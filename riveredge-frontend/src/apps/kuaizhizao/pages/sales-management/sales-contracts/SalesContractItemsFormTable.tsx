@@ -28,6 +28,10 @@ import { MaterialUnitSelect } from '../../../../../components/material-unit-sele
 import { OrderLineVariantAttributesCell } from '../../../../master-data/components/OrderLineVariantAttributesCell';
 import { AmountDisplay } from '../../../../../components/permission';
 import { KUAIZHIZAO_SALES_CONTRACT_FIELD_RESOURCE as SC } from '../../../constants/fieldPermissionResources';
+import {
+  documentCurrencyTitleVars,
+  resolveDocumentCurrencyInputPrefix,
+} from '../../../utils/documentCurrencyDisplay';
 import type { Material } from '../../../../master-data/types/material';
 import {
   calcContractLineAmounts,
@@ -88,10 +92,17 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
 
   return (
     <>
-      <Form.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.price_type !== curr?.price_type}>
+      <Form.Item
+        noStyle
+        shouldUpdate={(prev: any, curr: any) =>
+          prev?.price_type !== curr?.price_type || prev?.currency_code !== curr?.currency_code
+        }
+      >
         {({ getFieldValue }) => {
           const priceType = salesFormPriceType(getFieldValue('price_type'));
           const showTaxBreakdownColumns = priceType === 'tax_inclusive';
+          const currencyVars = documentCurrencyTitleVars(getFieldValue('currency_code'), t);
+          const moneyPrefix = resolveDocumentCurrencyInputPrefix(getFieldValue('currency_code'));
           const detailColumns = [
                     {
                       title: productColumnTitle,
@@ -179,8 +190,8 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                     {
                       title:
                         priceType === 'tax_inclusive'
-                          ? t('app.kuaizhizao.salesOrder.unitPriceColumnTaxInclusive')
-                          : t('app.kuaizhizao.salesOrder.unitPriceColumnTaxExclusive'),
+                          ? t('app.kuaizhizao.salesOrder.unitPriceColumnTaxInclusive', currencyVars)
+                          : t('app.kuaizhizao.salesOrder.unitPriceColumnTaxExclusive', currencyVars),
                       dataIndex: 'unit_price',
                       width: DOCUMENT_DETAIL_COL_WIDTH.unitPrice,
                       ...DOCUMENT_DETAIL_NUM_COL,
@@ -210,7 +221,7 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                             }
                             min={0}
                             precision={priceDecimals}
-                            prefix="¥"
+                            prefix={moneyPrefix}
                             style={{ width: '100%' }}
                             size={DOCUMENT_DETAIL_CONTROL_SIZE}
                           />
@@ -220,7 +231,7 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                     ...(showTaxBreakdownColumns
                       ? [
                           {
-                            title: t('app.kuaizhizao.salesOrder.exclAmount'),
+                            title: t('app.kuaizhizao.salesOrder.exclAmount', currencyVars),
                             width: DOCUMENT_DETAIL_COL_WIDTH.exclAmount,
                             ...DOCUMENT_DETAIL_NUM_COL,
                             render: (_: unknown, __: unknown, index: number) => (
@@ -241,6 +252,7 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                                       resource={SC}
                                       fieldName="amount_without_tax"
                                       value={line.excl}
+                                      prefix={moneyPrefix}
                                       style={DOCUMENT_DETAIL_AMOUNT_STYLE}
                                     />
                                   );
@@ -285,7 +297,7 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                     ...(showTaxBreakdownColumns
                       ? [
                           {
-                            title: t('app.kuaizhizao.salesOrder.taxAmount'),
+                            title: t('app.kuaizhizao.salesOrder.taxAmount', currencyVars),
                             width: DOCUMENT_DETAIL_COL_WIDTH.taxAmount,
                             ...DOCUMENT_DETAIL_NUM_COL,
                             render: (_: unknown, __: unknown, index: number) => (
@@ -306,6 +318,7 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                                       resource={SC}
                                       fieldName="tax_amount"
                                       value={line.tax}
+                                      prefix={moneyPrefix}
                                       style={DOCUMENT_DETAIL_AMOUNT_STYLE}
                                     />
                                   );
@@ -317,8 +330,8 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                       : []),
                     {
                       title: showTaxBreakdownColumns
-                        ? t('app.kuaizhizao.salesOrder.inclAmount')
-                        : t('app.kuaizhizao.salesOrder.exclAmount'),
+                        ? t('app.kuaizhizao.salesOrder.inclAmount', currencyVars)
+                        : t('app.kuaizhizao.salesOrder.exclAmount', currencyVars),
                       width: DOCUMENT_DETAIL_COL_WIDTH.lineAmount,
                       ...DOCUMENT_DETAIL_NUM_COL,
                       render: (_: unknown, __: unknown, index: number) =>
@@ -345,7 +358,7 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                                   placeholder={t('app.kuaizhizao.salesOrder.inclAmountPlaceholder')}
                                   min={0}
                                   precision={amountDecimals}
-                                  prefix="¥"
+                                  prefix={moneyPrefix}
                                   style={{ width: '100%' }}
                                   size={DOCUMENT_DETAIL_CONTROL_SIZE}
                                   value={displayValue}

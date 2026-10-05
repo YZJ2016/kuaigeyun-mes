@@ -52,7 +52,11 @@ import InstallExecutionTaskFormModal from '../../../components/InstallExecutionT
 import InstallExecutionAdvanceStageModal from '../../../components/InstallExecutionAdvanceStageModal';
 import InstallExecutionCostFormModal from '../../../components/InstallExecutionCostFormModal';
 import { InstallExecutionDetailDrawer } from './components/InstallExecutionDetailDrawer';
-import { extractProTableSort } from '../../../../../utils/tableQueryKey';
+import {
+  extractProTableSort,
+  pickListSearchKeyword,
+  pickSearchString,
+} from '../../../../../utils/tableQueryKey';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
@@ -760,7 +764,9 @@ const InstallExecutionPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.afterSalesInstall)}
           permissionResource={RESOURCE}
-          columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.install-execution.v3"
+          columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.install-execution.v4"
+          showAdvancedSearch
+          skipFuzzyPinyinClientFilter
           headerTitle={t('app.kuaizhizao.menu.after-sales-service.install-execution')}
           columns={columns}
           enableRowSelection={
@@ -859,17 +865,17 @@ const InstallExecutionPage: React.FC = () => {
               size="medium"
             />,
           ]}
-          request={async (params, sort) => {
-            const { current = 1, pageSize = 20, keyword, status, sales_order_code } = params;
+          request={async (params, sort, _filter, searchFormValues) => {
+            const { current = 1, pageSize = 20 } = params;
             const { sortBy, sortOrder } = extractProTableSort(sort);
             const orderBy =
               sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
             const res = await installExecutionApi.list({
               skip: (current - 1) * pageSize,
               limit: pageSize,
-              keyword: keyword as string | undefined,
-              status: status as string | undefined,
-              sales_order_code: sales_order_code as string | undefined,
+              keyword: pickListSearchKeyword(searchFormValues),
+              status: pickSearchString(searchFormValues, 'status'),
+              sales_order_code: pickSearchString(searchFormValues, 'sales_order_code'),
               order_by: orderBy,
             });
             return { data: res.data ?? [], total: res.total ?? 0, success: true };

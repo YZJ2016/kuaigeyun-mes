@@ -38,6 +38,7 @@ class Quality8DBase(BaseSchema):
     remarks: Optional[str] = Field(None, description="备注")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
     stage_unlocks: Optional[dict] = Field(None, description="已解锁阶段")
+    coordination_mode: str = Field("collaborative", description="legacy / collaborative")
 
 
 class Quality8DCreate(Quality8DBase):
@@ -111,6 +112,79 @@ class Quality8DStageUnlockRequest(BaseSchema):
     reason: str = Field(..., min_length=1, description="修改原因")
 
 
+class Quality8DStageAssignmentResponse(BaseSchema):
+    id: int
+    report_id: int
+    stage_key: str
+    assignee_user_id: Optional[int] = None
+    assignee_name: Optional[str] = None
+    due_date: Optional[datetime] = None
+    status: str
+    submitted_at: Optional[datetime] = None
+    approved_at: Optional[datetime] = None
+    approved_by: Optional[int] = None
+    approved_by_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class Quality8DStageAssignmentUpsert(BaseSchema):
+    stage_key: str = Field(..., description="阶段键")
+    assignee_user_id: Optional[int] = Field(None, description="负责人")
+    assignee_name: Optional[str] = Field(None, description="负责人姓名")
+    due_date: Optional[datetime] = Field(None, description="截止")
+
+
+class Quality8DStageAssignmentBatchUpsert(BaseSchema):
+    items: List[Quality8DStageAssignmentUpsert] = Field(default_factory=list)
+
+
+class Quality8DStageRejectRequest(BaseSchema):
+    reason: str = Field(..., min_length=1, description="驳回原因")
+
+
+class Quality8DActionItemBase(BaseSchema):
+    discipline: str = Field(..., description="d3_containment/d5_corrective/d6_verification")
+    title: str = Field(..., min_length=1, max_length=200)
+    description: Optional[str] = None
+    assignee_user_id: Optional[int] = None
+    assignee_name: Optional[str] = None
+    due_date: Optional[datetime] = None
+    sort_order: int = 0
+    evidence_attachments: Optional[List[dict]] = None
+
+
+class Quality8DActionItemCreate(Quality8DActionItemBase):
+    pass
+
+
+class Quality8DActionItemUpdate(BaseSchema):
+    title: Optional[str] = Field(None, min_length=1, max_length=200)
+    description: Optional[str] = None
+    assignee_user_id: Optional[int] = None
+    assignee_name: Optional[str] = None
+    due_date: Optional[datetime] = None
+    sort_order: Optional[int] = None
+    evidence_attachments: Optional[List[dict]] = None
+    status: Optional[str] = None
+
+
+class Quality8DActionItemResponse(Quality8DActionItemBase):
+    id: int
+    report_id: int
+    status: str
+    completed_at: Optional[datetime] = None
+    verified_by: Optional[int] = None
+    verified_by_name: Optional[str] = None
+    verified_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class Quality8DResponse(Quality8DBase):
     id: int
     report_code: str
@@ -129,6 +203,8 @@ class Quality8DResponse(Quality8DBase):
     updated_by_name: Optional[str] = Field(None, description="更新人姓名")
     created_at: datetime
     updated_at: datetime
+    stage_assignments: List[Quality8DStageAssignmentResponse] = Field(default_factory=list)
+    open_action_items_count: int = Field(0, description="未关闭行动项数量")
 
     class Config:
         from_attributes = True

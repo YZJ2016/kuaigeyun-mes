@@ -381,7 +381,9 @@ def enrich_sales_order_capabilities_on_response(
     has_remaining_invoice_amount: bool = True,
     has_purchasable_remaining: bool = False,
     require_purchase_requisition: bool = False,
+    require_shipment_notice_before_delivery: bool = False,
     require_audit_before_print: bool = False,
+    has_prepayment_receipt: bool = False,
 ) -> T:
     caps = derive_sales_order_capabilities(
         order_model,
@@ -397,7 +399,9 @@ def enrich_sales_order_capabilities_on_response(
         has_remaining_invoice_amount=has_remaining_invoice_amount,
         has_purchasable_remaining=has_purchasable_remaining,
         require_purchase_requisition=require_purchase_requisition,
+        require_shipment_notice_before_delivery=require_shipment_notice_before_delivery,
         require_audit_before_print=require_audit_before_print,
+        has_prepayment_receipt=has_prepayment_receipt,
     )
     if hasattr(response, "model_copy"):
         return _attach_capabilities_to_response(response, caps)
@@ -418,6 +422,7 @@ def enrich_sales_order_list_capabilities(
     has_existing_delivery_project_by_id: Optional[dict[int, bool]] = None,
     has_downstream_documents_by_id: Optional[dict[int, bool]] = None,
     has_remaining_invoice_amount_by_id: Optional[dict[int, bool]] = None,
+    has_prepayment_receipt_by_id: Optional[dict[int, bool]] = None,
     require_audit_before_print: bool = False,
 ) -> List[T]:
     pushed_map = pushed_to_computation_by_id or {}
@@ -430,6 +435,7 @@ def enrich_sales_order_list_capabilities(
     delivery_project_map = has_existing_delivery_project_by_id or {}
     downstream_map = has_downstream_documents_by_id or {}
     invoice_remainder_map = has_remaining_invoice_amount_by_id or {}
+    prepay_map = has_prepayment_receipt_by_id or {}
     out: List[T] = []
     for order_model, resp in zip(orders, responses):
         oid = int(getattr(order_model, "id", 0) or 0)
@@ -445,6 +451,7 @@ def enrich_sales_order_list_capabilities(
             has_existing_delivery_project=delivery_project_map.get(oid, False),
             has_downstream_documents=downstream_map.get(oid, False),
             has_remaining_invoice_amount=invoice_remainder_map.get(oid, True),
+            has_prepayment_receipt=prepay_map.get(oid, False),
             require_audit_before_print=require_audit_before_print,
         )
         if hasattr(resp, "model_copy"):
@@ -468,6 +475,7 @@ def get_sales_order_capabilities_from_record(
     has_downstream_documents: bool = False,
     has_remaining_invoice_amount: bool = True,
     require_audit_before_print: bool = False,
+    has_prepayment_receipt: bool = False,
 ) -> SalesOrderCapabilities:
     return derive_sales_order_capabilities(
         order,
@@ -482,6 +490,7 @@ def get_sales_order_capabilities_from_record(
         has_downstream_documents=has_downstream_documents,
         has_remaining_invoice_amount=has_remaining_invoice_amount,
         require_audit_before_print=require_audit_before_print,
+        has_prepayment_receipt=has_prepayment_receipt,
     )
 
 
@@ -998,6 +1007,32 @@ async def _purchase_order_invoice_by_ids(tenant_id: int, order_ids: List[int]) -
     return result
 
 
+async def _order_prepayment_linked_by_ids(
+    tenant_id: int,
+    order_ids: List[int],
+    *,
+    source_type: str,
+    target_type: str,
+) -> dict[int, bool]:
+    """订单是否已存在预付/预收单据关联。"""
+    from apps.kuaizhizao.models.document_relation import DocumentRelation
+
+    if not order_ids:
+        return {}
+    result: dict[int, bool] = {oid: False for oid in order_ids}
+    rows = await DocumentRelation.filter(
+        tenant_id=tenant_id,
+        source_type=source_type,
+        source_id__in=order_ids,
+        target_type=target_type,
+    ).values_list("source_id", flat=True)
+    for sid in rows:
+        oid = int(sid or 0)
+        if oid in result:
+            result[oid] = True
+    return result
+
+
 async def _purchase_order_returnable_by_ids(tenant_id: int, order_ids: List[int]) -> dict[int, bool]:
     from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
     from apps.kuaizhizao.services.warehouse_service import returned_qty_by_purchase_order_item_ids
@@ -1123,6 +1158,7 @@ def enrich_purchase_order_capabilities_on_response(
     has_downstream: bool = False,
     has_pending_change: bool = False,
     has_returnable: bool = False,
+    has_prepayment_payment: bool = False,
 ) -> T:
     caps = derive_purchase_order_capabilities(
         order,
@@ -1136,6 +1172,7 @@ def enrich_purchase_order_capabilities_on_response(
         has_downstream=has_downstream,
         has_pending_change=has_pending_change,
         has_returnable=has_returnable,
+        has_prepayment_payment=has_prepayment_payment,
     )
     if hasattr(response, "model_copy"):
         return _attach_capabilities_to_response(response, caps)
@@ -1162,6 +1199,9 @@ async def enrich_purchase_order_detail_capabilities(
     has_downstream = await purchase_order_has_downstream(tenant_id, order_id)
     pending_change_map = await _purchase_order_pending_change_by_ids(tenant_id, [order_id])
     returnable_map = await _purchase_order_returnable_by_ids(tenant_id, [order_id])
+    prepay_map = await _order_prepayment_linked_by_ids(
+        tenant_id, [order_id], source_type="purchase_order", target_type="payment"
+    )
     return enrich_purchase_order_capabilities_on_response(
         order,
         response,
@@ -1174,6 +1214,7 @@ async def enrich_purchase_order_detail_capabilities(
         has_downstream=has_downstream,
         has_pending_change=pending_change_map.get(order_id, False),
         has_returnable=returnable_map.get(order_id, False),
+        has_prepayment_payment=prepay_map.get(order_id, False),
     )
 
 
@@ -1197,6 +1238,9 @@ async def enrich_purchase_order_list_capabilities(
     downstream_map = await _purchase_order_downstream_by_ids(tenant_id, order_ids)
     pending_change_map = await _purchase_order_pending_change_by_ids(tenant_id, order_ids)
     returnable_map = await _purchase_order_returnable_by_ids(tenant_id, order_ids)
+    prepay_map = await _order_prepayment_linked_by_ids(
+        tenant_id, order_ids, source_type="purchase_order", target_type="payment"
+    )
     items_map = has_items_by_id or {}
     out: List[T] = []
     for order_model, resp in zip(orders, responses):
@@ -1212,6 +1256,7 @@ async def enrich_purchase_order_list_capabilities(
             has_downstream=downstream_map.get(oid, False),
             has_pending_change=pending_change_map.get(oid, False),
             has_returnable=returnable_map.get(oid, False),
+            has_prepayment_payment=prepay_map.get(oid, False),
         )
         if hasattr(resp, "model_copy"):
             out.append(_attach_capabilities_to_response(resp, caps))

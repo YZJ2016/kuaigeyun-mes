@@ -873,6 +873,8 @@ class MaterialResponse(MaterialBase):
     group_id: Optional[int] = Field(None, alias="groupId", description="物料分组ID")
     process_route_id: Optional[int] = Field(None, alias="processRouteId", description="工艺路线ID")
     process_route_name: Optional[str] = Field(None, alias="processRouteName", description="工艺路线名称")
+    process_route_code: Optional[str] = Field(None, alias="processRouteCode", description="工艺路线编码")
+    process_route_uuid: Optional[str] = Field(None, alias="processRouteUuid", description="工艺路线UUID")
     created_at: datetime = Field(..., alias="createdAt", description="创建时间")
     updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
     created_by_name: Optional[str] = Field(None, alias="createdByName", description="创建人姓名")
@@ -1216,6 +1218,7 @@ class BOMResponse(BOMBase):
 
 class BOMGroupSummary(BaseModel):
     """BOM 分组摘要（按 material_id + version 一组，用于列表树按需加载）"""
+    id: Optional[int] = Field(None, description="版本组代表行 ID（MIN(id)，外推 source_id）")
     material_id: int = Field(..., description="主物料ID")
     version: str = Field(..., description="版本号")
     bom_code: Optional[str] = Field(None, max_length=100, description="BOM编码")

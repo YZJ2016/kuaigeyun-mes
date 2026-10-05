@@ -35,6 +35,7 @@ import {
   WorkOrderStatusTag,
 } from '../../../../../components/touch-terminal';
 import { workOrderApi, reportingApi, warehouseApi } from '../../../services/production';
+import type { WorkOrderExecutionConfig } from '../../../services/production';
 import StationBinder, { getStationStorageKey, type StationInfo } from '../../../components/StationBinder';
 import ReportingParameterForm from './components/ReportingParameterForm';
 import MaterialBindingModal from './components/MaterialBindingModal';
@@ -127,6 +128,7 @@ const WorkOrdersKioskPage: React.FC = () => {
     const [reportingParameters, setReportingParameters] = useState<Array<{ id: string; name: string; type: 'string' | 'number' | 'boolean'; defaultValue?: unknown }>>([
         { id: 'quality', name: '首检', type: 'boolean', defaultValue: true },
     ]);
+    const [executionConfig, setExecutionConfig] = useState<WorkOrderExecutionConfig | null>(null);
     // 物料绑定弹窗
     const [materialBindingModalVisible, setMaterialBindingModalVisible] = useState(false);
     const [lastReportingRecordId, setLastReportingRecordId] = useState<string | number | null>(null);
@@ -145,6 +147,12 @@ const WorkOrdersKioskPage: React.FC = () => {
         }).catch(err => {
              console.error('Failed to load user info', err);
              // Optionally redirect to login if critical
+        });
+
+        workOrderApi.getExecutionConfig().then((cfg) => {
+            setExecutionConfig(cfg);
+        }).catch((err) => {
+            console.error('Failed to load execution config', err);
         });
 
         const storageKey = getStationStorageKey();
@@ -320,6 +328,10 @@ const WorkOrdersKioskPage: React.FC = () => {
     };
 
     const handleOpenParamModal = async () => {
+        if (executionConfig?.parameter_reporting_enabled === false) {
+            message.warning('当前组织未开启参数报工，请在配置中心启用后再操作');
+            return;
+        }
         setParamModalVisible(true);
         const assignedEquipmentId = activeOperation?.assigned_equipment_id;
         if (!assignedEquipmentId) return;
@@ -360,6 +372,10 @@ const WorkOrdersKioskPage: React.FC = () => {
 
     const handleReport = async () => {
         try {
+            if (executionConfig?.quick_reporting_enabled === false) {
+                message.warning('当前组织未开启快捷报工，请在配置中心启用后再操作');
+                return;
+            }
             if (selectedWorkOrder?.is_frozen === true) {
                 message.warning(
                     t('app.kuaizhizao.workOrder.kioskFrozenCannotOperate', {
@@ -383,16 +399,19 @@ const WorkOrdersKioskPage: React.FC = () => {
                 return;
             }
             setOpsLoading(true);
-            const sopParams = Object.fromEntries(
-                Object.entries(values).filter(([k]) => !['qualified_quantity', 'unqualified_quantity', 'work_hours', 'remarks'].includes(k))
-            );
+            const parameterReportingEnabled = executionConfig?.parameter_reporting_enabled !== false;
+            const sopParams = parameterReportingEnabled
+                ? Object.fromEntries(
+                    Object.entries(values).filter(([k]) => !['qualified_quantity', 'unqualified_quantity', 'work_hours', 'remarks'].includes(k))
+                )
+                : {};
             
             const qtyContext = selectedWorkOrder;
             const reportedQtyBase = convertProductionInputToBaseQty(qty, qtyContext);
             const qualifiedQtyBase = convertProductionInputToBaseQty(qualified, qtyContext);
             const unqualifiedQtyBase = convertProductionInputToBaseQty(unqualified, qtyContext);
 
-            const created = await reportingApi.create({
+            const created = await reportingApi.quickCreate({
                 work_order_id: selectedWorkOrder.id!,
                 work_order_code: selectedWorkOrder.code || '',
                 work_order_name: selectedWorkOrder.name || selectedWorkOrder.product_name || '',
@@ -861,7 +880,12 @@ const WorkOrdersKioskPage: React.FC = () => {
                                                 <Button size="large" {...touchButtonProps({ size: 'header' })} icon={<FileProtectOutlined />} onClick={() => { setSopModalTab('static'); setSopModalVisible(true); }}>
                                                     作业指导书
                                                 </Button>
-                                                <Button size="large" {...touchButtonProps({ size: 'header' })} onClick={() => void handleOpenParamModal()}>
+                                                <Button
+                                                    size="large"
+                                                    {...touchButtonProps({ size: 'header' })}
+                                                    disabled={executionConfig?.parameter_reporting_enabled === false}
+                                                    onClick={() => void handleOpenParamModal()}
+                                                >
                                                     报工参数
                                                 </Button>
                                                 <Button size="large" {...touchButtonProps({ size: 'header' })} disabled={!lastReportingRecordId} onClick={() => setMaterialBindingModalVisible(true)}>
@@ -933,11 +957,15 @@ const WorkOrdersKioskPage: React.FC = () => {
                                                       variant: 'success',
                                                       size: 'action',
                                                       loading: opsLoading,
-                                                      disabled: isWorkOrderFrozen,
+                                                      disabled: isWorkOrderFrozen || executionConfig?.quick_reporting_enabled === false,
                                                     })}
                                                     icon={<CheckCircleOutlined />}
                                                     onClick={handleReport}
-                                                    title={frozenOperateHint}
+                                                    title={
+                                                      executionConfig?.quick_reporting_enabled === false
+                                                        ? '当前组织未开启快捷报工'
+                                                        : frozenOperateHint
+                                                    }
                                                 >
                                                     确认报工
                                                 </Button>
@@ -1307,11 +1335,15 @@ const WorkOrdersKioskPage: React.FC = () => {
                             {...touchButtonProps({
                               variant: 'success',
                               size: 'action',
-                              disabled: isWorkOrderFrozen,
+                              disabled: isWorkOrderFrozen || executionConfig?.quick_reporting_enabled === false,
                             })}
                             icon={<CheckCircleOutlined />}
                             onClick={handleReport}
-                            title={frozenOperateHint}
+                            title={
+                              executionConfig?.quick_reporting_enabled === false
+                                ? '当前组织未开启快捷报工'
+                                : frozenOperateHint
+                            }
                         >
                             完成报工
                         </Button>

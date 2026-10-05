@@ -7,7 +7,7 @@ from typing import Any, Awaitable, Callable, List, Optional, TypeVar
 from pydantic import BaseModel, Field, ConfigDict
 from loguru import logger
 
-from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 
 T = TypeVar("T")
 R = TypeVar("R")
@@ -51,7 +51,7 @@ async def run_bulk_create(
         try:
             await create_one(item, index)
             created += 1
-        except (ValidationError, NotFoundError) as exc:
+        except (ValidationError, NotFoundError, BusinessLogicError) as exc:
             failed.append(BulkCreateFailedItem(index=index, reason=str(exc)))
         except Exception as exc:
             logger.exception("bulk_create failed index=%s", index)

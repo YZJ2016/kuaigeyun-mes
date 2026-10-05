@@ -48,6 +48,27 @@ class APIService:
             raise ValidationError("仅支持绑定业务系统类应用连接器（ERP/PLM/CRM/OA/WMS/IoT）")
         return integration_config
 
+    async def _create_or_revive_api(
+        self,
+        tenant_id: int,
+        *,
+        code: str,
+        **fields: Any,
+    ) -> API:
+        """创建接口；若同 code 已软删则恢复，避免撞 unique (tenant_id, code)。"""
+        trashed = await API.filter(
+            tenant_id=tenant_id,
+            code=code,
+            deleted_at__isnull=False,
+        ).order_by("-deleted_at", "-id").first()
+        if trashed:
+            trashed.deleted_at = None
+            for key, value in fields.items():
+                setattr(trashed, key, value)
+            await trashed.save()
+            return trashed
+        return await API.create(tenant_id=tenant_id, code=code, **fields)
+
     @staticmethod
     def build_api_response(api: API) -> APIResponse:
         connection_uuid = None
@@ -318,10 +339,10 @@ class APIService:
                     categorized.append(code)
                 skipped.append(code)
                 continue
-            api = await API.create(
-                tenant_id=tenant_id,
-                name=preset["name"],
+            api = await self._create_or_revive_api(
+                tenant_id,
                 code=code,
+                name=preset["name"],
                 description=preset["description"],
                 path=preset["path"],
                 method=preset["method"],
@@ -404,10 +425,10 @@ class APIService:
                 skipped.append(code)
                 continue
             request_params = preset.get("request_params")
-            api = await API.create(
-                tenant_id=tenant_id,
-                name=preset["name"],
+            api = await self._create_or_revive_api(
+                tenant_id,
                 code=code,
+                name=preset["name"],
                 description=preset["description"],
                 path=preset["path"],
                 method=preset["method"],
@@ -584,10 +605,10 @@ class APIService:
                     categorized.append(code)
                 skipped.append(code)
                 continue
-            await API.create(
-                tenant_id=tenant_id,
-                name=item["name"],
+            await self._create_or_revive_api(
+                tenant_id,
                 code=code,
+                name=item["name"],
                 description=item.get("description") or None,
                 path=item["path"],
                 method=item["method"],

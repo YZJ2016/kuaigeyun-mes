@@ -26,6 +26,7 @@ import {
   type PendingInboxDocType,
   type PendingInboxItem,
 } from '../../services/pending-inbox';
+import { resolvePlmStandardDocListSearch } from '../../utils/plmListCore';
 
 const DOC_TYPE_KEYS: PendingInboxDocType[] = [
   'product_firmware',
@@ -167,12 +168,15 @@ const PendingInboxPage: React.FC = () => {
         columnPersistenceId="apps.kuaiplm.pages.pending-inbox.width-v2"
         showCreateButton={false}
         showDeleteButton={false}
-        request={async (params) => {
+        skipFuzzyPinyinClientFilter
+        params={filterProjectId ? { project_id: filterProjectId } : undefined}
+        request={async (params, _sort, _filter, searchFormValues) => {
           try {
+            const { doc_type } = resolvePlmStandardDocListSearch(searchFormValues, []);
             const res = await pendingInboxApi.list({
               skip: ((params.current || 1) - 1) * (params.pageSize || 20),
               limit: params.pageSize || 20,
-              doc_type: params.doc_type as string | undefined,
+              doc_type,
               project_id: filterProjectId,
             });
             return { data: res.items, total: res.total, success: true };

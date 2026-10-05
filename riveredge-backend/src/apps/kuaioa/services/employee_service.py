@@ -7,6 +7,7 @@ from datetime import date
 from typing import Any, Optional
 
 from apps.kuaioa.models.employee import KuaioaEmployeeProfile
+from apps.common.bulk_import import BulkCreateResponse, run_bulk_create
 from apps.kuaioa.schemas.employee import EmployeeProfileCreate, EmployeeProfileUpdate
 from apps.kuaioa.services.kuaioa_list_core import (
     apply_create_audit_by_user_id,
@@ -84,16 +85,15 @@ class EmployeeProfileService:
         if pay_method not in _ALLOWED_PAY:
             raise BusinessLogicError("计薪方式无效")
 
-        hire_date = parse_optional_date(data.hire_date)
-        leave_date = parse_optional_date(data.leave_date)
+        try:
+            hire_date = parse_optional_date(data.hire_date)
+            leave_date = parse_optional_date(data.leave_date)
+        except ValueError as exc:
+            raise BusinessLogicError(str(exc)) from exc
         status = _resolve_status(leave_date=leave_date, status=data.status)
 
-        employee_code = await generate_daily_code(
-            KuaioaEmployeeProfile, tenant_id, "EMP", code_field="employee_code"
-        )
         create_payload: dict[str, Any] = {
             "tenant_id": tenant_id,
-            "employee_code": employee_code,
             "full_name": full_name,
             "phone": (data.phone or "").strip() or None,
             "workshop_name": (data.workshop_name or "").strip() or None,
@@ -120,8 +120,52 @@ class EmployeeProfileService:
             "notes": data.notes,
         }
         await apply_create_audit_by_user_id(create_payload, user_id)
-        row = await KuaioaEmployeeProfile.create(**create_payload)
-        return model_to_dict(row)
+
+        provided_code = (data.employee_code or "").strip()
+        if provided_code:
+            exists = await KuaioaEmployeeProfile.filter(
+                tenant_id=tenant_id,
+                employee_code=provided_code,
+                deleted_at__isnull=True,
+            ).exists()
+            if exists:
+                raise BusinessLogicError(f"员工编号「{provided_code}」已存在")
+            create_payload["employee_code"] = provided_code
+            try:
+                row = await KuaioaEmployeeProfile.create(**create_payload)
+                return model_to_dict(row)
+            except Exception as exc:
+                if "employee_code" in str(exc).lower() or "unique" in str(exc).lower():
+                    raise BusinessLogicError(f"员工编号「{provided_code}」已存在") from exc
+                raise
+
+        last_error: Exception | None = None
+        for _ in range(8):
+            create_payload["employee_code"] = await generate_daily_code(
+                KuaioaEmployeeProfile, tenant_id, "EMP", code_field="employee_code"
+            )
+            try:
+                row = await KuaioaEmployeeProfile.create(**create_payload)
+                return model_to_dict(row)
+            except Exception as exc:
+                if "employee_code" in str(exc).lower() or "unique" in str(exc).lower():
+                    last_error = exc
+                    continue
+                raise
+        raise BusinessLogicError("员工编号生成冲突，请稍后重试") from last_error
+
+    async def bulk_create_profiles(
+        self,
+        tenant_id: int,
+        items: list[EmployeeProfileCreate],
+        user_id: int,
+    ) -> BulkCreateResponse:
+        """批量创建员工（导入分片）；片内顺序执行，单条失败不中断整批。"""
+
+        async def create_one(item: EmployeeProfileCreate, _index: int) -> dict[str, Any]:
+            return await self.create_profile(tenant_id, item, user_id)
+
+        return await run_bulk_create(list(items or []), create_one)
 
     async def update_profile(
         self, tenant_id: int, profile_id: int, data: EmployeeProfileUpdate, user_id: int
@@ -149,7 +193,10 @@ class EmployeeProfileService:
             payload["pay_method"] = pm
         for key in ("hire_date", "leave_date"):
             if key in payload:
-                payload[key] = parse_optional_date(payload[key])
+                try:
+                    payload[key] = parse_optional_date(payload[key])
+                except ValueError as exc:
+                    raise BusinessLogicError(str(exc)) from exc
         for key in (
             "phone",
             "workshop_name",

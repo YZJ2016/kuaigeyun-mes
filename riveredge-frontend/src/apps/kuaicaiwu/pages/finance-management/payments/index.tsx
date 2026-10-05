@@ -412,7 +412,15 @@ const PaymentsPage: React.FC = () => {
     actionRef.current?.reload();
           refreshOpenDetail();
         } catch (e: any) {
-          messageApi.error(e?.message || t('common.operationFailed'));
+          messageApi.error(
+            e?.response?.data?.detail?.message ||
+              e?.response?.data?.detail ||
+              e?.message ||
+              t('common.operationFailed'),
+          );
+          // 过账中途失败时库内状态可能已变，刷新避免界面仍显示草稿
+          actionRef.current?.reload();
+          refreshOpenDetail();
         }
   };
 
@@ -939,9 +947,8 @@ const PaymentsPage: React.FC = () => {
           tableRowsRef.current = rows;
         }}
         rowKey="id"
-        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.payments.list-v3"
+        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.payments.list-v4"
         showAdvancedSearch
-        search={{ labelWidth: 120 }}
         showCreateButton={false}
         createButtonText={t(`${P}.createTitle`)}
         onCreate={() => setCreateModalVisible(true)}

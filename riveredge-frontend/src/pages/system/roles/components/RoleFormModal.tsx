@@ -32,8 +32,10 @@ export interface RoleFormModalProps {
   onClose: () => void;
   /** 编辑时传入角色 uuid，为 null 时为新建 */
   editUuid: string | null;
-  /** 保存成功回调 */
-  onSuccess: () => void;
+  /** 保存成功；新建时回传创建实体便于外层回填选中 */
+  onSuccess: (created?: Role) => void;
+  /** 嵌套在外层 Modal 时抬高层级 */
+  zIndex?: number;
 }
 
 export const RoleFormModal: React.FC<RoleFormModalProps> = ({
@@ -41,6 +43,7 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
   onClose,
   editUuid,
   onSuccess,
+  zIndex,
 }) => {
   const { t, i18n } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -120,18 +123,22 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
         payload = omitPresetLocalizedPayloadFields('role', editPresetCode, payload);
         await updateRole(editUuid, payload as UpdateRoleData);
         messageApi.success(t('common.updateSuccess'));
+        void queryClient.invalidateQueries({ queryKey: EFFECTIVE_HOME_QUERY_KEY });
+        onClose();
+        formRef.current?.resetFields();
+        onSuccess();
       } else {
-        await createRole({ ...payload, create_position: createPosition } as CreateRoleData);
+        const created = await createRole({ ...payload, create_position: createPosition } as CreateRoleData);
         messageApi.success(
           createPosition
             ? t('field.role.createSuccessWithPosition')
             : t('common.createSuccess'),
         );
+        void queryClient.invalidateQueries({ queryKey: EFFECTIVE_HOME_QUERY_KEY });
+        onClose();
+        formRef.current?.resetFields();
+        onSuccess(created);
       }
-      void queryClient.invalidateQueries({ queryKey: EFFECTIVE_HOME_QUERY_KEY });
-      onClose();
-      formRef.current?.resetFields();
-      onSuccess();
     } catch (error: any) {
       messageApi.error(error?.message || (isEdit ? t('common.updateFailed') : t('common.saveFailed')));
     } finally {
@@ -157,6 +164,7 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
       initialValues={{ is_active: true, role_type: 'internal', create_position: false }}
       layout="vertical"
       grid
+      zIndex={zIndex}
       onValuesChange={(changed) => {
         if ('role_type' in changed && changed.role_type !== 'external') {
           formRef.current?.setFieldsValue({ external_partner_type: undefined });

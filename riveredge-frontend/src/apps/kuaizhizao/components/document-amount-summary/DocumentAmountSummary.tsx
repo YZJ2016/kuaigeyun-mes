@@ -620,14 +620,15 @@ export const DocumentAmountSummaryWatch: React.FC<
     DocumentAmountSummaryProps,
     'getFieldValue' | 'items' | 'feeDetails' | 'priceType' | 'discountAmount'
   >
-> = ({ variant, quantityField, style, showDiscount }) => (
+> = ({ variant, quantityField, style, showDiscount, currencyCode }) => (
   <Form.Item
     noStyle
     shouldUpdate={(prev, curr) =>
       prev?.items !== curr?.items ||
       prev?.fee_details !== curr?.fee_details ||
       prev?.price_type !== curr?.price_type ||
-      prev?.discount_amount !== curr?.discount_amount
+      prev?.discount_amount !== curr?.discount_amount ||
+      prev?.currency_code !== curr?.currency_code
     }
   >
     {({ getFieldValue }) => (
@@ -637,6 +638,7 @@ export const DocumentAmountSummaryWatch: React.FC<
         quantityField={quantityField}
         style={style}
         showDiscount={showDiscount}
+        currencyCode={currencyCode}
       />
     )}
   </Form.Item>

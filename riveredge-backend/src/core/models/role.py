@@ -50,7 +50,7 @@ class Role(BaseModel):
     functional_domain = fields.CharField(
         max_length=32,
         null=True,
-        description="内部/触屏角色职能域：sales/purchase/production/warehouse/quality/finance/general",
+        description="内部/触屏角色职能域：sales/purchase/production/equipment/warehouse/quality/rd/finance/general",
     )
     is_system = fields.BooleanField(default=False, description="是否系统角色（系统角色不可删除）")
     is_active = fields.BooleanField(default=True, description="是否启用")

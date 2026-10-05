@@ -28,7 +28,7 @@ from .drawing_loan import DrawingLoan, DrawingLoanLine
 from .customer import Customer
 from .supplier import Supplier
 from .performance import Holiday, Skill
-from .shift_scheduling import Shift, ShiftRoster, ShiftAssignment
+from .shift_scheduling import Shift, ShiftRoster, ShiftAssignment, RosterTimeAdjustment
 from .work_calendar import WorkCalendarConfig, OvertimePlan, StationUnavailableWindow
 from .employee_performance import (
     EmployeePerformanceConfig,
@@ -83,6 +83,7 @@ __all__ = [
     "Shift",
     "ShiftRoster",
     "ShiftAssignment",
+    "RosterTimeAdjustment",
     "WorkCalendarConfig",
     "OvertimePlan",
     "StationUnavailableWindow",

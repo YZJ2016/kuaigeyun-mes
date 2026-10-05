@@ -18,6 +18,8 @@ import { DeleteOutlined, PlusOutlined, SyncOutlined } from '@ant-design/icons';
 import { ThemedSegmented } from '../themed-segmented/ThemedSegmented';
 import { getAPIByUuid, testAPI } from '../../services/apiManagement';
 import {
+  collectRowColumnKeys,
+  expandNestedDetailRows,
   extractKingdeeFieldKeys,
   formatSyncErrorMessage,
   invertFieldMapping,
@@ -231,10 +233,12 @@ export const SyncSourceSettingModal: React.FC<SyncSourceSettingModalProps> = ({
           offset: 0,
         });
         if (!res.success) throw new Error(res.error || t('components.syncFromSource.queryFailed'));
-        rows = ((res.data || []) as Record<string, unknown>[]).slice(0, SYNC_PREVIEW_ROW_LIMIT);
+        rows = expandNestedDetailRows(
+          ((res.data || []) as Record<string, unknown>[]),
+        ).slice(0, SYNC_PREVIEW_ROW_LIMIT);
       }
 
-      const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
+      const columns = collectRowColumnKeys(rows);
       setPreviewRows(rows);
       setPreviewColumns(columns);
 

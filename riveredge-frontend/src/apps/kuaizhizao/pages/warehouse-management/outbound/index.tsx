@@ -7,7 +7,10 @@
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { useQuery } from '@tanstack/react-query';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
+import { getBusinessConfig } from '../../../../../services/businessConfig';
+import { TOOLBAR_SYNC_PUSH_FLAGS_QUERY_KEY } from '../../../../../hooks/useToolbarSyncPushFlags';
 import { ActionType, ProColumns, type ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Tooltip, Typography, Spin, Empty, Select, theme as AntdTheme } from 'antd';
 import { CheckCircleOutlined, PlayCircleOutlined, RollbackOutlined } from '@ant-design/icons';
@@ -31,6 +34,7 @@ import {
 import { buildHubMergedCustomFieldColumns } from '../../../../../components/custom-fields/hubCustomFieldListColumns';
 
 import { ListPageTemplate, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
+import { LinkedDocumentCodesFromFields } from '../../../../../components/linked-document-code';
 import { UniPullLoadButton } from '../../../../../components/uni-pull';
 import { OutboundDetailDrawer } from './components/OutboundDetailDrawer';
 import { WarehouseTraceBriefPrimaryActions } from '../WarehouseTraceBriefFooter';
@@ -114,7 +118,7 @@ import {
   outboundWithdrawCapabilityReasonMessage,
   mapOutsourceIssueToOutbound,
   outboundDocumentCode,
-  outboundSourceDocNo,
+  OUTBOUND_SOURCE_DOC_CODE_FIELDS,
   resolveOutboundHubOperator,
   resolveOutboundHubDateRaw,
   outboundDocumentTrackingType,
@@ -200,6 +204,14 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
   const { token } = AntdTheme.useToken();
   const outboundDetailDrawerZIndex = token.zIndexPopupBase;
   const { message: messageApi } = App.useApp();
+  const { data: businessConfig } = useQuery({
+    queryKey: TOOLBAR_SYNC_PUSH_FLAGS_QUERY_KEY,
+    queryFn: getBusinessConfig,
+    staleTime: 60_000,
+  });
+  const requireShipmentNoticeBeforeDelivery = Boolean(
+    businessConfig?.parameters?.sales?.require_shipment_notice_before_delivery,
+  );
   const actionRef = useRef<ActionType>(null);
   const searchFormRef = useRef<ProFormInstance>();
   const quickPullRef = useRef<OutboundQuickPullModalsRef>(null);
@@ -449,11 +461,15 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
             actionKey: 'sales_delivery.pull_from_shipment_notice',
             onClick: () => quickPullRef.current?.open('shipment_notice'),
           },
-          {
-            key: 'pull-from-sales-order',
-            actionKey: 'sales_delivery.pull_from_sales_order',
-            onClick: () => quickPullRef.current?.open('sales_order'),
-          },
+          ...(requireShipmentNoticeBeforeDelivery
+            ? []
+            : [
+                {
+                  key: 'pull-from-sales-order',
+                  actionKey: 'sales_delivery.pull_from_sales_order',
+                  onClick: () => quickPullRef.current?.open('sales_order'),
+                },
+              ]),
           {
             actionKey: 'outbound.pull_from_outsource_work_order',
             onClick: () => quickPullRef.current?.open('outsource'),
@@ -466,7 +482,7 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
         ],
         hubScopedOutboundTypes,
       ),
-    [hubScopedOutboundTypes, t],
+    [hubScopedOutboundTypes, requireShipmentNoticeBeforeDelivery, t],
   );
   const handleCreate = useCallback(() => {
     quickPullRef.current?.open(defaultOutboundQuickPullKey);
@@ -781,7 +797,7 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
       try {
         const linesRes = await deliveryNoticeApi.listSalesDeliveryPullLines({
           skip: 0,
-          limit: 500,
+          limit: 100,
           sales_delivery_id: salesDeliveryId,
           pullable_only: true,
         });
@@ -1145,7 +1161,12 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
       resizable: false,
       ellipsis: true,
       hideInSearch: true,
-      render: (_, record) => outboundSourceDocNo(record) || '-',
+      render: (_, record) => (
+        <LinkedDocumentCodesFromFields
+          record={record as Record<string, unknown>}
+          codeFields={OUTBOUND_SOURCE_DOC_CODE_FIELDS}
+        />
+      ),
     },
     {
       title: t('app.kuaizhizao.common.colLineMaterials'),
@@ -1596,17 +1617,36 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
           setListRowsVersion((v) => v + 1);
         }}
         toolBarRender={() => {
-          if (!outboundPullMenuSpecs.length) return [];
-          return [
-            <UniPullLoadButton
-              key="pull"
-              compactKey="outbound-pull-load"
-              label={pullLoadLabel}
-              type="primary"
-              variant="solid"
-              menuItems={buildKuaizhizaoPullCreateMenuItems(t, outboundPullMenuSpecs)}
-            />,
-          ];
+          const items: React.ReactNode[] = [];
+          if (outboundPullMenuSpecs.length) {
+            items.push(
+              <UniPullLoadButton
+                key="pull"
+                compactKey="outbound-pull-load"
+                label={pullLoadLabel}
+                type="primary"
+                variant="solid"
+                menuItems={buildKuaizhizaoPullCreateMenuItems(t, outboundPullMenuSpecs)}
+              />,
+            );
+          }
+          if (showSalesDeliveryPush) {
+            items.push(
+              <UniPushToolbarButton
+                key={`outbound-push-delivery-notice-${selectedSalesDeliveryForPush?.id ?? 'none'}`}
+                menuItems={toolbarPushMenuItems}
+                disabled={selectedRowKeys.length !== 1 || !selectedSalesDeliveryForPush}
+                disabledReason={salesDeliveryToolbarPushDisabledReason}
+                sourceDocument={
+                  selectedSalesDeliveryForPush?.id
+                    ? { type: 'sales_delivery', id: Number(selectedSalesDeliveryForPush.id) }
+                    : null
+                }
+                pushTargets={{ 'push-delivery-notice': 'delivery_notice' }}
+              />,
+            );
+          }
+          return items;
         }}
         toolBarActionsAfterBatch={[
           <WarehouseShowAmountSwitch
@@ -1614,22 +1654,6 @@ const OutboundPage: React.FC<OutboundHubPageProps> = ({
             checked={showAmount}
             onChange={setShowAmount}
           />,
-          ...(showSalesDeliveryPush
-            ? [
-                <UniPushToolbarButton
-                  key={`outbound-push-delivery-notice-${selectedSalesDeliveryForPush?.id ?? 'none'}`}
-                  menuItems={toolbarPushMenuItems}
-                  disabled={selectedRowKeys.length !== 1 || !selectedSalesDeliveryForPush}
-                  disabledReason={salesDeliveryToolbarPushDisabledReason}
-                  sourceDocument={
-                    selectedSalesDeliveryForPush?.id
-                      ? { type: 'sales_delivery', id: Number(selectedSalesDeliveryForPush.id) }
-                      : null
-                  }
-                  pushTargets={{ 'push-delivery-notice': 'delivery_notice' }}
-                />,
-              ]
-            : []),
         ]}
         showPrintButton={outboundPerms.canPrint}
         printButtonDisabled={!canToolbarPrint}

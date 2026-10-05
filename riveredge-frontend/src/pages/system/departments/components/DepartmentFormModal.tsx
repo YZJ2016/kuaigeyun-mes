@@ -46,9 +46,12 @@ export interface DepartmentFormModalProps {
   editUuid: string | null;
   /** 新建时指定父部门（添加子部门场景） */
   initialParentUuid?: string | null;
-  onSuccess: () => void;
+  /** 保存成功；新建时回传创建实体便于外层回填选中 */
+  onSuccess: (created?: Department) => void;
   /** 部门树数据（由父组件传入，避免重复请求） */
   deptTreeItems: DepartmentTreeItem[];
+  /** 嵌套在外层 Modal 时抬高层级 */
+  zIndex?: number;
 }
 
 export const DepartmentFormModal: React.FC<DepartmentFormModalProps> = ({
@@ -58,6 +61,7 @@ export const DepartmentFormModal: React.FC<DepartmentFormModalProps> = ({
   initialParentUuid,
   onSuccess,
   deptTreeItems,
+  zIndex,
 }) => {
   const { t, i18n } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -124,13 +128,16 @@ export const DepartmentFormModal: React.FC<DepartmentFormModalProps> = ({
         payload = omitPresetLocalizedPayloadFields('department', editPresetCode, payload);
         await updateDepartment(editUuid, payload as UpdateDepartmentData);
         messageApi.success(t('common.updateSuccess'));
+        onClose();
+        formRef.current?.resetFields();
+        onSuccess();
       } else {
-        await createDepartment(payload as CreateDepartmentData);
+        const created = await createDepartment(payload as CreateDepartmentData);
         messageApi.success(t('common.createSuccess'));
+        onClose();
+        formRef.current?.resetFields();
+        onSuccess(created);
       }
-      onClose();
-      formRef.current?.resetFields();
-      onSuccess();
     } catch (error: any) {
       messageApi.error(error?.message || (isEdit ? t('common.updateFailed') : t('common.saveFailed')));
     } finally {
@@ -155,6 +162,7 @@ export const DepartmentFormModal: React.FC<DepartmentFormModalProps> = ({
       formRef={formRef as React.RefObject<ProFormInstance>}
       initialValues={{ is_active: true, sort_order: 0, parent_uuid: initialParentUuid || undefined }}
       layout="vertical"
+      zIndex={zIndex}
     >
       <SchemaFormRenderer
         schema={departmentFormSchema}
@@ -167,6 +175,8 @@ export const DepartmentFormModal: React.FC<DepartmentFormModalProps> = ({
               name="manager_uuid"
               label={t('field.department.managerUuid')}
               placeholder={t('field.department.managerPlaceholder')}
+              showQuickCreate
+              showDepartmentInLabel
             />
           ),
         }}

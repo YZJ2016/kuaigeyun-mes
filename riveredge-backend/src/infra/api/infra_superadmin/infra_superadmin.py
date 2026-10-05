@@ -10,9 +10,10 @@ Date: 2025-12-27
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from infra.schemas.infra_superadmin import (
+    InfraSuperAdminChangePasswordRequest,
     InfraSuperAdminCreate,
     InfraSuperAdminUpdate,
-    InfraSuperAdminResponse
+    InfraSuperAdminResponse,
 )
 from infra.services.infra_superadmin_service import InfraSuperAdminService
 from infra.api.deps.services import get_infra_superadmin_service_with_fallback
@@ -123,4 +124,32 @@ async def update_infra_superadmin(
         )
     
     return InfraSuperAdminResponse.model_validate(admin)
+
+
+@router.post("/change-password")
+async def change_infra_superadmin_password(
+    data: InfraSuperAdminChangePasswordRequest,
+    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
+    admin_service: Any = Depends(get_infra_superadmin_service_with_fallback),
+):
+    """平台超级管理员修改登录密码（不依赖租户上下文）。"""
+    if not admin_service:
+        admin_service = InfraSuperAdminService()
+    if hasattr(admin_service, "change_infra_superadmin_password"):
+        await admin_service.change_infra_superadmin_password(
+            current_admin,
+            data.old_password,
+            data.new_password,
+        )
+    else:
+        from infra.domain.security.security import hash_password
+
+        if not current_admin.verify_password(data.old_password):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="当前密码错误",
+            )
+        current_admin.password_hash = hash_password(data.new_password)
+        await current_admin.save()
+    return {"message": "密码修改成功"}
 

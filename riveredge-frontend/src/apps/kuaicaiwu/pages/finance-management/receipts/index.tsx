@@ -414,7 +414,14 @@ const ReceiptsPage: React.FC = () => {
     actionRef.current?.reload();
           refreshOpenDetail();
         } catch (e: any) {
-          messageApi.error(e?.message || t('common.operationFailed'));
+          messageApi.error(
+            e?.response?.data?.detail?.message ||
+              e?.response?.data?.detail ||
+              e?.message ||
+              t('common.operationFailed'),
+          );
+          actionRef.current?.reload();
+          refreshOpenDetail();
         }
   };
 
@@ -966,9 +973,8 @@ const ReceiptsPage: React.FC = () => {
           tableRowsRef.current = rows;
         }}
         rowKey="id"
-        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.receipts.list-v5"
+        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.receipts.list-v6"
         showAdvancedSearch
-        search={{ labelWidth: 120 }}
         showCreateButton={false}
         createButtonText={t(`${R}.createTitle`)}
         onCreate={() => setCreateModalVisible(true)}

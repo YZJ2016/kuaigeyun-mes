@@ -31,6 +31,7 @@ PAGE_CODE_TO_FIXED_TEXT_PRESET: Dict[str, str] = {
     "master-data-supply-chain-supplier": "GYS",  # 供应商
     "master-data-performance-skill": "JN",       # 技能
     "kuaizhizao-production-work-order": "GD",    # 工单
+    "kuaizhizao-production-packing-binding": "PB",  # 装箱绑定（与 INDUSTRY_PACKING_BOX 同号段）
     "kuaizhizao-production-rework-order": "FGD", # 返工单
     "kuaizhizao-production-daily": "PDR",
     "kuaizhizao-production-daily-template": "PDT",
@@ -499,6 +500,19 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "module_icon": "tool",
         "auto_generate": True,
         "rule_code": "REWORK_ORDER_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaizhizao-production-packing-binding",
+        "page_name": "装箱绑定",
+        "page_path": "/apps/kuaizhizao/production-execution/packing-binding",
+        "code_field": "box_no",
+        "code_field_label": "箱号",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        # 与行业插件「装箱箱号」共用同一 rule_code，避免另建 PACKING_BINDING_BOX_CODE
+        "rule_code": "INDUSTRY_PACKING_BOX",
         "allow_manual_edit": True,
     },
     {
@@ -2482,6 +2496,7 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "code_field_label": "箱号",
         "module": "行业插件",
         "module_icon": "layers",
+        # 业务真源在装箱绑定；本页仅作行业插件侧展示入口，共用 INDUSTRY_PACKING_BOX
         "auto_generate": False,
         "rule_code": "INDUSTRY_PACKING_BOX",
         "allow_manual_edit": True,
@@ -2555,12 +2570,19 @@ def get_seq_sync_entity_for_rule(rule_code: str) -> Optional[Tuple[str, str, str
     return None
 
 
+_CODE_RULE_PAGE_BY_CODE: Optional[Dict[str, Dict[str, Any]]] = None
+
+
 def get_page_config_by_code(page_code: str) -> Optional[CodeRulePageConfig]:
     """按 page_code 查找页面编码规则静态配置。"""
-    for page in CODE_RULE_PAGES:
-        if page.get("page_code") == page_code:
-            return page
-    return None
+    global _CODE_RULE_PAGE_BY_CODE
+    if _CODE_RULE_PAGE_BY_CODE is None:
+        _CODE_RULE_PAGE_BY_CODE = {
+            str(page.get("page_code")): page
+            for page in CODE_RULE_PAGES
+            if page.get("page_code")
+        }
+    return _CODE_RULE_PAGE_BY_CODE.get(page_code)
 
 
 def get_canonical_rule_code(page_code: str) -> Optional[str]:

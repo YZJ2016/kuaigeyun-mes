@@ -69,6 +69,28 @@ def sources_from_row(row: Optional[Any]) -> List[Dict[str, Any]]:
     return normalize_sources_json(getattr(row, "sources", None))
 
 
+# 工程 BOM：line_key = parent|version|component，可由父件+子件目标字段派生
+_BOM_LINE_KEY_PARENT_TARGETS = frozenset({"parent_code", "material_code", "parent_main_code"})
+_BOM_LINE_KEY_COMPONENT_TARGETS = frozenset(
+    {"component_code", "child_code", "component_main_code"}
+)
+
+
+def mapping_covers_match_key(mapping: Dict[str, str], match_key: str) -> bool:
+    """字段映射是否覆盖匹配键（含 BOM line_key 派生）。"""
+    key = str(match_key or "").strip()
+    if not key:
+        return False
+    targets = {str(v).strip() for v in mapping.values() if str(v).strip()}
+    if key in targets:
+        return True
+    if key == "line_key":
+        return bool(targets & _BOM_LINE_KEY_PARENT_TARGETS) and bool(
+            targets & _BOM_LINE_KEY_COMPONENT_TARGETS
+        )
+    return False
+
+
 def validate_sources_for_match_key(sources: List[Dict[str, Any]], match_key: str) -> None:
     if not sources:
         raise ValidationError("请配置至少一个同步来源")
@@ -79,14 +101,13 @@ def validate_sources_for_match_key(sources: List[Dict[str, Any]], match_key: str
         mapping = _coerce_mapping(src.get("field_mapping"))
         if not mapping:
             raise ValidationError(f"来源 {idx + 1} 须配置字段映射")
-        if key not in mapping.values():
+        if not mapping_covers_match_key(mapping, key):
             raise ValidationError(f"来源 {idx + 1} 的字段映射须包含匹配键 {key}")
         kind = str(src.get("kind") or "").strip()
         if kind == "api" and not str(src.get("api_uuid") or "").strip():
             raise ValidationError(f"来源 {idx + 1} 须选择数据接口")
         if kind == "dataset" and not str(src.get("dataset_uuid") or "").strip():
             raise ValidationError(f"来源 {idx + 1} 须选择数据集")
-
 
 def resolve_sources_from_request(
     binding: Optional[Any],

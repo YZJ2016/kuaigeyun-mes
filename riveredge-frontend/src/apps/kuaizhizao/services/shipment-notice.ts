@@ -61,6 +61,8 @@ export interface ShipmentNotice {
   sales_delivery_code?: string;
   total_quantity?: number;
   total_amount?: number;
+  currency_code?: string;
+  exchange_rate?: number;
   notes?: string;
   attachments?: Array<{ uid?: string; name?: string; url?: string }>;
   created_at?: string;

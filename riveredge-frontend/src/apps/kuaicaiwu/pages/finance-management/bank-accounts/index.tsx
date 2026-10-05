@@ -1,6 +1,6 @@
 import { rowActionKind, rowActionViewBankFlow } from '../../../../../components/uni-action';
-import React, { useMemo, useRef, useState } from 'react';
-import type { ActionType, ProColumns } from '@ant-design/pro-components';
+import React, { lazy, Suspense, useCallback, useMemo, useRef, useState } from 'react';
+import type { ActionType, ProColumns, ProFormInstance } from '@ant-design/pro-components';
 import {
   ProFormDependency,
   ProFormMoney,
@@ -8,7 +8,20 @@ import {
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Button, Popconfirm, Typography } from 'antd';
+import {
+  App,
+  Alert,
+  Button,
+  DatePicker,
+  Form as AntForm,
+  Input,
+  InputNumber,
+  Popconfirm,
+  Select,
+  Typography,
+} from 'antd';
+import type { ColumnsType } from 'antd/es/table';
+import dayjs, { type Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import {
   DetailDrawerTemplate,
@@ -18,6 +31,7 @@ import {
   MODAL_CONFIG,
 } from '../../../../../components/layout-templates';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { bankAccountService, type BankAccount } from '../../../services/finance/bank-account';
 import { getCurrencySelectOptions, formatBankDirection, formatCurrency } from '../../../utils/financeUiLabels';
@@ -39,10 +53,50 @@ import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
+import {
+  buildFactoryImportTemplate,
+  resolveFactoryImportHeaderIndexMap,
+} from '../../../../../utils/spreadsheetImportTemplate';
+import { formatDateTime } from '../../../../../utils/format';
+import { normalizeFormListItems } from '../../../../../utils/formListItems';
 
 type BankTx = Record<string, unknown>;
 
+type StatementLine = {
+  transaction_date?: Dayjs | string | null;
+  direction?: 'in' | 'out' | string;
+  amount?: number | null;
+  summary?: string;
+};
+
 const BA = 'app.kuaicaiwu.bankAccount';
+
+const LazyUniImport = lazy(() =>
+  import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport })),
+);
+
+function escapeCsvCell(value: string): string {
+  if (/[",\n\r]/.test(value)) {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  return value;
+}
+
+function normalizeStatementDirection(raw: string): 'in' | 'out' | null {
+  const val = String(raw || '').trim().toLowerCase();
+  if (['in', '收入', '收', 'credit', 'cr', '+'].includes(val)) return 'in';
+  if (['out', '支出', '付', 'debit', 'dr', '-'].includes(val)) return 'out';
+  return null;
+}
+
+function createEmptyStatementLine(): StatementLine {
+  return {
+    transaction_date: dayjs(),
+    direction: 'in',
+    amount: undefined,
+    summary: '',
+  };
+}
 
 const BankAccountsPage: React.FC = () => {
   const { t } = useTranslation();
@@ -55,8 +109,224 @@ const BankAccountsPage: React.FC = () => {
   const [txDrawerOpen, setTxDrawerOpen] = useState(false);
   const [txAccount, setTxAccount] = useState<BankAccount | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  const [importOpen, setImportOpen] = useState(false);
+  const [importFormOpen, setImportFormOpen] = useState(false);
+  const [uniImportOpen, setUniImportOpen] = useState(false);
   const [importAccount, setImportAccount] = useState<BankAccount | null>(null);
+  const importFormRef = useRef<ProFormInstance>();
+
+  const directionInLabel = t('app.kuaicaiwu.financeUi.bankDirection.in');
+  const directionOutLabel = t('app.kuaicaiwu.financeUi.bankDirection.out');
+
+  const statementImportTemplate = useMemo(
+    () =>
+      buildFactoryImportTemplate(
+        t,
+        [
+          {
+            field: 'transactionDate',
+            required: true,
+            labelKey: `${BA}.import.transactionDate`,
+            aliases: ['交易日期', 'transaction_date', 'date', 'Date'],
+          },
+          {
+            field: 'direction',
+            required: true,
+            labelKey: `${BA}.import.direction`,
+            aliases: ['收支方向', '方向', 'direction', 'Direction'],
+            options: [directionInLabel, directionOutLabel],
+          },
+          {
+            field: 'amount',
+            required: true,
+            labelKey: `${BA}.import.amount`,
+            aliases: ['金额', 'amount', 'Amount'],
+          },
+          {
+            field: 'summary',
+            labelKey: `${BA}.col.summary`,
+            aliases: ['摘要', '备注', 'summary', 'Summary'],
+          },
+        ],
+        [
+          t(`${BA}.importExample.transactionDate`),
+          directionInLabel,
+          t(`${BA}.importExample.amount`),
+          t(`${BA}.importExample.summary`),
+        ],
+      ),
+    [t, directionInLabel, directionOutLabel],
+  );
+
+  const statementLineColumns = useMemo<ColumnsType<StatementLine>>(
+    () => [
+      {
+        title: t(`${BA}.import.transactionDate`),
+        dataIndex: 'transaction_date',
+        width: 160,
+        render: (_: unknown, __: unknown, index: number) => (
+          <AntForm.Item
+            name={[index, 'transaction_date']}
+            rules={[{ required: true, message: t('common.required') }]}
+            style={{ marginBottom: 0 }}
+          >
+            <DatePicker style={{ width: '100%' }} />
+          </AntForm.Item>
+        ),
+      },
+      {
+        title: t(`${BA}.import.direction`),
+        dataIndex: 'direction',
+        width: 120,
+        render: (_: unknown, __: unknown, index: number) => (
+          <AntForm.Item
+            name={[index, 'direction']}
+            rules={[{ required: true, message: t('common.required') }]}
+            style={{ marginBottom: 0 }}
+          >
+            <Select
+              options={[
+                { value: 'in', label: directionInLabel },
+                { value: 'out', label: directionOutLabel },
+              ]}
+            />
+          </AntForm.Item>
+        ),
+      },
+      {
+        title: t(`${BA}.import.amount`),
+        dataIndex: 'amount',
+        width: 140,
+        render: (_: unknown, __: unknown, index: number) => (
+          <AntForm.Item
+            name={[index, 'amount']}
+            rules={[{ required: true, message: t('common.required') }]}
+            style={{ marginBottom: 0 }}
+          >
+            <InputNumber min={0.01} precision={2} style={{ width: '100%' }} />
+          </AntForm.Item>
+        ),
+      },
+      {
+        title: t(`${BA}.col.summary`),
+        dataIndex: 'summary',
+        render: (_: unknown, __: unknown, index: number) => (
+          <AntForm.Item name={[index, 'summary']} style={{ marginBottom: 0 }}>
+            <Input maxLength={200} />
+          </AntForm.Item>
+        ),
+      },
+    ],
+    [directionInLabel, directionOutLabel, t],
+  );
+
+  /** UniImport：灌入表单明细，不直接提交 */
+  const handleUniImportFillLines = useCallback(
+    (data: unknown[][]) => {
+      const headers = (data[0] || []).map((h) => String(h ?? '').trim());
+      const headerIndexMap = resolveFactoryImportHeaderIndexMap(
+        headers,
+        statementImportTemplate.importHeaderMap,
+      );
+      if (
+        headerIndexMap.transactionDate === undefined
+        || headerIndexMap.direction === undefined
+        || headerIndexMap.amount === undefined
+      ) {
+        messageApi.error(t(`${BA}.importHeaderError`));
+        return false;
+      }
+      const importRows = data.slice(2).filter((row) =>
+        Array.isArray(row) && row.some((c) => c != null && String(c).trim() !== ''),
+      );
+      const newLines: StatementLine[] = [];
+      for (const row of importRows) {
+        const dateRaw = row[headerIndexMap.transactionDate];
+        const direction = normalizeStatementDirection(String(row[headerIndexMap.direction] ?? ''));
+        const amountRaw = String(row[headerIndexMap.amount] ?? '').trim().replace(/,/g, '');
+        const amount = Number(amountRaw);
+        const summary =
+          headerIndexMap.summary !== undefined
+            ? String(row[headerIndexMap.summary] ?? '').trim()
+            : '';
+        if (!dateRaw || !direction || !(amount > 0)) continue;
+        const dateStr = formatDateTime(dateRaw as string | Date | number, 'YYYY-MM-DD');
+        if (!dateStr || dateStr === '-') continue;
+        newLines.push({
+          transaction_date: dayjs(dateStr),
+          direction,
+          amount,
+          summary,
+        });
+      }
+      if (newLines.length === 0) {
+        messageApi.warning(t('app.kuaicaiwu.common.importNoValidRows'));
+        return false;
+      }
+      const current = normalizeFormListItems<StatementLine>(
+        importFormRef.current?.getFieldValue('lines'),
+      );
+      const keep = current.filter(
+        (row) => Number(row?.amount) > 0 || String(row?.summary || '').trim().length > 0,
+      );
+      importFormRef.current?.setFieldsValue({
+        lines: [...keep, ...newLines],
+      });
+      messageApi.success(t(`${BA}.importFilledLines`, { count: newLines.length }));
+      setUniImportOpen(false);
+      return true;
+    },
+    [messageApi, statementImportTemplate.importHeaderMap, t],
+  );
+
+  const handleImportFormFinish = useCallback(
+    async (values: { lines?: StatementLine[] }) => {
+      if (!importAccount) return;
+      const lines = normalizeFormListItems<StatementLine>(values.lines).filter((row) => {
+        const amount = Number(row.amount);
+        return row.transaction_date && row.direction && amount > 0;
+      });
+      if (lines.length === 0) {
+        messageApi.warning(t('app.kuaicaiwu.common.importNoValidRows'));
+        throw new Error('no valid statement lines');
+      }
+      const csvLines = ['transaction_date,direction,amount,summary'];
+      for (const row of lines) {
+        const dateStr = formatDateTime(
+          row.transaction_date as string | Date | number,
+          'YYYY-MM-DD',
+        );
+        const direction = normalizeStatementDirection(String(row.direction || ''));
+        const amount = Number(row.amount);
+        if (!dateStr || dateStr === '-' || !direction || !(amount > 0)) continue;
+        csvLines.push(
+          [
+            escapeCsvCell(dateStr),
+            escapeCsvCell(direction),
+            escapeCsvCell(String(amount)),
+            escapeCsvCell(String(row.summary || '').trim()),
+          ].join(','),
+        );
+      }
+      if (csvLines.length <= 1) {
+        messageApi.warning(t('app.kuaicaiwu.common.importNoValidRows'));
+        throw new Error('no valid statement lines');
+      }
+      const result = await bankAccountService.importStatement(
+        importAccount.id,
+        csvLines.join('\n'),
+      );
+      messageApi.success(
+        t(`${BA}.importSuccess`, {
+          count: result.imported_count,
+          balance: result.current_balance,
+        }),
+      );
+      setImportFormOpen(false);
+      setImportAccount(null);
+      actionRef.current?.reload();
+    },
+    [importAccount, messageApi, t],
+  );
 
   const activeValueEnum = useMemo(
     () => ({
@@ -201,7 +471,7 @@ const BankAccountsPage: React.FC = () => {
               {...rowActionKind('import')}
               onClick={() => {
                 setImportAccount(record);
-                setImportOpen(true);
+                setImportFormOpen(true);
               }}
             />
           ),
@@ -460,36 +730,55 @@ const BankAccountsPage: React.FC = () => {
       />
 
       <FormModalTemplate
-        title={importAccount
-          ? t(`${BA}.importTitleWithAccount`, { name: importAccount.account_name })
-          : t(`${BA}.importStatementTitle`)}
-        open={importOpen}
-        onClose={() => setImportOpen(false)}
-        width={MODAL_CONFIG.LARGE_WIDTH}
-        onFinish={async (values) => {
-          if (!importAccount) return;
-          const result = await bankAccountService.importStatement(importAccount.id, values.csv_content);
-          messageApi.success(t(`${BA}.importSuccess`, {
-            count: result.imported_count,
-            balance: result.current_balance,
-          }));
-          setImportOpen(false);
-    actionRef.current?.reload();
+        key={importAccount ? `import-statement-${importAccount.id}` : 'import-statement'}
+        title={
+          importAccount
+            ? t(`${BA}.importTitleWithAccount`, { name: importAccount.account_name })
+            : t(`${BA}.importStatementTitle`)
+        }
+        open={importFormOpen}
+        onClose={() => {
+          setImportFormOpen(false);
+          setUniImportOpen(false);
+          setImportAccount(null);
         }}
+        formRef={importFormRef}
+        grid={false}
+        width={MODAL_CONFIG.LARGE_WIDTH}
+        submitText={t('common.save')}
+        initialValues={{ lines: [createEmptyStatementLine()] }}
+        onFinish={handleImportFormFinish}
       >
-        <p style={{ color: 'var(--ant-color-text-secondary)', marginBottom: 8 }}>
-          {t(`${BA}.importHint`)}
-        </p>
-        <ProFormTextArea
-          name="csv_content"
-          label={t(`${BA}.importContent`)}
-          rules={[{ required: true, message: t(`${BA}.importContentRequired`) }]}
-          fieldProps={{
-            rows: 10,
-            placeholder: t(`${BA}.importPlaceholder`),
-          }}
+        <Alert
+          type="info"
+          showIcon
+          title={t(`${BA}.importHint`)}
+          style={{ marginBottom: 12 }}
+        />
+        <UniTableDetail
+          name="lines"
+          title={t(`${BA}.import.linesTitle`)}
+          required
+          requiredMessage={t(`${BA}.import.linesRequired`)}
+          columns={statementLineColumns}
+          initialValue={createEmptyStatementLine}
+          minRows={1}
+          onImport={() => setUniImportOpen(true)}
+          importText={t('common.importDetail')}
         />
       </FormModalTemplate>
+
+      <Suspense fallback={null}>
+        <LazyUniImport
+          open={uniImportOpen}
+          onCancel={() => setUniImportOpen(false)}
+          onConfirm={handleUniImportFillLines}
+          title={t(`${BA}.importUniImportTitle`)}
+          headers={statementImportTemplate.importHeaders}
+          exampleRow={statementImportTemplate.importExampleRow}
+          columnOptions={statementImportTemplate.importColumnOptions}
+        />
+      </Suspense>
 
       <FormModalTemplate
         title={editing ? t(`${BA}.editTitle`) : t(`${BA}.createTitle`)}

@@ -258,6 +258,8 @@ export async function getMrpExceptionInbox(params?: {
   severity?: string;
   skip?: number;
   limit?: number;
+  /** 看板摘要：只扫最近 N 次已完成计算 */
+  max_computations?: number;
 }): Promise<MrpExceptionInboxResponse> {
   return apiRequest<MrpExceptionInboxResponse>('/apps/kuaizhizao/demand-computations/mrp-exception-inbox', {
     method: 'GET',

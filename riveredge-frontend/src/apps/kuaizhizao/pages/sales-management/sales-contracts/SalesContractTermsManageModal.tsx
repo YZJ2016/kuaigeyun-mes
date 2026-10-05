@@ -285,7 +285,6 @@ export const SalesContractTermsManageModal: React.FC<SalesContractTermsManageMod
                   columnPersistenceId="apps.kuaizhizao.sales-contracts.terms-items-width-v1"
                   actionRef={itemActionRef}
                   rowKey="id"
-                  search={false}
                   showFuzzySearch={false}
                   showAdvancedSearch={false}
                   options={false}
@@ -327,7 +326,6 @@ export const SalesContractTermsManageModal: React.FC<SalesContractTermsManageMod
                   columnPersistenceId="apps.kuaizhizao.sales-contracts.terms-groups-width-v1"
                   actionRef={groupActionRef}
                   rowKey="id"
-                  search={false}
                   showFuzzySearch={false}
                   showAdvancedSearch={false}
                   options={false}

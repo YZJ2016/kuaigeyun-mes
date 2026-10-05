@@ -65,6 +65,7 @@ import { testGenerateCode } from '../../../services/codeRule';
 
 import { MaterialUnitQuickSelect } from './MaterialUnitQuickSelect';
 import { useMaterialUnitOptions } from '../hooks/useMaterialUnitOptions';
+import { useResourcePermissions } from '../../../hooks/useResourcePermissions';
 import PriceTypeSwitch, { type PriceTypeValue } from '../../../components/price-type-switch/PriceTypeSwitch';
 import { convertUnitPriceByPriceType } from '../utils/resolve-partner-material-price';
 import {
@@ -237,6 +238,13 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
     resetFieldValues,
   } = useCustomFields({ tableName: 'master_data_materials', loadWhenOpen: true, open });
 
+  const processRoutePerms = useResourcePermissions('master-data:process:route');
+  const processOperationPerms = useResourcePermissions('master-data:process:operation');
+  const supplierPerms = useResourcePermissions('master-data:supply-chain:supplier');
+  const customerPerms = useResourcePermissions('master-data:supply-chain:customer');
+  const warehousePerms = useResourcePermissions('master-data:warehouse:warehouse');
+  const engineeringBomPerms = useResourcePermissions('master-data:process:engineering-bom');
+
   const sourceTypeOptions = useMemo(() => buildMaterialSourceTypeOptions(t), [t]);
   const [activeTab, setActiveTab] = useState<string>('basic');
   const [variantManaged, setVariantManaged] = useState<boolean>(false);
@@ -302,6 +310,10 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
    * 加载客户列表
    */
   const loadCustomers = async () => {
+    if (!customerPerms.canRead) {
+      setCustomers([]);
+      return;
+    }
     try {
       setCustomersLoading(true);
       const result = await customerApi.list({ limit: 1000, isActive: true });
@@ -317,6 +329,10 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
    * 加载供应商列表
    */
   const loadSuppliers = async () => {
+    if (!supplierPerms.canRead) {
+      setSuppliers([]);
+      return;
+    }
     try {
       setSuppliersLoading(true);
       const result = await supplierApi.list({ limit: 1000, isActive: true });
@@ -329,24 +345,13 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
   };
 
   /**
-   * 加载仓库列表
-   */
-  const loadWarehouses = async () => {
-    try {
-      setWarehousesLoading(true);
-      const result = await warehouseApi.list({ limit: 1000, is_active: true });
-      setWarehouses(result.items);
-    } catch (error: any) {
-      console.error(t('app.master-data.materialForm.fetchWarehousesFailed'), error);
-    } finally {
-      setWarehousesLoading(false);
-    }
-  };
-
-  /**
-   * 加载工艺路线列表
+   * 加载工艺路线列表（默认工艺路线下拉）
    */
   const loadProcessRoutes = async () => {
+    if (!processRoutePerms.canRead) {
+      setProcessRoutes([]);
+      return;
+    }
     try {
       setProcessRoutesLoading(true);
       const result = await processRouteApi.list({ limit: 1000, isActive: true });
@@ -362,6 +367,10 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
    * 加载工序列表（委外工序下拉用）
    */
   const loadOperations = async () => {
+    if (!processOperationPerms.canRead) {
+      setOperations([]);
+      return;
+    }
     try {
       setOperationsLoading(true);
       const result = await operationApi.list({ limit: 1000, isActive: true });
@@ -370,6 +379,25 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
       console.error(t('app.master-data.materialForm.fetchOperationsFailed'), error);
     } finally {
       setOperationsLoading(false);
+    }
+  };
+
+  /**
+   * 加载仓库列表
+   */
+  const loadWarehouses = async () => {
+    if (!warehousePerms.canRead) {
+      setWarehouses([]);
+      return;
+    }
+    try {
+      setWarehousesLoading(true);
+      const result = await warehouseApi.list({ limit: 1000, is_active: true });
+      setWarehouses(result.items);
+    } catch (error: any) {
+      console.error(t('app.master-data.materialForm.fetchWarehousesFailed'), error);
+    } finally {
+      setWarehousesLoading(false);
     }
   };
 
@@ -1446,6 +1474,13 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
                   suppliersLoading={suppliersLoading}
                   processRoutesLoading={processRoutesLoading}
                   operationsLoading={operationsLoading}
+                  canReadProcessRoutes={processRoutePerms.canRead}
+                  canCreateProcessRoutes={processRoutePerms.canCreate}
+                  canReadOperations={processOperationPerms.canRead}
+                  canCreateOperations={processOperationPerms.canCreate}
+                  canReadSuppliers={supplierPerms.canRead}
+                  canCreateSuppliers={supplierPerms.canCreate}
+                  canUpdateEngineeringBom={engineeringBomPerms.canUpdate}
                   sourceTypeOptions={sourceTypeOptions}
                   suspendedModalReturnPath={pageSuspendPath}
                   materialUuid={isEdit && material ? material.uuid : undefined}
@@ -3764,6 +3799,13 @@ interface MaterialSourceTabProps {
   suppliersLoading: boolean;
   processRoutesLoading: boolean;
   operationsLoading: boolean;
+  canReadProcessRoutes: boolean;
+  canCreateProcessRoutes: boolean;
+  canReadOperations: boolean;
+  canCreateOperations: boolean;
+  canReadSuppliers: boolean;
+  canCreateSuppliers: boolean;
+  canUpdateEngineeringBom: boolean;
   sourceTypeOptions: Array<{ label: string; value: string }>;
   suspendedModalReturnPath?: string;
   materialUuid?: string;
@@ -3782,6 +3824,13 @@ const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
   suppliersLoading,
   processRoutesLoading,
   operationsLoading,
+  canReadProcessRoutes,
+  canCreateProcessRoutes,
+  canReadOperations,
+  canCreateOperations,
+  canReadSuppliers,
+  canCreateSuppliers,
+  canUpdateEngineeringBom,
   sourceTypeOptions,
   suspendedModalReturnPath,
   materialUuid,
@@ -3811,6 +3860,50 @@ const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
     }),
     [t],
   );
+
+  /** 有工序列表权限时用全量；否则用物料详情已有名称回填，避免下拉只显示 UUID */
+  const processRouteSelectOptions = useMemo(() => {
+    const fromList = processRoutes.map((pr) => ({
+      label: `${pr.code} - ${pr.name}`,
+      value: pr.uuid,
+    }));
+    if (fromList.length > 0) return fromList;
+    const defaults = ((material as any)?.defaults || {}) as Record<string, unknown>;
+    const uuid = String(
+      defaults.defaultProcessRouteUuid
+        ?? defaults.default_process_route_uuid
+        ?? (material as any)?.processRouteUuid
+        ?? (material as any)?.process_route_uuid
+        ?? '',
+    ).trim();
+    if (!uuid) return [];
+    const name = String(
+      (material as any)?.processRouteName
+        ?? (material as any)?.process_route_name
+        ?? '',
+    ).trim();
+    const code = String(
+      (material as any)?.processRouteCode
+        ?? (material as any)?.process_route_code
+        ?? '',
+    ).trim();
+    const label = code && name ? `${code} - ${name}` : (name || uuid);
+    return [{ label, value: uuid }];
+  }, [processRoutes, material]);
+
+  const operationSelectOptions = useMemo(() => {
+    const fromList = operations.map((op) => ({
+      label: `${op.code} - ${op.name}`,
+      value: op.uuid,
+    }));
+    if (fromList.length > 0) return fromList;
+    const cfg = ((material as any)?.sourceConfig
+      || (material as any)?.source_config
+      || {}) as Record<string, unknown>;
+    const uuid = String(cfg.outsource_operation ?? '').trim();
+    if (!uuid) return [];
+    return [{ label: uuid, value: uuid }];
+  }, [operations, material]);
 
   const materialId = material?.id;
   const [bomVersionRows, setBomVersionRows] = useState<
@@ -3849,7 +3942,7 @@ const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
       const defaultRow = rows.find((r) => r.isDefault) ?? rows[0];
       setSelectedBomVersion(defaultRow?.version);
     } catch (e: unknown) {
-      messageApi.error((e as Error).message || t('app.master-data.materialForm.fetchBomVersionsFailed'));
+      console.error('load material BOM versions failed', e);
       setBomVersionRows([]);
       setSelectedBomVersion(undefined);
     } finally {
@@ -3875,7 +3968,7 @@ const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
   };
 
   const handleDefaultBomVersionChange = async (version: string | undefined) => {
-    if (!version || !materialId) return;
+    if (!version || !materialId || !canUpdateEngineeringBom) return;
     const row = bomVersionRows.find((r) => r.version === version);
     if (!row?.uuid) return;
     try {
@@ -4060,17 +4153,15 @@ const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
                       >
                         <UniDropdown
                           placeholder={t('app.master-data.source.selectProcessRoute')}
-                          options={processRoutes.map((pr) => ({
-                            label: `${pr.code} - ${pr.name}`,
-                            value: pr.uuid,
-                          }))}
-                          allowClear
-                          showSearch
+                          options={processRouteSelectOptions}
+                          allowClear={canReadProcessRoutes}
+                          showSearch={canReadProcessRoutes}
                           loading={processRoutesLoading}
+                          disabled={!canReadProcessRoutes}
                           optionFilterProp="label"
                           style={{ width: '100%' }}
                           quickCreate={
-                            onQuickAddProcessRoute
+                            onQuickAddProcessRoute && canCreateProcessRoutes
                               ? {
                                   label: t('app.master-data.materialForm.quickAddProcessRoute'),
                                   onClick: () => onQuickAddProcessRoute(),
@@ -4102,7 +4193,7 @@ const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
                           disabled={!materialId}
                           loading={bomVersionsLoading}
                           allowClear={false}
-                          showSearch
+                          showSearch={canUpdateEngineeringBom}
                           optionFilterProp="label"
                           style={{ width: '100%' }}
                           value={selectedBomVersion}
@@ -4112,7 +4203,11 @@ const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
                               ? `${row.version} ${t('app.kuaizhizao.demandComputation.bomVersionDefault')}`
                               : row.version,
                           }))}
-                          onChange={(val) => handleDefaultBomVersionChange(val as string | undefined)}
+                          onChange={(val) => {
+                            if (canUpdateEngineeringBom) {
+                              void handleDefaultBomVersionChange(val as string | undefined);
+                            }
+                          }}
                           quickCreate={
                             materialId
                               ? {
@@ -4157,12 +4252,13 @@ const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
                           placeholder={t('app.master-data.source.selectDefaultSupplier')}
                           options={suppliers.map((s) => ({ label: `${s.code} - ${s.name}`, value: s.id }))}
                           loading={suppliersLoading}
-                          showSearch
-                          allowClear
+                          showSearch={canReadSuppliers}
+                          allowClear={canReadSuppliers}
+                          disabled={!canReadSuppliers}
                           style={{ width: '100%' }}
                           optionFilterProp="label"
                           quickCreate={
-                            onQuickAddSupplier
+                            onQuickAddSupplier && canCreateSuppliers
                               ? {
                                   label: t('app.master-data.materialForm.quickAddSupplier'),
                                   onClick: () => onQuickAddSupplier(),
@@ -4215,12 +4311,13 @@ const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
                           placeholder={t('app.master-data.source.selectOutsourceSupplier')}
                           options={suppliers.map((s) => ({ label: `${s.code} - ${s.name}`, value: s.id }))}
                           loading={suppliersLoading}
-                          showSearch
-                          allowClear
+                          showSearch={canReadSuppliers}
+                          allowClear={canReadSuppliers}
+                          disabled={!canReadSuppliers}
                           style={{ width: '100%' }}
                           optionFilterProp="label"
                           quickCreate={
-                            onQuickAddOutsourceSupplier
+                            onQuickAddOutsourceSupplier && canCreateSuppliers
                               ? {
                                   label: t('app.master-data.materialForm.quickAddSupplier'),
                                   onClick: () => onQuickAddOutsourceSupplier(),
@@ -4238,14 +4335,15 @@ const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
                       >
                         <UniDropdown
                           placeholder={t('app.master-data.source.selectOutsourceOperation')}
-                          options={operations.map((op) => ({ label: `${op.code} - ${op.name}`, value: op.uuid }))}
+                          options={operationSelectOptions}
                           loading={operationsLoading}
-                          showSearch
-                          allowClear
+                          showSearch={canReadOperations}
+                          allowClear={canReadOperations}
+                          disabled={!canReadOperations}
                           style={{ width: '100%' }}
                           optionFilterProp="label"
                           quickCreate={
-                            onQuickAddOperation
+                            onQuickAddOperation && canCreateOperations
                               ? {
                                   label: t('app.master-data.materialForm.quickAddOperation'),
                                   onClick: () => onQuickAddOperation(),

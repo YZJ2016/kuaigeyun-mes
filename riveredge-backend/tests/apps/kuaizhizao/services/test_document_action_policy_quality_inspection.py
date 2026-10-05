@@ -48,6 +48,20 @@ def test_conduct_blocked_when_approved():
     )
     assert not caps.conduct.allowed
     assert caps.conduct.reason == "quality_inspection.conduct.approved_locked"
+    assert caps.update_attachments.allowed
+    assert not caps.apply_plan.allowed
+
+
+def test_apply_plan_when_pending():
+    caps = derive_quality_inspection_capabilities(_inspection())
+    assert caps.apply_plan.allowed
+
+
+def test_update_attachments_when_approved():
+    caps = derive_quality_inspection_capabilities(
+        _inspection(status="已审核", review_status="通过", inspection_result="已检验"),
+    )
+    assert caps.update_attachments.allowed
 
 
 def test_conduct_blocked_when_auto_approved_unqualified():

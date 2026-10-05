@@ -86,7 +86,7 @@ const WorkbenchPage: React.FC = () => {
       {
         key: 'pending',
         title: t('app.kuaioa.workbench.pendingApprovals'),
-        value: summary?.pending_approval_total ?? 0,
+        value: summary?.kuaioa_pending_approval_total ?? 0,
         icon: <AuditOutlined style={{ fontSize: 24 }} />,
         gradient: 'linear-gradient(135deg, #1890ff 0%, #36cfc9 100%)',
         onClick: () => navigate('/personal/tasks'),

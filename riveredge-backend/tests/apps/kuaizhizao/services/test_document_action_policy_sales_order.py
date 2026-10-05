@@ -48,8 +48,9 @@ def test_computation_already_pushed_blocks_push():
         has_items=True,
     )
     assert not caps.push_computation.allowed
+    assert caps.push_computation.reason == "sales_order.push_computation.already_pushed"
     assert caps.withdraw_computation.allowed
-    assert caps.withdraw_computation.reason == "sales_order.push_computation.already_pushed"
+    assert caps.withdraw_computation.reason is None
 
 
 def test_line_work_orders_block_computation_push():
@@ -95,6 +96,25 @@ def test_revoke_approval_confirmed_effective():
 def test_revoke_approval_denied_when_closed():
     caps = derive_sales_order_capabilities(_o(status="已关闭", review_status="审核通过"))
     assert not caps.revoke_approval.allowed
+
+
+def test_revoke_approval_denied_when_has_downstream():
+    caps = derive_sales_order_capabilities(
+        _o(status="CONFIRMED", review_status="APPROVED"),
+        has_downstream_documents=True,
+    )
+    assert not caps.revoke_approval.allowed
+    assert caps.revoke_approval.reason == "sales_order.revoke_approval.has_downstream"
+    assert caps.create_change_order.allowed
+
+    with pytest.raises(BusinessLogicError) as exc:
+        assert_sales_order_capability(
+            _o(status="已审核", review_status="审核通过"),
+            "revoke_approval",
+            has_downstream_documents=True,
+        )
+    assert "下游单据" in str(exc.value)
+    assert "销售变更单" in str(exc.value)
 
 
 def test_create_change_order_when_locked():

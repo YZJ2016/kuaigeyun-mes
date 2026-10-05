@@ -31,6 +31,7 @@ import {
   deletePrintTemplate,
   renderPrintTemplate,
   PrintTemplate,
+  PrintTemplateListParams,
   CreatePrintTemplateData,
   UpdatePrintTemplateData,
   RenderPrintTemplateData,
@@ -43,6 +44,7 @@ import {
   resolvePresetPrintTemplateName,
 } from '../../../../utils/presetEntityI18n';
 import { countWithPagedRequests } from '../../../../utils/pagedCount';
+import { resolvePrintTemplateListFilter } from '../../../../utils/systemUniTableListFilters';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
@@ -691,16 +693,17 @@ const PrintTemplateListPage: React.FC = () => {
             const skip = (current - 1) * pageSize;
             const limit = pageSize;
             
-            const listParams: any = {
+            const filter = resolvePrintTemplateListFilter(searchFormValues);
+            const listParams: PrintTemplateListParams = {
               skip,
               limit,
-              ...searchFormValues,
+              ...filter,
             };
             
             try {
               const [data, total] = await Promise.all([
                 getPrintTemplateList(listParams),
-                countWithPagedRequests(getPrintTemplateList, searchFormValues || {}, { chunkSize: 100 }),
+                countWithPagedRequests(getPrintTemplateList, filter, { chunkSize: 100 }),
               ]);
               
               // 同时获取所有数据用于统计（如果当前页是第一页）

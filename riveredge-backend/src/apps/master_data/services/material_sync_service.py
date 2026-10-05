@@ -31,6 +31,7 @@ from apps.master_data.services.master_data_sync_common import (
     mark_binding_success,
     normalize_schedule_interval,
     normalize_sync_mode,
+    record_fields_unchanged,
     resolve_incremental_since,
     resolve_sync_sources,
     serialize_binding_row,
@@ -451,6 +452,38 @@ class MaterialSyncService:
                 custom_payload_by_code[main_code] = mapped_row
                 existing = existing_by_code.get(main_code)
                 if existing:
+                    proposed: Dict[str, Any] = {
+                        "name": name,
+                        "specification": specification,
+                        "base_unit": resolved_unit,
+                    }
+                    if group_id is not None:
+                        proposed["group_id"] = group_id
+                    for field_name in MATERIAL_SYNC_EXTRA_SCALAR_FIELDS:
+                        if field_name not in mapped_row:
+                            continue
+                        coerced = _coerce_material_extra_value(
+                            field_name,
+                            mapped_row.get(field_name),
+                            conversion_entries,
+                            source_field_names,
+                        )
+                        if coerced is None and field_name in MATERIAL_SYNC_BOOL_FIELDS:
+                            continue
+                        if coerced is None and field_name in {
+                            "weight",
+                            "volume",
+                            "over_report_value",
+                        }:
+                            continue
+                        proposed[field_name] = coerced
+                    # 自定义字段有映射时无法在此廉价比对，仍走更新；纯系统字段无变更则跳过
+                    has_custom_mapping = any(
+                        str(key).startswith("custom:") for key in mapped_row.keys()
+                    )
+                    if not has_custom_mapping and record_fields_unchanged(existing, proposed):
+                        skipped += 1
+                        continue
                     existing.name = name
                     existing.specification = specification
                     existing.base_unit = resolved_unit

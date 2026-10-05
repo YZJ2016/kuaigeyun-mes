@@ -203,6 +203,10 @@ class PlatformSettings(Model):
         default=True,
         description="登录页是否显示快捷登录（社交账号登录）"
     )
+    login_quick_providers = fields.JSONField(
+        default=dict,
+        description="快捷登录分渠道开关（wechat/qq/wechat_work/dingtalk/feishu）",
+    )
     enable_register = fields.BooleanField(
         default=True,
         description="是否启用公开注册（登录页注册链接）"

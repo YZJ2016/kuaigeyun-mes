@@ -35,6 +35,10 @@ import {
   TWO_COLUMN_LAYOUT,
 } from '../../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import {
+  pickListSearchKeywordOrFields,
+  pickSearchString,
+} from '../../../../../utils/tableQueryKey';
 import { ProcessMasterDetailDrawer } from '../shared/processMasterDetailDrawer';
 import { DetailDrawerActions } from '../../../../../components/layout-templates/DetailDrawerActions';
 import { MarkerTag, StatusTag } from '../../../../../constants/statusBadges';
@@ -312,7 +316,6 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
   const showInlinePreview = !!screens.lg;
 
   const actionRef = useRef<ActionType>(null);
-  const treeFilterRef = useRef<DrawingTreeFilter>({});
 
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
   const [paneMode, setPaneMode] = useState<DrawingPaneMode>('vault');
@@ -394,8 +397,6 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
     catalogTab === 'engineering' ? 'product_spec' : undefined;
 
   const showPreviewPane = showInlinePreview && !!inlinePreviewFile?.uuid;
-
-  treeFilterRef.current = treeFilter;
 
   const typeLabel = (type: DrawingType) =>
     t(`app.master-data.drawings.type.${type}`, { defaultValue: type });
@@ -530,7 +531,6 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
     const keep = mode === 'vault' ? isVaultTreeKey(currentKey) : !isVaultTreeKey(currentKey) || currentKey === DRAWING_TREE_ALL_KEY;
     if (!keep) {
       setSelectedTreeKeys([DRAWING_TREE_ALL_KEY]);
-      treeFilterRef.current = {};
       startTransition(() => {
         setTreeFilter({});
     actionRef.current?.reload();
@@ -544,7 +544,6 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
     const currentKey = String(selectedTreeKeys[0] ?? DRAWING_TREE_ALL_KEY);
     if (!treeKeyBelongsToMode(currentKey, mode)) {
       setSelectedTreeKeys([DRAWING_TREE_ALL_KEY]);
-      treeFilterRef.current = {};
       startTransition(() => {
         setTreeFilter({});
     actionRef.current?.reload();
@@ -620,7 +619,6 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
           messageApi.success(t('common.deleteSuccess'));
           if (treeFilter.folderUuid === folder.uuid) {
             setSelectedTreeKeys([DRAWING_TREE_ALL_KEY]);
-            treeFilterRef.current = {};
             setTreeFilter({});
             actionRef.current?.reload();
           }
@@ -760,7 +758,6 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
       setSelectedTreeKeys(keys);
 
       startTransition(() => {
-        treeFilterRef.current = nextFilter;
         setTreeFilter(nextFilter);
         if (inferredMode && inferredMode !== navMode) {
           setNavMode(inferredMode);
@@ -1699,8 +1696,10 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
           helpViewConfig={buildListPageHelpViewConfig('masterData.drawings')}
           actionRef={actionRef}
           rowKey="uuid"
-          columnPersistenceId="apps.master-data.pages.process.drawings.folder-v4"
+          columnPersistenceId="apps.master-data.pages.process.drawings.folder-v6"
+          showAdvancedSearch
           permissionResource={DRAWING_PERMISSION}
+          params={{ drawingTreeFilter: treeFilter }}
           tanstackQuery={{ queryKeyPrefix: tableQueryKey }}
           columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
           headerTitle={t('app.master-data.menu.process.drawings')}
@@ -1801,19 +1800,28 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
           onTableDataChange={(rows) => {
             drawingRowsRef.current = rows;
           }}
-          request={async (params, meta?: UniTableRequestMeta) => {
+          skipFuzzyPinyinClientFilter
+          request={async (params, _sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
             try {
-              const tf = treeFilterRef.current;
+              const tf = (params.drawingTreeFilter ?? {}) as DrawingTreeFilter;
+              const keyword = pickListSearchKeywordOrFields(searchFormValues, 'name', 'code');
+              const advancedStatus = pickSearchString(searchFormValues, 'status') as
+                | DrawingStatus
+                | undefined;
+              const advancedDrawingType = pickSearchString(searchFormValues, 'drawingType') as
+                | DrawingType
+                | undefined;
               const res = await drawingApi.list({
                 skip: ((params.current || 1) - 1) * (params.pageSize || 20),
                 limit: params.pageSize || 20,
-                keyword: params.keyword as string | undefined,
-                status: (params.status as DrawingStatus | undefined) ?? tf.status,
+                keyword,
+                status: advancedStatus ?? tf.status,
                 drawingType:
-                  fixedCatalogDrawingType ??
-                  ((params.drawingType as DrawingType | undefined) ?? tf.drawingType),
+                  fixedCatalogDrawingType ?? (advancedDrawingType ?? tf.drawingType),
                 excludeDrawingTypes: excludeCatalogDrawingTypes,
-                securityLevel: params.securityLevel as DrawingSecurityLevel | undefined,
+                securityLevel: pickSearchString(searchFormValues, 'securityLevel') as
+                  | DrawingSecurityLevel
+                  | undefined,
                 materialUuid: tf.materialUuid,
                 processRouteUuid: tf.processRouteUuid,
                 folderUuid: tf.folderUuid,
@@ -1862,6 +1870,8 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
       fixedCatalogDrawingType,
       excludeCatalogDrawingTypes,
       rdProductionView,
+      treeFilter,
+      enrichRecordsWithCustomFields,
     ],
   );
 

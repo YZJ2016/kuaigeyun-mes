@@ -2,7 +2,12 @@ import type { TFunction } from 'i18next';
 import type { ProColumns } from '@ant-design/pro-components';
 import React from 'react';
 import type { FactoryPaginatedList } from '../types/factory';
-import { extractProTableSort } from '../../../utils/tableQueryKey';
+import {
+  extractProTableSort,
+  pickListSearchKeyword,
+  pickSearchString,
+  pickSearchTriStateBoolean,
+} from '../../../utils/tableQueryKey';
 import { parseSalesReportDateRange } from '../../kuaizhizao/services/reports';
 import { formatDateTime } from '../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../utils/formDate';
@@ -92,11 +97,6 @@ export function normalizeMasterBatchDeleteResponse(raw: unknown): MasterBatchDel
   };
 }
 
-function pickString(searchFormValues: Record<string, unknown> | null | undefined, key: string) {
-  const v = searchFormValues?.[key];
-  return typeof v === 'string' && v.trim() ? v.trim() : undefined;
-}
-
 function resolveMasterCrudSort(sort?: Record<string, unknown>) {
   const { sortBy, sortOrder } = extractProTableSort(sort ?? {});
   if (!sortBy || !sortOrder) {
@@ -112,9 +112,9 @@ export function pickOptionalId(
   search: Record<string, unknown>,
   key: string,
 ): number | undefined {
-  const v = search[key];
-  if (v == null || v === '') return undefined;
-  const n = Number(v);
+  const raw = pickSearchString(search, key);
+  if (raw == null) return undefined;
+  const n = Number(raw);
   return Number.isFinite(n) && n > 0 ? n : undefined;
 }
 
@@ -122,8 +122,7 @@ export function pickOptionalString(
   search: Record<string, unknown>,
   key: string,
 ): string | undefined {
-  const v = search[key];
-  return typeof v === 'string' && v.trim() ? v.trim() : undefined;
+  return pickSearchString(search, key);
 }
 
 export function masterCrudCodeNameSearchColumns(
@@ -304,26 +303,20 @@ export function resolveMasterCrudListParams(
     extra?: (search: Record<string, unknown>) => Record<string, string | number | boolean | undefined>;
   },
 ): Record<string, string | number | boolean | undefined> {
-  const s = searchFormValues ?? {};
+  const search = searchFormValues ?? {};
   const activeField = options?.activeField ?? MASTER_CRUD_PINNED_ACTIVE_FIELD;
-  const fuzzyKeyword = pickString(s, 'keyword');
-  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(s, [
+  const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
+  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(search, [
     'created_at_range',
     'createdAtRange',
   ]);
-  const { date_start: updated_start_date, date_end: updated_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: updated_start_date, date_end: updated_end_date } = parseSalesReportDateRange(search, [
     'updated_at_range',
     'updatedAtRange',
   ]);
   const { sort_field, sort_order } = resolveMasterCrudSort(sort);
 
-  const activeRaw = s[activeField];
-  const is_active =
-    activeRaw === true || activeRaw === 'true'
-      ? true
-      : activeRaw === false || activeRaw === 'false'
-        ? false
-        : undefined;
+  const is_active = pickSearchTriStateBoolean(searchFormValues, activeField);
 
   const params: Record<string, string | number | boolean | undefined> = {
     sort_field,
@@ -333,14 +326,14 @@ export function resolveMasterCrudListParams(
     created_end_date,
     updated_start_date,
     updated_end_date,
-    ...(options?.extra?.(s) ?? {}),
+    ...(options?.extra?.(search) ?? {}),
   };
 
   if (fuzzyKeyword) {
     params.keyword = fuzzyKeyword;
   } else {
-    const code = pickString(s, 'code');
-    const name = pickString(s, 'name');
+    const code = pickSearchString(searchFormValues, 'code');
+    const name = pickSearchString(searchFormValues, 'name');
     if (code) params.code = code;
     if (name) params.name = name;
   }

@@ -40,9 +40,9 @@ wizard_supports_truecolor() {
 
 # 固定主题色：优先 24-bit RGB（各终端观感一致），否则退回标准 16 色（不用 90–97 亮色系）
 wizard_init_theme() {
-    WIZARD_RESET='\033[0m'
-    WIZARD_BOLD='\033[1m'
-    WIZARD_DIM='\033[2m'
+    WIZARD_RESET=$'\033[0m'
+    WIZARD_BOLD=$'\033[1m'
+    WIZARD_DIM=$'\033[2m'
     if [ -n "${NO_COLOR:-}" ]; then
         WIZARD_CYAN=''
         WIZARD_GREEN=''
@@ -61,12 +61,12 @@ wizard_init_theme() {
         WIZARD_RED=$'\033[38;2;208;96;96m'
         WIZARD_BLUE=$'\033[38;2;96;144;208m'
     else
-        WIZARD_CYAN='\033[36m'
+        WIZARD_CYAN=$'\033[36m'
         WIZARD_LOGO_COLOR="${WIZARD_CYAN}"
-        WIZARD_GREEN='\033[32m'
-        WIZARD_YELLOW='\033[33m'
-        WIZARD_RED='\033[31m'
-        WIZARD_BLUE='\033[34m'
+        WIZARD_GREEN=$'\033[32m'
+        WIZARD_YELLOW=$'\033[33m'
+        WIZARD_RED=$'\033[31m'
+        WIZARD_BLUE=$'\033[34m'
     fi
     WIZARD_PANEL_BORDER="${WIZARD_DIM}"
 }
@@ -387,12 +387,12 @@ wizard_show_home_panel() {
     wizard_panel_mid
     wizard_panel_section "DEPLOY 部署"
     wizard_panel_menu_item "1" "全新安装" "检测环境与依赖，完成配置后启动"
-    wizard_panel_menu_item "2" "修改配置" "修改数据库、超管账号与访问地址"
+    wizard_panel_menu_item "2" "修改配置" "分类挑选或全部设置（库/超管/IP/Caddy/反代）"
     wizard_panel_menu_item "3" "更新系统" "fetch+reset 拉最新 → 迁移重启（低配固定传统部署）"
     wizard_panel_menu_item "4" "扩展应用" "专业包 / 定制包 / 移动端 H5（私有仓，需凭证）"
+    wizard_panel_menu_item "5" "选装依赖" "发票 OCR / PDF 打印 / KU-AI / 敏感词 / LibreOffice"
     wizard_panel_section "OPS 运维"
-    wizard_panel_menu_item "5" "详情" "服务状态 · 基线依赖 · 可选能力依赖"
-    wizard_panel_menu_short "${WIZARD_CYAN}[6]${WIZARD_RESET} 服务  ${WIZARD_CYAN}[7]${WIZARD_RESET} 开机自启  ${WIZARD_CYAN}[8]${WIZARD_RESET} 数据库迁移  ${WIZARD_CYAN}[9]${WIZARD_RESET} 低配模式  ${WIZARD_CYAN}[0]${WIZARD_RESET} 退出"
+    wizard_panel_menu_short "${WIZARD_CYAN}[6]${WIZARD_RESET} ${WIZARD_BOLD}详情${WIZARD_RESET}  ${WIZARD_CYAN}[7]${WIZARD_RESET} ${WIZARD_BOLD}服务${WIZARD_RESET}  ${WIZARD_CYAN}[8]${WIZARD_RESET} ${WIZARD_BOLD}自启${WIZARD_RESET}  ${WIZARD_CYAN}[9]${WIZARD_RESET} ${WIZARD_BOLD}低配${WIZARD_RESET}  ${WIZARD_CYAN}[0]${WIZARD_RESET} ${WIZARD_BOLD}退出${WIZARD_RESET}"
     wizard_panel_bot
     echo ""
 }
@@ -1085,6 +1085,277 @@ wizard_ask_intent_hint() {
     esac
 }
 
+# 终端显示宽度：全角/CJK 计 2、半角计 1（与 UTF-8 中文终端常见行为一致）
+wizard_python_bin() {
+    local py
+    for py in python python3; do
+        command -v "$py" >/dev/null 2>&1 || continue
+        if "$py" - <<'PY' >/dev/null 2>&1
+import unicodedata  # noqa: F401
+PY
+        then
+            printf '%s\n' "$py"
+            return 0
+        fi
+    done
+    return 1
+}
+
+wizard_unicode_display_width() {
+    local py w
+    py="$(wizard_python_bin 2>/dev/null || true)"
+    if [ -n "$py" ]; then
+        w="$(WIZARD_WIDTH_TEXT=$1 "$py" - <<'PY'
+import os, unicodedata
+
+s = os.environ.get("WIZARD_WIDTH_TEXT", "")
+w = 0
+for ch in s:
+    if unicodedata.east_asian_width(ch) in ("F", "W", "A"):
+        w += 2
+    else:
+        w += 1
+print(w)
+PY
+)"
+    fi
+    case "${w:-}" in
+        ''|*[!0-9]*) w=${#1} ;;
+    esac
+    echo "$w"
+}
+
+wizard_pad_to_display_width() {
+    local label=$1 target=$2 py out
+    py="$(wizard_python_bin 2>/dev/null || true)"
+    if [ -n "$py" ]; then
+        out="$(WIZARD_WIDTH_TEXT=$1 WIZARD_WIDTH_TARGET=$2 "$py" - <<'PY'
+import os, unicodedata
+
+label = os.environ.get("WIZARD_WIDTH_TEXT", "")
+target = int(os.environ.get("WIZARD_WIDTH_TARGET", "0"))
+w = 0
+for ch in label:
+    if unicodedata.east_asian_width(ch) in ("F", "W", "A"):
+        w += 2
+    else:
+        w += 1
+pad = max(0, target - w)
+print(label + " " * pad, end="")
+PY
+)"
+        if [ -n "$out" ]; then
+            printf '%s' "$out"
+            return
+        fi
+    fi
+    printf '%s' "$label"
+}
+
+wizard_optional_deps_label_column() {
+    local w max=0 label
+    for label in \
+        "发票 OCR（二维码/识别）" \
+        "系统库 (zbar 等)" \
+        "OCR Python 包" \
+        "PDF 打印" \
+        "Playwright Python 包" \
+        "Chromium 浏览器" \
+        "KU-AI 向量（pgvector）" \
+        "敏感词库（lexicon.pack）" \
+        "LibreOffice（Office 高级预览）"; do
+        w="$(wizard_unicode_display_width "$label")"
+        [ "${w:-0}" -gt "$max" ] && max=$w
+    done
+    echo $((max + 2))
+}
+
+wizard_optional_deps_item_line() {
+    local num=$1 label=$2 status=$3 col=$4 padded
+    padded="$(wizard_pad_to_display_width "$label" "$col")"
+    echo -e "  ${WIZARD_CYAN}[${num}]${WIZARD_RESET} ${padded}${status}"
+}
+
+# 开关行（仅显示已启用/未启用）；子探测行另起
+wizard_optional_deps_flag_line() {
+    local num=$1 label=$2 flag_val=$3 col=$4 padded
+    padded="$(wizard_pad_to_display_width "$label" "$col")"
+    echo -e "  ${WIZARD_CYAN}[${num}]${WIZARD_RESET} ${padded}$(wizard_optional_deps_flag_colored "$flag_val")"
+}
+
+# 与 [n] 主行标签列对齐的子探测行（仅机上状态）
+wizard_optional_deps_sub_line() {
+    local label=$1 probe_st=$2 col=$3 padded
+    padded="$(wizard_pad_to_display_width "$label" "$col")"
+    echo -e "      ${padded}$(wizard_optional_deps_install_colored "$probe_st")"
+}
+
+# 选装面板状态着色：开关（已启用绿 / 未启用暗）｜机上探测（已装绿 / 告警黄 / 未装红）
+wizard_optional_deps_flag_colored() {
+    if deploy_env_flag_enabled "${1:-0}"; then
+        printf '%b%s%b' "${WIZARD_GREEN}" "已启用" "${WIZARD_RESET}"
+    else
+        printf '%b%s%b' "${WIZARD_DIM}" "未启用" "${WIZARD_RESET}"
+    fi
+}
+
+wizard_optional_deps_install_colored() {
+    local label
+    label="$(deploy_opt_install_short_label "${1:-}")"
+    case "${1:-}" in
+        ok|skipped|disabled-present)
+            printf '%b%s%b' "${WIZARD_GREEN}" "$label" "${WIZARD_RESET}"
+            ;;
+        partial|installing|pending|deps-missing)
+            printf '%b%s%b' "${WIZARD_YELLOW}" "$label" "${WIZARD_RESET}"
+            ;;
+        *)
+            printf '%b%s%b' "${WIZARD_RED}" "$label" "${WIZARD_RESET}"
+            ;;
+    esac
+}
+
+wizard_optional_deps_panel_status() {
+    local flag_val=$1 probe_st=$2
+    printf '%s｜%s' "$(wizard_optional_deps_flag_colored "$flag_val")" "$(wizard_optional_deps_install_colored "$probe_st")"
+}
+
+wizard_show_optional_deps_panel() {
+    load_deploy_env
+    local label_col
+    label_col="$(wizard_optional_deps_label_column)"
+    echo ""
+    wizard_say "选装依赖（写入 fast-deploy/config/deploy.env；主行=开关，子行=机上探测）"
+    echo ""
+    wizard_say "正在探测机上依赖，请稍候..."
+    wizard_optional_deps_flag_line 1 "发票 OCR（二维码/识别）" "${OPT_INVOICE_OCR:-0}" "$label_col"
+    wizard_optional_deps_sub_line "系统库 (zbar 等)" "$(check_invoice_parse_runtime 2>/dev/null || echo missing)" "$label_col"
+    wizard_optional_deps_sub_line "OCR Python 包" "$(check_ocr 2>/dev/null || echo missing)" "$label_col"
+    wizard_optional_deps_flag_line 2 "PDF 打印" "${OPT_PDF_PRINT:-0}" "$label_col"
+    wizard_optional_deps_sub_line "Playwright Python 包" "$(check_playwright 2>/dev/null || echo missing)" "$label_col"
+    wizard_optional_deps_sub_line "Chromium 浏览器" "$(check_playwright_chromium 2>/dev/null || echo missing)" "$label_col"
+    wizard_optional_deps_item_line 3 "KU-AI 向量（pgvector）" "$(wizard_optional_deps_panel_status "${OPT_KUAI_VECTOR:-0}" "$(deploy_opt_probe_pgvector)")" "$label_col"
+    wizard_optional_deps_item_line 4 "敏感词库（lexicon.pack）" "$(wizard_optional_deps_panel_status "${OPT_SENSITIVE_LEXICON:-0}" "$(deploy_opt_probe_lexicon)")" "$label_col"
+    wizard_optional_deps_item_line 5 "LibreOffice（Office 高级预览）" "$(wizard_optional_deps_panel_status "${OPT_LIBREOFFICE:-0}" "$(deploy_opt_probe_libreoffice)")" "$label_col"
+    echo ""
+    echo -e "  ${WIZARD_CYAN}[6]${WIZARD_RESET} 检查依赖就绪详情"
+    echo -e "  ${WIZARD_CYAN}[A]${WIZARD_RESET} 全选启用"
+    echo -e "  ${WIZARD_CYAN}[I]${WIZARD_RESET} 安装已启用"
+    echo -e "  ${WIZARD_DIM}[0]${WIZARD_RESET} 返回主菜单"
+    echo ""
+    wizard_say "「已装」仅表示机上具备，不等于已写入开关；纳入安装须先启用"
+    wizard_say "先启用再按 [I] 安装；若开了 KU-AI 向量，装完后仍需 migrate 补列"
+}
+
+# 切换单项选装开关；成功返回 0
+wizard_optional_deps_toggle_one() {
+    local num=$1
+    case "$num" in
+        1)
+            toggle_deploy_opt_flag OPT_INVOICE_OCR || { wizard_say_fail "发票 OCR 保存失败"; return 1; }
+            wizard_say_ok "发票 OCR: $(deploy_opt_flag_label "${OPT_INVOICE_OCR:-0}")"
+            ;;
+        2)
+            toggle_deploy_opt_flag OPT_PDF_PRINT || { wizard_say_fail "PDF 打印 保存失败"; return 1; }
+            wizard_say_ok "PDF 打印: $(deploy_opt_flag_label "${OPT_PDF_PRINT:-0}")"
+            ;;
+        3)
+            toggle_deploy_opt_flag OPT_KUAI_VECTOR || { wizard_say_fail "KU-AI 向量 保存失败"; return 1; }
+            wizard_say_ok "KU-AI 向量: $(deploy_opt_flag_label "${OPT_KUAI_VECTOR:-0}")"
+            ;;
+        4)
+            toggle_deploy_opt_flag OPT_SENSITIVE_LEXICON || { wizard_say_fail "敏感词库 保存失败"; return 1; }
+            wizard_say_ok "敏感词库: $(deploy_opt_flag_label "${OPT_SENSITIVE_LEXICON:-0}")"
+            ;;
+        5)
+            toggle_deploy_opt_flag OPT_LIBREOFFICE || { wizard_say_fail "LibreOffice 保存失败"; return 1; }
+            wizard_say_ok "LibreOffice: $(deploy_opt_flag_label "${OPT_LIBREOFFICE:-0}")"
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+    return 0
+}
+
+wizard_ask_optional_deps_choice() {
+    local choice raw token tokens seen fail norm
+    while true; do
+        wizard_show_optional_deps_panel
+        read -rp "$(echo -e "${WIZARD_DIM}选择（可多选如 1,2,4；A=全选；I=安装已启用） › ${WIZARD_RESET}")" choice
+        raw="${choice:-}"
+        norm="$(echo "$raw" | tr -d '[:space:]')"
+        # 去掉空白后的 0/q 返回；单独 6 查详情；A/a 全选启用；I/i 安装已启用
+        case "$norm" in
+            0|q|Q)
+                return 0
+                ;;
+            6)
+                echo ""
+                cmd_check_special || true
+                echo ""
+                read -rp "$(echo -e "${WIZARD_DIM}Enter 继续${WIZARD_RESET} › ")" _ || true
+                continue
+                ;;
+            A|a)
+                set_deploy_opt_flag OPT_INVOICE_OCR 1 || wizard_say_fail "发票 OCR 保存失败"
+                set_deploy_opt_flag OPT_PDF_PRINT 1 || wizard_say_fail "PDF 打印 保存失败"
+                set_deploy_opt_flag OPT_KUAI_VECTOR 1 || wizard_say_fail "KU-AI 向量 保存失败"
+                set_deploy_opt_flag OPT_SENSITIVE_LEXICON 1 || wizard_say_fail "敏感词库 保存失败"
+                set_deploy_opt_flag OPT_LIBREOFFICE 1 || wizard_say_fail "LibreOffice 保存失败"
+                wizard_say_ok "已全选启用 1–5"
+                continue
+                ;;
+            I|i)
+                echo ""
+                if cmd_install_optional_deps; then
+                    wizard_say_ok "选装安装结束"
+                else
+                    wizard_say_warn "选装安装未完全成功，见上方日志"
+                fi
+                echo ""
+                read -rp "$(echo -e "${WIZARD_DIM}Enter 继续${WIZARD_RESET} › ")" _ || true
+                continue
+                ;;
+        esac
+
+        # 支持 1,2,4 / 1 2 4 / 1，2，4 / 1、2
+        raw="$(printf '%s' "$raw" | tr '，、;' ',')"
+        tokens=()
+        seen="|"
+        fail=0
+        # shellcheck disable=SC2086
+        for token in ${raw//,/ }; do
+            [ -n "$token" ] || continue
+            case "$token" in
+                [1-5])
+                    case "$seen" in
+                        *"|${token}|"*) ;;
+                        *)
+                            tokens+=("$token")
+                            seen="${seen}${token}|"
+                            ;;
+                    esac
+                    ;;
+                *)
+                    fail=1
+                    break
+                    ;;
+            esac
+        done
+
+        if [ "$fail" -ne 0 ] || [ "${#tokens[@]}" -eq 0 ]; then
+            wizard_say_warn "无效选项（1-5 切换，可多选；A=全选；I=安装已启用；6 查详情；0 返回）"
+            sleep 0.3
+            continue
+        fi
+
+        for token in "${tokens[@]}"; do
+            wizard_optional_deps_toggle_one "$token" || true
+        done
+    done
+}
+
 wizard_ask_intent() {
     if [ -n "${WIZARD_INTENT:-}" ]; then
         wizard_say_ok "操作: $(wizard_intent_label)"
@@ -1106,24 +1377,22 @@ wizard_ask_intent() {
             wizard_ask_pro_apps_choice
             return 2
             ;;
-        5|details|status)
+        5|opt|optional|optional-deps|选装)
+            wizard_ask_optional_deps_choice
+            return 2
+            ;;
+        6|details|status)
             echo ""
             wizard_run_quick_action details || true
             wizard_pause_return_menu
             return 2
             ;;
-        6|service|svc)
+        7|service|svc)
             wizard_ask_service_choice
             return 2
             ;;
-        7|boot|autostart)
+        8|boot|autostart)
             wizard_ask_boot_service_choice
-            return 2
-            ;;
-        8|migrate)
-            echo ""
-            wizard_run_quick_action migrate || true
-            wizard_pause_return_menu
             return 2
             ;;
         9|low-spec-mode|low_spec_mode|lowspec|mem)
@@ -1241,7 +1510,7 @@ wizard_env_scan() {
     else
         wizard_say "部分基线依赖尚未就绪，下一阶段将自动安装"
     fi
-    wizard_say "可选能力依赖（PDF / OCR / 向量 / 敏感词）按需安装，不用可忽略；状态见菜单 [5] 详情"
+    wizard_say "选装依赖默认关闭；开关见 DEPLOY [5]，就绪情况见 OPS [6] 详情"
     return $failed
 }
 
@@ -1509,6 +1778,7 @@ wizard_component_display_name() {
         postgresql) echo "PostgreSQL 15+" ;;
         caddy) echo "Caddy" ;;
         zbar|invoice-runtime) echo "发票解析系统库 (zbar+libgomp)" ;;
+        libreoffice) echo "LibreOffice（Office 高级预览）" ;;
         *) echo "$1" ;;
     esac
 }
@@ -1556,6 +1826,13 @@ wizard_install_method_hint() {
                 *) echo "apt 安装 libzbar0 + libgomp1" ;;
             esac
             ;;
+        libreoffice)
+            case "$plat" in
+                windows) echo "winget 安装 LibreOffice" ;;
+                rhel|fedora) echo "dnf/yum 安装 libreoffice" ;;
+                *) echo "apt 安装 libreoffice-writer/calc/impress" ;;
+            esac
+            ;;
         *) echo "" ;;
     esac
 }
@@ -1578,7 +1855,12 @@ wizard_install_deps() {
     if [ "$DEPLOY_MODE" = "prod" ]; then
         st="$(check_caddy)"; [ "$st" != "ok" ] && plan+=("caddy:$st")
     fi
-    st="$(check_invoice_parse_runtime)"; [ "$st" != "ok" ] && plan+=("invoice-runtime:$st")
+    if deploy_opt_invoice_ocr_enabled; then
+        st="$(check_invoice_parse_runtime)"; [ "$st" != "ok" ] && plan+=("invoice-runtime:$st")
+    fi
+    if deploy_opt_libreoffice_enabled; then
+        st="$(check_libreoffice)"; [ "$st" != "ok" ] && plan+=("libreoffice:$st")
+    fi
 
     if [ "${#plan[@]}" -eq 0 ]; then
         wizard_say_ok "所有依赖已就绪，无需安装"
@@ -1597,7 +1879,7 @@ wizard_install_deps() {
         hint="$(wizard_install_method_hint "$comp")"
         echo "    · $(wizard_component_display_name "$comp") — $(wizard_install_reason "$status")${hint:+ · ${hint}}"
         case "$comp" in
-            postgresql|caddy|node|python|invoice-runtime|zbar) needs_sudo=1 ;;
+            postgresql|caddy|node|python|invoice-runtime|zbar|libreoffice) needs_sudo=1 ;;
         esac
     done
     wizard_say "安装过程会实时输出到终端，同时写入日志: ${log}"
@@ -1657,7 +1939,7 @@ wizard_install_deps() {
     if [ "$check_rc" -eq 0 ]; then
         wizard_finalize_local_database || return 1
         wizard_say_ok "环境软件安装全部完成"
-        wizard_say "可选能力依赖将在迁移/启动时按需处理（不用可忽略），状态见菜单 [5] 详情"
+        wizard_say "选装依赖见 DEPLOY [5]；迁移/启动时仅处理已启用项，就绪情况见 OPS [6] 详情"
         return 0
     fi
     wizard_say_fail "环境复核未通过"
@@ -1781,7 +2063,7 @@ wizard_update_app() {
     fi
 
     wizard_run_deploy_step release_meta_final "确认发版信息与运行 commit 一致" "$log" record_deploy_release_metadata || return 1
-    wizard_say_ok "系统更新已全部完成（可选能力依赖状态见菜单 [5] 详情）"
+    wizard_say_ok "系统更新已全部完成（选装 DEPLOY [5] · 就绪 OPS [6] 详情）"
 }
 
 wizard_show_summary() {
@@ -1808,9 +2090,13 @@ wizard_show_summary() {
     wizard_panel_mid
     wizard_panel_kv "Mode" "${mode_label}"
     wizard_panel_kv "Web" "${web_url}"
-    if [ "$DEPLOY_MODE" = "prod" ] && [ -n "$(read_deploy_env_value CADDY_DOMAIN || true)" ]; then
-        wizard_panel_kv "Domain" "$(read_deploy_env_value CADDY_DOMAIN)"
-        wizard_panel_kv "HTTPS" "$(read_deploy_env_value CADDY_ENABLE_LETSENCRYPT || echo false)"
+    if [ "$DEPLOY_MODE" = "prod" ]; then
+        wizard_panel_kv "CaddyPort" "$(read_deploy_env_value PROXY_PORT || echo "${PROXY_PORT:-8080}")"
+        if [ -n "$(read_deploy_env_value CADDY_DOMAIN || true)" ]; then
+            wizard_panel_kv "Domain" "$(read_deploy_env_value CADDY_DOMAIN)"
+            wizard_panel_kv "HTTPS" "$(read_deploy_env_value CADDY_ENABLE_LETSENCRYPT || echo false)"
+        fi
+        wizard_panel_kv "ExtraProxies" "$(caddy_extra_proxy_count) 条"
     fi
     wizard_panel_kv "API" "${api_hint}"
     wizard_panel_kv "Database" "$(read_env_value DB_USER || echo postgres)@${db_host}:${db_port}/${db_name}"
@@ -1894,7 +2180,7 @@ cmd_wizard_configure() {
     ensure_logs_dir
     load_deploy_env
     apply_cn_mirrors
-    CONFIGURE_ALLOW_DB_EDIT=1 cmd_configure
+    CONFIGURE_MENU=1 CONFIGURE_ALLOW_DB_EDIT=1 cmd_configure
 
     wizard_stage 3 "完成"
     wizard_show_summary

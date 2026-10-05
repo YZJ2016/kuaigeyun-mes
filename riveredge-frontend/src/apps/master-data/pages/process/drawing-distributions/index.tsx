@@ -21,6 +21,10 @@ import { StatusTag } from '../../../../../constants/statusBadges';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import {
+  pickListSearchKeywordOrFields,
+  pickSearchString,
+} from '../../../../../utils/tableQueryKey';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../../../utils/format';
 import { detailDrawerBasicColumn } from '../../../../../components/layout-templates/constants';
@@ -183,6 +187,18 @@ const DrawingDistributionsPage: React.FC = () => {
         ellipsis: true,
       },
       ...buildDocumentAuditColumns<DrawingDistribution>(t),
+      {
+        title: t('common.status'),
+        dataIndex: 'status',
+        hideInTable: true,
+        valueType: 'select',
+        valueEnum: {
+          Draft: { text: t('app.master-data.drawingDistributions.status.Draft') },
+          Pending: { text: t('app.master-data.drawingDistributions.status.Pending') },
+          Issued: { text: t('app.master-data.drawingDistributions.status.Issued') },
+          Recalled: { text: t('app.master-data.drawingDistributions.status.Recalled') },
+        },
+      },
       {
         title: t('common.status'),
         key: 'lifecycle',
@@ -352,7 +368,9 @@ const DrawingDistributionsPage: React.FC = () => {
           tableRowsRef.current = rows;
         }}
         columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
-        columnPersistenceId="apps.master-data.pages.process.drawing-distributions.v3"
+        columnPersistenceId="apps.master-data.pages.process.drawing-distributions.v4"
+        showAdvancedSearch
+        pinnedTabsField="status"
         showCreateButton={perms.canCreate}
         createButtonText={t('app.master-data.drawingDistributions.create')}
         onCreate={openCreate}
@@ -403,12 +421,13 @@ const DrawingDistributionsPage: React.FC = () => {
             />
           </Space>,
         ]}
-        request={async (params) => {
+        skipFuzzyPinyinClientFilter
+        request={async (params, _sort, _filter, searchFormValues) => {
           const res = await drawingDistributionApi.list({
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize || 20,
-            status: params.status,
-            keyword: params.keyword || params.name || params.code,
+            status: pickSearchString(searchFormValues, 'status'),
+            keyword: pickListSearchKeywordOrFields(searchFormValues, 'name', 'code'),
           });
           return { data: res.data ?? [], total: res.total ?? 0, success: true };
         }}

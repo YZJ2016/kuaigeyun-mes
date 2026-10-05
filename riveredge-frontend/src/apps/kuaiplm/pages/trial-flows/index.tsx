@@ -54,6 +54,7 @@ import {
   type TrialFlowFormProfile,
   type TrialFlowStatus,
 } from '../../services/trial-flow';
+import { resolvePlmStandardDocListSearch } from '../../utils/plmListCore';
 import { isIndustryFormProfileActive } from '../../../../utils/industryFormProfile';
 import {
   formatHeaderFieldDisplayValue,
@@ -454,13 +455,16 @@ const TrialFlowsPage: React.FC = () => {
             messageApi.error(getApiErrorMessage(err, t('common.exportFailed')));
           }
         }}
-        request={async (params) => {
+        skipFuzzyPinyinClientFilter
+        params={filterProjectId ? { project_id: filterProjectId } : undefined}
+        request={async (params, _sort, _filter, searchFormValues) => {
+          const { keyword, status, business_type } = resolvePlmStandardDocListSearch(searchFormValues);
           const res = await trialFlowApi.list({
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize || 20,
-            status: params.status as string | undefined,
-            business_type: params.business_type as string | undefined,
-            keyword: (params.keyword || params.title) as string | undefined,
+            status,
+            business_type,
+            keyword,
             project_id: filterProjectId,
           });
           return { data: res.items, total: res.total, success: true };

@@ -53,6 +53,14 @@ class OvertimePlan(BaseModel):
     start_time = fields.TimeField(description="加班开始时刻")
     end_time = fields.TimeField(description="加班结束时刻")
     name = fields.CharField(max_length=200, null=True, description="名称/说明")
+    reason = fields.CharField(max_length=500, null=True, description="加班原因")
+    scope_type = fields.CharField(
+        max_length=20, default="plant", description="适用范围 plant/department/employee"
+    )
+    department_id = fields.IntField(null=True, description="部门ID（按部门）")
+    department_name = fields.CharField(max_length=200, null=True, description="部门名称（冗余）")
+    employee_id = fields.IntField(null=True, description="员工ID（按人员）")
+    employee_name = fields.CharField(max_length=100, null=True, description="员工姓名（冗余）")
     is_active = fields.BooleanField(default=True, description="是否启用")
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
 

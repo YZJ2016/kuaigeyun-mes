@@ -83,9 +83,17 @@ export function relayoutUniverSheet(
     const canvas = typeof engine.getCanvasElement === 'function' ? engine.getCanvasElement() : null;
     const canvasHost = canvas?.parentElement;
     if (typeof engine.resizeBySize === 'function') {
-      const width = (clipEl ?? canvasHost)?.clientWidth ?? 0;
-      // 高度取画布宿主（不含工具栏/Sheet 栏）；若无则回退 clipEl
-      const height = canvasHost?.clientHeight || clipEl?.clientHeight || 0;
+      // 有裁剪盒时宽必须跟裁剪盒；高优先画布宿主（不含工具栏），但不得大于裁剪盒，
+      // 否则内容撑破宿主后引擎仍认「未超高」而不出滚动条。
+      const clipW = clipEl?.clientWidth ?? 0;
+      const clipH = clipEl?.clientHeight ?? 0;
+      const hostW = canvasHost?.clientWidth ?? 0;
+      const hostH = canvasHost?.clientHeight ?? 0;
+      const width = clipW > 0 ? clipW : hostW;
+      let height = hostH > 0 ? hostH : clipH;
+      if (clipH > 0 && height > clipH) {
+        height = clipH;
+      }
       if (width > 0 && height > 0) {
         engine.resizeBySize(width, height);
         return;

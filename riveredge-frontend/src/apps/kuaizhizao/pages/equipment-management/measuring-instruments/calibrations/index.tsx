@@ -374,7 +374,7 @@ const MeasuringInstrumentCalibrationsPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable<CalibrationRecord>
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.measuring-instruments.calibrations-v4"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.measuring-instruments.calibrations-v5"
           actionRef={actionRef}
           permissionResource={RESOURCE}
           enableRowSelection={perms.canExport}
@@ -442,7 +442,6 @@ const MeasuringInstrumentCalibrationsPage: React.FC = () => {
             const { data, total } = normalizeEquipmentListResponse(res);
             return { data: data as CalibrationRecord[], success: true, total };
           }}
-          search={{ labelWidth: 'auto' }}
           pagination={{ defaultPageSize: 20 }}
         />
       </ListPageTemplate>

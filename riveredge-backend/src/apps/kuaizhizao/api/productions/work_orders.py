@@ -374,6 +374,10 @@ async def create_peer_group_work_orders(
 async def get_work_order_statistics(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
+    include_trends: bool = Query(
+        True,
+        description="false 时仅返回 KPI 计数（手机工作台）；true 含 PC 看板 7 日趋势",
+    ),
 ) -> Dict[str, Any]:
     """
     返回工单各维度数量，用于列表页指标卡片。
@@ -438,6 +442,15 @@ async def get_work_order_statistics(
         ).count()
         draft_count = await base.filter(status="draft").count()
         completed_count = await base.filter(status="completed").count()
+
+    if not include_trends:
+        return {
+            "in_progress_count": in_progress_count,
+            "completed_today_count": completed_today_count,
+            "overdue_count": overdue_count,
+            "draft_count": draft_count,
+            "completed_count": completed_count,
+        }
 
     # 补充前端指标卡需要的字段（基于现有数据合理计算）
     from apps.kuaizhizao.models.work_order import WorkOrder
@@ -753,6 +766,9 @@ async def get_work_order_execution_config(
         tenant_id=tenant_id,
         user_id=current_user.id,
     )
+    biz_params = (await BusinessConfigService().get_business_config(tenant_id)).get("parameters", {}) or {}
+    wo_params = biz_params.get("work_order", {}) or {}
+    reporting_params = biz_params.get("reporting", {}) or {}
     return {
         **policy,
         "last_operation_auto_inbound_mode": last_inbound_mode,
@@ -766,12 +782,15 @@ async def get_work_order_execution_config(
         "current_user_role_codes": sorted(role_codes),
         "current_user_functional_domains": sorted(functional_domains),
         "current_user_can_confirm_picking": can_confirm_picking,
-        "show_customer_name": bool(
-            (await BusinessConfigService().get_business_config(tenant_id))
-            .get("parameters", {})
-            .get("work_order", {})
-            .get("show_customer_name", False)
-        ),
+        "show_customer_name": bool(wo_params.get("show_customer_name", False)),
+        # 与配置中心 parameters.work_order / reporting 开关对齐，供前端隐藏入口；服务端仍强校验
+        "priority_enabled": bool(wo_params.get("priority", True)),
+        "split_enabled": bool(wo_params.get("split", True)),
+        "merge_enabled": bool(wo_params.get("merge", True)),
+        "quick_reporting_enabled": bool(reporting_params.get("quick_reporting", True)),
+        "parameter_reporting_enabled": bool(reporting_params.get("parameter_reporting", True)),
+        "data_correction_enabled": bool(reporting_params.get("data_correction", True)),
+        "reporting_auto_approve_enabled": bool(reporting_params.get("auto_approve", False)),
     }
 
 

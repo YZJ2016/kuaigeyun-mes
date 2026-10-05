@@ -45,7 +45,12 @@ import { CustomerFollowUpAttachments } from '../../../components/CustomerFollowU
 import { getCustomerFollowUpLifecycle, isCustomerFollowUpRevisitOverdue } from '../../../utils/customerFollowUpLifecycle';
 import { formatDateTime } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
-import { extractProTableSort } from '../../../../../utils/tableQueryKey';
+import {
+  extractProTableSort,
+  pickListSearchKeyword,
+  pickSearchDateTimeRange,
+  pickSearchString,
+} from '../../../../../utils/tableQueryKey';
 import {
   KUAIZHIZAO_DOC_HOST,
   loadCustomerFormReferenceList,
@@ -610,7 +615,7 @@ const CustomerFollowUpsPage: React.FC = () => {
       `}</style>
       <ListPageTemplate style={{ padding: 0 }}>
         <UniTable<CustomerFollowUp>
-          columnPersistenceId="apps.kuaizhizao.pages.sales-management.customer-follow-ups-width-v1"
+          columnPersistenceId="apps.kuaizhizao.pages.sales-management.customer-follow-ups-width-v3"
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.customerFollowUps')}
           selectedRowKeys={selectedRowKeys}
@@ -658,43 +663,29 @@ const CustomerFollowUpsPage: React.FC = () => {
           onDelete={handleBatchDelete}
           deleteConfirmTitle={(count) => t('common.confirmBatchDeleteContent', { count })}
           request={async (params, sort, _filter, searchFormValues) => {
-            const keyword =
-              typeof searchFormValues?.keyword === 'string'
-                ? searchFormValues.keyword.trim() || undefined
-                : undefined;
-            const occurredRange = searchFormValues?.occurred_at_range as [unknown, unknown] | undefined;
-            let occurredFrom: string | undefined;
-            let occurredTo: string | undefined;
-            if (occurredRange && Array.isArray(occurredRange) && occurredRange[0]) {
-              occurredFrom = formatDateTime(occurredRange[0] as string | Date, 'YYYY-MM-DD HH:mm:ss');
-              occurredTo = occurredRange[1]
-                ? formatDateTime(occurredRange[1] as string | Date, 'YYYY-MM-DD HH:mm:ss')
-                : occurredFrom;
-            }
+            const keyword = pickListSearchKeyword(searchFormValues);
+            const { from: occurredFrom, to: occurredTo } = pickSearchDateTimeRange(
+              searchFormValues,
+              'occurred_from',
+              'occurred_to',
+              'occurred_at_range',
+            );
             const { sortBy, sortOrder } = extractProTableSort(sort);
             const orderBy =
               sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
+            const customerIdRaw = pickSearchString(searchFormValues, 'customer_id');
             try {
               const res = await customerFollowUpApi.list({
                 skip: ((params.current || 1) - 1) * (params.pageSize || 20),
                 limit: params.pageSize || 20,
                 keyword,
                 customer_id:
-                  searchFormValues?.customer_id != null && searchFormValues.customer_id !== ''
-                    ? Number(searchFormValues.customer_id)
+                  customerIdRaw != null && Number.isFinite(Number(customerIdRaw))
+                    ? Number(customerIdRaw)
                     : undefined,
-                activity_type_code:
-                  typeof searchFormValues?.activity_type_code === 'string'
-                    ? searchFormValues.activity_type_code.trim() || undefined
-                    : undefined,
-                quotation_code:
-                  typeof searchFormValues?.quotation_code === 'string'
-                    ? searchFormValues.quotation_code.trim() || undefined
-                    : undefined,
-                sales_order_code:
-                  typeof searchFormValues?.sales_order_code === 'string'
-                    ? searchFormValues.sales_order_code.trim() || undefined
-                    : undefined,
+                activity_type_code: pickSearchString(searchFormValues, 'activity_type_code'),
+                quotation_code: pickSearchString(searchFormValues, 'quotation_code'),
+                sales_order_code: pickSearchString(searchFormValues, 'sales_order_code'),
                 occurred_from: occurredFrom,
                 occurred_to: occurredTo,
                 pending_only: pendingOnlyFilter || undefined,

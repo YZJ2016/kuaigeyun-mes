@@ -25,6 +25,7 @@ import {
 } from '../../../services/delivery-project';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { renderDeliveryStatusTag } from '../shared/deliveryListPresentation';
+import { pickListSearchKeyword, pickSearchString } from '../../../../../utils/tableQueryKey';
 import {
   DELIVERY_CUSTOMER_COLUMN_DEFAULTS,
   DELIVERY_PROJECT_NAME_REMAINDER_COLUMN_DEFAULTS,
@@ -237,9 +238,9 @@ const WorkshopBoardPage: React.FC = () => {
         rowKey="id"
         columns={columns}
         permissionResource="kuaizhizao:delivery-project"
-        columnPersistenceId="apps.kuaizhizao.pages.delivery-project.workshop-board.v1"
+        columnPersistenceId="apps.kuaizhizao.pages.delivery-project.workshop-board.v3"
         showCreateButton={false}
-        search={{ labelWidth: 'auto' }}
+        showAdvancedSearch
         toolBarRender={() => []}
         rowActions={(row) => [
           rowActionOpenWorkbench({
@@ -247,13 +248,13 @@ const WorkshopBoardPage: React.FC = () => {
             onClick: () => openWorkbench(row.project_id),
           }),
         ]}
-        request={async (params) => {
+        request={async (params, _sort, _filter, searchFormValues) => {
           const res = await deliveryProjectApi.workshopBoard({
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize || 20,
-            keyword: params.keyword as string | undefined,
-            board_section: params.board_section as string | undefined,
-            status: params.status as string | undefined,
+            keyword: pickListSearchKeyword(searchFormValues),
+            board_section: pickSearchString(searchFormValues, 'board_section'),
+            status: pickSearchString(searchFormValues, 'status'),
           });
           setBoardColumns(res.columns || []);
           return {

@@ -27,6 +27,8 @@ export interface ProductionLineFormModalProps {
   editUuid: string | null;
   onSuccess: (productionLine: ProductionLine) => void;
   zIndex?: number;
+  /** 从上级表单快速新增时预填所属车间 */
+  defaultWorkshopId?: number | null;
 }
 
 export const ProductionLineFormModal: React.FC<ProductionLineFormModalProps> = ({
@@ -35,6 +37,7 @@ export const ProductionLineFormModal: React.FC<ProductionLineFormModalProps> = (
   editUuid,
   onSuccess,
   zIndex,
+  defaultWorkshopId,
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -74,7 +77,10 @@ export const ProductionLineFormModal: React.FC<ProductionLineFormModalProps> = (
   useEffect(() => {
     if (!open) return;
     formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({ isActive: true });
+    formRef.current?.setFieldsValue({
+      isActive: true,
+      ...(defaultWorkshopId ? { workshopId: defaultWorkshopId } : {}),
+    });
     resetFieldValues();
 
     if (!editUuid) {
@@ -93,16 +99,26 @@ export const ProductionLineFormModal: React.FC<ProductionLineFormModalProps> = (
           testGenerateCode({ rule_code: ruleCode })
             .then((res) => {
               setPreviewCode(res.code);
-              formRef.current?.setFieldsValue({ code: res.code, isActive: true });
+              formRef.current?.setFieldsValue({
+                code: res.code,
+                isActive: true,
+                ...(defaultWorkshopId ? { workshopId: defaultWorkshopId } : {}),
+              });
             })
             .catch(() => {
               setPreviewCode(null);
-              formRef.current?.setFieldsValue({ isActive: true });
+              formRef.current?.setFieldsValue({
+                isActive: true,
+                ...(defaultWorkshopId ? { workshopId: defaultWorkshopId } : {}),
+              });
             });
         } else {
           setPreviewCode(null);
           setEffectiveRuleCode(null);
-          formRef.current?.setFieldsValue({ isActive: true });
+          formRef.current?.setFieldsValue({
+            isActive: true,
+            ...(defaultWorkshopId ? { workshopId: defaultWorkshopId } : {}),
+          });
         }
       })();
       return;
@@ -125,7 +141,7 @@ export const ProductionLineFormModal: React.FC<ProductionLineFormModalProps> = (
       .catch((err: any) => {
         messageApi.error(err?.message || t('app.master-data.productionLines.getDetailFailed'));
       });
-  }, [open, editUuid]);
+  }, [open, editUuid, defaultWorkshopId]);
 
   const handleSubmit = async (values: any) => {
     try {

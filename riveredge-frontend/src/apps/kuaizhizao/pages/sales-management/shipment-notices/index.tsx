@@ -38,6 +38,10 @@ const LazyUniImport = lazy(() =>
 );
 import type { Material } from '../../../../master-data/types/material';
 import { DocumentAmountSummaryWatch } from '../../../components/document-amount-summary/DocumentAmountSummary';
+import {
+  documentCurrencyTitleVars,
+  resolveDocumentCurrencyInputPrefix,
+} from '../../../utils/documentCurrencyDisplay';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG,   useDetailDrawerDescriptionItems } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
@@ -62,7 +66,7 @@ import {
   shipmentNoticeCapabilityReasonMessage,
 } from '../../../../../hooks/useDocumentCapabilities';
 import { LinkedOqcPanel } from '../../quality-management/components/LinkedInspectionPanel';
-import { getShipmentNoticeLifecycle, buildShipmentNoticeLifecycleValueEnum, resolveShipmentNoticeListLifecycleParams } from '../../../utils/shipmentNoticeLifecycle';
+import { getShipmentNoticeLifecycle, buildShipmentNoticeLifecycleValueEnum, resolveShipmentNoticeListApiParams } from '../../../utils/shipmentNoticeLifecycle';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
 import { ListUniLifecycleCell } from '../shared/ListUniLifecycleCell';
@@ -656,7 +660,8 @@ const ShipmentNoticesPage: React.FC = () => {
         uniTableKeepWidth: true,
         resizable: false,
         align: 'right',
-        render: (text: unknown) => formatPrice(text),
+        render: (text: unknown, record: any) =>
+          `${resolveDocumentCurrencyInputPrefix(record?.currency_code)}${formatPrice(text)}`,
       },
       {
         title: t('app.kuaizhizao.shipmentNotice.amount'),
@@ -666,7 +671,8 @@ const ShipmentNoticesPage: React.FC = () => {
         uniTableKeepWidth: true,
         resizable: false,
         align: 'right',
-        render: (text: unknown) => formatAmount(text),
+        render: (text: unknown, record: any) =>
+          `${resolveDocumentCurrencyInputPrefix(record?.currency_code)}${formatAmount(text)}`,
       },
       {
         title: t('app.kuaizhizao.shipmentNotice.plannedShipDate'),
@@ -771,6 +777,8 @@ const ShipmentNoticesPage: React.FC = () => {
         warehouse_name: detail.warehouse_name,
         planned_ship_date: detail.planned_ship_date ? dayjs(detail.planned_ship_date) : undefined,
         shipping_address: detail.shipping_address,
+        currency_code: String((detail as any).currency_code || 'CNY').trim().toUpperCase() || 'CNY',
+        exchange_rate: Number((detail as any).exchange_rate ?? 1) || 1,
         notes: detail.notes,
         attachments: mapAttachmentsToUploadList(detail.attachments),
         items: itemsForm.length ? itemsForm : [defaultNoticeItem],
@@ -1147,6 +1155,8 @@ const ShipmentNoticesPage: React.FC = () => {
       customer_contact: order.customer_contact || cust?.contactPerson || (cust as any)?.contact,
       customer_phone: order.customer_phone || cust?.phone,
       shipping_address: order.shipping_address || cust?.address,
+      currency_code: String(order.currency_code || order.currency || 'CNY').trim().toUpperCase() || 'CNY',
+      exchange_rate: Number(order.exchange_rate ?? 1) || 1,
     });
     if (order.items && order.items.length > 0) {
       const items = order.items
@@ -1236,6 +1246,8 @@ const ShipmentNoticesPage: React.FC = () => {
         warehouse_name: values.warehouse_name || undefined,
         planned_ship_date: values.planned_ship_date ? formatDateTime(values.planned_ship_date, 'YYYY-MM-DD') : undefined,
         shipping_address: values.shipping_address,
+        currency_code: String(values.currency_code || 'CNY').trim().toUpperCase() || 'CNY',
+        exchange_rate: Number(values.exchange_rate ?? 1) || 1,
         notes: values.notes,
         attachments: normalizeDocumentAttachments(values.attachments),
         items: payloadItems,
@@ -1265,6 +1277,8 @@ const ShipmentNoticesPage: React.FC = () => {
         warehouse_name: values.warehouse_name,
         planned_ship_date: values.planned_ship_date ? formatDateTime(values.planned_ship_date, 'YYYY-MM-DD') : undefined,
         shipping_address: values.shipping_address,
+        currency_code: String(values.currency_code || 'CNY').trim().toUpperCase() || 'CNY',
+        exchange_rate: Number(values.exchange_rate ?? 1) || 1,
         notes: values.notes,
         attachments: normalizeDocumentAttachments(values.attachments),
       });
@@ -1287,6 +1301,12 @@ const ShipmentNoticesPage: React.FC = () => {
     { title: t('field.customer.phone'), dataIndex: 'customer_phone' },
     { title: t('app.kuaizhizao.shipmentNotice.outboundWarehouse'), dataIndex: 'warehouse_name' },
     { title: t('app.kuaizhizao.shipmentNotice.plannedShipDate'), dataIndex: 'planned_ship_date', valueType: 'date' },
+    {
+      title: t('app.kuaizhizao.quotation.form.currency'),
+      dataIndex: 'currency_code',
+      render: (_: unknown, record: ShipmentNoticeDetail) =>
+        String((record as any)?.currency_code || 'CNY').trim().toUpperCase() || 'CNY',
+    },
     { title: t('app.kuaizhizao.salesOrder.shippingAddress'), dataIndex: 'shipping_address', span: 3 },
     { title: t('app.kuaizhizao.shipmentNotice.notifiedAt'), dataIndex: 'notified_at', valueType: 'dateTime' },
     { title: t('common.remark'), dataIndex: 'notes', span: 3 },
@@ -1400,6 +1420,10 @@ const ShipmentNoticesPage: React.FC = () => {
         </Col>
       </Row>
       <ProFormText name="warehouse_name" hidden />
+      <ProFormText name="currency_code" hidden initialValue="CNY" />
+      <ProForm.Item name="exchange_rate" hidden initialValue={1}>
+        <InputNumber />
+      </ProForm.Item>
       <Row gutter={16}>
         <Col span={8}>
           <ProFormDatePicker name="planned_ship_date" label={t('app.kuaizhizao.shipmentNotice.plannedShipDate')} fieldProps={buildFutureDateShortcutFieldProps({ getForm: () => createFormRef.current, fieldName: 'planned_ship_date', t })} />
@@ -1525,13 +1549,42 @@ const ShipmentNoticesPage: React.FC = () => {
                   ),
                 },
                 {
-                  title: t('app.kuaizhizao.salesOrder.unitPrice'),
+                  title: (
+                    <AntForm.Item
+                      noStyle
+                      shouldUpdate={(prev: any, curr: any) => prev?.currency_code !== curr?.currency_code}
+                    >
+                      {({ getFieldValue }: any) =>
+                        t(
+                          'app.kuaizhizao.salesOrder.unitPrice',
+                          documentCurrencyTitleVars(getFieldValue('currency_code'), t),
+                        )
+                      }
+                    </AntForm.Item>
+                  ),
                   dataIndex: 'unit_price',
                   width: 100,
                   align: 'right' as const,
                   render: (_: any, __: any, index: number) => (
-                    <AntForm.Item name={[index, 'unit_price']} style={{ margin: 0 }}>
-                      <InputNumber placeholder="0" min={0} precision={priceDecimals} style={{ width: '100%' }} size="small" />
+                    <AntForm.Item
+                      noStyle
+                      shouldUpdate={(prev: any, curr: any) => prev?.currency_code !== curr?.currency_code}
+                    >
+                      {({ getFieldValue }: any) => {
+                        const moneyPrefix = resolveDocumentCurrencyInputPrefix(getFieldValue('currency_code'));
+                        return (
+                          <AntForm.Item name={[index, 'unit_price']} style={{ margin: 0 }}>
+                            <InputNumber
+                              placeholder="0"
+                              min={0}
+                              precision={priceDecimals}
+                              prefix={moneyPrefix}
+                              style={{ width: '100%' }}
+                              size="small"
+                            />
+                          </AntForm.Item>
+                        );
+                      }}
                     </AntForm.Item>
                   ),
                 },
@@ -1596,11 +1649,21 @@ const ShipmentNoticesPage: React.FC = () => {
       </Row>
       <ProFormText name="warehouse_name" hidden />
       <ProFormText name="customer_name" hidden />
+      <ProFormText name="currency_code" hidden />
+      <ProForm.Item name="exchange_rate" hidden>
+        <InputNumber />
+      </ProForm.Item>
       <ProFormTextArea name="shipping_address" label={t('app.kuaizhizao.salesOrder.shippingAddress')} placeholder={t('app.kuaizhizao.quotation.form.shippingAddressPlaceholder')} fieldProps={{ rows: 2 }} />
       <ProFormItem label={t('app.kuaizhizao.shipmentNotice.noticeItems')}>
-        <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
+        <AntForm.Item
+          noStyle
+          shouldUpdate={(prev: any, curr: any) =>
+            prev?.items !== curr?.items || prev?.currency_code !== curr?.currency_code
+          }
+        >
           {({ getFieldValue }: any) => {
             const items = getFieldValue('items') ?? [];
+            const currencyVars = documentCurrencyTitleVars(getFieldValue('currency_code'), t);
             return (
               <Table
                 size="small"
@@ -1612,7 +1675,16 @@ const ShipmentNoticesPage: React.FC = () => {
                   { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 150 },
                   { title: t('common.unit'), dataIndex: 'material_unit', width: 60 },
                   { title: t('common.quantity'), dataIndex: 'notice_quantity', width: 90, align: 'right', render: formatQuantity },
-                  { title: t('app.kuaizhizao.salesOrder.unitPrice'), dataIndex: 'unit_price', width: 90, align: 'right' },
+                  {
+                    title: t('app.kuaizhizao.salesOrder.unitPrice', currencyVars),
+                    dataIndex: 'unit_price',
+                    width: 90,
+                    align: 'right' as const,
+                    render: (text: unknown) => {
+                      const code = getFieldValue('currency_code');
+                      return `${resolveDocumentCurrencyInputPrefix(code)}${text ?? 0}`;
+                    },
+                  },
                 ]}
               />
             );
@@ -1790,47 +1862,11 @@ const ShipmentNoticesPage: React.FC = () => {
           }}
           request={async (params, sort, _filter, searchFormValues) => {
             try {
-              const sf = searchFormValues ?? {};
-              const lifecycleParams = resolveShipmentNoticeListLifecycleParams(sf, params);
-              const { sortBy, sortOrder } = extractProTableSort(sort);
-              const orderBy =
-                sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
-              const fuzzyKeyword =
-                typeof sf.keyword === 'string' ? sf.keyword.trim() : '';
-              const noticeCode = sf.notice_code != null ? String(sf.notice_code).trim() : '';
-              const apiParams: ShipmentNoticeListParams = {
-                skip: ((params.current || 1) - 1) * (params.pageSize || 20),
-                limit: params.pageSize || 20,
-                ...lifecycleParams,
-                order_by: orderBy,
-                // 订单视图明细预览列 + 明细视图展开行均需 items
-                include_items: true,
-              };
-              if (fuzzyKeyword) {
-                apiParams.keyword = fuzzyKeyword;
-              } else if (noticeCode) {
-                apiParams.notice_code = noticeCode;
-              }
-              if (sf.customer_id != null && sf.customer_id !== '') {
-                apiParams.customer_id = Number(sf.customer_id);
-              }
-              const salesOrderCode =
-                sf.sales_order_code != null ? String(sf.sales_order_code).trim() : '';
-              if (salesOrderCode) apiParams.sales_order_code = salesOrderCode;
-              const plannedRange = sf.planned_ship_date_range as [unknown, unknown] | undefined;
-              if (plannedRange && Array.isArray(plannedRange) && plannedRange[0]) {
-                apiParams.planned_start_date = formatDateTime(plannedRange[0] as string | Date, 'YYYY-MM-DD');
-                apiParams.planned_end_date = plannedRange[1]
-                  ? formatDateTime(plannedRange[1] as string | Date, 'YYYY-MM-DD')
-                  : apiParams.planned_start_date;
-              }
-              const createdRange = sf.created_at_range as [unknown, unknown] | undefined;
-              if (createdRange && Array.isArray(createdRange) && createdRange[0]) {
-                apiParams.created_start_date = formatDateTime(createdRange[0] as string | Date, 'YYYY-MM-DD');
-                apiParams.created_end_date = createdRange[1]
-                  ? formatDateTime(createdRange[1] as string | Date, 'YYYY-MM-DD')
-                  : apiParams.created_start_date;
-              }
+              const apiParams = resolveShipmentNoticeListApiParams(
+                params,
+                sort,
+                searchFormValues,
+              ) as ShipmentNoticeListParams;
               const response = await shipmentNoticeApi.list(apiParams);
               const notices = response?.data ?? [];
               const total = response?.total ?? notices.length;
@@ -2047,8 +2083,25 @@ const ShipmentNoticesPage: React.FC = () => {
                   { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 150 },
                   { title: t('common.unit'), dataIndex: 'material_unit', width: 60 },
                   { title: t('common.quantity'), dataIndex: 'notice_quantity', width: 90, align: 'right', render: formatQuantity },
-                  { title: t('app.kuaizhizao.salesOrder.unitPrice'), dataIndex: 'unit_price', width: 90, align: 'right' },
-                  { title: t('app.kuaizhizao.shipmentNotice.amount'), dataIndex: 'total_amount', width: 100, align: 'right' },
+                  {
+                    title: t(
+                      'app.kuaizhizao.salesOrder.unitPrice',
+                      documentCurrencyTitleVars((noticeDetail as any)?.currency_code, t),
+                    ),
+                    dataIndex: 'unit_price',
+                    width: 90,
+                    align: 'right' as const,
+                    render: (text: unknown) =>
+                      `${resolveDocumentCurrencyInputPrefix((noticeDetail as any)?.currency_code)}${text ?? 0}`,
+                  },
+                  {
+                    title: t('app.kuaizhizao.shipmentNotice.amount'),
+                    dataIndex: 'total_amount',
+                    width: 100,
+                    align: 'right' as const,
+                    render: (text: unknown) =>
+                      `${resolveDocumentCurrencyInputPrefix((noticeDetail as any)?.currency_code)}${formatAmount(text ?? 0, '0.00')}`,
+                  },
                 ]}
                 dataSource={noticeDetail.items}
                 pagination={false}

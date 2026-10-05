@@ -42,7 +42,13 @@ import ConnectionWizard from '../ConnectionWizard';
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
-import { extractProTableSort, mergeListKeyword, mapIntegrationConfigListSortField } from '../../../../utils/tableQueryKey';
+import {
+  extractProTableSort,
+  mapIntegrationConfigListSortField,
+  pickListSearchKeywordOrFields,
+  pickSearchString,
+  pickSearchTriStateBoolean,
+} from '../../../../utils/tableQueryKey';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 import { todaySiteDateString } from '../../../../utils/format';
 import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
@@ -655,22 +661,15 @@ const IntegrationConfigListPage: React.FC = () => {
             {t('pages.system.integrationConfigs.subtitle')}
           </Paragraph>
           <UniTable<IntegrationConfig>
-          columnPersistenceId="pages.system.integration-configs.list"
+          columnPersistenceId="pages.system.integration-configs.list-v2"
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {
             const { sortBy, sortOrder } = extractProTableSort(sort);
-            const kw = mergeListKeyword(searchFormValues, 'search');
-
             const filterBase = {
-              type: searchFormValues?.type as string | undefined,
-              is_active:
-                searchFormValues?.is_active !== undefined &&
-                searchFormValues.is_active !== '' &&
-                searchFormValues.is_active !== null
-                  ? (searchFormValues.is_active as boolean)
-                  : undefined,
-              search: kw || undefined,
+              type: pickSearchString(searchFormValues, 'type'),
+              is_active: pickSearchTriStateBoolean(searchFormValues, 'is_active'),
+              search: pickListSearchKeywordOrFields(searchFormValues, 'search'),
               sort_by: mapIntegrationConfigListSortField(sortBy),
               sort_order: sortOrder,
             };

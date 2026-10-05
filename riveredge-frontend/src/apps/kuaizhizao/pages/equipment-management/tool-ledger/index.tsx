@@ -62,6 +62,10 @@ import {
 import { buildToolLedgerDetailPath } from './toolLedgerPaths';
 import { todaySiteDateString } from '../../../../../utils/format';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
+import {
+  buildLedgerCodeUuidMap,
+  upsertLedgerImportItem,
+} from '../../../utils/ledgerImportUpsert';
 interface Tool {
   id?: number;
   uuid?: string;
@@ -484,6 +488,7 @@ const ToolLedgerPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.toolsLedger')}
           headerTitle={t('app.kuaizhizao.toolLedger.title')}
+          permissionResource="kuaizhizao:equipment-management-tool-ledger"
           columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-ledger-r10-v1"
           actionRef={actionRef}
           rowKey="uuid"
@@ -523,7 +528,7 @@ const ToolLedgerPage: React.FC = () => {
           showCreateButton={perms.canCreate}
           createButtonText={createButtonLabel}
           onCreate={handleCreate}
-          showImportButton
+          showImportButton={perms.canImport}
           onImport={async (data) => {
             if (!data || data.length < 2) {
               messageApi.warning(t('app.kuaizhizao.toolLedger.importEmpty'));
@@ -588,9 +593,16 @@ const ToolLedgerPage: React.FC = () => {
               messageApi.warning(t('app.kuaizhizao.toolLedger.importNoRows'));
               return;
             }
+            const codeToUuid = await buildLedgerCodeUuidMap((p) => toolApi.list(p));
             const result = await importInChunksViaPerItemCreate({
               items,
-              createOne: async (item, _index) => toolApi.create(item),
+              createOne: async (item, _index) =>
+                upsertLedgerImportItem(
+                  item,
+                  codeToUuid,
+                  (payload) => toolApi.create(payload),
+                  (uuid, payload) => toolApi.update(uuid, payload),
+                ),
               title: t('app.kuaizhizao.toolLedger.importTitle'),
               chunkSize: 100,
               concurrency: 4,

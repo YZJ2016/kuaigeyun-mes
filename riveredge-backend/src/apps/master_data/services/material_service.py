@@ -326,7 +326,7 @@ async def _resolve_process_route_id_from_defaults_dict(
 async def _enrich_material_process_route_display(
     tenant_id: int, material: Any, resp_data: Dict[str, Any]
 ) -> None:
-    """补齐 process_route_name；若仅有 defaults 中的路线引用则回填 id+name（列表/详情/保存后响应）。"""
+    """补齐 process_route_name/code/uuid；若仅有 defaults 中的路线引用则回填 id+name（列表/详情/保存后响应）。"""
     pr_id = resp_data.get("process_route_id")
     pr_name = resp_data.get("process_route_name")
     if pr_id and not pr_name:
@@ -335,13 +335,25 @@ async def _enrich_material_process_route_display(
         ).first()
         if pr:
             resp_data["process_route_name"] = pr.name
+            resp_data["process_route_code"] = pr.code
+            resp_data["process_route_uuid"] = pr.uuid
         return
     if pr_id:
+        if not resp_data.get("process_route_uuid") or not resp_data.get("process_route_code"):
+            pr = await ProcessRoute.filter(
+                id=pr_id, tenant_id=tenant_id, deleted_at__isnull=True
+            ).first()
+            if pr:
+                resp_data.setdefault("process_route_name", pr.name)
+                resp_data["process_route_code"] = pr.code
+                resp_data["process_route_uuid"] = pr.uuid
         return
     pr = await _get_process_route_from_defaults_dict(tenant_id, getattr(material, "defaults", None))
     if pr:
         resp_data["process_route_id"] = pr.id
         resp_data["process_route_name"] = pr.name
+        resp_data["process_route_code"] = pr.code
+        resp_data["process_route_uuid"] = pr.uuid
 
 
 async def _batch_enrich_process_route_for_material_list(
@@ -4560,7 +4572,8 @@ class MaterialService:
             )
         filter_sql = "".join(extra)
         grouped_sql = f'''
-            SELECT b.material_id, b.version,
+            SELECT MIN(b.id) AS id,
+                   b.material_id, b.version,
                    MAX(b.bom_code) AS bom_code,
                    MAX(b.bom_name) AS bom_name,
                    MAX(b.base_quantity) AS base_quantity,

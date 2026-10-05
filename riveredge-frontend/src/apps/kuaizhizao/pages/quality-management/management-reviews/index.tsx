@@ -8,6 +8,7 @@ import {
   ProFormTextArea,
 } from '@ant-design/pro-components';
 import { App, Button, Col, Empty, Row, Tag, Alert } from 'antd';
+import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import CodeField from '../../../../../components/code-field';
 import { UniTable } from '../../../../../components/uni-table';
@@ -19,15 +20,16 @@ import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { formatDateTimeBySiteSetting } from '../../../../../utils/format';
+import { pickListSearchKeyword, pickSearchString } from '../../../../../utils/tableQueryKey';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { qualityQmsApi, QmsManagementReview } from '../../../services/quality-qms';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
-import {
-  parseEvidenceLinksText,
-  stringifyEvidenceLinks,
-  QMS_REVIEW_STATUS_OPTIONS,
-} from '../qms/qmsMeta';
+import { parseEvidenceLinksText, stringifyEvidenceLinks, QMS_REVIEW_STATUS_OPTIONS } from '../qms/qmsMeta';
+import QmsReviewInputLinksField, {
+  mergeReviewInputLinks,
+  splitReviewInputLinks,
+} from '../qms/QmsReviewInputLinksField';
 
 const RESOURCE = 'kuaizhizao:quality-management-management-reviews';
 
@@ -40,7 +42,20 @@ const ManagementReviewsPage: React.FC = () => {
   const [editing, setEditing] = useState<QmsManagementReview | null>(null);
   const [inputSummaryText, setInputSummaryText] = useState('');
   const [inputSummaryLoading, setInputSummaryLoading] = useState(false);
+  const [inputDocIds, setInputDocIds] = useState<number[]>([]);
+  const [inputAuditIds, setInputAuditIds] = useState<number[]>([]);
+  const [inputNcIds, setInputNcIds] = useState<number[]>([]);
+  const [inputEightDIds, setInputEightDIds] = useState<number[]>([]);
+  const inputLinkCacheRef = useRef<Map<string, import('../../../services/quality-qms').QmsEvidenceLink>>(
+    new Map(),
+  );
+  const otherInputLinksRef = useRef<import('../../../services/quality-qms').QmsEvidenceLink[]>([]);
   const { canCreate, canUpdate, canDelete } = useResourcePermissions(RESOURCE);
+
+  const { data: standardsEnvelope } = useQuery({
+    queryKey: ['qms-standards'],
+    queryFn: () => qualityQmsApi.standards.list({ limit: 200 }),
+  });
 
   const statusEnum = useMemo(
     () =>
@@ -55,11 +70,16 @@ const ManagementReviewsPage: React.FC = () => {
       formRef.current?.resetFields();
       formRef.current?.setFieldsValue({
         status: 'draft',
-        input_links_text: '[]',
+        standard_ids: [],
         training_refs_text: '[]',
         calibration_refs_text: '[]',
         attachments: [],
       });
+      setInputDocIds([]);
+      setInputAuditIds([]);
+      setInputNcIds([]);
+      setInputEightDIds([]);
+      otherInputLinksRef.current = [];
     }, 0);
   }, []);
   useNewShortcut(() => {
@@ -128,6 +148,17 @@ const ManagementReviewsPage: React.FC = () => {
             hideInSearch: true,
           },
           {
+            title: t('app.kuaizhizao.quality.qms.reviewStandards'),
+            dataIndex: 'standard_labels',
+            width: 160,
+            minWidth: 160,
+            uniTableKeepWidth: true,
+            resizable: false,
+            hideInSearch: true,
+            ellipsis: true,
+            render: (_, row) => (row.standard_labels?.length ? row.standard_labels.join('、') : '-'),
+          },
+          {
             title: t('app.kuaizhizao.quality.qms.reviewDate'),
             dataIndex: 'review_date',
             width: 140,
@@ -158,10 +189,18 @@ const ManagementReviewsPage: React.FC = () => {
                   onClick={() => {
                     setEditing(row);
                     setOpen(true);
+                    const split = splitReviewInputLinks(row.input_links);
+                    otherInputLinksRef.current = split.other;
+                    setInputDocIds(split.docIds);
+                    setInputAuditIds(split.auditIds);
+                    setInputNcIds(split.ncIds);
+                    setInputEightDIds(split.eightDIds);
+                    for (const link of row.input_links || []) {
+                      inputLinkCacheRef.current.set(`${link.ref_type}:${link.ref_id ?? ''}`, link);
+                    }
                     setTimeout(() => {
                       formRef.current?.setFieldsValue({
                         ...row,
-                        input_links_text: stringifyEvidenceLinks(row.input_links),
                         training_refs_text: stringifyEvidenceLinks(row.training_refs),
                         calibration_refs_text: stringifyEvidenceLinks(row.calibration_refs),
                         attachments: mapAttachmentsToUploadList(row.attachments as any),
@@ -203,7 +242,8 @@ const ManagementReviewsPage: React.FC = () => {
           rowKey="id"
           columns={columns}
           showAdvancedSearch
-          columnPersistenceId="apps.kuaizhizao.pages.quality-management.management-reviews-width-v2"
+          columnPersistenceId="apps.kuaizhizao.pages.quality-management.management-reviews-width-v4"
+          skipFuzzyPinyinClientFilter
           toolBarRender={() =>
             canCreate
               ? [
@@ -220,14 +260,14 @@ const ManagementReviewsPage: React.FC = () => {
             messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
             actionRef.current?.reload();
           }}
-          request={async (params) => {
+          request={async (params, _sort, _filter, searchFormValues) => {
             const pageSize = params.pageSize || 20;
             const skip = ((params.current || 1) - 1) * pageSize;
             const res = await qualityQmsApi.managementReviews.list({
               skip,
               limit: pageSize,
-              keyword: params.keyword,
-              status: params.status,
+              keyword: pickListSearchKeyword(searchFormValues),
+              status: pickSearchString(searchFormValues, 'status'),
             });
             return { success: true, data: res.items || [], total: res.total || 0 };
           }}
@@ -251,12 +291,18 @@ const ManagementReviewsPage: React.FC = () => {
             try {
               const payload = {
                 ...values,
-                input_links: parseEvidenceLinksText(values.input_links_text),
+                input_links: mergeReviewInputLinks(
+                  inputDocIds,
+                  inputAuditIds,
+                  inputNcIds,
+                  inputEightDIds,
+                  inputLinkCacheRef.current,
+                  otherInputLinksRef.current,
+                ),
                 training_refs: parseEvidenceLinksText(values.training_refs_text),
                 calibration_refs: parseEvidenceLinksText(values.calibration_refs_text),
                 attachments: normalizeDocumentAttachments(values.attachments),
               };
-              delete (payload as any).input_links_text;
               delete (payload as any).training_refs_text;
               delete (payload as any).calibration_refs_text;
               if (editing?.id) {
@@ -292,6 +338,18 @@ const ManagementReviewsPage: React.FC = () => {
                 label={t('common.status')}
                 options={QMS_REVIEW_STATUS_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }))}
                 rules={[{ required: true }]}
+              />
+            </Col>
+            <Col span={24}>
+              <ProFormSelect
+                name="standard_ids"
+                label={t('app.kuaizhizao.quality.qms.reviewStandards')}
+                mode="multiple"
+                rules={[{ required: true, message: t('app.kuaizhizao.quality.qms.reviewStandardsRequired') }]}
+                options={(standardsEnvelope?.items ?? []).map((s) => ({
+                  value: s.id,
+                  label: `${s.code} ${s.name}`,
+                }))}
               />
             </Col>
             <Col span={8}>
@@ -331,11 +389,21 @@ const ManagementReviewsPage: React.FC = () => {
               />
             </Col>
             <Col span={24}>
-              <ProFormTextArea
-                name="input_links_text"
-                label={t('app.kuaizhizao.quality.qms.inputLinks')}
-                tooltip={t('app.kuaizhizao.quality.qms.inputLinksHint')}
-                fieldProps={{ rows: 4 }}
+              <QmsReviewInputLinksField
+                docIds={inputDocIds}
+                auditIds={inputAuditIds}
+                ncIds={inputNcIds}
+                eightDIds={inputEightDIds}
+                onChange={(links) => {
+                  const split = splitReviewInputLinks(links);
+                  setInputDocIds(split.docIds);
+                  setInputAuditIds(split.auditIds);
+                  setInputNcIds(split.ncIds);
+                  setInputEightDIds(split.eightDIds);
+                  for (const link of links) {
+                    inputLinkCacheRef.current.set(`${link.ref_type}:${link.ref_id ?? ''}`, link);
+                  }
+                }}
               />
             </Col>
             <Col span={24}>

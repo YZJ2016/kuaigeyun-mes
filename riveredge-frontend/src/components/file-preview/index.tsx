@@ -9,7 +9,23 @@ import {
 import { useTranslation } from 'react-i18next';
 import { getFileByUuid, getFilePreview, getFileDownloadUrlWithToken, FILE_IMAGE_SIZE_MEDIUM } from '../../services/file';
 import { PreviewOverlayToolButton, UniPdfPreview, UniPreviewOverlay } from '../uni-preview';
-import { getFileExt, isCad2dFile, isImageFile, isInlineDocumentPreview, isAltiumEdaFile, isPcbDocFile, isSchDocFile, isPdfFile, isStepFile, type FilePreviewSource } from '../../utils/filePreviewKind';
+import {
+  getFileExt,
+  isCad2dFile,
+  isImageFile,
+  isInlineDocumentPreview,
+  isDocumentPreviewFile,
+  isOfficeMsDocFile,
+  isExcelWorkbookFile,
+  isTextFile,
+  isSpreadsheetFile,
+  isAltiumEdaFile,
+  isPcbDocFile,
+  isSchDocFile,
+  isPdfFile,
+  isStepFile,
+  type FilePreviewSource,
+} from '../../utils/filePreviewKind';
 import { FilePreviewHeaderTitle } from './FilePreviewHeaderTitle';
 import type { DwgSvgViewerRef } from '../dwg-preview/DwgCadViewer';
 import type { PcbSvgViewerRef } from '../pcb-preview/PcbSvgViewer';
@@ -33,6 +49,12 @@ const SchPreviewPane = lazy(() =>
 );
 const DocumentPreviewPane = lazy(() =>
   import('./DocumentPreviewPane').then((m) => ({ default: m.DocumentPreviewPane })),
+);
+const OfficeDocPreviewPane = lazy(() =>
+  import('./OfficeDocPreviewPane').then((m) => ({ default: m.OfficeDocPreviewPane })),
+);
+const UniverExcelPreviewPane = lazy(() =>
+  import('./UniverExcelPreviewPane').then((m) => ({ default: m.UniverExcelPreviewPane })),
 );
 
 export interface FilePreviewModalProps extends FilePreviewSource {
@@ -70,6 +92,8 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [error, setError] = useState<string>('');
+  /** LibreOffice 高级预览：后端已转 PDF */
+  const [officeAdvancedPdf, setOfficeAdvancedPdf] = useState(false);
   const [stepShowEdges, setStepShowEdges] = useState(true);
   const [pcbSide, setPcbSide] = useState<'top' | 'bottom'>('top');
   const stepViewerRef = useRef<StepModelViewerRef>(null);
@@ -108,13 +132,17 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   }, [open, fileUuid, initialSource]);
 
   const isImage = isImageFile(fileSource);
-  const isPdf = isPdfFile(fileSource);
+  const isPdf = isPdfFile(fileSource) || officeAdvancedPdf;
   const isStep = isStepFile(fileSource);
   const isCad2d = isCad2dFile(fileSource);
   const isPcbDoc = isPcbDocFile(fileSource);
   const isSchDoc = isSchDocFile(fileSource);
   const isAltiumEda = isAltiumEdaFile(fileSource);
-  const isDocument = isInlineDocumentPreview(fileSource);
+  const isOfficeMs = isOfficeMsDocFile(fileSource) && !officeAdvancedPdf;
+  const isExcelWorkbook = isExcelWorkbookFile(fileSource);
+  const isTextPreview = isTextFile(fileSource) && !isSpreadsheetFile(fileSource);
+  const isInlineDocument = isInlineDocumentPreview(fileSource);
+  const isDocument = isDocumentPreviewFile(fileSource) || officeAdvancedPdf;
 
   const previewFallbackTitle = title || t('pages.system.files.previewModalTitle');
   const previewHeaderTitle = useMemo(
@@ -147,6 +175,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     const run = async () => {
       setLoading(true);
       setError('');
+      setOfficeAdvancedPdf(false);
       try {
         if (url) {
           if (!cancelled) {
@@ -163,15 +192,23 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
           fileUuid,
           isImage ? { size: FILE_IMAGE_SIZE_MEDIUM } : undefined,
         );
-        // 文档类（txt/xlsx 等）由前端按扩展名渲染，不依赖后端 supported；
-        // 缩略图 size 仅图片有效，表格/文本必须拉原文件。
+        // 文档类（txt/xlsx/Office 等）由前端按扩展名渲染，不依赖后端 supported；
+        // 缩略图 size 仅图片有效，表格/文本/Office 必须拉原文件。
         if (!preview?.preview_url) {
           throw new Error(t('app.master-data.drawings.previewUnsupported'));
         }
-        if (!isDocument && preview.supported === false) {
+        const advancedOfficePdf =
+          preview.preview_mode === 'advanced'
+          && (
+            (preview.file_type || '').toLowerCase() === 'application/pdf'
+            || (preview.file_extension || '').toLowerCase() === 'pdf'
+            || isOfficeMsDocFile(fileSource)
+          );
+        if (!isDocument && !advancedOfficePdf && preview.supported === false) {
           throw new Error(t('app.master-data.drawings.previewUnsupported'));
         }
         if (!cancelled) {
+          setOfficeAdvancedPdf(advancedOfficePdf);
           setPreviewUrl(preview.preview_url);
           setDisplayUrl(preview.preview_url);
           setIsOriginalPreview(false);
@@ -239,6 +276,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
       setDisplayUrl('');
       setIsOriginalPreview(false);
       setLoadingOriginal(false);
+      setOfficeAdvancedPdf(false);
     }
   }, [open]);
 
@@ -529,6 +567,150 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     );
   }
 
+  if (open && isExcelWorkbook) {
+    const overlayBodyHeight: React.CSSProperties = {
+      flex: 1,
+      minHeight: 0,
+      display: 'flex',
+      flexDirection: 'column',
+    };
+    return (
+      <UniPreviewOverlay
+        open={open}
+        onClose={onClose}
+        title={previewHeaderTitle}
+        inset={16}
+        zIndex={overlayZIndex}
+      >
+        <style>{`
+          .uni-excel-preview-host {
+            width: 100%;
+            max-width: 100%;
+            min-width: 0;
+            height: 100%;
+          }
+          .uni-excel-preview-host > * {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            height: 100% !important;
+            max-height: 100% !important;
+            box-sizing: border-box !important;
+          }
+        `}</style>
+        {loading || pdfLoading ? (
+          <div
+            style={{
+              ...overlayBodyHeight,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Spin description={t('pages.system.files.previewLoading')}>
+              <div style={{ minHeight: 24 }} />
+            </Spin>
+          </div>
+        ) : error ? (
+          <Alert type="error" title={error} showIcon style={{ margin: 16 }} />
+        ) : previewUrl ? (
+          <Suspense
+            fallback={
+              <div
+                style={{
+                  ...overlayBodyHeight,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Spin description={t('pages.system.files.previewLoading')}>
+                  <div style={{ minHeight: 24 }} />
+                </Spin>
+              </div>
+            }
+          >
+            <UniverExcelPreviewPane
+              fileUrl={previewUrl}
+              fileUuid={fileUuid}
+              fileSource={fileSource}
+              height="100%"
+            />
+          </Suspense>
+        ) : (
+          <Alert
+            type="warning"
+            showIcon
+            title={t('app.master-data.drawings.previewUnsupported')}
+            style={{ margin: 16 }}
+          />
+        )}
+      </UniPreviewOverlay>
+    );
+  }
+
+  if (open && isTextPreview) {
+    const overlayBodyHeight: React.CSSProperties = {
+      flex: 1,
+      minHeight: 0,
+      display: 'flex',
+      flexDirection: 'column',
+    };
+    return (
+      <UniPreviewOverlay
+        open={open}
+        onClose={onClose}
+        title={previewHeaderTitle}
+        inset={16}
+        zIndex={overlayZIndex}
+      >
+        {loading || pdfLoading ? (
+          <div
+            style={{
+              ...overlayBodyHeight,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Spin description={t('pages.system.files.previewLoading')}>
+              <div style={{ minHeight: 24 }} />
+            </Spin>
+          </div>
+        ) : error ? (
+          <Alert type="error" title={error} showIcon style={{ margin: 16 }} />
+        ) : previewUrl ? (
+          <Suspense
+            fallback={
+              <div
+                style={{
+                  ...overlayBodyHeight,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Spin description={t('pages.system.files.previewLoading')}>
+                  <div style={{ minHeight: 24 }} />
+                </Spin>
+              </div>
+            }
+          >
+            <DocumentPreviewPane
+              fileUrl={previewUrl}
+              fileUuid={fileUuid}
+              fileSource={fileSource}
+              height="100%"
+            />
+          </Suspense>
+        ) : (
+          <Alert
+            type="warning"
+            showIcon
+            title={t('app.master-data.drawings.previewUnsupported')}
+            style={{ margin: 16 }}
+          />
+        )}
+      </UniPreviewOverlay>
+    );
+  }
+
   return (
     <>
       {previewUrl && isImage ? (
@@ -613,7 +795,31 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
             </div>
           ) : error ? (
             <Alert type="error" title={error} showIcon />
-          ) : previewUrl && isDocument ? (
+          ) : previewUrl && isOfficeMs ? (
+            <Suspense
+              fallback={
+                <div
+                  style={{
+                    minHeight: typeof height === 'number' ? `${height}px` : height,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Spin description={t('pages.system.files.previewLoading')}>
+                    <div style={{ minHeight: 24 }} />
+                  </Spin>
+                </div>
+              }
+            >
+              <OfficeDocPreviewPane
+                fileUrl={previewUrl}
+                fileUuid={fileUuid}
+                fileSource={fileSource}
+                height={height}
+              />
+            </Suspense>
+          ) : previewUrl && isInlineDocument ? (
             <Suspense
               fallback={
                 <div

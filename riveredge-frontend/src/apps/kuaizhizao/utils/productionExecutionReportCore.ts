@@ -1,26 +1,27 @@
 /** 生产执行报表 → 后端 /reports/production 表单字段（排序走 extractReportProTableSort 统一路径） */
+import { pickListSearchKeyword, pickSearchString } from '../../../utils/tableQueryKey';
+
 export function resolveProductionReportFormParams(
   searchFormValues?: Record<string, unknown> | null,
 ): Record<string, string | undefined> {
-  const s = searchFormValues ?? {};
-  const pick = (key: string) => {
-    const v = s[key];
-    return typeof v === 'string' && v.trim() ? v.trim() : undefined;
-  };
-  const keyword = pick('keyword');
+  const keyword = pickListSearchKeyword(searchFormValues);
+  const status = pickSearchString(searchFormValues, 'status');
   return {
     keyword,
-    status: typeof s.status === 'string' && s.status ? s.status : undefined,
-    order_code: pick('order_code') ?? pick('code'),
-    product_name: pick('product_name') ?? pick('material_name'),
-    supplier_name: pick('supplier_name'),
+    status,
+    order_code:
+      pickSearchString(searchFormValues, 'order_code') ?? pickSearchString(searchFormValues, 'code'),
+    product_name:
+      pickSearchString(searchFormValues, 'product_name') ??
+      pickSearchString(searchFormValues, 'material_name'),
+    supplier_name: pickSearchString(searchFormValues, 'supplier_name'),
     work_order_code:
-      pick('work_order_code') ??
-      pick('order_code') ??
-      pick('code') ??
-      pick('outsource_work_order_code'),
-    template_code: pick('template_code'),
-    team_name: pick('team_name'),
+      pickSearchString(searchFormValues, 'work_order_code') ??
+      pickSearchString(searchFormValues, 'order_code') ??
+      pickSearchString(searchFormValues, 'code') ??
+      pickSearchString(searchFormValues, 'outsource_work_order_code'),
+    template_code: pickSearchString(searchFormValues, 'template_code'),
+    team_name: pickSearchString(searchFormValues, 'team_name'),
   };
 }
 

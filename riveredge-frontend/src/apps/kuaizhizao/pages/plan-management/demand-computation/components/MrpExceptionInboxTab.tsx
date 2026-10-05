@@ -20,6 +20,7 @@ import {
   mrpExceptionMessage,
   mrpExceptionTagColor,
 } from './mrpExceptionHelpers'
+import { pickSearchString } from '../../../../../../utils/tableQueryKey'
 
 const SUPPLY_LINK_CODES = new Set(['RESCHEDULE_IN', 'RESCHEDULE_OUT', 'CANCEL_SUPPLY', 'PAST_DUE_SUPPLY'])
 
@@ -243,19 +244,18 @@ export const MrpExceptionInboxTab: React.FC<MrpExceptionInboxTabProps> = ({
     <>
       {summaryBanner}
       <UniTable<MrpExceptionInboxItem>
-        columnPersistenceId="apps.kuaizhizao.pages.plan-management.demand-computation-mrp-exception-inbox-rank-v1"
+        columnPersistenceId="apps.kuaizhizao.pages.plan-management.demand-computation-mrp-exception-inbox-rank-v3"
         actionRef={actionRef}
         columns={columns}
         rowKey="inbox_key"
-        search={{ labelWidth: 'auto' }}
+        showAdvancedSearch
         showCreateButton={false}
         request={async (params, _sort, _filter, searchFormValues) => {
-          const s = (searchFormValues ?? {}) as Record<string, unknown>
           const result = await getMrpExceptionInbox({
             skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
             limit: params.pageSize ?? 20,
-            code: typeof s.code === 'string' && s.code ? s.code : undefined,
-            severity: typeof s.severity === 'string' && s.severity ? s.severity : undefined,
+            code: pickSearchString(searchFormValues, 'code'),
+            severity: pickSearchString(searchFormValues, 'severity'),
           })
           setSummary({
             total: result.total,

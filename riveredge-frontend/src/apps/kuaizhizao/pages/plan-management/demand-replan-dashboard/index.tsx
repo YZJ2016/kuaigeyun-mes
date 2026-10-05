@@ -11,7 +11,12 @@ import {
   UNI_TABLE_STACKED_BADGE_DATETIME_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { rowActionKind } from '../../../../../components/uni-action';
-import { extractProTableSort } from '../../../../../utils/tableQueryKey';
+import {
+  extractProTableSort,
+  pickListSearchKeyword,
+  pickSearchDateRange,
+  pickSearchString,
+} from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { formatDateTime, formatDateTimeBySiteSetting } from '../../../../../utils/format';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
@@ -732,7 +737,7 @@ const DemandReplanDashboardPage: React.FC = () => {
               <UniTable<DemandReplanTaskItem>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.demandReplanDashboard')}
-                columnPersistenceId="apps.kuaizhizao.pages.plan-management.demand-replan-dashboard.tasks-width-v1"
+                columnPersistenceId="apps.kuaizhizao.pages.plan-management.demand-replan-dashboard.tasks-width-v2"
                 actionRef={taskTableActionRef}
                 columns={taskColumns}
                 rowKey="id"
@@ -741,32 +746,35 @@ const DemandReplanDashboardPage: React.FC = () => {
                 pinnedTabsField="status"
                 pinnedTabsValueEnum={taskStatusValueEnum}
                 request={async (params, sort, _filter, searchFormValues) => {
-                  const s = (searchFormValues ?? {}) as Record<string, unknown>;
                   const { sortBy, sortOrder } = extractProTableSort(sort);
                   const orderBy =
                     sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
-                  const fuzzyKeyword = typeof s.keyword === 'string' ? s.keyword.trim() : '';
+                  const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
                   const apiParams: Parameters<typeof listDemandReplanTasks>[0] = {
                     skip: ((params.current || 1) - 1) * (params.pageSize || 20),
                     limit: params.pageSize || 20,
                     order_by: orderBy,
                     event_id: selectedEventId ?? undefined,
-                    status: s.status as string | undefined,
-                    mode: s.mode as string | undefined,
-                    risk_level: s.risk_level as string | undefined,
-                    approval_status: s.approval_status as string | undefined,
+                    status: pickSearchString(searchFormValues, 'status'),
+                    mode: pickSearchString(searchFormValues, 'mode'),
+                    risk_level: pickSearchString(searchFormValues, 'risk_level'),
+                    approval_status: pickSearchString(searchFormValues, 'approval_status'),
                   };
+                  const taskCodeKeyword = pickSearchString(searchFormValues, 'task_code');
                   if (fuzzyKeyword) {
                     apiParams.keyword = fuzzyKeyword;
-                  } else if (s.task_code != null && String(s.task_code).trim()) {
-                    apiParams.keyword = String(s.task_code).trim();
+                  } else if (taskCodeKeyword) {
+                    apiParams.keyword = taskCodeKeyword;
                   }
-                  const createdRange = s.created_at_range as [unknown, unknown] | undefined;
-                  if (createdRange && Array.isArray(createdRange) && createdRange[0]) {
-                    apiParams.created_start_date = formatDateTime(createdRange[0] as string | Date, 'YYYY-MM-DD');
-                    apiParams.created_end_date = createdRange[1]
-                      ? formatDateTime(createdRange[1] as string | Date, 'YYYY-MM-DD')
-                      : apiParams.created_start_date;
+                  const createdRange = pickSearchDateRange(
+                    searchFormValues,
+                    'created_start_date',
+                    'created_end_date',
+                    'created_at_range',
+                  );
+                  if (createdRange.from) {
+                    apiParams.created_start_date = createdRange.from;
+                    apiParams.created_end_date = createdRange.to ?? createdRange.from;
                   }
                   const res = await listDemandReplanTasks(apiParams);
                   return {

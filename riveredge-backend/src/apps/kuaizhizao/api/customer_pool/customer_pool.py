@@ -62,7 +62,7 @@ async def list_customer_pool(
     follow_status: Optional[str] = Query(None, alias="followStatus"),
     market_scope: Optional[str] = Query(None, alias="marketScope"),
     country_code: Optional[str] = Query(None, alias="countryCode", description="国家/地区（模糊）"),
-    inactive_7d: Optional[bool] = Query(None, alias="inactive7d", description="仅7天未联系"),
+    inactive: Optional[bool] = Query(None, description="仅未联系（按规则中的未联系提醒天数）"),
     order_by: Optional[str] = Query(None, description="排序字段，如 code、-last_follow_up_at"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -103,7 +103,7 @@ async def list_customer_pool(
         follow_status=follow_status,
         market_scope=market_scope,
         country_code=country_code,
-        inactive_7d=inactive_7d,
+        inactive=inactive,
         order_by=safe_order_by,
     )
 

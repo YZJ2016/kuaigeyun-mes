@@ -12,7 +12,10 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import type { NavigateFunction } from 'react-router-dom';
 import { resolveSalesOrderDisplayTotalAmount } from '../../../../utils/documentLineAmounts';
-import { resolveDocumentCurrencyInputPrefix } from '../../../../utils/documentCurrencyDisplay';
+import {
+  documentCurrencyTitleVars,
+  resolveDocumentCurrencyInputPrefix,
+} from '../../../../utils/documentCurrencyDisplay';
 import { AmountDisplay } from '../../../../../../components/permission';
 import { KUAIZHIZAO_SALES_ORDER_FIELD_RESOURCE as SO } from '../../../../constants/fieldPermissionResources';
 import { MaterialUnitLabel } from '../../../../../../components/material-unit-label';
@@ -664,7 +667,7 @@ export const SalesOrderDetailLinesPane: React.FC = () => {
                 ),
               },
               {
-                title: t('app.kuaizhizao.salesOrder.unitPrice'),
+                title: t('app.kuaizhizao.salesOrder.unitPrice', documentCurrencyTitleVars(order.currency_code, t)),
                 dataIndex: 'unit_price',
                 width: 100,
                 align: 'right' as const,
@@ -686,7 +689,7 @@ export const SalesOrderDetailLinesPane: React.FC = () => {
                 render: (val: number) => val ?? 0,
               },
               {
-                title: t('app.kuaizhizao.salesOrder.inclAmount'),
+                title: t('app.kuaizhizao.salesOrder.inclAmount', documentCurrencyTitleVars(order.currency_code, t)),
                 dataIndex: 'item_amount',
                 width: 120,
                 align: 'right' as const,

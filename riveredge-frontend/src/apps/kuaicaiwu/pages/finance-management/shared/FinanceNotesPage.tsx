@@ -57,6 +57,12 @@ import {
   rowActionNoteHonor,
 } from '../../../../../components/uni-action';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
+import {
+  extractProTableSort,
+  pickListSearchKeywordOrFields,
+  pickSearchString,
+} from '../../../../../utils/tableQueryKey';
+import { parseSalesReportDateRange } from '../../../../kuaizhizao/services/reports';
 
 type Props = {
   direction: FinanceNoteDirection;
@@ -419,25 +425,31 @@ const FinanceNotesPage: React.FC<Props> = ({ direction, resource, columnPersiste
               ]
             : []
         }
-        request={async (params, sort) => {
-          const sortField = Object.keys(sort || {})[0];
-          const sortOrder = sortField ? sort?.[sortField] : undefined;
-          const dueRange = params.due_date_range as string[] | undefined;
+        request={async (params, sort, _filter, searchFormValues) => {
+          const { sortBy, sortOrder } = extractProTableSort(sort ?? {});
+          const { date_start: due_date_start, date_end: due_date_end } = parseSalesReportDateRange(
+            searchFormValues ?? {},
+            ['due_date_range', 'dueDateRange'],
+          );
+          const keyword =
+            pickListSearchKeywordOrFields(searchFormValues, 'bill_no') ?? urlKeyword;
           return financeNoteService.list(direction, {
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize || 20,
-            keyword: (params.keyword as string | undefined) || urlKeyword,
-            status: params.status as string | undefined,
-            bill_type: params.bill_type as FinanceNote['bill_type'] | undefined,
+            keyword,
+            status: pickSearchString(searchFormValues, 'status'),
+            bill_type: pickSearchString(searchFormValues, 'bill_type') as
+              | FinanceNote['bill_type']
+              | undefined,
             expiring_within_days: expiringDays ? Number(expiringDays) : undefined,
-            due_date_start: dueRange?.[0],
-            due_date_end: dueRange?.[1],
-            sort_field: sortField,
+            due_date_start,
+            due_date_end,
+            sort_field: sortBy,
             sort_order: sortOrder,
           });
         }}
         rowSelection={false}
-        search={{ labelWidth: 'auto' }}
+        showAdvancedSearch
       />
 
       <FormModalTemplate

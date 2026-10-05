@@ -151,6 +151,16 @@ export const qualityApi = {
       apiRequest(`/apps/kuaizhizao/incoming-inspections/${id}/conduct`, { method: 'POST', data }),
     revokeConduct: async (id: string) =>
       apiRequest(`/apps/kuaizhizao/incoming-inspections/${id}/revoke-conduct`, { method: 'POST' }),
+    patchAttachments: async (id: string, attachments: unknown[]) =>
+      apiRequest(`/apps/kuaizhizao/incoming-inspections/${id}/attachments`, {
+        method: 'PATCH',
+        data: { attachments },
+      }),
+    applyPlan: async (id: string, inspectionPlanId: number) =>
+      apiRequest(`/apps/kuaizhizao/incoming-inspections/${id}/apply-plan`, {
+        method: 'POST',
+        data: { inspection_plan_id: inspectionPlanId },
+      }),
     approve: async (id: string, data: any) =>
       apiRequest(`/apps/kuaizhizao/incoming-inspections/${id}/approve`, { method: 'POST', data }),
     pushToPurchaseReturn: async (id: string, data?: { quantity?: number }) =>
@@ -324,6 +334,16 @@ export const qualityApi = {
       }),
     revokeConduct: async (id: string) =>
       apiRequest(`/apps/kuaizhizao/process-inspections/${id}/revoke-conduct`, { method: 'POST' }),
+    patchAttachments: async (id: string, attachments: unknown[]) =>
+      apiRequest(`/apps/kuaizhizao/process-inspections/${id}/attachments`, {
+        method: 'PATCH',
+        data: { attachments },
+      }),
+    applyPlan: async (id: string, inspectionPlanId: number) =>
+      apiRequest(`/apps/kuaizhizao/process-inspections/${id}/apply-plan`, {
+        method: 'POST',
+        data: { inspection_plan_id: inspectionPlanId },
+      }),
     approve: async (id: string, data: any) =>
       apiRequest(`/apps/kuaizhizao/process-inspections/${id}/approve`, { method: 'POST', data }),
     createFromWorkOrder: async (workOrderId: string, operationId: string) =>
@@ -365,6 +385,16 @@ export const qualityApi = {
       apiRequest(`/apps/kuaizhizao/finished-goods-inspections/${id}/conduct`, { method: 'POST', data }),
     revokeConduct: async (id: string) =>
       apiRequest(`/apps/kuaizhizao/finished-goods-inspections/${id}/revoke-conduct`, { method: 'POST' }),
+    patchAttachments: async (id: string, attachments: unknown[]) =>
+      apiRequest(`/apps/kuaizhizao/finished-goods-inspections/${id}/attachments`, {
+        method: 'PATCH',
+        data: { attachments },
+      }),
+    applyPlan: async (id: string, inspectionPlanId: number) =>
+      apiRequest(`/apps/kuaizhizao/finished-goods-inspections/${id}/apply-plan`, {
+        method: 'POST',
+        data: { inspection_plan_id: inspectionPlanId },
+      }),
     approve: async (id: string, data: any) =>
       apiRequest(`/apps/kuaizhizao/finished-goods-inspections/${id}/approve`, { method: 'POST', data }),
     pushToRework: async (id: string, data?: { quantity?: number }) =>

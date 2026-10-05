@@ -5,6 +5,12 @@
 import type { LifecycleResult } from '../../../components/uni-lifecycle/types';
 import type { BackendLifecycle } from './backendLifecycle';
 import { parseBackendLifecycle } from './backendLifecycle';
+import {
+  extractProTableSort,
+  pickListSearchKeyword,
+  pickSearchString,
+} from '../../../utils/tableQueryKey';
+import { parseSalesReportDateRange } from '../services/reports';
 
 const REWORK_ORDER_STAGE_KEYS = new Set([
   'draft',
@@ -209,13 +215,60 @@ export function buildReworkOrderLifecycleValueEnum(
 export function resolveReworkOrderListLifecycleParams(
   searchFormValues?: Record<string, unknown> | null,
 ): { status?: string } {
-  const raw = searchFormValues?.status ?? searchFormValues?.lifecycle_stage;
-  if (raw == null || String(raw).trim() === '') return {};
-  const status = String(raw).trim();
+  const status =
+    pickSearchString(searchFormValues, 'status') ??
+    pickSearchString(searchFormValues, 'lifecycle_stage');
+  if (!status) return {};
   if (REWORK_ORDER_LIFECYCLE_KEYS.includes(status as (typeof REWORK_ORDER_LIFECYCLE_KEYS)[number])) {
     return { status };
   }
   return {};
+}
+
+export function resolveReworkOrderListApiParams(
+  params: { current?: number; pageSize?: number },
+  sort?: Record<string, unknown>,
+  searchFormValues?: Record<string, unknown> | null,
+): Record<string, unknown> {
+  const lifecycleParams = resolveReworkOrderListLifecycleParams(searchFormValues);
+  const { sortBy, sortOrder } = extractProTableSort(sort ?? {});
+  const orderBy =
+    sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
+  const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
+
+  const apiParams: Record<string, unknown> = {
+    skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
+    limit: params.pageSize ?? 20,
+    ...lifecycleParams,
+    order_by: orderBy,
+    rework_type: pickSearchString(searchFormValues, 'rework_type'),
+    business_type: pickSearchString(searchFormValues, 'business_type'),
+    product_line_code: pickSearchString(searchFormValues, 'product_line_code'),
+  };
+
+  if (fuzzyKeyword) {
+    apiParams.keyword = fuzzyKeyword;
+  } else {
+    const code = pickSearchString(searchFormValues, 'code');
+    const productName = pickSearchString(searchFormValues, 'product_name');
+    const originalWorkOrderCode = pickSearchString(searchFormValues, 'original_work_order_code');
+    if (code) apiParams.code = code;
+    if (productName) apiParams.product_name = productName;
+    if (originalWorkOrderCode) apiParams.original_work_order_code = originalWorkOrderCode;
+  }
+
+  const planned = parseSalesReportDateRange(searchFormValues ?? {}, ['planned_start_date_range']);
+  if (planned.date_start) {
+    apiParams.planned_start_from = planned.date_start;
+    apiParams.planned_start_to = planned.date_end ?? planned.date_start;
+  }
+  const created = parseSalesReportDateRange(searchFormValues ?? {}, ['created_at_range', 'createdAtRange']);
+  if (created.date_start) {
+    apiParams.created_start_date = created.date_start;
+    apiParams.created_end_date = created.date_end ?? created.date_start;
+  }
+
+  return apiParams;
 }
 
 export function reworkCapabilityAllowed(

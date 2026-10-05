@@ -50,7 +50,10 @@ import { TabRouteCache } from './TabRouteCache';
 import { isCreateTabKey } from './isCreateTabKey';
 import { readUniTabsBorderRadius } from '../../utils/themeBorderRadius';
 import { isAppGroupTitleItem } from '../../utils/permission';
-import { dispatchRouteSoftRefresh } from '../../hooks/useRouteSoftRefresh';
+import {
+  dispatchRouteSoftRefresh,
+  normalizeSoftRefreshTabKey,
+} from '../../hooks/useRouteSoftRefresh';
 import { isStationEntryPath } from '../../utils/clientChannel';
 
 function isTenantDefaultHomePath(p: string): boolean {
@@ -60,6 +63,7 @@ function isTenantDefaultHomePath(p: string): boolean {
 /**
  * 首页未就绪时只摘掉兜底页。工作台已在栏上就保留，避免先清空再被首页接口插回来。
  * 首页就绪后，只丢掉与有效首页冲突的占位 path。
+ * 有效首页为工作台时，强制 closable=false（不可关闭）。
  */
 function retainOpenHomeTabs(tabs: TabItem[], tenantHomePath: string, homeReady: boolean): TabItem[] {
   return tabs
@@ -73,9 +77,38 @@ function retainOpenHomeTabs(tabs: TabItem[], tenantHomePath: string, homeReady: 
       }
       return true;
     })
-    .map((tab) =>
-      tab.key === TENANT_HOME_WORKPLACE && tab.closable === false ? { ...tab, closable: true } : tab,
-    );
+    .map((tab) => {
+      if (
+        tab.key === TENANT_HOME_WORKPLACE &&
+        (!homeReady || !tenantHomePath || tenantHomePath === TENANT_HOME_WORKPLACE)
+      ) {
+        return tab.closable === false ? tab : { ...tab, closable: false };
+      }
+      return tab;
+    });
+}
+
+/** 有效首页是工作台时，该标签不可关闭 */
+function isUnclosableHomeTab(tabKey: string, tenantHomePath: string): boolean {
+  return Boolean(tenantHomePath) && tabKey === tenantHomePath && tenantHomePath === TENANT_HOME_WORKPLACE;
+}
+
+function resolveTabClosable(path: string, tenantHomePath: string): boolean {
+  return !isUnclosableHomeTab(path, tenantHomePath);
+}
+
+function buildHomeTabItem(
+  tenantHomePath: string,
+  label: string,
+  existing?: TabItem,
+): TabItem {
+  return {
+    key: tenantHomePath,
+    path: tenantHomePath,
+    label: existing?.label || label,
+    closable: resolveTabClosable(tenantHomePath, tenantHomePath),
+    pinned: existing?.pinned ?? false,
+  };
 }
 
 /** 兜底占位页在首页未就绪时不入栏；工作台允许先留着 */
@@ -92,8 +125,15 @@ function tabsForPersistence(tabs: TabItem[], tenantHomePath: string, homeReady: 
   return retainOpenHomeTabs(tabs, tenantHomePath, homeReady);
 }
 
-/** 有效首页就绪后：剔除冲突占位首页，并把真实首页固定到第一位 */
-function normalizeTabsForTenantHome(tabs: TabItem[], tenantHomePath: string): TabItem[] {
+/**
+ * 有效首页就绪后：剔除冲突占位首页，并把真实首页固定到第一位。
+ * 有效首页为工作台时：若栏上缺失则强制补回（不可关闭首页不允许「关掉后不插回」）。
+ */
+function normalizeTabsForTenantHome(
+  tabs: TabItem[],
+  tenantHomePath: string,
+  getTabTitle: (path: string) => string,
+): TabItem[] {
   let next = tabs;
   if (!isTenantDefaultHomePath(tenantHomePath)) {
     next = next.filter((t) => !isTenantDefaultHomePath(t.key));
@@ -102,14 +142,32 @@ function normalizeTabsForTenantHome(tabs: TabItem[], tenantHomePath: string): Ta
   }
 
   const existingHome = next.find((t) => t.key === tenantHomePath);
-  if (!existingHome) return next;
-  const homeTab: TabItem = { ...existingHome, pinned: existingHome.pinned ?? false };
+  const mustKeepHome = isUnclosableHomeTab(tenantHomePath, tenantHomePath);
+  if (!existingHome && !mustKeepHome) return next;
+  const homeTab = buildHomeTabItem(
+    tenantHomePath,
+    getTabTitle(tenantHomePath),
+    existingHome,
+  );
   const rest = next.filter((t) => t.key !== tenantHomePath);
   return [homeTab, ...rest];
 }
 
 function tabsSameKeys(a: TabItem[], b: TabItem[]): boolean {
   return a.length === b.length && a.every((tab, idx) => tab.key === b[idx]?.key);
+}
+
+/** key + closable + pinned，避免仅 closable 变化时被当成无变更而丢掉 */
+function tabsSamePresentation(a: TabItem[], b: TabItem[]): boolean {
+  return (
+    a.length === b.length &&
+    a.every(
+      (tab, idx) =>
+        tab.key === b[idx]?.key &&
+        Boolean(tab.closable) === Boolean(b[idx]?.closable) &&
+        Boolean(tab.pinned) === Boolean(b[idx]?.pinned),
+    )
+  );
 }
 
 function isAppGroupPlaceholderMenuItem(item: {
@@ -280,8 +338,8 @@ function mergeTabLists(current: TabItem[], restored: TabItem[]): TabItem[] {
 }
 
 function loadPersistedTabs(
-  _menuConfig: MenuDataItem[],
-  _t: (key: string) => string,
+  menuConfig: MenuDataItem[],
+  t: (key: string) => string,
   tenantHomePath: string,
   sourceTabs?: TabItem[] | null,
   options?: { homeReady?: boolean },
@@ -305,7 +363,8 @@ function loadPersistedTabs(
     if (!homeReady) {
       return deduped;
     }
-    return dedupeTabsByPathname(normalizeTabsForTenantHome(deduped, tenantHomePath));
+    const titleFor = (path: string) => findMenuTitleWithTranslation(path, menuConfig, t);
+    return dedupeTabsByPathname(normalizeTabsForTenantHome(deduped, tenantHomePath, titleFor));
   } catch {
     return null;
   }
@@ -524,12 +583,12 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           );
         }
 
-        // 添加新标签
+        // 添加新标签（有效首页为工作台时不可关闭）
         const newTab: TabItem = {
           key: path,
           path,
           label: getTabTitle(path),
-          closable: true,
+          closable: resolveTabClosable(path, tenantHomePath),
           pinned: false, // 默认不固定
         };
 
@@ -562,8 +621,12 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           if (workplaceTab) {
             // 有工作台：工作台 -> 固定标签 -> 新标签 -> 其他标签
             newTabs = [workplaceTab, ...pinnedTabs, newTab, ...unpinnedTabs];
+          } else if (isUnclosableHomeTab(tenantHomePath, tenantHomePath)) {
+            // 有效首页为工作台：缺失时强制补回，不允许「关掉后不插回」
+            const homeTab = buildHomeTabItem(tenantHomePath, getTabTitle(tenantHomePath));
+            newTabs = [homeTab, ...pinnedTabs, newTab, ...unpinnedTabs];
           } else {
-            // 工作台已被关掉时不再顺手建回来
+            // 其它可关闭首页：已被关掉时不再顺手建回来
             newTabs = [...pinnedTabs, newTab, ...unpinnedTabs];
           }
         }
@@ -612,8 +675,8 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   }, [homePathReady, effectiveHome, tenantBackendHome?.path, configs]);
 
   /**
-   * 租户后台首页路径变化时：去掉与当前首页冲突的占位标签，并把仍打开的首页放到第一位。用户关掉的首页不再插回。
-   * 与 BasicLayout 中 effectiveSystemHomePath 数据源一致（React Query 同 key 缓存共享）。
+   * 租户后台首页路径变化时：去掉与当前首页冲突的占位标签，并把首页固定到第一位。
+   * 有效首页为工作台时始终保留并在缺失时补回；其它首页仍尊重「用户关掉后不再插回」。
    */
   const prevTenantHomePathRef = useRef<string | null>(null);
   const didInitialHomeTabNormalizeRef = useRef(false);
@@ -623,13 +686,21 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     const prev = prevTenantHomePathRef.current;
     const homePathChanged = prev !== null && prev !== tenantHomePath;
     const needsInitialNormalize = !didInitialHomeTabNormalizeRef.current;
+    const mustKeepHome = isUnclosableHomeTab(tenantHomePath, tenantHomePath);
+    if (mustKeepHome) {
+      dismissedHomePathRef.current = null;
+    }
 
     let shouldNormalize = needsInitialNormalize || homePathChanged;
     setTabs((prevTabs) => {
       const hasStrayPlaceholder = prevTabs.some(
         (t) => isTenantDefaultHomePath(t.key) && t.key !== tenantHomePath,
       );
-      if (!shouldNormalize && !hasStrayPlaceholder) {
+      const homeClosableMismatch = prevTabs.some(
+        (t) => isUnclosableHomeTab(t.key, tenantHomePath) && t.closable !== false,
+      );
+      const homeMissing = mustKeepHome && !prevTabs.some((t) => t.key === tenantHomePath);
+      if (!shouldNormalize && !hasStrayPlaceholder && !homeClosableMismatch && !homeMissing) {
         return prevTabs;
       }
 
@@ -637,16 +708,18 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
       if (homePathChanged && prev) {
         working = working.filter((t) => t.key !== prev);
       }
-      let normalized = normalizeTabsForTenantHome(working, tenantHomePath);
-      const homeDismissed = dismissedHomePathRef.current === tenantHomePath;
-      const hadHome = prevTabs.some((tab) => tab.key === tenantHomePath);
-      if (homeDismissed || (!hadHome && prevTabs.length > 0)) {
-        normalized = normalized.filter((tab) => tab.key !== tenantHomePath);
+      let normalized = normalizeTabsForTenantHome(working, tenantHomePath, getTabTitle);
+      if (!mustKeepHome) {
+        const homeDismissed = dismissedHomePathRef.current === tenantHomePath;
+        const hadHome = prevTabs.some((tab) => tab.key === tenantHomePath);
+        if (homeDismissed || (!hadHome && prevTabs.length > 0)) {
+          normalized = normalized.filter((tab) => tab.key !== tenantHomePath);
+        }
       }
-      if (!tabsSameKeys(normalized, prevTabs)) {
+      if (!tabsSamePresentation(normalized, prevTabs)) {
         shouldNormalize = true;
       }
-      return tabsSameKeys(normalized, prevTabs) ? prevTabs : normalized;
+      return tabsSamePresentation(normalized, prevTabs) ? prevTabs : normalized;
     });
 
     if (shouldNormalize) {
@@ -824,6 +897,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         normalizeTabsForTenantHome(
           mergeTabLists(retainOpenHomeTabs(prev, tenantHomePath, true), restored),
           tenantHomePath,
+          getTabTitle,
         ),
       );
       setActiveKey(getCurrentRouteTabKey());
@@ -866,6 +940,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         normalizeTabsForTenantHome(
           mergeTabLists(retainOpenHomeTabs(prev, tenantHomePath, true), restored),
           tenantHomePath,
+          getTabTitle,
         ),
       );
       setActiveKey(getCurrentRouteTabKey());
@@ -974,21 +1049,28 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     setActiveKey((prev) => (prev === tabKey ? prev : tabKey));
   }, [location.pathname, location.search, getCurrentRouteTabKey, tenantHomePath, homePathReady]);
 
-  /** 标签栏还是空的时补上有效首页。已有其它标签说明工作台被关掉，不再插回。 */
+  /**
+   * 确保有效首页在标签栏：工作台作为有效首页时始终补回；其它首页仅在栏为空且未被主动关掉时补上。
+   */
   useEffect(() => {
     if (!homePathReady || !tenantHomePath) return;
-    if (dismissedHomePathRef.current === tenantHomePath) return;
+    const mustKeepHome = isUnclosableHomeTab(tenantHomePath, tenantHomePath);
+    if (mustKeepHome) {
+      dismissedHomePathRef.current = null;
+    } else if (dismissedHomePathRef.current === tenantHomePath) {
+      return;
+    }
     setTabs((prev) => {
-      if (prev.length > 0 || prev.some((tab) => tab.key === tenantHomePath)) return prev;
-      return [
-        {
-          key: tenantHomePath,
-          path: tenantHomePath,
-          label: getTabTitle(tenantHomePath),
-          closable: true,
-          pinned: false,
-        },
-      ];
+      const homeIdx = prev.findIndex((tab) => tab.key === tenantHomePath);
+      if (homeIdx >= 0) {
+        const home = prev[homeIdx];
+        if (!mustKeepHome || home.closable === false) return prev;
+        const next = [...prev];
+        next[homeIdx] = { ...home, closable: false };
+        return next;
+      }
+      if (!mustKeepHome && prev.length > 0) return prev;
+      return [buildHomeTabItem(tenantHomePath, getTabTitle(tenantHomePath)), ...prev];
     });
   }, [homePathReady, tenantHomePath, getTabTitle]);
 
@@ -1046,19 +1128,17 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   }, [location.pathname, location.search, location.state, removeTab, navigate]);
 
   /**
-   * 监听 refresh 参数，实现局部刷新
+   * 监听 refresh 参数，实现局部刷新（切换到其它标签后再刷新时走此路径）
    */
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
     if (!searchParams.has('_refresh')) return;
     searchParams.delete('_refresh');
     const newSearch = searchParams.toString();
-    const tabKey = location.pathname + (newSearch ? `?${newSearch}` : '');
+    const tabKey = normalizeSoftRefreshTabKey(location.pathname, newSearch ? `?${newSearch}` : '');
     navigate(tabKey, { replace: true });
     dispatchRouteSoftRefresh(tabKey);
-    if (isCreateTabKey(tabKey)) {
-      setRefreshKey((prev) => prev + 1);
-    }
+    setRefreshKey((prev) => prev + 1);
   }, [location.search, location.pathname, navigate]);
 
   /**
@@ -1086,6 +1166,9 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
    * 处理标签关闭
    */
   const handleTabClose = (targetKey: string) => {
+    if (isUnclosableHomeTab(targetKey, tenantHomePath)) {
+      return;
+    }
     if (targetKey === tenantHomePath) {
       dismissedHomePathRef.current = targetKey;
     }
@@ -1216,23 +1299,24 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   }, [tabs, navigate, tenantHomePath]);
 
   /**
-   * 处理标签刷新 - 局部刷新当前标签页
+   * 处理标签刷新：软刷新（UniTable/看板）+ refreshKey remount 列表路由（不拆建单 keep-alive）。
+   * 若右键的不是当前路由标签，先导航并带上 _refresh，由上方 effect 统一刷新。
    */
   const handleTabRefresh = useCallback((tabKey: string) => {
-    const searchParams = new URLSearchParams(location.search || '');
-    searchParams.delete('_refresh');
-    const cleanSearch = searchParams.toString();
-    const currentTabKey = location.pathname + (cleanSearch ? `?${cleanSearch}` : '');
+    const currentTabKey = normalizeSoftRefreshTabKey(location.pathname, location.search);
+    const targetTabKey = normalizeSoftRefreshTabKey(
+      tabPathname(tabKey),
+      tabKey.includes('?') ? tabKey.slice(tabKey.indexOf('?')) : '',
+    );
 
-    if (currentTabKey !== tabKey) {
-      navigate(tabKey, { replace: true });
+    if (currentTabKey !== targetTabKey) {
+      const separator = tabKey.includes('?') ? '&' : '?';
+      navigate(`${tabKey}${separator}_refresh=${Date.now()}`, { replace: true });
       return;
     }
 
-    dispatchRouteSoftRefresh(tabKey);
-    if (isCreateTabKey(tabKey)) {
-      setRefreshKey((prev) => prev + 1);
-    }
+    dispatchRouteSoftRefresh(targetTabKey);
+    setRefreshKey((prev) => prev + 1);
   }, [navigate, location.pathname, location.search]);
 
   /** 从 menuConfig 中按 path 查找菜单元数据 */
@@ -1295,7 +1379,8 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   const getTabContextMenu = (tabKey: string): MenuProps => {
     const targetIndex = tabs.findIndex((tab) => tab.key === tabKey);
     const targetTab = tabs.find((tab) => tab.key === tabKey);
-    const isWorkplace = tabKey === tenantHomePath;
+    const isEffectiveHome = tabKey === tenantHomePath;
+    const homeUnclosable = isUnclosableHomeTab(tabKey, tenantHomePath);
     const hasRightTabs = targetIndex < tabs.length - 1;
     const hasOtherTabs = tabs.length > 1;
     const isPinned = targetTab?.pinned || false;
@@ -1319,7 +1404,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         key: 'favoriteToQuickEntry',
         label: t('ui.tabs.favoriteToQuickEntry'),
         icon: <StarFilled style={{ color: '#f59e0b' }} />, // 2026 Amber Gold
-        disabled: isWorkplace,
+        disabled: isEffectiveHome,
       },
       {
         type: 'divider',
@@ -1328,22 +1413,22 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
       {
         key: 'close',
         label: t('common.close'),
-        disabled: isPinned,
+        disabled: isPinned || homeUnclosable,
       },
       {
         key: 'closeRight',
         label: t('tabs.closeRight'),
-        disabled: !hasRightTabs || isWorkplace,
+        disabled: !hasRightTabs || isEffectiveHome,
       },
       {
         key: 'closeOthers',
         label: t('tabs.closeOthers'),
-        disabled: !hasOtherTabs || isWorkplace,
+        disabled: !hasOtherTabs || isEffectiveHome,
       },
       {
         key: 'closeAll',
         label: t('tabs.closeAll'),
-        disabled: tabs.length <= 1 || (tabs.length === 1 && isWorkplace),
+        disabled: tabs.length <= 1 || (tabs.length === 1 && isEffectiveHome),
       },
     ];
 
@@ -1561,7 +1646,8 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         {content}
       </TabRouteCache>
     ) : (
-      <RouteTransition>{content}</RouteTransition>
+      // 无建单标签：refreshKey remount 当前列表/看板路由（软刷新之外的兜底）
+      <RouteTransition key={`route-refresh-${refreshKey}`}>{content}</RouteTransition>
     );
 
   // 无标签时仍保留 UniTabs 内容壳（page-outer 16px），避免切换租户清空标签后内容贴边

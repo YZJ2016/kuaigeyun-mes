@@ -57,6 +57,8 @@ import { Spin } from 'antd';
 const LazyRegisterDrawer = lazy(() => import('./RegisterDrawer'));
 import { theme } from 'antd';
 import { getPlatformSettingsPublic, type PlatformSettings } from '../../services/publicPlatformSettings';
+import { isLoginQuickProviderEnabled, resolveLoginQuickProviders } from '../../constants/loginQuickProviders';
+import LoginQuickSocialButtons from './components/LoginQuickSocialButtons';
 import { getBuildProvenance } from '../../services/platformSettings';
 import {
   consumeWecomOAuthState,
@@ -300,6 +302,7 @@ export default function LoginPage() {
 
   const loginGuestEnabled = platformSettings?.login_guest_enabled !== false;
   const loginQuickEnabled = platformSettings?.login_quick_enabled !== false;
+  const loginQuickProviders = resolveLoginQuickProviders(platformSettings?.login_quick_providers);
   const loginClientWinEnabled = platformSettings?.login_client_win_enabled !== false;
   const loginClientAndroidEnabled = platformSettings?.login_client_android_enabled !== false;
   const registerEnabled = platformSettings?.enable_register !== false;
@@ -1321,6 +1324,9 @@ export default function LoginPage() {
    * @param provider - 社交登录提供商（wechat, qq, wechat_work, dingtalk, feishu）
    */
   const handleSocialLogin = (provider: 'wechat' | 'qq' | 'wechat_work' | 'dingtalk' | 'feishu') => {
+    if (!isLoginQuickProviderEnabled(loginQuickProviders, provider)) {
+      return;
+    }
     if (provider === 'wechat') {
       handleWechatLogin();
       return;
@@ -2242,209 +2248,12 @@ export default function LoginPage() {
                   maxWidth: '80px'
                 }}></div>
                 
-                {/* 社交图标按钮 */}
-                <div style={{ 
-                  display: 'flex', 
-                  gap: '8px', 
-                  alignItems: 'center',
-                  flexWrap: 'wrap'
-                }}>
-                  {/* 微信登录 */}
-                  <Tooltip title={t('pages.login.wechatLogin')}>
-                    <Button
-                      type="default"
-                      shape="circle"
-                      size="large"
-                      onClick={() => handleSocialLogin('wechat')}
-                      className="social-login-btn social-login-btn-wechat"
-                      style={{
-                        width: '40px',
-                        height: '40px',
-                        flexShrink: 0, // ⚠️ 关键修复：防止小屏下 Flex 挤压变形
-                        backgroundColor: 'rgba(7, 193, 96, 0.7)',
-                        borderColor: 'rgba(7, 193, 96, 0.7)',
-                        borderWidth: '0',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        padding: 0,
-                        transition: 'all 0.3s ease',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = '#07C160';
-                        e.currentTarget.style.borderColor = '#07C160';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = 'rgba(7, 193, 96, 0.7)';
-                        e.currentTarget.style.borderColor = 'rgba(7, 193, 96, 0.7)';
-                      }}
-                    >
-                      {socialIcons.wechat && (
-                        <img 
-                          src={socialIcons.wechat} 
-                          alt={t('pages.login.wechatLogin')} 
-                          style={{ width: '24px', height: '24px', filter: 'brightness(0) invert(1)' }}
-                        />
-                      )}
-                    </Button>
-                  </Tooltip>
-                  {/* QQ登录 */}
-                  <Tooltip title={t('pages.login.qqLogin')}>
-                    <Button
-                      type="default"
-                      shape="circle"
-                      size="large"
-                      onClick={() => handleSocialLogin('qq')}
-                      className="social-login-btn social-login-btn-qq"
-                      style={{
-                        width: '40px',
-                        height: '40px',
-                        flexShrink: 0, // ⚠️ 关键修复：防止小屏下 Flex 挤压变形
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        backgroundColor: 'rgba(18, 183, 245, 0.7)',
-                        borderColor: 'rgba(18, 183, 245, 0.7)',
-                        borderWidth: '0',
-                        padding: 0,
-                        transition: 'all 0.3s ease',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = '#12B7F5';
-                        e.currentTarget.style.borderColor = '#12B7F5';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = 'rgba(18, 183, 245, 0.7)';
-                        e.currentTarget.style.borderColor = 'rgba(18, 183, 245, 0.7)';
-                      }}
-                    >
-                      {socialIcons.qq && (
-                        <img 
-                          src={socialIcons.qq} 
-                          alt={t('pages.login.qqLogin')} 
-                          style={{ width: '24px', height: '24px', filter: 'brightness(0) invert(1)' }}
-                        />
-                      )}
-                    </Button>
-                  </Tooltip>
-                  {/* 企业微信登录 */}
-                  <Tooltip title={t('pages.login.wechatWorkLogin')}>
-                    <Button
-                      type="default"
-                      shape="circle"
-                      size="large"
-                      onClick={() => handleSocialLogin('wechat_work')}
-                      className="social-login-btn social-login-btn-wechat-work"
-                      style={{
-                        width: '40px',
-                        height: '40px',
-                        flexShrink: 0, // ⚠️ 关键修复：防止小屏下 Flex 挤压变形
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        backgroundColor: 'rgba(120, 195, 64, 0.5)',
-                        borderColor: 'rgba(120, 195, 64, 0.5)',
-                        borderWidth: '0',
-                        padding: 0,
-                        transition: 'all 0.3s ease',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = '#78C340';
-                        e.currentTarget.style.borderColor = '#78C340';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = 'rgba(120, 195, 64, 0.7)';
-                        e.currentTarget.style.borderColor = 'rgba(120, 195, 64, 0.7)';
-                      }}
-                    >
-                      {socialIcons.qwei && (
-                        <img 
-                          src={socialIcons.qwei} 
-                          alt={t('pages.login.wechatWorkLogin')} 
-                          style={{ width: '24px', height: '24px', filter: 'brightness(0) invert(1)' }}
-                        />
-                      )}
-                    </Button>
-                  </Tooltip>
-                  {/* 钉钉登录 */}
-                  <Tooltip title={t('pages.login.dingtalkLogin')}>
-                    <Button
-                      type="default"
-                      shape="circle"
-                      size="large"
-                      onClick={() => handleSocialLogin('dingtalk')}
-                      className="social-login-btn social-login-btn-dingtalk"
-                      style={{
-                        width: '40px',
-                        height: '40px',
-                        flexShrink: 0, // ⚠️ 关键修复：防止小屏下 Flex 挤压变形
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        backgroundColor: 'rgba(0, 117, 255, 0.5)',
-                        borderColor: 'rgba(0, 117, 255, 0.5)',
-                        borderWidth: '0',
-                        padding: 0,
-                        transition: 'all 0.3s ease',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = '#0075FF';
-                        e.currentTarget.style.borderColor = '#0075FF';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = 'rgba(0, 117, 255, 0.5)';
-                        e.currentTarget.style.borderColor = 'rgba(0, 117, 255, 0.5)';
-                      }}
-                    >
-                      {socialIcons.dingtalk && (
-                        <img 
-                          src={socialIcons.dingtalk} 
-                          alt={t('pages.login.dingtalkLogin')} 
-                          style={{ width: '24px', height: '24px', filter: 'brightness(0) invert(1)' }}
-                        />
-                      )}
-                    </Button>
-                  </Tooltip>
-                  {/* 飞书登录 */}
-                  <Tooltip title={t('pages.login.feishuLogin')}>
-                    <Button
-                      type="default"
-                      shape="circle"
-                      size="large"
-                      onClick={() => handleSocialLogin('feishu')}
-                      className="social-login-btn social-login-btn-feishu"
-                      style={{
-                        width: '40px',
-                        height: '40px',
-                        flexShrink: 0, // ⚠️ 关键修复：防止小屏下 Flex 挤压变形
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        backgroundColor: 'rgba(51, 112, 255, 0.5)',
-                        borderColor: 'rgba(51, 112, 255, 0.5)',
-                        borderWidth: '0',
-                        padding: 0,
-                        transition: 'all 0.3s ease',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = '#3370FF';
-                        e.currentTarget.style.borderColor = '#3370FF';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = 'rgba(51, 112, 255, 0.5)';
-                        e.currentTarget.style.borderColor = 'rgba(51, 112, 255, 0.5)';
-                      }}
-                    >
-                      {socialIcons.feishu && (
-                        <img 
-                          src={socialIcons.feishu} 
-                          alt={t('pages.login.feishuLogin')} 
-                          style={{ width: '24px', height: '24px', filter: 'brightness(0) invert(1)' }}
-                        />
-                      )}
-                    </Button>
-                  </Tooltip>
-                </div>
+                <LoginQuickSocialButtons
+                  socialIcons={socialIcons}
+                  providers={loginQuickProviders}
+                  onSocialLogin={handleSocialLogin}
+                  t={t}
+                />
                 
                 {/* 右侧分割线 */}
                 <div style={{ 

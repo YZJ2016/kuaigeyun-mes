@@ -1,22 +1,16 @@
 /**
  * 平台超级管理员管理页面
  *
- * 用于管理平台超级管理员信息（查看、编辑）
+ * 用于管理平台超级管理员信息（查看、编辑、改密）
  * 平台超级管理员是平台唯一的，只能有一个
  */
 
-import { ProDescriptions } from '@ant-design/pro-components';
-import { App, Button, Modal } from 'antd';
-import { LogoutOutlined, SettingOutlined, UserOutlined, GlobalOutlined, DeploymentUnitOutlined } from '@ant-design/icons';
+import { App } from 'antd';
+import { SettingOutlined, UserOutlined, GlobalOutlined, DeploymentUnitOutlined } from '@ant-design/icons';
 import { useMemo, useState, useCallback } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { MultiTabListPageTemplate } from '../../../components/layout-templates';
-import {
-  getInfraSuperAdmin,
-  updateInfraSuperAdmin,
-  type InfraSuperAdmin,
-  type InfraSuperAdminUpdateRequest
-} from '../../../services/infraAdmin';
+import { getInfraSuperAdmin } from '../../../services/infraAdmin';
 import { clearAuth } from '../../../utils/auth';
 import { redirectAfterLogout } from '../../../utils/loginEntry';
 import { useNavigate } from 'react-router-dom';
@@ -27,6 +21,8 @@ import BuildProvenanceSummaryTab from './build-provenance-summary';
 import { getBuildProvenance } from '../../../services/platformSettings';
 import { canShowRegistrySummaryAdmin } from '../../../utils/officialRegistrySite';
 import { getAntdModal } from '../../../utils/antdAppApis';
+import InfraAdminInfoPane from './InfraAdminInfoPane';
+
 /**
  * 平台超级管理员管理页面组件
  */
@@ -52,21 +48,6 @@ export default function InfraSuperAdminPage() {
   const showProvenanceSummaryTab = canShowRegistrySummaryAdmin(
     buildProvenance?.registry_summary_admin_available,
   );
-
-  const updateMutation = useMutation({
-    mutationFn: (data: InfraSuperAdminUpdateRequest) => updateInfraSuperAdmin(data),
-    onSuccess: () => {
-      messageApi.success(t('common.updateSuccess'));
-      queryClient.invalidateQueries({ queryKey: ['infraSuperAdmin'] });
-    },
-    onError: (error: any) => {
-      messageApi.error(error?.message || t('common.updateFailed'));
-    },
-  });
-
-  const handleSave = async (values: InfraSuperAdminUpdateRequest) => {
-    await updateMutation.mutateAsync(values);
-  };
 
   const handleLogout = useCallback(() => {
     getAntdModal().confirm({
@@ -128,44 +109,19 @@ export default function InfraSuperAdminPage() {
         </span>
       ),
       children: (
-        <>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-            <h2 style={{ margin: 0 }}>{t('pages.infra.admin.pageTitle')}</h2>
-            <Button icon={<LogoutOutlined />} onClick={handleLogout}>
-              {t('pages.infra.admin.logout')}
-            </Button>
-          </div>
-          {admin && (
-            <ProDescriptions<InfraSuperAdmin>
-              column={2}
-              dataSource={admin}
-              loading={isLoading}
-              columns={[
-                { title: t('pages.infra.admin.id'), dataIndex: 'id' },
-                { title: t('pages.infra.admin.username'), dataIndex: 'username' },
-                { title: t('pages.infra.admin.email'), dataIndex: 'email' },
-                { title: t('pages.infra.admin.fullName'), dataIndex: 'full_name' },
-                {
-                  title: t('common.status'),
-                  dataIndex: 'is_active',
-                  valueType: 'switch',
-                  valueEnum: {
-                    true: { text: t('pages.infra.admin.statusActive'), status: 'Success' },
-                    false: { text: t('pages.infra.admin.statusInactive'), status: 'Error' },
-                  },
-                },
-                { title: t('pages.infra.admin.lastLogin'), dataIndex: 'last_login', valueType: 'dateTime' },
-                { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
-                { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
-              ]}
-            />
-          )}
-        </>
+        <InfraAdminInfoPane
+          admin={admin}
+          loading={isLoading}
+          onLogout={handleLogout}
+          onUpdated={() => {
+            void queryClient.invalidateQueries({ queryKey: ['infraSuperAdmin'] });
+          }}
+        />
       ),
     });
 
     return items;
-  }, [admin, handleLogout, isLoading, showProvenanceSummaryTab, t]);
+  }, [admin, handleLogout, isLoading, queryClient, showProvenanceSummaryTab, t]);
 
   return (
     <MultiTabListPageTemplate

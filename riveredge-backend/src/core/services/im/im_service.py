@@ -103,6 +103,121 @@ class ImService:
         return peer_id, name or None
 
     @staticmethod
+    async def _batch_unread_counts(
+        *,
+        tenant_id: int,
+        user_id: int,
+        member_by_conv: dict[int, Any],
+    ) -> dict[int, int]:
+        if not member_by_conv:
+            return {}
+        try:
+            from tortoise import Tortoise
+
+            conn = Tortoise.get_connection("default")
+            if not hasattr(conn, "execute_query_dict"):
+                raise RuntimeError("no execute_query_dict")
+            conv_ids = list(member_by_conv.keys())
+            rows = await conn.execute_query_dict(
+                """
+                SELECT m.conversation_id AS conversation_id, COUNT(*) AS unread_count
+                FROM core_im_messages m
+                INNER JOIN core_im_conversation_members mem
+                  ON mem.conversation_id = m.conversation_id
+                 AND mem.user_id = $2
+                 AND mem.tenant_id = $1
+                 AND mem.deleted_at IS NULL
+                WHERE m.tenant_id = $1
+                  AND m.conversation_id = ANY($3::int[])
+                  AND m.deleted_at IS NULL
+                  AND m.sender_id <> $2
+                  AND m.created_at > COALESCE(mem.last_read_at, TIMESTAMPTZ '1970-01-01')
+                GROUP BY m.conversation_id
+                """,
+                [tenant_id, user_id, conv_ids],
+            )
+            return {int(r["conversation_id"]): int(r["unread_count"] or 0) for r in rows}
+        except Exception:
+            out: dict[int, int] = {}
+            for conv_id, member in member_by_conv.items():
+                out[conv_id] = await ImService.conversation_unread_count(
+                    tenant_id=tenant_id,
+                    user_id=user_id,
+                    conversation_id=conv_id,
+                    last_read_at=getattr(member, "last_read_at", None),
+                )
+            return out
+
+    @staticmethod
+    async def _batch_module_codes(
+        *, tenant_id: int, conversation_ids: list[int]
+    ) -> dict[int, list[str]]:
+        if not conversation_ids:
+            return {}
+        rows = await ImConversationModule.filter(
+            tenant_id=tenant_id,
+            conversation_id__in=conversation_ids,
+            deleted_at__isnull=True,
+        ).all()
+        out: dict[int, set[str]] = {cid: set() for cid in conversation_ids}
+        for row in rows:
+            code = str(row.module_code or "").strip()
+            if code:
+                out.setdefault(int(row.conversation_id), set()).add(code)
+        return {cid: sorted(codes) for cid, codes in out.items()}
+
+    @staticmethod
+    async def _batch_member_counts(
+        *, tenant_id: int, conversation_ids: list[int]
+    ) -> dict[int, int]:
+        if not conversation_ids:
+            return {}
+        rows = await ImConversationMember.filter(
+            tenant_id=tenant_id,
+            conversation_id__in=conversation_ids,
+            deleted_at__isnull=True,
+        ).values("conversation_id")
+        out: dict[int, int] = {cid: 0 for cid in conversation_ids}
+        for row in rows:
+            cid = int(row["conversation_id"])
+            out[cid] = out.get(cid, 0) + 1
+        return out
+
+    @staticmethod
+    async def _batch_direct_peer_titles(
+        *,
+        tenant_id: int,
+        viewer_user_id: int,
+        conversation_ids: list[int],
+    ) -> dict[int, tuple[int | None, str | None]]:
+        if not conversation_ids:
+            return {}
+        members = await ImConversationMember.filter(
+            tenant_id=tenant_id,
+            conversation_id__in=conversation_ids,
+            deleted_at__isnull=True,
+        ).all()
+        peer_by_conv: dict[int, int | None] = {}
+        peer_ids: set[int] = set()
+        for m in members:
+            if m.user_id == viewer_user_id:
+                continue
+            peer_by_conv[int(m.conversation_id)] = int(m.user_id)
+            peer_ids.add(int(m.user_id))
+        users = await User.filter(
+            id__in=list(peer_ids),
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).all()
+        name_by_id = {
+            int(u.id): (u.full_name or u.username or "").strip() or None for u in users
+        }
+        return {
+            cid: (peer_id, name_by_id.get(peer_id) if peer_id else None)
+            for cid, peer_id in peer_by_conv.items()
+        }
+
+    @staticmethod
     async def to_conversation_response(
         *,
         tenant_id: int,
@@ -288,6 +403,7 @@ class ImService:
         if not conv_ids:
             return ImConversationListResponse(items=[], total=0)
 
+        member_by_conv = {int(m.conversation_id): m for m in member_rows}
         pinned_by_conv = {m.conversation_id: bool(m.is_pinned) for m in member_rows}
         conversations = await ImConversation.filter(
             tenant_id=tenant_id,
@@ -304,14 +420,47 @@ class ImService:
         conversations.sort(key=_sort_key)
         total = len(conversations)
         page_rows = conversations[skip : skip + limit]
+        page_ids = [int(c.id) for c in page_rows]
+        direct_ids = [int(c.id) for c in page_rows if c.kind == "direct"]
+
+        unread_map, module_map, member_count_map, direct_peer_map = await asyncio.gather(
+            ImService._batch_unread_counts(
+                tenant_id=tenant_id,
+                user_id=user_id,
+                member_by_conv={cid: member_by_conv[cid] for cid in page_ids if cid in member_by_conv},
+            ),
+            ImService._batch_module_codes(tenant_id=tenant_id, conversation_ids=page_ids),
+            ImService._batch_member_counts(tenant_id=tenant_id, conversation_ids=page_ids),
+            ImService._batch_direct_peer_titles(
+                tenant_id=tenant_id,
+                viewer_user_id=user_id,
+                conversation_ids=direct_ids,
+            ),
+        )
 
         items: list[ImConversationResponse] = []
         for conv in page_rows:
+            cid = int(conv.id)
+            member = member_by_conv.get(cid)
+            title = conv.title
+            peer_user_id: Optional[int] = None
+            if conv.kind == "direct":
+                peer_user_id, peer_title = direct_peer_map.get(cid, (None, None))
+                if peer_title:
+                    title = peer_title
             items.append(
-                await ImService.to_conversation_response(
-                    tenant_id=tenant_id,
-                    user_id=user_id,
-                    conv=conv,
+                ImConversationResponse(
+                    uuid=conv.uuid,
+                    kind=conv.kind,
+                    title=title,
+                    is_public=bool(conv.is_public),
+                    is_pinned=bool(member.is_pinned) if member else False,
+                    peer_user_id=peer_user_id,
+                    module_codes=module_map.get(cid, []),
+                    member_count=member_count_map.get(cid, 0),
+                    last_message_at=conv.last_message_at,
+                    last_message_preview=conv.last_message_preview,
+                    unread_count=unread_map.get(cid, 0),
                 )
             )
         return ImConversationListResponse(items=items, total=total)

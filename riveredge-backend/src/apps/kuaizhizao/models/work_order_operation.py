@@ -130,8 +130,12 @@ class WorkOrderOperation(BaseModel):
     assigned_team_name = fields.CharField(max_length=100, null=True, description="分配的工作小组名称")
     assigned_station_id = fields.IntField(null=True, description="分配的工位ID")
     assigned_station_name = fields.CharField(max_length=200, null=True, description="分配的工位名称")
-    assigned_equipment_id = fields.IntField(null=True, description="分配的设备ID")
-    assigned_equipment_name = fields.CharField(max_length=100, null=True, description="分配的设备姓名")
+    assigned_equipment_id = fields.IntField(null=True, description="分配的设备ID（主责/兼容，取 assigned_equipment_ids 首项）")
+    assigned_equipment_name = fields.CharField(max_length=500, null=True, description="分配的设备名称（多台以顿号分隔）")
+    assigned_equipment_ids = fields.JSONField(
+        default=list,
+        description="分配的设备ID列表（派工多设备时使用）",
+    )
     assigned_mold_id = fields.IntField(null=True, description="分配的模具ID")
     assigned_mold_name = fields.CharField(max_length=200, null=True, description="分配的模具名称")
     assigned_tool_id = fields.IntField(null=True, description="分配的工装ID")

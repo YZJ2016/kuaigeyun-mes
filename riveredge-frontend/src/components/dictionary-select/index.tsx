@@ -141,6 +141,8 @@ export interface DictionarySelectProps {
   hostResource?: string;
   /** 多选模式：存库为英文逗号分隔字符串，表单内为字符串数组 */
   mode?: 'multiple';
+  /** 从下拉中排除的字典项 value（如设备台账排除「测量设备」） */
+  excludeValues?: string[];
 }
 
 /**
@@ -171,21 +173,28 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
   quickCreatePopoverZIndex,
   hostResource,
   mode,
+  excludeValues,
 }) => {
   const multiple = mode === 'multiple';
   const { t, i18n } = useTranslation();
   const { message: messageApi } = App.useApp();
   const isReadonlyMode = useProFormReadonlyMode(readonly);
+  const excludeValueSet = useMemo(
+    () => new Set((excludeValues ?? []).map((v) => String(v))),
+    [excludeValues],
+  );
   const mapItemsToOptions = useCallback(
     (items: Parameters<typeof mapSystemDictionaryItemOptions>[1]) =>
       dedupeDictionaryOptionsByValue(
-        mapSystemDictionaryItemOptions(dictionaryCode, items, t).sort((a, b) => {
-          const orderA = items.find((i) => i.value === a.value)?.sort_order ?? 0;
-          const orderB = items.find((i) => i.value === b.value)?.sort_order ?? 0;
-          return orderA - orderB;
-        }),
+        mapSystemDictionaryItemOptions(dictionaryCode, items, t)
+          .filter((opt) => !excludeValueSet.has(String(opt.value)))
+          .sort((a, b) => {
+            const orderA = items.find((i) => i.value === a.value)?.sort_order ?? 0;
+            const orderB = items.find((i) => i.value === b.value)?.sort_order ?? 0;
+            return orderA - orderB;
+          }),
       ),
-    [dictionaryCode, t],
+    [dictionaryCode, excludeValueSet, t],
   );
 
   const cachedItems = getDictionaryItemsSync(dictionaryCode);

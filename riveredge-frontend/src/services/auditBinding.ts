@@ -11,6 +11,8 @@ export interface AuditBindingItem {
   name: string;
   app: string;
   config_category: string;
+  /** 分类内二级分区（可选） */
+  config_section?: string | null;
   template: string;
   is_enabled: boolean;
   process_uuid?: string | null;

@@ -170,8 +170,8 @@
         "sort_order": 3,
         "children": [
           {
-            "title": "app.kuaizhizao.menu.quality-management.iso-clauses",
-            "path": "/apps/kuaizhizao/quality-management/iso-clauses",
+            "title": "app.kuaizhizao.menu.quality-management.clause-management",
+            "path": "/apps/kuaizhizao/quality-management/clause-management",
             "sort_order": 0,
             "permission": "kuaizhizao:quality-management-iso-clauses:read"
           },

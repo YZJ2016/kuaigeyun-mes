@@ -45,6 +45,7 @@ import {
   type ProjectProposal,
   type ProjectProposalStatus,
 } from '../../services/project-proposal';
+import { resolvePlmStandardDocListSearch } from '../../utils/plmListCore';
 
 const RESOURCE = 'kuaiplm:project-proposal';
 const STATUS_KEYS: ProjectProposalStatus[] = [
@@ -463,12 +464,15 @@ const ProjectProposalsGenericPage: React.FC = () => {
             messageApi.error(getApiErrorMessage(err, t('common.exportFailed')));
           }
         }}
-        request={async (params) => {
+        skipFuzzyPinyinClientFilter
+        params={filterProjectId ? { project_id: filterProjectId } : undefined}
+        request={async (params, _sort, _filter, searchFormValues) => {
+          const { keyword, status } = resolvePlmStandardDocListSearch(searchFormValues);
           const res = await projectProposalApi.list({
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize || 20,
-            status: params.status as string | undefined,
-            keyword: (params.keyword || params.title) as string | undefined,
+            status,
+            keyword,
             project_id: filterProjectId,
           });
           return { data: res.items, total: res.total, success: true };

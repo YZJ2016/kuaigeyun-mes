@@ -20,6 +20,7 @@ import { serviceDispatchApi, type ServiceDispatchOrder } from '../../../services
 import DispatchOrderFormModal from './DispatchOrderFormModal';
 import { DispatchOrderDetailDrawer } from './components/DispatchOrderDetailDrawer';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
+import { pickListSearchKeyword, pickSearchString } from '../../../../../utils/tableQueryKey';
 
 const RESOURCE = 'kuaizhizao:service-dispatch';
 
@@ -182,15 +183,17 @@ const DispatchOrdersPage: React.FC = () => {
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.afterSalesDispatch)}
         actionRef={actionRef}
         columns={columns}
-        columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.dispatch-orders.v6"
+        columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.dispatch-orders.v7"
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
         rowKey="id"
         headerTitle={t('app.kuaizhizao.menu.after-sales-service.dispatch-orders')}
-        request={async (params) => {
+        request={async (params, _sort, _filter, searchFormValues) => {
           const res = await serviceDispatchApi.list({
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize,
-            keyword: params.keyword as string | undefined,
-            status: params.status as string | undefined,
+            keyword: pickListSearchKeyword(searchFormValues),
+            status: pickSearchString(searchFormValues, 'status'),
           });
           return { data: res.items, total: res.total, success: true };
         }}

@@ -6,6 +6,7 @@ import { getMaterialField } from '../../../../../components/uni-material-batch-p
 import { AmountDisplay } from '../../../../../components/permission';
 import { DocumentAmountSummaryWatch } from '../../../components/document-amount-summary/DocumentAmountSummary';
 import { KUAIZHIZAO_SALES_CONTRACT_FIELD_RESOURCE as SC } from '../../../constants/fieldPermissionResources';
+import { resolveDocumentCurrencyInputPrefix } from '../../../utils/documentCurrencyDisplay';
 import type { Material } from '../../../../master-data/types/material';
 import {
   applySalesDocumentLineMaterialPricing,
@@ -165,6 +166,7 @@ export const ContractMaterialSelectCell: React.FC<{
 export const ContractAmountCell: React.FC<{ index: number }> = ({ index }) => {
   const row = Form.useWatch(['items', index]);
   const priceType = salesFormPriceType(Form.useWatch('price_type'));
+  const moneyPrefix = resolveDocumentCurrencyInputPrefix(Form.useWatch('currency_code'));
   const line = calcContractLineAmounts(
     row?.contract_quantity,
     row?.unit_price,
@@ -173,7 +175,9 @@ export const ContractAmountCell: React.FC<{ index: number }> = ({ index }) => {
     row?.item_amount,
     row?.is_gift,
   );
-  return <AmountDisplay resource={SC} fieldName="amount_without_tax" value={line.excl} />;
+  return (
+    <AmountDisplay resource={SC} fieldName="amount_without_tax" value={line.excl} prefix={moneyPrefix} />
+  );
 };
 
 export const ContractFormSummary: React.FC = () => (

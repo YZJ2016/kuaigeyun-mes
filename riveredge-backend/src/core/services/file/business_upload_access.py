@@ -229,6 +229,18 @@ BUSINESS_FILE_UPLOAD_PERMISSIONS: Final[dict[str, tuple[str, ...]]] = {
         "kuaizhizao:quality-management-inspection-plans:create",
         "kuaizhizao:quality-management-inspection-plans:update",
     ),
+    "qms_system_document_attachments": (
+        "kuaizhizao:quality-management-system-documents:create",
+        "kuaizhizao:quality-management-system-documents:update",
+    ),
+    "qms_internal_audit_attachments": (
+        "kuaizhizao:quality-management-internal-audits:create",
+        "kuaizhizao:quality-management-internal-audits:update",
+    ),
+    "qms_management_review_attachments": (
+        "kuaizhizao:quality-management-management-reviews:create",
+        "kuaizhizao:quality-management-management-reviews:update",
+    ),
     # kuaizhizao — 设备管理
     "equipment_attachments": (
         "kuaizhizao:equipment-management-equipment:create",

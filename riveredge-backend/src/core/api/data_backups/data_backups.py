@@ -85,9 +85,9 @@ async def get_worker_health(
     获取备份 Worker 健康状态（用于前端状态指示）。
 
     状态说明：
-    - online: 最近有执行活动（running 或最近完成）
+    - online: 当前有 running 备份（正在执行）
     - backlog: 存在超时 pending（任务堆积，未必代表 worker 进程离线）
-    - idle: 当前无执行活动且无堆积（空闲）
+    - idle: 当前无 running 且无堆积（空闲；刚完成的任务不继续显示为运行中）
     """
     now = resolve_business_datetime()
     stale_threshold = now - timedelta(minutes=2)
@@ -106,7 +106,7 @@ async def get_worker_health(
     except Exception:
         broker_ready = False
 
-    if running_count > 0 or recent_completed > 0:
+    if running_count > 0:
         worker_status = "online"
     elif pending_stalled > 0:
         worker_status = "backlog"
@@ -122,6 +122,28 @@ async def get_worker_health(
         recent_completed=recent_completed,
         checked_at=now,
     )
+
+
+class BackupReclaimResponse(BaseModel):
+    failed_running: int
+    redispatched: int
+    already_queued: int
+
+
+@router.post("/reclaim-stalled", response_model=BackupReclaimResponse)
+async def reclaim_stalled_backups(
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """重投超时 pending、取消无进度的 running。"""
+    _require_backup_administrator(current_user)
+    result = await DataBackupService.reclaim_stalled_backups(tenant_id=current_user.tenant_id)
+    try:
+        from core.tasks.taskiq_app import _notify_pending_backup_messages
+
+        await _notify_pending_backup_messages()
+    except Exception:
+        logger.warning("补发 Taskiq NOTIFY 失败", exc_info=True)
+    return BackupReclaimResponse(**result)
 
 
 @router.get("", response_model=DataBackupListResponse)

@@ -309,7 +309,7 @@ const BatchesPage: React.FC = () => {
       <UniTable<MaterialBatch>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('masterData.batches')}
-        columnPersistenceId="apps.master-data.pages.materials.batches.list-v2"
+        columnPersistenceId="apps.master-data.pages.materials.batches.list-v3"
         headerTitle={t('app.master-data.menu.materials.batches')}
         actionRef={actionRef}
         rowKey="uuid"
@@ -336,9 +336,6 @@ const BatchesPage: React.FC = () => {
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
         pinnedTabsField={BATCH_STATUS_PINNED_FIELD}
-        search={{
-          labelWidth: 'auto',
-        }}
         showCreateButton
         createButtonText={t('common.create')}
         onCreate={handleCreate}

@@ -305,6 +305,8 @@ export interface Shift {
   name: string;
   startTime: string;
   endTime: string;
+  breakStart?: string | null;
+  breakEnd?: string | null;
   crossesMidnight: boolean;
   standardHours: number;
   isActive: boolean;
@@ -319,6 +321,8 @@ export interface ShiftCreate {
   name: string;
   startTime: string;
   endTime: string;
+  breakStart?: string | null;
+  breakEnd?: string | null;
   crossesMidnight?: boolean;
   standardHours?: number;
   isActive?: boolean;
@@ -329,6 +333,8 @@ export interface ShiftUpdate {
   name?: string;
   startTime?: string;
   endTime?: string;
+  breakStart?: string | null;
+  breakEnd?: string | null;
   crossesMidnight?: boolean;
   standardHours?: number;
   isActive?: boolean;
@@ -419,6 +425,8 @@ export interface StationUnavailableWindow {
   isActive: boolean;
 }
 
+export type PerformanceScopeType = 'plant' | 'department' | 'employee';
+
 /** 加班计划 */
 export interface OvertimePlan {
   id: number;
@@ -428,6 +436,12 @@ export interface OvertimePlan {
   startTime: string;
   endTime: string;
   name?: string | null;
+  reason?: string | null;
+  scopeType: PerformanceScopeType;
+  departmentId?: number | null;
+  departmentName?: string | null;
+  employeeId?: number | null;
+  employeeName?: string | null;
   isActive: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -440,6 +454,12 @@ export interface OvertimePlanCreate {
   startTime: string;
   endTime: string;
   name?: string;
+  reason?: string;
+  scopeType?: PerformanceScopeType;
+  departmentId?: number;
+  departmentName?: string;
+  employeeId?: number;
+  employeeName?: string;
   isActive?: boolean;
 }
 
@@ -448,5 +468,62 @@ export interface OvertimePlanUpdate {
   startTime?: string;
   endTime?: string;
   name?: string;
+  reason?: string | null;
+  scopeType?: PerformanceScopeType;
+  departmentId?: number | null;
+  departmentName?: string | null;
+  employeeId?: number | null;
+  employeeName?: string | null;
+  isActive?: boolean;
+}
+
+export type RosterTimeAdjustmentKind = 'temp_overtime' | 'temp_rest';
+
+export interface RosterTimeAdjustment {
+  id: number;
+  uuid: string;
+  tenantId: number;
+  scopeType: PerformanceScopeType;
+  departmentId?: number | null;
+  departmentName?: string | null;
+  employeeId?: number | null;
+  employeeName?: string | null;
+  workDate: string;
+  kind: RosterTimeAdjustmentKind;
+  startTime: string;
+  endTime: string;
+  reason: string;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  createdByName?: string;
+  updatedByName?: string;
+}
+
+export interface RosterTimeAdjustmentCreate {
+  scopeType?: PerformanceScopeType;
+  departmentId?: number;
+  departmentName?: string;
+  employeeId?: number;
+  employeeName?: string;
+  workDate: string;
+  kind: RosterTimeAdjustmentKind;
+  startTime: string;
+  endTime: string;
+  reason: string;
+  isActive?: boolean;
+}
+
+export interface RosterTimeAdjustmentUpdate {
+  scopeType?: PerformanceScopeType;
+  departmentId?: number | null;
+  departmentName?: string | null;
+  employeeId?: number | null;
+  employeeName?: string | null;
+  workDate?: string;
+  kind?: RosterTimeAdjustmentKind;
+  startTime?: string;
+  endTime?: string;
+  reason?: string;
   isActive?: boolean;
 }

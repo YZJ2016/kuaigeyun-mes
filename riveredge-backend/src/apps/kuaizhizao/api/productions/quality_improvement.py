@@ -13,6 +13,10 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from loguru import logger
 
 from apps.kuaizhizao.schemas.defect_record import DefectRecordListResponse, DefectRecordResponse
+from apps.kuaizhizao.schemas.quality import (
+    QualityInspectionApplyPlanBody,
+    QualityInspectionAttachmentsPatch,
+)
 from apps.kuaizhizao.schemas.quality_improvement import (
     NonconformingDispositionUpdate,
     OQCInspectionConduct,
@@ -24,6 +28,12 @@ from apps.kuaizhizao.schemas.quality_improvement import (
     Quality8DResponse,
     Quality8DStageRevisionEntry,
     Quality8DStageUnlockRequest,
+    Quality8DStageAssignmentBatchUpsert,
+    Quality8DStageAssignmentResponse,
+    Quality8DStageRejectRequest,
+    Quality8DActionItemCreate,
+    Quality8DActionItemUpdate,
+    Quality8DActionItemResponse,
     Quality8DTransition,
     Quality8DUpdate,
     SPCChartResponse,
@@ -34,6 +44,7 @@ from apps.kuaizhizao.schemas.quality_improvement import (
 from apps.kuaizhizao.services.spc_list_core import SPC_SAMPLE_SORTABLE_FIELDS
 from apps.kuaizhizao.services.defect_record_service import DefectRecordService
 from apps.kuaizhizao.services.quality_improvement_service import OQCInspectionService, Quality8DService, SPCService
+from apps.kuaizhizao.services.eight_d_collaboration_service import EightDCollaborationService
 from core.api.deps.access import require_permission_codes, get_auth_context, ensure_permission_codes, AuthContext
 from core.api.deps import get_current_tenant, get_current_user
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
@@ -79,6 +90,9 @@ _8D_UPDATE_OR_CLOSE = Depends(
 )
 _8D_DELETE = Depends(require_permission_codes("kuaizhizao:quality-management-eight-d-reports:delete"))
 _8D_PRINT = Depends(require_permission_codes("kuaizhizao:quality-management-eight-d-reports:print"))
+_8D_ASSIGN = Depends(require_permission_codes("kuaizhizao:quality-management-eight-d-reports:assign"))
+_8D_SUBMIT = Depends(require_permission_codes("kuaizhizao:quality-management-eight-d-reports:submit"))
+_8D_APPROVE = Depends(require_permission_codes("kuaizhizao:quality-management-eight-d-reports:approve"))
 _NC_READ = Depends(require_permission_codes("kuaizhizao:quality-management-nonconforming-ledger:read"))
 _NC_UPDATE = Depends(require_permission_codes("kuaizhizao:quality-management-nonconforming-ledger:update"))
 _OQC_READ = Depends(require_permission_codes("kuaizhizao:quality-management-oqc-inspection:read"))
@@ -106,6 +120,8 @@ async def list_quality_8d_reports(
     created_end_date: Optional[str] = Query(None, description="创建结束日期 YYYY-MM-DD"),
     due_start_date: Optional[str] = Query(None, description="计划完成开始日期 YYYY-MM-DD"),
     due_end_date: Optional[str] = Query(None, description="计划完成结束日期 YYYY-MM-DD"),
+    my_stage_pending: bool = Query(False, description="待我负责阶段"),
+    my_action_pending: bool = Query(False, description="待我行动项"),
     _auth= _8D_READ,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -118,6 +134,9 @@ async def list_quality_8d_reports(
         severity=severity,
         owner_id=owner_id,
         overdue_only=overdue_only,
+        my_stage_pending=my_stage_pending,
+        my_action_pending=my_action_pending,
+        viewer_user_id=current_user.id,
         keyword=keyword,
         order_by=order_by,
         created_start_date=created_start_date,
@@ -241,6 +260,202 @@ async def request_quality_8d_stage_unlock(
         report_id=report_id,
         user_id=current_user.id,
         payload=payload,
+    )
+
+
+@router.get(
+    "/quality-8d-reports/{report_id}/stage-assignments",
+    response_model=List[Quality8DStageAssignmentResponse],
+    summary="List 8D stage assignments",
+)
+async def list_quality_8d_stage_assignments(
+    report_id: int = Path(...),
+    _auth=_8D_READ,
+    tenant_id: int = Depends(get_current_tenant),
+):
+    _ = _auth
+    return await EightDCollaborationService.list_assignments(tenant_id, report_id)
+
+
+@router.put(
+    "/quality-8d-reports/{report_id}/stage-assignments",
+    response_model=List[Quality8DStageAssignmentResponse],
+    summary="Upsert 8D stage assignments",
+)
+async def upsert_quality_8d_stage_assignments(
+    report_id: int = Path(...),
+    payload: Quality8DStageAssignmentBatchUpsert = Body(...),
+    _auth=_8D_ASSIGN,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    _ = _auth
+    return await EightDCollaborationService.upsert_assignments(
+        tenant_id, report_id, current_user.id, payload
+    )
+
+
+@router.post(
+    "/quality-8d-reports/{report_id}/stage-assignments/{stage_key}/submit",
+    response_model=Quality8DStageAssignmentResponse,
+    summary="Submit 8D stage for review",
+)
+async def submit_quality_8d_stage(
+    report_id: int = Path(...),
+    stage_key: str = Path(...),
+    _auth=_8D_SUBMIT,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    _ = _auth
+    return await EightDCollaborationService.submit_stage(
+        tenant_id, report_id, stage_key, current_user.id
+    )
+
+
+@router.post(
+    "/quality-8d-reports/{report_id}/stage-assignments/{stage_key}/approve",
+    response_model=Quality8DStageAssignmentResponse,
+    summary="Approve submitted 8D stage",
+)
+async def approve_quality_8d_stage(
+    report_id: int = Path(...),
+    stage_key: str = Path(...),
+    _auth=_8D_APPROVE,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    _ = _auth
+    user_info = await quality_8d_service.get_user_info(current_user.id)
+    return await EightDCollaborationService.approve_stage(
+        tenant_id, report_id, stage_key, current_user.id, user_info["name"]
+    )
+
+
+@router.post(
+    "/quality-8d-reports/{report_id}/stage-assignments/{stage_key}/reject",
+    response_model=Quality8DStageAssignmentResponse,
+    summary="Reject submitted 8D stage",
+)
+async def reject_quality_8d_stage(
+    report_id: int = Path(...),
+    stage_key: str = Path(...),
+    payload: Quality8DStageRejectRequest = Body(...),
+    _auth=_8D_APPROVE,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    _ = _auth
+    user_info = await quality_8d_service.get_user_info(current_user.id)
+    return await EightDCollaborationService.reject_stage(
+        tenant_id, report_id, stage_key, current_user.id, user_info["name"], payload.reason
+    )
+
+
+@router.get(
+    "/quality-8d-reports/{report_id}/action-items",
+    response_model=List[Quality8DActionItemResponse],
+    summary="List 8D action items",
+)
+async def list_quality_8d_action_items(
+    report_id: int = Path(...),
+    discipline: Optional[str] = Query(None),
+    _auth=_8D_READ,
+    tenant_id: int = Depends(get_current_tenant),
+):
+    _ = _auth
+    return await EightDCollaborationService.list_action_items(tenant_id, report_id, discipline)
+
+
+@router.post(
+    "/quality-8d-reports/{report_id}/action-items",
+    response_model=Quality8DActionItemResponse,
+    summary="Create 8D action item",
+)
+async def create_quality_8d_action_item(
+    report_id: int = Path(...),
+    payload: Quality8DActionItemCreate = Body(...),
+    _auth=_8D_UPDATE_OR_CLOSE,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    _ = _auth
+    return await EightDCollaborationService.create_action_item(
+        tenant_id, report_id, current_user.id, payload
+    )
+
+
+@router.put(
+    "/quality-8d-reports/{report_id}/action-items/{item_id}",
+    response_model=Quality8DActionItemResponse,
+    summary="Update 8D action item",
+)
+async def update_quality_8d_action_item(
+    report_id: int = Path(...),
+    item_id: int = Path(...),
+    payload: Quality8DActionItemUpdate = Body(...),
+    _auth=_8D_UPDATE_OR_CLOSE,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    _ = _auth
+    return await EightDCollaborationService.update_action_item(
+        tenant_id, report_id, item_id, current_user.id, payload
+    )
+
+
+@router.delete(
+    "/quality-8d-reports/{report_id}/action-items/{item_id}",
+    summary="Delete 8D action item",
+)
+async def delete_quality_8d_action_item(
+    report_id: int = Path(...),
+    item_id: int = Path(...),
+    _auth=_8D_ASSIGN,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    _ = _auth
+    await EightDCollaborationService.delete_action_item(
+        tenant_id, report_id, item_id, current_user.id
+    )
+    return {"success": True}
+
+
+@router.post(
+    "/quality-8d-reports/{report_id}/action-items/{item_id}/complete",
+    response_model=Quality8DActionItemResponse,
+    summary="Complete 8D action item",
+)
+async def complete_quality_8d_action_item(
+    report_id: int = Path(...),
+    item_id: int = Path(...),
+    _auth=_8D_SUBMIT,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    _ = _auth
+    return await EightDCollaborationService.complete_action_item(
+        tenant_id, report_id, item_id, current_user.id
+    )
+
+
+@router.post(
+    "/quality-8d-reports/{report_id}/action-items/{item_id}/verify",
+    response_model=Quality8DActionItemResponse,
+    summary="Verify 8D action item",
+)
+async def verify_quality_8d_action_item(
+    report_id: int = Path(...),
+    item_id: int = Path(...),
+    _auth=_8D_APPROVE,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    _ = _auth
+    user_info = await quality_8d_service.get_user_info(current_user.id)
+    return await EightDCollaborationService.verify_action_item(
+        tenant_id, report_id, item_id, current_user.id, user_info["name"]
     )
 
 
@@ -650,6 +865,50 @@ async def revoke_conduct_oqc_inspection(
     return await oqc_service.revoke_conduct(
         tenant_id=tenant_id,
         inspection_id=inspection_id,
+        user_id=current_user.id,
+    )
+
+
+@router.patch(
+    "/oqc-inspections/{inspection_id}/attachments",
+    response_model=OQCInspectionResponse,
+    summary="Update OQC inspection attachments",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:quality-management-oqc-inspection:update"))],
+)
+async def patch_oqc_inspection_attachments(
+    inspection_id: int = Path(...),
+    body: QualityInspectionAttachmentsPatch = ...,
+    _auth=_OQC_UPDATE,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OQCInspectionResponse:
+    _ = _auth
+    return await oqc_service.patch_attachments(
+        tenant_id=tenant_id,
+        inspection_id=inspection_id,
+        attachments=body.attachments,
+        user_id=current_user.id,
+    )
+
+
+@router.post(
+    "/oqc-inspections/{inspection_id}/apply-plan",
+    response_model=OQCInspectionResponse,
+    summary="Apply inspection plan to pending OQC inspection",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:quality-management-oqc-inspection:update"))],
+)
+async def apply_oqc_inspection_plan(
+    inspection_id: int = Path(...),
+    body: QualityInspectionApplyPlanBody = ...,
+    _auth=_OQC_UPDATE,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OQCInspectionResponse:
+    _ = _auth
+    return await oqc_service.apply_inspection_plan(
+        tenant_id=tenant_id,
+        inspection_id=inspection_id,
+        inspection_plan_id=body.inspection_plan_id,
         user_id=current_user.id,
     )
 

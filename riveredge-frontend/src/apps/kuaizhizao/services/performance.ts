@@ -41,6 +41,9 @@ import type {
   OvertimePlan,
   OvertimePlanCreate,
   OvertimePlanUpdate,
+  RosterTimeAdjustment,
+  RosterTimeAdjustmentCreate,
+  RosterTimeAdjustmentUpdate,
 } from '../types/performance';
 
 const PERF_BASE = '/apps/master-data/performance';
@@ -108,6 +111,28 @@ export const overtimeApi = {
   delete: async (uuid: string): Promise<void> => api.delete(`${PERF_BASE}/overtimes/${uuid}`),
 };
 
+export const rosterTimeAdjustmentApi = {
+  list: async (params?: {
+    dateFrom?: string;
+    dateTo?: string;
+    employeeId?: number;
+    employeeIds?: number[];
+    kind?: string;
+    isActive?: boolean;
+    skip?: number;
+    limit?: number;
+  }): Promise<PerformanceListResult<RosterTimeAdjustment>> =>
+    api.get(`${PERF_BASE}/roster-time-adjustments`, { params }),
+  create: async (data: RosterTimeAdjustmentCreate): Promise<RosterTimeAdjustment> =>
+    api.post(`${PERF_BASE}/roster-time-adjustments`, data),
+  get: async (uuid: string): Promise<RosterTimeAdjustment> =>
+    api.get(`${PERF_BASE}/roster-time-adjustments/${uuid}`),
+  update: async (uuid: string, data: RosterTimeAdjustmentUpdate): Promise<RosterTimeAdjustment> =>
+    api.put(`${PERF_BASE}/roster-time-adjustments/${uuid}`, data),
+  delete: async (uuid: string): Promise<void> =>
+    api.delete(`${PERF_BASE}/roster-time-adjustments/${uuid}`),
+};
+
 /**
  * 假期 API 服务
  */
@@ -144,6 +169,7 @@ export const shiftRosterApi = {
   getByWeek: async (params: {
     workGroupId?: number;
     employeeId?: number;
+    scopeType?: 'work_group' | 'employee' | 'all_employees';
     periodStart: string;
   }): Promise<ShiftRoster> =>
     api.get(`${PERF_BASE}/shift-rosters/by-week`, { params }),
@@ -205,6 +231,7 @@ export interface EmployeeOption {
   id: number;
   full_name: string;
   username: string;
+  department_id?: number | null;
 }
 
 export const employeePerformanceApi = {

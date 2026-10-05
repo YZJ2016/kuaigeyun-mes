@@ -15,9 +15,21 @@ from apps.kuaizhizao.services.feishu_work_order_push_service import (
     TARGET_PROFILE as WO_FEISHU_PROFILE,
     FeishuWorkOrderPushService,
 )
+from apps.kuaizhizao.services.kingdee_engineering_bom_push_service import (
+    TARGET_PROFILE as BOM_KD_PROFILE,
+    KingdeeEngineeringBomPushService,
+)
 from apps.kuaizhizao.services.kingdee_inventory_push_service import (
     TARGET_PROFILE as INV_KD_PROFILE,
     KingdeeInventoryPushService,
+)
+from apps.kuaizhizao.services.kingdee_material_push_service import (
+    TARGET_PROFILE as MAT_KD_PROFILE,
+    KingdeeMaterialPushService,
+)
+from apps.kuaizhizao.services.kingdee_process_operation_push_service import (
+    TARGET_PROFILE as OP_KD_PROFILE,
+    KingdeeProcessOperationPushService,
 )
 from apps.kuaizhizao.services.kingdee_production_order_push_service import (
     TARGET_PROFILE as WO_KD_PROFILE,
@@ -52,6 +64,9 @@ SUPPORTED_PROFILES: Set[Tuple[str, str]] = {
     ("sales_order", SO_KD_PROFILE),
     ("purchase_order", PO_KD_PROFILE),
     ("material_batch", INV_KD_PROFILE),
+    ("material", MAT_KD_PROFILE),
+    ("engineering_bom", BOM_KD_PROFILE),
+    ("process_operation", OP_KD_PROFILE),
 }
 
 # source_type → business_config 分类键
@@ -61,6 +76,9 @@ _SOURCE_CONFIG_CATEGORY: Dict[str, str] = {
     "sales_order": "sales",
     "purchase_order": "purchase",
     "material_batch": "warehouse",
+    "material": "master_data",
+    "engineering_bom": "master_data",
+    "process_operation": "master_data",
 }
 
 MULTI_PROFILE_TOKEN = "*"
@@ -288,6 +306,90 @@ async def _handle_material_batch_kingdee(
     return result
 
 
+async def _handle_material_kingdee(
+    *,
+    tenant_id: int,
+    acting_user_id: int,
+    source_id: int,
+    connection_code: Optional[str],
+    save_api_uuid: Optional[str],
+    dry_run: bool,
+    **_: Any,
+) -> Dict[str, Any]:
+    result = await KingdeeMaterialPushService().push_material(
+        tenant_id=tenant_id,
+        material_id=int(source_id),
+        acting_user_id=acting_user_id,
+        connection_code=connection_code,
+        save_api_uuid=save_api_uuid,
+        dry_run=dry_run,
+    )
+    if result is None:
+        return _disabled_result(
+            source_type="material",
+            source_id=source_id,
+            target_profile=MAT_KD_PROFILE,
+            message="金蝶物料推送未启用或物料不存在",
+        )
+    return result
+
+
+async def _handle_engineering_bom_kingdee(
+    *,
+    tenant_id: int,
+    acting_user_id: int,
+    source_id: int,
+    connection_code: Optional[str],
+    save_api_uuid: Optional[str],
+    dry_run: bool,
+    **_: Any,
+) -> Dict[str, Any]:
+    result = await KingdeeEngineeringBomPushService().push_engineering_bom(
+        tenant_id=tenant_id,
+        bom_line_id=int(source_id),
+        acting_user_id=acting_user_id,
+        connection_code=connection_code,
+        save_api_uuid=save_api_uuid,
+        dry_run=dry_run,
+    )
+    if result is None:
+        return _disabled_result(
+            source_type="engineering_bom",
+            source_id=source_id,
+            target_profile=BOM_KD_PROFILE,
+            message="金蝶工程BOM推送未启用或BOM不存在",
+        )
+    return result
+
+
+async def _handle_process_operation_kingdee(
+    *,
+    tenant_id: int,
+    acting_user_id: int,
+    source_id: int,
+    connection_code: Optional[str],
+    save_api_uuid: Optional[str],
+    dry_run: bool,
+    **_: Any,
+) -> Dict[str, Any]:
+    result = await KingdeeProcessOperationPushService().push_process_operation(
+        tenant_id=tenant_id,
+        operation_id=int(source_id),
+        acting_user_id=acting_user_id,
+        connection_code=connection_code,
+        save_api_uuid=save_api_uuid,
+        dry_run=dry_run,
+    )
+    if result is None:
+        return _disabled_result(
+            source_type="process_operation",
+            source_id=source_id,
+            target_profile=OP_KD_PROFILE,
+            message="金蝶工序推送未启用或工序不存在",
+        )
+    return result
+
+
 def ensure_default_push_handlers_registered() -> None:
     """惰性注册真实已实现 profile；禁止把 WMS/PLM/CRM 虚报进来。"""
     if _PUSH_HANDLERS:
@@ -299,6 +401,9 @@ def ensure_default_push_handlers_registered() -> None:
     register_push_handler("sales_order", SO_KD_PROFILE, _handle_sales_order_kingdee)
     register_push_handler("purchase_order", PO_KD_PROFILE, _handle_purchase_order_kingdee)
     register_push_handler("material_batch", INV_KD_PROFILE, _handle_material_batch_kingdee)
+    register_push_handler("material", MAT_KD_PROFILE, _handle_material_kingdee)
+    register_push_handler("engineering_bom", BOM_KD_PROFILE, _handle_engineering_bom_kingdee)
+    register_push_handler("process_operation", OP_KD_PROFILE, _handle_process_operation_kingdee)
 
 
 class DocumentPushService:

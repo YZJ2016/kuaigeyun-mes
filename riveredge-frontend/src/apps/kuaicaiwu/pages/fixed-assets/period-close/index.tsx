@@ -178,7 +178,9 @@ const FaPeriodClosePage: React.FC = () => {
       <UniTable
         actionRef={actionRef}
         rowKey="id"
-        columnPersistenceId="apps.kuaicaiwu.fixed-assets.period-close.list-v2"
+        columnPersistenceId="apps.kuaicaiwu.fixed-assets.period-close.list-v3"
+        showFuzzySearch={false}
+        showAdvancedSearch={false}
         columns={columns}
         permissionResource={RESOURCE}
         enableRowSelection
@@ -187,7 +189,6 @@ const FaPeriodClosePage: React.FC = () => {
         onTableDataChange={(rows) => {
           tableRowsRef.current = rows as Record<string, unknown>[];
         }}
-        search={false}
         showCreateButton
         createButtonText={t(`${NS}.createButton`)}
         onCreate={() => setModalOpen(true)}

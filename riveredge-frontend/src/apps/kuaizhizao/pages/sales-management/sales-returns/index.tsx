@@ -73,9 +73,13 @@ import {
 } from '../../../../../utils/documentFormReferenceLoad';
 import { useWarehouseLocationOptions } from '../../../hooks/useWarehouseLocationOptions';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
+import {
+  documentCurrencyTitleVars,
+  resolveDocumentCurrencyInputPrefix,
+} from '../../../utils/documentCurrencyDisplay';
 import dayjs from 'dayjs';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
-import { getSalesReturnLifecycle, buildSalesReturnLifecycleValueEnum, resolveSalesReturnListLifecycleParams } from '../../../utils/salesReturnLifecycle';
+import { getSalesReturnLifecycle, buildSalesReturnLifecycleValueEnum, resolveSalesReturnListApiParams } from '../../../utils/salesReturnLifecycle';
 import { createListAuditPhaseColumn } from '../shared/listAuditPhaseColumn';
 import { alignProColumns, alignDescriptionColumns, SALES_DOC_LIST_FIELD_RANK } from '../shared/documentFieldAlignment';
 import {
@@ -111,7 +115,7 @@ import {
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
-import { formatBusinessDateOnly, formatDateTime, formatQuantity, formatCurrencyAmount } from '../../../../../utils/format';
+import { formatBusinessDateOnly, formatDateTime, formatQuantity, formatAmount } from '../../../../../utils/format';
 import type { SalesReturnDeliveryPullLine, SalesReturnOrderPullLine } from '../../../services/warehouse-execution';
 import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
@@ -751,7 +755,8 @@ const SalesReturnsPage: React.FC = () => {
       align: 'right',
       sorter: true,
       hideInSearch: true,
-      render: (text: any) => formatCurrencyAmount(text || 0),
+      render: (text: any, record: any) =>
+        `${resolveDocumentCurrencyInputPrefix(record?.currency_code)}${formatAmount(text || 0, '0.00')}`,
     },
     {
       title: t('app.kuaizhizao.salesReturn.returnTime'),
@@ -1201,6 +1206,8 @@ const SalesReturnsPage: React.FC = () => {
         return_reason: detail.return_reason,
         return_type: detail.return_type,
         shipping_method: detail.shipping_method,
+        currency_code: String(detail.currency_code || 'CNY').trim().toUpperCase() || 'CNY',
+        exchange_rate: Number(detail.exchange_rate ?? 1) || 1,
         notes: detail.notes,
         attachments: mapAttachmentsToUploadList(detail.attachments),
         items: (detail.items || []).map((it) => ({
@@ -1287,6 +1294,8 @@ const SalesReturnsPage: React.FC = () => {
           shipping_method: standardValues.shipping_method ?? null,
           tracking_number: detail.tracking_number ?? null,
           shipping_address: detail.shipping_address ?? null,
+          currency_code: String(standardValues.currency_code || detail.currency_code || 'CNY').trim().toUpperCase() || 'CNY',
+          exchange_rate: Number(standardValues.exchange_rate ?? detail.exchange_rate ?? 1) || 1,
           notes: standardValues.notes ?? null,
           attachments: normalizeDocumentAttachments(standardValues.attachments),
           sales_delivery_id: detail.sales_delivery_id ?? null,
@@ -1494,7 +1503,7 @@ const SalesReturnsPage: React.FC = () => {
     ];
     const unitPriceKeys = [
       t('app.kuaizhizao.salesReturn.import.unitPrice'),
-      t('app.kuaizhizao.salesOrder.unitPrice'),
+      t('app.kuaizhizao.salesOrder.unitPrice', documentCurrencyTitleVars(undefined, t)),
       '单价',
     ];
     const batchNumberKeys = [
@@ -1557,6 +1566,12 @@ const SalesReturnsPage: React.FC = () => {
         dataIndex: 'warehouse_name',
       },
       {
+        title: t('app.kuaizhizao.quotation.form.currency'),
+        dataIndex: 'currency_code',
+        render: (_, record) =>
+          String(record.currency_code || 'CNY').trim().toUpperCase() || 'CNY',
+      },
+      {
         title: t('app.kuaizhizao.salesReturn.returnReason'),
         dataIndex: 'return_reason',
       },
@@ -1572,7 +1587,8 @@ const SalesReturnsPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.salesReturn.totalAmount'),
         dataIndex: 'total_amount',
-        render: (_, record) => formatCurrencyAmount(record.total_amount),
+        render: (_, record) =>
+          `${resolveDocumentCurrencyInputPrefix(record.currency_code)}${formatAmount(record.total_amount, '0.00')}`,
       },
       {
         title: t('app.kuaizhizao.salesReturn.returnTime'),
@@ -1702,8 +1718,8 @@ const SalesReturnsPage: React.FC = () => {
         resizable: false,
         align: 'right',
         hideInSearch: true,
-        render: (text: unknown) =>
-          formatCurrencyAmount(text || 0),
+        render: (text: unknown, record: any) =>
+          `${resolveDocumentCurrencyInputPrefix(record?.currency_code)}${formatAmount(text || 0, '0.00')}`,
       },
       {
         title: t('app.kuaizhizao.salesReturn.totalAmount'),
@@ -1714,8 +1730,8 @@ const SalesReturnsPage: React.FC = () => {
         resizable: false,
         align: 'right',
         hideInSearch: true,
-        render: (text: unknown) =>
-          formatCurrencyAmount(text || 0),
+        render: (text: unknown, record: any) =>
+          `${resolveDocumentCurrencyInputPrefix(record?.currency_code)}${formatAmount(text || 0, '0.00')}`,
       },
       {
         title: t('app.kuaizhizao.salesReturn.batchNumber'),
@@ -1868,50 +1884,11 @@ const SalesReturnsPage: React.FC = () => {
           ]}
           request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
             try {
-              const sf = searchFormValues ?? {};
-              const lifecycleParams = resolveSalesReturnListLifecycleParams(sf, params);
-              const { sortBy, sortOrder } = extractProTableSort(sort);
-              const orderBy =
-                sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
-              const fuzzyKeyword =
-                typeof sf.keyword === 'string' ? sf.keyword.trim() : '';
-              const returnCode = sf.return_code != null ? String(sf.return_code).trim() : '';
-              const apiParams: SalesReturnListParams = {
-                skip: ((params.current || 1) - 1) * (params.pageSize || 20),
-                limit: params.pageSize || 20,
-                ...lifecycleParams,
-                order_by: orderBy,
-                // 订单视图明细预览列 + 明细视图展开行均需 items
-                include_items: true,
-              };
-              if (fuzzyKeyword) {
-                apiParams.keyword = fuzzyKeyword;
-              } else if (returnCode) {
-                apiParams.return_code = returnCode;
-              }
-              if (sf.customer_id != null && sf.customer_id !== '') {
-                apiParams.customer_id = Number(sf.customer_id);
-              }
-              const deliveryCode =
-                sf.sales_delivery_code != null ? String(sf.sales_delivery_code).trim() : '';
-              if (deliveryCode) apiParams.sales_delivery_code = deliveryCode;
-              const orderCode =
-                sf.sales_order_code != null ? String(sf.sales_order_code).trim() : '';
-              if (orderCode) apiParams.sales_order_code = orderCode;
-              const returnRange = sf.return_time_range as [unknown, unknown] | undefined;
-              if (returnRange && Array.isArray(returnRange) && returnRange[0]) {
-                apiParams.return_start_date = formatDateTime(returnRange[0] as string | Date, 'YYYY-MM-DD');
-                apiParams.return_end_date = returnRange[1]
-                  ? formatDateTime(returnRange[1] as string | Date, 'YYYY-MM-DD')
-                  : apiParams.return_start_date;
-              }
-              const createdRange = sf.created_at_range as [unknown, unknown] | undefined;
-              if (createdRange && Array.isArray(createdRange) && createdRange[0]) {
-                apiParams.created_start_date = formatDateTime(createdRange[0] as string | Date, 'YYYY-MM-DD');
-                apiParams.created_end_date = createdRange[1]
-                  ? formatDateTime(createdRange[1] as string | Date, 'YYYY-MM-DD')
-                  : apiParams.created_start_date;
-              }
+              const apiParams = resolveSalesReturnListApiParams(
+                params,
+                sort,
+                searchFormValues,
+              ) as SalesReturnListParams;
               const response = await warehouseApi.salesReturn.list(apiParams);
               const list = response?.data ?? [];
               const enriched = meta?.purpose === 'prefetch'
@@ -2156,6 +2133,10 @@ const SalesReturnsPage: React.FC = () => {
             />
           </Col>
         </Row>
+        <ProFormText name="currency_code" hidden initialValue="CNY" />
+        <ProForm.Item name="exchange_rate" hidden initialValue={1}>
+          <InputNumber />
+        </ProForm.Item>
         <Row gutter={16}>
           <Col span={8}>
             <ProFormSelect
@@ -2336,13 +2317,40 @@ const SalesReturnsPage: React.FC = () => {
                       ),
                     },
                     {
-                      title: t('app.kuaizhizao.salesOrder.unitPrice'),
+                      title: (
+                        <AntForm.Item
+                          noStyle
+                          shouldUpdate={(prev: any, curr: any) => prev?.currency_code !== curr?.currency_code}
+                        >
+                          {({ getFieldValue }) =>
+                            t(
+                              'app.kuaizhizao.salesOrder.unitPrice',
+                              documentCurrencyTitleVars(getFieldValue('currency_code'), t),
+                            )
+                          }
+                        </AntForm.Item>
+                      ),
                       dataIndex: 'unit_price',
                       width: DOCUMENT_DETAIL_COL_WIDTH.unitPrice,
                       ...DOCUMENT_DETAIL_NUM_COL,
                       render: (_: unknown, __: unknown, index: number) => (
-                        <AntForm.Item name={[index, 'unit_price']} noStyle>
-                          <InputNumber size={DOCUMENT_DETAIL_CONTROL_SIZE} style={{ width: '100%' }} min={0} prefix="¥" />
+                        <AntForm.Item
+                          noStyle
+                          shouldUpdate={(prev: any, curr: any) => prev?.currency_code !== curr?.currency_code}
+                        >
+                          {({ getFieldValue }) => {
+                            const moneyPrefix = resolveDocumentCurrencyInputPrefix(getFieldValue('currency_code'));
+                            return (
+                              <AntForm.Item name={[index, 'unit_price']} noStyle>
+                                <InputNumber
+                                  size={DOCUMENT_DETAIL_CONTROL_SIZE}
+                                  style={{ width: '100%' }}
+                                  min={0}
+                                  prefix={moneyPrefix}
+                                />
+                              </AntForm.Item>
+                            );
+                          }}
                         </AntForm.Item>
                       ),
                     },
@@ -2612,8 +2620,25 @@ const SalesReturnsPage: React.FC = () => {
                       { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 120 },
                       { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 150 },
                       { title: t('app.kuaizhizao.salesReturn.returnQuantity'), dataIndex: 'return_quantity', width: 100, align: 'right', render: formatQuantity },
-                      { title: t('app.kuaizhizao.salesOrder.unitPrice'), dataIndex: 'unit_price', width: 100, align: 'right', render: (text) => `¥${text || 0}` },
-                      { title: t('app.kuaizhizao.salesReturn.amount'), dataIndex: 'total_amount', width: 100, align: 'right', render: (text) => `¥${text || 0}` },
+                      {
+                        title: t(
+                          'app.kuaizhizao.salesOrder.unitPrice',
+                          documentCurrencyTitleVars(returnDetail?.currency_code, t),
+                        ),
+                        dataIndex: 'unit_price',
+                        width: 100,
+                        align: 'right',
+                        render: (text) =>
+                          `${resolveDocumentCurrencyInputPrefix(returnDetail?.currency_code)}${text || 0}`,
+                      },
+                      {
+                        title: t('app.kuaizhizao.salesReturn.amount'),
+                        dataIndex: 'total_amount',
+                        width: 100,
+                        align: 'right',
+                        render: (text) =>
+                          `${resolveDocumentCurrencyInputPrefix(returnDetail?.currency_code)}${text || 0}`,
+                      },
                       { title: t('app.kuaizhizao.salesReturn.import.batchNumber'), dataIndex: 'batch_number', width: 120 },
                       { title: t('app.kuaizhizao.salesReturn.location'), dataIndex: 'location_code', width: 100 },
                     ]}

@@ -72,32 +72,14 @@ function workWindowsForDay(day: Dayjs, calendar: EffectiveWorkCalendar): Window[
   }
 
   const base: Window[] = [];
-  const shiftSlots =
-    calendar.config.windowSource === 'shift' ? calendar.dayWindowsByDate?.[key] || [] : null;
-  if (shiftSlots) {
-    for (const w of shiftSlots) {
-      const a = parseHm(w.startTime);
-      const b = parseHm(w.endTime);
-      if (!a || !b) continue;
-      const s = atTime(day, a);
-      const e = atTime(day, b);
-      if (e.isAfter(s)) base.push([s, e]);
-    }
-  } else {
-    const start = parseHm(calendar.config.workDayStart) || { h: 8, m: 0 };
-    const end = parseHm(calendar.config.workDayEnd) || { h: 17, m: 0 };
-    const bs = parseHm(calendar.config.breakStart);
-    const be = parseHm(calendar.config.breakEnd);
-    const dayStart = atTime(day, start);
-    const dayEnd = atTime(day, end);
-    if (bs && be) {
-      const b0 = atTime(day, bs);
-      const b1 = atTime(day, be);
-      if (b0.isAfter(dayStart)) base.push([dayStart, b0]);
-      if (b1.isBefore(dayEnd)) base.push([b1, dayEnd]);
-    } else {
-      base.push([dayStart, dayEnd]);
-    }
+  // 可排窗唯一真源：已发布排班合成的 dayWindowsByDate（含班内休息扣除）
+  for (const w of calendar.dayWindowsByDate?.[key] || []) {
+    const a = parseHm(w.startTime);
+    const b = parseHm(w.endTime);
+    if (!a || !b) continue;
+    const s = atTime(day, a);
+    const e = atTime(day, b);
+    if (e.isAfter(s)) base.push([s, e]);
   }
   return mergeWindows([...base, ...otWindows]);
 }

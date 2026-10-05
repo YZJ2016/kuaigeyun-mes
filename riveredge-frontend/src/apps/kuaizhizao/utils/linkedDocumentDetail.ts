@@ -19,6 +19,22 @@ export const LINKED_DOCUMENT_DETAIL_TYPES = new Set([
   'demand_computation',
   'work_order',
   'freight_order',
+  'delivery_notice',
+  'shipment_notice',
+  'sales_return',
+  'sales_contract',
+  'receipt_notice',
+  'production_picking',
+  'production_return',
+  'finished_goods_receipt',
+  'outsource_issue',
+  'outsource_receipt',
+  'outsource_material_return',
+  'outsource_product_return',
+  'purchase_return',
+  'incoming_inspection',
+  'finished_goods_inspection',
+  'rework_order',
   'after_sales_ticket',
   'install_execution',
   'service_asset',
@@ -44,6 +60,22 @@ export type LinkedDocumentType =
   | 'demand_computation'
   | 'work_order'
   | 'freight_order'
+  | 'delivery_notice'
+  | 'shipment_notice'
+  | 'sales_return'
+  | 'sales_contract'
+  | 'receipt_notice'
+  | 'production_picking'
+  | 'production_return'
+  | 'finished_goods_receipt'
+  | 'outsource_issue'
+  | 'outsource_receipt'
+  | 'outsource_material_return'
+  | 'outsource_product_return'
+  | 'purchase_return'
+  | 'incoming_inspection'
+  | 'finished_goods_inspection'
+  | 'rework_order'
   | 'after_sales_ticket'
   | 'install_execution'
   | 'service_asset'
@@ -78,6 +110,22 @@ const LINKED_DOCUMENT_TYPE_ALIASES: Record<string, string> = {
   reportingrecord: 'reporting_record',
   performancesummary: 'performance_summary',
   deliveryproject: 'delivery_project',
+  deliverynotice: 'delivery_notice',
+  shipmentnotice: 'shipment_notice',
+  salesreturn: 'sales_return',
+  salescontract: 'sales_contract',
+  receiptnotice: 'receipt_notice',
+  productionpicking: 'production_picking',
+  productionreturn: 'production_return',
+  finishedgoodsreceipt: 'finished_goods_receipt',
+  finishedgoodsinspection: 'finished_goods_inspection',
+  incominginspection: 'incoming_inspection',
+  outsourceissue: 'outsource_issue',
+  outsourcereceipt: 'outsource_receipt',
+  outsourcematerialreturn: 'outsource_material_return',
+  outsourceproductreturn: 'outsource_product_return',
+  purchasereturn: 'purchase_return',
+  reworkorder: 'rework_order',
 };
 
 /**

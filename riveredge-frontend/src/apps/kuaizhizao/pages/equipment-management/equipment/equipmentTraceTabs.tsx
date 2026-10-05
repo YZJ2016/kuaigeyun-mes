@@ -15,7 +15,7 @@ function renderOpsStatusTag(status: string) {
 }
 
 export interface EquipmentTraceData {
-  equipment?: { uuid?: string; code?: string; name?: string; status?: string };
+  equipment?: { uuid?: string; code?: string; name?: string; status?: string; is_active?: boolean };
   maintenance_plans?: Record<string, unknown>[];
   maintenance_executions?: Record<string, unknown>[];
   equipment_faults?: Record<string, unknown>[];
@@ -25,6 +25,7 @@ export interface EquipmentTraceData {
   route_patrols?: Record<string, unknown>[];
   spare_part_requisitions?: Record<string, unknown>[];
   scrap_applications?: Record<string, unknown>[];
+  assigned_operations?: Record<string, unknown>[];
 }
 
 type TraceColumn = { title: string; dataIndex?: string; width?: number; ellipsis?: boolean; render?: (...args: unknown[]) => unknown };

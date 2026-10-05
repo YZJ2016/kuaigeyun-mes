@@ -79,7 +79,11 @@ import {
   resolveFactoryImportHeaderIndexMap,
 } from '../../../../utils/spreadsheetImportTemplate';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
-import { mergeListKeyword } from '../../../../utils/tableQueryKey';
+import {
+  pickListSearchKeywordOrFields,
+  pickSearchString,
+  pickSearchTriStateBoolean,
+} from '../../../../utils/tableQueryKey';
 import { useResourcePermissions } from '../../../../hooks/useResourcePermissions';
 import { todaySiteDateString } from '../../../../utils/format';
 import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
@@ -1481,7 +1485,6 @@ const ApplicationConnectionsListPage: React.FC = () => {
       resizable: false,
       valueType: 'dateTime',
       hideInSearch: true,
-      sorter: true,
     },
     {
       title: t('common.createdAt'),
@@ -1492,7 +1495,6 @@ const ApplicationConnectionsListPage: React.FC = () => {
       resizable: false,
       valueType: 'dateTime',
       hideInSearch: true,
-      sorter: true,
     },
     {
       title: t('common.actions'),
@@ -1633,7 +1635,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
         <UniTable<ApplicationConnection>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('system.applicationConnections')}
-          columnPersistenceId="pages.system.application-connections.list-v3"
+          columnPersistenceId="pages.system.application-connections.list-v4"
           actionRef={actionRef}
           columns={columns}
           request={async (params, _sort, _filter, searchFormValues) => {
@@ -1641,11 +1643,13 @@ const ApplicationConnectionsListPage: React.FC = () => {
               page: params.current || 1,
               page_size: params.pageSize || 20,
             };
-            const kw = mergeListKeyword(searchFormValues, 'search');
-            if (kw) apiParams.search = kw;
-            if (searchFormValues?.type) apiParams.type = searchFormValues.type;
-            if (searchFormValues?.is_active !== undefined && searchFormValues.is_active !== '' && searchFormValues.is_active !== null) {
-              apiParams.is_active = searchFormValues.is_active;
+            const search = pickListSearchKeywordOrFields(searchFormValues, 'search');
+            if (search) apiParams.search = search;
+            const type = pickSearchString(searchFormValues, 'type');
+            if (type) apiParams.type = type;
+            const isActive = pickSearchTriStateBoolean(searchFormValues, 'is_active');
+            if (isActive !== undefined) {
+              apiParams.is_active = isActive;
             }
             try {
               const result = await getApplicationConnectionList(apiParams);

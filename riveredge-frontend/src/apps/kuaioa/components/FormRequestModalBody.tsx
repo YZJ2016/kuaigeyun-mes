@@ -79,10 +79,12 @@ const FormRequestModalBody: React.FC<Props> = ({
         name="department_name"
         label={t('app.kuaioa.common.department')}
         colProps={{ span: 12 }}
+        hostResource="kuaioa:form-request"
       />
       {schema.length > 0 ? (
         <OaDynamicFormFields
           schema={schema}
+          hostResource="kuaioa:form-request"
           disabled={templateLocked && editing?.status !== 'draft' && editing?.status !== 'rejected'}
         />
       ) : (fixedTemplateId ?? templateId) ? (

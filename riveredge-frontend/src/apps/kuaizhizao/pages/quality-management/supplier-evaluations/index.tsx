@@ -128,6 +128,12 @@ import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { SupplierSelectDropdown } from '../../../../master-data/components/SupplierSelectDropdown';
 
 import { EQUIPMENT_DATE_FIELD_PROPS } from '../../../utils/equipmentFormFieldProps';
+import {
+  resolveSupplierEvalEnvListParams,
+  resolveSupplierEvalPlanListParams,
+  resolveSupplierEvaluationListParams,
+  resolveSupplierEvalTemplateListParams,
+} from '../../../utils/supplierEvalListCore';
 
 import {
 
@@ -2162,31 +2168,11 @@ const SupplierEvaluationsPage: React.FC = () => {
 
                 }}
 
-                request={async (params, _sort, _filter, search) => {
+                request={async (params, _sort, _filter, searchFormValues) => {
 
-                  const s = search || {};
-
-                  const res = await supplierEvalPlanApi.list({
-
-                    skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
-
-                    limit: params.pageSize ?? 20,
-
-                    keyword: typeof s.keyword === 'string' ? s.keyword : undefined,
-
-                    status: (s.status as string) || undefined,
-
-                    period_type: (s.period_type as string) || undefined,
-
-                    period_year:
-
-                      s.period_year != null && s.period_year !== ''
-
-                        ? Number(s.period_year)
-
-                        : undefined,
-
-                  });
+                  const res = await supplierEvalPlanApi.list(
+                    resolveSupplierEvalPlanListParams(searchFormValues, params),
+                  );
 
                   return { data: res.data || [], success: true, total: res.total || 0 };
 
@@ -2544,31 +2530,11 @@ const SupplierEvaluationsPage: React.FC = () => {
 
                 }}
 
-                request={async (params, _sort, _filter, search) => {
+                request={async (params, _sort, _filter, searchFormValues) => {
 
-                  const s = search || {};
-
-                  const res = await supplierEvaluationApi.list({
-
-                    skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
-
-                    limit: params.pageSize ?? 20,
-
-                    keyword: typeof s.keyword === 'string' ? s.keyword : undefined,
-
-                    status: (s.status as string) || undefined,
-
-                    period_type: (s.period_type as string) || undefined,
-
-                    period_year:
-
-                      s.period_year != null && s.period_year !== ''
-
-                        ? Number(s.period_year)
-
-                        : undefined,
-
-                  });
+                  const res = await supplierEvaluationApi.list(
+                    resolveSupplierEvaluationListParams(searchFormValues, params),
+                  );
 
                   return { data: res.data || [], success: true, total: res.total || 0 };
 
@@ -2638,21 +2604,11 @@ const SupplierEvaluationsPage: React.FC = () => {
 
                 }}
 
-                request={async (params, _sort, _filter, search) => {
+                request={async (params, _sort, _filter, searchFormValues) => {
 
-                  const s = search || {};
-
-                  const res = await supplierEvalEnvDocumentApi.list({
-
-                    skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
-
-                    limit: params.pageSize ?? 20,
-
-                    keyword: typeof s.keyword === 'string' ? s.keyword : undefined,
-
-                    doc_type: (s.doc_type as string) || undefined,
-
-                  });
+                  const res = await supplierEvalEnvDocumentApi.list(
+                    resolveSupplierEvalEnvListParams(searchFormValues, params),
+                  );
 
                   return { data: res.data || [], success: true, total: res.total || 0 };
 
@@ -2722,33 +2678,11 @@ const SupplierEvaluationsPage: React.FC = () => {
 
                 }}
 
-                request={async (params, _sort, _filter, search) => {
+                request={async (params, _sort, _filter, searchFormValues) => {
 
-                  const s = search || {};
-
-                  const res = await supplierEvalTemplateApi.list({
-
-                    skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
-
-                    limit: params.pageSize ?? 20,
-
-                    keyword: typeof s.keyword === 'string' ? s.keyword : undefined,
-
-                    is_active:
-
-                      s.is_active === true || s.is_active === 'true'
-
-                        ? true
-
-                        : s.is_active === false || s.is_active === 'false'
-
-                          ? false
-
-                          : undefined,
-
-                    period_type: (s.period_type as string) || undefined,
-
-                  });
+                  const res = await supplierEvalTemplateApi.list(
+                    resolveSupplierEvalTemplateListParams(searchFormValues, params),
+                  );
 
                   return { data: res.data || [], success: true, total: res.total || 0 };
 

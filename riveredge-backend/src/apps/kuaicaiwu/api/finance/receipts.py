@@ -309,8 +309,13 @@ async def confirm_receipt(
 ):
     """确认收款单（过账：核销往来 + 记入资金流水）。"""
     receipt = await _get_or_404(tenant_id, id)
-    if receipt.status != "Draft":
-        raise _http_exception_with_trace(400, "只有草稿状态的收款单可以确认", "/receipts/{id}/confirm", tenant_id)
+    if receipt.status not in ("Draft", "Confirmed"):
+        raise _http_exception_with_trace(
+            400,
+            f"只有草稿状态的收款单可以确认，当前状态: {receipt.status}",
+            "/receipts/{id}/confirm",
+            tenant_id,
+        )
     from apps.kuaicaiwu.services.finance_voucher_posting_service import FinanceVoucherPostingService
     from infra.exceptions.exceptions import NotFoundError, ValidationError
 

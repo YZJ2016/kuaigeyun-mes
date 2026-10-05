@@ -18,6 +18,8 @@ import { ShiftFormModal } from '../../../components/ShiftFormModal';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import {
+  formatShiftBreakRange,
+  formatShiftTimeRange,
   getPerformanceInactiveActiveValueEnum,
   renderActiveTag,
   renderYesNoTag,
@@ -56,7 +58,12 @@ const ShiftsPage: React.FC = () => {
       {
         title: t('app.kuaizhizao.performance.shifts.columns.timeRange'),
         dataIndex: 'startTime',
-        render: (_, r) => `${r?.startTime?.slice(0, 5) ?? '-'} ~ ${r?.endTime?.slice(0, 5) ?? '-'}`,
+        render: (_, r) => formatShiftTimeRange(r),
+      },
+      {
+        title: t('app.kuaizhizao.performance.shifts.columns.breakRange'),
+        dataIndex: 'breakStart',
+        render: (_, r) => formatShiftBreakRange(r) || '-',
       },
       {
         title: t('app.kuaizhizao.performance.shifts.columns.crossesMidnight'),
@@ -146,13 +153,28 @@ const ShiftsPage: React.FC = () => {
       },
       {
         title: t('app.kuaizhizao.performance.shifts.columns.timeRange'),
+        // key 用 timeRange 进 rank；dataIndex 必须指向真实字段，避免持久化/无 dataIndex 时单元格空白
         key: 'timeRange',
+        dataIndex: 'startTime',
         width: 140,
         minWidth: 140,
         uniTableKeepWidth: true,
         resizable: false,
         hideInSearch: true,
-        render: (_, r) => `${r.startTime?.slice(0, 5) ?? '-'} ~ ${r.endTime?.slice(0, 5) ?? '-'}`,
+        ellipsis: false,
+        render: (_, r) => formatShiftTimeRange(r),
+      },
+      {
+        title: t('app.kuaizhizao.performance.shifts.columns.breakRange'),
+        key: 'breakRange',
+        dataIndex: 'breakStart',
+        width: 140,
+        minWidth: 140,
+        uniTableKeepWidth: true,
+        resizable: false,
+        hideInSearch: true,
+        ellipsis: false,
+        render: (_, r) => formatShiftBreakRange(r) || '-',
       },
       {
         title: t('app.kuaizhizao.performance.shifts.columns.standardHours'),
@@ -244,7 +266,7 @@ const ShiftsPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable<Shift>
           headerTitle={t('app.kuaizhizao.performance.shifts.pageTitle')}
-          columnPersistenceId="apps.kuaizhizao.pages.performance.shifts.v4"
+          columnPersistenceId="apps.kuaizhizao.pages.performance.shifts.v6"
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.shifts')}
           actionRef={actionRef}

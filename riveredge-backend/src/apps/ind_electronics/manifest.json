@@ -1,8 +1,8 @@
 {
   "code": "ind-electronics",
   "name": "电子制造",
-  "version": "0.8.5",
-  "description": "电子制造小场景插件（ESD、OEM 签样、Gerber/钢网/SMT 预置）。组织流程 profile 已迁至 funide-oa 定制应用。",
+  "version": "0.8.7",
+  "description": "电子制造小场景插件（ESD、OEM 签样、返工策划/返工工单、Gerber/钢网/SMT 预置）。上述生产入口挂在行业包下；组织流程 profile 可迁定制应用。",
   "icon": "cpu",
   "author": "StarTech",
   "market_category": "industry",
@@ -12,6 +12,30 @@
   "sort_order": 310,
   "industry_pack_menu": {
     "children": [
+      {
+        "title": "app.ind-electronics.menu.reworkPositionPlan",
+        "path": "/apps/kuaizhizao/production-execution/rework-position-plan-templates",
+        "permission": "kuaizhizao:rework-position-plan-template:read",
+        "sort_order": 40
+      },
+      {
+        "title": "app.ind-electronics.menu.reworkOrders",
+        "path": "/apps/kuaizhizao/production-execution/rework-orders",
+        "permission": "kuaizhizao:rework-order:read",
+        "sort_order": 50
+      },
+      {
+        "title": "app.ind-electronics.menu.packingAsn",
+        "path": "/apps/ind-electronics/packing-asn",
+        "permission": "kuaizhizao:production-execution-packing-binding:read",
+        "sort_order": 55
+      },
+      {
+        "title": "app.ind-electronics.menu.labelOem",
+        "path": "/apps/ind-electronics/label-oem",
+        "permission": "ind-electronics:label-oem:read",
+        "sort_order": 60
+      },
       {
         "title": "app.ind-electronics.menu.esdDashboard",
         "path": "/apps/ind-electronics/esd/dashboard",
@@ -65,7 +89,8 @@
       "replacement_app": "ind-electronics",
       "replacement_path": "/apps/ind-electronics/label-oem",
       "menu_title": "app.ind-electronics.menu.labelOem",
-      "menu_sort_order": 60
+      "menu_sort_order": 60,
+      "pack_menu": true
     },
     {
       "id": "electronics.esd",

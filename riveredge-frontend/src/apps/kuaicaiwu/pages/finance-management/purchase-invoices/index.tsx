@@ -2,7 +2,7 @@
  * 采购发票列表页
  */
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
-import { rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind, rowActionFillInvoiceNumber } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Col, Modal, Typography, Alert, Spin, Table, Empty, Form } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
@@ -34,7 +34,7 @@ import {
 } from '../../../../../components/uni-pull-query';
 import { getChineseInvoiceLifecycle } from '../../../utils/financeLifecycle';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
-import { canDeletePurchaseInvoice } from '../../../utils/purchaseInvoiceUi';
+import { canDeletePurchaseInvoice, canFillPurchaseInvoiceNumber, faceInvoiceNumberForEdit } from '../../../utils/purchaseInvoiceUi';
 import {
   ModalForm,
   ProForm,
@@ -58,7 +58,7 @@ import {
 import dayjs from 'dayjs';
 import { buildKuaicaiwuPullCreateMenuItems, getKuaicaiwuDocumentAction } from '../../../constants/documentActionRegistry';
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
-import { normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
+import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
 import { getStatusDisplay } from '../../../../kuaizhizao/constants/documentStatus';
 import {
   assertBankAccountForPaymentMethod,
@@ -114,6 +114,9 @@ const PurchaseInvoiceList: React.FC = () => {
   const actionRef = useRef<ActionType>();
   const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
   const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [editVisible, setEditVisible] = useState(false);
+  const [editingRecord, setEditingRecord] = useState<PurchaseInvoice | null>(null);
+  const [editSubmitting, setEditSubmitting] = useState(false);
   const [pullSubmitting, setPullSubmitting] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [tableRows, setTableRows] = useState<PurchaseInvoice[]>([]);
@@ -171,6 +174,32 @@ const PurchaseInvoiceList: React.FC = () => {
       actionRef.current?.reload();
     } catch (e: unknown) {
       messageApi.error(resolveApiErrorMessage(e, t('common.operationFailed')));
+    }
+  };
+
+  const openEditModal = (record: PurchaseInvoice) => {
+    setEditingRecord(record);
+    setEditVisible(true);
+  };
+
+  const handleEditSubmit = async (values: { invoice_number?: string; attachments?: unknown }) => {
+    if (!editingRecord?.id) return false;
+    setEditSubmitting(true);
+    try {
+      await purchaseInvoiceService.update(Number(editingRecord.id), {
+        invoice_number: String(values.invoice_number ?? '').trim(),
+        attachments: normalizeDocumentAttachments(values.attachments),
+      });
+      messageApi.success(t(`${P}.editNumberSuccess`));
+      setEditVisible(false);
+      setEditingRecord(null);
+      actionRef.current?.reload();
+      return true;
+    } catch (e: unknown) {
+      messageApi.error(resolveApiErrorMessage(e, t('common.saveFailed')));
+      return false;
+    } finally {
+      setEditSubmitting(false);
     }
   };
 
@@ -662,7 +691,17 @@ const PurchaseInvoiceList: React.FC = () => {
         fixed: 'right',
         hideInSearch: true,
         render: (_, record) => {
-          const acts: React.ReactNode[] = [
+          const acts: React.ReactNode[] = [];
+          if (canFillPurchaseInvoiceNumber(record) && purchaseInvoicePerms.canUpdate) {
+            acts.push(
+              <Button
+                key="edit"
+                {...rowActionFillInvoiceNumber('update')}
+                onClick={() => openEditModal(record)}
+              />,
+            );
+          }
+          acts.push(
             <Button
               key="det"
               {...rowActionKind('read')}
@@ -685,7 +724,7 @@ const PurchaseInvoiceList: React.FC = () => {
               size="small"
               onSuccess={() => actionRef.current?.reload()}
             />,
-          ];
+          );
           if (canDeletePurchaseInvoice(record) && purchaseInvoicePerms.canDelete) {
             acts.push(
               <ActionConfirmPopconfirm
@@ -704,7 +743,7 @@ const PurchaseInvoiceList: React.FC = () => {
         },
       },
     ],
-    [t, navigate, supplierOptions, reviewStatusEnum, purchaseInvoicePerms.canDelete],
+    [t, navigate, supplierOptions, reviewStatusEnum, purchaseInvoicePerms.canDelete, purchaseInvoicePerms.canUpdate],
   );
 
 
@@ -1280,6 +1319,36 @@ const PurchaseInvoiceList: React.FC = () => {
           </div>
         ) : null}
       </Modal>
+
+      <ModalForm
+        title={
+          editingRecord?.invoice_code
+            ? t(`${P}.editNumberTitleWithCode`, { code: editingRecord.invoice_code })
+            : t(`${P}.editNumberTitle`)
+        }
+        open={editVisible}
+        onOpenChange={(open) => {
+          if (editSubmitting) return;
+          setEditVisible(open);
+          if (!open) setEditingRecord(null);
+        }}
+        onFinish={handleEditSubmit}
+        width={480}
+        modalProps={{ destroyOnHidden: true }}
+        submitter={{ submitButtonProps: { loading: editSubmitting } }}
+        initialValues={{
+          invoice_number: faceInvoiceNumberForEdit(editingRecord?.invoice_number),
+          attachments: mapAttachmentsToUploadList((editingRecord as { attachments?: unknown })?.attachments),
+        }}
+      >
+        <ProFormText
+          name="invoice_number"
+          label={t(`${P}.col.invoiceNumber`)}
+          rules={[{ required: true, message: t(`${P}.form.invoiceNumberRequired`) }]}
+          placeholder={t(`${P}.form.invoiceNumberPlaceholder`)}
+        />
+        <DocumentAttachmentsField category="purchase_invoice_attachments" />
+      </ModalForm>
 
       <ModalForm
         title={t(`${P}.createTitle`)}

@@ -58,3 +58,29 @@ async def test_exclusive_create_never_deletes_an_existing_collision(monkeypatch,
     with pytest.raises(FileExistsError):
         await service.DataBackupService.upload_backup_file(1, upload("new"), "same")
     assert existing.read_bytes() == b"keep"
+
+
+def test_ensure_newline_does_not_raise_on_write_only_file(tmp_path):
+    from core.services.system.data_backup_jobs import _ensure_binary_file_ends_with_newline
+
+    dump = tmp_path / "db_dump.sql"
+    with open(dump, "wb") as f:
+        f.write(b"row1")
+        _ensure_binary_file_ends_with_newline(f)
+        f.write(b"row2")
+        _ensure_binary_file_ends_with_newline(f)
+    assert dump.read_bytes().endswith(b"\n")
+
+
+def test_infer_source_tenant_skips_referenced_core_users():
+    from core.services.system.data_backup_jobs import infer_source_tenant_id_from_csv_map
+
+    assert (
+        infer_source_tenant_id_from_csv_map(
+            {
+                "core_users": "id,tenant_id\n1,2\n2,24\n",
+                "md_materials": "id,tenant_id\n10,24\n",
+            }
+        )
+        == 24
+    )

@@ -628,12 +628,23 @@ async def update_sales_invoice(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    """更新销售发票"""
+    """更新销售发票；已审核仅允许补全发票号码与附件。"""
     invoice = await _get_or_404(tenant_id, id)
-    if invoice.status in ("已审核", "已作废", "已红冲"):
+    provided = data.model_dump(exclude_unset=True)
+    status_text = str(invoice.status or "").strip()
+    if status_text in ("已作废", "已红冲"):
         raise _http_exception_with_trace(
-            400, "已审核、已作废或已红冲的发票不能修改", "/sales-invoices/{id}", tenant_id
+            400, "已作废或已红冲的发票不能修改", "/sales-invoices/{id}", tenant_id
         )
+    if status_text == "已审核":
+        extra = set(provided) - {"invoice_number", "attachments"}
+        if extra:
+            raise _http_exception_with_trace(
+                400,
+                "已审核发票仅可补全发票号码与附件",
+                "/sales-invoices/{id}",
+                tenant_id,
+            )
     from apps.kuaicaiwu.services.finance_tax import resolve_invoice_amounts_for_create
 
     update_data: dict = {}

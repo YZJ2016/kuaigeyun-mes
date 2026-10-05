@@ -61,10 +61,10 @@ export async function getRoleOnboardingGuide(
   roleCode?: string
 ): Promise<any> {
   if (roleId) {
-    const response = await apiRequest(`/api/v1/core/onboarding/roles/${roleId}/guide`, { method: 'GET' });
+    const response = await apiRequest(`/core/onboarding/roles/${roleId}/guide`, { method: 'GET' });
     return response.data || response;
   } else if (roleCode) {
-    const response = await apiRequest(`/api/v1/core/onboarding/roles/by-code/${roleCode}/guide`, { method: 'GET' });
+    const response = await apiRequest(`/core/onboarding/roles/by-code/${roleCode}/guide`, { method: 'GET' });
     return response.data || response;
   } else {
     throw new Error('必须提供roleId或roleCode');
@@ -77,7 +77,7 @@ export async function getRoleOnboardingGuide(
  * @returns 所有角色的上线准备向导信息
  */
 export async function getAllOnboardingGuides(): Promise<any> {
-  const response = await apiRequest('/api/v1/core/onboarding/guides', { method: 'GET' });
+  const response = await apiRequest('/core/onboarding/guides', { method: 'GET' });
   return response.data || response;
 }
 
@@ -93,10 +93,10 @@ export async function getRoleScenarioGuide(
   roleCode?: string
 ): Promise<any> {
   if (roleId) {
-    const response = await apiRequest(`/api/v1/core/onboarding/roles/${roleId}/scenarios`, { method: 'GET' });
+    const response = await apiRequest(`/core/onboarding/roles/${roleId}/scenarios`, { method: 'GET' });
     return response.data || response;
   } else if (roleCode) {
-    const response = await apiRequest(`/api/v1/core/onboarding/roles/by-code/${roleCode}/scenarios`, { method: 'GET' });
+    const response = await apiRequest(`/core/onboarding/roles/by-code/${roleCode}/scenarios`, { method: 'GET' });
     return response.data || response;
   } else {
     throw new Error('必须提供roleId或roleCode');
@@ -109,7 +109,7 @@ export async function getRoleScenarioGuide(
  * @returns 快速入门教程信息
  */
 export async function getQuickStartTutorial(): Promise<any> {
-  const response = await apiRequest('/api/v1/core/onboarding/quick-start', { method: 'GET' });
+  const response = await apiRequest('/core/onboarding/quick-start', { method: 'GET' });
   return response.data || response;
 }
 

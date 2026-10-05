@@ -28,6 +28,8 @@ export interface WorkstationFormModalProps {
   onSuccess: (workstation: Workstation) => void;
   /** 嵌套于其他 Modal 时使用，确保叠层正确 */
   zIndex?: number;
+  /** 从上级表单快速新增时预填所属产线 */
+  defaultProductionLineId?: number | null;
 }
 
 export const WorkstationFormModal: React.FC<WorkstationFormModalProps> = ({
@@ -36,6 +38,7 @@ export const WorkstationFormModal: React.FC<WorkstationFormModalProps> = ({
   editUuid,
   onSuccess,
   zIndex,
+  defaultProductionLineId,
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -77,10 +80,16 @@ export const WorkstationFormModal: React.FC<WorkstationFormModalProps> = ({
     void reloadProductionLines();
   }, [open, reloadProductionLines]);
 
+  const createDefaults = () => ({
+    isActive: true,
+    maxParallel: 1,
+    ...(defaultProductionLineId ? { productionLineId: defaultProductionLineId } : {}),
+  });
+
   useEffect(() => {
     if (!open) return;
     formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({ isActive: true, maxParallel: 1 });
+    formRef.current?.setFieldsValue(createDefaults());
     resetFieldValues();
 
     if (!editUuid) {
@@ -99,16 +108,16 @@ export const WorkstationFormModal: React.FC<WorkstationFormModalProps> = ({
           testGenerateCode({ rule_code: ruleCode })
             .then((res) => {
               setPreviewCode(res.code);
-              formRef.current?.setFieldsValue({ code: res.code, isActive: true });
+              formRef.current?.setFieldsValue({ code: res.code, ...createDefaults() });
             })
             .catch(() => {
               setPreviewCode(null);
-              formRef.current?.setFieldsValue({ isActive: true });
+              formRef.current?.setFieldsValue(createDefaults());
             });
         } else {
           setPreviewCode(null);
           setEffectiveRuleCode(null);
-          formRef.current?.setFieldsValue({ isActive: true });
+          formRef.current?.setFieldsValue(createDefaults());
         }
       })();
       return;
@@ -132,7 +141,7 @@ export const WorkstationFormModal: React.FC<WorkstationFormModalProps> = ({
       .catch((err: any) => {
         messageApi.error(err?.message || t('app.master-data.workstations.getDetailFailed'));
       });
-  }, [open, editUuid]);
+  }, [open, editUuid, defaultProductionLineId]);
 
   const handleSubmit = async (values: any) => {
     try {

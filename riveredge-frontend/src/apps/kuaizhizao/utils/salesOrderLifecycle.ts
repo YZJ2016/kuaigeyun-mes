@@ -16,6 +16,13 @@ import {
   resolveListLifecycleStageFromSearch,
   toListLifecycleStageApiParams,
 } from '../../../utils/listLifecycleStage';
+import {
+  extractProTableSort,
+  pickListSearchKeyword,
+  pickSearchRaw,
+  pickSearchString,
+} from '../../../utils/tableQueryKey';
+import { parseSalesReportDateRange } from '../services/reports';
 import { mapAuditLifecycleStageToApiParams } from './auditListFilter';
 
 const MAIN_STAGE_KEYS = [
@@ -401,4 +408,61 @@ export function isSalesOrderLineDeliveryOverdue(
   if (isSalesOrderDeliveryHighlightExcluded(pseudo, auditRequired)) return false;
 
   return true;
+}
+
+export function resolveSalesOrderListApiParams(
+  params: Record<string, unknown>,
+  sort?: Record<string, unknown>,
+  searchFormValues?: Record<string, unknown> | null,
+  options?: { salesmanId?: number | null },
+): Record<string, unknown> {
+  const { sortBy, sortOrder } = extractProTableSort(sort ?? {});
+  const orderBy =
+    sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
+  const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
+
+  const apiParams: Record<string, unknown> = {
+    skip: ((Number(params.current) || 1) - 1) * (Number(params.pageSize) || 20),
+    limit: Number(params.pageSize) || 20,
+    order_by: orderBy,
+    include_items: true,
+  };
+
+  Object.assign(apiParams, resolveSalesOrderListLifecycleParams(searchFormValues, params));
+
+  if (fuzzyKeyword) {
+    apiParams.keyword = fuzzyKeyword;
+  } else {
+    const orderCode = pickSearchString(searchFormValues, 'order_code');
+    if (orderCode) apiParams.order_code = orderCode;
+  }
+
+  const customerIdRaw = pickSearchString(searchFormValues, 'customer_id');
+  if (customerIdRaw != null && Number.isFinite(Number(customerIdRaw))) {
+    apiParams.customer_id = Number(customerIdRaw);
+  }
+
+  if (options?.salesmanId != null) {
+    apiParams.salesman_id = options.salesmanId;
+  }
+
+  const contractCode = pickSearchString(searchFormValues, 'contract_code');
+  if (contractCode) apiParams.contract_code = contractCode;
+
+  const orderDate = parseSalesReportDateRange(searchFormValues ?? {}, ['order_date_range']);
+  if (orderDate.date_start) {
+    apiParams.start_date = orderDate.date_start;
+    apiParams.end_date = orderDate.date_end ?? orderDate.date_start;
+  }
+
+  const columnFilters = pickSearchRaw(searchFormValues, 'column_filters');
+  if (typeof columnFilters === 'string' && columnFilters.trim()) {
+    apiParams.column_filters = columnFilters.trim();
+  }
+
+  if (params.list_scope != null && params.list_scope !== '') {
+    apiParams.list_scope = params.list_scope;
+  }
+
+  return apiParams;
 }

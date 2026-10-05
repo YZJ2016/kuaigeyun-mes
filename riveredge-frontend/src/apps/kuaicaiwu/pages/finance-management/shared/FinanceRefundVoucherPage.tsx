@@ -815,10 +815,10 @@ const FinanceRefundVoucherPage: React.FC<Props> = ({ mode, columnPersistenceId }
             />
           ) : null,
         ]}
-        request={async (params, sort) => {
+        request={async (params, sort, _filter, searchFormValues) => {
           const sourceId = filterSourceIdRef.current;
           const listParams = {
-            ...cfg.resolveListParams(params, sort),
+            ...cfg.resolveListParams(searchFormValues, sort),
             ...(sourceId != null ? { source_id: sourceId } : {}),
           };
           lastListParamsRef.current = listParams;

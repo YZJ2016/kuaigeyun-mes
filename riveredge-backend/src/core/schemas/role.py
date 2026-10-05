@@ -29,7 +29,7 @@ class RoleBase(BaseModel):
     )
     functional_domain: Optional[str] = Field(
         None,
-        description="内部/触屏角色职能域：sales/purchase/production/warehouse/quality/finance/general",
+        description="内部/触屏角色职能域：sales/purchase/production/equipment/warehouse/quality/rd/finance/general",
     )
     is_active: bool = Field(default=True, description="是否启用")
     home_path: Optional[str] = Field(

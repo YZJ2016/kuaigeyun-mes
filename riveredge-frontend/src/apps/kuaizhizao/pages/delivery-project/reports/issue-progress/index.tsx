@@ -13,6 +13,7 @@ import {
   type DeliveryIssueProgressRow,
 } from '../../../../services/delivery-project';
 import { formatBusinessDateOnly } from '../../../../../../utils/format';
+import { pickListSearchKeyword, pickSearchString } from '../../../../../../utils/tableQueryKey';
 
 const IssueProgressReportPage: React.FC = () => {
   const { t } = useTranslation();
@@ -95,8 +96,8 @@ const IssueProgressReportPage: React.FC = () => {
       const res = await deliveryProjectApi.issueProgress({
         skip,
         limit: pageSize,
-        keyword: (searchFormValues?.keyword ?? params.keyword) as string | undefined,
-        status: (searchFormValues?.status ?? params.status) as string | undefined,
+        keyword: pickListSearchKeyword(searchFormValues),
+        status: pickSearchString(searchFormValues, 'status'),
       });
       return { data: res.items, total: res.total, success: true };
     },
@@ -105,7 +106,7 @@ const IssueProgressReportPage: React.FC = () => {
 
   return (
     <KuaizhizaoReport<DeliveryIssueProgressRow>
-      columnPersistenceId="apps.kuaizhizao.pages.delivery-project.reports.issue-progress.index-v2"
+      columnPersistenceId="apps.kuaizhizao.pages.delivery-project.reports.issue-progress.index-v3"
       title={t('app.kuaizhizao.menu.delivery-project.reports.issue-progress')}
       reportType="delivery-issue-progress"
       domain="delivery"

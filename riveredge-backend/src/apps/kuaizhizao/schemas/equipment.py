@@ -57,6 +57,12 @@ class EquipmentBase(BaseModel):
     work_center_id: Optional[int] = Field(None, description="关联工作中心ID（可选）")
     work_center_code: Optional[str] = Field(None, max_length=50, description="工作中心编码")
     work_center_name: Optional[str] = Field(None, max_length=200, description="工作中心名称")
+    capable_operation_ids: Optional[List[int]] = Field(
+        None, description="可加工工序ID列表（主数据工序）"
+    )
+    capable_operations: Optional[List[Dict[str, Any]]] = Field(
+        None, description="可加工工序快照 [{id, code, name}]"
+    )
     responsible_person_id: Optional[int] = Field(None, description="设备负责人ID（可选）")
     responsible_person_name: Optional[str] = Field(None, max_length=100, description="设备负责人姓名")
     spot_check_person_id: Optional[int] = Field(None, description="点检人ID（可选）")
@@ -142,6 +148,12 @@ class EquipmentUpdate(BaseModel):
     work_center_id: Optional[int] = Field(None, description="关联工作中心ID（可选）")
     work_center_code: Optional[str] = Field(None, max_length=50, description="工作中心编码")
     work_center_name: Optional[str] = Field(None, max_length=200, description="工作中心名称")
+    capable_operation_ids: Optional[List[int]] = Field(
+        None, description="可加工工序ID列表（主数据工序）"
+    )
+    capable_operations: Optional[List[Dict[str, Any]]] = Field(
+        None, description="可加工工序快照 [{id, code, name}]"
+    )
     responsible_person_id: Optional[int] = Field(None, description="设备负责人ID（可选）")
     responsible_person_name: Optional[str] = Field(None, max_length=100, description="设备负责人姓名")
     spot_check_person_id: Optional[int] = Field(None, description="点检人ID（可选）")
@@ -387,4 +399,39 @@ class MeasuringInstrumentCalibrationDetailReportResponse(BaseModel):
     total: int
     skip: int
     limit: int
+
+
+class EquipmentDispatchSnapshotRequest(BaseModel):
+    """工序派工选设备卡片快照（批量）。"""
+
+    equipment_ids: List[int] = Field(..., min_length=1, max_length=300, description="设备 ID 列表")
+    date_from: Optional[str] = Field(None, description="已废弃，保留兼容")
+    date_to: Optional[str] = Field(None, description="已废弃，保留兼容")
+
+
+class EquipmentDispatchSnapshotItem(BaseModel):
+    equipment_id: int
+    equipment_uuid: str
+    code: str
+    name: str
+    status: str
+    is_active: bool
+    monitor_status: Optional[str] = None
+    monitor_is_online: Optional[bool] = None
+    assigned_operation_count: int = 0
+    assigned_work_order_codes: List[str] = Field(default_factory=list)
+    has_in_process_work_order: bool = False
+    open_fault_count: int = 0
+    open_maintenance_plan_count: int = 0
+    spot_check_abnormality_count: int = 0
+    latest_spot_check_date: Optional[str] = None
+    latest_spot_check_document_no: Optional[str] = None
+    latest_spot_check_has_abnormality: Optional[bool] = None
+    latest_repair_date: Optional[str] = None
+    latest_repair_no: Optional[str] = None
+    latest_repair_status: Optional[str] = None
+
+
+class EquipmentDispatchSnapshotResponse(BaseModel):
+    items: List[EquipmentDispatchSnapshotItem]
 

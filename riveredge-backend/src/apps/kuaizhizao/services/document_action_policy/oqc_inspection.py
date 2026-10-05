@@ -7,7 +7,9 @@ from typing import Any, Optional
 from infra.exceptions.exceptions import BusinessLogicError
 
 from apps.kuaizhizao.services.document_action_policy.quality_inspection_record import (
+    can_apply_quality_inspection_plan,
     can_conduct_quality_inspection,
+    can_update_quality_inspection_attachments,
 )
 from apps.kuaizhizao.services.document_action_policy.types import (
     ActionCapability,
@@ -75,12 +77,21 @@ def derive_oqc_inspection_capabilities(inspection: Any) -> OQCInspectionCapabili
 
     print_cap = _cap(True)
 
+    apply_plan_allowed = can_apply_quality_inspection_plan(status, inspection_result)
+    apply_plan_cap = _cap(
+        apply_plan_allowed,
+        "oqc_inspection.apply_plan.not_pending" if not apply_plan_allowed else None,
+    )
+    update_attachments_cap = _cap(can_update_quality_inspection_attachments())
+
     return OQCInspectionCapabilities(
         conduct=conduct_cap,
         approve=approve_cap,
         reject=reject_cap,
         revoke_approval=revoke_cap,
         revoke_conduct=revoke_conduct_cap,
+        update_attachments=update_attachments_cap,
+        apply_plan=apply_plan_cap,
         delete=delete_cap,
         print=print_cap,
     )
@@ -95,6 +106,8 @@ def assert_oqc_inspection_capability(inspection: Any, action: str) -> None:
         "revoke_approval": caps.revoke_approval,
         "revoke_conduct": caps.revoke_conduct,
         "delete": caps.delete,
+        "update_attachments": caps.update_attachments,
+        "apply_plan": caps.apply_plan,
         "print": caps.print,
     }
     cap = cap_map.get(action)

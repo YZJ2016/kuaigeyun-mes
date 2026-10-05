@@ -9,11 +9,14 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from apps.common.audit_actor import apply_create_audit, apply_update_audit
 from apps.kuaizhizao.utils.work_calendar import load_holiday_dates
+from apps.master_data.config.performance_scope_spec import scope_applies_to_row
+from apps.master_data.models.shift_scheduling import RosterTimeAdjustment
 from apps.master_data.models.work_calendar import (
     OvertimePlan,
     StationUnavailableWindow,
     WorkCalendarConfig,
 )
+from apps.master_data.services.performance_scope_service import PerformanceScopeService
 from apps.master_data.schemas.work_calendar_schemas import (
     EffectiveCalendarResponse,
     OvertimePlanCreate,
@@ -33,11 +36,84 @@ DEFAULT_END = time(17, 0)
 
 
 def _config_response(row: WorkCalendarConfig) -> WorkCalendarConfigResponse:
-    return WorkCalendarConfigResponse.model_validate(row)
+    payload = WorkCalendarConfigResponse.model_validate(row)
+    # 可排窗已统一跟班次；对外始终返回 shift，避免前端再走固定时段
+    return payload.model_copy(
+        update={"window_source": "shift", "break_start": None, "break_end": None}
+    )
 
 
 def _overtime_response(row: OvertimePlan) -> OvertimePlanResponse:
     return OvertimePlanResponse.model_validate(row)
+
+
+def _strip_tz_clock(t: time) -> time:
+    if getattr(t, "tzinfo", None) is not None:
+        return t.replace(tzinfo=None, microsecond=0)
+    return t.replace(microsecond=0) if getattr(t, "microsecond", 0) else t
+
+
+async def _merge_scoped_overtime_windows(
+    tenant_id: int,
+    from_date: date,
+    to_date: date,
+    *,
+    employee_id: Optional[int] = None,
+) -> Dict[date, List[Tuple[time, time]]]:
+    viewer_department_id: Optional[int] = None
+    if employee_id is not None:
+        viewer_department_id = await PerformanceScopeService.resolve_viewer_department_id(
+            tenant_id, employee_id
+        )
+
+    overtime: Dict[date, List[Tuple[time, time]]] = defaultdict(list)
+
+    ot_rows = await OvertimePlan.filter(
+        tenant_id=tenant_id,
+        deleted_at__isnull=True,
+        is_active=True,
+        overtime_date__gte=from_date,
+        overtime_date__lte=to_date,
+    ).all()
+    for r in ot_rows:
+        if not scope_applies_to_row(
+            r.scope_type or "plant",
+            row_department_id=r.department_id,
+            row_employee_id=r.employee_id,
+            viewer_employee_id=employee_id,
+            viewer_department_id=viewer_department_id,
+        ):
+            continue
+        s = _strip_tz_clock(r.start_time)
+        e = _strip_tz_clock(r.end_time)
+        if e > s:
+            overtime[r.overtime_date].append((s, e))
+
+    temp_rows = await RosterTimeAdjustment.filter(
+        tenant_id=tenant_id,
+        deleted_at__isnull=True,
+        is_active=True,
+        kind="temp_overtime",
+        work_date__gte=from_date,
+        work_date__lte=to_date,
+    ).all()
+    for r in temp_rows:
+        if not scope_applies_to_row(
+            r.scope_type or "employee",
+            row_department_id=r.department_id,
+            row_employee_id=r.employee_id,
+            viewer_employee_id=employee_id,
+            viewer_department_id=viewer_department_id,
+        ):
+            continue
+        s = _strip_tz_clock(r.start_time)
+        e = _strip_tz_clock(r.end_time)
+        if e > s:
+            overtime[r.work_date].append((s, e))
+
+    for d in overtime:
+        overtime[d].sort(key=lambda x: x[0])
+    return dict(overtime)
 
 
 class WorkCalendarService:
@@ -58,7 +134,7 @@ class WorkCalendarService:
             "work_day_end": DEFAULT_END,
             "break_start": None,
             "break_end": None,
-            "window_source": "fixed",
+            "window_source": "shift",
         }
         apply_create_audit(payload, operator)
         row = await WorkCalendarConfig.create(**payload)
@@ -76,11 +152,12 @@ class WorkCalendarService:
         if not row:
             created = await WorkCalendarService.get_or_create_config(tenant_id, operator)
             row = await WorkCalendarConfig.get(id=created.id)
+        # 可排工作窗已改跟班次；配置行仅保留兼容字段，窗口来源固定为 shift
         row.work_day_start = data.work_day_start
         row.work_day_end = data.work_day_end
-        row.break_start = data.break_start
-        row.break_end = data.break_end
-        row.window_source = data.window_source or "fixed"
+        row.break_start = None
+        row.break_end = None
+        row.window_source = "shift"
         apply_update_audit(row, operator)
         await row.save()
         return _config_response(row)
@@ -117,6 +194,14 @@ class WorkCalendarService:
         data: OvertimePlanCreate,
         operator: Optional[User] = None,
     ) -> OvertimePlanResponse:
+        scope_fields = await PerformanceScopeService.build_scope_write_fields(
+            tenant_id,
+            scope_type=data.scope_type,
+            department_id=data.department_id,
+            department_name=data.department_name,
+            employee_id=data.employee_id,
+            employee_name=data.employee_name,
+        )
         payload: Dict[str, Any] = {
             "tenant_id": tenant_id,
             "uuid": str(uuid_mod.uuid4()),
@@ -124,7 +209,9 @@ class WorkCalendarService:
             "start_time": data.start_time,
             "end_time": data.end_time,
             "name": data.name,
+            "reason": data.reason,
             "is_active": data.is_active,
+            **scope_fields,
         }
         apply_create_audit(payload, operator)
         row = await OvertimePlan.create(**payload)
@@ -159,6 +246,21 @@ class WorkCalendarService:
                 raise ValidationError("endTime 必须晚于 startTime（加班窗口不跨日）")
         if "name" in updates and updates["name"] is not None:
             updates["name"] = str(updates["name"]).strip() or None
+        if "reason" in updates and updates["reason"] is not None:
+            updates["reason"] = str(updates["reason"]).strip() or None
+        scope_keys = {"scope_type", "department_id", "department_name", "employee_id", "employee_name"}
+        if scope_keys.intersection(updates.keys()):
+            merged_scope = {
+                "scope_type": updates.get("scope_type", row.scope_type or "plant"),
+                "department_id": updates.get("department_id", row.department_id),
+                "department_name": updates.get("department_name", row.department_name),
+                "employee_id": updates.get("employee_id", row.employee_id),
+                "employee_name": updates.get("employee_name", row.employee_name),
+            }
+            scope_fields = await PerformanceScopeService.build_scope_write_fields(
+                tenant_id, **merged_scope
+            )
+            updates.update(scope_fields)
         for k, v in updates.items():
             setattr(row, k, v)
         apply_update_audit(row, operator)
@@ -182,6 +284,8 @@ class WorkCalendarService:
         tenant_id: int,
         from_date: date,
         to_date: date,
+        *,
+        employee_id: Optional[int] = None,
     ) -> Tuple[WorkCalendarConfig, Set[date], Dict[date, List[Tuple[time, time]]]]:
         """返回 (config_row, holidays, overtime_by_date)。"""
         cfg_resp = await WorkCalendarService.get_or_create_config(tenant_id)
@@ -189,24 +293,10 @@ class WorkCalendarService:
         if to_date < from_date:
             from_date, to_date = to_date, from_date
         holidays = await load_holiday_dates(tenant_id, from_date, to_date)
-        rows = await OvertimePlan.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True,
-            is_active=True,
-            overtime_date__gte=from_date,
-            overtime_date__lte=to_date,
-        ).all()
-        overtime: Dict[date, List[Tuple[time, time]]] = defaultdict(list)
-        def _strip_tz(t: time) -> time:
-            if getattr(t, "tzinfo", None) is not None:
-                return t.replace(tzinfo=None, microsecond=0)
-            return t.replace(microsecond=0) if getattr(t, "microsecond", 0) else t
-
-        for r in rows:
-            overtime[r.overtime_date].append((_strip_tz(r.start_time), _strip_tz(r.end_time)))
-        for d in overtime:
-            overtime[d].sort(key=lambda x: x[0])
-        return cfg, holidays, dict(overtime)
+        overtime = await _merge_scoped_overtime_windows(
+            tenant_id, from_date, to_date, employee_id=employee_id
+        )
+        return cfg, holidays, overtime
 
     @staticmethod
     async def get_effective_calendar_response(
@@ -227,18 +317,17 @@ class WorkCalendarService:
                 for s, e in windows
             ]
         day_payload: Dict[str, List[Dict[str, str]]] = {}
-        if str(getattr(cfg, "window_source", "fixed") or "fixed").lower() == "shift":
-            from apps.kuaizhizao.utils.working_time import _load_shift_day_windows
+        from apps.kuaizhizao.utils.working_time import _load_shift_day_windows
 
-            day_windows = await _load_shift_day_windows(tenant_id, from_date, to_date)
-            for d, windows in day_windows.items():
-                day_payload[d.isoformat()] = [
-                    {
-                        "startTime": s.strftime("%H:%M"),
-                        "endTime": e.strftime("%H:%M"),
-                    }
-                    for s, e in windows
-                ]
+        day_windows = await _load_shift_day_windows(tenant_id, from_date, to_date)
+        for d, windows in day_windows.items():
+            day_payload[d.isoformat()] = [
+                {
+                    "startTime": s.strftime("%H:%M"),
+                    "endTime": e.strftime("%H:%M"),
+                }
+                for s, e in windows
+            ]
         return EffectiveCalendarResponse(
             config=_config_response(cfg),
             holiday_dates=sorted(holidays),

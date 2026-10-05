@@ -28,7 +28,10 @@ class UserDisplayService:
         return str(user_id)
 
     @staticmethod
-    async def _department_uuid_map(tenant_id: int, department_ids: set[int]) -> dict[int, str]:
+    async def _department_display_map(
+        tenant_id: int, department_ids: set[int]
+    ) -> dict[int, tuple[str, str]]:
+        """department_id → (uuid, name)。"""
         if not department_ids:
             return {}
         rows = await Department.filter(
@@ -36,7 +39,7 @@ class UserDisplayService:
             tenant_id=tenant_id,
             deleted_at__isnull=True,
         ).all()
-        return {d.id: d.uuid for d in rows}
+        return {d.id: (d.uuid, d.name or "") for d in rows}
 
     @staticmethod
     def _roles_data(user: User) -> list[UserDisplayRoleItem]:
@@ -59,10 +62,14 @@ class UserDisplayService:
         return out
 
     @staticmethod
-    def _to_item(user: User, dept_uuid_by_id: dict[int, str]) -> UserDisplayItem:
+    def _to_item(user: User, dept_by_id: dict[int, tuple[str, str]]) -> UserDisplayItem:
         dept_uuid = None
+        dept_name = None
         if user.department_id:
-            dept_uuid = dept_uuid_by_id.get(user.department_id)
+            mapped = dept_by_id.get(user.department_id)
+            if mapped:
+                dept_uuid, dept_name = mapped
+                dept_name = (dept_name or "").strip() or None
         return UserDisplayItem(
             id=user.id,
             uuid=user.uuid,
@@ -75,6 +82,7 @@ class UserDisplayService:
             ),
             avatar=user.avatar,
             department_uuid=dept_uuid,
+            department_name=dept_name,
             roles=UserDisplayService._roles_data(user),
         )
 
@@ -140,8 +148,8 @@ class UserDisplayService:
             .all()
         )
         dept_ids = {u.department_id for u in users if u.department_id}
-        dept_uuid_by_id = await UserDisplayService._department_uuid_map(tenant_id, dept_ids)
-        items = [UserDisplayService._to_item(u, dept_uuid_by_id) for u in users]
+        dept_by_id = await UserDisplayService._department_display_map(tenant_id, dept_ids)
+        items = [UserDisplayService._to_item(u, dept_by_id) for u in users]
         return {
             "items": items,
             "total": total,
@@ -171,8 +179,8 @@ class UserDisplayService:
 
         users = await User.filter(cond).prefetch_related("roles").all()
         dept_ids = {u.department_id for u in users if u.department_id}
-        dept_uuid_by_id = await UserDisplayService._department_uuid_map(tenant_id, dept_ids)
-        return [UserDisplayService._to_item(u, dept_uuid_by_id) for u in users]
+        dept_by_id = await UserDisplayService._department_display_map(tenant_id, dept_ids)
+        return [UserDisplayService._to_item(u, dept_by_id) for u in users]
 
     @staticmethod
     async def build_label_map(*, tenant_id: int, user_ids: set[int] | list[int]) -> dict[int, str]:

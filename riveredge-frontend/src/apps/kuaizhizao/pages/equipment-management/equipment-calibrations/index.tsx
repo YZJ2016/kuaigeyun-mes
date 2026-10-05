@@ -332,7 +332,7 @@ const EquipmentCalibrationsPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.equipmentCalibrations)}
         headerTitle={t(`${P}.title`)}
-        columnPersistenceId="apps.kuaizhizao.pages.equipment-management.equipment-calibrations-width-v3"
+        columnPersistenceId="apps.kuaizhizao.pages.equipment-management.equipment-calibrations-width-v4"
         actionRef={actionRef}
         enableRowSelection
         selectedRowKeys={selectedRowKeys}
@@ -369,7 +369,6 @@ const EquipmentCalibrationsPage: React.FC = () => {
               ]
             : []
         }
-        search={{ labelWidth: 'auto' }}
         pagination={{ defaultPageSize: 20 }}
       />
     </ListPageTemplate>

@@ -99,6 +99,7 @@ const SYSTEM_LAUNCH_STRUCTURE: PhaseDef[] = [
         jump_path: '/apps/master-data/materials',
         subItems: [
           { nameKey: 'pages.system.onboardingWizard.system.sub.materialMain.name', descKey: 'pages.system.onboardingWizard.system.sub.materialMain.desc', required: true, jump_path: '/apps/master-data/materials', check_key: 'material_main' },
+          { nameKey: 'pages.system.onboardingWizard.system.sub.materialUnits.name', descKey: 'pages.system.onboardingWizard.system.sub.materialUnits.desc', required: false, jump_path: '/apps/master-data/materials/units', check_key: 'material_units' },
           { nameKey: 'pages.system.onboardingWizard.system.sub.materialVariants.name', descKey: 'pages.system.onboardingWizard.system.sub.materialVariants.desc', required: false, jump_path: '/apps/master-data/materials/variant-attributes', check_key: 'material_variants' },
           { nameKey: 'pages.system.onboardingWizard.system.sub.materialBatchRules.name', descKey: 'pages.system.onboardingWizard.system.sub.materialBatchRules.desc', required: false, jump_path: '/apps/master-data/materials/batch-rules', check_key: 'material_batch_rules' },
           { nameKey: 'pages.system.onboardingWizard.system.sub.materialSerialRules.name', descKey: 'pages.system.onboardingWizard.system.sub.materialSerialRules.desc', required: false, jump_path: '/apps/master-data/materials/serial-rules', check_key: 'material_serial_rules' },
@@ -113,6 +114,8 @@ const SYSTEM_LAUNCH_STRUCTURE: PhaseDef[] = [
         subItems: [
           { nameKey: 'pages.system.onboardingWizard.system.sub.partnerCustomers.name', descKey: 'pages.system.onboardingWizard.system.sub.partnerCustomers.desc', required: true, jump_path: '/apps/master-data/supply-chain/customers', check_key: 'partner_customers' },
           { nameKey: 'pages.system.onboardingWizard.system.sub.partnerSuppliers.name', descKey: 'pages.system.onboardingWizard.system.sub.partnerSuppliers.desc', required: true, jump_path: '/apps/master-data/supply-chain/suppliers', check_key: 'partner_suppliers' },
+          { nameKey: 'pages.system.onboardingWizard.system.sub.partnerCustomerPriceBooks.name', descKey: 'pages.system.onboardingWizard.system.sub.partnerCustomerPriceBooks.desc', required: false, jump_path: '/apps/master-data/supply-chain/customer-price-books', check_key: 'partner_customer_price_books' },
+          { nameKey: 'pages.system.onboardingWizard.system.sub.partnerSupplierPriceBooks.name', descKey: 'pages.system.onboardingWizard.system.sub.partnerSupplierPriceBooks.desc', required: false, jump_path: '/apps/master-data/supply-chain/supplier-price-books', check_key: 'partner_supplier_price_books' },
         ],
       },
     ],
@@ -129,6 +132,7 @@ const SYSTEM_LAUNCH_STRUCTURE: PhaseDef[] = [
         jump_path: '/apps/master-data/process/engineering-bom',
         subItems: [
           { nameKey: 'pages.system.onboardingWizard.system.sub.processBom.name', descKey: 'pages.system.onboardingWizard.system.sub.processBom.desc', required: true, jump_path: '/apps/master-data/process/engineering-bom', check_key: 'process_bom' },
+          { nameKey: 'pages.system.onboardingWizard.system.sub.processProductProcess.name', descKey: 'pages.system.onboardingWizard.system.sub.processProductProcess.desc', required: false, jump_path: '/apps/master-data/process/product-process', check_key: 'process_product_process' },
         ],
       },
       {
@@ -156,15 +160,118 @@ const SYSTEM_LAUNCH_STRUCTURE: PhaseDef[] = [
         descKey: 'pages.system.onboardingWizard.system.task.firstOrderRun.desc',
         required: true,
         jump_path: '/apps/kuaizhizao/sales-management/sales-orders',
+        subItems: [
+          { id: 'loop_sales_order', nameKey: 'pages.system.onboardingWizard.system.sub.loopSalesOrder.name', descKey: 'pages.system.onboardingWizard.system.sub.loopSalesOrder.desc', required: true, jump_path: '/apps/kuaizhizao/sales-management/sales-orders' },
+          { id: 'loop_demand', nameKey: 'pages.system.onboardingWizard.system.sub.loopDemand.name', descKey: 'pages.system.onboardingWizard.system.sub.loopDemand.desc', required: true, jump_path: '/apps/kuaizhizao/plan-management/demand-management' },
+          { id: 'loop_work_order', nameKey: 'pages.system.onboardingWizard.system.sub.loopWorkOrder.name', descKey: 'pages.system.onboardingWizard.system.sub.loopWorkOrder.desc', required: true, jump_path: '/apps/kuaizhizao/production-execution/work-orders' },
+          { id: 'loop_reporting', nameKey: 'pages.system.onboardingWizard.system.sub.loopReporting.name', descKey: 'pages.system.onboardingWizard.system.sub.loopReporting.desc', required: true, jump_path: '/apps/kuaizhizao/production-execution/reporting' },
+          { id: 'loop_prod_inbound', nameKey: 'pages.system.onboardingWizard.system.sub.loopProdInbound.name', descKey: 'pages.system.onboardingWizard.system.sub.loopProdInbound.desc', required: true, jump_path: '/apps/kuaizhizao/production-execution/inbound' },
+          { id: 'loop_shipment', nameKey: 'pages.system.onboardingWizard.system.sub.loopShipment.name', descKey: 'pages.system.onboardingWizard.system.sub.loopShipment.desc', required: true, jump_path: '/apps/kuaizhizao/sales-management/shipment-notices' },
+          { id: 'loop_inventory', nameKey: 'pages.system.onboardingWizard.system.sub.loopInventory.name', descKey: 'pages.system.onboardingWizard.system.sub.loopInventory.desc', required: true, jump_path: '/apps/kuaizhizao/warehouse-management/inventory' },
+        ],
       },
       {
         id: 'initial_data_verified',
         nameKey: 'pages.system.onboardingWizard.system.task.initialDataVerified.name',
         descKey: 'pages.system.onboardingWizard.system.task.initialDataVerified.desc',
         required: true,
-        jump_path: '/apps/kuaizhizao/warehouse-management/initial-data',
+        jump_path: '/system/initial-data',
         check_key: 'initial_data_verified',
         actionable: 'mark_initial_data_verified',
+      },
+    ],
+  },
+  {
+    id: 'ops_calendar',
+    nameKey: 'pages.system.onboardingWizard.system.phase.opsCalendar',
+    items: [
+      {
+        id: 'ops_calendar_setup',
+        nameKey: 'pages.system.onboardingWizard.system.task.opsCalendarSetup.name',
+        descKey: 'pages.system.onboardingWizard.system.task.opsCalendarSetup.desc',
+        required: false,
+        jump_path: '/apps/kuaizhizao/performance/work-calendar',
+        subItems: [
+          { nameKey: 'pages.system.onboardingWizard.system.sub.opsHolidays.name', descKey: 'pages.system.onboardingWizard.system.sub.opsHolidays.desc', required: false, jump_path: '/apps/kuaizhizao/performance/holidays' },
+          { nameKey: 'pages.system.onboardingWizard.system.sub.opsShifts.name', descKey: 'pages.system.onboardingWizard.system.sub.opsShifts.desc', required: false, jump_path: '/apps/kuaizhizao/performance/shifts' },
+          { nameKey: 'pages.system.onboardingWizard.system.sub.opsWorkCalendar.name', descKey: 'pages.system.onboardingWizard.system.sub.opsWorkCalendar.desc', required: false, jump_path: '/apps/kuaizhizao/performance/work-calendar' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'outsource',
+    nameKey: 'pages.system.onboardingWizard.system.phase.outsource',
+    items: [
+      {
+        id: 'outsource_bootstrap',
+        nameKey: 'pages.system.onboardingWizard.system.task.outsourceBootstrap.name',
+        descKey: 'pages.system.onboardingWizard.system.task.outsourceBootstrap.desc',
+        required: false,
+        jump_path: '/apps/kuaizhizao/outsource-management/outsource-orders',
+        subItems: [
+          { nameKey: 'pages.system.onboardingWizard.system.sub.outsourceOrders.name', descKey: 'pages.system.onboardingWizard.system.sub.outsourceOrders.desc', required: false, jump_path: '/apps/kuaizhizao/outsource-management/outsource-orders' },
+          { nameKey: 'pages.system.onboardingWizard.system.sub.outsourceIssue.name', descKey: 'pages.system.onboardingWizard.system.sub.outsourceIssue.desc', required: false, jump_path: '/apps/kuaizhizao/outsource-management/outsource-issue' },
+          { nameKey: 'pages.system.onboardingWizard.system.sub.outsourceReceipt.name', descKey: 'pages.system.onboardingWizard.system.sub.outsourceReceipt.desc', required: false, jump_path: '/apps/kuaizhizao/outsource-management/outsource-receipt' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'qms_bootstrap',
+    nameKey: 'pages.system.onboardingWizard.system.phase.qmsBootstrap',
+    items: [
+      {
+        id: 'qms_bootstrap_setup',
+        nameKey: 'pages.system.onboardingWizard.system.task.qmsBootstrap.name',
+        descKey: 'pages.system.onboardingWizard.system.task.qmsBootstrap.desc',
+        required: false,
+        jump_path: '/apps/kuaizhizao/quality-management/inspection-plans',
+        subItems: [
+          { nameKey: 'pages.system.onboardingWizard.system.sub.qmsPlans.name', descKey: 'pages.system.onboardingWizard.system.sub.qmsPlans.desc', required: false, jump_path: '/apps/kuaizhizao/quality-management/inspection-plans' },
+          { nameKey: 'pages.system.onboardingWizard.system.sub.qmsIqc.name', descKey: 'pages.system.onboardingWizard.system.sub.qmsIqc.desc', required: false, jump_path: '/apps/kuaizhizao/quality-management/incoming-inspection' },
+          { nameKey: 'pages.system.onboardingWizard.system.sub.qmsIpqc.name', descKey: 'pages.system.onboardingWizard.system.sub.qmsIpqc.desc', required: false, jump_path: '/apps/kuaizhizao/quality-management/process-inspection' },
+          { nameKey: 'pages.system.onboardingWizard.system.sub.qmsFqc.name', descKey: 'pages.system.onboardingWizard.system.sub.qmsFqc.desc', required: false, jump_path: '/apps/kuaizhizao/quality-management/finished-goods-inspection' },
+          { nameKey: 'pages.system.onboardingWizard.system.sub.qmsNcr.name', descKey: 'pages.system.onboardingWizard.system.sub.qmsNcr.desc', required: false, jump_path: '/apps/kuaizhizao/quality-management/nonconforming-ledger' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'ems_bootstrap',
+    nameKey: 'pages.system.onboardingWizard.system.phase.emsBootstrap',
+    items: [
+      {
+        id: 'ems_bootstrap_setup',
+        nameKey: 'pages.system.onboardingWizard.system.task.emsBootstrap.name',
+        descKey: 'pages.system.onboardingWizard.system.task.emsBootstrap.desc',
+        required: false,
+        jump_path: '/apps/kuaizhizao/equipment-management/equipment',
+        subItems: [
+          { nameKey: 'pages.system.onboardingWizard.system.sub.emsEquipment.name', descKey: 'pages.system.onboardingWizard.system.sub.emsEquipment.desc', required: false, jump_path: '/apps/kuaizhizao/equipment-management/equipment' },
+          { nameKey: 'pages.system.onboardingWizard.system.sub.emsMaintPlans.name', descKey: 'pages.system.onboardingWizard.system.sub.emsMaintPlans.desc', required: false, jump_path: '/apps/kuaizhizao/equipment-management/maintenance-plans' },
+          { nameKey: 'pages.system.onboardingWizard.system.sub.emsSpotCheck.name', descKey: 'pages.system.onboardingWizard.system.sub.emsSpotCheck.desc', required: false, jump_path: '/apps/kuaizhizao/equipment-management/spot-checks' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'finance_bootstrap',
+    nameKey: 'pages.system.onboardingWizard.system.phase.financeBootstrap',
+    items: [
+      {
+        id: 'finance_bootstrap_setup',
+        nameKey: 'pages.system.onboardingWizard.system.task.financeBootstrap.name',
+        descKey: 'pages.system.onboardingWizard.system.task.financeBootstrap.desc',
+        required: false,
+        jump_path: '/apps/kuaicaiwu/gl-management/chart-of-accounts',
+        subItems: [
+          { nameKey: 'pages.system.onboardingWizard.system.sub.fiCoa.name', descKey: 'pages.system.onboardingWizard.system.sub.fiCoa.desc', required: false, jump_path: '/apps/kuaicaiwu/gl-management/chart-of-accounts' },
+          { nameKey: 'pages.system.onboardingWizard.system.sub.fiGlSettings.name', descKey: 'pages.system.onboardingWizard.system.sub.fiGlSettings.desc', required: false, jump_path: '/apps/kuaicaiwu/gl-management/settings' },
+          { nameKey: 'pages.system.onboardingWizard.system.sub.fiOpening.name', descKey: 'pages.system.onboardingWizard.system.sub.fiOpening.desc', required: false, jump_path: '/apps/kuaicaiwu/gl-management/opening-balances' },
+          { nameKey: 'pages.system.onboardingWizard.system.sub.fiReceivables.name', descKey: 'pages.system.onboardingWizard.system.sub.fiReceivables.desc', required: false, jump_path: '/apps/kuaicaiwu/finance-management/receivables' },
+          { nameKey: 'pages.system.onboardingWizard.system.sub.fiPayables.name', descKey: 'pages.system.onboardingWizard.system.sub.fiPayables.desc', required: false, jump_path: '/apps/kuaicaiwu/finance-management/payables' },
+        ],
       },
     ],
   },

@@ -822,10 +822,10 @@ const CostCalculationPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable<CostCalculation>
         actionRef={actionRef}
-        columnPersistenceId="apps.kuaicaiwu.pages.cost-management.cost-calculations.list-v6"
+        columnPersistenceId="apps.kuaicaiwu.pages.cost-management.cost-calculations.list-v7"
+        showAdvancedSearch
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaicaiwu.costCalculations')}
-        showAdvancedSearch
         skipFuzzyPinyinClientFilter
         pinnedTabsField={COST_CALCULATION_PINNED_STATUS_FIELD}
         request={async (params, sort, _filter, searchFormValues) => {
@@ -850,7 +850,6 @@ const CostCalculationPage: React.FC = () => {
         }}
         columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
         rowKey="uuid"
-        search={{ labelWidth: 'auto' }}
         pagination={{ defaultPageSize: 20, showSizeChanger: true }}
         toolBarActions={[
           <Button

@@ -481,6 +481,8 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         # 应用筛选条件
         if params.supplier_id:
             query = query.filter(supplier_id=params.supplier_id)
+        if params.buyer_id is not None and int(params.buyer_id) > 0:
+            query = query.filter(buyer_id=int(params.buyer_id))
         if params.status:
             query = query.filter(status=params.status)
         if params.review_status:
@@ -2192,7 +2194,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             "items": preview_items,
             "has_blocking_issues": has_blocking,
             "blocking_reason": blocking_reason,
-            "tip": "可选按可开票余额或按预付款开票；发票号码等信息可在财务管理中补全。",
+            "tip": "可选按可开票余额或按预付款开票；发票代码可在此填写，也可稍后在财务管理中补全。",
             "order_total": money_to_json_float(order_total),
             "invoiced_total": money_to_json_float(invoiced_total),
             "remaining_total": money_to_json_float(remaining_total),
@@ -2219,6 +2221,123 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                     ),
                 },
             ],
+        }
+
+    async def preview_push_to_prepayment(
+        self,
+        tenant_id: int,
+        order_id: int,
+    ) -> Dict[str, Any]:
+        """下推预付付款单预览。"""
+        from apps.kuaicaiwu.services.finance_tax import money_to_json_float, quantize_money
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            _order_prepayment_linked_by_ids,
+        )
+
+        order_model = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=order_id)
+        if not order_model:
+            raise NotFoundError(f"采购订单不存在: {order_id}")
+
+        prepay_map = await _order_prepayment_linked_by_ids(
+            tenant_id, [order_id], source_type="purchase_order", target_type="payment"
+        )
+        assert_purchase_order_capability(
+            order_model,
+            "push_prepayment",
+            has_prepayment_payment=prepay_map.get(order_id, False),
+        )
+
+        amount = quantize_money(Decimal(str(order_model.prepayment_amount or 0)))
+        bank_id = order_model.prepayment_bank_account_id
+        has_blocking = amount <= 0 or prepay_map.get(order_id, False)
+        blocking_reason = None
+        if prepay_map.get(order_id, False):
+            blocking_reason = "purchase_order.push_prepayment.already_exists"
+        elif amount <= 0:
+            blocking_reason = "purchase_order.push_prepayment.no_amount"
+
+        return {
+            "target_type": "payment",
+            "order_id": order_id,
+            "order_code": order_model.order_code,
+            "summary": (
+                f"将按采购订单 {order_model.order_code} 生成预付付款单（金额 {money_to_json_float(amount)}）"
+                if not has_blocking
+                else "当前采购订单不可下推预付付款单"
+            ),
+            "items": [],
+            "has_blocking_issues": has_blocking,
+            "blocking_reason": blocking_reason,
+            "tip": "确认后将生成已确认的预付付款单；金额默认取订单预付款，可在此调整。",
+            "prepayment_amount": money_to_json_float(amount),
+            "prepayment_bank_account_id": int(bank_id) if bank_id else None,
+            "supplier_id": int(order_model.supplier_id) if order_model.supplier_id else None,
+            "supplier_name": order_model.supplier_name,
+        }
+
+    async def push_to_prepayment(
+        self,
+        tenant_id: int,
+        order_id: int,
+        created_by: int,
+        *,
+        amount: Optional[Decimal] = None,
+        bank_account_id: Optional[int] = None,
+        notes: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """从采购订单下推预付付款单。"""
+        from apps.kuaicaiwu.models.payment import Payment
+        from apps.kuaicaiwu.services.finance_integration_hooks import (
+            ensure_prepayment_payment_for_purchase_order,
+        )
+        from apps.kuaicaiwu.services.finance_tax import quantize_money
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            _order_prepayment_linked_by_ids,
+        )
+
+        order = await self.get_purchase_order_by_id(tenant_id, order_id)
+        prepay_map = await _order_prepayment_linked_by_ids(
+            tenant_id, [order_id], source_type="purchase_order", target_type="payment"
+        )
+        assert_purchase_order_capability(
+            order,
+            "push_prepayment",
+            has_prepayment_payment=prepay_map.get(order_id, False),
+        )
+
+        amount_override = None
+        if amount is not None:
+            amount_override = quantize_money(Decimal(str(amount)))
+            if amount_override <= 0:
+                raise BusinessLogicError("预付金额须大于 0")
+
+        note_text = (notes or "").strip() or (
+            f"从采购订单 {order.order_code} 下推预付付款单"
+        )
+        payment_id = await ensure_prepayment_payment_for_purchase_order(
+            tenant_id=tenant_id,
+            order_id=int(order.id),
+            order_code=str(order.order_code or ""),
+            supplier_id=int(order.supplier_id),
+            supplier_name=str(order.supplier_name or ""),
+            prepayment_amount=order.prepayment_amount,
+            prepayment_bank_account_id=order.prepayment_bank_account_id,
+            operator_id=created_by,
+            amount_override=amount_override,
+            bank_account_id_override=bank_account_id,
+            notes_override=note_text,
+            raise_if_exists=True,
+        )
+        if not payment_id:
+            raise BusinessLogicError("未能生成预付付款单，请确认预付款金额大于 0")
+
+        payment = await Payment.get(id=payment_id)
+        return {
+            "order_id": order_id,
+            "order_code": order.order_code,
+            "payment_id": payment.id,
+            "payment_code": payment.payment_code,
+            "total_amount": float(payment.total_amount or 0),
         }
 
     async def preview_push_to_purchase_return(
@@ -3232,6 +3351,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         *,
         invoice_mode: str = "remaining",
         total_amount: Optional[Decimal] = None,
+        invoice_number: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         下推到采购发票
@@ -3240,6 +3360,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
           - remaining: 按可开票余额（订单价税合计 − 已开票）
           - prepayment: 按预付款金额（不超过可开票余额）
         total_amount: 可选，显式指定价税合计（不得超过所选模式上限）
+        invoice_number: 可选，票面发票代码/号码；空则写入「待补全」
         """
         from decimal import Decimal
 
@@ -3307,6 +3428,9 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
 
         today = today_site_str()
         invoice_code = await self.generate_code(tenant_id, "PURCHASE_INVOICE_CODE", prefix=f"PI{today}")
+        face_number = (invoice_number or "").strip() or "待补全"
+        if len(face_number) > 100:
+            raise BusinessLogicError("发票代码长度不能超过 100 个字符")
 
         # 编码只经 create_purchase_invoice(invoice_code=…) 传入；与进项加载一致跳过入库金额门禁
         invoice_data = PurchaseInvoiceCreate(
@@ -3314,7 +3438,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             purchase_order_code=order.order_code,
             supplier_id=order.supplier_id,
             supplier_name=order.supplier_name,
-            invoice_number="待补全",
+            invoice_number=face_number,
             invoice_date=to_site_date(resolve_business_datetime()),
             invoice_type="增值税专用发票",
             tax_rate=tax_rate,

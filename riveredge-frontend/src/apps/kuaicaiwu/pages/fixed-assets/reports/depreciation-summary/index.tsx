@@ -3,6 +3,7 @@ import type { ProColumns } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 import { UniReport } from '../../../../../../components/uni-report';
 import { fixedAssetService } from '../../../../services/fixed-assets';
+import { pickSearchString } from '../../../../../../utils/tableQueryKey';
 
 const RESOURCE = 'kuaicaiwu:fixed-asset-report';
 const NS = 'app.kuaicaiwu.fixedAssets.reports.summary';
@@ -70,9 +71,11 @@ const DepreciationSummaryReportPage: React.FC = () => {
 
   const request = useCallback(
     async (params, _sort, _filter, searchFormValues) => {
+      const periodYear = pickSearchString(searchFormValues, 'period_year');
+      const periodMonth = pickSearchString(searchFormValues, 'period_month');
       const items = await fixedAssetService.depreciationSummaryReport({
-        period_year: searchFormValues?.period_year,
-        period_month: searchFormValues?.period_month,
+        period_year: periodYear != null ? Number(periodYear) : undefined,
+        period_month: periodMonth != null ? Number(periodMonth) : undefined,
       });
       const pageSize = Number(params.pageSize ?? 20);
       const skip = (Number(params.current ?? 1) - 1) * pageSize;
@@ -105,7 +108,7 @@ const DepreciationSummaryReportPage: React.FC = () => {
   return (
     <UniReport
       title={t('app.kuaicaiwu.menu.fixed-assets.reports.depreciation-summary')}
-      columnPersistenceId="apps.kuaicaiwu.fixed-assets.reports.depr-summary-v3"
+      columnPersistenceId="apps.kuaicaiwu.fixed-assets.reports.depr-summary-v4"
       columns={columns}
       permissionResource={RESOURCE}
       rowKey="period"

@@ -30,6 +30,11 @@ class Quality8DReport(BaseModel):
     title = fields.CharField(max_length=200, description="报告标题")
     status = fields.CharField(max_length=30, default="d0_prepare", description="8D 阶段")
     severity = fields.CharField(max_length=20, default="major", description="严重程度")
+    coordination_mode = fields.CharField(
+        max_length=20,
+        default="legacy",
+        description="legacy 单人编制 / collaborative 阶段协同",
+    )
 
     owner_id = fields.IntField(null=True, description="负责人ID")
     owner_name = fields.CharField(max_length=100, null=True, description="负责人姓名")

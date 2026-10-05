@@ -121,11 +121,13 @@ function parseWorksheetCells(
     const rowIndex0 = rowNumMatch ? Number(rowNumMatch[1]) - 1 : null;
     let nextCol = 0;
 
-    const cellRe = /<c\b([^>]*)(?:\/>|>([\s\S]*?)<\/c>)/g;
+    // 须区分 <c ... /> 与 <c ...>...</c>：旧写法 [^>]* 会把 s="4"/> 里的 / 吃进属性，误把下一格当本格内容
+    const cellRe = /<c\b([^>]*?)(\s*\/>|\s*>([\s\S]*?)<\/c>)/g;
     let cellMatch: RegExpExecArray | null;
     while ((cellMatch = cellRe.exec(rowInner)) !== null) {
       const attrs = cellMatch[1];
-      const inner = cellMatch[2] ?? '';
+      const isSelfClosing = /^\s*\/>$/.test(cellMatch[2]);
+      const inner = isSelfClosing ? '' : (cellMatch[3] ?? '');
       const fullAddressMatch = /\br="([A-Za-z]+[0-9]+)"/.exec(attrs);
       const colOnlyMatch =
         !fullAddressMatch && rowIndex0 != null ? /\br="([A-Za-z]+)"/.exec(attrs) : null;
@@ -178,6 +180,9 @@ function parseWorksheetCells(
         continue;
       }
 
+      if (/<c\b/i.test(inner)) {
+        continue;
+      }
       const valueMatch = /<v>([^<]*)<\/v>/.exec(inner);
       if (!valueMatch || valueMatch[1] === '') continue;
       map.set(addr.toUpperCase(), valueMatch[1]);

@@ -83,6 +83,10 @@ import type { DocumentPushPreview } from '../../../services/purchase-requisition
 import InspectionTemplateConductFields from '../components/InspectionTemplateConductFields';
 import { QualityInspectionDetailDrawer } from '../components/QualityInspectionDetailDrawer';
 import {
+  buildQualityInspectionDetailSupplementNode,
+  renderQualityInspectionPlanSummary,
+} from '../components/QualityInspectionDetailSupplement';
+import {
   InspectionUnqualifiedBanner,
   buildInspectionQualityExtraButtons,
 } from '../components/InspectionDetailQualityActions';
@@ -122,6 +126,7 @@ import { useGlobalStore } from '../../../../../stores/globalStore';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { UniAuditBatchMenuButton, createUniAuditBatchHandlers } from '../../../../../components/uni-batch';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
+import { useQualityStageCreateEnabled } from '../components/QualityMasterDataHint';
 import { qualityInspectionCapabilityReasonMessage, qualityInspectionRowGates } from '../../../../../hooks/useDocumentCapabilities';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { useCustomFields } from '../../../../../hooks/useCustomFields';
@@ -260,6 +265,7 @@ const ProcessInspectionPage: React.FC = () => {
   const { token } = AntdTheme.useToken();
   const processInspectionDetailDrawerZIndex = token.zIndexPopupBase;
   const processPerms = useResourcePermissions(PROCESS_RESOURCE);
+  const { enabled: ipqcCreateEnabled } = useQualityStageCreateEnabled('ipqc');
   const processAuditEnabled = useAuditRequired('process_inspection');
   const processAuditColumn = useMemo(
     () => createListAuditPhaseColumn<ProcessInspection>({ t, auditEnabled: processAuditEnabled }),
@@ -667,7 +673,7 @@ const ProcessInspectionPage: React.FC = () => {
       setPullPreviewConfirming(false);
     }
   };
-  useNewShortcut(pullFromWorkOrderQuery.openModal);
+  useNewShortcut(ipqcCreateEnabled ? pullFromWorkOrderQuery.openModal : () => undefined);
 
   // 处理创建不合格品记录
   const handleCreateDefect = (record: ProcessInspection) => {
@@ -675,9 +681,54 @@ const ProcessInspectionPage: React.FC = () => {
     setCreateDefectModalVisible(true);
   };
 
+  const processDetailSupplement = useMemo(() => {
+    if (!inspectionDetail?.id) return null;
+    const gates = qualityInspectionRowGates(inspectionDetail, processPerms, ncPerms, t);
+    return buildQualityInspectionDetailSupplementNode({
+      inspection: inspectionDetail as Record<string, unknown>,
+      attachmentCategory: 'process_inspection_attachments',
+      updateAttachmentsGate: gates.updateAttachments,
+      patchAttachments: (attachments) =>
+        qualityApi.processInspection.patchAttachments(String(inspectionDetail.id), attachments),
+      onUpdated: (record) => {
+        setInspectionDetail(record as ProcessInspection);
+        setPiTrackingRefreshKey((k) => k + 1);
+        actionRef.current?.reload();
+      },
+    });
+  }, [inspectionDetail, processPerms, ncPerms, t]);
+
+  const processConductPlanSwitch = useMemo(() => {
+    if (!currentInspection?.id) return undefined;
+    if (currentInspection.capabilities?.apply_plan?.allowed !== true) return undefined;
+    const gates = qualityInspectionRowGates(currentInspection, processPerms, ncPerms, t);
+    return {
+      planType: 'process' as const,
+      materialId: currentInspection.material_id,
+      operationId: currentInspection.operation_id,
+      disabled: gates.applyPlan.disabled,
+      disabledTitle: gates.applyPlan.title,
+      onApplyPlan: async (planId: number) => {
+        const updated = (await qualityApi.processInspection.applyPlan(
+          String(currentInspection.id),
+          planId,
+        )) as ProcessInspection;
+        setCurrentInspection(updated);
+        formRef.current?.setFieldsValue({
+          conduct_step_results: buildConductStepResultDefaults(updated as Record<string, unknown>),
+        });
+      },
+    };
+  }, [currentInspection, processPerms, ncPerms, t]);
+
   const detailBaseColumns: ProDescriptionsItemProps<ProcessInspection>[] = useMemo(
     () => [
       buildQualityInspectionDetailCodeColumn<ProcessInspection>(t),
+      {
+        title: t('app.kuaizhizao.quality.common.columns.inspectionKind'),
+        key: 'inspection_plan_summary',
+        render: (_, row) => renderQualityInspectionPlanSummary(row as Record<string, unknown>, t),
+      },
       ...buildQualityInspectionDetailMaterialColumns<ProcessInspection>(t),
       { title: t('app.kuaizhizao.quality.common.columns.materialSpec'), dataIndex: 'material_spec' },
       { title: t('app.kuaizhizao.quality.common.columns.batchNo'), dataIndex: 'batch_number' },
@@ -1006,7 +1057,7 @@ const ProcessInspectionPage: React.FC = () => {
         onTableDataChange={(rows) => {
           tableRowsRef.current = rows;
         }}
-        showCreateButton={true}
+        showCreateButton={ipqcCreateEnabled}
         createButtonText={createButtonLabel}
         onCreate={pullFromWorkOrderQuery.openModal}
         enableRowSelection={true}
@@ -1130,6 +1181,7 @@ const ProcessInspectionPage: React.FC = () => {
         <InspectionTemplateConductFields
           inspection={currentInspection as Record<string, unknown>}
           photoCategory="process_inspection_attachments"
+          planSwitch={processConductPlanSwitch}
         />
         <InspectionConductQuantityFields
           materialId={currentInspection?.material_id}
@@ -1321,6 +1373,7 @@ const ProcessInspectionPage: React.FC = () => {
         }
         banner={<InspectionUnqualifiedBanner inspection={inspectionDetail} />}
         basicColumns={detailBaseColumns}
+        supplement={processDetailSupplement}
         customFields={inspectionListCustomFields}
         customFieldValues={inspectionDetailCustomFieldValues}
         tracking={processTracking}

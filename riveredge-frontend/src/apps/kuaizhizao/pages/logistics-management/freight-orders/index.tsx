@@ -66,6 +66,7 @@ import { CarrierSelectDropdown } from '../shared/CarrierSelectDropdown';
 import { DriverSelectDropdown } from '../shared/DriverSelectDropdown';
 import { VehicleSelectDropdown } from '../shared/VehicleSelectDropdown';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
+import { pickListSearchKeyword } from '../../../../../utils/tableQueryKey';
 
 function freightPullRowKey(row: FreightPullCandidate): string {
   return `${row.source_type}-${row.source_id}`;
@@ -519,13 +520,15 @@ const FreightOrdersPage: React.FC = () => {
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.freightOrder)}
         actionRef={actionRef}
         columns={columns}
-        columnPersistenceId="apps.kuaizhizao.pages.logistics-management.freight-orders-width-v6"
+        columnPersistenceId="apps.kuaizhizao.pages.logistics-management.freight-orders-width-v7"
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
         rowKey="id"
-        request={async (params) => {
+        request={async (params, _sort, _filter, searchFormValues) => {
           const res = await listFreightOrders({
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize,
-            keyword: params.keyword as string | undefined,
+            keyword: pickListSearchKeyword(searchFormValues),
           });
           return { data: res.items, total: res.total, success: true };
         }}

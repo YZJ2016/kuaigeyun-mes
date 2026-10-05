@@ -26,6 +26,7 @@ import {
   updateApprovalProcess,
   deleteApprovalProcess,
   ApprovalProcess,
+  ApprovalProcessListParams,
   CreateApprovalProcessData,
   UpdateApprovalProcessData,
 } from '../../../../services/approvalProcess';
@@ -33,6 +34,7 @@ import {
   resolvePresetApprovalProcessDescription,
   resolvePresetApprovalProcessName,
 } from '../../../../utils/presetEntityI18n';
+import { resolveApprovalProcessListFilter } from '../../../../utils/systemUniTableListFilters';
 import { rowActionKind, rowActionLabelKeep } from '../../../../components/uni-action';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 import { todaySiteDateString } from '../../../../utils/format';
@@ -380,7 +382,7 @@ const ApprovalProcessListPage: React.FC = () => {
         <UniTable<ApprovalProcess>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('system.approvalProcesses')}
-        columnPersistenceId="pages.system.approval-processes.list-v2"
+        columnPersistenceId="pages.system.approval-processes.list-v3"
         headerTitle={t('pages.system.approvalProcesses.headerTitle')}
         actionRef={actionRef}
         columns={columns}
@@ -390,10 +392,11 @@ const ApprovalProcessListPage: React.FC = () => {
             const skip = (current - 1) * pageSize;
             const limit = pageSize;
 
-            const listParams: any = {
+            const filter = resolveApprovalProcessListFilter(searchFormValues);
+            const listParams: ApprovalProcessListParams = {
               skip,
               limit,
-              ...searchFormValues,
+              ...filter,
             };
 
             const countTotal = async (): Promise<number> => {
@@ -404,7 +407,7 @@ const ApprovalProcessListPage: React.FC = () => {
                 const chunk = await getApprovalProcessList({
                   skip: offset,
                   limit: chunkSize,
-                  ...searchFormValues,
+                  ...filter,
                 });
                 total += chunk.length;
                 if (chunk.length < chunkSize) break;
@@ -460,9 +463,6 @@ const ApprovalProcessListPage: React.FC = () => {
             `approval-processes-${todaySiteDateString()}.xlsx`,
           );
           messageApi.success(t('pages.system.approvalProcesses.exportSuccess'));
-        }}
-        search={{
-          labelWidth: 'auto',
         }}
       />
       </ListPageTemplate>

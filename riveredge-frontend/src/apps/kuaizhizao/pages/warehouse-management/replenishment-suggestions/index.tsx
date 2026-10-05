@@ -719,6 +719,18 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
                     menuItems={toolbarPushMenuItems}
                     disabled={pushToolbarDisabled}
                     disabledReason={pushToolbarDisabledReason}
+                    sourceDocument={
+                      selectedRowKeys.length === 1 && selectedRecordsForBatch[0]?.id
+                        ? {
+                            type: 'replenishment_suggestion',
+                            id: Number(selectedRecordsForBatch[0].id),
+                          }
+                        : null
+                    }
+                    pushTargets={{
+                      'push-purchase-requisition': 'purchase_requisition',
+                      'push-purchase-order': 'purchase_order',
+                    }}
                   />,
                 ]
               : []),

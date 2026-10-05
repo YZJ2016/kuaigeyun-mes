@@ -82,6 +82,8 @@ export interface UpdateDepartmentData {
 export async function getDepartmentTree(params?: {
   keyword?: string;
   is_active?: boolean;
+  /** 宿主 {app}:{module}，供引用 display 隐式鉴权 */
+  host_resource?: string;
 }): Promise<DepartmentTreeResponse> {
   return apiRequest<DepartmentTreeResponse>('/core/departments/tree', {
     params,
@@ -208,13 +210,6 @@ export async function loadPresetDepartments(
   return apiRequest<{ created: number; message: string }>('/core/departments/load-preset', {
     method: 'POST',
     data: codes?.length ? { codes } : undefined,
-  });
-}
-
-/** 按预设映射补齐部门负责人（销售经理→销售部等） */
-export async function linkPresetDepartmentManagers(): Promise<{ managers_linked: number; message: string }> {
-  return apiRequest<{ managers_linked: number; message: string }>('/core/departments/link-preset-managers', {
-    method: 'POST',
   });
 }
 

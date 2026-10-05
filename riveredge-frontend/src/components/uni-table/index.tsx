@@ -127,6 +127,7 @@ const useProTableSearch = () => {
 import { useConfigStore } from '../../stores/configStore'
 import { useListPageStatCardsContext } from '../layout-templates/listPageStatCardsContext'
 import { useUserPreferenceStore } from '../../stores/userPreferenceStore'
+import { readExplicitPreferenceTablePageSize } from '../../utils/resolveDefaultTablePageSize'
 import { TableContext } from '@ant-design/pro-table/es/Store/Provide'
 /* 布局 CSS 唯一入口：global.less @import uni-table.less（禁止本文件再引一份） */
 import { formatDateBySiteSetting, formatDateTimeBySiteSetting } from '../../utils/format'
@@ -137,7 +138,7 @@ import { withSingleNewShortcutHint } from '../../utils/globalNewShortcut'
 import { MaterialUnitLabel } from '../material-unit-label'
 import { DictionaryLabel } from '../dictionary-label'
 import { resolveSystemDictionaryFieldCode } from '../../utils/systemDictionaryFields'
-import { stableJsonForQueryKey } from '../../utils/tableQueryKey'
+import { pickListSearchKeyword, stableJsonForQueryKey } from '../../utils/tableQueryKey'
 import {
   isUniTableOperationColumn,
   renderUniTableOperationCell,
@@ -699,6 +700,8 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    * 表头文案 → 字段名（与 buildFactoryImportTemplate.importHeaderMap 一致；内部传给 UniImport.importFieldMap）
    */
   importFieldMap?: Record<string, string>
+  /** 导入模板修订号（传给 UniImport，模板列变更时 bump） */
+  importTemplateRevision?: string
   /**
    * 是否启用自定义导入字段选择
    */
@@ -884,7 +887,8 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    */
   deleteButtonDisabled?: boolean
   /**
-   * 默认分页大小（默认：20）
+   * 默认分页大小。不传则走站点「表格默认每页条数」与个人偏好（见 resolveDefaultTablePageSize）。
+   * 意图覆盖请用本 prop；勿再写 pagination.defaultPageSize: 20 分叉。
    */
   defaultPageSize?: number
   /**
@@ -1087,6 +1091,10 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    */
   searchParamsRef?: React.MutableRefObject<Record<string, any> | undefined>
   /**
+   * 内置钉住 Tab 只从该列 valueEnum 生成（传给 QuerySearchButton；未传则按列打分取最高一列）
+   */
+  pinnedTabsField?: string
+  /**
    * 工具栏按钮尺寸（新建、删除、导入、导出、同步等）
    * middle 为 Ant Design 默认尺寸
    */
@@ -1180,6 +1188,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   importColumnOptions,
   importTemplateName,
   importFieldMap,
+  importTemplateRevision,
   enableCustomImport = false,
   enableRelationImport = false,
   relationImportConfig,
@@ -1242,6 +1251,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   actionRef: externalActionRef,
   formRef: externalFormRef,
   searchParamsRef: externalSearchParamsRef,
+  pinnedTabsField,
   tanstackQuery,
   columnPersistenceId,
   embedded = false,
@@ -1276,9 +1286,19 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   // 全局 Alt+N：只要传入 onCreate 即注册（含 showCreateButton=false、自定义工具栏新建）
   useNewShortcut(onCreate);
 
-  // 计算最终配置（优先使用 Props，其次使用用户偏好，最后使用全局配置）
-  // 分页大小优先级：Props > User Preference > Config Store > Default(20)
-  const defaultPageSize = defaultPageSizeProp ?? getPreference('ui.default_page_size', getConfig('ui.default_page_size', 20))
+  // 分页大小：显式 Prop > 个人偏好（仅显式设置）> 站点 ui.default_page_size > 20
+  // 订阅 store 切片，保证站点设置保存后已打开列表能跟上，而非只吃首帧非受控 defaultPageSize
+  const preferencePageSize = useUserPreferenceStore((s) =>
+    readExplicitPreferenceTablePageSize(s.preferences),
+  )
+  const configPageSize = useConfigStore((s) => {
+    const n = Number(s.configs['ui.default_page_size'])
+    return Number.isFinite(n) && n > 0 ? Math.floor(n) : 20
+  })
+  const defaultPageSize =
+    defaultPageSizeProp != null && Number(defaultPageSizeProp) > 0
+      ? Math.floor(Number(defaultPageSizeProp))
+      : (preferencePageSize ?? configPageSize)
 
   const serverZebraStripe = useUserPreferenceStore((s) => {
     const ui = s.preferences?.ui as Record<string, unknown> | undefined
@@ -1344,8 +1364,11 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const reportMeasuredScrollYRef = React.useRef<number | undefined>(undefined)
   const tableSummaryProp = (restProps as { summary?: unknown }).summary
   const reportHasFixedSummary = reportLayout && tableSummaryProp != null
-  /** 当前分页大小：用于判断当前页是否未装满（未装满则不注入 scroll.y） */
+  /** 当前分页大小：受控；用于 request / scroll.y；站点配置变更时同步（用户手动改过后不再覆盖） */
   const [currentPageSize, setCurrentPageSize] = useState<number>(defaultPageSize)
+  const userChangedPageSizeRef = useRef(false)
+  const prevResolvedPageSizeRef = useRef(defaultPageSize)
+
   // ⭐ 关键：使用 useProTableSearch Hook 管理搜索参数
   const { searchParamsRef: hookSearchParamsRef, formRef: hookFormRef, actionRef: hookActionRef } =
     useProTableSearch()
@@ -1387,6 +1410,15 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const formRef = (externalFormRef || hookFormRef || internalFormRef) as React.MutableRefObject<
     ProFormInstance | undefined
   >
+
+  useEffect(() => {
+    if (userChangedPageSizeRef.current) return
+    if (prevResolvedPageSizeRef.current === defaultPageSize) return
+    prevResolvedPageSizeRef.current = defaultPageSize
+    setCurrentPageSize(defaultPageSize)
+    // 配置从默认 20 异步变为站点值后重新取数
+    actionRefForProTable.current?.reload?.()
+  }, [defaultPageSize, actionRefForProTable])
 
   /** 父组件常写内联 request，避免其引用每帧变化触发 ProTable 重复拉数 */
   const requestRef = useRef(request)
@@ -2295,9 +2327,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       ...inner,
       reload: (...args: any[]) => reloadWithTanstackCacheBust(...args),
       reloadAndRest: (...args: any[]) => reloadAndRestWithTanstackCacheBust(...args),
+      resetSearch: () => handleSearchReset(),
       clearSelected: () => clearAllRowSelection(),
-    }
-  }, [outwardActionRef, reloadWithTanstackCacheBust, reloadAndRestWithTanstackCacheBust, clearAllRowSelection])
+    } as ActionType
+  }, [outwardActionRef, reloadWithTanstackCacheBust, reloadAndRestWithTanstackCacheBust, handleSearchReset, clearAllRowSelection])
 
   /**
    * 表格数据请求（核心性能路径）
@@ -2352,7 +2385,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     const searchFormValues =
       searchParamsRef.current !== undefined ? searchParamsRef.current : formValues
 
-    const keywordForPrefetch = searchFormValues?.keyword
+    const keywordForPrefetch = pickListSearchKeyword(searchFormValues)
     const skipPrefetchForPinyin = !!(
       keywordForPrefetch &&
       isPinyinKeyword(keywordForPrefetch) &&
@@ -2481,7 +2514,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       }
 
       // 请求方掌握完整数据集；不能用当前页过滤结果覆盖服务端搜索及总数。
-      const keyword = searchFormValues?.keyword
+      const keyword = pickListSearchKeyword(searchFormValues)
       if (
         typeof requestRef.current !== 'function' &&
         !liveSkipFuzzyPinyinClientFilter &&
@@ -3026,23 +3059,52 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const handleClearSelection = clearAllRowSelection
 
   const memoizedPagination = React.useMemo(() => {
-    const restPagination = restProps.pagination as Record<string, unknown> | undefined
-    const restSizeChanger = restPagination?.showSizeChanger
+    if (restProps.pagination === false) return false
+
+    const restPagination =
+      restProps.pagination && typeof restProps.pagination === 'object'
+        ? { ...(restProps.pagination as Record<string, unknown>) }
+        : {}
+    // 页面 pagination.defaultPageSize: 20 是历史分叉，会盖掉站点「表格默认每页条数」；忽略之。
+    // 意图覆盖请用 UniTable 的 defaultPageSize prop。
+    delete restPagination.defaultPageSize
+
+    const restSizeChanger = restPagination.showSizeChanger
     const hasCustomPageSizeOptions =
       restSizeChanger != null &&
       typeof restSizeChanger === 'object' &&
       Array.isArray((restSizeChanger as { options?: unknown }).options)
 
+    const restOnChange = restPagination.onChange as
+      | ((page: number, size: number) => void)
+      | undefined
+    const restOnShowSizeChange = restPagination.onShowSizeChange as
+      | ((page: number, size: number) => void)
+      | undefined
+
     return {
-      defaultPageSize,
       showSizeChanger: true,
       ...(hasCustomPageSizeOptions ? {} : { pageSizeOptions: ['10', '20', '50', '100'] }),
       showQuickJumper: true,
       showTotal: (total: number, range: [number, number]) =>
         t('components.uniTable.paginationTotal', { total, start: range[0], end: range[1] }),
       ...restPagination,
+      // 受控 pageSize：站点/偏好变更可生效；用户改条数后标记不再被配置覆盖
+      pageSize: currentPageSize,
+      onChange: (page: number, size: number) => {
+        if (size !== currentPageSize) {
+          userChangedPageSizeRef.current = true
+          setCurrentPageSize(size)
+        }
+        restOnChange?.(page, size)
+      },
+      onShowSizeChange: (page: number, size: number) => {
+        userChangedPageSizeRef.current = true
+        setCurrentPageSize(size)
+        restOnShowSizeChange?.(page, size)
+      },
     }
-  }, [defaultPageSize, t, restProps.pagination])
+  }, [currentPageSize, t, restProps.pagination])
   const effectiveTableAlertRender = (restProps as any).tableAlertRender ?? false
   const restTableVirtual = (restProps as any).virtual === true
   const restTableScrollY = (restProps as any).scroll?.y
@@ -3418,6 +3480,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           searchParamsRef,
           pinnedSearchUiEpoch,
           onSearchParamsApplied: () => setPinnedSearchUiEpoch((e) => e + 1),
+          pinnedTabsField,
         }}
         afterSearch={afterSearchButtons}
         showReset={!isMobile && (showFuzzySearch || showAdvancedSearch)}
@@ -3441,6 +3504,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       isMobile,
       onCreate,
       pinnedSearchUiEpoch,
+      pinnedTabsField,
       processedColumns,
       searchParamsRef,
       outwardActionRef,
@@ -4300,6 +4364,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
             exampleRow={effectiveImportConfig.exampleRow}
             columnOptions={effectiveImportConfig.columnOptions}
             importFieldMap={effectiveImportConfig.fieldMap}
+            importTemplateRevision={importTemplateRevision}
             enableXlsxTemplate
             enableMappingImport
             enableImportPreview

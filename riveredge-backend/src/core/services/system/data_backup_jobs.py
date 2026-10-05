@@ -28,6 +28,9 @@ from core.utils.timezone_utils import resolve_business_datetime
 
 ProgressCallback = Callable[[int, str], Awaitable[None]]
 
+# 与 data_backup_handlers 同一把 session advisory lock（bigint key）
+BACKUP_ADVISORY_LOCK_KEY = 824_601_001
+
 TENANT_BACKUP_EXCLUDED_TABLES = {
     # 超大运行日志表：对业务恢复价值有限，但会显著拖慢租户级备份
     "core_operation_logs",
@@ -180,20 +183,72 @@ def _pg_dsn() -> str:
 
 async def _asyncpg_connect():
     import asyncpg
-    return await asyncpg.connect(_pg_dsn(), command_timeout=600)
+
+    host = infra_settings.DB_HOST
+    if host == "localhost":
+        host = "127.0.0.1"
+    return await asyncpg.connect(
+        host=host,
+        port=int(infra_settings.DB_PORT),
+        user=infra_settings.DB_USER,
+        password=infra_settings.DB_PASSWORD or None,
+        database=infra_settings.DB_NAME,
+        ssl=False,
+        timeout=30,
+        command_timeout=600,
+        server_settings={
+            "application_name": "riveredge_backup",
+            "timezone": getattr(infra_settings, "TIMEZONE", "UTC"),
+        },
+    )
+
+
+async def is_backup_advisory_lock_held() -> Optional[bool]:
+    """当前库是否仍有备份 advisory lock。查询失败返回 None（当作仍持锁，避免误杀）。"""
+    key = int(BACKUP_ADVISORY_LOCK_KEY)
+    classid = key >> 32
+    objid = key & 0xFFFFFFFF
+    try:
+        conn = await _asyncpg_connect()
+        try:
+            held = await conn.fetchval(
+                """
+                SELECT EXISTS (
+                    SELECT 1 FROM pg_locks
+                    WHERE locktype = 'advisory'
+                      AND classid = $1::oid
+                      AND objid = $2::oid
+                      AND granted
+                )
+                """,
+                classid,
+                objid,
+            )
+            return bool(held)
+        finally:
+            await conn.close()
+    except Exception as e:
+        logger.debug("查询备份 advisory lock 失败: {}", e)
+        return None
 
 
 async def _copy_query_to_file(conn, select_sql: str, file_obj) -> int:
     """
     用 asyncpg COPY 流式导出 CSV（含表头）到已打开的二进制文件。
 
-    禁止整表进内存：大表 COPY 进 BytesIO/str 会把 taskiq worker 打到数 GB 触发 OOM。
-    返回本次写入字节数。
+    不要把 file 对象直接交给 copy_from_query：asyncpg 在线程池里 write 之后，
+    本线程对 `wb` 文件 `read()` 会变成 UnsupportedOperation: read（远程库更易踩中）。
+    禁止整表进内存。返回本次写入字节数。
     """
     start = file_obj.tell()
+
+    async def _on_chunk(data: bytes) -> None:
+        if data:
+            file_obj.write(data)
+
     await conn.copy_from_query(
         select_sql,
-        output=file_obj,
+        output=_on_chunk,
         format="csv",
         header=True,
     )
@@ -201,15 +256,8 @@ async def _copy_query_to_file(conn, select_sql: str, file_obj) -> int:
 
 
 def _ensure_binary_file_ends_with_newline(file_obj) -> None:
-    pos = file_obj.tell()
-    if pos <= 0:
-        file_obj.write(b"\n")
-        return
-    file_obj.seek(pos - 1)
-    last = file_obj.read(1)
-    file_obj.seek(0, os.SEEK_END)
-    if last != b"\n":
-        file_obj.write(b"\n")
+    """dump 分段以换行结束。只写不读。"""
+    file_obj.write(b"\n")
 
 
 async def _load_core_user_fk_children_async(conn, *, export_tables: list[str]) -> dict[str, str]:
@@ -248,21 +296,6 @@ async def _load_core_user_fk_children_async(conn, *, export_tables: list[str]) -
     return mapping
 
 
-def _build_tenant_user_reference_subqueries(
-    *,
-    tenant_id: int,
-    user_fk_children: dict[str, str],
-) -> list[str]:
-    """收集租户子表引用 core_users 的 user_id，用于导出时一并打包关联用户。"""
-    subqueries: list[str] = []
-    for child_table, child_column in sorted(user_fk_children.items()):
-        subqueries.append(
-            f'SELECT DISTINCT "{child_column}" FROM "{child_table}" '
-            f"WHERE tenant_id = {int(tenant_id)} AND \"{child_column}\" IS NOT NULL"
-        )
-    return subqueries
-
-
 async def _load_tenant_tables_with_user_id_column_async(conn, *, export_tables: list[str]) -> set[str]:
     if not export_tables:
         return set()
@@ -294,7 +327,6 @@ def _resolve_user_ref_column_for_table(
 def _build_tenant_table_copy_sql(
     table: str,
     tenant_id: int,
-    user_ref_subqueries: list[str],
     user_fk_children: Optional[dict[str, str]] = None,
     tables_with_user_id: Optional[set[str]] = None,
 ) -> str:
@@ -302,12 +334,6 @@ def _build_tenant_table_copy_sql(
     user_fk_children = user_fk_children or {}
     tables_with_user_id = tables_with_user_id or set()
     if table == "core_users":
-        if user_ref_subqueries:
-            refs = " UNION ".join(user_ref_subqueries)
-            return (
-                f'SELECT * FROM "core_users" WHERE tenant_id = {tid} '
-                f"OR id IN ({refs})"
-            )
         return f'SELECT * FROM "core_users" WHERE tenant_id = {tid}'
 
     user_col = _resolve_user_ref_column_for_table(table, user_fk_children, tables_with_user_id)
@@ -315,7 +341,7 @@ def _build_tenant_table_copy_sql(
         return (
             f'SELECT t.* FROM "{table}" t '
             f"WHERE t.tenant_id = {tid} "
-            f'AND EXISTS (SELECT 1 FROM "core_users" u WHERE u.id = t."{user_col}")'
+            f'AND EXISTS (SELECT 1 FROM "core_users" u WHERE u.id = t."{user_col}" AND u.tenant_id = {tid})'
         )
     return f'SELECT * FROM "{table}" WHERE tenant_id = {tid}'
 
@@ -325,8 +351,7 @@ def _build_tenant_junction_copy_sql(table: str, tenant_id: int) -> str:
     if table == "core_user_roles":
         return (
             f'SELECT ur.* FROM "core_user_roles" ur '
-            f'WHERE ur.user_id IN (SELECT id FROM "core_users" WHERE tenant_id = {tid}) '
-            f'OR ur.role_id IN (SELECT id FROM "core_roles" WHERE tenant_id = {tid})'
+            f'WHERE ur.user_id IN (SELECT id FROM "core_users" WHERE tenant_id = {tid})'
         )
     if table == "core_role_permissions":
         return (
@@ -336,11 +361,7 @@ def _build_tenant_junction_copy_sql(table: str, tenant_id: int) -> str:
     if table == "core_policy_bindings":
         return (
             f'SELECT pb.* FROM "core_policy_bindings" pb '
-            f'WHERE pb.policy_id IN (SELECT id FROM "core_access_policies" WHERE tenant_id = {tid}) '
-            f"OR (pb.subject_type = 'user' AND pb.subject_id IN "
-            f'(SELECT id FROM "core_users" WHERE tenant_id = {tid})) '
-            f"OR (pb.subject_type = 'role' AND pb.subject_id IN "
-            f'(SELECT id FROM "core_roles" WHERE tenant_id = {tid}))'
+            f'WHERE pb.policy_id IN (SELECT id FROM "core_access_policies" WHERE tenant_id = {tid})'
         )
     raise ValueError(f"未知租户关联表: {table}")
 
@@ -453,12 +474,6 @@ async def _export_tenant_csv_dump(
 
     user_fk_children = await _load_core_user_fk_children_async(conn, export_tables=tables)
     tables_with_user_id = await _load_tenant_tables_with_user_id_column_async(conn, export_tables=tables)
-    user_ref_subqueries = _build_tenant_user_reference_subqueries(
-        tenant_id=int(tenant_id),
-        user_fk_children=user_fk_children,
-    )
-    if user_ref_subqueries:
-        logger.info("core_users 导出将包含 {} 个子表引用的用户 ID", len(user_ref_subqueries))
 
     total_tables = max(len(tables), 1)
     junction_tables = sorted(TENANT_JUNCTION_TABLES)
@@ -478,7 +493,7 @@ async def _export_tenant_csv_dump(
                 pct = 8 + int(index * 80 / total_tables)
                 await on_progress(pct, f"导出表 {index}/{len(tables)}: {table}")
             select_sql = _build_tenant_table_copy_sql(
-                table, int(tenant_id), user_ref_subqueries, user_fk_children, tables_with_user_id
+                table, int(tenant_id), user_fk_children, tables_with_user_id
             )
             section_start = f.tell()
             f.write(f"-- Data for table: {table}\n".encode("utf-8"))
@@ -954,11 +969,16 @@ def _ensure_csv_field_limit() -> None:
 
 
 def infer_source_tenant_id_from_csv_map(table_csv_map: dict[str, str]) -> Optional[int]:
-    """从备份 CSV 数据推断导出租户 ID（须唯一）。"""
+    """从备份 CSV 数据推断导出租户 ID（须唯一）。
+
+    跳过 core_users：旧备份会打入被本租户引用的其他租户用户，不能参与推断。
+    """
     _ensure_csv_field_limit()
 
     found: set[int] = set()
-    for csv_text in sorted(table_csv_map.values(), key=len):
+    for table, csv_text in sorted(table_csv_map.items(), key=lambda item: len(item[1])):
+        if table == "core_users":
+            continue
         if not _csv_has_data_rows(csv_text):
             continue
         columns = _csv_header_columns(csv_text)

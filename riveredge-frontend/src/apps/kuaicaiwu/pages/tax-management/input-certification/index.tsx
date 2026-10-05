@@ -16,6 +16,7 @@ import { buildListPageHelpViewConfig } from '../../../../../components/page-help
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { pickListSearchKeyword, pickSearchString } from '../../../../../utils/tableQueryKey';
 import {
   rowActionKind,
   rowActionTaxCertify,
@@ -208,7 +209,7 @@ const InputCertificationPage: React.FC = () => {
         columns={columns}
         enableRowSelection={canUpdate}
         onRowSelectionChange={(rows) => setSelected(rows as Row[])}
-        columnPersistenceId="apps.kuaicaiwu.pages.tax-management.input-certification.list-v2"
+        columnPersistenceId="apps.kuaicaiwu.pages.tax-management.input-certification.list-v3"
         pinnedTabsField={INPUT_CERT_PINNED_STATUS_FIELD}
         skipFuzzyPinyinClientFilter
         toolBarRender={() =>
@@ -242,10 +243,9 @@ const InputCertificationPage: React.FC = () => {
           const res = await taxService.listInputCertification({
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize || 20,
-            verification_status: (searchFormValues?.verification_status as string) || 'pending',
-            keyword:
-              (searchFormValues?.keyword as string | undefined) ??
-              (params.keyword as string | undefined),
+            verification_status:
+              pickSearchString(searchFormValues, 'verification_status') ?? 'pending',
+            keyword: pickListSearchKeyword(searchFormValues),
           });
           return { data: res.items as Row[], success: true, total: res.total };
         }}

@@ -40,7 +40,7 @@ class CustomerPoolItem(BaseModel):
     country_code: Optional[str] = None
     customer_level_code: Optional[str] = None
     follow_up_count: int = 0
-    inactive_7d: bool = False
+    inactive: bool = False
     created_by_name: Optional[str] = None
     updated_by_name: Optional[str] = None
     created_at: datetime
@@ -53,6 +53,7 @@ class CustomerPoolItem(BaseModel):
 class CustomerPoolListEnvelope(BaseModel):
     items: List[CustomerPoolItem]
     total: int
+    inactive_alert_days: int = 7
 
 
 class CustomerPoolAssignBody(BaseModel):
@@ -67,6 +68,7 @@ class CustomerPoolActionBody(BaseModel):
 class CustomerPoolRuleResponse(BaseModel):
     recycle_enabled: bool = True
     recycle_after_days: int = 15
+    inactive_alert_days: int = 7
     max_owned_customers: int = 0
     allow_claim_others: bool = False
     updated_at: Optional[datetime] = None
@@ -78,6 +80,7 @@ class CustomerPoolRuleResponse(BaseModel):
 class CustomerPoolRuleUpdateBody(BaseModel):
     recycle_enabled: Optional[bool] = None
     recycle_after_days: Optional[int] = Field(None, ge=1, le=365)
+    inactive_alert_days: Optional[int] = Field(None, ge=1, le=365)
     max_owned_customers: Optional[int] = Field(None, ge=0, le=100000)
     allow_claim_others: Optional[bool] = None
 

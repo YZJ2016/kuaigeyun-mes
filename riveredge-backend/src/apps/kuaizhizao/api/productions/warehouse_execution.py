@@ -150,6 +150,7 @@ from apps.kuaizhizao.schemas.inventory_alert import (
     InventoryAlertCheckResponse,
 )
 from apps.kuaizhizao.schemas.packing_binding import (
+    PackingAsnResponse,
     PackingBindingCreateFromReceipt,
     PackingBindingCreateFromDelivery,
     PackingBindingUpdate,
@@ -158,6 +159,7 @@ from apps.kuaizhizao.schemas.packing_binding import (
     PackingBindingPageResponse,
     PackingBindingStatisticsResponse,
     PackingBindingTaskPoolResponse,
+    PackingSourceRemainingResponse,
 )
 from apps.kuaizhizao.schemas.customer_material_registration import (
     BarcodeMappingRuleCreate,
@@ -2641,6 +2643,67 @@ async def get_packing_binding_task_pool(
     return await packing_binding_service.get_task_pool_summary(
         tenant_id=tenant_id,
         limit=limit,
+    )
+
+
+@router.get(
+    "/packing-bindings/source-remaining",
+    response_model=PackingSourceRemainingResponse,
+    summary="Get packing remaining qty by source",
+)
+async def get_packing_source_remaining(
+    source_type: str = Query(..., description="sales_delivery | finished_goods_receipt"),
+    source_id: int = Query(..., ge=1, description="来源单据ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> PackingSourceRemainingResponse:
+    if source_type == "sales_delivery":
+        await _assert_sales_delivery_visible(
+            tenant_id=tenant_id,
+            current_user=current_user,
+            delivery_id=source_id,
+        )
+    return await packing_binding_service.get_source_remaining(
+        tenant_id=tenant_id,
+        source_type=source_type,
+        source_id=source_id,
+    )
+
+
+@router.get(
+    "/sales-deliveries/{delivery_id}/packing-asn",
+    response_model=PackingAsnResponse,
+    summary="Get packing ASN summary for sales delivery",
+)
+async def get_packing_asn_for_delivery(
+    delivery_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> PackingAsnResponse:
+    await _assert_sales_delivery_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        delivery_id=delivery_id,
+    )
+    return await packing_binding_service.get_asn_for_delivery(
+        tenant_id=tenant_id,
+        delivery_id=delivery_id,
+    )
+
+
+@router.post(
+    "/packing-bindings/{binding_id}/seal",
+    response_model=PackingBindingResponse,
+    summary="Seal packing binding",
+)
+async def seal_packing_binding(
+    binding_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> PackingBindingResponse:
+    return await packing_binding_service.seal_packing_binding(
+        tenant_id=tenant_id,
+        binding_id=binding_id,
     )
 
 

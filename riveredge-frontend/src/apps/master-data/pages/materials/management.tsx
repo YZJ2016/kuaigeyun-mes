@@ -121,7 +121,10 @@ import {
 import { MaterialForm } from '../../components/MaterialForm'
 import MaterialSyncFromSourceModal from '../../components/MaterialSyncFromSourceModal'
 import MaterialGroupSyncFromSourceModal from '../../components/MaterialGroupSyncFromSourceModal'
+import MaterialDocumentPushPanel from '../../components/MaterialDocumentPushPanel'
 import { SyncFreshnessBadge } from '../../../../components/sync-from-source-modal/SyncFreshnessBadge'
+import { SyncPushHubButton } from '../../../../components/sync-push-hub'
+import { useToolbarSyncPushFlags } from '../../../../hooks/useToolbarSyncPushFlags'
 import { MaterialGroupFormModal } from '../../components/MaterialGroupFormModal'
 import { DEFAULT_MATERIAL_BASE_UNIT } from '../../constants/materialDefaults'
 import {
@@ -163,7 +166,7 @@ import {
   renderMasterActiveTag,
   renderMasterYesNoTag,
 } from '../../utils/masterListPresentation'
-import { MarkerTag } from '../../../../constants/statusBadges'
+import { renderInlineMarkerTagGroup } from '../../../../components/inline-marker-tag-preview'
 
 const LazyUniImport = lazy(() => import('../../../../components/uni-import'))
 
@@ -247,21 +250,31 @@ function MaterialListStackedCell({
 
   const brand = record.brand?.trim()
   const model = record.model?.trim()
-  const badges =
-    brand || model ? (
-      <Space size={4} wrap style={{ marginTop: 2 }}>
-        {brand ? (
-          <Tooltip title={`${t('app.master-data.materials.brand')}: ${brand}`}>
-            <MarkerTag color="processing">{brand}</MarkerTag>
-          </Tooltip>
-        ) : null}
-        {model ? (
-          <Tooltip title={`${t('app.master-data.materials.model')}: ${model}`}>
-            <MarkerTag color="purple">{model}</MarkerTag>
-          </Tooltip>
-        ) : null}
-      </Space>
-    ) : null
+  const badgeItems = [
+    ...(brand
+      ? [
+          {
+            key: 'brand',
+            label: brand,
+            color: 'processing' as const,
+            title: `${t('app.master-data.materials.brand')}: ${brand}`,
+          },
+        ]
+      : []),
+    ...(model
+      ? [
+          {
+            key: 'model',
+            label: model,
+            color: 'purple' as const,
+            title: `${t('app.master-data.materials.model')}: ${model}`,
+          },
+        ]
+      : []),
+  ]
+  const badges = badgeItems.length
+    ? renderInlineMarkerTagGroup(badgeItems, { empty: null })
+    : null
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 0, minWidth: 0 }}>
@@ -647,6 +660,11 @@ const MaterialsManagementPage: React.FC = () => {
   const [formPageError, setFormPageError] = useState<string | null>(null)
   const pagePermissionResource = usePagePermissionResource(location.pathname)
   const { canImport, canCreate } = useResourcePermissions(pagePermissionResource)
+  const toolbarSyncPush = useToolbarSyncPushFlags('master-data:material')
+  const drawingPerms = useResourcePermissions('master-data:process:drawing')
+  const processRoutePerms = useResourcePermissions('master-data:process:route')
+  const customerPerms = useResourcePermissions('master-data:supply-chain:customer')
+  const warehousePerms = useResourcePermissions('master-data:warehouse:warehouse')
 
   // 左侧分组树状态
   const [groupTreeData, setGroupTreeData] = useState<DataNode[]>([])
@@ -658,15 +676,33 @@ const MaterialsManagementPage: React.FC = () => {
   // 右侧物料列表状态
   const actionRef = useRef<ActionType>(null)
   const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({})
+  const pageMaterialsRef = useRef<Material[]>([])
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
   const [activeImportKind, setActiveImportKind] = useState<MaterialSplitImportKind | null>(null)
   const [importModalVisible, setImportModalVisible] = useState(false)
-  const [syncModalVisible, setSyncModalVisible] = useState(false)
   const [groupSyncModalVisible, setGroupSyncModalVisible] = useState(false)
   const [syncFreshnessKey, setSyncFreshnessKey] = useState(0)
   const [groupSyncFreshnessKey, setGroupSyncFreshnessKey] = useState(0)
   const loadMaterialSyncBinding = useCallback(() => getMaterialSyncBinding(), [])
   const loadMaterialGroupSyncBinding = useCallback(() => getMaterialGroupSyncBinding(), [])
+
+  const resolveMaterialIdsFromRowKeys = useCallback((keys: React.Key[]): number[] => {
+    const byUuid = new Map(
+      pageMaterialsRef.current
+        .filter((row) => row.uuid && Number(row.id) > 0)
+        .map((row) => [row.uuid, Number(row.id)] as const),
+    )
+    const seen = new Set<number>()
+    const ids: number[] = []
+    for (const key of keys) {
+      const fromUuid = byUuid.get(String(key))
+      const numeric = fromUuid ?? Number(key)
+      if (!Number.isFinite(numeric) || numeric <= 0 || seen.has(numeric)) continue
+      seen.add(numeric)
+      ids.push(numeric)
+    }
+    return ids
+  }, [])
 
   const handleSyncComplete = useCallback(() => {
     setSyncFreshnessKey((key) => key + 1)
@@ -1042,23 +1078,37 @@ const MaterialsManagementPage: React.FC = () => {
     async (uuid: string) => {
       setMaterialDetailLoading(true)
       setMaterialDetailError(null)
-      setLinkedDrawingsLoading(true)
+      setLinkedDrawings([])
+      setLinkedDrawingsLoading(false)
       try {
         const detail = await materialApi.get(uuid)
         setCurrentMaterial(detail)
-        await loadFieldValuesForDetail(detail.id)
-        const drawings = await drawingApi.listByContext({ materialUuid: uuid })
-        setLinkedDrawings(drawings)
+        try {
+          await loadFieldValuesForDetail(detail.id)
+        } catch (fieldErr) {
+          console.error('load material custom fields failed', fieldErr)
+        }
+        if (drawingPerms.canRead) {
+          setLinkedDrawingsLoading(true)
+          try {
+            const drawings = await drawingApi.listByContext({ materialUuid: uuid })
+            setLinkedDrawings(drawings)
+          } catch (drawErr) {
+            console.error('load linked drawings failed', drawErr)
+            setLinkedDrawings([])
+          } finally {
+            setLinkedDrawingsLoading(false)
+          }
+        }
       } catch (error) {
         setCurrentMaterial(null)
         setLinkedDrawings([])
         setMaterialDetailError(getApiErrorMessage(error, t('app.master-data.materials.getDetailFailed')))
       } finally {
         setMaterialDetailLoading(false)
-        setLinkedDrawingsLoading(false)
       }
     },
-    [loadFieldValuesForDetail, t],
+    [drawingPerms.canRead, loadFieldValuesForDetail, t],
   )
 
   const handleViewMaterial = useCallback(
@@ -1840,6 +1890,11 @@ const MaterialsManagementPage: React.FC = () => {
     }
     setBatchProcessRouteId(undefined)
     setBatchProcessRouteOpen(true)
+    if (!processRoutePerms.canRead) {
+      setProcessRoutesForBulk([])
+      setProcessRoutesForBulkLoading(false)
+      return
+    }
     setProcessRoutesForBulkLoading(true)
     processRouteApi
       .list({ limit: 1000, isActive: true })
@@ -1852,7 +1907,7 @@ const MaterialsManagementPage: React.FC = () => {
         setProcessRoutesForBulk([])
       })
       .finally(() => setProcessRoutesForBulkLoading(false))
-  }, [selectedRowKeys, messageApi, t])
+  }, [processRoutePerms.canRead, selectedRowKeys, messageApi, t])
 
   const handleConfirmBatchProcessRoute = useCallback(async () => {
     if (selectedRowKeys.length === 0) {
@@ -1944,6 +1999,11 @@ const MaterialsManagementPage: React.FC = () => {
     setBatchDefaultsApplyMaxStock(false)
     setBatchDefaultsMaxStock(undefined)
     setBatchDefaultsOpen(true)
+    if (!warehousePerms.canRead) {
+      setWarehousesForBulk([])
+      setWarehousesForBulkLoading(false)
+      return
+    }
     setWarehousesForBulkLoading(true)
     warehouseApi
       .list({ limit: 1000, is_active: true })
@@ -1955,7 +2015,7 @@ const MaterialsManagementPage: React.FC = () => {
         setWarehousesForBulk([])
       })
       .finally(() => setWarehousesForBulkLoading(false))
-  }, [selectedRowKeys, messageApi, t])
+  }, [warehousePerms.canRead, selectedRowKeys, messageApi, t])
 
   const handleConfirmBatchDefaults = useCallback(async () => {
     if (selectedRowKeys.length === 0) {
@@ -3086,12 +3146,14 @@ const MaterialsManagementPage: React.FC = () => {
     }
 
     let customers: Customer[] = []
-    try {
-      const result = await customerApi.list({ limit: 1000, isActive: true })
-      customers = unwrapSupplyPagedList(result)
-    } catch (error: any) {
-      messageApi.error(error?.message || t('app.master-data.materialForm.fetchCustomersFailed'))
-      return
+    if (customerPerms.canRead) {
+      try {
+        const result = await customerApi.list({ limit: 1000, isActive: true })
+        customers = unwrapSupplyPagedList(result)
+      } catch (error: any) {
+        messageApi.error(error?.message || t('app.master-data.materialForm.fetchCustomersFailed'))
+        return
+      }
     }
 
     const { groups, errors } = parseMaterialCustomerCodeImportRows(rows, idx, customers, 3, t)
@@ -3192,12 +3254,14 @@ const MaterialsManagementPage: React.FC = () => {
     }
 
     let warehouses: Warehouse[] = []
-    try {
-      const result = await warehouseApi.list({ limit: 1000, is_active: true })
-      warehouses = result.items ?? []
-    } catch (error: any) {
-      messageApi.error(error?.message || t('app.master-data.materialForm.fetchWarehousesFailed'))
-      return
+    if (warehousePerms.canRead) {
+      try {
+        const result = await warehouseApi.list({ limit: 1000, is_active: true })
+        warehouses = result.items ?? []
+      } catch (error: any) {
+        messageApi.error(error?.message || t('app.master-data.materialForm.fetchWarehousesFailed'))
+        return
+      }
     }
 
     const { items, errors } = parseMaterialDefaultsImportRows(rows, idx, warehouses, 3, t)
@@ -3544,13 +3608,15 @@ const MaterialsManagementPage: React.FC = () => {
           }
         }
         let customers: Customer[] = []
-        try {
-          const result = await customerApi.list({ limit: 1000, isActive: true })
-          customers = unwrapSupplyPagedList(result)
-        } catch (error: any) {
-          return {
-            canImport: false,
-            errors: [error?.message || t('app.master-data.materialForm.fetchCustomersFailed')],
+        if (customerPerms.canRead) {
+          try {
+            const result = await customerApi.list({ limit: 1000, isActive: true })
+            customers = unwrapSupplyPagedList(result)
+          } catch (error: any) {
+            return {
+              canImport: false,
+              errors: [error?.message || t('app.master-data.materialForm.fetchCustomersFailed')],
+            }
           }
         }
         const { groups, errors } = parseMaterialCustomerCodeImportRows(rows, idx, customers, 3, t)
@@ -3578,13 +3644,15 @@ const MaterialsManagementPage: React.FC = () => {
           }
         }
         let warehouses: Warehouse[] = []
-        try {
-          const result = await warehouseApi.list({ limit: 1000, is_active: true })
-          warehouses = result.items ?? []
-        } catch (error: any) {
-          return {
-            canImport: false,
-            errors: [error?.message || t('app.master-data.materialForm.fetchWarehousesFailed')],
+        if (warehousePerms.canRead) {
+          try {
+            const result = await warehouseApi.list({ limit: 1000, is_active: true })
+            warehouses = result.items ?? []
+          } catch (error: any) {
+            return {
+              canImport: false,
+              errors: [error?.message || t('app.master-data.materialForm.fetchWarehousesFailed')],
+            }
           }
         }
         const { items, errors } = parseMaterialDefaultsImportRows(rows, idx, warehouses, 3, t)
@@ -4482,7 +4550,6 @@ const MaterialsManagementPage: React.FC = () => {
           helpViewConfig={buildListPageHelpViewConfig('masterData.materials')}
                 tanstackQuery={{ queryKeyPrefix: ['apps.master-data.pages.materials.management', String(selectedGroupKeys[0] ?? 'all')] }}
                 size="small"
-                defaultPageSize={20}
                 actionRef={actionRef}
                 columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
                 beforeSearchButtons={
@@ -4603,6 +4670,9 @@ const MaterialsManagementPage: React.FC = () => {
                 }
                 }}
                 rowKey="uuid"
+                onTableDataChange={(rows) => {
+                  pageMaterialsRef.current = rows || []
+                }}
                 defaultExpandAllRows
                 showAdvancedSearch={true}
                 skipFuzzyPinyinClientFilter
@@ -4613,17 +4683,47 @@ const MaterialsManagementPage: React.FC = () => {
                   onChange: setSelectedRowKeys,
                 }}
                 showImportButton={false}
-                showSyncButton={canCreate}
-                onSync={() => setSyncModalVisible(true)}
+                showSyncButton={toolbarSyncPush.hubVisible}
+                onSync={() => undefined}
                 syncToolbarExtra={
-                  canCreate
-                    ? (syncButton) => (
-                        <SyncFreshnessBadge
-                          getBinding={loadMaterialSyncBinding}
-                          refreshKey={syncFreshnessKey}
-                        >
-                          {syncButton}
-                        </SyncFreshnessBadge>
+                  toolbarSyncPush.hubVisible
+                    ? () => (
+                        <SyncPushHubButton
+                          syncEnabled={toolbarSyncPush.syncEnabled}
+                          pushEnabled={toolbarSyncPush.pushEnabled}
+                          size="middle"
+                          wrapButton={(hubButton) => (
+                            <SyncFreshnessBadge
+                              getBinding={loadMaterialSyncBinding}
+                              refreshKey={syncFreshnessKey}
+                            >
+                              {hubButton}
+                            </SyncFreshnessBadge>
+                          )}
+                          renderSyncPanel={({ active, close }) => (
+                            <MaterialSyncFromSourceModal
+                              contentOnly
+                              open={active}
+                              onClose={close}
+                              onComplete={() => {
+                                handleSyncComplete()
+                                close()
+                              }}
+                            />
+                          )}
+                          renderPushPanel={({ active, close }) => (
+                            <MaterialDocumentPushPanel
+                              embedded
+                              open={active}
+                              onClose={close}
+                              materialIds={resolveMaterialIdsFromRowKeys(selectedRowKeys)}
+                              onComplete={() => {
+                                handleSyncComplete()
+                                close()
+                              }}
+                            />
+                          )}
+                        />
                       )
                     : undefined
                 }
@@ -5553,9 +5653,11 @@ const MaterialsManagementPage: React.FC = () => {
           ) : undefined
         }
         linesTitle={t('app.master-data.materials.variantSkusSection', '属性 SKU（预组合）')}
-        supplementaryTitle={t('app.master-data.materials.linkedDrawings')}
+        supplementaryTitle={
+          drawingPerms.canRead ? t('app.master-data.materials.linkedDrawings') : undefined
+        }
         supplementary={
-          currentMaterial ? (
+          currentMaterial && drawingPerms.canRead ? (
             linkedDrawingsLoading ? (
               <Skeleton active paragraph={{ rows: 3 }} />
             ) : linkedDrawings.length ? (
@@ -5697,12 +5799,6 @@ const MaterialsManagementPage: React.FC = () => {
           />
         </Suspense>
       )}
-
-      <MaterialSyncFromSourceModal
-        open={syncModalVisible}
-        onClose={() => setSyncModalVisible(false)}
-        onComplete={handleSyncComplete}
-      />
 
       <MaterialGroupSyncFromSourceModal
         open={groupSyncModalVisible}

@@ -94,9 +94,13 @@ class FilePreviewResponse(BaseModel):
     
     用于返回文件预览信息。
     """
-    preview_mode: str = Field(default="simple", description="预览模式（固定为浏览器直连下载预览）")
+    preview_mode: str = Field(
+        default="simple",
+        description="预览模式：simple=原文件/简易；advanced=LibreOffice 转 PDF 高级预览",
+    )
     preview_url: str = Field(..., description="预览URL")
-    file_type: Optional[str] = Field(None, description="文件类型")
+    file_type: Optional[str] = Field(None, description="预览内容 MIME（高级预览时为 application/pdf）")
+    file_extension: Optional[str] = Field(None, description="预览内容扩展名（高级预览时为 pdf）")
     supported: bool = Field(..., description="是否支持预览")
 
 

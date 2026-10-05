@@ -116,7 +116,7 @@ import {
   getCodeRulePageConfig,
 } from '../../../../../services/codeRule'
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage'
-import { getSalesForecastLifecycle } from '../../../utils/salesForecastLifecycle'
+import { getSalesForecastLifecycle, resolveSalesForecastListApiParams } from '../../../utils/salesForecastLifecycle'
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage'
 import { ListUniLifecycleCell } from '../shared/ListUniLifecycleCell'
 import { createListAuditPhaseColumn } from '../shared/listAuditPhaseColumn'
@@ -2029,47 +2029,11 @@ export default function SalesForecastsPage() {
             setTimeout(() => actionRef.current?.reload(), 0);
           }}
           request={async (params, sort, _filter, searchFormValues) => {
-            const sf = searchFormValues ?? {};
-            const { sortBy, sortOrder } = extractProTableSort(sort);
-            const orderBy =
-              sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
-            const apiParams: SalesForecastListParams = {
-              skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
-              limit: params.pageSize ?? 20,
-              // 订单视图明细预览列 + 明细视图展开行均需 items
-              include_items: true,
-              order_by: orderBy,
-            };
-            if (sf.forecast_period) apiParams.forecast_period = sf.forecast_period as string;
-            const fuzzyKeyword =
-              typeof sf.keyword === 'string' ? sf.keyword.trim() : '';
-            const fc = sf.forecast_code != null ? String(sf.forecast_code).trim() : '';
-            if (fuzzyKeyword) {
-              apiParams.keyword = fuzzyKeyword;
-            } else if (fc) {
-              apiParams.forecast_code = fc;
-            }
-            const fn = sf.forecast_name != null ? String(sf.forecast_name).trim() : '';
-            if (fn) apiParams.forecast_name = fn;
-            if (sf.lifecycle) {
-              const lifecycleToStatus: Record<string, string> = {
-                草稿: 'DRAFT',
-                待审核: 'PENDING_REVIEW',
-                已审核: 'AUDITED',
-                已下推: 'PUSHED',
-                已生效: 'EFFECTIVE',
-                执行中: 'IN_PROGRESS',
-                已完成: 'COMPLETED',
-                已驳回: 'REJECTED',
-                已取消: 'CANCELLED',
-              };
-              apiParams.status = lifecycleToStatus[String(sf.lifecycle)] ?? String(sf.lifecycle);
-            } else if (sf.status) {
-              apiParams.status = sf.status as string;
-            }
-            if (sf.start_date)
-              apiParams.start_date = formatDateTime(sf.start_date, 'YYYY-MM-DD');
-            if (sf.end_date) apiParams.end_date = formatDateTime(sf.end_date, 'YYYY-MM-DD');
+            const apiParams = resolveSalesForecastListApiParams(
+              params,
+              sort,
+              searchFormValues,
+            ) as SalesForecastListParams;
 
             const formatListResponse = (forecasts: SalesForecast[], total: number) => {
               // 行缓存唯一真源：onTableDataChange（prefetch 会走本 request，禁止在此覆盖）
@@ -2152,6 +2116,12 @@ export default function SalesForecastsPage() {
               key={`sales-forecast-push-toolbar-${selectedRowKeys.join('-') || 'none'}`}
               disabled={selectedRowKeys.length !== 1 || !selectedForecastForToolbar}
               disabledReason={toolbarPushDisabledReason}
+              sourceDocument={
+                selectedForecastForToolbar?.id
+                  ? { type: 'sales_forecast', id: Number(selectedForecastForToolbar.id) }
+                  : null
+              }
+              pushTargets={{ 'push-to-computation': 'demand_computation' }}
               menuItems={buildUniPushMenuItems([
                 {
                   key: 'push-to-computation',

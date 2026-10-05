@@ -32,6 +32,11 @@ import {
   getDrawerFloatingWrapperStyle,
 } from '../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../utils/errorHandler';
+import {
+  pickListSearchKeyword,
+  pickSearchString,
+  pickSearchTriStateBoolean,
+} from '../../../../utils/tableQueryKey';
 import { buildDetailDrawerEditExtra } from '../../../../apps/kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
 import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer';
 import { DataDictionaryFormModal } from '../components/DataDictionaryFormModal';
@@ -563,7 +568,7 @@ const DataDictionaryListPage: React.FC = () => {
         <UniTable<DataDictionary>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('system.dataDictionaries')}
-        columnPersistenceId="pages.system.data-dictionaries.list-v2"
+        columnPersistenceId="pages.system.data-dictionaries.list-v3"
         actionRef={actionRef}
         searchParamsRef={searchParamsRef}
         columns={columns}
@@ -574,23 +579,19 @@ const DataDictionaryListPage: React.FC = () => {
             page_size: params.pageSize || 20,
           };
           
-          // 状态筛选
-          if (searchFormValues?.is_active !== undefined && searchFormValues.is_active !== '' && searchFormValues.is_active !== null) {
-            apiParams.is_active = searchFormValues.is_active === true || searchFormValues.is_active === 'true';
+          const isActive = pickSearchTriStateBoolean(searchFormValues, 'is_active');
+          if (isActive !== undefined) {
+            apiParams.is_active = isActive;
           }
 
-          const keyword = String(searchFormValues?.keyword ?? '').trim();
+          const keyword = pickListSearchKeyword(searchFormValues);
           if (keyword) {
-            // UniTable 顶栏模糊搜索走 keyword（名称/代码/备注 OR）
             apiParams.keyword = keyword;
           } else {
-            // 高级搜索：名称、代码独立模糊
-            if (searchFormValues?.name) {
-              apiParams.name = searchFormValues.name as string;
-            }
-            if (searchFormValues?.code) {
-              apiParams.code = searchFormValues.code as string;
-            }
+            const name = pickSearchString(searchFormValues, 'name');
+            const code = pickSearchString(searchFormValues, 'code');
+            if (name) apiParams.name = name;
+            if (code) apiParams.code = code;
           }
           
           try {

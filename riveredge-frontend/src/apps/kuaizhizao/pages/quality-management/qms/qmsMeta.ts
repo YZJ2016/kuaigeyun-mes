@@ -1,20 +1,49 @@
 import type { QmsEvidenceLink } from '../../../services/quality-qms';
 
-/** 将表单中的 JSON 文本解析为证据链接数组；空串视为空数组。 */
+export const EVIDENCE_LINKS_PARSE_INVALID_JSON = 'evidence_links_invalid_json';
+
+function isNoteOnlyLink(link: QmsEvidenceLink): boolean {
+  return (
+    link.ref_type === 'note' &&
+    link.ref_id == null &&
+    !link.ref_code &&
+    !link.ref_name &&
+    !link.path
+  );
+}
+
+/** 表单文本 → 证据链接：支持纯文本（每行一条说明）或 JSON 数组。 */
 export function parseEvidenceLinksText(raw: unknown): QmsEvidenceLink[] {
   if (raw == null || raw === '') return [];
   if (Array.isArray(raw)) return raw as QmsEvidenceLink[];
   const text = String(raw).trim();
   if (!text) return [];
-  const parsed = JSON.parse(text);
-  if (!Array.isArray(parsed)) {
-    throw new Error('evidence_links_must_be_array');
+
+  if (text.startsWith('[')) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      throw new Error(EVIDENCE_LINKS_PARSE_INVALID_JSON);
+    }
+    if (!Array.isArray(parsed)) {
+      throw new Error('evidence_links_must_be_array');
+    }
+    return parsed as QmsEvidenceLink[];
   }
-  return parsed as QmsEvidenceLink[];
+
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((note) => ({ ref_type: 'note', note }));
 }
 
 export function stringifyEvidenceLinks(links?: QmsEvidenceLink[] | null): string {
-  if (!links || !links.length) return '[]';
+  if (!links || !links.length) return '';
+  if (links.every(isNoteOnlyLink)) {
+    return links.map((l) => l.note ?? '').filter(Boolean).join('\n');
+  }
   return JSON.stringify(links, null, 2);
 }
 

@@ -40,7 +40,11 @@ import {
   UpdateSystemParameterData,
 } from '../../../../services/systemParameter';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
-import { mergeListKeyword } from '../../../../utils/tableQueryKey';
+import {
+  pickListSearchKeywordOrFields,
+  pickSearchString,
+  pickSearchTriStateBoolean,
+} from '../../../../utils/tableQueryKey';
 import { todaySiteDateString } from '../../../../utils/format';
 import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
 /**
@@ -611,7 +615,7 @@ const SystemParameterListPage: React.FC = () => {
     <>
       <ListPageTemplate>
         <UniTable<SystemParameter>
-          columnPersistenceId="pages.system.system-parameters.list"
+          columnPersistenceId="pages.system.system-parameters.list-v2"
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {
@@ -621,18 +625,17 @@ const SystemParameterListPage: React.FC = () => {
               page_size: params.pageSize || 20,
             };
             
-            // 状态筛选
-            if (searchFormValues?.is_active !== undefined && searchFormValues.is_active !== '' && searchFormValues.is_active !== null) {
-              apiParams.is_active = searchFormValues.is_active;
+            const isActive = pickSearchTriStateBoolean(searchFormValues, 'is_active');
+            if (isActive !== undefined) {
+              apiParams.is_active = isActive;
             }
-            
-            // 类型筛选
-            if (searchFormValues?.type) {
-              apiParams.type = searchFormValues.type;
+
+            const type = pickSearchString(searchFormValues, 'type');
+            if (type) {
+              apiParams.type = type;
             }
-            
-            // 搜索条件：顶栏模糊词 + 高级搜索 key
-            const keyword = mergeListKeyword(searchFormValues, 'key');
+
+            const keyword = pickListSearchKeywordOrFields(searchFormValues, 'key');
             if (keyword) {
               apiParams.keyword = keyword;
             }

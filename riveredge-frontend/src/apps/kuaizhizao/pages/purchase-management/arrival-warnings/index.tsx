@@ -29,6 +29,10 @@ import {
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import {
+  pickListSearchKeyword,
+  pickSearchString,
+} from '../../../../../utils/tableQueryKey';
+import {
   buildPurchaseArrivalProcessingStatusValueEnum,
   purchaseArrivalProcessingStatusLabel,
   resolvePurchaseArrivalProcessingStatusTagColor,
@@ -217,7 +221,11 @@ const PurchaseArrivalWarningsPage: React.FC = () => {
       <UniTable<PurchaseArrivalWarningRow>
         actionRef={actionRef}
         rowKey="id"
-        columnPersistenceId="apps.kuaizhizao.pages.purchase-management.arrival-warnings-v4"
+        columnPersistenceId="apps.kuaizhizao.pages.purchase-management.arrival-warnings-v6"
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
+        pinnedTabsField="warning_level"
+        pinnedTabsValueEnum={warningLevelEnum}
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.purchaseArrivalWarnings')}
         headerTitle={t('app.kuaizhizao.menu.purchase-management.arrival-warnings')}
@@ -230,15 +238,24 @@ const PurchaseArrivalWarningsPage: React.FC = () => {
         ]}
         columns={columns}
         request={async (params, _sort, _filter, searchFormValues) => {
-          const sf = { ...(searchFormValues ?? {}), ...(params ?? {}) } as Record<string, unknown>;
+          const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
+          const orderCode = pickSearchString(searchFormValues, 'order_code');
+          const supplierKeyword = pickSearchString(searchFormValues, 'supplier_name');
+          const materialKeyword =
+            pickSearchString(searchFormValues, 'material_name') ||
+            pickSearchString(searchFormValues, 'material_code');
           const res = await listPurchaseArrivalWarnings({
             skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
             limit: params.pageSize ?? 20,
-            warning_level: sf.warning_level as PurchaseArrivalWarningRow['warning_level'],
-            order_code: String(sf.order_code ?? '').trim() || undefined,
-            supplier_keyword: String(sf.supplier_name ?? '').trim() || undefined,
-            material_keyword: String(sf.material_name ?? '').trim() || undefined,
-            processing_status: sf.processing_status as PurchaseArrivalWarningRow['processing_status'],
+            warning_level: pickSearchString(searchFormValues, 'warning_level') as
+              | PurchaseArrivalWarningRow['warning_level']
+              | undefined,
+            order_code: fuzzyKeyword ?? orderCode,
+            supplier_keyword: fuzzyKeyword ? undefined : supplierKeyword,
+            material_keyword: fuzzyKeyword ? undefined : materialKeyword,
+            processing_status: pickSearchString(searchFormValues, 'processing_status') as
+              | PurchaseArrivalWarningRow['processing_status']
+              | undefined,
           });
           setSummary(res.summary ?? summary);
           return { data: res.data ?? [], total: res.total ?? 0, success: true };

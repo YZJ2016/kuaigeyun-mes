@@ -322,7 +322,8 @@ function formatSyncManifestApiError(
   return `HTTP ${status}: ${statusText}`;
 }
 
-const SYNC_ALL_MANIFESTS_AND_MENUS_TIMEOUT_MS = 180_000;
+/** 全量同步实测约 200–240s（534 菜单 + 权限/接管）；须高于后端慢请求，避免前端先 abort 看起来像卡住 */
+const SYNC_ALL_MANIFESTS_AND_MENUS_TIMEOUT_MS = 360_000;
 
 export const MENU_SYNC_STATUS_QUERY_KEY = ['menuSyncStatus'] as const;
 
@@ -396,18 +397,35 @@ export async function syncApplicationManifest(appCode: string): Promise<{
   // ⚠️ 特殊处理：sync-manifest API 返回的是 { success: true, message: ..., data: ... }
   // 但 apiRequest 会返回 data 字段的内容，我们需要整个响应对象
   const baseUrl = window.location.origin;
-  const response = await fetch(`${baseUrl}/api/v1/core/applications/sync-manifest/${appCode}`, {
-    method: 'POST',
-    headers: buildWriteAuthHeaders(),
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), SYNC_ALL_MANIFESTS_AND_MENUS_TIMEOUT_MS);
+  try {
+    const response = await fetch(`${baseUrl}/api/v1/core/applications/sync-manifest/${appCode}`, {
+      method: 'POST',
+      headers: buildWriteAuthHeaders(),
+      signal: controller.signal,
+    });
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => null);
-    throw new Error(formatSyncManifestApiError(errorData, response.status, response.statusText));
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(formatSyncManifestApiError(errorData, response.status, response.statusText));
+    }
+
+    return (await response.json()) as { success: boolean; message: string; data?: any };
+  } catch (e: any) {
+    const aborted =
+      e?.name === 'AbortError' ||
+      e?.originalError?.name === 'AbortError' ||
+      /aborted/i.test(String(e?.message || ''));
+    if (aborted) {
+      throw new Error(
+        `菜单同步超时（超过 ${SYNC_ALL_MANIFESTS_AND_MENUS_TIMEOUT_MS / 1000} 秒），请查看后端日志或稍后重试`,
+      );
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
   }
-
-  const result = await response.json();
-  return result; // 返回完整的响应对象 { success, message, data }
 }
 
 export type AppCenterCategory = 'basic' | 'pro' | 'industry' | 'dedicated';

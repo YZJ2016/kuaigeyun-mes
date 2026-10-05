@@ -408,11 +408,39 @@ kill_taskiq_processes() {
                 }
 
                 if (\$shouldKill) {
-                    Stop-Process -Id \$id -Force -ErrorAction SilentlyContinue
                     \$killed += \$id
                 }
             }
-            if (\$killed.Count -gt 0) { Write-Output (\$killed -join ', ') }
+            \$procs = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue)
+            \$ids = [System.Collections.Generic.HashSet[int]]::new()
+            foreach (\$id in \$killed) { [void]\$ids.Add([int]\$id) }
+            \$changed = \$true
+            while (\$changed) {
+                \$changed = \$false
+                foreach (\$p in \$procs) {
+                    if (\$ids.Contains([int]\$p.ParentProcessId) -and -not \$ids.Contains([int]\$p.ProcessId)) {
+                        [void]\$ids.Add([int]\$p.ProcessId)
+                        \$changed = \$true
+                    }
+                }
+            }
+            foreach (\$p in \$procs) {
+                if (-not \$p.CommandLine) { continue }
+                if (\$p.CommandLine -notmatch 'from multiprocessing\.spawn import spawn_main') { continue }
+                if (\$p.CommandLine -notmatch 'parent_pid=(\d+)') { continue }
+                \$pp = [int]\$Matches[1]
+                \$parent = \$null
+                foreach (\$c in \$procs) { if ([int]\$c.ProcessId -eq \$pp) { \$parent = \$c; break } }
+                \$parentIsTaskiq = \$false
+                if (\$parent -and \$parent.CommandLine -and (\$parent.CommandLine -match 'taskiq')) { \$parentIsTaskiq = \$true }
+                if (\$ids.Contains(\$pp) -or \$parentIsTaskiq -or (-not \$parent)) {
+                    [void]\$ids.Add([int]\$p.ProcessId)
+                }
+            }
+            foreach (\$id in \$ids) {
+                Stop-Process -Id \$id -Force -ErrorAction SilentlyContinue
+            }
+            if (\$ids.Count -gt 0) { Write-Output ((\$ids | Sort-Object) -join ', ') }
         " 2>/dev/null | tr -d '\r' || true)"
         if [ -n "$killed" ]; then
             log_warn "清理 taskiq 残留进程（第 $((round + 1)) 轮）: ${killed}"

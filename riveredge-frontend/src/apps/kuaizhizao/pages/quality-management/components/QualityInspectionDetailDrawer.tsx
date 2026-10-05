@@ -49,6 +49,8 @@ export type QualityInspectionDetailDrawerProps<T extends QualityInspectionDetail
   renderBriefActions?: NonNullable<
     React.ComponentProps<typeof DetailDrawerTemplate>['traceDocument']
   >['renderBriefActions'];
+  /** 基本信息下方：检验方案/附件等补充区 */
+  supplement?: React.ReactNode;
 };
 
 export function QualityInspectionDetailDrawer<T extends QualityInspectionDetailRecord>({
@@ -68,6 +70,7 @@ export function QualityInspectionDetailDrawer<T extends QualityInspectionDetailR
   error = null,
   onRetry,
   renderBriefActions,
+  supplement,
 }: QualityInspectionDetailDrawerProps<T>) {
   const { t } = useTranslation();
   const contentReady = Boolean(inspection);
@@ -123,6 +126,7 @@ export function QualityInspectionDetailDrawer<T extends QualityInspectionDetailR
               size="small"
               items={basicItems}
             />
+            {supplement ? <div style={{ marginTop: 16 }}>{supplement}</div> : null}
             {hasCustomFieldsDetailContent(customFields, customFieldValues) ? (
               <div style={{ marginTop: 16 }}>
                 <CustomFieldsDetailSection

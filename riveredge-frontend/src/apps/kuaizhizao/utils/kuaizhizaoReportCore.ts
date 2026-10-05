@@ -1,5 +1,10 @@
 import type { UniReportExecuteResult } from '../../../components/uni-report';
-import { extractReportProTableSort } from '../../../utils/tableQueryKey';
+import {
+  extractReportProTableSort,
+  pickListSearchKeyword,
+  pickSearchRaw,
+  pickSearchString,
+} from '../../../utils/tableQueryKey';
 import {
   serializeReportColumnFilters,
   parseReportColumnFilters,
@@ -187,7 +192,7 @@ export function buildKuaizhizaoReportRequestParams(
   const { sortBy, sortOrder } = extractReportProTableSort(sort ?? {});
   const order_by =
     sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
-  const columnFiltersRaw = searchFormValues?.column_filters;
+  const columnFiltersRaw = pickSearchRaw(searchFormValues ?? null, 'column_filters');
   const column_filters =
     typeof columnFiltersRaw === 'string'
       ? columnFiltersRaw
@@ -196,8 +201,7 @@ export function buildKuaizhizaoReportRequestParams(
     options?.domainHint === 'production'
       ? resolveProductionReportFormParams(searchFormValues)
       : {};
-  const fuzzyKeyword =
-    typeof searchFormValues?.keyword === 'string' ? searchFormValues.keyword.trim() : undefined;
+  const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
   return {
     skip,
     limit,
@@ -263,50 +267,29 @@ export async function fetchKuaizhizaoReport(
   });
   const { skip, limit, date_start, date_end, order_by, column_filters, keyword, status, order_code, product_name, supplier_name, work_order_code } =
     query as Record<string, string | number | undefined>;
-  const period_basis_from_params =
-    typeof params?.period_basis === 'string' && params.period_basis.trim()
-      ? params.period_basis.trim()
-      : undefined;
-  const period_basis_from_search =
-    typeof searchFormValues?.period_basis === 'string' && searchFormValues.period_basis.trim()
-      ? searchFormValues.period_basis.trim()
-      : undefined;
-  const period_basis = period_basis_from_params || period_basis_from_search;
+  const period_basis =
+    pickSearchString({ period_basis: params?.period_basis }, 'period_basis') ??
+    pickSearchString(searchFormValues, 'period_basis');
   const customerField = options?.customerKeywordField ?? 'customer_name';
-  const customer_keyword = searchFormValues?.[customerField] as string | undefined;
-  const formStatus =
-    typeof searchFormValues?.status === 'string' && searchFormValues.status.trim()
-      ? searchFormValues.status.trim()
-      : undefined;
-  const demand_type =
-    typeof searchFormValues?.demand_type === 'string' && searchFormValues.demand_type.trim()
-      ? searchFormValues.demand_type.trim()
-      : undefined;
-  const formSupplier =
-    typeof searchFormValues?.supplier_name === 'string' && searchFormValues.supplier_name.trim()
-      ? searchFormValues.supplier_name.trim()
-      : undefined;
-  const supplierIdRaw = searchFormValues?.supplier_id;
+  const customer_keyword = pickSearchString(searchFormValues, customerField);
+  const formStatus = pickSearchString(searchFormValues, 'status');
+  const demand_type = pickSearchString(searchFormValues, 'demand_type');
+  const formSupplier = pickSearchString(searchFormValues, 'supplier_name');
+  const supplierIdRaw = pickSearchString(searchFormValues, 'supplier_id');
   const supplier_id =
-    typeof supplierIdRaw === 'number'
-      ? supplierIdRaw
-      : typeof supplierIdRaw === 'string' && supplierIdRaw.trim()
-        ? Number(supplierIdRaw)
-        : undefined;
-  const warehouseIdRaw = searchFormValues?.warehouse_id;
-  const materialIdRaw = searchFormValues?.material_id;
+    supplierIdRaw != null && Number.isFinite(Number(supplierIdRaw))
+      ? Number(supplierIdRaw)
+      : undefined;
+  const warehouseIdRaw = pickSearchString(searchFormValues, 'warehouse_id');
+  const materialIdRaw = pickSearchString(searchFormValues, 'material_id');
   const warehouse_id =
-    typeof warehouseIdRaw === 'number'
-      ? warehouseIdRaw
-      : typeof warehouseIdRaw === 'string' && warehouseIdRaw.trim()
-        ? Number(warehouseIdRaw)
-        : undefined;
+    warehouseIdRaw != null && Number.isFinite(Number(warehouseIdRaw))
+      ? Number(warehouseIdRaw)
+      : undefined;
   const material_id =
-    typeof materialIdRaw === 'number'
-      ? materialIdRaw
-      : typeof materialIdRaw === 'string' && materialIdRaw.trim()
-        ? Number(materialIdRaw)
-        : undefined;
+    materialIdRaw != null && Number.isFinite(Number(materialIdRaw))
+      ? Number(materialIdRaw)
+      : undefined;
   const filters: Record<string, number> = {};
   if (warehouse_id != null && Number.isFinite(warehouse_id)) filters.warehouse_id = warehouse_id;
   if (material_id != null && Number.isFinite(material_id)) filters.material_id = material_id;

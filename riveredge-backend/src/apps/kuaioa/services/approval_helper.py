@@ -50,7 +50,7 @@ async def start_approval(
     )
     if not instance:
         raise ValidationError(
-            f"审核已开启但未找到可用的审批流程，请在配置中心检查 {node_key} 审批流程是否已激活"
+            f"审批流程未激活：请在配置中心检查 {node_key} 审批流程"
         )
     return instance
 
@@ -95,6 +95,7 @@ async def cancel_approval(
     operator_id: int,
 ) -> None:
     from core.services.approval.approval_instance_service import ApprovalInstanceService
+    from infra.exceptions.exceptions import BusinessLogicError
 
     try:
         await ApprovalInstanceService.cancel_approval(
@@ -104,12 +105,13 @@ async def cancel_approval(
             operator_id=operator_id,
         )
     except Exception as exc:
-        logger.warning(
+        logger.error(
             "cancel kuaioa approval failed entity_type={} entity_id={}: {}",
             entity_type,
             entity_id,
             exc,
         )
+        raise BusinessLogicError("审批取消失败，单据保持待审") from exc
 
 
 async def get_approval_status(tenant_id: int, entity_type: str, entity_id: int) -> dict[str, Any]:

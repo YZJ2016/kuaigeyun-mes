@@ -49,6 +49,7 @@ class SalesOrderCapabilities(BaseModel):
     push_shipment_notice: ActionCapability
     push_sales_delivery: ActionCapability
     push_invoice: ActionCapability
+    push_prepayment: ActionCapability
     push_sales_return: ActionCapability
     push_delivery_project: ActionCapability
     push_purchase_requisition: ActionCapability
@@ -197,6 +198,7 @@ class PurchaseOrderCapabilities(BaseModel):
     push_receipt_notice: ActionCapability
     push_receipt: ActionCapability
     push_invoice: ActionCapability
+    push_prepayment: ActionCapability
     push_purchase_return: ActionCapability
     push_incoming_inspection: ActionCapability
     create_change_order: ActionCapability
@@ -299,6 +301,7 @@ class PackingBindingCapabilities(BaseModel):
     update: ActionCapability
     delete: ActionCapability
     print: ActionCapability
+    seal: ActionCapability = ActionCapability(allowed=True)
 
 
 class InboundHubCapabilities(BaseModel):
@@ -351,6 +354,8 @@ class QualityInspectionCapabilities(BaseModel):
     push_rework: ActionCapability
     push_inbound: ActionCapability
     update: ActionCapability
+    update_attachments: ActionCapability
+    apply_plan: ActionCapability
     delete: ActionCapability
     print: ActionCapability
 
@@ -361,6 +366,8 @@ class OQCInspectionCapabilities(BaseModel):
     reject: ActionCapability
     revoke_approval: ActionCapability
     revoke_conduct: ActionCapability
+    update_attachments: ActionCapability
+    apply_plan: ActionCapability
     delete: ActionCapability
     print: ActionCapability
 
@@ -433,6 +440,7 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "sales_order.approve.not_pending": "只有待审核状态的订单可审核",
     "sales_order.print.requires_audit": "已开启「打印须审核」，未审核通过的销售订单不可打印",
     "sales_order.revoke_approval.not_allowed": "当前状态不可撤销审核（仅已审核/已生效且审核通过，或已驳回时可撤销）",
+    "sales_order.revoke_approval.has_downstream": "该销售订单已有下游单据，不能撤销审核；如需变更请走销售变更单",
     "sales_order.push.requires_approved": "只能下推已审核的销售订单",
     "sales_order.push.closed": "订单已关闭，无法继续执行",
     "sales_order.push.cancelled": "订单已取消，无法继续执行",
@@ -450,6 +458,7 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "sales_order.push_shipment.no_backorder": "销售订单无欠发数量，无法下推发货通知单",
     "sales_order.push_delivery.not_allowed": "当前状态不可下推销售出库",
     "sales_order.push_delivery.no_backorder": "销售订单无欠发数量，无法下推销售出库",
+    "sales_order.push_delivery.require_shipment_notice": "当前组织要求先发货通知后出库，请先下推发货通知",
     "sales_order.push_invoice.not_allowed": "当前状态不可下推销售发票",
     "sales_order.push_invoice.already_fully_invoiced": "销售订单可开票金额已全部开票，删除未审核发票后可再次下推",
     "sales_order.push_return.not_allowed": "当前状态不可下推销售退货单",
@@ -592,6 +601,12 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "purchase_order.push_invoice.already_fully_invoiced": "该采购单可开票金额已全部开票，删除未审核发票后可再次下推",
     "purchase_order.push_invoice.no_prepayment": "采购单未填写预付款金额，无法按预付款开票",
     "purchase_order.push_invoice.prepayment_exceeds_remaining": "预付款金额已超过可开票余额",
+    "purchase_order.push_prepayment.not_audited": "只有已审核或已确认的采购单才能下推预付付款单",
+    "purchase_order.push_prepayment.no_amount": "采购单未填写预付款金额，无法下推预付付款单",
+    "purchase_order.push_prepayment.already_exists": "该采购订单已关联预付付款单",
+    "sales_order.push_prepayment.not_audited": "只有已审核或已确认的销售订单才能下推预收收款单",
+    "sales_order.push_prepayment.no_amount": "销售订单未填写预收款金额，无法下推预收收款单",
+    "sales_order.push_prepayment.already_exists": "该销售订单已关联预收收款单",
     "purchase_order.push_purchase_return.not_audited": "只有已审核或已确认的采购单才能下推采购退货",
     "purchase_order.push_purchase_return.no_received": "采购单尚无已入库数量，无法下推采购退货",
     "purchase_order.push_purchase_return.no_lines": "没有可退货的采购单明细",
@@ -725,6 +740,7 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "reporting_record.revoke_approval.not_approved": "只有已审核通过的报工记录才可以撤回审核",
     "exception_process.cancel.already_finished": "该异常处理流程已结束，无法取消",
     "packing_binding.deleted": "装箱绑定记录已删除",
+    "packing_binding.sealed": "装箱已封箱，不可修改或删除",
     "inbound_hub.confirm.not_pending": "当前状态不可确认入库",
     "inbound_hub.confirm.use_single_preview": "委外退料/退货请使用单行确认预览",
     "inbound_hub.update.not_allowed": "当前状态不可编辑",
@@ -801,9 +817,13 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "process_inspection.pull_from_work_order.already_pulled": "相关工序均已存在待检验的过程检验单，删除后可再次加载",
     "quality_inspection.update.not_pending": "只能更新待检验状态的检验单",
     "quality_inspection.update.not_editable": "已审核的检验单不可编辑，请先撤销审核",
+    "quality_inspection.apply_plan.not_pending": "仅待检验状态可切换检验方案",
+    "quality_inspection.apply_plan.invalid": "检验方案无效或与当前环节不匹配",
     "quality_inspection.delete.not_pending": "只能删除待检验状态的检验单",
     "oqc_inspection.conduct.not_pending": "只有待检验状态的出货检验单可执行检验",
     "oqc_inspection.conduct.approved_locked": "已审核的出货检验单不可执行检验，请先撤销审核",
+    "oqc_inspection.apply_plan.not_pending": "仅待检验状态可切换检验方案",
+    "oqc_inspection.apply_plan.invalid": "检验方案无效或与当前环节不匹配",
     "oqc_inspection.approve.not_pending": "出货检验单当前不可审核",
     "oqc_inspection.revoke_approval.not_approved": "仅已审核通过的出货检验单可撤销审核",
     "oqc_inspection.revoke_conduct.not_allowed": "当前状态不可撤回检验",
@@ -825,6 +845,8 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "eight_d_report.close.already_closed": "8D 报告已关闭",
     "eight_d_report.close.not_at_final_stage": "仅 D8 总结阶段可关闭报告",
     "eight_d_report.close.stage_incomplete": "关闭前需先完善 D8 总结内容",
+    "eight_d_report.transition.stage_not_approved": "推进前需牵头人确认当前阶段",
+    "eight_d_report.transition.actions_not_verified": "推进前需验证当前阶段全部行动项",
     "nonconforming_ledger.update.closed": "已处理或已取消的台账不可更新处置",
     "nonconforming_ledger.start_8d.closed": "已处理或已取消的台账不可发起 8D",
     "nonconforming_ledger.start_8d.already_linked": "该台账已关联 8D 报告",

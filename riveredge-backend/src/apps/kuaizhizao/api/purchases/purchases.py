@@ -168,6 +168,7 @@ async def list_purchase_orders(
     skip: int = Query(0, ge=0, description="跳过数量"),
     limit: int = Query(20, ge=1, le=1000, description="返回数量"),
     supplier_id: Optional[int] = Query(None, description="供应商ID"),
+    buyer_id: Optional[int] = Query(None, description="归属采购员ID"),
     status: Optional[str] = Query(None, description="订单状态"),
     review_status: Optional[str] = Query(None, description="审核状态"),
     order_date_from: Optional[date] = Query(None, description="订单日期从"),
@@ -209,6 +210,7 @@ async def list_purchase_orders(
         skip=skip,
         limit=limit,
         supplier_id=supplier_id,
+        buyer_id=buyer_id,
         status=status,
         review_status=review_status,
         order_date_from=order_date_from,
@@ -785,6 +787,21 @@ async def preview_push_purchase_order_to_invoice(
     )
 
 
+@router.get(
+    "/purchase-orders/{order_id}/push-to-prepayment/preview",
+    summary="Preview push to prepayment payment",
+)
+async def preview_push_purchase_order_to_prepayment(
+    order_id: int = Path(..., description="采购订单ID"),
+    current_user: CurrentUser = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    return await PurchaseService().preview_push_to_prepayment(
+        tenant_id=tenant_id,
+        order_id=order_id,
+    )
+
+
 @router.get("/purchase-orders/{order_id}/push-to-purchase-return/preview", summary="Preview push to purchase return")
 async def preview_push_purchase_order_to_purchase_return(
     order_id: int = Path(..., description="采购订单ID"),
@@ -988,6 +1005,7 @@ async def push_purchase_order_to_invoice(
 
     body.invoice_mode: remaining（可开票余额）| prepayment（按预付款）
     body.total_amount: 可选，显式价税合计（不超过所选模式上限）
+    body.invoice_number: 可选，票面发票代码/号码；空则创建时仍为「待补全」
     """
     from decimal import Decimal
 
@@ -996,6 +1014,7 @@ async def push_purchase_order_to_invoice(
 
     invoice_mode = "remaining"
     total_amount = None
+    invoice_number = None
     if isinstance(body, dict):
         raw_mode = body.get("invoice_mode")
         if isinstance(raw_mode, str) and raw_mode.strip():
@@ -1003,6 +1022,9 @@ async def push_purchase_order_to_invoice(
         raw_total = body.get("total_amount")
         if raw_total is not None and raw_total != "":
             total_amount = Decimal(str(raw_total))
+        raw_number = body.get("invoice_number")
+        if isinstance(raw_number, str) and raw_number.strip():
+            invoice_number = raw_number.strip()
 
     service = PurchaseService()
     result = await service.push_to_invoice(
@@ -1011,6 +1033,47 @@ async def push_purchase_order_to_invoice(
         created_by=current_user.id,
         invoice_mode=invoice_mode,
         total_amount=total_amount,
+        invoice_number=invoice_number,
+    )
+    return JSONResponse(content=result, status_code=status.HTTP_200_OK)
+
+
+@router.post(
+    "/purchase-orders/{order_id}/push-to-prepayment",
+    summary="Push to prepayment payment",
+)
+async def push_purchase_order_to_prepayment(
+    order_id: int = Path(..., description="采购订单ID"),
+    body: Optional[Dict[str, Any]] = Body(None),
+    current_user: CurrentUser = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """从采购订单下推预付付款单。body 可选 amount / bank_account_id / notes。"""
+    from decimal import Decimal
+
+    from fastapi import status
+
+    amount = None
+    bank_account_id = None
+    notes = None
+    if isinstance(body, dict):
+        raw_amount = body.get("amount")
+        if raw_amount is not None and raw_amount != "":
+            amount = Decimal(str(raw_amount))
+        raw_bank = body.get("bank_account_id")
+        if raw_bank is not None and raw_bank != "":
+            bank_account_id = int(raw_bank)
+        raw_notes = body.get("notes")
+        if isinstance(raw_notes, str) and raw_notes.strip():
+            notes = raw_notes.strip()
+
+    result = await PurchaseService().push_to_prepayment(
+        tenant_id=tenant_id,
+        order_id=order_id,
+        created_by=current_user.id,
+        amount=amount,
+        bank_account_id=bank_account_id,
+        notes=notes,
     )
     return JSONResponse(content=result, status_code=status.HTTP_200_OK)
 

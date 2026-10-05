@@ -1,69 +1,59 @@
 /**
- * 读取业务配置：工具栏「同步 / 推送」Tab 显隐（默认 true，兼容现网）。
+ * 列表工具栏「同步 / 推送」显隐：按角色功能权限（:sync / :push），不再走业务配置。
  *
- * 与配置中心共用 `['businessConfig']` query key：保存后 setQueryData / invalidate
- * 会立刻更新已打开功能页，无需 F5。
- *
- * 热加载要点：CustomEvent / storage 触发重渲染时，优先读 queryClient.getQueryData，
- * 避免 useQuery 的 data 快照尚未刷新导致仍算出旧 flags。
+ * 在「角色权限」中勾选对应资源的「显示同步」「显示推送」即可控制。
+ * 业务配置里的 toolbar_*_enabled 已废弃，勿再写入。
  */
-import { useEffect, useMemo, useState } from 'react';
-import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
-import { getBusinessConfig, type BusinessConfig } from '../services/businessConfig';
+import { useMemo } from 'react';
+import { useResourcePermissions } from './useResourcePermissions';
 
-/** 与配置中心 BUSINESS_CONFIG_QUERY_KEY 对齐，保证热加载 */
+/** @deprecated 仅为历史 import 兼容；实际是 businessConfig 缓存 key */
 export const TOOLBAR_SYNC_PUSH_FLAGS_QUERY_KEY = ['businessConfig'] as const;
 
-/** 同窗口兜底：配置中心保存后广播，已挂载功能页立刻重算 */
+/** @deprecated 配置中心广播事件名，其它仍读 businessConfig 的页面可继续用 */
 export const BUSINESS_CONFIG_UPDATED_EVENT = 'riveredge:business-config-updated';
-
-/** 与 business_config.parameters.<category> 对齐 */
-export type ToolbarSyncPushCategory =
-  | 'work_order'
-  | 'reporting'
-  | 'sales'
-  | 'purchase'
-  | 'warehouse';
 
 export type ToolbarSyncPushFlags = {
   syncEnabled: boolean;
   pushEnabled: boolean;
-  /** 任一开启时工具栏按钮可见（SyncPushHub）；纯同步页请用 syncEnabled */
+  /** 任一开启时工具栏按钮可见（SyncPushHub） */
   hubVisible: boolean;
 };
 
-function resolveFlag(value: unknown, defaultValue = true): boolean {
-  if (value === undefined || value === null) return defaultValue;
-  if (typeof value === 'string') {
-    const normalized = value.trim().toLowerCase();
-    if (normalized === 'false' || normalized === '0' || normalized === 'off') return false;
-    if (normalized === 'true' || normalized === '1' || normalized === 'on') return true;
-  }
-  return Boolean(value);
-}
+/** 与各列表页 useResourcePermissions 资源前缀一致 */
+export type ToolbarSyncPushResource =
+  | 'kuaizhizao:work-order'
+  | 'kuaizhizao:production-execution-reporting'
+  | 'kuaizhizao:sales-order'
+  | 'kuaizhizao:purchase-order'
+  | 'kuaizhizao:inventory'
+  | 'master-data:material'
+  | 'master-data:process:engineering-bom'
+  | 'master-data:process:operation';
 
-/**
- * 无 DocumentPush profile 的模块也默认开 push Tab（占位面板），与工单/报工 Hub 结构一致。
- * 业务配置仍可单独关闭 toolbar_push_enabled。
- */
-const PUSH_DEFAULT_BY_CATEGORY: Record<ToolbarSyncPushCategory, boolean> = {
-  work_order: true,
-  reporting: true,
-  sales: true,
-  purchase: true,
-  warehouse: true,
+/** @deprecated 旧 category 名 → 资源前缀（兼容未改完的调用） */
+const CATEGORY_TO_RESOURCE: Record<string, ToolbarSyncPushResource> = {
+  work_order: 'kuaizhizao:work-order',
+  reporting: 'kuaizhizao:production-execution-reporting',
+  sales: 'kuaizhizao:sales-order',
+  purchase: 'kuaizhizao:purchase-order',
+  warehouse: 'kuaizhizao:inventory',
 };
 
-export function resolveToolbarSyncPushFlags(
-  config: BusinessConfig | null | undefined,
-  category: ToolbarSyncPushCategory,
+export function resolveToolbarSyncPushResource(
+  resourceOrCategory: string,
+): string {
+  const raw = (resourceOrCategory || '').trim();
+  if (raw.includes(':')) return raw;
+  return CATEGORY_TO_RESOURCE[raw] || raw;
+}
+
+export function resolveToolbarSyncPushFlagsFromPerms(
+  canAction: ((action: string) => boolean) | undefined,
 ): ToolbarSyncPushFlags {
-  const params = config?.parameters?.[category] as Record<string, unknown> | undefined;
-  const syncEnabled = resolveFlag(params?.toolbar_sync_enabled, true);
-  const pushEnabled = resolveFlag(
-    params?.toolbar_push_enabled,
-    PUSH_DEFAULT_BY_CATEGORY[category],
-  );
+  const check = canAction || (() => false);
+  const syncEnabled = Boolean(check('sync'));
+  const pushEnabled = Boolean(check('push'));
   return {
     syncEnabled,
     pushEnabled,
@@ -71,12 +61,21 @@ export function resolveToolbarSyncPushFlags(
   };
 }
 
-const BUSINESS_CONFIG_STORAGE_KEY = 'riveredge:business-config-cache';
+export function useToolbarSyncPushFlags(
+  resourceOrCategory: ToolbarSyncPushResource | string,
+): ToolbarSyncPushFlags {
+  const resource = resolveToolbarSyncPushResource(resourceOrCategory);
+  const perms = useResourcePermissions(resource);
+  return useMemo(
+    () => resolveToolbarSyncPushFlagsFromPerms(perms.canAction),
+    [perms.canAction],
+  );
+}
 
-/** 写入 React Query 缓存并广播，供配置中心保存后立刻热加载（同窗事件 + 跨标签 localStorage） */
+/** 写入 React Query businessConfig 缓存并广播（配置中心其它参数仍用） */
 export function syncBusinessConfigQueryCache(
-  queryClient: QueryClient,
-  config: BusinessConfig,
+  queryClient: import('@tanstack/react-query').QueryClient,
+  config: import('../services/businessConfig').BusinessConfig,
 ): void {
   queryClient.setQueryData(TOOLBAR_SYNC_PUSH_FLAGS_QUERY_KEY, config);
   if (typeof window === 'undefined') return;
@@ -84,22 +83,21 @@ export function syncBusinessConfigQueryCache(
     new CustomEvent(BUSINESS_CONFIG_UPDATED_EVENT, { detail: config }),
   );
   try {
-    // 带时间戳，确保同内容连续保存仍触发 storage 事件
     window.localStorage.setItem(
-      BUSINESS_CONFIG_STORAGE_KEY,
+      'riveredge:business-config-cache',
       JSON.stringify({ ts: Date.now(), config }),
     );
   } catch {
-    // 隐私模式 / 配额满时忽略跨标签同步
+    // ignore
   }
 }
 
-/** 乐观合并 parameters 补丁到现有 businessConfig 缓存 */
 export function patchBusinessConfigQueryCache(
-  queryClient: QueryClient,
+  queryClient: import('@tanstack/react-query').QueryClient,
   patch: Record<string, Record<string, unknown>>,
-  fallback?: BusinessConfig | null,
-): BusinessConfig {
+  fallback?: import('../services/businessConfig').BusinessConfig | null,
+): import('../services/businessConfig').BusinessConfig {
+  type BusinessConfig = import('../services/businessConfig').BusinessConfig;
   const prev = queryClient.getQueryData<BusinessConfig>(TOOLBAR_SYNC_PUSH_FLAGS_QUERY_KEY);
   const base = prev?.parameters || fallback?.parameters || {};
   const nextParameters: Record<string, Record<string, unknown>> = { ...base };
@@ -115,62 +113,4 @@ export function patchBusinessConfigQueryCache(
   };
   syncBusinessConfigQueryCache(queryClient, next);
   return next;
-}
-
-export function useToolbarSyncPushFlags(category: ToolbarSyncPushCategory): ToolbarSyncPushFlags {
-  const queryClient = useQueryClient();
-  const { data } = useQuery({
-    queryKey: TOOLBAR_SYNC_PUSH_FLAGS_QUERY_KEY,
-    queryFn: getBusinessConfig,
-    staleTime: 60_000,
-  });
-
-  // 同窗口自定义事件 + 跨标签 storage + queryCache：强制在广播后重算
-  const [eventTick, setEventTick] = useState(0);
-  useEffect(() => {
-    const bump = () => setEventTick((n) => n + 1);
-    const applyConfig = (config: BusinessConfig | undefined) => {
-      if (config?.parameters) {
-        queryClient.setQueryData(TOOLBAR_SYNC_PUSH_FLAGS_QUERY_KEY, config);
-      }
-      bump();
-    };
-    const onUpdated = (ev: Event) => {
-      applyConfig((ev as CustomEvent<BusinessConfig>).detail);
-    };
-    const onStorage = (ev: StorageEvent) => {
-      if (ev.key !== BUSINESS_CONFIG_STORAGE_KEY || !ev.newValue) return;
-      try {
-        const parsed = JSON.parse(ev.newValue) as { config?: BusinessConfig };
-        applyConfig(parsed?.config);
-      } catch {
-        // ignore malformed payload
-      }
-    };
-    const unsubCache = queryClient.getQueryCache().subscribe((event) => {
-      const key = event?.query?.queryKey;
-      if (
-        Array.isArray(key) &&
-        key[0] === TOOLBAR_SYNC_PUSH_FLAGS_QUERY_KEY[0] &&
-        (event.type === 'updated' || event.type === 'observerResultsUpdated')
-      ) {
-        bump();
-      }
-    });
-    window.addEventListener(BUSINESS_CONFIG_UPDATED_EVENT, onUpdated);
-    window.addEventListener('storage', onStorage);
-    return () => {
-      unsubCache();
-      window.removeEventListener(BUSINESS_CONFIG_UPDATED_EVENT, onUpdated);
-      window.removeEventListener('storage', onStorage);
-    };
-  }, [queryClient]);
-
-  return useMemo(() => {
-    // 关键：eventTick 触发的那一帧，useQuery.data 可能仍是旧快照
-    const live =
-      queryClient.getQueryData<BusinessConfig>(TOOLBAR_SYNC_PUSH_FLAGS_QUERY_KEY) ?? data;
-    return resolveToolbarSyncPushFlags(live, category);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- eventTick 有意列入
-  }, [data, category, eventTick, queryClient]);
 }

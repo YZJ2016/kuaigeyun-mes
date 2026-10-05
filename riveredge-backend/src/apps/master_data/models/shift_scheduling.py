@@ -25,6 +25,8 @@ class Shift(BaseModel):
     name = fields.CharField(max_length=200, description="班次名称")
     start_time = fields.TimeField(description="开始时间")
     end_time = fields.TimeField(description="结束时间")
+    break_start = fields.TimeField(null=True, description="班内休息开始时刻")
+    break_end = fields.TimeField(null=True, description="班内休息结束时刻")
     crosses_midnight = fields.BooleanField(default=False, description="是否跨天")
     standard_hours = fields.DecimalField(
         max_digits=6, decimal_places=2, default=8, description="标准工时（小时）"
@@ -53,7 +55,9 @@ class ShiftRoster(BaseModel):
 
     id = fields.IntField(pk=True, description="主键ID")
     scope_type = fields.CharField(
-        max_length=20, default="work_group", description="范围：work_group/employee"
+        max_length=20,
+        default="work_group",
+        description="范围：work_group/employee/all_employees",
     )
     work_group_id = fields.IntField(null=True, description="工作小组ID（小组排班）")
     work_group_code = fields.CharField(max_length=50, null=True, description="工作小组编码（冗余）")
@@ -99,3 +103,38 @@ class ShiftAssignment(BaseModel):
 
     def __str__(self):
         return f"Assignment emp={self.employee_id} {self.work_date}"
+
+
+class RosterTimeAdjustment(BaseModel):
+    """员工临时加班 / 临时休息（按人按日时段）。"""
+
+    class Meta:
+        table = "apps_master_data_roster_time_adjustments"
+        table_description = "基础数据管理 - 排班临时加班/休息"
+        indexes = [
+            ("tenant_id",),
+            ("uuid",),
+            ("employee_id",),
+            ("work_date",),
+            ("tenant_id", "employee_id", "work_date"),
+            ("tenant_id", "work_date"),
+        ]
+
+    id = fields.IntField(pk=True, description="主键ID")
+    scope_type = fields.CharField(
+        max_length=20, default="employee", description="适用范围 plant/department/employee"
+    )
+    department_id = fields.IntField(null=True, description="部门ID（按部门）")
+    department_name = fields.CharField(max_length=200, null=True, description="部门名称（冗余）")
+    employee_id = fields.IntField(null=True, description="员工ID（User.id，按人员）")
+    employee_name = fields.CharField(max_length=100, null=True, description="员工姓名（冗余）")
+    work_date = fields.DateField(description="工作日期")
+    kind = fields.CharField(max_length=20, description="temp_overtime / temp_rest")
+    start_time = fields.TimeField(description="开始时刻")
+    end_time = fields.TimeField(description="结束时刻")
+    reason = fields.CharField(max_length=500, description="原因")
+    is_active = fields.BooleanField(default=True, description="是否启用")
+    deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
+
+    def __str__(self):
+        return f"RosterTimeAdjustment emp={self.employee_id} {self.work_date} {self.kind}"

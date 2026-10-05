@@ -57,6 +57,9 @@ export const DOCUMENT_PUSH_KNOWN_PROFILES = [
   'kingdee_sal_saleorder',
   'kingdee_pur_purchaseorder',
   'kingdee_stk_miscellaneous',
+  'kingdee_bd_material',
+  'kingdee_eng_bom',
+  'kingdee_eng_process',
 ] as const;
 
 const KNOWN_PROFILE_SET = new Set<string>(DOCUMENT_PUSH_KNOWN_PROFILES);
@@ -72,6 +75,9 @@ export const DOCUMENT_PUSH_PROFILE_CATEGORY: Record<
   kingdee_sal_saleorder: 'erp',
   kingdee_pur_purchaseorder: 'erp',
   kingdee_stk_miscellaneous: 'erp',
+  kingdee_bd_material: 'erp',
+  kingdee_eng_bom: 'erp',
+  kingdee_eng_process: 'erp',
 };
 
 export function isKnownDocumentPushProfile(profile: string): boolean {

@@ -10,6 +10,7 @@ Date: 2026-01-06
 from fastapi import APIRouter, Query
 
 from core.utils.timezone_utils import now_utc, site_timezone_name
+from core.utils.login_quick_providers import merge_login_quick_providers
 from loguru import logger
 
 from infra.schemas.platform_settings import PlatformSettingsResponse
@@ -130,6 +131,10 @@ async def get_platform_settings_public(
                         "login_quick_enabled": site_settings.get("login_quick_enabled")
                         if site_settings.get("login_quick_enabled") is not None
                         else merged.get("login_quick_enabled"),
+                        "login_quick_providers": merge_login_quick_providers(
+                            merged.get("login_quick_providers"),
+                            site_settings.get("login_quick_providers"),
+                        ),
                         "enable_register": site_settings.get("enable_register")
                         if site_settings.get("enable_register") is not None
                         else (merged.get("enable_register") if merged.get("enable_register") is not None else True),

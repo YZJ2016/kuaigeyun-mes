@@ -4,10 +4,78 @@
  */
 import React from 'react';
 import { Progress } from 'antd';
+import { formatApiErrorDetail } from '../services/api';
 import { getAntdMessage, getAntdModal } from './antdAppApis';
 import type { BatchImportResult } from './batchOperations';
 
 export const DEFAULT_IMPORT_CHUNK_SIZE = 100;
+
+/** 与后端 ApiWriteRateLimitMiddleware 默认额度对齐，略留余量避免 429 */
+export const DEFAULT_BULK_IMPORT_WRITES_PER_MINUTE = 100;
+
+function sleepMs(ms: number): Promise<void> {
+  const delay = Math.max(0, Math.trunc(ms));
+  if (delay === 0) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    setTimeout(resolve, delay);
+  });
+}
+
+function extractImportFailureReason(error: unknown): string {
+  const err = error as {
+    message?: string;
+    detail?: string;
+    response?: { data?: { detail?: unknown; message?: unknown } };
+  };
+  const fromResponse = formatApiErrorDetail(
+    err.response?.data?.detail ?? err.response?.data?.message,
+  );
+  if (fromResponse) {
+    return fromResponse;
+  }
+  return err.message || err.detail || '未知错误';
+}
+
+function isWriteRateLimitError(error: unknown): boolean {
+  const err = error as { response?: { status?: number }; message?: string };
+  if (err?.response?.status === 429) {
+    return true;
+  }
+  const message = String(err?.message ?? '');
+  return message.includes('过于频繁');
+}
+
+function retryAfterMsFromError(error: unknown): number {
+  const headers = (error as { response?: { headers?: Record<string, string> } })?.response
+    ?.headers;
+  const raw = headers?.['retry-after'] ?? headers?.['Retry-After'];
+  const seconds = raw != null ? Number.parseInt(String(raw), 10) : Number.NaN;
+  if (Number.isFinite(seconds) && seconds > 0) {
+    return seconds * 1000;
+  }
+  return 60_000;
+}
+
+async function invokeCreateWithWriteRateLimitRetry(
+  createOne: () => Promise<unknown>,
+  maxRateLimitRetries: number,
+): Promise<void> {
+  let rateLimitAttempts = 0;
+  while (true) {
+    try {
+      await createOne();
+      return;
+    } catch (error: unknown) {
+      if (!isWriteRateLimitError(error) || rateLimitAttempts >= maxRateLimitRetries) {
+        throw error;
+      }
+      rateLimitAttempts += 1;
+      await sleepMs(retryAfterMsFromError(error));
+    }
+  }
+}
 
 /** 让出一帧，确保进度 Modal 能先画出「正在导入第 x–y 批」再发请求 */
 function yieldForProgressPaint(): Promise<void> {
@@ -388,12 +456,22 @@ export async function importInChunksViaPerItemCreate<T>(config: {
   items: T[];
   chunkSize?: number;
   concurrency?: number;
+  /** 每分钟写请求上限，避免触发 API 写限流；默认 100（后端 normal 120/min） */
+  writesPerMinute?: number;
+  /** 遇 429 时按 Retry-After 等待并重试同一行的次数上限 */
+  maxRateLimitRetries?: number;
   title?: string;
   createOne: (item: T, globalIndex: number) => Promise<unknown>;
   rowNumberForIndex?: (globalIndex: number, item: T) => number;
   showResultModal?: boolean;
 }): Promise<BatchImportResult> {
   const concurrency = Math.max(1, Math.min(8, config.concurrency ?? 4));
+  const writesPerMinute = Math.max(
+    1,
+    Math.trunc(config.writesPerMinute ?? DEFAULT_BULK_IMPORT_WRITES_PER_MINUTE),
+  );
+  const maxRateLimitRetries = Math.max(0, Math.trunc(config.maxRateLimitRetries ?? 8));
+  const paceMs = Math.ceil(60_000 / writesPerMinute);
   return importInChunks({
     items: config.items,
     chunkSize: config.chunkSize ?? DEFAULT_IMPORT_CHUNK_SIZE,
@@ -404,18 +482,32 @@ export async function importInChunksViaPerItemCreate<T>(config: {
       const failedItems: ChunkBulkFailedItem[] = [];
       let createdCount = 0;
       let next = 0;
+      /** 全 chunk 共享写节奏，避免多 worker 并发冲垮 API 写限流 */
+      let writeGate = Promise.resolve();
+      const enqueueWrite = (run: () => Promise<void>): Promise<void> => {
+        const scheduled = writeGate.then(run);
+        writeGate = scheduled.catch(() => {});
+        return scheduled;
+      };
       const workers = Array.from({ length: concurrency }, async () => {
         while (next < chunk.length) {
           const i = next;
           next += 1;
           try {
-            await config.createOne(chunk[i], chunkOffset + i);
-            createdCount += 1;
+            await enqueueWrite(async () => {
+              await invokeCreateWithWriteRateLimitRetry(
+                () => config.createOne(chunk[i], chunkOffset + i),
+                maxRateLimitRetries,
+              );
+              createdCount += 1;
+              if (paceMs > 0) {
+                await sleepMs(paceMs);
+              }
+            });
           } catch (error: unknown) {
-            const err = error as { message?: string; detail?: string };
             failedItems.push({
               index: i,
-              reason: err?.message || err?.detail || '未知错误',
+              reason: extractImportFailureReason(error),
             });
           }
         }

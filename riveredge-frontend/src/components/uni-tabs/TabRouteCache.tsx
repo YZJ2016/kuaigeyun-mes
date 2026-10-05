@@ -203,7 +203,8 @@ export function TabRouteCache({
 
       {!isActiveCreate && (
         <div className="uni-tabs-route-cache-pane uni-tabs-route-cache-pane--active" style={routePaneStyle}>
-          <RouteTransition>{children}</RouteTransition>
+          {/* refreshToken 变化时仅 remount 列表分支，不影响建单 keep-alive */}
+          <RouteTransition key={`list-refresh-${refreshToken}`}>{children}</RouteTransition>
         </div>
       )}
     </>

@@ -115,22 +115,34 @@
                 "sort_order": 5
               },
               {
+                "title": "app.kuaioa.menu.attendance-daily",
+                "path": "/apps/kuaioa/hr/attendance-daily",
+                "permission": "kuaioa:attendance-daily:read",
+                "sort_order": 6
+              },
+              {
+                "title": "app.kuaioa.menu.attendance-analysis",
+                "path": "/apps/kuaioa/hr/attendance-analysis",
+                "permission": "kuaioa:attendance-analysis:read",
+                "sort_order": 7
+              },
+              {
                 "title": "app.kuaioa.menu.attendance",
                 "path": "/apps/kuaioa/hr/attendance",
                 "permission": "kuaioa:attendance:read",
-                "sort_order": 6
+                "sort_order": 8
               },
               {
                 "title": "app.kuaioa.menu.attendance-rest",
                 "path": "/apps/kuaioa/hr/attendance/day-register?mode=rest",
                 "permission": "kuaioa:attendance:update",
-                "sort_order": 4
+                "sort_order": 9
               },
               {
                 "title": "app.kuaioa.menu.attendance-night",
                 "path": "/apps/kuaioa/hr/attendance/day-register?mode=night",
                 "permission": "kuaioa:attendance:update",
-                "sort_order": 5
+                "sort_order": 10
               }
             ]
           },
@@ -453,6 +465,14 @@
     "kuaioa:attendance:delete",
     "kuaioa:attendance:submit",
     "kuaioa:attendance:export",
+    "kuaioa:attendance-daily:read",
+    "kuaioa:attendance-daily:create",
+    "kuaioa:attendance-daily:update",
+    "kuaioa:attendance-daily:delete",
+    "kuaioa:attendance-daily:import",
+    "kuaioa:attendance-daily:export",
+    "kuaioa:attendance-analysis:read",
+    "kuaioa:attendance-analysis:export",
     "kuaioa:living-advance:read",
     "kuaioa:living-advance:create",
     "kuaioa:living-advance:update",
@@ -527,6 +547,14 @@
     "riveredge-backend": ">=1.0.0",
     "riveredge-frontend": ">=1.0.0"
   },
+  "requires_apps": [
+    "kuaizhizao"
+  ],
+  "module_references": {
+    "__all_modules__": [
+      "system:department"
+    ]
+  },
   "audit": [
     {
       "node_key": "kuaioa_form_request",
@@ -534,7 +562,8 @@
       "resource": "kuaioa:form-request",
       "name": "轻办公自定义申请审核",
       "template": "simple",
-      "config_category": "common"
+      "config_category": "office",
+      "config_section": "office_admin"
     },
     {
       "node_key": "kuaioa_asset_purchase",
@@ -542,7 +571,8 @@
       "resource": "kuaioa:asset-purchase",
       "name": "固定资产采买申请审核",
       "template": "simple",
-      "config_category": "common"
+      "config_category": "office",
+      "config_section": "office_admin"
     },
     {
       "node_key": "kuaioa_leave",
@@ -550,7 +580,8 @@
       "resource": "kuaioa:leave",
       "name": "请假出差申请审核",
       "template": "simple",
-      "config_category": "common"
+      "config_category": "office",
+      "config_section": "office_admin"
     },
     {
       "node_key": "kuaioa_seal",
@@ -558,7 +589,8 @@
       "resource": "kuaioa:seal",
       "name": "用章申请审核",
       "template": "simple",
-      "config_category": "common"
+      "config_category": "office",
+      "config_section": "office_admin"
     },
     {
       "node_key": "kuaioa_special_price",
@@ -566,7 +598,8 @@
       "resource": "kuaioa:special-price",
       "name": "特价申请审核",
       "template": "simple",
-      "config_category": "common"
+      "config_category": "sales",
+      "config_section": "sales_special"
     },
     {
       "node_key": "kuaioa_concession",
@@ -574,7 +607,8 @@
       "resource": "kuaioa:concession",
       "name": "让步接收申请审核",
       "template": "simple",
-      "config_category": "common"
+      "config_category": "quality",
+      "config_section": "quality_collab"
     },
     {
       "node_key": "kuaioa_process_deviation",
@@ -582,7 +616,8 @@
       "resource": "kuaioa:process-deviation",
       "name": "工艺偏离申请审核",
       "template": "simple",
-      "config_category": "common"
+      "config_category": "quality",
+      "config_section": "quality_collab"
     },
     {
       "node_key": "kuaioa_dept_training_application",
@@ -590,7 +625,8 @@
       "resource": "kuaioa:dept-training-application",
       "name": "部门培训申请审核",
       "template": "simple",
-      "config_category": "common"
+      "config_category": "office",
+      "config_section": "office_training"
     },
     {
       "node_key": "kuaioa_training_plan",
@@ -598,7 +634,8 @@
       "resource": "kuaioa:training-plan",
       "name": "年度培训计划审核",
       "template": "simple",
-      "config_category": "common"
+      "config_category": "office",
+      "config_section": "office_training"
     },
     {
       "node_key": "kuaioa_special_work_qualification",
@@ -606,7 +643,8 @@
       "resource": "kuaioa:special-work-qualification",
       "name": "特殊作业资格确认审核",
       "template": "simple",
-      "config_category": "common"
+      "config_category": "office",
+      "config_section": "office_training"
     }
   ]
 }

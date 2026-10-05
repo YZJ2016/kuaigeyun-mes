@@ -9,3 +9,4 @@ export { SourceDocumentCode } from './SourceDocumentCode';
 export type { SourceDocumentCodeProps } from './SourceDocumentCode';
 export { DemandComputationSourceCode } from './DemandComputationSourceCode';
 export { LinkedDocumentAutoCell } from './LinkedDocumentAutoCell';
+export { LinkedDocumentCodesFromFields } from './LinkedDocumentCodesFromFields';

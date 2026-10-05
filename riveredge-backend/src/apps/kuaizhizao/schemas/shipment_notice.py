@@ -10,6 +10,7 @@ Date: 2026-02-22
 from __future__ import annotations
 
 from datetime import datetime, date
+from decimal import Decimal
 from typing import Optional, List
 
 from pydantic import Field
@@ -34,6 +35,8 @@ class ShipmentNoticeBase(BaseSchema):
     planned_ship_date: Optional[date] = Field(None, description="计划发货日期")
     shipping_address: Optional[str] = Field(None, description="收货地址")
     status: str = Field("待发货", max_length=20, description="通知状态")
+    currency_code: Optional[str] = Field("CNY", max_length=20, description="币种代码")
+    exchange_rate: Decimal = Field(default=Decimal("1"), gt=0, description="汇率（相对本位币）")
     notes: Optional[str] = Field(None, description="备注")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
@@ -57,6 +60,8 @@ class ShipmentNoticeUpdate(BaseSchema):
     planned_ship_date: Optional[date] = Field(None, description="计划发货日期")
     shipping_address: Optional[str] = Field(None, description="收货地址")
     status: Optional[str] = Field(None, max_length=20, description="通知状态")
+    currency_code: Optional[str] = Field(None, max_length=20, description="币种代码")
+    exchange_rate: Optional[Decimal] = Field(None, gt=0, description="汇率（相对本位币）")
     notes: Optional[str] = Field(None, description="备注")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
     items: Optional[List["ShipmentNoticeItemCreate"]] = Field(None, description="通知明细列表")

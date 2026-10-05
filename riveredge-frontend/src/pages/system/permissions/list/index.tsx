@@ -21,7 +21,12 @@ import {
   getPermissionByUuid,
   Permission,
 } from '../../../../services/permission';
-import { extractProTableSort, mergeListKeyword, mapPermissionListSortField } from '../../../../utils/tableQueryKey';
+import {
+  extractProTableSort,
+  mapPermissionListSortField,
+  pickListSearchKeyword,
+  pickSearchString,
+} from '../../../../utils/tableQueryKey';
 import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
 
 const PermissionListPage: React.FC = () => {
@@ -194,20 +199,19 @@ const PermissionListPage: React.FC = () => {
         <UniTable<Permission>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('system.permissions')}
-          columnPersistenceId="pages.system.permissions.list"
+          columnPersistenceId="pages.system.permissions.list-v2"
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {
             const { sortBy, sortOrder } = extractProTableSort(sort);
-            const keyword = mergeListKeyword(searchFormValues);
             const response = await getPermissionList({
               page: params.current || 1,
               page_size: params.pageSize || 20,
-              keyword: keyword || undefined,
-              name: searchFormValues?.name as string | undefined,
-              code: searchFormValues?.code as string | undefined,
-              resource: searchFormValues?.resource as string | undefined,
-              permission_type: searchFormValues?.permission_type as string | undefined,
+              keyword: pickListSearchKeyword(searchFormValues),
+              name: pickSearchString(searchFormValues, 'name'),
+              code: pickSearchString(searchFormValues, 'code'),
+              resource: pickSearchString(searchFormValues, 'resource'),
+              permission_type: pickSearchString(searchFormValues, 'permission_type'),
               sort_by: mapPermissionListSortField(sortBy),
               sort_order: sortOrder,
             });

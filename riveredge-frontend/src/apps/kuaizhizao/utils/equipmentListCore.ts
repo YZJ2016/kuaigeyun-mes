@@ -1,5 +1,11 @@
 import type { TFunction } from 'i18next';
-import { extractProTableSort, extractReportProTableSort } from '../../../utils/tableQueryKey';
+import {
+  extractProTableSort,
+  extractReportProTableSort,
+  pickListSearchKeyword,
+  pickSearchString,
+  pickSearchTriStateBoolean,
+} from '../../../utils/tableQueryKey';
 import { parseSalesReportDateRange } from '../services/reports';
 
 export const EQUIPMENT_OPS_PINNED_STATUS_FIELD = 'status';
@@ -57,11 +63,6 @@ export function normalizeEquipmentListResponse(res: unknown): { data: unknown[];
   return { data: [], total: 0 };
 }
 
-function pickString(searchFormValues: Record<string, unknown> | null | undefined, key: string) {
-  const v = searchFormValues?.[key];
-  return typeof v === 'string' && v.trim() ? v.trim() : undefined;
-}
-
 function resolveOrderBy(sort?: Record<string, unknown>) {
   const { sortBy, sortOrder } = extractProTableSort(sort ?? {});
   return sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
@@ -93,23 +94,20 @@ export function resolveSpotCheckListParams(
   searchFormValues?: Record<string, unknown> | null,
   sort?: Record<string, unknown>,
 ): Record<string, string | number | boolean | undefined> {
-  const s = searchFormValues ?? {};
-  const { date_start: check_start_date, date_end: check_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: check_start_date, date_end: check_end_date } = parseSalesReportDateRange(searchFormValues ?? {}, [
     'check_date_range',
     'checkDateRange',
   ]);
-  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(searchFormValues ?? {}, [
     'created_at_range',
     'createdAtRange',
   ]);
-  const abn = s.has_abnormality;
-  const has_abnormality =
-    abn === true || abn === 'true' ? true : abn === false || abn === 'false' ? false : undefined;
+  const has_abnormality = pickSearchTriStateBoolean(searchFormValues, 'has_abnormality');
 
   return {
     order_by: resolveOrderBy(sort),
-    keyword: pickString(s, 'keyword'),
-    status: typeof s.status === 'string' && s.status ? s.status : undefined,
+    keyword: pickListSearchKeyword(searchFormValues),
+    status: pickSearchString(searchFormValues, 'status'),
     check_start_date,
     check_end_date,
     created_start_date,
@@ -122,23 +120,20 @@ export function resolveRoutePatrolListParams(
   searchFormValues?: Record<string, unknown> | null,
   sort?: Record<string, unknown>,
 ): Record<string, string | number | boolean | undefined> {
-  const s = searchFormValues ?? {};
-  const { date_start: patrol_start_date, date_end: patrol_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: patrol_start_date, date_end: patrol_end_date } = parseSalesReportDateRange(searchFormValues ?? {}, [
     'patrol_date_range',
     'patrolDateRange',
   ]);
-  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(searchFormValues ?? {}, [
     'created_at_range',
     'createdAtRange',
   ]);
-  const abn = s.has_abnormality;
-  const has_abnormality =
-    abn === true || abn === 'true' ? true : abn === false || abn === 'false' ? false : undefined;
+  const has_abnormality = pickSearchTriStateBoolean(searchFormValues, 'has_abnormality');
 
   return {
     order_by: resolveOrderBy(sort),
-    keyword: pickString(s, 'keyword'),
-    status: typeof s.status === 'string' && s.status ? s.status : undefined,
+    keyword: pickListSearchKeyword(searchFormValues),
+    status: pickSearchString(searchFormValues, 'status'),
     patrol_start_date,
     patrol_end_date,
     created_start_date,
@@ -172,21 +167,20 @@ export function resolveEquipmentFaultListParams(
   searchFormValues?: Record<string, unknown> | null,
   sort?: Record<string, unknown>,
 ): Record<string, string | undefined> {
-  const s = searchFormValues ?? {};
-  const { date_start: fault_start_date, date_end: fault_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: fault_start_date, date_end: fault_end_date } = parseSalesReportDateRange(searchFormValues ?? {}, [
     'fault_date_range',
     'faultDateRange',
   ]);
-  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(searchFormValues ?? {}, [
     'created_at_range',
     'createdAtRange',
   ]);
 
   return {
     order_by: resolveOrderBy(sort),
-    keyword: pickString(s, 'keyword'),
-    status: typeof s.status === 'string' && s.status ? s.status : undefined,
-    fault_type: typeof s.fault_type === 'string' && s.fault_type ? s.fault_type : undefined,
+    keyword: pickListSearchKeyword(searchFormValues),
+    status: pickSearchString(searchFormValues, 'status'),
+    fault_type: pickSearchString(searchFormValues, 'fault_type'),
     fault_start_date,
     fault_end_date,
     created_start_date,
@@ -198,20 +192,19 @@ export function resolveEquipmentRepairListParams(
   searchFormValues?: Record<string, unknown> | null,
   sort?: Record<string, unknown>,
 ): Record<string, string | undefined> {
-  const s = searchFormValues ?? {};
-  const { date_start: repair_start_date, date_end: repair_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: repair_start_date, date_end: repair_end_date } = parseSalesReportDateRange(searchFormValues ?? {}, [
     'repair_date_range',
     'repairDateRange',
   ]);
-  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(searchFormValues ?? {}, [
     'created_at_range',
     'createdAtRange',
   ]);
 
   return {
     order_by: resolveOrderBy(sort),
-    keyword: pickString(s, 'keyword'),
-    status: typeof s.status === 'string' && s.status ? s.status : undefined,
+    keyword: pickListSearchKeyword(searchFormValues),
+    status: pickSearchString(searchFormValues, 'status'),
     repair_start_date,
     repair_end_date,
     created_start_date,
@@ -277,26 +270,25 @@ export function resolveMaintenancePlanListParams(
   searchFormValues?: Record<string, unknown> | null,
   sort?: Record<string, unknown>,
 ): Record<string, string | undefined> {
-  const s = searchFormValues ?? {};
-  const { date_start: planned_start_date, date_end: planned_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: planned_start_date, date_end: planned_end_date } = parseSalesReportDateRange(searchFormValues ?? {}, [
     'planned_start_date_range',
     'plannedStartDateRange',
   ]);
-  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(searchFormValues ?? {}, [
     'created_at_range',
     'createdAtRange',
   ]);
-  const { date_start: updated_start_date, date_end: updated_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: updated_start_date, date_end: updated_end_date } = parseSalesReportDateRange(searchFormValues ?? {}, [
     'updated_at_range',
     'updatedAtRange',
   ]);
 
   return {
     order_by: resolveOrderBy(sort),
-    keyword: pickString(s, 'keyword'),
-    status: typeof s.status === 'string' && s.status ? s.status : undefined,
-    plan_type: typeof s.plan_type === 'string' && s.plan_type ? s.plan_type : undefined,
-    maintenance_type: typeof s.maintenance_type === 'string' && s.maintenance_type ? s.maintenance_type : undefined,
+    keyword: pickListSearchKeyword(searchFormValues),
+    status: pickSearchString(searchFormValues, 'status'),
+    plan_type: pickSearchString(searchFormValues, 'plan_type'),
+    maintenance_type: pickSearchString(searchFormValues, 'maintenance_type'),
     planned_start_date,
     planned_end_date,
     created_start_date,
@@ -329,25 +321,24 @@ export function resolveMaintenanceExecutionListParams(
   searchFormValues?: Record<string, unknown> | null,
   sort?: Record<string, unknown>,
 ): Record<string, string | undefined> {
-  const s = searchFormValues ?? {};
-  const { date_start: execution_start_date, date_end: execution_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: execution_start_date, date_end: execution_end_date } = parseSalesReportDateRange(searchFormValues ?? {}, [
     'execution_date_range',
     'executionDateRange',
   ]);
-  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(searchFormValues ?? {}, [
     'created_at_range',
     'createdAtRange',
   ]);
-  const { date_start: updated_start_date, date_end: updated_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: updated_start_date, date_end: updated_end_date } = parseSalesReportDateRange(searchFormValues ?? {}, [
     'updated_at_range',
     'updatedAtRange',
   ]);
 
   return {
     order_by: resolveOrderBy(sort),
-    keyword: pickString(s, 'keyword'),
-    status: typeof s.status === 'string' && s.status ? s.status : undefined,
-    execution_result: typeof s.execution_result === 'string' && s.execution_result ? s.execution_result : undefined,
+    keyword: pickListSearchKeyword(searchFormValues),
+    status: pickSearchString(searchFormValues, 'status'),
+    execution_result: pickSearchString(searchFormValues, 'execution_result'),
     execution_start_date,
     execution_end_date,
     created_start_date,
@@ -374,23 +365,22 @@ export function resolveApprovalDocListParams(
   sort?: Record<string, unknown>,
   options?: { docDateRangeKeys?: [string, string]; docDateParamPrefix?: string },
 ): Record<string, string | undefined> {
-  const s = searchFormValues ?? {};
   const docDateKeys = options?.docDateRangeKeys ?? ['doc_date_range', 'docDateRange'];
   const docPrefix = options?.docDateParamPrefix ?? 'doc';
-  const { date_start: docStart, date_end: docEnd } = parseSalesReportDateRange(s, docDateKeys);
-  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: docStart, date_end: docEnd } = parseSalesReportDateRange(searchFormValues ?? {}, docDateKeys);
+  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(searchFormValues ?? {}, [
     'created_at_range',
     'createdAtRange',
   ]);
-  const { date_start: updated_start_date, date_end: updated_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: updated_start_date, date_end: updated_end_date } = parseSalesReportDateRange(searchFormValues ?? {}, [
     'updated_at_range',
     'updatedAtRange',
   ]);
 
   const params: Record<string, string | undefined> = {
     order_by: resolveOrderBy(sort),
-    keyword: pickString(s, 'keyword'),
-    status: typeof s.status === 'string' && s.status ? s.status : undefined,
+    keyword: pickListSearchKeyword(searchFormValues),
+    status: pickSearchString(searchFormValues, 'status'),
     created_start_date,
     created_end_date,
     updated_start_date,
@@ -418,9 +408,9 @@ export const EQUIPMENT_LEDGER_GROUP_PINNED_FIELD: Record<EquipmentLedgerGroupMod
 };
 
 function pickNumber(searchFormValues: Record<string, unknown> | null | undefined, key: string) {
-  const v = searchFormValues?.[key];
-  if (v == null || v === '') return undefined;
-  const n = Number(v);
+  const raw = pickSearchString(searchFormValues, key);
+  if (raw == null) return undefined;
+  const n = Number(raw);
   return Number.isFinite(n) ? n : undefined;
 }
 
@@ -441,26 +431,32 @@ export function buildEquipmentNatureValueEnum(_t: TFunction): Record<string, { t
   };
 }
 
+/** 设备台账排除「测量设备」（该性质走计量器具台账），避免钉住页签筛出空列表 */
+export function buildEquipmentLedgerNatureValueEnum(t: TFunction): Record<string, { text: string }> {
+  return Object.fromEntries(
+    Object.entries(buildEquipmentNatureValueEnum(t)).filter(([k]) => k !== '测量设备'),
+  );
+}
+
+export const DEFAULT_EQUIPMENT_LEDGER_NATURE = '通用设备';
+
 export function resolveMasterDataListParams(
   searchFormValues?: Record<string, unknown> | null,
   sort?: Record<string, unknown>,
 ): Record<string, string | boolean | undefined> {
-  const s = searchFormValues ?? {};
-  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(searchFormValues ?? {}, [
     'created_at_range',
     'createdAtRange',
   ]);
-  const { date_start: updated_start_date, date_end: updated_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: updated_start_date, date_end: updated_end_date } = parseSalesReportDateRange(searchFormValues ?? {}, [
     'updated_at_range',
     'updatedAtRange',
   ]);
-  const active = s.is_active;
-  const is_active =
-    active === true || active === 'true' ? true : active === false || active === 'false' ? false : undefined;
+  const is_active = pickSearchTriStateBoolean(searchFormValues, 'is_active');
 
   return {
     order_by: resolveOrderBy(sort),
-    keyword: pickString(s, 'keyword'),
+    keyword: pickListSearchKeyword(searchFormValues),
     is_active,
     created_start_date,
     created_end_date,
@@ -484,21 +480,20 @@ export function resolveLedgerListParams(
   searchFormValues?: Record<string, unknown> | null,
   sort?: Record<string, unknown>,
 ): Record<string, string | boolean | number | undefined> {
-  const s = searchFormValues ?? {};
   const base = resolveMasterDataListParams(searchFormValues, sort);
   // 高级搜索「设备编号」字段 dataIndex=code，后端用 keyword 模糊匹配 code/name/serial
-  const codeKeyword = pickString(s, 'code');
+  const codeKeyword = pickSearchString(searchFormValues, 'code');
   return {
     ...base,
     // 台账未点列头时固定创建时间倒序；禁止 extractProTableSort 无 sort 对象时误注入缺省
     order_by: resolveLedgerOrderBy(sort),
     keyword: codeKeyword ?? base.keyword,
-    status: typeof s.status === 'string' && s.status ? s.status : undefined,
-    type: typeof s.type === 'string' && s.type ? s.type : undefined,
-    category: typeof s.category === 'string' && s.category ? s.category : undefined,
-    equipment_nature: typeof s.equipment_nature === 'string' && s.equipment_nature ? s.equipment_nature : undefined,
-    workshop_id: pickNumber(s, 'workshop_id'),
-    production_line_id: pickNumber(s, 'production_line_id'),
+    status: pickSearchString(searchFormValues, 'status'),
+    type: pickSearchString(searchFormValues, 'type'),
+    category: pickSearchString(searchFormValues, 'category'),
+    equipment_nature: pickSearchString(searchFormValues, 'equipment_nature'),
+    workshop_id: pickNumber(searchFormValues, 'workshop_id'),
+    production_line_id: pickNumber(searchFormValues, 'production_line_id'),
   };
 }
 
@@ -507,16 +502,15 @@ export function resolveAssetWorkflowListParams(
   sort?: Record<string, unknown>,
   options?: { docDateRangeKeys?: [string, string]; docDateParamPrefix?: string },
 ): Record<string, string | undefined> {
-  const s = searchFormValues ?? {};
   const docDateKeys = options?.docDateRangeKeys ?? ['doc_date_range', 'docDateRange'];
   const docPrefix = options?.docDateParamPrefix ?? 'doc';
-  const { date_start: docStart, date_end: docEnd } = parseSalesReportDateRange(s, docDateKeys);
+  const { date_start: docStart, date_end: docEnd } = parseSalesReportDateRange(searchFormValues ?? {}, docDateKeys);
   const base = resolveMasterDataListParams(searchFormValues, sort);
 
   const params: Record<string, string | undefined> = {
     order_by: base.order_by as string | undefined,
     keyword: base.keyword as string | undefined,
-    status: typeof s.status === 'string' && s.status ? s.status : undefined,
+    status: pickSearchString(searchFormValues, 'status'),
     created_start_date: base.created_start_date as string | undefined,
     created_end_date: base.created_end_date as string | undefined,
     updated_start_date: base.updated_start_date as string | undefined,
@@ -532,19 +526,15 @@ export function resolveReminderListParams(
   sort?: Record<string, unknown>,
   options?: { dateRangeKeys?: [string, string]; dateParamPrefix?: string },
 ): Record<string, string | boolean | undefined> {
-  const s = searchFormValues ?? {};
   const dateKeys = options?.dateRangeKeys ?? ['reminder_date_range', 'reminderDateRange'];
   const datePrefix = options?.dateParamPrefix ?? 'reminder';
-  const { date_start: dateStart, date_end: dateEnd } = parseSalesReportDateRange(s, dateKeys);
-  const read = s.is_read;
-  const handled = s.is_handled;
+  const { date_start: dateStart, date_end: dateEnd } = parseSalesReportDateRange(searchFormValues ?? {}, dateKeys);
   const params: Record<string, string | boolean | undefined> = {
     order_by: resolveOrderBy(sort),
-    keyword: pickString(s, 'keyword'),
-    reminder_type: typeof s.reminder_type === 'string' && s.reminder_type ? s.reminder_type : undefined,
-    is_read: read === true || read === 'true' ? true : read === false || read === 'false' ? false : undefined,
-    is_handled:
-      handled === true || handled === 'true' ? true : handled === false || handled === 'false' ? false : undefined,
+    keyword: pickListSearchKeyword(searchFormValues),
+    reminder_type: pickSearchString(searchFormValues, 'reminder_type'),
+    is_read: pickSearchTriStateBoolean(searchFormValues, 'is_read'),
+    is_handled: pickSearchTriStateBoolean(searchFormValues, 'is_handled'),
   };
   if (dateStart) params[`${datePrefix}_start_date`] = dateStart;
   if (dateEnd) params[`${datePrefix}_end_date`] = dateEnd;

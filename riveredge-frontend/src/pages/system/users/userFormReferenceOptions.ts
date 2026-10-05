@@ -23,6 +23,8 @@ export type UserFormCoreReferenceOptions = {
   positionOptions: UserFormSelectOption[];
   roleOptions: UserFormSelectOption[];
   roleMetaByUuid: Record<string, UserFormRoleMeta>;
+  /** 部门树原数据（快速新建部门弹窗用） */
+  deptTreeItems: DepartmentTreeItem[];
 };
 
 function buildDeptOptions(
@@ -70,6 +72,7 @@ async function fetchCoreReferenceOptions(t: TFunction): Promise<UserFormCoreRefe
       };
       return acc;
     }, {} as Record<string, UserFormRoleMeta>),
+    deptTreeItems: deptResponse.items,
   };
 }
 

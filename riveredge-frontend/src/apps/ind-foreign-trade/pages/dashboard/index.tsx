@@ -49,7 +49,8 @@ export default function ForeignTradeDashboardPage() {
 
   const pending = stats?.pending_customers ?? 0;
   const overdue = stats?.overdue_customers ?? 0;
-  const inactive7d = stats?.inactive_7d_customers ?? 0;
+  const inactiveAlertDays = Math.max(1, Number(stats?.inactive_alert_days) || 7);
+  const inactiveCustomers = stats?.inactive_customers ?? 0;
   const followed = stats?.follow_status_followed ?? 0;
   const unfollowed = stats?.follow_status_pending ?? 0;
   const records = stats?.follow_up_records_total ?? 0;
@@ -71,8 +72,8 @@ export default function ForeignTradeDashboardPage() {
       },
       {
         key: 'inactive',
-        title: t('app.kuaizhizao.salesDashboard.kpi.inactive7d'),
-        value: inactive7d,
+        title: t('app.kuaizhizao.salesDashboard.kpi.inactiveDays', { days: inactiveAlertDays }),
+        value: inactiveCustomers,
         subtitle: t('app.ind-foreign-trade.dashboard.inactiveHint'),
         icon: <WarningOutlined style={{ fontSize: 24, color: '#fff' }} />,
         gradient: 'linear-gradient(135deg, #ff4d4f 0%, #ff7875 100%)',
@@ -93,7 +94,17 @@ export default function ForeignTradeDashboardPage() {
         onClick: () => navigate('/apps/ind-foreign-trade/export-customers'),
       },
     ],
-    [followed, inactive7d, navigate, overdue, pending, records, t, unfollowed],
+    [
+      followed,
+      inactiveAlertDays,
+      inactiveCustomers,
+      navigate,
+      overdue,
+      pending,
+      records,
+      t,
+      unfollowed,
+    ],
   );
 
   const shortcuts: ModuleShortcutDef[] = useMemo(

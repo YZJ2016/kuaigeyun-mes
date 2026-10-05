@@ -25,6 +25,9 @@ PROFILE_CONNECTOR_TYPE: Dict[str, str] = {
     "kingdee_sal_saleorder": "kingdee_galaxy",
     "kingdee_pur_purchaseorder": "kingdee_galaxy",
     "kingdee_stk_miscellaneous": "kingdee_galaxy",
+    "kingdee_bd_material": "kingdee_galaxy",
+    "kingdee_eng_bom": "kingdee_galaxy",
+    "kingdee_eng_process": "kingdee_galaxy",
     "oa_http_webhook": "Webhook",
     "feishu_im_notify": "feishu",
 }
