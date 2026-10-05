@@ -44,6 +44,13 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'mobile-login-form-banner-gap-r01',
+    date: '2026-10-05',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-login-form-banner-gap-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.mobile-login-form-banner-gap-r01.description',
+  },
+  {
     id: 'mobile-login-banner-ratio-1-2-r01',
     date: '2026-10-05',
     type: 'fix',
