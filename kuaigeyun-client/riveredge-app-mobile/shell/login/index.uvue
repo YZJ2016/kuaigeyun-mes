@@ -14,14 +14,19 @@
 			<view class="card login-card">
 				<text class="login-label login-label-first">组织</text>
 				<text v-if="tenantName.length > 0" class="org-current">{{ tenantName }}</text>
-				<text v-else-if="tenantId.length > 0" class="org-current">已选择组织</text>
-				<input class="field login-field" v-model="keyword" placeholder="组织名称或域名" placeholder-class="login-ph" />
-				<button :class="searching || wecomBusy ? 'btn-secondary is-disabled' : 'btn-secondary'" :disabled="searching || wecomBusy" @click="onSearch">{{ searching ? '搜索中' : '搜索组织' }}</button>
-				<text v-if="isOrgMessage()" class="error login-error">{{ message }}</text>
-				<view v-for="(item, index) in tenants" :key="item.tenantId" class="list-row" hover-class="pressed" @click="onChoose(index)">
-					<text class="title">{{ item.tenantName }}</text>
-					<text class="muted">{{ item.tenantDomain }}</text>
+				<text v-else-if="tenantId.length > 0 && !tenantLocked" class="org-current">已选择组织</text>
+				<view v-if="showAppAddressSettings()" class="btn-secondary" hover-class="pressed" @click="openAddressSettings">
+					<text class="btn-label-secondary">设置</text>
 				</view>
+				<view v-if="!tenantLocked">
+					<input class="field login-field" v-model="keyword" placeholder="组织名称或域名" placeholder-class="login-ph" />
+					<button :class="searching || wecomBusy ? 'btn-secondary is-disabled' : 'btn-secondary'" :disabled="searching || wecomBusy" @click="onSearch">{{ searching ? '搜索中' : '搜索组织' }}</button>
+					<view v-for="(item, index) in tenants" :key="item.tenantId" class="list-row" hover-class="pressed" @click="onChoose(index)">
+						<text class="title">{{ item.tenantName }}</text>
+						<text class="muted">{{ item.tenantDomain }}</text>
+					</view>
+				</view>
+				<text v-if="isOrgMessage()" class="error login-error">{{ message }}</text>
 				<text class="login-label">用户名</text>
 				<input class="field login-field" v-model="username" placeholder="请输入用户名" placeholder-class="login-ph" />
 				<text class="login-label">密码</text>
@@ -45,6 +50,7 @@
 	const fieldErrors = ref<Array<string>>([])
 	const tenantId = ref('')
 	const tenantName = ref('')
+	const tenantLocked = ref(false)
 	const keyword = ref('')
 	const username = ref('')
 	const passwordText = ref('')
@@ -61,14 +67,37 @@
 		if (text == '请搜索并选择组织' || text == '请先确定组织') {
 			return true
 		}
+		if (text == '没有找到组织' || text == '组织地址暂时无法确认') {
+			return true
+		}
 		return false
+	}
+
+	function showAppAddressSettings() : boolean {
+		if (!tenantLocked.value) {
+			return false
+		}
+		let app = false
+		// #ifdef APP
+		app = true
+		// #endif
+		return app
+	}
+
+	function openAddressSettings() {
+		uni.navigateTo({ url: '/shell/tenant/index?mode=settings' })
 	}
 
 	async function refresh(options : any | null) {
 		const state = await bootLogin(options)
+		if (state.needsAddress) {
+			uni.reLaunch({ url: '/shell/tenant/index' })
+			return
+		}
 		message.value = state.message
 		tenantId.value = state.tenantId
 		tenantName.value = getTenantName()
+		tenantLocked.value = state.tenantLocked
 		ready.value = true
 		if (state.enterWorkbench) {
 			uni.reLaunch({ url: '/shell/workbench/index' })
@@ -83,7 +112,7 @@
 	})
 
 	async function onSearch() {
-		if (searching.value || wecomBusy.value) {
+		if (tenantLocked.value || searching.value || wecomBusy.value) {
 			return
 		}
 		searching.value = true
@@ -99,6 +128,9 @@
 	}
 
 	function onChoose(index : number) {
+		if (tenantLocked.value) {
+			return
+		}
 		const item = tenants.value[index]
 		chooseTenant(item.tenantId)
 		setTenantName(item.tenantName)
@@ -118,6 +150,10 @@
 		}
 		if (passwordText.value.length == 0) {
 			missing.push('请输入密码')
+		}
+		if (tenantLocked.value && tenantId.value.length == 0) {
+			message.value = message.value.length > 0 ? message.value : '没有找到组织'
+			return
 		}
 		fieldErrors.value = missing
 		if (missing.length > 0) {

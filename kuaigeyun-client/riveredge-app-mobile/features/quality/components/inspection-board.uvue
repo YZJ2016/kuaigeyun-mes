@@ -1,6 +1,8 @@
 <template>
-	<scroll-view class="page" scroll-y="true">
-		<home-link />
+	<scroll-view class="page" scroll-y="true" :scroll-into-view="scrollTarget">
+		<home-link v-if="!conducting" />
+		<button v-else class="btn-secondary" :disabled="submitting || uploadingCount > 0" @click="leaveHome">返回首页</button>
+		<view v-if="!conducting">
 		<view class="toolbar">
 			<button class="btn-secondary" @click="loadList">刷新</button>
 		</view>
@@ -12,9 +14,16 @@
 			<text v-if="rowLine(row).length > 0" class="meta">{{ rowLine(row) }}</text>
 			<view class="btn-secondary" @click="openConduct(index)"><text class="btn-label-secondary">执行检验</text></view>
 		</view>
+		</view>
 		<view v-if="conducting" class="card">
 			<text class="title">执行检验 {{ currentTitle }}</text>
 			<text class="meta">检验数量 {{ currentQty }}</text>
+			<text class="hint">第 {{ activeStage + 1 }} / 3 段：{{ stageLabels[activeStage] }}</text>
+			<text v-if="formError.length > 0" class="error">{{ formError }}</text>
+			<view class="choices">
+				<button v-for="(label, stageIndex) in stageLabels" :key="stageIndex" class="btn-secondary" :disabled="submitting || uploadingCount > 0" @click="goStage(stageIndex)">{{ activeStage == stageIndex ? '● ' : '' }}{{ label }}</button>
+			</view>
+			<view v-show="activeStage == 0">
 			<view class="field-wrap">
 				<text class="label">合格数量</text>
 				<input class="field" type="digit" :value="qualifiedText" @input="onQualifiedInput" />
@@ -57,10 +66,13 @@
 				<text class="label">附件</text>
 				<view class="link" @click="addAttachment"><text class="link-text">添加附件</text></view>
 				<view v-for="(file, fileIndex) in attachments" :key="fileIndex" class="choices">
+					<image v-if="fileUrl(file).length > 0" class="attachment-preview" :src="fileUrl(file)" mode="aspectFill" @click="previewFile(file)" />
 					<text class="meta">{{ fileLabel(file) }}</text>
 					<view class="link" @click="removeAttachment(fileIndex)"><text class="link-text">移除</text></view>
 				</view>
 			</view>
+			</view>
+			<view v-show="activeStage == 1">
 			<view v-if="needsOverallJudgment" class="field-wrap">
 				<text class="label">整体判定</text>
 				<view class="choices">
@@ -68,7 +80,7 @@
 					<text :class="choiceClass(overallJudgment, 'fail')" @click="pickOverall('fail')">不合格</text>
 				</view>
 			</view>
-			<view v-for="(step, index) in steps" :key="step.key" class="field-wrap">
+			<view v-for="(step, index) in steps" :key="step.key" :id="'quality-step-' + index" class="field-wrap">
 				<text class="label">{{ step.name }}</text>
 				<view v-if="step.legacy" class="choices">
 					<text :class="choiceClass(step.judgment, 'pass')" @click="pickLegacy(index, 'pass')">合格</text>
@@ -99,18 +111,26 @@
 					<text class="label">步骤照片</text>
 					<view class="link" @click="addStepPhoto(index)"><text class="link-text">添加照片</text></view>
 					<view v-for="(photo, photoIndex) in step.photos" :key="photoIndex" class="choices">
+						<image v-if="fileUrl(photo).length > 0" class="attachment-preview" :src="fileUrl(photo)" mode="aspectFill" @click="previewFile(photo)" />
 						<text class="meta">{{ fileLabel(photo) }}</text>
 						<view class="link" @click="removeStepPhoto(index, photoIndex)"><text class="link-text">移除</text></view>
 					</view>
 				</view>
 			</view>
+			</view>
+			<view v-show="activeStage == 2">
+			<text class="meta">合格 {{ qualifiedText }} · 不合格 {{ unqualifiedText }} · 检验项 {{ steps.length }} 项</text>
+			<text class="hint">核对检验结果与补充信息后提交</text>
 			<view v-for="(field, index) in customFields" :key="field.code" class="field-wrap">
 				<text class="label">{{ field.name }}</text>
 				<input class="field" :value="field.value" @input="onCustomInput(index, $event)" />
 			</view>
+			</view>
+			<button v-if="activeStage > 0" class="btn-secondary" :disabled="submitting || uploadingCount > 0" @click="goStage(activeStage - 1)">上一段</button>
+			<button v-if="activeStage < 2" class="btn-primary" :disabled="submitting || uploadingCount > 0" @click="goStage(activeStage + 1)">下一段</button>
 			<text v-if="uploadingCount > 0" class="loading">图片上传中</text>
-			<text v-if="formError.length > 0" class="error">{{ formError }}</text>
-			<view :class="submitting ? 'btn-primary is-disabled' : 'btn-primary'" @click="submitConduct">
+
+			<view v-if="activeStage == 2" :class="submitting ? 'btn-primary is-disabled' : 'btn-primary'" @click="submitConduct">
 				<text class="btn-label">{{ submitting ? '提交中' : '提交检验' }}</text>
 			</view>
 			<view class="link" @click="closeConduct">
@@ -161,6 +181,7 @@
 	}
 
 	const props = defineProps({
+		backRequest: { type: Number, default: 0 },
 		listPath: {
 			type: String,
 			default: ''
@@ -184,6 +205,39 @@
 	const releaseValues : string[] = ['pending', 'released', 'rejected']
 	const releaseLabels : string[] = ['待判定', '放行', '拒绝放行']
 
+	const emit = defineEmits(['conduct-state'])
+	const activeStage = ref(0)
+	const scrollTarget = ref('')
+	let firstMissingStep = -1
+	const stageLabels = ['数量与结论', '检验项目', '核对与补充']
+	const leavePromptOpen = ref(false)
+	function goStage(index : number) {
+		if (submitting.value || uploadingCount.value > 0 || index < 0 || index > 2) { return }
+		activeStage.value = index
+		scrollTarget.value = ''
+	}
+	function fileUrl(file : UTSJSONObject) : string { return file.getString('url') ?? '' }
+	function previewFile(file : UTSJSONObject) {
+		const url = fileUrl(file)
+		if (url.length > 0) { uni.previewImage({ urls: [url], current: url }) }
+	}
+	function leaveHome() { askLeave(true) }
+	function askLeave(toHome : boolean) {
+		if (!conducting.value || leavePromptOpen.value) { return }
+		if (submitting.value || uploadingCount.value > 0) { formError.value = '请等待上传或提交完成后离开'; return }
+		leavePromptOpen.value = true
+		uni.showModal({
+			title: '离开检验', content: '当前检验尚未提交，离开会丢失已填写内容。', confirmText: '确认离开', cancelText: '继续填写',
+			success: (result) => {
+				leavePromptOpen.value = false
+				if (!result.confirm) { return }
+				conducting.value = false
+				uploadSession.value += 1
+				formError.value = ''
+				if (toHome) { uni.reLaunch({ url: '/shell/workbench/index' }) }
+			}, fail: () => { leavePromptOpen.value = false }
+		})
+	}
 	const loading = ref(false)
 	const submitting = ref(false)
 	const conducting = ref(false)
@@ -940,14 +994,14 @@
 		steps.value = buildSteps(row)
 		needsOverallJudgment.value = needsOverallResult(row)
 		overallJudgment.value = ''
+		activeStage.value = 0
 		conducting.value = true
 		loadCustomFields(id)
 	}
 
-	function closeConduct() {
-		conducting.value = false
-		formError.value = ''
-	}
+	function closeConduct() { askLeave(false) }
+	watch(conducting, () => { emit('conduct-state', conducting.value) })
+	watch(() : number => props.backRequest, () => { closeConduct() })
 
 	// 对照后端 assert_inspection_quantities_balanced：合格+不合格须等于检验数量。
 	// 检验数量读不到时跳过，交给后端兜底。
@@ -967,12 +1021,14 @@
 	// legacy 项须选合格/不合格；typed 项按 valueType 判必填，na/非必填跳过；
 	// text 项值与判定都必填；multi_select 空选视为「无缺陷」不必填。
 	function validateSteps() : string {
+		firstMissingStep = -1
 		const missing : string[] = []
 		const list = steps.value
 		for (let i = 0; i < list.length; i++) {
 			const step = list[i]
 			if (step.legacy) {
 				if (step.judgment != 'pass' && step.judgment != 'fail') {
+					if (firstMissingStep < 0) { firstMissingStep = i }
 					missing.push(step.name)
 				}
 				continue
@@ -985,12 +1041,14 @@
 			}
 			if (step.valueType == 'text') {
 				if (step.value.trim().length == 0 || (step.judgment != 'pass' && step.judgment != 'fail')) {
+					if (firstMissingStep < 0) { firstMissingStep = i }
 					missing.push(step.name)
 				}
 				continue
 			}
 			if (step.value.trim().length == 0) {
-				missing.push(step.name)
+				if (firstMissingStep < 0) { firstMissingStep = i }
+					missing.push(step.name)
 			}
 		}
 		if (missing.length > 0) {
@@ -1084,30 +1142,38 @@
 		}
 		const qtyError = validateQuantities()
 		if (qtyError.length > 0) {
+			activeStage.value = 0
 			formError.value = qtyError
 			return
 		}
 		const stepError = validateSteps()
 		if (stepError.length > 0) {
+			activeStage.value = 1
+			scrollTarget.value = ''
+			if (firstMissingStep >= 0) { nextTick(() => { scrollTarget.value = 'quality-step-' + firstMissingStep.toString() }) }
 			formError.value = stepError
 			return
 		}
 		const failError = validateFailedStep()
 		if (failError.length > 0) {
+			activeStage.value = 0
 			formError.value = failError
 			return
 		}
 		if (needsOverallJudgment.value && overallJudgment.value != 'pass' && overallJudgment.value != 'fail') {
+			activeStage.value = 1
 			formError.value = '请填写整体检验判定'
 			return
 		}
 		const fieldError = validateCustomFieldFormats()
 		if (fieldError.length > 0) {
+			activeStage.value = 2
 			formError.value = fieldError
 			return
 		}
 		if (props.conductKind == 'oqc') {
 			if (inspectionResult.value.length == 0 || qualityStatus.value.length == 0 || releaseDecision.value.length == 0) {
+				activeStage.value = 0
 				formError.value = '请填写检验结果、质量状态和放行结论'
 				return
 			}
@@ -1151,6 +1217,7 @@
 </script>
 
 <style>
+	.attachment-preview { width: 80px; height: 80px; margin-right: 8px; border-radius: 8px; }
 	.field-wrap {
 		margin-top: 10px;
 	}

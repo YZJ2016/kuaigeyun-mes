@@ -1,22 +1,34 @@
 <template>
-	<view class="page">
+	<scroll-view class="page" direction="vertical" :scroll-top="scrollTop" @scroll="onScroll">
 		<home-link />
 		<text v-if="errorTextValue.length > 0" class="error">{{ errorTextValue }}</text>
 		<text v-if="loading" class="loading">加载中</text>
 		<view v-if="selectedIndex < 0">
+			<text class="label">工单编码、名称或产品</text>
+			<input v-model="keyword" class="field" :disabled="loading" placeholder="输入关键词" @confirm="search" />
+			<view class="status-options">
+				<button v-for="(choice, index) in statuses" :key="choice.value" :class="status == choice.value ? 'status-choice status-choice-on' : 'status-choice'" :disabled="loading" @click="pickStatus(index)">{{ status == choice.value ? '● ' : '' }}{{ choice.label }}</button>
+			</view>
+			<button class="btn-primary" :disabled="loading" @click="search">查询</button>
+			<button class="btn-secondary" :disabled="loading" @click="refreshList">刷新当前查询</button>
+			<text class="sub">已加载 {{ rows.length }} / {{ total }} 条</text>
 			<text v-if="!loading && rows.length == 0 && errorTextValue.length == 0" class="empty">暂无工单</text>
 			<view v-for="(row, index) in rows" :key="index" class="card" hover-class="pressed" @click="openDetail(index)">
 				<text class="title">{{ lineTitle(row) }}</text>
 				<text class="sub">{{ lineSub(row) }}</text>
 			</view>
+			<button v-if="rows.length < total" class="btn-secondary" :disabled="loading" @click="loadMore">加载更多</button>
 		</view>
 		<view v-else class="card">
 			<button class="btn-secondary" @click="closeDetail">返回列表</button>
 			<text class="title">{{ lineTitle(rows[selectedIndex]) }}</text>
 			<text class="sub">{{ lineSub(rows[selectedIndex]) }}</text>
+			<text class="sub">计划数量：{{ fieldText(rows[selectedIndex], 'quantity') }}</text>
+			<text class="sub">计划开始：{{ fieldText(rows[selectedIndex], 'planned_start_date') }}</text>
+			<text class="sub">计划完成：{{ fieldText(rows[selectedIndex], 'planned_end_date') }}</text>
 			<button class="btn-primary" @click="goReport">去报工</button>
 		</view>
-	</view>
+	</scroll-view>
 </template>
 
 <script setup lang="uts">
@@ -30,6 +42,46 @@
 	const loading = ref(false)
 	const errorTextValue = ref('')
 	const selectedIndex = ref(-1)
+	const keyword = ref('')
+	const status = ref('')
+	const total = ref(0)
+	const scrollTop = ref(0)
+	const listScrollTop = ref(0)
+	let activeKeyword = ''
+	let activeStatus = ''
+	const statuses = [
+		{ value: '', label: '全部' }, { value: 'draft', label: '草稿' },
+		{ value: 'released', label: '已下达' }, { value: 'in_progress', label: '执行中' },
+		{ value: 'completed', label: '已完成' }, { value: 'cancelled', label: '已取消' },
+		{ value: 'split', label: '已拆分' }
+	]
+	function statusLabel(value : string) : string {
+		for (let i = 0; i < statuses.length; i++) {
+			if (statuses[i].value == value) { return statuses[i].label }
+		}
+		return value
+	}
+	function onScroll(event : UniScrollEvent) {
+		if (selectedIndex.value < 0) {
+			listScrollTop.value = event.detail.scrollTop
+			scrollTop.value = event.detail.scrollTop
+		}
+	}
+	function pickStatus(index : number) {
+		if (loading.value) { return }
+		status.value = statuses[index].value
+		search()
+	}
+	async function search() {
+		if (loading.value) { return }
+		activeKeyword = keyword.value.trim()
+		activeStatus = status.value
+		await load(false)
+	}
+	async function refreshList() { await load(false) }
+	async function loadMore() {
+		if (rows.value.length < total.value) { await load(true) }
+	}
 
 	function lineTitle(row : any) : string {
 		const code = fieldText(row, 'code')
@@ -41,10 +93,11 @@
 	}
 
 	function lineSub(row : any) : string {
-		return fieldText(row, 'product_name') + ' ' + fieldText(row, 'status')
+		return fieldText(row, 'product_name') + ' ' + statusLabel(fieldText(row, 'status'))
 	}
 
-	async function load() {
+	async function load(append : boolean = false) {
+		if (loading.value) { return }
 		const user = readCurrentUser()
 		if (user == null) {
 			errorTextValue.value = '未找到当前用户'
@@ -54,6 +107,18 @@
 		errorTextValue.value = ''
 		const query = new UTSJSONObject()
 		query.set('assigned_worker_id', user.id)
+		query.set('skip', append ? rows.value.length : 0)
+		query.set('limit', 20)
+		query.set('order_by', '-created_at')
+		query.set('include_downstream_push_progress', false)
+		if (activeKeyword.length > 0) { query.set('keyword', activeKeyword) }
+		if (activeStatus.length > 0) { query.set('status', activeStatus) }
+		if (!append) {
+			rows.value = []
+			total.value = 0
+			scrollTop.value = 0
+			listScrollTop.value = 0
+		}
 		try {
 			const payload = await request({
 				method: 'GET',
@@ -61,7 +126,8 @@
 				query: query,
 				body: null,
 			})
-			rows.value = readRows(payload)
+			rows.value = append ? rows.value.concat(readRows(payload)) : readRows(payload)
+			total.value = fieldNumber(payload, 'total')
 		} catch (err) {
 			errorTextValue.value = errorText(err)
 		}
@@ -69,11 +135,14 @@
 	}
 
 	function openDetail(index : number) {
+		if (index < 0 || index >= rows.value.length) { return }
 		selectedIndex.value = index
+		scrollTop.value = 0
 	}
 
 	function closeDetail() {
 		selectedIndex.value = -1
+		nextTick(() => { scrollTop.value = listScrollTop.value })
 	}
 
 	function goReport() {
@@ -94,7 +163,7 @@
 			return false
 		}
 		if (options.from == 'backbutton' || options.from == 'navigateBack') {
-			selectedIndex.value = -1
+			closeDetail()
 			return true
 		}
 		return false
@@ -106,3 +175,8 @@
 </script>
 
 
+<style>
+	.status-options { flex-direction: row; flex-wrap: wrap; margin-top: 8px; }
+	.status-choice { min-height: 44px; font-size: 14px; margin: 0px 8px 8px 0px; padding: 4px 12px; border-radius: 8px; background-color: #F1F5F9; color: #475569; }
+	.status-choice-on { background-color: #F3E8FF; color: #7E22CE; }
+</style>

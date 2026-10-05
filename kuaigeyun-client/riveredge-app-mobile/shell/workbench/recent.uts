@@ -1,0 +1,35 @@
+import { getTenantId, readSessionUserId } from '../../shared/api/session.uts'
+
+function storageKey() : string {
+	const tenant = getTenantId()
+	const user = readSessionUserId()
+	return tenant.length > 0 && user > 0 ? 'recent_entries:' + tenant + ':' + user.toString() : ''
+}
+
+export function readRecentRoutes() : Array<string> {
+	const key = storageKey()
+	if (key.length == 0) { return [] }
+	try {
+		const raw = uni.getStorageSync(key)
+		if (raw == null || String(raw).length == 0) { return [] }
+		const parsed = JSON.parse(String(raw))
+		if (!Array.isArray(parsed)) { return [] }
+		const routes : Array<string> = []
+		const list = parsed as Array<any>
+		for (let i = 0; i < list.length && routes.length < 8; i++) {
+			if (typeof list[i] == 'string') { routes.push(list[i] as string) }
+		}
+		return routes
+	} catch (_err) { return [] }
+}
+
+export function rememberRoute(route : string) {
+	const key = storageKey()
+	if (key.length == 0 || route.length == 0) { return }
+	const old = readRecentRoutes()
+	const next : Array<string> = [route]
+	for (let i = 0; i < old.length && next.length < 8; i++) {
+		if (old[i] != route) { next.push(old[i]) }
+	}
+	try { uni.setStorageSync(key, JSON.stringify(next)) } catch (_err) {}
+}

@@ -1,0 +1,33 @@
+import { request } from '../../shared/api/index.uts'
+import { fieldNumber, readRows } from '../../shared/api/fields.uts'
+
+const BASE = '/api/v1/apps/kuaizhizao/'
+
+export async function searchChoices(kind : string, keyword : string, skip : number) : Promise<any> {
+	const resource = kind == 'device' ? 'equipment' : (kind == 'scheme' ? 'equipment-inspection-schemes' : 'equipment-patrol-routes')
+	const query = new UTSJSONObject()
+	query.set('keyword', keyword.trim())
+	query.set('skip', skip)
+	query.set('limit', 20)
+	if (kind != 'device') { query.set('is_active', true) }
+	if (kind == 'scheme') { query.set('domain', 'equipment') }
+	return await request({ path: BASE + resource, method: 'GET', query: query, body: null })
+}
+
+export async function loadBoundSchemes(equipmentId : number) : Promise<any[]> {
+	const query = new UTSJSONObject()
+	query.set('equipment_id', equipmentId)
+	query.set('scheme_type', 'spot_check')
+	const raw = await request({ path: BASE + 'equipment-scheme-bindings', method: 'GET', query: query, body: null })
+	const bindings = readRows(raw)
+	const requests : Array<Promise<any>> = []
+	const seen : number[] = []
+	for (let i = 0; i < bindings.length; i++) {
+		const id = fieldNumber(bindings[i], 'scheme_id')
+		if (id > 0 && seen.indexOf(id) < 0) {
+			seen.push(id)
+			requests.push(request({ path: BASE + 'equipment-inspection-schemes/' + id.toString(), method: 'GET', query: null, body: null }))
+		}
+	}
+	return await Promise.all(requests)
+}

@@ -139,8 +139,82 @@ h2.section-title {
 .page > .section-title:first-child,
 .scope:first-child .section-title { margin-top: 0; }
 .who { margin: 0 0 12px; }
+.who-btn {
+	width: 100%;
+	min-height: 48px;
+	padding: 12px;
+	border: 1px solid var(--border);
+	border-radius: 12px;
+	background: var(--card);
+	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	text-align: left;
+}
+.who-copy { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; }
+.who-trail { display: inline-flex; align-items: center; gap: 2px; flex: 0 0 auto; }
+.who-account { color: var(--ink); font-size: 16px; font-weight: 700; }
 .who-name { display: block; font-size: 20px; font-weight: 700; }
 .who-meta { display: block; margin-top: 2px; color: var(--muted); font-size: 14px; }
+.identity { display: flex; align-items: center; gap: 12px; }
+.avatar {
+	width: 40px;
+	height: 40px;
+	border-radius: 10px;
+	background: #F3E8FF;
+	color: #9730E3;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 18px;
+	font-weight: 700;
+	flex: 0 0 40px;
+	overflow: hidden;
+}
+.avatar img { width: 40px; height: 40px; display: block; }
+.avatar-edit { display: flex; align-items: center; gap: 12px; }
+.avatar-actions { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.account-logout { margin-top: 48px; }
+.action-list {
+	background: var(--card);
+	border: 1px solid var(--border);
+	border-radius: 12px;
+	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+	overflow: hidden;
+}
+.action-row {
+	width: 100%;
+	min-height: 48px;
+	margin: 0;
+	padding: 8px 12px;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	text-align: left;
+	background: transparent;
+	border: 0;
+	border-bottom: 1px solid var(--border);
+	border-radius: 0;
+}
+.action-list > :last-child { border-bottom: 0; }
+.action-label { font-size: 16px; font-weight: 700; flex: 0 0 auto; }
+.action-end { margin-left: auto; min-width: 0; display: flex; align-items: center; justify-content: flex-end; gap: 4px; }
+.action-aside { color: var(--muted); font-size: 14px; font-weight: 500; text-align: right; }
+.action-inline {
+	width: auto;
+	min-height: 48px;
+	padding: 0 12px;
+	border-radius: 8px;
+	border: 1px solid var(--input);
+	background: #fff;
+	font-size: 15px;
+	font-weight: 700;
+	flex: 0 0 auto;
+	white-space: nowrap;
+}
+.lead { margin: 0 0 12px; }
 .hint, .sub, .step-label { color: var(--muted); font-size: 14px; margin: 8px 0 0; }
 .step-label { margin: 0 0 12px; }
 .step-label strong { color: var(--ink); }

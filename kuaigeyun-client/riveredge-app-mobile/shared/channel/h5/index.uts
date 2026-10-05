@@ -68,6 +68,161 @@ export function readBrowserPath() : string {
 	return path
 }
 
+/** 从当前地址去掉一个查询参数，不整页跳转。 */
+export function dropBrowserQuery(name : string) : void {
+	// #ifdef WEB || H5
+	let search = window.location.search
+	if (search.indexOf('?') == 0) {
+		search = search.substring(1)
+	}
+	const parts = search.split('&')
+	const kept : Array<string> = []
+	const prefix = name + '='
+	for (let i = 0; i < parts.length; i++) {
+		const part = parts[i]
+		if (part.length == 0 || part.indexOf(prefix) == 0) {
+			continue
+		}
+		kept.push(part)
+	}
+	let hash = window.location.hash
+	if (hash == null) {
+		hash = ''
+	}
+	const path = window.location.pathname
+	const next = kept.length == 0 ? path + hash : path + '?' + kept.join('&') + hash
+	window.history.replaceState(window.history.state, '', next)
+	// #endif
+}
+
+const ENTRY_DOMAIN_KEY = 'riveredge-mobile-entry-domain'
+
+const RESERVED_ENTRY_DOMAINS : Array<string> = [
+	'admin', 'login', 'infra', 'system', 'apps', 'api', 'docs', 'debug', 'qrcode', 'init', 'personal', 'lock'
+]
+
+const APP_PATH_SEGMENTS : Array<string> = [
+	'shell', 'features', 'static', 'assets', 'uni_modules', 'unpackage'
+]
+
+function browserPathname() : string {
+	let path = ''
+	// #ifdef WEB || H5
+	path = window.location.pathname
+	// #endif
+	path = path.trim().toLowerCase()
+	while (path.length > 1 && path.charAt(path.length - 1) == '/') {
+		path = path.substring(0, path.length - 1)
+	}
+	return path
+}
+
+function listed(items : Array<string>, value : string) : boolean {
+	for (let i = 0; i < items.length; i++) {
+		if (items[i] == value) {
+			return true
+		}
+	}
+	return false
+}
+
+function isTenantDomainSegment(value : string) : boolean {
+	if (value.length < 3 || value.length > 12) {
+		return false
+	}
+	const first = value.charAt(0)
+	if (first < 'a' || first > 'z') {
+		return false
+	}
+	for (let i = 1; i < value.length; i++) {
+		const ch = value.charAt(i)
+		const letter = ch >= 'a' && ch <= 'z'
+		const digit = ch >= '0' && ch <= '9'
+		if (!letter && !digit && ch != '_' && ch != '-') {
+			return false
+		}
+	}
+	if (listed(RESERVED_ENTRY_DOMAINS, value) || listed(APP_PATH_SEGMENTS, value)) {
+		return false
+	}
+	return true
+}
+
+function segmentAfterMobile(path : string) : string {
+	const prefix = '/mobile/'
+	if (path.indexOf(prefix) != 0) {
+		return ''
+	}
+	const rest = path.substring(prefix.length)
+	if (rest.length == 0 || rest.indexOf('/') >= 0) {
+		return ''
+	}
+	return rest
+}
+
+function rememberEntryDomain(domain : string) : void {
+	// #ifdef WEB || H5
+	window.sessionStorage.setItem(ENTRY_DOMAIN_KEY, domain)
+	// #endif
+}
+
+function clearEntryDomain() : void {
+	// #ifdef WEB || H5
+	window.sessionStorage.removeItem(ENTRY_DOMAIN_KEY)
+	// #endif
+}
+
+function readEntryDomain() : string {
+	let raw = ''
+	// #ifdef WEB || H5
+	const stored = window.sessionStorage.getItem(ENTRY_DOMAIN_KEY)
+	if (stored != null) {
+		raw = String(stored)
+	}
+	// #endif
+	const domain = raw.trim().toLowerCase()
+	if (!isTenantDomainSegment(domain)) {
+		return ''
+	}
+	return domain
+}
+
+/** 组织入口仅 `/mobile/{组织域名}` 这一段。裸 `/mobile` 清掉本次入口。 */
+export function readMobileEntryDomain() : string {
+	const path = browserPathname()
+	const segment = segmentAfterMobile(path)
+	if (isTenantDomainSegment(segment)) {
+		rememberEntryDomain(segment)
+		return segment
+	}
+	if (path == '/mobile') {
+		clearEntryDomain()
+		return ''
+	}
+	return readEntryDomain()
+}
+
+/** 未知单段路径交给登录页，避免 H5 历史路由停在 404。 */
+export function openMobileTenantEntry() : void {
+	const path = browserPathname()
+	const segment = segmentAfterMobile(path)
+	if (isTenantDomainSegment(segment)) {
+		rememberEntryDomain(segment)
+		let search = ''
+		// #ifdef WEB || H5
+		search = window.location.search
+		// #endif
+		if (search.indexOf('?') != 0) {
+			search = ''
+		}
+		uni.reLaunch({ url: '/shell/login/index' + search })
+		return
+	}
+	if (path == '/mobile') {
+		clearEntryDomain()
+	}
+}
+
 export function publishH5Route(route : string) : void {
 	// #ifdef WEB || H5
 	let path = route.trim()

@@ -9,7 +9,6 @@ Author: Auto (AI Assistant)
 Date: 2026-01-16
 """
 
-import asyncio
 import uuid
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -324,19 +323,80 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
         }
         return stock_payload, payable_payload
 
-    def _schedule_outsource_receipt_followups(
+    async def _post_stock_and_cost_inside_receipt_transaction(
         self,
         stock_payload: Optional[Dict[str, Any]],
-        payable_payload: Optional[Dict[str, Any]],
     ) -> None:
-        self._schedule_stock_for_outsource_receipt(stock_payload)
-        if stock_payload:
-            self._schedule_cost_for_outsource_receipt(
-                tenant_id=int(stock_payload["tenant_id"]),
-                receipt_id=int(stock_payload["source_doc_id"]),
+        """库存与成本与收货确认同一事务。调用方必须已处于 in_transaction 内。"""
+        if not stock_payload:
+            return
+        from apps.kuaicaiwu.services.inventory_cost_service import InventoryCostService
+        from apps.kuaizhizao.services.inventory_service import InventoryService
+
+        await InventoryService.increase_stock(
+            tenant_id=int(stock_payload["tenant_id"]),
+            material_id=int(stock_payload["material_id"]),
+            quantity=stock_payload["quantity"],
+            warehouse_id=stock_payload["warehouse_id"],
+            batch_no=stock_payload["batch_no"],
+            source_type=stock_payload["source_type"],
+            source_doc_id=stock_payload["source_doc_id"],
+            source_doc_code=stock_payload["source_doc_code"],
+            ledger_production_date=stock_payload["ledger_production_date"],
+            movement_type="outsource_receipt",
+            to_warehouse_id=stock_payload["warehouse_id"],
+            operator_id=stock_payload.get("operator_id"),
+            operator_name=stock_payload.get("operator_name"),
+            idempotency_key=(
+                f"outsource_material_receipt:{stock_payload['source_doc_id']}:inc"
+            ),
+        )
+        await InventoryCostService().on_outsource_receipt_confirmed(
+            int(stock_payload["tenant_id"]),
+            int(stock_payload["source_doc_id"]),
+        )
+
+    async def _await_payable_after_outsource_receipt_commit(
+        self,
+        *,
+        payable_payload: Optional[Dict[str, Any]],
+        material_receipt: OutsourceMaterialReceipt,
+        outsource_work_order: OutsourceWorkOrder,
+        created_by: int,
+        receipt_data: Optional[OutsourceMaterialReceiptCreate] = None,
+    ) -> None:
+        """事务已提交后再生成应付。失败对调用方可见，单据可以仍是 completed。"""
+        if not payable_payload:
+            return
+        if receipt_data is None:
+            receipt_data = OutsourceMaterialReceiptCreate(
+                outsource_work_order_id=int(payable_payload["outsource_work_order_id"]),
+                outsource_work_order_code=str(getattr(outsource_work_order, "code", None) or ""),
+                quantity=payable_payload["quantity"],
+                qualified_quantity=payable_payload["qualified_quantity"],
+                unqualified_quantity=Decimal("0"),
+                unit=str(getattr(material_receipt, "unit", None) or "件"),
+                warehouse_id=getattr(material_receipt, "warehouse_id", None),
+                warehouse_name=getattr(material_receipt, "warehouse_name", None),
             )
-        if payable_payload:
-            self._schedule_auto_payable_for_outsource_receipt(**payable_payload)
+        try:
+            await self._maybe_auto_create_payable_for_outsource_receipt(
+                tenant_id=int(payable_payload["tenant_id"]),
+                material_receipt=material_receipt,
+                outsource_work_order=outsource_work_order,
+                receipt_data=receipt_data,
+                created_by=created_by,
+            )
+        except Exception as exc:
+            logger.error(
+                "委外收货生成应付单失败 receipt_id=%s: %s",
+                getattr(material_receipt, "id", None),
+                exc,
+            )
+            code = getattr(material_receipt, "code", None) or payable_payload.get("receipt_id")
+            raise BusinessLogicError(
+                f"委外收货单 {code} 已完成，但自动生成应付单失败: {exc}"
+            ) from exc
 
     @staticmethod
     def _inspection_counts_for_outsource_release(
@@ -466,6 +526,8 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
 
         stock_payload: Optional[Dict[str, Any]] = None
         payable_payload: Optional[Dict[str, Any]] = None
+        receipt_for_payable: Optional[OutsourceMaterialReceipt] = None
+        work_order_for_payable: Optional[OutsourceWorkOrder] = None
         requires_iqc = False
         response: Optional[OutsourceMaterialReceiptResponse] = None
         try:
@@ -555,6 +617,9 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
                         operator_name=receiver_name,
                         now=now,
                     )
+                    await self._post_stock_and_cost_inside_receipt_transaction(stock_payload)
+                    receipt_for_payable = material_receipt
+                    work_order_for_payable = locked_work_order
 
                 logger.info(f"创建委外收货单成功: {code}")
 
@@ -565,130 +630,21 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
                 raise BusinessLogicError(self._OUTSOURCE_WO_LOCK_BUSY_MSG) from exc
             raise
 
-        if not requires_iqc:
-            self._schedule_outsource_receipt_followups(stock_payload, payable_payload)
+        if (
+            not requires_iqc
+            and receipt_for_payable is not None
+            and work_order_for_payable is not None
+        ):
+            await self._await_payable_after_outsource_receipt_commit(
+                payable_payload=payable_payload,
+                material_receipt=receipt_for_payable,
+                outsource_work_order=work_order_for_payable,
+                created_by=created_by,
+                receipt_data=receipt_data,
+            )
         if response is None:
             raise BusinessLogicError("委外收货创建失败")
         return response
-
-    def _schedule_stock_for_outsource_receipt(self, payload: Optional[Dict[str, Any]]) -> None:
-        """库存入库异步执行，避免阻塞 HTTP 响应或占满连接池。"""
-        if not payload:
-            return
-
-        async def _run() -> None:
-            from apps.kuaizhizao.services.inventory_service import InventoryService
-
-            try:
-                await InventoryService.increase_stock(
-                    tenant_id=int(payload["tenant_id"]),
-                    material_id=int(payload["material_id"]),
-                    quantity=payload["quantity"],
-                    warehouse_id=payload["warehouse_id"],
-                    batch_no=payload["batch_no"],
-                    source_type=payload["source_type"],
-                    source_doc_id=payload["source_doc_id"],
-                    source_doc_code=payload["source_doc_code"],
-                    ledger_production_date=payload["ledger_production_date"],
-                    movement_type="outsource_receipt",
-                    to_warehouse_id=payload["warehouse_id"],
-                    operator_id=payload.get("operator_id"),
-                    operator_name=payload.get("operator_name"),
-                    idempotency_key=(
-                        f"outsource_material_receipt:{payload['source_doc_id']}:inc"
-                    ),
-                )
-            except Exception as exc:
-                logger.error(
-                    "委外收货异步入库失败 doc=%s id=%s: %s",
-                    payload.get("source_doc_code"),
-                    payload.get("source_doc_id"),
-                    exc,
-                )
-
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            return
-        loop.create_task(
-            _run(),
-            name=f"outsource-receipt-stock-{payload.get('source_doc_id')}",
-        )
-
-    def _schedule_cost_for_outsource_receipt(self, *, tenant_id: int, receipt_id: int) -> None:
-        """委外收货成本暂估异步执行，不阻塞 HTTP 响应。"""
-
-        async def _run() -> None:
-            from apps.kuaicaiwu.services.inventory_cost_service import InventoryCostService
-
-            try:
-                await InventoryCostService().on_outsource_receipt_confirmed(tenant_id, receipt_id)
-            except Exception as exc:
-                # spec 142：detached task 失败必须 error 级可见，不得以 warning 当成功
-                logger.error(
-                    "委外收货异步成本结转失败 receipt_id=%s: %s",
-                    receipt_id,
-                    exc,
-                )
-
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            return
-        loop.create_task(_run(), name=f"outsource-receipt-cost-{receipt_id}")
-
-    def _schedule_auto_payable_for_outsource_receipt(
-        self,
-        *,
-        tenant_id: int,
-        receipt_id: int,
-        outsource_work_order_id: int,
-        created_by: int,
-        qualified_quantity: Decimal,
-        quantity: Decimal,
-    ) -> None:
-        """应付单生成不阻塞收货 API 响应。"""
-
-        async def _run() -> None:
-            try:
-                material_receipt = await OutsourceMaterialReceipt.filter(
-                    tenant_id=tenant_id,
-                    id=receipt_id,
-                    deleted_at__isnull=True,
-                ).first()
-                outsource_work_order = await OutsourceWorkOrder.filter(
-                    tenant_id=tenant_id,
-                    id=outsource_work_order_id,
-                    deleted_at__isnull=True,
-                ).first()
-                if not material_receipt or not outsource_work_order:
-                    return
-                receipt_data = OutsourceMaterialReceiptCreate(
-                    outsource_work_order_id=outsource_work_order_id,
-                    outsource_work_order_code=str(outsource_work_order.code or ""),
-                    quantity=quantity,
-                    qualified_quantity=qualified_quantity,
-                    unqualified_quantity=Decimal("0"),
-                    unit=str(material_receipt.unit or "件"),
-                    warehouse_id=material_receipt.warehouse_id,
-                    warehouse_name=material_receipt.warehouse_name,
-                )
-                await self._maybe_auto_create_payable_for_outsource_receipt(
-                    tenant_id=tenant_id,
-                    material_receipt=material_receipt,
-                    outsource_work_order=outsource_work_order,
-                    receipt_data=receipt_data,
-                    created_by=created_by,
-                )
-            except Exception as exc:
-                # spec 142：detached task 失败必须 error 级可见，不得以 warning 当成功
-                logger.error("委外收货异步生成应付单失败 receipt_id=%s: %s", receipt_id, exc)
-
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            return
-        loop.create_task(_run(), name=f"outsource-receipt-payable-{receipt_id}")
 
     async def _maybe_auto_create_payable_for_outsource_receipt(
         self,
@@ -771,8 +727,7 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
                 notes=f"委外收货单 {material_receipt.code} 自动生成应付单",
             )
         except Exception as e:
-            # spec 142：不再就地吞掉；抛出后由调度壳 _run 记录失败日志。
-            # 该任务为收货提交后的 detached task，失败不阻塞收货接口（见 _schedule_auto_payable_for_outsource_receipt）。
+            # spec 176：失败继续上抛。调用方在收货事务提交后 await，并包装成 BusinessLogicError。
             logger.error("委外收货自动生成应付单失败 receipt_id=%s: %s", material_receipt.id, e)
             raise
 
@@ -929,6 +884,7 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
 
         stock_payload: Optional[Dict[str, Any]] = None
         payable_payload: Optional[Dict[str, Any]] = None
+        payable_work_order: Optional[OutsourceWorkOrder] = None
         try:
             async with in_transaction():
                 current = await OutsourceMaterialReceipt.filter(
@@ -995,13 +951,21 @@ class OutsourceMaterialReceiptService(AppBaseService[OutsourceMaterialReceipt]):
                     operator_name=confirmer_name,
                     now=now,
                 )
+                await self._post_stock_and_cost_inside_receipt_transaction(stock_payload)
+                payable_work_order = locked_work_order
                 receipt = current
         except Exception as exc:
             if self._is_row_lock_unavailable(exc):
                 raise BusinessLogicError(self._OUTSOURCE_WO_LOCK_BUSY_MSG) from exc
             raise
 
-        self._schedule_outsource_receipt_followups(stock_payload, payable_payload)
+        if payable_work_order is not None:
+            await self._await_payable_after_outsource_receipt_commit(
+                payable_payload=payable_payload,
+                material_receipt=receipt,
+                outsource_work_order=payable_work_order,
+                created_by=completed_by,
+            )
         logger.info(f"完成委外收货单: {receipt.code}")
         await receipt.refresh_from_db()
         return OutsourceMaterialReceiptResponse.model_validate(receipt)

@@ -55,6 +55,12 @@ export function getTenantId() : string {
 	return readStorage(TENANT_KEY)
 }
 
+export function readSessionUserId() : number {
+	const obj = asJsonObject(uni.getStorageSync(USER_INFO_KEY))
+	if (obj == null) { return 0 }
+	return obj.getNumber('id') ?? 0
+}
+
 export function setTenantId(tenantId : string) : void {
 	const value = tenantId.trim()
 	if (value.length == 0) {

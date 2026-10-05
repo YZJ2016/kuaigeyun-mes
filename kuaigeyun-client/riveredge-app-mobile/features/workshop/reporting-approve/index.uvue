@@ -7,7 +7,10 @@
 		<view v-for="(row, index) in rows" :key="index" class="card">
 			<text class="title">{{ lineTitle(row) }}</text>
 			<text class="sub">{{ lineSub(row) }}</text>
-			<button class="btn-primary" @click="approve(index)">审核</button>
+			<text class="sub">{{ reviewQuantities(row) }}</text>
+			<text class="sub">工时 {{ reviewValue(row, 'work_hours') }} 小时</text>
+			<text class="sub">报工时间 {{ reviewValue(row, 'reported_at') }}</text>
+			<button class="btn-primary" :disabled="loading || approving" @click="approve(index)">{{ approving ? '审核处理中' : '审核' }}</button>
 		</view>
 	</view>
 </template>
@@ -21,6 +24,16 @@
 	const rows = ref<any[]>([])
 	const loading = ref(false)
 	const errorTextValue = ref('')
+	const approving = ref(false)
+
+	function reviewValue(row : any, key : string) : string {
+		const value = fieldText(row, key)
+		return value.length > 0 ? value : '未提供'
+	}
+
+	function reviewQuantities(row : any) : string {
+		return '合格 ' + reviewValue(row, 'qualified_quantity') + '  不合格 ' + reviewValue(row, 'unqualified_quantity')
+	}
 
 	function lineTitle(row : any) : string {
 		return fieldText(row, 'work_order_code') + ' ' + fieldText(row, 'operation_name')
@@ -49,13 +62,37 @@
 		loading.value = false
 	}
 
-	async function approve(index : number) {
-		const recordId = fieldNumber(rows.value[index], 'id')
+	function approve(index : number) {
+		if (approving.value || loading.value || index < 0 || index >= rows.value.length) {
+			return
+		}
+		const row = rows.value[index]
+		const recordId = fieldNumber(row, 'id')
 		if (recordId <= 0) {
 			toast('报工记录无效')
 			return
 		}
-		loading.value = true
+		approving.value = true
+		uni.showModal({
+			title: '确认审核通过',
+			content: lineTitle(row) + '\n' + lineSub(row) + '\n' + reviewQuantities(row) + '\n工时 ' + reviewValue(row, 'work_hours') + ' 小时\n报工时间 ' + reviewValue(row, 'reported_at'),
+			confirmText: '审核通过',
+			cancelText: '取消',
+			success: async (res) => {
+				if (!res.confirm) {
+					approving.value = false
+					return
+				}
+				await submitApproval(recordId)
+			},
+			fail: () => {
+				approving.value = false
+				errorTextValue.value = '未能打开审核确认，请重试'
+			}
+		})
+	}
+
+	async function submitApproval(recordId : number) {
 		errorTextValue.value = ''
 		try {
 			await request({
@@ -65,10 +102,11 @@
 				body: null,
 			})
 			toast('已审核')
-			await load()
+			rows.value = rows.value.filter((row : any) : boolean => fieldNumber(row, 'id') != recordId)
 		} catch (err) {
 			errorTextValue.value = errorText(err)
-			loading.value = false
+		} finally {
+			approving.value = false
 		}
 	}
 
@@ -76,5 +114,4 @@
 		load()
 	})
 </script>
-
 

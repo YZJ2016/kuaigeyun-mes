@@ -1,0 +1,252 @@
+<template>
+	<scroll-view class="page" direction="vertical">
+		<home-link />
+		<text class="hint lead">这里修改的是姓名、用户名、手机和邮箱</text>
+		<text v-if="loading" class="loading">正在加载</text>
+		<text v-if="errorText.length > 0" class="error">{{ errorText }}</text>
+		<text class="label">头像</text>
+		<view class="avatar-edit">
+			<image v-if="avatarSrc.length > 0" class="avatar-img" :src="avatarSrc" mode="aspectFill"></image>
+			<view v-else class="avatar-fallback">
+				<text class="avatar-letter">{{ initial }}</text>
+			</view>
+			<view class="avatar-actions">
+				<view class="btn-secondary" hover-class="pressed" @click="onPick">
+					<text class="btn-label-secondary">{{ hasAvatar ? '更换头像' : '选择头像' }}</text>
+				</view>
+				<view v-if="hasAvatar" class="btn-secondary" hover-class="pressed" @click="onClear">
+					<text class="btn-label-secondary">移除头像</text>
+				</view>
+			</view>
+		</view>
+		<text class="label">姓名</text>
+		<input class="field" v-model="fullName" />
+		<text class="label">用户名</text>
+		<input class="field" v-model="username" />
+		<text class="label">手机</text>
+		<input class="field" v-model="phone" />
+		<text class="label">邮箱</text>
+		<input class="field" v-model="email" />
+		<view :class="busy ? 'btn-primary is-disabled' : 'btn-primary'" hover-class="pressed" @click="onSave">
+			<text class="btn-label">保存</text>
+		</view>
+	</scroll-view>
+</template>
+
+<script setup lang="uts">
+	import HomeLink from '../../shared/ui/home-link.uvue'
+	import { apiGet, apiRequest } from '../../shared/api/http.uts'
+	import { fieldText } from '../../shared/api/fields.uts'
+	import { getToken } from '../../shared/api/session.uts'
+	import { pickAndUploadImage } from '../../shared/api/pick-image.uts'
+	import { loadAvatarSrc, profileInitial, profileUpdateBody } from './profile.uts'
+
+	const loading = ref(false)
+	const busy = ref(false)
+	const errorText = ref('')
+	const fullName = ref('')
+	const username = ref('')
+	const phone = ref('')
+	const email = ref('')
+	const avatarUuid = ref('')
+	const originalAvatar = ref('')
+	const avatarSrc = ref('')
+	let loaded = false
+	let starting = false
+	let attempted = false
+
+	const hasAvatar = computed((): boolean => {
+		return avatarUuid.value.trim().length > 0
+	})
+
+	const initial = computed((): string => {
+		return profileInitial(fullName.value, username.value)
+	})
+
+	function leave() {
+		uni.reLaunch({ url: '/shell/login/index' })
+	}
+
+	function failText(err : any) : string {
+		if (err instanceof Error) {
+			return err.message
+		}
+		return '网络连接失败'
+	}
+
+	async function showAvatar(uuid : string) {
+		const id = uuid.trim()
+		if (id.length == 0) {
+			avatarSrc.value = ''
+			return
+		}
+		try {
+			avatarSrc.value = await loadAvatarSrc(id)
+		} catch (_err) {
+			avatarSrc.value = ''
+		}
+	}
+
+	async function loadForm() {
+		if (getToken().length == 0) {
+			leave()
+			return
+		}
+		if (loaded || starting || attempted) {
+			return
+		}
+		attempted = true
+		starting = true
+		loading.value = true
+		errorText.value = ''
+		try {
+			const profile = await apiGet('/personal/user-profile', null)
+			fullName.value = fieldText(profile, 'full_name')
+			username.value = fieldText(profile, 'username')
+			phone.value = fieldText(profile, 'phone')
+			email.value = fieldText(profile, 'email')
+			const avatar = fieldText(profile, 'avatar')
+			originalAvatar.value = avatar
+			avatarUuid.value = avatar
+			loaded = true
+			await showAvatar(avatar)
+		} catch (err) {
+			errorText.value = failText(err)
+			if (getToken().length == 0) {
+				loading.value = false
+				starting = false
+				leave()
+				return
+			}
+		}
+		loading.value = false
+		starting = false
+	}
+
+	async function onPick() {
+		if (busy.value) {
+			return
+		}
+		busy.value = true
+		errorText.value = ''
+		try {
+			const file = await pickAndUploadImage('avatar')
+			if (file != null) {
+				const uid = fieldText(file, 'uid')
+				if (uid.length == 0) {
+					errorText.value = '上传没有返回文件'
+				} else {
+					avatarUuid.value = uid
+					await showAvatar(uid)
+				}
+			}
+		} catch (err) {
+			errorText.value = failText(err)
+			if (getToken().length == 0) {
+				leave()
+			}
+		}
+		busy.value = false
+	}
+
+	function onClear() {
+		if (busy.value) {
+			return
+		}
+		avatarUuid.value = ''
+		avatarSrc.value = ''
+	}
+
+	async function onSave() {
+		if (busy.value) {
+			return
+		}
+		const name = username.value.trim()
+		if (name.length == 0) {
+			errorText.value = '请填写用户名'
+			return
+		}
+		if (name.length > 50) {
+			errorText.value = '用户名不能超过 50 个字'
+			return
+		}
+		const nextAvatar = avatarUuid.value.trim()
+		const previous = originalAvatar.value.trim()
+		const clearAvatar = nextAvatar.length == 0 && previous.length > 0
+		const setAvatar = nextAvatar.length > 0 && nextAvatar != previous
+		busy.value = true
+		errorText.value = ''
+		try {
+			await apiRequest('PUT', '/personal/user-profile', null, profileUpdateBody(
+				fullName.value.trim(),
+				name,
+				phone.value.trim(),
+				email.value.trim(),
+				clearAvatar || setAvatar,
+				clearAvatar,
+				nextAvatar
+			))
+			uni.showToast({ title: '已保存', icon: 'none' })
+			uni.navigateBack({
+				fail: () => {
+					uni.redirectTo({ url: '/shell/account/index' })
+				}
+			})
+		} catch (err) {
+			errorText.value = failText(err)
+			if (getToken().length == 0) {
+				leave()
+			}
+		}
+		busy.value = false
+	}
+
+	onShow(() => {
+		if (getToken().length == 0) {
+			leave()
+			return
+		}
+		void loadForm()
+	})
+</script>
+
+<style>
+	.lead {
+		margin-bottom: 12px;
+	}
+
+	.avatar-edit {
+		flex-direction: row;
+		align-items: center;
+		margin-top: 8px;
+	}
+
+	.avatar-fallback {
+		width: 40px;
+		height: 40px;
+		border-radius: 10px;
+		background-color: #F3E8FF;
+		flex-direction: row;
+		align-items: center;
+		justify-content: center;
+		margin-right: 12px;
+	}
+
+	.avatar-img {
+		width: 40px;
+		height: 40px;
+		border-radius: 10px;
+		margin-right: 12px;
+	}
+
+	.avatar-letter {
+		color: #9730E3;
+		font-size: 18px;
+		font-weight: 700;
+	}
+
+	.avatar-actions {
+		flex: 1;
+		flex-direction: column;
+	}
+</style>

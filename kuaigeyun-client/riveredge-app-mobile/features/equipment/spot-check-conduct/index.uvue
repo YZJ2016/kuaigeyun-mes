@@ -4,10 +4,10 @@
 		<view class="card">
 			<text class="title">点检</text>
 			<text v-if="equipmentText.length > 0" class="hint">{{ equipmentText }}</text>
-			<input class="field" v-model="schemeIdText" placeholder="方案 ID" />
+			<master-picker kind="scheme" title="点检方案" :equipment-id="equipmentId.toString()" :disabled="busy" @choose="chooseScheme" />
 			<input class="field" v-model="checkDateText" placeholder="点检日期（可空，YYYY-MM-DD）" />
-			<input class="field" v-model="inspectorIdText" placeholder="点检人 ID（可空）" />
-			<input class="field" v-model="inspectorNameText" placeholder="点检人姓名（可空）" />
+			<text class="hint">点检人优先使用设备配置，未配置时使用当前操作人</text>
+
 			<input class="field" v-model="remarkText" placeholder="备注（可空）" />
 			<button :class="busy ? 'btn-secondary is-disabled' : 'btn-secondary'" :disabled="busy" @click="loadPreview">加载点检项</button>
 			<text v-if="captureMode.length > 0" class="hint">采集模式 {{ captureMode }}</text>
@@ -36,6 +36,7 @@
 
 <script setup lang="uts">
 	import HomeLink from '../../../shared/ui/home-link.uvue'
+	import MasterPicker from '../components/master-picker.uvue'
 	import { request } from '../../../shared/api/index.uts'
 	import { asJsonObject, fieldIntOrNull, fieldText } from '../../../shared/api/fields.uts'
 	import { pickAndUploadImage } from '../../../shared/api/pick-image.uts'
@@ -66,6 +67,12 @@
 			return ''
 		}
 		return ('' + raw).trim()
+	}
+
+	function chooseScheme(row : any) {
+		if (busy.value) { return }
+		schemeIdText.value = fieldText(row, 'id')
+		clearPreview()
 	}
 
 	function optionalInt(raw: string): number | null {
@@ -134,13 +141,13 @@
 				return
 			}
 			if (schemeIdText.value.trim().length == 0) {
-				errorText.value = '请填写方案 ID'
+				errorText.value = '请选择点检方案'
 				busy.value = false
 				return
 			}
 			const schemeId = optionalInt(schemeIdText.value)
 			if (schemeId == null) {
-				errorText.value = '方案 ID 无效'
+				errorText.value = '所选方案无效，请重新选择'
 				busy.value = false
 				return
 			}
@@ -239,13 +246,13 @@
 				return
 			}
 			if (schemeIdText.value.trim().length == 0) {
-				errorText.value = '请填写方案 ID'
+				errorText.value = '请选择点检方案'
 				busy.value = false
 				return
 			}
 			const schemeId = optionalInt(schemeIdText.value)
 			if (schemeId == null) {
-				errorText.value = '方案 ID 无效'
+				errorText.value = '所选方案无效，请重新选择'
 				busy.value = false
 				return
 			}

@@ -9,9 +9,35 @@
 			}
 		},
 		{
+			"path": "shell/tenant/index",
+			"style": {
+				"navigationBarTitleText": "填写地址",
+				"navigationBarBackgroundColor": "#F8FAFC",
+				"backgroundColor": "#F8FAFC"
+			}
+		},
+		{
 			"path": "shell/workbench/index",
 			"style": {
 				"navigationBarTitleText": "工作台"
+			}
+		},
+		{
+			"path": "shell/account/index",
+			"style": {
+				"navigationBarTitleText": "账号"
+			}
+		},
+		{
+			"path": "shell/account/edit",
+			"style": {
+				"navigationBarTitleText": "编辑资料"
+			}
+		},
+		{
+			"path": "shell/account/password",
+			"style": {
+				"navigationBarTitleText": "修改密码"
 			}
 		},
 		{

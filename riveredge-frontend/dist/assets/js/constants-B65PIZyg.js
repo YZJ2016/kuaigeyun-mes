@@ -1,0 +1,1 @@
+const e=["search_knowledge","query_workorder","list_workorder_tasks","submit_production_feedback","update_workorder_status"],r={agents:["kuaiai","options","agents"],knowledgeBases:["kuaiai","options","knowledge-bases"],mcpServers:["kuaiai","options","mcp-servers"]},t=["kuaiai","options"];function _(o,s,a){return a<s?(o-1)*s+a:o*s+1}export{t as K,e as a,r as b,_ as c};

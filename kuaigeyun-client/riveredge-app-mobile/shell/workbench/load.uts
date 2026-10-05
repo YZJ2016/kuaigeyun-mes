@@ -93,98 +93,16 @@ async function loadBadge(pkg : any) : Promise<WorkScope | null> {
 	return block
 }
 
-export async function loadWorkbench() : Promise<WorkScope[]> {
-	if (getToken().length == 0) {
-		return []
-	}
-	const packages = installedPackages()
-	const blocks : Array<WorkScope> = []
-	const seen : Array<string> = []
-	for (let i = 0; i < packages.length; i++) {
-		const pkg = packages[i]
-		const scope = packageScope(pkg)
-		if (scope.length == 0 || seen.indexOf(scope) >= 0) {
-			continue
-		}
-		seen.push(scope)
-		let payload : any | null = null
-		try {
-			payload = await apiGet('/apps/kuaizhizao/mobile/workbench', [
-				{ key: 'scope', value: scope }
-			])
-		} catch (err) {
-			const message = err instanceof Error ? err.message : '工作台未能加载'
-			blocks.push({
-				scope: scope,
-				showBadge: false,
-				badgeNote: '',
-				pendingText: '',
-				overdueText: '',
-				pendingCount: 0,
-				overdueCount: 0,
-				sections: [] as Array<WorkSection>,
-				errorText: message
-			} as WorkScope)
-			continue
-		}
-		const sections = readSections(payload)
-		const viewSections : Array<WorkSection> = []
-		for (let s = 0; s < sections.length; s++) {
-			const section = sections[s]
-			const title = readString(section, 'title')
-			const entries = section == null ? null : (section as UTSJSONObject)['entries']
-			if (entries == null || !Array.isArray(entries)) {
-				continue
-			}
-			const list = entries as Array<any>
-			const cells : Array<WorkCell> = []
-			for (let e = 0; e < list.length; e++) {
-				const item = list[e]
-				const key = readString(item, 'key')
-				const label = readString(item, 'label')
-				const local = findEntryByKey(scope, key)
-				if (local != null && !entrySupportsPlatform(local)) {
-					continue
-				}
-				if (local != null && !entryInWorkbench(local)) {
-					continue
-				}
-				const missing = local == null
-				let pagePath = ''
-				if (!missing && local != null) {
-					pagePath = entryPagePath(local)
-				}
-				let iconGroup = ''
-				if (hasOwn(item, 'icon_group')) {
-					iconGroup = readString(item, 'icon_group')
-				}
-				const solo = item != null && (item as UTSJSONObject)['solo_row'] == true
-				cells.push({
-					uid: scope + '-' + key + '-' + e.toString(),
-					key: key,
-					label: label.length > 0 ? label : key,
-					icon: readString(item, 'icon'),
-					iconGroup: iconGroup,
-					solo: solo,
-					missing: missing,
-					pagePath: pagePath,
-					route: readString(item, 'route')
-				} as WorkCell)
-			}
-			if (cells.length == 0) {
-				continue
-			}
-			viewSections.push({
-				uid: scope + '-section-' + s.toString(),
-				title: title,
-				showTitle: title.length > 0,
-				cells: cells
-			} as WorkSection)
-		}
-		if (viewSections.length == 0) {
-			continue
-		}
-		const block = {
+async function loadScope(pkg : any) : Promise<WorkScope | null> {
+	const scope = packageScope(pkg)
+	let payload : any | null = null
+	try {
+		payload = await apiGet('/apps/kuaizhizao/mobile/workbench', [
+			{ key: 'scope', value: scope }
+		])
+	} catch (err) {
+		const message = err instanceof Error ? err.message : '工作台未能加载'
+		return {
 			scope: scope,
 			showBadge: false,
 			badgeNote: '',
@@ -192,24 +110,111 @@ export async function loadWorkbench() : Promise<WorkScope[]> {
 			overdueText: '',
 			pendingCount: 0,
 			overdueCount: 0,
-			sections: viewSections,
-			errorText: ''
+			sections: [] as Array<WorkSection>,
+			errorText: message
 		} as WorkScope
-		if (packageBadge(pkg) != null) {
-			try {
-				const badge = await loadBadge(pkg)
-				if (badge != null && badge.showBadge) {
-					block.showBadge = true
-					block.pendingText = badge.pendingText
-					block.overdueText = badge.overdueText
-					block.pendingCount = badge.pendingCount
-					block.overdueCount = badge.overdueCount
-				}
-			} catch (_err) {
-				block.badgeNote = '角标未能读取'
-			}
+	}
+	const sections = readSections(payload)
+	const viewSections : Array<WorkSection> = []
+	for (let s = 0; s < sections.length; s++) {
+		const section = sections[s]
+		const title = readString(section, 'title')
+		const entries = section == null ? null : (section as UTSJSONObject)['entries']
+		if (entries == null || !Array.isArray(entries)) {
+			continue
 		}
-		blocks.push(block)
+		const list = entries as Array<any>
+		const cells : Array<WorkCell> = []
+		for (let e = 0; e < list.length; e++) {
+			const item = list[e]
+			const key = readString(item, 'key')
+			const label = readString(item, 'label')
+			const local = findEntryByKey(scope, key)
+			if (local != null && !entrySupportsPlatform(local)) {
+				continue
+			}
+			if (local != null && !entryInWorkbench(local)) {
+				continue
+			}
+			const missing = local == null
+			let pagePath = ''
+			if (!missing && local != null) {
+				pagePath = entryPagePath(local)
+			}
+			let iconGroup = ''
+			if (hasOwn(item, 'icon_group')) {
+				iconGroup = readString(item, 'icon_group')
+			}
+			const solo = item != null && (item as UTSJSONObject)['solo_row'] == true
+			cells.push({
+				uid: scope + '-' + key + '-' + e.toString(),
+				key: key,
+				label: label.length > 0 ? label : key,
+				icon: readString(item, 'icon'),
+				iconGroup: iconGroup,
+				solo: solo,
+				missing: missing,
+				pagePath: pagePath,
+				route: readString(item, 'route')
+			} as WorkCell)
+		}
+		if (cells.length == 0) {
+			continue
+		}
+		viewSections.push({
+			uid: scope + '-section-' + s.toString(),
+			title: title,
+			showTitle: title.length > 0,
+			cells: cells
+		} as WorkSection)
+	}
+	if (viewSections.length == 0) {
+		return null
+	}
+	const block = {
+		scope: scope,
+		showBadge: false,
+		badgeNote: '',
+		pendingText: '',
+		overdueText: '',
+		pendingCount: 0,
+		overdueCount: 0,
+		sections: viewSections,
+		errorText: ''
+	} as WorkScope
+	if (packageBadge(pkg) != null) {
+		try {
+			const badge = await loadBadge(pkg)
+			if (badge != null && badge.showBadge) {
+				block.showBadge = true
+				block.pendingText = badge.pendingText
+				block.overdueText = badge.overdueText
+				block.pendingCount = badge.pendingCount
+				block.overdueCount = badge.overdueCount
+			}
+		} catch (_err) {
+			block.badgeNote = '角标未能读取'
+		}
+	}
+	return block
+}
+
+export async function loadWorkbench() : Promise<WorkScope[]> {
+	if (getToken().length == 0) { return [] }
+	const packages = installedPackages()
+	const seen : Array<string> = []
+	const requests : Array<Promise<WorkScope | null>> = []
+	for (let i = 0; i < packages.length; i++) {
+		const scope = packageScope(packages[i])
+		if (scope.length == 0 || seen.indexOf(scope) >= 0) { continue }
+		seen.push(scope)
+		requests.push(loadScope(packages[i]))
+	}
+	const results = await Promise.all(requests)
+	const blocks : Array<WorkScope> = []
+	for (let i = 0; i < results.length; i++) {
+		const block = results[i]
+		if (block != null) { blocks.push(block) }
 	}
 	return blocks
 }

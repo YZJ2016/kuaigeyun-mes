@@ -12,10 +12,10 @@
 		</view>
 		<view class="card">
 			<text class="title">新建</text>
-			<input class="field" v-model="routeIdText" placeholder="路线 ID" />
+			<master-picker kind="route" title="巡检路线" :disabled="busy" @choose="chooseRoute" />
 			<input class="field" v-model="patrolDateText" placeholder="巡检日期（可空，YYYY-MM-DD）" />
-			<input class="field" v-model="inspectorIdText" placeholder="巡检人 ID（可空）" />
-			<input class="field" v-model="inspectorNameText" placeholder="巡检人姓名（可空）" />
+			<text class="hint">巡检人默认使用当前操作人</text>
+
 			<input class="field" v-model="remarkText" placeholder="备注（可空）" />
 			<button :class="busy ? 'btn-secondary is-disabled' : 'btn-secondary'" :disabled="busy" @click="loadPreview">加载巡检项</button>
 			<text v-if="lines.length > 0" class="hint">第 {{ pointIndex + 1 }} 点，共 {{ lines.length }} 点</text>
@@ -44,6 +44,7 @@
 
 <script setup lang="uts">
 	import HomeLink from '../../../shared/ui/home-link.uvue'
+	import MasterPicker from '../components/master-picker.uvue'
 	import { request } from '../../../shared/api/index.uts'
 	import { fieldText, readRows } from '../../../shared/api/fields.uts'
 	import { pickAndUploadImage } from '../../../shared/api/pick-image.uts'
@@ -68,6 +69,12 @@
 	const loadedRouteId = ref(0)
 	const lines = ref<Array<PatrolLineForm>>([])
 	const pointIndex = ref(0)
+
+	function chooseRoute(row : any) {
+		if (busy.value) { return }
+		routeIdText.value = fieldText(row, 'id')
+		clearPreview()
+	}
 
 	function optionalInt(raw: string): number | null {
 		if (raw.trim().length == 0) {
@@ -147,7 +154,7 @@
 		messageText.value = ''
 		const routeId = parseRequiredInt(routeIdText.value)
 		if (routeId == null) {
-			errorText.value = '请填写路线 ID'
+			errorText.value = '请选择巡检路线'
 			return
 		}
 		busy.value = true
@@ -214,7 +221,7 @@
 		try {
 			const routeId = parseRequiredInt(routeIdText.value)
 			if (routeId == null) {
-				errorText.value = '请填写路线 ID'
+				errorText.value = '请选择巡检路线'
 				busy.value = false
 				return
 			}
