@@ -1077,10 +1077,15 @@ class ImService:
         """站内信成功后，同步到绑定了对应模块的群聊（按业务实体/动作去重）。"""
         if not message_log_uuid:
             return
-        # 同一业务通知会按收件人多次调用 MessageService，需按实体去重
-        dedupe_id = str(entity_uuid or "").strip() or str(message_log_uuid)
-        action = str(business_action or "").strip()
-        ref_id = f"{dedupe_id}:{action}" if action else dedupe_id
+        from core.services.im.im_module_notify_ref import resolve_module_notify_ref_id
+
+        ref_id = resolve_module_notify_ref_id(
+            message_log_uuid=message_log_uuid,
+            entity_uuid=entity_uuid,
+            business_document=business_document,
+            business_action=business_action,
+            variables=variables,
+        )
         exists = await ImMessage.filter(
             tenant_id=tenant_id,
             kind="system",
@@ -1116,7 +1121,10 @@ class ImService:
         ).all()
         title = (subject or "").strip() or "模块通知"
         body_core = (content or "").strip()
-        body = f"【{title}】\n{body_core}" if body_core else f"【{title}】"
+        if title.startswith("【") and title.endswith("】"):
+            body = f"{title}\n{body_core}" if body_core else title
+        else:
+            body = f"【{title}】\n{body_core}" if body_core else f"【{title}】"
         for conv in conversations:
             await ImService._post_bot_message(
                 tenant_id=tenant_id,

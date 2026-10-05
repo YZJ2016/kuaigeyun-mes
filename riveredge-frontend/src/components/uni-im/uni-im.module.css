@@ -286,7 +286,8 @@
 }
 
 [data-theme='dark'] .listPane {
-  background: var(--ant-colorFillAlter);
+  /* 须不透明：FillAlter 为半透明，会透出弹窗背后的工作台 */
+  background: var(--ant-colorBgContainer);
   border-right-color: var(--ant-colorBorderSecondary);
 }
 
@@ -534,6 +535,14 @@
 
 [data-theme='dark'] .convName {
   color: var(--ant-colorText);
+}
+
+[data-theme='dark'] .convTime {
+  color: var(--ant-colorTextTertiary);
+}
+
+[data-theme='dark'] .convPreview {
+  color: var(--ant-colorTextSecondary);
 }
 
 .convTime {

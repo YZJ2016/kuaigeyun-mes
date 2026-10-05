@@ -29949,6 +29949,22 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.im-module-notify-dedupe-r01.title':
+    '模块群工序交接通知不再重复两条',
+  'pages.dashboard.updateLog.entries.im-module-notify-dedupe-r01.description':
+    '同一工序交接提醒按工单与工序去重同步到 IM 模块群，多收件人各收站内信时群聊只展示一条系统消息。',
+  'pages.dashboard.updateLog.entries.message-subject-pipe-format-r01.title':
+    '站内信主题统一为【分类 | 正文】格式',
+  'pages.dashboard.updateLog.entries.message-subject-pipe-format-r01.description':
+    '工序交接等通知不再出现【【分类】正文】双括号；新消息与历史列表均规范为【分类 | 正文】。',
+  'pages.dashboard.updateLog.entries.uni-im-dark-list-pane-bg-r01.title':
+    '暗黑模式下在线消息会话列表背景不再透底',
+  'pages.dashboard.updateLog.entries.uni-im-dark-list-pane-bg-r01.description':
+    '第二栏改用不透明容器底色，避免工作台指标卡片从会话列表背后透出。',
+  'pages.dashboard.updateLog.entries.mobile-local-system-notification-r01.title':
+    '制造运营移动端支持系统通知栏提醒',
+  'pages.dashboard.updateLog.entries.mobile-local-system-notification-r01.description':
+    '应用打开或回到前台时，站内信、聊天与审批等消息可弹出 Android 系统通知，点击直达消息或审批页（与 ANC 同级本地提醒，非杀进程云推送）。',
   'pages.dashboard.updateLog.entries.tech-stack-copyright-align-r01.title':
     '版权声明技术栈与当前产品依赖对齐',
   'pages.dashboard.updateLog.entries.tech-stack-copyright-align-r01.description':

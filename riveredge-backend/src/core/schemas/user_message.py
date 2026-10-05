@@ -5,7 +5,7 @@
 复用 MessageLog 模型，但提供用户视角的 Schema。
 """
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 from typing import Optional, Dict, Any
 from datetime import datetime
 from uuid import UUID
@@ -31,6 +31,15 @@ class UserMessageResponse(BaseModel):
     attachment_name: Optional[str] = Field(None, description="可选附件文件名；内容走附件下载")
     
     model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("subject", mode="before")
+    @classmethod
+    def _normalize_subject(cls, value: object) -> object:
+        from core.services.messaging.message_subject_format import format_message_subject
+
+        if value is None or not isinstance(value, str):
+            return value
+        return format_message_subject(value)
 
 
 class UserMessageListResponse(BaseModel):
