@@ -86,6 +86,8 @@ export type LoginClientDownload = {
   sha256?: string | null;
   size_bytes?: number | null;
   release_notes?: string;
+  /** 站点墙钟 YYYY-MM-DD HH:MM:SS，已由接口转换 */
+  published_at?: string | null;
 };
 
 export type LoginClientDownloads = {
@@ -308,6 +310,7 @@ function releaseToTenantDownload(
     size_bytes: pkg.size_bytes,
     filename: pkg.filename,
     release_notes: release.release_notes,
+    published_at: release.published_at,
   };
 }
 

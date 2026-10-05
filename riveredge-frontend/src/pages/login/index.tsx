@@ -68,7 +68,7 @@ import {
   saveWecomOAuthState,
   stripOAuthQueryFromUrl,
 } from '../../utils/wecomAuth';
-import { getLoginClientDownloads } from '../../services/clientRelease';
+import { getLoginClientDownloads, type LoginClientDownload } from '../../services/clientRelease';
 import { applyFavicon } from '../../utils/favicon';
 import { normalizeFilePreviewUrl, getSiteLogoPreview } from '../../services/file';
 // 直连文件，避免 barrel 连带 login-page-editor 其它重模块（如 ReactQuill）
@@ -125,6 +125,25 @@ function readPlatformSettingsPublicCache(cacheKey: string): PlatformSettings | n
     /* ignore */
   }
   return null;
+}
+
+function loginClientDownloadHoverTitle(item: LoginClientDownload | null | undefined, t: (key: string, opts?: Record<string, string>) => string) {
+  const version = item?.app_version?.trim();
+  if (!version) {
+    return undefined;
+  }
+  const published = item.published_at?.trim();
+  return (
+    <span>
+      {t('pages.login.clientDownloadHoverVersion', { version })}
+      {published ? (
+        <>
+          <br />
+          {t('pages.login.clientDownloadHoverUpdatedAt', { time: published })}
+        </>
+      ) : null}
+    </span>
+  );
 }
 
 /**
@@ -679,6 +698,9 @@ export default function LoginPage() {
     },
     [loginClientDownloads, showClientDownloadPlaceholder],
   );
+
+  const windowsDownloadHover = loginClientDownloadHoverTitle(loginClientDownloads?.windows, t);
+  const androidDownloadHover = loginClientDownloadHoverTitle(loginClientDownloads?.android_pda, t);
 
   // 个人注册表单状态
   const [tenantCheckResult, setTenantCheckResult] = useState<TenantCheckResponse | null>(null);
@@ -2315,6 +2337,8 @@ export default function LoginPage() {
           >
             <div className="login-client-downloads-grid">
               {loginClientWinEnabled && (
+              <div className="login-client-download-tile-wrap">
+              <Tooltip title={windowsDownloadHover} placement="top">
               <button
                 type="button"
                 className="login-client-download-tile"
@@ -2328,8 +2352,12 @@ export default function LoginPage() {
                 </div>
                 <DownloadOutlined className="login-client-download-tile-arrow" aria-hidden />
               </button>
+              </Tooltip>
+              </div>
               )}
               {loginClientAndroidEnabled && (
+              <div className="login-client-download-tile-wrap">
+              <Tooltip title={androidDownloadHover} placement="top">
               <button
                 type="button"
                 className="login-client-download-tile"
@@ -2343,6 +2371,8 @@ export default function LoginPage() {
                 </div>
                 <DownloadOutlined className="login-client-download-tile-arrow" aria-hidden />
               </button>
+              </Tooltip>
+              </div>
               )}
             </div>
           </div>

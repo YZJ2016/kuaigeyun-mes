@@ -97,6 +97,7 @@ class LoginClientDownloadOut(BaseModel):
     sha256: str | None = None
     size_bytes: int | None = None
     release_notes: str = ""
+    published_at: str | None = None
 
 
 class LoginClientDownloadsOut(BaseModel):
