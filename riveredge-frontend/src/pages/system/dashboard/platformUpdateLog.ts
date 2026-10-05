@@ -44,6 +44,20 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'mobile-login-banner-ratio-1-2-r01',
+    date: '2026-10-05',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-login-banner-ratio-1-2-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.mobile-login-banner-ratio-1-2-r01.description',
+  },
+  {
+    id: 'mobile-login-banner-keyboard-shrink-r01',
+    date: '2026-10-05',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-login-banner-keyboard-shrink-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.mobile-login-banner-keyboard-shrink-r01.description',
+  },
+  {
     id: 'mobile-workbench-my-work-order-badge-r01',
     date: '2026-10-05',
     type: 'fix',
