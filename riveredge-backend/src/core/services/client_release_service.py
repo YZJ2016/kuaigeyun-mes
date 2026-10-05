@@ -733,5 +733,6 @@ async def resolve_login_downloads(origin: str, *, win_enabled: bool, android_ena
             "app_version": active.app_version,
             "release_notes": active.release_notes,
             **pkg,
+            "published_at": to_api_isoformat(active.published_at) if active.published_at else None,
         }
     return out

@@ -44,6 +44,20 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'login-quick-not-enabled-i18n-r01',
+    date: '2026-10-05',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.login-quick-not-enabled-i18n-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.login-quick-not-enabled-i18n-r01.description',
+  },
+  {
+    id: 'login-client-download-hover-version-r01',
+    date: '2026-10-05',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.login-client-download-hover-version-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.login-client-download-hover-version-r01.description',
+  },
+  {
     id: 'mobile-login-form-banner-gap-r01',
     date: '2026-10-05',
     type: 'fix',

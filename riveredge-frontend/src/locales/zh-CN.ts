@@ -487,6 +487,8 @@ export default {
   'pages.login.clientDownloadWinMeta': 'Windows 版安装包',
   'pages.login.clientDownloadAndroidTitle': '移动端 PDA',
   'pages.login.clientDownloadAndroidMeta': 'Android 版安装包',
+  'pages.login.clientDownloadHoverVersion': '版本 {{version}}',
+  'pages.login.clientDownloadHoverUpdatedAt': '更新时间 {{time}}',
   'pages.login.clientDownloadPlaceholder': '下载通道即将开放',
   'pages.login.verifyTip': '检测到频繁操作，请完成验证（{{seconds}}秒）',
   'pages.login.longPressVerify': '长按验证 {{seconds}}秒',
@@ -29945,6 +29947,14 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.login-quick-not-enabled-i18n-r01.title':
+    '登录页未开启的快捷登录悬停改为中文提示',
+  'pages.dashboard.updateLog.entries.login-quick-not-enabled-i18n-r01.description':
+    '登录页精简语言包此前未收录该提示，悬停未启用的微信/企微等图标会露出英文键名。现已显示「未开启」。',
+  'pages.dashboard.updateLog.entries.login-client-download-hover-version-r01.title':
+    '登录页工位机和移动端悬停显示版本与更新时间',
+  'pages.dashboard.updateLog.entries.login-client-download-hover-version-r01.description':
+    '登录页「触屏工位机终端」和「移动端 PDA」悬停时展示当前安装包版本号及发布时间，便于确认是否为最新包。',
   'pages.dashboard.updateLog.entries.mobile-login-form-banner-gap-r01.title':
     '手机登录弹出键盘时账号登录与顶栏之间留出间距',
   'pages.dashboard.updateLog.entries.mobile-login-form-banner-gap-r01.description':
