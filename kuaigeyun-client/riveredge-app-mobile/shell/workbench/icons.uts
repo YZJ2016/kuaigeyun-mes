@@ -1,147 +1,158 @@
 /**
- * 工作台宫格字形映射。
- * 后端 manifest.json 的 mobile_workbench（及其它入口）用语义名描述 icon，
- * 这里给每个语义名一个 emoji/字符字形。未命中返回 ''，页面保持纯 label。
+ * 工作台色块里的单字标记。
+ * 后端用语义名描述 icon。未命中返回 ''，页面改用功能名称的首字。
  */
+
+const SCOPES = ['workshop', 'warehouse', 'quality', 'equipment', 'mold']
 
 function glyphFor(name : string) : string {
 	const key = name.trim()
-	if (key == 'scan' || key == 'scanLine') {
-		return '📷'
+	if (key == 'scan' || key == 'scanLine' || key == 'barcode') {
+		return '扫'
 	}
 	if (key == 'user') {
-		return '👤'
+		return '人'
 	}
-	if (key == 'file' || key == 'fileText') {
-		return '📄'
+	if (key == 'file' || key == 'fileText' || key == 'fileSpreadsheet') {
+		return '单'
 	}
-	if (key == 'list') {
-		return '≡'
+	if (key == 'list' || key == 'clipboardList' || key == 'audit') {
+		return '列'
 	}
-	if (key == 'history') {
-		return '🕘'
+	if (key == 'history' || key == 'clock') {
+		return '史'
 	}
-	if (key == 'check') {
-		return '✅'
-	}
-	if (key == 'check-circle') {
-		return '✔️'
+	if (key == 'check' || key == 'check-circle' || key == 'shield') {
+		return '核'
 	}
 	if (key == 'close-circle') {
-		return '❌'
+		return '驳'
 	}
 	if (key == 'inbox' || key == 'package' || key == 'boxes') {
-		return '📦'
+		return '箱'
 	}
-	if (key == 'plus-square' || key == 'file-plus') {
-		return '➕'
+	if (key == 'plus-square' || key == 'file-plus' || key == 'import' || key == 'arrow-down-to-line') {
+		return '入'
 	}
 	if (key == 'minus-square' || key == 'file-minus') {
-		return '➖'
+		return '出'
 	}
-	if (key == 'warning' || key == 'alert-triangle') {
-		return '⚠️'
-	}
-	if (key == 'alert-circle') {
-		return '❗'
+	if (key == 'warning' || key == 'alert-triangle' || key == 'alert-circle') {
+		return '警'
 	}
 	if (key == 'chart' || key == 'chartBar') {
-		return '📊'
+		return '绩'
 	}
 	if (key == 'chartLine' || key == 'trendingUp' || key == 'activity') {
-		return '📈'
+		return '势'
 	}
 	if (key == 'export' || key == 'arrow-up-from-line') {
-		return '📤'
-	}
-	if (key == 'import' || key == 'arrow-down-to-line') {
-		return '📥'
+		return '领'
 	}
 	if (key == 'rollback' || key == 'rotate-ccw') {
-		return '↩️'
+		return '退'
 	}
-	if (key == 'shopping') {
-		return '🛒'
-	}
-	if (key == 'shoppingBag') {
-		return '🛍️'
+	if (key == 'shopping' || key == 'shoppingBag') {
+		return '货'
 	}
 	if (key == 'truck') {
-		return '🚚'
-	}
-	if (key == 'audit' || key == 'clipboardList') {
-		return '📋'
+		return '送'
 	}
 	if (key == 'search') {
-		return '🔍'
+		return '查'
 	}
 	if (key == 'swap' || key == 'arrow-left-right' || key == 'gitBranch') {
-		return '🔀'
+		return '调'
 	}
-	if (key == 'bell') {
-		return '🔔'
+	if (key == 'bell' || key == 'calendar') {
+		return '期'
 	}
-	if (key == 'shield') {
-		return '🛡️'
-	}
-	if (key == 'link') {
-		return '🔗'
+	if (key == 'link' || key == 'assembly') {
+		return '绑'
 	}
 	if (key == 'tool') {
-		return '🔧'
+		return '修'
 	}
 	if (key == 'maintain') {
-		return '🛠️'
-	}
-	if (key == 'calendar') {
-		return '📅'
-	}
-	if (key == 'clock') {
-		return '🕐'
+		return '养'
 	}
 	if (key == 'dashboard') {
-		return '🗂️'
-	}
-	if (key == 'assembly') {
-		return '🧩'
-	}
-	if (key == 'barcode') {
-		return '🏷️'
-	}
-	if (key == 'fileSpreadsheet') {
-		return '📑'
+		return '览'
 	}
 	if (key == 'handshake') {
-		return '🤝'
+		return '协'
 	}
 	if (key == 'key') {
-		return '🔑'
+		return '钥'
 	}
 	if (key == 'layers') {
-		return '📚'
+		return '层'
 	}
 	if (key == 'map-pin') {
-		return '📍'
+		return '位'
 	}
 	if (key == 'production') {
-		return '🏭'
+		return '产'
 	}
 	if (key == 'refresh-cw') {
-		return '🔃'
+		return '新'
 	}
 	if (key == 'warehouse') {
-		return '🏬'
+		return '仓'
 	}
 	return ''
 }
 
-/**
- * icon 为主键，iconGroup 为次选键；都未命中返回 ''。
- */
 export function iconGlyph(icon : string, iconGroup : string) : string {
 	const primary = glyphFor(icon)
 	if (primary.length > 0) {
 		return primary
 	}
 	return glyphFor(iconGroup)
+}
+
+export function iconMark(icon : string, iconGroup : string, label : string) : string {
+	const glyph = iconGlyph(icon, iconGroup)
+	if (glyph.length > 0) {
+		return glyph
+	}
+	const text = label.trim()
+	if (text.length == 0) {
+		return '项'
+	}
+	return text.charAt(0)
+}
+
+function knownScope(scope : string) : string {
+	if (SCOPES.indexOf(scope) >= 0) {
+		return scope
+	}
+	return 'workshop'
+}
+
+export function tileClass(scope : string) : string {
+	return 'icon-tile icon-' + knownScope(scope)
+}
+
+export function markClass(scope : string) : string {
+	return 'tile-mark mark-' + knownScope(scope)
+}
+
+export function scopeTitle(scope : string) : string {
+	if (scope == 'workshop') {
+		return '车间'
+	}
+	if (scope == 'warehouse') {
+		return '仓储'
+	}
+	if (scope == 'quality') {
+		return '质量'
+	}
+	if (scope == 'equipment') {
+		return '设备'
+	}
+	if (scope == 'mold') {
+		return '模具'
+	}
+	return scope
 }

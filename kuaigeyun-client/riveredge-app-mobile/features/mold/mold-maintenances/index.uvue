@@ -1,5 +1,6 @@
 <template>
 	<view class="page">
+		<home-link />
 		<text class="section">模具</text>
 		<input class="field" v-model="moldKeyword" placeholder="编码或名称" />
 		<button class="btn-secondary" @click="searchMolds">查找模具</button>
@@ -34,6 +35,7 @@
 </template>
 
 <script setup lang="uts">
+	import HomeLink from '../../../shared/ui/home-link.uvue'
 	import {
 		DocLine,
 		MOLD_ARCHIVE,

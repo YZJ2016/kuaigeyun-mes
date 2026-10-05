@@ -1,13 +1,42 @@
 <template>
 	<view class="page">
+		<home-link />
 		<text v-if="errorTextValue.length > 0" class="error">{{ errorTextValue }}</text>
 		<text v-if="loading" class="loading">加载中</text>
-		<view v-if="detail == null">
+		<view v-if="detail == null && !packOpen">
 			<text v-if="!loading && rows.length == 0 && errorTextValue.length == 0" class="empty">暂无绑定</text>
 			<view v-for="(row, index) in rows" :key="index" class="card" hover-class="pressed" @click="openBinding(index)">
 				<text class="title">{{ lineTitle(row) }}</text>
 				<text class="sub">{{ lineSub(row) }}</text>
 			</view>
+			<button class="btn-primary" @click="openPack">绑定新箱</button>
+		</view>
+		<view v-else-if="packOpen">
+			<button class="btn-secondary" @click="closePack">返回列表</button>
+			<text class="hint">先选来源单据，再选该单上的产品。箱号可空。</text>
+			<text class="label">来源单据</text>
+			<view class="kind-row">
+				<button :class="sourceKind == 'fg' ? 'btn-chip btn-chip-on' : 'btn-chip'" @click="chooseKind(0)">成品入库单</button>
+				<button :class="sourceKind == 'sales' ? 'btn-chip btn-chip-on' : 'btn-chip'" @click="chooseKind(1)">销售出库单</button>
+			</view>
+			<text v-if="sourceKind.length > 0 && sources.length == 0 && !loading" class="empty">没有可选单据</text>
+			<view v-for="(doc, index) in sources" :key="doc.uid" class="card" hover-class="pressed" @click="pickSource(index)">
+				<text class="title">{{ doc.title }}</text>
+				<text class="sub">{{ sourceIndex == index ? '已选' : '点选' }}</text>
+			</view>
+			<view v-if="sourceIndex >= 0">
+				<text class="label">产品</text>
+				<text v-if="products.length == 0 && !loading" class="empty">这张单没有可绑定的产品</text>
+				<view v-for="(product, index) in products" :key="product.uid" class="card" hover-class="pressed" @click="pickProduct(index)">
+					<text class="title">{{ product.label }}</text>
+					<text class="sub">{{ productIndex == index ? '已选' : '点选' }}</text>
+				</view>
+			</view>
+			<text class="label">装箱数量</text>
+			<input class="field" :value="packQty" placeholder="必填" @input="onPackQty" />
+			<text class="label">箱号（可选）</text>
+			<input class="field" :value="boxNo" placeholder="可空" @input="onBoxNo" />
+			<button class="btn-primary" :disabled="loading" @click="submitPack">确认绑定</button>
 		</view>
 		<view v-else>
 			<button class="btn-secondary" @click="closeDetail">返回列表</button>
@@ -23,14 +52,38 @@
 </template>
 
 <script setup lang="uts">
+	import HomeLink from '../../../shared/ui/home-link.uvue'
 	import { request } from '../../../shared/api/index.uts'
-	import { readRows, fieldText, fieldNumber, errorText } from '../../../shared/api/fields.uts'
+	import { readRows, fieldText, fieldNumber, firstText, errorText } from '../../../shared/api/fields.uts'
 	import { toast } from '../json.uts'
+
+	type SourceDoc = {
+		uid : string
+		id : number
+		title : string
+	}
+
+	type SourceProduct = {
+		uid : string
+		lineId : number
+		materialId : number
+		code : string
+		name : string
+		label : string
+	}
 
 	const rows = ref<any[]>([])
 	const detail = ref<any | null>(null)
 	const loading = ref(false)
 	const errorTextValue = ref('')
+	const packOpen = ref(false)
+	const sourceKind = ref('')
+	const sources = ref<Array<SourceDoc>>([])
+	const sourceIndex = ref(-1)
+	const products = ref<Array<SourceProduct>>([])
+	const productIndex = ref(-1)
+	const packQty = ref('')
+	const boxNo = ref('')
 
 	function lineTitle(row : any) : string {
 		return fieldText(row, 'product_code') + ' ' + fieldText(row, 'product_name')
@@ -86,9 +139,213 @@
 		detail.value = null
 	}
 
+	function listQuery() : UTSJSONObject {
+		const query = new UTSJSONObject()
+		query.set('skip', '0')
+		query.set('limit', '50')
+		return query
+	}
+
+	function sourcePath() : string {
+		if (sourceKind.value == 'sales') {
+			return '/api/v1/apps/kuaizhizao/sales-deliveries'
+		}
+		return '/api/v1/apps/kuaizhizao/finished-goods-receipts'
+	}
+
+	function resetProducts() {
+		sourceIndex.value = -1
+		products.value = []
+		productIndex.value = -1
+	}
+
+	function openPack() {
+		packOpen.value = true
+		errorTextValue.value = ''
+		sourceKind.value = ''
+		sources.value = []
+		packQty.value = ''
+		boxNo.value = ''
+		resetProducts()
+	}
+
+	function closePack() {
+		packOpen.value = false
+	}
+
+	async function chooseKind(index : number) {
+		sourceKind.value = index == 0 ? 'fg' : 'sales'
+		sources.value = []
+		resetProducts()
+		errorTextValue.value = ''
+		loading.value = true
+		try {
+			const payload = await request({
+				method: 'GET',
+				path: sourcePath(),
+				query: listQuery(),
+				body: null,
+			})
+			const list = readRows(payload)
+			const next : Array<SourceDoc> = []
+			for (let i = 0; i < list.length; i++) {
+				const row = list[i]
+				const id = fieldNumber(row, 'id')
+				if (id <= 0) {
+					continue
+				}
+				const title = firstText(row, ['receipt_code', 'delivery_code', 'code'])
+				next.push({
+					uid: id.toString(),
+					id: id,
+					title: title.length > 0 ? title : '单据'
+				} as SourceDoc)
+			}
+			sources.value = next
+		} catch (err) {
+			errorTextValue.value = errorText(err)
+		}
+		loading.value = false
+	}
+
+	async function pickSource(index : number) {
+		sourceIndex.value = index
+		products.value = []
+		productIndex.value = -1
+		errorTextValue.value = ''
+		const doc = sources.value[index]
+		loading.value = true
+		try {
+			const payload = await request({
+				method: 'GET',
+				path: sourcePath() + '/' + doc.id,
+				query: null,
+				body: null,
+			})
+			const list = readRows(payload)
+			const next : Array<SourceProduct> = []
+			for (let i = 0; i < list.length; i++) {
+				const row = list[i]
+				const materialId = fieldNumber(row, 'material_id')
+				if (materialId <= 0) {
+					continue
+				}
+				const code = fieldText(row, 'material_code')
+				const name = fieldText(row, 'material_name')
+				let label = code
+				if (name.length > 0) {
+					label = code.length > 0 ? code + ' ' + name : name
+				}
+				next.push({
+					uid: materialId.toString() + '-' + i.toString(),
+					lineId: fieldNumber(row, 'id'),
+					materialId: materialId,
+					code: code,
+					name: name,
+					label: label.length > 0 ? label : '产品'
+				} as SourceProduct)
+			}
+			products.value = next
+		} catch (err) {
+			errorTextValue.value = errorText(err)
+		}
+		loading.value = false
+	}
+
+	function pickProduct(index : number) {
+		productIndex.value = index
+	}
+
+	function onPackQty(event : UniInputEvent) {
+		packQty.value = event.detail.value
+	}
+
+	function onBoxNo(event : UniInputEvent) {
+		boxNo.value = event.detail.value
+	}
+
+	async function submitPack() {
+		if (loading.value) {
+			return
+		}
+		if (sourceIndex.value < 0) {
+			errorTextValue.value = '请选择来源单据'
+			return
+		}
+		if (productIndex.value < 0) {
+			errorTextValue.value = '请选择产品'
+			return
+		}
+		const qty = parseFloat(packQty.value.trim())
+		if (isNaN(qty) || qty <= 0) {
+			errorTextValue.value = '请填写装箱数量'
+			return
+		}
+		const doc = sources.value[sourceIndex.value]
+		const product = products.value[productIndex.value]
+		if (product.materialId <= 0) {
+			errorTextValue.value = '这行没有产品，不能绑定'
+			return
+		}
+		const body = new UTSJSONObject()
+		body.set('product_id', product.materialId)
+		if (product.code.length > 0) {
+			body.set('product_code', product.code)
+		}
+		if (product.name.length > 0) {
+			body.set('product_name', product.name)
+		}
+		if (product.lineId > 0) {
+			body.set('source_line_id', product.lineId)
+		}
+		body.set('packing_quantity', qty)
+		const box = boxNo.value.trim()
+		if (box.length > 0) {
+			body.set('box_no', box)
+		}
+		loading.value = true
+		errorTextValue.value = ''
+		try {
+			await request({
+				method: 'POST',
+				path: sourcePath() + '/' + doc.id + '/packing-binding',
+				query: null,
+				body: body,
+			})
+			toast('已绑定')
+			closePack()
+			await load()
+		} catch (err) {
+			errorTextValue.value = errorText(err)
+		}
+		loading.value = false
+	}
+
+	onBackPress((options : OnBackPressOptions) : boolean | null => {
+		if (options.from != 'backbutton' && options.from != 'navigateBack') {
+			return false
+		}
+		if (packOpen.value) {
+			closePack()
+			return true
+		}
+		if (detail.value != null) {
+			closeDetail()
+			return true
+		}
+		return false
+	})
+
 	onLoad(() => {
 		load()
 	})
 </script>
+
+<style>
+	.kind-row {
+		flex-direction: row;
+		flex-wrap: wrap;
+	}
+</style>
 
 

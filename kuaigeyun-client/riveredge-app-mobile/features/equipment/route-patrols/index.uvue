@@ -1,5 +1,6 @@
 <template>
 	<scroll-view class="page" direction="vertical">
+		<home-link />
 		<view class="card">
 			<text class="title">路线巡检</text>
 			<button :class="busy ? 'btn-secondary is-disabled' : 'btn-secondary'" :disabled="busy" @click="loadList">刷新</button>
@@ -17,7 +18,9 @@
 			<input class="field" v-model="inspectorNameText" placeholder="巡检人姓名（可空）" />
 			<input class="field" v-model="remarkText" placeholder="备注（可空）" />
 			<button :class="busy ? 'btn-secondary is-disabled' : 'btn-secondary'" :disabled="busy" @click="loadPreview">加载巡检项</button>
-			<view class="item" v-for="(line, index) in lines" :key="line.rowKey">
+			<text v-if="lines.length > 0" class="hint">第 {{ pointIndex + 1 }} 点，共 {{ lines.length }} 点</text>
+			<view v-for="(line, index) in lines" :key="line.rowKey">
+				<view class="item" v-if="index == pointIndex">
 				<text class="item-title">{{ line.title }}</text>
 				<text v-if="line.detail.length > 0" class="hint">{{ line.detail }}</text>
 				<text class="hint">采集模式 {{ line.captureMode }}</text>
@@ -28,8 +31,11 @@
 				<button :class="busy ? 'btn-secondary is-disabled' : 'btn-secondary'" :disabled="busy" @click="onLinePhoto(index)">上传照片</button>
 				<text v-if="line.attachments.length > 0" class="hint">已选 {{ line.attachments.length }} 张</text>
 				<button v-if="line.attachments.length > 0" :class="busy ? 'btn-secondary is-disabled' : 'btn-secondary'" :disabled="busy" @click="clearLinePhotos(index)">清除照片</button>
+				</view>
 			</view>
-			<button :class="busy ? 'btn-primary is-disabled' : 'btn-primary'" :disabled="busy" @click="submitCreate">新建</button>
+			<button v-if="lines.length > 0 && pointIndex > 0" class="btn-secondary" @click="pointBack">上一点</button>
+			<button v-if="lines.length > 0" :class="busy ? 'btn-primary is-disabled' : 'btn-primary'" :disabled="busy" @click="advancePoint">{{ pointButtonLabel() }}</button>
+			<button v-else :class="busy ? 'btn-primary is-disabled' : 'btn-primary'" :disabled="busy" @click="submitCreate">新建</button>
 			<text v-if="messageText.length > 0" class="hint">{{ messageText }}</text>
 			<text v-if="errorText.length > 0" class="error">{{ errorText }}</text>
 		</view>
@@ -37,6 +43,7 @@
 </template>
 
 <script setup lang="uts">
+	import HomeLink from '../../../shared/ui/home-link.uvue'
 	import { request } from '../../../shared/api/index.uts'
 	import { fieldText, readRows } from '../../../shared/api/fields.uts'
 	import { pickAndUploadImage } from '../../../shared/api/pick-image.uts'
@@ -60,6 +67,7 @@
 	const errorText = ref('')
 	const loadedRouteId = ref(0)
 	const lines = ref<Array<PatrolLineForm>>([])
+	const pointIndex = ref(0)
 
 	function optionalInt(raw: string): number | null {
 		if (raw.trim().length == 0) {
@@ -107,6 +115,28 @@
 	function clearPreview(): void {
 		loadedRouteId.value = 0
 		lines.value = []
+		pointIndex.value = 0
+	}
+
+	function pointButtonLabel(): string {
+		if (pointIndex.value + 1 < lines.value.length) {
+			return '巡下一点'
+		}
+		return '完成巡检'
+	}
+
+	function pointBack(): void {
+		if (pointIndex.value > 0) {
+			pointIndex.value = pointIndex.value - 1
+		}
+	}
+
+	function advancePoint(): void {
+		if (pointIndex.value + 1 < lines.value.length) {
+			pointIndex.value = pointIndex.value + 1
+			return
+		}
+		void submitCreate()
 	}
 
 	async function loadPreview(): Promise<void> {
@@ -124,6 +154,7 @@
 		try {
 			const preview = await loadRoutePatrolPreview(routeId)
 			loadedRouteId.value = routeId
+			pointIndex.value = 0
 			lines.value = preview.lines
 			messageText.value = '已加载 ' + preview.lines.length + ' 行'
 		} catch (e) {

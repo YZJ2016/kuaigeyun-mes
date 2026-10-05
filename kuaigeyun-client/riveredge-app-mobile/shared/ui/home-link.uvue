@@ -1,0 +1,33 @@
+<template>
+	<view class="home-link" hover-class="pressed" @click="goWorkbench">
+		<text class="home-link-text">首页</text>
+	</view>
+</template>
+
+<script setup lang="uts">
+	function goWorkbench() {
+		uni.reLaunch({ url: '/shell/workbench/index' })
+	}
+</script>
+
+<style>
+	.home-link {
+		min-width: 44px;
+		min-height: 44px;
+		padding-left: 12px;
+		padding-right: 12px;
+		flex-direction: row;
+		align-items: center;
+		justify-content: flex-end;
+		align-self: flex-end;
+	}
+
+	.home-link-text {
+		color: #9730E3;
+		font-size: 16px;
+	}
+
+	.pressed {
+		background-color: #F1F5F9;
+	}
+</style>

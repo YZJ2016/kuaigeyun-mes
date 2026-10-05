@@ -1,0 +1,213 @@
+<template>
+	<scroll-view class="page" direction="vertical">
+		<home-link />
+		<text v-if="loading" class="loading">正在加载</text>
+		<text v-if="errorText.length > 0" class="error">{{ errorText }}</text>
+		<text v-if="empty && openedScope.length == 0" class="empty">没有可显示的入口</text>
+		<view v-if="openedScope.length == 0">
+			<view v-for="(block, index) in scopes" :key="block.scope" class="scope-card" hover-class="pressed" @click="openScope(index)">
+				<view :class="tileClass(block.scope)">
+					<text :class="markClass(block.scope)">{{ scopeMark(block.scope) }}</text>
+				</view>
+				<view class="scope-copy">
+					<text class="title">{{ scopeTitle(block.scope) }}</text>
+					<text class="hint">{{ scopeMeta(block) }}</text>
+				</view>
+			</view>
+		</view>
+		<view v-for="block in scopes" :key="block.scope">
+			<view v-if="block.scope == openedScope" class="scope">
+				<view class="btn-secondary" hover-class="pressed" @click="closeScope">
+					<text class="btn-label-secondary">返回分组</text>
+				</view>
+				<text v-if="block.errorText.length > 0" class="error">{{ block.errorText }}</text>
+				<view v-if="block.showBadge || block.badgeNote.length > 0" class="badges">
+					<text v-if="block.pendingCount > 0" class="badge badge-warning">待处理故障 {{ block.pendingText }}</text>
+					<text v-if="block.overdueCount > 0" class="badge badge-danger">逾期保养 {{ block.overdueText }}</text>
+					<text v-if="block.badgeNote.length > 0" class="hint">{{ block.badgeNote }}</text>
+				</view>
+				<view v-for="section in block.sections" :key="section.uid" class="section">
+					<text v-if="section.showTitle" class="hint">{{ section.title }}</text>
+					<view class="grid">
+						<view v-for="cell in section.cells" :key="cell.uid" :class="cell.solo ? 'cell solo' : 'cell'" hover-class="pressed" @click="onCell(cell)">
+							<view :class="tileClass(block.scope)">
+								<text :class="markClass(block.scope)">{{ iconMark(cell.icon, cell.iconGroup, cell.label) }}</text>
+							</view>
+							<text class="title">{{ cell.label }}</text>
+							<text v-if="cell.missing" class="hint">功能尚未安装</text>
+						</view>
+					</view>
+				</view>
+			</view>
+		</view>
+	</scroll-view>
+</template>
+
+<script setup lang="uts">
+	import HomeLink from '../../shared/ui/home-link.uvue'
+	import { getToken } from '../../shared/api/session.uts'
+	import { openRegisteredRoute } from '../registry/index.uts'
+	import { iconMark, markClass, scopeTitle, tileClass } from '../workbench/icons.uts'
+	import { loadWorkbench } from '../workbench/load.uts'
+	import type { WorkCell, WorkScope } from '../workbench/load.uts'
+
+	const loading = ref(false)
+	const scopes = ref<Array<WorkScope>>([])
+	const empty = ref(false)
+	const errorText = ref('')
+	const openedScope = ref('')
+
+	async function refresh() {
+		if (getToken().length == 0) {
+			uni.reLaunch({ url: '/shell/login/index' })
+			return
+		}
+		loading.value = true
+		empty.value = false
+		errorText.value = ''
+		try {
+			scopes.value = await loadWorkbench()
+			empty.value = scopes.value.length == 0
+		} catch (err) {
+			scopes.value = []
+			empty.value = false
+			errorText.value = err instanceof Error ? err.message : '工作台未能加载'
+		}
+		loading.value = false
+	}
+
+	function cellCount(block : WorkScope) : number {
+		let count = 0
+		const sections = block.sections
+		for (let i = 0; i < sections.length; i++) {
+			count += sections[i].cells.length
+		}
+		return count
+	}
+
+	function scopeMeta(block : WorkScope) : string {
+		let text = cellCount(block).toString() + ' 项'
+		const notes : Array<string> = []
+		if (block.pendingCount > 0) {
+			notes.push(block.pendingText + ' 条待处理故障')
+		}
+		if (block.overdueCount > 0) {
+			notes.push(block.overdueText + ' 条逾期保养')
+		}
+		if (block.badgeNote.length > 0) {
+			notes.push(block.badgeNote)
+		}
+		if (notes.length == 0) {
+			return text
+		}
+		let extra = ''
+		for (let i = 0; i < notes.length; i++) {
+			if (extra.length > 0) {
+				extra += '，'
+			}
+			extra += notes[i]
+		}
+		return text + ' · ' + extra
+	}
+
+	function scopeMark(scope : string) : string {
+		const title = scopeTitle(scope)
+		if (title.length == 0) {
+			return '组'
+		}
+		return title.charAt(0)
+	}
+
+	function openScope(index : number) {
+		openedScope.value = scopes.value[index].scope
+	}
+
+	function closeScope() {
+		openedScope.value = ''
+	}
+
+	function onCell(cell : WorkCell) {
+		if (cell.missing || cell.route.length == 0) {
+			uni.showToast({ title: '功能尚未安装', icon: 'none' })
+			return
+		}
+		openRegisteredRoute(cell.route)
+	}
+
+	onBackPress((options : OnBackPressOptions) : boolean | null => {
+		if (openedScope.value.length == 0) {
+			return false
+		}
+		if (options.from == 'backbutton' || options.from == 'navigateBack') {
+			openedScope.value = ''
+			return true
+		}
+		return false
+	})
+
+	onShow(() => {
+		refresh()
+	})
+</script>
+
+<style>
+	.scope-card {
+		flex-direction: row;
+		align-items: center;
+		background-color: #FFFFFF;
+		border-radius: 12px;
+		border-width: 1px;
+		border-style: solid;
+		border-color: #E2E8F0;
+		padding-top: 16px;
+		padding-right: 12px;
+		padding-bottom: 16px;
+		padding-left: 12px;
+		margin-bottom: 12px;
+		min-height: 72px;
+	}
+
+	.scope-copy {
+		flex: 1;
+		flex-direction: column;
+		margin-left: 12px;
+	}
+
+	.scope {
+		margin-bottom: 8px;
+		flex-direction: column;
+	}
+
+	.badges {
+		margin-bottom: 8px;
+		flex-direction: column;
+	}
+
+	.grid {
+		flex-direction: row;
+		flex-wrap: wrap;
+	}
+
+	.cell {
+		width: 48%;
+		margin-top: 6px;
+		margin-bottom: 6px;
+		margin-left: 1%;
+		margin-right: 1%;
+		padding-top: 16px;
+		padding-right: 12px;
+		padding-bottom: 16px;
+		padding-left: 12px;
+		min-height: 72px;
+		background-color: #FFFFFF;
+		border-radius: 12px;
+		border-width: 1px;
+		border-style: solid;
+		border-color: #E2E8F0;
+		flex-direction: column;
+	}
+
+	.solo {
+		width: 98%;
+	}
+</style>
