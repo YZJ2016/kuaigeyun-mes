@@ -29864,6 +29864,14 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.mobile-login-banner-ratio-1-2-r01.title':
+    '手机登录页品牌区与表单固定为三分之一对三分之二',
+  'pages.dashboard.updateLog.entries.mobile-login-banner-ratio-1-2-r01.description':
+    '网页端登录顶栏原先把剩余高度几乎占满，看起来过高。现已按当前可见高度（含键盘顶起后）固定品牌区占三分之一、登录区占三分之二。',
+  'pages.dashboard.updateLog.entries.mobile-login-banner-keyboard-shrink-r01.title':
+    '手机登录页弹出键盘时顶部品牌区会一起收矮',
+  'pages.dashboard.updateLog.entries.mobile-login-banner-keyboard-shrink-r01.description':
+    '原先顶部品牌条按整屏三分之一写死高度，键盘起来后把账号密码区挤没。现已随剩余高度同比收缩，Logo 仍保持正方形。',
   'pages.dashboard.updateLog.entries.mobile-workbench-my-work-order-badge-r01.title':
     '手机工作台「我的工单」角标按本人派工计数',
   'pages.dashboard.updateLog.entries.mobile-workbench-my-work-order-badge-r01.description':
