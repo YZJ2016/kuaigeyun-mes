@@ -29,7 +29,8 @@
 		</view>
 		<view class="card">
 			<text class="title">新建故障</text>
-			<input class="field" v-model="equipmentUuidText" placeholder="设备 UUID" />
+			<text v-if="equipmentLabel.length > 0" class="hint">{{ equipmentLabel }}</text>
+			<master-picker kind="device" title="故障设备" :disabled="busy" @choose="chooseEquipment" />
 			<text class="hint">故障类型：{{ faultType }}</text>
 			<view class="choices">
 				<button class="btn-chip" @click="chooseType(0)">机械故障</button>
@@ -55,6 +56,7 @@
 
 <script setup lang="uts">
 	import HomeLink from '../../../shared/ui/home-link.uvue'
+	import MasterPicker from '../components/master-picker.uvue'
 	import { request } from '../../../shared/api/index.uts'
 	import { asJsonObject, fieldText, readRows } from '../../../shared/api/fields.uts'
 	import { joinParts, readError } from '../json-text.uts'
@@ -80,6 +82,12 @@
 	const repairContentText = ref('')
 	const rows = ref<Array<ListRow>>([])
 	const equipmentUuidText = ref('')
+	const equipmentLabel = ref('')
+	function chooseEquipment(row : any) {
+		if (busy.value) { return }
+		equipmentUuidText.value = fieldText(row, 'uuid')
+		equipmentLabel.value = fieldText(row, 'code') + ' ' + fieldText(row, 'name')
+	}
 	const faultType = ref('机械故障')
 	const faultLevel = ref('一般')
 	const faultDescriptionText = ref('')
@@ -274,7 +282,7 @@
 			const equipmentUuid = equipmentUuidText.value.trim()
 			const description = faultDescriptionText.value.trim()
 			if (equipmentUuid.length == 0) {
-				errorText.value = '请填写设备 UUID'
+				errorText.value = '请选择故障设备'
 				busy.value = false
 				return
 			}
@@ -310,6 +318,9 @@
 		queryUuid.value = equipmentUuid
 		if (equipmentUuid.length > 0 && equipmentUuidText.value.trim().length == 0) {
 			equipmentUuidText.value = equipmentUuid
+			request({ path: '/api/v1/apps/kuaizhizao/equipment/' + encodeURIComponent(equipmentUuid), method: 'GET', query: null, body: null }).then((row) => {
+				if (equipmentUuidText.value == equipmentUuid) { equipmentLabel.value = fieldText(row, 'code') + ' ' + fieldText(row, 'name') }
+			}).catch((_err) => { errorText.value = '设备名称未能加载，请重新选择设备' })
 		}
 	})
 

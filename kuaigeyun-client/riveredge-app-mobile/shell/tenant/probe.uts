@@ -1,0 +1,74 @@
+import { parseAppEntryUrl } from '../../shared/api/app-entry.uts'
+import { apiGetFromOrigin } from '../../shared/api/http.uts'
+
+export type AppProbe = {
+	ok : boolean
+	message : string
+	url : string
+	origin : string
+	domain : string
+	tenantId : string
+	tenantName : string
+}
+
+function fail(message : string) : AppProbe {
+	return {
+		ok: false,
+		message: message,
+		url: '',
+		origin: '',
+		domain: '',
+		tenantId: '',
+		tenantName: ''
+	} as AppProbe
+}
+
+function isPositiveInt(value : string) : boolean {
+	if (value.length == 0) {
+		return false
+	}
+	for (let i = 0; i < value.length; i++) {
+		const ch = value.charAt(i)
+		if (ch < '0' || ch > '9') {
+			return false
+		}
+	}
+	return parseInt(value) >= 1
+}
+
+function readString(obj : any | null, key : string) : string {
+	if (obj == null || (obj as UTSJSONObject)[key] == null) {
+		return ''
+	}
+	return String((obj as UTSJSONObject)[key])
+}
+
+export async function probeAppEntry(raw : string) : Promise<AppProbe> {
+	const parsed = parseAppEntryUrl(raw)
+	if (parsed == null) {
+		return fail('地址格式不正确')
+	}
+	try {
+		const data = await apiGetFromOrigin(parsed.origin, '/tenants/check-domain/' + encodeURIComponent(parsed.domain))
+		const exists = data != null && (data as UTSJSONObject)['exists'] == true
+		const tenantText = readString(data, 'tenant_id').trim()
+		if (!exists || !isPositiveInt(tenantText)) {
+			return fail('没有找到组织')
+		}
+		return {
+			ok: true,
+			message: '',
+			url: parsed.url,
+			origin: parsed.origin,
+			domain: parsed.domain,
+			tenantId: tenantText,
+			tenantName: readString(data, 'tenant_name').trim()
+		} as AppProbe
+	} catch (err) {
+		const message = err instanceof Error ? err.message : '网络连接失败'
+		if (message.length == 0) {
+			return fail('网络连接失败')
+		}
+		return fail(message)
+	}
+}

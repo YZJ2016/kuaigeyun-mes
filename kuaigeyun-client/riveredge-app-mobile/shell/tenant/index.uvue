@@ -1,0 +1,176 @@
+<template>
+	<scroll-view v-if="allowed" class="page" direction="vertical">
+		<view v-if="settingsMode && currentUrl.length > 0" class="card">
+			<text class="label">当前组织</text>
+			<text v-if="currentName.length > 0" class="title">{{ currentName }}</text>
+			<text class="hint">{{ currentUrl }}</text>
+		</view>
+		<view class="card">
+			<text class="label">地址</text>
+			<input class="field" :value="address" placeholder="https://主机/mobile/组织域名" placeholder-class="entry-ph" @input="onAddress" />
+			<view :class="busy ? 'btn-secondary is-disabled' : 'btn-secondary'" hover-class="pressed" @click="onIdentify">
+				<text class="btn-label-secondary">{{ busy ? '识别中' : '识别' }}</text>
+			</view>
+			<text v-if="message.length > 0" class="error">{{ message }}</text>
+			<view v-if="pendingId.length > 0">
+				<text class="label">组织</text>
+				<text v-if="pendingName.length > 0" class="title">{{ pendingName }}</text>
+				<text class="hint">{{ pendingDomain }}</text>
+				<view :class="busy ? 'btn-primary is-disabled' : 'btn-primary'" hover-class="pressed" @click="onConfirm">
+					<text class="btn-label">确认</text>
+				</view>
+			</view>
+		</view>
+	</scroll-view>
+</template>
+
+<script setup lang="uts">
+	import { clearToken, getTenantId, getToken } from '../../shared/api/session.uts'
+	import { readSavedAppEntry, saveAppEntry } from '../../shared/api/app-entry.uts'
+	import type { SavedAppEntry } from '../../shared/api/app-entry.uts'
+	import { probeAppEntry } from './probe.uts'
+
+	const allowed = ref(false)
+	const settingsMode = ref(false)
+	const currentUrl = ref('')
+	const currentName = ref('')
+	const address = ref('')
+	const message = ref('')
+	const busy = ref(false)
+	const checkedText = ref('')
+	const pendingUrl = ref('')
+	const pendingOrigin = ref('')
+	const pendingDomain = ref('')
+	const pendingId = ref('')
+	const pendingName = ref('')
+
+	function clearPending() {
+		checkedText.value = ''
+		pendingUrl.value = ''
+		pendingOrigin.value = ''
+		pendingDomain.value = ''
+		pendingId.value = ''
+		pendingName.value = ''
+	}
+
+	function onAddress(event : UniInputEvent) {
+		const next = event.detail.value
+		if (next == address.value) {
+			return
+		}
+		address.value = next
+		clearPending()
+		message.value = ''
+	}
+
+	async function onIdentify() {
+		if (busy.value) {
+			return
+		}
+		const raw = address.value.trim()
+		if (raw.length == 0) {
+			message.value = '地址格式不正确'
+			clearPending()
+			return
+		}
+		busy.value = true
+		message.value = ''
+		clearPending()
+		try {
+			const result = await probeAppEntry(raw)
+			if (address.value.trim() != raw) {
+				busy.value = false
+				return
+			}
+			if (!result.ok) {
+				message.value = result.message
+			} else {
+				checkedText.value = raw
+				pendingUrl.value = result.url
+				pendingOrigin.value = result.origin
+				pendingDomain.value = result.domain
+				pendingId.value = result.tenantId
+				pendingName.value = result.tenantName
+			}
+		} catch (err) {
+			if (address.value.trim() == raw) {
+				message.value = err instanceof Error ? err.message : '网络连接失败'
+			}
+		}
+		busy.value = false
+	}
+
+	function onConfirm() {
+		if (busy.value || pendingId.value.length == 0) {
+			return
+		}
+		if (address.value.trim() != checkedText.value) {
+			clearPending()
+			return
+		}
+		const hadToken = getToken().length > 0
+		const previousId = getTenantId()
+		const nextId = pendingId.value
+		const changed = hadToken && previousId != nextId
+		const saved = saveAppEntry({
+			url: pendingUrl.value,
+			origin: pendingOrigin.value,
+			tenantId: nextId,
+			tenantName: pendingName.value,
+			tenantDomain: pendingDomain.value
+		} as SavedAppEntry)
+		if (!saved) {
+			message.value = '地址格式不正确'
+			return
+		}
+		if (changed) {
+			clearToken()
+			uni.reLaunch({ url: '/shell/login/index' })
+			return
+		}
+		if (!hadToken) {
+			uni.reLaunch({ url: '/shell/login/index' })
+			return
+		}
+		if (settingsMode.value) {
+			uni.navigateBack()
+			return
+		}
+		uni.reLaunch({ url: '/shell/workbench/index' })
+	}
+
+	onLoad((options : any) => {
+		let app = false
+		// #ifdef APP
+		app = true
+		// #endif
+		if (!app) {
+			uni.reLaunch({ url: '/shell/login/index' })
+			return
+		}
+		allowed.value = true
+		let mode = ''
+		if (options != null && options['mode'] != null) {
+			mode = String(options['mode'])
+		}
+		settingsMode.value = mode == 'settings'
+		if (settingsMode.value) {
+			uni.setNavigationBarTitle({ title: '设置' })
+			const savedEntry = readSavedAppEntry()
+			if (savedEntry != null) {
+				currentUrl.value = savedEntry.url
+				currentName.value = savedEntry.tenantName
+				address.value = savedEntry.url
+			}
+		} else {
+			uni.setNavigationBarTitle({ title: '填写地址' })
+		}
+	})
+</script>
+
+<style>
+	.entry-ph {
+		color: #475569;
+		font-size: 16px;
+	}
+</style>

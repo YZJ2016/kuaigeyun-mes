@@ -1,5 +1,7 @@
 <template>
 	<InspectionBoard
+		:back-request="backRequest"
+		@conduct-state="onConductState"
 		list-path="/api/v1/apps/kuaizhizao/process-inspections"
 		conduct-kind="standard"
 		custom-table="apps_kuaizhizao_process_inspections"
@@ -9,4 +11,12 @@
 
 <script setup lang="uts">
 	import InspectionBoard from '../components/inspection-board.uvue'
+	const backRequest = ref(0)
+	const executing = ref(false)
+	function onConductState(value : boolean) { executing.value = value }
+	onBackPress(() : boolean | null => {
+		if (!executing.value) { return false }
+		backRequest.value += 1
+		return true
+	})
 </script>

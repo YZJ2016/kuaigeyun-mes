@@ -1,0 +1,157 @@
+import { apiBase, apiGet } from '../../shared/api/http.uts'
+import { asJsonObject, fieldBool, fieldInt, fieldText } from '../../shared/api/fields.uts'
+
+const WECOM_KEYS : Array<string> = ['wecom_userid', 'wecom_user_id', 'wx_work_userid']
+
+export function profileInitial(name : string, username : string) : string {
+	const named = name.trim()
+	const text = named.length > 0 ? named : username.trim()
+	if (text.length == 0) {
+		return ''
+	}
+	return text.substring(0, 1)
+}
+
+export function nestedName(data : any | null, key : string) : string {
+	const root = asJsonObject(data)
+	if (root == null) {
+		return ''
+	}
+	const child = asJsonObject(root[key])
+	if (child == null) {
+		return ''
+	}
+	return fieldText(child, 'name')
+}
+
+export function roleLine(data : any | null) : string {
+	const root = asJsonObject(data)
+	if (root == null) {
+		return ''
+	}
+	const raw = root['roles']
+	if (raw == null || !Array.isArray(raw)) {
+		return ''
+	}
+	const list = raw as Array<any>
+	const names : Array<string> = []
+	for (let i = 0; i < list.length; i++) {
+		const name = fieldText(list[i], 'name')
+		if (name.length > 0) {
+			names.push(name)
+		}
+	}
+	return names.join('、')
+}
+
+export function userIdOf(data : any | null) : number {
+	return fieldInt(data, 'id')
+}
+
+/** 只认个人资料 contact_info 里的企微标识，不用登录方式推测。 */
+export function wecomUserIdOf(profile : any | null) : string {
+	const root = asJsonObject(profile)
+	if (root == null) {
+		return ''
+	}
+	const contact = asJsonObject(root['contact_info'])
+	if (contact == null) {
+		return ''
+	}
+	for (let i = 0; i < WECOM_KEYS.length; i++) {
+		const text = fieldText(contact, WECOM_KEYS[i])
+		if (text.length > 0) {
+			return text
+		}
+	}
+	return ''
+}
+
+function hasPreviewToken(url : string) : boolean {
+	const at = url.indexOf('token=')
+	if (at < 0) {
+		return false
+	}
+	const rest = url.substring(at + 'token='.length)
+	const amp = rest.indexOf('&')
+	const token = amp >= 0 ? rest.substring(0, amp) : rest
+	return token.length > 0
+}
+
+function siteOrigin() : string {
+	const base = apiBase()
+	const marker = '/api/v1'
+	if (base == marker) {
+		return ''
+	}
+	if (base.length > marker.length && base.substring(base.length - marker.length) == marker) {
+		return base.substring(0, base.length - marker.length)
+	}
+	return ''
+}
+
+/** preview_url 已含 /api/v1，只拼源站。无 token 时不拿来当图片。 */
+export function absolutePreview(previewUrl : string) : string {
+	const url = previewUrl.trim()
+	if (!hasPreviewToken(url)) {
+		return ''
+	}
+	if (url.indexOf('https://') == 0 || url.indexOf('http://') == 0) {
+		return url
+	}
+	if (url.indexOf('/api/v1') != 0) {
+		return ''
+	}
+	const origin = siteOrigin()
+	if (origin.length == 0) {
+		return url
+	}
+	return origin + url
+}
+
+export async function loadAvatarSrc(uuid : string) : Promise<string> {
+	const id = uuid.trim()
+	if (id.length == 0) {
+		return ''
+	}
+	const data = await apiGet('/core/files/' + encodeURIComponent(id) + '/preview', [
+		{ key: 'for_avatar', value: 'true' }
+	])
+	if (!fieldBool(data, 'supported', false)) {
+		return ''
+	}
+	return absolutePreview(fieldText(data, 'preview_url'))
+}
+
+/**
+ * 只送姓名、用户名、手机、邮箱。头像没变不带 avatar。
+ * 移除头像时 avatar 为 null：UserProfileUpdate.avatar 是 Optional[str]，服务端把 null 当成删除。
+ */
+export function profileUpdateBody(fullName : string, username : string, phone : string, email : string, includeAvatar : boolean, clearAvatar : boolean, avatarUuid : string) : UTSJSONObject {
+	const body = new UTSJSONObject()
+	body.set('full_name', fullName)
+	body.set('username', username)
+	body.set('phone', phone)
+	body.set('email', email)
+	if (includeAvatar) {
+		if (clearAvatar) {
+			body.set('avatar', null)
+		} else {
+			body.set('avatar', avatarUuid)
+		}
+	}
+	return body
+}
+
+export function passwordBody(oldPassword : string, newPassword : string) : UTSJSONObject {
+	const body = new UTSJSONObject()
+	body.set('old_password', oldPassword)
+	body.set('new_password', newPassword)
+	return body
+}
+
+export function wecomBindBody(code : string) : UTSJSONObject {
+	const body = new UTSJSONObject()
+	body.set('code', code)
+	return body
+}

@@ -246,7 +246,8 @@ const TITLES = {
 	"/equipment/route-patrols": "路线巡检", "/equipment/faults": "报修维修", "/equipment/repairs": "维修台账",
 	"/equipment/maintenance-executions": "保养执行记录", "/equipment/maintenance-reminders": "维护提醒",
 	"/mold/scan": "扫码查模具", "/mold/borrows": "模具领用", "/mold/returns": "模具归还",
-	"/mold/maintenances": "模具保养", "/mold/repairs": "模具维修", "/mold/reminders": "模具保养提醒"
+	"/mold/maintenances": "模具保养", "/mold/repairs": "模具维修", "/mold/reminders": "模具保养提醒",
+	account: "账号", "account-edit": "编辑资料", "account-password": "修改密码"
 };
 
 const QUALITY_ROUTES = ["/quality/incoming", "/quality/process", "/quality/finished", "/quality/oqc"];
@@ -260,6 +261,21 @@ const ui = {
 	assignOrder: "", assignOp: "", assignMode: "worker", pickedWorkers: {}, assignTeam: "",
 	exKind: "material-shortage", exOrder: "", exMaterial: "", matKeyword: "",
 	equipCode: "", moldCode: "", resolved: null, next: null, loadTimer: 0
+};
+
+const SAMPLE_AVATAR = "data:image/svg+xml;charset=UTF-8," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect width="40" height="40" fill="#9730E3"/><circle cx="20" cy="16" r="6" fill="#F3E8FF"/><path d="M8 34c1.8-6 5.4-9 12-9s10.2 3 12 9" fill="#F3E8FF"/></svg>');
+
+const profile = {
+	name: "张工",
+	username: "zhanggong",
+	phone: "13800138018",
+	email: "zhanggong@xinghuan.local",
+	department: "装配一组",
+	position: "操作工",
+	role: "车间操作",
+	avatar: "",
+	wecomUserId: "",
+	password: "demo"
 };
 
 const screen = document.getElementById("screen");
@@ -603,10 +619,115 @@ function homeFrequentHtml() {
 	}).join("");
 }
 
-function renderHome() {
+function orgName() {
 	const org = tenantById(ui.tenantId);
+	return org ? org.tenantName : "星环精密";
+}
+
+function filled(value) {
+	return String(value == null ? "" : value).trim();
+}
+
+function profileName() {
+	return filled(profile.name) || profile.username;
+}
+
+function profileInitial(name, username) {
+	const text = filled(name) || filled(username) || profileName();
+	return text ? text.slice(0, 1) : "";
+}
+
+function kept(id, saved) {
+	return Object.prototype.hasOwnProperty.call(ui.draft, id) ? ui.draft[id] : saved;
+}
+
+function workbenchMeta() {
+	const parts = [orgName()];
+	if (filled(profile.position)) parts.push(filled(profile.position));
+	parts.push("早班");
+	return parts.join(" · ");
+}
+
+function avatarHtml(src, letter) {
+	if (src) return '<span class="avatar"><img src="' + esc(src) + '" alt=""></span>';
+	return '<span class="avatar" aria-hidden="true">' + esc(letter) + "</span>";
+}
+
+function chevronHtml() {
+	return '<span class="chevron" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>';
+}
+
+function actionRow(label, aside, attrs) {
+	const asideHtml = aside ? '<span class="action-aside">' + esc(aside) + "</span>" : "";
+	return '<button type="button" class="action-row" ' + attrs + '><span class="action-label">' + esc(label) + '</span><span class="action-end">' + asideHtml + chevronHtml() + "</span></button>";
+}
+
+function textField(id, label, value, kind) {
+	const type = kind === "password" ? "password" : "text";
+	const auto = kind === "password" ? (id === "pwd-current" ? "current-password" : "new-password") : "off";
+	return '<label for="' + id + '">' + label + '</label><input class="field" id="' + id + '" data-draft type="' + type + '" autocomplete="' + auto + '" value="' + esc(value) + '"' + invalidAttr(id) + ">" + fieldError(id);
+}
+
+function renderAccount() {
+	const pairs = [
+		["姓名", filled(profile.name) || "未填写"],
+		["用户名", profile.username],
+		["手机", filled(profile.phone) || "未填写"],
+		["邮箱", filled(profile.email) || "未填写"],
+		["组织", orgName()]
+	];
+	if (filled(profile.department)) pairs.push(["部门", filled(profile.department)]);
+	if (filled(profile.position)) pairs.push(["职位", filled(profile.position)]);
+	if (filled(profile.role)) pairs.push(["角色", filled(profile.role)]);
+	const bound = !!filled(profile.wecomUserId);
+	const wecom = bound
+		? '<div class="action-row"><span class="action-label">企业微信</span><span class="action-end"><span class="action-aside">' + esc(profile.wecomUserId) + '</span><button type="button" class="action-inline" data-act="wecom-unbind-ask">解除绑定</button></span></div>'
+		: actionRow("企业微信", "未绑定", 'data-act="wecom-bind-ask"');
+	const body = '<div class="page">' + bannerHtml()
+		+ '<div class="card identity">' + avatarHtml(profile.avatar, profileInitial(profile.name, profile.username)) + '<span class="who-copy"><span class="who-name">' + esc(profileName()) + '</span><span class="who-meta">' + esc(orgName()) + "</span></span></div>"
+		+ '<div class="card">' + facts(pairs) + "</div>"
+		+ '<h2 class="section-title">管理</h2><div class="action-list">'
+		+ actionRow("编辑资料", "修改姓名和联系方式", 'data-act="open-route" data-route="account-edit"')
+		+ actionRow("修改密码", "", 'data-act="open-route" data-route="account-password"')
+		+ wecom
+		+ "</div>"
+		+ '<div class="account-logout"><button type="button" class="btn-danger" data-act="logout-ask">退出登录</button></div></div>';
+	return view(body);
+}
+
+function renderAccountEdit() {
+	const name = kept("profile-name", profile.name);
+	const username = kept("profile-username", profile.username);
+	const phone = kept("profile-phone", profile.phone);
+	const email = kept("profile-email", profile.email);
+	const avatar = kept("profile-avatar", profile.avatar);
+	const picked = !!avatar;
+	let actions = '<button type="button" class="btn-secondary" data-act="pick-avatar">' + (picked ? "更换头像" : "选择头像") + "</button>";
+	if (picked) actions += '<button type="button" class="btn-secondary" data-act="clear-avatar">移除头像</button>';
+	const body = '<div class="page">' + errorHtml()
+		+ '<p class="hint lead">这里修改的是姓名、用户名、手机和邮箱</p>'
+		+ "<label>头像</label><div class=\"avatar-edit\">" + avatarHtml(avatar, profileInitial(name, username)) + '<div class="avatar-actions">' + actions + "</div></div>"
+		+ textField("profile-name", "姓名", name)
+		+ textField("profile-username", "用户名", username)
+		+ textField("profile-phone", "手机", phone)
+		+ textField("profile-email", "邮箱", email)
+		+ "</div>";
+	return view(body, '<button type="button" class="btn-primary" data-act="save-profile">保存</button>');
+}
+
+function renderAccountPassword() {
+	const body = '<div class="page">' + bannerHtml() + errorHtml()
+		+ '<p class="hint" style="margin:0 0 4px">当前样例密码是 ' + esc(profile.password) + "。</p>"
+		+ textField("pwd-current", "当前密码", draftValue("pwd-current"), "password")
+		+ textField("pwd-new", "新密码", draftValue("pwd-new"), "password")
+		+ textField("pwd-again", "再输入一次新密码", draftValue("pwd-again"), "password")
+		+ "</div>";
+	return view(body, '<button type="button" class="btn-primary" data-act="save-password">保存密码</button>');
+}
+
+function renderHome() {
 	const query = draftValue("feature-find").trim();
-	const body = '<div class="page"><div class="who"><span class="who-name">张工</span><span class="who-meta">' + esc(org ? org.tenantName : "星环精密") + ' · 操作工 · 早班</span></div><button type="button" class="btn-primary btn-scan" data-act="open-route" data-route="scan-hub">' + icon("scan") + "扫码</button><p class=\"hint\">识别工单、领料单或设备</p><label for=\"feature-find\">检索功能</label><input class=\"field\" id=\"feature-find\" data-draft autocomplete=\"off\" placeholder=\"例如盘点、领料\" value=\"" + esc(query) + "\"><div id=\"feature-rest\">" + featureRest(query, homeTodoHtml(), homeFrequentHtml()) + "</div></div>";
+	const body = '<div class="page"><button type="button" class="who who-btn" data-act="open-route" data-route="account"><span class="who-copy"><span class="who-name">' + esc(profileName()) + '</span><span class="who-meta">' + esc(workbenchMeta()) + '</span></span><span class="who-trail"><span class="who-account">账号</span>' + chevronHtml() + '</span></button><button type="button" class="btn-primary btn-scan" data-act="open-route" data-route="scan-hub">' + icon("scan") + "扫码</button><p class=\"hint\">识别工单、领料单或设备</p><label for=\"feature-find\">检索功能</label><input class=\"field\" id=\"feature-find\" data-draft autocomplete=\"off\" placeholder=\"例如盘点、领料\" value=\"" + esc(query) + "\"><div id=\"feature-rest\">" + featureRest(query, homeTodoHtml(), homeFrequentHtml()) + "</div></div>";
 	return view(body);
 }
 
@@ -1004,6 +1125,9 @@ function renderLogin() {
 }
 
 function renderPage(route) {
+	if (route === "account") return renderAccount();
+	if (route === "account-edit") return renderAccountEdit();
+	if (route === "account-password") return renderAccountPassword();
 	if (route === "apps") return renderApps();
 	if (route === "scan-hub") return renderScanHub();
 	if (route === "/mes/scan") return renderScan();
@@ -1242,8 +1366,7 @@ function render() {
 	dock.innerHTML = page.dock || "";
 	dock.hidden = !page.dock;
 	if (ui.dialog) {
-		const danger = ui.dialog.tone === "danger";
-		const confirmClass = danger ? "btn-danger" : "btn-primary";
+		const confirmClass = ui.dialog.tone === "danger" ? "btn-danger" : ui.dialog.tone === "secondary" ? "btn-secondary" : "btn-primary";
 		dialogEl.innerHTML = '<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="dialog-title" tabindex="-1"><h2 id="dialog-title">' + esc(ui.dialog.title) + "</h2><p>" + esc(ui.dialog.body) + '</p><button type="button" class="' + confirmClass + '" data-act="' + esc(ui.dialog.act) + '">' + esc(ui.dialog.confirm) + '</button><button type="button" class="btn-secondary" data-act="dialog-cancel">' + esc(ui.dialog.cancel || "返回修改") + "</button></div>";
 		dialogEl.hidden = false;
 	} else {
@@ -1317,6 +1440,78 @@ function onClick(event) {
 		return;
 	}
 	if (act === "dialog-cancel") { ui.dialog = null; render(); return; }
+	if (act === "pick-avatar") { ui.draft["profile-avatar"] = SAMPLE_AVATAR; render(); return; }
+	if (act === "clear-avatar") { ui.draft["profile-avatar"] = ""; render(); return; }
+	if (act === "save-profile") {
+		const name = filled(kept("profile-name", profile.name));
+		const username = filled(kept("profile-username", profile.username));
+		const errors = [];
+		if (!username) errors.push({ id: "profile-username", text: "请填写用户名" });
+		else if (username.length > 50) errors.push({ id: "profile-username", text: "用户名不能超过 50 个字" });
+		if (errors.length) { ui.errors = errors; render(); return; }
+		profile.name = name;
+		profile.username = username;
+		profile.phone = filled(kept("profile-phone", profile.phone));
+		profile.email = filled(kept("profile-email", profile.email));
+		profile.avatar = kept("profile-avatar", profile.avatar) || "";
+		go("account");
+		ui.banner = "已保存";
+		render();
+		return;
+	}
+	if (act === "save-password") {
+		ui.banner = "";
+		const current = draftValue("pwd-current");
+		const next = draftValue("pwd-new");
+		const again = draftValue("pwd-again");
+		if (!current || !next || !again) {
+			const id = !current ? "pwd-current" : !next ? "pwd-new" : "pwd-again";
+			ui.errors = [{ id: id, text: "请输入当前密码和新密码" }];
+			render();
+			return;
+		}
+		if (next.length < 8) { ui.errors = [{ id: "pwd-new", text: "新密码至少 8 个字符" }]; render(); return; }
+		if (next !== again) { ui.errors = [{ id: "pwd-again", text: "两次新密码不一致" }]; render(); return; }
+		if (current !== profile.password) { ui.errors = [{ id: "pwd-current", text: "当前密码错误" }]; render(); return; }
+		profile.password = next;
+		ui.draft["pwd-current"] = "";
+		ui.draft["pwd-new"] = "";
+		ui.draft["pwd-again"] = "";
+		ui.banner = "密码修改成功";
+		render();
+		return;
+	}
+	if (act === "wecom-bind-ask") {
+		openDialog({ title: "绑定企业微信", body: "模拟手机网页授权已经完成。", confirm: "完成绑定", cancel: "返回", act: "wecom-bind-do", tone: "secondary" });
+		return;
+	}
+	if (act === "wecom-bind-do") {
+		profile.wecomUserId = "ZhangGong";
+		ui.dialog = null;
+		ui.banner = "已绑定企业微信";
+		render();
+		return;
+	}
+	if (act === "wecom-unbind-ask") {
+		openDialog({ title: "解除绑定", body: "解除后企业微信变为未绑定。", confirm: "解除绑定", cancel: "返回", act: "wecom-unbind-do", tone: "danger" });
+		return;
+	}
+	if (act === "wecom-unbind-do") {
+		profile.wecomUserId = "";
+		ui.dialog = null;
+		ui.banner = "已解除绑定";
+		render();
+		return;
+	}
+	if (act === "logout-ask") {
+		openDialog({ title: "退出登录", body: "退出后需要重新登录。", confirm: "退出", cancel: "返回", act: "logout-do", tone: "danger" });
+		return;
+	}
+	if (act === "logout-do") {
+		ui.loggedIn = false;
+		go("login");
+		return;
+	}
 	if (act === "wizard-next") { ui.step = 2; ui.lineIndex = 0; render(); return; }
 	if (act === "qty-dec" || act === "qty-inc") {
 		const row = currentRow();

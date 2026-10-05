@@ -1,0 +1,102 @@
+<template>
+	<view class="field-wrap">
+		<text class="label">{{ title }}</text>
+		<text class="hint">{{ selectedLabel.length > 0 ? selectedLabel : '尚未选择' }}</text>
+		<button class="btn-secondary" :disabled="disabled || loading" @click="toggle">{{ expanded ? '收起选择' : '选择' + title }}</button>
+		<view v-if="expanded">
+			<input class="field" v-model="keyword" :disabled="disabled || loading" placeholder="输入编码或名称" @confirm="search" />
+			<button class="btn-secondary" :disabled="disabled || loading" @click="search">查询</button>
+			<button v-if="kind == 'device'" class="btn-secondary" :disabled="disabled || loading" @click="scanDevice">扫码选择设备</button>
+			<button v-if="kind == 'scheme' && Number(equipmentId) > 0" class="btn-secondary" :disabled="disabled || loading" @click="bound">查看设备绑定方案</button>
+			<text v-if="note.length > 0" class="hint">{{ note }}</text>
+			<text v-if="error.length > 0" class="error">{{ error }}</text>
+			<text v-if="loading" class="loading">加载中</text>
+			<button v-for="(row, index) in rows" :key="index" class="btn-secondary" :disabled="disabled || loading" @click="choose(index)">{{ label(row) }}</button>
+			<button v-if="rows.length < total" class="btn-secondary" :disabled="disabled || loading" @click="more">加载更多</button>
+		</view>
+	</view>
+</template>
+<script setup lang="uts">
+	import { searchChoices, loadBoundSchemes } from '../selection.uts'
+	import { request } from '../../../shared/api/index.uts'
+	import { fieldText, fieldNumber, readRows } from '../../../shared/api/fields.uts'
+	import { scan } from '../../../shared/channel/index.uts'
+	const props = defineProps({
+		kind: { type: String, default: 'device' }, title: { type: String, default: '设备' },
+		equipmentId: { type: String, default: '' }, disabled: { type: Boolean, default: false }
+	})
+	const emit = defineEmits(['choose'])
+	const expanded = ref(false)
+	const loading = ref(false)
+	const keyword = ref('')
+	const activeKeyword = ref('')
+	const selectedLabel = ref('')
+	const rows = ref<any[]>([])
+	const total = ref(0)
+	const note = ref('')
+	const error = ref('')
+	let selectionSession = 0
+	function label(row : any) : string { return fieldText(row, 'code') + ' ' + fieldText(row, 'name') }
+	function choose(index : number) {
+		if (props.disabled || loading.value || index < 0 || index >= rows.value.length) { return }
+		const row = rows.value[index]
+		if (fieldNumber(row, 'id') <= 0 || (props.kind == 'device' && fieldText(row, 'uuid').length == 0)) { error.value = '记录无效，请重新查询'; return }
+		selectedLabel.value = label(row)
+		emit('choose', row)
+		expanded.value = false
+	}
+	async function toggle() {
+		if (props.disabled || loading.value) { return }
+		expanded.value = !expanded.value
+		if (expanded.value) {
+			if (props.kind == 'scheme' && Number(props.equipmentId) > 0) { await bound() } else { await search() }
+		}
+	}
+	async function load(append : boolean) {
+		if (props.disabled || loading.value) { return }
+		const session = selectionSession
+		loading.value = true
+		error.value = ''
+		note.value = ''
+		if (!append) { rows.value = []; total.value = 0; activeKeyword.value = keyword.value.trim() }
+		try {
+			const raw = await searchChoices(props.kind, activeKeyword.value, append ? rows.value.length : 0)
+			if (session != selectionSession || props.disabled) { return }
+			rows.value = append ? rows.value.concat(readRows(raw)) : readRows(raw)
+			total.value = fieldNumber(raw, 'total')
+			if (rows.value.length == 0) { note.value = '未找到匹配记录' }
+		} catch (_err) { error.value = '查询未完成，请重试' } finally { loading.value = false }
+	}
+	async function search() { await load(false) }
+	async function more() { await load(true) }
+	async function bound() {
+		if (props.disabled || loading.value || Number(props.equipmentId) <= 0) { return }
+		const session = selectionSession
+		loading.value = true
+		rows.value = []; total.value = 0; error.value = ''; note.value = ''
+		try {
+			const result = await loadBoundSchemes(Number(props.equipmentId))
+			if (session != selectionSession || props.disabled) { return }
+			rows.value = result
+			total.value = rows.value.length
+			note.value = rows.value.length > 0 ? '设备绑定方案' : '设备未绑定方案，可按编码或名称查询'
+		} catch (_err) { error.value = '绑定方案未能加载，请重试或查询方案' } finally { loading.value = false }
+	}
+	async function scanDevice() {
+		if (props.disabled || loading.value) { return }
+		loading.value = true; error.value = ''
+		try {
+			const code = await scan()
+			if (code == null || String(code).trim().length == 0) { return }
+			const row = await request({ path: '/api/v1/apps/kuaizhizao/equipment/resolve-scan', method: 'GET', query: { q: String(code).trim() } as UTSJSONObject, body: null })
+			if (fieldNumber(row, 'id') <= 0 || fieldText(row, 'uuid').length == 0) { error.value = '未解析到设备'; return }
+			if (props.disabled) { return }
+			selectedLabel.value = label(row); emit('choose', row); expanded.value = false
+		} catch (_err) { error.value = '扫码未完成，可输入编码或名称查询' } finally { loading.value = false }
+	}
+	watch(() : string => props.equipmentId, () => {
+		if (props.kind != 'scheme') { return }
+		selectionSession += 1
+		selectedLabel.value = ''; rows.value = []; total.value = 0; note.value = ''; error.value = ''; expanded.value = false
+	})
+</script>

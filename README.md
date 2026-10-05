@@ -107,15 +107,15 @@
 
 同一套后端 API 与业务模型，按岗位与现场组合部署。本仓库包含 **PC Web、后端 API、移动端**（`kuaigeyun-client/riveredge-app-mobile`，uni-app x）与 **工位壳**（`kuaigeyun-client/riveredge-app-station`）；TV 看板客户端不在本仓。
 
-| 终端               | 技术栈                                         | 源码      | 典型场景                  |
-| ---------------- | ------------------------------------------- | ------- | --------------------- |
-| **PC Web**       | React 18 + TS 5 + Vite 5 + Ant Design 6       | 本仓库 `riveredge-frontend` | 计划、主数据、销售/采购/财务、审批、报表 |
-| **后端 API**       | FastAPI + Tortoise + PostgreSQL 15 + Taskiq | 本仓库 `riveredge-backend` | 全终端共用业务与权限            |
-| **移动 App**       | uni-app x 蒸汽模式（Android / iOS）                      | 本仓库 `kuaigeyun-client/riveredge-app-mobile`      | 工业 PDA 扫码、移动报工、收发货、巡检 |
-| **H5 / 小程序**     | 同一套 uni-app x；H5 经 Caddy `/mobile`；微信小程序 `mp-weixin`                  | 本仓库（同上）      | 轻量访问、iOS 过渡、外协/访客     |
-| **企微 / 钉钉 / 飞书** | 办公平台内嵌 H5 + OAuth / JS-SDK                  | 本仓库 `kuaigeyun-client/riveredge-app-mobile/shared/channel/h5`      | 待办审批、消息触达、移动审单与扫码     |
-| **触屏工位**         | Windows + Electron 44；薄壳加载服务器工位入口                | 本仓库 `kuaigeyun-client/riveredge-app-station`      | 固定工位过站、戴手套触屏、可选刷脸共享   |
-| **TV 看板**        | —                        | —      | 本仓未包含该客户端     |
+| 终端               | 技术栈                                                  | 源码                                                            | 典型场景                  |
+| ---------------- | ---------------------------------------------------- | ------------------------------------------------------------- | --------------------- |
+| **PC Web**       | React 18 + TS 5 + Vite 5 + Ant Design 6              | 本仓库 `riveredge-frontend`                                      | 计划、主数据、销售/采购/财务、审批、报表 |
+| **后端 API**       | FastAPI + Tortoise + PostgreSQL 15 + Taskiq          | 本仓库 `riveredge-backend`                                       | 全终端共用业务与权限            |
+| **移动 App**       | uni-app x 蒸汽模式（Android / iOS）                        | 本仓库 `kuaigeyun-client/riveredge-app-mobile`                   | 工业 PDA 扫码、移动报工、收发货、巡检 |
+| **H5 / 小程序**     | 同一套 uni-app x；H5 经 Caddy `/mobile`；微信小程序 `mp-weixin` | 本仓库（同上）                                                       | 轻量访问、iOS 过渡、外协/访客     |
+| **企微 / 钉钉 / 飞书** | 办公平台内嵌 H5 + OAuth / JS-SDK                           | 本仓库 `kuaigeyun-client/riveredge-app-mobile/shared/channel/h5` | 待办审批、消息触达、移动审单与扫码     |
+| **触屏工位**         | Windows + Electron 44；薄壳加载服务器工位入口                    | 本仓库 `kuaigeyun-client/riveredge-app-station`                  | 固定工位过站、戴手套触屏、可选刷脸共享   |
+| **TV 看板**        | —                                                    | —                                                             | 本仓未包含该客户端             |
 
 
 **选型建议**：办公室计划/物控 → PC；仓库 PDA / 无微信现场 → App；已用企微钉钉飞书 → 办公 H5；产线固定工序 → 触屏工位；班组巡视 → TV 看板。

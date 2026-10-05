@@ -35,7 +35,7 @@ function setPositiveInt(body: UTSJSONObject, key: string, value: string): boolea
 	return true
 }
 
-function serialList(value: string): string[] {
+export function serialList(value: string): string[] {
 	let normalized = value
 	while (normalized.indexOf('\n') >= 0) {
 		normalized = normalized.replace('\n', ',')

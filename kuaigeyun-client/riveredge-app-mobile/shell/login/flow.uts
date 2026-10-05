@@ -1,8 +1,14 @@
 import { apiGet, apiPost } from '../../shared/api/http.uts'
-import { clearToken, getTenantId, getToken, setPendingEntry, setSessionUser, setTenantId, setToken } from '../../shared/api/session.uts'
+import { clearToken, getTenantId, getToken, setPendingEntry, setSessionUser, setTenantId, setTenantName, setToken } from '../../shared/api/session.uts'
 import { acquireLoginCode, loginRedirect, readBrowserPath, readBrowserQuery } from '../../shared/channel/index.uts'
 import { loginConnected } from '../../shared/channel/headers.uts'
 import { findEntryByRoute } from '../registry/index.uts'
+// #ifdef WEB || H5
+import { readMobileEntryDomain } from '../../shared/channel/h5/index.uts'
+// #endif
+// #ifdef APP
+import { readSavedAppEntry } from '../../shared/api/app-entry.uts'
+// #endif
 
 export type TenantChoice = {
 	tenantId : string
@@ -15,8 +21,17 @@ export type LoginState = {
 	enterWorkbench : boolean
 	message : string
 	tenantId : string
+	tenantLocked : boolean
 	tenants : Array<TenantChoice>
+	needsAddress : boolean
 }
+
+type EntryResolve = {
+	message : string
+	locked : boolean
+}
+
+let tenantEntryLocked = false
 
 function stateOf(connected : boolean, enterWorkbench : boolean, message : string, tenants : Array<TenantChoice>) : LoginState {
 	return {
@@ -24,8 +39,37 @@ function stateOf(connected : boolean, enterWorkbench : boolean, message : string
 		enterWorkbench: enterWorkbench,
 		message: message,
 		tenantId: getTenantId(),
-		tenants: tenants
+		tenantLocked: tenantEntryLocked,
+		tenants: tenants,
+		needsAddress: false
 	} as LoginState
+}
+
+function addressNeededState() : LoginState {
+	return {
+		connected: false,
+		enterWorkbench: false,
+		message: '',
+		tenantId: '',
+		tenantLocked: false,
+		tenants: [] as Array<TenantChoice>,
+		needsAddress: true
+	} as LoginState
+}
+
+function entryOf(message : string, locked : boolean) : EntryResolve {
+	return {
+		message: message,
+		locked: locked
+	} as EntryResolve
+}
+
+function currentEntryDomain() : string {
+	let domain = ''
+	// #ifdef WEB || H5
+	domain = readMobileEntryDomain()
+	// #endif
+	return domain
 }
 
 function isPositiveInt(value : string) : boolean {
@@ -71,31 +115,66 @@ function queryTenant(options : any | null) : string {
 	return ''
 }
 
-async function resolveTenant(options : any | null) : Promise<string> {
+async function lockTenantByDomain(domain : string) : Promise<string> {
+	const previous = getTenantId()
+	try {
+		const data = await apiGet('/tenants/check-domain/' + encodeURIComponent(domain), null)
+		const exists = data != null && (data as UTSJSONObject)['exists'] == true
+		const tenantText = readString(data, 'tenant_id').trim()
+		if (!exists || !isPositiveInt(tenantText)) {
+			setTenantId('')
+			setTenantName('')
+			if (getToken().length > 0) {
+				clearToken()
+			}
+			return '没有找到组织'
+		}
+		if (getToken().length > 0 && previous != tenantText) {
+			clearToken()
+		}
+		setTenantId(tenantText)
+		setTenantName(readString(data, 'tenant_name').trim())
+		return ''
+	} catch (_err) {
+		setTenantId('')
+		setTenantName('')
+		if (getToken().length > 0) {
+			clearToken()
+		}
+		return '组织地址暂时无法确认'
+	}
+}
+
+async function resolveTenant(options : any | null) : Promise<EntryResolve> {
+	const entryDomain = currentEntryDomain()
+	if (entryDomain.length > 0) {
+		const failure = await lockTenantByDomain(entryDomain)
+		return entryOf(failure, true)
+	}
 	const fromUrl = queryTenant(options)
 	if (fromUrl.length > 0) {
 		setTenantId(fromUrl)
-		return ''
+		return entryOf('', false)
 	}
 	try {
 		const data = await apiGet('/auth/wecom/bootstrap-tenant', null)
 		const tenantValue = data == null ? null : (data as UTSJSONObject)['tenant_id']
 		if (tenantValue != null && isPositiveInt(String(tenantValue).trim())) {
 			setTenantId(String(tenantValue).trim())
-			return ''
+			return entryOf('', false)
 		}
 	} catch (_err) {
 		const local = getTenantId()
 		if (isPositiveInt(local)) {
-			return ''
+			return entryOf('', false)
 		}
-		return '请搜索并选择组织'
+		return entryOf('请搜索并选择组织', false)
 	}
 	const local = getTenantId()
 	if (isPositiveInt(local)) {
-		return ''
+		return entryOf('', false)
 	}
-	return '请搜索并选择组织'
+	return entryOf('请搜索并选择组织', false)
 }
 
 async function exchangeCode(code : string, state : string) : Promise<string> {
@@ -142,6 +221,10 @@ export async function loginWithPassword(username : string, password : string) : 
 	const body = new UTSJSONObject()
 	body['username'] = name
 	body['password'] = password
+	const tenant = getTenantId()
+	if (isPositiveInt(tenant)) {
+		body['tenant_id'] = parseInt(tenant)
+	}
 	const data = await apiPost('/auth/login', body)
 	if (data != null && (data as UTSJSONObject)['requires_phone_verification'] == true) {
 		clearToken()
@@ -175,13 +258,28 @@ export async function loginWithPassword(username : string, password : string) : 
 
 export async function bootLogin(options : any | null) : Promise<LoginState> {
 	rememberDeepLink()
+	tenantEntryLocked = false
 	if (!loginConnected()) {
+		// #ifdef APP
+		const saved = readSavedAppEntry()
+		if (saved == null) {
+			return addressNeededState()
+		}
+		setTenantId(saved.tenantId)
+		setTenantName(saved.tenantName)
+		tenantEntryLocked = true
+		// #endif
 		if (getToken().length > 0) {
 			return stateOf(false, true, '', [])
 		}
 		return stateOf(false, false, '', [])
 	}
-	await resolveTenant(options)
+	const resolved = await resolveTenant(options)
+	tenantEntryLocked = resolved.locked
+	const entryMessage = resolved.locked ? resolved.message : ''
+	if (entryMessage.length > 0) {
+		return stateOf(true, false, entryMessage, [])
+	}
 	const got = await acquireLoginCode()
 	if (!got.connected) {
 		if (getToken().length > 0) {
@@ -211,7 +309,7 @@ export async function bootLogin(options : any | null) : Promise<LoginState> {
 	if (getToken().length > 0) {
 		return stateOf(true, true, '', [])
 	}
-	return stateOf(true, false, '', [])
+	return stateOf(true, false, entryMessage, [])
 }
 
 export async function searchTenants(keyword : string) : Promise<Array<TenantChoice>> {

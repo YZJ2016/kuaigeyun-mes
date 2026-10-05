@@ -1,0 +1,224 @@
+import { setTenantId, setTenantName } from './session.uts'
+
+/**
+ * APP 安装包本机入口。不读 H5 的 sessionStorage。
+ * 地址形如 https://主机/mobile/组织域名 ，也可使用 http。
+ */
+
+const URL_KEY = 'app_entry_url'
+const ORIGIN_KEY = 'app_entry_origin'
+const TENANT_ID_KEY = 'app_entry_tenant_id'
+const TENANT_NAME_KEY = 'app_entry_tenant_name'
+const TENANT_DOMAIN_KEY = 'app_entry_tenant_domain'
+
+const RESERVED_ENTRY_DOMAINS : Array<string> = [
+	'admin', 'login', 'infra', 'system', 'apps', 'api', 'docs', 'debug', 'qrcode', 'init', 'personal', 'lock'
+]
+
+const APP_PATH_SEGMENTS : Array<string> = [
+	'shell', 'features', 'static', 'assets', 'uni_modules', 'unpackage'
+]
+
+export type AppEntryAddress = {
+	url : string
+	origin : string
+	domain : string
+}
+
+export type SavedAppEntry = {
+	url : string
+	origin : string
+	tenantId : string
+	tenantName : string
+	tenantDomain : string
+}
+
+function readStorage(key : string) : string {
+	const raw = uni.getStorageSync(key)
+	if (raw == null) {
+		return ''
+	}
+	const text = String(raw).trim()
+	if (text == 'null' || text == 'undefined') {
+		return ''
+	}
+	return text
+}
+
+function listed(items : Array<string>, value : string) : boolean {
+	for (let i = 0; i < items.length; i++) {
+		if (items[i] == value) {
+			return true
+		}
+	}
+	return false
+}
+
+function isPositiveInt(value : string) : boolean {
+	if (value.length == 0) {
+		return false
+	}
+	for (let i = 0; i < value.length; i++) {
+		const ch = value.charAt(i)
+		if (ch < '0' || ch > '9') {
+			return false
+		}
+	}
+	return parseInt(value) >= 1
+}
+
+function isTenantDomainSegment(value : string) : boolean {
+	if (value.length < 3 || value.length > 12) {
+		return false
+	}
+	const first = value.charAt(0)
+	if (first < 'a' || first > 'z') {
+		return false
+	}
+	for (let i = 1; i < value.length; i++) {
+		const ch = value.charAt(i)
+		const letter = ch >= 'a' && ch <= 'z'
+		const digit = ch >= '0' && ch <= '9'
+		if (!letter && !digit && ch != '_' && ch != '-') {
+			return false
+		}
+	}
+	if (listed(RESERVED_ENTRY_DOMAINS, value) || listed(APP_PATH_SEGMENTS, value)) {
+		return false
+	}
+	return true
+}
+
+function isHost(value : string) : boolean {
+	if (value.length == 0) {
+		return false
+	}
+	let colon = 0
+	for (let i = 0; i < value.length; i++) {
+		const ch = value.charAt(i)
+		const letter = ch >= 'a' && ch <= 'z'
+		const digit = ch >= '0' && ch <= '9'
+		if (letter || digit || ch == '.' || ch == '-') {
+			continue
+		}
+		if (ch == ':') {
+			colon = colon + 1
+			continue
+		}
+		return false
+	}
+	if (colon > 1) {
+		return false
+	}
+	const first = value.charAt(0)
+	const last = value.charAt(value.length - 1)
+	if (first == ':' || first == '.' || first == '-' || last == ':' || last == '.') {
+		return false
+	}
+	if (colon == 1) {
+		const portAt = value.indexOf(':')
+		const port = value.substring(portAt + 1)
+		if (port.length == 0) {
+			return false
+		}
+		for (let p = 0; p < port.length; p++) {
+			const ch = port.charAt(p)
+			if (ch < '0' || ch > '9') {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+export function parseAppEntryUrl(raw : string) : AppEntryAddress | null {
+	let text = raw.trim().toLowerCase()
+	while (text.length > 0 && text.charAt(text.length - 1) == '/') {
+		text = text.substring(0, text.length - 1)
+	}
+	let scheme = ''
+	if (text.indexOf('https://') == 0) {
+		scheme = 'https://'
+	} else if (text.indexOf('http://') == 0) {
+		scheme = 'http://'
+	} else {
+		return null
+	}
+	const rest = text.substring(scheme.length)
+	const marker = '/mobile/'
+	const at = rest.indexOf(marker)
+	if (at <= 0) {
+		return null
+	}
+	const host = rest.substring(0, at)
+	const domain = rest.substring(at + marker.length)
+	if (domain.indexOf('/') >= 0) {
+		return null
+	}
+	if (!isHost(host) || !isTenantDomainSegment(domain)) {
+		return null
+	}
+	const origin = scheme + host
+	return {
+		url: origin + '/mobile/' + domain,
+		origin: origin,
+		domain: domain
+	} as AppEntryAddress
+}
+
+export function readSavedAppEntry() : SavedAppEntry | null {
+	const url = readStorage(URL_KEY)
+	const origin = readStorage(ORIGIN_KEY)
+	const tenantId = readStorage(TENANT_ID_KEY)
+	const tenantName = readStorage(TENANT_NAME_KEY)
+	const tenantDomain = readStorage(TENANT_DOMAIN_KEY)
+	if (!isPositiveInt(tenantId)) {
+		return null
+	}
+	const parsed = parseAppEntryUrl(url)
+	if (parsed == null) {
+		return null
+	}
+	if (parsed.url != url || parsed.origin != origin || parsed.domain != tenantDomain) {
+		return null
+	}
+	return {
+		url: url,
+		origin: origin,
+		tenantId: tenantId,
+		tenantName: tenantName,
+		tenantDomain: tenantDomain
+	} as SavedAppEntry
+}
+
+export function readAppEntryOrigin() : string {
+	const saved = readSavedAppEntry()
+	if (saved == null) {
+		return ''
+	}
+	return saved.origin
+}
+
+export function saveAppEntry(entry : SavedAppEntry) : boolean {
+	const parsed = parseAppEntryUrl(entry.url)
+	const tenantId = entry.tenantId.trim()
+	if (parsed == null || !isPositiveInt(tenantId)) {
+		return false
+	}
+	if (parsed.domain != entry.tenantDomain.trim().toLowerCase()) {
+		return false
+	}
+	const name = entry.tenantName.trim()
+	uni.setStorageSync(URL_KEY, parsed.url)
+	uni.setStorageSync(ORIGIN_KEY, parsed.origin)
+	uni.setStorageSync(TENANT_ID_KEY, tenantId)
+	if (name.length == 0) {
+		uni.removeStorageSync(TENANT_NAME_KEY)
+	} else {
+		uni.setStorageSync(TENANT_NAME_KEY, name)
+	}
+	uni.setStorageSync(TENANT_DOMAIN_KEY, parsed.domain)
+	setTenantId(tenantId)
+	setTenantName(name)
+	return true
+}

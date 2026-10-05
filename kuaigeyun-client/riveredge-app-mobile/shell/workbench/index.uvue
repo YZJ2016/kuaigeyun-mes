@@ -1,20 +1,33 @@
 <template>
 	<scroll-view class="page" direction="vertical">
+		<view class="who" hover-class="pressed" @click="openAccount">
+			<view class="who-copy">
+				<text class="who-name">{{ displayName }}</text>
+				<text v-if="orgName.length > 0" class="who-meta">{{ orgName }}</text>
+			</view>
+			<view class="who-trail">
+				<text class="who-account">账号</text>
+				<text class="who-chevron">›</text>
+			</view>
+		</view>
 		<text v-if="loading" class="loading">正在加载</text>
 		<text v-if="errorText.length > 0" class="error">{{ errorText }}</text>
-		<view v-if="!loading && errorText.length == 0" class="hello">
-			<text class="hello-name">{{ displayName }}</text>
-			<text v-if="orgName.length > 0" class="hint">{{ orgName }}</text>
+		<view v-if="!loading && (errorText.length > 0 || homeWarnings.length > 0)">
+			<text v-for="(warning, index) in homeWarnings" :key="index" class="error">{{ warning }}</text>
+			<button class="btn-secondary" @click="refresh">重新加载</button>
+		</view>
+		<view v-if="appSettingsEnabled()" class="btn-secondary" hover-class="pressed" @click="openAppSettings">
+			<text class="btn-label-secondary">设置</text>
 		</view>
 		<view v-if="hasScan" class="btn-primary" hover-class="pressed" @click="onScan">
-			<text class="btn-label">扫码</text>
+			<text class="btn-label">扫码报工</text>
 		</view>
-		<text v-if="hasScan" class="hint">识别工单、领料单或设备</text>
+		<text v-if="hasScan" class="hint">扫描工单进入报工；也可手动输入编码</text>
 		<text v-if="!loading && errorText.length == 0" class="label">检索功能</text>
 		<input v-if="!loading && errorText.length == 0" class="field" :value="featureQuery" placeholder="例如盘点、领料" @input="onFeatureQuery" />
 		<view v-if="!loading && errorText.length == 0 && !searching">
-			<text class="section-title">今日待办</text>
-			<text v-if="todos.length == 0" class="empty">今天没有待办</text>
+			<text class="section-title">待处理提醒</text>
+			<text v-if="todoEmptyText.length > 0" class="empty">{{ todoEmptyText }}</text>
 			<view v-for="(todo, index) in todos" :key="todo.uid" class="card todo" hover-class="pressed" @click="onTodo(index)">
 				<text class="title">{{ todo.title }}</text>
 				<text :class="todo.tone == 'danger' ? 'badge badge-danger' : 'badge badge-warning'">{{ todo.countText }}</text>
@@ -58,6 +71,7 @@
 	import { openRegisteredRoute } from '../registry/index.uts'
 	import { iconMark, markClass, scopeTitle, tileClass } from './icons.uts'
 	import { loadWorkbench } from './load.uts'
+	import { readRecentRoutes } from './recent.uts'
 	import type { WorkCell, WorkScope } from './load.uts'
 
 	type HomeTodo = {
@@ -93,7 +107,15 @@
 	const featureQuery = ref('')
 	const hits = ref<Array<FeatureHit>>([])
 	const loadedBlocks = ref<Array<WorkScope>>([])
+	const homeWarnings = ref<Array<string>>([])
+	const todoStatsAvailable = ref(false)
 	let openedDeepLink = false
+	const todoEmptyText = computed((): string => {
+		if (loading.value || errorText.value.length > 0 || homeWarnings.value.length > 0 || todos.value.length > 0) {
+			return ''
+		}
+		return todoStatsAvailable.value ? '当前故障与保养提醒均无待处理项' : '当前没有可显示的待办统计'
+	})
 
 	const searching = computed((): boolean => {
 		return featureQuery.value.trim().length > 0
@@ -132,6 +154,22 @@
 	}
 
 	function applyHome(blocks : Array<WorkScope>) {
+		const warnings : Array<string> = []
+		let statsAvailable = false
+		for (let i = 0; i < blocks.length; i++) {
+			const block = blocks[i]
+			if (block.errorText.length > 0) {
+				warnings.push(scopeTitle(block.scope) + '入口未能加载，请重试')
+			} else if (block.badgeNote.length > 0) {
+				warnings.push(scopeTitle(block.scope) + '待处理数量未能读取，请重试')
+			} else if (block.showBadge) {
+				statsAvailable = true
+			} else if (findScoped(block, 'faults') != null || findScoped(block, 'maintenance-reminders') != null) {
+				warnings.push(scopeTitle(block.scope) + '待处理数量暂不可用，请重试')
+			}
+		}
+		homeWarnings.value = warnings
+		todoStatsAvailable.value = statsAvailable
 		const name = readSessionName()
 		displayName.value = name.length > 0 ? name : '已登录'
 		orgName.value = getTenantName()
@@ -140,11 +178,28 @@
 		scanRoute.value = scan == null ? '' : scan.route
 		scanMissing.value = scan != null && scan.missing
 		const nextFrequent : Array<WorkCell> = []
-		for (let i = 0; i < FREQUENT_KEYS.length; i++) {
-			const cell = findCell(blocks, FREQUENT_KEYS[i])
-			if (cell != null) {
-				nextFrequent.push(cell)
+		const available : Array<WorkCell> = []
+		for (let i = 0; i < blocks.length; i++) {
+			for (let j = 0; j < blocks[i].sections.length; j++) {
+				const cells = blocks[i].sections[j].cells
+				for (let c = 0; c < cells.length; c++) {
+					if (!cells[c].missing && cells[c].route.length > 0) { available.push(cells[c]) }
+				}
 			}
+		}
+		const recent = readRecentRoutes()
+		for (let i = 0; i < recent.length && nextFrequent.length < 4; i++) {
+			for (let c = 0; c < available.length; c++) {
+				if (available[c].route == recent[i]) { nextFrequent.push(available[c]); break }
+			}
+		}
+		for (let i = 0; i < FREQUENT_KEYS.length && nextFrequent.length < 4; i++) {
+			const cell = findCell(blocks, FREQUENT_KEYS[i])
+			if (cell != null && !cell.missing && !nextFrequent.some((item : WorkCell) : boolean => item.route == cell.route)) { nextFrequent.push(cell) }
+		}
+		for (let c = 0; c < available.length && nextFrequent.length < 4; c++) {
+			const cell = available[c]
+			if (!nextFrequent.some((item : WorkCell) : boolean => item.route == cell.route)) { nextFrequent.push(cell) }
 		}
 		frequent.value = nextFrequent
 		const nextTodos : Array<HomeTodo> = []
@@ -228,7 +283,21 @@
 		openRegisteredRoute(route)
 	}
 
+	function paintSession() {
+		const name = readSessionName()
+		displayName.value = name.length > 0 ? name : '已登录'
+		orgName.value = getTenantName()
+	}
+
+	function openAccount() {
+		uni.navigateTo({ url: '/shell/account/index' })
+	}
+
 	async function refresh() {
+		if (loading.value) {
+			return
+		}
+		paintSession()
 		if (getToken().length == 0) {
 			leaveToLogin()
 			return
@@ -244,7 +313,9 @@
 			loadedBlocks.value = []
 			hits.value = []
 			hasScan.value = false
-			errorText.value = err instanceof Error ? err.message : '工作台未能加载'
+			homeWarnings.value = []
+			todoStatsAvailable.value = false
+			errorText.value = '工作台未能加载，请重试'
 		}
 		loading.value = false
 		if (!openedDeepLink) {
@@ -279,21 +350,74 @@
 		uni.navigateTo({ url: '/shell/apps/index' })
 	}
 
+	function appSettingsEnabled() : boolean {
+		let enabled = false
+		// #ifdef APP
+		enabled = true
+		// #endif
+		return enabled
+	}
+
+	function openAppSettings() {
+		uni.navigateTo({ url: '/shell/tenant/index?mode=settings' })
+	}
+
 	onShow(() => {
 		refresh()
 	})
 </script>
 
 <style>
-	.hello {
-		flex-direction: column;
-		margin-bottom: 8px;
+	.who {
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+		min-height: 48px;
+		padding-top: 12px;
+		padding-right: 12px;
+		padding-bottom: 12px;
+		padding-left: 12px;
+		margin-bottom: 12px;
+		background-color: #FFFFFF;
+		border-radius: 12px;
+		border-width: 1px;
+		border-style: solid;
+		border-color: #E2E8F0;
 	}
 
-	.hello-name {
-		font-size: 22px;
+	.who-copy {
+		flex: 1;
+		flex-direction: column;
+	}
+
+	.who-name {
+		font-size: 20px;
 		color: #28113C;
 		font-weight: 700;
+	}
+
+	.who-meta {
+		margin-top: 2px;
+		font-size: 14px;
+		color: #475569;
+	}
+
+	.who-trail {
+		flex-direction: row;
+		align-items: center;
+		margin-left: 12px;
+	}
+
+	.who-account {
+		font-size: 16px;
+		color: #28113C;
+		font-weight: 700;
+	}
+
+	.who-chevron {
+		margin-left: 2px;
+		font-size: 20px;
+		color: #475569;
 	}
 
 	.todo {

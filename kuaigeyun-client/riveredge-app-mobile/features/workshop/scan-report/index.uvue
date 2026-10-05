@@ -1,8 +1,16 @@
 <template>
-	<view class="page">
+	<scroll-view class="page" direction="vertical">
 		<home-link />
 		<text class="hint">报工人员 {{ workerName }}</text>
-		<button class="btn-primary" @click="onScan">扫码</button>
+		<button class="btn-primary" :disabled="loading || submitting" @click="onScan">扫码工单</button>
+		<text class="hint">扫码不可用时，可输入或粘贴工单编码。</text>
+		<text class="label">工单编码或扫码内容</text>
+		<input class="field" v-model="manualCode" :disabled="loading || submitting" placeholder="输入或粘贴编码" />
+		<button class="btn-secondary" :disabled="loading || submitting" @click="resolveManual">查询工单</button>
+		<view v-if="successText.length > 0" class="card">
+			<text class="title">报工已提交</text><text class="sub">{{ successText }}</text>
+			<button class="btn-secondary" @click="openHistory">查看我的报工</button>
+		</view>
 		<text v-if="codeText.length > 0" class="hint">扫码内容 {{ codeText }}</text>
 		<text v-if="errorTextValue.length > 0" class="error">{{ errorTextValue }}</text>
 		<text v-if="loading" class="loading">加载中</text>
@@ -16,13 +24,13 @@
 				<text class="title">{{ operationTitle(row) }}</text>
 				<text class="sub">{{ selectedOperationIndex == index ? '已选' : '点选' }}</text>
 			</view>
-			<input class="field" v-model="reportedQuantity" placeholder="报工数量" />
-			<input class="field" v-model="unqualifiedQuantity" placeholder="不合格数量" />
+			<text class="label">报工数量</text><input class="field" type="digit" v-model="reportedQuantity" :disabled="loading || submitting" /><text v-if="reportedError.length > 0" class="error">{{ reportedError }}</text>
+			<text class="label">不合格数量</text><input class="field" type="digit" v-model="unqualifiedQuantity" :disabled="loading || submitting" /><text v-if="unqualifiedError.length > 0" class="error">{{ unqualifiedError }}</text>
 			<text class="hint">合格数量 {{ qualifiedPreview.length > 0 ? qualifiedPreview : '自动计算' }}</text>
-			<input class="field" v-model="workHours" placeholder="工时（小时）" />
-			<button class="btn-primary" :disabled="submitting" @click="submitReport">提交报工</button>
+			<text class="label">工时（小时）</text><input class="field" type="digit" v-model="workHours" :disabled="loading || submitting" /><text v-if="hoursError.length > 0" class="error">{{ hoursError }}</text>
+			<button class="btn-primary" :disabled="loading || submitting" @click="submitReport">提交报工</button>
 		</view>
-	</view>
+	</scroll-view>
 </template>
 
 <script setup lang="uts">
@@ -45,6 +53,26 @@
 	const unqualifiedQuantity = ref('')
 	const workHours = ref('')
 	const submitting = ref(false)
+	const manualCode = ref('')
+	const successText = ref('')
+	const reportedError = ref('')
+	const unqualifiedError = ref('')
+	const hoursError = ref('')
+
+	function clearQuantities() {
+		reportedQuantity.value = ''
+		unqualifiedQuantity.value = ''
+		workHours.value = ''
+		reportedError.value = ''
+		unqualifiedError.value = ''
+		hoursError.value = ''
+	}
+	function openHistory() {
+		uni.navigateTo({ url: '/features/workshop/reporting-history/index' })
+	}
+	async function resolveManual() {
+		await resolveCode(manualCode.value.trim())
+	}
 
 	function orderTitle(row : any) : string {
 		return firstText(row, ['code', 'name'])
@@ -64,41 +92,50 @@
 	}
 
 	async function onScan() {
-		errorTextValue.value = ''
-		selectedOrder.value = null
-		operations.value = []
-		selectedOperationIndex.value = -1
+		if (loading.value || submitting.value) return
+		loading.value = true
 		try {
 			const raw = scanRaw(await scan())
-			if (raw.length == 0) {
-				toast('没有扫到内容')
-				return
-			}
-			codeText.value = raw
-			loading.value = true
+			loading.value = false
+			await resolveCode(raw)
+		} catch (err) {
+			errorTextValue.value = '扫码未完成，请重试或输入工单编码'
+		} finally {
+			loading.value = false
+		}
+	}
+	async function resolveCode(raw : string) {
+		if (loading.value || submitting.value) return
+		if (raw.trim().length == 0) {
+			errorTextValue.value = '请输入工单编码或扫码内容'
+			return
+		}
+		loading.value = true
+		errorTextValue.value = ''
+		successText.value = ''
+		selectedOrder.value = null
+		operations.value = []
+		orders.value = []
+		selectedOperationIndex.value = -1
+		clearQuantities()
+		try {
 			const body = new UTSJSONObject()
-			body.set('raw', raw)
-			const payload = await request({
-				method: 'POST',
-				path: '/api/v1/apps/kuaizhizao/work-orders/resolve-by-scan',
-				query: null,
-				body: body,
-			})
+			body.set('raw', raw.trim())
+			const payload = await request({ method: 'POST', path: '/api/v1/apps/kuaizhizao/work-orders/resolve-by-scan', query: null, body: body })
+			codeText.value = raw.trim()
 			orders.value = readWorkOrderRows(payload)
-			if (!(payload instanceof Array)) {
-				const message = (payload as UTSJSONObject).getString('message')
-				if (orders.value.length == 0 && message != null && message.length > 0) {
-					errorTextValue.value = message
-				}
-			}
+			if (orders.value.length == 0) errorTextValue.value = '没有找到可报工的工单，请核对编码'
 		} catch (err) {
 			errorTextValue.value = errorText(err)
+		} finally {
+			loading.value = false
 		}
-		loading.value = false
 	}
 
 	async function pickOrder(index : number) {
+		if (loading.value || submitting.value || index < 0 || index >= orders.value.length) return
 		const row = orders.value[index]
+		clearQuantities()
 		selectedOrder.value = row
 		selectedOperationIndex.value = -1
 		operations.value = []
@@ -124,15 +161,15 @@
 	}
 
 	function pickOperation(index : number) {
+		if (loading.value || submitting.value) return
 		selectedOperationIndex.value = index
 	}
 
 	function quantityValue(raw : string) : number {
-		const value = parseFloat(raw.trim())
-		if (isNaN(value)) {
-			return -1
-		}
-		return value
+		const text = raw.trim()
+		if (!/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(text)) return -1
+		const value = Number(text)
+		return isFinite(value) && value >= 0 ? value : -1
 	}
 
 	const qualifiedPreview = computed((): string => {
@@ -145,21 +182,16 @@
 	})
 
 	function requiredNumber(raw : string, label : string) : number | null {
-		const text = raw.trim()
-		if (text.length == 0) {
-			toast('请填写' + label)
-			return null
-		}
-		const value = parseFloat(text)
-		if (isNaN(value)) {
-			toast(label + '不是数字')
-			return null
-		}
-		return value
+		const value = quantityValue(raw)
+		const message = value < 0 ? '请填写有效的非负' + label : ''
+		if (label == '报工数量') reportedError.value = message
+		if (label == '不合格数量') unqualifiedError.value = message
+		if (label == '工时') hoursError.value = message
+		return value < 0 ? null : value
 	}
 
 	async function submitReport() {
-		if (submitting.value) {
+		if (submitting.value || loading.value) {
 			return
 		}
 		const user = readCurrentUser()
@@ -184,7 +216,7 @@
 			return
 		}
 		if (unqualified > reported) {
-			toast('不合格数量不能大于报工数量')
+			unqualifiedError.value = '不合格数量不能大于报工数量'
 			return
 		}
 		const qualified = reported - unqualified
@@ -212,6 +244,7 @@
 				query: null,
 				body: body,
 			})
+			successText.value = fieldText(order, 'code') + ' · ' + operationTitle(operation) + ' · 合格 ' + qualified + ' · 不合格 ' + unqualified + ' · 工时 ' + hours + ' 小时'
 			toast('报工已提交')
 			selectedOrder.value = null
 			operations.value = []

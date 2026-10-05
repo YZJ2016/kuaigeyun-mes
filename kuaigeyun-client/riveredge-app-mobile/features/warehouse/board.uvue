@@ -1,5 +1,5 @@
 <template>
-	<scroll-view class="page" scroll-y="true">
+	<scroll-view class="page" scroll-y="true" :scroll-into-view="scrollTarget">
 		<home-link />
 		<view v-if="isQuery" class="row">
 			<input class="field grow" v-model="keyword" placeholder="物料编码、名称或仓库" />
@@ -26,10 +26,15 @@
 			<text class="hint">{{ stepLabel }}</text>
 
 			<view v-if="wizardStep == 1 && showHeader">
+				<text class="meta">仓库 {{ warehouseName.length > 0 ? warehouseName : '未填写' }}</text>
+				<text class="meta">{{ personLabel }} {{ personName.length > 0 ? personName : '未填写' }}</text>
+				<button class="btn-secondary" :disabled="busy" @click="editingHeader = !editingHeader">{{ editingHeader ? '收起编辑' : '编辑仓库与人员' }}</button>
+				<view v-if="editingHeader">
 				<text class="label">仓库名称</text>
 				<input class="field" :value="warehouseName" @input="onWarehouseName" />
 				<text class="label">{{ personLabel }}</text>
 				<input class="field" :value="personName" @input="onPersonName" />
+				</view>
 				<button class="btn-primary" @click="goStep(2)">下一步</button>
 			</view>
 
@@ -39,23 +44,34 @@
 				<button class="btn-secondary" @click="locateLine">定位</button>
 				<text v-if="locateHint.length > 0" :class="locateMiss ? 'error' : 'hint'">{{ locateHint }}</text>
 				<text v-if="showLines && !showReceipt" class="hint">单据数量只作核对，确认时不另填数量。</text>
-				<view v-for="(line, index) in lines" :key="index" class="line">
+				<view v-for="(line, index) in lines" :key="index" :id="'warehouse-line-' + index" class="line">
 					<text class="title">{{ line.materialCode }} {{ line.materialName }}</text>
 					<text v-if="locatedIndex == index" class="meta">当前定位</text>
 					<text v-if="line.displayQty.length > 0" class="meta">单据数量 {{ line.displayQty }}</text>
 					<view v-if="showLines">
+						<text class="meta">仓库 {{ line.warehouseName }} · 库位 {{ line.locationCode }}</text>
+						<text class="meta">批号 {{ line.batchNumber }} · 序列号 {{ serialList(line.serialText).length }} 个</text>
+						<text v-if="showReceipt" class="meta">实收 {{ line.receiptQuantityText }}</text>
+						<button class="btn-secondary" :disabled="busy" @click="editLine(index)">{{ editingLineIndex == index ? '收起编辑' : '编辑此物料' }}</button>
+						<view v-if="editingLineIndex == index">
 						<text class="label">仓库名称</text>
 						<input class="field" :value="line.warehouseName" @input="onLineInput(index, 'warehouseName', $event)" />
 						<text class="label">库位编码</text>
 						<input class="field" :value="line.locationCode" @input="onLineInput(index, 'locationCode', $event)" />
 						<text class="label">批号</text>
 						<input class="field" :value="line.batchNumber" @input="onLineInput(index, 'batchNumber', $event)" />
-						<text class="label">序列号（逗号分隔）</text>
-						<input class="field" :value="line.serialText" @input="onLineInput(index, 'serialText', $event)" />
+						<text class="label">序列号</text>
+						<view v-for="(serial, serialIndex) in serialList(line.serialText)" :key="serialIndex" class="row">
+							<text class="meta">{{ serial }}</text>
+							<button class="btn-chip" :disabled="busy" @click="removeSerial(index, serialIndex)">移除</button>
+						</view>
+						<input class="field" v-model="serialInput" :disabled="busy" placeholder="输入或粘贴序列号，支持逗号分隔" />
+						<button class="btn-secondary" :disabled="busy" @click="addSerial(index)">添加序列号</button>
 						<view v-if="showReceipt">
 							<text class="label">实收数量</text>
 							<input class="field" :value="line.receiptQuantityText" @input="onLineInput(index, 'receiptQuantityText', $event)" />
 						</view>
+					</view>
 					</view>
 					<view v-if="isStock">
 						<text class="meta">账面 {{ line.bookQuantityText }}</text>
@@ -87,6 +103,9 @@
 				<view v-for="(line, index) in lines" :key="index" class="line">
 					<text class="title">{{ line.materialCode }} {{ line.materialName }}</text>
 					<text v-if="line.displayQty.length > 0" class="meta">单据数量 {{ line.displayQty }}</text>
+					<text v-if="showLines" class="meta">仓库 {{ line.warehouseName }} · 库位 {{ line.locationCode }}</text>
+					<text v-if="showLines" class="meta">批号 {{ line.batchNumber }}</text>
+					<text v-for="(serial, serialIndex) in serialList(line.serialText)" :key="serialIndex" class="meta">序列号 {{ serial }}</text>
 					<text v-if="showReceipt && line.receiptQuantityText.length > 0" class="meta">实收 {{ line.receiptQuantityText }}</text>
 				</view>
 				<button v-if="showHeader" class="btn-secondary" @click="goStep(2)">返回修改</button>
@@ -100,7 +119,7 @@
 	import HomeLink from '../../shared/ui/home-link.uvue'
 	import { alertHandlePath, apiGet, apiPost, confirmPath, detailPath, listPath, listQuery, sendPath, stockExecutePath, transferExecutePath } from './http.uts'
 	import { DocCard, LineForm } from './models.uts'
-	import { buildAlertBody, buildInboundBody, buildOutboundBody, buildSalesBody, buildStockBody } from './payload.uts'
+	import { buildAlertBody, buildInboundBody, buildOutboundBody, buildSalesBody, buildStockBody, serialList } from './payload.uts'
 	import { errorText } from '../../shared/api/fields.uts'
 	import { readCards, readDetail, readTotal } from './read.uts'
 
@@ -138,6 +157,32 @@
 	const locateHint = ref('')
 	const locateMiss = ref(false)
 	const locatedIndex = ref(-1)
+	const editingHeader = ref(false)
+	const editingLineIndex = ref(-1)
+	const serialInput = ref('')
+	const scrollTarget = ref('')
+	function editLine(index : number) {
+		if (busy.value) { return }
+		editingLineIndex.value = editingLineIndex.value == index ? -1 : index
+		serialInput.value = ''
+	}
+	function addSerial(index : number) {
+		if (busy.value || index < 0 || index >= lines.value.length) { return }
+		const incoming = serialList(serialInput.value)
+		if (incoming.length == 0) { return }
+		const line = lines.value[index]
+		const next = serialList(line.serialText).concat(incoming)
+		line.serialText = next.join(',')
+		serialInput.value = ''
+	}
+	function removeSerial(index : number, serialIndex : number) {
+		if (busy.value || index < 0 || index >= lines.value.length) { return }
+		const line = lines.value[index]
+		const next = serialList(line.serialText)
+		if (serialIndex < 0 || serialIndex >= next.length) { return }
+		next.splice(serialIndex, 1)
+		line.serialText = next.join(',')
+	}
 
 	function currentKind(): string {
 		const value = props.kind
@@ -299,6 +344,10 @@
 	}
 
 	function clearLocate(): void {
+		editingHeader.value = false
+		editingLineIndex.value = -1
+		serialInput.value = ''
+		scrollTarget.value = ''
 		locateText.value = ''
 		locateHint.value = ''
 		locateMiss.value = false
@@ -395,6 +444,8 @@
 			const name = list[i].materialName
 			if (code == word || name == word || code.indexOf(word) >= 0 || name.indexOf(word) >= 0) {
 				locatedIndex.value = i
+				scrollTarget.value = ''
+				nextTick(() => { scrollTarget.value = 'warehouse-line-' + i.toString() })
 				locateMiss.value = false
 				locateHint.value = '已定位到 ' + name
 				return

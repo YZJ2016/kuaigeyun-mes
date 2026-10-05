@@ -1,0 +1,540 @@
+<template>
+	<scroll-view class="page" direction="vertical">
+		<home-link />
+		<text v-if="errorText.length > 0" class="error">{{ errorText }}</text>
+		<text v-if="loading" class="loading">正在加载</text>
+		<view class="card identity">
+			<image v-if="avatarSrc.length > 0" class="avatar-img" :src="avatarSrc" mode="aspectFill"></image>
+			<view v-else class="avatar-fallback">
+				<text class="avatar-letter">{{ initial }}</text>
+			</view>
+			<view class="who-copy">
+				<text class="who-name">{{ headerName }}</text>
+				<text v-if="headerOrg.length > 0" class="who-meta">{{ headerOrg }}</text>
+			</view>
+		</view>
+		<view v-if="facts.length > 0" class="card">
+			<view v-for="(row, index) in facts" :key="index" class="fact">
+				<text class="fact-label">{{ row.label }}</text>
+				<text class="fact-value">{{ row.value }}</text>
+			</view>
+		</view>
+		<text class="section-title">管理</text>
+		<view class="action-list">
+			<view class="action-row" hover-class="pressed" @click="openEdit">
+				<text class="action-label">编辑资料</text>
+				<view class="action-end">
+					<text class="action-aside">修改姓名和联系方式</text>
+					<text class="chevron">›</text>
+				</view>
+			</view>
+			<view class="action-row" hover-class="pressed" @click="openPassword">
+				<text class="action-label">修改密码</text>
+				<view class="action-end">
+					<text class="chevron">›</text>
+				</view>
+			</view>
+			<view v-if="wecomBound" class="action-row action-row-last">
+				<text class="action-label">企业微信</text>
+				<view class="action-end">
+					<text class="action-aside">{{ wecomUserId }}</text>
+					<view class="action-inline" hover-class="pressed" @click="askUnbind">
+						<text class="action-inline-text">解除绑定</text>
+					</view>
+				</view>
+			</view>
+			<view v-else-if="bindHere && profileReady" class="action-row action-row-last" hover-class="pressed" @click="onBind">
+				<text class="action-label">企业微信</text>
+				<view class="action-end">
+					<text class="action-aside">未绑定</text>
+					<text class="bind-text">绑定企业微信</text>
+					<text class="chevron">›</text>
+				</view>
+			</view>
+			<view v-else class="action-row action-row-last">
+				<text class="action-label">企业微信</text>
+				<view class="action-end">
+					<text class="action-aside">{{ profileReady ? '未绑定' : '' }}</text>
+				</view>
+			</view>
+		</view>
+		<text v-if="profileReady && !wecomBound && !bindHere" class="hint wecom-note">当前端取码未接通。请用企业微信打开手机网页完成绑定。</text>
+		<view class="logout" hover-class="pressed" @click="askLogout">
+			<text class="logout-text">退出登录</text>
+		</view>
+	</scroll-view>
+</template>
+
+<script setup lang="uts">
+	import HomeLink from '../../shared/ui/home-link.uvue'
+	import { apiGet, apiPost } from '../../shared/api/http.uts'
+	import { fieldText } from '../../shared/api/fields.uts'
+	import { clearToken, getTenantName, getToken, readSessionName, setSessionUser, setTenantName } from '../../shared/api/session.uts'
+	import { dropBrowserQuery, readBrowserQuery } from '../../shared/channel/index.uts'
+	import { startWecomBind, wecomBindOnThisClient } from './bind.uts'
+	import { loadAvatarSrc, nestedName, profileInitial, roleLine, userIdOf, wecomBindBody, wecomUserIdOf } from './profile.uts'
+
+	type FactRow = {
+		label : string
+		value : string
+	}
+
+	const loading = ref(false)
+	const errorText = ref('')
+	const headerName = ref('已登录')
+	const headerOrg = ref('')
+	const fullName = ref('')
+	const username = ref('')
+	const email = ref('')
+	const phone = ref('')
+	const department = ref('')
+	const position = ref('')
+	const role = ref('')
+	const avatarSrc = ref('')
+	const facts = ref<Array<FactRow>>([])
+	const wecomUserId = ref('')
+	const profileReady = ref(false)
+	const phoneKnown = ref(false)
+	const meReady = ref(false)
+	const busy = ref(false)
+	let ticket = 0
+	let handedCode = ''
+
+	const bindHere = computed((): boolean => {
+		return wecomBindOnThisClient()
+	})
+
+	const wecomBound = computed((): boolean => {
+		return wecomUserId.value.length > 0
+	})
+
+	const initial = computed((): string => {
+		return profileInitial(fullName.value, username.value.length > 0 ? username.value : headerName.value)
+	})
+
+	function leave() {
+		uni.reLaunch({ url: '/shell/login/index' })
+	}
+
+	function failText(err : any) : string {
+		if (err instanceof Error) {
+			return err.message
+		}
+		return '网络连接失败'
+	}
+
+	function paintSession() {
+		const name = readSessionName()
+		headerName.value = name.length > 0 ? name : '已登录'
+		headerOrg.value = getTenantName()
+		fullName.value = name
+	}
+
+	function blank(value : string) : string {
+		const text = value.trim()
+		return text.length > 0 ? text : '未填写'
+	}
+
+	function rebuildFacts() {
+		if (!meReady.value) {
+			facts.value = []
+			return
+		}
+		const rows : Array<FactRow> = []
+		rows.push({ label: '姓名', value: blank(fullName.value) } as FactRow)
+		rows.push({ label: '用户名', value: username.value } as FactRow)
+		if (phoneKnown.value) {
+			rows.push({ label: '手机', value: blank(phone.value) } as FactRow)
+		}
+		rows.push({ label: '邮箱', value: blank(email.value) } as FactRow)
+		rows.push({ label: '组织', value: headerOrg.value } as FactRow)
+		if (department.value.length > 0) {
+			rows.push({ label: '部门', value: department.value } as FactRow)
+		}
+		if (position.value.length > 0) {
+			rows.push({ label: '职位', value: position.value } as FactRow)
+		}
+		if (role.value.length > 0) {
+			rows.push({ label: '角色', value: role.value } as FactRow)
+		}
+		facts.value = rows
+	}
+
+	function applyMe(data : any | null) {
+		const id = userIdOf(data)
+		const name = fieldText(data, 'full_name')
+		const user = fieldText(data, 'username')
+		if (id > 0) {
+			setSessionUser(id, name, user)
+		}
+		fullName.value = name
+		username.value = user
+		email.value = fieldText(data, 'email')
+		const tenant = fieldText(data, 'tenant_name')
+		if (tenant.length > 0) {
+			setTenantName(tenant)
+			headerOrg.value = tenant
+		} else {
+			headerOrg.value = getTenantName()
+		}
+		department.value = nestedName(data, 'department')
+		position.value = nestedName(data, 'position')
+		role.value = roleLine(data)
+		const shown = name.length > 0 ? name : user
+		if (shown.length > 0) {
+			headerName.value = shown
+		}
+		meReady.value = true
+	}
+
+	async function refresh() {
+		paintSession()
+		const mine = ticket + 1
+		ticket = mine
+		let code = readBrowserQuery('code').trim()
+		if (code.length > 0) {
+			dropBrowserQuery('code')
+			if (code == handedCode) {
+				code = ''
+			} else {
+				handedCode = code
+			}
+		}
+		if (getToken().length == 0) {
+			leave()
+			return
+		}
+		loading.value = true
+		errorText.value = ''
+		if (code.length > 0) {
+			try {
+				await apiPost('/auth/wecom/bind', wecomBindBody(code))
+				if (ticket != mine) {
+					return
+				}
+				uni.showToast({ title: '已绑定企业微信', icon: 'none' })
+			} catch (err) {
+				if (ticket != mine) {
+					return
+				}
+				errorText.value = failText(err)
+			}
+		}
+		if (getToken().length == 0) {
+			loading.value = false
+			leave()
+			return
+		}
+		let avatarId = ''
+		try {
+			const me = await apiGet('/auth/me', null)
+			if (ticket != mine) {
+				return
+			}
+			applyMe(me)
+			avatarId = fieldText(me, 'avatar')
+		} catch (err) {
+			if (ticket != mine) {
+				return
+			}
+			meReady.value = false
+			facts.value = []
+			errorText.value = failText(err)
+		}
+		try {
+			const profile = await apiGet('/personal/user-profile', null)
+			if (ticket != mine) {
+				return
+			}
+			phone.value = fieldText(profile, 'phone')
+			phoneKnown.value = true
+			wecomUserId.value = wecomUserIdOf(profile)
+			profileReady.value = true
+			avatarId = fieldText(profile, 'avatar')
+		} catch (err) {
+			if (ticket != mine) {
+				return
+			}
+			phoneKnown.value = false
+			profileReady.value = false
+			wecomUserId.value = ''
+			if (errorText.value.length == 0) {
+				errorText.value = failText(err)
+			}
+		}
+		rebuildFacts()
+		try {
+			avatarSrc.value = await loadAvatarSrc(avatarId)
+		} catch (_err) {
+			avatarSrc.value = ''
+		}
+		if (ticket != mine) {
+			return
+		}
+		loading.value = false
+		if (getToken().length == 0) {
+			leave()
+		}
+	}
+
+	function openEdit() {
+		uni.navigateTo({ url: '/shell/account/edit' })
+	}
+
+	function openPassword() {
+		uni.navigateTo({ url: '/shell/account/password' })
+	}
+
+	async function onBind() {
+		if (busy.value || wecomBound.value || !bindHere.value) {
+			return
+		}
+		busy.value = true
+		errorText.value = ''
+		try {
+			const text = await startWecomBind()
+			if (text.length > 0) {
+				errorText.value = text
+			}
+		} catch (err) {
+			errorText.value = failText(err)
+		}
+		busy.value = false
+		if (getToken().length == 0) {
+			leave()
+		}
+	}
+
+	function askUnbind() {
+		if (busy.value) {
+			return
+		}
+		uni.showModal({
+			title: '解除绑定',
+			content: '解除后企业微信变为未绑定。',
+			confirmText: '解除绑定',
+			cancelText: '返回',
+			success: (res) => {
+				if (res.confirm) {
+					void doUnbind()
+				}
+			}
+		})
+	}
+
+	async function doUnbind() {
+		busy.value = true
+		errorText.value = ''
+		try {
+			await apiPost('/auth/wecom/unbind', null)
+			uni.showToast({ title: '已解除绑定', icon: 'none' })
+			busy.value = false
+			await refresh()
+		} catch (err) {
+			errorText.value = failText(err)
+			busy.value = false
+			if (getToken().length == 0) {
+				leave()
+			}
+		}
+	}
+
+	function askLogout() {
+		uni.showModal({
+			title: '退出登录',
+			content: '退出后需要重新登录。',
+			confirmText: '退出',
+			cancelText: '返回',
+			success: (res) => {
+				if (res.confirm) {
+					void doLogout()
+				}
+			}
+		})
+	}
+
+	async function doLogout() {
+		try {
+			await apiPost('/auth/logout', null)
+		} catch (_err) {
+		}
+		clearToken()
+		uni.reLaunch({ url: '/shell/login/index' })
+	}
+
+	onShow(() => {
+		void refresh()
+	})
+</script>
+
+<style>
+	.identity {
+		flex-direction: row;
+		align-items: center;
+	}
+
+	.avatar-fallback {
+		width: 40px;
+		height: 40px;
+		border-radius: 10px;
+		background-color: #F3E8FF;
+		flex-direction: row;
+		align-items: center;
+		justify-content: center;
+		margin-right: 12px;
+	}
+
+	.avatar-img {
+		width: 40px;
+		height: 40px;
+		border-radius: 10px;
+		margin-right: 12px;
+	}
+
+	.avatar-letter {
+		color: #9730E3;
+		font-size: 18px;
+		font-weight: 700;
+	}
+
+	.who-copy {
+		flex: 1;
+		flex-direction: column;
+	}
+
+	.who-name {
+		font-size: 20px;
+		color: #28113C;
+		font-weight: 700;
+	}
+
+	.who-meta {
+		margin-top: 2px;
+		font-size: 14px;
+		color: #475569;
+	}
+
+	.fact {
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+		padding-top: 10px;
+		padding-bottom: 10px;
+		border-bottom-width: 1px;
+		border-bottom-style: solid;
+		border-bottom-color: #E2E8F0;
+	}
+
+	.fact-label {
+		font-size: 14px;
+		color: #475569;
+	}
+
+	.fact-value {
+		flex: 1;
+		margin-left: 12px;
+		font-size: 15px;
+		color: #28113C;
+		font-weight: 700;
+		text-align: right;
+	}
+
+	.action-list {
+		background-color: #FFFFFF;
+		border-radius: 12px;
+		border-width: 1px;
+		border-style: solid;
+		border-color: #E2E8F0;
+	}
+
+	.action-row {
+		flex-direction: row;
+		align-items: center;
+		min-height: 48px;
+		padding-top: 8px;
+		padding-right: 12px;
+		padding-bottom: 8px;
+		padding-left: 12px;
+		border-bottom-width: 1px;
+		border-bottom-style: solid;
+		border-bottom-color: #E2E8F0;
+	}
+
+	.action-row-last {
+		border-bottom-width: 0;
+	}
+
+	.action-label {
+		font-size: 16px;
+		color: #28113C;
+		font-weight: 700;
+	}
+
+	.action-end {
+		flex: 1;
+		flex-direction: row;
+		align-items: center;
+		justify-content: flex-end;
+		margin-left: 8px;
+	}
+
+	.action-aside {
+		font-size: 14px;
+		color: #475569;
+		text-align: right;
+	}
+
+	.bind-text {
+		margin-left: 8px;
+		font-size: 14px;
+		color: #28113C;
+		font-weight: 700;
+	}
+
+	.chevron {
+		margin-left: 4px;
+		font-size: 20px;
+		color: #475569;
+	}
+
+	.action-inline {
+		min-height: 48px;
+		margin-left: 8px;
+		padding-left: 12px;
+		padding-right: 12px;
+		border-radius: 8px;
+		border-width: 1px;
+		border-style: solid;
+		border-color: #64748B;
+		background-color: #FFFFFF;
+		flex-direction: row;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.action-inline-text {
+		font-size: 15px;
+		color: #28113C;
+		font-weight: 700;
+	}
+
+	.wecom-note {
+		margin-top: 8px;
+	}
+
+	.logout {
+		margin-top: 48px;
+		min-height: 48px;
+		border-radius: 8px;
+		background-color: #FEE2E2;
+		flex-direction: row;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.logout-text {
+		color: #991B1B;
+		font-size: 16px;
+		font-weight: 700;
+	}
+</style>

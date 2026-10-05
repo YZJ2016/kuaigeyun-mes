@@ -1,6 +1,6 @@
 """KR-PG2：委外收货套用来料检验。无库，只测创建/确认分叉与检验单挂接。"""
 
-from contextlib import asynccontextmanager
+from contextlib import ExitStack, asynccontextmanager, contextmanager
 from datetime import datetime
 from decimal import Decimal
 from types import SimpleNamespace
@@ -18,9 +18,20 @@ from apps.kuaizhizao.services.quality_service import IncomingInspectionService
 from infra.exceptions.exceptions import BusinessLogicError
 
 
+_txn_state = {"open": False, "rolled_back": False}
+
+
 @asynccontextmanager
 async def _txn():
-    yield None
+    _txn_state["open"] = True
+    _txn_state["rolled_back"] = False
+    try:
+        yield None
+    except Exception:
+        _txn_state["rolled_back"] = True
+        raise
+    finally:
+        _txn_state["open"] = False
 
 
 def _receipt_create() -> OutsourceMaterialReceiptCreate:
@@ -48,6 +59,7 @@ def _work_order(*, product_id=9):
     wo.qualified_quantity = Decimal("0")
     wo.unqualified_quantity = Decimal("0")
     wo.status = "in_progress"
+    wo.code = "OWO-1"
     wo.save = AsyncMock()
     return wo
 
@@ -57,10 +69,49 @@ def _service(wo):
     svc.get_user_info = AsyncMock(return_value={"name": "tester"})
     svc.get_user_name = AsyncMock(return_value="tester")
     svc._acquire_outsource_work_order_row_lock = AsyncMock(return_value=wo)
-    svc._schedule_stock_for_outsource_receipt = MagicMock()
-    svc._schedule_cost_for_outsource_receipt = MagicMock()
-    svc._schedule_auto_payable_for_outsource_receipt = MagicMock()
+    svc._posting = {"stock": [], "cost": [], "payable": []}
     return svc
+
+
+@contextmanager
+def _posting_patches(svc, *, stock_error=None, cost_error=None, payable_error=None):
+    state = svc._posting
+
+    async def increase_stock(**kwargs):
+        state["stock"].append({"in_txn": _txn_state["open"], "kwargs": kwargs})
+        if stock_error is not None:
+            raise stock_error
+
+    async def on_cost(_self, tenant_id, receipt_id):
+        state["cost"].append(
+            {"in_txn": _txn_state["open"], "tenant_id": tenant_id, "receipt_id": receipt_id}
+        )
+        if cost_error is not None:
+            raise cost_error
+
+    async def payable(*_args, **kwargs):
+        state["payable"].append({"in_txn": _txn_state["open"], "kwargs": kwargs})
+        if payable_error is not None:
+            raise payable_error
+
+    svc._maybe_auto_create_payable_for_outsource_receipt = AsyncMock(side_effect=payable)
+    with (
+        patch(
+            "apps.kuaizhizao.services.inventory_service.InventoryService.increase_stock",
+            new=increase_stock,
+        ),
+        patch(
+            "apps.kuaicaiwu.services.inventory_cost_service.InventoryCostService.on_outsource_receipt_confirmed",
+            new=on_cost,
+        ),
+    ):
+        yield state
+
+
+def _assert_no_posting(svc):
+    assert svc._posting["stock"] == []
+    assert svc._posting["cost"] == []
+    assert svc._posting["payable"] == []
 
 
 def _created_receipt():
@@ -117,6 +168,7 @@ async def test_required_receipt_stays_draft_without_posting(policy):
             "apps.kuaizhizao.schemas.outsource_work_order.OutsourceMaterialReceiptResponse.model_validate",
             return_value=SimpleNamespace(status="draft"),
         ),
+        _posting_patches(svc),
     ):
         result = await svc.create_material_receipt(1, _receipt_create(), 8)
 
@@ -125,9 +177,7 @@ async def test_required_receipt_stays_draft_without_posting(policy):
     wo.save.assert_not_awaited()
     assert wo.received_quantity == Decimal("0")
     assert wo.qualified_quantity == Decimal("0")
-    svc._schedule_stock_for_outsource_receipt.assert_not_called()
-    svc._schedule_cost_for_outsource_receipt.assert_not_called()
-    svc._schedule_auto_payable_for_outsource_receipt.assert_not_called()
+    _assert_no_posting(svc)
 
 
 @pytest.mark.asyncio
@@ -176,6 +226,7 @@ async def test_exempt_receipt_completes_and_posts(policy):
             "apps.kuaizhizao.schemas.outsource_work_order.OutsourceMaterialReceiptResponse.model_validate",
             side_effect=lambda obj: SimpleNamespace(status=create_mock.await_args.kwargs["status"]),
         ),
+        _posting_patches(svc),
     ):
         result = await svc.create_material_receipt(1, _receipt_create(), 8)
 
@@ -184,11 +235,18 @@ async def test_exempt_receipt_completes_and_posts(policy):
     wo.save.assert_awaited()
     assert wo.received_quantity == Decimal("4")
     assert wo.qualified_quantity == Decimal("4")
-    stock = svc._schedule_stock_for_outsource_receipt.call_args.args[0]
-    assert stock["source_type"] == "outsource_material_receipt"
-    assert stock["source_doc_id"] == 77
-    svc._schedule_auto_payable_for_outsource_receipt.assert_called_once()
-    svc._schedule_cost_for_outsource_receipt.assert_called_once()
+    assert len(svc._posting["stock"]) == 1
+    stock = svc._posting["stock"][0]
+    assert stock["in_txn"] is True
+    assert stock["kwargs"]["source_type"] == "outsource_material_receipt"
+    assert stock["kwargs"]["source_doc_id"] == 77
+    assert stock["kwargs"]["movement_type"] == "outsource_receipt"
+    assert stock["kwargs"]["idempotency_key"] == "outsource_material_receipt:77:inc"
+    assert svc._posting["cost"] == [
+        {"in_txn": True, "tenant_id": 1, "receipt_id": 77}
+    ]
+    assert len(svc._posting["payable"]) == 1
+    assert svc._posting["payable"][0]["in_txn"] is False
 
 
 def _draft_receipt():
@@ -202,6 +260,8 @@ def _draft_receipt():
     receipt.unqualified_quantity = Decimal("1")
     receipt.quantity = Decimal("5")
     receipt.warehouse_id = 2
+    receipt.warehouse_name = "主仓"
+    receipt.unit = "件"
     receipt.batch_number = None
     receipt.received_at = None
     receipt.save = AsyncMock()
@@ -248,14 +308,14 @@ async def test_complete_rejects_without_passed_inspection_or_processed_concessio
             "apps.kuaizhizao.models.outsource_work_order.OutsourceMaterialReceipt.filter",
             return_value=_receipt_query(receipt),
         ),
+        _posting_patches(svc),
     ):
         with pytest.raises(BusinessLogicError, match="来料检验"):
             await svc.complete_material_receipt(1, 8, 4)
 
     assert receipt.status == "draft"
     receipt.save.assert_not_awaited()
-    svc._schedule_stock_for_outsource_receipt.assert_not_called()
-    svc._schedule_auto_payable_for_outsource_receipt.assert_not_called()
+    _assert_no_posting(svc)
     assert defect_filter.call_args.kwargs["disposition"] == "accept"
     assert defect_filter.call_args.kwargs["status"] == "processed"
     assert defect_filter.call_args.kwargs["incoming_inspection_id__in"] == [11]
@@ -303,6 +363,7 @@ async def test_complete_posts_after_passed_inspection():
             "apps.kuaizhizao.schemas.outsource_work_order.OutsourceMaterialReceiptResponse.model_validate",
             side_effect=lambda obj: SimpleNamespace(status=obj.status),
         ),
+        _posting_patches(svc),
     ):
         result = await svc.complete_material_receipt(1, 8, 4)
 
@@ -312,10 +373,18 @@ async def test_complete_posts_after_passed_inspection():
     assert wo.received_quantity == Decimal("4")
     assert wo.qualified_quantity == Decimal("4")
     wo.save.assert_awaited()
-    stock = svc._schedule_stock_for_outsource_receipt.call_args.args[0]
-    assert stock["source_type"] == "outsource_material_receipt"
-    assert stock["material_id"] == 9
-    svc._schedule_auto_payable_for_outsource_receipt.assert_called_once()
+    assert len(svc._posting["stock"]) == 1
+    stock = svc._posting["stock"][0]
+    assert stock["in_txn"] is True
+    assert stock["kwargs"]["source_type"] == "outsource_material_receipt"
+    assert stock["kwargs"]["material_id"] == 9
+    assert stock["kwargs"]["movement_type"] == "outsource_receipt"
+    assert stock["kwargs"]["idempotency_key"] == "outsource_material_receipt:8:inc"
+    assert svc._posting["cost"] == [
+        {"in_txn": True, "tenant_id": 1, "receipt_id": 8}
+    ]
+    assert len(svc._posting["payable"]) == 1
+    assert svc._posting["payable"][0]["in_txn"] is False
 
 
 @pytest.mark.asyncio
@@ -365,15 +434,19 @@ async def test_complete_posts_on_processed_accept_concession():
             "apps.kuaizhizao.schemas.outsource_work_order.OutsourceMaterialReceiptResponse.model_validate",
             side_effect=lambda obj: SimpleNamespace(status=obj.status),
         ),
+        _posting_patches(svc),
     ):
         result = await svc.complete_material_receipt(1, 8, 4)
 
     assert result.status == "completed"
     assert wo.received_quantity == Decimal("4")
-    svc._schedule_stock_for_outsource_receipt.assert_called_once()
-    stock = svc._schedule_stock_for_outsource_receipt.call_args.args[0]
-    assert stock["source_type"] == "outsource_material_receipt"
-    assert stock["source_doc_id"] == receipt.id
+    assert len(svc._posting["stock"]) == 1
+    stock = svc._posting["stock"][0]
+    assert stock["in_txn"] is True
+    assert stock["kwargs"]["source_type"] == "outsource_material_receipt"
+    assert stock["kwargs"]["source_doc_id"] == receipt.id
+    assert svc._posting["cost"][0]["in_txn"] is True
+    assert svc._posting["payable"][0]["in_txn"] is False
 
 
 @pytest.mark.asyncio
@@ -394,13 +467,14 @@ async def test_complete_already_completed_returns_without_gate_or_posting():
             "apps.kuaizhizao.schemas.outsource_work_order.OutsourceMaterialReceiptResponse.model_validate",
             side_effect=lambda obj: SimpleNamespace(status=obj.status),
         ),
+        _posting_patches(svc),
     ):
         result = await svc.complete_material_receipt(1, 8, 4)
 
     assert result.status == "completed"
     inspection_filter.assert_not_called()
     receipt.save.assert_not_awaited()
-    svc._schedule_stock_for_outsource_receipt.assert_not_called()
+    _assert_no_posting(svc)
 
 
 @pytest.mark.asyncio
@@ -649,6 +723,7 @@ async def test_locked_assert_failure_keeps_draft():
             "apps.kuaizhizao.utils.inbound_confirm_helper.resolve_inbound_confirm_business_time",
             return_value=datetime(2026, 9, 30, 8, 0, 0),
         ),
+        _posting_patches(svc),
     ):
         with pytest.raises(BusinessLogicError, match="来料检验"):
             await svc.complete_material_receipt(1, 8, 4)
@@ -658,8 +733,7 @@ async def test_locked_assert_failure_keeps_draft():
     receipt.save.assert_not_awaited()
     wo.save.assert_not_awaited()
     svc._acquire_outsource_work_order_row_lock.assert_awaited()
-    svc._schedule_stock_for_outsource_receipt.assert_not_called()
-    svc._schedule_auto_payable_for_outsource_receipt.assert_not_called()
+    _assert_no_posting(svc)
 
 
 @pytest.mark.asyncio
@@ -700,6 +774,7 @@ async def test_complete_rejects_when_inspection_material_differs_from_work_order
             "apps.kuaizhizao.utils.inbound_confirm_helper.resolve_inbound_confirm_business_time",
             return_value=datetime(2026, 9, 30, 8, 0, 0),
         ),
+        _posting_patches(svc),
     ):
         with pytest.raises(BusinessLogicError, match="来料检验"):
             await svc.complete_material_receipt(1, 8, 4)
@@ -709,7 +784,88 @@ async def test_complete_rejects_when_inspection_material_differs_from_work_order
     assert receipt.status == "draft"
     receipt.save.assert_not_awaited()
     wo.save.assert_not_awaited()
-    svc._schedule_stock_for_outsource_receipt.assert_not_called()
+    _assert_no_posting(svc)
+
+
+def _complete_release_patches(receipt):
+    inspection = SimpleNamespace(id=11, tenant_id=1, material_id=9)
+    inspections = MagicMock()
+    inspections.all = AsyncMock(return_value=[inspection])
+    return (
+        patch(
+            "apps.kuaizhizao.services.document_action_policy.warehouse_inbound_hub.assert_inbound_hub_capability"
+        ),
+        patch(
+            "apps.kuaizhizao.services.outsource_material_receipt_service.in_transaction",
+            _txn,
+        ),
+        patch(
+            "apps.kuaizhizao.models.incoming_inspection.IncomingInspection.filter",
+            return_value=inspections,
+        ),
+        patch(
+            "apps.kuaizhizao.services.inspection_policy_service.iqc_inspection_passed_for_inbound",
+            new=AsyncMock(return_value=True),
+        ),
+        patch(
+            "apps.kuaizhizao.models.outsource_work_order.OutsourceMaterialReceipt.filter",
+            return_value=_receipt_query(receipt),
+        ),
+        patch(
+            "apps.kuaizhizao.utils.inbound_confirm_helper.resolve_inbound_confirm_receiver",
+            new=AsyncMock(return_value=(4, "tester")),
+        ),
+        patch(
+            "apps.kuaizhizao.utils.inbound_confirm_helper.resolve_inbound_confirm_business_time",
+            return_value=datetime(2026, 9, 30, 8, 0, 0),
+        ),
+    )
+
+
+@contextmanager
+def _confirm_posting(svc, receipt, **posting_kwargs):
+    with ExitStack() as stack:
+        for manager in _complete_release_patches(receipt):
+            stack.enter_context(manager)
+        stack.enter_context(_posting_patches(svc, **posting_kwargs))
+        yield
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("which", ["stock", "cost"])
+async def test_stock_or_cost_failure_rolls_back_completed_receipt(which):
+    receipt = _draft_receipt()
+    wo = _work_order()
+    svc = _service(wo)
+    stock_error = RuntimeError("stock down") if which == "stock" else None
+    cost_error = RuntimeError("cost down") if which == "cost" else None
+
+    with _confirm_posting(svc, receipt, stock_error=stock_error, cost_error=cost_error):
+        with pytest.raises(RuntimeError):
+            await svc.complete_material_receipt(1, 8, 4)
+
+    assert _txn_state["rolled_back"] is True
+    assert svc._posting["payable"] == []
+    assert svc._posting["stock"][0]["in_txn"] is True
+    if which == "cost":
+        assert svc._posting["cost"][0]["in_txn"] is True
+
+
+@pytest.mark.asyncio
+async def test_payable_failure_raises_business_error_after_completed_commit():
+    receipt = _draft_receipt()
+    wo = _work_order()
+    svc = _service(wo)
+
+    with _confirm_posting(svc, receipt, payable_error=RuntimeError("payable down")):
+        with pytest.raises(BusinessLogicError, match="已完成，但自动生成应付单失败"):
+            await svc.complete_material_receipt(1, 8, 4)
+
+    assert _txn_state["rolled_back"] is False
+    assert receipt.status == "completed"
+    assert svc._posting["stock"][0]["in_txn"] is True
+    assert svc._posting["cost"][0]["in_txn"] is True
+    assert svc._posting["payable"][0]["in_txn"] is False
 
 
 @pytest.mark.asyncio

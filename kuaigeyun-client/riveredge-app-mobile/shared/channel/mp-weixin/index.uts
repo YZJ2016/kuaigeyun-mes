@@ -18,6 +18,9 @@ export function readBrowserQuery(_name : string) : string {
 	return ''
 }
 
+export function dropBrowserQuery(_name : string) : void {
+}
+
 export function readBrowserPath() : string {
 	return ''
 }

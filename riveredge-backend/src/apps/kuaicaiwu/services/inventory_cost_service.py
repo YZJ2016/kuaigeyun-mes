@@ -550,8 +550,8 @@ class InventoryCostService:
                 inbound_unit_price=unit_cost,
             )
         except Exception as exc:
-            # spec 142：成本结转失败上抛（detached task 壳层记 error 落可见失败，
-            # 不再静默返回 None 假装无成本）
+            # spec 142 / 176：成本结转失败上抛。委外收货在确认事务内调用，
+            # 失败与收货状态、工单数量一同回滚，不再静默返回 None。
             logger.error(
                 "委外收货成本结转失败 receipt={} product={}: {}",
                 receipt_id,

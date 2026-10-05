@@ -1,10 +1,16 @@
 <script setup lang="uts">
+	// #ifdef WEB || H5
+	import { openMobileTenantEntry } from './shared/channel/h5/index.uts'
+	// #endif
 	// #ifdef APP-ANDROID || APP-HARMONY
 	let firstBackTime = 0
 	// #endif
 
 	onLaunch(() => {
 		console.log('App Launch')
+		// #ifdef WEB || H5
+		openMobileTenantEntry()
+		// #endif
 	})
 
 	onAppShow(() => {

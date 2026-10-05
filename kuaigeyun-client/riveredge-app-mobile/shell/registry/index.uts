@@ -1,3 +1,4 @@
+import { rememberRoute } from '../workbench/recent.uts'
 import { publishH5Route } from '../../shared/channel/index.uts'
 import { runtimePlatform } from '../../shared/channel/headers.uts'
 import { featurePackage as workshopPackage } from '../../features/workshop/index.uts'
@@ -323,6 +324,7 @@ export function openRegisteredRoute(rawPath : string) : boolean {
 	uni.navigateTo({
 		url: url,
 		success: () => {
+			rememberRoute(entryRoute(entry))
 			publishH5Route(shown)
 		},
 		fail: () => {

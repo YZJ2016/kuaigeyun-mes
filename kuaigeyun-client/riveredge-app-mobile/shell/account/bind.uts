@@ -1,0 +1,53 @@
+import { apiGet } from '../../shared/api/http.uts'
+import { fieldText } from '../../shared/api/fields.uts'
+import { getTenantId } from '../../shared/api/session.uts'
+
+export function wecomBindOnThisClient() : boolean {
+	let enabled = false
+	// #ifdef WEB || H5
+	enabled = true
+	// #endif
+	return enabled
+}
+
+function pageAddress(tenantId : string) : string {
+	let origin = ''
+	// #ifdef WEB || H5
+	origin = window.location.origin
+	// #endif
+	if (origin.length == 0) {
+		return ''
+	}
+	return origin + '/mobile/shell/account/index?tenant_id=' + encodeURIComponent(tenantId)
+}
+
+function assignPage(url : string) : void {
+	// #ifdef WEB || H5
+	window.location.assign(url)
+	// #endif
+}
+
+/** 绑定用授权地址，回调落在账号页。不走登录用的 startWecomLogin。 */
+export async function startWecomBind() : Promise<string> {
+	if (!wecomBindOnThisClient()) {
+		return '当前端取码未接通。请用企业微信打开手机网页完成绑定。'
+	}
+	const tenant = getTenantId().trim()
+	if (tenant.length == 0) {
+		return '请先确定组织'
+	}
+	const redirectUri = pageAddress(tenant)
+	if (redirectUri.length == 0) {
+		return '没有当前页面地址'
+	}
+	const data = await apiGet('/auth/wecom/authorize-url', [
+		{ key: 'redirect_uri', value: redirectUri },
+		{ key: 'tenant_id', value: tenant }
+	])
+	const authorizeUrl = fieldText(data, 'authorize_url')
+	if (authorizeUrl.length == 0) {
+		return '没有获得授权地址'
+	}
+	assignPage(authorizeUrl)
+	return ''
+}
