@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from decimal import Decimal
 from typing import Optional, Sequence
 
@@ -64,3 +65,57 @@ def allocate_increment(
         if leftover <= ZERO:
             break
     return allocated
+
+
+def planned_start_ts(value: Optional[datetime]) -> float:
+    if value is None:
+        return 0.0
+    try:
+        return float(value.timestamp())
+    except (OSError, OverflowError, TypeError, ValueError):
+        return 0.0
+
+
+def candidate_bind_sort_key(
+    status_rank: int,
+    planned_start: Optional[datetime],
+    wo_id: int,
+) -> tuple:
+    """生产中优先；同状态计划开始越新越优先；再 id 越大越优先。"""
+    return (int(status_rank), -planned_start_ts(planned_start), -int(wo_id or 0))
+
+
+def candidate_fill_sort_key(
+    planned_start: Optional[datetime],
+    wo_id: int,
+) -> tuple:
+    """同产品连做：先填计划开始更早的工单。"""
+    ts = planned_start_ts(planned_start)
+    return (0 if ts else 1, ts, int(wo_id or 0))
+
+
+def should_changeover(
+    *,
+    has_bound: bool,
+    bound_still_candidate: bool,
+    bound_in_progress: bool,
+    bound_product_id: Optional[int],
+    best_in_progress: bool,
+    best_wo_id: int,
+    best_product_id: Optional[int],
+    bound_wo_id: int,
+) -> bool:
+    """产品变了、旧任务已不在候选、或旧单不再生产中而新单已生产中 → 切单。"""
+    if not has_bound:
+        return False
+    if not bound_still_candidate:
+        return True
+    if bound_product_id != best_product_id:
+        return True
+    if (
+        (not bound_in_progress)
+        and best_in_progress
+        and int(best_wo_id) != int(bound_wo_id)
+    ):
+        return True
+    return False

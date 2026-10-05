@@ -74,6 +74,10 @@ export type RelayAutoReportBinding = {
   bound_work_order_code?: string | null;
   bound_operation_id?: number | null;
   bound_operation_name?: string | null;
+  production_line_id?: number | null;
+  production_line_code?: string | null;
+  production_line_name?: string | null;
+  bound_product_id?: number | null;
   last_settle_at?: string | null;
   last_seen_at?: string | null;
   offline_flushed: boolean;
@@ -90,6 +94,9 @@ export type RelayAutoReportDeviceOption = {
   equipment_id: number;
   equipment_code?: string;
   equipment_name?: string;
+  production_line_id?: number | null;
+  production_line_code?: string;
+  production_line_name?: string;
   is_online?: boolean;
   label: string;
 };
@@ -190,6 +197,4 @@ export const industryRelayApi = {
       method: 'GET',
       params,
     }),
-  settleAutoReportNow: () =>
-    apiRequest<Record<string, unknown>>('/apps/ind-relay/auto-report/settle-now', { method: 'POST' }),
 };

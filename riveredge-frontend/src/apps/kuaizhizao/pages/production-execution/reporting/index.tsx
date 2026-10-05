@@ -137,7 +137,7 @@ import { ActionConfirmPopconfirm } from '../../../../../components/action-confir
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import {
-  reportingClientChannelSourceKey,
+  reportingClientChannelSourceI18nKey,
   type ReportingReportMode,
 } from '../../../../../utils/clientChannel';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
@@ -158,6 +158,10 @@ interface ReportingRecord {
   recorded_by_name?: string | null;
   /** 报工来源渠道码 */
   client_channel?: string | null;
+  origin?: string | null;
+  production_line_id?: number | null;
+  production_line_code?: string | null;
+  production_line_name?: string | null;
   /** 报工方式 self/proxy/team */
   report_mode?: ReportingReportMode | string | null;
   reported_quantity: number;
@@ -1571,18 +1575,20 @@ const ReportingPage: React.FC = () => {
       minWidth: 88,
       hideInSearch: true,
       render: (_, record) => {
-        const sourceKey = reportingClientChannelSourceKey(record.client_channel);
-        if (!sourceKey) return '—';
-        const label =
-          sourceKey === 'miniprogram'
-            ? t('app.kuaizhizao.workReporting.clientChannel.miniprogram')
-            : sourceKey === 'app'
-              ? t('app.kuaizhizao.workReporting.clientChannel.app')
-              : sourceKey === 'station'
-                ? t('app.kuaizhizao.workReporting.clientChannel.station')
-                : t('app.kuaizhizao.workReporting.clientChannel.pc');
-        return <MarkerTag color="processing">{label}</MarkerTag>;
+        const key = reportingClientChannelSourceI18nKey(record.client_channel);
+        if (!key) return '—';
+        return <MarkerTag color="processing">{t(key)}</MarkerTag>;
       },
+    },
+    {
+      title: t('app.kuaizhizao.workReporting.colProductionLine'),
+      dataIndex: 'production_line_name',
+      width: 120,
+      minWidth: 100,
+      hideInSearch: true,
+      ellipsis: true,
+      render: (_, record) =>
+        record.production_line_name || record.production_line_code || '—',
     },
     {
       title: t('app.kuaizhizao.workReporting.colReportMode'),
@@ -1758,16 +1764,15 @@ const ReportingPage: React.FC = () => {
           title: t('app.kuaizhizao.workReporting.colClientChannel'),
           dataIndex: 'client_channel',
           render: (_: unknown, r: ReportingRecord) => {
-            const sourceKey = reportingClientChannelSourceKey(r.client_channel);
-            if (!sourceKey) return '—';
-            return sourceKey === 'miniprogram'
-              ? t('app.kuaizhizao.workReporting.clientChannel.miniprogram')
-              : sourceKey === 'app'
-                ? t('app.kuaizhizao.workReporting.clientChannel.app')
-                : sourceKey === 'station'
-                  ? t('app.kuaizhizao.workReporting.clientChannel.station')
-                  : t('app.kuaizhizao.workReporting.clientChannel.pc');
+            const key = reportingClientChannelSourceI18nKey(r.client_channel);
+            return key ? t(key) : '—';
           },
+        },
+        {
+          title: t('app.kuaizhizao.workReporting.colProductionLine'),
+          dataIndex: 'production_line_name',
+          render: (_: unknown, r: ReportingRecord) =>
+            r.production_line_name || r.production_line_code || '—',
         },
         {
           title: t('app.kuaizhizao.workReporting.colReportMode'),

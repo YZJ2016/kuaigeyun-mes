@@ -16,19 +16,32 @@ from apps.ind_relay.models.auto_report import (
     RelayAutoReportConfig,
     RelayAutoReportLog,
 )
-from apps.ind_relay.services.auto_report_math import allocate_increment, compute_zscl_increment
+from apps.ind_relay.services.auto_report_math import (
+    allocate_increment,
+    candidate_bind_sort_key,
+    candidate_fill_sort_key,
+    compute_zscl_increment,
+    should_changeover,
+)
 from apps.kuaizhizao.models.equipment import Equipment
 from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
 from apps.kuaizhizao.schemas.reporting_record import ReportingRecordCreate
 from apps.kuaizhizao.services.reporting_service import ReportingService
 from apps.kuaizhizao.services.work_order_service import WORK_ORDER_IN_PROGRESS_STATUS
-from apps.kuaiiot.models.iot import IotDevice, IotTagSnapshot
+from apps.kuaiiot.models.iot import IotDevice, IotDiscoveredMqttDevice, IotTagSnapshot
 from core.utils.timezone_utils import resolve_business_datetime
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 from infra.models.user import User
 
 ZERO = Decimal("0")
+_IN_PROGRESS_WO = {
+    "in_progress",
+    "生产中",
+    "进行中",
+    "执行中",
+    "IN_PROGRESS",
+}
 
 
 class AutoReportService:
@@ -149,12 +162,12 @@ class AutoReportService:
             deleted_at__isnull=True,
         )
         if is_enabled and not config.match_by_device:
-            others = await RelayAutoReportBinding.filter(
+            others_qs = RelayAutoReportBinding.filter(
                 tenant_id=tenant_id,
                 deleted_at__isnull=True,
                 is_enabled=True,
             ).exclude(id=existing.id if existing else 0)
-            if await others.exists():
+            if await others_qs.exists():
                 raise ValidationError(
                     "关闭「按设备匹配工序」时，只能启用一台快数采设备做末道报工"
                 )
@@ -176,6 +189,12 @@ class AutoReportService:
         row.equipment_id = int(equipment.id)
         row.equipment_code = equipment.code
         row.equipment_name = equipment.name
+        line_id, line_code, line_name = await AutoReportService._resolve_production_line(
+            tenant_id, device=device, equipment=equipment
+        )
+        row.production_line_id = line_id
+        row.production_line_code = line_code
+        row.production_line_name = line_name
         row.is_enabled = bool(is_enabled)
         if remarks is not None:
             row.remarks = remarks
@@ -202,12 +221,12 @@ class AutoReportService:
         if is_enabled:
             config = await AutoReportService.get_or_create_config(tenant_id)
             if not config.match_by_device:
-                others = await RelayAutoReportBinding.filter(
+                others_qs = RelayAutoReportBinding.filter(
                     tenant_id=tenant_id,
                     deleted_at__isnull=True,
                     is_enabled=True,
                 ).exclude(id=row.id)
-                if await others.exists():
+                if await others_qs.exists():
                     raise ValidationError(
                         "关闭「按设备匹配工序」时，只能启用一台快数采设备做末道报工"
                     )
@@ -279,9 +298,19 @@ class AutoReportService:
                     "equipment_id": int(eq.id),
                     "equipment_code": eq.code,
                     "equipment_name": eq.name,
+                    "production_line_id": eq.production_line_id,
+                    "production_line_code": eq.production_line_code,
+                    "production_line_name": eq.production_line_name,
                     "is_online": bool(d.is_online),
                     "last_seen_at": d.last_seen_at,
-                    "label": f"{d.name} → {eq.name}/{eq.code}",
+                    "label": (
+                        f"{d.name} → {eq.name}/{eq.code}"
+                        + (
+                            f" ({eq.production_line_name})"
+                            if eq.production_line_name
+                            else ""
+                        )
+                    ),
                 }
             )
         return result
@@ -336,6 +365,47 @@ class AutoReportService:
             except (InvalidOperation, ValueError):
                 return None, snap.sampled_at
         return None, snap.sampled_at
+
+    @staticmethod
+    def _wo_in_progress(wo: WorkOrder) -> bool:
+        return (wo.status or "") in _IN_PROGRESS_WO
+
+    @staticmethod
+    def _planned_start(wo: WorkOrder, op: WorkOrderOperation):
+        return op.planned_start_date or wo.planned_start_date
+
+    @staticmethod
+    def _apply_bind(binding: RelayAutoReportBinding, wo: WorkOrder, op: WorkOrderOperation) -> None:
+        binding.bound_work_order_id = int(wo.id)
+        binding.bound_work_order_code = wo.code
+        binding.bound_operation_id = int(op.operation_id) if op.operation_id else None
+        binding.bound_operation_name = op.operation_name
+        binding.bound_product_id = int(wo.product_id) if wo.product_id else None
+
+    @staticmethod
+    async def _resolve_production_line(
+        tenant_id: int,
+        *,
+        device: IotDevice,
+        equipment: Equipment,
+    ) -> tuple[Optional[int], Optional[str], Optional[str]]:
+        line_id = equipment.production_line_id
+        line_code = (equipment.production_line_code or "").strip() or None
+        line_name = (equipment.production_line_name or "").strip() or None
+        if (not line_code and not line_name) and device.external_device_id:
+            disc = (
+                await IotDiscoveredMqttDevice.filter(
+                    tenant_id=tenant_id,
+                    external_device_id=device.external_device_id,
+                    deleted_at__isnull=True,
+                )
+                .order_by("-last_seen_at")
+                .first()
+            )
+            if disc:
+                line_code = (disc.line_code or "").strip() or line_code
+                line_name = (disc.line_name or "").strip() or line_name
+        return line_id, line_code, line_name
 
     @staticmethod
     def _op_has_equipment(op: WorkOrderOperation, equipment_id: int) -> bool:
@@ -399,17 +469,14 @@ class AutoReportService:
             for op in matched:
                 if not op.assigned_worker_id and not getattr(op, "assigned_team_id", None):
                     continue
-                status_rank = 0 if (wo.status or "") in {"in_progress", "生产中", "进行中", "执行中", "IN_PROGRESS"} else 1
+                status_rank = 0 if AutoReportService._wo_in_progress(wo) else 1
                 candidates.append((wo, op, status_rank))
 
         candidates.sort(
-            key=lambda item: (
+            key=lambda item: candidate_bind_sort_key(
                 item[2],
-                item[1].planned_start_date
-                or item[0].planned_start_date
-                or resolve_business_datetime(),
+                AutoReportService._planned_start(item[0], item[1]),
                 int(item[0].id or 0),
-                int(item[1].sequence or 0),
             )
         )
         return [(wo, op) for wo, op, _ in candidates]
@@ -467,12 +534,20 @@ class AutoReportService:
             "work_hours": ZERO,
             "status": "pending",
             "reported_at": resolve_business_datetime(),
-            "remarks": f"继电器自动报工 iot={binding.iot_device_code or binding.iot_device_id}",
+            "remarks": f"自动报工 iot={binding.iot_device_code or binding.iot_device_id}",
+            "origin": "auto",
+            "production_line_id": binding.production_line_id,
+            "production_line_code": binding.production_line_code,
+            "production_line_name": binding.production_line_name,
             "device_info": {
                 "source": "ind_relay_auto_report",
+                "origin": "auto",
                 "iot_device_id": binding.iot_device_id,
                 "equipment_uuid": binding.equipment_uuid,
                 "equipment_code": binding.equipment_code,
+                "production_line_id": binding.production_line_id,
+                "production_line_code": binding.production_line_code,
+                "production_line_name": binding.production_line_name,
             },
             "idempotency_key": (
                 f"ind-relay-ar-{binding.id}-{wo.id}-{op.operation_id}-"
@@ -494,10 +569,84 @@ class AutoReportService:
             tenant_id=tenant_id,
             reporting_data=create_data,
             reported_by=int(reporter_id),
-            entry_mode="manual",
-            client_channel="integration",
+            entry_mode="auto",
+            client_channel="auto",
         )
         return int(record.id)
+
+    @staticmethod
+    async def _report_pairs(
+        tenant_id: int,
+        *,
+        config: RelayAutoReportConfig,
+        binding: RelayAutoReportBinding,
+        pairs: list[tuple[WorkOrder, WorkOrderOperation, Decimal]],
+        current: Optional[Decimal],
+        reason: str,
+        event: str = "report",
+    ) -> tuple[list[int], Decimal]:
+        reported_ids: list[int] = []
+        reported_qty = ZERO
+        for wo, op, qty in pairs:
+            if qty <= ZERO:
+                continue
+            try:
+                rid = await AutoReportService._create_reporting(
+                    tenant_id,
+                    config=config,
+                    wo=wo,
+                    op=op,
+                    qty=qty,
+                    binding=binding,
+                )
+            except (ValidationError, BusinessLogicError, NotFoundError) as exc:
+                await AutoReportService._append_log(
+                    tenant_id,
+                    binding=binding,
+                    level="error",
+                    event="error",
+                    message=str(exc),
+                    zscl=current,
+                    increment_qty=qty,
+                    work_order_id=int(wo.id),
+                    work_order_code=wo.code,
+                    operation_id=int(op.operation_id) if op.operation_id else None,
+                    extra={"reason": reason},
+                )
+                break
+            except Exception as exc:  # noqa: BLE001
+                logger.exception("ind_relay auto report failed: {}", exc)
+                await AutoReportService._append_log(
+                    tenant_id,
+                    binding=binding,
+                    level="error",
+                    event="error",
+                    message=f"报工异常: {exc}",
+                    zscl=current,
+                    increment_qty=qty,
+                    work_order_id=int(wo.id),
+                    work_order_code=wo.code,
+                    extra={"reason": reason},
+                )
+                break
+            if rid:
+                reported_ids.append(rid)
+                reported_qty += qty
+                await AutoReportService._append_log(
+                    tenant_id,
+                    binding=binding,
+                    level="info",
+                    event=event,
+                    message="自动报工成功",
+                    zscl=current,
+                    increment_qty=qty,
+                    work_order_id=int(wo.id),
+                    work_order_code=wo.code,
+                    operation_id=int(op.operation_id) if op.operation_id else None,
+                    reporting_record_id=rid,
+                    extra={"reason": reason},
+                )
+        return reported_ids, reported_qty
 
     @staticmethod
     async def settle_binding(
@@ -519,6 +668,21 @@ class AutoReportService:
                 message="绑定缺少 MES 设备 ID",
             )
             return {"skipped": True, "reason": "no_equipment"}
+
+        equipment = await Equipment.get_or_none(
+            tenant_id=tenant_id, id=int(binding.equipment_id), deleted_at__isnull=True
+        )
+        if equipment:
+            device = await IotDevice.get_or_none(
+                tenant_id=tenant_id, id=int(binding.iot_device_id), deleted_at__isnull=True
+            )
+            if device:
+                line_id, line_code, line_name = await AutoReportService._resolve_production_line(
+                    tenant_id, device=device, equipment=equipment
+                )
+                binding.production_line_id = line_id
+                binding.production_line_code = line_code
+                binding.production_line_name = line_name
 
         current, sampled_at = await AutoReportService._read_zscl(tenant_id, int(binding.iot_device_id))
         if sampled_at:
@@ -579,23 +743,131 @@ class AutoReportService:
                 binding=binding,
                 level="info",
                 event="skip",
-                message="未匹配到可报工工序任务",
+                message="未匹配到可报工的末道工序任务（产量来自产线，工单由末道派工匹配）",
                 zscl=current,
                 increment_qty=increment if increment > ZERO else None,
                 extra={"pending": str(pending), "reason": reason},
             )
             return {"skipped": True, "reason": "no_task", "pending": str(pending)}
 
-        first_wo, first_op = candidates[0]
-        binding.bound_work_order_id = int(first_wo.id)
-        binding.bound_work_order_code = first_wo.code
-        binding.bound_operation_id = int(first_op.operation_id) if first_op.operation_id else None
-        binding.bound_operation_name = first_op.operation_name
+        best_wo, best_op = candidates[0]
+        in_progress_hits = [
+            (wo, op) for wo, op in candidates if AutoReportService._wo_in_progress(wo)
+        ]
+        if len(in_progress_hits) > 1:
+            await AutoReportService._append_log(
+                tenant_id,
+                binding=binding,
+                level="info",
+                event="BIND",
+                message=(
+                    "当前设备命中多条生产中任务，已按计划开始时间自动选择，"
+                    f"candidateCount={len(in_progress_hits)}"
+                ),
+                work_order_id=int(best_wo.id),
+                work_order_code=best_wo.code,
+                operation_id=int(best_op.operation_id) if best_op.operation_id else None,
+                extra={
+                    "candidateCount": len(in_progress_hits),
+                    "selected": best_wo.code,
+                },
+            )
+
+        bound_wo_id = binding.bound_work_order_id
+        bound_pair = next(
+            ((wo, op) for wo, op in candidates if bound_wo_id and int(wo.id) == int(bound_wo_id)),
+            None,
+        )
+        changeover = should_changeover(
+            has_bound=bool(bound_wo_id),
+            bound_still_candidate=bound_pair is not None,
+            bound_in_progress=bool(bound_pair and AutoReportService._wo_in_progress(bound_pair[0])),
+            bound_product_id=(
+                int(bound_pair[0].product_id)
+                if bound_pair and bound_pair[0].product_id
+                else binding.bound_product_id
+            ),
+            best_in_progress=AutoReportService._wo_in_progress(best_wo),
+            best_wo_id=int(best_wo.id),
+            best_product_id=int(best_wo.product_id) if best_wo.product_id else None,
+            bound_wo_id=int(bound_wo_id or 0),
+        )
+
+        if changeover:
+            reported_ids: list[int] = []
+            reported_qty = ZERO
+            if bound_pair and pending > ZERO:
+                old_wo, old_op = bound_pair
+                reported_ids, reported_qty = await AutoReportService._report_pairs(
+                    tenant_id,
+                    config=config,
+                    binding=binding,
+                    pairs=[(old_wo, old_op, pending)],
+                    current=current,
+                    reason=reason,
+                    event="changeover",
+                )
+            elif bound_wo_id and pending > ZERO and bound_pair is None:
+                await AutoReportService._append_log(
+                    tenant_id,
+                    binding=binding,
+                    level="info",
+                    event="changeover",
+                    message="旧任务已不在可报工集合，增量不转入新工单，仅对齐新任务基线",
+                    zscl=current,
+                    increment_qty=pending,
+                    extra={"old_work_order_id": bound_wo_id, "reason": reason},
+                )
+            AutoReportService._apply_bind(binding, best_wo, best_op)
+            binding.last_zscl = current
+            binding.pending_quantity = ZERO
+            binding.last_settle_at = resolve_business_datetime()
+            if force_flush and reason.startswith("offline"):
+                binding.offline_flushed = True
+            await binding.save()
+            await AutoReportService._append_log(
+                tenant_id,
+                binding=binding,
+                level="info",
+                event="BIND",
+                message=f"切单后绑定新任务 {best_wo.code}，基线已对齐",
+                zscl=current,
+                work_order_id=int(best_wo.id),
+                work_order_code=best_wo.code,
+                operation_id=int(best_op.operation_id) if best_op.operation_id else None,
+                extra={"reason": reason},
+            )
+            return {
+                "changeover": True,
+                "reported": len(reported_ids),
+                "qty": str(reported_qty),
+                "pending": "0",
+                "record_ids": reported_ids,
+            }
+
+        target_wo, target_op = bound_pair if bound_pair else (best_wo, best_op)
+        AutoReportService._apply_bind(binding, target_wo, target_op)
+
+        product_id = int(target_wo.product_id) if target_wo.product_id else None
+        same_product = [
+            (wo, op)
+            for wo, op in candidates
+            if product_id is not None
+            and wo.product_id
+            and int(wo.product_id) == product_id
+            and int(wo.id) != int(target_wo.id)
+        ]
+        same_product.sort(
+            key=lambda item: candidate_fill_sort_key(
+                AutoReportService._planned_start(item[0], item[1]),
+                int(item[0].id or 0),
+            )
+        )
+        queue = [(target_wo, target_op), *same_product]
 
         should_report = force_flush or config.report_mode == MODE_REALTIME
         if not should_report and config.report_mode == MODE_PLAN_OFFLINE:
-            # 达计划：若待报量已覆盖第一张任务剩余则可落单
-            rem = await AutoReportService._remaining_for_op(tenant_id, first_wo, first_op)
+            rem = await AutoReportService._remaining_for_op(tenant_id, target_wo, target_op)
             if pending >= rem > ZERO:
                 should_report = True
 
@@ -611,9 +883,9 @@ class AutoReportService:
                 message="计划量/断链模式：仅累计待报数量",
                 zscl=current,
                 increment_qty=increment if increment > ZERO else None,
-                work_order_id=int(first_wo.id),
-                work_order_code=first_wo.code,
-                operation_id=int(first_op.operation_id) if first_op.operation_id else None,
+                work_order_id=int(target_wo.id),
+                work_order_code=target_wo.code,
+                operation_id=int(target_op.operation_id) if target_op.operation_id else None,
                 extra={"pending": str(pending), "reason": reason},
             )
             return {"accumulated": True, "pending": str(pending)}
@@ -624,72 +896,26 @@ class AutoReportService:
             return {"skipped": True, "reason": "no_pending"}
 
         remainings: list[Decimal] = []
-        for wo, op in candidates:
+        for wo, op in queue:
             rem = await AutoReportService._remaining_for_op(tenant_id, wo, op)
             remainings.append(rem)
         allocs = allocate_increment(pending, remainings, last_takes_overflow=True)
-
-        reported_ids: list[int] = []
-        reported_qty = ZERO
-        for (wo, op), qty in zip(candidates, allocs):
-            if qty <= ZERO:
-                continue
-            try:
-                rid = await AutoReportService._create_reporting(
-                    tenant_id,
-                    config=config,
-                    wo=wo,
-                    op=op,
-                    qty=qty,
-                    binding=binding,
-                )
-            except (ValidationError, BusinessLogicError, NotFoundError) as exc:
-                await AutoReportService._append_log(
-                    tenant_id,
-                    binding=binding,
-                    level="error",
-                    event="error",
-                    message=str(exc),
-                    zscl=current,
-                    increment_qty=qty,
-                    work_order_id=int(wo.id),
-                    work_order_code=wo.code,
-                    operation_id=int(op.operation_id) if op.operation_id else None,
-                    extra={"reason": reason},
-                )
-                break
-            except Exception as exc:  # noqa: BLE001
-                logger.exception("ind_relay auto report failed: {}", exc)
-                await AutoReportService._append_log(
-                    tenant_id,
-                    binding=binding,
-                    level="error",
-                    event="error",
-                    message=f"报工异常: {exc}",
-                    zscl=current,
-                    increment_qty=qty,
-                    work_order_id=int(wo.id),
-                    work_order_code=wo.code,
-                    extra={"reason": reason},
-                )
-                break
-            if rid:
-                reported_ids.append(rid)
-                reported_qty += qty
-                await AutoReportService._append_log(
-                    tenant_id,
-                    binding=binding,
-                    level="info",
-                    event="report",
-                    message="自动报工成功",
-                    zscl=current,
-                    increment_qty=qty,
-                    work_order_id=int(wo.id),
-                    work_order_code=wo.code,
-                    operation_id=int(op.operation_id) if op.operation_id else None,
-                    reporting_record_id=rid,
-                    extra={"reason": reason},
-                )
+        pairs = [
+            (wo, op, qty) for (wo, op), qty in zip(queue, allocs) if qty > ZERO
+        ]
+        reported_ids, reported_qty = await AutoReportService._report_pairs(
+            tenant_id,
+            config=config,
+            binding=binding,
+            pairs=pairs,
+            current=current,
+            reason=reason,
+        )
+        if reported_ids:
+            for wo, op, qty in reversed(pairs):
+                if qty > ZERO:
+                    AutoReportService._apply_bind(binding, wo, op)
+                    break
 
         leftover = pending - reported_qty
         binding.pending_quantity = leftover if leftover > ZERO else ZERO

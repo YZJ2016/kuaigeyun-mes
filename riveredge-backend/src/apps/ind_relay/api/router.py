@@ -615,6 +615,10 @@ class AutoReportBindingResponse(BaseModel):
     last_settle_at: Optional[datetime] = None
     last_seen_at: Optional[datetime] = None
     offline_flushed: bool = False
+    production_line_id: Optional[int] = None
+    production_line_code: Optional[str] = None
+    production_line_name: Optional[str] = None
+    bound_product_id: Optional[int] = None
     remarks: Optional[str] = None
 
 
@@ -671,6 +675,10 @@ def _binding_response(row) -> AutoReportBindingResponse:
         last_settle_at=row.last_settle_at,
         last_seen_at=row.last_seen_at,
         offline_flushed=bool(row.offline_flushed),
+        production_line_id=getattr(row, "production_line_id", None),
+        production_line_code=getattr(row, "production_line_code", None),
+        production_line_name=getattr(row, "production_line_name", None),
+        bound_product_id=getattr(row, "bound_product_id", None),
         remarks=row.remarks,
     )
 
@@ -861,14 +869,3 @@ async def list_auto_report_logs(
             for r in rows
         ],
     }
-
-
-@router.post(
-    "/auto-report/settle-now",
-    dependencies=[Depends(require_permission_codes("ind-relay:auto-report:update"))],
-)
-async def settle_auto_report_now(tenant_id: int = Depends(get_current_tenant)):
-    """手动触发一次本租户结算（调试/运维）。"""
-    from apps.ind_relay.services.auto_report_service import AutoReportService
-
-    return await AutoReportService.settle_tenant(tenant_id, force=True)

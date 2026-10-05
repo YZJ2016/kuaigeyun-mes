@@ -49,6 +49,10 @@ class ReportingRecordBase(BaseSchema):
     sop_parameters: Optional[Any] = Field(None, description="SOP参数数据（JSON格式，存储报工时收集的SOP参数）")
     inbound_warehouse_id: Optional[int] = Field(None, description="末道工序入库仓库 ID")
     inbound_warehouse_name: Optional[str] = Field(None, description="末道工序入库仓库名称")
+    origin: Optional[str] = Field(None, description="报工类型：manual | auto")
+    production_line_id: Optional[int] = Field(None, description="数量来源产线 ID")
+    production_line_code: Optional[str] = Field(None, description="数量来源产线编码")
+    production_line_name: Optional[str] = Field(None, description="数量来源产线名称")
     idempotency_key: Optional[str] = Field(
         None, max_length=200, description="客户端幂等键（可选，防重复提交）"
     )
@@ -141,6 +145,10 @@ class ReportingRecordResponse(ReportingRecordBase):
     report_mode: Optional[str] = Field(
         None, description="报工方式：self 自报 / proxy 代报 / team 小组报工"
     )
+    origin: Optional[str] = Field(None, description="报工类型：manual | auto")
+    production_line_id: Optional[int] = Field(None, description="数量来源产线 ID")
+    production_line_code: Optional[str] = Field(None, description="数量来源产线编码")
+    production_line_name: Optional[str] = Field(None, description="数量来源产线名称")
     approved_at: Optional[datetime] = Field(None, description="审核时间")
     approved_by: Optional[int] = Field(None, description="审核人ID")
     approved_by_name: Optional[str] = Field(None, description="审核人姓名")
@@ -190,6 +198,10 @@ class ReportingRecordListResponse(BaseSchema):
     recorded_by_name: Optional[str] = Field(None, description="记录人姓名")
     client_channel: Optional[str] = Field(None, description="报工来源渠道码")
     report_mode: Optional[str] = Field(None, description="报工方式 self/proxy/team")
+    origin: Optional[str] = Field(None, description="报工类型：manual | auto")
+    production_line_id: Optional[int] = Field(None, description="数量来源产线 ID")
+    production_line_code: Optional[str] = Field(None, description="数量来源产线编码")
+    production_line_name: Optional[str] = Field(None, description="数量来源产线名称")
     reported_quantity: Decimal = Field(..., description="报工数量")
     qualified_quantity: Decimal = Field(..., description="合格数量")
     unqualified_quantity: Decimal = Field(..., description="不合格数量")
