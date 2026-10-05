@@ -70,6 +70,7 @@ riveredge-backend/backups/
 .aoci/
 >>>>>>> 7e06af67f (feat: SOP 按业务域唯一，工位准入与人脸模板加固)
 .cursor/
+.idea/
 .trae/
 .vscode/
 # 架构/编排临时产物（应放仓库外，如 D:\kuaigeyun-pro\_out-of-repo\）
