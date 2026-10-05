@@ -73,14 +73,11 @@ class ApplicationRegistryService:
             from infra.infrastructure.database.database import get_db_connection
             conn = await get_db_connection()
 
-            # 查询所有已安装且启用的应用（使用首个租户的应用配置，避免硬编码 tenant_id）
-            tenant_row = await conn.fetchrow(
-                "SELECT id FROM infra_tenants ORDER BY id ASC LIMIT 1"
-            )
-            default_tenant_id = tenant_row["id"] if tenant_row else 1
-
+            # 进程级路由按「任一租户已启用」挂载，不得只查首个租户。
+            # 否则 A 租户启用的行业包（如 ind-relay）在 B 为首个租户时会全部 404。
             rows = await conn.fetch("""
-                SELECT uuid, code, name, description, version, changelog,
+                SELECT DISTINCT ON (code)
+                       uuid, code, name, description, version, changelog,
                        route_path, entry_point, menu_config,
                        is_system, is_active, is_installed,
                        created_at, updated_at
@@ -88,9 +85,8 @@ class ApplicationRegistryService:
                 WHERE is_installed = TRUE
                   AND is_active = TRUE
                   AND deleted_at IS NULL
-                  AND tenant_id = $1
-                ORDER BY sort_order, created_at
-            """, default_tenant_id)
+                ORDER BY code, tenant_id ASC
+            """)
 
             apps = []
             for row in rows:
