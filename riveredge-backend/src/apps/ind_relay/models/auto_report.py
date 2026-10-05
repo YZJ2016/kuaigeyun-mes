@@ -73,6 +73,10 @@ class RelayAutoReportBinding(BaseModel):
     last_settle_at = fields.DatetimeField(null=True)
     last_seen_at = fields.DatetimeField(null=True)
     offline_flushed = fields.BooleanField(default=False, description="本次离线是否已兜底报工")
+    production_line_id = fields.IntField(null=True, description="数量来源产线 ID")
+    production_line_code = fields.CharField(max_length=50, null=True)
+    production_line_name = fields.CharField(max_length=200, null=True)
+    bound_product_id = fields.IntField(null=True, description="当前绑定工单产品 ID")
     remarks = fields.TextField(null=True)
     deleted_at = fields.DatetimeField(null=True)
 

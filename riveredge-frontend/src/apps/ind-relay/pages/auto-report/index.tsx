@@ -32,7 +32,6 @@ export default function RelayAutoReportPage() {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [settling, setSettling] = useState(false);
   const [config, setConfig] = useState<RelayAutoReportConfig | null>(null);
   const [bindings, setBindings] = useState<RelayAutoReportBinding[]>([]);
   const [deviceOptions, setDeviceOptions] = useState<RelayAutoReportDeviceOption[]>([]);
@@ -153,19 +152,6 @@ export default function RelayAutoReportPage() {
     [load, t],
   );
 
-  const handleSettleNow = useCallback(async () => {
-    setSettling(true);
-    try {
-      await industryRelayApi.settleAutoReportNow();
-      message.success(t('app.ind-relay.autoReport.settleOk'));
-      await load();
-    } catch (e: unknown) {
-      message.error(e instanceof Error ? e.message : t('app.ind-relay.autoReport.settleFailed'));
-    } finally {
-      setSettling(false);
-    }
-  }, [load, t]);
-
   const bindingColumns = useMemo(
     () => [
       {
@@ -179,6 +165,13 @@ export default function RelayAutoReportPage() {
         dataIndex: 'equipment_name',
         render: (_: unknown, row: RelayAutoReportBinding) =>
           `${row.equipment_name || '-'} / ${row.equipment_code || '-'}`,
+      },
+      {
+        title: t('app.ind-relay.autoReport.line'),
+        dataIndex: 'production_line_name',
+        width: 140,
+        render: (_: unknown, row: RelayAutoReportBinding) =>
+          row.production_line_name || row.production_line_code || '—',
       },
       {
         title: 'zscl',
@@ -286,14 +279,9 @@ export default function RelayAutoReportPage() {
           loading={loading}
           extra={
             perms.canUpdate ? (
-              <Space>
-                <Button loading={settling} onClick={() => void handleSettleNow()}>
-                  {t('app.ind-relay.autoReport.settleNow')}
-                </Button>
-                <Button type="primary" loading={saving} onClick={() => void handleSaveConfig()}>
-                  {t('common.save')}
-                </Button>
-              </Space>
+              <Button type="primary" loading={saving} onClick={() => void handleSaveConfig()}>
+                {t('common.save')}
+              </Button>
             ) : null
           }
         >

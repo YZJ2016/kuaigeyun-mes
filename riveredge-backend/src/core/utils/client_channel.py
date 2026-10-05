@@ -21,6 +21,7 @@ CLIENT_CHANNEL_DEVICE_LABELS: dict[str, str] = {
     "mobile_h5": "手机H5",
     "miniprogram": "微信小程序",
     "integration": "系统对接",
+    "auto": "自动报工",
 }
 
 # 报工列表「报工来源」聚合展示（口语：小程序 / App / 终端 / PC）
@@ -31,6 +32,7 @@ REPORTING_CLIENT_CHANNEL_SOURCE_LABELS: dict[str, str] = {
     "mobile_h5": "App",
     "station": "终端",
     "pc": "PC",
+    "auto": "自动报工",
 }
 
 REPORT_MODE_SELF = "self"
@@ -67,6 +69,8 @@ def normalize_client_channel(raw: Optional[str]) -> Optional[str]:
         "api": "integration",
         "sync": "integration",
         "connector": "integration",
+        "auto_report": "auto",
+        "ind_relay_auto_report": "auto",
     }
     return aliases.get(code)
 

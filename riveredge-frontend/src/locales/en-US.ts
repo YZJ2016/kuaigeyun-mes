@@ -2583,9 +2583,9 @@ export default {
   'app.ind-relay.lineOutput.dateRange': 'Date range',
   'app.ind-relay.autoReport.title': 'Auto reporting',
   'app.ind-relay.autoReport.hint':
-    'Reuse KuaiIoT devices already bound to MES equipment; create formal reports from zscl increments',
+    'Quantity comes from the line MQTT (zscl). Work orders are matched by last-operation tasks. Reports are marked auto and include the line.',
   'app.ind-relay.autoReport.hintDetail':
-    'Bind MES on Device Connection and ensure zscl tag exists; last-op mode requires the last operation to be assigned that MES equipment.',
+    'Bind MES on Device Connection and ensure the zscl tag exists. Line/PLC are not bound to work orders; stamp the source line on the report and match last-op tasks on this MES equipment. Same product fills plan qty in order; changeover settles the old WO then rebinds.',
   'app.ind-relay.autoReport.openDevices': 'Open device connection',
   'app.ind-relay.autoReport.configTitle': 'Reporting policy',
   'app.ind-relay.autoReport.bindingsTitle': 'Enabled devices',
@@ -2594,7 +2594,8 @@ export default {
   'app.ind-relay.autoReport.matchByDevice': 'Match operation by equipment',
   'app.ind-relay.autoReport.matchByDeviceOnHint': 'Report to unfinished operations assigned to this MES equipment',
   'app.ind-relay.autoReport.matchByDeviceOffHint':
-    'Report only the last operation; only one device may be enabled',
+    'Report only the last operation; quantity is counted by line and matched to last-op tasks',
+  'app.ind-relay.autoReport.line': 'Line',
   'app.ind-relay.autoReport.mode': 'Reporting mode',
   'app.ind-relay.autoReport.modeRealtime': 'Realtime increment',
   'app.ind-relay.autoReport.modePlanOffline': 'Plan reached / offline flush',
@@ -2623,9 +2624,6 @@ export default {
   'app.ind-relay.autoReport.loadFailed': 'Failed to load auto reporting',
   'app.ind-relay.autoReport.bindOk': 'Device added to auto reporting',
   'app.ind-relay.autoReport.bindFailed': 'Failed to add device',
-  'app.ind-relay.autoReport.settleNow': 'Settle now',
-  'app.ind-relay.autoReport.settleOk': 'Settlement triggered',
-  'app.ind-relay.autoReport.settleFailed': 'Settlement failed',
   'app.spoke-wheel.desc': 'Aluminum spoke wheel 5-part assembly and debug module (concentricity ≤ 0.8mm)',
   'app.spoke-wheel.menu.assembly-debug': 'Assembly debug',
   'app.kuaioa.menu.group.approval': 'Approval',

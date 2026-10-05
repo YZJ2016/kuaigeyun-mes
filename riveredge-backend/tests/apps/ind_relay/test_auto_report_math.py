@@ -2,7 +2,11 @@
 
 from decimal import Decimal
 
-from apps.ind_relay.services.auto_report_math import allocate_increment, compute_zscl_increment
+from apps.ind_relay.services.auto_report_math import (
+    allocate_increment,
+    compute_zscl_increment,
+    should_changeover,
+)
 
 
 class TestComputeZsclIncrement:
@@ -51,3 +55,65 @@ class TestAllocateIncrement:
 
     def test_empty(self):
         assert allocate_increment(Decimal("10"), []) == []
+
+
+class TestShouldChangeover:
+    def test_no_bound(self):
+        assert not should_changeover(
+            has_bound=False,
+            bound_still_candidate=False,
+            bound_in_progress=False,
+            bound_product_id=1,
+            best_in_progress=True,
+            best_wo_id=2,
+            best_product_id=1,
+            bound_wo_id=1,
+        )
+
+    def test_same_product_keep_bound(self):
+        assert not should_changeover(
+            has_bound=True,
+            bound_still_candidate=True,
+            bound_in_progress=True,
+            bound_product_id=1,
+            best_in_progress=True,
+            best_wo_id=2,
+            best_product_id=1,
+            bound_wo_id=1,
+        )
+
+    def test_product_changed(self):
+        assert should_changeover(
+            has_bound=True,
+            bound_still_candidate=True,
+            bound_in_progress=True,
+            bound_product_id=1,
+            best_in_progress=True,
+            best_wo_id=2,
+            best_product_id=9,
+            bound_wo_id=1,
+        )
+
+    def test_old_not_running_new_in_progress(self):
+        assert should_changeover(
+            has_bound=True,
+            bound_still_candidate=True,
+            bound_in_progress=False,
+            bound_product_id=1,
+            best_in_progress=True,
+            best_wo_id=2,
+            best_product_id=1,
+            bound_wo_id=1,
+        )
+
+    def test_bound_gone(self):
+        assert should_changeover(
+            has_bound=True,
+            bound_still_candidate=False,
+            bound_in_progress=False,
+            bound_product_id=1,
+            best_in_progress=True,
+            best_wo_id=2,
+            best_product_id=1,
+            bound_wo_id=1,
+        )

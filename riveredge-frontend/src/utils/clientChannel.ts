@@ -64,12 +64,15 @@ export function webClientChannelHeaders(): Record<string, string> {
 /** 报工来源口语聚合（与后端 REPORTING_CLIENT_CHANNEL_SOURCE_LABELS 一致） */
 export function reportingClientChannelSourceKey(
   channel: string | null | undefined,
-): 'miniprogram' | 'app' | 'station' | 'pc' | null {
+): 'miniprogram' | 'app' | 'station' | 'pc' | 'auto' | null {
   const code = String(channel ?? '')
     .trim()
     .toLowerCase()
     .replace(/-/g, '_');
   if (!code) return null;
+  if (code === 'auto' || code === 'auto_report' || code === 'ind_relay_auto_report') {
+    return 'auto';
+  }
   if (code === 'miniprogram' || code === 'wechat' || code === 'weixin' || code === 'mp') {
     return 'miniprogram';
   }
