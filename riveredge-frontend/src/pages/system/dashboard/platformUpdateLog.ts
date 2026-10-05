@@ -44,6 +44,13 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'mobile-workbench-my-work-order-badge-r01',
+    date: '2026-10-05',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-workbench-my-work-order-badge-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.mobile-workbench-my-work-order-badge-r01.description',
+  },
+  {
     id: 'mobile-approval-node-label-zh-r01',
     date: '2026-10-05',
     type: 'fix',
