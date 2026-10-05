@@ -104,6 +104,7 @@ export default function RelayHomePage() {
               <Link to="/apps/ind-relay/line-capacity">{t('app.ind-relay.menu.lineCapacity')}</Link>
               <Link to="/apps/ind-relay/changeover">{t('app.ind-relay.menu.changeover')}</Link>
               <Link to="/apps/ind-relay/line-output">{t('app.ind-relay.menu.lineOutput')}</Link>
+              <Link to="/apps/ind-relay/auto-report">{t('app.ind-relay.menu.autoReport')}</Link>
               <Link to="/apps/kuaizhizao/plan-management/scheduling">
                 {t('app.ind-relay.home.openScheduling')}
               </Link>

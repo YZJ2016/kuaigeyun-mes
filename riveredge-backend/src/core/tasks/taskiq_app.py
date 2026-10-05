@@ -318,12 +318,20 @@ async def kuaiiot_offline_check_tick() -> dict:
     return await run_kuaiiot_offline_check()
 
 
+@task(schedule=[{"cron": "* * * * *"}])
+async def ind_relay_auto_report_tick() -> dict:
+    """每分钟扫描继电器行业包自动报工（按配置间隔实际结算）。"""
+    from apps.ind_relay.workflows.functions.auto_report_workflow import run_ind_relay_auto_report_tick
+
+    return await run_ind_relay_auto_report_tick()
+
+
 @task(schedule=[{"cron": "*/2 * * * *"}])
-async def kuaiiot_mqtt_reload_tick() -> dict:
-    """每 2 分钟对齐 MQTT 连接源订阅。"""
+async def kuaiiot_mqtt_reload_tick(force_restart: bool = False) -> dict:
+    """对齐 MQTT 连接源订阅；定时巡检默认不强制重连，配置变更可传 force_restart=True。"""
     from apps.kuaiiot.workflows.functions.mqtt_subscriber_workflow import run_kuaiiot_mqtt_reload
 
-    return await run_kuaiiot_mqtt_reload()
+    return await run_kuaiiot_mqtt_reload(force_restart=force_restart)
 
 
 @task(schedule=[{"cron": "*/5 * * * *"}])

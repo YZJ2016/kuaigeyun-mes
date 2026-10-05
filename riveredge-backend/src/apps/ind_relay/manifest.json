@@ -35,6 +35,12 @@
         "path": "/apps/ind-relay/line-output",
         "permission": "ind-relay:line-output:read",
         "sort_order": 30
+      },
+      {
+        "title": "app.ind-relay.menu.autoReport",
+        "path": "/apps/ind-relay/auto-report",
+        "permission": "ind-relay:auto-report:read",
+        "sort_order": 40
       }
     ]
   },
@@ -55,6 +61,11 @@
       "pack_menu": true
     },
     {
+      "id": "relay.auto_report",
+      "kind": "standalone",
+      "pack_menu": true
+    },
+    {
       "id": "relay.host_defaults",
       "kind": "standalone",
       "pack_menu": false
@@ -69,7 +80,9 @@
     "ind-relay:changeover:read",
     "ind-relay:changeover:create",
     "ind-relay:changeover:update",
-    "ind-relay:line-output:read"
+    "ind-relay:line-output:read",
+    "ind-relay:auto-report:read",
+    "ind-relay:auto-report:update"
   ],
   "dependencies": {
     "riveredge-backend": ">=1.0.0",
