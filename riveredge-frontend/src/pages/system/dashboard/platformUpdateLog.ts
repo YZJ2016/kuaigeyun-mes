@@ -44,6 +44,13 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'tech-stack-copyright-align-r01',
+    date: '2026-10-05',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.tech-stack-copyright-align-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.tech-stack-copyright-align-r01.description',
+  },
+  {
     id: 'login-quick-not-enabled-i18n-r01',
     date: '2026-10-05',
     type: 'fix',

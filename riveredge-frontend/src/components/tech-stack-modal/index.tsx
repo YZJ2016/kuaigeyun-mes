@@ -7,7 +7,7 @@
  * RiverEdge 为无锡快格信息技术有限公司注册商标
  */
 
-import React, { useEffect } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, Badge, Modal, Tabs, Table, Tag, Typography, Space, Divider, theme } from 'antd';
 import type { TabsProps } from 'antd';
@@ -43,10 +43,9 @@ interface TechStackItem {
  * 技术栈数据
  */
 const techStackData: TechStackItem[] = [
-  // 核心技术栈
   {
     name: 'FastAPI',
-    version: '0.115.0+',
+    version: '0.115.x',
     description: '高性能异步 Web 框架',
     license: 'MIT License',
     commercialUse: true,
@@ -55,8 +54,8 @@ const techStackData: TechStackItem[] = [
   },
   {
     name: 'Taskiq',
-    version: '0.12.0+',
-    description: '异步任务队列与工作流，PostgreSQL broker + 独立 worker/scheduler 消费',
+    version: '0.12.x',
+    description: '异步任务队列：PostgreSQL broker + 独立 worker / scheduler，默认无需 Redis',
     license: 'Apache License 2.0',
     commercialUse: true,
     category: 'backend',
@@ -65,34 +64,32 @@ const techStackData: TechStackItem[] = [
   {
     name: 'React',
     version: '18.3.1',
-    description: '现代化前端框架，构建响应式用户界面',
+    description: 'PC Web 前端框架（触屏工位同版本；移动 App 为 React 19.1）',
     license: 'MIT License',
     commercialUse: true,
     category: 'frontend',
     isCore: true,
   },
-  
-  // 后端技术栈
   {
     name: 'Python',
-    version: '3.12.0',
-    description: '编程语言，长期支持版本',
+    version: '3.11',
+    description: '后端运行时；uv.lock 锁定 3.11（requires-python ≥3.11,<3.12）',
     license: 'PSF License (类似 BSD)',
     commercialUse: true,
     category: 'backend',
   },
   {
     name: 'Uvicorn',
-    version: '0.30.0+',
-    description: 'ASGI 服务器，FastAPI 官方推荐',
+    version: '0.30.x',
+    description: 'ASGI 服务器',
     license: 'BSD License',
     commercialUse: true,
     category: 'backend',
   },
   {
     name: 'Pydantic',
-    version: '2.9.0+',
-    description: '数据验证库，基于 Python 类型提示',
+    version: '2.9.x',
+    description: '数据校验与设置（含 pydantic-settings）',
     license: 'MIT License',
     commercialUse: true,
     category: 'backend',
@@ -100,39 +97,31 @@ const techStackData: TechStackItem[] = [
   {
     name: 'Tortoise ORM',
     version: '0.21.1',
-    description: '异步 ORM 框架，专为异步 Python 设计',
+    description: '异步 ORM',
     license: 'Apache License 2.0',
     commercialUse: true,
     category: 'backend',
   },
   {
     name: 'Aerich',
-    version: '0.7.1+',
-    description: 'Tortoise ORM 数据库迁移工具',
+    version: '0.7.1',
+    description: 'Tortoise ORM 数据库迁移',
     license: 'Apache License 2.0',
     commercialUse: true,
     category: 'backend',
   },
   {
     name: 'asyncpg',
-    version: '0.29.0+',
+    version: '0.29.x',
     description: 'PostgreSQL 异步驱动',
     license: 'Apache License 2.0',
     commercialUse: true,
     category: 'backend',
   },
   {
-    name: 'redis-py',
-    version: '6.0.0+',
-    description: 'Redis Python 客户端，支持异步接口',
-    license: 'MIT License',
-    commercialUse: true,
-    category: 'backend',
-  },
-  {
     name: 'python-jose',
-    version: '3.3.0+',
-    description: 'JWT 认证库',
+    version: '3.3.x',
+    description: 'JWT 认证',
     license: 'MIT License',
     commercialUse: true,
     category: 'backend',
@@ -140,429 +129,373 @@ const techStackData: TechStackItem[] = [
   {
     name: 'passlib',
     version: '1.7.4+',
-    description: '密码加密库',
+    description: '密码哈希（bcrypt）',
     license: 'MIT License',
     commercialUse: true,
     category: 'backend',
   },
   {
     name: 'httpx',
-    version: '0.27.0+',
-    description: 'HTTP 客户端，支持异步',
+    version: '0.27.x',
+    description: '异步 HTTP 客户端（含 OpenAI 兼容连接器）',
     license: 'BSD License',
     commercialUse: true,
     category: 'backend',
   },
   {
     name: 'loguru',
-    version: '0.7.3+',
-    description: '日志库，结构化日志输出',
+    version: '0.7.3',
+    description: '结构化日志',
     license: 'MIT License',
     commercialUse: true,
     category: 'backend',
   },
   {
-    name: 'psutil',
-    version: '5.9.8+',
-    description: '系统资源监控库',
+    name: 'python-socketio',
+    version: '5.11.x',
+    description: '实时通道（工位 / 消息）',
     license: 'MIT License',
     commercialUse: true,
     category: 'backend',
   },
   {
-    name: 'python-dotenv',
-    version: '>=1.0.0',
-    description: '环境变量管理',
+    name: 'webauthn',
+    version: '2.7.x',
+    description: '通行密钥（WebAuthn）',
     license: 'BSD License',
     commercialUse: true,
     category: 'backend',
   },
   {
-    name: 'pydantic-settings',
-    version: '>=2.6.0',
-    description: 'Pydantic 配置管理',
-    license: 'MIT License',
+    name: 'aiomqtt',
+    version: '2.3.x',
+    description: 'MQTT 客户端（快数采接入）',
+    license: 'BSD License',
     commercialUse: true,
     category: 'backend',
   },
   {
-    name: 'pypinyin',
-    version: '>=0.51.0',
-    description: '中文拼音支持，用于拼音首字母搜索',
-    license: 'MIT License',
-    commercialUse: true,
-    category: 'backend',
-  },
-  {
-    name: 'aiofiles',
-    version: '>=23.2.1',
-    description: '异步文件操作库',
-    license: 'Apache License 2.0',
-    commercialUse: true,
-    category: 'backend',
-  },
-  {
-    name: 'openpyxl',
-    version: '>=3.1.0',
-    description: 'Excel 文件读写库',
+    name: 'influxdb-client',
+    version: '1.49.x',
+    description: '可选时序库客户端（快数采历史点）',
     license: 'MIT License',
     commercialUse: true,
     category: 'backend',
   },
   {
     name: 'Playwright',
-    version: '1.x+',
-    description: 'HTML 转 PDF（Chromium 无头），报表与快智造打印统一链路；需 uv sync --extra pdf 与 playwright install chromium',
+    version: '1.57.x',
+    description: '可选 extra：HTML 转 PDF（需 uv sync --extra pdf）',
     license: 'Apache License 2.0',
     commercialUse: true,
     category: 'backend',
   },
   {
     name: 'prometheus-client',
-    version: '>=0.26.0',
-    description: 'HTTP 性能指标导出（/metrics），多实例聚合与 Grafana 看板',
+    version: '0.26.x',
+    description: 'HTTP 指标导出（/metrics）',
     license: 'Apache License 2.0',
     commercialUse: true,
     category: 'backend',
   },
   {
-    name: 'OpenAI SDK',
-    version: '>=1.0.0',
-    description: '大语言模型 API 客户端',
-    license: 'Apache License 2.0',
+    name: 'openpyxl / pypdf',
+    version: '3.1+ / 5.x',
+    description: 'Excel 读写与 PDF 解析（发票验票等）',
+    license: 'MIT / BSD',
     commercialUse: true,
     category: 'backend',
   },
   {
-    name: 'qrcode',
-    version: '>=7.4.0',
-    description: '二维码生成库（Python）',
-    license: 'BSD License',
-    commercialUse: true,
-    category: 'backend',
-  },
-  {
-    name: 'pyzbar',
-    version: '>=0.1.9',
-    description: '二维码解析库',
-    license: 'MIT License',
+    name: 'qrcode / pyzbar',
+    version: '7.4+ / 0.1.9+',
+    description: '二维码生成与解析',
+    license: 'BSD / MIT',
     commercialUse: true,
     category: 'backend',
   },
   {
     name: 'aiosmtplib',
-    version: '>=3.0.1',
-    description: '异步 SMTP 客户端，邮件发送',
+    version: '3.0.x',
+    description: '异步 SMTP 发信',
     license: 'MIT License',
     commercialUse: true,
     category: 'backend',
   },
-  
+  {
+    name: 'MinIO SDK',
+    version: '7.2.x',
+    description: '对象存储客户端（兼容 S3；亦可接腾讯云 COS）',
+    license: 'Apache License 2.0',
+    commercialUse: true,
+    category: 'backend',
+  },
+
   // 前端技术栈
   {
     name: 'Vite',
-    version: '5.4.8+',
-    description: '现代化构建工具，闪电般冷启动',
-    license: 'MIT License',
-    commercialUse: true,
-    category: 'frontend',
-  },
-  {
-    name: 'React Router DOM',
-    version: '6.26.2+',
-    description: 'React 官方路由解决方案',
-    license: 'MIT License',
-    commercialUse: true,
-    category: 'frontend',
-  },
-  {
-    name: 'Zustand',
-    version: '5.0.0+',
-    description: '轻量级现代化状态管理',
-    license: 'MIT License',
-    commercialUse: true,
-    category: 'frontend',
-  },
-  {
-    name: 'TanStack Query',
-    version: '5.51.1+',
-    description: '智能服务端状态管理，数据获取和缓存',
-    license: 'MIT License',
-    commercialUse: true,
-    category: 'frontend',
-  },
-  {
-    name: 'Ant Design',
-    version: '6.1.0+',
-    description: '企业级 UI 组件库',
-    license: 'MIT License',
-    commercialUse: true,
-    category: 'frontend',
-  },
-  {
-    name: '@ant-design/pro-components',
-    version: '2.8.2+',
-    description: 'Ant Design Pro 高级业务组件',
-    license: 'MIT License',
-    commercialUse: true,
-    category: 'frontend',
-  },
-  {
-    name: '@ant-design/pro-flow',
-    version: '^1.3.12+',
-    description: '审批流设计器，用于审批流、业务蓝图设计',
-    license: 'MIT License',
-    commercialUse: true,
-    category: 'frontend',
-  },
-  {
-    name: '@ant-design/charts',
-    version: '^2.1.0',
-    description: 'Ant Design 图表组件库',
-    license: 'MIT License',
-    commercialUse: true,
-    category: 'frontend',
-  },
-  {
-    name: '@ant-design/graphs',
-    version: '^2.1.0',
-    description: 'Ant Design 图可视化组件',
-    license: 'MIT License',
-    commercialUse: true,
-    category: 'frontend',
-  },
-  {
-    name: 'Three.js',
-    version: '^0.183.2',
-    description: '3D 图形库（WebGL 场景，如仪表盘等）',
-    license: 'MIT License',
-    commercialUse: true,
-    category: 'frontend',
-  },
-  {
-    name: '@react-three/fiber',
-    version: '^8.18.0',
-    description: 'React 声明式 Three.js 渲染器',
-    license: 'MIT License',
-    commercialUse: true,
-    category: 'frontend',
-  },
-  {
-    name: '@react-three/drei',
-    version: '^9.117.0',
-    description: 'Three.js React 辅助库（OrbitControls、useGLTF 等）',
-    license: 'MIT License',
-    commercialUse: true,
-    category: 'frontend',
-  },
-  {
-    name: '@svar-ui/react-gantt',
-    version: '^2.5.2',
-    description: '甘特图组件，工单排程',
-    license: 'MIT License',
-    commercialUse: true,
-    category: 'frontend',
-  },
-  {
-    name: '@formily/core',
-    version: '^2.3.7+',
-    description: '表单自定义字段核心库',
-    license: 'MIT License',
-    commercialUse: true,
-    category: 'frontend',
-  },
-  {
-    name: '@formily/react',
-    version: '^2.3.7+',
-    description: '表单自定义字段 React 绑定',
-    license: 'MIT License',
-    commercialUse: true,
-    category: 'frontend',
-  },
-  {
-    name: '@formily/antd-v5',
-    version: '^1.2.4+',
-    description: '表单自定义字段 Ant Design 适配',
-    license: 'MIT License',
-    commercialUse: true,
-    category: 'frontend',
-  },
-  {
-    name: '@univerjs/*',
-    version: '^0.12.3+',
-    description: 'Excel 在线编辑（Sheets，用于导入/导出）',
-    license: 'Apache License 2.0',
-    commercialUse: true,
-    category: 'frontend',
-  },
-  {
-    name: 'signature_pad',
-    version: '^5.1.3',
-    description: '电子签名库，手写签名（用于 PDF 签名组件）',
+    version: '5.4.8',
+    description: 'PC Web 构建工具',
     license: 'MIT License',
     commercialUse: true,
     category: 'frontend',
   },
   {
     name: 'TypeScript',
-    version: '5.6.3+',
-    description: '静态类型检查，提升代码可维护性',
+    version: '5.6.3',
+    description: 'PC Web 静态类型（移动端为 5.9）',
     license: 'Apache License 2.0',
     commercialUse: true,
     category: 'frontend',
   },
   {
-    name: 'pinyin-pro',
-    version: '^3.19.0+',
-    description: '前端中文拼音支持',
+    name: 'React Router DOM',
+    version: '6.26.2',
+    description: '前端路由',
     license: 'MIT License',
     commercialUse: true,
     category: 'frontend',
   },
   {
-    name: 'less',
-    version: '^4.4.2+',
-    description: 'CSS 预处理器',
+    name: 'Zustand',
+    version: '5.0.x',
+    description: '客户端状态',
+    license: 'MIT License',
+    commercialUse: true,
+    category: 'frontend',
+  },
+  {
+    name: 'TanStack Query',
+    version: '5.51.x',
+    description: '服务端状态与缓存',
+    license: 'MIT License',
+    commercialUse: true,
+    category: 'frontend',
+  },
+  {
+    name: 'Ant Design',
+    version: '6.4.4',
+    description: '企业级 UI 组件库',
+    license: 'MIT License',
+    commercialUse: true,
+    category: 'frontend',
+    isCore: true,
+  },
+  {
+    name: '@ant-design/pro-components',
+    version: '2.8.2',
+    description: 'ProTable 等业务组件',
+    license: 'MIT License',
+    commercialUse: true,
+    category: 'frontend',
+  },
+  {
+    name: '@ant-design/pro-flow',
+    version: '1.3.12',
+    description: '审批流 / 业务蓝图设计器',
+    license: 'MIT License',
+    commercialUse: true,
+    category: 'frontend',
+  },
+  {
+    name: '@ant-design/x',
+    version: '2.4.x',
+    description: 'AI 对话 UI（助手与单据问答）',
+    license: 'MIT License',
+    commercialUse: true,
+    category: 'frontend',
+  },
+  {
+    name: '@ant-design/charts',
+    version: '2.1.x',
+    description: 'Ant Design 图表',
+    license: 'MIT License',
+    commercialUse: true,
+    category: 'frontend',
+  },
+  {
+    name: 'ECharts',
+    version: '5.6.0',
+    description: '图表与地图可视化',
     license: 'Apache License 2.0',
+    commercialUse: true,
+    category: 'frontend',
+  },
+  {
+    name: 'Three.js / R3F',
+    version: '0.183 / 8.18',
+    description: '3D 场景（仪表盘等；含 @react-three/fiber、drei）',
+    license: 'MIT License',
+    commercialUse: true,
+    category: 'frontend',
+  },
+  {
+    name: '@svar-ui/react-gantt',
+    version: '2.5.2',
+    description: '甘特图（排程）',
+    license: 'MIT License',
+    commercialUse: true,
+    category: 'frontend',
+  },
+  {
+    name: 'Formily',
+    version: '2.3.7',
+    description: '自定义字段表单（core / react / antd-v5）',
+    license: 'MIT License',
+    commercialUse: true,
+    category: 'frontend',
+  },
+  {
+    name: '@univerjs/*',
+    version: '0.12.4',
+    description: '在线表格（导入导出）',
+    license: 'Apache License 2.0',
+    commercialUse: true,
+    category: 'frontend',
+  },
+  {
+    name: 'LibreDWG / CAD',
+    version: '0.7.x',
+    description: '图纸预览（@mlightcad/libredwg-web 等）',
+            license: 'GPL-2.0-or-later（libredwg，须遵循 copyleft）',
+    commercialUse: true,
+    category: 'frontend',
+  },
+  {
+    name: 'ExcelJS',
+    version: '4.4.x',
+    description: '浏览器端 Excel 读写',
+    license: 'MIT License',
+    commercialUse: true,
+    category: 'frontend',
+  },
+  {
+    name: 'Centrifuge',
+    version: '5.7.x',
+    description: '实时收件箱（WebSocket）',
+    license: 'MIT License',
     commercialUse: true,
     category: 'frontend',
   },
   {
     name: 'i18next',
-    version: '23.15.2+',
-    description: '国际化核心库',
-    license: 'MIT License',
-    commercialUse: true,
-    category: 'frontend',
-  },
-  {
-    name: 'react-i18next',
-    version: '^14.1.3',
-    description: 'React 国际化解决方案',
+    version: '23.15.2',
+    description: '国际化（含 react-i18next）',
     license: 'MIT License',
     commercialUse: true,
     category: 'frontend',
   },
   {
     name: 'dayjs',
-    version: '1.11.13+',
-    description: '轻量级日期处理库',
+    version: '1.11.13',
+    description: '日期时间',
     license: 'MIT License',
+    commercialUse: true,
+    category: 'frontend',
+  },
+  {
+    name: 'less',
+    version: '4.4.2',
+    description: 'CSS 预处理器',
+    license: 'Apache License 2.0',
     commercialUse: true,
     category: 'frontend',
   },
   {
     name: 'framer-motion',
-    version: '11.5.4+',
-    description: '现代化动画库',
+    version: '11.5.4',
+    description: '动画',
     license: 'MIT License',
     commercialUse: true,
     category: 'frontend',
   },
   {
-    name: 'qrcode.react',
-    version: '^4.2.0',
-    description: 'React 二维码生成与展示',
-    license: 'MIT License',
+    name: 'qrcode.react / html5-qrcode',
+    version: '4.2 / 2.3.8',
+    description: '二维码展示与摄像头扫码',
+    license: 'MIT / Apache-2.0',
     commercialUse: true,
     category: 'frontend',
   },
   {
     name: 'lottie-react',
-    version: '^2.4.1',
-    description: 'Lottie 动画播放库',
-    license: 'MIT License',
-    commercialUse: true,
-    category: 'frontend',
-  },
-  {
-    name: 'react-easy-crop',
-    version: '^5.5.6',
-    description: '图片裁剪组件（方形/圆形）',
-    license: 'MIT License',
-    commercialUse: true,
-    category: 'frontend',
-  },
-  {
-    name: 'react-image-crop',
-    version: '^11.0.10',
-    description: '图片自由裁剪组件',
-    license: 'ISC License',
-    commercialUse: true,
-    category: 'frontend',
-  },
-  {
-    name: 'react-grid-layout',
-    version: '^2.2.2',
-    description: '可拖拽网格布局',
+    version: '2.4.1',
+    description: 'Lottie 动画',
     license: 'MIT License',
     commercialUse: true,
     category: 'frontend',
   },
   {
     name: 'lucide-react',
-    version: '^0.556.0',
-    description: '图标库',
+    version: '0.556.x',
+    description: '图标',
     license: 'ISC License',
     commercialUse: true,
     category: 'frontend',
   },
-  {
-    name: 'react-icons',
-    version: '^5.5.0',
-    description: '图标库集合',
-    license: 'MIT License',
-    commercialUse: true,
-    category: 'frontend',
-  },
-  
-  // 数据库和基础设施
+
   {
     name: 'PostgreSQL',
     version: '15+',
-    description: '功能强大的开源关系型数据库',
+    description: '主数据库；Taskiq broker 亦用 PostgreSQL',
     license: 'PostgreSQL License (类似 BSD/MIT)',
     commercialUse: true,
     category: 'database',
   },
   {
-    name: 'Redis',
-    version: '6.2.6+',
-    description: '高性能内存数据库（服务器版本）',
-    license: '≤7.2: BSD-3-Clause；7.4+: RSALv2/SSPLv1；8+: 可选 AGPLv3',
+    name: 'InfluxDB',
+    version: '可选',
+    description: '快数采点位历史（未配置时走库内短窗）',
+    license: 'MIT（官方客户端）；服务端许可以部署版本为准',
     commercialUse: true,
     category: 'database',
   },
+
   {
     name: 'Node.js',
-    version: '>=22.0.0',
-    description: 'JavaScript 运行时环境',
+    version: '>=22',
+    description: '前端与工位机构建运行时',
     license: 'MIT License',
     commercialUse: true,
     category: 'infrastructure',
   },
   {
     name: 'npm',
-    version: '>=10.0.0',
-    description: 'Node.js 包管理器（前端）',
+    version: '>=10',
+    description: '前端包管理',
     license: 'Artistic License 2.0',
     commercialUse: true,
     category: 'infrastructure',
   },
   {
     name: 'UV',
-    version: '>=0.4.0',
-    description: 'Python 包管理器与项目管理工具，替代 pip/poetry',
+    version: '>=0.4',
+    description: 'Python 依赖与虚拟环境（替代 pip/poetry）',
+    license: 'MIT / Apache-2.0',
+    commercialUse: true,
+    category: 'infrastructure',
+  },
+  {
+    name: 'Caddy',
+    version: '2.x',
+    description: '生产反向代理（Web / H5 / API）',
+    license: 'Apache License 2.0',
+    commercialUse: true,
+    category: 'infrastructure',
+  },
+  {
+    name: 'Electron',
+    version: '33.x',
+    description: 'Windows 触屏工位机（私仓 riveredge-app-station）',
     license: 'MIT License',
     commercialUse: true,
     category: 'infrastructure',
   },
 
-  // 移动端技术栈
   {
     name: 'Expo',
-    version: '~54.0',
-    description: 'React Native 开发平台，构建、部署与 OTA 更新',
+    version: '54.0.x',
+    description: '移动 App 与 H5 构建、OTA',
     license: 'MIT License',
     commercialUse: true,
     category: 'mobile',
@@ -570,8 +503,8 @@ const techStackData: TechStackItem[] = [
   },
   {
     name: 'React Native',
-    version: '0.81.x',
-    description: '跨平台移动端与 Web 应用框架',
+    version: '0.81.5',
+    description: '跨平台移动端（React 19.1）',
     license: 'MIT License',
     commercialUse: true,
     category: 'mobile',
@@ -579,57 +512,49 @@ const techStackData: TechStackItem[] = [
   },
   {
     name: '@ant-design/react-native',
-    version: '^5.4',
-    description: 'Ant Design 移动端 UI 组件库',
+    version: '5.4.3',
+    description: '移动端 UI',
     license: 'MIT License',
     commercialUse: true,
     category: 'mobile',
   },
   {
     name: 'expo-router',
-    version: '~6.0',
-    description: '基于文件的路由，Expo 官方路由方案',
+    version: '6.0.x',
+    description: '基于文件的路由',
     license: 'MIT License',
     commercialUse: true,
     category: 'mobile',
   },
   {
-    name: 'react-native-reanimated',
-    version: '~4.1',
-    description: '高性能动画库',
-    license: 'MIT License',
-    commercialUse: true,
-    category: 'mobile',
-  },
-  {
-    name: 'react-native-screens',
-    version: '~4.16',
-    description: '原生导航容器，与 React Navigation 配合',
-    license: 'MIT License',
-    commercialUse: true,
-    category: 'mobile',
-  },
-  {
-    name: 'react-native-gesture-handler',
-    version: '~2.28',
-    description: '手势处理库',
+    name: 'expo-camera',
+    version: '17.0.x',
+    description: '扫码与拍照',
     license: 'MIT License',
     commercialUse: true,
     category: 'mobile',
   },
   {
     name: 'expo-secure-store',
-    version: '^55',
-    description: '安全存储（钥匙串/Keystore）',
+    version: '55.x',
+    description: '钥匙串 / Keystore',
     license: 'MIT License',
     commercialUse: true,
     category: 'mobile',
   },
   {
-    name: 'TypeScript',
-    version: '~5.9',
-    description: '移动端静态类型（riveredge-mobile）',
-    license: 'Apache License 2.0',
+    name: 'react-native-reanimated',
+    version: '4.1.x',
+    description: '原生动画',
+    license: 'MIT License',
+    commercialUse: true,
+    category: 'mobile',
+  },
+  {
+    name: 'socket.io-client',
+    version: '4.8.x',
+    description: '移动端实时通道',
+    license: 'MIT License',
     commercialUse: true,
     category: 'mobile',
   },
@@ -646,16 +571,46 @@ interface TechStackModalProps {
 const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
   const { t } = useTranslation();
   const { token } = useToken();
+  const overviewPaneRef = useRef<HTMLDivElement>(null);
+  const [lockedBodyHeight, setLockedBodyHeight] = useState<number>();
 
   useEffect(() => {
     if (open) verifyCopyright();
   }, [open]);
 
-  /** 各 Tab 内边距：上下略大于左右，避免贴底；高度由 tabpane 滚动区承载 */
+  const lockBodyHeightFromOverview = useCallback((pane: HTMLElement | null) => {
+    const body = pane?.closest('.ant-modal-body');
+    if (!(body instanceof HTMLElement)) {
+      return;
+    }
+    const nextHeight = Math.round(body.getBoundingClientRect().height);
+    if (nextHeight <= 0) {
+      return;
+    }
+    setLockedBodyHeight((prev) => prev ?? nextHeight);
+  }, []);
+
+  /** 打开时按「概览」自然高度锁定 body，切换 Tab 不再撑高或塌缩 */
+  const bindOverviewPane = useCallback((node: HTMLDivElement | null) => {
+    overviewPaneRef.current = node;
+    if (!open || !node) {
+      return;
+    }
+    lockBodyHeightFromOverview(node);
+  }, [open, lockBodyHeightFromOverview]);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setLockedBodyHeight(undefined);
+      return;
+    }
+    lockBodyHeightFromOverview(overviewPaneRef.current);
+  }, [open, lockBodyHeightFromOverview]);
+
+  /** 各 Tab 内边距：上下略大于左右，避免贴底；高度由锁定后的 tabpane 滚动区承载 */
   const tabContentStyle: React.CSSProperties = {
     padding: `${token.paddingMD}px ${token.paddingSM}px ${token.paddingLG}px`,
     boxSizing: 'border-box',
-    minHeight: '100%',
   };
   const warningBoxStyle: React.CSSProperties = {
     marginTop: 16,
@@ -731,7 +686,7 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
       key: 'overview',
       label: t('components.techStackModal.tabOverview'),
       children: (
-        <div style={tabContentStyle}>
+        <div ref={bindOverviewPane} style={tabContentStyle}>
           <Title level={4}>{t('components.techStackModal.overview.coreTitle')}</Title>
           <Paragraph>
             {t('components.techStackModal.overview.intro')}
@@ -758,6 +713,12 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
             <div>
               <Text strong>React Native</Text>：{t('components.techStackModal.overview.reactNative')}
             </div>
+            <div>
+              <Text strong>PostgreSQL</Text>：{t('components.techStackModal.overview.postgresql')}
+            </div>
+            <div>
+              <Text strong>Caddy</Text>：{t('components.techStackModal.overview.caddy')}
+            </div>
           </Space>
           <Divider />
           <Title level={5}>{t('components.techStackModal.overview.licenseTitle')}</Title>
@@ -767,7 +728,7 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
           <Paragraph>
             <Space align="start">
               <ExclamationCircleOutlined style={{ color: 'var(--ant-color-warning)', marginTop: 2 }} />
-              <span>{t('components.techStackModal.overview.redisWarning')}</span>
+              <span>{t('components.techStackModal.overview.defaultStackNote')}</span>
             </Space>
           </Paragraph>
         </div>
@@ -958,7 +919,7 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
             dataSource={backendTech}
             columns={columns}
             rowKey="name"
-            pagination={{ pageSize: 10 }}
+            pagination={{ pageSize: 20 }}
             size="small"
           />
         </div>
@@ -973,7 +934,7 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
             dataSource={frontendTech}
             columns={columns}
             rowKey="name"
-            pagination={{ pageSize: 10 }}
+            pagination={{ pageSize: 20 }}
             size="small"
           />
         </div>
@@ -988,7 +949,7 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
             dataSource={mobileTech}
             columns={columns}
             rowKey="name"
-            pagination={{ pageSize: 10 }}
+            pagination={{ pageSize: 20 }}
             size="small"
           />
         </div>
@@ -1003,7 +964,7 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
             dataSource={databaseTech}
             columns={columns}
             rowKey="name"
-            pagination={{ pageSize: 10 }}
+            pagination={{ pageSize: 20 }}
             size="small"
           />
         </div>
@@ -1018,7 +979,7 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
             dataSource={infrastructureTech}
             columns={columns}
             rowKey="name"
-            pagination={{ pageSize: 10 }}
+            pagination={{ pageSize: 20 }}
             size="small"
           />
         </div>
@@ -1026,7 +987,7 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
     },
   ];
 
-  const modalBodyHeight = getViewportHeightExpr(SYSTEM_VIEWPORT_OFFSETS.TECH_STACK_MODAL_PX);
+  const modalBodyMaxHeight = getViewportHeightExpr(SYSTEM_VIEWPORT_OFFSETS.TECH_STACK_MODAL_PX);
 
   return (
     <Modal
@@ -1034,12 +995,13 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
       open={open}
       onCancel={onCancel}
       footer={null}
+      destroyOnHidden
       width={MODAL_CONFIG.LARGE_WIDTH + 200}
       style={{ top: 24 }}
       styles={{
         body: {
-          height: modalBodyHeight,
-          maxHeight: modalBodyHeight,
+          height: lockedBodyHeight,
+          maxHeight: modalBodyMaxHeight,
           overflow: 'hidden',
           padding: `${token.paddingMD}px ${token.paddingLG}px ${token.paddingLG}px`,
           display: 'flex',
@@ -1049,7 +1011,11 @@ const TechStackModal: React.FC<TechStackModalProps> = ({ open, onCancel }) => {
       }}
     >
       <Tabs
-        className="tech-stack-modal-tabs"
+        className={
+          lockedBodyHeight != null
+            ? 'tech-stack-modal-tabs tech-stack-modal-tabs--locked'
+            : 'tech-stack-modal-tabs'
+        }
         defaultActiveKey="overview"
         items={tabItems}
         size="medium"
