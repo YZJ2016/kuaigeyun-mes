@@ -1,5 +1,6 @@
 <template>
 	<scroll-view class="page" direction="vertical">
+		<home-link />
 		<view class="card">
 			<text class="title">换线绑定</text>
 			<button :class="busy ? 'btn-secondary is-disabled' : 'btn-secondary'" :disabled="busy" @click="loadList">刷新</button>
@@ -23,6 +24,7 @@
 </template>
 
 <script setup lang="uts">
+	import HomeLink from '../../../shared/ui/home-link.uvue'
 	import { request } from '../../../shared/api/index.uts'
 	import { asJsonObject, fieldText, readRows } from '../../../shared/api/fields.uts'
 	import { joinParts, parseIdList, parseRequiredInt, readError } from '../json-text.uts'

@@ -1,5 +1,6 @@
 <template>
 	<scroll-view class="page" scroll-y="true">
+		<home-link />
 		<view class="toolbar">
 			<button class="btn-secondary" @click="loadList">刷新</button>
 		</view>
@@ -51,14 +52,6 @@
 			<view v-if="conductKind != 'oqc'" class="field-wrap">
 				<text class="label">不合格原因</text>
 				<input class="field" :value="nonconformanceReason" @input="onReasonInput" />
-			</view>
-			<view class="field-wrap">
-				<text class="label">检验人员 ID</text>
-				<input class="field" type="number" :value="inspectorIdText" @input="onInspectorIdInput" />
-			</view>
-			<view v-if="conductKind != 'oqc'" class="field-wrap">
-				<text class="label">检验人员 UUID</text>
-				<input class="field" :value="inspectorUuid" @input="onInspectorUuidInput" />
 			</view>
 			<view class="field-wrap">
 				<text class="label">附件</text>
@@ -128,6 +121,7 @@
 </template>
 
 <script setup lang="uts">
+	import HomeLink from '../../../shared/ui/home-link.uvue'
 	import { request } from '../../../shared/api/index.uts'
 	import { uploadImage } from '../../../shared/api/upload.uts'
 	import { asJsonObject, errorText, fieldId, fieldText, readRows } from '../../../shared/api/fields.uts'
@@ -287,14 +281,6 @@
 
 	function onReasonInput(event : UniInputEvent) {
 		nonconformanceReason.value = inputValue(event)
-	}
-
-	function onInspectorIdInput(event : UniInputEvent) {
-		inspectorIdText.value = inputValue(event)
-	}
-
-	function onInspectorUuidInput(event : UniInputEvent) {
-		inspectorUuid.value = inputValue(event)
 	}
 
 	function onReleaseNoteInput(event : UniInputEvent) {
@@ -1013,6 +999,29 @@
 		return ''
 	}
 
+	function hasFailedStep() : boolean {
+		const list = steps.value
+		for (let i = 0; i < list.length; i++) {
+			if (list[i].judgment == 'fail') {
+				return true
+			}
+		}
+		return false
+	}
+
+	function validateFailedStep() : string {
+		if (props.conductKind == 'oqc' || !hasFailedStep()) {
+			return ''
+		}
+		if (readQty(unqualifiedText.value) <= 0) {
+			return '有不合格步骤时，不合格数量须大于 0'
+		}
+		if (nonconformanceReason.value.trim().length == 0) {
+			return '请填写不合格原因'
+		}
+		return ''
+	}
+
 	function isDigitsRange(text : string, from : number, to : number) : boolean {
 		for (let i = from; i < to; i++) {
 			const code = text.charCodeAt(i)
@@ -1081,6 +1090,11 @@
 		const stepError = validateSteps()
 		if (stepError.length > 0) {
 			formError.value = stepError
+			return
+		}
+		const failError = validateFailedStep()
+		if (failError.length > 0) {
+			formError.value = failError
 			return
 		}
 		if (needsOverallJudgment.value && overallJudgment.value != 'pass' && overallJudgment.value != 'fail') {

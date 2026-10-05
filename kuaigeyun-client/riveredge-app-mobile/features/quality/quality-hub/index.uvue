@@ -1,5 +1,6 @@
 <template>
 	<scroll-view class="page" scroll-y="true">
+		<home-link />
 		<view class="toolbar">
 			<button class="btn-secondary" @click="loadSummary">刷新</button>
 		</view>
@@ -14,6 +15,7 @@
 </template>
 
 <script setup lang="uts">
+	import HomeLink from '../../../shared/ui/home-link.uvue'
 	import { request } from '../../../shared/api/index.uts'
 	import { errorText } from '../../../shared/api/fields.uts'
 	import { openRegisteredRoute } from '../../../shell/registry/index.uts'

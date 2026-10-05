@@ -1,5 +1,6 @@
 <template>
 	<view class="page">
+		<home-link />
 		<text class="hint">报工人员 {{ workerName }}</text>
 		<button class="btn-primary" @click="onScan">扫码</button>
 		<text v-if="codeText.length > 0" class="hint">扫码内容 {{ codeText }}</text>
@@ -16,8 +17,8 @@
 				<text class="sub">{{ selectedOperationIndex == index ? '已选' : '点选' }}</text>
 			</view>
 			<input class="field" v-model="reportedQuantity" placeholder="报工数量" />
-			<input class="field" v-model="qualifiedQuantity" placeholder="合格数量" />
 			<input class="field" v-model="unqualifiedQuantity" placeholder="不合格数量" />
+			<text class="hint">合格数量 {{ qualifiedPreview.length > 0 ? qualifiedPreview : '自动计算' }}</text>
 			<input class="field" v-model="workHours" placeholder="工时（小时）" />
 			<button class="btn-primary" :disabled="submitting" @click="submitReport">提交报工</button>
 		</view>
@@ -25,6 +26,7 @@
 </template>
 
 <script setup lang="uts">
+	import HomeLink from '../../../shared/ui/home-link.uvue'
 	import { request } from '../../../shared/api/index.uts'
 	import { scan } from '../../../shared/channel/index.uts'
 	import { readRows, fieldText, fieldNumber, errorText, firstText } from '../../../shared/api/fields.uts'
@@ -40,7 +42,6 @@
 	const selectedOrder = ref<any | null>(null)
 	const selectedOperationIndex = ref(-1)
 	const reportedQuantity = ref('')
-	const qualifiedQuantity = ref('')
 	const unqualifiedQuantity = ref('')
 	const workHours = ref('')
 	const submitting = ref(false)
@@ -126,6 +127,23 @@
 		selectedOperationIndex.value = index
 	}
 
+	function quantityValue(raw : string) : number {
+		const value = parseFloat(raw.trim())
+		if (isNaN(value)) {
+			return -1
+		}
+		return value
+	}
+
+	const qualifiedPreview = computed((): string => {
+		const reported = quantityValue(reportedQuantity.value)
+		const unqualified = quantityValue(unqualifiedQuantity.value)
+		if (reported < 0 || unqualified < 0 || unqualified > reported) {
+			return ''
+		}
+		return '' + (reported - unqualified)
+	})
+
 	function requiredNumber(raw : string, label : string) : number | null {
 		const text = raw.trim()
 		if (text.length == 0) {
@@ -160,12 +178,16 @@
 			return
 		}
 		const reported = requiredNumber(reportedQuantity.value, '报工数量')
-		const qualified = requiredNumber(qualifiedQuantity.value, '合格数量')
 		const unqualified = requiredNumber(unqualifiedQuantity.value, '不合格数量')
 		const hours = requiredNumber(workHours.value, '工时')
-		if (reported == null || qualified == null || unqualified == null || hours == null) {
+		if (reported == null || unqualified == null || hours == null) {
 			return
 		}
+		if (unqualified > reported) {
+			toast('不合格数量不能大于报工数量')
+			return
+		}
+		const qualified = reported - unqualified
 		const body = new UTSJSONObject()
 		body.set('work_order_id', fieldNumber(order, 'id'))
 		body.set('work_order_code', fieldText(order, 'code'))
@@ -195,7 +217,6 @@
 			operations.value = []
 			selectedOperationIndex.value = -1
 			reportedQuantity.value = ''
-			qualifiedQuantity.value = ''
 			unqualifiedQuantity.value = ''
 			workHours.value = ''
 		} catch (err) {
@@ -205,13 +226,47 @@
 		loading.value = false
 	}
 
-	onLoad(() => {
+	async function openById(workOrderId : number) {
+		errorTextValue.value = ''
+		loading.value = true
+		try {
+			const payload = await request({
+				method: 'GET',
+				path: '/api/v1/apps/kuaizhizao/work-orders/' + workOrderId,
+				query: null,
+				body: null,
+			})
+			loading.value = false
+			if (fieldNumber(payload, 'id') <= 0) {
+				errorTextValue.value = '没有这张工单'
+				return
+			}
+			const list : any[] = []
+			list.push(payload)
+			orders.value = list
+			await pickOrder(0)
+		} catch (err) {
+			loading.value = false
+			errorTextValue.value = errorText(err)
+		}
+	}
+
+	onLoad((options : OnLoadOptions) => {
 		const user = readCurrentUser()
 		if (user == null) {
 			workerName.value = '未找到当前用户'
+		} else {
+			workerName.value = user.name
+		}
+		const raw = options['workOrderId']
+		if (raw == null) {
 			return
 		}
-		workerName.value = user.name
+		const workOrderId = parseInt(('' + raw).trim())
+		if (isNaN(workOrderId) || workOrderId <= 0) {
+			return
+		}
+		void openById(workOrderId)
 	})
 </script>
 

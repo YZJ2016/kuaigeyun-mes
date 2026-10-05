@@ -4,14 +4,20 @@
 			"path": "shell/login/index",
 			"style": {
 				"navigationBarTitleText": "登录",
-				"navigationBarBackgroundColor": "#F1F1F4",
-				"backgroundColor": "#F1F1F4"
+				"navigationBarBackgroundColor": "#F8FAFC",
+				"backgroundColor": "#F8FAFC"
 			}
 		},
 		{
 			"path": "shell/workbench/index",
 			"style": {
 				"navigationBarTitleText": "工作台"
+			}
+		},
+		{
+			"path": "shell/apps/index",
+			"style": {
+				"navigationBarTitleText": "全部功能"
 			}
 		},
 		{
@@ -282,8 +288,8 @@
 	"globalStyle": {
 		"navigationBarTextStyle": "black",
 		"navigationBarTitleText": "星制造",
-		"navigationBarBackgroundColor": "#E7D9FD",
-		"backgroundColor": "#F1F1F4"
+		"navigationBarBackgroundColor": "#F8FAFC",
+		"backgroundColor": "#F8FAFC"
 	},
 	"uniIdRouter": {}
 }

@@ -2,28 +2,51 @@
 	<scroll-view class="page" direction="vertical">
 		<text v-if="loading" class="loading">正在加载</text>
 		<text v-if="errorText.length > 0" class="error">{{ errorText }}</text>
-		<text v-if="empty" class="empty">没有可显示的入口</text>
-		<view v-for="block in scopes" :key="block.scope" class="scope">
-			<text v-if="block.errorText.length > 0" class="error">{{ block.errorText }}</text>
-			<view v-if="block.showBadge || block.badgeNote.length > 0" class="badges">
-				<view v-if="block.pendingText.length > 0" class="badge-row">
-					<text class="badge-label">待处理故障 {{ block.pendingText }}</text>
-					<uni-badge-view v-if="block.pendingCount > 0" :text="block.pendingText"></uni-badge-view>
-				</view>
-				<view v-if="block.overdueText.length > 0" class="badge-row">
-					<text class="badge-label">逾期保养提醒 {{ block.overdueText }}</text>
-					<uni-badge-view v-if="block.overdueCount > 0" :text="block.overdueText"></uni-badge-view>
-				</view>
-				<text v-if="block.badgeNote.length > 0" class="hint">{{ block.badgeNote }}</text>
+		<view v-if="!loading && errorText.length == 0" class="hello">
+			<text class="hello-name">{{ displayName }}</text>
+			<text v-if="orgName.length > 0" class="hint">{{ orgName }}</text>
+		</view>
+		<view v-if="hasScan" class="btn-primary" hover-class="pressed" @click="onScan">
+			<text class="btn-label">扫码</text>
+		</view>
+		<text v-if="hasScan" class="hint">识别工单、领料单或设备</text>
+		<text v-if="!loading && errorText.length == 0" class="label">检索功能</text>
+		<input v-if="!loading && errorText.length == 0" class="field" :value="featureQuery" placeholder="例如盘点、领料" @input="onFeatureQuery" />
+		<view v-if="!loading && errorText.length == 0 && !searching">
+			<text class="section-title">今日待办</text>
+			<text v-if="todos.length == 0" class="empty">今天没有待办</text>
+			<view v-for="(todo, index) in todos" :key="todo.uid" class="card todo" hover-class="pressed" @click="onTodo(index)">
+				<text class="title">{{ todo.title }}</text>
+				<text :class="todo.tone == 'danger' ? 'badge badge-danger' : 'badge badge-warning'">{{ todo.countText }}</text>
 			</view>
-			<view v-for="section in block.sections" :key="section.uid" class="section">
-				<text v-if="section.showTitle" class="section-title">{{ section.title }}</text>
-				<view class="grid">
-					<view v-for="cell in section.cells" :key="cell.uid" :class="cell.solo ? 'cell solo' : 'cell'" hover-class="pressed" @click="onCell(cell)">
-						<text v-if="iconGlyph(cell.icon, cell.iconGroup).length > 0" class="icon">{{ iconGlyph(cell.icon, cell.iconGroup) }}</text>
-						<text class="title">{{ cell.label }}</text>
-						<text v-if="cell.missing" class="hint">功能尚未安装</text>
+			<text v-if="frequent.length > 0" class="section-title">常用</text>
+			<view v-if="frequent.length > 0" class="grid">
+				<view v-for="(cell, index) in frequent" :key="cell.uid" class="cell" hover-class="pressed" @click="onFrequent(index)">
+					<view class="icon-tile icon-workshop">
+						<text class="tile-mark mark-workshop">{{ iconMark(cell.icon, cell.iconGroup, cell.label) }}</text>
 					</view>
+					<text class="title">{{ cell.label }}</text>
+				</view>
+			</view>
+			<view class="btn-secondary" hover-class="pressed" @click="openApps">
+				<text class="btn-label-secondary">全部功能</text>
+			</view>
+		</view>
+		<view v-if="searching">
+			<view v-if="hits.length == 0" class="card">
+				<text class="title">没有这个功能</text>
+				<text class="hint">换个名称，或从全部分组里找。</text>
+				<view class="btn-secondary" hover-class="pressed" @click="openApps">
+					<text class="btn-label-secondary">去全部分组</text>
+				</view>
+			</view>
+			<view v-for="(hit, index) in hits" :key="hit.uid" class="hit" hover-class="pressed" @click="onHit(index)">
+				<view :class="tileClass(hit.scope)">
+					<text :class="markClass(hit.scope)">{{ iconMark(hit.icon, hit.iconGroup, hit.label) }}</text>
+				</view>
+				<view class="hit-copy">
+					<text class="title">{{ hit.label }}</text>
+					<text class="hint">{{ scopeTitle(hit.scope) }}</text>
 				</view>
 			</view>
 		</view>
@@ -31,20 +54,178 @@
 </template>
 
 <script setup lang="uts">
-	import { getToken, takePendingEntry } from '../../shared/api/session.uts'
+	import { getTenantName, getToken, readSessionName, takePendingEntry } from '../../shared/api/session.uts'
 	import { openRegisteredRoute } from '../registry/index.uts'
-	import { iconGlyph } from './icons.uts'
+	import { iconMark, markClass, scopeTitle, tileClass } from './icons.uts'
 	import { loadWorkbench } from './load.uts'
 	import type { WorkCell, WorkScope } from './load.uts'
 
+	type HomeTodo = {
+		uid : string
+		title : string
+		countText : string
+		tone : string
+		route : string
+		missing : boolean
+	}
+
+	type FeatureHit = {
+		uid : string
+		label : string
+		scope : string
+		route : string
+		missing : boolean
+		icon : string
+		iconGroup : string
+	}
+
+	const FREQUENT_KEYS = ['my-work-orders', 'exception-report', 'packing-binding', 'reporting-history']
+
 	const loading = ref(false)
-	const scopes = ref<Array<WorkScope>>([])
-	const empty = ref(false)
 	const errorText = ref('')
+	const displayName = ref('已登录')
+	const orgName = ref('')
+	const hasScan = ref(false)
+	const scanRoute = ref('')
+	const scanMissing = ref(false)
+	const todos = ref<Array<HomeTodo>>([])
+	const frequent = ref<Array<WorkCell>>([])
+	const featureQuery = ref('')
+	const hits = ref<Array<FeatureHit>>([])
+	const loadedBlocks = ref<Array<WorkScope>>([])
 	let openedDeepLink = false
+
+	const searching = computed((): boolean => {
+		return featureQuery.value.trim().length > 0
+	})
 
 	function leaveToLogin() {
 		uni.reLaunch({ url: '/shell/login/index' })
+	}
+
+	function findCell(blocks : Array<WorkScope>, key : string) : WorkCell | null {
+		for (let i = 0; i < blocks.length; i++) {
+			const sections = blocks[i].sections
+			for (let s = 0; s < sections.length; s++) {
+				const cells = sections[s].cells
+				for (let c = 0; c < cells.length; c++) {
+					if (cells[c].key == key) {
+						return cells[c]
+					}
+				}
+			}
+		}
+		return null
+	}
+
+	function findScoped(block : WorkScope, key : string) : WorkCell | null {
+		const sections = block.sections
+		for (let s = 0; s < sections.length; s++) {
+			const cells = sections[s].cells
+			for (let c = 0; c < cells.length; c++) {
+				if (cells[c].key == key) {
+					return cells[c]
+				}
+			}
+		}
+		return null
+	}
+
+	function applyHome(blocks : Array<WorkScope>) {
+		const name = readSessionName()
+		displayName.value = name.length > 0 ? name : '已登录'
+		orgName.value = getTenantName()
+		const scan = findCell(blocks, 'scan-report')
+		hasScan.value = scan != null
+		scanRoute.value = scan == null ? '' : scan.route
+		scanMissing.value = scan != null && scan.missing
+		const nextFrequent : Array<WorkCell> = []
+		for (let i = 0; i < FREQUENT_KEYS.length; i++) {
+			const cell = findCell(blocks, FREQUENT_KEYS[i])
+			if (cell != null) {
+				nextFrequent.push(cell)
+			}
+		}
+		frequent.value = nextFrequent
+		const nextTodos : Array<HomeTodo> = []
+		for (let i = 0; i < blocks.length; i++) {
+			const block = blocks[i]
+			if (block.pendingCount > 0) {
+				const cell = findScoped(block, 'faults')
+				if (cell != null) {
+					nextTodos.push({
+						uid: 'todo-faults',
+						title: '待处理故障',
+						countText: block.pendingText,
+						tone: 'warning',
+						route: cell.route,
+						missing: cell.missing
+					} as HomeTodo)
+				}
+			}
+			if (block.overdueCount > 0) {
+				const cell = findScoped(block, 'maintenance-reminders')
+				if (cell != null) {
+					nextTodos.push({
+						uid: 'todo-overdue',
+						title: '逾期保养',
+						countText: block.overdueText,
+						tone: 'danger',
+						route: cell.route,
+						missing: cell.missing
+					} as HomeTodo)
+				}
+			}
+		}
+		todos.value = nextTodos
+		loadedBlocks.value = blocks
+		refreshHits()
+	}
+
+	function onFeatureQuery(event : UniInputEvent) {
+		featureQuery.value = event.detail.value
+		refreshHits()
+	}
+
+	function refreshHits() {
+		const word = featureQuery.value.trim().toLowerCase()
+		const next : Array<FeatureHit> = []
+		if (word.length == 0) {
+			hits.value = next
+			return
+		}
+		const blocks = loadedBlocks.value
+		for (let i = 0; i < blocks.length; i++) {
+			const block = blocks[i]
+			const sections = block.sections
+			for (let s = 0; s < sections.length; s++) {
+				const cells = sections[s].cells
+				for (let c = 0; c < cells.length; c++) {
+					const cell = cells[c]
+					if (cell.label.toLowerCase().indexOf(word) < 0) {
+						continue
+					}
+					next.push({
+						uid: cell.uid,
+						label: cell.label,
+						scope: block.scope,
+						route: cell.route,
+						missing: cell.missing,
+						icon: cell.icon,
+						iconGroup: cell.iconGroup
+					} as FeatureHit)
+				}
+			}
+		}
+		hits.value = next
+	}
+
+	function openCell(route : string, missing : boolean) {
+		if (missing || route.length == 0) {
+			uni.showToast({ title: '功能尚未安装', icon: 'none' })
+			return
+		}
+		openRegisteredRoute(route)
 	}
 
 	async function refresh() {
@@ -53,14 +234,16 @@
 			return
 		}
 		loading.value = true
-		empty.value = false
 		errorText.value = ''
 		try {
-			scopes.value = await loadWorkbench()
-			empty.value = scopes.value.length == 0
+			const blocks = await loadWorkbench()
+			applyHome(blocks)
 		} catch (err) {
-			scopes.value = []
-			empty.value = false
+			todos.value = []
+			frequent.value = []
+			loadedBlocks.value = []
+			hits.value = []
+			hasScan.value = false
 			errorText.value = err instanceof Error ? err.message : '工作台未能加载'
 		}
 		loading.value = false
@@ -73,12 +256,27 @@
 		}
 	}
 
-	function onCell(cell : WorkCell) {
-		if (cell.missing || cell.route.length == 0) {
-			uni.showToast({ title: '功能尚未安装', icon: 'none' })
-			return
-		}
-		openRegisteredRoute(cell.route)
+	function onScan() {
+		openCell(scanRoute.value, scanMissing.value)
+	}
+
+	function onTodo(index : number) {
+		const todo = todos.value[index]
+		openCell(todo.route, todo.missing)
+	}
+
+	function onFrequent(index : number) {
+		const cell = frequent.value[index]
+		openCell(cell.route, cell.missing)
+	}
+
+	function onHit(index : number) {
+		const hit = hits.value[index]
+		openCell(hit.route, hit.missing)
+	}
+
+	function openApps() {
+		uni.navigateTo({ url: '/shell/apps/index' })
 	}
 
 	onShow(() => {
@@ -87,25 +285,49 @@
 </script>
 
 <style>
-	.scope {
-		margin-bottom: 8px;
+	.hello {
 		flex-direction: column;
+		margin-bottom: 8px;
 	}
 
-	.badges {
-		margin-bottom: 8px;
-		flex-direction: column;
+	.hello-name {
+		font-size: 22px;
+		color: #28113C;
+		font-weight: 700;
 	}
 
-	.badge-row {
+	.todo {
 		flex-direction: row;
 		align-items: center;
-		margin-bottom: 4px;
+		justify-content: space-between;
 	}
 
 	.grid {
 		flex-direction: row;
 		flex-wrap: wrap;
+	}
+
+	.hit {
+		flex-direction: row;
+		align-items: center;
+		margin-top: 8px;
+		margin-bottom: 8px;
+		padding-top: 12px;
+		padding-right: 12px;
+		padding-bottom: 12px;
+		padding-left: 12px;
+		min-height: 44px;
+		background-color: #FFFFFF;
+		border-radius: 12px;
+		border-width: 1px;
+		border-style: solid;
+		border-color: #E2E8F0;
+	}
+
+	.hit-copy {
+		flex: 1;
+		flex-direction: column;
+		margin-left: 12px;
 	}
 
 	.cell {
@@ -120,19 +342,10 @@
 		padding-left: 12px;
 		min-height: 72px;
 		background-color: #FFFFFF;
-		border-radius: 16px;
+		border-radius: 12px;
 		border-width: 1px;
 		border-style: solid;
-		border-color: #DDDBE5;
+		border-color: #E2E8F0;
 		flex-direction: column;
-	}
-
-	.solo {
-		width: 98%;
-	}
-
-	.icon {
-		font-size: 22px;
-		margin-bottom: 6px;
 	}
 </style>

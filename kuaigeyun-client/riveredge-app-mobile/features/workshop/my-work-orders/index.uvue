@@ -1,23 +1,35 @@
 <template>
 	<view class="page">
+		<home-link />
 		<text v-if="errorTextValue.length > 0" class="error">{{ errorTextValue }}</text>
 		<text v-if="loading" class="loading">加载中</text>
-		<text v-if="!loading && rows.length == 0 && errorTextValue.length == 0" class="empty">暂无工单</text>
-		<view v-for="(row, index) in rows" :key="index" class="card">
-			<text class="title">{{ lineTitle(row) }}</text>
-			<text class="sub">{{ lineSub(row) }}</text>
+		<view v-if="selectedIndex < 0">
+			<text v-if="!loading && rows.length == 0 && errorTextValue.length == 0" class="empty">暂无工单</text>
+			<view v-for="(row, index) in rows" :key="index" class="card" hover-class="pressed" @click="openDetail(index)">
+				<text class="title">{{ lineTitle(row) }}</text>
+				<text class="sub">{{ lineSub(row) }}</text>
+			</view>
+		</view>
+		<view v-else class="card">
+			<button class="btn-secondary" @click="closeDetail">返回列表</button>
+			<text class="title">{{ lineTitle(rows[selectedIndex]) }}</text>
+			<text class="sub">{{ lineSub(rows[selectedIndex]) }}</text>
+			<button class="btn-primary" @click="goReport">去报工</button>
 		</view>
 	</view>
 </template>
 
 <script setup lang="uts">
+	import HomeLink from '../../../shared/ui/home-link.uvue'
 	import { request } from '../../../shared/api/index.uts'
-	import { readRows, fieldText, errorText } from '../../../shared/api/fields.uts'
+	import { readRows, fieldText, fieldNumber, errorText } from '../../../shared/api/fields.uts'
 	import { readCurrentUser } from '../session.uts'
+	import { toast } from '../json.uts'
 
 	const rows = ref<any[]>([])
 	const loading = ref(false)
 	const errorTextValue = ref('')
+	const selectedIndex = ref(-1)
 
 	function lineTitle(row : any) : string {
 		const code = fieldText(row, 'code')
@@ -55,6 +67,38 @@
 		}
 		loading.value = false
 	}
+
+	function openDetail(index : number) {
+		selectedIndex.value = index
+	}
+
+	function closeDetail() {
+		selectedIndex.value = -1
+	}
+
+	function goReport() {
+		const index = selectedIndex.value
+		if (index < 0 || index >= rows.value.length) {
+			return
+		}
+		const workOrderId = fieldNumber(rows.value[index], 'id')
+		if (workOrderId <= 0) {
+			toast('工单无效')
+			return
+		}
+		uni.navigateTo({ url: '/features/workshop/scan-report/index?workOrderId=' + workOrderId })
+	}
+
+	onBackPress((options : OnBackPressOptions) : boolean | null => {
+		if (selectedIndex.value < 0) {
+			return false
+		}
+		if (options.from == 'backbutton' || options.from == 'navigateBack') {
+			selectedIndex.value = -1
+			return true
+		}
+		return false
+	})
 
 	onLoad(() => {
 		load()

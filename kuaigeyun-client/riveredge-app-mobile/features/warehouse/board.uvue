@@ -1,5 +1,6 @@
 <template>
 	<scroll-view class="page" scroll-y="true">
+		<home-link />
 		<view v-if="isQuery" class="row">
 			<input class="field grow" v-model="keyword" placeholder="物料编码、名称或仓库" />
 			<button class="btn-chip" @click="reload">查询</button>
@@ -12,7 +13,7 @@
 			<text v-if="!loading && cards.length == 0" class="empty">没有数据</text>
 			<view v-for="(card, index) in cards" :key="index" class="card" hover-class="pressed" @click="openCard(index)">
 				<text class="title">{{ card.title }}</text>
-				<text v-if="card.status.length > 0" class="meta">{{ card.status }}</text>
+				<text v-if="card.status.length > 0" :class="statusClass(card.status)">{{ card.status }}</text>
 				<text v-if="card.subtitle.length > 0" class="meta">{{ card.subtitle }}</text>
 			</view>
 			<button v-if="cards.length < total" class="btn-secondary" @click="loadMore">加载更多</button>
@@ -21,53 +22,55 @@
 		<view v-else class="card">
 			<button class="btn-secondary" @click="closeDetail">返回列表</button>
 			<text class="title">{{ detailTitle }}</text>
-			<text v-if="detailStatus.length > 0" class="meta">{{ detailStatus }}</text>
+			<text v-if="detailStatus.length > 0" :class="statusClass(detailStatus)">{{ detailStatus }}</text>
+			<text class="hint">{{ stepLabel }}</text>
 
-			<view v-if="showHeader">
-				<text class="label">仓库 ID</text>
-				<input class="field" :value="warehouseIdText" @input="onWarehouseId" />
+			<view v-if="wizardStep == 1 && showHeader">
 				<text class="label">仓库名称</text>
 				<input class="field" :value="warehouseName" @input="onWarehouseName" />
-				<text class="label">{{ personLabel }} ID</text>
-				<input class="field" :value="personIdText" @input="onPersonId" />
 				<text class="label">{{ personLabel }}</text>
 				<input class="field" :value="personName" @input="onPersonName" />
+				<button class="btn-primary" @click="goStep(2)">下一步</button>
 			</view>
 
-			<view v-if="showLines || isStock">
-			<view v-for="(line, index) in lines" :key="index" class="line">
-				<text class="title">{{ line.materialCode }} {{ line.materialName }}</text>
-				<text v-if="line.displayQty.length > 0" class="meta">单据数量 {{ line.displayQty }}</text>
-				<view v-if="showLines">
-					<text class="label">仓库 ID</text>
-					<input class="field" :value="line.warehouseIdText" @input="onLineInput(index, 'warehouseIdText', $event)" />
-					<text class="label">仓库名称</text>
-					<input class="field" :value="line.warehouseName" @input="onLineInput(index, 'warehouseName', $event)" />
-					<text class="label">库位 ID</text>
-					<input class="field" :value="line.locationIdText" @input="onLineInput(index, 'locationIdText', $event)" />
-					<text class="label">库位编码</text>
-					<input class="field" :value="line.locationCode" @input="onLineInput(index, 'locationCode', $event)" />
-					<text class="label">批号</text>
-					<input class="field" :value="line.batchNumber" @input="onLineInput(index, 'batchNumber', $event)" />
-					<text class="label">序列号（逗号分隔）</text>
-					<input class="field" :value="line.serialText" @input="onLineInput(index, 'serialText', $event)" />
-					<view v-if="showReceipt">
-						<text class="label">实收数量</text>
-						<input class="field" :value="line.receiptQuantityText" @input="onLineInput(index, 'receiptQuantityText', $event)" />
+			<view v-if="wizardStep == 2 && (showLines || isStock)">
+				<text class="label">定位物料</text>
+				<input class="field" :value="locateText" placeholder="物料编码或名称" @input="onLocateText" />
+				<button class="btn-secondary" @click="locateLine">定位</button>
+				<text v-if="locateHint.length > 0" :class="locateMiss ? 'error' : 'hint'">{{ locateHint }}</text>
+				<text v-if="showLines && !showReceipt" class="hint">单据数量只作核对，确认时不另填数量。</text>
+				<view v-for="(line, index) in lines" :key="index" class="line">
+					<text class="title">{{ line.materialCode }} {{ line.materialName }}</text>
+					<text v-if="locatedIndex == index" class="meta">当前定位</text>
+					<text v-if="line.displayQty.length > 0" class="meta">单据数量 {{ line.displayQty }}</text>
+					<view v-if="showLines">
+						<text class="label">仓库名称</text>
+						<input class="field" :value="line.warehouseName" @input="onLineInput(index, 'warehouseName', $event)" />
+						<text class="label">库位编码</text>
+						<input class="field" :value="line.locationCode" @input="onLineInput(index, 'locationCode', $event)" />
+						<text class="label">批号</text>
+						<input class="field" :value="line.batchNumber" @input="onLineInput(index, 'batchNumber', $event)" />
+						<text class="label">序列号（逗号分隔）</text>
+						<input class="field" :value="line.serialText" @input="onLineInput(index, 'serialText', $event)" />
+						<view v-if="showReceipt">
+							<text class="label">实收数量</text>
+							<input class="field" :value="line.receiptQuantityText" @input="onLineInput(index, 'receiptQuantityText', $event)" />
+						</view>
+					</view>
+					<view v-if="isStock">
+						<text class="meta">账面 {{ line.bookQuantityText }}</text>
+						<text class="label">实际数量</text>
+						<input class="field" :value="line.actualQuantityText" @input="onLineInput(index, 'actualQuantityText', $event)" />
+						<text class="label">备注</text>
+						<input class="field" :value="line.remarks" @input="onLineInput(index, 'remarks', $event)" />
+						<button :class="busy ? 'btn-primary is-disabled' : 'btn-primary'" :disabled="busy" @click="submitStock(index)">记录实盘</button>
 					</view>
 				</view>
-				<view v-if="isStock">
-					<text class="meta">账面 {{ line.bookQuantityText }}</text>
-					<text class="label">实际数量</text>
-					<input class="field" :value="line.actualQuantityText" @input="onLineInput(index, 'actualQuantityText', $event)" />
-					<text class="label">备注</text>
-					<input class="field" :value="line.remarks" @input="onLineInput(index, 'remarks', $event)" />
-					<button :class="busy ? 'btn-primary is-disabled' : 'btn-primary'" :disabled="busy" @click="submitStock(index)">记录实盘</button>
-				</view>
-			</view>
+				<button v-if="showHeader" class="btn-secondary" @click="goStep(1)">上一步</button>
+				<button v-if="showHeader" class="btn-primary" @click="goStep(3)">下一步</button>
 			</view>
 
-			<view v-if="isAlert">
+			<view v-if="wizardStep == 3 && isAlert">
 				<text class="label">处理状态</text>
 				<view class="row">
 					<button :class="alertStatus == 'processing' ? 'btn-chip btn-chip-on' : 'btn-chip'" @click="pickStatus('processing')">处理中</button>
@@ -78,12 +81,23 @@
 				<input class="field" :value="alertNotes" @input="onAlertNotes" />
 			</view>
 
-			<button v-if="showSubmit" :class="busy ? 'btn-primary is-disabled' : 'btn-primary'" :disabled="busy" @click="submitMain">{{ actionLabel }}</button>
+			<view v-if="wizardStep == 3 && showSubmit && !isStock">
+				<text v-if="showHeader" class="meta">仓库 {{ warehouseName }}</text>
+				<text v-if="showHeader" class="meta">{{ personLabel }} {{ personName }}</text>
+				<view v-for="(line, index) in lines" :key="index" class="line">
+					<text class="title">{{ line.materialCode }} {{ line.materialName }}</text>
+					<text v-if="line.displayQty.length > 0" class="meta">单据数量 {{ line.displayQty }}</text>
+					<text v-if="showReceipt && line.receiptQuantityText.length > 0" class="meta">实收 {{ line.receiptQuantityText }}</text>
+				</view>
+				<button v-if="showHeader" class="btn-secondary" @click="goStep(2)">返回修改</button>
+				<button :class="busy ? 'btn-primary is-disabled' : 'btn-primary'" :disabled="busy" @click="askSubmit">{{ actionLabel }}</button>
+			</view>
 		</view>
 	</scroll-view>
 </template>
 
 <script setup lang="uts">
+	import HomeLink from '../../shared/ui/home-link.uvue'
 	import { alertHandlePath, apiGet, apiPost, confirmPath, detailPath, listPath, listQuery, sendPath, stockExecutePath, transferExecutePath } from './http.uts'
 	import { DocCard, LineForm } from './models.uts'
 	import { buildAlertBody, buildInboundBody, buildOutboundBody, buildSalesBody, buildStockBody } from './payload.uts'
@@ -119,6 +133,11 @@
 	const personName = ref('')
 	const alertStatus = ref('processing')
 	const alertNotes = ref('')
+	const wizardStep = ref(1)
+	const locateText = ref('')
+	const locateHint = ref('')
+	const locateMiss = ref(false)
+	const locatedIndex = ref(-1)
 
 	function currentKind(): string {
 		const value = props.kind
@@ -166,8 +185,7 @@
 	})
 
 	const showReceipt = computed((): boolean => {
-		const kind = currentKind()
-		return kind == 'returns' || kind == 'fg-receipts' || kind == 'purchase-receipts' || kind == 'other-inbound'
+		return currentKind() == 'purchase-receipts'
 	})
 
 	const showSubmit = computed((): boolean => {
@@ -179,6 +197,22 @@
 		if (mode.value == 'picking') return '领料人'
 		if (mode.value == 'deliver' || mode.value == 'sales') return '出库人'
 		return '收货人'
+	})
+
+	const stepLabel = computed((): string => {
+		if (isAlert.value) {
+			return '处理'
+		}
+		if (isStock.value) {
+			return '逐行实盘'
+		}
+		if (wizardStep.value == 1) {
+			return '单据'
+		}
+		if (wizardStep.value == 2) {
+			return '明细'
+		}
+		return '确认'
 	})
 
 	const actionLabel = computed((): string => {
@@ -260,6 +294,48 @@
 		selectedId.value = 0
 		lines.value = []
 		hint.value = ''
+		wizardStep.value = 1
+		clearLocate()
+	}
+
+	function clearLocate(): void {
+		locateText.value = ''
+		locateHint.value = ''
+		locateMiss.value = false
+		locatedIndex.value = -1
+	}
+
+	function beginWizard(): void {
+		const value = mode.value
+		if (value == 'alert' || value == 'send' || value == 'execute') {
+			wizardStep.value = 3
+			return
+		}
+		if (value == 'stock') {
+			wizardStep.value = 2
+			return
+		}
+		wizardStep.value = 1
+	}
+
+	function goStep(step: number): void {
+		wizardStep.value = step
+	}
+
+	function statusClass(status: string): string {
+		if (status.indexOf('逾期') >= 0 || status.indexOf('不合格') >= 0 || status.indexOf('驳回') >= 0 || status.indexOf('严重') >= 0) {
+			return 'badge badge-danger'
+		}
+		if (status.indexOf('完成') >= 0 || status.indexOf('合格') >= 0) {
+			return 'badge badge-ok'
+		}
+		if (status.indexOf('进行') >= 0 || status.indexOf('生产') >= 0 || status.indexOf('维修') >= 0 || status.indexOf('盘点') >= 0 || status.indexOf('处理中') >= 0) {
+			return 'badge badge-progress'
+		}
+		if (status.indexOf('待') == 0) {
+			return 'badge badge-warning'
+		}
+		return 'meta'
 	}
 
 	async function loadDetail(): Promise<void> {
@@ -275,23 +351,18 @@
 			lines.value = form.lines
 			alertStatus.value = 'processing'
 			alertNotes.value = ''
+			clearLocate()
+			beginWizard()
 		} catch (err) {
 			hint.value = errorText(err)
+			beginWizard()
 		} finally {
 			loading.value = false
 		}
 	}
 
-	function onWarehouseId(e: UniInputEvent): void {
-		warehouseIdText.value = e.detail.value
-	}
-
 	function onWarehouseName(e: UniInputEvent): void {
 		warehouseName.value = e.detail.value
-	}
-
-	function onPersonId(e: UniInputEvent): void {
-		personIdText.value = e.detail.value
 	}
 
 	function onPersonName(e: UniInputEvent): void {
@@ -304,6 +375,33 @@
 
 	function pickStatus(status: string): void {
 		alertStatus.value = status
+	}
+
+	function onLocateText(e: UniInputEvent): void {
+		locateText.value = e.detail.value
+	}
+
+	function locateLine(): void {
+		const word = locateText.value.trim()
+		locatedIndex.value = -1
+		if (word.length == 0) {
+			locateMiss.value = false
+			locateHint.value = ''
+			return
+		}
+		const list = lines.value
+		for (let i = 0; i < list.length; i++) {
+			const code = list[i].materialCode
+			const name = list[i].materialName
+			if (code == word || name == word || code.indexOf(word) >= 0 || name.indexOf(word) >= 0) {
+				locatedIndex.value = i
+				locateMiss.value = false
+				locateHint.value = '已定位到 ' + name
+				return
+			}
+		}
+		locateMiss.value = true
+		locateHint.value = '这张单没有这个物料'
 	}
 
 	function onLineInput(index: number, field: string, e: UniInputEvent): void {
@@ -326,6 +424,64 @@
 			next.push(line)
 		}
 		lines.value = next
+	}
+
+	function qtyOf(text: string): number {
+		const value = parseFloat(text.trim())
+		if (isNaN(value)) {
+			return -1
+		}
+		return value
+	}
+
+	function receiptDiff(): boolean {
+		if (!showReceipt.value) {
+			return false
+		}
+		const list = lines.value
+		for (let i = 0; i < list.length; i++) {
+			const expected = qtyOf(list[i].displayQty)
+			const actual = qtyOf(list[i].receiptQuantityText)
+			if (expected >= 0 && actual >= 0 && expected != actual) {
+				return true
+			}
+		}
+		return false
+	}
+
+	function askSubmit(): void {
+		if (busy.value) {
+			return
+		}
+		if (isAlert.value && alertStatus.value == 'ignored') {
+			uni.showModal({
+				title: '忽略这条预警',
+				content: '忽略后不再作为待处理。',
+				confirmText: '确认忽略',
+				cancelText: '返回',
+				success: (res) => {
+					if (res.confirm) {
+						void submitMain()
+					}
+				}
+			})
+			return
+		}
+		if (receiptDiff()) {
+			uni.showModal({
+				title: '实收与单据数量不一致',
+				content: '可以返回修改，或仍然提交当前实收数量。',
+				confirmText: '仍然提交',
+				cancelText: '返回修改',
+				success: (res) => {
+					if (res.confirm) {
+						void submitMain()
+					}
+				}
+			})
+			return
+		}
+		void submitMain()
 	}
 
 	async function submitMain(): Promise<void> {
@@ -353,7 +509,7 @@
 		} else if (value == 'deliver') {
 			body = buildOutboundBody('deliverer', warehouseIdText.value, warehouseName.value, personIdText.value, personName.value, lines.value)
 		} else if (value == 'inbound') {
-			body = buildInboundBody(warehouseIdText.value, warehouseName.value, personIdText.value, personName.value, lines.value, true)
+			body = buildInboundBody(warehouseIdText.value, warehouseName.value, personIdText.value, personName.value, lines.value, currentKind() == 'purchase-receipts')
 		}
 		if (body == null) {
 			hint.value = '没有可提交的确认内容'
@@ -421,6 +577,6 @@
 		padding-top: 12px;
 		border-top-width: 1px;
 		border-top-style: solid;
-		border-top-color: #E7D9FD;
+		border-top-color: #E2E8F0;
 	}
 </style>

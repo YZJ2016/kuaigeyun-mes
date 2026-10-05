@@ -1,5 +1,6 @@
 <template>
 	<view class="page">
+		<home-link />
 		<view class="modes">
 			<button class="btn-chip" @click="switchKind('material-shortage')">缺料</button>
 			<button class="btn-chip" @click="switchKind('delivery-delay')">交期</button>
@@ -33,6 +34,7 @@
 </template>
 
 <script setup lang="uts">
+	import HomeLink from '../../../shared/ui/home-link.uvue'
 	import { request } from '../../../shared/api/index.uts'
 	import { readRows, fieldText, fieldNumber, errorText, firstText } from '../../../shared/api/fields.uts'
 	import { toast } from '../json.uts'

@@ -40,7 +40,7 @@
 </script>
 
 <style>
-	/* 品牌色：#801ED3 强调 #9730E3 文字 #28113C/#625370/#888B9D 底 #F1F1F4 浅紫 #E7D9FD/#EEE5FB 成功 #07C160 错误 #FF4942 */
+	/* 品牌紫只作强调。底 #F8FAFC，字 #28113C/#475569，边 #CBD5E1/#64748B，主按钮 #9730E3 */
 	.uni-row {
 		flex-direction: row;
 	}
@@ -52,7 +52,7 @@
 	.page {
 		flex: 1;
 		flex-direction: column;
-		background-color: #F1F1F4;
+		background-color: #F8FAFC;
 		color: #28113C;
 		padding-top: 12px;
 		padding-right: 12px;
@@ -63,7 +63,10 @@
 	.card {
 		flex-direction: column;
 		background-color: #FFFFFF;
-		border-radius: 16px;
+		border-radius: 12px;
+		border-width: 1px;
+		border-style: solid;
+		border-color: #E2E8F0;
 		padding-top: 12px;
 		padding-right: 12px;
 		padding-bottom: 12px;
@@ -93,7 +96,7 @@
 	.badge-label,
 	.missing {
 		font-size: 13px;
-		color: #888B9D;
+		color: #475569;
 		margin-top: 4px;
 	}
 
@@ -105,14 +108,14 @@
 	.error,
 	.err {
 		font-size: 14px;
-		color: #FF4942;
+		color: #991B1B;
 		margin-top: 8px;
 		margin-bottom: 8px;
 	}
 
 	.empty {
 		font-size: 14px;
-		color: #888B9D;
+		color: #475569;
 		padding-top: 20px;
 		padding-bottom: 20px;
 	}
@@ -128,8 +131,8 @@
 		background-color: #FFFFFF;
 		border-width: 1px;
 		border-style: solid;
-		border-color: #DDDBE5;
-		border-radius: 12px;
+		border-color: #64748B;
+		border-radius: 8px;
 		padding-top: 12px;
 		padding-right: 12px;
 		padding-bottom: 12px;
@@ -141,14 +144,14 @@
 	}
 
 	button {
-		height: 44px;
-		border-radius: 22px;
+		height: 48px;
+		border-radius: 8px;
 		font-size: 16px;
-		color: #801ED3;
+		color: #28113C;
 		background-color: #FFFFFF;
 		border-width: 1px;
 		border-style: solid;
-		border-color: #E7D9FD;
+		border-color: #64748B;
 		margin-top: 8px;
 		margin-bottom: 8px;
 		margin-left: 0;
@@ -157,8 +160,8 @@
 
 	.btn-primary {
 		width: 100%;
-		height: 44px;
-		border-radius: 22px;
+		height: 48px;
+		border-radius: 8px;
 		background-color: #9730E3;
 		color: #FFFFFF;
 		border-width: 1px;
@@ -173,13 +176,13 @@
 
 	.btn-secondary {
 		width: 100%;
-		height: 44px;
-		border-radius: 22px;
+		height: 48px;
+		border-radius: 8px;
 		background-color: #FFFFFF;
-		color: #801ED3;
+		color: #28113C;
 		border-width: 1px;
 		border-style: solid;
-		border-color: #E7D9FD;
+		border-color: #64748B;
 		flex-direction: row;
 		align-items: center;
 		justify-content: center;
@@ -192,20 +195,24 @@
 		font-size: 16px;
 	}
 
-	.btn-label-secondary,
+	.btn-label-secondary {
+		color: #28113C;
+		font-size: 16px;
+	}
+
 	.link-text {
-		color: #801ED3;
+		color: #9730E3;
 		font-size: 16px;
 	}
 
 	.btn-chip {
-		height: 44px;
-		border-radius: 22px;
-		background-color: #EEE5FB;
+		height: 48px;
+		border-radius: 8px;
+		background-color: #FFFFFF;
 		color: #28113C;
 		border-width: 1px;
 		border-style: solid;
-		border-color: #E7D9FD;
+		border-color: #64748B;
 		padding-left: 16px;
 		padding-right: 16px;
 		margin-top: 8px;
@@ -231,9 +238,9 @@
 		padding-left: 16px;
 		border-width: 1px;
 		border-style: solid;
-		border-color: #E7D9FD;
-		border-radius: 22px;
-		background-color: #EEE5FB;
+		border-color: #64748B;
+		border-radius: 8px;
+		background-color: #FFFFFF;
 		font-size: 14px;
 		color: #28113C;
 	}
@@ -251,7 +258,7 @@
 		padding-bottom: 12px;
 		border-bottom-width: 1px;
 		border-bottom-style: solid;
-		border-bottom-color: #E7D9FD;
+		border-bottom-color: #E2E8F0;
 	}
 
 	.link {
@@ -266,6 +273,94 @@
 	}
 
 	.pressed {
-		background-color: #EEE5FB;
+		background-color: #F1F5F9;
+	}
+
+	.badge {
+		font-size: 12px;
+		color: #475569;
+		background-color: #F1F5F9;
+		border-radius: 6px;
+		padding-top: 4px;
+		padding-right: 8px;
+		padding-bottom: 4px;
+		padding-left: 8px;
+		margin-top: 4px;
+		align-self: flex-start;
+	}
+
+	.badge-warning {
+		color: #92400E;
+		background-color: #FEF3C7;
+	}
+
+	.badge-danger {
+		color: #991B1B;
+		background-color: #FEE2E2;
+	}
+
+	.badge-progress {
+		color: #6B21A8;
+		background-color: #F3E8FF;
+	}
+
+	.badge-ok {
+		color: #166534;
+		background-color: #DCFCE7;
+	}
+
+	.icon-tile {
+		width: 40px;
+		height: 40px;
+		border-radius: 10px;
+		flex-direction: row;
+		align-items: center;
+		justify-content: center;
+		margin-bottom: 8px;
+	}
+
+	.icon-workshop {
+		background-color: #F3E8FF;
+	}
+
+	.icon-warehouse {
+		background-color: #DBEAFE;
+	}
+
+	.icon-quality {
+		background-color: #DCFCE7;
+	}
+
+	.icon-equipment {
+		background-color: #FEF3C7;
+	}
+
+	.icon-mold {
+		background-color: #CCFBF1;
+	}
+
+	.tile-mark {
+		font-size: 16px;
+		font-weight: 700;
+	}
+
+	.mark-workshop {
+		color: #9730E3;
+	}
+
+	.mark-warehouse {
+		color: #1D4ED8;
+	}
+
+	.mark-quality {
+		color: #15803D;
+	}
+
+	.mark-equipment {
+		color: #B45309;
+	}
+
+	.mark-mold {
+		color: #0F766E;
 	}
 </style>

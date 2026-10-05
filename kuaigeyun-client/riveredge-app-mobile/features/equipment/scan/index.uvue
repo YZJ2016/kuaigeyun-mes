@@ -1,5 +1,6 @@
 <template>
 	<scroll-view class="page" direction="vertical">
+		<home-link />
 		<view class="card">
 			<text class="title">扫码查设备</text>
 			<button :class="busy ? 'btn-primary is-disabled' : 'btn-primary'" :disabled="busy" @click="onScan">扫码</button>
@@ -10,6 +11,7 @@
 </template>
 
 <script setup lang="uts">
+	import HomeLink from '../../../shared/ui/home-link.uvue'
 	import { request } from '../../../shared/api/index.uts'
 	import { asJsonObject, fieldText } from '../../../shared/api/fields.uts'
 	import { scan } from '../../../shared/channel/index.uts'

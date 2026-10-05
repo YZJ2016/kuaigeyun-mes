@@ -1,5 +1,6 @@
 <template>
 	<view class="page">
+		<home-link />
 		<button :class="loading ? 'btn-primary is-disabled' : 'btn-primary'" :disabled="loading" @click="onScan">扫码</button>
 		<text v-if="scanned != ''" class="meta">扫到 {{ scanned }}</text>
 		<text v-if="hint != ''" class="error">{{ hint }}</text>
@@ -19,6 +20,7 @@
 </template>
 
 <script setup lang="uts">
+	import HomeLink from '../../../shared/ui/home-link.uvue'
 	import { scan } from '../../../shared/channel/index.uts'
 	import { DocLine, MOLD_ARCHIVE, apiGetRows, withQuery } from '../http.uts'
 	import { errorText, fieldNumber, fieldText } from '../../../shared/api/fields.uts'

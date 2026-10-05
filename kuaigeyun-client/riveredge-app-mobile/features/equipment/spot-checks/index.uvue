@@ -1,5 +1,6 @@
 <template>
 	<scroll-view class="page" direction="vertical">
+		<home-link />
 		<view class="card">
 			<text class="title">设备点检</text>
 			<button :class="busy ? 'btn-secondary is-disabled' : 'btn-secondary'" :disabled="busy" @click="loadList">刷新</button>
@@ -43,6 +44,7 @@
 </template>
 
 <script setup lang="uts">
+	import HomeLink from '../../../shared/ui/home-link.uvue'
 	import { request } from '../../../shared/api/index.uts'
 	import { fieldText, readRows } from '../../../shared/api/fields.uts'
 	import { pickAndUploadImage } from '../../../shared/api/pick-image.uts'

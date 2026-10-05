@@ -1,5 +1,6 @@
 <template>
 	<scroll-view class="page" direction="vertical">
+		<home-link />
 		<view class="card">
 			<text class="title">维护提醒</text>
 			<button :class="busy ? 'btn-secondary is-disabled' : 'btn-secondary'" :disabled="busy" @click="loadList">刷新</button>
@@ -11,7 +12,8 @@
 		</view>
 		<view class="card" v-if="reminderUuid.length > 0">
 			<text class="title">标记已处理</text>
-			<input class="field" v-model="remarkText" placeholder="处理备注（可空）" />
+			<text class="hint">确认后标记已处理。</text>
+			<input class="field" v-model="remarkText" placeholder="备注（可选，不会保存）" />
 			<button :class="busy ? 'btn-primary is-disabled' : 'btn-primary'" :disabled="busy" @click="submitHandled">标记已处理</button>
 		</view>
 		<text v-if="messageText.length > 0" class="hint page-hint">{{ messageText }}</text>
@@ -20,6 +22,7 @@
 </template>
 
 <script setup lang="uts">
+	import HomeLink from '../../../shared/ui/home-link.uvue'
 	import { request } from '../../../shared/api/index.uts'
 	import { fieldBool, fieldText, readRows } from '../../../shared/api/fields.uts'
 	import { joinParts, readError } from '../json-text.uts'

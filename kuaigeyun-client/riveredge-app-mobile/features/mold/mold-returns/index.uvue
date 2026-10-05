@@ -1,5 +1,6 @@
 <template>
 	<view class="page">
+		<home-link />
 		<text class="section">未归还领用</text>
 		<view v-for="(item, index) in borrowOptions" :key="index" class="list-row" hover-class="pressed" @click="chooseBorrow(index)">
 			<text class="title">{{ item.label }}</text>
@@ -23,6 +24,7 @@
 </template>
 
 <script setup lang="uts">
+	import HomeLink from '../../../shared/ui/home-link.uvue'
 	import {
 		DocLine,
 		MOLD_BORROWS_OUTSTANDING,

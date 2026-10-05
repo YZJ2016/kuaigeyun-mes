@@ -1,15 +1,31 @@
 <template>
 	<scroll-view class="page" direction="vertical">
+		<home-link />
 		<view class="card">
 			<text class="title">报修维修</text>
 			<button :class="busy ? 'btn-secondary is-disabled' : 'btn-secondary'" :disabled="busy" @click="reload">刷新</button>
 			<text v-if="queryUuid.length > 0" class="hint">以下为该设备的故障</text>
-			<text v-if="openedText.length > 0" class="hint">{{ openedText }}</text>
 			<text v-if="rows.length == 0" class="empty">暂无记录</text>
 			<view class="item" hover-class="pressed" v-for="item in rows" :key="item.rowKey" @click="openFault(item.faultUuid)">
 				<text class="item-title">{{ item.title }}</text>
 				<text class="hint">{{ item.detail }}</text>
 			</view>
+		</view>
+		<view class="card" v-if="openedText.length > 0">
+			<text class="title">故障详情</text>
+			<text class="hint">{{ openedText }}</text>
+			<view v-if="completeUuid.length > 0">
+				<text class="hint">维修结果：{{ repairResult.length > 0 ? repairResult : '请选择' }}</text>
+				<view class="choices">
+					<button class="btn-chip" @click="chooseResult(0)">成功</button>
+					<button class="btn-chip" @click="chooseResult(1)">失败</button>
+					<button class="btn-chip" @click="chooseResult(2)">部分成功</button>
+				</view>
+				<input class="field" v-model="faultCauseText" placeholder="故障原因" />
+				<input class="field" v-model="repairContentText" placeholder="维修内容" />
+				<button :class="busy ? 'btn-primary is-disabled' : 'btn-primary'" :disabled="busy" @click="submitComplete">填写维修结果</button>
+			</view>
+			<text v-else-if="openedPending" class="hint">这条故障还没有可完工的维修单</text>
 		</view>
 		<view class="card">
 			<text class="title">新建故障</text>
@@ -38,6 +54,7 @@
 </template>
 
 <script setup lang="uts">
+	import HomeLink from '../../../shared/ui/home-link.uvue'
 	import { request } from '../../../shared/api/index.uts'
 	import { asJsonObject, fieldText, readRows } from '../../../shared/api/fields.uts'
 	import { joinParts, readError } from '../json-text.uts'
@@ -51,10 +68,16 @@
 
 	const faultTypes: string[] = ['机械故障', '电气故障', '软件故障', '其他']
 	const faultLevels: string[] = ['轻微', '一般', '严重', '紧急']
+	const repairResults: string[] = ['成功', '失败', '部分成功']
 
 	const busy = ref(false)
 	const queryUuid = ref('')
 	const openedText = ref('')
+	const openedPending = ref(false)
+	const completeUuid = ref('')
+	const repairResult = ref('')
+	const faultCauseText = ref('')
+	const repairContentText = ref('')
 	const rows = ref<Array<ListRow>>([])
 	const equipmentUuidText = ref('')
 	const faultType = ref('机械故障')
@@ -78,6 +101,17 @@
 
 	function chooseLevel(index: number): void {
 		faultLevel.value = faultLevels[index]
+	}
+
+	function chooseResult(index: number): void {
+		repairResult.value = repairResults[index]
+	}
+
+	function clearComplete(): void {
+		completeUuid.value = ''
+		repairResult.value = ''
+		faultCauseText.value = ''
+		repairContentText.value = ''
 	}
 
 	async function loadList(): Promise<void> {
@@ -131,22 +165,97 @@
 				data: null
 			})
 			const body = asJsonObject(raw)
+			const status = fieldText(body, 'status')
 			openedText.value = joinParts([
 				fieldText(body, 'fault_no'),
 				fieldText(body, 'equipment_name'),
 				fieldText(body, 'equipment_code'),
 				fieldText(body, 'fault_type'),
 				fieldText(body, 'fault_level'),
-				fieldText(body, 'status'),
-				fieldText(body, 'fault_description'),
-				fieldText(body, 'uuid')
+				status,
+				fieldText(body, 'fault_description')
 			])
+			openedPending.value = status == '待处理' || status == '处理中'
+			clearComplete()
 			if (openedText.value.length == 0) {
 				errorText.value = '未打开故障'
+				openedPending.value = false
+			} else if (openedPending.value) {
+				await findRepair(faultUuid)
 			}
 		} catch (e) {
 			errorText.value = readError(e)
 		}
+	}
+
+	async function findRepair(faultUuid: string): Promise<void> {
+		const query = new UTSJSONObject()
+		query.set('equipment_fault_uuid', faultUuid)
+		const raw = await request({
+			url: '/api/v1/apps/kuaizhizao/equipment-faults/repairs',
+			method: 'GET',
+			query: query,
+			data: null
+		})
+		const items = readRows(raw)
+		for (let i = 0; i < items.length; i++) {
+			const row = items[i]
+			const uuid = fieldText(row, 'uuid')
+			const status = fieldText(row, 'status')
+			const arrival = fieldText(row, 'arrival_at')
+			if (uuid.length > 0 && status == '进行中' && arrival.length > 0) {
+				completeUuid.value = uuid
+				return
+			}
+		}
+	}
+
+	async function submitComplete(): Promise<void> {
+		if (busy.value) {
+			return
+		}
+		const uuid = completeUuid.value
+		if (uuid.length == 0) {
+			errorText.value = '这条故障还没有可完工的维修单'
+			return
+		}
+		const cause = faultCauseText.value.trim()
+		const content = repairContentText.value.trim()
+		const result = repairResult.value
+		if (cause.length == 0) {
+			errorText.value = '请填写故障原因'
+			return
+		}
+		if (content.length == 0) {
+			errorText.value = '请填写维修内容'
+			return
+		}
+		if (result != '成功' && result != '失败' && result != '部分成功') {
+			errorText.value = '请选择维修结果'
+			return
+		}
+		busy.value = true
+		errorText.value = ''
+		messageText.value = ''
+		try {
+			const data = new UTSJSONObject()
+			data.set('fault_cause', cause)
+			data.set('repair_content', content)
+			data.set('repair_result', result)
+			await request({
+				url: '/api/v1/apps/kuaizhizao/equipment-faults/repairs/' + encodeURIComponent(uuid) + '/complete',
+				method: 'POST',
+				data: data
+			})
+			messageText.value = '已完工'
+			openedText.value = ''
+			openedPending.value = false
+			clearComplete()
+			await loadList()
+		} catch (e) {
+			errorText.value = readError(e)
+		}
+		busy.value = false
 	}
 
 	async function reload(): Promise<void> {

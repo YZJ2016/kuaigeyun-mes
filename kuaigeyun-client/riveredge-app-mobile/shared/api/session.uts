@@ -1,5 +1,8 @@
+import { asJsonObject } from './fields.uts'
+
 const TOKEN_KEY = 'access_token'
 const TENANT_KEY = 'tenant_id'
+const TENANT_NAME_KEY = 'tenant_name'
 const PENDING_ENTRY_KEY = 'pending_entry'
 const USER_INFO_KEY = 'user_info'
 
@@ -59,6 +62,35 @@ export function setTenantId(tenantId : string) : void {
 		return
 	}
 	uni.setStorageSync(TENANT_KEY, value)
+}
+
+export function getTenantName() : string {
+	return readStorage(TENANT_NAME_KEY)
+}
+
+export function setTenantName(name : string) : void {
+	const value = name.trim()
+	if (value.length == 0) {
+		uni.removeStorageSync(TENANT_NAME_KEY)
+		return
+	}
+	uni.setStorageSync(TENANT_NAME_KEY, value)
+}
+
+export function readSessionName() : string {
+	const obj = asJsonObject(uni.getStorageSync(USER_INFO_KEY))
+	if (obj == null) {
+		return ''
+	}
+	const fullName = obj.getString('full_name')
+	if (fullName != null && fullName.trim().length > 0) {
+		return fullName.trim()
+	}
+	const username = obj.getString('username')
+	if (username != null && username.trim().length > 0) {
+		return username.trim()
+	}
+	return ''
 }
 
 export function setPendingEntry(path : string) : void {

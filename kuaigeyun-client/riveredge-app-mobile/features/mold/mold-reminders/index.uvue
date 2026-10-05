@@ -1,5 +1,6 @@
 <template>
 	<view class="page">
+		<home-link />
 		<button class="btn-secondary" @click="loadList">刷新</button>
 		<text v-if="hint != ''" class="error">{{ hint }}</text>
 		<view v-for="(item, index) in rows" :key="index" class="list-row">
@@ -11,6 +12,7 @@
 </template>
 
 <script setup lang="uts">
+	import HomeLink from '../../../shared/ui/home-link.uvue'
 	import { DocLine, MOLD_REMINDERS, apiGetRows, joinParts, withQuery } from '../http.uts'
 	import { errorText, fieldText } from '../../../shared/api/fields.uts'
 
