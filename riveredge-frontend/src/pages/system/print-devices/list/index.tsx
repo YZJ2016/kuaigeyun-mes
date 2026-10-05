@@ -30,6 +30,7 @@ import {
   testPrintDevice,
   printWithDevice,
   PrintDevice,
+  PrintDeviceListParams,
   CreatePrintDeviceData,
   UpdatePrintDeviceData,
   PrintDeviceTestResponse,
@@ -39,6 +40,7 @@ import {
 import { getPrintTemplateList } from '../../../../services/printTemplate';
 import { formatDateTime, todaySiteDateString } from '../../../../utils/format';
 import { countWithPagedRequests } from '../../../../utils/pagedCount';
+import { resolvePrintDeviceListFilter } from '../../../../utils/systemUniTableListFilters';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
@@ -713,16 +715,17 @@ const PrintDeviceListPage: React.FC = () => {
             const skip = (current - 1) * pageSize;
             const limit = pageSize;
 
-            const listParams: any = {
+            const filter = resolvePrintDeviceListFilter(searchFormValues);
+            const listParams: PrintDeviceListParams = {
               skip,
               limit,
-              ...searchFormValues,
+              ...filter,
             };
 
             try {
               const [data, total] = await Promise.all([
                 getPrintDeviceList(listParams),
-                countWithPagedRequests(getPrintDeviceList, searchFormValues || {}, { chunkSize: 100 }),
+                countWithPagedRequests(getPrintDeviceList, filter, { chunkSize: 100 }),
               ]);
               
               // 同时获取所有数据用于统计（如果当前页是第一页）

@@ -14,6 +14,7 @@ import { useRequest } from 'ahooks';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
+import { renderInlineMarkerTagGroup } from '../../../../../components/inline-marker-tag-preview';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import {
   workOrderApi,
@@ -2172,14 +2173,21 @@ const SchedulingPage: React.FC = () => {
           const tooltip = issues.map((item) => item.label).join('；');
           return (
             <Tooltip title={tooltip}>
-              <Space size={4} wrap>
-                {visible.map((item) => (
-                  <Tag key={item.key} color={item.severity === 'error' ? 'error' : 'warning'}>
-                    {item.label}
-                  </Tag>
-                ))}
-                {rest > 0 ? <Tag>+{rest}</Tag> : null}
-              </Space>
+              <span style={{ display: 'inline-block', maxWidth: '100%', verticalAlign: 'middle' }}>
+                {renderInlineMarkerTagGroup(
+                  [
+                    ...visible.map((item) => ({
+                      key: item.key,
+                      label: item.label,
+                      color: item.severity === 'error' ? ('error' as const) : ('warning' as const),
+                    })),
+                    ...(rest > 0
+                      ? [{ key: 'more', label: `+${rest}`, color: 'default' as const }]
+                      : []),
+                  ],
+                  { empty: null },
+                )}
+              </span>
             </Tooltip>
           );
         },
@@ -2729,7 +2737,8 @@ const SchedulingPage: React.FC = () => {
                 row.needHours ? (
                   <InputNumber
                     min={0}
-                    step={0.1}
+                    step={0.01}
+                    precision={2}
                     style={{ width: '100%' }}
                     value={row.setup_time}
                     onChange={(v) =>
@@ -2753,7 +2762,8 @@ const SchedulingPage: React.FC = () => {
                 row.needHours ? (
                   <InputNumber
                     min={0}
-                    step={0.1}
+                    step={0.01}
+                    precision={2}
                     style={{ width: '100%' }}
                     value={row.standard_time}
                     onChange={(v) =>
@@ -2902,6 +2912,7 @@ const SchedulingPage: React.FC = () => {
                 min={0}
                 max={12}
                 step={0.5}
+                precision={2}
                 value={schedulingConstraints.setup_changeover_hours}
                 onChange={(v) =>
                   setSchedulingConstraints((c) => ({

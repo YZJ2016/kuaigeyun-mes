@@ -563,6 +563,8 @@
     "master-data:material:revoke",
     "master-data:material:audit",
     "master-data:material:print",
+    "master-data:material:sync",
+    "master-data:material:push",
     "master-data:material-batch:read",
     "master-data:material-batch:create",
     "master-data:material-batch:delete",
@@ -649,6 +651,8 @@
     "master-data:process:engineering-bom:audit",
     "master-data:process:engineering-bom:reject",
     "master-data:process:engineering-bom:print",
+    "master-data:process:engineering-bom:sync",
+    "master-data:process:engineering-bom:push",
     "master-data:process:operation:read",
     "master-data:process:operation:create",
     "master-data:process:operation:delete",
@@ -661,6 +665,8 @@
     "master-data:process:operation:audit",
     "master-data:process:operation:reject",
     "master-data:process:operation:print",
+    "master-data:process:operation:sync",
+    "master-data:process:operation:push",
     "master-data:process:route:read",
     "master-data:process:route:create",
     "master-data:process:route:delete",
@@ -1186,7 +1192,8 @@
       "resource": "master-data:process:drawing",
       "name": "工程图纸审核",
       "template": "simple",
-      "config_category": "common"
+      "config_category": "plm",
+      "config_section": "plm_doc"
     }
   ]
 }

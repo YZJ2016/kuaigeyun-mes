@@ -2271,7 +2271,8 @@ class DocumentRelationService:
         # 工单（MTO模式）
         work_orders = await WorkOrder.filter(
             tenant_id=tenant_id,
-            sales_order_id=order_id
+            sales_order_id=order_id,
+            deleted_at__isnull=True,
         ).limit(10)
         for wo in work_orders:
             downstream.append({
@@ -2286,7 +2287,8 @@ class DocumentRelationService:
         # 销售出库单
         deliveries = await SalesDelivery.filter(
             tenant_id=tenant_id,
-            sales_order_id=order_id
+            sales_order_id=order_id,
+            deleted_at__isnull=True,
         ).limit(10)
         for delivery in deliveries:
             downstream.append({

@@ -76,6 +76,7 @@ import {
   type ProductionFileStatus,
   type ProductionFileVersion,
 } from '../../services/production-file';
+import { resolvePlmStandardDocListSearch } from '../../utils/plmListCore';
 
 const RESOURCE = 'kuaiplm:production-file';
 const FILE_CATEGORY = 'production_file';
@@ -734,7 +735,8 @@ const ProductionFilesPage: React.FC = () => {
       rowKey="id"
       columns={columns}
       permissionResource={RESOURCE}
-      columnPersistenceId={`apps.kuaiplm.pages.production-files.${pageTab}.width-v5`}
+      columnPersistenceId={`apps.kuaiplm.pages.production-files.${pageTab}.width-v6`}
+      showAdvancedSearch
       enableRowSelection
       selectedRowKeys={selectedRowKeys}
       onSelectedRowKeysChange={setSelectedRowKeys}
@@ -788,19 +790,26 @@ const ProductionFilesPage: React.FC = () => {
       }
       toolBarRender={() => []}
       headerTitle={t('app.kuaiplm.productionFile.title')}
-      request={async (params) => {
+      skipFuzzyPinyinClientFilter
+      params={
+        pageTabIsRd(pageTab)
+          ? { pageTab, rdListViewScope }
+          : { pageTab }
+      }
+      request={async (params, _sort, _filter, searchFormValues) => {
+        const { keyword, status } = resolvePlmStandardDocListSearch(searchFormValues);
         const res = await productionFileApi.list({
           skip: ((params.current || 1) - 1) * (params.pageSize || 20),
           limit: params.pageSize || 20,
-          keyword: params.keyword as string | undefined,
-          status: params.status as string | undefined,
+          keyword,
+          status,
           catalog_kind: kind,
           file_type: fileTypeFilter,
-          production_view: pageTabIsRd(pageTab) && rdListViewScope === 'production',
+          production_view:
+            pageTabIsRd(pageTab) && params.rdListViewScope === 'production',
         });
         return { data: res.items, success: true, total: res.total };
       }}
-      search={{ labelWidth: 'auto' }}
     />
     </>
   );

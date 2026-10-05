@@ -1,4 +1,10 @@
-import { extractProTableSort } from '../../../utils/tableQueryKey';
+import {
+  extractProTableSort,
+  pickListSearchKeyword,
+  pickSearchDateTimeRange,
+  pickSearchString,
+  pickSearchTriStateBoolean,
+} from '../../../utils/tableQueryKey';
 import { parseSalesReportDateRange } from '../services/reports';
 import { formatDateTime } from '../../../utils/format';
 
@@ -15,52 +21,57 @@ export function normalizeCustomerPoolListResponse(res: unknown): { data: unknown
   return { data: [], total: 0 };
 }
 
-function pickString(searchFormValues: Record<string, unknown> | null | undefined, key: string) {
-  const v = searchFormValues?.[key];
-  return typeof v === 'string' && v.trim() ? v.trim() : undefined;
-}
-
 function resolveOrderBy(sort?: Record<string, unknown>) {
   const { sortBy, sortOrder } = extractProTableSort(sort ?? {});
   return sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
 }
 
-function parseDateTimeRange(range: unknown): { from?: string; to?: string } {
-  if (!range || !Array.isArray(range) || !range[0]) {
-    return {};
-  }
-  const from = formatDateTime(range[0] as string | Date, 'YYYY-MM-DD HH:mm:ss');
-  const to = range[1] ? formatDateTime(range[1] as string | Date, 'YYYY-MM-DD HH:mm:ss') : from;
-  return { from, to };
-}
-
 export function resolveCustomerPoolListParams(
   searchFormValues?: Record<string, unknown> | null,
   sort?: Record<string, unknown>,
-): Record<string, string | number | undefined> {
-  const s = searchFormValues ?? {};
-  const fuzzyKeyword = pickString(s, 'keyword');
-  const lastFollowUpRange = parseDateTimeRange(s.last_follow_up_at_range);
-  const recycleRange = parseDateTimeRange(s.recycle_at_range);
-  const assignedRange = parseDateTimeRange(s.assigned_at_range);
-  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(s, [
+): Record<string, string | number | boolean | undefined> {
+  const search = searchFormValues ?? {};
+  const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
+  const lastFollowUpRange = pickSearchDateTimeRange(
+    searchFormValues,
+    'last_follow_up_from',
+    'last_follow_up_to',
+    'last_follow_up_at_range',
+  );
+  const recycleRange = pickSearchDateTimeRange(
+    searchFormValues,
+    'recycle_from',
+    'recycle_to',
+    'recycle_at_range',
+  );
+  const assignedRange = pickSearchDateTimeRange(
+    searchFormValues,
+    'assigned_from',
+    'assigned_to',
+    'assigned_at_range',
+  );
+  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(search, [
     'created_at_range',
     'createdAtRange',
   ]);
-  const { date_start: updated_start_date, date_end: updated_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: updated_start_date, date_end: updated_end_date } = parseSalesReportDateRange(search, [
     'updated_at_range',
     'updatedAtRange',
   ]);
 
-  const salesmanRaw = s.salesmanId;
+  const salesmanRaw = pickSearchString(searchFormValues, 'salesmanId');
   const salesmanId =
-    salesmanRaw != null && salesmanRaw !== '' ? Number(salesmanRaw) : undefined;
-  const poolStatusRaw = s.poolStatus;
+    salesmanRaw != null && Number.isFinite(Number(salesmanRaw)) ? Number(salesmanRaw) : undefined;
+  const poolStatusRaw = pickSearchString(searchFormValues, 'poolStatus');
   const poolStatus =
     poolStatusRaw === 'pool' || poolStatusRaw === 'owned' ? poolStatusRaw : undefined;
-  const followStatusRaw = pickString(s, 'follow_status') || pickString(s, 'followStatus');
-  const marketScopeRaw = pickString(s, 'market_scope') || pickString(s, 'marketScope') || 'domestic';
-  const inactive7dRaw = s.inactive_7d ?? s.inactive7d;
+  const followStatusRaw =
+    pickSearchString(searchFormValues, 'follow_status') ?? pickSearchString(searchFormValues, 'followStatus');
+  const marketScopeRaw =
+    pickSearchString(searchFormValues, 'market_scope') ??
+    pickSearchString(searchFormValues, 'marketScope') ??
+    'domestic';
+  const inactiveTri = pickSearchTriStateBoolean(searchFormValues, 'inactive');
 
   const params: Record<string, string | number | boolean | undefined> = {
     order_by: resolveOrderBy(sort),
@@ -69,10 +80,15 @@ export function resolveCustomerPoolListParams(
     marketScope: marketScopeRaw === 'export' ? 'export' : 'domestic',
     followStatus:
       followStatusRaw === 'pending' || followStatusRaw === 'followed' ? followStatusRaw : undefined,
-    intentMaterialName: pickString(s, 'intent_material_name') || pickString(s, 'intentMaterialName'),
-    customerLevelCode: pickString(s, 'customer_level_code') || pickString(s, 'customerLevelCode'),
-    regionText: pickString(s, 'region_text') || pickString(s, 'regionText'),
-    inactive7d: inactive7dRaw === true || inactive7dRaw === 'true' ? true : undefined,
+    intentMaterialName:
+      pickSearchString(searchFormValues, 'intent_material_name') ??
+      pickSearchString(searchFormValues, 'intentMaterialName'),
+    customerLevelCode:
+      pickSearchString(searchFormValues, 'customer_level_code') ??
+      pickSearchString(searchFormValues, 'customerLevelCode'),
+    regionText:
+      pickSearchString(searchFormValues, 'region_text') ?? pickSearchString(searchFormValues, 'regionText'),
+    inactive: inactiveTri === true ? true : undefined,
     last_follow_up_from: lastFollowUpRange.from,
     last_follow_up_to: lastFollowUpRange.to,
     recycle_from: recycleRange.from,
@@ -88,10 +104,10 @@ export function resolveCustomerPoolListParams(
   if (fuzzyKeyword) {
     params.keyword = fuzzyKeyword;
   } else {
-    const code = pickString(s, 'code');
-    const name = pickString(s, 'name');
-    const contactPerson = pickString(s, 'contact_person');
-    const phone = pickString(s, 'phone');
+    const code = pickSearchString(searchFormValues, 'code');
+    const name = pickSearchString(searchFormValues, 'name');
+    const contactPerson = pickSearchString(searchFormValues, 'contact_person');
+    const phone = pickSearchString(searchFormValues, 'phone');
     if (code) params.code = code;
     if (name) params.name = name;
     if (contactPerson) params.contact_person = contactPerson;

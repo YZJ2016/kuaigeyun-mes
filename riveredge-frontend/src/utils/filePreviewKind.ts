@@ -8,7 +8,12 @@ const TEXT_EXTENSIONS = new Set([
   'sql', 'json', 'properties', 'bat', 'sh', 'py', 'js', 'ts', 'jsx', 'tsx',
   'css', 'scss', 'less', 'html', 'htm',
 ]);
-const SPREADSHEET_EXTENSIONS = new Set(['xls', 'xlsx', 'csv', 'ods']);
+/** 前端 SheetJS 本地表格预览（csv/ods） */
+const SPREADSHEET_EXTENSIONS = new Set(['csv', 'ods']);
+/** Word / PPT（含 2007+ OOXML），走 react-doc-viewer 或 LibreOffice 转 PDF */
+const OFFICE_MS_DOC_EXTENSIONS = new Set(['doc', 'docx', 'ppt', 'pptx']);
+/** Excel 走 Univer Sheet 预览，不转 PDF、不走微软在线 */
+const EXCEL_WORKBOOK_EXTENSIONS = new Set(['xls', 'xlsx']);
 const VIDEO_EXTENSIONS = new Set(['mp4', 'webm', 'ogg', 'mov', 'm4v', 'avi', 'mkv']);
 const AUDIO_EXTENSIONS = new Set(['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac', 'webm']);
 
@@ -121,13 +126,39 @@ export function isTextFile(source: FilePreviewSource): boolean {
 export function isSpreadsheetFile(source: FilePreviewSource): boolean {
   const ext = getFileExt(source);
   const mime = getMime(source);
+  if (isOfficeMsDocFile(source) || isExcelWorkbookFile(source)) return false;
   return (
     SPREADSHEET_EXTENSIONS.has(ext)
-    || mime.includes('spreadsheet')
-    || mime.includes('ms-excel')
     || mime === 'text/csv'
     || mime === 'application/csv'
+    || mime === 'application/vnd.oasis.opendocument.spreadsheet'
   );
+}
+
+/**
+ * Word / PowerPoint（doc/docx/ppt/pptx）。
+ * 预览走 react-doc-viewer 或 LibreOffice 转 PDF。Excel 见 isExcelWorkbookFile。
+ */
+export function isOfficeMsDocFile(source: FilePreviewSource): boolean {
+  const ext = getFileExt(source);
+  if (EXCEL_WORKBOOK_EXTENSIONS.has(ext)) return false;
+  if (OFFICE_MS_DOC_EXTENSIONS.has(ext)) return true;
+  const mime = getMime(source);
+  if (mime.includes('spreadsheetml') || mime.includes('ms-excel')) return false;
+  return (
+    mime === 'application/msword'
+    || mime === 'application/vnd.ms-powerpoint'
+    || mime.includes('wordprocessingml')
+    || mime.includes('presentationml')
+  );
+}
+
+/** Excel 工作簿：Univer Sheet 预览 */
+export function isExcelWorkbookFile(source: FilePreviewSource): boolean {
+  const ext = getFileExt(source);
+  if (EXCEL_WORKBOOK_EXTENSIONS.has(ext)) return true;
+  const mime = getMime(source);
+  return mime.includes('spreadsheetml') || mime === 'application/vnd.ms-excel';
 }
 
 export function isVideoFile(source: FilePreviewSource): boolean {
@@ -145,4 +176,13 @@ export function isAudioFile(source: FilePreviewSource): boolean {
 /** 由前端解析渲染的文档类预览（文本、表格、音视频），不走 iframe */
 export function isInlineDocumentPreview(source: FilePreviewSource): boolean {
   return isTextFile(source) || isSpreadsheetFile(source) || isVideoFile(source) || isAudioFile(source);
+}
+
+/** 需走 FilePreviewModal 文档区（本地解析或 Office Online），不依赖后端 supported */
+export function isDocumentPreviewFile(source: FilePreviewSource): boolean {
+  return (
+    isInlineDocumentPreview(source)
+    || isOfficeMsDocFile(source)
+    || isExcelWorkbookFile(source)
+  );
 }

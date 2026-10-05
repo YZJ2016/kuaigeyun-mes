@@ -27,6 +27,7 @@ import type {
 } from '../../../types/material-market-price';
 import { materialMarketPriceApi } from '../../../services/material-market-price';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
+import { pickListSearchKeyword, pickSearchDate } from '../../../../../utils/tableQueryKey';
 
 function formatDate(v: unknown): string | undefined {
   if (!v) return undefined;
@@ -410,25 +411,26 @@ const MarketPricesPage: React.FC = () => {
       <UniTable<MaterialMarketPrice>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('masterData.marketPrices')}
-        columnPersistenceId="apps.master-data.pages.materials.market-prices.list-v6"
+        columnPersistenceId="apps.master-data.pages.materials.market-prices.list-v8"
+        showAdvancedSearch
+        searchResetSeed={() => ({ priceDate: today })}
         headerTitle={t('app.master-data.menu.materials.market-prices')}
         actionRef={actionRef}
         rowKey={marketPriceRowKey}
         columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
-        request={async (params, sort, _filter, search) => {
+        request={async (params, sort, _filter, searchFormValues) => {
           const { current = 1, pageSize = 20 } = params;
           const sortKey = sort ? Object.keys(sort)[0] : undefined;
           const res = await materialMarketPriceApi.list({
             skip: ((current as number) - 1) * (pageSize as number),
             limit: pageSize as number,
-            keyword: (params.keyword as string) || (search?.keyword as string) || undefined,
-            priceDate: formatDate(params.priceDate ?? search?.priceDate) || today,
+            keyword: pickListSearchKeyword(searchFormValues),
+            priceDate: pickSearchDate(searchFormValues, 'priceDate') || today,
             sortBy: sortKey,
             sortOrder: sortKey && sort?.[sortKey] === 'ascend' ? 'asc' : sortKey ? 'desc' : undefined,
           });
           return { data: res.items || [], success: true, total: res.total || 0 };
         }}
-        search={{ labelWidth: 'auto' }}
         showCreateButton={perms.canUpdate}
         createButtonText={t('common.create')}
         onCreate={handleCreate}

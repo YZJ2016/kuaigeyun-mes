@@ -47,6 +47,7 @@ const RollingSchedulingPage = lazy(() => import('./pages/plan-management/rolling
 const ProductionControlTower = lazy(() => import('./pages/plan-management/production-plans/ProductionControlTower'));
 const MESDashboard = lazy(() => import('./pages/dashboard'));
 const TimeconfigPage = lazy(() => import('./pages/timeconfig'));
+const FlowDataGeneratePage = lazy(() => import('./pages/app-management/flow-data-generate'));
 
 // 生产执行页面
 const ManufacturingDashboardPage = lazy(() => import('./pages/production-execution/dashboard'));
@@ -141,7 +142,7 @@ const SystemDocumentsPage = lazy(() => import('./pages/quality-management/system
 const QcSopPage = lazy(() => import('./pages/quality-management/qc-sop'));
 const InternalAuditsPage = lazy(() => import('./pages/quality-management/internal-audits'));
 const ManagementReviewsPage = lazy(() => import('./pages/quality-management/management-reviews'));
-const IsoClausesPage = lazy(() => import('./pages/quality-management/iso-clauses'));
+const ClauseManagementPage = lazy(() => import('./pages/quality-management/clause-management'));
 const FaiOrdersPage = lazy(() => import('./pages/quality-management/fai-orders'));
 const FaiBalloonPage = lazy(() => import('./pages/quality-management/fai-orders/balloon'));
 
@@ -537,7 +538,8 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="quality-management/supplier-evaluations" element={withPageSuspense(SupplierEvaluationsPage)} />
       <Route path="quality-management/oqc-inspection" element={withPageSuspense(OQCInspectionPage)} />
       <Route path="quality-management/spc-monitor" element={withPageSuspense(SPCMonitorPage)} />
-      <Route path="quality-management/iso-clauses" element={withPageSuspense(IsoClausesPage)} />
+      <Route path="quality-management/clause-management" element={withPageSuspense(ClauseManagementPage)} />
+      <Route path="quality-management/iso-clauses" element={<Navigate to="/apps/kuaizhizao/quality-management/clause-management" replace />} />
       <Route path="quality-management/system-documents" element={withPageSuspense(SystemDocumentsPage)} />
       <Route path="quality-management/qc-sop" element={withPageSuspense(QcSopPage)} />
       <Route path="quality-management/internal-audits" element={withPageSuspense(InternalAuditsPage)} />
@@ -829,6 +831,8 @@ const KuaizhizaoApp: React.FC = () => {
 
       {/* 详情抽屉时间显示：不进菜单，仅地址栏 /apps/kuaizhizao/timeconfig */}
       <Route path="timeconfig" element={withPageSuspense(TimeconfigPage)} />
+      {/* 流程造数：不进菜单/应用中心，仅手输地址 /apps/kuaizhizao/app-management/flow-data-generate */}
+      <Route path="app-management/flow-data-generate" element={withPageSuspense(FlowDataGeneratePage)} />
       {/* 默认路由 - 应用首页 */}
       <Route path="" element={withPageSuspense(MESDashboard)} />
       </Routes>

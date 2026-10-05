@@ -194,7 +194,7 @@ def _material_group_sync_service():
     "/groups/sync-binding",
     response_model=MasterDataSyncBindingOut,
     summary="物料分组同步绑定配置",
-    dependencies=[Depends(require_master_data_module_access("master-data:material"))],
+    dependencies=[Depends(require_master_data_module_access("material"))],
 )
 async def get_material_group_sync_binding(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -206,7 +206,7 @@ async def get_material_group_sync_binding(
     "/groups/sync-binding",
     response_model=MasterDataSyncBindingOut,
     summary="保存物料分组同步绑定配置",
-    dependencies=[Depends(require_master_data_module_access("master-data:material"))],
+    dependencies=[Depends(require_master_data_module_access("material"))],
 )
 async def put_material_group_sync_binding(
     body: MasterDataSyncBindingUpsert,
@@ -222,7 +222,7 @@ async def put_material_group_sync_binding(
     "/groups/sync-from-source",
     response_model=MasterDataSyncFromSourceOut,
     summary="从数据接口或数据集同步物料分组",
-    dependencies=[Depends(require_master_data_module_access("master-data:material"))],
+    dependencies=[Depends(require_master_data_module_access("material"))],
 )
 async def sync_material_groups_from_source(
     body: MasterDataSyncFromSourceRequest,
@@ -353,6 +353,62 @@ async def list_bom_groups(
         approval_status=approval_status,
         keyword=keyword,
     )
+
+
+engineering_bom_sync_service = None
+
+
+def _engineering_bom_sync_service():
+    global engineering_bom_sync_service
+    if engineering_bom_sync_service is None:
+        from apps.master_data.services.engineering_bom_sync_service import EngineeringBomSyncService
+        engineering_bom_sync_service = EngineeringBomSyncService()
+    return engineering_bom_sync_service
+
+
+@router.get(
+    "/bom/sync-binding",
+    response_model=MasterDataSyncBindingOut,
+    summary="工程BOM同步绑定配置",
+    dependencies=[Depends(require_master_data_module_access("process:engineering-bom"))],
+)
+async def get_engineering_bom_sync_binding(
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    return await _engineering_bom_sync_service().get_binding(tenant_id)
+
+
+@router.put(
+    "/bom/sync-binding",
+    response_model=MasterDataSyncBindingOut,
+    summary="保存工程BOM同步绑定配置",
+    dependencies=[Depends(require_master_data_module_access("process:engineering-bom"))],
+)
+async def put_engineering_bom_sync_binding(
+    body: MasterDataSyncBindingUpsert,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    try:
+        return await _engineering_bom_sync_service().upsert_binding(tenant_id, body)
+    except ValidationError as e:
+        raise _http_error(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
+@router.post(
+    "/bom/sync-from-source",
+    response_model=MasterDataSyncFromSourceOut,
+    summary="从数据接口或数据集同步工程BOM",
+    dependencies=[Depends(require_master_data_module_access("process:engineering-bom"))],
+)
+async def sync_engineering_bom_from_source(
+    body: MasterDataSyncFromSourceRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    try:
+        return await _engineering_bom_sync_service().sync_from_source(tenant_id, current_user, body)
+    except ValidationError as e:
+        raise _http_error(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
 
 
 @router.get("/bom/component-ids", summary="List component material IDs")
@@ -1701,7 +1757,7 @@ def _material_sync_service():
     "/sync-binding",
     response_model=MasterDataSyncBindingOut,
     summary="物料同步绑定配置",
-    dependencies=[Depends(require_master_data_module_access("master-data:material"))],
+    dependencies=[Depends(require_master_data_module_access("material"))],
 )
 async def get_material_sync_binding(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -1713,7 +1769,7 @@ async def get_material_sync_binding(
     "/sync-binding",
     response_model=MasterDataSyncBindingOut,
     summary="保存物料同步绑定配置",
-    dependencies=[Depends(require_master_data_module_access("master-data:material"))],
+    dependencies=[Depends(require_master_data_module_access("material"))],
 )
 async def put_material_sync_binding(
     body: MasterDataSyncBindingUpsert,
@@ -1729,7 +1785,7 @@ async def put_material_sync_binding(
     "/sync-from-source",
     response_model=MasterDataSyncFromSourceOut,
     summary="从数据接口或数据集同步物料",
-    dependencies=[Depends(require_master_data_module_access("master-data:material"))],
+    dependencies=[Depends(require_master_data_module_access("material"))],
 )
 async def sync_materials_from_source(
     body: MasterDataSyncFromSourceRequest,

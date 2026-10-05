@@ -122,15 +122,55 @@ export function pickListSearchKeyword(
   return kw || undefined
 }
 
+/** 高级搜索原始字段（JSON、column_filters 等结构化值） */
+export function pickSearchRaw(
+  searchFormValues: Record<string, unknown> | undefined | null,
+  key: string,
+): unknown {
+  if (!searchFormValues) return undefined
+  const raw = searchFormValues[key]
+  if (raw === '' || raw == null) return undefined
+  return raw
+}
+
 /** 高级搜索字符串字段（空则 undefined） */
 export function pickSearchString(
   searchFormValues: Record<string, unknown> | undefined | null,
   key: string,
 ): string | undefined {
   const raw = searchFormValues?.[key]
-  if (raw == null) return undefined
+  if (raw == null || raw === '') return undefined
+  if (Array.isArray(raw)) {
+    const first = String(raw[0] ?? '').trim()
+    return first || undefined
+  }
   const trimmed = String(raw).trim()
   return trimmed || undefined
+}
+
+/** 高级搜索布尔字段（true/false/未选） */
+export function pickSearchTriStateBoolean(
+  searchFormValues: Record<string, unknown> | undefined | null,
+  key: string,
+): boolean | undefined {
+  const raw = searchFormValues?.[key]
+  if (raw === true || raw === 'true') return true
+  if (raw === false || raw === 'false') return false
+  return undefined
+}
+
+/** 模糊 keyword，否则依次尝试列内高级搜索字段 */
+export function pickListSearchKeywordOrFields(
+  searchFormValues?: Record<string, unknown> | null,
+  ...fieldKeys: string[]
+): string | undefined {
+  const kw = pickListSearchKeyword(searchFormValues)
+  if (kw) return kw
+  for (const key of fieldKeys) {
+    const v = pickSearchString(searchFormValues, key)
+    if (v) return v
+  }
+  return undefined
 }
 
 /** 高级搜索日期字段 → YYYY-MM-DD（兼容 dayjs / Date / ISO 字符串） */
@@ -144,6 +184,40 @@ export function pickSearchDate(
   if (parsed.isValid()) return parsed.format('YYYY-MM-DD')
   const fallback = String(raw).trim()
   return fallback || undefined
+}
+
+/** 高级搜索日期时间字段 → YYYY-MM-DD HH:mm:ss */
+export function pickSearchDateTime(
+  searchFormValues: Record<string, unknown> | undefined | null,
+  key: string,
+): string | undefined {
+  const raw = searchFormValues?.[key]
+  if (raw == null || raw === '') return undefined
+  const parsed = dayjs(raw as never)
+  if (parsed.isValid()) return parsed.format('YYYY-MM-DD HH:mm:ss')
+  const fallback = String(raw).trim()
+  return fallback || undefined
+}
+
+/** 高级搜索日期时间区间：优先 from/to 键，否则读取 rangeKey 数组 */
+export function pickSearchDateTimeRange(
+  searchFormValues: Record<string, unknown> | undefined | null,
+  fromKey: string,
+  toKey: string,
+  rangeKey?: string,
+): { from?: string; to?: string } {
+  const from = pickSearchDateTime(searchFormValues, fromKey)
+  const to = pickSearchDateTime(searchFormValues, toKey)
+  if (from || to) return { from, to: to ?? from }
+  if (!rangeKey) return {}
+  const raw = searchFormValues?.[rangeKey]
+  if (!Array.isArray(raw) || raw.length === 0 || raw[0] == null || raw[0] === '') return {}
+  const start = pickSearchDateTime({ [fromKey]: raw[0] }, fromKey)
+  const end =
+    raw.length > 1 && raw[1] != null && raw[1] !== ''
+      ? pickSearchDateTime({ [toKey]: raw[1] }, toKey)
+      : start
+  return { from: start, to: end }
 }
 
 /** 高级搜索日期区间：优先 from/to 键，否则读取 rangeKey 数组 */

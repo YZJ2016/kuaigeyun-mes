@@ -48,6 +48,10 @@ export interface EquipmentListParams {
   status?: string;
   is_active?: boolean;
   workstation_id?: number;
+  /** 仅返回具备该工序加工能力的设备 */
+  capable_operation_id?: number;
+  /** 与 capable_operation_id 联用时额外保留的设备（派工回显） */
+  include_equipment_id?: number;
   search?: string;
 }
 

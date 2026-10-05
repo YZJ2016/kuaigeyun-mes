@@ -96,7 +96,10 @@ import {
 import { formatBusinessDateOnly } from '../../../../../utils/format';
 import { glService } from '../../../../kuaicaiwu/services/gl';
 import { exchangeRateService } from '../../../../kuaicaiwu/services/exchange-rate';
-import { resolveDocumentCurrencyInputPrefix } from '../../../utils/documentCurrencyDisplay';
+import {
+  documentCurrencyTitleVars,
+  resolveDocumentCurrencyInputPrefix,
+} from '../../../utils/documentCurrencyDisplay';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { ListUniLifecycleCell } from '../shared/ListUniLifecycleCell';
@@ -105,7 +108,7 @@ import {
   SalesDocumentSalesmanListFilter,
   resolveListSalesmanId,
 } from '../shared/SalesDocumentSalesmanListFilter';
-import { getSalesOrderLifecycle, isSalesOrderDeliveryOverdue, isSalesOrderLineDeliveryOverdue, buildSalesOrderLifecycleValueEnum, resolveSalesOrderListLifecycleParams } from '../../../utils/salesOrderLifecycle';
+import { getSalesOrderLifecycle, isSalesOrderDeliveryOverdue, isSalesOrderLineDeliveryOverdue, buildSalesOrderLifecycleValueEnum, resolveSalesOrderListApiParams } from '../../../utils/salesOrderLifecycle';
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
 import {
   isAuditedStatus,
@@ -197,6 +200,7 @@ import {
   previewPushSalesOrderToShipmentNotice,
   previewPushSalesOrderToDelivery,
   previewPushSalesOrderToInvoice,
+  previewPushSalesOrderToPrepayment,
   previewPushSalesOrderToSalesReturn,
   previewBackfillSalesContract,
   pushSalesOrderToComputation,
@@ -206,6 +210,7 @@ import {
   pushSalesOrderToShipmentNotice,
   pushSalesOrderToDelivery,
   pushSalesOrderToInvoice,
+  pushSalesOrderToPrepayment,
   pushSalesOrderToSalesReturn,
   pullSalesOrderFromQuotation,
   pullSalesOrderFromSalesContract,
@@ -332,6 +337,7 @@ function resolveDefaultSalesOrderListScope(): SalesOrderListScope {
 /** 销售明细行（订单 + 明细合并，用于明细表格平铺） */
 type SalesOrderItemRow = SalesOrderItem & {
   _rowKey: string;
+  currency_code?: string;
   sales_order_id: number;
   order_code?: string;
   customer_name?: string;
@@ -587,6 +593,7 @@ const SalesOrdersPage: React.FC = () => {
   const pushToPurchaseRequisitionAction = resolveKuaizhizaoDocumentAction(t, 'purchase_requisition.pull_from_sales_order');
   const pushToPurchaseOrderAction = resolveKuaizhizaoDocumentAction(t, 'purchase_order.pull_from_sales_order');
   const pushToSalesInvoiceAction = resolveKuaizhizaoDocumentAction(t, 'sales_invoice.pull_from_sales_order');
+  const pushToPrepaymentAction = resolveKuaizhizaoDocumentAction(t, 'receipt.pull_from_sales_order');
   const pushToShipmentNoticeAction = resolveKuaizhizaoDocumentAction(t, 'shipment_notice.pull_from_sales_order');
   const pushToSalesDeliveryAction = resolveKuaizhizaoDocumentAction(t, 'sales_delivery.pull_from_sales_order');
   const pushToSalesReturnAction = resolveKuaizhizaoDocumentAction(t, 'sales_return.pull_from_sales_order');
@@ -1864,6 +1871,7 @@ const SalesOrdersPage: React.FC = () => {
   const [pushShipmentNoticeLineWh, setPushShipmentNoticeLineWh] = useState<Record<number, number>>({});
   const [pushReturnLineBatch, setPushReturnLineBatch] = useState<Record<number, string>>({});
   const [pushDeliveryNotes, setPushDeliveryNotes] = useState('');
+  const [pushPrepaymentAmount, setPushPrepaymentAmount] = useState(0);
 
   const resolvePushPreviewModalTitle = (
     targetType: NonNullable<PushPreviewResponse['target_type']>,
@@ -1874,6 +1882,7 @@ const SalesOrdersPage: React.FC = () => {
     if (targetType === 'purchase_requisition') return pushToPurchaseRequisitionAction.label;
     if (targetType === 'purchase_order') return pushToPurchaseOrderAction.label;
     if (targetType === 'sales_invoice') return pushToSalesInvoiceAction.label;
+    if (targetType === 'receipt') return pushToPrepaymentAction.label;
     if (targetType === 'sales_delivery') return pushToSalesDeliveryAction.label;
     if (targetType === 'sales_return') return pushToSalesReturnAction.label;
     if (targetType === 'sales_contract') return pushToBackfillSalesContractAction.label;
@@ -1904,6 +1913,7 @@ const SalesOrdersPage: React.FC = () => {
     setPushShipmentNoticeLineWh({});
     setPushReturnLineBatch({});
     setPushDeliveryNotes('');
+    setPushPrepaymentAmount(0);
     const ensureWorkCentersLoaded = async () => {
       if (workCenterList.length > 0) return;
       try {
@@ -1999,6 +2009,8 @@ const SalesOrdersPage: React.FC = () => {
             .filter((row) => Number((row as any).max_push_quantity ?? 0) > 0)
             .map((row) => Number((row as any).item_id));
           setWorkOrderSelectedItemIds(ids);
+        } else if (res?.target_type === 'receipt') {
+          setPushPrepaymentAmount(Number(res.prepayment_amount ?? 0));
         }
         setPushPreviewLoading(false);
       })
@@ -2318,6 +2330,18 @@ const SalesOrdersPage: React.FC = () => {
             code: res?.contract_code || t('app.kuaizhizao.salesOrder.createdFallback'),
           }),
         );
+      } else if (pushPreviewData.target_type === 'receipt') {
+        if (!(pushPrepaymentAmount > 0)) {
+          messageApi.warning(t('app.kuaizhizao.salesOrder.pushPrepaymentAmountInvalid'));
+          return;
+        }
+        const res = await pushPreviewAction.doPush({ amount: pushPrepaymentAmount });
+        messageApi.success(
+          res?.message ||
+            t('app.kuaizhizao.salesOrder.pushPrepaymentSuccess', {
+              code: res?.receipt_code || t('app.kuaizhizao.salesOrder.createdFallback'),
+            }),
+        );
       }
       if (pushPreviewData.target_type === 'shipment_notice') {
         messageApi.success(t('app.kuaizhizao.salesOrder.shipmentNoticeCreated'));
@@ -2429,6 +2453,25 @@ const SalesOrdersPage: React.FC = () => {
       'sales_invoice',
       () => previewPushSalesOrderToInvoice(id),
       () => pushSalesOrderToInvoice(id),
+      () => refreshDrawerOrder(id),
+      id,
+    );
+  };
+
+  /** 处理下推到预收收款单 */
+  const handlePushToPrepayment = async (id: number, order?: SalesOrder | null) => {
+    if (!order?.capabilities?.push_prepayment?.allowed) {
+      messageApi.warning(
+        salesOrderCapabilityReasonMessage(order?.capabilities?.push_prepayment?.reason, t) ||
+          t('app.kuaizhizao.salesOrder.pushRequiresApproved'),
+      );
+      return;
+    }
+    showPushPreviewModal(
+      'receipt',
+      () => previewPushSalesOrderToPrepayment(id),
+      (payload?: { amount?: number; bank_account_id?: number; notes?: string }) =>
+        pushSalesOrderToPrepayment(id, payload),
       () => refreshDrawerOrder(id),
       id,
     );
@@ -3575,6 +3618,10 @@ const SalesOrdersPage: React.FC = () => {
       { disabled: !salesOrderPerms.canUpdate, title: permDeniedTitle },
       !salesNodeEnabled.invoice ? t('app.kuaizhizao.salesOrder.nodeInvoiceDisabled') : undefined,
     );
+    const prepaymentDisabledReason = resolvePushReason(
+      record.capabilities?.push_prepayment,
+      { disabled: !salesOrderPerms.canUpdate, title: permDeniedTitle },
+    );
     const shipmentDisabledReason = resolvePushReason(
       record.capabilities?.push_shipment_notice,
       { disabled: !salesOrderPerms.canUpdate, title: permDeniedTitle },
@@ -3592,6 +3639,7 @@ const SalesOrdersPage: React.FC = () => {
     const canPushShipment = !shipmentDisabledReason;
     const canPushDelivery = !deliveryDisabledReason;
     const canPushInvoice = !invoiceDisabledReason;
+    const canPushPrepayment = !prepaymentDisabledReason;
     const salesReturnDisabledReason = resolvePushReason(
       record.capabilities?.push_sales_return,
       { disabled: !salesOrderPerms.canUpdate, title: permDeniedTitle },
@@ -3659,6 +3707,13 @@ const SalesOrdersPage: React.FC = () => {
         onClick: () => canPushInvoice && handlePushToInvoice(record.id!),
       },
       {
+        key: 'prepayment',
+        label: pushToPrepaymentAction.label,
+        disabled: !!prepaymentDisabledReason,
+        title: prepaymentDisabledReason,
+        onClick: () => canPushPrepayment && handlePushToPrepayment(record.id!, record),
+      },
+      {
         key: 'shipment',
         label: pushToShipmentNoticeAction.label,
         disabled: !!shipmentDisabledReason,
@@ -3703,7 +3758,7 @@ const SalesOrdersPage: React.FC = () => {
         onClick: () => canWithdrawComputation && handleWithdrawFromComputation(record.id!),
       },
     ]);
-  }, [deliveryProjectPerms.canCreate, handleBackfillSalesContract, handlePushToComputation, handlePushToDelivery, handlePushToDeliveryProject, handlePushToInvoice, handlePushToPurchaseOrder, handlePushToPurchaseRequisition, handlePushToSalesOrderChange, handlePushToSalesReturn, handlePushToShipmentNotice, handlePushToWorkOrder, handleWithdrawFromComputation, permDeniedTitle, purchaseOrderPerms.canCreate, purchaseRequisitionPerms.canCreate, pushToBackfillSalesContractAction.label, pushToDemandComputationAction.label, pushToPurchaseOrderAction.label, pushToPurchaseRequisitionAction.label, pushToSalesDeliveryAction.label, pushToSalesInvoiceAction.label, pushToSalesOrderChangeAction.label, pushToSalesReturnAction.label, pushToShipmentNoticeAction.label, pushToWorkOrderAction.label, salesContractPerms.canCreate, salesNodeEnabled.demand_computation, salesNodeEnabled.invoice, salesNodeEnabled.shipment_notice, salesNodeEnabled.work_order, salesOrderPerms.canCreate, salesOrderPerms.canUpdate, t]);
+  }, [deliveryProjectPerms.canCreate, handleBackfillSalesContract, handlePushToComputation, handlePushToDelivery, handlePushToDeliveryProject, handlePushToInvoice, handlePushToPrepayment, handlePushToPurchaseOrder, handlePushToPurchaseRequisition, handlePushToSalesOrderChange, handlePushToSalesReturn, handlePushToShipmentNotice, handlePushToWorkOrder, handleWithdrawFromComputation, permDeniedTitle, purchaseOrderPerms.canCreate, purchaseRequisitionPerms.canCreate, pushToBackfillSalesContractAction.label, pushToDemandComputationAction.label, pushToPrepaymentAction.label, pushToPurchaseOrderAction.label, pushToPurchaseRequisitionAction.label, pushToSalesDeliveryAction.label, pushToSalesInvoiceAction.label, pushToSalesOrderChangeAction.label, pushToSalesReturnAction.label, pushToShipmentNoticeAction.label, pushToWorkOrderAction.label, salesContractPerms.canCreate, salesNodeEnabled.demand_computation, salesNodeEnabled.invoice, salesNodeEnabled.shipment_notice, salesNodeEnabled.work_order, salesOrderPerms.canCreate, salesOrderPerms.canUpdate, t]);
   const toolbarPushMenuItems = useMemo(
     () => (selectedOrderForToolbar ? buildToolbarPushMenuItems(selectedOrderForToolbar) : buildUniPushMenuItems([])),
     [buildToolbarPushMenuItems, selectedOrderForToolbar]
@@ -3742,7 +3797,7 @@ const SalesOrdersPage: React.FC = () => {
     () => (
       <Space key="highlight-overdue-switch" align="center">
         <Switch checked={highlightDeliveryOverdue} onChange={setHighlightDeliveryOverdue} />
-        <span className="uni-table-toolbar-plain-label" style={{ fontSize: 13, color: 'var(--ant-color-text)' }}>
+        <span className="uni-table-toolbar-plain-label">
           {t('app.kuaizhizao.salesOrder.highlightOverdue')}
         </span>
       </Space>
@@ -3789,8 +3844,11 @@ const SalesOrdersPage: React.FC = () => {
         pushTargets={{
           computation: 'demand_computation',
           workorder: 'work_order',
+          'purchase-requisition': 'purchase_requisition',
+          'purchase-order': 'purchase_order',
           'delivery-project': 'delivery_project',
           invoice: 'sales_invoice',
+          prepayment: 'receipt',
           shipment: 'shipment_notice',
           delivery: 'sales_delivery',
           'sales-return': 'sales_return',
@@ -3994,6 +4052,7 @@ const SalesOrdersPage: React.FC = () => {
           resource={SO}
           fieldName="total_amount"
           value={resolveSalesOrderDisplayTotalAmount(r)}
+          prefix={resolveDocumentCurrencyInputPrefix(r.currency_code)}
         />
       ),
     },
@@ -4205,14 +4264,21 @@ const SalesOrdersPage: React.FC = () => {
       ),
     },
     {
-      title: t('app.kuaizhizao.salesOrder.unitPrice'),
+      title: t('app.kuaizhizao.salesOrder.unitPrice', documentCurrencyTitleVars(undefined, t)),
       dataIndex: 'unit_price',
       width: 90,
       minWidth: 90,
       uniTableKeepWidth: true,
       resizable: false,
       align: 'right' as const,
-      render: (val: any) => <AmountDisplay resource={SO} fieldName="unit_price" value={val} />,
+      render: (val: any, r: SalesOrderItemRow) => (
+        <AmountDisplay
+          resource={SO}
+          fieldName="unit_price"
+          value={val}
+          prefix={resolveDocumentCurrencyInputPrefix(r.currency_code)}
+        />
+      ),
     },
     {
       title: t('app.kuaizhizao.salesOrder.taxRate'),
@@ -4225,14 +4291,21 @@ const SalesOrdersPage: React.FC = () => {
       render: (val: any) => val ?? 0,
     },
     {
-      title: t('app.kuaizhizao.salesOrder.inclAmount'),
+      title: t('app.kuaizhizao.salesOrder.inclAmount', documentCurrencyTitleVars(undefined, t)),
       dataIndex: 'item_amount',
       width: 100,
       minWidth: 100,
       uniTableKeepWidth: true,
       resizable: false,
       align: 'right' as const,
-      render: (val: any) => <AmountDisplay resource={SO} fieldName="amount_with_tax" value={val} />,
+      render: (val: any, r: SalesOrderItemRow) => (
+        <AmountDisplay
+          resource={SO}
+          fieldName="amount_with_tax"
+          value={val}
+          prefix={resolveDocumentCurrencyInputPrefix(r.currency_code)}
+        />
+      ),
     },
     {
       title: t('app.kuaizhizao.salesOrder.deliveredQty'),
@@ -4710,10 +4783,16 @@ const SalesOrdersPage: React.FC = () => {
       </DetailDrawerSection>
 
       <DetailDrawerSection titleAccent title={t('app.uniDetail.sectionLines')}>
-          <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.price_type !== curr?.price_type}>
+          <AntForm.Item
+            noStyle
+            shouldUpdate={(prev: any, curr: any) =>
+              prev?.price_type !== curr?.price_type || prev?.currency_code !== curr?.currency_code
+            }
+          >
             {({ getFieldValue: getFormValue }: any) => {
               const priceType = salesFormPriceType(getFormValue('price_type'));
               const showTaxBreakdownColumns = priceType === 'tax_inclusive';
+              const currencyVars = documentCurrencyTitleVars(getFormValue('currency_code'), t);
               const materialSourceType = productScope === 'make' ? 'Make' : undefined;
               const productColumnTitle = (
                 <Space size={8} align="center">
@@ -4927,8 +5006,8 @@ const SalesOrdersPage: React.FC = () => {
                     {
                       title:
                         priceType === 'tax_inclusive'
-                          ? t('app.kuaizhizao.salesOrder.unitPriceColumnTaxInclusive')
-                          : t('app.kuaizhizao.salesOrder.unitPriceColumnTaxExclusive'),
+                          ? t('app.kuaizhizao.salesOrder.unitPriceColumnTaxInclusive', currencyVars)
+                          : t('app.kuaizhizao.salesOrder.unitPriceColumnTaxExclusive', currencyVars),
                       dataIndex: 'unit_price',
                       width: DOCUMENT_DETAIL_COL_WIDTH.unitPrice + 28,
                       ...DOCUMENT_DETAIL_NUM_COL,
@@ -4981,7 +5060,7 @@ const SalesOrdersPage: React.FC = () => {
                     ...(showTaxBreakdownColumns
                       ? [
                           {
-                            title: t('app.kuaizhizao.salesOrder.exclAmount'),
+                            title: t('app.kuaizhizao.salesOrder.exclAmount', currencyVars),
                             width: DOCUMENT_DETAIL_COL_WIDTH.exclAmount,
                             ...DOCUMENT_DETAIL_NUM_COL,
                             render: (_: any, __: any, index: number) => (
@@ -5055,7 +5134,7 @@ const SalesOrdersPage: React.FC = () => {
                     ...(showTaxBreakdownColumns
                       ? [
                           {
-                            title: t('app.kuaizhizao.salesOrder.taxAmount'),
+                            title: t('app.kuaizhizao.salesOrder.taxAmount', currencyVars),
                             width: DOCUMENT_DETAIL_COL_WIDTH.taxAmount,
                             ...DOCUMENT_DETAIL_NUM_COL,
                             render: (_: any, __: any, index: number) => (
@@ -5096,8 +5175,8 @@ const SalesOrdersPage: React.FC = () => {
                       : []),
                     {
                       title: showTaxBreakdownColumns
-                        ? t('app.kuaizhizao.salesOrder.inclAmount')
-                        : t('app.kuaizhizao.salesOrder.exclAmount'),
+                        ? t('app.kuaizhizao.salesOrder.inclAmount', currencyVars)
+                        : t('app.kuaizhizao.salesOrder.exclAmount', currencyVars),
                       width: DOCUMENT_DETAIL_COL_WIDTH.lineAmount,
                       ...DOCUMENT_DETAIL_NUM_COL,
                       render: (_: any, __: any, index: number) => (
@@ -5381,7 +5460,7 @@ const SalesOrdersPage: React.FC = () => {
             onCancel={() => setImportModalVisible(false)}
             onConfirm={handleItemImport}
             title={t('app.kuaizhizao.salesOrder.importItemsTitle')}
-            headers={[t('app.kuaizhizao.salesOrder.materialCode'), t('app.kuaizhizao.salesOrder.spec'), t('common.unit'), t('common.quantity'), t('app.kuaizhizao.salesOrder.unitPrice'), t('app.kuaizhizao.salesOrder.deliveryDate')]}
+            headers={[t('app.kuaizhizao.salesOrder.materialCode'), t('app.kuaizhizao.salesOrder.spec'), t('common.unit'), t('common.quantity'), t('app.kuaizhizao.salesOrder.unitPrice', documentCurrencyTitleVars(undefined, t)), t('app.kuaizhizao.salesOrder.deliveryDate')]}
             exampleRow={['MAT001', 'Spec X', pickImportExampleValue(salesOrderLineUnitOptions, 'PCS'), '100', '1.5', '2026-03-01']}
             columnOptions={salesOrderLineImportColumnOptions}
           />
@@ -5541,46 +5620,9 @@ const SalesOrdersPage: React.FC = () => {
           }}
           request={async (params: any, sort: any, _filter: any, searchFormValues: any, meta?: UniTableRequestMeta): Promise<any> => {
             const isPrefetch = meta?.purpose === 'prefetch';
-            const sf = searchFormValues ?? {};
-            const { sortBy, sortOrder } = extractProTableSort(sort);
-            const orderBy =
-              sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
-            const apiParams: SalesOrderListParams = {
-              skip: ((params.current || 1) - 1) * (params.pageSize || 20),
-              limit: params.pageSize || 20,
-              order_by: orderBy,
-            };
-            Object.assign(apiParams, resolveSalesOrderListLifecycleParams(sf, params));
-            const fuzzyKeyword =
-              typeof sf.keyword === 'string' ? sf.keyword.trim() : '';
-            const orderCode = sf.order_code != null ? String(sf.order_code).trim() : '';
-            if (fuzzyKeyword) {
-              apiParams.keyword = fuzzyKeyword;
-            } else if (orderCode) {
-              apiParams.order_code = orderCode;
-            }
-            if (sf.customer_id != null && sf.customer_id !== '') {
-              apiParams.customer_id = Number(sf.customer_id);
-            }
-            const salesmanId = resolveListSalesmanId(salesmanFilterIdRef.current, sf);
-            if (salesmanId != null) {
-              apiParams.salesman_id = salesmanId;
-            }
-            const contractCode = sf.contract_code != null ? String(sf.contract_code).trim() : '';
-            if (contractCode) apiParams.contract_code = contractCode;
-            const orderDateRange = sf.order_date_range as [unknown, unknown] | undefined;
-            if (orderDateRange && Array.isArray(orderDateRange) && orderDateRange[0]) {
-              apiParams.start_date = formatDateTime(orderDateRange[0] as string | Date, 'YYYY-MM-DD');
-              apiParams.end_date = orderDateRange[1]
-                ? formatDateTime(orderDateRange[1] as string | Date, 'YYYY-MM-DD')
-                : apiParams.start_date;
-            }
-            // 订单视图明细预览列 + 明细视图展开行均需 items
-            apiParams.include_items = true;
-            if (typeof sf.column_filters === 'string' && sf.column_filters.trim()) {
-              apiParams.column_filters = sf.column_filters.trim();
-            }
-            apiParams.list_scope = params.list_scope;
+            const apiParams = resolveSalesOrderListApiParams(params, sort, searchFormValues, {
+              salesmanId: resolveListSalesmanId(salesmanFilterIdRef.current, searchFormValues),
+            }) as SalesOrderListParams;
 
             const toFlatRows = (orders: SalesOrder[], writeRowKeyMap: boolean): SalesOrderItemRow[] => {
               const map = new Map<string, number>();
@@ -5617,6 +5659,7 @@ const SalesOrdersPage: React.FC = () => {
                     material_name: '-',
                     required_quantity: 0,
                     delivery_date: order.delivery_date ?? '',
+                    currency_code: order.currency_code,
                   } as SalesOrderItemRow);
                 } else {
                   items.forEach((item: SalesOrderItem, idx: number) => {
@@ -5657,6 +5700,7 @@ const SalesOrdersPage: React.FC = () => {
                       delivered_quantity: item.delivered_quantity,
                       remaining_quantity: item.remaining_quantity,
                       delivery_date: item.delivery_date ?? order.delivery_date ?? '',
+                      currency_code: order.currency_code,
                     } as SalesOrderItemRow);
                   });
                 }
@@ -5855,10 +5899,10 @@ const SalesOrdersPage: React.FC = () => {
               messageApi.error(error?.message || t('common.exportFailed'));
             }
           }}
-          showSyncButton={salesOrderPerms.canCreate && toolbarSyncPush.hubVisible}
+          showSyncButton={toolbarSyncPush.hubVisible}
           onSync={() => undefined}
           syncToolbarExtra={
-            salesOrderPerms.canCreate && toolbarSyncPush.hubVisible
+            toolbarSyncPush.hubVisible
               ? () => (
                   <SyncPushHubButton
                     syncEnabled={toolbarSyncPush.syncEnabled}
@@ -6328,7 +6372,8 @@ const SalesOrdersPage: React.FC = () => {
           disabled:
             pushPreviewLoading ||
             !pushPreviewData ||
-            (!!pushPreviewData?.has_blocking_issues && !!pushPreviewData?.blocking_reason),
+            (!!pushPreviewData?.has_blocking_issues && !!pushPreviewData?.blocking_reason) ||
+            (pushPreviewData?.target_type === 'receipt' && !(pushPrepaymentAmount > 0)),
         }}
       >
         {pushPreviewLoading ? (
@@ -6349,6 +6394,20 @@ const SalesOrdersPage: React.FC = () => {
                   t('app.kuaizhizao.salesOrder.pushFailed')
                 }
               />
+            ) : null}
+            {pushPreviewData.target_type === 'receipt' && !pushPreviewData.has_blocking_issues ? (
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ marginBottom: 8 }}>
+                  {t('app.kuaizhizao.salesOrder.pushPrepaymentAmount')}
+                </div>
+                <InputNumber
+                  style={{ width: 280 }}
+                  min={0.01}
+                  precision={2}
+                  value={pushPrepaymentAmount > 0 ? pushPrepaymentAmount : undefined}
+                  onChange={(v) => setPushPrepaymentAmount(Number(v) || 0)}
+                />
+              </div>
             ) : null}
             {pushPreviewData.target_type === 'work_order' && (
               <div style={{ marginBottom: 10 }}>

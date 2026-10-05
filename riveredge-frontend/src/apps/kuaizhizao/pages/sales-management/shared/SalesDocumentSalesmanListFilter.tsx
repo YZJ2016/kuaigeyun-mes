@@ -6,6 +6,7 @@ import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { normalizeUserDisplayName } from '../../../../../utils/userDisplay';
+import { pickSearchString } from '../../../../../utils/tableQueryKey';
 
 export type SalesmanListFilterValue = number | undefined;
 
@@ -84,8 +85,8 @@ export function resolveListSalesmanId(
   searchFormValues: { salesman_id?: unknown } | null | undefined,
 ): number | undefined {
   if (toolbarSalesmanId != null) return toolbarSalesmanId;
-  const raw = searchFormValues?.salesman_id;
-  if (raw == null || raw === '') return undefined;
+  const raw = pickSearchString(searchFormValues ?? null, 'salesman_id');
+  if (raw == null) return undefined;
   const n = Number(raw);
   return Number.isFinite(n) ? n : undefined;
 }

@@ -369,34 +369,6 @@ function Invoke-BgRollbackUpdate {
     Write-LogWarn "蓝绿回滚完成；完整退回代码: git checkout $(Get-BgStateValue 'pre_update_git_sha')"
 }
 
-function Reload-CaddyProdConfig {
-    New-Caddyfile
-    Load-DeployEnv
-    Set-CaddyEnv
-    $caddy = Resolve-Caddy
-    if (-not $caddy) { throw '未安装 Caddy' }
-    $config = (Resolve-Path $script:Caddyfile).Path
-    $reloadErr = Join-Path $script:LogsDir 'caddy-reload.err'
-    & $caddy validate --config $config 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw 'Caddyfile 校验失败' }
-    $pidFile = Join-Path $script:LogsDir 'caddy.pid'
-    if (Test-PidFileAlive $pidFile) {
-        Invoke-CaddyReload -CaddyBin $caddy -ConfigPath $config -AdminAddress $script:CaddyProdAdminAddr 2>$reloadErr
-        if ($LASTEXITCODE -eq 0) {
-            Write-LogOk 'Caddy 已 reload'
-            return
-        }
-        if (Test-Path $reloadErr) {
-            $tail = Get-Content $reloadErr -Tail 3 -ErrorAction SilentlyContinue
-            Write-LogWarn "Caddy reload 失败: $($tail -join ' ')"
-        } else {
-            Write-LogWarn 'Caddy reload 失败'
-        }
-    }
-    Write-LogInfo '正在重启 Caddy 以应用配置...'
-    Start-CaddyProd -Force
-}
-
 function Invoke-BgUpdateProd {
     Initialize-BgState
     Set-BgStateValue 'pre_update_git_sha' (git -C $script:ProjectRoot rev-parse HEAD 2>$null)

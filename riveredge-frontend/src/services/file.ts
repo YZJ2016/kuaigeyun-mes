@@ -115,10 +115,11 @@ export interface FileUpdate {
 }
 
 export interface FilePreviewResponse {
-  /** 固定为浏览器直连带 token 的下载预览 */
-  preview_mode: 'simple';
+  /** simple=原文件/简易；advanced=LibreOffice 转 PDF */
+  preview_mode: 'simple' | 'advanced';
   preview_url: string;
   file_type?: string;
+  file_extension?: string;
   supported: boolean;
 }
 

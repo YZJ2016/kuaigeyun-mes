@@ -5,7 +5,7 @@
  * 卡片式：单据名称 / 开关 / 审批流程下拉
  */
 
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { App, Card, Layout, Menu, Select, Spin, Switch, Typography } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -26,6 +26,63 @@ const AUDIT_BINDINGS_QUERY_KEY = ['auditBindings'] as const;
 interface AuditSettingsPanelProps {
   selectedCatId: string;
   onSelectCat: (id: string) => void;
+}
+
+type AuditRenderBlock =
+  | { kind: 'section'; sectionKey: string }
+  | { kind: 'item'; item: AuditBindingItem };
+
+/** 分区展示序：同分区条目聚拢，避免声明序交错导致标题重复出现 */
+const AUDIT_SECTION_ORDER = [
+  'office_admin',
+  'office_training',
+  'plm_change',
+  'plm_doc',
+  'plm_project',
+  'sales_order',
+  'sales_fulfillment',
+  'sales_special',
+  'procurement_request',
+  'procurement_order',
+  'production_work',
+  'production_reporting',
+  'quality_inspection',
+  'quality_complaint',
+  'quality_collab',
+  'warehouse_picking',
+  'warehouse_logistics',
+  'finance_ar_ap',
+  'finance_invoice',
+] as const;
+
+function sortAuditItemsForSections(items: AuditBindingItem[]): AuditBindingItem[] {
+  return items
+    .map((item, index) => ({ item, index }))
+    .sort((a, b) => {
+      const sa = (a.item.config_section || '').trim();
+      const sb = (b.item.config_section || '').trim();
+      const ia = sa ? AUDIT_SECTION_ORDER.indexOf(sa as (typeof AUDIT_SECTION_ORDER)[number]) : -1;
+      const ib = sb ? AUDIT_SECTION_ORDER.indexOf(sb as (typeof AUDIT_SECTION_ORDER)[number]) : -1;
+      const ra = ia === -1 ? (sa ? 900 : 950) : ia;
+      const rb = ib === -1 ? (sb ? 900 : 950) : ib;
+      if (ra !== rb) return ra - rb;
+      return a.index - b.index;
+    })
+    .map((x) => x.item);
+}
+
+function groupAuditItemsForRender(items: AuditBindingItem[]): AuditRenderBlock[] {
+  const blocks: AuditRenderBlock[] = [];
+  let lastSection = '';
+  for (const item of sortAuditItemsForSections(items)) {
+    const section = (item.config_section || '').trim();
+    if (section && section !== lastSection) {
+      lastSection = section;
+      blocks.push({ kind: 'section', sectionKey: section });
+    }
+    blocks.push({ kind: 'item', item });
+  }
+  return blocks;
 }
 
 const AuditSettingsPanel: React.FC<AuditSettingsPanelProps> = ({ selectedCatId, onSelectCat }) => {
@@ -101,19 +158,70 @@ const AuditSettingsPanel: React.FC<AuditSettingsPanelProps> = ({ selectedCatId, 
 
   const pendingNodeKey = updateMutation.isPending ? updateMutation.variables?.nodeKey : null;
 
+  const categoryCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const item of data?.items ?? []) {
+      const cat = item.config_category || 'common';
+      counts.set(cat, (counts.get(cat) || 0) + 1);
+    }
+    return counts;
+  }, [data?.items]);
+
+  const visibleCategories = useMemo(() => {
+    if (!data?.items) return AUDIT_CATEGORIES;
+    return AUDIT_CATEGORIES.filter((c) => (categoryCounts.get(c.id) || 0) > 0);
+  }, [categoryCounts, data?.items]);
+
+  useEffect(() => {
+    if (!visibleCategories.some((c) => c.id === selectedCatId)) {
+      onSelectCat(visibleCategories[0]?.id || 'common');
+    }
+  }, [visibleCategories, selectedCatId, onSelectCat]);
+
   const categoryItems = useMemo(() => {
     const all = data?.items ?? [];
-    const currentCat = selectedCatId || AUDIT_CATEGORIES[0]?.id || 'common';
+    const currentCat = selectedCatId || visibleCategories[0]?.id || 'common';
     if (currentCat === 'common') {
       return all.filter((item) => item.config_category === 'common' || !item.config_category);
     }
     return all.filter((item) => item.config_category === currentCat);
-  }, [data?.items, selectedCatId]);
+  }, [data?.items, selectedCatId, visibleCategories]);
+
+  const renderBlocks = useMemo(() => groupAuditItemsForRender(categoryItems), [categoryItems]);
 
   const renderText = (key: string | undefined, fallback?: string) => {
     if (!key) return fallback || '';
     if (i18n.exists(key)) return t(key);
     return fallback || key;
+  };
+
+  const renderSectionTitle = (sectionKey: string) => {
+    const nameKey = `pages.system.configCenter.auditSection.${sectionKey}`;
+    const descKey = `${nameKey}_desc`;
+    return (
+      <div
+        key={`section:${sectionKey}`}
+        style={{
+          gridColumn: '1 / -1',
+          marginTop: 12,
+          marginBottom: 4,
+          padding: '12px 14px',
+          borderRadius: token.borderRadiusLG,
+        }}
+      >
+        <Text strong style={{ fontSize: 14, color: token.colorPrimary }}>
+          {renderText(nameKey, sectionKey)}
+        </Text>
+        {i18n.exists(descKey) ? (
+          <Paragraph
+            type="secondary"
+            style={{ fontSize: 12, margin: '4px 0 0', color: token.colorTextSecondary }}
+          >
+            {t(descKey)}
+          </Paragraph>
+        ) : null}
+      </div>
+    );
   };
 
   const handleToggle = (record: AuditBindingItem, checked: boolean) => {
@@ -131,7 +239,10 @@ const AuditSettingsPanel: React.FC<AuditSettingsPanelProps> = ({ selectedCatId, 
   };
 
   const currentCat =
-    AUDIT_CATEGORIES.find((c) => c.id === selectedCatId) || AUDIT_CATEGORIES[0];
+    visibleCategories.find((c) => c.id === selectedCatId) ||
+    AUDIT_CATEGORIES.find((c) => c.id === selectedCatId) ||
+    visibleCategories[0] ||
+    AUDIT_CATEGORIES[0];
 
   const sectionCardStyle = {
     background: token.colorBgContainer,
@@ -157,7 +268,7 @@ const AuditSettingsPanel: React.FC<AuditSettingsPanelProps> = ({ selectedCatId, 
           selectedKeys={[selectedCatId]}
           mode="inline"
           style={{ border: 'none', background: 'transparent' }}
-          items={AUDIT_CATEGORIES.map((c) => ({
+          items={visibleCategories.map((c) => ({
             key: c.id,
             label: renderText(c.nameKey, c.id),
           }))}
@@ -179,9 +290,15 @@ const AuditSettingsPanel: React.FC<AuditSettingsPanelProps> = ({ selectedCatId, 
             <Text strong style={{ fontSize: 16 }}>
               {renderText(currentCat?.nameKey, currentCat?.id)}
             </Text>
-            <Paragraph type="secondary" style={{ marginTop: 4 }}>
-              {t('pages.system.configCenter.auditBinding.sectionDesc')}
-            </Paragraph>
+            {currentCat?.descriptionKey ? (
+              <Paragraph type="secondary" style={{ marginTop: 4 }}>
+                {renderText(currentCat.descriptionKey, '')}
+              </Paragraph>
+            ) : (
+              <Paragraph type="secondary" style={{ marginTop: 4 }}>
+                {t('pages.system.configCenter.auditBinding.sectionDesc')}
+              </Paragraph>
+            )}
           </div>
 
           <Card
@@ -199,53 +316,59 @@ const AuditSettingsPanel: React.FC<AuditSettingsPanelProps> = ({ selectedCatId, 
                   marginTop: 12,
                 }}
               >
-                {categoryItems.map((item) => (
-                  <Card
-                    key={item.node_key}
-                    size="small"
-                    style={itemCardStyle}
-                    styles={{ body: { background: token.colorFillAlter } }}
-                  >
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'flex-start',
-                        marginBottom: 12,
-                      }}
+                {renderBlocks.map((block) => {
+                  if (block.kind === 'section') {
+                    return renderSectionTitle(block.sectionKey);
+                  }
+                  const item = block.item;
+                  return (
+                    <Card
+                      key={item.node_key}
+                      size="small"
+                      style={itemCardStyle}
+                      styles={{ body: { background: token.colorFillAlter } }}
                     >
-                      <div style={{ flex: 1, marginRight: 16, minWidth: 0 }}>
-                        <Text strong>{item.name}</Text>
-                        <Paragraph type="secondary" style={{ fontSize: 12, margin: 0 }}>
-                          {item.node_key}
-                        </Paragraph>
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'flex-start',
+                          marginBottom: 12,
+                        }}
+                      >
+                        <div style={{ flex: 1, marginRight: 16, minWidth: 0 }}>
+                          <Text strong>{item.name}</Text>
+                          <Paragraph type="secondary" style={{ fontSize: 12, margin: 0 }}>
+                            {item.node_key}
+                          </Paragraph>
+                        </div>
+                        <Switch
+                          checked={item.is_enabled}
+                          loading={pendingNodeKey === item.node_key}
+                          onChange={(v) => handleToggle(item, v)}
+                        />
                       </div>
-                      <Switch
-                        checked={item.is_enabled}
-                        loading={pendingNodeKey === item.node_key}
-                        onChange={(v) => handleToggle(item, v)}
-                      />
-                    </div>
-                    <div>
-                      <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
-                        {t('pages.system.configCenter.auditBinding.process')}
-                      </Text>
-                      <Select
-                        allowClear
-                        showSearch
-                        size="medium"
-                        placeholder={t('pages.system.configCenter.auditBinding.processPlaceholder')}
-                        style={{ width: '100%' }}
-                        optionFilterProp="label"
-                        value={item.is_enabled ? (item.process_uuid ?? undefined) : undefined}
-                        loading={pendingNodeKey === item.node_key}
-                        disabled={!item.is_enabled}
-                        options={buildSelectOptionsForItem(item)}
-                        onChange={(v) => handleProcessChange(item, v ?? null)}
-                      />
-                    </div>
-                  </Card>
-                ))}
+                      <div>
+                        <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
+                          {t('pages.system.configCenter.auditBinding.process')}
+                        </Text>
+                        <Select
+                          allowClear
+                          showSearch
+                          size="medium"
+                          placeholder={t('pages.system.configCenter.auditBinding.processPlaceholder')}
+                          style={{ width: '100%' }}
+                          optionFilterProp="label"
+                          value={item.is_enabled ? (item.process_uuid ?? undefined) : undefined}
+                          loading={pendingNodeKey === item.node_key}
+                          disabled={!item.is_enabled}
+                          options={buildSelectOptionsForItem(item)}
+                          onChange={(v) => handleProcessChange(item, v ?? null)}
+                        />
+                      </div>
+                    </Card>
+                  );
+                })}
                 {categoryItems.length === 0 && (
                   <Text type="secondary">{t('pages.system.configCenter.auditSwitch.empty')}</Text>
                 )}

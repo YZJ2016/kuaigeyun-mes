@@ -24,6 +24,8 @@ export interface DocumentPreviewPaneProps {
   fileUuid?: string;
   fileSource: FilePreviewSource;
   height?: string | number;
+  /** 强制按表格解析（xls/xlsx 在 Office Online 不可达时回本地 SheetJS） */
+  forceSpreadsheet?: boolean;
 }
 
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
@@ -100,6 +102,7 @@ export const DocumentPreviewPane: React.FC<DocumentPreviewPaneProps> = ({
   fileUuid,
   fileSource,
   height = '72vh',
+  forceSpreadsheet = false,
 }) => {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
@@ -110,7 +113,7 @@ export const DocumentPreviewPane: React.FC<DocumentPreviewPaneProps> = ({
   const [rowsTruncated, setRowsTruncated] = useState(false);
   const [activeSheet, setActiveSheet] = useState('0');
 
-  const isSpreadsheet = isSpreadsheetFile(fileSource);
+  const isSpreadsheet = forceSpreadsheet || isSpreadsheetFile(fileSource);
   const isText = isTextFile(fileSource) && !isSpreadsheet;
   const isVideo = isVideoFile(fileSource);
   const isAudio = isAudioFile(fileSource);
@@ -313,20 +316,34 @@ export const DocumentPreviewPane: React.FC<DocumentPreviewPaneProps> = ({
 
   if (isText) {
     return (
-      <div style={{ padding: 12 }}>
+      <div
+        style={{
+          height: resolvedHeight,
+          maxHeight: '100%',
+          minHeight: 0,
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          padding: 12,
+          boxSizing: 'border-box',
+          overflow: 'hidden',
+          background: '#fff',
+        }}
+      >
         {textTruncated ? (
           <Alert
             type="info"
             showIcon
             title={t('pages.system.files.previewTextTruncated')}
-            style={{ marginBottom: 8 }}
+            style={{ marginBottom: 8, flexShrink: 0 }}
           />
         ) : null}
         <pre
           style={{
             margin: 0,
             padding: 12,
-            maxHeight: `calc(${resolvedHeight} - 48px)`,
+            flex: 1,
+            minHeight: 0,
             overflow: 'auto',
             background: 'var(--ant-color-fill-quaternary, #fafafa)',
             borderRadius: 6,

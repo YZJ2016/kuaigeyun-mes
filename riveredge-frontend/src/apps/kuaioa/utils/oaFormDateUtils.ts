@@ -19,6 +19,7 @@ export function mapOaRecordToFormValues(
     const raw = record[field.name];
     if (
       field.type === 'date' ||
+      field.type === 'time' ||
       field.type === 'datetime' ||
       field.type === 'month' ||
       field.type === 'year'
@@ -28,6 +29,11 @@ export function mapOaRecordToFormValues(
       } else if (field.type === 'year') {
         const y = String(raw).trim();
         values[field.name] = dayjs(y.length === 4 ? `${y}-01-01` : y);
+      } else if (field.type === 'time') {
+        const text = String(raw).trim();
+        // HH:mm / HH:mm:ss → 挂到固定日以便 TimePicker 回显
+        const parsed = dayjs(`1970-01-01 ${text.length >= 5 ? text.slice(0, 8) : text}`);
+        values[field.name] = parsed.isValid() ? parsed : undefined;
       } else {
         values[field.name] = dayjs(String(raw));
       }
@@ -58,6 +64,7 @@ export function mapOaFormValuesToPayload(
     const raw = values[field.name];
     if (
       field.type === 'date' ||
+      field.type === 'time' ||
       field.type === 'datetime' ||
       field.type === 'month' ||
       field.type === 'year'
@@ -72,9 +79,13 @@ export function mapOaFormValuesToPayload(
               ? 'YYYY-MM'
               : field.type === 'date'
                 ? 'YYYY-MM-DD'
-                : 'YYYY-MM-DD HH:mm:ss';
+                : field.type === 'time'
+                  ? 'HH:mm'
+                  : 'YYYY-MM-DD HH:mm:ss';
         const formatted = (raw as Dayjs).format(format);
         payload[field.name] = field.type === 'year' ? Number(formatted) : formatted;
+      } else if (field.type === 'time') {
+        payload[field.name] = String(raw).trim().slice(0, 5);
       }
       continue;
     }

@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 import shutil
 import zipfile
@@ -22,7 +23,9 @@ from core.services.system.backup_storage import (
     resolve_backup_file_path,
 )
 from core.services.system.data_backup_jobs import (
+    BACKUP_ADVISORY_LOCK_KEY,
     BackupProgressReporter,
+    is_backup_advisory_lock_held,
     read_backup_metadata,
     resolve_backup_scope_for_restore,
     is_full_logical_csv_dump,
@@ -41,8 +44,9 @@ from core.utils.timezone_utils import resolve_business_datetime
 from infra.domain.tenant_context import unscoped, with_tenant
 
 # 全站同时只允许一个备份任务跑，避免多任务并发打爆内存（专用连接持锁，不用连接池）
-_BACKUP_ADVISORY_LOCK_KEY = 824_601_001
 _BACKUP_STALE_AFTER = timedelta(hours=12)
+_LOCK_RETRY_SEC = 20
+_LOCK_WAIT_MAX = timedelta(hours=1)
 
 
 async def _try_acquire_backup_lock():
@@ -56,7 +60,7 @@ async def _try_acquire_backup_lock():
     try:
         locked = await conn.fetchval(
             "SELECT pg_try_advisory_lock($1)",
-            _BACKUP_ADVISORY_LOCK_KEY,
+            BACKUP_ADVISORY_LOCK_KEY,
         )
         if not locked:
             await conn.close()
@@ -73,7 +77,7 @@ async def _release_backup_lock(lock_conn) -> None:
     try:
         await lock_conn.execute(
             "SELECT pg_advisory_unlock($1)",
-            _BACKUP_ADVISORY_LOCK_KEY,
+            BACKUP_ADVISORY_LOCK_KEY,
         )
     except Exception as e:
         logger.warning("释放备份 advisory lock 失败: {}", e)
@@ -186,6 +190,11 @@ async def _handle_database_backup_requested_body(ctx: TaskContext, step: TaskSte
         return
 
     now = resolve_business_datetime()
+    if backup.status == "running":
+        lock_held = await is_backup_advisory_lock_held()
+        if lock_held is not False:
+            logger.info("跳过仍在执行的备份 uuid={}", backup_uuid)
+            return
     created_at = backup.created_at
     if created_at is not None:
         age = now - created_at if created_at.tzinfo else now.replace(tzinfo=None) - created_at
@@ -206,15 +215,20 @@ async def _handle_database_backup_requested_body(ctx: TaskContext, step: TaskSte
             )
             return
 
-    lock_conn = await _try_acquire_backup_lock()
-    if lock_conn is None:
-        backup.status = "failed"
-        backup.error_message = "已有备份任务在执行，拒绝并发（防止内存打爆）"
-        backup.progress_message = "已取消：并发冲突"
-        backup.completed_at = now
+    attempts = max(1, int(_LOCK_WAIT_MAX.total_seconds() / max(_LOCK_RETRY_SEC, 1)))
+    lock_conn = None
+    for attempt in range(attempts):
+        lock_conn = await _try_acquire_backup_lock()
+        if lock_conn is not None:
+            break
+        backup.status = "pending"
+        backup.error_message = None
+        backup.progress_message = "排队中：等待其它备份完成"
         await backup.save()
-        logger.warning("拒绝并发备份 uuid={} name={}", backup_uuid, backup.name)
-        return
+        if attempt + 1 >= attempts:
+            logger.info("备份排队超时 uuid={} name={}", backup_uuid, backup.name)
+            return
+        await asyncio.sleep(_LOCK_RETRY_SEC)
 
     try:
         backup.status = "running"
@@ -259,12 +273,16 @@ async def _handle_database_backup_requested_body(ctx: TaskContext, step: TaskSte
     except Exception as e:
         logger.exception(f"备份任务失败: {e}")
         if backup is not None:
-            backup.status = "failed"
-            backup.error_message = str(e)
-            backup.progress_message = "备份失败"
-            backup.completed_at = resolve_business_datetime()
+            err = str(e).strip() or repr(e)
+            name = type(e).__name__
+            error_message = name if err == name else f"{name}: {err}"
             try:
-                await backup.save()
+                await DataBackup.filter(uuid=backup.uuid).update(
+                    status="failed",
+                    error_message=error_message[:4000],
+                    progress_message="备份失败",
+                    completed_at=resolve_business_datetime(),
+                )
             except Exception as save_e:
                 logger.error(f"写入备份失败状态异常: {save_e}")
     finally:

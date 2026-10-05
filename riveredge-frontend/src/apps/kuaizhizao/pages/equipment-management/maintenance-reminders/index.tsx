@@ -37,6 +37,7 @@ import { ROUTES } from '../../../constants/routes';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { MEASURING_INSTRUMENT_NATURE } from '../measuring-instruments/measuringInstrumentConstants';
+import { pickSearchString } from '../../../../../utils/tableQueryKey';
 
 const P = 'app.kuaizhizao.maintenanceReminder';
 
@@ -577,7 +578,7 @@ const MaintenanceRemindersPage: React.FC = () => {
               <UniTable<MaintenanceReminder>
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.maintenanceReminders)}
-        columnPersistenceId="apps.kuaizhizao.pages.equipment-management.maintenance-reminders-width-v2"
+        columnPersistenceId="apps.kuaizhizao.pages.equipment-management.maintenance-reminders-width-v3"
         actionRef={actionRef}
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
@@ -602,11 +603,6 @@ const MaintenanceRemindersPage: React.FC = () => {
         }}
         columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
         rowKey="uuid"
-        search={{
-          labelWidth: 'auto',
-          searchText: t('common.search'),
-          resetText: t('common.reset'),
-        }}
         pagination={{
           defaultPageSize: 20,
           showSizeChanger: true,
@@ -639,7 +635,7 @@ const MaintenanceRemindersPage: React.FC = () => {
             label: t(`${P}.tabCalibration`),
             children: (
               <UniTable<EquipmentCalibrationReminder>
-                columnPersistenceId="apps.kuaizhizao.pages.equipment-management.maintenance-reminders.calibration-width-v2"
+                columnPersistenceId="apps.kuaizhizao.pages.equipment-management.maintenance-reminders.calibration-width-v4"
                 actionRef={calibrationActionRef}
                 showAdvancedSearch
                 skipFuzzyPinyinClientFilter
@@ -648,17 +644,15 @@ const MaintenanceRemindersPage: React.FC = () => {
                   'calibration-reminder-unknown'
                 }
                 columns={calibrationColumns}
-                request={async (params) => {
+                request={async (params, _sort, _filter, searchFormValues) => {
                   const res = await equipmentApi.listCalibrationReminders({
                     skip: ((params.current || 1) - 1) * (params.pageSize || 20),
                     limit: params.pageSize || 20,
-                    due_type: params.due_type as string | undefined,
+                    due_type: pickSearchString(searchFormValues, 'due_type'),
                     exclude_equipment_nature: MEASURING_INSTRUMENT_NATURE,
                   });
                   return { data: res.items || [], success: true, total: res.total || 0 };
                 }}
-                search={{ labelWidth: 'auto' }}
-                pagination={{ defaultPageSize: 20 }}
               />
             ),
           },

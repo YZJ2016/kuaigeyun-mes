@@ -3,12 +3,14 @@ import {
   ActionType,
   ProColumns,
   ProFormDateTimePicker,
+  ProFormDependency,
   ProFormItem,
   ProFormSelect,
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
 import { App, Button, Col, Empty, Row, Tag } from 'antd';
+import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import CodeField from '../../../../../components/code-field';
 import { UniTable } from '../../../../../components/uni-table';
@@ -20,6 +22,7 @@ import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { formatDateTimeBySiteSetting } from '../../../../../utils/format';
+import { pickListSearchKeyword, pickSearchString } from '../../../../../utils/tableQueryKey';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { qualityQmsApi, QmsInternalAudit } from '../../../services/quality-qms';
@@ -29,7 +32,7 @@ import {
   stringifyEvidenceLinks,
   QMS_AUDIT_STATUS_OPTIONS,
 } from '../qms/qmsMeta';
-import QmsIsoClauseSelect from '../qms/QmsIsoClauseSelect';
+import QmsClauseSelect from '../qms/QmsClauseSelect';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 
 const RESOURCE = 'kuaizhizao:quality-management-internal-audits';
@@ -71,6 +74,16 @@ const InternalAuditsPage: React.FC = () => {
     if (canCreate) openCreate();
   });
 
+  const { data: standardsEnvelope } = useQuery({
+    queryKey: ['qms-standards'],
+    queryFn: () => qualityQmsApi.standards.list({ limit: 200 }),
+  });
+
+  const standardValueEnum = useMemo(() => {
+    const items = standardsEnvelope?.items ?? [];
+    return Object.fromEntries(items.map((s) => [s.id, { text: s.code }]));
+  }, [standardsEnvelope?.items]);
+
   const columns: ProColumns<QmsInternalAudit>[] = useMemo(
     () =>
       alignProColumns(
@@ -101,13 +114,31 @@ const InternalAuditsPage: React.FC = () => {
             hideInTable: true,
           },
           {
-            title: t('app.kuaizhizao.quality.qms.isoClause'),
-            dataIndex: 'iso_clause',
-            width: 100,
-            minWidth: 100,
+            title: t('app.kuaizhizao.quality.qms.applicableStandard'),
+            dataIndex: 'standard_id',
+            width: 120,
+            minWidth: 120,
+            uniTableKeepWidth: true,
+            resizable: false,
+            valueEnum: standardValueEnum,
+            render: (_, row) =>
+              (row.standard_id != null && standardValueEnum[row.standard_id]?.text) || '-',
+          },
+          {
+            title: t('app.kuaizhizao.quality.qms.clauseLabel'),
+            dataIndex: 'clause_labels',
+            width: 140,
+            minWidth: 140,
             uniTableKeepWidth: true,
             resizable: false,
             hideInSearch: true,
+            ellipsis: true,
+            render: (_, row) => {
+              const labels = row.clause_labels;
+              if (!labels?.length) return '-';
+              if (labels.length === 1) return labels[0];
+              return `${labels[0]} +${labels.length - 1}`;
+            },
           },
           {
             title: t('app.kuaizhizao.quality.qms.leadAuditor'),
@@ -179,7 +210,7 @@ const InternalAuditsPage: React.FC = () => {
         ],
         SALES_DOC_LIST_FIELD_RANK,
       ),
-    [canDelete, canUpdate, messageApi, statusEnum, t],
+    [canDelete, canUpdate, messageApi, standardValueEnum, statusEnum, t],
   );
 
   return (
@@ -196,7 +227,8 @@ const InternalAuditsPage: React.FC = () => {
           rowKey="id"
           columns={columns}
           showAdvancedSearch
-          columnPersistenceId="apps.kuaizhizao.pages.quality-management.internal-audits-width-v2"
+          columnPersistenceId="apps.kuaizhizao.pages.quality-management.internal-audits-width-v4"
+          skipFuzzyPinyinClientFilter
           toolBarRender={() =>
             canCreate
               ? [
@@ -213,14 +245,19 @@ const InternalAuditsPage: React.FC = () => {
             messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
             actionRef.current?.reload();
           }}
-          request={async (params) => {
+          request={async (params, _sort, _filter, searchFormValues) => {
             const pageSize = params.pageSize || 20;
             const skip = ((params.current || 1) - 1) * pageSize;
+            const standardIdRaw = pickSearchString(searchFormValues, 'standard_id');
             const res = await qualityQmsApi.internalAudits.list({
               skip,
               limit: pageSize,
-              keyword: params.keyword,
-              status: params.status,
+              keyword: pickListSearchKeyword(searchFormValues),
+              status: pickSearchString(searchFormValues, 'status'),
+              standard_id:
+                standardIdRaw != null && Number.isFinite(Number(standardIdRaw))
+                  ? Number(standardIdRaw)
+                  : undefined,
             });
             return { success: true, data: res.items || [], total: res.total || 0 };
           }}
@@ -290,9 +327,27 @@ const InternalAuditsPage: React.FC = () => {
               <ProFormText name="audit_scope" label={t('app.kuaizhizao.quality.qms.auditScope')} />
             </Col>
             <Col span={8}>
-              <ProFormItem name="iso_clause_id" label={t('app.kuaizhizao.quality.qms.isoClause')}>
-                <QmsIsoClauseSelect />
-              </ProFormItem>
+              <ProFormSelect
+                name="standard_id"
+                label={t('app.kuaizhizao.quality.qms.auditStandard')}
+                options={(standardsEnvelope?.items ?? []).map((s) => ({
+                  value: s.id,
+                  label: `${s.code} ${s.name}`,
+                }))}
+              />
+            </Col>
+            <Col span={16}>
+              <ProFormDependency name={['standard_id']}>
+                {({ standard_id }) => (
+                  <ProFormItem name="clause_ids" label={t('app.kuaizhizao.quality.qms.clauseLabel')}>
+                    <QmsClauseSelect
+                      standardId={standard_id as number | undefined}
+                      multiple
+                      disabled={!standard_id}
+                    />
+                  </ProFormItem>
+                )}
+              </ProFormDependency>
             </Col>
             <Col span={8}>
               <ProFormText name="lead_auditor" label={t('app.kuaizhizao.quality.qms.leadAuditor')} />

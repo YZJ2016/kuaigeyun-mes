@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
 # 构建 riveredge-frontend，历史仅保留 tip 一份 dist，并推送供生产机 git pull 部署。
 #
-# Git 只提交未压缩 dist（.gz/.br 被 gitignore，避免仓库膨胀）。
-# 生产机 update/start 在 cmd_ensure_frontend_dist 里按 dist 现生成预压缩，供 Caddy precompressed。
-#
 # 流程：fetch 上游 → 落后则 pull --no-rebase 合并 → 校验源码已 commit
 #       → 剥离历史 dist → npm run build → 仅提交 dist → force-with-lease 推送。
 # 生产机 update 直接消费 Git 中的 dist，无需在服务器构建（见 cmd_ensure_frontend_dist）。

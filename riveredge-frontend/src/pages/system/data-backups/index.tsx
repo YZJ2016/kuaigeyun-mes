@@ -27,6 +27,7 @@ import { UniTable } from '../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../components/layout-templates';
 import { SystemMasterDetailDrawer } from '../shared/systemMasterDetailDrawer';
 import { getApiErrorMessage } from '../../../utils/errorHandler';
+import { resolveDataBackupListFilter } from '../../../utils/systemUniTableListFilters';
 import {
   getBackups,
   createBackup,
@@ -36,6 +37,7 @@ import {
   deleteBackup,
   startBackupDownload,
   getBackupWorkerHealth,
+  reclaimStalledBackups,
   pollRestoreStatus,
   DataBackup,
   BackupWorkerHealth,
@@ -108,6 +110,7 @@ const DataBackupsPage: React.FC = () => {
   const [allBackups, setAllBackups] = useState<DataBackup[]>([]); // 用于统计
   const [workerHealth, setWorkerHealth] = useState<BackupWorkerHealth | null>(null);
   const [workerHealthLoading, setWorkerHealthLoading] = useState(false);
+  const [reclaiming, setReclaiming] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [hasActiveBackupJobs, setHasActiveBackupJobs] = useState(false);
 
@@ -128,6 +131,25 @@ const DataBackupsPage: React.FC = () => {
       }
     }
   }, [messageApi, t]);
+
+  const handleReclaimStalled = async () => {
+    setReclaiming(true);
+    try {
+      const result = await reclaimStalledBackups();
+      messageApi.success(
+        t('pages.system.dataBackups.reclaimSuccess', {
+          redispatched: result.redispatched,
+          failedRunning: result.failed_running,
+        }),
+      );
+      await loadWorkerHealth(true);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || t('pages.system.dataBackups.reclaimFailed'));
+    } finally {
+      setReclaiming(false);
+    }
+  };
 
   React.useEffect(() => {
     loadWorkerHealth(true);
@@ -373,21 +395,9 @@ const DataBackupsPage: React.FC = () => {
     const status =
       record.status === 'success' ? 'success' : record.status === 'failed' ? 'exception' : 'active';
     return (
-      <Tooltip title={record.progress_message || undefined}>
-        <div style={{ minWidth: 120 }}>
-          <Progress
-            percent={percent}
-            size="small"
-            status={status}
-            format={(p) => `${p ?? 0}%`}
-          />
-          {(isActive || record.status === 'failed') && record.progress_message ? (
-            <Text type="secondary" style={{ fontSize: 11 }} ellipsis>
-              {record.progress_message}
-            </Text>
-          ) : null}
-        </div>
-      </Tooltip>
+      <div style={{ minWidth: 120 }}>
+        <Progress percent={percent} size="small" status={status} />
+      </div>
     );
   }, []);
 
@@ -833,20 +843,27 @@ const DataBackupsPage: React.FC = () => {
               };
             }
             
-            const { current, pageSize, backup_type, backup_scope, status } = params;
+            const { current, pageSize } = params;
+            const filter = resolveDataBackupListFilter(searchFormValues);
             
             try {
               // 获取当前页数据
               const response = await getBackups({
                 page: current || 1,
                 page_size: pageSize || 20,
-                backup_type: backup_type as string | undefined,
-                backup_scope: backup_scope as string | undefined,
-                status: status as string | undefined,
+                backup_type: filter.backup_type,
+                status: filter.status,
               });
               
               const isActiveJob = (item: DataBackup) =>
                 item.status === 'pending' || item.status === 'running';
+              const markActiveJobs = (items: DataBackup[]) => {
+                const nextActive = items.some(isActiveJob);
+                setHasActiveBackupJobs(nextActive);
+                if (!nextActive) {
+                  void loadWorkerHealth(true);
+                }
+              };
               // 同时获取所有数据用于统计（如果当前页是第一页，获取所有数据）
               if ((current || 1) === 1) {
                 try {
@@ -855,12 +872,12 @@ const DataBackupsPage: React.FC = () => {
                     page_size: 1000,
                   });
                   setAllBackups(allResponse.items);
-                  setHasActiveBackupJobs(allResponse.items.some(isActiveJob));
+                  markActiveJobs(allResponse.items);
                 } catch (e) {
-                  setHasActiveBackupJobs(response.items.some(isActiveJob));
+                  markActiveJobs(response.items);
                 }
               } else {
-                setHasActiveBackupJobs(response.items.some(isActiveJob));
+                markActiveJobs(response.items);
               }
               
               return {
@@ -922,6 +939,11 @@ const DataBackupsPage: React.FC = () => {
               >
                 {t('pages.system.dataBackups.workerStatusRefresh')}
               </Button>
+              {workerHealth?.status === 'backlog' ? (
+                <Button type="primary" loading={reclaiming} onClick={() => void handleReclaimStalled()}>
+                  {t('pages.system.dataBackups.reclaimStalled')}
+                </Button>
+              ) : null}
             </Space>,
           ]}
           showImportButton={false}

@@ -40,12 +40,17 @@ import type { DocumentPushPreview } from '../../../services/purchase-requisition
 import InspectionTemplateConductFields from '../components/InspectionTemplateConductFields';
 import { QualityInspectionDetailDrawer } from '../components/QualityInspectionDetailDrawer';
 import {
+  buildQualityInspectionDetailSupplementNode,
+  renderQualityInspectionPlanSummary,
+} from '../components/QualityInspectionDetailSupplement';
+import {
   InspectionUnqualifiedBanner,
   buildInspectionQualityExtraButtons,
 } from '../components/InspectionDetailQualityActions';
 import { useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
 import {
+  buildConductStepResultDefaults,
   getInspectionTemplateSource,
   hasInspectionPlanSteps,
   pickInspectionConductExtras,
@@ -60,6 +65,7 @@ import {
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { UniAuditBatchMenuButton, createUniAuditBatchHandlers } from '../../../../../components/uni-batch';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
+import { useQualityStageCreateEnabled } from '../components/QualityMasterDataHint';
 import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
 import { oqcInspectionCapabilityReasonMessage, oqcInspectionRowGates } from '../../../../../hooks/useDocumentCapabilities';
 import PermissionGuard from '../../../../../components/permission/PermissionGuard';
@@ -121,6 +127,8 @@ const OQCInspectionPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const oqcPerms = useResourcePermissions(OQC_RESOURCE);
   const { canCreate, canAction } = oqcPerms;
+  const { enabled: oqcCreateEnabled } = useQualityStageCreateEnabled('oqc');
+  const canCreateByConfig = canCreate && oqcCreateEnabled;
   const canConduct = canAction?.('execute') ?? false;
   const oqcAuditEnabled = useAuditRequired('oqc_inspection', false);
   const oqcAuditColumn = useMemo(
@@ -489,9 +497,50 @@ const OQCInspectionPage: React.FC = () => {
     [executeDeleteRow, executeRevokeConduct, handleDetail, oqcPerms, openConductModal, t],
   );
 
+  const oqcDetailSupplement = useMemo(() => {
+    if (!detailRecord?.id) return null;
+    const gates = oqcInspectionRowGates(detailRecord, oqcPerms, t);
+    return buildQualityInspectionDetailSupplementNode({
+      inspection: detailRecord as Record<string, unknown>,
+      attachmentCategory: 'oqc_inspection_attachments',
+      updateAttachmentsGate: gates.updateAttachments,
+      patchAttachments: (attachments) =>
+        qualityImprovementApi.oqc.patchAttachments(detailRecord.id, attachments),
+      onUpdated: (record) => {
+        setDetailRecord(record as OQCInspection);
+        setOqcTrackingRefreshKey((k) => k + 1);
+        actionRef.current?.reload();
+      },
+    });
+  }, [detailRecord, oqcPerms, t]);
+
+  const oqcConductPlanSwitch = useMemo(() => {
+    if (!currentRow?.id) return undefined;
+    if (currentRow.capabilities?.apply_plan?.allowed !== true) return undefined;
+    const gates = oqcInspectionRowGates(currentRow, oqcPerms, t);
+    return {
+      planType: 'outbound' as const,
+      materialId: currentRow.material_id,
+      disabled: gates.applyPlan.disabled,
+      disabledTitle: gates.applyPlan.title,
+      onApplyPlan: async (planId: number) => {
+        const updated = await qualityImprovementApi.oqc.applyPlan(currentRow.id, planId);
+        setCurrentRow(updated);
+        conductFormRef.current?.setFieldsValue({
+          conduct_step_results: buildConductStepResultDefaults(updated as Record<string, unknown>),
+        });
+      },
+    };
+  }, [currentRow, oqcPerms, t]);
+
   const detailBaseColumns: ProDescriptionsItemProps<OQCInspection>[] = useMemo(
     () => [
       buildQualityInspectionDetailCodeColumn<OQCInspection>(t),
+      {
+        title: t('app.kuaizhizao.quality.common.columns.inspectionKind'),
+        key: 'inspection_plan_summary',
+        render: (_, row) => renderQualityInspectionPlanSummary(row as Record<string, unknown>, t),
+      },
       ...buildQualityInspectionDetailMaterialColumns<OQCInspection>(t),
       {
         title: t('app.kuaizhizao.quality.oqc.columns.shipmentNotice'),
@@ -674,7 +723,7 @@ const OQCInspectionPage: React.FC = () => {
             tableRowsRef.current = rows;
           }}
           toolBarRender={() =>
-            canCreate
+            canCreateByConfig
               ? [
                   <Button
                     {...rowActionKind('create')}
@@ -905,6 +954,7 @@ const OQCInspectionPage: React.FC = () => {
           }
           banner={<InspectionUnqualifiedBanner inspection={detailRecord} />}
           basicColumns={detailBaseColumns}
+          supplement={oqcDetailSupplement}
           tracking={oqcTracking}
           renderBriefActions={(doc) => (
             <WarehouseTraceBriefPrimaryActions
@@ -979,6 +1029,7 @@ const OQCInspectionPage: React.FC = () => {
           <InspectionTemplateConductFields
             inspection={currentRow as Record<string, unknown>}
             photoCategory="oqc_inspection_attachments"
+            planSwitch={oqcConductPlanSwitch}
           />
           <InspectionConductQuantityFields
             materialId={currentRow?.material_id}

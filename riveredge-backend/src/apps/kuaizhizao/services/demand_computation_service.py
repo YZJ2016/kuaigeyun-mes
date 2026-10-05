@@ -2162,9 +2162,11 @@ class DemandComputationService(AppBaseService):
         severity: Optional[str] = None,
         skip: int = 0,
         limit: int = 50,
+        max_computations: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         聚合已完成需求计算的 MRP 例外，供计划员收件箱（错误优先）。
+        max_computations：看板等场景只扫最近 N 次计算，避免拉全量明细。
         """
         from apps.kuaizhizao.utils.mrp_llc_engine import _normalize_exception
 
@@ -2175,7 +2177,12 @@ class DemandComputationService(AppBaseService):
         )
         if computation_id is not None:
             comp_q = comp_q.filter(id=computation_id)
-        computations = await comp_q.order_by("-computation_end_time", "-id").all()
+        comp_q = comp_q.order_by("-computation_end_time", "-id")
+        if max_computations is not None and computation_id is None:
+            capped = max(1, min(int(max_computations), 100))
+            computations = await comp_q.limit(capped).all()
+        else:
+            computations = await comp_q.all()
         if not computations:
             return {
                 "total": 0,

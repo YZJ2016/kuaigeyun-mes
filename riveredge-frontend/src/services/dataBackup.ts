@@ -160,6 +160,14 @@ export async function getBackupWorkerHealth(): Promise<BackupWorkerHealth> {
   return apiRequest<BackupWorkerHealth>('/core/data-backups/worker-health');
 }
 
+export async function reclaimStalledBackups(): Promise<{
+  failed_running: number;
+  redispatched: number;
+  already_queued: number;
+}> {
+  return apiRequest('/core/data-backups/reclaim-stalled', { method: 'POST' });
+}
+
 /**
  * 获取备份详情
  */

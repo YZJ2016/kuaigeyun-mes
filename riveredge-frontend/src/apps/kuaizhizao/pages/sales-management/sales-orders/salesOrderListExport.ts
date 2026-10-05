@@ -10,6 +10,7 @@ import {
 import { formatAmount, formatDateTime, formatQuantity } from '../../../../../utils/format';
 import { translateLifecycleResult } from '../../../../../utils/globalLifecycleI18n';
 import type { SalesOrder, SalesOrderItem } from '../../../services/sales-order';
+import { documentCurrencyTitleVars } from '../../../utils/documentCurrencyDisplay';
 import { getSalesOrderLifecycle } from '../../../utils/salesOrderLifecycle';
 import { resolveLifecycleDisplayLabel } from '../shared/ListUniLifecycleCell';
 
@@ -117,9 +118,9 @@ export function buildSalesOrderItemExportColumns(ctx: SalesOrderExportContext): 
     { key: 'material_spec', title: t('app.kuaizhizao.salesOrder.materialSpec') },
     { key: 'material_unit', title: t('common.unit') },
     { key: 'required_quantity', title: t('common.quantity') },
-    { key: 'unit_price', title: t('app.kuaizhizao.salesOrder.unitPrice') },
+    { key: 'unit_price', title: t('app.kuaizhizao.salesOrder.unitPrice', documentCurrencyTitleVars(undefined, t)) },
     { key: 'tax_rate', title: t('app.kuaizhizao.salesOrder.taxRate') },
-    { key: 'item_amount', title: t('app.kuaizhizao.salesOrder.inclAmount') },
+    { key: 'item_amount', title: t('app.kuaizhizao.salesOrder.inclAmount', documentCurrencyTitleVars(undefined, t)) },
     { key: 'delivered_quantity', title: t('app.kuaizhizao.salesOrder.deliveredQty') },
     { key: 'remaining_quantity', title: t('app.kuaizhizao.salesOrder.remainingQty') },
     { key: 'delivery_date', title: t('app.kuaizhizao.salesOrder.deliveryDate') },

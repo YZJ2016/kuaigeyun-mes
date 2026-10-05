@@ -69,7 +69,10 @@ async def list_tenants_for_superadmin(
     is_subtenant: Optional[bool] = Query(None, description="是否子组织筛选"),
     name: Optional[str] = Query(None, description="组织名称搜索（模糊搜索）"),
     domain: Optional[str] = Query(None, description="域名搜索（模糊搜索）"),
-    sort: Optional[str] = Query(None, description="排序字段（如：name、status、created_at）"),
+    sort: Optional[str] = Query(
+        None,
+        description="排序字段（如：name、status、created_at、last_login_at）",
+    ),
     order: Optional[str] = Query(None, description="排序顺序（asc 或 desc）"),
     current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
     tenant_service: Any = Depends(get_tenant_service_with_fallback)  # ⚠️ 第三阶段改进：依赖注入
@@ -89,7 +92,7 @@ async def list_tenants_for_superadmin(
         plan: 组织套餐筛选（可选，精确匹配）
         name: 组织名称搜索（可选，模糊搜索）
         domain: 域名搜索（可选，模糊搜索）
-        sort: 排序字段（可选，如：name、status、created_at）
+        sort: 排序字段（可选，如：name、status、created_at、last_login_at）
         order: 排序顺序（可选，asc 或 desc）
         current_admin: 当前平台超级管理员对象（通过依赖注入获取）
         

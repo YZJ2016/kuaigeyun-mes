@@ -59,8 +59,19 @@ async def list_collaborator_customer_ids(tenant_id: int, user_id: int) -> List[i
     return list(rows)
 
 
-def _is_inactive_7d(last_follow_up_at: Optional[datetime], *, now: Optional[datetime] = None) -> bool:
-    """连续 7 个站点日未新增跟进（含从未跟进）。"""
+def _normalize_inactive_alert_days(days: Optional[int]) -> int:
+    value = 7 if days is None else int(days)
+    return max(1, min(value, 365))
+
+
+def _is_inactive(
+    last_follow_up_at: Optional[datetime],
+    *,
+    days: int,
+    now: Optional[datetime] = None,
+) -> bool:
+    """连续 N 个站点日未新增跟进（含从未跟进）。"""
+    threshold = _normalize_inactive_alert_days(days)
     anchor = now or resolve_business_datetime()
     today = to_site_date(anchor)
     if last_follow_up_at is None:
@@ -68,7 +79,7 @@ def _is_inactive_7d(last_follow_up_at: Optional[datetime], *, now: Optional[date
     last_day = to_site_date(last_follow_up_at)
     if last_day is None or today is None:
         return True
-    return (today - last_day).days >= 7
+    return (today - last_day).days >= threshold
 
 
 def _to_customer_pool_item(
@@ -77,6 +88,7 @@ def _to_customer_pool_item(
     salesman_labels: Optional[Dict[int, str]] = None,
     *,
     follow_up_count: int = 0,
+    inactive_alert_days: int = 7,
     now: Optional[datetime] = None,
 ) -> CustomerPoolItem:
     """列表响应：显式映射字段，兼容 pool_status 历史脏数据。"""
@@ -112,7 +124,7 @@ def _to_customer_pool_item(
         country_code=getattr(row, "country_code", None),
         customer_level_code=getattr(row, "customer_level_code", None),
         follow_up_count=int(follow_up_count or 0),
-        inactive_7d=_is_inactive_7d(last_fu, now=now),
+        inactive=_is_inactive(last_fu, days=inactive_alert_days, now=now),
         created_by_name=getattr(row, "created_by_name", None),
         updated_by_name=getattr(row, "updated_by_name", None),
         created_at=row.created_at,
@@ -122,6 +134,27 @@ def _to_customer_pool_item(
 
 
 class CustomerPoolService:
+    @classmethod
+    async def _pool_item(
+        cls,
+        tenant_id: int,
+        customer: Customer,
+        *,
+        collaborators: Optional[Sequence[CustomerPoolCollaboratorItem]] = None,
+        salesman_labels: Optional[Dict[int, str]] = None,
+        follow_up_count: int = 0,
+        now: Optional[datetime] = None,
+    ) -> CustomerPoolItem:
+        rule = await cls._get_rule(tenant_id)
+        return _to_customer_pool_item(
+            customer,
+            collaborators,
+            salesman_labels,
+            follow_up_count=follow_up_count,
+            inactive_alert_days=_normalize_inactive_alert_days(rule.inactive_alert_days),
+            now=now,
+        )
+
     @staticmethod
     async def _get_rule(tenant_id: int) -> CustomerPoolRule:
         rule = await CustomerPoolRule.filter(
@@ -678,9 +711,11 @@ class CustomerPoolService:
         follow_status: Optional[str] = None,
         market_scope: Optional[str] = None,
         country_code: Optional[str] = None,
-        inactive_7d: Optional[bool] = None,
+        inactive: Optional[bool] = None,
         order_by: Optional[str] = None,
     ) -> CustomerPoolListEnvelope:
+        rule = await cls._get_rule(tenant_id)
+        inactive_alert_days = _normalize_inactive_alert_days(rule.inactive_alert_days)
         query = Customer.filter(tenant_id=tenant_id, deleted_at__isnull=True)
 
         normalized_scope = (scope or "pool").strip().lower()
@@ -730,8 +765,8 @@ class CustomerPoolService:
             order_by=order_by,
         )
 
-        if inactive_7d is True:
-            cutoff = resolve_business_datetime() - timedelta(days=7)
+        if inactive is True:
+            cutoff = resolve_business_datetime() - timedelta(days=inactive_alert_days)
             query = query.filter(Q(last_follow_up_at__isnull=True) | Q(last_follow_up_at__lt=cutoff))
 
         query = await DataScopeService.apply(
@@ -756,11 +791,16 @@ class CustomerPoolService:
                 collab_map.get(r.id, []),
                 salesman_labels,
                 follow_up_count=count_map.get(int(r.id), 0),
+                inactive_alert_days=inactive_alert_days,
                 now=now,
             )
             for r in rows
         ]
-        return CustomerPoolListEnvelope(items=items, total=total)
+        return CustomerPoolListEnvelope(
+            items=items,
+            total=total,
+            inactive_alert_days=inactive_alert_days,
+        )
 
     @staticmethod
     async def _customer_follow_up_counts(
@@ -809,7 +849,7 @@ class CustomerPoolService:
             reason=body.reason if body else None,
             action="claim",
         )
-        return _to_customer_pool_item(customer)
+        return await cls._pool_item(tenant_id, customer)
 
     @classmethod
     async def assign_customer(
@@ -839,7 +879,7 @@ class CustomerPoolService:
             reason=body.reason,
             action="assign",
         )
-        return _to_customer_pool_item(customer)
+        return await cls._pool_item(tenant_id, customer)
 
     @classmethod
     async def release_customer(
@@ -864,7 +904,7 @@ class CustomerPoolService:
             reason=body.reason if body else None,
             action="release",
         )
-        return _to_customer_pool_item(customer)
+        return await cls._pool_item(tenant_id, customer)
 
     @classmethod
     async def recycle_customer(
@@ -888,7 +928,7 @@ class CustomerPoolService:
             operator=current_user,
             reason=body.reason if body else None,
         )
-        return _to_customer_pool_item(customer)
+        return await cls._pool_item(tenant_id, customer)
 
     @classmethod
     async def get_rule(

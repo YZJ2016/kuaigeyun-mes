@@ -27,7 +27,10 @@ import {
 } from '../../../../services/invitationCode';
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
-import { pickListSearchKeyword } from '../../../../utils/tableQueryKey';
+import {
+  pickListSearchKeyword,
+  pickSearchTriStateBoolean,
+} from '../../../../utils/tableQueryKey';
 import { todaySiteDateString } from '../../../../utils/format';
 import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
 const InvitationCodeListPage: React.FC = () => {
@@ -290,7 +293,7 @@ const InvitationCodeListPage: React.FC = () => {
         <UniTable<InvitationCode>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('system.invitationCodes')}
-          columnPersistenceId="pages.system.invitation-codes.list"
+          columnPersistenceId="pages.system.invitation-codes.list-v2"
           actionRef={actionRef}
           columns={columns}
           request={async (params, _sort, _filter, searchFormValues) => {
@@ -302,12 +305,9 @@ const InvitationCodeListPage: React.FC = () => {
             if (keyword) {
               apiParams.keyword = keyword;
             }
-            if (
-              searchFormValues?.is_active !== undefined &&
-              searchFormValues.is_active !== '' &&
-              searchFormValues.is_active !== null
-            ) {
-              apiParams.is_active = searchFormValues.is_active;
+            const isActive = pickSearchTriStateBoolean(searchFormValues, 'is_active');
+            if (isActive !== undefined) {
+              apiParams.is_active = isActive;
             }
             try {
               const response = await getInvitationCodeList(apiParams);

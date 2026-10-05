@@ -841,6 +841,51 @@ async def _resolve_inspection_template_fields(
     return {}
 
 
+async def _apply_explicit_inspection_plan_to_inspection_row(
+    tenant_id: int,
+    row: Any,
+    inspection_plan_id: int,
+    stage: InspectionStage,
+    *,
+    updated_by: int,
+    updated_by_name: str,
+) -> None:
+    """待检验单据按指定方案重建检验项快照。"""
+    from apps.kuaizhizao.services.document_action_policy.types import CAPABILITY_REASON_MESSAGES
+
+    material_id = getattr(row, "material_id", None)
+    if not material_id:
+        raise BusinessLogicError("检验单缺少物料，无法切换检验方案")
+    use_qc = stage == "ipqc"
+    operation_id = getattr(row, "operation_id", None) if use_qc else None
+    template = await _resolve_inspection_template_fields(
+        tenant_id,
+        int(material_id),
+        stage,
+        operation_id=operation_id,
+        explicit_plan_id=int(inspection_plan_id),
+        use_quality_characteristics=use_qc,
+    )
+    if not template:
+        raise BusinessLogicError(
+            CAPABILITY_REASON_MESSAGES["quality_inspection.apply_plan.invalid"],
+        )
+    if template.get("inspection_standard") is not None:
+        row.inspection_standard = template["inspection_standard"]
+    if "inspection_method" in template:
+        row.inspection_method = template.get("inspection_method")
+    if template.get("other_checks") is not None:
+        row.other_checks = template["other_checks"]
+    if template.get("quality_characteristics") is not None:
+        row.quality_characteristics = template["quality_characteristics"]
+        snap = template["quality_characteristics"]
+        if isinstance(snap, dict) and snap.get("plan_id"):
+            row.inspection_plan_id = int(snap["plan_id"])
+    row.updated_by = updated_by
+    row.updated_by_name = updated_by_name
+    await row.save()
+
+
 def _validate_inspection_template_conduct(
     template_json: Any,
     conduct_data: Dict[str, Any],
@@ -1249,6 +1294,62 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
             _ = deleted_by
             row.deleted_at = resolve_business_datetime()
             await row.save(update_fields=["deleted_at"])
+
+    async def patch_incoming_inspection_attachments(
+        self,
+        tenant_id: int,
+        inspection_id: int,
+        attachments: List[dict],
+        user_id: int,
+    ) -> IncomingInspectionResponse:
+        """补充附件（已审核后仍可用）。"""
+        from apps.kuaizhizao.services.document_action_policy.quality_inspection_record import (
+            assert_quality_inspection_capability,
+        )
+
+        async with in_transaction():
+            row = await IncomingInspection.get_or_none(
+                tenant_id=tenant_id, id=inspection_id, deleted_at__isnull=True
+            )
+            if not row:
+                raise NotFoundError(f"来料检验单不存在: {inspection_id}")
+            assert_quality_inspection_capability(row, "update_attachments")
+            user_info = await self.get_user_info(user_id)
+            row.attachments = attachments
+            row.updated_by = user_id
+            row.updated_by_name = user_info["name"]
+            await row.save()
+        return await self.get_incoming_inspection_by_id(tenant_id, inspection_id)
+
+    async def apply_incoming_inspection_plan(
+        self,
+        tenant_id: int,
+        inspection_id: int,
+        inspection_plan_id: int,
+        user_id: int,
+    ) -> IncomingInspectionResponse:
+        """待检验切换检验方案。"""
+        from apps.kuaizhizao.services.document_action_policy.quality_inspection_record import (
+            assert_quality_inspection_capability,
+        )
+
+        async with in_transaction():
+            row = await IncomingInspection.get_or_none(
+                tenant_id=tenant_id, id=inspection_id, deleted_at__isnull=True
+            )
+            if not row:
+                raise NotFoundError(f"来料检验单不存在: {inspection_id}")
+            assert_quality_inspection_capability(row, "apply_plan")
+            user_info = await self.get_user_info(user_id)
+            await _apply_explicit_inspection_plan_to_inspection_row(
+                tenant_id,
+                row,
+                inspection_plan_id,
+                "iqc",
+                updated_by=user_id,
+                updated_by_name=user_info["name"],
+            )
+        return await self.get_incoming_inspection_by_id(tenant_id, inspection_id)
 
     async def conduct_inspection(self, tenant_id: int, inspection_id: int, inspection_data: dict, inspected_by: int) -> IncomingInspectionResponse:
         """执行检验"""
@@ -4245,6 +4346,60 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
             row.deleted_at = resolve_business_datetime()
             await row.save(update_fields=["deleted_at"])
 
+    async def patch_process_inspection_attachments(
+        self,
+        tenant_id: int,
+        inspection_id: int,
+        attachments: List[dict],
+        user_id: int,
+    ) -> ProcessInspectionResponse:
+        from apps.kuaizhizao.services.document_action_policy.quality_inspection_record import (
+            assert_quality_inspection_capability,
+        )
+
+        async with in_transaction():
+            row = await ProcessInspection.get_or_none(
+                tenant_id=tenant_id, id=inspection_id, deleted_at__isnull=True
+            )
+            if not row:
+                raise NotFoundError(f"过程检验单不存在: {inspection_id}")
+            assert_quality_inspection_capability(row, "update_attachments")
+            user_info = await self.get_user_info(user_id)
+            row.attachments = attachments
+            row.updated_by = user_id
+            row.updated_by_name = user_info["name"]
+            await row.save()
+        return await self.get_process_inspection_by_id(tenant_id, inspection_id)
+
+    async def apply_process_inspection_plan(
+        self,
+        tenant_id: int,
+        inspection_id: int,
+        inspection_plan_id: int,
+        user_id: int,
+    ) -> ProcessInspectionResponse:
+        from apps.kuaizhizao.services.document_action_policy.quality_inspection_record import (
+            assert_quality_inspection_capability,
+        )
+
+        async with in_transaction():
+            row = await ProcessInspection.get_or_none(
+                tenant_id=tenant_id, id=inspection_id, deleted_at__isnull=True
+            )
+            if not row:
+                raise NotFoundError(f"过程检验单不存在: {inspection_id}")
+            assert_quality_inspection_capability(row, "apply_plan")
+            user_info = await self.get_user_info(user_id)
+            await _apply_explicit_inspection_plan_to_inspection_row(
+                tenant_id,
+                row,
+                inspection_plan_id,
+                "ipqc",
+                updated_by=user_id,
+                updated_by_name=user_info["name"],
+            )
+        return await self.get_process_inspection_by_id(tenant_id, inspection_id)
+
     async def conduct_inspection(self, tenant_id: int, inspection_id: int, inspection_data: dict, inspected_by: int) -> ProcessInspectionResponse:
         """执行过程检验"""
         from apps.kuaizhizao.services.document_action_policy.quality_inspection_record import (
@@ -5887,6 +6042,60 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
             _ = deleted_by
             row.deleted_at = resolve_business_datetime()
             await row.save(update_fields=["deleted_at"])
+
+    async def patch_finished_goods_inspection_attachments(
+        self,
+        tenant_id: int,
+        inspection_id: int,
+        attachments: List[dict],
+        user_id: int,
+    ) -> FinishedGoodsInspectionResponse:
+        from apps.kuaizhizao.services.document_action_policy.quality_inspection_record import (
+            assert_quality_inspection_capability,
+        )
+
+        async with in_transaction():
+            row = await FinishedGoodsInspection.get_or_none(
+                tenant_id=tenant_id, id=inspection_id, deleted_at__isnull=True
+            )
+            if not row:
+                raise NotFoundError(f"成品检验单不存在: {inspection_id}")
+            assert_quality_inspection_capability(row, "update_attachments")
+            user_info = await self.get_user_info(user_id)
+            row.attachments = attachments
+            row.updated_by = user_id
+            row.updated_by_name = user_info["name"]
+            await row.save()
+        return await self.get_finished_goods_inspection_by_id(tenant_id, inspection_id)
+
+    async def apply_finished_goods_inspection_plan(
+        self,
+        tenant_id: int,
+        inspection_id: int,
+        inspection_plan_id: int,
+        user_id: int,
+    ) -> FinishedGoodsInspectionResponse:
+        from apps.kuaizhizao.services.document_action_policy.quality_inspection_record import (
+            assert_quality_inspection_capability,
+        )
+
+        async with in_transaction():
+            row = await FinishedGoodsInspection.get_or_none(
+                tenant_id=tenant_id, id=inspection_id, deleted_at__isnull=True
+            )
+            if not row:
+                raise NotFoundError(f"成品检验单不存在: {inspection_id}")
+            assert_quality_inspection_capability(row, "apply_plan")
+            user_info = await self.get_user_info(user_id)
+            await _apply_explicit_inspection_plan_to_inspection_row(
+                tenant_id,
+                row,
+                inspection_plan_id,
+                "fqc",
+                updated_by=user_id,
+                updated_by_name=user_info["name"],
+            )
+        return await self.get_finished_goods_inspection_by_id(tenant_id, inspection_id)
 
     async def conduct_inspection(self, tenant_id: int, inspection_id: int, inspection_data: dict, inspected_by: int) -> FinishedGoodsInspectionResponse:
         """执行成品检验"""

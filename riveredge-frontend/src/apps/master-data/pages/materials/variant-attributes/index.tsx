@@ -395,7 +395,7 @@ const VariantAttributesPage: React.FC = () => {
         <UniTable<VariantAttributeDefinition>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('masterData.variantAttributes')}
-          columnPersistenceId="apps.master-data.pages.materials.variant-attributes.list-v3"
+          columnPersistenceId="apps.master-data.pages.materials.variant-attributes.list-v4"
           headerTitle={t('app.master-data.menu.materials.variant-attributes')}
           actionRef={actionRef}
           columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
@@ -470,9 +470,6 @@ const VariantAttributesPage: React.FC = () => {
           enableRowSelection={true}
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
-          search={{
-            labelWidth: 'auto',
-          }}
         />
       </ListPageTemplate>
 

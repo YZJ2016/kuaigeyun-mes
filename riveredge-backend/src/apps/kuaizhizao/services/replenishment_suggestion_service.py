@@ -800,7 +800,7 @@ class ReplenishmentSuggestionService(AppBaseService[ReplenishmentSuggestion]):
                     material_id=int(s.material_id),
                     material_code=s.material_code,
                     material_name=s.material_name,
-                    unit=unit_by_material.get(int(s.material_id)),
+                    unit=unit_by_material.get(int(s.material_id)) or "件",
                     quantity=Decimal(str(s.suggested_quantity)),
                     suggested_unit_price=price or Decimal(0),
                     required_date=self._required_date_for_suggestion(s),
@@ -813,43 +813,44 @@ class ReplenishmentSuggestionService(AppBaseService[ReplenishmentSuggestion]):
         if len(suggestions) > 1:
             source_code = f"RS-{suggestions[0].id}+{len(suggestions) - 1}"
 
-        async with in_transaction():
-            req = await PurchaseRequisitionService().create_requisition(
+        # 禁止外层 in_transaction：create_requisition / create_relation 内部已有事务，
+        # Tortoise NestedTransactionPooledContext 三层嵌套会死锁，前端表现为 504「服务器暂时不可用」。
+        req = await PurchaseRequisitionService().create_requisition(
+            tenant_id=tenant_id,
+            data=PurchaseRequisitionCreate(
+                required_date=min(required_dates) if required_dates else None,
+                source_type="ReplenishmentSuggestion",
+                source_id=int(suggestions[0].id),
+                source_code=source_code,
+                notes="由补货建议下推生成",
+                items=req_items,
+            ),
+            created_by=created_by,
+        )
+        relation_service = DocumentRelationNewService()
+        for s in suggestions:
+            await relation_service.create_relation(
                 tenant_id=tenant_id,
-                data=PurchaseRequisitionCreate(
-                    required_date=min(required_dates) if required_dates else None,
-                    source_type="ReplenishmentSuggestion",
-                    source_id=int(suggestions[0].id),
-                    source_code=source_code,
-                    notes="由补货建议下推生成",
-                    items=req_items,
+                relation_data=DocumentRelationCreate(
+                    source_type="replenishment_suggestion",
+                    source_id=int(s.id),
+                    source_code=str(s.id),
+                    source_name=s.material_name,
+                    target_type="purchase_requisition",
+                    target_id=req.id,
+                    target_code=req.requisition_code,
+                    target_name=req.requisition_name,
+                    relation_type="source",
+                    relation_mode="push",
+                    relation_desc="从补货建议下推到采购申请",
                 ),
                 created_by=created_by,
             )
-            relation_service = DocumentRelationNewService()
-            for s in suggestions:
-                await relation_service.create_relation(
-                    tenant_id=tenant_id,
-                    relation_data=DocumentRelationCreate(
-                        source_type="replenishment_suggestion",
-                        source_id=int(s.id),
-                        source_code=str(s.id),
-                        source_name=s.material_name,
-                        target_type="purchase_requisition",
-                        target_id=req.id,
-                        target_code=req.requisition_code,
-                        target_name=req.requisition_name,
-                        relation_type="source",
-                        relation_mode="push",
-                        relation_desc="从补货建议下推到采购申请",
-                    ),
-                    created_by=created_by,
-                )
-            await self._mark_suggestions_processed(
-                suggestions,
-                created_by,
-                f"已下推采购申请 {req.requisition_code}",
-            )
+        await self._mark_suggestions_processed(
+            suggestions,
+            created_by,
+            f"已下推采购申请 {req.requisition_code}",
+        )
 
         return {
             "success": True,
@@ -905,78 +906,79 @@ class ReplenishmentSuggestionService(AppBaseService[ReplenishmentSuggestion]):
         target_documents = []
         order_date = to_site_date(resolve_business_datetime())
 
-        async with in_transaction():
-            for supplier_id, group in by_supplier.items():
-                supplier = await Supplier.get_or_none(tenant_id=tenant_id, id=supplier_id)
-                supplier_name = (
-                    supplier.name
-                    if supplier
-                    else (group[0].supplier_name or f"供应商({supplier_id})")
+        # 禁止外层 in_transaction：create_purchase_order / create_relation 内部已有事务，
+        # 三层嵌套会死锁（与售后下推/需求计算下推同因）。
+        for supplier_id, group in by_supplier.items():
+            supplier = await Supplier.get_or_none(tenant_id=tenant_id, id=supplier_id)
+            supplier_name = (
+                supplier.name
+                if supplier
+                else (group[0].supplier_name or f"供应商({supplier_id})")
+            )
+            po_items = []
+            for s in group:
+                _, _, _, price = await self._resolve_supplier_and_lead(
+                    tenant_id, int(s.material_id)
                 )
-                po_items = []
-                for s in group:
-                    _, _, _, price = await self._resolve_supplier_and_lead(
-                        tenant_id, int(s.material_id)
+                unit_price = price or Decimal(0)
+                qty = Decimal(str(s.suggested_quantity))
+                required = self._required_date_for_suggestion(s)
+                po_items.append(
+                    PurchaseOrderItemCreate(
+                        material_id=int(s.material_id),
+                        material_code=s.material_code,
+                        material_name=s.material_name,
+                        ordered_quantity=qty,
+                        unit=unit_by_material.get(int(s.material_id)) or "件",
+                        unit_price=unit_price,
+                        total_price=qty * unit_price,
+                        required_date=required,
+                        source_type="replenishment_suggestion",
+                        source_id=int(s.id),
+                        notes=f"补货建议#{s.id}",
                     )
-                    unit_price = price or Decimal(0)
-                    qty = Decimal(str(s.suggested_quantity))
-                    required = self._required_date_for_suggestion(s)
-                    po_items.append(
-                        PurchaseOrderItemCreate(
-                            material_id=int(s.material_id),
-                            material_code=s.material_code,
-                            material_name=s.material_name,
-                            ordered_quantity=qty,
-                            unit=unit_by_material.get(int(s.material_id)),
-                            unit_price=unit_price,
-                            total_price=qty * unit_price,
-                            required_date=required,
-                            source_type="replenishment_suggestion",
-                            source_id=int(s.id),
-                            notes=f"补货建议#{s.id}",
-                        )
-                    )
-                delivery_date = min(self._required_date_for_suggestion(s) for s in group)
-                po = await purchase_service.create_purchase_order(
+                )
+            delivery_date = min(self._required_date_for_suggestion(s) for s in group)
+            po = await purchase_service.create_purchase_order(
+                tenant_id=tenant_id,
+                order_data=PurchaseOrderCreate(
+                    supplier_id=supplier_id,
+                    supplier_name=supplier_name,
+                    order_date=order_date,
+                    delivery_date=delivery_date,
+                    source_type="ReplenishmentSuggestion",
+                    source_id=int(group[0].id),
+                    notes="由补货建议下推生成",
+                    items=po_items,
+                ),
+                created_by=created_by,
+            )
+            target_documents.append(
+                {"type": "purchase_order", "id": po.id, "code": po.order_code}
+            )
+            for s in group:
+                await relation_service.create_relation(
                     tenant_id=tenant_id,
-                    order_data=PurchaseOrderCreate(
-                        supplier_id=supplier_id,
-                        supplier_name=supplier_name,
-                        order_date=order_date,
-                        delivery_date=delivery_date,
-                        source_type="ReplenishmentSuggestion",
-                        source_id=int(group[0].id),
-                        notes="由补货建议下推生成",
-                        items=po_items,
+                    relation_data=DocumentRelationCreate(
+                        source_type="replenishment_suggestion",
+                        source_id=int(s.id),
+                        source_code=str(s.id),
+                        source_name=s.material_name,
+                        target_type="purchase_order",
+                        target_id=po.id,
+                        target_code=po.order_code,
+                        target_name=po.order_code,
+                        relation_type="source",
+                        relation_mode="push",
+                        relation_desc="从补货建议下推到采购订单",
                     ),
                     created_by=created_by,
                 )
-                target_documents.append(
-                    {"type": "purchase_order", "id": po.id, "code": po.order_code}
-                )
-                for s in group:
-                    await relation_service.create_relation(
-                        tenant_id=tenant_id,
-                        relation_data=DocumentRelationCreate(
-                            source_type="replenishment_suggestion",
-                            source_id=int(s.id),
-                            source_code=str(s.id),
-                            source_name=s.material_name,
-                            target_type="purchase_order",
-                            target_id=po.id,
-                            target_code=po.order_code,
-                            target_name=po.order_code,
-                            relation_type="source",
-                            relation_mode="push",
-                            relation_desc="从补货建议下推到采购订单",
-                        ),
-                        created_by=created_by,
-                    )
-                await self._mark_suggestions_processed(
-                    group,
-                    created_by,
-                    f"已下推采购订单 {po.order_code}",
-                )
+            await self._mark_suggestions_processed(
+                group,
+                created_by,
+                f"已下推采购订单 {po.order_code}",
+            )
 
         return {
             "success": True,

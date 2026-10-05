@@ -21,6 +21,8 @@ class PermissionVersion(TenantIsolationMixin, Model):
         table = "core_permission_versions"
         app = "models"
         default_connection = "default"
+        # 非空 (tenant_id, user_id) 仍靠表级 UNIQUE；
+        # 租户级 user_id IS NULL 须部分唯一索引（见迁移 817_*），PG 普通 UNIQUE 管不住多条 NULL。
         unique_together = [("tenant_id", "user_id")]
         indexes = [
             ("tenant_id",),

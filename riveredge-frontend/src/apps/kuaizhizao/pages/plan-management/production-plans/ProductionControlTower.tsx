@@ -1,8 +1,8 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, lazy, Suspense } from 'react';
 import { 
   Card, Row, Col, Progress, Table, Tag, Typography, Space, Empty, 
   Button, Drawer, Form, Select, InputNumber, DatePicker, message, 
-  theme, List, Divider, Alert
+  theme, List, Divider, Alert, Spin
 } from 'antd';
 import { useDashboardRequest } from '../../../utils/dashboardRequestOptions';
 import {
@@ -21,11 +21,12 @@ import { useTranslation } from 'react-i18next';
 import { apiRequest } from '../../../../../services/api';
 import { getMrpExceptionInbox } from '../../../services/demand-computation';
 import dayjs from 'dayjs';
-import CoordinationPipelinePanel from './CoordinationPipelinePanel';
-import HumanMachineEfficiencyPanel from './HumanMachineEfficiencyPanel';
 import { ModuleCenterLayout, ModuleKpiRow, ModuleShortcutGrid } from '../../../components/module-center';
 import type { ModuleKpiDef, ModuleShortcutDef } from '../../../components/module-center';
 import { toApiDateTimeString } from '../../../../../utils/formDate';
+
+const CoordinationPipelinePanel = lazy(() => import('./CoordinationPipelinePanel'));
+const HumanMachineEfficiencyPanel = lazy(() => import('./HumanMachineEfficiencyPanel'));
 
 const { Text } = Typography;
 
@@ -61,13 +62,23 @@ const ProductionControlTower: React.FC = () => {
     pollingInterval: 30000,
   });
 
-  const { data: mrpInboxSummary } = useDashboardRequest(
-    () => getMrpExceptionInbox({ skip: 0, limit: 1 }),
-    'kz:plan-dashboard:mrp-exception-inbox',
-    { pollingInterval: 60000 },
-  );
-
   const s = summary as SummaryShape | undefined;
+  /** KPI 就绪后再挂载重面板，避免与 summary 抢带宽 */
+  const [detailPanelsReady, setDetailPanelsReady] = useState(false);
+  useEffect(() => {
+    if (s || !loading) {
+      setDetailPanelsReady(true);
+    }
+  }, [s, loading]);
+
+  const { data: mrpInboxSummary } = useDashboardRequest(
+    () => getMrpExceptionInbox({ skip: 0, limit: 1, max_computations: 15 }),
+    'kz:plan-dashboard:mrp-exception-inbox',
+    {
+      pollingInterval: 60000,
+      ready: detailPanelsReady,
+    },
+  );
 
   const readinessList = s?.material_readiness || [];
   const risks = s?.delivery_risks || [];
@@ -220,13 +231,27 @@ const ProductionControlTower: React.FC = () => {
               }
             />
           ) : null}
-          <HumanMachineEfficiencyPanel />
-          <Card
-            style={{ borderRadius: token.borderRadiusLG, border: 'none', boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)' }}
-            styles={{ body: { padding: '16px 24px' } }}
-          >
-            <CoordinationPipelinePanel onRefreshSummary={refreshSummary} />
-          </Card>
+          {detailPanelsReady ? (
+            <Suspense
+              fallback={
+                <div style={{ padding: 48, textAlign: 'center' }}>
+                  <Spin />
+                </div>
+              }
+            >
+              <HumanMachineEfficiencyPanel />
+              <Card
+                style={{
+                  borderRadius: token.borderRadiusLG,
+                  border: 'none',
+                  boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
+                }}
+                styles={{ body: { padding: '16px 24px' } }}
+              >
+                <CoordinationPipelinePanel onRefreshSummary={refreshSummary} />
+              </Card>
+            </Suspense>
+          ) : null}
         </div>
       }
     />

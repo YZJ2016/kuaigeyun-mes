@@ -66,6 +66,8 @@ import DeliveryIssueDetailDrawer from './components/DeliveryIssueDetailDrawer';
 
 import { createDeliveryListExporter } from '../shared/deliveryListExport';
 import { renderDeliveryIssuePriorityTag, renderDeliveryIssueTypeTag, renderDeliveryStatusTag } from '../shared/deliveryListPresentation';
+import { resolveListLifecycleStageFromSearch } from '../../../../../utils/listLifecycleStage';
+import { pickListSearchKeyword } from '../../../../../utils/tableQueryKey';
 
 
 
@@ -691,7 +693,7 @@ const IssuesPage: React.FC = () => {
 
           columns={columns}
 
-          columnPersistenceId="kuaizhizao-delivery-issues-v8"
+          columnPersistenceId="kuaizhizao-delivery-issues-v9"
 
           enableRowSelection
 
@@ -725,11 +727,10 @@ const IssuesPage: React.FC = () => {
 
           }}
 
-          request={async (params) => {
-
+          request={async (params, _sort, _filter, searchFormValues) => {
             const listParams = {
-              keyword: params.keyword,
-              status: params.lifecycle as string | undefined,
+              keyword: pickListSearchKeyword(searchFormValues),
+              status: resolveListLifecycleStageFromSearch(searchFormValues),
             };
             lastListParamsRef.current = listParams;
 

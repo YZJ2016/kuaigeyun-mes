@@ -8,19 +8,37 @@ from typing import Any
 
 from core.services.application.application_service import ApplicationService
 from core.services.authorization.data_scope_service import DataScopeService
+from core.services.authorization.effective_access_service import EffectiveUserAccess
 from core.services.authorization.user_permission_service import UserPermissionService
 from infra.models.user import User
 
 _MANIFEST_PATH = ApplicationService._get_plugins_directory() / "kuaizhizao" / "manifest.json"
 
+# 手机工作台首屏分区 scope 顺序（与 riveredge-app/mobile workbenchService 一致）
+MOBILE_WORKBENCH_HOME_SCOPES: tuple[str, ...] = (
+    "workshop",
+    "warehouse",
+    "quality",
+    "equipment",
+    "mold",
+    "common",
+)
+
+_manifest_cache: tuple[float, dict[str, Any]] | None = None
+
 
 def _load_mobile_workbench_config() -> dict[str, Any]:
+    global _manifest_cache
     if not _MANIFEST_PATH.is_file():
         raise RuntimeError(f"Kuaizhizao manifest 缺失: {_MANIFEST_PATH}")
+    mtime = _MANIFEST_PATH.stat().st_mtime
+    if _manifest_cache is not None and _manifest_cache[0] == mtime:
+        return _manifest_cache[1]
     data = json.loads(_MANIFEST_PATH.read_text(encoding="utf-8"))
     cfg = data.get("mobile_workbench")
     if not isinstance(cfg, dict):
         raise RuntimeError("manifest.json 缺少 mobile_workbench 配置")
+    _manifest_cache = (mtime, cfg)
     return cfg
 
 
@@ -47,15 +65,21 @@ def _perm_set_overlaps(user_perms: set[str], codes: list[str]) -> bool:
     return bool(user_perms & normalized)
 
 
-async def _user_is_external_partner(tenant_id: int, user: User) -> bool:
-    if await UserPermissionService.is_admin_bypass(user, tenant_id):
+def _is_external_partner_from_roles(roles: tuple[Any, ...] | list[Any], *, admin_bypass: bool) -> bool:
+    if admin_bypass:
         return False
-    roles = await DataScopeService._load_active_roles(user.id, tenant_id)
     return any(
         (getattr(role, "role_type", "") or "").strip().lower() == "external"
         and (getattr(role, "external_partner_type", "") or "").strip()
         for role in roles
     )
+
+
+async def _user_is_external_partner(tenant_id: int, user: User) -> bool:
+    if await UserPermissionService.is_admin_bypass(user, tenant_id):
+        return False
+    roles = await DataScopeService._load_active_roles(user.id, tenant_id)
+    return _is_external_partner_from_roles(roles, admin_bypass=False)
 
 
 def _filter_scope_sections(
@@ -115,18 +139,60 @@ def _filter_scope_sections(
     return sections_out
 
 
-async def resolve_mobile_workbench(
+async def resolve_mobile_workbench_home(
     *,
     tenant_id: int,
     user: User,
-    scope: str,
+    access: EffectiveUserAccess | None = None,
 ) -> list[dict[str, Any]]:
     cfg = _load_mobile_workbench_config()
     scopes = cfg.get("scopes")
     if not isinstance(scopes, dict):
         raise RuntimeError("mobile_workbench.scopes 配置无效")
 
+    if access is None:
+        from core.services.authorization.effective_access_service import EffectiveAccessService
+
+        access = await EffectiveAccessService.get(user.id, tenant_id, user=user)
+    user_perms = set(access.permission_codes)
+    bypass = access.is_admin_bypass
+    is_external = _is_external_partner_from_roles(access.roles, admin_bypass=bypass)
+
+    merged: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for scope_key in MOBILE_WORKBENCH_HOME_SCOPES:
+        scope_cfg = scopes.get(scope_key)
+        if not isinstance(scope_cfg, dict):
+            continue
+        for section in _filter_scope_sections(
+            scope_cfg,
+            user_perms=user_perms,
+            is_external_partner=is_external,
+            admin_bypass=bypass,
+        ):
+            dedupe_key = f"{section.get('key')}:{section.get('title')}"
+            if dedupe_key in seen:
+                continue
+            seen.add(dedupe_key)
+            merged.append(section)
+    return merged
+
+
+async def resolve_mobile_workbench(
+    *,
+    tenant_id: int,
+    user: User,
+    scope: str,
+) -> list[dict[str, Any]]:
     scope_key = (scope or "").strip()
+    if scope_key == "home":
+        return await resolve_mobile_workbench_home(tenant_id=tenant_id, user=user)
+
+    cfg = _load_mobile_workbench_config()
+    scopes = cfg.get("scopes")
+    if not isinstance(scopes, dict):
+        raise RuntimeError("mobile_workbench.scopes 配置无效")
+
     scope_cfg = scopes.get(scope_key)
     if not isinstance(scope_cfg, dict):
         return []

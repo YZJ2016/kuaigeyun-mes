@@ -28,7 +28,7 @@ export interface CustomerPoolItem {
   country_code?: string | null;
   customer_level_code?: string | null;
   follow_up_count?: number;
-  inactive_7d?: boolean;
+  inactive?: boolean;
   created_by_name?: string | null;
   updated_by_name?: string | null;
   created_at: string;
@@ -39,11 +39,13 @@ export interface CustomerPoolItem {
 export interface CustomerPoolListResult {
   items: CustomerPoolItem[];
   total: number;
+  inactive_alert_days?: number;
 }
 
 export interface CustomerPoolRule {
   recycle_enabled: boolean;
   recycle_after_days: number;
+  inactive_alert_days: number;
   max_owned_customers: number;
   allow_claim_others: boolean;
   updated_at?: string | null;
@@ -93,7 +95,7 @@ export interface CustomerPoolListParams {
   regionText?: string;
   followStatus?: string;
   marketScope?: string;
-  inactive7d?: boolean;
+  inactive?: boolean;
   order_by?: string;
 }
 

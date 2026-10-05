@@ -259,7 +259,7 @@ export default defineConfig({
           const base = dep.split('/').pop() || '';
           // 主包形如 vendor-<hash>.js；排除 vendor-univerjs / vendor-three 等按需栈
           if (!/^vendor-[A-Za-z0-9_-]+\.js$/.test(base)) return false;
-          return !/^vendor-(univerjs|three|libredwg|altium|monaco|occt|xlsx|echarts|gantt|pdf|html2canvas)-/.test(
+          return !/^vendor-(univerjs|three|libredwg|altium|monaco|occt|xlsx|echarts|gantt|pdf|html2canvas|doc-viewer)-/.test(
             base,
           );
         }),
@@ -296,6 +296,7 @@ export default defineConfig({
             }
             if (id.includes('occt-import-js')) return 'vendor-occt';
             if (id.includes('altium-toolkit') || id.includes('circuitjson-toolkit')) return 'vendor-altium';
+            if (id.includes('@cyntler/react-doc-viewer')) return 'vendor-doc-viewer';
             if (id.includes('echarts')) return 'vendor-echarts';
             // 仅匹配 sheetjs / exceljs 包路径；禁止 id.includes('xlsx') 宽匹配。
             // 勿把 graphlib/dagre 强行打进独立 vendor：会把 CJS require 助手绑进该 chunk，
@@ -434,7 +435,7 @@ export default defineConfig({
       // ⚠️ 关键修复：使用经典的JSX运行时，确保兼容性
       jsxRuntime: 'automatic', // 使用自动JSX运行时，不需要显式导入React
     }),
-    // P5-1：本地/CI 构建仍生成 .gz/.br；不提交 Git。生产 update 由 precompress_web_dist 补齐。
+    // P5-1：预压缩产物（.gz/.br），Caddy file_server precompressed 直出，弱网 Transfer Size 下降
     viteCompression({
       algorithm: 'gzip',
       ext: '.gz',

@@ -675,6 +675,7 @@ export const bomApi = {
     );
     const arr = Array.isArray(raw.data) ? raw.data : [];
     const data = arr.map((item: any) => ({
+      id: item.id != null ? Number(item.id) : undefined,
       material_id: item.material_id ?? item.materialId,
       version: item.version ?? '1.0',
       bom_code: item.bom_code ?? item.bomCode,
@@ -1537,6 +1538,31 @@ export async function syncMaterialGroupsFromSource(payload: {
 }): Promise<MasterDataSyncFromSourceResult> {
   return apiRequest<MasterDataSyncFromSourceResult>(
     '/apps/master-data/materials/groups/sync-from-source',
+    {
+      method: 'POST',
+      data: payload,
+      timeoutMs: 600_000,
+    },
+  );
+}
+
+export async function getEngineeringBomSyncBinding(): Promise<MasterDataSyncBinding> {
+  return api.get('/apps/master-data/materials/bom/sync-binding');
+}
+
+export async function syncEngineeringBomFromSource(payload: {
+  source_type?: 'api' | 'dataset';
+  api_uuid?: string;
+  dataset_uuid?: string;
+  field_mapping?: Record<string, string>;
+  save_binding?: boolean;
+  sync_mode?: string;
+  schedule_interval_minutes?: number;
+  incremental?: boolean;
+  active_only?: boolean;
+}): Promise<MasterDataSyncFromSourceResult> {
+  return apiRequest<MasterDataSyncFromSourceResult>(
+    '/apps/master-data/materials/bom/sync-from-source',
     {
       method: 'POST',
       data: payload,

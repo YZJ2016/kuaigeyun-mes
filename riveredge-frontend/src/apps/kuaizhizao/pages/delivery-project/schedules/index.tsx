@@ -36,6 +36,8 @@ import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { createDeliveryListExporter } from '../shared/deliveryListExport';
 import { renderDeliveryMarkerTag, renderDeliveryStatusTag } from '../shared/deliveryListPresentation';
 import { DELIVERY_CUSTOMER_COLUMN_DEFAULTS, DELIVERY_PROJECT_NAME_REMAINDER_COLUMN_DEFAULTS } from '../shared/deliveryTableColumns';
+import { resolveListLifecycleStageFromSearch } from '../../../../../utils/listLifecycleStage';
+import { pickListSearchKeyword } from '../../../../../utils/tableQueryKey';
 
 
 
@@ -303,7 +305,7 @@ const SchedulesPage: React.FC = () => {
 
           columns={columns}
 
-          columnPersistenceId="kuaizhizao-delivery-schedules-v7"
+          columnPersistenceId="kuaizhizao-delivery-schedules-v8"
 
           enableRowSelection
 
@@ -321,11 +323,10 @@ const SchedulesPage: React.FC = () => {
 
           }}
 
-          request={async (params) => {
-
+          request={async (params, _sort, _filter, searchFormValues) => {
             const listParams = {
-              keyword: params.keyword,
-              status: params.lifecycle as string | undefined,
+              keyword: pickListSearchKeyword(searchFormValues),
+              status: resolveListLifecycleStageFromSearch(searchFormValues),
             };
             lastListParamsRef.current = listParams;
 

@@ -10,6 +10,7 @@ import ahocorasick
 from loguru import logger
 
 from core.services.content.lexicon_pack import PACK_FILENAME, load_pack, read_source_lines
+from infra.config.infra_config import infra_settings
 from infra.exceptions.exceptions import ValidationError
 
 _LEXICON_DIR = Path(__file__).resolve().parents[2] / "data" / "sensitive_words"
@@ -98,8 +99,13 @@ class SensitiveWordService:
     ) -> None:
         if words is None:
             directory = lexicon_dir or _LEXICON_DIR
-            raw_words = load_pack(directory / PACK_FILENAME)
-            raw_allow = read_source_lines(directory / _ALLOWLIST_FILE)
+            if not infra_settings.SENSITIVE_WORD_LEXICON_ENABLED:
+                raw_words = []
+                raw_allow = []
+            else:
+                raw_words = load_pack(directory / PACK_FILENAME)
+                allow_path = directory / _ALLOWLIST_FILE
+                raw_allow = read_source_lines(allow_path) if allow_path.is_file() else []
         else:
             raw_words = list(words)
             raw_allow = list(allowlist or [])

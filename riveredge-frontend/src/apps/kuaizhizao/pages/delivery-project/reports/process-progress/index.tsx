@@ -13,6 +13,7 @@ import {
 import { reportPercent } from '../../../../utils/reportPresentation';
 import { DELIVERY_CUSTOMER_COLUMN_DEFAULTS } from '../../shared/deliveryTableColumns';
 import { formatBusinessDateOnly } from '../../../../../../utils/format';
+import { pickListSearchKeyword, pickSearchString } from '../../../../../../utils/tableQueryKey';
 
 const ProcessProgressReportPage: React.FC = () => {
   const { t } = useTranslation();
@@ -129,8 +130,8 @@ const ProcessProgressReportPage: React.FC = () => {
       const res = await deliveryProjectApi.processProgress({
         skip,
         limit: pageSize,
-        keyword: (searchFormValues?.keyword ?? params.keyword) as string | undefined,
-        status: (searchFormValues?.status ?? params.status) as string | undefined,
+        keyword: pickListSearchKeyword(searchFormValues),
+        status: pickSearchString(searchFormValues, 'status'),
       });
       return { data: res.items, total: res.total, success: true };
     },
@@ -139,7 +140,7 @@ const ProcessProgressReportPage: React.FC = () => {
 
   return (
     <KuaizhizaoReport<DeliveryProcessProgressRow>
-      columnPersistenceId="apps.kuaizhizao.pages.delivery-project.reports.process-progress.index-v5"
+      columnPersistenceId="apps.kuaizhizao.pages.delivery-project.reports.process-progress.index-v6"
       title={t('app.kuaizhizao.menu.delivery-project.reports.process-progress')}
       reportType="delivery-process-progress"
       domain="delivery"

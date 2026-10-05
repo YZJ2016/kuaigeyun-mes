@@ -9,6 +9,12 @@ import { parseBackendLifecycle } from './backendLifecycle';
 import { deriveLifecycleRingPercent } from '../../../utils/lifecycleRingPercent';
 import { applyLifecycleI18n, requireI18nText, type LifecycleTranslateFn } from './lifecycleI18n';
 import { LIFECYCLE_DOCUMENT_ACTION_LABEL_KEYS as DA } from '../constants/lifecycleDocumentActionLabelKeys';
+import {
+  extractProTableSort,
+  pickListSearchKeyword,
+  pickSearchDate,
+  pickSearchString,
+} from '../../../utils/tableQueryKey';
 
 const SF = 'app.kuaizhizao.salesForecast';
 
@@ -411,6 +417,64 @@ function finalizeSalesForecastLifecycle(
 /**
  * 根据销售预测获取生命周期结果，供 UniLifecycleStepper 使用。
  */
+const SALES_FORECAST_LIFECYCLE_TO_STATUS: Record<string, string> = {
+  草稿: 'DRAFT',
+  待审核: 'PENDING_REVIEW',
+  已审核: 'AUDITED',
+  已下推: 'PUSHED',
+  已生效: 'EFFECTIVE',
+  执行中: 'IN_PROGRESS',
+  已完成: 'COMPLETED',
+  已驳回: 'REJECTED',
+  已取消: 'CANCELLED',
+};
+
+export function resolveSalesForecastListApiParams(
+  params: { current?: number; pageSize?: number },
+  sort?: Record<string, unknown>,
+  searchFormValues?: Record<string, unknown> | null,
+): Record<string, unknown> {
+  const { sortBy, sortOrder } = extractProTableSort(sort ?? {});
+  const orderBy =
+    sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
+  const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
+
+  const apiParams: Record<string, unknown> = {
+    skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
+    limit: params.pageSize ?? 20,
+    include_items: true,
+    order_by: orderBy,
+  };
+
+  const forecastPeriod = pickSearchString(searchFormValues, 'forecast_period');
+  if (forecastPeriod) apiParams.forecast_period = forecastPeriod;
+
+  if (fuzzyKeyword) {
+    apiParams.keyword = fuzzyKeyword;
+  } else {
+    const forecastCode = pickSearchString(searchFormValues, 'forecast_code');
+    if (forecastCode) apiParams.forecast_code = forecastCode;
+  }
+
+  const forecastName = pickSearchString(searchFormValues, 'forecast_name');
+  if (forecastName) apiParams.forecast_name = forecastName;
+
+  const lifecycleLabel = pickSearchString(searchFormValues, 'lifecycle');
+  if (lifecycleLabel) {
+    apiParams.status = SALES_FORECAST_LIFECYCLE_TO_STATUS[lifecycleLabel] ?? lifecycleLabel;
+  } else {
+    const status = pickSearchString(searchFormValues, 'status');
+    if (status) apiParams.status = status;
+  }
+
+  const startDate = pickSearchDate(searchFormValues, 'start_date');
+  if (startDate) apiParams.start_date = startDate;
+  const endDate = pickSearchDate(searchFormValues, 'end_date');
+  if (endDate) apiParams.end_date = endDate;
+
+  return apiParams;
+}
+
 export function getSalesForecastLifecycle(
   record: SalesForecastLike | Record<string, unknown> | null | undefined,
   auditRequired = true,

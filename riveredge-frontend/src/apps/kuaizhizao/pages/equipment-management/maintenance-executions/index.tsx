@@ -309,7 +309,7 @@ const MaintenanceExecutionsPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.maintenanceExecutions)}
           headerTitle={t(`${P}.title`)}
-          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.maintenance-executions-width-v2"
+          columnPersistenceId="apps.kuaizhizao.pages.equipment-management.maintenance-executions-width-v3"
           actionRef={actionRef}
           rowKey="uuid"
           enableRowSelection={perms.canDelete}
@@ -340,7 +340,6 @@ const MaintenanceExecutionsPage: React.FC = () => {
               return { data: [], success: false, total: 0 };
             }
           }}
-          search={{ labelWidth: 'auto' }}
           pagination={{ defaultPageSize: 20 }}
         />
       </ListPageTemplate>

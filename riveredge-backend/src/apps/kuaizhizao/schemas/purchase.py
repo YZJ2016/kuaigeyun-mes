@@ -320,6 +320,7 @@ class PurchaseOrderConfirm(BaseModel):
 
 class PurchaseOrderListParams(BaseModel):
     supplier_id: Optional[int] = None
+    buyer_id: Optional[int] = None
     status: Optional[str] = None
     review_status: Optional[str] = None
     order_date_from: Optional[date] = None

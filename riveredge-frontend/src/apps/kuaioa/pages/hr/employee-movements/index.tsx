@@ -138,7 +138,7 @@ const EmployeeMovementsPage: React.FC = () => {
       try {
         const [empRes, deptTree, workshops] = await Promise.all([
           listEmployees({ status: 'active' }),
-          getDepartmentTree(),
+          getDepartmentTree({ host_resource: 'kuaioa:employee' }),
           loadOaWorkshopNameOptions(),
         ]);
         if (cancelled) return;

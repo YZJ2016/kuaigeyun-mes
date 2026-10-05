@@ -43,6 +43,7 @@ import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
+import { extractProTableSort, pickListSearchKeyword } from '../../../../../utils/tableQueryKey';
 
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 
@@ -85,6 +86,7 @@ import { createDeliveryListExporter } from '../shared/deliveryListExport';
 import { DELIVERY_CUSTOMER_COLUMN_DEFAULTS, DELIVERY_NODE_PROGRESS_REMAINDER_COLUMN_DEFAULTS } from '../shared/deliveryTableColumns';
 import { renderDeliveryStatusTag } from '../shared/deliveryListPresentation';
 import { renderDeliveryNodeProgressCell } from '../shared/deliveryNodeProgressCell';
+import { resolveListLifecycleStageFromSearch } from '../../../../../utils/listLifecycleStage';
 
 
 
@@ -815,7 +817,7 @@ const DeliveryProjectsPage: React.FC = () => {
 
           columns={columns}
 
-          columnPersistenceId="kuaizhizao-delivery-projects-v10"
+          columnPersistenceId="kuaizhizao-delivery-projects-v11"
 
           enableRowSelection
 
@@ -849,19 +851,19 @@ const DeliveryProjectsPage: React.FC = () => {
 
           }}
 
-          request={async (params) => {
-
+          request={async (params, sort, _filter, searchFormValues) => {
             const listParams = {
-              keyword: params.keyword,
-              status: params.lifecycle,
+              keyword: pickListSearchKeyword(searchFormValues),
+              status: resolveListLifecycleStageFromSearch(searchFormValues),
             };
             lastListParamsRef.current = listParams;
 
-            const sort = params.sort as Record<string, 'ascend' | 'descend' | null> | undefined;
-            const sortKey = sort ? Object.keys(sort)[0] : undefined;
+            const { sortBy, sortOrder } = extractProTableSort(sort);
             const orderBy =
-              sortKey && sort[sortKey]
-                ? `${sort[sortKey] === 'descend' ? '-' : ''}${sortKey}`
+              sortBy && sortOrder
+                ? sortOrder === 'desc'
+                  ? `-${sortBy}`
+                  : sortBy
                 : '-delivery_date';
 
             const res = await deliveryProjectApi.list({

@@ -56,6 +56,8 @@ import {
 import {
   displaySalesInvoiceListCode,
   canDeleteSalesInvoice,
+  canFillSalesInvoiceNumber,
+  faceInvoiceNumberForEdit,
 } from '../../../utils/salesInvoiceUi';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
@@ -755,7 +757,7 @@ const SalesInvoicesPage: React.FC = () => {
         hideInSearch: true,
         render: (_, record) => {
           const acts: React.ReactNode[] = [];
-          if (!['已审核', '已作废', '已红冲'].includes(String(record.status || '').trim()) && salesInvoicePerms.canUpdate) {
+          if (canFillSalesInvoiceNumber(record) && salesInvoicePerms.canUpdate) {
             acts.push(
               <Button key="edit" {...rowActionFillInvoiceNumber('update')} onClick={() => openEditModal(record)} />,
             );
@@ -941,9 +943,8 @@ const SalesInvoicesPage: React.FC = () => {
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         rowKey="id"
-        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.sales-invoices.list-v3"
+        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.sales-invoices.list-v4"
         showAdvancedSearch
-        search={{ labelWidth: 120 }}
         showCreateButton={false}
         createButtonText={t(`${P}.createTitle`)}
         onCreate={() => setCreateModalVisible(true)}
@@ -1372,7 +1373,7 @@ const SalesInvoicesPage: React.FC = () => {
         modalProps={{ destroyOnHidden: true }}
         submitter={{ submitButtonProps: { loading: editSubmitting } }}
         initialValues={{
-          invoice_number: editingRecord?.invoice_number || '',
+          invoice_number: faceInvoiceNumberForEdit(editingRecord?.invoice_number),
           attachments: mapAttachmentsToUploadList((editingRecord as any)?.attachments),
         }}
       >

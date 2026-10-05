@@ -1,9 +1,13 @@
 """工作日历 Schema"""
 
 from datetime import date, datetime, time
-from typing import Dict, List, Optional
+from typing import Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from apps.master_data.config.performance_scope_spec import validate_scope_ids
+
+PerformanceScopeType = Literal["plant", "department", "employee"]
 
 
 def _normalize_time(v):
@@ -79,6 +83,12 @@ class OvertimePlanCreate(BaseModel):
     start_time: time = Field(..., alias="startTime")
     end_time: time = Field(..., alias="endTime")
     name: Optional[str] = None
+    reason: Optional[str] = Field(None, max_length=500)
+    scope_type: PerformanceScopeType = Field("plant", alias="scopeType")
+    department_id: Optional[int] = Field(None, alias="departmentId")
+    department_name: Optional[str] = Field(None, alias="departmentName")
+    employee_id: Optional[int] = Field(None, alias="employeeId")
+    employee_name: Optional[str] = Field(None, alias="employeeName")
     is_active: bool = Field(True, alias="isActive")
 
     model_config = ConfigDict(populate_by_name=True)
@@ -94,6 +104,13 @@ class OvertimePlanCreate(BaseModel):
             raise ValueError("endTime 必须晚于 startTime（加班窗口不跨日）")
         if self.name is not None:
             self.name = self.name.strip() or None
+        if self.reason is not None:
+            self.reason = self.reason.strip() or None
+        validate_scope_ids(
+            self.scope_type,
+            department_id=self.department_id,
+            employee_id=self.employee_id,
+        )
         return self
 
 
@@ -102,6 +119,12 @@ class OvertimePlanUpdate(BaseModel):
     start_time: Optional[time] = Field(None, alias="startTime")
     end_time: Optional[time] = Field(None, alias="endTime")
     name: Optional[str] = None
+    reason: Optional[str] = Field(None, max_length=500)
+    scope_type: Optional[PerformanceScopeType] = Field(None, alias="scopeType")
+    department_id: Optional[int] = Field(None, alias="departmentId")
+    department_name: Optional[str] = Field(None, alias="departmentName")
+    employee_id: Optional[int] = Field(None, alias="employeeId")
+    employee_name: Optional[str] = Field(None, alias="employeeName")
     is_active: Optional[bool] = Field(None, alias="isActive")
 
     model_config = ConfigDict(populate_by_name=True)
@@ -122,6 +145,12 @@ class OvertimePlanResponse(BaseModel):
     start_time: time = Field(..., alias="startTime")
     end_time: time = Field(..., alias="endTime")
     name: Optional[str] = None
+    reason: Optional[str] = None
+    scope_type: PerformanceScopeType = Field("plant", alias="scopeType")
+    department_id: Optional[int] = Field(None, alias="departmentId")
+    department_name: Optional[str] = Field(None, alias="departmentName")
+    employee_id: Optional[int] = Field(None, alias="employeeId")
+    employee_name: Optional[str] = Field(None, alias="employeeName")
     is_active: bool = Field(..., alias="isActive")
     created_at: Optional[datetime] = Field(None, alias="createdAt")
     updated_at: Optional[datetime] = Field(None, alias="updatedAt")

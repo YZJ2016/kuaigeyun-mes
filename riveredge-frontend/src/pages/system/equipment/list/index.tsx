@@ -21,6 +21,11 @@ import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer'
 import { getApiErrorMessage } from '../../../../utils/errorHandler';
 import { renderSystemActiveTag, renderSystemStatusTag } from '../../utils/systemListPresentation';
 import {
+  pickListSearchKeyword,
+  pickSearchString,
+  pickSearchTriStateBoolean,
+} from '../../../../utils/tableQueryKey';
+import {
   getEquipmentList,
   getEquipmentByUuid,
   createEquipment,
@@ -454,18 +459,18 @@ const EquipmentListPage: React.FC = () => {
         <UniTable<Equipment>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('system.equipment')}
-          columnPersistenceId="pages.system.equipment.list"
+          columnPersistenceId="pages.system.equipment.list-v2"
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, filter, searchFormValues) => {
             const response = await getEquipmentList({
               skip: ((params.current || 1) - 1) * (params.pageSize || 20),
               limit: params.pageSize || 20,
-              type: searchFormValues?.type,
-              category: searchFormValues?.category,
-              status: searchFormValues?.status,
-              is_active: searchFormValues?.is_active,
-              search: searchFormValues?.keyword,
+              type: pickSearchString(searchFormValues, 'type'),
+              category: pickSearchString(searchFormValues, 'category'),
+              status: pickSearchString(searchFormValues, 'status'),
+              is_active: pickSearchTriStateBoolean(searchFormValues, 'is_active'),
+              search: pickListSearchKeyword(searchFormValues),
             });
             return {
               data: response.items,

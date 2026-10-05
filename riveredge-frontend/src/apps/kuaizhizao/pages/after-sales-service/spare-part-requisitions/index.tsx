@@ -21,6 +21,7 @@ import {
   AFTER_SALES_REVIEW_STATUS_COLOR,
   renderAfterSalesStatusTag,
 } from '../shared/afterSalesListPresentation';
+import { pickListSearchKeyword, pickSearchString } from '../../../../../utils/tableQueryKey';
 import {
   afterSalesSparePartRequisitionApi,
   type AfterSalesSparePartRequisition,
@@ -257,15 +258,17 @@ const AfterSalesSparePartRequisitionsPage: React.FC = () => {
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.afterSalesSpareRequisition)}
         actionRef={actionRef}
         columns={columns}
-        columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.spare-part-requisitions.v6"
+        columnPersistenceId="apps.kuaizhizao.pages.after-sales-service.spare-part-requisitions.v7"
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
         rowKey="id"
         headerTitle={t('app.kuaizhizao.menu.after-sales-service.spare-part-requisitions')}
-        request={async (params) => {
+        request={async (params, _sort, _filter, searchFormValues) => {
           const res = await afterSalesSparePartRequisitionApi.list({
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize,
-            keyword: params.keyword as string | undefined,
-            status: params.status as string | undefined,
+            keyword: pickListSearchKeyword(searchFormValues),
+            status: pickSearchString(searchFormValues, 'status'),
           });
           return { data: res.items, total: res.total, success: true };
         }}

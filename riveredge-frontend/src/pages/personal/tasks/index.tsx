@@ -32,6 +32,7 @@ import {
   KUAIPLM_CHANGE_TYPE_I18N,
 } from '../../../apps/kuaiplm/components/kuaiplmMeta';
 import { buildListPageHelpViewConfig } from '../../../components/page-help-wiki';
+import { pickSearchString } from '../../../utils/tableQueryKey';
 
 /** 后端写入的中文变更类型 → i18n key（与码表对齐，覆盖尚未出现的全部类型） */
 const APPROVAL_CHANGE_TYPE_LABEL_TO_I18N: Record<string, string> = {
@@ -528,7 +529,7 @@ const UserTasksPage: React.FC = () => {
         ]}
       >
         <UniTable<UserTask>
-          columnPersistenceId="pages.personal.tasks.list-v2"
+          columnPersistenceId="pages.personal.tasks.list-v3"
           headerTitle={t('pages.personal.tasks.headerTitle')}
           actionRef={actionRef}
           columns={columns}
@@ -546,7 +547,7 @@ const UserTasksPage: React.FC = () => {
               const response = await getUserTasks({
                 page: params.current || 1,
                 page_size: params.pageSize || 20,
-                status: searchFormValues?.status || defaultStatus,
+                status: pickSearchString(searchFormValues, 'status') ?? defaultStatus,
                 task_type: reqTaskType as any,
               });
               return {

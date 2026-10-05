@@ -11,6 +11,7 @@ import { ProForm, ProFormSelect, ProFormSwitch, ProFormInstance } from '@ant-des
 import SafeProFormSelect from '../../../components/safe-pro-form-select';
 import { App, Card, ColorPicker, Form, Row, Col, Typography, Space } from 'antd';
 import { useUserPreferenceStore, readCachedPreferencesForCurrentUser } from '../../../stores/userPreferenceStore';
+import { readExplicitPreferenceTablePageSize } from '../../../utils/resolveDefaultTablePageSize';
 import { getLanguageList, Language } from '../../../services/language';
 import { SUPPORTED_UI_LANGUAGES, normalizeUiLanguage } from '../../../utils/localeBootstrap';
 import { LANGUAGE_MAP } from '../../../config/i18n';
@@ -18,6 +19,8 @@ import type { Color } from 'antd/es/color-picker';
 import { clampBorderRadius, DEFAULT_THEME_BORDER_RADIUS, readBorderRadius } from '../../../utils/themeBorderRadius';
 import { clampFontSize, readFontSize } from '../../../utils/themeFontSize';
 import { ThemeStyleSliders } from '../../../components/theme-editor/ThemeStyleSliders';
+
+const FOLLOW_SYSTEM_PAGE_SIZE = 'follow';
 
 
 /** 将 ColorPicker 的值规范为 hex 字符串 */
@@ -196,7 +199,9 @@ const UserPreferencesPage: React.FC = () => {
         layout: 'default',
         font_size: getPreference<string>('ui.font_size', 'medium'),
         sidebar_collapsed: getPreference<boolean>('ui.sidebar_collapsed', false),
-        default_page_size: getPreference<number>('ui.default_page_size', 20),
+        // 未显式设置时选「跟随系统」，避免把站点默认误写入个人偏好后永久盖住站点配置
+        default_page_size:
+          readExplicitPreferenceTablePageSize(preferences) ?? FOLLOW_SYSTEM_PAGE_SIZE,
         default_table_density: normalizeProTableDensity(
           getPreference<string | undefined>('ui.default_table_density', undefined) ?? 'small',
         ),
@@ -237,12 +242,21 @@ const UserPreferencesPage: React.FC = () => {
           ? preferences.ui
           : {};
       const submittedUi = (values.ui && typeof values.ui === 'object') ? values.ui : {};
+      const rawPageSize = submittedUi.default_page_size;
+      const explicitPageSize =
+        rawPageSize === FOLLOW_SYSTEM_PAGE_SIZE || rawPageSize == null || rawPageSize === ''
+          ? null
+          : Number(rawPageSize);
       values = {
         ...values,
         ui: {
           ...prevUi,
           ...submittedUi,
           layout: 'default',
+          default_page_size:
+            explicitPageSize != null && Number.isFinite(explicitPageSize) && explicitPageSize > 0
+              ? explicitPageSize
+              : null,
           default_table_density: normalizeProTableDensity(
             submittedUi.default_table_density ?? prevUi.default_table_density ?? 'small',
           ),
@@ -422,10 +436,16 @@ const UserPreferencesPage: React.FC = () => {
                 <Typography.Title level={5} style={{ marginBottom: 16 }}>{t('pages.personal.preferences.interface')}</Typography.Title>
                 <Row gutter={[16, 16]}>
                   <Col span={12}>
-                    <SafeProFormSelect 
-                      name={['ui', 'default_page_size']} 
-                      label={t('pages.personal.preferences.tablePageSize')} 
-                      valueEnum={{ 10: t('pages.personal.preferences.perPage10'), 20: t('pages.personal.preferences.perPage20'), 50: t('pages.personal.preferences.perPage50'), 100: t('pages.personal.preferences.perPage100') }} 
+                    <SafeProFormSelect
+                      name={['ui', 'default_page_size']}
+                      label={t('pages.personal.preferences.tablePageSize')}
+                      valueEnum={{
+                        [FOLLOW_SYSTEM_PAGE_SIZE]: t('pages.personal.preferences.followSystemPageSize'),
+                        10: t('pages.personal.preferences.perPage10'),
+                        20: t('pages.personal.preferences.perPage20'),
+                        50: t('pages.personal.preferences.perPage50'),
+                        100: t('pages.personal.preferences.perPage100'),
+                      }}
                     />
                   </Col>
                   <Col span={12}>

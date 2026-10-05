@@ -1,0 +1,58 @@
+from __future__ import annotations
+
+from typing import List
+
+from apps.kuaizhizao.services.qms_clause_presets.types import ClausePresetItem
+
+ISO14001_2015_STANDARD = "ISO14001:2015"
+
+ISO14001_2015_PRESET: List[ClausePresetItem] = [
+    {"clause_code": "1", "title": "范围", "parent_code": None, "sort_order": 100},
+    {"clause_code": "2", "title": "规范性引用文件", "parent_code": None, "sort_order": 200},
+    {"clause_code": "3", "title": "术语和定义", "parent_code": None, "sort_order": 300},
+    {"clause_code": "4", "title": "组织所处的环境", "parent_code": None, "sort_order": 400},
+    {"clause_code": "4.1", "title": "理解组织及其环境", "parent_code": "4", "sort_order": 410},
+    {"clause_code": "4.2", "title": "理解相关方的需求和期望", "parent_code": "4", "sort_order": 420},
+    {"clause_code": "4.3", "title": "确定环境管理体系的范围", "parent_code": "4", "sort_order": 430},
+    {"clause_code": "4.4", "title": "环境管理体系", "parent_code": "4", "sort_order": 440},
+    {"clause_code": "5", "title": "领导作用", "parent_code": None, "sort_order": 500},
+    {"clause_code": "5.1", "title": "领导作用和承诺", "parent_code": "5", "sort_order": 510},
+    {"clause_code": "5.2", "title": "环境方针", "parent_code": "5", "sort_order": 520},
+    {"clause_code": "5.3", "title": "组织的角色、职责和权限", "parent_code": "5", "sort_order": 530},
+    {"clause_code": "6", "title": "策划", "parent_code": None, "sort_order": 600},
+    {"clause_code": "6.1", "title": "应对风险和机遇的措施", "parent_code": "6", "sort_order": 610},
+    {"clause_code": "6.1.1", "title": "总则", "parent_code": "6.1", "sort_order": 611},
+    {"clause_code": "6.1.2", "title": "环境因素", "parent_code": "6.1", "sort_order": 612},
+    {"clause_code": "6.1.3", "title": "合规义务", "parent_code": "6.1", "sort_order": 613},
+    {"clause_code": "6.1.4", "title": "措施的策划", "parent_code": "6.1", "sort_order": 614},
+    {"clause_code": "6.2", "title": "环境目标及实现策划", "parent_code": "6", "sort_order": 620},
+    {"clause_code": "6.2.1", "title": "环境目标", "parent_code": "6.2", "sort_order": 621},
+    {"clause_code": "6.2.2", "title": "实现环境目标措施的策划", "parent_code": "6.2", "sort_order": 622},
+    {"clause_code": "7", "title": "支持", "parent_code": None, "sort_order": 700},
+    {"clause_code": "7.1", "title": "资源", "parent_code": "7", "sort_order": 710},
+    {"clause_code": "7.2", "title": "能力", "parent_code": "7", "sort_order": 720},
+    {"clause_code": "7.3", "title": "意识", "parent_code": "7", "sort_order": 730},
+    {"clause_code": "7.4", "title": "信息交流", "parent_code": "7", "sort_order": 740},
+    {"clause_code": "7.5", "title": "成文信息", "parent_code": "7", "sort_order": 750},
+    {"clause_code": "7.5.1", "title": "总则", "parent_code": "7.5", "sort_order": 751},
+    {"clause_code": "7.5.2", "title": "创建和更新", "parent_code": "7.5", "sort_order": 752},
+    {"clause_code": "7.5.3", "title": "成文信息的控制", "parent_code": "7.5", "sort_order": 753},
+    {"clause_code": "8", "title": "运行", "parent_code": None, "sort_order": 800},
+    {"clause_code": "8.1", "title": "运行策划和控制", "parent_code": "8", "sort_order": 810},
+    {"clause_code": "8.2", "title": "应急准备和响应", "parent_code": "8", "sort_order": 820},
+    {"clause_code": "9", "title": "绩效评价", "parent_code": None, "sort_order": 900},
+    {"clause_code": "9.1", "title": "监视、测量、分析和评价", "parent_code": "9", "sort_order": 910},
+    {"clause_code": "9.1.1", "title": "总则", "parent_code": "9.1", "sort_order": 911},
+    {"clause_code": "9.1.2", "title": "合规性评价", "parent_code": "9.1", "sort_order": 912},
+    {"clause_code": "9.2", "title": "内部审核", "parent_code": "9", "sort_order": 920},
+    {"clause_code": "9.2.1", "title": "总则", "parent_code": "9.2", "sort_order": 921},
+    {"clause_code": "9.2.2", "title": "内部审核方案", "parent_code": "9.2", "sort_order": 922},
+    {"clause_code": "9.3", "title": "管理评审", "parent_code": "9", "sort_order": 930},
+    {"clause_code": "9.3.1", "title": "总则", "parent_code": "9.3", "sort_order": 931},
+    {"clause_code": "9.3.2", "title": "管理评审输入", "parent_code": "9.3", "sort_order": 932},
+    {"clause_code": "9.3.3", "title": "管理评审输出", "parent_code": "9.3", "sort_order": 933},
+    {"clause_code": "10", "title": "改进", "parent_code": None, "sort_order": 1000},
+    {"clause_code": "10.1", "title": "总则", "parent_code": "10", "sort_order": 1010},
+    {"clause_code": "10.2", "title": "不符合和纠正措施", "parent_code": "10", "sort_order": 1020},
+    {"clause_code": "10.3", "title": "持续改进", "parent_code": "10", "sort_order": 1030},
+]

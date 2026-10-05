@@ -15,6 +15,12 @@ import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uni
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { useTrialRunMode } from '../../../../../hooks/useTrialRunMode';
+import { useToolbarSyncPushFlags } from '../../../../../hooks/useToolbarSyncPushFlags';
+import { SyncPushHubButton } from '../../../../../components/sync-push-hub';
+import { SyncFreshnessBadge } from '../../../../../components/sync-from-source-modal/SyncFreshnessBadge';
+import OperationSyncFromSourceModal from '../../../components/OperationSyncFromSourceModal';
+import OperationDocumentPushPanel from '../../../components/OperationDocumentPushPanel';
+import { getOperationSyncBinding } from '../../../services/process';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
@@ -81,8 +87,33 @@ const OperationsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const lastListParamsRef = useRef<Record<string, string | number | boolean | undefined>>({});
+  const pageOperationsRef = useRef<Operation[]>([]);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [searchParams, setSearchParams] = useSearchParams();
+  const toolbarSyncPush = useToolbarSyncPushFlags('master-data:process:operation');
+  const [opSyncFreshnessKey, setOpSyncFreshnessKey] = useState(0);
+  const loadOperationSyncBinding = React.useCallback(() => getOperationSyncBinding(), []);
+  const handleOpSyncComplete = React.useCallback(() => {
+    setOpSyncFreshnessKey((k) => k + 1);
+    actionRef.current?.reload();
+  }, []);
+  const resolveOperationIdsFromRowKeys = React.useCallback((keys: React.Key[]): number[] => {
+    const byUuid = new Map(
+      pageOperationsRef.current
+        .filter((row) => row.uuid && Number(row.id) > 0)
+        .map((row) => [row.uuid, Number(row.id)] as const),
+    );
+    const seen = new Set<number>();
+    const ids: number[] = [];
+    for (const key of keys) {
+      const fromUuid = byUuid.get(String(key));
+      const numeric = fromUuid ?? Number(key);
+      if (!Number.isFinite(numeric) || numeric <= 0 || seen.has(numeric)) continue;
+      seen.add(numeric);
+      ids.push(numeric);
+    }
+    return ids;
+  }, []);
 
   const operationReportingTypeValueEnum = useMemo(
     () => buildOperationReportingTypeValueEnum(t),
@@ -743,6 +774,9 @@ const OperationsPage: React.FC = () => {
         columnPersistenceId="apps.master-data.pages.process.operations.list-v4"
         actionRef={actionRef}
         columns={alignProColumns(columns, MASTER_DATA_LIST_FIELD_RANK)}
+        onTableDataChange={(rows) => {
+          pageOperationsRef.current = rows || [];
+        }}
         request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
           const listParams = resolveProcessListParams(searchFormValues, sort);
           lastListParamsRef.current = listParams;
@@ -849,6 +883,51 @@ const OperationsPage: React.FC = () => {
         importExampleRow={operationImportTemplate.importExampleRow}
         importColumnOptions={operationImportTemplate.importColumnOptions}
         importFieldMap={operationImportTemplate.importHeaderMap}
+        showSyncButton={toolbarSyncPush.hubVisible}
+        onSync={() => undefined}
+        syncToolbarExtra={
+          toolbarSyncPush.hubVisible
+            ? () => (
+                <SyncPushHubButton
+                  syncEnabled={toolbarSyncPush.syncEnabled}
+                  pushEnabled={toolbarSyncPush.pushEnabled}
+                  size="middle"
+                  wrapButton={(hubButton) => (
+                    <SyncFreshnessBadge
+                      getBinding={loadOperationSyncBinding}
+                      refreshKey={opSyncFreshnessKey}
+                    >
+                      {hubButton}
+                    </SyncFreshnessBadge>
+                  )}
+                  renderSyncPanel={({ active, close }) => (
+                    <OperationSyncFromSourceModal
+                      contentOnly
+                      open={active}
+                      onClose={close}
+                      onComplete={() => {
+                        handleOpSyncComplete();
+                        close();
+                      }}
+                    />
+                  )}
+                  renderPushPanel={({ active, close }) => (
+                    <OperationDocumentPushPanel
+                      embedded
+                      open={active}
+                      onClose={close}
+                      operationIds={resolveOperationIdsFromRowKeys(selectedRowKeys)}
+                      operationUuids={selectedRowKeys.map((k) => String(k))}
+                      onComplete={() => {
+                        handleOpSyncComplete();
+                        close();
+                      }}
+                    />
+                  )}
+                />
+              )
+            : undefined
+        }
         showExportButton
         onExport={handleExport}
       />

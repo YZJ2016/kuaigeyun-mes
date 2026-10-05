@@ -66,6 +66,10 @@ import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uni
 import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { buildMoldDetailPath } from './moldPaths';
+import {
+  buildLedgerCodeUuidMap,
+  upsertLedgerImportItem,
+} from '../../../utils/ledgerImportUpsert';
 import { todaySiteDateString } from '../../../../../utils/format';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 const MOLD_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_molds';
@@ -672,6 +676,7 @@ const MoldsPage: React.FC = () => {
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.moldsLedger')}
           headerTitle={t('app.kuaizhizao.mold.title')}
+          permissionResource="kuaizhizao:equipment-management-molds"
           columnPersistenceId="apps.kuaizhizao.pages.equipment-management.molds-signback-r10-v1"
           actionRef={actionRef}
           rowKey="uuid"
@@ -720,7 +725,7 @@ const MoldsPage: React.FC = () => {
           createButtonText={createButtonLabel}
           onCreate={handleCreate}
           toolbar={{ actions: [moldCardToolbar] }}
-          showImportButton
+          showImportButton={perms.canImport}
           onImport={async (data) => {
             if (!data || data.length < 2) {
               messageApi.warning(t('app.kuaizhizao.mold.importEmpty'));
@@ -785,9 +790,16 @@ const MoldsPage: React.FC = () => {
               messageApi.warning(t('app.kuaizhizao.mold.importNoRows'));
               return;
             }
+            const codeToUuid = await buildLedgerCodeUuidMap((p) => moldApi.list(p));
             const result = await importInChunksViaPerItemCreate({
               items,
-              createOne: async (item, _index) => moldApi.create(item),
+              createOne: async (item, _index) =>
+                upsertLedgerImportItem(
+                  item,
+                  codeToUuid,
+                  (payload) => moldApi.create(payload),
+                  (uuid, payload) => moldApi.update(uuid, payload),
+                ),
               title: t('app.kuaizhizao.mold.importTitle'),
               chunkSize: 100,
               concurrency: 4,

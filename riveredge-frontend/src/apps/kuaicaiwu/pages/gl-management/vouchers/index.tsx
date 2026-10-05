@@ -36,6 +36,7 @@ import {
 import { StatusTag } from '../../../../../constants/statusBadges';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { pickListSearchKeyword, pickSearchString } from '../../../../../utils/tableQueryKey';
 import { formatAmount } from '../../../../../utils/format';
 import { useLinkedDocumentDetail } from '../../../../../components/linked-document-detail';
 import { canOpenLinkedDocumentDetail } from '../../../../kuaizhizao/utils/linkedDocumentDetail';
@@ -970,11 +971,11 @@ const GlVouchersPage: React.FC = () => {
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.voucher)}
         actionRef={actionRef}
         rowKey="id"
-        columnPersistenceId="apps.kuaicaiwu.pages.gl-management.vouchers.list-v4"
+        columnPersistenceId="apps.kuaicaiwu.pages.gl-management.vouchers.list-v5"
         columns={columns}
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
-        request={async (params) => {
+        request={async (params, _sort, _filter, searchFormValues) => {
           try {
             const pageSize = params.pageSize ?? 20;
             const current = params.current ?? 1;
@@ -982,8 +983,8 @@ const GlVouchersPage: React.FC = () => {
             const res = await glService.listVouchers({
               skip,
               limit: pageSize,
-              status: params.status || undefined,
-              keyword: params.keyword || undefined,
+              status: pickSearchString(searchFormValues, 'status'),
+              keyword: pickListSearchKeyword(searchFormValues),
             });
             const data = asList<GlVoucher>(res);
             const total = data.length < pageSize ? skip + data.length : skip + data.length + 1;

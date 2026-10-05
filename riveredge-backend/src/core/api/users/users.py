@@ -178,6 +178,105 @@ async def batch_delete_users(
     )
 
 
+class UserBatchUpdateRequest(BaseModel):
+    """批量更新用户请求（部门 / 职位 / 角色 / 启用状态，至少一项）"""
+
+    user_uuids: List[str] = Field(..., min_length=1, description="用户 UUID 列表")
+    department_uuid: Optional[str] = Field(None, description="部门 UUID；传空字符串可清空")
+    position_uuid: Optional[str] = Field(None, description="职位 UUID；传空字符串可清空")
+    role_uuids: Optional[List[str]] = Field(None, description="角色 UUID 列表；传空列表可清空")
+    is_active: Optional[bool] = Field(None, description="是否启用")
+
+
+class UserBatchStatusRequest(BaseModel):
+    """批量启用 / 停用用户"""
+
+    user_uuids: List[str] = Field(..., min_length=1, description="用户 UUID 列表")
+    is_active: bool = Field(..., description="是否启用")
+
+
+class UserBatchUpdateErrorItem(BaseModel):
+    uuid: str
+    message: str
+
+
+class UserBatchUpdateResponse(BaseModel):
+    success_count: int
+    failure_count: int
+    errors: List[UserBatchUpdateErrorItem] = Field(default_factory=list)
+
+
+@router.post("/batch-update", response_model=UserBatchUpdateResponse)
+async def batch_update_users(
+    request: UserBatchUpdateRequest,
+    _auth: object = Depends(require_permission_codes("system:user:update")),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    批量设置部门、职位、角色或启用状态。
+
+    请求体中出现的字段才会写入；单条失败计入 errors，其余继续。
+    """
+    patch_kwargs: dict = {}
+    if "department_uuid" in request.model_fields_set:
+        patch_kwargs["department_uuid"] = request.department_uuid or None
+    if "position_uuid" in request.model_fields_set:
+        patch_kwargs["position_uuid"] = request.position_uuid or None
+    if "role_uuids" in request.model_fields_set:
+        patch_kwargs["role_uuids"] = list(request.role_uuids or [])
+    if "is_active" in request.model_fields_set:
+        patch_kwargs["is_active"] = request.is_active
+
+    if not patch_kwargs:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="批量更新至少需要提供部门、职位、角色或启用状态之一",
+        )
+
+    try:
+        result = await UserService.batch_update_users(
+            tenant_id=tenant_id,
+            user_uuids=request.user_uuids,
+            data=UserUpdate(**patch_kwargs),
+            current_user_id=current_user.id,
+            current_user=current_user,
+        )
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        ) from e
+
+    return UserBatchUpdateResponse(
+        success_count=result["success_count"],
+        failure_count=result["failure_count"],
+        errors=[UserBatchUpdateErrorItem(**item) for item in result["errors"]],
+    )
+
+
+@router.post("/batch/status", response_model=UserBatchUpdateResponse)
+async def batch_update_users_status(
+    request: UserBatchStatusRequest,
+    _auth: object = Depends(require_permission_codes("system:user:update")),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """批量启用或停用用户。"""
+    result = await UserService.batch_update_users(
+        tenant_id=tenant_id,
+        user_uuids=request.user_uuids,
+        data=UserUpdate(is_active=request.is_active),
+        current_user_id=current_user.id,
+        current_user=current_user,
+    )
+    return UserBatchUpdateResponse(
+        success_count=result["success_count"],
+        failure_count=result["failure_count"],
+        errors=[UserBatchUpdateErrorItem(**item) for item in result["errors"]],
+    )
+
+
 _require_user_picker_access = require_reference_display_access(
     "system:user",
     "缺少用户读或引用展示权限",

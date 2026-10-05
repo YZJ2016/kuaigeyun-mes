@@ -220,18 +220,22 @@ async def fetch_sync_rows(
     since: Optional[datetime] = None,
     active_only: bool = True,
 ) -> List[Dict[str, Any]]:
+    from core.services.data.sync_nested_expand import expand_nested_detail_rows
+
     if source_type == "api":
         if not api_uuid:
             raise ValidationError("数据接口同步须指定接口")
-        return await fetch_rows_from_api(
+        # API 路径已在 normalize_api_body_to_rows 内摊平；再跑一遍保持幂等
+        rows = await fetch_rows_from_api(
             tenant_id, api_uuid, since=since, active_only=active_only
         )
+        return expand_nested_detail_rows(rows)
     if source_type == "dataset":
         if not dataset_uuid:
             raise ValidationError("数据集同步须指定数据集")
-        return await fetch_rows_from_dataset(tenant_id, dataset_uuid, since=since)
+        rows = await fetch_rows_from_dataset(tenant_id, dataset_uuid, since=since)
+        return expand_nested_detail_rows(rows)
     raise ValidationError("来源类型须为 api 或 dataset")
-
 
 def map_sync_rows(
     raw_rows: List[Dict[str, Any]],
@@ -268,6 +272,44 @@ def cell_str(value: Any) -> str:
     if value is None:
         return ""
     return str(value).strip()
+
+
+def sync_values_equal(left: Any, right: Any) -> bool:
+    """同步写入比较：空串/None、Decimal、布尔按业务等价判断。"""
+    if left is right:
+        return True
+    if left is None and right is None:
+        return True
+    if isinstance(left, bool) or isinstance(right, bool):
+        try:
+            return bool(left) == bool(right)
+        except Exception:
+            return False
+    from decimal import Decimal, InvalidOperation
+
+    if isinstance(left, Decimal) or isinstance(right, Decimal):
+        try:
+            if left is None or right is None:
+                return (left is None or str(left).strip() == "") and (
+                    right is None or str(right).strip() == ""
+                )
+            return Decimal(str(left)) == Decimal(str(right))
+        except (InvalidOperation, ValueError, TypeError):
+            return False
+    left_text = "" if left is None else str(left).strip()
+    right_text = "" if right is None else str(right).strip()
+    return left_text == right_text
+
+
+def record_fields_unchanged(record: Any, proposed: Dict[str, Any]) -> bool:
+    """proposed 中每个字段与 record 当前值均等价时返回 True（用于跳过无变更更新）。"""
+    if not proposed:
+        return True
+    for field_name, new_value in proposed.items():
+        current = getattr(record, field_name, None)
+        if not sync_values_equal(current, new_value):
+            return False
+    return True
 
 
 def cell_optional_bool(value: Any) -> Optional[bool]:

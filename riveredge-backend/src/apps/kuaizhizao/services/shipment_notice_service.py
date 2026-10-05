@@ -397,12 +397,29 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
             raise BusinessLogicError(
                 f"该销售订单已创建发货通知单（{existed.notice_code}），请勿重复创建"
             )
+        from apps.kuaizhizao.utils.sales_order_currency_carry import currency_fields_for_sales_doc
+
+        fields_set = getattr(notice_data, "model_fields_set", set()) or set()
+        so_currency = currency_fields_for_sales_doc(
+            source_order,
+            override_code=(
+                getattr(notice_data, "currency_code", None)
+                if "currency_code" in fields_set
+                else None
+            ),
+            override_rate=(
+                getattr(notice_data, "exchange_rate", None)
+                if "exchange_rate" in fields_set
+                else None
+            ),
+        )
         async with in_transaction():
             code = notice_data.notice_code
             if not code:
                 code = await self.generate_code(tenant_id, "SHIPMENT_NOTICE_CODE", prefix="SN")
 
             dump = notice_data.model_dump(exclude_unset=True, exclude={"items", "notice_code"})
+            dump.update(so_currency)
             audit_required = await self.business_config_service.check_audit_required(
                 tenant_id, "shipment_notice"
             )
@@ -1235,6 +1252,8 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
                 delivery_time=notice.planned_ship_date,
                 shipping_address=getattr(notice, "shipping_address", None),
                 notes=getattr(notice, "notes", None),
+                currency_code=getattr(notice, "currency_code", None) or "CNY",
+                exchange_rate=getattr(notice, "exchange_rate", None) or Decimal("1"),
                 items=delivery_items,
                 status="待出库",
                 review_status="已通过",

@@ -13,7 +13,7 @@
  * 使用场景：BasicLayout（侧边栏、UniTabs、面包屑、页面标题）、Dashboard 快捷入口等
  */
 
-import { createElement, useMemo, useCallback, useEffect, useRef } from 'react';
+import { createElement, useMemo, useCallback, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { MenuDataItem } from '@ant-design/pro-components';
 import {
@@ -306,12 +306,12 @@ export function useUnifiedMenuData(
     void refetchSessionCurrentUser().catch(() => {});
   }, [currentUser?.id, currentUser?.is_tenant_admin, currentUser?.is_infra_admin, menuPermissionUser?.permissions?.length]);
 
-  const { data: fullMenuTree, isLoading, refetch } = useNavigationMenuTreeQuery();
+  const { data: fullMenuTree, isLoading, isPending, refetch } = useNavigationMenuTreeQuery();
   const menuCustomLayoutQueryKey = useMemo(
     () => buildMenuCustomLayoutQueryKey(currentUser?.tenant_id),
     [currentUser?.tenant_id],
   );
-  const { data: menuCustomLayout, isLoading: customLayoutLoading } = useQuery({
+  const { data: menuCustomLayout } = useQuery({
     queryKey: menuCustomLayoutQueryKey,
     queryFn: () => getMenuCustomLayout(),
     enabled: !!currentUser,
@@ -345,19 +345,6 @@ export function useUnifiedMenuData(
       queryClient.invalidateQueries({ queryKey: ['dashboard-menu-tree'] });
     }
   }, [applicationMenuVersion, queryClient]);
-
-  const prevPermissionVersionRef = useRef<number | null>(null);
-  useEffect(() => {
-    const version = currentUser?.permission_version;
-    if (version == null) return;
-    if (prevPermissionVersionRef.current === null) {
-      prevPermissionVersionRef.current = version;
-      return;
-    }
-    if (prevPermissionVersionRef.current === version) return;
-    prevPermissionVersionRef.current = version;
-    queryClient.invalidateQueries({ queryKey: [NAVIGATION_MENU_TREE_QUERY_KEY] });
-  }, [currentUser?.permission_version, queryClient]);
 
   const invalidateAndRefetch = useCallback(() => {
     useGlobalStore.getState().incrementApplicationMenuVersion();
@@ -527,7 +514,8 @@ export function useUnifiedMenuData(
     sidebarMenuData,
     breadcrumbMenuData,
     applicationMenus: filteredApplicationMenus ?? [],
-    isLoading: isLoading || customLayoutLoading,
+    // 已有导航树即可渲染 APP 菜单；自组布局未到时先按默认序，到了再映射，勿整段卡住
+    isLoading: (isPending || isLoading) && !fullMenuTree?.length,
     refetch,
     invalidateAndRefetch,
   };

@@ -94,6 +94,7 @@ const LEGACY_ENGLISH_HEADERS: Record<string, string[]> = {
   processRouteName: ['processRouteName', 'process_route_name', 'process route name'],
   operationName: ['operationName', 'operation_name', 'operation name'],
   employeeId: ['employeeId', 'employee_id', 'employee id'],
+  employee_code: ['employee_code', 'employeeCode', 'employee code', '员工编号', '工号'],
   employeeName: ['employeeName', 'employee_name', 'employee name'],
   calcMode: ['calcMode', 'calc_mode', 'calc mode'],
   hourlyRate: ['hourlyRate', 'hourly_rate', 'hourly rate'],

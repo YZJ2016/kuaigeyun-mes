@@ -25,12 +25,14 @@ import {
   deleteScript,
   executeScript,
   Script,
+  ScriptListParams,
   CreateScriptData,
   UpdateScriptData,
   ExecuteScriptData,
   ScriptExecuteResponse,
 } from '../../../../services/script';
 import { countWithPagedRequests } from '../../../../utils/pagedCount';
+import { resolveScriptListFilter } from '../../../../utils/systemUniTableListFilters';
 import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 import { todaySiteDateString } from '../../../../utils/format';
@@ -413,19 +415,20 @@ const ScriptListPage: React.FC = () => {
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {
-            const { current = 1, pageSize = 20, ...rest } = params;
+            const { current = 1, pageSize = 20 } = params;
             const skip = (current - 1) * pageSize;
             const limit = pageSize;
             
-            const listParams: any = {
+            const filter = resolveScriptListFilter(searchFormValues);
+            const listParams: ScriptListParams = {
               skip,
               limit,
-              ...searchFormValues,
+              ...filter,
             };
             
             const [data, total] = await Promise.all([
               getScriptList(listParams),
-              countWithPagedRequests(getScriptList, searchFormValues || {}, { chunkSize: 100 }),
+              countWithPagedRequests(getScriptList, filter, { chunkSize: 100 }),
             ]);
             return {
               data,
@@ -459,9 +462,6 @@ const ScriptListPage: React.FC = () => {
               `scripts-${todaySiteDateString()}.xlsx`,
             );
             messageApi.success(t('pages.infra.scripts.exportSuccess'));
-          }}
-          search={{
-            labelWidth: 'auto',
           }}
         />
       </ListPageTemplate>

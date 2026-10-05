@@ -38,6 +38,13 @@ import { toApiDateString } from '../../../../../utils/formDate';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { useOptionalLinkedDocumentDetail } from '../../../../../components/linked-document-detail';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
+import {
+  generateCode,
+  getCodeRulePageConfig,
+  testGenerateCode,
+} from '../../../../../services/codeRule';
+import { resolveUserDisplay } from '../../../../../services/user';
+import { getPageRuleCode, isAutoGenerateEnabled } from '../../../../../utils/codeRulePage';
 import { SALES_FORM_ROW_GUTTER } from '../shared/salesFormLayout';
 import {
   salesReviewApi,
@@ -49,8 +56,11 @@ import { formatAmount } from '../../../../../utils/format';
 import {
   buildReviewDeptPlanFormRows,
   ReviewDeptPlanFormItem,
-  reviewDeptPlanRowsToPayload,
+  resolveReviewDeptPlanPayload,
+  type ReviewDeptPlanFormRow,
 } from './ReviewDeptPlanFields';
+
+const SALES_REVIEW_PAGE_CODE = 'kuaizhizao-sales-review';
 
 const getCustomerId = (c: any): number | null => {
   const id = Number(c?.id ?? c?.customer_id);
@@ -108,7 +118,11 @@ export const SalesReviewFormModal: React.FC<SalesReviewFormModalProps> = ({
   const [customers, setCustomers] = useState<any[]>([]);
   const [paymentTermsOptions, setPaymentTermsOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [previewCode, setPreviewCode] = useState<string | null>(null);
+  const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null);
+  const [effectiveAutoGen, setEffectiveAutoGen] = useState<boolean | null>(null);
   const customerDropdownRef = useRef<any>(null);
+  const isEdit = Boolean(editing);
 
   const customerOptions = useMemo(
     () =>
@@ -156,8 +170,14 @@ export const SalesReviewFormModal: React.FC<SalesReviewFormModalProps> = ({
 
   useEffect(() => {
     if (!open) return;
+    let cancelled = false;
     if (editing) {
+      setPreviewCode(null);
+      setEffectiveRuleCode(null);
+      setEffectiveAutoGen(null);
+      const planRows = buildReviewDeptPlanFormRows(editing.review_dept_plan);
       form.setFieldsValue({
+        review_code: editing.review_code,
         customer_id: editing.customer_id,
         customer_name: editing.customer_name,
         customer_code: editing.customer_code,
@@ -171,7 +191,7 @@ export const SalesReviewFormModal: React.FC<SalesReviewFormModalProps> = ({
         settlement_method: editing.settlement_method,
         payment_cycle: editing.payment_cycle,
         remarks: editing.remarks,
-        review_dept_plan_rows: buildReviewDeptPlanFormRows(editing.review_dept_plan),
+        review_dept_plan_rows: planRows,
         items: (editing.items || []).map((it) => ({
           material_id: it.material_id ?? undefined,
           material_code: it.material_code,
@@ -183,13 +203,32 @@ export const SalesReviewFormModal: React.FC<SalesReviewFormModalProps> = ({
           notes: it.notes ?? undefined,
         })),
       });
-      return;
+      const reviewerIds = planRows
+        .map((r) => r.assigned_reviewer_id)
+        .filter((id): id is number => typeof id === 'number' && id > 0);
+      if (reviewerIds.length) {
+        void resolveUserDisplay({ user_ids: reviewerIds }).then((users) => {
+          if (cancelled) return;
+          const uuidById = new Map(users.map((u) => [u.id, u.uuid]));
+          const hydrated: ReviewDeptPlanFormRow[] = planRows.map((r) => ({
+            ...r,
+            reviewer_uuid:
+              r.assigned_reviewer_id != null ? uuidById.get(r.assigned_reviewer_id) : undefined,
+          }));
+          form.setFieldsValue({ review_dept_plan_rows: hydrated });
+        });
+      }
+      return () => {
+        cancelled = true;
+      };
     }
+    setPreviewCode(null);
     form.setFieldsValue({
+      review_code: undefined,
       urgency: 'normal',
       risk_level: 'medium',
       review_date: dayjs(),
-      review_dept_plan_rows: buildReviewDeptPlanFormRows(null),
+      review_dept_plan_rows: [],
       items: [
         {
           material_id: undefined,
@@ -200,10 +239,46 @@ export const SalesReviewFormModal: React.FC<SalesReviewFormModalProps> = ({
         },
       ],
     });
+    void (async () => {
+      let ruleCode = getPageRuleCode(SALES_REVIEW_PAGE_CODE);
+      let autoGen = isAutoGenerateEnabled(SALES_REVIEW_PAGE_CODE);
+      try {
+        const pageConfig = await getCodeRulePageConfig(SALES_REVIEW_PAGE_CODE);
+        if (cancelled) return;
+        if (pageConfig?.ruleCode) {
+          ruleCode = pageConfig.ruleCode;
+          autoGen = !!pageConfig.autoGenerate;
+        }
+      } catch {
+        // 配置加载失败时沿用页面默认编码规则
+      }
+      if (cancelled) return;
+      setEffectiveRuleCode(ruleCode ?? null);
+      setEffectiveAutoGen(autoGen);
+      if (autoGen && ruleCode) {
+        try {
+          const codeResponse = await testGenerateCode({ rule_code: ruleCode });
+          if (cancelled) return;
+          const preview = codeResponse.code ?? null;
+          setPreviewCode(preview);
+          form.setFieldsValue({ review_code: preview ?? undefined });
+        } catch {
+          if (!cancelled) setPreviewCode(null);
+        }
+      } else {
+        setPreviewCode(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [open, editing, form]);
 
   const handleClose = () => {
     form.resetFields();
+    setPreviewCode(null);
+    setEffectiveRuleCode(null);
+    setEffectiveAutoGen(null);
     onClose();
   };
 
@@ -236,19 +311,48 @@ export const SalesReviewFormModal: React.FC<SalesReviewFormModalProps> = ({
       message.error(t('app.kuaizhizao.salesReview.itemsRequired'));
       return;
     }
-    const reviewDeptPlan = reviewDeptPlanRowsToPayload(values.review_dept_plan_rows || []);
-    if (!reviewDeptPlan.length) {
-      message.error(t('app.kuaizhizao.salesReview.deptPlanRequired'));
+    const planRows = (values.review_dept_plan_rows || []) as ReviewDeptPlanFormRow[];
+    if (!planRows.length || planRows.some((r) => !r?.dept_code || !r?.reviewer_uuid)) {
+      message.error(
+        planRows.length
+          ? t('app.kuaizhizao.salesReview.reviewerRequired')
+          : t('app.kuaizhizao.salesReview.deptPlanRequired'),
+      );
       return;
     }
-    for (const row of values.review_dept_plan_rows || []) {
-      if (row?.enabled && !row.assigned_reviewer_id) {
-        message.error(t('app.kuaizhizao.salesReview.reviewerRequired'));
+    let reviewDeptPlan: Awaited<ReturnType<typeof resolveReviewDeptPlanPayload>>;
+    try {
+      reviewDeptPlan = await resolveReviewDeptPlanPayload(planRows);
+    } catch {
+      message.error(t('app.kuaizhizao.salesReview.reviewerRequired'));
+      return;
+    }
+    if (!reviewDeptPlan.length || reviewDeptPlan.length !== planRows.length) {
+      message.error(t('app.kuaizhizao.salesReview.reviewerRequired'));
+      return;
+    }
+    let reviewCode = String(values.review_code || '').trim() || undefined;
+    if (!isEdit) {
+      const submitRuleCode = effectiveRuleCode || getPageRuleCode(SALES_REVIEW_PAGE_CODE);
+      const submitAutoEnabled = effectiveAutoGen ?? isAutoGenerateEnabled(SALES_REVIEW_PAGE_CODE);
+      if (submitAutoEnabled && submitRuleCode && (reviewCode === previewCode || !reviewCode)) {
+        try {
+          const codeResponse = await generateCode({ rule_code: submitRuleCode });
+          reviewCode = codeResponse.code || undefined;
+        } catch (err) {
+          message.error(getApiErrorMessage(err, t('app.kuaizhizao.salesReview.generateCodeFailed')));
+          return;
+        }
+      }
+      if (!reviewCode) {
+        message.error(t('app.kuaizhizao.salesReview.codeRequired'));
         return;
       }
     }
+
     const customerOpt = customerOptions.find((o) => o.value === Number(values.customer_id));
     const payload: SalesReviewCreatePayload = {
+      ...(isEdit ? {} : { review_code: reviewCode }),
       customer_id: Number(values.customer_id),
       customer_code: values.customer_code || customerOpt?.code || null,
       customer_name: values.customer_name || customerOpt?.name || customerOpt?.label || '',
@@ -300,6 +404,27 @@ export const SalesReviewFormModal: React.FC<SalesReviewFormModalProps> = ({
       loading={submitting}
     >
       <Row gutter={SALES_FORM_ROW_GUTTER}>
+        <Col xs={24} md={8}>
+          <Form.Item
+            name="review_code"
+            label={t('app.kuaizhizao.salesReview.fieldReviewCode')}
+            rules={
+              isEdit
+                ? undefined
+                : [{ required: true, whitespace: true, message: t('app.kuaizhizao.salesReview.codeRequired') }]
+            }
+          >
+            <Input
+              maxLength={120}
+              disabled={isEdit}
+              placeholder={
+                (effectiveAutoGen ?? isAutoGenerateEnabled(SALES_REVIEW_PAGE_CODE))
+                  ? t('app.kuaizhizao.quotation.form.codeAutoGenerate')
+                  : t('app.kuaizhizao.salesReview.codeRequired')
+              }
+            />
+          </Form.Item>
+        </Col>
         <Col xs={24} md={8}>
           <Form.Item name="customer_code" hidden>
             <Input />
@@ -373,6 +498,25 @@ export const SalesReviewFormModal: React.FC<SalesReviewFormModalProps> = ({
         </Col>
         <Col xs={24} md={8}>
           <Form.Item
+            name="settlement_method"
+            label={t('app.kuaizhizao.salesReview.fieldSettlement')}
+          >
+            <Input maxLength={100} />
+          </Form.Item>
+        </Col>
+        <Col xs={24} md={8}>
+          <Form.Item name="payment_cycle" label={t('app.kuaizhizao.salesReview.fieldPaymentCycle')}>
+            <UniDropdown
+              showSearch
+              allowClear
+              optionFilterProp="label"
+              options={paymentTermsOptions}
+              placeholder={t('app.kuaizhizao.quotation.form.selectPaymentTerms')}
+            />
+          </Form.Item>
+        </Col>
+        <Col xs={24} md={8}>
+          <Form.Item
             name="urgency"
             label={t('app.kuaizhizao.salesReview.fieldUrgency')}
             initialValue="normal"
@@ -399,25 +543,6 @@ export const SalesReviewFormModal: React.FC<SalesReviewFormModalProps> = ({
                 { label: t('app.kuaizhizao.salesReview.risk.medium'), value: 'medium' },
                 { label: t('app.kuaizhizao.salesReview.risk.high'), value: 'high' },
               ]}
-            />
-          </Form.Item>
-        </Col>
-        <Col xs={24} md={8}>
-          <Form.Item
-            name="settlement_method"
-            label={t('app.kuaizhizao.salesReview.fieldSettlement')}
-          >
-            <Input maxLength={100} />
-          </Form.Item>
-        </Col>
-        <Col xs={24} md={8}>
-          <Form.Item name="payment_cycle" label={t('app.kuaizhizao.salesReview.fieldPaymentCycle')}>
-            <UniDropdown
-              showSearch
-              allowClear
-              optionFilterProp="label"
-              options={paymentTermsOptions}
-              placeholder={t('app.kuaizhizao.quotation.form.selectPaymentTerms')}
             />
           </Form.Item>
         </Col>

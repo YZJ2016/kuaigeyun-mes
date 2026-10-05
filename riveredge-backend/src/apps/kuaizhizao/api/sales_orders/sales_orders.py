@@ -1633,6 +1633,36 @@ async def preview_push_sales_order_to_invoice(
 
 
 @router.get(
+    "/{sales_order_id}/push-to-prepayment/preview",
+    response_model=Dict[str, Any],
+    summary="Push to prepayment receipt preview",
+)
+async def preview_push_sales_order_to_prepayment(
+    sales_order_id: int,
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await sales_order_service.preview_push_sales_order_to_prepayment(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(
+            http_status.HTTP_404_NOT_FOUND,
+            str(e),
+            "/sales-orders/{sales_order_id}/push-to-prepayment/preview",
+            tenant_id,
+        )
+    except (BusinessLogicError, ValidationError) as e:
+        raise _http_exception_with_trace(
+            http_status.HTTP_400_BAD_REQUEST,
+            str(e),
+            "/sales-orders/{sales_order_id}/push-to-prepayment/preview",
+            tenant_id,
+        )
+
+
+@router.get(
     "/{sales_order_id}/backfill-sales-contract/preview",
     response_model=Dict[str, Any],
     summary="Preview backfill sales contract from sales order",
@@ -1738,6 +1768,59 @@ async def push_sales_order_to_invoice(
             "/sales-orders/{sales_order_id}/push-to-invoice",
             tenant_id,
             trace_id=tid,
+        )
+
+
+@router.post(
+    "/{sales_order_id}/push-to-prepayment",
+    response_model=Dict[str, Any],
+    summary="Push to prepayment receipt",
+)
+async def push_sales_order_to_prepayment(
+    sales_order_id: int = Path(..., description="销售订单ID"),
+    body: Optional[Dict[str, Any]] = Body(None),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """从销售订单下推预收收款单。body 可选 amount / bank_account_id / notes。"""
+    from decimal import Decimal
+
+    amount = None
+    bank_account_id = None
+    notes = None
+    if isinstance(body, dict):
+        raw_amount = body.get("amount")
+        if raw_amount is not None and raw_amount != "":
+            amount = Decimal(str(raw_amount))
+        raw_bank = body.get("bank_account_id")
+        if raw_bank is not None and raw_bank != "":
+            bank_account_id = int(raw_bank)
+        raw_notes = body.get("notes")
+        if isinstance(raw_notes, str) and raw_notes.strip():
+            notes = raw_notes.strip()
+
+    try:
+        return await sales_order_service.push_sales_order_to_prepayment(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id,
+            created_by=current_user.id,
+            amount=amount,
+            bank_account_id=bank_account_id,
+            notes=notes,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(
+            http_status.HTTP_404_NOT_FOUND,
+            str(e),
+            "/sales-orders/{sales_order_id}/push-to-prepayment",
+            tenant_id,
+        )
+    except (BusinessLogicError, ValidationError) as e:
+        raise _http_exception_with_trace(
+            http_status.HTTP_400_BAD_REQUEST,
+            str(e),
+            "/sales-orders/{sales_order_id}/push-to-prepayment",
+            tenant_id,
         )
 
 

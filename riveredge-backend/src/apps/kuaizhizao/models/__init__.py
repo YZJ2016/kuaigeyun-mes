@@ -56,6 +56,8 @@ from .delivery_delay_exception import DeliveryDelayException
 from .quality_exception import QualityException
 from .exception_process_record import ExceptionProcessRecord, ExceptionProcessHistory
 from .quality_8d_report import Quality8DReport
+from .quality_8d_stage_assignment import Quality8DStageAssignment
+from .quality_8d_action_item import Quality8DActionItem
 from .quality_8d_stage_revision import Quality8DStageRevision
 from .quality_complaint import QualityComplaint
 from .quality_complaint_batch_month import QualityComplaintBatchMonth
@@ -74,6 +76,10 @@ from .fai_order import FaiOrder
 from .qms_internal_audit import QmsInternalAudit
 from .qms_management_review import QmsManagementReview
 from .qms_iso_clause import QmsIsoClause
+from .qms_standard import QmsStandard
+from .qms_document_clause import QmsDocumentClause
+from .qms_audit_clause import QmsAuditClause
+from .qms_review_standard import QmsReviewStandard
 from .qms_system_document import QmsSystemDocument
 from .qms_system_document_version import QmsSystemDocumentVersion
 from .spc_sample import SPCSample

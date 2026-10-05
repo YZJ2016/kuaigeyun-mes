@@ -170,6 +170,26 @@ const EightDReportsPage: React.FC = () => {
       search: { order: 22 } as ProColumns['search'],
     },
     {
+      title: t('app.kuaizhizao.eightD.collab.filterMyStage'),
+      dataIndex: 'my_stage_pending',
+      valueType: 'select',
+      hideInTable: true,
+      valueEnum: {
+        true: { text: t('app.kuaizhizao.eightD.collab.filterMyStageOnly') },
+      },
+      search: { order: 23 } as ProColumns['search'],
+    },
+    {
+      title: t('app.kuaizhizao.eightD.collab.filterMyAction'),
+      dataIndex: 'my_action_pending',
+      valueType: 'select',
+      hideInTable: true,
+      valueEnum: {
+        true: { text: t('app.kuaizhizao.eightD.collab.filterMyActionOnly') },
+      },
+      search: { order: 24 } as ProColumns['search'],
+    },
+    {
       title: t('app.kuaizhizao.eightD.columns.reportCode'),
       dataIndex: 'report_code',
       hideInTable: true,
@@ -238,6 +258,16 @@ const EightDReportsPage: React.FC = () => {
       hideInSearch: true,
       ellipsis: true,
       render: (_, row) => resolveEightDSourceDisplay(t, row)?.label ?? '-',
+    },
+    {
+      title: t('app.kuaizhizao.eightD.collab.openActions'),
+      dataIndex: 'open_action_items_count',
+      width: 88,
+      minWidth: 88,
+      uniTableKeepWidth: true,
+      hideInSearch: true,
+      render: (_, row) =>
+        row.coordination_mode === 'collaborative' ? String(row.open_action_items_count ?? 0) : '—',
     },
     {
       title: t('app.kuaizhizao.eightD.columns.owner'),

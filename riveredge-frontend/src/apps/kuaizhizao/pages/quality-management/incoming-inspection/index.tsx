@@ -88,10 +88,15 @@ import InspectionPlanFormModal from '../../../components/InspectionPlanFormModal
 import InspectionTemplateConductFields from '../components/InspectionTemplateConductFields';
 import { QualityInspectionDetailDrawer } from '../components/QualityInspectionDetailDrawer';
 import {
+  buildQualityInspectionDetailSupplementNode,
+  renderQualityInspectionPlanSummary,
+} from '../components/QualityInspectionDetailSupplement';
+import {
   InspectionUnqualifiedBanner,
   buildInspectionQualityExtraButtons,
 } from '../components/InspectionDetailQualityActions';
 import {
+  buildConductStepResultDefaults,
   getInspectionTemplateSource,
   hasInspectionPlanSteps,
   pickInspectionConductExtras,
@@ -129,6 +134,7 @@ import { pickImportExampleValue } from '../../../../../utils/loadImportDictionar
 import { useGlobalStore } from '../../../../../stores/globalStore';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
+import { useQualityStageCreateEnabled } from '../components/QualityMasterDataHint';
 import { qualityInspectionRowGates, qualityInspectionCapabilityReasonMessage } from '../../../../../hooks/useDocumentCapabilities';
 import { buildUniPushMenuItems, buildUniPushToolbarDisabledReason, UniPushToolbarButton } from '../../../../../components/uni-push';
 import { UniAuditBatchMenuButton, createUniAuditBatchHandlers } from '../../../../../components/uni-batch';
@@ -275,6 +281,7 @@ const IncomingInspectionPage: React.FC = () => {
   const incomingPerms = useResourcePermissions(INCOMING_RESOURCE);
   const inboundPerms = useResourcePermissions('kuaizhizao:inbound');
   const inspectionPlanPerms = useResourcePermissions(INSPECTION_PLAN_RESOURCE);
+  const { enabled: iqcCreateEnabled } = useQualityStageCreateEnabled('iqc');
   const incomingAuditEnabled = useAuditRequired('incoming_inspection');
   const incomingAuditColumn = useMemo(
     () => createListAuditPhaseColumn<IncomingInspection>({ t, auditEnabled: incomingAuditEnabled }),
@@ -1184,7 +1191,9 @@ const IncomingInspectionPage: React.FC = () => {
       }
     },
   });
-  useNewShortcut(pullFromPurchaseReceiptQuery.openModal);
+  useNewShortcut(
+    iqcCreateEnabled ? pullFromPurchaseReceiptQuery.openModal : () => undefined,
+  );
 
   const createMenuItems = useMemo(
     () => [
@@ -1329,9 +1338,53 @@ const IncomingInspectionPage: React.FC = () => {
     ],
   );
 
+  const incomingDetailSupplement = useMemo(() => {
+    if (!inspectionDetail?.id) return null;
+    const gates = qualityInspectionRowGates(inspectionDetail, incomingPerms, ncPerms, t);
+    return buildQualityInspectionDetailSupplementNode({
+      inspection: inspectionDetail as Record<string, unknown>,
+      attachmentCategory: 'incoming_inspection_attachments',
+      updateAttachmentsGate: gates.updateAttachments,
+      patchAttachments: (attachments) =>
+        qualityApi.incomingInspection.patchAttachments(String(inspectionDetail.id), attachments),
+      onUpdated: (record) => {
+        setInspectionDetail(record as IncomingInspection);
+        setIiTrackingRefreshKey((k) => k + 1);
+        actionRef.current?.reload();
+      },
+    });
+  }, [inspectionDetail, incomingPerms, ncPerms, t]);
+
+  const incomingConductPlanSwitch = useMemo(() => {
+    if (!currentInspection?.id) return undefined;
+    if (currentInspection.capabilities?.apply_plan?.allowed !== true) return undefined;
+    const gates = qualityInspectionRowGates(currentInspection, incomingPerms, ncPerms, t);
+    return {
+      planType: 'incoming' as const,
+      materialId: currentInspection.material_id,
+      disabled: gates.applyPlan.disabled,
+      disabledTitle: gates.applyPlan.title,
+      onApplyPlan: async (planId: number) => {
+        const updated = (await qualityApi.incomingInspection.applyPlan(
+          String(currentInspection.id),
+          planId,
+        )) as IncomingInspection;
+        setCurrentInspection(updated);
+        formRef.current?.setFieldsValue({
+          conduct_step_results: buildConductStepResultDefaults(updated as Record<string, unknown>),
+        });
+      },
+    };
+  }, [currentInspection, incomingPerms, ncPerms, t]);
+
   const detailBaseColumns: ProDescriptionsItemProps<IncomingInspection>[] = useMemo(
     () => [
       buildQualityInspectionDetailCodeColumn<IncomingInspection>(t),
+      {
+        title: t('app.kuaizhizao.quality.common.columns.inspectionKind'),
+        key: 'inspection_plan_summary',
+        render: (_, row) => renderQualityInspectionPlanSummary(row as Record<string, unknown>, t),
+      },
       ...buildQualityInspectionDetailMaterialColumns<IncomingInspection>(t),
       {
         title: t('app.kuaizhizao.quality.common.columns.purchaseReceiptCode'),
@@ -1688,29 +1741,42 @@ const IncomingInspectionPage: React.FC = () => {
           tableRowsRef.current = rows;
         }}
         showCreateButton={false}
-        toolBarActionsBeforeCreate={[
-          <UniPullCreateToolbar
-            key="create-incoming"
-            compactKey="create-incoming"
-            createIcon={<PlusOutlined />}
-            createLabel={t('app.kuaizhizao.quality.incoming.createButton')}
-            onCreate={pullFromPurchaseReceiptQuery.openModal}
-            menuItems={createMenuItems}
-          />,
-          <Button
-            key="posted-receipt-recheck"
-            type="primary"
-            onClick={pullFromPostedPurchaseReceiptQuery.openModal}
-          >
-            {t('app.kuaizhizao.quality.incoming.createFromPostedReceiptButton')}
-          </Button>,
-        ]}
+        toolBarActionsBeforeCreate={
+          iqcCreateEnabled
+            ? [
+                <UniPullCreateToolbar
+                  key="create-incoming"
+                  compactKey="create-incoming"
+                  createIcon={<PlusOutlined />}
+                  createLabel={t('app.kuaizhizao.quality.incoming.createButton')}
+                  onCreate={pullFromPurchaseReceiptQuery.openModal}
+                  menuItems={createMenuItems}
+                />,
+                <Button
+                  key="posted-receipt-recheck"
+                  type="primary"
+                  onClick={pullFromPostedPurchaseReceiptQuery.openModal}
+                >
+                  {t('app.kuaizhizao.quality.incoming.createFromPostedReceiptButton')}
+                </Button>,
+              ]
+            : []
+        }
         toolBarRender={() => [
           <UniPushToolbarButton
             key={`incoming-inspection-push-${selectedIncomingForToolbar?.id ?? 'none'}`}
             menuItems={toolbarPushMenuItems}
             disabled={selectedRowKeys.length !== 1 || !selectedIncomingForToolbar}
             disabledReason={toolbarPushDisabledReason}
+            sourceDocument={
+              selectedIncomingForToolbar?.id
+                ? { type: 'incoming_inspection', id: Number(selectedIncomingForToolbar.id) }
+                : null
+            }
+            pushTargets={{
+              'push-inbound': 'purchase_receipt',
+              'push-purchase-return': 'purchase_return',
+            }}
           />,
         ]}
         enableRowSelection={true}
@@ -1820,6 +1886,7 @@ const IncomingInspectionPage: React.FC = () => {
           inspection={currentInspection as Record<string, unknown>}
           photoCategory="incoming_inspection_attachments"
           stepPhotoRequired={false}
+          planSwitch={incomingConductPlanSwitch}
         />
         <InspectionConductQuantityFields
           materialId={currentInspection?.material_id}
@@ -1907,6 +1974,7 @@ const IncomingInspectionPage: React.FC = () => {
         }
         banner={<InspectionUnqualifiedBanner inspection={inspectionDetail} />}
         basicColumns={detailBaseColumns}
+        supplement={incomingDetailSupplement}
         customFields={inspectionListCustomFields}
         customFieldValues={inspectionDetailCustomFieldValues}
         tracking={incomingTracking}

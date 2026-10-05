@@ -103,6 +103,8 @@ special_deps_status_label() {
         disabled-present) echo "浏览器就绪 · 补装关闭" ;;
         disabled-missing) echo "补装关闭 · 浏览器未装" ;;
         pending) echo "待配置数据库" ;;
+        partial) echo "部分就绪" ;;
+        opt-off) echo "选装未启用" ;;
         n/a|na) echo "不适用" ;;
         old:*) echo "需升级 (${1#old:})" ;;
         *) echo "$1" ;;
@@ -111,8 +113,8 @@ special_deps_status_label() {
 
 print_special_deps_header() {
     echo "=== 可选能力依赖 ==="
-    echo "  仅在使用打印 PDF、发票 OCR、KU-AI 向量或敏感词过滤时需要；不用对应功能可忽略未就绪项。"
-    echo "  迁移/启动时会按需尝试安装；完整日志: DEPLOY_SPECIAL_DEPS_VERBOSE=1 ./fast-deploy/deploy.sh start"
+    echo "  下列为机上探测结果；是否纳入 install/migrate 由 deploy.env 的 OPT_*=1 决定（默认均为 0）。"
+    echo "  完整日志: DEPLOY_SPECIAL_DEPS_VERBOSE=1 ./fast-deploy/deploy.sh check"
     echo ""
 }
 
@@ -213,6 +215,8 @@ load_deploy_env() {
     PROXY_PORT="${PROXY_PORT:-8080}"
     CADDY_DOMAIN="${CADDY_DOMAIN:-}"
     CADDY_ENABLE_LETSENCRYPT="${CADDY_ENABLE_LETSENCRYPT:-false}"
+    CADDY_EXTRA_PROXIES="${CADDY_EXTRA_PROXIES:-}"
+    CADDY_EXTRA_PROXIES_FILE="${CADDY_EXTRA_PROXIES_FILE:-$FAST_DEPLOY_DIR/config/caddy-extra-proxies.list}"
     NODE_BUILD_MEM="${NODE_BUILD_MEM:-4096}"
     ALLOW_SERVER_BUILD="${ALLOW_SERVER_BUILD:-0}"
     SERVER_IP="${SERVER_IP:-}"
@@ -239,6 +243,179 @@ load_deploy_env() {
     # Taskiq worker/scheduler 就绪等待（低内存机 import 慢，sleep 也会因 swap 被拉长）
     TASKIQ_START_TIMEOUT="${TASKIQ_START_TIMEOUT:-180}"
     LOW_SPEC_MODE="${LOW_SPEC_MODE:-0}"
+    OPT_INVOICE_OCR="${OPT_INVOICE_OCR:-0}"
+    OPT_PDF_PRINT="${OPT_PDF_PRINT:-0}"
+    OPT_KUAI_VECTOR="${OPT_KUAI_VECTOR:-0}"
+    OPT_SENSITIVE_LEXICON="${OPT_SENSITIVE_LEXICON:-0}"
+    OPT_LIBREOFFICE="${OPT_LIBREOFFICE:-0}"
+}
+
+# deploy.env 选装开关：1 / true / yes / on 视为启用；未设置时在 load_deploy_env 已默认 0
+deploy_env_flag_enabled() {
+    local raw="${1:-}"
+    case "$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]')" in
+        1|true|yes|on) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+deploy_opt_invoice_ocr_enabled() {
+    load_deploy_env
+    deploy_env_flag_enabled "${OPT_INVOICE_OCR:-0}"
+}
+
+deploy_opt_pdf_print_enabled() {
+    load_deploy_env
+    deploy_env_flag_enabled "${OPT_PDF_PRINT:-0}"
+}
+
+deploy_opt_kuaiai_vector_enabled() {
+    load_deploy_env
+    deploy_env_flag_enabled "${OPT_KUAI_VECTOR:-0}"
+}
+
+deploy_opt_sensitive_lexicon_enabled() {
+    load_deploy_env
+    deploy_env_flag_enabled "${OPT_SENSITIVE_LEXICON:-0}"
+}
+
+deploy_opt_libreoffice_enabled() {
+    load_deploy_env
+    deploy_env_flag_enabled "${OPT_LIBREOFFICE:-0}"
+}
+
+# 将选装开关同步到 riveredge-backend/.env（后端运行时唯一入口）
+sync_deploy_optional_features_to_backend_env() {
+    ensure_env_file
+    if deploy_opt_sensitive_lexicon_enabled; then
+        set_env_value SENSITIVE_WORD_LEXICON_ENABLED true
+    else
+        set_env_value SENSITIVE_WORD_LEXICON_ENABLED false
+    fi
+    # LibreOffice：后端以 soffice 是否在 PATH/常见路径为准；选装开关仅驱动安装，不强制写死禁用
+}
+
+ensure_sensitive_lexicon_if_enabled() {
+    if deploy_opt_sensitive_lexicon_enabled; then
+        ensure_sensitive_lexicon_pack || return 1
+        return 0
+    fi
+    log_special "敏感词选装未启用 (OPT_SENSITIVE_LEXICON=0)，跳过 lexicon.pack"
+    return 0
+}
+
+deploy_opt_flag_label() {
+    if deploy_env_flag_enabled "${1:-0}"; then
+        printf '%s' "已启用"
+    else
+        printf '%s' "未启用"
+    fi
+}
+
+# 机上探测结果 → 选装面板短文案（与 OPT 开关并列，不替代开关）
+deploy_opt_install_short_label() {
+    case "${1:-}" in
+        ok|skipped|disabled-present) printf '%s' "已装" ;;
+        partial) printf '%s' "部分就绪" ;;
+        installing) printf '%s' "补装中" ;;
+        pending) printf '%s' "待检" ;;
+        deps-missing) printf '%s' "缺库" ;;
+        *) printf '%s' "未装" ;;
+    esac
+}
+
+# 面板一行：开关状态｜机上是否已装（间隔用全角竖线，避免与间隔号混淆）
+deploy_opt_panel_status() {
+    local flag_val=$1 probe_st=$2
+    printf '%s｜%s' "$(deploy_opt_flag_label "$flag_val")" "$(deploy_opt_install_short_label "$probe_st")"
+}
+
+# 下列 probe_* 始终探测机上实况，与 OPT_*=0/1 无关（开关只决定是否纳入 install/migrate）
+deploy_opt_probe_invoice() {
+    local rt ocr
+    rt="$(check_invoice_parse_runtime 2>/dev/null || echo missing)"
+    ocr="$(check_ocr 2>/dev/null || echo missing)"
+    if [ "$rt" = "ok" ] && [ "$ocr" = "ok" ]; then
+        echo "ok"
+    elif [ "$rt" = "ok" ] || [ "$ocr" = "ok" ]; then
+        echo "partial"
+    else
+        echo "missing"
+    fi
+}
+
+deploy_opt_probe_pdf() {
+    local pw cr pw_ok=0 cr_ok=0
+    pw="$(check_playwright 2>/dev/null || echo missing)"
+    cr="$(check_playwright_chromium 2>/dev/null || echo missing)"
+    case "$cr" in
+        installing) echo "installing"; return ;;
+        deps-missing) echo "deps-missing"; return ;;
+    esac
+    case "$pw" in ok|skipped) pw_ok=1 ;; esac
+    case "$cr" in ok|skipped|disabled-present) cr_ok=1 ;; esac
+    if [ "$pw_ok" -eq 1 ] && [ "$cr_ok" -eq 1 ]; then
+        echo "ok"
+    elif [ "$pw_ok" -eq 1 ] || [ "$cr_ok" -eq 1 ]; then
+        echo "partial"
+    else
+        echo "missing"
+    fi
+}
+
+deploy_opt_probe_pgvector() {
+    check_pgvector 2>/dev/null || echo missing
+}
+
+deploy_opt_probe_lexicon() {
+    check_sensitive_lexicon 2>/dev/null || echo missing
+}
+
+deploy_opt_probe_libreoffice() {
+    check_libreoffice 2>/dev/null || echo missing
+}
+
+set_deploy_opt_flag() {
+    local key=$1 val=$2
+    case "$key" in
+        OPT_INVOICE_OCR|OPT_PDF_PRINT|OPT_KUAI_VECTOR|OPT_SENSITIVE_LEXICON|OPT_LIBREOFFICE) ;;
+        *)
+            log_error "未知选装项: $key"
+            return 1
+            ;;
+    esac
+    case "$val" in
+        0|1) ;;
+        *)
+            log_error "选装值须为 0 或 1"
+            return 1
+            ;;
+    esac
+    set_deploy_env_value "$key" "$val"
+    load_deploy_env
+    sync_deploy_optional_features_to_backend_env
+}
+
+toggle_deploy_opt_flag() {
+    local key=$1 current new_val
+    load_deploy_env
+    case "$key" in
+        OPT_INVOICE_OCR) current="${OPT_INVOICE_OCR:-0}" ;;
+        OPT_PDF_PRINT) current="${OPT_PDF_PRINT:-0}" ;;
+        OPT_KUAI_VECTOR) current="${OPT_KUAI_VECTOR:-0}" ;;
+        OPT_SENSITIVE_LEXICON) current="${OPT_SENSITIVE_LEXICON:-0}" ;;
+        OPT_LIBREOFFICE) current="${OPT_LIBREOFFICE:-0}" ;;
+        *)
+            log_error "未知选装项: $key"
+            return 1
+            ;;
+    esac
+    if deploy_env_flag_enabled "$current"; then
+        new_val=0
+    else
+        new_val=1
+    fi
+    set_deploy_opt_flag "$key" "$new_val"
 }
 
 # shellcheck source=lib/low_spec_mode.sh
@@ -1919,6 +2096,38 @@ resolve_prod_web_url() {
     echo "http://${server_ip}:${PROXY_PORT}"
 }
 
+collect_caddy_proxy_port_config() {
+    local current_port input port
+    load_deploy_env
+    [ "$DEPLOY_MODE" = "prod" ] || return 0
+    [ -f "$DEPLOY_ENV_FILE" ] || cp "$DEPLOY_ENV_EXAMPLE" "$DEPLOY_ENV_FILE"
+
+    current_port="$(read_deploy_env_value PROXY_PORT || true)"
+    [ -n "$current_port" ] || current_port="${PROXY_PORT:-8080}"
+
+    echo ""
+    log_info "Caddy 对外监听端口（PROXY_PORT，本项目主站入口）"
+    echo "    默认 8080；启用域名 HTTPS 时主站走 80/443，此端口仍可作为 IP 备用入口"
+    echo "    端口 <1024 时 Linux 可能需: sudo setcap 'cap_net_bind_service=+ep' \$(which caddy)"
+    read -rp "Caddy 端口 (PROXY_PORT) [${current_port}]: " input
+    port="${input:-$current_port}"
+    port="$(printf '%s' "$port" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+    if ! printf '%s' "$port" | grep -qE '^[1-9][0-9]{0,4}$'; then
+        log_error "端口无效: ${port}（须为 1-65535 的整数）"
+        return 1
+    fi
+    if [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then
+        log_error "端口超出范围: ${port}"
+        return 1
+    fi
+    set_deploy_env_value PROXY_PORT "$port"
+    load_deploy_env
+    if [ "$port" -lt 1024 ]; then
+        log_warn "已设置特权端口 ${port}，若绑定失败请为 caddy 授予 cap_net_bind_service"
+    fi
+    log_ok "Caddy 端口: ${port}"
+}
+
 collect_prod_domain_https_config() {
     local current_domain current_le choice domain input enable_input enable_le default_le
     load_deploy_env
@@ -1982,6 +2191,195 @@ collect_prod_domain_https_config() {
     esac
 }
 
+# 收集当前额外反代条目（列表文件 + CADDY_EXTRA_PROXIES），每行一条「站点 -> 上游」
+collect_caddy_extra_proxy_entries() {
+    load_deploy_env
+    local list_file="${CADDY_EXTRA_PROXIES_FILE:-$FAST_DEPLOY_DIR/config/caddy-extra-proxies.list}"
+    local line entry rest site upstream
+
+    if [ -f "$list_file" ]; then
+        while IFS= read -r line || [ -n "$line" ]; do
+            line="${line%%#*}"
+            line="$(printf '%s' "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+            [ -n "$line" ] || continue
+            site=""
+            upstream=""
+            if parse_caddy_extra_proxy_entry "$line" 2>/dev/null; then
+                printf '%s -> %s\n' "$site" "$upstream"
+            fi
+        done < "$list_file"
+    fi
+
+    if [ -n "${CADDY_EXTRA_PROXIES:-}" ]; then
+        rest="$(printf '%s' "$CADDY_EXTRA_PROXIES" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")"
+        while [ -n "$rest" ]; do
+            case "$rest" in
+                *,*)
+                    entry="${rest%%,*}"
+                    rest="${rest#*,}"
+                    ;;
+                *)
+                    entry="$rest"
+                    rest=""
+                    ;;
+            esac
+            entry="$(printf '%s' "$entry" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+            [ -n "$entry" ] || continue
+            site=""
+            upstream=""
+            if parse_caddy_extra_proxy_entry "$entry" 2>/dev/null; then
+                printf '%s -> %s\n' "$site" "$upstream"
+            fi
+        done
+    fi
+}
+
+caddy_extra_proxy_count() {
+    collect_caddy_extra_proxy_entries | grep -c . || true
+}
+
+save_caddy_extra_proxy_entries() {
+    # stdin: 每行「站点 -> 上游」；写入列表文件并清空 CADDY_EXTRA_PROXIES，避免双源重复
+    load_deploy_env
+    local list_file="${CADDY_EXTRA_PROXIES_FILE:-$FAST_DEPLOY_DIR/config/caddy-extra-proxies.list}"
+    local line site upstream count=0
+    mkdir -p "$(dirname "$list_file")"
+    {
+        printf '%s\n' "# 由部署面板「修改配置」写入；格式: 站点 -> host:port"
+        while IFS= read -r line || [ -n "$line" ]; do
+            line="$(printf '%s' "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+            [ -n "$line" ] || continue
+            site=""
+            upstream=""
+            parse_caddy_extra_proxy_entry "$line" || return 1
+            printf '%s -> %s\n' "$site" "$upstream"
+            count=$((count + 1))
+        done
+    } > "$list_file"
+    set_deploy_env_value CADDY_EXTRA_PROXIES ""
+    load_deploy_env
+    log_ok "已保存 ${count} 条额外反向代理 → ${list_file}"
+}
+
+collect_caddy_extra_proxies_config() {
+    local choice site upstream entry idx del_idx reload_input
+    local -a entries=()
+    load_deploy_env
+    [ "$DEPLOY_MODE" = "prod" ] || return 0
+
+    while IFS= read -r entry || [ -n "$entry" ]; do
+        [ -n "$entry" ] || continue
+        entries+=("$entry")
+    done < <(collect_caddy_extra_proxy_entries)
+
+    echo ""
+    log_info "额外反向代理：把其它域名转到内网服务（与本项目主站并列）"
+    echo "    示例站点: http://app.example.com"
+    echo "    示例上游: 192.168.1.10:8888"
+    echo "    http://域名 = 仅 HTTP；裸域名 = 自动 HTTPS"
+
+    while true; do
+        echo ""
+        if [ "${#entries[@]}" -eq 0 ]; then
+            echo "    当前: （无）"
+        else
+            echo "    当前:"
+            idx=1
+            for entry in "${entries[@]}"; do
+                echo "      ${idx}) ${entry}"
+                idx=$((idx + 1))
+            done
+        fi
+        echo "    a) 添加一条"
+        if [ "${#entries[@]}" -gt 0 ]; then
+            echo "    d) 删除一条"
+            echo "    c) 清空全部"
+        fi
+        echo "    0) 完成并保存"
+        read -rp "请选择 [a/d/c/0] (默认 0): " choice
+        choice="${choice:-0}"
+        case "$choice" in
+            a|A|add)
+                read -rp "站点 (如 http://app.example.com): " site
+                site="$(printf '%s' "$site" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's|/*$||')"
+                [ -n "$site" ] || { log_warn "站点不能为空"; continue; }
+                read -rp "上游 host:port (如 192.168.1.10:8888): " upstream
+                upstream="$(printf '%s' "$upstream" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's|/*$||')"
+                entry="${site}->${upstream}"
+                site=""
+                upstream=""
+                if ! parse_caddy_extra_proxy_entry "$entry"; then
+                    continue
+                fi
+                entries+=("${site} -> ${upstream}")
+                log_ok "已加入: ${site} -> ${upstream}"
+                ;;
+            d|D|del|delete)
+                if [ "${#entries[@]}" -eq 0 ]; then
+                    log_warn "当前没有可删条目"
+                    continue
+                fi
+                read -rp "删除序号 [1-${#entries[@]}]: " del_idx
+                if ! printf '%s' "$del_idx" | grep -qE '^[0-9]+$'; then
+                    log_warn "序号无效"
+                    continue
+                fi
+                if [ "$del_idx" -lt 1 ] || [ "$del_idx" -gt "${#entries[@]}" ]; then
+                    log_warn "序号超出范围"
+                    continue
+                fi
+                log_info "已删除: ${entries[$((del_idx - 1))]}"
+                unset "entries[$((del_idx - 1))]"
+                # 压缩数组下标
+                local -a _compact=()
+                for entry in "${entries[@]}"; do
+                    [ -n "${entry:-}" ] && _compact+=("$entry")
+                done
+                entries=("${_compact[@]}")
+                ;;
+            c|C|clear)
+                entries=()
+                log_ok "已清空（保存后生效）"
+                ;;
+            0|done|q|Q)
+                break
+                ;;
+            *)
+                log_warn "未知选项: ${choice}"
+                ;;
+        esac
+    done
+
+    if [ "${#entries[@]}" -eq 0 ]; then
+        printf '' | save_caddy_extra_proxy_entries || return 1
+    else
+        printf '%s\n' "${entries[@]}" | save_caddy_extra_proxy_entries || return 1
+    fi
+
+    if [ "${CADDY_CONFIG_SKIP_RELOAD:-0}" = "1" ]; then
+        return 0
+    fi
+    configure_offer_caddy_reload
+}
+
+configure_offer_caddy_reload() {
+    local reload_input
+    [ "$DEPLOY_MODE" = "prod" ] || return 0
+    read -rp "是否立即 reload Caddy 使配置生效？ [Y/n]: " reload_input
+    case "${reload_input:-Y}" in
+        n|N|no|No|NO)
+            log_info "稍后执行 ./fast-deploy/deploy.sh start 时会应用"
+            ;;
+        *)
+            if reload_caddy_prod_config; then
+                :
+            else
+                log_warn "Caddy reload 未成功（服务可能未在运行）；请稍后 start"
+            fi
+            ;;
+    esac
+}
+
 apply_app_config() {
     local jwt server_ip detected_ip base_url admin_user cors
     load_deploy_env
@@ -2016,6 +2414,7 @@ apply_app_config() {
         # PC 前端 / Expo Web / 工位 Vite：loopback + 局域网 IP
         set_env_value CORS_ORIGINS "http://${server_ip}:${FRONTEND_PORT},http://127.0.0.1:${FRONTEND_PORT},http://localhost:${FRONTEND_PORT},http://${server_ip}:8098,http://127.0.0.1:8098,http://localhost:8098,http://${server_ip}:8081,http://127.0.0.1:8081,http://localhost:8081,http://${server_ip}:8300,http://127.0.0.1:8300,http://localhost:8300"
     fi
+    sync_deploy_optional_features_to_backend_env
 }
 
 blue_green_deploy_status_label() {
@@ -2043,10 +2442,12 @@ print_configure_summary() {
     echo "  超管账号: ${admin_user}"
     echo "  蓝绿部署: $(blue_green_deploy_status_label)"
     if [ "$DEPLOY_MODE" = "prod" ]; then
+        echo "  Caddy 端口: ${PROXY_PORT}"
         echo "  访问地址: $(resolve_prod_web_url "$server_ip")"
         if [ -n "$CADDY_DOMAIN" ] && [ "$CADDY_ENABLE_LETSENCRYPT" = "true" ]; then
             echo "  备用 IP: http://${server_ip}:${PROXY_PORT}"
         fi
+        echo "  额外反代: $(caddy_extra_proxy_count) 条"
     else
         echo "  访问地址: http://${server_ip}:${FRONTEND_PORT} (Web) / http://${server_ip}:${BACKEND_PORT} (API)"
     fi
@@ -2097,29 +2498,16 @@ configure_prompt_database_edit() {
     fi
 }
 
-cmd_configure() {
-    log_info "配置应用环境..."
-    apply_cn_mirrors
-    if [ ! -f "$ENV_FILE" ]; then
-        cp "$BACKEND_DIR/.env.example" "$ENV_FILE"
-        log_info "已从 .env.example 创建 $ENV_FILE"
+configure_section_database() {
+    local db_user db_host db_port db_name input
+    echo ""
+    log_info "[数据库]"
+    if db_config_complete && [ "${CONFIGURE_FORCE_DB_EDIT:-0}" != "1" ] && [ "${CONFIGURE_ALLOW_DB_EDIT:-0}" != "1" ]; then
+        log_info "数据库已配置，跳过（菜单中选此项或设置 CONFIGURE_ALLOW_DB_EDIT=1 可改）"
+        return 0
     fi
-    load_deploy_env
-
-    local db_user db_host db_port db_name admin_pass admin_user input detected_ip server_ip
-
-    if db_config_complete && [ "${CONFIGURE_ALLOW_DB_EDIT:-0}" = "1" ]; then
+    if db_config_complete; then
         configure_prompt_database_edit
-        db_user="$(read_env_value DB_USER)"
-        db_host="$(read_env_value DB_HOST)"
-        db_port="$(read_env_value DB_PORT)"
-        db_name="$(read_env_value DB_NAME)"
-    elif db_config_complete; then
-        log_info "数据库已在向导/此前步骤配置，跳过数据库问答"
-        db_user="$(read_env_value DB_USER)"
-        db_host="$(read_env_value DB_HOST)"
-        db_port="$(read_env_value DB_PORT)"
-        db_name="$(read_env_value DB_NAME)"
     else
         db_user="$(read_env_value DB_USER || true)"
         [ -z "$db_user" ] && db_user="postgres"
@@ -2147,7 +2535,12 @@ cmd_configure() {
 
         configure_postgres_password
     fi
+}
 
+configure_section_admin() {
+    local admin_user admin_pass input
+    echo ""
+    log_info "[平台超管]"
     admin_user="$(read_env_value PLATFORM_SUPERADMIN_USERNAME || true)"
     [ -z "$admin_user" ] && admin_user="infra_admin"
     if ! admin_config_complete; then
@@ -2155,12 +2548,12 @@ cmd_configure() {
         admin_user="${input:-$admin_user}"
         set_env_value PLATFORM_SUPERADMIN_USERNAME "$admin_user"
         read -rsp "平台超级管理员密码: " admin_pass; echo
-        [ ${#admin_pass} -lt 8 ] && { log_error "超管密码至少 8 位"; exit 1; }
+        [ ${#admin_pass} -lt 8 ] && { log_error "超管密码至少 8 位"; return 1; }
         set_env_value PLATFORM_SUPERADMIN_PASSWORD "$admin_pass"
     else
         read -rsp "平台超管密码 [已配置，回车跳过 / 输入新密码]: " input; echo
         if [ -n "$input" ]; then
-            [ ${#input} -lt 8 ] && { log_error "超管密码至少 8 位"; exit 1; }
+            [ ${#input} -lt 8 ] && { log_error "超管密码至少 8 位"; return 1; }
             set_env_value PLATFORM_SUPERADMIN_PASSWORD "$input"
         fi
         read -rp "平台超管用户名 [${admin_user}，回车跳过]: " input
@@ -2168,7 +2561,12 @@ cmd_configure() {
             set_env_value PLATFORM_SUPERADMIN_USERNAME "$input"
         fi
     fi
+}
 
+configure_section_server_ip() {
+    local detected_ip server_ip input
+    echo ""
+    log_info "[服务器 IP]"
     detected_ip="$(detect_server_ip)"
     server_ip="$(read_deploy_env_value SERVER_IP || true)"
     [ -z "$server_ip" ] && server_ip="$detected_ip"
@@ -2176,10 +2574,114 @@ cmd_configure() {
     read -rp "服务器 IP (浏览器访问地址) [${server_ip}]: " input
     server_ip="${input:-$server_ip}"
     set_deploy_env_value SERVER_IP "$server_ip"
+    load_deploy_env
+}
 
+configure_run_all_sections() {
+    local skip_reload="${1:-0}"
+    CONFIGURE_FORCE_DB_EDIT=1 configure_section_database || return 1
+    configure_section_admin || return 1
+    configure_section_server_ip || return 1
     if [ "$DEPLOY_MODE" = "prod" ]; then
+        collect_caddy_proxy_port_config || return 1
         echo ""
-        collect_prod_domain_https_config || exit 1
+        collect_prod_domain_https_config || return 1
+        if [ "$skip_reload" = "1" ]; then
+            CADDY_CONFIG_SKIP_RELOAD=1 collect_caddy_extra_proxies_config || return 1
+        else
+            collect_caddy_extra_proxies_config || return 1
+        fi
+    fi
+}
+
+configure_menu_loop() {
+    local choice need_caddy_reload=0
+    load_deploy_env
+
+    while true; do
+        echo ""
+        log_info "修改配置 — 选择要调整的分类（可多次挑选）"
+        echo "    1) 数据库"
+        echo "    2) 平台超管账号"
+        echo "    3) 服务器 IP"
+        if [ "$DEPLOY_MODE" = "prod" ]; then
+            echo "    4) Caddy 端口 (PROXY_PORT)"
+            echo "    5) 域名与 HTTPS"
+            echo "    6) 额外反向代理"
+        fi
+        echo "    a) 全部设置（按顺序走完以上各项）"
+        echo "    0) 完成并退出"
+        read -rp "请选择: " choice
+        choice="$(printf '%s' "${choice:-}" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+        case "$choice" in
+            1)
+                CONFIGURE_FORCE_DB_EDIT=1 configure_section_database || return 1
+                ;;
+            2)
+                configure_section_admin || return 1
+                ;;
+            3)
+                configure_section_server_ip || return 1
+                ;;
+            4)
+                if [ "$DEPLOY_MODE" != "prod" ]; then
+                    log_warn "仅生产模式可配置 Caddy 端口"
+                    continue
+                fi
+                collect_caddy_proxy_port_config || return 1
+                need_caddy_reload=1
+                ;;
+            5)
+                if [ "$DEPLOY_MODE" != "prod" ]; then
+                    log_warn "仅生产模式可配置域名"
+                    continue
+                fi
+                echo ""
+                collect_prod_domain_https_config || return 1
+                need_caddy_reload=1
+                ;;
+            6)
+                if [ "$DEPLOY_MODE" != "prod" ]; then
+                    log_warn "仅生产模式可配置额外反代"
+                    continue
+                fi
+                CADDY_CONFIG_SKIP_RELOAD=1 collect_caddy_extra_proxies_config || return 1
+                need_caddy_reload=1
+                ;;
+            a|A|all)
+                configure_run_all_sections 1 || return 1
+                need_caddy_reload=1
+                ;;
+            0|q|Q|"")
+                break
+                ;;
+            *)
+                log_warn "未知选项: ${choice}"
+                ;;
+        esac
+    done
+
+    if [ "$need_caddy_reload" = "1" ]; then
+        configure_offer_caddy_reload
+    fi
+}
+
+cmd_configure() {
+    log_info "配置应用环境..."
+    apply_cn_mirrors
+    if [ ! -f "$ENV_FILE" ]; then
+        cp "$BACKEND_DIR/.env.example" "$ENV_FILE"
+        log_info "已从 .env.example 创建 $ENV_FILE"
+    fi
+    [ -f "$DEPLOY_ENV_FILE" ] || cp "$DEPLOY_ENV_EXAMPLE" "$DEPLOY_ENV_FILE"
+    load_deploy_env
+
+    # 向导「修改配置」或已具备库/超管时：分类菜单；首次缺配置时仍走全部设置
+    if [ "${CONFIGURE_MENU:-0}" = "1" ] || [ "${CONFIGURE_ALLOW_DB_EDIT:-0}" = "1" ] \
+        || { db_config_complete && admin_config_complete; }; then
+        configure_menu_loop || exit 1
+    else
+        configure_run_all_sections 0 || exit 1
     fi
 
     apply_app_config
@@ -2192,10 +2694,17 @@ cmd_configure() {
     print_configure_summary
 }
 
-# 后端 uv sync/run extras：ocr 始终开启（发票 PDF）；pdf（Playwright 包）始终保留。
-# Chromium 浏览器是否后台补装由 PLAYWRIGHT_POSTINSTALL_ENABLE 单独控制，勿与包安装混为一谈。
+# 后端 uv sync/run extras：由 deploy.env OPT_INVOICE_OCR / OPT_PDF_PRINT 选装。
+# Chromium 浏览器是否后台补装由 OPT_PDF_PRINT + PLAYWRIGHT_POSTINSTALL_ENABLE 控制。
 backend_uv_extra_args() {
-    printf '%s' "--extra ocr --extra pdf"
+    local args=""
+    if deploy_opt_invoice_ocr_enabled; then
+        args="${args} --extra ocr"
+    fi
+    if deploy_opt_pdf_print_enabled; then
+        args="${args} --extra pdf"
+    fi
+    printf '%s' "$args"
 }
 
 # glibc 多 arena 收敛：降低 CPython 多线程下 RSS 虚高（生产 API / Worker 启动路径唯一出口）
@@ -2258,7 +2767,7 @@ sync_backend_deps() {
     apply_cn_mirrors
     ensure_uv || { log_error "Python 依赖同步失败"; exit 1; }
     log_info "同步 Python 依赖..."
-    log_special "uv sync extras: $(backend_uv_extra_args)（OCR+Playwright 包；Chromium 补装见 PLAYWRIGHT_POSTINSTALL_ENABLE）"
+    log_special "uv sync extras:$(backend_uv_extra_args)（选装见 OPT_INVOICE_OCR / OPT_PDF_PRINT；Chromium 见 PLAYWRIGHT_POSTINSTALL_ENABLE）"
     (
         cd "$BACKEND_DIR"
         export SETUPTOOLS_EGG_INFO_DIR="$LOGS_DIR"
@@ -2269,13 +2778,14 @@ sync_backend_deps() {
     ) || { log_error "Python 依赖同步失败"; exit 1; }
     if is_windows_gitbash; then
         ensure_pyzbar_windows_native
-    elif [ "$(uname -s)" = "Linux" ]; then
+    elif [ "$(uname -s)" = "Linux" ] && deploy_opt_invoice_ocr_enabled; then
         ensure_linux_invoice_parse_runtime
     fi
     _BACKEND_DEPS_SYNCED=1
 }
 
 playwright_postinstall_enabled() {
+    deploy_opt_pdf_print_enabled || return 1
     [ "${PLAYWRIGHT_POSTINSTALL_ENABLE:-1}" != "0" ]
 }
 
@@ -2297,10 +2807,11 @@ playwright_uv_extra_args() {
 
 _playwright_chromium_probe() {
     # 0=可运行；1=浏览器未装；2=二进制在但系统共享库缺失（打印会 exit 127）
+    # 探测用 --no-sync：禁止 uv 因 --extra pdf 静默拉包导致面板假死
     local uv_bin="$1"
     playwright_export_env
     (cd "$BACKEND_DIR" && export PYTHONPATH="$BACKEND_DIR/src" && \
-        "$uv_bin" run --extra pdf python - <<'PY'
+        "$uv_bin" run --no-sync python - <<'PY'
 import os
 import subprocess
 import sys
@@ -2564,13 +3075,13 @@ check_invoice_parse_runtime() {
 
 check_ocr() {
     # Python 侧：pymupdf + rapidocr（需 uv sync --extra ocr 之后）
+    # 探测必须 --no-sync 且不带 --extra：否则刚启用 OPT 时 uv 会静默拉包，面板像卡住
     [ -d "$BACKEND_DIR" ] || { echo "missing"; return; }
     local uv_bin
     uv_bin="$(resolve_uv 2>/dev/null || true)"
     [ -n "$uv_bin" ] || { echo "missing"; return; }
-    # shellcheck disable=SC2046
     if (cd "$BACKEND_DIR" && export PYTHONPATH="$BACKEND_DIR/src" && \
-        "$uv_bin" run $(backend_uv_extra_args) python - <<'PY' >/dev/null 2>&1
+        "$uv_bin" run --no-sync python - <<'PY' >/dev/null 2>&1
 import fitz
 from rapidocr_onnxruntime import RapidOCR
 PY
@@ -2667,13 +3178,127 @@ ensure_linux_zbar_runtime() {
     ensure_linux_invoice_parse_runtime
 }
 
+# LibreOffice：Office 高级预览（Word/PPT → PDF；Excel 走前端 Univer Sheet）
+resolve_libreoffice_binary() {
+    if command -v soffice >/dev/null 2>&1; then
+        command -v soffice
+        return 0
+    fi
+    if command -v libreoffice >/dev/null 2>&1; then
+        command -v libreoffice
+        return 0
+    fi
+    local cand
+    for cand in \
+        "/usr/bin/soffice" \
+        "/usr/bin/libreoffice" \
+        "/usr/lib/libreoffice/program/soffice" \
+        "/opt/libreoffice*/program/soffice" \
+        "/c/Program Files/LibreOffice/program/soffice.exe" \
+        "/c/Program Files (x86)/LibreOffice/program/soffice.exe"; do
+        # shellcheck disable=SC2086
+        for path in $cand; do
+            if [ -x "$path" ]; then
+                echo "$path"
+                return 0
+            fi
+        done
+    done
+    if is_windows_gitbash; then
+        local win
+        for win in \
+            "/c/Program Files/LibreOffice/program/soffice.exe" \
+            "/c/Program Files (x86)/LibreOffice/program/soffice.exe"; do
+            if [ -f "$win" ]; then
+                echo "$win"
+                return 0
+            fi
+        done
+    fi
+    return 1
+}
+
+check_libreoffice() {
+    if resolve_libreoffice_binary >/dev/null 2>&1; then
+        echo "ok"
+        return
+    fi
+    echo "missing"
+}
+
+install_libreoffice_runtime() {
+    if [ "$(check_libreoffice)" = "ok" ]; then
+        log_special_ok "LibreOffice 已就绪（Office 高级预览）"
+        return 0
+    fi
+    log_info "安装 LibreOffice（Office 文档高级预览：转 PDF）..."
+    if is_windows_gitbash; then
+        if command -v winget >/dev/null 2>&1; then
+            winget install -e --id TheDocumentFoundation.LibreOffice \
+                --accept-package-agreements --accept-source-agreements \
+                || {
+                    log_error "winget 安装 LibreOffice 失败，请手动安装后重试"
+                    return 1
+                }
+        else
+            log_error "未找到 winget，请手动安装 LibreOffice: https://www.libreoffice.org/download/"
+            return 1
+        fi
+        refresh_windows_path 2>/dev/null || true
+    elif [ -f /etc/debian_version ]; then
+        ensure_sudo_ready || return 1
+        sudo -n apt-get update \
+            && sudo -n DEBIAN_FRONTEND=noninteractive apt-get install -y \
+                libreoffice-writer libreoffice-calc libreoffice-impress libreoffice-java-common \
+            || {
+                log_error "请手动执行: sudo apt-get install -y libreoffice-writer libreoffice-calc libreoffice-impress"
+                return 1
+            }
+    elif is_linux_rhel_family || is_linux_fedora; then
+        ensure_sudo_ready || return 1
+        local pkg_mgr=dnf
+        command -v dnf >/dev/null 2>&1 || pkg_mgr=yum
+        sudo -n "$pkg_mgr" install -y libreoffice-writer libreoffice-calc libreoffice-impress \
+            || sudo -n "$pkg_mgr" install -y libreoffice \
+            || {
+                log_error "请手动执行: sudo $pkg_mgr install -y libreoffice"
+                return 1
+            }
+    else
+        log_error "不支持的平台，请手动安装 LibreOffice（需提供 soffice/libreoffice 命令）"
+        return 1
+    fi
+    if [ "$(check_libreoffice)" = "ok" ]; then
+        log_ok "LibreOffice 已就绪（Office 高级预览）"
+        return 0
+    fi
+    log_warn "LibreOffice 包已尝试安装，但未检测到 soffice；请重新打开终端或检查 PATH"
+    return 1
+}
+
+ensure_libreoffice_if_enabled() {
+    if ! deploy_opt_libreoffice_enabled; then
+        log_special "LibreOffice 选装未启用 (OPT_LIBREOFFICE=0)，Office 使用简易预览"
+        return 0
+    fi
+    if [ "$(check_libreoffice)" = "ok" ]; then
+        return 0
+    fi
+    install_libreoffice_runtime || {
+        log_warn "LibreOffice 未就绪：Office 将回落简易预览（react-doc-viewer / 微软在线）"
+        return 0
+    }
+}
+
 check_playwright() {
+    # 机上探测：不因 OPT_PDF_PRINT=0 而跳过（开关只决定是否强制 install）
+    # --no-sync：只看当前 venv，禁止因 --extra pdf 静默拉包导致面板假死
     [ -d "$BACKEND_DIR" ] || { echo "missing"; return; }
     local uv_bin
     uv_bin="$(resolve_uv)"
     playwright_export_env
     if (cd "$BACKEND_DIR" && export PYTHONPATH="$BACKEND_DIR/src" && \
-        "$uv_bin" run --extra pdf python -m playwright --version >/dev/null 2>&1); then
+        "$uv_bin" run --no-sync python -m playwright --version >/dev/null 2>&1); then
         if playwright_postinstall_enabled; then
             echo "ok"
         else
@@ -3012,9 +3637,15 @@ cmd_migrate() {
     DEPLOY_SPECIAL_DEPS_QUIET=1
     sync_backend_deps
     ensure_timezone_env
-    ensure_postgresql_pgvector || { log_error "pgvector 未就绪，无法执行依赖 vector 的迁移"; DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"; exit 1; }
-    ensure_vector_extension_created || { log_error "无法在应用库创建 vector 扩展（需要超级用户）"; DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"; exit 1; }
-    ensure_sensitive_lexicon_pack || { log_error "敏感词 lexicon.pack 未就绪，后端无法启动"; DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"; exit 1; }
+    sync_deploy_optional_features_to_backend_env
+    if deploy_opt_kuaiai_vector_enabled; then
+        ensure_postgresql_pgvector || { log_error "pgvector 未就绪（OPT_KUAI_VECTOR=1）；请安装扩展或关闭选装"; DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"; exit 1; }
+        ensure_vector_extension_created || { log_error "无法在应用库创建 vector 扩展（需要超级用户）"; DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"; exit 1; }
+    else
+        log_special "KU-AI 向量选装未启用 (OPT_KUAI_VECTOR=0)，跳过 pgvector"
+    fi
+    ensure_sensitive_lexicon_if_enabled || { log_error "敏感词 lexicon.pack 未就绪（OPT_SENSITIVE_LEXICON=1）"; DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"; exit 1; }
+    ensure_libreoffice_if_enabled
     log_info "执行数据库迁移（aerich upgrade，含 804 ind_relay）..."
     (
         cd "$BACKEND_DIR"
@@ -3025,6 +3656,9 @@ cmd_migrate() {
         fi
         PYTHONUNBUFFERED=1 AERICH_MIGRATE=1 "$(resolve_uv)" run aerich upgrade
     ) || { log_error "数据库迁移失败"; DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"; exit 1; }
+    if deploy_opt_kuaiai_vector_enabled; then
+        ensure_kuaiai_vector_schema || { DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"; exit 1; }
+    fi
     ensure_ind_relay_tables_804 || { DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"; exit 1; }
     DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"
     log_ok "迁移完成"
@@ -3234,6 +3868,97 @@ ensure_mobile_web_dist() {
     return 0
 }
 
+# 解析单条额外反代：site->upstream（允许箭头两侧空格）
+# 成功时把 site / upstream 写入同名变量（调用方需 local site upstream）
+parse_caddy_extra_proxy_entry() {
+    local entry="${1:-}"
+    entry="$(printf '%s' "$entry" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+    [ -n "$entry" ] || return 1
+    case "$entry" in
+        *'->'*) ;;
+        *)
+            log_error "额外反代格式错误（缺 ->）: $entry"
+            log_error "期望: http://host->ip:port 或 host->ip:port"
+            return 1
+            ;;
+    esac
+    site="$(printf '%s' "$entry" | sed -e 's/[[:space:]]*->.*$//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+    upstream="$(printf '%s' "$entry" | sed -e 's/^.*->[[:space:]]*//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's|/*$||')"
+    if [ -z "$site" ] || [ -z "$upstream" ]; then
+        log_error "额外反代格式错误: $entry"
+        return 1
+    fi
+    # host:port（IPv4 / 主机名）；须带端口，禁止路径与空格
+    if ! printf '%s' "$upstream" | grep -qE '^[A-Za-z0-9._-]+:[0-9]+$'; then
+        log_error "额外反代上游无效（需 host:port）: $upstream"
+        return 1
+    fi
+    return 0
+}
+
+# 将 CADDY_EXTRA_PROXIES / caddy-extra-proxies.list 追加为独立站点块（写在主站 :PROXY_PORT 之外）
+append_caddy_extra_proxy_blocks() {
+    local out="${1:-}"
+    [ -n "$out" ] || return 1
+    load_deploy_env
+
+    local list_file="${CADDY_EXTRA_PROXIES_FILE:-$FAST_DEPLOY_DIR/config/caddy-extra-proxies.list}"
+    local -a entries=()
+    local line entry site upstream count=0
+
+    if [ -f "$list_file" ]; then
+        while IFS= read -r line || [ -n "$line" ]; do
+            line="${line%%#*}"
+            line="$(printf '%s' "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+            [ -n "$line" ] || continue
+            entries+=("$line")
+        done < "$list_file"
+    fi
+
+    if [ -n "${CADDY_EXTRA_PROXIES:-}" ]; then
+        local rest="${CADDY_EXTRA_PROXIES}"
+        rest="$(printf '%s' "$rest" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")"
+        while [ -n "$rest" ]; do
+            case "$rest" in
+                *,*)
+                    entry="${rest%%,*}"
+                    rest="${rest#*,}"
+                    ;;
+                *)
+                    entry="$rest"
+                    rest=""
+                    ;;
+            esac
+            entry="$(printf '%s' "$entry" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+            [ -n "$entry" ] || continue
+            entries+=("$entry")
+        done
+    fi
+
+    [ "${#entries[@]}" -gt 0 ] || return 0
+
+    {
+        printf '\n'
+        printf '%s\n' "# ----- 额外反向代理（CADDY_EXTRA_PROXIES / caddy-extra-proxies.list）-----"
+    } >> "$out"
+
+    for entry in "${entries[@]}"; do
+        site=""
+        upstream=""
+        parse_caddy_extra_proxy_entry "$entry" || exit 1
+        cat >> "$out" <<EOF
+
+${site} {
+	encode gzip zstd
+	reverse_proxy ${upstream}
+}
+EOF
+        count=$((count + 1))
+        log_info "额外反代: ${site} -> ${upstream}"
+    done
+    log_ok "已追加 ${count} 条额外反向代理"
+}
+
 gen_caddyfile() {
     load_deploy_env
     sync_prod_app_urls
@@ -3280,6 +4005,8 @@ gen_caddyfile() {
         -e "s|{{CLIENT_RELEASE_ROOT}}|${client_release_root}|g" \
         -e "s|{{FILE_UPLOAD_ROOT}}|${file_upload_root}|g" \
         "$CADDY_TEMPLATE" > "$CADDYFILE.tmp"
+
+    append_caddy_extra_proxy_blocks "$CADDYFILE.tmp"
 
     if ! grep -qE '^[A-Za-z0-9.:_/-][^{]*\{' "$CADDYFILE.tmp"; then
         log_error "生成的 Caddyfile 无效"
@@ -3366,7 +4093,9 @@ ensure_linux_caddy_ready() {
 
 start_backend_dev() {
     ensure_timezone_env
-    ensure_sensitive_lexicon_pack || { log_error "敏感词 lexicon.pack 未就绪，后端无法启动"; exit 1; }
+    sync_deploy_optional_features_to_backend_env
+    ensure_sensitive_lexicon_if_enabled || { log_error "敏感词 lexicon.pack 未就绪（OPT_SENSITIVE_LEXICON=1）"; exit 1; }
+    ensure_libreoffice_if_enabled
     if bg_enabled; then
         bg_init_state
         bg_start_backend_slot "$(bg_active_slot)" dev || exit 1
@@ -3437,7 +4166,9 @@ start_frontend_dev() {
 
 start_backend_prod() {
     ensure_timezone_env
-    ensure_sensitive_lexicon_pack || { log_error "敏感词 lexicon.pack 未就绪，后端无法启动"; exit 1; }
+    sync_deploy_optional_features_to_backend_env
+    ensure_sensitive_lexicon_if_enabled || { log_error "敏感词 lexicon.pack 未就绪（OPT_SENSITIVE_LEXICON=1）"; exit 1; }
+    ensure_libreoffice_if_enabled
     if bg_enabled; then
         bg_init_state
         bg_start_backend_slot "$(bg_active_slot)" prod || exit 1
@@ -4281,6 +5012,10 @@ cmd_details() {
             echo "  riveredge.service: $(boot_service_status_label)"
         fi
     fi
+    echo ""
+    echo "  选装开关: DEPLOY [5] 选装依赖"
+    echo "  仅数据库迁移（不拉代码）: ./fast-deploy/deploy.sh migrate"
+    echo "  日常发版请用菜单 [3] 更新系统，或 start（启动前会自动 migrate）"
 }
 
 print_special_deps_hint() {
@@ -4290,15 +5025,15 @@ print_special_deps_hint() {
     case "$st_cr" in
         ok|disabled-present) ;;
         installing)
-            echo "  可选依赖: Chromium 后台补装中（不用打印 PDF 可忽略）— 详情见菜单 [5]"
+            echo "  可选依赖: Chromium 后台补装中 — DEPLOY [5] 选装 / OPS [6] 详情"
             ;;
         disabled-missing|skipped)
             if [ "$st_pw" = "skipped" ] || [ "$st_cr" = "disabled-missing" ]; then
-                echo "  可选依赖: 打印 PDF 补装已关闭（不用打印可忽略）— 详情见菜单 [5]"
+                echo "  可选依赖: 打印 PDF 补装已关闭 — DEPLOY [5] 选装 / OPS [6] 详情"
             fi
             ;;
         *)
-            echo "  可选依赖: 部分增强能力未就绪（按需安装）— 详情见菜单 [5]"
+            echo "  可选依赖: 部分增强能力未就绪 — DEPLOY [5] 选装 / OPS [6] 详情"
             ;;
     esac
 }
@@ -4363,38 +5098,179 @@ cmd_check_special() {
     local failed=0 st pw_st cr_st
     print_special_deps_header
 
-    print_special_deps_group "打印 PDF（报表 / 单据，可跳过）"
+    print_special_deps_group "打印 PDF（机上探测；OPT_PDF_PRINT=1 时 install/migrate 强制）"
     pw_st="$(check_playwright)"
     print_special_deps_item "Playwright Python 包" "$pw_st"
-    case "$pw_st" in ok|skipped) ;; *) failed=1 ;; esac
     cr_st="$(check_playwright_chromium)"
     print_special_deps_item "Chromium 浏览器" "$cr_st"
-    case "$cr_st" in ok|skipped|installing|disabled-present) ;; *) failed=1 ;; esac
+    if deploy_opt_pdf_print_enabled; then
+        case "$pw_st" in ok|skipped) ;; *) failed=1 ;; esac
+        case "$cr_st" in ok|skipped|installing|disabled-present) ;; *) failed=1 ;; esac
+    else
+        printf '      %-22s %s\n' "选装开关" "未启用（不强制安装）"
+    fi
     echo ""
 
-    print_special_deps_group "发票解析（二维码 / OCR，可跳过）"
+    print_special_deps_group "发票解析（机上探测；OPT_INVOICE_OCR=1 时强制）"
     st="$(check_invoice_parse_runtime)"
     print_special_deps_item "系统库 (zbar 等)" "$st"
-    [ "$st" = "ok" ] || failed=1
+    if deploy_opt_invoice_ocr_enabled; then
+        [ "$st" = "ok" ] || failed=1
+    fi
     st="$(check_ocr)"
     print_special_deps_item "OCR Python 包" "$st"
-    [ "$st" = "ok" ] || failed=1
+    if deploy_opt_invoice_ocr_enabled; then
+        [ "$st" = "ok" ] || failed=1
+    else
+        printf '      %-22s %s\n' "选装开关" "未启用（不强制安装）"
+    fi
     echo ""
 
-    print_special_deps_group "KU-AI 向量检索（可跳过）"
+    print_special_deps_group "KU-AI 向量（机上探测；OPT_KUAI_VECTOR=1 时强制）"
     st="$(check_pgvector)"
     print_special_deps_item "PostgreSQL pgvector" "$st"
-    case "$st" in ok|pending) ;; *) failed=1 ;; esac
+    if deploy_opt_kuaiai_vector_enabled; then
+        case "$st" in ok|pending) ;; *) failed=1 ;; esac
+    else
+        printf '      %-22s %s\n' "选装开关" "未启用（不强制安装）"
+    fi
     echo ""
 
-    print_special_deps_group "敏感词过滤（组织开启时，可跳过）"
+    print_special_deps_group "敏感词（机上探测；OPT_SENSITIVE_LEXICON=1 时强制）"
     st="$(check_sensitive_lexicon)"
     print_special_deps_item "词库 lexicon.pack" "$st"
-    [ "$st" = "ok" ] || failed=1
+    if deploy_opt_sensitive_lexicon_enabled; then
+        [ "$st" = "ok" ] || failed=1
+    else
+        printf '      %-22s %s\n' "选装开关" "未启用（不强制安装）"
+    fi
+    echo ""
+
+    print_special_deps_group "Office 高级预览（机上有 soffice 即高级预览；OPT_LIBREOFFICE=1 时 install）"
+    st="$(check_libreoffice)"
+    print_special_deps_item "LibreOffice (soffice)" "$st"
+    if deploy_opt_libreoffice_enabled; then
+        [ "$st" = "ok" ] || failed=1
+    else
+        printf '      %-22s %s\n' "选装开关" "未启用（不强制安装）"
+    fi
     echo ""
 
     print_special_deps_footnotes "$pw_st" "$cr_st"
     return $failed
+}
+
+# 仅安装 deploy.env 中已启用的选装依赖（当场补齐，不跑全库 migrate / 不启服务）
+cmd_install_optional_deps() {
+    load_deploy_env
+    apply_cn_mirrors
+    sync_deploy_optional_features_to_backend_env
+
+    local any=0 failed=0 need_py=0 need_sudo=0 st
+
+    deploy_opt_invoice_ocr_enabled && any=1
+    deploy_opt_pdf_print_enabled && any=1
+    deploy_opt_kuaiai_vector_enabled && any=1
+    deploy_opt_sensitive_lexicon_enabled && any=1
+    deploy_opt_libreoffice_enabled && any=1
+
+    if [ "$any" -eq 0 ]; then
+        log_warn "当前无已启用的选装项。请先用 1–5 或 A 启用后再安装。"
+        return 1
+    fi
+
+    if deploy_opt_invoice_ocr_enabled || deploy_opt_pdf_print_enabled; then
+        need_py=1
+    fi
+
+    echo "=== 安装已启用的选装依赖 ==="
+    echo "  仅处理 OPT_*=1 的项；Python extras / 系统库 / Chromium / pgvector / 词库 / LibreOffice。"
+    echo "  不执行全库 migrate / start；KU-AI vector 列仍需另行 migrate。"
+    echo ""
+
+    if [ "$(uname -s)" = "Linux" ] && [ "$(id -u)" -ne 0 ]; then
+        if deploy_opt_invoice_ocr_enabled && [ "$(check_invoice_parse_runtime)" != "ok" ]; then
+            need_sudo=1
+        fi
+        if deploy_opt_libreoffice_enabled && [ "$(check_libreoffice)" != "ok" ]; then
+            need_sudo=1
+        fi
+        if deploy_opt_kuaiai_vector_enabled; then
+            need_sudo=1
+        fi
+        if deploy_opt_pdf_print_enabled; then
+            st="$(check_playwright_chromium)"
+            case "$st" in deps-missing|missing|disabled-missing) need_sudo=1 ;; esac
+        fi
+        if [ "$need_sudo" -eq 1 ]; then
+            ensure_sudo_ready || {
+                log_error "无法获取 sudo，部分系统依赖无法安装"
+                return 1
+            }
+        fi
+    fi
+
+    if [ "$need_py" -eq 1 ]; then
+        log_info "同步 Python 依赖（按已启用 OPT 带入 uv --extra）..."
+        # 允许刚打开 OPT 后强制再 sync（避免沿用「无 extra」的旧同步标记）
+        _BACKEND_DEPS_SYNCED=0
+        sync_backend_deps || failed=1
+    fi
+
+    if deploy_opt_invoice_ocr_enabled; then
+        log_info "[发票 OCR] 系统库..."
+        st="$(check_invoice_parse_runtime)"
+        if [ "$st" = "ok" ]; then
+            log_ok "发票解析系统库已就绪"
+        else
+            run_install_component invoice-runtime "$st" || failed=1
+        fi
+        if [ "$(check_ocr)" = "ok" ]; then
+            log_ok "OCR Python 包已就绪"
+        else
+            log_warn "OCR Python 包未就绪（需 uv sync --extra ocr 成功）"
+            failed=1
+        fi
+    fi
+
+    if deploy_opt_pdf_print_enabled; then
+        log_info "[PDF 打印] Playwright Chromium..."
+        if [ "$(check_playwright)" = "missing" ]; then
+            log_warn "Playwright Python 包未就绪"
+            failed=1
+        fi
+        ensure_playwright_chromium_sync || failed=1
+    fi
+
+    if deploy_opt_kuaiai_vector_enabled; then
+        log_info "[KU-AI 向量] PostgreSQL pgvector..."
+        ensure_postgresql_pgvector || failed=1
+        ensure_vector_extension_created || failed=1
+        log_info "知识库 vector 列/索引请随后执行 migrate"
+    fi
+
+    if deploy_opt_sensitive_lexicon_enabled; then
+        log_info "[敏感词] lexicon.pack..."
+        ensure_sensitive_lexicon_pack || failed=1
+    fi
+
+    if deploy_opt_libreoffice_enabled; then
+        log_info "[LibreOffice] soffice..."
+        if [ "$(check_libreoffice)" = "ok" ]; then
+            log_ok "LibreOffice 已就绪"
+        else
+            install_libreoffice_runtime || failed=1
+        fi
+    fi
+
+    echo ""
+    cmd_check_special || true
+    if [ "$failed" -eq 0 ]; then
+        log_ok "已启用选装依赖安装完成"
+        return 0
+    fi
+    log_warn "部分选装依赖未完全就绪，见上方详情"
+    return 1
 }
 
 cmd_status() {
@@ -4913,6 +5789,44 @@ ensure_vector_extension_created() {
     fi
     log_error "CREATE EXTENSION 后应用库仍无 vector"
     return 1
+}
+
+# OPT_KUAI_VECTOR=1 时补建迁移 517 的 vector 列（迁移在无 pgvector 时会跳过 DDL）
+ensure_kuaiai_vector_schema() {
+    local sql out
+    if ! pgvector_available_in_app_db; then
+        log_error "应用库尚无 pgvector，无法创建 KU-AI vector 列"
+        return 1
+    fi
+    if ! vector_extension_installed_in_app_db; then
+        ensure_vector_extension_created || return 1
+    fi
+    out="$(app_db_psql -tAc "SELECT 1 FROM information_schema.columns
+        WHERE table_schema='public' AND table_name='apps_kuaiai_knowledge_chunks'
+          AND column_name='embedding_vector'" 2>/dev/null | tr -d '[:space:]')" || true
+    if [ "$out" = "1" ]; then
+        log_special_ok "KU-AI embedding_vector 列已存在"
+        return 0
+    fi
+    log_info "创建 KU-AI 知识库 pgvector 列与索引..."
+    sql='DO $m$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = ''vector'') THEN
+    CREATE EXTENSION IF NOT EXISTS vector;
+    ALTER TABLE "apps_kuaiai_knowledge_chunks"
+        ADD COLUMN IF NOT EXISTS "embedding_vector" vector(768);
+    CREATE INDEX IF NOT EXISTS "idx_kuaiai_kchunk_tenant_hnsw"
+        ON "apps_kuaiai_knowledge_chunks"
+        USING hnsw ("embedding_vector" vector_cosine_ops)
+        WHERE "deleted_at" IS NULL AND "embedding_vector" IS NOT NULL;
+  END IF;
+END $m$;'
+    if ! postgres_superuser_sql_on_app_db "$sql"; then
+        log_error "KU-AI vector 列创建失败"
+        return 1
+    fi
+    log_special_ok "KU-AI pgvector 列已就绪"
+    return 0
 }
 
 curl_pipe_bash_fallback() {
@@ -5483,6 +6397,10 @@ run_install_component() {
         install_invoice_parse_runtime || return 1
         return 0
     fi
+    if [ "$comp" = "libreoffice" ]; then
+        install_libreoffice_runtime || return 1
+        return 0
+    fi
     local cmd
     cmd="$(get_install_command "$comp")"
     [ -n "$cmd" ] || { log_error "无 $comp 的安装命令"; return 1; }
@@ -5540,8 +6458,16 @@ cmd_install() {
     if [ "$DEPLOY_MODE" = "prod" ]; then
         run_install_component caddy "$(check_caddy)" || return 1
     fi
-    # 发票 PDF：系统库 zbar+libgomp；Python OCR 包在 migrate/sync_backend_deps 中 --extra ocr
-    run_install_component invoice-runtime "$(check_invoice_parse_runtime)" || true
+    if deploy_opt_invoice_ocr_enabled; then
+        run_install_component invoice-runtime "$(check_invoice_parse_runtime)" || true
+    else
+        log_info "发票 OCR 选装未启用 (OPT_INVOICE_OCR=0)，跳过 zbar 等系统库"
+    fi
+    if deploy_opt_libreoffice_enabled; then
+        run_install_component libreoffice "$(check_libreoffice)" || true
+    else
+        log_info "LibreOffice 选装未启用 (OPT_LIBREOFFICE=0)，Office 使用简易预览"
+    fi
     log_warn "若刚安装系统软件，请重新打开终端或刷新 PATH 后再次 check"
     cmd_check_baseline || exit 1
 }
@@ -6383,6 +7309,9 @@ fd_dispatch() {
         install)
             cmd_install
             log_info "install 仅安装系统依赖；完整部署请执行: ./fast-deploy/deploy.sh"
+            ;;
+        install-optional|install-opt|install_optional)
+            cmd_install_optional_deps
             ;;
         configure) cmd_configure ;;
         migrate)   cmd_migrate ;;

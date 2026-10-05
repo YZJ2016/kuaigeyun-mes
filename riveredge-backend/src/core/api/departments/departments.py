@@ -310,20 +310,6 @@ async def load_preset_departments(
     return {"created": count, "message": f"已加载 {count} 个部门"}
 
 
-@router.post("/link-preset-managers")
-async def link_preset_department_managers(
-    current_user: User = Depends(soil_get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-    _auth: object = Depends(require_department_update),
-):
-    """按预设映射补齐部门负责人（销售经理→销售部等），供审批流部门节点使用。"""
-    linked = await DepartmentService.link_preset_department_managers(tenant_id)
-    return {
-        "managers_linked": linked,
-        "message": f"已关联 {linked} 个部门负责人" if linked else "无需更新，部门负责人已配置或缺少对应角色用户",
-    }
-
-
 @router.put("/sort", status_code=status.HTTP_200_OK)
 async def update_department_order(
     department_orders: List[Dict[str, Any]] = Body(..., description="部门排序列表"),

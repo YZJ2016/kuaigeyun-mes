@@ -35,22 +35,42 @@ const { Text, Paragraph } = Typography;
 const ALL_CATEGORY_KEY = '__all__';
 type LibrarySource = 'system' | 'official';
 
-function normalizeSearchText(value: string): string {
-  return value.trim().toLowerCase();
+function normalizeSearchText(value: unknown): string {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase();
 }
 
-function packMatchesSearch(pack: ApiLibraryPack, keyword: string): boolean {
+function packMatchesSearch(
+  pack: ApiLibraryPack,
+  keyword: string,
+  options?: { excludeCategoryName?: boolean },
+): boolean {
   if (!keyword) {
     return true;
   }
-  const haystacks = [
+  const haystacks: unknown[] = [
     pack.name,
     pack.description,
-    pack.category_name,
     pack.connector_type,
-    ...pack.items.map((item) => `${item.name} ${item.description}`),
+    ...pack.items.map((item) => `${item.name ?? ''} ${item.description ?? ''}`),
   ];
+  if (!options?.excludeCategoryName) {
+    haystacks.push(pack.category_name);
+  }
   return haystacks.some((text) => normalizeSearchText(text).includes(keyword));
+}
+
+function itemMatchesSearch(
+  item: ApiLibraryPack['items'][number],
+  keyword: string,
+): boolean {
+  if (!keyword) {
+    return true;
+  }
+  return normalizeSearchText(`${item.name ?? ''} ${item.description ?? ''} ${item.item_key ?? ''}`).includes(
+    keyword,
+  );
 }
 
 export interface ApiLibraryModalProps {
@@ -97,13 +117,26 @@ export const ApiLibraryModal: React.FC<ApiLibraryModalProps> = ({
 
   const filteredPacks = useMemo(() => {
     const keyword = normalizeSearchText(searchValue);
+    const categoryScoped = categoryFilter !== ALL_CATEGORY_KEY;
     return packs.filter((pack) => {
-      if (categoryFilter !== ALL_CATEGORY_KEY && pack.category_name !== categoryFilter) {
+      if (categoryScoped && pack.category_name !== categoryFilter) {
         return false;
       }
-      return packMatchesSearch(pack, keyword);
+      // 已选分类时不再用分类名本身充当搜索命中，否则关键词只匹配分类时列表看起来「搜了没变化」
+      return packMatchesSearch(pack, keyword, { excludeCategoryName: categoryScoped });
     });
   }, [categoryFilter, packs, searchValue]);
+
+  const filteredPackItems = useMemo(() => {
+    if (!selectedPack) {
+      return [];
+    }
+    const keyword = normalizeSearchText(searchValue);
+    if (!keyword) {
+      return selectedPack.items;
+    }
+    return selectedPack.items.filter((item) => itemMatchesSearch(item, keyword));
+  }, [searchValue, selectedPack]);
 
   const connectorOptions = useMemo(
     () =>
@@ -319,6 +352,7 @@ export const ApiLibraryModal: React.FC<ApiLibraryModalProps> = ({
             placeholder={t('pages.system.apis.librarySearchPlaceholder')}
             value={searchValue}
             onChange={(event) => setSearchValue(event.target.value)}
+            onSearch={(value) => setSearchValue(value)}
           />
           <Select
             className="api-library-category"
@@ -422,7 +456,15 @@ export const ApiLibraryModal: React.FC<ApiLibraryModalProps> = ({
                     </div>
 
                     <div className="api-library-item-list">
-                      {selectedPack.items.map((item) => {
+                      {filteredPackItems.length === 0 ? (
+                        <div className="api-library-empty" style={{ minHeight: 120 }}>
+                          <Empty
+                            image={Empty.PRESENTED_IMAGE_SIMPLE}
+                            description={t('pages.system.apis.libraryEmptySearch')}
+                          />
+                        </div>
+                      ) : (
+                        filteredPackItems.map((item) => {
                         const checked = selectedItemKeys.includes(item.item_key);
                         return (
                           <div
@@ -449,7 +491,8 @@ export const ApiLibraryModal: React.FC<ApiLibraryModalProps> = ({
                             </div>
                           </div>
                         );
-                      })}
+                      })
+                      )}
                     </div>
                   </div>
 

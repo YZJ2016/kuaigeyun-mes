@@ -208,6 +208,7 @@ class Operation(BaseModel):
     
     # 状态信息
     is_active = fields.BooleanField(default=True, description="是否启用")
+    external_sync_at = fields.DatetimeField(null=True, description="最近从外部接口/数据集同步时间")
     
     # 默认生产人员（用户ID列表，JSON格式存储，同组织）
     default_operator_ids = fields.JSONField(null=True, description="默认生产人员（用户ID列表）")

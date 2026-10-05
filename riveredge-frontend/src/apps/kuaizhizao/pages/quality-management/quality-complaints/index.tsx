@@ -48,6 +48,7 @@ import {
   flattenComplaintForForm,
   getComplaintExtensionValue,
 } from '../../../utils/qualityComplaintExtension';
+import { pickListSearchKeyword, pickSearchString } from '../../../../../utils/tableQueryKey';
 import {
   qualityComplaintApi,
   type QualityComplaint,
@@ -443,7 +444,9 @@ const QualityComplaintsPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<QualityComplaint>
-        columnPersistenceId="apps.kuaizhizao.pages.quality-management.quality-complaints-v2"
+        columnPersistenceId="apps.kuaizhizao.pages.quality-management.quality-complaints-v3"
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
         headerTitle={t('app.kuaizhizao.qualityComplaint.title')}
         permissionResource={RESOURCE}
         actionRef={actionRef}
@@ -501,15 +504,14 @@ const QualityComplaintsPage: React.FC = () => {
             messageApi.error(getApiErrorMessage(e, t('common.exportFailed')));
           }
         }}
-        request={async (params, _sort, _filter, search) => {
-          const s = search || {};
+        request={async (params, _sort, _filter, searchFormValues) => {
           const res = await qualityComplaintApi.list({
             skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
             limit: params.pageSize ?? 20,
-            keyword: typeof s.keyword === 'string' ? s.keyword : undefined,
-            status: (s.status as string) || undefined,
-            business_type: (s.business_type as string) || undefined,
-            defect_category: (s.defect_category as string) || undefined,
+            keyword: pickListSearchKeyword(searchFormValues),
+            status: pickSearchString(searchFormValues, 'status'),
+            business_type: pickSearchString(searchFormValues, 'business_type'),
+            defect_category: pickSearchString(searchFormValues, 'defect_category'),
           });
           return { data: res.data || [], success: true, total: res.total || 0 };
         }}

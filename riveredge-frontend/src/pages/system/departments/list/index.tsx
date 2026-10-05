@@ -33,6 +33,10 @@ import { getApiErrorMessage } from '../../../../utils/errorHandler';
 import { buildDetailDrawerEditExtra } from '../../../../apps/kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
 import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer';
 import { UniTable } from '../../../../components/uni-table';
+import {
+  pickListSearchKeywordOrFields,
+  pickSearchTriStateBoolean,
+} from '../../../../utils/tableQueryKey';
 import { DepartmentFormModal } from '../components/DepartmentFormModal';
 import {
   getDepartmentTree,
@@ -40,7 +44,6 @@ import {
   deleteDepartment,
   importDepartments,
   loadPresetDepartments,
-  linkPresetDepartmentManagers,
   getDepartmentPresetPreview,
   getDepartmentDatasetBinding,
   putDepartmentDatasetBinding,
@@ -375,11 +378,8 @@ const DepartmentListPage: React.FC = () => {
 
   const loadData = async (params: any, _sort: any, _filter: any, searchFormValues?: any) => {
     try {
-      const keyword = searchFormValues?.keyword || searchFormValues?.name || searchFormValues?.code;
-      const is_active =
-        searchFormValues?.is_active !== undefined && searchFormValues?.is_active !== ''
-          ? searchFormValues.is_active === 'true' || searchFormValues.is_active === true
-          : undefined;
+      const keyword = pickListSearchKeywordOrFields(searchFormValues, 'name', 'code');
+      const is_active = pickSearchTriStateBoolean(searchFormValues, 'is_active');
 
       const response = await getDepartmentTree({ keyword, is_active });
 
@@ -545,8 +545,9 @@ const DepartmentListPage: React.FC = () => {
     {
       title: t('field.department.code'),
       dataIndex: 'code',
-      width: 140,
-      minWidth: 140,
+      // 树形缩进 + 展开钮 + 复制图标：140 不够；加宽以尽量完整展示编码
+      width: 240,
+      minWidth: 240,
       uniTableKeepWidth: true,
       resizable: false,
       copyable: true,
@@ -669,7 +670,8 @@ const DepartmentListPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<Department>
-        columnPersistenceId="pages.system.departments.list-v2"
+        columnPersistenceId="pages.system.departments.list-v6"
+        showAdvancedSearch
         permissionResource="system:department"
         viewTypes={['table', 'help']}
         helpViewConfig={buildListPageHelpViewConfig('system.departments')}
@@ -711,22 +713,6 @@ const DepartmentListPage: React.FC = () => {
             {t('field.department.loadPreset')}
           </Button>
           ),
-          (
-          <Button
-            key="linkPresetManagers"
-            onClick={async () => {
-              try {
-                const res = await linkPresetDepartmentManagers();
-                messageApi.success(res.message);
-    actionRef.current?.reload();
-              } catch (e: any) {
-                messageApi.error(e?.message || t('common.operationFailed'));
-              }
-            }}
-          >
-            {t('field.department.linkPresetManagers')}
-          </Button>
-          ),
           <Button {...rowActionKind('skip')}
             key="toggleExpand"
             onClick={() => {
@@ -756,7 +742,6 @@ const DepartmentListPage: React.FC = () => {
           expandedRowKeys,
           onExpandedRowsChange: (keys) => setExpandedRowKeys(keys as React.Key[]),
         }}
-        search={{ labelWidth: 'auto' }}
         showQuickJumper={false}
         showDatasetConfigButton
         onDatasetConfig={handleDatasetConfig}

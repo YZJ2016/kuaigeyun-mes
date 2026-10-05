@@ -200,7 +200,30 @@
 }
 
 .uni-table-container .ant-table-tbody > tr > td {
+  vertical-align: middle;
   border-bottom-color: rgba(0, 0, 0, 0.12) !important;
+
+  /*
+   * 表体徽章垂直对齐（唯一路径）：
+   * Space / 内联 span 包 MarkerTag 时会继承单元格行高形成 strut，
+   * 与同列裸 Tag（如启用状态）中线错位。压掉行高并强制 item 与 Tag 同中线。
+   */
+  .ant-tag.re-marker-tag,
+  .ant-tag.re-status-badge {
+    vertical-align: middle;
+  }
+
+  .ant-space {
+    vertical-align: middle;
+    line-height: 1;
+    align-items: center;
+  }
+
+  .ant-space-item {
+    display: inline-flex;
+    align-items: center;
+    line-height: 1;
+  }
 }
 
 /*
@@ -369,8 +392,15 @@
   flex-wrap: nowrap !important;
 }
 
+/*
+ * UniTable 工具栏旁路纯文案（开关标签等）：字号跟 antd 控件 token，禁止裸 span 继承
+ * 页面/系统放大字体后比邻钮更大；垂直对齐由外层 Space align="center" 负责。
+ */
 .uni-table-toolbar-plain-label {
   white-space: nowrap;
+  font-size: var(--ant-font-size);
+  line-height: var(--ant-line-height);
+  color: var(--ant-color-text);
 }
 
 .uni-table-container .uni-table-alt-view-toolbar {

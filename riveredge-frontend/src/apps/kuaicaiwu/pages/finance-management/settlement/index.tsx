@@ -938,8 +938,8 @@ const SettlementPage: React.FC = () => {
         rowKey="id"
         viewTypes={[...tableOnlyViewTypes, 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.settlement)}
-        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement.history-v2"
-        search={{ labelWidth: 'auto' }}
+        columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement.history-v3"
+        showAdvancedSearch
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
         request={async (params, sort, _filter, searchFormValues) => {
@@ -1012,8 +1012,8 @@ const SettlementPage: React.FC = () => {
             actionRef={receivableActionRef}
             rowKey="id"
             viewTypes={[...tableOnlyViewTypes]}
-            columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement.list-v5"
-            search={{ labelWidth: 'auto' }}
+            columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement.list-v6"
+            showAdvancedSearch
             showAdvancedSearch
             skipFuzzyPinyinClientFilter
             enableRowSelection
@@ -1074,8 +1074,8 @@ const SettlementPage: React.FC = () => {
             actionRef={receiptActionRef}
             rowKey="id"
             viewTypes={[...tableOnlyViewTypes]}
-            columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement:2.list-v4"
-            search={{ labelWidth: 'auto' }}
+            columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement:2.list-v5"
+            showAdvancedSearch
             showAdvancedSearch
             skipFuzzyPinyinClientFilter
             request={async (params, sort, _filter, searchFormValues) => {
@@ -1163,8 +1163,8 @@ const SettlementPage: React.FC = () => {
             actionRef={payableActionRef}
             rowKey="id"
             viewTypes={[...tableOnlyViewTypes]}
-            columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement:payable.list-v5"
-            search={{ labelWidth: 'auto' }}
+            columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement:payable.list-v6"
+            showAdvancedSearch
             showAdvancedSearch
             skipFuzzyPinyinClientFilter
             enableRowSelection
@@ -1225,8 +1225,8 @@ const SettlementPage: React.FC = () => {
             actionRef={paymentActionRef}
             rowKey="id"
             viewTypes={[...tableOnlyViewTypes]}
-            columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement:payment.list-v4"
-            search={{ labelWidth: 'auto' }}
+            columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement:payment.list-v5"
+            showAdvancedSearch
             showAdvancedSearch
             skipFuzzyPinyinClientFilter
             request={async (params, sort, _filter, searchFormValues) => {

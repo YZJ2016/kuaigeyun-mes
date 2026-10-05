@@ -1,5 +1,10 @@
 import type { TFunction } from 'i18next';
-import { extractProTableSort } from '../../../utils/tableQueryKey';
+import {
+  extractProTableSort,
+  pickListSearchKeyword,
+  pickSearchString,
+  pickSearchTriStateBoolean,
+} from '../../../utils/tableQueryKey';
 import { parseSalesReportDateRange } from '../services/reports';
 import { getPerformanceSummaryStatusValueEnum } from '../pages/performance/components/performanceMeta';
 
@@ -20,53 +25,58 @@ export function normalizePerformanceListResponse(res: unknown): { data: unknown[
   return { data: [], total: 0 };
 }
 
-function pickString(searchFormValues: Record<string, unknown> | null | undefined, key: string) {
-  const v = searchFormValues?.[key];
-  return typeof v === 'string' && v.trim() ? v.trim() : undefined;
-}
-
 function resolveOrderBy(sort?: Record<string, unknown>) {
   const { sortBy, sortOrder } = extractProTableSort(sort ?? {});
   return sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
 }
 
-function resolveOptionalBoolean(value: unknown): boolean | undefined {
-  if (value === true || value === 'true') return true;
-  if (value === false || value === 'false') return false;
-  return undefined;
+function pickPerformanceActive(searchFormValues?: Record<string, unknown> | null): boolean | undefined {
+  return (
+    pickSearchTriStateBoolean(searchFormValues, 'isActive') ??
+    pickSearchTriStateBoolean(searchFormValues, 'is_active')
+  );
 }
 
 function resolveMasterListDateParams(searchFormValues?: Record<string, unknown> | null) {
-  const s = searchFormValues ?? {};
-  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(s, [
+  const search = searchFormValues ?? {};
+  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(search, [
     'created_at_range',
     'createdAtRange',
   ]);
-  const { date_start: updated_start_date, date_end: updated_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: updated_start_date, date_end: updated_end_date } = parseSalesReportDateRange(search, [
     'updated_at_range',
     'updatedAtRange',
   ]);
   return { created_start_date, created_end_date, updated_start_date, updated_end_date };
 }
 
+function pickOptionalId(searchFormValues: Record<string, unknown> | null | undefined, key: string) {
+  const raw = pickSearchString(searchFormValues, key);
+  if (raw == null || !Number.isFinite(Number(raw))) return undefined;
+  const n = Number(raw);
+  return n > 0 ? n : undefined;
+}
+
 export function resolveHolidayListParams(
   searchFormValues?: Record<string, unknown> | null,
   sort?: Record<string, unknown>,
 ): Record<string, string | boolean | undefined> {
-  const s = searchFormValues ?? {};
-  const dates = resolveMasterListDateParams(s);
-  const { date_start: start_date, date_end: end_date } = parseSalesReportDateRange(s, [
+  const search = searchFormValues ?? {};
+  const dates = resolveMasterListDateParams(searchFormValues);
+  const { date_start: start_date, date_end: end_date } = parseSalesReportDateRange(search, [
     'holiday_date_range',
     'holidayDateRange',
   ]);
 
   return {
     order_by: resolveOrderBy(sort),
-    keyword: pickString(s, 'keyword'),
-    holiday_type: typeof s.holidayType === 'string' && s.holidayType ? s.holidayType : pickString(s, 'holiday_type'),
+    keyword: pickListSearchKeyword(searchFormValues),
+    holiday_type:
+      pickSearchString(searchFormValues, 'holidayType') ??
+      pickSearchString(searchFormValues, 'holiday_type'),
     start_date,
     end_date,
-    is_active: resolveOptionalBoolean(s.isActive ?? s.is_active),
+    is_active: pickPerformanceActive(searchFormValues),
     ...dates,
   };
 }
@@ -75,13 +85,12 @@ export function resolveSkillListParams(
   searchFormValues?: Record<string, unknown> | null,
   sort?: Record<string, unknown>,
 ): Record<string, string | boolean | undefined> {
-  const s = searchFormValues ?? {};
   return {
     order_by: resolveOrderBy(sort),
-    keyword: pickString(s, 'keyword'),
-    category: typeof s.category === 'string' && s.category ? s.category : undefined,
-    is_active: resolveOptionalBoolean(s.isActive ?? s.is_active),
-    ...resolveMasterListDateParams(s),
+    keyword: pickListSearchKeyword(searchFormValues),
+    category: pickSearchString(searchFormValues, 'category'),
+    is_active: pickPerformanceActive(searchFormValues),
+    ...resolveMasterListDateParams(searchFormValues),
   };
 }
 
@@ -89,12 +98,11 @@ export function resolveShiftListParams(
   searchFormValues?: Record<string, unknown> | null,
   sort?: Record<string, unknown>,
 ): Record<string, string | boolean | undefined> {
-  const s = searchFormValues ?? {};
   return {
     order_by: resolveOrderBy(sort),
-    keyword: pickString(s, 'keyword'),
-    is_active: resolveOptionalBoolean(s.isActive ?? s.is_active),
-    ...resolveMasterListDateParams(s),
+    keyword: pickListSearchKeyword(searchFormValues),
+    is_active: pickPerformanceActive(searchFormValues),
+    ...resolveMasterListDateParams(searchFormValues),
   };
 }
 
@@ -102,20 +110,14 @@ export function resolveEmployeeConfigListParams(
   searchFormValues?: Record<string, unknown> | null,
   sort?: Record<string, unknown>,
 ): Record<string, string | number | boolean | undefined> {
-  const s = searchFormValues ?? {};
   return {
     order_by: resolveOrderBy(sort),
-    keyword: pickString(s, 'keyword'),
-    employee_id:
-      s.employee_id != null && s.employee_id !== '' ? Number(s.employee_id) : undefined,
+    keyword: pickListSearchKeyword(searchFormValues),
+    employee_id: pickOptionalId(searchFormValues, 'employee_id'),
     calc_mode:
-      typeof s.calc_mode === 'string' && s.calc_mode
-        ? s.calc_mode
-        : typeof s.calcMode === 'string' && s.calcMode
-          ? s.calcMode
-          : undefined,
-    is_active: resolveOptionalBoolean(s.is_active ?? s.isActive),
-    ...resolveMasterListDateParams(s),
+      pickSearchString(searchFormValues, 'calc_mode') ?? pickSearchString(searchFormValues, 'calcMode'),
+    is_active: pickPerformanceActive(searchFormValues),
+    ...resolveMasterListDateParams(searchFormValues),
   };
 }
 
@@ -123,12 +125,11 @@ export function resolveHourlyRateListParams(
   searchFormValues?: Record<string, unknown> | null,
   sort?: Record<string, unknown>,
 ): Record<string, string | boolean | undefined> {
-  const s = searchFormValues ?? {};
   return {
     order_by: resolveOrderBy(sort),
-    keyword: pickString(s, 'keyword'),
-    is_active: resolveOptionalBoolean(s.is_active ?? s.isActive),
-    ...resolveMasterListDateParams(s),
+    keyword: pickListSearchKeyword(searchFormValues),
+    is_active: pickPerformanceActive(searchFormValues),
+    ...resolveMasterListDateParams(searchFormValues),
   };
 }
 
@@ -136,18 +137,13 @@ export function resolveKpiDefinitionListParams(
   searchFormValues?: Record<string, unknown> | null,
   sort?: Record<string, unknown>,
 ): Record<string, string | boolean | undefined> {
-  const s = searchFormValues ?? {};
   return {
     order_by: resolveOrderBy(sort),
-    keyword: pickString(s, 'keyword'),
+    keyword: pickListSearchKeyword(searchFormValues),
     calc_type:
-      typeof s.calc_type === 'string' && s.calc_type
-        ? s.calc_type
-        : typeof s.calcType === 'string' && s.calcType
-          ? s.calcType
-          : undefined,
-    is_active: resolveOptionalBoolean(s.is_active ?? s.isActive),
-    ...resolveMasterListDateParams(s),
+      pickSearchString(searchFormValues, 'calc_type') ?? pickSearchString(searchFormValues, 'calcType'),
+    is_active: pickPerformanceActive(searchFormValues),
+    ...resolveMasterListDateParams(searchFormValues),
   };
 }
 
@@ -156,14 +152,13 @@ export function resolvePerformanceSummaryListParams(
   sort?: Record<string, unknown>,
   toolbar?: { period?: string; employee_id?: number },
 ): Record<string, string | number | undefined> {
-  const s = searchFormValues ?? {};
   return {
     order_by: resolveOrderBy(sort),
-    keyword: pickString(s, 'keyword'),
-    period: toolbar?.period || pickString(s, 'period'),
+    keyword: pickListSearchKeyword(searchFormValues),
+    period: toolbar?.period ?? pickSearchString(searchFormValues, 'period'),
     employee_id: toolbar?.employee_id,
-    status: typeof s.status === 'string' && s.status ? s.status : undefined,
-    ...resolveMasterListDateParams(s),
+    status: pickSearchString(searchFormValues, 'status'),
+    ...resolveMasterListDateParams(searchFormValues),
   };
 }
 

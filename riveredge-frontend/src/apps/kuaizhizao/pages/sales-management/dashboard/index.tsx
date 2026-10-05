@@ -149,7 +149,8 @@ const SalesDashboard: React.FC = () => {
   const pendingFollowUps = followUpStats?.items || [];
   const pendingFollowUpTotal = followUpStats?.pending_customers ?? 0;
   const overdueFollowUpCount = followUpStats?.overdue_customers ?? 0;
-  const inactive7dCustomers = followUpStats?.inactive_7d_customers ?? 0;
+  const inactiveAlertDays = Math.max(1, Number(followUpStats?.inactive_alert_days) || 7);
+  const inactiveCustomers = followUpStats?.inactive_customers ?? 0;
   const followStatusPending = followUpStats?.follow_status_pending ?? 0;
   const followStatusFollowed = followUpStats?.follow_status_followed ?? 0;
   const followUpRecordsTotal = followUpStats?.follow_up_records_total ?? 0;
@@ -243,8 +244,8 @@ const SalesDashboard: React.FC = () => {
             value: overdueFollowUpCount,
           },
           {
-            label: t('app.kuaizhizao.salesDashboard.kpi.inactive7d'),
-            value: inactive7dCustomers,
+            label: t('app.kuaizhizao.salesDashboard.kpi.inactiveDays', { days: inactiveAlertDays }),
+            value: inactiveCustomers,
           },
         ],
       },
@@ -305,7 +306,16 @@ const SalesDashboard: React.FC = () => {
         ],
       },
     ],
-    [navigate, overdueFollowUpCount, inactive7dCustomers, pendingFollowUpTotal, s, showMoney, t],
+    [
+      navigate,
+      overdueFollowUpCount,
+      inactiveAlertDays,
+      inactiveCustomers,
+      pendingFollowUpTotal,
+      s,
+      showMoney,
+      t,
+    ],
   );
 
   const crmLevelItems = useMemo(() => {
@@ -707,8 +717,8 @@ const SalesDashboard: React.FC = () => {
                     <Text strong>{followStatusFollowed}</Text>
                   </Text>
                   <Text type="secondary">
-                    {t('app.kuaizhizao.salesDashboard.kpi.inactive7d')}：
-                    <Text strong>{inactive7dCustomers}</Text>
+                    {t('app.kuaizhizao.salesDashboard.kpi.inactiveDays', { days: inactiveAlertDays })}：
+                    <Text strong>{inactiveCustomers}</Text>
                   </Text>
                 </div>
                 <ModuleFeedList

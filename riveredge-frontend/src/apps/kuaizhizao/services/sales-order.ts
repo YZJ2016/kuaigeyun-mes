@@ -146,6 +146,7 @@ export interface SalesOrderCapabilities {
   push_shipment_notice?: ActionCapability;
   push_sales_delivery?: ActionCapability;
   push_invoice?: ActionCapability;
+  push_prepayment?: ActionCapability;
   push_sales_return?: ActionCapability;
   push_delivery_project?: ActionCapability;
   create_change_order?: ActionCapability;
@@ -506,6 +507,9 @@ export interface PushPreviewResponse {
   warehouse_required?: boolean;
   warehouse_id?: number;
   warehouse_name?: string;
+  /** 预收/预付下推 */
+  prepayment_amount?: number;
+  prepayment_bank_account_id?: number | null;
 }
 
 /**
@@ -684,6 +688,44 @@ export async function pushSalesOrderToInvoice(salesOrderId: number): Promise<Pus
   return apiRequest<PushToInvoiceResponse>(`/apps/kuaizhizao/sales-orders/${salesOrderId}/push-to-invoice`, {
     method: 'POST',
   });
+}
+
+export interface PushToPrepaymentReceiptRequest {
+  amount?: number;
+  bank_account_id?: number;
+  notes?: string;
+}
+
+export interface PushToPrepaymentReceiptResponse {
+  success?: boolean;
+  message?: string;
+  order_id?: number;
+  order_code?: string;
+  receipt_id?: number;
+  receipt_code?: string;
+  total_amount?: number;
+}
+
+export async function previewPushSalesOrderToPrepayment(
+  salesOrderId: number,
+): Promise<PushPreviewResponse> {
+  return apiRequest<PushPreviewResponse>(
+    `/apps/kuaizhizao/sales-orders/${salesOrderId}/push-to-prepayment/preview`,
+    { method: 'GET' },
+  );
+}
+
+export async function pushSalesOrderToPrepayment(
+  salesOrderId: number,
+  data?: PushToPrepaymentReceiptRequest,
+): Promise<PushToPrepaymentReceiptResponse> {
+  return apiRequest<PushToPrepaymentReceiptResponse>(
+    `/apps/kuaizhizao/sales-orders/${salesOrderId}/push-to-prepayment`,
+    {
+      method: 'POST',
+      data: data ?? {},
+    },
+  );
 }
 
 export interface PushToSalesReturnResponse {

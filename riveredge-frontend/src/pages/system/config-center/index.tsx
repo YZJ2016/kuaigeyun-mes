@@ -156,6 +156,7 @@ function toBusinessParams(flat: Record<string, any>, bizParamKeys: string[]): Re
 }
 
 type ParamRenderBlock =
+  | { kind: 'section'; sectionKey: string; sectionNameKey: string; sectionDescriptionKey?: string }
   | { kind: 'single'; param: ParamMeta }
   | {
       kind: 'group';
@@ -165,12 +166,30 @@ type ParamRenderBlock =
       params: ParamMeta[];
     };
 
-/** 按 groupKey 聚合同组参数；无组参数保持单卡。同组首次出现位置决定整组插入点。 */
+/**
+ * 按声明顺序构建渲染块：
+ * 1) sectionKey 变化时插入通栏分区标题；
+ * 2) groupKey 聚合同组参数为一张卡；无组参数保持单卡。
+ */
 function groupParamsForRender(params: ParamMeta[]): ParamRenderBlock[] {
   const blocks: ParamRenderBlock[] = [];
   const groupBuckets = new Map<string, ParamMeta[]>();
+  let lastSectionKey = '';
+
+  const emitSectionIfNeeded = (param: ParamMeta) => {
+    const sk = param.sectionKey?.trim();
+    if (!sk || sk === lastSectionKey) return;
+    lastSectionKey = sk;
+    blocks.push({
+      kind: 'section',
+      sectionKey: sk,
+      sectionNameKey: param.sectionNameKey || sk,
+      sectionDescriptionKey: param.sectionDescriptionKey,
+    });
+  };
 
   for (const param of params) {
+    emitSectionIfNeeded(param);
     const gk = param.groupKey?.trim();
     if (!gk) {
       blocks.push({ kind: 'single', param });
@@ -242,6 +261,34 @@ const ConfigCenterPage: React.FC = () => {
   const loading = configLoading && !bizRes;
 
   const parameterImplementation = schemaRes?.parameterImplementation || {};
+  const parameterControlMeta = useMemo(() => {
+    const merged: Record<string, Record<string, { type?: string; min?: number; max?: number; options?: { value: string; labelKey: string }[] }>> = {};
+    for (const src of [
+      schemaRes?.parameterRegistryControlMeta,
+      schemaRes?.processRegistryControlMeta,
+    ]) {
+      if (!src) continue;
+      for (const [cat, keys] of Object.entries(src)) {
+        merged[cat] = { ...(merged[cat] || {}), ...keys };
+      }
+    }
+    return merged;
+  }, [schemaRes?.parameterRegistryControlMeta, schemaRes?.processRegistryControlMeta]);
+
+  const resolveParamBounds = (param: ParamMeta): { min?: number; max?: number } => {
+    if (!param.sourcePath.startsWith('parameters.')) {
+      return { min: param.min, max: param.max };
+    }
+    const parts = param.sourcePath.replace('parameters.', '').split('.');
+    if (parts.length !== 2) return { min: param.min, max: param.max };
+    const [cat, key] = parts;
+    const meta = parameterControlMeta[cat]?.[key];
+    return {
+      min: param.min ?? meta?.min,
+      max: param.max ?? meta?.max,
+    };
+  };
+
   const isImplementedParam = (sourcePath: string): boolean => {
     if (!sourcePath.startsWith('parameters.')) return true;
     const parts = sourcePath.replace('parameters.', '').split('.');
@@ -281,8 +328,16 @@ const ConfigCenterPage: React.FC = () => {
       }
       mergedByCat.set(c.id, target);
     }
-    return Array.from(mergedByCat.values());
+    // 无参数的模块侧栏不挂（如设备）；通用分类始终保留
+    return Array.from(mergedByCat.values()).filter(
+      (c) => c.id === 'common' || c.params.length > 0,
+    );
   }, []);
+
+  const visibleAutomationCategories = useMemo(
+    () => AUTOMATION_CATEGORIES.filter((c) => c.id === 'common' || c.params.length > 0),
+    [],
+  );
 
   const renderText = (key: string | undefined, fallback?: string) => {
     if (!key) return fallback || '';
@@ -304,10 +359,30 @@ const ConfigCenterPage: React.FC = () => {
       (!implemented
         || isQualityParamDisabled(param.key, qualityFormValues)
         || isFinanceParamDisabled(param.key, qualityFormValues));
+    const bounds = resolveParamBounds(param);
+    const numberRules =
+      param.type === 'number'
+        ? [
+            {
+              validator: async (_: unknown, value: unknown) => {
+                if (value === undefined || value === null || value === '') return;
+                const n = Number(value);
+                if (Number.isNaN(n)) throw new Error(t('common.invalidValue') || '无效数值');
+                if (bounds.min !== undefined && n < bounds.min) {
+                  throw new Error(`${t('common.min') || '最小值'} ${bounds.min}`);
+                }
+                if (bounds.max !== undefined && n > bounds.max) {
+                  throw new Error(`${t('common.max') || '最大值'} ${bounds.max}`);
+                }
+              },
+            },
+          ]
+        : undefined;
     return (
       <Form.Item
         name={[param.key]}
         noStyle
+        rules={numberRules}
         valuePropName={param.type === 'boolean' ? 'checked' : undefined}
         getValueFromEvent={
           param.type === 'color'
@@ -316,7 +391,7 @@ const ConfigCenterPage: React.FC = () => {
         }
       >
         {param.type === 'boolean' ? <Switch disabled={disabled} /> :
-         param.type === 'number' ? <InputNumber size="medium" min={param.min} max={param.max} style={{ width: 120 }} disabled={!implemented} /> :
+         param.type === 'number' ? <InputNumber size="medium" min={bounds.min} max={bounds.max} style={{ width: 120 }} disabled={!implemented} /> :
          param.type === 'select' ? <Select size="medium" options={param.selectOptions?.map(o => ({ value: o.value, label: renderText(o.labelKey, o.value) }))} style={{ minWidth: 160, maxWidth: 280 }} disabled={!implemented} /> :
          param.type === 'multiselect' ? (
            <Select
@@ -371,6 +446,19 @@ const ConfigCenterPage: React.FC = () => {
       setSelectedAutoCat(moduleId);
     }
   }, [searchParams, activeMainTab, validTabs]);
+
+  // 空分类已从侧栏剔除后，若当前选中不在可见列表，回落到首项
+  useEffect(() => {
+    if (!mergedParameterCategories.some((c) => c.id === selectedParamCat)) {
+      setSelectedParamCat(mergedParameterCategories[0]?.id || 'common');
+    }
+  }, [mergedParameterCategories, selectedParamCat]);
+
+  useEffect(() => {
+    if (!visibleAutomationCategories.some((c) => c.id === selectedAutoCat)) {
+      setSelectedAutoCat(visibleAutomationCategories[0]?.id || 'common');
+    }
+  }, [visibleAutomationCategories, selectedAutoCat]);
 
   useEffect(() => {
     const initialValues = flattenBusinessParams(bizRes?.parameters || {});
@@ -494,6 +582,34 @@ const ConfigCenterPage: React.FC = () => {
                           (param) => param.source === 'quality_stage_toggle' || isImplementedParam(param.sourcePath),
                         ),
                       ).map((block) => {
+                        if (block.kind === 'section') {
+                          const { sectionKey, sectionNameKey, sectionDescriptionKey } = block;
+                          return (
+                            <div
+                              key={`section:${sectionKey}`}
+                              style={{
+                                gridColumn: '1 / -1',
+                                marginTop: 12,
+                                marginBottom: 4,
+                                padding: '12px 14px',
+                                borderRadius: token.borderRadiusLG,
+                              }}
+                            >
+                              <Text strong style={{ fontSize: 14, color: token.colorPrimary }}>
+                                {renderText(sectionNameKey, sectionKey)}
+                              </Text>
+                              {sectionDescriptionKey ? (
+                                <Paragraph
+                                  type="secondary"
+                                  style={{ fontSize: 12, margin: '4px 0 0', color: token.colorTextSecondary }}
+                                >
+                                  {renderText(sectionDescriptionKey, '')}
+                                </Paragraph>
+                              ) : null}
+                            </div>
+                          );
+                        }
+
                         if (block.kind === 'group') {
                           const { groupKey, groupNameKey, groupDescriptionKey, params } = block;
                           // 外层占满一行（不与其他卡并排）；内层同列宽网格，卡片宽度与单卡一致
@@ -560,7 +676,7 @@ const ConfigCenterPage: React.FC = () => {
       tabs={[
         { key: 'parameters', label: <Space><SettingOutlined />{t('pages.system.configCenter.tabParameters')}</Space>, children: renderTabContent(mergedParameterCategories, selectedParamCat, setSelectedParamCat, <SettingOutlined />) },
         { key: 'audit', label: <Space><AuditOutlined />{t('pages.system.configCenter.tabAudit')}</Space>, children: <AuditSettingsPanel selectedCatId={selectedAuditCat} onSelectCat={setSelectedAuditCat} /> },
-        { key: 'automation', label: <Space><ControlOutlined />{t('pages.system.configCenter.tabAutomation')}</Space>, children: renderTabContent(AUTOMATION_CATEGORIES, selectedAutoCat, setSelectedAutoCat, <ControlOutlined />) },
+        { key: 'automation', label: <Space><ControlOutlined />{t('pages.system.configCenter.tabAutomation')}</Space>, children: renderTabContent(visibleAutomationCategories, selectedAutoCat, setSelectedAutoCat, <ControlOutlined />) },
         { key: 'notification', label: <Space><BellOutlined />{t('pages.system.configCenter.notification.title')}</Space>, children: renderNotificationTab() },
         { key: 'scheduledTasks', label: <Space><ClockCircleOutlined />{t('pages.system.configCenter.scheduledTasks.title')}</Space>, children: renderScheduledTasksTab() },
       ]}

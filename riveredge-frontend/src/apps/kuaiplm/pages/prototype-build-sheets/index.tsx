@@ -45,6 +45,7 @@ import {
   type PrototypeBuildSheet,
   type PrototypeBuildSheetStatus,
 } from '../../services/prototype-build-sheet';
+import { resolvePlmStandardDocListSearch } from '../../utils/plmListCore';
 
 const RESOURCE = 'kuaiplm:prototype-build-sheet';
 const STATUS_KEYS: PrototypeBuildSheetStatus[] = [
@@ -379,12 +380,15 @@ const PrototypeBuildSheetsPage: React.FC = () => {
           onTableDataChange={(rows) => {
             tableRowsRef.current = rows;
           }}
-          request={async (params) => {
+          skipFuzzyPinyinClientFilter
+          params={filterProjectId ? { project_id: filterProjectId } : undefined}
+          request={async (params, _sort, _filter, searchFormValues) => {
+            const { keyword, status } = resolvePlmStandardDocListSearch(searchFormValues);
             const res = await prototypeBuildSheetApi.list({
               skip: ((params.current || 1) - 1) * (params.pageSize || 20),
               limit: params.pageSize || 20,
-              keyword: params.keyword as string | undefined,
-              status: params.status as string | undefined,
+              keyword,
+              status,
               project_id: filterProjectId,
             });
             return { data: res.items, success: true, total: res.total };

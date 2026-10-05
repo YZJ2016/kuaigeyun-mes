@@ -326,6 +326,21 @@ class Quality8DService(AppBaseService[Quality8DReport]):
         )
         return enrich_eight_d_report_capabilities_on_response(row, resp)
 
+    async def _build_response_enriched(self, tenant_id: int, row: Quality8DReport) -> Quality8DResponse:
+        from apps.kuaizhizao.services.eight_d_collaboration_service import EightDCollaborationService
+
+        gate = await EightDCollaborationService.transition_gate(tenant_id, row)
+        setattr(row, "_eight_d_gate", gate)
+        resp = self._build_response(row)
+        assignments = await EightDCollaborationService.list_assignments(tenant_id, row.id)
+        open_count = await EightDCollaborationService.count_open_actions(tenant_id, row.id)
+        return resp.model_copy(
+            update={
+                "stage_assignments": assignments,
+                "open_action_items_count": open_count,
+            }
+        )
+
     def _validate_stage_completion_before_transition(
         self,
         row: Quality8DReport,
@@ -351,6 +366,29 @@ class Quality8DService(AppBaseService[Quality8DReport]):
             )
             if not resolved_verification:
                 raise BusinessLogicError("关闭前必须填写验证结果")
+
+    async def _validate_stage_completion_before_transition_async(
+        self,
+        tenant_id: int,
+        row: Quality8DReport,
+        to_status: str,
+        verification_result: Optional[str],
+    ) -> None:
+        self._validate_stage_completion_before_transition(row, to_status, verification_result)
+        from apps.kuaizhizao.services.eight_d_collaboration_service import EightDCollaborationService
+
+        if EightDCollaborationService._is_collaborative(row):
+            gate = await EightDCollaborationService.transition_gate(tenant_id, row)
+            if not gate.current_stage_approved:
+                from apps.kuaizhizao.services.document_action_policy.types import CAPABILITY_REASON_MESSAGES
+
+                code = gate.reason or "eight_d_report.transition.stage_not_approved"
+                raise BusinessLogicError(CAPABILITY_REASON_MESSAGES.get(code, "当前阶段尚未确认"))
+            if not gate.action_items_verified:
+                from apps.kuaizhizao.services.document_action_policy.types import CAPABILITY_REASON_MESSAGES
+
+                code = gate.reason or "eight_d_report.transition.actions_not_verified"
+                raise BusinessLogicError(CAPABILITY_REASON_MESSAGES.get(code, "行动项尚未全部验证"))
 
     def _append_transition_history_line(
         self,
@@ -438,6 +476,12 @@ class Quality8DService(AppBaseService[Quality8DReport]):
             report_code = _build_quick_code("8D")
 
         user_info = await self.get_user_info(user_id)
+        create_data = payload.model_dump(exclude={"report_code"})
+        if not create_data.get("coordination_mode"):
+            create_data["coordination_mode"] = "collaborative"
+        if not create_data.get("owner_id"):
+            create_data["owner_id"] = user_id
+            create_data["owner_name"] = user_info["name"]
         report = await Quality8DReport.create(
             tenant_id=tenant_id,
             report_code=report_code,
@@ -445,9 +489,17 @@ class Quality8DService(AppBaseService[Quality8DReport]):
             created_by_name=user_info["name"],
             updated_by=user_id,
             updated_by_name=user_info["name"],
-            **payload.model_dump(exclude={"report_code"}),
+            **create_data,
         )
-        return self._build_response(report)
+        from apps.kuaizhizao.services.eight_d_collaboration_service import EightDCollaborationService
+
+        await EightDCollaborationService.bootstrap_on_create(
+            tenant_id,
+            report,
+            champion_user_id=user_id,
+            champion_name=user_info["name"],
+        )
+        return await self._build_response_enriched(tenant_id, report)
 
     async def list_reports(
         self,
@@ -458,6 +510,9 @@ class Quality8DService(AppBaseService[Quality8DReport]):
         severity: Optional[str] = None,
         owner_id: Optional[int] = None,
         overdue_only: bool = False,
+        my_stage_pending: bool = False,
+        my_action_pending: bool = False,
+        viewer_user_id: Optional[int] = None,
         keyword: Optional[str] = None,
         order_by: Optional[str] = None,
         created_start_date: Optional[str] = None,
@@ -482,6 +537,21 @@ class Quality8DService(AppBaseService[Quality8DReport]):
             query = query.filter(owner_id=owner_id)
         if overdue_only:
             query = query.filter(due_date__lt=resolve_business_datetime()).exclude(status="closed")
+        if viewer_user_id and (my_stage_pending or my_action_pending):
+            from apps.kuaizhizao.services.eight_d_collaboration_service import EightDCollaborationService
+
+            ids: set[int] = set()
+            if my_stage_pending:
+                ids |= await EightDCollaborationService.filter_report_ids_my_stage_pending(
+                    tenant_id, viewer_user_id
+                )
+            if my_action_pending:
+                ids |= await EightDCollaborationService.filter_report_ids_my_action_pending(
+                    tenant_id, viewer_user_id
+                )
+            if not ids:
+                return Quality8DListResponse(items=[], total=0)
+            query = query.filter(id__in=list(ids))
         query = _apply_quality_inspection_list_filters(
             query,
             {
@@ -504,13 +574,16 @@ class Quality8DService(AppBaseService[Quality8DReport]):
             "-created_at",
         )
         rows = await query.order_by(order_clause).offset(skip).limit(limit)
-        return Quality8DListResponse(items=[self._build_response(row) for row in rows], total=total)
+        items: List[Quality8DResponse] = []
+        for row in rows:
+            items.append(await self._build_response_enriched(tenant_id, row))
+        return Quality8DListResponse(items=items, total=total)
 
     async def get_report(self, tenant_id: int, report_id: int) -> Quality8DResponse:
         row = await Quality8DReport.get_or_none(id=report_id, tenant_id=tenant_id, deleted_at__isnull=True)
         if not row:
             raise NotFoundError("8D 报告不存在")
-        return self._build_response(row)
+        return await self._build_response_enriched(tenant_id, row)
 
     def _relock_completed_stages(
         self,
@@ -562,6 +635,12 @@ class Quality8DService(AppBaseService[Quality8DReport]):
         self._validate_closed_report_update(row, data, changed_stage_keys)
         if row.status != "closed":
             self._validate_stage_field_updates(row, changed_stage_keys)
+        from apps.kuaizhizao.services.eight_d_collaboration_service import EightDCollaborationService
+
+        for stage_key in changed_stage_keys:
+            await EightDCollaborationService.assert_can_edit_stage_content(
+                tenant_id, row, user_id, stage_key
+            )
         user_info = await self.get_user_info(user_id)
         if "remarks" in data:
             user_part = self._normalize_text(data.get("remarks"))
@@ -601,7 +680,7 @@ class Quality8DService(AppBaseService[Quality8DReport]):
                     user_id=user_id,
                     user_name=user_info["name"],
                 )
-        return self._build_response(row)
+        return await self._build_response_enriched(tenant_id, row)
 
     async def transition(self, tenant_id: int, report_id: int, user_id: int, payload: Quality8DTransition) -> Quality8DResponse:
         from apps.kuaizhizao.services.document_action_policy.eight_d_report import (
@@ -615,7 +694,9 @@ class Quality8DService(AppBaseService[Quality8DReport]):
             raise BusinessLogicError(f"非法 8D 阶段: {payload.to_status}")
         action = "close" if payload.to_status == "closed" else "transition"
         assert_eight_d_report_capability(row, action)
-        self._validate_stage_completion_before_transition(row, payload.to_status, payload.verification_result)
+        await self._validate_stage_completion_before_transition_async(
+            tenant_id, row, payload.to_status, payload.verification_result
+        )
         old_status = row.status
         user_info = await self.get_user_info(user_id)
         required_field = _8D_STAGE_REQUIRED_FIELD.get(old_status)
@@ -638,13 +719,16 @@ class Quality8DService(AppBaseService[Quality8DReport]):
         row.updated_by = user_id
         row.updated_by_name = user_info["name"]
         await row.save()
+        from apps.kuaizhizao.services.eight_d_collaboration_service import EightDCollaborationService
+
+        await EightDCollaborationService.on_report_transition(tenant_id, row, payload.to_status)
         if payload.to_status == "closed":
             await self._close_linked_quality_exception_on_8d_close(
                 tenant_id=tenant_id,
                 report=row,
                 handled_by=user_id,
             )
-        resp = self._build_response(row)
+        resp = await self._build_response_enriched(tenant_id, row)
         return resp.model_copy(
             update={
                 "next_step_suggestions": [
@@ -771,7 +855,7 @@ class Quality8DService(AppBaseService[Quality8DReport]):
             user_id=user_id,
             user_name=user_info["name"],
         )
-        return self._build_response(row)
+        return await self._build_response_enriched(tenant_id, row)
 
     async def get_stage_revisions(
         self,
@@ -1215,6 +1299,61 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
         assert_oqc_inspection_capability(row, "delete")
         row.deleted_at = resolve_business_datetime()
         await row.save(update_fields=["deleted_at"])
+
+    async def patch_attachments(
+        self,
+        tenant_id: int,
+        inspection_id: int,
+        attachments: list,
+        user_id: int,
+    ):
+        from apps.kuaizhizao.services.document_action_policy.oqc_inspection import (
+            assert_oqc_inspection_capability,
+        )
+
+        row = await OQCInspection.get_or_none(
+            id=inspection_id, tenant_id=tenant_id, deleted_at__isnull=True
+        )
+        if not row:
+            raise NotFoundError("OQC 检验单不存在")
+        assert_oqc_inspection_capability(row, "update_attachments")
+        user_info = await self.get_user_info(user_id)
+        row.attachments = attachments
+        row.updated_by = user_id
+        row.updated_by_name = user_info["name"]
+        await row.save()
+        return await self.get_by_id(tenant_id, inspection_id)
+
+    async def apply_inspection_plan(
+        self,
+        tenant_id: int,
+        inspection_id: int,
+        inspection_plan_id: int,
+        user_id: int,
+    ):
+        from apps.kuaizhizao.services.document_action_policy.oqc_inspection import (
+            assert_oqc_inspection_capability,
+        )
+        from apps.kuaizhizao.services.quality_service import (
+            _apply_explicit_inspection_plan_to_inspection_row,
+        )
+
+        row = await OQCInspection.get_or_none(
+            id=inspection_id, tenant_id=tenant_id, deleted_at__isnull=True
+        )
+        if not row:
+            raise NotFoundError("OQC 检验单不存在")
+        assert_oqc_inspection_capability(row, "apply_plan")
+        user_info = await self.get_user_info(user_id)
+        await _apply_explicit_inspection_plan_to_inspection_row(
+            tenant_id,
+            row,
+            inspection_plan_id,
+            "oqc",
+            updated_by=user_id,
+            updated_by_name=user_info["name"],
+        )
+        return await self.get_by_id(tenant_id, inspection_id)
 
     async def revoke_approval(
         self, tenant_id: int, inspection_id: int, user_id: int

@@ -55,7 +55,8 @@ import {
 import { UniAuditBatchMenuButton, UniCapabilityBatchButton } from '../../../../../components/uni-batch';
 import { SyncFreshnessBadge } from '../../../../../components/sync-from-source-modal/SyncFreshnessBadge';
 import { SyncPushHubButton } from '../../../../../components/sync-push-hub';
-import { useToolbarSyncPushFlags } from '../../../../../hooks/useToolbarSyncPushFlags';
+import { useToolbarSyncPushFlags, TOOLBAR_SYNC_PUSH_FLAGS_QUERY_KEY } from '../../../../../hooks/useToolbarSyncPushFlags';
+import { getBusinessConfig } from '../../../../../services/businessConfig';
 import { renderExternalSyncPrimaryExtra } from '../../../../../components/external-sync-source/ExternalSyncSourceIcon';
 import PurchaseOrderSyncFromSourceModal from './PurchaseOrderSyncFromSourceModal';
 import PurchaseOrderDocumentPushPanel from './PurchaseOrderDocumentPushPanel';
@@ -122,10 +123,10 @@ import {
   withdrawPurchaseOrder,
   revokePurchaseOrder,
   pushPurchaseOrderToReceipt,
-  pushPurchaseOrderToReceiptNotice, pushPurchaseOrderToReceiptNoticeFromPreview, pushPurchaseOrderToInvoice, pushPurchaseOrderToPurchaseReturn,
+  pushPurchaseOrderToReceiptNotice, pushPurchaseOrderToReceiptNoticeFromPreview, pushPurchaseOrderToInvoice, pushPurchaseOrderToPrepayment, pushPurchaseOrderToPurchaseReturn,
   getPurchaseOrderStatistics,
   getPurchaseOrderSyncBinding,
-  previewPushToReceiptNotice, previewPushToReceipt, previewPushToInvoice, previewPushToPurchaseReturn,
+  previewPushToReceiptNotice, previewPushToReceipt, previewPushToInvoice, previewPushToPrepayment, previewPushToPurchaseReturn,
   type DocumentPushPreview,
   type PurchaseInvoicePushMode,
   PurchaseOrder, PurchaseOrderItem
@@ -177,7 +178,7 @@ import {
   isDraftStatus,
   isAuditedStatus,
 } from '../../../constants/documentStatus';
-import { getPurchaseOrderLifecycle, buildPurchaseOrderLifecycleValueEnum, resolvePurchaseOrderListLifecycleParams, isPurchaseOrderDeliveryOverdue } from '../../../utils/purchaseOrderLifecycle';
+import { getPurchaseOrderLifecycle, buildPurchaseOrderLifecycleValueEnum, resolvePurchaseOrderListApiParams, isPurchaseOrderDeliveryOverdue } from '../../../utils/purchaseOrderLifecycle';
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
 import { PurchaseOrderAiCreateTrigger } from './components/PurchaseOrderAiCreateDrawer';
 import {
@@ -330,7 +331,7 @@ type PurchaseOrderDetail = PurchaseOrder;
 type PullPurchaseRequisitionCandidate = PurchaseRequisitionPullLine;
 type PullPurchaseInquiryCandidate = PurchaseInquiryPurchasePullLine;
 
-type PushPreviewKind = 'receipt_notice' | 'receipt' | 'invoice' | 'purchase_return' | 'incoming_inspection';
+type PushPreviewKind = 'receipt_notice' | 'receipt' | 'invoice' | 'prepayment' | 'purchase_return' | 'incoming_inspection';
 
 const defaultOrderItem = {
   material_id: undefined,
@@ -378,6 +379,14 @@ const PurchaseOrdersPage: React.FC = () => {
   const purchaseOrderAuditEnabled = useAuditRequired('purchase_order', false);
   const purchaseOrderPerms = useResourcePermissions(PURCHASE_ORDER_RESOURCE);
   const toolbarSyncPush = useToolbarSyncPushFlags('purchase');
+  const { data: businessConfig } = useQuery({
+    queryKey: TOOLBAR_SYNC_PUSH_FLAGS_QUERY_KEY,
+    queryFn: getBusinessConfig,
+    staleTime: 60_000,
+  });
+  const requirePurchaseRequisition = Boolean(
+    businessConfig?.parameters?.procurement?.require_purchase_requisition,
+  );
   const purchaseOrderChangePerms = useResourcePermissions('kuaizhizao:purchase-order-change');
   const { token } = theme.useToken();
   const purchaseOrderDetailDrawerZIndex = token.zIndexPopupBase;
@@ -395,6 +404,7 @@ const PurchaseOrdersPage: React.FC = () => {
   const pushToReceiptNoticeAction = resolveKuaizhizaoDocumentAction(t, 'receipt_notice.pull_from_purchase_order');
   const pushToReceiptAction = resolveKuaizhizaoDocumentAction(t, 'purchase_receipt.pull_from_purchase_order');
   const pushToInvoiceAction = resolveKuaizhizaoDocumentAction(t, 'purchase_invoice.pull_from_purchase_order');
+  const pushToPrepaymentAction = resolveKuaizhizaoDocumentAction(t, 'payment.pull_from_purchase_order');
   const pushToPurchaseReturnAction = resolveKuaizhizaoDocumentAction(t, 'purchase_return.pull_from_purchase_order');
   const pushToPurchaseOrderChangeAction = resolveKuaizhizaoDocumentAction(
     t,
@@ -502,7 +512,7 @@ const PurchaseOrdersPage: React.FC = () => {
     () => (
       <Space key="highlight-overdue-switch" align="center">
         <Switch checked={highlightDeliveryOverdue} onChange={setHighlightDeliveryOverdue} />
-        <span className="uni-table-toolbar-plain-label" style={{ fontSize: 13, color: 'var(--ant-color-text)' }}>
+        <span className="uni-table-toolbar-plain-label">
           {t('app.kuaizhizao.purchaseOrder.highlightOverdue')}
         </span>
       </Space>
@@ -1298,11 +1308,13 @@ const PurchaseOrdersPage: React.FC = () => {
   const [pushPreviewWarehouseOptions, setPushPreviewWarehouseOptions] = useState<Array<{ label: string; value: number }>>([]);
   const [pushInvoiceMode, setPushInvoiceMode] = useState<PurchaseInvoicePushMode>('remaining');
   const [pushInvoiceAmount, setPushInvoiceAmount] = useState<number>(0);
+  const [pushInvoiceNumber, setPushInvoiceNumber] = useState('');
 
   const pushPreviewModalTitle = useMemo(() => {
     if (pushPreviewKind === 'receipt_notice') return pushToReceiptNoticeAction.label;
     if (pushPreviewKind === 'receipt') return pushToReceiptAction.label;
     if (pushPreviewKind === 'invoice') return pushToInvoiceAction.label;
+    if (pushPreviewKind === 'prepayment') return pushToPrepaymentAction.label;
     if (pushPreviewKind === 'purchase_return') return pushToPurchaseReturnAction.label;
     if (pushPreviewKind === 'incoming_inspection') return pushToIncomingInspectionAction.label;
     return t('app.kuaizhizao.salesOrder.pushPreviewTitle');
@@ -1310,6 +1322,7 @@ const PurchaseOrdersPage: React.FC = () => {
     pushPreviewKind,
     pushToIncomingInspectionAction.label,
     pushToInvoiceAction.label,
+    pushToPrepaymentAction.label,
     pushToPurchaseReturnAction.label,
     pushToReceiptAction.label,
     pushToReceiptNoticeAction.label,
@@ -1390,6 +1403,7 @@ const PurchaseOrdersPage: React.FC = () => {
     setPushPreviewWarehouseOptions([]);
     setPushInvoiceMode('remaining');
     setPushInvoiceAmount(0);
+    setPushInvoiceNumber('');
   }, []);
 
   const openPushReturnWarehouseModal = useCallback(
@@ -1452,6 +1466,7 @@ const PurchaseOrdersPage: React.FC = () => {
       setPushPreviewWarehouseOptions([]);
       setPushInvoiceMode(invoiceMode ?? 'remaining');
       setPushInvoiceAmount(0);
+      setPushInvoiceNumber('');
       setPushPreviewLoading(true);
       setPushPreviewData(null);
       try {
@@ -1462,6 +1477,8 @@ const PurchaseOrdersPage: React.FC = () => {
           preview = await previewPushToReceipt(record.id);
         } else if (kind === 'invoice') {
           preview = await previewPushToInvoice(record.id);
+        } else if (kind === 'prepayment') {
+          preview = await previewPushToPrepayment(record.id);
         } else if (kind === 'incoming_inspection') {
           preview = (await qualityApi.incomingInspection.previewFromPurchaseOrder(
             record.id,
@@ -1478,6 +1495,8 @@ const PurchaseOrdersPage: React.FC = () => {
           const nextMode = (modeRow?.key === 'prepayment' ? 'prepayment' : 'remaining') as PurchaseInvoicePushMode;
           setPushInvoiceMode(nextMode);
           setPushInvoiceAmount(Number(modeRow?.amount ?? preview.remaining_total ?? 0));
+        } else if (kind === 'prepayment') {
+          setPushInvoiceAmount(Number(preview.prepayment_amount ?? 0));
         }
         const rows = preview.items || [];
         const ids: number[] = [];
@@ -1529,7 +1548,7 @@ const PurchaseOrdersPage: React.FC = () => {
       const row = rowById.get(id);
       return row && Number(row.max_push_quantity ?? 0) > 0;
     });
-    if (pushPreviewKind !== 'invoice' && !selectedIds.length) {
+    if (pushPreviewKind !== 'invoice' && pushPreviewKind !== 'prepayment' && !selectedIds.length) {
       messageApi.warning(t('app.kuaizhizao.purchaseOrder.push.selectLinesFirst'));
       return;
     }
@@ -1541,7 +1560,7 @@ const PurchaseOrdersPage: React.FC = () => {
 
     const quantities: Record<number, number> = {};
     const lineWarehouses: Record<number, number> = {};
-    if (pushPreviewKind !== 'invoice') {
+    if (pushPreviewKind !== 'invoice' && pushPreviewKind !== 'prepayment') {
       for (const id of selectedIds) {
         const row = rowById.get(id);
         const qty = Number(pushPreviewQuantities[id] ?? 0);
@@ -1688,6 +1707,39 @@ const PurchaseOrdersPage: React.FC = () => {
       return;
     }
 
+    if (kind === 'prepayment') {
+      if (!(pushInvoiceAmount > 0)) {
+        messageApi.warning(t('app.kuaizhizao.purchaseOrder.pushPrepaymentAmountInvalid'));
+        return;
+      }
+      setPushPreviewConfirming(true);
+      try {
+        const result = await pushPurchaseOrderToPrepayment(target.id!, {
+          amount: pushInvoiceAmount,
+          notes: pushPreviewNotes.trim() || undefined,
+        });
+        messageApi.success(
+          t('app.kuaizhizao.purchaseOrder.pushPrepaymentSuccess', {
+            code: result.payment_code || t('app.kuaizhizao.purchaseOrder.createdFallback'),
+          }),
+        );
+        resetPushPreviewModal();
+        invalidateStatistics();
+        invalidateMenuBadgeCounts();
+        actionRef.current?.reload();
+        if (detailDrawerVisible && orderDetail?.id === target.id) {
+          getPurchaseOrder(target.id!).then(setOrderDetail);
+        }
+      } catch (error: unknown) {
+        messageApi.error(
+          getApiErrorMessage(error, t('app.kuaizhizao.purchaseOrder.pushPrepaymentFailed')),
+        );
+      } finally {
+        setPushPreviewConfirming(false);
+      }
+      return;
+    }
+
     if (!(pushInvoiceAmount > 0)) {
       messageApi.warning(t('app.kuaizhizao.purchaseOrder.pushInvoiceAmountInvalid'));
       return;
@@ -1698,6 +1750,7 @@ const PurchaseOrdersPage: React.FC = () => {
       const result = await pushPurchaseOrderToInvoice(target.id!, {
         invoice_mode: pushInvoiceMode,
         total_amount: pushInvoiceAmount > 0 ? pushInvoiceAmount : undefined,
+        invoice_number: pushInvoiceNumber.trim() || undefined,
       });
       messageApi.success(t('app.kuaizhizao.purchaseOrder.pushInvoiceSuccess', { code: result.invoice_code || t('app.kuaizhizao.purchaseOrder.createdFallback') }));
       invalidateStatistics();
@@ -1720,6 +1773,7 @@ const PurchaseOrdersPage: React.FC = () => {
     orderDetail?.id,
     pushInvoiceAmount,
     pushInvoiceMode,
+    pushInvoiceNumber,
     pushPreviewData,
     pushPreviewKind,
     pushPreviewLineWh,
@@ -1749,6 +1803,13 @@ const PurchaseOrdersPage: React.FC = () => {
   const handlePushToInvoice = useCallback(
     (record: PurchaseOrder, mode: PurchaseInvoicePushMode = 'remaining') => {
       void loadPushPreview(record, 'invoice', mode);
+    },
+    [loadPushPreview],
+  );
+
+  const handlePushToPrepayment = useCallback(
+    (record: PurchaseOrder) => {
+      void loadPushPreview(record, 'prepayment');
     },
     [loadPushPreview],
   );
@@ -1899,6 +1960,16 @@ const PurchaseOrdersPage: React.FC = () => {
           ],
         },
         {
+          key: 'prepayment',
+          label: pushToPrepaymentAction.label,
+          disabled: record.capabilities?.push_prepayment?.allowed !== true,
+          title: capReason(record.capabilities?.push_prepayment),
+          onClick: () => {
+            if (record.capabilities?.push_prepayment?.allowed !== true) return;
+            handlePushToPrepayment(record);
+          },
+        },
+        {
           key: 'incoming-inspection',
           label: pushToIncomingInspectionAction.label,
           disabled: record.capabilities?.push_incoming_inspection?.allowed !== true,
@@ -1934,12 +2005,14 @@ const PurchaseOrdersPage: React.FC = () => {
       handlePushToIncomingInspection,
       handlePushToInvoice,
       handlePushToNotice,
+      handlePushToPrepayment,
       handlePushToPurchaseOrderChange,
       handlePushToReceipt,
       handlePushToReturn,
       purchaseOrderChangePerms.canCreate,
       pushToIncomingInspectionAction.label,
       pushToInvoiceAction.label,
+      pushToPrepaymentAction.label,
       pushToPurchaseOrderChangeAction.label,
       pushToPurchaseReturnAction.label,
       pushToReceiptAction.label,
@@ -1964,6 +2037,7 @@ const PurchaseOrdersPage: React.FC = () => {
       caps?.push_receipt_notice?.allowed === true ||
       caps?.push_receipt?.allowed === true ||
       caps?.push_invoice?.allowed === true ||
+      caps?.push_prepayment?.allowed === true ||
       caps?.push_incoming_inspection?.allowed === true ||
       caps?.push_purchase_return?.allowed === true ||
       (purchaseOrderChangePerms.canCreate && caps?.create_change_order?.allowed === true);
@@ -1973,6 +2047,7 @@ const PurchaseOrdersPage: React.FC = () => {
           caps?.push_receipt_notice?.reason ||
             caps?.push_receipt?.reason ||
             caps?.push_invoice?.reason ||
+            caps?.push_prepayment?.reason ||
             caps?.push_incoming_inspection?.reason ||
             caps?.push_purchase_return?.reason ||
             caps?.create_change_order?.reason,
@@ -2294,8 +2369,20 @@ const PurchaseOrdersPage: React.FC = () => {
   };
 
   const handleCreate = () => {
+    if (requirePurchaseRequisition) {
+      messageApi.warning('当前组织要求先采购申请后下单，请从采购申请加载');
+      pullFromRequisitionQuery.openModal();
+      return;
+    }
     navigate(PURCHASE_ORDER_CREATE_PATH);
   };
+
+  useEffect(() => {
+    if (!isCreatePage || !requirePurchaseRequisition) return;
+    messageApi.warning('当前组织要求先采购申请后下单，请从采购申请加载');
+    navigate(PURCHASE_ORDER_LIST_PATH, { replace: true });
+    pullFromRequisitionQuery.openModal();
+  }, [isCreatePage, requirePurchaseRequisition]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!isFormPage) {
@@ -3647,20 +3734,35 @@ const PurchaseOrdersPage: React.FC = () => {
             <UniPullCreateToolbar
               compactKey="create-purchase-order-with-pull"
               createIcon={<PlusOutlined />}
-              createLabel={t('app.kuaizhizao.menu.purchase-management.purchase-orders.new')}
+              createLabel={
+                requirePurchaseRequisition
+                  ? pullFromRequisitionAction.label
+                  : t('app.kuaizhizao.menu.purchase-management.purchase-orders.new')
+              }
               onCreate={handleCreate}
-              menuItems={buildKuaizhizaoPullCreateMenuItems(t, [
-                {
-                  key: 'pull-from-requisition',
-                  actionKey: 'purchase_order.pull_from_requisition',
-                  onClick: pullFromRequisitionQuery.openModal,
-                },
-                {
-                  key: 'pull-from-inquiry',
-                  actionKey: 'purchase_order.pull_from_inquiry',
-                  onClick: pullFromInquiryQuery.openModal,
-                },
-              ])}
+              menuItems={buildKuaizhizaoPullCreateMenuItems(
+                t,
+                requirePurchaseRequisition
+                  ? [
+                      {
+                        key: 'pull-from-requisition',
+                        actionKey: 'purchase_order.pull_from_requisition',
+                        onClick: pullFromRequisitionQuery.openModal,
+                      },
+                    ]
+                  : [
+                      {
+                        key: 'pull-from-requisition',
+                        actionKey: 'purchase_order.pull_from_requisition',
+                        onClick: pullFromRequisitionQuery.openModal,
+                      },
+                      {
+                        key: 'pull-from-inquiry',
+                        actionKey: 'purchase_order.pull_from_inquiry',
+                        onClick: pullFromInquiryQuery.openModal,
+                      },
+                    ],
+              )}
             />,
             <UniPushToolbarButton
               key={`purchase-order-push-${selectedOrderForToolbar?.id ?? 'none'}`}
@@ -3676,6 +3778,7 @@ const PurchaseOrdersPage: React.FC = () => {
                 'receipt-notice': 'receipt_notice',
                 receipt: 'purchase_receipt',
                 invoice: 'purchase_invoice',
+                prepayment: 'payment',
                 'incoming-inspection': 'incoming_inspection',
                 'purchase-return': 'purchase_return',
                 'purchase-order-change': 'purchase_order_change',
@@ -3825,13 +3928,11 @@ const PurchaseOrdersPage: React.FC = () => {
           }}
           showSyncButton={
             viewTypeState !== 'detailTable' &&
-            purchaseOrderPerms.canCreate &&
             toolbarSyncPush.hubVisible
           }
           onSync={() => undefined}
           syncToolbarExtra={
             viewTypeState !== 'detailTable' &&
-            purchaseOrderPerms.canCreate &&
             toolbarSyncPush.hubVisible
               ? () => (
                   <SyncPushHubButton
@@ -3878,52 +3979,7 @@ const PurchaseOrdersPage: React.FC = () => {
           toolBarActionsEnd={[purchaseOrderHighlightOverdueToolbar]}
           request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
             try {
-              const sf = searchFormValues ?? {};
-              const { sortBy, sortOrder } = extractProTableSort(sort);
-              const orderBy =
-                sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
-              const fuzzyKeyword = typeof sf.keyword === 'string' ? sf.keyword.trim() : '';
-              const apiParams: Record<string, unknown> = {
-                skip: (params.current! - 1) * params.pageSize!,
-                limit: params.pageSize,
-                order_by: orderBy,
-              };
-              const lifecycleMapped = resolvePurchaseOrderListLifecycleParams(sf, params);
-              if (lifecycleMapped.status) apiParams.status = lifecycleMapped.status;
-              if (lifecycleMapped.review_status) apiParams.review_status = lifecycleMapped.review_status;
-              if (fuzzyKeyword) {
-                apiParams.keyword = fuzzyKeyword;
-              } else if (sf.order_code != null && String(sf.order_code).trim()) {
-                apiParams.order_code = String(sf.order_code).trim();
-              }
-              if (sf.supplier_id != null && sf.supplier_id !== '') {
-                apiParams.supplier_id = Number(sf.supplier_id);
-              }
-              const orderDateRange = sf.order_date_range as [unknown, unknown] | undefined;
-              if (orderDateRange && Array.isArray(orderDateRange) && orderDateRange[0]) {
-                apiParams.order_date_from = formatDateTime(orderDateRange[0] as string | Date, 'YYYY-MM-DD');
-                apiParams.order_date_to = orderDateRange[1]
-                  ? formatDateTime(orderDateRange[1] as string | Date, 'YYYY-MM-DD')
-                  : apiParams.order_date_from;
-              }
-              const deliveryDateRange = sf.delivery_date_range as [unknown, unknown] | undefined;
-              if (deliveryDateRange && Array.isArray(deliveryDateRange) && deliveryDateRange[0]) {
-                apiParams.delivery_date_from = formatDateTime(deliveryDateRange[0] as string | Date, 'YYYY-MM-DD');
-                apiParams.delivery_date_to = deliveryDateRange[1]
-                  ? formatDateTime(deliveryDateRange[1] as string | Date, 'YYYY-MM-DD')
-                  : apiParams.delivery_date_from;
-              }
-              const createdRange = sf.created_at_range as [unknown, unknown] | undefined;
-              if (createdRange && Array.isArray(createdRange) && createdRange[0]) {
-                apiParams.created_start_date = formatDateTime(createdRange[0] as string | Date, 'YYYY-MM-DD');
-                apiParams.created_end_date = createdRange[1]
-                  ? formatDateTime(createdRange[1] as string | Date, 'YYYY-MM-DD')
-                  : apiParams.created_start_date;
-              }
-              apiParams.include_items = true;
-              if (typeof sf.column_filters === 'string' && sf.column_filters.trim()) {
-                apiParams.column_filters = sf.column_filters.trim();
-              }
+              const apiParams = resolvePurchaseOrderListApiParams(params, sort, searchFormValues);
 
               const toFlatRows = (orders: PurchaseOrder[]): PurchaseOrderItemRow[] => {
                 const flatRows: PurchaseOrderItemRow[] = [];
@@ -4128,7 +4184,7 @@ const PurchaseOrdersPage: React.FC = () => {
             pushPreviewLoading ||
             !pushPreviewData ||
             !!pushPreviewData?.has_blocking_issues ||
-            (pushPreviewKind === 'invoice'
+            (pushPreviewKind === 'invoice' || pushPreviewKind === 'prepayment'
               ? !(pushInvoiceAmount > 0)
               : pushPreviewSelectedItemIds.length === 0),
         }}
@@ -4151,7 +4207,21 @@ const PurchaseOrdersPage: React.FC = () => {
                 title={purchaseOrderCapabilityReasonMessage(pushPreviewData.blocking_reason, t) || t('app.kuaizhizao.purchaseOrder.push.previewFailed')}
               />
             ) : null}
-            {pushPreviewKind !== 'invoice' && pushPreviewData.items?.length > 0 ? (
+            {pushPreviewKind === 'prepayment' && !pushPreviewData.has_blocking_issues ? (
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ marginBottom: 8 }}>
+                  {t('app.kuaizhizao.purchaseOrder.pushPrepaymentAmount')}
+                </div>
+                <InputNumber
+                  style={{ width: 280 }}
+                  min={0.01}
+                  precision={2}
+                  value={pushInvoiceAmount > 0 ? pushInvoiceAmount : undefined}
+                  onChange={(v) => setPushInvoiceAmount(Number(v) || 0)}
+                />
+              </div>
+            ) : null}
+            {pushPreviewKind !== 'invoice' && pushPreviewKind !== 'prepayment' && pushPreviewData.items?.length > 0 ? (
               <Table
                 size="small"
                 dataSource={pushPreviewData.items}
@@ -4330,22 +4400,37 @@ const PurchaseOrdersPage: React.FC = () => {
                     }))}
                   />
                 </div>
-                <div style={{ marginBottom: 12 }}>
-                  <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
-                    {t('app.kuaizhizao.purchaseOrder.pushInvoiceAmount')}
-                  </Typography.Text>
-                  <InputNumber
-                    min={0.01}
-                    max={
-                      pushInvoiceMode === 'prepayment'
-                        ? Number(pushPreviewData.prepayment_pushable ?? 0) || undefined
-                        : Number(pushPreviewData.remaining_total ?? 0) || undefined
-                    }
-                    precision={2}
-                    style={{ width: 220 }}
-                    value={pushInvoiceAmount}
-                    onChange={(v) => setPushInvoiceAmount(Number(v) || 0)}
-                  />
+                <div style={{ marginBottom: 12, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                  <div>
+                    <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
+                      {t('app.kuaizhizao.purchaseOrder.pushInvoiceAmount')}
+                    </Typography.Text>
+                    <InputNumber
+                      min={0.01}
+                      max={
+                        pushInvoiceMode === 'prepayment'
+                          ? Number(pushPreviewData.prepayment_pushable ?? 0) || undefined
+                          : Number(pushPreviewData.remaining_total ?? 0) || undefined
+                      }
+                      precision={2}
+                      style={{ width: 220 }}
+                      value={pushInvoiceAmount}
+                      onChange={(v) => setPushInvoiceAmount(Number(v) || 0)}
+                    />
+                  </div>
+                  <div>
+                    <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
+                      {t('app.kuaizhizao.purchaseOrder.pushInvoiceNumber')}
+                    </Typography.Text>
+                    <Input
+                      allowClear
+                      maxLength={100}
+                      style={{ width: 220 }}
+                      value={pushInvoiceNumber}
+                      onChange={(e) => setPushInvoiceNumber(e.target.value)}
+                      placeholder={t('app.kuaizhizao.purchaseOrder.pushInvoiceNumberPlaceholder')}
+                    />
+                  </div>
                 </div>
                 {pushPreviewData.items?.length > 0 ? (
                   <Table

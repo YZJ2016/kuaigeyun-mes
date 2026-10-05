@@ -41,6 +41,7 @@ import {
 } from '../../../../components/custom-fields/customFieldAssociatedDisplayMode';
 import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer';
 import { getApiErrorMessage } from '../../../../utils/errorHandler';
+import { pickSearchString, pickSearchTriStateBoolean } from '../../../../utils/tableQueryKey';
 import {
   getCustomFieldList,
   getCustomFieldByUuid,
@@ -1295,34 +1296,34 @@ const CustomFieldListPage: React.FC = () => {
                   <UniTable<CustomField>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('system.customFields')}
-                    columnPersistenceId="pages.system.custom-fields.list-v2"
+                    columnPersistenceId="pages.system.custom-fields.list-v3"
                     actionRef={actionRef}
                     params={{ table_name: selectedPage.tableName }}
                     columns={columns}
-                    request={async (params, _sort, _filter) => {
-                      // 处理搜索参数
+                    request={async (params, _sort, _filter, searchFormValues) => {
+                      const isActive = pickSearchTriStateBoolean(searchFormValues, 'is_active');
+                      const fieldType = pickSearchString(searchFormValues, 'field_type');
+                      const name = pickSearchString(searchFormValues, 'name');
+                      const code = pickSearchString(searchFormValues, 'code');
                       const apiParams: any = {
                         page: params.current || 1,
                         page_size: params.pageSize || 20,
                         table_name: selectedPage.tableName, // 只查询当前页面的字段
                       };
 
-                      // 状态筛选
-                      if (params.is_active !== undefined && params.is_active !== '' && params.is_active !== null) {
-                        apiParams.is_active = params.is_active;
+                      if (isActive !== undefined) {
+                        apiParams.is_active = isActive;
                       }
 
-                      // 类型筛选
-                      if (params.field_type) {
-                        apiParams.field_type = params.field_type;
+                      if (fieldType) {
+                        apiParams.field_type = fieldType;
                       }
 
-                      // 搜索条件处理：name 和 code 使用模糊搜索
-                      if (params.name) {
-                        apiParams.name = params.name as string;
+                      if (name) {
+                        apiParams.name = name;
                       }
-                      if (params.code) {
-                        apiParams.code = params.code as string;
+                      if (code) {
+                        apiParams.code = code;
                       }
 
                       try {
@@ -1343,9 +1344,6 @@ const CustomFieldListPage: React.FC = () => {
                       }
                     }}
                     rowKey="uuid"
-                    search={{
-                      labelWidth: 'auto',
-                    }}
                     pagination={{
                       defaultPageSize: 20,
                       showSizeChanger: true,

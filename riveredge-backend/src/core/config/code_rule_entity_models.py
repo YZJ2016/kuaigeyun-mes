@@ -279,6 +279,10 @@ ENTITY_MODEL_BY_RULE_CODE: Dict[str, Tuple[str, str]] = {
         "apps.kuaizhizao.models.label_station",
         "LabelOuterBox",
     ),
+    "INDUSTRY_PACKING_BOX": (
+        "apps.kuaizhizao.models.packing_binding",
+        "PackingBinding",
+    ),
     "LABEL_STATION_JOB_CODE": (
         "apps.kuaizhizao.models.label_station",
         "LabelOuterBox",

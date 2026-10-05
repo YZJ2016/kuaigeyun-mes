@@ -50,8 +50,10 @@ export function WarehouseShowAmountSwitch({
 }) {
   const { t } = useTranslation();
   return (
-    <Space size={6} style={{ marginInlineEnd: 4 }}>
-      <span style={{ whiteSpace: 'nowrap' }}>{t('app.kuaizhizao.warehouseCommon.showAmount')}</span>
+    <Space size={6} align="center" style={{ marginInlineEnd: 4 }}>
+      <span className="uni-table-toolbar-plain-label">
+        {t('app.kuaizhizao.warehouseCommon.showAmount')}
+      </span>
       <Switch checked={checked} onChange={onChange} size="small" />
     </Space>
   );

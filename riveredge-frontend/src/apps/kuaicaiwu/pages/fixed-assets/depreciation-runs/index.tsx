@@ -145,7 +145,7 @@ const FaDepreciationRunsPage: React.FC = () => {
             { key: 'status', title: t(`${NS}.col.status`) },
           ], t(`${NS}.exportFileName`));
         }}
-        request={async (params) => {
+        request={async (params, _sort, _filter, _searchFormValues) => {
           const res = await fixedAssetService.listDeprRuns({
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize || 20,

@@ -11,6 +11,7 @@ import { parseSpreadsheetDateToApiString } from '../../../../../utils/formDate';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { resolveFactoryImportHeaderIndexMap } from '../../../../../utils/spreadsheetImportTemplate';
 import { fixedAssetService, type FaAsset, type FaCategory } from '../../../services/fixed-assets';
+import { pickListSearchKeyword, pickSearchString } from '../../../../../utils/tableQueryKey';
 import {
   buildFaAssetImportTemplate,
   parseFaAssetStatusLabel,
@@ -114,7 +115,9 @@ const FaAssetsPage: React.FC = () => {
       <UniTable<FaAsset>
         actionRef={actionRef}
         rowKey="id"
-        columnPersistenceId="apps.kuaicaiwu.fixed-assets.assets.list-v1"
+        columnPersistenceId="apps.kuaicaiwu.fixed-assets.assets.list-v2"
+        showAdvancedSearch
+        skipFuzzyPinyinClientFilter
         columns={columns}
         permissionResource={RESOURCE}
         enableRowSelection
@@ -276,12 +279,12 @@ const FaAssetsPage: React.FC = () => {
             t(`${NS}.exportFileName`),
           );
         }}
-        request={async (params) => {
+        request={async (params, _sort, _filter, searchFormValues) => {
           const res = await fixedAssetService.listAssets({
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize || 20,
-            keyword: params.keyword as string | undefined,
-            status: params.status as string | undefined,
+            keyword: pickListSearchKeyword(searchFormValues),
+            status: pickSearchString(searchFormValues, 'status'),
           });
           return { data: res.items, success: true, total: res.total };
         }}

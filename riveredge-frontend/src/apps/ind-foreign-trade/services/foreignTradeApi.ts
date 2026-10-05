@@ -36,7 +36,8 @@ export interface InquiryImportResponse {
 export interface ForeignTradeCrmStats {
   pending_customers?: number;
   overdue_customers?: number;
-  inactive_7d_customers?: number;
+  inactive_customers?: number;
+  inactive_alert_days?: number;
   follow_status_pending?: number;
   follow_status_followed?: number;
   follow_up_records_total?: number;

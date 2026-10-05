@@ -570,7 +570,12 @@ const ToolMaintenanceItemsPage: React.FC = () => {
 
           <Col span={12}>
 
-            <ProFormDigit name="standard_hours" label={t(`${P}.col.standardHours`)} min={0} />
+            <ProFormDigit
+              name="standard_hours"
+              label={t(`${P}.col.standardHours`)}
+              min={0}
+              fieldProps={{ precision: 2, step: 0.01 }}
+            />
 
           </Col>
 

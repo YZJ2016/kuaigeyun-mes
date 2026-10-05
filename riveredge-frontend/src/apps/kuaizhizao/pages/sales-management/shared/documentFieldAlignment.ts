@@ -662,6 +662,7 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   total_hours: 32,
   /** 班次/加班时间段：紧挨标准工时前（表单：时段 → 工时） */
   timeRange: 31.5,
+  breakRange: 31.6,
   standardHours: 32,
   /** 报工工时；生产人员紧随其后；来源/报工方式紧接生产人员 */
   work_hours: 32,
@@ -883,6 +884,8 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   recalled_by_name: 76.46,
   recalledByName: 76.46,
   responsible_person_name: 76.5,
+  /** 部门管理：负责人在备注前 */
+  manager_name: 81,
   spot_check_person_name: 76.45,
   inspectorName: 76.4,
   contact_person: 77,
@@ -1311,6 +1314,7 @@ export const GLOBAL_DOC_DETAIL_BASIC_FIELD_RANK = {
   tracking_number: 51.15,
   workshop_name: 51.2,
   work_center_name: 51.4,
+  capable_operations: 51.45,
   workstation_name: 51.6,
   payment_terms: 52,
   payment_method: 52.2,
@@ -1489,6 +1493,7 @@ export const MASTER_DATA_DETAIL_BASIC_FIELD_RANK = {
   storageAreaName: 20.18,
   workCenterName: 20.19,
   work_center_name: 20.19,
+  capable_operations: 20.195,
   productionLineName: 20.21,
   processRouteName: 20.22,
   rule_type: 20,
@@ -1555,6 +1560,8 @@ export const MASTER_DATA_DETAIL_BASIC_FIELD_RANK = {
   holiday_type: 20,
   startTime: 21,
   endTime: 21.1,
+  breakRange: 21.15,
+  breakStart: 21.15,
   crossesMidnight: 21.2,
   standardHours: 50.2,
   department_name: 20,

@@ -45,8 +45,18 @@ export const equipmentApi = {
   },
 
   // 获取设备使用记录追溯
-  getTrace: async (uuid: string) => {
-    return apiRequest(`/apps/kuaizhizao/equipment/${uuid}/trace`, { method: 'GET' });
+  getTrace: async (
+    uuid: string,
+    params?: {
+      date_from?: string;
+      date_to?: string;
+    },
+  ) => {
+    return apiRequest(`/apps/kuaizhizao/equipment/${uuid}/trace`, { method: 'GET', params });
+  },
+
+  getDispatchSnapshots: async (data: { equipment_ids: number[] }) => {
+    return apiRequest('/apps/kuaizhizao/equipment/dispatch-snapshots', { method: 'POST', data });
   },
 
   // 创建设备校验记录

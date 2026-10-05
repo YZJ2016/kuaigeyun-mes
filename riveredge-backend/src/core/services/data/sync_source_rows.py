@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
+from core.services.data.sync_nested_expand import expand_nested_detail_rows
+
 
 def _collect_kingdee_error_messages(payload: Any) -> List[str]:
     messages: List[str] = []
@@ -52,13 +54,51 @@ def _raise_if_kingdee_error_payload(body: Any) -> None:
             raise ValueError("；".join(messages))
 
 
+def _extract_array_from_object(payload: Dict[str, Any], *, depth: int = 0) -> Optional[List[Any]]:
+    """从苍穹 batchQuery 等嵌套响应中取出行数组（对齐接口测试预览 extractArrayFromObject）。"""
+    candidates = ("data", "items", "rows", "records", "Results", "result", "list")
+    for key in candidates:
+        value = payload.get(key)
+        if isinstance(value, list):
+            return value
+    if depth >= 2:
+        return None
+    for key in candidates:
+        value = payload.get(key)
+        if isinstance(value, dict):
+            nested = _extract_array_from_object(value, depth=depth + 1)
+            if nested is not None:
+                return nested
+    return None
+
+
 def normalize_api_body_to_rows(
+    body: Any,
+    *,
+    column_names: Optional[List[str]] = None,
+) -> List[Dict[str, Any]]:
+    rows = _normalize_api_body_to_rows_raw(body, column_names=column_names)
+    # 苍穹 BOM 等「表头 + entry[]」在解包外壳后仍须摊成扁平行，供字段映射
+    return expand_nested_detail_rows(rows)
+
+
+def _normalize_api_body_to_rows_raw(
     body: Any,
     *,
     column_names: Optional[List[str]] = None,
 ) -> List[Dict[str, Any]]:
     if body is None:
         return []
+    if isinstance(body, str):
+        text = body.strip()
+        if not text:
+            return []
+        try:
+            import json
+
+            body = json.loads(text)
+        except Exception:
+            return [{"value": body}]
     if isinstance(body, dict) and body.get("error"):
         raise ValueError(str(body["error"]))
     _raise_if_kingdee_error_payload(body)
@@ -79,9 +119,8 @@ def normalize_api_body_to_rows(
             return [item for item in body if isinstance(item, dict)]
         return [{"value": item} for item in body]
     if isinstance(body, dict):
-        if "data" in body:
-            return normalize_api_body_to_rows(body["data"], column_names=column_names)
-        if "items" in body:
-            return normalize_api_body_to_rows(body["items"], column_names=column_names)
+        nested = _extract_array_from_object(body)
+        if nested is not None:
+            return _normalize_api_body_to_rows_raw(nested, column_names=column_names)
         return [body]
     return [{"value": body}]

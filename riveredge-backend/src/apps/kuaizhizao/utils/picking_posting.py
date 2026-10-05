@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import Dict, Iterable, List, Optional, Sequence
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 from apps.kuaizhizao.utils.mrp_quantity import MRP_QTY_STEP, mrp_qty
 
@@ -170,6 +170,40 @@ def picking_item_belongs_to_work_order(
     return int(getattr(picking, "work_order_id", 0) or 0) == int(work_order_id)
 
 
+def max_reportable_units_from_picked(
+    plan_qty: Decimal,
+    pick_requirements: Sequence[Tuple[int, Decimal]],
+    picked_by_material: Dict[int, Decimal],
+) -> Optional[Decimal]:
+    """
+    按 BOM 事前领料件与已正式发料数量，计算可支撑的最大成品报工量。
+
+    pick_requirements: (material_id, 整单计划量对应的需求数量)
+    无事前领料件时返回 None（不做数量门禁）；有领料件但未领则为 0。
+    """
+    plan = mrp_qty(plan_qty)
+    if plan <= 0:
+        return Decimal("0")
+
+    max_units: Optional[Decimal] = None
+    for material_id, required_for_plan in pick_requirements:
+        mid = int(material_id or 0)
+        if mid <= 0:
+            continue
+        required = mrp_qty(required_for_plan)
+        if required <= 0:
+            continue
+        need_per_unit = mrp_qty(required / plan)
+        if need_per_unit <= 0:
+            continue
+        picked = mrp_qty(picked_by_material.get(mid, Decimal("0")))
+        units = mrp_qty(picked / need_per_unit)
+        if max_units is None or units < max_units:
+            max_units = units
+
+    return max_units
+
+
 async def list_work_order_cost_pickings(tenant_id: int, work_order_id: int) -> List[object]:
     """工单已正式发料的领料单（头表或明细挂工单，排除备料转移型）。"""
     from apps.kuaizhizao.models.production_picking import ProductionPicking
@@ -207,3 +241,34 @@ async def list_work_order_cost_pickings(tenant_id: int, work_order_id: int) -> L
         return []
     gi_ids = set(filter_gi_picking_ids(list(by_id.values())))
     return [p for p in by_id.values() if int(getattr(p, "id")) in gi_ids]
+
+
+async def sum_confirmed_picked_by_material(
+    tenant_id: int, work_order_id: int
+) -> Dict[int, Decimal]:
+    """工单正式发料明细已领数量，按物料汇总。"""
+    pickings = await list_work_order_cost_pickings(tenant_id, work_order_id)
+    if not pickings:
+        return {}
+    from apps.kuaizhizao.models.production_picking_item import ProductionPickingItem
+
+    by_id = {int(p.id): p for p in pickings}
+    items = await ProductionPickingItem.filter(
+        tenant_id=tenant_id,
+        picking_id__in=list(by_id.keys()),
+        deleted_at__isnull=True,
+    ).all()
+    out: Dict[int, Decimal] = {}
+    for item in items:
+        picking = by_id.get(int(getattr(item, "picking_id", 0) or 0))
+        if picking is None:
+            continue
+        if not picking_item_belongs_to_work_order(item, picking, work_order_id):
+            continue
+        mid = int(getattr(item, "material_id", 0) or 0)
+        if mid <= 0:
+            continue
+        out[mid] = out.get(mid, Decimal("0")) + mrp_qty(
+            getattr(item, "picked_quantity", 0) or 0
+        )
+    return out

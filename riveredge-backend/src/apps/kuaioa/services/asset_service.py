@@ -217,16 +217,16 @@ class AssetPurchaseService:
             raise NotFoundError("采买申请不存在")
         if row.status != "pending":
             raise BusinessLogicError("仅待审批状态可撤销")
-        row.status = "cancelled"
-        row.lifecycle_stage = STAGE_DRAFT
-        await touch_updated(row, user_id)
-        await row.save()
         await cancel_approval(
             tenant_id,
             entity_type="kuaioa_asset_purchase",
             entity_id=int(row.id),
             operator_id=user_id,
         )
+        row.status = "cancelled"
+        row.lifecycle_stage = STAGE_DRAFT
+        await touch_updated(row, user_id)
+        await row.save()
         return model_to_dict(row)
 
     async def advance_lifecycle(

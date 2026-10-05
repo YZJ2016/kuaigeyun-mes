@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActionType,
   ProColumns,
@@ -53,6 +53,11 @@ import {
 } from '../../../services/quality-qms';
 import QmsIsoClauseSelect from '../qms/QmsIsoClauseSelect';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
+import {
+  pickListSearchKeyword,
+  pickSearchString,
+  pickSearchTriStateBoolean,
+} from '../../../../../utils/tableQueryKey';
 
 const RESOURCE = 'kuaizhizao:quality-management-iso-clauses';
 const DEFAULT_STANDARD = 'ISO9001:2015';
@@ -75,6 +80,7 @@ const IsoClausesPage: React.FC = () => {
   const formRef = useRef<any>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [standardFilter, setStandardFilter] = useState<string>(DEFAULT_STANDARD);
+  const standardFilterMountedRef = useRef(false);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<QmsIsoClause | null>(null);
@@ -88,6 +94,14 @@ const IsoClausesPage: React.FC = () => {
   const [relatedAudits, setRelatedAudits] = useState<QmsInternalAudit[]>([]);
 
   const { canCreate, canUpdate, canDelete, canExport } = useResourcePermissions(RESOURCE);
+
+  useEffect(() => {
+    if (!standardFilterMountedRef.current) {
+      standardFilterMountedRef.current = true;
+      return;
+    }
+    actionRef.current?.reload();
+  }, [standardFilter]);
 
   const openCreate = useCallback(() => {
     setEditing(null);
@@ -350,7 +364,10 @@ const IsoClausesPage: React.FC = () => {
           actionRef={actionRef}
           permissionResource={RESOURCE}
           headerTitle={t('app.kuaizhizao.menu.quality-management.iso-clauses')}
-          columnPersistenceId="apps.kuaizhizao.pages.quality-management.iso-clauses-width-v2"
+          columnPersistenceId="apps.kuaizhizao.pages.quality-management.iso-clauses-width-v4"
+          showAdvancedSearch
+          skipFuzzyPinyinClientFilter
+          params={{ isoStandardCode: standardFilter }}
           rowKey="id"
           columns={columns}
           enableRowSelection
@@ -381,13 +398,17 @@ const IsoClausesPage: React.FC = () => {
               </Button>
             ) : null,
           ]}
-          request={async (params) => {
+          request={async (params, _sort, _filter, searchFormValues) => {
+            const toolbarStandard =
+              typeof params.isoStandardCode === 'string' && params.isoStandardCode.trim()
+                ? params.isoStandardCode.trim()
+                : DEFAULT_STANDARD;
             const res = await qualityQmsApi.isoClauses.list({
               skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 50),
               limit: params.pageSize ?? 50,
-              keyword: params.keyword,
-              standard_code: params.standard_code ?? standardFilter,
-              is_active: params.is_active,
+              keyword: pickListSearchKeyword(searchFormValues),
+              standard_code: pickSearchString(searchFormValues, 'standard_code') ?? toolbarStandard,
+              is_active: pickSearchTriStateBoolean(searchFormValues, 'is_active'),
             });
             return { data: res.items, success: true, total: res.total };
           }}

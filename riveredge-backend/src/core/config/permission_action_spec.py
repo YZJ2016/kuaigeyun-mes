@@ -19,6 +19,9 @@ STANDARD_ACTIONS: set[str] = {
     "export",
     "print",
     "display",
+    # 列表工具栏 SyncPushHub 显隐（按角色分配，勿放业务配置）
+    "sync",
+    "push",
     # 已在应用 manifest 使用的业务动作（新增须先登记此处再写入 manifest）
     "claim",
     "recycle",
@@ -37,6 +40,8 @@ STANDARD_ACTIONS: set[str] = {
     "upload-part-spec",
     # 应用管理破坏性操作（须搭配 RBAC + 二次确认）
     "reset-data",
+    # 按销售订单生成全流程演示数据
+    "flow-generate",
     # 开放 API 凭证管理
     "manage",
 }
@@ -59,6 +64,8 @@ ACTION_DISPLAY_LABELS: dict[str, str] = {
     "export": "导出",
     "print": "打印",
     "display": "展示",
+    "sync": "显示同步",
+    "push": "显示推送",
     "submit": "提交",
     "audit": "审核",
     "approve": "审核",
@@ -71,6 +78,7 @@ ACTION_DISPLAY_LABELS: dict[str, str] = {
     "confirm_adjustment": "确认调整",
     "recall": "确认收回",
     "reset-data": "重置数据",
+    "flow-generate": "流程造数",
     "claim": "认领",
     "recycle": "回收",
     "release": "释放",
@@ -132,6 +140,8 @@ MANIFEST_ACTION_ORDER: tuple[str, ...] = (
     "audit",
     "reject",
     "print",
+    "sync",
+    "push",
     "assign",
     "execute",
     "complete",

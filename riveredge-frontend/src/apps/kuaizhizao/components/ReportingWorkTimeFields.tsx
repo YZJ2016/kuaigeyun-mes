@@ -114,7 +114,11 @@ export const ReportingWorkTimeFields: React.FC<ReportingWorkTimeFieldsProps> = (
         label={t('app.kuaizhizao.workReporting.colWorkHours')}
         placeholder={t('app.kuaizhizao.workReporting.formWorkHoursPlaceholder')}
         min={0}
-        fieldProps={{ step: 0.1, onChange: handleHoursChange }}
+        fieldProps={{
+          precision: 2,
+          step: 0.01,
+          onChange: handleHoursChange,
+        }}
         colProps={colProps}
       />
     </>

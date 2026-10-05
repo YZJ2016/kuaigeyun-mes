@@ -7,9 +7,10 @@ Author: Auto (AI Assistant)
 Date: 2026-01-06
 """
 
-from typing import Optional
+from typing import Dict, Optional
 from datetime import datetime
-from pydantic import Field
+from pydantic import Field, field_validator
+from core.utils.login_quick_providers import default_login_quick_providers, normalize_login_quick_providers
 from core.schemas.base import BaseSchema
 from core.utils.timezone_utils import site_timezone_name
 
@@ -49,7 +50,16 @@ class PlatformSettingsBase(BaseSchema):
     login_client_win_enabled: Optional[bool] = Field(True, description="登录页是否显示 Windows 工位机安装包下载")
     login_client_android_enabled: Optional[bool] = Field(True, description="登录页是否显示 Android PDA 安装包下载")
     login_quick_enabled: Optional[bool] = Field(True, description="登录页是否显示快捷登录（社交账号登录）")
+    login_quick_providers: Dict[str, bool] = Field(
+        default_factory=default_login_quick_providers,
+        description="快捷登录分渠道开关",
+    )
     enable_register: Optional[bool] = Field(True, description="是否启用公开注册（登录页注册链接）")
+
+    @field_validator("login_quick_providers", mode="before")
+    @classmethod
+    def _normalize_login_quick_providers(cls, value: object) -> dict[str, bool]:
+        return normalize_login_quick_providers(value)
     official_api_library_host: Optional[str] = Field(
         None,
         max_length=200,
@@ -97,7 +107,18 @@ class PlatformSettingsUpdate(BaseSchema):
     login_client_win_enabled: Optional[bool] = Field(None, description="登录页是否显示 Windows 工位机安装包下载")
     login_client_android_enabled: Optional[bool] = Field(None, description="登录页是否显示 Android PDA 安装包下载")
     login_quick_enabled: Optional[bool] = Field(None, description="登录页是否显示快捷登录（社交账号登录）")
+    login_quick_providers: Optional[Dict[str, bool]] = Field(
+        None,
+        description="快捷登录分渠道开关",
+    )
     enable_register: Optional[bool] = Field(None, description="是否启用公开注册（登录页注册链接）")
+
+    @field_validator("login_quick_providers", mode="before")
+    @classmethod
+    def _normalize_login_quick_providers_update(cls, value: object) -> object:
+        if value is None:
+            return None
+        return normalize_login_quick_providers(value)
     official_api_library_host: Optional[str] = Field(
         None,
         max_length=200,

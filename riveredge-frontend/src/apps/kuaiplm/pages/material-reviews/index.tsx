@@ -51,6 +51,7 @@ import {
   type MaterialReviewStatus,
   type MaterialUsageStatus,
 } from '../../services/material-review';
+import { resolvePlmStandardDocListSearch } from '../../utils/plmListCore';
 
 const RESOURCE = 'kuaiplm:material-review';
 const STATUS_KEYS: MaterialReviewStatus[] = ['draft', 'pending', 'approved', 'rejected'];
@@ -626,12 +627,15 @@ const MaterialReviewsPage: React.FC = () => {
             messageApi.error(getApiErrorMessage(err, t('common.exportFailed')));
           }
         }}
-        request={async (params) => {
+        skipFuzzyPinyinClientFilter
+        params={filterProjectId ? { project_id: filterProjectId } : undefined}
+        request={async (params, _sort, _filter, searchFormValues) => {
+          const { keyword, status } = resolvePlmStandardDocListSearch(searchFormValues);
           const res = await materialReviewApi.list({
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize || 20,
-            status: params.status as string | undefined,
-            keyword: (params.keyword || params.title) as string | undefined,
+            status,
+            keyword,
             project_id: filterProjectId,
           });
           return { data: res.items, total: res.total, success: true };

@@ -419,9 +419,15 @@ async def ensure_prepayment_payment_for_purchase_order(
     prepayment_amount: Optional[Decimal],
     prepayment_bank_account_id: Optional[int],
     operator_id: int,
+    amount_override: Optional[Decimal] = None,
+    bank_account_id_override: Optional[int] = None,
+    notes_override: Optional[str] = None,
+    raise_if_exists: bool = False,
 ) -> Optional[int]:
-    """采购订单审核/确认后：按 prepayment_amount 自动生成预付付款单（幂等）。"""
-    amount = _q_money(prepayment_amount or 0)
+    """采购订单审核/确认或下推：按预付金额生成预付付款单（幂等）。"""
+    amount = _q_money(
+        amount_override if amount_override is not None else (prepayment_amount or 0)
+    )
     if amount <= 0:
         return None
 
@@ -431,6 +437,10 @@ async def ensure_prepayment_payment_for_purchase_order(
         logger.info(
             "采购订单 %s 已存在预付付款单关联，跳过重复生成", order_code
         )
+        if raise_if_exists:
+            from infra.exceptions.exceptions import BusinessLogicError
+
+            raise BusinessLogicError("该采购订单已关联预付付款单，请勿重复下推")
         return None
 
     try:
@@ -439,7 +449,10 @@ async def ensure_prepayment_payment_for_purchase_order(
 
         user_info = await AppBaseService().get_user_info(operator_id)
         bank_account_id, bank_account_label, payment_method = await _resolve_bank_account_for_voucher(
-            tenant_id, prepayment_bank_account_id
+            tenant_id,
+            bank_account_id_override
+            if bank_account_id_override is not None
+            else prepayment_bank_account_id,
         )
         if bank_account_id:
             from apps.kuaicaiwu.services.bank_account_service import BankAccountService
@@ -454,6 +467,9 @@ async def ensure_prepayment_payment_for_purchase_order(
         payment_code = await allocate_payment_code(tenant_id)
         biz_date = to_site_date(resolve_business_datetime())
 
+        note_text = (notes_override or "").strip() or (
+            f"采购订单 {order_code} 审核通过自动生成预付付款单"
+        )
         # spec 142：付款单创建 + 单据关联 + 会计事件同事务——
         # 任一步失败全部回滚，重试不会产出无关联的重复付款单
         from tortoise.transactions import in_transaction
@@ -473,7 +489,7 @@ async def ensure_prepayment_payment_for_purchase_order(
                 bank_account_id=bank_account_id,
                 settlement_type="prepayment",
                 status="Confirmed",
-                notes=f"采购订单 {order_code} 审核通过自动生成预付付款单",
+                notes=note_text,
                 created_by=operator_id,
                 created_by_name=user_info["name"],
                 updated_by=operator_id,
@@ -488,7 +504,7 @@ async def ensure_prepayment_payment_for_purchase_order(
                 target_type="payment",
                 target_id=payment.id,
                 target_code=payment.payment_code,
-                relation_desc="采购订单审核通过自动生成预付付款单",
+                relation_desc=note_text,
                 created_by=operator_id,
             )
             await record_finance_accounting_event(
@@ -527,9 +543,15 @@ async def ensure_prepayment_receipt_for_sales_order(
     prepayment_amount: Optional[Decimal],
     prepayment_bank_account_id: Optional[int],
     operator_id: int,
+    amount_override: Optional[Decimal] = None,
+    bank_account_id_override: Optional[int] = None,
+    notes_override: Optional[str] = None,
+    raise_if_exists: bool = False,
 ) -> Optional[int]:
-    """销售订单审核通过后：按 prepayment_amount 自动生成预收收款单（幂等）。"""
-    amount = _q_money(prepayment_amount or 0)
+    """销售订单审核通过或下推：按预收金额生成预收收款单（幂等）。"""
+    amount = _q_money(
+        amount_override if amount_override is not None else (prepayment_amount or 0)
+    )
     if amount <= 0:
         return None
 
@@ -539,6 +561,10 @@ async def ensure_prepayment_receipt_for_sales_order(
         logger.info(
             "销售订单 %s 已存在预收收款单关联，跳过重复生成", order_code
         )
+        if raise_if_exists:
+            from infra.exceptions.exceptions import BusinessLogicError
+
+            raise BusinessLogicError("该销售订单已关联预收收款单，请勿重复下推")
         return None
 
     try:
@@ -547,7 +573,10 @@ async def ensure_prepayment_receipt_for_sales_order(
 
         user_info = await AppBaseService().get_user_info(operator_id)
         bank_account_id, bank_account_label, payment_method = await _resolve_bank_account_for_voucher(
-            tenant_id, prepayment_bank_account_id
+            tenant_id,
+            bank_account_id_override
+            if bank_account_id_override is not None
+            else prepayment_bank_account_id,
         )
         if bank_account_id:
             from apps.kuaicaiwu.services.bank_account_service import BankAccountService
@@ -562,6 +591,9 @@ async def ensure_prepayment_receipt_for_sales_order(
         receipt_code = await allocate_receipt_code(tenant_id)
         biz_date = to_site_date(resolve_business_datetime())
 
+        note_text = (notes_override or "").strip() or (
+            f"销售订单 {order_code} 审核通过自动生成预收收款单"
+        )
         # spec 142：收款单创建 + 单据关联 + 会计事件同事务——
         # 任一步失败全部回滚，重试不会产出无关联的重复收款单
         from tortoise.transactions import in_transaction
@@ -581,7 +613,7 @@ async def ensure_prepayment_receipt_for_sales_order(
                 bank_account_id=bank_account_id,
                 settlement_type="prepayment",
                 status="Confirmed",
-                notes=f"销售订单 {order_code} 审核通过自动生成预收收款单",
+                notes=note_text,
                 created_by=operator_id,
                 created_by_name=user_info["name"],
                 updated_by=operator_id,
@@ -596,7 +628,7 @@ async def ensure_prepayment_receipt_for_sales_order(
                 target_type="receipt",
                 target_id=receipt.id,
                 target_code=receipt.receipt_code,
-                relation_desc="销售订单审核通过自动生成预收收款单",
+                relation_desc=note_text,
                 created_by=operator_id,
             )
             await record_finance_accounting_event(

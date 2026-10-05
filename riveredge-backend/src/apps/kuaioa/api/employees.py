@@ -4,7 +4,12 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 
-from apps.kuaioa.schemas.employee import EmployeeProfileCreate, EmployeeProfileUpdate
+from apps.common.bulk_import import BulkCreateResponse
+from apps.kuaioa.schemas.employee import (
+    EmployeeBulkCreateRequest,
+    EmployeeProfileCreate,
+    EmployeeProfileUpdate,
+)
 from apps.kuaioa.services.employee_service import EmployeeProfileService
 from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
@@ -53,6 +58,30 @@ async def list_employee_movements(
         return {"data": rows, "total": len(rows), "success": True}
     except BusinessLogicError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"message": str(e)})
+
+
+@router.post(
+    "/batch-create",
+    response_model=BulkCreateResponse,
+    response_model_by_alias=True,
+    summary="Batch create employee profiles",
+)
+async def bulk_create_employees(
+    data: EmployeeBulkCreateRequest,
+    current_user: User = Depends(get_current_user),
+    _auth=Depends(require_permission_codes("kuaioa:employee:create")),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    批量创建员工档案（Excel / UniImport 分片）。
+
+    - 单次最多 200 条；前端按分片循环调用。
+    - 单条失败不回滚已成功行，失败原因见 failedItems。
+    """
+    result = await service.bulk_create_profiles(
+        tenant_id, list(data.items), current_user.id
+    )
+    return result
 
 
 @router.get("/{profile_id}", summary="Get employee profile")

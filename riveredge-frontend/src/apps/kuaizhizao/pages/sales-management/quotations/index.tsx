@@ -131,7 +131,12 @@ import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulk
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { normalizeFormListItems } from '../../../../../utils/formListItems';
 import { coerceFormDate, formDateFormItemProps, formDateRangeFormItemProps } from '../../../../../utils/formDate';
-import { extractProTableSort } from '../../../../../utils/tableQueryKey';
+import {
+  extractProTableSort,
+  pickListSearchKeyword,
+  pickSearchString,
+} from '../../../../../utils/tableQueryKey';
+import { parseSalesReportDateRange } from '../../../services/reports';
 import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
 import { useTranslation } from 'react-i18next';
 import { useNumericPrecision } from '../../../../../hooks/useNumericPrecision';
@@ -181,6 +186,10 @@ import {
   resolveMaterialGiftable,
 } from '../../../utils/giftLineUi';
 import { applyDocumentLineTaxRateChange, resolveDocumentLineDisplayAmounts, stripExclusiveUnitAnchor, EXCLUSIVE_UNIT_ANCHOR_KEY } from '../../../utils/documentLineAmounts';
+import {
+  documentCurrencyTitleVars,
+  resolveDocumentCurrencyInputPrefix,
+} from '../../../utils/documentCurrencyDisplay';
 import {
   DOCUMENT_DETAIL_CONTROL_SIZE,
   DOCUMENT_DETAIL_TABLE_PROPS,
@@ -273,6 +282,7 @@ type QuotationItemRow = QuotationItem & {
   quotation_code?: string;
   customer_name?: string;
   quotation_date?: string;
+  currency_code?: string;
   status?: string;
   review_status?: string;
   sales_order_id?: number;
@@ -285,7 +295,7 @@ type QuotationItemRow = QuotationItem & {
 };
 
 const QUOTATION_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_quotations';
-const QUOTATION_LIST_PERSISTENCE_ID = 'apps.kuaizhizao.pages.sales-management.quotations-width-v2';
+const QUOTATION_LIST_PERSISTENCE_ID = 'apps.kuaizhizao.pages.sales-management.quotations-width-v3';
 
 function pickQuotationCustomFieldProps(record: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(Object.entries(record).filter(([key]) => key.startsWith('custom_')));
@@ -564,6 +574,7 @@ const QuotationMaterialSelectCell: React.FC<{
 const QuotationAmountCell: React.FC<{ index: number }> = ({ index }) => {
   const row = Form.useWatch(['items', index]);
   const priceType = salesFormPriceType(Form.useWatch('price_type'));
+  const moneyPrefix = resolveDocumentCurrencyInputPrefix(Form.useWatch('currency_code'));
   const line = resolveDocumentLineDisplayAmounts(
     {
       qty: row?.quote_quantity,
@@ -579,6 +590,7 @@ const QuotationAmountCell: React.FC<{ index: number }> = ({ index }) => {
       resource={QUOTATION_FIELD_RESOURCE}
       fieldName="amount_without_tax"
       value={line.excl}
+      prefix={moneyPrefix}
       style={QUOTATION_DETAIL_AMOUNT_STYLE}
     />
   );
@@ -1230,7 +1242,7 @@ const QuotationsPage: React.FC = () => {
       align: 'right',
       sorter: true,
       hideInSearch: true,
-      render: (_, r) => <AmountDisplay resource={QUOTATION_FIELD_RESOURCE} fieldName="total_amount" value={r.total_amount} />,
+      render: (_, r) => <AmountDisplay resource={QUOTATION_FIELD_RESOURCE} fieldName="total_amount" value={r.total_amount} prefix={resolveDocumentCurrencyInputPrefix(r.currency_code)} />,
     },
     {
       title: t('app.kuaizhizao.quotation.colSalesPersonnel'),
@@ -1438,7 +1450,12 @@ const QuotationsPage: React.FC = () => {
             width: 100,
             align: 'right',
             render: (_, record) => (
-              <AmountDisplay resource={QUOTATION_FIELD_RESOURCE} fieldName="unit_price" value={record.unit_price} />
+              <AmountDisplay
+                resource={QUOTATION_FIELD_RESOURCE}
+                fieldName="unit_price"
+                value={record.unit_price}
+                prefix={resolveDocumentCurrencyInputPrefix(record.currency_code)}
+              />
             ),
           },
           {
@@ -1447,7 +1464,12 @@ const QuotationsPage: React.FC = () => {
             width: 110,
             align: 'right',
             render: (_, record) => (
-              <AmountDisplay resource={QUOTATION_FIELD_RESOURCE} fieldName="total_amount" value={record.total_amount} />
+              <AmountDisplay
+                resource={QUOTATION_FIELD_RESOURCE}
+                fieldName="total_amount"
+                value={record.total_amount}
+                prefix={resolveDocumentCurrencyInputPrefix(record.currency_code)}
+              />
             ),
           },
           {
@@ -2885,7 +2907,12 @@ const QuotationsPage: React.FC = () => {
       dataIndex: 'discount_amount',
       render: (_, r) =>
         Number(r.discount_amount ?? 0) > 0 ? (
-          <AmountDisplay resource={QUOTATION_FIELD_RESOURCE} fieldName="amount" value={r.discount_amount} />
+          <AmountDisplay
+            resource={QUOTATION_FIELD_RESOURCE}
+            fieldName="amount"
+            value={r.discount_amount}
+            prefix={resolveDocumentCurrencyInputPrefix(r.currency_code)}
+          />
         ) : (
           '-'
         ),
@@ -2898,7 +2925,14 @@ const QuotationsPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.quotation.colTotalAmount'),
       dataIndex: 'total_amount',
-      render: (_, r) => <AmountDisplay resource={QUOTATION_FIELD_RESOURCE} fieldName="total_amount" value={r.total_amount} />,
+      render: (_, r) => (
+        <AmountDisplay
+          resource={QUOTATION_FIELD_RESOURCE}
+          fieldName="total_amount"
+          value={r.total_amount}
+          prefix={resolveDocumentCurrencyInputPrefix(r.currency_code)}
+        />
+      ),
     },
     {
       title: t('app.kuaizhizao.quotation.form.currency'),
@@ -3286,10 +3320,17 @@ const QuotationsPage: React.FC = () => {
       </DetailDrawerSection>
 
       <DetailDrawerSection titleAccent title={t('app.kuaizhizao.quotation.form.section.detailInfo')}>
-      <Form.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.price_type !== curr?.price_type}>
+      <Form.Item
+        noStyle
+        shouldUpdate={(prev: any, curr: any) =>
+          prev?.price_type !== curr?.price_type || prev?.currency_code !== curr?.currency_code
+        }
+      >
         {({ getFieldValue }: any) => {
           const priceType = salesFormPriceType(getFieldValue('price_type'));
           const showTaxBreakdownColumns = priceType === 'tax_inclusive';
+          const currencyVars = documentCurrencyTitleVars(getFieldValue('currency_code'), t);
+          const moneyPrefix = resolveDocumentCurrencyInputPrefix(getFieldValue('currency_code'));
           const quotationDetailColumns = [
                       {
                         title: productColumnTitle,
@@ -3415,8 +3456,8 @@ const QuotationsPage: React.FC = () => {
                       {
                         title:
                           priceType === 'tax_inclusive'
-                            ? t('app.kuaizhizao.salesOrder.unitPriceColumnTaxInclusive')
-                            : t('app.kuaizhizao.salesOrder.unitPriceColumnTaxExclusive'),
+                            ? t('app.kuaizhizao.salesOrder.unitPriceColumnTaxInclusive', currencyVars)
+                            : t('app.kuaizhizao.salesOrder.unitPriceColumnTaxExclusive', currencyVars),
                         dataIndex: 'unit_price',
                         width: 132,
                         ...QUOTATION_DETAIL_NUM_COL,
@@ -3459,7 +3500,7 @@ const QuotationsPage: React.FC = () => {
                                     }
                                     min={0}
                                     precision={priceDecimals}
-                                    prefix="¥"
+                                    prefix={moneyPrefix}
                                     style={{ width: '100%' }}
                                     size={DOCUMENT_DETAIL_CONTROL_SIZE}
                                     disabled={isGift}
@@ -3473,7 +3514,7 @@ const QuotationsPage: React.FC = () => {
                       ...(showTaxBreakdownColumns
                         ? [
                             {
-                              title: t('app.kuaizhizao.salesOrder.exclAmount'),
+                              title: t('app.kuaizhizao.salesOrder.exclAmount', currencyVars),
                               width: 120,
                               ...QUOTATION_DETAIL_NUM_COL,
                               render: (_: unknown, __: unknown, index: number) => (
@@ -3494,6 +3535,7 @@ const QuotationsPage: React.FC = () => {
                                         resource={QUOTATION_FIELD_RESOURCE}
                                         fieldName="amount_without_tax"
                                         value={line.excl}
+                                        prefix={moneyPrefix}
                                         style={QUOTATION_DETAIL_AMOUNT_STYLE}
                                       />
                                     );
@@ -3540,7 +3582,7 @@ const QuotationsPage: React.FC = () => {
                       ...(showTaxBreakdownColumns
                         ? [
                             {
-                              title: t('app.kuaizhizao.salesOrder.taxAmount'),
+                              title: t('app.kuaizhizao.salesOrder.taxAmount', currencyVars),
                               width: 112,
                               ...QUOTATION_DETAIL_NUM_COL,
                               render: (_: unknown, __: unknown, index: number) => (
@@ -3561,6 +3603,7 @@ const QuotationsPage: React.FC = () => {
                                         resource={QUOTATION_FIELD_RESOURCE}
                                         fieldName="tax_amount"
                                         value={line.tax}
+                                        prefix={moneyPrefix}
                                         style={QUOTATION_DETAIL_AMOUNT_STYLE}
                                       />
                                     );
@@ -3572,8 +3615,8 @@ const QuotationsPage: React.FC = () => {
                         : []),
                       {
                         title: showTaxBreakdownColumns
-                          ? t('app.kuaizhizao.salesOrder.inclAmount')
-                          : t('app.kuaizhizao.salesOrder.exclAmount'),
+                          ? t('app.kuaizhizao.salesOrder.inclAmount', currencyVars)
+                          : t('app.kuaizhizao.salesOrder.exclAmount', currencyVars),
                         width: 132,
                         ...QUOTATION_DETAIL_NUM_COL,
                         render: (_: unknown, __: unknown, index: number) =>
@@ -3600,7 +3643,7 @@ const QuotationsPage: React.FC = () => {
                                     placeholder={t('app.kuaizhizao.salesOrder.inclAmountPlaceholder')}
                                     min={0}
                                     precision={amountDecimals}
-                                    prefix="¥"
+                                    prefix={moneyPrefix}
                                     style={{ width: '100%' }}
                                     size={DOCUMENT_DETAIL_CONTROL_SIZE}
                                     value={displayValue}
@@ -3806,7 +3849,7 @@ const QuotationsPage: React.FC = () => {
           onCancel={() => setImportModalVisible(false)}
           onConfirm={handleItemImport}
           title={t('app.kuaizhizao.quotation.importItemsTitle')}
-          headers={[t('app.kuaizhizao.salesOrder.materialCode'), t('app.kuaizhizao.salesOrder.spec'), t('common.unit'), t('common.quantity'), t('app.kuaizhizao.salesOrder.unitPrice'), t('app.kuaizhizao.salesOrder.deliveryDate')]}
+          headers={[t('app.kuaizhizao.salesOrder.materialCode'), t('app.kuaizhizao.salesOrder.spec'), t('common.unit'), t('common.quantity'), t('app.kuaizhizao.salesOrder.unitPrice', documentCurrencyTitleVars(undefined, t)), t('app.kuaizhizao.salesOrder.deliveryDate')]}
           exampleRow={['MAT001', 'Spec X', pickImportExampleValue(quotationLineUnitOptions, 'PCS'), '100', '1.5', '2026-03-01']}
           columnOptions={quotationLineImportColumnOptions}
         />
@@ -3947,6 +3990,15 @@ const QuotationsPage: React.FC = () => {
                 !quotationForToolbarPush
               }
               disabledReason={quotationPushDisabledReason}
+              sourceDocument={
+                quotationForToolbarPush?.id
+                  ? { type: 'quotation', id: Number(quotationForToolbarPush.id) }
+                  : null
+              }
+              pushTargets={{
+                'sales-order': 'sales_order',
+                'sales-review': 'sales_contract',
+              }}
             />,
           ]}
           enableRowSelection={viewTypeState !== 'detailTable'}
@@ -4097,27 +4149,25 @@ const QuotationsPage: React.FC = () => {
           request={async (params, sort, _filter, searchFormValues, meta?: UniTableRequestMeta) => {
             const isPrefetch = meta?.purpose === 'prefetch';
             try {
-              const dr = searchFormValues?.date_range as [unknown, unknown] | undefined;
-              let startDate: string | undefined;
-              let endDate: string | undefined;
-              if (dr && Array.isArray(dr) && dr[0]) {
-                startDate = formatDateTime(dr[0] as string | Date, 'YYYY-MM-DD');
-                endDate = dr[1] ? formatDateTime(dr[1] as string | Date, 'YYYY-MM-DD') : startDate;
-              }
+              const { date_start: startDate, date_end: endDate } = parseSalesReportDateRange(
+                searchFormValues ?? {},
+                ['date_range'],
+              );
               const { sortBy, sortOrder } = extractProTableSort(sort);
               const lifecycleParams = resolveQuotationListLifecycleParams(searchFormValues, params);
               const orderBy =
                 sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
+              const customerIdRaw = pickSearchString(searchFormValues, 'customer_id');
               const response = await listQuotations({
                 skip: ((params.current || 1) - 1) * (params.pageSize || 20),
                 limit: params.pageSize || 20,
                 ...lifecycleParams,
-                keyword: searchFormValues?.keyword,
-                quotation_code: searchFormValues?.quotation_code,
-                quotation_series_code: searchFormValues?.quotation_series_code,
+                keyword: pickListSearchKeyword(searchFormValues),
+                quotation_code: pickSearchString(searchFormValues, 'quotation_code'),
+                quotation_series_code: pickSearchString(searchFormValues, 'quotation_series_code'),
                 customer_id:
-                  searchFormValues?.customer_id != null && searchFormValues.customer_id !== ''
-                    ? Number(searchFormValues.customer_id)
+                  customerIdRaw != null && Number.isFinite(Number(customerIdRaw))
+                    ? Number(customerIdRaw)
                     : undefined,
                 salesman_id: resolveListSalesmanId(salesmanFilterIdRef.current, searchFormValues),
                 start_date: startDate,
@@ -4133,10 +4183,6 @@ const QuotationsPage: React.FC = () => {
               const flat = isPrefetch
                 ? raw
                 : await enrichQuotationRecordsWithCustomFields(raw);
-              if (!isPrefetch) {
-                lastQuotationsFlatCacheRef.current = flat;
-                setTableQuotationsFlat(flat);
-              }
               if (dataViewModeRef.current === 'order') {
                 return {
                   data: buildQuotationSeriesTree(flat),
@@ -4157,6 +4203,7 @@ const QuotationsPage: React.FC = () => {
                   quotation_code: h.quotation_code,
                   customer_name: h.customer_name,
                   quotation_date: h.quotation_date,
+                  currency_code: h.currency_code,
                   status: h.status,
                   review_status: h.review_status,
                   sales_order_id: h.sales_order_id,
@@ -4179,6 +4226,7 @@ const QuotationsPage: React.FC = () => {
                   quote_quantity: 0,
                   unit_price: 0,
                   total_amount: 0,
+                  currency_code: h.currency_code,
                   status: h.status,
                   review_status: h.review_status,
                   quotation_date: h.quotation_date,
@@ -4364,6 +4412,8 @@ const QuotationsPage: React.FC = () => {
                     columns={(() => {
                       const pt = normalizeSalesPriceType(quotationDetail.price_type);
                       const showTax = pt === 'tax_inclusive';
+                      const currencyVars = documentCurrencyTitleVars(quotationDetail.currency_code, t);
+                      const moneyPrefix = resolveDocumentCurrencyInputPrefix(quotationDetail.currency_code);
                       type LineIt = NonNullable<Quotation['items']>[number];
                       return [
                         { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true, ...QUOTATION_DETAIL_TEXT_COL },
@@ -4379,7 +4429,7 @@ const QuotationsPage: React.FC = () => {
                         },
                         { title: t('app.kuaizhizao.quotation.form.quoteQuantity'), dataIndex: 'quote_quantity', width: 100, ...QUOTATION_DETAIL_NUM_COL },
                         {
-                          title: t('app.kuaizhizao.salesOrder.unitPrice'),
+                          title: t('app.kuaizhizao.salesOrder.unitPrice', currencyVars),
                           dataIndex: 'unit_price',
                           width: 100,
                           ...QUOTATION_DETAIL_NUM_COL,
@@ -4388,6 +4438,7 @@ const QuotationsPage: React.FC = () => {
                               resource={QUOTATION_FIELD_RESOURCE}
                               fieldName="unit_price"
                               value={v}
+                              prefix={moneyPrefix}
                               style={QUOTATION_DETAIL_AMOUNT_STYLE}
                             />
                           ),
@@ -4395,7 +4446,7 @@ const QuotationsPage: React.FC = () => {
                         ...(showTax
                           ? [
                               {
-                                title: t('app.kuaizhizao.salesOrder.exclAmount'),
+                                title: t('app.kuaizhizao.salesOrder.exclAmount', currencyVars),
                                 key: 'line_excl',
                                 width: 100,
                                 ...QUOTATION_DETAIL_NUM_COL,
@@ -4413,6 +4464,7 @@ const QuotationsPage: React.FC = () => {
                                       resource={QUOTATION_FIELD_RESOURCE}
                                       fieldName="amount_without_tax"
                                       value={line.excl}
+                                      prefix={moneyPrefix}
                                       style={QUOTATION_DETAIL_AMOUNT_STYLE}
                                     />
                                   );
@@ -4425,7 +4477,7 @@ const QuotationsPage: React.FC = () => {
                                 ...QUOTATION_DETAIL_NUM_COL,
                               },
                               {
-                                title: t('app.kuaizhizao.salesOrder.taxAmount'),
+                                title: t('app.kuaizhizao.salesOrder.taxAmount', currencyVars),
                                 key: 'line_tax',
                                 width: 90,
                                 ...QUOTATION_DETAIL_NUM_COL,
@@ -4443,6 +4495,7 @@ const QuotationsPage: React.FC = () => {
                                       resource={QUOTATION_FIELD_RESOURCE}
                                       fieldName="tax_amount"
                                       value={line.tax}
+                                      prefix={moneyPrefix}
                                       style={QUOTATION_DETAIL_AMOUNT_STYLE}
                                     />
                                   );
@@ -4451,7 +4504,9 @@ const QuotationsPage: React.FC = () => {
                             ]
                           : []),
                         {
-                          title: showTax ? t('app.kuaizhizao.salesOrder.inclAmount') : t('app.kuaizhizao.salesOrder.exclAmount'),
+                          title: showTax
+                            ? t('app.kuaizhizao.salesOrder.inclAmount', currencyVars)
+                            : t('app.kuaizhizao.salesOrder.exclAmount', currencyVars),
                           key: 'line_amount_display',
                           width: 100,
                           ...QUOTATION_DETAIL_NUM_COL,
@@ -4469,6 +4524,7 @@ const QuotationsPage: React.FC = () => {
                                 resource={QUOTATION_FIELD_RESOURCE}
                                 fieldName={showTax ? 'amount_with_tax' : 'amount_without_tax'}
                                 value={showTax ? line.incl : line.excl}
+                                prefix={moneyPrefix}
                                 style={QUOTATION_DETAIL_AMOUNT_STYLE}
                               />
                             );

@@ -153,6 +153,7 @@ fast-deploy/caddy/
 fast-deploy/.tools/
 fast-deploy/config/deploy.env
 fast-deploy/config/boot-service.env
+fast-deploy/config/caddy-extra-proxies.list
 
 # ===== Playwright E2E 运行产物 =====
 riveredge-frontend/e2e/output/

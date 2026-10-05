@@ -46,6 +46,19 @@ import { useUserPreferenceStore } from '../../stores/userPreferenceStore';
 import ErrorBoundary from '../error-boundary';
 
 /** Univer dispose / 上传重建竞态：内部异步仍可能访问已卸载 workbook */
+type ImportFieldSelectionEntry = string[] | { keys?: string[]; revision?: string };
+
+function readImportFieldSelectionEntry(
+  entry: ImportFieldSelectionEntry | undefined,
+): { keys: string[]; revision?: string } {
+  if (!entry) return { keys: [] };
+  if (Array.isArray(entry)) return { keys: entry };
+  return {
+    keys: Array.isArray(entry.keys) ? entry.keys : [],
+    revision: entry.revision,
+  };
+}
+
 function isUniverImportDisposeRaceError(error: unknown): boolean {
   const msg = error instanceof Error ? error.message : String(error ?? '');
   return (
@@ -179,6 +192,10 @@ export interface UniImportProps {
    */
   customImportPreferenceKey?: string;
   /**
+   * 导入模板修订号；变更后重置在线表列布局与字段偏好（如新增「员工编号」列）
+   */
+  importTemplateRevision?: string;
+  /**
    * 确认入库前是否展示预检预览（默认：true）
    */
   enableImportPreview?: boolean;
@@ -225,6 +242,7 @@ export const UniImport: React.FC<UniImportProps> = ({
   onRelationImportPrecheck,
   onRelationImportSubmit,
   customImportPreferenceKey,
+  importTemplateRevision,
   enableImportPreview = true,
   importPreviewMaxRows = 10,
   importDataStartRow = 2,
@@ -461,17 +479,39 @@ export const UniImport: React.FC<UniImportProps> = ({
   useEffect(() => {
     if (!(open ?? visible)) return;
     if (!allFieldKeys.length) return;
-    const savedMap = getPreference<Record<string, string[]>>('ui.import_field_selection', {});
-    const saved = Array.isArray(savedMap?.[importPreferenceSegment]) ? savedMap[importPreferenceSegment] : [];
+    const savedMap = getPreference<Record<string, ImportFieldSelectionEntry>>(
+      'ui.import_field_selection',
+      {},
+    );
+    const { keys: saved, revision: savedRevision } = readImportFieldSelectionEntry(
+      savedMap?.[importPreferenceSegment],
+    );
+    if (
+      importTemplateRevision &&
+      importTemplateRevision !== savedRevision
+    ) {
+      setCustomImportFieldKeys(allFieldKeys);
+      return;
+    }
     if (!saved.length) {
       setCustomImportFieldKeys(allFieldKeys);
       return;
     }
     const orderedSaved = saved.filter((key) => allFieldKeys.includes(key));
     const missing = allFieldKeys.filter((key) => !orderedSaved.includes(key));
-    const merged = [...orderedSaved, ...missing];
+    const merged =
+      missing.length > 0
+        ? allFieldKeys.filter((key) => orderedSaved.includes(key) || missing.includes(key))
+        : orderedSaved;
     setCustomImportFieldKeys(merged.length ? merged : allFieldKeys);
-  }, [open, visible, allFieldKeys, getPreference, importPreferenceSegment]);
+  }, [
+    open,
+    visible,
+    allFieldKeys,
+    getPreference,
+    importPreferenceSegment,
+    importTemplateRevision,
+  ]);
 
   // 弹窗打开时拦截 Ctrl/Cmd+D，避免触发浏览器收藏
   useEffect(() => {
@@ -614,10 +654,15 @@ export const UniImport: React.FC<UniImportProps> = ({
     setCustomImportFieldKeys(result.selectedFieldKeys);
     setCustomRelationEntities(sanitizedRelationEntities);
     setCustomWriteStrategy(result.writeStrategy);
-    const savedMap = getPreference<Record<string, string[]>>('ui.import_field_selection', {});
+    const savedMap = getPreference<Record<string, ImportFieldSelectionEntry>>(
+      'ui.import_field_selection',
+      {},
+    );
     const nextMap = {
       ...(savedMap && typeof savedMap === 'object' ? savedMap : {}),
-      [importPreferenceSegment]: result.selectedFieldKeys,
+      [importPreferenceSegment]: importTemplateRevision
+        ? { revision: importTemplateRevision, keys: result.selectedFieldKeys }
+        : result.selectedFieldKeys,
     };
     void updatePreferences({
       ui: {
@@ -1159,8 +1204,8 @@ export const UniImport: React.FC<UniImportProps> = ({
             <UniImportSheetHost
             isDark={isDark}
             uploadedSheetRows={uploadedSheetRows}
-            headers={headersRef.current}
-            exampleRow={exampleRowRef.current}
+            headers={effectiveHeaders}
+            exampleRow={effectiveExampleRow}
             columnOptions={effectiveColumnOptions}
             height={height}
             loading={loading}

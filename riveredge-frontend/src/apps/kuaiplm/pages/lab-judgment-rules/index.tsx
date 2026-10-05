@@ -37,6 +37,7 @@ import {
   labJudgmentRuleApi,
   type LabJudgmentRule,
 } from '../../services/lab-judgment-rule';
+import { resolvePlmStandardDocListSearch } from '../../utils/plmListCore';
 
 const RESOURCE = 'kuaiplm:lab-judgment-rule';
 
@@ -347,17 +348,16 @@ const LabJudgmentRulesPage: React.FC = () => {
         onTableDataChange={(rows) => {
           tableRowsRef.current = rows;
         }}
-        request={async (params) => {
+        skipFuzzyPinyinClientFilter
+        request={async (params, _sort, _filter, searchFormValues) => {
+          const { keyword, is_active } = resolvePlmStandardDocListSearch(searchFormValues, [
+            'rule_name',
+          ]);
           const res = await labJudgmentRuleApi.list({
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize || 20,
-            keyword: params.keyword || params.rule_name,
-            is_active:
-              params.is_active === true || params.is_active === 'true'
-                ? true
-                : params.is_active === false || params.is_active === 'false'
-                  ? false
-                  : undefined,
+            keyword,
+            is_active,
           });
           return { data: res.items, success: true, total: res.total };
         }}

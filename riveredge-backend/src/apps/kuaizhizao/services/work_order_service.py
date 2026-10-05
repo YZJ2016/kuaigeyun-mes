@@ -281,6 +281,62 @@ def _parse_assigned_worker_ids(
     return out
 
 
+def _parse_assigned_equipment_ids(
+    raw_ids: Any,
+    fallback_equipment_id: Optional[int] = None,
+) -> List[int]:
+    """解析派工设备 ID 列表，去重并保持顺序。"""
+    out: List[int] = []
+    if isinstance(raw_ids, list):
+        for x in raw_ids:
+            try:
+                eid = int(x)
+            except (TypeError, ValueError):
+                continue
+            if eid > 0 and eid not in out:
+                out.append(eid)
+    if not out and fallback_equipment_id is not None:
+        try:
+            eid = int(fallback_equipment_id)
+        except (TypeError, ValueError):
+            eid = 0
+        if eid > 0:
+            out.append(eid)
+    return out
+
+
+async def _resolve_assigned_equipment_fields(
+    tenant_id: int,
+    equipment_ids: List[int],
+) -> Tuple[List[int], Optional[int], Optional[str]]:
+    """解析派工设备列表，返回 (ids, primary_id, joined_labels)。"""
+    if not equipment_ids:
+        return [], None, None
+    from apps.kuaizhizao.models.equipment import Equipment
+
+    rows = await Equipment.filter(
+        tenant_id=tenant_id,
+        id__in=equipment_ids,
+        deleted_at__isnull=True,
+    ).all()
+    by_id = {row.id: row for row in rows}
+    ordered_ids: List[int] = []
+    labels: List[str] = []
+    for eid in equipment_ids:
+        if eid in ordered_ids:
+            continue
+        eq = by_id.get(eid)
+        if not eq:
+            continue
+        ordered_ids.append(eid)
+        label = f"{eq.code} {eq.name}".strip()
+        if label:
+            labels.append(label)
+    if not ordered_ids:
+        return [], None, None
+    return ordered_ids, ordered_ids[0], ("、".join(labels) if labels else None)
+
+
 async def _resolve_assigned_worker_fields(
     tenant_id: int,
     worker_ids: List[int],
@@ -834,6 +890,119 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
         pickings = await list_work_order_cost_pickings(tenant_id, work_order_id)
         return bool(pickings)
+
+    @staticmethod
+    async def resolve_max_reportable_qty_from_confirmed_picking(
+        tenant_id: int,
+        work_order_id: int,
+    ) -> Optional[Decimal]:
+        """
+        正式领料可支撑的最大报工量（成品数量口径）。
+
+        按 BOM 事前领料件：min(已领 / 单件需求)。无事前领料件返回 None（不按领料卡数量）。
+        """
+        from apps.kuaizhizao.utils.issue_method_resolver import is_pick_list_material
+        from apps.kuaizhizao.utils.picking_posting import (
+            max_reportable_units_from_picked,
+            sum_confirmed_picked_by_material,
+        )
+
+        work_order = await WorkOrder.get_or_none(
+            tenant_id=tenant_id, id=work_order_id, deleted_at__isnull=True
+        )
+        if not work_order:
+            raise NotFoundError(f"工单不存在: {work_order_id}")
+
+        plan_qty = Decimal(str(work_order.quantity or 0))
+        try:
+            variant_attrs = getattr(work_order, "variant_attributes", None)
+            cfg_selections = getattr(work_order, "configurable_selections", None)
+            if cfg_selections and isinstance(cfg_selections, dict):
+                try:
+                    cfg_selections = {
+                        str(k): int(v) for k, v in cfg_selections.items() if v is not None
+                    }
+                except (TypeError, ValueError):
+                    cfg_selections = None
+            requirements = await calculate_material_requirements_from_bom(
+                tenant_id=tenant_id,
+                material_id=work_order.product_id,
+                required_quantity=float(plan_qty),
+                only_approved=True,
+                variant_attributes=variant_attrs,
+                configurable_selections=cfg_selections,
+                for_kitting_analysis=True,
+            )
+        except Exception as exc:
+            logger.warning(
+                "报工领料上限：BOM 展开失败 wo=%s err=%s，跳过数量门禁",
+                work_order_id,
+                exc,
+            )
+            return None
+
+        pick_reqs: List[Tuple[int, Decimal]] = []
+        for req in requirements or []:
+            if not is_pick_list_material(
+                getattr(req, "issue_method", None),
+                getattr(req, "component_type", None),
+            ):
+                continue
+            mid = int(getattr(req, "component_id", 0) or 0)
+            if mid <= 0:
+                continue
+            required = Decimal(
+                str(
+                    getattr(req, "gross_requirement", None)
+                    or getattr(req, "net_requirement", None)
+                    or 0
+                )
+            )
+            pick_reqs.append((mid, required))
+
+        if not pick_reqs:
+            return None
+
+        picked_map = await sum_confirmed_picked_by_material(tenant_id, work_order_id)
+        max_units = max_reportable_units_from_picked(plan_qty, pick_reqs, picked_map)
+        if max_units is None:
+            return None
+        return max(Decimal("0"), max_units)
+
+    @staticmethod
+    async def assert_reporting_qty_within_confirmed_picking_if_required(
+        tenant_id: int,
+        work_order_id: int,
+        *,
+        operation_completed_qty: Decimal,
+        reporting_qty: Decimal,
+    ) -> None:
+        """流程参数「报工前必须确认领料」开启时：工序累计报工不得超过正式领料可支撑量。"""
+        policy = await BusinessConfigService().get_work_order_picking_policy(tenant_id)
+        if not policy.get("require_confirmed_picking_before_reporting", False):
+            return
+        max_from_pick = await WorkOrderService.resolve_max_reportable_qty_from_confirmed_picking(
+            tenant_id, work_order_id
+        )
+        if max_from_pick is None:
+            return
+        completed = Decimal(str(operation_completed_qty or 0))
+        this_qty = Decimal(str(reporting_qty or 0))
+        if this_qty <= 0:
+            return
+        after = completed + this_qty
+        # 允许一个数量步长内的显示误差
+        from apps.kuaizhizao.utils.mrp_quantity import MRP_QTY_STEP
+
+        if after <= max_from_pick + MRP_QTY_STEP:
+            return
+        remaining = max_from_pick - completed
+        if remaining < 0:
+            remaining = Decimal("0")
+        raise BusinessLogicError(
+            f"报工数量超限：正式领料仅支撑完成 {max_from_pick}，"
+            f"本道工序已报 {completed}，本次最多可报 {remaining}，本次报工 {this_qty}"
+        )
 
     @staticmethod
     async def assert_confirmed_picking_before_operation_start_if_required(
@@ -4209,12 +4378,14 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 "bom_missing": True,
                 "shortage_items": [],
                 "total_shortage_count": 0,
+                "checked_requirement_count": 0,
                 "work_order_id": work_order_id,
                 "work_order_code": work_order.code or "",
                 "work_order_name": work_order.name or "",
             }
 
         shortage_items = []
+        checked_requirement_count = 0
 
         # 检查每个物料的需求和库存
         # 下达缺料：服务/委外/虚拟件及发料 none 不校验厂内库存
@@ -4227,6 +4398,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 getattr(requirement, "component_type", None),
             ):
                 continue
+            checked_requirement_count += 1
             # 获取可用库存
             available_quantity = await get_material_available_quantity(
                 tenant_id=tenant_id,
@@ -4253,6 +4425,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             "bom_missing": False,
             "shortage_items": shortage_items,
             "total_shortage_count": len(shortage_items),
+            "checked_requirement_count": checked_requirement_count,
             "work_order_id": work_order_id,
             "work_order_code": work_order.code or "",
             "work_order_name": work_order.name or "",
@@ -6494,8 +6667,25 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             work_order_operation.assigned_team_name = dispatch_data.assigned_team_name
             work_order_operation.assigned_station_id = dispatch_data.assigned_station_id
             work_order_operation.assigned_station_name = dispatch_data.assigned_station_name
-            work_order_operation.assigned_equipment_id = dispatch_data.assigned_equipment_id
-            work_order_operation.assigned_equipment_name = dispatch_data.assigned_equipment_name
+            if (
+                "assigned_equipment_ids" in dispatch_patch
+                or "assigned_equipment_id" in dispatch_patch
+                or "assigned_equipment_name" in dispatch_patch
+            ):
+                if "assigned_equipment_ids" in dispatch_patch:
+                    equipment_ids = _parse_assigned_equipment_ids(dispatch_data.assigned_equipment_ids)
+                elif dispatch_data.assigned_equipment_id is not None:
+                    equipment_ids = _parse_assigned_equipment_ids(None, dispatch_data.assigned_equipment_id)
+                else:
+                    equipment_ids = []
+                (
+                    resolved_equipment_ids,
+                    primary_equipment_id,
+                    joined_equipment_name,
+                ) = await _resolve_assigned_equipment_fields(tenant_id, equipment_ids)
+                work_order_operation.assigned_equipment_ids = resolved_equipment_ids
+                work_order_operation.assigned_equipment_id = primary_equipment_id
+                work_order_operation.assigned_equipment_name = joined_equipment_name
             work_order_operation.assigned_mold_id = dispatch_data.assigned_mold_id
             work_order_operation.assigned_mold_name = dispatch_data.assigned_mold_name
             work_order_operation.assigned_tool_id = dispatch_data.assigned_tool_id

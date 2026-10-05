@@ -27,6 +27,7 @@ import {
   EquipmentMasterDetailDrawer,
   useEquipmentDetailDrawer,
 } from '../shared/equipmentMasterDataDetail';
+import { pickSearchString } from '../../../../../utils/tableQueryKey';
 
 const P = 'app.kuaizhizao.toolMaintenanceReminder';
 const RESOURCE = 'kuaizhizao:tool-maintenance-reminder';
@@ -408,7 +409,7 @@ const ToolMaintenanceRemindersPage: React.FC = () => {
               <UniTable<ToolMaintenanceReminder>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.toolMaintenanceReminders')}
-                columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-maintenance-reminders.maintenance-width-v2"
+                columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-maintenance-reminders.maintenance-width-v3"
                 actionRef={maintenanceActionRef}
                 showAdvancedSearch
                 skipFuzzyPinyinClientFilter
@@ -444,7 +445,6 @@ const ToolMaintenanceRemindersPage: React.FC = () => {
                   const { data, total } = normalizeEquipmentListResponse(res);
                   return { data: data as ToolMaintenanceReminder[], success: true, total };
                 }}
-                search={{ labelWidth: 'auto' }}
                 pagination={{ defaultPageSize: 20 }}
               />
             ),
@@ -454,7 +454,7 @@ const ToolMaintenanceRemindersPage: React.FC = () => {
             label: t(`${P}.tabCalibration`),
             children: (
               <UniTable<ToolCalibrationReminder>
-                columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-maintenance-reminders.calibration-width-v2"
+                columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-maintenance-reminders.calibration-width-v4"
                 actionRef={calibrationActionRef}
                 showAdvancedSearch
                 skipFuzzyPinyinClientFilter
@@ -479,16 +479,14 @@ const ToolMaintenanceRemindersPage: React.FC = () => {
                       ]
                     : []
                 }
-                request={async (params) => {
+                request={async (params, _sort, _filter, searchFormValues) => {
                   const res = await toolApi.listCalibrationReminders({
                     skip: ((params.current || 1) - 1) * (params.pageSize || 20),
                     limit: params.pageSize || 20,
-                    due_type: params.due_type as string | undefined,
+                    due_type: pickSearchString(searchFormValues, 'due_type'),
                   });
                   return { data: res.items || [], success: true, total: res.total || 0 };
                 }}
-                search={{ labelWidth: 'auto' }}
-                pagination={{ defaultPageSize: 20 }}
               />
             ),
           },

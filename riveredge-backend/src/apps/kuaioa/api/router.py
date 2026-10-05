@@ -6,6 +6,8 @@ from .announcements import router as announcements_router
 from .assets import router as assets_router
 from .attendance import router as attendance_router
 from .collaboration import router as collaboration_router
+from .attendance_analysis import router as attendance_analysis_router
+from .daily_attendance import router as daily_attendance_router
 from .employees import router as employees_router
 from .forms import router as forms_router
 from .leave import router as leave_router
@@ -25,6 +27,8 @@ router.include_router(workbench_router)
 router.include_router(forms_router)
 router.include_router(employees_router)
 router.include_router(attendance_router)
+router.include_router(daily_attendance_router)
+router.include_router(attendance_analysis_router)
 router.include_router(payroll_router)
 router.include_router(welfare_router)
 router.include_router(post_subsidy_router)

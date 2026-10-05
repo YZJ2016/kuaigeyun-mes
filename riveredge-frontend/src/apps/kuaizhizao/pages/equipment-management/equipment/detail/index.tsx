@@ -111,6 +111,8 @@ interface EquipmentDetail {
   workstation_name?: string;
   work_center_id?: number;
   work_center_name?: string;
+  capable_operation_ids?: number[] | null;
+  capable_operations?: Array<{ id?: number; code?: string; name?: string }> | null;
   responsible_person_id?: number;
   responsible_person_name?: string;
   spot_check_person_id?: number;
@@ -247,6 +249,19 @@ const EquipmentDetailPage: React.FC = () => {
       },
       { title: t('app.kuaizhizao.equipment.colWorkstation'), dataIndex: 'workstation_name' },
       { title: t('app.kuaizhizao.equipment.colWorkCenter'), dataIndex: 'work_center_name' },
+      {
+        title: t('app.kuaizhizao.equipment.colCapableOperations'),
+        dataIndex: 'capable_operations',
+        span: 2,
+        render: (_, r) => {
+          const ops = Array.isArray(r.capable_operations) ? r.capable_operations : [];
+          if (ops.length === 0) return '-';
+          return ops
+            .map((op) => (op?.name || op?.code || '').trim())
+            .filter(Boolean)
+            .join('、') || '-';
+        },
+      },
       { title: t('app.kuaizhizao.equipment.colResponsiblePerson'), dataIndex: 'responsible_person_name' },
       { title: t('app.kuaizhizao.equipment.colSpotCheckPerson'), dataIndex: 'spot_check_person_name' },
       {

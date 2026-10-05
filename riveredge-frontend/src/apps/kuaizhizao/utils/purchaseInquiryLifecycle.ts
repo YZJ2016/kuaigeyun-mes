@@ -10,6 +10,12 @@ import {
   resolveListLifecycleStageFromSearch,
   toListLifecycleStageApiParams,
 } from '../../../utils/listLifecycleStage';
+import {
+  extractProTableSort,
+  pickListSearchKeyword,
+  pickSearchString,
+} from '../../../utils/tableQueryKey';
+import { parseSalesReportDateRange } from '../services/reports';
 
 const STATUS_TO_STAGE: Record<string, string> = {
   DRAFT: '草稿',
@@ -114,6 +120,50 @@ export function getPurchaseInquiryLifecycle(record: Record<string, unknown> | nu
     stageName,
     mainStages,
   };
+}
+
+export function resolvePurchaseInquiryListApiParams(
+  params: Record<string, unknown>,
+  sort?: Record<string, 'ascend' | 'descend' | null>,
+  searchFormValues?: Record<string, unknown> | null,
+): Record<string, unknown> {
+  const lifecycleParams = resolvePurchaseInquiryListLifecycleParams(searchFormValues, params);
+  const { sortBy, sortOrder } = extractProTableSort(sort ?? {});
+  const orderBy =
+    sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
+  const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
+
+  const apiParams: Record<string, unknown> = {
+    skip: (((params.current as number) || 1) - 1) * ((params.pageSize as number) || 20),
+    limit: (params.pageSize as number) || 20,
+    ...lifecycleParams,
+    order_by: orderBy,
+    include_items: true,
+  };
+
+  if (fuzzyKeyword) {
+    apiParams.keyword = fuzzyKeyword;
+  } else {
+    const inquiryCode = pickSearchString(searchFormValues, 'inquiry_code');
+    const inquiryName = pickSearchString(searchFormValues, 'inquiry_name');
+    const sourceCode = pickSearchString(searchFormValues, 'source_code');
+    if (inquiryCode) apiParams.inquiry_code = inquiryCode;
+    if (inquiryName) apiParams.inquiry_name = inquiryName;
+    if (sourceCode) apiParams.source_code = sourceCode;
+  }
+
+  const deadline = parseSalesReportDateRange(searchFormValues ?? {}, ['quote_deadline_range']);
+  if (deadline.date_start) {
+    apiParams.quote_deadline_from = deadline.date_start;
+    apiParams.quote_deadline_to = deadline.date_end ?? deadline.date_start;
+  }
+  const created = parseSalesReportDateRange(searchFormValues ?? {}, ['created_at_range', 'createdAtRange']);
+  if (created.date_start) {
+    apiParams.created_start_date = created.date_start;
+    apiParams.created_end_date = created.date_end ?? created.date_start;
+  }
+
+  return apiParams;
 }
 
 export { LIST_LIFECYCLE_STAGE_FIELD };

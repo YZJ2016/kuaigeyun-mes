@@ -61,6 +61,7 @@ import DeliveryNodeReportDetailDrawer from './components/DeliveryNodeReportDetai
 
 import { createDeliveryListExporter } from '../shared/deliveryListExport';
 import { renderDeliveryStatusTag } from '../shared/deliveryListPresentation';
+import { resolveListLifecycleStageFromSearch } from '../../../../../utils/listLifecycleStage';
 
 
 
@@ -552,7 +553,7 @@ const NodeReportsPage: React.FC = () => {
 
           columns={columns}
 
-          columnPersistenceId="kuaizhizao-delivery-node-reports-v5"
+          columnPersistenceId="kuaizhizao-delivery-node-reports-v6"
 
           enableRowSelection
 
@@ -586,10 +587,9 @@ const NodeReportsPage: React.FC = () => {
 
           }}
 
-          request={async (params) => {
-
+          request={async (params, _sort, _filter, searchFormValues) => {
             const listParams = {
-              status: params.lifecycle as string | undefined,
+              status: resolveListLifecycleStageFromSearch(searchFormValues),
             };
             lastListParamsRef.current = listParams;
 

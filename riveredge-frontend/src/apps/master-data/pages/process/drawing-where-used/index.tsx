@@ -295,12 +295,13 @@ const DrawingWhereUsedPage: React.FC = () => {
         rowKey="uuid"
         permissionResource={RESOURCE}
         headerTitle={t('app.master-data.menu.process.drawing-where-used')}
-        columnPersistenceId="apps.master-data.pages.process.drawing-where-used.v2"
+        columnPersistenceId="apps.master-data.pages.process.drawing-where-used.v3"
+        showFuzzySearch={false}
+        showAdvancedSearch={false}
         columns={(queryRef.current.direction === 'reverse' ? usageColumns : drawingColumns) as ProColumns<EngineeringDrawing | DrawingWhereUsedUsage>[]}
         showCreateButton={false}
         showExportButton={canExport}
         onExport={handleExport}
-        search={false}
         beforeSearchButtons={
           <Segmented
             value={direction}

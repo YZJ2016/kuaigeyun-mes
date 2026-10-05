@@ -5,6 +5,7 @@
  */
 
 import { api, apiRequest } from '../../../services/api';
+import { pickListSearchKeyword } from '../../../utils/tableQueryKey';
 import {
   normalizeMasterBatchDeleteResponse,
   type MasterBatchDeleteResult,
@@ -55,9 +56,9 @@ export function applyFactoryKeyword(
   apiParams: Record<string, unknown>,
   searchFormValues?: Record<string, unknown>
 ): void {
-  const kw = searchFormValues?.keyword;
-  if (kw !== undefined && kw !== null && String(kw).trim() !== '') {
-    apiParams.keyword = String(kw).trim();
+  const kw = pickListSearchKeyword(searchFormValues);
+  if (kw) {
+    apiParams.keyword = kw;
   }
 }
 

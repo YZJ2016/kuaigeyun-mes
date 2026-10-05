@@ -226,19 +226,29 @@ class CustomerSyncService:
                     deleted_at__isnull=True,
                 ).first()
                 if existing:
-                    update_data = CustomerUpdate(
-                        name=name,
-                        short_name=cell_str(row.get("short_name")) or None,
-                        contact_person=cell_str(row.get("contact_person")) or None,
-                        phone=cell_str(row.get("phone")) or None,
-                        email=cell_str(row.get("email")) or None,
-                        address=cell_str(row.get("address")) or None,
-                    )
+                    update_payload: Dict[str, Any] = {"name": name}
+                    short_name = cell_str(row.get("short_name"))
+                    contact_person = cell_str(row.get("contact_person"))
+                    phone = cell_str(row.get("phone"))
+                    email = cell_str(row.get("email"))
+                    address = cell_str(row.get("address"))
+                    if short_name:
+                        update_payload["short_name"] = short_name
+                    if contact_person:
+                        update_payload["contact_person"] = contact_person
+                    if phone:
+                        update_payload["phone"] = phone
+                    if email:
+                        update_payload["email"] = email
+                    if address:
+                        update_payload["address"] = address
+                    update_data = CustomerUpdate(**update_payload)
                     await SupplyChainService.update_customer(
                         tenant_id,
                         existing.uuid,
                         update_data,
                         current_user,
+                        require_contact_channel=False,
                     )
                     await existing.refresh_from_db()
                     await apply_sync_extras_after_write(
@@ -265,7 +275,10 @@ class CustomerSyncService:
                         address=cell_str(row.get("address")) or None,
                     )
                     created_customer = await SupplyChainService.create_customer(
-                        tenant_id, create_data, current_user
+                        tenant_id,
+                        create_data,
+                        current_user,
+                        require_contact_channel=False,
                     )
                     customer_row = await Customer.filter(
                         tenant_id=tenant_id,

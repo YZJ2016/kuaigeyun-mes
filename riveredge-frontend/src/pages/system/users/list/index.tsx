@@ -9,13 +9,15 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, List, Modal, Popconfirm, Space, Tag, Typography } from 'antd';
+import { App, Button, List, Modal, Popconfirm, Select, Space, Tag, Typography } from 'antd';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
-import { renderSystemActiveTag, renderSystemTypeMarker, renderSystemYesNoTag, SystemUserAvatar } from '../../utils/systemListPresentation';
+import { renderSystemActiveTag, renderSystemYesNoTag, SystemUserAvatar } from '../../utils/systemListPresentation';
+import { renderInlineMarkerTagGroup } from '../../../../components/inline-marker-tag-preview';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../utils/uniTableLayoutColumns';
-import { QrcodeOutlined } from '@ant-design/icons';
+import { QrcodeOutlined, CheckCircleOutlined, StopOutlined, ApartmentOutlined, IdcardOutlined, TeamOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import { ListPageTemplate } from '../../../../components/layout-templates';
+import { ListPageTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { UniBatchMenuButton } from '../../../../components/uni-batch';
 import { getApiErrorMessage } from '../../../../utils/errorHandler';
 import { buildDetailDrawerEditExtra } from '../../../../apps/kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
 import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer';
@@ -29,6 +31,8 @@ import {
   exportUsers,
   resetUserPassword,
   batchDeleteUsers,
+  batchUpdateUsers,
+  batchUpdateUsersStatus,
   User,
 } from '../../../../services/user';
 import { QRCodeGenerator } from '../../../../components/qrcode';
@@ -47,6 +51,11 @@ import { getAntdModal } from '../../../../utils/antdAppApis';
 import { formatDateTimeBySiteSetting, todaySiteDateString } from '../../../../utils/format';
 import { importExcelMatrixInChunks } from '../../../../utils/chunkedBulkImport';
 import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
+import {
+  pickListSearchKeyword,
+  pickSearchString,
+  pickSearchTriStateBoolean,
+} from '../../../../utils/tableQueryKey';
 /**
  * 账户管理列表页面组件
  */
@@ -62,6 +71,9 @@ const UserListPage: React.FC = () => {
   const [roleOptions, setRoleOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [userFormOpen, setUserFormOpen] = useState(false);
   const [userEditUuid, setUserEditUuid] = useState<string | null>(null);
+  const [batchFieldModal, setBatchFieldModal] = useState<'department' | 'position' | 'roles' | null>(null);
+  const [batchFieldValue, setBatchFieldValue] = useState<string | string[] | undefined>(undefined);
+  const [batchSubmitting, setBatchSubmitting] = useState(false);
   
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -250,6 +262,103 @@ const UserListPage: React.FC = () => {
       messageApi.error(error.message || t('common.deleteFailed'));
     }
   };
+
+  const reportBatchUpdateResult = useCallback(
+    (result: { success_count: number; failure_count: number; errors?: Array<{ message: string }> }) => {
+      if (result.failure_count > 0) {
+        const reasonHint =
+          result.errors && result.errors.length > 0
+            ? `：${result.errors
+                .slice(0, 3)
+                .map((e) => e.message)
+                .join('；')}${result.errors.length > 3 ? '…' : ''}`
+            : '';
+        messageApi.warning(
+          t('field.user.batchUpdatePartial', {
+            success: result.success_count,
+            fail: result.failure_count,
+          }) + reasonHint,
+        );
+      } else {
+        messageApi.success(t('field.user.batchUpdateSuccess', { count: result.success_count }));
+      }
+      // 保留勾选，便于连续批量设置部门/职位/角色或启停；须配合 UniTable 受控 selectedRowKeys
+      actionRef.current?.reload();
+    },
+    [messageApi, t],
+  );
+
+  const handleBatchStatus = useCallback(
+    async (uuids: React.Key[], isActive: boolean) => {
+      if (!uuids.length) return;
+      try {
+        const result = await batchUpdateUsersStatus(uuids as string[], isActive);
+        reportBatchUpdateResult(result);
+      } catch (error: any) {
+        messageApi.error(error.message || t('common.operationFailed'));
+      }
+    },
+    [messageApi, reportBatchUpdateResult, t],
+  );
+
+  const openBatchFieldModal = useCallback((kind: 'department' | 'position' | 'roles') => {
+    setBatchFieldValue(kind === 'roles' ? [] : undefined);
+    setBatchFieldModal(kind);
+  }, []);
+
+  const closeBatchFieldModal = useCallback(() => {
+    setBatchFieldModal(null);
+    setBatchFieldValue(undefined);
+    setBatchSubmitting(false);
+  }, []);
+
+  const submitBatchField = useCallback(async () => {
+    if (!batchFieldModal || selectedRowKeys.length === 0) return;
+    if (batchFieldModal === 'roles') {
+      const roles = Array.isArray(batchFieldValue) ? batchFieldValue.map(String).filter(Boolean) : [];
+      if (roles.length === 0) {
+        messageApi.warning(t('field.user.batchSetRolesRequired'));
+        return;
+      }
+    } else if (!batchFieldValue || (typeof batchFieldValue === 'string' && !batchFieldValue.trim())) {
+      messageApi.warning(
+        t(
+          batchFieldModal === 'department'
+            ? 'field.user.batchSetDepartmentRequired'
+            : 'field.user.batchSetPositionRequired',
+        ),
+      );
+      return;
+    }
+
+    setBatchSubmitting(true);
+    try {
+      const payload =
+        batchFieldModal === 'department'
+          ? { user_uuids: selectedRowKeys as string[], department_uuid: String(batchFieldValue) }
+          : batchFieldModal === 'position'
+            ? { user_uuids: selectedRowKeys as string[], position_uuid: String(batchFieldValue) }
+            : {
+                user_uuids: selectedRowKeys as string[],
+                role_uuids: (batchFieldValue as string[]).map(String),
+              };
+      const result = await batchUpdateUsers(payload);
+      reportBatchUpdateResult(result);
+      closeBatchFieldModal();
+    } catch (error: any) {
+      messageApi.error(error.message || t('common.operationFailed'));
+    } finally {
+      setBatchSubmitting(false);
+    }
+  }, [
+    batchFieldModal,
+    batchFieldValue,
+    closeBatchFieldModal,
+    messageApi,
+    reportBatchUpdateResult,
+    selectedRowKeys,
+    t,
+  ]);
 
   /**
    * 处理重置密码
@@ -530,31 +639,24 @@ const UserListPage: React.FC = () => {
         record.position ? resolvePresetPositionName(record.position, t) : '-',
     },
     {
-      // 角色多枚徽章：唯一 RemainderFlex
+      // 角色多枚徽章：唯一 RemainderFlex；抬高 minWidth 避免余量不足时徽章贴边/被裁
       title: t('field.user.roles'),
       dataIndex: 'roles',
-      minWidth: 140,
+      minWidth: 200,
       uniTableRemainderFlex: true,
       uniTablePrimaryFlex: true,
       resizable: false,
-      ellipsis: true,
+      ellipsis: false,
       hideInSearch: true,
-      render: (_, record) => (
-        <Space size={4} wrap>
-          {record.roles?.map(role => (
-            <span
-              key={role.uuid}
-              style={{ cursor: 'pointer' }}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleOpenRoleEdit(role.uuid);
-              }}
-            >
-              {renderSystemTypeMarker(resolvePresetRoleName(role, t), 'processing')}
-            </span>
-          ))}
-        </Space>
-      ),
+      render: (_, record) =>
+        renderInlineMarkerTagGroup(
+          (record.roles ?? []).map((role) => ({
+            key: role.uuid,
+            label: resolvePresetRoleName(role, t),
+            color: 'processing',
+            onClick: () => handleOpenRoleEdit(role.uuid),
+          })),
+        ),
     },
     {
       title: t('field.user.phone'),
@@ -727,22 +829,22 @@ const UserListPage: React.FC = () => {
         <UniTable<User>
         viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('system.users')}
-        columnPersistenceId="pages.system.users.list-v3"
+        columnPersistenceId="pages.system.users.list-v5"
         actionRef={actionRef}
         columns={columns}
         request={async (params, _, __, searchFormValues) => {
             const response = await getUserList({
               page: params.current || 1,
               page_size: params.pageSize || 20,
-              keyword: searchFormValues?.keyword,
-              username: searchFormValues?.username,
-              email: searchFormValues?.email,
-              full_name: searchFormValues?.full_name,
-              phone: searchFormValues?.phone,
-              department_uuid: searchFormValues?.department_uuid,
-              position_uuid: searchFormValues?.position_uuid,
-              is_active: searchFormValues?.is_active,
-              is_tenant_admin: searchFormValues?.is_tenant_admin,
+              keyword: pickListSearchKeyword(searchFormValues),
+              username: pickSearchString(searchFormValues, 'username'),
+              email: pickSearchString(searchFormValues, 'email'),
+              full_name: pickSearchString(searchFormValues, 'full_name'),
+              phone: pickSearchString(searchFormValues, 'phone'),
+              department_uuid: pickSearchString(searchFormValues, 'department_uuid'),
+              position_uuid: pickSearchString(searchFormValues, 'position_uuid'),
+              is_active: pickSearchTriStateBoolean(searchFormValues, 'is_active'),
+              is_tenant_admin: pickSearchTriStateBoolean(searchFormValues, 'is_tenant_admin'),
             });
           return {
             data: response.items,
@@ -756,6 +858,7 @@ const UserListPage: React.FC = () => {
         createButtonText={t('field.user.createButton')}
         onCreate={handleCreate}
         enableRowSelection
+        selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         showDeleteButton={true}
         deleteButtonText={t('common.batchDelete')}
@@ -830,18 +933,117 @@ const UserListPage: React.FC = () => {
         }}
         showExportButton={true}
         onExport={handleExport}
-        toolBarActionsAfterBatch={[
-          <Button {...rowActionKind('read')}
-            key="batch-qrcode"
-            icon={<QrcodeOutlined />}
-            disabled={selectedRowKeys.length === 0}
-            onClick={handleBatchGenerateQRCode}
-          >
-            {t('field.user.batchQrcode')}
-          </Button>,
+        toolBarActionsAfterDelete={[
+          <UniBatchMenuButton
+            key="user-batch-actions"
+            selectedRowKeys={selectedRowKeys}
+            buttonText={t('components.uniBatch.batchActions')}
+            menuItems={[
+              {
+                key: 'batch-set-department',
+                label: t('field.user.batchSetDepartment'),
+                icon: <ApartmentOutlined />,
+                onClick: () => openBatchFieldModal('department'),
+              },
+              {
+                key: 'batch-set-position',
+                label: t('field.user.batchSetPosition'),
+                icon: <IdcardOutlined />,
+                onClick: () => openBatchFieldModal('position'),
+              },
+              {
+                key: 'batch-set-roles',
+                label: t('field.user.batchSetRoles'),
+                icon: <TeamOutlined />,
+                onClick: () => openBatchFieldModal('roles'),
+              },
+              {
+                key: 'batch-enable',
+                label: t('field.user.batchEnable'),
+                icon: <CheckCircleOutlined />,
+                requireConfirm: true,
+                confirmTitle: t('field.user.batchEnableConfirmTitle'),
+                confirmDescription: (c) => t('field.user.batchEnableConfirmDescription', { count: c }),
+                onClick: (keys) => handleBatchStatus(keys, true),
+              },
+              {
+                key: 'batch-disable',
+                label: t('field.user.batchDisable'),
+                icon: <StopOutlined />,
+                requireConfirm: true,
+                confirmTitle: t('field.user.batchDisableConfirmTitle'),
+                confirmDescription: (c) => t('field.user.batchDisableConfirmDescription', { count: c }),
+                onClick: (keys) => handleBatchStatus(keys, false),
+              },
+              {
+                key: 'batch-qrcode',
+                label: t('field.user.batchQrcode'),
+                icon: <QrcodeOutlined />,
+                onClick: () => handleBatchGenerateQRCode(),
+              },
+            ]}
+          />,
         ]}
         />
       </ListPageTemplate>
+
+      <Modal
+        title={
+          batchFieldModal === 'department'
+            ? t('field.user.batchSetDepartment')
+            : batchFieldModal === 'position'
+              ? t('field.user.batchSetPosition')
+              : t('field.user.batchSetRoles')
+        }
+        open={batchFieldModal != null}
+        onCancel={closeBatchFieldModal}
+        onOk={() => void submitBatchField()}
+        confirmLoading={batchSubmitting}
+        destroyOnHidden
+        width={MODAL_CONFIG.SMALL_WIDTH}
+        okText={t('common.save')}
+      >
+        <div style={{ marginBottom: 8, color: 'rgba(0,0,0,0.45)' }}>
+          {t('field.user.batchSetSelectedHint', { count: selectedRowKeys.length })}
+        </div>
+        {batchFieldModal === 'department' ? (
+          <Select
+            showSearch
+            allowClear
+            optionFilterProp="label"
+            style={{ width: '100%' }}
+            placeholder={t('field.user.departmentPlaceholder')}
+            options={departmentOptions}
+            value={typeof batchFieldValue === 'string' ? batchFieldValue : undefined}
+            onChange={(v) => setBatchFieldValue(v)}
+          />
+        ) : null}
+        {batchFieldModal === 'position' ? (
+          <Select
+            showSearch
+            allowClear
+            optionFilterProp="label"
+            style={{ width: '100%' }}
+            placeholder={t('field.user.positionPlaceholder')}
+            options={positionOptions}
+            value={typeof batchFieldValue === 'string' ? batchFieldValue : undefined}
+            onChange={(v) => setBatchFieldValue(v)}
+          />
+        ) : null}
+        {batchFieldModal === 'roles' ? (
+          <Select
+            mode="multiple"
+            showSearch
+            allowClear
+            optionFilterProp="label"
+            style={{ width: '100%' }}
+            placeholder={t('field.user.rolesPlaceholder')}
+            options={roleOptions}
+            value={Array.isArray(batchFieldValue) ? batchFieldValue : []}
+            onChange={(v) => setBatchFieldValue(v)}
+          />
+        ) : null}
+      </Modal>
 
       <UserFormModal
         open={userFormOpen}

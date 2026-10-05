@@ -1,6 +1,7 @@
 import React from 'react';
 import { Col, Form, Row, Switch } from 'antd';
 import { useTranslation } from 'react-i18next';
+import LoginQuickProvidersSwitchesRow from './LoginQuickProvidersSwitchesRow';
 import './login-page-editor.less';
 
 const LoginFeatureSwitchesBlock: React.FC = () => {
@@ -35,6 +36,9 @@ const LoginFeatureSwitchesBlock: React.FC = () => {
           </Form.Item>
         </Col>
       </Row>
+      <Form.Item noStyle shouldUpdate={(prev, cur) => prev.login_quick_enabled !== cur.login_quick_enabled}>
+        {({ getFieldValue }) => (getFieldValue('login_quick_enabled') ? <LoginQuickProvidersSwitchesRow /> : null)}
+      </Form.Item>
     </div>
   );
 };

@@ -30,6 +30,7 @@ import {
 import { getAntdModal } from '../../../utils/antdAppApis';
 import { copyTextToClipboard } from '../../../utils/clipboard';
 import { buildListPageHelpViewConfig } from '../../../components/page-help-wiki';
+import { pickSearchString } from '../../../utils/tableQueryKey';
 
 const GLOBAL_SCOPE = '*';
 
@@ -242,15 +243,15 @@ export default function LicenseManagementPage() {
         rowSelectionGetCheckboxProps={(record) => ({
           disabled: !record.is_active,
         })}
-        request={async (params, _sort, _filter, searchFormValues) => {
-          const form = (searchFormValues || {}) as Record<string, unknown>;
-          const merged = { ...params, ...form } as Record<string, unknown>;
+        request={async (_params, _sort, _filter, searchFormValues) => {
+          const form = searchFormValues ?? {};
+          const isActiveRaw = form.is_active;
           const list = await listPlatformLicenses({
-            app_code: (merged.app_code as string) || undefined,
+            app_code: pickSearchString(form, 'app_code'),
             is_active:
-              merged.is_active === undefined || merged.is_active === ''
+              isActiveRaw === undefined || isActiveRaw === ''
                 ? undefined
-                : merged.is_active === 'true' || merged.is_active === true,
+                : isActiveRaw === 'true' || isActiveRaw === true,
           });
           return { data: list, success: true, total: list.length };
         }}

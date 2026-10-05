@@ -62,9 +62,11 @@ const ROLE_LAUNCH_DEFS: Record<string, RoleDef> = {
     empowermentValueKey: 'pages.system.onboardingWizard.role.sales.empowermentValue',
     tasks: [
       { id: 'sales_customer', nameKey: 'pages.system.onboardingWizard.role.sales.task.sales_customer.name', descKey: 'pages.system.onboardingWizard.role.sales.task.sales_customer.desc', required: true, jump_path: '/apps/master-data/supply-chain/customers' },
+      { id: 'sales_price_book', nameKey: 'pages.system.onboardingWizard.role.sales.task.sales_price_book.name', descKey: 'pages.system.onboardingWizard.role.sales.task.sales_price_book.desc', required: false, jump_path: '/apps/master-data/supply-chain/customer-price-books' },
       { id: 'sales_price', nameKey: 'pages.system.onboardingWizard.role.sales.task.sales_price.name', descKey: 'pages.system.onboardingWizard.role.sales.task.sales_price.desc', required: false, jump_path: '/apps/kuaizhizao/sales-management/quotations' },
       { id: 'sales_order', nameKey: 'pages.system.onboardingWizard.role.sales.task.sales_order.name', descKey: 'pages.system.onboardingWizard.role.sales.task.sales_order.desc', required: true, jump_path: '/apps/kuaizhizao/sales-management/sales-orders' },
-      { id: 'sales_delivery', nameKey: 'pages.system.onboardingWizard.role.sales.task.sales_delivery.name', descKey: 'pages.system.onboardingWizard.role.sales.task.sales_delivery.desc', required: true, jump_path: '/apps/kuaizhizao/sales-management/deliveries' },
+      { id: 'sales_delivery', nameKey: 'pages.system.onboardingWizard.role.sales.task.sales_delivery.name', descKey: 'pages.system.onboardingWizard.role.sales.task.sales_delivery.desc', required: true, jump_path: '/apps/kuaizhizao/sales-management/shipment-notices' },
+      { id: 'sales_return', nameKey: 'pages.system.onboardingWizard.role.sales.task.sales_return.name', descKey: 'pages.system.onboardingWizard.role.sales.task.sales_return.desc', required: false, jump_path: '/apps/kuaizhizao/sales-management/sales-returns' },
     ],
   },
   purchase: {
@@ -74,9 +76,11 @@ const ROLE_LAUNCH_DEFS: Record<string, RoleDef> = {
     empowermentValueKey: 'pages.system.onboardingWizard.role.purchase.empowermentValue',
     tasks: [
       { id: 'pur_supplier', nameKey: 'pages.system.onboardingWizard.role.purchase.task.pur_supplier.name', descKey: 'pages.system.onboardingWizard.role.purchase.task.pur_supplier.desc', required: true, jump_path: '/apps/master-data/supply-chain/suppliers' },
-      { id: 'pur_price', nameKey: 'pages.system.onboardingWizard.role.purchase.task.pur_price.name', descKey: 'pages.system.onboardingWizard.role.purchase.task.pur_price.desc', required: true, jump_path: '/apps/kuaizhizao/purchase-management/purchase-orders' },
+      { id: 'pur_price_book', nameKey: 'pages.system.onboardingWizard.role.purchase.task.pur_price_book.name', descKey: 'pages.system.onboardingWizard.role.purchase.task.pur_price_book.desc', required: false, jump_path: '/apps/master-data/supply-chain/supplier-price-books' },
+      { id: 'pur_requisition', nameKey: 'pages.system.onboardingWizard.role.purchase.task.pur_requisition.name', descKey: 'pages.system.onboardingWizard.role.purchase.task.pur_requisition.desc', required: false, jump_path: '/apps/kuaizhizao/purchase-management/purchase-requisitions' },
       { id: 'pur_order', nameKey: 'pages.system.onboardingWizard.role.purchase.task.pur_order.name', descKey: 'pages.system.onboardingWizard.role.purchase.task.pur_order.desc', required: true, jump_path: '/apps/kuaizhizao/purchase-management/purchase-orders' },
       { id: 'pur_receipt', nameKey: 'pages.system.onboardingWizard.role.purchase.task.pur_receipt.name', descKey: 'pages.system.onboardingWizard.role.purchase.task.pur_receipt.desc', required: true, jump_path: '/apps/kuaizhizao/purchase-management/receipt-notices' },
+      { id: 'pur_inbound', nameKey: 'pages.system.onboardingWizard.role.purchase.task.pur_inbound.name', descKey: 'pages.system.onboardingWizard.role.purchase.task.pur_inbound.desc', required: true, jump_path: '/apps/kuaizhizao/purchase-management/inbound' },
     ],
   },
   warehouse: {
@@ -86,8 +90,11 @@ const ROLE_LAUNCH_DEFS: Record<string, RoleDef> = {
     empowermentValueKey: 'pages.system.onboardingWizard.role.warehouse.empowermentValue',
     tasks: [
       { id: 'wh_setup', nameKey: 'pages.system.onboardingWizard.role.warehouse.task.wh_setup.name', descKey: 'pages.system.onboardingWizard.role.warehouse.task.wh_setup.desc', required: true, jump_path: '/apps/master-data/warehouse/warehouses' },
+      { id: 'wh_initial', nameKey: 'pages.system.onboardingWizard.role.warehouse.task.wh_initial.name', descKey: 'pages.system.onboardingWizard.role.warehouse.task.wh_initial.desc', required: true, jump_path: '/system/initial-data' },
       { id: 'wh_stock_in', nameKey: 'pages.system.onboardingWizard.role.warehouse.task.wh_stock_in.name', descKey: 'pages.system.onboardingWizard.role.warehouse.task.wh_stock_in.desc', required: true, jump_path: '/apps/kuaizhizao/warehouse-management/inbound' },
-      { id: 'wh_picking', nameKey: 'pages.system.onboardingWizard.role.warehouse.task.wh_picking.name', descKey: 'pages.system.onboardingWizard.role.warehouse.task.wh_picking.desc', required: true, jump_path: '/apps/kuaizhizao/warehouse-management/outbound' },
+      { id: 'wh_inventory', nameKey: 'pages.system.onboardingWizard.role.warehouse.task.wh_inventory.name', descKey: 'pages.system.onboardingWizard.role.warehouse.task.wh_inventory.desc', required: true, jump_path: '/apps/kuaizhizao/warehouse-management/inventory' },
+      { id: 'wh_stocktake', nameKey: 'pages.system.onboardingWizard.role.warehouse.task.wh_stocktake.name', descKey: 'pages.system.onboardingWizard.role.warehouse.task.wh_stocktake.desc', required: false, jump_path: '/apps/kuaizhizao/warehouse-management/stocktaking' },
+      { id: 'wh_transfer', nameKey: 'pages.system.onboardingWizard.role.warehouse.task.wh_transfer.name', descKey: 'pages.system.onboardingWizard.role.warehouse.task.wh_transfer.desc', required: false, jump_path: '/apps/kuaizhizao/warehouse-management/inventory-transfer' },
       { id: 'wh_stock_out', nameKey: 'pages.system.onboardingWizard.role.warehouse.task.wh_stock_out.name', descKey: 'pages.system.onboardingWizard.role.warehouse.task.wh_stock_out.desc', required: true, jump_path: '/apps/kuaizhizao/warehouse-management/outbound' },
     ],
   },
@@ -98,8 +105,11 @@ const ROLE_LAUNCH_DEFS: Record<string, RoleDef> = {
     empowermentValueKey: 'pages.system.onboardingWizard.role.technician.empowermentValue',
     tasks: [
       { id: 'tech_material', nameKey: 'pages.system.onboardingWizard.role.technician.task.tech_material.name', descKey: 'pages.system.onboardingWizard.role.technician.task.tech_material.desc', required: true, jump_path: '/apps/master-data/materials' },
+      { id: 'tech_units', nameKey: 'pages.system.onboardingWizard.role.technician.task.tech_units.name', descKey: 'pages.system.onboardingWizard.role.technician.task.tech_units.desc', required: false, jump_path: '/apps/master-data/materials/units' },
       { id: 'tech_bom', nameKey: 'pages.system.onboardingWizard.role.technician.task.tech_bom.name', descKey: 'pages.system.onboardingWizard.role.technician.task.tech_bom.desc', required: true, jump_path: '/apps/master-data/process/engineering-bom' },
+      { id: 'tech_product_process', nameKey: 'pages.system.onboardingWizard.role.technician.task.tech_product_process.name', descKey: 'pages.system.onboardingWizard.role.technician.task.tech_product_process.desc', required: false, jump_path: '/apps/master-data/process/product-process' },
       { id: 'tech_route', nameKey: 'pages.system.onboardingWizard.role.technician.task.tech_route.name', descKey: 'pages.system.onboardingWizard.role.technician.task.tech_route.desc', required: true, jump_path: '/apps/master-data/process/routes' },
+      { id: 'tech_defects', nameKey: 'pages.system.onboardingWizard.role.technician.task.tech_defects.name', descKey: 'pages.system.onboardingWizard.role.technician.task.tech_defects.desc', required: false, jump_path: '/apps/master-data/process/defect-types' },
     ],
   },
   planner: {
@@ -109,8 +119,10 @@ const ROLE_LAUNCH_DEFS: Record<string, RoleDef> = {
     empowermentValueKey: 'pages.system.onboardingWizard.role.planner.empowermentValue',
     tasks: [
       { id: 'plan_wc', nameKey: 'pages.system.onboardingWizard.role.planner.task.plan_wc.name', descKey: 'pages.system.onboardingWizard.role.planner.task.plan_wc.desc', required: true, jump_path: '/apps/master-data/factory/work-centers' },
-      { id: 'plan_mrp', nameKey: 'pages.system.onboardingWizard.role.planner.task.plan_mrp.name', descKey: 'pages.system.onboardingWizard.role.planner.task.plan_mrp.desc', required: false, jump_path: '/apps/kuaizhizao/production-planning/mrp' },
-      { id: 'plan_order', nameKey: 'pages.system.onboardingWizard.role.planner.task.plan_order.name', descKey: 'pages.system.onboardingWizard.role.planner.task.plan_order.desc', required: true, jump_path: '/apps/kuaizhizao/production-planning/work-orders' },
+      { id: 'plan_demand', nameKey: 'pages.system.onboardingWizard.role.planner.task.plan_demand.name', descKey: 'pages.system.onboardingWizard.role.planner.task.plan_demand.desc', required: true, jump_path: '/apps/kuaizhizao/plan-management/demand-management' },
+      { id: 'plan_mrp', nameKey: 'pages.system.onboardingWizard.role.planner.task.plan_mrp.name', descKey: 'pages.system.onboardingWizard.role.planner.task.plan_mrp.desc', required: false, jump_path: '/apps/kuaizhizao/plan-management/demand-computation' },
+      { id: 'plan_schedule', nameKey: 'pages.system.onboardingWizard.role.planner.task.plan_schedule.name', descKey: 'pages.system.onboardingWizard.role.planner.task.plan_schedule.desc', required: false, jump_path: '/apps/kuaizhizao/plan-management/scheduling' },
+      { id: 'plan_order', nameKey: 'pages.system.onboardingWizard.role.planner.task.plan_order.name', descKey: 'pages.system.onboardingWizard.role.planner.task.plan_order.desc', required: true, jump_path: '/apps/kuaizhizao/production-execution/work-orders' },
     ],
   },
   supervisor: {
@@ -119,8 +131,10 @@ const ROLE_LAUNCH_DEFS: Record<string, RoleDef> = {
     businessDocsKey: 'pages.system.onboardingWizard.role.supervisor.businessDocs',
     empowermentValueKey: 'pages.system.onboardingWizard.role.supervisor.empowermentValue',
     tasks: [
-      { id: 'sup_team', nameKey: 'pages.system.onboardingWizard.role.supervisor.task.sup_team.name', descKey: 'pages.system.onboardingWizard.role.supervisor.task.sup_team.desc', required: true, jump_path: '/apps/master-data/factory/teams' },
-      { id: 'sup_dispatch', nameKey: 'pages.system.onboardingWizard.role.supervisor.task.sup_dispatch.name', descKey: 'pages.system.onboardingWizard.role.supervisor.task.sup_dispatch.desc', required: true, jump_path: '/apps/kuaizhizao/production-execution/dispatch' },
+      { id: 'sup_team', nameKey: 'pages.system.onboardingWizard.role.supervisor.task.sup_team.name', descKey: 'pages.system.onboardingWizard.role.supervisor.task.sup_team.desc', required: true, jump_path: '/apps/master-data/factory/work-groups' },
+      { id: 'sup_dispatch', nameKey: 'pages.system.onboardingWizard.role.supervisor.task.sup_dispatch.name', descKey: 'pages.system.onboardingWizard.role.supervisor.task.sup_dispatch.desc', required: true, jump_path: '/apps/kuaizhizao/production-execution/work-orders' },
+      { id: 'sup_prod_out', nameKey: 'pages.system.onboardingWizard.role.supervisor.task.sup_prod_out.name', descKey: 'pages.system.onboardingWizard.role.supervisor.task.sup_prod_out.desc', required: false, jump_path: '/apps/kuaizhizao/production-execution/outbound' },
+      { id: 'sup_calendar', nameKey: 'pages.system.onboardingWizard.role.supervisor.task.sup_calendar.name', descKey: 'pages.system.onboardingWizard.role.supervisor.task.sup_calendar.desc', required: false, jump_path: '/apps/kuaizhizao/performance/work-calendar' },
       { id: 'sup_monitor', nameKey: 'pages.system.onboardingWizard.role.supervisor.task.sup_monitor.name', descKey: 'pages.system.onboardingWizard.role.supervisor.task.sup_monitor.desc', required: true, jump_path: '/apps/kuaizhizao/production-execution/dashboard' },
     ],
   },
@@ -130,8 +144,9 @@ const ROLE_LAUNCH_DEFS: Record<string, RoleDef> = {
     businessDocsKey: 'pages.system.onboardingWizard.role.operator.businessDocs',
     empowermentValueKey: 'pages.system.onboardingWizard.role.operator.empowermentValue',
     tasks: [
-      { id: 'op_receive', nameKey: 'pages.system.onboardingWizard.role.operator.task.op_receive.name', descKey: 'pages.system.onboardingWizard.role.operator.task.op_receive.desc', required: true, jump_path: '/apps/kuaizhizao/production-execution/tasks' },
+      { id: 'op_receive', nameKey: 'pages.system.onboardingWizard.role.operator.task.op_receive.name', descKey: 'pages.system.onboardingWizard.role.operator.task.op_receive.desc', required: true, jump_path: '/apps/kuaizhizao/production-execution/work-orders' },
       { id: 'op_report', nameKey: 'pages.system.onboardingWizard.role.operator.task.op_report.name', descKey: 'pages.system.onboardingWizard.role.operator.task.op_report.desc', required: true, jump_path: '/apps/kuaizhizao/production-execution/reporting' },
+      { id: 'op_label', nameKey: 'pages.system.onboardingWizard.role.operator.task.op_label.name', descKey: 'pages.system.onboardingWizard.role.operator.task.op_label.desc', required: false, jump_path: '/apps/kuaizhizao/production-execution/label-station' },
     ],
   },
   quality: {
@@ -140,9 +155,13 @@ const ROLE_LAUNCH_DEFS: Record<string, RoleDef> = {
     businessDocsKey: 'pages.system.onboardingWizard.role.quality.businessDocs',
     empowermentValueKey: 'pages.system.onboardingWizard.role.quality.empowermentValue',
     tasks: [
-      { id: 'qa_standard', nameKey: 'pages.system.onboardingWizard.role.quality.task.qa_standard.name', descKey: 'pages.system.onboardingWizard.role.quality.task.qa_standard.desc', required: true, jump_path: '/apps/master-data/quality/standards' },
-      { id: 'qa_iqc', nameKey: 'pages.system.onboardingWizard.role.quality.task.qa_iqc.name', descKey: 'pages.system.onboardingWizard.role.quality.task.qa_iqc.desc', required: true, jump_path: '/apps/kuaizhizao/quality-control/iqc' },
-      { id: 'qa_oqc', nameKey: 'pages.system.onboardingWizard.role.quality.task.qa_oqc.name', descKey: 'pages.system.onboardingWizard.role.quality.task.qa_oqc.desc', required: true, jump_path: '/apps/kuaizhizao/quality-control/oqc' },
+      { id: 'qa_standard', nameKey: 'pages.system.onboardingWizard.role.quality.task.qa_standard.name', descKey: 'pages.system.onboardingWizard.role.quality.task.qa_standard.desc', required: true, jump_path: '/apps/kuaizhizao/quality-management/inspection-plans' },
+      { id: 'qa_iqc', nameKey: 'pages.system.onboardingWizard.role.quality.task.qa_iqc.name', descKey: 'pages.system.onboardingWizard.role.quality.task.qa_iqc.desc', required: true, jump_path: '/apps/kuaizhizao/quality-management/incoming-inspection' },
+      { id: 'qa_ipqc', nameKey: 'pages.system.onboardingWizard.role.quality.task.qa_ipqc.name', descKey: 'pages.system.onboardingWizard.role.quality.task.qa_ipqc.desc', required: true, jump_path: '/apps/kuaizhizao/quality-management/process-inspection' },
+      { id: 'qa_fqc', nameKey: 'pages.system.onboardingWizard.role.quality.task.qa_fqc.name', descKey: 'pages.system.onboardingWizard.role.quality.task.qa_fqc.desc', required: false, jump_path: '/apps/kuaizhizao/quality-management/finished-goods-inspection' },
+      { id: 'qa_oqc', nameKey: 'pages.system.onboardingWizard.role.quality.task.qa_oqc.name', descKey: 'pages.system.onboardingWizard.role.quality.task.qa_oqc.desc', required: true, jump_path: '/apps/kuaizhizao/quality-management/oqc-inspection' },
+      { id: 'qa_ncr', nameKey: 'pages.system.onboardingWizard.role.quality.task.qa_ncr.name', descKey: 'pages.system.onboardingWizard.role.quality.task.qa_ncr.desc', required: false, jump_path: '/apps/kuaizhizao/quality-management/nonconforming-ledger' },
+      { id: 'qa_fai', nameKey: 'pages.system.onboardingWizard.role.quality.task.qa_fai.name', descKey: 'pages.system.onboardingWizard.role.quality.task.qa_fai.desc', required: false, jump_path: '/apps/kuaizhizao/quality-management/fai-orders' },
     ],
   },
   equipment: {
@@ -151,8 +170,11 @@ const ROLE_LAUNCH_DEFS: Record<string, RoleDef> = {
     businessDocsKey: 'pages.system.onboardingWizard.role.equipment.businessDocs',
     empowermentValueKey: 'pages.system.onboardingWizard.role.equipment.empowermentValue',
     tasks: [
-      { id: 'eq_ledger', nameKey: 'pages.system.onboardingWizard.role.equipment.task.eq_ledger.name', descKey: 'pages.system.onboardingWizard.role.equipment.task.eq_ledger.desc', required: true, jump_path: '/apps/master-data/equipment/ledger' },
-      { id: 'eq_maintain', nameKey: 'pages.system.onboardingWizard.role.equipment.task.eq_maintain.name', descKey: 'pages.system.onboardingWizard.role.equipment.task.eq_maintain.desc', required: true, jump_path: '/apps/kuaizhizao/equipment-maintenance/maintenance' },
+      { id: 'eq_ledger', nameKey: 'pages.system.onboardingWizard.role.equipment.task.eq_ledger.name', descKey: 'pages.system.onboardingWizard.role.equipment.task.eq_ledger.desc', required: true, jump_path: '/apps/kuaizhizao/equipment-management/equipment' },
+      { id: 'eq_plan', nameKey: 'pages.system.onboardingWizard.role.equipment.task.eq_plan.name', descKey: 'pages.system.onboardingWizard.role.equipment.task.eq_plan.desc', required: true, jump_path: '/apps/kuaizhizao/equipment-management/maintenance-plans' },
+      { id: 'eq_maintain', nameKey: 'pages.system.onboardingWizard.role.equipment.task.eq_maintain.name', descKey: 'pages.system.onboardingWizard.role.equipment.task.eq_maintain.desc', required: true, jump_path: '/apps/kuaizhizao/equipment-management/maintenance-executions' },
+      { id: 'eq_spot', nameKey: 'pages.system.onboardingWizard.role.equipment.task.eq_spot.name', descKey: 'pages.system.onboardingWizard.role.equipment.task.eq_spot.desc', required: false, jump_path: '/apps/kuaizhizao/equipment-management/spot-checks' },
+      { id: 'eq_fault', nameKey: 'pages.system.onboardingWizard.role.equipment.task.eq_fault.name', descKey: 'pages.system.onboardingWizard.role.equipment.task.eq_fault.desc', required: false, jump_path: '/apps/kuaizhizao/equipment-management/equipment-faults' },
     ],
   },
   finance: {
@@ -161,9 +183,13 @@ const ROLE_LAUNCH_DEFS: Record<string, RoleDef> = {
     businessDocsKey: 'pages.system.onboardingWizard.role.finance.businessDocs',
     empowermentValueKey: 'pages.system.onboardingWizard.role.finance.empowermentValue',
     tasks: [
-      { id: 'fi_ap', nameKey: 'pages.system.onboardingWizard.role.finance.task.fi_ap.name', descKey: 'pages.system.onboardingWizard.role.finance.task.fi_ap.desc', required: true, jump_path: '/apps/kuaizhizao/finance/ap' },
-      { id: 'fi_ar', nameKey: 'pages.system.onboardingWizard.role.finance.task.fi_ar.name', descKey: 'pages.system.onboardingWizard.role.finance.task.fi_ar.desc', required: true, jump_path: '/apps/kuaizhizao/finance/ar' },
-      { id: 'fi_cost', nameKey: 'pages.system.onboardingWizard.role.finance.task.fi_cost.name', descKey: 'pages.system.onboardingWizard.role.finance.task.fi_cost.desc', required: false, jump_path: '/apps/kuaizhizao/finance/costing' },
+      { id: 'fi_coa', nameKey: 'pages.system.onboardingWizard.role.finance.task.fi_coa.name', descKey: 'pages.system.onboardingWizard.role.finance.task.fi_coa.desc', required: true, jump_path: '/apps/kuaicaiwu/gl-management/chart-of-accounts' },
+      { id: 'fi_open', nameKey: 'pages.system.onboardingWizard.role.finance.task.fi_open.name', descKey: 'pages.system.onboardingWizard.role.finance.task.fi_open.desc', required: false, jump_path: '/apps/kuaicaiwu/gl-management/opening-balances' },
+      { id: 'fi_ap', nameKey: 'pages.system.onboardingWizard.role.finance.task.fi_ap.name', descKey: 'pages.system.onboardingWizard.role.finance.task.fi_ap.desc', required: true, jump_path: '/apps/kuaicaiwu/finance-management/payables' },
+      { id: 'fi_ar', nameKey: 'pages.system.onboardingWizard.role.finance.task.fi_ar.name', descKey: 'pages.system.onboardingWizard.role.finance.task.fi_ar.desc', required: true, jump_path: '/apps/kuaicaiwu/finance-management/receivables' },
+      { id: 'fi_payment', nameKey: 'pages.system.onboardingWizard.role.finance.task.fi_payment.name', descKey: 'pages.system.onboardingWizard.role.finance.task.fi_payment.desc', required: false, jump_path: '/apps/kuaicaiwu/finance-management/payments' },
+      { id: 'fi_receipt', nameKey: 'pages.system.onboardingWizard.role.finance.task.fi_receipt.name', descKey: 'pages.system.onboardingWizard.role.finance.task.fi_receipt.desc', required: false, jump_path: '/apps/kuaicaiwu/finance-management/receipts' },
+      { id: 'fi_cost', nameKey: 'pages.system.onboardingWizard.role.finance.task.fi_cost.name', descKey: 'pages.system.onboardingWizard.role.finance.task.fi_cost.desc', required: false, jump_path: '/apps/kuaicaiwu/cost-management/cost-calculations' },
     ],
   },
   manager: {
@@ -172,8 +198,11 @@ const ROLE_LAUNCH_DEFS: Record<string, RoleDef> = {
     businessDocsKey: 'pages.system.onboardingWizard.role.manager.businessDocs',
     empowermentValueKey: 'pages.system.onboardingWizard.role.manager.empowermentValue',
     tasks: [
-      { id: 'mgr_approve', nameKey: 'pages.system.onboardingWizard.role.manager.task.mgr_approve.name', descKey: 'pages.system.onboardingWizard.role.manager.task.mgr_approve.desc', required: true, jump_path: '/apps/system/workflow/approvals' },
-      { id: 'mgr_dashboard', nameKey: 'pages.system.onboardingWizard.role.manager.task.mgr_dashboard.name', descKey: 'pages.system.onboardingWizard.role.manager.task.mgr_dashboard.desc', required: true, jump_path: '/apps/dashboard/bi' },
+      { id: 'mgr_approve', nameKey: 'pages.system.onboardingWizard.role.manager.task.mgr_approve.name', descKey: 'pages.system.onboardingWizard.role.manager.task.mgr_approve.desc', required: true, jump_path: '/system/approval-instances' },
+      { id: 'mgr_dashboard', nameKey: 'pages.system.onboardingWizard.role.manager.task.mgr_dashboard.name', descKey: 'pages.system.onboardingWizard.role.manager.task.mgr_dashboard.desc', required: true, jump_path: '/system/dashboard/workplace' },
+      { id: 'mgr_sales_dash', nameKey: 'pages.system.onboardingWizard.role.manager.task.mgr_sales_dash.name', descKey: 'pages.system.onboardingWizard.role.manager.task.mgr_sales_dash.desc', required: false, jump_path: '/apps/kuaizhizao/sales-management/dashboard' },
+      { id: 'mgr_prod_dash', nameKey: 'pages.system.onboardingWizard.role.manager.task.mgr_prod_dash.name', descKey: 'pages.system.onboardingWizard.role.manager.task.mgr_prod_dash.desc', required: false, jump_path: '/apps/kuaizhizao/production-execution/dashboard' },
+      { id: 'mgr_wh_dash', nameKey: 'pages.system.onboardingWizard.role.manager.task.mgr_wh_dash.name', descKey: 'pages.system.onboardingWizard.role.manager.task.mgr_wh_dash.desc', required: false, jump_path: '/apps/kuaizhizao/warehouse-management/dashboard' },
     ],
   },
   implementer: {
@@ -244,7 +273,7 @@ const IMPLEMENTER_LAUNCH_STRUCTURE: ImpPhaseDef[] = [
         required: true,
         subItems: [
           { id: 'imp_workflow', nameKey: 'pages.system.onboardingWizard.implementer.sub.imp_workflow.name', descKey: 'pages.system.onboardingWizard.implementer.sub.imp_workflow.desc', required: true, jump_path: '/system/approval-processes' },
-          { id: 'imp_msg', nameKey: 'pages.system.onboardingWizard.implementer.sub.imp_msg.name', descKey: 'pages.system.onboardingWizard.implementer.sub.imp_msg.desc', required: false, jump_path: '/system/message-templates' },
+          { id: 'imp_msg', nameKey: 'pages.system.onboardingWizard.implementer.sub.imp_msg.name', descKey: 'pages.system.onboardingWizard.implementer.sub.imp_msg.desc', required: false, jump_path: '/system/messages/template' },
           { id: 'imp_print', nameKey: 'pages.system.onboardingWizard.implementer.sub.imp_print.name', descKey: 'pages.system.onboardingWizard.implementer.sub.imp_print.desc', required: false, jump_path: '/system/print-templates' },
         ],
       },
@@ -278,6 +307,8 @@ const IMPLEMENTER_LAUNCH_STRUCTURE: ImpPhaseDef[] = [
         descKey: 'pages.system.onboardingWizard.implementer.task.opsGroup.desc',
         required: false,
         subItems: [
+          { id: 'imp_initial_data', nameKey: 'pages.system.onboardingWizard.implementer.sub.imp_initial_data.name', descKey: 'pages.system.onboardingWizard.implementer.sub.imp_initial_data.desc', required: false, jump_path: '/system/initial-data' },
+          { id: 'imp_approval_instances', nameKey: 'pages.system.onboardingWizard.implementer.sub.imp_approval_instances.name', descKey: 'pages.system.onboardingWizard.implementer.sub.imp_approval_instances.desc', required: false, jump_path: '/system/approval-instances' },
           { id: 'imp_audit', nameKey: 'pages.system.onboardingWizard.implementer.sub.imp_audit.name', descKey: 'pages.system.onboardingWizard.implementer.sub.imp_audit.desc', required: false, jump_path: '/system/operation-logs' },
           { id: 'imp_login', nameKey: 'pages.system.onboardingWizard.implementer.sub.imp_login.name', descKey: 'pages.system.onboardingWizard.implementer.sub.imp_login.desc', required: false, jump_path: '/system/login-logs' },
           { id: 'imp_online', nameKey: 'pages.system.onboardingWizard.implementer.sub.imp_online.name', descKey: 'pages.system.onboardingWizard.implementer.sub.imp_online.desc', required: false, jump_path: '/system/online-users' },

@@ -86,6 +86,15 @@ export interface WorkOrderExecutionConfig {
   require_fqc_before_finished_goods_receipt?: boolean;
   /** 工单列表是否展示客户名称并可按客户筛选 */
   show_customer_name?: boolean;
+  /** 配置中心：工单优先级 / 拆分 / 合并 */
+  priority_enabled?: boolean;
+  split_enabled?: boolean;
+  merge_enabled?: boolean;
+  /** 配置中心：快捷报工 / 参数报工 / 数据修正 / 报工自动审核 */
+  quick_reporting_enabled?: boolean;
+  parameter_reporting_enabled?: boolean;
+  data_correction_enabled?: boolean;
+  reporting_auto_approve_enabled?: boolean;
 }
 
 export interface WorkOrderGroupMember {

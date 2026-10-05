@@ -44,6 +44,1492 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'mobile-perf-root-bootstrap-r01',
+    date: '2026-10-04',
+    type: 'major',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-perf-root-bootstrap-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-perf-root-bootstrap-r01.description',
+  },
+  {
+    id: 'mobile-perf-inbox-chat-r01',
+    date: '2026-10-04',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-perf-inbox-chat-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-perf-inbox-chat-r01.description',
+  },
+  {
+    id: 'mobile-perf-list-load-r01',
+    date: '2026-10-04',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-perf-list-load-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-perf-list-load-r01.description',
+  },
+  {
+    id: 'mobile-mold-detail-doc-flow-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-mold-detail-doc-flow-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-mold-detail-doc-flow-r01.description',
+  },
+  {
+    id: 'mobile-equipment-detail-doc-flow-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-equipment-detail-doc-flow-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-equipment-detail-doc-flow-r01.description',
+  },
+  {
+    id: 'mobile-quality-conduct-doc-flow-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-quality-conduct-doc-flow-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-quality-conduct-doc-flow-r01.description',
+  },
+  {
+    id: 'mobile-exception-detail-doc-flow-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-exception-detail-doc-flow-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-exception-detail-doc-flow-r01.description',
+  },
+  {
+    id: 'mobile-packing-detail-doc-flow-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-packing-detail-doc-flow-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-packing-detail-doc-flow-r01.description',
+  },
+  {
+    id: 'mobile-doc-flow-mold-lists-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-doc-flow-mold-lists-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-doc-flow-mold-lists-r01.description',
+  },
+  {
+    id: 'mobile-doc-flow-equipment-lists-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-doc-flow-equipment-lists-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-doc-flow-equipment-lists-r01.description',
+  },
+  {
+    id: 'mobile-doc-flow-quality-lists-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-doc-flow-quality-lists-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-doc-flow-quality-lists-r01.description',
+  },
+  {
+    id: 'mobile-doc-flow-wms-alerts-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-doc-flow-wms-alerts-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-doc-flow-wms-alerts-r01.description',
+  },
+  {
+    id: 'mobile-doc-flow-wms-transfers-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-doc-flow-wms-transfers-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-doc-flow-wms-transfers-r01.description',
+  },
+  {
+    id: 'mobile-doc-flow-wms-inventory-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-doc-flow-wms-inventory-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-doc-flow-wms-inventory-r01.description',
+  },
+  {
+    id: 'mobile-doc-flow-wms-stocktaking-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-doc-flow-wms-stocktaking-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-doc-flow-wms-stocktaking-r01.description',
+  },
+  {
+    id: 'mobile-doc-flow-wms-other-outbounds-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-doc-flow-wms-other-outbounds-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-doc-flow-wms-other-outbounds-r01.description',
+  },
+  {
+    id: 'mobile-doc-flow-wms-other-inbounds-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-doc-flow-wms-other-inbounds-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-doc-flow-wms-other-inbounds-r01.description',
+  },
+  {
+    id: 'mobile-doc-flow-wms-delivery-notices-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-doc-flow-wms-delivery-notices-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-doc-flow-wms-delivery-notices-r01.description',
+  },
+  {
+    id: 'mobile-doc-flow-wms-sales-deliveries-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-doc-flow-wms-sales-deliveries-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-doc-flow-wms-sales-deliveries-r01.description',
+  },
+  {
+    id: 'mobile-doc-flow-wms-purchase-receipts-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-doc-flow-wms-purchase-receipts-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-doc-flow-wms-purchase-receipts-r01.description',
+  },
+  {
+    id: 'mobile-doc-flow-wms-fg-receipts-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-doc-flow-wms-fg-receipts-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-doc-flow-wms-fg-receipts-r01.description',
+  },
+  {
+    id: 'mobile-doc-flow-wms-returns-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-doc-flow-wms-returns-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-doc-flow-wms-returns-r01.description',
+  },
+  {
+    id: 'mobile-doc-flow-wms-pickings-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-doc-flow-wms-pickings-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-doc-flow-wms-pickings-r01.description',
+  },
+  {
+    id: 'mobile-doc-flow-shipment-notices-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-doc-flow-shipment-notices-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-doc-flow-shipment-notices-r01.description',
+  },
+  {
+    id: 'mobile-doc-flow-receipt-notices-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-doc-flow-receipt-notices-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-doc-flow-receipt-notices-r01.description',
+  },
+  {
+    id: 'mobile-doc-flow-performance-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-doc-flow-performance-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-doc-flow-performance-r01.description',
+  },
+  {
+    id: 'mobile-doc-flow-exception-report-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-doc-flow-exception-report-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-doc-flow-exception-report-r01.description',
+  },
+  {
+    id: 'mobile-doc-flow-scan-report-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-doc-flow-scan-report-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-doc-flow-scan-report-r01.description',
+  },
+  {
+    id: 'mobile-doc-flow-workshop-lists-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-doc-flow-workshop-lists-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-doc-flow-workshop-lists-r01.description',
+  },
+  {
+    id: 'mobile-doc-flow-work-order-detail-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.mobile-doc-flow-work-order-detail-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-doc-flow-work-order-detail-r01.description',
+  },
+  {
+    id: 'mobile-doc-flow-work-order-list-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-doc-flow-work-order-list-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-doc-flow-work-order-list-r01.description',
+  },
+  {
+    id: 'mobile-doc-flow-purchase-requisition-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.mobile-doc-flow-purchase-requisition-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-doc-flow-purchase-requisition-r01.description',
+  },
+  {
+    id: 'mobile-doc-flow-ui-system-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-doc-flow-ui-system-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-doc-flow-ui-system-r01.description',
+  },
+  {
+    id: 'mobile-doc-card-industrial-pilot-r02',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-doc-card-industrial-pilot-r02.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-doc-card-industrial-pilot-r02.description',
+  },
+  {
+    id: 'mobile-doc-card-industrial-pilot-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-doc-card-industrial-pilot-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-doc-card-industrial-pilot-r01.description',
+  },
+  {
+    id: 'mobile-im-chat-self-align-right-r01',
+    date: '2026-10-03',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-im-chat-self-align-right-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-im-chat-self-align-right-r01.description',
+  },
+  {
+    id: 'mobile-im-chat-markdown-table-r01',
+    date: '2026-10-03',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-im-chat-markdown-table-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.mobile-im-chat-markdown-table-r01.description',
+  },
+  {
+    id: 'mobile-im-chat-markdown-avatar-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-im-chat-markdown-avatar-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-im-chat-markdown-avatar-r01.description',
+  },
+  {
+    id: 'mobile-inbox-loading-perf-r01',
+    date: '2026-10-03',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-inbox-loading-perf-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.mobile-inbox-loading-perf-r01.description',
+  },
+  {
+    id: 'mobile-kuaizhizao-other-common-docs-r01',
+    date: '2026-10-03',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-kuaizhizao-other-common-docs-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.mobile-kuaizhizao-other-common-docs-r01.description',
+  },
+  {
+    id: 'mobile-login-platform-logo-r01',
+    date: '2026-10-03',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-login-platform-logo-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.mobile-login-platform-logo-r01.description',
+  },
+  {
+    id: 'mobile-im-chat-wechat-r02',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-im-chat-wechat-r02.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.mobile-im-chat-wechat-r02.description',
+  },
+  {
+    id: 'mobile-message-notify-chips-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-message-notify-chips-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.mobile-message-notify-chips-r01.description',
+  },
+  {
+    id: 'mobile-im-wechat-ui-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-im-wechat-ui-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.mobile-im-wechat-ui-r01.description',
+  },
+  {
+    id: 'mobile-message-chat-tab-first-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-message-chat-tab-first-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.mobile-message-chat-tab-first-r01.description',
+  },
+  {
+    id: 'mobile-card-radius-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-card-radius-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.mobile-card-radius-r01.description',
+  },
+  {
+    id: 'mobile-tab-approval-split-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-tab-approval-split-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.mobile-tab-approval-split-r01.description',
+  },
+  {
+    id: 'mobile-inbox-bell-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-inbox-bell-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.mobile-inbox-bell-r01.description',
+  },
+  {
+    id: 'mobile-inbox-capabilities-r01',
+    date: '2026-10-03',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.mobile-inbox-capabilities-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.mobile-inbox-capabilities-r01.description',
+  },
+  {
+    id: 'eight-d-collaboration-r01',
+    date: '2026-10-03',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.eight-d-collaboration-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.eight-d-collaboration-r01.description',
+  },
+  {
+    id: 'funide-host-pages-offline-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-host-pages-offline-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.funide-host-pages-offline-r01.description',
+  },
+  {
+    id: 'label-station-menu-offline-r02',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.label-station-menu-offline-r02.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.label-station-menu-offline-r02.description',
+  },
+  {
+    id: 'work-calendar-menu-remove-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.work-calendar-menu-remove-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.work-calendar-menu-remove-r01.description',
+  },
+  {
+    id: 'shift-roster-downtime-tab-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.shift-roster-downtime-tab-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.shift-roster-downtime-tab-r01.description',
+  },
+  {
+    id: 'shift-roster-overtime-scope-r01',
+    date: '2026-10-03',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.shift-roster-overtime-scope-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.shift-roster-overtime-scope-r01.description',
+  },
+  {
+    id: 'shift-roster-all-employees-view-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.shift-roster-all-employees-view-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.shift-roster-all-employees-view-r01.description',
+  },
+  {
+    id: 'shift-roster-overtime-temp-adjust-r01',
+    date: '2026-10-03',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.shift-roster-overtime-temp-adjust-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.shift-roster-overtime-temp-adjust-r01.description',
+  },
+  {
+    id: 'shift-work-window-break-r01',
+    date: '2026-10-03',
+    type: 'major',
+    titleKey: 'pages.dashboard.updateLog.entries.shift-work-window-break-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.shift-work-window-break-r01.description',
+  },
+  {
+    id: 'shift-roster-employee-shift-display-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.shift-roster-employee-shift-display-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.shift-roster-employee-shift-display-r01.description',
+  },
+  {
+    id: 'shift-roster-quick-fill-rest-mode-r01',
+    date: '2026-10-03',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.shift-roster-quick-fill-rest-mode-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.shift-roster-quick-fill-rest-mode-r01.description',
+  },
+  {
+    id: 'shift-list-time-range-display-r01',
+    date: '2026-10-03',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.shift-list-time-range-display-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.shift-list-time-range-display-r01.description',
+  },
+  {
+    id: 'shift-roster-row-quick-fill-r01',
+    date: '2026-10-03',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.shift-roster-row-quick-fill-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.shift-roster-row-quick-fill-r01.description',
+  },
+  {
+    id: 'factory-dimension-hint-popover-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.factory-dimension-hint-popover-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.factory-dimension-hint-popover-r01.description',
+  },
+  {
+    id: 'config-center-notification-task-search-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.config-center-notification-task-search-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.config-center-notification-task-search-r01.description',
+  },
+  {
+    id: 'config-center-audit-categories-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.config-center-audit-categories-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.config-center-audit-categories-r01.description',
+  },
+  {
+    id: 'config-center-param-sections-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.config-center-param-sections-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.config-center-param-sections-r01.description',
+  },
+  {
+    id: 'department-list-manager-before-remark-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.department-list-manager-before-remark-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.department-list-manager-before-remark-r01.description',
+  },
+  {
+    id: 'user-clear-position-persist-r01',
+    date: '2026-10-03',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.user-clear-position-persist-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.user-clear-position-persist-r01.description',
+  },
+  {
+    id: 'sidebar-app-menu-permission-version-refetch-r01',
+    date: '2026-10-03',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sidebar-app-menu-permission-version-refetch-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.sidebar-app-menu-permission-version-refetch-r01.description',
+  },
+  {
+    id: 'department-manager-show-dept-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.department-manager-show-dept-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.department-manager-show-dept-r01.description',
+  },
+  {
+    id: 'department-remove-link-preset-managers-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.department-remove-link-preset-managers-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.department-remove-link-preset-managers-r01.description',
+  },
+  {
+    id: 'org-preset-rd-equipment-trim-clerk-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.org-preset-rd-equipment-trim-clerk-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.org-preset-rd-equipment-trim-clerk-r01.description',
+  },
+  {
+    id: 'user-batch-menu-keep-selection-r01',
+    date: '2026-10-03',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.user-batch-menu-keep-selection-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.user-batch-menu-keep-selection-r01.description',
+  },
+  {
+    id: 'user-form-quick-create-org-role-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.user-form-quick-create-org-role-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.user-form-quick-create-org-role-r01.description',
+  },
+  {
+    id: 'workplace-tab-always-present-r01',
+    date: '2026-10-03',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.workplace-tab-always-present-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.workplace-tab-always-present-r01.description',
+  },
+  {
+    id: 'user-batch-actions-menu-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.user-batch-actions-menu-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.user-batch-actions-menu-r01.description',
+  },
+  {
+    id: 'user-batch-set-org-role-status-r01',
+    date: '2026-10-03',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.user-batch-set-org-role-status-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.user-batch-set-org-role-status-r01.description',
+  },
+  {
+    id: 'workplace-tab-unclosable-r01',
+    date: '2026-10-03',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.workplace-tab-unclosable-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.workplace-tab-unclosable-r01.description',
+  },
+  {
+    id: 'unitab-right-click-refresh-r01',
+    date: '2026-10-03',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.unitab-right-click-refresh-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.unitab-right-click-refresh-r01.description',
+  },
+  {
+    id: 'department-manager-quick-create-user-r01',
+    date: '2026-10-03',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.department-manager-quick-create-user-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.department-manager-quick-create-user-r01.description',
+  },
+  {
+    id: 'onboarding-detail-check-icon-after-name-r01',
+    date: '2026-10-02',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.onboarding-detail-check-icon-after-name-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.onboarding-detail-check-icon-after-name-r01.description',
+  },
+  {
+    id: 'onboarding-process-flow-removed-r01',
+    date: '2026-10-02',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.onboarding-process-flow-removed-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.onboarding-process-flow-removed-r01.description',
+  },
+  {
+    id: 'onboarding-wizard-pane-shell-r01',
+    date: '2026-10-02',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.onboarding-wizard-pane-shell-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.onboarding-wizard-pane-shell-r01.description',
+  },
+  {
+    id: 'onboarding-role-guide-api-path-r01',
+    date: '2026-10-02',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.onboarding-role-guide-api-path-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.onboarding-role-guide-api-path-r01.description',
+  },
+  {
+    id: 'dev-hmr-appshell-spin-fix-r01',
+    date: '2026-10-02',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.dev-hmr-appshell-spin-fix-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.dev-hmr-appshell-spin-fix-r01.description',
+  },
+  {
+    id: 'onboarding-wizard-completed-open-r01',
+    date: '2026-10-02',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.onboarding-wizard-completed-open-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.onboarding-wizard-completed-open-r01.description',
+  },
+  {
+    id: 'onboarding-wizard-go-live-paths-r01',
+    date: '2026-10-02',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.onboarding-wizard-go-live-paths-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.onboarding-wizard-go-live-paths-r01.description',
+  },
+  {
+    id: 'unitable-system-audit-backup-package-list-search-r01',
+    date: '2026-10-01',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.unitable-system-audit-backup-package-list-search-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.unitable-system-audit-backup-package-list-search-r01.description',
+  },
+  {
+    id: 'unitable-system-approval-print-list-search-r01',
+    date: '2026-10-01',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.unitable-system-approval-print-list-search-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.unitable-system-approval-print-list-search-r01.description',
+  },
+  {
+    id: 'unitable-hub-contract-finance-list-search-r01',
+    date: '2026-10-01',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.unitable-hub-contract-finance-list-search-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.unitable-hub-contract-finance-list-search-r01.description',
+  },
+  {
+    id: 'unitable-kz-sales-purchase-doc-list-search-r01',
+    date: '2026-10-01',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.unitable-kz-sales-purchase-doc-list-search-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.unitable-kz-sales-purchase-doc-list-search-r01.description',
+  },
+  {
+    id: 'unitable-list-search-lifecycle-r01',
+    date: '2026-10-01',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.unitable-list-search-lifecycle-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.unitable-list-search-lifecycle-r01.description',
+  },
+  {
+    id: 'unitable-plm-kz-production-list-search-r01',
+    date: '2026-10-01',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.unitable-plm-kz-production-list-search-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.unitable-plm-kz-production-list-search-r01.description',
+  },
+  {
+    id: 'unitable-master-data-list-core-search-r01',
+    date: '2026-10-01',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.unitable-master-data-list-core-search-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.unitable-master-data-list-core-search-r01.description',
+  },
+  {
+    id: 'unitable-kz-warehouse-equipment-list-core-r01',
+    date: '2026-10-01',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.unitable-kz-warehouse-equipment-list-core-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.unitable-kz-warehouse-equipment-list-core-r01.description',
+  },
+  {
+    id: 'unitable-kz-list-core-search-r01',
+    date: '2026-10-01',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.unitable-kz-list-core-search-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.unitable-kz-list-core-search-r01.description',
+  },
+  {
+    id: 'unitable-system-infra-list-search-r01',
+    date: '2026-10-01',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.unitable-system-infra-list-search-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.unitable-system-infra-list-search-r01.description',
+  },
+  {
+    id: 'unitable-system-master-list-search-r01',
+    date: '2026-10-01',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.unitable-system-master-list-search-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.unitable-system-master-list-search-r01.description',
+  },
+  {
+    id: 'unitable-list-search-tail-r01',
+    date: '2026-10-01',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.unitable-list-search-tail-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.unitable-list-search-tail-r01.description',
+  },
+  {
+    id: 'unitable-sales-crm-list-search-r01',
+    date: '2026-10-01',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.unitable-sales-crm-list-search-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.unitable-sales-crm-list-search-r01.description',
+  },
+  {
+    id: 'unitable-finance-report-list-search-r01',
+    date: '2026-10-01',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.unitable-finance-report-list-search-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.unitable-finance-report-list-search-r01.description',
+  },
+  {
+    id: 'unitable-oa-finance-master-list-search-r01',
+    date: '2026-10-01',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.unitable-oa-finance-master-list-search-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.unitable-oa-finance-master-list-search-r01.description',
+  },
+  {
+    id: 'unitable-qms-misc-list-search-r01',
+    date: '2026-10-01',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.unitable-qms-misc-list-search-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.unitable-qms-misc-list-search-r01.description',
+  },
+  {
+    id: 'unitable-plan-management-list-search-r01',
+    date: '2026-10-01',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.unitable-plan-management-list-search-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.unitable-plan-management-list-search-r01.description',
+  },
+  {
+    id: 'unitable-delivery-project-list-search-r01',
+    date: '2026-10-01',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.unitable-delivery-project-list-search-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.unitable-delivery-project-list-search-r01.description',
+  },
+  {
+    id: 'unitable-aftersales-list-search-r02',
+    date: '2026-10-01',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.unitable-aftersales-list-search-r02.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.unitable-aftersales-list-search-r02.description',
+  },
+  {
+    id: 'unitable-logistics-aftersales-list-search-r01',
+    date: '2026-10-01',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.unitable-logistics-aftersales-list-search-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.unitable-logistics-aftersales-list-search-r01.description',
+  },
+  {
+    id: 'unitable-equipment-list-search-r01',
+    date: '2026-10-01',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.unitable-equipment-list-search-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.unitable-equipment-list-search-r01.description',
+  },
+  {
+    id: 'unitable-quality-complaint-iso-clause-search-r01',
+    date: '2026-10-01',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.unitable-quality-complaint-iso-clause-search-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.unitable-quality-complaint-iso-clause-search-r01.description',
+  },
+  {
+    id: 'unitable-outsource-settlement-list-search-r01',
+    date: '2026-10-01',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.unitable-outsource-settlement-list-search-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.unitable-outsource-settlement-list-search-r01.description',
+  },
+  {
+    id: 'unitable-warehouse-toolbar-scope-params-r01',
+    date: '2026-10-01',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.unitable-warehouse-toolbar-scope-params-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.unitable-warehouse-toolbar-scope-params-r01.description',
+  },
+  {
+    id: 'unitable-production-daily-list-search-r01',
+    date: '2026-10-01',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.unitable-production-daily-list-search-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.unitable-production-daily-list-search-r01.description',
+  },
+  {
+    id: 'unitable-purchase-arrival-warning-search-r01',
+    date: '2026-10-01',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.unitable-purchase-arrival-warning-search-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.unitable-purchase-arrival-warning-search-r01.description',
+  },
+  {
+    id: 'unitable-drawing-vault-tree-filter-r01',
+    date: '2026-10-01',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.unitable-drawing-vault-tree-filter-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.unitable-drawing-vault-tree-filter-r01.description',
+  },
+  {
+    id: 'unitable-drawing-doc-list-search-r01',
+    date: '2026-10-01',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.unitable-drawing-doc-list-search-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.unitable-drawing-doc-list-search-r01.description',
+  },
+  {
+    id: 'unitable-list-legacy-protable-search-r02',
+    date: '2026-10-01',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.unitable-list-legacy-protable-search-r02.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.unitable-list-legacy-protable-search-r02.description',
+  },
+  {
+    id: 'unitable-list-legacy-protable-search-r01',
+    date: '2026-10-01',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.unitable-list-legacy-protable-search-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.unitable-list-legacy-protable-search-r01.description',
+  },
+  {
+    id: 'unitable-list-search-form-values-r03',
+    date: '2026-10-01',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.unitable-list-search-form-values-r03.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.unitable-list-search-form-values-r03.description',
+  },
+  {
+    id: 'unitable-list-search-form-values-r02',
+    date: '2026-10-01',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.unitable-list-search-form-values-r02.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.unitable-list-search-form-values-r02.description',
+  },
+  {
+    id: 'unitable-list-search-form-values-r01',
+    date: '2026-10-01',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.unitable-list-search-form-values-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.unitable-list-search-form-values-r01.description',
+  },
+  {
+    id: 'unitable-pinned-search-engine-r01',
+    date: '2026-10-01',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.unitable-pinned-search-engine-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.unitable-pinned-search-engine-r01.description',
+  },
+  {
+    id: 'tenant-list-sort-last-login-r01',
+    date: '2026-10-01',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.tenant-list-sort-last-login-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.tenant-list-sort-last-login-r01.description',
+  },
+  {
+    id: 'user-list-roles-column-width-r01',
+    date: '2026-10-01',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.user-list-roles-column-width-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.user-list-roles-column-width-r01.description',
+  },
+  {
+    id: 'department-code-column-width-r01',
+    date: '2026-10-01',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.department-code-column-width-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.department-code-column-width-r01.description',
+  },
+  {
+    id: 'infra-admin-info-profile-layout-r01',
+    date: '2026-10-01',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.infra-admin-info-profile-layout-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.infra-admin-info-profile-layout-r01.description',
+  },
+  {
+    id: 'unitable-default-page-size-site-setting-r01',
+    date: '2026-10-01',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.unitable-default-page-size-site-setting-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.unitable-default-page-size-site-setting-r01.description',
+  },
+  {
+    id: 'unitable-marker-badge-vertical-align-r01',
+    date: '2026-10-01',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.unitable-marker-badge-vertical-align-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.unitable-marker-badge-vertical-align-r01.description',
+  },
+  {
+    id: 'qms-preset-clauses-three-standards-r01',
+    date: '2026-09-30',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.qms-preset-clauses-three-standards-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.qms-preset-clauses-three-standards-r01.description',
+  },
+  {
+    id: 'qms-system-document-evidence-attachments-r01',
+    date: '2026-09-30',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.qms-system-document-evidence-attachments-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.qms-system-document-evidence-attachments-r01.description',
+  },
+  {
+    id: 'qms-clause-link-audit-columns-r01',
+    date: '2026-09-30',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.qms-clause-link-audit-columns-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.qms-clause-link-audit-columns-r01.description',
+  },
+  {
+    id: 'qms-clause-management-three-column-r01',
+    date: '2026-09-30',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.qms-clause-management-three-column-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.qms-clause-management-three-column-r01.description',
+  },
+  {
+    id: 'qms-multi-standard-clauses-r01',
+    date: '2026-09-30',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.qms-multi-standard-clauses-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.qms-multi-standard-clauses-r01.description',
+  },
+  {
+    id: 'equipment-ledger-import-upsert-r01',
+    date: '2026-09-30',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.equipment-ledger-import-upsert-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.equipment-ledger-import-upsert-r01.description',
+  },
+  {
+    id: 'measuring-instrument-ledger-import-r01',
+    date: '2026-09-30',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.measuring-instrument-ledger-import-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.measuring-instrument-ledger-import-r01.description',
+  },
+  {
+    id: 'login-quick-providers-r01',
+    date: '2026-09-30',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.login-quick-providers-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.login-quick-providers-r01.description',
+  },
+  {
+    id: 'uni-push-pushed-docs-r01',
+    date: '2026-09-30',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.uni-push-pushed-docs-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.uni-push-pushed-docs-r01.description',
+  },
+  {
+    id: 'unitable-push-after-create-order-r01',
+    date: '2026-09-30',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.unitable-push-after-create-order-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.unitable-push-after-create-order-r01.description',
+  },
+  {
+    id: 'unitable-toolbar-plain-label-font-r01',
+    date: '2026-09-30',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.unitable-toolbar-plain-label-font-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.unitable-toolbar-plain-label-font-r01.description',
+  },
+  {
+    id: 'warehouse-source-doc-link-r01',
+    date: '2026-09-30',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.warehouse-source-doc-link-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.warehouse-source-doc-link-r01.description',
+  },
+  {
+    id: 'inline-marker-tag-preview-middle-align-r01',
+    date: '2026-09-30',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.inline-marker-tag-preview-middle-align-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.inline-marker-tag-preview-middle-align-r01.description',
+  },
+  {
+    id: 'quality-inspection-conduct-plan-list-r01',
+    date: '2026-09-29',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.quality-inspection-conduct-plan-list-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.quality-inspection-conduct-plan-list-r01.description',
+  },
+  {
+    id: 'quality-inspection-conduct-plan-label-r01',
+    date: '2026-09-29',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.quality-inspection-conduct-plan-label-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.quality-inspection-conduct-plan-label-r01.description',
+  },
+  {
+    id: 'quality-inspection-plan-switch-conduct-modal-r01',
+    date: '2026-09-29',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.quality-inspection-plan-switch-conduct-modal-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.quality-inspection-plan-switch-conduct-modal-r01.description',
+  },
+  {
+    id: 'quality-inspection-plan-switch-r01',
+    date: '2026-09-29',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.quality-inspection-plan-switch-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.quality-inspection-plan-switch-r01.description',
+  },
+  {
+    id: 'quality-inspection-attachments-after-complete-r01',
+    date: '2026-09-29',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.quality-inspection-attachments-after-complete-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.quality-inspection-attachments-after-complete-r01.description',
+  },
+  {
+    id: 'kuaicaiwu-notes-form-grid-batch-r01',
+    date: '2026-09-29',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaicaiwu-notes-form-grid-batch-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaicaiwu-notes-form-grid-batch-r01.description',
+  },
+  {
+    id: 'kuaicaiwu-refund-list-batch-select-r01',
+    date: '2026-09-29',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaicaiwu-refund-list-batch-select-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaicaiwu-refund-list-batch-select-r01.description',
+  },
+  {
+    id: 'kuaicaiwu-ar-ap-toolbar-push-r01',
+    date: '2026-09-29',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaicaiwu-ar-ap-toolbar-push-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaicaiwu-ar-ap-toolbar-push-r01.description',
+  },
+  {
+    id: 'material-buy-default-suppliers-multi-r01',
+    date: '2026-09-29',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.material-buy-default-suppliers-multi-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.material-buy-default-suppliers-multi-r01.description',
+  },
+  {
+    id: 'customer-contact-phone-optional-r01',
+    date: '2026-09-29',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.customer-contact-phone-optional-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.customer-contact-phone-optional-r01.description',
+  },
+  {
+    id: 'user-create-phone-optional-r01',
+    date: '2026-09-29',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.user-create-phone-optional-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.user-create-phone-optional-r01.description',
+  },
+  {
+    id: 'file-preview-txt-overlay-r01',
+    date: '2026-09-29',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.file-preview-txt-overlay-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.file-preview-txt-overlay-r01.description',
+  },
+  {
+    id: 'file-preview-excel-univer-overlay-r01',
+    date: '2026-09-29',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.file-preview-excel-univer-overlay-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.file-preview-excel-univer-overlay-r01.description',
+  },
+  {
+    id: 'file-preview-excel-univer-scroll-r01',
+    date: '2026-09-29',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.file-preview-excel-univer-scroll-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.file-preview-excel-univer-scroll-r01.description',
+  },
+  {
+    id: 'file-preview-excel-univer-sheet-r01',
+    date: '2026-09-29',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.file-preview-excel-univer-sheet-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.file-preview-excel-univer-sheet-r01.description',
+  },
+  {
+    id: 'file-preview-libreoffice-advanced-r01',
+    date: '2026-09-29',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.file-preview-libreoffice-advanced-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.file-preview-libreoffice-advanced-r01.description',
+  },
+  {
+    id: 'file-preview-office-react-doc-viewer-r01',
+    date: '2026-09-29',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.file-preview-office-react-doc-viewer-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.file-preview-office-react-doc-viewer-r01.description',
+  },
+  {
+    id: 'kuaioa-employee-batch-import-r01',
+    date: '2026-09-29',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-employee-batch-import-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-employee-batch-import-r01.description',
+  },
+  {
+    id: 'chunked-import-write-rate-limit-r01',
+    date: '2026-09-29',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.chunked-import-write-rate-limit-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.chunked-import-write-rate-limit-r01.description',
+  },
+  {
+    id: 'uniimport-xlsx-self-closing-cell-r01',
+    date: '2026-09-29',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.uniimport-xlsx-self-closing-cell-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.uniimport-xlsx-self-closing-cell-r01.description',
+  },
+  {
+    id: 'kuaioa-employee-import-uniimport-code-r01',
+    date: '2026-09-29',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-employee-import-uniimport-code-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-employee-import-uniimport-code-r01.description',
+  },
+  {
+    id: 'kuaioa-employee-import-date-normalize-r01',
+    date: '2026-09-29',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-employee-import-date-normalize-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-employee-import-date-normalize-r01.description',
+  },
+  {
+    id: 'kuaioa-employee-import-template-code-r01',
+    date: '2026-09-29',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-employee-import-template-code-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-employee-import-template-code-r01.description',
+  },
+  {
+    id: 'kuaioa-employee-import-xlsx-date-r01',
+    date: '2026-09-29',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-employee-import-xlsx-date-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-employee-import-xlsx-date-r01.description',
+  },
+  {
+    id: 'deploy-wizard-optional-deps-menu-r01',
+    date: '2026-09-29',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.deploy-wizard-optional-deps-menu-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.deploy-wizard-optional-deps-menu-r01.description',
+  },
+  {
+    id: 'deploy-wizard-migrate-menu-r01',
+    date: '2026-09-29',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.deploy-wizard-migrate-menu-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.deploy-wizard-migrate-menu-r01.description',
+  },
+  {
+    id: 'deploy-optional-backend-deps-r01',
+    date: '2026-09-29',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.deploy-optional-backend-deps-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.deploy-optional-backend-deps-r01.description',
+  },
+  {
+    id: 'permission-governance-affiliate-r01',
+    date: '2026-09-28',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.permission-governance-affiliate-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.permission-governance-affiliate-r01.description',
+  },
+  {
+    id: 'material-detail-drawing-perm-r01',
+    date: '2026-09-28',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.material-detail-drawing-perm-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.material-detail-drawing-perm-r01.description',
+  },
+  {
+    id: 'material-sync-binding-bom-perm-r01',
+    date: '2026-09-28',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.material-sync-binding-bom-perm-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.material-sync-binding-bom-perm-r01.description',
+  },
+  {
+    id: 'material-form-process-route-perm-r01',
+    date: '2026-09-28',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.material-form-process-route-perm-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.material-form-process-route-perm-r01.description',
+  },
+  {
+    id: 'file-preview-notfound-import-r01',
+    date: '2026-09-28',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.file-preview-notfound-import-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.file-preview-notfound-import-r01.description',
+  },
+  {
+    id: 'role-permission-version-null-unique-r01',
+    date: '2026-09-28',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.role-permission-version-null-unique-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.role-permission-version-null-unique-r01.description',
+  },
+  {
+    id: 'order-push-prepayment-receipt-r01',
+    date: '2026-09-28',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.order-push-prepayment-receipt-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.order-push-prepayment-receipt-r01.description',
+  },
+  {
+    id: 'bank-account-statement-uniimport-r01',
+    date: '2026-09-28',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.bank-account-statement-uniimport-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.bank-account-statement-uniimport-r01.description',
+  },
+  {
+    id: 'finance-invoice-fill-number-approved-r01',
+    date: '2026-09-28',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.finance-invoice-fill-number-approved-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.finance-invoice-fill-number-approved-r01.description',
+  },
+  {
+    id: 'purchase-order-push-invoice-number-r01',
+    date: '2026-09-28',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-order-push-invoice-number-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-order-push-invoice-number-r01.description',
+  },
+  {
+    id: 'finance-voucher-confirm-bank-first-r01',
+    date: '2026-09-28',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.finance-voucher-confirm-bank-first-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.finance-voucher-confirm-bank-first-r01.description',
+  },
+  {
+    id: 'sales-order-linked-demand-status-align-r01',
+    date: '2026-09-28',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-order-linked-demand-status-align-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-order-linked-demand-status-align-r01.description',
+  },
+  {
+    id: 'customer-pool-inactive-alert-days-r01',
+    date: '2026-09-28',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.customer-pool-inactive-alert-days-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.customer-pool-inactive-alert-days-r01.description',
+  },
+  {
+    id: 'customer-pool-level-badge-i18n-r01',
+    date: '2026-09-28',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.customer-pool-level-badge-i18n-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.customer-pool-level-badge-i18n-r01.description',
+  },
+  {
+    id: 'sales-review-form-code-field-order-r01',
+    date: '2026-09-28',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-review-form-code-field-order-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-review-form-code-field-order-r01.description',
+  },
+  {
+    id: 'sales-review-dept-plan-table-r01',
+    date: '2026-09-28',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-review-dept-plan-table-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.sales-review-dept-plan-table-r01.description',
+  },
+  {
+    id: 'work-order-equipment-dispatch-ledger-status-r07',
+    date: '2026-09-28',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.work-order-equipment-dispatch-ledger-status-r07.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.work-order-equipment-dispatch-ledger-status-r07.description',
+  },
+  {
+    id: 'work-order-equipment-dispatch-capable-sort-r06',
+    date: '2026-09-28',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.work-order-equipment-dispatch-capable-sort-r06.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.work-order-equipment-dispatch-capable-sort-r06.description',
+  },
+  {
+    id: 'infra-superadmin-change-password-r01',
+    date: '2026-09-28',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.infra-superadmin-change-password-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.infra-superadmin-change-password-r01.description',
+  },
+  {
+    id: 'work-order-equipment-dispatch-card-snapshot-r05',
+    date: '2026-09-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.work-order-equipment-dispatch-card-snapshot-r05.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.work-order-equipment-dispatch-card-snapshot-r05.description',
+  },
+  {
+    id: 'work-order-equipment-dispatch-filter-multiselect-r04',
+    date: '2026-09-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.work-order-equipment-dispatch-filter-multiselect-r04.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.work-order-equipment-dispatch-filter-multiselect-r04.description',
+  },
+  {
+    id: 'work-order-equipment-dispatch-select-modal-r03',
+    date: '2026-09-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.work-order-equipment-dispatch-select-modal-r03.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.work-order-equipment-dispatch-select-modal-r03.description',
+  },
+  {
+    id: 'work-order-equipment-dispatch-cards-r02',
+    date: '2026-09-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.work-order-equipment-dispatch-cards-r02.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.work-order-equipment-dispatch-cards-r02.description',
+  },
+  {
+    id: 'packing-binding-qrcode-preview-r01',
+    date: '2026-09-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.packing-binding-qrcode-preview-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.packing-binding-qrcode-preview-r01.description',
+  },
+  {
+    id: 'packing-binding-capability-r01',
+    date: '2026-09-27',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.packing-binding-capability-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.packing-binding-capability-r01.description',
+  },
+  {
+    id: 'plan-dashboard-load-perf-r01',
+    date: '2026-09-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.plan-dashboard-load-perf-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.plan-dashboard-load-perf-r01.description',
+  },
+  {
+    id: 'rework-menu-to-ind-electronics-r01',
+    date: '2026-09-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.rework-menu-to-ind-electronics-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.rework-menu-to-ind-electronics-r01.description',
+  },
+  {
+    id: 'label-station-menu-offline-r01',
+    date: '2026-09-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.label-station-menu-offline-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.label-station-menu-offline-r01.description',
+  },
+  {
+    id: 'equipment-status-fixed-right-r01',
+    date: '2026-09-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.equipment-status-fixed-right-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.equipment-status-fixed-right-r01.description',
+  },
+  {
+    id: 'equipment-form-tabs-r01',
+    date: '2026-09-27',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.equipment-form-tabs-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.equipment-form-tabs-r01.description',
+  },
+  {
+    id: 'equipment-capable-operations-r01',
+    date: '2026-09-27',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.equipment-capable-operations-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.equipment-capable-operations-r01.description',
+  },
+  {
     id: 'official-api-library-third-party-catalog-r01',
     date: '2026-09-27',
     type: 'fix',

@@ -48,7 +48,6 @@ import { useCurrentUserQuery } from './hooks/useCurrentUserQuery';
 import { useCurrentUser } from './hooks/useCurrentUser';
 import { useSiteSettingQuery } from './hooks/useSiteSettingQuery';
 import { useUserPreferenceQuery } from './hooks/useUserPreferenceQuery';
-import { NAVIGATION_MENU_TREE_QUERY_KEY } from './hooks/useNavigationMenuTreeQuery';
 import { useConfigStore } from './stores/configStore';
 import { useUserPreferenceStore } from './stores/userPreferenceStore';
 import { getPlatformSettingsPublic } from './services/platformSettings';
@@ -213,8 +212,8 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
     }
     setUserInfo(nextUser);
     if (nextUser.avatar) prefetchAvatarUrl(nextUser.avatar);
+    // 权限版本变化只需重算侧栏 RBAC 过滤（currentUser 已更新）；navigation-tree 是租户全量树，勿失效重拉
     if (permissionVersionChanged) {
-      queryClient.invalidateQueries({ queryKey: [NAVIGATION_MENU_TREE_QUERY_KEY] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-menu-tree'] });
     }
   }, [userData, setCurrentUser]);

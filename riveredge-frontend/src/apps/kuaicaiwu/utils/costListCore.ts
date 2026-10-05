@@ -1,7 +1,12 @@
 import type { TFunction } from 'i18next';
 import type { ProColumns } from '@ant-design/pro-components';
 import React from 'react';
-import { extractProTableSort } from '../../../utils/tableQueryKey';
+import {
+  extractProTableSort,
+  pickListSearchKeyword,
+  pickSearchString,
+  pickSearchTriStateBoolean,
+} from '../../../utils/tableQueryKey';
 import { parseSalesReportDateRange } from '../../kuaizhizao/services/reports';
 import { formatDateTime } from '../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../utils/formDate';
@@ -13,15 +18,10 @@ import {
 export const COST_CALCULATION_PINNED_STATUS_FIELD = 'calculation_status';
 export const COST_CRUD_PINNED_ACTIVE_FIELD = 'isActive';
 
-function pickString(search: Record<string, unknown> | null | undefined, key: string) {
-  const v = search?.[key];
-  return typeof v === 'string' && v.trim() ? v.trim() : undefined;
-}
-
 function pickOptionalId(search: Record<string, unknown>, key: string): number | undefined {
-  const v = search[key];
-  if (v == null || v === '') return undefined;
-  const n = Number(v);
+  const raw = pickSearchString(search, key);
+  if (raw == null) return undefined;
+  const n = Number(raw);
   return Number.isFinite(n) && n > 0 ? n : undefined;
 }
 
@@ -197,25 +197,25 @@ export function resolveCostCalculationListParams(
   searchFormValues?: Record<string, unknown> | null,
   sort?: Record<string, unknown>,
 ): Record<string, string | number | boolean | undefined> {
-  const s = searchFormValues ?? {};
-  const fuzzyKeyword = pickString(s, 'keyword');
+  const search = searchFormValues ?? {};
+  const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
   const { sort_field, sort_order } = resolveCostSort(sort);
-  const { date_start: calculation_date_start, date_end: calculation_date_end } = parseSalesReportDateRange(s, [
+  const { date_start: calculation_date_start, date_end: calculation_date_end } = parseSalesReportDateRange(search, [
     'calculation_date_range',
     'calculationDateRange',
   ]);
-  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(search, [
     'created_at_range',
     'createdAtRange',
   ]);
-  const { date_start: updated_start_date, date_end: updated_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: updated_start_date, date_end: updated_end_date } = parseSalesReportDateRange(search, [
     'updated_at_range',
     'updatedAtRange',
   ]);
 
   const params: Record<string, string | number | boolean | undefined> = {
-    calculation_type: pickString(s, 'calculation_type'),
-    calculation_status: pickString(s, 'calculation_status'),
+    calculation_type: pickSearchString(searchFormValues, 'calculation_type'),
+    calculation_status: pickSearchString(searchFormValues, 'calculation_status'),
     sort_field,
     sort_order,
     calculation_date_start,
@@ -226,18 +226,18 @@ export function resolveCostCalculationListParams(
     updated_end_date,
   };
 
-  const workOrderId = pickOptionalId(s, 'work_order_id');
-  const productId = pickOptionalId(s, 'product_id');
+  const workOrderId = pickOptionalId(search, 'work_order_id');
+  const productId = pickOptionalId(search, 'product_id');
   if (workOrderId) params.work_order_id = workOrderId;
   if (productId) params.product_id = productId;
 
   if (fuzzyKeyword) {
     params.keyword = fuzzyKeyword;
   } else {
-    const calculationNo = pickString(s, 'calculation_no');
-    const workOrderCode = pickString(s, 'work_order_code');
-    const productCode = pickString(s, 'product_code');
-    const productName = pickString(s, 'product_name');
+    const calculationNo = pickSearchString(searchFormValues, 'calculation_no');
+    const workOrderCode = pickSearchString(searchFormValues, 'work_order_code');
+    const productCode = pickSearchString(searchFormValues, 'product_code');
+    const productName = pickSearchString(searchFormValues, 'product_name');
     if (calculationNo) params.calculation_no = calculationNo;
     if (workOrderCode) params.work_order_code = workOrderCode;
     if (productCode) params.product_code = productCode;
@@ -251,30 +251,22 @@ export function resolveCostRuleListParams(
   searchFormValues?: Record<string, unknown> | null,
   sort?: Record<string, unknown>,
 ): Record<string, string | number | boolean | undefined> {
-  const s = searchFormValues ?? {};
-  const fuzzyKeyword = pickString(s, 'keyword');
+  const search = searchFormValues ?? {};
+  const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
   const { sort_field, sort_order } = resolveCostSort(sort);
-  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(search, [
     'created_at_range',
     'createdAtRange',
   ]);
-  const { date_start: updated_start_date, date_end: updated_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: updated_start_date, date_end: updated_end_date } = parseSalesReportDateRange(search, [
     'updated_at_range',
     'updatedAtRange',
   ]);
 
-  const activeRaw = s[COST_CRUD_PINNED_ACTIVE_FIELD];
-  const is_active =
-    activeRaw === true || activeRaw === 'true'
-      ? true
-      : activeRaw === false || activeRaw === 'false'
-        ? false
-        : undefined;
-
   const params: Record<string, string | number | boolean | undefined> = {
-    rule_type: pickString(s, 'rule_type'),
-    cost_type: pickString(s, 'cost_type'),
-    is_active,
+    rule_type: pickSearchString(searchFormValues, 'rule_type'),
+    cost_type: pickSearchString(searchFormValues, 'cost_type'),
+    is_active: pickSearchTriStateBoolean(searchFormValues, COST_CRUD_PINNED_ACTIVE_FIELD),
     sort_field,
     sort_order,
     created_start_date,
@@ -286,8 +278,8 @@ export function resolveCostRuleListParams(
   if (fuzzyKeyword) {
     params.keyword = fuzzyKeyword;
   } else {
-    const code = pickString(s, 'code');
-    const name = pickString(s, 'name');
+    const code = pickSearchString(searchFormValues, 'code');
+    const name = pickSearchString(searchFormValues, 'name');
     if (code) params.code = code;
     if (name) params.name = name;
   }
@@ -299,34 +291,26 @@ export function resolveStandardCostListParams(
   searchFormValues?: Record<string, unknown> | null,
   sort?: Record<string, unknown>,
 ): Record<string, string | number | boolean | undefined> {
-  const s = searchFormValues ?? {};
-  const fuzzyKeyword = pickString(s, 'keyword');
+  const search = searchFormValues ?? {};
+  const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
   const { sort_field, sort_order } = resolveCostSort(sort);
-  const { date_start: effective_date_start, date_end: effective_date_end } = parseSalesReportDateRange(s, [
+  const { date_start: effective_date_start, date_end: effective_date_end } = parseSalesReportDateRange(search, [
     'effective_date_range',
     'effectiveDateRange',
   ]);
-  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: created_start_date, date_end: created_end_date } = parseSalesReportDateRange(search, [
     'created_at_range',
     'createdAtRange',
   ]);
-  const { date_start: updated_start_date, date_end: updated_end_date } = parseSalesReportDateRange(s, [
+  const { date_start: updated_start_date, date_end: updated_end_date } = parseSalesReportDateRange(search, [
     'updated_at_range',
     'updatedAtRange',
   ]);
 
-  const activeRaw = s[COST_CRUD_PINNED_ACTIVE_FIELD];
-  const is_active =
-    activeRaw === true || activeRaw === 'true'
-      ? true
-      : activeRaw === false || activeRaw === 'false'
-        ? false
-        : undefined;
-
   const params: Record<string, string | number | boolean | undefined> = {
-    target_type: pickString(s, 'target_type'),
-    cost_item_type: pickString(s, 'cost_item_type'),
-    is_active,
+    target_type: pickSearchString(searchFormValues, 'target_type'),
+    cost_item_type: pickSearchString(searchFormValues, 'cost_item_type'),
+    is_active: pickSearchTriStateBoolean(searchFormValues, COST_CRUD_PINNED_ACTIVE_FIELD),
     sort_field,
     sort_order,
     effective_date_start,
@@ -337,14 +321,14 @@ export function resolveStandardCostListParams(
     updated_end_date,
   };
 
-  const targetId = pickOptionalId(s, 'target_id');
+  const targetId = pickOptionalId(search, 'target_id');
   if (targetId) params.target_id = targetId;
 
   if (fuzzyKeyword) {
     params.keyword = fuzzyKeyword;
   } else {
-    const targetCode = pickString(s, 'target_code');
-    const targetName = pickString(s, 'target_name');
+    const targetCode = pickSearchString(searchFormValues, 'target_code');
+    const targetName = pickSearchString(searchFormValues, 'target_name');
     if (targetCode) params.target_code = targetCode;
     if (targetName) params.target_name = targetName;
   }

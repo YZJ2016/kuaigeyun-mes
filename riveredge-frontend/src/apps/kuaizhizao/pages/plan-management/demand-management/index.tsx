@@ -90,7 +90,12 @@ import { DemandDetailDrawer, DEMAND_WORKFLOW_PROPS } from './components/DemandDe
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
-import { extractProTableSort } from '../../../../../utils/tableQueryKey';
+import {
+  extractProTableSort,
+  pickListSearchKeyword,
+  pickSearchDateRange,
+  pickSearchString,
+} from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
@@ -956,7 +961,7 @@ const DemandManagementPage: React.FC = () => {
     <>
       <ListPageTemplate statCards={statCards}>
         <UniTable<Demand>
-          columnPersistenceId="apps.kuaizhizao.pages.plan-management.demand-management-width-v2"
+          columnPersistenceId="apps.kuaizhizao.pages.plan-management.demand-management-width-v3"
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.demandManagement)}
           headerTitle={t('app.kuaizhizao.demandManagement.title')}
@@ -964,12 +969,14 @@ const DemandManagementPage: React.FC = () => {
           actionRef={actionRef}
           columns={columns}
           request={async (params, sort, _filter, searchFormValues) => {
-            const s = (searchFormValues ?? {}) as Record<string, unknown>;
-            const lifecycleParams = resolveDemandPlanListLifecycleParams(s, params as Record<string, unknown>);
+            const lifecycleParams = resolveDemandPlanListLifecycleParams(
+              searchFormValues,
+              params as Record<string, unknown>,
+            );
             const { sortBy, sortOrder } = extractProTableSort(sort);
             const orderBy =
               sortBy && sortOrder ? (sortOrder === 'desc' ? `-${sortBy}` : sortBy) : undefined;
-            const fuzzyKeyword = typeof s.keyword === 'string' ? s.keyword.trim() : '';
+            const fuzzyKeyword = pickListSearchKeyword(searchFormValues);
 
             const apiParams: Parameters<typeof listDemands>[0] = {
               skip: ((params.current || 1) - 1) * (params.pageSize || 20),
@@ -977,32 +984,30 @@ const DemandManagementPage: React.FC = () => {
               demand_type: 'demand_plan',
               ...lifecycleParams,
               order_by: orderBy,
-              business_mode: s.business_mode as Demand['business_mode'],
-              start_date_from: s.start_date_from as string | undefined,
-              start_date_to: s.start_date_to as string | undefined,
+              business_mode: pickSearchString(searchFormValues, 'business_mode') as Demand['business_mode'],
+              start_date_from: pickSearchString(searchFormValues, 'start_date_from'),
+              start_date_to: pickSearchString(searchFormValues, 'start_date_to'),
               include_items: true,
             };
 
             if (fuzzyKeyword) {
               apiParams.keyword = fuzzyKeyword;
             } else {
-              if (s.demand_code != null && String(s.demand_code).trim()) {
-                apiParams.demand_code = String(s.demand_code).trim();
-              }
-              if (s.demand_name != null && String(s.demand_name).trim()) {
-                apiParams.demand_name = String(s.demand_name).trim();
-              }
+              const demandCode = pickSearchString(searchFormValues, 'demand_code');
+              const demandName = pickSearchString(searchFormValues, 'demand_name');
+              if (demandCode) apiParams.demand_code = demandCode;
+              if (demandName) apiParams.demand_name = demandName;
             }
 
-            const createdRange = s.created_at_range as [unknown, unknown] | undefined;
-            if (createdRange && Array.isArray(createdRange) && createdRange[0]) {
-              apiParams.created_start_date = formatDateTimeValue(
-                createdRange[0] as string | Date,
-                'YYYY-MM-DD',
-              );
-              apiParams.created_end_date = createdRange[1]
-                ? formatDateTimeValue(createdRange[1] as string | Date, 'YYYY-MM-DD')
-                : apiParams.created_start_date;
+            const createdRange = pickSearchDateRange(
+              searchFormValues,
+              'created_start_date',
+              'created_end_date',
+              'created_at_range',
+            );
+            if (createdRange.from) {
+              apiParams.created_start_date = createdRange.from;
+              apiParams.created_end_date = createdRange.to ?? createdRange.from;
             }
 
             try {
@@ -1045,6 +1050,12 @@ const DemandManagementPage: React.FC = () => {
               menuItems={demandToolbarPushMenuItems}
               disabled={selectedRowKeys.length !== 1 || !selectedDemandForPush}
               disabledReason={demandToolbarPushDisabledReason}
+              sourceDocument={
+                selectedDemandForPush?.id
+                  ? { type: 'demand', id: Number(selectedDemandForPush.id) }
+                  : null
+              }
+              pushTargets={{ 'push-to-computation': 'demand_computation' }}
             />,
           ]}
           showEditButton={false}
