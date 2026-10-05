@@ -29,7 +29,12 @@ from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
 from apps.kuaizhizao.schemas.reporting_record import ReportingRecordCreate
 from apps.kuaizhizao.services.reporting_service import ReportingService
 from apps.kuaizhizao.services.work_order_service import WORK_ORDER_IN_PROGRESS_STATUS
-from apps.kuaiiot.models.iot import IotDevice, IotDiscoveredMqttDevice, IotTagSnapshot
+from apps.kuaiiot.models.iot import IotDevice, IotTagSnapshot
+
+try:
+    from apps.kuaiiot.models.iot import IotDiscoveredMqttDevice
+except ImportError:  # 快数采私有仓未合入现场设备名录模型时仍可报工
+    IotDiscoveredMqttDevice = None  # type: ignore[misc, assignment]
 from core.utils.timezone_utils import resolve_business_datetime
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 from infra.models.user import User
@@ -392,7 +397,11 @@ class AutoReportService:
         line_id = equipment.production_line_id
         line_code = (equipment.production_line_code or "").strip() or None
         line_name = (equipment.production_line_name or "").strip() or None
-        if (not line_code and not line_name) and device.external_device_id:
+        if (
+            IotDiscoveredMqttDevice is not None
+            and (not line_code and not line_name)
+            and device.external_device_id
+        ):
             disc = (
                 await IotDiscoveredMqttDevice.filter(
                     tenant_id=tenant_id,
