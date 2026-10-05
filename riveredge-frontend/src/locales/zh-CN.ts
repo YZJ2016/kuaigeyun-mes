@@ -29945,6 +29945,10 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.mobile-login-form-banner-gap-r01.title':
+    '手机登录弹出键盘时账号登录与顶栏之间留出间距',
+  'pages.dashboard.updateLog.entries.mobile-login-form-banner-gap-r01.description':
+    '键盘顶起后登录区变矮，标题会贴到品牌区下沿。现已在表单顶部保留间距，不再顶死。',
   'pages.dashboard.updateLog.entries.mobile-login-banner-ratio-1-2-r01.title':
     '手机登录页品牌区与表单固定为三分之一对三分之二',
   'pages.dashboard.updateLog.entries.mobile-login-banner-ratio-1-2-r01.description':
