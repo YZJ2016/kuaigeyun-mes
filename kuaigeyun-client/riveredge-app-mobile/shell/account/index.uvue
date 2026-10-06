@@ -21,36 +21,36 @@
 		</view>
 		<text class="section-title">管理</text>
 		<view class="action-list">
-			<view class="action-row" hover-class="pressed" @click="openEdit">
+			<button class="action-row" hover-class="pressed" @click="openEdit" :disabled="loading || busy">
 				<text class="action-label">编辑资料</text>
 				<view class="action-end">
 					<text class="action-aside">修改姓名和联系方式</text>
 					<text class="chevron">›</text>
 				</view>
-			</view>
-			<view class="action-row" hover-class="pressed" @click="openPassword">
+			</button>
+			<button class="action-row" hover-class="pressed" @click="openPassword" :disabled="loading || busy">
 				<text class="action-label">修改密码</text>
 				<view class="action-end">
 					<text class="chevron">›</text>
 				</view>
-			</view>
+			</button>
 			<view v-if="wecomBound" class="action-row action-row-last">
 				<text class="action-label">企业微信</text>
 				<view class="action-end">
 					<text class="action-aside">{{ wecomUserId }}</text>
-					<view class="action-inline" hover-class="pressed" @click="askUnbind">
+					<button class="action-inline" hover-class="pressed" @click="askUnbind" :disabled="loading || busy">
 						<text class="action-inline-text">解除绑定</text>
-					</view>
+					</button>
 				</view>
 			</view>
-			<view v-else-if="bindHere && profileReady" class="action-row action-row-last" hover-class="pressed" @click="onBind">
+			<button v-else-if="bindHere && profileReady" class="action-row action-row-last" hover-class="pressed" @click="onBind" :disabled="loading || busy">
 				<text class="action-label">企业微信</text>
 				<view class="action-end">
 					<text class="action-aside">未绑定</text>
 					<text class="bind-text">绑定企业微信</text>
 					<text class="chevron">›</text>
 				</view>
-			</view>
+			</button>
 			<view v-else class="action-row action-row-last">
 				<text class="action-label">企业微信</text>
 				<view class="action-end">
@@ -59,9 +59,9 @@
 			</view>
 		</view>
 		<text v-if="profileReady && !wecomBound && !bindHere" class="hint wecom-note">当前端取码未接通。请用企业微信打开手机网页完成绑定。</text>
-		<view class="logout" hover-class="pressed" @click="askLogout">
+		<button class="logout" hover-class="pressed" @click="askLogout" :disabled="loading || busy">
 			<text class="logout-text">退出登录</text>
-		</view>
+		</button>
 	</scroll-view>
 		<view v-if="loading" class="loading-mask">
 			<view class="loading-card">
@@ -374,6 +374,9 @@
 </script>
 
 <style>
+	.action-row, .action-inline, .logout { height: auto; min-height: 48px; margin: 0px; line-height: 24px; text-align: left; }
+	.action-row { border-top-width: 0px; border-left-width: 0px; border-right-width: 0px; border-radius: 0px; }
+	.logout { border-width: 0px; }
 	.identity {
 		flex-direction: row;
 		align-items: center;

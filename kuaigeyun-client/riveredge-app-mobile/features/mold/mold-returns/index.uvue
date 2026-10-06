@@ -1,37 +1,38 @@
 <template>
 	<view class="page-shell">
 		<home-link />
-	<view class="page">
+	<scroll-view class="page" direction="vertical">
+		<load-feedback :active="loading" :mode="loadSettled ? 'refresh' : 'initial'" />
 		<text class="section">未归还领用</text>
-		<view v-for="(item, index) in borrowOptions" :key="index" class="list-row" hover-class="pressed" @click="chooseBorrow(index)">
-			<text class="title">{{ item.label }}</text>
-		</view>
+		<selection-row v-for="(item, index) in borrowOptions" :key="item.id" :label="item.label" :selected="item.id == borrowId" :disabled="loading || submitting" @choose="chooseBorrow(index)" />
 		<text v-if="!loading && borrowOptions.length == 0 && hint == ''" class="empty">没有未归还的领用</text>
 		<text v-if="chosenBorrow != ''" class="meta">已选 {{ chosenBorrow }}</text>
-		<input class="field" v-model="returnDate" placeholder="归还日期 YYYY-MM-DD" />
-		<input class="field" v-model="usageCount" placeholder="使用次数" />
-		<input class="field" v-model="remark" placeholder="备注" />
-		<button :class="submitting ? 'btn-primary is-disabled' : 'btn-primary'" :disabled="submitting" @click="createReturn">创建归还</button>
+		<date-field v-model="returnDate" label="归还日期" :disabled="loading || submitting" />
+		<text class="label">使用次数</text>
+		<input class="field" v-model="usageCount" :disabled="loading || submitting" type="number" placeholder="使用次数" />
+		<text class="label">备注（可选）</text>
+		<input class="field" v-model="remark" :disabled="loading || submitting" placeholder="备注" />
+		<action-button label="创建归还" tone="primary" :busy="submitting" :disabled="loading" @press="createReturn" />
 		<text v-if="hint != ''" class="error">{{ hint }}</text>
 		<text class="section">归还记录</text>
-		<input class="field" v-model="listKeyword" placeholder="搜索归还单" />
-		<button class="btn-secondary" @click="loadList">刷新</button>
+		<text class="label">记录关键词</text>
+		<input class="field" v-model="listKeyword" :disabled="loading || submitting" placeholder="搜索归还单" />
+		<action-button label="查询记录" :disabled="loading || submitting" @press="loadList" />
 		<view v-for="(item, index) in rows" :key="index" class="list-row">
 			<text class="title">{{ item.title }}</text>
 			<text class="meta">{{ item.detail }}</text>
 		</view>
 		<text v-if="!loading && rows.length == 0 && hint == ''" class="empty">暂无归还</text>
-	</view>
-		<view v-if="loading" class="loading-mask">
-			<view class="loading-card">
-				<text class="loading">加载中</text>
-			</view>
-		</view>
+	</scroll-view>
 	</view>
 </template>
 
 <script setup lang="uts">
+	import LoadFeedback from '../../../shared/ui/load-feedback.uvue'
 	import HomeLink from '../../../shared/ui/home-link.uvue'
+	import ActionButton from '../../../shared/ui/action-button.uvue'
+	import SelectionRow from '../../../shared/ui/selection-row.uvue'
+	import DateField from '../../../shared/ui/date-field.uvue'
 	import {
 		DocLine,
 		MOLD_BORROWS_OUTSTANDING,
@@ -66,6 +67,7 @@
 	const hint = ref('')
 	const submitting = ref(false)
 	const loading = ref(false)
+	const loadSettled = ref(false)
 	let ticket = 0
 	let borrowTicket = 0
 	let listOpen = false
@@ -73,6 +75,7 @@
 
 	function syncLoading(): void {
 		loading.value = listOpen || borrowOpen
+		if (!loading.value) { loadSettled.value = true }
 	}
 
 	function parseCount(raw: string): number {
@@ -95,6 +98,7 @@
 	}
 
 	async function chooseBorrow(index: number): Promise<void> {
+		if (loading.value || submitting.value) { return }
 		const options = borrowOptions.value
 		if (index < 0 || index >= options.length) {
 			return
@@ -203,6 +207,7 @@
 	}
 
 	async function createReturn(): Promise<void> {
+		if (loading.value || submitting.value) { return }
 		hint.value = ''
 		if (borrowId.value <= 0 || moldId.value <= 0) {
 			hint.value = '请选择领用单'

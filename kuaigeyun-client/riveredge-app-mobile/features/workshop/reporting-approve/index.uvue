@@ -2,6 +2,7 @@
 	<view class="page-shell">
 		<home-link />
 	<view class="page">
+		<load-feedback :active="loading" :mode="loadSettled ? 'refresh' : 'initial'" />
 		<text v-if="errorTextValue.length > 0" class="error">{{ errorTextValue }}</text>
 		<text v-if="!loading && rows.length == 0 && errorTextValue.length == 0" class="empty">暂无报工</text>
 		<view v-for="(row, index) in rows" :key="index" class="card">
@@ -10,18 +11,15 @@
 			<text class="sub">{{ reviewQuantities(row) }}</text>
 			<text class="sub">工时 {{ reviewValue(row, 'work_hours') }} 小时</text>
 			<text class="sub">报工时间 {{ reviewValue(row, 'reported_at') }}</text>
-			<button class="btn-primary" :disabled="loading || approving" @click="approve(index)">{{ approving ? '审核处理中' : '审核' }}</button>
+			<action-button label="审核" :busy="approvalPosting && approvingIndex == index" busy-label="审核中" tone="primary" :disabled="loading || approving" @press="approve(index)" />
 		</view>
 	</view>
-		<view v-if="loading" class="loading-mask">
-			<view class="loading-card">
-				<text class="loading">加载中</text>
-			</view>
-		</view>
 	</view>
 </template>
 
 <script setup lang="uts">
+	import LoadFeedback from '../../../shared/ui/load-feedback.uvue'
+	import ActionButton from '../../../shared/ui/action-button.uvue'
 	import HomeLink from '../../../shared/ui/home-link.uvue'
 	import { request } from '../../../shared/api/index.uts'
 	import { readRows, fieldText, fieldNumber, errorText } from '../../../shared/api/fields.uts'
@@ -29,8 +27,11 @@
 
 	const rows = ref<any[]>([])
 	const loading = ref(false)
+	const loadSettled = ref(false)
 	const errorTextValue = ref('')
 	const approving = ref(false)
+	const approvalPosting = ref(false)
+	const approvingIndex = ref(-1)
 	let ticket = 0
 
 	function reviewValue(row : any, key : string) : string {
@@ -78,6 +79,7 @@
 			return
 		}
 		loading.value = false
+		loadSettled.value = true
 	}
 
 	function approve(index : number) {
@@ -90,6 +92,7 @@
 			toast('报工记录无效')
 			return
 		}
+		approvingIndex.value = index
 		approving.value = true
 		uni.showModal({
 			title: '确认审核通过',
@@ -111,6 +114,7 @@
 	}
 
 	async function submitApproval(recordId : number) {
+		approvalPosting.value = true
 		errorTextValue.value = ''
 		try {
 			await request({
@@ -124,6 +128,8 @@
 		} catch (err) {
 			errorTextValue.value = errorText(err)
 		} finally {
+			approvalPosting.value = false
+			approvingIndex.value = -1
 			approving.value = false
 		}
 	}

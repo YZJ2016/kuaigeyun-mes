@@ -2,25 +2,24 @@
 	<view class="page-shell">
 		<home-link />
 	<scroll-view class="page" scroll-y="true">
+		<load-feedback :active="loading" :mode="loadSettled ? 'refresh' : 'initial'" />
 		<view class="toolbar">
-			<button class="btn-secondary" @click="loadSummary">刷新</button>
+			<action-button label="刷新" tone="secondary" :disabled="loading" @press="loadSummary" />
 		</view>
 		<text v-if="errorTextValue.length > 0" class="error">{{ errorTextValue }}</text>
 		<text v-if="!loading && pendingRows.length == 0 && errorTextValue.length == 0" class="empty">汇总里没有待检项</text>
-		<view v-for="(row, index) in pendingRows" :key="index" class="card" hover-class="pressed" @click="openRow(index)">
+		<action-card v-for="(row, index) in pendingRows" :key="index" @press="openRow(index)" :disabled="loading">
 			<text class="title">{{ row.label }}</text>
 			<text class="meta">待检 {{ row.countText }}</text>
-		</view>
+		</action-card>
 	</scroll-view>
-		<view v-if="loading" class="loading-mask">
-			<view class="loading-card">
-				<text class="loading">加载中</text>
-			</view>
-		</view>
 	</view>
 </template>
 
 <script setup lang="uts">
+	import LoadFeedback from '../../../shared/ui/load-feedback.uvue'
+	import ActionCard from '../../../shared/ui/action-card.uvue'
+	import ActionButton from '../../../shared/ui/action-button.uvue'
 	import HomeLink from '../../../shared/ui/home-link.uvue'
 	import { request } from '../../../shared/api/index.uts'
 	import { errorText } from '../../../shared/api/fields.uts'
@@ -37,6 +36,7 @@
 	const entryKeys : string[] = ['incoming', 'process-scan', 'finished', 'oqc']
 
 	const loading = ref(false)
+	const loadSettled = ref(false)
 	const errorTextValue = ref('')
 	const pendingRows = ref<PendingRow[]>([])
 	let ticket = 0
@@ -100,9 +100,11 @@
 			return
 		}
 		loading.value = false
+		loadSettled.value = true
 	}
 
 	function openRow(index : number) {
+		if (loading.value) { return }
 		const route = pendingRows.value[index].route
 		if (route.length == 0) {
 			return

@@ -1,13 +1,13 @@
 <template>
 	<view class="page-nav">
-		<view v-if="showActions" class="nav-back" hover-class="pressed" @click="onBack">
+		<button v-if="showActions" class="nav-back" hover-class="pressed" @click="onBack">
 			<view class="nav-chevron"></view>
 			<text class="nav-action">返回</text>
-		</view>
+		</button>
 		<text class="page-nav-title">{{ barTitle }}</text>
-		<view v-if="showActions" class="nav-home" hover-class="pressed" @click="onHome">
+		<button v-if="showActions" class="nav-home" hover-class="pressed" @click="onHome">
 			<text class="nav-action">首页</text>
-		</view>
+		</button>
 	</view>
 </template>
 
@@ -71,6 +71,7 @@
 </script>
 
 <style>
+	.nav-back, .nav-home { margin: 0px; border-width: 0px; border-radius: 0px; min-height: 48px; min-width: 48px; line-height: 24px; background-color: transparent; }
 	.page-nav {
 		height: 48px;
 		background-color: #F8FAFC;

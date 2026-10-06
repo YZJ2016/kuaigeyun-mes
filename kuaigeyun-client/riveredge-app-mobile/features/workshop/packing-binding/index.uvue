@@ -2,44 +2,45 @@
 	<view class="page-shell">
 		<home-link />
 	<view class="page">
+		<load-feedback :active="loading && !submitting" :mode="loadSettled ? 'refresh' : 'initial'" />
 		<text v-if="errorTextValue.length > 0" class="error">{{ errorTextValue }}</text>
 		<view v-if="detail == null && !packOpen">
 			<text v-if="!loading && rows.length == 0 && errorTextValue.length == 0" class="empty">暂无绑定</text>
-			<view v-for="(row, index) in rows" :key="index" class="card" hover-class="pressed" @click="openBinding(index)">
+			<action-card v-for="(row, index) in rows" :key="index" @press="openBinding(index)" :disabled="loading || submitting">
 				<text class="title">{{ lineTitle(row) }}</text>
 				<text class="sub">{{ lineSub(row) }}</text>
-			</view>
-			<button class="btn-primary" @click="openPack">绑定新箱</button>
+			</action-card>
+			<action-button label="绑定新箱" tone="primary" @press="openPack" :disabled="loading || submitting" />
 		</view>
 		<view v-else-if="packOpen">
-			<button class="btn-secondary" @click="closePack">返回列表</button>
+			<action-button label="返回列表" tone="secondary" @press="closePack" :disabled="loading || submitting" />
 			<text class="hint">先选来源单据，再选该单上的产品。箱号可空。</text>
 			<text class="label">来源单据</text>
 			<view class="kind-row">
-				<button :class="sourceKind == 'fg' ? 'btn-chip btn-chip-on' : 'btn-chip'" @click="chooseKind(0)">成品入库单</button>
-				<button :class="sourceKind == 'sales' ? 'btn-chip btn-chip-on' : 'btn-chip'" @click="chooseKind(1)">销售出库单</button>
+				<choice-button label="成品入库单" :selected="sourceKind == 'fg'" @choose="chooseKind(0)" :disabled="loading || submitting" />
+				<choice-button label="销售出库单" :selected="sourceKind == 'sales'" @choose="chooseKind(1)" :disabled="loading || submitting" />
 			</view>
 			<text v-if="sourceKind.length > 0 && sources.length == 0 && !loading" class="empty">没有可选单据</text>
-			<view v-for="(doc, index) in sources" :key="doc.uid" class="card" hover-class="pressed" @click="pickSource(index)">
+			<action-card v-for="(doc, index) in sources" :key="doc.uid" @press="pickSource(index)" :disabled="loading || submitting">
 				<text class="title">{{ doc.title }}</text>
 				<text class="sub">{{ sourceIndex == index ? '已选' : '点选' }}</text>
-			</view>
+			</action-card>
 			<view v-if="sourceIndex >= 0">
 				<text class="label">产品</text>
 				<text v-if="products.length == 0 && !loading" class="empty">这张单没有可绑定的产品</text>
-				<view v-for="(product, index) in products" :key="product.uid" class="card" hover-class="pressed" @click="pickProduct(index)">
+				<action-card v-for="(product, index) in products" :key="product.uid" @press="pickProduct(index)" :disabled="loading || submitting">
 					<text class="title">{{ product.label }}</text>
 					<text class="sub">{{ productIndex == index ? '已选' : '点选' }}</text>
-				</view>
+				</action-card>
 			</view>
 			<text class="label">装箱数量</text>
-			<input class="field" :value="packQty" placeholder="必填" @input="onPackQty" />
+			<input :disabled="loading || submitting" class="field" :value="packQty" placeholder="必填" @input="onPackQty" />
 			<text class="label">箱号（可选）</text>
-			<input class="field" :value="boxNo" placeholder="可空" @input="onBoxNo" />
-			<button class="btn-primary" :disabled="loading" @click="submitPack">确认绑定</button>
+			<input :disabled="loading || submitting" class="field" :value="boxNo" placeholder="可空" @input="onBoxNo" />
+			<action-button label="确认绑定" tone="primary" :busy="submitting" busy-label="绑定中" :disabled="loading || submitting" @press="submitPack" />
 		</view>
 		<view v-else>
-			<button class="btn-secondary" @click="closeDetail">返回列表</button>
+			<action-button label="返回列表" tone="secondary" @press="closeDetail" :disabled="loading || submitting" />
 			<text class="title">{{ detailLine('product_code') }} {{ detailLine('product_name') }}</text>
 			<text class="sub">箱号 {{ detailLine('box_no') }}</text>
 			<text class="sub">数量 {{ detailLine('packing_quantity') }}</text>
@@ -49,15 +50,14 @@
 			<text class="sub">备注 {{ detailLine('remarks') }}</text>
 		</view>
 	</view>
-		<view v-if="loading" class="loading-mask">
-			<view class="loading-card">
-				<text class="loading">加载中</text>
-			</view>
-		</view>
 	</view>
 </template>
 
 <script setup lang="uts">
+	import LoadFeedback from '../../../shared/ui/load-feedback.uvue'
+	import ActionCard from '../../../shared/ui/action-card.uvue'
+	import ChoiceButton from '../../../shared/ui/choice-button.uvue'
+	import ActionButton from '../../../shared/ui/action-button.uvue'
 	import HomeLink from '../../../shared/ui/home-link.uvue'
 	import { request } from '../../../shared/api/index.uts'
 	import { readRows, fieldText, fieldNumber, firstText, errorText } from '../../../shared/api/fields.uts'
@@ -81,6 +81,8 @@
 	const rows = ref<any[]>([])
 	const detail = ref<any | null>(null)
 	const loading = ref(false)
+	const loadSettled = ref(false)
+	const submitting = ref(false)
 	const errorTextValue = ref('')
 	const packOpen = ref(false)
 	const sourceKind = ref('')
@@ -105,6 +107,7 @@
 	}
 
 	async function load() {
+		if (submitting.value) { return }
 		const mine = ticket + 1
 		ticket = mine
 		loading.value = true
@@ -130,9 +133,11 @@
 			return
 		}
 		loading.value = false
+		loadSettled.value = true
 	}
 
 	async function openBinding(index : number) {
+		if (loading.value || submitting.value) { return }
 		const bindingId = fieldNumber(rows.value[index], 'id')
 		if (bindingId <= 0) {
 			toast('绑定无效')
@@ -163,9 +168,11 @@
 			return
 		}
 		loading.value = false
+		loadSettled.value = true
 	}
 
 	function closeDetail() {
+		if (loading.value || submitting.value) { return }
 		detail.value = null
 	}
 
@@ -190,6 +197,7 @@
 	}
 
 	function openPack() {
+		if (loading.value || submitting.value) { return }
 		packOpen.value = true
 		errorTextValue.value = ''
 		sourceKind.value = ''
@@ -200,10 +208,12 @@
 	}
 
 	function closePack() {
+		if (loading.value || submitting.value) { return }
 		packOpen.value = false
 	}
 
 	async function chooseKind(index : number) {
+		if (loading.value || submitting.value) { return }
 		sourceKind.value = index == 0 ? 'fg' : 'sales'
 		resetProducts()
 		errorTextValue.value = ''
@@ -246,9 +256,11 @@
 			return
 		}
 		loading.value = false
+		loadSettled.value = true
 	}
 
 	async function pickSource(index : number) {
+		if (loading.value || submitting.value) { return }
 		sourceIndex.value = index
 		productIndex.value = -1
 		errorTextValue.value = ''
@@ -300,21 +312,26 @@
 			return
 		}
 		loading.value = false
+		loadSettled.value = true
 	}
 
 	function pickProduct(index : number) {
+		if (loading.value || submitting.value) { return }
 		productIndex.value = index
 	}
 
 	function onPackQty(event : UniInputEvent) {
+		if (loading.value || submitting.value) { return }
 		packQty.value = event.detail.value
 	}
 
 	function onBoxNo(event : UniInputEvent) {
+		if (loading.value || submitting.value) { return }
 		boxNo.value = event.detail.value
 	}
 
 	async function submitPack() {
+		if (loading.value || submitting.value) { return }
 		if (loading.value) {
 			return
 		}
@@ -356,6 +373,7 @@
 		const mine = ticket + 1
 		ticket = mine
 		loading.value = true
+		submitting.value = true
 		errorTextValue.value = ''
 		try {
 			await request({
@@ -368,6 +386,8 @@
 				return
 			}
 			toast('已绑定')
+			submitting.value = false
+			loading.value = false
 			closePack()
 			await load()
 			return
@@ -380,7 +400,9 @@
 		if (ticket != mine) {
 			return
 		}
+		submitting.value = false
 		loading.value = false
+		loadSettled.value = true
 	}
 
 	onBackPress((options : OnBackPressOptions) : boolean | null => {

@@ -2,7 +2,8 @@
 	<view class="page-shell">
 		<home-link />
 	<view class="page">
-		<button class="btn-secondary" @click="loadList">刷新</button>
+		<load-feedback :active="loading" :mode="loadSettled ? 'refresh' : 'initial'" />
+		<action-button label="刷新" tone="secondary" @press="loadList"  :disabled="loading" />
 		<text v-if="hint != ''" class="error">{{ hint }}</text>
 		<view v-for="(item, index) in rows" :key="index" class="list-row">
 			<text class="title">{{ item.title }}</text>
@@ -10,15 +11,12 @@
 		</view>
 		<text v-if="!loading && rows.length == 0 && hint == ''" class="empty">暂无保养提醒</text>
 	</view>
-		<view v-if="loading" class="loading-mask">
-			<view class="loading-card">
-				<text class="loading">加载中</text>
-			</view>
-		</view>
 	</view>
 </template>
 
 <script setup lang="uts">
+	import LoadFeedback from '../../../shared/ui/load-feedback.uvue'
+	import ActionButton from '../../../shared/ui/action-button.uvue'
 	import HomeLink from '../../../shared/ui/home-link.uvue'
 	import { DocLine, MOLD_REMINDERS, apiGetRows, joinParts, withQuery } from '../http.uts'
 	import { errorText, fieldText } from '../../../shared/api/fields.uts'
@@ -26,6 +24,7 @@
 	const rows = ref<DocLine[]>([])
 	const hint = ref('')
 	const loading = ref(false)
+	const loadSettled = ref(false)
 	let ticket = 0
 
 	function reminderLabel(value: string): string {
@@ -95,7 +94,7 @@
 		if (ticket != mine) {
 			return
 		}
-		loading.value = false
+		loading.value = false; loadSettled.value = true
 	}
 
 	onShow(() => {

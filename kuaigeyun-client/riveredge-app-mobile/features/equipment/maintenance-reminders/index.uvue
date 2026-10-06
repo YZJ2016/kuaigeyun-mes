@@ -2,33 +2,32 @@
 	<view class="page-shell">
 		<home-link />
 	<scroll-view class="page" direction="vertical">
+		<load-feedback :active="loading" :mode="loadSettled ? 'refresh' : 'initial'" />
 		<view class="card">
 			<text class="title">维护提醒</text>
-			<button :class="busy ? 'btn-secondary is-disabled' : 'btn-secondary'" :disabled="busy" @click="loadList">刷新</button>
+			<action-button label="刷新" tone="secondary" :disabled="loading || busy" @press="loadList" />
 			<text v-if="!loading && rows.length == 0 && errorText.length == 0" class="empty">暂无记录</text>
-			<view class="item" hover-class="pressed" v-for="(item, index) in rows" :key="item.rowKey" @click="selectRow(index)">
+			<action-card v-for="(item, index) in rows" :key="item.rowKey" @press="selectRow(index)" :disabled="loading || busy" variant="row">
 				<text class="item-title">{{ item.title }}</text>
 				<text class="hint">{{ item.detail }}</text>
-			</view>
+			</action-card>
 		</view>
 		<view class="card" v-if="reminderUuid.length > 0">
 			<text class="title">标记已处理</text>
 			<text class="hint">确认后标记已处理。</text>
-			<input class="field" v-model="remarkText" placeholder="备注（可选，不会保存）" />
-			<button :class="busy ? 'btn-primary is-disabled' : 'btn-primary'" :disabled="busy" @click="submitHandled">标记已处理</button>
+			<input class="field" v-model="remarkText" placeholder="备注（可选，不会保存）"  :disabled="loading || busy" />
+			<action-button label="标记已处理" tone="primary" :disabled="loading" :busy="busy" busy-label="提交中" @press="submitHandled" />
 		</view>
 		<text v-if="messageText.length > 0" class="hint page-hint">{{ messageText }}</text>
 		<text v-if="errorText.length > 0" class="error page-hint">{{ errorText }}</text>
 	</scroll-view>
-		<view v-if="loading" class="loading-mask">
-			<view class="loading-card">
-				<text class="loading">加载中</text>
-			</view>
-		</view>
 	</view>
 </template>
 
 <script setup lang="uts">
+	import LoadFeedback from '../../../shared/ui/load-feedback.uvue'
+	import ActionCard from '../../../shared/ui/action-card.uvue'
+	import ActionButton from '../../../shared/ui/action-button.uvue'
 	import HomeLink from '../../../shared/ui/home-link.uvue'
 	import { request } from '../../../shared/api/index.uts'
 	import { fieldBool, fieldText, readRows } from '../../../shared/api/fields.uts'
@@ -44,6 +43,7 @@
 
 	const busy = ref(false)
 	const loading = ref(false)
+	const loadSettled = ref(false)
 	let ticket = 0
 	const rows = ref<Array<ListRow>>([])
 	const reminderUuid = ref('')
@@ -109,7 +109,7 @@
 		if (ticket != mine) {
 			return
 		}
-		loading.value = false
+		loading.value = false; loadSettled.value = true
 	}
 
 	async function submitHandled(): Promise<void> {

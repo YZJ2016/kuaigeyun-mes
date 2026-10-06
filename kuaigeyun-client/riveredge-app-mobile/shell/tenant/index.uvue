@@ -10,17 +10,13 @@
 		<view class="card">
 			<text class="label">地址</text>
 			<input class="field" :value="address" placeholder="https://主机/mobile/组织域名" placeholder-class="entry-ph" @input="onAddress" />
-			<view :class="busy ? 'btn-secondary is-disabled' : 'btn-secondary'" hover-class="pressed" @click="onIdentify">
-				<text class="btn-label-secondary">{{ busy ? '识别中' : '识别' }}</text>
-			</view>
+			<action-button :label="busy ? '识别中' : '识别'" tone="secondary" @press="onIdentify" :disabled="busy" />
 			<text v-if="message.length > 0" class="error">{{ message }}</text>
 			<view v-if="pendingId.length > 0">
 				<text class="label">组织</text>
 				<text v-if="pendingName.length > 0" class="title">{{ pendingName }}</text>
 				<text class="hint">{{ pendingDomain }}</text>
-				<view :class="busy ? 'btn-primary is-disabled' : 'btn-primary'" hover-class="pressed" @click="onConfirm">
-					<text class="btn-label">确认</text>
-				</view>
+				<action-button label="确认" tone="primary" @press="onConfirm" :disabled="busy" />
 			</view>
 		</view>
 	</scroll-view>
@@ -28,6 +24,7 @@
 </template>
 
 <script setup lang="uts">
+	import ActionButton from '../../shared/ui/action-button.uvue'
 	import HomeLink from '../../shared/ui/home-link.uvue'
 	import { clearToken, getTenantId, getToken } from '../../shared/api/session.uts'
 	import { readSavedAppEntry, saveAppEntry } from '../../shared/api/app-entry.uts'

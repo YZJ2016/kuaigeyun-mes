@@ -3,15 +3,16 @@
 		<home-link :hold-home="conducting" @home="leaveHome" />
 	<scroll-view class="page" scroll-y="true" :scroll-into-view="scrollTarget">
 		<view v-if="!conducting">
+		<load-feedback :active="loading" :mode="loadSettled ? 'refresh' : 'initial'" />
 		<view class="toolbar">
-			<button class="btn-secondary" @click="loadList">刷新</button>
+			<action-button label="刷新" tone="secondary" :disabled="loading" @press="loadList" />
 		</view>
 		<text v-if="errorTextValue.length > 0" class="error">{{ errorTextValue }}</text>
 		<text v-if="!loading && rows.length == 0 && errorTextValue.length == 0" class="empty">暂无检验单</text>
 		<view v-for="(row, index) in rows" :key="index" class="card">
 			<text class="title">{{ rowTitle(row) }}</text>
 			<text v-if="rowLine(row).length > 0" class="meta">{{ rowLine(row) }}</text>
-			<view class="btn-secondary" @click="openConduct(index)"><text class="btn-label-secondary">执行检验</text></view>
+			<action-button label="执行检验" tone="secondary" :disabled="loading" @press="openConduct(index)" />
 		</view>
 		</view>
 		<view v-if="conducting" class="card">
@@ -20,54 +21,54 @@
 			<text class="hint">第 {{ activeStage + 1 }} / 3 段：{{ stageLabels[activeStage] }}</text>
 			<text v-if="formError.length > 0" class="error">{{ formError }}</text>
 			<view class="choices">
-				<button v-for="(label, stageIndex) in stageLabels" :key="stageIndex" class="btn-secondary" :disabled="submitting || uploadingCount > 0" @click="goStage(stageIndex)">{{ activeStage == stageIndex ? '● ' : '' }}{{ label }}</button>
+				<action-button :label="(activeStage == stageIndex ? '● ' : '') + label" tone="secondary" v-for="(label, stageIndex) in stageLabels" :key="stageIndex" :disabled="submitting || uploadingCount > 0" @press="goStage(stageIndex)" />
 			</view>
 			<view v-show="activeStage == 0">
 			<view class="field-wrap">
 				<text class="label">合格数量</text>
-				<input class="field" type="digit" :value="qualifiedText" @input="onQualifiedInput" />
+				<input :disabled="submitting || uploadingCount > 0" class="field" type="digit" :value="qualifiedText" @input="onQualifiedInput" />
 			</view>
 			<view class="field-wrap">
 				<text class="label">不合格数量</text>
-				<input class="field" type="digit" :value="unqualifiedText" @input="onUnqualifiedInput" />
+				<input :disabled="submitting || uploadingCount > 0" class="field" type="digit" :value="unqualifiedText" @input="onUnqualifiedInput" />
 			</view>
 			<view v-if="conductKind == 'oqc'" class="field-wrap">
 				<text class="label">检验结果</text>
 				<view class="choices">
-					<text v-for="(label, index) in resultOptions" :key="index" :class="choiceClass(inspectionResult, label)" @click="pickResult(label)">{{ label }}</text>
+					<choice-button :label="label" :selected="inspectionResult == label" :disabled="submitting || uploadingCount > 0" v-for="(label, index) in resultOptions" :key="index" @choose="pickResult(label)" />
 				</view>
 			</view>
 			<view v-if="conductKind == 'oqc'" class="field-wrap">
 				<text class="label">质量状态</text>
 				<view class="choices">
-					<text v-for="(label, index) in statusOptions" :key="index" :class="choiceClass(qualityStatus, label)" @click="pickStatus(label)">{{ label }}</text>
+					<choice-button :label="label" :selected="qualityStatus == label" :disabled="submitting || uploadingCount > 0" v-for="(label, index) in statusOptions" :key="index" @choose="pickStatus(label)" />
 				</view>
 			</view>
 			<view v-if="conductKind == 'oqc'" class="field-wrap">
 				<text class="label">放行结论</text>
 				<view class="choices">
-					<text v-for="(label, index) in releaseLabels" :key="index" :class="choiceClass(releaseDecision, releaseValues[index])" @click="pickRelease(index)">{{ label }}</text>
+					<choice-button :label="label" :selected="releaseDecision == releaseValues[index]" :disabled="submitting || uploadingCount > 0" v-for="(label, index) in releaseLabels" :key="index" @choose="pickRelease(index)" />
 				</view>
 			</view>
 			<view v-if="conductKind == 'oqc'" class="field-wrap">
 				<text class="label">放行说明</text>
-				<input class="field" :value="releaseNote" @input="onReleaseNoteInput" />
+				<input :disabled="submitting || uploadingCount > 0" class="field" :value="releaseNote" @input="onReleaseNoteInput" />
 			</view>
 			<view class="field-wrap">
 				<text class="label">备注</text>
-				<input class="field" :value="notes" @input="onNotesInput" />
+				<input :disabled="submitting || uploadingCount > 0" class="field" :value="notes" @input="onNotesInput" />
 			</view>
 			<view v-if="conductKind != 'oqc'" class="field-wrap">
 				<text class="label">不合格原因</text>
-				<input class="field" :value="nonconformanceReason" @input="onReasonInput" />
+				<input :disabled="submitting || uploadingCount > 0" class="field" :value="nonconformanceReason" @input="onReasonInput" />
 			</view>
 			<view class="field-wrap">
 				<text class="label">附件</text>
-				<view class="link" @click="addAttachment"><text class="link-text">添加附件</text></view>
+				<action-button label="添加附件" :disabled="submitting || uploadingCount > 0" @press="addAttachment" />
 				<view v-for="(file, fileIndex) in attachments" :key="fileIndex" class="choices">
 					<image v-if="fileUrl(file).length > 0" class="attachment-preview" :src="fileUrl(file)" mode="aspectFill" @click="previewFile(file)" />
 					<text class="meta">{{ fileLabel(file) }}</text>
-					<view class="link" @click="removeAttachment(fileIndex)"><text class="link-text">移除</text></view>
+					<action-button label="移除" :disabled="submitting || uploadingCount > 0" @press="removeAttachment(fileIndex)" />
 				</view>
 			</view>
 			</view>
@@ -75,44 +76,44 @@
 			<view v-if="needsOverallJudgment" class="field-wrap">
 				<text class="label">整体判定</text>
 				<view class="choices">
-					<text :class="choiceClass(overallJudgment, 'pass')" @click="pickOverall('pass')">合格</text>
-					<text :class="choiceClass(overallJudgment, 'fail')" @click="pickOverall('fail')">不合格</text>
+					<choice-button label="合格" :selected="overallJudgment == 'pass'" :disabled="submitting || uploadingCount > 0" @choose="pickOverall('pass')" />
+					<choice-button label="不合格" :selected="overallJudgment == 'fail'" :disabled="submitting || uploadingCount > 0" @choose="pickOverall('fail')" />
 				</view>
 			</view>
 			<view v-for="(step, index) in steps" :key="step.key" :id="'quality-step-' + index" class="field-wrap">
 				<text class="label">{{ step.name }}</text>
 				<view v-if="step.legacy" class="choices">
-					<text :class="choiceClass(step.judgment, 'pass')" @click="pickLegacy(index, 'pass')">合格</text>
-					<text :class="choiceClass(step.judgment, 'fail')" @click="pickLegacy(index, 'fail')">不合格</text>
+					<choice-button label="合格" :selected="step.judgment == 'pass'" :disabled="submitting || uploadingCount > 0" @choose="pickLegacy(index, 'pass')" />
+					<choice-button label="不合格" :selected="step.judgment == 'fail'" :disabled="submitting || uploadingCount > 0" @choose="pickLegacy(index, 'fail')" />
 				</view>
 				<view v-else-if="step.valueType == 'boolean'" class="choices">
-					<text :class="choiceClass(step.value, 'true')" @click="pickBool(index, 'true')">是</text>
-					<text :class="choiceClass(step.value, 'false')" @click="pickBool(index, 'false')">否</text>
+					<choice-button label="是" :selected="step.value == 'true'" :disabled="submitting || uploadingCount > 0" @choose="pickBool(index, 'true')" />
+					<choice-button label="否" :selected="step.value == 'false'" :disabled="submitting || uploadingCount > 0" @choose="pickBool(index, 'false')" />
 				</view>
 				<view v-else>
 					<view v-if="step.allowNa && !step.textNeedsJudgment" class="choices">
-						<text :class="choiceClass(step.judgment, 'na')" @click="toggleNa(index)">不适用</text>
+						<choice-button label="不适用" :selected="step.judgment == 'na'" :disabled="submitting || uploadingCount > 0" @choose="toggleNa(index)" />
 					</view>
 					<view v-if="step.judgment != 'na' && step.valueType == 'single_select'" class="choices">
-						<text v-for="(opt, optIndex) in step.options" :key="optIndex" :class="choiceClass(step.value, opt.value)" @click="pickOption(index, optIndex)">{{ opt.label }}</text>
+						<choice-button :label="opt.label" :selected="step.value == opt.value" :disabled="submitting || uploadingCount > 0" v-for="(opt, optIndex) in step.options" :key="optIndex" @choose="pickOption(index, optIndex)" />
 					</view>
 					<view v-if="step.judgment != 'na' && step.valueType == 'multi_select'" class="choices">
-						<text v-for="(opt, optIndex) in step.options" :key="optIndex" :class="multiChoiceClass(index, opt.value)" @click="toggleOption(index, optIndex)">{{ opt.label }}</text>
+						<choice-button :label="opt.label" :selected="multiChoiceClass(index, opt.value) == 'choice choice-on'" :disabled="submitting || uploadingCount > 0" v-for="(opt, optIndex) in step.options" :key="optIndex" @choose="toggleOption(index, optIndex)" />
 					</view>
-					<input v-if="step.judgment != 'na' && step.valueType != 'single_select' && step.valueType != 'multi_select'" class="field" :value="step.value" @input="onStepInput(index, $event)" />
+					<input :disabled="submitting || uploadingCount > 0" v-if="step.judgment != 'na' && step.valueType != 'single_select' && step.valueType != 'multi_select'" class="field" :value="step.value" @input="onStepInput(index, $event)" />
 					<view v-if="step.textNeedsJudgment" class="choices">
-						<text :class="choiceClass(step.judgment, 'pass')" @click="pickLegacy(index, 'pass')">合格</text>
-						<text :class="choiceClass(step.judgment, 'fail')" @click="pickLegacy(index, 'fail')">不合格</text>
-						<text v-if="step.allowNa" :class="choiceClass(step.judgment, 'na')" @click="pickLegacy(index, 'na')">不适用</text>
+						<choice-button label="合格" :selected="step.judgment == 'pass'" :disabled="submitting || uploadingCount > 0" @choose="pickLegacy(index, 'pass')" />
+						<choice-button label="不合格" :selected="step.judgment == 'fail'" :disabled="submitting || uploadingCount > 0" @choose="pickLegacy(index, 'fail')" />
+						<choice-button label="不适用" :selected="step.judgment == 'na'" :disabled="submitting || uploadingCount > 0" v-if="step.allowNa" @choose="pickLegacy(index, 'na')" />
 					</view>
 				</view>
 				<view v-if="stepShowsPhoto(index)" class="field-wrap">
 					<text class="label">步骤照片</text>
-					<view class="link" @click="addStepPhoto(index)"><text class="link-text">添加照片</text></view>
+					<action-button label="添加照片" :disabled="submitting || uploadingCount > 0" @press="addStepPhoto(index)" />
 					<view v-for="(photo, photoIndex) in step.photos" :key="photoIndex" class="choices">
 						<image v-if="fileUrl(photo).length > 0" class="attachment-preview" :src="fileUrl(photo)" mode="aspectFill" @click="previewFile(photo)" />
 						<text class="meta">{{ fileLabel(photo) }}</text>
-						<view class="link" @click="removeStepPhoto(index, photoIndex)"><text class="link-text">移除</text></view>
+						<action-button label="移除" :disabled="submitting || uploadingCount > 0" @press="removeStepPhoto(index, photoIndex)" />
 					</view>
 				</view>
 			</view>
@@ -122,30 +123,24 @@
 			<text class="hint">核对检验结果与补充信息后提交</text>
 			<view v-for="(field, index) in customFields" :key="field.code" class="field-wrap">
 				<text class="label">{{ field.name }}</text>
-				<input class="field" :value="field.value" @input="onCustomInput(index, $event)" />
+				<input :disabled="submitting || uploadingCount > 0" class="field" :value="field.value" @input="onCustomInput(index, $event)" />
 			</view>
 			</view>
-			<button v-if="activeStage > 0" class="btn-secondary" :disabled="submitting || uploadingCount > 0" @click="goStage(activeStage - 1)">上一段</button>
-			<button v-if="activeStage < 2" class="btn-primary" :disabled="submitting || uploadingCount > 0" @click="goStage(activeStage + 1)">下一段</button>
-			<text v-if="uploadingCount > 0" class="loading">图片上传中</text>
+			<action-button label="上一段" tone="secondary" v-if="activeStage > 0" :disabled="submitting || uploadingCount > 0" @press="goStage(activeStage - 1)" />
+			<action-button label="下一段" tone="primary" v-if="activeStage < 2" :disabled="submitting || uploadingCount > 0" @press="goStage(activeStage + 1)" />
+			<load-feedback :active="uploadingCount > 0" mode="refresh" label="图片上传中" />
 
-			<view v-if="activeStage == 2" :class="submitting ? 'btn-primary is-disabled' : 'btn-primary'" @click="submitConduct">
-				<text class="btn-label">{{ submitting ? '提交中' : '提交检验' }}</text>
-			</view>
-			<view class="link" @click="closeConduct">
-				<text class="link-text">取消</text>
-			</view>
+			<action-button label="提交检验" :busy="submitting" busy-label="提交中" tone="primary" v-if="activeStage == 2" @press="submitConduct" :disabled="uploadingCount > 0" />
+			<action-button label="取消" :disabled="submitting || uploadingCount > 0" @press="closeConduct" />
 		</view>
 	</scroll-view>
-		<view v-if="loading" class="loading-mask">
-			<view class="loading-card">
-				<text class="loading">加载中</text>
-			</view>
-		</view>
 	</view>
 </template>
 
 <script setup lang="uts">
+	import LoadFeedback from '../../../shared/ui/load-feedback.uvue'
+	import ChoiceButton from '../../../shared/ui/choice-button.uvue'
+	import ActionButton from '../../../shared/ui/action-button.uvue'
 	import HomeLink from '../../../shared/ui/home-link.uvue'
 	import { request } from '../../../shared/api/index.uts'
 	import { uploadImage } from '../../../shared/api/upload.uts'
@@ -244,6 +239,7 @@
 		})
 	}
 	const loading = ref(false)
+	const loadSettled = ref(false)
 	let ticket = 0
 	const submitting = ref(false)
 	const conducting = ref(false)
@@ -271,12 +267,6 @@
 	const needsOverallJudgment = ref(false)
 	const overallJudgment = ref('')
 
-	function choiceClass(current : string, value : string) : string {
-		if (current == value) {
-			return 'choice choice-on'
-		}
-		return 'choice'
-	}
 
 	function rowTitle(row : UTSJSONObject) : string {
 		const code = fieldText(row, 'inspection_code')
@@ -328,62 +318,75 @@
 	}
 
 	function onQualifiedInput(event : UniInputEvent) {
+		if (submitting.value || uploadingCount.value > 0) { return }
 		qualifiedText.value = inputValue(event)
 	}
 
 	function onUnqualifiedInput(event : UniInputEvent) {
+		if (submitting.value || uploadingCount.value > 0) { return }
 		unqualifiedText.value = inputValue(event)
 	}
 
 	function onNotesInput(event : UniInputEvent) {
+		if (submitting.value || uploadingCount.value > 0) { return }
 		notes.value = inputValue(event)
 	}
 
 	function onReasonInput(event : UniInputEvent) {
+		if (submitting.value || uploadingCount.value > 0) { return }
 		nonconformanceReason.value = inputValue(event)
 	}
 
 	function onReleaseNoteInput(event : UniInputEvent) {
+		if (submitting.value || uploadingCount.value > 0) { return }
 		releaseNote.value = inputValue(event)
 	}
 
 	function onStepInput(index : number, event : UniInputEvent) {
+		if (submitting.value || uploadingCount.value > 0) { return }
 		const list = steps.value
 		list[index].value = inputValue(event)
 		steps.value = list
 	}
 
 	function onCustomInput(index : number, event : UniInputEvent) {
+		if (submitting.value || uploadingCount.value > 0) { return }
 		const list = customFields.value
 		list[index].value = inputValue(event)
 		customFields.value = list
 	}
 
 	function pickResult(label : string) {
+		if (submitting.value || uploadingCount.value > 0) { return }
 		inspectionResult.value = label
 	}
 
 	function pickStatus(label : string) {
+		if (submitting.value || uploadingCount.value > 0) { return }
 		qualityStatus.value = label
 	}
 
 	function pickRelease(index : number) {
+		if (submitting.value || uploadingCount.value > 0) { return }
 		releaseDecision.value = releaseValues[index]
 	}
 
 	function pickLegacy(index : number, judgment : string) {
+		if (submitting.value || uploadingCount.value > 0) { return }
 		const list = steps.value
 		list[index].judgment = judgment
 		steps.value = list
 	}
 
 	function pickBool(index : number, value : string) {
+		if (submitting.value || uploadingCount.value > 0) { return }
 		const list = steps.value
 		list[index].value = value
 		steps.value = list
 	}
 
 	function pickOption(index : number, optIndex : number) {
+		if (submitting.value || uploadingCount.value > 0) { return }
 		const list = steps.value
 		const step = list[index]
 		if (optIndex < 0 || optIndex >= step.options.length) {
@@ -396,6 +399,7 @@
 	}
 
 	function toggleOption(index : number, optIndex : number) {
+		if (submitting.value || uploadingCount.value > 0) { return }
 		const list = steps.value
 		const step = list[index]
 		if (optIndex < 0 || optIndex >= step.options.length) {
@@ -433,10 +437,12 @@
 	}
 
 	function pickOverall(value : string) {
+		if (submitting.value || uploadingCount.value > 0) { return }
 		overallJudgment.value = value
 	}
 
 	function toggleNa(index : number) {
+		if (submitting.value || uploadingCount.value > 0) { return }
 		const list = steps.value
 		if (list[index].judgment == 'na') {
 			list[index].judgment = ''
@@ -503,6 +509,7 @@
 	}
 
 	function removeAttachment(index : number) {
+		if (submitting.value || uploadingCount.value > 0) { return }
 		const list = attachments.value
 		const next : UTSJSONObject[] = []
 		for (let i = 0; i < list.length; i++) {
@@ -514,6 +521,7 @@
 	}
 
 	function removeStepPhoto(stepIndex : number, photoIndex : number) {
+		if (submitting.value || uploadingCount.value > 0) { return }
 		const list = steps.value
 		const photos = list[stepIndex].photos
 		const next : UTSJSONObject[] = []
@@ -527,10 +535,12 @@
 	}
 
 	function addAttachment() {
+		if (submitting.value || uploadingCount.value > 0) { return }
 		beginUpload(true, -1)
 	}
 
 	function addStepPhoto(index : number) {
+		if (submitting.value || uploadingCount.value > 0) { return }
 		beginUpload(false, index)
 	}
 
@@ -982,9 +992,11 @@
 			return
 		}
 		loading.value = false
+		loadSettled.value = true
 	}
 
 	function openConduct(index : number) {
+		if (loading.value || submitting.value) { return }
 		const row = rows.value[index]
 		const id = fieldId(row)
 		if (id <= 0) {

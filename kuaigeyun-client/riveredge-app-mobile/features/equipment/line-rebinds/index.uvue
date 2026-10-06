@@ -2,9 +2,10 @@
 	<view class="page-shell">
 		<home-link />
 	<scroll-view class="page" direction="vertical">
+		<load-feedback :active="loading" :mode="loadSettled ? 'refresh' : 'initial'" />
 		<view class="card">
 			<text class="title">换线绑定</text>
-			<button :class="busy ? 'btn-secondary is-disabled' : 'btn-secondary'" :disabled="busy" @click="loadList">刷新</button>
+			<action-button label="刷新" tone="secondary" :disabled="loading || busy" @press="loadList" />
 			<text v-if="!loading && rows.length == 0 && errorText.length == 0" class="empty">暂无记录</text>
 			<view class="item" v-for="item in rows" :key="item.rowKey">
 				<text class="item-title">{{ item.title }}</text>
@@ -13,24 +14,21 @@
 		</view>
 		<view class="card">
 			<text class="title">新建</text>
-			<input class="field" v-model="productionLineIdText" placeholder="产线 ID" />
-			<input class="field" v-model="overdueHoursText" placeholder="强制初检超时小时（默认 4）" />
-			<input class="field" v-model="equipmentIdsText" placeholder="预置设备 ID，逗号分隔（可空）" />
-			<input class="field" v-model="remarkText" placeholder="备注（可空）" />
-			<button :class="busy ? 'btn-primary is-disabled' : 'btn-primary'" :disabled="busy" @click="submitCreate">新建</button>
+			<input class="field" v-model="productionLineIdText" placeholder="产线 ID"  :disabled="loading || busy" />
+			<input class="field" v-model="overdueHoursText" placeholder="强制初检超时小时（默认 4）"  :disabled="loading || busy" />
+			<input class="field" v-model="equipmentIdsText" placeholder="预置设备 ID，逗号分隔（可空）"  :disabled="loading || busy" />
+			<input class="field" v-model="remarkText" placeholder="备注（可空）"  :disabled="loading || busy" />
+			<action-button label="新建" tone="primary" :disabled="loading" :busy="busy" busy-label="提交中" @press="submitCreate" />
 			<text v-if="messageText.length > 0" class="hint">{{ messageText }}</text>
 			<text v-if="errorText.length > 0" class="error">{{ errorText }}</text>
 		</view>
 	</scroll-view>
-		<view v-if="loading" class="loading-mask">
-			<view class="loading-card">
-				<text class="loading">加载中</text>
-			</view>
-		</view>
 	</view>
 </template>
 
 <script setup lang="uts">
+	import LoadFeedback from '../../../shared/ui/load-feedback.uvue'
+	import ActionButton from '../../../shared/ui/action-button.uvue'
 	import HomeLink from '../../../shared/ui/home-link.uvue'
 	import { request } from '../../../shared/api/index.uts'
 	import { asJsonObject, fieldText, readRows } from '../../../shared/api/fields.uts'
@@ -44,6 +42,7 @@
 
 	const busy = ref(false)
 	const loading = ref(false)
+	const loadSettled = ref(false)
 	let ticket = 0
 	const rows = ref<Array<ListRow>>([])
 	const productionLineIdText = ref('')
@@ -96,7 +95,7 @@
 		if (ticket != mine) {
 			return
 		}
-		loading.value = false
+		loading.value = false; loadSettled.value = true
 	}
 
 	async function submitCreate(): Promise<void> {

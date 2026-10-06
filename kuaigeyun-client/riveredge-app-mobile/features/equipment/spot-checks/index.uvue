@@ -2,9 +2,10 @@
 	<view class="page-shell">
 		<home-link />
 	<scroll-view class="page" direction="vertical">
+		<load-feedback :active="loading" :mode="loadSettled ? 'refresh' : 'initial'" />
 		<view class="card">
 			<text class="title">设备点检</text>
-			<button :class="busy ? 'btn-secondary is-disabled' : 'btn-secondary'" :disabled="busy" @click="loadList">刷新</button>
+			<action-button label="刷新" tone="secondary" :disabled="loading || busy" @press="loadList" />
 			<text v-if="!loading && rows.length == 0 && errorText.length == 0" class="empty">暂无记录</text>
 			<view class="item" v-for="item in rows" :key="item.rowKey">
 				<text class="item-title">{{ item.title }}</text>
@@ -13,44 +14,42 @@
 		</view>
 		<view class="card">
 			<text class="title">新建</text>
-			<master-picker kind="device" title="设备" :disabled="busy" @choose="chooseEquipment" />
-			<master-picker kind="scheme" title="点检方案" :equipment-id="equipmentIdText" :disabled="busy" @choose="chooseScheme" />
-			<input class="field" v-model="checkDateText" placeholder="点检日期（可空，YYYY-MM-DD）" />
+			<master-picker kind="device" title="设备" :disabled="loading || busy" @choose="chooseEquipment" />
+			<master-picker kind="scheme" title="点检方案" :equipment-id="equipmentIdText" :disabled="loading || busy" @choose="chooseScheme" />
+			<date-field label="点检日期" v-model="checkDateText" :disabled="loading || busy" />
 			<text class="hint">点检人优先使用设备配置，未配置时使用当前操作人</text>
 
-			<input class="field" v-model="remarkText" placeholder="备注（可空）" />
-			<button :class="busy ? 'btn-secondary is-disabled' : 'btn-secondary'" :disabled="busy" @click="loadPreview">加载点检项</button>
+			<input class="field" v-model="remarkText" placeholder="备注（可空）"  :disabled="loading || busy" />
+			<action-button label="加载点检项" tone="secondary" :disabled="loading || busy" @press="loadPreview" />
 			<text v-if="captureMode.length > 0" class="hint">采集模式 {{ captureMode }}</text>
 			<view v-if="captureMode == 'B'">
-				<button :class="busy ? 'btn-secondary is-disabled' : 'btn-secondary'" :disabled="busy" @click="onHeaderPhoto">上传整单照片</button>
+				<action-button label="上传整单照片" tone="secondary" :disabled="loading || busy" @press="onHeaderPhoto" />
 				<text v-if="headerPhotos.length > 0" class="hint">已选 {{ headerPhotos.length }} 张</text>
-				<button v-if="headerPhotos.length > 0" :class="busy ? 'btn-secondary is-disabled' : 'btn-secondary'" :disabled="busy" @click="clearHeaderPhotos">清除照片</button>
+				<action-button label="清除照片" tone="secondary" v-if="headerPhotos.length > 0" :disabled="loading || busy" @press="clearHeaderPhotos" />
 			</view>
 			<view class="item" v-for="(line, index) in lines" :key="line.rowKey">
 				<text class="item-title">{{ line.title }}</text>
 				<text v-if="line.detail.length > 0" class="hint">{{ line.detail }}</text>
 				<text v-if="line.isBoolean" class="hint">{{ line.measuredValue }}</text>
-				<input v-if="line.showMeasured" class="field" :value="line.measuredValue" placeholder="实测值" @input="onMeasured(index, $event)" />
-				<button :class="busy ? 'btn-secondary is-disabled' : 'btn-secondary'" :disabled="busy" @click="onTogglePass(index)">{{ line.passLabel }}</button>
+				<input v-if="line.showMeasured" class="field" :value="line.measuredValue" placeholder="实测值" @input="onMeasured(index, $event)"  :disabled="loading || busy" />
+				<action-button :label="line.passLabel" tone="secondary" :disabled="loading || busy" @press="onTogglePass(index)" />
 				<text v-if="line.photoHint.length > 0" class="hint">{{ line.photoHint }}</text>
-				<button :class="busy ? 'btn-secondary is-disabled' : 'btn-secondary'" :disabled="busy" @click="onLinePhoto(index)">上传照片</button>
+				<action-button label="上传照片" tone="secondary" :disabled="loading || busy" @press="onLinePhoto(index)" />
 				<text v-if="line.attachments.length > 0" class="hint">已选 {{ line.attachments.length }} 张</text>
-				<button v-if="line.attachments.length > 0" :class="busy ? 'btn-secondary is-disabled' : 'btn-secondary'" :disabled="busy" @click="clearLinePhotos(index)">清除照片</button>
+				<action-button label="清除照片" tone="secondary" v-if="line.attachments.length > 0" :disabled="loading || busy" @press="clearLinePhotos(index)" />
 			</view>
-			<button :class="busy ? 'btn-primary is-disabled' : 'btn-primary'" :disabled="busy" @click="submitCreate">新建</button>
+			<action-button label="新建" tone="primary" :disabled="loading" :busy="busy" busy-label="提交中" @press="submitCreate" />
 			<text v-if="messageText.length > 0" class="hint">{{ messageText }}</text>
 			<text v-if="errorText.length > 0" class="error">{{ errorText }}</text>
 		</view>
 	</scroll-view>
-		<view v-if="loading" class="loading-mask">
-			<view class="loading-card">
-				<text class="loading">加载中</text>
-			</view>
-		</view>
 	</view>
 </template>
 
 <script setup lang="uts">
+	import LoadFeedback from '../../../shared/ui/load-feedback.uvue'
+	import DateField from '../../../shared/ui/date-field.uvue'
+	import ActionButton from '../../../shared/ui/action-button.uvue'
 	import HomeLink from '../../../shared/ui/home-link.uvue'
 	import MasterPicker from '../components/master-picker.uvue'
 	import { request } from '../../../shared/api/index.uts'
@@ -67,6 +66,7 @@
 
 	const busy = ref(false)
 	const loading = ref(false)
+	const loadSettled = ref(false)
 	let ticket = 0
 	const rows = ref<Array<ListRow>>([])
 	const equipmentIdText = ref('')
@@ -150,7 +150,7 @@
 		if (ticket != mine) {
 			return
 		}
-		loading.value = false
+		loading.value = false; loadSettled.value = true
 	}
 
 	function clearPreview(): void {

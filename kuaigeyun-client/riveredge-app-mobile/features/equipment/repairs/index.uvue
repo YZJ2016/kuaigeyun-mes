@@ -2,40 +2,40 @@
 	<view class="page-shell">
 		<home-link />
 	<scroll-view class="page" direction="vertical">
+		<load-feedback :active="loading" :mode="loadSettled ? 'refresh' : 'initial'" />
 		<view class="card">
 			<text class="title">维修台账</text>
-			<button :class="busy ? 'btn-secondary is-disabled' : 'btn-secondary'" :disabled="busy" @click="loadList">刷新</button>
+			<action-button label="刷新" tone="secondary" :disabled="loading || busy" @press="loadList" />
 			<text v-if="!loading && rows.length == 0 && errorText.length == 0" class="empty">暂无记录</text>
-			<view class="item" hover-class="pressed" v-for="(item, index) in rows" :key="item.rowKey" @click="selectRow(index)">
+			<action-card v-for="(item, index) in rows" :key="item.rowKey" @press="selectRow(index)" :disabled="loading || busy" variant="row">
 				<text class="item-title">{{ item.title }}</text>
 				<text class="hint">{{ item.detail }}</text>
-			</view>
+			</action-card>
 		</view>
 		<view class="card" v-if="completeUuid.length > 0">
 			<text class="title">完工</text>
 			<text class="hint">维修结果：{{ repairResult }}</text>
 			<view class="choices">
-				<button class="btn-chip" @click="chooseResult(0)">成功</button>
-				<button class="btn-chip" @click="chooseResult(1)">失败</button>
-				<button class="btn-chip" @click="chooseResult(2)">部分成功</button>
+				<choice-button label="成功" :selected="repairResult == repairResults[0]" @choose="chooseResult(0)" :disabled="loading || busy" />
+				<choice-button label="失败" :selected="repairResult == repairResults[1]" @choose="chooseResult(1)" :disabled="loading || busy" />
+				<choice-button label="部分成功" :selected="repairResult == repairResults[2]" @choose="chooseResult(2)" :disabled="loading || busy" />
 			</view>
-			<input class="field" v-model="faultCauseText" placeholder="故障原因" />
-			<input class="field" v-model="repairContentText" placeholder="维修内容" />
-			<input class="field" v-model="remarkText" placeholder="备注（可空）" />
-			<button :class="busy ? 'btn-primary is-disabled' : 'btn-primary'" :disabled="busy" @click="submitComplete">完工</button>
+			<input class="field" v-model="faultCauseText" placeholder="故障原因"  :disabled="loading || busy" />
+			<input class="field" v-model="repairContentText" placeholder="维修内容"  :disabled="loading || busy" />
+			<input class="field" v-model="remarkText" placeholder="备注（可空）"  :disabled="loading || busy" />
+			<action-button label="完工" tone="primary" :disabled="loading" :busy="busy" busy-label="提交中" @press="submitComplete" />
 		</view>
 		<text v-if="messageText.length > 0" class="hint page-hint">{{ messageText }}</text>
 		<text v-if="errorText.length > 0" class="error page-hint">{{ errorText }}</text>
 	</scroll-view>
-		<view v-if="loading" class="loading-mask">
-			<view class="loading-card">
-				<text class="loading">加载中</text>
-			</view>
-		</view>
 	</view>
 </template>
 
 <script setup lang="uts">
+	import LoadFeedback from '../../../shared/ui/load-feedback.uvue'
+	import ActionCard from '../../../shared/ui/action-card.uvue'
+	import ChoiceButton from '../../../shared/ui/choice-button.uvue'
+	import ActionButton from '../../../shared/ui/action-button.uvue'
 	import HomeLink from '../../../shared/ui/home-link.uvue'
 	import { request } from '../../../shared/api/index.uts'
 	import { fieldText, readRows } from '../../../shared/api/fields.uts'
@@ -54,6 +54,7 @@
 
 	const busy = ref(false)
 	const loading = ref(false)
+	const loadSettled = ref(false)
 	let ticket = 0
 	const rows = ref<Array<ListRow>>([])
 	const completeUuid = ref('')
@@ -143,7 +144,7 @@
 		if (ticket != mine) {
 			return
 		}
-		loading.value = false
+		loading.value = false; loadSettled.value = true
 	}
 
 	async function submitComplete(): Promise<void> {

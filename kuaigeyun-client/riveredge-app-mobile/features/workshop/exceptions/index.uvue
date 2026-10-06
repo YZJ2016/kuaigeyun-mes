@@ -2,10 +2,11 @@
 	<view class="page-shell">
 		<home-link />
 	<view class="page">
+		<load-feedback :active="loading" :mode="loadSettled ? 'refresh' : 'initial'" />
 		<view class="modes">
-			<button class="btn-chip" @click="switchKind('material-shortage')">缺料</button>
-			<button class="btn-chip" @click="switchKind('delivery-delay')">交期</button>
-			<button class="btn-chip" @click="switchKind('quality')">质量</button>
+			<choice-button label="缺料" :selected="kind == 'material-shortage'" @choose="switchKind('material-shortage')" :disabled="loading" />
+			<choice-button label="交期" :selected="kind == 'delivery-delay'" @choose="switchKind('delivery-delay')" :disabled="loading" />
+			<choice-button label="质量" :selected="kind == 'quality'" @choose="switchKind('quality')" :disabled="loading" />
 		</view>
 		<text v-if="errorTextValue.length > 0" class="error">{{ errorTextValue }}</text>
 		<text v-if="!loading && rows.length == 0 && errorTextValue.length == 0" class="empty">暂无异常</text>
@@ -14,15 +15,12 @@
 			<text class="sub">{{ lineSub(row) }}</text>
 		</view>
 	</view>
-		<view v-if="loading" class="loading-mask">
-			<view class="loading-card">
-				<text class="loading">加载中</text>
-			</view>
-		</view>
 	</view>
 </template>
 
 <script setup lang="uts">
+	import LoadFeedback from '../../../shared/ui/load-feedback.uvue'
+	import ChoiceButton from '../../../shared/ui/choice-button.uvue'
 	import HomeLink from '../../../shared/ui/home-link.uvue'
 	import { request } from '../../../shared/api/index.uts'
 	import { readRows, fieldText, errorText } from '../../../shared/api/fields.uts'
@@ -30,6 +28,7 @@
 	const kind = ref('material-shortage')
 	const rows = ref<any[]>([])
 	const loading = ref(false)
+	const loadSettled = ref(false)
 	const errorTextValue = ref('')
 	let ticket = 0
 
@@ -79,9 +78,13 @@
 			return
 		}
 		loading.value = false
+		loadSettled.value = true
 	}
 
 	function switchKind(next : string) {
+		if (loading.value || kind.value == next) { return }
+		rows.value = []
+		loadSettled.value = false
 		kind.value = next
 		load()
 	}

@@ -2,25 +2,27 @@
 	<view class="page-shell">
 		<home-link />
 	<scroll-view class="page" scroll-y="true" :scroll-into-view="scrollTarget">
+		<load-feedback :active="loading && selectedId == 0 && loadMode != 'more'" :mode="loadMode" />
 		<view v-if="isQuery" class="row">
-			<input class="field grow" v-model="keyword" placeholder="物料编码、名称或仓库" />
-			<button class="btn-chip" @click="reload">查询</button>
+			<input class="field grow" v-model="keyword" :disabled="loading || busy" placeholder="物料编码、名称或仓库" />
+			<action-button label="查询" :compact="true" @press="reload" :disabled="loading || busy" />
 		</view>
-		<button v-if="selectedId == 0" class="btn-secondary" @click="reload">刷新</button>
+		<action-button label="刷新" tone="secondary" v-if="selectedId == 0" :disabled="loading || busy" @press="reload" />
 		<text v-if="hint.length > 0" class="error">{{ hint }}</text>
 
 		<view v-if="selectedId == 0">
 			<text v-if="!loading && cards.length == 0" class="empty">没有数据</text>
-			<view v-for="(card, index) in cards" :key="index" class="card" hover-class="pressed" @click="openCard(index)">
+			<action-card v-for="(card, index) in cards" :key="index" @press="openCard(index)" :disabled="loading || busy">
 				<text class="title">{{ card.title }}</text>
 				<text v-if="card.status.length > 0" :class="statusClass(card.status)">{{ card.status }}</text>
 				<text v-if="card.subtitle.length > 0" class="meta">{{ card.subtitle }}</text>
-			</view>
-			<button v-if="cards.length < total" class="btn-secondary" @click="loadMore">加载更多</button>
+			</action-card>
+			<load-feedback :active="loading && selectedId == 0 && loadMode == 'more'" mode="more" />
+			<action-button label="加载更多" tone="secondary" v-if="cards.length < total" :disabled="loading || busy" @press="loadMore" />
 		</view>
 
 		<view v-else class="card">
-			<button class="btn-secondary" @click="closeDetail">返回列表</button>
+			<action-button label="返回列表" tone="secondary" @press="closeDetail" />
 			<text class="title">{{ detailTitle }}</text>
 			<text v-if="detailStatus.length > 0" :class="statusClass(detailStatus)">{{ detailStatus }}</text>
 			<text class="hint">{{ stepLabel }}</text>
@@ -28,20 +30,20 @@
 			<view v-if="wizardStep == 1 && showHeader">
 				<text class="meta">仓库 {{ warehouseName.length > 0 ? warehouseName : '未填写' }}</text>
 				<text class="meta">{{ personLabel }} {{ personName.length > 0 ? personName : '未填写' }}</text>
-				<button class="btn-secondary" :disabled="busy" @click="editingHeader = !editingHeader">{{ editingHeader ? '收起编辑' : '编辑仓库与人员' }}</button>
+				<action-button :label="editingHeader ? '收起编辑' : '编辑仓库与人员'" tone="secondary" :disabled="busy" @press="editingHeader = !editingHeader" />
 				<view v-if="editingHeader">
 				<text class="label">仓库名称</text>
 				<input class="field" :value="warehouseName" @input="onWarehouseName" />
 				<text class="label">{{ personLabel }}</text>
 				<input class="field" :value="personName" @input="onPersonName" />
 				</view>
-				<button class="btn-primary" @click="goStep(2)">下一步</button>
+				<action-button label="下一步" tone="primary" @press="goStep(2)" />
 			</view>
 
 			<view v-if="wizardStep == 2 && (showLines || isStock)">
 				<text class="label">定位物料</text>
 				<input class="field" :value="locateText" placeholder="物料编码或名称" @input="onLocateText" />
-				<button class="btn-secondary" @click="locateLine">定位</button>
+				<action-button label="定位" tone="secondary" @press="locateLine" />
 				<text v-if="locateHint.length > 0" :class="locateMiss ? 'error' : 'hint'">{{ locateHint }}</text>
 				<text v-if="showLines && !showReceipt" class="hint">单据数量只作核对，确认时不另填数量。</text>
 				<view v-for="(line, index) in lines" :key="index" :id="'warehouse-line-' + index" class="line">
@@ -52,7 +54,7 @@
 						<text class="meta">仓库 {{ line.warehouseName }} · 库位 {{ line.locationCode }}</text>
 						<text class="meta">批号 {{ line.batchNumber }} · 序列号 {{ serialList(line.serialText).length }} 个</text>
 						<text v-if="showReceipt" class="meta">实收 {{ line.receiptQuantityText }}</text>
-						<button class="btn-secondary" :disabled="busy" @click="editLine(index)">{{ editingLineIndex == index ? '收起编辑' : '编辑此物料' }}</button>
+						<action-button :label="editingLineIndex == index ? '收起编辑' : '编辑此物料'" tone="secondary" :disabled="busy" @press="editLine(index)" />
 						<view v-if="editingLineIndex == index">
 						<text class="label">仓库名称</text>
 						<input class="field" :value="line.warehouseName" @input="onLineInput(index, 'warehouseName', $event)" />
@@ -63,10 +65,10 @@
 						<text class="label">序列号</text>
 						<view v-for="(serial, serialIndex) in serialList(line.serialText)" :key="serialIndex" class="row">
 							<text class="meta">{{ serial }}</text>
-							<button class="btn-chip" :disabled="busy" @click="removeSerial(index, serialIndex)">移除</button>
+							<action-button label="移除" :compact="true" :disabled="busy" @press="removeSerial(index, serialIndex)" />
 						</view>
 						<input class="field" v-model="serialInput" :disabled="busy" placeholder="输入或粘贴序列号，支持逗号分隔" />
-						<button class="btn-secondary" :disabled="busy" @click="addSerial(index)">添加序列号</button>
+						<action-button label="添加序列号" tone="secondary" :disabled="busy" @press="addSerial(index)" />
 						<view v-if="showReceipt">
 							<text class="label">实收数量</text>
 							<input class="field" :value="line.receiptQuantityText" @input="onLineInput(index, 'receiptQuantityText', $event)" />
@@ -79,19 +81,19 @@
 						<input class="field" :value="line.actualQuantityText" @input="onLineInput(index, 'actualQuantityText', $event)" />
 						<text class="label">备注</text>
 						<input class="field" :value="line.remarks" @input="onLineInput(index, 'remarks', $event)" />
-						<button :class="busy ? 'btn-primary is-disabled' : 'btn-primary'" :disabled="busy" @click="submitStock(index)">记录实盘</button>
+						<action-button label="记录实盘" tone="primary" :busy="busy" :disabled="loading" @press="submitStock(index)" />
 					</view>
 				</view>
-				<button v-if="showHeader" class="btn-secondary" @click="goStep(1)">上一步</button>
-				<button v-if="showHeader" class="btn-primary" @click="goStep(3)">下一步</button>
+				<action-button label="上一步" tone="secondary" v-if="showHeader" @press="goStep(1)" />
+				<action-button label="下一步" tone="primary" v-if="showHeader" @press="goStep(3)" />
 			</view>
 
 			<view v-if="wizardStep == 3 && isAlert">
 				<text class="label">处理状态</text>
 				<view class="row">
-					<button :class="alertStatus == 'processing' ? 'btn-chip btn-chip-on' : 'btn-chip'" @click="pickStatus('processing')">处理中</button>
-					<button :class="alertStatus == 'resolved' ? 'btn-chip btn-chip-on' : 'btn-chip'" @click="pickStatus('resolved')">已解决</button>
-					<button :class="alertStatus == 'ignored' ? 'btn-chip btn-chip-on' : 'btn-chip'" @click="pickStatus('ignored')">已忽略</button>
+					<choice-button label="处理中" :selected="alertStatus == 'processing'" @choose="pickStatus('processing')" :disabled="busy" />
+					<choice-button label="已解决" :selected="alertStatus == 'resolved'" @choose="pickStatus('resolved')" :disabled="busy" />
+					<choice-button label="已忽略" :selected="alertStatus == 'ignored'" @choose="pickStatus('ignored')" :disabled="busy" />
 				</view>
 				<text class="label">处理备注</text>
 				<input class="field" :value="alertNotes" @input="onAlertNotes" />
@@ -108,20 +110,20 @@
 					<text v-for="(serial, serialIndex) in serialList(line.serialText)" :key="serialIndex" class="meta">序列号 {{ serial }}</text>
 					<text v-if="showReceipt && line.receiptQuantityText.length > 0" class="meta">实收 {{ line.receiptQuantityText }}</text>
 				</view>
-				<button v-if="showHeader" class="btn-secondary" @click="goStep(2)">返回修改</button>
-				<button :class="busy ? 'btn-primary is-disabled' : 'btn-primary'" :disabled="busy" @click="askSubmit">{{ actionLabel }}</button>
+				<action-button label="返回修改" tone="secondary" v-if="showHeader" @press="goStep(2)" />
+				<action-button :label="actionLabel" tone="primary" :busy="busy" :disabled="loading" @press="askSubmit" />
 			</view>
 		</view>
 	</scroll-view>
-		<view v-if="loading" class="loading-mask">
-			<view class="loading-card">
-				<text class="loading">加载中</text>
-			</view>
-		</view>
+		<load-feedback :active="loading && selectedId > 0" mode="blocking" />
 	</view>
 </template>
 
 <script setup lang="uts">
+	import LoadFeedback from '../../shared/ui/load-feedback.uvue'
+	import ActionCard from '../../shared/ui/action-card.uvue'
+	import ChoiceButton from '../../shared/ui/choice-button.uvue'
+	import ActionButton from '../../shared/ui/action-button.uvue'
 	import HomeLink from '../../shared/ui/home-link.uvue'
 	import { alertHandlePath, apiGet, apiPost, confirmPath, detailPath, listPath, listQuery, sendPath, stockExecutePath, transferExecutePath } from './http.uts'
 	import { DocCard, LineForm } from './models.uts'
@@ -145,6 +147,8 @@
 	const keyword = ref('')
 	const hint = ref('')
 	const loading = ref(false)
+	const listLoaded = ref(false)
+	const loadMode = ref('initial')
 	const busy = ref(false)
 	const skip = ref(0)
 	const page = ref(1)
@@ -290,6 +294,7 @@
 	}
 
 	function loadMore(): void {
+		if (loading.value || busy.value) { return }
 		if (currentKind() == 'inventory-query') {
 			page.value = page.value + 1
 		} else {
@@ -309,6 +314,7 @@
 		const querySkip = skip.value
 		const queryPage = page.value
 		const queryKeyword = keyword.value
+		loadMode.value = !reset ? 'more' : listLoaded.value ? 'refresh' : 'initial'
 		loading.value = true
 		hint.value = ''
 		try {
@@ -318,6 +324,7 @@
 			}
 			const batch = readCards(raw)
 			total.value = readTotal(raw)
+			listLoaded.value = true
 			if (reset) {
 				cards.value = batch
 			} else {
