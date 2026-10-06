@@ -1,0 +1,18 @@
+<template>
+	<button :class="(selected ? 'choice-button choice-selected' : 'choice-button') + (disabled ? ' choice-disabled' : '')" :disabled="disabled" @click="activate">{{ selected ? '● ' + label : label }}</button>
+</template>
+<script setup lang="uts">
+	const props = defineProps({
+		label: { type: String, default: '' }, selected: { type: Boolean, default: false }, disabled: { type: Boolean, default: false }
+	})
+	const emit = defineEmits(['choose'])
+	function activate() {
+		if (props.disabled) { return }
+		emit('choose')
+	}
+</script>
+<style>
+	.choice-button { min-height: 48px; height: auto; padding: 8px 12px; margin: 4px 8px 4px 0px; font-size: 14px; line-height: 24px; border-radius: 8px; border-width: 1px; border-style: solid; border-color: #64748B; color: #28113C; background-color: #FFFFFF; }
+	.choice-selected { border-color: #9730E3; color: #7E22CE; background-color: #F3E8FF; }
+	.choice-disabled { opacity: 0.55; }
+</style>

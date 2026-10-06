@@ -5,7 +5,7 @@
 		<text v-if="errorText.length > 0" class="error">{{ errorText }}</text>
 		<text v-if="!loading && empty && openedScope.length == 0" class="empty">没有可显示的入口</text>
 		<view v-if="openedScope.length == 0">
-			<view v-for="(block, index) in scopes" :key="block.scope" class="scope-card" hover-class="pressed" @click="openScope(index)">
+			<button v-for="(block, index) in scopes" :key="block.scope" class="scope-card" :disabled="loading" hover-class="pressed" @click="openScope(index)">
 				<view :class="tileClass(block.scope)">
 					<image v-if="iconAsset(scopeIcon(block.scope), '', block.scope).length > 0" class="tile-icon" :src="iconAsset(scopeIcon(block.scope), '', block.scope)" mode="aspectFit"></image>
 					<text v-else :class="markClass(block.scope)">{{ scopeMark(block.scope) }}</text>
@@ -14,13 +14,11 @@
 					<text class="title">{{ scopeTitle(block.scope) }}</text>
 					<text class="hint">{{ scopeMeta(block) }}</text>
 				</view>
-			</view>
+			</button>
 		</view>
 		<view v-for="block in scopes" :key="block.scope">
 			<view v-if="block.scope == openedScope" class="scope">
-				<view class="btn-secondary" hover-class="pressed" @click="closeScope">
-					<text class="btn-label-secondary">返回分组</text>
-				</view>
+				<action-button label="返回分组" :disabled="loading" @press="closeScope" />
 				<text v-if="block.errorText.length > 0" class="error">{{ block.errorText }}</text>
 				<view v-if="block.showBadge || block.badgeNote.length > 0" class="badges">
 					<text v-if="block.pendingCount > 0" class="badge badge-warning">待处理故障 {{ block.pendingText }}</text>
@@ -30,14 +28,14 @@
 				<view v-for="section in block.sections" :key="section.uid" class="section">
 					<text v-if="section.showTitle" class="hint">{{ section.title }}</text>
 					<view class="grid">
-						<view v-for="cell in section.cells" :key="cell.uid" :class="cell.solo ? 'cell solo' : 'cell'" hover-class="pressed" @click="onCell(cell)">
+						<button v-for="cell in section.cells" :key="cell.uid" :class="cell.solo ? 'cell solo' : 'cell'" :disabled="loading || cell.missing" hover-class="pressed" @click="onCell(cell)">
 							<view :class="tileClass(block.scope)">
 								<image v-if="iconAsset(cell.icon, cell.iconGroup, block.scope).length > 0" class="tile-icon" :src="iconAsset(cell.icon, cell.iconGroup, block.scope)" mode="aspectFit"></image>
 								<text v-else :class="markClass(block.scope)">{{ iconMark(cell.icon, cell.iconGroup, cell.label) }}</text>
 							</view>
 							<text class="title">{{ cell.label }}</text>
 							<text v-if="cell.missing" class="hint">功能尚未安装</text>
-						</view>
+						</button>
 					</view>
 				</view>
 			</view>
@@ -53,6 +51,7 @@
 
 <script setup lang="uts">
 	import HomeLink from '../../shared/ui/home-link.uvue'
+	import ActionButton from '../../shared/ui/action-button.uvue'
 	import { getToken } from '../../shared/api/session.uts'
 	import { openRegisteredRoute } from '../registry/index.uts'
 	import { iconAsset, iconMark, markClass, scopeIcon, scopeTitle, tileClass } from '../workbench/icons.uts'
@@ -172,6 +171,8 @@
 </script>
 
 <style>
+	.scope-card, .cell { height: auto; min-height: 48px; line-height: 24px; text-align: left; }
+	.cell { margin: 0px; padding: 12px; border-width: 0px; background-color: transparent; }
 	.scope-card {
 		flex-direction: row;
 		align-items: center;

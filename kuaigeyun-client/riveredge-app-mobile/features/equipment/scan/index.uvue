@@ -4,20 +4,18 @@
 	<scroll-view class="page" direction="vertical">
 		<view class="card">
 			<text class="title">扫码查设备</text>
-			<button :class="loading ? 'btn-primary is-disabled' : 'btn-primary'" :disabled="loading" @click="onScan">扫码</button>
+			<action-button label="扫码" tone="primary" :disabled="loading" @press="onScan" />
 			<text v-if="messageText.length > 0" class="hint">{{ messageText }}</text>
 			<text v-if="errorText.length > 0" class="error">{{ errorText }}</text>
 		</view>
 	</scroll-view>
-		<view v-if="loading" class="loading-mask">
-			<view class="loading-card">
-				<text class="loading">加载中</text>
-			</view>
-		</view>
+		<load-feedback :active="loading" mode="blocking" label="正在解析扫码内容" />
 	</view>
 </template>
 
 <script setup lang="uts">
+	import LoadFeedback from '../../../shared/ui/load-feedback.uvue'
+	import ActionButton from '../../../shared/ui/action-button.uvue'
 	import HomeLink from '../../../shared/ui/home-link.uvue'
 	import { request } from '../../../shared/api/index.uts'
 	import { asJsonObject, fieldText } from '../../../shared/api/fields.uts'

@@ -2,7 +2,8 @@
 	<view class="page-shell">
 		<home-link />
 	<scroll-view class="page home-page" direction="vertical">
-		<view class="who" hover-class="pressed" @click="openAccount">
+		<load-feedback :active="loading" :mode="homeLoaded ? 'refresh' : 'initial'" />
+		<button class="who" :disabled="false" hover-class="pressed" @click="openAccount">
 			<view class="who-copy">
 				<text class="who-name">{{ displayName }}</text>
 				<text v-if="orgName.length > 0" class="who-meta">{{ orgName }}</text>
@@ -11,13 +12,13 @@
 				<text class="who-account">账号</text>
 				<text class="who-chevron">›</text>
 			</view>
-		</view>
+		</button>
 		<text v-if="errorText.length > 0" class="error">{{ errorText }}</text>
 		<view v-if="!loading && (errorText.length > 0 || homeWarnings.length > 0)">
 			<text v-for="(warning, index) in homeWarnings" :key="index" class="error">{{ warning }}</text>
-			<button class="btn-secondary" @click="refresh">重新加载</button>
+			<action-button label="重新加载" :busy="loading" @press="refresh" />
 		</view>
-		<view v-if="hasScan" class="btn-primary btn-scan" hover-class="pressed" @click="onScan">
+		<button v-if="hasScan" class="btn-primary btn-scan" :disabled="loading" hover-class="pressed" @click="onScan">
 			<view class="scan-mark">
 				<view class="scan-row">
 					<view class="scan-corner scan-tl"></view>
@@ -32,50 +33,44 @@
 				</view>
 			</view>
 			<text class="btn-scan-label">扫码报工</text>
-		</view>
+		</button>
 		<text v-if="hasScan" class="home-hint">扫描工单进入报工；也可手动输入编码</text>
-		<text v-if="!loading && errorText.length == 0" class="home-label">检索功能</text>
-		<input v-if="!loading && errorText.length == 0" class="field home-field" :value="featureQuery" placeholder="例如盘点、领料" @input="onFeatureQuery" />
-		<view v-if="!loading && errorText.length == 0 && !searching">
+		<text v-if="(!loading || homeLoaded) && errorText.length == 0" class="home-label">检索功能</text>
+		<input v-if="(!loading || homeLoaded) && errorText.length == 0" class="field home-field" :value="featureQuery" placeholder="例如盘点、领料" @input="onFeatureQuery" />
+		<view v-if="(!loading || homeLoaded) && errorText.length == 0 && !searching">
 			<text class="home-section">今日待办</text>
 			<view v-if="todoEmptyText.length > 0" class="home-empty">
 				<text class="home-empty-title">{{ todoEmptyText }}</text>
 			</view>
-			<view v-for="(todo, index) in todos" :key="todo.uid" class="home-todo" hover-class="pressed" @click="onTodo(index)">
+			<button v-for="(todo, index) in todos" :key="todo.uid" class="home-todo" :disabled="loading || todo.missing" hover-class="pressed" @click="onTodo(index)">
 				<view class="todo-copy">
 					<text class="todo-title">{{ todo.title }}</text>
 					<text v-if="todo.subtitle.length > 0" class="todo-sub">{{ todo.subtitle }}</text>
 				</view>
-				<text :class="todoBadgeClass(todo.tone)">{{ todo.countText }}</text>
-			</view>
+				<status-badge :value="todo.countText" :tone="todo.tone" />
+			</button>
 			<text v-if="frequent.length > 0" class="home-section">常用</text>
 			<view v-if="frequent.length > 0" class="home-grid">
 				<view v-for="(cell, index) in frequent" :key="cell.uid" class="home-cell-slot">
-					<view class="home-cell" hover-class="pressed" @click="onFrequent(index)">
+					<button class="home-cell" :disabled="loading || cell.missing" hover-class="pressed" @click="onFrequent(index)">
 						<view class="icon-tile icon-workshop home-tile">
 							<image v-if="iconAsset(cell.icon, cell.iconGroup, 'workshop').length > 0" class="tile-icon" :src="iconAsset(cell.icon, cell.iconGroup, 'workshop')" mode="aspectFit"></image>
 							<text v-else class="tile-mark mark-workshop">{{ iconMark(cell.icon, cell.iconGroup, cell.label) }}</text>
 						</view>
 						<text class="cell-label">{{ cell.label }}</text>
-					</view>
+					</button>
 				</view>
 			</view>
-			<view class="btn-secondary home-apps" hover-class="pressed" @click="openApps">
-				<text class="btn-label-secondary">全部功能</text>
-			</view>
-			<view v-if="appSettingsEnabled()" class="btn-secondary home-settings" hover-class="pressed" @click="openAppSettings">
-				<text class="btn-label-secondary">设置</text>
-			</view>
+			<action-button  label="全部功能" :disabled="loading" @press="openApps" />
+			<action-button v-if="appSettingsEnabled()"  label="设置" :disabled="loading" @press="openAppSettings" />
 		</view>
 		<view v-if="searching">
 			<view v-if="hits.length == 0" class="home-empty">
 				<text class="home-empty-title">没有这个功能</text>
 				<text class="home-hint">换个名称，或从全部分组里找。</text>
-				<view class="btn-secondary" hover-class="pressed" @click="openApps">
-					<text class="btn-label-secondary">去全部分组</text>
-				</view>
+				<action-button  label="去全部分组" :disabled="loading" @press="openApps" />
 			</view>
-			<view v-for="(hit, index) in hits" :key="hit.uid" class="hit" hover-class="pressed" @click="onHit(index)">
+			<button v-for="(hit, index) in hits" :key="hit.uid" class="hit" :disabled="loading || hit.missing" hover-class="pressed" @click="onHit(index)">
 				<view class="hit-tile" :class="tileClass(hit.scope)">
 					<image v-if="iconAsset(hit.icon, hit.iconGroup, hit.scope).length > 0" class="tile-icon" :src="iconAsset(hit.icon, hit.iconGroup, hit.scope)" mode="aspectFit"></image>
 					<text v-else :class="markClass(hit.scope)">{{ iconMark(hit.icon, hit.iconGroup, hit.label) }}</text>
@@ -84,25 +79,19 @@
 					<text class="hit-title">{{ hit.label }}</text>
 					<text class="hit-meta">{{ scopeTitle(hit.scope) }}</text>
 				</view>
-			</view>
-			<view v-if="appSettingsEnabled()" class="btn-secondary home-settings" hover-class="pressed" @click="openAppSettings">
-				<text class="btn-label-secondary">设置</text>
-			</view>
+			</button>
+			<action-button v-if="appSettingsEnabled()"  label="设置" :disabled="loading" @press="openAppSettings" />
 		</view>
-		<view v-if="appSettingsEnabled() && !searching && (loading || errorText.length > 0)" class="btn-secondary home-settings" hover-class="pressed" @click="openAppSettings">
-			<text class="btn-label-secondary">设置</text>
-		</view>
+		<action-button v-if="appSettingsEnabled() && !searching && (loading || errorText.length > 0)" label="设置" @press="openAppSettings" />
 	</scroll-view>
-		<view v-if="loading" class="loading-mask">
-			<view class="loading-card">
-				<text class="loading">正在加载</text>
-			</view>
-		</view>
 	</view>
 </template>
 
 <script setup lang="uts">
+	import LoadFeedback from '../../shared/ui/load-feedback.uvue'
 	import HomeLink from '../../shared/ui/home-link.uvue'
+	import ActionButton from '../../shared/ui/action-button.uvue'
+	import StatusBadge from '../../shared/ui/status-badge.uvue'
 	import { request } from '../../shared/api/index.uts'
 	import { getTenantName, getToken, readSessionName, takePendingEntry } from '../../shared/api/session.uts'
 	import { openRegisteredRoute } from '../registry/index.uts'
@@ -140,6 +129,7 @@
 	const FREQUENT_KEYS = ['my-work-orders', 'exception-report', 'packing-binding', 'reporting-history']
 
 	const loading = ref(false)
+	const homeLoaded = ref(false)
 	const errorText = ref('')
 	const displayName = ref('已登录')
 	const orgName = ref('')
@@ -251,15 +241,6 @@
 		}
 	}
 
-	function todoBadgeClass(tone : string) : string {
-		if (tone == 'danger') {
-			return 'badge home-badge badge-danger'
-		}
-		if (tone == 'warning') {
-			return 'badge home-badge badge-warning'
-		}
-		return 'badge home-badge'
-	}
 
 	function pushLinkedTodo(nextTodos : Array<HomeTodo>, blocks : Array<WorkScope>, measured : Array<MeasuredTodo> | null, key : string, title : string, tone : string) {
 		const cell = linkedCell(blocks, key)
@@ -507,7 +488,9 @@
 			const blocks = await loadWorkbench()
 			const measured = await measureHomeTodos(blocks)
 			applyHome(blocks, measured)
+			homeLoaded.value = true
 		} catch (err) {
+			homeLoaded.value = false
 			todos.value = []
 			frequent.value = []
 			loadedBlocks.value = []
@@ -568,6 +551,8 @@
 </script>
 
 <style>
+	.who, .home-todo, .home-cell, .hit { height: auto; min-height: 48px; line-height: 24px; text-align: left; }
+	.home-cell { margin: 0px; padding: 0px; border-width: 0px; background-color: transparent; }
 	.who {
 		flex-direction: row;
 		align-items: center;

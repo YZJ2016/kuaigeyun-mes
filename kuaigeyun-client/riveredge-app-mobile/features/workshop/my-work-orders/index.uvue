@@ -2,42 +2,43 @@
 	<view class="page-shell">
 		<home-link />
 	<scroll-view class="page" direction="vertical" :scroll-top="scrollTop" @scroll="onScroll">
+		<load-feedback :active="loading && loadMode != 'more'" :mode="loadMode" />
 		<text v-if="errorTextValue.length > 0" class="error">{{ errorTextValue }}</text>
 		<view v-if="selectedIndex < 0">
 			<text class="label">工单编码、名称或产品</text>
 			<input v-model="keyword" class="field" :disabled="loading" placeholder="输入关键词" @confirm="search" />
 			<view class="status-options">
-				<button v-for="(choice, index) in statuses" :key="choice.value" :class="status == choice.value ? 'status-choice status-choice-on' : 'status-choice'" :disabled="loading" @click="pickStatus(index)">{{ status == choice.value ? '● ' : '' }}{{ choice.label }}</button>
+				<choice-button :label="choice.label" :selected="status == choice.value" v-for="(choice, index) in statuses" :key="choice.value" :disabled="loading" @choose="pickStatus(index)" />
 			</view>
-			<button class="btn-primary" :disabled="loading" @click="search">查询</button>
-			<button class="btn-secondary" :disabled="loading" @click="refreshList">刷新当前查询</button>
+			<action-button label="查询" tone="primary" :disabled="loading" @press="search" />
+			<action-button label="刷新当前查询" tone="secondary" :disabled="loading" @press="refreshList" />
 			<text class="sub">已加载 {{ rows.length }} / {{ total }} 条</text>
 			<text v-if="!loading && rows.length == 0 && errorTextValue.length == 0" class="empty">暂无工单</text>
-			<view v-for="(row, index) in rows" :key="index" class="card" hover-class="pressed" @click="openDetail(index)">
+			<action-card v-for="(row, index) in rows" :key="index" @press="openDetail(index)" :disabled="loading">
 				<text class="title">{{ lineTitle(row) }}</text>
 				<text class="sub">{{ lineSub(row) }}</text>
-			</view>
-			<button v-if="rows.length < total" class="btn-secondary" :disabled="loading" @click="loadMore">加载更多</button>
+			</action-card>
+			<load-feedback :active="loading && loadMode == 'more'" mode="more" />
+			<action-button label="加载更多" tone="secondary" v-if="rows.length < total" :disabled="loading" @press="loadMore" />
 		</view>
 		<view v-else class="card">
-			<button class="btn-secondary" @click="closeDetail">返回列表</button>
+			<action-button label="返回列表" tone="secondary" @press="closeDetail" />
 			<text class="title">{{ lineTitle(rows[selectedIndex]) }}</text>
 			<text class="sub">{{ lineSub(rows[selectedIndex]) }}</text>
 			<text class="sub">计划数量：{{ fieldText(rows[selectedIndex], 'quantity') }}</text>
 			<text class="sub">计划开始：{{ fieldText(rows[selectedIndex], 'planned_start_date') }}</text>
 			<text class="sub">计划完成：{{ fieldText(rows[selectedIndex], 'planned_end_date') }}</text>
-			<button class="btn-primary" @click="goReport">去报工</button>
+			<action-button label="去报工" tone="primary" @press="goReport" />
 		</view>
 	</scroll-view>
-		<view v-if="loading" class="loading-mask">
-			<view class="loading-card">
-				<text class="loading">加载中</text>
-			</view>
-		</view>
 	</view>
 </template>
 
 <script setup lang="uts">
+	import LoadFeedback from '../../../shared/ui/load-feedback.uvue'
+	import ActionCard from '../../../shared/ui/action-card.uvue'
+	import ChoiceButton from '../../../shared/ui/choice-button.uvue'
+	import ActionButton from '../../../shared/ui/action-button.uvue'
 	import HomeLink from '../../../shared/ui/home-link.uvue'
 	import { request } from '../../../shared/api/index.uts'
 	import { readRows, fieldText, fieldNumber, errorText } from '../../../shared/api/fields.uts'
@@ -46,6 +47,8 @@
 
 	const rows = ref<any[]>([])
 	const loading = ref(false)
+	const listLoaded = ref(false)
+	const loadMode = ref('initial')
 	const errorTextValue = ref('')
 	const selectedIndex = ref(-1)
 	const keyword = ref('')
@@ -111,6 +114,7 @@
 		}
 		const mine = ticket + 1
 		ticket = mine
+		loadMode.value = append ? 'more' : listLoaded.value ? 'refresh' : 'initial'
 		loading.value = true
 		errorTextValue.value = ''
 		const skip = append ? rows.value.length : 0
@@ -139,6 +143,7 @@
 				rows.value = incoming
 			}
 			total.value = fieldNumber(payload, 'total')
+			listLoaded.value = true
 		} catch (err) {
 			if (ticket != mine) {
 				return

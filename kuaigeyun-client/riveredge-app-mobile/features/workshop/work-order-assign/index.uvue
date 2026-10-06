@@ -2,52 +2,52 @@
 	<view class="page-shell">
 		<home-link />
 	<view class="page">
+		<load-feedback :active="loading && !submitting" :mode="loadSettled ? 'refresh' : 'initial'" />
 		<text v-if="errorTextValue.length > 0" class="error">{{ errorTextValue }}</text>
 		<view v-if="selectedOrder == null">
 			<text class="section">选择工单</text>
-			<view v-for="(row, index) in orders" :key="index" class="card" hover-class="pressed" @click="pickOrder(index)">
+			<action-card v-for="(row, index) in orders" :key="index" @press="pickOrder(index)" :disabled="loading || submitting">
 				<text class="title">{{ orderTitle(row) }}</text>
 				<text class="sub">{{ orderStatus(row) }}</text>
-			</view>
+			</action-card>
 		</view>
 		<view v-if="selectedOrder != null && selectedOperation == null">
-			<button class="btn-secondary" @click="clearOrder">返回工单</button>
+			<action-button label="返回工单" tone="secondary" @press="clearOrder" :disabled="loading || submitting" />
 			<text class="section">选择工序</text>
-			<view v-for="(row, index) in operations" :key="index" class="card" hover-class="pressed" @click="pickOperation(index)">
+			<action-card v-for="(row, index) in operations" :key="index" @press="pickOperation(index)" :disabled="loading || submitting">
 				<text class="title">{{ operationTitle(row) }}</text>
-			</view>
+			</action-card>
 		</view>
 		<view v-if="selectedOperation != null">
-			<button class="btn-secondary" @click="clearOperation">返回工序</button>
+			<action-button label="返回工序" tone="secondary" @press="clearOperation" :disabled="loading || submitting" />
 			<view class="modes">
-				<button class="btn-chip" @click="setMode('worker')">指派给人员</button>
-				<button class="btn-chip" @click="setMode('team')">指派给小组</button>
+				<choice-button label="指派给人员" :selected="mode == 'worker'" @choose="setMode('worker')" :disabled="loading || submitting" />
+				<choice-button label="指派给小组" :selected="mode == 'team'" @choose="setMode('team')" :disabled="loading || submitting" />
 			</view>
 			<view v-if="mode == 'worker'">
-				<view v-for="(row, index) in workers" :key="index" class="card" hover-class="pressed" @click="toggleWorker(index)">
+				<action-card v-for="(row, index) in workers" :key="index" @press="toggleWorker(index)" :disabled="loading || submitting">
 					<text class="title">{{ workerTitle(row) }}</text>
 					<text class="sub">{{ workerMarked(row) }}</text>
-				</view>
+				</action-card>
 			</view>
 			<view v-else>
-				<view v-for="(row, index) in teams" :key="index" class="card" hover-class="pressed" @click="pickTeam(index)">
+				<action-card v-for="(row, index) in teams" :key="index" @press="pickTeam(index)" :disabled="loading || submitting">
 					<text class="title">{{ fieldText(row, 'name') }}</text>
 					<text class="sub">{{ selectedTeamIndex == index ? '已选' : '点选' }}</text>
-				</view>
+				</action-card>
 			</view>
-			<input class="field" v-model="remarks" placeholder="备注（可空）" />
-			<button class="btn-primary" @click="submitDispatch">指派</button>
+			<input :disabled="loading || submitting" class="field" v-model="remarks" placeholder="备注（可空）" />
+			<action-button label="指派" tone="primary" :busy="submitting" busy-label="指派中" @press="submitDispatch" :disabled="loading || submitting" />
 		</view>
 	</view>
-		<view v-if="loading" class="loading-mask">
-			<view class="loading-card">
-				<text class="loading">加载中</text>
-			</view>
-		</view>
 	</view>
 </template>
 
 <script setup lang="uts">
+	import LoadFeedback from '../../../shared/ui/load-feedback.uvue'
+	import ActionCard from '../../../shared/ui/action-card.uvue'
+	import ChoiceButton from '../../../shared/ui/choice-button.uvue'
+	import ActionButton from '../../../shared/ui/action-button.uvue'
 	import HomeLink from '../../../shared/ui/home-link.uvue'
 	import { request } from '../../../shared/api/index.uts'
 	import { readRows, fieldText, fieldNumber, errorText, firstText } from '../../../shared/api/fields.uts'
@@ -64,6 +64,8 @@
 	const mode = ref('worker')
 	const remarks = ref('')
 	const loading = ref(false)
+	const loadSettled = ref(false)
+	const submitting = ref(false)
 	const errorTextValue = ref('')
 	let ticket = 0
 
@@ -100,6 +102,7 @@
 	}
 
 	async function loadOrders() {
+		if (submitting.value) { return }
 		const mine = ticket + 1
 		ticket = mine
 		loading.value = true
@@ -125,9 +128,11 @@
 			return
 		}
 		loading.value = false
+		loadSettled.value = true
 	}
 
 	async function pickOrder(index : number) {
+		if (loading.value || submitting.value) { return }
 		const row = orders.value[index]
 		const workOrderId = fieldNumber(row, 'id')
 		if (workOrderId <= 0) {
@@ -161,9 +166,11 @@
 			return
 		}
 		loading.value = false
+		loadSettled.value = true
 	}
 
 	async function pickOperation(index : number) {
+		if (loading.value || submitting.value) { return }
 		selectedOperation.value = operations.value[index]
 		selectedWorkerIds.value = []
 		selectedTeamIndex.value = -1
@@ -171,20 +178,24 @@
 	}
 
 	function clearOrder() {
+		if (loading.value || submitting.value) { return }
 		selectedOrder.value = null
 		selectedOperation.value = null
 		operations.value = []
 	}
 
 	function clearOperation() {
+		if (loading.value || submitting.value) { return }
 		selectedOperation.value = null
 	}
 
 	function setMode(next : string) {
+		if (loading.value || submitting.value) { return }
 		mode.value = next
 	}
 
 	async function loadAssignees() {
+		if (submitting.value) { return }
 		const mine = ticket + 1
 		ticket = mine
 		loading.value = true
@@ -226,9 +237,11 @@
 			return
 		}
 		loading.value = false
+		loadSettled.value = true
 	}
 
 	function toggleWorker(index : number) {
+		if (loading.value || submitting.value) { return }
 		const id = fieldNumber(workers.value[index], 'id')
 		if (id <= 0) {
 			return
@@ -250,6 +263,7 @@
 	}
 
 	function pickTeam(index : number) {
+		if (loading.value || submitting.value) { return }
 		selectedTeamIndex.value = index
 	}
 
@@ -269,6 +283,7 @@
 	}
 
 	async function submitDispatch() {
+		if (loading.value || submitting.value) { return }
 		const order = selectedOrder.value
 		const operation = selectedOperation.value
 		if (order == null || operation == null) {
@@ -305,6 +320,7 @@
 			body.set('remarks', note)
 		}
 		loading.value = true
+		submitting.value = true
 		errorTextValue.value = ''
 		try {
 			await request({
@@ -317,7 +333,9 @@
 		} catch (err) {
 			errorTextValue.value = errorText(err)
 		}
+		submitting.value = false
 		loading.value = false
+		loadSettled.value = true
 	}
 
 	onLoad(() => {

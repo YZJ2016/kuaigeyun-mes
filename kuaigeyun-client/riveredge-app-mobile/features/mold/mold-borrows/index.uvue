@@ -1,39 +1,42 @@
 <template>
 	<view class="page-shell">
 		<home-link />
-	<view class="page">
+	<scroll-view class="page" direction="vertical">
+		<load-feedback :active="loading" :mode="loadSettled ? 'refresh' : 'initial'" />
 		<text class="section">模具</text>
-		<input class="field" v-model="moldKeyword" placeholder="编码或名称" />
-		<button class="btn-secondary" @click="searchMolds">查找模具</button>
-		<view v-for="(item, index) in moldOptions" :key="index" class="list-row" hover-class="pressed" @click="chooseMold(index)">
-			<text class="title">{{ item.label }}</text>
-		</view>
+		<text class="label">模具编码或名称</text>
+		<input class="field" v-model="moldKeyword" :disabled="loading || submitting" placeholder="编码或名称" />
+		<action-button label="查找模具" tone="secondary" :disabled="loading || submitting" @press="searchMolds" />
+		<selection-row v-for="(item, index) in moldOptions" :key="item.id" :label="item.label" :selected="moldId == item.id" :disabled="loading || submitting" @choose="chooseMold(index)" />
 		<text v-if="chosenMold != ''" class="meta">已选 {{ chosenMold }}</text>
-		<input class="field" v-model="borrowDate" placeholder="领用日期 YYYY-MM-DD" />
-		<input class="field" v-model="borrowerName" placeholder="领用人" />
-		<input class="field" v-model="departmentName" placeholder="部门" />
-		<input class="field" v-model="expectedReturnDate" placeholder="预计归还 YYYY-MM-DD" />
-		<input class="field" v-model="remark" placeholder="备注" />
-		<button :class="submitting ? 'btn-primary is-disabled' : 'btn-primary'" :disabled="submitting" @click="createBorrow">创建领用</button>
+		<date-field label="领用日期" v-model="borrowDate" :disabled="loading || submitting" />
+		<text class="label">领用人</text>
+		<input class="field" v-model="borrowerName" :disabled="loading || submitting" placeholder="领用人" />
+		<text class="label">部门</text>
+		<input class="field" v-model="departmentName" :disabled="loading || submitting" placeholder="部门" />
+		<date-field label="预计归还日期" v-model="expectedReturnDate" :disabled="loading || submitting" />
+		<text class="label">备注</text>
+		<input class="field" v-model="remark" :disabled="loading || submitting" placeholder="备注" />
+		<action-button label="创建领用" tone="primary" :busy="submitting" :disabled="loading" @press="createBorrow" />
 		<text v-if="hint != ''" class="error">{{ hint }}</text>
 		<text class="section">领用记录</text>
-		<input class="field" v-model="listKeyword" placeholder="搜索领用单" />
-		<button class="btn-secondary" @click="loadList">刷新</button>
+		<text class="label">领用单搜索</text>
+		<input class="field" v-model="listKeyword" :disabled="loading || submitting" placeholder="搜索领用单" />
+		<action-button label="刷新" tone="secondary" :disabled="loading || submitting" @press="loadList" />
 		<view v-for="(item, index) in rows" :key="index" class="list-row">
 			<text class="title">{{ item.title }}</text>
 			<text class="meta">{{ item.detail }}</text>
 		</view>
 		<text v-if="!loading && rows.length == 0 && hint == ''" class="empty">暂无领用</text>
-	</view>
-		<view v-if="loading" class="loading-mask">
-			<view class="loading-card">
-				<text class="loading">加载中</text>
-			</view>
-		</view>
+	</scroll-view>
 	</view>
 </template>
 
 <script setup lang="uts">
+	import LoadFeedback from '../../../shared/ui/load-feedback.uvue'
+	import DateField from '../../../shared/ui/date-field.uvue'
+	import SelectionRow from '../../../shared/ui/selection-row.uvue'
+	import ActionButton from '../../../shared/ui/action-button.uvue'
 	import HomeLink from '../../../shared/ui/home-link.uvue'
 	import {
 		DocLine,
@@ -65,6 +68,7 @@
 	const hint = ref('')
 	const submitting = ref(false)
 	const loading = ref(false)
+	const loadSettled = ref(false)
 	let ticket = 0
 	let moldTicket = 0
 	let listOpen = false
@@ -72,9 +76,11 @@
 
 	function syncLoading(): void {
 		loading.value = listOpen || moldOpen
+		if (!loading.value) { loadSettled.value = true }
 	}
 
 	function chooseMold(index: number): void {
+		if (loading.value || submitting.value) { return }
 		const options = moldOptions.value
 		if (index < 0 || index >= options.length) {
 			return
@@ -163,6 +169,7 @@
 	}
 
 	async function createBorrow(): Promise<void> {
+		if (loading.value || submitting.value) { return }
 		hint.value = ''
 		if (moldId.value <= 0) {
 			hint.value = '请选择模具'

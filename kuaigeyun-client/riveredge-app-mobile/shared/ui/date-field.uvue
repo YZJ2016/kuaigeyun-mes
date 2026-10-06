@@ -1,0 +1,50 @@
+<template>
+	<view class="date-field">
+		<text class="date-label">{{ label }}{{ required ? '（必填）' : '（可选）' }}</text>
+		<picker mode="date" :value="pickerValue" :disabled="disabled" @change="onChange">
+			<view :class="disabled ? 'date-control date-disabled' : 'date-control'">
+				<text class="date-value">{{ modelValue.length > 0 ? modelValue : '请选择日期' }}</text>
+				<text class="date-prompt">选择日期</text>
+			</view>
+		</picker>
+		<text v-if="validationText.length > 0" class="date-error">{{ validationText }}</text>
+		<button v-if="!required && modelValue.length > 0" class="date-clear" :disabled="disabled" @click="clearDate">清除{{ label }}</button>
+	</view>
+</template>
+<script setup lang="uts">
+	import { isDateText, todayDate } from './date.uts'
+	const props = defineProps({
+		modelValue: { type: String, default: '' }, label: { type: String, default: '日期' },
+		disabled: { type: Boolean, default: false }, required: { type: Boolean, default: false }
+	})
+	const emit = defineEmits(['update:modelValue'])
+	const selectionError = ref('')
+	const pickerValue = computed(() : string => isDateText(props.modelValue) ? props.modelValue : todayDate())
+	const validationText = computed(() : string => {
+		if (selectionError.value.length > 0) { return selectionError.value }
+		return props.modelValue.length > 0 && !isDateText(props.modelValue) ? '请选择有效日期' : ''
+	})
+	function onChange(event : UniPickerChangeEvent) {
+		if (props.disabled) { return }
+		const value = String(event.detail.value)
+		if (!isDateText(value)) { selectionError.value = '请选择有效日期'; return }
+		selectionError.value = ''
+		emit('update:modelValue', value)
+	}
+	function clearDate() {
+		if (props.disabled || props.required) { return }
+		selectionError.value = ''
+		emit('update:modelValue', '')
+	}
+	watch(() : string => props.modelValue, () => { selectionError.value = '' })
+</script>
+<style>
+	.date-field { margin-top: 8px; margin-bottom: 8px; }
+	.date-label { font-size: 14px; color: #475569; margin-bottom: 8px; }
+	.date-control { min-height: 48px; padding: 12px; flex-direction: row; align-items: center; justify-content: space-between; border-width: 1px; border-style: solid; border-color: #64748B; border-radius: 8px; background-color: #FFFFFF; }
+	.date-disabled { opacity: 0.55; }
+	.date-value { flex: 1; font-size: 16px; color: #28113C; }
+	.date-prompt { font-size: 14px; color: #7E22CE; margin-left: 8px; }
+	.date-error { color: #991B1B; font-size: 14px; margin-top: 8px; }
+	.date-clear { min-height: 48px; margin-top: 8px; font-size: 14px; color: #475569; }
+</style>

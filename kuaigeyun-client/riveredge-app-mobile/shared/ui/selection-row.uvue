@@ -1,0 +1,27 @@
+<template>
+	<button :class="(selected ? 'selection selection-on' : 'selection') + (disabled || busy ? ' selection-disabled' : '')" :disabled="disabled || busy" @click="activate">
+		<text class="selection-label">{{ label }}</text>
+		<text v-if="description.length > 0" class="selection-description">{{ description }}</text>
+		<text class="selection-state">{{ selected ? selectedLabel : unselectedLabel }}</text>
+	</button>
+</template>
+<script setup lang="uts">
+	const props = defineProps({
+		label: { type: String, default: '' }, description: { type: String, default: '' },
+		selected: { type: Boolean, default: false }, selectedLabel: { type: String, default: '已选' },
+		unselectedLabel: { type: String, default: '点选' }, disabled: { type: Boolean, default: false }, busy: { type: Boolean, default: false }
+	})
+	const emit = defineEmits(['choose'])
+	function activate() {
+		if (props.disabled || props.busy) { return }
+		emit('choose')
+	}
+</script>
+<style>
+	.selection { width: 100%; min-height: 48px; height: auto; flex-direction: column; align-items: flex-start; padding: 12px; margin: 8px 0px; border-radius: 8px; background-color: #FFFFFF; border-color: #CBD5E1; }
+	.selection-on { background-color: #F3E8FF; border-color: #9730E3; }
+	.selection-label { font-size: 16px; color: #28113C; line-height: 24px; text-align: left; }
+	.selection-description { font-size: 14px; color: #475569; line-height: 22px; text-align: left; }
+	.selection-state { font-size: 14px; color: #7E22CE; line-height: 22px; }
+	.selection-disabled { opacity: 0.55; }
+</style>

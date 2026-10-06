@@ -2,28 +2,27 @@
 	<view class="page-shell">
 		<home-link />
 	<scroll-view class="page" direction="vertical">
+		<load-feedback :active="loading" :mode="loadSettled ? 'refresh' : 'initial'" />
 		<view class="card">
 			<text class="title">设备详情</text>
-			<button :class="loading ? 'btn-secondary is-disabled' : 'btn-secondary'" :disabled="loading" @click="loadDetail">刷新</button>
+			<action-button label="刷新" tone="secondary" :disabled="loading" @press="loadDetail" />
 			<text v-if="summaryText.length > 0" class="hint">{{ summaryText }}</text>
 			<text v-if="errorText.length > 0" class="error">{{ errorText }}</text>
 		</view>
 	</scroll-view>
-		<view v-if="loading" class="loading-mask">
-			<view class="loading-card">
-				<text class="loading">加载中</text>
-			</view>
-		</view>
 	</view>
 </template>
 
 <script setup lang="uts">
+	import LoadFeedback from '../../../shared/ui/load-feedback.uvue'
+	import ActionButton from '../../../shared/ui/action-button.uvue'
 	import HomeLink from '../../../shared/ui/home-link.uvue'
 	import { request } from '../../../shared/api/index.uts'
 	import { asJsonObject, fieldText } from '../../../shared/api/fields.uts'
 	import { joinParts, readError } from '../json-text.uts'
 
 	const loading = ref(false)
+	const loadSettled = ref(false)
 	let ticket = 0
 	const queryUuid = ref('')
 	const summaryText = ref('')
@@ -79,7 +78,7 @@
 		if (ticket != mine) {
 			return
 		}
-		loading.value = false
+		loading.value = false; loadSettled.value = true
 	}
 
 	onLoad((options: OnLoadOptions) => {

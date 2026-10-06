@@ -249,18 +249,23 @@ for (const page of ['my-work-orders','work-orders']) {
       nextTick:fn=>fn(),
     });
     run("keyword.value=' WO ';status.value='released'");
-    await run('search()');
+      await run('search()');
+      assert.equal(run('loadMode.value'),'initial');
+      assert.equal(run('listLoaded.value'),true);
     assert.equal(calls[0].query.keyword,'WO');
     assert.equal(calls[0].query.status,'released');
     assert.equal(calls[0].query.skip,0);
     assert.equal(calls[0].query.limit,20);
     if(page==='my-work-orders') assert.equal(calls[0].query.assigned_worker_id,1);
     run("keyword.value='unapplied'");
-    await run('loadMore()');
+      await run('loadMore()');
+      assert.equal(run('loadMode.value'),'more');
     assert.equal(calls[1].query.skip,1);
     assert.equal(calls[1].query.keyword,'WO');
     fail=true;await run('loadMore()');
-    assert.equal(run('rows.value.length'),2);
+      assert.equal(run('rows.value.length'),2);
+      await run('refreshList()');
+      assert.equal(run('loadMode.value'),'refresh');
     run('listScrollTop.value=480;openDetail(0);closeDetail()');
     assert.equal(run('scrollTop.value'),480);
     assert.equal(run('status.value'),'released');

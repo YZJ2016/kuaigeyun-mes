@@ -2,44 +2,43 @@
 	<view class="page-shell">
 		<home-link />
 	<scroll-view class="page" direction="vertical">
+		<load-feedback :active="loading && !submitting" mode="refresh" label="正在读取工单与工序" />
 		<text class="hint">报工人员 {{ workerName }}</text>
-		<button class="btn-primary" :disabled="loading || submitting" @click="onScan">扫码工单</button>
+		<action-button label="扫码工单" tone="primary" :disabled="loading || submitting" @press="onScan" />
 		<text class="hint">扫码不可用时，可输入或粘贴工单编码。</text>
 		<text class="label">工单编码或扫码内容</text>
 		<input class="field" v-model="manualCode" :disabled="loading || submitting" placeholder="输入或粘贴编码" />
-		<button class="btn-secondary" :disabled="loading || submitting" @click="resolveManual">查询工单</button>
+		<action-button label="查询工单" tone="secondary" :disabled="loading || submitting" @press="resolveManual" />
 		<view v-if="successText.length > 0" class="card">
 			<text class="title">报工已提交</text><text class="sub">{{ successText }}</text>
-			<button class="btn-secondary" @click="openHistory">查看我的报工</button>
+			<action-button label="查看我的报工" tone="secondary" :disabled="loading || submitting" @press="openHistory" />
 		</view>
 		<text v-if="codeText.length > 0" class="hint">扫码内容 {{ codeText }}</text>
 		<text v-if="errorTextValue.length > 0" class="error">{{ errorTextValue }}</text>
-		<view v-for="(row, index) in orders" :key="index" class="card" hover-class="pressed" @click="pickOrder(index)">
+		<action-card v-for="(row, index) in orders" :key="index" @press="pickOrder(index)" :disabled="loading || submitting">
 			<text class="title">{{ orderTitle(row) }}</text>
 			<text class="sub">{{ orderSub(row) }}</text>
-		</view>
+		</action-card>
 		<view v-if="selectedOrder != null">
 			<text class="section">选择工序</text>
-			<view v-for="(row, index) in operations" :key="index" class="card" hover-class="pressed" @click="pickOperation(index)">
+			<action-card v-for="(row, index) in operations" :key="index" @press="pickOperation(index)" :disabled="loading || submitting">
 				<text class="title">{{ operationTitle(row) }}</text>
 				<text class="sub">{{ selectedOperationIndex == index ? '已选' : '点选' }}</text>
-			</view>
+			</action-card>
 			<text class="label">报工数量</text><input class="field" type="digit" v-model="reportedQuantity" :disabled="loading || submitting" /><text v-if="reportedError.length > 0" class="error">{{ reportedError }}</text>
 			<text class="label">不合格数量</text><input class="field" type="digit" v-model="unqualifiedQuantity" :disabled="loading || submitting" /><text v-if="unqualifiedError.length > 0" class="error">{{ unqualifiedError }}</text>
 			<text class="hint">合格数量 {{ qualifiedPreview.length > 0 ? qualifiedPreview : '自动计算' }}</text>
 			<text class="label">工时（小时）</text><input class="field" type="digit" v-model="workHours" :disabled="loading || submitting" /><text v-if="hoursError.length > 0" class="error">{{ hoursError }}</text>
-			<button class="btn-primary" :disabled="loading || submitting" @click="submitReport">提交报工</button>
+			<action-button label="提交报工" tone="primary" :busy="submitting" busy-label="提交中" :disabled="loading || submitting" @press="submitReport" />
 		</view>
 	</scroll-view>
-		<view v-if="loading" class="loading-mask">
-			<view class="loading-card">
-				<text class="loading">加载中</text>
-			</view>
-		</view>
 	</view>
 </template>
 
 <script setup lang="uts">
+	import LoadFeedback from '../../../shared/ui/load-feedback.uvue'
+	import ActionCard from '../../../shared/ui/action-card.uvue'
+	import ActionButton from '../../../shared/ui/action-button.uvue'
 	import HomeLink from '../../../shared/ui/home-link.uvue'
 	import { request } from '../../../shared/api/index.uts'
 	import { scan } from '../../../shared/channel/index.uts'
@@ -51,6 +50,7 @@
 	const codeText = ref('')
 	const errorTextValue = ref('')
 	const loading = ref(false)
+	const loadSettled = ref(false)
 	const orders = ref<any[]>([])
 	const operations = ref<any[]>([])
 	const selectedOrder = ref<any | null>(null)
@@ -75,9 +75,11 @@
 		hoursError.value = ''
 	}
 	function openHistory() {
+		if (loading.value || submitting.value) { return }
 		uni.navigateTo({ url: '/features/workshop/reporting-history/index' })
 	}
 	async function resolveManual() {
+		if (loading.value || submitting.value) { return }
 		await resolveCode(manualCode.value.trim())
 	}
 
@@ -99,7 +101,7 @@
 	}
 
 	async function onScan() {
-		if (submitting.value) return
+		if (loading.value || submitting.value) return
 		const mine = ticket + 1
 		ticket = mine
 		loading.value = true
@@ -157,6 +159,7 @@
 			return
 		}
 		loading.value = false
+		loadSettled.value = true
 	}
 
 	async function pickOrder(index : number) {
@@ -196,6 +199,7 @@
 			return
 		}
 		loading.value = false
+		loadSettled.value = true
 	}
 
 	function pickOperation(index : number) {
@@ -295,6 +299,7 @@
 		}
 		submitting.value = false
 		loading.value = false
+		loadSettled.value = true
 	}
 
 	async function openById(workOrderId : number) {

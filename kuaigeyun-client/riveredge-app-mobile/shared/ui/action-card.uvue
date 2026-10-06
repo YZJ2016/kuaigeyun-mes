@@ -1,0 +1,17 @@
+<template>
+	<button :class="(variant == 'row' ? 'action-card action-row' : 'action-card') + (disabled ? ' action-card-disabled' : '')" :disabled="disabled" hover-class="action-card-pressed" @click="activate"><slot /></button>
+</template>
+<script setup lang="uts">
+	const props = defineProps({ disabled: { type: Boolean, default: false }, variant: { type: String, default: 'card' } })
+	const emit = defineEmits(['press'])
+	function activate() {
+		if (props.disabled) { return }
+		emit('press')
+	}
+</script>
+<style>
+	.action-card { width: 100%; height: auto; min-height: 48px; flex-direction: column; align-items: stretch; padding: 12px; margin: 0px 0px 12px 0px; text-align: left; line-height: 24px; background-color: #FFFFFF; border-radius: 12px; border-width: 1px; border-style: solid; border-color: #E2E8F0; }
+	.action-row { padding-left: 0px; padding-right: 0px; margin-bottom: 0px; border-radius: 0px; border-top-width: 0px; border-left-width: 0px; border-right-width: 0px; }
+	.action-card-disabled { opacity: 0.55; }
+	.action-card-pressed { background-color: #F1F5F9; }
+</style>

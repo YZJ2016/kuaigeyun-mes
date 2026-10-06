@@ -1,0 +1,21 @@
+<template>
+	<button :class="(tone == 'primary' ? 'action action-primary' : 'action action-secondary') + (compact ? ' action-compact' : '') + (disabled || busy ? ' action-disabled' : '')" :disabled="disabled || busy" :loading="busy" @click="activate">{{ busy ? busyLabel : label }}</button>
+</template>
+<script setup lang="uts">
+	const props = defineProps({
+		label: { type: String, default: '' }, tone: { type: String, default: 'secondary' }, compact: { type: Boolean, default: false },
+		busyLabel: { type: String, default: '处理中' }, disabled: { type: Boolean, default: false }, busy: { type: Boolean, default: false }
+	})
+	const emit = defineEmits(['press'])
+	function activate() {
+		if (props.disabled || props.busy) { return }
+		emit('press')
+	}
+</script>
+<style>
+	.action { width: 100%; min-height: 48px; height: auto; padding: 8px 12px; margin: 8px 0px; border-radius: 8px; font-size: 16px; line-height: 24px; }
+	.action-primary { color: #FFFFFF; background-color: #9730E3; border-color: #9730E3; }
+	.action-secondary { color: #28113C; background-color: #FFFFFF; border-color: #64748B; }
+	.action-disabled { opacity: 0.55; }
+	.action-compact { width: auto; margin: 4px 8px 4px 0px; font-size: 14px; }
+</style>

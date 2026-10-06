@@ -2,6 +2,7 @@
 	<view class="page-shell">
 		<home-link />
 	<view class="page">
+		<load-feedback :active="loading" :mode="loadSettled ? 'refresh' : 'initial'" />
 		<text class="hint">周期 {{ period }}</text>
 		<text v-if="errorTextValue.length > 0" class="error">{{ errorTextValue }}</text>
 		<text v-if="!loading && rows.length == 0 && errorTextValue.length == 0" class="empty">暂无绩效</text>
@@ -10,15 +11,11 @@
 			<text class="sub">{{ lineSub(row) }}</text>
 		</view>
 	</view>
-		<view v-if="loading" class="loading-mask">
-			<view class="loading-card">
-				<text class="loading">加载中</text>
-			</view>
-		</view>
 	</view>
 </template>
 
 <script setup lang="uts">
+	import LoadFeedback from '../../../shared/ui/load-feedback.uvue'
 	import HomeLink from '../../../shared/ui/home-link.uvue'
 	import { request } from '../../../shared/api/index.uts'
 	import { readRows, fieldText, errorText } from '../../../shared/api/fields.uts'
@@ -28,6 +25,7 @@
 	const period = ref('')
 	const rows = ref<any[]>([])
 	const loading = ref(false)
+	const loadSettled = ref(false)
 	const errorTextValue = ref('')
 	let ticket = 0
 
@@ -75,6 +73,7 @@
 			return
 		}
 		loading.value = false
+		loadSettled.value = true
 	}
 
 	onLoad(() => {

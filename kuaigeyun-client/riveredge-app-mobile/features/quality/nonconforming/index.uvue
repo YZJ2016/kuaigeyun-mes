@@ -2,25 +2,26 @@
 	<view class="page-shell">
 		<home-link />
 	<scroll-view class="page" scroll-y="true">
+		<load-feedback :active="loading && !disposing" :mode="loadSettled ? 'refresh' : 'initial'" />
 		<view class="toolbar">
-			<button class="btn-secondary" @click="loadLedger">刷新</button>
+			<action-button label="刷新" tone="secondary" :disabled="loading" @press="loadLedger" />
 		</view>
 		<text v-if="errorTextValue.length > 0" class="error">{{ errorTextValue }}</text>
 		<view v-if="selectedIndex < 0">
 			<text v-if="!loading && rows.length == 0 && errorTextValue.length == 0" class="empty">暂无不合格品</text>
-			<view v-for="(row, index) in rows" :key="index" class="card" hover-class="pressed" @click="openRow(index)">
+			<action-card v-for="(row, index) in rows" :key="index" @press="openRow(index)" :disabled="loading">
 				<text class="title">{{ titleOf(row) }}</text>
 				<text v-if="lineOf(row).length > 0" class="meta">{{ lineOf(row) }}</text>
-			</view>
+			</action-card>
 		</view>
 		<view v-else class="card">
-			<button class="btn-secondary" @click="closeRow">返回列表</button>
+			<action-button label="返回列表" tone="secondary" :disabled="loading" @press="closeRow" />
 			<text class="title">{{ titleOf(rows[selectedIndex]) }}</text>
 			<text v-if="lineOf(rows[selectedIndex]).length > 0" class="meta">{{ lineOf(rows[selectedIndex]) }}</text>
 			<view v-if="canDispose(rows[selectedIndex])">
 				<text class="label">处置</text>
 				<view class="kind-row">
-					<text v-for="(label, index) in disposeLabels" :key="index" :class="disposeIndex == index ? 'choice choice-on' : 'choice'" @click="pickDispose(index)">{{ label }}</text>
+					<choice-button :label="label" :selected="disposeIndex == index" :disabled="loading" v-for="(label, index) in disposeLabels" :key="index" @choose="pickDispose(index)" />
 				</view>
 				<text v-if="disposeIndex == 4 || disposeIndex == 1 || disposeIndex == 2" class="hint">{{ blockedPlaceText() }}</text>
 				<view v-if="disposeIndex == 5">
@@ -29,21 +30,20 @@
 				</view>
 				<view v-if="disposeIndex == 6">
 					<text class="label">备注</text>
-					<input class="field" :value="disposeNote" @input="onDisposeNote" />
+					<input class="field" :disabled="loading" :value="disposeNote" @input="onDisposeNote" />
 				</view>
-				<button class="btn-primary" :disabled="loading" @click="submitDispose">确认处置</button>
+				<action-button label="确认处置" tone="primary" :busy="disposing" busy-label="处置中" :disabled="loading" @press="submitDispose" />
 			</view>
 		</view>
 	</scroll-view>
-		<view v-if="loading" class="loading-mask">
-			<view class="loading-card">
-				<text class="loading">加载中</text>
-			</view>
-		</view>
 	</view>
 </template>
 
 <script setup lang="uts">
+	import LoadFeedback from '../../../shared/ui/load-feedback.uvue'
+	import ActionCard from '../../../shared/ui/action-card.uvue'
+	import ChoiceButton from '../../../shared/ui/choice-button.uvue'
+	import ActionButton from '../../../shared/ui/action-button.uvue'
 	import HomeLink from '../../../shared/ui/home-link.uvue'
 	import { request } from '../../../shared/api/index.uts'
 	import { fieldText, fieldNumber, errorText, readRows } from '../../../shared/api/fields.uts'
@@ -52,6 +52,8 @@
 	const disposeLabels : string[] = ['退货', '让步', '隔离', '返工', '报废', '降级', '其他']
 
 	const loading = ref(false)
+	const loadSettled = ref(false)
+	const disposing = ref(false)
 	const errorTextValue = ref('')
 	const rows = ref<UTSJSONObject[]>([])
 	let ticket = 0
@@ -136,6 +138,7 @@
 	}
 
 	function openRow(index : number) {
+		if (loading.value) { return }
 		selectedIndex.value = index
 		disposeIndex.value = -1
 		disposeNote.value = ''
@@ -143,17 +146,20 @@
 	}
 
 	function closeRow() {
+		if (loading.value) { return }
 		selectedIndex.value = -1
 		disposeIndex.value = -1
 		disposeNote.value = ''
 	}
 
 	function pickDispose(index : number) {
+		if (loading.value) { return }
 		disposeIndex.value = index
 		errorTextValue.value = ''
 	}
 
 	function onDisposeNote(event : UniInputEvent) {
+		if (loading.value) { return }
 		disposeNote.value = event.detail.value
 	}
 
@@ -202,6 +208,7 @@
 			body.set('remarks', note)
 		}
 		loading.value = true
+		disposing.value = true
 		errorTextValue.value = ''
 		try {
 			await request({
@@ -209,11 +216,14 @@
 				method: 'PUT',
 				data: body
 			})
+			disposing.value = false
+			loading.value = false
 			closeRow()
 			await loadLedger()
 		} catch (err) {
 			errorTextValue.value = errorText(err)
 			loading.value = false
+			disposing.value = false
 		}
 	}
 
@@ -229,6 +239,7 @@
 	})
 
 	async function loadLedger() {
+		if (disposing.value) { return }
 		const mine = ticket + 1
 		ticket = mine
 		loading.value = true
@@ -254,6 +265,7 @@
 			return
 		}
 		loading.value = false
+		loadSettled.value = true
 	}
 
 	onShow(() => {

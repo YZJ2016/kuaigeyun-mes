@@ -1,26 +1,26 @@
 <template>
 	<view class="field-wrap">
 		<text class="label">{{ title }}</text>
+		<load-feedback :active="loading && !appending" :mode="loadSettled ? 'refresh' : 'initial'" />
 		<text class="hint">{{ selectedLabel.length > 0 ? selectedLabel : '尚未选择' }}</text>
-		<button class="btn-secondary" :disabled="disabled || loading" @click="toggle">{{ expanded ? '收起选择' : '选择' + title }}</button>
+		<action-button :label="expanded ? '收起选择' : '选择' + title" tone="secondary" :disabled="disabled || loading" @press="toggle" />
 		<view v-if="expanded">
 			<input class="field" v-model="keyword" :disabled="disabled || loading" placeholder="输入编码或名称" @confirm="search" />
-			<button class="btn-secondary" :disabled="disabled || loading" @click="search">查询</button>
-			<button v-if="kind == 'device'" class="btn-secondary" :disabled="disabled || loading" @click="scanDevice">扫码选择设备</button>
-			<button v-if="kind == 'scheme' && Number(equipmentId) > 0" class="btn-secondary" :disabled="disabled || loading" @click="bound">查看设备绑定方案</button>
+			<action-button label="查询" :disabled="disabled" :busy="loading" @press="search" />
+			<action-button label="扫码选择设备" tone="secondary" v-if="kind == 'device'" :disabled="disabled || loading" @press="scanDevice" />
+			<action-button label="查看设备绑定方案" tone="secondary" v-if="kind == 'scheme' && Number(equipmentId) > 0" :disabled="disabled || loading" @press="bound" />
 			<text v-if="note.length > 0" class="hint">{{ note }}</text>
 			<text v-if="error.length > 0" class="error">{{ error }}</text>
-			<button v-for="(row, index) in rows" :key="index" class="btn-secondary" :disabled="disabled || loading" @click="choose(index)">{{ label(row) }}</button>
-			<button v-if="rows.length < total" class="btn-secondary" :disabled="disabled || loading" @click="more">加载更多</button>
-		</view>
-		<view v-if="loading" class="loading-mask">
-			<view class="loading-card">
-				<text class="loading">加载中</text>
-			</view>
+			<selection-row v-for="(row, index) in rows" :key="fieldNumber(row, 'id')" :label="label(row)" :selected="fieldNumber(row, 'id') == selectedId" :disabled="disabled || loading" @choose="choose(index)" />
+			<load-feedback :active="loading && appending" mode="more" />
+			<action-button v-if="rows.length < total" label="加载更多" :disabled="disabled || loading" @press="more" />
 		</view>
 	</view>
 </template>
 <script setup lang="uts">
+	import LoadFeedback from '../../../shared/ui/load-feedback.uvue'
+	import SelectionRow from '../../../shared/ui/selection-row.uvue'
+	import ActionButton from '../../../shared/ui/action-button.uvue'
 	import { searchChoices, loadBoundSchemes } from '../selection.uts'
 	import { request } from '../../../shared/api/index.uts'
 	import { fieldText, fieldNumber, readRows } from '../../../shared/api/fields.uts'
@@ -32,9 +32,12 @@
 	const emit = defineEmits(['choose'])
 	const expanded = ref(false)
 	const loading = ref(false)
+	const loadSettled = ref(false)
+	const appending = ref(false)
 	const keyword = ref('')
 	const activeKeyword = ref('')
 	const selectedLabel = ref('')
+	const selectedId = ref(0)
 	const rows = ref<any[]>([])
 	const total = ref(0)
 	const note = ref('')
@@ -45,6 +48,7 @@
 		if (props.disabled || loading.value || index < 0 || index >= rows.value.length) { return }
 		const row = rows.value[index]
 		if (fieldNumber(row, 'id') <= 0 || (props.kind == 'device' && fieldText(row, 'uuid').length == 0)) { error.value = '记录无效，请重新查询'; return }
+		selectedId.value = fieldNumber(row, 'id')
 		selectedLabel.value = label(row)
 		emit('choose', row)
 		expanded.value = false
@@ -60,6 +64,7 @@
 		if (props.disabled) { return }
 		const mine = ticket + 1
 		ticket = mine
+		appending.value = append
 		loading.value = true
 		error.value = ''
 		note.value = ''
@@ -76,7 +81,7 @@
 			error.value = '查询未完成，请重试'
 		}
 		if (ticket != mine) { return }
-		loading.value = false
+		loading.value = false; loadSettled.value = true
 	}
 	async function search() { await load(false) }
 	async function more() { await load(true) }
@@ -84,6 +89,7 @@
 		if (props.disabled || Number(props.equipmentId) <= 0) { return }
 		const mine = ticket + 1
 		ticket = mine
+		appending.value = false
 		loading.value = true
 		error.value = ''; note.value = ''
 		try {
@@ -97,39 +103,42 @@
 			error.value = '绑定方案未能加载，请重试或查询方案'
 		}
 		if (ticket != mine) { return }
-		loading.value = false
+		loading.value = false; loadSettled.value = true
 	}
 	async function scanDevice() {
 		if (props.disabled) { return }
 		const mine = ticket + 1
 		ticket = mine
+		appending.value = false
 		loading.value = true; error.value = ''
 		try {
 			const code = await scan()
 			if (ticket != mine) { return }
 			if (code == null || String(code).trim().length == 0) {
-				loading.value = false
+				loading.value = false; loadSettled.value = true
 				return
 			}
 			const row = await request({ path: '/api/v1/apps/kuaizhizao/equipment/resolve-scan', method: 'GET', query: { q: String(code).trim() } as UTSJSONObject, body: null })
 			if (ticket != mine || props.disabled) { return }
 			if (fieldNumber(row, 'id') <= 0 || fieldText(row, 'uuid').length == 0) {
 				error.value = '未解析到设备'
-				loading.value = false
+				loading.value = false; loadSettled.value = true
 				return
 			}
-			selectedLabel.value = label(row); emit('choose', row); expanded.value = false
+			selectedId.value = fieldNumber(row, 'id')
+		selectedLabel.value = label(row); emit('choose', row); expanded.value = false
 		} catch (_err) {
 			if (ticket != mine) { return }
 			error.value = '扫码未完成，可输入编码或名称查询'
 		}
 		if (ticket != mine) { return }
-		loading.value = false
+		loading.value = false; loadSettled.value = true
 	}
 	watch(() : string => props.equipmentId, () => {
 		if (props.kind != 'scheme') { return }
 		ticket = ticket + 1
-		loading.value = false
+		loading.value = false; loadSettled.value = false
+		selectedId.value = 0
 		selectedLabel.value = ''; rows.value = []; total.value = 0; note.value = ''; error.value = ''; expanded.value = false
 	})
 </script>

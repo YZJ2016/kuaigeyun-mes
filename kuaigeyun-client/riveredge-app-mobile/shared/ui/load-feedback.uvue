@@ -1,0 +1,45 @@
+<template>
+	<view v-if="active && (visible || mode == 'initial' || mode == 'blocking')" :class="mode == 'blocking' ? 'feedback feedback-blocking' : 'feedback'">
+		<view v-if="mode == 'initial'" class="placeholder">
+			<view class="placeholder-line"></view><view class="placeholder-line placeholder-short"></view><view class="placeholder-line"></view>
+		</view>
+		<view v-if="visible" class="feedback-status">
+			<loading class="feedback-spinner" />
+			<text class="feedback-label">{{ label.length > 0 ? label : defaultLabel }}</text>
+		</view>
+		<text v-if="slow" class="feedback-note">响应较慢，正在等待服务器返回</text>
+	</view>
+</template>
+<script setup lang="uts">
+	const props = defineProps({ active: { type: Boolean, default: false }, mode: { type: String, default: 'refresh' }, label: { type: String, default: '' } })
+	const visible = ref(false)
+	const slow = ref(false)
+	let showTimer = 0
+	let slowTimer = 0
+	const defaultLabel = computed((): string => props.mode == 'more' ? '正在加载更多' : props.mode == 'refresh' ? '正在更新' : '正在加载')
+	function clearTimers() {
+		if (showTimer != 0) { clearTimeout(showTimer); showTimer = 0 }
+		if (slowTimer != 0) { clearTimeout(slowTimer); slowTimer = 0 }
+	}
+	function sync(active: boolean) {
+		clearTimers()
+		visible.value = false
+		slow.value = false
+		if (!active) { return }
+		showTimer = setTimeout(() => { showTimer = 0; if (props.active) { visible.value = true } }, 160)
+		slowTimer = setTimeout(() => { slowTimer = 0; if (props.active) { slow.value = true } }, 8000)
+	}
+	watch((): boolean => props.active, (active: boolean) => { sync(active) }, { immediate: true })
+	onUnmounted(() => { clearTimers() })
+</script>
+<style>
+	.feedback { padding: 8px 12px; flex-direction: column; align-items: center; }
+	.feedback-blocking { position: fixed; left: 0px; right: 0px; top: 48px; bottom: 0px; z-index: 20; background-color: rgba(248, 250, 252, 0.9); justify-content: center; }
+	.feedback-status { min-height: 32px; flex-direction: row; align-items: center; justify-content: center; }
+	.feedback-spinner { width: 20px; height: 20px; border-color: #9730E3; }
+	.feedback-label { margin-left: 8px; font-size: 14px; color: #475569; }
+	.feedback-note { margin-top: 8px; font-size: 13px; color: #475569; }
+	.placeholder { width: 100%; padding: 12px; }
+	.placeholder-line { height: 20px; width: 100%; margin-bottom: 16px; border-radius: 4px; background-color: #E2E8F0; }
+	.placeholder-short { width: 65%; }
+</style>

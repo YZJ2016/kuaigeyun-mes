@@ -11,12 +11,8 @@
 				<text class="avatar-letter">{{ initial }}</text>
 			</view>
 			<view class="avatar-actions">
-				<view class="btn-secondary" hover-class="pressed" @click="onPick">
-					<text class="btn-label-secondary">{{ hasAvatar ? '更换头像' : '选择头像' }}</text>
-				</view>
-				<view v-if="hasAvatar" class="btn-secondary" hover-class="pressed" @click="onClear">
-					<text class="btn-label-secondary">移除头像</text>
-				</view>
+				<action-button :label="hasAvatar ? '更换头像' : '选择头像'" tone="secondary" @press="onPick" />
+				<action-button label="移除头像" tone="secondary" v-if="hasAvatar" @press="onClear" />
 			</view>
 		</view>
 		<text class="label">姓名</text>
@@ -27,9 +23,7 @@
 		<input class="field" v-model="phone" />
 		<text class="label">邮箱</text>
 		<input class="field" v-model="email" />
-		<view :class="busy ? 'btn-primary is-disabled' : 'btn-primary'" hover-class="pressed" @click="onSave">
-			<text class="btn-label">保存</text>
-		</view>
+		<action-button label="保存" tone="primary" @press="onSave" :disabled="busy" />
 	</scroll-view>
 		<view v-if="loading" class="loading-mask">
 			<view class="loading-card">
@@ -40,6 +34,7 @@
 </template>
 
 <script setup lang="uts">
+	import ActionButton from '../../shared/ui/action-button.uvue'
 	import HomeLink from '../../shared/ui/home-link.uvue'
 	import { apiGet, apiRequest } from '../../shared/api/http.uts'
 	import { fieldText } from '../../shared/api/fields.uts'

@@ -2,15 +2,16 @@
 	<view class="page-shell">
 		<home-link />
 	<scroll-view class="page" direction="vertical">
+		<load-feedback :active="loading || detailLoading" :mode="detailLoading || loadSettled ? 'refresh' : 'initial'" :label="detailLoading ? '正在读取故障详情' : ''" />
 		<view class="card">
 			<text class="title">报修维修</text>
-			<button :class="busy ? 'btn-secondary is-disabled' : 'btn-secondary'" :disabled="busy" @click="reload">刷新</button>
+			<action-button label="刷新" tone="secondary" :disabled="loading || detailLoading || busy" @press="reload" />
 			<text v-if="queryUuid.length > 0" class="hint">以下为该设备的故障</text>
 			<text v-if="!loading && rows.length == 0 && errorText.length == 0" class="empty">暂无记录</text>
-			<view class="item" hover-class="pressed" v-for="item in rows" :key="item.rowKey" @click="openFault(item.faultUuid)">
+			<action-card v-for="item in rows" :key="item.rowKey" @press="openFault(item.faultUuid)" :disabled="loading || detailLoading || busy" variant="row">
 				<text class="item-title">{{ item.title }}</text>
 				<text class="hint">{{ item.detail }}</text>
-			</view>
+			</action-card>
 		</view>
 		<view class="card" v-if="openedText.length > 0">
 			<text class="title">故障详情</text>
@@ -18,50 +19,49 @@
 			<view v-if="completeUuid.length > 0">
 				<text class="hint">维修结果：{{ repairResult.length > 0 ? repairResult : '请选择' }}</text>
 				<view class="choices">
-					<button class="btn-chip" @click="chooseResult(0)">成功</button>
-					<button class="btn-chip" @click="chooseResult(1)">失败</button>
-					<button class="btn-chip" @click="chooseResult(2)">部分成功</button>
+					<choice-button label="成功" :selected="repairResult == repairResults[0]" @choose="chooseResult(0)" :disabled="loading || detailLoading || busy" />
+					<choice-button label="失败" :selected="repairResult == repairResults[1]" @choose="chooseResult(1)" :disabled="loading || detailLoading || busy" />
+					<choice-button label="部分成功" :selected="repairResult == repairResults[2]" @choose="chooseResult(2)" :disabled="loading || detailLoading || busy" />
 				</view>
-				<input class="field" v-model="faultCauseText" placeholder="故障原因" />
-				<input class="field" v-model="repairContentText" placeholder="维修内容" />
-				<button :class="busy ? 'btn-primary is-disabled' : 'btn-primary'" :disabled="busy" @click="submitComplete">填写维修结果</button>
+				<input class="field" v-model="faultCauseText" placeholder="故障原因"  :disabled="loading || detailLoading || busy" />
+				<input class="field" v-model="repairContentText" placeholder="维修内容"  :disabled="loading || detailLoading || busy" />
+				<action-button label="填写维修结果" tone="primary" :disabled="loading || detailLoading" :busy="busy" busy-label="提交中" @press="submitComplete" />
 			</view>
 			<text v-else-if="openedPending" class="hint">这条故障还没有可完工的维修单</text>
 		</view>
 		<view class="card">
 			<text class="title">新建故障</text>
 			<text v-if="equipmentLabel.length > 0" class="hint">{{ equipmentLabel }}</text>
-			<master-picker kind="device" title="故障设备" :disabled="busy" @choose="chooseEquipment" />
+			<master-picker kind="device" title="故障设备" :disabled="loading || detailLoading || busy" @choose="chooseEquipment" />
 			<text class="hint">故障类型：{{ faultType }}</text>
 			<view class="choices">
-				<button class="btn-chip" @click="chooseType(0)">机械故障</button>
-				<button class="btn-chip" @click="chooseType(1)">电气故障</button>
-				<button class="btn-chip" @click="chooseType(2)">软件故障</button>
-				<button class="btn-chip" @click="chooseType(3)">其他</button>
+				<choice-button label="机械故障" :selected="faultType == faultTypes[0]" @choose="chooseType(0)" :disabled="loading || detailLoading || busy" />
+				<choice-button label="电气故障" :selected="faultType == faultTypes[1]" @choose="chooseType(1)" :disabled="loading || detailLoading || busy" />
+				<choice-button label="软件故障" :selected="faultType == faultTypes[2]" @choose="chooseType(2)" :disabled="loading || detailLoading || busy" />
+				<choice-button label="其他" :selected="faultType == faultTypes[3]" @choose="chooseType(3)" :disabled="loading || detailLoading || busy" />
 			</view>
 			<text class="hint">故障级别：{{ faultLevel }}</text>
 			<view class="choices">
-				<button class="btn-chip" @click="chooseLevel(0)">轻微</button>
-				<button class="btn-chip" @click="chooseLevel(1)">一般</button>
-				<button class="btn-chip" @click="chooseLevel(2)">严重</button>
-				<button class="btn-chip" @click="chooseLevel(3)">紧急</button>
+				<choice-button label="轻微" :selected="faultLevel == faultLevels[0]" @choose="chooseLevel(0)" :disabled="loading || detailLoading || busy" />
+				<choice-button label="一般" :selected="faultLevel == faultLevels[1]" @choose="chooseLevel(1)" :disabled="loading || detailLoading || busy" />
+				<choice-button label="严重" :selected="faultLevel == faultLevels[2]" @choose="chooseLevel(2)" :disabled="loading || detailLoading || busy" />
+				<choice-button label="紧急" :selected="faultLevel == faultLevels[3]" @choose="chooseLevel(3)" :disabled="loading || detailLoading || busy" />
 			</view>
-			<input class="field" v-model="faultDescriptionText" placeholder="故障描述" />
-			<input class="field" v-model="remarkText" placeholder="备注（可空）" />
-			<button :class="busy ? 'btn-primary is-disabled' : 'btn-primary'" :disabled="busy" @click="submitCreate">新建</button>
+			<input class="field" v-model="faultDescriptionText" placeholder="故障描述"  :disabled="loading || detailLoading || busy" />
+			<input class="field" v-model="remarkText" placeholder="备注（可空）"  :disabled="loading || detailLoading || busy" />
+			<action-button label="新建" tone="primary" :disabled="loading || detailLoading" :busy="busy" busy-label="提交中" @press="submitCreate" />
 			<text v-if="messageText.length > 0" class="hint">{{ messageText }}</text>
 			<text v-if="errorText.length > 0" class="error">{{ errorText }}</text>
 		</view>
 	</scroll-view>
-		<view v-if="loading" class="loading-mask">
-			<view class="loading-card">
-				<text class="loading">加载中</text>
-			</view>
-		</view>
 	</view>
 </template>
 
 <script setup lang="uts">
+	import LoadFeedback from '../../../shared/ui/load-feedback.uvue'
+	import ActionCard from '../../../shared/ui/action-card.uvue'
+	import ChoiceButton from '../../../shared/ui/choice-button.uvue'
+	import ActionButton from '../../../shared/ui/action-button.uvue'
 	import HomeLink from '../../../shared/ui/home-link.uvue'
 	import MasterPicker from '../components/master-picker.uvue'
 	import { request } from '../../../shared/api/index.uts'
@@ -81,6 +81,8 @@
 
 	const busy = ref(false)
 	const loading = ref(false)
+	const detailLoading = ref(false)
+	const loadSettled = ref(false)
 	let ticket = 0
 	const queryUuid = ref('')
 	const openedText = ref('')
@@ -180,14 +182,16 @@
 		if (ticket != mine) {
 			return
 		}
-		loading.value = false
+		loading.value = false; loadSettled.value = true
 	}
 
 	async function openFault(faultUuid: string): Promise<void> {
+		if (loading.value || busy.value || detailLoading.value) { return }
 		if (faultUuid.length == 0) {
 			errorText.value = '这条故障没有单号'
 			return
 		}
+		detailLoading.value = true
 		errorText.value = ''
 		try {
 			const raw = await request({
@@ -216,6 +220,8 @@
 			}
 		} catch (e) {
 			errorText.value = readError(e)
+		} finally {
+			detailLoading.value = false
 		}
 	}
 

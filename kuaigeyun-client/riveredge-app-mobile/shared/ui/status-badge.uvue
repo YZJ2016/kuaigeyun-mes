@@ -1,0 +1,11 @@
+<template>
+	<uni-badge-view :text="value" :badge-style="badgeStyle" :always-wrap-with-content="true" />
+</template>
+<script setup lang="uts">
+	import UniBadgeView from '../../uni_modules/uni-badge-view/components/uni-badge-view/uni-badge-view.uvue'
+	const props = defineProps({ value: { type: String, default: '' }, tone: { type: String, default: 'warning' } })
+	const badgeStyle = computed(() : string => {
+		const colors = props.tone == 'danger' ? 'background-color: #FEE2E2; color: #991B1B;' : 'background-color: #FEF3C7; color: #92400E;'
+		return colors + 'font-size: 14px; padding: 4px 10px; border-radius: 8px;'
+	})
+</script>
