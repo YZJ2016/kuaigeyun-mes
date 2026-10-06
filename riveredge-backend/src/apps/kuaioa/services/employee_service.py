@@ -39,7 +39,7 @@ from infra.domain.security.reserved_username import (
 from infra.models.user import User
 
 _ALLOWED_EMPLOYMENT = frozenset({"formal", "temp", "labor"})
-_ALLOWED_PAY = frozenset({"piece", "time", "line"})
+_ALLOWED_PAY = frozenset({"piece", "time", "line", "month"})
 _ALLOWED_STATUS = frozenset({"active", "left"})
 
 

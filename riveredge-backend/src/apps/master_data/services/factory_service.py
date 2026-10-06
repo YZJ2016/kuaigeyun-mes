@@ -5,6 +5,10 @@
 """
 
 from typing import List, Optional, TYPE_CHECKING
+from uuid import uuid4
+
+from loguru import logger
+from tortoise import connections
 from tortoise.exceptions import IntegrityError
 from tortoise.models import Q
 
@@ -51,6 +55,55 @@ class FactoryService:
         if plant:
             return resp.model_copy(update={"plant_code": plant.code, "plant_name": plant.name})
         return resp
+
+    @staticmethod
+    async def _find_workshop_by_code(
+        tenant_id: int,
+        code: str,
+        *,
+        deleted: Optional[bool] = None,
+    ) -> Optional[Workshop]:
+        """按租户 + 编码查找车间。先精确匹配，再大小写不敏感精确匹配（禁止模糊包含）。"""
+        query = Workshop.filter(tenant_id=tenant_id)
+        if deleted is True:
+            query = query.filter(deleted_at__isnull=False)
+        elif deleted is False:
+            query = query.filter(deleted_at__isnull=True)
+        found = await query.filter(code=code).first()
+        if found:
+            return found
+        return await query.filter(code__iexact=code).first()
+
+    @staticmethod
+    async def _revive_workshop(
+        workshop: Workshop,
+        data: WorkshopCreate,
+        current_user: Optional[User] = None,
+    ) -> WorkshopResponse:
+        workshop.deleted_at = None
+        workshop.code = data.code
+        workshop.name = data.name
+        workshop.description = data.description
+        workshop.plant_id = data.plant_id
+        workshop.is_active = data.is_active
+        if current_user:
+            apply_restore_audit(workshop, current_user)
+        await workshop.save()
+        return await FactoryService._workshop_to_response(workshop)
+
+    @staticmethod
+    async def _ensure_workshop_id_sequence() -> None:
+        """校准自增序列到 MAX(id)，避免造数写入显式 id 后新建撞主键。"""
+        conn = connections.get("default")
+        await conn.execute_query(
+            """
+            SELECT setval(
+              'apps_master_data_workshops_id_seq',
+              COALESCE((SELECT MAX(id) FROM apps_master_data_workshops), 1),
+              EXISTS (SELECT 1 FROM apps_master_data_workshops)
+            )
+            """
+        )
 
     @staticmethod
     async def _workstation_to_response(ws: Workstation) -> WorkstationResponse:
@@ -466,126 +519,49 @@ class FactoryService:
         Raises:
             ValidationError: 当编码已存在时抛出
         """
-        # 检查编码是否已存在（包括软删除的记录）
-        # 先尝试精确匹配
-        existing_active = await Workshop.filter(
-            tenant_id=tenant_id,
-            code=data.code,
-            deleted_at__isnull=True
-        ).first()
-        
+        existing_active = await FactoryService._find_workshop_by_code(
+            tenant_id, data.code, deleted=False
+        )
         if existing_active:
             raise ValidationError(f"车间编码 {data.code} 已存在")
-        
-        # 检查是否存在相同编码的软删除记录（精确匹配）
-        existing_deleted = await Workshop.filter(
-            tenant_id=tenant_id,
-            code=data.code,
-            deleted_at__isnull=False
-        ).first()
-        
+
+        existing_deleted = await FactoryService._find_workshop_by_code(
+            tenant_id, data.code, deleted=True
+        )
         if existing_deleted:
-            # 恢复软删除的记录，更新其数据
-            existing_deleted.deleted_at = None
-            existing_deleted.name = data.name
-            existing_deleted.description = data.description
-            existing_deleted.plant_id = data.plant_id if hasattr(data, 'plant_id') else None
-            existing_deleted.is_active = data.is_active if hasattr(data, 'is_active') else True
-            if current_user:
-                apply_restore_audit(existing_deleted, current_user)
-            await existing_deleted.save()
-            return await FactoryService._workshop_to_response(existing_deleted)
-        
-        # 如果不区分大小写的匹配（防止编码大小写不一致的问题）
-        code_upper = data.code.upper() if data.code else None
-        if code_upper:
-            # 查询所有可能的匹配（使用模糊查询，然后手动过滤）
-            all_possible = await Workshop.filter(
-                tenant_id=tenant_id,
-                code__icontains=code_upper
-            ).all()
-            
-            # 手动精确匹配（不区分大小写）
-            for record in all_possible:
-                if record.code and record.code.upper() == code_upper:
-                    if record.deleted_at is None:
-                        raise ValidationError(f"车间编码 {data.code} 已存在（编码大小写不一致）")
-                    else:
-                        # 找到软删除记录，恢复它
-                        existing_deleted = record
-                        existing_deleted.deleted_at = None
-                        existing_deleted.name = data.name
-                        existing_deleted.description = data.description
-                        existing_deleted.plant_id = data.plant_id if hasattr(data, 'plant_id') else None
-                        existing_deleted.is_active = data.is_active if hasattr(data, 'is_active') else True
-                        if current_user:
-                            apply_restore_audit(existing_deleted, current_user)
-                        # 统一使用新传入的编码
-                        existing_deleted.code = data.code
-                        await existing_deleted.save()
-                        return await FactoryService._workshop_to_response(existing_deleted)
-        
-        # 创建新车间
+            return await FactoryService._revive_workshop(
+                existing_deleted, data, current_user
+            )
+
         create_payload = data.model_dump(by_alias=False) if hasattr(data, "model_dump") else data.dict()
+        create_payload.pop("id", None)
+        create_payload.pop("uuid", None)
         if current_user:
             apply_create_audit(create_payload, current_user)
+        create_payload["uuid"] = str(uuid4())
+
+        await FactoryService._ensure_workshop_id_sequence()
         try:
             workshop = await Workshop.create(
                 tenant_id=tenant_id,
                 **create_payload
             )
         except IntegrityError as e:
-            # 捕获数据库唯一约束或主键冲突错误
             error_str = str(e).lower()
-            if "unique" in error_str or "duplicate" in error_str or "pkey" in error_str:
-                # 再次检查是否有软删除记录（可能在并发情况下被创建）
-                # 先尝试精确匹配
-                existing_deleted_retry = await Workshop.filter(
-                    tenant_id=tenant_id,
-                    code=data.code,
-                    deleted_at__isnull=False
-                ).first()
-                
+            logger.exception("创建车间失败 IntegrityError tenant_id={} code={}: {}", tenant_id, data.code, e)
+            if "idx_apps_master_data_workshops_tenant_code" in error_str:
+                existing_deleted_retry = await FactoryService._find_workshop_by_code(
+                    tenant_id, data.code, deleted=True
+                )
                 if existing_deleted_retry:
-                    # 恢复软删除的记录
-                    existing_deleted_retry.deleted_at = None
-                    existing_deleted_retry.name = data.name
-                    existing_deleted_retry.description = data.description
-                    existing_deleted_retry.plant_id = data.plant_id if hasattr(data, 'plant_id') else None
-                    existing_deleted_retry.is_active = data.is_active if hasattr(data, 'is_active') else True
-                    if current_user:
-                        apply_restore_audit(existing_deleted_retry, current_user)
-                    await existing_deleted_retry.save()
-                    return await FactoryService._workshop_to_response(existing_deleted_retry)
-                
-                # 如果不区分大小写的匹配
-                if code_upper:
-                    all_possible_retry = await Workshop.filter(
-                        tenant_id=tenant_id,
-                        code__icontains=code_upper
-                    ).all()
-                    
-                    for record in all_possible_retry:
-                        if record.code and record.code.upper() == code_upper:
-                            if record.deleted_at is not None:
-                                # 恢复软删除的记录
-                                record.deleted_at = None
-                                record.name = data.name
-                                record.description = data.description
-                                record.plant_id = data.plant_id if hasattr(data, 'plant_id') else None
-                                record.is_active = data.is_active if hasattr(data, 'is_active') else True
-                                if current_user:
-                                    apply_restore_audit(record, current_user)
-                                # 统一使用新传入的编码
-                                record.code = data.code
-                                await record.save()
-                                return await FactoryService._workshop_to_response(record)
-                            else:
-                                raise ValidationError(f"车间编码 {data.code} 已存在")
-                
-                raise ValidationError(f"车间编码 {data.code} 已存在（可能已被软删除，请检查）")
+                    return await FactoryService._revive_workshop(
+                        existing_deleted_retry, data, current_user
+                    )
+                raise ValidationError(f"车间编码 {data.code} 已存在")
+            if "apps_master_data_workshops_pkey" in error_str:
+                raise ValidationError("车间保存失败：主键冲突，请再保存一次")
             raise
-        
+
         return await FactoryService._workshop_to_response(workshop)
     
     @staticmethod
@@ -726,32 +702,36 @@ class FactoryService:
         if not workshop:
             raise NotFoundError(f"车间 {workshop_uuid} 不存在")
         
-        # 如果更新编码，检查是否已存在
-        if data.code and data.code != workshop.code:
-            existing = await Workshop.filter(
-                tenant_id=tenant_id,
-                code=data.code,
-                deleted_at__isnull=True
-            ).first()
-            
-            if existing:
+        if data.code and data.code.upper() != (workshop.code or "").upper():
+            existing = await FactoryService._find_workshop_by_code(
+                tenant_id, data.code, deleted=False
+            )
+            if existing and existing.uuid != workshop.uuid:
                 raise ValidationError(f"车间编码 {data.code} 已存在")
-        
-        # 更新字段
+
         update_data = data.model_dump(exclude_unset=True, by_alias=False) if hasattr(data, "model_dump") else data.dict(exclude_unset=True)
+        update_data.pop("id", None)
+        update_data.pop("uuid", None)
         for key, value in update_data.items():
             setattr(workshop, key, value)
         if current_user:
             apply_update_audit(workshop, current_user)
-        
+
         try:
             await workshop.save()
         except IntegrityError as e:
-            # 捕获数据库唯一约束错误，提供友好提示
-            if "unique" in str(e).lower() or "duplicate" in str(e).lower():
-                raise ValidationError(f"车间编码 {data.code} 已存在（可能已被软删除，请检查）")
+            error_str = str(e).lower()
+            logger.exception(
+                "更新车间失败 IntegrityError tenant_id={} uuid={} code={}: {}",
+                tenant_id,
+                workshop_uuid,
+                data.code,
+                e,
+            )
+            if "idx_apps_master_data_workshops_tenant_code" in error_str:
+                raise ValidationError(f"车间编码 {data.code} 已存在")
             raise
-        
+
         return await FactoryService._workshop_to_response(workshop)
     
     @staticmethod

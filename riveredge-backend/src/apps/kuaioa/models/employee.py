@@ -18,7 +18,7 @@ class KuaioaEmployeeProfile(BaseModel):
         max_length=20, default="formal", description="用工类型 formal/temp"
     )
     pay_method = fields.CharField(
-        max_length=20, default="time", description="计薪方式 piece/time/line"
+        max_length=20, default="time", description="计薪方式 piece/time/line/month"
     )
     hourly_rate = fields.DecimalField(
         max_digits=12, decimal_places=4, null=True, description="计时单价"

@@ -453,6 +453,145 @@ class LoginLogService:
         )
 
     @staticmethod
+    async def unify_login_log_ip_geo_from_history(
+        *,
+        tenant_id: int,
+        batch_size: int = 200,
+        lookup_concurrency: Optional[int] = None,
+    ) -> dict[str, int]:
+        """
+        按 IP 对齐历史登录地点与坐标（写路径真源）。
+
+        同 IP 多条文案时取规范地点（优先「中国 …」+ 出现次数），坐标取自带该地点的成对行；
+        仅当该 IP 完全无可用坐标时才外网解析一次。不按行混源拼凑。
+        """
+        from core.utils.ip_parser import (
+            _format_location_from_detail,
+            get_ip_location_detail,
+            is_private_ip,
+            normalize_login_location_label,
+            pick_canonical_login_location,
+        )
+
+        if tenant_id is None or int(tenant_id) <= 0:
+            raise ValueError("unify_login_log_ip_geo_from_history 须指定有效 tenant_id")
+
+        tid = int(tenant_id)
+        ips = await (
+            LoginLog.filter(tenant_id=tid)
+            .distinct()
+            .values_list("login_ip", flat=True)
+        )
+        unique_ips = [str(ip).strip() for ip in ips if ip and str(ip).strip()]
+        updated_rows = 0
+        unified_ips = 0
+        skipped_ips = 0
+        api_ips = 0
+
+        concurrency = lookup_concurrency or LoginLogService._BACKFILL_IP_LOOKUP_CONCURRENCY
+        sem = asyncio.Semaphore(concurrency)
+
+        async def _unify_ip(ip: str) -> None:
+            nonlocal updated_rows, unified_ips, skipped_ips, api_ips
+            if is_private_ip(ip):
+                skipped_ips += 1
+                return
+
+            rows = await (
+                LoginLog.filter(tenant_id=tid, login_ip=ip)
+                .order_by("-created_at")
+                .only("login_location", "login_latitude", "login_longitude")
+            )
+            if not rows:
+                skipped_ips += 1
+                return
+
+            labels = [
+                str(r.login_location).strip()
+                for r in rows
+                if r.login_location and str(r.login_location).strip()
+            ]
+            canonical = pick_canonical_login_location(labels)
+
+            lat: Optional[float] = None
+            lon: Optional[float] = None
+            if canonical:
+                for r in rows:
+                    if not r.login_location or r.login_latitude is None or r.login_longitude is None:
+                        continue
+                    label = normalize_login_location_label(str(r.login_location).strip())
+                    if label == canonical:
+                        lat = float(r.login_latitude)
+                        lon = float(r.login_longitude)
+                        break
+            if lat is None or lon is None:
+                for r in rows:
+                    if r.login_latitude is not None and r.login_longitude is not None:
+                        lat = float(r.login_latitude)
+                        lon = float(r.login_longitude)
+                        break
+
+            if (lat is None or lon is None) or not canonical:
+                async with sem:
+                    detail = await get_ip_location_detail(ip, timeout=2.5)
+                if detail:
+                    api_ips += 1
+                    if not canonical:
+                        label = _format_location_from_detail(detail)
+                        if label:
+                            canonical = normalize_login_location_label(label)
+                    if lat is None or lon is None:
+                        lat_raw = detail.get("lat")
+                        lon_raw = detail.get("lon")
+                        if lat_raw is not None and lon_raw is not None:
+                            lat = float(lat_raw)
+                            lon = float(lon_raw)
+
+            if not canonical or lat is None or lon is None:
+                skipped_ips += 1
+                return
+
+            # 已全部一致则跳过写库
+            needs_update = False
+            for r in rows:
+                loc = normalize_login_location_label(str(r.login_location).strip()) if r.login_location else None
+                if loc != canonical:
+                    needs_update = True
+                    break
+                if r.login_latitude is None or r.login_longitude is None:
+                    needs_update = True
+                    break
+                if abs(float(r.login_latitude) - lat) > 1e-6 or abs(float(r.login_longitude) - lon) > 1e-6:
+                    needs_update = True
+                    break
+            if not needs_update:
+                unified_ips += 1
+                return
+
+            count = await LoginLog.filter(tenant_id=tid, login_ip=ip).update(
+                login_location=canonical,
+                login_latitude=float(lat),
+                login_longitude=float(lon),
+            )
+            if count:
+                updated_rows += int(count)
+                unified_ips += 1
+
+        for offset in range(0, len(unique_ips), batch_size):
+            batch = unique_ips[offset : offset + batch_size]
+            await asyncio.gather(*[_unify_ip(ip) for ip in batch])
+            if offset + batch_size < len(unique_ips):
+                await asyncio.sleep(0.35)
+
+        return {
+            "candidate_ips": len(unique_ips),
+            "unified_ips": unified_ips,
+            "api_ips": api_ips,
+            "skipped_ips": skipped_ips,
+            "updated_rows": updated_rows,
+        }
+
+    @staticmethod
     async def backfill_login_log_ip_coordinates(
         *,
         tenant_id: Optional[int] = None,

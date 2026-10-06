@@ -58,6 +58,27 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
     descriptionKey: 'pages.dashboard.updateLog.entries.inventory-sync-empty-batch-no-r01.description',
   },
   {
+    id: 'oa-hire-form-pay-month-r01',
+    date: '2026-10-06',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.oa-hire-form-pay-month-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.oa-hire-form-pay-month-r01.description',
+  },
+  {
+    id: 'workshop-create-unique-pkey-r01',
+    date: '2026-10-06',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.workshop-create-unique-pkey-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.workshop-create-unique-pkey-r01.description',
+  },
+  {
+    id: 'login-log-ip-location-sticky-r01',
+    date: '2026-10-06',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.login-log-ip-location-sticky-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.login-log-ip-location-sticky-r01.description',
+  },
+  {
     id: 'im-module-notify-dedupe-r01',
     date: '2026-10-05',
     type: 'fix',

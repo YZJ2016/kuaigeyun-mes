@@ -74,6 +74,16 @@ export function resolveOaEmploymentTypeLabel(
   return hit?.label ?? (code || '—');
 }
 
+/** 员工档案计薪方式（表单 / 导入共用） */
+export function buildOaPayMethodOptions(t: TFunction) {
+  return [
+    { label: t('app.kuaioa.employee.payMethod.piece'), value: 'piece' },
+    { label: t('app.kuaioa.employee.payMethod.time'), value: 'time' },
+    { label: t('app.kuaioa.employee.payMethod.line'), value: 'line' },
+    { label: t('app.kuaioa.employee.payMethod.month'), value: 'month' },
+  ];
+}
+
 export function buildLicenseTypeOptions(t: TFunction) {
   return [
     { label: t('app.kuaioa.license.type.vehicle_group_insurance'), value: 'vehicle_group_insurance' },
