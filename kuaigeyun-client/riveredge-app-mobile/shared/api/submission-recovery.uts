@@ -194,7 +194,8 @@ export function listPendingSubmissions() : Array<SubmissionSnapshot> {
 function corruptAction(key : string, prefix : string) : string {
 	const encoded = key.substring(prefix.length)
 	try {
-		return decodeURIComponent(encoded)
+		const decoded = decodeURIComponent(encoded)
+		return decoded != null ? decoded : encoded
 	} catch (_err) {
 		return encoded
 	}
