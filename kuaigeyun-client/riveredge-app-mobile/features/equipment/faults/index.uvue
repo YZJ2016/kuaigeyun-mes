@@ -1,38 +1,50 @@
 <template>
 	<view class="page-shell">
-		<home-link />
-	<scroll-view class="page" direction="vertical">
-		<load-feedback :active="loading || detailLoading" :mode="detailLoading || loadSettled ? 'refresh' : 'initial'" :label="detailLoading ? '正在读取故障详情' : ''" />
+		<home-link :hold-back="needsGuard" @back="leaveBack" :hold-home="needsGuard" @home="leaveHome" />
+	<scroll-view class="page" direction="vertical" :scroll-into-view="scrollTarget">
+		<load-feedback :active="detailLoading || (loading && loadMode != 'more')" :mode="detailLoading ? 'refresh' : loadMode" :label="detailLoading ? '正在读取故障详情' : ''" />
 		<view class="card">
 			<text class="title">报修维修</text>
 			<action-button label="刷新" tone="secondary" :disabled="loading || detailLoading || busy" @press="reload" />
 			<text v-if="queryUuid.length > 0" class="hint">以下为该设备的故障</text>
+			<text v-if="errorText.length > 0" class="error">{{ errorText }}</text>
 			<text v-if="!loading && rows.length == 0 && errorText.length == 0" class="empty">暂无记录</text>
 			<action-card v-for="item in rows" :key="item.rowKey" @press="openFault(item.faultUuid)" :disabled="loading || detailLoading || busy" variant="row">
 				<text class="item-title">{{ item.title }}</text>
 				<text class="hint">{{ item.detail }}</text>
 			</action-card>
+			<text v-if="total > 0" class="hint">已显示 {{ rows.length }} / {{ total }} 条</text>
+			<load-feedback :active="loading && loadMode == 'more'" mode="more" />
+			<action-button label="加载更多" tone="secondary" v-if="rows.length < total" :disabled="loading || detailLoading || busy" @press="loadMore" />
 		</view>
 		<view class="card" v-if="openedText.length > 0">
 			<text class="title">故障详情</text>
 			<text class="hint">{{ openedText }}</text>
 			<view v-if="completeUuid.length > 0">
-				<text class="hint">维修结果：{{ repairResult.length > 0 ? repairResult : '请选择' }}</text>
+				<text class="hint" id="fault-field-result">维修结果：{{ repairResult.length > 0 ? repairResult : '请选择' }}</text>
 				<view class="choices">
 					<choice-button label="成功" :selected="repairResult == repairResults[0]" @choose="chooseResult(0)" :disabled="loading || detailLoading || busy" />
 					<choice-button label="失败" :selected="repairResult == repairResults[1]" @choose="chooseResult(1)" :disabled="loading || detailLoading || busy" />
 					<choice-button label="部分成功" :selected="repairResult == repairResults[2]" @choose="chooseResult(2)" :disabled="loading || detailLoading || busy" />
 				</view>
-				<input class="field" v-model="faultCauseText" placeholder="故障原因"  :disabled="loading || detailLoading || busy" />
-				<input class="field" v-model="repairContentText" placeholder="维修内容"  :disabled="loading || detailLoading || busy" />
+				<text v-if="resultError.length > 0" class="error">{{ resultError }}</text>
+				<text class="label">故障原因</text>
+				<input class="field" id="fault-field-cause" :value="faultCauseText" @input="onFaultCause" placeholder="故障原因"  :disabled="loading || detailLoading || busy" />
+				<text v-if="causeError.length > 0" class="error">{{ causeError }}</text>
+				<text class="label">维修内容</text>
+				<textarea class="field field-area" id="fault-field-content" :value="repairContentText" @input="onRepairContent" placeholder="维修内容"  :disabled="loading || detailLoading || busy" />
+				<text v-if="contentError.length > 0" class="error">{{ contentError }}</text>
 				<action-button label="填写维修结果" tone="primary" :disabled="loading || detailLoading" :busy="busy" busy-label="提交中" @press="submitComplete" />
+				<text v-if="formError.length > 0" class="error">{{ formError }}</text>
 			</view>
 			<text v-else-if="openedPending" class="hint">这条故障还没有可完工的维修单</text>
 		</view>
 		<view class="card">
 			<text class="title">新建故障</text>
 			<text v-if="equipmentLabel.length > 0" class="hint">{{ equipmentLabel }}</text>
+			<text class="label" id="fault-field-equipment">故障设备</text>
 			<master-picker kind="device" title="故障设备" :disabled="loading || detailLoading || busy" @choose="chooseEquipment" />
+			<text v-if="equipmentError.length > 0" class="error">{{ equipmentError }}</text>
 			<text class="hint">故障类型：{{ faultType }}</text>
 			<view class="choices">
 				<choice-button label="机械故障" :selected="faultType == faultTypes[0]" @choose="chooseType(0)" :disabled="loading || detailLoading || busy" />
@@ -47,11 +59,14 @@
 				<choice-button label="严重" :selected="faultLevel == faultLevels[2]" @choose="chooseLevel(2)" :disabled="loading || detailLoading || busy" />
 				<choice-button label="紧急" :selected="faultLevel == faultLevels[3]" @choose="chooseLevel(3)" :disabled="loading || detailLoading || busy" />
 			</view>
-			<input class="field" v-model="faultDescriptionText" placeholder="故障描述"  :disabled="loading || detailLoading || busy" />
-			<input class="field" v-model="remarkText" placeholder="备注（可空）"  :disabled="loading || detailLoading || busy" />
+			<text class="label">故障描述</text>
+			<textarea class="field field-area" id="fault-field-description" :value="faultDescriptionText" @input="onFaultDescription" placeholder="故障描述"  :disabled="loading || detailLoading || busy" />
+			<text v-if="descriptionError.length > 0" class="error">{{ descriptionError }}</text>
+			<text class="label">备注（可空）</text>
+			<textarea class="field field-area" v-model="remarkText" placeholder="备注"  :disabled="loading || detailLoading || busy" />
 			<action-button label="新建" tone="primary" :disabled="loading || detailLoading" :busy="busy" busy-label="提交中" @press="submitCreate" />
 			<text v-if="messageText.length > 0" class="hint">{{ messageText }}</text>
-			<text v-if="errorText.length > 0" class="error">{{ errorText }}</text>
+			<text v-if="formError.length > 0" class="error">{{ formError }}</text>
 		</view>
 	</scroll-view>
 	</view>
@@ -65,7 +80,7 @@
 	import HomeLink from '../../../shared/ui/home-link.uvue'
 	import MasterPicker from '../components/master-picker.uvue'
 	import { request } from '../../../shared/api/index.uts'
-	import { asJsonObject, fieldText, readRows } from '../../../shared/api/fields.uts'
+	import { asJsonObject, fieldInt, fieldText, readRows } from '../../../shared/api/fields.uts'
 	import { joinParts, readError } from '../json-text.uts'
 
 	type ListRow = {
@@ -83,6 +98,9 @@
 	const loading = ref(false)
 	const detailLoading = ref(false)
 	const loadSettled = ref(false)
+	const loadMode = ref('initial')
+	const skip = ref(0)
+	const total = ref(0)
 	let ticket = 0
 	const queryUuid = ref('')
 	const openedText = ref('')
@@ -93,11 +111,13 @@
 	const repairContentText = ref('')
 	const rows = ref<Array<ListRow>>([])
 	const equipmentUuidText = ref('')
+	const prefilledUuid = ref('')
 	const equipmentLabel = ref('')
 	function chooseEquipment(row : any) {
 		if (busy.value) { return }
 		equipmentUuidText.value = fieldText(row, 'uuid')
 		equipmentLabel.value = fieldText(row, 'code') + ' ' + fieldText(row, 'name')
+		equipmentError.value = ''
 	}
 	const faultType = ref('机械故障')
 	const faultLevel = ref('一般')
@@ -105,6 +125,31 @@
 	const remarkText = ref('')
 	const messageText = ref('')
 	const errorText = ref('')
+	const formError = ref('')
+	const resultError = ref('')
+	const causeError = ref('')
+	const contentError = ref('')
+	const equipmentError = ref('')
+	const descriptionError = ref('')
+	const scrollTarget = ref('')
+	const leaving = ref(false)
+	const leavePromptOpen = ref(false)
+
+	const needsGuard = computed((): boolean => {
+		if (leaving.value) {
+			return false
+		}
+		if (busy.value) {
+			return true
+		}
+		const equipmentUuid = equipmentUuidText.value.trim()
+		return (equipmentUuid.length > 0 && equipmentUuid != prefilledUuid.value)
+			|| repairResult.value.length > 0
+			|| faultCauseText.value.trim().length > 0
+			|| repairContentText.value.trim().length > 0
+			|| faultDescriptionText.value.trim().length > 0
+			|| remarkText.value.trim().length > 0
+	})
 
 	function readQueryUuid(options: OnLoadOptions): string {
 		const raw = options['uuid']
@@ -124,6 +169,22 @@
 
 	function chooseResult(index: number): void {
 		repairResult.value = repairResults[index]
+		resultError.value = ''
+	}
+
+	function onFaultCause(e : UniInputEvent) : void {
+		faultCauseText.value = e.detail.value
+		causeError.value = ''
+	}
+
+	function onRepairContent(e : UniInputEvent) : void {
+		repairContentText.value = e.detail.value
+		contentError.value = ''
+	}
+
+	function onFaultDescription(e : UniInputEvent) : void {
+		faultDescriptionText.value = e.detail.value
+		descriptionError.value = ''
 	}
 
 	function clearComplete(): void {
@@ -131,48 +192,95 @@
 		repairResult.value = ''
 		faultCauseText.value = ''
 		repairContentText.value = ''
+		resultError.value = ''
+		causeError.value = ''
+		contentError.value = ''
 	}
 
-	async function loadList(): Promise<void> {
+	function scrollToField(target: string): void {
+		scrollTarget.value = ''
+		if (target.length > 0) {
+			nextTick(() => { scrollTarget.value = target })
+		}
+	}
+
+	function readListTotal(raw: any | null): number {
+		const obj = asJsonObject(raw)
+		if (obj == null) {
+			return 0
+		}
+		const direct = fieldInt(obj, 'total')
+		if (direct > 0) {
+			return direct
+		}
+		const inner = asJsonObject(obj['data'])
+		if (inner == null) {
+			return 0
+		}
+		return fieldInt(inner, 'total')
+	}
+
+	function readListRow(row: UTSJSONObject, index: number): ListRow {
+		const title = fieldText(row, 'fault_no')
+		const faultUuid = fieldText(row, 'uuid')
+		const view: ListRow = {
+			rowKey: faultUuid.length > 0 ? faultUuid : ('' + index),
+			faultUuid: faultUuid,
+			title: title.length > 0 ? title : '故障',
+			detail: joinParts([
+				fieldText(row, 'equipment_name'),
+				fieldText(row, 'fault_type'),
+				fieldText(row, 'fault_level'),
+				fieldText(row, 'status')
+			])
+		}
+		return view
+	}
+
+	async function loadList(reset: boolean): Promise<void> {
 		const mine = ticket + 1
 		ticket = mine
+		const querySkip = reset ? 0 : skip.value + 50
+		loadMode.value = !reset ? 'more' : loadSettled.value ? 'refresh' : 'initial'
 		loading.value = true
 		errorText.value = ''
-		let url = '/api/v1/apps/kuaizhizao/equipment-faults'
+		const query = new UTSJSONObject()
+		query.set('skip', querySkip)
+		query.set('limit', 50)
 		const equipmentUuid = queryUuid.value
 		if (equipmentUuid.length > 0) {
-			url = url + '?equipment_uuid=' + encodeURIComponent(equipmentUuid)
+			query.set('equipment_uuid', equipmentUuid)
 		}
 		try {
 			const raw = await request({
-				url: url,
+				url: '/api/v1/apps/kuaizhizao/equipment-faults',
 				method: 'GET',
+				query: query,
 				data: null
 			})
 			const items = readRows(raw)
-			const next: Array<ListRow> = []
+			const batch: Array<ListRow> = []
 			for (let i = 0; i < items.length; i++) {
-				const row = items[i]
-				const title = fieldText(row, 'fault_no')
-				const detail = joinParts([
-					fieldText(row, 'equipment_name'),
-					fieldText(row, 'fault_type'),
-					fieldText(row, 'fault_level'),
-					fieldText(row, 'status')
-				])
-				const faultUuid = fieldText(row, 'uuid')
-				const view: ListRow = {
-					rowKey: faultUuid.length > 0 ? faultUuid : ('' + i),
-					faultUuid: faultUuid,
-					title: title.length > 0 ? title : '故障',
-					detail: detail
-				}
-				next.push(view)
+				batch.push(readListRow(items[i], querySkip + i))
 			}
 			if (ticket != mine) {
 				return
 			}
-			rows.value = next
+			skip.value = querySkip
+			total.value = readListTotal(raw)
+			if (reset) {
+				rows.value = batch
+			} else {
+				const next: Array<ListRow> = []
+				const current = rows.value
+				for (let i = 0; i < current.length; i++) {
+					next.push(current[i])
+				}
+				for (let i = 0; i < batch.length; i++) {
+					next.push(batch[i])
+				}
+				rows.value = next
+			}
 		} catch (e) {
 			if (ticket != mine) {
 				return
@@ -185,6 +293,11 @@
 		loading.value = false; loadSettled.value = true
 	}
 
+	function loadMore(): void {
+		if (loading.value || busy.value || detailLoading.value) { return }
+		void loadList(false)
+	}
+
 	async function openFault(faultUuid: string): Promise<void> {
 		if (loading.value || busy.value || detailLoading.value) { return }
 		if (faultUuid.length == 0) {
@@ -193,6 +306,7 @@
 		}
 		detailLoading.value = true
 		errorText.value = ''
+		formError.value = ''
 		try {
 			const raw = await request({
 				url: '/api/v1/apps/kuaizhizao/equipment-faults/' + encodeURIComponent(faultUuid),
@@ -253,26 +367,31 @@
 		}
 		const uuid = completeUuid.value
 		if (uuid.length == 0) {
-			errorText.value = '这条故障还没有可完工的维修单'
+			formError.value = '这条故障还没有可完工的维修单'
 			return
 		}
 		const cause = faultCauseText.value.trim()
 		const content = repairContentText.value.trim()
 		const result = repairResult.value
-		if (cause.length == 0) {
-			errorText.value = '请填写故障原因'
-			return
+		resultError.value = (result != '成功' && result != '失败' && result != '部分成功') ? '请选择维修结果' : ''
+		causeError.value = cause.length == 0 ? '请填写故障原因' : ''
+		contentError.value = content.length == 0 ? '请填写维修内容' : ''
+		let target = ''
+		let summary = ''
+		if (resultError.value.length > 0) {
+			target = 'fault-field-result'; summary = resultError.value
+		} else if (causeError.value.length > 0) {
+			target = 'fault-field-cause'; summary = causeError.value
+		} else if (contentError.value.length > 0) {
+			target = 'fault-field-content'; summary = contentError.value
 		}
-		if (content.length == 0) {
-			errorText.value = '请填写维修内容'
-			return
-		}
-		if (result != '成功' && result != '失败' && result != '部分成功') {
-			errorText.value = '请选择维修结果'
+		if (summary.length > 0) {
+			formError.value = summary
+			scrollToField(target)
 			return
 		}
 		busy.value = true
-		errorText.value = ''
+		formError.value = ''
 		messageText.value = ''
 		try {
 			const data = new UTSJSONObject()
@@ -288,38 +407,40 @@
 			openedText.value = ''
 			openedPending.value = false
 			clearComplete()
-			await loadList()
+			await loadList(true)
 		} catch (e) {
-			errorText.value = readError(e)
+			formError.value = readError(e)
 		}
 		busy.value = false
 	}
 
 	async function reload(): Promise<void> {
 		errorText.value = ''
-		await loadList()
+		await loadList(true)
 	}
 
 	async function submitCreate(): Promise<void> {
 		if (busy.value) {
 			return
 		}
+		const equipmentUuid = equipmentUuidText.value.trim()
+		const description = faultDescriptionText.value.trim()
+		equipmentError.value = equipmentUuid.length == 0 ? '请选择故障设备' : ''
+		descriptionError.value = description.length == 0 ? '请填写故障描述' : ''
+		if (equipmentError.value.length > 0) {
+			formError.value = equipmentError.value
+			scrollToField('fault-field-equipment')
+			return
+		}
+		if (descriptionError.value.length > 0) {
+			formError.value = descriptionError.value
+			scrollToField('fault-field-description')
+			return
+		}
 		busy.value = true
-		errorText.value = ''
+		formError.value = ''
 		messageText.value = ''
 		try {
-			const equipmentUuid = equipmentUuidText.value.trim()
-			const description = faultDescriptionText.value.trim()
-			if (equipmentUuid.length == 0) {
-				errorText.value = '请选择故障设备'
-				busy.value = false
-				return
-			}
-			if (description.length == 0) {
-				errorText.value = '请填写故障描述'
-				busy.value = false
-				return
-			}
 			const data = new UTSJSONObject()
 			data.set('equipment_uuid', equipmentUuid)
 			data.set('fault_type', faultType.value)
@@ -335,9 +456,9 @@
 			})
 			const faultNo = fieldText(asJsonObject(raw), 'fault_no')
 			messageText.value = faultNo.length > 0 ? ('已新建 ' + faultNo) : '已新建'
-			await loadList()
+			await loadList(true)
 		} catch (e) {
-			errorText.value = readError(e)
+			formError.value = readError(e)
 		}
 		busy.value = false
 	}
@@ -347,6 +468,7 @@
 		queryUuid.value = equipmentUuid
 		if (equipmentUuid.length > 0 && equipmentUuidText.value.trim().length == 0) {
 			equipmentUuidText.value = equipmentUuid
+			prefilledUuid.value = equipmentUuid
 			request({ path: '/api/v1/apps/kuaizhizao/equipment/' + encodeURIComponent(equipmentUuid), method: 'GET', query: null, body: null }).then((row) => {
 				if (equipmentUuidText.value == equipmentUuid) { equipmentLabel.value = fieldText(row, 'code') + ' ' + fieldText(row, 'name') }
 			}).catch((_err) => { errorText.value = '设备名称未能加载，请重新选择设备' })
@@ -354,15 +476,73 @@
 	})
 
 	onShow(() => {
+		// 兜底：上次确认离开后导航若失败，leaving 可能滞留为 true，恢复守卫。
+		leaving.value = false
+		leavePromptOpen.value = false
 		reload().catch((e) => {
 			errorText.value = readError(e)
 		})
 	})
+
+	function leaveHome(): void { askLeave(true) }
+
+	function leaveBack(): void { askLeave(false) }
+
+	function askLeave(toHome: boolean): void {
+		if (!needsGuard.value || leavePromptOpen.value) {
+			return
+		}
+		if (busy.value) {
+			formError.value = '提交或读取进行中，请等待完成后再离开'
+			return
+		}
+		leavePromptOpen.value = true
+		uni.showModal({
+			title: '离开确认',
+			content: '当前内容尚未提交，离开后已填写的内容将丢失。',
+			confirmText: '确认离开',
+			cancelText: '继续填写',
+			success: (result) => {
+				leavePromptOpen.value = false
+				if (!result.confirm) {
+					return
+				}
+				leaving.value = true
+				if (toHome) {
+					uni.reLaunch({
+						url: '/shell/workbench/index',
+						fail: () => { leaving.value = false; leavePromptOpen.value = false }
+					})
+				} else {
+					uni.navigateBack({
+						fail: () => { leaving.value = false; leavePromptOpen.value = false }
+					})
+				}
+			},
+			fail: () => { leavePromptOpen.value = false }
+		})
+	}
+
+	if (typeof onBackPress == 'function') {
+		onBackPress((options : OnBackPressOptions) : boolean | null => {
+			if (!needsGuard.value) {
+				return false
+			}
+			if (options.from == 'backbutton' || options.from == 'navigateBack') {
+				leaveBack()
+				return true
+			}
+			return false
+		})
+	}
 </script>
 
 <style>
 	.choices {
 		flex-direction: row;
 		flex-wrap: wrap;
+	}
+	.field-area {
+		min-height: 96px;
 	}
 </style>

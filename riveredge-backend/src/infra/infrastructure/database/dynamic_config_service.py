@@ -84,6 +84,7 @@ class DynamicDatabaseConfigService:
             "core.models.ai_audit_log",
             "core.models.user_activity",
             "core.models.cache_entry",
+            "core.models.mobile_submission",
             "core.models.data_dictionary",
             "core.models.dictionary_item",
             "core.models.system_parameter",

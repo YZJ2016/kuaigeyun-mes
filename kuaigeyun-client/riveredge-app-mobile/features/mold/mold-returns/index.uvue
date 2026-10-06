@@ -1,28 +1,36 @@
 <template>
 	<view class="page-shell">
-		<home-link />
+		<home-link :hold-back="leaveGuarded" :hold-home="leaveGuarded" @back="leaveBack" @home="leaveHome" />
 	<scroll-view class="page" direction="vertical">
-		<load-feedback :active="loading" :mode="loadSettled ? 'refresh' : 'initial'" />
+		<load-feedback :active="loading && borrowMode != 'more' && listMode != 'more'" :mode="loadSettled ? 'refresh' : 'initial'" />
+		<text v-if="listError != ''" class="error">{{ listError }}</text>
 		<text class="section">未归还领用</text>
 		<selection-row v-for="(item, index) in borrowOptions" :key="item.id" :label="item.label" :selected="item.id == borrowId" :disabled="loading || submitting" @choose="chooseBorrow(index)" />
-		<text v-if="!loading && borrowOptions.length == 0 && hint == ''" class="empty">没有未归还的领用</text>
+		<text v-if="!loading && borrowOptions.length == 0 && hint == '' && listError == ''" class="empty">没有未归还的领用</text>
+		<text v-if="borrowTotal > 0" class="meta">已显示 {{ borrowOptions.length }} / {{ borrowTotal }} 条</text>
+		<load-feedback :active="borrowOpen && borrowMode == 'more'" mode="more" />
+		<action-button label="加载更多" accessibility-label="加载更多未归还领用" tone="secondary" v-if="borrowOptions.length < borrowTotal" :disabled="loading || submitting || previewPending" @press="loadMoreBorrows" />
 		<text v-if="chosenBorrow != ''" class="meta">已选 {{ chosenBorrow }}</text>
 		<date-field v-model="returnDate" label="归还日期" :disabled="loading || submitting" />
 		<text class="label">使用次数</text>
-		<input class="field" v-model="usageCount" :disabled="loading || submitting" type="number" placeholder="使用次数" />
+		<input class="field" v-model="usageCount" :disabled="loading || submitting || previewPending" type="number" placeholder="使用次数" />
 		<text class="label">备注（可选）</text>
 		<input class="field" v-model="remark" :disabled="loading || submitting" placeholder="备注" />
-		<action-button label="创建归还" tone="primary" :busy="submitting" :disabled="loading" @press="createReturn" />
+		<text v-if="previewPending" class="hint">正在读取所选领用的使用次数</text>
+		<action-button label="创建归还" tone="primary" :busy="submitting" :disabled="loading || previewPending" @press="createReturn" />
 		<text v-if="hint != ''" class="error">{{ hint }}</text>
 		<text class="section">归还记录</text>
 		<text class="label">记录关键词</text>
 		<input class="field" v-model="listKeyword" :disabled="loading || submitting" placeholder="搜索归还单" />
-		<action-button label="查询记录" :disabled="loading || submitting" @press="loadList" />
+		<action-button label="查询记录" :disabled="loading || submitting" @press="loadList(true)" />
 		<view v-for="(item, index) in rows" :key="index" class="list-row">
 			<text class="title">{{ item.title }}</text>
 			<text class="meta">{{ item.detail }}</text>
 		</view>
-		<text v-if="!loading && rows.length == 0 && hint == ''" class="empty">暂无归还</text>
+		<text v-if="!loading && rows.length == 0 && hint == '' && listError == ''" class="empty">暂无归还</text>
+		<text v-if="listTotal > 0" class="meta">已显示 {{ rows.length }} / {{ listTotal }} 条</text>
+		<load-feedback :active="listOpen && listMode == 'more'" mode="more" />
+		<action-button label="加载更多" accessibility-label="加载更多归还记录" tone="secondary" v-if="rows.length < listTotal" :disabled="loading || submitting" @press="loadMoreRecords" />
 	</scroll-view>
 	</view>
 </template>
@@ -39,7 +47,6 @@
 		MOLD_RETURNS,
 		MOLD_RETURN_USAGE_PREVIEW,
 		apiGet,
-		apiGetRows,
 		apiPost,
 		isDateText,
 		joinParts,
@@ -47,7 +54,7 @@
 		todayDate,
 		withQuery
 	} from '../http.uts'
-	import { errorText, fieldNumber, fieldText } from '../../../shared/api/fields.uts'
+	import { asJsonObject, errorText, fieldInt, fieldNumber, fieldText, readRows } from '../../../shared/api/fields.uts'
 
 	class BorrowPick {
 		id: number = 0
@@ -63,19 +70,93 @@
 	const usageCount = ref('1')
 	const remark = ref('')
 	const listKeyword = ref('')
+	const activeListKeyword = ref('')
 	const rows = ref<DocLine[]>([])
 	const hint = ref('')
+	const listError = ref('')
 	const submitting = ref(false)
 	const loading = ref(false)
 	const loadSettled = ref(false)
+	const previewPending = ref(false)
+	const borrowSkip = ref(0)
+	const borrowTotal = ref(0)
+	const listSkip = ref(0)
+	const listTotal = ref(0)
+	const borrowMode = ref('initial')
+	const listMode = ref('initial')
+	const borrowOpen = ref(false)
+	const listOpen = ref(false)
+	const leavePromptOpen = ref(false)
+	let previewTicket = 0
 	let ticket = 0
 	let borrowTicket = 0
-	let listOpen = false
-	let borrowOpen = false
+	const leaving = ref(false)
 
 	function syncLoading(): void {
-		loading.value = listOpen || borrowOpen
+		loading.value = listOpen.value || borrowOpen.value
 		if (!loading.value) { loadSettled.value = true }
+	}
+
+	function readListTotal(raw: UTSJSONObject | null): number {
+		if (raw == null) {
+			return 0
+		}
+		const direct = fieldInt(raw, 'total')
+		if (direct > 0) {
+			return direct
+		}
+		const inner = asJsonObject(raw['data'])
+		if (inner == null) {
+			return 0
+		}
+		return fieldInt(inner, 'total')
+	}
+
+	function clearSelection(): void {
+		borrowId.value = 0
+		moldId.value = 0
+		chosenBorrow.value = ''
+	}
+
+	const leaveGuarded = computed((): boolean => {
+		if (leaving.value) {
+			return false
+		}
+		return chosenBorrow.value != '' || usageCount.value.trim() != '1' || remark.value.trim() != '' || submitting.value || previewPending.value
+	})
+
+	function leaveBack(): void { askLeave(false) }
+	function leaveHome(): void { askLeave(true) }
+
+	function releaseLeave(): void {
+		leaving.value = false
+		leavePromptOpen.value = false
+	}
+
+	function askLeave(toHome: boolean): void {
+		if (!leaveGuarded.value || leavePromptOpen.value) { return }
+		if (submitting.value || previewPending.value) {
+			hint.value = '提交或读取进行中，请等待完成后再离开'
+			return
+		}
+		leavePromptOpen.value = true
+		uni.showModal({
+			title: '离开确认',
+			content: '当前内容尚未提交，离开后已填写的内容将丢失。',
+			confirmText: '确认离开',
+			cancelText: '继续填写',
+			success: (result) => {
+				leavePromptOpen.value = false
+				if (!result.confirm) { return }
+				leaving.value = true
+				if (toHome) {
+					uni.reLaunch({ url: '/shell/workbench/index', fail: () => { releaseLeave() } })
+				} else {
+					uni.navigateBack({ success: () => {}, fail: () => { releaseLeave() } })
+				}
+			},
+			fail: () => { leavePromptOpen.value = false }
+		})
 	}
 
 	function parseCount(raw: string): number {
@@ -104,13 +185,17 @@
 			return
 		}
 		const row = options[index]
+		const mine = previewTicket + 1
+		previewTicket = mine
+		previewPending.value = true
 		borrowId.value = row.id
 		moldId.value = row.moldId
 		chosenBorrow.value = row.label
+		usageCount.value = '1'
 		hint.value = ''
 		try {
 			const preview = await apiGet(withQuery(MOLD_RETURN_USAGE_PREVIEW, 'borrow_id=' + row.id))
-			if (preview != null) {
+			if (previewTicket == mine && borrowId.value == row.id && preview != null) {
 				const count = preview.getNumber('usage_count')
 				if (count != null && count >= 1) {
 					usageCount.value = '' + count
@@ -121,21 +206,29 @@
 				}
 			}
 		} catch (err) {
-			hint.value = errorText(err)
+			if (previewTicket == mine && borrowId.value == row.id) {
+				hint.value = errorText(err)
+			}
+		} finally {
+			if (previewTicket == mine) { previewPending.value = false }
 		}
 	}
 
-	async function loadOutstanding(): Promise<void> {
+	async function loadOutstanding(reset: boolean): Promise<void> {
 		const mine = borrowTicket + 1
 		borrowTicket = mine
-		borrowOpen = true
+		const querySkip = reset ? 0 : borrowSkip.value + 50
+		borrowMode.value = reset ? (loadSettled.value ? 'refresh' : 'initial') : 'more'
+		borrowOpen.value = true
 		syncLoading()
+		listError.value = ''
 		try {
-			const items = await apiGetRows(withQuery(MOLD_BORROWS_OUTSTANDING, 'limit=50'))
+			const raw = await apiGet(withQuery(MOLD_BORROWS_OUTSTANDING, 'skip=' + querySkip + '&limit=50'))
 			if (borrowTicket != mine) {
 				return
 			}
-			const options: BorrowPick[] = []
+			const items = readRows(raw)
+			const batch: BorrowPick[] = []
 			for (let i = 0; i < items.length; i++) {
 				const item = items[i]
 				const row = new BorrowPick()
@@ -144,20 +237,53 @@
 				const no = fieldText(item, 'document_no')
 				const name = fieldText(item, 'mold_name')
 				row.label = no != '' ? no + ' - ' + name : name
-				options.push(row)
+				batch.push(row)
 			}
-			borrowOptions.value = options
+			borrowSkip.value = querySkip
+			borrowTotal.value = readListTotal(raw)
+			if (reset) {
+				borrowOptions.value = batch
+			} else {
+				const next: BorrowPick[] = []
+				const current = borrowOptions.value
+				for (let i = 0; i < current.length; i++) {
+					next.push(current[i])
+				}
+				for (let i = 0; i < batch.length; i++) {
+					next.push(batch[i])
+				}
+				borrowOptions.value = next
+			}
+			if (borrowId.value > 0) {
+				let found = false
+				const options = borrowOptions.value
+				for (let i = 0; i < options.length; i++) {
+					if (options[i].id == borrowId.value) {
+						found = true
+						break
+					}
+				}
+				if (!found) {
+					clearSelection()
+					hint.value = '所选领用已不存在'
+				}
+			}
 		} catch (err) {
 			if (borrowTicket != mine) {
 				return
 			}
-			hint.value = errorText(err)
+			listError.value = errorText(err)
 		}
 		if (borrowTicket != mine) {
 			return
 		}
-		borrowOpen = false
+		borrowOpen.value = false
 		syncLoading()
+	}
+
+	function loadMoreBorrows(): void {
+		if (loading.value || submitting.value || previewPending.value) { return }
+		void loadOutstanding(false)
 	}
 
 	function mapReturn(item: UTSJSONObject): DocLine {
@@ -173,41 +299,65 @@
 		return line
 	}
 
-	async function loadList(): Promise<void> {
+	async function loadList(reset: boolean): Promise<void> {
 		const mine = ticket + 1
 		ticket = mine
-		listOpen = true
+		const querySkip = reset ? 0 : listSkip.value + 50
+		listMode.value = reset ? (loadSettled.value ? 'refresh' : 'initial') : 'more'
+		listOpen.value = true
 		syncLoading()
+		listError.value = ''
+		const queryKeyword = reset ? listKeyword.value.trim() : activeListKeyword.value
 		try {
-			let query = 'limit=50'
-			const keyword = listKeyword.value.trim()
-			if (keyword != '') {
-				query = 'keyword=' + encodeURIComponent(keyword) + '&limit=50'
+			let query = 'skip=' + querySkip + '&limit=50'
+			if (queryKeyword != '') {
+				query = 'keyword=' + encodeURIComponent(queryKeyword) + '&' + query
 			}
-			const items = await apiGetRows(withQuery(MOLD_RETURNS, query))
+			const raw = await apiGet(withQuery(MOLD_RETURNS, query))
 			if (ticket != mine) {
 				return
 			}
-			const lines: DocLine[] = []
+			const items = readRows(raw)
+			const batch: DocLine[] = []
 			for (let i = 0; i < items.length; i++) {
-				lines.push(mapReturn(items[i]))
+				batch.push(mapReturn(items[i]))
 			}
-			rows.value = lines
+			listSkip.value = querySkip
+			listTotal.value = readListTotal(raw)
+			activeListKeyword.value = queryKeyword
+			if (reset) {
+				rows.value = batch
+			} else {
+				const next: DocLine[] = []
+				const current = rows.value
+				for (let i = 0; i < current.length; i++) {
+					next.push(current[i])
+				}
+				for (let i = 0; i < batch.length; i++) {
+					next.push(batch[i])
+				}
+				rows.value = next
+			}
 		} catch (err) {
 			if (ticket != mine) {
 				return
 			}
-			hint.value = errorText(err)
+			listError.value = errorText(err)
 		}
 		if (ticket != mine) {
 			return
 		}
-		listOpen = false
+		listOpen.value = false
 		syncLoading()
 	}
 
+	function loadMoreRecords(): void {
+		if (loading.value || submitting.value || previewPending.value) { return }
+		void loadList(false)
+	}
+
 	async function createReturn(): Promise<void> {
-		if (loading.value || submitting.value) { return }
+		if (loading.value || submitting.value || previewPending.value) { return }
 		hint.value = ''
 		if (borrowId.value <= 0 || moldId.value <= 0) {
 			hint.value = '请选择领用单'
@@ -234,8 +384,11 @@
 			const created = await apiPost(MOLD_RETURNS, body)
 			const no = fieldText(created, 'document_no')
 			hint.value = no == '' ? '已创建' : '已创建 ' + no
-			await loadOutstanding()
-			await loadList()
+			clearSelection()
+			usageCount.value = '1'
+			remark.value = ''
+			await loadOutstanding(true)
+			await loadList(true)
 		} catch (err) {
 			hint.value = errorText(err)
 		} finally {
@@ -243,12 +396,27 @@
 		}
 	}
 
+	// 测试桩无此页面生命周期全局时静默跳过
+	try {
+		onBackPress((options: OnBackPressOptions): boolean | null => {
+			if (!leaveGuarded.value) { return false }
+			if (options.from == 'backbutton' || options.from == 'navigateBack') {
+				askLeave(false)
+				return true
+			}
+			return false
+		})
+	} catch (_e) {
+	}
+
 	onShow(() => {
+		// 页面可能挺过一次失败或被取消的离开，重新武装离开守卫
+		releaseLeave()
 		if (returnDate.value == '') {
 			returnDate.value = todayDate()
 		}
-		loadOutstanding()
-		loadList()
+		loadOutstanding(true)
+		loadList(true)
 	})
 </script>
 
@@ -257,3 +425,4 @@
 		margin-top: 16px;
 	}
 </style>
+</file-view>

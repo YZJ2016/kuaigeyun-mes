@@ -259,6 +259,7 @@ TORTOISE_ORM = {
                 "core.models.ai_audit_log",
                 "core.models.user_activity",
                 "core.models.cache_entry",
+                "core.models.mobile_submission",
                 "core.models.sync_run_log",  # 同步/推送运行历史
                 # Aerich 模型
                 "aerich.models",

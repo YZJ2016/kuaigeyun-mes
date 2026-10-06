@@ -10,6 +10,41 @@ export type QueryPair = {
 	value : string
 }
 
+/**
+ * 请求失败分类。resultUnknown=true 表示请求可能已到达服务端但结果丢失
+ * （超时、断网、2xx 响应体损坏），不能盲目重发；false 表示服务端明确拒绝，
+ * 操作确定未执行，可安全重试。status 为 HTTP 状态码，0 表示未收到服务端响应。
+ * 仍是 Error 子类，页面原有 instanceof Error / errorText 取消息不受影响。
+ */
+export class ApiRequestError extends Error {
+	status : number = 0
+	resultUnknown : boolean = false
+}
+
+/** 判断一次失败是否为“结果未知”，需要用户核对原操作后再决定。 */
+export function apiResultUnknown(err : any | null) : boolean {
+	return err != null && err instanceof ApiRequestError && (err as ApiRequestError).resultUnknown
+}
+
+/**
+ * apiRequestWithOperationKey 的结果：data 与原契约一致，replayed 为后端幂等重放标记。
+ * bodyPresent 表示 2xx 响应是否带有非空响应体；为 false 时（2xx 但 body 丢失/为空）
+ * 可恢复提交路径须按结果未知处理，普通读取调用方不受影响。
+ */
+export type ApiOutcome = {
+	data : any | null
+	replayed : boolean
+	status : number
+	bodyPresent : boolean
+}
+
+function newFailure(message : string, status : number, resultUnknown : boolean) : ApiRequestError {
+	const err = new ApiRequestError(message)
+	err.status = status
+	err.resultUnknown = resultUnknown
+	return err
+}
+
 function trimSlash(value : string) : string {
 	let text = value.trim()
 	while (text.length > 0 && text.charAt(text.length - 1) == '/') {
@@ -84,7 +119,7 @@ function buildUrl(base : string, path : string, query : Array<QueryPair> | null)
 	return url + joiner + parts.join('&')
 }
 
-function buildHeaders(method : string, path : string) : UTSJSONObject {
+function buildHeaders(method : string, path : string, operationKey : string | null) : UTSJSONObject {
 	const header = new UTSJSONObject()
 	header['Content-Type'] = 'application/json'
 	const channel = clientChannel()
@@ -92,9 +127,11 @@ function buildHeaders(method : string, path : string) : UTSJSONObject {
 		header['X-Client-Channel'] = channel
 	}
 	const isPublic = isPublicPath(path)
-	// 调用方未传入 Idempotency-Key。写方法且非公开接口时生成，对齐 api.ts。
+	// 写方法且非公开接口时使用 Idempotency-Key。恢复提交传入持久化 operationKey
+	// （mob-op- 前缀）复用原键，否则每次生成新键，对齐 api.ts。
+	const provided = operationKey ?? ''
 	if (isWriteMethod(method) && !isPublic) {
-		header['Idempotency-Key'] = createIdempotencyKey()
+		header['Idempotency-Key'] = provided.length > 0 ? provided : createIdempotencyKey()
 	}
 	if (!isPublic) {
 		const token = getToken()
@@ -189,9 +226,26 @@ function unwrap(payload : any | null) : any | null {
 	return payload
 }
 
-function handleResponse(res : any, resolve : (value : any | null) => void, reject : (reason : any) => void) : void {
+function isReplayed(res : any) : boolean {
+	const headers = res.header
+	if (headers == null || typeof headers != 'object') {
+		return false
+	}
+	const obj = headers as UTSJSONObject
+	const upper = obj['X-Idempotency-Replay']
+	if (upper != null && String(upper) == '1') {
+		return true
+	}
+	const lower = obj['x-idempotency-replay']
+	return lower != null && String(lower) == '1'
+}
+
+function handleResponse(res : any, resolve : (value : ApiOutcome) => void, reject : (reason : any) => void) : void {
 	const status = res.statusCode as number
-	let payload : any | null = res.data
+	const rawBody : any | null = res.data
+	// 2xx 但 body 缺失（null）或为空串：可恢复提交按结果未知处理。
+	const bodyPresent = rawBody != null && !(typeof rawBody == 'string' && (rawBody as string).trim().length == 0)
+	let payload : any | null = rawBody
 	let parseFailed = false
 	if (typeof payload == 'string' && (payload as string).length > 0) {
 		try {
@@ -204,32 +258,41 @@ function handleResponse(res : any, resolve : (value : any | null) => void, rejec
 	if (status == 401) {
 		clearToken()
 	}
+	if (status == 0) {
+		// 部分平台传输被截断/中止时仍回调 statusCode:0 的"成功"响应，
+		// 不能证明服务端已拒绝，一律按结果未知处理。
+		reject(newFailure('未获得有效的服务器响应，操作结果未知', 0, true))
+		return
+	}
 	if (parseFailed) {
 		if (status < 200 || status >= 300) {
-			reject(new Error(errorText(null, status)))
+			reject(newFailure(errorText(null, status), status, false))
 			return
 		}
-		reject(new Error('请求失败（' + status.toString() + '）'))
+		// 2xx 但响应体丢失/损坏：服务端可能已执行，结果未知，保留原快照核对。
+		reject(newFailure('服务器响应无法读取，操作结果未知', status, true))
 		return
 	}
 	if (status < 200 || status >= 300) {
-		reject(new Error(errorText(payload, status)))
+		reject(newFailure(errorText(payload, status), status, false))
 		return
 	}
 	try {
-		resolve(unwrap(payload))
+		resolve({ data: unwrap(payload), replayed: isReplayed(res), status: status, bodyPresent: bodyPresent } as ApiOutcome)
 	} catch (err) {
-		reject(err)
+		const message = err instanceof Error ? (err as Error).message : '请求失败'
+		reject(newFailure(message, status, false))
 	}
 }
 
-function apiRequestOn(base : string, method : string, path : string, query : Array<QueryPair> | null, body : UTSJSONObject | null) : Promise<any | null> {
+function apiRequestOutcomeOn(base : string, method : string, path : string, query : Array<QueryPair> | null, body : UTSJSONObject | null, operationKey : string | null) : Promise<ApiOutcome> {
 	const verb = method.toUpperCase()
-	const header = buildHeaders(verb, path)
+	const header = buildHeaders(verb, path, operationKey)
 	const url = buildUrl(base, path, query)
 	return new Promise((resolve, reject) => {
 		const fail = (_err : any) => {
-			reject(new Error('网络连接失败'))
+			// 超时/断网不能证明服务端未执行，结果按未知处理。
+			reject(newFailure('网络连接失败', 0, true))
 		}
 		const success = (res : any) => {
 			handleResponse(res, resolve, reject)
@@ -293,14 +356,28 @@ function apiRequestOn(base : string, method : string, path : string, query : Arr
 	})
 }
 
+function apiRequestOn(base : string, method : string, path : string, query : Array<QueryPair> | null, body : UTSJSONObject | null) : Promise<any | null> {
+	return apiRequestOutcomeOn(base, method, path, query, body, null).then((outcome : ApiOutcome) => {
+		return outcome.data
+	})
+}
+
 export function apiRequest(method : string, path : string, query : Array<QueryPair> | null, body : UTSJSONObject | null) : Promise<any | null> {
 	return apiRequestOn(apiBase(), method, path, query, body)
+}
+
+/**
+ * 可恢复提交入口。operationKey 为持久化快照的原操作键（mob-op- 前缀），
+ * 作为既有 Idempotency-Key 头发送；恢复时同键同快照重发，replayed 标记重放。
+ */
+export function apiRequestWithOperationKey(method : string, path : string, query : Array<QueryPair> | null, body : UTSJSONObject | null, operationKey : string) : Promise<ApiOutcome> {
+	return apiRequestOutcomeOn(apiBase(), method, path, query, body, operationKey)
 }
 
 export function apiGetFromOrigin(origin : string, path : string) : Promise<any | null> {
 	const host = trimSlash(origin)
 	if (host.length == 0) {
-		return Promise.reject(new Error('网络连接失败'))
+		return Promise.reject(newFailure('网络连接失败', 0, true))
 	}
 	return apiRequestOn(host + '/api/v1', 'GET', path, null, null)
 }

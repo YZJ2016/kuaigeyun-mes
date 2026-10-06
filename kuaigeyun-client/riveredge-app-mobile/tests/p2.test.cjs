@@ -65,6 +65,53 @@ test('warehouse pagination remains locked while refreshing or submitting',()=>{
   page.run('loading.value=true;loadMore()');assert.equal(page.run('page.value'),1);assert.equal(page.run('skip.value'),0);
   page.run('loading.value=false;busy.value=true;loadMore()');assert.equal(page.run('page.value'),1);assert.equal(page.run('skip.value'),0);
 });
+test('warehouse retries the failed page and advances only after successful append',async()=>{
+  for(const kind of ['inventory-query','pickings']) {
+    const calls=[];let fail=true;
+    const page=script('features/warehouse/board.uvue',{kind},{
+      listPath:()=>'/list',listQuery:(kind,skip,page)=>({skip,page}),
+      apiGet:async(url,query)=>{calls.push(query);if(fail)throw new Error('网络失败');return {items:[{id:2}],total:100};},
+      readCards:raw=>raw.items,readTotal:raw=>raw.total,errorText:e=>e.message,
+    });
+    page.run('cards.value=[{id:1}];total.value=100;listLoaded.value=true;loadMore()');
+    await new Promise(resolve=>setImmediate(resolve));
+    assert.equal(page.run('cards.value.length'),1);
+    assert.equal(page.run('skip.value'),0);assert.equal(page.run('page.value'),1);
+    fail=false;page.run('loadMore()');await new Promise(resolve=>setImmediate(resolve));
+    assert.deepEqual(calls,kind==='inventory-query'?[{skip:0,page:2},{skip:0,page:2}]:[{skip:50,page:1},{skip:50,page:1}]);
+    assert.equal(page.run('cards.value.length'),2);
+    assert.equal(page.run(kind==='inventory-query'?'page.value':'skip.value'),kind==='inventory-query'?2:50);
+  }
+});
+test('mold return ignores old previews and prevents submitting an unsettled selection',async()=>{
+  const pending=[],writes=[];
+  const page=script('features/mold/mold-returns/index.uvue',{}, {
+    apiGet:()=>new Promise((resolve,reject)=>pending.push({resolve,reject})),
+    withQuery:(p,q)=>p+'?'+q,MOLD_RETURN_USAGE_PREVIEW:'/preview',
+    apiPost:(url,body)=>{writes.push(body);return Promise.resolve({});},errorText:e=>e.message,
+    putText:(body,key,value)=>{if(value.trim())body.set(key,value.trim());},
+    apiGetRows:async()=>[],fieldText:()=>'',MOLD_RETURNS:'/returns',MOLD_BORROWS_OUTSTANDING:'/borrows',
+  });
+  page.run('borrowOptions.value=[{id:1,moldId:11,label:"A"},{id:2,moldId:22,label:"B"}]');
+  const first=page.run('chooseBorrow(0)');const second=page.run('chooseBorrow(1)');
+  await page.run('createReturn()');assert.equal(writes.length,0);
+  pending[1].resolve({getNumber:key=>key==='usage_count'?2:22});await second;
+  pending[0].resolve({getNumber:key=>key==='usage_count'?9:11});await first;
+  assert.equal(page.run('borrowId.value'),2);assert.equal(page.run('moldId.value'),22);
+  assert.equal(page.run('usageCount.value'),'2');assert.equal(page.run('chosenBorrow.value'),'B');
+});
+test('mold return discards stale preview errors and does not retain another borrow usage',async()=>{
+  const pending=[];
+  const page=script('features/mold/mold-returns/index.uvue',{}, {
+    apiGet:()=>new Promise((resolve,reject)=>pending.push({resolve,reject})),
+    withQuery:(p,q)=>p+'?'+q,MOLD_RETURN_USAGE_PREVIEW:'/preview',errorText:e=>e.message,
+  });
+  page.run('borrowOptions.value=[{id:1,moldId:11,label:"A"},{id:2,moldId:22,label:"B"}];usageCount.value="99"');
+  const first=page.run('chooseBorrow(0)');const second=page.run('chooseBorrow(1)');
+  pending[1].resolve(null);await second;
+  pending[0].reject(new Error('旧请求错误'));await first;
+  assert.equal(page.run('usageCount.value'),'1');assert.equal(page.run('hint.value'),'');
+});
 test('equipment fault detail reports waiting and unlocks after failure without duplicate requests',async()=>{
   let reject;const calls=[];
   const page=script('features/equipment/faults/index.uvue',{}, {

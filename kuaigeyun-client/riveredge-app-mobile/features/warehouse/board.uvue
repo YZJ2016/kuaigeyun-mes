@@ -1,7 +1,7 @@
 <template>
 	<view class="page-shell">
-		<home-link />
-	<scroll-view class="page" scroll-y="true" :scroll-into-view="scrollTarget">
+		<home-link :hold-back="needsGuard" @back="leaveBack" :hold-home="needsGuard" @home="leaveHome" />
+	<scroll-view class="page" direction="vertical" :scroll-into-view="scrollTarget">
 		<load-feedback :active="loading && selectedId == 0 && loadMode != 'more'" :mode="loadMode" />
 		<view v-if="isQuery" class="row">
 			<input class="field grow" v-model="keyword" :disabled="loading || busy" placeholder="物料编码、名称或仓库" />
@@ -139,12 +139,24 @@
 		kind: {
 			type: String,
 			default: ''
+		},
+		backRequest: {
+			type: Number,
+			default: 0
+		},
+		showRequest: {
+			type: Number,
+			default: 0
 		}
 	})
+
+	const emit = defineEmits(['guard-state'])
 
 	const cards = ref<DocCard[]>([])
 	const lines = ref<LineForm[]>([])
 	const keyword = ref('')
+	const activeKeyword = ref('')
+	const lastSize = ref(50)
 	const hint = ref('')
 	const loading = ref(false)
 	const listLoaded = ref(false)
@@ -161,6 +173,7 @@
 	const personIdText = ref('')
 	const personName = ref('')
 	const alertStatus = ref('processing')
+	const alertStatusBaseline = ref('processing')
 	const alertNotes = ref('')
 	const wizardStep = ref(1)
 	const locateText = ref('')
@@ -171,6 +184,8 @@
 	const editingLineIndex = ref(-1)
 	const serialInput = ref('')
 	const scrollTarget = ref('')
+	const leaving = ref(false)
+	const leavePromptOpen = ref(false)
 	let ticket = 0
 	function editLine(index : number) {
 		if (busy.value) { return }
@@ -283,23 +298,46 @@
 		return '确认入库'
 	})
 
+	const needsGuard = computed((): boolean => {
+		if (leaving.value) {
+			return false
+		}
+		if (busy.value) {
+			return true
+		}
+		if (selectedId.value <= 0) {
+			return false
+		}
+		if (isStock.value) {
+			const list = lines.value
+			for (let i = 0; i < list.length; i++) {
+				if (list[i].actualQuantityText.trim().length > 0 || list[i].remarks.trim().length > 0) {
+					return true
+				}
+			}
+		}
+		if (isAlert.value && (alertNotes.value.trim().length > 0 || alertStatus.value != alertStatusBaseline.value)) {
+			return true
+		}
+		return editingHeader.value || editingLineIndex.value >= 0 || serialInput.value.trim().length > 0
+	})
+
+	// 页面级返回协议：包装页经 guard-state 事件同步守卫状态，系统返回时递增
+	// back-request 触发离开确认；show-request 让页面再次显示时刷新列表。
+	watch(needsGuard, () => { emit('guard-state', needsGuard.value) })
+	watch((): number => props.backRequest, () => { askLeave(false) })
+	watch((): number => props.showRequest, () => { reload() })
+
 	onMounted(() => {
 		reload()
 	})
 
 	function reload(): void {
-		skip.value = 0
-		page.value = 1
 		void loadList(true)
 	}
 
 	function loadMore(): void {
 		if (loading.value || busy.value) { return }
-		if (currentKind() == 'inventory-query') {
-			page.value = page.value + 1
-		} else {
-			skip.value = skip.value + 50
-		}
 		void loadList(false)
 	}
 
@@ -311,9 +349,10 @@
 		}
 		const mine = ticket + 1
 		ticket = mine
-		const querySkip = skip.value
-		const queryPage = page.value
-		const queryKeyword = keyword.value
+		const inventory = currentKind() == 'inventory-query'
+		const querySkip = reset ? 0 : inventory ? skip.value : skip.value + lastSize.value
+		const queryPage = reset ? 1 : inventory ? page.value + 1 : page.value
+		const queryKeyword = reset ? keyword.value : activeKeyword.value
 		loadMode.value = !reset ? 'more' : listLoaded.value ? 'refresh' : 'initial'
 		loading.value = true
 		hint.value = ''
@@ -323,6 +362,10 @@
 				return
 			}
 			const batch = readCards(raw)
+			skip.value = querySkip
+			page.value = queryPage
+			lastSize.value = batch.length
+			activeKeyword.value = queryKeyword
 			total.value = readTotal(raw)
 			listLoaded.value = true
 			if (reset) {
@@ -431,6 +474,7 @@
 			personName.value = form.personName
 			lines.value = form.lines
 			alertStatus.value = 'processing'
+			alertStatusBaseline.value = alertStatus.value
 			alertNotes.value = ''
 			clearLocate()
 			beginWizard()
@@ -647,6 +691,62 @@
 		} finally {
 			busy.value = false
 		}
+	}
+
+	function leaveHome(): void { askLeave(true) }
+
+	function leaveBack(): void { askLeave(false) }
+
+	function askLeave(toHome: boolean): void {
+		if (!needsGuard.value || leavePromptOpen.value) {
+			return
+		}
+		if (busy.value) {
+			hint.value = '提交或读取进行中，请等待完成后再离开'
+			return
+		}
+		leavePromptOpen.value = true
+		uni.showModal({
+			title: '离开确认',
+			content: '当前内容尚未提交，离开后已填写的内容将丢失。',
+			confirmText: '确认离开',
+			cancelText: '继续填写',
+			success: (result) => {
+				leavePromptOpen.value = false
+				if (!result.confirm) {
+					return
+				}
+				leaving.value = true
+				// 同步解除包装页守卫，避免随后的 navigateBack 被页面级 onBackPress 再次拦截。
+				emit('guard-state', false)
+				if (toHome) {
+					uni.reLaunch({
+						url: '/shell/workbench/index',
+						fail: () => { leaving.value = false; leavePromptOpen.value = false }
+					})
+				} else {
+					uni.navigateBack({
+						fail: () => { leaving.value = false; leavePromptOpen.value = false }
+					})
+				}
+			},
+			fail: () => { leavePromptOpen.value = false }
+		})
+	}
+
+	// 组件内的 onBackPress 不会被 uni-app x 派发（仅页面生命周期），系统返回由包装页
+	// 经 back-request 驱动；此处保留作为看板被直接当页使用时的兜底，重复触发由 leavePromptOpen 去重。
+	if (typeof onBackPress == 'function') {
+		onBackPress((options : OnBackPressOptions) : boolean | null => {
+			if (!needsGuard.value) {
+				return false
+			}
+			if (options.from == 'backbutton' || options.from == 'navigateBack') {
+				leaveBack()
+				return true
+			}
+			return false
+		})
 	}
 </script>
 
