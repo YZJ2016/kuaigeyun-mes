@@ -79,7 +79,8 @@ class OperationCompleteRequest(BaseModel):
 
 class FaceEnrollRequest(BaseModel):
     user_id: int
-    descriptor: List[float]
+    descriptor: Optional[List[float]] = None
+    samples: Optional[List[List[float]]] = None
     quality: Optional[float] = None
     device_info: Optional[str] = None
 
@@ -95,6 +96,7 @@ class FaceIdentifyResponse(BaseModel):
     username: str
     full_name: str
     template_id: int
+    has_station_role: bool = False
 
 
 class FaceTemplateResponse(BaseModel):

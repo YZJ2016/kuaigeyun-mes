@@ -44,6 +44,20 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'cosmic-warehouse-createorg-r01',
+    date: '2026-10-06',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.cosmic-warehouse-createorg-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.cosmic-warehouse-createorg-r01.description',
+  },
+  {
+    id: 'inventory-sync-empty-batch-no-r01',
+    date: '2026-10-06',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.inventory-sync-empty-batch-no-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.inventory-sync-empty-batch-no-r01.description',
+  },
+  {
     id: 'im-module-notify-dedupe-r01',
     date: '2026-10-05',
     type: 'fix',

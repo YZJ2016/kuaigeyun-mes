@@ -175,3 +175,8 @@ riveredge-backend/src/core/data/sensitive_words/insult.txt
 riveredge-backend/src/core/data/sensitive_words/porn.txt
 riveredge-backend/src/core/data/sensitive_words/porn_types.txt
 riveredge-backend/src/core/data/sensitive_words/extra.txt
+
+# AOCI recovery: frontend blue-green build output is generated; git-ignore so AOCI auto-excludes
+riveredge-frontend/dist-green/
+riveredge-frontend/dist-blue/
+riveredge-frontend/dist-live/

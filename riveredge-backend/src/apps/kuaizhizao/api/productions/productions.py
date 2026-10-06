@@ -300,11 +300,7 @@ def _http_exception_with_trace(
 from apps.kuaizhizao.services.print_service import DocumentPrintService
 from fastapi.responses import HTMLResponse
 
-@router.get(
-    "/work-orders/{id}/print",
-    summary="Print work order",
-    dependencies=[Depends(require_permission_codes("kuaizhizao:work-order:print"))],
-)
+@router.get("/work-orders/{id}/print", summary="Print work order", dependencies=[Depends(require_permission_codes("kuaizhizao:work-order:print"))])
 async def print_work_order(
     id: int = Path(..., description="工单ID"),
     template_code: Optional[str] = Query(None, description="打印模板代码"),

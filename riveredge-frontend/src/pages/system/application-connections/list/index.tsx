@@ -794,6 +794,12 @@ const ApplicationConnectionsListPage: React.FC = () => {
               }
               colProps={{ span: 24 }}
             />
+            <ProFormText
+              name="org_number"
+              label={t('pages.system.applicationConnections.kingdeeCosmicOrgNumber')}
+              extra={t('pages.system.applicationConnections.kingdeeCosmicOrgNumberExtra')}
+              colProps={{ span: 12 }}
+            />
             <ProFormText name="language" label="language" initialValue="zh_CN" colProps={{ span: 12 }} />
           </>
         );
