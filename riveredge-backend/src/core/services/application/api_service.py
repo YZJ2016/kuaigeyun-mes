@@ -383,8 +383,10 @@ class APIService:
     ) -> Dict[str, Any]:
         """加载金蝶云苍穹 OpenAPI 常用 / 制造链路接口预设。"""
         from core.services.integration.kingdee_cosmic_api_presets import (
+            WAREHOUSE_PRESET_CODE_SUFFIX,
             list_kingdee_cosmic_api_presets,
             resolve_preset_api_code,
+            warehouse_batch_query_preset_needs_upgrade,
         )
         from core.services.integration.kingdee_cosmic_mfg_api_presets import (
             list_kingdee_cosmic_mfg_api_presets,
@@ -407,6 +409,7 @@ class APIService:
         created: List[str] = []
         skipped: List[str] = []
         categorized: List[str] = []
+        upgraded: List[str] = []
         for preset in presets:
             code_suffix = str(preset["code_suffix"] or "").strip()
             if allowed_suffixes is not None and code_suffix not in allowed_suffixes:
@@ -418,6 +421,24 @@ class APIService:
                 deleted_at__isnull=True,
             ).first()
             if existing:
+                if (
+                    code_suffix == WAREHOUSE_PRESET_CODE_SUFFIX
+                    and warehouse_batch_query_preset_needs_upgrade(existing.request_body)
+                ):
+                    body = dict(existing.request_body or {}) if isinstance(existing.request_body, dict) else {}
+                    data = dict(body.get("data") or {}) if isinstance(body.get("data"), dict) else {}
+                    data["createorg_number"] = str(
+                        data.get("createorg_number") or data.get("createOrgNumber") or "WANG"
+                    ).strip() or "WANG"
+                    body["data"] = data
+                    if body.get("pageNo") in (None, ""):
+                        body["pageNo"] = 1
+                    if body.get("pageSize") in (None, ""):
+                        body["pageSize"] = 1000
+                    existing.request_body = body
+                    existing.description = preset["description"]
+                    await existing.save(update_fields=["request_body", "description", "updated_at"])
+                    upgraded.append(code)
                 if category_id is not None and existing.category_id is None:
                     existing.category_id = category_id
                     await existing.save(update_fields=["category_id", "updated_at"])
@@ -451,11 +472,11 @@ class APIService:
             "created_count": len(created),
             "skipped_count": len(skipped),
             "categorized_count": len(categorized),
-            "upgraded_count": 0,
+            "upgraded_count": len(upgraded),
             "created_codes": created,
             "skipped_codes": skipped,
             "categorized_codes": categorized,
-            "upgraded_codes": [],
+            "upgraded_codes": upgraded,
         }
 
     async def list_api_library(self) -> Dict[str, Any]:
@@ -1067,6 +1088,9 @@ class APIService:
         request_body = copy.deepcopy(api.request_body) if api.request_body else {}
         if test_request.body:
             request_body.update(test_request.body)
+
+        cosmic_cfg = None
+        is_cosmic_oauth = False
         
         # 4. 构建完整URL
         try:
@@ -1111,6 +1135,7 @@ class APIService:
 
                     try:
                         cfg = api.integration_config.get_config()
+                        cosmic_cfg = cfg
                         url_lower = str(url or "").lower()
                         path_lower = str(api.path or "").lower().replace("\\", "/")
                         # getToken 本身不要先换票再带 Bearer 重放；用连接器配置组真实请求体
@@ -1118,6 +1143,7 @@ class APIService:
                             "oauth2/gettoken" in path_lower
                             or url_lower.rstrip("/").endswith("/kapi/oauth2/gettoken")
                         )
+                        is_cosmic_oauth = bool(is_oauth_token)
                         # 门户页/绝对非 kapi 地址不是 OpenAPI，带 token 会落到错误数据中心
                         is_open_api = "/kapi/" in url_lower or path_lower.startswith("kapi/")
                         if is_oauth_token:
@@ -1168,7 +1194,28 @@ class APIService:
             }
         
         # 5. 发送请求
-        if "/kapi/v2/" in str(url or "").lower():
+        method_upper = api.method.upper()
+        if cosmic_cfg is not None and not is_cosmic_oauth:
+            from core.services.integration.kingdee_cosmic_paths import (
+                prepare_kingdee_cosmic_outbound,
+            )
+
+            try:
+                method_upper, url, request_params, request_body = prepare_kingdee_cosmic_outbound(
+                    cosmic_cfg,
+                    url,
+                    method_upper,
+                    request_params,
+                    request_body,
+                )
+            except (ValidationError, ValueError) as exc:
+                return {
+                    "status_code": 0,
+                    "headers": {},
+                    "body": {"error": str(exc)},
+                    "elapsed_time": 0,
+                }
+        elif "/kapi/v2/" in str(url or "").lower():
             from core.services.integration.kingdee_cosmic_paths import (
                 ensure_kingdee_v2_request_body,
             )
@@ -1178,7 +1225,6 @@ class APIService:
         start_time = time.time()
         try:
             client = get_http_client()
-            method_upper = api.method.upper()
             if method_upper == "GET":
                 response = await client.get(
                     url,
@@ -1328,6 +1374,17 @@ class APIService:
                         request_headers,
                         config=cfg,
                         access_token=str(session["access_token"]),
+                    )
+                    from core.services.integration.kingdee_cosmic_paths import (
+                        prepare_kingdee_cosmic_outbound,
+                    )
+
+                    method_upper, url, request_params, request_body = prepare_kingdee_cosmic_outbound(
+                        cfg,
+                        url,
+                        method_upper,
+                        request_params,
+                        request_body,
                     )
                 except ValueError as exc:
                     return {

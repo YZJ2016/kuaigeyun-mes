@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict
+import re
+from typing import Any, Dict, Optional, Tuple
 
 
 _BASEDATA_BATCH_OBJECTS = {
@@ -149,6 +150,77 @@ def ensure_kingdee_v2_request_body(url: str, body: Dict[str, Any]) -> Dict[str, 
             if payload.get("pageNo") in (None, "") and data.get("pageNo") not in (None, ""):
                 payload["pageNo"] = data.pop("pageNo")
     return payload
+
+
+def resolve_kingdee_cosmic_createorg_number(cfg: Optional[Dict[str, Any]]) -> str:
+    """连接器组织编码：仓库/供应商 basedata 查询的 createorg_number。"""
+    data = cfg if isinstance(cfg, dict) else {}
+    for key in ("createorg_number", "create_org_number", "org_number", "orgNumber"):
+        val = str(data.get(key) or "").strip()
+        if val:
+            return val
+    return ""
+
+
+def _path_without_query(url: str) -> str:
+    return str(url or "").split("?", 1)[0]
+
+
+def _is_basedata_single_query(path: str) -> bool:
+    lower = _path_without_query(path).lower()
+    return "/basedata/" in lower and lower.endswith("/query") and "batchquery" not in lower
+
+
+def _is_warehouse_path(path: str) -> bool:
+    return "bd_warehouse" in _path_without_query(path).lower()
+
+
+def prepare_kingdee_cosmic_outbound(
+    cfg: Optional[Dict[str, Any]],
+    url: str,
+    method: str,
+    params: Optional[Dict[str, Any]],
+    body: Optional[Dict[str, Any]],
+) -> Tuple[str, str, Dict[str, Any], Dict[str, Any]]:
+    """
+    仓库列表走 batchQuery，并把连接器组织编码写入 createorg_number。
+    GET /bd_warehouse/query 且未指定 number 时改为 POST batchQuery。
+    """
+    params_out: Dict[str, Any] = dict(params or {})
+    body_out: Dict[str, Any] = dict(body) if isinstance(body, dict) else {}
+    method_out = str(method or "POST").upper() or "POST"
+    url_out = str(url or "")
+    lower_path = _path_without_query(url_out).lower()
+    if "oauth2/gettoken" in lower_path:
+        return method_out, url_out, params_out, body_out
+
+    number = str(params_out.get("number") or "").strip()
+    if _is_warehouse_path(url_out) and _is_basedata_single_query(url_out) and not number:
+        url_out = re.sub(r"(?i)/query/?$", "/batchQuery", _path_without_query(url_out))
+        method_out = "POST"
+        params_out.pop("number", None)
+
+    body_out = ensure_kingdee_v2_request_body(url_out, body_out)
+    org = resolve_kingdee_cosmic_createorg_number(cfg)
+    lower = _path_without_query(url_out).lower()
+    data_obj = body_out.get("data") if isinstance(body_out.get("data"), dict) else {}
+    already = str(params_out.get("createorg_number") or "").strip() or str(
+        data_obj.get("createorg_number") or data_obj.get("createOrgNumber") or ""
+    ).strip()
+    createorg = already or org or ("WANG" if _is_warehouse_path(url_out) else "")
+
+    if _is_warehouse_path(url_out) and "batchquery" in lower:
+        data = dict(data_obj)
+        data["createorg_number"] = createorg
+        body_out["data"] = data
+    elif _is_basedata_single_query(url_out) and createorg:
+        params_out["createorg_number"] = createorg
+
+    if "batchquery" in lower:
+        method_out = "POST"
+
+    return method_out, url_out, params_out, body_out
+
 
 def normalize_kingdee_cosmic_api_path(endpoint: str) -> str:
     """

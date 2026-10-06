@@ -12,7 +12,7 @@ POST {门户}/kapi/sys/{业务对象标识}/query
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, TypedDict
+from typing import Any, Dict, List, Optional, TypedDict
 
 # 增强型 Token（固定路径，用于联调对照；日常同步由连接器自动带 token）
 OAUTH_GET_TOKEN_PATH = "kapi/oauth2/getToken"
@@ -41,14 +41,41 @@ class KingdeeCosmicApiPreset(TypedDict, total=False):
     request_params: Dict[str, Any]
 
 
+WAREHOUSE_PRESET_CODE_SUFFIX = "query_warehouse"
+
+
+def build_warehouse_batch_query_preset_body() -> Dict[str, Any]:
+    """仓库 batchQuery：createorg_number 必须放在 data 里。"""
+    return {
+        "data": {"createorg_number": "WANG"},
+        "pageNo": 1,
+        "pageSize": 1000,
+    }
+
+
+def warehouse_batch_query_preset_needs_upgrade(request_body: Any) -> bool:
+    if not isinstance(request_body, dict):
+        return True
+    data = request_body.get("data")
+    if not isinstance(data, dict):
+        return True
+    return not str(data.get("createorg_number") or data.get("createOrgNumber") or "").strip()
+
+
 def _basedata_batch_query_preset(
     *,
     code_suffix: str,
     name: str,
     biz_object: str,
     usage: str,
+    request_body: Optional[Dict[str, Any]] = None,
 ) -> KingdeeCosmicApiPreset:
     """与基础资料API服务中物料批量查询同一拼法：/v2/basedata/{对象}/batchQuery。"""
+    body = request_body if isinstance(request_body, dict) else {
+        "data": {},
+        "pageNo": 1,
+        "pageSize": 100,
+    }
     return {
         "code_suffix": code_suffix,
         "name": name,
@@ -59,11 +86,7 @@ def _basedata_batch_query_preset(
         ),
         "path": f"kapi/v2/basedata/{biz_object}/batchQuery",
         "method": "POST",
-        "request_body": {
-            "data": {},
-            "pageNo": 1,
-            "pageSize": 100,
-        },
+        "request_body": body,
     }
 
 
@@ -180,12 +203,21 @@ def list_kingdee_cosmic_api_presets() -> List[KingdeeCosmicApiPreset]:
             biz_object=BIZ_BD_CUSTOMER,
             usage="客户",
         ),
-        _basedata_batch_query_preset(
-            code_suffix="query_warehouse",
-            name="苍穹查询仓库",
-            biz_object=BIZ_BD_WAREHOUSE,
-            usage="仓库",
-        ),
+        {
+            **_basedata_batch_query_preset(
+                code_suffix=WAREHOUSE_PRESET_CODE_SUFFIX,
+                name="苍穹查询仓库",
+                biz_object=BIZ_BD_WAREHOUSE,
+                usage="仓库",
+                request_body=build_warehouse_batch_query_preset_body(),
+            ),
+            "description": (
+                "基础资料API服务里的仓库批量查询。"
+                "请求地址 /v2/basedata/bd_warehouse/batchQuery。"
+                "请求体为 data、pageNo、pageSize；"
+                "金蝶要求把 createorg_number 放在 data 内，默认示例 WANG，可按本环境创建组织编码修改。"
+            ),
+        },
         {
             "code_suffix": "query_purchase_order",
             "name": "苍穹查询采购订单",

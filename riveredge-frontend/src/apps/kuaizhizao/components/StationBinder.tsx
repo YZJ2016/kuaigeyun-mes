@@ -36,6 +36,7 @@ export interface StationInfo {
   stationCode: string;
   workCenterId?: number;
   workCenterName?: string;
+  equipmentUuid?: string;
 }
 
 interface StationBinderProps {
@@ -171,6 +172,7 @@ const StationBinder: React.FC<StationBinderProps> = ({
       stationCode: station.code,
       workCenterId: (station as any).workCenterId ?? (station as any).work_center_id,
       workCenterName: (station as any).workCenterName ?? (station as any).work_center_name,
+      equipmentUuid: (station as any).equipmentUuid ?? (station as any).equipment_uuid,
     };
 
     if (persist) {

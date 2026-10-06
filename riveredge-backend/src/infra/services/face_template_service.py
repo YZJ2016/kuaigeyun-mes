@@ -7,6 +7,8 @@ from __future__ import annotations
 import math
 from typing import List, Optional, Sequence
 
+from tortoise.transactions import in_transaction
+
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
 from infra.models.face_template import UserFaceTemplate
 from infra.models.user import User
@@ -73,6 +75,48 @@ class FaceTemplateService:
             quality=quality,
             device_info=device_info,
         )
+
+    @staticmethod
+    async def enroll_many(
+        tenant_id: int,
+        user_id: int,
+        samples: Sequence[Sequence[float]],
+        quality: Optional[float] = None,
+        device_info: Optional[str] = None,
+    ) -> List[UserFaceTemplate]:
+        if not samples:
+            raise BusinessLogicError("缺少人脸特征向量")
+        if len(samples) > MAX_TEMPLATES_PER_USER:
+            raise BusinessLogicError(f"单次最多录入 {MAX_TEMPLATES_PER_USER} 个样本")
+        user = await User.get_or_none(id=user_id, deleted_at__isnull=True)
+        if not user:
+            raise NotFoundError(f"用户不存在: {user_id}")
+        vecs = [_as_vector(s) for s in samples]
+
+        async with in_transaction():
+            existing = await UserFaceTemplate.filter(
+                tenant_id=tenant_id,
+                user_id=user_id,
+                deleted_at__isnull=True,
+            ).order_by("created_at").all()
+            overflow = len(existing) + len(vecs) - MAX_TEMPLATES_PER_USER
+            if overflow > 0:
+                now = resolve_business_datetime()
+                for oldest in existing[:overflow]:
+                    oldest.deleted_at = now
+                    await oldest.save()
+            created: List[UserFaceTemplate] = []
+            for vec in vecs:
+                created.append(
+                    await UserFaceTemplate.create(
+                        tenant_id=tenant_id,
+                        user_id=user_id,
+                        descriptor=vec,
+                        quality=quality,
+                        device_info=device_info,
+                    )
+                )
+            return created
 
     @staticmethod
     async def list_for_user(tenant_id: int, user_id: int) -> List[UserFaceTemplate]:

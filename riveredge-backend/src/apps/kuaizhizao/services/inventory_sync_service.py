@@ -13,6 +13,7 @@ from apps.kuaizhizao.schemas.inventory_sync import (
     InventorySyncFromSourceOut,
     InventorySyncFromSourceRequest,
 )
+from apps.master_data.constants.batch_quality_status import QUALIFIED
 from apps.master_data.models.material import Material
 from apps.master_data.models.material_batch import MaterialBatch
 from apps.master_data.models.warehouse import Warehouse
@@ -40,6 +41,22 @@ from core.services.data.sync_binding_sources import fetch_mapped_rows_from_sourc
 from core.services.data.sync_progress import emit_sync_progress
 from tortoise.expressions import Q
 
+
+def normalize_inventory_sync_batch_no(row: Dict[str, Any]) -> str:
+    """即时库存源常无批号；MaterialBatch.batch_no 非空，空值落空串（与库存增减口径一致）。"""
+    return cell_str(
+        row.get("batch_no")
+        or row.get("batch_number")
+        or row.get("batchNo")
+    )
+
+
+def _inventory_batch_match_key(
+    material_id: int,
+    batch_no: str,
+    warehouse_id: int,
+) -> tuple[int, str, int]:
+    return (int(material_id), batch_no or "", int(warehouse_id or 0))
 
 
 class InventorySyncService:
@@ -196,8 +213,6 @@ class InventorySyncService:
         rows: List[Dict[str, Any]],
         match_key: str,
     ) -> InventorySyncFromSourceOut:
-        from datetime import date
-
         created = 0
         updated = 0
         skipped = 0
@@ -207,7 +222,8 @@ class InventorySyncService:
 
         to_update: List[MaterialBatch] = []
         to_create: List[MaterialBatch] = []
-        existing_by_key: Dict[str, MaterialBatch] = {}
+        parsed: List[Dict[str, Any]] = []
+        material_ids: List[int] = []
 
         for row in rows:
             material_code = cell_str(row.get(match_key) or row.get("material_code") or row.get("code"))
@@ -225,11 +241,7 @@ class InventorySyncService:
                 errors.append(f"物料 {material_code} 不存在，请先同步物料主数据")
                 continue
 
-            batch_no = cell_str(
-                row.get("batch_no")
-                or row.get("batch_number")
-                or row.get("batchNo")
-            ) or None
+            batch_no = normalize_inventory_sync_batch_no(row)
             quantity_raw = row.get("quantity")
             quantity = cell_optional_decimal(quantity_raw)
             if quantity is None:
@@ -263,7 +275,47 @@ class InventorySyncService:
                 except (ValueError, TypeError):
                     production_date = None
 
-            key = f"{material_code}||{batch_no or ''}||{warehouse_id or 0}"
+            parsed.append(
+                {
+                    "material": material,
+                    "batch_no": batch_no,
+                    "quantity": quantity,
+                    "warehouse_id": warehouse_id or 0,
+                    "warehouse_name": warehouse_name,
+                    "expiry_date": expiry_date,
+                    "production_date": production_date,
+                }
+            )
+            material_ids.append(material.id)
+
+        existing_by_key: Dict[tuple[int, str, int], MaterialBatch] = {}
+        if material_ids:
+            existing_rows = await MaterialBatch.filter(
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+                material_id__in=list(set(material_ids)),
+                ownership_type="company_owned",
+                customer_id=0,
+                quality_status=QUALIFIED,
+            ).all()
+            for existing in existing_rows:
+                key = _inventory_batch_match_key(
+                    existing.material_id,
+                    existing.batch_no or "",
+                    existing.warehouse_id or 0,
+                )
+                if key not in existing_by_key:
+                    existing_by_key[key] = existing
+
+        for item in parsed:
+            material = item["material"]
+            batch_no = item["batch_no"]
+            quantity = item["quantity"]
+            warehouse_id = item["warehouse_id"]
+            warehouse_name = item["warehouse_name"]
+            expiry_date = item["expiry_date"]
+            production_date = item["production_date"]
+            key = _inventory_batch_match_key(material.id, batch_no, warehouse_id)
             if key in existing_by_key:
                 batch = existing_by_key[key]
                 batch.quantity = (batch.quantity or 0).__class__(quantity or 0)
@@ -288,7 +340,7 @@ class InventorySyncService:
                     production_date=production_date,
                     expiry_date=expiry_date,
                     quantity=quantity or 0,
-                    status="in_stock" if (quantity or 0) > 0 else "in_stock",
+                    status="in_stock",
                     created_at=sync_at,
                     updated_at=sync_at,
                 )

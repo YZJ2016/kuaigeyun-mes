@@ -29949,6 +29949,14 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.cosmic-warehouse-createorg-r01.title':
+    '苍穹仓库列表查询自动带创建组织',
+  'pages.dashboard.updateLog.entries.cosmic-warehouse-createorg-r01.description':
+    '金蝶苍穹仓库列表接口要求 createorg_number。现可在苍穹连接器填写组织编码，查询时自动写入；未指定仓库编码的 GET query 会改走批量查询。',
+  'pages.dashboard.updateLog.entries.inventory-sync-empty-batch-no-r01.title':
+    '即时库存同步支持无批号行',
+  'pages.dashboard.updateLog.entries.inventory-sync-empty-batch-no-r01.description':
+    '从数据接口同步即时库存时，源数据没有批号会报 batch_no 不能为空。现已按空批号写入并更新已有库存行，无批次物料可以正常同步。',
   'pages.dashboard.updateLog.entries.im-module-notify-dedupe-r01.title':
     '模块群工序交接通知不再重复两条',
   'pages.dashboard.updateLog.entries.im-module-notify-dedupe-r01.description':
@@ -40750,6 +40758,9 @@ export default {
   'pages.system.applicationConnections.kingdeeCosmicUsername': '代理用户名',
   'pages.system.applicationConnections.kingdeeCosmicUsernameExtra':
     '第三方应用配置的代理用户（getToken 的 username）',
+  'pages.system.applicationConnections.kingdeeCosmicOrgNumber': '组织编码',
+  'pages.system.applicationConnections.kingdeeCosmicOrgNumberExtra':
+    '创建组织编码（createorg_number）。仓库列表等基础资料查询必填；填写后会自动写入接口，无需在每条接口参数里重复填。',
   'pages.system.applicationConnections.kingdeeCosmicClientIdExtra':
     '第三方应用系统编码（详情中的 appId / client_id）',
   'pages.system.applicationConnections.kingdeeCosmicClientSecretExtra':
