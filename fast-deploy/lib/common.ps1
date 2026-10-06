@@ -2006,8 +2006,10 @@ function Start-ProcessBackground([string]$Name, [string]$FilePath, [string[]]$Ar
         foreach ($k in $EnvVars.Keys) {
             if ($k -ne 'WORKDIR') { Set-Item -Path "env:$k" -Value $EnvVars[$k] }
         }
+        # PowerShell forbids RedirectStandardOutput and RedirectStandardError pointing at the same file.
+        $errFile = Join-Path $script:LogsDir "$Name.err.log"
         $proc = Start-Process -FilePath $FilePath -ArgumentList $ArgumentList `
-            -RedirectStandardOutput $logFile -RedirectStandardError $logFile `
+            -RedirectStandardOutput $logFile -RedirectStandardError $errFile `
             -PassThru -NoNewWindow -WorkingDirectory $workDir
         Set-Content -Path $pidFile -Value $proc.Id
         return $proc.Id
