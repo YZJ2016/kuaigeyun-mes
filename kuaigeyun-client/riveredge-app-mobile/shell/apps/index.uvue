@@ -2,6 +2,7 @@
 	<view class="page-shell">
 		<home-link />
 	<scroll-view class="page" direction="vertical">
+		<load-feedback :active="loading" :mode="loadSettled ? 'refresh' : 'initial'" />
 		<text v-if="errorText.length > 0" class="error">{{ errorText }}</text>
 		<text v-if="!loading && empty && openedScope.length == 0" class="empty">没有可显示的入口</text>
 		<view v-if="openedScope.length == 0">
@@ -41,15 +42,11 @@
 			</view>
 		</view>
 	</scroll-view>
-		<view v-if="loading" class="loading-mask">
-			<view class="loading-card">
-				<text class="loading">正在加载</text>
-			</view>
-		</view>
 	</view>
 </template>
 
 <script setup lang="uts">
+	import LoadFeedback from '../../shared/ui/load-feedback.uvue'
 	import HomeLink from '../../shared/ui/home-link.uvue'
 	import ActionButton from '../../shared/ui/action-button.uvue'
 	import { getToken } from '../../shared/api/session.uts'
@@ -59,6 +56,7 @@
 	import type { WorkCell, WorkScope } from '../workbench/load.uts'
 
 	const loading = ref(false)
+	const loadSettled = ref(false)
 	const scopes = ref<Array<WorkScope>>([])
 	const empty = ref(false)
 	const errorText = ref('')
@@ -94,6 +92,7 @@
 			return
 		}
 		loading.value = false
+		loadSettled.value = true
 	}
 
 	function cellCount(block : WorkScope) : number {

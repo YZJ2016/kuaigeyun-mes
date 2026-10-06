@@ -134,13 +134,21 @@ test('navigation retains home interception and return behavior',()=>{
 test('account actions keep confirmation and cancellation makes no request',()=>{
   const modals=[],requests=[],routes=[];
   const page=script('shell/account/index.uvue',{}, {
-    apiPost:(url)=>requests.push(url),
-    uni:{showModal:o=>modals.push(o),navigateTo:o=>routes.push(o.url)},
+    apiPost:(url)=>requests.push(url),navigateToPage:url=>routes.push(url),
+    uni:{showModal:o=>modals.push(o)},
   });
   page.run('openEdit();openPassword();askUnbind();askLogout()');
   assert.deepEqual(routes,['/shell/account/edit','/shell/account/password']);
   assert.equal(modals.length,2);assert.equal(modals[0].title,'解除绑定');assert.equal(modals[1].title,'退出登录');
   modals[0].success({confirm:false});modals[1].success({confirm:false});assert.equal(requests.length,0);
+});
+test('page push helper applies the shared slide animation and forwards callbacks',()=>{
+  const calls=[];let fired='';
+  const page=script('shared/ui/navigate.uts',{}, {uni:{navigateTo:o=>calls.push(o)},mark:v=>{fired=v;}});
+  page.run("exports.navigateToPage('/x')");
+  assert.equal(calls[0].url,'/x');assert.equal(calls[0].animationType,'slide-in-right');
+  page.run("exports.navigateToPage('/y',function(){mark('ok')},function(){mark('fail')})");
+  calls[1].success();assert.equal(fired,'ok');calls[1].fail();assert.equal(fired,'fail');
 });
 test('mold borrowing keeps optional dates and blocks duplicate submission',async()=>{
   const calls=[];let finish;
@@ -247,4 +255,40 @@ test('successful disposition closes details and waits for ledger refresh',async(
   assert.equal(calls[1].method,'GET');assert.equal(calls[1].path,'/api/v1/apps/kuaizhizao/nonconforming-ledger');
   pending[1]([{id:8,status:'processed'}]);await submit;
   assert.equal(page.run('loading.value'),false);assert.equal(page.run('rows.value[0].status'),'processed');assert.equal(page.run('loadSettled.value'),true);
+});
+test('account edit locks pick clear and save while the form is still loading',async()=>{
+  const calls=[];const picks=[];
+  const page=script('shell/account/edit.uvue',{}, {
+    apiRequest:async(...args)=>{calls.push(args);},
+    pickAndUploadImage:async()=>{picks.push(1);return {uid:'u1'};},
+  });
+  page.run("loading.value=true;username.value='operator';avatarUuid.value='a1'");
+  await page.run('onSave()');await page.run('onPick()');page.run('onClear()');
+  assert.equal(calls.length,0);assert.equal(picks.length,0);assert.equal(page.run('avatarUuid.value'),'a1');
+});
+test('apps page keeps groups during refresh after the first load settles',async()=>{
+  const pending=[];
+  const page=script('shell/apps/index.uvue',{}, {
+    onBackPress(){},getToken:()=> 'token',
+    loadWorkbench:()=>new Promise(resolve=>pending.push(resolve)),
+    uni:{reLaunch(){},showToast(){}},
+  });
+  const first=page.run('refresh()');
+  assert.equal(page.run('loading.value'),true);assert.equal(page.run('loadSettled.value'),false);
+  pending[0]([{scope:'workshop',sections:[],errorText:'',badgeNote:'',showBadge:false,pendingCount:0,pendingText:'',overdueCount:0,overdueText:''}]);await first;
+  assert.equal(page.run('loading.value'),false);assert.equal(page.run('loadSettled.value'),true);assert.equal(page.run('scopes.value.length'),1);
+  const second=page.run('refresh()');
+  assert.equal(page.run('loading.value'),true);assert.equal(page.run('scopes.value.length'),1);
+  pending[1]([]);await second;
+  assert.equal(page.run('loading.value'),false);assert.equal(page.run('loadSettled.value'),true);
+});
+test('migrated shell pages use shared loading feedback without the removed dark mask',()=>{
+  for(const file of ['shell/login/index.uvue','shell/account/index.uvue','shell/account/edit.uvue','shell/account/password.uvue','shell/apps/index.uvue','shell/tenant/index.uvue','App.uvue']) {
+    const source=fs.readFileSync(path.join(root,file),'utf8');
+    assert.doesNotMatch(source,/loading-mask|loading-card|class="loading"|\.loading\s*\{/,file);
+  }
+  for(const file of ['shell/login/index.uvue','shell/account/index.uvue','shell/account/edit.uvue','shell/apps/index.uvue']) {
+    const source=fs.readFileSync(path.join(root,file),'utf8');
+    assert.match(source,/<load-feedback\b/,file);assert.match(source,/import LoadFeedback from/,file);
+  }
 });

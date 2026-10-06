@@ -132,41 +132,6 @@
 		padding-bottom: 20px;
 	}
 
-	.loading-mask {
-		position: fixed;
-		left: 0;
-		top: 48px;
-		right: 0;
-		bottom: 0;
-		z-index: 20;
-		background-color: rgba(15, 23, 42, 0.56);
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-	}
-
-	.loading-card {
-		background-color: #FFFFFF;
-		border-radius: 12px;
-		border-width: 1px;
-		border-style: solid;
-		border-color: #E2E8F0;
-		padding-top: 16px;
-		padding-right: 24px;
-		padding-bottom: 16px;
-		padding-left: 24px;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-	}
-
-	.loading {
-		font-size: 14px;
-		color: #625370;
-		padding-top: 12px;
-		padding-bottom: 12px;
-	}
-
 	.field {
 		background-color: #FFFFFF;
 		border-width: 1px;

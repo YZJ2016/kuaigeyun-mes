@@ -1,0 +1,10 @@
+export const PAGE_PUSH_ANIMATION = 'slide-in-right'
+
+export function navigateToPage(url : string, success : (() => void) | null = null, fail : (() => void) | null = null) {
+	uni.navigateTo({
+		url: url,
+		animationType: PAGE_PUSH_ANIMATION,
+		success: success,
+		fail: fail
+	})
+}

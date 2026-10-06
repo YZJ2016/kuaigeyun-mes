@@ -2,6 +2,7 @@
 	<view class="page-shell">
 		<home-link />
 	<scroll-view class="page" direction="vertical">
+		<load-feedback :active="loading" :mode="loadSettled ? 'refresh' : 'initial'" />
 		<text v-if="errorText.length > 0" class="error">{{ errorText }}</text>
 		<view class="card identity">
 			<image v-if="avatarSrc.length > 0" class="avatar-img" :src="avatarSrc" mode="aspectFill"></image>
@@ -63,15 +64,11 @@
 			<text class="logout-text">退出登录</text>
 		</button>
 	</scroll-view>
-		<view v-if="loading" class="loading-mask">
-			<view class="loading-card">
-				<text class="loading">正在加载</text>
-			</view>
-		</view>
 	</view>
 </template>
 
 <script setup lang="uts">
+	import LoadFeedback from '../../shared/ui/load-feedback.uvue'
 	import HomeLink from '../../shared/ui/home-link.uvue'
 	import { apiGet, apiPost } from '../../shared/api/http.uts'
 	import { fieldText } from '../../shared/api/fields.uts'
@@ -79,6 +76,7 @@
 	import { dropBrowserQuery, readBrowserQuery } from '../../shared/channel/index.uts'
 	import { startWecomBind, wecomBindOnThisClient } from './bind.uts'
 	import { loadAvatarSrc, nestedName, profileInitial, roleLine, userIdOf, wecomBindBody, wecomUserIdOf } from './profile.uts'
+	import { navigateToPage } from '../../shared/ui/navigate.uts'
 
 	type FactRow = {
 		label : string
@@ -86,6 +84,7 @@
 	}
 
 	const loading = ref(false)
+	const loadSettled = ref(false)
 	const errorText = ref('')
 	const headerName = ref('已登录')
 	const headerOrg = ref('')
@@ -278,17 +277,18 @@
 			return
 		}
 		loading.value = false
+		loadSettled.value = true
 		if (getToken().length == 0) {
 			leave()
 		}
 	}
 
 	function openEdit() {
-		uni.navigateTo({ url: '/shell/account/edit' })
+		navigateToPage('/shell/account/edit')
 	}
 
 	function openPassword() {
-		uni.navigateTo({ url: '/shell/account/password' })
+		navigateToPage('/shell/account/password')
 	}
 
 	async function onBind() {

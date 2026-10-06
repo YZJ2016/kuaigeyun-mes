@@ -45,6 +45,7 @@
 	import { readRows, fieldText, fieldNumber, errorText, firstText } from '../../../shared/api/fields.uts'
 	import { scanRaw, nowIso, toast, readWorkOrderRows } from '../json.uts'
 	import { readCurrentUser } from '../session.uts'
+	import { navigateToPage } from '../../../shared/ui/navigate.uts'
 
 	const workerName = ref('')
 	const codeText = ref('')
@@ -76,7 +77,7 @@
 	}
 	function openHistory() {
 		if (loading.value || submitting.value) { return }
-		uni.navigateTo({ url: '/features/workshop/reporting-history/index' })
+		navigateToPage('/features/workshop/reporting-history/index')
 	}
 	async function resolveManual() {
 		if (loading.value || submitting.value) { return }

@@ -44,6 +44,7 @@
 	import { readRows, fieldText, fieldNumber, errorText } from '../../../shared/api/fields.uts'
 	import { readCurrentUser } from '../session.uts'
 	import { toast } from '../json.uts'
+	import { navigateToPage } from '../../../shared/ui/navigate.uts'
 
 	const rows = ref<any[]>([])
 	const loading = ref(false)
@@ -177,7 +178,7 @@
 			toast('工单无效')
 			return
 		}
-		uni.navigateTo({ url: '/features/workshop/scan-report/index?workOrderId=' + workOrderId })
+		navigateToPage('/features/workshop/scan-report/index?workOrderId=' + workOrderId)
 	}
 
 	onBackPress((options : OnBackPressOptions) : boolean | null => {
