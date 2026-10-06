@@ -1,6 +1,7 @@
 import { rememberRoute } from '../workbench/recent.uts'
 import { publishH5Route } from '../../shared/channel/index.uts'
 import { runtimePlatform } from '../../shared/channel/headers.uts'
+import { navigateToPage } from '../../shared/ui/navigate.uts'
 import { featurePackage as workshopPackage } from '../../features/workshop/index.uts'
 import { featurePackage as warehousePackage } from '../../features/warehouse/index.uts'
 import { featurePackage as qualityPackage } from '../../features/quality/index.uts'
@@ -321,15 +322,11 @@ export function openRegisteredRoute(rawPath : string) : boolean {
 	if (query.length > 0) {
 		url = url + '?' + query
 	}
-	uni.navigateTo({
-		url: url,
-		success: () => {
-			rememberRoute(entryRoute(entry))
-			publishH5Route(shown)
-		},
-		fail: () => {
-			uni.showToast({ title: '页面未能打开', icon: 'none' })
-		}
+	navigateToPage(url, () => {
+		rememberRoute(entryRoute(entry))
+		publishH5Route(shown)
+	}, () => {
+		uni.showToast({ title: '页面未能打开', icon: 'none' })
 	})
 	return true
 }

@@ -15,7 +15,7 @@ const files = [
   ...['exception-report','packing-binding','reporting-approve','work-order-assign'].map(p=>'features/workshop/'+p+'/index.uvue'),
   'shell/account/edit.uvue', 'shell/account/password.uvue', 'shell/tenant/index.uvue',
   'shell/apps/index.uvue', 'shared/ui/action-button.uvue', 'shared/ui/selection-row.uvue',
-  'shared/ui/date-field.uvue', 'shared/ui/date.uts', 'shared/ui/status-badge.uvue',
+  'shared/ui/date-field.uvue', 'shared/ui/date.uts', 'shared/ui/navigate.uts', 'shared/ui/status-badge.uvue',
   'features/mold/http.uts', ...['mold-repairs','mold-maintenances','mold-returns'].map(p=>'features/mold/'+p+'/index.uvue'),
   'shell/workbench/index.uvue', 'shell/workbench/load.uts', 'shell/workbench/recent.uts',
   'shell/registry/index.uts', 'shared/api/session.uts',

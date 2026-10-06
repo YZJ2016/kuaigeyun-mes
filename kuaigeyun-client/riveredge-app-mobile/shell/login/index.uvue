@@ -2,6 +2,7 @@
 	<view class="page-shell">
 		<home-link />
 	<scroll-view class="login-page" direction="vertical">
+		<load-feedback :active="!ready" mode="initial" />
 		<view class="login-hero">
 			<view class="login-mark">
 				<text class="login-mark-text">星</text>
@@ -34,21 +35,18 @@
 			<view class="login-wecom"><action-button label="企业微信登录" :busy="wecomBusy" :disabled="searching || loggingIn" @press="onWecom" /></view>
 		</view>
 	</scroll-view>
-		<view v-if="!ready" class="loading-mask">
-			<view class="loading-card">
-				<text class="loading">正在加载</text>
-			</view>
-		</view>
 	</view>
 </template>
 
 <script setup lang="uts">
+	import LoadFeedback from '../../shared/ui/load-feedback.uvue'
 	import ActionButton from '../../shared/ui/action-button.uvue'
 	import SelectionRow from '../../shared/ui/selection-row.uvue'
 	import HomeLink from '../../shared/ui/home-link.uvue'
 	import { getTenantName, setTenantName } from '../../shared/api/session.uts'
 	import { bootLogin, chooseTenant, loginWithPassword, searchTenants, startWecomLogin } from './flow.uts'
 	import type { TenantChoice } from './flow.uts'
+	import { navigateToPage } from '../../shared/ui/navigate.uts'
 
 	const ready = ref(false)
 	const message = ref('')
@@ -91,7 +89,7 @@
 	}
 
 	function openAddressSettings() {
-		uni.navigateTo({ url: '/shell/tenant/index?mode=settings' })
+		navigateToPage('/shell/tenant/index?mode=settings')
 	}
 
 	async function refresh(options : any | null) {

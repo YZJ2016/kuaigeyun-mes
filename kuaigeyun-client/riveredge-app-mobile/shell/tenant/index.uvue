@@ -9,8 +9,8 @@
 		</view>
 		<view class="card">
 			<text class="label">地址</text>
-			<input class="field" :value="address" placeholder="https://主机/mobile/组织域名" placeholder-class="entry-ph" @input="onAddress" />
-			<action-button :label="busy ? '识别中' : '识别'" tone="secondary" @press="onIdentify" :disabled="busy" />
+			<input class="field" :value="address" :disabled="busy" placeholder="https://主机/mobile/组织域名" placeholder-class="entry-ph" @input="onAddress" />
+			<action-button label="识别" tone="secondary" :busy="busy" busy-label="识别中" @press="onIdentify" />
 			<text v-if="message.length > 0" class="error">{{ message }}</text>
 			<view v-if="pendingId.length > 0">
 				<text class="label">组织</text>

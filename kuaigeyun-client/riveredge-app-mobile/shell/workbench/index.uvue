@@ -98,6 +98,7 @@
 	import { iconAsset, iconMark, markClass, scopeTitle, tileClass } from './icons.uts'
 	import { loadWorkbench } from './load.uts'
 	import { readRecentRoutes } from './recent.uts'
+	import { navigateToPage } from '../../shared/ui/navigate.uts'
 	import type { WorkCell, WorkScope } from './load.uts'
 
 	type HomeTodo = {
@@ -470,7 +471,7 @@
 	}
 
 	function openAccount() {
-		uni.navigateTo({ url: '/shell/account/index' })
+		navigateToPage('/shell/account/index')
 	}
 
 	async function refresh() {
@@ -530,7 +531,7 @@
 	}
 
 	function openApps() {
-		uni.navigateTo({ url: '/shell/apps/index' })
+		navigateToPage('/shell/apps/index')
 	}
 
 	function appSettingsEnabled() : boolean {
@@ -542,7 +543,7 @@
 	}
 
 	function openAppSettings() {
-		uni.navigateTo({ url: '/shell/tenant/index?mode=settings' })
+		navigateToPage('/shell/tenant/index?mode=settings')
 	}
 
 	onShow(() => {

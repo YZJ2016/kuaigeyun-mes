@@ -63,3 +63,62 @@ node --test tests/p0.test.cjs tests/p1.test.cjs tests/p1-structure.test.cjs test
 实际执行：`node --test tests/p0.test.cjs tests/p1.test.cjs tests/p1-structure.test.cjs tests/p2.test.cjs`，50 项通过，0 失败；`git diff --check` 通过。未执行 HBuilderX 编译与真机验证，未提交 Git。真机重点：检验上传和提交反馈、输入锁定、处置成功后的列表刷新、短请求闪烁及离开确认。
 
 后续仍有生产报工／指派／异常／装箱／记录、账号／登录初始化／功能分组，以及导航转场策略。
+
+## 第四批：壳层（登录/账号/应用分组/租户）
+
+移动端壳层剩余 6 个页面收口，App.uvue 中已无引用的遮罩样式随之移除。请求 URL、参数、响应处理、票号与过期响应规则、登录与企业微信流程均未改动。
+
+| 文件 | 修改 |
+| --- | --- |
+| shell/login/index.uvue | 初始化遮罩改为 `load-feedback` 静态占位（`:active="!ready" mode="initial"`），表单仍由 `v-if="ready"` 控制；`searching`/`loggingIn`/`wecomBusy` 逻辑不变 |
+| shell/account/index.uvue | 遮罩改为公共反馈；新增 `loadSettled`，`refresh()` 结束后置位，每次 `onShow` 重载区分首次占位与刷新保留内容；`ticket` 过期响应、`busy` 守卫、按钮 `loading \|\| busy` 禁用不变 |
+| shell/account/edit.uvue | 遮罩改为 `load-feedback` 首次占位；`onPick`/`onClear`/`onSave` 守卫补充 `loading` 条件，头像按钮、四个输入和保存按钮在 `loading \|\| busy` 期间禁用，保存接入 `:busy`/`busy-label="保存中"` |
+| shell/account/password.uvue | 保存按钮接入 `:busy="busy" busy-label="保存中"`，三个密码输入 `busy` 期间禁用；无遮罩原本即存在 |
+| shell/apps/index.uvue | 遮罩改为公共反馈；新增 `loadSettled`，`refresh()` 结束置位，二次刷新保留已加载分组 |
+| shell/tenant/index.uvue | 识别按钮由 `:label="busy ? '识别中' : '识别'"` 改为 `label="识别" :busy="busy" busy-label="识别中"`（busy 内部即禁用）；地址输入 `busy` 期间禁用 |
+| App.uvue | 删除已无引用的 `.loading-mask`、`.loading-card`、`.loading` 全局样式块 |
+| uni.scss | 页面 class 注释不再列出已删除的 `.loading .loading-mask` |
+| tests/p2.test.cjs | 新增账号编辑加载期锁定、应用分组首次置位与刷新保留、迁移页面源码断言回归 |
+
+### 验证
+
+移动端目录执行：
+
+```powershell
+node --test tests/p0.test.cjs tests/p1.test.cjs tests/p1-structure.test.cjs tests/p2.test.cjs
+```
+
+`git diff --check` 通过；源码层面已确认 `riveredge-app-mobile` 内不再存在 `loading-mask`/`loading-card`/`class="loading"` 引用。未执行 HBuilderX 编译与真机验证，未提交 Git。
+
+真机需确认：登录初始化占位、账号页每次进入的刷新反馈与内容保留、编辑页加载期间表单禁用、应用分组二次刷新内容保留、租户地址识别忙碌反馈。
+
+## 第五批：导航转场统一
+
+移动端所有前进式页面跳转收口到公共入口，统一携带 `slide-in-right` 转场，时长保持平台默认。`navigateBack`/`reLaunch`/`redirectTo` 等返回与栈重置沿用平台默认行为，未新增 CSS 动画；应用分组弹层 `openScope`/`closeScope` 保持即时开合。
+
+| 文件 | 修改 |
+| --- | --- |
+| shared/ui/navigate.uts | 新增公共入口：`PAGE_PUSH_ANIMATION` 常量与 `navigateToPage(url, success?, fail?)`，内部为应用源码中唯一的 `uni.navigateTo` 调用 |
+| shell/registry/index.uts | `openRegisteredRoute` 改经 `navigateToPage`，成功回调仍记忆最近路由并发布 H5 路由，失败回调仍提示“页面未能打开” |
+| shell/workbench/index.uvue | 账号、应用分组、租户设置 3 处跳转改经公共入口 |
+| shell/account/index.uvue | 编辑资料、修改密码 2 处跳转改经公共入口 |
+| shell/login/index.uvue | 服务器地址设置跳转改经公共入口 |
+| features/workshop/work-orders/index.uvue | 扫码报工跳转改经公共入口 |
+| features/workshop/my-work-orders/index.uvue | 扫码报工跳转改经公共入口 |
+| features/workshop/scan-report/index.uvue | 报工记录跳转改经公共入口 |
+| tests/p1-structure.test.cjs | 新公共脚本纳入源码检查 |
+| tests/p2.test.cjs | 新增公共入口转场参数与回调透传回归；账号页跳转桩改为公共入口 |
+
+### 验证
+
+移动端目录执行：
+
+```powershell
+node --test tests/p0.test.cjs tests/p1.test.cjs tests/p1-structure.test.cjs tests/p2.test.cjs
+```
+
+54 项通过，0 失败。Git 根目录 `git diff --check` 通过；`uni.navigateTo` 在应用源码中仅剩公共入口内部一处调用（`uni_modules` 供应商代码除外），其余前进跳转均经 `navigateToPage`。未执行 HBuilderX 编译与真机验证，未提交 Git。
+
+真机需确认：前进转场方向与默认时长、返回手势与 `navigateBack` 表现、注册路由成功后仍记录最近使用并同步 H5、功能分组弹层开合保持即时。
+
+加载与动效方案 B 至此全部落地，无遗留批次。

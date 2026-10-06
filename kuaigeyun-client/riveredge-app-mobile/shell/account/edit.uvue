@@ -2,6 +2,7 @@
 	<view class="page-shell">
 		<home-link />
 	<scroll-view class="page" direction="vertical">
+		<load-feedback :active="loading" mode="initial" />
 		<text class="hint lead">这里修改的是姓名、用户名、手机和邮箱</text>
 		<text v-if="errorText.length > 0" class="error">{{ errorText }}</text>
 		<text class="label">头像</text>
@@ -11,29 +12,25 @@
 				<text class="avatar-letter">{{ initial }}</text>
 			</view>
 			<view class="avatar-actions">
-				<action-button :label="hasAvatar ? '更换头像' : '选择头像'" tone="secondary" @press="onPick" />
-				<action-button label="移除头像" tone="secondary" v-if="hasAvatar" @press="onClear" />
+				<action-button :label="hasAvatar ? '更换头像' : '选择头像'" tone="secondary" :disabled="loading || busy" @press="onPick" />
+				<action-button label="移除头像" tone="secondary" v-if="hasAvatar" :disabled="loading || busy" @press="onClear" />
 			</view>
 		</view>
 		<text class="label">姓名</text>
-		<input class="field" v-model="fullName" />
+		<input class="field" v-model="fullName" :disabled="loading || busy" />
 		<text class="label">用户名</text>
-		<input class="field" v-model="username" />
+		<input class="field" v-model="username" :disabled="loading || busy" />
 		<text class="label">手机</text>
-		<input class="field" v-model="phone" />
+		<input class="field" v-model="phone" :disabled="loading || busy" />
 		<text class="label">邮箱</text>
-		<input class="field" v-model="email" />
-		<action-button label="保存" tone="primary" @press="onSave" :disabled="busy" />
+		<input class="field" v-model="email" :disabled="loading || busy" />
+		<action-button label="保存" tone="primary" :busy="busy" busy-label="保存中" :disabled="loading || busy" @press="onSave" />
 	</scroll-view>
-		<view v-if="loading" class="loading-mask">
-			<view class="loading-card">
-				<text class="loading">正在加载</text>
-			</view>
-		</view>
 	</view>
 </template>
 
 <script setup lang="uts">
+	import LoadFeedback from '../../shared/ui/load-feedback.uvue'
 	import ActionButton from '../../shared/ui/action-button.uvue'
 	import HomeLink from '../../shared/ui/home-link.uvue'
 	import { apiGet, apiRequest } from '../../shared/api/http.uts'
@@ -125,7 +122,7 @@
 	}
 
 	async function onPick() {
-		if (busy.value) {
+		if (loading.value || busy.value) {
 			return
 		}
 		busy.value = true
@@ -151,7 +148,7 @@
 	}
 
 	function onClear() {
-		if (busy.value) {
+		if (loading.value || busy.value) {
 			return
 		}
 		avatarUuid.value = ''
@@ -159,7 +156,7 @@
 	}
 
 	async function onSave() {
-		if (busy.value) {
+		if (loading.value || busy.value) {
 			return
 		}
 		const name = username.value.trim()
