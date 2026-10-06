@@ -29950,6 +29950,10 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.haoligo-order-tracking-search-select-r01.title':
+    '订单跟踪搜索条件改用下拉并真正生效',
+  'pages.dashboard.updateLog.entries.haoligo-order-tracking-search-select-r01.description':
+    '客户、订单类型、订单情况、指定人、账期、交期提醒、已提交生产等可选项改为下拉；指定人等筛选会传到后端，不再只显示条件却筛不出结果。',
   'pages.dashboard.updateLog.entries.cosmic-warehouse-createorg-r01.title':
     '苍穹仓库列表查询自动带创建组织',
   'pages.dashboard.updateLog.entries.cosmic-warehouse-createorg-r01.description':
