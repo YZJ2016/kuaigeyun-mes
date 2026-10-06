@@ -696,7 +696,7 @@ class PayrollSettlementService:
             ot = _d(hours.get("ot"))
             rate = _d(emp.hourly_rate)
             time_wage = ZERO
-            if rate > 0 and (regular > 0 or ot > 0):
+            if emp.pay_method != "month" and rate > 0 and (regular > 0 or ot > 0):
                 time_wage = regular * rate + ot * rate * ot_mult
 
             piece = ZERO

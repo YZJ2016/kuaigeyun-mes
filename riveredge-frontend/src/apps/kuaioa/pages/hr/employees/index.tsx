@@ -6,6 +6,7 @@ import { runKuaioaListExport } from '../../../utils/kuaioaListExport';
 import {
   buildOaEmployeeStatusEnum,
   buildOaEmploymentTypeOptions,
+  buildOaPayMethodOptions,
 } from '../../../utils/oaFormEnums';
 import { loadOaProductionLineNameOptions, loadOaWorkshopNameOptions } from '../../../utils/oaWorkshopOptions';
 import {
@@ -52,14 +53,7 @@ const EmployeesPage: React.FC = () => {
 
   const employmentOptions = useMemo(() => buildOaEmploymentTypeOptions(t), [t]);
 
-  const payMethodOptions = useMemo(
-    () => [
-      { label: t('app.kuaioa.employee.payMethod.piece'), value: 'piece' },
-      { label: t('app.kuaioa.employee.payMethod.time'), value: 'time' },
-      { label: t('app.kuaioa.employee.payMethod.line'), value: 'line' },
-    ],
-    [t],
-  );
+  const payMethodOptions = useMemo(() => buildOaPayMethodOptions(t), [t]);
 
   const statusOptions = useMemo(
     () => [

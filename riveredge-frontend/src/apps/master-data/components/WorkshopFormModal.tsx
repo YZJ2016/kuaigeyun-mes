@@ -149,7 +149,10 @@ export const WorkshopFormModal: React.FC<WorkshopFormModalProps> = ({
           try {
             const codeResponse = await generateCode({ rule_code: ruleCodeToUse });
             standardValues.code = codeResponse.code;
-          } catch {}
+          } catch (genErr: any) {
+            messageApi.error(genErr?.message || t('common.createFailed'));
+            return;
+          }
         }
         const created = await workshopApi.create(standardValues as WorkshopCreate);
         await saveCustomFieldValues(created.id, customData);

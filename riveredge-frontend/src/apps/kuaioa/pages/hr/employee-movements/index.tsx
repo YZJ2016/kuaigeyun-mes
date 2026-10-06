@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import { App, Button, DatePicker, Form, Select, Space, Table, Typography } from 'antd';
 import {
   ProFormDatePicker,
+  ProFormDigit,
   ProFormSelect,
   ProFormText,
   ProFormTextArea,
@@ -28,14 +29,29 @@ import {
 } from '../../../services/employees';
 import {
   buildOaEmploymentTypeOptions,
+  buildOaPayMethodOptions,
   resolveOaEmploymentTypeLabel,
 } from '../../../utils/oaFormEnums';
 import { flattenDepartmentOptions } from '../../../utils/oaLookupFields';
-import { loadOaWorkshopNameOptions } from '../../../utils/oaWorkshopOptions';
+import {
+  loadOaProductionLineNameOptions,
+  loadOaWorkshopNameOptions,
+} from '../../../utils/oaWorkshopOptions';
 
 type Row = Record<string, unknown>;
 
 type RegisterKind = 'hire' | 'temp' | 'leave' | null;
+
+function optionalTrimmed(value: unknown): string | undefined {
+  const text = value == null ? '' : String(value).trim();
+  return text || undefined;
+}
+
+function optionalNumber(value: unknown): number | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : undefined;
+}
 
 const EmployeeMovementsPage: React.FC = () => {
   const { t } = useTranslation();
@@ -46,6 +62,7 @@ const EmployeeMovementsPage: React.FC = () => {
   const [workshop, setWorkshop] = useState<string | undefined>();
   const [movementType, setMovementType] = useState<string | undefined>();
   const [workshopOptions, setWorkshopOptions] = useState<{ label: string; value: string }[]>([]);
+  const [lineOptions, setLineOptions] = useState<{ label: string; value: string }[]>([]);
   const [activeEmployees, setActiveEmployees] = useState<Row[]>([]);
   const [departmentOptions, setDepartmentOptions] = useState<{ label: string; value: string }[]>(
     [],
@@ -58,14 +75,7 @@ const EmployeeMovementsPage: React.FC = () => {
   const deepLinkHandledRef = React.useRef<string | null>(null);
 
   const employmentOptions = useMemo(() => buildOaEmploymentTypeOptions(t), [t]);
-  const payMethodOptions = useMemo(
-    () => [
-      { label: t('app.kuaioa.employee.payMethod.piece'), value: 'piece' },
-      { label: t('app.kuaioa.employee.payMethod.time'), value: 'time' },
-      { label: t('app.kuaioa.employee.payMethod.line'), value: 'line' },
-    ],
-    [t],
-  );
+  const payMethodOptions = useMemo(() => buildOaPayMethodOptions(t), [t]);
   const typeOptions = useMemo(
     () => [
       { label: t('app.kuaioa.movement.type.hire'), value: 'hire' },
@@ -124,31 +134,36 @@ const EmployeeMovementsPage: React.FC = () => {
   }, [openRegister, perms.canCreate, perms.canUpdate, searchParams]);
 
   const refreshEmployeeOptions = useCallback(async () => {
-    const [empRes, workshops] = await Promise.all([
+    const [empRes, workshops, lines] = await Promise.all([
       listEmployees({ status: 'active' }),
       loadOaWorkshopNameOptions(),
+      loadOaProductionLineNameOptions(),
     ]);
     setActiveEmployees(empRes.items);
     setWorkshopOptions(workshops);
+    setLineOptions(lines.map(({ label, value }) => ({ label, value })));
   }, []);
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
-        const [empRes, deptTree, workshops] = await Promise.all([
+        const [empRes, deptTree, workshops, lines] = await Promise.all([
           listEmployees({ status: 'active' }),
           getDepartmentTree({ host_resource: 'kuaioa:employee' }),
           loadOaWorkshopNameOptions(),
+          loadOaProductionLineNameOptions(),
         ]);
         if (cancelled) return;
         setActiveEmployees(empRes.items);
         setWorkshopOptions(workshops);
+        setLineOptions(lines.map(({ label, value }) => ({ label, value })));
         setDepartmentOptions(flattenDepartmentOptions(deptTree.items || []));
       } catch {
         if (!cancelled) {
           setActiveEmployees([]);
           setWorkshopOptions([]);
+          setLineOptions([]);
           setDepartmentOptions([]);
         }
       }
@@ -224,17 +239,28 @@ const EmployeeMovementsPage: React.FC = () => {
     try {
       await createEmployee({
         full_name: String(values.full_name ?? '').trim(),
-        department_name: values.department_name
-          ? String(values.department_name).trim()
-          : undefined,
-        workshop_name: values.workshop_name ? String(values.workshop_name).trim() : undefined,
+        department_name: optionalTrimmed(values.department_name),
+        workshop_name: optionalTrimmed(values.workshop_name),
+        production_line_name: optionalTrimmed(values.production_line_name),
         employment_type:
           registerKind === 'temp' ? 'temp' : String(values.employment_type ?? 'formal'),
         pay_method: String(values.pay_method ?? 'time'),
-        phone: values.phone ? String(values.phone).trim() : undefined,
+        phone: optionalTrimmed(values.phone),
+        hourly_rate: optionalNumber(values.hourly_rate),
         hire_date: hireDay.format('YYYY-MM-DD'),
+        bank_account: optionalTrimmed(values.bank_account),
+        bank_name: optionalTrimmed(values.bank_name),
+        bank_branch: optionalTrimmed(values.bank_branch),
+        living_allowance: optionalNumber(values.living_allowance),
+        post_wage: optionalNumber(values.post_wage),
+        social_insurance: optionalNumber(values.social_insurance),
+        housing_fund: optionalNumber(values.housing_fund),
+        rent_utility: optionalNumber(values.rent_utility),
+        welfare_dragon_boat: optionalNumber(values.welfare_dragon_boat),
+        welfare_mid_autumn: optionalNumber(values.welfare_mid_autumn),
+        welfare_spring_festival: optionalNumber(values.welfare_spring_festival),
         status: 'active',
-        notes: values.notes ? String(values.notes).trim() : undefined,
+        notes: optionalTrimmed(values.notes),
       });
       message.success(
         registerKind === 'temp'
@@ -390,10 +416,14 @@ const EmployeeMovementsPage: React.FC = () => {
           colProps={{ span: 12 }}
           fieldProps={{ optionFilterProp: 'label' }}
         />
-        <ProFormText
-          name="phone"
-          label={t('app.kuaioa.employee.phone')}
+        <ProFormSelect
+          name="production_line_name"
+          label={t('app.kuaioa.employee.productionLine')}
+          options={lineOptions}
+          showSearch
+          allowClear
           colProps={{ span: 12 }}
+          fieldProps={{ optionFilterProp: 'label' }}
         />
         <ProFormSelect
           name="employment_type"
@@ -410,10 +440,93 @@ const EmployeeMovementsPage: React.FC = () => {
           rules={[{ required: true }]}
           colProps={{ span: 12 }}
         />
+        <ProFormText
+          name="phone"
+          label={t('app.kuaioa.employee.phone')}
+          colProps={{ span: 12 }}
+        />
+        <ProFormDigit
+          name="hourly_rate"
+          label={t('app.kuaioa.employee.hourlyRate')}
+          min={0}
+          colProps={{ span: 12 }}
+          fieldProps={{ style: { width: '100%' } }}
+        />
         <ProFormDatePicker
           name="hire_date"
           label={t('app.kuaioa.employee.hireDate')}
           rules={[{ required: true, message: t('app.kuaioa.movement.hireDateRequired') }]}
+          colProps={{ span: 12 }}
+          fieldProps={{ style: { width: '100%' } }}
+        />
+        <ProFormText
+          name="bank_account"
+          label={t('app.kuaioa.employee.bankAccount')}
+          colProps={{ span: 12 }}
+        />
+        <ProFormText
+          name="bank_name"
+          label={t('app.kuaioa.employee.bankName')}
+          colProps={{ span: 12 }}
+        />
+        <ProFormText
+          name="bank_branch"
+          label={t('app.kuaioa.employee.bankBranch')}
+          colProps={{ span: 12 }}
+        />
+        <ProFormDigit
+          name="living_allowance"
+          label={t('app.kuaioa.employee.livingAllowance')}
+          min={0}
+          colProps={{ span: 12 }}
+          fieldProps={{ style: { width: '100%' } }}
+        />
+        <ProFormDigit
+          name="post_wage"
+          label={t('app.kuaioa.employee.postWage')}
+          min={0}
+          colProps={{ span: 12 }}
+          fieldProps={{ style: { width: '100%' } }}
+        />
+        <ProFormDigit
+          name="social_insurance"
+          label={t('app.kuaioa.employee.socialInsurance')}
+          min={0}
+          colProps={{ span: 12 }}
+          fieldProps={{ style: { width: '100%' } }}
+        />
+        <ProFormDigit
+          name="housing_fund"
+          label={t('app.kuaioa.employee.housingFund')}
+          min={0}
+          colProps={{ span: 12 }}
+          fieldProps={{ style: { width: '100%' } }}
+        />
+        <ProFormDigit
+          name="rent_utility"
+          label={t('app.kuaioa.employee.rentUtility')}
+          min={0}
+          colProps={{ span: 12 }}
+          fieldProps={{ style: { width: '100%' } }}
+        />
+        <ProFormDigit
+          name="welfare_dragon_boat"
+          label={t('app.kuaioa.employee.welfareDragonBoat')}
+          min={0}
+          colProps={{ span: 12 }}
+          fieldProps={{ style: { width: '100%' } }}
+        />
+        <ProFormDigit
+          name="welfare_mid_autumn"
+          label={t('app.kuaioa.employee.welfareMidAutumn')}
+          min={0}
+          colProps={{ span: 12 }}
+          fieldProps={{ style: { width: '100%' } }}
+        />
+        <ProFormDigit
+          name="welfare_spring_festival"
+          label={t('app.kuaioa.employee.welfareSpringFestival')}
+          min={0}
           colProps={{ span: 12 }}
           fieldProps={{ style: { width: '100%' } }}
         />

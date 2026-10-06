@@ -1,7 +1,10 @@
 from core.utils.ip_parser import (
     format_location_label,
     format_manual_user_location_label,
+    merge_location_detail_with_zh_admin,
     normalize_login_location_label,
+    pick_canonical_login_location,
+    vote_ip_location_details,
 )
 
 
@@ -39,3 +42,89 @@ def test_format_manual_user_location_label():
     assert format_manual_user_location_label(["台湾省", "台北市"]) == "中国 台湾省 台北市"
     assert format_manual_user_location_label([]) is None
     assert format_manual_user_location_label(None) is None
+
+
+def test_pick_canonical_prefers_china_prefix_and_frequency():
+    labels = (
+        ["China Anhui Wuhu"] * 35
+        + ["中国 广东 广州市"] * 74
+        + ["CN Anhui Hefei"]
+    )
+    assert pick_canonical_login_location(labels) == "中国 广东 广州市"
+
+
+def test_pick_canonical_prefers_chinese_when_counts_tie():
+    labels = ["China Jiangsu Wuxi", "中国 江苏 无锡市"]
+    assert pick_canonical_login_location(labels) == "中国 江苏 无锡市"
+
+
+def test_pick_canonical_ignores_legacy_dash_format():
+    assert pick_canonical_login_location(["中国-广东-广州", "中国 广东 广州市"]) == (
+        "中国 广东 广州市"
+    )
+
+
+def test_vote_ip_location_prefers_region_then_city():
+    """运营商段：广州 2 票 vs 安徽(芜湖2+合肥1)；先省后市应落芜湖。"""
+    candidates = [
+        {"city": "广州市", "region": "广东", "country": "中国", "lat": 23.1317, "lon": 113.266},
+        {"city": "Guangzhou", "region": "Guangdong", "country": "China", "lat": 23.1317, "lon": 113.266},
+        {"city": "Wuhu", "region": "Anhui", "country": "China", "lat": 31.146, "lon": 118.56455},
+        {"city": "Hefei", "region": "Anhui", "country": "CN", "lat": 31.8639, "lon": 117.2808},
+        {"city": "Wuhu", "region": "Anhui", "country": "China", "lat": 31.3522, "lon": 118.4451},
+        {"city": "Beijing", "region": "Beijing", "country": "China", "lat": 39.9075, "lon": 116.3972},
+    ]
+    voted = vote_ip_location_details(candidates)
+    assert voted is not None
+    assert voted["city"] == "芜湖"
+    assert voted["region"] == "安徽"
+    assert voted["country"] == "中国"
+    assert 31.1 <= float(voted["lat"]) <= 31.4
+    assert 118.4 <= float(voted["lon"]) <= 118.6
+
+
+def test_vote_ip_location_single_candidate():
+    voted = vote_ip_location_details(
+        [{"city": "无锡市", "region": "江苏", "country": "中国", "lat": 31.57, "lon": 120.3}]
+    )
+    assert voted == {
+        "city": "无锡",
+        "region": "江苏",
+        "country": "中国",
+        "lat": 31.57,
+        "lon": 120.3,
+    }
+
+
+def test_merge_location_detail_prefers_zh_admin_keeps_coords():
+    detail = {
+        "city": "Wuhu",
+        "region": "Anhui",
+        "country": "China",
+        "lat": 31.35,
+        "lon": 118.45,
+    }
+    merged = merge_location_detail_with_zh_admin(
+        detail,
+        {"country": "中国", "region": "安徽省", "city": "芜湖市"},
+    )
+    assert merged == {
+        "city": "芜湖",
+        "region": "安徽",
+        "country": "中国",
+        "lat": 31.35,
+        "lon": 118.45,
+    }
+    assert format_location_label(**{k: merged[k] for k in ("country", "region", "city")}) == (
+        "中国 安徽 芜湖"
+    )
+
+
+def test_merge_location_detail_alias_when_no_admin():
+    merged = merge_location_detail_with_zh_admin(
+        {"city": "Wuxi", "region": "Jiangsu", "country": "CN", "lat": 1.0, "lon": 2.0},
+        None,
+    )
+    assert merged["country"] == "中国"
+    assert merged["region"] == "江苏"
+    assert merged["city"] == "无锡"
