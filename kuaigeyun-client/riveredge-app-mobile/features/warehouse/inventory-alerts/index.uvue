@@ -1,7 +1,21 @@
 <template>
-	<WarehouseBoard kind="inventory-alerts"></WarehouseBoard>
+	<WarehouseBoard kind="inventory-alerts" :back-request="backRequest" :show-request="showRequest" @guard-state="onGuardState"></WarehouseBoard>
 </template>
 
 <script setup lang="uts">
 	import WarehouseBoard from '../board.uvue'
+	const backRequest = ref(0)
+	const showRequest = ref(0)
+	const guarded = ref(false)
+	function onGuardState(value : boolean) { guarded.value = value }
+	onBackPress(() : boolean | null => {
+		if (!guarded.value) { return false }
+		backRequest.value += 1
+		return true
+	})
+	let shown = false
+	onShow(() => {
+		if (shown) { showRequest.value += 1 }
+		shown = true
+	})
 </script>

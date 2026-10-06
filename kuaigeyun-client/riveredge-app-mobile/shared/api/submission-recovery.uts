@@ -1,0 +1,385 @@
+import { apiBase, QueryPair, ApiOutcome, ApiRequestError, apiRequestWithOperationKey, apiResultUnknown } from './http.uts'
+import { getTenantId, readSessionUserId, getToken } from './session.uts'
+import { createIdempotencyKey } from '../channel/headers.uts'
+
+// Storage + resend for durable mobile submissions. Pages opt in only after the
+// matching backend transaction is verified. Recovery never generates a new
+// operation key: the snapshot's operationKey is resent as Idempotency-Key.
+export type SubmissionSnapshot = {
+	version : number
+	storageKey : string
+	scope : string
+	action : string
+	operationKey : string
+	method : string
+	path : string
+	queryText : string
+	bodyText : string
+}
+
+// submitRecoverable / recoverSubmission 的结果分类。页面据此区分
+// 已应用（含重放）、明确拒绝（安全重试）、结果未知（先核对再操作）。
+export const SUBMISSION_APPLIED = 'applied'
+export const SUBMISSION_REJECTED = 'rejected'
+export const SUBMISSION_UNKNOWN = 'unknown'
+
+export type SubmissionOutcome = {
+	state : string
+	data : any | null
+	replayed : boolean
+	httpStatus : number
+	message : string
+	snapshot : SubmissionSnapshot
+}
+
+// listCorruptSubmissions 返回的损坏记录存根：action/operationKey 为尽力
+// 解析结果（可能为空串），仅供页面/运维展示"需人工核对"，不含可重发数据。
+// 按规范不提供用户侧删除入口，损坏记录仅可见、不可清除。
+export type CorruptSubmission = {
+	storageKey : string
+	action : string
+	operationKey : string
+}
+
+function currentScope() : string {
+	const tenant = getTenantId()
+	const user = readSessionUserId()
+	if (tenant.length == 0 || user <= 0 || getToken().length == 0) {
+		throw new Error('提交恢复需要有效账号和组织，请重新登录')
+	}
+	return JSON.stringify([apiBase(), tenant, user]) ?? ''
+}
+
+function storageKey(scope : string, action : string) : string {
+	return 'mobile_submission_v1:' + encodeURIComponent(scope) + ':' + encodeURIComponent(action)
+}
+
+function parseStoredSnapshot(raw : string, key : string, scope : string) : SubmissionSnapshot {
+	const saved = JSON.parse(raw) as SubmissionSnapshot
+	if (saved.version != 1 || saved.scope != scope || saved.storageKey != key) {
+		throw new Error('invalid snapshot scope')
+	}
+	if (typeof saved.action != 'string' || saved.action.length == 0 || storageKey(scope, saved.action) != key) {
+		throw new Error('invalid snapshot action')
+	}
+	if (typeof saved.operationKey != 'string' || saved.operationKey.indexOf('mob-op-') != 0 || saved.operationKey.length > 128) {
+		throw new Error('invalid operation key')
+	}
+	if (typeof saved.bodyText != 'string' || typeof saved.queryText != 'string' || typeof saved.path != 'string' || typeof saved.method != 'string') {
+		throw new Error('invalid request snapshot')
+	}
+	JSON.parse(saved.bodyText)
+	JSON.parse(saved.queryText)
+	return saved
+}
+
+export function readPendingSubmission(action : string) : SubmissionSnapshot | null {
+	const scope = currentScope()
+	const key = storageKey(scope, action)
+	const raw = uni.getStorageSync(key)
+	if (raw == null || raw == '') {
+		return null
+	}
+	try {
+		if (typeof raw != 'string') {
+			throw new Error('invalid snapshot')
+		}
+		const saved = parseStoredSnapshot(raw as string, key, scope)
+		if (saved.action != action) {
+			throw new Error('invalid snapshot action')
+		}
+		return saved
+	} catch (_err) {
+		// Corruption must not silently permit a replacement operation.
+		throw new Error('待恢复提交记录无法读取，请联系管理员核对原操作，不要重新创建')
+	}
+}
+
+export function prepareSubmission(action : string, method : string, path : string, query : Array<QueryPair> | null, body : UTSJSONObject | null) : SubmissionSnapshot {
+	if (action.trim().length == 0) {
+		throw new Error('提交操作名称无效')
+	}
+	if (readPendingSubmission(action) != null) {
+		throw new Error('此操作仍有待恢复的提交，请先恢复原操作')
+	}
+	const scope = currentScope()
+	const key = storageKey(scope, action)
+	// stringify 失败必须抛错（快照完整性），绝不能用 'null' 顶替：
+	// 否则首发用活对象而恢复重发 body=null，可能被 4xx 清除一条实际已执行的提交。
+	const queryText = JSON.stringify(query)
+	const bodyText = JSON.stringify(body)
+	if (queryText == null || bodyText == null) {
+		throw new Error('提交内容无法序列化为快照，未保存也未发送请求')
+	}
+	const snapshot = {
+		version: 1,
+		storageKey: key,
+		scope: scope,
+		action: action,
+		operationKey: 'mob-op-' + createIdempotencyKey(),
+		method: method.toUpperCase(),
+		path: path,
+		queryText: queryText,
+		bodyText: bodyText,
+	} as SubmissionSnapshot
+	const encoded = JSON.stringify(snapshot)
+	if (encoded == null || encoded.length == 0 || snapshot.bodyText.length > 256 * 1024) {
+		throw new Error('提交快照无法保存，请减少内容后重试')
+	}
+	try {
+		uni.setStorageSync(key, encoded)
+		if (uni.getStorageSync(key) != encoded) {
+			throw new Error('snapshot not persisted')
+		}
+	} catch (_err) {
+		throw new Error('提交快照保存失败，尚未发送请求，请检查设备存储空间')
+	}
+	return snapshot
+}
+
+// Called only after a verified successful response. Captured storageKey keeps
+// late callbacks scoped to the original account, even after logout/switching.
+export function completeSubmission(snapshot : SubmissionSnapshot) : void {
+	let raw : any | null = null
+	try {
+		raw = uni.getStorageSync(snapshot.storageKey)
+	} catch (_err) {
+		// 存储读取失败不代表提交失败：快照留待人工核对，不得把异常
+		// 抛回 sendSnapshot 误分类这次已成功的请求。
+		return
+	}
+	if (typeof raw != 'string' || (raw as string).length == 0) {
+		return
+	}
+	let saved : SubmissionSnapshot | null = null
+	try {
+		saved = JSON.parse(raw as string) as SubmissionSnapshot
+	} catch (_err) {
+		// 内容损坏时不得删除，保留待人工核对，也不阻断已成功的提交。
+		return
+	}
+	if (saved != null && saved.operationKey == snapshot.operationKey && saved.scope == snapshot.scope) {
+		try {
+			uni.removeStorageSync(snapshot.storageKey)
+		} catch (_err) {
+		}
+	}
+}
+
+/** 当前服务地址、组织、账号作用域下的全部待恢复提交（供恢复入口列出）。 */
+export function listPendingSubmissions() : Array<SubmissionSnapshot> {
+	const scope = currentScope()
+	const prefix = 'mobile_submission_v1:' + encodeURIComponent(scope) + ':'
+	const list : Array<SubmissionSnapshot> = []
+	const keys = uni.getStorageInfoSync().keys
+	for (let i = 0; i < keys.length; i++) {
+		const key = keys[i]
+		if (key.indexOf(prefix) != 0) {
+			continue
+		}
+		const raw = uni.getStorageSync(key)
+		if (typeof raw != 'string') {
+			continue
+		}
+		try {
+			list.push(parseStoredSnapshot(raw as string, key, scope))
+		} catch (_err) {
+			// 损坏的快照不出现在可重发列表；由 listCorruptSubmissions 单独
+			// 暴露"需人工核对"，对应 action 的读写仍按原路径抛错阻断重发。
+		}
+	}
+	return list
+}
+
+function corruptAction(key : string, prefix : string) : string {
+	const encoded = key.substring(prefix.length)
+	try {
+		return decodeURIComponent(encoded)
+	} catch (_err) {
+		return encoded
+	}
+}
+
+function corruptEntry(raw : any | null, key : string, prefix : string) : CorruptSubmission {
+	// 尽力从损坏内容里捞 operationKey，便于对照服务端 Idempotency-Key 记录核对。
+	let operationKey = ''
+	if (typeof raw == 'string' && (raw as string).length > 0) {
+		try {
+			const parsed = JSON.parse(raw as string)
+			if (parsed != null && typeof parsed == 'object' && !Array.isArray(parsed)) {
+				const savedKey = (parsed as UTSJSONObject)['operationKey']
+				if (typeof savedKey == 'string' && (savedKey as string).length > 0) {
+					operationKey = savedKey as string
+				}
+			}
+		} catch (_err) {
+		}
+	}
+	return {
+		storageKey: key,
+		action: corruptAction(key, prefix),
+		operationKey: operationKey
+	} as CorruptSubmission
+}
+
+/**
+ * 当前服务地址、组织、账号作用域下已损坏的提交记录（仅存根）。
+ * 页面/运维可据此展示"需人工核对"，而不是让损坏记录无声地把 action 卡死。
+ * 只读可见性：不提供删除/清除入口，损坏记录需管理员核对后处理。
+ */
+export function listCorruptSubmissions() : Array<CorruptSubmission> {
+	const scope = currentScope()
+	const prefix = 'mobile_submission_v1:' + encodeURIComponent(scope) + ':'
+	const list : Array<CorruptSubmission> = []
+	const keys = uni.getStorageInfoSync().keys
+	for (let i = 0; i < keys.length; i++) {
+		const key = keys[i]
+		if (key.indexOf(prefix) != 0) {
+			continue
+		}
+		let raw : any | null = null
+		try {
+			raw = uni.getStorageSync(key)
+		} catch (_err) {
+			list.push(corruptEntry(null, key, prefix))
+			continue
+		}
+		if (typeof raw != 'string' || (raw as string).length == 0) {
+			list.push(corruptEntry(raw, key, prefix))
+			continue
+		}
+		try {
+			parseStoredSnapshot(raw as string, key, scope)
+		} catch (_err) {
+			list.push(corruptEntry(raw, key, prefix))
+		}
+	}
+	return list
+}
+
+function failMessage(err : any | null) : string {
+	if (err != null && err instanceof ApiRequestError) {
+		const known = (err as ApiRequestError).message
+		if (known != null && known.length > 0) {
+			return known
+		}
+	}
+	if (err != null && err instanceof Error) {
+		const message = (err as Error).message
+		if (message != null && message.length > 0) {
+			return message
+		}
+	}
+	return '请求失败'
+}
+
+function sendSnapshot(snapshot : SubmissionSnapshot, query : Array<QueryPair> | null, body : UTSJSONObject | null) : Promise<SubmissionOutcome> {
+	return apiRequestWithOperationKey(snapshot.method, snapshot.path, query, body, snapshot.operationKey).then((outcome : ApiOutcome) => {
+		if (!outcome.bodyPresent) {
+			// 2xx 但 body 丢失/为空：执行结果无法确认，保留原快照核对。
+			return {
+				state: SUBMISSION_UNKNOWN,
+				data: null,
+				replayed: outcome.replayed,
+				httpStatus: outcome.status,
+				message: '服务器返回成功但响应内容为空，执行结果未知',
+				snapshot: snapshot
+			} as SubmissionOutcome
+		}
+		completeSubmission(snapshot)
+		return {
+			state: SUBMISSION_APPLIED,
+			data: outcome.data,
+			replayed: outcome.replayed,
+			httpStatus: outcome.status,
+			message: '',
+			snapshot: snapshot
+		} as SubmissionOutcome
+	}).catch((err : any) => {
+		let status = 0
+		let isApiError = false
+		if (err instanceof ApiRequestError) {
+			status = (err as ApiRequestError).status
+			isApiError = true
+		}
+		// 结果未知：保留快照，等用户核对或恢复原操作，绝不自动换键重发。
+		// HTTP 5xx 同样按未知处理——后端业务记录可能已提交，仅是之后的
+		// 副作用（自动审批/绩效刷新/金蝶推送）抛错；按"拒绝"清除快照会让
+		// 盲重发产生重复单。非 ApiRequestError（本地异常等）保守按未知处理。
+		if (apiResultUnknown(err) || !isApiError || status >= 500) {
+			let message = failMessage(err)
+			if (isApiError && !apiResultUnknown(err) && status >= 500) {
+				message = '服务器返回 ' + status.toString() + '，执行结果未知，请核对原操作后重试'
+			}
+			return {
+				state: SUBMISSION_UNKNOWN,
+				data: null,
+				replayed: false,
+				httpStatus: status,
+				message: message,
+				snapshot: snapshot
+			} as SubmissionOutcome
+		}
+		// 明确拒绝：4xx 视为业务提交前的校验拒绝，服务端确认未执行，
+		// 解除待恢复状态可安全重试。401（身份失效，需重新登录核对）与
+		// 409（服务端可能已留存同键记录）除外，仍保留快照。
+		// 残余边角：若后端在业务记录提交后才返回 4xx，前端无法区分，
+		// 需后端持久化包装（execute_submission 中间件接线 + 状态查询端点）
+		// 兜底，本层不做过度处理。
+		if (status != 401 && status != 409) {
+			completeSubmission(snapshot)
+		}
+		return {
+			state: SUBMISSION_REJECTED,
+			data: null,
+			replayed: false,
+			httpStatus: status,
+			message: failMessage(err),
+			snapshot: snapshot
+		} as SubmissionOutcome
+	})
+}
+
+/**
+ * 写页面入口：先持久化快照（失败则零发送直接抛错），再以原 operationKey 发送。
+ * 返回 SubmissionOutcome，不会 reject 服务端/网络结果；只有本地前置校验抛错。
+ */
+export function submitRecoverable(action : string, method : string, path : string, query : Array<QueryPair> | null, body : UTSJSONObject | null) : Promise<SubmissionOutcome> {
+	const snapshot = prepareSubmission(action, method, path, query, body)
+	return sendSnapshot(snapshot, query, body)
+}
+
+/**
+ * 按 operationKey 恢复原请求：只能读取当前服务地址、组织、账号作用域的快照，
+ * 并以原 method/path/query/body/键重发；同键异参由后端返回既有冲突结构。
+ */
+export function recoverSubmission(operationKey : string) : Promise<SubmissionOutcome> {
+	const list = listPendingSubmissions()
+	let snapshot : SubmissionSnapshot | null = null
+	for (let i = 0; i < list.length; i++) {
+		if (list[i].operationKey == operationKey) {
+			snapshot = list[i]
+			break
+		}
+	}
+	if (snapshot == null) {
+		// 损坏记录也能从存根里尽力认出 operationKey：命中则报告损坏
+		// 需人工核对，而不是谎称"没有该记录"。
+		const corrupt = listCorruptSubmissions()
+		for (let i = 0; i < corrupt.length; i++) {
+			if (corrupt[i].operationKey.length > 0 && corrupt[i].operationKey == operationKey) {
+				throw new Error('待恢复提交记录无法读取，请联系管理员核对原操作，不要重新创建')
+			}
+		}
+		throw new Error('当前账号和组织下没有该待恢复的提交记录')
+	}
+	let query : Array<QueryPair> | null = null
+	let body : UTSJSONObject | null = null
+	try {
+		query = JSON.parse(snapshot.queryText) as Array<QueryPair> | null
+		body = JSON.parse(snapshot.bodyText) as UTSJSONObject | null
+	} catch (_err) {
+		throw new Error('待恢复提交记录无法读取，请联系管理员核对原操作，不要重新创建')
+	}
+	return sendSnapshot(snapshot, query, body)
+}

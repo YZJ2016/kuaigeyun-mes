@@ -2,31 +2,43 @@
 	<view class="page-shell">
 		<home-link />
 	<view class="page">
-		<load-feedback :active="loading" :mode="loadSettled ? 'refresh' : 'initial'" />
-		<text class="hint">周期 {{ period }}</text>
+		<load-feedback :active="loading && loadMode != 'more'" :mode="loadMode" />
+		<date-field label="绩效月份" v-model="pickedDate" :disabled="loading" />
+		<text class="hint">{{ period.length > 0 ? '周期 ' + period + '（所选日期所在月，可清除查看全部）' : '周期 全部月份' }}</text>
+		<action-button label="刷新" tone="secondary" :disabled="loading" @press="refreshList" />
 		<text v-if="errorTextValue.length > 0" class="error">{{ errorTextValue }}</text>
+		<action-button label="重试" tone="secondary" v-if="errorTextValue.length > 0" :disabled="loading" @press="retry" />
 		<text v-if="!loading && rows.length == 0 && errorTextValue.length == 0" class="empty">暂无绩效</text>
 		<view v-for="(row, index) in rows" :key="index" class="card">
 			<text class="title">{{ lineTitle(row) }}</text>
 			<text class="sub">{{ lineSub(row) }}</text>
 		</view>
+		<load-feedback :active="loading && loadMode == 'more'" mode="more" />
+		<text class="sub">已加载 {{ rows.length }} / 共 {{ total }} 条</text>
+		<action-button label="加载更多" tone="secondary" v-if="rows.length < total" :disabled="loading" @press="loadMore" />
 	</view>
 	</view>
 </template>
 
 <script setup lang="uts">
 	import LoadFeedback from '../../../shared/ui/load-feedback.uvue'
+	import ActionButton from '../../../shared/ui/action-button.uvue'
+	import DateField from '../../../shared/ui/date-field.uvue'
 	import HomeLink from '../../../shared/ui/home-link.uvue'
 	import { request } from '../../../shared/api/index.uts'
-	import { readRows, fieldText, errorText } from '../../../shared/api/fields.uts'
+	import { readRows, fieldText, fieldNumber, errorText } from '../../../shared/api/fields.uts'
 	import { currentPeriod } from '../json.uts'
 	import { readCurrentUser } from '../session.uts'
 
+	const pageSize = 20
 	const period = ref('')
+	const pickedDate = ref('')
 	const rows = ref<any[]>([])
 	const loading = ref(false)
-	const loadSettled = ref(false)
+	const listLoaded = ref(false)
+	const loadMode = ref('initial')
 	const errorTextValue = ref('')
+	const total = ref(0)
 	let ticket = 0
 
 	function lineTitle(row : any) : string {
@@ -37,7 +49,16 @@
 		return '工时 ' + fieldText(row, 'total_hours') + '  件数 ' + fieldText(row, 'total_pieces') + '  金额 ' + fieldText(row, 'total_amount') + '  ' + fieldText(row, 'status')
 	}
 
-	async function load() {
+	watch((): string => pickedDate.value, (value : string) => {
+		const next = value.length >= 7 ? value.substring(0, 7) : ''
+		if (next == period.value) {
+			return
+		}
+		period.value = next
+		load()
+	})
+
+	async function load(append : boolean = false) {
 		const user = readCurrentUser()
 		if (user == null || user.id <= 0) {
 			errorTextValue.value = '未获取到当前用户'
@@ -45,13 +66,16 @@
 		}
 		const mine = ticket + 1
 		ticket = mine
+		loadMode.value = append ? 'more' : listLoaded.value ? 'refresh' : 'initial'
 		loading.value = true
 		errorTextValue.value = ''
 		const query = new UTSJSONObject()
-		query.set('period', period.value)
+		if (period.value.length > 0) {
+			query.set('period', period.value)
+		}
 		query.set('employee_id', user.id)
-		query.set('skip', 0)
-		query.set('limit', 100)
+		query.set('skip', append ? rows.value.length : 0)
+		query.set('limit', pageSize)
 		try {
 			const payload = await request({
 				method: 'GET',
@@ -62,7 +86,14 @@
 			if (ticket != mine) {
 				return
 			}
-			rows.value = readRows(payload)
+			const incoming = readRows(payload)
+			if (append) {
+				rows.value = rows.value.concat(incoming)
+			} else {
+				rows.value = incoming
+			}
+			total.value = fieldNumber(payload, 'total')
+			listLoaded.value = true
 		} catch (err) {
 			if (ticket != mine) {
 				return
@@ -73,13 +104,24 @@
 			return
 		}
 		loading.value = false
-		loadSettled.value = true
+	}
+
+	async function refreshList() { await load(false) }
+
+	async function loadMore() {
+		if (loading.value || rows.value.length >= total.value) { return }
+		await load(true)
+	}
+
+	// 追加失败不提交位置，重试仍请求同一页
+	function retry() {
+		load(loadMode.value == 'more')
 	}
 
 	onLoad(() => {
 		period.value = currentPeriod()
+		pickedDate.value = period.value + '-01'
 		load()
 	})
 </script>
-
 

@@ -1,7 +1,7 @@
 <template>
 	<view class="page-shell">
-		<home-link />
-	<scroll-view class="page" direction="vertical">
+		<home-link :hold-back="needsGuard" @back="leaveBack" :hold-home="needsGuard" @home="leaveHome" />
+	<scroll-view class="page" direction="vertical" :scroll-into-view="scrollTarget">
 		<load-feedback :active="loading && !submitting" mode="refresh" label="正在读取工单与工序" />
 		<text class="hint">报工人员 {{ workerName }}</text>
 		<action-button label="扫码工单" tone="primary" :disabled="loading || submitting" @press="onScan" />
@@ -12,6 +12,11 @@
 		<view v-if="successText.length > 0" class="card">
 			<text class="title">报工已提交</text><text class="sub">{{ successText }}</text>
 			<action-button label="查看我的报工" tone="secondary" :disabled="loading || submitting" @press="openHistory" />
+		</view>
+		<view v-if="pendingKey.length > 0" class="card">
+			<text class="title">上次报工结果未知</text>
+			<text class="hint">有一条报工提交未确认结果，请核对或点「恢复提交」，不要重新填写提交。</text>
+			<action-button label="恢复提交" tone="secondary" :busy="submitting" busy-label="恢复中" :disabled="loading || submitting" @press="recoverPending" />
 		</view>
 		<text v-if="codeText.length > 0" class="hint">扫码内容 {{ codeText }}</text>
 		<text v-if="errorTextValue.length > 0" class="error">{{ errorTextValue }}</text>
@@ -25,11 +30,12 @@
 				<text class="title">{{ operationTitle(row) }}</text>
 				<text class="sub">{{ selectedOperationIndex == index ? '已选' : '点选' }}</text>
 			</action-card>
-			<text class="label">报工数量</text><input class="field" type="digit" v-model="reportedQuantity" :disabled="loading || submitting" /><text v-if="reportedError.length > 0" class="error">{{ reportedError }}</text>
-			<text class="label">不合格数量</text><input class="field" type="digit" v-model="unqualifiedQuantity" :disabled="loading || submitting" /><text v-if="unqualifiedError.length > 0" class="error">{{ unqualifiedError }}</text>
+			<text class="label" id="report-field-reported">报工数量</text><input class="field" type="digit" v-model="reportedQuantity" :disabled="loading || submitting" /><text v-if="reportedError.length > 0" class="error">{{ reportedError }}</text>
+			<text class="label" id="report-field-unqualified">不合格数量</text><input class="field" type="digit" v-model="unqualifiedQuantity" :disabled="loading || submitting" /><text v-if="unqualifiedError.length > 0" class="error">{{ unqualifiedError }}</text>
 			<text class="hint">合格数量 {{ qualifiedPreview.length > 0 ? qualifiedPreview : '自动计算' }}</text>
-			<text class="label">工时（小时）</text><input class="field" type="digit" v-model="workHours" :disabled="loading || submitting" /><text v-if="hoursError.length > 0" class="error">{{ hoursError }}</text>
+			<text class="label" id="report-field-hours">工时（小时）</text><input class="field" type="digit" v-model="workHours" :disabled="loading || submitting" /><text v-if="hoursError.length > 0" class="error">{{ hoursError }}</text>
 			<action-button label="提交报工" tone="primary" :busy="submitting" busy-label="提交中" :disabled="loading || submitting" @press="submitReport" />
+			<text v-if="formError.length > 0" class="error">{{ formError }}</text>
 		</view>
 	</scroll-view>
 	</view>
@@ -41,6 +47,7 @@
 	import ActionButton from '../../../shared/ui/action-button.uvue'
 	import HomeLink from '../../../shared/ui/home-link.uvue'
 	import { request } from '../../../shared/api/index.uts'
+	import { submitRecoverable, recoverSubmission, readPendingSubmission, SubmissionOutcome, SUBMISSION_APPLIED, SUBMISSION_REJECTED, SUBMISSION_UNKNOWN } from '../../../shared/api/submission-recovery.uts'
 	import { scan } from '../../../shared/channel/index.uts'
 	import { readRows, fieldText, fieldNumber, errorText, firstText } from '../../../shared/api/fields.uts'
 	import { scanRaw, nowIso, toast, readWorkOrderRows } from '../json.uts'
@@ -65,7 +72,113 @@
 	const reportedError = ref('')
 	const unqualifiedError = ref('')
 	const hoursError = ref('')
+	const formError = ref('')
+	const pendingKey = ref('')
+	const scrollTarget = ref('')
+	let leavePromptOpen = false
+	let leaveDone = false
 	let ticket = 0
+
+	// 有已填写内容或提交中时拦住返回/首页，避免误丢报工
+	const needsGuard = computed((): boolean => {
+		return submitting.value || selectedOrder.value != null || manualCode.value.trim().length > 0 || reportedQuantity.value.trim().length > 0 || unqualifiedQuantity.value.trim().length > 0 || workHours.value.trim().length > 0
+	})
+
+	function scrollToField(target : string) {
+		scrollTarget.value = ''
+		if (target.length > 0) {
+			nextTick(() => { scrollTarget.value = target })
+		}
+	}
+
+	function askLeave(target : string) {
+		if (submitting.value) { errorTextValue.value = '提交或读取进行中，请等待完成后再离开'; return }
+		if (leavePromptOpen) { return }
+		leavePromptOpen = true
+		uni.showModal({
+			title: '离开确认', content: '当前内容尚未提交，离开后已填写的内容将丢失。', confirmText: '确认离开', cancelText: '继续填写',
+			success: (result) => {
+				leavePromptOpen = false
+				if (!result.confirm) { return }
+				leaveDone = true
+				if (target == 'home') {
+					uni.reLaunch({ url: '/shell/workbench/index' })
+				} else {
+					uni.navigateBack({ success: () => {} })
+				}
+			}, fail: () => { leavePromptOpen = false }
+		})
+	}
+	function leaveBack() { askLeave('back') }
+	function leaveHome() { askLeave('home') }
+
+	function syncPending() {
+		try {
+			const pending = readPendingSubmission('scan-report')
+			pendingKey.value = pending == null ? '' : pending.operationKey
+		} catch (err) {
+			errorTextValue.value = errorText(err)
+		}
+	}
+
+	function snapshotBody(out : SubmissionOutcome) : UTSJSONObject | null {
+		try {
+			const parsed = JSON.parse(out.snapshot.bodyText)
+			if (parsed != null && typeof parsed == 'object' && !Array.isArray(parsed)) {
+				return parsed as UTSJSONObject
+			}
+		} catch (_err) {
+		}
+		return null
+	}
+
+	function showSubmitted(body : UTSJSONObject | null) {
+		if (body == null) {
+			successText.value = '已提交，请到我的报工核对'
+			return
+		}
+		const opCode = fieldText(body, 'operation_code')
+		const opName = fieldText(body, 'operation_name')
+		const opLabel = opCode.length > 0 ? opCode + ' ' + opName : opName
+		successText.value = fieldText(body, 'work_order_code') + ' · ' + opLabel + ' · 合格 ' + fieldText(body, 'qualified_quantity') + ' · 不合格 ' + fieldText(body, 'unqualified_quantity') + ' · 工时 ' + fieldText(body, 'work_hours') + ' 小时'
+	}
+
+	// applied 走原成功摘要；rejected 是明确失败可重试；unknown 保留快照只给恢复入口
+	function applyOutcome(out : SubmissionOutcome, body : UTSJSONObject | null) {
+		if (out.state == SUBMISSION_UNKNOWN) {
+			pendingKey.value = out.snapshot.operationKey
+			errorTextValue.value = (out.message.length > 0 ? out.message + '，' : '') + '提交结果未知，请核对或点「恢复提交」'
+			return
+		}
+		if (out.state == SUBMISSION_REJECTED) {
+			errorTextValue.value = out.message.length > 0 ? out.message : '提交被拒绝，可修改后重试'
+			syncPending()
+			return
+		}
+		pendingKey.value = ''
+		showSubmitted(body)
+		toast('报工已提交')
+		selectedOrder.value = null
+		operations.value = []
+		selectedOperationIndex.value = -1
+		manualCode.value = ''
+		clearQuantities()
+		formError.value = ''
+	}
+
+	async function recoverPending() {
+		if (submitting.value || loading.value || pendingKey.value.length == 0) { return }
+		submitting.value = true
+		errorTextValue.value = ''
+		try {
+			const out = await recoverSubmission(pendingKey.value)
+			applyOutcome(out, snapshotBody(out))
+		} catch (err) {
+			errorTextValue.value = errorText(err)
+			syncPending()
+		}
+		submitting.value = false
+	}
 
 	function clearQuantities() {
 		reportedQuantity.value = ''
@@ -255,13 +368,22 @@
 		const reported = requiredNumber(reportedQuantity.value, '报工数量')
 		const unqualified = requiredNumber(unqualifiedQuantity.value, '不合格数量')
 		const hours = requiredNumber(workHours.value, '工时')
+		let invalidField = ''
+		if (reported == null) invalidField = 'report-field-reported'
+		else if (unqualified == null) invalidField = 'report-field-unqualified'
+		else if (hours == null) invalidField = 'report-field-hours'
 		if (reported == null || unqualified == null || hours == null) {
+			formError.value = '请先修正高亮字段：' + (reportedError.value.length > 0 ? reportedError.value : (unqualifiedError.value.length > 0 ? unqualifiedError.value : hoursError.value))
+			scrollToField(invalidField)
 			return
 		}
 		if (unqualified > reported) {
 			unqualifiedError.value = '不合格数量不能大于报工数量'
+			formError.value = unqualifiedError.value
+			scrollToField('report-field-unqualified')
 			return
 		}
+		formError.value = ''
 		const qualified = reported - unqualified
 		const body = new UTSJSONObject()
 		body.set('work_order_id', fieldNumber(order, 'id'))
@@ -281,22 +403,13 @@
 		submitting.value = true
 		errorTextValue.value = ''
 		try {
-			await request({
-				method: 'POST',
-				path: '/api/v1/apps/kuaizhizao/reporting/quick',
-				query: null,
-				body: body,
-			})
-			successText.value = fieldText(order, 'code') + ' · ' + operationTitle(operation) + ' · 合格 ' + qualified + ' · 不合格 ' + unqualified + ' · 工时 ' + hours + ' 小时'
-			toast('报工已提交')
-			selectedOrder.value = null
-			operations.value = []
-			selectedOperationIndex.value = -1
-			reportedQuantity.value = ''
-			unqualifiedQuantity.value = ''
-			workHours.value = ''
+			// 快照在发送前持久化；reported_at 等字段已在上方一次写入 body，恢复时原样重发
+			const out = await submitRecoverable('scan-report', 'POST', '/apps/kuaizhizao/reporting/quick', null, body)
+			applyOutcome(out, body)
 		} catch (err) {
+			// 本地前置失败（含仍有待恢复提交）不会发出请求
 			errorTextValue.value = errorText(err)
+			syncPending()
 		}
 		submitting.value = false
 		loading.value = false
@@ -352,6 +465,16 @@
 			return
 		}
 		void openById(workOrderId)
+	})
+
+	onShow(() => {
+		syncPending()
+	})
+
+	onBackPress(() : boolean | null => {
+		if (leaveDone || !needsGuard.value) { return false }
+		askLeave('back')
+		return true
 	})
 </script>
 

@@ -1,10 +1,11 @@
 <template>
-	<button :class="(tone == 'primary' ? 'action action-primary' : 'action action-secondary') + (compact ? ' action-compact' : '') + (disabled || busy ? ' action-disabled' : '')" :disabled="disabled || busy" :loading="busy" @click="activate">{{ busy ? busyLabel : label }}</button>
+	<button :class="(tone == 'primary' ? 'action action-primary' : 'action action-secondary') + (compact ? ' action-compact' : '') + (disabled || busy ? ' action-disabled' : '')" :disabled="disabled || busy" :loading="busy" role="button" :aria-label="accessibilityLabel.length > 0 ? accessibilityLabel : label" :aria-disabled="disabled || busy" :aria-busy="busy" @click="activate">{{ busy ? busyLabel : label }}</button>
 </template>
 <script setup lang="uts">
 	const props = defineProps({
 		label: { type: String, default: '' }, tone: { type: String, default: 'secondary' }, compact: { type: Boolean, default: false },
-		busyLabel: { type: String, default: '处理中' }, disabled: { type: Boolean, default: false }, busy: { type: Boolean, default: false }
+		busyLabel: { type: String, default: '处理中' }, disabled: { type: Boolean, default: false }, busy: { type: Boolean, default: false },
+		accessibilityLabel: { type: String, default: '' }
 	})
 	const emit = defineEmits(['press'])
 	function activate() {

@@ -2,28 +2,37 @@
 	<view class="page-shell">
 		<home-link />
 	<view class="page">
-		<load-feedback :active="loading" :mode="loadSettled ? 'refresh' : 'initial'" />
+		<load-feedback :active="loading && loadMode != 'more'" :mode="loadMode" />
+		<action-button label="刷新" tone="secondary" :disabled="loading" @press="refreshList" />
 		<text v-if="errorTextValue.length > 0" class="error">{{ errorTextValue }}</text>
+		<action-button label="重试" tone="secondary" v-if="errorTextValue.length > 0" :disabled="loading" @press="retry" />
 		<text v-if="!loading && rows.length == 0 && errorTextValue.length == 0" class="empty">暂无报工</text>
 		<view v-for="(row, index) in rows" :key="index" class="card">
 			<text class="title">{{ lineTitle(row) }}</text>
 			<text class="sub">{{ lineSub(row) }}</text>
 		</view>
+		<load-feedback :active="loading && loadMode == 'more'" mode="more" />
+		<text class="sub">已加载 {{ rows.length }} / 共 {{ total }} 条</text>
+		<action-button label="加载更多" tone="secondary" v-if="rows.length < total" :disabled="loading" @press="loadMore" />
 	</view>
 	</view>
 </template>
 
 <script setup lang="uts">
 	import LoadFeedback from '../../../shared/ui/load-feedback.uvue'
+	import ActionButton from '../../../shared/ui/action-button.uvue'
 	import HomeLink from '../../../shared/ui/home-link.uvue'
 	import { request } from '../../../shared/api/index.uts'
-	import { readRows, fieldText, errorText } from '../../../shared/api/fields.uts'
+	import { readRows, fieldText, fieldNumber, errorText } from '../../../shared/api/fields.uts'
 	import { readCurrentUser } from '../session.uts'
 
+	const pageSize = 20
 	const rows = ref<any[]>([])
 	const loading = ref(false)
-	const loadSettled = ref(false)
+	const listLoaded = ref(false)
+	const loadMode = ref('initial')
 	const errorTextValue = ref('')
+	const total = ref(0)
 	let ticket = 0
 
 	function lineTitle(row : any) : string {
@@ -34,18 +43,21 @@
 		return '数量 ' + fieldText(row, 'reported_quantity') + '  ' + fieldText(row, 'status')
 	}
 
-	async function load() {
+	async function load(append : boolean = false) {
 		const user = readCurrentUser()
-		if (user == null) {
-			errorTextValue.value = '未找到当前用户'
+		if (user == null || user.id <= 0) {
+			errorTextValue.value = '未获取到当前用户'
 			return
 		}
 		const mine = ticket + 1
 		ticket = mine
+		loadMode.value = append ? 'more' : listLoaded.value ? 'refresh' : 'initial'
 		loading.value = true
 		errorTextValue.value = ''
 		const query = new UTSJSONObject()
 		query.set('worker_id', user.id)
+		query.set('skip', append ? rows.value.length : 0)
+		query.set('limit', pageSize)
 		try {
 			const payload = await request({
 				method: 'GET',
@@ -56,7 +68,14 @@
 			if (ticket != mine) {
 				return
 			}
-			rows.value = readRows(payload)
+			const incoming = readRows(payload)
+			if (append) {
+				rows.value = rows.value.concat(incoming)
+			} else {
+				rows.value = incoming
+			}
+			total.value = fieldNumber(payload, 'total')
+			listLoaded.value = true
 		} catch (err) {
 			if (ticket != mine) {
 				return
@@ -67,12 +86,22 @@
 			return
 		}
 		loading.value = false
-		loadSettled.value = true
+	}
+
+	async function refreshList() { await load(false) }
+
+	async function loadMore() {
+		if (loading.value || rows.value.length >= total.value) { return }
+		await load(true)
+	}
+
+	// 追加失败不提交位置，重试仍请求同一页
+	function retry() {
+		load(loadMode.value == 'more')
 	}
 
 	onLoad(() => {
 		load()
 	})
 </script>
-
 

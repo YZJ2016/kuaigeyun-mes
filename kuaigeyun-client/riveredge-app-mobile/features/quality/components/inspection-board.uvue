@@ -1,7 +1,7 @@
 <template>
 	<view class="page-shell">
 		<home-link :hold-home="conducting" @home="leaveHome" />
-	<scroll-view class="page" scroll-y="true" :scroll-into-view="scrollTarget">
+	<scroll-view class="page" direction="vertical" :scroll-into-view="scrollTarget">
 		<view v-if="!conducting">
 		<load-feedback :active="loading" :mode="loadSettled ? 'refresh' : 'initial'" />
 		<view class="toolbar">

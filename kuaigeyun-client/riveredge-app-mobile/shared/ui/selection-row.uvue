@@ -1,5 +1,5 @@
 <template>
-	<button :class="(selected ? 'selection selection-on' : 'selection') + (disabled || busy ? ' selection-disabled' : '')" :disabled="disabled || busy" @click="activate">
+	<button :class="(selected ? 'selection selection-on' : 'selection') + (disabled || busy ? ' selection-disabled' : '')" :disabled="disabled || busy" role="button" :aria-label="accessibilityLabel.length > 0 ? accessibilityLabel : label" :aria-pressed="selected" :aria-disabled="disabled || busy" :aria-busy="busy" @click="activate">
 		<text class="selection-label">{{ label }}</text>
 		<text v-if="description.length > 0" class="selection-description">{{ description }}</text>
 		<text class="selection-state">{{ selected ? selectedLabel : unselectedLabel }}</text>
@@ -9,7 +9,8 @@
 	const props = defineProps({
 		label: { type: String, default: '' }, description: { type: String, default: '' },
 		selected: { type: Boolean, default: false }, selectedLabel: { type: String, default: '已选' },
-		unselectedLabel: { type: String, default: '点选' }, disabled: { type: Boolean, default: false }, busy: { type: Boolean, default: false }
+		unselectedLabel: { type: String, default: '点选' }, disabled: { type: Boolean, default: false }, busy: { type: Boolean, default: false },
+		accessibilityLabel: { type: String, default: '' }
 	})
 	const emit = defineEmits(['choose'])
 	function activate() {

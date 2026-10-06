@@ -13,21 +13,21 @@
 		<view v-if="ready">
 			<view class="card login-card">
 				<text class="login-label login-label-first">用户名</text>
-				<input class="field login-field" v-model="username" :disabled="loggingIn || wecomBusy" placeholder="请输入用户名" placeholder-class="login-ph" />
+				<input class="field login-field" name="username" v-model="username" :disabled="loggingIn || wecomBusy" placeholder="请输入用户名" placeholder-class="login-ph" confirm-type="next" @confirm="focusPassword" />
 				<text class="login-label">密码</text>
-				<input class="field login-field" :password="true" v-model="passwordText" :disabled="loggingIn || wecomBusy" placeholder="请输入密码" placeholder-class="login-ph" />
+				<input class="field login-field" name="password" :password="true" v-model="passwordText" :disabled="loggingIn || wecomBusy" placeholder="请输入密码" placeholder-class="login-ph" :focus="passwordFocus" confirm-type="go" @confirm="onPasswordLogin" @blur="clearPasswordFocus" />
 				<text v-for="(line, index) in fieldErrors" :key="index" class="error login-error">{{ line }}</text>
 				<view v-if="!hideOrg">
 					<text class="login-label">组织</text>
 					<text v-if="tenantName.length > 0" class="org-current">{{ tenantName }}</text>
 					<text v-else-if="tenantId.length > 0 && !tenantLocked" class="org-current">已选择组织</text>
-					<action-button v-if="showAppAddressSettings()" label="设置" :disabled="searching || loggingIn || wecomBusy" @press="openAddressSettings" />
+					<action-button v-if="showAppAddressSettings()" label="设置" accessibility-label="设置服务器地址" :disabled="searching || loggingIn || wecomBusy" @press="openAddressSettings" />
 					<view v-if="!tenantLocked">
-						<input class="field login-field" v-model="keyword" :disabled="searching || loggingIn || wecomBusy" placeholder="组织名称或域名" placeholder-class="login-ph" />
+						<input class="field login-field" name="tenant-keyword" v-model="keyword" :disabled="searching || loggingIn || wecomBusy" placeholder="组织名称或域名" placeholder-class="login-ph" confirm-type="search" @confirm="onSearch" />
 						<action-button label="搜索组织" :busy="searching" busy-label="搜索中" :disabled="loggingIn || wecomBusy" @press="onSearch" />
 						<selection-row v-for="(item, index) in tenants" :key="item.tenantId" :label="item.tenantName" :description="item.tenantDomain" :selected="tenantId == item.tenantId" :disabled="tenantLocked || searching || loggingIn || wecomBusy" @choose="onChoose(index)" />
 					</view>
-					<text v-if="isOrgMessage()" class="error login-error">{{ message }}</text>
+					<text v-if="isOrgMessage()" :class="isOrgHint() ? 'hint login-hint' : 'error login-error'">{{ message }}</text>
 				</view>
 				<text v-if="message.length > 0 && !isOrgMessage()" class="error login-error">{{ message }}</text>
 				<view class="login-submit"><action-button label="登录" tone="primary" :busy="loggingIn" busy-label="登录中" :disabled="searching || wecomBusy" @press="onPasswordLogin" /></view>
@@ -62,19 +62,33 @@
 	const searching = ref(false)
 	const loggingIn = ref(false)
 	const wecomBusy = ref(false)
+	const passwordFocus = ref(false)
 
 	function isOrgMessage() : boolean {
 		const text = message.value
 		if (text == '没有匹配的组织') {
 			return true
 		}
-		if (text == '请搜索并选择组织' || text == '请先确定组织') {
+		if (text == '请搜索并选择组织' || text == '请先确定组织' || text == '输入关键词搜索组织') {
 			return true
 		}
 		if (text == '没有找到组织' || text == '组织地址暂时无法确认') {
 			return true
 		}
 		return false
+	}
+
+	function isOrgHint() : boolean {
+		const text = message.value
+		return text == '请搜索并选择组织' || text == '输入关键词搜索组织'
+	}
+
+	function focusPassword() {
+		passwordFocus.value = true
+	}
+
+	function clearPasswordFocus() {
+		passwordFocus.value = false
 	}
 
 	function showAppAddressSettings() : boolean {
@@ -124,7 +138,9 @@
 		try {
 			tenants.value = await searchTenants(keyword.value)
 			if (tenants.value.length == 0) {
-				message.value = '没有匹配的组织'
+				message.value = keyword.value.trim().length == 0 ? '输入关键词搜索组织' : '没有匹配的组织'
+			} else if (isOrgMessage()) {
+				message.value = ''
 			}
 		} catch (err) {
 			message.value = err instanceof Error ? err.message : '组织搜索失败'
@@ -280,6 +296,11 @@
 		margin-top: 12px;
 		margin-bottom: 0;
 		color: #991B1B;
+	}
+
+	.hint.login-hint {
+		margin-top: 12px;
+		margin-bottom: 0;
 	}
 
 	.login-submit {

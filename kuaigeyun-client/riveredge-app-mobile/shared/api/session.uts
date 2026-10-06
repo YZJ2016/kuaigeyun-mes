@@ -58,6 +58,12 @@ export function getTenantId() : string {
 export function readSessionUserId() : number {
 	const obj = asJsonObject(uni.getStorageSync(USER_INFO_KEY))
 	if (obj == null) { return 0 }
+	// 与 features/workshop/session.uts readCurrentUser 同形：优先取嵌套
+	// user.id，否则回退顶层 id，避免嵌套形 user_info 下误判为未登录。
+	const nested = obj.getJSON('user')
+	if (nested != null && nested.getNumber('id') != null) {
+		return nested.getNumber('id') ?? 0
+	}
 	return obj.getNumber('id') ?? 0
 }
 

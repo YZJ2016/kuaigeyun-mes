@@ -1,13 +1,16 @@
 <template>
-	<view class="page-nav">
-		<button v-if="showActions" class="nav-back" hover-class="pressed" @click="onBack">
-			<view class="nav-chevron"></view>
-			<text class="nav-action">返回</text>
-		</button>
-		<text class="page-nav-title">{{ barTitle }}</text>
-		<button v-if="showActions" class="nav-home" hover-class="pressed" @click="onHome">
-			<text class="nav-action">首页</text>
-		</button>
+	<view class="page-nav-wrap">
+		<view v-if="navInsetTop > 0" class="nav-inset" :style="'height: ' + navInsetTop + 'px'"></view>
+		<view class="page-nav">
+			<button v-if="showActions" class="nav-back" hover-class="pressed" @click="onBack">
+				<view class="nav-chevron"></view>
+				<text class="nav-action">返回</text>
+			</button>
+			<text class="page-nav-title">{{ barTitle }}</text>
+			<button v-if="showActions" class="nav-home" hover-class="pressed" @click="onHome">
+				<text class="nav-action">首页</text>
+			</button>
+		</view>
 	</view>
 </template>
 
@@ -20,12 +23,17 @@
 		holdHome: {
 			type: Boolean,
 			default: false
+		},
+		holdBack: {
+			type: Boolean,
+			default: false
 		}
 	})
 
-	const emit = defineEmits(['home'])
+	const emit = defineEmits(['home', 'back'])
 	const barTitle = ref('')
 	const showActions = ref(false)
+	const navInsetTop = ref(0)
 
 	function syncBar() {
 		const pages = getCurrentPages()
@@ -41,16 +49,33 @@
 			barTitle.value = props.title
 			return
 		}
-		const style = page.getPageStyle()
-		const title = style.getString('navigationBarTitleText')
-		barTitle.value = title != null ? title : ''
+		try {
+			const title = page.getPageStyle().getString('navigationBarTitleText')
+			barTitle.value = title != null ? title : ''
+		} catch (_err) {
+			barTitle.value = ''
+		}
 	}
 
 	watch((): string => props.title, () => {
 		syncBar()
 	})
 
+	function syncInset() {
+		try {
+			const height = uni.getWindowInfo().statusBarHeight
+			if (height > 0) {
+				navInsetTop.value = height
+			}
+		} catch (_err) {
+		}
+	}
+
 	function onBack() {
+		if (props.holdBack) {
+			emit('back')
+			return
+		}
 		uni.navigateBack({
 			success: () => {}
 		})
@@ -64,14 +89,19 @@
 		uni.reLaunch({ url: '/shell/workbench/index' })
 	}
 
+	// setup 先同步一次保证首帧标题；若此时栈顶仍是上一页，onMounted 会按当前页校正
 	syncBar()
+	syncInset()
 	onMounted(() => {
 		syncBar()
+		syncInset()
 	})
 </script>
 
 <style>
 	.nav-back, .nav-home { margin: 0px; border-width: 0px; border-radius: 0px; min-height: 48px; min-width: 48px; line-height: 24px; background-color: transparent; }
+	.page-nav-wrap { flex-direction: column; flex-shrink: 0; background-color: #F8FAFC; }
+	.nav-inset { flex-shrink: 0; }
 	.page-nav {
 		height: 48px;
 		background-color: #F8FAFC;

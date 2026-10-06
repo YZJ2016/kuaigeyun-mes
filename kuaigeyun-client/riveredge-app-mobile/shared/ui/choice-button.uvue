@@ -1,9 +1,10 @@
 <template>
-	<button :class="(selected ? 'choice-button choice-selected' : 'choice-button') + (disabled ? ' choice-disabled' : '')" :disabled="disabled" @click="activate">{{ selected ? '● ' + label : label }}</button>
+	<button :class="(selected ? 'choice-button choice-selected' : 'choice-button') + (disabled ? ' choice-disabled' : '')" :disabled="disabled" role="button" :aria-label="accessibilityLabel.length > 0 ? accessibilityLabel : label" :aria-pressed="selected" :aria-disabled="disabled" @click="activate">{{ selected ? '● ' + label : label }}</button>
 </template>
 <script setup lang="uts">
 	const props = defineProps({
-		label: { type: String, default: '' }, selected: { type: Boolean, default: false }, disabled: { type: Boolean, default: false }
+		label: { type: String, default: '' }, selected: { type: Boolean, default: false }, disabled: { type: Boolean, default: false },
+		accessibilityLabel: { type: String, default: '' }
 	})
 	const emit = defineEmits(['choose'])
 	function activate() {

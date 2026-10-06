@@ -1,8 +1,8 @@
 <template>
-	<button :class="(variant == 'row' ? 'action-card action-row' : 'action-card') + (disabled ? ' action-card-disabled' : '')" :disabled="disabled" hover-class="action-card-pressed" @click="activate"><slot /></button>
+	<button :class="(variant == 'row' ? 'action-card action-row' : 'action-card') + (disabled ? ' action-card-disabled' : '')" :disabled="disabled" hover-class="action-card-pressed" role="button" :aria-label="accessibilityLabel" :aria-disabled="disabled" @click="activate"><slot /></button>
 </template>
 <script setup lang="uts">
-	const props = defineProps({ disabled: { type: Boolean, default: false }, variant: { type: String, default: 'card' } })
+	const props = defineProps({ disabled: { type: Boolean, default: false }, variant: { type: String, default: 'card' }, accessibilityLabel: { type: String, default: '' } })
 	const emit = defineEmits(['press'])
 	function activate() {
 		if (props.disabled) { return }
