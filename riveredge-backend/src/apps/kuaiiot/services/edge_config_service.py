@@ -309,6 +309,91 @@ class EdgeConfigService:
         return [EdgeConfigService._public(row) for row in rows]
 
     @staticmethod
+    async def get_config(tenant_id: int, config_id: int) -> dict[str, Any]:
+        tid = _require_tenant(tenant_id)
+        row = await KuaiiotEdgeConfig.filter(
+            tenant_id=tid, id=config_id, deleted_at__isnull=True
+        ).first()
+        if row is None:
+            raise NotFoundError("边缘配置不存在")
+        return EdgeConfigService._public(row)
+
+    @staticmethod
+    async def update_config(
+        tenant_id: int,
+        config_id: int,
+        *,
+        code: str,
+        name: str,
+        device_id: int,
+        protocol: str,
+        config: dict,
+        is_enabled: bool = True,
+        user_id: Optional[int] = None,
+    ) -> dict[str, Any]:
+        tid = _require_tenant(tenant_id)
+        row = await KuaiiotEdgeConfig.filter(
+            tenant_id=tid, id=config_id, deleted_at__isnull=True
+        ).first()
+        if row is None:
+            raise NotFoundError("边缘配置不存在")
+        text = (code or "").strip()
+        title = (name or "").strip()
+        if not text or len(text) > 50 or not title or len(title) > 100:
+            raise ValidationError("配置编码和名称不能为空")
+        EdgeConfigService._validate_config(protocol, config)
+        device = await KuaiiotDevice.filter(tenant_id=tid, id=device_id, deleted_at__isnull=True).first()
+        if device is None:
+            raise ValidationError("设备不存在")
+        conflict = await KuaiiotEdgeConfig.filter(
+            tenant_id=tid, code=text, deleted_at__isnull=True
+        ).exclude(id=row.id).exists()
+        if conflict:
+            raise ValidationError("配置编码已存在")
+        content_changed = (
+            row.code != text
+            or row.protocol != protocol
+            or row.config != config
+            or int(row.device_id) != int(device.id)
+            or bool(row.is_enabled) != bool(is_enabled)
+        )
+        row.code = text
+        row.name = title
+        row.device_id = device.id
+        row.protocol = protocol
+        row.config = config
+        row.is_enabled = is_enabled
+        row.updated_by = user_id
+        if content_changed:
+            row.config_version = int(row.config_version) + 1
+        await row.save(
+            update_fields=[
+                "code",
+                "name",
+                "device_id",
+                "protocol",
+                "config",
+                "is_enabled",
+                "config_version",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+        return EdgeConfigService._public(row)
+
+    @staticmethod
+    async def delete_config(tenant_id: int, config_id: int, *, user_id: Optional[int] = None) -> None:
+        tid = _require_tenant(tenant_id)
+        row = await KuaiiotEdgeConfig.filter(
+            tenant_id=tid, id=config_id, deleted_at__isnull=True
+        ).first()
+        if row is None:
+            raise NotFoundError("边缘配置不存在")
+        row.deleted_at = resolve_business_datetime()
+        row.deleted_by = user_id
+        await row.save(update_fields=["deleted_at", "deleted_by", "updated_at"])
+
+    @staticmethod
     async def save_config(
         tenant_id: int,
         *,

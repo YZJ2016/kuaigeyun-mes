@@ -32,7 +32,7 @@ export default function GroupsPage() {
         <Title level={4} style={{ margin: 0 }}>
           设备分组
         </Title>
-        <Link to="/apps/kuaiiot">返回登记</Link>
+        <Link to="/apps/kuaiiot/dashboard">返回数采中心</Link>
       </Space>
       <Text type="secondary">分组只挂在 IoT 设备上，不改星制造设备台账。</Text>
       <Card title="新建">

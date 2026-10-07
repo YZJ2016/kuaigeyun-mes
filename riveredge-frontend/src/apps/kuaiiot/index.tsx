@@ -7,10 +7,13 @@ import React, { Suspense, lazy } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import PageSkeleton from '../../components/page-skeleton';
 
-const RegistryPage = lazy(() => import('./pages/registry'));
+const DashboardPage = lazy(() => import('./pages/dashboard'));
+const ConnectionsPage = lazy(() => import('./pages/connections'));
+const DevicesPage = lazy(() => import('./pages/devices'));
+const TagsPage = lazy(() => import('./pages/tags'));
+const EdgeConfigsPage = lazy(() => import('./pages/edge-configs'));
 const AlertsPage = lazy(() => import('./pages/alerts'));
 const TemplatesPage = lazy(() => import('./pages/templates'));
-const EdgePage = lazy(() => import('./pages/edge'));
 const ProductsPage = lazy(() => import('./pages/products'));
 const TrendPage = lazy(() => import('./pages/trend'));
 const GroupsPage = lazy(() => import('./pages/groups'));
@@ -26,7 +29,7 @@ const KuaiiotApp: React.FC = () => {
         path="dashboard"
         element={
           <Suspense fallback={<PageSkeleton variant="content" />}>
-            <RegistryPage section="center" />
+            <DashboardPage />
           </Suspense>
         }
       />
@@ -42,7 +45,7 @@ const KuaiiotApp: React.FC = () => {
         path="connections"
         element={
           <Suspense fallback={<PageSkeleton variant="content" />}>
-            <RegistryPage section="connection" />
+            <ConnectionsPage />
           </Suspense>
         }
       />
@@ -50,7 +53,7 @@ const KuaiiotApp: React.FC = () => {
         path="devices"
         element={
           <Suspense fallback={<PageSkeleton variant="content" />}>
-            <RegistryPage section="device" />
+            <DevicesPage />
           </Suspense>
         }
       />
@@ -58,7 +61,7 @@ const KuaiiotApp: React.FC = () => {
         path="tags"
         element={
           <Suspense fallback={<PageSkeleton variant="content" />}>
-            <RegistryPage section="tag" />
+            <TagsPage />
           </Suspense>
         }
       />
@@ -79,13 +82,14 @@ const KuaiiotApp: React.FC = () => {
         }
       />
       <Route
-        path="edge"
+        path="edge-configs"
         element={
           <Suspense fallback={<PageSkeleton variant="content" />}>
-            <EdgePage />
+            <EdgeConfigsPage />
           </Suspense>
         }
       />
+      <Route path="edge" element={<Navigate to="edge-configs" replace />} />
       <Route
         path="products"
         element={

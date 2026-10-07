@@ -8,6 +8,7 @@ from apps.kuaiiot.schemas.prefill import (
     AlertOut,
     AlertRuleCreate,
     AlertRuleOut,
+    AlertRuleUpdate,
     ApplyTemplateIn,
     ApplyTemplateOut,
     FillContextOut,
@@ -81,6 +82,57 @@ async def api_create_alert_rule(
 
 
 @router.get(
+    "/alert-rules",
+    response_model=list[AlertRuleOut],
+    dependencies=[Depends(require_permission_codes("kuaiiot:alert:display"))],
+)
+async def api_list_alert_rules(tenant_id: int = Depends(get_current_tenant)):
+    rows = await alert_service.list_rules(tenant_id)
+    return [AlertRuleOut.model_validate(row) for row in rows]
+
+
+@router.get(
+    "/alert-rules/{rule_id}",
+    response_model=AlertRuleOut,
+    dependencies=[Depends(require_permission_codes("kuaiiot:alert:display"))],
+)
+async def api_get_alert_rule(rule_id: int, tenant_id: int = Depends(get_current_tenant)):
+    return AlertRuleOut.model_validate(await alert_service.get_rule(tenant_id, rule_id))
+
+
+@router.put(
+    "/alert-rules/{rule_id}",
+    response_model=AlertRuleOut,
+    dependencies=[Depends(require_permission_codes("kuaiiot:alert:create"))],
+)
+async def api_update_alert_rule(
+    rule_id: int,
+    payload: AlertRuleUpdate,
+    tenant_id: int = Depends(get_current_tenant),
+    current_user=Depends(get_current_user),
+):
+    rule = await alert_service.update_rule(
+        tenant_id, rule_id, payload, user_id=getattr(current_user, "id", None)
+    )
+    return AlertRuleOut.model_validate(rule)
+
+
+@router.delete(
+    "/alert-rules/{rule_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_permission_codes("kuaiiot:alert:create"))],
+)
+async def api_delete_alert_rule(
+    rule_id: int,
+    tenant_id: int = Depends(get_current_tenant),
+    current_user=Depends(get_current_user),
+):
+    await alert_service.delete_rule(
+        tenant_id, rule_id, user_id=getattr(current_user, "id", None)
+    )
+
+
+@router.get(
     "/alerts",
     response_model=list[AlertOut],
     dependencies=[Depends(require_permission_codes("kuaiiot:alert:display"))],
@@ -100,6 +152,21 @@ async def api_acknowledge_alert(alert_id: int, tenant_id: int = Depends(get_curr
              dependencies=[Depends(require_permission_codes("kuaiiot:alert:create"))])
 async def api_close_alert(alert_id: int, tenant_id: int = Depends(get_current_tenant), current_user=Depends(get_current_user)):
     return AlertOut.model_validate(await alert_service.transition_alert(tenant_id, alert_id, "close", current_user.id))
+
+
+@router.delete(
+    "/alerts/{alert_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_permission_codes("kuaiiot:alert:create"))],
+)
+async def api_delete_alert(
+    alert_id: int,
+    tenant_id: int = Depends(get_current_tenant),
+    current_user=Depends(get_current_user),
+):
+    await alert_service.delete_alert(
+        tenant_id, alert_id, user_id=getattr(current_user, "id", None)
+    )
 
 
 @router.get(
