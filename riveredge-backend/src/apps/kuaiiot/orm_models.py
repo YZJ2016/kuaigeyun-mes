@@ -11,4 +11,5 @@ ORM_MODEL_MODULES: list[str] = [
     "apps.kuaiiot.models.group",
     "apps.kuaiiot.models.command",
     "apps.kuaiiot.models.message_log",
+    "apps.kuaiiot.models.delivery",
 ]
