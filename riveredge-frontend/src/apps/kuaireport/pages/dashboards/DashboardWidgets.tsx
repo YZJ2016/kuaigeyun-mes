@@ -9,7 +9,7 @@ import './dashboardWidgets.css';
 export type WidgetResult = {
   data?: Record<string, unknown>[];
   total?: number;
-  summary?: Record<string, number>;
+  summary?: Record<string, number | null>;
 };
 
 export type DashboardWidget = {
@@ -191,7 +191,12 @@ function ChartWidget({
     const categoryField = (typeof options?.category_field === 'string' && options.category_field) || xField;
     const valueField = (typeof options?.value_field === 'string' && options.value_field) || yField;
     const categories = rows.map((row) => String(row[categoryField] ?? row[xField] ?? ''));
-    const values = rows.map((row) => Number(row[valueField] ?? row[yField] ?? 0));
+    const values = rows.map((row) => {
+      const raw = valueField in row ? row[valueField] : row[yField];
+      if (raw == null || raw === '') return null;
+      const value = Number(raw);
+      return Number.isFinite(value) ? value : null;
+    });
     const axisText = { color: 'rgba(255,255,255,0.65)' };
     const categoryAxis = {
       type: 'category' as const,
@@ -204,7 +209,7 @@ function ChartWidget({
       axisLabel: axisText,
       splitLine: { lineStyle: { color: 'rgba(0,212,255,0.12)' } },
     };
-    const points = categories.map((name, index) => ({ name, value: values[index] || 0 }));
+    const points = categories.map((name, index) => ({ name, value: values[index] })).filter(point => point.value != null);
     let option: echarts.EChartsCoreOption;
     if (kind === 'pie' || kind === 'funnel') {
       option = {
@@ -218,7 +223,7 @@ function ChartWidget({
         series: [
           {
             type: 'gauge',
-            data: [{ value: values[0] || 0 }],
+            data: values[0] == null ? [] : [{ value: values[0] }],
             detail: { color: colors[0], fontSize: 18 },
             axisLine: { lineStyle: { color: [[1, colors[0]]] } },
           },
@@ -233,7 +238,7 @@ function ChartWidget({
             type: 'pie',
             radius: ['0%', '72%'],
             silent: true,
-            label: { show: true, position: 'center', formatter: String(values[0] || 0), color: '#fff', fontSize: 22 },
+            label: { show: true, position: 'center', formatter: values[0] == null ? '—' : String(values[0]), color: '#fff', fontSize: 22 },
             data: [
               { value, itemStyle: { color: colors[0] }, label: { show: false } },
               { value: Math.max(0, 100 - value), itemStyle: { color: 'rgba(255,255,255,0.08)' }, label: { show: false } },
@@ -242,7 +247,7 @@ function ChartWidget({
         ],
       };
     } else if (kind === 'radar') {
-      const max = Math.max(1, ...values);
+      const max = Math.max(1, ...values.filter((value): value is number => value != null));
       option = {
         backgroundColor: 'transparent',
         color: colors,
@@ -591,9 +596,9 @@ function WidgetBody({
     const raw = widget.result
       ? preferred && preferred in summary
         ? summary[preferred]
-        : Object.values(summary)[0] ?? widget.result.total
+        : preferred ? undefined : Object.values(summary)[0] ?? widget.result.total
       : Number(options.value ?? 8888);
-    const numeric = typeof raw === 'number' ? raw : Number(raw);
+    const numeric = raw == null || raw === '' ? NaN : typeof raw === 'number' ? raw : Number(raw);
     const shown = Number.isFinite(numeric) ? numeric.toLocaleString('zh-CN') : raw == null || raw === '' ? '—' : String(raw);
     const color = optionText(options, 'color', '#00d4ff');
     const kind = optionText(options, 'indicatorType', 'number');

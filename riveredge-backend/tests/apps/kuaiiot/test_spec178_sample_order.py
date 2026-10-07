@@ -31,7 +31,21 @@ async def test_bad_quality_preserves_quality_without_business_value(db):
     row = await KuaiiotTagSnapshot.get(device_id=device.id, tag_key="temp")
     assert row.quality == "bad"
     assert row.value_number is None
+    from apps.kuaiiot.models.delivery import KuaiiotDelivery
+    delivery = await KuaiiotDelivery.get(kind="trend")
+    assert delivery.payload["quality"] == "bad"
+    assert delivery.payload["value"] is None
 
 
 def test_unknown_status_stays_unknown():
     assert normalize_equipment_status("vendor-unknown") == "未知"
+
+
+@pytest.mark.asyncio
+async def test_writeback_guard_uses_locked_equipment_state(db):
+    from apps.kuaizhizao.models.equipment import Equipment
+    set_current_tenant_id(1)
+    stale = await Equipment.create(tenant_id=1, code="STATE-LOCK", name="锁后状态", status="正常")
+    await Equipment.filter(id=stale.id).update(status="报废")
+    now = resolve_business_datetime()
+    assert await IngestService._maybe_insert_monitor(1, stale, {"status": "运行中"}, now, now) is False

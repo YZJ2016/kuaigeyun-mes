@@ -22,6 +22,12 @@ from infra.api.deps.deps import get_current_user
 router = APIRouter(tags=["App - 星数采 - 预填"])
 
 
+@router.get("/diagnostics", dependencies=[Depends(require_permission_codes("kuaiiot:device:display"))])
+async def api_diagnostics(tenant_id: int = Depends(get_current_tenant)):
+    from apps.kuaiiot.services.diagnostic_service import read_diagnostics
+    return await read_diagnostics(tenant_id)
+
+
 @router.get(
     "/tag-templates",
     response_model=list[TemplateOut],

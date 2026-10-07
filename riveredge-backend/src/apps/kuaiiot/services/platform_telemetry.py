@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 from typing import Any, Optional
+import hashlib
 
 from pydantic import ValidationError as PydanticValidationError
 
 from apps.kuaiiot.models.connection import KuaiiotConnection
 from apps.kuaiiot.schemas.ingest import IngestBody
 from apps.kuaiiot.services.ingest_service import IngestService
-from apps.kuaiiot.services.connection_runtime import connection_is_active
-from infra.domain.tenant_context import with_tenant
+from apps.kuaiiot.services.connection_runtime import connection_is_active, resolve_core_connection
+from apps.kuaiiot.models.device import KuaiiotDevice
+from core.services.integration.iot_platform_client import PlatformClient, sample_timestamp
+from infra.domain.tenant_context import with_tenant, unscoped
 from infra.exceptions.exceptions import AuthenticationError, ValidationError
 
 # KuaiiotConnection.config 字段名。topic 只用于 mqtt。
@@ -212,4 +215,25 @@ async def pull_registered_telemetry() -> dict[str, int]:
             stored += 1
         else:
             skipped += 1
+    async with unscoped(reason="扫描已登记平台遥测连接", resource="KuaiiotConnection"):
+        connections = await KuaiiotConnection.filter(connection_type__in=["thingsboard", "jetlinks"], is_enabled=True, deleted_at__isnull=True)
+    for connection in connections:
+        async with with_tenant(int(connection.tenant_id), reason="拉取所属租户平台已登记设备"):
+            try:
+                core = await resolve_core_connection(connection)
+                config = core.get_config()
+                if not config.get("base_url"):
+                    continue
+                devices = await KuaiiotDevice.filter(tenant_id=connection.tenant_id, connection_id=connection.id, deleted_at__isnull=True)
+                async with PlatformClient(connection.connection_type, config) as client:
+                    for device in devices:
+                        try:
+                            for sample in await client.telemetry(device.external_device_id):
+                                key = hashlib.sha256(f"{connection.id}:{device.id}:{sample['tag_key']}:{sample['timestamp']}".encode()).hexdigest()
+                                await IngestService.ingest(device.device_token, IngestBody(tags={sample["tag_key"]: sample["value"]}, timestamp=sample_timestamp(sample["timestamp"]), idempotency_key=key))
+                                stored += 1
+                        except (ValidationError, ValueError, OverflowError):
+                            skipped += 1
+            except ValidationError:
+                skipped += 1
     return {"stored": stored, "skipped_unregistered": skipped}

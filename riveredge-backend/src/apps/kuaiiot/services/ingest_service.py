@@ -256,13 +256,14 @@ class IngestService:
                     stored = await IngestService._stored_response(tenant_id, device.id, key)
                     if stored is not None:
                         return stored
-                previous = await KuaiiotTagSnapshot.filter(tenant_id=tenant_id, device_id=device.id).order_by("-sampled_at").first()
+                newest_sample = current.latest_sampled_at
+                is_current = newest_sample is None or _aware(sampled_at) > _aware(newest_sample)
                 fresh = []
                 for definition, value_text, value_number, value_bool in planned:
                     quality = body.qualities.get(definition.tag_key, "good")
-                    if quality == "good" and value_number is not None:
+                    if definition.value_type == "number" and (value_number is not None or quality != "good"):
                         delivery_key = hashlib.sha256(f"{device.id}:{definition.tag_key}:{_aware(sampled_at).isoformat()}".encode()).hexdigest()
-                        await enqueue(tenant_id, "trend", delivery_key, {"device_id": device.id, "tag_key": definition.tag_key, "value": float(value_number), "sampled_at": sampled_at.isoformat()})
+                        await enqueue(tenant_id, "trend", delivery_key, {"device_id": device.id, "tag_key": definition.tag_key, "value": float(value_number) if value_number is not None else None, "quality": quality, "sampled_at": sampled_at.isoformat()})
                     updated = await IngestService._upsert_snapshot(
                         tenant_id,
                         device.id,
@@ -273,12 +274,14 @@ class IngestService:
                         sampled_at,
                         quality,
                     )
-                    if updated and quality == "good":
+                    if updated and quality == "good" and (newest_sample is None or _aware(sampled_at) >= _aware(newest_sample)):
                         fresh.append((definition, value_text, value_number, value_bool))
                         _apply_monitor(definition.map_target, definition.tag_key, body.tags[definition.tag_key], monitor_fields)
+                if is_current:
+                    current.latest_sampled_at = sampled_at
                 current.is_online = True
                 current.last_seen_at = server_now
-                await current.save(update_fields=["is_online", "last_seen_at", "updated_at"])
+                await current.save(update_fields=["is_online", "last_seen_at", "latest_sampled_at", "updated_at"])
                 monitor_written = False
                 if equipment is not None and monitor_fields:
                     monitor_written = await IngestService._maybe_insert_monitor(
@@ -303,7 +306,7 @@ class IngestService:
                 accepted_events = await IngestService._apply_events(
                     tenant_id,
                     device,
-                    (body.events or []) if previous is None or _aware(sampled_at) > _aware(previous.sampled_at) else [],
+                    (body.events or []) if is_current else [],
                     sampled_at,
                 )
                 await MessageLogService.append(
@@ -381,7 +384,7 @@ class IngestService:
             accepted.append(event_key)
             alerted = severity in _ALERT_SEVERITIES
             if alerted:
-                await KuaiiotAlert.create(
+                alert = await KuaiiotAlert.create(
                     tenant_id=tenant_id,
                     rule_id=None,
                     device_id=device.id,
@@ -392,6 +395,7 @@ class IngestService:
                     status="open",
                     triggered_at=sampled_at,
                 )
+                await enqueue(tenant_id, "notification", f"alert:{alert.id}:raised", {"alert_id": alert.id, "action": "raised", "message": alert.message})
             await MessageLogService.append(
                 tenant_id=tenant_id,
                 device_id=device.id,
@@ -477,6 +481,7 @@ class IngestService:
         ).select_for_update().first()
         if locked is None:
             return False
+        equipment = locked
         latest = await EquipmentStatusMonitor.filter(
             tenant_id=tenant_id,
             equipment_uuid=equipment.uuid,

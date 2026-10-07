@@ -125,31 +125,24 @@ async def test_shared_equipment_throttle_and_unbound_device(db):
     opened = await IngestService.ingest(first.device_token, IngestBody(tags={"temp": 1, "run": "运行中"}))
     shared = await IngestService.ingest(second.device_token, IngestBody(tags={"temp": 2, "run": "待机"}))
     assert opened["monitor_written"] is True
-    assert shared["monitor_written"] is False
-    assert await EquipmentStatusMonitor.filter(data_source="sensor").count() == 1
+    assert shared["monitor_written"] is True
+    assert await EquipmentStatusMonitor.filter(data_source="sensor").count() == 2
     second_snap = await KuaiiotTagSnapshot.get(device_id=second.id, tag_key="temp")
     assert second_snap.value_number == Decimal("2")
-
-    recent = await EquipmentStatusMonitor.filter(data_source="sensor").first()
+    recent = await EquipmentStatusMonitor.filter(data_source="sensor").order_by("-monitored_at", "-id").first()
     assert recent is not None
-    await EquipmentStatusMonitor.filter(id=recent.id).update(
-        created_at=resolve_business_datetime() - timedelta(seconds=4)
-    )
-    held = await IngestService.ingest(second.device_token, IngestBody(tags={"temp": 3, "run": "运行中"}))
+    held = await IngestService.ingest(second.device_token, IngestBody(tags={"temp": 3, "run": "待机"}))
     assert held["monitor_written"] is False
-    assert await EquipmentStatusMonitor.filter(data_source="sensor").count() == 1
-
-    await EquipmentStatusMonitor.filter(id=recent.id).update(
-        created_at=resolve_business_datetime() - timedelta(seconds=6)
-    )
-    released = await IngestService.ingest(first.device_token, IngestBody(tags={"temp": 4, "run": "运行中"}))
-    assert released["monitor_written"] is True
     assert await EquipmentStatusMonitor.filter(data_source="sensor").count() == 2
+    await EquipmentStatusMonitor.filter(id=recent.id).update(created_at=resolve_business_datetime() - timedelta(seconds=6))
+    released = await IngestService.ingest(first.device_token, IngestBody(tags={"temp": 4, "run": "待机"}))
+    assert released["monitor_written"] is True
+    assert await EquipmentStatusMonitor.filter(data_source="sensor").count() == 3
 
     free = await IngestService.ingest(unbound.device_token, IngestBody(tags={"temp": 8, "run": "运行中"}))
     assert free["monitor_written"] is False
     assert await KuaiiotTagSnapshot.filter(device_id=unbound.id).count() == 2
-    assert await EquipmentStatusMonitor.filter(data_source="sensor").count() == 2
+    assert await EquipmentStatusMonitor.filter(data_source="sensor").count() == 3
     await first.refresh_from_db()
     await second.refresh_from_db()
     assert first.last_mes_sync_at is None

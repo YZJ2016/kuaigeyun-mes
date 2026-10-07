@@ -104,6 +104,9 @@ export type AlertOut = {
   actual_value?: string | null;
   status: string;
   triggered_at: string;
+  acknowledged_at?: string | null;
+  recovered_at?: string | null;
+  closed_at?: string | null;
 };
 
 export function listTemplates(): Promise<TemplateOut[]> {
@@ -116,6 +119,10 @@ export function applyTemplate(deviceId: number, code: string): Promise<{ code: s
 
 export function listAlerts(): Promise<AlertOut[]> {
   return apiRequest<AlertOut[]>('/apps/kuaiiot/alerts');
+}
+
+export function transitionAlert(id: number, action: 'acknowledge' | 'close'): Promise<AlertOut> {
+  return apiRequest(`/apps/kuaiiot/alerts/${id}/${action}`, { method: 'POST' });
 }
 
 export function createAlertRule(payload: {

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 from typing import Any, Optional
+from uuid import uuid4
 
 from apps.kuaiiot.constants import (
     EDGE_PROTOCOLS,
@@ -150,7 +151,7 @@ class EdgeConfigService:
         return rows[0]
 
     @staticmethod
-    async def _enabled_config(device: KuaiiotDevice, edge_config_code: str) -> KuaiiotEdgeConfig:
+    async def _enabled_config(device: KuaiiotDevice, edge_config_code: str, *, allow_disabled: bool = False) -> KuaiiotEdgeConfig:
         code = (edge_config_code or "").strip()
         if not code:
             raise NotFoundError("边缘配置不存在")
@@ -160,10 +161,9 @@ class EdgeConfigService:
                 tenant_id=tenant_id,
                 device_id=device.id,
                 code=code,
-                is_enabled=True,
                 deleted_at__isnull=True,
             ).first()
-        if row is None:
+        if row is None or (not allow_disabled and not row.is_enabled):
             raise NotFoundError("边缘配置不存在")
         return row
 
@@ -200,6 +200,7 @@ class EdgeConfigService:
         agent_version: str,
         buffer_pending_count: int,
         status: str,
+        trial_result: Optional[dict] = None,
     ) -> dict[str, Any]:
         version_text = (agent_version or "").strip()
         status_text = (status or "").strip()
@@ -212,7 +213,7 @@ class EdgeConfigService:
         if buffer_pending_count < 0:
             raise ValidationError("buffer_pending_count 无效")
         device = await EdgeConfigService._device_for_token(device_token)
-        row = await EdgeConfigService._enabled_config(device, edge_config_code)
+        row = await EdgeConfigService._enabled_config(device, edge_config_code, allow_disabled=True)
         changed = int(row.config_version) != int(config_version)
         tenant_id = int(device.tenant_id)
         async with with_tenant(tenant_id, reason="心跳写入凭据命中的边缘配置"):
@@ -220,28 +221,51 @@ class EdgeConfigService:
             current = await KuaiiotEdgeConfig.get_or_none(
                 id=row.id, tenant_id=tenant_id, deleted_at__isnull=True
             )
-            if current is None or not current.is_enabled:
+            if current is None:
                 raise NotFoundError("边缘配置不存在")
             current.last_agent_heartbeat_at = resolve_business_datetime()
+            current.agent_config_version = int(config_version)
             current.agent_version = version_text
             current.agent_status = status_text
             current.buffer_pending_count = buffer_pending_count
+            if trial_result and trial_result.get("request_uuid") == current.trial_request_uuid:
+                _reject_secrets(trial_result)
+                tags = trial_result.get("tags")
+                if not isinstance(tags, dict) or len(tags) > 200:
+                    raise ValidationError("试读结果无效")
+                raw_values = trial_result.get("raw_values") or {}
+                if not isinstance(raw_values, dict) or len(raw_values) > 200:
+                    raise ValidationError("试读原始值无效")
+                current.trial_result = {"request_uuid": current.trial_request_uuid, "tags": tags, "raw_values": {key: value for key, value in raw_values.items() if key in tags}, "qualities": {key: "bad" if value is None else "good" for key, value in tags.items()}, "config_version": int(config_version), "received_at": resolve_business_datetime().isoformat()}
             await current.save(
                 update_fields=[
                     "last_agent_heartbeat_at",
                     "agent_version",
+                    "agent_config_version",
                     "agent_status",
                     "buffer_pending_count",
                     "updated_at",
+                    "trial_result",
                 ]
             )
             try:
                 await ensure_device_connection(device)
-                collection_enabled = True
+                collection_enabled = bool(current.is_enabled)
             except ValidationError:
                 collection_enabled = False
             pending_commands = await claim_pending_commands(tenant_id, device.id) if collection_enabled else []
-        return {"config_changed": changed, "pending_commands": pending_commands, "collection_enabled": collection_enabled}
+        return {"config_changed": changed, "pending_commands": pending_commands, "collection_enabled": collection_enabled, "trial_request_uuid": current.trial_request_uuid if collection_enabled else None}
+
+    @staticmethod
+    async def request_trial(tenant_id: int, config_id: int) -> dict:
+        tid = _require_tenant(tenant_id)
+        row = await KuaiiotEdgeConfig.filter(id=config_id, tenant_id=tid, deleted_at__isnull=True).first()
+        if row is None or not row.is_enabled or row.protocol != "modbus_tcp":
+            raise ValidationError("试读需要已启用的 Modbus TCP 配置和在线 Agent")
+        row.trial_request_uuid = str(uuid4())
+        row.trial_result = None
+        await row.save(update_fields=["trial_request_uuid", "trial_result", "updated_at"])
+        return EdgeConfigService._public(row)
 
     @staticmethod
     async def ingest_batch(device_token: str, items: list[IngestBody]) -> dict[str, int]:
@@ -271,8 +295,11 @@ class EdgeConfigService:
             "config_version": int(row.config_version),
             "agent_status": row.agent_status,
             "agent_version": row.agent_version,
+            "agent_config_version": row.agent_config_version,
             "buffer_pending_count": int(row.buffer_pending_count),
             "last_agent_heartbeat_at": seen.isoformat() if seen else None,
+            "trial_request_uuid": row.trial_request_uuid,
+            "trial_result": row.trial_result,
         }
 
     @staticmethod

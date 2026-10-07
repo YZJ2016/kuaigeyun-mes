@@ -71,3 +71,14 @@ def test_lost_command_receipt_does_not_reexecute(agent_module, tmp_path):
     agent.maybe_heartbeat()
     assert agent.poller.execute_command.call_count == 1
     assert all(call.kwargs["success"] for call in agent.cloud.submit_command_result.call_args_list)
+
+
+def test_failed_config_reload_reports_claimed_command_without_executing(agent_module, tmp_path):
+    agent = make_agent(agent_module, tmp_path)
+    agent.poller = MagicMock()
+    agent.cloud.heartbeat.return_value = {"config_changed": True, "pending_commands": [{"command_uuid": "config-failed"}]}
+    agent.reload_runtime = MagicMock(side_effect=RuntimeError("PLC unavailable"))
+    agent.maybe_heartbeat()
+    agent.poller.execute_command.assert_not_called()
+    agent.cloud.submit_command_result.assert_called_once()
+    assert agent.cloud.submit_command_result.call_args.kwargs["success"] is False

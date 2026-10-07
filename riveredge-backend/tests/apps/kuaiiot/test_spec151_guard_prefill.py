@@ -103,10 +103,16 @@ async def test_threshold_cooldown_skips_repeat_alert(db):
     )
     await IngestService.ingest(device.device_token, IngestBody(tags={"temp": 22}))
     alerts = await KuaiiotAlert.filter(rule_id=rule.id).order_by("id")
-    assert len(alerts) == 2
+    assert len(alerts) == 1  # 持续越限仅一个告警，必须恢复后才能开启新周期
+    await IngestService.ingest(device.device_token, IngestBody(tags={"temp": 5}))
+    await alerts[0].refresh_from_db()
+    assert alerts[0].recovered_at is not None
+    await IngestService.ingest(device.device_token, IngestBody(tags={"temp": 22}))
+    assert await KuaiiotAlert.filter(rule_id=rule.id).count() == 2
     assert alerts[0].actual_value == "20"
+    alerts = await KuaiiotAlert.filter(rule_id=rule.id).order_by("id")
     assert alerts[1].actual_value == "22"
-    assert alerts[0].status == "open"
+    assert alerts[0].status == "recovered"
 
 
 @pytest.mark.asyncio

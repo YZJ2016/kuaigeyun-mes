@@ -20,6 +20,8 @@ from decimal import Decimal
 from loguru import logger
 
 from apps.kuaizhizao.models.equipment import Equipment
+from apps.kuaizhizao.models.equipment_status_monitor import EquipmentStatusMonitor
+from apps.kuaizhizao.services.oee_calculator import calculate_oee, reports_in_plan
 from apps.kuaizhizao.models.reporting_record import ReportingRecord
 from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
@@ -95,42 +97,16 @@ class EquipmentOEEService:
                 if device_id == equipment_id or device_code == equipment.code:
                     equipment_records.append(record)
 
-        # 计算实际运行时间（小时）
-        actual_runtime = sum([float(record.work_hours or 0) for record in equipment_records])
-
-        # 计算计划运行时间（从工单计划时间计算）
-        # 这里简化处理，使用工作日的标准工作时间（假设每天8小时）
-        working_days = (date_end - date_start).days
-        planned_runtime = working_days * 8  # 简化：每天8小时
-
-        # 计算时间稼动率
-        availability_rate = (actual_runtime / planned_runtime * 100) if planned_runtime > 0 else 0
-        availability_rate = min(100, max(0, availability_rate))  # 限制在0-100之间
-
-        # 计算实际产量和合格数量
-        actual_quantity = sum([float(record.reported_quantity or 0) for record in equipment_records])
-        qualified_quantity = sum([float(record.qualified_quantity or 0) for record in equipment_records])
-
-        # 计算良品率
-        quality_rate = (qualified_quantity / actual_quantity * 100) if actual_quantity > 0 else 0
-        quality_rate = min(100, max(0, quality_rate))  # 限制在0-100之间
-
-        # 计算性能稼动率
-        # 性能稼动率 = (实际产量 × 标准工时) / 实际运行时间
-        # 这里简化处理，使用平均标准工时
-        # TODO: 从工序配置中获取标准工时，或从报工记录计算平均标准工时
-        standard_time_per_unit = 1.0  # 简化：假设标准工时为1小时/单位
-        if actual_quantity > 0:
-            # 从报工记录计算平均标准工时
-            total_time = actual_runtime
-            standard_time_per_unit = total_time / actual_quantity if actual_quantity > 0 else 1.0
-
-        performance_rate = ((actual_quantity * standard_time_per_unit) / actual_runtime * 100) if actual_runtime > 0 else 0
-        performance_rate = min(100, max(0, performance_rate))  # 限制在0-100之间
-
-        # 计算OEE
-        oee_value = (availability_rate * performance_rate * quality_rate) / 10000
-        oee_value = min(100, max(0, oee_value))  # 限制在0-100之间
+        monitors = await EquipmentStatusMonitor.filter(tenant_id=tenant_id, equipment_uuid=equipment.uuid, data_source="sensor", deleted_at__isnull=True, monitored_at__gte=date_start-timedelta(minutes=5), monitored_at__lte=date_end)
+        equipment_records = reports_in_plan(equipment_records, (equipment.technical_parameters or {}).get("oee", {}), date_start, date_end)
+        actual_quantity = sum(float(record.reported_quantity or 0) for record in equipment_records)
+        qualified_quantity = None if any(record.qualified_quantity is None for record in equipment_records) else sum(float(record.qualified_quantity) for record in equipment_records)
+        metrics = calculate_oee(monitors, date_start, date_end, (equipment.technical_parameters or {}).get("oee", {}), actual_quantity, qualified_quantity)
+        actual_runtime = metrics["running_seconds"] / 3600
+        planned_runtime = metrics["planned_seconds"] / 3600 if metrics["planned_seconds"] is not None else None
+        def percent(key):
+            value = metrics[key]
+            return round(value * 100, 2) if value is not None else None
 
         return {
             "equipment": {
@@ -144,18 +120,20 @@ class EquipmentOEEService:
                 "end": to_api_isoformat(date_end),
             },
             "metrics": {
-                "planned_runtime": round(planned_runtime, 2),  # 计划运行时间（小时）
+                "planned_runtime": round(planned_runtime, 2) if planned_runtime is not None else None,  # 计划运行时间（小时）
                 "actual_runtime": round(actual_runtime, 2),  # 实际运行时间（小时）
                 "actual_quantity": round(actual_quantity, 2),  # 实际产量
-                "qualified_quantity": round(qualified_quantity, 2),  # 合格数量
-                "unqualified_quantity": round(actual_quantity - qualified_quantity, 2),  # 不合格数量
+                "qualified_quantity": round(qualified_quantity, 2) if qualified_quantity is not None else None,  # 合格数量
+                "unqualified_quantity": round(actual_quantity - qualified_quantity, 2) if qualified_quantity is not None else None,  # 不合格数量
             },
             "oee": {
-                "availability_rate": round(availability_rate, 2),  # 时间稼动率（%）
-                "performance_rate": round(performance_rate, 2),  # 性能稼动率（%）
-                "quality_rate": round(quality_rate, 2),  # 良品率（%）
-                "oee_value": round(oee_value, 2),  # OEE值（%）
+                "availability_rate": percent("availability_rate"),  # 时间稼动率（%）
+                "performance_rate": percent("performance_rate"),  # 性能稼动率（%）
+                "quality_rate": percent("quality_rate"),  # 良品率（%）
+                "oee_value": percent("oee"),  # OEE值（%）
             },
+            "coverage_rate": metrics["coverage_rate"],
+            "unavailable_reasons": metrics["reasons"],
             "record_count": len(equipment_records),  # 报工记录数
         }
 
@@ -228,20 +206,21 @@ class EquipmentOEEService:
                         "end": to_api_isoformat(date_end),
                     },
                     "metrics": {
-                        "planned_runtime": 0,
-                        "actual_runtime": 0,
-                        "actual_quantity": 0,
-                        "qualified_quantity": 0,
-                        "unqualified_quantity": 0,
+                        "planned_runtime": None,
+                        "actual_runtime": None,
+                        "actual_quantity": None,
+                        "qualified_quantity": None,
+                        "unqualified_quantity": None,
                     },
                     "oee": {
-                        "availability_rate": 0,
-                        "performance_rate": 0,
-                        "quality_rate": 0,
-                        "oee_value": 0,
+                        "availability_rate": None,
+                        "performance_rate": None,
+                        "quality_rate": None,
+                        "oee_value": None,
                     },
                     "record_count": 0,
-                    "error": str(e),
+                    "error": "OEE 计算失败",
+                    "unavailable_reasons": ["OEE 计算失败"],
                 })
 
         return oee_list
@@ -314,17 +293,17 @@ class EquipmentOEEService:
                 trend_data.append({
                     "period": to_api_isoformat(current_date),
                     "oee": {
-                        "availability_rate": 0,
-                        "performance_rate": 0,
-                        "quality_rate": 0,
-                        "oee_value": 0,
+                        "availability_rate": None,
+                        "performance_rate": None,
+                        "quality_rate": None,
+                        "oee_value": None,
                     },
                     "metrics": {
-                        "planned_runtime": 0,
-                        "actual_runtime": 0,
-                        "actual_quantity": 0,
-                        "qualified_quantity": 0,
-                        "unqualified_quantity": 0,
+                        "planned_runtime": None,
+                        "actual_runtime": None,
+                        "actual_quantity": None,
+                        "qualified_quantity": None,
+                        "unqualified_quantity": None,
                     },
                 })
 

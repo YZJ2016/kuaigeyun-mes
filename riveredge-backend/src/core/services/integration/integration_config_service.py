@@ -494,6 +494,10 @@ class IntegrationConfigService:
                 result = await IntegrationConfigService._test_sqlserver_connection(integration)
             elif integration.type in DATA_SOURCE_CONFIG_ONLY_TYPES or integration.type == "Database":
                 result = await IntegrationConfigService._test_database_config_validation(integration)
+            elif integration.type in {"thingsboard", "jetlinks"}:
+                from core.services.integration.iot_platform_client import PlatformClient
+                async with PlatformClient(integration.type, integration.get_config()) as client:
+                    result = await client.probe()
             elif integration.type == "mqtt":
                 result = IntegrationConfigService._validate_mqtt_config(integration.get_config())
             elif integration.type == "feishu":
@@ -579,7 +583,7 @@ class IntegrationConfigService:
 
             integration.update_connection_status(True)
             await integration.save()
-            merged = {**result, "verification_level": "live"}
+            merged = {**result, "verification_level": result.get("verification_level", "live")}
             return {
                 "success": True,
                 "message": "连接成功",
@@ -753,6 +757,10 @@ class IntegrationConfigService:
                 result = await IntegrationConfigService._test_sqlserver_connection(temp)
             elif temp.type in DATA_SOURCE_CONFIG_ONLY_TYPES or temp.type == "Database":
                 result = await IntegrationConfigService._test_database_config_validation(temp)
+            elif temp.type in {"thingsboard", "jetlinks"}:
+                from core.services.integration.iot_platform_client import PlatformClient
+                async with PlatformClient(temp.type, temp.get_config()) as client:
+                    result = await client.probe()
             elif temp.type == "mqtt":
                 result = IntegrationConfigService._validate_mqtt_config(temp.get_config())
             elif temp.type == "feishu":
@@ -836,7 +844,7 @@ class IntegrationConfigService:
             return {
                 "success": True,
                 "message": result.get("message", "连接成功"),
-                "data": {**result, "verification_level": "live"},
+                "data": {**result, "verification_level": result.get("verification_level", "live")},
             }
         except Exception as e:
             return {

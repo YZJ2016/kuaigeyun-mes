@@ -1,8 +1,7 @@
-"""指令闭环。边缘通道走心跳领取，平台通道停在未发出。回执只改凭据命中的那台设备。"""
+"""指令闭环。边缘通道走心跳领取，平台通道使用公共配置执行 REST。回执只改凭据命中的那台设备。"""
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from datetime import timedelta
 from typing import Any, Optional
 
@@ -16,6 +15,8 @@ from apps.kuaiiot.models.device import KuaiiotDevice
 from apps.kuaiiot.services.message_log_service import MessageLogService, sanitize_payload
 from apps.kuaiiot.services.product_service import get_product
 from apps.kuaiiot.services.connection_runtime import ensure_device_connection
+from apps.kuaiiot.services.connection_runtime import resolve_core_connection
+from core.services.integration.iot_platform_client import PlatformClient
 from core.utils.timezone_utils import resolve_business_datetime
 from infra.domain.tenant_context import TenantContextError, get_current_tenant_id, unscoped, with_tenant
 from infra.exceptions.exceptions import AuthenticationError, NotFoundError, ValidationError
@@ -24,20 +25,7 @@ DISPATCH_CHANNEL = "edge_heartbeat"
 NOT_SENT = "not_sent"
 
 
-def dispatch_thingsboard() -> str:
-    """不发 HTTP。说明见 spec 156「平台地址未进入仓库」。"""
-    return NOT_SENT
-
-
-def dispatch_jetlinks() -> str:
-    """不发 HTTP。说明见 spec 156「平台地址未进入仓库」。"""
-    return NOT_SENT
-
-
-PLATFORM_DISPATCHERS: dict[str, Callable[[], str]] = {
-    "thingsboard": dispatch_thingsboard,
-    "jetlinks": dispatch_jetlinks,
-}
+PLATFORM_CHANNELS = frozenset({"thingsboard", "jetlinks"})
 
 
 def _require_tenant(explicit: int) -> int:
@@ -175,15 +163,15 @@ async def create_command(
         if connection is not None and connection.connection_type:
             source = connection.connection_type.strip().lower()
     # 平台指令永不到边缘，不强制边缘动作；http/mqtt 仍按原顺序校验
-    if source not in PLATFORM_DISPATCHERS:
+    if source not in PLATFORM_CHANNELS:
         _executable_edge_action(function)
     _check_required_params(function, body)
     if source == "mqtt":
         raise ValidationError("MQTT 连接不做指令下发")
-    dispatcher = PLATFORM_DISPATCHERS.get(source)
-    if dispatcher is not None:
+    platform_command = source in PLATFORM_CHANNELS
+    if platform_command:
         channel = source
-        status = dispatcher()
+        status = "pending"
     else:
         channel = DISPATCH_CHANNEL
         status = "pending"
@@ -213,6 +201,22 @@ async def create_command(
             status=status,
             direction="out",
         )
+    if platform_command:
+        try:
+            core = await resolve_core_connection(connection)
+            # 发送前持久标记；网络响应丢失不自动重发设备动作。
+            command.status = "sent"
+            command.sent_at = resolve_business_datetime()
+            await command.save()
+            async with PlatformClient(source, core.get_config()) as client:
+                outcome = await client.command(device.external_device_id, command.function_key, body, command.uuid)
+            command.result = sanitize_payload(outcome if isinstance(outcome, dict) else {"response": outcome}, tuple(str(value) for key, value in core.get_config().items() if key in {"password", "token", "api_key", "secret"} and value) + (device.device_token,))
+            command.status = "success"
+            command.completed_at = resolve_business_datetime()
+        except Exception:
+            command.status = "uncertain"
+            command.error_message = "平台执行结果未确认；请核对设备，不自动重复发送"
+        await command.save()
     return command
 
 

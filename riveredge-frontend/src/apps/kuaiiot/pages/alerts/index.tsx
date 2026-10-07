@@ -5,7 +5,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button, Card, Form, Input, InputNumber, Select, Space, Switch, Table, Typography, message } from 'antd';
-import { createAlertRule, listAlerts, type AlertOut } from '../../services/kuaiiot';
+import { createAlertRule, listAlerts, transitionAlert, type AlertOut } from '../../services/kuaiiot';
 
 const { Title } = Typography;
 
@@ -105,6 +105,15 @@ export default function AlertsPage() {
             { title: '实际值', dataIndex: 'actual_value' },
             { title: '状态', dataIndex: 'status' },
             { title: '触发时间', dataIndex: 'triggered_at' },
+            { title: '恢复时间', dataIndex: 'recovered_at' },
+            { title: '操作', render: (_, row: AlertOut) => <Space>
+              <Button disabled={!!row.acknowledged_at || row.status === 'closed'} onClick={async () => {
+                try { await transitionAlert(row.id, 'acknowledge'); await load(); } catch { message.error('确认失败'); }
+              }}>确认</Button>
+              <Button disabled={row.status === 'closed'} onClick={async () => {
+                try { await transitionAlert(row.id, 'close'); await load(); } catch { message.error('处置失败'); }
+              }}>处置完成</Button>
+            </Space> },
           ]}
         />
       </Card>
