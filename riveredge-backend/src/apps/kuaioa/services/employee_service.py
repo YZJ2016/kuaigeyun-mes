@@ -260,6 +260,11 @@ class EmployeeProfileService:
             "department_name": (data.department_name or "").strip() or None,
             "status": status,
             "notes": data.notes,
+            "id_card_file_uuid": (data.id_card_file_uuid or "").strip() or None,
+            "labor_contract_file_uuid": (data.labor_contract_file_uuid or "").strip() or None,
+            "medical_report_file_uuid": (data.medical_report_file_uuid or "").strip() or None,
+            "education_cert_file_uuid": (data.education_cert_file_uuid or "").strip() or None,
+            "disability_cert_file_uuid": (data.disability_cert_file_uuid or "").strip() or None,
         }
         await apply_create_audit_by_user_id(create_payload, user_id)
 
@@ -347,6 +352,11 @@ class EmployeeProfileService:
             "bank_name",
             "bank_branch",
             "department_name",
+            "id_card_file_uuid",
+            "labor_contract_file_uuid",
+            "medical_report_file_uuid",
+            "education_cert_file_uuid",
+            "disability_cert_file_uuid",
         ):
             if key in payload and isinstance(payload[key], str):
                 payload[key] = payload[key].strip() or None

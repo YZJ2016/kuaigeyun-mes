@@ -16,6 +16,7 @@ import {
 import type { ColumnsType } from 'antd/es/table';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { formatQuantity } from '../../../../../utils/format';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import {
   batchMarkAttendance,
@@ -49,6 +50,23 @@ type EmpRow = {
   days: Record<string, DayCell>;
 };
 
+function asDayCell(raw: Record<string, unknown>, fallback?: DayCell): DayCell {
+  return {
+    id: Number(raw.id ?? fallback?.id ?? 0),
+    employee_id: Number(raw.employee_id ?? fallback?.employee_id ?? 0),
+    employee_name: String(raw.employee_name ?? fallback?.employee_name ?? ''),
+    employee_code:
+      raw.employee_code != null
+        ? String(raw.employee_code)
+        : fallback?.employee_code,
+    work_date: String(raw.work_date ?? fallback?.work_date ?? ''),
+    regular_hours: Number(raw.regular_hours ?? fallback?.regular_hours ?? 0),
+    ot_hours: Number(raw.ot_hours ?? fallback?.ot_hours ?? 0),
+    mark: String(raw.mark ?? fallback?.mark ?? 'normal'),
+    is_night: Boolean(raw.is_night ?? fallback?.is_night ?? false),
+  };
+}
+
 const AttendanceFillPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const sheetId = Number(id);
@@ -79,6 +97,22 @@ const AttendanceFillPage: React.FC = () => {
 
   const locked = sheet?.status === 'submitted';
   const hasNight = Boolean(sheet?.has_night);
+  const standardHours = Number(sheet?.standard_hours ?? 8);
+
+  /** 单格保存后只合并本地 days，避免整表重载导致输入卡顿 */
+  const mergeDayLocally = useCallback((updated: DayCell) => {
+    setSheet((prev) => {
+      if (!prev) return prev;
+      const days = Array.isArray(prev.days) ? [...(prev.days as DayCell[])] : [];
+      const idx = days.findIndex((d) => Number(d.id) === updated.id);
+      if (idx >= 0) {
+        days[idx] = { ...days[idx], ...updated };
+      } else {
+        days.push(updated);
+      }
+      return { ...prev, days };
+    });
+  }, []);
 
   const { dayKeys, rows } = useMemo(() => {
     const days = (sheet?.days as DayCell[] | undefined) || [];
@@ -112,23 +146,48 @@ const AttendanceFillPage: React.FC = () => {
 
   const patchCell = async (cell: DayCell, patch: Record<string, unknown>) => {
     if (locked || !perms.canUpdate) return;
+
+    const optimisticPatch: Record<string, unknown> = { ...patch };
+    if (patch.mark === 'leave' || patch.mark === 'rest') {
+      optimisticPatch.regular_hours = 0;
+      optimisticPatch.ot_hours = 0;
+    } else if (patch.mark === 'normal' && cell.mark !== 'normal') {
+      optimisticPatch.regular_hours = standardHours;
+    }
+
+    const optimistic = asDayCell({ ...cell, ...optimisticPatch }, cell);
+    mergeDayLocally(optimistic);
+
     try {
-      await updateAttendanceDay(sheetId, cell.id, patch);
-      await load();
+      const saved = await updateAttendanceDay(sheetId, cell.id, {
+        ...patch,
+        ...(patch.mark === 'normal' && cell.mark !== 'normal'
+          ? { regular_hours: standardHours }
+          : {}),
+      });
+      mergeDayLocally(asDayCell(saved, optimistic));
     } catch (error) {
       message.error(getApiErrorMessage(error));
+      // 失败时回源，避免本地状态与库不一致
+      await load();
     }
   };
 
   const renderCell = (cell: DayCell | undefined) => {
     if (!cell) return '—';
-    if (cell.mark === 'leave') return 'X';
-    if (cell.mark === 'rest') return '√';
+    const isLeaveOrRest = cell.mark === 'leave' || cell.mark === 'rest';
     const night = hasNight && cell.is_night ? ' ☆' : '';
+    const statusHint =
+      cell.mark === 'leave'
+        ? t('app.kuaioa.attendance.mark.leave')
+        : cell.mark === 'rest'
+          ? t('app.kuaioa.attendance.mark.rest')
+          : `${formatQuantity(cell.regular_hours)}h`;
     return (
       <Space orientation="vertical" size={2} style={{ width: '100%' }}>
         <Typography.Text type="secondary" style={{ fontSize: 11 }}>
-          {Number(cell.regular_hours)}h{night}
+          {statusHint}
+          {night}
         </Typography.Text>
         <InputNumber
           size="small"
@@ -136,13 +195,13 @@ const AttendanceFillPage: React.FC = () => {
           step={0.5}
           changeOnBlur
           value={Number(cell.ot_hours)}
-          disabled={locked || !perms.canUpdate}
+          disabled={locked || !perms.canUpdate || isLeaveOrRest}
           onChange={(value) => {
             if (value === null || value === undefined) return;
             if (Number(value) === Number(cell.ot_hours)) return;
             void patchCell(cell, { ot_hours: value, mark: 'normal' });
           }}
-          style={{ width: 64 }}
+          style={{ width: 72 }}
         />
         <Select
           size="small"
@@ -151,10 +210,11 @@ const AttendanceFillPage: React.FC = () => {
           style={{ width: 72 }}
           options={[
             { value: 'normal', label: t('app.kuaioa.attendance.mark.normal') },
-            { value: 'leave', label: 'X' },
-            { value: 'rest', label: '√' },
+            { value: 'leave', label: t('app.kuaioa.attendance.mark.leave') },
+            { value: 'rest', label: t('app.kuaioa.attendance.mark.rest') },
           ]}
           onChange={(value) => {
+            if (value === cell.mark) return;
             void patchCell(cell, { mark: value });
           }}
         />
@@ -186,7 +246,7 @@ const AttendanceFillPage: React.FC = () => {
       dataIndex: 'ot_total',
       fixed: 'left',
       width: 80,
-      render: (v: number) => Number(v).toFixed(1),
+      render: (v: number) => formatQuantity(v),
     },
     ...(hasNight
       ? [
@@ -206,18 +266,8 @@ const AttendanceFillPage: React.FC = () => {
     })),
   ];
 
-  const statusLabel =
-    sheet?.status === 'submitted'
-      ? t('app.kuaioa.attendance.status.submitted')
-      : sheet?.status === 'draft'
-        ? t('app.kuaioa.attendance.status.draft')
-        : sheet?.status
-          ? String(sheet.status)
-          : '';
-
   return (
     <ListPageTemplate
-      title={`${t('app.kuaioa.attendance.fillTitle')} ${sheet?.year_month || ''} ${sheet?.workshop_name || ''}${statusLabel ? ` · ${statusLabel}` : ''}`}
       toolbarExtra={
         <Space wrap>
           <Button onClick={() => navigate('/apps/kuaioa/hr/attendance')}>
@@ -342,7 +392,9 @@ const AttendanceFillPage: React.FC = () => {
                 type="info"
                 showIcon
                 title={t('app.kuaioa.attendance.hintNewHires', {
-                  names: newHires.map((h) => String((h as Record<string, unknown>).employee_name)).join('、'),
+                  names: newHires
+                    .map((h) => String((h as Record<string, unknown>).employee_name))
+                    .join('、'),
                 })}
               />
             ) : null}
@@ -351,7 +403,9 @@ const AttendanceFillPage: React.FC = () => {
                 type="warning"
                 showIcon
                 title={t('app.kuaioa.attendance.hintLeftBlocked', {
-                  names: leftBlocked.map((h) => String((h as Record<string, unknown>).employee_name)).join('、'),
+                  names: leftBlocked
+                    .map((h) => String((h as Record<string, unknown>).employee_name))
+                    .join('、'),
                 })}
               />
             ) : null}

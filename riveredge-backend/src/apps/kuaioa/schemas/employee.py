@@ -32,6 +32,11 @@ class EmployeeProfileCreate(BaseModel):
     department_name: Optional[str] = Field(None, max_length=100)
     status: Optional[str] = Field(None, max_length=20)
     notes: Optional[str] = None
+    id_card_file_uuid: Optional[str] = Field(None, max_length=36)
+    labor_contract_file_uuid: Optional[str] = Field(None, max_length=36)
+    medical_report_file_uuid: Optional[str] = Field(None, max_length=36)
+    education_cert_file_uuid: Optional[str] = Field(None, max_length=36)
+    disability_cert_file_uuid: Optional[str] = Field(None, max_length=36)
 
 
 class EmployeeBulkCreateRequest(BaseModel):
@@ -88,3 +93,8 @@ class EmployeeProfileUpdate(BaseModel):
     department_name: Optional[str] = Field(None, max_length=100)
     status: Optional[str] = Field(None, max_length=20)
     notes: Optional[str] = None
+    id_card_file_uuid: Optional[str] = Field(None, max_length=36)
+    labor_contract_file_uuid: Optional[str] = Field(None, max_length=36)
+    medical_report_file_uuid: Optional[str] = Field(None, max_length=36)
+    education_cert_file_uuid: Optional[str] = Field(None, max_length=36)
+    disability_cert_file_uuid: Optional[str] = Field(None, max_length=36)

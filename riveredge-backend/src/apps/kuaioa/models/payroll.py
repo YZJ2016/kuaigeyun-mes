@@ -67,6 +67,9 @@ class KuaioaPayrollSettlement(BaseModel):
     settlement_code = fields.CharField(max_length=50, description="结算单号")
     year_month = fields.CharField(max_length=7, description="年月 YYYY-MM")
     workshop_name = fields.CharField(max_length=100, description="车间")
+    employment_types = fields.JSONField(
+        default=list, description="用工类型多选 formal/temp/labor，空表示全部"
+    )
     ot_multiplier = fields.DecimalField(
         max_digits=6, decimal_places=2, default=3, description="加班倍率"
     )

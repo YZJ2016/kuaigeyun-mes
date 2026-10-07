@@ -181,7 +181,6 @@ const PayrollSettlementDetailPage: React.FC = () => {
 
   return (
     <ListPageTemplate
-      title={`${t('app.kuaioa.payroll.detailTitle')} ${sheet?.year_month || ''} ${sheet?.workshop_name || ''}`}
       toolbarExtra={
         <Space wrap className="no-print">
           <Button onClick={() => navigate('/apps/kuaioa/hr/payroll-settlements')}>

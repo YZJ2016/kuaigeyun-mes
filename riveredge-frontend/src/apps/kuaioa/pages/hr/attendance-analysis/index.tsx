@@ -313,7 +313,6 @@ const AttendanceAnalysisPage: React.FC = () => {
 
   return (
     <ListPageTemplate
-      title={t('app.kuaioa.attendanceAnalysis.title')}
       toolbarExtra={
         <Space wrap>
           <Segmented

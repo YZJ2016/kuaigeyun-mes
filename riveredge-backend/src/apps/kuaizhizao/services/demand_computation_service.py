@@ -1385,7 +1385,7 @@ class DemandComputationService(AppBaseService):
         from tortoise.expressions import Q
         from datetime import datetime
         
-        query = DemandComputation.filter(tenant_id=tenant_id)
+        query = DemandComputation.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         
         if demand_id:
             query = query.filter(demand_id=demand_id)

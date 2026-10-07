@@ -3775,6 +3775,13 @@ export default {
   'app.kuaioa.employee.welfareDragonBoat': '端午福利标准',
   'app.kuaioa.employee.welfareMidAutumn': '中秋福利标准',
   'app.kuaioa.employee.welfareSpringFestival': '春节福利标准',
+  'app.kuaioa.employee.tabBasic': '基本信息',
+  'app.kuaioa.employee.tabAttachments': '附件',
+  'app.kuaioa.employee.idCard': '身份证',
+  'app.kuaioa.employee.laborContract': '劳动合同',
+  'app.kuaioa.employee.medicalReport': '体检报告',
+  'app.kuaioa.employee.educationCert': '学历证书',
+  'app.kuaioa.employee.disabilityCert': '残疾证',
   'app.kuaioa.employee.status.active': '在职',
   'app.kuaioa.employee.status.left': '离职',
   'app.kuaioa.employee.boundAccount': '登录账号',
@@ -3827,7 +3834,7 @@ export default {
   'app.kuaioa.attendance.fill': '填报',
   'app.kuaioa.attendance.fillTitle': '考勤填报',
   'app.kuaioa.attendance.fillHint':
-    '默认正常工时已填；请填写加班小时。标记：X=请假，√=休息；夜班模板可勾选☆。提交后锁定。',
+    '默认正常工时已填；请填写加班小时。状态可选正常/请假/休息；夜班模板可勾选☆。提交后锁定。',
   'app.kuaioa.attendance.submit': '提交考勤',
   'app.kuaioa.attendance.reopen': '重新打开',
   'app.kuaioa.attendance.refreshRoster': '刷新名单',
@@ -3837,17 +3844,28 @@ export default {
   'app.kuaioa.attendance.otTotal': '加班合计',
   'app.kuaioa.attendance.nightCount': '夜班次数',
   'app.kuaioa.attendance.mark.normal': '正常',
+  'app.kuaioa.attendance.mark.leave': '请假',
+  'app.kuaioa.attendance.mark.rest': '休息',
   'app.kuaioa.attendance.restRegister': '休息登记',
   'app.kuaioa.attendance.nightRegister': '夜班登记',
+  'app.kuaioa.attendance.restRegisterCreate': '新建休息登记',
+  'app.kuaioa.attendance.nightRegisterCreate': '新建夜班登记',
   'app.kuaioa.attendance.restRegisterHint':
-    '选择车间与休息日期后，写入对应月度考勤草稿（标记√）。可不选人员表示当日全员。',
+    '新建时选择车间与休息日期区间，写入对应月度考勤草稿（标记√）。可不选人员表示区间内全员。',
   'app.kuaioa.attendance.nightRegisterHint':
-    '选择车间与夜班日期后，写入夜班模板考勤草稿（标记☆）。可不选人员表示当日全员。',
+    '新建时选择车间与夜班日期区间，写入夜班模板考勤草稿（标记☆）。可不选人员表示区间内全员。',
   'app.kuaioa.attendance.workshopRequired': '请填写车间',
   'app.kuaioa.attendance.workDateRequired': '请选择日期',
+  'app.kuaioa.attendance.workDateRangeRequired': '请选择日期区间',
   'app.kuaioa.attendance.workDate': '登记日期',
+  'app.kuaioa.attendance.workDateRange': '日期区间',
   'app.kuaioa.attendance.workDateMonthMismatch': '登记日期须属于所选年月',
+  'app.kuaioa.attendance.registerCode': '登记单号',
+  'app.kuaioa.attendance.employeeSummary': '人员',
+  'app.kuaioa.attendance.markedCellCount': '写入格数',
   'app.kuaioa.attendance.productionLineOptional': '产线选填',
+  'app.kuaioa.attendance.employmentTypesOptional': '用工类型选填，空则全部',
+  'app.kuaioa.attendance.employmentTypesAll': '全部',
   'app.kuaioa.attendance.employeeOptional': '人员选填，空则全员',
   'app.kuaioa.attendance.nightTemplateRequired': '请先使用夜班模板考勤单，或新建时勾选夜班模板',
   'app.kuaioa.attendanceDaily.createButton': '新建考勤登记',
@@ -30025,10 +30043,86 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.haoligo-sales-qty-formatQuantity-r01.title':
+    '销售跟踪数量展示去掉多余尾零',
+  'pages.dashboard.updateLog.entries.haoligo-sales-qty-formatQuantity-r01.description':
+    '订单跟踪的订单数量、已发货，以及月度工厂台账的发货/开票数量改走 formatQuantity，按站点数量小数位显示并去掉无意义尾零（如 111.0000 显示为 111）。',
+  'pages.dashboard.updateLog.entries.haoligo-order-tracking-fuzzy-search-r01.title':
+    '订单跟踪顶栏模糊搜索不生效',
+  'pages.dashboard.updateLog.entries.haoligo-order-tracking-fuzzy-search-r01.description':
+    '列表请求误从 params 取 keyword，而 UniTable 模糊词在 searchFormValues；已改为 pickListSearchKeyword，搜订单号等可正确过滤。',
+  'pages.dashboard.updateLog.entries.haoligo-monthly-ledger-invoice-fields-r01.title':
+    '月度工厂台账补齐开票明细与发票号',
+  'pages.dashboard.updateLog.entries.haoligo-monthly-ledger-invoice-fields-r01.description':
+    '销售新建/编辑可填本月开票明细、未开票总数并上传开票明细 Excel；财务跟踪改为下载该 Excel，不再录入未开票总数，并增加发票号。',
+  'pages.dashboard.updateLog.entries.haoligo-order-tracking-list-route-r01.title':
+    '订单跟踪列表接口误挂路由导致整页无数据',
+  'pages.dashboard.updateLog.entries.haoligo-order-tracking-list-route-r01.description':
+    '列表 GET 装饰器误挂在日期解析辅助函数上，请求返回 422（缺少 raw），页面显示暂无数据；已改回挂到 list_order_trackings，库内订单跟踪数据本身未丢失。',
   'pages.dashboard.updateLog.entries.haoligo-order-tracking-search-select-r01.title':
     '订单跟踪搜索条件改用下拉并真正生效',
   'pages.dashboard.updateLog.entries.haoligo-order-tracking-search-select-r01.description':
     '客户、订单类型、订单情况、指定人、账期、交期提醒、已提交生产等可选项改为下拉；指定人等筛选会传到后端，不再只显示条件却筛不出结果。',
+  'pages.dashboard.updateLog.entries.approval-process-search-canonical-r01.title':
+    '审批流程按中文名搜索不再漏单',
+  'pages.dashboard.updateLog.entries.approval-process-search-canonical-r01.description':
+    '审批流程列表搜索除库内名称/代码外，同步按单据审核规范中文名命中；历史英文机名（如 sales_order_audit）搜「销售」时也能列出销售订单审核等流程。',
+  'pages.dashboard.updateLog.entries.kuaioa-hr-drop-list-page-title-r01.title':
+    '人事管理页去掉多余页内大标题',
+  'pages.dashboard.updateLog.entries.kuaioa-hr-drop-list-page-title-r01.description':
+    '考勤填报、考勤分析、工资结算明细、生活费发放、个人工资、年度统计、节日福利明细等页不再渲染 ListPageTemplate 页内标题，与标签/面包屑重复；工具栏操作保留。',
+  'pages.dashboard.updateLog.entries.kuaioa-attendance-fill-local-patch-r01.title':
+    '月度考勤填报改格不再整表刷新，请假休息可改回',
+  'pages.dashboard.updateLog.entries.kuaioa-attendance-fill-local-patch-r01.description':
+    '日格保存改为本地合并更新，避免每次输入都重载整张考勤表；请假/休息仍保留状态下拉，可改回正常并恢复标准工时。',
+  'pages.dashboard.updateLog.entries.kuaioa-list-number-formatQuantity-r01.title':
+    '轻办公人事列表数字按规范去掉多余尾零',
+  'pages.dashboard.updateLog.entries.kuaioa-list-number-formatQuantity-r01.description':
+    '人事等 CRUD 列表的数字列统一走 formatQuantity / formatAmount：数量与工时跟随站点小数位并去掉无意义尾零，金额固定金额精度，避免库内四位小数原样显示。',
+  'pages.dashboard.updateLog.entries.kuaioa-payroll-welfare-employment-types-r01.title':
+    '工资结算与节日福利可按用工类型筛选',
+  'pages.dashboard.updateLog.entries.kuaioa-payroll-welfare-employment-types-r01.description':
+    '工资登记、节日福利发放在车间后增加用工类型多选（正式工/临时工/劳务工）；空表示全部，生成明细时按所选类型过滤花名册。',
+  'pages.dashboard.updateLog.entries.kuaioa-attendance-employment-types-r01.title':
+    '月度考勤与休息夜班登记可按用工类型筛选',
+  'pages.dashboard.updateLog.entries.kuaioa-attendance-employment-types-r01.description':
+    '新建考勤单、休息登记、夜班登记在车间与产线后增加用工类型多选（正式工/临时工/劳务工）；空表示全部，花名册与批量标记按所选类型过滤。',
+  'pages.dashboard.updateLog.entries.kuaioa-day-register-alt-n-r01.title':
+    '休息夜班登记新建支持 Alt+N',
+  'pages.dashboard.updateLog.entries.kuaioa-day-register-alt-n-r01.description':
+    '休息登记、夜班登记列表的新建按钮补齐 Alt+N 快捷键与按钮文案提示，与全站 UniTable 新建规范一致。',
+  'pages.dashboard.updateLog.entries.kuaioa-attendance-day-register-range-list-r01.title':
+    '休息夜班登记支持日期区间与列表',
+  'pages.dashboard.updateLog.entries.kuaioa-attendance-day-register-range-list-r01.description':
+    '休息登记、夜班登记改为列表页并保留登记历史；新建弹窗可选日期区间，一次写入对应月度考勤草稿（休息√ / 夜班☆），可不选人员表示区间内全员。',
+  'pages.dashboard.updateLog.entries.mrp-list-hide-soft-deleted-r01.title':
+    '需求计算列表不再显示已删除单据',
+  'pages.dashboard.updateLog.entries.mrp-list-hide-soft-deleted-r01.description':
+    '需求计算列表与采购单全链路上游推导统一跳过已软删的需求计算，删除后刷新列表即不再出现，也不会在采购单全链路中挂出幽灵节点。',
+  'pages.dashboard.updateLog.entries.full-chain-hide-soft-deleted-r01.title':
+    '全链路不再带出已删除下游单据',
+  'pages.dashboard.updateLog.entries.full-chain-hide-soft-deleted-r01.description':
+    '销售订单、工单全链路业务推导统一跳过已软删的工单、领料、成品入库、检验与出库等节点，删除单据后刷新全链路即不再显示。',
+  'pages.dashboard.updateLog.entries.full-chain-trace-live-doc-codes-r01.title':
+    '全链路跟踪按真实单据号展示',
+  'pages.dashboard.updateLog.entries.full-chain-trace-live-doc-codes-r01.description':
+    '全链路节点编码改为读取当前活单据，不再使用关联关系表里过期的单号快照，避免采购订单、收货单与应付单等节点显示错误编号。',
+  'pages.dashboard.updateLog.entries.approval-process-names-canonicalize-r01.title':
+    '审批流程名称全部对齐规范名',
+  'pages.dashboard.updateLog.entries.approval-process-names-canonicalize-r01.description':
+    '注册表内审批流程（manifest.audit）的名称与种子备注一律落成规范中文名，如销售订单审核、框架合同审核；打开列表或补齐绑定时自动对齐，自定义非注册表流程不受影响。',
+  'pages.dashboard.updateLog.entries.oa-hire-form-pay-month-r01.title':
+    '入职登记字段与员工档案对齐并支持月薪',
+  'pages.dashboard.updateLog.entries.oa-hire-form-pay-month-r01.description':
+    '入职登记、临时工登记补齐产线、银行卡、生活费、岗位工资、社保公积金、房租电费与节日福利等档案字段；计薪方式新增月薪，结算时按岗位工资计发、不再按计时单价折算。',
+  'pages.dashboard.updateLog.entries.workshop-create-unique-pkey-r01.title':
+    '车间新建不再误报编码已存在',
+  'pages.dashboard.updateLog.entries.workshop-create-unique-pkey-r01.description':
+    '新建车间按精确编码判重并校准主键序列；主键冲突不再被说成编码已存在，未占用的编码可以正常保存。',
+  'pages.dashboard.updateLog.entries.login-log-ip-location-sticky-r01.title':
+    '登录日志同一 IP 地点不再中英混跳',
+  'pages.dashboard.updateLog.entries.login-log-ip-location-sticky-r01.description':
+    '新 IP 首次登录多源按省→市投票定坐标，再逆地理写成中文地址落库；同一 IP 第二次及以后直接复用首次结果，不再重投。',
   'pages.dashboard.updateLog.entries.cosmic-warehouse-createorg-r01.title':
     '苍穹仓库列表查询自动带创建组织',
   'pages.dashboard.updateLog.entries.cosmic-warehouse-createorg-r01.description':

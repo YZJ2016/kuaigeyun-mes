@@ -4,6 +4,10 @@ import { App } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { runKuaioaListExport } from '../../../utils/kuaioaListExport';
 import { loadOaWorkshopNameOptions } from '../../../utils/oaWorkshopOptions';
+import {
+  buildOaEmploymentTypeOptions,
+  resolveOaEmploymentTypeLabel,
+} from '../../../utils/oaFormEnums';
 import KuaioaCrudListPage from '../../../components/KuaioaCrudListPage';
 import {
   confirmWelfareBatch,
@@ -47,6 +51,7 @@ const WelfareBatchesPage: React.FC = () => {
     ],
     [t],
   );
+  const employmentOptions = useMemo(() => buildOaEmploymentTypeOptions(t), [t]);
 
   const fields = useMemo(
     () => [
@@ -67,12 +72,27 @@ const WelfareBatchesPage: React.FC = () => {
         width: 120,
       },
       {
-        name: 'workshop_name',
+        name: 'workshop_names',
         labelKey: 'app.kuaioa.attendance.workshop',
         type: 'select' as const,
+        mode: 'multiple' as const,
         options: workshopOptions,
         required: true,
-        width: 140,
+        hideInTable: true,
+      },
+      {
+        name: 'workshop_name',
+        labelKey: 'app.kuaioa.attendance.workshop',
+        hideInForm: true,
+        width: 200,
+      },
+      {
+        name: 'employment_types',
+        labelKey: 'app.kuaioa.employee.employmentTypeLabel',
+        type: 'select' as const,
+        mode: 'multiple' as const,
+        options: employmentOptions,
+        width: 160,
       },
       {
         name: 'status',
@@ -84,7 +104,7 @@ const WelfareBatchesPage: React.FC = () => {
       },
       { name: 'notes', labelKey: 'common.remark', type: 'textarea' as const, hideInTable: true },
     ],
-    [festivalOptions, statusOptions, workshopOptions],
+    [employmentOptions, festivalOptions, statusOptions, workshopOptions],
   );
 
   return (
@@ -97,24 +117,84 @@ const WelfareBatchesPage: React.FC = () => {
       statusPresentation="marker"
       detailVariant="master"
       getDetailFn={getWelfareBatch}
-      columnPersistenceId="apps.kuaioa.welfare.list-v1"
+      columnPersistenceId="apps.kuaioa.welfare.list-v3"
       fields={fields}
       listFn={listWelfareBatches}
       createFn={createWelfareBatch}
       updateFn={updateWelfareBatch}
       deleteFn={deleteWelfareBatch}
+      mapFormValuesToPayload={(values) => {
+        const rawNames = values.workshop_names;
+        const names = (
+          Array.isArray(rawNames)
+            ? rawNames
+            : rawNames != null && rawNames !== ''
+              ? [rawNames]
+              : []
+        )
+          .map((item) => String(item ?? '').trim())
+          .filter(Boolean);
+        const display = names.join('、');
+        const rawTypes = values.employment_types;
+        const types = (
+          Array.isArray(rawTypes)
+            ? rawTypes
+            : rawTypes != null && rawTypes !== ''
+              ? [rawTypes]
+              : []
+        )
+          .map((item) => String(item ?? '').trim())
+          .filter(Boolean);
+        return {
+          ...values,
+          workshop_names: names,
+          workshop_name: display || String(values.workshop_name ?? '').trim() || undefined,
+          employment_types: types,
+        };
+      }}
+      mapRecordToFormValues={(record) => {
+        const raw = record.employment_types;
+        const types = Array.isArray(raw)
+          ? raw.map((v) => String(v))
+          : raw != null && raw !== ''
+            ? [String(raw)]
+            : [];
+        return {
+          ...record,
+          employment_types: types,
+        };
+      }}
       showExportButton
       onExport={async (type, keys, pageData) => {
+        const formatEmployment = (row: Record<string, unknown>) => {
+          const arr = Array.isArray(row.employment_types) ? row.employment_types : [];
+          if (arr.length === 0) return t('app.kuaioa.attendance.employmentTypesAll');
+          return arr
+            .map((code) => resolveOaEmploymentTypeLabel(String(code), t))
+            .join('、');
+        };
+        const withLabels = (rows?: Record<string, unknown>[]) =>
+          (rows ?? []).map((row) => ({
+            ...row,
+            employment_types_label: formatEmployment(row),
+          }));
         await runKuaioaListExport({
           type,
           keys,
-          pageData,
-          listFn: listWelfareBatches,
+          pageData: withLabels(pageData),
+          listFn: async (params) => {
+            const res = await listWelfareBatches(params);
+            return { items: withLabels(res.items), total: res.total };
+          },
           columns: [
             { key: 'batch_code', title: t('app.kuaioa.welfare.code') },
             { key: 'year', title: t('app.kuaioa.welfare.year') },
             { key: 'festival_type', title: t('app.kuaioa.welfare.festivalType') },
             { key: 'workshop_name', title: t('app.kuaioa.attendance.workshop') },
+            {
+              key: 'employment_types_label',
+              title: t('app.kuaioa.employee.employmentTypeLabel'),
+            },
             { key: 'status', title: t('common.status') },
           ],
           filename: t('app.kuaioa.welfare.exportFileName'),

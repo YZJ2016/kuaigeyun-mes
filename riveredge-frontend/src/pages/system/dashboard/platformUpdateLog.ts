@@ -44,6 +44,96 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'kuaioa-hr-drop-list-page-title-r01',
+    date: '2026-10-08',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-hr-drop-list-page-title-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-hr-drop-list-page-title-r01.description',
+  },
+  {
+    id: 'kuaioa-attendance-fill-local-patch-r01',
+    date: '2026-10-08',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-attendance-fill-local-patch-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-attendance-fill-local-patch-r01.description',
+  },
+  {
+    id: 'kuaioa-list-number-formatQuantity-r01',
+    date: '2026-10-07',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-list-number-formatQuantity-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-list-number-formatQuantity-r01.description',
+  },
+  {
+    id: 'kuaioa-payroll-welfare-employment-types-r01',
+    date: '2026-10-07',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-payroll-welfare-employment-types-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-payroll-welfare-employment-types-r01.description',
+  },
+  {
+    id: 'kuaioa-attendance-employment-types-r01',
+    date: '2026-10-07',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-attendance-employment-types-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-attendance-employment-types-r01.description',
+  },
+  {
+    id: 'kuaioa-day-register-alt-n-r01',
+    date: '2026-10-07',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-day-register-alt-n-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.kuaioa-day-register-alt-n-r01.description',
+  },
+  {
+    id: 'kuaioa-attendance-day-register-range-list-r01',
+    date: '2026-10-07',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-attendance-day-register-range-list-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-attendance-day-register-range-list-r01.description',
+  },
+  {
+    id: 'mrp-list-hide-soft-deleted-r01',
+    date: '2026-10-07',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.mrp-list-hide-soft-deleted-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.mrp-list-hide-soft-deleted-r01.description',
+  },
+  {
+    id: 'full-chain-hide-soft-deleted-r01',
+    date: '2026-10-07',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.full-chain-hide-soft-deleted-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.full-chain-hide-soft-deleted-r01.description',
+  },
+  {
+    id: 'full-chain-trace-live-doc-codes-r01',
+    date: '2026-10-07',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.full-chain-trace-live-doc-codes-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.full-chain-trace-live-doc-codes-r01.description',
+  },
+  {
+    id: 'approval-process-names-canonicalize-r01',
+    date: '2026-10-07',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.approval-process-names-canonicalize-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.approval-process-names-canonicalize-r01.description',
+  },
+  {
+    id: 'approval-process-search-canonical-r01',
+    date: '2026-10-07',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.approval-process-search-canonical-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.approval-process-search-canonical-r01.description',
+  },
+  {
     id: 'cosmic-warehouse-createorg-r01',
     date: '2026-10-06',
     type: 'fix',

@@ -391,6 +391,41 @@ const EmployeesPage: React.FC = () => {
         hideInTable: true,
       },
       {
+        name: 'id_card_file_uuid',
+        labelKey: 'app.kuaioa.employee.idCard',
+        type: 'file' as const,
+        hideInTable: true,
+        formTab: 'attachments',
+      },
+      {
+        name: 'labor_contract_file_uuid',
+        labelKey: 'app.kuaioa.employee.laborContract',
+        type: 'file' as const,
+        hideInTable: true,
+        formTab: 'attachments',
+      },
+      {
+        name: 'medical_report_file_uuid',
+        labelKey: 'app.kuaioa.employee.medicalReport',
+        type: 'file' as const,
+        hideInTable: true,
+        formTab: 'attachments',
+      },
+      {
+        name: 'education_cert_file_uuid',
+        labelKey: 'app.kuaioa.employee.educationCert',
+        type: 'file' as const,
+        hideInTable: true,
+        formTab: 'attachments',
+      },
+      {
+        name: 'disability_cert_file_uuid',
+        labelKey: 'app.kuaioa.employee.disabilityCert',
+        type: 'file' as const,
+        hideInTable: true,
+        formTab: 'attachments',
+      },
+      {
         name: 'status',
         labelKey: 'common.status',
         type: 'select' as const,
@@ -701,6 +736,10 @@ const EmployeesPage: React.FC = () => {
       getDetailFn={getEmployee}
       columnPersistenceId="apps.kuaioa.employee.list-v2"
       fields={fields}
+      formTabs={[
+        { key: 'basic', labelKey: 'app.kuaioa.employee.tabBasic' },
+        { key: 'attachments', labelKey: 'app.kuaioa.employee.tabAttachments' },
+      ]}
       listFn={listEmployees}
       createFn={createEmployee}
       updateFn={updateEmployee}

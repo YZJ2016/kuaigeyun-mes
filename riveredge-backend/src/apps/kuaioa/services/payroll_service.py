@@ -27,6 +27,7 @@ from apps.kuaioa.schemas.payroll import (
     RewardRecordUpdate,
 )
 from apps.kuaioa.schemas.payroll_import import PayrollLineImportRequest
+from apps.kuaioa.services.employment_types import normalize_employment_types
 from apps.kuaioa.services.kuaioa_list_core import (
     apply_create_audit_by_user_id,
     build_keyword_q,
@@ -419,6 +420,7 @@ class PayrollSettlementService:
         workshop = (data.workshop_name or "").strip()
         if not workshop:
             raise BusinessLogicError("车间不能为空")
+        employment_types = normalize_employment_types(data.employment_types)
         ot_mult = data.ot_multiplier if data.ot_multiplier is not None else Decimal("3")
         if ot_mult <= 0:
             raise BusinessLogicError("加班倍率须大于 0")
@@ -440,6 +442,7 @@ class PayrollSettlementService:
             "settlement_code": code,
             "year_month": ym,
             "workshop_name": workshop,
+            "employment_types": employment_types,
             "ot_multiplier": ot_mult,
             "status": "draft",
             "notes": data.notes,
@@ -470,6 +473,10 @@ class PayrollSettlementService:
         if sheet.status == "confirmed":
             raise BusinessLogicError("已确认结算单不可修改")
         payload = data.model_dump(exclude_unset=True)
+        if "employment_types" in payload:
+            payload["employment_types"] = normalize_employment_types(
+                payload.get("employment_types")
+            )
         for k, v in payload.items():
             setattr(sheet, k, v)
         await touch_updated(sheet, user_id)
@@ -592,12 +599,18 @@ class PayrollSettlementService:
         ym = sheet.year_month
         workshop = sheet.workshop_name
         ot_mult = _d(sheet.ot_multiplier) or Decimal("3")
+        employment_types = normalize_employment_types(
+            getattr(sheet, "employment_types", None)
+        )
 
-        employees = await KuaioaEmployeeProfile.filter(
+        emp_q = KuaioaEmployeeProfile.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,
             workshop_name=workshop,
-        ).order_by("full_name", "id")
+        )
+        if employment_types:
+            emp_q = emp_q.filter(employment_type__in=employment_types)
+        employees = await emp_q.order_by("full_name", "id")
 
         att_sheets = await KuaioaAttendanceSheet.filter(
             tenant_id=tenant_id,

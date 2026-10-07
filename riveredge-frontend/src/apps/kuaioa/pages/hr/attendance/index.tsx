@@ -18,7 +18,11 @@ import {
   loadOaWorkshopNameOptions,
 } from '../../../utils/oaWorkshopOptions';
 import { runKuaioaListExport } from '../../../utils/kuaioaListExport';
-import { buildOaAttendanceSheetStatusEnum } from '../../../utils/oaFormEnums';
+import {
+  buildOaAttendanceSheetStatusEnum,
+  buildOaEmploymentTypeOptions,
+  resolveOaEmploymentTypeLabel,
+} from '../../../utils/oaFormEnums';
 
 const AttendanceListPage: React.FC = () => {
   const { t } = useTranslation();
@@ -42,6 +46,7 @@ const AttendanceListPage: React.FC = () => {
   }, []);
 
   const statusEnum = useMemo(() => buildOaAttendanceSheetStatusEnum(t), [t]);
+  const employmentOptions = useMemo(() => buildOaEmploymentTypeOptions(t), [t]);
   const statusOptions = useMemo(
     () => [
       { label: statusEnum.draft.text, value: 'draft' },
@@ -76,6 +81,14 @@ const AttendanceListPage: React.FC = () => {
         width: 120,
       },
       {
+        name: 'employment_types',
+        labelKey: 'app.kuaioa.employee.employmentTypeLabel',
+        type: 'select' as const,
+        mode: 'multiple' as const,
+        options: employmentOptions,
+        width: 160,
+      },
+      {
         name: 'has_night',
         labelKey: 'app.kuaioa.attendance.hasNight',
         type: 'switch' as const,
@@ -101,7 +114,7 @@ const AttendanceListPage: React.FC = () => {
         hideInTable: true,
       },
     ],
-    [lineOptions, statusOptions, workshopOptions],
+    [employmentOptions, lineOptions, statusOptions, workshopOptions],
   );
 
   return (
@@ -115,24 +128,67 @@ const AttendanceListPage: React.FC = () => {
       statusPresentation="marker"
       detailVariant="master"
       getDetailFn={getAttendanceSheet}
-      columnPersistenceId="apps.kuaioa.attendance.list-v2"
+      columnPersistenceId="apps.kuaioa.attendance.list-v3"
       fields={fields}
       listFn={listAttendanceSheets}
       createFn={createAttendanceSheet}
       updateFn={updateAttendanceSheet}
       deleteFn={deleteAttendanceSheet}
+      mapFormValuesToPayload={(values) => {
+        const raw = values.employment_types;
+        const types = (
+          Array.isArray(raw) ? raw : raw != null && raw !== '' ? [raw] : []
+        )
+          .map((v) => String(v).trim())
+          .filter(Boolean);
+        return {
+          ...values,
+          employment_types: types,
+        };
+      }}
+      mapRecordToFormValues={(record) => {
+        const raw = record.employment_types;
+        const types = Array.isArray(raw)
+          ? raw.map((v) => String(v))
+          : raw != null && raw !== ''
+            ? [String(raw)]
+            : [];
+        return {
+          ...record,
+          employment_types: types,
+        };
+      }}
       showExportButton
       onExport={async (type, keys, pageData) => {
+        const formatEmployment = (row: Record<string, unknown>) => {
+          const arr = Array.isArray(row.employment_types) ? row.employment_types : [];
+          if (arr.length === 0) return t('app.kuaioa.attendance.employmentTypesAll');
+          return arr
+            .map((code) => resolveOaEmploymentTypeLabel(String(code), t))
+            .join('、');
+        };
+        const withLabels = (rows?: Record<string, unknown>[]) =>
+          (rows ?? []).map((row) => ({
+            ...row,
+            employment_types_label: formatEmployment(row),
+          }));
         await runKuaioaListExport({
           type,
           keys,
-          pageData,
-          listFn: listAttendanceSheets,
+          pageData: withLabels(pageData),
+          listFn: async (params) => {
+            const res = await listAttendanceSheets(params);
+            return { items: withLabels(res.items), total: res.total };
+          },
           columns: [
             { key: 'sheet_code', title: t('app.kuaioa.attendance.code') },
             { key: 'year_month', title: t('app.kuaioa.attendance.yearMonth') },
             { key: 'workshop_name', title: t('app.kuaioa.attendance.workshop') },
             { key: 'production_line_name', title: t('app.kuaioa.attendance.productionLine') },
+            {
+              key: 'employment_types_label',
+              title: t('app.kuaioa.employee.employmentTypeLabel'),
+            },
             { key: 'has_night', title: t('app.kuaioa.attendance.hasNight') },
             { key: 'status', title: t('common.status') },
           ],

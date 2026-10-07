@@ -6,22 +6,28 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActionType,
   ProColumns,
-  ProForm,
   ProFormDatePicker,
   ProFormDigit,
+  ProFormField,
   ProFormSelect,
   ProFormSwitch,
   ProFormText,
   ProFormTextArea,
   ProFormTimePicker,
 } from '@ant-design/pro-components';
-import { App, Button, Form } from 'antd';
+import { App, Button, Col, Form, Row, Tabs } from 'antd';
 import type { FormInstance } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import { ThemedSegmented } from '../../../components/themed-segmented';
 import { UniTable } from '../../../components/uni-table';
-import { FormModalGridBlock, FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../components/layout-templates';
+import {
+  FORM_LAYOUT,
+  FormModalGridBlock,
+  FormModalTemplate,
+  ListPageTemplate,
+  MODAL_CONFIG,
+} from '../../../components/layout-templates';
 import { useResourcePermissions } from '../../../hooks/useResourcePermissions';
 import { rowActionKind, rowActionLabelKeep } from '../../../components/uni-action';
 import { ActionConfirmPopconfirm } from '../../../components/action-confirm';
@@ -31,7 +37,13 @@ import {
   GLOBAL_DOC_LIST_FIELD_RANK,
 } from '../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../kuaizhizao/pages/shared/documentAuditColumns';
-import { formatDateBySiteSetting, formatDateTimeBySiteSetting } from '../../../utils/format';
+import {
+  formatAmount,
+  formatDateBySiteSetting,
+  formatDateTimeBySiteSetting,
+  formatPrice,
+  formatQuantity,
+} from '../../../utils/format';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../utils/uniTableLayoutColumns';
 import KuaioaDetailDrawer, { type KuaioaDetailDrawerVariant } from './KuaioaDetailDrawer';
 import {
@@ -93,6 +105,8 @@ export type KuaioaFieldConfig = {
   userIdExtra?: React.ReactNode;
   /** type='userId'：选中账号后若该表单项为空则回填姓名 */
   userIdFillNameField?: string;
+  /** 配合 formTabs：字段归属的 Tab key；未设时归入第一个 Tab */
+  formTab?: string;
   width?: number;
 };
 
@@ -146,6 +160,8 @@ type Props = {
   renderDetailExtra?: (record: Record<string, unknown>, reload: () => void) => React.ReactNode;
   /** 自定义 Modal 表单区（替换默认 fields 渲染） */
   renderModalBody?: (form: FormInstance, editing: Record<string, unknown> | null) => React.ReactNode;
+  /** 表单按 Tab 分组；字段用 formTab 指定归属，未指定归入首个 Tab */
+  formTabs?: Array<{ key: string; labelKey: string }>;
   /** 打开编辑时映射表单初值 */
   mapRecordToFormValues?: (record: Record<string, unknown>) => Record<string, unknown>;
   /** 提交前映射 API payload */
@@ -234,6 +250,7 @@ const KuaioaCrudListPage: React.FC<Props> = ({
   getDetailFn,
   renderDetailExtra,
   renderModalBody,
+  formTabs,
   mapRecordToFormValues,
   mapFormValuesToPayload,
   onFormValuesChange,
@@ -548,6 +565,35 @@ const KuaioaCrudListPage: React.FC<Props> = ({
         return col;
       }
 
+      if (field.type === 'number') {
+        col.hideInSearch = true;
+        col.render = (_, row) => {
+          const raw = row[field.name];
+          if (raw == null || raw === '') return '—';
+          const name = field.name.toLowerCase();
+          // 年份等整数标识不走千分位数量格式
+          if (name === 'year' || name.endsWith('_year') || name === 'plan_year') {
+            const n = Number(raw);
+            return Number.isFinite(n) ? String(Math.trunc(n)) : String(raw);
+          }
+          if (name === 'unit_price' || name.endsWith('_unit_price')) {
+            return formatPrice(raw);
+          }
+          if (
+            /(?:^|_)(?:amount|wage|allowance|tax|deduct|payout|fee|insurance|balance|earning|compensation|salary)(?:$|_)/.test(
+              name,
+            ) ||
+            name.endsWith('_amount') ||
+            name.includes('amount')
+          ) {
+            return formatAmount(raw);
+          }
+          // 数量 / 工时 / 天数 / 倍率等：跟随站点数量小数位并去掉无意义尾零
+          return formatQuantity(raw);
+        };
+        return col;
+      }
+
       if (TYPE_MARKER_FIELDS.has(field.name) || field.type === 'select') {
         const hideSearch = TYPE_MARKER_FIELDS.has(field.name) && field.type !== 'select';
         if (hideSearch) {
@@ -560,15 +606,34 @@ const KuaioaCrudListPage: React.FC<Props> = ({
         }
         col.render = (_, row) => {
           const raw = row[field.name];
-          const text = raw == null || raw === '' ? '' : String(raw);
-          if (!text) return '-';
-          const fromOptions =
-            field.options?.find((o) => String(o.value) === text)?.label ||
-            field.options?.find((o) => String(o.label) === text)?.label;
-          const label =
-            fromOptions ||
-            t(`${field.labelKey}.${text}`, { defaultValue: text });
-          return renderOaTypeMarker(label);
+          const values = Array.isArray(raw)
+            ? raw.map((v) => String(v ?? '').trim()).filter(Boolean)
+            : raw == null || raw === ''
+              ? []
+              : [String(raw).trim()].filter(Boolean);
+          if (values.length === 0) {
+            if (field.name === 'employment_types') {
+              return renderOaTypeMarker(t('app.kuaioa.attendance.employmentTypesAll'));
+            }
+            return '-';
+          }
+          const labels = values.map((text) => {
+            const fromOptions =
+              field.options?.find((o) => String(o.value) === text)?.label ||
+              field.options?.find((o) => String(o.label) === text)?.label;
+            return (
+              fromOptions ||
+              t(`${field.labelKey}.${text}`, { defaultValue: text })
+            );
+          });
+          if (field.mode === 'multiple' && labels.length > 1) {
+            return labels.map((label, idx) => (
+              <span key={`${field.name}-${idx}`} style={{ marginRight: 4 }}>
+                {renderOaTypeMarker(label)}
+              </span>
+            ));
+          }
+          return renderOaTypeMarker(labels[0]);
         };
         return col;
       }
@@ -839,209 +904,272 @@ const KuaioaCrudListPage: React.FC<Props> = ({
       >
         {renderModalBody
           ? renderModalBody(form, editing)
-          : fields.map((field) => {
-              if (field.name === codeField && autoGenerateCode && !editing) {
-                return null;
-              }
-              if (shouldSkipOaFormField(field, fields)) {
-                return null;
-              }
-              const label = t(field.labelKey);
-              const rules = field.required
-                ? [{ required: true, message: t('app.kuaioa.common.required') }]
-                : [];
-              const colProps = modalGrid
-                ? { span: field.type === 'textarea' || field.type === 'file' ? 24 : 12 }
-                : undefined;
-              const lookupKind = resolveOaLookupKind(field);
-              if (lookupKind) {
-                const lookupField = (
-                  <OaLookupField
-                    key={field.name}
-                    field={field}
-                    kind={lookupKind}
-                    label={label}
-                    required={field.required}
-                    colProps={lookupKind === 'user' || lookupKind === 'userId' || lookupKind === 'department' || lookupKind === 'operation' ? colProps : undefined}
-                    form={form}
-                    resource={resource}
-                    editing={editing}
-                    departmentExtraOptions={
-                      lookupKind === 'department' ? departmentExtraOptions : undefined
+          : (() => {
+              const renderOneField = (field: KuaioaFieldConfig) => {
+                if (field.name === codeField && autoGenerateCode && !editing) {
+                  return null;
+                }
+                if (field.hideInForm || shouldSkipOaFormField(field, fields)) {
+                  return null;
+                }
+                const label = t(field.labelKey);
+                const rules = field.required
+                  ? [{ required: true, message: t('app.kuaioa.common.required') }]
+                  : [];
+                const colProps = modalGrid
+                  ? {
+                      // 通栏仅备注 / 附件；多选 select（用工类型等）与普通字段同为半宽
+                      span: field.type === 'textarea' || field.type === 'file' ? 24 : 12,
                     }
-                  />
-                );
-                /**
-                 * UniMaterialSelect / CustomerSelect 不是 ProForm 字段，colProps 不会进 Col。
-                 * Skill：非 ProForm 节点必须作为 grid 的直接 children 包 FormModalGridBlock。
-                 */
-                if (modalGrid && (lookupKind === 'material' || lookupKind === 'customer' || lookupKind === 'supplier')) {
+                  : undefined;
+                const lookupKind = resolveOaLookupKind(field);
+                if (lookupKind) {
+                  const lookupField = (
+                    <OaLookupField
+                      key={field.name}
+                      field={field}
+                      kind={lookupKind}
+                      label={label}
+                      required={field.required}
+                      colProps={
+                        lookupKind === 'user' ||
+                        lookupKind === 'userId' ||
+                        lookupKind === 'department' ||
+                        lookupKind === 'operation'
+                          ? colProps
+                          : undefined
+                      }
+                      form={form}
+                      resource={resource}
+                      editing={editing}
+                      departmentExtraOptions={
+                        lookupKind === 'department' ? departmentExtraOptions : undefined
+                      }
+                    />
+                  );
+                  /**
+                   * UniMaterialSelect / CustomerSelect 不是 ProForm 字段，colProps 不会进 Col。
+                   * Skill：非 ProForm 节点必须作为 grid 的直接 children 包 FormModalGridBlock。
+                   */
+                  if (
+                    modalGrid &&
+                    (lookupKind === 'material' ||
+                      lookupKind === 'customer' ||
+                      lookupKind === 'supplier')
+                  ) {
+                    return (
+                      <FormModalGridBlock key={field.name} span={colProps?.span ?? 12}>
+                        {lookupField}
+                      </FormModalGridBlock>
+                    );
+                  }
+                  return lookupField;
+                }
+                const fieldWidth = { style: { width: '100%' as const } };
+                if (field.type === 'date') {
                   return (
-                    <FormModalGridBlock key={field.name} span={colProps?.span ?? 12}>
-                      {lookupField}
-                    </FormModalGridBlock>
+                    <ProFormDatePicker
+                      key={field.name}
+                      name={field.name}
+                      label={label}
+                      rules={rules}
+                      colProps={colProps}
+                      fieldProps={fieldWidth}
+                    />
                   );
                 }
-                return lookupField;
-              }
-              const fieldWidth = { style: { width: '100%' as const } };
-              if (field.type === 'date') {
+                if (field.type === 'time') {
+                  return (
+                    <ProFormTimePicker
+                      key={field.name}
+                      name={field.name}
+                      label={label}
+                      rules={rules}
+                      colProps={colProps}
+                      fieldProps={{ ...fieldWidth, format: 'HH:mm', needConfirm: false }}
+                    />
+                  );
+                }
+                if (field.type === 'month') {
+                  return (
+                    <ProFormDatePicker
+                      key={field.name}
+                      name={field.name}
+                      label={label}
+                      rules={rules}
+                      colProps={colProps}
+                      fieldProps={{ ...fieldWidth, picker: 'month', format: 'YYYY-MM' }}
+                    />
+                  );
+                }
+                if (field.type === 'year') {
+                  return (
+                    <ProFormDatePicker
+                      key={field.name}
+                      name={field.name}
+                      label={label}
+                      rules={rules}
+                      colProps={colProps}
+                      fieldProps={{ ...fieldWidth, picker: 'year', format: 'YYYY' }}
+                    />
+                  );
+                }
+                if (field.type === 'datetime') {
+                  return (
+                    <ProFormDatePicker
+                      key={field.name}
+                      name={field.name}
+                      label={label}
+                      rules={rules}
+                      colProps={colProps}
+                      fieldProps={{
+                        ...fieldWidth,
+                        showTime: true,
+                        format: 'YYYY-MM-DD HH:mm:ss',
+                      }}
+                    />
+                  );
+                }
+                if (field.type === 'file') {
+                  // Tab 内手写 Row 时 colProps 不会进栅格，须显式 Col span=24（一行一个）
+                  if (formTabs?.length && modalGrid) {
+                    return (
+                      <Col span={24} key={field.name}>
+                        <ProFormField name={field.name} label={label} rules={rules}>
+                          <OaSingleFileField />
+                        </ProFormField>
+                      </Col>
+                    );
+                  }
+                  return (
+                    <ProFormField
+                      key={field.name}
+                      name={field.name}
+                      label={label}
+                      rules={rules}
+                      colProps={colProps}
+                    >
+                      <OaSingleFileField />
+                    </ProFormField>
+                  );
+                }
+                if (field.type === 'textarea') {
+                  return (
+                    <ProFormTextArea
+                      key={field.name}
+                      name={field.name}
+                      label={label}
+                      rules={rules}
+                      colProps={colProps}
+                      fieldProps={{ rows: 3 }}
+                    />
+                  );
+                }
+                if (field.type === 'select') {
+                  return (
+                    <ProFormSelect
+                      key={field.name}
+                      name={field.name}
+                      label={label}
+                      rules={rules}
+                      colProps={colProps}
+                      options={field.options}
+                      mode={field.mode}
+                      allowClear={!field.readonly}
+                      showSearch
+                      optionFilterProp="label"
+                      disabled={field.readonly}
+                    />
+                  );
+                }
+                if (field.type === 'userIds') {
+                  return (
+                    <ProFormSelect
+                      key={field.name}
+                      name={field.name}
+                      label={label}
+                      rules={rules}
+                      colProps={colProps}
+                      mode="multiple"
+                      showSearch
+                      debounceTime={300}
+                      fieldProps={{ filterOption: false }}
+                      request={async ({ keyWords }) => {
+                        const res = await searchUserDisplay({
+                          keyword: keyWords,
+                          host_resource: resource,
+                          page_size: 50,
+                        });
+                        return (res.items || []).map((u) => ({
+                          label: u.label || formatUserDisplayLabel(u),
+                          value: u.id,
+                        }));
+                      }}
+                    />
+                  );
+                }
+                if (field.type === 'switch') {
+                  return (
+                    <ProFormSwitch
+                      key={field.name}
+                      name={field.name}
+                      label={label}
+                      colProps={colProps}
+                    />
+                  );
+                }
+                if (field.type === 'number') {
+                  return (
+                    <ProFormDigit
+                      key={field.name}
+                      name={field.name}
+                      label={label}
+                      rules={rules}
+                      colProps={colProps}
+                      disabled={field.readonly}
+                      fieldProps={fieldWidth}
+                    />
+                  );
+                }
                 return (
-                  <ProFormDatePicker
+                  <ProFormText
                     key={field.name}
                     name={field.name}
                     label={label}
                     rules={rules}
                     colProps={colProps}
-                    fieldProps={fieldWidth}
-                  />
-                );
-              }
-              if (field.type === 'time') {
-                return (
-                  <ProFormTimePicker
-                    key={field.name}
-                    name={field.name}
-                    label={label}
-                    rules={rules}
-                    colProps={colProps}
-                    fieldProps={{ ...fieldWidth, format: 'HH:mm', needConfirm: false }}
-                  />
-                );
-              }
-              if (field.type === 'month') {
-                return (
-                  <ProFormDatePicker
-                    key={field.name}
-                    name={field.name}
-                    label={label}
-                    rules={rules}
-                    colProps={colProps}
-                    fieldProps={{ ...fieldWidth, picker: 'month', format: 'YYYY-MM' }}
-                  />
-                );
-              }
-              if (field.type === 'year') {
-                return (
-                  <ProFormDatePicker
-                    key={field.name}
-                    name={field.name}
-                    label={label}
-                    rules={rules}
-                    colProps={colProps}
-                    fieldProps={{ ...fieldWidth, picker: 'year', format: 'YYYY' }}
-                  />
-                );
-              }
-              if (field.type === 'datetime') {
-                return (
-                  <ProFormDatePicker
-                    key={field.name}
-                    name={field.name}
-                    label={label}
-                    rules={rules}
-                    colProps={colProps}
-                    fieldProps={{ ...fieldWidth, showTime: true, format: 'YYYY-MM-DD HH:mm:ss' }}
-                  />
-                );
-              }
-              if (field.type === 'file') {
-                return (
-                  <ProForm.Item
-                    key={field.name}
-                    name={field.name}
-                    label={label}
-                    rules={rules}
-                    colProps={colProps}
-                  >
-                    <OaSingleFileField />
-                  </ProForm.Item>
-                );
-              }
-              if (field.type === 'textarea') {
-                return (
-                  <ProFormTextArea
-                    key={field.name}
-                    name={field.name}
-                    label={label}
-                    rules={rules}
-                    colProps={colProps}
-                    fieldProps={{ rows: 3 }}
-                  />
-                );
-              }
-              if (field.type === 'select') {
-                return (
-                  <ProFormSelect
-                    key={field.name}
-                    name={field.name}
-                    label={label}
-                    rules={rules}
-                    colProps={colProps}
-                    options={field.options}
-                    mode={field.mode}
-                    allowClear={!field.readonly}
-                    showSearch
-                    optionFilterProp="label"
                     disabled={field.readonly}
                   />
                 );
+              };
+
+              if (!formTabs?.length) {
+                return fields.map((field) => renderOneField(field));
               }
-              if (field.type === 'userIds') {
-                return (
-                  <ProFormSelect
-                    key={field.name}
-                    name={field.name}
-                    label={label}
-                    rules={rules}
-                    colProps={colProps}
-                    mode="multiple"
-                    showSearch
-                    debounceTime={300}
-                    fieldProps={{ filterOption: false }}
-                    request={async ({ keyWords }) => {
-                      const res = await searchUserDisplay({
-                        keyword: keyWords,
-                        host_resource: resource,
-                        page_size: 50,
-                      });
-                      return (res.items || []).map((u) => ({
-                        label: u.label || formatUserDisplayLabel(u),
-                        value: u.id,
-                      }));
-                    }}
-                  />
-                );
-              }
-              if (field.type === 'switch') {
-                return (
-                  <ProFormSwitch key={field.name} name={field.name} label={label} colProps={colProps} />
-                );
-              }
-              if (field.type === 'number') {
-                return (
-                  <ProFormDigit
-                    key={field.name}
-                    name={field.name}
-                    label={label}
-                    rules={rules}
-                    colProps={colProps}
-                    disabled={field.readonly}
-                    fieldProps={fieldWidth}
-                  />
-                );
-              }
+
+              const defaultTabKey = formTabs[0].key;
               return (
-                <ProFormText
-                  key={field.name}
-                  name={field.name}
-                  label={label}
-                  rules={rules}
-                  colProps={colProps}
-                  disabled={field.readonly}
-                />
+                <FormModalGridBlock>
+                  <Tabs
+                    destroyOnHidden={false}
+                    style={{ width: '100%' }}
+                    items={formTabs.map((tab) => ({
+                      key: tab.key,
+                      label: t(tab.labelKey),
+                      children: (
+                        <Row gutter={FORM_LAYOUT.GRID_GUTTER} wrap>
+                          {fields
+                            .filter(
+                              (field) => (field.formTab || defaultTabKey) === tab.key,
+                            )
+                            .map((field) => renderOneField(field))}
+                        </Row>
+                      ),
+                    }))}
+                  />
+                </FormModalGridBlock>
               );
-            })}
+            })()}
       </FormModalTemplate>
 
       <KuaioaDetailDrawer

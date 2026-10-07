@@ -97,7 +97,7 @@ async def check_and_notify_spot_check_overdue(*, tenant_id: int) -> dict:
     if await _supervision_sent_today(tenant_id=tenant_id, subject=daily_subject):
         return {"spot_check_overdue_count": 0, "spot_check_notified": False}
 
-    config = await BusinessConfigService.get_business_config(tenant_id)
+    config = await BusinessConfigService().get_business_config(tenant_id)
     params = config.get("parameters") if isinstance(config, dict) else {}
     kuaizhizao = params.get("kuaizhizao") if isinstance(params, dict) else {}
     equipment_cfg = kuaizhizao.get("equipment") if isinstance(kuaizhizao, dict) else {}

@@ -129,6 +129,14 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   template_code: 10,
   plan_code: 10,
   record_code: 10,
+  /** 轻办公：休息/夜班登记单号 */
+  register_code: 10,
+  /** 轻办公考勤：车间 / 产线 / 人员摘要 / 写入格数 */
+  workshop_name: 15.2,
+  production_line_name: 15.25,
+  employment_types: 15.3,
+  employee_summary: 75.05,
+  marked_cell_count: 32.05,
   license_code: 10,
   document_code: 10,
   document_type: 21,
@@ -812,6 +820,10 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   settlement_type: 60.38,
   /** 轻财务收/付款参考号 */
   finance_voucher_reference: 60.4,
+  /** 轻办公休息/夜班登记：日期区间展示列 */
+  date_range: 60.42,
+  date_from: 60.43,
+  date_to: 60.44,
   start_date: 60.5,
   end_date: 60.6,
   planned_start_date: 61,

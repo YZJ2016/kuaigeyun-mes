@@ -38,7 +38,7 @@ def _normalize_user_ids(raw: Any) -> List[int]:
 
 
 async def _resolve_equipment_notify_user_ids(tenant_id: int, config_key: str) -> List[int]:
-    config = await BusinessConfigService.get_business_config(tenant_id)
+    config = await BusinessConfigService().get_business_config(tenant_id)
     params = config.get("parameters") if isinstance(config, dict) else {}
     if not isinstance(params, dict):
         return []

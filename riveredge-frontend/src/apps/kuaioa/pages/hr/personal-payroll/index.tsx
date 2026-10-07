@@ -115,7 +115,6 @@ const PersonalPayrollPage: React.FC = () => {
 
   return (
     <ListPageTemplate
-      title={t('app.kuaioa.personalPayroll.title')}
       toolbarExtra={
         <Space wrap className="no-print">
           <DatePicker

@@ -48,12 +48,16 @@ class RewardRecordUpdate(BaseModel):
 class PayrollSettlementCreate(BaseModel):
     year_month: str = Field(..., min_length=7, max_length=7)
     workshop_name: str = Field(..., max_length=100)
+    employment_types: Optional[list[str]] = Field(
+        None, description="用工类型多选 formal/temp/labor，空表示全部"
+    )
     ot_multiplier: Decimal = Field(default=Decimal("3"))
     notes: Optional[str] = None
 
 
 class PayrollSettlementUpdate(BaseModel):
     notes: Optional[str] = None
+    employment_types: Optional[list[str]] = None
     ot_multiplier: Optional[Decimal] = None
     line_total_output: Optional[Decimal] = None
     line_total_hours: Optional[Decimal] = None

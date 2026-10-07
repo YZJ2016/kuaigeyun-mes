@@ -127,10 +127,6 @@ const WelfareBatchDetailPage: React.FC = () => {
 
   return (
     <ListPageTemplate
-      title={t('app.kuaioa.welfare.sheetTitle', {
-        year: batch?.year || '',
-        festival: festivalLabel,
-      })}
       toolbarExtra={
         <Space wrap>
           <Button onClick={() => navigate('/apps/kuaioa/hr/welfare-batches')}>

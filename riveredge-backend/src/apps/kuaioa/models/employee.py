@@ -56,6 +56,19 @@ class KuaioaEmployeeProfile(BaseModel):
     department_name = fields.CharField(max_length=100, null=True, description="部门")
     status = fields.CharField(max_length=20, default="active", description="状态 active/left")
     notes = fields.TextField(null=True, description="备注")
+    id_card_file_uuid = fields.CharField(max_length=36, null=True, description="身份证附件UUID")
+    labor_contract_file_uuid = fields.CharField(
+        max_length=36, null=True, description="劳动合同附件UUID"
+    )
+    medical_report_file_uuid = fields.CharField(
+        max_length=36, null=True, description="体检报告附件UUID"
+    )
+    education_cert_file_uuid = fields.CharField(
+        max_length=36, null=True, description="学历证书附件UUID"
+    )
+    disability_cert_file_uuid = fields.CharField(
+        max_length=36, null=True, description="残疾证附件UUID"
+    )
     deleted_at = fields.DatetimeField(null=True)
 
     class Meta:

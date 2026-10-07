@@ -1,10 +1,23 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
-import { App, Button, DatePicker, Form, Select, Space, Table, Typography } from 'antd';
+import {
+  App,
+  Button,
+  Col,
+  DatePicker,
+  Form,
+  Row as AntRow,
+  Select,
+  Space,
+  Table,
+  Tabs,
+  Typography,
+} from 'antd';
 import {
   ProFormDatePicker,
   ProFormDigit,
+  ProFormField,
   ProFormSelect,
   ProFormText,
   ProFormTextArea,
@@ -13,6 +26,8 @@ import type { ColumnsType } from 'antd/es/table';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
 import {
+  FORM_LAYOUT,
+  FormModalGridBlock,
   FormModalTemplate,
   ListPageTemplate,
   MODAL_CONFIG,
@@ -21,6 +36,10 @@ import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { getDepartmentTree } from '../../../../../services/department';
+import { getPopupContainerInModal } from '../../../../../utils/modalEventIsolation';
+import OaSingleFileField, {
+  extractOaSingleFileUuid,
+} from '../../../components/OaSingleFileField';
 import {
   createEmployee,
   listEmployeeMovements,
@@ -37,6 +56,14 @@ import {
   loadOaProductionLineNameOptions,
   loadOaWorkshopNameOptions,
 } from '../../../utils/oaWorkshopOptions';
+
+const HIRE_ATTACHMENT_FIELDS = [
+  { name: 'id_card_file_uuid', labelKey: 'app.kuaioa.employee.idCard' },
+  { name: 'labor_contract_file_uuid', labelKey: 'app.kuaioa.employee.laborContract' },
+  { name: 'medical_report_file_uuid', labelKey: 'app.kuaioa.employee.medicalReport' },
+  { name: 'education_cert_file_uuid', labelKey: 'app.kuaioa.employee.educationCert' },
+  { name: 'disability_cert_file_uuid', labelKey: 'app.kuaioa.employee.disabilityCert' },
+] as const;
 
 type Row = Record<string, unknown>;
 
@@ -70,6 +97,7 @@ const EmployeeMovementsPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState<Row[]>([]);
   const [registerKind, setRegisterKind] = useState<RegisterKind>(null);
+  const [hireFormTab, setHireFormTab] = useState('basic');
   const [hireForm] = Form.useForm();
   const [leaveForm] = Form.useForm();
   const deepLinkHandledRef = React.useRef<string | null>(null);
@@ -85,18 +113,36 @@ const EmployeeMovementsPage: React.FC = () => {
   );
   const activeEmployeeOptions = useMemo(
     () =>
-      activeEmployees.map((e) => ({
-        value: Number(e.id),
-        label: `${String(e.full_name ?? '')}（${String(e.employee_code ?? '')}）`.trim(),
-      })),
+      activeEmployees
+        .map((e) => {
+          const id = Number(e.id);
+          if (!Number.isFinite(id) || id <= 0) return null;
+          return {
+            value: id,
+            label: `${String(e.full_name ?? '')}（${String(e.employee_code ?? '')}）`.trim(),
+          };
+        })
+        .filter((o): o is { value: number; label: string } => o != null),
     [activeEmployees],
   );
+
+  const loadActiveEmployees = useCallback(async () => {
+    try {
+      const empRes = await listEmployees({ status: 'active' });
+      setActiveEmployees(empRes.items);
+    } catch (error) {
+      setActiveEmployees([]);
+      message.error(getApiErrorMessage(error));
+    }
+  }, [message]);
 
   const openRegister = useCallback(
     (kind: 'hire' | 'temp' | 'leave') => {
       if (kind === 'leave') {
         leaveForm.resetFields();
         leaveForm.setFieldsValue({ leave_date: dayjs() });
+        // 打开时单独拉在职员工，避免与车间/部门请求绑死导致人事专员下拉为空
+        void loadActiveEmployees();
       } else {
         hireForm.resetFields();
         hireForm.setFieldsValue({
@@ -104,10 +150,11 @@ const EmployeeMovementsPage: React.FC = () => {
           employment_type: kind === 'temp' ? 'temp' : 'formal',
           pay_method: 'time',
         });
+        setHireFormTab('basic');
       }
       setRegisterKind(kind);
     },
-    [hireForm, leaveForm],
+    [hireForm, leaveForm, loadActiveEmployees],
   );
 
   const closeRegister = useCallback(() => {
@@ -134,38 +181,53 @@ const EmployeeMovementsPage: React.FC = () => {
   }, [openRegister, perms.canCreate, perms.canUpdate, searchParams]);
 
   const refreshEmployeeOptions = useCallback(async () => {
-    const [empRes, workshops, lines] = await Promise.all([
+    const [empSettled, workshopSettled, lineSettled] = await Promise.allSettled([
       listEmployees({ status: 'active' }),
       loadOaWorkshopNameOptions(),
       loadOaProductionLineNameOptions(),
     ]);
-    setActiveEmployees(empRes.items);
-    setWorkshopOptions(workshops);
-    setLineOptions(lines.map(({ label, value }) => ({ label, value })));
+    if (empSettled.status === 'fulfilled') {
+      setActiveEmployees(empSettled.value.items);
+    }
+    if (workshopSettled.status === 'fulfilled') {
+      setWorkshopOptions(workshopSettled.value);
+    }
+    if (lineSettled.status === 'fulfilled') {
+      setLineOptions(lineSettled.value.map(({ label, value }) => ({ label, value })));
+    }
   }, []);
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      try {
-        const [empRes, deptTree, workshops, lines] = await Promise.all([
-          listEmployees({ status: 'active' }),
-          getDepartmentTree({ host_resource: 'kuaioa:employee' }),
-          loadOaWorkshopNameOptions(),
-          loadOaProductionLineNameOptions(),
-        ]);
-        if (cancelled) return;
-        setActiveEmployees(empRes.items);
-        setWorkshopOptions(workshops);
-        setLineOptions(lines.map(({ label, value }) => ({ label, value })));
-        setDepartmentOptions(flattenDepartmentOptions(deptTree.items || []));
-      } catch {
-        if (!cancelled) {
-          setActiveEmployees([]);
-          setWorkshopOptions([]);
-          setLineOptions([]);
-          setDepartmentOptions([]);
-        }
+      // 员工 / 部门 / 车间 / 产线各自加载：人事专员常无主数据车间权限，
+      // 不可再用 Promise.all 一把失败清空在职员工（离职登记姓名下拉会空）。
+      const [empSettled, deptSettled, workshopSettled, lineSettled] = await Promise.allSettled([
+        listEmployees({ status: 'active' }),
+        getDepartmentTree({ host_resource: 'kuaioa:employee' }),
+        loadOaWorkshopNameOptions(),
+        loadOaProductionLineNameOptions(),
+      ]);
+      if (cancelled) return;
+      if (empSettled.status === 'fulfilled') {
+        setActiveEmployees(empSettled.value.items);
+      } else {
+        setActiveEmployees([]);
+      }
+      if (deptSettled.status === 'fulfilled') {
+        setDepartmentOptions(flattenDepartmentOptions(deptSettled.value.items || []));
+      } else {
+        setDepartmentOptions([]);
+      }
+      if (workshopSettled.status === 'fulfilled') {
+        setWorkshopOptions(workshopSettled.value);
+      } else {
+        setWorkshopOptions([]);
+      }
+      if (lineSettled.status === 'fulfilled') {
+        setLineOptions(lineSettled.value.map(({ label, value }) => ({ label, value })));
+      } else {
+        setLineOptions([]);
       }
     })();
     return () => {
@@ -259,6 +321,15 @@ const EmployeeMovementsPage: React.FC = () => {
         welfare_dragon_boat: optionalNumber(values.welfare_dragon_boat),
         welfare_mid_autumn: optionalNumber(values.welfare_mid_autumn),
         welfare_spring_festival: optionalNumber(values.welfare_spring_festival),
+        id_card_file_uuid: extractOaSingleFileUuid(values.id_card_file_uuid) ?? undefined,
+        labor_contract_file_uuid:
+          extractOaSingleFileUuid(values.labor_contract_file_uuid) ?? undefined,
+        medical_report_file_uuid:
+          extractOaSingleFileUuid(values.medical_report_file_uuid) ?? undefined,
+        education_cert_file_uuid:
+          extractOaSingleFileUuid(values.education_cert_file_uuid) ?? undefined,
+        disability_cert_file_uuid:
+          extractOaSingleFileUuid(values.disability_cert_file_uuid) ?? undefined,
         status: 'active',
         notes: optionalTrimmed(values.notes),
       });
@@ -393,144 +464,191 @@ const EmployeeMovementsPage: React.FC = () => {
         width={MODAL_CONFIG.STANDARD_WIDTH}
         isEdit={false}
       >
-        <ProFormText
-          name="full_name"
-          label={t('app.kuaioa.employee.fullName')}
-          rules={[{ required: true, message: t('app.kuaioa.employee.importNameRequired') }]}
-          colProps={{ span: 12 }}
-        />
-        <ProFormSelect
-          name="department_name"
-          label={t('app.kuaioa.common.department')}
-          options={departmentOptions}
-          showSearch
-          colProps={{ span: 12 }}
-          fieldProps={{ optionFilterProp: 'label' }}
-        />
-        <ProFormSelect
-          name="workshop_name"
-          label={t('app.kuaioa.employee.workshop')}
-          options={workshopOptions}
-          showSearch
-          allowClear
-          colProps={{ span: 12 }}
-          fieldProps={{ optionFilterProp: 'label' }}
-        />
-        <ProFormSelect
-          name="production_line_name"
-          label={t('app.kuaioa.employee.productionLine')}
-          options={lineOptions}
-          showSearch
-          allowClear
-          colProps={{ span: 12 }}
-          fieldProps={{ optionFilterProp: 'label' }}
-        />
-        <ProFormSelect
-          name="employment_type"
-          label={t('app.kuaioa.employee.employmentType')}
-          options={employmentOptions}
-          rules={[{ required: true }]}
-          colProps={{ span: 12 }}
-          disabled={registerKind === 'temp'}
-        />
-        <ProFormSelect
-          name="pay_method"
-          label={t('app.kuaioa.employee.payMethod')}
-          options={payMethodOptions}
-          rules={[{ required: true }]}
-          colProps={{ span: 12 }}
-        />
-        <ProFormText
-          name="phone"
-          label={t('app.kuaioa.employee.phone')}
-          colProps={{ span: 12 }}
-        />
-        <ProFormDigit
-          name="hourly_rate"
-          label={t('app.kuaioa.employee.hourlyRate')}
-          min={0}
-          colProps={{ span: 12 }}
-          fieldProps={{ style: { width: '100%' } }}
-        />
-        <ProFormDatePicker
-          name="hire_date"
-          label={t('app.kuaioa.employee.hireDate')}
-          rules={[{ required: true, message: t('app.kuaioa.movement.hireDateRequired') }]}
-          colProps={{ span: 12 }}
-          fieldProps={{ style: { width: '100%' } }}
-        />
-        <ProFormText
-          name="bank_account"
-          label={t('app.kuaioa.employee.bankAccount')}
-          colProps={{ span: 12 }}
-        />
-        <ProFormText
-          name="bank_name"
-          label={t('app.kuaioa.employee.bankName')}
-          colProps={{ span: 12 }}
-        />
-        <ProFormText
-          name="bank_branch"
-          label={t('app.kuaioa.employee.bankBranch')}
-          colProps={{ span: 12 }}
-        />
-        <ProFormDigit
-          name="living_allowance"
-          label={t('app.kuaioa.employee.livingAllowance')}
-          min={0}
-          colProps={{ span: 12 }}
-          fieldProps={{ style: { width: '100%' } }}
-        />
-        <ProFormDigit
-          name="post_wage"
-          label={t('app.kuaioa.employee.postWage')}
-          min={0}
-          colProps={{ span: 12 }}
-          fieldProps={{ style: { width: '100%' } }}
-        />
-        <ProFormDigit
-          name="social_insurance"
-          label={t('app.kuaioa.employee.socialInsurance')}
-          min={0}
-          colProps={{ span: 12 }}
-          fieldProps={{ style: { width: '100%' } }}
-        />
-        <ProFormDigit
-          name="housing_fund"
-          label={t('app.kuaioa.employee.housingFund')}
-          min={0}
-          colProps={{ span: 12 }}
-          fieldProps={{ style: { width: '100%' } }}
-        />
-        <ProFormDigit
-          name="rent_utility"
-          label={t('app.kuaioa.employee.rentUtility')}
-          min={0}
-          colProps={{ span: 12 }}
-          fieldProps={{ style: { width: '100%' } }}
-        />
-        <ProFormDigit
-          name="welfare_dragon_boat"
-          label={t('app.kuaioa.employee.welfareDragonBoat')}
-          min={0}
-          colProps={{ span: 12 }}
-          fieldProps={{ style: { width: '100%' } }}
-        />
-        <ProFormDigit
-          name="welfare_mid_autumn"
-          label={t('app.kuaioa.employee.welfareMidAutumn')}
-          min={0}
-          colProps={{ span: 12 }}
-          fieldProps={{ style: { width: '100%' } }}
-        />
-        <ProFormDigit
-          name="welfare_spring_festival"
-          label={t('app.kuaioa.employee.welfareSpringFestival')}
-          min={0}
-          colProps={{ span: 12 }}
-          fieldProps={{ style: { width: '100%' } }}
-        />
-        <ProFormTextArea name="notes" label={t('common.remark')} colProps={{ span: 24 }} />
+        <FormModalGridBlock>
+          <Tabs
+            activeKey={hireFormTab}
+            onChange={setHireFormTab}
+            destroyOnHidden={false}
+            style={{ width: '100%' }}
+            items={[
+              {
+                key: 'basic',
+                label: t('app.kuaioa.employee.tabBasic'),
+                children: (
+                  <AntRow gutter={FORM_LAYOUT.GRID_GUTTER} wrap>
+                    <ProFormText
+                      name="full_name"
+                      label={t('app.kuaioa.employee.fullName')}
+                      rules={[
+                        {
+                          required: true,
+                          message: t('app.kuaioa.employee.importNameRequired'),
+                        },
+                      ]}
+                      colProps={{ span: 12 }}
+                    />
+                    <ProFormSelect
+                      name="department_name"
+                      label={t('app.kuaioa.common.department')}
+                      options={departmentOptions}
+                      showSearch
+                      colProps={{ span: 12 }}
+                      fieldProps={{ optionFilterProp: 'label' }}
+                    />
+                    <ProFormSelect
+                      name="workshop_name"
+                      label={t('app.kuaioa.employee.workshop')}
+                      options={workshopOptions}
+                      showSearch
+                      allowClear
+                      colProps={{ span: 12 }}
+                      fieldProps={{ optionFilterProp: 'label' }}
+                    />
+                    <ProFormSelect
+                      name="production_line_name"
+                      label={t('app.kuaioa.employee.productionLine')}
+                      options={lineOptions}
+                      showSearch
+                      allowClear
+                      colProps={{ span: 12 }}
+                      fieldProps={{ optionFilterProp: 'label' }}
+                    />
+                    <ProFormSelect
+                      name="employment_type"
+                      label={t('app.kuaioa.employee.employmentType')}
+                      options={employmentOptions}
+                      rules={[{ required: true }]}
+                      colProps={{ span: 12 }}
+                      disabled={registerKind === 'temp'}
+                    />
+                    <ProFormSelect
+                      name="pay_method"
+                      label={t('app.kuaioa.employee.payMethod')}
+                      options={payMethodOptions}
+                      rules={[{ required: true }]}
+                      colProps={{ span: 12 }}
+                    />
+                    <ProFormText
+                      name="phone"
+                      label={t('app.kuaioa.employee.phone')}
+                      colProps={{ span: 12 }}
+                    />
+                    <ProFormDigit
+                      name="hourly_rate"
+                      label={t('app.kuaioa.employee.hourlyRate')}
+                      min={0}
+                      colProps={{ span: 12 }}
+                      fieldProps={{ style: { width: '100%' } }}
+                    />
+                    <ProFormDatePicker
+                      name="hire_date"
+                      label={t('app.kuaioa.employee.hireDate')}
+                      rules={[
+                        {
+                          required: true,
+                          message: t('app.kuaioa.movement.hireDateRequired'),
+                        },
+                      ]}
+                      colProps={{ span: 12 }}
+                      fieldProps={{ style: { width: '100%' } }}
+                    />
+                    <ProFormText
+                      name="bank_account"
+                      label={t('app.kuaioa.employee.bankAccount')}
+                      colProps={{ span: 12 }}
+                    />
+                    <ProFormText
+                      name="bank_name"
+                      label={t('app.kuaioa.employee.bankName')}
+                      colProps={{ span: 12 }}
+                    />
+                    <ProFormText
+                      name="bank_branch"
+                      label={t('app.kuaioa.employee.bankBranch')}
+                      colProps={{ span: 12 }}
+                    />
+                    <ProFormDigit
+                      name="living_allowance"
+                      label={t('app.kuaioa.employee.livingAllowance')}
+                      min={0}
+                      colProps={{ span: 12 }}
+                      fieldProps={{ style: { width: '100%' } }}
+                    />
+                    <ProFormDigit
+                      name="post_wage"
+                      label={t('app.kuaioa.employee.postWage')}
+                      min={0}
+                      colProps={{ span: 12 }}
+                      fieldProps={{ style: { width: '100%' } }}
+                    />
+                    <ProFormDigit
+                      name="social_insurance"
+                      label={t('app.kuaioa.employee.socialInsurance')}
+                      min={0}
+                      colProps={{ span: 12 }}
+                      fieldProps={{ style: { width: '100%' } }}
+                    />
+                    <ProFormDigit
+                      name="housing_fund"
+                      label={t('app.kuaioa.employee.housingFund')}
+                      min={0}
+                      colProps={{ span: 12 }}
+                      fieldProps={{ style: { width: '100%' } }}
+                    />
+                    <ProFormDigit
+                      name="rent_utility"
+                      label={t('app.kuaioa.employee.rentUtility')}
+                      min={0}
+                      colProps={{ span: 12 }}
+                      fieldProps={{ style: { width: '100%' } }}
+                    />
+                    <ProFormDigit
+                      name="welfare_dragon_boat"
+                      label={t('app.kuaioa.employee.welfareDragonBoat')}
+                      min={0}
+                      colProps={{ span: 12 }}
+                      fieldProps={{ style: { width: '100%' } }}
+                    />
+                    <ProFormDigit
+                      name="welfare_mid_autumn"
+                      label={t('app.kuaioa.employee.welfareMidAutumn')}
+                      min={0}
+                      colProps={{ span: 12 }}
+                      fieldProps={{ style: { width: '100%' } }}
+                    />
+                    <ProFormDigit
+                      name="welfare_spring_festival"
+                      label={t('app.kuaioa.employee.welfareSpringFestival')}
+                      min={0}
+                      colProps={{ span: 12 }}
+                      fieldProps={{ style: { width: '100%' } }}
+                    />
+                    <ProFormTextArea
+                      name="notes"
+                      label={t('common.remark')}
+                      colProps={{ span: 24 }}
+                    />
+                  </AntRow>
+                ),
+              },
+              {
+                key: 'attachments',
+                label: t('app.kuaioa.employee.tabAttachments'),
+                children: (
+                  <AntRow gutter={FORM_LAYOUT.GRID_GUTTER} wrap>
+                    {HIRE_ATTACHMENT_FIELDS.map((field) => (
+                      <Col span={24} key={field.name}>
+                        <ProFormField name={field.name} label={t(field.labelKey)}>
+                          <OaSingleFileField />
+                        </ProFormField>
+                      </Col>
+                    ))}
+                  </AntRow>
+                ),
+              },
+            ]}
+          />
+        </FormModalGridBlock>
       </FormModalTemplate>
 
       <FormModalTemplate
@@ -550,7 +668,10 @@ const EmployeeMovementsPage: React.FC = () => {
           rules={[{ required: true, message: t('app.kuaioa.movement.employeeRequired') }]}
           showSearch
           colProps={{ span: 12 }}
-          fieldProps={{ optionFilterProp: 'label' }}
+          fieldProps={{
+            optionFilterProp: 'label',
+            getPopupContainer: getPopupContainerInModal,
+          }}
         />
         <ProFormDatePicker
           name="leave_date"
