@@ -6,7 +6,8 @@ from typing import Any, Optional
 
 from apps.kuaiiot.models.connection import KuaiiotConnection
 from apps.kuaiiot.services.platform_telemetry import TOPIC_FIELD, deliver_registered_telemetry
-from infra.domain.tenant_context import unscoped
+from infra.domain.tenant_context import unscoped, with_tenant
+from apps.kuaiiot.services.connection_runtime import connection_is_active
 
 
 class MqttSubscriberService:
@@ -49,6 +50,9 @@ class MqttSubscriberService:
             )
         aligned = 0
         for row in rows:
+            async with with_tenant(int(row.tenant_id), reason="订阅配置核对所属租户公共连接"):
+                if not await connection_is_active(row):
+                    continue
             config = row.config if isinstance(row.config, dict) else {}
             topic = config.get(TOPIC_FIELD)
             if isinstance(topic, str) and topic.strip():

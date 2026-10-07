@@ -9,6 +9,8 @@ from pydantic import ValidationError as PydanticValidationError
 from apps.kuaiiot.models.connection import KuaiiotConnection
 from apps.kuaiiot.schemas.ingest import IngestBody
 from apps.kuaiiot.services.ingest_service import IngestService
+from apps.kuaiiot.services.connection_runtime import connection_is_active
+from infra.domain.tenant_context import with_tenant
 from infra.exceptions.exceptions import AuthenticationError, ValidationError
 
 # KuaiiotConnection.config 字段名。topic 只用于 mqtt。
@@ -108,6 +110,9 @@ def topic_matches(pattern: str, topic: str) -> bool:
 
 async def ingest_mapped_payload(connection: KuaiiotConnection, payload: dict[str, Any]) -> dict[str, Any]:
     """按 config 的 JSON 路径收成 IngestBody，只调用 IngestService.ingest。"""
+    async with with_tenant(int(connection.tenant_id), reason="归一化读取数采连接所属租户"):
+        if not await connection_is_active(connection):
+            return {"stored": False}
     config = _config_dict(connection)
     token = _text(_path_value(payload, _configured_path(config, DEVICE_TOKEN_PATH)))
     if not token:
@@ -127,6 +132,9 @@ async def ingest_mapped_payload(connection: KuaiiotConnection, payload: dict[str
             timestamp=_text(_path_value(payload, _configured_path(config, TIMESTAMP_PATH))),
             idempotency_key=idempotency_key,
         )
+        device = await IngestService._match_device(token)
+        if device.tenant_id != connection.tenant_id or device.connection_id != connection.id:
+            return {"stored": False}
         await IngestService.ingest(token, body)
     except (AuthenticationError, ValidationError, PydanticValidationError):
         return {"stored": False}

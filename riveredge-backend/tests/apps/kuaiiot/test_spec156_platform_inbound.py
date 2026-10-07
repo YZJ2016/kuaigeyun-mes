@@ -37,6 +37,7 @@ from apps.kuaiiot.services.mqtt_subscriber_service import MqttSubscriberService
 from apps.kuaiiot.workflows.functions.command_timeout_workflow import run_kuaiiot_command_timeout_check
 from apps.kuaiiot.workflows.functions.mqtt_subscriber_workflow import run_kuaiiot_mqtt_reload
 from apps.kuaiiot.workflows.functions.telemetry_sync_workflow import run_kuaiiot_telemetry_pull
+from core.models.integration_config import IntegrationConfig
 from core.utils.timezone_utils import resolve_business_datetime
 from infra.domain.tenant_context import clear_tenant_context, set_current_tenant_id
 from infra.exceptions.exceptions import ValidationError
@@ -48,8 +49,6 @@ _PATH_CONFIG = {
     "events_path": "alarms",
     "timestamp_path": "ts",
     "idempotency_key_path": "id",
-    "password": "do-not-leak",
-    "broker_password": "also-hidden",
 }
 
 
@@ -270,6 +269,14 @@ def _mapped_payload(device: KuaiiotDevice, idempotency_key: str) -> dict:
     }
 
 
+async def _core_uuid(kind: str, code: str) -> str:
+    core = await IntegrationConfig.create(
+        tenant_id=1, code=code, name="公共连接", type=kind.lower(),
+        config={"password": "do-not-leak", "host": "broker.invalid"},
+    )
+    return str(core.uuid)
+
+
 async def _mapped_device(suffix: str, connection_type: str, config: dict):
     product = await product_service.create_product(
         1,
@@ -291,7 +298,8 @@ async def _mapped_device(suffix: str, connection_type: str, config: dict):
     )
     connection = await control_service.create_connection(
         1,
-        ConnectionCreate(code=f"conn-{suffix}", name="线边", connection_type=connection_type, config=config),
+        ConnectionCreate(code=f"conn-{suffix}", name="线边", connection_type=connection_type, config=config,
+                         integration_uuid=await _core_uuid(connection_type, f"core-{suffix}")),
     )
     device = await control_service.create_device(
         1,
@@ -345,6 +353,7 @@ async def test_pull_stays_empty_when_platform_connections_exist(db):
             1,
             ConnectionCreate(
                 code=f"empty-{kind}",
+                integration_uuid=await _core_uuid(kind, f"core-empty-{kind}"),
                 name=kind,
                 connection_type=kind,
                 config=dict(_PATH_CONFIG),
@@ -471,6 +480,7 @@ async def test_platform_command_without_edge_action_stays_not_sent(db):
         1,
         ConnectionCreate(
             code="conn-no-edge",
+            integration_uuid=await _core_uuid("thingsboard", "core-no-edge"),
             name="平台",
             connection_type="thingsboard",
             config=dict(_PATH_CONFIG),
@@ -562,6 +572,7 @@ async def test_mqtt_reload_matches_connection_type_case_insensitively(db):
         1,
         ConnectionCreate(
             code="conn-uptype",
+            integration_uuid=await _core_uuid("mqtt", "core-uptype"),
             name="上行",
             connection_type="MQTT",
             config={"topic": "plant/#"},

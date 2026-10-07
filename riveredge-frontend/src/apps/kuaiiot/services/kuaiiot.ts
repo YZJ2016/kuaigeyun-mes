@@ -10,6 +10,7 @@ export type ConnectionOut = {
   code: string;
   name: string;
   connection_type: string;
+  integration_id?: number | null;
   is_enabled: boolean;
   health_status: string;
 };
@@ -52,6 +53,8 @@ export function createConnection(payload: {
   code: string;
   name: string;
   connection_type: string;
+  integration_uuid?: string;
+  config?: Record<string, string>;
 }): Promise<ConnectionOut> {
   return apiRequest<ConnectionOut>('/apps/kuaiiot/connections', { method: 'POST', data: payload });
 }

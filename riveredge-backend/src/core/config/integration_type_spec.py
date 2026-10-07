@@ -74,6 +74,7 @@ APPLICATION_CONNECTOR_TYPES: tuple[str, ...] = (
     "huaweicloud_iot",
     "thingsboard",
     "jetlinks",
+    "mqtt",
     "flux_wms",
     "kejian_wms",
     "digiwin_wms",

@@ -241,7 +241,7 @@ const TYPE_CATEGORIES: Record<string, string[]> = {
   PLM: ['teamcenter', 'windchill', 'caxa', 'sanpin_plm', 'sunlike_plm', 'sipm', 'inteplm'],
   CRM: ['salesforce', 'xiaoshouyi', 'fenxiang', 'qidian', 'supra_crm'],
   OA: ['weaver', 'seeyon', 'landray', 'cloudhub', 'tongda_oa', 'feishu', 'dingtalk', 'wecom'],
-  IoT: ['rootcloud', 'casicloud', 'alicloud_iot', 'huaweicloud_iot', 'thingsboard', 'jetlinks'],
+  IoT: ['rootcloud', 'casicloud', 'alicloud_iot', 'huaweicloud_iot', 'thingsboard', 'jetlinks', 'mqtt'],
   WMS: ['flux_wms', 'kejian_wms', 'digiwin_wms', 'openwms'],
   存储: [
     'alicloud_oss', 'tencent_cos', 'huaweicloud_obs', 'aws_s3', 'minio', 'qiniu_kodo',

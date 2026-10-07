@@ -3,6 +3,7 @@
 from datetime import datetime
 from decimal import Decimal
 from typing import Any, Optional
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
@@ -28,6 +29,7 @@ class ConnectionCreate(BaseModel):
     code: str = Field(..., min_length=1, max_length=50)
     name: str = Field(..., min_length=1, max_length=100)
     connection_type: str = Field(..., min_length=1, max_length=30)
+    integration_uuid: Optional[UUID] = None
     config: Optional[dict] = None
     is_enabled: bool = True
     remark: Optional[str] = None
@@ -41,6 +43,7 @@ class ConnectionOut(BaseModel):
     code: str
     name: str
     connection_type: str
+    integration_id: Optional[int] = None
     config: Optional[dict] = None
     is_enabled: bool
     health_status: str

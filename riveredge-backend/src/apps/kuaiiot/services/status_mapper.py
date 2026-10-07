@@ -12,7 +12,7 @@ MONITOR_STATUS_WHEN_ABSENT = "正常"
 
 
 def normalize_equipment_status(value: Any) -> str:
-    """未知值、英文别名、空串和 None 都写成待机。缺映射不走这里。"""
+    """未知值明确保留未知，不能冒充设备待机。"""
     if isinstance(value, str) and value in EQUIPMENT_STATUS_VALUES:
         return value
-    return "待机"
+    return "未知"

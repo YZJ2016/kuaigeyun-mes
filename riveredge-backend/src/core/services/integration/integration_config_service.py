@@ -10,6 +10,8 @@ from typing import Optional, List, Dict, Any, Tuple  # noqa: F401
 from urllib.parse import urlparse
 from uuid import UUID
 from tortoise.exceptions import IntegrityError
+from tortoise import Tortoise
+from tortoise.transactions import in_transaction
 import httpx  # 仅用于 BasicAuth 等类型
 
 from core.models.integration_config import IntegrationConfig
@@ -391,9 +393,20 @@ class IntegrationConfigService:
         if integration.code == SYSTEM_DEFAULT_CODE:
             raise ValidationError("系统默认数据源不可删除")
         
-        # 软删除
-        integration.deleted_at = resolve_business_datetime()
-        await integration.save()
+        async with in_transaction():
+            integration = await IntegrationConfig.filter(
+                id=integration.id, tenant_id=tenant_id, deleted_at__isnull=True,
+            ).select_for_update().first()
+            if integration is None:
+                raise NotFoundError("集成配置不存在")
+            # 专业应用未安装时不引入其模型；已加载时检查所有未删除引用（含停用）。
+            connection_model = Tortoise.apps.get("models", {}).get("KuaiiotConnection")
+            if connection_model is not None and await connection_model.filter(
+                integration_id=integration.id, tenant_id=tenant_id, deleted_at__isnull=True,
+            ).exists():
+                raise ValidationError("公共连接已被数采引用，不能删除")
+            integration.deleted_at = resolve_business_datetime()
+            await integration.save()
 
     @staticmethod
     async def ensure_system_default(tenant_id: int) -> Dict[str, Any]:
@@ -481,6 +494,8 @@ class IntegrationConfigService:
                 result = await IntegrationConfigService._test_sqlserver_connection(integration)
             elif integration.type in DATA_SOURCE_CONFIG_ONLY_TYPES or integration.type == "Database":
                 result = await IntegrationConfigService._test_database_config_validation(integration)
+            elif integration.type == "mqtt":
+                result = IntegrationConfigService._validate_mqtt_config(integration.get_config())
             elif integration.type == "feishu":
                 result = await IntegrationConfigService._test_feishu_connection(integration)
             elif integration.type == "dingtalk":
@@ -551,7 +566,7 @@ class IntegrationConfigService:
             if isinstance(result, dict) and result.get("success") is False:
                 raise ValueError(result.get("message", "连接失败"))
 
-            if integration.type in DATA_SOURCE_CONFIG_ONLY_TYPES or integration.type == "Database":
+            if integration.type in DATA_SOURCE_CONFIG_ONLY_TYPES or integration.type in {"Database", "mqtt"}:
                 # 未真实建连：不标记为已连接，避免列表/详情出现「已连通」误导；也不写入 last_error（非失败）
                 integration.update_connection_status(False, None)
                 await integration.save()
@@ -738,6 +753,8 @@ class IntegrationConfigService:
                 result = await IntegrationConfigService._test_sqlserver_connection(temp)
             elif temp.type in DATA_SOURCE_CONFIG_ONLY_TYPES or temp.type == "Database":
                 result = await IntegrationConfigService._test_database_config_validation(temp)
+            elif temp.type == "mqtt":
+                result = IntegrationConfigService._validate_mqtt_config(temp.get_config())
             elif temp.type == "feishu":
                 result = await IntegrationConfigService._test_feishu_connection(temp)
             elif temp.type == "dingtalk":
@@ -810,7 +827,7 @@ class IntegrationConfigService:
                 }
             if not isinstance(result, dict):
                 result = {"message": str(result)}
-            if temp.type in DATA_SOURCE_CONFIG_ONLY_TYPES or temp.type == "Database":
+            if temp.type in DATA_SOURCE_CONFIG_ONLY_TYPES or temp.type in {"Database", "mqtt"}:
                 return {
                     "success": True,
                     "message": _config_only_user_message(temp.type),
@@ -1728,6 +1745,16 @@ class IntegrationConfigService:
         if data.get("errcode") != 0:
             raise ValueError(data.get("errmsg", "获取 token 失败"))
         return {"message": "企业微信连接成功", "access_token": "***"}
+
+    @staticmethod
+    def _validate_mqtt_config(config: Dict[str, Any]) -> Dict[str, Any]:
+        host = config.get("host")
+        port = config.get("port", 1883)
+        if not isinstance(host, str) or not host.strip():
+            raise ValueError("MQTT 配置缺少 host")
+        if isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65535:
+            raise ValueError("MQTT port 必须在 1 到 65535 之间")
+        return {"message": "MQTT 配置校验通过，未建立 Broker 连接"}
 
     @staticmethod
     async def _test_rest_api_connection(integration: IntegrationConfig) -> Dict[str, Any]:

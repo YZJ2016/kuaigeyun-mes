@@ -6,6 +6,7 @@ import secrets
 from typing import Optional
 
 from tortoise.exceptions import IntegrityError
+from tortoise.transactions import in_transaction
 
 from apps.kuaizhizao.services.equipment_service import EquipmentService
 from apps.kuaiiot.constants import VALUE_TYPES
@@ -15,6 +16,8 @@ from apps.kuaiiot.models.group import KuaiiotDeviceGroup
 from apps.kuaiiot.models.tag import KuaiiotTagDefinition, KuaiiotTagSnapshot
 from apps.kuaiiot.schemas.control import ConnectionCreate, DeviceCreate, DeviceUpdate, TagCreate
 from apps.kuaiiot.services.product_service import get_product
+from apps.kuaiiot.services.connection_runtime import EXTERNAL_TYPES, validate_mapping, validate_type
+from core.models.integration_config import IntegrationConfig
 from apps.kuaiiot.services.tag_service import _validate_fill_target, _validate_map_target
 from infra.domain.tenant_context import TenantContextError, get_current_tenant_id
 from infra.exceptions.exceptions import NotFoundError, ValidationError
@@ -56,21 +59,33 @@ async def create_connection(
 ) -> KuaiiotConnection:
     tid = _require_tenant(tenant_id)
     code = payload.code.strip()
+    kind = payload.connection_type.strip().lower()
+    if kind not in {"http", *EXTERNAL_TYPES}:
+        raise ValidationError("不支持的数采连接类型")
+    validate_mapping(payload.config)
+    if kind in EXTERNAL_TYPES and payload.integration_uuid is None:
+        raise ValidationError("请选择同租户公共连接")
     exists = await KuaiiotConnection.filter(tenant_id=tid, code=code, deleted_at__isnull=True).exists()
     if exists:
         raise ValidationError("连接编码已存在")
     try:
-        return await KuaiiotConnection.create(
-            tenant_id=tid,
-            code=code,
-            name=payload.name.strip(),
-            connection_type=payload.connection_type.strip(),
-            config=payload.config,
-            is_enabled=payload.is_enabled,
-            remark=payload.remark,
-            created_by=user_id,
-            updated_by=user_id,
-        )
+        async with in_transaction():
+            integration_id = None
+            if payload.integration_uuid is not None:
+                core = await IntegrationConfig.filter(
+                    uuid=str(payload.integration_uuid), tenant_id=tid, deleted_at__isnull=True,
+                ).select_for_update().first()
+                if core is None:
+                    raise ValidationError("公共连接不存在或不属于当前租户")
+                validate_type(kind, core.type)
+                if not core.is_active:
+                    raise ValidationError("公共连接已停用")
+                integration_id = core.id
+            return await KuaiiotConnection.create(
+                tenant_id=tid, code=code, name=payload.name.strip(), connection_type=kind,
+                integration_id=integration_id, config=payload.config, is_enabled=payload.is_enabled,
+                remark=payload.remark, created_by=user_id, updated_by=user_id,
+            )
     except IntegrityError as exc:
         raise ValidationError("连接编码已存在") from exc
 
