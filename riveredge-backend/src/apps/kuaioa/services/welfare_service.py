@@ -15,6 +15,7 @@ from apps.kuaioa.schemas.welfare import (
     WelfareBatchLineUpdate,
     WelfareBatchUpdate,
 )
+from apps.kuaioa.services.employment_types import normalize_employment_types
 from apps.kuaioa.services.kuaioa_list_core import (
     apply_create_audit_by_user_id,
     build_keyword_q,
@@ -82,6 +83,43 @@ def _normalize_festival(festival_type: str) -> str:
     return key
 
 
+def _normalize_workshop_names(
+    *,
+    workshop_names: Optional[list[str]] = None,
+    workshop_name: Optional[str] = None,
+) -> list[str]:
+    names: list[str] = []
+    seen: set[str] = set()
+    for raw in workshop_names or []:
+        text = str(raw or "").strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        names.append(text)
+    if not names:
+        single = (workshop_name or "").strip()
+        if single:
+            names.append(single)
+    if not names:
+        raise BusinessLogicError("车间不能为空")
+    return names
+
+
+def _batch_workshop_names(batch: KuaioaWelfareBatch) -> list[str]:
+    raw = getattr(batch, "workshop_names", None) or []
+    if isinstance(raw, list) and raw:
+        try:
+            return _normalize_workshop_names(workshop_names=[str(x) for x in raw])
+        except BusinessLogicError:
+            pass
+    name = (getattr(batch, "workshop_name", None) or "").strip()
+    return [name] if name else []
+
+
+def _workshop_display(names: list[str]) -> str:
+    return "、".join(names)
+
+
 class WelfareBatchService:
     async def list_batches(
         self,
@@ -98,14 +136,22 @@ class WelfareBatchService:
             q = q.filter(year=int(year))
         if festival_type:
             q = q.filter(festival_type=_normalize_festival(festival_type))
-        if workshop_name:
-            q = q.filter(workshop_name=workshop_name.strip())
         if status:
             q = q.filter(status=status)
         if keyword:
             q = q.filter(build_keyword_q(keyword, "batch_code", "workshop_name"))
         rows = await q.order_by("-year", "-id")
-        return [model_to_dict(r) for r in rows]
+        items = [model_to_dict(r) for r in rows]
+        filter_ws = (workshop_name or "").strip()
+        if filter_ws:
+            items = [
+                item
+                for item in items
+                if filter_ws in (item.get("workshop_names") or [])
+                or filter_ws == str(item.get("workshop_name") or "").strip()
+                or filter_ws in str(item.get("workshop_name") or "")
+            ]
+        return items
 
     async def get_batch(self, tenant_id: int, batch_id: int) -> dict[str, Any]:
         batch = await self._get_header(tenant_id, batch_id)
@@ -123,19 +169,25 @@ class WelfareBatchService:
     ) -> dict[str, Any]:
         year = _parse_year(int(data.year))
         festival = _normalize_festival(data.festival_type)
-        workshop = (data.workshop_name or "").strip()
-        if not workshop:
-            raise BusinessLogicError("车间不能为空")
+        workshops = _normalize_workshop_names(
+            workshop_names=list(data.workshop_names or []),
+            workshop_name=data.workshop_name,
+        )
+        employment_types = normalize_employment_types(data.employment_types)
 
-        exists = await KuaioaWelfareBatch.filter(
+        existing = await KuaioaWelfareBatch.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,
             year=year,
             festival_type=festival,
-            workshop_name=workshop,
-        ).exists()
-        if exists:
-            raise BusinessLogicError("该车间本节日福利发放单已存在")
+        )
+        workshop_set = set(workshops)
+        for row in existing:
+            overlap = workshop_set.intersection(_batch_workshop_names(row))
+            if overlap:
+                raise BusinessLogicError(
+                    f"车间「{_workshop_display(sorted(overlap))}」本节日福利发放单已存在"
+                )
 
         code = await generate_daily_code(
             KuaioaWelfareBatch, tenant_id, "WLF", code_field="batch_code"
@@ -145,7 +197,9 @@ class WelfareBatchService:
             "batch_code": code,
             "year": year,
             "festival_type": festival,
-            "workshop_name": workshop,
+            "workshop_names": workshops,
+            "workshop_name": _workshop_display(workshops),
+            "employment_types": employment_types,
             "status": "draft",
             "notes": data.notes,
         }
@@ -253,12 +307,19 @@ class WelfareBatchService:
     async def _build_lines(self, batch: KuaioaWelfareBatch) -> None:
         tenant_id = int(batch.tenant_id)
         field = FESTIVAL_FIELD_MAP[str(batch.festival_type)]
-        employees = await KuaioaEmployeeProfile.filter(
+        workshops = _batch_workshop_names(batch)
+        employment_types = normalize_employment_types(
+            getattr(batch, "employment_types", None)
+        )
+        emp_q = KuaioaEmployeeProfile.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,
             status="active",
-            workshop_name=batch.workshop_name,
-        ).order_by("full_name", "id")
+            workshop_name__in=workshops,
+        )
+        if employment_types:
+            emp_q = emp_q.filter(employment_type__in=employment_types)
+        employees = await emp_q.order_by("full_name", "id")
         for emp in employees:
             standard = _d(getattr(emp, field, None))
             line = KuaioaWelfareBatchLine(

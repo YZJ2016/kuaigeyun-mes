@@ -28,6 +28,15 @@ export const updateAttendanceDay = (
 export const batchMarkAttendance = (sheetId: number, data: Record<string, unknown>) =>
   kuaioaPost<Record<string, unknown>>(`${BASE}/sheets/${sheetId}/batch-mark`, data);
 
+export const listAttendanceDayRegisters = (params?: Record<string, unknown>) =>
+  kuaioaList<Record<string, unknown>>(`${BASE}/day-registers`, params);
+
+export const getAttendanceDayRegister = (id: number) =>
+  kuaioaGet<Record<string, unknown>>(`${BASE}/day-registers/${id}`);
+
+export const createAttendanceDayRegister = (data: Record<string, unknown>) =>
+  kuaioaPost<Record<string, unknown>>(`${BASE}/day-registers`, data);
+
 export const submitAttendanceSheet = (id: number) =>
   kuaioaPost<Record<string, unknown>>(`${BASE}/sheets/${id}/submit`, {});
 

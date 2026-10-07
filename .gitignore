@@ -64,11 +64,14 @@ riveredge-backend/backups/
 .agent-teams/
 .agent-audit/
 .argo/
-<<<<<<< HEAD
 .codegraph/
-=======
-.aoci/
->>>>>>> 7e06af67f (feat: SOP 按业务域唯一，工位准入与人脸模板加固)
+# AOCI：默认忽略 .aoci 运行时；正式治理资产放行（与 .aoci/.gitignore 白名单一致）
+.aoci/*
+!.aoci/.gitignore
+!.aoci/baseline.json
+!.aoci/database-baseline.json
+!.aoci/config.json
+!.aoci/curation.json
 .cursor/
 .idea/
 .trae/

@@ -13,7 +13,6 @@ from tortoise.exceptions import IntegrityError
 from tortoise.expressions import Q
 
 from core.models.approval_process import ApprovalProcess
-from core.utils.search_utils import apply_keyword_icontains
 from core.models.approval_instance import ApprovalInstance
 from core.schemas.approval_process import ApprovalProcessCreate, ApprovalProcessUpdate
 from infra.exceptions.exceptions import NotFoundError, ValidationError
@@ -47,40 +46,50 @@ class ApprovalProcessService:
         return str(value).strip().lower().replace("-", "_").replace(" ", "_")
 
     @staticmethod
-    def _resolve_canonical_name(code: Optional[str], name: Optional[str]) -> Optional[str]:
+    def _resolve_canonical_name(code: Optional[str], name: Optional[str] = None) -> Optional[str]:
+        """注册表流程的规范名真源：manifest.audit（node_key -> name）。"""
+        _ = name  # 注册表内流程一律用规范名，不再保留旧中文/机名旁路
         code_key = ApprovalProcessService._normalize_name_token(code)
         if not code_key:
             return None
-        canonical = ApprovalProcessService.CANONICAL_PROCESS_NAMES.get(code_key)
-        if not canonical:
-            return None
-
-        name_key = ApprovalProcessService._normalize_name_token(name)
-        # 仅修正明显的英文/机器名，避免覆盖用户已维护的中文自定义名称
-        if name_key in {
-            "",
-            code_key,
-            f"{code_key}_audit",
-            "reporting_record",
-            "reporting_record_audit",
-            "reporting",
-            "sales_forecast",
-            "sales_forecast_audit",
-        }:
-            return canonical
-        if name and all(ord(ch) < 128 for ch in str(name)):
-            return canonical
-        return None
+        return ApprovalProcessService.CANONICAL_PROCESS_NAMES.get(code_key)
 
     @staticmethod
-    async def _normalize_process_name_if_needed(approval_process: ApprovalProcess) -> None:
-        canonical = ApprovalProcessService._resolve_canonical_name(
-            getattr(approval_process, "code", None),
-            getattr(approval_process, "name", None),
-        )
-        if canonical and canonical != approval_process.name:
+    async def _normalize_process_name_if_needed(approval_process: ApprovalProcess) -> bool:
+        """将注册表流程的 name/备注落成规范名；非注册表自定义流程不动。"""
+        code = str(getattr(approval_process, "code", "") or "")
+        canonical = ApprovalProcessService._resolve_canonical_name(code)
+        if not canonical:
+            return False
+        update_fields: List[str] = []
+        if getattr(approval_process, "name", None) != canonical:
             approval_process.name = canonical
-            await approval_process.save(update_fields=["name", "updated_at"])
+            update_fields.append("name")
+        if getattr(approval_process, "description", None) != canonical:
+            approval_process.description = canonical
+            update_fields.append("description")
+        if not update_fields:
+            return False
+        update_fields.append("updated_at")
+        await approval_process.save(update_fields=update_fields)
+        return True
+
+    @staticmethod
+    async def normalize_registry_process_names(tenant_id: int) -> int:
+        """将该租户全部注册表审批流程名称对齐为规范名。"""
+        codes = list(ApprovalProcessService.CANONICAL_PROCESS_NAMES.keys())
+        if not codes:
+            return 0
+        rows = await ApprovalProcess.filter(
+            tenant_id=tenant_id,
+            code__in=codes,
+            deleted_at__isnull=True,
+        ).all()
+        fixed = 0
+        for row in rows:
+            if await ApprovalProcessService._normalize_process_name_if_needed(row):
+                fixed += 1
+        return fixed
 
     @staticmethod
     async def get_approval_process_by_code(
@@ -152,6 +161,7 @@ class ApprovalProcessService:
             )
             if canonical_name:
                 payload["name"] = canonical_name
+                payload["description"] = canonical_name
             raw_nodes = payload.get("nodes")
             node_list = (
                 raw_nodes.get("nodes")
@@ -205,6 +215,35 @@ class ApprovalProcessService:
         return approval_process
     
     @staticmethod
+    def _codes_matching_canonical_keyword(keyword: str) -> List[str]:
+        """按 manifest.audit 规范名命中流程 code（列表展示名真源，避免库内机名搜不到）。"""
+        text = (keyword or "").strip().lower()
+        if not text:
+            return []
+        matched: List[str] = []
+        for code, name in ApprovalProcessService.CANONICAL_PROCESS_NAMES.items():
+            name_l = str(name or "").lower()
+            if text in name_l or text in str(code).lower():
+                matched.append(code)
+        return matched
+
+    @staticmethod
+    def _apply_approval_process_keyword(query, keyword: Optional[str]):
+        """名称/代码/描述 OR 规范中文名对应的 code。"""
+        text = (keyword or "").strip()
+        if not text:
+            return query
+        cond = (
+            Q(name__icontains=text)
+            | Q(code__icontains=text)
+            | Q(description__icontains=text)
+        )
+        canonical_codes = ApprovalProcessService._codes_matching_canonical_keyword(text)
+        if canonical_codes:
+            cond |= Q(code__in=canonical_codes)
+        return query.filter(cond)
+
+    @staticmethod
     async def list_approval_processes(
         tenant_id: int,
         skip: int = 0,
@@ -227,6 +266,8 @@ class ApprovalProcessService:
         Returns:
             List[ApprovalProcess]: 审批流程列表
         """
+        await ApprovalProcessService.normalize_registry_process_names(tenant_id)
+
         query = ApprovalProcess.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True
@@ -235,7 +276,7 @@ class ApprovalProcessService:
         if is_active is not None:
             query = query.filter(is_active=is_active)
 
-        query = apply_keyword_icontains(query, keyword, ["name", "code", "description"])
+        query = ApprovalProcessService._apply_approval_process_keyword(query, keyword)
 
         if installed_app_codes is not None:
             from core.config.audit_registry import all_entries
@@ -304,6 +345,7 @@ class ApprovalProcessService:
             setattr(approval_process, key, value)
         
         await approval_process.save()
+        await ApprovalProcessService._normalize_process_name_if_needed(approval_process)
 
         return approval_process
     

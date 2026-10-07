@@ -1,26 +1,35 @@
 /**
  * 轻办公单文件字段：上传后存 file_uuid
+ * 外观统一走平台 FileUploadComponent。
  */
 import React, { useEffect, useState } from 'react';
-import { Upload } from 'antd';
 import type { UploadFile } from 'antd/es/upload/interface';
-import { UploadOutlined } from '@ant-design/icons';
-import { useTranslation } from 'react-i18next';
 import {
   customFieldFileValueToUploadFiles,
   extractUploadFileUuids,
   normalizeUploadFileList,
 } from '../../../components/custom-fields/customFieldFileUtils';
-import { uploadFile } from '../../../services/file';
+import FileUploadComponent from '../../../components/file-upload';
+
+const EMPLOYEE_DOC_ACCEPT =
+  '.pdf,.jpg,.jpeg,.png,.gif,.webp,.doc,.docx,.xls,.xlsx,.zip,.rar';
 
 type Props = {
   value?: string | UploadFile[] | null;
   onChange?: (value: UploadFile[]) => void;
   disabled?: boolean;
+  /** 文件管理分类 */
+  category?: string;
+  accept?: string;
 };
 
-const OaSingleFileField: React.FC<Props> = ({ value, onChange, disabled }) => {
-  const { t } = useTranslation();
+const OaSingleFileField: React.FC<Props> = ({
+  value,
+  onChange,
+  disabled,
+  category = 'kuaioa_employee_attachments',
+  accept = EMPLOYEE_DOC_ACCEPT,
+}) => {
   const [fileList, setFileList] = useState<UploadFile[]>([]);
 
   useEffect(() => {
@@ -28,7 +37,7 @@ const OaSingleFileField: React.FC<Props> = ({ value, onChange, disabled }) => {
     void (async () => {
       const list = normalizeUploadFileList(value);
       if (list.length) {
-        if (!cancelled) setFileList(list);
+        if (!cancelled) setFileList(list.slice(0, 1));
         return;
       }
       const files = await customFieldFileValueToUploadFiles(value);
@@ -40,37 +49,19 @@ const OaSingleFileField: React.FC<Props> = ({ value, onChange, disabled }) => {
   }, [value]);
 
   return (
-    <Upload
+    <FileUploadComponent
+      category={category}
+      multiple={false}
       maxCount={1}
-      fileList={fileList}
+      accept={accept}
       disabled={disabled}
-      onChange={({ fileList: next }) => {
+      value={fileList}
+      onChange={(next) => {
         const trimmed = next.slice(-1);
         setFileList(trimmed);
         onChange?.(trimmed);
       }}
-      customRequest={async ({ file, onSuccess, onError }) => {
-        try {
-          const res = await uploadFile(file as File);
-          const uuid = res.uuid;
-          const done: UploadFile = {
-            uid: uuid,
-            name: (file as File).name,
-            status: 'done',
-            response: { uuid },
-          };
-          setFileList([done]);
-          onChange?.([done]);
-          onSuccess?.(res);
-        } catch (error) {
-          onError?.(error as Error);
-        }
-      }}
-    >
-      <button type="button" disabled={disabled} style={{ border: 0, background: 'none', padding: 0 }}>
-        <UploadOutlined /> {t('app.kuaioa.common.uploadFile')}
-      </button>
-    </Upload>
+    />
   );
 };
 

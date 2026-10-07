@@ -106,6 +106,7 @@ class AuditBindingService:
                 continue
             await ApprovalProcessService.create_audit_process_for_node(tenant_id, node_key)
             created += 1
+        await ApprovalProcessService.normalize_registry_process_names(tenant_id)
         return created
 
     @staticmethod

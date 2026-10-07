@@ -15,7 +15,13 @@ class KuaioaWelfareBatch(BaseModel):
         max_length=30,
         description="节日类型 dragon_boat/mid_autumn/spring_festival",
     )
-    workshop_name = fields.CharField(max_length=100, description="车间")
+    workshop_name = fields.CharField(
+        max_length=500, description="车间展示（多选拼接）"
+    )
+    workshop_names = fields.JSONField(default=list, description="车间名称列表")
+    employment_types = fields.JSONField(
+        default=list, description="用工类型多选 formal/temp/labor，空表示全部"
+    )
     status = fields.CharField(max_length=20, default="draft", description="draft/confirmed")
     confirmed_at = fields.DatetimeField(null=True)
     confirmed_by = fields.IntField(null=True)

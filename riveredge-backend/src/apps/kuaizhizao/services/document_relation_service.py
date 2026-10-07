@@ -665,7 +665,9 @@ class DocumentRelationService:
 
         # source_type 为 MRP/LRP 或 demand_computation 时，source_id 均为 DemandComputation.id
         if order.source_type in ("MRP", "LRP", "demand_computation"):
-            computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=order.source_id)
+            computation = await DemandComputation.get_or_none(
+                tenant_id=tenant_id, id=order.source_id, deleted_at__isnull=True
+            )
             if computation:
                 upstream.append({
                     "document_type": "demand_computation",
@@ -728,7 +730,9 @@ class DocumentRelationService:
 
             # 如果采购单有来源，继续向上追溯（需求计算）
             if purchase_order.source_type and purchase_order.source_id and purchase_order.source_type in ("MRP", "LRP", "demand_computation"):
-                computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=purchase_order.source_id)
+                computation = await DemandComputation.get_or_none(
+                    tenant_id=tenant_id, id=purchase_order.source_id, deleted_at__isnull=True
+                )
                 if computation:
                     upstream.append({
                         "document_type": "demand_computation",
@@ -2115,6 +2119,7 @@ class DocumentRelationService:
                 purchase_orders = await PurchaseOrder.filter(
                     tenant_id=tenant_id,
                     source_id=comp.id,
+                    deleted_at__isnull=True,
                 ).limit(10)
                 for po in purchase_orders:
                     downstream.append({
@@ -2257,7 +2262,9 @@ class DocumentRelationService:
             deleted_at__isnull=True,
         )
         if demand and demand.computation_id:
-            comp = await DemandComputation.get_or_none(tenant_id=tenant_id, id=demand.computation_id)
+            comp = await DemandComputation.get_or_none(
+                tenant_id=tenant_id, id=demand.computation_id, deleted_at__isnull=True
+            )
             if comp:
                 downstream.append({
                     "document_type": "demand_computation",
@@ -3150,6 +3157,7 @@ class DocumentRelationService:
         purchase_orders = await PurchaseOrder.filter(
             tenant_id=tenant_id,
             source_id=computation_id,
+            deleted_at__isnull=True,
         ).limit(10)
         for po in purchase_orders:
             downstream.append({
@@ -3171,10 +3179,11 @@ class DocumentRelationService:
         """获取工单的下游单据（生产领料、报工记录、成品入库、销售出库）"""
         downstream = []
 
-        # 生产领料单
+        # 生产领料单（软删单据不进全链路推导）
         pickings = await ProductionPicking.filter(
             tenant_id=tenant_id,
-            work_order_id=work_order_id
+            work_order_id=work_order_id,
+            deleted_at__isnull=True,
         ).limit(10)
         for picking in pickings:
             downstream.append({
@@ -3189,7 +3198,8 @@ class DocumentRelationService:
         # 生产退料单
         production_returns = await ProductionReturn.filter(
             tenant_id=tenant_id,
-            work_order_id=work_order_id
+            work_order_id=work_order_id,
+            deleted_at__isnull=True,
         ).limit(10)
         for ret in production_returns:
             downstream.append({
@@ -3213,7 +3223,8 @@ class DocumentRelationService:
         # 成品入库单
         receipts = await FinishedGoodsReceipt.filter(
             tenant_id=tenant_id,
-            work_order_id=work_order_id
+            work_order_id=work_order_id,
+            deleted_at__isnull=True,
         ).limit(10)
         for receipt in receipts:
             downstream.append({
@@ -3245,7 +3256,8 @@ class DocumentRelationService:
             if receipt.sales_order_id:
                 deliveries = await SalesDelivery.filter(
                     tenant_id=tenant_id,
-                    sales_order_id=receipt.sales_order_id
+                    sales_order_id=receipt.sales_order_id,
+                    deleted_at__isnull=True,
                 ).limit(5)
                 for delivery in deliveries:
                     downstream.append({
@@ -3293,7 +3305,7 @@ class DocumentRelationService:
         from apps.kuaizhizao.models.batching_order import BatchingOrder
 
         batching_orders = await BatchingOrder.filter(
-            tenant_id=tenant_id, work_order_id=work_order_id
+            tenant_id=tenant_id, work_order_id=work_order_id, deleted_at__isnull=True
         ).limit(10)
         for bo in batching_orders:
             downstream.append({
@@ -3309,7 +3321,7 @@ class DocumentRelationService:
         from apps.kuaizhizao.models.material_call_request import MaterialCallRequest
 
         material_calls = await MaterialCallRequest.filter(
-            tenant_id=tenant_id, work_order_id=work_order_id
+            tenant_id=tenant_id, work_order_id=work_order_id, deleted_at__isnull=True
         ).limit(10)
         for mc in material_calls:
             downstream.append({
@@ -3360,7 +3372,8 @@ class DocumentRelationService:
         # 过程检验单
         process_inspections = await ProcessInspection.filter(
             tenant_id=tenant_id,
-            work_order_id=work_order_id
+            work_order_id=work_order_id,
+            deleted_at__isnull=True,
         ).limit(10)
         for pi in process_inspections:
             downstream.append({
@@ -3375,7 +3388,8 @@ class DocumentRelationService:
         # 成品检验单
         finished_inspections = await FinishedGoodsInspection.filter(
             tenant_id=tenant_id,
-            work_order_id=work_order_id
+            work_order_id=work_order_id,
+            deleted_at__isnull=True,
         ).limit(10)
         for fi in finished_inspections:
             downstream.append({

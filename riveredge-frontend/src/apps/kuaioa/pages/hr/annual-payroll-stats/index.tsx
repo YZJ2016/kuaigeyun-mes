@@ -164,7 +164,6 @@ const AnnualPayrollStatsPage: React.FC = () => {
 
   return (
     <ListPageTemplate
-      title={t('app.kuaioa.annualStats.title')}
       toolbarExtra={
         <Space wrap>
           <DatePicker

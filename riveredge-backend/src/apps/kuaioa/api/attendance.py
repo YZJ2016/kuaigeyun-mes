@@ -7,6 +7,7 @@ from fastapi.responses import StreamingResponse
 
 from apps.kuaioa.schemas.attendance import (
     AttendanceBatchMark,
+    AttendanceDayRegisterCreate,
     AttendanceDayUpdate,
     AttendanceSheetCreate,
     AttendanceSheetUpdate,
@@ -148,6 +149,50 @@ async def batch_mark(
         return {"data": row, "success": True}
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"message": str(e)})
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"message": str(e)})
+
+
+@router.get("/day-registers", summary="List rest/night day registers")
+async def list_day_registers(
+    keyword: Optional[str] = Query(None),
+    register_type: Optional[str] = Query(None, description="rest 或 night"),
+    workshop_name: Optional[str] = Query(None),
+    _auth=Depends(require_permission_codes("kuaioa:attendance:read")),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    rows = await service.list_day_registers(
+        tenant_id,
+        register_type=register_type,
+        keyword=keyword,
+        workshop_name=workshop_name,
+    )
+    return {"data": rows, "total": len(rows), "success": True}
+
+
+@router.get("/day-registers/{register_id}", summary="Get rest/night day register")
+async def get_day_register(
+    register_id: int = Path(..., ge=1),
+    _auth=Depends(require_permission_codes("kuaioa:attendance:read")),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        row = await service.get_day_register(tenant_id, register_id)
+        return {"data": row, "success": True}
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"message": str(e)})
+
+
+@router.post("/day-registers", status_code=status.HTTP_201_CREATED, summary="Create rest/night day register")
+async def create_day_register(
+    data: AttendanceDayRegisterCreate,
+    current_user: User = Depends(get_current_user),
+    _auth=Depends(require_permission_codes("kuaioa:attendance:update")),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        row = await service.create_day_register(tenant_id, data, current_user.id)
+        return {"data": row, "success": True}
     except BusinessLogicError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"message": str(e)})
 

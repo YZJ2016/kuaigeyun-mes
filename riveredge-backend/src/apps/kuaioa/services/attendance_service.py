@@ -13,14 +13,23 @@ from openpyxl.styles import Alignment, Font
 
 from loguru import logger
 
-from apps.kuaioa.models.attendance import KuaioaAttendanceDay, KuaioaAttendanceSheet
+from apps.kuaioa.models.attendance import (
+    KuaioaAttendanceDay,
+    KuaioaAttendanceDayRegister,
+    KuaioaAttendanceSheet,
+)
 from apps.kuaioa.models.employee import KuaioaEmployeeProfile
 from apps.kuaioa.models.leave import KuaioaLeaveRequest
 from apps.kuaioa.schemas.attendance import (
     AttendanceBatchMark,
+    AttendanceDayRegisterCreate,
     AttendanceDayUpdate,
     AttendanceSheetCreate,
     AttendanceSheetUpdate,
+)
+from apps.kuaioa.services.employment_types import (
+    employment_types_summary,
+    normalize_employment_types,
 )
 from apps.kuaioa.services.kuaioa_list_core import (
     apply_create_audit_by_user_id,
@@ -116,7 +125,10 @@ class AttendanceService:
         year, month = _parse_year_month(sheet.year_month)
         first, last, _ = _month_bounds(year, month)
         employees = await self._list_workshop_employees(
-            tenant_id, sheet.workshop_name, sheet.production_line_name
+            tenant_id,
+            sheet.workshop_name,
+            sheet.production_line_name,
+            employment_types=list(sheet.employment_types or []),
         )
         present_ids = {int(d["employee_id"]) for d in days}
         new_hires: list[dict[str, Any]] = []
@@ -296,6 +308,7 @@ class AttendanceService:
         if not workshop:
             raise BusinessLogicError("车间不能为空")
         line = (data.production_line_name or "").strip() or None
+        employment_types = normalize_employment_types(data.employment_types)
         standard = data.standard_hours if data.standard_hours is not None else _DEFAULT_HOURS
         if standard <= 0:
             raise BusinessLogicError("标准日工时须大于 0")
@@ -319,6 +332,7 @@ class AttendanceService:
             "year_month": f"{year:04d}-{month:02d}",
             "workshop_name": workshop,
             "production_line_name": line,
+            "employment_types": employment_types,
             "has_night": bool(data.has_night),
             "standard_hours": standard,
             "status": "draft",
@@ -336,6 +350,10 @@ class AttendanceService:
         if sheet.status == "submitted":
             raise BusinessLogicError("已提交的考勤单不可修改表头")
         payload = data.model_dump(exclude_unset=True)
+        if "employment_types" in payload:
+            payload["employment_types"] = normalize_employment_types(
+                payload.get("employment_types")
+            )
         for key, value in payload.items():
             setattr(sheet, key, value)
         await touch_updated(sheet, user_id)
@@ -408,34 +426,249 @@ class AttendanceService:
         work_date = parse_optional_date(data.work_date)
         if not work_date:
             raise BusinessLogicError("日期无效")
+        end_date = parse_optional_date(data.work_date_end) if data.work_date_end else work_date
+        if data.work_date_end and not end_date:
+            raise BusinessLogicError("结束日期无效")
+        if end_date < work_date:
+            raise BusinessLogicError("结束日期不能早于开始日期")
         if data.mark and data.mark not in _ALLOWED_MARK:
             raise BusinessLogicError("日格标记无效")
         if data.is_night and not sheet.has_night:
             raise BusinessLogicError("当前考勤单未启用夜班模板")
 
+        year, month = _parse_year_month(str(sheet.year_month))
+        month_start, month_end, _ = _month_bounds(year, month)
+        dates: list[date] = []
+        cur = work_date
+        while cur <= end_date:
+            if month_start <= cur <= month_end:
+                dates.append(cur)
+            cur += timedelta(days=1)
+        if not dates:
+            raise BusinessLogicError("登记日期须属于当前考勤单年月")
+
+        await self._apply_marks_for_dates(
+            sheet,
+            dates,
+            mark=data.mark,
+            is_night=data.is_night,
+            employee_ids=data.employee_ids,
+            user_id=user_id,
+        )
+        return await self.get_sheet(tenant_id, sheet_id)
+
+    async def _apply_marks_for_dates(
+        self,
+        sheet: KuaioaAttendanceSheet,
+        dates: list[date],
+        *,
+        mark: Optional[str],
+        is_night: Optional[bool],
+        employee_ids: Optional[list[int]],
+        user_id: int,
+    ) -> int:
+        if not dates:
+            return 0
         q = KuaioaAttendanceDay.filter(
-            tenant_id=tenant_id,
-            sheet_id=sheet_id,
-            work_date=work_date,
+            tenant_id=sheet.tenant_id,
+            sheet_id=sheet.id,
+            work_date__in=dates,
             deleted_at__isnull=True,
         )
-        if data.employee_ids:
-            q = q.filter(employee_id__in=data.employee_ids)
+        if employee_ids:
+            q = q.filter(employee_id__in=employee_ids)
         rows = await q
         standard = Decimal(str(sheet.standard_hours or _DEFAULT_HOURS))
         for day in rows:
-            if data.mark is not None:
-                day.mark = data.mark
-                reg, ot = _default_cell_hours(standard, data.mark)
+            if mark is not None:
+                day.mark = mark
+                reg, ot = _default_cell_hours(standard, mark)
                 day.regular_hours = reg
                 day.ot_hours = ot
-            if data.is_night is not None:
-                day.is_night = bool(data.is_night)
+            if is_night is not None:
+                day.is_night = bool(is_night)
             await touch_updated(day, user_id)
             await day.save()
         await touch_updated(sheet, user_id)
         await sheet.save()
-        return await self.get_sheet(tenant_id, sheet_id)
+        return len(rows)
+
+    async def list_day_registers(
+        self,
+        tenant_id: int,
+        *,
+        register_type: Optional[str] = None,
+        keyword: Optional[str] = None,
+        workshop_name: Optional[str] = None,
+    ) -> list[dict[str, Any]]:
+        q = KuaioaAttendanceDayRegister.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if register_type:
+            q = q.filter(register_type=register_type.strip())
+        if workshop_name:
+            q = q.filter(workshop_name=workshop_name.strip())
+        if keyword:
+            q = q.filter(
+                build_keyword_q(
+                    keyword,
+                    "register_code",
+                    "workshop_name",
+                    "production_line_name",
+                    "employee_summary",
+                )
+            )
+        rows = await q.order_by("-date_from", "-id")
+        return [model_to_dict(row) for row in rows]
+
+    async def get_day_register(self, tenant_id: int, register_id: int) -> dict[str, Any]:
+        row = await KuaioaAttendanceDayRegister.get_or_none(
+            id=register_id, tenant_id=tenant_id, deleted_at__isnull=True
+        )
+        if not row:
+            raise NotFoundError("登记记录不存在")
+        return model_to_dict(row)
+
+    async def _resolve_draft_sheet_for_register(
+        self,
+        tenant_id: int,
+        *,
+        year_month: str,
+        workshop_name: str,
+        production_line_name: Optional[str],
+        register_type: str,
+        user_id: int,
+        employment_types: Optional[list[str]] = None,
+    ) -> KuaioaAttendanceSheet:
+        line = (production_line_name or "").strip() or None
+        drafts = await KuaioaAttendanceSheet.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            year_month=year_month,
+            workshop_name=workshop_name,
+            status="draft",
+        )
+        line_matched = [s for s in drafts if (s.production_line_name or None) == line]
+        if register_type == "night":
+            matched = [s for s in line_matched if bool(s.has_night)]
+            if not matched:
+                matched = [s for s in drafts if bool(s.has_night)]
+            if matched:
+                return matched[0]
+            if line_matched and not any(bool(s.has_night) for s in line_matched):
+                raise BusinessLogicError("请先使用夜班模板考勤单，或新建时勾选夜班模板")
+        else:
+            matched = line_matched or list(drafts)
+            if matched:
+                return matched[0]
+
+        created = await self.create_sheet(
+            tenant_id,
+            AttendanceSheetCreate(
+                year_month=year_month,
+                workshop_name=workshop_name,
+                production_line_name=line,
+                employment_types=employment_types or None,
+                has_night=register_type == "night",
+                standard_hours=_DEFAULT_HOURS,
+            ),
+            user_id,
+        )
+        return await self._get_sheet_row(tenant_id, int(created["id"]))
+
+    async def create_day_register(
+        self, tenant_id: int, data: AttendanceDayRegisterCreate, user_id: int
+    ) -> dict[str, Any]:
+        register_type = (data.register_type or "").strip()
+        if register_type not in ("rest", "night"):
+            raise BusinessLogicError("登记类型无效")
+        date_from = parse_optional_date(data.date_from)
+        date_to = parse_optional_date(data.date_to)
+        if not date_from or not date_to:
+            raise BusinessLogicError("日期无效")
+        if date_to < date_from:
+            raise BusinessLogicError("结束日期不能早于开始日期")
+        if (date_to - date_from).days > 62:
+            raise BusinessLogicError("一次登记最多 62 天")
+        workshop = (data.workshop_name or "").strip()
+        if not workshop:
+            raise BusinessLogicError("车间不能为空")
+        line = (data.production_line_name or "").strip() or None
+        employment_types = normalize_employment_types(data.employment_types)
+        employee_ids = [int(x) for x in (data.employee_ids or []) if int(x) > 0]
+        mark_employee_ids = employee_ids
+        if not mark_employee_ids and employment_types:
+            scoped = await self._list_workshop_employees(
+                tenant_id, workshop, line, employment_types=employment_types
+            )
+            mark_employee_ids = [int(e.id) for e in scoped]
+
+        by_month: dict[str, list[date]] = {}
+        cur = date_from
+        while cur <= date_to:
+            key = f"{cur.year:04d}-{cur.month:02d}"
+            by_month.setdefault(key, []).append(cur)
+            cur += timedelta(days=1)
+
+        marked = 0
+        for year_month, dates in by_month.items():
+            sheet = await self._resolve_draft_sheet_for_register(
+                tenant_id,
+                year_month=year_month,
+                workshop_name=workshop,
+                production_line_name=line,
+                register_type=register_type,
+                user_id=user_id,
+                employment_types=employment_types or None,
+            )
+            if register_type == "night" and not sheet.has_night:
+                raise BusinessLogicError("请先使用夜班模板考勤单，或新建时勾选夜班模板")
+            await self.refresh_roster(tenant_id, int(sheet.id), user_id)
+            sheet = await self._get_sheet_row(tenant_id, int(sheet.id))
+            marked += await self._apply_marks_for_dates(
+                sheet,
+                dates,
+                mark="rest" if register_type == "rest" else None,
+                is_night=True if register_type == "night" else None,
+                employee_ids=mark_employee_ids or None,
+                user_id=user_id,
+            )
+
+        if employee_ids:
+            emps = await KuaioaEmployeeProfile.filter(
+                tenant_id=tenant_id, id__in=employee_ids, deleted_at__isnull=True
+            ).only("id", "full_name", "employee_code")
+            names = [
+                f"{(e.employee_code or '').strip()} {(e.full_name or '').strip()}".strip()
+                for e in emps
+            ]
+            summary = "、".join([n for n in names if n][:8])
+            if len(names) > 8:
+                summary = f"{summary} 等{len(names)}人"
+            if not summary:
+                summary = f"{len(employee_ids)}人"
+        elif employment_types:
+            summary = employment_types_summary(employment_types)
+        else:
+            summary = "全员"
+
+        code = await generate_daily_code(
+            KuaioaAttendanceDayRegister, tenant_id, "ADR", code_field="register_code"
+        )
+        payload: dict[str, Any] = {
+            "tenant_id": tenant_id,
+            "register_code": code,
+            "register_type": register_type,
+            "date_from": date_from,
+            "date_to": date_to,
+            "workshop_name": workshop,
+            "production_line_name": line,
+            "employment_types": employment_types,
+            "employee_ids": employee_ids,
+            "employee_summary": summary,
+            "marked_cell_count": marked,
+        }
+        await apply_create_audit_by_user_id(payload, user_id)
+        row = await KuaioaAttendanceDayRegister.create(**payload)
+        return model_to_dict(row)
 
     async def submit_sheet(self, tenant_id: int, sheet_id: int, user: User) -> dict[str, Any]:
         sheet = await self._get_sheet_row(tenant_id, sheet_id)
@@ -554,6 +787,7 @@ class AttendanceService:
             int(sheet.tenant_id),
             sheet.workshop_name,
             sheet.production_line_name,
+            employment_types=list(sheet.employment_types or []),
         )
         standard = Decimal(str(sheet.standard_hours or _DEFAULT_HOURS))
         existing: set[tuple[int, date]] = set()
@@ -591,7 +825,12 @@ class AttendanceService:
         return created
 
     async def _list_workshop_employees(
-        self, tenant_id: int, workshop_name: str, production_line_name: Optional[str]
+        self,
+        tenant_id: int,
+        workshop_name: str,
+        production_line_name: Optional[str],
+        *,
+        employment_types: Optional[list[str]] = None,
     ) -> list[KuaioaEmployeeProfile]:
         q = KuaioaEmployeeProfile.filter(
             tenant_id=tenant_id,
@@ -600,6 +839,9 @@ class AttendanceService:
         )
         if production_line_name:
             q = q.filter(production_line_name=production_line_name)
+        types = normalize_employment_types(employment_types)
+        if types:
+            q = q.filter(employment_type__in=types)
         return await q.order_by("full_name", "id")
 
     async def _get_sheet_row(self, tenant_id: int, sheet_id: int) -> KuaioaAttendanceSheet:

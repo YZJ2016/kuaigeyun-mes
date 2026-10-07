@@ -694,19 +694,26 @@ class DocumentRelationNewService:
                 max_depth=max_depth,
                 visited=visited
             )
+            # 全链路展示以活单据编码为准，禁止关系表过期快照冒充真单号
+            live_code, live_name, live_created = await self._get_document_info(
+                tenant_id, rel.source_type, rel.source_id
+            )
+            node_code = live_code if live_code is not None else rel.source_code
+            node_name = live_name if live_name is not None else rel.source_name
+            node_created = live_created if live_created is not None else rel.created_at
             nodes.append(DocumentTraceNode(
                 document_type=rel.source_type,
                 document_id=rel.source_id,
-                document_code=rel.source_code,
-                document_name=rel.source_name,
-                created_at=rel.created_at,
+                document_code=node_code,
+                document_name=node_name,
+                created_at=node_created,
                 level=level + 1,
                 is_deleted=await self._resolve_trace_node_deleted(
                     tenant_id,
                     rel.source_type,
                     rel.source_id,
-                    rel.source_code,
-                    rel.created_at,
+                    node_code,
+                    node_created,
                 ),
                 children=children
             ))
@@ -743,19 +750,26 @@ class DocumentRelationNewService:
                 max_depth=max_depth,
                 visited=visited
             )
+            # 全链路展示以活单据编码为准，禁止关系表过期快照冒充真单号
+            live_code, live_name, live_created = await self._get_document_info(
+                tenant_id, rel.target_type, rel.target_id
+            )
+            node_code = live_code if live_code is not None else rel.target_code
+            node_name = live_name if live_name is not None else rel.target_name
+            node_created = live_created if live_created is not None else rel.created_at
             nodes.append(DocumentTraceNode(
                 document_type=rel.target_type,
                 document_id=rel.target_id,
-                document_code=rel.target_code,
-                document_name=rel.target_name,
-                created_at=rel.created_at,
+                document_code=node_code,
+                document_name=node_name,
+                created_at=node_created,
                 level=level + 1,
                 is_deleted=await self._resolve_trace_node_deleted(
                     tenant_id,
                     rel.target_type,
                     rel.target_id,
-                    rel.target_code,
-                    rel.created_at,
+                    node_code,
+                    node_created,
                 ),
                 children=children
             ))

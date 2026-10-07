@@ -1,88 +1,92 @@
 /**
  * 通用文件上传组件
- * 
+ *
  * 基于文件管理模块的统一文件上传组件，供业务模块使用。
  * 支持单文件和多文件上传，自动关联文件管理。
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Upload, Button, message, UploadProps, UploadFile } from 'antd';
+import { Upload, Button, UploadProps, UploadFile, App } from 'antd';
 import { UploadOutlined } from '@ant-design/icons';
 import { uploadFile, uploadMultipleFiles, FileUploadResponse } from '../../services/file';
-import { App } from 'antd';
 
 export interface FileUploadComponentProps {
   /**
    * 文件分类（可选）
    */
   category?: string;
-  
+
   /**
    * 文件标签（可选）
    */
   tags?: string[];
-  
+
   /**
    * 文件描述（可选）
    */
   description?: string;
-  
+
   /**
    * 是否支持多文件上传
    */
   multiple?: boolean;
-  
+
   /**
    * 最大文件数量（多文件上传时）
    */
   maxCount?: number;
-  
+
   /**
    * 接受的文件类型（MIME 类型或文件扩展名）
    */
   accept?: string;
-  
+
   /**
    * 文件大小限制（字节）
    */
   maxSize?: number;
-  
+
   /**
    * 上传成功回调
    */
   onSuccess?: (file: FileUploadResponse | FileUploadResponse[]) => void;
-  
+
   /**
    * 上传失败回调
    */
   onError?: (error: Error) => void;
-  
+
   /**
-   * 文件列表变化回调
+   * 文件列表变化回调（Form.Item value/onChange）
    */
   onChange?: (fileList: UploadFile[]) => void;
-  
+
   /**
-   * 初始文件列表
+   * 受控文件列表（Form.Item value）
+   */
+  value?: UploadFile[];
+
+  /**
+   * 初始文件列表（非受控）
    */
   defaultFileList?: UploadFile[];
-  
+
   /**
    * 是否显示文件列表
    */
   showUploadList?: boolean | UploadProps['showUploadList'];
-  
+
   /**
    * 自定义上传按钮文本
    */
   buttonText?: string;
-  
+
   /**
    * 自定义上传按钮图标
    */
   buttonIcon?: React.ReactNode;
-  
+
   /**
    * 是否禁用
    */
@@ -103,26 +107,40 @@ const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
   onSuccess,
   onError,
   onChange,
+  value,
   defaultFileList = [],
   showUploadList = true,
-  buttonText = '选择文件',
+  buttonText,
   buttonIcon = <UploadOutlined />,
   disabled = false,
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
-  const [fileList, setFileList] = useState<UploadFile[]>(defaultFileList);
+  const [fileList, setFileList] = useState<UploadFile[]>(value ?? defaultFileList);
   const [uploading, setUploading] = useState(false);
+  const resolvedButtonText = buttonText ?? t('pages.system.files.selectFiles');
+  const resolvedMaxCount = maxCount ?? (multiple ? undefined : 1);
+
+  useEffect(() => {
+    if (value !== undefined) {
+      setFileList(value);
+    }
+  }, [value]);
+
+  const emitChange = (next: UploadFile[]) => {
+    setFileList(next);
+    onChange?.(next);
+  };
 
   /**
    * 处理文件上传
    */
   const handleUpload: UploadProps['customRequest'] = async (options) => {
     const { file, onSuccess: onUploadSuccess, onError: onUploadError } = options;
-    
+
     try {
       setUploading(true);
-      
+
       const uploadFileCandidate = Array.isArray(file) ? file[0] : file;
       const fileSize =
         uploadFileCandidate != null &&
@@ -132,58 +150,57 @@ const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
           ? (uploadFileCandidate as Blob).size
           : undefined;
 
-      // 检查文件大小
       if (maxSize != null && fileSize != null && fileSize > maxSize) {
-        throw new Error(t('components.fileUpload.sizeExceeded', { size: (maxSize / 1024 / 1024).toFixed(2) }));
-      }
-      
-      if (multiple) {
-        // 多文件上传
-        const files = Array.isArray(file) ? file : [file];
-        const response = await uploadMultipleFiles(
-          files as File[],
-          { category }
+        throw new Error(
+          t('components.fileUpload.sizeExceeded', {
+            size: (maxSize / 1024 / 1024).toFixed(2),
+          }),
         );
-        
-        // 更新文件列表
+      }
+
+      if (multiple) {
+        const files = Array.isArray(file) ? file : [file];
+        const response = await uploadMultipleFiles(files as File[], { category });
+
         const newFileList: UploadFile[] = response.map((fileInfo) => ({
           uid: fileInfo.uuid,
           name: fileInfo.original_name,
           status: 'done',
-          url: undefined, // 可以通过 getFilePreview 获取预览 URL
+          response: { uuid: fileInfo.uuid },
         }));
-        
-        setFileList(newFileList);
-        onChange?.(newFileList);
+
+        emitChange(newFileList);
         onUploadSuccess?.(response);
         onSuccess?.(response);
-        messageApi.success(t('components.fileUpload.uploadMultiSuccess', { count: response.length }));
+        messageApi.success(
+          t('components.fileUpload.uploadMultiSuccess', { count: response.length }),
+        );
       } else {
-        // 单文件上传
         const response = await uploadFile(uploadFileCandidate as File, {
           category,
           tags,
           description,
         });
-        
-        // 更新文件列表
-        const newFileList: UploadFile[] = [{
-          uid: response.uuid,
-          name: response.original_name,
-          status: 'done',
-          url: undefined, // 可以通过 getFilePreview 获取预览 URL
-        }];
-        
-        setFileList(newFileList);
-        onChange?.(newFileList);
+
+        const newFileList: UploadFile[] = [
+          {
+            uid: response.uuid,
+            name: response.original_name,
+            status: 'done',
+            response: { uuid: response.uuid },
+          },
+        ];
+
+        emitChange(newFileList);
         onUploadSuccess?.(response);
         onSuccess?.(response);
         messageApi.success(t('components.fileUpload.uploadSuccess'));
       }
-    } catch (error: any) {
-      onUploadError?.(error);
-      onError?.(error);
-      messageApi.error(error.message || t('components.fileUpload.uploadFailed'));
+    } catch (error: unknown) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      onUploadError?.(err);
+      onError?.(err);
+      messageApi.error(err.message || t('components.fileUpload.uploadFailed'));
     } finally {
       setUploading(false);
     }
@@ -193,37 +210,36 @@ const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
    * 处理文件列表变化
    */
   const handleChange: UploadProps['onChange'] = (info) => {
-    setFileList(info.fileList);
-    onChange?.(info.fileList);
+    const next = resolvedMaxCount ? info.fileList.slice(-resolvedMaxCount) : info.fileList;
+    emitChange(next);
   };
 
   /**
    * 处理文件删除
    */
   const handleRemove: UploadProps['onRemove'] = (file) => {
-    const newFileList = fileList.filter((item) => item.uid !== file.uid);
-    setFileList(newFileList);
-    onChange?.(newFileList);
+    emitChange(fileList.filter((item) => item.uid !== file.uid));
   };
 
   /**
    * 文件上传前验证
    */
   const beforeUpload: UploadProps['beforeUpload'] = (file) => {
-    // 检查文件大小
     if (maxSize && file.size > maxSize) {
-      messageApi.error(t('components.fileUpload.sizeExceeded', { size: (maxSize / 1024 / 1024).toFixed(2) }));
+      messageApi.error(
+        t('components.fileUpload.sizeExceeded', {
+          size: (maxSize / 1024 / 1024).toFixed(2),
+        }),
+      );
       return Upload.LIST_IGNORE;
     }
-    
-    // 检查文件数量（多文件上传时）
-    if (multiple && maxCount && fileList.length >= maxCount) {
-      messageApi.error(t('components.fileUpload.maxCountExceeded', { count: maxCount }));
+
+    if (multiple && resolvedMaxCount && fileList.length >= resolvedMaxCount) {
+      messageApi.error(t('components.fileUpload.maxCountExceeded', { count: resolvedMaxCount }));
       return Upload.LIST_IGNORE;
     }
-    
-    // 返回 false 阻止自动上传，使用 customRequest
-    return false;
+
+    return true;
   };
 
   return (
@@ -234,16 +250,16 @@ const FileUploadComponent: React.FC<FileUploadComponentProps> = ({
       onRemove={handleRemove}
       beforeUpload={beforeUpload}
       multiple={multiple}
+      maxCount={resolvedMaxCount}
       accept={accept}
       showUploadList={showUploadList}
       disabled={disabled || uploading}
     >
       <Button icon={buttonIcon} loading={uploading} disabled={disabled}>
-        {buttonText}
+        {resolvedButtonText}
       </Button>
     </Upload>
   );
 };
 
 export default FileUploadComponent;
-

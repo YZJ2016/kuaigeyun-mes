@@ -9,6 +9,46 @@ import type { PlatformUpdateLogEntry } from './platformUpdateLog';
 
 export const PLATFORM_UPDATE_LOG_DEDICATED: PlatformUpdateLogEntry[] = [
   {
+    id: 'haoligo-sales-qty-formatQuantity-r01',
+    date: '2026-10-07',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey: 'pages.dashboard.updateLog.entries.haoligo-sales-qty-formatQuantity-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-sales-qty-formatQuantity-r01.description',
+  },
+  {
+    id: 'haoligo-order-tracking-fuzzy-search-r01',
+    date: '2026-10-07',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey: 'pages.dashboard.updateLog.entries.haoligo-order-tracking-fuzzy-search-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-order-tracking-fuzzy-search-r01.description',
+  },
+  {
+    id: 'haoligo-monthly-ledger-invoice-fields-r01',
+    date: '2026-10-07',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey: 'pages.dashboard.updateLog.entries.haoligo-monthly-ledger-invoice-fields-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-monthly-ledger-invoice-fields-r01.description',
+  },
+  {
+    id: 'haoligo-order-tracking-list-route-r01',
+    date: '2026-10-07',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey: 'pages.dashboard.updateLog.entries.haoligo-order-tracking-list-route-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-order-tracking-list-route-r01.description',
+  },
+  {
     id: 'haoligo-order-tracking-search-select-r01',
     date: '2026-10-07',
     type: 'fix',

@@ -111,7 +111,6 @@ const LivingPayoutPage: React.FC = () => {
 
   return (
     <ListPageTemplate
-      title={t('app.kuaioa.livingPayout.title')}
       toolbarExtra={
         <Space wrap>
           <DatePicker

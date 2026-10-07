@@ -1,0 +1,8 @@
+#AOCI-CODE-VOLUME: 1
+
+===F:/dev/riveredge/===
+.gitattributes[CG3T]: F:强制文本LF检出并保护二进制不被autocrlf改写 | R:- | A:- | S:baseline按原始字节对齐；改规则会触发全树漂移
+.gitignore[CG5S]: F:声明Git不跟踪路径含依赖构建产物与本地密钥 | R:- | A:- | S:含.aoci与.cursor；勿把应版本化源码误忽略
+AGENTS.md[CG7S]: F:规定Host Agent使用AOCI认知与维护收尾纪律 | R:code:aoci.txt,code:aoci.meta.txt | A:aoci_rules,aoci_overview,aoci_maintain,aoci_update_entry | S:压缩恢复须重载Whole-Index；禁止读侧猜写Entry
+LICENSE[CG3M]: F:Apache-2.0许可证全文 | R:- | A:- | S:-
+README.md[CG6M]: F:快格云制造产品说明与仓库结构导航 | R:- | A:- | S:默认PostgreSQL+Taskiq无Redis
