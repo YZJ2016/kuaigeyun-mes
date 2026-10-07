@@ -35,6 +35,7 @@ DELAY_HOURS_BY_ENTITY = {
     "production_file": 24,
     "engineering_drawing": 24,
     "drawing_change": 24,
+    "sample_process": 24,
 }
 
 ENTITY_RD_DELIVERABLE = "rd_deliverable"
@@ -42,6 +43,7 @@ ENTITY_PRODUCT_FIRMWARE = "product_firmware"
 ENTITY_PRODUCTION_FILE = "production_file"
 ENTITY_ENGINEERING_DRAWING = "engineering_drawing"
 ENTITY_DRAWING_CHANGE = "drawing_change"
+ENTITY_SAMPLE_PROCESS = "sample_process"
 
 
 def approval_delay_hours(entity_type: str) -> int:
@@ -177,6 +179,12 @@ async def _load_pending_row(tenant_id: int, entity_type: str, entity_id: int):
         return await DrawingChange.filter(
             tenant_id=tenant_id, id=entity_id, deleted_at__isnull=True
         ).first()
+    if entity_type == ENTITY_SAMPLE_PROCESS:
+        from apps.kuaiplm.models.sample_process import SampleProcessApplication
+
+        return await SampleProcessApplication.filter(
+            tenant_id=tenant_id, id=entity_id, deleted_at__isnull=True
+        ).first()
     return None
 
 
@@ -225,6 +233,8 @@ async def dispatch_plm_pending_approval_reminder(
             doc_code = f"{row.code}-{row.revision}" if row.code else f"图纸#{row.id}"
         elif entity_type == ENTITY_DRAWING_CHANGE:
             doc_code = str(getattr(row, "drawing_code", None) or f"变更#{row.id}")
+        elif entity_type == ENTITY_SAMPLE_PROCESS:
+            doc_code = row.application_code or f"样品加工#{row.id}"
     if not title:
         if entity_type == ENTITY_DRAWING_CHANGE:
             title = str(

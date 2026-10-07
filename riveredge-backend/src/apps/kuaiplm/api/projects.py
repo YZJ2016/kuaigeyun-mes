@@ -264,7 +264,11 @@ async def create_deliverable(
     try:
         codes = await _permission_codes(current_user, tenant_id)
         return await service.create_deliverable(
-            tenant_id, project_id, data, current_user.id, permission_codes=codes
+            tenant_id,
+            data,
+            current_user.id,
+            path_project_id=project_id,
+            permission_codes=codes,
         )
     except NotFoundError as e:
         raise _err(404, str(e), f"/rd-projects/{project_id}/deliverables", tenant_id)
@@ -294,10 +298,10 @@ async def update_deliverable(
         codes = await _permission_codes(current_user, tenant_id)
         return await service.update_deliverable(
             tenant_id,
-            project_id,
             deliverable_id,
             data,
             current_user.id,
+            scope_project_id=project_id,
             permission_codes=codes,
         )
     except NotFoundError as e:
@@ -319,7 +323,12 @@ async def delete_deliverable(
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        await service.delete_deliverable(tenant_id, project_id, deliverable_id, current_user.id)
+        await service.delete_deliverable(
+            tenant_id,
+            deliverable_id,
+            current_user.id,
+            scope_project_id=project_id,
+        )
     except NotFoundError as e:
         raise _err(404, str(e), f"/rd-projects/{project_id}/deliverables/{deliverable_id}", tenant_id)
 
@@ -345,8 +354,8 @@ async def list_deliverable_versions(
         )
         return await service.list_deliverable_versions(
             tenant_id,
-            project_id,
             deliverable_id,
+            scope_project_id=project_id,
             current_user_id=current_user.id,
             permission_codes=permission_codes,
         )
@@ -381,10 +390,10 @@ async def revise_deliverable(
         codes = await _permission_codes(current_user, tenant_id)
         return await service.revise_deliverable(
             tenant_id,
-            project_id,
             deliverable_id,
             data,
             actor_id=current_user.id,
+            scope_project_id=project_id,
             permission_codes=codes,
         )
     except NotFoundError as e:
@@ -407,7 +416,10 @@ async def submit_deliverable(
 ):
     try:
         return await service.submit_deliverable(
-            tenant_id, project_id, deliverable_id, current_user
+            tenant_id,
+            deliverable_id,
+            current_user,
+            scope_project_id=project_id,
         )
     except NotFoundError as e:
         raise _err(
@@ -433,7 +445,10 @@ async def approve_deliverable(
 ):
     try:
         return await service.approve_deliverable(
-            tenant_id, project_id, deliverable_id, current_user
+            tenant_id,
+            deliverable_id,
+            current_user,
+            scope_project_id=project_id,
         )
     except NotFoundError as e:
         raise _err(
@@ -467,10 +482,10 @@ async def reject_deliverable(
     try:
         return await service.reject_deliverable(
             tenant_id,
-            project_id,
             deliverable_id,
             data,
             actor_id=current_user.id,
+            scope_project_id=project_id,
         )
     except NotFoundError as e:
         raise _err(404, str(e), f"/rd-projects/{project_id}/deliverables/{deliverable_id}/reject", tenant_id)

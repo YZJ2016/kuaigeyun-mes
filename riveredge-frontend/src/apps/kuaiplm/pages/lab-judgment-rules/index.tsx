@@ -336,10 +336,9 @@ const LabJudgmentRulesPage: React.FC = () => {
         rowKey="id"
         headerTitle={t('app.kuaiplm.menu.lab-judgment-rules')}
         columnPersistenceId="apps.kuaiplm.pages.lab-judgment-rules.width-v2"
-        createButtonText={
-          perms.canCreate ? t('app.kuaiplm.labJudgmentRule.createButton') : undefined
-        }
-        onCreate={perms.canCreate ? openCreate : undefined}
+        showCreateButton={perms.canCreate}
+        createButtonText={t('app.kuaiplm.labJudgmentRule.createButton')}
+        onCreate={openCreate}
         enableRowSelection={perms.canDelete}
         showDeleteButton={perms.canDelete}
         deleteConfirmTitle={t('common.batchDeleteTitle')}

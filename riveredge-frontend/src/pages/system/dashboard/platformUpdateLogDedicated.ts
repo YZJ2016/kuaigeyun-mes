@@ -9,6 +9,69 @@ import type { PlatformUpdateLogEntry } from './platformUpdateLog';
 
 export const PLATFORM_UPDATE_LOG_DEDICATED: PlatformUpdateLogEntry[] = [
   {
+    id: 'funide-oa-project-proposal-section-card-r01',
+    date: '2026-10-08',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey:
+      'pages.dashboard.updateLog.entries.funide-oa-project-proposal-section-card-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-project-proposal-section-card-r01.description',
+  },
+  {
+    id: 'funide-oa-project-proposal-field-group-r01',
+    date: '2026-10-08',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey:
+      'pages.dashboard.updateLog.entries.funide-oa-project-proposal-field-group-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-project-proposal-field-group-r01.description',
+  },
+  {
+    id: 'funide-oa-project-proposal-dict-load-fix-r01',
+    date: '2026-10-08',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey:
+      'pages.dashboard.updateLog.entries.funide-oa-project-proposal-dict-load-fix-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-project-proposal-dict-load-fix-r01.description',
+  },
+  {
+    id: 'funide-oa-knowledge-base-menu-short-r01',
+    date: '2026-10-08',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-knowledge-base-menu-short-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-knowledge-base-menu-short-r01.description',
+  },
+  {
+    id: 'funide-oa-reports-menu-last-r01',
+    date: '2026-10-08',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-reports-menu-last-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-reports-menu-last-r01.description',
+  },
+  {
+    id: 'funide-oa-project-proposal-dict-options-r01',
+    date: '2026-10-08',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-project-proposal-dict-options-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-project-proposal-dict-options-r01.description',
+  },
+  {
     id: 'haoligo-sales-qty-formatQuantity-r01',
     date: '2026-10-07',
     type: 'improvement',

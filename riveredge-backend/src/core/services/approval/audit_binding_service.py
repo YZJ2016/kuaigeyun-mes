@@ -311,6 +311,7 @@ class AuditBindingService:
                 code__in=list(visible_codes),
             ).order_by("name").all(),
         )
+        process_by_code = {str(p.code): p for p in process_options}
 
         items: List[Dict[str, Any]] = []
         for entry in all_entries():
@@ -318,6 +319,9 @@ class AuditBindingService:
                 continue
             binding = binding_map.get(entry.node_key)
             process = AuditBindingService._display_process(binding, node_key=entry.node_key)
+            # 未启用时 binding.process_id 常为空；仍回填 code=node_key 的内置流程，避免下拉看似「无模板」
+            if process is None:
+                process = process_by_code.get(entry.node_key)
             items.append(
                 {
                     "node_key": entry.node_key,

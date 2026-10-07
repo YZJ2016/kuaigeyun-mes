@@ -266,7 +266,7 @@ def validate_deliverable_catalog(
         if file_name:
             _require_software_spec_filename(file_name, project_code=project_code)
         elif not (project_code or "").strip():
-            raise ValidationError("软件规格书须关联有项目代号的研发项目")
+            raise ValidationError("软件规格书须填写项目代号")
         return
 
     if dtype in SCHEMATIC_GERBER_TYPES or dtype in rules.get("schematic_gerber_types", []):

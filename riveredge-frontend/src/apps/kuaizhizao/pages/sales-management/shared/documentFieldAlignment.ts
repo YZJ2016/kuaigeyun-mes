@@ -552,6 +552,25 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   stationId: 22,
   reason: 82.1,
   // —— 20 类型类（同类靠拢，均在数量之前）——
+  /** 质量投诉：投诉类型 → 缺陷分类 → 物料（专用 key，避免 material_name 落 79 段） */
+  quality_complaint_business_type: 20,
+  quality_complaint_defect_category: 20.5,
+  quality_complaint_material: 21,
+  /** 供方评价：周期/得分/整改/审核方式/模板版本等（专用 key，免未入 rank 落到 91.5） */
+  supplier_eval_period_type: 20.1,
+  supplier_eval_period_year: 20.2,
+  supplier_eval_period_quarter: 20.3,
+  supplier_eval_audit_mode: 20.4,
+  supplier_eval_rectification: 20.5,
+  supplier_eval_template_version: 20.6,
+  supplier_eval_grade_version: 20.7,
+  supplier_eval_clause_count: 30.08,
+  supplier_eval_plan_progress: 32.1,
+  supplier_eval_score: 34.1,
+  supplier_eval_grade: 34.2,
+  supplier_eval_env_material: 21.1,
+  supplier_eval_env_material_desc: 21.2,
+  supplier_eval_env_doc_type: 20.8,
   /** 不良处理：缺陷类型 / 处置方式 */
   nc_defect_type: 20,
   disposition: 21,

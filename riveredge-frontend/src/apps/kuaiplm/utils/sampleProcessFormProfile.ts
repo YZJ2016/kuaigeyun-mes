@@ -42,5 +42,9 @@ export function isFieldRequiredForKind(
   fieldKey: string,
   industryActive: boolean,
 ): boolean {
+  // L36：钢网/SMT 期望交期为产品必填（租户旧 profile 未同步时仍生效）
+  if (fieldKey === 'due_date' && (kind === 'stencil' || kind === 'smt')) {
+    return true;
+  }
   return requiredFieldsForKind(profile, kind, industryActive).includes(fieldKey);
 }

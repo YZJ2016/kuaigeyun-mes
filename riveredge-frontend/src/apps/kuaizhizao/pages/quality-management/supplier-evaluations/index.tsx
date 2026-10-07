@@ -55,13 +55,7 @@ import type { ColumnsType } from 'antd/es/table';
 
 import { UniTable } from '../../../../../components/uni-table';
 
-import {
-
-  UniTableStackedPrimaryCell,
-
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-
-} from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
 
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
 
@@ -121,8 +115,6 @@ import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 
-import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
-
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 
 import { SupplierSelectDropdown } from '../../../../master-data/components/SupplierSelectDropdown';
@@ -159,13 +151,9 @@ import {
 
 import { fetchHostCapabilityData } from '../../../../../services/extensionHostCapabilities';
 
-
-
 const RESOURCE = 'kuaizhizao:supplier-eval';
 
 const P = 'app.kuaizhizao.supplierEval';
-
-
 
 const EVAL_STATUS_KEYS: SupplierEvaluationStatus[] = [
   'draft',
@@ -179,15 +167,11 @@ const PLAN_STATUS_KEYS: SupplierEvalPlanStatus[] = ['draft', 'released', 'closed
 
 const RECT_STATUS_KEYS = ['none', 'open', 'closed'] as const;
 
-
-
 const PERIOD_TYPES = ['annual', 'quarterly'] as const;
 
 const AUDIT_MODES = ['document', 'onsite'] as const;
 
 const ENV_DOC_TYPES = ['rohs', 'reach', 'conflict_minerals', 'msds', 'other'] as const;
-
-
 
 const EMPTY_CLAUSE: SupplierEvalTemplateClause = {
   clause_code: '',
@@ -197,8 +181,6 @@ const EMPTY_CLAUSE: SupplierEvalTemplateClause = {
 };
 
 const EMPTY_PLAN_LINE = { remarks: '' } as SupplierEvalPlanLine;
-
-
 
 const EVAL_EXPORT_COLUMNS: ExportXlsxColumn[] = [
 
@@ -226,8 +208,6 @@ const EVAL_EXPORT_COLUMNS: ExportXlsxColumn[] = [
 
 ];
 
-
-
 function currentEvalYear(): number {
 
   const siteDate = todaySiteDateString();
@@ -235,8 +215,6 @@ function currentEvalYear(): number {
   return Number(siteDate.slice(0, 4));
 
 }
-
-
 
 function canCloseRectification(row: SupplierEvaluation): boolean {
 
@@ -253,8 +231,6 @@ function canCloseRectification(row: SupplierEvaluation): boolean {
   );
 
 }
-
-
 
 const SupplierEvaluationsPage: React.FC = () => {
 
@@ -332,8 +308,6 @@ const SupplierEvaluationsPage: React.FC = () => {
 
   const [closeRectSubmitting, setCloseRectSubmitting] = useState(false);
 
-
-
   const statusEnum = useMemo(
     () =>
       Object.fromEntries(
@@ -349,8 +323,6 @@ const SupplierEvaluationsPage: React.FC = () => {
       ),
     [t],
   );
-
-
 
   const periodOptions = useMemo(
 
@@ -368,8 +340,6 @@ const SupplierEvaluationsPage: React.FC = () => {
 
   );
 
-
-
   const auditModeOptions = useMemo(
 
     () =>
@@ -385,8 +355,6 @@ const SupplierEvaluationsPage: React.FC = () => {
     [t],
 
   );
-
-
 
   const envDocTypeOptions = useMemo(
 
@@ -404,8 +372,6 @@ const SupplierEvaluationsPage: React.FC = () => {
 
   );
 
-
-
   const quarterOptions = useMemo(
 
     () =>
@@ -421,8 +387,6 @@ const SupplierEvaluationsPage: React.FC = () => {
     [t],
 
   );
-
-
 
   const loadActiveTemplates = useCallback(async () => {
 
@@ -445,8 +409,6 @@ const SupplierEvaluationsPage: React.FC = () => {
     );
 
   }, []);
-
-
 
   useEffect(() => {
     if (evalModalOpen || planModalOpen) {
@@ -495,8 +457,6 @@ const SupplierEvaluationsPage: React.FC = () => {
     }
   }, [activeTabKey, loadSummary]);
 
-
-
   const openEvalCreate = useCallback(() => {
 
     setEditingEval(null);
@@ -504,8 +464,6 @@ const SupplierEvaluationsPage: React.FC = () => {
     setEvalModalOpen(true);
 
   }, []);
-
-
 
   const openEnvCreate = useCallback(() => {
 
@@ -515,8 +473,6 @@ const SupplierEvaluationsPage: React.FC = () => {
 
   }, []);
 
-
-
   const openTemplateCreate = useCallback(() => {
 
     setEditingTemplate(null);
@@ -524,8 +480,6 @@ const SupplierEvaluationsPage: React.FC = () => {
     setTemplateModalOpen(true);
 
   }, []);
-
-
 
   const openPlanCreate = useCallback(() => {
     setEditingPlan(null);
@@ -543,8 +497,6 @@ const SupplierEvaluationsPage: React.FC = () => {
       openTemplateCreate();
     }
   });
-
-
 
   const openDetail = async (record: SupplierEvaluation) => {
 
@@ -574,8 +526,6 @@ const SupplierEvaluationsPage: React.FC = () => {
 
   };
 
-
-
   const openEvalEdit = async (row: SupplierEvaluation) => {
 
     if (!row.id) return;
@@ -595,8 +545,6 @@ const SupplierEvaluationsPage: React.FC = () => {
     }
 
   };
-
-
 
   const openTemplateEdit = async (row: SupplierEvalTemplate) => {
     if (!row.id) return;
@@ -619,8 +567,6 @@ const SupplierEvaluationsPage: React.FC = () => {
       messageApi.error(getApiErrorMessage(e));
     }
   };
-
-
 
   const handleEvalTemplateChange = async (templateId: number | undefined) => {
 
@@ -664,8 +610,6 @@ const SupplierEvaluationsPage: React.FC = () => {
 
   };
 
-
-
   const openCloseRectification = (row: SupplierEvaluation) => {
 
     setCloseRectTarget(row);
@@ -675,8 +619,6 @@ const SupplierEvaluationsPage: React.FC = () => {
     setCloseRectOpen(true);
 
   };
-
-
 
   const submitCloseRectification = async () => {
 
@@ -724,8 +666,6 @@ const SupplierEvaluationsPage: React.FC = () => {
 
   };
 
-
-
   const renderRectificationStatus = (status?: string) => {
     const key = RECT_STATUS_KEYS.includes(status as (typeof RECT_STATUS_KEYS)[number])
       ? status
@@ -770,7 +710,11 @@ const SupplierEvaluationsPage: React.FC = () => {
             title: t(`${P}.colPlanName`),
             dataIndex: 'name',
             key: 'name',
-            ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+            minWidth: 200,
+            uniTableRemainderFlex: true,
+            uniTablePrimaryFlex: true,
+            resizable: false,
+            ellipsis: false,
             render: (_, record) => (
               <UniTableStackedPrimaryCell
                 primary={record.name}
@@ -783,11 +727,16 @@ const SupplierEvaluationsPage: React.FC = () => {
             dataIndex: 'template_name',
             key: 'template_name',
             hideInSearch: true,
+            width: 160,
+            minWidth: 160,
+            uniTableKeepWidth: true,
+            resizable: false,
             ellipsis: true,
           },
           {
             title: t(`${P}.colPeriodType`),
             dataIndex: 'period_type',
+            key: 'supplier_eval_period_type',
             valueType: 'select',
             fieldProps: { options: periodOptions },
             ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
@@ -800,12 +749,22 @@ const SupplierEvaluationsPage: React.FC = () => {
           {
             title: t(`${P}.colPeriodYear`),
             dataIndex: 'period_year',
+            key: 'supplier_eval_period_year',
             hideInSearch: true,
+            width: 100,
+            minWidth: 100,
+            uniTableKeepWidth: true,
+            resizable: false,
           },
           {
             title: t(`${P}.colPeriodQuarter`),
             dataIndex: 'period_quarter',
+            key: 'supplier_eval_period_quarter',
             hideInSearch: true,
+            width: 100,
+            minWidth: 100,
+            uniTableKeepWidth: true,
+            resizable: false,
             render: (_, record) =>
               record.period_type === 'quarterly' && record.period_quarter
                 ? t(`${P}.quarterOption`, { quarter: record.period_quarter })
@@ -814,10 +773,12 @@ const SupplierEvaluationsPage: React.FC = () => {
           {
             title: t(`${P}.colPlanProgress`),
             dataIndex: 'generated_count',
-            key: 'plan_progress',
+            key: 'supplier_eval_plan_progress',
             hideInSearch: true,
             width: 160,
+            minWidth: 160,
             uniTableKeepWidth: true,
+            resizable: false,
             render: (_, record) => renderPlanProgress(record),
           },
           {
@@ -842,99 +803,99 @@ const SupplierEvaluationsPage: React.FC = () => {
             render: (_, row) => {
               const actions: React.ReactNode[] = [];
               if (row.status !== 'closed' && perms.canUpdate) {
-                actions.push(
-                  <Button
-                    key="edit"
-                    {...rowActionKind('update')}
-                    onClick={() => void openPlanEdit(row)}
-                  >
-                    {t('common.edit')}
-                  </Button>,
-                );
+              actions.push(
+              <Button
+              key="edit"
+              {...rowActionKind('update')}
+              onClick={() => void openPlanEdit(row)}
+              >
+              {t('common.edit')}
+              </Button>,
+              );
               }
               if (row.status === 'draft' && row.id) {
-                actions.push(
-                  <Button
-                    key="release"
-                    {...rowActionKind('submit')}
-                    disabled={!perms.canAction('submit')}
-                    onClick={async () => {
-                      try {
-                        await supplierEvalPlanApi.release(row.id!);
-                        messageApi.success(t(`${P}.planReleaseSuccess`));
-                        reloadPlan();
-                      } catch (e) {
-                        messageApi.error(getApiErrorMessage(e));
-                      }
-                    }}
-                  >
-                    {t(`${P}.actionPlanRelease`)}
-                  </Button>,
-                );
+              actions.push(
+              <Button
+              key="release"
+              {...rowActionKind('submit')}
+              disabled={!perms.canAction('submit')}
+              onClick={async () => {
+              try {
+              await supplierEvalPlanApi.release(row.id!);
+              messageApi.success(t(`${P}.planReleaseSuccess`));
+              reloadPlan();
+              } catch (e) {
+              messageApi.error(getApiErrorMessage(e));
+              }
+              }}
+              >
+              {t(`${P}.actionPlanRelease`)}
+              </Button>,
+              );
               }
               if ((row.status === 'draft' || row.status === 'released') && row.id) {
-                actions.push(
-                  <Button
-                    key="generate"
-                    {...rowActionKind('execute')}
-                    disabled={!perms.canCreate}
-                    onClick={async () => {
-                      try {
-                        const res = await supplierEvalPlanApi.generate(row.id!);
-                        messageApi.success(
-                          t(`${P}.planGenerateSuccess`, {
-                            created: res.created,
-                            skipped: res.skipped,
-                          }),
-                        );
-                        reloadPlan();
-                        reloadEval();
-                      } catch (e) {
-                        messageApi.error(getApiErrorMessage(e));
-                      }
-                    }}
-                  >
-                    {t(`${P}.actionPlanGenerate`)}
-                  </Button>,
-                );
+              actions.push(
+              <Button
+              key="generate"
+              {...rowActionKind('execute')}
+              disabled={!perms.canCreate}
+              onClick={async () => {
+              try {
+              const res = await supplierEvalPlanApi.generate(row.id!);
+              messageApi.success(
+              t(`${P}.planGenerateSuccess`, {
+              created: res.created,
+              skipped: res.skipped,
+              }),
+              );
+              reloadPlan();
+              reloadEval();
+              } catch (e) {
+              messageApi.error(getApiErrorMessage(e));
+              }
+              }}
+              >
+              {t(`${P}.actionPlanGenerate`)}
+              </Button>,
+              );
               }
               if (row.status === 'released' && row.id && perms.canUpdate) {
-                actions.push(
-                  <Button
-                    key="reopen"
-                    {...rowActionKind('revoke')}
-                    onClick={async () => {
-                      try {
-                        await supplierEvalPlanApi.reopenDraft(row.id!);
-                        messageApi.success(t(`${P}.planReopenSuccess`));
-                        reloadPlan();
-                      } catch (e) {
-                        messageApi.error(getApiErrorMessage(e));
-                      }
-                    }}
-                  >
-                    {t(`${P}.actionPlanReopen`)}
-                  </Button>,
-                );
+              actions.push(
+              <Button
+              key="reopen"
+              {...rowActionKind('revoke')}
+              onClick={async () => {
+              try {
+              await supplierEvalPlanApi.reopenDraft(row.id!);
+              messageApi.success(t(`${P}.planReopenSuccess`));
+              reloadPlan();
+              } catch (e) {
+              messageApi.error(getApiErrorMessage(e));
+              }
+              }}
+              >
+              {t(`${P}.actionPlanReopen`)}
+              </Button>,
+              );
               }
               if (row.status !== 'closed' && row.id && perms.canUpdate) {
-                actions.push(
-                  <Button
-                    key="close"
-                    {...rowActionKind('close')}
-                    onClick={async () => {
-                      try {
-                        await supplierEvalPlanApi.close(row.id!);
-                        messageApi.success(t(`${P}.planCloseSuccess`));
-                        reloadPlan();
-                      } catch (e) {
-                        messageApi.error(getApiErrorMessage(e));
-                      }
-                    }}
-                  >
-                    {t(`${P}.actionPlanClose`)}
-                  </Button>,
-                );
+              actions.push(
+              <Button
+              key="close"
+              {...rowActionKind('close')}
+              onClick={async () => {
+              try {
+              await supplierEvalPlanApi.close(row.id!);
+              messageApi.success(t(`${P}.planCloseSuccess`));
+              reloadPlan();
+              } catch (e) {
+              messageApi.error(getApiErrorMessage(e));
+              }
+              }}
+              >
+              {t(`${P}.actionPlanClose`)}
+              </Button>,
+              );
               }
               return actions;
             },
@@ -946,772 +907,560 @@ const SupplierEvaluationsPage: React.FC = () => {
   );
 
   const evalColumns: ProColumns<SupplierEvaluation>[] = useMemo(
-
     () =>
-
       alignProColumns(
-
         [
-
           {
-
             title: t(`${P}.colSupplier`),
-
             dataIndex: 'supplier_name',
-
             key: 'supplier_name',
-
-            ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-
+            minWidth: 200,
+            uniTableRemainderFlex: true,
+            uniTablePrimaryFlex: true,
+            resizable: false,
+            ellipsis: false,
             render: (_, record) => (
-
               <UniTableStackedPrimaryCell
-
                 primary={record.supplier_name || '-'}
-
                 secondary={record.code || '-'}
-
               />
-
             ),
-
           },
-
           {
-
             title: t(`${P}.colTemplate`),
-
             dataIndex: 'template_name',
-
             key: 'template_name',
-
             hideInSearch: true,
-
+            width: 160,
+            minWidth: 160,
+            uniTableKeepWidth: true,
+            resizable: false,
             ellipsis: true,
-
           },
-
           {
-
             title: t(`${P}.colPeriodType`),
-
             dataIndex: 'period_type',
-
+            key: 'supplier_eval_period_type',
             valueType: 'select',
-
             fieldProps: { options: periodOptions },
-
             ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
-
             render: (_, record) => (
-
               <MarkerTag color="blue">
-
                 {t(`${P}.periodType.${record.period_type || 'annual'}`)}
-
               </MarkerTag>
-
             ),
-
           },
-
           {
-
             title: t(`${P}.colPeriodYear`),
-
             dataIndex: 'period_year',
-
+            key: 'supplier_eval_period_year',
             hideInSearch: true,
-
+            width: 100,
+            minWidth: 100,
+            uniTableKeepWidth: true,
+            resizable: false,
           },
-
           {
-
             title: t(`${P}.colPeriodQuarter`),
-
             dataIndex: 'period_quarter',
-
+            key: 'supplier_eval_period_quarter',
             hideInSearch: true,
-
+            width: 100,
+            minWidth: 100,
+            uniTableKeepWidth: true,
+            resizable: false,
             render: (_, record) =>
-
               record.period_type === 'quarterly' && record.period_quarter
-
                 ? t(`${P}.quarterOption`, { quarter: record.period_quarter })
-
                 : '-',
-
           },
-
           {
-
             title: t(`${P}.colScore`),
-
             dataIndex: 'score',
-
+            key: 'supplier_eval_score',
             hideInSearch: true,
-
+            width: 88,
+            minWidth: 88,
+            uniTableKeepWidth: true,
+            resizable: false,
           },
-
           {
-
             title: t(`${P}.colGrade`),
-
             dataIndex: 'grade',
-
+            key: 'supplier_eval_grade',
             hideInSearch: true,
-
+            width: 80,
+            minWidth: 80,
+            uniTableKeepWidth: true,
+            resizable: false,
           },
-
           {
-
             title: t(`${P}.colRectificationStatus`),
-
             dataIndex: 'rectification_status',
-
-            key: 'rectification_status',
-
+            key: 'supplier_eval_rectification',
             hideInSearch: true,
-
             ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
-
             render: (_, record) => renderRectificationStatus(record.rectification_status),
-
           },
-
           {
-
             title: t(`${P}.colAuditMode`),
-
             dataIndex: 'audit_mode',
-
+            key: 'supplier_eval_audit_mode',
             valueType: 'select',
-
             fieldProps: { options: auditModeOptions, allowClear: true },
-
             ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
-
             render: (_, record) => (
-
               <MarkerTag color="geekblue">
-
                 {t(`${P}.auditMode.${record.audit_mode || 'document'}`)}
-
               </MarkerTag>
-
             ),
-
           },
-
           {
-
             title: t('common.status'),
-
             dataIndex: 'status',
-
             key: 'lifecycle',
-
             valueType: 'select',
-
             valueEnum: statusEnum,
-
             fixed: 'right',
-
             render: (_, record) =>
               renderDocumentStatusTag(
                 t(`${P}.status.${record.status || 'draft'}`),
                 record.status || 'draft',
               ),
-
           },
-
           ...buildDocumentAuditColumns<SupplierEvaluation>(t),
-
           {
-
             title: t('common.actions'),
-
             key: 'option',
-
             fixed: 'right',
-
             hideInSearch: true,
-
             render: (_, row) => {
 
               const actions: React.ReactNode[] = [
 
-                <Button key="view" {...rowActionKind('read')} onClick={() => void openDetail(row)}>
+              <Button key="view" {...rowActionKind('read')} onClick={() => void openDetail(row)}>
 
-                  {t('common.detail')}
+              {t('common.detail')}
 
-                </Button>,
+              </Button>,
 
               ];
 
               if (row.status === 'draft' || row.status === 'rejected') {
 
-                actions.push(
+              actions.push(
 
-                  <Button
+              <Button
 
-                    key="edit"
+              key="edit"
 
-                    {...rowActionKind('update')}
+              {...rowActionKind('update')}
 
-                    disabled={!perms.canUpdate}
+              disabled={!perms.canUpdate}
 
-                    onClick={() => void openEvalEdit(row)}
+              onClick={() => void openEvalEdit(row)}
 
-                  >
+              >
 
-                    {t('common.edit')}
+              {t('common.edit')}
 
-                  </Button>,
+              </Button>,
 
-                );
+              );
 
               }
 
               if ((row.status === 'draft' || row.status === 'rejected') && row.id) {
 
-                actions.push(
+              actions.push(
 
-                  <Button
+              <Button
 
-                    key="recalculate"
+              key="recalculate"
 
-                    {...rowActionKind('execute')}
+              {...rowActionKind('execute')}
 
-                    disabled={!perms.canUpdate}
+              disabled={!perms.canUpdate}
 
-                    onClick={async () => {
+              onClick={async () => {
 
-                      try {
+              try {
 
-                        await supplierEvaluationApi.recalculate(row.id!);
+              await supplierEvaluationApi.recalculate(row.id!);
 
-                        messageApi.success(t(`${P}.recalculateSuccess`));
+              messageApi.success(t(`${P}.recalculateSuccess`));
 
-                        reloadEval();
+              reloadEval();
 
-                      } catch (e) {
+              } catch (e) {
 
-                        messageApi.error(getApiErrorMessage(e));
+              messageApi.error(getApiErrorMessage(e));
 
-                      }
+              }
 
-                    }}
+              }}
 
-                  >
+              >
 
-                    {t(`${P}.actionRecalculate`)}
+              {t(`${P}.actionRecalculate`)}
 
-                  </Button>,
+              </Button>,
 
-                );
+              );
 
-                actions.push(
+              actions.push(
 
-                  <Button
+              <Button
 
-                    key="submit"
+              key="submit"
 
-                    {...rowActionKind('submit')}
+              {...rowActionKind('submit')}
 
-                    disabled={!perms.canAction('submit')}
+              disabled={!perms.canAction('submit')}
 
-                    onClick={async () => {
+              onClick={async () => {
 
-                      try {
+              try {
 
-                        await supplierEvaluationApi.submit(row.id!);
+              await supplierEvaluationApi.submit(row.id!);
 
-                        messageApi.success(t(`${P}.submitSuccess`));
+              messageApi.success(t(`${P}.submitSuccess`));
 
-                        reloadEval();
+              reloadEval();
 
-                      } catch (e) {
+              } catch (e) {
 
-                        messageApi.error(getApiErrorMessage(e));
+              messageApi.error(getApiErrorMessage(e));
 
-                      }
+              }
 
-                    }}
+              }}
 
-                  >
+              >
 
-                    {t(`${P}.actionSubmit`)}
+              {t(`${P}.actionSubmit`)}
 
-                  </Button>,
+              </Button>,
 
-                );
+              );
 
               }
 
               if (row.status === 'pending' && row.id) {
 
-                if (perms.canAction('approve')) {
+              if (perms.canAction('approve')) {
 
-                  actions.push(
+              actions.push(
 
-                    <Button
+              <Button
 
-                      key="approve"
+              key="approve"
 
-                      {...rowActionKind('approve')}
+              {...rowActionKind('approve')}
 
-                      onClick={async () => {
+              onClick={async () => {
 
-                        try {
+              try {
 
-                          await supplierEvaluationApi.approve(row.id!);
+              await supplierEvaluationApi.approve(row.id!);
 
-                          messageApi.success(t(`${P}.approveSuccess`));
+              messageApi.success(t(`${P}.approveSuccess`));
 
-                          reloadEval();
+              reloadEval();
 
-                        } catch (e) {
+              } catch (e) {
 
-                          messageApi.error(getApiErrorMessage(e));
+              messageApi.error(getApiErrorMessage(e));
 
-                        }
+              }
 
-                      }}
+              }}
 
-                    />,
+              />,
 
-                  );
+              );
 
-                }
+              }
 
-                if (perms.canAction('reject')) {
+              if (perms.canAction('reject')) {
 
-                  actions.push(
+              actions.push(
 
-                    <Button
+              <Button
 
-                      key="reject"
+              key="reject"
 
-                      {...rowActionKind('reject')}
+              {...rowActionKind('reject')}
 
-                      onClick={async () => {
+              onClick={async () => {
 
-                        try {
+              try {
 
-                          await supplierEvaluationApi.reject(row.id!);
+              await supplierEvaluationApi.reject(row.id!);
 
-                          messageApi.success(t(`${P}.rejectSuccess`));
+              messageApi.success(t(`${P}.rejectSuccess`));
 
-                          reloadEval();
+              reloadEval();
 
-                        } catch (e) {
+              } catch (e) {
 
-                          messageApi.error(getApiErrorMessage(e));
+              messageApi.error(getApiErrorMessage(e));
 
-                        }
+              }
 
-                      }}
+              }}
 
-                    />,
+              />,
 
-                  );
+              );
 
-                }
+              }
 
               }
 
               if (canCloseRectification(row)) {
 
-                actions.push(
+              actions.push(
 
-                  <Button
+              <Button
 
-                    key="closeRect"
+              key="closeRect"
 
-                    {...rowActionKind('close')}
+              {...rowActionKind('close')}
 
-                    disabled={!perms.canUpdate}
+              disabled={!perms.canUpdate}
 
-                    onClick={() => openCloseRectification(row)}
+              onClick={() => openCloseRectification(row)}
 
-                  >
+              >
 
-                    {t(`${P}.actionCloseRectification`)}
+              {t(`${P}.actionCloseRectification`)}
 
-                  </Button>,
+              </Button>,
 
-                );
+              );
 
               }
 
               return actions;
-
             },
-
           },
-
         ],
-
         GLOBAL_DOC_LIST_FIELD_RANK,
-
       ),
-
     [t, periodOptions, auditModeOptions, statusEnum, perms, messageApi, reloadEval],
-
   );
-
-
 
   const templateColumns: ProColumns<SupplierEvalTemplate>[] = useMemo(
-
     () =>
-
       alignProColumns(
-
         [
-
           {
-
             title: t(`${P}.colTemplate`),
-
             dataIndex: 'name',
-
             key: 'name',
-
-            ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-
+            minWidth: 200,
+            uniTableRemainderFlex: true,
+            uniTablePrimaryFlex: true,
+            resizable: false,
+            ellipsis: false,
             render: (_, record) => (
-
               <UniTableStackedPrimaryCell
-
                 primary={record.name}
-
                 secondary={record.code || '-'}
-
               />
-
             ),
-
           },
-
           {
-
             title: t(`${P}.colTemplateVersion`),
-
             dataIndex: 'version',
-
+            key: 'supplier_eval_template_version',
             hideInSearch: true,
-
-            width: 88,
-
+            width: 100,
+            minWidth: 100,
             uniTableKeepWidth: true,
-
+            resizable: false,
           },
-
           {
-
             title: t(`${P}.colGradeVersion`),
-
             dataIndex: 'grade_version',
-
+            key: 'supplier_eval_grade_version',
             hideInSearch: true,
-
-            width: 96,
-
+            width: 100,
+            minWidth: 100,
             uniTableKeepWidth: true,
-
+            resizable: false,
           },
-
           {
-
             title: t(`${P}.colPeriodType`),
-
             dataIndex: 'period_type',
-
+            key: 'supplier_eval_period_type',
             valueType: 'select',
-
             fieldProps: { options: periodOptions, allowClear: true },
-
             ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
-
             render: (_, record) =>
-
               record.period_type ? (
-
                 <MarkerTag color="blue">
-
                   {t(`${P}.periodType.${record.period_type}`)}
-
                 </MarkerTag>
-
               ) : (
-
                 '-'
-
               ),
-
           },
-
           {
-
             title: t(`${P}.colClauseCount`),
-
             dataIndex: 'clause_count',
-
+            key: 'supplier_eval_clause_count',
             hideInSearch: true,
-
             width: 88,
-
+            minWidth: 88,
             uniTableKeepWidth: true,
-
+            resizable: false,
           },
-
           {
-
             title: t(`${P}.colTemplateActive`),
-
             dataIndex: 'is_active',
-
             valueType: 'select',
-
             valueEnum: {
-
               true: { text: t(`${P}.templateActiveYes`) },
-
               false: { text: t(`${P}.templateActiveNo`) },
-
             },
-
             ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
-
             render: (_, record) =>
-
               record.is_active ? (
-
                 <MarkerTag color="success">{t(`${P}.templateActiveYes`)}</MarkerTag>
-
               ) : (
-
                 <MarkerTag color="default">{t(`${P}.templateActiveNo`)}</MarkerTag>
-
               ),
-
           },
-
           ...buildDocumentAuditColumns<SupplierEvalTemplate>(t),
-
           {
-
             title: t('common.actions'),
-
             key: 'option',
-
             fixed: 'right',
-
             hideInSearch: true,
-
             render: (_, row) => [
-
               perms.canUpdate ? (
-
-                <Button
-
-                  key="edit"
-
-                  {...rowActionKind('update')}
-
-                  onClick={() => void openTemplateEdit(row)}
-
-                >
-
-                  {t('common.edit')}
-
-                </Button>
-
+              <Button
+              key="edit"
+              {...rowActionKind('update')}
+              onClick={() => void openTemplateEdit(row)}
+              >
+              {t('common.edit')}
+              </Button>
               ) : null,
-
             ].filter(Boolean),
-
           },
-
         ],
-
         GLOBAL_DOC_LIST_FIELD_RANK,
-
       ),
-
     [t, periodOptions, perms.canUpdate],
-
   );
-
-
 
   const envColumns: ProColumns<SupplierEvalEnvDocument>[] = useMemo(
-
     () =>
-
       alignProColumns(
-
         [
-
           {
-
             title: t(`${P}.colSupplier`),
-
             dataIndex: 'supplier_name',
-
             key: 'supplier_name',
-
-            ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-
+            minWidth: 200,
+            uniTableRemainderFlex: true,
+            uniTablePrimaryFlex: true,
+            resizable: false,
+            ellipsis: false,
             render: (_, record) => (
-
               <UniTableStackedPrimaryCell
-
                 primary={record.title || '-'}
-
                 secondary={
-
                   [record.supplier_code, record.supplier_name].filter(Boolean).join(' ') || '-'
-
                 }
-
               />
-
             ),
-
           },
-
           {
-
             title: t(`${P}.colMaterial`),
-
             dataIndex: 'material_code',
-
-            key: 'material_code',
-
+            key: 'supplier_eval_env_material',
             hideInSearch: true,
-
-            render: (_, record) =>
-
-              [record.material_code, record.material_name].filter(Boolean).join(' ') || '-',
-
-          },
-
-          {
-
-            title: t(`${P}.colMaterialDescription`),
-
-            dataIndex: 'material_description',
-
-            key: 'material_description',
-
-            hideInSearch: true,
-
+            width: 160,
+            minWidth: 160,
+            uniTableKeepWidth: true,
+            resizable: false,
             ellipsis: true,
-
+            render: (_, record) =>
+              [record.material_code, record.material_name].filter(Boolean).join(' ') || '-',
           },
-
           {
-
+            title: t(`${P}.colMaterialDescription`),
+            dataIndex: 'material_description',
+            key: 'supplier_eval_env_material_desc',
+            hideInSearch: true,
+            width: 160,
+            minWidth: 160,
+            uniTableKeepWidth: true,
+            resizable: false,
+            ellipsis: true,
+          },
+          {
             title: t(`${P}.colEnvDocType`),
-
             dataIndex: 'doc_type',
-
+            key: 'supplier_eval_env_doc_type',
             valueType: 'select',
-
             fieldProps: { options: envDocTypeOptions },
-
             ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
-
             render: (_, record) => (
-
               <MarkerTag color="cyan">
-
                 {t(`${P}.envDocType.${record.doc_type || 'other'}`)}
-
               </MarkerTag>
-
             ),
-
           },
-
           {
-
             title: t(`${P}.colIssuedAt`),
-
             dataIndex: 'issued_at',
-
             hideInSearch: true,
-
+            width: 120,
+            minWidth: 120,
+            uniTableKeepWidth: true,
+            resizable: false,
             render: (v) => formatBusinessDateOnly(v),
-
           },
-
           {
-
             title: t(`${P}.colExpiresAt`),
-
             dataIndex: 'expires_at',
-
             hideInSearch: true,
-
+            width: 120,
+            minWidth: 120,
+            uniTableKeepWidth: true,
+            resizable: false,
             render: (v) => formatBusinessDateOnly(v),
-
           },
-
           ...buildDocumentAuditColumns<SupplierEvalEnvDocument>(t),
-
           {
-
             title: t('common.actions'),
-
             key: 'option',
-
             fixed: 'right',
-
             hideInSearch: true,
-
             render: (_, row) => [
-
               <Button
-
-                key="edit"
-
-                {...rowActionKind('update')}
-
-                disabled={!perms.canUpdate}
-
-                onClick={() => {
-
-                  setEditingEnv(row);
-
-                  setEnvModalOpen(true);
-
-                }}
-
+              key="edit"
+              {...rowActionKind('update')}
+              disabled={!perms.canUpdate}
+              onClick={() => {
+              setEditingEnv(row);
+              setEnvModalOpen(true);
+              }}
               >
-
-                {t('common.edit')}
-
+              {t('common.edit')}
               </Button>,
-
             ],
-
           },
-
         ],
-
         GLOBAL_DOC_LIST_FIELD_RANK,
-
       ),
-
-    [t, envDocTypeOptions, perms],
-
+    [t, envDocTypeOptions, perms.canUpdate],
   );
-
-
 
   const detailColumns: ProDescriptionsItemProps<SupplierEvaluation>[] = useMemo(
 
@@ -1875,11 +1624,7 @@ const SupplierEvaluationsPage: React.FC = () => {
 
   );
 
-
-
   const detailItems = useDetailDrawerDescriptionItems(detailColumns, detail, 'supplier_evaluation');
-
-
 
   const templateClauseColumns = useMemo<ColumnsType>(
 
@@ -1987,8 +1732,6 @@ const SupplierEvaluationsPage: React.FC = () => {
 
   );
 
-
-
   const evalScoreLineColumns = useMemo<ColumnsType>(
     () => [
       {
@@ -2090,8 +1833,6 @@ const SupplierEvaluationsPage: React.FC = () => {
       }));
   }, [summaryData]);
 
-
-
   const detailLineColumns = useMemo(
 
     () => [
@@ -2112,8 +1853,6 @@ const SupplierEvaluationsPage: React.FC = () => {
 
   );
 
-
-
   const detailExtra = detail && canCloseRectification(detail) && perms.canUpdate ? (
 
     <Button type="primary" onClick={() => openCloseRectification(detail)}>
@@ -2123,8 +1862,6 @@ const SupplierEvaluationsPage: React.FC = () => {
     </Button>
 
   ) : undefined;
-
-
 
   return (
 
@@ -2150,7 +1887,7 @@ const SupplierEvaluationsPage: React.FC = () => {
 
               <UniTable<SupplierEvalPlan>
 
-                columnPersistenceId="apps.kuaizhizao.pages.quality-management.supplier-evaluations-plan-v1"
+                columnPersistenceId="apps.kuaizhizao.pages.quality-management.supplier-evaluations-plan-width-v2"
 
                 headerTitle={t(`${P}.tabPlan`)}
 
@@ -2178,7 +1915,7 @@ const SupplierEvaluationsPage: React.FC = () => {
 
                 showCreateButton={perms.canCreate}
 
-                createButtonText={`${t(`${P}.createPlan`)}${NEW_SHORTCUT_HINT}`}
+                createButtonText={t(`${P}.createPlan`)}
 
                 onCreate={openPlanCreate}
 
@@ -2472,7 +2209,7 @@ const SupplierEvaluationsPage: React.FC = () => {
 
               <UniTable<SupplierEvaluation>
 
-                columnPersistenceId="apps.kuaizhizao.pages.quality-management.supplier-evaluations-eval-v3"
+                columnPersistenceId="apps.kuaizhizao.pages.quality-management.supplier-evaluations-eval-width-v4"
 
                 headerTitle={t(`${P}.title`)}
 
@@ -2498,7 +2235,7 @@ const SupplierEvaluationsPage: React.FC = () => {
 
                 showCreateButton={perms.canCreate}
 
-                createButtonText={`${t(`${P}.createEval`)}${NEW_SHORTCUT_HINT}`}
+                createButtonText={t(`${P}.createEval`)}
 
                 onCreate={openEvalCreate}
 
@@ -2588,7 +2325,7 @@ const SupplierEvaluationsPage: React.FC = () => {
 
               <UniTable<SupplierEvalEnvDocument>
 
-                columnPersistenceId="apps.kuaizhizao.pages.quality-management.supplier-evaluations-env-v3"
+                columnPersistenceId="apps.kuaizhizao.pages.quality-management.supplier-evaluations-env-width-v4"
 
                 headerTitle={t(`${P}.tabEnv`)}
 
@@ -2662,7 +2399,7 @@ const SupplierEvaluationsPage: React.FC = () => {
 
               <UniTable<SupplierEvalTemplate>
 
-                columnPersistenceId="apps.kuaizhizao.pages.quality-management.supplier-evaluations-template-v2"
+                columnPersistenceId="apps.kuaizhizao.pages.quality-management.supplier-evaluations-template-width-v3"
 
                 headerTitle={t(`${P}.tabTemplate`)}
 
@@ -2729,8 +2466,6 @@ const SupplierEvaluationsPage: React.FC = () => {
         ]}
 
       />
-
-
 
       <FormModalTemplate
 
@@ -2984,8 +2719,6 @@ const SupplierEvaluationsPage: React.FC = () => {
 
         </Row>
 
-
-
         <UniTableDetail
 
           name="lines"
@@ -3006,8 +2739,6 @@ const SupplierEvaluationsPage: React.FC = () => {
 
         />
 
-
-
         <Row gutter={16}>
 
           <Col span={24}>
@@ -3019,8 +2750,6 @@ const SupplierEvaluationsPage: React.FC = () => {
         </Row>
 
       </FormModalTemplate>
-
-
 
       <FormModalTemplate
 
@@ -3286,8 +3015,6 @@ const SupplierEvaluationsPage: React.FC = () => {
 
         </ProFormDependency>
 
-
-
         <UniTableDetail
 
           name="lines"
@@ -3308,8 +3035,6 @@ const SupplierEvaluationsPage: React.FC = () => {
 
         />
 
-
-
         <Row gutter={16}>
 
           <Col span={24}>
@@ -3321,8 +3046,6 @@ const SupplierEvaluationsPage: React.FC = () => {
         </Row>
 
       </FormModalTemplate>
-
-
 
       <FormModalTemplate
 
@@ -3556,8 +3279,6 @@ const SupplierEvaluationsPage: React.FC = () => {
 
         </ProFormItem>
 
-
-
         <UniTableDetail
 
           name="clauses"
@@ -3574,8 +3295,6 @@ const SupplierEvaluationsPage: React.FC = () => {
 
         />
 
-
-
         <Row gutter={16}>
 
           <Col span={24}>
@@ -3587,8 +3306,6 @@ const SupplierEvaluationsPage: React.FC = () => {
         </Row>
 
       </FormModalTemplate>
-
-
 
       <FormModalTemplate
 
@@ -3784,8 +3501,6 @@ const SupplierEvaluationsPage: React.FC = () => {
 
       </FormModalTemplate>
 
-
-
       <DetailDrawerTemplate
 
         title={detail?.code || t(`${P}.title`)}
@@ -3859,8 +3574,6 @@ const SupplierEvaluationsPage: React.FC = () => {
         }
 
       />
-
-
 
       <Modal
         title={t('core.extensionHost.supplierAuditPlan.modalTitle')}
@@ -3944,8 +3657,6 @@ const SupplierEvaluationsPage: React.FC = () => {
   );
 
 };
-
-
 
 export default SupplierEvaluationsPage;
 

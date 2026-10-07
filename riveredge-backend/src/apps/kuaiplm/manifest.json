@@ -53,52 +53,58 @@
         "sort_order": 2,
         "children": [
           {
+            "title": "app.kuaiplm.menu.rd-deliverables",
+            "path": "/apps/kuaiplm/rd-deliverables",
+            "permission": "kuaiplm:project:read",
+            "sort_order": 1
+          },
+          {
             "title": "app.kuaiplm.menu.product-firmwares",
             "path": "/apps/kuaiplm/product-firmwares",
             "permission": "kuaiplm:product-firmware:read",
-            "sort_order": 1
+            "sort_order": 2
           },
           {
             "title": "app.kuaiplm.menu.production-files",
             "path": "/apps/kuaiplm/production-files",
             "permission": "kuaiplm:production-file:read",
-            "sort_order": 2
+            "sort_order": 3
           },
           {
             "title": "app.kuaiplm.menu.sample-process",
             "path": "/apps/kuaiplm/sample-process-applications",
             "permission": "kuaiplm:sample-process:read",
-            "sort_order": 3
+            "sort_order": 4
           },
           {
             "title": "app.kuaiplm.menu.material-reviews",
             "path": "/apps/kuaiplm/material-reviews",
             "permission": "kuaiplm:material-review:read",
-            "sort_order": 4
+            "sort_order": 5
           },
           {
             "title": "app.kuaiplm.menu.bom-collaborations",
             "path": "/apps/kuaiplm/bom-collaborations",
             "permission": "kuaiplm:bom-collab:read",
-            "sort_order": 5
+            "sort_order": 6
           },
           {
             "title": "app.kuaiplm.menu.project-proposals",
             "path": "/apps/kuaiplm/project-proposals",
             "permission": "kuaiplm:project-proposal:read",
-            "sort_order": 6
+            "sort_order": 7
           },
           {
             "title": "app.kuaiplm.menu.mold-sample-orders",
             "path": "/apps/kuaiplm/mold-sample-orders",
             "permission": "kuaiplm:mold-sample:read",
-            "sort_order": 7
+            "sort_order": 8
           },
           {
             "title": "app.kuaiplm.menu.prototype-build-sheets",
             "path": "/apps/kuaiplm/prototype-build-sheets",
             "permission": "kuaiplm:prototype-build-sheet:read",
-            "sort_order": 8
+            "sort_order": 9
           },
           {
             "title": "app.kuaiplm.menu.trial-flows",

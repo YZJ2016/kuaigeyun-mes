@@ -1,14 +1,4 @@
 /**
- * 返工排位策划：快制造通用菜单已下线，能力由定制应用维护。
+ * 返工排位策划模板列表（宿主页；funide-oa / 电子制造行业包菜单共用此路由）
  */
-import React from 'react';
-import { DedicatedHostOfflinePage } from '../../../components/DedicatedHostOfflinePage';
-
-export default function ReworkPositionPlanTemplatesPage() {
-  return (
-    <DedicatedHostOfflinePage
-      titleKey="app.kuaizhizao.reworkPositionPlan.offlineTitle"
-      descriptionKey="app.kuaizhizao.reworkPositionPlan.offlineDescription"
-    />
-  );
-}
+export { default } from './ReworkPositionPlanTemplatesScreen';

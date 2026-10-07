@@ -5,6 +5,7 @@
 from fastapi import APIRouter
 
 from .projects import router as projects_router
+from .rd_deliverables import router as rd_deliverables_router
 from .knowledge import router as knowledge_router
 from .changes import router as changes_router
 from .dashboard import router as dashboard_router
@@ -29,6 +30,7 @@ from .routes_config import router as config_router
 router = APIRouter(tags=["App - Kuaiplm - Overview"])
 
 router.include_router(projects_router)
+router.include_router(rd_deliverables_router)
 router.include_router(knowledge_router)
 router.include_router(changes_router)
 router.include_router(dashboard_router)

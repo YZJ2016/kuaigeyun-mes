@@ -7,16 +7,15 @@ from typing import Any, List, Optional
 from apps.common.audit_actor import apply_create_audit, apply_update_audit
 from apps.common.base_service import AppBaseService
 from apps.kuaiplm.constants.project_proposal_template import (
-    CUSTOMER_MATERIAL_TYPES,
-    DEV_REQ_TYPES,
     DEV_REQ_TYPES_NEED_SUPPLIER,
-    PRODUCT_LINES,
+    PROJECT_PROPOSAL_CUSTOMER_MATERIAL_DICT,
+    PROJECT_PROPOSAL_DEV_REQ_TYPE_DICT,
+    PROJECT_PROPOSAL_PRODUCT_LINE_DICT,
     PROPOSING_DEPTS,
     SUPPLIER_ASSESSMENT_MATERIAL_KEYS,
     SUPPLIER_ASSESSMENT_MATERIALS,
 )
 from apps.kuaiplm.models.project_proposal import ProjectProposal
-from apps.kuaiplm.models.rd_project import RdProject
 from apps.kuaiplm.schemas.project_proposal import (
     ProjectProposalCreate,
     ProjectProposalListResponse,
@@ -27,6 +26,10 @@ from apps.kuaiplm.schemas.project_proposal import (
 )
 from core.services.approval.approval_instance_service import ApprovalInstanceService
 from core.services.approval.audit_binding_service import AuditBindingService
+from core.services.data.data_dictionary_service import (
+    DataDictionaryService,
+    normalize_dictionary_item_token,
+)
 from core.utils.timezone_utils import resolve_business_datetime
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 from infra.models.user import User
@@ -50,13 +53,16 @@ class ProjectProposalService(AppBaseService[ProjectProposal]):
             return raw
         return await self.generate_code(tenant_id, self.rule_code, prefix=self.code_prefix)
 
-    async def _require_project(self, tenant_id: int, project_id: int) -> RdProject:
-        project = await RdProject.filter(
-            tenant_id=tenant_id, id=project_id, deleted_at__isnull=True
-        ).first()
-        if not project:
-            raise ValidationError("研发项目不存在")
-        return project
+    @staticmethod
+    def _resolve_doc_title(title: Optional[str], project_name: str) -> str:
+        """标题选填；未填时用项目名称写入，保证列表/审批有可展示文案。"""
+        text = str(title or "").strip()
+        if text:
+            return text
+        name = str(project_name or "").strip()
+        if not name:
+            raise ValidationError("请填写项目名称或标题")
+        return name
 
     async def _get_row(self, tenant_id: int, proposal_id: int) -> ProjectProposal:
         row = await ProjectProposal.filter(
@@ -66,21 +72,33 @@ class ProjectProposalService(AppBaseService[ProjectProposal]):
             raise NotFoundError("项目建议书不存在")
         return row
 
-    def _normalize_str_list(self, raw: Optional[List[str]], allowed: frozenset[str], label: str) -> List[str]:
+    async def _normalize_dict_str_list(
+        self,
+        tenant_id: int,
+        raw: Optional[List[str]],
+        dict_code: str,
+        label: str,
+    ) -> List[str]:
+        """按系统数据字典校验多选值；未知项报错（禁止静默丢弃）。"""
         if not raw:
             return []
+        label_map = await DataDictionaryService.get_dictionary_label_map(tenant_id, dict_code)
+        if not label_map:
+            raise ValidationError(f"{label}字典未初始化，请先加载系统字典")
+        by_ci = {normalize_dictionary_item_token(k).casefold(): k for k in label_map}
         out: List[str] = []
         for item in raw:
-            if label == "开发要求分类":
-                key = str(item or "").strip().upper()
-            else:
-                key = str(item or "").strip().lower()
+            key = normalize_dictionary_item_token(item)
             if not key:
                 continue
-            if key not in allowed:
+            if key in label_map:
+                canonical = key
+            else:
+                canonical = by_ci.get(key.casefold())
+            if not canonical:
                 raise ValidationError(f"非法{label}: {item}")
-            if key not in out:
-                out.append(key)
+            if canonical not in out:
+                out.append(canonical)
         return out
 
     def _normalize_optional_text(self, value: Optional[str], *, max_len: int) -> Optional[str]:
@@ -133,10 +151,15 @@ class ProjectProposalService(AppBaseService[ProjectProposal]):
         normalized = {str(x).strip().upper() for x in (dev_req_types or []) if str(x).strip()}
         return bool(normalized & DEV_REQ_TYPES_NEED_SUPPLIER)
 
-    def _apply_sales_fields(self, row: ProjectProposal, payload: ProjectProposalCreate | ProjectProposalUpdate) -> None:
+    async def _apply_sales_fields(
+        self,
+        tenant_id: int,
+        row: ProjectProposal,
+        payload: ProjectProposalCreate | ProjectProposalUpdate,
+    ) -> None:
         data = payload.model_dump(exclude_unset=True)
-        if "title" in data and data["title"] is not None:
-            row.title = str(data["title"]).strip()
+        if "title" in data:
+            row.title = str(data["title"] or "").strip()
         for field in (
             "summary",
             "expected_date",
@@ -149,6 +172,8 @@ class ProjectProposalService(AppBaseService[ProjectProposal]):
             if field in data:
                 setattr(row, field, data[field])
         text_fields = {
+            "project_code": 50,
+            "project_name": 200,
             "customer_name": 200,
             "proposer_name": 100,
             "sample_quantity": 80,
@@ -163,13 +188,26 @@ class ProjectProposalService(AppBaseService[ProjectProposal]):
             if field in data:
                 setattr(row, field, self._normalize_optional_text(data[field], max_len=max_len))
         if "product_lines" in data and data["product_lines"] is not None:
-            row.product_lines = self._normalize_str_list(data["product_lines"], PRODUCT_LINES, "产品类型")
+            row.product_lines = await self._normalize_dict_str_list(
+                tenant_id,
+                data["product_lines"],
+                PROJECT_PROPOSAL_PRODUCT_LINE_DICT,
+                "产品类型",
+            )
         if "customer_material_types" in data and data["customer_material_types"] is not None:
-            row.customer_material_types = self._normalize_str_list(
-                data["customer_material_types"], CUSTOMER_MATERIAL_TYPES, "客户资料类型"
+            row.customer_material_types = await self._normalize_dict_str_list(
+                tenant_id,
+                data["customer_material_types"],
+                PROJECT_PROPOSAL_CUSTOMER_MATERIAL_DICT,
+                "客户资料类型",
             )
         if "dev_req_types" in data and data["dev_req_types"] is not None:
-            row.dev_req_types = self._normalize_str_list(data["dev_req_types"], DEV_REQ_TYPES, "开发要求分类")
+            row.dev_req_types = await self._normalize_dict_str_list(
+                tenant_id,
+                data["dev_req_types"],
+                PROJECT_PROPOSAL_DEV_REQ_TYPE_DICT,
+                "开发要求分类",
+            )
         if "proposing_dept" in data:
             dept = self._normalize_optional_text(data.get("proposing_dept"), max_len=32)
             if dept and dept not in PROPOSING_DEPTS:
@@ -179,7 +217,12 @@ class ProjectProposalService(AppBaseService[ProjectProposal]):
     async def create(
         self, tenant_id: int, payload: ProjectProposalCreate, user: User
     ) -> ProjectProposalResponse:
-        project = await self._require_project(tenant_id, payload.project_id)
+        project_code = str(payload.project_code or "").strip()
+        project_name = str(payload.project_name or "").strip()
+        if not project_code:
+            raise ValidationError("请填写项目代号")
+        if not project_name:
+            raise ValidationError("请填写项目名称")
         code = await self._ensure_code(tenant_id, payload.proposal_code)
         exists = await ProjectProposal.filter(
             tenant_id=tenant_id, proposal_code=code, deleted_at__isnull=True
@@ -190,17 +233,18 @@ class ProjectProposalService(AppBaseService[ProjectProposal]):
         row = ProjectProposal(
             tenant_id=tenant_id,
             proposal_code=code,
-            project_id=project.id,
-            project_code=project.project_code,
-            project_name=project.project_name,
-            title=payload.title.strip(),
+            project_id=None,
+            project_code=project_code,
+            project_name=project_name,
+            title=self._resolve_doc_title(payload.title, project_name),
             status="draft",
             product_lines=[],
             customer_material_types=[],
             dev_req_types=[],
             supplier_assessment_lines=self._default_supplier_lines(),
         )
-        self._apply_sales_fields(row, payload)
+        await self._apply_sales_fields(tenant_id, row, payload)
+        row.title = self._resolve_doc_title(row.title, row.project_name)
         apply_create_audit(row, user)
         await row.save()
         return ProjectProposalResponse.model_validate(row)
@@ -241,7 +285,8 @@ class ProjectProposalService(AppBaseService[ProjectProposal]):
         row = await self._get_row(tenant_id, proposal_id)
         if row.status not in {"draft", "rejected"}:
             raise BusinessLogicError("仅草稿或已驳回可编辑")
-        self._apply_sales_fields(row, payload)
+        await self._apply_sales_fields(tenant_id, row, payload)
+        row.title = self._resolve_doc_title(row.title, row.project_name)
         apply_update_audit(row, user)
         await row.save()
         return ProjectProposalResponse.model_validate(row)

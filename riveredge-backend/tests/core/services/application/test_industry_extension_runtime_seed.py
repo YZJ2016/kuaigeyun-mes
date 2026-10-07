@@ -29,6 +29,8 @@ def test_electronics_builtin_seeds_cover_manifest_profile_keys():
     assert profile_keys == {
         "kuaiplm.sample_process",
         "kuaiplm.bom_collab",
+        "kuaiplm.trial_flow",
+        "kuaiplm.rd_deliverable",
     }
     for key in profile_keys:
         seed = IndustryExtensionRuntimeService._builtin_seed("ind-electronics", key)

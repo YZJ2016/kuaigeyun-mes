@@ -138,7 +138,10 @@ class RdProjectDeliverableBase(BaseModel):
 
 
 class RdProjectDeliverableCreate(RdProjectDeliverableBase):
-    pass
+    project_id: Optional[int] = Field(None, description="可选关联研发项目")
+    project_code: Optional[str] = Field(
+        None, max_length=50, description="无项目时必填（软件规格等）；有项目时由项目快照"
+    )
 
 
 class RdProjectDeliverableUpdate(BaseModel):
@@ -152,6 +155,7 @@ class RdProjectDeliverableUpdate(BaseModel):
     file_uuid: Optional[str] = None
     material_code: Optional[str] = Field(None, max_length=80)
     legacy_material_code: Optional[str] = Field(None, max_length=80)
+    project_code: Optional[str] = Field(None, max_length=50)
 
 
 class RdProjectDeliverableResponse(RdProjectDeliverableBase):
@@ -160,7 +164,8 @@ class RdProjectDeliverableResponse(RdProjectDeliverableBase):
     id: int
     uuid: str
     tenant_id: int
-    project_id: int
+    project_id: Optional[int] = None
+    project_code: Optional[str] = None
     submitted_at: Optional[datetime] = None
     approved_at: Optional[datetime] = None
     created_by: Optional[int] = None
@@ -175,7 +180,7 @@ class RdProjectDeliverableVersionResponse(BaseModel):
     id: int
     uuid: str
     deliverable_id: int
-    project_id: int
+    project_id: Optional[int] = None
     version: str
     status: str
     is_effective: bool = False
@@ -212,6 +217,11 @@ class RdProjectDeliverableReviseRequest(BaseModel):
 
 class RdProjectDeliverableRejectRequest(BaseModel):
     reason: Optional[str] = Field(None, max_length=500, description="驳回原因")
+
+
+class RdProjectDeliverableListResponse(BaseModel):
+    items: List[RdProjectDeliverableResponse]
+    total: int
 
 
 # ---------- Links ----------

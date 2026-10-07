@@ -15,8 +15,9 @@ class SupplierAssessmentLine(BaseModel):
 
 
 class ProjectProposalCreate(BaseModel):
-    project_id: int
-    title: str = Field(..., min_length=1, max_length=200)
+    project_code: str = Field(..., min_length=1, max_length=50)
+    project_name: str = Field(..., min_length=1, max_length=200)
+    title: Optional[str] = Field(None, max_length=200)
     proposal_code: Optional[str] = Field(None, max_length=50)
     summary: Optional[str] = None
     customer_name: Optional[str] = Field(None, max_length=200)
@@ -41,7 +42,9 @@ class ProjectProposalCreate(BaseModel):
 
 
 class ProjectProposalUpdate(BaseModel):
-    title: Optional[str] = Field(None, min_length=1, max_length=200)
+    project_code: Optional[str] = Field(None, min_length=1, max_length=50)
+    project_name: Optional[str] = Field(None, min_length=1, max_length=200)
+    title: Optional[str] = Field(None, max_length=200)
     summary: Optional[str] = None
     customer_name: Optional[str] = Field(None, max_length=200)
     expected_date: Optional[date] = None
@@ -80,7 +83,7 @@ class ProjectProposalResponse(BaseModel):
     id: int
     uuid: UUID
     proposal_code: str
-    project_id: int
+    project_id: Optional[int] = None
     project_code: str
     project_name: str
     title: str

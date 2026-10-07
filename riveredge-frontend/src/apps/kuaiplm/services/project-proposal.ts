@@ -22,7 +22,7 @@ export interface ProjectProposal {
   id: number;
   uuid: string;
   proposal_code: string;
-  project_id: number;
+  project_id?: number | null;
   project_code: string;
   project_name: string;
   title: string;
@@ -65,8 +65,9 @@ export interface ProjectProposal {
 }
 
 export interface ProjectProposalSalesPayload {
-  project_id: number;
-  title: string;
+  project_code: string;
+  project_name: string;
+  title?: string | null;
   summary?: string | null;
   customer_name?: string | null;
   expected_date?: string | null;
@@ -114,7 +115,7 @@ export const projectProposalApi = {
     const res = await api.post(BASE, data);
     return res as ProjectProposal;
   },
-  update: async (id: number, data: Partial<Omit<ProjectProposalSalesPayload, 'project_id'>>) => {
+  update: async (id: number, data: Partial<ProjectProposalSalesPayload>) => {
     const res = await api.put(`${BASE}/${id}`, data);
     return res as ProjectProposal;
   },

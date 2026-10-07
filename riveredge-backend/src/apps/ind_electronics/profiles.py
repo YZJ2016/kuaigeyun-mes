@@ -132,6 +132,8 @@ ELECTRONICS_TRIAL_FLOW_SEED: Dict[str, Any] = {
         "supplier_name": "供应商",
         "material_spec": "材料规格",
         "mold_no": "模号",
+        "designator": "位号",
+        "product_model": "试用产品型号",
         "inspection_date": "检验日期",
     },
     "header_fields": [
@@ -152,7 +154,9 @@ ELECTRONICS_TRIAL_FLOW_SEED: Dict[str, Any] = {
         {"key": "supplier_name", "label": "供应商", "sort": 115, "type": "text"},
         {"key": "material_spec", "label": "材料规格", "sort": 116, "type": "text"},
         {"key": "mold_no", "label": "模号", "sort": 117, "type": "text"},
-        {"key": "inspection_date", "label": "检验日期", "sort": 118, "type": "date"},
+        {"key": "designator", "label": "位号", "sort": 118, "type": "text"},
+        {"key": "product_model", "label": "试用产品型号", "sort": 119, "type": "text"},
+        {"key": "inspection_date", "label": "检验日期", "sort": 120, "type": "date"},
     ],
     "step_templates": {
         "component": [
@@ -226,6 +230,17 @@ ELECTRONICS_RD_DELIVERABLE_SEED: Dict[str, Any] = {
             "panel",
         ],
     },
+    # L53 项目图纸四类 / L57 规格书承认书（与命名规则同 profile，禁止二次赋值覆盖）
+    "drawing_types": [
+        {"code": "drawing_silkscreen", "label": "丝印图纸", "sort": 10, "active": True},
+        {"code": "drawing_assembly", "label": "总装图纸", "sort": 20, "active": True},
+        {"code": "drawing_packaging", "label": "包装图纸", "sort": 30, "active": True},
+        {"code": "drawing_pcb_assembly", "label": "线路板组件图纸", "sort": 40, "active": True},
+    ],
+    "customer_doc_types": [
+        {"code": "customer_spec", "label": "规格书", "sort": 10, "active": True},
+        {"code": "customer_approval", "label": "承认书", "sort": 20, "active": True},
+    ],
 }
 
 # ---------------------------------------------------------------------------
@@ -383,12 +398,13 @@ ELECTRONICS_SAMPLE_PROCESS_SEED: Dict[str, Any] = {
     "field_labels": {
         "material_code": "PCB 料号",
         "material_version": "PCB 版本",
+        "due_date": "期望交期",
     },
     "validation_rules": [
         {
             "when_kind_in": ["stencil", "smt"],
-            "require": ["material_code"],
-            "message": "钢网/SMT 申请须填写 PCB 料号",
+            "require": ["material_code", "due_date"],
+            "message": "钢网/SMT 申请须填写 PCB 料号与期望交期",
         }
     ],
 }
@@ -426,19 +442,6 @@ ELECTRONICS_LAB_REQUEST_SEED: Dict[str, Any] = {
             },
         ],
     },
-}
-
-ELECTRONICS_RD_DELIVERABLE_SEED: Dict[str, Any] = {
-    "drawing_types": [
-        {"code": "drawing_silkscreen", "label": "丝印图纸", "sort": 10, "active": True},
-        {"code": "drawing_assembly", "label": "总装图纸", "sort": 20, "active": True},
-        {"code": "drawing_packaging", "label": "包装图纸", "sort": 30, "active": True},
-        {"code": "drawing_pcb_assembly", "label": "线路板组件图纸", "sort": 40, "active": True},
-    ],
-    "customer_doc_types": [
-        {"code": "customer_spec", "label": "规格书", "sort": 10, "active": True},
-        {"code": "customer_approval", "label": "承认书", "sort": 20, "active": True},
-    ],
 }
 
 ELECTRONICS_BOM_COLLAB_SEED: Dict[str, Any] = {
@@ -480,6 +483,7 @@ ELECTRONICS_BOM_COLLAB_SEED: Dict[str, Any] = {
 ELECTRONICS_PROFILE_SEEDS_BY_KEY: Dict[str, Dict[str, Any]] = {
     "kuaiplm.sample_process": ELECTRONICS_SAMPLE_PROCESS_SEED,
     "kuaiplm.bom_collab": ELECTRONICS_BOM_COLLAB_SEED,
+    "kuaiplm.trial_flow": ELECTRONICS_TRIAL_FLOW_SEED,
     "kuaiplm.rd_deliverable": ELECTRONICS_RD_DELIVERABLE_SEED,
 }
 

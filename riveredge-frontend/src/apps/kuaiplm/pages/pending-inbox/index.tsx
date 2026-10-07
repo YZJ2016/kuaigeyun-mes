@@ -1,43 +1,46 @@
 /**
- * 跨项目待办（优先一联调收口）
- * 聚合 R-15 / R-08 / R-04 待审单据；路由 /apps/kuaiplm/pending-inbox
+ * 跨项目待办 — 聚合看板
+ * 按单据类型分列；点击卡片进入对应业务列表。
  */
 
-import React, { useCallback, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import type { ProColumns } from '@ant-design/pro-components';
-import { ActionType } from '@ant-design/pro-components';
-import { App, Button } from 'antd';
-import { UniTable } from '../../../../components/uni-table';
-import { rowActionKind } from '../../../../components/uni-action';
+import { App, Typography } from 'antd';
 import { ListPageTemplate } from '../../../../components/layout-templates';
-import { MarkerTag } from '../../../../constants/statusBadges';
 import { renderDocumentStatusTag } from '../../../../utils/documentLifecycleStatusTag';
 import { formatDateTimeBySiteSetting } from '../../../../utils/format';
-import {
-  alignProColumns,
-  GLOBAL_DOC_LIST_FIELD_RANK,
-} from '../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
-import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../utils/uniTableLayoutColumns';
 import { getApiErrorMessage } from '../../../../utils/errorHandler';
+import { AggregationKanban } from '../../components/AggregationKanban';
 import {
   pendingInboxApi,
   type PendingInboxDocType,
   type PendingInboxItem,
 } from '../../services/pending-inbox';
-import { resolvePlmStandardDocListSearch } from '../../utils/plmListCore';
+
+const { Text } = Typography;
 
 const DOC_TYPE_KEYS: PendingInboxDocType[] = [
+  'project_proposal',
+  'bom_collab',
   'product_firmware',
   'sample_process',
   'material_review',
-  'bom_collab',
-  'project_proposal',
   'mold_sample',
   'trial_flow',
   'engineering_change',
 ];
+
+const DOC_TYPE_COLORS: Record<string, string> = {
+  project_proposal: '#1677ff',
+  bom_collab: '#13c2c2',
+  product_firmware: '#722ed1',
+  sample_process: '#fa8c16',
+  material_review: '#eb2f96',
+  mold_sample: '#2f54eb',
+  trial_flow: '#52c41a',
+  engineering_change: '#fa541c',
+};
 
 const PendingInboxPage: React.FC = () => {
   const { t } = useTranslation();
@@ -48,7 +51,8 @@ const PendingInboxPage: React.FC = () => {
     ? Number(searchParams.get('project_id'))
     : undefined;
 
-  const actionRef = useRef<ActionType>(null);
+  const [loading, setLoading] = useState(false);
+  const [items, setItems] = useState<PendingInboxItem[]>([]);
 
   const docTypeLabel = useCallback(
     (s: string) => t(`app.kuaiplm.pendingInbox.docType.${s}`, { defaultValue: s }),
@@ -58,6 +62,27 @@ const PendingInboxPage: React.FC = () => {
     (s: string) => t(`app.kuaiplm.pendingInbox.status.${s}`, { defaultValue: s }),
     [t],
   );
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await pendingInboxApi.list({
+        skip: 0,
+        limit: 200,
+        project_id: filterProjectId,
+      });
+      setItems(res.items);
+    } catch (e) {
+      messageApi.error(getApiErrorMessage(e));
+      setItems([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [filterProjectId, messageApi]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const openDoc = useCallback(
     (row: PendingInboxItem) => {
@@ -72,119 +97,56 @@ const PendingInboxPage: React.FC = () => {
     [navigate],
   );
 
-  const columns = useMemo<ProColumns<PendingInboxItem>[]>(() => {
-    const cols: ProColumns<PendingInboxItem>[] = [
-      {
-        title: t('app.kuaiplm.pendingInbox.fields.docType'),
-        dataIndex: 'doc_type',
-        key: 'document_type',
-        width: 130,
-        uniTableKeepWidth: true,
-        valueEnum: Object.fromEntries(DOC_TYPE_KEYS.map((k) => [k, { text: docTypeLabel(k) }])),
-        render: (_, r) => <MarkerTag>{docTypeLabel(r.doc_type)}</MarkerTag>,
-      },
-      {
-        title: t('app.kuaiplm.pendingInbox.fields.code'),
-        dataIndex: 'doc_code',
-        key: 'document_code',
-        width: 140,
-        minWidth: 140,
-        copyable: true,
-        uniTableKeepWidth: true,
-        resizable: false,
-        ellipsis: true,
-      },
-      {
-        title: t('app.kuaiplm.pendingInbox.fields.title'),
-        dataIndex: 'title',
-        key: 'title',
-        minWidth: 160,
-        uniTablePrimaryFlex: true,
-        uniTableRemainderFlex: true,
-        ellipsis: true,
-      },
-      {
-        title: t('app.kuaiplm.pendingInbox.fields.project'),
-        dataIndex: 'project_name',
-        key: 'project_name',
-        width: 180,
-        minWidth: 180,
-        uniTableKeepWidth: true,
-        resizable: false,
-        ellipsis: true,
-        render: (_, r) =>
-          r.project_name
-            ? `${r.project_name}${r.project_code ? ` (${r.project_code})` : ''}`
-            : '—',
-      },
-      {
-        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
-        title: t('common.status'),
-        dataIndex: 'status',
-        key: 'lifecycle',
-        fixed: 'right',
-        hideInSearch: true,
-        render: (_, r) => renderDocumentStatusTag(statusLabel(r.status), r.status),
-      },
-      {
-        title: t('common.updatedAt'),
-        dataIndex: 'updated_at',
-        key: 'updated_at',
-        width: 160,
-        search: false,
-        uniTableKeepWidth: true,
-        render: (_, r) => formatDateTimeBySiteSetting(r.updated_at) || '—',
-      },
-      {
-        title: t('common.action'),
-        valueType: 'option',
-        key: 'option',
-        fixed: 'right',
-        render: (_, row) => [
-          <Button
-            key="open"
-            type="link"
-            size="small"
-            {...rowActionKind('read')}
-            onClick={() => openDoc(row)}
-          >
-            {t('app.kuaiplm.pendingInbox.actions.open')}
-          </Button>,
-        ],
-      },
-    ];
-    return cols;
-  }, [t, docTypeLabel, statusLabel, openDoc]);
+  const columns = useMemo(
+    () =>
+      DOC_TYPE_KEYS.map((docType) => ({
+        id: docType,
+        title: docTypeLabel(docType),
+        color: DOC_TYPE_COLORS[docType],
+        items: items.filter((row) => row.doc_type === docType),
+      })),
+    [docTypeLabel, items],
+  );
 
   return (
-    <ListPageTemplate>
-      <UniTable<PendingInboxItem>
-        headerTitle={t('app.kuaiplm.pendingInbox.title')}
-        actionRef={actionRef}
-        rowKey={(r) => `${r.doc_type}-${r.doc_id}`}
-        permissionResource="kuaiplm:dashboard"
-        enableRowSelection={false}
-        columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
-        columnPersistenceId="apps.kuaiplm.pages.pending-inbox.width-v2"
-        showCreateButton={false}
-        showDeleteButton={false}
-        skipFuzzyPinyinClientFilter
-        params={filterProjectId ? { project_id: filterProjectId } : undefined}
-        request={async (params, _sort, _filter, searchFormValues) => {
-          try {
-            const { doc_type } = resolvePlmStandardDocListSearch(searchFormValues, []);
-            const res = await pendingInboxApi.list({
-              skip: ((params.current || 1) - 1) * (params.pageSize || 20),
-              limit: params.pageSize || 20,
-              doc_type,
-              project_id: filterProjectId,
-            });
-            return { data: res.items, total: res.total, success: true };
-          } catch (e) {
-            messageApi.error(getApiErrorMessage(e));
-            return { data: [], total: 0, success: false };
-          }
-        }}
+    <ListPageTemplate prioritizeMainContentPaint={false}>
+      <AggregationKanban<PendingInboxItem>
+        title={t('app.kuaiplm.pendingInbox.title')}
+        columns={columns}
+        loading={loading}
+        onRefresh={() => void load()}
+        getItemKey={(row) => `${row.doc_type}-${row.doc_id}`}
+        onCardClick={openDoc}
+        emptyDescription={t('app.kuaiplm.pendingInbox.boardEmptyColumn')}
+        renderCard={(row) => (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <Text strong ellipsis style={{ fontSize: 13 }}>
+              {row.doc_code || '—'}
+            </Text>
+            <Text ellipsis style={{ fontSize: 13 }}>
+              {row.title || '—'}
+            </Text>
+            <Text type="secondary" ellipsis style={{ fontSize: 12 }}>
+              {row.project_name
+                ? `${row.project_name}${row.project_code ? ` (${row.project_code})` : ''}`
+                : t('app.kuaiplm.pendingInbox.noProject')}
+            </Text>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                gap: 8,
+                marginTop: 2,
+              }}
+            >
+              {renderDocumentStatusTag(statusLabel(row.status), row.status)}
+              <Text type="secondary" style={{ fontSize: 11, flexShrink: 0 }}>
+                {formatDateTimeBySiteSetting(row.updated_at) || '—'}
+              </Text>
+            </div>
+          </div>
+        )}
       />
     </ListPageTemplate>
   );

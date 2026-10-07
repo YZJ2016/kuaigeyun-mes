@@ -9,19 +9,22 @@ import {
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Button, Col, Empty, Row, Segmented, Table, Tag, Alert, Modal } from 'antd';
+import { App, Button, Col, Empty, Row, Table, Alert, Modal } from 'antd';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import CodeField from '../../../../../components/code-field';
 import { UniTable } from '../../../../../components/uni-table';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import PermissionGuard from '../../../../../components/permission/PermissionGuard';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
-import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { formatDateTimeBySiteSetting } from '../../../../../utils/format';
+import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
+import { MarkerTag } from '../../../../../constants/statusBadges';
 import { pickListSearchKeyword, pickSearchString } from '../../../../../utils/tableQueryKey';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
@@ -223,7 +226,7 @@ const SystemDocumentsPage: React.FC = () => {
             render: (_, row) => {
               const text = formatDateTimeBySiteSetting(row.next_review_at) || '-';
               if (isReviewDue(row)) {
-                return <Tag color="warning">{text}</Tag>;
+                return <MarkerTag color="warning">{text}</MarkerTag>;
               }
               return text;
             },
@@ -235,7 +238,11 @@ const SystemDocumentsPage: React.FC = () => {
             fixed: 'right',
             valueEnum: statusEnum,
             hideInSearch: zone === 'formal',
-            render: (_, row) => <Tag>{statusEnum[row.status]?.text || row.status}</Tag>,
+            render: (_, row) =>
+              renderDocumentStatusTag(
+                statusEnum[row.status]?.text || row.status || '-',
+                row.status || undefined,
+              ),
           },
           {
             title: t('common.actions'),
@@ -338,7 +345,7 @@ const SystemDocumentsPage: React.FC = () => {
             ],
           },
         ],
-        SALES_DOC_LIST_FIELD_RANK,
+        GLOBAL_DOC_LIST_FIELD_RANK,
       ),
     [
       canDelete,
@@ -371,30 +378,29 @@ const SystemDocumentsPage: React.FC = () => {
             title={t('app.kuaizhizao.quality.qms.reviewDueBanner', { count: reviewDueSummary.due_count })}
           />
         ) : null}
-        <div style={{ marginBottom: 12 }}>
-          <Segmented
-            value={zone}
-            onChange={(v) => {
-              setZone(v as CatalogZone);
-              actionRef.current?.reload();
-            }}
-            options={[
-              { label: t('app.kuaizhizao.quality.qms.zone.formal'), value: 'formal' },
-              { label: t('app.kuaizhizao.quality.qms.zone.pending'), value: 'pending' },
-            ]}
-          />
-        </div>
         <UniTable<QmsSystemDocument>
-        key={zone}
-        viewTypes={['table', 'help']}
+          viewTypes={['table', 'help']}
           helpViewConfig={buildListPageHelpViewConfig('kuaizhizao.systemDocuments')}
           headerTitle={t('app.kuaizhizao.menu.quality-management.system-documents')}
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
           showAdvancedSearch
-          columnPersistenceId="apps.kuaizhizao.pages.quality-management.system-documents-width-v5"
+          columnPersistenceId="apps.kuaizhizao.pages.quality-management.system-documents-width-v6"
           skipFuzzyPinyinClientFilter
+          params={{ zone }}
+          beforeSearchButtons={
+            <ThemedSegmented
+              surfaceBackground
+              size="medium"
+              value={zone}
+              onChange={(v) => setZone(v as CatalogZone)}
+              options={[
+                { label: t('app.kuaizhizao.quality.qms.zone.formal'), value: 'formal' },
+                { label: t('app.kuaizhizao.quality.qms.zone.pending'), value: 'pending' },
+              ]}
+            />
+          }
           toolBarRender={() =>
             canCreate
               ? [

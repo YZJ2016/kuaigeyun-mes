@@ -44,6 +44,217 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'kuaiplm-rd-deliverables-standalone-r01',
+    date: '2026-10-08',
+    type: 'feature',
+    titleKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-rd-deliverables-standalone-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-rd-deliverables-standalone-r01.description',
+  },
+  {
+    id: 'ind-electronics-rd-deliverable-profile-wire-r01',
+    date: '2026-10-08',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.ind-electronics-rd-deliverable-profile-wire-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.ind-electronics-rd-deliverable-profile-wire-r01.description',
+  },
+  {
+    id: 'kuaiplm-sample-process-due-date-remind-r01',
+    date: '2026-10-08',
+    type: 'feature',
+    titleKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-sample-process-due-date-remind-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-sample-process-due-date-remind-r01.description',
+  },
+  {
+    id: 'ind-electronics-trial-flow-profile-wire-r01',
+    date: '2026-10-08',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.ind-electronics-trial-flow-profile-wire-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.ind-electronics-trial-flow-profile-wire-r01.description',
+  },
+  {
+    id: 'config-center-audit-process-show-when-off-r01',
+    date: '2026-10-08',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.config-center-audit-process-show-when-off-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.config-center-audit-process-show-when-off-r01.description',
+  },
+  {
+    id: 'kuaiplm-project-proposal-title-optional-r01',
+    date: '2026-10-08',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-project-proposal-title-optional-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-project-proposal-title-optional-r01.description',
+  },
+  {
+    id: 'kuaiplm-project-proposal-pre-project-text-r01',
+    date: '2026-10-08',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-project-proposal-pre-project-text-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-project-proposal-pre-project-text-r01.description',
+  },
+  {
+    id: 'kuaiplm-project-proposal-dict-app-scope-r01',
+    date: '2026-10-08',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-project-proposal-dict-app-scope-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-project-proposal-dict-app-scope-r01.description',
+  },
+  {
+    id: 'kuaizhizao-system-documents-zone-before-search-r01',
+    date: '2026-10-08',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.kuaizhizao-system-documents-zone-before-search-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaizhizao-system-documents-zone-before-search-r01.description',
+  },
+  {
+    id: 'kuaizhizao-reports-menu-last-r02',
+    date: '2026-10-08',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaizhizao-reports-menu-last-r02.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaizhizao-reports-menu-last-r02.description',
+  },
+  {
+    id: 'kuaiplm-aggregation-kanban-r01',
+    date: '2026-10-08',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiplm-aggregation-kanban-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-aggregation-kanban-r01.description',
+  },
+  {
+    id: 'kuaiplm-lab-judgment-rule-create-button-r01',
+    date: '2026-10-08',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-lab-judgment-rule-create-button-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-lab-judgment-rule-create-button-r01.description',
+  },
+  {
+    id: 'kuaiplm-annual-lab-plan-create-button-r01',
+    date: '2026-10-08',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-annual-lab-plan-create-button-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-annual-lab-plan-create-button-r01.description',
+  },
+  {
+    id: 'kuaizhizao-production-daily-restore-route-r01',
+    date: '2026-10-08',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.kuaizhizao-production-daily-restore-route-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaizhizao-production-daily-restore-route-r01.description',
+  },
+  {
+    id: 'kuaizhizao-rework-plan-restore-route-r01',
+    date: '2026-10-08',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.kuaizhizao-rework-plan-restore-route-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaizhizao-rework-plan-restore-route-r01.description',
+  },
+  {
+    id: 'kuaizhizao-eight-d-collab-audit-columns-r01',
+    date: '2026-10-08',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.kuaizhizao-eight-d-collab-audit-columns-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaizhizao-eight-d-collab-audit-columns-r01.description',
+  },
+  {
+    id: 'kuaizhizao-system-documents-status-tag-r01',
+    date: '2026-10-08',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.kuaizhizao-system-documents-status-tag-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaizhizao-system-documents-status-tag-r01.description',
+  },
+  {
+    id: 'kuaizhizao-eight-d-three-bucket-r01',
+    date: '2026-10-08',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaizhizao-eight-d-three-bucket-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaizhizao-eight-d-three-bucket-r01.description',
+  },
+  {
+    id: 'kuaizhizao-supplier-eval-three-bucket-r01',
+    date: '2026-10-08',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.kuaizhizao-supplier-eval-three-bucket-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaizhizao-supplier-eval-three-bucket-r01.description',
+  },
+  {
+    id: 'kuaizhizao-quality-complaint-three-bucket-r01',
+    date: '2026-10-08',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.kuaizhizao-quality-complaint-three-bucket-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaizhizao-quality-complaint-three-bucket-r01.description',
+  },
+  {
+    id: 'kuaizhizao-quality-complaint-status-tag-r01',
+    date: '2026-10-08',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.kuaizhizao-quality-complaint-status-tag-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaizhizao-quality-complaint-status-tag-r01.description',
+  },
+  {
+    id: 'kuaizhizao-supplier-eval-uuid-varchar-r01',
+    date: '2026-10-08',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaizhizao-supplier-eval-uuid-varchar-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaizhizao-supplier-eval-uuid-varchar-r01.description',
+  },
+  {
+    id: 'kuaiplm-material-review-alert-upload-import-r01',
+    date: '2026-10-08',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-material-review-alert-upload-import-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-material-review-alert-upload-import-r01.description',
+  },
+  {
+    id: 'kuaiplm-material-review-useAuditRequired-r01',
+    date: '2026-10-08',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiplm-material-review-useAuditRequired-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-material-review-useAuditRequired-r01.description',
+  },
+  {
     id: 'kuaioa-hr-drop-list-page-title-r01',
     date: '2026-10-08',
     type: 'improvement',

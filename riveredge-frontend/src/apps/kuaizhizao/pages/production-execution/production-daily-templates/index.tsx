@@ -1,14 +1,4 @@
 /**
- * 生产日报模板：快制造通用菜单已下线，能力由定制应用维护。
+ * 生产日报模板列表（宿主页；funide-oa 等定制应用菜单共用此路由）
  */
-import React from 'react';
-import { DedicatedHostOfflinePage } from '../../../components/DedicatedHostOfflinePage';
-
-export default function ProductionDailyTemplatesPage() {
-  return (
-    <DedicatedHostOfflinePage
-      titleKey="app.kuaizhizao.productionDailyTemplate.offlineTitle"
-      descriptionKey="app.kuaizhizao.productionDailyTemplate.offlineDescription"
-    />
-  );
-}
+export { default } from './ProductionDailyTemplatesScreen';

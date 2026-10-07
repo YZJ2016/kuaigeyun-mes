@@ -32,6 +32,7 @@ import {
   Row,
   Select,
   Table,
+  Typography,
   Upload,
 } from 'antd';
 import { InboxOutlined } from '@ant-design/icons';
@@ -39,6 +40,7 @@ import type { ColumnsType } from 'antd/es/table';
 import type { DescriptionsProps } from 'antd';
 import { ThemedSegmented } from '../../../../components/themed-segmented';
 import { DictionaryLabel } from '../../../../components/dictionary-label';
+import { AggregationKanban } from '../../components/AggregationKanban';
 import { UniMaterialSelect } from '../../../../components/uni-material-select';
 import { UniTable } from '../../../../components/uni-table';
 import { UniTableDetail } from '../../../../components/uni-table-detail';
@@ -104,6 +106,8 @@ import {
   getDictionaryOptionsSync,
   supplierApi,
 } from '../../../master-data/services/supply-chain';
+
+const { Text } = Typography;
 
 const LAB_REPORT_FILE_CATEGORY = 'lab-report';
 
@@ -297,6 +301,12 @@ const STATUS_KEYS: LabRequestStatus[] = [
   'rejected',
   'revoked',
 ];
+/** 待检看板泳道（与后端 board=true 过滤一致） */
+const BOARD_STATUS_KEYS: LabRequestStatus[] = ['pending', 'in_lab'];
+const BOARD_STATUS_COLORS: Record<string, string> = {
+  pending: '#1677ff',
+  in_lab: '#fa8c16',
+};
 const EXPORT_COLUMNS: ExportXlsxColumn[] = [
   { key: 'code', title: '委托单号' },
   { key: 'title', title: '试验名称' },
@@ -346,6 +356,8 @@ const LabRequestsPage: React.FC = () => {
   const [detailError, setDetailError] = useState<string | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [listScope, setListScope] = useState<'all' | 'mine'>('all');
+  const [boardItems, setBoardItems] = useState<LabRequest[]>([]);
+  const [boardLoading, setBoardLoading] = useState(false);
   const [completeOpen, setCompleteOpen] = useState(false);
   const [completeTarget, setCompleteTarget] = useState<LabRequest | null>(null);
   const [completeSummary, setCompleteSummary] = useState('');
@@ -414,6 +426,28 @@ const LabRequestsPage: React.FC = () => {
       });
   }, [modalOpen]);
 
+  const loadBoard = useCallback(async () => {
+    if (!isBoard) return;
+    setBoardLoading(true);
+    try {
+      const res = await labRequestApi.list({ skip: 0, limit: 200, board: true });
+      setBoardItems(res.items);
+    } catch (e) {
+      messageApi.error(getApiErrorMessage(e));
+      setBoardItems([]);
+    } finally {
+      setBoardLoading(false);
+    }
+  }, [isBoard, messageApi]);
+
+  const reloadList = useCallback(() => {
+    if (isBoard) {
+      void loadBoard();
+      return;
+    }
+    actionRef.current?.reload();
+  }, [isBoard, loadBoard]);
+
   useEffect(() => {
     if (isBoard) return;
     if (!listScopeReadyRef.current) {
@@ -422,6 +456,11 @@ const LabRequestsPage: React.FC = () => {
     }
     actionRef.current?.reload();
   }, [listScope, isBoard]);
+
+  useEffect(() => {
+    if (!isBoard) return;
+    void loadBoard();
+  }, [isBoard, loadBoard]);
 
   const typeLabel = useCallback(
     (v?: string) => {
@@ -602,7 +641,7 @@ const LabRequestsPage: React.FC = () => {
             ? t('app.kuaiplm.labRequest.messages.reportSubmitted')
             : t('app.kuaiplm.labRequest.messages.reportSaved'),
         );
-        actionRef.current?.reload();
+        reloadList();
       } catch (e) {
         messageApi.error(getApiErrorMessage(e));
       } finally {
@@ -917,7 +956,7 @@ const LabRequestsPage: React.FC = () => {
                     if (row.id == null) return;
                     await labRequestApi.submit(row.id);
                     messageApi.success(t('app.kuaiplm.labRequest.messages.submitSuccess'));
-                    actionRef.current?.reload();
+                    reloadList();
                   }}
                 />
               ) : null,
@@ -930,7 +969,7 @@ const LabRequestsPage: React.FC = () => {
                     try {
                       await labRequestApi.approve(row.id);
                       messageApi.success(t('app.kuaiplm.labRequest.messages.approveSuccess'));
-                      actionRef.current?.reload();
+                      reloadList();
                     } catch (e) {
                       messageApi.error(getApiErrorMessage(e));
                     }
@@ -946,7 +985,7 @@ const LabRequestsPage: React.FC = () => {
                     if (row.id == null) return;
                     await labRequestApi.accept(row.id);
                     messageApi.success(t('app.kuaiplm.labRequest.messages.acceptSuccess'));
-                    actionRef.current?.reload();
+                    reloadList();
                   }}
                 >
                   {t('app.kuaiplm.labRequest.actions.accept')}
@@ -997,7 +1036,7 @@ const LabRequestsPage: React.FC = () => {
                         report_file_uuid: full.report_file_uuid || undefined,
                       });
                       messageApi.success(t('app.kuaiplm.labRequest.messages.reportSubmitted'));
-                      actionRef.current?.reload();
+                      reloadList();
                     } catch (e) {
                       messageApi.error(getApiErrorMessage(e));
                     }
@@ -1016,7 +1055,7 @@ const LabRequestsPage: React.FC = () => {
                     try {
                       await labRequestApi.approveReport(row.id);
                       messageApi.success(t('app.kuaiplm.labRequest.messages.reportApproved'));
-                      actionRef.current?.reload();
+                      reloadList();
                     } catch (e) {
                       messageApi.error(getApiErrorMessage(e));
                     }
@@ -1071,7 +1110,7 @@ const LabRequestsPage: React.FC = () => {
                     if (row.id == null) return;
                     await labRequestApi.reject(row.id);
                     messageApi.success(t('app.kuaiplm.labRequest.messages.rejectSuccess'));
-                    actionRef.current?.reload();
+                    reloadList();
                   }}
                 />
               ) : null,
@@ -1099,7 +1138,7 @@ const LabRequestsPage: React.FC = () => {
                     if (row.id == null) return;
                     await labRequestApi.delete(row.id);
                     messageApi.success(t('common.deleteSuccess'));
-                    actionRef.current?.reload();
+                    reloadList();
                   }}
                 />
               ) : null,
@@ -1463,7 +1502,7 @@ const LabRequestsPage: React.FC = () => {
                     const updated = await labRequestApi.linkNgException(detail.id, row.id);
                     setDetail(updated);
                     messageApi.success(t('app.kuaiplm.labRequest.messages.exceptionLinked'));
-                    actionRef.current?.reload();
+                    reloadList();
                   } catch (e) {
                     messageApi.error(getApiErrorMessage(e));
                   }
@@ -1483,17 +1522,81 @@ const LabRequestsPage: React.FC = () => {
     },
   ];
 
+  const boardColumns = useMemo(
+    () =>
+      BOARD_STATUS_KEYS.map((status) => ({
+        id: status,
+        title: statusLabel(status),
+        color: BOARD_STATUS_COLORS[status],
+        items: boardItems.filter((row) => row.status === status),
+      })),
+    [boardItems, statusLabel],
+  );
+
   return (
-    <ListPageTemplate>
+    <ListPageTemplate prioritizeMainContentPaint={!isBoard}>
+      {isBoard ? (
+        <AggregationKanban<LabRequest>
+          title={t('app.kuaiplm.menu.lab-board')}
+          columns={boardColumns}
+          loading={boardLoading}
+          onRefresh={() => void loadBoard()}
+          getItemKey={(row) => String(row.id ?? row.uuid)}
+          onCardClick={(row) => {
+            if (row.id != null) void openDetail(row.id);
+          }}
+          emptyDescription={t('app.kuaiplm.labRequest.boardEmptyColumn')}
+          renderCard={(row) => (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                <Text strong ellipsis style={{ fontSize: 13 }}>
+                  {row.code || '—'}
+                </Text>
+                {row.priority === 'urgent' ? (
+                  <MarkerTag variant="filled" color="error">
+                    {t('app.kuaiplm.labRequest.priority.urgent')}
+                  </MarkerTag>
+                ) : null}
+              </div>
+              <Text ellipsis style={{ fontSize: 13 }}>
+                {row.title || '—'}
+              </Text>
+              <Text type="secondary" ellipsis style={{ fontSize: 12 }}>
+                {typeLabel(row.business_type)}
+                {row.requester_name ? ` / ${row.requester_name}` : ''}
+              </Text>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  gap: 8,
+                  marginTop: 2,
+                }}
+              >
+                <span>
+                  {renderDocumentStatusTag(statusLabel(row.status), row.status || 'pending')}
+                  {row.has_ng ? (
+                    <span style={{ marginLeft: 6 }}>
+                      <MarkerTag variant="filled" color="warning">
+                        {t('app.kuaiplm.labRequest.fields.ngFlag')}
+                      </MarkerTag>
+                    </span>
+                  ) : null}
+                </span>
+                <Text type="secondary" style={{ fontSize: 11, flexShrink: 0 }}>
+                  {formatDateTimeBySiteSetting(row.expected_complete_at || row.updated_at) || '—'}
+                </Text>
+              </div>
+            </div>
+          )}
+        />
+      ) : (
       <UniTable<LabRequest>
         actionRef={actionRef}
-        headerTitle={
-          isBoard ? t('app.kuaiplm.menu.lab-board') : t('app.kuaiplm.menu.lab-requests')
-        }
+        headerTitle={t('app.kuaiplm.menu.lab-requests')}
         permissionResource={RESOURCE}
-        columnPersistenceId={
-          isBoard ? 'apps.kuaiplm.pages.lab-board-v6' : 'apps.kuaiplm.pages.lab-requests-v6'
-        }
+        columnPersistenceId="apps.kuaiplm.pages.lab-requests-v6"
         rowKey="id"
         columns={columns}
         enableRowSelection
@@ -1503,35 +1606,32 @@ const LabRequestsPage: React.FC = () => {
           tableRowsRef.current = rows;
         }}
         beforeSearchButtons={
-          !isBoard ? (
-            <ThemedSegmented
-              surfaceBackground
-              size="medium"
-              value={listScope}
-              onChange={(v) => setListScope(v as 'all' | 'mine')}
-              options={[
-                { label: t('app.kuaiplm.labRequest.scope.all'), value: 'all' },
-                { label: t('app.kuaiplm.labRequest.scope.mine'), value: 'mine' },
-              ]}
-            />
-          ) : undefined
+          <ThemedSegmented
+            surfaceBackground
+            size="medium"
+            value={listScope}
+            onChange={(v) => setListScope(v as 'all' | 'mine')}
+            options={[
+              { label: t('app.kuaiplm.labRequest.scope.all'), value: 'all' },
+              { label: t('app.kuaiplm.labRequest.scope.mine'), value: 'mine' },
+            ]}
+          />
         }
-        showCreateButton={!isBoard}
+        showCreateButton
         createButtonText={t('app.kuaiplm.labRequest.createButton')}
         onCreate={() => {
           setEditing(null);
           setModalOpen(true);
         }}
         showExportButton={!!perms.canExport}
-        params={isBoard ? undefined : { listScope }}
+        params={{ listScope }}
         skipFuzzyPinyinClientFilter
         onExport={async () => {
           const items = await fetchAllListItems<LabRequest>(async ({ skip, limit }) => {
             const res = await labRequestApi.list({
               skip,
               limit,
-              board: isBoard || undefined,
-              mine: !isBoard && listScope === 'mine' ? true : undefined,
+              mine: listScope === 'mine' ? true : undefined,
             });
             return { items: res.items, total: res.total };
           });
@@ -1543,7 +1643,7 @@ const LabRequestsPage: React.FC = () => {
             has_ng: r.has_ng ? '是' : '否',
           }));
           downloadRecordsAsXlsx(
-            isBoard ? 'lab-board' : 'lab-requests',
+            'lab-requests',
             EXPORT_COLUMNS,
             rows as Record<string, unknown>[],
           );
@@ -1558,13 +1658,12 @@ const LabRequestsPage: React.FC = () => {
             status,
             business_type,
             priority,
-            board: isBoard || undefined,
-            mine:
-              !isBoard && params.listScope === 'mine' ? true : undefined,
+            mine: params.listScope === 'mine' ? true : undefined,
           });
           return { data: res.items, success: true, total: res.total };
         }}
       />
+      )}
 
       <FormModalTemplate
         key={editing?.id ?? 'create'}
@@ -1629,7 +1728,7 @@ const LabRequestsPage: React.FC = () => {
             }
             messageApi.success(t('common.saveSuccess'));
             setModalOpen(false);
-            actionRef.current?.reload();
+            reloadList();
             return true;
           } catch (e) {
             messageApi.error(getApiErrorMessage(e));
@@ -2108,7 +2207,7 @@ const LabRequestsPage: React.FC = () => {
                         const updated = await labRequestApi.saveMeasures(detail.id, items);
                         setDetail(updated);
                         messageApi.success(t('app.kuaiplm.labRequest.messages.measureSaved'));
-                        actionRef.current?.reload();
+                        reloadList();
                       } catch (e) {
                         messageApi.error(getApiErrorMessage(e));
                       }
@@ -2174,7 +2273,7 @@ const LabRequestsPage: React.FC = () => {
                         });
                         setDetail(updated);
                         messageApi.success(t('app.kuaiplm.labRequest.messages.reportSubmitted'));
-                        actionRef.current?.reload();
+                        reloadList();
                       } catch (e) {
                         messageApi.error(getApiErrorMessage(e));
                       }
@@ -2192,7 +2291,7 @@ const LabRequestsPage: React.FC = () => {
                         const updated = await labRequestApi.approveReport(detail.id);
                         setDetail(updated);
                         messageApi.success(t('app.kuaiplm.labRequest.messages.reportApproved'));
-                        actionRef.current?.reload();
+                        reloadList();
                       } catch (e) {
                         messageApi.error(getApiErrorMessage(e));
                       }
@@ -2261,7 +2360,7 @@ const LabRequestsPage: React.FC = () => {
             setDetail(updated);
             messageApi.success(t('common.saveSuccess'));
             setPriceOpen(false);
-            actionRef.current?.reload();
+            reloadList();
           } catch (e) {
             messageApi.error(getApiErrorMessage(e));
           }
@@ -2325,7 +2424,7 @@ const LabRequestsPage: React.FC = () => {
             });
             messageApi.success(t('app.kuaiplm.labRequest.messages.completeSuccess'));
             setCompleteOpen(false);
-            actionRef.current?.reload();
+            reloadList();
           } catch (e) {
             messageApi.error(getApiErrorMessage(e));
           } finally {
@@ -2466,7 +2565,7 @@ const LabRequestsPage: React.FC = () => {
             setDetail(updated);
             setOverrideOpen(false);
             messageApi.success(t('app.kuaiplm.labRequest.messages.overrideSuccess'));
-            actionRef.current?.reload();
+            reloadList();
           } catch (e) {
             messageApi.error(getApiErrorMessage(e));
           }
@@ -2756,7 +2855,7 @@ const LabRequestsPage: React.FC = () => {
             if (detail?.id === revokeTarget.id) {
               setDetail(null);
             }
-            actionRef.current?.reload();
+            reloadList();
           } catch (e) {
             messageApi.error(getApiErrorMessage(e));
           } finally {
@@ -2804,7 +2903,7 @@ const LabRequestsPage: React.FC = () => {
             if (detail?.id === updated.id) {
               setDetail(updated);
             }
-            actionRef.current?.reload();
+            reloadList();
           } catch (e) {
             messageApi.error(getApiErrorMessage(e));
           } finally {

@@ -27,6 +27,7 @@ export interface SampleProcessApplication {
   material_code?: string | null;
   material_version?: string | null;
   release_date?: string | null;
+  due_date?: string | null;
   purpose?: string | null;
   status: SampleProcessStatus;
   attachments?: SampleProcessAttachment[];
@@ -48,6 +49,7 @@ export interface SampleProcessPayload {
   material_code?: string | null;
   material_version?: string | null;
   release_date?: string | null;
+  due_date?: string | null;
   purpose?: string | null;
   attachments?: SampleProcessAttachment[];
   remarks?: string | null;
