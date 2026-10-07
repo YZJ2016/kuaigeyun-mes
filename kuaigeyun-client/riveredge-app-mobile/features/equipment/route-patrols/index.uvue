@@ -6,7 +6,7 @@
 		<view class="card">
 			<text class="title">路线巡检</text>
 			<action-button label="刷新" tone="secondary" :disabled="loading || busy" @press="loadList" />
-			<text v-if="!loading && rows.length == 0 && errorText.length == 0" class="empty">暂无记录</text>
+			<empty-state v-if="!loading && rows.length == 0 && errorText.length == 0" title="暂无记录" :compact="true" />
 			<view class="item" v-for="item in rows" :key="item.rowKey">
 				<text class="item-title">{{ item.title }}</text>
 				<text class="hint">{{ item.detail }}</text>
@@ -56,6 +56,7 @@
 	import { pickAndUploadImage } from '../../../shared/api/pick-image.uts'
 	import { joinParts, parseRequiredInt, readError } from '../json-text.uts'
 	import { loadRoutePatrolPreview, PatrolLineForm, submitRoutePatrol, togglePatrolPass } from '../route-patrol-create.uts'
+	import EmptyState from '../../../shared/ui/empty-state.uvue'
 
 	type ListRow = {
 		rowKey: string

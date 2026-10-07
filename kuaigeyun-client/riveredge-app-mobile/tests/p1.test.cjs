@@ -380,7 +380,7 @@ test('app shell refresh ends after failure and does not apply an older scope lis
 test('home starts scopes concurrently and retains individual failures',async()=>{
   const pending=[];
   const run=runPage('shell/workbench/load.uts',{
-    getToken:()=> 'token',installedPackages:()=>['a','b'],packageScope:p=>p,
+    getToken:()=> 'token',getTenantId:()=> 't1',installedPackages:()=>['a','b'],packageScope:p=>p,
     packageBadge:()=>null,apiGet:(url,q)=>new Promise((resolve,reject)=>pending.push({resolve,reject})),
   });
   const result=run('loadWorkbench()');

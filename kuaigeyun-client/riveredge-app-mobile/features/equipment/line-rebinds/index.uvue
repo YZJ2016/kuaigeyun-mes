@@ -6,7 +6,7 @@
 		<view class="card">
 			<text class="title">换线绑定</text>
 			<action-button label="刷新" tone="secondary" :disabled="loading || busy" @press="loadList" />
-			<text v-if="!loading && rows.length == 0 && errorText.length == 0" class="empty">暂无记录</text>
+			<empty-state v-if="!loading && rows.length == 0 && errorText.length == 0" title="暂无记录" :compact="true" />
 			<view class="item" v-for="item in rows" :key="item.rowKey">
 				<text class="item-title">{{ item.title }}</text>
 				<text class="hint">{{ item.detail }}</text>
@@ -33,6 +33,7 @@
 	import { request } from '../../../shared/api/index.uts'
 	import { asJsonObject, fieldText, readRows } from '../../../shared/api/fields.uts'
 	import { joinParts, parseIdList, parseRequiredInt, readError } from '../json-text.uts'
+	import EmptyState from '../../../shared/ui/empty-state.uvue'
 
 	type ListRow = {
 		rowKey: string

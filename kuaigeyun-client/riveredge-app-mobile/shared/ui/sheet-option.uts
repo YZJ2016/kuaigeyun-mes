@@ -1,0 +1,13 @@
+export class SheetOption {
+	id: number = 0
+	label: string = ''
+	description: string = ''
+}
+
+export function sheetOption(id: number, label: string, description: string = ''): SheetOption {
+	const row = new SheetOption()
+	row.id = id
+	row.label = label
+	row.description = description
+	return row
+}

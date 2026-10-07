@@ -8,7 +8,7 @@
 		</view>
 		<text v-if="errorTextValue.length > 0" class="error">{{ errorTextValue }}</text>
 		<view v-if="selectedIndex < 0">
-			<text v-if="!loading && rows.length == 0 && errorTextValue.length == 0" class="empty">暂无不合格品</text>
+			<empty-state v-if="!loading && rows.length == 0 && errorTextValue.length == 0" title="暂无不合格品" />
 			<action-card v-for="(row, index) in rows" :key="index" @press="openRow(index)" :disabled="loading">
 				<text class="title">{{ titleOf(row) }}</text>
 				<text v-if="lineOf(row).length > 0" class="meta">{{ lineOf(row) }}</text>
@@ -47,6 +47,7 @@
 	import HomeLink from '../../../shared/ui/home-link.uvue'
 	import { request } from '../../../shared/api/index.uts'
 	import { fieldText, fieldNumber, errorText, readRows } from '../../../shared/api/fields.uts'
+	import EmptyState from '../../../shared/ui/empty-state.uvue'
 
 	const disposeCodes : string[] = ['return', 'accept', 'quarantine', 'rework', 'scrap', 'downgrade', 'other']
 	const disposeLabels : string[] = ['退货', '让步', '隔离', '返工', '报废', '降级', '其他']

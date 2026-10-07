@@ -2,8 +2,7 @@
 	<view class="page-shell">
 		<home-link />
 	<scroll-view class="page home-page" direction="vertical">
-		<load-feedback :active="loading" :mode="homeLoaded ? 'refresh' : 'initial'" />
-		<button class="who" :disabled="false" hover-class="pressed" @click="openAccount">
+		<button v-if="!loading || homeLoaded" class="who" :disabled="false" hover-class="pressed" @click="openAccount">
 			<view class="who-copy">
 				<text class="who-name">{{ displayName }}</text>
 				<text v-if="orgName.length > 0" class="who-meta">{{ orgName }}</text>
@@ -13,10 +12,11 @@
 				<text class="who-chevron">›</text>
 			</view>
 		</button>
+		<load-feedback :active="loading || refreshing" :mode="homeLoaded ? 'refresh' : 'initial'" />
 		<text v-if="errorText.length > 0" class="error">{{ errorText }}</text>
 		<view v-if="!loading && (errorText.length > 0 || homeWarnings.length > 0)">
 			<text v-for="(warning, index) in homeWarnings" :key="index" class="error">{{ warning }}</text>
-			<action-button label="重新加载" :busy="loading" @press="refresh" />
+			<action-button label="重新加载" :busy="loading || refreshing" @press="refresh" />
 		</view>
 		<button v-if="hasScan" class="btn-primary btn-scan" :disabled="loading" hover-class="pressed" @click="onScan">
 			<view class="scan-mark">
@@ -130,6 +130,7 @@
 	const FREQUENT_KEYS = ['my-work-orders', 'exception-report', 'packing-binding', 'reporting-history']
 
 	const loading = ref(false)
+	const refreshing = ref(false)
 	const homeLoaded = ref(false)
 	const errorText = ref('')
 	const displayName = ref('已登录')
@@ -243,7 +244,14 @@
 	}
 
 
-	function pushLinkedTodo(nextTodos : Array<HomeTodo>, blocks : Array<WorkScope>, measured : Array<MeasuredTodo> | null, key : string, title : string, tone : string) {
+	function countTone(count : number) : string {
+		if (count <= 0) { return 'neutral' }
+		if (count <= 5) { return 'success' }
+		if (count <= 10) { return 'warning' }
+		return 'danger'
+	}
+
+	function pushLinkedTodo(nextTodos : Array<HomeTodo>, blocks : Array<WorkScope>, measured : Array<MeasuredTodo> | null, key : string, title : string) {
 		const cell = linkedCell(blocks, key)
 		const row = measuredFor(measured, key)
 		if (cell == null || row == null || row.failed) {
@@ -254,7 +262,7 @@
 			title: title,
 			subtitle: cell.label,
 			countText: String(row.count),
-			tone: row.count > 0 ? tone : 'neutral',
+			tone: countTone(row.count),
 			route: cell.route,
 			missing: cell.missing
 		} as HomeTodo)
@@ -380,8 +388,8 @@
 		}
 		frequent.value = nextFrequent
 		const nextTodos : Array<HomeTodo> = []
-		pushLinkedTodo(nextTodos, blocks, measured, 'reporting-approve', '待审报工', 'warning')
-		pushLinkedTodo(nextTodos, blocks, measured, 'quality-hub', '待检验', 'warning')
+		pushLinkedTodo(nextTodos, blocks, measured, 'reporting-approve', '待审报工')
+		pushLinkedTodo(nextTodos, blocks, measured, 'quality-hub', '待检验')
 		for (let i = 0; i < blocks.length; i++) {
 			const block = blocks[i]
 			if (block.pendingText.length > 0) {
@@ -392,7 +400,7 @@
 						title: '待处理故障',
 						subtitle: cell.label,
 						countText: block.pendingText,
-						tone: block.pendingCount > 0 ? 'warning' : 'neutral',
+						tone: countTone(block.pendingCount),
 						route: cell.route,
 						missing: cell.missing
 					} as HomeTodo)
@@ -406,7 +414,7 @@
 						title: '逾期保养',
 						subtitle: cell.label,
 						countText: block.overdueText,
-						tone: block.overdueCount > 0 ? 'danger' : 'neutral',
+						tone: countTone(block.overdueCount),
 						route: cell.route,
 						missing: cell.missing
 					} as HomeTodo)
@@ -475,7 +483,7 @@
 	}
 
 	async function refresh() {
-		if (loading.value) {
+		if (loading.value || refreshing.value) {
 			return
 		}
 		paintSession()
@@ -483,7 +491,11 @@
 			leaveToLogin()
 			return
 		}
-		loading.value = true
+		if (homeLoaded.value) {
+			refreshing.value = true
+		} else {
+			loading.value = true
+		}
 		errorText.value = ''
 		try {
 			const blocks = await loadWorkbench()
@@ -491,17 +503,22 @@
 			applyHome(blocks, measured)
 			homeLoaded.value = true
 		} catch (err) {
-			homeLoaded.value = false
-			todos.value = []
-			frequent.value = []
-			loadedBlocks.value = []
-			hits.value = []
-			hasScan.value = false
-			homeWarnings.value = []
-			todoStatsAvailable.value = false
-			errorText.value = '工作台未能加载，请重试'
+			if (homeLoaded.value) {
+				homeWarnings.value = ['数据刷新失败，显示的是上一次结果']
+			} else {
+				homeLoaded.value = false
+				todos.value = []
+				frequent.value = []
+				loadedBlocks.value = []
+				hits.value = []
+				hasScan.value = false
+				homeWarnings.value = []
+				todoStatsAvailable.value = false
+				errorText.value = '工作台未能加载，请重试'
+			}
 		}
 		loading.value = false
+		refreshing.value = false
 		if (!openedDeepLink) {
 			openedDeepLink = true
 			const pending = takePendingEntry()

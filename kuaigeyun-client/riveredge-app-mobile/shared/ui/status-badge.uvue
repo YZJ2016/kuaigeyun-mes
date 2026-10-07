@@ -5,7 +5,14 @@
 	import UniBadgeView from '../../uni_modules/uni-badge-view/components/uni-badge-view/uni-badge-view.uvue'
 	const props = defineProps({ value: { type: String, default: '' }, tone: { type: String, default: 'warning' } })
 	const badgeStyle = computed(() : string => {
-		const colors = props.tone == 'danger' ? 'background-color: #FEE2E2; color: #991B1B;' : 'background-color: #FEF3C7; color: #92400E;'
-		return colors + 'font-size: 14px; padding: 4px 10px; border-radius: 8px;'
+		let colors = 'background-color: #F59E0B; color: #FFFFFF;'
+		if (props.tone == 'danger') {
+			colors = 'background-color: #EF4444; color: #FFFFFF;'
+		} else if (props.tone == 'success') {
+			colors = 'background-color: #22C55E; color: #FFFFFF;'
+		} else if (props.tone == 'neutral') {
+			colors = 'background-color: #94A3B8; color: #FFFFFF;'
+		}
+		return colors + 'font-size: 14px; line-height: 16px; padding: 4px 10px; height: 24px; min-width: 24px; border-radius: 12px;'
 	})
 </script>

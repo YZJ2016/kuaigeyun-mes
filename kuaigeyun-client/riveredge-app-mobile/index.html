@@ -12,6 +12,44 @@
 		<title></title>
 		<!--preload-links-->
 		<!--app-context-->
+		<style>
+			/* Web(H5/PC) 端修正：uni-button 默认是 display:block，与 App 端 flex 容器行为不一致，
+			   导致按钮内图标/文字错位堆叠；这里按 App 端语义改为 flex 列容器。 */
+			uni-app uni-button {
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				justify-content: center;
+				line-height: normal;
+			}
+			/* 去掉 web 端 uni-button 自带的 0.5px 伪边框，避免与设计边框叠加出现双框 */
+			uni-app uni-button::after {
+				display: none;
+			}
+			/* 自定义导航标题不允许换行，防止长标题撑出 48px 导航栏被裁切 */
+			uni-app .page-nav-title {
+				white-space: nowrap;
+			}
+			/* PC web：限宽居中，接近手机视图；H5 小屏不受影响 */
+			@media (min-width: 768px) {
+				body {
+					background-color: #E9EDF3;
+				}
+				uni-app {
+					max-width: 480px;
+					margin-left: auto;
+					margin-right: auto;
+					box-shadow: 0 0 24px rgba(15, 23, 42, 0.08);
+				}
+				/* 固定定位的浮层按视口对齐，PC 上限宽到与应用栏一致 */
+				uni-app .picker-sheet {
+					left: 50%;
+					right: auto;
+					width: 480px;
+					transform: translateX(-50%);
+				}
+			}
+		</style>
 	</head>
 	<body>
 		<div id="app"><!--app-html--></div>

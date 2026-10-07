@@ -5,12 +5,7 @@
 		<load-feedback :active="loading && borrowMode != 'more' && listMode != 'more'" :mode="loadSettled ? 'refresh' : 'initial'" />
 		<text v-if="listError != ''" class="error">{{ listError }}</text>
 		<text class="section">未归还领用</text>
-		<selection-row v-for="(item, index) in borrowOptions" :key="item.id" :label="item.label" :selected="item.id == borrowId" :disabled="loading || submitting" @choose="chooseBorrow(index)" />
-		<text v-if="!loading && borrowOptions.length == 0 && hint == '' && listError == ''" class="empty">没有未归还的领用</text>
-		<text v-if="borrowTotal > 0" class="meta">已显示 {{ borrowOptions.length }} / {{ borrowTotal }} 条</text>
-		<load-feedback :active="borrowOpen && borrowMode == 'more'" mode="more" />
-		<action-button label="加载更多" accessibility-label="加载更多未归还领用" tone="secondary" v-if="borrowOptions.length < borrowTotal" :disabled="loading || submitting || previewPending" @press="loadMoreBorrows" />
-		<text v-if="chosenBorrow != ''" class="meta">已选 {{ chosenBorrow }}</text>
+		<sheet-picker title="领用单" :options="borrowSheetOptions" :selected-id="borrowId" :selection-text="chosenBorrow" :loading="borrowOpen && borrowMode != 'more'" :appending="borrowOpen && borrowMode == 'more'" :total="borrowTotal" :disabled="loading || submitting || previewPending" :searchable="false" :error="listError" empty-title="没有未归还的领用" @choose="chooseBorrow" @more="loadMoreBorrows" />
 		<date-field v-model="returnDate" label="归还日期" :disabled="loading || submitting" />
 		<text class="label">使用次数</text>
 		<input class="field" v-model="usageCount" :disabled="loading || submitting || previewPending" type="number" placeholder="使用次数" />
@@ -27,8 +22,8 @@
 			<text class="title">{{ item.title }}</text>
 			<text class="meta">{{ item.detail }}</text>
 		</view>
-		<text v-if="!loading && rows.length == 0 && hint == '' && listError == ''" class="empty">暂无归还</text>
-		<text v-if="listTotal > 0" class="meta">已显示 {{ rows.length }} / {{ listTotal }} 条</text>
+		<empty-state v-if="!loading && rows.length == 0 && hint == '' && listError == ''" title="暂无归还" :compact="true" />
+		<text v-if="listTotal > 0" class="list-count">已显示 {{ rows.length }} / 共 {{ listTotal }} 条</text>
 		<load-feedback :active="listOpen && listMode == 'more'" mode="more" />
 		<action-button label="加载更多" accessibility-label="加载更多归还记录" tone="secondary" v-if="rows.length < listTotal" :disabled="loading || submitting" @press="loadMoreRecords" />
 	</scroll-view>
@@ -39,7 +34,7 @@
 	import LoadFeedback from '../../../shared/ui/load-feedback.uvue'
 	import HomeLink from '../../../shared/ui/home-link.uvue'
 	import ActionButton from '../../../shared/ui/action-button.uvue'
-	import SelectionRow from '../../../shared/ui/selection-row.uvue'
+	import SheetPicker from '../../../shared/ui/sheet-picker.uvue'
 	import DateField from '../../../shared/ui/date-field.uvue'
 	import {
 		DocLine,
@@ -55,6 +50,8 @@
 		withQuery
 	} from '../http.uts'
 	import { asJsonObject, errorText, fieldInt, fieldNumber, fieldText, readRows } from '../../../shared/api/fields.uts'
+	import { SheetOption, sheetOption } from '../../../shared/ui/sheet-option.uts'
+	import EmptyState from '../../../shared/ui/empty-state.uvue'
 
 	class BorrowPick {
 		id: number = 0
@@ -63,6 +60,14 @@
 	}
 
 	const borrowOptions = ref<BorrowPick[]>([])
+	const borrowSheetOptions = computed((): SheetOption[] => {
+		const list = borrowOptions.value
+		const out: SheetOption[] = []
+		for (let i = 0; i < list.length; i++) {
+			out.push(sheetOption(list[i].id, list[i].label))
+		}
+		return out
+	})
 	const borrowId = ref(0)
 	const moldId = ref(0)
 	const chosenBorrow = ref('')

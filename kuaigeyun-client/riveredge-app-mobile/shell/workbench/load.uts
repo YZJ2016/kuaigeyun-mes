@@ -1,6 +1,6 @@
 import { apiGet } from '../../shared/api/http.uts'
 import { fieldText } from '../../shared/api/fields.uts'
-import { getToken } from '../../shared/api/session.uts'
+import { getToken, getTenantId } from '../../shared/api/session.uts'
 import {
 	entryInWorkbench,
 	entryPagePath,
@@ -199,6 +199,16 @@ async function loadScope(pkg : any) : Promise<WorkScope | null> {
 	return block
 }
 
+let cachedBlocks : Array<WorkScope> | null = null
+let cachedToken = ''
+let cachedTenant = ''
+
+export function readWorkbenchCache() : Array<WorkScope> | null {
+	if (cachedBlocks == null) { return null }
+	if (cachedToken != getToken() || cachedTenant != getTenantId()) { return null }
+	return cachedBlocks
+}
+
 export async function loadWorkbench() : Promise<WorkScope[]> {
 	if (getToken().length == 0) { return [] }
 	const packages = installedPackages()
@@ -216,5 +226,8 @@ export async function loadWorkbench() : Promise<WorkScope[]> {
 		const block = results[i]
 		if (block != null) { blocks.push(block) }
 	}
+	cachedBlocks = blocks
+	cachedToken = getToken()
+	cachedTenant = getTenantId()
 	return blocks
 }

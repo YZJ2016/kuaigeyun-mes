@@ -1,10 +1,10 @@
 <template>
 	<view class="page-shell">
 		<home-link />
-	<view class="page">
+	<scroll-view class="page" direction="vertical">
 		<load-feedback :active="loading" :mode="loadSettled ? 'refresh' : 'initial'" />
 		<text v-if="errorTextValue.length > 0" class="error">{{ errorTextValue }}</text>
-		<text v-if="!loading && rows.length == 0 && errorTextValue.length == 0" class="empty">暂无报工</text>
+		<empty-state v-if="!loading && rows.length == 0 && errorTextValue.length == 0" title="暂无报工" />
 		<view v-for="(row, index) in rows" :key="index" class="card">
 			<text class="title">{{ lineTitle(row) }}</text>
 			<text class="sub">{{ lineSub(row) }}</text>
@@ -13,7 +13,7 @@
 			<text class="sub">报工时间 {{ reviewValue(row, 'reported_at') }}</text>
 			<action-button label="审核" :busy="approvalPosting && approvingIndex == index" busy-label="审核中" tone="primary" :disabled="loading || approving" @press="approve(index)" />
 		</view>
-	</view>
+		</scroll-view>
 	</view>
 </template>
 
@@ -24,6 +24,7 @@
 	import { request } from '../../../shared/api/index.uts'
 	import { readRows, fieldText, fieldNumber, errorText } from '../../../shared/api/fields.uts'
 	import { toast } from '../json.uts'
+	import EmptyState from '../../../shared/ui/empty-state.uvue'
 
 	const rows = ref<any[]>([])
 	const loading = ref(false)

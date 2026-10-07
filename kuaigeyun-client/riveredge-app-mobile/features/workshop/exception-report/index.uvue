@@ -1,7 +1,7 @@
 <template>
 	<view class="page-shell">
 		<home-link />
-	<view class="page">
+	<scroll-view class="page" direction="vertical">
 		<load-feedback :active="loading && !submitting" :mode="loadSettled ? 'refresh' : 'initial'" />
 		<view class="modes">
 			<choice-button label="缺料" :selected="kind == 'material-shortage'" @choose="switchKind('material-shortage')" :disabled="loading || submitting" />
@@ -32,7 +32,7 @@
 		</view>
 		<input :disabled="loading || submitting" class="field" v-model="remarks" placeholder="备注（可空）" />
 		<action-button label="提交" tone="primary" :busy="submitting" busy-label="提交中" @press="submitReport" :disabled="loading || submitting" />
-	</view>
+		</scroll-view>
 	</view>
 </template>
 

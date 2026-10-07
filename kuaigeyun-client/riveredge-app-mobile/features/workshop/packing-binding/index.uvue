@@ -1,11 +1,11 @@
 <template>
 	<view class="page-shell">
 		<home-link />
-	<view class="page">
+	<scroll-view class="page" direction="vertical">
 		<load-feedback :active="loading && !submitting" :mode="loadSettled ? 'refresh' : 'initial'" />
 		<text v-if="errorTextValue.length > 0" class="error">{{ errorTextValue }}</text>
 		<view v-if="detail == null && !packOpen">
-			<text v-if="!loading && rows.length == 0 && errorTextValue.length == 0" class="empty">暂无绑定</text>
+			<empty-state v-if="!loading && rows.length == 0 && errorTextValue.length == 0" title="暂无绑定" />
 			<action-card v-for="(row, index) in rows" :key="index" @press="openBinding(index)" :disabled="loading || submitting">
 				<text class="title">{{ lineTitle(row) }}</text>
 				<text class="sub">{{ lineSub(row) }}</text>
@@ -20,14 +20,14 @@
 				<choice-button label="成品入库单" :selected="sourceKind == 'fg'" @choose="chooseKind(0)" :disabled="loading || submitting" />
 				<choice-button label="销售出库单" :selected="sourceKind == 'sales'" @choose="chooseKind(1)" :disabled="loading || submitting" />
 			</view>
-			<text v-if="sourceKind.length > 0 && sources.length == 0 && !loading" class="empty">没有可选单据</text>
+			<empty-state v-if="sourceKind.length > 0 && sources.length == 0 && !loading" title="没有可选单据" :compact="true" />
 			<action-card v-for="(doc, index) in sources" :key="doc.uid" @press="pickSource(index)" :disabled="loading || submitting">
 				<text class="title">{{ doc.title }}</text>
 				<text class="sub">{{ sourceIndex == index ? '已选' : '点选' }}</text>
 			</action-card>
 			<view v-if="sourceIndex >= 0">
 				<text class="label">产品</text>
-				<text v-if="products.length == 0 && !loading" class="empty">这张单没有可绑定的产品</text>
+				<empty-state v-if="products.length == 0 && !loading" title="这张单没有可绑定的产品" :compact="true" />
 				<action-card v-for="(product, index) in products" :key="product.uid" @press="pickProduct(index)" :disabled="loading || submitting">
 					<text class="title">{{ product.label }}</text>
 					<text class="sub">{{ productIndex == index ? '已选' : '点选' }}</text>
@@ -49,7 +49,7 @@
 			<text class="sub">绑定时间 {{ detailLine('bound_at') }}</text>
 			<text class="sub">备注 {{ detailLine('remarks') }}</text>
 		</view>
-	</view>
+		</scroll-view>
 	</view>
 </template>
 
@@ -62,6 +62,7 @@
 	import { request } from '../../../shared/api/index.uts'
 	import { readRows, fieldText, fieldNumber, firstText, errorText } from '../../../shared/api/fields.uts'
 	import { toast } from '../json.uts'
+	import EmptyState from '../../../shared/ui/empty-state.uvue'
 
 	type SourceDoc = {
 		uid : string

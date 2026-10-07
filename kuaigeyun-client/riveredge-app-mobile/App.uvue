@@ -117,6 +117,15 @@
 		color: #625370;
 	}
 
+	.list-count {
+		font-size: 12px;
+		color: #94A3B8;
+		text-align: center;
+		align-self: center;
+		padding-top: 10px;
+		padding-bottom: 10px;
+	}
+
 	.error,
 	.err {
 		font-size: 14px;

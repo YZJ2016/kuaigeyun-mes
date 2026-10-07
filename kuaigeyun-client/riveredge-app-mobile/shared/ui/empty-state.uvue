@@ -1,0 +1,29 @@
+<template>
+	<view :class="compact ? 'empty-state empty-state-sm' : 'empty-state'">
+		<view :class="compact ? 'empty-orb empty-orb-sm' : 'empty-orb'">
+			<image :class="compact ? 'empty-icon empty-icon-sm' : 'empty-icon'" :src="iconPath" mode="aspectFit"></image>
+		</view>
+		<text :class="compact ? 'empty-title empty-title-sm' : 'empty-title'">{{ title }}</text>
+		<text v-if="hint.length > 0" class="empty-hint">{{ hint }}</text>
+	</view>
+</template>
+<script setup lang="uts">
+	const props = defineProps({
+		title: { type: String, default: '暂无数据' },
+		hint: { type: String, default: '' },
+		icon: { type: String, default: '' },
+		compact: { type: Boolean, default: false }
+	})
+	const iconPath = computed((): string => props.icon.length > 0 ? props.icon : '/static/workbench-icons/workshop/inbox.svg')
+</script>
+<style>
+	.empty-state { padding-top: 40px; padding-right: 24px; padding-bottom: 40px; padding-left: 24px; flex-direction: column; align-items: center; justify-content: center; }
+	.empty-state-sm { padding-top: 14px; padding-right: 16px; padding-bottom: 14px; padding-left: 16px; }
+	.empty-orb { width: 56px; height: 56px; border-radius: 28px; background-color: #F1F5F9; align-items: center; justify-content: center; margin-bottom: 10px; }
+	.empty-orb-sm { width: 34px; height: 34px; border-radius: 17px; margin-bottom: 6px; }
+	.empty-icon { width: 26px; height: 26px; }
+	.empty-icon-sm { width: 17px; height: 17px; }
+	.empty-title { font-size: 14px; font-weight: 500; color: #64748B; text-align: center; }
+	.empty-title-sm { font-size: 13px; }
+	.empty-hint { margin-top: 6px; font-size: 13px; color: #94A3B8; text-align: center; }
+</style>
