@@ -2,7 +2,7 @@
  * 登记连接、IoT 设备、点位，并查看该设备最新快照。
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button, Card, Form, Input, Select, Space, Table, Typography, message } from 'antd';
 import {
@@ -10,8 +10,11 @@ import {
   createDevice,
   createTag,
   listSnapshots,
+  listConnections,
+  type ConnectionOut,
   type SnapshotOut,
 } from '../../services/kuaiiot';
+import { getIntegrationConfigListAllMatching, type IntegrationConfig } from '../../../../services/integrationConfig';
 
 const { Title, Text } = Typography;
 
@@ -45,10 +48,39 @@ export default function RegistryPage({ section = 'center' }: { section?: Registr
   const [deviceId, setDeviceId] = useState<number | null>(null);
   const [snapshots, setSnapshots] = useState<SnapshotOut[]>([]);
   const [loadingSnapshots, setLoadingSnapshots] = useState(false);
+  const [connectionForm] = Form.useForm();
+  const [connectionType, setConnectionType] = useState('http');
+  const [coreConnections, setCoreConnections] = useState<IntegrationConfig[]>([]);
+  const [connections, setConnections] = useState<ConnectionOut[]>([]);
+  const [loadingConnections, setLoadingConnections] = useState(false);
   const showConnection = section === 'center' || section === 'connection';
   const showDevice = section === 'center' || section === 'device';
   const showTag = section === 'center' || section === 'tag';
   const showSnapshot = section === 'center';
+  useEffect(() => {
+    let cancelled = false;
+    setLoadingConnections(true);
+    const load = async () => {
+      try {
+        const [core, rows] = await Promise.all([
+          showConnection ? getIntegrationConfigListAllMatching({ is_active: true }) : Promise.resolve([]),
+          listConnections(),
+        ]);
+        if (!cancelled) {
+          setCoreConnections(core);
+          setConnections(rows);
+        }
+      } catch {
+        if (!cancelled) message.error('连接列表加载失败，请刷新重试');
+      } finally {
+        if (!cancelled) setLoadingConnections(false);
+      }
+    };
+    void load();
+    return () => { cancelled = true; };
+  }, [showConnection]);
+  const eligibleCore = coreConnections.filter((row) => connectionType === 'http'
+    ? ['API', 'api', 'Webhook'].includes(row.type) : row.type === connectionType);
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%', padding: 16 }}>
@@ -66,11 +98,15 @@ export default function RegistryPage({ section = 'center' }: { section?: Registr
 
       {showConnection ? <Card title="连接">
         <Form
+          form={connectionForm}
           layout="inline"
-          onFinish={async (values: { code: string; name: string; connection_type: string }) => {
+          onFinish={async (values: { code: string; name: string; connection_type: string; integration_uuid?: string; topic?: string; device_token_path?: string; tags_path?: string; events_path?: string; timestamp_path?: string; idempotency_key_path?: string }) => {
             try {
-              const row = await createConnection(values);
+              const { code, name, connection_type, integration_uuid, ...mapping } = values;
+              const config = Object.fromEntries(Object.entries(mapping).filter(([, value]) => value?.trim()));
+              const row = await createConnection({ code, name, connection_type, integration_uuid, config });
               setConnectionId(row.id);
+              setConnections((rows) => [...rows, row]);
               message.success(`连接已登记，编号 ${row.id}`);
             } catch (error) {
               message.error(error instanceof Error ? error.message : '连接登记失败');
@@ -84,12 +120,28 @@ export default function RegistryPage({ section = 'center' }: { section?: Registr
             <Input placeholder="名称" />
           </Form.Item>
           <Form.Item name="connection_type" initialValue="http" rules={[{ required: true }]}>
-            <Select style={{ width: 160 }} options={CONNECTION_TYPES} />
+            <Select style={{ width: 160 }} options={CONNECTION_TYPES} onChange={(value) => {
+              setConnectionType(value);
+              connectionForm.resetFields(['integration_uuid', 'topic', 'device_token_path', 'tags_path', 'events_path', 'timestamp_path', 'idempotency_key_path']);
+            }} />
           </Form.Item>
+          <Form.Item name="integration_uuid" label="公共连接" rules={[{ required: connectionType !== 'http', message: '请选择公共连接' }]}>
+            <Select allowClear showSearch optionFilterProp="label" loading={loadingConnections}
+              style={{ width: 260 }} placeholder="选择已启用的公共连接"
+              options={eligibleCore.map((row) => ({ value: row.uuid, label: `${row.name} (${row.code})` }))} />
+          </Form.Item>
+          {connectionType === 'mqtt' ? <Form.Item name="topic" label="订阅主题"><Input placeholder="plant/+" /></Form.Item> : null}
+          {connectionType !== 'http' ? ['device_token_path', 'tags_path', 'events_path', 'timestamp_path', 'idempotency_key_path'].map((key) => (
+            <Form.Item key={key} name={key} label={{ device_token_path: '设备凭据路径', tags_path: '点位路径', events_path: '事件路径', timestamp_path: '采样时间路径', idempotency_key_path: '幂等键路径' }[key]}>
+              <Input placeholder="载荷中的点分路径" />
+            </Form.Item>
+          )) : null}
           <Button type="primary" htmlType="submit">
             登记连接
           </Button>
         </Form>
+        <Text type="secondary">地址与凭据在公共连接中维护。直接 HTTP 入站可不选公共连接。</Text>
+        <Link to="/system/application-connections" style={{ marginLeft: 12 }}>管理公共连接</Link>
       </Card> : null}
 
       {showDevice ? <Card title="IoT 设备">
@@ -114,6 +166,12 @@ export default function RegistryPage({ section = 'center' }: { section?: Registr
             }
           }}
         >
+          <Form.Item label="数采连接">
+            <Select allowClear value={connectionId ?? undefined} loading={loadingConnections}
+              style={{ width: 220 }} placeholder="选择已登记的数采连接"
+              onChange={(value) => setConnectionId(value ?? null)}
+              options={connections.map((row) => ({ value: row.id, label: `${row.name} (${row.code})` }))} />
+          </Form.Item>
           <Form.Item
             name="external_device_id"
             rules={[{ required: true, message: '请填写外部设备标识' }]}

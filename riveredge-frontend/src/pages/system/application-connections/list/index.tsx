@@ -11,6 +11,7 @@ import {
   ActionType,
   ProColumns,
   ProFormText,
+  ProFormDigit,
   ProFormTextArea,
   ProFormSwitch,
   ProFormSelect,
@@ -971,6 +972,16 @@ const ApplicationConnectionsListPage: React.FC = () => {
             <ProFormText.Password name="secret" label="App Secret" rules={[{ required: true }]} colProps={{ span: 12 }} />
           </>
         );
+      case 'mqtt':
+        return (
+          <>
+            <ProFormText name="host" label="Broker 地址" rules={[{ required: true }]} colProps={{ span: 12 }} />
+            <ProFormDigit name="port" label="端口" min={1} max={65535} initialValue={1883} rules={[{ required: true }]} colProps={{ span: 12 }} />
+            <ProFormText name="username" label="用户名" colProps={{ span: 12 }} />
+            <ProFormText.Password name="password" label="密码" colProps={{ span: 12 }} />
+            <ProFormSwitch name="use_tls" label="TLS" colProps={{ span: 12 }} />
+          </>
+        );
       case 'jetlinks':
         return (
           <>
@@ -1365,7 +1376,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
       'teamcenter', 'windchill', 'caxa', 'sanpin_plm', 'sunlike_plm', 'sipm', 'inteplm',
       'salesforce', 'xiaoshouyi', 'fenxiang', 'qidian', 'supra_crm',
       'weaver', 'seeyon', 'landray', 'cloudhub', 'tongda_oa',
-      'rootcloud', 'casicloud', 'alicloud_iot', 'huaweicloud_iot', 'thingsboard', 'jetlinks',
+      'rootcloud', 'casicloud', 'alicloud_iot', 'huaweicloud_iot', 'thingsboard', 'jetlinks', 'mqtt',
       'flux_wms', 'kejian_wms', 'digiwin_wms', 'openwms',
       'alicloud_oss', 'tencent_cos', 'huaweicloud_obs', 'aws_s3', 'minio', 'qiniu_kodo',
       'nas_webdav', 'nas_smb', 'amap', 'kuaidi100', 'kdniao', 'aliyun_market', 'tencent_market',

@@ -15,6 +15,7 @@ from apps.kuaiiot.models.connection import KuaiiotConnection
 from apps.kuaiiot.models.device import KuaiiotDevice
 from apps.kuaiiot.services.message_log_service import MessageLogService, sanitize_payload
 from apps.kuaiiot.services.product_service import get_product
+from apps.kuaiiot.services.connection_runtime import ensure_device_connection
 from core.utils.timezone_utils import resolve_business_datetime
 from infra.domain.tenant_context import TenantContextError, get_current_tenant_id, unscoped, with_tenant
 from infra.exceptions.exceptions import AuthenticationError, NotFoundError, ValidationError
@@ -157,6 +158,7 @@ async def create_command(
     device = await KuaiiotDevice.filter(tenant_id=tid, id=device_id, deleted_at__isnull=True).first()
     if device is None:
         raise NotFoundError("设备不存在")
+    await ensure_device_connection(device)
     if not device.product_id:
         raise ValidationError("设备未绑定产品")
     product = await get_product(tid, int(device.product_id))
@@ -228,6 +230,10 @@ async def claim_pending_commands(tenant_id: int, device_id: int) -> list[dict[st
     now = resolve_business_datetime()
     device = await KuaiiotDevice.filter(tenant_id=tenant_id, id=device_id, deleted_at__isnull=True).first()
     if device is None:
+        return []
+    try:
+        await ensure_device_connection(device)
+    except ValidationError:
         return []
     functions = await _functions_by_key(tenant_id, device.product_id)
     rows = await KuaiiotDeviceCommand.filter(

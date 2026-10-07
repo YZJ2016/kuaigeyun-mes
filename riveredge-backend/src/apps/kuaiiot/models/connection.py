@@ -19,7 +19,11 @@ class KuaiiotConnection(BaseModel):
     code = fields.CharField(max_length=50, description="连接编码")
     name = fields.CharField(max_length=100, description="连接名称")
     connection_type = fields.CharField(max_length=30, description="连接类型")
-    config = fields.JSONField(null=True, description="连接配置")
+    integration = fields.ForeignKeyField(
+        "models.IntegrationConfig", related_name="kuaiiot_connections",
+        null=True, on_delete=fields.RESTRICT, description="同租户公共连接",
+    )
+    config = fields.JSONField(null=True, description="数采映射配置，不保存连接地址或凭据")
     is_enabled = fields.BooleanField(default=True, description="是否启用")
     health_status = fields.CharField(max_length=20, default="unknown", description="健康状态")
     last_health_at = fields.DatetimeField(null=True, description="最近健康检查时间")

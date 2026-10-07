@@ -15,6 +15,7 @@ from apps.kuaiiot.models.device import KuaiiotDevice
 from apps.kuaiiot.models.edge_config import KuaiiotEdgeConfig
 from apps.kuaiiot.schemas.ingest import IngestBody
 from apps.kuaiiot.services.command_service import claim_pending_commands
+from apps.kuaiiot.services.connection_runtime import ensure_device_connection
 from apps.kuaiiot.services.ingest_service import IngestService
 from core.utils.timezone_utils import resolve_business_datetime
 from infra.domain.tenant_context import TenantContextError, get_current_tenant_id, unscoped, with_tenant
@@ -179,6 +180,8 @@ class EdgeConfigService:
     @staticmethod
     async def pull_runtime_config(device_token: str, edge_config_code: str) -> dict[str, Any]:
         device = await EdgeConfigService._device_for_token(device_token)
+        async with with_tenant(int(device.tenant_id), reason="校验边缘配置公共连接"):
+            await ensure_device_connection(device)
         row = await EdgeConfigService._enabled_config(device, edge_config_code)
         body = {
             "config_version": int(row.config_version),
@@ -232,8 +235,13 @@ class EdgeConfigService:
                     "updated_at",
                 ]
             )
-            pending_commands = await claim_pending_commands(tenant_id, device.id)
-        return {"config_changed": changed, "pending_commands": pending_commands}
+            try:
+                await ensure_device_connection(device)
+                collection_enabled = True
+            except ValidationError:
+                collection_enabled = False
+            pending_commands = await claim_pending_commands(tenant_id, device.id) if collection_enabled else []
+        return {"config_changed": changed, "pending_commands": pending_commands, "collection_enabled": collection_enabled}
 
     @staticmethod
     async def ingest_batch(device_token: str, items: list[IngestBody]) -> dict[str, int]:

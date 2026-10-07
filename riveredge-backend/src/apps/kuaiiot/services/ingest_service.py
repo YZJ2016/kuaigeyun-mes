@@ -28,6 +28,7 @@ from apps.kuaiiot.models.product import KuaiiotProduct
 from apps.kuaiiot.models.tag import KuaiiotTagDefinition, KuaiiotTagSnapshot
 from apps.kuaiiot.services.message_log_service import MessageLogService
 from apps.kuaiiot.schemas.ingest import IngestBody
+from apps.kuaiiot.services.connection_runtime import ensure_device_connection
 from apps.kuaiiot.services.alert_service import evaluate_thresholds
 from apps.kuaiiot.services.status_mapper import (
     BLOCKED_EQUIPMENT_STATUSES,
@@ -216,6 +217,7 @@ class IngestService:
 
     @staticmethod
     async def _ingest_matched(device: KuaiiotDevice, body: IngestBody) -> dict[str, Any]:
+        await ensure_device_connection(device)
         tenant_id = int(device.tenant_id)
         key = (body.idempotency_key or "").strip()
         if key:
@@ -239,15 +241,24 @@ class IngestService:
             definition = by_key.get(tag_key)
             if definition is None:
                 continue
-            value_text, value_number, value_bool = _typed_snapshot(definition.value_type, raw)
+            quality = body.qualities.get(tag_key, "good")
+            value_text, value_number, value_bool = (
+                _typed_snapshot(definition.value_type, raw) if quality == "good" else (None, None, None)
+            )
             planned.append((definition, value_text, value_number, value_bool))
-            if definition.map_target in MONITOR_COLUMNS or definition.map_target.startswith(OTHER_PARAMETERS_PREFIX):
-                _apply_monitor(definition.map_target, tag_key, raw, monitor_fields)
 
         try:
             async with in_transaction():
+                current = await KuaiiotDevice.filter(id=device.id, tenant_id=tenant_id).select_for_update().get()
+                if key:
+                    stored = await IngestService._stored_response(tenant_id, device.id, key)
+                    if stored is not None:
+                        return stored
+                previous = await KuaiiotTagSnapshot.filter(tenant_id=tenant_id, device_id=device.id).order_by("-sampled_at").first()
+                fresh = []
                 for definition, value_text, value_number, value_bool in planned:
-                    await IngestService._upsert_snapshot(
+                    quality = body.qualities.get(definition.tag_key, "good")
+                    updated = await IngestService._upsert_snapshot(
                         tenant_id,
                         device.id,
                         definition.tag_key,
@@ -255,8 +266,11 @@ class IngestService:
                         value_number,
                         value_bool,
                         sampled_at,
+                        quality,
                     )
-                current = await KuaiiotDevice.get(id=device.id, tenant_id=tenant_id)
+                    if updated and quality == "good":
+                        fresh.append((definition, value_text, value_number, value_bool))
+                        _apply_monitor(definition.map_target, definition.tag_key, body.tags[definition.tag_key], monitor_fields)
                 current.is_online = True
                 current.last_seen_at = server_now
                 await current.save(update_fields=["is_online", "last_seen_at", "updated_at"])
@@ -269,10 +283,10 @@ class IngestService:
                         sampled_at,
                         server_now,
                     )
-                if planned:
+                if fresh:
                     samples = {
                         definition.tag_key: (value_text, value_number, value_bool)
-                        for definition, value_text, value_number, value_bool in planned
+                        for definition, value_text, value_number, value_bool in fresh
                     }
                     await evaluate_thresholds(
                         tenant_id,
@@ -284,7 +298,7 @@ class IngestService:
                 accepted_events = await IngestService._apply_events(
                     tenant_id,
                     device,
-                    body.events or [],
+                    (body.events or []) if previous is None or _aware(sampled_at) > _aware(previous.sampled_at) else [],
                     sampled_at,
                 )
                 await MessageLogService.append(
@@ -403,7 +417,8 @@ class IngestService:
         value_number: Optional[Decimal],
         value_bool: Optional[bool],
         sampled_at: datetime,
-    ) -> None:
+        quality: str = "good",
+    ) -> bool:
         row = await KuaiiotTagSnapshot.filter(
             tenant_id=tenant_id,
             device_id=device_id,
@@ -417,14 +432,16 @@ class IngestService:
                 value_text=value_text,
                 value_number=value_number,
                 value_bool=value_bool,
-                quality="good",
+                quality=quality,
                 sampled_at=sampled_at,
             )
-            return
+            return True
+        if _aware(sampled_at) <= _aware(row.sampled_at):
+            return False
         row.value_text = value_text
         row.value_number = value_number
         row.value_bool = value_bool
-        row.quality = "good"
+        row.quality = quality
         row.sampled_at = sampled_at
         row.deleted_at = None
         await row.save(
@@ -438,6 +455,7 @@ class IngestService:
                 "updated_at",
             ]
         )
+        return True
 
     @staticmethod
     async def _maybe_insert_monitor(
@@ -459,13 +477,16 @@ class IngestService:
             equipment_uuid=equipment.uuid,
             data_source=SENSOR_DATA_SOURCE,
             deleted_at__isnull=True,
-        ).order_by("-created_at").first()
+        ).order_by("-monitored_at", "-id").first()
         blocked = await IngestService._writeback_blocked(tenant_id, equipment)
         if blocked and latest is None:
             return False
         if latest is not None:
+            if _aware(sampled_at) <= _aware(latest.monitored_at):
+                return False
             elapsed = _aware(server_now) - _aware(latest.created_at)
-            if elapsed < timedelta(seconds=THROTTLE_SECONDS):
+            status_changed = "status" in fields and normalize_equipment_status(fields["status"]) != latest.status
+            if elapsed < timedelta(seconds=THROTTLE_SECONDS) and not status_changed:
                 return False
         if blocked:
             status_value = latest.status

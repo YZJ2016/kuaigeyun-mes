@@ -808,6 +808,15 @@ export const APP_CONNECTOR_DEFINITIONS: AppConnectorDefinition[] = [
     defaultConfig: { base_url: '', app_key: '', app_secret: '' },
   },
   {
+    id: 'mqtt',
+    name: 'MQTT Broker',
+    type: 'mqtt',
+    category: 'iot',
+    description: '客户自备 MQTT Broker 连接配置',
+    icon: <RocketOutlined />,
+    defaultConfig: { host: '', port: 1883, username: '', password: '', use_tls: false },
+  },
+  {
     id: 'thingsboard',
     name: 'ThingsBoard',
     type: 'thingsboard',

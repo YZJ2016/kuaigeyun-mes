@@ -90,6 +90,7 @@ PRESET_APP_CONNECTORS: List[Dict[str, Any]] = [
     {"id": "huaweicloud_iot", "name": "华为云 IoT", "type": "huaweicloud_iot", "category": "iot", "description": "华为云 IoT (OceanConnect)", "icon": "CloudOutlined", "default_config": {"app_id": "", "secret": "", "base_url": ""}},
     {"id": "rootcloud", "name": "树根互联", "type": "rootcloud", "category": "iot", "description": "树根互联工业互联网平台", "icon": "RocketOutlined", "default_config": {"base_url": "", "app_key": "", "app_secret": ""}},
     {"id": "casicloud", "name": "航天云网", "type": "casicloud", "category": "iot", "description": "航天云网 INDICS 平台", "icon": "InteractionOutlined", "default_config": {"base_url": "", "app_key": "", "app_secret": ""}},
+    {"id": "mqtt", "name": "MQTT Broker", "type": "mqtt", "category": "iot", "description": "客户自备 MQTT Broker 连接配置", "icon": "RocketOutlined", "default_config": {"host": "", "port": 1883, "username": "", "password": "", "use_tls": False}},
     {"id": "thingsboard", "name": "ThingsBoard", "type": "thingsboard", "category": "iot", "description": "ThingsBoard 开源 IoT 平台", "icon": "RocketOutlined", "default_config": {"base_url": "", "username": "", "password": ""}},
     {"id": "jetlinks", "name": "JetLinks", "type": "jetlinks", "category": "iot", "description": "JetLinks 开源 IoT 平台", "icon": "RocketOutlined", "default_config": {"base_url": "", "token": ""}},
     # WMS
