@@ -35,6 +35,7 @@ async def db():
                 "apps.kuaiiot.models.device",
                 "apps.kuaiiot.models.tag",
                 "apps.kuaiiot.models.dedup",
+                "apps.kuaiiot.models.delivery",
                 "apps.kuaiiot.models.alert",
                 "apps.kuaiiot.models.edge_config",
                 "apps.kuaiiot.models.product",

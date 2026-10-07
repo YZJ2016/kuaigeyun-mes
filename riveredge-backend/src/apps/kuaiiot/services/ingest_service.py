@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import hashlib
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Optional
@@ -30,6 +31,7 @@ from apps.kuaiiot.services.message_log_service import MessageLogService
 from apps.kuaiiot.schemas.ingest import IngestBody
 from apps.kuaiiot.services.connection_runtime import ensure_device_connection
 from apps.kuaiiot.services.alert_service import evaluate_thresholds
+from apps.kuaiiot.services.delivery_service import enqueue
 from apps.kuaiiot.services.status_mapper import (
     BLOCKED_EQUIPMENT_STATUSES,
     MONITOR_STATUS_WHEN_ABSENT,
@@ -258,6 +260,9 @@ class IngestService:
                 fresh = []
                 for definition, value_text, value_number, value_bool in planned:
                     quality = body.qualities.get(definition.tag_key, "good")
+                    if quality == "good" and value_number is not None:
+                        delivery_key = hashlib.sha256(f"{device.id}:{definition.tag_key}:{_aware(sampled_at).isoformat()}".encode()).hexdigest()
+                        await enqueue(tenant_id, "trend", delivery_key, {"device_id": device.id, "tag_key": definition.tag_key, "value": float(value_number), "sampled_at": sampled_at.isoformat()})
                     updated = await IngestService._upsert_snapshot(
                         tenant_id,
                         device.id,

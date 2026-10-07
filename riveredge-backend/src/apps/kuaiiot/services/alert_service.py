@@ -7,6 +7,7 @@ from decimal import Decimal
 from typing import Optional
 
 from tortoise.exceptions import IntegrityError
+from tortoise.transactions import in_transaction
 
 from apps.kuaizhizao.services.equipment_service import EquipmentService
 from apps.kuaiiot.models.alert import KuaiiotAlert, KuaiiotAlertRule
@@ -18,6 +19,8 @@ from apps.kuaiiot.services.alert_threshold_resolver import (
 )
 from apps.kuaiiot.services.tag_template_service import _require_tenant
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from apps.kuaiiot.services.delivery_service import enqueue
+from core.utils.timezone_utils import resolve_business_datetime
 
 
 _RULE_SEVERITIES = {"info", "warning", "critical"}
@@ -57,15 +60,14 @@ async def evaluate_thresholds(
         if sample is None:
             continue
         value_text, value_number, value_bool = sample
-        if not is_threshold_breached(
+        breached = is_threshold_breached(
             rule.operator,
             threshold_number=rule.threshold_number,
             threshold_text=rule.threshold_text,
             value_number=value_number,
             value_text=value_text,
             value_bool=value_bool,
-        ):
-            continue
+        )
         previous = await KuaiiotAlert.filter(
             tenant_id=tenant_id,
             rule_id=rule.id,
@@ -73,12 +75,23 @@ async def evaluate_thresholds(
             equipment_uuid=equipment_uuid,
             deleted_at__isnull=True,
         ).order_by("-triggered_at").first()
+        if not breached:
+            if previous is not None and previous.recovered_at is None:
+                previous.recovered_at = server_now
+                if previous.status != "closed":
+                    previous.status = "recovered"
+                await previous.save()
+                if rule.notify_enabled:
+                    await enqueue(tenant_id, "notification", f"alert:{previous.id}:recovered", {"alert_id": previous.id, "action": "recovered", "message": previous.message})
+            continue
         if previous is not None:
+            if previous.recovered_at is None:
+                continue
             elapsed = _aware(server_now) - _aware(previous.triggered_at)
             if elapsed < timedelta(seconds=int(rule.cooldown_seconds)):
                 continue
         actual = format_actual_value(value_text, value_number, value_bool)
-        await KuaiiotAlert.create(
+        alert = await KuaiiotAlert.create(
             tenant_id=tenant_id,
             rule_id=rule.id,
             device_id=device_id,
@@ -90,6 +103,8 @@ async def evaluate_thresholds(
             status="open",
             triggered_at=server_now,
         )
+        if rule.notify_enabled:
+            await enqueue(tenant_id, "notification", f"alert:{alert.id}:raised", {"alert_id": alert.id, "action": "raised", "message": alert.message})
         created += 1
     return created
 
@@ -150,3 +165,22 @@ async def create_rule(tenant_id: int, payload, *, user_id: Optional[int] = None)
 async def list_alerts(tenant_id: int) -> list[KuaiiotAlert]:
     tid = _require_tenant(tenant_id)
     return await KuaiiotAlert.filter(tenant_id=tid, deleted_at__isnull=True).order_by("-triggered_at").limit(100)
+
+
+async def transition_alert(tenant_id: int, alert_id: int, action: str, user_id: int) -> KuaiiotAlert:
+    tid = _require_tenant(tenant_id)
+    async with in_transaction():
+        row = await KuaiiotAlert.filter(tenant_id=tid, id=alert_id, deleted_at__isnull=True).select_for_update().first()
+        if row is None:
+            raise NotFoundError("告警不存在")
+        if action == "acknowledge" and row.acknowledged_at is None and row.status != "closed":
+            row.acknowledged_at = resolve_business_datetime()
+            row.acknowledged_by = user_id
+            if row.recovered_at is None:
+                row.status = "acknowledged"
+        elif action == "close" and row.closed_at is None:
+            row.closed_at = resolve_business_datetime()
+            row.closed_by = user_id
+            row.status = "closed"
+        await row.save()
+    return row

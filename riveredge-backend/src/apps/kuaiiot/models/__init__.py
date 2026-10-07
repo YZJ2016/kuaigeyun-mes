@@ -3,6 +3,7 @@
 from apps.kuaiiot.models.alert import KuaiiotAlert, KuaiiotAlertRule
 from apps.kuaiiot.models.connection import KuaiiotConnection
 from apps.kuaiiot.models.dedup import KuaiiotIngestDedup
+from apps.kuaiiot.models.delivery import KuaiiotDelivery
 from apps.kuaiiot.models.device import KuaiiotDevice
 from apps.kuaiiot.models.command import KuaiiotDeviceCommand
 from apps.kuaiiot.models.group import KuaiiotDeviceGroup
@@ -20,6 +21,7 @@ __all__ = [
     "KuaiiotDeviceGroup",
     "KuaiiotEdgeConfig",
     "KuaiiotIngestDedup",
+    "KuaiiotDelivery",
     "KuaiiotMessageLog",
     "KuaiiotProduct",
     "KuaiiotTagDefinition",
