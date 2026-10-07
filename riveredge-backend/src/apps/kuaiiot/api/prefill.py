@@ -84,6 +84,18 @@ async def api_list_alerts(tenant_id: int = Depends(get_current_tenant)):
     return [AlertOut.model_validate(row) for row in rows]
 
 
+@router.post("/alerts/{alert_id}/acknowledge", response_model=AlertOut,
+             dependencies=[Depends(require_permission_codes("kuaiiot:alert:create"))])
+async def api_acknowledge_alert(alert_id: int, tenant_id: int = Depends(get_current_tenant), current_user=Depends(get_current_user)):
+    return AlertOut.model_validate(await alert_service.transition_alert(tenant_id, alert_id, "acknowledge", current_user.id))
+
+
+@router.post("/alerts/{alert_id}/close", response_model=AlertOut,
+             dependencies=[Depends(require_permission_codes("kuaiiot:alert:create"))])
+async def api_close_alert(alert_id: int, tenant_id: int = Depends(get_current_tenant), current_user=Depends(get_current_user)):
+    return AlertOut.model_validate(await alert_service.transition_alert(tenant_id, alert_id, "close", current_user.id))
+
+
 @router.get(
     "/fill-context",
     response_model=FillContextOut,

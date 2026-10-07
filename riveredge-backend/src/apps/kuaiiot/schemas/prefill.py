@@ -84,6 +84,9 @@ class AlertOut(BaseModel):
     actual_value: Optional[str] = None
     status: str
     triggered_at: datetime
+    acknowledged_at: Optional[datetime] = None
+    recovered_at: Optional[datetime] = None
+    closed_at: Optional[datetime] = None
 
 
 class FillContextOut(BaseModel):
