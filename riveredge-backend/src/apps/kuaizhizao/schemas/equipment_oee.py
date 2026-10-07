@@ -21,8 +21,10 @@ class EquipmentOEEBase(BaseModel):
 
     equipment: Dict[str, Any] = Field(..., description="设备信息")
     period: Dict[str, str] = Field(..., description="统计周期")
-    metrics: Dict[str, float] = Field(..., description="指标数据")
-    oee: Dict[str, float] = Field(..., description="OEE指标")
+    metrics: Dict[str, Optional[float]] = Field(..., description="指标数据")
+    oee: Dict[str, Optional[float]] = Field(..., description="OEE指标")
+    coverage_rate: Optional[float] = None
+    unavailable_reasons: List[str] = Field(default_factory=list)
     record_count: int = Field(..., description="报工记录数")
 
 

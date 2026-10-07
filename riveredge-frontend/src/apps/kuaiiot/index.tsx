@@ -16,6 +16,7 @@ const TrendPage = lazy(() => import('./pages/trend'));
 const GroupsPage = lazy(() => import('./pages/groups'));
 const CommandsPage = lazy(() => import('./pages/commands'));
 const MessagesPage = lazy(() => import('./pages/messages'));
+const PipelinePage = lazy(() => import('./pages/pipeline'));
 
 const KuaiiotApp: React.FC = () => {
   return (
@@ -33,7 +34,7 @@ const KuaiiotApp: React.FC = () => {
         path="pipeline"
         element={
           <Suspense fallback={<PageSkeleton variant="content" />}>
-            <MessagesPage title="数采链路" />
+            <PipelinePage />
           </Suspense>
         }
       />

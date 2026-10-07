@@ -191,7 +191,7 @@ class BusinessNotificationService:
             "alert",
             "reminder",
         })
-        if entity_id_int and entity_id_int > 0 and action not in _REPEATABLE_ACTIONS:
+        if entity_id_int and entity_id_int > 0 and action not in _REPEATABLE_ACTIONS and not ctx.get("reliable_delivery"):
             from core.models.message_log import MessageLog
             from datetime import timedelta
             from core.utils.timezone_utils import resolve_business_datetime
@@ -283,6 +283,8 @@ class BusinessNotificationService:
                             channel_type, uid, contact_map
                         )
                         if not recipient:
+                            if ctx.get("reliable_delivery"):
+                                dispatch_errors.append("缺少收件地址")
                             logger.error(
                                 "业务消息提醒缺少收件地址 tenant={} doc={} action={} user={} channel={}",
                                 tenant_id,
@@ -293,10 +295,28 @@ class BusinessNotificationService:
                             )
                             continue
 
+                        if ctx.get("reliable_delivery") and entity_id_int:
+                            from core.models.message_log import MessageLog
+                            import hashlib
+                            import json
+                            rule_key = hashlib.sha256(json.dumps(rule, sort_keys=True, default=str).encode()).hexdigest()
+                            prior_logs = await MessageLog.filter(
+                                tenant_id=tenant_id, business_document=doc, business_action=action,
+                                entity_id=entity_id_int, type=channel_type, recipient=recipient,
+                                config_uuid=str(channel["config_uuid"]) if channel.get("config_uuid") else None,
+                                status="success", deleted_at__isnull=True,
+                            ).all()
+                            if any((log.variables or {}).get("_delivery_rule_key") == rule_key for log in prior_logs):
+                                sent += 1
+                                continue
+                        message_variables = dict(vars_payload)
+                        if ctx.get("reliable_delivery") and entity_id_int:
+                            message_variables["_delivery_rule_key"] = rule_key
+
                         req_kwargs: Dict[str, Any] = dict(
                             type=channel_type,
                             recipient=recipient,
-                            variables=vars_payload,
+                            variables=message_variables,
                             content="",
                             business_document=doc,
                             business_action=action,
@@ -330,7 +350,7 @@ class BusinessNotificationService:
                                 action,
                                 uid,
                                 channel_type,
-                                result.error,
+                                "渠道发送失败" if ctx.get("reliable_delivery") else result.error,
                             )
                     except Exception as e:
                         dispatch_errors.append(str(e))
@@ -341,9 +361,9 @@ class BusinessNotificationService:
                             action,
                             uid,
                             channel_type,
-                            e,
+                            "渠道发送异常" if ctx.get("reliable_delivery") else e,
                         )
-        if sent == 0 and dispatch_errors:
+        if dispatch_errors and (sent == 0 or ctx.get("reliable_delivery")):
             raise RuntimeError(
                 f"业务消息提醒全部发送失败 doc={doc} action={action}: {dispatch_errors[0]}"
             )

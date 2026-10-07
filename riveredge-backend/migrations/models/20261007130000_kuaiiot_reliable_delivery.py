@@ -16,14 +16,23 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
     );
     CREATE INDEX idx_kuaiiot_delivery_due ON apps_kuaiiot_deliveries(status,next_attempt_at);
     CREATE INDEX idx_kuaiiot_delivery_tenant ON apps_kuaiiot_deliveries(tenant_id);
+    ALTER TABLE apps_kuaiiot_devices ADD COLUMN latest_sampled_at TIMESTAMPTZ;
     ALTER TABLE apps_kuaiiot_alerts ADD COLUMN recovered_at TIMESTAMPTZ;
     ALTER TABLE apps_kuaiiot_alerts ADD COLUMN closed_at TIMESTAMPTZ;
     ALTER TABLE apps_kuaiiot_alerts ADD COLUMN closed_by INT;
+    ALTER TABLE apps_kuaiiot_connections ADD COLUMN subscriber_owner VARCHAR(36);
+    ALTER TABLE apps_kuaiiot_connections ADD COLUMN subscriber_lease_until TIMESTAMPTZ;
+    ALTER TABLE apps_kuaiiot_edge_configs ADD COLUMN agent_config_version INT;
+    ALTER TABLE apps_kuaiiot_edge_configs ADD COLUMN trial_request_uuid VARCHAR(36);
+    ALTER TABLE apps_kuaiiot_edge_configs ADD COLUMN trial_result JSONB;
     """
 
 
 async def downgrade(db: BaseDBAsyncClient) -> str:
     return """
+ALTER TABLE "apps_kuaiiot_devices" DROP COLUMN "latest_sampled_at";
     ALTER TABLE apps_kuaiiot_alerts DROP COLUMN recovered_at, DROP COLUMN closed_at, DROP COLUMN closed_by;
     DROP TABLE apps_kuaiiot_deliveries;
+    ALTER TABLE apps_kuaiiot_connections DROP COLUMN subscriber_owner, DROP COLUMN subscriber_lease_until;
+    ALTER TABLE apps_kuaiiot_edge_configs DROP COLUMN trial_request_uuid, DROP COLUMN trial_result, DROP COLUMN agent_config_version;
     """

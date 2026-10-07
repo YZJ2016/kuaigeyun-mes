@@ -55,5 +55,7 @@ async def db():
     try:
         yield
     finally:
+        from apps.kuaiiot.services.mqtt_subscriber_service import MqttSubscriberService
+        await MqttSubscriberService.stop_all()
         clear_tenant_context()
         await Tortoise.close_connections()

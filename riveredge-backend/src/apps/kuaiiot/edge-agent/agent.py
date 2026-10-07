@@ -111,7 +111,7 @@ class BufferStore:
 
 
 def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return datetime.now(timezone.utc).isoformat(timespec="microseconds")
 
 
 def _load_local_config(path: str) -> LocalConfig:
@@ -138,6 +138,7 @@ class CloudClient:
         self.local = local
         self.runtime_spec: dict[str, Any] | None = None
         self.config_version: int | None = None
+        self.trial_result: dict | None = None
 
     def _url(self, path: str) -> str:
         if path.startswith("http"):
@@ -164,6 +165,7 @@ class CloudClient:
             "agent_version": self.local.agent_version,
             "buffer_pending_count": buffer_pending_count,
             "status": "buffer_full" if buffer_pending_count >= self.local.buffer_max_items else "online",
+            "trial_result": self.trial_result,
         }
         with httpx.Client(timeout=20.0) as client:
             response = client.post(self._url(path), json=payload)
@@ -296,6 +298,7 @@ class ModbusPoller:
             raise RuntimeError("Modbus 未连接")
         unit_id = int(self.config.get("unit_id") or 1)
         tags: dict[str, Any] = {}
+        self.last_raw_values = {}
         for item in self.config.get("registers") or []:
             tag_key = str(item.get("tag_key") or "").strip()
             if not tag_key:
@@ -303,12 +306,13 @@ class ModbusPoller:
             try:
                 address = int(item.get("address"))
                 data_type = str(item.get("data_type") or "uint16").lower()
-                scale = float(item.get("scale") or 1.0)
+                scale = float(item.get("scale", 1.0))
                 count = 2 if data_type in {"int32", "uint32", "float32"} else 1
                 result = self.client.read_holding_registers(address=address, count=count, device_id=unit_id)
                 if result.isError():
                     raise RuntimeError(f"读取寄存器失败 tag={tag_key} address={address}: {result}")
                 raw = result.registers if count > 1 else result.registers[0]
+                self.last_raw_values[tag_key] = raw
                 tags[tag_key] = _decode_register(raw, data_type, scale)
             except Exception:
                 tags[tag_key] = None
@@ -372,27 +376,26 @@ class EdgeAgent:
                 old.close()
 
     def flush_buffer(self) -> None:
-        for _ in range(1):
-            batch = self.buffer.fetch_batch(BATCH_MAX_ITEMS)
-            if not batch:
-                return
-            items = []
-            for _, idempotency_key, payload in batch:
-                items.append(
-                    {
-                        "tags": payload["tags"],
-                        "timestamp": payload["timestamp"],
-                        "idempotency_key": idempotency_key,
-                        "qualities": payload.get("qualities", {}),
-                    }
-                )
-            try:
-                self.cloud.ingest_batch(items)
-            except Exception:
-                print("batch flush failed; retained for retry")
-                return
-            self.buffer.delete_ids([row_id for row_id, _, _ in batch])
-            print(f"flushed buffered items={len(batch)}")
+        batch = self.buffer.fetch_batch(BATCH_MAX_ITEMS)
+        if not batch:
+            return
+        items = []
+        for _, idempotency_key, payload in batch:
+            items.append(
+                {
+                    "tags": payload["tags"],
+                    "timestamp": payload["timestamp"],
+                    "idempotency_key": idempotency_key,
+                    "qualities": payload.get("qualities", {}),
+                }
+            )
+        try:
+            self.cloud.ingest_batch(items)
+        except Exception:
+            print("batch flush failed; retained for retry")
+            return
+        self.buffer.delete_ids([row_id for row_id, _, _ in batch])
+        print(f"flushed buffered items={len(batch)}")
 
     def publish_tags(self, tags: dict[str, Any]) -> None:
         if self.buffer.pending_count() >= self.local.buffer_max_items:
@@ -423,9 +426,21 @@ class EdgeAgent:
             self.flush_command_results()
             if not self.collection_enabled:
                 return
+            config_applied = True
             if result.get("config_changed"):
-                print("config changed, reloading runtime spec")
-                self.reload_runtime()
+                try:
+                    self.reload_runtime()
+                except Exception:
+                    config_applied = False
+                    print("config apply failed; retaining last successful runtime")
+            trial_uuid = result.get("trial_request_uuid")
+            if config_applied and trial_uuid and (not self.cloud.trial_result or self.cloud.trial_result.get("request_uuid") != trial_uuid):
+                try:
+                    with self.poller_lock:
+                        tags = self.poller.poll_tags() if self.poller else {}
+                except Exception:
+                    tags = {str(item.get("tag_key")): None for item in (self.poller.config.get("registers", []) if self.poller else [])}
+                self.cloud.trial_result = {"request_uuid": trial_uuid, "tags": tags, "raw_values": getattr(self.poller, "last_raw_values", {}), "qualities": {key: "bad" if value is None else "good" for key, value in tags.items()}}
             for command in result.get("pending_commands") or []:
                 if not isinstance(command, dict):
                     continue
@@ -435,6 +450,9 @@ class EdgeAgent:
                 if not self.buffer.begin_command(command_uuid):
                     continue
                 try:
+                    if not config_applied:
+                        self.buffer.finish_command(command_uuid, {"success": False, "error_message": "配置未应用，指令未执行"})
+                        continue
                     if not self.poller:
                         self.reload_runtime()
                     with self.poller_lock:

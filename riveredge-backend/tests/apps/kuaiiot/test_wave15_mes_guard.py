@@ -1,4 +1,4 @@
-"""入站状态护栏：未知值写成待机，不可覆盖的设备态不改台账。"""
+"""入站状态护栏：未知值保持未知，不可覆盖的设备态不改台账。"""
 
 from datetime import timedelta
 from decimal import Decimal
@@ -17,15 +17,15 @@ from core.utils.timezone_utils import resolve_business_datetime
 from infra.domain.tenant_context import set_current_tenant_id
 
 
-def test_unknown_and_aliases_become_standby():
+def test_unknown_and_aliases_remain_unknown():
     assert normalize_equipment_status("运行中") == "运行中"
     assert normalize_equipment_status("待机") == "待机"
-    assert normalize_equipment_status("running") == "待机"
-    assert normalize_equipment_status("idle") == "待机"
-    assert normalize_equipment_status("fault") == "待机"
-    assert normalize_equipment_status("unknown_state") == "待机"
-    assert normalize_equipment_status("") == "待机"
-    assert normalize_equipment_status(None) == "待机"
+    assert normalize_equipment_status("running") == "未知"
+    assert normalize_equipment_status("idle") == "未知"
+    assert normalize_equipment_status("fault") == "未知"
+    assert normalize_equipment_status("unknown_state") == "未知"
+    assert normalize_equipment_status("") == "未知"
+    assert normalize_equipment_status(None) == "未知"
 
 
 async def _device(equipment_uuid: str, suffix: str):
@@ -186,14 +186,14 @@ async def test_repair_in_progress_blocks_writeback(db):
 
 
 @pytest.mark.asyncio
-async def test_alias_becomes_standby_and_missing_status_stays_normal(db):
+async def test_unknown_alias_and_missing_status_preserve_unknown(db):
     set_current_tenant_id(1)
     equipment = await Equipment.create(tenant_id=1, code="EQ-NORM", name="普通机床")
     device = await _device(equipment.uuid, "alias")
     aliased = await IngestService.ingest(device.device_token, IngestBody(tags={"temp": "1", "run": "running"}))
     assert aliased["monitor_written"] is True
     row = await EquipmentStatusMonitor.get(data_source="sensor")
-    assert row.status == "待机"
+    assert row.status == "未知"
 
     await EquipmentStatusMonitor.filter(id=row.id).update(
         created_at=resolve_business_datetime() - timedelta(seconds=30)
@@ -203,5 +203,5 @@ async def test_alias_becomes_standby_and_missing_status_stays_normal(db):
     assert missing["monitor_written"] is True
     latest = await EquipmentStatusMonitor.filter(data_source="sensor").order_by("-id").first()
     assert latest is not None
-    assert latest.status == "正常"
+    assert latest.status == "未知"
     assert latest.status != "运行中"

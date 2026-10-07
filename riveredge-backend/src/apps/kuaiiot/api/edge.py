@@ -23,6 +23,7 @@ class HeartbeatIn(BaseModel):
     agent_version: str
     buffer_pending_count: int
     status: str
+    trial_result: dict | None = None
 
 
 class EdgeConfigWrite(BaseModel):
@@ -50,6 +51,7 @@ async def api_edge_heartbeat(device_token: str, body: HeartbeatIn) -> dict:
         agent_version=body.agent_version,
         buffer_pending_count=body.buffer_pending_count,
         status=body.status,
+        trial_result=body.trial_result,
     )
 
 
@@ -70,6 +72,11 @@ async def api_command_result(device_token: str, body: CommandResultIn) -> dict:
 )
 async def api_list_edge_configs(tenant_id: int = Depends(get_current_tenant)) -> list[dict]:
     return await EdgeConfigService.list_configs(tenant_id)
+
+
+@router.post("/edge-configs/{config_id}/trial", dependencies=[Depends(require_permission_codes("kuaiiot:device:update"))])
+async def api_trial(config_id: int, tenant_id: int = Depends(get_current_tenant)) -> dict:
+    return await EdgeConfigService.request_trial(tenant_id, config_id)
 
 
 @router.post(

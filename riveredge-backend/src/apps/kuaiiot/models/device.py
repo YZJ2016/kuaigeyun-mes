@@ -29,6 +29,7 @@ class KuaiiotDevice(BaseModel):
     product_id = fields.IntField(null=True, description="产品物模型ID")
     group_id = fields.IntField(null=True, description="设备分组ID")
     is_online = fields.BooleanField(default=False, description="是否在线")
+    latest_sampled_at = fields.DatetimeField(null=True, description="最新样本时间水位，包含事件")
     last_seen_at = fields.DatetimeField(null=True, description="最近入站时间")
     last_mes_sync_at = fields.DatetimeField(null=True, description="最近 MES 同步时间")
     remark = fields.TextField(null=True, description="备注")

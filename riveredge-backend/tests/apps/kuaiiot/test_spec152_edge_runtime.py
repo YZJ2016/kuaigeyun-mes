@@ -380,19 +380,16 @@ async def test_heartbeat_rechecks_disabled_before_write(db, monkeypatch):
         staticmethod(AsyncMock(return_value=stale_row)),
     )
     clear_tenant_context()
-    with pytest.raises(NotFoundError):
-        await EdgeConfigService.record_heartbeat(
-            device.device_token,
-            edge_config_code="toctou",
-            config_version=1,
-            agent_version="1.0.0",
-            buffer_pending_count=0,
-            status="online",
-        )
+    result = await EdgeConfigService.record_heartbeat(
+        device.device_token, edge_config_code="toctou", config_version=1,
+        agent_version="1.0.0", buffer_pending_count=0, status="online",
+    )
+    assert result["collection_enabled"] is False
+    assert result["pending_commands"] == []
     set_current_tenant_id(1)
     await stale_row.refresh_from_db()
-    assert stale_row.last_agent_heartbeat_at is None
-    assert stale_row.agent_status != "online"
+    assert stale_row.last_agent_heartbeat_at is not None
+    assert stale_row.agent_status == "online"
 
 
 @pytest.mark.asyncio
@@ -410,12 +407,12 @@ async def test_batch_matches_device_only_once(db, monkeypatch):
     result = await EdgeConfigService.ingest_batch(
         device.device_token,
         [
-            IngestBody(tags={"temp": "1"}, idempotency_key="mo-1"),
-            IngestBody(tags={"temp": "2"}, idempotency_key="mo-2"),
+            IngestBody(tags={"temp": "1"}, timestamp="2026-10-07T00:00:00+00:00", idempotency_key="mo-1"),
+            IngestBody(tags={"temp": "2"}, timestamp="2026-10-07T00:00:00+00:00", idempotency_key="mo-2"),
         ],
     )
     assert result == {"count": 2}
     assert calls == [device.device_token]
     snapshots = await KuaiiotTagSnapshot.filter(device_id=device.id, tag_key="temp")
     assert len(snapshots) == 1
-    assert snapshots[0].value_number == Decimal("2")
+    assert snapshots[0].value_number == Decimal("1")  # 同采样时间保留首次值

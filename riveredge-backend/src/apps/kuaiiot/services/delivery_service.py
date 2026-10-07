@@ -34,13 +34,13 @@ async def process_pending(limit: int = 100) -> dict:
                 try:
                     payload = row.payload
                     if row.kind == "trend":
-                        await write_trend(int(row.tenant_id), device_id=payload["device_id"], tag_key=payload["tag_key"], value=payload["value"], sampled_at=datetime.fromisoformat(payload["sampled_at"]))
+                        await write_trend(int(row.tenant_id), device_id=payload["device_id"], tag_key=payload["tag_key"], value=payload["value"], quality=payload.get("quality", "good"), sampled_at=datetime.fromisoformat(payload["sampled_at"]))
                         count = 1
                     elif row.kind == "notification":
                         count = await BusinessNotificationService.dispatch(
                             int(row.tenant_id), trigger_document="kuaiiot_alert", trigger_action=payload["action"],
                             variables={"message": payload["message"], "alert_id": payload["alert_id"]},
-                            context={"entity_type": "kuaiiot_alert", "entity_id": payload["alert_id"]},
+                            context={"entity_type": "kuaiiot_alert", "entity_id": payload["alert_id"], "reliable_delivery": True},
                         )
                     else:
                         raise ValueError("unsupported delivery")

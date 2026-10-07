@@ -186,10 +186,11 @@ async def test_feed_five_fields_hide_other_tenant_and_register_one_http_row(feed
     assert listed["status"] == "待机"
     assert listed["equipment_uuid"] != foreign.uuid
     metric = body["ops_metrics"][0]
-    assert metric["availability_rate"] == 0.5
+    assert metric["availability_rate"] is None
     assert metric["quality_rate"] == 0.8
-    assert metric["oee_live"] == 0.4
-    assert isinstance(metric["oee_live"], float)
+    assert metric["oee_live"] is None
+    assert metric["unavailable_reasons"]
+    assert metric["performance_rate"] is None
     assert body["status_dist"] == [{"status": "待机", "count": 1}]
     assert body["workshop_stats"] == [
         {"workshop_id": 3, "workshop_name": "一车间", "equipment_count": 1}
@@ -203,7 +204,7 @@ async def test_feed_five_fields_hide_other_tenant_and_register_one_http_row(feed
     assert rows[0].config["url"] == _feed_url("https://mes.example.com")
     assert "?" not in rows[0].config["url"]
     again = await read_equipment_ops_feed(1, 24, at=end)
-    assert again["ops_metrics"][0]["oee_live"] == 0.4
+    assert again["ops_metrics"][0]["oee_live"] is None
     assert await KuaireportDataSource.filter(type="http").count() == 1
     dashboards = await KuaireportDashboard.filter(tenant_id=1, code=EQUIPMENT_OPS_DASHBOARD_CODE)
     assert len(dashboards) == 1
@@ -291,7 +292,7 @@ async def test_oee_live_null_when_approved_yield_missing(feed_db, monkeypatch):
     await _report(equipment, end - timedelta(minutes=5), reported="0", qualified="0", info={"id": equipment.id})
     body = await read_equipment_ops_feed(1, 24, at=end)
     metric = body["ops_metrics"][0]
-    assert metric["availability_rate"] == 0.5
+    assert metric["availability_rate"] is None
     assert metric["quality_rate"] is None
     assert metric["oee_live"] is None
     assert metric["oee_live"] != 0
@@ -309,9 +310,9 @@ async def test_code_key_match_yields_numeric_oee(feed_db, monkeypatch):
     await _report(equipment, end - timedelta(minutes=10), reported="4", qualified="2", info={"equipment_code": "EQ-CODE"})
     body = await read_equipment_ops_feed(1, 24, at=end)
     metric = body["ops_metrics"][0]
-    assert metric["availability_rate"] == 1.0
+    assert metric["availability_rate"] is None
     assert metric["quality_rate"] == 0.5
-    assert metric["oee_live"] == 0.5
+    assert metric["oee_live"] is None
 
 
 @pytest.mark.asyncio

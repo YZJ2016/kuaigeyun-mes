@@ -5,7 +5,6 @@ from __future__ import annotations
 import re
 from collections import defaultdict
 from datetime import datetime, timedelta
-from decimal import Decimal
 from typing import Any, Optional
 from urllib.parse import urlparse
 
@@ -16,6 +15,7 @@ from apps.kuaireport.models.data_source import KuaireportDataSource
 from apps.kuaireport.schemas.data_source import DataSourceCreate, DataSourceUpdate
 from apps.kuaireport.services.data_source_service import create_data_source, update_data_source
 from apps.kuaizhizao.models.equipment import Equipment
+from apps.kuaizhizao.services.oee_calculator import calculate_oee, reports_in_plan
 from apps.kuaizhizao.models.equipment_ops import EquipmentSpotCheck
 from apps.kuaizhizao.models.equipment_status_monitor import EquipmentStatusMonitor
 from apps.kuaizhizao.models.reporting_record import ReportingRecord
@@ -31,8 +31,6 @@ EQUIPMENT_OPS_DASHBOARD_CODE = "equipment-ops"
 EQUIPMENT_OPS_DASHBOARD_NAME = "设备运营大屏"
 _PG_PLACEHOLDER = re.compile(r"\$\d+(?:::jsonb)?")
 _SITE_ROOT_MESSAGE = "请配置站点根地址"
-_RUNNING_STATUS = "运行中"
-_RATE = Decimal("0.0001")
 _RECENT_SPOT_CHECKS = 20
 
 
@@ -279,49 +277,6 @@ def _matches_equipment(device_info: Any, equipment: Equipment) -> bool:
     return device_id == equipment.id or device_code == equipment.code
 
 
-def _availability(rows: list[EquipmentStatusMonitor], end: datetime) -> Optional[float]:
-    ordered = sorted(rows, key=lambda row: (_utc(row.monitored_at), row.id))
-    if not ordered:
-        return None
-    running = Decimal(0)
-    total = Decimal(0)
-    window_end = _utc(end)
-    for index, row in enumerate(ordered):
-        start_at = _utc(row.monitored_at)
-        stop_at = _utc(ordered[index + 1].monitored_at) if index + 1 < len(ordered) else window_end
-        seconds = Decimal(str((stop_at - start_at).total_seconds()))
-        if seconds <= 0:
-            continue
-        total += seconds
-        if row.status == _RUNNING_STATUS:
-            running += seconds
-    if total <= 0:
-        return None
-    return float((running / total).quantize(_RATE))
-
-
-def _quality(records: list[ReportingRecord], equipment: Equipment) -> Optional[float]:
-    reported = Decimal(0)
-    qualified = Decimal(0)
-    for record in records:
-        if not _matches_equipment(record.device_info, equipment):
-            continue
-        quantity = record.reported_quantity
-        if quantity is None or Decimal(quantity) <= 0:
-            continue
-        reported += Decimal(quantity)
-        qualified += Decimal(record.qualified_quantity or 0)
-    if reported <= 0:
-        return None
-    return float((qualified / reported).quantize(_RATE))
-
-
-def _oee(availability: Optional[float], quality: Optional[float]) -> Optional[float]:
-    if availability is None or quality is None:
-        return None
-    return float((Decimal(str(availability)) * Decimal(str(quality))).quantize(_RATE))
-
-
 def _latest(rows: list[EquipmentStatusMonitor]) -> Optional[EquipmentStatusMonitor]:
     if not rows:
         return None
@@ -376,7 +331,7 @@ async def read_equipment_ops_feed(
         equipment_uuid__in=uuids,
         data_source=SENSOR_DATA_SOURCE,
         deleted_at__isnull=True,
-        monitored_at__gte=start,
+        monitored_at__gte=start - timedelta(minutes=5),
         monitored_at__lte=end,
     )
     by_equipment: dict[str, list[EquipmentStatusMonitor]] = defaultdict(list)
@@ -418,8 +373,13 @@ async def read_equipment_ops_feed(
                 "is_online": latest.is_online if latest is not None else None,
             }
         )
-        availability = _availability(segments, end)
-        quality = _quality(reports, equipment)
+        equipment_reports = [record for record in reports if _matches_equipment(record.device_info, equipment)]
+        equipment_reports = reports_in_plan(equipment_reports, (equipment.technical_parameters or {}).get("oee", {}), start, end)
+        quantity = sum(float(record.reported_quantity or 0) for record in equipment_reports)
+        qualified = None if any(record.qualified_quantity is None for record in equipment_reports) else sum(float(record.qualified_quantity) for record in equipment_reports)
+        calculation = calculate_oee(segments, start, end, (equipment.technical_parameters or {}).get("oee", {}), quantity, qualified)
+        availability = calculation["availability_rate"]
+        quality = calculation["quality_rate"]
         ops_metrics.append(
             {
                 "equipment_uuid": equipment.uuid,
@@ -428,7 +388,10 @@ async def read_equipment_ops_feed(
                 "name": equipment.name,
                 "availability_rate": availability,
                 "quality_rate": quality,
-                "oee_live": _oee(availability, quality),
+                "performance_rate": calculation["performance_rate"],
+                "coverage_rate": calculation["coverage_rate"],
+                "unavailable_reasons": calculation["reasons"],
+                "oee_live": calculation["oee"],
             }
         )
         if status is not None:

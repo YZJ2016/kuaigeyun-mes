@@ -23,6 +23,8 @@ class KuaiiotConnection(BaseModel):
         "models.IntegrationConfig", related_name="kuaiiot_connections",
         null=True, on_delete=fields.RESTRICT, description="同租户公共连接",
     )
+    subscriber_owner = fields.CharField(max_length=36, null=True, description="订阅进程租约")
+    subscriber_lease_until = fields.DatetimeField(null=True, description="订阅租约截止时间")
     config = fields.JSONField(null=True, description="数采映射配置，不保存连接地址或凭据")
     is_enabled = fields.BooleanField(default=True, description="是否启用")
     health_status = fields.CharField(max_length=20, default="unknown", description="健康状态")

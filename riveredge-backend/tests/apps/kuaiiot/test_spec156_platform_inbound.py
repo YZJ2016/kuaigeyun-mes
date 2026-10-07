@@ -26,11 +26,9 @@ from apps.kuaiiot.schemas.product import (
 from apps.kuaiiot.services import control_service, platform_telemetry, product_service
 from apps.kuaiiot.services.command_service import (
     NOT_SENT,
-    PLATFORM_DISPATCHERS,
+    PLATFORM_CHANNELS,
     claim_pending_commands,
     create_command,
-    dispatch_jetlinks,
-    dispatch_thingsboard,
     submit_command_result,
 )
 from apps.kuaiiot.services.mqtt_subscriber_service import MqttSubscriberService
@@ -320,29 +318,11 @@ async def _mapped_device(suffix: str, connection_type: str, config: dict):
     return connection, device
 
 
-def test_platform_pull_stays_empty_while_address_section_remains():
-    spec = _spec_156().read_text(encoding="utf-8")
-    assert "### 平台地址未进入仓库" in spec
-    assert "地址未进入仓库与 spec，拉取因此为空" in spec
-    assert "调试时看这一节，不要到代码里猜地址" in spec
-    assert "不得发出猜测的 HTTP 请求" in spec
+def test_platform_addresses_are_runtime_configuration():
     assert platform_telemetry.load_platform_records() == []
-    for fn in (
-        platform_telemetry.load_platform_records,
-        platform_telemetry.normalize_thingsboard,
-        platform_telemetry.normalize_jetlinks,
-        platform_telemetry.pull_registered_telemetry,
-        dispatch_thingsboard,
-        dispatch_jetlinks,
-    ):
-        text = inspect.getsource(fn)
-        assert "平台地址未进入仓库" in (fn.__doc__ or "")
-        _source_has_no_platform_url(text)
-        assert "urlopen" not in text
-        assert "httpx" not in text
-    assert set(PLATFORM_DISPATCHERS) == {"thingsboard", "jetlinks"}
-    assert dispatch_thingsboard() == NOT_SENT
-    assert dispatch_jetlinks() == NOT_SENT
+    for fn in (platform_telemetry.normalize_thingsboard, platform_telemetry.normalize_jetlinks, platform_telemetry.pull_registered_telemetry):
+        _source_has_no_platform_url(inspect.getsource(fn))
+    assert set(PLATFORM_CHANNELS) == {"thingsboard", "jetlinks"}
 
 
 @pytest.mark.asyncio
@@ -415,7 +395,7 @@ async def test_platform_commands_stay_not_sent_and_are_not_claimed(db):
     _connection, device = await _mapped_device("tb-cmd", "thingsboard", dict(_PATH_CONFIG))
     command = await create_command(1, device.id, function_key="set_speed", params={"value": 80})
     assert command.dispatch_channel == "thingsboard"
-    assert command.status == NOT_SENT
+    assert command.status == "uncertain"  # 认证配置不完整，禁止报告已成功或自动重复执行
     planted = await KuaiiotDeviceCommand.create(
         tenant_id=1,
         device_id=device.id,
@@ -428,7 +408,7 @@ async def test_platform_commands_stay_not_sent_and_are_not_claimed(db):
     assert claimed == []
     await command.refresh_from_db()
     await planted.refresh_from_db()
-    assert command.status == NOT_SENT
+    assert command.status == "uncertain"  # 认证配置不完整，禁止报告已成功或自动重复执行
     assert planted.status == "pending"
     clear_tenant_context()
     receipt = await submit_command_result(
@@ -437,16 +417,16 @@ async def test_platform_commands_stay_not_sent_and_are_not_claimed(db):
         success=True,
         result={"address": 100},
     )
-    assert receipt == {"status": NOT_SENT}
+    assert receipt == {"status": "uncertain"}
     set_current_tenant_id(1)
     await command.refresh_from_db()
-    assert command.status == NOT_SENT
-    assert command.sent_at is None
+    assert command.status == "uncertain"  # 认证配置不完整，禁止报告已成功或自动重复执行
+    assert command.sent_at is not None
 
     _jl_connection, jl_device = await _mapped_device("jl-cmd", "jetlinks", dict(_PATH_CONFIG))
     jl_command = await create_command(1, jl_device.id, function_key="set_speed", params={"value": 1})
     assert jl_command.dispatch_channel == "jetlinks"
-    assert jl_command.status == NOT_SENT
+    assert jl_command.status == "uncertain"
     assert await claim_pending_commands(1, jl_device.id) == []
 
     _mqtt_connection, mqtt_device = await _mapped_device(
@@ -499,7 +479,7 @@ async def test_platform_command_without_edge_action_stays_not_sent(db):
     await device.save(update_fields=["product_id", "updated_at"])
     command = await create_command(1, device.id, function_key="reboot", params={"value": 1})
     assert command.dispatch_channel == "thingsboard"
-    assert command.status == NOT_SENT
+    assert command.status == "uncertain"  # 认证配置不完整，禁止报告已成功或自动重复执行
     assert await claim_pending_commands(1, device.id) == []
 
     edge_connection = await control_service.create_connection(

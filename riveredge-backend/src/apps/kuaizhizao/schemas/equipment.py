@@ -26,6 +26,13 @@ EQUIPMENT_ALLOWED_STATUSES = (
 )
 
 
+def _validate_technical_parameters(value):
+    if value and "oee" in value:
+        from apps.kuaizhizao.services.oee_calculator import validate_oee_config
+        validate_oee_config(value["oee"])
+    return value
+
+
 class EquipmentBase(BaseModel):
     """
     设备基础 Schema
@@ -33,6 +40,7 @@ class EquipmentBase(BaseModel):
     包含设备的基本字段，用于创建和更新操作。
     """
     code: Optional[str] = Field(None, max_length=50, description="设备编码（可选，创建时自动生成）")
+    validate_technical_parameters = field_validator("technical_parameters")(_validate_technical_parameters)
     name: str = Field(..., min_length=1, max_length=200, description="设备名称")
     type: Optional[str] = Field(None, max_length=50, description="设备类型（如：加工设备、检测设备、包装设备等）")
     category: Optional[str] = Field(None, max_length=50, description="设备分类（如：CNC、注塑机、冲压机等）")
@@ -118,6 +126,7 @@ class EquipmentCreate(EquipmentBase):
 
 
 class EquipmentUpdate(BaseModel):
+    validate_technical_parameters = field_validator("technical_parameters")(_validate_technical_parameters)
     """
     设备更新 Schema
     
