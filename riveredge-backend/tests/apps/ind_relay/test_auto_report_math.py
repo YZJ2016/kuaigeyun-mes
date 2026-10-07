@@ -5,6 +5,7 @@ from decimal import Decimal
 from apps.ind_relay.services.auto_report_math import (
     allocate_increment,
     compute_zscl_increment,
+    equipment_in_default_ids,
     should_changeover,
 )
 
@@ -117,3 +118,14 @@ class TestShouldChangeover:
             best_product_id=1,
             bound_wo_id=1,
         )
+
+
+class TestEquipmentInDefaultIds:
+    def test_hit_int_and_str(self):
+        assert equipment_in_default_ids([1, 2], 2)
+        assert equipment_in_default_ids(["3"], 3)
+
+    def test_miss(self):
+        assert not equipment_in_default_ids([1, 2], 9)
+        assert not equipment_in_default_ids(None, 1)
+        assert not equipment_in_default_ids("1", 1)

@@ -21,6 +21,7 @@ from apps.ind_relay.services.auto_report_math import (
     candidate_bind_sort_key,
     candidate_fill_sort_key,
     compute_zscl_increment,
+    equipment_in_default_ids,
     should_changeover,
 )
 from apps.kuaizhizao.models.equipment import Equipment
@@ -83,8 +84,6 @@ class AutoReportService:
         row = await AutoReportService.get_or_create_config(tenant_id)
         if "is_enabled" in data and data["is_enabled"] is not None:
             row.is_enabled = bool(data["is_enabled"])
-        if "match_by_device" in data and data["match_by_device"] is not None:
-            row.match_by_device = bool(data["match_by_device"])
         if "interval_minutes" in data and data["interval_minutes"] is not None:
             minutes = int(data["interval_minutes"])
             if minutes < 1:
@@ -115,14 +114,6 @@ class AutoReportService:
                 )
         if "remarks" in data:
             row.remarks = data["remarks"]
-        if not row.match_by_device:
-            enabled_count = await RelayAutoReportBinding.filter(
-                tenant_id=tenant_id, deleted_at__isnull=True, is_enabled=True
-            ).count()
-            if enabled_count > 1:
-                raise ValidationError(
-                    "关闭「按设备匹配工序」时，只能启用一台快数采设备做末道报工"
-                )
         if user_id is not None:
             row.updated_by = int(user_id)
         await row.save()
@@ -160,23 +151,11 @@ class AutoReportService:
         if not equipment:
             raise ValidationError("绑定的 MES 设备不存在，请重新在设备连接中选择")
 
-        config = await AutoReportService.get_or_create_config(tenant_id)
         existing = await RelayAutoReportBinding.get_or_none(
             tenant_id=tenant_id,
             iot_device_id=int(device.id),
             deleted_at__isnull=True,
         )
-        if is_enabled and not config.match_by_device:
-            others_qs = RelayAutoReportBinding.filter(
-                tenant_id=tenant_id,
-                deleted_at__isnull=True,
-                is_enabled=True,
-            ).exclude(id=existing.id if existing else 0)
-            if await others_qs.exists():
-                raise ValidationError(
-                    "关闭「按设备匹配工序」时，只能启用一台快数采设备做末道报工"
-                )
-
         if existing:
             row = existing
         else:
@@ -223,18 +202,6 @@ class AutoReportService:
         )
         if not row:
             raise NotFoundError("绑定不存在")
-        if is_enabled:
-            config = await AutoReportService.get_or_create_config(tenant_id)
-            if not config.match_by_device:
-                others_qs = RelayAutoReportBinding.filter(
-                    tenant_id=tenant_id,
-                    deleted_at__isnull=True,
-                    is_enabled=True,
-                ).exclude(id=row.id)
-                if await others_qs.exists():
-                    raise ValidationError(
-                        "关闭「按设备匹配工序」时，只能启用一台快数采设备做末道报工"
-                    )
         row.is_enabled = bool(is_enabled)
         if user_id is not None:
             row.updated_by = int(user_id)
@@ -417,6 +384,92 @@ class AutoReportService:
         return line_id, line_code, line_name
 
     @staticmethod
+    def _equipment_ids_from_json(raw: object) -> list[int]:
+        if not isinstance(raw, (list, tuple)):
+            return []
+        out: list[int] = []
+        for item in raw:
+            try:
+                out.append(int(item))
+            except (TypeError, ValueError):
+                continue
+        return out
+
+    @staticmethod
+    async def list_process_operations_for_equipment(
+        tenant_id: int,
+        equipment_id: int,
+    ) -> list[dict[str, Any]]:
+        from apps.master_data.models.process import Operation
+
+        rows = await Operation.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).order_by("code")
+        result: list[dict[str, Any]] = []
+        for op in rows:
+            if not equipment_in_default_ids(op.default_equipment_ids, equipment_id):
+                continue
+            result.append(
+                {
+                    "id": int(op.id),
+                    "uuid": op.uuid,
+                    "code": op.code,
+                    "name": op.name,
+                    "is_active": bool(op.is_active),
+                    "reporting_type": op.reporting_type,
+                    "default_equipment_ids": AutoReportService._equipment_ids_from_json(
+                        op.default_equipment_ids
+                    ),
+                }
+            )
+        return result
+
+    @staticmethod
+    async def list_binding_process_operations(
+        tenant_id: int,
+        binding_id: int,
+    ) -> dict[str, Any]:
+        row = await RelayAutoReportBinding.get_or_none(
+            tenant_id=tenant_id, id=binding_id, deleted_at__isnull=True
+        )
+        if not row:
+            raise NotFoundError("绑定不存在")
+        if not row.equipment_id:
+            raise ValidationError("绑定缺少 MES 设备")
+        items = await AutoReportService.list_process_operations_for_equipment(
+            tenant_id, int(row.equipment_id)
+        )
+        return {
+            "binding_id": int(row.id),
+            "equipment_id": int(row.equipment_id),
+            "equipment_code": row.equipment_code,
+            "equipment_name": row.equipment_name,
+            "items": items,
+        }
+
+    @staticmethod
+    async def process_operation_counts_by_equipment(tenant_id: int) -> dict[int, int]:
+        from apps.master_data.models.process import Operation
+
+        counts: dict[int, int] = {}
+        rows = await Operation.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        for op in rows:
+            for eid in AutoReportService._equipment_ids_from_json(op.default_equipment_ids):
+                counts[eid] = counts.get(eid, 0) + 1
+        return counts
+
+    @staticmethod
+    async def _master_operation_ids_for_equipment(
+        tenant_id: int,
+        equipment_id: int,
+    ) -> set[int]:
+        ops = await AutoReportService.list_process_operations_for_equipment(
+            tenant_id, equipment_id
+        )
+        return {int(op["id"]) for op in ops}
+
+    @staticmethod
     def _op_has_equipment(op: WorkOrderOperation, equipment_id: int) -> bool:
         if op.assigned_equipment_id and int(op.assigned_equipment_id) == equipment_id:
             return True
@@ -435,8 +488,10 @@ class AutoReportService:
         tenant_id: int,
         *,
         equipment_id: int,
-        match_by_device: bool,
+        bound_operation_ids: set[int],
     ) -> list[tuple[WorkOrder, WorkOrderOperation]]:
+        if not bound_operation_ids:
+            return []
         work_orders = await WorkOrder.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,
@@ -462,19 +517,13 @@ class AutoReportService:
             wo = wo_map.get(wo_id)
             if not wo:
                 continue
-            all_ops = [op for op in ops if int(op.work_order_id) == wo_id]
-            if match_by_device:
-                matched = [op for op in wo_ops if AutoReportService._op_has_equipment(op, equipment_id)]
-            else:
-                # 末道：该工单末道工序派了此 MES 设备时才报
-                if not all_ops:
-                    continue
-                last_op = max(all_ops, key=lambda o: (int(o.sequence or 0), int(o.id or 0)))
-                if not AutoReportService._op_has_equipment(last_op, equipment_id):
-                    continue
-                if (last_op.status or "") in {"completed", "cancelled", "paused"}:
-                    continue
-                matched = [last_op]
+            matched = [
+                op
+                for op in wo_ops
+                if op.operation_id
+                and int(op.operation_id) in bound_operation_ids
+                and AutoReportService._op_has_equipment(op, equipment_id)
+            ]
             for op in matched:
                 if not op.assigned_worker_id and not getattr(op, "assigned_team_id", None):
                     continue
@@ -738,10 +787,29 @@ class AutoReportService:
             pending += increment
             binding.last_zscl = current
 
+        bound_operation_ids = await AutoReportService._master_operation_ids_for_equipment(
+            tenant_id, int(binding.equipment_id)
+        )
+        if not bound_operation_ids:
+            binding.pending_quantity = pending
+            binding.last_settle_at = resolve_business_datetime()
+            await binding.save()
+            await AutoReportService._append_log(
+                tenant_id,
+                binding=binding,
+                level="info",
+                event="skip",
+                message="MES 设备未在工序主数据中设为默认设备，请先在工序档案绑定该设备",
+                zscl=current,
+                increment_qty=increment if increment > ZERO else None,
+                extra={"pending": str(pending), "reason": reason},
+            )
+            return {"skipped": True, "reason": "no_master_ops", "pending": str(pending)}
+
         candidates = await AutoReportService._find_candidate_ops(
             tenant_id,
             equipment_id=int(binding.equipment_id),
-            match_by_device=bool(config.match_by_device),
+            bound_operation_ids=bound_operation_ids,
         )
         if not candidates:
             binding.pending_quantity = pending
@@ -752,10 +820,14 @@ class AutoReportService:
                 binding=binding,
                 level="info",
                 event="skip",
-                message="未匹配到可报工的末道工序任务（产量来自产线，工单由末道派工匹配）",
+                message="工序已绑定该设备，但进行中工单未派给该设备或未派工人",
                 zscl=current,
                 increment_qty=increment if increment > ZERO else None,
-                extra={"pending": str(pending), "reason": reason},
+                extra={
+                    "pending": str(pending),
+                    "reason": reason,
+                    "masterOperationCount": len(bound_operation_ids),
+                },
             )
             return {"skipped": True, "reason": "no_task", "pending": str(pending)}
 

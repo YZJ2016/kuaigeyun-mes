@@ -2,6 +2,17 @@ import { api, apiRequest } from '../../../services/api';
 import { apiRequestSyncNdjson } from '../../../components/sync-from-source-modal/apiRequestSyncNdjson';
 
 export type InventorySyncBinding = {
+  sources?: Array<{
+    kind: 'api' | 'dataset';
+    api_uuid?: string;
+    dataset_uuid?: string;
+    field_mapping: Record<string, string>;
+    request_body?: Record<string, unknown>;
+    request_params?: Record<string, unknown>;
+    persist_request_override?: boolean;
+    batch_fill_path?: string;
+    batch_fill_values?: string[];
+  }>;
   source_type?: 'api' | 'dataset' | null;
   api_uuid?: string | null;
   dataset_uuid?: string | null;
@@ -25,12 +36,35 @@ export type InventorySyncFromSourceResult = {
   mode?: string;
 };
 
+export type InventoryClearTenantResult = {
+  material_batch_deleted: number;
+  line_side_deleted: number;
+};
+
 export async function getInventorySyncBinding(): Promise<InventorySyncBinding> {
   return api.get('/apps/kuaizhizao/reports/inventory/sync-binding');
 }
 
+export async function clearTenantInventory(): Promise<InventoryClearTenantResult> {
+  return apiRequest<InventoryClearTenantResult>(
+    '/apps/kuaizhizao/reports/inventory/clear-tenant',
+    { method: 'POST' },
+  );
+}
+
 export async function syncInventoryFromSource(
   payload: {
+    sources?: Array<{
+      kind: 'api' | 'dataset';
+      api_uuid?: string;
+      dataset_uuid?: string;
+      field_mapping?: Record<string, string>;
+      request_body?: Record<string, unknown>;
+      request_params?: Record<string, unknown>;
+      persist_request_override?: boolean;
+      batch_fill_path?: string;
+      batch_fill_values?: string[];
+    }>;
     source_type?: 'api' | 'dataset';
     api_uuid?: string;
     dataset_uuid?: string;

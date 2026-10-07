@@ -64,44 +64,58 @@ async def _execute_api_once(
     return normalize_api_body_to_rows(result.get("body"), column_names=column_names)
 
 
-async def fetch_rows_from_api(
+def _overlay_json_object(
+    base: Optional[Dict[str, Any]],
+    override: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    merged = copy.deepcopy(base) if isinstance(base, dict) else {}
+    if isinstance(override, dict):
+        merged.update(copy.deepcopy(override))
+    return merged
+
+
+def _set_nested_value(body: Dict[str, Any], path: str, value: Any) -> Dict[str, Any]:
+    cloned = copy.deepcopy(body)
+    keys = [part.strip() for part in str(path or "").split(".") if part.strip()]
+    if not keys:
+        return cloned
+    cursor: Any = cloned
+    for key in keys[:-1]:
+        if not isinstance(cursor, dict):
+            return cloned
+        nxt = cursor.get(key)
+        if not isinstance(nxt, dict):
+            cursor[key] = {}
+        cursor = cursor[key]
+    if isinstance(cursor, dict):
+        cursor[keys[-1]] = value
+    return cloned
+
+
+def _resolve_batch_fill_size(request_body: Dict[str, Any], default: int = 100) -> int:
+    raw = request_body.get("pageSize", request_body.get("page_size", default))
+    try:
+        size = int(raw) if raw is not None else default
+    except (TypeError, ValueError):
+        size = default
+    if size <= 0:
+        return default
+    return min(size, 5000)
+
+
+async def _fetch_paged_rows(
+    *,
+    api_service: Any,
     tenant_id: int,
     api_uuid: str,
-    *,
-    since: Optional[datetime] = None,
-    active_only: bool = True,
-    timeout: float = 600.0,
+    request_body: Dict[str, Any],
+    request_params: Optional[Dict[str, Any]],
+    timeout: float,
 ) -> List[Dict[str, Any]]:
-    from core.services.application.api_service import APIService
-
-    api_service = APIService()
-    api = await api_service.get_api_by_uuid(tenant_id, UUID(api_uuid))
-    request_body = copy.deepcopy(api.request_body) if isinstance(api.request_body, dict) else {}
-    request_params = (
-        copy.deepcopy(api.request_params) if isinstance(api.request_params, dict) else {}
-    )
-    request_body = apply_kingdee_active_scope_filter(request_body, active_only=active_only)
-    if since is not None:
-        request_body = apply_kingdee_since_filter(request_body, since)
-        request_body = apply_cosmic_since_filter(request_body, since)
-        request_params = apply_cosmic_since_to_params(
-            request_params,
-            since,
-            path=str(getattr(api, "path", None) or ""),
-        )
-        await emit_sync_progress(
-            f"已注入增量水位（自 {since.isoformat(sep=' ', timespec='seconds')}）…"
-        )
-    if active_only:
-        await emit_sync_progress("已启用有效/未完成过滤（源端 FilterString）…")
-    else:
-        await emit_sync_progress("已关闭有效/未完成过滤，按接口可拉全量…")
-
-    all_rows: List[Dict[str, Any]]
     if is_kingdee_execute_bill_query(request_body):
         _, query = parse_kingdee_query(request_body)
         page_size = resolve_page_size(query or {})
-        all_rows = []
+        all_rows: List[Dict[str, Any]] = []
         start_row = 0
         for page_no in range(1, MAX_PAGES + 1):
             await emit_sync_progress(
@@ -122,7 +136,8 @@ async def fetch_rows_from_api(
             if len(chunk) < page_size:
                 break
             start_row += len(chunk)
-    elif is_cosmic_paged_query(request_body):
+        return all_rows
+    if is_cosmic_paged_query(request_body):
         page_size = resolve_cosmic_page_size(request_body)
         all_rows = []
         for page_no in range(1, MAX_PAGES + 1):
@@ -143,9 +158,84 @@ async def fetch_rows_from_api(
             all_rows.extend(chunk)
             if len(chunk) < page_size:
                 break
+        return all_rows
+    await emit_sync_progress("正在从数据接口拉取…")
+    return await _execute_api_once(
+        api_service=api_service,
+        tenant_id=tenant_id,
+        api_uuid=api_uuid,
+        request_body=request_body,
+        request_params=request_params or None,
+        timeout=timeout,
+    )
+
+
+async def fetch_rows_from_api(
+    tenant_id: int,
+    api_uuid: str,
+    *,
+    since: Optional[datetime] = None,
+    active_only: bool = True,
+    timeout: float = 600.0,
+    request_body_override: Optional[Dict[str, Any]] = None,
+    request_params_override: Optional[Dict[str, Any]] = None,
+    batch_fill_path: Optional[str] = None,
+    batch_fill_values: Optional[List[str]] = None,
+) -> List[Dict[str, Any]]:
+    from core.services.application.api_service import APIService
+
+    api_service = APIService()
+    api = await api_service.get_api_by_uuid(tenant_id, UUID(api_uuid))
+    request_body = _overlay_json_object(
+        api.request_body if isinstance(api.request_body, dict) else {},
+        request_body_override,
+    )
+    request_params = _overlay_json_object(
+        api.request_params if isinstance(api.request_params, dict) else {},
+        request_params_override,
+    )
+    request_body = apply_kingdee_active_scope_filter(request_body, active_only=active_only)
+    if since is not None:
+        request_body = apply_kingdee_since_filter(request_body, since)
+        request_body = apply_cosmic_since_filter(request_body, since)
+        request_params = apply_cosmic_since_to_params(
+            request_params,
+            since,
+            path=str(getattr(api, "path", None) or ""),
+        )
+        await emit_sync_progress(
+            f"已注入增量水位（自 {since.isoformat(sep=' ', timespec='seconds')}）…"
+        )
+    if active_only:
+        await emit_sync_progress("已启用有效/未完成过滤（源端 FilterString）…")
     else:
-        await emit_sync_progress("正在从数据接口拉取…")
-        all_rows = await _execute_api_once(
+        await emit_sync_progress("已关闭有效/未完成过滤，按接口可拉全量…")
+
+    fill_path = str(batch_fill_path or "").strip()
+    fill_values = [str(item).strip() for item in (batch_fill_values or []) if str(item).strip()]
+    if fill_path and fill_values:
+        chunk_size = _resolve_batch_fill_size(request_body)
+        total_chunks = (len(fill_values) + chunk_size - 1) // chunk_size
+        all_rows: List[Dict[str, Any]] = []
+        for index in range(0, len(fill_values), chunk_size):
+            chunk_vals = fill_values[index : index + chunk_size]
+            chunk_no = index // chunk_size + 1
+            await emit_sync_progress(
+                f"按物料编码第 {chunk_no}/{total_chunks} 批调用（本批 {len(chunk_vals)} 个，pageSize={chunk_size}）…"
+            )
+            chunk_body = _set_nested_value(request_body, fill_path, ",".join(chunk_vals))
+            all_rows.extend(
+                await _fetch_paged_rows(
+                    api_service=api_service,
+                    tenant_id=tenant_id,
+                    api_uuid=api_uuid,
+                    request_body=chunk_body,
+                    request_params=request_params or None,
+                    timeout=timeout,
+                )
+            )
+    else:
+        all_rows = await _fetch_paged_rows(
             api_service=api_service,
             tenant_id=tenant_id,
             api_uuid=api_uuid,

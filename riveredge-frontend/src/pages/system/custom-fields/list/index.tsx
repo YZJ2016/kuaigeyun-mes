@@ -24,7 +24,7 @@ import { FormModalTemplate, MODAL_CONFIG, TwoColumnLayout } from '../../../../co
 import { FEATURE_PAGE_LIST_ITEM_CLASS, FEATURE_PAGE_RIGHT_PANEL_HEADER_STYLE, FEATURE_PAGE_RIGHT_PANEL_NAME_STYLE, FEATURE_PAGE_RIGHT_PANEL_PATH_STYLE, FEATURE_PAGE_RIGHT_PANEL_TITLE_ROW_STYLE } from '../../../../components/layout-templates/constants';
 import { CustomFieldJsonEditor, CustomFieldJsonModeSegmented, type CustomFieldJsonEditorMode } from '../../../../components/custom-fields/CustomFieldJsonEditor';
 import { CustomFieldFormulaConfigEditor } from '../../../../components/custom-fields/CustomFieldFormulaConfigEditor';
-import { normalizeJsonFieldValue, isFlatJsonObject } from '../../../../components/custom-fields/customFieldJsonUtils';
+import { normalizeJsonFieldValue, canEditAsJsonTree } from '../../../../components/custom-fields/customFieldJsonUtils';
 import {
   buildSourceFieldKeyFromConfig,
   parseSourceFieldKey,
@@ -273,7 +273,7 @@ const CustomFieldListPage: React.FC = () => {
       editingFieldConfigRef.current = detail.config ?? null;
       if (detail.field_type === 'json') {
         setJsonEditorMode(
-          detail.config?.default != null && !isFlatJsonObject(detail.config.default) ? 'source' : 'kv',
+          detail.config?.default != null && !canEditAsJsonTree(detail.config.default) ? 'source' : 'kv',
         );
       } else {
         setJsonEditorMode('kv');

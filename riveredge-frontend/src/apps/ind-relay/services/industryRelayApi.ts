@@ -82,6 +82,24 @@ export type RelayAutoReportBinding = {
   last_seen_at?: string | null;
   offline_flushed: boolean;
   remarks?: string | null;
+  process_operation_count?: number;
+};
+
+export type RelayAutoReportProcessOperation = {
+  id: number;
+  uuid?: string;
+  code?: string;
+  name?: string;
+  is_active?: boolean;
+  reporting_type?: string;
+};
+
+export type RelayAutoReportBindingOperations = {
+  binding_id: number;
+  equipment_id: number;
+  equipment_code?: string | null;
+  equipment_name?: string | null;
+  items: RelayAutoReportProcessOperation[];
 };
 
 export type RelayAutoReportDeviceOption = {
@@ -192,6 +210,11 @@ export const industryRelayApi = {
     }),
   deleteAutoReportBinding: (id: number) =>
     apiRequest<{ ok: boolean }>(`/apps/ind-relay/auto-report/bindings/${id}`, { method: 'DELETE' }),
+  listAutoReportBindingOperations: (id: number) =>
+    apiRequest<RelayAutoReportBindingOperations>(
+      `/apps/ind-relay/auto-report/bindings/${id}/operations`,
+      { method: 'GET' },
+    ),
   listAutoReportLogs: (params?: { binding_id?: number; skip?: number; limit?: number }) =>
     apiRequest<{ total: number; items: RelayAutoReportLog[] }>('/apps/ind-relay/auto-report/logs', {
       method: 'GET',

@@ -1,13 +1,18 @@
 """即时库存从数据接口/数据集同步服务。"""
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+import uuid
+from decimal import Decimal
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from infra.exceptions.exceptions import ValidationError
 from infra.models.user import User
+from tortoise import connections
 
 from apps.kuaizhizao.models.inventory_sync_binding import InventorySyncBinding
+from apps.kuaizhizao.models.line_side_inventory import LineSideInventory
 from apps.kuaizhizao.schemas.inventory_sync import (
+    InventoryClearTenantOut,
     InventorySyncBindingOut,
     InventorySyncBindingUpsert,
     InventorySyncFromSourceOut,
@@ -19,6 +24,7 @@ from apps.master_data.models.material_batch import MaterialBatch
 from apps.master_data.models.warehouse import Warehouse
 from apps.master_data.services.master_data_sync_common import (
     attach_sync_fetch_meta,
+    serialize_binding_row,
     cell_optional_decimal,
     cell_str,
     fetch_sync_rows,
@@ -37,47 +43,113 @@ from apps.master_data.services.master_data_sync_common import (
     upsert_sync_binding,
 )
 from core.services.data.sync_binding_sources import fetch_mapped_rows_from_sources
-
 from core.services.data.sync_progress import emit_sync_progress
-from tortoise.expressions import Q
+
+
+INVENTORY_WRITE_CHUNK = 500
+# 金蝶即时库存：数量优先 avbqty，其次 qty；批号 lotnum。映射到空列（如 baseqty）时回退。
+INVENTORY_MAP_EMPTY_FALLBACKS = {
+    "quantity": ["avbqty", "qty", "baseqty"],
+    "batch_no": ["lotnum", "lot_number", "lot.number", "batch_no", "batch_number"],
+}
 
 
 def normalize_inventory_sync_batch_no(row: Dict[str, Any]) -> str:
-    """即时库存源常无批号；MaterialBatch.batch_no 非空，空值落空串（与库存增减口径一致）。"""
-    return cell_str(
-        row.get("batch_no")
-        or row.get("batch_number")
-        or row.get("batchNo")
+    """即时库存源常无批号；空值落空串（与库存增减口径一致），并兼容金蝶 lotnum。"""
+    return _inventory_cell(
+        row,
+        "batch_no",
+        "batch_number",
+        "batchNo",
+        "lotnum",
+        "lot_number",
+        "lot.number",
+    )[:100]
+
+
+def _compact_sync_errors(errors: List[str], *, limit: int = 12) -> List[str]:
+    counts: Dict[str, int] = {}
+    order: List[str] = []
+    for item in errors:
+        text = str(item or "").strip()
+        if not text:
+            continue
+        if text not in counts:
+            order.append(text)
+            counts[text] = 0
+        counts[text] += 1
+    out: List[str] = []
+    for text in order[:limit]:
+        n = counts[text]
+        out.append(f"{text}（共 {n} 条）" if n > 1 else text)
+    return out
+
+
+def _empty_inventory_write_message(result: Any, fetched: int) -> str:
+    skipped = int(getattr(result, "skipped", 0) or 0)
+    failed = int(getattr(result, "failed", 0) or 0)
+    msg = (
+        f"未写入任何库存（拉取 {int(fetched or 0)} 条，"
+        f"新建 0，更新 0，跳过 {skipped}，失败 {failed}）"
     )
+    details = _compact_sync_errors(list(getattr(result, "errors", None) or []))
+    if details:
+        msg = f"{msg}。{ '；'.join(details) }"
+    elif int(fetched or 0) == 0:
+        msg = f"{msg}。请检查接口调用参数、物料编码分批条件是否返回了余额行"
+    else:
+        msg = f"{msg}。请确认物料主数据已同步，且映射了物料编码、数量、仓库编码或名称"
+    return msg[:2000]
 
 
-def _inventory_batch_match_key(
-    material_id: int,
-    batch_no: str,
-    warehouse_id: int,
-) -> tuple[int, str, int]:
-    return (int(material_id), batch_no or "", int(warehouse_id or 0))
+def _inventory_cell(row: Dict[str, Any], *keys: str) -> str:
+    for key in keys:
+        text = cell_str(row.get(key))
+        if text:
+            return text
+    return ""
+
+
+def _inventory_quantity(row: Dict[str, Any]) -> Optional[float]:
+    for key in ("quantity", "avbqty", "qty", "baseqty"):
+        raw = row.get(key)
+        if raw in (None, ""):
+            continue
+        text = str(raw).strip()
+        if not text or text in {"-", "--"}:
+            continue
+        qty = cell_optional_decimal(raw)
+        if qty is not None:
+            return float(qty)
+    return None
+
+
+def _chunks(items: Sequence[Any], size: int) -> Iterable[Sequence[Any]]:
+    for index in range(0, len(items), size):
+        yield items[index : index + size]
 
 
 class InventorySyncService:
     MATCH_KEY = "material_code"
 
     def serialize_binding(self, row: Optional[InventorySyncBinding]) -> InventorySyncBindingOut:
-        if not row:
-            return InventorySyncBindingOut(match_key_field=self.MATCH_KEY)
-        mapping = row.field_mapping if isinstance(row.field_mapping, dict) else {}
-        return InventorySyncBindingOut(
-            source_type=row.source_type,
-            api_uuid=row.api_uuid,
-            dataset_uuid=row.dataset_uuid,
-            field_mapping={str(k): str(v) for k, v in mapping.items()},
-            match_key_field=row.match_key_field or self.MATCH_KEY,
-            sync_mode=row.sync_mode or "manual_full",
-            sync_direction=getattr(row, "sync_direction", None) or "pull",
-            schedule_interval_minutes=int(getattr(row, "schedule_interval_minutes", None) or 15),
-            last_success_at=row.last_success_at,
-            last_attempt_at=row.last_attempt_at,
-            last_error=row.last_error,
+        data = serialize_binding_row(row, default_match_key=self.MATCH_KEY)
+        return InventorySyncBindingOut(**data)
+
+    async def clear_tenant_inventory(self, tenant_id: int) -> InventoryClearTenantOut:
+        """软删除当前租户全部主仓批次库存与线边仓库存（即时库存口径）。"""
+        now = resolve_business_datetime()
+        material_batch_deleted = await MaterialBatch.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).update(deleted_at=now, updated_at=now)
+        line_side_deleted = await LineSideInventory.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).update(deleted_at=now, updated_at=now)
+        return InventoryClearTenantOut(
+            material_batch_deleted=int(material_batch_deleted or 0),
+            line_side_deleted=int(line_side_deleted or 0),
         )
 
     async def upsert_binding(
@@ -165,22 +237,34 @@ class InventorySyncService:
                 sources,
                 since=since,
                 active_only=req.active_only,
+                empty_fallbacks=INVENTORY_MAP_EMPTY_FALLBACKS,
             )
             await emit_sync_progress(f"字段映射完成，准备写入 {len(rows)} 条库存记录…")
             result = await self._upsert_batches(tenant_id, current_user, rows, match_key)
             if source_errors:
                 result.errors = (source_errors + list(result.errors))[:20]
             attach_sync_fetch_meta(result, fetched=fetched, since=since, truncated=False)
+            result.errors = _compact_sync_errors(list(result.errors or []))
+            wrote = bool(result.created or result.updated)
             if binding:
-                if result.failed and not (result.created or result.updated):
-                    await mark_binding_failure(
-                        binding,
-                        "; ".join(result.errors) or "即时库存同步失败",
+                if not wrote:
+                    incremental_noop = (
+                        since is not None
+                        and fetched == 0
+                        and not result.failed
+                        and not result.skipped
                     )
-                elif result.failed and (result.created or result.updated):
+                    if incremental_noop:
+                        await mark_binding_success(binding)
+                    else:
+                        await mark_binding_failure(
+                            binding,
+                            _empty_inventory_write_message(result, fetched),
+                        )
+                elif result.failed:
                     await mark_binding_partial_success(
                         binding,
-                        "; ".join(result.errors) or "即时库存部分行同步失败",
+                        "；".join(result.errors) or "即时库存部分行同步失败",
                     )
                 else:
                     await mark_binding_success(binding)
@@ -213,170 +297,142 @@ class InventorySyncService:
         rows: List[Dict[str, Any]],
         match_key: str,
     ) -> InventorySyncFromSourceOut:
+        """金蝶仍一次拉全量；本地认仓认料后批量 UPSERT，避免逐行写库拖垮进度流。"""
         created = 0
         updated = 0
         skipped = 0
         failed = 0
         errors: List[str] = []
-        sync_at = resolve_business_datetime()
 
-        to_update: List[MaterialBatch] = []
-        to_create: List[MaterialBatch] = []
-        parsed: List[Dict[str, Any]] = []
-        material_ids: List[int] = []
+        await emit_sync_progress("正在预加载本地仓库与物料…")
+        warehouses = await Warehouse.filter(
+            tenant_id=tenant_id, deleted_at__isnull=True
+        ).all()
+        warehouse_by_code = {str(w.code).strip(): w for w in warehouses if str(w.code or "").strip()}
+        warehouse_by_name = {str(w.name).strip(): w for w in warehouses if str(w.name or "").strip()}
 
+        materials = await Material.filter(
+            tenant_id=tenant_id, deleted_at__isnull=True
+        ).all()
+        material_by_code: Dict[str, Material] = {}
+        for material in materials:
+            main_code = str(getattr(material, "main_code", None) or "").strip()
+            code = str(getattr(material, "code", None) or "").strip()
+            if main_code:
+                material_by_code[main_code] = material
+            if code and code not in material_by_code:
+                material_by_code[code] = material
+
+        payloads: Dict[Tuple[int, str, int], Dict[str, Any]] = {}
+        await emit_sync_progress(f"正在匹配 {len(rows)} 条来源行…")
         for row in rows:
-            material_code = cell_str(row.get(match_key) or row.get("material_code") or row.get("code"))
-            if not material_code:
-                skipped += 1
-                errors.append("存在缺少物料编码的行，已跳过")
+            warehouse_code = _inventory_cell(
+                row, "warehouse_code", "warehouseCode", "warehouse.number"
+            )
+            warehouse_name = _inventory_cell(
+                row, "warehouse_name", "warehouseName", "warehouse.name"
+            )
+            if not warehouse_code and not warehouse_name:
+                failed += 1
+                errors.append("存在缺少仓库编码或仓库名称的行")
+                continue
+            warehouse = warehouse_by_code.get(warehouse_code) if warehouse_code else None
+            if warehouse is None and warehouse_name:
+                warehouse = warehouse_by_name.get(warehouse_name)
+            if warehouse is None:
+                failed += 1
+                errors.append(f"仓库不存在：{warehouse_code or warehouse_name}")
                 continue
 
-            material = await Material.filter(
-                tenant_id=tenant_id,
-                deleted_at__isnull=True,
-            ).filter(Q(main_code=material_code) | Q(code=material_code)).first()
-            if not material:
+            material_code = _inventory_cell(
+                row,
+                match_key,
+                "material_code",
+                "material.number",
+                "material",
+                "number",
+                "code",
+            )
+            if not material_code:
+                failed += 1
+                errors.append("存在缺少物料编码的行")
+                continue
+            material = material_by_code.get(material_code)
+            if material is None:
                 failed += 1
                 errors.append(f"物料 {material_code} 不存在，请先同步物料主数据")
                 continue
 
-            batch_no = normalize_inventory_sync_batch_no(row)
-            quantity_raw = row.get("quantity")
-            quantity = cell_optional_decimal(quantity_raw)
+            quantity = _inventory_quantity(row)
             if quantity is None:
-                quantity = 0.0
+                failed += 1
+                errors.append(f"物料 {material_code} 缺少库存数量")
+                continue
 
-            warehouse_value = (
-                row.get("warehouse_id")
-                or row.get("warehouseId")
-                or row.get("warehouse_code")
-                or row.get("warehouseCode")
+            batch_no = normalize_inventory_sync_batch_no(row)
+            key = (int(material.id), batch_no, int(warehouse.id))
+            payloads[key] = {
+                "material_id": int(material.id),
+                "batch_no": batch_no,
+                "warehouse_id": int(warehouse.id),
+                "warehouse_name": (warehouse.name or warehouse_name or None),
+                "quantity": Decimal(str(quantity)),
+            }
+
+        if not payloads:
+            await emit_sync_progress(
+                f"库存写入完成：新建 0，更新 0，跳过 {skipped}，失败 {failed}"
             )
-            warehouse_name = cell_str(row.get("warehouse_name") or row.get("warehouseName")) or None
-            warehouse_id, warehouse_name = await self._resolve_warehouse(
-                tenant_id,
-                warehouse_value,
-                warehouse_name,
+            return InventorySyncFromSourceOut(
+                created=0,
+                updated=0,
+                skipped=skipped,
+                failed=failed,
+                errors=_compact_sync_errors(errors),
             )
 
-            expiry_date = row.get("expiry_date") or row.get("expiryDate")
-            production_date = row.get("production_date") or row.get("productionDate")
-            if expiry_date:
-                try:
-                    from datetime import datetime as dt
-                    expiry_date = dt.strptime(str(expiry_date)[:10], "%Y-%m-%d").date()
-                except (ValueError, TypeError):
-                    expiry_date = None
-            if production_date:
-                try:
-                    from datetime import datetime as dt
-                    production_date = dt.strptime(str(production_date)[:10], "%Y-%m-%d").date()
-                except (ValueError, TypeError):
-                    production_date = None
+        material_ids = list({item["material_id"] for item in payloads.values()})
+        existing_rows = await MaterialBatch.filter(
+            tenant_id=tenant_id,
+            material_id__in=material_ids,
+            ownership_type="company_owned",
+            customer_id=0,
+            quality_status=QUALIFIED,
+            deleted_at__isnull=True,
+        ).only("id", "material_id", "batch_no", "warehouse_id")
+        existing_keys = {
+            (int(row.material_id), str(row.batch_no), int(row.warehouse_id or 0))
+            for row in existing_rows
+        }
 
-            parsed.append(
-                {
-                    "material": material,
-                    "batch_no": batch_no,
-                    "quantity": quantity,
-                    "warehouse_id": warehouse_id or 0,
-                    "warehouse_name": warehouse_name,
-                    "expiry_date": expiry_date,
-                    "production_date": production_date,
-                }
-            )
-            material_ids.append(material.id)
-
-        existing_by_key: Dict[tuple[int, str, int], MaterialBatch] = {}
-        if material_ids:
-            existing_rows = await MaterialBatch.filter(
-                tenant_id=tenant_id,
-                deleted_at__isnull=True,
-                material_id__in=list(set(material_ids)),
-                ownership_type="company_owned",
-                customer_id=0,
-                quality_status=QUALIFIED,
-            ).all()
-            for existing in existing_rows:
-                key = _inventory_batch_match_key(
-                    existing.material_id,
-                    existing.batch_no or "",
-                    existing.warehouse_id or 0,
-                )
-                if key not in existing_by_key:
-                    existing_by_key[key] = existing
-
-        for item in parsed:
-            material = item["material"]
-            batch_no = item["batch_no"]
-            quantity = item["quantity"]
-            warehouse_id = item["warehouse_id"]
-            warehouse_name = item["warehouse_name"]
-            expiry_date = item["expiry_date"]
-            production_date = item["production_date"]
-            key = _inventory_batch_match_key(material.id, batch_no, warehouse_id)
-            if key in existing_by_key:
-                batch = existing_by_key[key]
-                batch.quantity = (batch.quantity or 0).__class__(quantity or 0)
-                if warehouse_id:
-                    batch.warehouse_id = warehouse_id
-                if warehouse_name:
-                    batch.warehouse_name = warehouse_name
-                if expiry_date:
-                    batch.expiry_date = expiry_date
-                if production_date:
-                    batch.production_date = production_date
-                batch.status = "in_stock"
-                batch.updated_at = sync_at
-                to_update.append(batch)
+        to_insert: List[Dict[str, Any]] = []
+        to_update: List[Dict[str, Any]] = []
+        for key, item in payloads.items():
+            if key in existing_keys:
+                to_update.append(item)
             else:
-                batch = MaterialBatch(
-                    tenant_id=tenant_id,
-                    material_id=material.id,
-                    batch_no=batch_no,
-                    warehouse_id=warehouse_id or 0,
-                    warehouse_name=warehouse_name,
-                    production_date=production_date,
-                    expiry_date=expiry_date,
-                    quantity=quantity or 0,
-                    status="in_stock",
-                    created_at=sync_at,
-                    updated_at=sync_at,
-                )
-                if current_user:
-                    from apps.common.audit_actor import apply_create_audit
-                    apply_create_audit(batch, current_user)
-                to_create.append(batch)
-                existing_by_key[key] = batch
+                to_insert.append(item)
 
-        write_batch = 500
-        for offset in range(0, len(to_update), write_batch):
-            batch_list = to_update[offset:offset + write_batch]
-            start = offset + 1
-            end = offset + len(batch_list)
-            await emit_sync_progress(f"正在批量更新库存批次 {start}-{end}/{len(to_update)}…")
-            try:
-                for b in batch_list:
-                    await b.save(update_fields=["quantity", "warehouse_id", "warehouse_name",
-                                               "expiry_date", "production_date", "status",
-                                               "updated_at", "updated_by", "updated_by_name"])
-                updated += len(batch_list)
-            except Exception as e:
-                failed += len(batch_list)
-                errors.append(f"批量更新失败：{e}")
+        now = resolve_business_datetime()
+        actor_id = None
+        actor_name = None
+        if current_user is not None:
+            from apps.common.audit_actor import operator_name_from_user
 
-        for offset in range(0, len(to_create), write_batch):
-            batch_list = to_create[offset:offset + write_batch]
-            start = offset + 1
-            end = offset + len(batch_list)
-            await emit_sync_progress(f"正在批量新建库存批次 {start}-{end}/{len(to_create)}…")
-            try:
-                await MaterialBatch.bulk_create(batch_list, batch_size=write_batch)
-                created += len(batch_list)
-            except Exception as e:
-                failed += len(batch_list)
-                errors.append(f"批量新建失败：{e}")
+            actor_id = int(current_user.id)
+            actor_name = operator_name_from_user(current_user)
+
+        await emit_sync_progress(
+            f"正在批量写入库存：新建 {len(to_insert)}，更新 {len(to_update)}…"
+        )
+        if to_update:
+            updated += await self._bulk_update_on_hand(
+                tenant_id, to_update, now, actor_id, actor_name
+            )
+        if to_insert:
+            created += await self._bulk_insert_on_hand(
+                tenant_id, to_insert, now, actor_id, actor_name
+            )
 
         await emit_sync_progress(
             f"库存写入完成：新建 {created}，更新 {updated}，跳过 {skipped}，失败 {failed}"
@@ -386,37 +442,107 @@ class InventorySyncService:
             updated=updated,
             skipped=skipped,
             failed=failed,
-            errors=errors[:20],
+            errors=_compact_sync_errors(errors),
         )
 
-    async def _resolve_warehouse(
+    async def _bulk_update_on_hand(
         self,
         tenant_id: int,
-        value: Any,
-        warehouse_name: Optional[str],
-    ) -> tuple[int, Optional[str]]:
-        """将外部仓库编码、名称或数字 ID 解析为本地仓库 ID。"""
-        raw = cell_str(value)
-        if not raw:
-            return 0, warehouse_name
+        items: List[Dict[str, Any]],
+        now: Any,
+        actor_id: Optional[int],
+        actor_name: Optional[str],
+    ) -> int:
+        conn = connections.get("default")
+        sql = """
+            UPDATE apps_master_data_material_batches AS b
+            SET quantity = v.quantity,
+                status = CASE WHEN v.quantity > 0 THEN 'in_stock' ELSE 'out_stock' END,
+                warehouse_name = COALESCE(v.warehouse_name, b.warehouse_name),
+                updated_at = $6,
+                updated_by = $7,
+                updated_by_name = $8
+            FROM (
+                SELECT *
+                FROM unnest($1::int[], $2::varchar[], $3::int[], $4::numeric[], $5::varchar[])
+                    AS t(material_id, batch_no, warehouse_id, quantity, warehouse_name)
+            ) AS v
+            WHERE b.tenant_id = $9
+              AND b.material_id = v.material_id
+              AND b.batch_no = v.batch_no
+              AND b.warehouse_id = v.warehouse_id
+              AND b.ownership_type = 'company_owned'
+              AND b.customer_id = 0
+              AND b.quality_status = $10
+              AND b.deleted_at IS NULL
+        """
+        written = 0
+        for chunk in _chunks(items, INVENTORY_WRITE_CHUNK):
+            await conn.execute_query(
+                sql,
+                [
+                    [item["material_id"] for item in chunk],
+                    [item["batch_no"] for item in chunk],
+                    [item["warehouse_id"] for item in chunk],
+                    [item["quantity"] for item in chunk],
+                    [item["warehouse_name"] for item in chunk],
+                    now,
+                    actor_id,
+                    actor_name,
+                    tenant_id,
+                    QUALIFIED,
+                ],
+            )
+            written += len(chunk)
+        return written
 
-        warehouse = await Warehouse.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True,
-        ).filter(Q(code=raw) | Q(name=raw)).first()
-        if warehouse:
-            return warehouse.id, warehouse_name or warehouse.name
-
-        if raw.isdigit():
-            warehouse = await Warehouse.filter(
-                tenant_id=tenant_id,
-                id=int(raw),
-                deleted_at__isnull=True,
-            ).first()
-            if warehouse:
-                return warehouse.id, warehouse_name or warehouse.name
-
-        return 0, warehouse_name or raw
+    async def _bulk_insert_on_hand(
+        self,
+        tenant_id: int,
+        items: List[Dict[str, Any]],
+        now: Any,
+        actor_id: Optional[int],
+        actor_name: Optional[str],
+    ) -> int:
+        conn = connections.get("default")
+        sql = """
+            INSERT INTO apps_master_data_material_batches (
+                uuid, tenant_id, material_id, batch_no, warehouse_id, warehouse_name,
+                quantity, status, ownership_type, customer_id, quality_status,
+                created_at, updated_at, created_by, created_by_name, updated_by, updated_by_name
+            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'company_owned',0,$9,$10,$10,$11,$12,$11,$12)
+            ON CONFLICT (tenant_id, material_id, batch_no, ownership_type, customer_id, warehouse_id, quality_status)
+            WHERE deleted_at IS NULL
+            DO UPDATE SET
+                quantity = EXCLUDED.quantity,
+                status = EXCLUDED.status,
+                warehouse_name = COALESCE(EXCLUDED.warehouse_name, apps_master_data_material_batches.warehouse_name),
+                updated_at = EXCLUDED.updated_at,
+                updated_by = EXCLUDED.updated_by,
+                updated_by_name = EXCLUDED.updated_by_name
+        """
+        written = 0
+        for chunk in _chunks(items, INVENTORY_WRITE_CHUNK):
+            values = [
+                [
+                    str(uuid.uuid4()),
+                    tenant_id,
+                    item["material_id"],
+                    item["batch_no"],
+                    item["warehouse_id"],
+                    item["warehouse_name"],
+                    item["quantity"],
+                    "in_stock" if item["quantity"] > 0 else "out_stock",
+                    QUALIFIED,
+                    now,
+                    actor_id,
+                    actor_name,
+                ]
+                for item in chunk
+            ]
+            await conn.execute_many(sql, values)
+            written += len(chunk)
+        return written
 
     async def _upsert_sync_binding(
         self,

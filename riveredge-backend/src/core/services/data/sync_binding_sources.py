@@ -51,6 +51,10 @@ def legacy_row_to_sources(row: Any) -> List[Dict[str, Any]]:
     return [item]
 
 
+def _as_object(raw: Any) -> Optional[Dict[str, Any]]:
+    return raw if isinstance(raw, dict) else None
+
+
 def normalize_sources_json(raw: Any) -> List[Dict[str, Any]]:
     if not isinstance(raw, list):
         return []
@@ -59,7 +63,59 @@ def normalize_sources_json(raw: Any) -> List[Dict[str, Any]]:
         if not isinstance(entry, dict):
             continue
         parsed = SyncSourceItem.model_validate(entry)
-        out.append(parsed.model_dump(mode="json"))
+        dumped = parsed.model_dump(mode="json")
+        if not dumped.get("persist_request_override"):
+            dumped.pop("persist_request_override", None)
+        if not isinstance(dumped.get("request_body"), dict):
+            dumped.pop("request_body", None)
+        if not isinstance(dumped.get("request_params"), dict):
+            dumped.pop("request_params", None)
+        if not str(dumped.get("batch_fill_path") or "").strip():
+            dumped.pop("batch_fill_path", None)
+        values = dumped.get("batch_fill_values")
+        if not isinstance(values, list) or not values:
+            dumped.pop("batch_fill_values", None)
+        out.append(dumped)
+    return out
+
+
+def sources_for_persist(sources: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """绑定落库：未勾选记住时丢掉调用参数覆盖，接口管理模板保持不变。"""
+    out: List[Dict[str, Any]] = []
+    for src in sources:
+        item = dict(src)
+        persist = bool(item.get("persist_request_override"))
+        body = _as_object(item.get("request_body"))
+        params = _as_object(item.get("request_params"))
+        fill_path = str(item.get("batch_fill_path") or "").strip() or None
+        fill_values = [
+            str(v).strip()
+            for v in (item.get("batch_fill_values") or [])
+            if str(v).strip()
+        ] if isinstance(item.get("batch_fill_values"), list) else []
+        if persist and (body is not None or params is not None or fill_values):
+            item["persist_request_override"] = True
+            if body is not None:
+                item["request_body"] = body
+            else:
+                item.pop("request_body", None)
+            if params is not None:
+                item["request_params"] = params
+            else:
+                item.pop("request_params", None)
+            if fill_path and fill_values:
+                item["batch_fill_path"] = fill_path
+                item["batch_fill_values"] = fill_values
+            else:
+                item.pop("batch_fill_path", None)
+                item.pop("batch_fill_values", None)
+        else:
+            item.pop("persist_request_override", None)
+            item.pop("request_body", None)
+            item.pop("request_params", None)
+            item.pop("batch_fill_path", None)
+            item.pop("batch_fill_values", None)
+        out.append(item)
     return out
 
 
@@ -144,6 +200,7 @@ async def fetch_mapped_rows_from_sources(
     since: Optional[Any] = None,
     active_only: bool = True,
     transform_raw_rows: Optional[Any] = None,
+    empty_fallbacks: Optional[Dict[str, List[str]]] = None,
 ) -> Tuple[List[Dict[str, Any]], List[str], int]:
     """按源拉取并映射；单源失败记入 errors，其余继续。"""
     from apps.master_data.services.master_data_sync_common import fetch_sync_rows, map_sync_rows
@@ -163,11 +220,29 @@ async def fetch_mapped_rows_from_sources(
                 dataset_uuid=str(src.get("dataset_uuid") or "").strip() or None,
                 since=since,
                 active_only=active_only,
+                request_body=_as_object(src.get("request_body")),
+                request_params=_as_object(src.get("request_params")),
+                batch_fill_path=str(src.get("batch_fill_path") or "").strip() or None,
+                batch_fill_values=(
+                    [str(v).strip() for v in src.get("batch_fill_values") if str(v).strip()]
+                    if isinstance(src.get("batch_fill_values"), list)
+                    else None
+                ),
             )
             if transform_raw_rows is not None:
                 raw_rows = transform_raw_rows(raw_rows)
             fetched_total += len(raw_rows)
-            mapped_all.extend(map_sync_rows(raw_rows, mapping))
+            mapped = map_sync_rows(
+                raw_rows,
+                mapping,
+                empty_fallbacks=empty_fallbacks,
+            )
+            if raw_rows and mapping and not mapped:
+                errors.append(
+                    f"{label}：拉取 {len(raw_rows)} 条，字段映射后为 0 条，"
+                    "请检查映射列名是否与接口返回字段一致"
+                )
+            mapped_all.extend(mapped)
         except Exception as exc:
             errors.append(f"{label}：{exc}")
     return mapped_all, errors, fetched_total

@@ -19,6 +19,22 @@ class SyncSourceItem(BaseSchema):
     dataset_uuid: Optional[str] = None
     field_mapping: Dict[str, str] = Field(default_factory=dict)
     label: Optional[str] = Field(None, description="展示名（可选，错误信息用）")
+    request_body: Optional[Dict[str, Any]] = Field(
+        None, description="仅覆盖本同步来源调用，不改接口管理中的模板"
+    )
+    request_params: Optional[Dict[str, Any]] = Field(
+        None, description="仅覆盖本同步来源查询参数，不改接口管理"
+    )
+    persist_request_override: bool = Field(
+        False,
+        description="为 true 时随绑定记住调用参数；否则本次可用，下次仍走接口列表",
+    )
+    batch_fill_path: Optional[str] = Field(
+        None, description="用本系统物料编码批量填入的请求体路径，如 params.material"
+    )
+    batch_fill_values: Optional[List[str]] = Field(
+        None, description="待按 pageSize 分批写入 batch_fill_path 的编码列表"
+    )
 
     @field_validator("kind", mode="before")
     @classmethod

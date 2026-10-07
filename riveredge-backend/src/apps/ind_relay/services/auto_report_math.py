@@ -76,6 +76,19 @@ def planned_start_ts(value: Optional[datetime]) -> float:
         return 0.0
 
 
+def equipment_in_default_ids(raw: object, equipment_id: int) -> bool:
+    """工序主数据 default_equipment_ids 是否包含该 MES 设备。"""
+    if raw is None or not isinstance(raw, (list, tuple)):
+        return False
+    for item in raw:
+        try:
+            if int(item) == int(equipment_id):
+                return True
+        except (TypeError, ValueError):
+            continue
+    return False
+
+
 def candidate_bind_sort_key(
     status_rank: int,
     planned_start: Optional[datetime],

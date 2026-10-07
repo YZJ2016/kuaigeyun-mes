@@ -17,6 +17,7 @@ import {
   Steps,
   Switch,
   Table,
+  Tooltip,
   Typography,
 } from 'antd';
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
@@ -64,6 +65,20 @@ function resolveDraftDisplayName(
 
 function countMappedFields(draft: SyncSourceDraft): number {
   return Object.values(draft.targetToSource).filter(Boolean).length;
+}
+
+function mappingPairLines(
+  draft: SyncSourceDraft,
+  fieldByValue: Map<string, SyncTargetField>,
+  t: (key: string) => string,
+): string[] {
+  return Object.entries(draft.targetToSource)
+    .filter(([, source]) => Boolean(source))
+    .map(([target, source]) => {
+      const field = fieldByValue.get(target);
+      const label = field?.label?.trim() || (field?.labelKey ? t(field.labelKey) : target);
+      return `${label} ← ${source}`;
+    });
 }
 
 /**
@@ -247,6 +262,18 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
     [sourceDrafts],
   );
 
+  const fieldByValue = useMemo(() => {
+    const map = new Map<string, SyncTargetField>();
+    for (const field of [
+      ...config.targetFields,
+      ...(config.availableTargetFields ?? []),
+      ...loadedAvailableFields,
+    ]) {
+      if (!map.has(field.value)) map.set(field.value, field);
+    }
+    return map;
+  }, [config.availableTargetFields, config.targetFields, loadedAvailableFields]);
+
   const editingDraft = useMemo(() => {
     if (!settingSourceId) return null;
     const fromList = sourceDrafts.find((row) => row.id === settingSourceId);
@@ -346,7 +373,7 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
       .getBinding()
       .then((binding) => {
         if (cancelled) return;
-        setSourceDrafts(bindingToSourceDrafts(binding));
+        setSourceDrafts(bindingToSourceDrafts(binding, config.sanitizeMapping));
         if (binding.sync_mode) setSyncMode(binding.sync_mode);
         if (binding.schedule_interval_minutes) {
           setScheduleIntervalMinutes(binding.schedule_interval_minutes);
@@ -369,7 +396,7 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
     if (drafts.every((draft) => Object.keys(draft.targetToSource).length === 0)) {
       const binding = await config.getBinding().catch(() => null);
       if (binding) {
-        drafts = bindingToSourceDrafts(binding);
+        drafts = bindingToSourceDrafts(binding, config.sanitizeMapping);
         setSourceDrafts(drafts);
       }
     }
@@ -507,7 +534,7 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
 
       const result = await config.syncFromSource(
         {
-          sources: draftsToPayloadSources(drafts),
+          sources: draftsToPayloadSources(drafts, config.sanitizeMapping),
           save_binding: saveBinding,
           skip_prerequisite_syncs: config.skipBackendPrerequisites ?? prerequisiteSteps.length > 0,
           sync_mode: syncMode,
@@ -524,8 +551,13 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
         },
       );
 
+      const wrote = result.created + result.updated;
+      const incrementalNoop =
+        result.mode === 'incremental' &&
+        (result.fetched ?? 0) === 0 &&
+        result.failed === 0;
       patchProgress(mainStepId, {
-        status: result.failed > 0 ? 'error' : 'finish',
+        status: result.failed > 0 || (wrote === 0 && !incrementalNoop) ? 'error' : 'finish',
         description: formatStepResult(result),
       });
 
@@ -537,6 +569,15 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
             updated: result.updated,
             skipped: result.skipped,
             failed: result.failed,
+          }),
+        );
+      } else if (wrote === 0 && !incrementalNoop) {
+        messageApi.warning(
+          t('components.syncFromSource.completeEmpty', {
+            created: result.created,
+            updated: result.updated,
+            skipped: result.skipped,
+            fetched: result.fetched ?? 0,
           }),
         );
       } else {
@@ -645,13 +686,61 @@ export const SyncFromSourceModal: React.FC<SyncFromSourceModalProps> = ({
               title: t('components.syncFromSource.sourceName'),
               dataIndex: 'id',
               ellipsis: true,
-              render: (_id, record) =>
-                resolveDraftDisplayName(record, apiOptions, datasetOptions, t),
+              render: (_id, record) => (
+                <span>
+                  {resolveDraftDisplayName(record, apiOptions, datasetOptions, t)}
+                  {record.kind === 'api' &&
+                  (record.request_body || record.request_params || record.batch_fill_values?.length) ? (
+                    <Typography.Text type="secondary" style={{ marginLeft: 8, fontSize: 12 }}>
+                      {record.persist_request_override
+                        ? t('components.syncFromSource.callParamsRemembered')
+                        : t('components.syncFromSource.callParamsSessionOnly')}
+                    </Typography.Text>
+                  ) : null}
+                </span>
+              ),
             },
             {
-              title: t('components.syncFromSource.mappingFieldCount'),
-              width: 96,
-              render: (_value, record) => countMappedFields(record),
+              title: (
+                <Tooltip title={t('components.syncFromSource.mappingFieldCountHint')}>
+                  <span>{t('components.syncFromSource.mappingFieldCount')}</span>
+                </Tooltip>
+              ),
+              width: 120,
+              render: (_value, record) => {
+                const count = countMappedFields(record);
+                const pairs = mappingPairLines(record, fieldByValue, t);
+                return (
+                  <Tooltip
+                    title={
+                      pairs.length > 0 ? (
+                        <div>
+                          {pairs.map((line) => (
+                            <div key={line}>{line}</div>
+                          ))}
+                          <div style={{ marginTop: 6, opacity: 0.85 }}>
+                            {t('components.syncFromSource.mappingFieldClickToEdit')}
+                          </div>
+                        </div>
+                      ) : (
+                        t('components.syncFromSource.mappingFieldEmpty')
+                      )
+                    }
+                  >
+                    <Button
+                      type="link"
+                      size="small"
+                      disabled={syncing}
+                      onClick={() => setSettingSourceId(record.id)}
+                      style={{ padding: 0 }}
+                    >
+                      {count > 0
+                        ? t('components.syncFromSource.mappingFieldCountValue', { count })
+                        : t('components.syncFromSource.mappingFieldEmpty')}
+                    </Button>
+                  </Tooltip>
+                );
+              },
             },
             {
               title: t('common.actions'),

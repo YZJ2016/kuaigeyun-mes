@@ -34,6 +34,18 @@ def _collect_kingdee_error_messages(payload: Any) -> List[str]:
     return messages
 
 
+def _raise_if_cosmic_error_payload(body: Any) -> None:
+    """苍穹网关失败：status=false 且带 errorCode/data 外壳，禁止当成业务行。"""
+    if not isinstance(body, dict):
+        return
+    if body.get("status") is not False:
+        return
+    if "errorCode" not in body and "data" not in body:
+        return
+    msg = body.get("message") or body.get("errorCode") or "苍穹接口返回失败"
+    raise ValueError(str(msg))
+
+
 def _raise_if_kingdee_error_payload(body: Any) -> None:
     """金蝶失败时常见为单条 Result/ResponseStatus 对象；禁止当成业务行跳过。"""
     if isinstance(body, list) and body:
@@ -102,6 +114,7 @@ def _normalize_api_body_to_rows_raw(
     if isinstance(body, dict) and body.get("error"):
         raise ValueError(str(body["error"]))
     _raise_if_kingdee_error_payload(body)
+    _raise_if_cosmic_error_payload(body)
     if isinstance(body, list):
         if not body:
             return []

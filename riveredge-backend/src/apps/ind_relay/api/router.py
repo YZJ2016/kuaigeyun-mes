@@ -620,6 +620,7 @@ class AutoReportBindingResponse(BaseModel):
     production_line_name: Optional[str] = None
     bound_product_id: Optional[int] = None
     remarks: Optional[str] = None
+    process_operation_count: int = 0
 
 
 class AutoReportLogResponse(BaseModel):
@@ -652,7 +653,7 @@ def _config_response(row) -> AutoReportConfigResponse:
     )
 
 
-def _binding_response(row) -> AutoReportBindingResponse:
+def _binding_response(row, process_operation_count: int = 0) -> AutoReportBindingResponse:
     return AutoReportBindingResponse(
         id=int(row.id),
         iot_device_id=int(row.iot_device_id),
@@ -680,6 +681,17 @@ def _binding_response(row) -> AutoReportBindingResponse:
         production_line_name=getattr(row, "production_line_name", None),
         bound_product_id=getattr(row, "bound_product_id", None),
         remarks=row.remarks,
+        process_operation_count=int(process_operation_count or 0),
+    )
+
+
+async def _binding_response_with_count(tenant_id: int, row) -> AutoReportBindingResponse:
+    from apps.ind_relay.services.auto_report_service import AutoReportService
+
+    counts = await AutoReportService.process_operation_counts_by_equipment(tenant_id)
+    return _binding_response(
+        row,
+        process_operation_count=counts.get(int(row.equipment_id or 0), 0),
     )
 
 
@@ -742,7 +754,14 @@ async def list_auto_report_bindings(tenant_id: int = Depends(get_current_tenant)
     from apps.ind_relay.services.auto_report_service import AutoReportService
 
     rows = await AutoReportService.list_bindings(tenant_id)
-    return [_binding_response(r) for r in rows]
+    counts = await AutoReportService.process_operation_counts_by_equipment(tenant_id)
+    return [
+        _binding_response(
+            r,
+            process_operation_count=counts.get(int(r.equipment_id or 0), 0),
+        )
+        for r in rows
+    ]
 
 
 @router.post(
@@ -770,7 +789,26 @@ async def create_auto_report_binding(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except ValidationError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    return _binding_response(row)
+    return await _binding_response_with_count(tenant_id, row)
+
+
+@router.get(
+    "/auto-report/bindings/{binding_id}/operations",
+    dependencies=[Depends(require_permission_codes("ind-relay:auto-report:read"))],
+)
+async def list_auto_report_binding_operations(
+    binding_id: int,
+    tenant_id: int = Depends(get_current_tenant),
+):
+    from apps.ind_relay.services.auto_report_service import AutoReportService
+    from infra.exceptions.exceptions import NotFoundError, ValidationError
+
+    try:
+        return await AutoReportService.list_binding_process_operations(tenant_id, binding_id)
+    except NotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @router.patch(
@@ -809,7 +847,7 @@ async def update_auto_report_binding(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except ValidationError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    return _binding_response(row)
+    return await _binding_response_with_count(tenant_id, row)
 
 
 @router.delete(

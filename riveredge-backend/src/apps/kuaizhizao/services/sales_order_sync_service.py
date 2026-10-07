@@ -153,6 +153,14 @@ class SalesOrderSyncService:
                         dataset_uuid=str(src.get("dataset_uuid") or "").strip() or None,
                         since=since,
                         active_only=req.active_only,
+                        request_body=src.get("request_body") if isinstance(src.get("request_body"), dict) else None,
+                        request_params=src.get("request_params") if isinstance(src.get("request_params"), dict) else None,
+                        batch_fill_path=str(src.get("batch_fill_path") or "").strip() or None,
+                        batch_fill_values=(
+                            [str(v).strip() for v in src.get("batch_fill_values") if str(v).strip()]
+                            if isinstance(src.get("batch_fill_values"), list)
+                            else None
+                        ),
                     )
                     fetched_total += len(raw_rows)
                     for order in self._build_orders_from_rows(raw_rows, field_mapping, match_key):

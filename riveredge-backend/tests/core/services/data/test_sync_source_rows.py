@@ -29,6 +29,20 @@ def test_normalize_empty_data_rows():
     assert rows == []
 
 
+def test_normalize_cosmic_status_false_raises():
+    import pytest
+
+    with pytest.raises(ValueError, match="token expired"):
+        normalize_api_body_to_rows(
+            {
+                "status": False,
+                "errorCode": "401",
+                "message": "token expired",
+                "data": {},
+            }
+        )
+
+
 def test_normalize_items_array():
     rows = normalize_api_body_to_rows({"items": [{"id": 1}]})
     assert rows == [{"id": 1}]

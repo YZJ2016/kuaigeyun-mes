@@ -2457,6 +2457,7 @@ class ReportService:
         warehouse_id: Optional[int] = None,
         batch_number: Optional[str] = None,
         include_expired: bool = False,
+        include_zero_stock: bool = False,
     ) -> List[Dict[str, Any]]:
         from apps.master_data.constants.batch_quality_status import QUALIFIED
         from apps.master_data.models.material_batch import MaterialBatch
@@ -2530,7 +2531,7 @@ class ReportService:
                     continue
                 expiry_iso = to_api_isoformat(b.expiry_date) if b.expiry_date else None
                 qty = float(b.quantity or 0)
-                if qty <= 0:
+                if qty <= 0 and not include_zero_stock:
                     continue
                 status = "已过期" if b.expiry_date and b.expiry_date < today else "在库"
                 rows.append({
@@ -2552,7 +2553,7 @@ class ReportService:
                 })
         for l in lines:
             qty = float((l.quantity or 0) - (l.reserved_quantity or 0))
-            if qty <= 0:
+            if qty <= 0 and not include_zero_stock:
                 continue
             status = "已过期" if l.expiry_date and l.expiry_date < today else "在库"
             wh_id = int(l.warehouse_id) if l.warehouse_id else None
@@ -2889,6 +2890,7 @@ class ReportService:
             material_id=material_id,
             warehouse_id=warehouse_id,
             include_expired=False,
+            include_zero_stock=include_zero_stock,
         )
         grouped: Dict[tuple, Dict[str, Any]] = {}
         for it in rows:
