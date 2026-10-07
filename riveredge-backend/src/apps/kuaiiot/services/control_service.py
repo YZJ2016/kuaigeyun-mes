@@ -10,15 +10,25 @@ from tortoise.transactions import in_transaction
 
 from apps.kuaizhizao.services.equipment_service import EquipmentService
 from apps.kuaiiot.constants import VALUE_TYPES
+from apps.kuaiiot.models.alert import KuaiiotAlertRule
 from apps.kuaiiot.models.connection import KuaiiotConnection
 from apps.kuaiiot.models.device import KuaiiotDevice
+from apps.kuaiiot.models.edge_config import KuaiiotEdgeConfig
 from apps.kuaiiot.models.group import KuaiiotDeviceGroup
 from apps.kuaiiot.models.tag import KuaiiotTagDefinition, KuaiiotTagSnapshot
-from apps.kuaiiot.schemas.control import ConnectionCreate, DeviceCreate, DeviceUpdate, TagCreate
+from apps.kuaiiot.schemas.control import (
+    ConnectionCreate,
+    ConnectionUpdate,
+    DeviceCreate,
+    DeviceUpdate,
+    TagCreate,
+    TagUpdate,
+)
 from apps.kuaiiot.services.product_service import get_product
 from apps.kuaiiot.services.connection_runtime import EXTERNAL_TYPES, validate_mapping, validate_type
 from core.models.integration_config import IntegrationConfig
 from apps.kuaiiot.services.tag_service import _validate_fill_target, _validate_map_target
+from core.utils.timezone_utils import resolve_business_datetime
 from infra.domain.tenant_context import TenantContextError, get_current_tenant_id
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
@@ -95,6 +105,54 @@ async def list_connections(tenant_id: int) -> list[KuaiiotConnection]:
     return await KuaiiotConnection.filter(tenant_id=tid, deleted_at__isnull=True).order_by("id").limit(500)
 
 
+async def get_connection(tenant_id: int, connection_id: int) -> KuaiiotConnection:
+    tid = _require_tenant(tenant_id)
+    row = await KuaiiotConnection.filter(
+        tenant_id=tid, id=connection_id, deleted_at__isnull=True
+    ).first()
+    if row is None:
+        raise NotFoundError("数采连接不存在")
+    return row
+
+
+async def update_connection(
+    tenant_id: int,
+    connection_id: int,
+    payload: ConnectionUpdate,
+    *,
+    user_id: Optional[int] = None,
+) -> KuaiiotConnection:
+    row = await get_connection(tenant_id, connection_id)
+    fields = payload.model_fields_set
+    if "name" in fields:
+        title = (payload.name or "").strip()
+        if not title:
+            raise ValidationError("连接名称不能为空")
+        row.name = title
+    if "config" in fields:
+        validate_mapping(payload.config)
+        row.config = payload.config
+    if "is_enabled" in fields and payload.is_enabled is not None:
+        row.is_enabled = payload.is_enabled
+    if "remark" in fields:
+        row.remark = payload.remark
+    row.updated_by = user_id
+    await row.save()
+    return row
+
+
+async def delete_connection(
+    tenant_id: int,
+    connection_id: int,
+    *,
+    user_id: Optional[int] = None,
+) -> None:
+    row = await get_connection(tenant_id, connection_id)
+    row.deleted_at = resolve_business_datetime()
+    row.deleted_by = user_id
+    await row.save(update_fields=["deleted_at", "deleted_by", "updated_at"])
+
+
 async def create_device(
     tenant_id: int,
     payload: DeviceCreate,
@@ -153,6 +211,39 @@ async def list_devices(tenant_id: int) -> list[KuaiiotDevice]:
     return await KuaiiotDevice.filter(tenant_id=tid, deleted_at__isnull=True).order_by("id").limit(500)
 
 
+async def get_device(tenant_id: int, device_id: int) -> KuaiiotDevice:
+    tid = _require_tenant(tenant_id)
+    row = await KuaiiotDevice.filter(
+        tenant_id=tid, id=device_id, deleted_at__isnull=True
+    ).first()
+    if row is None:
+        raise NotFoundError("IoT 设备不存在")
+    return row
+
+
+async def delete_device(
+    tenant_id: int,
+    device_id: int,
+    *,
+    user_id: Optional[int] = None,
+) -> None:
+    row = await get_device(tenant_id, device_id)
+    now = resolve_business_datetime()
+    async with in_transaction():
+        row.deleted_at = now
+        row.deleted_by = user_id
+        await row.save(update_fields=["deleted_at", "deleted_by", "updated_at"])
+        # 级联软删该设备下的边缘配置与设备绑定告警规则，同事务。
+        for model in (KuaiiotEdgeConfig, KuaiiotAlertRule):
+            children = await model.filter(
+                tenant_id=int(row.tenant_id), device_id=row.id, deleted_at__isnull=True
+            )
+            for child in children:
+                child.deleted_at = now
+                child.deleted_by = user_id
+                await child.save(update_fields=["deleted_at", "deleted_by", "updated_at"])
+
+
 async def update_device(
     tenant_id: int,
     device_id: int,
@@ -171,6 +262,16 @@ async def update_device(
         if not title:
             raise ValidationError("设备名称不能为空")
         device.name = title
+    if "connection_id" in fields:
+        if payload.connection_id is not None:
+            connection = await KuaiiotConnection.filter(
+                tenant_id=tid,
+                id=payload.connection_id,
+                deleted_at__isnull=True,
+            ).first()
+            if connection is None:
+                raise ValidationError("连接不存在")
+        device.connection_id = payload.connection_id
     if payload.clear_equipment:
         device.equipment_uuid = None
     elif "equipment_uuid" in fields:
@@ -270,3 +371,82 @@ async def list_device_snapshots(tenant_id: int, device_id: int) -> list[KuaiiotT
         device_id=device.id,
         deleted_at__isnull=True,
     ).order_by("tag_key").limit(500)
+
+
+async def _live_device_ids(tenant_id: int, device_id: Optional[int] = None) -> list[int]:
+    query = KuaiiotDevice.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+    if device_id is not None:
+        query = query.filter(id=device_id)
+    return [row.id for row in await query]
+
+
+async def list_tags(tenant_id: int, device_id: Optional[int] = None) -> list[KuaiiotTagDefinition]:
+    """点位列表只含未删除设备下的点位。device_id 为空时列全租户。"""
+    tid = _require_tenant(tenant_id)
+    device_ids = await _live_device_ids(tid, device_id)
+    if not device_ids:
+        return []
+    return await KuaiiotTagDefinition.filter(
+        tenant_id=tid,
+        device_id__in=device_ids,
+        deleted_at__isnull=True,
+    ).order_by("device_id", "tag_key").limit(500)
+
+
+async def get_tag(tenant_id: int, tag_id: int) -> KuaiiotTagDefinition:
+    tid = _require_tenant(tenant_id)
+    row = await KuaiiotTagDefinition.filter(
+        tenant_id=tid, id=tag_id, deleted_at__isnull=True
+    ).first()
+    if row is None:
+        raise NotFoundError("点位不存在")
+    device = await KuaiiotDevice.filter(
+        tenant_id=tid, id=row.device_id, deleted_at__isnull=True
+    ).first()
+    if device is None:
+        raise NotFoundError("点位不存在")
+    return row
+
+
+async def update_tag(
+    tenant_id: int,
+    tag_id: int,
+    payload: TagUpdate,
+    *,
+    user_id: Optional[int] = None,
+) -> KuaiiotTagDefinition:
+    row = await get_tag(tenant_id, tag_id)
+    fields = payload.model_fields_set
+    if "name" in fields:
+        title = (payload.name or "").strip()
+        if not title:
+            raise ValidationError("点位名称不能为空")
+        row.name = title
+    if "value_type" in fields and payload.value_type is not None:
+        value_type = payload.value_type.strip()
+        if value_type not in VALUE_TYPES:
+            raise ValidationError("点位值类型仅允许 number、boolean、text")
+        row.value_type = value_type
+    if "unit" in fields:
+        row.unit = (payload.unit or "").strip() or None
+    if "map_target" in fields and payload.map_target is not None:
+        row.map_target = _validate_map_target(payload.map_target)
+    if "fill_target" in fields:
+        row.fill_target = _validate_fill_target(payload.fill_target)
+    if "is_enabled" in fields and payload.is_enabled is not None:
+        row.is_enabled = payload.is_enabled
+    row.updated_by = user_id
+    await row.save()
+    return row
+
+
+async def delete_tag(
+    tenant_id: int,
+    tag_id: int,
+    *,
+    user_id: Optional[int] = None,
+) -> None:
+    row = await get_tag(tenant_id, tag_id)
+    row.deleted_at = resolve_business_datetime()
+    row.deleted_by = user_id
+    await row.save(update_fields=["deleted_at", "deleted_by", "updated_at"])

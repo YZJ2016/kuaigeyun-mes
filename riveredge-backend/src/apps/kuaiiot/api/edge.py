@@ -74,6 +74,52 @@ async def api_list_edge_configs(tenant_id: int = Depends(get_current_tenant)) ->
     return await EdgeConfigService.list_configs(tenant_id)
 
 
+@router.get(
+    "/edge-configs/{config_id}",
+    dependencies=[Depends(require_permission_codes("kuaiiot:device:display"))],
+)
+async def api_get_edge_config(config_id: int, tenant_id: int = Depends(get_current_tenant)) -> dict:
+    return await EdgeConfigService.get_config(tenant_id, config_id)
+
+
+@router.put(
+    "/edge-configs/{config_id}",
+    dependencies=[Depends(require_permission_codes("kuaiiot:device:update"))],
+)
+async def api_update_edge_config(
+    config_id: int,
+    payload: EdgeConfigWrite,
+    tenant_id: int = Depends(get_current_tenant),
+    current_user=Depends(get_current_user),
+) -> dict:
+    return await EdgeConfigService.update_config(
+        tenant_id,
+        config_id,
+        code=payload.code,
+        name=payload.name,
+        device_id=payload.device_id,
+        protocol=payload.protocol,
+        config=payload.config,
+        is_enabled=payload.is_enabled,
+        user_id=getattr(current_user, "id", None),
+    )
+
+
+@router.delete(
+    "/edge-configs/{config_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_permission_codes("kuaiiot:device:update"))],
+)
+async def api_delete_edge_config(
+    config_id: int,
+    tenant_id: int = Depends(get_current_tenant),
+    current_user=Depends(get_current_user),
+):
+    await EdgeConfigService.delete_config(
+        tenant_id, config_id, user_id=getattr(current_user, "id", None)
+    )
+
+
 @router.post("/edge-configs/{config_id}/trial", dependencies=[Depends(require_permission_codes("kuaiiot:device:update"))])
 async def api_trial(config_id: int, tenant_id: int = Depends(get_current_tenant)) -> dict:
     return await EdgeConfigService.request_trial(tenant_id, config_id)

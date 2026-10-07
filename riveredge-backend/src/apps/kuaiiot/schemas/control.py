@@ -57,6 +57,17 @@ class ConnectionOut(BaseModel):
         return redacted if isinstance(redacted, dict) else None
 
 
+class ConnectionUpdate(BaseModel):
+    """连接资料更新。code、connection_type 与公共连接绑定不可改。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    config: Optional[dict] = None
+    is_enabled: Optional[bool] = None
+    remark: Optional[str] = None
+
+
 class DeviceCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -75,6 +86,7 @@ class DeviceUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    connection_id: Optional[int] = None
     equipment_uuid: Optional[str] = Field(default=None, max_length=36)
     clear_equipment: bool = False
     group_id: Optional[int] = None
@@ -93,6 +105,8 @@ class DeviceOut(BaseModel):
     name: str
     equipment_uuid: Optional[str] = None
     group_id: Optional[int] = None
+    product_id: Optional[int] = None
+    remark: Optional[str] = None
     is_online: bool
     last_seen_at: Optional[datetime] = None
     created_at: datetime
@@ -114,6 +128,19 @@ class TagCreate(BaseModel):
     map_target: str = Field(..., min_length=1, max_length=100)
     fill_target: Optional[str] = Field(default=None, max_length=100)
     is_enabled: bool = True
+
+
+class TagUpdate(BaseModel):
+    """点位资料更新。tag_key 与所属设备不可改。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    value_type: Optional[str] = Field(default=None, max_length=20)
+    unit: Optional[str] = Field(default=None, max_length=30)
+    map_target: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    fill_target: Optional[str] = Field(default=None, max_length=100)
+    is_enabled: Optional[bool] = None
 
 
 class TagOut(BaseModel):

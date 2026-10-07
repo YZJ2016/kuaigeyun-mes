@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "is_pro": true,
   "market_category": "pro",
-  "description": "登记连接、IoT 设备与点位，并查看最新快照",
+  "description": "数采运营工作台：链路、告警、产品与设备接入运维",
   "icon": "api",
   "author": "StarTech",
   "entry_point": "../apps/kuaiiot/index.tsx",
@@ -59,7 +59,7 @@
           {
             "title": "app.kuaiiot.menu.tags",
             "path": "/apps/kuaiiot/tags",
-            "permission": "kuaiiot:tag:create",
+            "permission": "kuaiiot:tag:display",
             "sort_order": 3
           },
           {
@@ -70,7 +70,7 @@
           },
           {
             "title": "app.kuaiiot.menu.edgeConfigs",
-            "path": "/apps/kuaiiot/edge",
+            "path": "/apps/kuaiiot/edge-configs",
             "permission": "kuaiiot:device:display",
             "sort_order": 5
           }
@@ -85,6 +85,7 @@
     "kuaiiot:device:display",
     "kuaiiot:device:create",
     "kuaiiot:device:update",
+    "kuaiiot:tag:display",
     "kuaiiot:tag:create",
     "kuaiiot:snapshot:read",
     "kuaiiot:template:display",

@@ -50,6 +50,25 @@ class AlertRuleCreate(BaseModel):
     remark: Optional[str] = None
 
 
+class AlertRuleUpdate(BaseModel):
+    """告警规则更新。code 不可改；离线规则的点位、比较符与阈值由服务固定。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    tag_key: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    operator: Optional[str] = Field(default=None, min_length=1, max_length=10)
+    threshold_number: Optional[Decimal] = None
+    threshold_text: Optional[str] = Field(default=None, max_length=200)
+    device_id: Optional[int] = None
+    equipment_uuid: Optional[str] = Field(default=None, max_length=36)
+    severity: Optional[str] = Field(default=None, max_length=20)
+    cooldown_seconds: Optional[int] = Field(default=None, ge=0)
+    notify_enabled: Optional[bool] = None
+    is_enabled: Optional[bool] = None
+    remark: Optional[str] = None
+
+
 class AlertRuleOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

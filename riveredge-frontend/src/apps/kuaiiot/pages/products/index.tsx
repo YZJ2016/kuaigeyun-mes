@@ -1,349 +1,885 @@
 /**
- * 维护产品物模型，并按产品批量创建 IoT 设备。
- * 创建当次展示设备凭据，之后不再从列表回显。
+ * 产品模型运营列表：模糊 + 高级搜索、新建、编辑、详情抽屉、删除 / 批量删除。
+ * 列表接口为数组响应，筛选、排序、分页在前端完成。
+ * 权限与后端一致：列表/详情 kuaiiot:device:display，新建 kuaiiot:device:create，
+ * 编辑/删除 kuaiiot:device:update（后端删除走 update 权限，无独立 delete/export 权限码）。
  */
 
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Alert, Button, Card, Form, Input, InputNumber, Select, Space, Table, Typography, message } from 'antd';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
-  batchCreateDevices,
-  createProduct,
-  listProducts,
-  updateProduct,
-  type BatchDeviceOut,
-  type ProductEvent,
-  type ProductFunction,
-  type ProductOut,
-  type ProductTag,
-} from '../../services/kuaiiot';
+  ActionType,
+  ProColumns,
+  ProDescriptionsItemProps,
+  ProFormDigit,
+  ProFormGroup,
+  ProFormInstance,
+  ProFormItem,
+  ProFormList,
+  ProFormSelect,
+  ProFormText,
+  ProFormTextArea,
+} from '@ant-design/pro-components';
+import { App, AutoComplete, Button, Descriptions, Popconfirm, Result, Table, Tag } from 'antd';
+import { UniTable } from '../../../../components/uni-table';
+import { UniBatchDeleteButton } from '../../../../components/uni-batch';
+import { UniExportMenuButton } from '../../../../components/uni-export/UniExportMenuButton';
+import { rowActionKind } from '../../../../components/uni-action';
+import {
+  DetailDrawerTemplate,
+  DetailDrawerSection,
+  DRAWER_CONFIG,
+  FormModalTemplate,
+  ListPageTemplate,
+  MODAL_CONFIG,
+  detailDrawerDescriptionItems,
+} from '../../../../components/layout-templates';
+import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
+import { useResourcePermissions } from '../../../../hooks/useResourcePermissions';
+import { withSingleNewShortcutHint } from '../../../../utils/globalNewShortcut';
+import { getApiErrorMessage } from '../../../../utils/errorHandler';
+import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
+import { todaySiteDateString } from '../../../../utils/format';
+import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { SeverityTag, ValueTypeTag } from '../../components/status-tags';
+import type { ProductEvent, ProductFunction, ProductTag } from '../../services/kuaiiot';
+import {
+  createProductFull,
+  deleteProductRow,
+  filterProductRows,
+  getProductRow,
+  listProductRows,
+  sortLocalRows,
+  updateProductRow,
+  type ProductRow,
+  type ProductWritePayload,
+} from './api';
 
-const { Title, Text } = Typography;
+const MAP_TARGET_OPTIONS = [
+  'temperature',
+  'pressure',
+  'vibration',
+  'status',
+  'is_online',
+  'other_parameters',
+].map((value) => ({ value, label: value }));
 
-const MAP_TARGETS = ['temperature', 'pressure', 'vibration', 'status', 'is_online'].map((value) => ({
+const VALUE_TYPE_OPTIONS = ['number', 'boolean', 'text'].map((value) => ({
   value,
   label: value,
 }));
 
-const DATA_TYPES = ['int16', 'uint16', 'int32', 'uint32', 'float32', 'bool'].map((value) => ({
+const SEVERITY_OPTIONS = ['info', 'warning', 'critical'].map((value) => ({
   value,
   label: value,
 }));
 
-const BUILTIN_EVENTS: ProductEvent[] = [
-  { event_key: 'fault', name: '故障', severity: 'critical', message: '设备故障' },
-  { event_key: 'mold_change', name: '换模', severity: 'info', message: '换模' },
-];
+/** UniTable 布局扩展列属性（uniTable* 由布局引擎读取，页面侧仅声明可选）。 */
+type TableColumn<T extends Record<string, unknown>> = ProColumns<T> & {
+  uniTableKeepWidth?: boolean;
+  uniTableRemainderFlex?: boolean;
+  uniTablePrimaryFlex?: boolean;
+};
 
-export default function ProductsPage() {
-  const [products, setProducts] = useState<ProductOut[]>([]);
-  const [created, setCreated] = useState<BatchDeviceOut[]>([]);
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [events, setEvents] = useState<ProductEvent[]>([]);
-  const [functions, setFunctions] = useState<ProductFunction[]>([]);
+type FunctionFormRow = {
+  function_key?: string;
+  name?: string;
+  timeout_seconds?: number;
+  params_json?: string;
+  edge_action_json?: string;
+};
 
-  const load = async () => {
-    const rows = await listProducts();
-    setProducts(Array.isArray(rows) ? rows : []);
-  };
+type ProductFormValues = {
+  code?: string;
+  name?: string;
+  description?: string;
+  remark?: string;
+  tags?: ProductTag[];
+  events?: ProductEvent[];
+  functions?: FunctionFormRow[];
+};
+
+function parseJsonField(raw: string | undefined): { ok: true; value?: unknown } | { ok: false } {
+  const text = (raw ?? '').trim();
+  if (!text) return { ok: true, value: undefined };
+  try {
+    return { ok: true, value: JSON.parse(text) };
+  } catch {
+    return { ok: false };
+  }
+}
+
+const ProductsPage: React.FC = () => {
+  const { t } = useTranslation();
+  const { message: messageApi } = App.useApp();
+  const perms = useResourcePermissions('kuaiiot:device');
+  const canDisplay = perms.canAction?.('display') ?? false;
+  const canCreate = perms.canAction?.('create') ?? false;
+  const canUpdate = perms.canAction?.('update') ?? false;
+
+  const actionRef = useRef<ActionType>(null);
+  const formRef = useRef<ProFormInstance>(null);
+  /** 跨页批量删除解析：request 内增量累积（prefetch 只增不覆盖），不依赖当前展示页。 */
+  const allRowsRef = useRef<Map<number, ProductRow>>(new Map());
+  const [pageRows, setPageRows] = useState<ProductRow[]>([]);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<ProductRow | null>(null);
+
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [detail, setDetail] = useState<ProductRow | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailIdRef = useRef<number | null>(null);
+
+  const openCreate = useCallback(() => {
+    if (!canCreate) return;
+    setEditing(null);
+    setFormOpen(true);
+  }, [canCreate]);
+
+  const openEdit = useCallback((row: ProductRow) => {
+    setEditing(row);
+    setFormOpen(true);
+  }, []);
+
+  const loadDetail = useCallback(
+    async (id: number) => {
+      detailIdRef.current = id;
+      setDetailLoading(true);
+      setDetailError(null);
+      try {
+        const row = await getProductRow(id);
+        if (detailIdRef.current === id) {
+          setDetail(row);
+        }
+      } catch (e) {
+        if (detailIdRef.current === id) {
+          setDetail(null);
+          setDetailError(getApiErrorMessage(e, t('app.kuaiiot.products.detailLoadFailed')));
+        }
+      } finally {
+        if (detailIdRef.current === id) {
+          setDetailLoading(false);
+        }
+      }
+    },
+    [t],
+  );
+
+  const openDetail = useCallback(
+    (row: ProductRow) => {
+      setDrawerOpen(true);
+      setDetail(row);
+      void loadDetail(row.id);
+    },
+    [loadDetail],
+  );
+
+  const formInitialValues = useMemo<Record<string, unknown>>(() => {
+    if (!editing) return { tags: [], events: [], functions: [] };
+    return {
+      code: editing.code,
+      name: editing.name,
+      description: editing.description ?? undefined,
+      remark: editing.remark ?? undefined,
+      tags: (editing.tags || []).map((tag) => ({ ...tag })),
+      events: (editing.events || []).map((event) => ({ ...event })),
+      functions: (editing.functions || []).map((fn) => ({
+        function_key: fn.function_key,
+        name: fn.name,
+        timeout_seconds: fn.timeout_seconds ?? undefined,
+        params_json:
+          fn.params && fn.params.length ? JSON.stringify(fn.params, null, 2) : undefined,
+        edge_action_json: fn.edge_action ? JSON.stringify(fn.edge_action, null, 2) : undefined,
+      })),
+    };
+  }, [editing]);
+
+  const handleSubmit = useCallback(
+    async (values: ProductFormValues) => {
+      const tags = (values.tags || [])
+        .filter((tag) => tag && String(tag.tag_key || '').trim())
+        .map((tag) => ({
+          tag_key: String(tag.tag_key).trim(),
+          name: String(tag.name || '').trim(),
+          value_type: tag.value_type || 'number',
+          map_target: String(tag.map_target || '').trim(),
+          ...(tag.unit ? { unit: String(tag.unit).trim() } : {}),
+        }));
+      if (tags.some((tag) => !tag.name || !tag.map_target)) {
+        messageApi.error(t('app.kuaiiot.products.tagFieldsRequired'));
+        return;
+      }
+      if (new Set(tags.map((tag) => tag.tag_key)).size !== tags.length) {
+        messageApi.error(t('app.kuaiiot.products.tagKeyDup'));
+        return;
+      }
+
+      const events = (values.events || [])
+        .filter((event) => event && String(event.event_key || '').trim())
+        .map((event) => ({
+          event_key: String(event.event_key).trim(),
+          name: String(event.name || '').trim(),
+          severity: event.severity || 'info',
+          ...(event.message ? { message: String(event.message) } : {}),
+        }));
+      if (events.some((event) => !event.name)) {
+        messageApi.error(t('app.kuaiiot.products.eventFieldsRequired'));
+        return;
+      }
+      if (new Set(events.map((event) => event.event_key)).size !== events.length) {
+        messageApi.error(t('app.kuaiiot.products.eventKeyDup'));
+        return;
+      }
+
+      const functions: ProductFunction[] = [];
+      for (const row of values.functions || []) {
+        if (!row || !String(row.function_key || '').trim()) continue;
+        const params = parseJsonField(row.params_json);
+        const edgeAction = parseJsonField(row.edge_action_json);
+        if (!params.ok || !edgeAction.ok) {
+          messageApi.error(t('app.kuaiiot.message.invalidJson'));
+          return;
+        }
+        functions.push({
+          function_key: String(row.function_key).trim(),
+          name: String(row.name || '').trim(),
+          ...(row.timeout_seconds != null && Number(row.timeout_seconds) >= 1
+            ? { timeout_seconds: Number(row.timeout_seconds) }
+            : {}),
+          ...(Array.isArray(params.value)
+            ? { params: params.value as ProductFunction['params'] }
+            : {}),
+          ...(edgeAction.value && typeof edgeAction.value === 'object'
+            ? { edge_action: edgeAction.value as ProductFunction['edge_action'] }
+            : {}),
+        });
+      }
+      if (functions.some((fn) => !fn.name)) {
+        messageApi.error(t('app.kuaiiot.products.functionFieldsRequired'));
+        return;
+      }
+      if (new Set(functions.map((fn) => fn.function_key)).size !== functions.length) {
+        messageApi.error(t('app.kuaiiot.products.functionKeyDup'));
+        return;
+      }
+
+      try {
+        if (editing) {
+          await updateProductRow(editing.id, {
+            name: String(values.name || '').trim(),
+            description: values.description?.trim() || undefined,
+            remark: values.remark?.trim() || undefined,
+            tags,
+            events,
+            functions,
+          });
+        } else {
+          const payload: ProductWritePayload = {
+            code: String(values.code || '').trim(),
+            name: String(values.name || '').trim(),
+            description: values.description?.trim() || undefined,
+            remark: values.remark?.trim() || undefined,
+            tags,
+            events,
+            functions,
+          };
+          await createProductFull(payload);
+        }
+        messageApi.success(t('common.saveSuccess'));
+        setFormOpen(false);
+        setEditing(null);
+        actionRef.current?.reload();
+      } catch (e) {
+        messageApi.error(getApiErrorMessage(e, t('common.saveFailed')));
+      }
+    },
+    [editing, messageApi, t],
+  );
+
+  const handleDelete = useCallback(
+    async (row: ProductRow) => {
+      try {
+        await deleteProductRow(row.id);
+        messageApi.success(t('common.deleteSuccess'));
+        actionRef.current?.reload();
+      } catch (e) {
+        messageApi.error(getApiErrorMessage(e, t('common.deleteFailed')));
+      }
+    },
+    [messageApi, t],
+  );
+
+  /** 串行批量删除：首条失败即停并报明细（与后端 update 权限一致）。 */
+  const handleBatchDelete = useCallback(
+    async (keys: React.Key[]) => {
+      const rows = keys
+        .map((key) => allRowsRef.current.get(Number(key)))
+        .filter((row): row is ProductRow => Boolean(row));
+      let success = 0;
+      for (const row of rows) {
+        try {
+          await deleteProductRow(row.id);
+          success += 1;
+        } catch (e) {
+          messageApi.error(
+            t('app.kuaiiot.message.batchDeleteStopped', {
+              success,
+              name: row.name || row.code,
+              reason: getApiErrorMessage(e, t('common.operationFailed')),
+            }),
+          );
+          break;
+        }
+      }
+      if (success === rows.length && rows.length > 0) {
+        messageApi.success(t('common.batchDeleteSuccess', { count: success }));
+      }
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+    },
+    [messageApi, t],
+  );
+
+  const handleExport = useCallback(
+    async (type: 'selected' | 'currentPage' | 'all', keys?: React.Key[], pageData?: ProductRow[]) => {
+      try {
+        let rows: ProductRow[] = [];
+        if (type === 'selected' && keys?.length) {
+          rows = keys
+            .map((key) => allRowsRef.current.get(Number(key)))
+            .filter((row): row is ProductRow => Boolean(row));
+        } else if (type === 'currentPage' && pageData) {
+          rows = pageData;
+        } else {
+          rows = await listProductRows();
+        }
+        if (!rows.length) {
+          messageApi.warning(t('common.noDataToExport'));
+          return;
+        }
+        await downloadRecordsAsXlsx(
+          rows.map((row) => ({
+            code: row.code,
+            name: row.name,
+            description: row.description || '',
+            tag_count: (row.tags || []).length,
+            tag_keys: (row.tags || []).map((tag) => tag.tag_key).join(', '),
+            event_count: (row.events || []).length,
+            function_count: (row.functions || []).length,
+            remark: row.remark || '',
+          })),
+          `${t('app.kuaiiot.products.exportFileName', { date: todaySiteDateString() })}.xlsx`,
+          {
+            columns: [
+              { key: 'code', title: t('common.code') },
+              { key: 'name', title: t('common.name') },
+              { key: 'description', title: t('app.kuaiiot.products.colDescription') },
+              { key: 'tag_count', title: t('app.kuaiiot.products.colTagCount') },
+              { key: 'tag_keys', title: t('app.kuaiiot.products.colTagKeys') },
+              { key: 'event_count', title: t('app.kuaiiot.products.colEvents') },
+              { key: 'function_count', title: t('app.kuaiiot.products.colFunctions') },
+              { key: 'remark', title: t('common.remark') },
+            ],
+          },
+        );
+        messageApi.success(t('common.exportSuccess', { count: rows.length }));
+      } catch (e) {
+        messageApi.error(getApiErrorMessage(e, t('common.exportFailed')));
+      }
+    },
+    [messageApi, t],
+  );
+
+  const columns = useMemo<TableColumn<ProductRow>[]>(
+    () =>
+      alignProColumns<ProductRow>(
+        [
+          {
+            title: t('common.code'),
+            dataIndex: 'code',
+            width: 140,
+            minWidth: 140,
+            uniTableKeepWidth: true,
+            resizable: false,
+            copyable: true,
+            ellipsis: true,
+            sorter: true,
+          },
+          {
+            title: t('common.name'),
+            dataIndex: 'name',
+            width: 180,
+            minWidth: 160,
+            ellipsis: true,
+            sorter: true,
+          },
+          {
+            title: t('app.kuaiiot.products.colDescription'),
+            dataIndex: 'description',
+            minWidth: 180,
+            uniTableRemainderFlex: true,
+            uniTablePrimaryFlex: true,
+            resizable: false,
+            ellipsis: true,
+            hideInSearch: true,
+            render: (_, row) => row.description || '—',
+          },
+          {
+            title: t('app.kuaiiot.products.colTags'),
+            dataIndex: 'tags',
+            width: 220,
+            minWidth: 160,
+            ellipsis: true,
+            hideInSearch: true,
+            render: (_, row) => {
+              const tags = row.tags || [];
+              if (!tags.length) return '—';
+              const shown = tags.slice(0, 3);
+              return (
+                <>
+                  {shown.map((tag) => (
+                    <Tag key={tag.tag_key} style={{ marginInlineEnd: 4 }}>
+                      {tag.tag_key}
+                    </Tag>
+                  ))}
+                  {tags.length > shown.length ? (
+                    <Tag>{`+${tags.length - shown.length}`}</Tag>
+                  ) : null}
+                </>
+              );
+            },
+          },
+          {
+            title: t('app.kuaiiot.products.colEvents'),
+            dataIndex: 'events',
+            width: 90,
+            minWidth: 90,
+            uniTableKeepWidth: true,
+            resizable: false,
+            align: 'right',
+            hideInSearch: true,
+            sorter: true,
+            render: (_, row) => (row.events || []).length,
+          },
+          {
+            title: t('app.kuaiiot.products.colFunctions'),
+            dataIndex: 'functions',
+            width: 90,
+            minWidth: 90,
+            uniTableKeepWidth: true,
+            resizable: false,
+            align: 'right',
+            hideInSearch: true,
+            sorter: true,
+            render: (_, row) => (row.functions || []).length,
+          },
+          {
+            title: t('common.actions'),
+            key: 'action',
+            fixed: 'right',
+            hideInSearch: true,
+            render: (_, row) => [
+              <Button
+                key="detail"
+                type="link"
+                size="small"
+                {...rowActionKind('display')}
+                onClick={() => openDetail(row)}
+              >
+                {t('common.detail')}
+              </Button>,
+              <Button
+                key="edit"
+                type="link"
+                size="small"
+                {...rowActionKind('update')}
+                onClick={() => openEdit(row)}
+              >
+                {t('common.edit')}
+              </Button>,
+              <Popconfirm
+                key="delete"
+                title={t('app.kuaiiot.products.deleteConfirm', { name: row.name || row.code })}
+                onConfirm={() => void handleDelete(row)}
+              >
+                <Button type="link" size="small" danger {...rowActionKind('update')}>
+                  {t('common.delete')}
+                </Button>
+              </Popconfirm>,
+            ],
+          },
+        ] as TableColumn<ProductRow>[],
+        GLOBAL_DOC_LIST_FIELD_RANK,
+      ),
+    [t, openDetail, openEdit, handleDelete],
+  );
+
+  const detailColumns = useMemo<ProDescriptionsItemProps<ProductRow>[]>(
+    () => [
+      { title: t('common.code'), dataIndex: 'code' },
+      { title: t('common.name'), dataIndex: 'name' },
+      { title: t('app.kuaiiot.products.colDescription'), dataIndex: 'description', span: 2 },
+      { title: t('common.remark'), dataIndex: 'remark', span: 2 },
+    ],
+    [t],
+  );
+
+  if (!canDisplay) {
+    return <Result status="403" title={t('common.noPermission')} />;
+  }
 
   return (
-    <Space direction="vertical" size={16} style={{ width: '100%', padding: 16 }}>
-      <Space>
-        <Title level={4} style={{ margin: 0 }}>
-          产品物模型
-        </Title>
-        <Link to="/apps/kuaiiot">返回登记</Link>
-        <Link to="/apps/kuaiiot/trend">趋势</Link>
-      </Space>
-      <Text type="secondary">点位写在产品 tags 上。按产品一批最多 100 台 IoT 设备，不新建设备台账。</Text>
-
-      <Card title="产品">
-        <Form
-          layout="inline"
-          initialValues={{ value_type: 'number', map_target: 'temperature' }}
-          onFinish={async (values: {
-            code: string;
-            name: string;
-            tag_key: string;
-            tag_name: string;
-            value_type: string;
-            map_target: string;
-          }) => {
-            const tag: ProductTag = {
-              tag_key: values.tag_key,
-              name: values.tag_name,
-              value_type: values.value_type,
-              map_target: values.map_target,
+    <ListPageTemplate>
+      <UniTable<ProductRow>
+        viewTypes={['table', 'help']}
+        helpViewConfig={buildListPageHelpViewConfig('kuaiiot.products')}
+        columnPersistenceId="apps.kuaiiot.pages.products.list-v1"
+        permissionResource="kuaiiot:device"
+        actionRef={actionRef}
+        rowKey="id"
+        headerTitle={t('app.kuaiiot.menu.products')}
+        columns={columns}
+        showCreateButton={canCreate}
+        createButtonText={withSingleNewShortcutHint(t('app.kuaiiot.action.createProduct'))}
+        onCreate={openCreate}
+        toolBarActionsAfterCreate={
+          canUpdate
+            ? [
+                <UniBatchDeleteButton
+                  key="batch-delete"
+                  selectedRowKeys={selectedRowKeys}
+                  onConfirm={handleBatchDelete}
+                  confirmTitle={t('common.batchDeleteTitle')}
+                  confirmDescription={(count) => t('common.batchDeleteContent', { count })}
+                />,
+              ]
+            : []
+        }
+        rightToolBarActionsBeforeExport={
+          canDisplay
+            ? [
+                <UniExportMenuButton<ProductRow>
+                  key="export"
+                  onExport={handleExport}
+                  selectedRowKeys={selectedRowKeys}
+                  tableData={pageRows}
+                />,
+              ]
+            : []
+        }
+        enableRowSelection={canUpdate}
+        selectedRowKeys={selectedRowKeys}
+        onRowSelectionChange={setSelectedRowKeys}
+        onTableDataChange={(rows) => {
+          setPageRows(rows);
+        }}
+        defaultPageSize={20}
+        request={async (params, sort, _filter, searchFormValues) => {
+          try {
+            const rows = await listProductRows();
+            for (const row of rows) {
+              allRowsRef.current.set(row.id, row);
+            }
+            const filtered = sortLocalRows(filterProductRows(rows, searchFormValues), sort);
+            const pageSize = params.pageSize || 20;
+            const current = params.current || 1;
+            return {
+              data: filtered.slice((current - 1) * pageSize, current * pageSize),
+              success: true,
+              total: filtered.length,
             };
-            try {
-              await createProduct({ code: values.code, name: values.name, tags: [tag] });
-              message.success('产品已保存');
-              await load();
-            } catch (error) {
-              message.error(error instanceof Error ? error.message : '保存产品失败');
-            }
-          }}
+          } catch (e) {
+            messageApi.error(getApiErrorMessage(e, t('app.kuaiiot.products.listFailed')));
+            return { data: [], success: false, total: 0 };
+          }
+        }}
+      />
+
+      <FormModalTemplate
+        title={
+          editing
+            ? t('app.kuaiiot.products.editTitle')
+            : t('app.kuaiiot.action.createProduct')
+        }
+        open={formOpen}
+        onClose={() => {
+          setFormOpen(false);
+          setEditing(null);
+        }}
+        isEdit={Boolean(editing)}
+        formRef={formRef}
+        initialValues={formInitialValues}
+        width={MODAL_CONFIG.STANDARD_WIDTH}
+        onFinish={handleSubmit}
+      >
+        <ProFormText
+          name="code"
+          label={t('common.code')}
+          disabled={Boolean(editing)}
+          rules={[{ required: !editing, message: t('common.required') }]}
+          fieldProps={{ maxLength: 50 }}
+        />
+        <ProFormText
+          name="name"
+          label={t('common.name')}
+          rules={[{ required: true, message: t('common.required') }]}
+          fieldProps={{ maxLength: 100 }}
+        />
+        <ProFormTextArea
+          name="description"
+          label={t('app.kuaiiot.products.colDescription')}
+          fieldProps={{ rows: 2, maxLength: 500 }}
+        />
+        <ProFormList
+          name="tags"
+          label={t('app.kuaiiot.products.sectionTags')}
+          creatorButtonProps={{ creatorButtonText: t('app.kuaiiot.action.addTagRow') }}
+          copyIconProps={false}
+          deleteIconProps={{ tooltipText: t('common.delete') }}
         >
-          <Form.Item name="code" rules={[{ required: true, message: '请填写编码' }]}>
-            <Input placeholder="产品编码" />
-          </Form.Item>
-          <Form.Item name="name" rules={[{ required: true, message: '请填写名称' }]}>
-            <Input placeholder="产品名称" />
-          </Form.Item>
-          <Form.Item name="tag_key" rules={[{ required: true, message: '请填写点位键' }]}>
-            <Input placeholder="点位键" />
-          </Form.Item>
-          <Form.Item name="tag_name" rules={[{ required: true, message: '请填写点位名称' }]}>
-            <Input placeholder="点位名称" />
-          </Form.Item>
-          <Form.Item name="value_type">
-            <Select
-              style={{ width: 120 }}
-              options={[
-                { value: 'number', label: 'number' },
-                { value: 'boolean', label: 'boolean' },
-                { value: 'text', label: 'text' },
-              ]}
+          <ProFormGroup>
+            <ProFormText
+              name="tag_key"
+              label={t('app.kuaiiot.field.tagKey')}
+              rules={[{ required: true, message: t('common.required') }]}
+              width="sm"
+              fieldProps={{ maxLength: 100 }}
             />
-          </Form.Item>
-          <Form.Item name="map_target">
-            <Select style={{ width: 160 }} options={MAP_TARGETS} />
-          </Form.Item>
-          <Button type="primary" htmlType="submit">
-            保存产品
-          </Button>
-          <Button onClick={() => load().catch((error) => message.error(error instanceof Error ? error.message : '读取失败'))}>
-            刷新
-          </Button>
-        </Form>
-        <Table
-          style={{ marginTop: 16 }}
-          rowKey="id"
-          pagination={false}
-          dataSource={products}
-          columns={[
-            { title: '编码', dataIndex: 'code' },
-            { title: '名称', dataIndex: 'name' },
-            {
-              title: '点位',
-              dataIndex: 'tags',
-              render: (tags: ProductTag[]) => (tags || []).map((tag) => tag.tag_key).join(', '),
-            },
-            {
-              title: '事件',
-              dataIndex: 'events',
-              render: (rows: ProductEvent[]) => (rows || []).map((item) => item.event_key).join(', '),
-            },
-            {
-              title: '指令',
-              dataIndex: 'functions',
-              render: (rows: ProductFunction[]) => (rows || []).map((item) => item.function_key).join(', '),
-            },
-          ]}
-        />
-      </Card>
-
-      <Card title="事件与指令">
-        <Space direction="vertical" style={{ width: '100%' }}>
-          <Space>
-            <Button
-              onClick={() =>
-                load().catch((error) => message.error(error instanceof Error ? error.message : '读取失败'))
-              }
+            <ProFormText
+              name="name"
+              label={t('common.name')}
+              rules={[{ required: true, message: t('common.required') }]}
+              width="sm"
+              fieldProps={{ maxLength: 100 }}
+            />
+            <ProFormSelect
+              name="value_type"
+              label={t('app.kuaiiot.field.valueType')}
+              options={VALUE_TYPE_OPTIONS}
+              width="xs"
+            />
+            <ProFormItem
+              name="map_target"
+              label={t('app.kuaiiot.field.mapTarget')}
+              rules={[{ required: true, message: t('common.required') }]}
             >
-              刷新产品
-            </Button>
-            {BUILTIN_EVENTS.map((preset) => (
-              <Button
-                key={preset.event_key}
-                onClick={() =>
-                  setEvents((current) =>
-                    current.some((item) => item.event_key === preset.event_key) ? current : [...current, preset],
-                  )
-                }
-              >
-                加入{preset.name}
-              </Button>
-            ))}
-          </Space>
-          <Form
-            layout="inline"
-            onFinish={(values: { product_id: number }) => {
-              const product = products.find((item) => item.id === values.product_id);
-              if (!product) {
-                message.error('请先刷新并选择已有产品');
-                return;
-              }
-              setEditingId(product.id);
-              setEvents(product.events || []);
-              setFunctions(product.functions || []);
-            }}
-          >
-            <Form.Item name="product_id" rules={[{ required: true, message: '请填写产品编号' }]}>
-              <InputNumber placeholder="产品编号" min={1} />
-            </Form.Item>
-            <Button htmlType="submit">载入</Button>
-          </Form>
-          <Form
-            layout="inline"
-            onFinish={(values: { event_key: string; name: string; severity: string }) => {
-              setEvents((current) => {
-                if (current.some((item) => item.event_key === values.event_key)) {
-                  return current;
-                }
-                return [...current, values];
-              });
-            }}
-          >
-            <Form.Item name="event_key" rules={[{ required: true, message: '请填写事件键' }]}>
-              <Input placeholder="事件键" />
-            </Form.Item>
-            <Form.Item name="name" rules={[{ required: true, message: '请填写事件名称' }]}>
-              <Input placeholder="事件名称" />
-            </Form.Item>
-            <Form.Item name="severity" initialValue="warning">
-              <Select
-                style={{ width: 120 }}
-                options={[
-                  { value: 'info', label: 'info' },
-                  { value: 'warning', label: 'warning' },
-                  { value: 'critical', label: 'critical' },
-                ]}
+              <AutoComplete
+                options={MAP_TARGET_OPTIONS}
+                placeholder={t('app.kuaiiot.placeholder.mapTargetCustom')}
+                style={{ width: 220, maxWidth: '100%' }}
               />
-            </Form.Item>
-            <Button htmlType="submit">添加事件</Button>
-          </Form>
-          <Form
-            layout="inline"
-            initialValues={{ data_type: 'uint16', param_key: 'value', scale: 1, timeout_seconds: 30 }}
-            onFinish={(values: {
-              function_key: string;
-              name: string;
-              address: number;
-              data_type: string;
-              param_key: string;
-              scale: number;
-              timeout_seconds: number;
-            }) => {
-              const next: ProductFunction = {
-                function_key: values.function_key,
-                name: values.name,
-                timeout_seconds: values.timeout_seconds,
-                params: [{ key: values.param_key, name: values.param_key, value_type: 'number', required: true }],
-                edge_action: {
-                  type: 'modbus_write',
-                  param_key: values.param_key,
-                  address: values.address,
-                  data_type: values.data_type,
-                  scale: values.scale,
-                },
-              };
-              setFunctions((current) => {
-                if (current.some((item) => item.function_key === next.function_key)) {
-                  return current.map((item) => (item.function_key === next.function_key ? next : item));
-                }
-                return [...current, next];
-              });
-            }}
-          >
-            <Form.Item name="function_key" rules={[{ required: true, message: '请填写指令键' }]}>
-              <Input placeholder="指令键" />
-            </Form.Item>
-            <Form.Item name="name" rules={[{ required: true, message: '请填写指令名称' }]}>
-              <Input placeholder="指令名称" />
-            </Form.Item>
-            <Form.Item name="address" rules={[{ required: true, message: '请填写寄存器地址' }]}>
-              <InputNumber placeholder="地址" min={0} />
-            </Form.Item>
-            <Form.Item name="data_type">
-              <Select style={{ width: 120 }} options={DATA_TYPES} />
-            </Form.Item>
-            <Form.Item name="param_key">
-              <Input placeholder="参数键" />
-            </Form.Item>
-            <Form.Item name="scale">
-              <InputNumber placeholder="scale" />
-            </Form.Item>
-            <Form.Item name="timeout_seconds">
-              <InputNumber placeholder="超时秒" min={1} />
-            </Form.Item>
-            <Button htmlType="submit">添加指令</Button>
-          </Form>
-          <Text>
-            当前产品 {editingId ?? '未载入'}。事件：{events.map((item) => item.event_key).join(', ') || '无'}。指令：
-            {functions.map((item) => item.function_key).join(', ') || '无'}
-          </Text>
-          <Button
-            type="primary"
-            disabled={editingId == null}
-            onClick={() => {
-              if (editingId == null) {
-                return;
-              }
-              updateProduct(editingId, { events, functions })
-                .then(async () => {
-                  message.success('事件与指令已保存');
-                  await load();
-                })
-                .catch((error) => message.error(error instanceof Error ? error.message : '保存失败'));
-            }}
-          >
-            保存事件与指令
-          </Button>
-        </Space>
-      </Card>
-
-      <Card title="按产品批量建设备">
-        <Form
-          layout="inline"
-          onFinish={async (values: { product_id: number; name_prefix: string; code_prefix: string; count: number }) => {
-            try {
-              const rows = await batchCreateDevices(values);
-              setCreated(rows);
-              message.success(`已创建 ${rows.length} 台。凭据只在本次显示`);
-            } catch (error) {
-              setCreated([]);
-              message.error(error instanceof Error ? error.message : '批量创建失败');
-            }
-          }}
+            </ProFormItem>
+            <ProFormText
+              name="unit"
+              label={t('app.kuaiiot.products.fieldUnit')}
+              width="xs"
+              fieldProps={{ maxLength: 30 }}
+            />
+          </ProFormGroup>
+        </ProFormList>
+        <ProFormList
+          name="events"
+          label={t('app.kuaiiot.section.events')}
+          creatorButtonProps={{ creatorButtonText: t('app.kuaiiot.action.addEventRow') }}
+          copyIconProps={false}
+          deleteIconProps={{ tooltipText: t('common.delete') }}
         >
-          <Form.Item name="product_id" rules={[{ required: true, message: '请填写产品编号' }]}>
-            <InputNumber placeholder="产品编号" min={1} />
-          </Form.Item>
-          <Form.Item name="name_prefix" rules={[{ required: true, message: '请填写名称前缀' }]}>
-            <Input placeholder="名称前缀" />
-          </Form.Item>
-          <Form.Item name="code_prefix" rules={[{ required: true, message: '请填写编码前缀' }]}>
-            <Input placeholder="编码前缀" />
-          </Form.Item>
-          <Form.Item name="count" rules={[{ required: true, message: '请填写数量' }]}>
-            <InputNumber placeholder="数量" min={1} max={100} />
-          </Form.Item>
-          <Button type="primary" htmlType="submit">
-            批量创建
-          </Button>
-        </Form>
-        {created.length > 0 ? (
-          <Alert
-            style={{ marginTop: 16 }}
-            type="warning"
-            showIcon
-            message="设备凭据只在这次创建结果里出现，离开后不再显示。"
-          />
-        ) : null}
-        <Table
-          style={{ marginTop: 16 }}
-          rowKey="id"
-          pagination={false}
-          dataSource={created}
-          columns={[
-            { title: '编码', dataIndex: 'code' },
-            { title: '名称', dataIndex: 'name' },
-            { title: '凭据', dataIndex: 'device_token' },
-          ]}
+          <ProFormGroup>
+            <ProFormText
+              name="event_key"
+              label={t('app.kuaiiot.field.eventKey')}
+              rules={[{ required: true, message: t('common.required') }]}
+              width="sm"
+              fieldProps={{ maxLength: 100 }}
+            />
+            <ProFormText
+              name="name"
+              label={t('common.name')}
+              rules={[{ required: true, message: t('common.required') }]}
+              width="sm"
+              fieldProps={{ maxLength: 100 }}
+            />
+            <ProFormSelect
+              name="severity"
+              label={t('app.kuaiiot.field.severity')}
+              options={SEVERITY_OPTIONS}
+              width="xs"
+            />
+            <ProFormText
+              name="message"
+              label={t('app.kuaiiot.field.message')}
+              width="md"
+            />
+          </ProFormGroup>
+        </ProFormList>
+        <ProFormList
+          name="functions"
+          label={t('app.kuaiiot.section.functions')}
+          creatorButtonProps={{ creatorButtonText: t('app.kuaiiot.action.addFunctionRow') }}
+          copyIconProps={false}
+          deleteIconProps={{ tooltipText: t('common.delete') }}
+        >
+          <ProFormGroup>
+            <ProFormText
+              name="function_key"
+              label={t('app.kuaiiot.field.functionKey')}
+              rules={[{ required: true, message: t('common.required') }]}
+              width="sm"
+              fieldProps={{ maxLength: 100 }}
+            />
+            <ProFormText
+              name="name"
+              label={t('common.name')}
+              rules={[{ required: true, message: t('common.required') }]}
+              width="sm"
+              fieldProps={{ maxLength: 100 }}
+            />
+            <ProFormDigit
+              name="timeout_seconds"
+              label={t('app.kuaiiot.field.timeoutSeconds')}
+              width="xs"
+              min={1}
+              fieldProps={{ precision: 0 }}
+            />
+            <ProFormTextArea
+              name="params_json"
+              label={t('app.kuaiiot.products.fieldParamsJson')}
+              fieldProps={{ rows: 2 }}
+            />
+            <ProFormTextArea
+              name="edge_action_json"
+              label={t('app.kuaiiot.products.fieldEdgeActionJson')}
+              fieldProps={{ rows: 2 }}
+            />
+          </ProFormGroup>
+        </ProFormList>
+        <ProFormTextArea
+          name="remark"
+          label={t('common.remark')}
+          fieldProps={{ rows: 2, maxLength: 500 }}
         />
-      </Card>
-    </Space>
+      </FormModalTemplate>
+
+      <DetailDrawerTemplate
+        title={t('app.kuaiiot.products.detailTitle')}
+        open={drawerOpen}
+        onClose={() => {
+          setDrawerOpen(false);
+          setDetail(null);
+          setDetailError(null);
+          detailIdRef.current = null;
+        }}
+        size={DRAWER_CONFIG.STANDARD_WIDTH}
+        loading={detailLoading}
+        plainBody={
+          detailError && !detail ? (
+            <Result
+              status="error"
+              title={detailError}
+              extra={
+                <Button
+                  type="primary"
+                  onClick={() => {
+                    const id = detailIdRef.current;
+                    if (id != null) void loadDetail(id);
+                  }}
+                >
+                  {t('common.retry')}
+                </Button>
+              }
+            />
+          ) : undefined
+        }
+        basic={
+          detail ? (
+            <Descriptions
+              column={2}
+              size="small"
+              items={detailDrawerDescriptionItems(detailColumns, detail)}
+            />
+          ) : undefined
+        }
+        linesTitle={detail ? t('app.kuaiiot.products.modelSection') : undefined}
+        lines={
+          detail ? (
+            <>
+              <DetailDrawerSection title={t('app.kuaiiot.products.sectionTags')}>
+                <Table<ProductTag>
+                  rowKey="tag_key"
+                  size="small"
+                  pagination={false}
+                  dataSource={detail.tags || []}
+                  columns={[
+                    { title: t('app.kuaiiot.field.tagKey'), dataIndex: 'tag_key' },
+                    { title: t('common.name'), dataIndex: 'name' },
+                    {
+                      title: t('app.kuaiiot.field.valueType'),
+                      dataIndex: 'value_type',
+                      render: (_, tag) => <ValueTypeTag value={tag.value_type} />,
+                    },
+                    { title: t('app.kuaiiot.field.mapTarget'), dataIndex: 'map_target' },
+                    {
+                      title: t('app.kuaiiot.products.fieldUnit'),
+                      dataIndex: 'unit',
+                      render: (_, tag) => tag.unit || '—',
+                    },
+                  ]}
+                />
+              </DetailDrawerSection>
+              <DetailDrawerSection title={t('app.kuaiiot.section.events')}>
+                <Table<ProductEvent>
+                  rowKey="event_key"
+                  size="small"
+                  pagination={false}
+                  dataSource={detail.events || []}
+                  columns={[
+                    { title: t('app.kuaiiot.field.eventKey'), dataIndex: 'event_key' },
+                    { title: t('common.name'), dataIndex: 'name' },
+                    {
+                      title: t('app.kuaiiot.field.severity'),
+                      dataIndex: 'severity',
+                      render: (_, event) => <SeverityTag value={event.severity} />,
+                    },
+                    {
+                      title: t('app.kuaiiot.field.message'),
+                      dataIndex: 'message',
+                      render: (_, event) => event.message || '—',
+                    },
+                  ]}
+                />
+              </DetailDrawerSection>
+              <DetailDrawerSection title={t('app.kuaiiot.section.functions')} marginBottom={0}>
+                <Table<ProductFunction>
+                  rowKey="function_key"
+                  size="small"
+                  pagination={false}
+                  dataSource={detail.functions || []}
+                  columns={[
+                    { title: t('app.kuaiiot.field.functionKey'), dataIndex: 'function_key' },
+                    { title: t('common.name'), dataIndex: 'name' },
+                    {
+                      title: t('app.kuaiiot.field.timeoutSeconds'),
+                      dataIndex: 'timeout_seconds',
+                      render: (_, fn) => fn.timeout_seconds ?? '—',
+                    },
+                    {
+                      title: t('app.kuaiiot.products.colParams'),
+                      dataIndex: 'params',
+                      render: (_, fn) =>
+                        (fn.params || []).map((param) => param.key).join(', ') || '—',
+                    },
+                  ]}
+                />
+              </DetailDrawerSection>
+            </>
+          ) : undefined
+        }
+      />
+    </ListPageTemplate>
   );
-}
+};
+
+export default ProductsPage;
