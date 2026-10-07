@@ -46,13 +46,30 @@ class TestAllocateIncrement:
         )
         assert alloc == [Decimal("10"), Decimal("10"), Decimal("10")]
 
-    def test_no_overflow(self):
+    def test_no_overflow_default(self):
         alloc = allocate_increment(
             Decimal("30"),
             [Decimal("10"), Decimal("10")],
-            last_takes_overflow=False,
         )
         assert alloc == [Decimal("10"), Decimal("10")]
+
+    def test_cap_each_leave_unallocated(self):
+        """66460 待报、单张可报 2000：只分 2000，其余留给 pending。"""
+        alloc = allocate_increment(
+            Decimal("66460"),
+            [Decimal("2000")],
+            last_takes_overflow=False,
+        )
+        assert alloc == [Decimal("2000")]
+        assert sum(alloc) == Decimal("2000")
+
+    def test_fill_two_same_op_then_stop(self):
+        alloc = allocate_increment(
+            Decimal("66460"),
+            [Decimal("2000"), Decimal("3000")],
+            last_takes_overflow=False,
+        )
+        assert alloc == [Decimal("2000"), Decimal("3000")]
 
     def test_empty(self):
         assert allocate_increment(Decimal("10"), []) == []

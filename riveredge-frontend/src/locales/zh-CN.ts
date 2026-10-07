@@ -3394,9 +3394,9 @@ export default {
   'app.ind-relay.lineOutput.dateRange': '统计日期',
   'app.ind-relay.autoReport.title': '自动报工',
   'app.ind-relay.autoReport.hint':
-    '产量来自产线 MQTT（zscl）。只报工序主数据里默认设备含该 MES 设备、且工单已派给该设备的任务；绑的是末道则报末道。',
+    '产量来自产线 MQTT（zscl）。按计划量填满当前任务，剩余挂待报；同产品、同设备同工序的进行中工单依次顺延，不强制超报。',
   'app.ind-relay.autoReport.hintDetail':
-    '请先在设备连接中绑定 MES 设备并确保点位含 zscl。产线和 PLC 都不绑工单；数量记在来源产线上。同产品按计划量依次填满，切单时先结旧单再绑新任务。',
+    '请先在设备连接中绑定 MES 设备并确保点位含 zscl。产线和 PLC 都不绑工单；数量记在来源产线上。每张工单最多报到本道可报量，多出来的留在待报，有同条件工单再继续填。',
   'app.ind-relay.autoReport.openDevices': '打开设备连接',
   'app.ind-relay.autoReport.configTitle': '报工策略',
   'app.ind-relay.autoReport.bindingsTitle': '启用设备',
@@ -3423,6 +3423,7 @@ export default {
   'app.ind-relay.autoReport.iotDevice': '快数采设备',
   'app.ind-relay.autoReport.mesEquipment': 'MES 设备',
   'app.ind-relay.autoReport.pending': '待报数量',
+  'app.ind-relay.autoReport.pendingTip': '超出当前工单可报量的部分会留在这里，有同条件工单时继续顺延',
   'app.ind-relay.autoReport.boundTask': '当前任务',
   'app.ind-relay.autoReport.event': '事件',
   'app.ind-relay.autoReport.message': '说明',
@@ -3443,10 +3444,11 @@ export default {
   'app.ind-relay.autoReport.eventName.changeover': '切单',
   'app.ind-relay.autoReport.eventName.baseline': '对齐基线',
   'app.ind-relay.autoReport.eventName.accumulate': '累计',
+  'app.ind-relay.autoReport.eventName.allocate': '分摊',
   'app.ind-relay.autoReport.eventName.report': '报工',
   'app.ind-relay.autoReport.eventName.error': '失败',
   'app.ind-relay.autoReport.policyHint':
-    '只报工序档案中默认设备包含该 MES 设备、且工单已派给该设备的任务。设备绑的是末道，报工就是末道。',
+    '按计划量填满：每次报工同步计算本道可报量（含超报规则）并截断；剩余挂待报。同产品、同设备同工序的进行中工单依次顺延，不强制超报。工序须在档案中默认绑定该 MES 设备，且工单已派工。',
   'app.ind-relay.autoReport.processOps': '绑定工序',
   'app.ind-relay.autoReport.processOpCount': '{{count}} 道',
   'app.ind-relay.autoReport.processOpDetailTitle': 'MES 设备绑定工序',

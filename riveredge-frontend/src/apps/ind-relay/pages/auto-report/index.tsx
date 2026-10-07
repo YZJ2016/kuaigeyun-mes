@@ -14,6 +14,7 @@ import {
   Switch,
   Table,
   Tag,
+  Tooltip,
   Typography,
   message,
 } from 'antd';
@@ -42,6 +43,7 @@ const EVENT_TAG_COLOR: Record<string, string> = {
   changeover: 'orange',
   baseline: 'purple',
   accumulate: 'cyan',
+  allocate: 'geekblue',
   report: 'success',
   error: 'error',
 };
@@ -270,7 +272,11 @@ export default function RelayAutoReportPage() {
         render: (v: number | null | undefined) => (v == null ? '—' : v),
       },
       {
-        title: t('app.ind-relay.autoReport.pending'),
+        title: (
+          <Tooltip title={t('app.ind-relay.autoReport.pendingTip')}>
+            <span>{t('app.ind-relay.autoReport.pending')}</span>
+          </Tooltip>
+        ),
         dataIndex: 'pending_quantity',
         width: 100,
       },

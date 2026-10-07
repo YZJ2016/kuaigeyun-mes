@@ -2612,9 +2612,9 @@ export default {
   'app.ind-relay.lineOutput.dateRange': 'Date range',
   'app.ind-relay.autoReport.title': 'Auto reporting',
   'app.ind-relay.autoReport.hint':
-    'Quantity comes from line MQTT (zscl). Report only process operations whose default equipment includes this MES device and whose work-order dispatch assigned this device. Last-op reporting happens when that bound operation is last.',
+    'Quantity comes from line MQTT (zscl). Fill the current task up to plan remaining, keep the rest pending, then continue on other in-progress WOs with the same product / equipment / operation. No forced over-report.',
   'app.ind-relay.autoReport.hintDetail':
-    'Bind MES on Device Connection and ensure the zscl tag exists. Line/PLC are not bound to work orders; stamp the source line on the report. Same product fills plan qty in order; changeover settles the old WO then rebinds.',
+    'Bind MES on Device Connection and ensure the zscl tag exists. Line/PLC are not bound to work orders; stamp the source line on the report. Each WO is capped at reportable remaining; leftover stays pending for the next matching WO.',
   'app.ind-relay.autoReport.openDevices': 'Open device connection',
   'app.ind-relay.autoReport.configTitle': 'Reporting policy',
   'app.ind-relay.autoReport.bindingsTitle': 'Enabled devices',
@@ -2642,6 +2642,8 @@ export default {
   'app.ind-relay.autoReport.iotDevice': 'IoT device',
   'app.ind-relay.autoReport.mesEquipment': 'MES equipment',
   'app.ind-relay.autoReport.pending': 'Pending qty',
+  'app.ind-relay.autoReport.pendingTip':
+    'Qty beyond the current WO reportable remaining stays here and continues on matching WOs',
   'app.ind-relay.autoReport.boundTask': 'Current task',
   'app.ind-relay.autoReport.event': 'Event',
   'app.ind-relay.autoReport.message': 'Message',
@@ -2662,10 +2664,11 @@ export default {
   'app.ind-relay.autoReport.eventName.changeover': 'Changeover',
   'app.ind-relay.autoReport.eventName.baseline': 'Baseline',
   'app.ind-relay.autoReport.eventName.accumulate': 'Accumulated',
+  'app.ind-relay.autoReport.eventName.allocate': 'Allocated',
   'app.ind-relay.autoReport.eventName.report': 'Reported',
   'app.ind-relay.autoReport.eventName.error': 'Failed',
   'app.ind-relay.autoReport.policyHint':
-    'Report operations whose process master default equipment includes this MES device and whose work-order dispatch assigned this device. If that operation is last, auto reporting is last-op.',
+    'Fill by plan: every report recalculates reportable remaining (incl. over-report rules) and caps qty; leftover stays pending. Same product + same equipment/operation in-progress WOs continue in order. Process master must default-bind this MES device and the WO must be dispatched.',
   'app.ind-relay.autoReport.processOps': 'Bound operations',
   'app.ind-relay.autoReport.processOpCount': '{{count}} ops',
   'app.ind-relay.autoReport.processOpDetailTitle': 'MES equipment operations',
