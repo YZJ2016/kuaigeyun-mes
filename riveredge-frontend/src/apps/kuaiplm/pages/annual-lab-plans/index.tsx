@@ -522,10 +522,9 @@ const AnnualLabPlansPage: React.FC = () => {
         rowKey="id"
         headerTitle={t('app.kuaiplm.menu.annual-lab-plans')}
         columnPersistenceId="apps.kuaiplm.pages.annual-lab-plans.width-v2"
-        createButtonText={
-          perms.canCreate ? t('app.kuaiplm.annualLabPlan.createButton') : undefined
-        }
-        onCreate={perms.canCreate ? openCreate : undefined}
+        showCreateButton={perms.canCreate}
+        createButtonText={t('app.kuaiplm.annualLabPlan.createButton')}
+        onCreate={openCreate}
         enableRowSelection={perms.canDelete}
         showDeleteButton={perms.canDelete}
         deleteConfirmTitle={t('common.batchDeleteTitle')}

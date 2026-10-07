@@ -17,6 +17,7 @@ const withPageSuspense = (LazyComponent: React.LazyExoticComponent<React.Compone
 const DashboardPage = lazy(() => import('./pages/dashboard/index'));
 const RdProjectsListPage = lazy(() => import('./pages/rd-projects/index'));
 const RdProjectDetailPage = lazy(() => import('./pages/rd-projects/detail'));
+const RdDeliverablesPage = lazy(() => import('./pages/rd-deliverables/index'));
 const ChangeManagementPage = lazy(() => import('./pages/change-management/index'));
 const KnowledgeBasePage = lazy(() => import('./pages/knowledge-base/index'));
 const KnowledgeArticleDetailPage = lazy(() => import('./pages/knowledge-base/detail'));
@@ -47,6 +48,7 @@ const KuaiplmApp: React.FC = () => (
     <Route path="pending-inbox" element={withPageSuspense(PendingInboxPage)} />
     <Route path="rd-projects" element={withPageSuspense(RdProjectsListPage)} />
     <Route path="rd-projects/detail/:id" element={withPageSuspense(RdProjectDetailPage)} />
+    <Route path="rd-deliverables" element={withPageSuspense(RdDeliverablesPage)} />
     <Route path="gate-templates" element={withPageSuspense(GateTemplatesPage)} />
     <Route path="change-management" element={withPageSuspense(ChangeManagementPage)} />
     <Route path="knowledge-base" element={withPageSuspense(KnowledgeBasePage)} />

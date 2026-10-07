@@ -23,6 +23,7 @@ class SampleProcessCreate(BaseModel):
     material_code: Optional[str] = Field(None, max_length=100)
     material_version: Optional[str] = Field(None, max_length=50)
     release_date: Optional[date] = None
+    due_date: Optional[date] = None
     purpose: Optional[str] = None
     attachments: List[SampleProcessAttachment] = Field(default_factory=list)
     remarks: Optional[str] = None
@@ -34,6 +35,7 @@ class SampleProcessUpdate(BaseModel):
     material_code: Optional[str] = Field(None, max_length=100)
     material_version: Optional[str] = Field(None, max_length=50)
     release_date: Optional[date] = None
+    due_date: Optional[date] = None
     purpose: Optional[str] = None
     attachments: Optional[List[SampleProcessAttachment]] = None
     remarks: Optional[str] = None
@@ -53,6 +55,7 @@ class SampleProcessResponse(BaseModel):
     material_code: Optional[str] = None
     material_version: Optional[str] = None
     release_date: Optional[date] = None
+    due_date: Optional[date] = None
     purpose: Optional[str] = None
     status: str
     attachments: List[Any] = Field(default_factory=list)

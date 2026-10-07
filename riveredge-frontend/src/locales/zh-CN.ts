@@ -4464,6 +4464,7 @@ export default {
   'app.kuaiplm.menu.group.project-center': '研发项目',
   'app.kuaiplm.menu.group.project-docs': '项目单据',
   'app.kuaiplm.menu.group.sample-build': '样品打样',
+  'app.kuaiplm.menu.rd-deliverables': '交付物',
   'app.kuaiplm.menu.rd-projects': '研发项目',
   'app.kuaiplm.menu.gate-templates': '阶段管理',
   'app.kuaiplm.menu.pending-inbox': '跨项目待办',
@@ -4556,6 +4557,7 @@ export default {
   'app.kuaiplm.labRequest.createButton': '新建委托单',
   'app.kuaiplm.labRequest.createTitle': '新建委托单',
   'app.kuaiplm.labRequest.editTitle': '编辑委托单',
+  'app.kuaiplm.labRequest.boardEmptyColumn': '该泳道暂无委托',
   'app.kuaiplm.labRequest.fields.code': '委托单号',
   'app.kuaiplm.labRequest.fields.title': '试验名称',
   'app.kuaiplm.labRequest.fields.businessType': '委托类型',
@@ -5040,6 +5042,7 @@ export default {
   'app.kuaiplm.sampleProcess.fields.materialCode': '物料编码',
   'app.kuaiplm.sampleProcess.fields.materialVersion': '物料版本',
   'app.kuaiplm.sampleProcess.fields.releaseDate': '资料发布日期',
+  'app.kuaiplm.sampleProcess.fields.dueDate': '期望交期',
   'app.kuaiplm.sampleProcess.fields.purpose': '申请原因',
   'app.kuaiplm.sampleProcess.fields.attachments': '附件',
   'app.kuaiplm.sampleProcess.fields.attachmentType': '附件类型',
@@ -5143,6 +5146,8 @@ export default {
   'app.kuaiplm.projectProposal.createButton': '新建项目建议',
   'app.kuaiplm.projectProposal.fields.code': '建议单号',
   'app.kuaiplm.projectProposal.fields.project': '研发项目',
+  'app.kuaiplm.projectProposal.fields.projectCode': '项目代号',
+  'app.kuaiplm.projectProposal.fields.projectName': '项目名称',
   'app.kuaiplm.projectProposal.fields.title': '标题',
   'app.kuaiplm.projectProposal.fields.summary': '摘要',
   'app.kuaiplm.projectProposal.fields.customer': '客户',
@@ -5519,6 +5524,24 @@ export default {
   'app.kuaiplm.rdProjects.detail.deliverable.editTitle': '编辑交付物',
   'app.kuaiplm.rdProjects.detail.deliverable.name': '交付物名称',
   'app.kuaiplm.rdProjects.detail.deliverable.typePlaceholder': '如：材料部品规格书',
+  'app.kuaiplm.rdDeliverables.createButton': '新建交付物',
+  'app.kuaiplm.rdDeliverables.createTitle': '新建交付物',
+  'app.kuaiplm.rdDeliverables.editTitle': '编辑交付物',
+  'app.kuaiplm.rdDeliverables.pageHint':
+    '可直接归档研发文件，无需先建项目；也可选关联研发项目。项目工作台内的交付物与本页同一数据源。',
+  'app.kuaiplm.rdDeliverables.columns.projectCode': '项目代号',
+  'app.kuaiplm.rdDeliverables.columns.noProject': '无项目',
+  'app.kuaiplm.rdDeliverables.columns.projectLinked': '已关联项目',
+  'app.kuaiplm.rdDeliverables.openProject': '打开项目工作台',
+  'app.kuaiplm.rdDeliverables.scope.all': '全部',
+  'app.kuaiplm.rdDeliverables.scope.unlinked': '无项目',
+  'app.kuaiplm.rdDeliverables.scope.linked': '已挂项目',
+  'app.kuaiplm.rdDeliverables.form.projectOptional': '关联研发项目（可选）',
+  'app.kuaiplm.rdDeliverables.form.projectCode': '项目代号',
+  'app.kuaiplm.rdDeliverables.form.projectCodeRequired': '无项目归档时须填写项目代号',
+  'app.kuaiplm.rdDeliverables.form.projectCodePlaceholder': '用于软件规格等文件命名',
+  'app.kuaiplm.rdDeliverables.form.softwareSpecProjectCodeHint':
+    '未关联研发项目时，须填写项目代号以符合软件规格书命名规则。',
   'app.kuaiplm.rdProjects.detail.deliverable.type.partSpec': '材料部品规格书',
   'app.kuaiplm.rdProjects.detail.deliverable.type.softwareSpec': '软件开发规格书',
   'app.kuaiplm.rdProjects.detail.deliverable.type.schematic': '原理图',
@@ -5619,6 +5642,8 @@ export default {
   'app.kuaiplm.rdProjects.detail.shortcut.trialFlow': '试流管理',
   'app.kuaiplm.rdProjects.detail.shortcut.engineeringChange': '工程变更',
   'app.kuaiplm.pendingInbox.title': '跨项目待办',
+  'app.kuaiplm.pendingInbox.boardEmptyColumn': '该类暂无待办',
+  'app.kuaiplm.pendingInbox.noProject': '未关联项目',
   'app.kuaiplm.pendingInbox.fields.docType': '单据类型',
   'app.kuaiplm.pendingInbox.fields.code': '单号',
   'app.kuaiplm.pendingInbox.fields.title': '标题',
@@ -5996,7 +6021,7 @@ export default {
   'app.funide-oa.menu.r01.peSop': '工艺 SOP',
   'app.funide-oa.menu.r01.qcSop': 'QC SOP',
   'app.funide-oa.menu.r01.systemDocuments': '体系文件',
-  'app.funide-oa.menu.r01.knowledgeBase': '知识库与体系归档',
+  'app.funide-oa.menu.r01.knowledgeBase': '知识库',
   'app.funide-oa.menu.r02.labRequests': '实验委托',
   'app.funide-oa.menu.r02.labBoard': '委托看板',
   'app.funide-oa.menu.r02.labJudgmentRules': '判定规则',
@@ -6041,10 +6066,19 @@ export default {
   'app.funide-oa.projectProposal.title': '项目建议书',
   'app.funide-oa.projectProposal.createButton': '新建项目建议书',
   'app.funide-oa.projectProposal.sections.basic': '项目与客户信息',
+  'app.funide-oa.projectProposal.sections.project': '项目信息',
+  'app.funide-oa.projectProposal.sections.proposal': '提出信息',
+  'app.funide-oa.projectProposal.sections.schedule': '送样与量产',
+  'app.funide-oa.projectProposal.sections.customer': '客户信息',
   'app.funide-oa.projectProposal.sections.development': '开发要求',
   'app.funide-oa.projectProposal.sections.supplierAssessment': '供应商评审',
   'app.funide-oa.projectProposal.fields.code': '建议单号',
   'app.funide-oa.projectProposal.fields.project': '研发项目',
+  'app.funide-oa.projectProposal.fields.projectCode': '项目代号',
+  'app.funide-oa.projectProposal.fields.projectName': '项目名称',
+  'app.funide-oa.projectProposal.validation.projectCodeRequired': '请填写项目代号',
+  'app.funide-oa.projectProposal.validation.projectNameRequired': '请填写项目名称',
+  'app.funide-oa.projectProposal.placeholders.titleOptional': '选填；不填则使用项目名称',
   'app.funide-oa.projectProposal.fields.title': '标题',
   'app.funide-oa.projectProposal.fields.summary': '摘要',
   'app.funide-oa.projectProposal.fields.devRequirementsSummary': '开发要求概述',
@@ -7760,6 +7794,9 @@ export default {
   'app.kuaizhizao.workReporting.noMaterialBindings': '暂无物料绑定明细',
   'app.kuaizhizao.workReporting.noOperationLog': '暂无操作记录',
   'app.kuaizhizao.qualityComplaint.title': '质量投诉',
+  'app.kuaizhizao.qualityComplaint.createButton': '新建质量投诉',
+  'app.kuaizhizao.qualityComplaint.createTitle': '新建质量投诉',
+  'app.kuaizhizao.qualityComplaint.editTitle': '编辑质量投诉',
   'app.kuaizhizao.qualityComplaint.colCode': '投诉单号',
   'app.kuaizhizao.qualityComplaint.colTitle': '标题',
   'app.kuaizhizao.qualityComplaint.colBusinessType': '投诉类型',
@@ -8147,9 +8184,6 @@ export default {
   'app.kuaizhizao.reworkPositionPlanTemplate.updateSuccess': '排位策划模板已更新',
   'app.kuaizhizao.reworkPositionPlanTemplate.deleteSuccess': '排位策划模板已删除',
   'app.kuaizhizao.reworkPositionPlanTemplate.deleteConfirm': '确定删除该排位策划模板？',
-  'app.kuaizhizao.reworkPositionPlan.offlineTitle': '返工策划已从快制造通用版下线',
-  'app.kuaizhizao.reworkPositionPlan.offlineDescription':
-    '排位策划模板请在已启用的定制应用中维护；本地址不再加载通用列表与编辑页。',
   'app.kuaizhizao.menu.production-execution.outsource-orders': '委外单',
   'app.kuaizhizao.menu.production-execution.exception-management': '异常管理',
   'app.kuaizhizao.menu.production-execution.work-orders.kiosk': '工单看板',
@@ -9625,7 +9659,7 @@ export default {
   'app.kuaizhizao.eightD.editTitle': '编辑 8D 报告',
   'app.kuaizhizao.eightD.workbenchTitle': '8D 工作台',
   'app.kuaizhizao.eightD.sectionStageContent': '阶段内容',
-  'app.kuaizhizao.eightD.createButton': '新建8D',
+  'app.kuaizhizao.eightD.createButton': '新建8D报告',
   'app.kuaizhizao.eightD.createSuccess': '8D 报告已创建',
   'app.kuaizhizao.eightD.loadDetailFailed': '加载 8D 详情失败',
   'app.kuaizhizao.eightD.saveSuccess': '8D 内容已保存',
@@ -10217,12 +10251,6 @@ export default {
   'app.kuaizhizao.productionDaily.plantName': '厂区',
   'app.kuaizhizao.productionDaily.status.draft': '草稿',
   'app.kuaizhizao.productionDaily.status.submitted': '已提交',
-  'app.kuaizhizao.productionDailyTemplate.offlineTitle': '日报模板已从快制造通用版下线',
-  'app.kuaizhizao.productionDailyTemplate.offlineDescription':
-    '日报类型与字段模板请在已启用的定制应用中维护；本地址不再加载通用配置页。',
-  'app.kuaizhizao.productionDailyReport.offlineTitle': '生产日报已从快制造通用版下线',
-  'app.kuaizhizao.productionDailyReport.offlineDescription':
-    '生产日报录入请在已启用的定制应用中维护；本地址不再加载通用录入页。',
   'app.kuaizhizao.menu.reports.work-order-tracking': '工单状态跟踪',
   'app.kuaizhizao.menu.reports.work-order-material-usage': '物料耗用明细',
   'app.kuaizhizao.menu.reports.work-order-labor-detail': '工时报工明细',
@@ -24923,6 +24951,8 @@ export default {
   'pages.system.configCenter.auditBinding.switch': '审核开关',
   'pages.system.configCenter.auditBinding.process': '审批流程',
   'pages.system.configCenter.auditBinding.processPlaceholder': '选择审批流程',
+  'pages.system.configCenter.auditBinding.bindRolesBeforeEnable':
+    '流程已就绪。请先到「审批流程」设计器为各审批节点绑定角色，再打开右侧开关。',
   'pages.system.configCenter.auditBinding.sectionDesc':
     '为下方各单据配置人工审核及审批流程。开关关闭时提交后自动通过，开启时提交后进入审批，须选择对应审批流程。',
   'pages.system.configCenter.auditSwitch.sectionDesc': '',
@@ -30043,6 +30073,82 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.kuaiplm-rd-deliverables-standalone-r01.title':
+    '快研发交付物支持无项目直管',
+  'pages.dashboard.updateLog.entries.kuaiplm-rd-deliverables-standalone-r01.description':
+    '项目单据新增「交付物」菜单，可不关联研发项目直接上传、升版与审核；与项目工作台交付物同一数据源。无项目时软件规格等须填写项目代号快照。',
+  'pages.dashboard.updateLog.entries.kuaiplm-aggregation-kanban-r01.title':
+    '跨项目待办与委托看板改为看板布局',
+  'pages.dashboard.updateLog.entries.kuaiplm-aggregation-kanban-r01.description':
+    '聚合页不再用空表壳：跨项目待办按单据类型分列，委托看板按待受理/实验中分列；点击卡片进入详情或源列表，支持刷新。',
+  'pages.dashboard.updateLog.entries.kuaizhizao-system-documents-zone-before-search-r01.title':
+    '体系文件预置筛选移到搜索行',
+  'pages.dashboard.updateLog.entries.kuaizhizao-system-documents-zone-before-search-r01.description':
+    '正式目录/待审区改为 UniTable beforeSearchButtons，与模糊搜索同一行并靠前，去掉表上单独一行分段。',
+  'pages.dashboard.updateLog.entries.kuaizhizao-reports-menu-last-r02.title':
+    '生产执行报表分组再次置底',
+  'pages.dashboard.updateLog.entries.kuaizhizao-reports-menu-last-r02.description':
+    '报工统计移到异常管理之后、报表分组之前；前端误挂进报表下的异常统计收回异常管理；生产报表分组保持模块末位。',
+  'pages.dashboard.updateLog.entries.funide-oa-knowledge-base-menu-short-r01.title':
+    '文控资料知识库菜单简称',
+  'pages.dashboard.updateLog.entries.funide-oa-knowledge-base-menu-short-r01.description':
+    '文控资料下「知识库与体系归档」改为「知识库」，与快研发菜单用语一致。',
+  'pages.dashboard.updateLog.entries.funide-oa-reports-menu-last-r01.title':
+    '定制OA报表菜单置底',
+  'pages.dashboard.updateLog.entries.funide-oa-reports-menu-last-r01.description':
+    '质量管理「投诉月度分析」、生产作业「日报汇总」调到各组末位，业务单据在前、报表在后。请菜单同步后刷新。',
+  'pages.dashboard.updateLog.entries.kuaiplm-lab-judgment-rule-create-button-r01.title':
+    '判定规则补上新建按钮',
+  'pages.dashboard.updateLog.entries.kuaiplm-lab-judgment-rule-create-button-r01.description':
+    '列表已有创建弹窗与 create 权限，但未打开 showCreateButton，工具栏只见批量删除；现按权限显示新建。',
+  'pages.dashboard.updateLog.entries.kuaiplm-annual-lab-plan-create-button-r01.title':
+    '年度例试计划补上新建按钮',
+  'pages.dashboard.updateLog.entries.kuaiplm-annual-lab-plan-create-button-r01.description':
+    '列表已有创建弹窗与 create 权限，但未打开 showCreateButton，工具栏只见批量删除；现按权限显示「新建年度计划」。',
+  'pages.dashboard.updateLog.entries.kuaizhizao-production-daily-restore-route-r01.title':
+    '生产日报与日报模板去掉下线壳',
+  'pages.dashboard.updateLog.entries.kuaizhizao-production-daily-restore-route-r01.description':
+    '宿主路由恢复 ProductionDailyReportsScreen / ProductionDailyTemplatesScreen；定制应用菜单原路径可正常录入日报与维护模板。',
+  'pages.dashboard.updateLog.entries.kuaizhizao-rework-plan-restore-route-r01.title':
+    '返工策划去掉下线壳，恢复排位模板列表',
+  'pages.dashboard.updateLog.entries.kuaizhizao-rework-plan-restore-route-r01.description':
+    '宿主路由不再渲染「已从通用版下线」提示页，改回 ReworkPositionPlanTemplatesScreen；福尼特OA与电子制造菜单原路径可正常维护排位模板。',
+  'pages.dashboard.updateLog.entries.kuaizhizao-eight-d-collab-audit-columns-r01.title':
+    '客诉8D列表因协同表缺审计列报 500',
+  'pages.dashboard.updateLog.entries.kuaizhizao-eight-d-collab-audit-columns-r01.description':
+    '阶段指派与行动项表未含 updated_by_name 等 BaseModel 审计列，列表 enrich 查询失败；已迁移补齐并将 uuid 改为 VARCHAR(36)。',
+  'pages.dashboard.updateLog.entries.kuaizhizao-system-documents-status-tag-r01.title':
+    '体系文件列表状态改用 StatusTag',
+  'pages.dashboard.updateLog.entries.kuaizhizao-system-documents-status-tag-r01.description':
+    '流程状态由裸 Tag 改为 renderDocumentStatusTag；复审到期提示改为 MarkerTag，列持久化 bump 至 width-v6。',
+  'pages.dashboard.updateLog.entries.kuaizhizao-eight-d-three-bucket-r01.title':
+    '客诉8D列表补齐状态列与三桶徽章',
+  'pages.dashboard.updateLog.entries.kuaizhizao-eight-d-three-bucket-r01.description':
+    '增加右固定 StatusTag 状态列；严重级改用徽章 KeepWidth；新建走 UniTable createButton「新建8D报告」，操作列去掉 Space 包裹。',
+  'pages.dashboard.updateLog.entries.kuaizhizao-supplier-eval-three-bucket-r01.title':
+    '供方评价多 Tab 列表对齐三桶列宽',
+  'pages.dashboard.updateLog.entries.kuaizhizao-supplier-eval-three-bucket-r01.description':
+    '评价计划/评价单/环保资料/模板四 Tab：主标识唯一余量列，周期/得分/物料等 KeepWidth，专用 rank key；新建按钮去掉快捷键拼接，列持久化已 bump。',
+  'pages.dashboard.updateLog.entries.kuaizhizao-quality-complaint-three-bucket-r01.title':
+    '质量投诉列表对齐三桶列宽与列序',
+  'pages.dashboard.updateLog.entries.kuaizhizao-quality-complaint-three-bucket-r01.description':
+    '标题叠列改为唯一余量列，批次/要求完成/物料 KeepWidth，投诉类型与缺陷分类进 rank；工具栏与弹窗改为「新建/编辑质量投诉」，消除更新时间与状态间假空白。',
+  'pages.dashboard.updateLog.entries.kuaizhizao-quality-complaint-status-tag-r01.title':
+    '质量投诉列表状态列渲染崩溃',
+  'pages.dashboard.updateLog.entries.kuaizhizao-quality-complaint-status-tag-r01.description':
+    '状态列误把对象当作 rawCode 传给 renderDocumentStatusTag，触发 trim is not a function；已改为「展示文案 + 状态码」调用约定。',
+  'pages.dashboard.updateLog.entries.kuaizhizao-supplier-eval-uuid-varchar-r01.title':
+    '供方评价列表因 uuid 类型报校验失败',
+  'pages.dashboard.updateLog.entries.kuaizhizao-supplier-eval-uuid-varchar-r01.description':
+    '评价模板等表 uuid 建为 PostgreSQL UUID，读出后无法通过 Pydantic 字符串校验；已迁移为 VARCHAR(36)，与 BaseModel 一致。',
+  'pages.dashboard.updateLog.entries.kuaiplm-material-review-alert-upload-import-r01.title':
+    '物料评审新建弹窗报 Alert 未定义',
+  'pages.dashboard.updateLog.entries.kuaiplm-material-review-alert-upload-import-r01.description':
+    '新建/编辑弹窗使用了 Alert、Upload、UploadOutlined 但未从 antd / icons 导入；已补齐导入，打开弹窗与模板导入可正常使用。',
+  'pages.dashboard.updateLog.entries.kuaiplm-material-review-useAuditRequired-r01.title':
+    '物料评审列表打开报 useAuditRequired 未定义',
+  'pages.dashboard.updateLog.entries.kuaiplm-material-review-useAuditRequired-r01.description':
+    '物料评审页调用了 useAuditRequired 但未导入 hooks，打开列表即报错；已补上导入，审核开关可正常读取。',
   'pages.dashboard.updateLog.entries.haoligo-sales-qty-formatQuantity-r01.title':
     '销售跟踪数量展示去掉多余尾零',
   'pages.dashboard.updateLog.entries.haoligo-sales-qty-formatQuantity-r01.description':
@@ -34857,6 +34963,50 @@ export default {
     '生产作业去掉重复的标签菜单',
   'pages.dashboard.updateLog.entries.funide-oa-remove-duplicate-label-oem-r01.description':
     '福尼特 OA 生产作业仅保留「标签打印工位」；OEM 签样已由该入口自动替代，不再单独挂「OEM 标签签样」。请菜单同步后刷新。',
+  'pages.dashboard.updateLog.entries.funide-oa-project-proposal-section-card-r01.title':
+    '项目建议书新建表单分组卡片样式',
+  'pages.dashboard.updateLog.entries.funide-oa-project-proposal-section-card-r01.description':
+    '项目/提出/送样量产/客户/开发要求改为板块卡片分组，与详情抽屉板块一致，备注仍在末尾。请刷新后重开新建窗。',
+  'pages.dashboard.updateLog.entries.funide-oa-project-proposal-field-group-r01.title':
+    '项目建议书新建表单按功能分组排序',
+  'pages.dashboard.updateLog.entries.funide-oa-project-proposal-field-group-r01.description':
+    '标题与产品类型提前；提出信息、送样量产、客户信息、开发要求分块排列，备注仍在末尾。请刷新后重开新建窗。',
+  'pages.dashboard.updateLog.entries.funide-oa-project-proposal-dict-load-fix-r01.title':
+    '项目建议书数据字典选项可正常加载',
+  'pages.dashboard.updateLog.entries.funide-oa-project-proposal-dict-load-fix-r01.description':
+    '修复新建项目建议书时产品类型、客户产品资料、开发要求分类加载失败；系统字典已归属快研发并按需落库。请刷新后重开新建窗。',
+  'pages.dashboard.updateLog.entries.ind-electronics-rd-deliverable-profile-wire-r01.title':
+    '电子制造行业包正式挂接研发交付物命名规则',
+  'pages.dashboard.updateLog.entries.ind-electronics-rd-deliverable-profile-wire-r01.description':
+    '启用电子制造后写入部品规格书、测试报告、软件规格与原理图等命名规则。已启用租户请再同步一次应用或菜单以补写配置。',
+  'pages.dashboard.updateLog.entries.kuaiplm-sample-process-due-date-remind-r01.title':
+    '样品加工增加期望交期并接入24小时待审提醒',
+  'pages.dashboard.updateLog.entries.kuaiplm-sample-process-due-date-remind-r01.description':
+    '钢网/SMT 申请须填期望交期；提交后若超过24小时未审完会按平台待审超时规则提醒。请执行数据库迁移后刷新样品加工页。',
+  'pages.dashboard.updateLog.entries.ind-electronics-trial-flow-profile-wire-r01.title':
+    '电子制造行业包正式挂接试流工序与表头',
+  'pages.dashboard.updateLog.entries.ind-electronics-trial-flow-profile-wire-r01.description':
+    '启用电子制造后，元件试流使用经理、采购、生产试流、生产反馈四步，并带级别、位号、试用产品型号等表头。已启用租户请再同步一次应用或菜单以补写配置。',
+  'pages.dashboard.updateLog.entries.config-center-audit-process-show-when-off-r01.title':
+    '审核设置关闭时也能看到对应审批流程',
+  'pages.dashboard.updateLog.entries.config-center-audit-process-show-when-off-r01.description':
+    '修复开关关闭时下拉空白像「没有流程模板」的问题；会回填 code 匹配的内置流程，并提示先在设计器绑角色再启用。',
+  'pages.dashboard.updateLog.entries.kuaiplm-project-proposal-title-optional-r01.title':
+    '项目建议书标题改为选填',
+  'pages.dashboard.updateLog.entries.kuaiplm-project-proposal-title-optional-r01.description':
+    '新建或编辑时标题可不填；未填时按项目名称落库，列表与审批仍有展示文案。请刷新后重开表单。',
+  'pages.dashboard.updateLog.entries.kuaiplm-project-proposal-pre-project-text-r01.title':
+    '项目建议书新建改为填写项目代号名称',
+  'pages.dashboard.updateLog.entries.kuaiplm-project-proposal-pre-project-text-r01.description':
+    '建议书为立项前置：销售填写项目代号与名称，无需先选已有研发项目；正式项目在审批下发研发后再关联。请刷新后重开新建窗。',
+  'pages.dashboard.updateLog.entries.kuaiplm-project-proposal-dict-app-scope-r01.title':
+    '项目建议书系统字典纳入快研发初始化范围',
+  'pages.dashboard.updateLog.entries.kuaiplm-project-proposal-dict-app-scope-r01.description':
+    '产品类型、客户产品资料、开发要求分类三套系统字典归属快研发；安装或「加载系统字典」时会同步预置项，业务页按字典码拉取也会自动落库。',
+  'pages.dashboard.updateLog.entries.funide-oa-project-proposal-dict-options-r01.title':
+    '项目建议书产品类型等改走数据字典',
+  'pages.dashboard.updateLog.entries.funide-oa-project-proposal-dict-options-r01.description':
+    '产品类型、客户产品资料、开发要求分类改为系统字典维护与多选；表单支持快速新增选项，列表与详情读字典标签。请刷新后使用；若仍无选项可在数据字典管理中「加载系统字典」。',
   'pages.dashboard.updateLog.entries.funide-oa-project-proposal-menu-first-r01.title':
     '研发项目菜单项目建议书置顶',
   'pages.dashboard.updateLog.entries.funide-oa-project-proposal-menu-first-r01.description':

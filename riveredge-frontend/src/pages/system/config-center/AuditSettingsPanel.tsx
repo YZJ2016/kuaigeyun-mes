@@ -359,12 +359,19 @@ const AuditSettingsPanel: React.FC<AuditSettingsPanelProps> = ({ selectedCatId, 
                           placeholder={t('pages.system.configCenter.auditBinding.processPlaceholder')}
                           style={{ width: '100%' }}
                           optionFilterProp="label"
-                          value={item.is_enabled ? (item.process_uuid ?? undefined) : undefined}
+                          value={item.process_uuid ?? undefined}
                           loading={pendingNodeKey === item.node_key}
-                          disabled={!item.is_enabled}
                           options={buildSelectOptionsForItem(item)}
                           onChange={(v) => handleProcessChange(item, v ?? null)}
                         />
+                        {!item.is_enabled && item.process_matched ? (
+                          <Paragraph
+                            type="secondary"
+                            style={{ fontSize: 12, margin: '6px 0 0' }}
+                          >
+                            {t('pages.system.configCenter.auditBinding.bindRolesBeforeEnable')}
+                          </Paragraph>
+                        ) : null}
                       </div>
                     </Card>
                   );

@@ -39,7 +39,6 @@ import {
 import { buildDocumentAuditColumns } from '../../../kuaizhizao/pages/shared/documentAuditColumns';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../utils/uniTableLayoutColumns';
 import { NEW_SHORTCUT_HINT } from '../../../../utils/globalNewShortcut';
-import Phase2ProjectSelect from '../../components/Phase2ProjectSelect';
 import {
   projectProposalApi,
   type ProjectProposal,
@@ -496,21 +495,21 @@ const ProjectProposalsGenericPage: React.FC = () => {
         initialValues={
           editing
             ? {
-                project_id: editing.project_id,
+                project_code: editing.project_code,
+                project_name: editing.project_name,
                 title: editing.title,
                 summary: editing.summary,
                 customer_name: editing.customer_name,
                 expected_date: editing.expected_date,
                 remarks: editing.remarks,
               }
-            : filterProjectId
-              ? { project_id: filterProjectId }
-              : {}
+            : {}
         }
         onFinish={async (values) => {
           try {
             const payload = {
-              project_id: Number(values.project_id),
+              project_code: String(values.project_code || '').trim(),
+              project_name: String(values.project_name || '').trim(),
               title: String(values.title || '').trim(),
               summary: values.summary || null,
               customer_name: values.customer_name || null,
@@ -532,12 +531,19 @@ const ProjectProposalsGenericPage: React.FC = () => {
           }
         }}
       >
-        <Phase2ProjectSelect
-          name="project_id"
-          label={t('app.kuaiplm.projectProposal.fields.project')}
+        <ProFormText
+          name="project_code"
+          label={t('app.kuaiplm.projectProposal.fields.projectCode')}
           rules={[{ required: true }]}
-          disabled={!!editing}
           colProps={{ span: 12 }}
+          fieldProps={{ maxLength: 50 }}
+        />
+        <ProFormText
+          name="project_name"
+          label={t('app.kuaiplm.projectProposal.fields.projectName')}
+          rules={[{ required: true }]}
+          colProps={{ span: 12 }}
+          fieldProps={{ maxLength: 200 }}
         />
         <ProFormDatePicker
           name="expected_date"
@@ -548,8 +554,8 @@ const ProjectProposalsGenericPage: React.FC = () => {
         <ProFormText
           name="title"
           label={t('app.kuaiplm.projectProposal.fields.title')}
-          rules={[{ required: true }]}
           colProps={{ span: 24 }}
+          fieldProps={{ maxLength: 200 }}
         />
         <ProFormText
           name="customer_name"

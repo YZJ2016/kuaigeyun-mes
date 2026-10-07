@@ -641,6 +641,71 @@ SYSTEM_DICTIONARIES: List[Dict[str, Any]] = [
         ],
     },
     {
+        "code": "PROJECT_PROPOSAL_PRODUCT_LINE",
+        "name": "项目建议产品类型",
+        "description": "项目建议书产品类型（多选）；可在字典项中增补",
+        "items": [
+            {"label": "RF", "value": "rf", "description": "射频产品", "sort_order": 1},
+            {"label": "IR", "value": "ir", "description": "红外产品", "sort_order": 2},
+            {"label": "遥控器", "value": "remote", "description": "遥控器产品", "sort_order": 3},
+        ],
+    },
+    {
+        "code": "PROJECT_PROPOSAL_CUSTOMER_MATERIAL",
+        "name": "项目建议客户产品资料",
+        "description": "项目建议书客户产品资料类型（多选）；可在字典项中增补",
+        "items": [
+            {"label": "ID", "value": "id", "description": "工业设计资料", "sort_order": 1},
+            {"label": "3D&2D", "value": "3d2d", "description": "三维/二维图纸", "sort_order": 2},
+            {"label": "AI", "value": "ai", "description": "AI 设计稿", "sort_order": 3},
+            {"label": "规格书", "value": "spec", "description": "规格书", "sort_order": 4},
+            {"label": "E-mail", "value": "email", "description": "邮件资料", "sort_order": 5},
+        ],
+    },
+    {
+        "code": "PROJECT_PROPOSAL_DEV_REQ_TYPE",
+        "name": "项目建议开发要求分类",
+        "description": "项目建议书开发要求分类（多选）；D/E/F 须填供应商评审；可在字典项中增补",
+        "items": [
+            {
+                "label": "A 新系列 新IC 新软件",
+                "value": "A",
+                "description": "新系列 新IC 新软件",
+                "sort_order": 1,
+            },
+            {
+                "label": "B 新系列 新IC 旧软件",
+                "value": "B",
+                "description": "新系列 新IC 旧软件",
+                "sort_order": 2,
+            },
+            {
+                "label": "C 新系列 旧IC 旧软件",
+                "value": "C",
+                "description": "新系列 旧IC 旧软件",
+                "sort_order": 3,
+            },
+            {
+                "label": "D 旧系列 新IC 新软件",
+                "value": "D",
+                "description": "旧系列 新IC 新软件；提交前须完整填写供应商评审表",
+                "sort_order": 4,
+            },
+            {
+                "label": "E 旧系列 新IC 旧软件",
+                "value": "E",
+                "description": "旧系列 新IC 旧软件；提交前须完整填写供应商评审表",
+                "sort_order": 5,
+            },
+            {
+                "label": "F 旧系列 旧IC 旧软件",
+                "value": "F",
+                "description": "旧系列 旧IC 旧软件；提交前须完整填写供应商评审表",
+                "sort_order": 6,
+            },
+        ],
+    },
+    {
         "code": "LAB_REQUEST_BUSINESS_TYPE",
         "name": "实验委托类型",
         "description": "快研发实验委托单的委托类型（IQC/研发/材料试验/整机例试/委外/通用）",

@@ -1098,9 +1098,13 @@ async def _dispatch_rd_deliverable(
     if row is None:
         raise ValidationError(f"研发交付物不存在: {entity_id}")
     if action == "submit":
-        return await svc.submit_deliverable(tenant_id, row.project_id, entity_id, user)
+        return await svc.submit_deliverable(
+            tenant_id, entity_id, user, scope_project_id=row.project_id
+        )
     if action == "approve":
-        return await svc.approve_deliverable(tenant_id, row.project_id, entity_id, user)
+        return await svc.approve_deliverable(
+            tenant_id, entity_id, user, scope_project_id=row.project_id
+        )
     if action == "reject":
         return await svc.reject_deliverable_by_id(
             tenant_id, entity_id, user, reason=reason

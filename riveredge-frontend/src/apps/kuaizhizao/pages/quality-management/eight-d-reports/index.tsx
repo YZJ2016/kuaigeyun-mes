@@ -1,20 +1,20 @@
 import { rowActionKind, rowActionLabelKeep, rowActionOpenWorkbench } from '../../../../../components/uni-action';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormDateTimePicker, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Empty, Space } from 'antd';
-import { PlusOutlined } from '@ant-design/icons';
+import { App, Button, Empty } from 'antd';
 import dayjs from 'dayjs';
 import { stackedPrimarySecondaryColumn } from '../components/qualityTableColumns';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniUserSelect } from '../../../../../components/uni-user-select';
 import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { MarkerTag } from '../../../../../constants/statusBadges';
+import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 import { qualityImprovementApi, Quality8DReport } from '../../../services/quality-improvement';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { eightDReportRowGates } from '../../../../../hooks/useDocumentCapabilities';
 import { hasModulePermission } from '../../../../../utils/permissionContract';
 import PermissionGuard from '../../../../../components/permission/PermissionGuard';
-import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments, mapAttachmentsToUploadList } from '../../../utils/documentAttachments';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
@@ -33,7 +33,7 @@ import { buildFutureDateShortcutFieldProps } from '../../../../../utils/futureDa
 import { formDateRangeFormItemProps, toApiDateTimeString } from '../../../../../utils/formDate';
 import { formatDateTime } from '../../../../../utils/format';
 import { resolveUserDisplay } from '../../../../../services/user';
-import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
+import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import {
@@ -211,12 +211,10 @@ const EightDReportsPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.eightD.columns.severity'),
       dataIndex: 'severity',
-      width: 90,
-      minWidth: 90,
-      uniTableKeepWidth: true,
-      resizable: false,
+      key: 'severity',
       sorter: true,
       hideInSearch: true,
+      ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
       render: (_, row) => {
         const { label, color } = resolveEightDSeverityDisplay(t, row.severity);
         if (label === '-') return '-';
@@ -311,6 +309,21 @@ const EightDReportsPage: React.FC = () => {
       render: (_, row) =>
         row.due_date ? formatDateTime(row.due_date, 'YYYY-MM-DD HH:mm:ss') : '-',
     },
+    {
+      title: t('common.status'),
+      dataIndex: 'status',
+      key: 'lifecycle',
+      hideInSearch: true,
+      fixed: 'right',
+      render: (_, row) => {
+        const code = String(row.status || '').trim();
+        if (!code) return '-';
+        const label =
+          eightDStatusValueEnum[code]?.text ||
+          t(`app.kuaizhizao.eightD.status.${code}`, { defaultValue: code });
+        return renderDocumentStatusTag(String(label), code);
+      },
+    },
     ...buildDocumentAuditColumns<Quality8DReport>(t),
     {
       title: t('common.actions'),
@@ -319,14 +332,13 @@ const EightDReportsPage: React.FC = () => {
       hideInSearch: true,
       render: (_, row) => {
         const gates = eightDReportRowGates(row, canUpdate, canDelete, canClose, t, undefined, canPrint);
-        return (
-        <Space>
+        return [
           <Button
             key="detail"
             {...rowActionOpenWorkbench()}
             onClick={() => openWorkbench(row)}
-          />
-          {gates.update.allowed && (
+          />,
+          gates.update.allowed ? (
             <Button
               key="edit"
               {...rowActionKind('update')}
@@ -334,8 +346,8 @@ const EightDReportsPage: React.FC = () => {
               title={gates.update.title}
               onClick={() => void openEdit(row)}
             />
-          )}
-          {gates.print.allowed && (
+          ) : null,
+          gates.print.allowed ? (
             <Button
               key="print"
               {...rowActionKind('print')}
@@ -343,8 +355,8 @@ const EightDReportsPage: React.FC = () => {
               title={gates.print.title}
               onClick={() => openPrint({ documentType: 'eight_d_report', documentId: row.id! })}
             />
-          )}
-          {gates.delete.allowed && (
+          ) : null,
+          gates.delete.allowed ? (
             <Button
               key="delete"
               {...rowActionKind('delete')}
@@ -360,13 +372,13 @@ const EightDReportsPage: React.FC = () => {
                   onOk: async () => {
                     await qualityImprovementApi.eightD.delete(row.id!);
                     messageApi.success(t('common.deleteSuccess'));
-    actionRef.current?.reload();
+                    actionRef.current?.reload();
                   },
                 });
               }}
             />
-          )}
-          {gates.transition.allowed && (
+          ) : null,
+          gates.transition.allowed ? (
             <Button
               key="execute"
               {...rowActionKind('execute')}
@@ -377,12 +389,11 @@ const EightDReportsPage: React.FC = () => {
             >
               {t('app.kuaizhizao.eightD.actions.transition')}
             </Button>
-          )}
-        </Space>
-        );
+          ) : null,
+        ];
       },
     },
-  ], SALES_DOC_LIST_FIELD_RANK),
+  ], GLOBAL_DOC_LIST_FIELD_RANK),
     [t, canUpdate, canDelete, canClose, canPrint, eightDStatusValueEnum, eightDSeverityValueEnum, messageApi, modalApi, openPrint, openEdit],
   );
 
@@ -395,7 +406,6 @@ const EightDReportsPage: React.FC = () => {
         <UniTable<Quality8DReport>
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.eightDReport)}
-          headerTitle={t('app.kuaizhizao.menu.quality-management.eight-d-reports')}
           actionRef={actionRef}
           rowKey="id"
           enableRowSelection
@@ -403,40 +413,28 @@ const EightDReportsPage: React.FC = () => {
           onRowSelectionChange={setSelectedRowKeys}
           permissionResource={EIGHT_D_RESOURCE}
           columns={columns}
-          columnPersistenceId="apps.kuaizhizao.pages.quality-management.eight-d-reports-width-v2"
+          columnPersistenceId="apps.kuaizhizao.pages.quality-management.eight-d-reports-width-v3"
           showAdvancedSearch
           pinnedTabsField={EIGHT_D_PINNED_STATUS_FIELD}
           skipFuzzyPinyinClientFilter
+          showCreateButton={canCreate}
+          createButtonText={t('app.kuaizhizao.eightD.createButton')}
+          onCreate={() => setCreateVisible(true)}
           showDeleteButton={canDelete}
           onDelete={async (keys) => {
             try {
               for (const key of keys) {
-      await qualityImprovementApi.eightD.delete(Number(key));
+                await qualityImprovementApi.eightD.delete(Number(key));
               }
               messageApi.success(t('app.kuaizhizao.eightD.batchDeleteSuccess', { count: keys.length }));
               setSelectedRowKeys([]);
-    actionRef.current?.reload();
+              actionRef.current?.reload();
             } catch (e: any) {
               messageApi.error(e?.message || t('common.deleteFailed'));
             }
           }}
           deleteConfirmTitle={(count) => t('app.kuaizhizao.eightD.deleteConfirmTitle', { count })}
           deleteConfirmDescription={t('app.kuaizhizao.eightD.deleteConfirmDescription')}
-          toolBarRender={() =>
-            canCreate
-              ? [
-                  <Button
-                    {...rowActionKind('create')}
-                    key="create"
-                    type="primary"
-                    icon={<PlusOutlined />}
-                    onClick={() => setCreateVisible(true)}
-                  >
-                    {withSingleNewShortcutHint(t('app.kuaizhizao.eightD.createButton'))}
-                  </Button>,
-                ]
-              : []
-          }
           request={async (params, sort, _filter, searchFormValues) => {
             const pageSize = params.pageSize || 20;
             const skip = ((params.current || 1) - 1) * pageSize;

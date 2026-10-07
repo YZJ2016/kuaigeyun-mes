@@ -81,7 +81,8 @@ export interface RdProjectTask {
 
 export interface RdProjectDeliverable {
   id?: number;
-  project_id?: number;
+  project_id?: number | null;
+  project_code?: string | null;
   gate_id?: number | null;
   name?: string;
   description?: string | null;
@@ -98,7 +99,7 @@ export interface RdProjectDeliverable {
 export interface RdProjectDeliverableVersion {
   id: number;
   deliverable_id: number;
-  project_id: number;
+  project_id?: number | null;
   version: string;
   status: string;
   is_effective: boolean;

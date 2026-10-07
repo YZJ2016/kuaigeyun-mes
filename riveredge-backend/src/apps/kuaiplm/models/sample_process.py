@@ -42,6 +42,7 @@ class SampleProcessApplication(BaseModel):
         max_length=50, null=True, description="物料版本"
     )
     release_date = fields.DateField(null=True, description="资料发布日期")
+    due_date = fields.DateField(null=True, description="期望交期")
     purpose = fields.TextField(null=True, description="申请原因/用途")
     status = fields.CharField(
         max_length=20,

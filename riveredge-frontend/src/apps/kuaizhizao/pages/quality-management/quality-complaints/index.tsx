@@ -13,10 +13,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { App, Button, Col, Input, Modal, Result, Row, Typography } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
-import {
-  UniTableStackedPrimaryCell,
-  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-} from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { rowActionKind } from '../../../../../components/uni-action';
 import {
   DetailDrawerTemplate,
@@ -41,7 +38,6 @@ import {
 } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
-import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import {
   buildComplaintExtensionPayload,
@@ -170,7 +166,11 @@ const QualityComplaintsPage: React.FC = () => {
             title: t('app.kuaizhizao.qualityComplaint.colTitle'),
             dataIndex: 'title',
             key: 'title',
-            ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+            minWidth: 200,
+            uniTableRemainderFlex: true,
+            uniTablePrimaryFlex: true,
+            resizable: false,
+            ellipsis: false,
             render: (_, record) => (
               <UniTableStackedPrimaryCell
                 primary={record.title || '-'}
@@ -181,9 +181,14 @@ const QualityComplaintsPage: React.FC = () => {
           {
             title: t('app.kuaizhizao.qualityComplaint.colBusinessType'),
             dataIndex: 'business_type',
+            key: 'quality_complaint_business_type',
             valueType: 'select',
             fieldProps: { options: typeOptions },
-            ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+            width: 152,
+            minWidth: 152,
+            uniTableKeepWidth: true,
+            resizable: false,
+            align: 'center',
             render: (_, record) => (
               <MarkerTag color="blue">
                 {t(`app.kuaizhizao.qualityComplaint.businessType.${record.business_type || 'iqc_incoming'}`)}
@@ -193,6 +198,7 @@ const QualityComplaintsPage: React.FC = () => {
           {
             title: t('app.kuaizhizao.qualityComplaint.colDefectCategory'),
             dataIndex: 'defect_category',
+            key: 'quality_complaint_defect_category',
             valueType: 'select',
             fieldProps: { options: defectOptions, allowClear: true },
             ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
@@ -208,7 +214,13 @@ const QualityComplaintsPage: React.FC = () => {
           {
             title: t('app.kuaizhizao.qualityComplaint.colMaterial'),
             dataIndex: 'material_name',
+            key: 'quality_complaint_material',
             hideInSearch: true,
+            width: 160,
+            minWidth: 160,
+            uniTableKeepWidth: true,
+            resizable: false,
+            ellipsis: true,
             render: (_, r) =>
               [r.material_code, r.material_name].filter(Boolean).join(' ') || '-',
           },
@@ -216,11 +228,20 @@ const QualityComplaintsPage: React.FC = () => {
             title: t('app.kuaizhizao.qualityComplaint.colBatchNo'),
             dataIndex: 'batch_no',
             hideInSearch: true,
+            width: 120,
+            minWidth: 120,
+            uniTableKeepWidth: true,
+            resizable: false,
+            ellipsis: true,
           },
           {
             title: t('app.kuaizhizao.qualityComplaint.colDueAt'),
             dataIndex: 'due_at',
             hideInSearch: true,
+            width: 168,
+            minWidth: 168,
+            uniTableKeepWidth: true,
+            resizable: false,
             render: (v) => formatDateTimeBySiteSetting(v),
           },
           {
@@ -231,9 +252,10 @@ const QualityComplaintsPage: React.FC = () => {
             valueEnum: statusEnum,
             fixed: 'right',
             render: (_, record) =>
-              renderDocumentStatusTag(String(record.status || 'draft'), {
-                label: t(`app.kuaizhizao.qualityComplaint.status.${record.status || 'draft'}`),
-              }),
+              renderDocumentStatusTag(
+                t(`app.kuaizhizao.qualityComplaint.status.${record.status || 'draft'}`),
+                record.status || 'draft',
+              ),
           },
           ...buildDocumentAuditColumns<QualityComplaint>(t),
           {
@@ -444,10 +466,9 @@ const QualityComplaintsPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<QualityComplaint>
-        columnPersistenceId="apps.kuaizhizao.pages.quality-management.quality-complaints-v3"
+        columnPersistenceId="apps.kuaizhizao.pages.quality-management.quality-complaints-width-v4"
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
-        headerTitle={t('app.kuaizhizao.qualityComplaint.title')}
         permissionResource={RESOURCE}
         actionRef={actionRef}
         columns={columns}
@@ -459,7 +480,7 @@ const QualityComplaintsPage: React.FC = () => {
           tableRowsRef.current = rows;
         }}
         showCreateButton={perms.canCreate}
-        createButtonText={`${t('common.create')}${NEW_SHORTCUT_HINT}`}
+        createButtonText={t('app.kuaizhizao.qualityComplaint.createButton')}
         onCreate={() => {
           setEditing(null);
           setModalOpen(true);
@@ -518,7 +539,11 @@ const QualityComplaintsPage: React.FC = () => {
       />
 
       <FormModalTemplate
-        title={editing ? t('common.edit') : t('common.create')}
+        title={
+          editing
+            ? t('app.kuaizhizao.qualityComplaint.editTitle')
+            : t('app.kuaizhizao.qualityComplaint.createTitle')
+        }
         open={modalOpen}
         width={MODAL_CONFIG.STANDARD_WIDTH}
         grid={false}

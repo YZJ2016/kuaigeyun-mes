@@ -24,9 +24,10 @@ class ProjectProposal(BaseModel):
 
     id = fields.IntField(pk=True)
     proposal_code = fields.CharField(max_length=50, description="建议书单号")
-    project_id = fields.IntField(description="研发项目ID")
-    project_code = fields.CharField(max_length=50, description="项目代号快照")
-    project_name = fields.CharField(max_length=200, description="项目名称快照")
+    # 建议书为立项前置：新建时填写代号/名称；下发研发后再关联正式项目
+    project_id = fields.IntField(null=True, description="研发项目ID（下发后关联，新建可空）")
+    project_code = fields.CharField(max_length=50, description="项目代号（销售填写或正式项目快照）")
+    project_name = fields.CharField(max_length=200, description="项目名称（销售填写或正式项目快照）")
     title = fields.CharField(max_length=200, description="标题")
     summary = fields.TextField(null=True, description="开发要求概述")
     customer_name = fields.CharField(max_length=200, null=True, description="客户名称")

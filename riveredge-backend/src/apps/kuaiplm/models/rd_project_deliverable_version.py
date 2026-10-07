@@ -22,7 +22,7 @@ class RdProjectDeliverableVersion(BaseModel):
 
     id = fields.IntField(pk=True, description="主键")
     deliverable_id = fields.IntField(description="交付物头表 ID")
-    project_id = fields.IntField(description="项目 ID")
+    project_id = fields.IntField(null=True, description="项目 ID（与头表一致，可空）")
     version = fields.CharField(max_length=30, description="版本号")
     status = fields.CharField(
         max_length=20,

@@ -159,7 +159,10 @@ class RdProjectDeliverable(BaseModel):
     """研发项目交付物"""
 
     tenant_id = fields.IntField(description="租户ID")
-    project_id = fields.IntField(description="项目ID")
+    project_id = fields.IntField(null=True, description="项目ID（空表示无项目归档）")
+    project_code = fields.CharField(
+        max_length=50, null=True, description="项目代号快照（无项目时手填，供命名与检索）"
+    )
     gate_id = fields.IntField(null=True, description="阶段门ID")
     name = fields.CharField(max_length=200, description="交付物名称")
     description = fields.TextField(null=True, description="描述")
@@ -190,7 +193,11 @@ class RdProjectDeliverable(BaseModel):
     class Meta:
         table = "apps_kuaiplm_rd_project_deliverables"
         table_description = "快研发 - 项目交付物"
-        indexes = [("tenant_id", "project_id")]
+        indexes = [
+            ("tenant_id", "project_id"),
+            ("tenant_id", "deliverable_type"),
+            ("tenant_id", "material_code"),
+        ]
 
     class PydanticMeta:
         exclude = ["deleted_at"]

@@ -36,3 +36,31 @@ def test_hooks_resolve_sample_process_seed():
     assert seed is not None
     kinds = {x["code"] for x in seed.get("request_kinds") or []}
     assert "stencil" in kinds or "smt" in kinds or "gerber" in kinds or "general" in kinds
+
+
+def test_hooks_resolve_trial_flow_seed():
+    seed = resolve_profile_seed_from_hooks("ind-electronics", "kuaiplm.trial_flow")
+    assert seed is not None
+    component = seed.get("step_templates", {}).get("component") or []
+    keys = [x.get("step_key") for x in component]
+    assert keys == [
+        "rd_manager",
+        "purchasing",
+        "production_trial",
+        "production_feedback",
+    ]
+    header_keys = {x.get("key") for x in seed.get("header_fields") or []}
+    assert "designator" in header_keys
+    assert "urgency_level" in header_keys
+
+
+def test_hooks_resolve_rd_deliverable_seed():
+    seed = resolve_profile_seed_from_hooks("ind-electronics", "kuaiplm.rd_deliverable")
+    assert seed is not None
+    rules = seed.get("naming_rules") or {}
+    assert "part_spec" in (rules.get("part_spec_types") or [])
+    assert "component_spec" in (rules.get("part_spec_types") or [])
+    drawing_codes = {x.get("code") for x in seed.get("drawing_types") or []}
+    assert "drawing_silkscreen" in drawing_codes
+    customer_codes = {x.get("code") for x in seed.get("customer_doc_types") or []}
+    assert "customer_spec" in customer_codes

@@ -51,6 +51,7 @@ from apps.kuaiplm.schemas.rd_project import (
     RdProjectDeliverableCreate,
     RdProjectDeliverableRejectRequest,
     RdProjectDeliverableResponse,
+    RdProjectDeliverableListResponse,
     RdProjectDeliverableReviseRequest,
     RdProjectDeliverableUpdate,
     RdProjectDeliverableVersionListResponse,
@@ -1222,28 +1223,139 @@ class RdProjectService(AppBaseService[RdProject]):
         elif not has_project_write:
             raise BusinessLogicError("当前权限仅可上传部品规格书，不可维护其它交付物类型")
 
+    async def _get_deliverable_by_id(
+        self, tenant_id: int, deliverable_id: int
+    ) -> RdProjectDeliverable:
+        row = await RdProjectDeliverable.get_or_none(
+            tenant_id=tenant_id, id=deliverable_id, deleted_at__isnull=True
+        )
+        if not row:
+            raise NotFoundError(f"交付物不存在: {deliverable_id}")
+        return row
+
+    async def _get_scoped_deliverable(
+        self,
+        tenant_id: int,
+        deliverable_id: int,
+        scope_project_id: Optional[int],
+    ) -> RdProjectDeliverable:
+        row = await self._get_deliverable_by_id(tenant_id, deliverable_id)
+        if scope_project_id is not None and row.project_id != scope_project_id:
+            raise NotFoundError(f"交付物不存在: {deliverable_id}")
+        return row
+
+    async def _resolve_deliverable_project_code(
+        self, tenant_id: int, row: RdProjectDeliverable
+    ) -> Optional[str]:
+        snap = (getattr(row, "project_code", None) or "").strip()
+        if snap:
+            return snap
+        if row.project_id is not None:
+            project = await RdProject.get_or_none(
+                tenant_id=tenant_id, id=row.project_id, deleted_at__isnull=True
+            )
+            if project and (project.project_code or "").strip():
+                return project.project_code.strip()
+        return None
+
+    async def _resolve_deliverable_project_context(
+        self,
+        tenant_id: int,
+        data: RdProjectDeliverableCreate,
+        *,
+        path_project_id: Optional[int] = None,
+    ) -> Tuple[Optional[int], Optional[str]]:
+        effective_project_id = (
+            path_project_id
+            if path_project_id is not None
+            else getattr(data, "project_id", None)
+        )
+        if effective_project_id is not None:
+            project = await self._get_project_or_404(tenant_id, effective_project_id)
+            code = (project.project_code or "").strip() or None
+            return effective_project_id, code
+        if data.gate_id is not None:
+            raise BusinessLogicError("无项目归档的交付物不可关联阶段门")
+        code = (getattr(data, "project_code", None) or "").strip() or None
+        return None, code
+
+    async def list_deliverables(
+        self,
+        tenant_id: int,
+        *,
+        skip: int = 0,
+        limit: int = 20,
+        keyword: Optional[str] = None,
+        deliverable_type: Optional[str] = None,
+        material_code: Optional[str] = None,
+        project_id: Optional[int] = None,
+        unlinked_only: bool = False,
+        linked_only: bool = False,
+    ) -> RdProjectDeliverableListResponse:
+        qs = RdProjectDeliverable.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if unlinked_only:
+            qs = qs.filter(project_id__isnull=True)
+        elif linked_only:
+            qs = qs.filter(project_id__isnull=False)
+        elif project_id is not None:
+            qs = qs.filter(project_id=project_id)
+        dtype = (deliverable_type or "").strip()
+        if dtype:
+            qs = qs.filter(deliverable_type=dtype)
+        mcode = (material_code or "").strip()
+        if mcode:
+            qs = qs.filter(material_code=mcode)
+        kw = (keyword or "").strip()
+        if kw:
+            from tortoise.expressions import Q
+
+            qs = qs.filter(
+                Q(name__icontains=kw)
+                | Q(material_code__icontains=kw)
+                | Q(project_code__icontains=kw)
+                | Q(file_name__icontains=kw)
+            )
+        total = await qs.count()
+        rows = await qs.order_by("-updated_at", "-id").offset(skip).limit(limit)
+        items = [RdProjectDeliverableResponse.model_validate(r) for r in rows]
+        return RdProjectDeliverableListResponse(items=items, total=total)
+
+    async def get_deliverable(
+        self,
+        tenant_id: int,
+        deliverable_id: int,
+        *,
+        scope_project_id: Optional[int] = None,
+    ) -> RdProjectDeliverableResponse:
+        row = await self._get_scoped_deliverable(
+            tenant_id, deliverable_id, scope_project_id
+        )
+        return RdProjectDeliverableResponse.model_validate(row)
+
     async def create_deliverable(
         self,
         tenant_id: int,
-        project_id: int,
         data: RdProjectDeliverableCreate,
         created_by: int,
         *,
+        path_project_id: Optional[int] = None,
         permission_codes: Optional[List[str]] = None,
     ) -> RdProjectDeliverableResponse:
-        project = await self._get_project_or_404(tenant_id, project_id)
+        effective_project_id, project_code = await self._resolve_deliverable_project_context(
+            tenant_id, data, path_project_id=path_project_id
+        )
         await self._validate_deliverable_write(
             tenant_id,
-            project_code=project.project_code,
+            project_code=project_code,
             deliverable_type=data.deliverable_type,
             material_code=getattr(data, "material_code", None),
             legacy_material_code=getattr(data, "legacy_material_code", None),
             file_name=data.file_name,
             permission_codes=permission_codes,
         )
-        if data.gate_id is not None:
+        if data.gate_id is not None and effective_project_id is not None:
             gate = await RdProjectGate.get_or_none(
-                tenant_id=tenant_id, id=data.gate_id, project_id=project_id
+                tenant_id=tenant_id, id=data.gate_id, project_id=effective_project_id
             )
             if not gate:
                 raise BusinessLogicError(f"阶段门不存在: {data.gate_id}")
@@ -1254,8 +1366,9 @@ class RdProjectService(AppBaseService[RdProject]):
             raise BusinessLogicError(f"非法交付物状态: {status}")
         row = await RdProjectDeliverable.create(
             tenant_id=tenant_id,
-            project_id=project_id,
-            gate_id=data.gate_id,
+            project_id=effective_project_id,
+            project_code=project_code,
+            gate_id=data.gate_id if effective_project_id is not None else None,
             name=data.name,
             description=data.description,
             deliverable_type=data.deliverable_type,
@@ -1277,19 +1390,16 @@ class RdProjectService(AppBaseService[RdProject]):
     async def update_deliverable(
         self,
         tenant_id: int,
-        project_id: int,
         deliverable_id: int,
         data: RdProjectDeliverableUpdate,
         updated_by: int,
         *,
+        scope_project_id: Optional[int] = None,
         permission_codes: Optional[List[str]] = None,
     ) -> RdProjectDeliverableResponse:
-        row = await RdProjectDeliverable.get_or_none(
-            tenant_id=tenant_id, id=deliverable_id, project_id=project_id, deleted_at__isnull=True
+        row = await self._get_scoped_deliverable(
+            tenant_id, deliverable_id, scope_project_id
         )
-        if not row:
-            raise NotFoundError(f"交付物不存在: {deliverable_id}")
-        project = await self._get_project_or_404(tenant_id, project_id)
         user_info = await self.get_user_info(updated_by)
         update_fields: Dict[str, Any] = {
             "updated_by": updated_by,
@@ -1306,10 +1416,11 @@ class RdProjectService(AppBaseService[RdProject]):
             "file_uuid",
             "material_code",
             "legacy_material_code",
+            "project_code",
         ):
             val = getattr(data, field, None)
             if val is not None:
-                if field in {"material_code", "legacy_material_code"}:
+                if field in {"material_code", "legacy_material_code", "project_code"}:
                     update_fields[field] = str(val).strip() or None
                 else:
                     update_fields[field] = val
@@ -1317,9 +1428,16 @@ class RdProjectService(AppBaseService[RdProject]):
         merged_material = update_fields.get("material_code", row.material_code)
         merged_legacy = update_fields.get("legacy_material_code", row.legacy_material_code)
         merged_file = update_fields.get("file_name", row.file_name)
+        merged_project_code = update_fields.get("project_code", getattr(row, "project_code", None))
+        if row.project_id is not None and "project_code" in update_fields:
+            update_fields.pop("project_code", None)
+            merged_project_code = await self._resolve_deliverable_project_code(tenant_id, row)
+        naming_code = merged_project_code or await self._resolve_deliverable_project_code(
+            tenant_id, row
+        )
         await self._validate_deliverable_write(
             tenant_id,
-            project_code=project.project_code,
+            project_code=naming_code,
             deliverable_type=merged_type,
             material_code=merged_material,
             legacy_material_code=merged_legacy,
@@ -1342,19 +1460,6 @@ class RdProjectService(AppBaseService[RdProject]):
             row = await RdProjectDeliverable.get(id=deliverable_id)
             await self._ensure_deliverable_version_row(row, actor_name=user_info["name"])
         return RdProjectDeliverableResponse.model_validate(row)
-
-    async def _get_deliverable_or_404(
-        self, tenant_id: int, project_id: int, deliverable_id: int
-    ) -> RdProjectDeliverable:
-        row = await RdProjectDeliverable.get_or_none(
-            tenant_id=tenant_id,
-            id=deliverable_id,
-            project_id=project_id,
-            deleted_at__isnull=True,
-        )
-        if not row:
-            raise NotFoundError(f"交付物不存在: {deliverable_id}")
-        return row
 
     async def _apply_deliverable_approved(
         self,
@@ -1386,9 +1491,10 @@ class RdProjectService(AppBaseService[RdProject]):
     async def submit_deliverable(
         self,
         tenant_id: int,
-        project_id: int,
         deliverable_id: int,
         user: User,
+        *,
+        scope_project_id: Optional[int] = None,
     ) -> RdProjectDeliverableResponse:
         from core.services.approval.approval_instance_service import ApprovalInstanceService
         from core.services.approval.audit_binding_service import AuditBindingService
@@ -1398,13 +1504,15 @@ class RdProjectService(AppBaseService[RdProject]):
             PlmPendingApprovalReminderService,
         )
 
-        row = await self._get_deliverable_or_404(tenant_id, project_id, deliverable_id)
+        row = await self._get_scoped_deliverable(
+            tenant_id, deliverable_id, scope_project_id
+        )
         if row.status != RdDeliverableStatus.PENDING.value:
             raise BusinessLogicError("仅待提交交付物可提交审核")
         if not row.file_uuid and not (row.file_url or "").strip():
             raise ValidationError("提交前须上传文件")
 
-        project = await self._get_project_or_404(tenant_id, project_id)
+        project_code = await self._resolve_deliverable_project_code(tenant_id, row)
         user_info = await self.get_user_info(user.id)
         now = resolve_business_datetime()
         row.status = RdDeliverableStatus.SUBMITTED.value
@@ -1461,7 +1569,7 @@ class RdProjectService(AppBaseService[RdProject]):
             submitted_at=row.submitted_at,
             doc_code=row.name,
             title=row.name,
-            project_code=project.project_code,
+            project_code=project_code,
             doc_label="研发交付物 ",
             delay_hours=(
                 STRUCTURE_DRAWING_REMINDER_HOURS
@@ -1472,7 +1580,7 @@ class RdProjectService(AppBaseService[RdProject]):
 
         if submit_instance_auto_passed(approval_instance):
             approved = await self.approve_deliverable(
-                tenant_id, project_id, deliverable_id, user
+                tenant_id, deliverable_id, user, scope_project_id=scope_project_id
             )
             return approved
         return RdProjectDeliverableResponse.model_validate(row)
@@ -1480,9 +1588,10 @@ class RdProjectService(AppBaseService[RdProject]):
     async def approve_deliverable(
         self,
         tenant_id: int,
-        project_id: int,
         deliverable_id: int,
         user: User,
+        *,
+        scope_project_id: Optional[int] = None,
     ) -> RdProjectDeliverableResponse:
         from apps.kuaiplm.services.plm_audit_flow_sync import assert_plm_manual_approval_action
         from apps.kuaiplm.services.plm_pending_approval_reminder_service import (
@@ -1490,7 +1599,9 @@ class RdProjectService(AppBaseService[RdProject]):
             PlmPendingApprovalReminderService,
         )
 
-        row = await self._get_deliverable_or_404(tenant_id, project_id, deliverable_id)
+        row = await self._get_scoped_deliverable(
+            tenant_id, deliverable_id, scope_project_id
+        )
         if row.status != RdDeliverableStatus.SUBMITTED.value:
             raise BusinessLogicError("仅待审交付物可通过")
         from apps.kuaiplm.utils.rd_deliverable_naming import is_structure_drawing_type
@@ -1526,29 +1637,22 @@ class RdProjectService(AppBaseService[RdProject]):
     async def approve_deliverable_by_id(
         self, tenant_id: int, deliverable_id: int, user: User
     ) -> RdProjectDeliverableResponse:
-        row = await RdProjectDeliverable.get_or_none(
-            tenant_id=tenant_id, id=deliverable_id, deleted_at__isnull=True
-        )
-        if not row:
-            raise NotFoundError(f"交付物不存在: {deliverable_id}")
         return await self.approve_deliverable(
-            tenant_id, row.project_id, deliverable_id, user
+            tenant_id, deliverable_id, user, scope_project_id=None
         )
 
     async def list_deliverable_versions(
         self,
         tenant_id: int,
-        project_id: int,
         deliverable_id: int,
         *,
+        scope_project_id: Optional[int] = None,
         current_user_id: Optional[int] = None,
         permission_codes: Optional[List[str]] = None,
     ) -> RdProjectDeliverableVersionListResponse:
-        row = await RdProjectDeliverable.get_or_none(
-            tenant_id=tenant_id, id=deliverable_id, project_id=project_id, deleted_at__isnull=True
+        row = await self._get_scoped_deliverable(
+            tenant_id, deliverable_id, scope_project_id
         )
-        if not row:
-            raise NotFoundError(f"交付物不存在: {deliverable_id}")
         versions = await RdProjectDeliverableVersion.filter(
             tenant_id=tenant_id,
             deliverable_id=deliverable_id,
@@ -1593,27 +1697,25 @@ class RdProjectService(AppBaseService[RdProject]):
     async def revise_deliverable(
         self,
         tenant_id: int,
-        project_id: int,
         deliverable_id: int,
         payload: RdProjectDeliverableReviseRequest,
         *,
         actor_id: int,
+        scope_project_id: Optional[int] = None,
         permission_codes: Optional[List[str]] = None,
     ) -> RdProjectDeliverableResponse:
-        row = await RdProjectDeliverable.get_or_none(
-            tenant_id=tenant_id, id=deliverable_id, project_id=project_id, deleted_at__isnull=True
+        row = await self._get_scoped_deliverable(
+            tenant_id, deliverable_id, scope_project_id
         )
-        if not row:
-            raise NotFoundError(f"交付物不存在: {deliverable_id}")
         if row.status != RdDeliverableStatus.APPROVED.value:
             raise BusinessLogicError("仅已批准交付物可升版")
-        project = await self._get_project_or_404(tenant_id, project_id)
+        naming_code = await self._resolve_deliverable_project_code(tenant_id, row)
         next_file_name = (
             payload.file_name if payload.file_name is not None else row.file_name
         )
         await self._validate_deliverable_write(
             tenant_id,
-            project_code=project.project_code,
+            project_code=naming_code,
             deliverable_type=row.deliverable_type,
             material_code=getattr(row, "material_code", None),
             legacy_material_code=getattr(row, "legacy_material_code", None),
@@ -1635,7 +1737,7 @@ class RdProjectService(AppBaseService[RdProject]):
             await RdProjectDeliverableVersion.create(
                 tenant_id=tenant_id,
                 deliverable_id=row.id,
-                project_id=project_id,
+                project_id=row.project_id,
                 version=new_version,
                 status="draft",
                 is_effective=False,
@@ -1669,17 +1771,15 @@ class RdProjectService(AppBaseService[RdProject]):
     async def reject_deliverable(
         self,
         tenant_id: int,
-        project_id: int,
         deliverable_id: int,
         payload: Optional[RdProjectDeliverableRejectRequest] = None,
         *,
         actor_id: int,
+        scope_project_id: Optional[int] = None,
     ) -> RdProjectDeliverableResponse:
-        row = await RdProjectDeliverable.get_or_none(
-            tenant_id=tenant_id, id=deliverable_id, project_id=project_id, deleted_at__isnull=True
+        row = await self._get_scoped_deliverable(
+            tenant_id, deliverable_id, scope_project_id
         )
-        if not row:
-            raise NotFoundError(f"交付物不存在: {deliverable_id}")
         if row.status not in (
             RdDeliverableStatus.PENDING.value,
             RdDeliverableStatus.SUBMITTED.value,
@@ -1794,20 +1894,23 @@ class RdProjectService(AppBaseService[RdProject]):
         payload = RdProjectDeliverableRejectRequest(reason=reason) if reason else None
         return await self.reject_deliverable(
             tenant_id,
-            row.project_id,
             deliverable_id,
             payload,
             actor_id=user.id,
+            scope_project_id=None,
         )
 
     async def delete_deliverable(
-        self, tenant_id: int, project_id: int, deliverable_id: int, deleted_by: int
+        self,
+        tenant_id: int,
+        deliverable_id: int,
+        deleted_by: int,
+        *,
+        scope_project_id: Optional[int] = None,
     ) -> None:
-        row = await RdProjectDeliverable.get_or_none(
-            tenant_id=tenant_id, id=deliverable_id, project_id=project_id, deleted_at__isnull=True
+        row = await self._get_scoped_deliverable(
+            tenant_id, deliverable_id, scope_project_id
         )
-        if not row:
-            raise NotFoundError(f"交付物不存在: {deliverable_id}")
         status = (row.status or "").strip().upper()
         # PENDING = 待提交草稿；无 DRAFT 枚举。已提交/生效只能升版。
         if status not in {

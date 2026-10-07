@@ -140,6 +140,7 @@ class SampleProcessService(AppBaseService[SampleProcessApplication]):
             material_code=(payload.material_code or "").strip() or None,
             material_version=(payload.material_version or "").strip() or None,
             release_date=payload.release_date,
+            due_date=payload.due_date,
             purpose=payload.purpose,
             status="draft",
             attachments=attachments,
@@ -224,14 +225,21 @@ class SampleProcessService(AppBaseService[SampleProcessApplication]):
 
         profile = await self._profile(tenant_id)
         await self._validate_kind(tenant_id, row.request_kind, profile)
-        required = IndustryExtensionRuntimeService.require_fields_for_kind(
+        required = list(
+            IndustryExtensionRuntimeService.require_fields_for_kind(
+                profile, row.request_kind
+            )
+        )
+        # L36：钢网/SMT 期望交期为产品真源必填（不依赖租户旧 profile 是否已同步）
+        if row.request_kind in {"stencil", "smt"} and "due_date" not in required:
+            required.append("due_date")
+        msg = IndustryExtensionRuntimeService.validation_message(
             profile, row.request_kind
         )
         if "material_code" in required and not (row.material_code or "").strip():
-            msg = IndustryExtensionRuntimeService.validation_message(
-                profile, row.request_kind
-            ) or "请填写物料编码"
-            raise ValidationError(msg)
+            raise ValidationError(msg or "请填写物料编码")
+        if "due_date" in required and row.due_date is None:
+            raise ValidationError(msg or "请填写期望交期")
 
         row.status = "pending"
         row.submitted_at = resolve_business_datetime()
@@ -257,6 +265,22 @@ class SampleProcessService(AppBaseService[SampleProcessApplication]):
                     f"审核已开启但未找到可用审批流程，请检查 {AUDIT_NODE} 绑定"
                 )
         from apps.kuaiplm.services.plm_audit_flow_sync import submit_instance_auto_passed
+        from apps.kuaiplm.services.plm_pending_approval_reminder_service import (
+            ENTITY_SAMPLE_PROCESS,
+            PlmPendingApprovalReminderService,
+        )
+
+        await PlmPendingApprovalReminderService.sync_after_submit(
+            tenant_id,
+            entity_type=ENTITY_SAMPLE_PROCESS,
+            entity_id=row.id,
+            entity_uuid=str(row.uuid),
+            submitted_at=row.submitted_at,
+            doc_code=row.application_code,
+            title=row.title or row.application_code,
+            project_code=row.project_code,
+            doc_label="样品加工",
+        )
 
         if submit_instance_auto_passed(approval_instance):
             return await self.approve(tenant_id, application_id, user)
@@ -282,6 +306,17 @@ class SampleProcessService(AppBaseService[SampleProcessApplication]):
         row.approved_at = resolve_business_datetime()
         apply_update_audit(row, user)
         await row.save()
+        from apps.kuaiplm.services.plm_pending_approval_reminder_service import (
+            ENTITY_SAMPLE_PROCESS,
+            PlmPendingApprovalReminderService,
+        )
+
+        await PlmPendingApprovalReminderService.sync_after_terminal(
+            tenant_id,
+            entity_type=ENTITY_SAMPLE_PROCESS,
+            entity_id=application_id,
+            reason="审核通过",
+        )
         return SampleProcessResponse.model_validate(row)
 
     async def reject(
@@ -303,6 +338,17 @@ class SampleProcessService(AppBaseService[SampleProcessApplication]):
         row.status = "rejected"
         apply_update_audit(row, user)
         await row.save()
+        from apps.kuaiplm.services.plm_pending_approval_reminder_service import (
+            ENTITY_SAMPLE_PROCESS,
+            PlmPendingApprovalReminderService,
+        )
+
+        await PlmPendingApprovalReminderService.sync_after_terminal(
+            tenant_id,
+            entity_type=ENTITY_SAMPLE_PROCESS,
+            entity_id=application_id,
+            reason="已驳回",
+        )
         return SampleProcessResponse.model_validate(row)
 
     async def close(

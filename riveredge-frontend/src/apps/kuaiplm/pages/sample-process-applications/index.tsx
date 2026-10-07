@@ -71,6 +71,7 @@ const SAMPLE_PROCESS_EXPORT_COLUMNS: ExportXlsxColumn[] = [
   { key: 'material_code', title: '物料编码' },
   { key: 'material_version', title: '物料版本' },
   { key: 'release_date', title: '资料发布日期' },
+  { key: 'due_date', title: '期望交期' },
   { key: 'status_label', title: '状态' },
   { key: 'created_by_name', title: '创建人' },
   { key: 'updated_by_name', title: '更新人' },
@@ -297,6 +298,16 @@ const SampleProcessApplicationsPage: React.FC = () => {
         render: (_, r) => formatDateBySiteSetting(r.release_date) || '—',
       },
       {
+        title: t('app.kuaiplm.sampleProcess.fields.dueDate'),
+        dataIndex: 'due_date',
+        key: 'required_date',
+        width: 120,
+        minWidth: 120,
+        uniTableKeepWidth: true,
+        resizable: false,
+        render: (_, r) => formatDateBySiteSetting(r.due_date) || '—',
+      },
+      {
         ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         title: t('common.status'),
         dataIndex: 'status',
@@ -463,6 +474,12 @@ const SampleProcessApplicationsPage: React.FC = () => {
         render: (_, r) => formatDateBySiteSetting(r.release_date) || '—',
       },
       {
+        key: 'due_date',
+        title: t('app.kuaiplm.sampleProcess.fields.dueDate'),
+        dataIndex: 'due_date',
+        render: (_, r) => formatDateBySiteSetting(r.due_date) || '—',
+      },
+      {
         key: 'lifecycle',
         title: t('common.status'),
         dataIndex: 'status',
@@ -514,7 +531,7 @@ const SampleProcessApplicationsPage: React.FC = () => {
           tableRowsRef.current = rows;
         }}
         columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
-        columnPersistenceId="apps.kuaiplm.pages.sample-process-applications.width-v3"
+        columnPersistenceId="apps.kuaiplm.pages.sample-process-applications.width-v4"
         showCreateButton={perms.canCreate}
         createButtonText={t('app.kuaiplm.sampleProcess.createButton') + NEW_SHORTCUT_HINT}
         onCreate={openCreate}
@@ -602,6 +619,7 @@ const SampleProcessApplicationsPage: React.FC = () => {
                 material_code: editing.material_code,
                 material_version: editing.material_version,
                 release_date: editing.release_date,
+                due_date: editing.due_date,
                 purpose: editing.purpose,
                 remarks: editing.remarks,
                 attachment_type:
@@ -637,6 +655,7 @@ const SampleProcessApplicationsPage: React.FC = () => {
               material_code: values.material_code || null,
               material_version: values.material_version || null,
               release_date: values.release_date || null,
+              due_date: values.due_date || null,
               purpose: values.purpose || null,
               remarks: values.remarks || null,
               attachments,
@@ -717,6 +736,31 @@ const SampleProcessApplicationsPage: React.FC = () => {
           colProps={{ span: 12 }}
           fieldProps={{ style: { width: '100%' } }}
         />
+        <ProFormDependency name={['request_kind']}>
+          {({ request_kind }) => {
+            const dueRequired = isFieldRequiredForKind(
+              formProfile,
+              String(request_kind || ''),
+              'due_date',
+              industryProfileActive,
+            );
+            const dueRuleMessage =
+              validationMessageForKind(
+                formProfile,
+                String(request_kind || ''),
+                industryProfileActive,
+              ) || t('common.required');
+            return (
+              <ProFormDatePicker
+                name="due_date"
+                label={t('app.kuaiplm.sampleProcess.fields.dueDate')}
+                colProps={{ span: 12 }}
+                rules={dueRequired ? [{ required: true, message: dueRuleMessage }] : undefined}
+                fieldProps={{ style: { width: '100%' } }}
+              />
+            );
+          }}
+        </ProFormDependency>
         <ProFormSelect
           name="attachment_type"
           label={t('app.kuaiplm.sampleProcess.fields.attachmentType')}
