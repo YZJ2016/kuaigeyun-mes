@@ -8,6 +8,12 @@ export interface SyncSourceItem {
   dataset_uuid?: string;
   field_mapping: Record<string, string>;
   label?: string;
+  /** 仅覆盖本同步来源调用，不改接口管理模板 */
+  request_body?: Record<string, unknown>;
+  request_params?: Record<string, unknown>;
+  persist_request_override?: boolean;
+  batch_fill_path?: string;
+  batch_fill_values?: string[];
 }
 
 export interface SyncTargetField {
@@ -118,6 +124,8 @@ export interface SyncFromSourceConfig {
   /** 匹配键目标字段；BOM 等可为派生键（如 line_key），不必出现在 requiredTargets */
   matchKeyField?: string;
   validateMapping?: (targetToSource: Record<string, string>, t: TFunction) => string | null;
+  /** 保存/回填前清理错误映射（如把苍穹 warehouse 内码当成本地仓库ID） */
+  sanitizeMapping?: (targetToSource: Record<string, string>) => Record<string, string>;
   getBinding: () => Promise<SyncBinding>;
   syncFromSource: (
     payload: SyncFromSourcePayload,

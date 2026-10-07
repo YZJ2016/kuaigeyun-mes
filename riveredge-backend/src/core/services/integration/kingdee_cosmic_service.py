@@ -4,13 +4,18 @@
 鉴权：POST /kapi/oauth2/getToken
 请求头须带 x-acgw-identity；业务调用再带 access_token。
 文档：vip.kingdee.com 知识「OpenAPI开发认证指南」「增强型Token认证」
+
+access_token 按连接器配置缓存，默认按 expires_in 提前 5 分钟失效并重新换票。
 """
 
 from __future__ import annotations
 
+import asyncio
+import hashlib
 import json
+import time
 import uuid
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 from core.services.integration.kingdee_cosmic_paths import (
     normalize_kingdee_cosmic_api_path,
@@ -19,6 +24,15 @@ from core.services.integration.kingdee_cosmic_paths import (
 
 KINGDEE_COSMIC_GET_TOKEN_PATH = "/kapi/oauth2/getToken"
 KINGDEE_COSMIC_VERIFY_TOKEN_PATH = "/kapi/oauth2/verifyToken"
+
+# 金蝶增强型 Token 常见约 2 小时；缺省按约 1h55m，并提前刷新
+DEFAULT_TOKEN_EXPIRES_IN = 7000
+TOKEN_REFRESH_SKEW_SECONDS = 300
+_TOKEN_CACHE_PREFIX = "riveredge:kingdee_cosmic:access_token"
+
+# 进程内快路径；(payload, expire_at_monotonic)
+_MEMORY_TOKEN_CACHE: Dict[str, Tuple[Dict[str, Any], float]] = {}
+_TOKEN_LOCKS: Dict[str, asyncio.Lock] = {}
 
 
 def normalize_kingdee_cosmic_base_url(base_url: str) -> str:
@@ -110,6 +124,170 @@ def _secret_diag(secret: str) -> str:
         return "secret_len=0"
     ascii_ok = all(ord(ch) < 128 for ch in text)
     return f"secret_len={len(text)}, secret_ascii={'yes' if ascii_ok else 'no'}"
+
+
+def build_kingdee_cosmic_token_cache_key(config: Dict[str, Any]) -> str:
+    """按连接器身份字段生成缓存键；密钥变更会使指纹变化从而自动失效。"""
+    try:
+        base_url = normalize_kingdee_cosmic_base_url(
+            _config_str(config, "base_url", "url")
+        )
+    except ValueError:
+        base_url = _config_str(config, "base_url", "url")
+    client_id = _config_str(config, "client_id", "app_id")
+    account_id = _config_str(config, "account_id", "accountId", "acct_id")
+    username = _config_str(config, "username")
+    identity = _config_str(config, "x_acgw_identity", "x-acgw-identity")
+    secret = _config_str(config, "client_secret", "app_secret")
+    secret_fp = hashlib.sha256(secret.encode("utf-8")).hexdigest()[:16] if secret else ""
+    raw = "|".join([base_url, client_id, account_id, username, identity, secret_fp])
+    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
+    return f"{_TOKEN_CACHE_PREFIX}:{digest}"
+
+
+def token_cache_ttl_seconds(expires_in: Any) -> int:
+    """缓存 TTL：expires_in 减去提前刷新窗口，至少 60 秒。"""
+    try:
+        seconds = int(expires_in)
+    except (TypeError, ValueError):
+        seconds = DEFAULT_TOKEN_EXPIRES_IN
+    if seconds <= 0:
+        seconds = DEFAULT_TOKEN_EXPIRES_IN
+    return max(60, seconds - TOKEN_REFRESH_SKEW_SECONDS)
+
+
+def _session_from_token_data(
+    data: Dict[str, Any],
+    *,
+    token_url: Optional[str] = None,
+    message: Optional[str] = None,
+) -> Dict[str, Any]:
+    access_token = str(data.get("access_token") or "").strip()
+    return {
+        "access_token": access_token,
+        "token_type": str(data.get("token_type") or "Bearer"),
+        "expires_in": data.get("expires_in"),
+        "id_token": data.get("id_token"),
+        "token_url": token_url,
+        "message": message or "金蝶AI苍穹 OpenAPI 登录成功",
+    }
+
+
+def _memory_cache_get(key: str) -> Optional[Dict[str, Any]]:
+    hit = _MEMORY_TOKEN_CACHE.get(key)
+    if not hit:
+        return None
+    payload, expire_at = hit
+    if time.monotonic() >= expire_at:
+        _MEMORY_TOKEN_CACHE.pop(key, None)
+        return None
+    return dict(payload)
+
+
+def _memory_cache_set(key: str, session: Dict[str, Any], ttl: int) -> None:
+    _MEMORY_TOKEN_CACHE[key] = (dict(session), time.monotonic() + max(60, int(ttl)))
+
+
+def _memory_cache_delete(key: str) -> None:
+    _MEMORY_TOKEN_CACHE.pop(key, None)
+
+
+async def _pg_cache_get(key: str) -> Optional[str]:
+    try:
+        from infra.infrastructure.cache.cache import Cache
+
+        if not Cache._connected:
+            return None
+        return await Cache.get(key)
+    except Exception:
+        return None
+
+
+async def _pg_cache_set(key: str, value: str, expire: int) -> None:
+    try:
+        from infra.infrastructure.cache.cache import Cache
+
+        if not Cache._connected:
+            return
+        await Cache.set(key, value, expire=expire)
+    except Exception:
+        return
+
+
+async def _pg_cache_delete(key: str) -> None:
+    try:
+        from infra.infrastructure.cache.cache import Cache
+
+        if not Cache._connected:
+            return
+        await Cache.delete(key)
+    except Exception:
+        return
+
+
+async def _load_cached_token_session(cache_key: str) -> Optional[Dict[str, Any]]:
+    mem = _memory_cache_get(cache_key)
+    if mem and str(mem.get("access_token") or "").strip():
+        return mem
+    raw = await _pg_cache_get(cache_key)
+    if not raw:
+        return None
+    try:
+        payload = json.loads(raw)
+    except Exception:
+        await _pg_cache_delete(cache_key)
+        return None
+    if not isinstance(payload, dict):
+        return None
+    access_token = str(payload.get("access_token") or "").strip()
+    if not access_token:
+        return None
+    session = _session_from_token_data(payload, token_url=payload.get("token_url"), message=payload.get("message"))
+    # 回填进程缓存；PG 条目已带 TTL，此处给较短本地窗即可
+    _memory_cache_set(cache_key, session, ttl=min(300, token_cache_ttl_seconds(payload.get("expires_in"))))
+    return session
+
+
+async def _store_token_session_cache(
+    config: Dict[str, Any],
+    session: Dict[str, Any],
+) -> None:
+    access_token = str(session.get("access_token") or "").strip()
+    if not access_token:
+        return
+    cache_key = build_kingdee_cosmic_token_cache_key(config)
+    ttl = token_cache_ttl_seconds(session.get("expires_in"))
+    _memory_cache_set(cache_key, session, ttl)
+    await _pg_cache_set(
+        cache_key,
+        json.dumps(
+            {
+                "access_token": access_token,
+                "token_type": session.get("token_type") or "Bearer",
+                "expires_in": session.get("expires_in"),
+                "id_token": session.get("id_token"),
+                "token_url": session.get("token_url"),
+                "message": session.get("message"),
+            },
+            ensure_ascii=False,
+        ),
+        expire=ttl,
+    )
+
+
+async def invalidate_kingdee_cosmic_token_cache(config: Dict[str, Any]) -> None:
+    """业务调用遇 token 失效时主动清缓存。"""
+    cache_key = build_kingdee_cosmic_token_cache_key(config)
+    _memory_cache_delete(cache_key)
+    await _pg_cache_delete(cache_key)
+
+
+def _token_lock_for(cache_key: str) -> asyncio.Lock:
+    lock = _TOKEN_LOCKS.get(cache_key)
+    if lock is None:
+        lock = asyncio.Lock()
+        _TOKEN_LOCKS[cache_key] = lock
+    return lock
 
 
 def parse_kingdee_cosmic_token_response(
@@ -259,10 +437,19 @@ async def _request_kingdee_cosmic_access_token(config: Dict[str, Any]) -> Dict[s
 
 async def test_kingdee_cosmic_connection_config(config: Dict[str, Any]) -> Dict[str, Any]:
     """调用 /kapi/oauth2/getToken 校验苍穹 OpenAPI 连接器（不回传 token 明文）。"""
+    # 测连接始终打真实 getToken，成功后写入缓存供后续业务复用
     result = await _request_kingdee_cosmic_access_token(config)
     if not result.get("success"):
+        await invalidate_kingdee_cosmic_token_cache(config)
         return {"success": False, "message": result.get("message") or "连接失败"}
     data = result.get("data") if isinstance(result.get("data"), dict) else {}
+    session = _session_from_token_data(
+        data,
+        token_url=result.get("token_url"),
+        message=result.get("message"),
+    )
+    if session.get("access_token"):
+        await _store_token_session_cache(config, session)
     return {
         "success": True,
         "message": result.get("message") or "金蝶AI苍穹 OpenAPI 登录成功",
@@ -272,23 +459,40 @@ async def test_kingdee_cosmic_connection_config(config: Dict[str, Any]) -> Dict[
     }
 
 
-async def login_kingdee_cosmic_session(config: Dict[str, Any]) -> Dict[str, Any]:
-    """getToken 并返回会话字段；失败 raise ValueError。"""
-    result = await _request_kingdee_cosmic_access_token(config)
-    if not result.get("success"):
-        raise ValueError(str(result.get("message") or "金蝶AI苍穹 OpenAPI 登录失败"))
-    data = result.get("data") if isinstance(result.get("data"), dict) else {}
-    access_token = str(data.get("access_token") or "").strip()
-    if not access_token:
-        raise ValueError("金蝶 getToken 成功但未返回 access_token")
-    return {
-        "access_token": access_token,
-        "token_type": str(data.get("token_type") or "Bearer"),
-        "expires_in": data.get("expires_in"),
-        "id_token": data.get("id_token"),
-        "token_url": result.get("token_url"),
-        "message": result.get("message") or "金蝶AI苍穹 OpenAPI 登录成功",
-    }
+async def login_kingdee_cosmic_session(
+    config: Dict[str, Any],
+    *,
+    force_refresh: bool = False,
+) -> Dict[str, Any]:
+    """getToken 并返回会话字段；默认走缓存，过期或 force_refresh 时重新换票。"""
+    cache_key = build_kingdee_cosmic_token_cache_key(config)
+    if not force_refresh:
+        cached = await _load_cached_token_session(cache_key)
+        if cached:
+            return cached
+
+    lock = _token_lock_for(cache_key)
+    async with lock:
+        if not force_refresh:
+            cached = await _load_cached_token_session(cache_key)
+            if cached:
+                return cached
+        else:
+            await invalidate_kingdee_cosmic_token_cache(config)
+
+        result = await _request_kingdee_cosmic_access_token(config)
+        if not result.get("success"):
+            raise ValueError(str(result.get("message") or "金蝶AI苍穹 OpenAPI 登录失败"))
+        data = result.get("data") if isinstance(result.get("data"), dict) else {}
+        session = _session_from_token_data(
+            data,
+            token_url=result.get("token_url"),
+            message=result.get("message"),
+        )
+        if not session.get("access_token"):
+            raise ValueError("金蝶 getToken 成功但未返回 access_token")
+        await _store_token_session_cache(config, session)
+        return session
 
 
 def apply_kingdee_cosmic_session_headers(

@@ -61,6 +61,7 @@ import { RESOURCE_CATEGORY_UNCATEGORIZED_KEY, type ResourceCategoryListFilter } 
 import { ApiLibraryModal } from '../ApiLibraryModal';
 import { ApiTestDrawer } from '../ApiTestDrawer';
 import { ApiFormModal, normalizeApiFormInitialValues, type ApiFormSubmitValues } from '../ApiFormModal';
+import { DEFAULT_API_REQUEST_PAGE_SIZE } from '../apiFormUtils';
 import { TwoColumnLayout } from '../../../../components/layout-templates';
 
 
@@ -156,6 +157,7 @@ const APIListPage: React.FC = () => {
       category_uuid: presetCategoryUuid,
       request_headers: [],
       request_params: [],
+      request_body: { pageNo: 1, pageSize: DEFAULT_API_REQUEST_PAGE_SIZE },
     })
     setModalVisible(true)
   }

@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import {
   App,
   Button,
+  Checkbox,
   Modal,
   Select,
   Space,
@@ -14,7 +15,8 @@ import {
   Table,
   Typography,
 } from 'antd';
-import { DeleteOutlined, PlusOutlined, SyncOutlined } from '@ant-design/icons';
+import { DeleteOutlined, EditOutlined, PlusOutlined, SyncOutlined } from '@ant-design/icons';
+import { SyncApiCallParamsPanel } from './SyncApiCallParamsPanel';
 import { ThemedSegmented } from '../themed-segmented/ThemedSegmented';
 import { getAPIByUuid, testAPI } from '../../services/apiManagement';
 import {
@@ -31,6 +33,7 @@ import {
   withKingdeePreviewLimit,
 } from './syncSourceUtils';
 import { executeDatasetQuery } from '../../services/dataset';
+import { resolveCallPageSize, setByPath } from './syncCallParams';
 import type { SyncFromSourceConfig, SyncSourceType, SyncTargetField } from './types';
 import type { SyncSourceDraft } from './syncSourcesDraft';
 
@@ -105,6 +108,18 @@ export const SyncSourceSettingModal: React.FC<SyncSourceSettingModalProps> = ({
   const [executing, setExecuting] = useState(false);
   const [addedTargetKeys, setAddedTargetKeys] = useState<string[]>([]);
   const [pendingAddTargetKeys, setPendingAddTargetKeys] = useState<string[]>([]);
+  const [requestBody, setRequestBody] = useState<Record<string, unknown> | undefined>(
+    draft.request_body,
+  );
+  const [requestParams, setRequestParams] = useState<Record<string, unknown> | undefined>(
+    draft.request_params,
+  );
+  const [persistRequestOverride, setPersistRequestOverride] = useState(
+    Boolean(draft.persist_request_override),
+  );
+  const [batchFillPath, setBatchFillPath] = useState<string | undefined>(draft.batch_fill_path);
+  const [batchFillValues, setBatchFillValues] = useState<string[] | undefined>(draft.batch_fill_values);
+  const [editingCallParams, setEditingCallParams] = useState(false);
 
   const defaultTargetFieldValues = useMemo(
     () => new Set(config.targetFields.map((field) => field.value)),
@@ -187,11 +202,20 @@ export const SyncSourceSettingModal: React.FC<SyncSourceSettingModalProps> = ({
     setKind(draft.kind);
     setApiUuid(draft.api_uuid);
     setDatasetUuid(draft.dataset_uuid);
-    setTargetToSource({ ...draft.targetToSource });
+    const mapping = config.sanitizeMapping
+      ? config.sanitizeMapping({ ...draft.targetToSource })
+      : { ...draft.targetToSource };
+    setTargetToSource(mapping);
+    setRequestBody(draft.request_body ? { ...draft.request_body } : undefined);
+    setRequestParams(draft.request_params ? { ...draft.request_params } : undefined);
+    setPersistRequestOverride(Boolean(draft.persist_request_override));
+    setBatchFillPath(draft.batch_fill_path);
+    setBatchFillValues(draft.batch_fill_values);
+    setEditingCallParams(false);
     setPreviewRows([]);
     setPreviewColumns([]);
     setPendingAddTargetKeys([]);
-    const extras = Object.keys(draft.targetToSource).filter(
+    const extras = Object.keys(mapping).filter(
       (key) => !defaultTargetFieldValues.has(key),
     );
     setAddedTargetKeys(extras);
@@ -213,11 +237,26 @@ export const SyncSourceSettingModal: React.FC<SyncSourceSettingModalProps> = ({
       let rows: Record<string, unknown>[] = [];
       if (kind === 'api' && apiUuid) {
         const apiDetail = await getAPIByUuid(apiUuid);
-        const previewBody = withKingdeePreviewLimit(
-          apiDetail.request_body as Record<string, unknown> | null | undefined,
-          SYNC_PREVIEW_ROW_LIMIT,
-        );
-        const result = await testAPI(apiUuid, previewBody ? { body: previewBody } : {});
+        const apiBody =
+          apiDetail.request_body &&
+          typeof apiDetail.request_body === 'object' &&
+          !Array.isArray(apiDetail.request_body)
+            ? (apiDetail.request_body as Record<string, unknown>)
+            : {};
+        let baseBody = { ...apiBody, ...(requestBody ?? {}) };
+        if (batchFillPath && batchFillValues?.length) {
+          const pageSize = resolveCallPageSize(baseBody);
+          baseBody = setByPath(
+            baseBody,
+            batchFillPath,
+            batchFillValues.slice(0, pageSize).join(','),
+          );
+        }
+        const previewBody = withKingdeePreviewLimit(baseBody, SYNC_PREVIEW_ROW_LIMIT);
+        const result = await testAPI(apiUuid, {
+          ...(previewBody ? { body: previewBody } : {}),
+          ...(requestParams ? { params: requestParams } : {}),
+        });
         if (result.status_code < 200 || result.status_code >= 300) {
           const detail =
             typeof result.body === 'object' && result.body && 'error' in result.body
@@ -225,7 +264,7 @@ export const SyncSourceSettingModal: React.FC<SyncSourceSettingModalProps> = ({
               : `HTTP ${result.status_code}`;
           throw new Error(detail);
         }
-        const columnNames = extractKingdeeFieldKeys(apiDetail.request_body);
+        const columnNames = extractKingdeeFieldKeys(baseBody);
         rows = normalizeApiBodyToRows(result.body, columnNames).slice(0, SYNC_PREVIEW_ROW_LIMIT);
       } else if (kind === 'dataset' && datasetUuid) {
         const res = await executeDatasetQuery(datasetUuid, {
@@ -296,7 +335,14 @@ export const SyncSourceSettingModal: React.FC<SyncSourceSettingModalProps> = ({
       kind,
       api_uuid: kind === 'api' ? apiUuid : undefined,
       dataset_uuid: kind === 'dataset' ? datasetUuid : undefined,
-      targetToSource,
+      targetToSource: config.sanitizeMapping
+        ? config.sanitizeMapping(targetToSource)
+        : targetToSource,
+      request_body: kind === 'api' ? requestBody : undefined,
+      request_params: kind === 'api' ? requestParams : undefined,
+      persist_request_override: kind === 'api' ? persistRequestOverride : undefined,
+      batch_fill_path: kind === 'api' ? batchFillPath : undefined,
+      batch_fill_values: kind === 'api' ? batchFillValues : undefined,
     });
     onClose();
   };
@@ -346,6 +392,7 @@ export const SyncSourceSettingModal: React.FC<SyncSourceSettingModalProps> = ({
   });
 
   return (
+    <>
     <Modal
       title={t('components.syncFromSource.sourceSettingTitle')}
       open={open}
@@ -376,7 +423,16 @@ export const SyncSourceSettingModal: React.FC<SyncSourceSettingModalProps> = ({
               style={{ width: SYNC_SOURCE_KIND_SEGMENTED_WIDTH, maxWidth: '100%' }}
               value={kind}
               onChange={(value) => {
-                setKind(value as SyncSourceType);
+                const nextKind = value as SyncSourceType;
+                setKind(nextKind);
+                if (nextKind !== 'api') {
+                  setRequestBody(undefined);
+                  setRequestParams(undefined);
+                  setPersistRequestOverride(false);
+                  setBatchFillPath(undefined);
+                  setBatchFillValues(undefined);
+                  setEditingCallParams(false);
+                }
                 resetPreview();
               }}
               options={[
@@ -393,19 +449,47 @@ export const SyncSourceSettingModal: React.FC<SyncSourceSettingModalProps> = ({
               </Typography.Text>
               <div style={SYNC_FIELD_CONTROL_STYLE}>
                 <Select
-                  style={{ width: '100%', maxWidth: 520 }}
+                  style={{ flex: 1, minWidth: 220, maxWidth: 520 }}
                   placeholder={t('components.syncFromSource.selectApiPlaceholder')}
                   loading={loadingOptions}
                   options={apiOptions}
                   value={apiUuid}
                   onChange={(value) => {
                     setApiUuid(value);
+                    setRequestBody(undefined);
+                    setRequestParams(undefined);
+                    setPersistRequestOverride(false);
+                    setBatchFillPath(undefined);
+                    setBatchFillValues(undefined);
+                    setEditingCallParams(false);
                     resetPreview();
                   }}
                   showSearch
                   optionFilterProp="label"
                   allowClear
                 />
+                <Button
+                  icon={<EditOutlined />}
+                  disabled={!apiUuid}
+                  type={editingCallParams ? 'primary' : 'default'}
+                  onClick={() => setEditingCallParams((prev) => !prev)}
+                >
+                  {t('components.syncFromSource.editCallParams')}
+                </Button>
+                <Checkbox
+                  checked={persistRequestOverride}
+                  disabled={!apiUuid}
+                  onChange={(event) => setPersistRequestOverride(event.target.checked)}
+                >
+                  {t('components.syncFromSource.rememberCallParams')}
+                </Checkbox>
+                {requestBody || requestParams || batchFillValues?.length ? (
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    {persistRequestOverride
+                      ? t('components.syncFromSource.callParamsRemembered')
+                      : t('components.syncFromSource.callParamsSessionOnly')}
+                  </Typography.Text>
+                ) : null}
               </div>
             </>
           ) : (
@@ -440,6 +524,25 @@ export const SyncSourceSettingModal: React.FC<SyncSourceSettingModalProps> = ({
               : config.datasetBatchHintKey ?? 'components.syncFromSource.datasetBatchHintDefault',
           )}
         </Typography.Text>
+
+        {kind === 'api' && editingCallParams && apiUuid ? (
+          <SyncApiCallParamsPanel
+            apiUuid={apiUuid}
+            requestBody={requestBody}
+            requestParams={requestParams}
+            persistOverride={persistRequestOverride}
+            batchFillPath={batchFillPath}
+            batchFillValues={batchFillValues}
+            onChange={(next) => {
+              setRequestBody(next.request_body);
+              setRequestParams(next.request_params);
+              setPersistRequestOverride(next.persist_request_override);
+              setBatchFillPath(next.batch_fill_path);
+              setBatchFillValues(next.batch_fill_values);
+              resetPreview();
+            }}
+          />
+        ) : null}
 
         {executing ? (
           <div style={{ textAlign: 'center', padding: 24 }}>
@@ -560,5 +663,6 @@ export const SyncSourceSettingModal: React.FC<SyncSourceSettingModalProps> = ({
         ) : null}
       </Space>
     </Modal>
+    </>
   );
 };

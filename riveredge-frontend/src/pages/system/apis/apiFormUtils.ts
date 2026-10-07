@@ -52,6 +52,49 @@ export function keyValueListToObject(
   }, {});
 }
 
+export const DEFAULT_API_REQUEST_PAGE_SIZE = 1000;
+
+const REQUEST_BODY_PAGE_NO_KEYS = ['pageNo', 'page_no'] as const;
+const REQUEST_BODY_PAGE_SIZE_KEYS = ['pageSize', 'page_size'] as const;
+
+function hasOwnKey(obj: Record<string, unknown>, keys: readonly string[]): string | null {
+  for (const key of keys) {
+    if (Object.prototype.hasOwnProperty.call(obj, key)) return key;
+  }
+  return null;
+}
+
+function looksLikeExecuteBillQueryBody(body: Record<string, unknown>): boolean {
+  return (
+    Object.prototype.hasOwnProperty.call(body, 'FormId') ||
+    Object.prototype.hasOwnProperty.call(body, 'formId')
+  );
+}
+
+/** 新建/空请求体默认带分页；已有 pageNo 但缺少 pageSize 时补 1000 */
+export function applyRequestBodyFormDefaults(value: unknown): unknown {
+  const normalized = normalizeJsonFieldValue(value);
+  if (isEmptyJsonValue(normalized)) {
+    return { pageNo: 1, pageSize: DEFAULT_API_REQUEST_PAGE_SIZE };
+  }
+  if (!normalized || typeof normalized !== 'object' || Array.isArray(normalized)) {
+    return normalized;
+  }
+  const body = { ...(normalized as Record<string, unknown>) };
+  if (looksLikeExecuteBillQueryBody(body)) return body;
+
+  const pageNoKey = hasOwnKey(body, REQUEST_BODY_PAGE_NO_KEYS);
+  const pageSizeKey = hasOwnKey(body, REQUEST_BODY_PAGE_SIZE_KEYS);
+  if (pageSizeKey && (body[pageSizeKey] == null || body[pageSizeKey] === '')) {
+    body[pageSizeKey] = DEFAULT_API_REQUEST_PAGE_SIZE;
+    return body;
+  }
+  if (pageNoKey && !pageSizeKey) {
+    body.pageSize = DEFAULT_API_REQUEST_PAGE_SIZE;
+  }
+  return body;
+}
+
 /** Body / 响应 JSON 字段：表单值 → API 对象 */
 export function normalizeApiJsonObject(value: unknown): Record<string, unknown> {
   const normalized = normalizeJsonFieldValue(value);

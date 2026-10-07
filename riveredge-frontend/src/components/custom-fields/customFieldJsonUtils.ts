@@ -4,14 +4,152 @@ export interface JsonKeyValuePair {
   value: string;
 }
 
+/** 可嵌套的 JSON 键值对节点（支持对象子字段） */
+export interface JsonTreeNode {
+  id: string;
+  key: string;
+  enabled: boolean;
+  kind: 'value' | 'object';
+  value: string;
+  children: JsonTreeNode[];
+}
+
 const PRIMITIVE_JSON_TYPES = new Set(['string', 'number', 'boolean']);
 
-/** 是否为可用键值对模式编辑的扁平对象 */
+let jsonTreeNodeSeq = 0;
+
+export function createJsonTreeNodeId(): string {
+  jsonTreeNodeSeq += 1;
+  return `json-node-${jsonTreeNodeSeq}`;
+}
+
+export function createEmptyJsonTreeNode(): JsonTreeNode {
+  return {
+    id: createJsonTreeNodeId(),
+    key: '',
+    enabled: true,
+    kind: 'value',
+    value: '',
+    children: [],
+  };
+}
+
+/** 是否为普通 JSON 对象（可键值对编辑，允许嵌套） */
+export function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return value != null && typeof value === 'object' && !Array.isArray(value);
+}
+
+/** 是否为可用扁平键值对模式编辑的对象 */
 export function isFlatJsonObject(value: unknown): value is Record<string, string | number | boolean | null> {
-  if (value == null || typeof value !== 'object' || Array.isArray(value)) return false;
-  return Object.values(value as Record<string, unknown>).every(
+  if (!isJsonObject(value)) return false;
+  return Object.values(value).every(
     (v) => v == null || PRIMITIVE_JSON_TYPES.has(typeof v),
   );
+}
+
+export function canEditAsJsonTree(value: unknown): boolean {
+  return value == null || value === '' || isJsonObject(value);
+}
+
+export function parseJsonScalar(raw: string): string | number | boolean | null {
+  const trimmed = raw.trim();
+  if (trimmed === '') return null;
+  if (trimmed === 'true') return true;
+  if (trimmed === 'false') return false;
+  if (/^-?\d+(\.\d+)?$/.test(trimmed)) return Number(trimmed);
+  return raw;
+}
+
+function formatJsonScalar(val: unknown): string {
+  if (val == null) return '';
+  if (typeof val === 'string') return val;
+  if (typeof val === 'number' || typeof val === 'boolean') return String(val);
+  try {
+    return JSON.stringify(val);
+  } catch {
+    return String(val);
+  }
+}
+
+function jsonEntryToTreeNode(key: string, val: unknown): JsonTreeNode {
+  if (isJsonObject(val)) {
+    const entries = Object.entries(val);
+    return {
+      id: createJsonTreeNodeId(),
+      key,
+      enabled: true,
+      kind: 'object',
+      value: '',
+      children: entries.length ? entries.map(([k, v]) => jsonEntryToTreeNode(k, v)) : [createEmptyJsonTreeNode()],
+    };
+  }
+  return {
+    id: createJsonTreeNodeId(),
+    key,
+    enabled: true,
+    kind: 'value',
+    value: formatJsonScalar(val),
+    children: [],
+  };
+}
+
+export function jsonValueToTree(value: unknown): JsonTreeNode[] {
+  if (!isJsonObject(value) || Object.keys(value).length === 0) {
+    return [createEmptyJsonTreeNode()];
+  }
+  return Object.entries(value).map(([key, val]) => jsonEntryToTreeNode(key, val));
+}
+
+export function jsonTreeToValue(nodes: JsonTreeNode[]): Record<string, unknown> | null {
+  const result: Record<string, unknown> = {};
+  let hasEntry = false;
+  for (const node of nodes) {
+    if (!node.enabled) continue;
+    const key = node.key.trim();
+    if (!key) continue;
+    if (node.kind === 'object') {
+      result[key] = jsonTreeToValue(node.children) ?? {};
+      hasEntry = true;
+    } else {
+      result[key] = node.value.trim() === '' ? '' : parseJsonScalar(node.value);
+      hasEntry = true;
+    }
+  }
+  return hasEntry ? result : null;
+}
+
+export function updateJsonTreeNode(
+  nodes: JsonTreeNode[],
+  id: string,
+  mapper: (node: JsonTreeNode) => JsonTreeNode,
+): JsonTreeNode[] {
+  return nodes.map((node) => {
+    if (node.id === id) return mapper(node);
+    if (node.children.length) {
+      return { ...node, children: updateJsonTreeNode(node.children, id, mapper) };
+    }
+    return node;
+  });
+}
+
+export function removeJsonTreeNode(nodes: JsonTreeNode[], id: string): JsonTreeNode[] {
+  return nodes
+    .filter((node) => node.id !== id)
+    .map((node) => ({
+      ...node,
+      children: node.children.length ? removeJsonTreeNode(node.children, id) : node.children,
+    }));
+}
+
+export function addJsonTreeChild(nodes: JsonTreeNode[], parentId: string | null): JsonTreeNode[] {
+  const next = createEmptyJsonTreeNode();
+  if (parentId == null) return [...nodes, next];
+  return updateJsonTreeNode(nodes, parentId, (node) => ({
+    ...node,
+    kind: 'object',
+    value: '',
+    children: [...node.children, next],
+  }));
 }
 
 export function jsonValueToKeyValuePairs(value: unknown): JsonKeyValuePair[] {
@@ -31,24 +169,7 @@ export function keyValuePairsToJsonObject(pairs: JsonKeyValuePair[]): Record<str
     const key = pair.key.trim();
     if (!key) continue;
     hasEntry = true;
-    const raw = pair.value.trim();
-    if (raw === '') {
-      result[key] = null;
-      continue;
-    }
-    if (raw === 'true') {
-      result[key] = true;
-      continue;
-    }
-    if (raw === 'false') {
-      result[key] = false;
-      continue;
-    }
-    if (/^-?\d+(\.\d+)?$/.test(raw)) {
-      result[key] = Number(raw);
-      continue;
-    }
-    result[key] = pair.value;
+    result[key] = parseJsonScalar(pair.value);
   }
   return hasEntry ? result : null;
 }

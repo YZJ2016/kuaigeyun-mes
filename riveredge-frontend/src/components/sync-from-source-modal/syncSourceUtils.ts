@@ -15,6 +15,8 @@ const KINGDEE_TARGET_ALIASES: Record<string, string[]> = {
   product_code: ['FMaterialId.FNumber'],
   product_name: ['FMaterialId.FName'],
   quantity: [
+    'avbqty',
+    'qty',
     'FQty',
     'FPlanQty',
     'entryqty',
@@ -22,7 +24,14 @@ const KINGDEE_TARGET_ALIASES: Record<string, string[]> = {
     'entryentryqty',
     'entrychildnumerator',
     'billentryqty',
+    'baseqty',
   ],
+  material_code: ['material.number', 'material', 'number'],
+  material_name: ['material.name'],
+  warehouse_code: ['warehouse.number'],
+  warehouse_name: ['warehouse.name'],
+  batch_no: ['lotnum', 'lot_number', 'lot.number', 'lotnumber'],
+  unit: ['unit.number', 'unit.name', 'baseunit'],
   planned_start_date: ['FPlanStartDate'],
   planned_end_date: ['FPlanFinishDate', 'FPlanEndDate'],
   sales_order_code: ['FSaleOrderNo', 'FSrcBillNo'],
@@ -378,8 +387,16 @@ export function suggestTargetToSourceMapping(
   targetFields: string[],
 ): Record<string, string> {
   const mapping: Record<string, string> = {};
+  const columnByLower = new Map(columns.map((column) => [column.toLowerCase(), column]));
   for (const target of targetFields) {
-    const hit = columns.find((column) => columnMatchesTarget(column, target));
+    let hit: string | undefined;
+    for (const alias of KINGDEE_TARGET_ALIASES[target] ?? []) {
+      hit = columnByLower.get(alias.toLowerCase());
+      if (hit) break;
+    }
+    if (!hit) {
+      hit = columns.find((column) => columnMatchesTarget(column, target));
+    }
     if (hit) mapping[target] = hit;
   }
   return mapping;

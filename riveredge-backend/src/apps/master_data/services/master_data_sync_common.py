@@ -12,6 +12,7 @@ from apps.master_data.schemas.master_data_sync import VALID_SYNC_DIRECTIONS, VAL
 from core.services.data.sync_binding_sources import (
     normalize_sources_json,
     resolve_sources_from_request,
+    sources_for_persist,
     sources_from_row,
     validate_sources_for_match_key,
 )
@@ -107,7 +108,7 @@ async def upsert_sync_binding(
     sync_direction: str = "pull",
     schedule_interval_minutes: Optional[int] = None,
 ) -> TBinding:
-    normalized = normalize_sources_json(sources)
+    normalized = sources_for_persist(normalize_sources_json(sources))
     validate_sources_for_match_key(normalized, match_key_field)
 
     mode = normalize_sync_mode(sync_mode)
@@ -219,6 +220,10 @@ async def fetch_sync_rows(
     dataset_uuid: Optional[str],
     since: Optional[datetime] = None,
     active_only: bool = True,
+    request_body: Optional[Dict[str, Any]] = None,
+    request_params: Optional[Dict[str, Any]] = None,
+    batch_fill_path: Optional[str] = None,
+    batch_fill_values: Optional[List[str]] = None,
 ) -> List[Dict[str, Any]]:
     from core.services.data.sync_nested_expand import expand_nested_detail_rows
 
@@ -227,7 +232,14 @@ async def fetch_sync_rows(
             raise ValidationError("数据接口同步须指定接口")
         # API 路径已在 normalize_api_body_to_rows 内摊平；再跑一遍保持幂等
         rows = await fetch_rows_from_api(
-            tenant_id, api_uuid, since=since, active_only=active_only
+            tenant_id,
+            api_uuid,
+            since=since,
+            active_only=active_only,
+            request_body_override=request_body if isinstance(request_body, dict) else None,
+            request_params_override=request_params if isinstance(request_params, dict) else None,
+            batch_fill_path=str(batch_fill_path).strip() if batch_fill_path else None,
+            batch_fill_values=batch_fill_values,
         )
         return expand_nested_detail_rows(rows)
     if source_type == "dataset":
@@ -237,9 +249,35 @@ async def fetch_sync_rows(
         return expand_nested_detail_rows(rows)
     raise ValidationError("来源类型须为 api 或 dataset")
 
+def lookup_mapped_source_value(raw: Dict[str, Any], src_key: str) -> tuple[bool, Any]:
+    """按源列取值：先精确键（含苍穹 material.number），再按点号嵌套对象。"""
+    key = str(src_key or "")
+    if not key:
+        return False, None
+    if key in raw:
+        return True, raw[key]
+    if "." not in key:
+        return False, None
+    current: Any = raw
+    for part in key.split("."):
+        if not isinstance(current, dict) or part not in current:
+            return False, None
+        current = current[part]
+    return True, current
+
+
+def _mapped_value_blank(value: Any) -> bool:
+    if value is None:
+        return True
+    text = str(value).strip()
+    return text == "" or text in {"-", "--"}
+
+
 def map_sync_rows(
     raw_rows: List[Dict[str, Any]],
     field_mapping: Dict[str, str],
+    *,
+    empty_fallbacks: Optional[Dict[str, List[str]]] = None,
 ) -> List[Dict[str, Any]]:
     mapped_rows: List[Dict[str, Any]] = []
     for raw in raw_rows:
@@ -249,9 +287,28 @@ def map_sync_rows(
         for src_key, target_key in field_mapping.items():
             if not str(src_key).strip() or not str(target_key).strip():
                 continue
-            if src_key not in raw:
+            found, value = lookup_mapped_source_value(raw, src_key)
+            if not found:
                 continue
-            mapped[str(target_key).strip()] = raw[src_key]
+            mapped[str(target_key).strip()] = value
+        for target_key, source_keys in (empty_fallbacks or {}).items():
+            target = str(target_key).strip()
+            if not target:
+                continue
+            current = mapped.get(target)
+            needs_fallback = _mapped_value_blank(current)
+            if not needs_fallback and target == "quantity":
+                try:
+                    needs_fallback = float(str(current).strip()) == 0.0
+                except (TypeError, ValueError):
+                    needs_fallback = True
+            if not needs_fallback:
+                continue
+            for src_key in source_keys:
+                found, value = lookup_mapped_source_value(raw, str(src_key))
+                if found and not _mapped_value_blank(value):
+                    mapped[target] = value
+                    break
         if mapped:
             mapped_rows.append(mapped)
     return mapped_rows

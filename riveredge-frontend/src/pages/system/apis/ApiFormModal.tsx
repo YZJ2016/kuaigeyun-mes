@@ -2,7 +2,7 @@
  * 新建/编辑接口弹窗（Postman 式布局）
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ProFormDependency,
@@ -18,19 +18,15 @@ import { FormModalTemplate, MODAL_CONFIG } from '../../../components/layout-temp
 import type { DataConnectionGroupOption, IntegrationConfig } from '../../../services/integrationConfig';
 import { KingdeeExecuteBillQueryBodyEditor } from './KingdeeExecuteBillQueryBodyEditor';
 import { shouldShowKingdeeExecuteBillQueryWizard } from './kingdeeExecuteBillQuery';
-import {
-  CustomFieldJsonEditor,
-  CustomFieldJsonModeSegmented,
-  type CustomFieldJsonEditorMode,
-} from '../../../components/custom-fields/CustomFieldJsonEditor';
+import { CustomFieldJsonEditor } from '../../../components/custom-fields/CustomFieldJsonEditor';
 import {
   isEmptyJsonValue,
-  isFlatJsonObject,
   normalizeJsonFieldValue,
   parseJsonText,
 } from '../../../components/custom-fields/customFieldJsonUtils';
 import { FORM_LAYOUT } from '../../../components/layout-templates/constants';
 import {
+  applyRequestBodyFormDefaults,
   objectToKeyValueList,
   transformApiFormValues,
   type ApiFormRawValues,
@@ -103,84 +99,44 @@ interface ApiJsonFormFieldProps {
   placeholder?: string;
 }
 
-const resolveJsonEditorMode = (value: unknown): CustomFieldJsonEditorMode =>
-  isFlatJsonObject(value) || value == null ? 'kv' : 'source';
-
-const ApiJsonFormFieldContent: React.FC<
-  ApiJsonFormFieldProps & { fieldValue: unknown }
-> = ({ name, label, placeholder, fieldValue }) => {
-  const [mode, setMode] = useState<CustomFieldJsonEditorMode>(() => resolveJsonEditorMode(fieldValue));
-
-  useEffect(() => {
-    setMode(resolveJsonEditorMode(fieldValue));
-  }, [fieldValue]);
-
-  return (
-    <>
-      <Row align="middle" gutter={16} style={{ width: '100%', marginBottom: 8 }}>
-        <Col flex="auto">
-          <div className="ant-form-item-label" style={{ padding: 0, overflow: 'visible' }}>
-            <label>{label}</label>
-          </div>
-        </Col>
-        <Col flex="none">
-          <CustomFieldJsonModeSegmented mode={mode} onChange={setMode} />
-        </Col>
-      </Row>
-      <ProFormItem
-        name={name}
-        noStyle
-        rules={[
-          {
-            validator: async (_: unknown, value: unknown) => {
-              if (value == null || value === '') return;
-              if (typeof value === 'string') {
-                const parsed = parseJsonText(value);
-                if (!parsed.ok) throw new Error(parsed.error);
-                if (
-                  parsed.value != null &&
-                  (typeof parsed.value !== 'object' || Array.isArray(parsed.value))
-                ) {
-                  throw new Error('须为 JSON 对象');
-                }
-                return;
-              }
-              if (
-                !isEmptyJsonValue(value) &&
-                (typeof value !== 'object' || Array.isArray(value))
-              ) {
-                throw new Error('须为 JSON 对象');
-              }
-            },
-          },
-        ]}
-      >
-        <CustomFieldJsonEditor
-          placeholder={placeholder}
-          mode={mode}
-          onModeChange={setMode}
-          showModeToggle={false}
-        />
-      </ProFormItem>
-    </>
-  );
-};
-
 const ApiJsonFormField: React.FC<ApiJsonFormFieldProps> = ({ name, label, placeholder }) => (
   <div
     className="api-form-json-field"
     style={{ marginBottom: FORM_LAYOUT.ITEM_MARGIN_BOTTOM }}
   >
-    <ProFormDependency name={[name]}>
-      {(values) => (
-        <ApiJsonFormFieldContent
-          name={name}
-          label={label}
-          placeholder={placeholder}
-          fieldValue={values[name]}
-        />
-      )}
-    </ProFormDependency>
+    <div className="ant-form-item-label" style={{ padding: 0, marginBottom: 8, overflow: 'visible' }}>
+      <label>{label}</label>
+    </div>
+    <ProFormItem
+      name={name}
+      noStyle
+      rules={[
+        {
+          validator: async (_: unknown, value: unknown) => {
+            if (value == null || value === '') return;
+            if (typeof value === 'string') {
+              const parsed = parseJsonText(value);
+              if (!parsed.ok) throw new Error(parsed.error);
+              if (
+                parsed.value != null &&
+                (typeof parsed.value !== 'object' || Array.isArray(parsed.value))
+              ) {
+                throw new Error('须为 JSON 对象，请检查请求体');
+              }
+              return;
+            }
+            if (
+              !isEmptyJsonValue(value) &&
+              (typeof value !== 'object' || Array.isArray(value))
+            ) {
+              throw new Error('须为 JSON 对象，请检查请求体');
+            }
+          },
+        },
+      ]}
+    >
+      <CustomFieldJsonEditor placeholder={placeholder} />
+    </ProFormItem>
   </div>
 );
 
@@ -287,7 +243,7 @@ export const ApiFormModal: React.FC<ApiFormModalProps> = ({
                 </Col>
               </Row>
             </ProFormList>
-            <ProFormDependency name={['connection_uuid', 'path', 'request_body', 'request_headers']}>
+            <ProFormDependency name={['connection_uuid', 'path']}>
             {(values) => {
               const connectionType = connectionItems.find(
                 (item) => item.uuid === values.connection_uuid,
@@ -300,12 +256,16 @@ export const ApiFormModal: React.FC<ApiFormModalProps> = ({
                 )
               ) {
                 return (
-                  <KingdeeExecuteBillQueryBodyEditor
-                    connectionUuid={values.connection_uuid}
-                    path={values.path}
-                    value={values.request_body}
-                    requestHeaders={values.request_headers}
-                  />
+                  <ProFormDependency name={['request_body', 'request_headers']}>
+                    {(bodyValues) => (
+                      <KingdeeExecuteBillQueryBodyEditor
+                        connectionUuid={values.connection_uuid}
+                        path={values.path}
+                        value={bodyValues.request_body}
+                        requestHeaders={bodyValues.request_headers}
+                      />
+                    )}
+                  </ProFormDependency>
                 );
               }
               return (
@@ -525,7 +485,7 @@ export function normalizeApiFormInitialValues(
     is_system: detail.is_system,
     request_headers: objectToKeyValueList(detail.request_headers ?? undefined),
     request_params: objectToKeyValueList(detail.request_params ?? undefined),
-    request_body: normalizeJsonFieldValue(detail.request_body) ?? undefined,
+    request_body: applyRequestBodyFormDefaults(detail.request_body) ?? undefined,
     response_format: normalizeJsonFieldValue(detail.response_format) ?? undefined,
     response_example: normalizeJsonFieldValue(detail.response_example) ?? undefined,
     source_type_conversion_map_entries: detail.source_type_conversion_map
