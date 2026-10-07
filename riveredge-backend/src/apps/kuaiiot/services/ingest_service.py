@@ -500,7 +500,7 @@ class IngestService:
             status_value = (
                 normalize_equipment_status(fields.get("status"))
                 if "status" in fields
-                else MONITOR_STATUS_WHEN_ABSENT
+                else (latest.status if latest is not None else MONITOR_STATUS_WHEN_ABSENT)
             )
             is_online = fields["is_online"] if "is_online" in fields else True
         await EquipmentStatusMonitor.create(
