@@ -8,7 +8,7 @@
 			<action-button label="刷新" tone="secondary" :disabled="loading" @press="loadList" />
 		</view>
 		<text v-if="errorTextValue.length > 0" class="error">{{ errorTextValue }}</text>
-		<text v-if="!loading && rows.length == 0 && errorTextValue.length == 0" class="empty">暂无检验单</text>
+		<empty-state v-if="!loading && rows.length == 0 && errorTextValue.length == 0" title="暂无检验单" />
 		<view v-for="(row, index) in rows" :key="index" class="card">
 			<text class="title">{{ rowTitle(row) }}</text>
 			<text v-if="rowLine(row).length > 0" class="meta">{{ rowLine(row) }}</text>
@@ -145,6 +145,7 @@
 	import { request } from '../../../shared/api/index.uts'
 	import { uploadImage } from '../../../shared/api/upload.uts'
 	import { asJsonObject, errorText, fieldId, fieldText, readRows } from '../../../shared/api/fields.uts'
+	import EmptyState from '../../../shared/ui/empty-state.uvue'
 
 	defineOptions({
 		styleIsolation: 'app'

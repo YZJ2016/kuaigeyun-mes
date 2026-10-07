@@ -2,18 +2,30 @@
 	<view class="field-wrap">
 		<text class="label">{{ title }}</text>
 		<load-feedback :active="loading && !appending" :mode="loadSettled ? 'refresh' : 'initial'" />
-		<text class="hint">{{ selectedLabel.length > 0 ? selectedLabel : '尚未选择' }}</text>
-		<action-button :label="expanded ? '收起选择' : '选择' + title" tone="secondary" :disabled="disabled || loading" @press="toggle" />
-		<view v-if="expanded">
-			<input class="field" v-model="keyword" :disabled="disabled || loading" placeholder="输入编码或名称" @confirm="search" />
-			<action-button label="查询" :disabled="disabled" :busy="loading" @press="search" />
-			<action-button label="扫码选择设备" tone="secondary" v-if="kind == 'device'" :disabled="disabled || loading" @press="scanDevice" />
-			<action-button label="查看设备绑定方案" tone="secondary" v-if="kind == 'scheme' && Number(equipmentId) > 0" :disabled="disabled || loading" @press="bound" />
+		<button class="picker-field" hover-class="pressed" :disabled="disabled || loading" @click="toggle">
+			<text :class="shownLabel.length > 0 ? 'picker-value' : 'picker-placeholder'">{{ shownLabel.length > 0 ? shownLabel : '请选择' + title }}</text>
+			<text class="picker-chevron">{{ expanded ? '收起' : '›' }}</text>
+		</button>
+		<button v-if="expanded" class="picker-mask" :disabled="false" @click="toggle"></button>
+		<view v-if="expanded" class="picker-sheet">
+			<view class="sheet-head">
+				<text class="sheet-title">选择{{ title }}</text>
+				<button class="sheet-close" :disabled="false" @click="toggle">关闭</button>
+			</view>
+			<view class="sheet-tools">
+				<input class="field sheet-search" v-model="keyword" :disabled="disabled || loading" placeholder="输入编码或名称" @confirm="search" />
+				<action-button label="查询" :compact="true" :disabled="disabled" :busy="loading" @press="search" />
+				<action-button label="扫码选择" tone="secondary" :compact="true" v-if="kind == 'device'" :disabled="disabled || loading" @press="scanDevice" />
+				<action-button label="绑定方案" tone="secondary" :compact="true" v-if="kind == 'scheme' && Number(equipmentId) > 0" :disabled="disabled || loading" @press="bound" />
+			</view>
 			<text v-if="note.length > 0" class="hint">{{ note }}</text>
 			<text v-if="error.length > 0" class="error">{{ error }}</text>
-			<selection-row v-for="(row, index) in rows" :key="fieldNumber(row, 'id')" :label="label(row)" :selected="fieldNumber(row, 'id') == selectedId" :disabled="disabled || loading" @choose="choose(index)" />
-			<load-feedback :active="loading && appending" mode="more" />
-			<action-button v-if="rows.length < total" label="加载更多" :disabled="disabled || loading" @press="more" />
+			<load-feedback :active="loading && !appending" :mode="loadSettled ? 'refresh' : 'initial'" />
+			<scroll-view class="sheet-list" direction="vertical">
+				<selection-row v-for="(row, index) in rows" :key="fieldNumber(row, 'id')" :label="label(row)" :selected="fieldNumber(row, 'id') == selectedId" :disabled="disabled || loading" @choose="choose(index)" />
+				<load-feedback :active="loading && appending" mode="more" />
+				<action-button v-if="rows.length < total" label="加载更多" :disabled="disabled || loading" @press="more" />
+			</scroll-view>
 		</view>
 	</view>
 </template>
@@ -27,7 +39,8 @@
 	import { scan } from '../../../shared/channel/index.uts'
 	const props = defineProps({
 		kind: { type: String, default: 'device' }, title: { type: String, default: '设备' },
-		equipmentId: { type: String, default: '' }, disabled: { type: Boolean, default: false }
+		equipmentId: { type: String, default: '' }, disabled: { type: Boolean, default: false },
+		selectionText: { type: String, default: '' }
 	})
 	const emit = defineEmits(['choose'])
 	const expanded = ref(false)
@@ -38,6 +51,7 @@
 	const activeKeyword = ref('')
 	const selectedLabel = ref('')
 	const selectedId = ref(0)
+	const shownLabel = computed((): string => selectedLabel.value.length > 0 ? selectedLabel.value : props.selectionText)
 	const rows = ref<any[]>([])
 	const total = ref(0)
 	const note = ref('')
@@ -142,3 +156,17 @@
 		selectedLabel.value = ''; rows.value = []; total.value = 0; note.value = ''; error.value = ''; expanded.value = false
 	})
 </script>
+<style>
+	.picker-field { width: 100%; min-height: 48px; flex-direction: row; align-items: center; justify-content: space-between; background-color: #FFFFFF; border-width: 1px; border-style: solid; border-color: #64748B; border-radius: 8px; padding-top: 12px; padding-right: 12px; padding-bottom: 12px; padding-left: 12px; }
+	.picker-value { font-size: 15px; color: #28113C; }
+	.picker-placeholder { font-size: 15px; color: #94A3B8; }
+	.picker-chevron { font-size: 15px; color: #94A3B8; margin-left: 8px; }
+	.picker-mask { position: fixed; top: 0px; bottom: 0px; left: 0px; right: 0px; width: 100%; height: 100%; min-height: 0px; padding: 0px; margin: 0px; border-width: 0px; border-radius: 0px; background-color: rgba(15, 23, 42, 0.45); z-index: 98; }
+	.picker-sheet { position: fixed; bottom: 0px; left: 0px; right: 0px; height: 72%; z-index: 99; background-color: #F8FAFC; border-top-left-radius: 16px; border-top-right-radius: 16px; padding-top: 14px; padding-right: 16px; padding-bottom: 16px; padding-left: 16px; flex-direction: column; }
+	.sheet-head { flex-direction: row; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+	.sheet-title { font-size: 16px; font-weight: 700; color: #28113C; }
+	.sheet-close { width: auto; min-height: 0px; height: auto; margin: 0px; padding-top: 6px; padding-right: 4px; padding-bottom: 6px; padding-left: 8px; border-width: 0px; background-color: transparent; font-size: 15px; line-height: 21px; color: #9730E3; }
+	.sheet-tools { flex-direction: row; align-items: center; flex-wrap: wrap; }
+	.sheet-search { flex: 1; margin-right: 8px; }
+	.sheet-list { flex: 1; margin-top: 4px; }
+</style>

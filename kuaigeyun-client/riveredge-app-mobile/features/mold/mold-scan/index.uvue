@@ -1,7 +1,7 @@
 <template>
 	<view class="page-shell">
 		<home-link />
-	<view class="page">
+	<scroll-view class="page" direction="vertical">
 		<action-button label="扫码" tone="primary" :disabled="loading" @press="onScan" />
 		<text v-if="scanned != ''" class="meta">扫到 {{ scanned }}</text>
 		<text v-if="hint != ''" class="error">{{ hint }}</text>
@@ -16,8 +16,8 @@
 				<text class="meta">{{ item.detail }}</text>
 			</action-card>
 		</view>
-		<text v-if="!loading && scanned != '' && !hasOpened && choices.length == 0 && hint == ''" class="empty">未找到模具</text>
-	</view>
+		<empty-state v-if="!loading && scanned != '' && !hasOpened && choices.length == 0 && hint == ''" title="未找到模具" icon="/static/workbench-icons/workshop/search.svg" />
+		</scroll-view>
 		<load-feedback :active="loading" mode="blocking" label="正在解析扫码内容" />
 	</view>
 </template>
@@ -30,6 +30,7 @@
 	import { scan } from '../../../shared/channel/index.uts'
 	import { DocLine, MOLD_ARCHIVE, apiGetRows, withQuery } from '../http.uts'
 	import { errorText, fieldNumber, fieldText } from '../../../shared/api/fields.uts'
+	import EmptyState from '../../../shared/ui/empty-state.uvue'
 
 	const loading = ref(false)
 	let ticket = 0

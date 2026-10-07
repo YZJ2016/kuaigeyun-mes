@@ -8,12 +8,12 @@
 			<action-button label="刷新" tone="secondary" :disabled="loading || detailLoading || busy" @press="reload" />
 			<text v-if="queryUuid.length > 0" class="hint">以下为该设备的故障</text>
 			<text v-if="errorText.length > 0" class="error">{{ errorText }}</text>
-			<text v-if="!loading && rows.length == 0 && errorText.length == 0" class="empty">暂无记录</text>
+			<empty-state v-if="!loading && rows.length == 0 && errorText.length == 0" title="暂无记录" :compact="true" />
 			<action-card v-for="item in rows" :key="item.rowKey" @press="openFault(item.faultUuid)" :disabled="loading || detailLoading || busy" variant="row">
 				<text class="item-title">{{ item.title }}</text>
 				<text class="hint">{{ item.detail }}</text>
 			</action-card>
-			<text v-if="total > 0" class="hint">已显示 {{ rows.length }} / {{ total }} 条</text>
+			<text v-if="total > 0" class="list-count">已显示 {{ rows.length }} / 共 {{ total }} 条</text>
 			<load-feedback :active="loading && loadMode == 'more'" mode="more" />
 			<action-button label="加载更多" tone="secondary" v-if="rows.length < total" :disabled="loading || detailLoading || busy" @press="loadMore" />
 		</view>
@@ -41,9 +41,9 @@
 		</view>
 		<view class="card">
 			<text class="title">新建故障</text>
-			<text v-if="equipmentLabel.length > 0" class="hint">{{ equipmentLabel }}</text>
-			<text class="label" id="fault-field-equipment">故障设备</text>
-			<master-picker kind="device" title="故障设备" :disabled="loading || detailLoading || busy" @choose="chooseEquipment" />
+			<view id="fault-field-equipment">
+				<master-picker kind="device" title="故障设备" :selection-text="equipmentLabel" :disabled="loading || detailLoading || busy" @choose="chooseEquipment" />
+			</view>
 			<text v-if="equipmentError.length > 0" class="error">{{ equipmentError }}</text>
 			<text class="hint">故障类型：{{ faultType }}</text>
 			<view class="choices">
@@ -82,6 +82,7 @@
 	import { request } from '../../../shared/api/index.uts'
 	import { asJsonObject, fieldInt, fieldText, readRows } from '../../../shared/api/fields.uts'
 	import { joinParts, readError } from '../json-text.uts'
+	import EmptyState from '../../../shared/ui/empty-state.uvue'
 
 	type ListRow = {
 		rowKey: string

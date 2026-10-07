@@ -12,8 +12,8 @@
 			</view>
 			<action-button label="查询" tone="primary" :disabled="loading" @press="search" />
 			<action-button label="刷新当前查询" tone="secondary" :disabled="loading" @press="refreshList" />
-			<text class="sub">已加载 {{ rows.length }} / {{ total }} 条</text>
-			<text v-if="!loading && rows.length == 0 && errorTextValue.length == 0" class="empty">暂无工单</text>
+			<text v-if="total > 0" class="list-count">已显示 {{ rows.length }} / 共 {{ total }} 条</text>
+			<empty-state v-if="!loading && rows.length == 0 && errorTextValue.length == 0" title="暂无工单" />
 			<action-card v-for="(row, index) in rows" :key="index" @press="openDetail(index)" :disabled="loading">
 				<text class="title">{{ lineTitle(row) }}</text>
 				<text class="sub">{{ lineSub(row) }}</text>
@@ -45,6 +45,7 @@
 	import { readCurrentUser } from '../session.uts'
 	import { toast } from '../json.uts'
 	import { navigateToPage } from '../../../shared/ui/navigate.uts'
+	import EmptyState from '../../../shared/ui/empty-state.uvue'
 
 	const rows = ref<any[]>([])
 	const loading = ref(false)

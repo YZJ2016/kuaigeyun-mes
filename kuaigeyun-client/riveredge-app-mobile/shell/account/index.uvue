@@ -2,8 +2,9 @@
 	<view class="page-shell">
 		<home-link />
 	<scroll-view class="page" direction="vertical">
-		<load-feedback :active="loading" :mode="loadSettled ? 'refresh' : 'initial'" />
+		<load-feedback :active="loading || refreshing" :mode="loadSettled ? 'refresh' : 'initial'" />
 		<text v-if="errorText.length > 0" class="error">{{ errorText }}</text>
+		<view v-if="!loading || loadSettled">
 		<view class="card identity">
 			<image v-if="avatarSrc.length > 0" class="avatar-img" :src="avatarSrc" mode="aspectFill"></image>
 			<view v-else class="avatar-fallback">
@@ -63,6 +64,7 @@
 		<button class="logout" hover-class="pressed" @click="askLogout" :disabled="loading || busy">
 			<text class="logout-text">退出登录</text>
 		</button>
+		</view>
 	</scroll-view>
 	</view>
 </template>
@@ -84,6 +86,7 @@
 	}
 
 	const loading = ref(false)
+	const refreshing = ref(false)
 	const loadSettled = ref(false)
 	const errorText = ref('')
 	const headerName = ref('已登录')
@@ -209,7 +212,11 @@
 			leave()
 			return
 		}
-		loading.value = true
+		if (loadSettled.value) {
+			refreshing.value = true
+		} else {
+			loading.value = true
+		}
 		errorText.value = ''
 		if (code.length > 0) {
 			try {
@@ -227,6 +234,7 @@
 		}
 		if (getToken().length == 0) {
 			loading.value = false
+			refreshing.value = false
 			leave()
 			return
 		}
@@ -277,6 +285,7 @@
 			return
 		}
 		loading.value = false
+		refreshing.value = false
 		loadSettled.value = true
 		if (getToken().length == 0) {
 			leave()

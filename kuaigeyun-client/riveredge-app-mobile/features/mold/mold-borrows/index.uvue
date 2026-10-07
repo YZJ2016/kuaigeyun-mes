@@ -4,11 +4,7 @@
 	<scroll-view class="page" direction="vertical">
 		<load-feedback :active="loading" :mode="loadSettled ? 'refresh' : 'initial'" />
 		<text class="section">模具</text>
-		<text class="label">模具编码或名称</text>
-		<input class="field" v-model="moldKeyword" :disabled="loading || submitting" placeholder="编码或名称" />
-		<action-button label="查找模具" tone="secondary" :disabled="loading || submitting" @press="searchMolds" />
-		<selection-row v-for="(item, index) in moldOptions" :key="item.id" :label="item.label" :selected="moldId == item.id" :disabled="loading || submitting" @choose="chooseMold(index)" />
-		<text v-if="chosenMold != ''" class="meta">已选 {{ chosenMold }}</text>
+		<sheet-picker title="模具" :options="moldSheetOptions" :selected-id="moldId" :selection-text="chosenMold" :loading="loading" :disabled="loading || submitting" :error="hint" @search="onMoldSearch" @choose="chooseMold" />
 		<date-field label="领用日期" v-model="borrowDate" :disabled="loading || submitting" />
 		<text class="label">领用人</text>
 		<input class="field" v-model="borrowerName" :disabled="loading || submitting" placeholder="领用人" />
@@ -27,7 +23,7 @@
 			<text class="title">{{ item.title }}</text>
 			<text class="meta">{{ item.detail }}</text>
 		</view>
-		<text v-if="!loading && rows.length == 0 && hint == ''" class="empty">暂无领用</text>
+		<empty-state v-if="!loading && rows.length == 0 && hint == ''" title="暂无领用" :compact="true" />
 	</scroll-view>
 	</view>
 </template>
@@ -35,7 +31,7 @@
 <script setup lang="uts">
 	import LoadFeedback from '../../../shared/ui/load-feedback.uvue'
 	import DateField from '../../../shared/ui/date-field.uvue'
-	import SelectionRow from '../../../shared/ui/selection-row.uvue'
+	import SheetPicker from '../../../shared/ui/sheet-picker.uvue'
 	import ActionButton from '../../../shared/ui/action-button.uvue'
 	import HomeLink from '../../../shared/ui/home-link.uvue'
 	import {
@@ -49,13 +45,17 @@
 		joinParts,
 		mapNamedOptions,
 		putText,
+		toSheetOptions,
 		todayDate,
 		withQuery
 	} from '../http.uts'
 	import { errorText, fieldText } from '../../../shared/api/fields.uts'
+	import { SheetOption } from '../../../shared/ui/sheet-option.uts'
+	import EmptyState from '../../../shared/ui/empty-state.uvue'
 
 	const moldKeyword = ref('')
 	const moldOptions = ref<NamedOption[]>([])
+	const moldSheetOptions = computed((): SheetOption[] => toSheetOptions(moldOptions.value))
 	const moldId = ref(0)
 	const chosenMold = ref('')
 	const borrowDate = ref('')
@@ -77,6 +77,11 @@
 	function syncLoading(): void {
 		loading.value = listOpen || moldOpen
 		if (!loading.value) { loadSettled.value = true }
+	}
+
+	function onMoldSearch(keyword: string): void {
+		moldKeyword.value = keyword
+		searchMolds()
 	}
 
 	function chooseMold(index: number): void {

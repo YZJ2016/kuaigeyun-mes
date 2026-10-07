@@ -2,9 +2,9 @@
 	<view class="page-shell">
 		<home-link />
 	<scroll-view class="page" direction="vertical">
-		<load-feedback :active="loading" :mode="loadSettled ? 'refresh' : 'initial'" />
+		<load-feedback :active="loading || refreshing" :mode="loadSettled ? 'refresh' : 'initial'" />
 		<text v-if="errorText.length > 0" class="error">{{ errorText }}</text>
-		<text v-if="!loading && empty && openedScope.length == 0" class="empty">没有可显示的入口</text>
+		<empty-state v-if="!loading && empty && openedScope.length == 0" title="没有可显示的入口" />
 		<view v-if="openedScope.length == 0">
 			<button v-for="(block, index) in scopes" :key="block.scope" class="scope-card" :disabled="loading" hover-class="pressed" @click="openScope(index)">
 				<view :class="tileClass(block.scope)">
@@ -52,10 +52,12 @@
 	import { getToken } from '../../shared/api/session.uts'
 	import { openRegisteredRoute } from '../registry/index.uts'
 	import { iconAsset, iconMark, markClass, scopeIcon, scopeTitle, tileClass } from '../workbench/icons.uts'
-	import { loadWorkbench } from '../workbench/load.uts'
+	import { loadWorkbench, readWorkbenchCache } from '../workbench/load.uts'
 	import type { WorkCell, WorkScope } from '../workbench/load.uts'
+	import EmptyState from '../../shared/ui/empty-state.uvue'
 
 	const loading = ref(false)
+	const refreshing = ref(false)
 	const loadSettled = ref(false)
 	const scopes = ref<Array<WorkScope>>([])
 	const empty = ref(false)
@@ -70,7 +72,11 @@
 		}
 		const mine = ticket + 1
 		ticket = mine
-		loading.value = true
+		if (scopes.value.length > 0) {
+			refreshing.value = true
+		} else {
+			loading.value = true
+		}
 		empty.value = false
 		errorText.value = ''
 		try {
@@ -84,14 +90,19 @@
 			if (ticket != mine) {
 				return
 			}
-			scopes.value = []
-			empty.value = false
-			errorText.value = err instanceof Error ? err.message : '工作台未能加载'
+			if (scopes.value.length > 0) {
+				uni.showToast({ title: '刷新失败，显示的是上一次数据', icon: 'none' })
+			} else {
+				scopes.value = []
+				empty.value = false
+				errorText.value = err instanceof Error ? err.message : '工作台未能加载'
+			}
 		}
 		if (ticket != mine) {
 			return
 		}
 		loading.value = false
+		refreshing.value = false
 		loadSettled.value = true
 	}
 
@@ -165,6 +176,13 @@
 	})
 
 	onShow(() => {
+		if (scopes.value.length == 0) {
+			const cached = readWorkbenchCache()
+			if (cached != null) {
+				scopes.value = cached
+				loadSettled.value = true
+			}
+		}
 		refresh()
 	})
 </script>

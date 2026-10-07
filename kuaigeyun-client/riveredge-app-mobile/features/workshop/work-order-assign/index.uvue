@@ -1,7 +1,7 @@
 <template>
 	<view class="page-shell">
 		<home-link />
-	<view class="page">
+	<scroll-view class="page" direction="vertical">
 		<load-feedback :active="loading && !submitting" :mode="loadSettled ? 'refresh' : 'initial'" />
 		<text v-if="errorTextValue.length > 0" class="error">{{ errorTextValue }}</text>
 		<view v-if="selectedOrder == null">
@@ -39,7 +39,7 @@
 			<input :disabled="loading || submitting" class="field" v-model="remarks" placeholder="备注（可空）" />
 			<action-button label="指派" tone="primary" :busy="submitting" busy-label="指派中" @press="submitDispatch" :disabled="loading || submitting" />
 		</view>
-	</view>
+		</scroll-view>
 	</view>
 </template>
 

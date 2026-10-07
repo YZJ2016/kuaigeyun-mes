@@ -1,4 +1,5 @@
 import { isDateText as validDateText, todayDate as currentDateText } from '../../shared/ui/date.uts'
+import { SheetOption, sheetOption } from '../../shared/ui/sheet-option.uts'
 import { request } from '../../shared/api/index.uts'
 import { asJsonObject, fieldNumber, fieldText, readRows } from '../../shared/api/fields.uts'
 
@@ -60,6 +61,14 @@ export function todayDate(): string { return currentDateText() }
 export class NamedOption {
 	id: number = 0
 	label: string = ''
+}
+
+export function toSheetOptions(items: NamedOption[]): SheetOption[] {
+	const rows: SheetOption[] = []
+	for (let i = 0; i < items.length; i++) {
+		rows.push(sheetOption(items[i].id, items[i].label))
+	}
+	return rows
 }
 
 export function mapNamedOptions(items: UTSJSONObject[]): NamedOption[] {

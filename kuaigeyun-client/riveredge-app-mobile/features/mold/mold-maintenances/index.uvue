@@ -4,20 +4,15 @@
 	<scroll-view class="page" direction="vertical">
 		<load-feedback :active="loading" :mode="loadSettled ? 'refresh' : 'initial'" />
 		<text class="section">模具</text>
-		<text class="label">模具编码或名称</text>
-		<input class="field" v-model="moldKeyword" :disabled="loading || submitting" placeholder="编码或名称" />
-		<action-button label="查找模具" :disabled="loading || submitting" @press="searchMolds" />
-		<selection-row v-for="(item, index) in moldOptions" :key="item.id" :label="item.label" :selected="item.id == moldId" :disabled="loading || submitting" @choose="chooseMold(index)" />
-		<text v-if="chosenMold != ''" class="meta">已选 {{ chosenMold }}</text>
+		<sheet-picker title="模具" :options="moldSheetOptions" :selected-id="moldId" :selection-text="chosenMold" :loading="loading" :disabled="loading || submitting" :error="hint" @search="onMoldSearch" @choose="chooseMold" />
 		<text class="section">保养方案（不选则用模具默认方案）</text>
-		<selection-row v-for="(item, index) in schemeOptions" :key="item.id" :label="item.label" :selected="item.id == schemeId" :disabled="loading || submitting" @choose="chooseScheme(index)" />
-		<text v-if="chosenScheme != ''" class="meta">已选方案 {{ chosenScheme }}</text>
+		<sheet-picker title="保养方案" :options="schemeSheetOptions" :selected-id="schemeId" :selection-text="chosenScheme" :loading="loading" :disabled="loading || submitting" :searchable="false" empty-title="没有可选方案" @choose="chooseScheme" />
 		<date-field v-model="maintenanceDate" label="保养日期" :disabled="loading || submitting" />
 		<text class="label">备注（可选）</text>
 		<input class="field" v-model="remark" :disabled="loading || submitting" placeholder="备注" />
 		<text class="section">方案明细</text>
 		<selection-row v-for="(item, index) in previewLines" :key="index" :label="item.label" :selected="item.executed" selected-label="已执行" unselected-label="未执行" :disabled="loading || submitting" @choose="toggleExecuted(index)" />
-		<text v-if="!loading && previewLines.length == 0" class="empty">无明细</text>
+		<empty-state v-if="!loading && previewLines.length == 0" title="无明细" :compact="true" />
 		<action-button label="创建保养" tone="primary" :busy="submitting" :disabled="loading" @press="createMaintenance" />
 		<text v-if="hint != ''" class="error">{{ hint }}</text>
 		<text class="section">保养记录</text>
@@ -28,7 +23,7 @@
 			<text class="title">{{ item.title }}</text>
 			<text class="meta">{{ item.detail }}</text>
 		</view>
-		<text v-if="!loading && rows.length == 0 && hint == ''" class="empty">暂无保养</text>
+		<empty-state v-if="!loading && rows.length == 0 && hint == ''" title="暂无保养" :compact="true" />
 	</scroll-view>
 	</view>
 </template>
@@ -38,6 +33,7 @@
 	import HomeLink from '../../../shared/ui/home-link.uvue'
 	import ActionButton from '../../../shared/ui/action-button.uvue'
 	import SelectionRow from '../../../shared/ui/selection-row.uvue'
+	import SheetPicker from '../../../shared/ui/sheet-picker.uvue'
 	import DateField from '../../../shared/ui/date-field.uvue'
 	import {
 		DocLine,
@@ -54,15 +50,20 @@
 		mapNamedOptions,
 		putText,
 		readPreviewLines,
+		toSheetOptions,
 		todayDate,
 		toPcLines,
 		withQuery
 	} from '../http.uts'
 	import { errorText, fieldText } from '../../../shared/api/fields.uts'
+	import { SheetOption } from '../../../shared/ui/sheet-option.uts'
+	import EmptyState from '../../../shared/ui/empty-state.uvue'
 
 	const moldKeyword = ref('')
 	const moldOptions = ref<NamedOption[]>([])
+	const moldSheetOptions = computed((): SheetOption[] => toSheetOptions(moldOptions.value))
 	const schemeOptions = ref<NamedOption[]>([])
+	const schemeSheetOptions = computed((): SheetOption[] => toSheetOptions(schemeOptions.value))
 	const moldId = ref(0)
 	const schemeId = ref(0)
 	const chosenMold = ref('')
@@ -88,6 +89,11 @@
 	function syncLoading(): void {
 		loading.value = listOpen || moldOpen || schemeOpen || previewOpen
 		if (!loading.value) { loadSettled.value = true }
+	}
+
+	function onMoldSearch(keyword: string): void {
+		moldKeyword.value = keyword
+		searchMolds()
 	}
 
 	function chooseMold(index: number): void {

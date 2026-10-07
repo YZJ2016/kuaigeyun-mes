@@ -11,7 +11,7 @@
 		<text v-if="hint.length > 0" class="error">{{ hint }}</text>
 
 		<view v-if="selectedId == 0">
-			<text v-if="!loading && cards.length == 0" class="empty">没有数据</text>
+			<empty-state v-if="!loading && cards.length == 0" title="没有数据" />
 			<action-card v-for="(card, index) in cards" :key="index" @press="openCard(index)" :disabled="loading || busy">
 				<text class="title">{{ card.title }}</text>
 				<text v-if="card.status.length > 0" :class="statusClass(card.status)">{{ card.status }}</text>
@@ -130,6 +130,7 @@
 	import { buildAlertBody, buildInboundBody, buildOutboundBody, buildSalesBody, buildStockBody, serialList } from './payload.uts'
 	import { errorText } from '../../shared/api/fields.uts'
 	import { readCards, readDetail, readTotal } from './read.uts'
+	import EmptyState from '../../shared/ui/empty-state.uvue'
 
 	defineOptions({
 		styleIsolation: 'app'

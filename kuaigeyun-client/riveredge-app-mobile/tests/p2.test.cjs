@@ -255,7 +255,7 @@ test('badge retains explicit zero and uses the installed uni-ui x implementation
   assert.ok(text.includes(':always-wrap-with-content="true"'));
   assert.ok(text.includes('uni_modules/uni-badge-view/'));
   const page=script('shared/ui/status-badge.uvue',{value:'0',tone:'danger'});
-  assert.match(page.run('badgeStyle.value'),/#991B1B/);
+  assert.match(page.run('badgeStyle.value'),/#EF4444/);
 });
 
 test('quality list settlement ignores superseded responses and retains rows during refresh',async()=>{
@@ -325,9 +325,9 @@ test('apps page keeps groups during refresh after the first load settles',async(
   pending[0]([{scope:'workshop',sections:[],errorText:'',badgeNote:'',showBadge:false,pendingCount:0,pendingText:'',overdueCount:0,overdueText:''}]);await first;
   assert.equal(page.run('loading.value'),false);assert.equal(page.run('loadSettled.value'),true);assert.equal(page.run('scopes.value.length'),1);
   const second=page.run('refresh()');
-  assert.equal(page.run('loading.value'),true);assert.equal(page.run('scopes.value.length'),1);
+  assert.equal(page.run('loading.value'),false);assert.equal(page.run('refreshing.value'),true);assert.equal(page.run('scopes.value.length'),1);
   pending[1]([]);await second;
-  assert.equal(page.run('loading.value'),false);assert.equal(page.run('loadSettled.value'),true);
+  assert.equal(page.run('loading.value'),false);assert.equal(page.run('refreshing.value'),false);assert.equal(page.run('loadSettled.value'),true);
 });
 test('migrated shell pages use shared loading feedback without the removed dark mask',()=>{
   for(const file of ['shell/login/index.uvue','shell/account/index.uvue','shell/account/edit.uvue','shell/account/password.uvue','shell/apps/index.uvue','shell/tenant/index.uvue','App.uvue']) {

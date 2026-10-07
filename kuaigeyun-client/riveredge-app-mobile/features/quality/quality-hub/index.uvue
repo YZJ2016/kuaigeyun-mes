@@ -7,7 +7,7 @@
 			<action-button label="刷新" tone="secondary" :disabled="loading" @press="loadSummary" />
 		</view>
 		<text v-if="errorTextValue.length > 0" class="error">{{ errorTextValue }}</text>
-		<text v-if="!loading && pendingRows.length == 0 && errorTextValue.length == 0" class="empty">汇总里没有待检项</text>
+		<empty-state v-if="!loading && pendingRows.length == 0 && errorTextValue.length == 0" title="汇总里没有待检项" />
 		<action-card v-for="(row, index) in pendingRows" :key="index" @press="openRow(index)" :disabled="loading">
 			<text class="title">{{ row.label }}</text>
 			<text class="meta">待检 {{ row.countText }}</text>
@@ -25,6 +25,7 @@
 	import { errorText } from '../../../shared/api/fields.uts'
 	import { openRegisteredRoute } from '../../../shell/registry/index.uts'
 	import { featurePackage } from '../index.uts'
+	import EmptyState from '../../../shared/ui/empty-state.uvue'
 
 	class PendingRow {
 		label : string = ''

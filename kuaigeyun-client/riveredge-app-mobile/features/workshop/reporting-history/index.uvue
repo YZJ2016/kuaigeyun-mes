@@ -1,20 +1,20 @@
 <template>
 	<view class="page-shell">
 		<home-link />
-	<view class="page">
+	<scroll-view class="page" direction="vertical">
 		<load-feedback :active="loading && loadMode != 'more'" :mode="loadMode" />
 		<action-button label="刷新" tone="secondary" :disabled="loading" @press="refreshList" />
 		<text v-if="errorTextValue.length > 0" class="error">{{ errorTextValue }}</text>
 		<action-button label="重试" tone="secondary" v-if="errorTextValue.length > 0" :disabled="loading" @press="retry" />
-		<text v-if="!loading && rows.length == 0 && errorTextValue.length == 0" class="empty">暂无报工</text>
+		<empty-state v-if="!loading && rows.length == 0 && errorTextValue.length == 0" title="暂无报工" />
 		<view v-for="(row, index) in rows" :key="index" class="card">
 			<text class="title">{{ lineTitle(row) }}</text>
 			<text class="sub">{{ lineSub(row) }}</text>
 		</view>
 		<load-feedback :active="loading && loadMode == 'more'" mode="more" />
-		<text class="sub">已加载 {{ rows.length }} / 共 {{ total }} 条</text>
+		<text v-if="total > 0" class="list-count">已显示 {{ rows.length }} / 共 {{ total }} 条</text>
 		<action-button label="加载更多" tone="secondary" v-if="rows.length < total" :disabled="loading" @press="loadMore" />
-	</view>
+		</scroll-view>
 	</view>
 </template>
 
@@ -25,6 +25,7 @@
 	import { request } from '../../../shared/api/index.uts'
 	import { readRows, fieldText, fieldNumber, errorText } from '../../../shared/api/fields.uts'
 	import { readCurrentUser } from '../session.uts'
+	import EmptyState from '../../../shared/ui/empty-state.uvue'
 
 	const pageSize = 20
 	const rows = ref<any[]>([])

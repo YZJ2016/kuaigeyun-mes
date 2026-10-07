@@ -1,7 +1,7 @@
 <template>
 	<view class="page-shell">
 		<home-link />
-	<view class="page">
+	<scroll-view class="page" direction="vertical">
 		<load-feedback :active="loading" :mode="loadSettled ? 'refresh' : 'initial'" />
 		<action-button label="刷新" tone="secondary" @press="loadList"  :disabled="loading" />
 		<text v-if="hint != ''" class="error">{{ hint }}</text>
@@ -9,8 +9,8 @@
 			<text class="title">{{ item.title }}</text>
 			<text class="meta">{{ item.detail }}</text>
 		</view>
-		<text v-if="!loading && rows.length == 0 && hint == ''" class="empty">暂无保养提醒</text>
-	</view>
+		<empty-state v-if="!loading && rows.length == 0 && hint == ''" title="暂无保养提醒" />
+		</scroll-view>
 	</view>
 </template>
 
@@ -20,6 +20,7 @@
 	import HomeLink from '../../../shared/ui/home-link.uvue'
 	import { DocLine, MOLD_REMINDERS, apiGetRows, joinParts, withQuery } from '../http.uts'
 	import { errorText, fieldText } from '../../../shared/api/fields.uts'
+	import EmptyState from '../../../shared/ui/empty-state.uvue'
 
 	const rows = ref<DocLine[]>([])
 	const hint = ref('')
