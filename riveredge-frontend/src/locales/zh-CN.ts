@@ -30089,10 +30089,14 @@ export default {
     '生产执行报表分组再次置底',
   'pages.dashboard.updateLog.entries.kuaizhizao-reports-menu-last-r02.description':
     '报工统计移到异常管理之后、报表分组之前；前端误挂进报表下的异常统计收回异常管理；生产报表分组保持模块末位。',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-deliverables-menu-r01.title':
+    '福尼特OA研发项目增加交付物菜单',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-deliverables-menu-r01.description':
+    '快研发应用菜单已隐藏时，可在福尼特OA「研发项目」下直接进入交付物列表（含无项目直管）。L30-L41 使用说明路径已改为福尼特OA表述。',
   'pages.dashboard.updateLog.entries.funide-oa-knowledge-base-menu-short-r01.title':
     '文控资料知识库菜单简称',
   'pages.dashboard.updateLog.entries.funide-oa-knowledge-base-menu-short-r01.description':
-    '文控资料下「知识库与体系归档」改为「知识库」，与快研发菜单用语一致。',
+    '文控资料下「知识库与体系归档」改为「知识库」，与 PLM 菜单用语一致。',
   'pages.dashboard.updateLog.entries.funide-oa-reports-menu-last-r01.title':
     '定制OA报表菜单置底',
   'pages.dashboard.updateLog.entries.funide-oa-reports-menu-last-r01.description':
