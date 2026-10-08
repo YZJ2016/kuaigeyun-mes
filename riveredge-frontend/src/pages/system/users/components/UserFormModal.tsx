@@ -474,6 +474,15 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
         roleUuidsDraft ??
         (isEdit ? formInitialValues?.role_uuids : undefined);
       const normalizedRoleUuids = normalizeRoleUuids(rawRoleValue);
+      // 角色纯度（STN-D14）：station（触屏专用）不得与 internal/external 混挂。
+      // meta 缺失的角色类型按未知跳过，最终由服务端 purity 校验兜底。
+      const knownRoleTypes = normalizedRoleUuids
+        .map((uuid) => String(roleMetaByUuid[uuid]?.role_type ?? '').trim().toLowerCase())
+        .filter(Boolean);
+      if (knownRoleTypes.includes('station') && knownRoleTypes.some((type) => type !== 'station')) {
+        messageApi.error(t('field.user.errorRoleTypeStationMixed'));
+        return;
+      }
       if (isEdit || normalizedRoleUuids.length > 0 || rawRoleValue !== undefined) {
         submitData.role_uuids = normalizedRoleUuids;
       }

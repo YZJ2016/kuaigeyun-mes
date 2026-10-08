@@ -36471,6 +36471,7 @@ export default {
   'field.user.errorDepartmentInvalid': '选择的部门不存在或不属于当前组织，请重新选择',
   'field.user.errorPositionInvalid': '选择的职位不存在或不属于当前组织，请重新选择',
   'field.user.errorRoleInvalid': '选择的角色不存在或无效，请重新选择',
+  'field.user.errorRoleTypeStationMixed': '触屏专用（工位）角色不能与内部/外部角色同时绑定，请分开保存',
   'field.user.errorPhoneInvalid': '手机号格式不正确或已被使用，请检查后重新输入',
   'field.user.errorEmailInvalid': '邮箱格式不正确或已被使用，请检查后重新输入',
   'field.user.errorNoPermission': '您没有权限执行此操作，请联系管理员',

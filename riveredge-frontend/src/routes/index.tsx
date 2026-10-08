@@ -18,8 +18,10 @@ import React, { Suspense } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import BasicLayout from '../layouts/BasicLayout';
 import PlatformInfraPathNormalizer from '../components/PlatformInfraPathNormalizer';
+import StationAccessGate from '../components/station-access-gate';
 import { isPlatformInfraPublicPath } from '../utils/platformScope';
 import { isStaticLikePathname, isTenantEntryPathname } from '../utils/tenantDomainAccess';
+import { isStationEntryPath } from '../utils/clientChannel';
 // 系统核心路由（不依赖应用加载）
 import SystemRoutes from './SystemRoutes';
 // 应用业务路由（异步加载，隔离错误）
@@ -86,6 +88,11 @@ const useShouldRenderLayout = (): boolean => {
     return false;
   }
 
+  // 工位入口及其子路径用独立 StationLayout，不渲染 BasicLayout/UniTabs/侧栏
+  if (isStationEntryPath(pathname)) {
+    return false;
+  }
+
   // 其他所有路由都需要 BasicLayout
   return true;
 };
@@ -110,27 +117,31 @@ const MainRoutes: React.FC = () => {
   return (
     <>
       <PlatformInfraPathNormalizer />
-      {shouldRenderLayout ? (
-        <BasicLayout>
-          <Routes>
-            {/* 应用业务路由 - 异步加载，失败不影响系统 */}
-            {/* ⚠️ 重要：必须放在 SystemRoutes 之前，确保 /apps/* 路径优先匹配 */}
-            <Route path="/apps/*" element={<AppRoutes />} />
+      <StationAccessGate>
+        {shouldRenderLayout ? (
+          <BasicLayout>
+            <Routes>
+              {/* 应用业务路由 - 异步加载，失败不影响系统 */}
+              {/* ⚠️ 重要：必须放在 SystemRoutes 之前，确保 /apps/* 路径优先匹配 */}
+              <Route path="/apps/*" element={<AppRoutes />} />
 
-            {/* 系统核心路由 - 立即可用，不依赖应用加载 */}
-            {/* ⚠️ 注意：SystemRoutes 中的路由已经移除了 BasicLayout 包裹，直接返回页面组件 */}
+              {/* 系统核心路由 - 立即可用，不依赖应用加载 */}
+              {/* ⚠️ 注意：SystemRoutes 中的路由已经移除了 BasicLayout 包裹，直接返回页面组件 */}
+              <Route path="/*" element={<SystemRoutes />} />
+            </Routes>
+          </BasicLayout>
+        ) : (
+          <Routes>
+            {/* 工位入口子树（脱离 BasicLayout）：仍走应用路由装载，页面内由 StationLayout 接管 */}
+            <Route path="/apps/*" element={<AppRoutes />} />
+            {/* 报表/大屏分享页 - 按需加载，全屏展示 */}
+            <Route path="/apps/kuaireport/dashboards/shared" element={<Suspense fallback={<PageSkeleton />}><DashboardSharedView /></Suspense>} />
+            <Route path="/apps/kuaireport/reports/shared" element={<Suspense fallback={<PageSkeleton />}><ReportSharedView /></Suspense>} />
+            {/* 公开路由 - 不需要 BasicLayout，直接渲染 SystemRoutes */}
             <Route path="/*" element={<SystemRoutes />} />
           </Routes>
-        </BasicLayout>
-      ) : (
-        <Routes>
-          {/* 报表/大屏分享页 - 按需加载，全屏展示 */}
-          <Route path="/apps/kuaireport/dashboards/shared" element={<Suspense fallback={<PageSkeleton />}><DashboardSharedView /></Suspense>} />
-          <Route path="/apps/kuaireport/reports/shared" element={<Suspense fallback={<PageSkeleton />}><ReportSharedView /></Suspense>} />
-          {/* 公开路由 - 不需要 BasicLayout，直接渲染 SystemRoutes */}
-          <Route path="/*" element={<SystemRoutes />} />
-        </Routes>
-      )}
+        )}
+      </StationAccessGate>
     </>
   );
 };

@@ -37,7 +37,7 @@ import {
 } from '../../../../services/user';
 import { QRCodeGenerator } from '../../../../components/qrcode';
 import { qrcodeApi } from '../../../../services/qrcode';
-import { getUserFormCoreReferenceOptions } from '../userFormReferenceOptions';
+import { getUserFormCoreReferenceOptions, type UserFormRoleMeta } from '../userFormReferenceOptions';
 import { rowActionKind, rowActionResetPassword, rowActionToneDestructive } from '../../../../components/uni-action';
 import { ActionConfirmPopconfirm } from '../../../../components/action-confirm';
 import { UserFormModal } from '../components/UserFormModal';
@@ -69,6 +69,7 @@ const UserListPage: React.FC = () => {
   const [departmentOptions, setDepartmentOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [positionOptions, setPositionOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [roleOptions, setRoleOptions] = useState<Array<{ label: string; value: string }>>([]);
+  const [roleMetaByUuid, setRoleMetaByUuid] = useState<Record<string, UserFormRoleMeta>>({});
   const [userFormOpen, setUserFormOpen] = useState(false);
   const [userEditUuid, setUserEditUuid] = useState<string | null>(null);
   const [batchFieldModal, setBatchFieldModal] = useState<'department' | 'position' | 'roles' | null>(null);
@@ -164,6 +165,7 @@ const UserListPage: React.FC = () => {
       setDepartmentOptions(core.departmentOptions);
       setPositionOptions(core.positionOptions);
       setRoleOptions(core.roleOptions);
+      setRoleMetaByUuid(core.roleMetaByUuid);
     } catch (error) {
       if (typeof window !== 'undefined') {
         window.console.error('加载选项数据失败:', error);
@@ -320,6 +322,14 @@ const UserListPage: React.FC = () => {
         messageApi.warning(t('field.user.batchSetRolesRequired'));
         return;
       }
+      // 角色纯度（STN-D14）：station（触屏专用）不得与 internal/external 混挂
+      const knownRoleTypes = roles
+        .map((uuid) => String(roleMetaByUuid[uuid]?.role_type ?? '').trim().toLowerCase())
+        .filter(Boolean);
+      if (knownRoleTypes.includes('station') && knownRoleTypes.some((type) => type !== 'station')) {
+        messageApi.error(t('field.user.errorRoleTypeStationMixed'));
+        return;
+      }
     } else if (!batchFieldValue || (typeof batchFieldValue === 'string' && !batchFieldValue.trim())) {
       messageApi.warning(
         t(
@@ -356,6 +366,7 @@ const UserListPage: React.FC = () => {
     closeBatchFieldModal,
     messageApi,
     reportBatchUpdateResult,
+    roleMetaByUuid,
     selectedRowKeys,
     t,
   ]);
