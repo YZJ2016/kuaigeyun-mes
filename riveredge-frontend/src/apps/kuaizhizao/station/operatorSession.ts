@@ -68,6 +68,28 @@ export function stationOperatorSessionHeaders(): Record<string, string> {
   return credential ? { [STATION_OPERATOR_SESSION_HEADER]: credential } : {};
 }
 
+/** 写方法判定（与 apiRequest 对齐：POST/PUT/PATCH/DELETE 算写）。 */
+export function isWriteMethodForStationSession(method: string | undefined): boolean {
+  const m = String(method || 'GET').toUpperCase();
+  return m === 'POST' || m === 'PUT' || m === 'PATCH' || m === 'DELETE';
+}
+
+/**
+ * apiRequest 的注入判定（纯函数，供 Node 测试直接覆盖）：
+ * 仅调用方显式 opt-in 的写请求附加凭据头；读取请求一律不附加；
+ * 调用方已显式给同名头时不覆盖；无凭据不附加（由服务端门禁拒绝）。
+ */
+export function applyStationOperatorSessionHeader(
+  headers: Record<string, string>,
+  options?: { optIn?: boolean; method?: string },
+): void {
+  if (options?.optIn !== true || !isWriteMethodForStationSession(options?.method)) return;
+  if (STATION_OPERATOR_SESSION_HEADER in headers) return;
+  if (credential) {
+    headers[STATION_OPERATOR_SESSION_HEADER] = credential;
+  }
+}
+
 /** 确认接口签发凭据后登记到内存。凭据为空时忽略。 */
 export function acceptStationOperatorSession(next: {
   credential: string;
@@ -155,8 +177,8 @@ export async function fetchCurrentStationOperatorSession(
   return { valid: res?.valid === true, session: res?.session ?? null };
 }
 
-/** 显式换人/退出：通知服务端关闭；无论成败本地凭据都清空。 */
-export async function closeStationOperatorSession(): Promise<void> {
+/** 显式换人/退出：通知服务端关闭；无论成败本地凭据都清空。reason 仅作为服务端关闭原因记录。 */
+export async function closeStationOperatorSession(reason?: string): Promise<void> {
   const current = credential;
   if (!current) {
     clearStationOperatorSession();
@@ -166,6 +188,7 @@ export async function closeStationOperatorSession(): Promise<void> {
     await request<{ closed?: boolean }>(`${STATION_API}/operator-session/close`, {
       method: 'POST',
       headers: { [STATION_OPERATOR_SESSION_HEADER]: current },
+      ...(reason ? { data: { reason } } : {}),
     });
   } finally {
     clearStationOperatorSession();

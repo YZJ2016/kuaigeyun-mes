@@ -11,7 +11,12 @@ import { Button, Popconfirm, Typography, theme } from 'antd';
 import { LockOutlined, LogoutOutlined } from '@ant-design/icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { useGlobalStore, useThemeStore, useUserPreferenceStore } from '../stores';
-import { useStationEntrySnapshot } from '../apps/kuaizhizao/station/entry/session';
+import {
+  setStationOperator,
+  setStationOperatorCandidate,
+  useStationEntrySnapshot,
+} from '../apps/kuaizhizao/station/entry/session';
+import { closeStationOperatorSession } from '../apps/kuaizhizao/station/operatorSession';
 import { getSessionCurrentUser } from '../utils/sessionCurrentUser';
 import { clearSessionScopedQueries } from '../utils/clearSessionQueries';
 import { clearLanguageForLogout } from '../config/i18n';
@@ -38,8 +43,15 @@ const StationLayout: React.FC = () => {
     navigate('/lock-screen', { replace: true });
   }, [lockScreen, location.pathname, navigate]);
 
-  /** 退出终端账号：与 BasicLayout.performLogout 同一套本地清理 */
-  const handleLogout = useCallback(() => {
+  /** 退出终端账号：先尝试关闭操作员会话（失败不阻塞），再与 BasicLayout.performLogout 同一套本地清理 */
+  const handleLogout = useCallback(async () => {
+    try {
+      await closeStationOperatorSession('terminal_logout');
+    } catch {
+      /* 操作员会话关闭失败不阻塞登出 */
+    }
+    setStationOperator(null);
+    setStationOperatorCandidate(null);
     clearSessionScopedQueries(queryClient);
     useUserPreferenceStore.getState().clearForLogout();
     useThemeStore.getState().clearForLogout();

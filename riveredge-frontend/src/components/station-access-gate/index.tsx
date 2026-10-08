@@ -22,6 +22,11 @@ import { clearSessionScopedQueries } from '../../utils/clearSessionQueries';
 import { redirectAfterLogout } from '../../utils/loginEntry';
 import { isPureStationAccount, isStationAllowedPathname } from '../../utils/stationAccess';
 import { STATION_ENTRY_PATH } from '../../utils/clientChannel';
+import { closeStationOperatorSession } from '../../apps/kuaizhizao/station/operatorSession';
+import {
+  setStationOperator,
+  setStationOperatorCandidate,
+} from '../../apps/kuaizhizao/station/entry/session';
 
 type StationShellRejectionApi = { notifyStationRejected?: () => void };
 
@@ -48,16 +53,31 @@ const StationAccessGate: React.FC<{ children: React.ReactNode }> = ({ children }
   const shouldReject = !!shell && hasToken && !!user && !pureStation;
 
   useEffect(() => {
-    if (!shouldReject || rejectedRef.current) return;
+    if (!shouldReject) {
+      // 换账号登录后角色可能变为纯工位：解除锁存，避免永久停在 PageSkeleton
+      rejectedRef.current = false;
+      return;
+    }
+    if (rejectedRef.current) return;
     rejectedRef.current = true;
     try {
       shell?.notifyStationRejected?.();
     } catch {
       /* 壳接口缺失或异常不阻断本地会话清理 */
     }
-    clearSessionScopedQueries(queryClient);
-    useGlobalStore.getState().logout();
-    redirectAfterLogout(navigate);
+    void (async () => {
+      try {
+        // 先尝试通知服务端关闭操作员会话（需在登出清 token 前发出），失败不阻塞拒绝流程
+        await closeStationOperatorSession('terminal_logout');
+      } catch {
+        /* 会话关闭失败不阻断本地清理 */
+      }
+      setStationOperator(null);
+      setStationOperatorCandidate(null);
+      clearSessionScopedQueries(queryClient);
+      useGlobalStore.getState().logout();
+      redirectAfterLogout(navigate);
+    })();
   }, [shouldReject, shell, queryClient, navigate]);
 
   if (shouldReject) {

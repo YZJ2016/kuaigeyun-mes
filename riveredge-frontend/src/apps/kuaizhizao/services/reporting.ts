@@ -184,8 +184,8 @@ export const reportingApi = {
     apiRequest<ReportingDetailedStatistics>('/apps/kuaizhizao/reporting/statistics', { method: 'GET', params }),
   recordScrap: async (recordId: string, data: any, options?: { stationOperatorSession?: boolean }) =>
     apiRequest(`/apps/kuaizhizao/reporting/${recordId}/scrap`, { method: 'POST', data, ...options }),
-  recordDefect: async (recordId: string, data: any) =>
-    apiRequest(`/apps/kuaizhizao/reporting/${recordId}/defect`, { method: 'POST', data }),
+  recordDefect: async (recordId: string, data: any, options?: { stationOperatorSession?: boolean }) =>
+    apiRequest(`/apps/kuaizhizao/reporting/${recordId}/defect`, { method: 'POST', data, ...options }),
   correct: async (recordId: string, data: any) => {
     const { correction_reason, ...restData } = data;
     if (!correction_reason || !correction_reason.trim()) {
