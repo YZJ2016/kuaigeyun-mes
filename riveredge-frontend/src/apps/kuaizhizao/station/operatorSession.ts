@@ -9,7 +9,7 @@
  * 人脸特征、员工码明文与会话凭据不得写日志、toast 或持久存储。
  */
 
-/** 工位写请求显式 opt-in 后由 apiRequest 附加的业务凭据头。 */
+/** 工位业务请求显式 opt-in 后由 apiRequest 附加的业务凭据头。 */
 export const STATION_OPERATOR_SESSION_HEADER = 'X-Station-Operator-Session';
 
 const STATION_API = '/apps/kuaizhizao/station';
@@ -76,14 +76,14 @@ export function isWriteMethodForStationSession(method: string | undefined): bool
 
 /**
  * apiRequest 的注入判定（纯函数，供 Node 测试直接覆盖）：
- * 仅调用方显式 opt-in 的写请求附加凭据头；读取请求一律不附加；
+ * 仅调用方显式 opt-in 的请求附加凭据头（含需要操作员作用域的读取）；
  * 调用方已显式给同名头时不覆盖；无凭据不附加（由服务端门禁拒绝）。
  */
 export function applyStationOperatorSessionHeader(
   headers: Record<string, string>,
   options?: { optIn?: boolean; method?: string },
 ): void {
-  if (options?.optIn !== true || !isWriteMethodForStationSession(options?.method)) return;
+  if (options?.optIn !== true) return;
   if (STATION_OPERATOR_SESSION_HEADER in headers) return;
   if (credential) {
     headers[STATION_OPERATOR_SESSION_HEADER] = credential;
