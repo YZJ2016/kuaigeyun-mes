@@ -33,7 +33,6 @@ import {
   parseImportPriceType,
 } from '../../sales-management/shared/salesPriceType';
 import { PlusOutlined, EditOutlined, DeleteOutlined, DownOutlined, FileTextOutlined, AppstoreAddOutlined, ArrowLeftOutlined, ImportOutlined, PrinterOutlined } from '@ant-design/icons';
-import { apiRequest } from '../../../../../services/api';
 import { getDataDictionaryByCode, getDictionaryItemList, type DictionaryItem } from '../../../../../services/dataDictionary';
 import { mapSystemDictionaryItemOptions, resolveSystemDictionaryItemLabel } from '../../../../../utils/systemDictionaryI18n';
 import { getFileDownloadUrl } from '../../../../../services/file';
@@ -214,6 +213,7 @@ import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal'
 import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { warehouseApi as masterWarehouseApi } from '../../../../master-data/services/warehouse';
+import { materialApi } from '../../../../master-data/services/material';
 import { normalizeFormListItems } from '../../../../../utils/formListItems';
 import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
@@ -2147,11 +2147,9 @@ const PurchaseOrdersPage: React.FC = () => {
       return;
     }
 
-    const [matRes, _] = await Promise.all([
-      apiRequest<unknown>('/apps/master-data/materials', { params: { limit: 5000, is_active: true } }),
-      Promise.resolve(),
-    ]);
-    const matList = Array.isArray(matRes) ? matRes : (matRes as any)?.data ?? (matRes as any)?.items ?? [];
+    const matList = await fetchAllListItems((p) =>
+      materialApi.list({ ...p, isActive: true }),
+    );
 
     const errors: Array<{ row: number; message: string }> = [];
     const groupMap = new Map<string, { code?: string; supplier: string; date: string; items: any[] }>();

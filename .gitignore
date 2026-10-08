@@ -183,3 +183,7 @@ riveredge-backend/src/core/data/sensitive_words/extra.txt
 riveredge-frontend/dist-green/
 riveredge-frontend/dist-blue/
 riveredge-frontend/dist-live/
+
+# AOCI agent host integration (machine-bound; do not commit)
+.codex/config.toml
+.codex/config.toml.backup.*

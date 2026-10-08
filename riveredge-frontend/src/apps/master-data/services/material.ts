@@ -115,8 +115,9 @@ function optionalNumberId(value: unknown): number | null {
 const MATERIAL_LIST_LIMIT_MAX = 2000;
 
 function clampMaterialListLimit(limit: unknown): number | undefined {
-  if (typeof limit !== 'number' || Number.isNaN(limit)) return undefined;
-  return Math.max(1, Math.min(MATERIAL_LIST_LIMIT_MAX, Math.trunc(limit)));
+  const n = typeof limit === 'number' ? limit : typeof limit === 'string' ? Number(limit) : NaN;
+  if (!Number.isFinite(n)) return undefined;
+  return Math.max(1, Math.min(MATERIAL_LIST_LIMIT_MAX, Math.trunc(n)));
 }
 
 /**
@@ -361,6 +362,21 @@ export const materialApi = {
       return unwrap(await api.get('/apps/master-data/materials'));
     }
     const { sortBy, sortOrder, treeView, mastersOnly, ids, ...rest } = params;
+    if (ids && ids.length > MATERIAL_LIST_LIMIT_MAX) {
+      const merged: Material[] = [];
+      const seen = new Set<number>();
+      for (let i = 0; i < ids.length; i += MATERIAL_LIST_LIMIT_MAX) {
+        const chunk = ids.slice(i, i + MATERIAL_LIST_LIMIT_MAX);
+        const part = await materialApi.list({ ...params, ids: chunk, limit: chunk.length });
+        for (const m of part.items) {
+          if (!seen.has(m.id)) {
+            seen.add(m.id);
+            merged.push(m);
+          }
+        }
+      }
+      return { items: merged, total: merged.length };
+    }
     const limit = clampMaterialListLimit((rest as Record<string, unknown>).limit);
     const backendParams: Record<string, unknown> =
       limit != null ? { ...rest, limit } : { ...rest };
