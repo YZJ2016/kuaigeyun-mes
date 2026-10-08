@@ -14,6 +14,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi import HTTPException
 
+from apps.kuaizhizao.api.deps.station_operator_session import StationBusinessOperator
 from apps.kuaizhizao.api.productions import reporting as reporting_api
 from apps.kuaizhizao.schemas.reporting_record import ReportingRecordCreate
 
@@ -51,20 +52,15 @@ def _user(user_id: int) -> MagicMock:
     return user
 
 
-def _patch_pure(monkeypatch, is_pure: bool):
-    monkeypatch.setattr(
-        reporting_api,
-        "is_pure_station_terminal_user",
-        AsyncMock(return_value=is_pure),
+def _station_operator(user_id: int = 99) -> StationBusinessOperator:
+    return StationBusinessOperator(
+        user_id=user_id, user_name="操作员", user=None
     )
 
 
-def _patch_fallback_resolve(monkeypatch, session):
-    mock = AsyncMock(return_value=session)
-    monkeypatch.setattr(
-        reporting_api.operator_session_service, "get_current_session", mock
-    )
-    return mock
+def _pc_operator(user_id: int = 7) -> StationBusinessOperator:
+    user = _user(user_id)
+    return StationBusinessOperator(user_id=user_id, user_name="本人", user=user)
 
 
 @pytest.mark.asyncio
@@ -73,14 +69,13 @@ async def test_pure_station_worker_matches_session_operator_passes(monkeypatch):
     denied = AsyncMock(side_effect=HTTPException(status_code=403, detail="assign"))
     created = MagicMock()
     create = AsyncMock(return_value=created)
-    _patch_pure(monkeypatch, True)
     monkeypatch.setattr(reporting_api, "ensure_permission_codes", denied)
     monkeypatch.setattr(reporting_api.reporting_service, "create_reporting_record", create)
 
-    session = SimpleNamespace(operator_user_id=99)
     result = await reporting_api.create_quick_reporting_record(
         reporting=_record(worker_id=99, worker_name="操作员"),
-        request=_request("station", session=session),
+        request=_request("station"),
+        business_operator=_station_operator(),
         auth=MagicMock(),
         current_user=_user(7),
         tenant_id=1,
@@ -88,7 +83,7 @@ async def test_pure_station_worker_matches_session_operator_passes(monkeypatch):
 
     denied.assert_not_awaited()
     assert result is created
-    assert create.await_args.kwargs["reported_by"] == 7
+    assert create.await_args.kwargs["reported_by"] == 99
     assert create.await_args.kwargs["entry_mode"] == "quick"
     assert create.await_args.kwargs["client_channel"] == "station"
 
@@ -98,21 +93,20 @@ async def test_pure_station_team_report_passes(monkeypatch):
     """纯工位账号 + 小组报工 → 放行，不校验 worker_id、不查 assign。"""
     denied = AsyncMock(side_effect=HTTPException(status_code=403, detail="assign"))
     create = AsyncMock(return_value=MagicMock())
-    _patch_pure(monkeypatch, True)
     monkeypatch.setattr(reporting_api, "ensure_permission_codes", denied)
     monkeypatch.setattr(reporting_api.reporting_service, "create_reporting_record", create)
 
-    session = SimpleNamespace(operator_user_id=99)
     await reporting_api.create_quick_reporting_record(
         reporting=_record(worker_id=None, worker_name=None, team_id=6, team_name="甲班"),
-        request=_request("station", session=session),
+        request=_request("station"),
+        business_operator=_station_operator(),
         auth=MagicMock(),
         current_user=_user(7),
         tenant_id=1,
     )
 
     denied.assert_not_awaited()
-    assert create.await_args.kwargs["reported_by"] == 7
+    assert create.await_args.kwargs["reported_by"] == 99
 
 
 @pytest.mark.asyncio
@@ -120,15 +114,14 @@ async def test_pure_station_worker_mismatch_rejected(monkeypatch):
     """纯工位账号报 worker_id 非会话操作员 → 拒绝，不落库、不查 assign。"""
     denied = AsyncMock(side_effect=HTTPException(status_code=403, detail="assign"))
     create = AsyncMock(return_value=MagicMock())
-    _patch_pure(monkeypatch, True)
     monkeypatch.setattr(reporting_api, "ensure_permission_codes", denied)
     monkeypatch.setattr(reporting_api.reporting_service, "create_reporting_record", create)
 
-    session = SimpleNamespace(operator_user_id=99)
     with pytest.raises(HTTPException) as raised:
         await reporting_api.create_quick_reporting_record(
             reporting=_record(worker_id=88, worker_name="他人"),
-            request=_request("station", session=session),
+            request=_request("station"),
+            business_operator=_station_operator(),
             auth=MagicMock(),
             current_user=_user(7),
             tenant_id=1,
@@ -140,37 +133,10 @@ async def test_pure_station_worker_mismatch_rejected(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_pure_station_no_session_rejected(monkeypatch):
-    """纯工位账号但无已解析会话（含回退解析失败）→ 403 通用文案。"""
-    create = AsyncMock(return_value=MagicMock())
-    _patch_pure(monkeypatch, True)
-    monkeypatch.setattr(reporting_api, "ensure_permission_codes", AsyncMock())
-    monkeypatch.setattr(reporting_api.reporting_service, "create_reporting_record", create)
-    resolve = _patch_fallback_resolve(monkeypatch, None)
-
-    with pytest.raises(HTTPException) as raised:
-        await reporting_api.create_quick_reporting_record(
-            reporting=_record(worker_id=99, worker_name="操作员"),
-            request=_request("station", session=None),
-            auth=MagicMock(),
-            current_user=_user(7),
-            tenant_id=1,
-        )
-
-    assert raised.value.status_code == 403
-    assert (
-        raised.value.detail == reporting_api.STATION_OPERATOR_SESSION_DENIED_MESSAGE
-    )
-    resolve.assert_awaited_once()
-    create.assert_not_awaited()
-
-
-@pytest.mark.asyncio
 async def test_forged_station_channel_non_pure_user_still_requires_assign(monkeypatch):
     """非纯工位账号伪造 X-Client-Channel: station 代报 → 仍被 assign 拦截。"""
     denied = AsyncMock(side_effect=HTTPException(status_code=403, detail="assign"))
     create = AsyncMock(return_value=MagicMock())
-    _patch_pure(monkeypatch, False)
     monkeypatch.setattr(reporting_api, "ensure_permission_codes", denied)
     monkeypatch.setattr(reporting_api.reporting_service, "create_reporting_record", create)
 
@@ -178,6 +144,7 @@ async def test_forged_station_channel_non_pure_user_still_requires_assign(monkey
         await reporting_api.create_quick_reporting_record(
             reporting=_record(worker_id=99, worker_name="操作员"),
             request=_request("station"),
+            business_operator=_pc_operator(),
             auth=MagicMock(),
             current_user=_user(7),
             tenant_id=1,
@@ -194,13 +161,13 @@ async def test_non_station_self_report_passes_without_assign(monkeypatch):
     """非纯工位账号本人报工（worker == 登录用户）→ 不查 assign，照常创建。"""
     denied = AsyncMock(side_effect=HTTPException(status_code=403, detail="assign"))
     create = AsyncMock(return_value=MagicMock())
-    _patch_pure(monkeypatch, False)
     monkeypatch.setattr(reporting_api, "ensure_permission_codes", denied)
     monkeypatch.setattr(reporting_api.reporting_service, "create_reporting_record", create)
 
     await reporting_api.create_quick_reporting_record(
         reporting=_record(worker_id=7, worker_name="本人"),
         request=_request("pc"),
+        business_operator=_pc_operator(),
         auth=MagicMock(),
         current_user=_user(7),
         tenant_id=1,

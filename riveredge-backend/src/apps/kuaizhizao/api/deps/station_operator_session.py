@@ -20,6 +20,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from typing import Any, Optional
 
 from fastapi import Depends, Header, HTTPException, Request, status
@@ -41,6 +42,15 @@ STATION_TERMINAL_EXECUTE_PERMISSION = (
 STATION_OPERATOR_SESSION_DENIED_MESSAGE = "工位写操作需要先确认有效的当前操作员"
 
 operator_session_service = StationOperatorSessionService()
+
+
+@dataclass(frozen=True)
+class StationBusinessOperator:
+    """写入业务记录的可信操作员；登录账号仍只负责认证与权限。"""
+
+    user_id: int
+    user_name: str
+    user: Optional[User]
 
 
 # ---------------------------------------------------------------------------
@@ -190,7 +200,7 @@ async def require_station_operator_session(
     x_station_operator_session: Optional[str] = Header(
         None, alias=STATION_OPERATOR_SESSION_HEADER
     ),
-) -> None:
+) -> Optional[Any]:
     """纯工位账号的工位写操作门禁依赖。
 
     非纯工位账号直接返回（原有 RBAC 不变）；纯工位账号须持 execute 权限 +
@@ -223,3 +233,66 @@ async def require_station_operator_session(
         )
     # 供下游处理器（如快捷报工本人/小组边界）复用已解析会话，避免二次解析
     request.state.station_operator_session = session
+    return session
+
+
+async def get_station_business_operator(
+    current_user: User = Depends(get_current_user),
+    station_session: Optional[Any] = Depends(require_station_operator_session),
+) -> StationBusinessOperator:
+    """统一解析业务操作员：工位取确认会话，PC 保持当前登录用户。"""
+    if station_session is not None:
+        return StationBusinessOperator(
+            user_id=int(station_session.operator_user_id),
+            user_name=str(station_session.operator_name),
+            user=None,
+        )
+    return StationBusinessOperator(
+        user_id=int(current_user.id),
+        user_name=current_user.full_name or current_user.username,
+        user=current_user,
+    )
+
+
+async def get_optional_station_business_operator(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    x_station_operator_session: Optional[str] = Header(
+        None, alias=STATION_OPERATOR_SESSION_HEADER
+    ),
+) -> StationBusinessOperator:
+    """只读接口可借有效凭据识别操作员，缺失或无效时保持原 PC 行为。"""
+    session = None
+    if x_station_operator_session:
+        session = await operator_session_service.get_current_session(
+            tenant_id=tenant_id,
+            terminal_user_id=current_user.id,
+            credential=x_station_operator_session,
+            workstation_id=None,
+        )
+    if session is not None:
+        return StationBusinessOperator(
+            user_id=int(session.operator_user_id),
+            user_name=str(session.operator_name),
+            user=None,
+        )
+    return StationBusinessOperator(
+        user_id=int(current_user.id),
+        user_name=current_user.full_name or current_user.username,
+        user=current_user,
+    )
+
+
+def ensure_station_operator_matches(
+    operator: StationBusinessOperator, *, submitted_user_id: Optional[int]
+) -> None:
+    """工位请求不得把业务人员字段指向当前确认操作员之外的用户。"""
+    if (
+        operator.user is None
+        and submitted_user_id is not None
+        and int(submitted_user_id) != operator.user_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=STATION_OPERATOR_SESSION_DENIED_MESSAGE,
+        )

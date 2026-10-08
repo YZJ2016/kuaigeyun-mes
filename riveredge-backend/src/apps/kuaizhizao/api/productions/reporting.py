@@ -21,12 +21,10 @@ from infra.models.user import User
 from infra.exceptions.exceptions import ValidationError, BusinessLogicError, NotFoundError
 from infra.services.business_config_service import BusinessConfigService
 
-from apps.kuaizhizao.api.deps import require_station_operator_session
-from apps.kuaizhizao.api.deps.station_operator_session import (
-    STATION_OPERATOR_SESSION_DENIED_MESSAGE,
-    STATION_OPERATOR_SESSION_HEADER,
-    is_pure_station_terminal_user,
-    operator_session_service,
+from apps.kuaizhizao.api.deps import (
+    StationBusinessOperator,
+    get_station_business_operator,
+    require_station_operator_session,
 )
 from apps.kuaizhizao.services.reporting_service import ReportingService, REPORTING_SORTABLE_FIELDS
 from apps.kuaizhizao.services.reporting_sync_service import ReportingSyncService
@@ -395,6 +393,7 @@ async def create_reporting_record(
 async def create_quick_reporting_record(
     reporting: ReportingRecordCreate,
     request: Request,
+    business_operator: StationBusinessOperator = Depends(get_station_business_operator),
     auth: AuthContext = Depends(get_auth_context),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -408,25 +407,10 @@ async def create_quick_reporting_record(
         # 纯工位账号：以服务端操作员会话为事实边界——小组报工放行；
         # 非小组报工的生产人员必须等于当前已确认操作员，代报/他人一律拒绝。
         # 非纯工位账号：保持原代报判断（worker 非本人/缺省/小组需 reporting:assign）。
-        if await is_pure_station_terminal_user(
-            user_id=current_user.id, tenant_id=tenant_id
-        ):
-            session = getattr(request.state, "station_operator_session", None)
-            if session is None:
-                # 门禁未先跑（如直接调用）时按序解析一次
-                session = await operator_session_service.get_current_session(
-                    tenant_id=tenant_id,
-                    terminal_user_id=current_user.id,
-                    credential=request.headers.get(STATION_OPERATOR_SESSION_HEADER),
-                )
-            if session is None:
-                raise HTTPException(
-                    status_code=http_status.HTTP_403_FORBIDDEN,
-                    detail=STATION_OPERATOR_SESSION_DENIED_MESSAGE,
-                )
+        if business_operator.user is None:
             if reporting.team_id is None and (
                 reporting.worker_id is None
-                or int(reporting.worker_id) != int(session.operator_user_id)
+                or int(reporting.worker_id) != business_operator.user_id
             ):
                 raise HTTPException(
                     status_code=http_status.HTTP_400_BAD_REQUEST,
@@ -448,7 +432,7 @@ async def create_quick_reporting_record(
         return await reporting_service.create_reporting_record(
             tenant_id=tenant_id,
             reporting_data=reporting,
-            reported_by=current_user.id,
+            reported_by=business_operator.user_id,
             entry_mode="quick",
             client_channel=client_channel,
         )
@@ -752,6 +736,7 @@ async def delete_reporting_record(
 async def create_scrap_record_from_reporting(
     record_id: int,
     scrap_data: ScrapRecordCreateFromReporting,
+    business_operator: StationBusinessOperator = Depends(get_station_business_operator),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> ScrapRecordResponse:
@@ -768,7 +753,7 @@ async def create_scrap_record_from_reporting(
             tenant_id=tenant_id,
             reporting_record_id=record_id,
             scrap_data=scrap_data,
-            created_by=current_user.id
+            created_by=business_operator.user_id
         )
     except NotFoundError as e:
         raise _http_exception_with_trace(404, str(e), "/reporting/{record_id}/scrap", tenant_id)
@@ -784,6 +769,7 @@ async def create_scrap_record_from_reporting(
 async def create_feeding_binding_from_reporting(
     record_id: int,
     binding_data: MaterialBindingCreateFromReporting,
+    business_operator: StationBusinessOperator = Depends(get_station_business_operator),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> MaterialBindingResponse:
@@ -801,7 +787,7 @@ async def create_feeding_binding_from_reporting(
             tenant_id=tenant_id,
             reporting_record_id=record_id,
             binding_data=binding_data,
-            bound_by=current_user.id
+            bound_by=business_operator.user_id
         )
     except NotFoundError as e:
         raise _http_exception_with_trace(404, str(e), "/reporting/{record_id}/material-binding/feeding", tenant_id)
@@ -815,6 +801,7 @@ async def create_feeding_binding_from_reporting(
 async def create_discharging_binding_from_reporting(
     record_id: int,
     binding_data: MaterialBindingCreateFromReporting,
+    business_operator: StationBusinessOperator = Depends(get_station_business_operator),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> MaterialBindingResponse:
@@ -832,7 +819,7 @@ async def create_discharging_binding_from_reporting(
             tenant_id=tenant_id,
             reporting_record_id=record_id,
             binding_data=binding_data,
-            bound_by=current_user.id
+            bound_by=business_operator.user_id
         )
     except NotFoundError as e:
         raise _http_exception_with_trace(404, str(e), "/reporting/{record_id}/material-binding/discharging", tenant_id)
@@ -1013,6 +1000,7 @@ async def get_scrap_statistics(
 async def create_defect_record_from_reporting(
     record_id: int,
     defect_data: DefectRecordCreateFromReporting,
+    business_operator: StationBusinessOperator = Depends(get_station_business_operator),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> DefectRecordResponse:
@@ -1030,7 +1018,7 @@ async def create_defect_record_from_reporting(
             tenant_id=tenant_id,
             reporting_record_id=record_id,
             defect_data=defect_data,
-            created_by=current_user.id
+            created_by=business_operator.user_id
         )
     except NotFoundError as e:
         raise _http_exception_with_trace(404, str(e), "/reporting/{record_id}/defect", tenant_id)

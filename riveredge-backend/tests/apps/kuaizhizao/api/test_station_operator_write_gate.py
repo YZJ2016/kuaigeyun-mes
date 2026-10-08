@@ -134,7 +134,9 @@ def _request(*, method="POST", path="/apps/kuaizhizao/station/andon", query=None
 
 
 def _station_user(user_id: int = 7):
-    return SimpleNamespace(id=user_id, tenant_id=1, username="terminal")
+    return SimpleNamespace(
+        id=user_id, tenant_id=1, username="terminal", full_name="终端账号"
+    )
 
 
 def _auth():
@@ -209,13 +211,90 @@ async def test_station_user_valid_session_passes(monkeypatch):
         credential="cred",
     )
 
-    assert result is None
+    assert result is session.return_value
     perm.assert_awaited_once()
     assert perm.await_args.args[3] == [gate_mod.STATION_TERMINAL_EXECUTE_PERMISSION]
     assert session.await_args.kwargs["credential"] == "cred"
     assert session.await_args.kwargs["tenant_id"] == 1
     assert session.await_args.kwargs["terminal_user_id"] == 7
     assert session.await_args.kwargs["workstation_id"] == 5
+
+
+@pytest.mark.asyncio
+async def test_business_operator_uses_confirmed_operator_for_station_session():
+    """工位写入的业务归属必须来自已确认会话，不能继续使用共享终端账号。"""
+    actor = await gate_mod.get_station_business_operator(
+        current_user=_station_user(),
+        station_session=_session(operator_user_id=99, operator_name="操作员甲"),
+    )
+
+    assert actor.user_id == 99
+    assert actor.user_name == "操作员甲"
+    assert actor.user is None
+
+
+@pytest.mark.asyncio
+async def test_business_operator_keeps_current_user_for_pc_request():
+    """PC 兼容分支没有工位会话时，业务归属保持当前登录用户。"""
+    current_user = _station_user()
+
+    actor = await gate_mod.get_station_business_operator(
+        current_user=current_user,
+        station_session=None,
+    )
+
+    assert actor.user_id == 7
+    assert actor.user_name == "终端账号"
+    assert actor.user is current_user
+
+
+def test_station_payload_operator_mismatch_is_rejected():
+    """工位请求体中的人员 ID 不得冒用已确认操作员之外的用户。"""
+    actor = gate_mod.StationBusinessOperator(
+        user_id=99, user_name="操作员甲", user=None
+    )
+
+    with pytest.raises(HTTPException) as raised:
+        gate_mod.ensure_station_operator_matches(actor, submitted_user_id=88)
+
+    assert raised.value.status_code == 403
+    assert raised.value.detail == gate_mod.STATION_OPERATOR_SESSION_DENIED_MESSAGE
+
+
+def test_pc_payload_operator_is_not_restricted_by_station_session_rule():
+    """PC 用户原有代维护能力不受工位操作员匹配规则影响。"""
+    current_user = _station_user()
+    actor = gate_mod.StationBusinessOperator(
+        user_id=7, user_name="终端账号", user=current_user
+    )
+
+    gate_mod.ensure_station_operator_matches(actor, submitted_user_id=88)
+
+
+@pytest.mark.asyncio
+async def test_optional_business_operator_uses_valid_header_without_gating_get(
+    monkeypatch,
+):
+    """只读接口携带有效凭据时识别实际操作员，但缺头仍保持原有可读行为。"""
+    get_current = _patch_session(
+        monkeypatch,
+        _session(operator_user_id=99, operator_name="操作员甲"),
+    )
+
+    actor = await gate_mod.get_optional_station_business_operator(
+        current_user=_station_user(),
+        tenant_id=1,
+        x_station_operator_session="cred",
+    )
+
+    assert actor.user_id == 99
+    assert actor.user_name == "操作员甲"
+    get_current.assert_awaited_once_with(
+        tenant_id=1,
+        terminal_user_id=7,
+        credential="cred",
+        workstation_id=None,
+    )
 
 
 @pytest.mark.asyncio
