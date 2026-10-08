@@ -47,7 +47,13 @@ export interface LoginResponse {
     permission_version?: number;
     department?: { uuid: string; name: string };
     position?: { uuid: string; name: string };
-    roles?: Array<{ uuid: string; name: string; code: string }>;
+    roles?: Array<{
+      uuid: string;
+      name: string;
+      code: string;
+      role_type?: 'internal' | 'external' | 'station' | string;
+      external_partner_type?: string | null;
+    }>;
   };
   tenants?: Array<{
     id: number;
@@ -88,7 +94,13 @@ export interface CurrentUser {
   permission_version?: number;
   department?: { uuid: string; name: string };
   position?: { uuid: string; name: string };
-  roles?: Array<{ uuid: string; name: string; code: string }>;
+  roles?: Array<{
+    uuid: string;
+    name: string;
+    code: string;
+    role_type?: 'internal' | 'external' | 'station' | string;
+    external_partner_type?: string | null;
+  }>;
 }
 
 // 导出类型别名，便于在其他地方使用

@@ -24270,6 +24270,7 @@ export default {
   'field.user.errorDepartmentInvalid': 'Selected department does not exist or does not belong to current tenant',
   'field.user.errorPositionInvalid': 'Selected position does not exist or does not belong to current tenant',
   'field.user.errorRoleInvalid': 'Selected role does not exist or is invalid',
+  'field.user.errorRoleTypeStationMixed': 'Station (touchscreen) roles cannot be combined with internal/external roles on the same account',
   'field.user.errorPhoneInvalid': 'Invalid phone number or already in use',
   'field.user.errorEmailInvalid': 'Invalid email or already in use',
   'field.user.errorNoPermission': 'You do not have permission for this action',

@@ -13,6 +13,7 @@ import React, { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom';
 import PageSkeleton from '../../components/page-skeleton';
 import { LinkedDocumentDetailProvider } from '../../components/linked-document-detail';
+import StationLayout from '../../layouts/StationLayout';
 
 /** 页面懒加载包装：Suspense + Spin fallback */
 const withPageSuspense = (LazyComponent: React.LazyExoticComponent<React.ComponentType<any>>) => (
@@ -434,13 +435,16 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="production-execution/outbound" element={withPageSuspense(ProductionOutboundPage)} />
       <Route path="production-execution/inbound" element={withPageSuspense(ProductionInboundPage)} />
       {/* 生产终端路由已下线：/apps/kuaizhizao/production-execution/terminal */}
-      <Route path="production-execution/station" element={withPageSuspense(StationEntryPage)} />
-      <Route path="production-execution/station/work-orders/:id/kiosk" element={withPageSuspense(WorkOrderDetailKioskPage)} />
-      <Route path="production-execution/station/reporting/kiosk" element={withPageSuspense(ReportingKioskPage)} />
-      <Route path="production-execution/station/sop-viewer/kiosk" element={withPageSuspense(SOPViewerKioskPage)} />
-      <Route path="production-execution/station/drawing-viewer/kiosk" element={withPageSuspense(DrawingViewerKioskPage)} />
-      <Route path="production-execution/station/program-viewer/kiosk" element={withPageSuspense(ProgramViewerKioskPage)} />
-      <Route path="production-execution/station/*" element={withPageSuspense(StationEntryPage)} />
+      {/* 工位入口及其子路径：独立 StationLayout（无 PC 侧栏/UniTabs/应用切换），kiosk 子页同属工位边界 */}
+      <Route path="production-execution/station" element={<StationLayout />}>
+        <Route index element={withPageSuspense(StationEntryPage)} />
+        <Route path="work-orders/:id/kiosk" element={withPageSuspense(WorkOrderDetailKioskPage)} />
+        <Route path="reporting/kiosk" element={withPageSuspense(ReportingKioskPage)} />
+        <Route path="sop-viewer/kiosk" element={withPageSuspense(SOPViewerKioskPage)} />
+        <Route path="drawing-viewer/kiosk" element={withPageSuspense(DrawingViewerKioskPage)} />
+        <Route path="program-viewer/kiosk" element={withPageSuspense(ProgramViewerKioskPage)} />
+        <Route path="*" element={withPageSuspense(StationEntryPage)} />
+      </Route>
       <Route path="production-execution/reporting" element={withPageSuspense(ReportingPage)} />
       <Route path="production-execution/reporting/kiosk" element={withPageSuspense(ReportingKioskPage)} />
       <Route path="production-execution/reporting/statistics" element={withPageSuspense(ReportingStatisticsPage)} />

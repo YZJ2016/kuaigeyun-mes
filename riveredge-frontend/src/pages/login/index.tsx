@@ -43,9 +43,10 @@ import {
   tenantNameFromLoginResponse,
 } from '../../services/publicAuth';
 import { switchTenant } from '../../services/auth';
-import { setToken, setTenantId, setUserInfo, getTenantId, getToken } from '../../utils/auth';
+import { setToken, setTenantId, setUserInfo, getTenantId, getToken, getUserInfo } from '../../utils/auth';
 import { LANGUAGE_TOOLBAR_SHORT, SUPPORTED_UI_LANGUAGES, normalizeUiLanguage } from '../../utils/localeBootstrap';
 import { resolvePostLoginNavigatePath } from '../../utils/tenantHomePath';
+import { isPureStationAccount, STATION_ENTRY_PATH } from '../../utils/stationAccess';
 import { buildTenantLoginPathForHistoryReplace, resolvePlatformAdminLoginPathFromUrl, resolveTenantDomainFromUrl } from '../../utils/tenantDomainAccess';
 import { captureLoginEntryFromCurrentUrl } from '../../utils/loginEntry';
 const TenantSelectionModal = lazy(() => import('../../components/tenant-selection-modal'));
@@ -219,7 +220,10 @@ export default function LoginPage() {
     tenantId?: number;
   }) => {
     let targetPath: string;
-    if (options?.immediatePath) {
+    // 纯工位账号（全部角色 role_type=station）无论从哪个客户端登录都落工位入口
+    if (isPureStationAccount(getUserInfo())) {
+      targetPath = STATION_ENTRY_PATH;
+    } else if (options?.immediatePath) {
       targetPath = options.immediatePath;
     } else {
       try {

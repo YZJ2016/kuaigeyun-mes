@@ -19,8 +19,9 @@ import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { getInstalledApplicationList, scanPlugins } from '../services/application';
 import { loadPlugin } from '../utils/pluginLoader';
-import { getToken, getTenantId } from '../utils/auth';
+import { getToken, getTenantId, getUserInfo } from '../utils/auth';
 import { resolvePostLoginHomePath } from '../utils/tenantHomePath';
+import { isPureStationAccount, STATION_ENTRY_PATH } from '../utils/stationAccess';
 import type { Application } from '../services/application';
 import PageSkeleton from '../components/page-skeleton';
 import ProUpgradePrompt from '../components/pro-upgrade-prompt';
@@ -166,7 +167,10 @@ const UnmatchedAppPathFallback: React.FC = () => {
     (async () => {
       let target = '/';
       try {
-        target = await resolvePostLoginHomePath();
+        // 纯工位账号固定回工位入口，避免与 StationAccessGate 之间往返循环
+        target = isPureStationAccount(getUserInfo())
+          ? STATION_ENTRY_PATH
+          : await resolvePostLoginHomePath();
       } catch {
         target = '/';
       }

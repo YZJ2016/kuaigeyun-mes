@@ -12,6 +12,8 @@ import { clearTabsData } from '../stores/tabsStorage';
 import { applyAppShellFromLocalCache, abandonAppShellRefreshInFlight, refreshAppShellFromApi } from './appShellSessionInit';
 import { resolvePostLoginHomePath } from './tenantHomePath';
 import { isRequestCancellation } from './requestCancellation';
+import { getUserInfo } from './auth';
+import { isPureStationAccount, STATION_ENTRY_PATH } from './stationAccess';
 
 let tenantSwitchGeneration = 0;
 
@@ -53,7 +55,10 @@ export async function applyTenantSwitchSideEffects(
 
   let homePath: string;
   try {
-    homePath = await resolvePostLoginHomePath();
+    // 纯工位账号切换组织后仍落工位入口（角色数据已由调用方写入 user_info）
+    homePath = isPureStationAccount(getUserInfo())
+      ? STATION_ENTRY_PATH
+      : await resolvePostLoginHomePath();
   } catch {
     homePath = '/';
   }
