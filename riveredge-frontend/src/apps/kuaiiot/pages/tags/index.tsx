@@ -12,7 +12,7 @@ import type {
   ProDescriptionsItemProps,
 } from '@ant-design/pro-components';
 import { ProFormSwitch, ProFormText } from '@ant-design/pro-components';
-import { App, Button, Form, Popconfirm, Result, Select, Tag } from 'antd';
+import { App, Button, Form, Input, Popconfirm, Result, AutoComplete, Tag } from 'antd';
 import { UniTable } from '../../../../components/uni-table';
 import { rowActionKind } from '../../../../components/uni-action';
 import { UniBatchDeleteButton } from '../../../../components/uni-batch';
@@ -72,7 +72,7 @@ function sortRows(rows: TagRow[], sort: Record<string, 'ascend' | 'descend' | nu
   return sortOrder === 'asc' ? sorted : sorted.reverse();
 }
 
-/** map_target 允许标准监控字段或 other_parameters.<key>；tags 模式单选输入自定义值。 */
+/** map_target 允许标准监控字段或 other_parameters.<key>；兼容旧表单数组值。 */
 function normalizeMapTarget(value: unknown): string {
   if (Array.isArray(value)) return String(value[value.length - 1] ?? '').trim();
   return String(value ?? '').trim();
@@ -204,7 +204,7 @@ const TagsPage: React.FC = () => {
         width: 160,
         render: (_, row) => deviceLabelById.get(row.device_id) ?? `#${row.device_id}`,
       },
-      { title: '点位键', dataIndex: 'tag_key', key: 'tag_key', sorter: true, copyable: true, width: 140 },
+      { title: '点位 Key', dataIndex: 'tag_key', key: 'tag_key', sorter: true, copyable: true, width: 140 },
       { title: '名称', dataIndex: 'name', key: 'name', sorter: true, ellipsis: true, minWidth: 140 },
       {
         title: '值类型',
@@ -216,7 +216,7 @@ const TagsPage: React.FC = () => {
         render: (_, row) => <ValueTypeTag value={row.value_type} />,
       },
       {
-        title: '映射目标',
+        title: '写回目标',
         dataIndex: 'map_target',
         key: 'map_target',
         valueType: 'select',
@@ -292,12 +292,12 @@ const TagsPage: React.FC = () => {
         name: editing.name,
         value_type: editing.value_type,
         unit: editing.unit ?? undefined,
-        map_target: editing.map_target ? [editing.map_target] : undefined,
+        map_target: editing.map_target || undefined,
         fill_target: editing.fill_target ?? undefined,
         is_enabled: editing.is_enabled,
       };
     }
-    return { value_type: 'number', is_enabled: true };
+    return { value_type: 'number', map_target: 'temperature', is_enabled: true };
   }, [editing]);
 
   const handleFinish = useCallback(
@@ -348,14 +348,14 @@ const TagsPage: React.FC = () => {
         dataIndex: 'device_id',
         render: (_, row) => deviceLabelById.get(row.device_id) ?? `#${row.device_id}`,
       },
-      { title: '点位键', dataIndex: 'tag_key' },
+      { title: '点位 Key', dataIndex: 'tag_key' },
       { title: '名称', dataIndex: 'name' },
       {
         title: '值类型',
         dataIndex: 'value_type',
         render: (_, row) => <ValueTypeTag value={row.value_type} />,
       },
-      { title: '映射目标', dataIndex: 'map_target' },
+      { title: '写回目标', dataIndex: 'map_target' },
       { title: '单位', dataIndex: 'unit', render: (_, row) => row.unit || '—' },
       { title: '填充目标', dataIndex: 'fill_target', render: (_, row) => row.fill_target || '—' },
       {
@@ -464,12 +464,9 @@ const TagsPage: React.FC = () => {
             >
               <DeviceSelect />
             </Form.Item>
-            <ProFormText
-              name="tag_key"
-              label="点位键"
-              rules={[{ required: true, message: '请填写点位键' }]}
-              fieldProps={{ maxLength: 100 }}
-            />
+            <Form.Item name="tag_key" label="点位 Key" rules={[{ required: true, message: '请填写点位键' }]}>
+              <AutoComplete options={Array.from(new Set(Array.from(allRowsRef.current.values()).map(row => row.tag_key))).map(value => ({ value }))} placeholder="选择或输入点位 Key"><Input maxLength={100} /></AutoComplete>
+            </Form.Item>
           </>
         ) : null}
         <ProFormText
@@ -484,29 +481,25 @@ const TagsPage: React.FC = () => {
           options={VALUE_TYPE_OPTIONS}
           rules={[{ required: true, message: '请选择值类型' }]}
         />
-        <ProFormText
-          name="unit"
-          label="单位"
-          fieldProps={{ maxLength: 30, placeholder: '可空，如 ℃ / kPa' }}
-        />
         <Form.Item
           name="map_target"
-          label="映射目标"
+          label="写回目标"
           rules={[{ required: true, message: '请选择或输入映射目标' }]}
           extra="选择监控字段，或输入 other_parameters.<字段名> 写入其他参数"
         >
-          <Select
-            mode="tags"
-            maxCount={1}
-            showSearch
+          <AutoComplete
+            allowClear
             options={MAP_TARGET_OPTIONS}
             placeholder="选择或输入 other_parameters.xxx"
           />
         </Form.Item>
+        <Form.Item name="fill_target" label="填充目标" extra="可选；输入 spot_check.<项编码> 或 sop_parameters.<字段>">
+          <AutoComplete options={Array.from(new Set(Array.from(allRowsRef.current.values()).map(row => row.fill_target).filter((value): value is string => Boolean(value)))).map(value => ({ value }))} placeholder="选择或输入填充目标"><Input maxLength={100} /></AutoComplete>
+        </Form.Item>
         <ProFormText
-          name="fill_target"
-          label="填充目标"
-          fieldProps={{ maxLength: 100, placeholder: '可空，spot_check.<项编码> 或 sop_parameters.<字段>' }}
+          name="unit"
+          label="单位"
+          fieldProps={{ maxLength: 30, placeholder: '可空，如 ℃ / kPa' }}
         />
         <ProFormSwitch name="is_enabled" label="启用" />
       </FormModalTemplate>

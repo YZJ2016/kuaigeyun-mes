@@ -4,6 +4,7 @@
  */
 import type { Locale } from 'antd/es/locale';
 import enUS from 'antd/locale/en_US';
+import enUSDatePicker from 'antd/es/date-picker/locale/en_US';
 
 const months = 'ມັງກອນ_ກຸມພາ_ມີນາ_ເມສາ_ພຶດສະພາ_ມິຖຸນາ_ກໍລະກົດ_ສິງຫາ_ກັນຍາ_ຕຸລາ_ພະຈິກ_ທັນວາ'.split(
   '_',
@@ -30,9 +31,9 @@ const loLA: Locale = {
     page_size: 'ຂະໜາດໜ້າ',
   },
   DatePicker: {
-    ...enUS.DatePicker,
+    ...enUSDatePicker,
     lang: {
-      ...enUS.DatePicker?.lang,
+      ...enUSDatePicker.lang,
       locale: 'lo_LA',
       placeholder: 'ເລືອກວັນທີ',
       yearPlaceholder: 'ເລືອກປີ',

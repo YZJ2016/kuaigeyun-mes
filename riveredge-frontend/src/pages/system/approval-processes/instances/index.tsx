@@ -589,7 +589,7 @@ const ApprovalInstanceListPage: React.FC = () => {
               if (type === 'currentPage' && pageData?.length) {
                 toExport = pageData;
               } else if (type === 'selected' && keys?.length) {
-                toExport = items.filter((d: any) => keys.includes(d.uuid));
+                toExport = toExport.filter((d) => keys.includes(d.uuid));
               }
               if (toExport.length === 0) {
                 messageApi.warning(t('common.exportNoData'));

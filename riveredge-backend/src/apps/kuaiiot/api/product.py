@@ -50,6 +50,18 @@ async def api_list_products(tenant_id: int = Depends(get_current_tenant)):
     return [ProductOut.model_validate(row) for row in rows]
 
 
+@router.post(
+    "/products/load-builtin",
+    response_model=dict[str, int],
+    dependencies=[Depends(require_permission_codes("kuaiiot:device:create"))],
+)
+async def api_load_builtin_products(
+    tenant_id: int = Depends(get_current_tenant),
+    current_user=Depends(get_current_user),
+):
+    return await product_service.load_builtin_products(tenant_id, user_id=getattr(current_user, "id", None))
+
+
 @router.get(
     "/products/{product_id}",
     response_model=ProductOut,

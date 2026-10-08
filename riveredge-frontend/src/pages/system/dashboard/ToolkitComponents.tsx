@@ -224,6 +224,7 @@ export const WeightCalculator = () => {
  */
 export const ExchangeCalculator = () => {
   const { t } = useTranslation();
+  const amountDecimals = useNumericPrecisionPlaces('amount');
   const [direction, setDirection] = useState<'toCny' | 'fromCny'>('toCny');
   const [amount, setAmount] = useState<number>(100);
   const [currency, setCurrency] = useState('USD');

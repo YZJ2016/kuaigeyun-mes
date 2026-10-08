@@ -18,6 +18,7 @@ import type { Material, MaterialGroup, MaterialListResponse } from '../../../typ
 import type { SOP } from '../../../types/process';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import {
+  type SopBindingConflict,
   findSopBindingConflicts,
   formatSopBindingConflictLabels,
 } from '../../../utils/sopBindingDuplicate';
@@ -106,7 +107,7 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
     const scopes = type === 'material' ? selectedMaterialUuids : selectedMaterialGroupUuids;
     if (scopes.length === 0) return [] as string[];
 
-    const conflicts = [];
+    const conflicts: SopBindingConflict[] = [];
     for (const op of operations) {
       const fullOp = allOperations.find((item) => item.uuid === op.uuid);
       if (!fullOp?.id) continue;

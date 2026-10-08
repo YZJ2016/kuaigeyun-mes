@@ -22,33 +22,45 @@ def test_prev_interval_picks_latest_ending_before():
     assert prev[2] == 1
 
 
+class _ChangeoverCtx:
+    def __init__(self, hours=2.0):
+        self.hours = hours
+
+    def lookup(self, from_pid, to_pid, production_line_id=None):
+        return self.hours, False, "manual"
+
+
 def test_apply_changeover_same_product_no_bump():
     timeline = [
         (datetime(2026, 7, 27, 8, 0), datetime(2026, 7, 27, 10, 0), 1, 100),
     ]
-    earliest = _apply_changeover_earliest(
+    earliest, reason = _apply_changeover_earliest(
         timeline,
         datetime(2026, 7, 27, 10, 0),
         product_id=100,
-        changeover_hours=2.0,
+        changeover_ctx=_ChangeoverCtx(),
+        production_line_id=1,
         holidays=set(),
         work_hours=CFG,
         overtime=None,
     )
     assert earliest == datetime(2026, 7, 27, 10, 0)
+    assert reason is None
 
 
 def test_apply_changeover_different_product_bumps():
     timeline = [
         (datetime(2026, 7, 27, 8, 0), datetime(2026, 7, 27, 10, 0), 1, 100),
     ]
-    earliest = _apply_changeover_earliest(
+    earliest, reason = _apply_changeover_earliest(
         timeline,
         datetime(2026, 7, 27, 10, 0),
         product_id=200,
-        changeover_hours=2.0,
+        changeover_ctx=_ChangeoverCtx(),
+        production_line_id=1,
         holidays=set(),
         work_hours=CFG,
         overtime=None,
     )
     assert earliest == datetime(2026, 7, 27, 12, 0)
+    assert reason == "changeover:manual"

@@ -118,8 +118,8 @@ export default function PackageForm() {
         label={t('pages.infra.package.allowedApps')}
         mode="multiple"
         options={applicationOptions}
-        loading={appOptionsLoading}
         fieldProps={{
+          loading: appOptionsLoading,
           optionFilterProp: 'label',
           showSearch: true,
         }}

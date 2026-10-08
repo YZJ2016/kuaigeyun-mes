@@ -33,9 +33,6 @@ def test_rewrite_saved_supplier_sys_query_to_batch_query():
     assert rewrite("kapi/sys/bd_supplier/query") == "kapi/v2/basedata/bd_supplier/query"
     assert rewrite("kapi/v2/basedata/bd_supplier/batchQuery") == "kapi/v2/basedata/bd_supplier/query"
     assert rewrite("kapi/sys/bd_customer/query") == "kapi/v2/basedata/bd_customer/batchQuery"
-    assert rewrite("kapi/v2/basedata/bd_supplier/batchQuery") == (
-        "kapi/v2/basedata/bd_supplier/batchQuery"
-    )
 
 
 def test_normalize_oauth_path_unchanged():

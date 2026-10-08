@@ -5,6 +5,8 @@
 
 import {
   getDiagnostics,
+  listConnections,
+  type ConnectionOut,
   getEquipmentOpsFeed,
   listAlerts,
   listMessageLogs,
@@ -14,9 +16,10 @@ import {
   type MessageLog,
 } from '../../services/kuaiiot';
 
-export type DashboardSourceKey = 'diagnostics' | 'alerts' | 'feed' | 'messages';
+export type DashboardSourceKey = 'diagnostics' | 'alerts' | 'feed' | 'messages' | 'connections';
 
 export type DashboardSources = {
+  connections?: ConnectionOut[];
   diagnostics?: DiagnosticsOut;
   alerts?: AlertOut[];
   feed?: EquipmentOpsFeed;
@@ -45,6 +48,7 @@ export async function loadDashboardSources(): Promise<DashboardSources> {
   const errors: DashboardSources['errors'] = {};
   const sources: DashboardSources = { errors };
   await Promise.all([
+    capture('connections', listConnections, errors, value => { sources.connections = Array.isArray(value) ? value : []; }),
     capture('diagnostics', getDiagnostics, errors, (value) => {
       sources.diagnostics = value;
     }),

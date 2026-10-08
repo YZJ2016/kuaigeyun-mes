@@ -60,6 +60,7 @@ export const ProfileNotionistsAvatar: React.FC<ProfileNotionistsAvatarProps> = (
         } else if (generatedSrc) {
           setGeneratedFailed(true);
         }
+        return true;
       }}
       style={avatarStyle}
     >

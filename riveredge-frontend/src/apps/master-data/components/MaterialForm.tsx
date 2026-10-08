@@ -17,6 +17,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { Modal, Tabs, App, Table, Button, Form, Input, Select, Collapse, Row, Col, Alert, Tag, Space, Switch, Card, theme, Upload, Typography, Tooltip } from 'antd';
 import { UniTableStackedPrimaryCell } from '../../../components/uni-table/stackedPrimaryColumn';
+import type { CustomField } from '../../../services/customField';
 import { useCustomFields } from '../../../hooks/useCustomFields';
 import { CustomFieldsFormSection } from '../../../components/custom-fields';
 import { MaterialDedupCreateGuard } from './MaterialDedupAssistant';
@@ -2418,7 +2419,7 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
         gridColumns={4}
       />
       <Collapse
-        variant="borderless"
+        bordered={false}
         defaultActiveKey={[]}
         className="material-form-more-collapse"
         expandIconPlacement="start"

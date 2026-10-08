@@ -133,7 +133,6 @@ export default function ExportFollowUpsPage() {
       {
         title: t('app.kuaizhizao.customerFollowUp.colActivityType'),
         dataIndex: 'activity_type_code',
-        width: 120,
         hideInSearch: true,
         ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         render: (_, row) => <MarkerTag color="processing">{activityLabel(row.activity_type_code)}</MarkerTag>,

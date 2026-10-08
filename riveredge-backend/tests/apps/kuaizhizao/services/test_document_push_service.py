@@ -13,8 +13,17 @@ from apps.kuaizhizao.services.document_push_service import (
 from apps.kuaizhizao.services.feishu_work_order_push_service import (
     TARGET_PROFILE as FEISHU_PROFILE,
 )
+from apps.kuaizhizao.services.kingdee_engineering_bom_push_service import (
+    TARGET_PROFILE as BOM_PROFILE,
+)
 from apps.kuaizhizao.services.kingdee_inventory_push_service import (
     TARGET_PROFILE as INV_PROFILE,
+)
+from apps.kuaizhizao.services.kingdee_material_push_service import (
+    TARGET_PROFILE as MAT_PROFILE,
+)
+from apps.kuaizhizao.services.kingdee_process_operation_push_service import (
+    TARGET_PROFILE as OP_PROFILE,
 )
 from apps.kuaizhizao.services.kingdee_production_order_push_service import (
     TARGET_PROFILE as WO_PROFILE,
@@ -45,6 +54,9 @@ _EXPECTED_SUPPORTED_PROFILES = {
     ("sales_order", SO_PROFILE),
     ("purchase_order", PO_PROFILE),
     ("material_batch", INV_PROFILE),
+    ("material", MAT_PROFILE),
+    ("engineering_bom", BOM_PROFILE),
+    ("process_operation", OP_PROFILE),
 }
 
 

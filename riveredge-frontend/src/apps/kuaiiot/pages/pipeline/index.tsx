@@ -261,7 +261,8 @@ export default function PipelinePage() {
               {countLabel('连接源', sources ? connections.length : undefined, errors.connections)}
               {countLabel('设备', sources ? devices.length : undefined, errors.devices)}
               {countLabel('点位', sources ? tags.length : undefined, errors.tags)}
-              {countLabel('MES 设备', sources ? equipment.length : undefined, errors.equipment)}
+              {countLabel('已绑定 MES', sources ? equipment.length : undefined, errors.equipment)}
+              {countLabel('未确认告警', sources ? (sources.alerts ?? []).filter(a => a.status === 'open').length : undefined, errors.alerts)}
             </div>
           </Card>
 

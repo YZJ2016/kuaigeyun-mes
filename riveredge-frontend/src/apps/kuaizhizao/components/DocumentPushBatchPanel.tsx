@@ -704,7 +704,7 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
       return;
     }
     if (pull.open) {
-      pull.resetModal();
+      pull.closeModal();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 只跟随外部 open
   }, [open]);

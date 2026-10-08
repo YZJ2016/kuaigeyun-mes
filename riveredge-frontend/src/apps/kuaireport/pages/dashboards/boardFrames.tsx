@@ -280,8 +280,8 @@ export function accentStyle(color: string | undefined): React.CSSProperties {
   return style as React.CSSProperties;
 }
 
-function useMeasure(initial: { w: number; h: number }) {
-  const ref = useRef<HTMLDivElement>(null);
+function useMeasure<T extends HTMLElement = HTMLDivElement>(initial: { w: number; h: number }) {
+  const ref = useRef<T>(null);
   const [size, setSize] = useState(initial);
   useLayoutEffect(() => {
     const node = ref.current;
@@ -420,7 +420,7 @@ export function BoardButton({
   onClick?: () => void;
 }) {
   const reactId = React.useId().replace(/:/g, '');
-  const { ref, size } = useMeasure({ w: 140, h: BUTTON_H });
+  const { ref, size } = useMeasure<HTMLButtonElement>({ w: 140, h: BUTTON_H });
   const shape = buttonShape(variantOf(variant), size.w);
   return (
     <button

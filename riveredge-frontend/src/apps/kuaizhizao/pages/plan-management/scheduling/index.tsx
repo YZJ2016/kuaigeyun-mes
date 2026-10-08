@@ -9,7 +9,7 @@ import React, { useRef, useState, useCallback, lazy, Suspense, useMemo, useEffec
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Card, Modal, Switch, Spin, Typography, Alert, InputNumber, Divider, Tour, ConfigProvider, Tooltip, Table, Select } from 'antd';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
-import type { ThemeConfig } from 'antd/es/theme/interface';
+import type { ThemeConfig } from 'antd';
 import { useRequest } from 'ahooks';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';

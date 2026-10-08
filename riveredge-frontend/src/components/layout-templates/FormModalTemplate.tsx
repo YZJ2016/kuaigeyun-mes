@@ -70,7 +70,7 @@ export interface FormModalTemplateProps {
    * 仅传本属性、未传 onClose/onCancel 时也能关闭。
    */
   onOpenChange?: (open: boolean) => void;
-  onFinish: (values: any) => Promise<void>;
+  onFinish: (values: any) => Promise<void | boolean>;
   isEdit?: boolean;
   initialValues?: Record<string, any>;
   /** 表单项；仅使用 formItems 动态表单时可省略 */

@@ -44,7 +44,7 @@ async def test_load_presets_creates_rules_when_empty():
     with patch(
         "apps.kuaiplm.services.kuaiplm_notification_rule_presets.MessageTemplateService.load_preset_sme",
         new_callable=AsyncMock,
-        return_value=7,
+        return_value=len(KUAIPLM_NOTIFICATION_RULE_PRESETS),
     ), patch(
         "apps.kuaiplm.services.kuaiplm_notification_rule_presets.BusinessConfigService"
     ) as cfg_cls, patch(
@@ -60,9 +60,9 @@ async def test_load_presets_creates_rules_when_empty():
         cfg.get_business_config = AsyncMock(return_value={"parameters": {}})
         cfg.batch_update_process_parameters = AsyncMock()
         result = await load_kuaiplm_notification_rule_presets(1)
-        assert result["created"] == 7
+        assert result["created"] == len(KUAIPLM_NOTIFICATION_RULE_PRESETS)
         cfg.batch_update_process_parameters.assert_awaited_once()
         saved = cfg.batch_update_process_parameters.await_args.args[1]
         rules = saved["notifications"]["rules"]
-        assert len(rules) == 7
+        assert len(rules) == len(KUAIPLM_NOTIFICATION_RULE_PRESETS)
         assert rules[0]["trigger_document"] == TRIGGER_TRIAL_FLOW

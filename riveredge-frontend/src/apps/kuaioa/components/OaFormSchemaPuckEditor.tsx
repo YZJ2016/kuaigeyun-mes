@@ -94,6 +94,7 @@ const OaFormSchemaPuckEditor: React.FC<Props> = ({ value, onChange }) => {
         ui={{
           viewports: {
             controlsVisible: false,
+              options: [{ width: 720, height: 480, label: 'Form' }],
             current: { width: 720, height: 480 },
           },
         }}

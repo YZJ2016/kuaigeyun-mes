@@ -161,7 +161,7 @@ const ROLE_FUNCTIONAL_DOMAIN_I18N: Record<string, string> = {
 /** 权限树叶子节点展示名：数据范围走 permission.scope，其余走 permission.action */
 function permissionLeafDisplayLabel(
   permission: Permission,
-  t: (key: string, opts?: { defaultValue?: string }) => string
+  t: (key: string, opts?: { defaultValue?: string; name?: string }) => string
 ): string {
   const code = permission.code || '';
   if (code === KUAIZHIZAO_PRICING_VIEW) {

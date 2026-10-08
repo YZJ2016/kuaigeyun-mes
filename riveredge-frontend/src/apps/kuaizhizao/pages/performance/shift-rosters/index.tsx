@@ -1,3 +1,4 @@
+import type { EmployeeOption } from '../../../services/performance';
 /**
  * 排班管理页面（按工作小组或人员 + 周视图）
  */
@@ -33,7 +34,6 @@ import {
   shiftRosterApi,
 } from '../../../services/performance';
 import type {
-  EmployeeOption,
   Holiday,
   Shift,
   ShiftAssignment,

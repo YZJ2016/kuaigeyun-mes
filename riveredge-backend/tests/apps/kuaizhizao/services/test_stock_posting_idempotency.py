@@ -183,6 +183,10 @@ async def test_inbound_serial_update_uses_select_for_update():
             MagicMock(return_value=serial_qs),
         ),
         patch(
+            "apps.kuaizhizao.services.material_serial_document_ledger_service.record_serial_document_ledger",
+            new=AsyncMock(),
+        ),
+        patch(
             "apps.kuaizhizao.services.work_order_readiness_service.notify_inventory_changed",
             return_value=None,
         ),
@@ -357,7 +361,7 @@ def _enclosing_function_source(source: str, call):
 
 def test_direct_atomic_calls_all_pass_idempotency_key():
     for rel in _STOCK_CALL_FILES:
-        source = (_SRC / rel).read_text()
+        source = (_SRC / rel).read_text(encoding="utf-8")
         tree = ast.parse(source)
         for call in _calls(tree, _ATOMIC_NAMES):
             loc = f"{rel}:{call.lineno}"
@@ -385,7 +389,7 @@ def test_wrapper_calls_pass_key_or_synthesizable_fields():
         "apps/kuaizhizao/services/assembly_order_service.py",
         "apps/kuaizhizao/services/inventory_transfer_service.py",
     ]:
-        source = (_SRC / rel).read_text()
+        source = (_SRC / rel).read_text(encoding="utf-8")
         tree = ast.parse(source)
         for call in _calls(tree, _WRAPPER_NAMES):
             loc = f"{rel}:{call.lineno}"
@@ -571,7 +575,7 @@ def test_reconfirmable_document_flows_have_stock_document_guard():
     两者都给明细幂等键注入单次尝试 scope，防止再确认被流水查重吞掉。
     """
     for rel, targets in _GUARDED_DOCUMENT_FLOWS.items():
-        source = (_SRC / rel).read_text()
+        source = (_SRC / rel).read_text(encoding="utf-8")
         tree = ast.parse(source)
         class_map = {
             n.name: n for n in ast.walk(tree) if isinstance(n, ast.ClassDef)
@@ -648,7 +652,7 @@ def test_serial_persisted_flows_pass_serial_nos_to_posting():
     出库方向缺 serials 则让 MaterialSerial 台账漂移。结构性断言防止接线回退。
     """
     for rel, targets in _SERIAL_PERSISTED_FLOWS.items():
-        source = (_SRC / rel).read_text()
+        source = (_SRC / rel).read_text(encoding="utf-8")
         tree = ast.parse(source)
         class_map = {
             n.name: n for n in ast.walk(tree) if isinstance(n, ast.ClassDef)

@@ -25,6 +25,7 @@ export interface ReportParams {
   skip?: number;
   limit?: number;
   customer_keyword?: string;
+  customer_id?: number;
   keyword?: string;
   order_by?: string;
   status?: string;

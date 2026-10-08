@@ -143,7 +143,7 @@ export default function LockScreenPage() {
         });
 
         // 验证成功，更新 token
-        setToken(systemResponse.access_token);
+        if (systemResponse.access_token) setToken(systemResponse.access_token);
 
         response = systemResponse;
       }

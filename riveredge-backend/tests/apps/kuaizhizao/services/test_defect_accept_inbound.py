@@ -64,7 +64,11 @@ def test_accept_routes_incoming_inspection_with_supplier_to_purchase_receipt():
         other_inbound_id=None,
         save=AsyncMock(),
     )
-    inspection = MagicMock(supplier_id=9)
+    inspection = MagicMock(
+        supplier_id=9,
+        source_type="",
+        outsource_material_receipt_id=None,
+    )
     svc = DefectRecordService()
     with patch.object(
         svc,

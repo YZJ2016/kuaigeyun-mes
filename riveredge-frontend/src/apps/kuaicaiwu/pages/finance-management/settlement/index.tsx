@@ -940,7 +940,6 @@ const SettlementPage: React.FC = () => {
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.settlement)}
         columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement.history-v3"
         showAdvancedSearch
-        showAdvancedSearch
         skipFuzzyPinyinClientFilter
         request={async (params, sort, _filter, searchFormValues) => {
           const { current, pageSize } = params;
@@ -1014,7 +1013,6 @@ const SettlementPage: React.FC = () => {
             viewTypes={[...tableOnlyViewTypes]}
             columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement.list-v6"
             showAdvancedSearch
-            showAdvancedSearch
             skipFuzzyPinyinClientFilter
             enableRowSelection
             selectedRowKeys={
@@ -1075,7 +1073,6 @@ const SettlementPage: React.FC = () => {
             rowKey="id"
             viewTypes={[...tableOnlyViewTypes]}
             columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement:2.list-v5"
-            showAdvancedSearch
             showAdvancedSearch
             skipFuzzyPinyinClientFilter
             request={async (params, sort, _filter, searchFormValues) => {
@@ -1165,7 +1162,6 @@ const SettlementPage: React.FC = () => {
             viewTypes={[...tableOnlyViewTypes]}
             columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement:payable.list-v6"
             showAdvancedSearch
-            showAdvancedSearch
             skipFuzzyPinyinClientFilter
             enableRowSelection
             selectedRowKeys={
@@ -1226,7 +1222,6 @@ const SettlementPage: React.FC = () => {
             rowKey="id"
             viewTypes={[...tableOnlyViewTypes]}
             columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement:payment.list-v5"
-            showAdvancedSearch
             showAdvancedSearch
             skipFuzzyPinyinClientFilter
             request={async (params, sort, _filter, searchFormValues) => {

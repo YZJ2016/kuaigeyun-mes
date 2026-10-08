@@ -17,7 +17,7 @@ from infra.api.deps.deps import get_current_user
 from infra.utils import client_ip as client_ip_mod
 
 PLAIN = "share-plain-9f3a"
-NOW = datetime(2026, 9, 28, 8, 0, tzinfo=timezone.utc)
+NOW = datetime.now(timezone.utc).replace(microsecond=0)
 LATER = NOW + timedelta(days=2)
 PAST = NOW - timedelta(hours=1)
 TENANT = 7
@@ -223,7 +223,7 @@ async def test_share_gate_logs_and_does_not_leak_password():
 
     ok = open_with()
     assert ok.status_code == 200
-    assert calls == [TENANT, TENANT, TENANT]
+    assert calls == [TENANT] * len(share.DATA_WIDGET_TYPES)
     assert ok.json()["widgets_config"]
     _assert_no_secret(ok.json(), hashed)
 

@@ -41,10 +41,6 @@ async def test_with_tenant_isolation_accepts_direct_task_event():
     with patch(
         "core.utils.workflow_tenant_isolation.Tenant.get_or_none",
         new=AsyncMock(return_value=tenant),
-    ), patch(
-        "core.utils.workflow_tenant_isolation.set_current_tenant_id",
-    ), patch(
-        "core.utils.workflow_tenant_isolation.clear_tenant_context",
     ):
         await _run_handler(scheduled_task_executor_function, event, "run-1")
 
@@ -64,10 +60,6 @@ async def test_with_tenant_isolation_still_accepts_ctx_shape():
     with patch(
         "core.utils.workflow_tenant_isolation.Tenant.get_or_none",
         new=AsyncMock(return_value=tenant),
-    ), patch(
-        "core.utils.workflow_tenant_isolation.set_current_tenant_id",
-    ), patch(
-        "core.utils.workflow_tenant_isolation.clear_tenant_context",
     ):
         out = await handler(ctx, TaskStep())
     assert out == {"ok": True, "data": {"tenant_id": 3}}

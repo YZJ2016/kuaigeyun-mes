@@ -16,7 +16,6 @@ from apps.kuaicaiwu.models.voucher import Voucher
 from apps.kuaicaiwu.models.voucher_line import VoucherLine
 from apps.kuaicaiwu.services.gl.cash_flow_statement_template import DEFAULT_CASH_FLOW_SEED
 from apps.kuaicaiwu.services.gl.statement_service import StatementService
-from apps.kuaicaiwu.services.posting_service import PostingService
 from core.utils.timezone_utils import resolve_business_datetime, to_site_date
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
@@ -189,6 +188,9 @@ class GlPhase2Service:
         ).first()
         if not debit or not credit:
             raise ValidationError("摊销科目不存在")
+
+        from apps.kuaicaiwu.services.posting_service import PostingService
+
         posting = PostingService()
         voucher = await posting.create_manual_voucher(
             tenant_id,

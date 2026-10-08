@@ -3,6 +3,7 @@
  */
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { useQuery } from '@tanstack/react-query';
 import { Alert, App, Button, Card, Checkbox, Col, Row, Space, Spin, Table, Tag, Typography } from 'antd';
 import { CloudDownloadOutlined, ReloadOutlined } from '@ant-design/icons';
@@ -30,7 +31,7 @@ function resultRows(results: RunInitResponse['results'], items: InitItem[]) {
 
 const INIT_ITEM_COL_PROPS = { xs: 24, sm: 12, md: 8 } as const;
 
-function RequiredInitItemCard({ item, t }: { item: InitItem; t: (key: string) => string }) {
+function RequiredInitItemCard({ item, t }: { item: InitItem; t: TFunction }) {
   return (
     <Card size="small" type="inner" style={{ width: '100%', height: '100%' }}>
       <Typography.Text strong>{tenantInitItemLabel(t, item)}</Typography.Text>
@@ -48,7 +49,7 @@ function OptionalInitItemCard({
   onCheckedChange,
 }: {
   item: InitItem;
-  t: (key: string) => string;
+  t: TFunction;
   checked: boolean;
   onCheckedChange: (checked: boolean) => void;
 }) {

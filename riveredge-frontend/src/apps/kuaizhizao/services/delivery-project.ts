@@ -712,3 +712,5 @@ export const DELIVERY_ISSUE_TYPE: Record<string, string> = {
   delivery: '交期',
   other: '其他',
 };
+
+export type DeliveryNodeDocumentKind = keyof typeof DELIVERY_NODE_DOCUMENT_TYPES;

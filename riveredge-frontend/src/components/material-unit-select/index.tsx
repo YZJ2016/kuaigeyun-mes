@@ -125,7 +125,7 @@ export const MaterialUnitSelect: React.FC<MaterialUnitSelectProps> = ({
   materialId,
   value,
   onChange,
-  size='medium',
+  size='middle',
   disabled = false,
   placeholder = '单位',
   noStyle = false,

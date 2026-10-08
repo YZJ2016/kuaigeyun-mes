@@ -84,15 +84,15 @@ export function inferCustomFieldGridColumns(
 /** ProForm grid 模式：传 colProps 参与父级 Row；非 grid 模式：由外层 Col 控制栏宽 */
 export function customFieldControlLayout(colProps?: { span?: number }) {
   if (colProps) {
-    return { width: '100%' as const, colProps };
+    return { colProps };
   }
   return {};
 }
 
 /** 输入控件 fieldProps（唯一宽度来源，禁止页面内联 style.width） */
-export function customFieldFieldProps(
-  extra?: Record<string, unknown>,
-): { style: { width: '100%' } } & Record<string, unknown> {
+export function customFieldFieldProps<T extends object = Record<never, never>>(
+  extra?: T,
+): { style: { width: '100%' } } & Partial<T> {
   return { style: { width: '100%' }, ...extra };
 }
 

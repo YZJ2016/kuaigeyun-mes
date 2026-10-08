@@ -53,7 +53,8 @@ def test_effective_push_with_remaining():
         remaining_amount=Decimal("500"),
     )
     assert caps.push_to_sales_order.allowed
-    assert caps.push_to_work_order.allowed
+    assert not caps.push_to_work_order.allowed
+    assert caps.push_to_work_order.reason == "sales_contract.push_to_work_order.removed"
     assert caps.create_change.allowed
 
 
@@ -91,7 +92,8 @@ def test_push_allowed_after_termination_date():
         today=date(2026, 8, 4),
     )
     assert caps.push_to_sales_order.allowed
-    assert caps.push_to_work_order.allowed
+    assert not caps.push_to_work_order.allowed
+    assert caps.push_to_work_order.reason == "sales_contract.push_to_work_order.removed"
 
 
 def test_assert_delete_audited_raises():

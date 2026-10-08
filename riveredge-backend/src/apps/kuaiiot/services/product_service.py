@@ -212,6 +212,23 @@ async def list_products(tenant_id: int) -> list[KuaiiotProduct]:
     return await KuaiiotProduct.filter(tenant_id=tid, deleted_at__isnull=True).order_by("id").limit(500)
 
 
+async def load_builtin_products(tenant_id: int, *, user_id: Optional[int] = None) -> dict[str, int]:
+    """复用既有三套模板；重复加载不覆盖用户资料，也不复活已删除编码。"""
+    from apps.kuaiiot.tag_templates import TAG_TEMPLATES
+
+    tid = _require_tenant(tenant_id)
+    created = 0
+    async with in_transaction():
+        for code, template in TAG_TEMPLATES.items():
+            if await KuaiiotProduct.filter(tenant_id=tid, code=code).exists():
+                continue
+            await create_product(tid, ProductCreate(
+                code=code, name=template["name"], tags=template["tags"],
+            ), user_id=user_id)
+            created += 1
+    return {"created": created, "skipped": len(TAG_TEMPLATES) - created}
+
+
 async def get_product(tenant_id: int, product_id: int) -> KuaiiotProduct:
     tid = _require_tenant(tenant_id)
     row = await KuaiiotProduct.filter(tenant_id=tid, id=product_id, deleted_at__isnull=True).first()

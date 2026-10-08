@@ -199,6 +199,18 @@ class TortoiseDistributionStore:
             [tenant_id, resource_type, resource_id],
         )
 
+    async def delete_grants_for_resource(
+        self, tenant_id: int, resource_type: str, resource_id: int
+    ) -> None:
+        """资源删除时清掉其授权行（如删大屏）。"""
+        await self._execute(
+            """
+            DELETE FROM apps_kuaireport_share_grants
+            WHERE tenant_id = $1 AND resource_type = $2 AND resource_id = $3
+            """,
+            [tenant_id, resource_type, resource_id],
+        )
+
     async def user_role_ids(self, tenant_id: int, user_id: int) -> list[int]:
         rows = await self._select(
             """

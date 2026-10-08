@@ -216,7 +216,7 @@ export const CostCalculationFactorsPanel: React.FC<CostCalculationFactorsPanelPr
           ) : (
             groupedFactors.map(({ category, items }) => (
               <div key={category} style={{ marginBottom: 12 }}>
-                <Divider orientation="left" style={{ margin: '0 0 8px' }}>
+                <Divider titlePlacement="left" style={{ margin: '0 0 8px' }}>
                   {categoryLabel[category] ?? category}
                 </Divider>
                 <List

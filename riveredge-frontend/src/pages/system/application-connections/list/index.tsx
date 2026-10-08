@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import {
   ActionType,
   ProColumns,
+  ProDescriptionsItemProps,
   ProFormText,
   ProFormDigit,
   ProFormTextArea,
@@ -58,6 +59,7 @@ import {
 import { SystemMasterDetailDrawer } from '../../shared/systemMasterDetailDrawer';
 import { getApiErrorMessage } from '../../../../utils/errorHandler';
 import AppConnectorMarket from '../AppConnectorMarket';
+import { IotConnectionFields } from '../IotConnectionFields';
 import type { AppConnectorDefinition } from '../connectors';
 import { isKingdeeCosmicOpenApiType, isLlmConnectionType, resolveAppConnectorTypeLabel } from '../connectors';
 import {
@@ -73,7 +75,7 @@ import {
   loadApplicationConnectionApiPresets,
   getLlmRoleSelection,
   selectApplicationConnectionRole,
-  ApplicationConnection,
+  ApplicationConnection as ApplicationConnectionDto,
 } from '../../../../services/applicationConnection';
 import {
   buildFactoryImportTemplate,
@@ -88,6 +90,13 @@ import {
 import { useResourcePermissions } from '../../../../hooks/useResourcePermissions';
 import { todaySiteDateString } from '../../../../utils/format';
 import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
+
+// 映射类型保留服务字段，并满足表格布局的 Record 约束。
+type ApplicationConnection = { [K in keyof ApplicationConnectionDto]: ApplicationConnectionDto[K] };
+type ConnectionColumn = ProColumns<ApplicationConnection> & {
+  uniTableKeepWidth?: boolean;
+  uniTableRemainderFlex?: boolean;
+};
 
 const TYPE_COLORS: Record<string, { color: string; icon: React.ReactNode }> = {
   feishu: { color: 'blue', icon: <MessageOutlined /> },
@@ -880,7 +889,6 @@ const ApplicationConnectionsListPage: React.FC = () => {
       case 'tongda_oa':
       case 'digiwin_wms':
       case 'openwms':
-      case 'thingsboard':
       case 'kingdee_k3_wise':
       case 'kingdee_eas':
       case 'oracle_fusion':
@@ -973,22 +981,9 @@ const ApplicationConnectionsListPage: React.FC = () => {
           </>
         );
       case 'mqtt':
-        return (
-          <>
-            <ProFormText name="host" label="Broker 地址" rules={[{ required: true }]} colProps={{ span: 12 }} />
-            <ProFormDigit name="port" label="端口" min={1} max={65535} initialValue={1883} rules={[{ required: true }]} colProps={{ span: 12 }} />
-            <ProFormText name="username" label="用户名" colProps={{ span: 12 }} />
-            <ProFormText.Password name="password" label="密码" colProps={{ span: 12 }} />
-            <ProFormSwitch name="use_tls" label="TLS" colProps={{ span: 12 }} />
-          </>
-        );
+      case 'thingsboard':
       case 'jetlinks':
-        return (
-          <>
-            {common}
-            <ProFormText.Password name="token" label="Access Token" rules={[{ required: true }]} colProps={{ span: 24 }} />
-          </>
-        );
+        return <IotConnectionFields type={type} />;
       case 'qidian':
       case 'rootcloud':
       case 'casicloud':
@@ -1384,7 +1379,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
     ].includes(type);
   };
 
-  const columns = useMemo<ProColumns<ApplicationConnection>[]>(() => alignProColumns([
+  const columns = useMemo<ProColumns<ApplicationConnection>[]>(() => alignProColumns<ApplicationConnection>([
     {
       title: t('pages.system.applicationConnections.columnName'),
       dataIndex: 'name',
@@ -1574,16 +1569,16 @@ const ApplicationConnectionsListPage: React.FC = () => {
             </Popconfirm>,
           ].filter(Boolean),
     },
-  ], GLOBAL_DOC_LIST_FIELD_RANK), [t, canSyncContacts, canLoadApiPresets, syncingContactsUuid, loadingApiPresetsUuid, selectingRoleUuid, selectedLlmRoles, handleView, handleEdit, handleTestConnection, handleSelectLlmRole, handleSyncContacts, handleLoadApiPresets, handleDelete]);
+  ] as ConnectionColumn[], GLOBAL_DOC_LIST_FIELD_RANK), [t, canSyncContacts, canLoadApiPresets, syncingContactsUuid, loadingApiPresetsUuid, selectingRoleUuid, selectedLlmRoles, handleView, handleEdit, handleTestConnection, handleSelectLlmRole, handleSyncContacts, handleLoadApiPresets, handleDelete]);
 
-  const detailColumns = [
+  const detailColumns: ProDescriptionsItemProps<ApplicationConnection>[] = [
     { title: t('pages.system.applicationConnections.columnName'), dataIndex: 'name' },
     { title: t('pages.system.applicationConnections.columnCode'), dataIndex: 'code' },
     {
       title: t('pages.system.applicationConnections.columnType'),
       dataIndex: 'type',
-      render: (v: string) => {
-        const info = getTypeInfo(v);
+      render: (_, record) => {
+        const info = getTypeInfo(record.type);
         return <MarkerTag color={info.color}>{info.text}</MarkerTag>;
       },
     },
@@ -1612,20 +1607,20 @@ const ApplicationConnectionsListPage: React.FC = () => {
     {
       title: t('pages.system.applicationConnections.columnConnectionStatus'),
       dataIndex: 'is_connected',
-      render: (v: boolean) => (
+      render: (_, record) => (
         <Badge
-          status={v ? 'success' : 'default'}
-          text={v ? t('pages.system.applicationConnections.statusConnected') : t('pages.system.applicationConnections.statusDisconnected')}
+          status={record.is_connected ? 'success' : 'default'}
+          text={record.is_connected ? t('pages.system.applicationConnections.statusConnected') : t('pages.system.applicationConnections.statusDisconnected')}
         />
       ),
     },
     {
       title: t('common.enabled'),
       dataIndex: 'is_active',
-      render: (v: boolean) =>
+      render: (_, record) =>
         renderSystemActiveTag(
           t,
-          v,
+          record.is_active,
           'common.enabled',
           'common.disabled',
         ),
@@ -1634,7 +1629,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
     {
       title: t('pages.system.applicationConnections.columnLastError'),
       dataIndex: 'last_error',
-      render: (v: string) => (v ? renderSystemTypeMarker(v, 'error') : t('common.dash')),
+      render: (_, record) => (record.last_error ? renderSystemTypeMarker(record.last_error, 'error') : t('common.dash')),
     },
     { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
     { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },

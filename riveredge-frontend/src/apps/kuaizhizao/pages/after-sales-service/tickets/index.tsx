@@ -1232,7 +1232,7 @@ const AfterSalesTicketsPage: React.FC = () => {
                 ),
                 render: () => (
                   <ActionConfirmPopconfirm title={t('app.kuaizhizao.afterSalesTicket.actionPushRepairOrder')} description={t('app.kuaizhizao.afterSalesTicket.pushRepairConfirm', {
-          code: record.ticket_code,
+          code: detailRecord?.ticket_code,
         })} onConfirm={() => executePushRepair(detailRecord!)}>
               <Button
                     icon={<ToolOutlined />}

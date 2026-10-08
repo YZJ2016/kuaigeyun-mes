@@ -15,7 +15,7 @@ def test_delete_cancelled_voucher_soft_deletes():
     with patch.object(svc, "_get", new=AsyncMock(return_value=voucher)), patch(
         "apps.kuaicaiwu.models.voucher_line.VoucherLine.filter"
     ) as line_filter_mock, patch(
-        "tortoise.transactions.in_transaction",
+        "apps.kuaicaiwu.services.posting_service.in_transaction",
         return_value=MagicMock(__aenter__=AsyncMock(), __aexit__=AsyncMock()),
     ):
         line_filter_mock.return_value.delete = AsyncMock()

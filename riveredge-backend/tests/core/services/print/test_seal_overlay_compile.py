@@ -122,4 +122,4 @@ def test_seal_overlay_avoids_page_break_inside():
     )
     assert "print-seal-overlay-root" in html
     assert "page-break-inside: avoid" in html
-    assert "print-columns-with-seal" not in html
+    assert ".print-seal-overlay-root, .print-columns-with-seal" in html

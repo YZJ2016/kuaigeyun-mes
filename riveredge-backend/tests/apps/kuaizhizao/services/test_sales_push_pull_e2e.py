@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import ExitStack
 from decimal import Decimal
 from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
@@ -69,6 +70,8 @@ class _FakeQuery:
 
     def _match_row(self, row: Dict[str, Any]) -> bool:
         for key, val in self._filters:
+            if key == "tenant_id":
+                continue
             if key.endswith("__in"):
                 field = key[:-4]
                 if row.get(field) not in val:
@@ -108,19 +111,30 @@ def _patch_orm(
     notice_items: Optional[List[Dict[str, Any]]] = None,
     deliveries: Optional[List[Dict[str, Any]]] = None,
     delivery_items: Optional[List[Dict[str, Any]]] = None,
+    order_items: Optional[List[Any]] = None,
 ):
     notices = notices or []
     notice_items = notice_items or []
     deliveries = deliveries or []
     delivery_items = delivery_items or []
+    so_rows = [
+        {"id": getattr(it, "id", None), "sales_order_id": getattr(it, "sales_order_id", None)}
+        for it in (order_items or [])
+    ]
 
-    return patch.multiple(
+    stack = ExitStack()
+    stack.enter_context(patch.multiple(
         push_qty,
-        ShipmentNotice=SimpleNamespace(filter=lambda **kwargs: _FakeQuery(notices)),
-        ShipmentNoticeItem=SimpleNamespace(filter=lambda **kwargs: _FakeQuery(notice_items)),
-        SalesDelivery=SimpleNamespace(filter=lambda **kwargs: _FakeQuery(deliveries)),
-        SalesDeliveryItem=SimpleNamespace(filter=lambda **kwargs: _FakeQuery(delivery_items)),
-    )
+        ShipmentNotice=SimpleNamespace(filter=lambda **kwargs: _FakeQuery(notices).filter(**kwargs)),
+        ShipmentNoticeItem=SimpleNamespace(filter=lambda **kwargs: _FakeQuery(notice_items).filter(**kwargs)),
+        SalesDelivery=SimpleNamespace(filter=lambda **kwargs: _FakeQuery(deliveries).filter(**kwargs)),
+        SalesDeliveryItem=SimpleNamespace(filter=lambda **kwargs: _FakeQuery(delivery_items).filter(**kwargs)),
+    ))
+    stack.enter_context(patch(
+        "apps.kuaizhizao.models.sales_order_item.SalesOrderItem.filter",
+        lambda **kwargs: _FakeQuery(so_rows).filter(**kwargs),
+    ))
+    return stack
 
 
 def test_compute_backorder_zero_remaining_not_fallback_to_order_qty():
@@ -136,7 +150,7 @@ def test_compute_pushable_qty_formula():
 def test_zero_remaining_cannot_push_again():
     async def _run():
         items = [_item(item_id=1, remaining_quantity="0", order_quantity="10")]
-        with _patch_orm():
+        with _patch_orm(order_items=items):
             pushable = await push_qty.get_pushable_qty_for_order_items(1, 1, items)
         assert pushable.get(1, Decimal("-1")) == Decimal("0")
 
@@ -150,7 +164,7 @@ def test_second_notice_blocked_after_first_fills_backorder():
         notice_items = [
             {"notice_id": 101, "sales_order_item_id": 1, "notice_quantity": Decimal("10")},
         ]
-        with _patch_orm(notices=notices, notice_items=notice_items):
+        with _patch_orm(notices=notices, notice_items=notice_items, order_items=items):
             pushable = await push_qty.get_pushable_qty_for_order_items(1, 1, items)
         assert pushable[1] == Decimal("0")
 
@@ -167,7 +181,7 @@ def test_same_material_two_lines_independent_occupancy():
         notice_items = [
             {"notice_id": 201, "sales_order_item_id": 1, "notice_quantity": Decimal("5")},
         ]
-        with _patch_orm(notices=notices, notice_items=notice_items):
+        with _patch_orm(notices=notices, notice_items=notice_items, order_items=items):
             pushable = await push_qty.get_pushable_qty_for_order_items(1, 1, items)
         assert pushable[1] == Decimal("0")
         assert pushable[2] == Decimal("8")
@@ -187,7 +201,7 @@ def test_delivery_occupancy_by_order_line():
                 "delivery_quantity": Decimal("4"),
             },
         ]
-        with _patch_orm(deliveries=deliveries, delivery_items=delivery_items):
+        with _patch_orm(deliveries=deliveries, delivery_items=delivery_items, order_items=items):
             pushable = await push_qty.get_pushable_qty_for_order_items(1, 1, items)
         assert pushable[1] == Decimal("6")
 
@@ -213,7 +227,7 @@ def test_soft_deleted_delivery_does_not_occupy_pushable_qty():
                 "delivery_quantity": Decimal("10"),
             },
         ]
-        with _patch_orm(deliveries=deliveries, delivery_items=delivery_items):
+        with _patch_orm(deliveries=deliveries, delivery_items=delivery_items, order_items=items):
             pushable = await push_qty.get_pushable_qty_for_order_items(1, 1, items)
         assert pushable[1] == Decimal("10")
 
@@ -234,7 +248,7 @@ def test_soft_deleted_notice_does_not_occupy_pushable_qty():
         notice_items = [
             {"notice_id": 101, "sales_order_item_id": 1, "notice_quantity": Decimal("10")},
         ]
-        with _patch_orm(notices=notices, notice_items=notice_items):
+        with _patch_orm(notices=notices, notice_items=notice_items, order_items=items):
             pushable = await push_qty.get_pushable_qty_for_order_items(1, 1, items)
         assert pushable[1] == Decimal("10")
 
@@ -275,6 +289,9 @@ def test_pull_from_sales_order_rejects_zero_remaining():
 
         svc = SalesDeliveryService()
         with patch(
+            "infra.services.business_config_service.BusinessConfigService.get_business_config",
+            new=AsyncMock(return_value={"parameters": {}}),
+        ), patch(
             "apps.kuaizhizao.models.sales_order.SalesOrder.get_or_none",
             new=AsyncMock(return_value=order),
         ), patch(
@@ -283,6 +300,9 @@ def test_pull_from_sales_order_rejects_zero_remaining():
         ), patch(
             "apps.kuaizhizao.utils.sales_order_push_qty.get_pushable_qty_for_order_items",
             new=AsyncMock(return_value={1: Decimal("0")}),
+        ), patch(
+            "apps.kuaizhizao.utils.over_qty_tolerance.max_pushable_with_issue_tolerance",
+            new=AsyncMock(return_value=(Decimal("0"), None)),
         ), patch(
             "apps.kuaizhizao.models.sales_delivery.SalesDelivery.filter",
             return_value=_FakeQuery([]),
@@ -305,7 +325,7 @@ def test_pull_from_sales_order_rejects_zero_remaining():
 def test_batch_orders_with_pushable_qty_excludes_fully_delivered():
     async def _run():
         items = [_item(item_id=1, remaining_quantity="0")]
-        with _patch_orm():
+        with _patch_orm(order_items=items):
             ids = await push_qty.batch_orders_with_pushable_qty(1, items)
         assert 1 not in ids
 

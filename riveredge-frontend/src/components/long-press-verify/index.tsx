@@ -37,7 +37,7 @@ export default function LongPressVerify({
   duration = 2000,
   onVerify,
   text = '长按验证',
-  size='medium',
+  size='middle',
   disabled = false,
   className = '',
 }: LongPressVerifyProps) {

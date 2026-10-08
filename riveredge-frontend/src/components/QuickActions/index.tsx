@@ -89,7 +89,7 @@ const QuickActions: React.FC<QuickActionsProps> = ({
   onImport,
   onCopy,
   moreActions = [],
-  size='medium',
+  size='middle',
   type = 'default',
 }) => {
   const { token } = theme.useToken();

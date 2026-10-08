@@ -1,4 +1,4 @@
-import type { SyncTargetField } from '../../../components/sync-from-source-modal/types';
+import type { SyncTargetField } from '../../../../../components/sync-from-source-modal/types';
 
 export const OPERATION_SYNC_TARGET_FIELDS: SyncTargetField[] = [
   { value: 'code', labelKey: 'app.master-data.operations.syncField.code', required: true },

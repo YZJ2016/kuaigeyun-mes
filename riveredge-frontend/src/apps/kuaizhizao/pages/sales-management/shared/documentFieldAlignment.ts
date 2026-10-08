@@ -1023,7 +1023,7 @@ export const GLOBAL_DOC_DETAIL_TABLE_FIELD_RANK = {
   action: 94,
 } satisfies FieldRankMap
 
-export function alignProColumns<T extends Record<string, unknown>>(
+export function alignProColumns<T>(
   columns: ProColumns<T>[],
   rankMap: FieldRankMap = GLOBAL_DOC_LIST_FIELD_RANK,
 ): ProColumns<T>[] {
@@ -1412,7 +1412,7 @@ export const GLOBAL_DOC_DETAIL_BASIC_FIELD_RANK = {
   updated_at: 93.1,
 } satisfies FieldRankMap
 
-export function alignDescriptionColumns<T extends Record<string, unknown>>(
+export function alignDescriptionColumns<T>(
   columns: ProDescriptionsItemProps<T>[],
   rankMap: FieldRankMap = GLOBAL_DOC_DETAIL_BASIC_FIELD_RANK,
 ): ProDescriptionsItemProps<T>[] {

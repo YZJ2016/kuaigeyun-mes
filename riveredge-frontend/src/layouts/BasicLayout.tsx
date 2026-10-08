@@ -1115,7 +1115,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           src={siteLogoDisplayUrl}
           alt=""
           height={22}
-          fetchpriority="high"
+          fetchPriority="high"
           decoding="async"
           style={{
             height: 22,
@@ -2419,7 +2419,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
     // 如果后端有语言列表，优先使用后端的
     if (backendLanguages.length > 0) {
-      const order = new Map(SUPPORTED_UI_LANGUAGES.map((code, index) => [code, index]));
+      const order = new Map<string, number>(SUPPORTED_UI_LANGUAGES.map((code, index) => [code, index]));
       return backendLanguages
         .filter((lang: Language) => lang.is_active && normalizeUiLanguage(lang.code))
         .slice()
@@ -2988,7 +2988,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                   <Avatar
                     size={24}
                     src={headerTextAvatar ? undefined : avatarUrl}
-                    onError={() => setAvatarImageFailed(true)}
+                    onError={() => { setAvatarImageFailed(true); return true; }}
                     style={{
                       ...(headerTextAvatar
                         ? getTextAvatarCircleStyle(token)

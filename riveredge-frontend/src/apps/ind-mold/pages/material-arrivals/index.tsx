@@ -72,7 +72,7 @@ export default function MoldMaterialArrivalsPage() {
         actionRef={actionRef}
         rowKey="id"
         createButtonText={t('app.ind-mold.materialArrival.createButton')}
-        onCreateClick={perms.canCreate ? () => setOpen(true) : undefined}
+        onCreate={perms.canCreate ? () => setOpen(true) : undefined}
         columns={columns}
         request={async () => {
           const items = await industryMoldApi.listMaterialArrivals();

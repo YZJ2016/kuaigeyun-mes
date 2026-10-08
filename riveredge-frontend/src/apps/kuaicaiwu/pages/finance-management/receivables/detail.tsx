@@ -28,7 +28,6 @@ import { renderRefundExecutionMarker } from '../../../utils/financeUiLabels';
 import { MarkerTag } from '../../../../../constants/statusBadges';
 
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
-import { Alert } from 'antd';
 
 const P = 'app.kuaicaiwu.receivable';
 const RECEIPT_RESOURCE = 'kuaicaiwu:receipt';

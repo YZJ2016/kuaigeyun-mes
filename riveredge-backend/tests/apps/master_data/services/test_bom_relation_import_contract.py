@@ -39,16 +39,17 @@ class TestBOMRelationImportContract(unittest.TestCase):
         self.assertFalse(result.success)
         self.assertTrue(any("缺少必需表头" in err for err in result.errors))
 
-    def test_relation_import_requires_entity_headers_before_db_access(self):
+    def test_relation_import_missing_entity_headers_warns_before_db_access(self):
         req = BOMRelationImportRequest(
-            rows=[["*父件编号", "*子件编号", "*子件数量"], ["示例", "示例", "1"], ["A", "B", "2"]],
+            rows=[["*父件编号"], ["示例"], ["A"]],
             entities=["processRoute"],
             write_strategy="upsert",
             dry_run=True,
         )
         result = asyncio.run(MaterialService._relation_import_bom_v2(tenant_id=1, data=req))
         self.assertFalse(result.success)
-        self.assertTrue(any("processRoute" in err for err in result.errors))
+        self.assertTrue(any("缺少必需表头" in err for err in result.errors))
+        self.assertTrue(any("工艺路线" in w for w in result.warnings))
 
 
 if __name__ == "__main__":

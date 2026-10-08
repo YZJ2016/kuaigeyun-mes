@@ -10,7 +10,7 @@ export type ParamType = 'boolean' | 'number' | 'string' | 'color' | 'select' | '
 
 /** 下拉选项（label 使用 i18n key，由页面 t(labelKey) 渲染） */
 export interface ParamSelectOption {
-  value: string;
+  value: string | number;
   labelKey: string;
 }
 
@@ -63,6 +63,7 @@ const COMMON_CATEGORY = {
   id: 'common',
   nameKey: 'pages.system.configCenter.category.common',
   descriptionKey: 'pages.system.configCenter.category.commonDesc',
+  params: [] as ParamMeta[],
 };
 
 /** 8 个标准系统模块的基础定义（按快制造菜单顺序） */

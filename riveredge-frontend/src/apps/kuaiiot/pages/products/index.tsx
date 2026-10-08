@@ -20,7 +20,7 @@ import {
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, AutoComplete, Button, Descriptions, Popconfirm, Result, Table, Tag } from 'antd';
+import { App, AutoComplete, Button, Descriptions, Input, Popconfirm, Result, Table, Tag } from 'antd';
 import { UniTable } from '../../../../components/uni-table';
 import { UniBatchDeleteButton } from '../../../../components/uni-batch';
 import { UniExportMenuButton } from '../../../../components/uni-export/UniExportMenuButton';
@@ -49,6 +49,7 @@ import {
   filterProductRows,
   getProductRow,
   listProductRows,
+  loadBuiltinProducts,
   sortLocalRows,
   updateProductRow,
   type ProductRow,
@@ -122,6 +123,18 @@ const ProductsPage: React.FC = () => {
   /** 跨页批量删除解析：request 内增量累积（prefetch 只增不覆盖），不依赖当前展示页。 */
   const allRowsRef = useRef<Map<number, ProductRow>>(new Map());
   const [pageRows, setPageRows] = useState<ProductRow[]>([]);
+  const [builtinBusy, setBuiltinBusy] = useState(false);
+  const builtinBusyRef = useRef(false);
+  const handleLoadBuiltin = async () => {
+    if (builtinBusyRef.current) return;
+    builtinBusyRef.current = true; setBuiltinBusy(true);
+    try {
+      const result = await loadBuiltinProducts();
+      messageApi.success(`内置产品新增 ${result.created} 个，保留已有 ${result.skipped} 个`);
+      actionRef.current?.reload();
+    } catch { messageApi.error('内置产品加载失败，请检查权限后重试'); }
+    finally { builtinBusyRef.current = false; setBuiltinBusy(false); }
+  };
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   const [formOpen, setFormOpen] = useState(false);
@@ -207,6 +220,8 @@ const ProductsPage: React.FC = () => {
           value_type: tag.value_type || 'number',
           map_target: String(tag.map_target || '').trim(),
           ...(tag.unit ? { unit: String(tag.unit).trim() } : {}),
+          fill_target: String(tag.fill_target ?? '').trim() || null,
+          is_enabled: tag.is_enabled ?? true,
         }));
       if (tags.some((tag) => !tag.name || !tag.map_target)) {
         messageApi.error(t('app.kuaiiot.products.tagFieldsRequired'));
@@ -545,8 +560,9 @@ const ProductsPage: React.FC = () => {
         showCreateButton={canCreate}
         createButtonText={withSingleNewShortcutHint(t('app.kuaiiot.action.createProduct'))}
         onCreate={openCreate}
-        toolBarActionsAfterCreate={
-          canUpdate
+        toolBarActionsAfterCreate={[
+          ...(canCreate ? [<Button key="load-builtin" loading={builtinBusy} onClick={() => void handleLoadBuiltin()}>加载内置产品</Button>] : []),
+          ...(canUpdate
             ? [
                 <UniBatchDeleteButton
                   key="batch-delete"
@@ -556,8 +572,8 @@ const ProductsPage: React.FC = () => {
                   confirmDescription={(count) => t('common.batchDeleteContent', { count })}
                 />,
               ]
-            : []
-        }
+            : [])
+        ]}
         rightToolBarActionsBeforeExport={
           canDisplay
             ? [
@@ -641,13 +657,16 @@ const ProductsPage: React.FC = () => {
           deleteIconProps={{ tooltipText: t('common.delete') }}
         >
           <ProFormGroup>
-            <ProFormText
+            <ProFormItem
               name="tag_key"
               label={t('app.kuaiiot.field.tagKey')}
               rules={[{ required: true, message: t('common.required') }]}
-              width="sm"
-              fieldProps={{ maxLength: 100 }}
-            />
+            >
+              <AutoComplete
+                options={Array.from(new Set(Array.from(allRowsRef.current.values()).flatMap(row => (row.tags ?? []).map(tag => tag.tag_key)))).map(value => ({ value }))}
+                style={{ width: 216, maxWidth: '100%' }}
+              ><Input maxLength={100} /></AutoComplete>
+            </ProFormItem>
             <ProFormText
               name="name"
               label={t('common.name')}
@@ -672,6 +691,7 @@ const ProductsPage: React.FC = () => {
                 style={{ width: 220, maxWidth: '100%' }}
               />
             </ProFormItem>
+            <ProFormText name="fill_target" label="填充目标" width="sm" fieldProps={{ maxLength: 100, placeholder: 'spot_check.<项编码> / sop_parameters.<字段>' }} />
             <ProFormText
               name="unit"
               label={t('app.kuaiiot.products.fieldUnit')}

@@ -924,7 +924,7 @@ export default function LoginPage() {
       // 验证密码确认
       if (values.password !== values.confirm_password) {
         message.error(t('pages.login.passwordMismatch'));
-        return false;
+        return;
       }
 
       const registerResponse = await registerOrganization({
@@ -2006,7 +2006,7 @@ export default function LoginPage() {
             width={48}
             height={48}
             loading="eager"
-            fetchpriority="high"
+            fetchPriority="high"
             decoding="async"
             style={{
               opacity: 1,
@@ -2071,7 +2071,7 @@ export default function LoginPage() {
               width={48}
               height={48}
               loading="eager"
-              fetchpriority="high"
+              fetchPriority="high"
               decoding="async"
               style={{
                 opacity: 1,

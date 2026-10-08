@@ -65,7 +65,7 @@ const { Title } = Typography;
 
 type BlockStyle = {
   fontSize?: string;
-  fontWeight?: string;
+  fontWeight?: string | number;
   textAlign?: string;
   color?: string;
   letterSpacing?: string;

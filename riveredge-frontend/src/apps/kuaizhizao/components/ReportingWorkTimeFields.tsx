@@ -45,7 +45,8 @@ export const ReportingWorkTimeFields: React.FC<ReportingWorkTimeFieldsProps> = (
   );
 
   const handleStartChange = useCallback(
-    (value: Dayjs | null) => {
+    (value: Dayjs | Dayjs[] | null) => {
+      if (Array.isArray(value)) return;
       if (syncingRef.current || !form) return;
       form.setFieldValue(REPORTING_WORK_START_FIELD, value);
       syncDerived(REPORTING_WORK_START_FIELD);
@@ -54,7 +55,8 @@ export const ReportingWorkTimeFields: React.FC<ReportingWorkTimeFieldsProps> = (
   );
 
   const handleEndChange = useCallback(
-    (value: Dayjs | null) => {
+    (value: Dayjs | Dayjs[] | null) => {
+      if (Array.isArray(value)) return;
       if (syncingRef.current || !form) return;
       form.setFieldValue(REPORTING_WORK_END_FIELD, value);
       syncDerived(REPORTING_WORK_END_FIELD);

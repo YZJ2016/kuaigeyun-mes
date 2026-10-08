@@ -24,8 +24,9 @@ from apps.kuaiiot.schemas.control import (
     TagCreate,
     TagUpdate,
 )
-from apps.kuaiiot.services.product_service import get_product
-from apps.kuaiiot.services.connection_runtime import EXTERNAL_TYPES, validate_mapping, validate_type
+from apps.kuaiiot.services.product_service import get_product, _validate_tags
+from apps.kuaiiot.services.connection_runtime import EXTERNAL_TYPES, validate_mapping, validate_type, resolve_core_connection
+from core.services.integration.iot_platform_client import PlatformClient
 from core.models.integration_config import IntegrationConfig
 from apps.kuaiiot.services.tag_service import _validate_fill_target, _validate_map_target
 from core.utils.timezone_utils import resolve_business_datetime
@@ -178,6 +179,19 @@ async def create_device(
     if exists:
         raise ValidationError("设备编码已存在")
     equipment_uuid = await _bind_equipment_uuid(tid, payload.equipment_uuid)
+    product_tags = []
+    if payload.product_id is not None:
+        try:
+            product = await get_product(tid, payload.product_id)
+        except NotFoundError as exc:
+            raise ValidationError("产品不属于当前租户") from exc
+        product_tags = _validate_tags(product.tags or [])
+    if payload.group_id is not None:
+        group = await KuaiiotDeviceGroup.filter(
+            tenant_id=tid, id=payload.group_id, deleted_at__isnull=True,
+        ).first()
+        if group is None:
+            raise ValidationError("分组不属于当前租户")
     template_code = (payload.template_code or "").strip()
     if template_code:
         from apps.kuaiiot.tag_templates import TAG_TEMPLATES
@@ -185,25 +199,45 @@ async def create_device(
         if template_code not in TAG_TEMPLATES:
             raise ValidationError("点位模板不存在")
     try:
-        device = await KuaiiotDevice.create(
-            tenant_id=tid,
-            connection_id=payload.connection_id,
-            external_device_id=external_id,
-            code=code,
-            name=payload.name.strip(),
-            device_token=_new_device_token(),
-            equipment_uuid=equipment_uuid,
-            remark=payload.remark,
-            created_by=user_id,
-            updated_by=user_id,
-        )
+        async with in_transaction():
+            device = await KuaiiotDevice.create(
+                tenant_id=tid,
+                connection_id=payload.connection_id,
+                external_device_id=external_id,
+                code=code,
+                name=payload.name.strip(),
+                device_token=_new_device_token(),
+                equipment_uuid=equipment_uuid,
+                product_id=payload.product_id,
+                group_id=payload.group_id,
+                remark=payload.remark,
+                created_by=user_id,
+                updated_by=user_id,
+            )
+            for tag in product_tags:
+                await KuaiiotTagDefinition.create(
+                    tenant_id=tid, device_id=device.id, **tag,
+                    created_by=user_id, updated_by=user_id,
+                )
+            if template_code:
+                from apps.kuaiiot.services.tag_template_service import apply_template
+
+                # 已有模板语义：保留产品同名点位，只补尚不存在的点位。
+                await apply_template(tid, device.id, template_code, user_id=user_id)
     except IntegrityError as exc:
         raise ValidationError("设备编码已存在") from exc
-    if template_code:
-        from apps.kuaiiot.services.tag_template_service import apply_template
-
-        await apply_template(tid, device.id, template_code, user_id=user_id)
     return device
+
+
+async def discover_external_devices(tenant_id: int, connection_id: int, *, page: int = 0) -> dict:
+    connection = await get_connection(tenant_id, connection_id)
+    if connection.connection_type not in {"thingsboard", "jetlinks"}:
+        raise ValidationError("该连接需要手动填写外部设备标识")
+    core = await resolve_core_connection(connection)
+    if core is None:
+        raise ValidationError("数采连接未关联应用连接")
+    async with PlatformClient(connection.connection_type, core.get_config()) as client:
+        return await client.device_page(page)
 
 
 async def list_devices(tenant_id: int) -> list[KuaiiotDevice]:

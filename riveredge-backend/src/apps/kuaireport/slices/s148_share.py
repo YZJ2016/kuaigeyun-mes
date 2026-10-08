@@ -864,13 +864,10 @@ class SqlShareStore:
             """,
             [tenant_id, dashboard_id],
         )
-        await conn.execute_query_dict(
-            """
-            DELETE FROM apps_kuaireport_share_grants
-            WHERE tenant_id = $1 AND resource_type = $2 AND resource_id = $3
-            RETURNING id
-            """,
-            [tenant_id, "dashboard", dashboard_id],
+        from apps.kuaireport.slices.s149_distribution import TortoiseDistributionStore
+
+        await TortoiseDistributionStore(conn).delete_grants_for_resource(
+            tenant_id, "dashboard", dashboard_id
         )
         rows = await conn.execute_query_dict(
             """

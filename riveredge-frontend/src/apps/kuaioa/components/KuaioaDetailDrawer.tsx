@@ -2,6 +2,7 @@
  * 轻办公详情抽屉：审批类 HALF_WIDTH，台账类 STANDARD_WIDTH。
  */
 import React, { useMemo } from 'react';
+import type { TFunction } from 'i18next';
 import { Descriptions, Timeline } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { getFileDownloadUrlWithToken } from '../../../services/file';
@@ -46,7 +47,7 @@ const TYPE_MARKER_FIELDS = new Set(['category', 'plan_type', 'license_type', 'as
 function renderFieldValue(
   field: KuaioaFieldConfig,
   record: Record<string, unknown>,
-  t: (key: string) => string,
+  t: TFunction,
   statusEnum?: Record<string, { text: string; status?: string }>,
   statusPresentation?: 'lifecycle' | 'marker',
 ) {

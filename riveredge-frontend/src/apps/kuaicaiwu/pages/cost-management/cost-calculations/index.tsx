@@ -475,7 +475,7 @@ const CostCalculationPage: React.FC = () => {
           />
           {result.cost_details ? (
             <>
-              <Divider orientation="left" style={{ marginTop: 16 }}>
+              <Divider titlePlacement="left" style={{ marginTop: 16 }}>
                 {t('app.kuaicaiwu.costCalculation.calculationFactors')}
               </Divider>
               <div style={{ maxHeight: 360, overflow: 'auto' }}>

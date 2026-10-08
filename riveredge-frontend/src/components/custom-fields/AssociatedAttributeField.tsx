@@ -282,7 +282,7 @@ export const AssociatedAttributeField: React.FC<AssociatedAttributeFieldProps> =
         label={props.label}
         initialValue={props.initialValue ?? undefined}
         fieldProps={{ disabled: true, ...customFieldFieldProps(), placeholder: '-' }}
-        {...customFieldControlLayout(colProps)}
+        {...customFieldControlLayout(props.colProps)}
       />
     );
   }

@@ -1,4 +1,4 @@
-import type { SyncTargetField } from '../../components/sync-from-source-modal/types';
+import type { SyncTargetField } from '../../../../components/sync-from-source-modal/types';
 
 export const BOM_SYNC_TARGET_FIELDS: SyncTargetField[] = [
   { value: 'parent_code', labelKey: 'app.master-data.bom.syncField.parentCode', required: true },

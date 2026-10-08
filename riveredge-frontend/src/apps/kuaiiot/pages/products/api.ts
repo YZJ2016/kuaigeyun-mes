@@ -23,6 +23,10 @@ import {
 /** 后端 ProductOut 还带 remark；列表行保留该字段。 */
 export type ProductRow = ProductOut & { remark?: string | null };
 
+export function loadBuiltinProducts(): Promise<{ created: number; skipped: number }> {
+  return apiRequest('/apps/kuaiiot/products/load-builtin', { method: 'POST' });
+}
+
 /** POST /products 请求体（后端 ProductCreate 支持 events/functions/remark）。 */
 export type ProductWritePayload = {
   code: string;

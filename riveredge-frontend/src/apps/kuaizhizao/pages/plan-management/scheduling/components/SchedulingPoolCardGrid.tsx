@@ -1,6 +1,6 @@
 import React from 'react';
 import { Checkbox, Empty, Tag, Typography } from 'antd';
-import type { TFunction } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import type { SchedulingPoolCardItem } from '../schedulingCardViewUtils';
 import { SCHEDULING_DRAG_WORK_ORDER } from '../schedulingDropUtils';
 import { formatDateTime } from '../../../../../../utils/format';

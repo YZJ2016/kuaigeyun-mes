@@ -142,7 +142,6 @@ class TestResolveApproverIdentifiers:
 
         with patch(
             "core.services.approval.approval_instance_service.User.filter",
-            new_callable=AsyncMock,
         ) as user_filter:
             user_mock = MagicMock()
             user_mock.first = _first
@@ -166,7 +165,6 @@ class TestApprovalDataScope:
 
         with patch(
             "core.services.approval.approval_data_scope.ApprovalTask.filter",
-            new_callable=AsyncMock,
         ) as task_filter:
             qs = MagicMock()
             qs.prefetch_related.return_value = qs
@@ -193,7 +191,6 @@ class TestDepartmentManagerResolution:
         dept = MagicMock(manager_id=88)
         with patch(
             "core.services.approval.approval_instance_service.Department.filter",
-            new_callable=AsyncMock,
         ) as dept_filter:
             dept_filter.return_value.all = AsyncMock(return_value=[dept])
             with patch.object(

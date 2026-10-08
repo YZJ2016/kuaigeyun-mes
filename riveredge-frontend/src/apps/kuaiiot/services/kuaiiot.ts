@@ -290,6 +290,8 @@ export type ProductTag = {
   value_type: string;
   map_target: string;
   unit?: string;
+  fill_target?: string | null;
+  is_enabled?: boolean;
 };
 
 export type ProductEvent = {

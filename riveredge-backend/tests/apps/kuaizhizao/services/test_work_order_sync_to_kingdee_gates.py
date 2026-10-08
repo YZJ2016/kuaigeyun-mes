@@ -31,6 +31,7 @@ def _binding(**overrides):
         last_success_at=None,
         last_attempt_at=None,
         last_error=None,
+        match_key_field=None,
     )
     base.update(overrides)
     binding = SimpleNamespace(**base)
@@ -65,7 +66,18 @@ async def test_sync_from_source_does_not_invoke_kingdee_push():
     ), patch(
         "apps.kuaizhizao.services.work_order_sync_service.WorkOrderSyncBinding.filter",
     ) as binding_filter:
-        binding = _binding(source_type="api", api_uuid="api-1", field_mapping={"code": "code"})
+        binding = _binding(
+            source_type="api",
+            api_uuid="api-1",
+            field_mapping={"code": "code"},
+            sources=[
+                {
+                    "kind": "api",
+                    "api_uuid": "api-1",
+                    "field_mapping": {"code": "code"},
+                }
+            ],
+        )
         binding_filter.return_value.first = AsyncMock(return_value=binding)
 
         out = await service.sync_from_source(

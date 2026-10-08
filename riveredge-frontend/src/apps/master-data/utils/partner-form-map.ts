@@ -64,7 +64,7 @@ export function normalizePartnerContactsForSubmit(
 ): PartnerContact[] {
   if (!Array.isArray(contacts)) return [];
   return contacts
-    .map((row) => {
+    .map((row): PartnerContact | null => {
       const contactPerson = row.contactPerson?.trim() || undefined;
       const contactTitle = row.contactTitle?.trim() || undefined;
       const phone = row.phone?.trim() || undefined;

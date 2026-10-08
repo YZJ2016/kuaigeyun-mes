@@ -12,7 +12,7 @@ import type {
   ProFormInstance,
 } from '@ant-design/pro-components';
 import { ProFormSwitch, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Divider, Dropdown, Form, Popconfirm, Select, Tag, Typography } from 'antd';
+import { Alert, App, Button, Divider, Dropdown, Form, Popconfirm, Select, Space, Tag, Typography } from 'antd';
 import { UniTable } from '../../../../components/uni-table';
 import { rowActionKind } from '../../../../components/uni-action';
 import { UniBatchDeleteButton } from '../../../../components/uni-batch';
@@ -38,6 +38,8 @@ import {
   getIntegrationConfigListAllMatching,
   type IntegrationConfig,
 } from '../../../../services/integrationConfig';
+import { IotConnectionModal } from '../../../../pages/system/application-connections/IotConnectionModal';
+import { eligibleIotConnections } from '../../../../pages/system/application-connections/iotConnectionConfig';
 import { HealthStatusTag } from '../../components/status-tags';
 import {
   createConnectionRow,
@@ -77,14 +79,6 @@ const MAPPING_FIELDS: Array<{ name: string; label: string; mqttOnly?: boolean }>
   { name: 'idempotency_key_path', label: '幂等键路径' },
 ];
 
-/** 与 connection_runtime.validate_type 一致：http 可绑 API/Webhook，其余要求同型。 */
-function eligibleIntegrations(rows: IntegrationConfig[], connectionType: string): IntegrationConfig[] {
-  if (connectionType === 'http') {
-    return rows.filter((row) => ['API', 'api', 'Webhook'].includes(row.type));
-  }
-  return rows.filter((row) => row.type === connectionType);
-}
-
 function fmtTime(value?: string | null): string {
   return value ? formatDateTimeBySiteSetting(value, '—') : '—';
 }
@@ -115,21 +109,29 @@ const ConnectionsPage: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<ConnectionRow | null>(null);
   const [formConnType, setFormConnType] = useState('http');
+  const [iotModalOpen, setIotModalOpen] = useState(false);
+  const [coreLoading, setCoreLoading] = useState(false);
+  const [coreError, setCoreError] = useState(false);
   const [coreConnections, setCoreConnections] = useState<IntegrationConfig[]>([]);
   const [detail, setDetail] = useState<ConnectionRow | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
 
   const loadCoreConnections = useCallback(async () => {
+    setCoreLoading(true);
+    setCoreError(false);
     try {
       setCoreConnections(await getIntegrationConfigListAllMatching({ is_active: true }));
     } catch {
-      setCoreConnections([]);
+      setCoreError(true);
+    } finally {
+      setCoreLoading(false);
     }
   }, []);
 
   const openCreate = useCallback(() => {
     setEditing(null);
+    setIotModalOpen(false);
     setFormConnType('http');
     void loadCoreConnections();
     setModalOpen(true);
@@ -394,7 +396,7 @@ const ConnectionsPage: React.FC = () => {
 
   const coreOptions = useMemo(
     () =>
-      eligibleIntegrations(coreConnections, formConnType).map((row) => ({
+      eligibleIotConnections(coreConnections, formConnType).map((row) => ({
         value: row.uuid,
         label: `${row.name} (${row.code})`,
       })),
@@ -512,7 +514,7 @@ const ConnectionsPage: React.FC = () => {
       <FormModalTemplate
         title={editing ? '编辑接入配置' : '新建接入配置'}
         open={modalOpen}
-        onOpenChange={setModalOpen}
+        onOpenChange={(open) => { setModalOpen(open); if (!open) setIotModalOpen(false); }}
         width={MODAL_CONFIG.STANDARD_WIDTH}
         initialValues={modalInitialValues}
         formRef={formRef}
@@ -546,14 +548,19 @@ const ConnectionsPage: React.FC = () => {
             />
             <Form.Item
               name="integration_uuid"
-              label="公共连接"
+              label="应用连接"
               rules={[
                 { required: formConnType !== 'http', message: '该类型必须绑定同租户公共连接' },
               ]}
-              extra="连接地址与凭据在公共连接中维护；直接 HTTP 入站可不选"
+              extra="选择当前租户的一条应用连接；可维护多条同类型连接。直接 HTTP 入站可不选。"
             >
-              <Select allowClear showSearch optionFilterProp="label" options={coreOptions} placeholder="选择已启用的公共连接" />
+              <Select allowClear showSearch loading={coreLoading} optionFilterProp="label" options={coreOptions} placeholder="选择已启用的应用连接（名称 / 编码）" />
             </Form.Item>
+            <Space wrap style={{ marginBottom: 16 }}>
+              {formConnType !== 'http' ? <Button disabled={coreLoading} onClick={() => setIotModalOpen(true)}>新建 IoT 应用连接</Button> : null}
+              <Button loading={coreLoading} onClick={() => void loadCoreConnections()}>刷新连接</Button>
+            </Space>
+            {coreError ? <Alert type="warning" showIcon message="应用连接列表读取失败，请检查权限后刷新重试" style={{ marginBottom: 16 }} /> : null}
             {MAPPING_FIELDS.filter((f) => (f.mqttOnly ? formConnType === 'mqtt' : formConnType !== 'http')).map(
               (field) => (
                 <ProFormText
@@ -588,6 +595,18 @@ const ConnectionsPage: React.FC = () => {
           <ProFormTextArea name="remark" label="备注" fieldProps={{ rows: 2, maxLength: 500 }} />
         ) : null}
       </FormModalTemplate>
+
+      <IotConnectionModal
+        key={formConnType}
+        open={iotModalOpen && modalOpen && !editing}
+        type={formConnType}
+        onOpenChange={setIotModalOpen}
+        onCreated={(connection) => {
+          setCoreConnections(rows => [...rows.filter(row => row.uuid !== connection.uuid), connection]);
+          formRef.current?.setFieldValue('integration_uuid', connection.uuid);
+          setCoreError(false);
+        }}
+      />
 
       <DetailDrawerTemplate
         title={detail ? `接入配置：${detail.name}` : '接入配置详情'}

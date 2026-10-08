@@ -59,6 +59,18 @@ async def api_get_connection(connection_id: int, tenant_id: int = Depends(get_cu
     return await control_service.get_connection(tenant_id, connection_id)
 
 
+@router.get(
+    "/connections/{connection_id}/external-devices",
+    dependencies=[Depends(require_permission_codes("kuaiiot:device:create"))],
+)
+async def api_discover_external_devices(
+    connection_id: int,
+    page: int = Query(default=0, ge=0, le=10000),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    return await control_service.discover_external_devices(tenant_id, connection_id, page=page)
+
+
 @router.put(
     "/connections/{connection_id}",
     response_model=ConnectionOut,

@@ -1,6 +1,7 @@
 """编码规则序号校准契约：页面、实体映射、派生表三者一致。"""
 
 import importlib
+import importlib.util
 
 from core.models.model_fields import model_has_field
 
@@ -25,6 +26,12 @@ def test_build_rule_code_entity_for_seq_sync_covers_all_auto_generate_pages():
 
 def test_entity_models_are_importable():
     for rule_code, (module_path, class_name, attr_name) in RULE_CODE_ENTITY_FOR_SEQ_SYNC.items():
+        try:
+            spec = importlib.util.find_spec(module_path)
+        except ModuleNotFoundError:
+            spec = None
+        if spec is None:
+            continue  # 应用代码不在本仓（如 haoligo 在私有仓），仅校验随仓交付的模块
         mod = importlib.import_module(module_path)
         model_cls = getattr(mod, class_name)
         assert model_has_field(model_cls, attr_name), (

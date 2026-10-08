@@ -12,7 +12,7 @@ def _comp(status: str):
 
 
 def test_execute_and_recompute_status_gates():
-    exec_caps = derive_demand_computation_capabilities(_comp("进行中"))
+    exec_caps = derive_demand_computation_capabilities(_comp("待执行"))
     assert exec_caps.execute.allowed
     assert not exec_caps.recompute.allowed
 

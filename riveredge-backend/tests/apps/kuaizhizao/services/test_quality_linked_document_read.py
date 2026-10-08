@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -21,6 +21,18 @@ async def test_allow_sales_order_detail_when_linked_and_quality_read():
         ),
         patch(
             "core.services.authorization.user_permission_service.UserPermissionService.has_any_permission",
+            new=AsyncMock(return_value=True),
+        ),
+        patch(
+            "apps.kuaizhizao.models.sales_order.SalesOrder.get_or_none",
+            new=AsyncMock(return_value=MagicMock()),
+        ),
+        patch(
+            "infra.models.user.User.get_or_none",
+            new=AsyncMock(return_value=MagicMock()),
+        ),
+        patch(
+            "apps.kuaizhizao.services.kuaizhizao_data_scope.DataScopeService.row_visible",
             new=AsyncMock(return_value=True),
         ),
     ):
@@ -47,6 +59,18 @@ async def test_allow_work_order_detail_when_linked_and_quality_read():
         ),
         patch(
             "core.services.authorization.user_permission_service.UserPermissionService.has_any_permission",
+            new=AsyncMock(return_value=True),
+        ),
+        patch(
+            "apps.kuaizhizao.models.work_order.WorkOrder.get_or_none",
+            new=AsyncMock(return_value=MagicMock()),
+        ),
+        patch(
+            "infra.models.user.User.get_or_none",
+            new=AsyncMock(return_value=MagicMock()),
+        ),
+        patch(
+            "apps.kuaizhizao.services.kuaizhizao_data_scope.DataScopeService.row_visible",
             new=AsyncMock(return_value=True),
         ),
     ):

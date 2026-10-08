@@ -159,7 +159,7 @@ export function getDatetimeFormatString(): string {
  * @returns 格式化后的日期字符串
  */
 export function formatDateTime(
-  date: string | Date | number | null | undefined,
+  date: string | Date | number | Dayjs | null | undefined,
   format?: string
 ): string {
   if (!date) return '-';
@@ -175,7 +175,7 @@ export function formatDateTime(
  * @returns 格式化后的日期字符串
  */
 export function formatDate(
-  date: string | Date | number | null | undefined,
+  date: string | Date | number | Dayjs | null | undefined,
   format?: string
 ): string {
   if (!date) return '-';

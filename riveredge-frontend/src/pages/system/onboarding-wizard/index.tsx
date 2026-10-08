@@ -709,7 +709,7 @@ const OnboardingWizardPage: React.FC = () => {
           const requiredSubs = item.subItems!.filter(s => s.required);
           if (requiredSubs.length > 0) {
             isGroupCompleted = requiredSubs.every(
-              (s) => completedItems.has(s.id) || (realCounts[s.id] ?? 0) > 0
+              (s) => s.id !== undefined && (completedItems.has(s.id) || (realCounts[s.id] ?? 0) > 0)
             );
           }
         }

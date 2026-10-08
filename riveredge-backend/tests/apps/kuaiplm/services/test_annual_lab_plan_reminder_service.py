@@ -16,13 +16,12 @@ from apps.kuaiplm.models.annual_lab_plan import (
 from apps.kuaiplm.services.annual_lab_plan_reminder_service import (
     RULE_MONTH_DUE,
     AnnualLabPlanReminderService,
-    _month_remind_at,
     dispatch_annual_lab_plan_reminder,
 )
 
 
 def test_month_remind_at_first_day_site_10am():
-    planned = _month_remind_at("2026-10")
+    planned = AnnualLabPlanReminderService._month_remind_at("2026-10")
     assert planned is not None
     assert planned.tzinfo is not None
 
