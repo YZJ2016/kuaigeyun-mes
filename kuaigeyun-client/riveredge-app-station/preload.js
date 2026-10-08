@@ -7,4 +7,7 @@ contextBridge.exposeInMainWorld('stationShell', {
   getWorkstationId() {
     return ipcRenderer.invoke('stationShell:getWorkstationId');
   },
+  notifyStationRejected() {
+    return ipcRenderer.invoke('stationShell:stationRejected');
+  },
 });
