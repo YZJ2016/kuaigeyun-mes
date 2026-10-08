@@ -663,7 +663,8 @@ const LanguageListPage: React.FC = () => {
           onCreate={handleCreate}
           enableRowSelection
           onRowSelectionChange={setSelectedRowKeys}
-          showDeleteButtondeleteConfirmTitle={t('common.confirm')}
+          showDeleteButton
+        deleteConfirmTitle={t('common.confirm')}
           deleteConfirmDescription={(count) => t('field.language.batchDeleteConfirm', { count: selectedRowKeys.length })}
           
           onDelete={handleBatchDelete}

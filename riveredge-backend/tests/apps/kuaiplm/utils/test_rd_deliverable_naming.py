@@ -46,7 +46,7 @@ def test_drawing_requires_version_suffix():
 
 
 def test_software_spec_requires_project_version_date():
-    with pytest.raises(ValidationError, match="项目号_版本号_更新日期"):
+    with pytest.raises(ValidationError, match="项目代号_版本号_更新日期"):
         validate_deliverable_catalog(
             deliverable_type="software_spec",
             material_code=None,

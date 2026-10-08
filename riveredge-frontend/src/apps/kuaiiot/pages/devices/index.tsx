@@ -9,7 +9,7 @@ import type {
   ProColumns,
   ProDescriptionsItemProps,
 } from '@ant-design/pro-components';
-import { ProFormDigit, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
+import { ProFormDependency, ProFormDigit, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import {
   App,
   Alert,
@@ -80,6 +80,7 @@ import {
   updateDeviceRow,
   type DeviceRow,
 } from './api';
+import { ExternalDeviceInput } from './ExternalDeviceInput';
 
 const GROUP_ALL = 'all';
 const GROUP_NONE = 'ungrouped';
@@ -141,12 +142,14 @@ const DevicesPage: React.FC = () => {
   const allRowsRef = useRef<Map<number, DeviceRow>>(new Map());
   const groupFilterRef = useRef<React.Key>(GROUP_ALL);
   const [oeeForm] = Form.useForm();
+  const [deviceForm] = Form.useForm();
 
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [groups, setGroups] = useState<DeviceGroup[]>([]);
   const [groupsError, setGroupsError] = useState<string>();
   const [selectedGroup, setSelectedGroup] = useState<React.Key>(GROUP_ALL);
   const [connections, setConnections] = useState<ConnectionOut[]>([]);
+  const [equipmentLabels, setEquipmentLabels] = useState<Map<string, string>>(new Map());
   const [products, setProducts] = useState<{ id: number; code: string; name: string }[]>([]);
   const [templates, setTemplates] = useState<{ code: string; name: string }[]>([]);
 
@@ -181,6 +184,9 @@ const DevicesPage: React.FC = () => {
   }, [groups]);
 
   const loadSidebarSources = useCallback(async () => {
+    void equipmentApi.list({ limit: 500 }).then((res: any) => {
+      setEquipmentLabels(new Map((res?.items ?? []).map((row: { uuid: string; name: string; code: string }) => [row.uuid, `${row.name} (${row.code})`])));
+    }).catch(() => setEquipmentLabels(new Map()));
     try {
       setGroups(await listDeviceGroups());
       setGroupsError(undefined);
@@ -437,6 +443,10 @@ const DevicesPage: React.FC = () => {
     () => [
       { title: '编码', dataIndex: 'code', key: 'code', sorter: true, copyable: true, width: 140 },
       { title: '名称', dataIndex: 'name', key: 'name', sorter: true, ellipsis: true, minWidth: 140 },
+      { title: '产品', dataIndex: 'product_id', key: 'product_id', hideInSearch: true, width: 160,
+        render: (_, row) => row.product_id != null ? productLabelById.get(row.product_id) ?? `#${row.product_id}` : '—' },
+      { title: 'MES 设备', dataIndex: 'equipment_uuid', key: 'equipment_uuid', hideInSearch: true, width: 160,
+        render: (_, row) => row.equipment_uuid ? equipmentLabels.get(row.equipment_uuid) ?? row.equipment_uuid : '—' },
       {
         title: '外部标识',
         dataIndex: 'external_device_id',
@@ -560,6 +570,8 @@ const DevicesPage: React.FC = () => {
       connectionOptions,
       connectionLabelById,
       groupLabelById,
+      productLabelById,
+      equipmentLabels,
       openDetail,
       openEdit,
       handleDelete,
@@ -608,6 +620,8 @@ const DevicesPage: React.FC = () => {
             code: String(values.code ?? '').trim(),
             name: String(values.name ?? '').trim(),
             equipment_uuid: values.equipment_uuid || undefined,
+            product_id: values.product_id || undefined,
+            group_id: values.group_id || undefined,
             template_code: values.template_code || undefined,
             remark: typeof values.remark === 'string' && values.remark.trim() ? values.remark.trim() : undefined,
           });
@@ -671,7 +685,7 @@ const DevicesPage: React.FC = () => {
       {
         title: 'MES 设备',
         dataIndex: 'equipment_uuid',
-        render: (_, row) => row.equipment_uuid || '—',
+        render: (_, row) => row.equipment_uuid ? equipmentLabels.get(row.equipment_uuid) ?? row.equipment_uuid : '—',
       },
       {
         title: '在线状态',
@@ -800,6 +814,8 @@ const DevicesPage: React.FC = () => {
         onOpenChange={setModalOpen}
         width={MODAL_CONFIG.STANDARD_WIDTH}
         initialValues={modalInitialValues}
+        form={deviceForm}
+        onValuesChange={changed => { if (!editing && 'connection_id' in changed) deviceForm.setFieldValue('external_device_id', undefined); }}
         onFinish={handleFinish}
       >
         {editing ? (
@@ -834,12 +850,11 @@ const DevicesPage: React.FC = () => {
             <Form.Item name="connection_id" label="数采连接">
               <ConnectionSelect />
             </Form.Item>
-            <ProFormText
-              name="external_device_id"
-              label="外部设备标识"
-              rules={[{ required: true, message: '请填写外部设备标识' }]}
-              fieldProps={{ maxLength: 100 }}
-            />
+            <ProFormDependency name={['connection_id']}>
+              {({ connection_id }) => <Form.Item name="external_device_id" label="外部设备 ID" rules={[{ required: true, message: '请选择或填写外部设备标识' }]}>
+                <ExternalDeviceInput connectionId={connection_id} connectionType={connections.find(row => row.id === Number(connection_id))?.connection_type} />
+              </Form.Item>}
+            </ProFormDependency>
             <ProFormText
               name="code"
               label="编码"
@@ -854,6 +869,12 @@ const DevicesPage: React.FC = () => {
             />
             <Form.Item name="equipment_uuid" label="MES 设备">
               <EquipmentSelect />
+            </Form.Item>
+            <Form.Item name="product_id" label="产品模型" extra="创建时初始化产品点位；模板只补充产品未定义的点位">
+              <ProductSelect />
+            </Form.Item>
+            <Form.Item name="group_id" label="设备分组">
+              <Select allowClear showSearch optionFilterProp="label" options={groups.map(g => ({ value: g.id, label: `${g.name} (${g.code})` }))} placeholder="选择设备分组" />
             </Form.Item>
             <SafeProFormSelect
               name="template_code"

@@ -23,7 +23,12 @@ async def test_load_kitting_outsource_map_uses_whole_group_not_only_direct_paren
     ) as outsource_filter:
         result = await svc._load_kitting_component_outsource_map(1, wo)
 
-    outsource_filter.assert_called_once_with(
+    outsource_filter.assert_any_call(
+        tenant_id=1,
+        bom_parent_work_order_id=10,
+        deleted_at__isnull=True,
+    )
+    outsource_filter.assert_any_call(
         tenant_id=1,
         work_order_group_id=99,
         deleted_at__isnull=True,
@@ -51,7 +56,16 @@ async def test_load_kitting_outsource_map_without_group_uses_subtree_parents():
     ) as outsource_filter:
         result = await svc._load_kitting_component_outsource_map(1, wo)
 
-    outsource_filter.assert_called_once()
+    outsource_filter.assert_any_call(
+        tenant_id=1,
+        bom_parent_work_order_id=10,
+        deleted_at__isnull=True,
+    )
+    subtree_calls = [
+        c for c in outsource_filter.call_args_list
+        if set(c.kwargs.get("bom_parent_work_order_id__in") or []) == {10, 11}
+    ]
+    assert subtree_calls, outsource_filter.call_args_list
     call_kwargs = outsource_filter.call_args.kwargs
     assert call_kwargs["tenant_id"] == 1
     assert set(call_kwargs["bom_parent_work_order_id__in"]) == {10, 11}

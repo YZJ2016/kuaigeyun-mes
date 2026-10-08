@@ -54,7 +54,7 @@ function FieldPreview({
   );
 }
 
-function commonFields(t: TFunction, extras?: Record<string, unknown>) {
+function commonFields<T extends object = Record<never, never>>(t: TFunction, extras?: T) {
   return {
     name: { type: 'text' as const, label: t('app.kuaioa.formSchema.fieldName') },
     label: { type: 'text' as const, label: t('app.kuaioa.formSchema.fieldLabel') },

@@ -275,7 +275,7 @@ export const InstallExecutionFormModal: React.FC<Props> = ({
                   const next = [...prev];
                   next[index] = {
                     ...next[index],
-                    occurred_at: v ? v.format('YYYY-MM-DD HH:mm:ss') : '',
+                    occurred_at: v && !Array.isArray(v) ? v.format('YYYY-MM-DD HH:mm:ss') : '',
                   };
                   return next;
                 });

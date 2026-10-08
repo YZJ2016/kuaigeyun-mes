@@ -76,7 +76,7 @@ const MissingAppRoute: React.FC<{ appCode: string; appName: string }> = ({ appCo
 
 /** 为单个应用创建按需加载的懒组件（仅在该路由被访问时才加载 chunk） */
 function createLazyApp(app: Application) {
-  return React.lazy(() =>
+  return React.lazy<React.ComponentType>(() =>
     loadPlugin(app).then((routes) => {
       const component = routes[0]?.component;
       if (!component) {

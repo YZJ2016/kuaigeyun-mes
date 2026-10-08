@@ -5,8 +5,8 @@
 import type { MutableRefObject } from 'react';
 import type { MessageInstance } from 'antd/es/message/interface';
 import type { TFunction } from 'i18next';
-import type { WorkOrderForGantt } from '../../components/GanttSchedulingChart/types';
-import type { SchedulingAiProposal } from '../../services/scheduling-ai';
+import type { WorkOrderForGantt } from '../../../components/GanttSchedulingChart/types';
+import type { SchedulingAiProposal } from '../../../services/scheduling-ai';
 
 export interface ApplySchedulingAiProposalOptions {
   proposal: SchedulingAiProposal;

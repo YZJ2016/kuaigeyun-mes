@@ -2211,7 +2211,6 @@ export default {
   'components.uniTable.chartDeveloping': '图表功能暂未开放',
   'components.uniTable.ganttViewHint': '请配置 ganttViewConfig.renderGantt 来自定义甘特图渲染',
   'components.uniTable.helpTitle': '使用帮助',
-  'components.uniTable.helpHint': '可通过顶部搜索栏筛选数据，支持导入导出。如需页面专属帮助，可配置 helpViewConfig.content。',
   'components.uniTable.touchViewTitle': '触屏视图',
   'components.uniTable.touchViewHint': '请配置 touchViewConfig.renderCard 来启用触屏视图',
   'components.uniTable.exampleValue': '示例值',
@@ -4174,12 +4173,8 @@ export default {
   'app.kuaicaiwu.fixedAssets.disposals.type.scrap': '报废',
   'app.kuaicaiwu.fixedAssets.disposals.type.donate': '捐赠',
   'app.kuaicaiwu.fixedAssets.deprRuns.createButton': '新建折旧试算',
-  'app.kuaicaiwu.fixedAssets.deprRuns.createButton': '新建折旧试算',
   'app.kuaicaiwu.fixedAssets.deprRuns.previewButton': '试算折旧',
   'app.kuaicaiwu.fixedAssets.deprRuns.previewTitle': '折旧试算',
-  'app.kuaicaiwu.fixedAssets.deprRuns.batchConfirm': '批量确认计提',
-  'app.kuaicaiwu.fixedAssets.deprRuns.batchConfirmSuccess': '已确认 {{count}} 条折旧计提',
-  'app.kuaicaiwu.fixedAssets.deprRuns.exportFileName': '折旧计提批次',
   'app.kuaicaiwu.fixedAssets.deprRuns.batchConfirm': '批量确认计提',
   'app.kuaicaiwu.fixedAssets.deprRuns.batchConfirmSuccess': '已确认 {{count}} 条折旧计提',
   'app.kuaicaiwu.fixedAssets.deprRuns.exportFileName': '折旧计提批次',
@@ -4710,7 +4705,6 @@ export default {
   'app.kuaiplm.common.columns.owner': '负责人',
   'app.kuaiplm.common.columns.currentGate': '阶段门',
   'app.kuaiplm.common.columns.currentNode': '当前阶段',
-  'app.kuaiplm.common.columns.progress': '进度',
   'app.kuaiplm.common.columns.nodeProgress': '阶段进度',
   'app.kuaiplm.common.gate.concept': '概念阶段',
   'app.kuaiplm.common.gate.design': '设计阶段',
@@ -7031,8 +7025,6 @@ export default {
   'app.kuaizhizao.deliveryProject.addTemplateTask': '添加预置任务',
   'app.kuaizhizao.deliveryProject.templateTaskOwnerOptional': '可选，留空则在项目工作台指定',
   'app.kuaizhizao.deliveryProject.templateTaskMembersOptional': '可选，留空则在项目工作台指定',
-  'app.kuaizhizao.deliveryProject.templateTaskOwnerOptional': '可选，留空则在项目工作台指定',
-  'app.kuaizhizao.deliveryProject.templateTaskMembersOptional': '可选，留空则在项目工作台指定',
   'app.kuaizhizao.deliveryProject.newTemplateTask': '新任务',
   'app.kuaizhizao.deliveryProject.startProject': '启动项目',
   'app.kuaizhizao.deliveryProject.pauseProject': '暂停项目',
@@ -7467,7 +7459,6 @@ export default {
   'app.kuaizhizao.workReporting.formReportedQtyRequired': '请输入报工数量',
   'app.kuaizhizao.workReporting.formReportedQtyAuto': '报工数量（自动合计）：',
   'app.kuaizhizao.workReporting.formQualifiedQtyRequired': '请输入合格数量',
-  'app.kuaizhizao.workReporting.defectCreateAfterReportFailed': '报工成功，但不良品记录创建失败',
   'app.kuaizhizao.workReporting.defectBindOperationFailed': '不良品项已创建，但回写工序绑定失败，请在工序主数据中手动绑定',
   'app.kuaizhizao.workReporting.formWorkHoursPlaceholder': '选填，默认按 0',
   'app.kuaizhizao.workReporting.formRemarksPlaceholder': '请输入备注信息',
@@ -9281,7 +9272,6 @@ export default {
   'app.kuaizhizao.afterSalesTicket.loadSalesOrdersFailed': '加载销售订单失败',
   'app.kuaizhizao.afterSalesTicket.loadSalesDeliveriesFailed': '加载销售出库单失败',
   'app.kuaizhizao.afterSalesTicket.actionPushSalesReturn': '下推销售退货单',
-  'app.kuaizhizao.afterSalesTicket.actionPushRepairOrder': '下推维修单',
   'app.kuaizhizao.afterSalesTicket.actionPushReturnVisit': '下推客户回访',
   'app.kuaizhizao.afterSalesTicket.pushPreviewTitle': '下推销售退货单',
   'app.kuaizhizao.afterSalesTicket.pushSuccess': '已生成销售退货单',
@@ -13506,8 +13496,6 @@ export default {
   'app.kuaizhizao.demandComputation.pushProgressTooltip': '{{percent}}%（按建议下推数量）',
   'app.kuaizhizao.demandComputation.pushProgressNoNeedTooltip':
     '{{percent}}%（无需下推：净需求已被库存/在途冲抵或无建议数量）',
-  'app.kuaizhizao.demandComputation.pushNoProductionItems': '计算结果无生产/委外需求',
-  'app.kuaizhizao.demandComputation.pushNoPurchaseItems': '计算结果无采购需求',
   'app.kuaizhizao.demandComputation.capability.demand_computation.push.covered_by_supply':
     '净需求已被库存/在途冲抵，无需下推工单或采购；也不会展开 BOM 子件',
   'app.kuaizhizao.demandComputation.capability.demand_computation.push.no_suggested_qty':
@@ -30423,10 +30411,6 @@ export default {
     '实验委托列表搜索与钉住条件生效',
   'pages.dashboard.updateLog.entries.kuaiplm-lab-request-list-search-r01.description':
     '列表 request 改为读取 UniTable 的 searchFormValues（模糊 keyword、状态/类型等钉住与高级搜索），并纳入「全部/我的」范围进缓存键，避免搜了不筛选或切换范围仍显示旧数据。',
-  'pages.dashboard.updateLog.entries.kuaioa-employee-batch-import-r01.title':
-    '员工档案导入恢复分片批量接口',
-  'pages.dashboard.updateLog.entries.kuaioa-employee-batch-import-r01.description':
-    '新增员工 batch-create：每批最多 200 条一次提交，不再逐条 POST，大批量导入更快且不易触发写限流；你已自编员工编号时片内顺序建档即可。',
   'pages.dashboard.updateLog.entries.chunked-import-write-rate-limit-r01.title':
     '大批量逐条导入不再触发写限流',
   'pages.dashboard.updateLog.entries.chunked-import-write-rate-limit-r01.description':

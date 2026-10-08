@@ -36,6 +36,10 @@ async def test_tenant_only_route_authenticates(monkeypatch, token, header, expec
     # Legacy decoder fixtures make the original insecure route runnable too.
     monkeypatch.setattr(deps, "get_token_payload", lambda t: {"tenant_id": 21} if t == "user" else None, raising=False)
     monkeypatch.setattr(deps, "get_infra_superadmin_token_payload", lambda t: {"sub": "1"} if t == "admin" else None, raising=False)
+    monkeypatch.setattr(
+        "infra.domain.tenant.tenant_access.require_operational_tenant_by_id",
+        AsyncMock(return_value=SimpleNamespace()),
+    )
     app = FastAPI()
 
     @app.get("/tenant-resource")

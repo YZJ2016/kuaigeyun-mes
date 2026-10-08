@@ -672,19 +672,22 @@ class ReportingService(AppBaseService[ReportingRecord]):
     def __init__(self):
         super().__init__(ReportingRecord)
 
-    async def _get_reporting_estimated_wage_rate(self, tenant_id: int) -> Decimal:
-        """读取报工统计预估工资基数，未配置时回退到 30。"""
-        default_rate = Decimal("30")
+    async def _get_reporting_estimated_wage_rate(self, tenant_id: int) -> Optional[Decimal]:
+        """读取报工统计预估工资基数；未配置（或配置无效）返回 None，禁止回退常数。
+
+        spec 142：缺配置时统计字段 estimated_wages 返回 null + 「未配置」标记，
+        不得用回退常数冒充估算值。
+        """
         try:
             biz_config = await BusinessConfigService().get_business_config(tenant_id)
             reporting_cfg = (biz_config or {}).get("parameters", {}).get("reporting", {})
             configured_rate = reporting_cfg.get("estimated_wage_rate")
             if configured_rate is None:
-                return default_rate
+                return None
             rate = Decimal(str(configured_rate))
-            return rate if rate > 0 else default_rate
+            return rate if rate > 0 else None
         except Exception:
-            return default_rate
+            return None
 
     async def _is_last_operation_for_work_order(
         self,
@@ -3171,7 +3174,11 @@ class ReportingService(AppBaseService[ReportingRecord]):
             "total_unqualified_quantity": float(total_unqualified_quantity),
             "total_work_hours": float(total_work_hours),
             "cumulative_hours": float(total_work_hours),
-            "estimated_wages": float(total_work_hours * wage_rate),
+            # 缺 estimated_wage_rate 配置时为 null + 「未配置」，禁止回退常数 30（spec 142）
+            "estimated_wages": (
+                float(total_work_hours * wage_rate) if wage_rate is not None else None
+            ),
+            "estimated_wages_note": None if wage_rate is not None else "未配置",
             "qualification_rate": qualification_rate,
             "first_pass_yield_rate": first_pass_yield_rate,
             "first_pass_reported_quantity": float(first_pass_reported_quantity),
@@ -3185,7 +3192,14 @@ class ReportingService(AppBaseService[ReportingRecord]):
             "worker_stats": worker_stats_list,
             "trends": {
                 "hours": [120, 145, 138, 160, 155, 175, float(total_work_hours)],
-                "wages": [1200, 1500, 1800, 1600, 2100, 1900, float(total_work_hours * wage_rate)],
+                "wages": (
+                    [
+                        1200, 1500, 1800, 1600, 2100, 1900,
+                        float(total_work_hours * wage_rate),
+                    ]
+                    if wage_rate is not None
+                    else [None] * 7
+                ),
                 "efficiency": [qualification_rate] * 7,
             },
         }

@@ -66,7 +66,7 @@ export function shouldHideFromApplicationCenter(code: string | undefined | null)
 }
 
 /** 行业免费版原作者 GitHub ID（与 manifest author / author_github 一致） */
-export const FREE_INDUSTRY_AUTHOR_GITHUB: Record<FreeIndustryAppCode, string> = {
+export const FREE_INDUSTRY_AUTHOR_GITHUB: Partial<Record<FreeIndustryAppCode, string>> = {
   'spoke-wheel': 'xyt123lyq',
 };
 

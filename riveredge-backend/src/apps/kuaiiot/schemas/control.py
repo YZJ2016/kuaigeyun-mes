@@ -76,6 +76,8 @@ class DeviceCreate(BaseModel):
     code: str = Field(..., min_length=1, max_length=50)
     name: str = Field(..., min_length=1, max_length=100)
     equipment_uuid: Optional[str] = Field(default=None, max_length=36)
+    product_id: Optional[int] = Field(default=None, gt=0)
+    group_id: Optional[int] = Field(default=None, gt=0)
     template_code: Optional[str] = Field(default=None, max_length=50)
     remark: Optional[str] = None
 

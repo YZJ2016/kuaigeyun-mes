@@ -34,8 +34,7 @@ import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../
 
 function customerDisplayName(c: Customer | null | undefined): string {
   if (!c) return '';
-  const row = c as Record<string, unknown>;
-  return String(row.name ?? row.customer_name ?? '').trim();
+  return String(c.name ?? ('customer_name' in c ? c.customer_name : '') ?? '').trim();
 }
 
 const RESOURCE = 'kuaizhizao:customer-return-visit';

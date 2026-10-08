@@ -143,6 +143,14 @@ def test_tenant_control_on_still_rejects(monkeypatch):
         "core.middleware.sensitive_word_middleware.tenant_has_sensitive_word_control",
         _on,
     )
+
+    async def _not_allowlisted(_self, _tenant_id, _word):
+        return False
+
+    monkeypatch.setattr(
+        "infra.services.sensitive_word_blacklist_service.SensitiveWordBlacklistService.is_tenant_word_allowlisted",
+        _not_allowlisted,
+    )
     client = _app(monkeypatch)
     response = client.post("/api/v1/demo", json={"notes": f"这里有{CN}"})
     assert response.status_code == 422

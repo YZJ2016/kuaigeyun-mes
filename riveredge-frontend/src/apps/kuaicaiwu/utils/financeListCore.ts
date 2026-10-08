@@ -338,8 +338,8 @@ export function resolvePayableListParams(
 }
 
 function resolveFinanceVoucherListParams(
-  searchFormValues?: Record<string, unknown> | null,
-  sort?: Record<string, unknown>,
+  searchFormValues: Record<string, unknown> | null | undefined,
+  sort: Record<string, unknown> | undefined,
   options: {
     docCodeField: string;
     partnerIdField: string;
@@ -412,8 +412,8 @@ export function financeInvoiceNumberSearchColumn(title: string, order = 13): Pro
 }
 
 function resolveFinanceInvoiceListParams(
-  searchFormValues?: Record<string, unknown> | null,
-  sort?: Record<string, unknown>,
+  searchFormValues: Record<string, unknown> | null | undefined,
+  sort: Record<string, unknown> | undefined,
   options: {
     docCodeField: string;
     partnerIdField: string;

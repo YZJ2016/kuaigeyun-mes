@@ -82,6 +82,7 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src", "."]
 # 未声明该插件与模式时，仓库里全部 @pytest.mark.asyncio 测试会以
 # 「async def functions are not natively supported」静默计为失败/不执行。
 asyncio_mode = "strict"

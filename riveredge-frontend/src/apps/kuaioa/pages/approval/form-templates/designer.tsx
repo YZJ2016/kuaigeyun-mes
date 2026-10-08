@@ -214,6 +214,7 @@ const FormTemplateDesignerPage: React.FC = () => {
           ui={{
             viewports: {
               controlsVisible: false,
+              options: [{ width: 960, height: 640, label: 'Form' }],
               current: { width: 960, height: 640 },
             },
           }}

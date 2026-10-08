@@ -11,49 +11,59 @@ from apps.master_data.services.material_service import MaterialService
 from infra.exceptions.exceptions import ValidationError
 
 
-def _bom_row(row_id: int, uuid: str, approval_status: str, material_id: int = 100):
+def _bom_row(
+    row_id: int,
+    uuid: str,
+    approval_status: str,
+    material_id: int = 100,
+    component_id: int = 0,
+):
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc)
     return SimpleNamespace(
         id=row_id,
         uuid=uuid,
+        tenant_id=1,
         material_id=material_id,
-        component_id=None,
+        component_id=component_id,
+        quantity=1,
         version="1.0",
         approval_status=approval_status,
+        created_at=now,
+        updated_at=now,
     )
 
 
 @pytest.mark.asyncio
 async def test_recursive_approve_skips_already_approved_child_rows():
-    parent = _bom_row(1, "parent-uuid", "draft")
+    parent = _bom_row(1, "parent-uuid", "draft", component_id=200)
     child_approved = _bom_row(2, "child-approved", "approved", material_id=200)
     child_draft = _bom_row(3, "child-draft", "draft", material_id=200)
 
     updated_ids: list[int] = []
 
-    def make_qs(rows):
+    def make_qs(rows, ids=None):
         qs = MagicMock()
         qs.all = AsyncMock(return_value=rows)
 
         async def _update(**_kwargs):
+            if ids:
+                updated_ids.extend(ids)
             return len(rows)
 
         qs.update = _update
         return qs
 
-    async def fake_filter(**kwargs):
+    def fake_filter(**kwargs):
         if kwargs.get("uuid__in") == ["parent-uuid"]:
-            return make_qs([parent])
-        if kwargs.get("id__in") == [1]:
             return make_qs([parent])
         if kwargs.get("material_id") == 200:
             return make_qs([child_approved, child_draft])
-        if set(kwargs.get("id__in") or []) == {1, 2, 3}:
-            return make_qs([parent, child_approved, child_draft])
         if kwargs.get("id__in"):
             ids = list(kwargs["id__in"])
-            updated_ids.extend(ids)
             selected = [r for r in (parent, child_approved, child_draft) if r.id in ids]
-            return make_qs(selected)
+            return make_qs(selected, ids=ids)
         if kwargs.get("uuid__in"):
             return make_qs([parent])
         return make_qs([])
@@ -85,7 +95,7 @@ async def test_non_recursive_approve_still_rejects_mixed_status():
         _bom_row(2, "b", "approved"),
     ]
 
-    async def fake_filter(**kwargs):
+    def fake_filter(**kwargs):
         qs = MagicMock()
         qs.all = AsyncMock(return_value=rows)
         qs.update = AsyncMock(return_value=0)

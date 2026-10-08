@@ -58,7 +58,7 @@ export const QuantityWithUnit: React.FC<QuantityWithUnitProps> = ({
   value,
   onChange,
   disabled = false,
-  size='medium',
+  size='middle',
   quantityMin = 0,
   quantityPrecision = 2,
   quantityPlaceholder,

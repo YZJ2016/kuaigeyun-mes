@@ -28,7 +28,6 @@ def _assert_pre_effective(lc: dict) -> None:
     [
         lambda: get_sales_order_lifecycle(SimpleNamespace(status="草稿", review_status="PENDING")),
         lambda: get_sales_order_lifecycle(SimpleNamespace(status="待审核", review_status="PENDING")),
-        lambda: get_sales_order_lifecycle(SimpleNamespace(status="已审核", review_status="APPROVED")),
         lambda: get_demand_lifecycle(SimpleNamespace(status="草稿", review_status="PENDING", pushed_to_computation=False)),
         lambda: get_purchase_order_lifecycle(SimpleNamespace(status="待审核", review_status="PENDING")),
         lambda: get_reporting_record_lifecycle(SimpleNamespace(status="pending")),
@@ -38,6 +37,12 @@ def _assert_pre_effective(lc: dict) -> None:
 )
 def test_mode_a_pre_effective_shows_dash(factory):
     _assert_pre_effective(factory())
+
+
+def test_sales_order_approved_shows_effective_stage():
+    lc = get_sales_order_lifecycle(SimpleNamespace(status="已审核", review_status="APPROVED"))
+    assert lc["current_stage_name"] == "已生效"
+    assert lc["current_stage_key"] == "effective"
 
 
 def test_incoming_inspection_pending_ignores_preset_approved_review():

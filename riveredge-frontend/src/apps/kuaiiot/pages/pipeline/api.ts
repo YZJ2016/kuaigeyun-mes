@@ -7,6 +7,8 @@
 import {
   getEquipmentOpsFeed,
   listConnections,
+  listAlerts,
+  type AlertOut,
   listDevices,
   listTags,
   type ConnectionOut,
@@ -17,9 +19,10 @@ import { equipmentApi } from '../../../kuaizhizao/services/equipment';
 
 export type PipelineEquipment = { uuid: string; code: string; name: string };
 
-export type PipelineSourceKey = 'connections' | 'devices' | 'tags' | 'equipment';
+export type PipelineSourceKey = 'connections' | 'devices' | 'tags' | 'equipment' | 'alerts';
 
 export type PipelineSources = {
+  alerts?: AlertOut[];
   connections?: ConnectionOut[];
   devices?: DeviceOut[];
   tags?: TagOut[];
@@ -63,6 +66,7 @@ export async function loadPipelineSources(): Promise<PipelineSources> {
   };
 
   await Promise.all([
+    capture('alerts', listAlerts, (v) => { sources.alerts = Array.isArray(v) ? v : []; }),
     capture('connections', listConnections, (v) => {
       sources.connections = Array.isArray(v) ? v : [];
     }),

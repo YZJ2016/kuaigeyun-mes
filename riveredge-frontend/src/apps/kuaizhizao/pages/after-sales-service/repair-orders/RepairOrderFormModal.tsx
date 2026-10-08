@@ -20,8 +20,7 @@ const WARRANTY_STATUSES = ['保内', '保外', '待判定'];
 
 function customerDisplayName(c: Customer | null | undefined): string {
   if (!c) return '';
-  const row = c as Record<string, unknown>;
-  return String(row.name ?? row.customer_name ?? '').trim();
+  return String(c.name ?? ('customer_name' in c ? c.customer_name : '') ?? '').trim();
 }
 
 export type RepairOrderFormModalProps = {

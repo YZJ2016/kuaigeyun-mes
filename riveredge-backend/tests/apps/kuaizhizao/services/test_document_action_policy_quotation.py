@@ -64,7 +64,8 @@ def test_sent_approved_convert_and_confirm():
     )
     assert caps.confirm_customer.allowed
     assert caps.convert_to_order.allowed
-    assert caps.convert_to_contract.allowed
+    assert not caps.convert_to_contract.allowed
+    assert caps.convert_to_contract.reason == "quotation.convert_contract.removed"
     assert caps.print_formal.allowed
 
 
@@ -90,7 +91,8 @@ def test_accepted_with_stale_sales_order_id_still_allows_convert():
         audit_required=True,
     )
     assert caps.convert_to_order.allowed
-    assert caps.convert_to_contract.allowed
+    assert not caps.convert_to_contract.allowed
+    assert caps.convert_to_contract.reason == "quotation.convert_contract.removed"
 
 
 def test_linked_contract_blocks_convert_order():
@@ -111,7 +113,8 @@ def test_stale_contract_id_allows_convert_when_contract_missing():
         contract_downstream_missing=True,
     )
     assert caps.convert_to_order.allowed
-    assert caps.convert_to_contract.allowed
+    assert not caps.convert_to_contract.allowed
+    assert caps.convert_to_contract.reason == "quotation.convert_contract.removed"
 
 
 def test_accepted_allows_cancel_customer_confirm():
@@ -129,7 +132,7 @@ def test_accepted_with_contract_blocks_cancel_customer_confirm():
         audit_required=True,
     )
     assert not caps.cancel_customer_confirm.allowed
-    assert caps.cancel_customer_confirm.reason == "quotation.cancel_customer_confirm.linked_contract"
+    assert caps.cancel_customer_confirm.reason == "quotation.cancel_customer_confirm.not_allowed"
 
 
 def test_converted_downstream_missing():
@@ -140,7 +143,8 @@ def test_converted_downstream_missing():
     )
     assert caps.delete.allowed
     assert caps.convert_to_order.allowed
-    assert caps.convert_to_contract.allowed
+    assert not caps.convert_to_contract.allowed
+    assert caps.convert_to_contract.reason == "quotation.convert_contract.removed"
     assert caps.revoke_push.allowed
 
 

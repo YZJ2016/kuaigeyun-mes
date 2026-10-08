@@ -1,10 +1,8 @@
-"""报工登记不良：隔离处置未传仓库时由副作用解析待检仓。"""
+"""报工登记不良：隔离处置未传仓库时保持草稿，不落副作用。"""
 
 import asyncio
-from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from apps.kuaizhizao.schemas.defect_record import DefectRecordCreateFromReporting
 from apps.kuaizhizao.services.defect_record_service import DefectRecordService
 
 
@@ -15,7 +13,10 @@ def test_apply_disposition_quarantine_without_warehouse_id_allowed():
         incoming_inspection_id=None,
         work_order_id=10,
         operation_id=1,
+        quarantine_location=None,
     )
+    warehouse_query = MagicMock()
+    warehouse_query.order_by.return_value.first = AsyncMock(return_value=None)
     svc = DefectRecordService()
     with patch(
         "apps.kuaizhizao.models.defect_record.DefectRecord.get",
@@ -32,11 +33,11 @@ def test_apply_disposition_quarantine_without_warehouse_id_allowed():
         svc,
         "_mark_disposition_processed",
         new=AsyncMock(),
-    ), patch(
-        "tortoise.transactions.in_transaction",
-        return_value=MagicMock(__aenter__=AsyncMock(), __aexit__=AsyncMock()),
+    ) as mark_processed_mock, patch(
+        "apps.master_data.models.warehouse.Warehouse.filter",
+        return_value=warehouse_query,
     ):
-        asyncio.run(
+        result = asyncio.run(
             svc._apply_disposition_after_persist(
                 1,
                 1,
@@ -44,4 +45,6 @@ def test_apply_disposition_quarantine_without_warehouse_id_allowed():
                 quarantine_warehouse_id=None,
             )
         )
-    side_effects_mock.assert_awaited_once()
+    assert result is defect
+    side_effects_mock.assert_not_awaited()
+    mark_processed_mock.assert_not_awaited()

@@ -949,7 +949,7 @@ const InstallExecutionPage: React.FC = () => {
                     canBatchClose,
                 ),
                 render: () => (
-                  <ActionConfirmPopconfirm title={t('app.kuaizhizao.installExecution.closeConfirmTitle')} description={t('app.kuaizhizao.installExecution.closeConfirmContent', { code: row.job_code })} onConfirm={() => executeClose(detailRow!)}>
+                  <ActionConfirmPopconfirm title={t('app.kuaizhizao.installExecution.closeConfirmTitle')} description={t('app.kuaizhizao.installExecution.closeConfirmContent', { code: detailRow?.job_code })} onConfirm={() => executeClose(detailRow!)}>
               <Button icon={<CheckOutlined />} onClick={(e) => e.stopPropagation()}>
                     {t('common.close')}
                   </Button>
@@ -964,7 +964,7 @@ const InstallExecutionPage: React.FC = () => {
                     perms.canDelete,
                 ),
                 render: () => (
-                  <ActionConfirmPopconfirm title={t('app.kuaizhizao.installExecution.deleteConfirmTitle')} description={t('app.kuaizhizao.installExecution.deleteConfirmContent', { code: row.job_code })} okType="danger" onConfirm={() => executeDelete(detailRow!)}>
+                  <ActionConfirmPopconfirm title={t('app.kuaizhizao.installExecution.deleteConfirmTitle')} description={t('app.kuaizhizao.installExecution.deleteConfirmContent', { code: detailRow?.job_code })} okType="danger" onConfirm={() => executeDelete(detailRow!)}>
               <Button danger icon={<DeleteOutlined />} onClick={(e) => e.stopPropagation()}>
                     {t('common.delete')}
                   </Button>

@@ -583,8 +583,9 @@ const MessageConfigListPage: React.FC = () => {
         onCreate={handleCreate}
         enableRowSelection
         onRowSelectionChange={setSelectedRowKeys}
-        showDeleteButtondeleteConfirmTitle={t('pages.system.messageConfig.batchDeleteConfirmTitle')}
-          deleteConfirmDescription={(count) => t('pages.system.messageConfig.batchDeleteConfirmContent', { count: deletableKeys.length })}
+        showDeleteButton
+        deleteConfirmTitle={t('pages.system.messageConfig.batchDeleteConfirmTitle')}
+          deleteConfirmDescription={(count) => t('pages.system.messageConfig.batchDeleteConfirmContent', { count })}
           
         onDelete={handleBatchDelete}
         deleteButtonText={t('common.batchDelete')}

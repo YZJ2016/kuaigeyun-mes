@@ -324,7 +324,8 @@ const InvitationCodeListPage: React.FC = () => {
           onCreate={handleCreate}
           enableRowSelection
           onRowSelectionChange={setSelectedRowKeys}
-          showDeleteButtondeleteConfirmTitle={t('common.confirm')}
+          showDeleteButton
+        deleteConfirmTitle={t('common.confirm')}
           deleteConfirmDescription={(count) => t('field.invitationCode.batchDeleteConfirm', { count: count })}
           
           onDelete={handleBatchDelete}

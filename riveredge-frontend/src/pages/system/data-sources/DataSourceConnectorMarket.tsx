@@ -52,7 +52,7 @@ const DataSourceConnectorMarket: React.FC<DataSourceConnectorMarketProps> = ({
   }, [open]);
 
   const visibleCategories = useMemo(() => {
-    const used = new Set(
+    const used = new Set<string>(
       CONNECTOR_DEFINITIONS.map((c) => c.category).filter((c) => c !== 'domestic')
     );
     const hasDomestic = CONNECTOR_DEFINITIONS.some((c) => c.domestic);

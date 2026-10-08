@@ -713,7 +713,6 @@ const SuppliersPage: React.FC = () => {
       resizable: false,
       hideInSearch: true,
       ellipsis: true,
-      // @ts-expect-error UniTable defaultShow：列设置可再打开
       defaultShow: false,
     },
     {

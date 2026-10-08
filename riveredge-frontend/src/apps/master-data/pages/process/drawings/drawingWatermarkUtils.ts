@@ -45,12 +45,12 @@ export function renderWatermarkTemplate(
 ): string {
   const levelLabel = SECURITY_LEVEL_LABELS[ctx.securityLevel] ?? ctx.securityLevel;
   const text = template
-    .replaceAll('{user}', ctx.user)
-    .replaceAll('{time}', ctx.time)
-    .replaceAll('{code}', ctx.code)
-    .replaceAll('{revision}', ctx.revision)
-    .replaceAll('{securityLevel}', levelLabel)
-    .replaceAll('{siteName}', ctx.siteName);
+    .split('{user}').join(ctx.user)
+    .split('{time}').join(ctx.time)
+    .split('{code}').join(ctx.code)
+    .split('{revision}').join(ctx.revision)
+    .split('{securityLevel}').join(levelLabel)
+    .split('{siteName}').join(ctx.siteName);
   return text.replace(/\s+/g, ' ').trim();
 }
 

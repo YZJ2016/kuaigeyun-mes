@@ -1079,7 +1079,6 @@ const MenuListPage: React.FC = () => {
                 expandedRowKeys,
                 onExpandedRowsChange: (keys) => setExpandedRowKeys(keys as React.Key[]),
             }}
-            showAdvancedSearch={true}
         />
 
         <FormModalTemplate

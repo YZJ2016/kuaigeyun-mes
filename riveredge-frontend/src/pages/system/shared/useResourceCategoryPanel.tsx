@@ -235,7 +235,7 @@ export function useResourceCategoryPanel(
   const [contextMenuCategory, setContextMenuCategory] = useState<ResourceCategory | null>(null);
   const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number } | null>(null);
 
-  const handleTreeSelect = useCallback<TreeProps['onSelect']>(
+  const handleTreeSelect = useCallback<NonNullable<TreeProps['onSelect']>>(
     keys => {
       const key = keys[0];
       if (!key) return;

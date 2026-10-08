@@ -766,7 +766,8 @@ const DatasetListPage: React.FC = () => {
             selectedRowKeys,
             onChange: setSelectedRowKeys,
           }}
-          showDeleteButtondeleteConfirmTitle={t('pages.system.datasets.confirmBatchDelete', { count: selectedRowKeys.length })}
+          showDeleteButton
+        deleteConfirmTitle={t('pages.system.datasets.confirmBatchDelete', { count: selectedRowKeys.length })}
           
           onDelete={handleBatchDelete}
           deleteButtonText={t('common.batchDelete')}

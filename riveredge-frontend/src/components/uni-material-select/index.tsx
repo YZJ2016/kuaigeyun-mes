@@ -154,7 +154,7 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
   mastersOnly = true,
   listFieldKey,
   listFieldName,
-  size='medium',
+  size='middle',
   showQuickCreate = true,
   quickCreate: quickCreateProp,
   showAdvancedSearch = true,

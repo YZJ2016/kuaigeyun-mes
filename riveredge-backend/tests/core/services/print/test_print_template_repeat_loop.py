@@ -24,7 +24,9 @@ def test_wrap_repeat_collection_body_adds_single_loop():
 def test_unwrap_duplicate_collection_loops_removes_outer_shell():
     card = '<div class="card">{{ item.code }}</div>'
     single = _wrap_repeat_collection_body(card, "item", "items")
-    double = _wrap_repeat_collection_body(single, "item", "items")
+    # _wrap_repeat_collection_body 检测到已有循环时会原样返回；
+    # 手工再包一层模拟历史脏数据产生的双层循环。
+    double = '{% for item in items %}<div class="print-repeat-page">' + single + "</div>{% endfor %}"
     assert _count_repeat_collection_loops(double, "item", "items") == 2
     fixed = _unwrap_duplicate_collection_loops(double, "item", "items")
     assert _count_repeat_collection_loops(fixed, "item", "items") == 1

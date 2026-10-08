@@ -24,6 +24,14 @@ async def test_item_update_resolves_price_type_and_persists(monkeypatch, submitt
     order = SimpleNamespace(**fields, customer_name="fixture", total_quantity=1, total_amount=10, price_type=stored, status="草稿", order_code="fixture")
     monkeypatch.setattr(module.SalesOrder, "get_or_none", AsyncMock(return_value=order))
     query = MagicMock(); query.update = AsyncMock(); query.delete = AsyncMock()
+
+    class _AwaitableList(list):
+        def __await__(self):
+            async def _r():
+                return self
+            return _r().__await__()
+
+    query.order_by = MagicMock(side_effect=lambda *a, **kw: _AwaitableList())
     monkeypatch.setattr(module.SalesOrder, "filter", lambda **kw: query)
     monkeypatch.setattr(module.SalesOrderItem, "filter", lambda **kw: query)
     create = AsyncMock()

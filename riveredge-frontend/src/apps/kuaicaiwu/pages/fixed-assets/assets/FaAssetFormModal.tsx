@@ -156,7 +156,7 @@ const FaAssetFormModal: React.FC<FaAssetFormModalProps> = ({
         onSuccess();
       }}
     >
-      <Divider orientation="left">{t(`${NS}.form.sectionBasic`)}</Divider>
+      <Divider titlePlacement="left">{t(`${NS}.form.sectionBasic`)}</Divider>
       <Row gutter={16}>
         {!editing ? (
           <ProFormDependency name={['use_system_code']}>
@@ -275,7 +275,7 @@ const FaAssetFormModal: React.FC<FaAssetFormModalProps> = ({
         </Col>
       </Row>
 
-      <Divider orientation="left">{t(`${NS}.form.sectionDepreciation`)}</Divider>
+      <Divider titlePlacement="left">{t(`${NS}.form.sectionDepreciation`)}</Divider>
       <Row gutter={16} style={{ marginBottom: 16 }}>
         <Col span={24}>
           <Alert type="info" showIcon title={t(`${NS}.form.depreciationPerAssetHint`)} />
@@ -461,7 +461,7 @@ const FaAssetFormModal: React.FC<FaAssetFormModalProps> = ({
         </ProFormDependency>
       </Row>
 
-      <Divider orientation="left">{t(`${NS}.form.sectionAccounts`)}</Divider>
+      <Divider titlePlacement="left">{t(`${NS}.form.sectionAccounts`)}</Divider>
       <Row gutter={16}>
         <Col span={24}>
           <Alert type="info" title={t(`${NS}.form.voucherEntryHint`)} />

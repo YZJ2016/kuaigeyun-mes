@@ -771,7 +771,7 @@ export default function DashboardDesignPage() {
               size="small"
               value={zoomValue}
               className="dashboard-canvas-zoom__select"
-              classNames={{ popup: 'dashboard-canvas-zoom__select-dropdown' }}
+              classNames={{ popup: { root: 'dashboard-canvas-zoom__select-dropdown' } }}
               options={[
                 { value: ZOOM_FIT, label: '自适应' },
                 ...ZOOM_STOPS.map((stop) => ({ value: String(stop), label: `${Math.round(stop * 100)}%` })),
@@ -1227,7 +1227,7 @@ function PageInspector({
             <Select
               value={theme.image_fit}
               style={{ width: '100%' }}
-              classNames={{ popup: 'kb-puck-field-dropdown' }}
+              classNames={{ popup: { root: 'kb-puck-field-dropdown' } }}
               options={[
                 { value: 'cover', label: '覆盖' },
                 { value: 'contain', label: '包含' },
@@ -1241,7 +1241,7 @@ function PageInspector({
             <Select
               value={theme.image_position}
               style={{ width: '100%' }}
-              classNames={{ popup: 'kb-puck-field-dropdown' }}
+              classNames={{ popup: { root: 'kb-puck-field-dropdown' } }}
               options={positions}
               onChange={(value) => onChange({ image_position: value })}
             />
@@ -1316,7 +1316,7 @@ function WidgetInspector({
               style={{ width: '100%' }}
               placeholder="选择数据集"
               value={widget.data_source_id}
-              classNames={{ popup: 'kb-puck-field-dropdown' }}
+              classNames={{ popup: { root: 'kb-puck-field-dropdown' } }}
               options={dataSources.map((item) => ({ value: item.id, label: item.name }))}
               onChange={(value) => onChange({ data_source_id: value })}
             />
@@ -1617,7 +1617,7 @@ function Choice({
 }) {
   return (
     <Field label={label}>
-      <Select value={value} style={{ width: '100%' }} options={options} classNames={{ popup: 'kb-puck-field-dropdown' }} onChange={onChange} />
+      <Select value={value} style={{ width: '100%' }} options={options} classNames={{ popup: { root: 'kb-puck-field-dropdown' } }} onChange={onChange} />
     </Field>
   );
 }

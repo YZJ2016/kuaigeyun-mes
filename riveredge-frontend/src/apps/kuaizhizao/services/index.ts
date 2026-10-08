@@ -5,12 +5,11 @@
 export * from './production';
 export * from './sales';
 export * from './quality';
-export * from './finance';
 export * from './reports';
 export * from './common';
 export * from './purchase';
+export type { ActionCapability } from './purchase';
 export * from './equipment';
-export * from './cost';
 
 // 导出各个API模块
 export {
@@ -28,7 +27,3 @@ export {
   moldApi,
 } from './equipment';
 
-export {
-  costRuleApi,
-  costCalculationApi,
-} from './cost';

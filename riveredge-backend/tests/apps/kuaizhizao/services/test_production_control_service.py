@@ -20,5 +20,6 @@ def test_normalize_delivery_risk_row_converts_datetime_to_string():
         risk_desc="已延期 3 天",
     )
     item = DeliveryRiskItem.model_validate(row)
-    assert item.planned_end_date == "2026-05-10 18:00:00"
+    # naive datetime 按 UTC 解释（与 USE_TZ 落库口径一致），输出为站点时区墙钟
+    assert item.planned_end_date == "2026-05-11 02:00:00"
     assert item.risk_type == "delayed"

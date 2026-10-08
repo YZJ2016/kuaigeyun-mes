@@ -47,7 +47,7 @@ import { formatProjectRefLabel } from '../../../../kuaiplm/components/Phase2Proj
 import { getDictionaryOptions } from '../../../services/supply-chain';
 import { DrawingFormModal } from '../../../components/DrawingFormModal';
 import { DrawingBatchUploadModal } from '../../../components/DrawingBatchUploadModal';
-import { UniBatchMenuButton } from '../../../../../components/uni-batch';
+import { UniBatchMenuButton, type UniBatchMenuItem } from '../../../../../components/uni-batch';
 import { StepBomImportWizard } from '../../../components/StepBomImportWizard';
 import FilePreviewModal from '../../../../../components/file-preview';
 import { CadPreviewLoading } from '../../../../../components/cad-preview/CadPreviewLoading';
@@ -1072,7 +1072,7 @@ ${data.previewUrl ? `<img src="${escapeHtml(data.previewUrl)}" alt="${escapeHtml
   }, []);
 
   const drawingBatchMenuItems = useMemo(() => {
-    const items = [];
+    const items: UniBatchMenuItem[] = [];
     if (canSubmit) {
       items.push({
         key: 'batchSubmit',

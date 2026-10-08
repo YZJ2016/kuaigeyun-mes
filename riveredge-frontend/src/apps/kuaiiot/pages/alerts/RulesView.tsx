@@ -75,30 +75,34 @@ export default function RulesView() {
   const formRef = useRef<ProFormInstance>();
   const pageRowsRef = useRef<AlertRuleOut[]>([]);
   const [deviceMap, setDeviceMap] = useState<DeviceLabelMap>(new Map());
-  const [tagKeyOptions, setTagKeyOptions] = useState<{ value: string }[]>([]);
+  const [tagKeyOptions, setTagKeyOptions] = useState<{ value: string; device_id: number }[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<AlertRuleOut | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detail, setDetail] = useState<AlertRuleOut | null>(null);
   const [batchBusy, setBatchBusy] = useState(false);
 
+  const loadTagOptions = () => {
+    // 无点位读取权限时仍保留手动输入，保存由后端权限与规则校验。
+    void listTags()
+      .then((tags) => {
+        setTagKeyOptions((tags || []).filter(tag => tag.tag_key).map(tag => ({ value: tag.tag_key, device_id: tag.device_id })));
+      })
+      .catch(() => setTagKeyOptions([]));
+  };
+
   const openCreate = () => {
     if (!canWrite) return;
     setEditing(null);
     setModalOpen(true);
-    // 点位键候选：tag:create 不可用时静默降级为纯文本输入
-    void listTags()
-      .then((tags) => {
-        const keys = Array.from(new Set((tags || []).map((tag) => tag.tag_key).filter(Boolean)));
-        setTagKeyOptions(keys.map((key) => ({ value: key })));
-      })
-      .catch(() => setTagKeyOptions([]));
+    loadTagOptions();
   };
 
   const openEdit = (row: AlertRuleOut) => {
     if (!canWrite) return;
     setEditing(row);
     setModalOpen(true);
+    loadTagOptions();
   };
 
   // Alt+N 已由 UniTable 内部按 onCreate 注册，此处不再重复挂载。
@@ -494,8 +498,11 @@ export default function RulesView() {
           rules={[{ required: true, message: '请填写规则名称' }]}
           fieldProps={{ maxLength: 100 }}
         />
-        <ProFormDependency name={['rule_type']}>
-          {({ rule_type }) =>
+        <ProForm.Item name="device_id" label="绑定设备（可选）">
+          <DeviceSelect />
+        </ProForm.Item>
+        <ProFormDependency name={['rule_type', 'device_id']}>
+          {({ rule_type, device_id }) =>
             rule_type === 'threshold' ? (
               <>
                 <ProForm.Item
@@ -504,7 +511,7 @@ export default function RulesView() {
                   rules={[{ required: true, message: '请填写点位键' }]}
                 >
                   <AutoComplete
-                    options={tagKeyOptions}
+                    options={Array.from(new Set(tagKeyOptions.filter(tag => !device_id || tag.device_id === Number(device_id)).map(tag => tag.value))).map(value => ({ value }))}
                     placeholder="如 is_online、temperature"
                     allowClear
                     filterOption={(input, option) =>
@@ -538,9 +545,7 @@ export default function RulesView() {
             ) : null
           }
         </ProFormDependency>
-        <ProForm.Item name="device_id" label="绑定设备（可选）">
-          <DeviceSelect />
-        </ProForm.Item>
+
         <ProForm.Item
           name="severity"
           label="严重级别"
@@ -548,8 +553,9 @@ export default function RulesView() {
         >
           <Select options={ALERT_SEVERITY_OPTIONS} placeholder="info / warning / critical" />
         </ProForm.Item>
-        <ProFormDependency name={['rule_type']}>
-          {({ rule_type }) =>
+
+        <ProFormDependency name={['rule_type', 'device_id']}>
+          {({ rule_type, device_id }) =>
             // 离线新建接口不收 is_enabled（后端固定启用），避免静默丢字段；编辑与阈值规则保留
             !editing && rule_type === 'offline' ? null : (
               <ProFormSwitch name="is_enabled" label="启用" />

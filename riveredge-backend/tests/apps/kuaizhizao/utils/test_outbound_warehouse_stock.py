@@ -12,6 +12,13 @@ from apps.kuaizhizao.utils.inventory_helper import (
 from infra.exceptions.exceptions import BusinessLogicError
 
 
+def _empty_query():
+    query = MagicMock()
+    query.filter.return_value = query
+    query.all = AsyncMock(return_value=[])
+    return query
+
+
 @pytest.mark.asyncio
 async def test_main_warehouse_available_zero_when_default_mismatch():
     wh = MagicMock()
@@ -26,6 +33,9 @@ async def test_main_warehouse_available_zero_when_default_mismatch():
     ), patch(
         "apps.master_data.services.material_service.resolve_primary_default_warehouse_from_material",
         new=AsyncMock(return_value=(1, "A仓")),
+    ), patch(
+        "apps.master_data.models.material_batch.MaterialBatch.filter",
+        return_value=_empty_query(),
     ):
         available = await get_outbound_available_quantity(
             tenant_id=1,
@@ -49,7 +59,7 @@ async def test_assert_outbound_rejects_cross_warehouse_pick():
 
     with patch(
         "apps.kuaizhizao.utils.inventory_helper.get_outbound_available_quantity",
-        new=AsyncMock(return_value=Decimal("0")),
+        new=AsyncMock(side_effect=[Decimal("0"), Decimal("3")]),
     ), patch(
         "apps.master_data.models.warehouse.Warehouse.get_or_none",
         new=AsyncMock(return_value=wh_selected),

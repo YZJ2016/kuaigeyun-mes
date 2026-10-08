@@ -12,7 +12,7 @@ def test_system_archive_type_count_matches_prd():
     assert SYSTEM_ARCHIVE_TOTAL_COUNT == 26
     codes = [d["code"] for d in SYSTEM_ARCHIVE_TYPE_DEFINITIONS]
     assert len(codes) == len(set(codes))
-    assert SYSTEM_ARCHIVE_TYPE_BY_CODE["design_task_plan"]["name"] == "任务计划书"
+    assert SYSTEM_ARCHIVE_TYPE_BY_CODE["design_task_plan"]["name"] == "设计任务计划书"
     assert SYSTEM_ARCHIVE_TYPE_BY_CODE["project_summary"]["name"] == "项目总结报告"
     assert SYSTEM_ARCHIVE_TYPE_BY_CODE["t1_prototype_build"]["link_target_types"] == [
         "prototype_build_sheet"

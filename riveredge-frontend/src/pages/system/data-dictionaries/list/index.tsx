@@ -308,8 +308,8 @@ const DataDictionaryListPage: React.FC = () => {
     }
   };
 
-  const normalizeDictionaryItemFormValues = (values: Record<string, unknown>): UpdateDictionaryItemData => {
-    const payload: UpdateDictionaryItemData = {
+  const normalizeDictionaryItemFormValues = (values: Record<string, unknown>): Omit<CreateDictionaryItemData, 'dictionary_uuid'> => {
+    const payload: Omit<CreateDictionaryItemData, 'dictionary_uuid'> = {
       label: values.label as string,
       value: values.value as string,
       is_active: Boolean(values.is_active),
@@ -619,7 +619,8 @@ const DataDictionaryListPage: React.FC = () => {
         onCreate={handleCreate}
         enableRowSelection
         onRowSelectionChange={setSelectedRowKeys}
-        showDeleteButtondeleteConfirmTitle={t('common.confirm')}
+        showDeleteButton
+        deleteConfirmTitle={t('common.confirm')}
           deleteConfirmDescription={(count) => t('field.dataDictionary.batchDeleteConfirm', { count: count })}
           
         onDelete={handleBatchDelete}

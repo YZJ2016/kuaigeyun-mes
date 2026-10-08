@@ -135,10 +135,10 @@ def test_finished_goods_receipt_event_alias_and_template():
 
 def test_finished_and_semi_finished_receipt_emit_event_in_source():
     """成品/半成品确认路径源码内必须实际调用该事件（同事务）。"""
-    wh = (SRC_ROOT / "apps/kuaizhizao/services/warehouse_service.py").read_text()
+    wh = (SRC_ROOT / "apps/kuaizhizao/services/warehouse_service.py").read_text(encoding="utf-8")
     sfg = (
         SRC_ROOT / "apps/kuaizhizao/services/semi_finished_goods_receipt_service.py"
-    ).read_text()
+    ).read_text(encoding="utf-8")
     for name, text in (("warehouse_service", wh), ("semi_finished", sfg)):
         assert 'event_type="FINISHED_GOODS_RECEIPT_TO_INVENTORY"' in text, name
 
@@ -192,7 +192,7 @@ def test_no_decimal_30_wage_fallback_left():
         "apps/kuaizhizao/services/reporting_service.py",
         "apps/kuaizhizao/api/productions/reporting.py",
     ):
-        text = (SRC_ROOT / rel).read_text()
+        text = (SRC_ROOT / rel).read_text(encoding="utf-8")
         assert 'Decimal("30")' not in text, rel
         # estimated_wages 缺配置须为 null 并带「未配置」标记
         assert "estimated_wages_note" in text, rel
@@ -268,7 +268,7 @@ async def test_push_run_log_records_source_dimensions(monkeypatch):
 
 
 def test_push_status_query_endpoint_exists():
-    text = (SRC_ROOT / "apps/kuaizhizao/api/document_push/document_push.py").read_text()
+    text = (SRC_ROOT / "apps/kuaizhizao/api/document_push/document_push.py").read_text(encoding="utf-8")
     assert '"/status"' in text
     assert "source_type" in text and "source_id" in text
     # 失败行须透出 pushed=False / status=failed；顶层须给出汇总布尔
@@ -287,9 +287,9 @@ def test_sync_run_log_source_migration_exists():
     mig_dir = Path(__file__).resolve().parents[4] / "migrations" / "models"
     hits = [
         p for p in mig_dir.glob("*.py")
-        if "core_sync_run_logs" in p.read_text()
-        and "source_type" in p.read_text()
-        and "source_id" in p.read_text()
+        if "core_sync_run_logs" in p.read_text(encoding="utf-8")
+        and "source_type" in p.read_text(encoding="utf-8")
+        and "source_id" in p.read_text(encoding="utf-8")
     ]
     assert hits, "缺少 core_sync_run_logs source_type/source_id 迁移"
     # aerich 排序键 = 文件名首段；按仓库约定须为 14 位时间戳且大于既有最大时间戳
@@ -456,13 +456,13 @@ async def _awaitable(value):
 
 
 def test_posting_rejects_unbalanced_voucher():
-    text = (SRC_ROOT / "apps/kuaicaiwu/services/posting_service.py").read_text()
+    text = (SRC_ROOT / "apps/kuaicaiwu/services/posting_service.py").read_text(encoding="utf-8")
     assert "total_debit != total_credit" in text
     assert "凭证借贷不平衡" in text
 
 
 def test_close_period_prechecks_default_on():
-    text = (SRC_ROOT / "apps/kuaicaiwu/services/gl/period_service.py").read_text()
+    text = (SRC_ROOT / "apps/kuaicaiwu/services/gl/period_service.py").read_text(encoding="utf-8")
     assert "skip_checks: bool = False" in text
     assert "if not skip_checks:" in text
     assert "pre_close_checks" in text
@@ -471,7 +471,7 @@ def test_close_period_prechecks_default_on():
 def test_no_skip_checks_true_callers():
     offenders = []
     for path in SRC_ROOT.rglob("*.py"):
-        text = path.read_text()
+        text = path.read_text(encoding="utf-8")
         if re.search(r"skip_checks\s*=\s*True", text):
             offenders.append(str(path.relative_to(SRC_ROOT)))
     assert offenders == [], f"出现 skip_checks=True 调用: {offenders}"

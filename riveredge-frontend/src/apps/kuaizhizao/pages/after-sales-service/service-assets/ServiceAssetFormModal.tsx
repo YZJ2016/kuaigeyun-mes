@@ -11,8 +11,7 @@ const STATUS_OPTIONS = ['在用', '停用', '报废'];
 
 function customerDisplayName(c: Customer | null | undefined): string {
   if (!c) return '';
-  const row = c as Record<string, unknown>;
-  return String(row.name ?? row.customer_name ?? '').trim();
+  return String(c.name ?? ('customer_name' in c ? c.customer_name : '') ?? '').trim();
 }
 
 export type ServiceAssetFormModalProps = {

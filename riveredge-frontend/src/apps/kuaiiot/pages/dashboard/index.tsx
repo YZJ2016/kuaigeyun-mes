@@ -193,12 +193,7 @@ export default function DashboardPage() {
             <KpiCard
               title="在线设备"
               value={err('diagnostics') ? '—' : `${onlineCount} / ${devices.length}`}
-              hint={err('diagnostics') ? `不可用：${err('diagnostics')}` : '已标记在线 / 设备总数'}
-            />
-            <KpiCard
-              title="超时未上报"
-              value={err('diagnostics') ? '—' : staleDevices.length}
-              hint={err('diagnostics') ? `不可用：${err('diagnostics')}` : '在线标记下超过 5 分钟无入站'}
+              hint={err('diagnostics') ? `不可用：${err('diagnostics')}` : `超时未上报 ${staleDevices.length} 台 · 在线 / 设备总数`}
             />
             <KpiCard
               title="今日点数"
@@ -217,10 +212,15 @@ export default function DashboardPage() {
             <KpiCard
               title="异常连接"
               value={err('diagnostics') ? '—' : abnormalConnections.length}
-              hint={err('diagnostics') ? `不可用：${err('diagnostics')}` : '健康状态为已断开或不可用'}
+              hint={err('diagnostics') ? `不可用：${err('diagnostics')}` : `已启用连接 ${err('connections') ? '—' : (sources?.connections ?? []).filter(c => c.is_enabled).length} · 健康状态为已断开或不可用`}
             />
           </div>
 
+          <Card size="small" title="快捷入口">
+            <Space wrap size={16}>
+              {[['接入配置', 'connections'], ['设备链接', 'devices'], ['告警中心', 'alerts'], ['数采链路', 'pipeline'], ['边缘配置', 'edge-configs'], ['点位映射', 'tags']].map(([title, path]) => <Link key={path} to={`/apps/kuaiiot/${path}`}>{title}</Link>)}
+            </Space>
+          </Card>
           <Card size="small" title="待办">
             {todos.length ? (
               <Space direction="vertical" size={4}>
@@ -286,7 +286,7 @@ export default function DashboardPage() {
               </SectionCard>
             </Col>
             <Col xs={24} xl={12}>
-              <SectionCard title="OEE（近 24 小时）" error={err('feed')}>
+              <SectionCard title="OEE 实时（近 24 小时）" error={err('feed')}>
                 <Table
                   size="small"
                   rowKey="equipment_uuid"
@@ -321,7 +321,7 @@ export default function DashboardPage() {
               </SectionCard>
             </Col>
             <Col xs={24} xl={12}>
-              <SectionCard title="打开告警" to="/apps/kuaiiot/alerts" error={err('alerts')}>
+              <SectionCard title="未确认告警" to="/apps/kuaiiot/alerts" error={err('alerts')}>
                 <Table
                   size="small"
                   rowKey="id"

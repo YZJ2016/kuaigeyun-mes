@@ -160,22 +160,7 @@ export function buildGanttNodeTooltip(input: {
 }
 
 export function operationToGanttTask(
-  op: {
-    id?: number;
-    operation_name?: string | null;
-    sequence?: number;
-    planned_start_date?: string | null;
-    planned_end_date?: string | null;
-    assigned_station_id?: number | null;
-    assigned_station_name?: string | null;
-    assigned_equipment_name?: string | null;
-    assigned_mold_name?: string | null;
-    assigned_tool_name?: string | null;
-    outsource_kind?: string | null;
-    outsource_lead_time_days?: number | null;
-    default_outsource_supplier_name?: string | null;
-    is_outsourced?: boolean;
-  },
+  op: NonNullable<WorkOrderForGantt['operations']>[number],
   wo: WorkOrderForGantt,
   viewLevel: 'station_child' | 'legacy' = 'legacy'
 ): GanttTask {

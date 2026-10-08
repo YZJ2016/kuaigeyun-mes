@@ -22,8 +22,8 @@ import {
 } from '../../master-data/services/factory';
 
 type OptionWithMeta = {
-  label: string;
-  value: number;
+  label?: React.ReactNode;
+  value?: string | number | null;
   meta?: Record<string, unknown>;
 };
 
@@ -92,7 +92,7 @@ function EquipmentProductionLineField({
             label: t('field.workstation.quickAddProductionLine'),
             onClick: onQuickAdd,
           }}
-          onChange={(_value: number | undefined, option: OptionWithMeta | OptionWithMeta[]) => {
+          onChange={(_value: number | undefined, option?: OptionWithMeta | OptionWithMeta[]) => {
             const meta = pickMeta(option);
             formRef.current?.setFieldsValue({
               production_line_code: meta?.code ?? null,
@@ -155,7 +155,7 @@ function EquipmentWorkstationField({
             label: t('field.operation.quickAddWorkstation'),
             onClick: onQuickAdd,
           }}
-          onChange={(_value: number | undefined, option: OptionWithMeta | OptionWithMeta[]) => {
+          onChange={(_value: number | undefined, option?: OptionWithMeta | OptionWithMeta[]) => {
             const meta = pickMeta(option);
             formRef.current?.setFieldsValue({
               workstation_code: meta?.code ?? null,
@@ -365,7 +365,7 @@ export const EquipmentFactoryBindingFields: React.FC<EquipmentFactoryBindingFiel
                 label: t('field.operation.quickAddWorkshop'),
                 onClick: () => setWorkshopQuickAddOpen(true),
               }}
-              onChange={(_value: number | undefined, option: OptionWithMeta | OptionWithMeta[]) => {
+              onChange={(_value: number | undefined, option?: OptionWithMeta | OptionWithMeta[]) => {
                 const meta = pickMeta(option);
                 formRef.current?.setFieldsValue({
                   workshop_name: meta?.name ?? null,
@@ -430,7 +430,7 @@ export const EquipmentFactoryBindingFields: React.FC<EquipmentFactoryBindingFiel
                 label: t('field.operation.quickAddWorkCenter'),
                 onClick: () => setWorkCenterQuickAddOpen(true),
               }}
-              onChange={(_value: number | undefined, option: OptionWithMeta | OptionWithMeta[]) => {
+              onChange={(_value: number | undefined, option?: OptionWithMeta | OptionWithMeta[]) => {
                 const meta = pickMeta(option);
                 formRef.current?.setFieldsValue({
                   work_center_code: meta?.code ?? null,

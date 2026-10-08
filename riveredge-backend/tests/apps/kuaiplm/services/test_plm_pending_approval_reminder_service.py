@@ -8,7 +8,7 @@ import pytest
 
 from apps.kuaiplm.constants.rd_project import RdDeliverableStatus
 from apps.kuaiplm.services.plm_pending_approval_reminder_service import (
-    APPROVAL_DELAY_HOURS,
+    APPROVAL_DELAY_HOURS_DEFAULT,
     ENTITY_RD_DELIVERABLE,
     PlmPendingApprovalReminderService,
     dispatch_plm_pending_approval_reminder,
@@ -32,7 +32,7 @@ async def test_schedule_uses_24h_delay():
             title="规格书A",
         )
         ensure.assert_awaited_once()
-        assert ensure.await_args.kwargs["payload"]["delay_hours"] == APPROVAL_DELAY_HOURS
+        assert ensure.await_args.kwargs["payload"]["delay_hours"] == APPROVAL_DELAY_HOURS_DEFAULT
 
 
 @pytest.mark.asyncio

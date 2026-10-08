@@ -31,10 +31,21 @@ export function createDeviceRow(payload: {
   code: string;
   name: string;
   equipment_uuid?: string;
+  product_id?: number;
+  group_id?: number;
   template_code?: string;
   remark?: string;
 }): Promise<DeviceTokenRow> {
   return apiRequest<DeviceTokenRow>('/apps/kuaiiot/devices', { method: 'POST', data: payload });
+}
+
+export type ExternalDevicePage = {
+  items: { external_device_id: string; name: string }[];
+  has_more: boolean;
+};
+
+export function discoverExternalDevices(connectionId: number, page = 0): Promise<ExternalDevicePage> {
+  return apiRequest<ExternalDevicePage>(`/apps/kuaiiot/connections/${connectionId}/external-devices`, { params: { page } });
 }
 
 export function updateDeviceRow(

@@ -4651,7 +4651,6 @@ export default {
   'app.kuaizhizao.workReporting.formReportedQtyRequired': 'Enter reported quantity',
   'app.kuaizhizao.workReporting.formReportedQtyAuto': 'Reported qty (auto sum): ',
   'app.kuaizhizao.workReporting.formQualifiedQtyRequired': 'Enter qualified quantity',
-  'app.kuaizhizao.workReporting.defectCreateAfterReportFailed': 'Reporting saved, but creating the defect record failed',
   'app.kuaizhizao.workReporting.defectBindOperationFailed': 'Defect type was created, but binding it to the operation failed. Bind it in master data.',
   'app.kuaizhizao.workReporting.formWorkHoursPlaceholder': 'Optional, defaults to 0',
   'app.kuaizhizao.workReporting.formRemarksPlaceholder': 'Enter remarks',

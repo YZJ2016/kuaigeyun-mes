@@ -10,6 +10,7 @@ import {
 } from '@ant-design/pro-components';
 import { theme } from 'antd';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { searchUserDisplay } from '../../../../../services/user';
 import { formatUserDisplayLabel } from '../../../../../utils/userDisplay';
 import { getRoleList } from '../../../../../services/role';
@@ -19,7 +20,7 @@ import type { ConditionItem } from '../../../../../types/approvalFlowSchema';
 
 function departmentTreeSelectData(
   items: DepartmentTreeItem[],
-  t: (key: string) => string,
+  t: TFunction,
 ): Array<{ title: string; value: string; key: string; children?: ReturnType<typeof departmentTreeSelectData> }> {
   return items.map((item) => ({
     title: resolvePresetDepartmentName(item, t),

@@ -9,7 +9,6 @@ from typing import Any, Dict, List, Optional
 from apps.kuaicaiwu.models.chart_of_account import ChartOfAccount
 from apps.kuaicaiwu.models.gl_transfer_template import GlTransferTemplate
 from apps.kuaicaiwu.models.account_balance import AccountBalance
-from apps.kuaicaiwu.services.posting_service import PostingService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 
@@ -230,6 +229,8 @@ class GlTransferService:
         if total_debit != total_credit:
             raise ValidationError(f"自定义转账借贷不平衡: 借 {total_debit} 贷 {total_credit}")
 
+        from apps.kuaicaiwu.services.posting_service import PostingService
+
         posting = PostingService()
         voucher = await posting.create_manual_voucher(
             tenant_id,
@@ -372,6 +373,8 @@ class GlTransferService:
             raise ValidationError(
                 f"结转损益借贷不平衡: 借 {total_debit} 贷 {total_credit}"
             )
+
+        from apps.kuaicaiwu.services.posting_service import PostingService
 
         posting = PostingService()
         voucher = await posting.create_manual_voucher(

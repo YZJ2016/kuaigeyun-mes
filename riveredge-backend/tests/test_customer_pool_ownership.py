@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import unittest
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from tortoise.expressions import Q
@@ -198,6 +199,10 @@ class CustomerPoolOwnershipTests(unittest.IsolatedAsyncioTestCase):
                         CustomerPoolService,
                         "_load_collaborators_map",
                         AsyncMock(return_value={}),
+                    ), patch.object(
+                        CustomerPoolService,
+                        "_get_rule",
+                        AsyncMock(return_value=SimpleNamespace(inactive_alert_days=None)),
                     ):
                         await CustomerPoolService.list_customers(
                             tenant_id=1,
@@ -225,6 +230,10 @@ class CustomerPoolOwnershipTests(unittest.IsolatedAsyncioTestCase):
         with patch(
             "apps.kuaizhizao.services.customer_pool_service.Customer.filter",
             return_value=mock_query,
+        ), patch.object(
+            CustomerPoolService,
+            "_get_rule",
+            AsyncMock(return_value=SimpleNamespace(inactive_alert_days=None)),
         ):
             with patch(
                 "apps.kuaizhizao.services.customer_pool_service.DataScopeService.apply",
@@ -252,6 +261,10 @@ class CustomerPoolOwnershipTests(unittest.IsolatedAsyncioTestCase):
         with patch(
             "apps.kuaizhizao.services.customer_pool_service.Customer.filter",
             return_value=mock_query,
+        ), patch.object(
+            CustomerPoolService,
+            "_get_rule",
+            AsyncMock(return_value=SimpleNamespace(inactive_alert_days=None)),
         ):
             with patch(
                 "apps.kuaizhizao.services.customer_pool_service.DataScopeService.apply",

@@ -939,14 +939,14 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
           if (parsed.kind === 'operation') {
             opUpdates.push({
               operation_id: parsed.id,
-              planned_start_date: toApiDateTimeString(start),
-              planned_end_date: toApiDateTimeString(end),
+              planned_start_date: toApiDateTimeString(start)!,
+              planned_end_date: toApiDateTimeString(end)!,
             });
           } else {
             woUpdates.push({
               work_order_id: parsed.id,
-              planned_start_date: toApiDateTimeString(start),
-              planned_end_date: toApiDateTimeString(end),
+              planned_start_date: toApiDateTimeString(start)!,
+              planned_end_date: toApiDateTimeString(end)!,
             });
           }
         }

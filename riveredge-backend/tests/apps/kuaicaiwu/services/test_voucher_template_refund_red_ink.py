@@ -42,7 +42,7 @@ def test_build_draft_lines_payment_refund_red_ink():
         account.is_cash_journal = False
         account.is_bank_journal = account.account_code == "1002"
 
-    async def resolve_side_effect(_tenant_id, code):
+    async def resolve_side_effect(_tenant_id, code, **_kwargs):
         if code == "1002":
             return bank
         if code == "2202":
@@ -87,7 +87,7 @@ def test_build_draft_lines_receipt_refund_red_ink():
         account.is_cash_journal = False
         account.is_bank_journal = account.account_code == "1002"
 
-    async def resolve_side_effect(_tenant_id, code):
+    async def resolve_side_effect(_tenant_id, code, **_kwargs):
         if code == "1002":
             return bank
         if code == "1122":

@@ -18,7 +18,7 @@ async def test_initial_review_fields_when_audit_off():
         new=AsyncMock(return_value=False),
     ):
         fields = await _quality_inspection_initial_review_fields(1, "process_inspection")
-    assert fields == {"review_status": ReviewStatus.APPROVED}
+    assert fields == {"review_status": ""}
 
 
 @pytest.mark.asyncio
@@ -28,7 +28,7 @@ async def test_initial_review_fields_when_audit_on():
         new=AsyncMock(return_value=True),
     ):
         fields = await _quality_inspection_initial_review_fields(1, "process_inspection")
-    assert fields == {}
+    assert fields == {"review_status": ""}
 
 
 @pytest.mark.asyncio
@@ -64,7 +64,7 @@ async def test_conduct_finalize_stays_inspected_when_audit_on():
             inspected_by=10,
             inspector_name="检验员",
         )
-    assert fields == {"status": "已检验"}
+    assert fields == {"status": "已检验", "review_status": ReviewStatus.PENDING.value}
 
 
 @pytest.mark.asyncio
@@ -80,4 +80,8 @@ async def test_conduct_finalize_unqualified_stays_inspected_when_audit_off():
             inspected_by=10,
             inspector_name="检验员",
         )
-    assert fields == {"status": "已检验"}
+    assert fields["status"] == "已检验"
+    assert fields["review_status"] == ReviewStatus.APPROVED
+    assert fields["reviewer_id"] == 10
+    assert fields["reviewer_name"] == "检验员"
+    assert fields["review_time"] is not None

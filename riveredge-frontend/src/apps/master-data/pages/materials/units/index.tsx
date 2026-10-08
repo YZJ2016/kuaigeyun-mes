@@ -679,7 +679,6 @@ const UnitsPage: React.FC = () => {
         uniTableKeepWidth: true,
         resizable: false,
         sorter: true,
-        // @ts-expect-error UniTable defaultShow：列设置可再打开
         defaultShow: false,
       },
       {

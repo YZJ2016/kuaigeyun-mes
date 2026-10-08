@@ -51,7 +51,7 @@ export default function MoldProgramSheetsPage() {
         actionRef={actionRef}
         rowKey="id"
         createButtonText={t('app.ind-mold.programSheet.createButton')}
-        onCreateClick={perms.canCreate ? () => setOpen(true) : undefined}
+        onCreate={perms.canCreate ? () => setOpen(true) : undefined}
         columns={columns}
         request={async () => {
           const items = await industryMoldApi.listProgramSheets();

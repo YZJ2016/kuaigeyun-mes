@@ -1,6 +1,6 @@
 import type { TFunction } from 'i18next';
 
-import type { PriceTypeValue } from '../../../../components/price-type-switch/PriceTypeSwitch';
+import type { PriceTypeValue } from '../../../../../components/price-type-switch/PriceTypeSwitch';
 import {
   buildImportDictionaryOptionPack,
   parseImportCodedCell,

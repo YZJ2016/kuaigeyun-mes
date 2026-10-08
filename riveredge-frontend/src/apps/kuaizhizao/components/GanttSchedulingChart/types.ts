@@ -39,6 +39,7 @@ export interface WorkOrderForGantt {
     assigned_station_id?: number | null;
     assigned_station_name?: string | null;
     assigned_worker_id?: number | null;
+    assigned_worker_name?: string | null;
     assigned_worker_ids?: number[] | null;
     assigned_equipment_id?: number | null;
     assigned_equipment_name?: string | null;
@@ -70,6 +71,7 @@ export interface GanttTask {
   /** 工单 number；工序 op-{id}；工位资源 st-{id} */
   id: number | string;
   text: string;
+  title?: string;
   start: Date;
   end: Date;
   duration: number;

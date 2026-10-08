@@ -466,7 +466,7 @@ export const InspectionPlanStepEditor: React.FC<InspectionPlanStepEditorProps> =
                       <div style={{ marginTop: 4, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                         <InspectionValueTypeTag
                           valueType={activeStep.value_type}
-                          label={typeLabelMap[normalizeValueType(activeStep.value_type)] || activeStep.value_type}
+                          label={typeLabelMap[normalizeValueType(activeStep.value_type)] || activeStep.value_type || ''}
                         />
                         <InspectionSamplingTypeTag samplingType={activeStep.sampling_type} t={t} />
                       </div>
