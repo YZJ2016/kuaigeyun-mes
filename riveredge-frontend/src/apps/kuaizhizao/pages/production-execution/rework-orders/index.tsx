@@ -144,6 +144,8 @@ interface ReworkOrder {
   created_at?: string;
   updated_at?: string;
   start_work_order_operation_id?: number;
+  start_operation_code?: string;
+  start_operation_name?: string;
   rework_operations?: Array<{
     id?: number;
     work_order_operation_id: number;
@@ -419,13 +421,18 @@ const ReworkOrdersPage: React.FC = () => {
     },
     {
       title: t('app.kuaizhizao.reworkOrder.colStartOperation'),
-      dataIndex: 'rework_operations',
+      dataIndex: 'start_operation_name',
       span: 2,
-      render: (_: any, record: any) => {
-        const startOp = (record.rework_operations || []).find((o: any) => o.is_start)
+      render: (_: unknown, record: ReworkOrder) => {
+        const fromList = `${record.start_operation_code || ''} ${record.start_operation_name || ''}`.trim();
+        if (fromList) return fromList;
+        const startOp = (record.rework_operations || []).find((o) => o.is_start)
           || (record.rework_operations || [])[0];
         if (!startOp) return '-';
-        return `${startOp.operation_code || ''} ${startOp.operation_name || ''}`.trim() || t('app.kuaizhizao.reworkOrder.operationFallback', { id: startOp.work_order_operation_id });
+        return (
+          `${startOp.operation_code || ''} ${startOp.operation_name || ''}`.trim()
+          || t('app.kuaizhizao.reworkOrder.operationFallback', { id: startOp.work_order_operation_id })
+        );
       },
     },
     {
@@ -726,10 +733,21 @@ const ReworkOrdersPage: React.FC = () => {
       render: (_, record) => {
         const lifecycle = getReworkOrderLifecycle(record);
         const activeStage = lifecycle.mainStages?.find((stage) => stage.status === 'active');
+        const rawLabel =
+          (activeStage?.label && String(activeStage.label).trim())
+          || (lifecycle.stageName && String(lifecycle.stageName).trim())
+          || '';
+        // 勿把英文 status 码当展示文案；交给 UniLifecycle / 全局 lifecycle i18n 翻译
+        const stageName =
+          rawLabel && rawLabel !== '-'
+            ? rawLabel
+            : (record.status
+              ? String(record.status)
+              : t('app.kuaizhizao.reworkOrder.lifecycleDraft'));
         return (
           <UniLifecycle
             percent={lifecycle.percent}
-            stageName={activeStage?.label ?? lifecycle.stageName ?? record.status ?? t('app.kuaizhizao.reworkOrder.lifecycleDraft')}
+            stageName={stageName}
             status={lifecycle.status}
             subStages={lifecycle.subStages}
             showLabel
@@ -2821,7 +2839,13 @@ const ReworkOrdersPage: React.FC = () => {
                 <Col span={12} style={{ marginTop: 8 }}>
                   <div>
                     {t('app.kuaizhizao.reworkOrder.reportCardStartOperation')}
-                    {reportingOptions.start_operation_name || '-'}
+                    {(reportingOptions.operations || []).find(
+                      (op: any) =>
+                        op.is_start_operation
+                        || op.work_order_operation_id === reportingOptions.start_work_order_operation_id,
+                    )?.operation_name
+                      || reportingOptions.start_operation_name
+                      || '-'}
                   </div>
                 </Col>
                 <Col span={12} style={{ marginTop: 8 }}>

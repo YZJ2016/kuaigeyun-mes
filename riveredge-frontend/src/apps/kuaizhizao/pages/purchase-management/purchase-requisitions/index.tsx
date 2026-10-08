@@ -1515,10 +1515,15 @@ const PurchaseRequisitionsPage: React.FC = () => {
       uniTableKeepWidth: true,
       resizable: false,
       hideInSearch: false,
-      ellipsis: true,
+      // 叠列两行；ellipsis 会破坏居中，补货建议等较长单号时易看起来左对齐
+      ellipsis: false,
+      align: 'center',
       valueEnum: {
         DemandComputation: {
           text: formatPurchaseRequisitionSourceType('DemandComputation', t),
+        },
+        ReplenishmentSuggestion: {
+          text: formatPurchaseRequisitionSourceType('ReplenishmentSuggestion', t),
         },
       },
       render: (_, record) => {
@@ -1527,7 +1532,12 @@ const PurchaseRequisitionsPage: React.FC = () => {
           return t('app.kuaizhizao.purchaseRequisition.col.sourceTypeActiveRequest');
         }
         return (
-          <Space orientation="vertical" size={0} style={{ lineHeight: 1.35 }}>
+          <Space
+            orientation="vertical"
+            size={0}
+            align="center"
+            style={{ lineHeight: 1.35, width: '100%' }}
+          >
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
               {formatPurchaseRequisitionSourceType(record.source_type, t)}
             </Typography.Text>

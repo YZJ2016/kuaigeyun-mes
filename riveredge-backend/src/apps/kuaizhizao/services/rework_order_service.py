@@ -1202,12 +1202,31 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
             ro.original_work_order_id for ro in rework_orders if ro.original_work_order_id
         ]
         code_map = await self._load_original_work_order_code_map(tenant_id, original_ids)
+        start_op_ids = [
+            int(ro.start_work_order_operation_id)
+            for ro in rework_orders
+            if ro.start_work_order_operation_id
+        ]
+        start_op_map: dict[int, WorkOrderOperation] = {}
+        if start_op_ids:
+            start_ops = await WorkOrderOperation.filter(
+                tenant_id=tenant_id,
+                id__in=list(dict.fromkeys(start_op_ids)),
+                deleted_at__isnull=True,
+            ).all()
+            start_op_map = {int(op.id): op for op in start_ops if op.id is not None}
         result = []
         for ro in rework_orders:
             resp = ReworkOrderListResponse.model_validate(ro)
             resp.lifecycle = get_rework_order_lifecycle(ro)
             await self._enrich_rework_order_response(tenant_id, resp, ro)
             self._attach_original_work_order_code(resp, code_map, ro.original_work_order_id)
+            start_id = ro.start_work_order_operation_id
+            if start_id:
+                start_op = start_op_map.get(int(start_id))
+                if start_op:
+                    resp.start_operation_code = start_op.operation_code
+                    resp.start_operation_name = start_op.operation_name
             result.append(resp)
         return {
             "data": [r.model_dump() for r in result],
@@ -1515,6 +1534,14 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
         await sync_link_quantities_from_reports(tenant_id, current_link)
         remaining = max(Decimal("0"), _dec(current_link.input_quantity) - _dec(current_link.qualified_quantity))
         current_op = next((op for op in ops if op.id == current_link.work_order_operation_id), None)
+        start_op_id = rework_order.start_work_order_operation_id
+        start_op = next((op for op in ops if op.id == start_op_id), None) if start_op_id else None
+        if start_op_id and start_op is None:
+            start_op = await WorkOrderOperation.get_or_none(
+                tenant_id=tenant_id,
+                id=start_op_id,
+                deleted_at__isnull=True,
+            )
 
         operation_items: List[ReworkReportingOptionItem] = []
         for op in ops:
@@ -1535,11 +1562,17 @@ class ReworkOrderService(AppBaseService[ReworkOrder]):
                 )
             )
 
+        start_name = None
+        if start_op:
+            start_name = start_op.operation_name or None
+
         return ReworkReportingOptionsResponse(
             rework_order_id=rework_order.id,
             rework_order_code=rework_order.code,
             routing_mode=rework_order.routing_mode,
             rework_quantity=rework_order.quantity,
+            start_work_order_operation_id=start_op_id,
+            start_operation_name=start_name,
             current_work_order_operation_id=current_link.work_order_operation_id,
             current_operation_name=current_op.operation_name if current_op else None,
             remaining_input_quantity=remaining,

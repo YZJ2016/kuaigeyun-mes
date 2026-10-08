@@ -82,17 +82,34 @@ export async function fetchInboundHubList(
   // 「全部」视图需从各源拉取 skip+limit 再前端切片；不得超过各源 API limit 上限，否则 422
   const fetchLimit = Math.min(typed ? limit : skip + limit, INBOUND_HUB_SOURCE_FETCH_MAX);
 
+  /**
+   * Hub「待入库」= 入库待确认，不得混入退料/退货待办（其状态为待退料/待退货）。
+   * 显式按单据类型筛选时仍按各源 pending 状态拉取（如只看生产退料 + 待入库 → 待退料）。
+   */
+  const excludeReturnLikeForPendingHub =
+    hubStatus === 'pending' && (!typeFilter || typeFilter === 'all');
+
   const fetchPurchase = shouldFetchInboundHubType(user, typeFilter, 'purchase', scopedReceiptTypes);
   const fetchFinished = shouldFetchInboundHubType(user, typeFilter, 'finished_goods', scopedReceiptTypes);
   const fetchSemi = shouldFetchInboundHubType(user, typeFilter, 'semi_finished_goods', scopedReceiptTypes);
-  const fetchReturn = shouldFetchInboundHubType(user, typeFilter, 'production_return', scopedReceiptTypes);
+  const fetchReturn =
+    shouldFetchInboundHubType(user, typeFilter, 'production_return', scopedReceiptTypes) &&
+    !excludeReturnLikeForPendingHub;
   const fetchCustomerMaterial = shouldFetchInboundHubType(user, typeFilter, 'customer_material', scopedReceiptTypes);
-  const fetchSalesReturn = shouldFetchInboundHubType(user, typeFilter, 'sales_return', scopedReceiptTypes);
+  const fetchSalesReturn =
+    shouldFetchInboundHubType(user, typeFilter, 'sales_return', scopedReceiptTypes) &&
+    !excludeReturnLikeForPendingHub;
   const fetchOutsourceReceipt = shouldFetchInboundHubType(user, typeFilter, 'outsource_receipt', scopedReceiptTypes);
-  const fetchOutsourceMaterialReturn = shouldFetchInboundHubType(user, typeFilter, 'outsource_material_return', scopedReceiptTypes);
-  const fetchOutsourceProductReturn = shouldFetchInboundHubType(user, typeFilter, 'outsource_product_return', scopedReceiptTypes);
+  const fetchOutsourceMaterialReturn =
+    shouldFetchInboundHubType(user, typeFilter, 'outsource_material_return', scopedReceiptTypes) &&
+    !excludeReturnLikeForPendingHub;
+  const fetchOutsourceProductReturn =
+    shouldFetchInboundHubType(user, typeFilter, 'outsource_product_return', scopedReceiptTypes) &&
+    !excludeReturnLikeForPendingHub;
   const fetchOtherInbound = shouldFetchInboundHubType(user, typeFilter, 'other_inbound', scopedReceiptTypes);
-  const fetchMaterialReturn = shouldFetchInboundHubType(user, typeFilter, 'material_return', scopedReceiptTypes);
+  const fetchMaterialReturn =
+    shouldFetchInboundHubType(user, typeFilter, 'material_return', scopedReceiptTypes) &&
+    !excludeReturnLikeForPendingHub;
 
   const warehouseIdRaw =
     params.warehouse_id != null && params.warehouse_id !== ''

@@ -23,6 +23,21 @@ export type WorkOrderOperationStepSlot = {
 
 const DEFAULT_SLOT_COUNT = 5;
 
+/**
+ * 仅保留工艺路线名称（全部 pending、无百分比）。
+ * 拆分子行缺自有工序摘要、或已拆分父行借下级路线展示时使用，避免串用其它工单的完工进度。
+ */
+export function asRouteOnlyWorkOrderOperationSteps(
+  steps?: WorkOrderOperationStep[] | null,
+): WorkOrderOperationStep[] | undefined {
+  if (!steps?.length) return undefined;
+  return steps.map((s) => ({
+    name: s.name,
+    sequence: s.sequence,
+    status: 'pending' as const,
+  }));
+}
+
 /** 全部工序节点（无占位、不截断），供列表步骤轴使用 */
 export function buildAllWorkOrderOperationStepSlots(
   steps: WorkOrderOperationStep[],

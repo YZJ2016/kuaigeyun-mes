@@ -1790,6 +1790,8 @@ export default {
   'lifecycle.stage.accepted': '已接受',
   'lifecycle.stage.sent': '已发送',
   'lifecycle.stage.signed': '已签收',
+  'lifecycle.stage.pending_verification': '待复检',
+  'lifecycle.stage.quality_released': '质量放行',
 
   // 通用翻译
   'common.unnamedPage': '未命名页面',
@@ -30082,6 +30084,18 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.work-order-split-completion-progress-r01.title':
+    '拆分工单列表「完工进度」不再恒为 0%',
+  'pages.dashboard.updateLog.entries.work-order-split-completion-progress-r01.description':
+    '原先只算页内主工单进度，拆分子单挂树上后未计算；主单拆分后工序已归档也一直是 0%。现已为子单批量计算进度，已拆分主单按子单数量加权汇总。',
+  'pages.dashboard.updateLog.entries.rework-lifecycle-status-i18n-r01.title':
+    '工单/返工单执行状态不再显示英文码',
+  'pages.dashboard.updateLog.entries.rework-lifecycle-status-i18n-r01.description':
+    '原先列表偶发显示 quality_released、closed 等英文状态码。现已按中文展示为「质量放行」「已关闭」等。',
+  'pages.dashboard.updateLog.entries.work-order-nested-split-list-r01.title':
+    '生产工单二次拆分后能看到新拆出的子单',
+  'pages.dashboard.updateLog.entries.work-order-nested-split-list-r01.description':
+    '工单管理里第一次拆分正常、再拆一次列表不变的问题已修复：子工单继续拆分会挂在对应行下，刷新后能展开看到新单据。',
   'pages.dashboard.updateLog.entries.inspection-plan-quick-type-default-r01.title':
     '快速新建质检方案时正确带入方案类型',
   'pages.dashboard.updateLog.entries.inspection-plan-quick-type-default-r01.description':
@@ -38442,6 +38456,7 @@ export default {
   'components.documentTrackingPanel.docType.work_order': '工单',
   'components.documentTrackingPanel.docType.purchase_order': '采购订单',
   'components.documentTrackingPanel.docType.demand_computation': '需求计算',
+  'components.documentTrackingPanel.docType.replenishment_suggestion': '补货建议',
   'components.documentTrackingPanel.docType.sales_forecast': '销售预测',
   'components.documentTrackingPanel.docType.production_plan': '生产计划',
   'components.documentTrackingPanel.docType.purchase_requisition': '采购申请',

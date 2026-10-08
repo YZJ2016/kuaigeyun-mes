@@ -9,6 +9,16 @@ import type { TFunction } from 'i18next';
 const SOURCE_TYPE_TO_DOC_SUFFIX: Record<string, string> = {
   DemandComputation: 'demand_computation',
   demand_computation: 'demand_computation',
+  ReplenishmentSuggestion: 'replenishment_suggestion',
+  replenishment_suggestion: 'replenishment_suggestion',
+  SalesOrder: 'sales_order',
+  sales_order: 'sales_order',
+  WorkOrder: 'work_order',
+  work_order: 'work_order',
+  MaterialCall: 'material_call_request',
+  material_call: 'material_call_request',
+  MaterialCallRequest: 'material_call_request',
+  material_call_request: 'material_call_request',
 };
 
 function pascalToSnakeCase(s: string): string {

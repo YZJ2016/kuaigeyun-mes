@@ -2,6 +2,7 @@
  * 工单列表：按 work_order_group_id 组装 BOM 树，组节点为 row_kind=work_order_group
  */
 import type { WorkOrderListRow } from './workOrderListTreeTypes'
+import { asRouteOnlyWorkOrderOperationSteps } from './workOrderOperationSteps'
 
 export const WORK_ORDER_GROUP_ROW_KIND = 'work_order_group'
 
@@ -20,7 +21,7 @@ export function isBomTreeWorkOrderGroup(groupRow: WorkOrderListRow): boolean {
   )
 }
 
-/** 树形组默认展开：组节点 + 组内带 BOM 子工单的父行；平级组/拆/返/委外默认收起 */
+/** 树形组默认展开：组节点 + BOM 父行；多级拆分时展开有孙拆分的祖先与带 children 的拆分行 */
 export function collectDefaultExpandedWorkOrderTreeKeys(
   rows: WorkOrderListRow[],
   getRowKey: (row: WorkOrderListRow) => string | number,
@@ -31,6 +32,10 @@ export function collectDefaultExpandedWorkOrderTreeKeys(
     const kind = row.row_kind || 'work_order'
     const children = row.children ?? []
     const hasChildren = children.length > 0
+    const hasNestedSplitTree = children.some(
+      (c) => (c.row_kind || '') === 'split' && (c.children?.length ?? 0) > 0,
+    )
+    const isSplitWithChildren = kind === 'split' && hasChildren
 
     if (kind === WORK_ORDER_GROUP_ROW_KIND) {
       const expandGroup = isBomTreeWorkOrderGroup(row)
@@ -44,6 +49,10 @@ export function collectDefaultExpandedWorkOrderTreeKeys(
     if (insideBomTreeGroup && kind === 'work_order' && hasChildren) {
       const hasBomChild = children.some((c) => (c.row_kind || 'work_order') === 'work_order')
       if (hasBomChild) keys.push(getRowKey(row))
+    }
+
+    if (hasNestedSplitTree || isSplitWithChildren) {
+      keys.push(getRowKey(row))
     }
 
     if (hasChildren) {
@@ -96,21 +105,22 @@ function attachSplitAndReworkChildren(
 
   const attachChild = (parent: WorkOrderListRow, child: WorkOrderListRow) => {
     if (child.id == null || parent.id == null || child.id === parent.id) return
-    if (!parent.children) parent.children = []
+    if (parent.children?.some((c) => c.id === child.id)) {
+      childIds.add(Number(child.id))
+      return
+    }
     const kind = child.row_kind || 'split'
     const ownSteps =
       Array.isArray(child.operation_steps) && child.operation_steps.length > 0
         ? child.operation_steps
         : undefined
-    parent.children.push({
-      ...child,
-      row_kind: kind,
-      parent_work_order_id: parent.id,
-      list_tree_depth: (parent.list_tree_depth ?? 0) + 1,
-      // 仅拆分子行可回退主工单工序；返工/委外等保持自身（可空）
-      operation_steps:
-        ownSteps ?? (kind === 'split' ? parent.operation_steps : child.operation_steps),
-    })
+    child.row_kind = kind
+    child.parent_work_order_id = parent.id
+    if (!ownSteps && kind === 'split') {
+      child.operation_steps = asRouteOnlyWorkOrderOperationSteps(parent.operation_steps)
+    }
+    if (!parent.children) parent.children = []
+    parent.children.push(child)
     childIds.add(Number(child.id))
   }
 
@@ -173,9 +183,14 @@ function pickGroupRootMembers(
     if (aRoot !== bRoot) return aRoot - bRoot
     return String(a.code ?? '').localeCompare(String(b.code ?? ''))
   })
+  const applyDepth = (row: WorkOrderListRow, depth: number) => {
+    row.list_tree_depth = depth
+    if (!row.children?.length) return
+    sortWorkOrderChildren(row.children)
+    for (const child of row.children) applyDepth(child, depth + 1)
+  }
   for (const root of roots) {
-    root.list_tree_depth = 1
-    if (root.children?.length) sortWorkOrderChildren(root.children)
+    applyDepth(root, 1)
   }
   return roots
 }

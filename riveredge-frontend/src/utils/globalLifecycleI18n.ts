@@ -143,6 +143,9 @@ export const LIFECYCLE_ONLY_STAGE_KEYS = [
   'accepted',
   'sent',
   'signed',
+  /** 返工单等：待复检 / 质量放行（勿与 documentStatus.pending 审核态混淆） */
+  'pending_verification',
+  'quality_released',
 ] as const;
 
 /**
@@ -195,6 +198,9 @@ export const LIFECYCLE_ZH_LABEL_TO_KEY: Record<string, string> = {
   拣货出库: 'return_pick',
   退回供应商: 'supplier_return',
   待检验: 'pending_inspection',
+  待复检: 'pending_verification',
+  质量放行: 'quality_released',
+  已暂停: 'on_hold',
   已检验: 'inspected',
   配料中: 'batching',
   调拨中: 'transferring',
@@ -312,6 +318,15 @@ export function translateLifecycleStageByKey(
   }
   const label = (fallbackLabel ?? stageKey ?? '').trim();
   if (!label || label === '-') return label || '-';
+  // 后端/列表偶发把 stage.key（如 quality_released）直接当展示名
+  if (!/[\u4e00-\u9fff]/.test(label)) {
+    const asKey = normalizeLifecycleStageKey(label);
+    const fromKey = resolveLifecycleStageI18nKey(asKey);
+    if (fromKey) {
+      const translated = t(fromKey);
+      if (translated && translated !== fromKey) return translated;
+    }
+  }
   const keyFromZh = LIFECYCLE_ZH_LABEL_TO_KEY[label];
   if (keyFromZh) {
     const i18nKey = resolveLifecycleStageI18nKey(keyFromZh);

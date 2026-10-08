@@ -40,7 +40,7 @@ application-layer-contract.md[SC4M]: F:4-layer app discipline | R:- | A:basic/pr
 permission-contract.md[SS5M]: F:RBAC permission contract | R:- | A:require_* helpers | S:module param bare; no double-prefix; 69L
 permission-responsibility.md[SS4M]: F:permission duty split | R:- | A:manifest→route→UI | S:composite page material pilot; 64L
 realtime-im.md[SM3T]: F:realtime IM transport | R:- | A:3 backends | S:socketio default; centrifugo separate; 56L
-aoci-cursor-setup.md[DU3T]: F:Implements aoci-cursor-setup.md | R:- | A:- | S:51L
+aoci-cursor-setup.md[SU3T]: F:说明Cursor三仓AOCI接入、选仓与本机检查流程 | R:- | A:- | S:单个MCP进程只能绑定一个仓库；文中进度和路径须现场核对
 
 ===D:/kuaigeyun-pro/kuaigeyun/docs/===
 功能清单.md[SB4M]: F:product feature matrix | R:- | A:8 domains | S:master data through kuaiai; 175L
@@ -57,7 +57,8 @@ README.md[SV3S]: F:fast-deploy README | R:- | A:deploy entry points | S:deploy.s
 build.mobile.web.sh[OV1T]: F:Expo Web build | R:- | A:mobile web-dist | S:npm run build:web; 32L
 build.web.sh[OV2S]: F:frontend build+git push | R:- | A:dist-only commit | S:filter-repo strip; force-with-lease; 117L
 deploy.sh[OV3S]: F:unified deploy entry | R:- | A:dispatch+win PS fallback | S:14 subcmds; dev/prod mode; 110L
-launch.dev.sh[OV5L]: F:dev one-shot launcher | R:- | A:backend+worker+vite | S:port kill 6 rounds; uv resolve; 819L
+launch.dev.sh[OV6L]: F:启停并检查API、Taskiq、Vite及可选Expo Web开发服务 | R:code:riveredge-backend/scripts/run_dev_server.py,code:fast-deploy/launch.dev.ps1 | A:start_backend,start_worker,start_frontend,start_mobile,stop_all | S:端口8200/8100/8098；全启动先起Vite避免轮询重载；Windows清理进程树，Taskiq默认单worker
+launch.dev.ps1[OV5T]: F:在当前PowerShell终端通过Git Bash启动开发脚本 | R:code:fast-deploy/launch.dev.sh | A:Find-GitBash | S:透传全部参数与退出码；先切到仓库根目录；避免直接调用sh触发新窗口
 
 ===D:/kuaigeyun-pro/kuaigeyun/fast-deploy/config/===
 caddy-extra-proxies.list.example[CC1T]: F:Caddy extra proxy list | R:- | A:site→upstream lines | S:http=no TLS; https=auto; 11L
@@ -2357,7 +2358,7 @@ spare_part_service.py[SB5L]: F:备品备件业务服务模块  处理备件出�
 spc_list_core.py[SB5T]: F:SPC 样本列表：排序白名单、keyword、采样时间区间。 | R:- | A:apply_spc_sample_search_filters,apply_spc_sample_datetime_range,resolve_spc_s... | S:86L; SPC 样本列表：排序白名单、keyword、采样时间区间。
 spot_check_reminder_service.py[SB5M]: F:设备点检未点检/未审核超时提醒（INF-03 / R-10 WP-10.6）。 | R:- | A:_site_tz,_site_today,_period_key_and_start,_period_end,_site_datetime_utc,Spo... | S:387L; 设备点检未点检/未审核超时提醒（INF-03 / R-10 WP-10.6）。
 state_transition_service.py[SB5L]: F:状态流转服务模块  提供状态流转管理的业务逻辑，支持状态机模式管理需求状态。 优先从 StateTransitionRule 数据库加载规则，无规则时使用... | R:- | A:_normalize_state,StateTransitionService | S:507L
-station_service.py[SB5L]: F:工位终端服务：安灯联动、SOP 确认、工序暂停/恢复/结束、资质、交接班 | R:- | A:_station_file_preview_url,_attachment_uuids_from_node_data,_sop_flow_to_steps... | S:1491L; 工位终端服务：安灯联动、SOP 确认、工序暂停/恢复/结束、资质、交接班
+station_service.py[AB7L]: F:编排工位安灯业务联动、SOP文档与确认、资质、停复工及交接班 | R:code:riveredge-backend/src/apps/kuaizhizao/services/work_order_service.py,code:riveredge-backend/src/apps/master_data/services/process_service.py | A:StationService | S:SOP确认绑定人员和修订；组织未配资质默认放行；停机与工序状态同事务；结束状态报工用目标量、数量报工须合格达计划
 stocktaking_inventory_snapshot.py[SB5S]: F:盘点单库存快照模块  根据仓库账面库存生成盘点明细快照行，复用报表服务的库存加载逻辑。  Author: AI Assistant Date: 2026-... | R:- | A:InventorySnapshotLine,build_inventory_snapshot | S:102L
 stocktaking_service.py[SB5L]: F:库存盘点业务服务模块  提供库存盘点单相关的业务逻辑处理，包括盘点单创建、执行、差异处理等。  Author: Luigi Lu Date: 2025-0... | R:- | A:StocktakingService | S:988L
 supplier_collaboration_service.py[SB5M]: F:供应商协同服务模块  提供供应商协同功能，包括采购订单下发、进度同步、发货通知等。  Author: Auto (AI Assistant) Date: ... | R:- | A:SupplierCollaborationService | S:274L
@@ -4669,7 +4670,7 @@ EquipmentFormModal.tsx[EU5S]: F:Implements EquipmentFormModal.tsx | R:- | A:- | 
 EquipmentPersonSelect.tsx[EU5T]: F:Implements EquipmentPersonSelect.tsx | R:- | A:- | S:71L
 HolidayCnImportModal.tsx[EU5S]: F:Implements HolidayCnImportModal.tsx | R:- | A:- | S:166L
 HolidayFormModal.tsx[EU5S]: F:Implements HolidayFormModal.tsx | R:- | A:- | S:141L
-InspectionPlanFormModal.tsx[EU5M]: F:Implements InspectionPlanFormModal.tsx | R:- | A:- | S:320L
+InspectionPlanFormModal.tsx[EU6M]: F:复用质检方案新建编辑表单，维护检验步骤、类型与版本 | R:code:riveredge-frontend/src/apps/kuaizhizao/services/production.ts,code:riveredge-frontend/src/apps/kuaizhizao/types/inspectionStepSpec.ts | A:InspectionPlanFormModal | S:新建类型须进initialValues防销毁重建丢值；步骤变更确认后升版本；提交清空物料绑定并将步骤序号从零重排
 InspectionPlanStepEditor.tsx[EU5L]: F:结构化规格始终以 value_spec 重算合格标准，避免手工文案与判定口径漂移 | R:- | A:- | S:595L
 InspectionSamplingSpecFields.tsx[EU5T]: F:挂载时将默认 n/Ac/Re 写入 Form，避免仅展示默认值却未注册字段 | R:- | A:- | S:62L; 挂载时将默认 n/Ac/Re 写入 Form，避免仅展示默认值却未注册字段
 InspectionStepConductPhotoField.tsx[EU5S]: F:Implements InspectionStepConductPhotoField.tsx | R:- | A:- | S:122L
@@ -6143,8 +6144,8 @@ MaterialUnitQuickSelect.tsx[EU5S]: F:Implements MaterialUnitQuickSelect.tsx | R:
 MaterialVariantCombinationsTable.tsx[EU5L]: F:Implements MaterialVariantCombinationsTable.tsx | R:- | A:- | S:946L
 MaterialVariantSkusPanel.tsx[EU5T]: F:Implements MaterialVariantSkusPanel.tsx | R:- | A:- | S:23L
 OperationDocumentPushPanel.tsx[EU5S]: F:ignore | R:- | A:- | S:198L; ignore
-OperationFormModal.tsx[EU5L]: F:让首屏先绘制基础选项，再拉取资源/设备/质检方案，减轻打开弹窗时的主线程长任务 | R:- | A:- | S:868L; 让首屏先绘制基础选项，再拉取资源/设备/质检方案，减轻打开弹窗时的主线程长任务
-OperationSequenceEditor.tsx[EU5L]: F:表体内勿用 responsive（易整列收成 +N）；优先展示方案名，超出 2 个再 +N | R:- | A:- | S:1195L
+OperationFormModal.tsx[EU6L]: F:维护工序主数据、默认资源人员、有序质检方案及自定义字段，支持嵌套快建 | R:code:riveredge-frontend/src/apps/master-data/services/process.ts,code:riveredge-frontend/src/apps/master-data/schemas/operation.ts | A:OperationFormModal | S:编辑逐字段回填且不带质检默认值；保留已绑定停用不良项；多方案同步首方案和ipqc结构，非plan模式清空方案
+OperationSequenceEditor.tsx[EU6L]: F:编辑路线工序序列，支持手柄拖排、增删替换、质检、超报及委外覆盖 | R:code:riveredge-frontend/src/apps/master-data/components/OperationFormModal.tsx,code:riveredge-frontend/src/apps/master-data/utils/processRouteSequenceUtils.ts | A:OperationSequenceEditor,OperationPickPanel | S:搜索多选保留不可见已选项；替换重置为新工序默认值；多质检方案保持顺序及首方案兼容字段；弹窗portal到body
 OperationSyncFromSourceModal.tsx[EU5T]: F:Implements OperationSyncFromSourceModal.tsx | R:- | A:- | S:19L
 OrderLineVariantAttributesCell.tsx[EU5M]: F:eslint-disable-next-line react-hooks/exhaustive-deps -- applyAttributes 依赖 ro... | R:- | A:- | S:288L
 PartnerPriceVariantPricesEditor.tsx[EU5M]: F:Implements PartnerPriceVariantPricesEditor.tsx | R:- | A:- | S:330L
@@ -7561,7 +7562,7 @@ analysis.tsx[EU5T]: F:Implements analysis.tsx | R:- | A:- | S:1L
 dashboardCardSurface.ts[EU5T]: F:Implements dashboardCardSurface.ts | R:- | A:- | S:10L
 dashboardTopBarTheme.ts[EU5T]: F:Implements dashboardTopBarTheme.ts | R:- | A:- | S:39L
 index.tsx[EU5L]: F:克制色：浅底 + 同系文字，避免高饱和色块 | R:- | A:- | S:980L; 克制色：浅底 + 同系文字，避免高饱和色块
-platformUpdateLog.ts[EU5L]: F:Implements platformUpdateLog.ts | R:- | A:- | S:12386L
+platformUpdateLog.ts[FD5L]: F:定义工作台通用更新目录，合并定制日志并按租户应用、日期和类型筛选 | R:code:riveredge-frontend/src/pages/system/dashboard/platformUpdateLogDedicated.ts | A:getRecentPlatformUpdates,filterVisiblePlatformUpdates,groupPlatformUpdatesByDate | S:定制记录仅对已启用对应应用可见；日期降序同日通用在前；文本键同步zh-CN；不收录HaoliGO和造数工具
 platformUpdateLogDedicated.ts[EU5L]: F:Implements platformUpdateLogDedicated.ts | R:- | A:- | S:812L
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/pages/system/dashboard/analysis/===
