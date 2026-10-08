@@ -299,3 +299,53 @@ class StationWorkOrderDocumentFlags(BaseModel):
 
 class StationWorkOrderDocumentFlagsResponse(BaseModel):
     items: List[StationWorkOrderDocumentFlags] = Field(default_factory=list)
+
+
+class StationOperatorSessionConfirmRequest(BaseModel):
+    """工位操作员确认：候选操作员 + 确认方式负载（face 特征或员工码）。"""
+
+    workstation_id: int = Field(..., description="工位ID")
+    candidate_user_id: int = Field(..., description="候选操作员系统用户ID")
+    confirm_method: str = Field(..., description="确认方式 face/employee_code")
+    face_descriptor: Optional[List[float]] = Field(
+        None, description="confirm_method=face 时的人脸特征向量"
+    )
+    employee_code: Optional[str] = Field(
+        None, description="confirm_method=employee_code 时的员工码"
+    )
+
+
+class StationOperatorSessionInfo(BaseModel):
+    """操作员会话概要（不含凭据哈希等敏感字段）。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    uuid: str
+    workstation_id: Optional[int] = None
+    workstation_name: Optional[str] = None
+    operator_employee_id: int
+    operator_user_id: int
+    operator_name: str
+    confirm_method: str
+    status: str
+    issued_at: datetime
+    last_seen_at: datetime
+    closed_at: Optional[datetime] = None
+    close_reason: Optional[str] = None
+
+
+class StationOperatorSessionConfirmResponse(BaseModel):
+    """确认成功：凭据原文仅此一次返回，客户端只保存在页面内存。"""
+
+    credential: str = Field(..., description="会话原始凭据（仅此一次返回）")
+    session: StationOperatorSessionInfo
+
+
+class StationOperatorSessionCurrentResponse(BaseModel):
+    valid: bool
+    session: Optional[StationOperatorSessionInfo] = None
+
+
+class StationOperatorSessionCloseResponse(BaseModel):
+    closed: bool = True
