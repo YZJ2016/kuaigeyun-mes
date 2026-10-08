@@ -1,1 +1,0 @@
-import{j as e,F as r}from"./vendor-CHxkkwLz.js";import{L as i}from"./ListPageTemplate-BB52ucgB.js";import"./main-CWHzBI2J.js";import{c as a}from"./clientRelease-BRUefKDH.js";const f=({titleKey:o,descriptionKey:s})=>{const{t}=a();return e.jsx(i,{children:e.jsx(r,{type:"info",showIcon:!0,title:t(o),description:t(s)})})};export{f as D};
