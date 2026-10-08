@@ -5536,6 +5536,8 @@ export default {
   'app.kuaiplm.rdDeliverables.scope.all': '全部',
   'app.kuaiplm.rdDeliverables.scope.unlinked': '无项目',
   'app.kuaiplm.rdDeliverables.scope.linked': '已挂项目',
+  'app.kuaiplm.rdDeliverables.messages.deleteOnlyPending':
+    '仅待提交或已驳回的交付物可删除；已提交或已有发布履历的请升版',
   'app.kuaiplm.rdDeliverables.form.projectOptional': '关联研发项目（可选）',
   'app.kuaiplm.rdDeliverables.form.projectCode': '项目代号',
   'app.kuaiplm.rdDeliverables.form.projectCodeRequired': '无项目归档时须填写项目代号',
@@ -5586,7 +5588,12 @@ export default {
   'app.kuaiplm.rdProjects.detail.deliverable.completeMachineCode': '整机型号/料号',
   'app.kuaiplm.rdProjects.detail.deliverable.completeMachineCodeRequired': '请填写整机型号或整机料号',
   'app.kuaiplm.rdProjects.detail.deliverable.completeMachineCodePlaceholder': '整机目录下的归档料号',
-  'app.kuaiplm.rdProjects.detail.deliverable.type.document': '其它文档',
+  'app.kuaiplm.rdProjects.detail.deliverable.type.document': '项目文档',
+  'app.kuaiplm.rdProjects.detail.deliverable.type.quality': '质量报告',
+  'app.kuaiplm.rdProjects.detail.deliverable.type.sop': '作业指导书',
+  'app.kuaiplm.rdProjects.detail.deliverable.type.bom': 'BOM',
+  'app.kuaiplm.rdProjects.detail.deliverable.type.drawing': '图纸包',
+  'app.kuaiplm.rdProjects.detail.deliverable.type.process': '工艺文件',
   'app.kuaiplm.rdProjects.detail.deliverable.materialCode': '材料料号',
   'app.kuaiplm.rdProjects.detail.deliverable.catalogCode': '料号',
   'app.kuaiplm.rdProjects.detail.deliverable.materialCodeRequired': '部品规格书须填写材料料号',
@@ -30073,6 +30080,14 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.kuaiplm-rd-deliverables-list-columns-r01.title':
+    '交付物列表列宽与操作列对齐规范',
+  'pages.dashboard.updateLog.entries.kuaiplm-rd-deliverables-list-columns-r01.description':
+    '交付物列表走三桶列宽与 GLOBAL 列序；状态右固定；操作列提供详情、编辑、履历、提交、删除（uni-action）；行点击不再开抽屉，支持勾选批量删除。',
+  'pages.dashboard.updateLog.entries.kuaiplm-rd-deliverables-list-toolbar-r01.title':
+    '交付物列表工具栏对齐列表规范',
+  'pages.dashboard.updateLog.entries.kuaiplm-rd-deliverables-list-toolbar-r01.description':
+    '交付物页去掉重复页标题；全部/无项目/已挂项目筛选移到模糊搜索左侧；具备新建权限时显示「新建交付物」。',
   'pages.dashboard.updateLog.entries.kuaiplm-rd-deliverables-standalone-r01.title':
     '快研发交付物支持无项目直管',
   'pages.dashboard.updateLog.entries.kuaiplm-rd-deliverables-standalone-r01.description':

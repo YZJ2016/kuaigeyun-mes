@@ -14,19 +14,17 @@ import {
   ProFormTextArea,
   ProFormUploadDragger,
 } from '@ant-design/pro-components';
-import {
-  App,
-  Button,
-  Modal,
-  Result,
-  Space,
-  Spin,
-  Table,
-  Tag,
-  Typography,
-} from 'antd';
+import { App, Button, Modal, Result, Space, Spin, Table, Tag, Typography } from 'antd';
 import { ActionConfirmPopconfirm } from '../../../../components/action-confirm';
+import { MarkerTag } from '../../../../constants/statusBadges';
+import { rowActionKind, rowActionViewHistory } from '../../../../components/uni-action';
 import { UniTable } from '../../../../components/uni-table';
+import {
+  alignProColumns,
+  GLOBAL_DOC_LIST_FIELD_RANK,
+} from '../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { buildDocumentAuditColumns } from '../../../kuaizhizao/pages/shared/documentAuditColumns';
+import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../utils/uniTableLayoutColumns';
 import {
   DetailDrawerTemplate,
   FormModalTemplate,
@@ -49,6 +47,11 @@ import {
   needsMaterialCode,
   needsProjectCodeWithoutProject,
 } from '../../utils/rdDeliverableTypes';
+import {
+  buildRdDeliverableTypeSelectOptions,
+  RD_DELIVERABLE_TYPE_COLUMN_WIDTH,
+  resolveRdDeliverableTypeLabel,
+} from '../../utils/rdDeliverableTypePresentation';
 import type { RdProjectDeliverable } from '../../services/rd-project';
 import {
   createRdDeliverable,
@@ -79,9 +82,8 @@ const RdDeliverablesPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const actionRef = useRef<ActionType>();
   const formRef = useRef<ProFormInstance>();
+  const tableRowsRef = useRef<RdProjectDeliverable[]>([]);
   const perms = useResourcePermissions(RESOURCE);
-  const canWrite =
-    perms.canCreate || perms.canUpdate || Boolean(perms.canAction?.('upload-part-spec'));
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<RdProjectDeliverable | null>(null);
@@ -98,144 +100,16 @@ const RdDeliverablesPage: React.FC = () => {
 
   const scopeFilter = (searchParams.get('scope') as ScopeFilter) || 'all';
 
-  const deliverableTypeOptions = useMemo(
-    () => [
-      { value: 'part_spec', label: t('app.kuaiplm.rdProjects.detail.deliverable.type.partSpec') },
-      {
-        value: 'software_spec',
-        label: t('app.kuaiplm.rdProjects.detail.deliverable.type.softwareSpec'),
-      },
-      { value: 'schematic', label: t('app.kuaiplm.rdProjects.detail.deliverable.type.schematic') },
-      { value: 'layout', label: t('app.kuaiplm.rdProjects.detail.deliverable.type.layout') },
-      { value: 'gerber', label: t('app.kuaiplm.rdProjects.detail.deliverable.type.gerber') },
-      {
-        value: 'panelization',
-        label: t('app.kuaiplm.rdProjects.detail.deliverable.type.panelization'),
-      },
-      {
-        value: 'test_report_part',
-        label: t('app.kuaiplm.rdProjects.detail.deliverable.type.testReportPart'),
-      },
-      {
-        value: 'test_report_complete',
-        label: t('app.kuaiplm.rdProjects.detail.deliverable.type.testReportComplete'),
-      },
-      {
-        value: 'customer_spec',
-        label: t('app.kuaiplm.rdProjects.detail.deliverable.type.customerSpec'),
-      },
-      {
-        value: 'customer_approval',
-        label: t('app.kuaiplm.rdProjects.detail.deliverable.type.customerApproval'),
-      },
-    ],
+  const deliverableTypeOptions = useMemo(() => buildRdDeliverableTypeSelectOptions(t), [t]);
+
+  const typeLabel = useCallback(
+    (v?: string | null) => resolveRdDeliverableTypeLabel(t, v),
     [t],
   );
 
-  const typeLabel = useCallback(
-    (v?: string | null) => deliverableTypeOptions.find((o) => o.value === v)?.label || v || '—',
-    [deliverableTypeOptions],
-  );
-
-  const columns = useMemo<ProColumns<RdProjectDeliverable>[]>(
-    () => [
-      {
-        title: t('common.name'),
-        dataIndex: 'name',
-        ellipsis: true,
-        width: 200,
-      },
-      {
-        title: t('app.kuaiplm.common.columns.type'),
-        dataIndex: 'deliverable_type',
-        width: 140,
-        render: (_, row) => typeLabel(row.deliverable_type),
-      },
-      {
-        title: t('app.kuaiplm.rdDeliverables.columns.projectCode'),
-        dataIndex: 'project_code',
-        width: 120,
-        render: (_, row) =>
-          row.project_code?.trim() ||
-          (row.project_id
-            ? t('app.kuaiplm.rdDeliverables.columns.projectLinked')
-            : t('app.kuaiplm.rdDeliverables.columns.noProject')),
-      },
-      {
-        title: t('app.kuaiplm.rdProjects.detail.deliverable.catalogCode'),
-        dataIndex: 'material_code',
-        width: 120,
-        ellipsis: true,
-        render: (v) => v || '—',
-      },
-      {
-        title: t('app.kuaiplm.rdProjects.detail.deliverable.version'),
-        dataIndex: 'version',
-        width: 72,
-      },
-      {
-        title: t('common.status'),
-        dataIndex: 'status',
-        width: 100,
-        render: (_, row) =>
-          renderDocumentStatusTag(getKuaiplmDeliverableStatusText(t, row.status), row.status),
-      },
-      {
-        title: t('common.actions'),
-        key: 'actions',
-        width: 220,
-        fixed: 'right',
-        render: (_, row) => (
-          <Space size={4} wrap={false} onClick={(e) => e.stopPropagation()}>
-            {canWrite ? (
-              <Button type="link" size="small" onClick={() => openEdit(row)}>
-                {t('common.edit')}
-              </Button>
-            ) : null}
-            <Button
-              type="link"
-              size="small"
-              onClick={async () => {
-                setVersionOpen(true);
-                setVersionLoading(true);
-                try {
-                  const res = await listRdDeliverableVersions(row.id!);
-                  setVersionRows(res.items || []);
-                  setVersionCanDownload(Boolean(res.can_download_history));
-                } catch (error) {
-                  messageApi.error(getApiErrorMessage(error, t('common.operationFailed')));
-                } finally {
-                  setVersionLoading(false);
-                }
-              }}
-            >
-              {t('app.kuaiplm.rdProjects.detail.deliverable.versions')}
-            </Button>
-            {canWrite && row.status === 'PENDING' ? (
-              <Button
-                type="link"
-                size="small"
-                onClick={async () => {
-                  try {
-                    await submitRdDeliverable(row.id!);
-                    messageApi.success(
-                      t('app.kuaiplm.rdProjects.detail.deliverable.submitSuccess'),
-                    );
-                    actionRef.current?.reload();
-                  } catch (error) {
-                    messageApi.error(getApiErrorMessage(error, t('common.operationFailed')));
-                  }
-                }}
-              >
-                {t('app.kuaiplm.common.deliverableStatus.submitted')}
-              </Button>
-            ) : null}
-          </Space>
-        ),
-      },
-    ],
-    [t, typeLabel, canWrite, messageApi],
-  );
+  const reload = useCallback(() => {
+    actionRef.current?.reload();
+  }, []);
 
   const openCreate = () => {
     setEditing(null);
@@ -246,6 +120,214 @@ const RdDeliverablesPage: React.FC = () => {
     setEditing(row);
     setModalOpen(true);
   };
+
+  const openDetail = (row: RdProjectDeliverable) => {
+    setDetailRow(row);
+    setDetailOpen(true);
+  };
+
+  const openVersions = useCallback(
+    async (row: RdProjectDeliverable) => {
+      if (row.id == null) return;
+      setVersionOpen(true);
+      setVersionLoading(true);
+      try {
+        const res = await listRdDeliverableVersions(row.id);
+        setVersionRows(res.items || []);
+        setVersionCanDownload(Boolean(res.can_download_history));
+      } catch (error) {
+        messageApi.error(getApiErrorMessage(error, t('common.operationFailed')));
+      } finally {
+        setVersionLoading(false);
+      }
+    },
+    [messageApi, t],
+  );
+
+  const isDeliverableDeletable = (row: RdProjectDeliverable) => {
+    const status = (row.status || '').toUpperCase();
+    return status === 'PENDING' || status === 'REJECTED';
+  };
+
+  const columns = useMemo(
+    () =>
+      alignProColumns(
+        [
+          {
+            title: t('common.name'),
+            dataIndex: 'name',
+            key: 'title',
+            minWidth: 160,
+            uniTablePrimaryFlex: true,
+            uniTableRemainderFlex: true,
+            ellipsis: true,
+          },
+          {
+            title: t('app.kuaiplm.common.columns.type'),
+            dataIndex: 'deliverable_type',
+            key: 'document_type',
+            width: RD_DELIVERABLE_TYPE_COLUMN_WIDTH,
+            minWidth: RD_DELIVERABLE_TYPE_COLUMN_WIDTH,
+            uniTableKeepWidth: true,
+            resizable: false,
+            ellipsis: false,
+            render: (_, row) => {
+              const label = typeLabel(row.deliverable_type);
+              return label ? <MarkerTag>{label}</MarkerTag> : null;
+            },
+          },
+          {
+            title: t('app.kuaiplm.rdDeliverables.columns.projectCode'),
+            dataIndex: 'project_code',
+            key: 'project_code',
+            width: 120,
+            minWidth: 120,
+            uniTableKeepWidth: true,
+            resizable: false,
+            ellipsis: true,
+            render: (_, row) =>
+              row.project_code?.trim() ||
+              (row.project_id
+                ? t('app.kuaiplm.rdDeliverables.columns.projectLinked')
+                : t('app.kuaiplm.rdDeliverables.columns.noProject')),
+          },
+          {
+            title: t('app.kuaiplm.rdProjects.detail.deliverable.catalogCode'),
+            dataIndex: 'material_code',
+            key: 'material_code',
+            width: 120,
+            minWidth: 120,
+            uniTableKeepWidth: true,
+            resizable: false,
+            ellipsis: true,
+          },
+          {
+            title: t('app.kuaiplm.rdProjects.detail.deliverable.version'),
+            dataIndex: 'version',
+            key: 'version',
+            width: 72,
+            minWidth: 72,
+            uniTableKeepWidth: true,
+            resizable: false,
+          },
+          {
+            ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+            title: t('common.status'),
+            dataIndex: 'status',
+            key: 'lifecycle',
+            fixed: 'right',
+            render: (_, row) =>
+              renderDocumentStatusTag(getKuaiplmDeliverableStatusText(t, row.status), row.status),
+          },
+          ...buildDocumentAuditColumns(t),
+          {
+            title: t('common.action'),
+            valueType: 'option',
+            key: 'option',
+            fixed: 'right',
+            render: (_, row) => {
+              const actions: React.ReactNode[] = [
+                <Button
+                  key="detail"
+                  type="link"
+                  size="small"
+                  {...rowActionKind('read')}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openDetail(row);
+                  }}
+                />,
+              ];
+              if (
+                isDeliverableDeletable(row) &&
+                perms.canUpdate &&
+                row.id != null
+              ) {
+                actions.push(
+                  <Button
+                    key="edit"
+                    type="link"
+                    size="small"
+                    {...rowActionKind('update')}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openEdit(row);
+                    }}
+                  />,
+                );
+              }
+              if (row.id != null) {
+                actions.push(
+                  <Button
+                    key="versions"
+                    type="link"
+                    size="small"
+                    {...rowActionViewHistory()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void openVersions(row);
+                    }}
+                  />,
+                );
+              }
+              if (
+                row.status === 'PENDING' &&
+                perms.canAction?.('submit') &&
+                row.id != null
+              ) {
+                actions.push(
+                  <Button
+                    key="submit"
+                    type="link"
+                    size="small"
+                    {...rowActionKind('submit')}
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      try {
+                        await submitRdDeliverable(row.id!);
+                        messageApi.success(
+                          t('app.kuaiplm.rdProjects.detail.deliverable.submitSuccess'),
+                        );
+                        reload();
+                      } catch (error) {
+                        messageApi.error(getApiErrorMessage(error, t('common.operationFailed')));
+                      }
+                    }}
+                  />,
+                );
+              }
+              if (isDeliverableDeletable(row) && perms.canDelete && row.id != null) {
+                actions.push(
+                  <ActionConfirmPopconfirm
+                    key="delete"
+                    title={t('app.kuaiplm.rdProjects.detail.deliverable.deleteConfirm')}
+                    onConfirm={async () => {
+                      try {
+                        await deleteRdDeliverable(row.id!);
+                        messageApi.success(t('common.deleteSuccess'));
+                        reload();
+                      } catch (error) {
+                        messageApi.error(getApiErrorMessage(error, t('common.operationFailed')));
+                      }
+                    }}
+                  >
+                    <Button
+                      type="link"
+                      size="small"
+                      {...rowActionKind('delete')}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  </ActionConfirmPopconfirm>,
+                );
+              }
+              return actions;
+            },
+          },
+        ] as ProColumns<RdProjectDeliverable>[],
+        GLOBAL_DOC_LIST_FIELD_RANK,
+      ),
+    [t, typeLabel, perms, messageApi, openVersions, reload],
+  );
 
   const buildPayload = (values: Record<string, unknown>) => {
     const formUpload = formRef.current?.getFieldValue?.('file_upload');
@@ -290,23 +372,40 @@ const RdDeliverablesPage: React.FC = () => {
 
   if (!perms.canRead) {
     return (
-      <ListPageTemplate title={t('app.kuaiplm.menu.rd-deliverables')}>
+      <ListPageTemplate>
         <Result status="403" title={t('common.noPermission')} />
       </ListPageTemplate>
     );
   }
 
   return (
-    <ListPageTemplate title={t('app.kuaiplm.menu.rd-deliverables')}>
+    <ListPageTemplate>
       <UniTable<RdProjectDeliverable>
         actionRef={actionRef}
-        columnPersistenceId="apps.kuaiplm.pages.rd-deliverables.v1"
+        permissionResource={RESOURCE}
+        columnPersistenceId="apps.kuaiplm.pages.rd-deliverables.rank-v3"
         rowKey="id"
         columns={columns}
-        createButtonText={t('app.kuaiplm.rdDeliverables.createButton')}
-        toolBarRender={() => [
+        enableRowSelection
+        onTableDataChange={(rows) => {
+          tableRowsRef.current = rows;
+        }}
+        showDeleteButton={perms.canDelete}
+        onDelete={async (keys) => {
+          const rows = tableRowsRef.current.filter((r) => r.id != null && keys.includes(r.id));
+          const deletable = rows.filter(isDeliverableDeletable);
+          if (!deletable.length) {
+            messageApi.warning(t('app.kuaiplm.rdDeliverables.messages.deleteOnlyPending'));
+            return;
+          }
+          await Promise.all(deletable.map((r) => deleteRdDeliverable(r.id!)));
+          messageApi.success(t('common.deleteSuccess'));
+          reload();
+        }}
+        beforeSearchButtons={
           <ThemedSegmented
-            key="scope"
+            surfaceBackground
+            size="medium"
             value={scopeFilter}
             options={[
               { label: t('app.kuaiplm.rdDeliverables.scope.all'), value: 'all' },
@@ -320,10 +419,13 @@ const RdDeliverablesPage: React.FC = () => {
               setSearchParams(next, { replace: true });
               actionRef.current?.reload();
             }}
-          />,
-        ]}
-        onCreate={canWrite ? openCreate : undefined}
+          />
+        }
+        showCreateButton={perms.canCreate}
+        createButtonText={t('app.kuaiplm.rdDeliverables.createButton')}
+        onCreate={openCreate}
         newShortcutHint={NEW_SHORTCUT_HINT}
+        params={{ scope: scopeFilter }}
         request={async (params) => {
           const keyword = String(params.keyword || params.name || '').trim() || undefined;
           const res = await listRdDeliverables({
@@ -336,12 +438,6 @@ const RdDeliverablesPage: React.FC = () => {
           });
           return { data: res.items || [], success: true, total: res.total };
         }}
-        onRow={(row) => ({
-          onClick: () => {
-            setDetailRow(row);
-            setDetailOpen(true);
-          },
-        })}
       />
 
       <FormModalTemplate
