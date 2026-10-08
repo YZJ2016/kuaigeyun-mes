@@ -4,92 +4,44 @@
 - 写 URL 清单完整性：工位前端实际调用的全部写 URL 都挂了组合门禁依赖；
 - 门禁行为：无头/坏头/错绑定（跨租户、跨终端账号、工位不匹配）拒绝，
   有效头放行，PC（非纯 station）账号不受影响；
-- 只读 GET 路径不挂门禁、无头仍可访问。
+- 只读 GET 路径不挂门禁、无头仍可访问；
+- 路由级鉴权归一：纯工位账号命中闭包/前置端点时所需权限为 terminal:execute，
+  非纯工位账号与闭包外路径完全走原 URL→action 映射。
 """
 
+import re
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import HTTPException
 
+from apps.kuaizhizao.api import _kuaizhizao_route_access as route_access_mod
 from apps.kuaizhizao.api.deps import station_operator_session as gate_mod
 from apps.kuaizhizao.api.productions import reporting as reporting_api
 from apps.kuaizhizao.api.productions import work_orders as work_orders_api
 from apps.kuaizhizao.api.station import station as station_api
 
 # ---------------------------------------------------------------------------
-# 写 URL 清单：与 riveredge-frontend/src/apps/kuaizhizao/station/** 实际调用的
-# 非 GET 请求一一对应（前端经 stationOperatorSession: true 附加业务凭据头）。
+# 写 URL 清单：唯一真源在 deps/station_operator_session.py 的
+# GATED_WRITE_URL_MANIFEST（路由鉴权归一同样引用），这里只补路由归属。
 # path 为路由文件内注册形态（对外前缀 /api/v1/apps/kuaizhizao）。
 # ---------------------------------------------------------------------------
+
+
+def _router_for_gated_path(path: str):
+    if path.startswith("/work-orders/"):
+        return work_orders_api.router
+    if path.startswith("/reporting/"):
+        return reporting_api.router
+    if path.startswith("/station/"):
+        return station_api.router
+    raise AssertionError(f"工位写 URL 未映射到路由：{path}")
+
+
 GATED_WRITE_URL_MANIFEST = [
-    # (method, path, router, 说明)
-    # execution/api.ts —— 开工 / 撤回开工 / 暂停 / 恢复 / 完工 / 设备上下机
-    (
-        "POST",
-        "/work-orders/{work_order_id}/operations/{operation_id}/start",
-        work_orders_api.router,
-        "开工",
-    ),
-    (
-        "POST",
-        "/work-orders/{work_order_id}/operations/{operation_id}/withdraw-start",
-        work_orders_api.router,
-        "撤回开工",
-    ),
-    (
-        "POST",
-        "/work-orders/{work_order_id}/operations/{operation_id}/pause",
-        work_orders_api.router,
-        "暂停",
-    ),
-    (
-        "POST",
-        "/work-orders/{work_order_id}/operations/{operation_id}/resume",
-        work_orders_api.router,
-        "恢复",
-    ),
-    (
-        "POST",
-        "/work-orders/{work_order_id}/operations/{operation_id}/complete",
-        work_orders_api.router,
-        "完工",
-    ),
-    (
-        "POST",
-        "/work-orders/{work_order_id}/operations/{operation_id}/machine-session",
-        work_orders_api.router,
-        "设备上下机",
-    ),
-    # reporting/StationReportingPage.tsx —— 快速报工 / 投料 / 下料 / 报废
-    ("POST", "/reporting/quick", reporting_api.router, "快速报工"),
-    (
-        "POST",
-        "/reporting/{record_id}/material-binding/feeding",
-        reporting_api.router,
-        "投料（上料绑定）",
-    ),
-    (
-        "POST",
-        "/reporting/{record_id}/material-binding/discharging",
-        reporting_api.router,
-        "下料绑定",
-    ),
-    ("POST", "/reporting/{record_id}/scrap", reporting_api.router, "报废"),
-    # andon/api.ts —— 安灯发起 / 响应 / 关闭 / 取消
-    ("POST", "/station/andon", station_api.router, "安灯发起"),
-    ("POST", "/station/andon/{andon_id}/acknowledge", station_api.router, "安灯响应"),
-    ("POST", "/station/andon/{andon_id}/close", station_api.router, "安灯关闭"),
-    ("POST", "/station/andon/{andon_id}/cancel", station_api.router, "安灯取消"),
-    # execution/api.ts acknowledgeSop —— SOP 确认
-    ("POST", "/station/sop-acknowledgments", station_api.router, "SOP 确认"),
-    # face/api.ts —— 交接确认 / 刷脸登记 / 刷脸删除
-    ("POST", "/station/shift-handover", station_api.router, "交接确认"),
-    ("POST", "/station/face-templates", station_api.router, "刷脸登记"),
-    ("DELETE", "/station/face-templates/{template_id}", station_api.router, "刷脸删除"),
-    # 产生资质记录的写（当前前端未调用，防御性收口）
-    ("POST", "/station/operator-skills", station_api.router, "上岗资质维护"),
+    (method, path, _router_for_gated_path(path), path)
+    for method, path in gate_mod.GATED_WRITE_URL_MANIFEST
 ]
 
 # 明确不挂门禁的接口：会话生命周期本身、刷脸比对（确认流程前置）与只读检查
@@ -407,3 +359,168 @@ async def test_pure_station_detection(monkeypatch, role_ids, role_types, expecte
 
     result = await gate_mod.is_pure_station_terminal_user(user_id=7, tenant_id=1)
     assert result is expected
+
+
+# ---------------------------------------------------------------------------
+# 路由级鉴权归一：纯工位账号命中工位写闭包/确认流前置端点时，
+# 所需权限归一为 kuaizhizao:production-execution-terminal:execute（真实注册码，
+# 不 mock 注册表）；其他用户与其他路径完全走原 URL→action 映射。
+# ---------------------------------------------------------------------------
+
+_STATION_EXECUTE_ALL_URLS = [
+    *gate_mod.GATED_WRITE_URL_MANIFEST,
+    *gate_mod.STATION_EXECUTE_PRECHECK_URLS,
+]
+
+
+def _concrete_path(template: str) -> str:
+    return re.sub(r"\{[^}/]+\}", "1", template)
+
+
+def _route_access_dep(path: str):
+    """按闭包 URL 归属返回对应的路由级鉴权依赖。"""
+    if path.startswith("/work-orders/"):
+        return route_access_mod.require_kuaizhizao_work_order_access()
+    if path.startswith("/reporting/"):
+        return route_access_mod.require_kuaizhizao_productions_access()
+    if path.startswith("/station/"):
+        return route_access_mod.require_kuaizhizao_module_access(
+            "production-execution-terminal"
+        )
+    raise AssertionError(f"未映射鉴权依赖的 URL：{path}")
+
+
+def _access_request(method: str, template: str) -> MagicMock:
+    request = MagicMock()
+    request.method = method
+    request.url = SimpleNamespace(
+        path=f"/api/v1/apps/kuaizhizao{_concrete_path(template)}"
+    )
+    return request
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "method,template",
+    _STATION_EXECUTE_ALL_URLS,
+    ids=[f"{m} {p}" for m, p in _STATION_EXECUTE_ALL_URLS],
+)
+async def test_pure_station_route_access_normalized_to_execute(
+    monkeypatch, method, template
+):
+    """纯工位账号：闭包/前置 URL 的路由级鉴权所需码归一为 terminal:execute。"""
+    captured = AsyncMock()
+    monkeypatch.setattr(route_access_mod, "ensure_permission_codes", captured)
+    _patch_pure_station(monkeypatch, True)
+
+    dep = _route_access_dep(template)
+    await dep(
+        request=_access_request(method, template),
+        auth=_auth(),
+        tenant_id=1,
+    )
+
+    captured.assert_awaited_once()
+    assert captured.await_args.args[3] == [
+        gate_mod.STATION_TERMINAL_EXECUTE_PERMISSION
+    ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "method,template,expected_code",
+    [
+        (
+            "POST",
+            "/reporting/quick",
+            "kuaizhizao:production-execution-reporting:create",
+        ),
+        ("POST", "/station/andon", "kuaizhizao:production-execution-terminal:create"),
+        (
+            "DELETE",
+            "/station/face-templates/{template_id}",
+            "kuaizhizao:production-execution-terminal:delete",
+        ),
+        (
+            "POST",
+            "/work-orders/{work_order_id}/operations/{operation_id}/start",
+            "kuaizhizao:work-order:create",
+        ),
+        (
+            "POST",
+            "/station/skill-check",
+            "kuaizhizao:production-execution-terminal:create",
+        ),
+    ],
+)
+async def test_non_station_user_keeps_original_mapping(
+    monkeypatch, method, template, expected_code
+):
+    """非纯工位账号：同样 URL 仍按原 URL→action 映射取权限码，不归一。"""
+    captured = AsyncMock()
+    monkeypatch.setattr(route_access_mod, "ensure_permission_codes", captured)
+    _patch_pure_station(monkeypatch, False)
+
+    dep = _route_access_dep(template)
+    await dep(
+        request=_access_request(method, template),
+        auth=_auth(),
+        tenant_id=1,
+    )
+
+    captured.assert_awaited_once()
+    assert captured.await_args.args[3] == [expected_code]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "method,path,expected_code,dep_factory",
+    [
+        (
+            "GET",
+            "/work-orders",
+            "kuaizhizao:work-order:read",
+            route_access_mod.require_kuaizhizao_work_order_access,
+        ),
+        (
+            "POST",
+            "/work-orders",
+            "kuaizhizao:work-order:create",
+            route_access_mod.require_kuaizhizao_work_order_access,
+        ),
+        (
+            "GET",
+            "/station/andon",
+            "kuaizhizao:production-execution-terminal:read",
+            lambda: route_access_mod.require_kuaizhizao_module_access(
+                "production-execution-terminal"
+            ),
+        ),
+        (
+            "POST",
+            "/station/work-orders/1/operations/2/documents",
+            "kuaizhizao:production-execution-terminal:create",
+            lambda: route_access_mod.require_kuaizhizao_module_access(
+                "production-execution-terminal"
+            ),
+        ),
+    ],
+)
+async def test_pure_station_outside_closure_keeps_original_mapping(
+    monkeypatch, method, path, expected_code, dep_factory
+):
+    """纯工位账号：闭包外路径不归一（读走 read、其他写仍按原映射拒绝）。"""
+    captured = AsyncMock()
+    monkeypatch.setattr(route_access_mod, "ensure_permission_codes", captured)
+    _patch_pure_station(monkeypatch, True)
+
+    request = MagicMock()
+    request.method = method
+    request.url = SimpleNamespace(
+        path=f"/api/v1/apps/kuaizhizao{_concrete_path(path)}"
+    )
+    dep = dep_factory()
+    await dep(request=request, auth=_auth(), tenant_id=1)
+
+    captured.assert_awaited_once()
+    assert captured.await_args.args[3] == [expected_code]

@@ -19,6 +19,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any, Optional
 
 from fastapi import Depends, Header, HTTPException, Request, status
@@ -40,6 +41,85 @@ STATION_TERMINAL_EXECUTE_PERMISSION = (
 STATION_OPERATOR_SESSION_DENIED_MESSAGE = "工位写操作需要先确认有效的当前操作员"
 
 operator_session_service = StationOperatorSessionService()
+
+
+# ---------------------------------------------------------------------------
+# 工位写闭包：纯工位账号 + 有效操作员会话才允许执行的写 URL（路由内注册形态，
+# 不含 /api/v1/apps/kuaizhizao 前缀）。
+# 唯一真源——tests/apps/kuaizhizao/api/test_station_operator_write_gate.py 的
+# 断言清单由本表推导，路由鉴权归一（_kuaizhizao_route_access）同样引用本表，
+# 禁止在别处复制第二份清单。
+# ---------------------------------------------------------------------------
+GATED_WRITE_URL_MANIFEST: tuple[tuple[str, str], ...] = (
+    # execution/api.ts —— 开工 / 撤回开工 / 暂停 / 恢复 / 完工 / 设备上下机
+    ("POST", "/work-orders/{work_order_id}/operations/{operation_id}/start"),
+    ("POST", "/work-orders/{work_order_id}/operations/{operation_id}/withdraw-start"),
+    ("POST", "/work-orders/{work_order_id}/operations/{operation_id}/pause"),
+    ("POST", "/work-orders/{work_order_id}/operations/{operation_id}/resume"),
+    ("POST", "/work-orders/{work_order_id}/operations/{operation_id}/complete"),
+    ("POST", "/work-orders/{work_order_id}/operations/{operation_id}/machine-session"),
+    # reporting/StationReportingPage.tsx —— 快速报工 / 投料 / 下料 / 报废 / 不良
+    ("POST", "/reporting/quick"),
+    ("POST", "/reporting/{record_id}/material-binding/feeding"),
+    ("POST", "/reporting/{record_id}/material-binding/discharging"),
+    ("POST", "/reporting/{record_id}/scrap"),
+    ("POST", "/reporting/{record_id}/defect"),
+    # andon/api.ts —— 安灯发起 / 响应 / 关闭 / 取消
+    ("POST", "/station/andon"),
+    ("POST", "/station/andon/{andon_id}/acknowledge"),
+    ("POST", "/station/andon/{andon_id}/close"),
+    ("POST", "/station/andon/{andon_id}/cancel"),
+    # execution/api.ts acknowledgeSop —— SOP 确认
+    ("POST", "/station/sop-acknowledgments"),
+    # face/api.ts —— 交接确认 / 刷脸登记 / 刷脸删除
+    ("POST", "/station/shift-handover"),
+    ("POST", "/station/face-templates"),
+    ("DELETE", "/station/face-templates/{template_id}"),
+    # 产生资质记录的写（当前前端未调用，防御性收口）
+    ("POST", "/station/operator-skills"),
+)
+
+# 确认流前置调用：刷脸比对 / 上岗资质检查 / 会话签发与关闭。
+# 不挂会话门禁（会话生命周期本身），但纯工位账号必须可达——
+# 路由鉴权同样归一到 production-execution-terminal:execute。
+STATION_EXECUTE_PRECHECK_URLS: tuple[tuple[str, str], ...] = (
+    ("POST", "/station/face-identify"),
+    ("POST", "/station/skill-check"),
+    ("POST", "/station/operator-session/confirm"),
+    ("POST", "/station/operator-session/close"),
+)
+
+
+def _compile_url_template(template: str) -> "re.Pattern[str]":
+    """把 ``/a/{id}/b`` 模板编译成尾缀匹配正则（``{param}`` → ``[^/]+``）。"""
+    segments = re.split(r"\{[^}/]+\}", template)
+    pattern = "[^/]+".join(re.escape(seg) for seg in segments)
+    return re.compile(pattern + r"/?$", re.IGNORECASE)
+
+
+_STATION_TERMINAL_EXECUTE_URLS: tuple[tuple[str, "re.Pattern[str]"], ...] = tuple(
+    (method, _compile_url_template(template))
+    for method, template in (
+        *GATED_WRITE_URL_MANIFEST,
+        *STATION_EXECUTE_PRECHECK_URLS,
+    )
+)
+
+
+def is_station_terminal_execute_path(method: str, path: str) -> bool:
+    """请求是否属于工位写闭包或确认流前置端点。
+
+    尾缀匹配（模板本身以 ``/`` 开头，避免 ``/rework-orders`` 误命中
+    ``/work-orders``），兼容 ``/api/v1/apps/kuaizhizao`` 前缀路径。
+    """
+    m = (method or "").upper()
+    p = path or ""
+    if not m or not p:
+        return False
+    return any(
+        m == allowed_method and pattern.search(p) is not None
+        for allowed_method, pattern in _STATION_TERMINAL_EXECUTE_URLS
+    )
 
 
 async def is_pure_station_terminal_user(*, user_id: int, tenant_id: int) -> bool:
@@ -141,3 +221,5 @@ async def require_station_operator_session(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=STATION_OPERATOR_SESSION_DENIED_MESSAGE,
         )
+    # 供下游处理器（如快捷报工本人/小组边界）复用已解析会话，避免二次解析
+    request.state.station_operator_session = session

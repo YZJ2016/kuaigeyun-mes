@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock
 
@@ -169,6 +170,11 @@ async def test_station_preset_permissions_explicit_only(monkeypatch):
         "kuaizhizao:work-order:create",  # 未列举 → 不得授予
         "kuaizhizao:production-execution-reporting:read",
         "kuaizhizao:production-execution-reporting:assign",  # 明令禁止
+        "master-data:material:read",
+        "master-data:factory:work-group:read",
+        "master-data:factory:workstation:read",
+        "master-data:factory:production-line:read",
+        "system:user:display",
         *sorted(PermissionRegistryService.BASELINE_PERMISSION_CODES),
     ]
     perm_by_code = {c: MagicMock(id=i + 1, code=c) for i, c in enumerate(defined)}
@@ -218,8 +224,43 @@ async def test_station_preset_permissions_explicit_only(monkeypatch):
         "kuaizhizao:production-execution-terminal:execute",
         "kuaizhizao:work-order:read",
         "kuaizhizao:production-execution-reporting:read",
+        "master-data:material:read",
+        "master-data:factory:work-group:read",
+        "master-data:factory:workstation:read",
+        "master-data:factory:production-line:read",
+        "system:user:display",
         *PermissionRegistryService.BASELINE_PERMISSION_CODES,
     }
+
+
+def _registered_permission_codes() -> set[str]:
+    """全量已注册权限码：CORE + 所有应用 manifest.permissions + 引用 display 码。"""
+    from core.services.authorization.reference_registry_service import (
+        ReferenceRegistryService,
+    )
+
+    registered = {c.lower() for c in PermissionRegistryService.CORE_PERMISSION_CODES}
+    apps_dir = PermissionRegistryService._get_apps_dir()
+    for manifest_file in apps_dir.glob("*/manifest.json"):
+        try:
+            data = json.loads(manifest_file.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        for raw in data.get("permissions") or []:
+            code = str(raw).strip().lower()
+            if code:
+                registered.add(code)
+    for code, _ in ReferenceRegistryService.collect_display_permission_codes():
+        registered.add(str(code).strip().lower())
+    return registered
+
+
+def test_preset_explicit_permission_codes_all_registered():
+    """预设显式集合中每个码都必须在注册定义中找到（防静默丢码回归）。"""
+    registered = _registered_permission_codes()
+    for role_code, explicit in RoleService.PRESET_ROLE_EXPLICIT_PERMISSION_CODES.items():
+        missing = sorted(c for c in explicit if c not in registered)
+        assert not missing, f"{role_code} 显式权限码未注册: {missing}"
 
 
 # ---------------- 角色侧追加用户（bind 路径） ----------------

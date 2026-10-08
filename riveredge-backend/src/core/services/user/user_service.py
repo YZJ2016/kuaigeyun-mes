@@ -1060,7 +1060,9 @@ class UserService:
                 # 角色类型纯度：station 不得与 internal/external 混挂
                 if role_ids:
                     imported_role_types = await Role.filter(
-                        id__in=role_ids
+                        id__in=role_ids,
+                        tenant_id=tenant_id,
+                        deleted_at__isnull=True,
                     ).values_list("role_type", flat=True)
                     try:
                         assert_pure_role_types(imported_role_types)
@@ -1090,7 +1092,11 @@ class UserService:
                 
                 # 分配角色
                 if role_ids:
-                    roles = await Role.filter(id__in=role_ids).all()
+                    roles = await Role.filter(
+                        id__in=role_ids,
+                        tenant_id=tenant_id,
+                        deleted_at__isnull=True,
+                    ).all()
                     await user.roles.add(*roles)
                 
                 success_count += 1

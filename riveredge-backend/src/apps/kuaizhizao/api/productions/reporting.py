@@ -22,6 +22,12 @@ from infra.exceptions.exceptions import ValidationError, BusinessLogicError, Not
 from infra.services.business_config_service import BusinessConfigService
 
 from apps.kuaizhizao.api.deps import require_station_operator_session
+from apps.kuaizhizao.api.deps.station_operator_session import (
+    STATION_OPERATOR_SESSION_DENIED_MESSAGE,
+    STATION_OPERATOR_SESSION_HEADER,
+    is_pure_station_terminal_user,
+    operator_session_service,
+)
 from apps.kuaizhizao.services.reporting_service import ReportingService, REPORTING_SORTABLE_FIELDS
 from apps.kuaizhizao.services.reporting_sync_service import ReportingSyncService
 from apps.kuaizhizao.services.scrap_record_service import ScrapRecordService
@@ -398,24 +404,47 @@ async def create_quick_reporting_record(
     """
     try:
         client_channel = _resolve_reporting_client_channel(request)
-        # 工位渠道：入口操作员与登录用户可以不是同一人，仍算本人报工；
-        # 小组报工也不走办公室代报权限。recorded_by 仍是当前登录用户。
-        # 非 station 保持原代报判断。两边都没有生产人员、也没有小组时仍要 assign。
-        if client_channel == "station":
-            is_proxy = reporting.team_id is None and reporting.worker_id is None
+        # X-Client-Channel 只是来源标记（落库），不参与权限判定。
+        # 纯工位账号：以服务端操作员会话为事实边界——小组报工放行；
+        # 非小组报工的生产人员必须等于当前已确认操作员，代报/他人一律拒绝。
+        # 非纯工位账号：保持原代报判断（worker 非本人/缺省/小组需 reporting:assign）。
+        if await is_pure_station_terminal_user(
+            user_id=current_user.id, tenant_id=tenant_id
+        ):
+            session = getattr(request.state, "station_operator_session", None)
+            if session is None:
+                # 门禁未先跑（如直接调用）时按序解析一次
+                session = await operator_session_service.get_current_session(
+                    tenant_id=tenant_id,
+                    terminal_user_id=current_user.id,
+                    credential=request.headers.get(STATION_OPERATOR_SESSION_HEADER),
+                )
+            if session is None:
+                raise HTTPException(
+                    status_code=http_status.HTTP_403_FORBIDDEN,
+                    detail=STATION_OPERATOR_SESSION_DENIED_MESSAGE,
+                )
+            if reporting.team_id is None and (
+                reporting.worker_id is None
+                or int(reporting.worker_id) != int(session.operator_user_id)
+            ):
+                raise HTTPException(
+                    status_code=http_status.HTTP_400_BAD_REQUEST,
+                    detail="快捷报工人员须与当前确认操作员一致",
+                )
         else:
             is_proxy = (
                 reporting.team_id is not None
                 or reporting.worker_id is None
                 or int(reporting.worker_id) != int(current_user.id)
             )
-        if is_proxy:
-            await ensure_permission_codes(
-                auth,
-                tenant_id,
-                request,
-                ["kuaizhizao:production-execution-reporting:assign"],
-            )
+            if is_proxy:
+                await ensure_permission_codes(
+                    auth,
+                    tenant_id,
+                    request,
+                    ["kuaizhizao:production-execution-reporting:assign"],
+                )
         return await reporting_service.create_reporting_record(
             tenant_id=tenant_id,
             reporting_data=reporting,
@@ -980,7 +1009,7 @@ async def get_scrap_statistics(
 
 # ============ 不良品管理 API ============
 
-@router.post("/reporting/{record_id}/defect", response_model=DefectRecordResponse, summary="Create defect record from reporting")
+@router.post("/reporting/{record_id}/defect", response_model=DefectRecordResponse, summary="Create defect record from reporting", dependencies=[Depends(require_station_operator_session)])
 async def create_defect_record_from_reporting(
     record_id: int,
     defect_data: DefectRecordCreateFromReporting,

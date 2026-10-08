@@ -1066,6 +1066,14 @@ class RoleService:
                 "kuaizhizao:production-execution-terminal:execute",
                 "kuaizhizao:work-order:read",
                 "kuaizhizao:production-execution-reporting:read",
+                # 工位入口/报工页数据接口（UniMaterialSelect、WorkGroupSelectDropdown、
+                # resolveWorkstation 工位/产线解析）
+                "master-data:material:read",
+                "master-data:factory:work-group:read",
+                "master-data:factory:workstation:read",
+                "master-data:factory:production-line:read",
+                # 安灯页班长选择 /core/users/display-search（display 不含完整人员字段）
+                "system:user:display",
             }
         ),
     }
@@ -1093,6 +1101,13 @@ class RoleService:
         selected_permissions: list[Permission] = []
         if explicit_codes is not None:
             # 显式逐码列举（不做前缀扩权）：只授予已注册定义中的权限码
+            unregistered = sorted(c for c in explicit_codes if c not in desired_codes)
+            if unregistered:
+                logger.warning(
+                    "preset_explicit_permission_unregistered role_code={} codes={}",
+                    role.code,
+                    unregistered,
+                )
             wanted_codes = {c for c in explicit_codes if c in desired_codes}
             if wanted_codes:
                 permissions = await Permission.filter(
