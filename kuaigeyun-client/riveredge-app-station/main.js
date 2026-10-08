@@ -2,7 +2,10 @@ const { app, BrowserWindow, Menu, ipcMain, net, powerSaveBlocker } = require('el
 const fs = require('fs');
 const path = require('path');
 
+const { isNavigationAllowed } = require('./navigation-policy');
+
 const STATION_PATH = '/apps/kuaizhizao/production-execution/station';
+const LOGIN_PATH = '/login';
 const CONFIG_NAME = 'station-shell.json';
 const REACH_TIMEOUT_MS = 10000;
 
@@ -160,13 +163,7 @@ function createWindow(origin, workstationId) {
   const contents = win.webContents;
   contents.setWindowOpenHandler(() => ({ action: 'deny' }));
   contents.on('will-navigate', (event, url) => {
-    let target = '';
-    try {
-      target = new URL(url).origin;
-    } catch {
-      target = '';
-    }
-    if (target !== origin) event.preventDefault();
+    if (!isNavigationAllowed(url, origin)) event.preventDefault();
   });
   let recovering = false;
   const onLoadFail = (_event, errorCode, _desc, _url, isMainFrame) => {
@@ -220,6 +217,16 @@ app.whenReady().then(() => {
 
   ipcMain.handle('stationShell:getWorkstationId', () => {
     return normalizeWorkstationId(readConfig().workstationId);
+  });
+
+  // 前端判定当前账号不是纯工位角色时调用：壳把发起窗口导航回登录页，
+  // 页面会话的清理由前端登出流程完成。
+  ipcMain.handle('stationShell:stationRejected', async (event) => {
+    const origin = serverOrigin(readConfig());
+    if (!origin) return;
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win || win.isDestroyed()) return;
+    await win.loadURL(new URL(LOGIN_PATH, origin).toString());
   });
 
   let savingOrigin = false;
