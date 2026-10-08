@@ -4,7 +4,7 @@
  * 供质检方案管理页、工序表单内「快速新增质检方案」等场景使用。
  */
 
-import React, { useRef, useState, useEffect, useMemo } from 'react';
+import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ProFormInstance,
@@ -22,7 +22,10 @@ import { UniDropdown } from '../../../components/uni-dropdown';
 import { inspectionPlanApi } from '../services/production';
 import { InspectionPlanStepEditor, type InspectionPlanStepItem } from './InspectionPlanStepEditor';
 import { bumpPlanVersion, stepsFingerprint } from '../types/inspectionStepSpec';
-import { getQualityPlanTypeFallback } from '../pages/quality-management/components/qualityMeta';
+import {
+  getQualityPlanTypeFallback,
+  QUALITY_PLAN_TYPE_I18N,
+} from '../pages/quality-management/components/qualityMeta';
 import { getAntdModal } from '../../../utils/antdAppApis';
 export interface InspectionPlanRecord {
   id?: number;
@@ -82,22 +85,39 @@ export const InspectionPlanFormModal: React.FC<InspectionPlanFormModalProps> = (
     return undefined;
   }, [defaultPlanType, operationId]);
 
+  /** 新建默认值：须进 FormModalTemplate.initialValues（destroyOnHidden 重建后仅 setFieldsValue 常丢 plan_type） */
+  const createInitialValues = useMemo(() => {
+    const initial: Record<string, unknown> = {
+      version: '1.0',
+      is_active: true,
+    };
+    if (resolvedDefaultPlanType) {
+      initial.plan_type = resolvedDefaultPlanType;
+    }
+    if (operationId != null) {
+      initial.operation_id = operationId;
+    }
+    return initial;
+  }, [resolvedDefaultPlanType, operationId]);
+
+  const applyCreateDefaults = useCallback(() => {
+    setSteps([]);
+    setStepsBaseline('');
+    setCurrentPlan(null);
+    formRef.current?.setFieldsValue(createInitialValues);
+  }, [createInitialValues]);
+
+  const lockedPlanTypeHint = useMemo(() => {
+    if (!lockPlanType || !resolvedDefaultPlanType) return undefined;
+    const typeKey = QUALITY_PLAN_TYPE_I18N[resolvedDefaultPlanType];
+    const typeLabel = typeKey ? t(typeKey) : resolvedDefaultPlanType;
+    return t('app.kuaizhizao.quality.plans.form.planTypeLockedHintTyped', { type: typeLabel });
+  }, [lockPlanType, resolvedDefaultPlanType, t]);
+
   useEffect(() => {
     if (!open) return;
     if (!isEdit) {
-      formRef.current?.resetFields();
-      setSteps([]);
-      setStepsBaseline('');
-      setCurrentPlan(null);
-      const initial: Record<string, unknown> = {
-        plan_type: resolvedDefaultPlanType,
-        version: '1.0',
-        is_active: true,
-      };
-      if (operationId != null) {
-        initial.operation_id = operationId;
-      }
-      formRef.current?.setFieldsValue(initial);
+      applyCreateDefaults();
       return;
     }
     void (async () => {
@@ -134,7 +154,7 @@ export const InspectionPlanFormModal: React.FC<InspectionPlanFormModalProps> = (
         setFormLoading(false);
       }
     })();
-  }, [open, isEdit, editId, operationId, resolvedDefaultPlanType, messageApi, t]);
+  }, [open, isEdit, editId, applyCreateDefaults, messageApi, t]);
 
   const submitPlan = async (values: any) => {
     const planCode = typeof values.plan_code === 'string' ? values.plan_code.trim() : values.plan_code;
@@ -222,6 +242,12 @@ export const InspectionPlanFormModal: React.FC<InspectionPlanFormModalProps> = (
       className="inspection-plan-modal"
       grid={false}
       zIndex={zIndex}
+      initialValues={isEdit ? undefined : createInitialValues}
+      afterOpenChange={(visible) => {
+        if (visible && !isEdit) {
+          applyCreateDefaults();
+        }
+      }}
     >
       <ProFormItem name="operation_id" hidden>
         <input type="hidden" />
@@ -259,11 +285,7 @@ export const InspectionPlanFormModal: React.FC<InspectionPlanFormModalProps> = (
           <ProFormItem
             name="plan_type"
             label={t('app.kuaizhizao.quality.plans.form.planType')}
-            extra={
-              lockPlanType
-                ? t('app.kuaizhizao.quality.plans.form.planTypeLockedHint')
-                : t('app.kuaizhizao.quality.plans.form.planTypeHint')
-            }
+            extra={lockedPlanTypeHint || t('app.kuaizhizao.quality.plans.form.planTypeHint')}
             rules={[{ required: true, message: t('app.kuaizhizao.quality.plans.validation.requiredPlanType') }]}
           >
             <UniDropdown

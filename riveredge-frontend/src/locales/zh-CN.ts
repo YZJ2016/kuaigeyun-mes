@@ -26215,6 +26215,8 @@ export default {
   'app.kuaizhizao.quality.plans.placeholder.selectPlanType': '请选择方案类型',
   'app.kuaizhizao.quality.plans.placeholder.enterPlanName': '请输入',
   'app.kuaizhizao.quality.plans.form.planTypeLockedHint': '当前为来料检验快速创建，方案类型已固定为来料检验',
+  'app.kuaizhizao.quality.plans.form.planTypeLockedHintTyped':
+    '当前为{{type}}快速创建，方案类型已固定为{{type}}',
   'app.kuaizhizao.quality.plans.validation.requiredPlanName': '请输入方案名称',
   'app.kuaizhizao.quality.plans.validation.requiredPlanType': '请选择方案类型',
   'app.kuaizhizao.quality.plans.validation.requiredSteps': '请至少添加一条检验步骤',
@@ -30080,6 +30082,10 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.inspection-plan-quick-type-default-r01.title':
+    '快速新建质检方案时正确带入方案类型',
+  'pages.dashboard.updateLog.entries.inspection-plan-quick-type-default-r01.description':
+    '从来料/成品/出货等场景快速新增质检方案时，方案类型会按场景默认并锁定显示，不再出现空白占位「请选择方案类型」。',
   'pages.dashboard.updateLog.entries.po-import-material-list-limit-r01.title':
     '采购订单导入不再因物料列表条数上限失败',
   'pages.dashboard.updateLog.entries.po-import-material-list-limit-r01.description':

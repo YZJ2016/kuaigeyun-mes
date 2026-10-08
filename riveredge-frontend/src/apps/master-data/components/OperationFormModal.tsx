@@ -820,6 +820,7 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
       onClose={() => setInspectionPlanQuickAddOpen(false)}
       editId={null}
       defaultPlanType="process"
+      lockPlanType
       onSuccess={handleInspectionPlanQuickCreated}
       zIndex={nestedModalZIndex}
     />
