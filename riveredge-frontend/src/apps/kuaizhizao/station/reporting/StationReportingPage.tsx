@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -15,11 +15,8 @@ import {
 } from 'antd';
 import { TouchScreenTemplate } from '../../../../components/layout-templates/TouchScreenTemplate';
 import { UniMaterialSelect } from '../../../../components/uni-material-select';
-import { UniUserSelect } from '../../../../components/uni-user-select';
-import { useCurrentUser } from '../../../../hooks/useCurrentUser';
 import { reportingClientChannelSourceI18nKey } from '../../../../utils/clientChannel';
 import { convertProductionInputToBaseQty } from '../../../../utils/materialScenarioUnit';
-import { hasModulePermission } from '../../../../utils/permissionContract';
 import { WorkGroupSelectDropdown } from '../../../master-data/components/WorkGroupSelectDropdown';
 import type { WorkGroup } from '../../../master-data/types/factory';
 import type { Material } from '../../../master-data/types/material';
@@ -36,8 +33,7 @@ import {
   type StationOperator,
   type StationReportMode,
 } from './quickReporting';
-
-const ASSIGN_RESOURCE = 'kuaizhizao:production-execution-reporting';
+import { useStationWriteEnabled } from '../entry/session';
 
 export type StationReportingPageProps = {
   /** 157 入口已绑定工位。缺省时读 URL query `workstationId`。 */
@@ -74,12 +70,9 @@ export const StationReportingPage: React.FC<StationReportingPageProps> = ({
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const [searchParams] = useSearchParams();
-  const currentUser = useCurrentUser();
-  const canAssign = useMemo(
-    () => hasModulePermission(currentUser, ASSIGN_RESOURCE, 'assign'),
-    [currentUser],
-  );
   const workstationId = resolveWorkstationId(boundWorkstationId, searchParams.get('workstationId'));
+  // 未确认操作员时可查看页面，报工/上下料/报废提交禁用
+  const writeEnabled = useStationWriteEnabled();
 
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
@@ -87,7 +80,6 @@ export const StationReportingPage: React.FC<StationReportingPageProps> = ({
   const [workOrder, setWorkOrder] = useState<WorkOrderRow | null>(null);
   const [operations, setOperations] = useState<OperationRow[]>([]);
   const [operation, setOperation] = useState<OperationRow | null>(null);
-  const [proxyWorker, setProxyWorker] = useState<StationOperator | null>(null);
   const [team, setTeam] = useState<{ id: number; name: string } | null>(null);
   const [recordId, setRecordId] = useState<number | null>(null);
   const [recordUnqualified, setRecordUnqualified] = useState<number>(0);
@@ -136,10 +128,8 @@ export const StationReportingPage: React.FC<StationReportingPageProps> = ({
     });
     const decision = buildQuickReportingBody({
       mode,
-      hasAssignPermission: canAssign,
       workstationId,
       operator,
-      proxyWorker,
       team,
       workOrder,
       operation,
@@ -155,10 +145,6 @@ export const StationReportingPage: React.FC<StationReportingPageProps> = ({
       remarks: values.remarks,
     });
     if (!decision.submit) {
-      if (decision.reason === 'proxy-forbidden') {
-        messageApi.warning('没有代报权限，请求未发出');
-        return;
-      }
       if (decision.reason === 'missing-operator') {
         messageApi.warning('当前操作员未传入，本人报工不会提交');
         return;
@@ -187,6 +173,7 @@ export const StationReportingPage: React.FC<StationReportingPageProps> = ({
     try {
       const created = await reportingApi.quickCreate(
         coerceReportingCreateStrings(decision.body, workOrder ?? undefined),
+        { stationOperatorSession: true },
       );
       const createdId = Number((created as { id?: number } | null)?.id);
       if (!Number.isFinite(createdId) || createdId <= 0) {
@@ -223,9 +210,13 @@ export const StationReportingPage: React.FC<StationReportingPageProps> = ({
     setLoading(true);
     try {
       if (bindingType === 'feeding') {
-        await materialBindingApi.createFeeding(String(recordId), decision.body);
+        await materialBindingApi.createFeeding(String(recordId), decision.body, {
+          stationOperatorSession: true,
+        });
       } else {
-        await materialBindingApi.createDischarging(String(recordId), decision.body);
+        await materialBindingApi.createDischarging(String(recordId), decision.body, {
+          stationOperatorSession: true,
+        });
       }
       messageApi.success(t('app.kuaizhizao.workOrder.kioskBindSuccess'));
     } catch (error: unknown) {
@@ -254,7 +245,9 @@ export const StationReportingPage: React.FC<StationReportingPageProps> = ({
     }
     setLoading(true);
     try {
-      await reportingApi.recordScrap(String(recordId), decision.body);
+      await reportingApi.recordScrap(String(recordId), decision.body, {
+        stationOperatorSession: true,
+      });
       messageApi.success(t('app.kuaizhizao.workReporting.scrapCreateSuccess'));
     } catch (error: unknown) {
       messageApi.error(errorText(error) || t('app.kuaizhizao.workReporting.scrapCreateFailed'));
@@ -286,6 +279,13 @@ export const StationReportingPage: React.FC<StationReportingPageProps> = ({
               <Alert type="info" showIcon message={`当前操作员：${operator.name}`} />
             ) : null}
             {sourceLabel ? <Alert type="success" showIcon message={`报工来源：${sourceLabel}`} /> : null}
+            {!writeEnabled ? (
+              <Alert
+                type="info"
+                showIcon
+                message="未确认操作员：可查看页面，报工、上下料与报废提交不可用"
+              />
+            ) : null}
 
             <Card>
               <Radio.Group
@@ -295,26 +295,9 @@ export const StationReportingPage: React.FC<StationReportingPageProps> = ({
                 size="large"
               >
                 <Radio.Button value="self">本人</Radio.Button>
-                <Radio.Button value="proxy" disabled={!canAssign}>代报</Radio.Button>
                 <Radio.Button value="team">小组</Radio.Button>
               </Radio.Group>
             </Card>
-
-            {mode === 'proxy' && canAssign ? (
-              <UniUserSelect
-                name="proxy_worker_uuid"
-                label="生产人员"
-                placeholder={t('app.kuaizhizao.workReporting.formProxyWorkerPlaceholder')}
-                onChange={(_uuid, user) => {
-                  const picked = user && !Array.isArray(user) ? user : null;
-                  setProxyWorker(
-                    picked?.id
-                      ? { id: picked.id, name: String(picked.full_name || picked.username || '').trim() }
-                      : null,
-                  );
-                }}
-              />
-            ) : null}
 
             {mode === 'team' ? (
               <Form.Item label={t('app.kuaizhizao.workReporting.producerModeTeam')}>
@@ -388,7 +371,13 @@ export const StationReportingPage: React.FC<StationReportingPageProps> = ({
               <Form.Item name="remarks" label="备注">
                 <Input.TextArea rows={2} />
               </Form.Item>
-              <Button type="primary" size="large" block onClick={() => { void submitReport(); }}>
+              <Button
+                type="primary"
+                size="large"
+                block
+                disabled={!writeEnabled}
+                onClick={() => { void submitReport(); }}
+              >
                 提交报工
               </Button>
             </Card>
@@ -406,8 +395,8 @@ export const StationReportingPage: React.FC<StationReportingPageProps> = ({
                   <InputNumber min={0} size="large" style={{ width: '100%' }} />
                 </Form.Item>
                 <Space>
-                  <Button size="large" onClick={() => { void submitBinding('feeding'); }}>上料</Button>
-                  <Button size="large" onClick={() => { void submitBinding('discharging'); }}>下料</Button>
+                  <Button size="large" disabled={!writeEnabled} onClick={() => { void submitBinding('feeding'); }}>上料</Button>
+                  <Button size="large" disabled={!writeEnabled} onClick={() => { void submitBinding('discharging'); }}>下料</Button>
                 </Space>
                 <Form.Item name="scrap_quantity" label="报废数量" style={{ marginTop: 16 }}>
                   <InputNumber min={0} size="large" style={{ width: '100%' }} />
@@ -424,7 +413,7 @@ export const StationReportingPage: React.FC<StationReportingPageProps> = ({
                 <Form.Item name="scrap_reason" label="报废原因">
                   <Input size="large" />
                 </Form.Item>
-                <Button size="large" onClick={() => { void submitScrap(); }}>报废</Button>
+                <Button size="large" disabled={!writeEnabled} onClick={() => { void submitScrap(); }}>报废</Button>
               </Card>
             ) : null}
           </Space>

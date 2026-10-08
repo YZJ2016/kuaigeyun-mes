@@ -122,6 +122,7 @@ export function enrollFaceTemplate(body: FaceEnrollRequest): Promise<FaceTemplat
   return apiRequest<FaceTemplateResponse>(`${STATION}/face-templates`, {
     method: 'POST',
     data: body,
+    stationOperatorSession: true,
   });
 }
 
@@ -139,6 +140,7 @@ export function listMyFaceTemplates(): Promise<FaceTemplateResponse[]> {
 export function deleteFaceTemplate(templateId: number): Promise<{ deleted: boolean }> {
   return apiRequest<{ deleted: boolean }>(`${STATION}/face-templates/${templateId}`, {
     method: 'DELETE',
+    stationOperatorSession: true,
   });
 }
 
@@ -157,6 +159,7 @@ export function confirmShiftHandover(body: ShiftHandoverCreate): Promise<ShiftHa
   return apiRequest<ShiftHandoverResponse>(`${STATION}/shift-handover`, {
     method: 'POST',
     data: body,
+    stationOperatorSession: true,
   });
 }
 

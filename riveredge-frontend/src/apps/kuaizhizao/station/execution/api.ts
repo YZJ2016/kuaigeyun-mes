@@ -170,11 +170,15 @@ export async function listOperations(workOrderId: number): Promise<StationOperat
 }
 
 export function startOperation(workOrderId: number, operationId: number) {
-  return workOrderApi.startOperation(String(workOrderId), operationId);
+  return workOrderApi.startOperation(String(workOrderId), operationId, {
+    stationOperatorSession: true,
+  });
 }
 
 export function withdrawOperationStart(workOrderId: number, operationId: number) {
-  return workOrderApi.withdrawOperationStart(String(workOrderId), operationId);
+  return workOrderApi.withdrawOperationStart(String(workOrderId), operationId, {
+    stationOperatorSession: true,
+  });
 }
 
 export function pauseOperation(
@@ -187,21 +191,21 @@ export function pauseOperation(
   if (workstationId != null) data.workstation_id = workstationId;
   return apiRequest(
     `/apps/kuaizhizao/work-orders/${workOrderId}/operations/${operationId}/pause`,
-    { method: 'POST', data },
+    { method: 'POST', data, stationOperatorSession: true },
   );
 }
 
 export function resumeOperation(workOrderId: number, operationId: number) {
   return apiRequest(
     `/apps/kuaizhizao/work-orders/${workOrderId}/operations/${operationId}/resume`,
-    { method: 'POST' },
+    { method: 'POST', stationOperatorSession: true },
   );
 }
 
 export function completeOperation(workOrderId: number, operationId: number) {
   return apiRequest(
     `/apps/kuaizhizao/work-orders/${workOrderId}/operations/${operationId}/complete`,
-    { method: 'POST', data: {} },
+    { method: 'POST', data: {}, stationOperatorSession: true },
   );
 }
 
@@ -212,7 +216,7 @@ export function setMachineSession(
 ) {
   return apiRequest(
     `/apps/kuaizhizao/work-orders/${workOrderId}/operations/${operationId}/machine-session`,
-    { method: 'POST', data: { action } },
+    { method: 'POST', data: { action }, stationOperatorSession: true },
   );
 }
 
@@ -263,7 +267,11 @@ export function acknowledgeSop(body: {
   };
   if (body.revision) data.sop_revision = body.revision;
   if (body.workerName) data.worker_name = body.workerName;
-  return apiRequest('/apps/kuaizhizao/station/sop-acknowledgments', { method: 'POST', data });
+  return apiRequest('/apps/kuaizhizao/station/sop-acknowledgments', {
+    method: 'POST',
+    data,
+    stationOperatorSession: true,
+  });
 }
 
 export function checkOperatorSkill(body: {

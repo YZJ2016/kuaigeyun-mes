@@ -14,6 +14,10 @@ import { isTenantExpiredApiDetail, TENANT_EXPIRED_MESSAGE } from '../utils/tenan
 import { isKuaireportSharedApiPath, isKuaireportSharedBrowsePath } from '../utils/kuaireportSharedPath';
 import { webClientChannelHeaders } from '../utils/clientChannel';
 import { isRequestCancellation } from '../utils/requestCancellation';
+import {
+  getStationOperatorCredential,
+  STATION_OPERATOR_SESSION_HEADER,
+} from '../apps/kuaizhizao/station/operatorSession';
 
 /**
  * API 基础 URL
@@ -165,6 +169,12 @@ export async function apiRequest<T = any>(
     body?: any;
     params?: Record<string, any>; // 查询参数
     headers?: Record<string, string>;
+    /**
+     * 工位写请求显式 opt-in：命中且内存中持有操作员会话凭据时附加
+     * X-Station-Operator-Session；无凭据不附加也不报错（由服务端门禁拒绝）。
+     * GET/读请求一律不附加。
+     */
+    stationOperatorSession?: boolean;
     /** 请求超时（毫秒）。启动壳层接口建议 12–15s，避免后端 reload 时长时间转圈 */
     timeoutMs?: number;
     /** 覆盖默认网络重试次数（默认 2）；启动壳层建议 1 */
@@ -331,6 +341,19 @@ export async function apiRequest<T = any>(
     });
   }
 
+  // 工位操作员会话凭据：仅调用方显式 opt-in 的写请求附加；无凭据不附加（服务端门禁拒绝）。
+  // 读取请求一律不附加；调用方已显式给同名头时不覆盖。
+  if (
+    options?.stationOperatorSession === true &&
+    isWriteMethod &&
+    !(STATION_OPERATOR_SESSION_HEADER in headers)
+  ) {
+    const operatorCredential = getStationOperatorCredential();
+    if (operatorCredential) {
+      headers[STATION_OPERATOR_SESSION_HEADER] = operatorCredential;
+    }
+  }
+
   // 构建请求配置
   const fetchOptions: RequestInit = {
     method: options?.method || 'GET',
@@ -361,6 +384,7 @@ export async function apiRequest<T = any>(
     timeoutMs,
     maxRetries,
     signal: userSignal,
+    stationOperatorSession: _stationOperatorSession,
     ...otherOptions
   } = options || {};
 

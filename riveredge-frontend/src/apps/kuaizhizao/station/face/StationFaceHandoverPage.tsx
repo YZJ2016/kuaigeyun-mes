@@ -13,7 +13,6 @@ import {
   getOperationDocuments,
   getShiftSummary,
   getWorkOrderDocumentFlags,
-  identifyFace,
   listMyFaceTemplates,
   type FaceIdentifyResponse,
   type FaceTemplateResponse,
@@ -24,7 +23,13 @@ import {
   type StationWorkOrderDocumentFlags,
 } from './api';
 import { captureFaceResDescriptor } from './capture';
-import { setStationOperator } from '../entry/session';
+import { confirmStationOperatorSession } from '../operatorSession';
+import {
+  setStationOperator,
+  setStationOperatorCandidate,
+  useStationEntrySnapshot,
+  useStationWriteEnabled,
+} from '../entry/session';
 
 const { RangePicker } = DatePicker;
 const { Text, Paragraph } = Typography;
@@ -83,6 +88,8 @@ export const StationFaceHandoverPage: React.FC<StationFaceHandoverPageProps> = (
   const { message } = App.useApp();
   const navigate = useNavigate();
   const currentUser = useCurrentUser();
+  const { candidate } = useStationEntrySnapshot();
+  const writeEnabled = useStationWriteEnabled();
 
   const [templates, setTemplates] = useState<FaceTemplateResponse[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
@@ -236,19 +243,37 @@ export const StationFaceHandoverPage: React.FC<StationFaceHandoverPageProps> = (
     });
   };
 
-  const handleIdentify = () => {
+  // 刷脸确认：描述子与候选人一致时服务端才签发操作员会话
+  const handleConfirmOperator = () => {
+    if (workstationId == null) {
+      message.warning('未绑定工位');
+      return;
+    }
+    if (!candidate) {
+      message.warning('请先在工位入口点选候选操作员');
+      return;
+    }
+    const candidateId = candidate.id;
     void withCapturedDescriptor(async (descriptor) => {
-      const res = await identifyFace(descriptor);
-      setStationOperator({
-        id: res.user_id,
-        name: res.full_name || res.username,
-      });
-      setIdentifiedOperator({
-        user_id: res.user_id,
-        full_name: res.full_name,
-        username: res.username,
-      });
-      message.success('已切换当前操作员');
+      try {
+        const session = await confirmStationOperatorSession({
+          workstationId,
+          candidateUserId: candidateId,
+          confirmMethod: 'face',
+          faceDescriptor: descriptor,
+        });
+        setStationOperator({ id: session.operator_user_id, name: session.operator_name });
+        setStationOperatorCandidate(null);
+        setIdentifiedOperator({
+          user_id: session.operator_user_id,
+          full_name: session.operator_name,
+          username: '',
+        });
+        message.success('已确认当前操作员');
+      } catch {
+        // 通用失败文案：不回显人脸细节或失败原因
+        message.error('操作员确认失败，请重试');
+      }
     });
   };
 
@@ -346,8 +371,19 @@ export const StationFaceHandoverPage: React.FC<StationFaceHandoverPageProps> = (
           <Paragraph>
             登记使用入口传入的当前操作员
             {operatorUserId == null ? '（尚未传入，登记不可用）' : `（${operatorUserId}）`}
-            。「我的模板」只列出当前登录用户。比对成功写入入口当前操作员，不换登录令牌。
+            。「我的模板」只列出当前登录用户。刷脸确认与候选操作员一致后才写入入口当前操作员，不换登录令牌。
           </Paragraph>
+          {!writeEnabled ? (
+            <Paragraph type="warning">
+              未确认操作员：登记、删除模板与交接班确认不可用。请先在工位入口点选候选人并完成刷脸或员工码确认。
+            </Paragraph>
+          ) : null}
+          {!candidate && !writeEnabled ? (
+            <Paragraph type="secondary">当前无候选人，请先在工位入口点选。</Paragraph>
+          ) : null}
+          {candidate ? (
+            <Paragraph type="secondary">当前候选人：{candidate.name}（待确认）</Paragraph>
+          ) : null}
           {enrollsOtherOperator ? (
             <Paragraph>
               当前操作员与终端登录用户不是同一人。登记写入该操作员的模板后，不会出现在「我的模板」里。
@@ -355,20 +391,28 @@ export const StationFaceHandoverPage: React.FC<StationFaceHandoverPageProps> = (
           ) : null}
           {identifiedOperator ? (
             <Paragraph>
-              当前操作员 {identifiedOperator.full_name}（{identifiedOperator.username}，用户{' '}
-              {identifiedOperator.user_id}）
+              当前操作员 {identifiedOperator.full_name}（用户 {identifiedOperator.user_id}）
             </Paragraph>
           ) : (
-            <Paragraph>尚未比对出当前操作员。</Paragraph>
+            <Paragraph>尚未确认当前操作员。</Paragraph>
           )}
           <video ref={videoRef} muted playsInline style={{ width: '100%', maxHeight: 240, background: '#111' }} />
           <div style={{ margin: '12px 0' }}>
             <Space>
-              <Button size="large" disabled={operatorUserId == null || capturing} onClick={handleEnroll}>
+              <Button
+                size="large"
+                disabled={operatorUserId == null || capturing || !writeEnabled}
+                onClick={handleEnroll}
+              >
                 登记
               </Button>
-              <Button size="large" disabled={capturing} onClick={handleIdentify}>
-                比对
+              <Button
+                size="large"
+                type="primary"
+                disabled={capturing || !candidate || workstationId == null}
+                onClick={handleConfirmOperator}
+              >
+                刷脸确认
               </Button>
             </Space>
           </div>
@@ -389,7 +433,7 @@ export const StationFaceHandoverPage: React.FC<StationFaceHandoverPageProps> = (
                       cancelText="取消"
                       onConfirm={() => void handleDeleteTemplate(row.id)}
                     >
-                      <Button danger size="large" loading={deletingId === row.id}>
+                      <Button danger size="large" loading={deletingId === row.id} disabled={!writeEnabled}>
                         删除
                       </Button>
                     </Popconfirm>
@@ -434,7 +478,7 @@ export const StationFaceHandoverPage: React.FC<StationFaceHandoverPageProps> = (
               <Button
                 size="large"
                 loading={handoverLoading}
-                disabled={!summary || summaryKey !== currentShiftKey}
+                disabled={!summary || summaryKey !== currentShiftKey || !writeEnabled}
                 onClick={() => void handleConfirmHandover()}
               >
                 确认交接班
