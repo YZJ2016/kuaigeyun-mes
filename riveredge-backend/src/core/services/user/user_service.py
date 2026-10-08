@@ -20,6 +20,7 @@ from core.models.role import Role
 from core.models.user_role import UserRole
 from core.schemas.user import UserCreate, UserUpdate
 from core.services.authorization.permission_version_service import PermissionVersionService
+from core.services.authorization.role_type_policy import assert_pure_role_types
 from core.services.user.user_import_reference_service import UserImportReferenceService
 from core.services.user.user_administrator_guard import authorize_administrator_management
 from infra.services.tenant_service import TenantService
@@ -127,7 +128,9 @@ class UserService:
             
             if len(roles) != len(data.role_uuids):
                 raise ValidationError("所选角色中存在无效或不属于当前组织的角色，请重新选择")
-            
+
+            # 角色类型纯度：station 不得与 internal/external 混挂
+            assert_pure_role_types([role.role_type for role in roles])
             role_ids = [role.id for role in roles]
         
         # 加密密码
@@ -487,6 +490,8 @@ class UserService:
                             data.role_uuids,
                         )
                         raise ValidationError("所选角色中存在无效或不属于当前组织的角色，请重新选择")
+                    # 角色类型纯度：station 不得与 internal/external 混挂
+                    assert_pure_role_types([r.role_type for r in roles])
                     await UserRole.bulk_create(
                         [UserRole(user_id=db_user.id, role_id=r.id) for r in roles],
                         using_db=conn,
@@ -1051,7 +1056,19 @@ class UserService:
                             })
                             failure_count += 1
                             continue
-                
+
+                # 角色类型纯度：station 不得与 internal/external 混挂
+                if role_ids:
+                    imported_role_types = await Role.filter(
+                        id__in=role_ids
+                    ).values_list("role_type", flat=True)
+                    try:
+                        assert_pure_role_types(imported_role_types)
+                    except ValidationError as e:
+                        errors.append({"row": row_idx, "error": str(e)})
+                        failure_count += 1
+                        continue
+
                 # 创建用户
                 password_hash = User.hash_password(user_data['password'])
                 await TenantService().assert_shared_user_quota_capacity(

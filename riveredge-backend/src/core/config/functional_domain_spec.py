@@ -35,6 +35,7 @@ PRESET_ROLE_FUNCTIONAL_DOMAIN: dict[str, str] = {
     "RD_STAFF": "rd",
     "ADMIN_OFFICE": "general",
     "EMPLOYEE": "general",
+    "STATION_TERMINAL": "production",
 }
 
 _PREFIX_FUNCTIONAL_DOMAIN: tuple[tuple[str, str], ...] = (

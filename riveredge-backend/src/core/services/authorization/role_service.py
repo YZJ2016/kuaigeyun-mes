@@ -26,6 +26,12 @@ from core.config.functional_domain_spec import (
     resolve_functional_domain_from_role_code,
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError, AuthorizationError
+from core.services.authorization.role_type_policy import (
+    ROLE_TYPE_LOCKED_MESSAGE,
+    assert_pure_role_types,
+    assert_roles_assignment_pure,
+    is_station_role_type,
+)
 
 # 向后兼容别名
 PermissionDeniedError = AuthorizationError
@@ -431,6 +437,13 @@ class RoleService:
         )
         to_add = [u for u in users if u.id not in existing_ids]
         if to_add:
+            # 角色类型纯度：station 角色不得与用户既有 internal/external 角色混挂
+            for u in to_add:
+                await assert_roles_assignment_pure(
+                    tenant_id=tenant_id,
+                    user_id=u.id,
+                    role_ids=[role.id],
+                )
             await UserRole.bulk_create(
                 [UserRole(user_id=u.id, role_id=role.id) for u in to_add],
                 ignore_conflicts=True,
@@ -542,6 +555,10 @@ class RoleService:
             update_data["role_type"] = rt
             update_data["external_partner_type"] = pt
         next_role_type = update_data.get("role_type", role.role_type)
+        # 角色类型纯度：station↔非station 切换会改变既有用户的角色类型集合，须禁止
+        if is_station_role_type(next_role_type) != is_station_role_type(role.role_type):
+            if await UserRole.filter(role_id=role.id).exists():
+                raise ValidationError(ROLE_TYPE_LOCKED_MESSAGE)
         if "functional_domain" in update_data or "role_type" in update_data:
             raw_domain = update_data.get("functional_domain", role.functional_domain)
             if "functional_domain" in update_data and raw_domain == "":
@@ -1028,7 +1045,30 @@ class RoleService:
         # 通用
         {"name": "行政办公", "code": "ADMIN_OFFICE", "description": "负责行政文秘及通用办公功能"},
         {"name": "普通员工", "code": "EMPLOYEE", "description": "职能通用权限，仅包含基础查询"},
+
+        # 工位终端（触屏工位机专用账号，role_type=station，不得与 internal/external 混挂）
+        {
+            "name": "工位终端",
+            "code": "STATION_TERMINAL",
+            "description": "触屏工位机专用账号，仅可进入生产执行工位界面",
+            "role_type": "station",
+            "home_path": "/apps/kuaizhizao/production-execution/station",
+        },
     ]
+
+    # 预设角色显式权限集合（逐码列举、禁止前缀自动扩权；配置后覆盖前缀模板）。
+    # STATION_TERMINAL：基线权限由 _assign_preset_permissions 强制并入，
+    # 这里只列工位最小集合；禁止授予 production-execution-reporting:assign（代报）。
+    PRESET_ROLE_EXPLICIT_PERMISSION_CODES: dict[str, frozenset[str]] = {
+        "STATION_TERMINAL": frozenset(
+            {
+                "kuaizhizao:production-execution-terminal:read",
+                "kuaizhizao:production-execution-terminal:execute",
+                "kuaizhizao:work-order:read",
+                "kuaizhizao:production-execution-reporting:read",
+            }
+        ),
+    }
 
     GUEST_ROLE_CODE = "GUEST"
 
@@ -1049,8 +1089,20 @@ class RoleService:
             return
 
         prefixes = RoleService.PRESET_ROLE_PERMISSION_PREFIXES.get(role.code, [])
+        explicit_codes = RoleService.PRESET_ROLE_EXPLICIT_PERMISSION_CODES.get(role.code)
         selected_permissions: list[Permission] = []
-        if prefixes:
+        if explicit_codes is not None:
+            # 显式逐码列举（不做前缀扩权）：只授予已注册定义中的权限码
+            wanted_codes = {c for c in explicit_codes if c in desired_codes}
+            if wanted_codes:
+                permissions = await Permission.filter(
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True,
+                    code__in=list(wanted_codes),
+                ).all()
+                selected_permissions = list(permissions)
+            selected_ids = {p.id for p in selected_permissions}
+        elif prefixes:
             permissions = await Permission.filter(
                 tenant_id=tenant_id,
                 deleted_at__isnull=True,
@@ -1104,7 +1156,9 @@ class RoleService:
         # 默认数据/字段权限均为开放（全部/明文），仅在显式收敛时落库策略。
 
     @staticmethod
-    async def _merge_role_relations(source_role_id: int, target_role_id: int) -> None:
+    async def _merge_role_relations(
+        tenant_id: int, source_role_id: int, target_role_id: int
+    ) -> None:
         """迁移 source 角色的用户/权限关系到 target 角色。"""
         from core.models.role_permission import RolePermission
 
@@ -1112,10 +1166,50 @@ class RoleService:
         target_user_ids = {
             ur.user_id for ur in await UserRole.filter(role_id=target_role_id).all()
         }
+        candidate_ids = [
+            ur.user_id for ur in user_roles if ur.user_id not in target_user_ids
+        ]
+
+        # 角色类型纯度：合并不得把用户变成 station 与非 station 混挂，违规者跳过并入
+        conflict_user_ids: set[int] = set()
+        if candidate_ids:
+            target_role = await Role.filter(
+                id=target_role_id, tenant_id=tenant_id, deleted_at__isnull=True
+            ).first()
+            target_role_type = getattr(target_role, "role_type", None)
+            rows = (
+                await UserRole.filter(
+                    user_id__in=candidate_ids,
+                    role__deleted_at__isnull=True,
+                )
+                .exclude(role_id=source_role_id)
+                .values("user_id", "role__role_type")
+            )
+            types_by_user: dict[int, set] = {}
+            for row in rows:
+                types_by_user.setdefault(int(row["user_id"]), set()).add(
+                    row["role__role_type"]
+                )
+            for uid in candidate_ids:
+                try:
+                    assert_pure_role_types(
+                        {*types_by_user.get(uid, set()), target_role_type}
+                    )
+                except ValidationError:
+                    conflict_user_ids.add(uid)
+            if conflict_user_ids:
+                logger.warning(
+                    "角色合并跳过混挂 station 的用户: tenant_id={} source_role_id={} target_role_id={} user_ids={}",
+                    tenant_id,
+                    source_role_id,
+                    target_role_id,
+                    sorted(conflict_user_ids),
+                )
+
         to_add_user_roles = [
             UserRole(user_id=ur.user_id, role_id=target_role_id, created_at=now_utc())
             for ur in user_roles
-            if ur.user_id not in target_user_ids
+            if ur.user_id not in target_user_ids and ur.user_id not in conflict_user_ids
         ]
         if to_add_user_roles:
             await UserRole.bulk_create(to_add_user_roles, ignore_conflicts=True)
@@ -1165,7 +1259,11 @@ class RoleService:
             target_preset = preset_by_code.get(new_code)
 
             if target_role:
-                await RoleService._merge_role_relations(old_role.id, target_role.id)
+                await RoleService._merge_role_relations(
+                    tenant_id=tenant_id,
+                    source_role_id=old_role.id,
+                    target_role_id=target_role.id,
+                )
                 old_role.deleted_at = now_utc()
                 await old_role.save()
                 merged_count += 1
@@ -1197,7 +1295,11 @@ class RoleService:
                 ).exclude(id=legacy_role.id).first()
 
                 if target_role:
-                    await RoleService._merge_role_relations(legacy_role.id, target_role.id)
+                    await RoleService._merge_role_relations(
+                        tenant_id=tenant_id,
+                        source_role_id=legacy_role.id,
+                        target_role_id=target_role.id,
+                    )
                     legacy_role.deleted_at = now_utc()
                     await legacy_role.save()
                     merged_count += 1
@@ -1222,7 +1324,11 @@ class RoleService:
 
             keeper = dup_roles[0]
             for duplicate in dup_roles[1:]:
-                await RoleService._merge_role_relations(duplicate.id, keeper.id)
+                await RoleService._merge_role_relations(
+                    tenant_id=tenant_id,
+                    source_role_id=duplicate.id,
+                    target_role_id=keeper.id,
+                )
                 duplicate.deleted_at = now_utc()
                 await duplicate.save()
                 merged_count += 1
@@ -1291,14 +1397,19 @@ class RoleService:
             if not exists:
                 now = now_utc()
                 preset_domain = RoleService.resolve_preset_functional_domain(item["code"])
+                preset_role_type, preset_partner_type = RoleService._normalize_role_type_pair(
+                    item.get("role_type"), None
+                )
+                preset_home_path = RoleService._normalize_home_path(item.get("home_path"))
                 role = await Role.create(
                     tenant_id=tenant_id,
                     name=item["name"],
                     code=item["code"],
                     description=item.get("description"),
-                    role_type="internal",
-                    external_partner_type=None,
+                    role_type=preset_role_type,
+                    external_partner_type=preset_partner_type,
                     functional_domain=preset_domain,
+                    home_path=preset_home_path,
                     is_active=True,
                     is_system=False,
                     created_at=now,

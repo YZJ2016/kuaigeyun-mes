@@ -71,7 +71,9 @@ class AuthService:
     @staticmethod
     async def _ensure_user_has_guest_role(user_id: int, tenant_id: int) -> None:
         """为默认组织用户绑定已存在的 GUEST（体验用户）角色（幂等）。"""
+        from core.models.role import Role
         from core.models.user_role import UserRole
+        from core.services.authorization.role_type_policy import is_station_role_type
 
         guest_role = await RoleService.get_guest_role(tenant_id)
         if not guest_role:
@@ -82,6 +84,16 @@ class AuthService:
         exists = await UserRole.filter(user_id=user_id, role_id=guest_role.id).exists()
         if exists:
             return
+        # 纯度：纯 station 终端账号不自动绑 GUEST（internal），避免混挂
+        bound_role_ids = await UserRole.filter(user_id=user_id).values_list(
+            "role_id", flat=True
+        )
+        if bound_role_ids:
+            bound_types = await Role.filter(
+                id__in=list(bound_role_ids)
+            ).values_list("role_type", flat=True)
+            if any(is_station_role_type(t) for t in bound_types):
+                return
         await UserRole.create(user_id=user_id, role_id=guest_role.id)
         await PermissionVersionService.bump(tenant_id=tenant_id, user_id=user_id)
 
