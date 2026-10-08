@@ -40,11 +40,16 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
             ON "apps_kuaizhizao_station_operator_sessions" ("tenant_id", "credential_hash");
         CREATE INDEX IF NOT EXISTS "idx_station_opsess_tenant_ws"
             ON "apps_kuaizhizao_station_operator_sessions" ("tenant_id", "workstation_id");
+        -- 并发双会话兜底：同租户 + 同终端账号只允许一条 active 会话（PG 部分唯一索引）
+        CREATE UNIQUE INDEX IF NOT EXISTS "uq_station_opsess_tenant_terminal_active"
+            ON "apps_kuaizhizao_station_operator_sessions" ("tenant_id", "terminal_user_id")
+            WHERE "status" = 'active';
         COMMENT ON TABLE "apps_kuaizhizao_station_operator_sessions" IS '快格轻制造 - 工位操作员会话';
     """
 
 
 async def downgrade(db: BaseDBAsyncClient) -> str:
     return """
+        DROP INDEX IF EXISTS "uq_station_opsess_tenant_terminal_active";
         DROP TABLE IF EXISTS "apps_kuaizhizao_station_operator_sessions";
     """

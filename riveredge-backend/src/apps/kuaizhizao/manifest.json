@@ -2868,6 +2868,7 @@
     "kuaizhizao:production-execution-terminal:audit",
     "kuaizhizao:production-execution-terminal:reject",
     "kuaizhizao:production-execution-terminal:print",
+    "kuaizhizao:production-execution-terminal:execute",
     "kuaizhizao:purchase-arrival-delay:read",
     "kuaizhizao:purchase-arrival-delay:create",
     "kuaizhizao:purchase-arrival-delay:update",

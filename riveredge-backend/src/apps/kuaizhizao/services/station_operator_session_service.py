@@ -14,6 +14,7 @@ import hmac
 import secrets
 from typing import Optional, Sequence, Tuple
 
+from tortoise.exceptions import IntegrityError
 from tortoise.transactions import in_transaction
 
 from core.utils.timezone_utils import resolve_business_datetime
@@ -163,30 +164,35 @@ class StationOperatorSessionService:
         credential = generate_credential()
         credential_hash = hash_credential(credential)
         now = resolve_business_datetime()
-        async with in_transaction():
-            await StationOperatorSession.filter(
-                tenant_id=tenant_id,
-                terminal_user_id=terminal_user.id,
-                status=STATUS_ACTIVE,
-            ).update(
-                status=STATUS_CLOSED,
-                closed_at=now,
-                close_reason=CLOSE_REASON_REPLACED,
-            )
-            session = await StationOperatorSession.create(
-                tenant_id=tenant_id,
-                terminal_user_id=terminal_user.id,
-                workstation_id=workstation.id,
-                workstation_name=workstation.name,
-                operator_employee_id=profile.id,
-                operator_user_id=profile.user_id,
-                operator_name=profile.full_name,
-                confirm_method=confirm_method,
-                credential_hash=credential_hash,
-                status=STATUS_ACTIVE,
-                issued_at=now,
-                last_seen_at=now,
-            )
+        try:
+            async with in_transaction():
+                await StationOperatorSession.filter(
+                    tenant_id=tenant_id,
+                    terminal_user_id=terminal_user.id,
+                    status=STATUS_ACTIVE,
+                ).update(
+                    status=STATUS_CLOSED,
+                    closed_at=now,
+                    close_reason=CLOSE_REASON_REPLACED,
+                )
+                session = await StationOperatorSession.create(
+                    tenant_id=tenant_id,
+                    terminal_user_id=terminal_user.id,
+                    workstation_id=workstation.id,
+                    workstation_name=workstation.name,
+                    operator_employee_id=profile.id,
+                    operator_user_id=profile.user_id,
+                    operator_name=profile.full_name,
+                    confirm_method=confirm_method,
+                    credential_hash=credential_hash,
+                    status=STATUS_ACTIVE,
+                    issued_at=now,
+                    last_seen_at=now,
+                )
+        except IntegrityError:
+            # 并发 confirm 撞部分唯一索引（同终端账号已有 active 会话）：
+            # 与候选人一致性失败同口径，返回通用失败由客户端重走确认流
+            raise BusinessLogicError(CONFIRM_FAILED_MESSAGE)
         return session, credential
 
     async def resolve_active_session(

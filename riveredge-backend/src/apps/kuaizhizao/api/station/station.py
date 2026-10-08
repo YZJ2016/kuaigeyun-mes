@@ -40,6 +40,7 @@ from apps.kuaizhizao.schemas.station import (
     StationOperatorSessionConfirmResponse,
     StationOperatorSessionInfo,
     StationOperatorSessionCurrentResponse,
+    StationOperatorSessionCloseRequest,
     StationOperatorSessionCloseResponse,
 )
 
@@ -430,16 +431,18 @@ async def get_current_operator_session(
     summary="Close current operator session (idempotent)",
 )
 async def close_operator_session(
+    data: Optional[StationOperatorSessionCloseRequest] = None,
     x_station_operator_session: Optional[str] = Header(
         None, alias="X-Station-Operator-Session"
     ),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> StationOperatorSessionCloseResponse:
-    """按头关闭会话；重复关闭与无效凭据均幂等成功。"""
+    """按头关闭会话；重复关闭与无效凭据均幂等成功。reason 可选，默认 explicit_close。"""
     await operator_session_service.close_session(
         tenant_id=tenant_id,
         terminal_user_id=current_user.id,
         credential=x_station_operator_session,
+        reason=(data.reason if data else None) or "explicit_close",
     )
     return StationOperatorSessionCloseResponse(closed=True)

@@ -193,6 +193,44 @@ def _extract_work_order_quality_linked_id(request: Request) -> int | None:
     return None
 
 
+async def _resolve_station_terminal_required_codes(
+    request: Request,
+    *,
+    user_id: int,
+    tenant_id: int,
+) -> list[str] | None:
+    """纯工位账号命中工位写闭包/确认流前置端点时，所需权限归一为 terminal:execute。
+
+    - 闭包 URL 单点定义在 ``deps.station_operator_session.GATED_WRITE_URL_MANIFEST``
+      与 ``STATION_EXECUTE_PRECHECK_URLS``，此处不复制清单；
+    - 路径静态匹配先行，不命中直接返回 None —— 非闭包请求零额外开销；
+    - 命中后才查角色纯度；闭包外路径与所有非纯工位账号完全走原 URL→action 映射。
+    """
+    from apps.kuaizhizao.api.deps.station_operator_session import (
+        STATION_TERMINAL_EXECUTE_PERMISSION,
+        is_pure_station_terminal_user,
+        is_station_terminal_execute_path,
+    )
+
+    if not is_station_terminal_execute_path(request.method, request.url.path):
+        return None
+    if not await is_pure_station_terminal_user(user_id=user_id, tenant_id=tenant_id):
+        return None
+    return [STATION_TERMINAL_EXECUTE_PERMISSION]
+
+
+async def _apply_station_terminal_required(
+    request: Request,
+    auth: AuthContext,
+    tenant_id: int,
+    required: list[str],
+) -> list[str]:
+    override = await _resolve_station_terminal_required_codes(
+        request, user_id=auth.user_id, tenant_id=tenant_id
+    )
+    return override if override is not None else required
+
+
 def require_kuaizhizao_module_access(
     module_code: str,
     *,
@@ -219,6 +257,7 @@ def require_kuaizhizao_module_access(
             required = list(collection_create_permissions)
         else:
             required = [build_permission_code("kuaizhizao", module_code, action)]
+        required = await _apply_station_terminal_required(request, auth, tenant_id, required)
         await ensure_permission_codes(
             auth,
             tenant_id,
@@ -426,6 +465,7 @@ def require_kuaizhizao_productions_access(
             required = list(collection_create_permissions)
         else:
             required = [build_permission_code("kuaizhizao", module_code, action)]
+        required = await _apply_station_terminal_required(request, auth, tenant_id, required)
         await ensure_permission_codes(
             auth,
             tenant_id,
@@ -493,6 +533,7 @@ def require_kuaizhizao_work_order_access(
             required = list(collection_create_permissions)
         else:
             required = [build_permission_code("kuaizhizao", module_code, action)]
+        required = await _apply_station_terminal_required(request, auth, tenant_id, required)
         await ensure_permission_codes(
             auth,
             tenant_id,

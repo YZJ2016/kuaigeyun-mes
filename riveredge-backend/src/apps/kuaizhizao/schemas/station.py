@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field, ConfigDict, AliasChoices
 
@@ -345,6 +345,17 @@ class StationOperatorSessionConfirmResponse(BaseModel):
 class StationOperatorSessionCurrentResponse(BaseModel):
     valid: bool
     session: Optional[StationOperatorSessionInfo] = None
+
+
+class StationOperatorSessionCloseRequest(BaseModel):
+    """关闭会话原因（可选；缺省按 explicit_close 处理）。"""
+
+    reason: Optional[
+        Literal["explicit_close", "terminal_logout", "explicit_switch"]
+    ] = Field(
+        None,
+        description="关闭原因 explicit_close/terminal_logout/explicit_switch",
+    )
 
 
 class StationOperatorSessionCloseResponse(BaseModel):
