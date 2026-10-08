@@ -44,6 +44,13 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'po-import-material-list-limit-r01',
+    date: '2026-10-06',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.po-import-material-list-limit-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.po-import-material-list-limit-r01.description',
+  },
+  {
     id: 'kuaiplm-rd-deliverables-list-columns-r01',
     date: '2026-10-08',
     type: 'fix',

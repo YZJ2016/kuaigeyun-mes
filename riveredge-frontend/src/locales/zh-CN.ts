@@ -30080,6 +30080,10 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.po-import-material-list-limit-r01.title':
+    '采购订单导入不再因物料列表条数上限失败',
+  'pages.dashboard.updateLog.entries.po-import-material-list-limit-r01.description':
+    '导入采购订单时原先一次请求物料列表 limit=5000，超过接口上限 2000 会报校验错误。现已按页拉取全部启用物料后再匹配编码。',
   'pages.dashboard.updateLog.entries.kuaiplm-rd-deliverables-list-columns-r01.title':
     '交付物列表列宽与操作列对齐规范',
   'pages.dashboard.updateLog.entries.kuaiplm-rd-deliverables-list-columns-r01.description':
