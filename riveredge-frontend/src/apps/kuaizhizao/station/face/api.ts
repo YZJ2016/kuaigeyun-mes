@@ -134,7 +134,10 @@ export function identifyFace(descriptor: number[]): Promise<FaceIdentifyResponse
 }
 
 export function listMyFaceTemplates(): Promise<FaceTemplateResponse[]> {
-  return apiRequest<FaceTemplateResponse[]>(`${STATION}/face-templates/me`, { method: 'GET' });
+  return apiRequest<FaceTemplateResponse[]>(`${STATION}/face-templates/me`, {
+    method: 'GET',
+    stationOperatorSession: true,
+  });
 }
 
 export function deleteFaceTemplate(templateId: number): Promise<{ deleted: boolean }> {

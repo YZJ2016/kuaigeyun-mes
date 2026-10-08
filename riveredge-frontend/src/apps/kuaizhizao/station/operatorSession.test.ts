@@ -91,12 +91,12 @@ test('inject: write method with opt-in and credential attaches the header', () =
   clearStationOperatorSession();
 });
 
-test('inject: GET never attaches the header even with opt-in and credential', () => {
+test('inject: explicitly opted-in GET attaches the header for operator-scoped reads', () => {
   clearStationOperatorSession();
   acceptStationOperatorSession({ credential: 'cred-1', session: SESSION });
   const headers: Record<string, string> = {};
   applyStationOperatorSessionHeader(headers, { optIn: true, method: 'GET' });
-  assert.equal(STATION_OPERATOR_SESSION_HEADER in headers, false);
+  assert.equal(headers[STATION_OPERATOR_SESSION_HEADER], 'cred-1');
   clearStationOperatorSession();
 });
 
