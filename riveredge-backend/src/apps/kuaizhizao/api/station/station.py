@@ -9,7 +9,13 @@ from fastapi import APIRouter, Depends, Query, Header, HTTPException
 
 from core.api.deps import get_current_user, get_current_tenant
 from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
-from apps.kuaizhizao.api.deps import require_station_operator_session
+from apps.kuaizhizao.api.deps import (
+    StationBusinessOperator,
+    ensure_station_operator_matches,
+    get_optional_station_business_operator,
+    get_station_business_operator,
+    require_station_operator_session,
+)
 from infra.models.user import User
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
 from infra.services.face_template_service import FaceTemplateService
@@ -57,6 +63,7 @@ operator_session_service = StationOperatorSessionService()
 @router.post("/andon", response_model=StationAndonResponse, summary="Create station andon call", dependencies=[Depends(require_station_operator_session)])
 async def create_station_andon(
     data: StationAndonCreate,
+    business_operator: StationBusinessOperator = Depends(get_station_business_operator),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> StationAndonResponse:
@@ -64,9 +71,9 @@ async def create_station_andon(
         record = await station_service.create_andon_call(
             tenant_id=tenant_id,
             data=data,
-            caller_id=current_user.id,
-            caller_name=current_user.full_name or current_user.username,
-            caller=current_user,
+            caller_id=business_operator.user_id,
+            caller_name=business_operator.user_name,
+            caller=business_operator.user,
         )
         return StationAndonResponse.model_validate(record)
     except (BusinessLogicError, NotFoundError) as e:
@@ -104,6 +111,7 @@ async def list_open_andon(
 @router.post("/andon/{andon_id}/acknowledge", response_model=StationAndonResponse, dependencies=[Depends(require_station_operator_session)])
 async def acknowledge_andon(
     andon_id: int,
+    business_operator: StationBusinessOperator = Depends(get_station_business_operator),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> StationAndonResponse:
@@ -111,8 +119,8 @@ async def acknowledge_andon(
         record = await station_service.acknowledge_andon(
             tenant_id=tenant_id,
             andon_id=andon_id,
-            user_id=current_user.id,
-            user_name=current_user.full_name or current_user.username,
+            user_id=business_operator.user_id,
+            user_name=business_operator.user_name,
         )
         return StationAndonResponse.model_validate(record)
     except (BusinessLogicError, NotFoundError) as e:
@@ -122,6 +130,7 @@ async def acknowledge_andon(
 @router.post("/andon/{andon_id}/close", response_model=StationAndonResponse, dependencies=[Depends(require_station_operator_session)])
 async def close_andon(
     andon_id: int,
+    business_operator: StationBusinessOperator = Depends(get_station_business_operator),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> StationAndonResponse:
@@ -129,8 +138,8 @@ async def close_andon(
         record = await station_service.close_andon(
             tenant_id=tenant_id,
             andon_id=andon_id,
-            user_id=current_user.id,
-            user_name=current_user.full_name or current_user.username,
+            user_id=business_operator.user_id,
+            user_name=business_operator.user_name,
         )
         return StationAndonResponse.model_validate(record)
     except (BusinessLogicError, NotFoundError) as e:
@@ -140,6 +149,7 @@ async def close_andon(
 @router.post("/andon/{andon_id}/cancel", response_model=StationAndonResponse, dependencies=[Depends(require_station_operator_session)])
 async def cancel_andon(
     andon_id: int,
+    business_operator: StationBusinessOperator = Depends(get_station_business_operator),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> StationAndonResponse:
@@ -147,7 +157,7 @@ async def cancel_andon(
         record = await station_service.cancel_andon(
             tenant_id=tenant_id,
             andon_id=andon_id,
-            caller_id=current_user.id,
+            caller_id=business_operator.user_id,
         )
         return StationAndonResponse.model_validate(record)
     except (BusinessLogicError, NotFoundError) as e:
@@ -157,15 +167,26 @@ async def cancel_andon(
 @router.post("/sop-acknowledgments", summary="Acknowledge SOP before operation start", dependencies=[Depends(require_station_operator_session)])
 async def acknowledge_sop(
     data: StationSopAckCreate,
+    business_operator: StationBusinessOperator = Depends(get_station_business_operator),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
+        ensure_station_operator_matches(
+            business_operator, submitted_user_id=data.worker_id
+        )
+        if business_operator.user is None:
+            data = data.model_copy(
+                update={
+                    "worker_id": business_operator.user_id,
+                    "worker_name": business_operator.user_name,
+                }
+            )
         record = await station_service.acknowledge_sop(
             tenant_id=tenant_id,
             data=data,
-            user_id=current_user.id,
-            user_name=current_user.full_name or current_user.username,
+            user_id=business_operator.user_id,
+            user_name=business_operator.user_name,
         )
         return {"acknowledged": True, "acknowledged_at": record.acknowledged_at}
     except BusinessLogicError as e:
@@ -247,10 +268,14 @@ async def get_station_operation_documents(
 @router.post("/face-templates", response_model=FaceTemplateResponse, summary="Enroll face template", dependencies=[Depends(require_station_operator_session)])
 async def enroll_face_template(
     data: FaceEnrollRequest,
+    business_operator: StationBusinessOperator = Depends(get_station_business_operator),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> FaceTemplateResponse:
     try:
+        ensure_station_operator_matches(
+            business_operator, submitted_user_id=data.user_id
+        )
         tpl = await FaceTemplateService.enroll(
             tenant_id=tenant_id,
             user_id=data.user_id,
@@ -265,21 +290,29 @@ async def enroll_face_template(
 
 @router.get("/face-templates/me", response_model=List[FaceTemplateResponse])
 async def list_my_face_templates(
+    business_operator: StationBusinessOperator = Depends(
+        get_optional_station_business_operator
+    ),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> List[FaceTemplateResponse]:
-    rows = await FaceTemplateService.list_for_user(tenant_id, current_user.id)
+    rows = await FaceTemplateService.list_for_user(
+        tenant_id, business_operator.user_id
+    )
     return [FaceTemplateResponse.model_validate(r) for r in rows]
 
 
 @router.delete("/face-templates/{template_id}", summary="Delete face template", dependencies=[Depends(require_station_operator_session)])
 async def delete_face_template(
     template_id: int,
+    business_operator: StationBusinessOperator = Depends(get_station_business_operator),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        await FaceTemplateService.delete_template(tenant_id, template_id, user_id=current_user.id)
+        await FaceTemplateService.delete_template(
+            tenant_id, template_id, user_id=business_operator.user_id
+        )
         return {"deleted": True}
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
@@ -316,9 +349,15 @@ async def skill_check(
 @router.post("/operator-skills", response_model=OperatorSkillResponse, dependencies=[Depends(require_station_operator_session)])
 async def create_operator_skill(
     data: OperatorSkillCreate,
+    business_operator: StationBusinessOperator = Depends(get_station_business_operator),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> OperatorSkillResponse:
+    ensure_station_operator_matches(
+        business_operator, submitted_user_id=data.user_id
+    )
+    if business_operator.user is None:
+        data = data.model_copy(update={"user_name": business_operator.user_name})
     record = await station_service.create_operator_skill(tenant_id, data)
     return OperatorSkillResponse.model_validate(record)
 
@@ -356,14 +395,15 @@ async def shift_summary(
 @router.post("/shift-handover", response_model=ShiftHandoverResponse, dependencies=[Depends(require_station_operator_session)])
 async def shift_handover(
     data: ShiftHandoverCreate,
+    business_operator: StationBusinessOperator = Depends(get_station_business_operator),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> ShiftHandoverResponse:
     record = await station_service.confirm_shift_handover(
         tenant_id=tenant_id,
         data=data,
-        operator_id=current_user.id,
-        operator_name=current_user.full_name or current_user.username,
+        operator_id=business_operator.user_id,
+        operator_name=business_operator.user_name,
     )
     return ShiftHandoverResponse.model_validate(record)
 

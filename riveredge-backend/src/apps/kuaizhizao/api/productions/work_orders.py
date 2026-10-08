@@ -13,7 +13,11 @@ from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
 from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_work_order_access
-from apps.kuaizhizao.api.deps import require_station_operator_session
+from apps.kuaizhizao.api.deps import (
+    StationBusinessOperator,
+    get_station_business_operator,
+    require_station_operator_session,
+)
 from core.api.deps.access import require_permission_codes
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError, ValidationError
@@ -1064,6 +1068,7 @@ async def dispatch_work_order_operation(
 async def start_work_order_operation(
     work_order_id: int,
     operation_id: int,
+    business_operator: StationBusinessOperator = Depends(get_station_business_operator),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> WorkOrderOperationResponse:
@@ -1079,7 +1084,7 @@ async def start_work_order_operation(
         tenant_id=tenant_id,
         work_order_id=work_order_id,
         operation_id=operation_id,
-        started_by=current_user.id
+        started_by=business_operator.user_id
     )
 
 
@@ -1093,6 +1098,7 @@ async def set_work_order_operation_machine_session(
     work_order_id: int,
     operation_id: int,
     body: WorkOrderOperationMachineSessionRequest,
+    business_operator: StationBusinessOperator = Depends(get_station_business_operator),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> WorkOrderOperationResponse:
@@ -1101,7 +1107,7 @@ async def set_work_order_operation_machine_session(
         work_order_id=work_order_id,
         operation_id=operation_id,
         action=body.action,
-        operator_id=current_user.id,
+        operator_id=business_operator.user_id,
     )
 
 
@@ -1114,6 +1120,7 @@ async def set_work_order_operation_machine_session(
 async def withdraw_work_order_operation_start(
     work_order_id: int,
     operation_id: int,
+    business_operator: StationBusinessOperator = Depends(get_station_business_operator),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> WorkOrderOperationResponse:
@@ -1126,7 +1133,7 @@ async def withdraw_work_order_operation_start(
         tenant_id=tenant_id,
         work_order_id=work_order_id,
         operation_id=operation_id,
-        withdrawn_by=current_user.id,
+        withdrawn_by=business_operator.user_id,
     )
 
 
@@ -1139,6 +1146,7 @@ async def pause_work_order_operation(
     work_order_id: int,
     operation_id: int,
     data: OperationPauseRequest,
+    business_operator: StationBusinessOperator = Depends(get_station_business_operator),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -1148,7 +1156,7 @@ async def pause_work_order_operation(
             work_order_id=work_order_id,
             operation_id=operation_id,
             data=data,
-            operator_id=current_user.id,
+            operator_id=business_operator.user_id,
         )
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
@@ -1164,6 +1172,7 @@ async def pause_work_order_operation(
 async def resume_work_order_operation(
     work_order_id: int,
     operation_id: int,
+    business_operator: StationBusinessOperator = Depends(get_station_business_operator),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -1172,7 +1181,7 @@ async def resume_work_order_operation(
             tenant_id=tenant_id,
             work_order_id=work_order_id,
             operation_id=operation_id,
-            operator_id=current_user.id,
+            operator_id=business_operator.user_id,
         )
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
@@ -1190,6 +1199,7 @@ async def complete_work_order_operation(
     work_order_id: int,
     operation_id: int,
     data: OperationCompleteRequest | None = None,
+    business_operator: StationBusinessOperator = Depends(get_station_business_operator),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> WorkOrderOperationResponse:
@@ -1199,7 +1209,7 @@ async def complete_work_order_operation(
             tenant_id=tenant_id,
             work_order_id=work_order_id,
             operation_id=operation_id,
-            completed_by=current_user.id,
+            completed_by=business_operator.user_id,
             remarks=remarks,
         )
     except NotFoundError as e:
