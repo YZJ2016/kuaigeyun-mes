@@ -3,10 +3,12 @@ import { test } from 'node:test';
 import {
   STATION_OPERATOR_SESSION_HEADER,
   acceptStationOperatorSession,
+  applyStationOperatorSessionHeader,
   clearStationOperatorSession,
   getStationOperatorCredential,
   getStationOperatorSessionInfo,
   hasStationOperatorSession,
+  isWriteMethodForStationSession,
   stationOperatorSessionHeaders,
   subscribeStationOperatorSession,
   type StationOperatorSessionInfo,
@@ -76,4 +78,67 @@ test('subscribers are notified on accept and clear, unsubscribe stops it', () =>
   acceptStationOperatorSession({ credential: 'tok2', session: SESSION });
   assert.equal(calls, 2);
   clearStationOperatorSession();
+});
+
+// ===== apiRequest 注入分支（applyStationOperatorSessionHeader）=====
+
+test('inject: write method with opt-in and credential attaches the header', () => {
+  clearStationOperatorSession();
+  acceptStationOperatorSession({ credential: 'cred-1', session: SESSION });
+  const headers: Record<string, string> = {};
+  applyStationOperatorSessionHeader(headers, { optIn: true, method: 'POST' });
+  assert.equal(headers[STATION_OPERATOR_SESSION_HEADER], 'cred-1');
+  clearStationOperatorSession();
+});
+
+test('inject: GET never attaches the header even with opt-in and credential', () => {
+  clearStationOperatorSession();
+  acceptStationOperatorSession({ credential: 'cred-1', session: SESSION });
+  const headers: Record<string, string> = {};
+  applyStationOperatorSessionHeader(headers, { optIn: true, method: 'GET' });
+  assert.equal(STATION_OPERATOR_SESSION_HEADER in headers, false);
+  clearStationOperatorSession();
+});
+
+test('inject: without credential nothing is attached', () => {
+  clearStationOperatorSession();
+  const headers: Record<string, string> = {};
+  applyStationOperatorSessionHeader(headers, { optIn: true, method: 'POST' });
+  assert.equal(STATION_OPERATOR_SESSION_HEADER in headers, false);
+});
+
+test('inject: caller-provided same-name header is not overwritten', () => {
+  clearStationOperatorSession();
+  acceptStationOperatorSession({ credential: 'cred-1', session: SESSION });
+  const headers: Record<string, string> = {
+    [STATION_OPERATOR_SESSION_HEADER]: 'caller-value',
+  };
+  applyStationOperatorSessionHeader(headers, { optIn: true, method: 'POST' });
+  assert.equal(headers[STATION_OPERATOR_SESSION_HEADER], 'caller-value');
+  clearStationOperatorSession();
+});
+
+test('inject: DELETE counts as write; missing opt-in attaches nothing', () => {
+  clearStationOperatorSession();
+  acceptStationOperatorSession({ credential: 'cred-1', session: SESSION });
+  const del: Record<string, string> = {};
+  applyStationOperatorSessionHeader(del, { optIn: true, method: 'DELETE' });
+  assert.equal(del[STATION_OPERATOR_SESSION_HEADER], 'cred-1');
+  const noOptIn: Record<string, string> = {};
+  applyStationOperatorSessionHeader(noOptIn, { method: 'POST' });
+  assert.equal(STATION_OPERATOR_SESSION_HEADER in noOptIn, false);
+  const optOut: Record<string, string> = {};
+  applyStationOperatorSessionHeader(optOut, { optIn: false, method: 'PUT' });
+  assert.equal(STATION_OPERATOR_SESSION_HEADER in optOut, false);
+  clearStationOperatorSession();
+});
+
+test('inject: write-method table matches apiRequest', () => {
+  assert.equal(isWriteMethodForStationSession('POST'), true);
+  assert.equal(isWriteMethodForStationSession('PUT'), true);
+  assert.equal(isWriteMethodForStationSession('PATCH'), true);
+  assert.equal(isWriteMethodForStationSession('DELETE'), true);
+  assert.equal(isWriteMethodForStationSession('post'), true);
+  assert.equal(isWriteMethodForStationSession('GET'), false);
+  assert.equal(isWriteMethodForStationSession(undefined), false);
 });

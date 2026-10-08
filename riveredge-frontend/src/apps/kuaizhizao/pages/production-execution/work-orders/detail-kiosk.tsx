@@ -9,7 +9,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next'
-import { Card, Button, Row, Col, Tabs, Tag, Descriptions, message, Modal, Input, Space, Statistic, Progress } from 'antd';
+import { Card, Button, Row, Col, Tabs, Tag, Descriptions, message, Modal, Input, Space, Statistic, Progress, Alert } from 'antd';
 import { 
     ArrowLeftOutlined, 
     PlayCircleOutlined, 
@@ -19,12 +19,14 @@ import {
     BarcodeOutlined,
     FormOutlined
 } from '@ant-design/icons';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { TOUCH_SCREEN_CONFIG, HMI_DESIGN_TOKENS } from '../../../../../components/layout-templates';
 import { TouchScreenTemplate } from '../../../../../components/layout-templates/hmi';
 import { touchButtonProps, touchQtyInputProps, TOUCH_INPUT_QTY_STYLE } from '../../../../../components/touch-terminal';
 import NumericKeypad from '../../../../../components/touch-keyboard/NumericKeypad';
 import { workOrderApi } from '../../../services/production';
+import { isStationEntryPath } from '../../../../../utils/clientChannel';
+import { useStationWriteEnabled } from '../../../station/entry/session';
 
 const { Meta } = Card;
 
@@ -32,6 +34,10 @@ const WorkOrderDetailKioskPage: React.FC = () => {
   const { t } = useTranslation()
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
+    const location = useLocation();
+    // 工位路径下未确认操作员时禁用写按钮；PC 路径（/production-execution/*）行为不变
+    const stationWriteEnabled = useStationWriteEnabled();
+    const writeBlocked = isStationEntryPath(location.pathname) && !stationWriteEnabled;
     const [loading, setLoading] = useState(false);
     const [workOrder, setWorkOrder] = useState<any>(null);
     const [activeOperation, setActiveOperation] = useState<any>(null);
@@ -75,7 +81,9 @@ const WorkOrderDetailKioskPage: React.FC = () => {
             return;
         }
         try {
-            await workOrderApi.startOperation(workOrder.id, activeOperation.id);
+            await workOrderApi.startOperation(workOrder.id, activeOperation.id, {
+                stationOperatorSession: true,
+            });
             message.success(t('app.kuaizhizao.workOrder.kioskOpStarted'));
             loadWorkOrderDetail(workOrder.id);
         } catch (error: any) {
@@ -154,6 +162,13 @@ const WorkOrderDetailKioskPage: React.FC = () => {
             ]}
         >
             <div style={{ height: '100%', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {writeBlocked ? (
+                    <Alert
+                        type="info"
+                        showIcon
+                        message="未确认操作员：可查看工单与状态，开工与完工报工不可用"
+                    />
+                ) : null}
                 {/* 顶部信息栏 */}
                 <Card styles={{ body: { padding: '16px' } }}>
                     <Row gutter={[16, 16]}>
@@ -168,12 +183,12 @@ const WorkOrderDetailKioskPage: React.FC = () => {
                         </Col>
                          <Col span={8} style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px' }}>
                              {activeOperation?.status === 'pending' && (
-                                 <Button size="large" {...touchButtonProps({ variant: 'primary', size: 'action' })} icon={<PlayCircleOutlined />} onClick={handleStart} style={{ width: 140 }}>
+                                 <Button size="large" {...touchButtonProps({ variant: 'primary', size: 'action' })} icon={<PlayCircleOutlined />} onClick={handleStart} disabled={writeBlocked} style={{ width: 140 }}>
                                      开始
                                  </Button>
                              )}
                              {activeOperation?.status === 'processing' && (
-                                 <Button size="large" {...touchButtonProps({ variant: 'success', size: 'action' })} icon={<CheckCircleOutlined />} onClick={handleComplete} style={{ width: 140 }}>
+                                 <Button size="large" {...touchButtonProps({ variant: 'success', size: 'action' })} icon={<CheckCircleOutlined />} onClick={handleComplete} disabled={writeBlocked} style={{ width: 140 }}>
                                      完工
                                  </Button>
                              )}

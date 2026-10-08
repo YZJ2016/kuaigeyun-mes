@@ -10,6 +10,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { App, Card, Button, Space, Input, Alert, Spin, Form, Radio, InputNumber, Row, Col, Tag, Divider, Modal } from 'antd';
 import { QrcodeOutlined, ScanOutlined, CheckCircleOutlined, CloseCircleOutlined, ReloadOutlined } from '@ant-design/icons';
@@ -17,6 +18,8 @@ import { TOUCH_SCREEN_CONFIG } from '../../../../../components/layout-templates'
 import { TouchScreenTemplate } from '../../../../../components/layout-templates/hmi';
 import { touchButtonProps, TouchChip } from '../../../../../components/touch-terminal';
 import { reportingApi, workOrderApi } from '../../../services/production';
+import { isStationEntryPath } from '../../../../../utils/clientChannel';
+import { useStationWriteEnabled } from '../../../station/entry/session';
 import { QRCodeScanner } from '../../../../../components/qrcode';
 import { qrcodeApi } from '../../../../../services/qrcode';
 import { useTouchScreen } from '../../../../../hooks/useTouchScreen';
@@ -112,6 +115,10 @@ const effectiveAllowJump = (workOrder: WorkOrder | null, operation?: Operation |
 const ReportingKioskPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const location = useLocation();
+  // 工位路径下未确认操作员时禁用提交报工；PC 路径（/production-execution/*）行为不变
+  const stationWriteEnabled = useStationWriteEnabled();
+  const writeBlocked = isStationEntryPath(location.pathname) && !stationWriteEnabled;
   const touchScreen = useTouchScreen();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
@@ -307,6 +314,11 @@ const ReportingKioskPage: React.FC = () => {
       return;
     }
 
+    if (writeBlocked) {
+      messageApi.warning('未确认操作员：不能提交报工');
+      return;
+    }
+
     setLoading(true);
     try {
       let reportedQty = Number(values.reported_quantity) || 0;
@@ -373,7 +385,9 @@ const ReportingKioskPage: React.FC = () => {
         remarks: values.remarks || '',
       };
 
-      const created = await reportingApi.quickCreate(reportingData);
+      const created = await reportingApi.quickCreate(reportingData, {
+        stationOperatorSession: true,
+      });
       const createdId = Number((created as { id?: number } | null)?.id);
 
       if (
@@ -388,12 +402,16 @@ const ReportingKioskPage: React.FC = () => {
         const selected = defectOpts.find((o) => o.value === values.defect_type);
         if (defectOpts.length > 0 && values.defect_type) {
           try {
-            await reportingApi.recordDefect(String(createdId), {
-              defect_quantity: defectQtyBase,
-              defect_type: selected?.code || String(values.defect_type),
-              defect_reason: selected?.name || selected?.label || String(values.defect_type),
-              disposition: 'quarantine',
-            });
+            await reportingApi.recordDefect(
+              String(createdId),
+              {
+                defect_quantity: defectQtyBase,
+                defect_type: selected?.code || String(values.defect_type),
+                defect_reason: selected?.name || selected?.label || String(values.defect_type),
+                disposition: 'quarantine',
+              },
+              { stationOperatorSession: true },
+            );
           } catch (defectErr: unknown) {
             console.error(defectErr);
             const detail = defectErr instanceof Error ? defectErr.message : String(defectErr);
@@ -453,7 +471,7 @@ const ReportingKioskPage: React.FC = () => {
           title: '提交报工',
           type: 'primary',
           onClick: () => form.submit(),
-          disabled: !currentWorkOrder || !currentOperation || !!jumpRuleError,
+          disabled: !currentWorkOrder || !currentOperation || !!jumpRuleError || writeBlocked,
           block: true,
         },
         {
@@ -465,6 +483,14 @@ const ReportingKioskPage: React.FC = () => {
       ]}
     >
       <Spin spinning={loading}>
+        {writeBlocked ? (
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 24 }}
+            message="未确认操作员：可查看页面，提交报工与缺陷登记不可用"
+          />
+        ) : null}
         <Form
           form={form}
           layout="vertical"
