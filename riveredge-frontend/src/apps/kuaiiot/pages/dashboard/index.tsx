@@ -9,8 +9,16 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Alert, Button, Card, Col, Empty, Row, Space, Spin, Table, Typography } from 'antd';
-import { ReloadOutlined } from '@ant-design/icons';
+import { Alert, Button, Card, Col, Empty, Row, Space, Spin, Table, Typography, theme } from 'antd';
+import {
+  AlertOutlined,
+  ClusterOutlined,
+  DashboardOutlined,
+  DeploymentUnitOutlined,
+  LinkOutlined,
+  ReloadOutlined,
+  TagsOutlined,
+} from '@ant-design/icons';
 import {
   AgentStatusTag,
   AlertStatusTag,
@@ -23,6 +31,7 @@ import type { DiagnosticsOut } from '../../services/kuaiiot';
 import { loadDashboardSources, type DashboardSourceKey, type DashboardSources } from './api';
 
 const { Title, Text } = Typography;
+const { useToken } = theme;
 
 /** 与后端 run_kuaiiot_offline_check 的设备离线口径一致：超过 5 分钟未上报。 */
 const STALE_DEVICE_MS = 5 * 60 * 1000;
@@ -87,6 +96,7 @@ function SectionCard({
 }
 
 export default function DashboardPage() {
+  const { token } = useToken();
   const [sources, setSources] = useState<DashboardSources>();
   const [loading, setLoading] = useState(false);
   const [loadedAt, setLoadedAt] = useState<Date>();
@@ -217,9 +227,52 @@ export default function DashboardPage() {
           </div>
 
           <Card size="small" title="快捷入口">
-            <Space wrap size={16}>
-              {[['接入配置', 'connections'], ['设备链接', 'devices'], ['告警中心', 'alerts'], ['数采链路', 'pipeline'], ['边缘配置', 'edge-configs'], ['点位映射', 'tags']].map(([title, path]) => <Link key={path} to={`/apps/kuaiiot/${path}`}>{title}</Link>)}
-            </Space>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(128px, 1fr))',
+                gap: 12,
+              }}
+            >
+              {[
+                { title: '接入配置', path: 'connections', icon: <LinkOutlined /> },
+                { title: '设备链接', path: 'devices', icon: <DeploymentUnitOutlined /> },
+                { title: '告警中心', path: 'alerts', icon: <AlertOutlined /> },
+                { title: '数采链路', path: 'pipeline', icon: <ClusterOutlined /> },
+                { title: '边缘配置', path: 'edge-configs', icon: <DashboardOutlined /> },
+                { title: '点位映射', path: 'tags', icon: <TagsOutlined /> },
+              ].map(({ title, path, icon }) => (
+                <Link
+                  key={path}
+                  to={`/apps/kuaiiot/${path}`}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    minWidth: 0,
+                    color: token.colorText,
+                  }}
+                >
+                  <span
+                    style={{
+                      width: 32,
+                      height: 32,
+                      flexShrink: 0,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderRadius: token.borderRadius,
+                      background: token.colorPrimaryBg,
+                      color: token.colorPrimary,
+                      fontSize: 18,
+                    }}
+                  >
+                    {icon}
+                  </span>
+                  <span>{title}</span>
+                </Link>
+              ))}
+            </div>
           </Card>
           <Card size="small" title="待办">
             {todos.length ? (
