@@ -1136,6 +1136,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
           }}
           editId={null}
           defaultPlanType="process"
+          lockPlanType
           onSuccess={handleInspectionPlanQuickCreated}
           zIndex={operationFormModalZIndex}
         />
