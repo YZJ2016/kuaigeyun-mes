@@ -20,6 +20,7 @@ import {
   flattenWorkOrderListRows,
 } from './workOrderListGroupTree'
 import type { WorkOrderListRow } from './workOrderListTreeTypes'
+import { asRouteOnlyWorkOrderOperationSteps } from './workOrderOperationSteps'
 
 export const WORK_ORDER_LIST_TANSTACK_PREFIX = ['kuaizhizao', 'work-orders', 'list'] as const
 
@@ -192,25 +193,29 @@ const SPLIT_CHILD_CODE = /^(.+)-(\d{3})$/
 
 /**
  * 拆分子行 / 返工单 / 委外单通常不带 work_order_group_id，需从父工单继承以便留在组树内展示。
+ * 多级拆分时沿 parent 链迭代传递，避免孙单因父行本身也是拆分子行而丢组。
  */
 function propagateWorkOrderGroupIdFromParent(flat: WorkOrderListRow[]): WorkOrderListRow[] {
-  const groupIdByWorkOrderId = new Map<number, number>()
-  for (const row of flat) {
-    if (row.id != null && row.work_order_group_id != null) {
-      groupIdByWorkOrderId.set(Number(row.id), Number(row.work_order_group_id))
+  const rows = flat.map((row) => ({ ...row }))
+  const byId = new Map<number, WorkOrderListRow>()
+  for (const row of rows) {
+    if (row.id != null) byId.set(Number(row.id), row)
+  }
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const row of rows) {
+      if (row.work_order_group_id != null || row.parent_work_order_id == null) continue
+      const parent = byId.get(Number(row.parent_work_order_id))
+      if (parent?.work_order_group_id == null) continue
+      row.work_order_group_id = Number(parent.work_order_group_id)
+      changed = true
     }
   }
-  return flat.map((row) => {
-    if (row.work_order_group_id != null || row.parent_work_order_id == null) {
-      return row
-    }
-    const gid = groupIdByWorkOrderId.get(Number(row.parent_work_order_id))
-    if (gid == null) return row
-    return { ...row, work_order_group_id: gid }
-  })
+  return rows
 }
 
-/** 仅拆分子行在自身无工序摘要时继承主工单；BOM 子工单不得继承上级成品工序 */
+/** 仅拆分子行在自身无工序摘要时继承主工单路线名（无进度）；BOM 子工单不得继承上级成品工序 */
 function inheritOperationStepsFromParent(rows: WorkOrderListRow[]): WorkOrderListRow[] {
   return rows.map((row) => {
     if (!Array.isArray(row.children) || row.children.length === 0) {
@@ -226,7 +231,10 @@ function inheritOperationStepsFromParent(rows: WorkOrderListRow[]): WorkOrderLis
         return { ...child, operation_steps: ownSteps }
       }
       if (kind === 'split') {
-        return { ...child, operation_steps: row.operation_steps }
+        return {
+          ...child,
+          operation_steps: asRouteOnlyWorkOrderOperationSteps(row.operation_steps),
+        }
       }
       return child
     })
@@ -253,20 +261,22 @@ function normalizeUngroupedWorkOrderTree(rows: WorkOrderListRow[]): WorkOrderLis
 
   const attachChild = (parent: WorkOrderListRow, child: WorkOrderListRow) => {
     if (child.id == null || parent.id == null || child.id === parent.id) return
-    if (!parent.children) parent.children = []
+    if (parent.children?.some((c) => c.id === child.id)) {
+      childIds.add(Number(child.id))
+      return
+    }
     const kind = child.row_kind || 'split'
     const ownSteps =
       Array.isArray(child.operation_steps) && child.operation_steps.length > 0
         ? child.operation_steps
         : undefined
-    parent.children.push({
-      ...child,
-      row_kind: kind,
-      parent_work_order_id: parent.id,
-      list_tree_depth: (parent.list_tree_depth ?? 0) + 1,
-      operation_steps:
-        ownSteps ?? (kind === 'split' ? parent.operation_steps : child.operation_steps),
-    })
+    child.row_kind = kind
+    child.parent_work_order_id = parent.id
+    if (!ownSteps && kind === 'split') {
+      child.operation_steps = asRouteOnlyWorkOrderOperationSteps(parent.operation_steps)
+    }
+    if (!parent.children) parent.children = []
+    parent.children.push(child)
     childIds.add(Number(child.id))
   }
 
@@ -287,22 +297,30 @@ function normalizeUngroupedWorkOrderTree(rows: WorkOrderListRow[]): WorkOrderLis
     }
   }
 
+  const sortChildren = (children: WorkOrderListRow[]) => {
+    children.sort((a, b) => {
+      const order = (row: WorkOrderListRow) => {
+        const kind = row.row_kind || 'split'
+        if (kind === 'split') return 0
+        if (kind === 'rework') return 1
+        if (kind === 'outsource') return 2
+        return 3
+      }
+      const kindDiff = order(a) - order(b)
+      return kindDiff !== 0 ? kindDiff : String(a.code ?? '').localeCompare(String(b.code ?? ''))
+    })
+  }
+
+  const applyDepth = (row: WorkOrderListRow, depth: number) => {
+    row.list_tree_depth = depth
+    if (!row.children?.length) return
+    sortChildren(row.children)
+    for (const child of row.children) applyDepth(child, depth + 1)
+  }
+
   const roots = [...rowById.values()].filter((row) => row.id == null || !childIds.has(Number(row.id)))
   for (const root of roots) {
-    root.list_tree_depth = 0
-    if (root.children?.length) {
-      root.children.sort((a, b) => {
-        const order = (row: WorkOrderListRow) => {
-          const kind = row.row_kind || 'split'
-          if (kind === 'split') return 0
-          if (kind === 'rework') return 1
-          if (kind === 'outsource') return 2
-          return 3
-        }
-        const kindDiff = order(a) - order(b)
-        return kindDiff !== 0 ? kindDiff : String(a.code ?? '').localeCompare(String(b.code ?? ''))
-      })
-    }
+    applyDepth(root, 0)
   }
   return roots
 }
@@ -332,8 +350,8 @@ export function normalizeWorkOrderListTreeData(rows: WorkOrderListRow[]): WorkOr
 }
 
 function listSnapshotStoragePrefix(): string {
-  /* v14：拆分主工单不再继承 BOM 上级工序摘要 */
-  return `riveredge.woList.v14:${tenantIdForSnapshot()}:`
+  /* v16：多级拆分默认展开 + 工序模板回落归档 */
+  return `riveredge.woList.v16:${tenantIdForSnapshot()}:`
 }
 
 function listSnapshotStorageKey(queryKey: readonly unknown[]): string {

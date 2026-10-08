@@ -52,3 +52,18 @@ def build_work_order_operation_steps(
             }
         )
     return steps
+
+
+def as_route_only_operation_steps(steps: Optional[List[dict[str, Any]]]) -> List[dict[str, Any]]:
+    """只保留工序名称（pending、progress=0），用于拆分子单缺自有工序时借父/兄弟路线。"""
+    if not steps:
+        return []
+    return [
+        {
+            "name": s.get("name") or "",
+            "sequence": s.get("sequence") or 0,
+            "status": "pending",
+            "progress": 0,
+        }
+        for s in steps
+    ]

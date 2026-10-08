@@ -3152,6 +3152,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             result,
             operation_steps_by_wo_id=operation_steps_map if include_operation_steps else None,
             refresh_stale_readiness=include_readiness,
+            include_downstream_push_progress=include_downstream_push_progress,
         )
 
         return result, total
@@ -5177,6 +5178,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                             workshop_name=original_work_order.workshop_name,
                             work_center_id=original_work_order.work_center_id,
                             work_center_name=original_work_order.work_center_name,
+                            work_order_group_id=original_work_order.work_order_group_id,
                             status=child_status,
                             priority=original_work_order.priority,
                             planned_start_date=original_work_order.planned_start_date,
@@ -5224,6 +5226,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                             workshop_name=original_work_order.workshop_name,
                             work_center_id=original_work_order.work_center_id,
                             work_center_name=original_work_order.work_center_name,
+                            work_order_group_id=original_work_order.work_order_group_id,
                             status='released' if is_follow_up_split else original_work_order.status,
                             priority=original_work_order.priority,
                             planned_start_date=original_work_order.planned_start_date,
@@ -5298,31 +5301,66 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         *,
         exclude_work_order_ids: Optional[Iterable[int]] = None,
     ) -> List[WorkOrderOperation]:
-        """拆分子工单工序模板：优先主工单工序，否则取已有兄弟子工单工序。"""
-        parent_ops = await WorkOrderOperation.filter(
-            tenant_id=tenant_id,
-            work_order_id=parent_work_order_id,
-            deleted_at__isnull=True,
-        ).order_by("sequence").all()
-        if parent_ops:
-            return parent_ops
+        """拆分子工单工序模板。
 
-        sibling_query = WorkOrder.filter(
-            tenant_id=tenant_id,
-            parent_work_order_id=parent_work_order_id,
-            deleted_at__isnull=True,
-        )
+        优先当前父工单未删除工序 → 兄弟子工单工序 → 父工单已归档工序
+        → 沿 parent_work_order_id 向上找祖先的活跃/归档工序或旁系兄弟工序。
+        首次拆分会软删主工单工序，二次/多级拆分必须能回落归档模板，否则子单无工序无法报工。
+        """
         exclude_ids = [int(i) for i in (exclude_work_order_ids or []) if i is not None]
-        if exclude_ids:
-            sibling_query = sibling_query.exclude(id__in=exclude_ids)
-        sibling = await sibling_query.order_by("code").first()
-        if sibling is None:
-            return []
-        return await WorkOrderOperation.filter(
-            tenant_id=tenant_id,
-            work_order_id=sibling.id,
-            deleted_at__isnull=True,
-        ).order_by("sequence").all()
+        visited: set[int] = set()
+        current_id: Optional[int] = parent_work_order_id
+
+        while current_id is not None and current_id not in visited:
+            visited.add(current_id)
+
+            active_parent_ops = await WorkOrderOperation.filter(
+                tenant_id=tenant_id,
+                work_order_id=current_id,
+                deleted_at__isnull=True,
+            ).order_by("sequence").all()
+            if active_parent_ops:
+                return active_parent_ops
+
+            sibling_query = WorkOrder.filter(
+                tenant_id=tenant_id,
+                parent_work_order_id=current_id,
+                deleted_at__isnull=True,
+            )
+            if exclude_ids:
+                sibling_query = sibling_query.exclude(id__in=exclude_ids)
+            siblings = await sibling_query.order_by("code").all()
+            for sibling in siblings:
+                if sibling.id is None:
+                    continue
+                sibling_ops = await WorkOrderOperation.filter(
+                    tenant_id=tenant_id,
+                    work_order_id=sibling.id,
+                    deleted_at__isnull=True,
+                ).order_by("sequence").all()
+                if sibling_ops:
+                    return sibling_ops
+
+            archived_parent_ops = await WorkOrderOperation.filter(
+                tenant_id=tenant_id,
+                work_order_id=current_id,
+                deleted_at__isnull=False,
+            ).order_by("sequence").all()
+            if archived_parent_ops:
+                return archived_parent_ops
+
+            ancestor = await WorkOrder.get_or_none(
+                tenant_id=tenant_id,
+                id=current_id,
+                deleted_at__isnull=True,
+            )
+            current_id = (
+                int(ancestor.parent_work_order_id)
+                if ancestor is not None and ancestor.parent_work_order_id is not None
+                else None
+            )
+
+        return []
 
     async def _copy_work_order_operations(
         self,

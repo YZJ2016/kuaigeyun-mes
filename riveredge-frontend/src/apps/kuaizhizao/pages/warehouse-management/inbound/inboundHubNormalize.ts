@@ -243,8 +243,10 @@ export function resolveInboundHubStatusLabel(
     已完成: t('app.kuaizhizao.warehouseCommon.statusCompleted'),
     已入库: t('app.kuaizhizao.warehouseCommon.statusInbound'),
     已取消: t('app.kuaizhizao.warehouseCommon.statusCancelled'),
-    待退料: t('app.kuaizhizao.warehouseCommon.statusPendingInbound'),
+    // 退料/退货待办勿显示成「待入库」，避免与 Hub 筛选「待入库」混淆
+    待退料: t('lifecycle.stage.pending_return'),
     已退料: t('lifecycle.stage.returned'),
+    待退货: t('lifecycle.stage.pending_return_goods'),
     已退货: t('app.kuaizhizao.salesReturn.statusReturned'),
     已归还: t('app.kuaizhizao.warehouseMaterialReturn.status.returned'),
     待收货: t('app.kuaizhizao.warehouseCommon.statusPendingInbound'),

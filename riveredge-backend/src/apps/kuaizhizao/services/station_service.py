@@ -2,6 +2,7 @@
 工位终端服务：安灯联动、SOP 确认、工序暂停/恢复/结束、资质、交接班
 """
 
+import json
 from datetime import datetime
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
@@ -1238,19 +1239,32 @@ class StationService(WorkOrderService):
             reported_at__lte=end,
         )
         reports = await report_q.all()
-        # P2-13：指定工位时仅统计 device_info 带本工位的报工，避免全厂混算膨胀
+        # P2-13：指定工位时按 device_info.workstation_id 归属；兼容历史未写工位的固定工位报工
         if workstation_id is not None:
             wid = int(workstation_id)
 
             def _report_on_station(r) -> bool:
                 info = getattr(r, "device_info", None)
-                if not isinstance(info, dict):
-                    return False
-                raw = info.get("workstation_id", info.get("station_id"))
-                try:
-                    return int(raw) == wid
-                except (TypeError, ValueError):
-                    return False
+                if isinstance(info, str) and info.strip():
+                    try:
+                        info = json.loads(info)
+                    except Exception:
+                        return False
+                if isinstance(info, dict):
+                    raw = info.get("workstation_id", info.get("station_id"))
+                    if raw is not None and str(raw).strip() != "":
+                        try:
+                            return int(raw) == wid
+                        except (TypeError, ValueError):
+                            return False
+                    # 共享报工不计入固定工位交班
+                    if str(info.get("mode") or "").lower() == "shared":
+                        return False
+                    client = str(info.get("client") or "")
+                    # 历史固定工位报工只写了 client，未写 workstation_id
+                    if client == "riveredge-app-station" or str(info.get("mode") or "").lower() == "fixed":
+                        return True
+                return False
 
             reports = [r for r in reports if _report_on_station(r)]
         completed = sum((Decimal(str(r.qualified_quantity or 0)) for r in reports), Decimal("0"))
@@ -1263,16 +1277,26 @@ class StationService(WorkOrderService):
             started_at__gte=shift_start,
             started_at__lte=end,
         )
-        # 停机表无工位列：指定工位时用 remarks 标记 `workstation_id=<id>` 或跳过无法归属记录
+        # 停机表无工位列：优先 remarks 标记；无任何标记时不按工位丢弃（避免摘要停机恒为 0）
         downtimes = await dt_q.all()
         if workstation_id is not None:
             tag = f"workstation_id={int(workstation_id)}"
             tag2 = f"station_id={int(workstation_id)}"
-            downtimes = [
+            tagged = [
                 d
                 for d in downtimes
                 if tag in str(d.remarks or "") or tag2 in str(d.remarks or "")
             ]
+            if tagged:
+                downtimes = tagged
+            else:
+                untagged = [
+                    d
+                    for d in downtimes
+                    if "workstation_id=" not in str(d.remarks or "")
+                    and "station_id=" not in str(d.remarks or "")
+                ]
+                downtimes = untagged
         downtime_minutes = Decimal("0")
         for d in downtimes:
             ended = d.ended_at or end

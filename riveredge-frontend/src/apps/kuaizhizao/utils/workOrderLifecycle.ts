@@ -8,6 +8,7 @@ import type { LifecycleResult } from '../../../components/uni-lifecycle/types';
 import type { WorkOrder } from '../types/production';
 import type { BackendLifecycle } from './backendLifecycle';
 import { parseBackendLifecycle } from './backendLifecycle';
+import { translateLifecycleStageByKey } from '../../../utils/globalLifecycleI18n';
 import {
   LIST_LIFECYCLE_STAGE_FIELD,
   resolveListLifecycleStageFromSearch,
@@ -174,7 +175,8 @@ export function translateWorkOrderLifecycleStatus(
   if (key && key in WORK_ORDER_LIFECYCLE_I18N_KEYS) {
     return t(WORK_ORDER_LIFECYCLE_I18N_KEYS[key as WorkOrderLifecycleStageKey]);
   }
-  return status;
+  // 工单树下挂返工/委外子行时 status 可能是 quality_released、closed 等，走全局生命周期文案
+  return translateLifecycleStageByKey(t, status, status);
 }
 
 export function buildWorkOrderLifecycleValueEnum(

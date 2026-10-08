@@ -304,6 +304,11 @@ class ReworkOrderListResponse(BaseModel):
     pqc_checked_by_name: Optional[str] = None
     routing_mode: str = "DYNAMIC"
     verification_required: bool = False
+    start_work_order_operation_id: Optional[int] = Field(
+        None, description="起始工序（原工单工序 ID）"
+    )
+    start_operation_code: Optional[str] = Field(None, description="起始工序编码")
+    start_operation_name: Optional[str] = Field(None, description="起始工序名称")
     status: str
     planned_start_date: Optional[datetime]
     planned_end_date: Optional[datetime]
@@ -435,6 +440,8 @@ class ReworkReportingOptionsResponse(BaseModel):
     rework_order_code: str
     routing_mode: str
     rework_quantity: Decimal
+    start_work_order_operation_id: Optional[int] = None
+    start_operation_name: Optional[str] = None
     current_work_order_operation_id: Optional[int] = None
     current_operation_name: Optional[str] = None
     remaining_input_quantity: Decimal = Decimal("0")

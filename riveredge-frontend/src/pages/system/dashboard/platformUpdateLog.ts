@@ -44,6 +44,30 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'work-order-split-completion-progress-r01',
+    date: '2026-10-08',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.work-order-split-completion-progress-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.work-order-split-completion-progress-r01.description',
+  },
+  {
+    id: 'rework-lifecycle-status-i18n-r01',
+    date: '2026-10-08',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.rework-lifecycle-status-i18n-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.rework-lifecycle-status-i18n-r01.description',
+  },
+  {
+    id: 'work-order-nested-split-list-r01',
+    date: '2026-10-08',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.work-order-nested-split-list-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.work-order-nested-split-list-r01.description',
+  },
+  {
     id: 'inspection-plan-quick-type-default-r01',
     date: '2026-10-08',
     type: 'fix',

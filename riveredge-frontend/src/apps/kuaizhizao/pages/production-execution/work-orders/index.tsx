@@ -272,7 +272,10 @@ import WorkOrderTrackingEditFields from './components/WorkOrderTrackingEditField
 import WorkOrderCompleteTrackingModal, {
   type WorkOrderTrackingConfirmValues,
 } from './components/WorkOrderCompleteTrackingModal'
-import type { WorkOrderOperationStep } from './workOrderOperationSteps'
+import {
+  asRouteOnlyWorkOrderOperationSteps,
+  type WorkOrderOperationStep,
+} from './workOrderOperationSteps'
 import {
   WORK_ORDER_ROW_EXPAND_STALE_MS,
   parseWorkOrderOperationsBundle,
@@ -287,6 +290,8 @@ import {
 } from './workOrderListScrollPreserve'
 const LazyUniMaterialSelect = lazy(() => import('../../../../../components/uni-material-select'))
 import { getWorkOrderLifecycle, buildWorkOrderLifecycleValueEnum, translateWorkOrderLifecycleStatus, LIST_LIFECYCLE_STAGE_FIELD, isWorkOrderPlannedEndOverdue, isWorkOrderPlannedDatesLocked } from '../../../utils/workOrderLifecycle'
+import { getReworkOrderLifecycle } from '../../../utils/reworkOrderLifecycle'
+import { getOutsourceOrderLifecycle } from '../../../utils/outsourceOrderLifecycle'
 import { commitListPageSearchParams } from '../../../../../utils/listLifecycleStage'
 import { useRegisterAiContext } from '../../../../../hooks/useRegisterAiContext';
 import { WorkOrderEsopSidebar } from './components/WorkOrderEsopSidebar';
@@ -912,7 +917,13 @@ function renderProductionManufacturingStacked(record: {
 }
 
 function renderWorkOrderListLifecycle(record: WorkOrder): React.ReactNode {
-  const lifecycle = getWorkOrderLifecycle(record)
+  const kind = record.row_kind || 'work_order'
+  const lifecycle =
+    kind === 'rework'
+      ? getReworkOrderLifecycle(record as Record<string, unknown>)
+      : kind === 'outsource'
+        ? getOutsourceOrderLifecycle(record as Record<string, unknown>)
+        : getWorkOrderLifecycle(record)
   const activeStage = lifecycle.mainStages?.find((s) => s.status === 'active')
   const displayLabel = activeStage?.label ?? lifecycle.stageName
   return (
@@ -1038,9 +1049,16 @@ function canExpandWorkOrderOperationPanel(record: WorkOrder): boolean {
   const kind = record.row_kind || 'work_order'
   if (kind === 'work_order_group' || kind === 'rework' || kind === 'outsource') return false
   if (record.id == null) return false
-  if (isSplitParentWorkOrder(record) && record.split_remaining_quantity != null) {
+  // 已拆分且无剩余：仅作容器，报工应在子/孙拆分行上；仍允许展开看下级摘要时除外——无剩余则不可点工序卡报工
+  if (isSplitParentWorkOrder(record)) {
     const remaining = Number(record.split_remaining_quantity)
-    return Number.isFinite(remaining) && remaining > 0
+    if (record.split_remaining_quantity != null && Number.isFinite(remaining)) {
+      return remaining > 0
+    }
+    // 未带剩余字段的已拆分行：有下级拆分则不当作可报工容器
+    if ((record.children || []).some((c) => (c.row_kind || '') === 'split')) {
+      return false
+    }
   }
   const qty = Number(record.quantity)
   return Number.isFinite(qty) && qty > 0
@@ -1240,6 +1258,18 @@ function getWorkOrderOperationApiId(record: WorkOrder): string {
   return String(record.id ?? '')
 }
 
+function findWorkOrderListRowById(
+  rowByKey: Map<string, WorkOrder> | undefined,
+  id: number | null | undefined,
+): WorkOrder | undefined {
+  if (rowByKey == null || id == null) return undefined
+  return (
+    rowByKey.get(`work_order-${id}`)
+    || rowByKey.get(`split-${id}`)
+    || [...rowByKey.values()].find((row) => row.id === id)
+  )
+}
+
 function resolveWorkOrderOperationSteps(
   record: WorkOrder,
   rowByKey?: Map<string, WorkOrder>,
@@ -1249,15 +1279,13 @@ function resolveWorkOrderOperationSteps(
   }
   const kind = record.row_kind || 'work_order'
   if (kind === 'split' && record.parent_work_order_id != null) {
-    const parentKey = getWorkOrderListRowKey({
-      row_kind: 'work_order',
-      id: record.parent_work_order_id,
-    } as WorkOrder)
-    const parent = rowByKey?.get(parentKey)
+    // 父行可能是主工单或上级拆分行（多级拆分），不能写死 work_order- key
+    const parent = findWorkOrderListRowById(rowByKey, record.parent_work_order_id)
     if (parent?.operation_steps?.length) {
-      return parent.operation_steps
+      // 仅借路线名，不借父行完工进度
+      return asRouteOnlyWorkOrderOperationSteps(parent.operation_steps)
     }
-    // 主工单工序已归档时，从兄弟拆分子行取工艺摘要
+    // 主工单工序已归档时，从兄弟拆分子行取工艺路线名（不含兄弟进度）
     const sibling = (parent?.children || []).find(
       (c) =>
         (c.row_kind || '') === 'split' &&
@@ -1265,17 +1293,19 @@ function resolveWorkOrderOperationSteps(
         Array.isArray(c.operation_steps) &&
         c.operation_steps.length > 0,
     )
-    return sibling?.operation_steps
+    if (sibling?.operation_steps?.length) {
+      return asRouteOnlyWorkOrderOperationSteps(sibling.operation_steps)
+    }
   }
-  // 已拆分主工单：自身工序已归档，用拆分子工单工序展示正确工艺路线（禁止继承 BOM 上级成品工序）
-  if (kind === 'work_order' && ['split', '已拆分'].includes(record.status || '')) {
+  // 已拆分主工单/中间拆分行：自身工序已归档，用下级拆分子工单路线名展示（不含子行进度）
+  if (['split', '已拆分'].includes(record.status || '')) {
     const child = (record.children || []).find(
       (c) =>
         (c.row_kind || '') === 'split' &&
         Array.isArray(c.operation_steps) &&
         c.operation_steps.length > 0,
     )
-    return child?.operation_steps
+    return asRouteOnlyWorkOrderOperationSteps(child?.operation_steps)
   }
   return undefined
 }
@@ -1791,12 +1821,18 @@ const WorkOrdersPage: React.FC = () => {
         if (!row?.children?.length) continue
         const kind = row.row_kind || 'work_order'
         if (kind === WORK_ORDER_GROUP_ROW_KIND && !isBomTreeWorkOrderGroup(row)) continue
+        // 拆分行 / 带更深子树的主工单：保留用户展开，避免二次拆分后孙单被收起
+        if (kind === 'split') {
+          next.add(sk)
+          continue
+        }
         if (kind === 'work_order') {
           const onlySplitReworkOutsource = row.children.every((c) => {
             const ck = c.row_kind || 'work_order'
             return ck === 'split' || ck === 'rework' || ck === 'outsource'
           })
-          if (onlySplitReworkOutsource) continue
+          const hasDeeperTree = row.children.some((c) => (c.children?.length ?? 0) > 0)
+          if (onlySplitReworkOutsource && !hasDeeperTree) continue
         }
         next.add(sk)
       }
@@ -7668,10 +7704,6 @@ const WorkOrdersPage: React.FC = () => {
       render: (_, record) => {
         // 工单组无独立执行状态，避免展示误导的草稿
         if (isWorkOrderGroupListRow(record)) return null
-        const kind = record.row_kind || 'work_order'
-        if (kind === 'rework' || kind === 'outsource') {
-          return <Tag variant="solid">{translateWorkOrderLifecycleStatus(t, record.status)}</Tag>
-        }
         return renderWorkOrderListLifecycle(record)
       },
     },
