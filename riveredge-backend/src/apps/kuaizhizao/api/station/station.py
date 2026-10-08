@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, Query, Header, HTTPException
 
 from core.api.deps import get_current_user, get_current_tenant
 from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
+from apps.kuaizhizao.api.deps import require_station_operator_session
 from infra.models.user import User
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
 from infra.services.face_template_service import FaceTemplateService
@@ -52,7 +53,7 @@ station_service = StationService()
 operator_session_service = StationOperatorSessionService()
 
 
-@router.post("/andon", response_model=StationAndonResponse, summary="Create station andon call")
+@router.post("/andon", response_model=StationAndonResponse, summary="Create station andon call", dependencies=[Depends(require_station_operator_session)])
 async def create_station_andon(
     data: StationAndonCreate,
     current_user: User = Depends(get_current_user),
@@ -99,7 +100,7 @@ async def list_open_andon(
     return [StationAndonResponse.model_validate(r) for r in records]
 
 
-@router.post("/andon/{andon_id}/acknowledge", response_model=StationAndonResponse)
+@router.post("/andon/{andon_id}/acknowledge", response_model=StationAndonResponse, dependencies=[Depends(require_station_operator_session)])
 async def acknowledge_andon(
     andon_id: int,
     current_user: User = Depends(get_current_user),
@@ -117,7 +118,7 @@ async def acknowledge_andon(
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
-@router.post("/andon/{andon_id}/close", response_model=StationAndonResponse)
+@router.post("/andon/{andon_id}/close", response_model=StationAndonResponse, dependencies=[Depends(require_station_operator_session)])
 async def close_andon(
     andon_id: int,
     current_user: User = Depends(get_current_user),
@@ -135,7 +136,7 @@ async def close_andon(
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
-@router.post("/andon/{andon_id}/cancel", response_model=StationAndonResponse)
+@router.post("/andon/{andon_id}/cancel", response_model=StationAndonResponse, dependencies=[Depends(require_station_operator_session)])
 async def cancel_andon(
     andon_id: int,
     current_user: User = Depends(get_current_user),
@@ -152,7 +153,7 @@ async def cancel_andon(
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
-@router.post("/sop-acknowledgments", summary="Acknowledge SOP before operation start")
+@router.post("/sop-acknowledgments", summary="Acknowledge SOP before operation start", dependencies=[Depends(require_station_operator_session)])
 async def acknowledge_sop(
     data: StationSopAckCreate,
     current_user: User = Depends(get_current_user),
@@ -242,7 +243,7 @@ async def get_station_operation_documents(
         raise HTTPException(status_code=404, detail=str(e)) from e
 
 
-@router.post("/face-templates", response_model=FaceTemplateResponse, summary="Enroll face template")
+@router.post("/face-templates", response_model=FaceTemplateResponse, summary="Enroll face template", dependencies=[Depends(require_station_operator_session)])
 async def enroll_face_template(
     data: FaceEnrollRequest,
     current_user: User = Depends(get_current_user),
@@ -270,7 +271,7 @@ async def list_my_face_templates(
     return [FaceTemplateResponse.model_validate(r) for r in rows]
 
 
-@router.delete("/face-templates/{template_id}", summary="Delete face template")
+@router.delete("/face-templates/{template_id}", summary="Delete face template", dependencies=[Depends(require_station_operator_session)])
 async def delete_face_template(
     template_id: int,
     current_user: User = Depends(get_current_user),
@@ -311,7 +312,7 @@ async def skill_check(
     return SkillCheckResponse.model_validate(result)
 
 
-@router.post("/operator-skills", response_model=OperatorSkillResponse)
+@router.post("/operator-skills", response_model=OperatorSkillResponse, dependencies=[Depends(require_station_operator_session)])
 async def create_operator_skill(
     data: OperatorSkillCreate,
     current_user: User = Depends(get_current_user),
@@ -351,7 +352,7 @@ async def shift_summary(
     return ShiftSummaryResponse.model_validate(result)
 
 
-@router.post("/shift-handover", response_model=ShiftHandoverResponse)
+@router.post("/shift-handover", response_model=ShiftHandoverResponse, dependencies=[Depends(require_station_operator_session)])
 async def shift_handover(
     data: ShiftHandoverCreate,
     current_user: User = Depends(get_current_user),

@@ -21,6 +21,7 @@ from infra.models.user import User
 from infra.exceptions.exceptions import ValidationError, BusinessLogicError, NotFoundError
 from infra.services.business_config_service import BusinessConfigService
 
+from apps.kuaizhizao.api.deps import require_station_operator_session
 from apps.kuaizhizao.services.reporting_service import ReportingService, REPORTING_SORTABLE_FIELDS
 from apps.kuaizhizao.services.reporting_sync_service import ReportingSyncService
 from apps.kuaizhizao.services.scrap_record_service import ScrapRecordService
@@ -384,7 +385,7 @@ async def create_reporting_record(
         raise _http_exception_with_trace(400, str(e), "/reporting", tenant_id)
 
 
-@router.post("/reporting/quick", response_model=ReportingRecordResponse, summary="Quick reporting (scan / terminal)")
+@router.post("/reporting/quick", response_model=ReportingRecordResponse, summary="Quick reporting (scan / terminal)", dependencies=[Depends(require_station_operator_session)])
 async def create_quick_reporting_record(
     reporting: ReportingRecordCreate,
     request: Request,
@@ -718,7 +719,7 @@ async def delete_reporting_record(
     )
 
 
-@router.post("/reporting/{record_id}/scrap", response_model=ScrapRecordResponse, summary="Create scrap record from reporting")
+@router.post("/reporting/{record_id}/scrap", response_model=ScrapRecordResponse, summary="Create scrap record from reporting", dependencies=[Depends(require_station_operator_session)])
 async def create_scrap_record_from_reporting(
     record_id: int,
     scrap_data: ScrapRecordCreateFromReporting,
@@ -750,7 +751,7 @@ async def create_scrap_record_from_reporting(
 
 # ============ 物料绑定 API ============
 
-@router.post("/reporting/{record_id}/material-binding/feeding", response_model=MaterialBindingResponse, summary="Create feeding binding from reporting")
+@router.post("/reporting/{record_id}/material-binding/feeding", response_model=MaterialBindingResponse, summary="Create feeding binding from reporting", dependencies=[Depends(require_station_operator_session)])
 async def create_feeding_binding_from_reporting(
     record_id: int,
     binding_data: MaterialBindingCreateFromReporting,
@@ -781,7 +782,7 @@ async def create_feeding_binding_from_reporting(
         raise _http_exception_with_trace(400, str(e), "/reporting/{record_id}/material-binding/feeding", tenant_id)
 
 
-@router.post("/reporting/{record_id}/material-binding/discharging", response_model=MaterialBindingResponse, summary="Create discharging binding from reporting")
+@router.post("/reporting/{record_id}/material-binding/discharging", response_model=MaterialBindingResponse, summary="Create discharging binding from reporting", dependencies=[Depends(require_station_operator_session)])
 async def create_discharging_binding_from_reporting(
     record_id: int,
     binding_data: MaterialBindingCreateFromReporting,

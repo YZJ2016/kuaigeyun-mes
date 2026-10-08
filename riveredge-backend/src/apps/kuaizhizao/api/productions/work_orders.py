@@ -13,6 +13,7 @@ from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
 from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_work_order_access
+from apps.kuaizhizao.api.deps import require_station_operator_session
 from core.api.deps.access import require_permission_codes
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError, ValidationError
@@ -1059,7 +1060,7 @@ async def dispatch_work_order_operation(
     )
 
 
-@router.post("/work-orders/{work_order_id}/operations/{operation_id}/start", response_model=WorkOrderOperationResponse, summary="Start work order operation")
+@router.post("/work-orders/{work_order_id}/operations/{operation_id}/start", response_model=WorkOrderOperationResponse, summary="Start work order operation", dependencies=[Depends(require_station_operator_session)])
 async def start_work_order_operation(
     work_order_id: int,
     operation_id: int,
@@ -1086,6 +1087,7 @@ async def start_work_order_operation(
     "/work-orders/{work_order_id}/operations/{operation_id}/machine-session",
     response_model=WorkOrderOperationResponse,
     summary="Set work order operation machine on/off session",
+    dependencies=[Depends(require_station_operator_session)],
 )
 async def set_work_order_operation_machine_session(
     work_order_id: int,
@@ -1107,6 +1109,7 @@ async def set_work_order_operation_machine_session(
     "/work-orders/{work_order_id}/operations/{operation_id}/withdraw-start",
     response_model=WorkOrderOperationResponse,
     summary="Withdraw work order operation start",
+    dependencies=[Depends(require_station_operator_session)],
 )
 async def withdraw_work_order_operation_start(
     work_order_id: int,
@@ -1130,6 +1133,7 @@ async def withdraw_work_order_operation_start(
 @router.post(
     "/work-orders/{work_order_id}/operations/{operation_id}/pause",
     summary="Pause work order operation (station downtime)",
+    dependencies=[Depends(require_station_operator_session)],
 )
 async def pause_work_order_operation(
     work_order_id: int,
@@ -1155,6 +1159,7 @@ async def pause_work_order_operation(
 @router.post(
     "/work-orders/{work_order_id}/operations/{operation_id}/resume",
     summary="Resume paused work order operation",
+    dependencies=[Depends(require_station_operator_session)],
 )
 async def resume_work_order_operation(
     work_order_id: int,
@@ -1179,6 +1184,7 @@ async def resume_work_order_operation(
     "/work-orders/{work_order_id}/operations/{operation_id}/complete",
     response_model=WorkOrderOperationResponse,
     summary="Complete work order operation (station end)",
+    dependencies=[Depends(require_station_operator_session)],
 )
 async def complete_work_order_operation(
     work_order_id: int,
