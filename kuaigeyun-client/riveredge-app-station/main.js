@@ -165,6 +165,11 @@ function createWindow(origin, workstationId) {
   contents.on('will-navigate', (event, url) => {
     if (!isNavigationAllowed(url, origin)) event.preventDefault();
   });
+  // will-navigate 不覆盖服务端 30x 重定向；will-redirect 同样走白名单判定，
+  // 只拦主框架（isMainFrame），子框架重定向不在本壳防护范围内。
+  contents.on('will-redirect', (event, url, _isInPlace, isMainFrame) => {
+    if (isMainFrame && !isNavigationAllowed(url, origin)) event.preventDefault();
+  });
   let recovering = false;
   const onLoadFail = (_event, errorCode, _desc, _url, isMainFrame) => {
     if (!isMainFrame || errorCode === -3 || recovering || win.isDestroyed()) return;
