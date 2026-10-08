@@ -5,7 +5,7 @@
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, Header, HTTPException
 
 from core.api.deps import get_current_user, get_current_tenant
 from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
@@ -14,6 +14,9 @@ from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
 from infra.services.face_template_service import FaceTemplateService
 
 from apps.kuaizhizao.services.station_service import StationService
+from apps.kuaizhizao.services.station_operator_session_service import (
+    StationOperatorSessionService,
+)
 from apps.kuaizhizao.schemas.station import (
     StationAndonCreate,
     StationAndonResponse,
@@ -32,6 +35,11 @@ from apps.kuaizhizao.schemas.station import (
     ShiftSummaryResponse,
     ShiftHandoverCreate,
     ShiftHandoverResponse,
+    StationOperatorSessionConfirmRequest,
+    StationOperatorSessionConfirmResponse,
+    StationOperatorSessionInfo,
+    StationOperatorSessionCurrentResponse,
+    StationOperatorSessionCloseResponse,
 )
 
 router = APIRouter(
@@ -41,6 +49,7 @@ router = APIRouter(
 )
 
 station_service = StationService()
+operator_session_service = StationOperatorSessionService()
 
 
 @router.post("/andon", response_model=StationAndonResponse, summary="Create station andon call")
@@ -355,3 +364,81 @@ async def shift_handover(
         operator_name=current_user.full_name or current_user.username,
     )
     return ShiftHandoverResponse.model_validate(record)
+
+
+@router.post(
+    "/operator-session/confirm",
+    response_model=StationOperatorSessionConfirmResponse,
+    summary="Confirm candidate operator and issue session",
+)
+async def confirm_operator_session(
+    data: StationOperatorSessionConfirmRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> StationOperatorSessionConfirmResponse:
+    """刷脸/员工码与候选操作员一致后签发会话；凭据原文仅此一次返回。"""
+    try:
+        session, credential = await operator_session_service.confirm(
+            tenant_id=tenant_id,
+            terminal_user=current_user,
+            workstation_id=data.workstation_id,
+            candidate_user_id=data.candidate_user_id,
+            confirm_method=data.confirm_method,
+            face_descriptor=data.face_descriptor,
+            employee_code=data.employee_code,
+        )
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    return StationOperatorSessionConfirmResponse(
+        credential=credential,
+        session=StationOperatorSessionInfo.model_validate(session),
+    )
+
+
+@router.get(
+    "/operator-session/current",
+    response_model=StationOperatorSessionCurrentResponse,
+    summary="Current operator session status",
+)
+async def get_current_operator_session(
+    workstation_id: Optional[int] = Query(None),
+    x_station_operator_session: Optional[str] = Header(
+        None, alias="X-Station-Operator-Session"
+    ),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> StationOperatorSessionCurrentResponse:
+    """按 X-Station-Operator-Session 头返回当前会话状态；无效凭据不泄露他人信息。"""
+    session = await operator_session_service.get_current_session(
+        tenant_id=tenant_id,
+        terminal_user_id=current_user.id,
+        credential=x_station_operator_session,
+        workstation_id=workstation_id,
+    )
+    if session is None:
+        return StationOperatorSessionCurrentResponse(valid=False)
+    return StationOperatorSessionCurrentResponse(
+        valid=True,
+        session=StationOperatorSessionInfo.model_validate(session),
+    )
+
+
+@router.post(
+    "/operator-session/close",
+    response_model=StationOperatorSessionCloseResponse,
+    summary="Close current operator session (idempotent)",
+)
+async def close_operator_session(
+    x_station_operator_session: Optional[str] = Header(
+        None, alias="X-Station-Operator-Session"
+    ),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> StationOperatorSessionCloseResponse:
+    """按头关闭会话；重复关闭与无效凭据均幂等成功。"""
+    await operator_session_service.close_session(
+        tenant_id=tenant_id,
+        terminal_user_id=current_user.id,
+        credential=x_station_operator_session,
+    )
+    return StationOperatorSessionCloseResponse(closed=True)

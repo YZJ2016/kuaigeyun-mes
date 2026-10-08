@@ -426,6 +426,7 @@ TORTOISE_ORM = {
                 "apps.kuaizhizao.models.station_operation_downtime",  # 工位停机
                 "apps.kuaizhizao.models.operator_skill",  # 操作员上岗资质
                 "apps.kuaizhizao.models.station_shift_handover",  # 工位交接班
+                "apps.kuaizhizao.models.station_operator_session",  # 工位操作员会话
                 "apps.kuaizhizao.models.material_return",  # 物料退回（非生产）模型
                 "apps.kuaizhizao.models.material_return_item",  # 物料退回明细模型
                 "apps.kuaizhizao.models.material_shortage_exception",  # 缺料异常模型

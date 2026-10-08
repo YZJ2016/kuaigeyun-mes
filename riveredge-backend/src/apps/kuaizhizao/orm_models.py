@@ -168,6 +168,7 @@ ORM_MODEL_MODULES: list[str] = [
     "apps.kuaizhizao.models.state_transition",
     "apps.kuaizhizao.models.station_andon_call",
     "apps.kuaizhizao.models.station_operation_downtime",
+    "apps.kuaizhizao.models.station_operator_session",
     "apps.kuaizhizao.models.station_shift_handover",
     "apps.kuaizhizao.models.station_sop_acknowledgment",
     "apps.kuaizhizao.models.stocktaking",
