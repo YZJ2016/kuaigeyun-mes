@@ -239,11 +239,23 @@ export const workOrderApi = {
       { method: 'GET' },
     ),
   updateOperations: async (id: string, data: any) => apiRequest(`/apps/kuaizhizao/work-orders/${id}/operations`, { method: 'PUT', data }),
-  startOperation: async (workOrderId: string, operationId: number) =>
-    apiRequest(`/apps/kuaizhizao/work-orders/${workOrderId}/operations/${operationId}/start`, { method: 'POST' }),
-  withdrawOperationStart: async (workOrderId: string, operationId: number) =>
+  startOperation: async (
+    workOrderId: string,
+    operationId: number,
+    options?: { stationOperatorSession?: boolean },
+  ) =>
+    apiRequest(`/apps/kuaizhizao/work-orders/${workOrderId}/operations/${operationId}/start`, {
+      method: 'POST',
+      ...options,
+    }),
+  withdrawOperationStart: async (
+    workOrderId: string,
+    operationId: number,
+    options?: { stationOperatorSession?: boolean },
+  ) =>
     apiRequest(`/apps/kuaizhizao/work-orders/${workOrderId}/operations/${operationId}/withdraw-start`, {
       method: 'POST',
+      ...options,
     }),
   dispatchOperation: async (workOrderId: string, operationId: number, data: any) =>
     apiRequest(`/apps/kuaizhizao/work-orders/${workOrderId}/operations/${operationId}/dispatch`, { method: 'POST', data }),

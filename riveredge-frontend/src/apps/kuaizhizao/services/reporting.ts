@@ -169,7 +169,8 @@ export const reportingApi = {
     };
   },
   create: async (data: any) => apiRequest('/apps/kuaizhizao/reporting', { method: 'POST', data }),
-  quickCreate: async (data: any) => apiRequest('/apps/kuaizhizao/reporting/quick', { method: 'POST', data }),
+  quickCreate: async (data: any, options?: { stationOperatorSession?: boolean }) =>
+    apiRequest('/apps/kuaizhizao/reporting/quick', { method: 'POST', data, ...options }),
   update: async (id: string, data: any) => apiRequest(`/apps/kuaizhizao/reporting/${id}`, { method: 'PUT', data }),
   delete: async (id: string) => apiRequest(`/apps/kuaizhizao/reporting/${id}`, { method: 'DELETE' }),
   get: async (id: string) => apiRequest(`/apps/kuaizhizao/reporting/${id}`, { method: 'GET' }),
@@ -181,8 +182,8 @@ export const reportingApi = {
     apiRequest('/apps/kuaizhizao/reporting/batch-revoke', { method: 'POST', data: { record_ids: ids.map(Number) } }),
   getStatistics: async (params?: any) =>
     apiRequest<ReportingDetailedStatistics>('/apps/kuaizhizao/reporting/statistics', { method: 'GET', params }),
-  recordScrap: async (recordId: string, data: any) =>
-    apiRequest(`/apps/kuaizhizao/reporting/${recordId}/scrap`, { method: 'POST', data }),
+  recordScrap: async (recordId: string, data: any, options?: { stationOperatorSession?: boolean }) =>
+    apiRequest(`/apps/kuaizhizao/reporting/${recordId}/scrap`, { method: 'POST', data, ...options }),
   recordDefect: async (recordId: string, data: any) =>
     apiRequest(`/apps/kuaizhizao/reporting/${recordId}/defect`, { method: 'POST', data }),
   correct: async (recordId: string, data: any) => {
@@ -306,10 +307,10 @@ export const getReportingStatistics = async () =>
   apiRequest<ReportingOverviewStatistics>('/apps/kuaizhizao/reporting/overview-statistics', { method: 'GET' });
 
 export const materialBindingApi = {
-  createFeeding: async (recordId: string, data: any) =>
-    apiRequest(`/apps/kuaizhizao/reporting/${recordId}/material-binding/feeding`, { method: 'POST', data }),
-  createDischarging: async (recordId: string, data: any) =>
-    apiRequest(`/apps/kuaizhizao/reporting/${recordId}/material-binding/discharging`, { method: 'POST', data }),
+  createFeeding: async (recordId: string, data: any, options?: { stationOperatorSession?: boolean }) =>
+    apiRequest(`/apps/kuaizhizao/reporting/${recordId}/material-binding/feeding`, { method: 'POST', data, ...options }),
+  createDischarging: async (recordId: string, data: any, options?: { stationOperatorSession?: boolean }) =>
+    apiRequest(`/apps/kuaizhizao/reporting/${recordId}/material-binding/discharging`, { method: 'POST', data, ...options }),
   getByReportingRecord: async (recordId: string) =>
     apiRequest(`/apps/kuaizhizao/reporting/${recordId}/material-binding`, { method: 'GET' }),
   delete: async (bindingId: string) =>

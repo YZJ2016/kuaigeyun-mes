@@ -10,10 +10,8 @@ import {
 
 const base: QuickReportInput = {
   mode: 'self',
-  hasAssignPermission: false,
   workstationId: 9,
   operator: { id: 3, name: '张三' },
-  proxyWorker: null,
   team: null,
   workOrder: { id: 11, code: 'WO-1', name: '', product_name: '产品A' },
   operation: { operation_id: 22, operation_code: 'OP-1', operation_name: '组装' },
@@ -27,17 +25,6 @@ test('workstationId query is used when the page has no bound id', () => {
   assert.equal(resolveWorkstationId(null, '15'), 15);
   assert.equal(resolveWorkstationId(undefined, '0'), null);
   assert.equal(resolveWorkstationId(4, '15'), 4);
-});
-
-test('proxy without assign permission does not build a body', () => {
-  const decision = buildQuickReportingBody({
-    ...base,
-    mode: 'proxy',
-    hasAssignPermission: false,
-    proxyWorker: { id: 8, name: '李四' },
-  });
-  assert.equal(decision.submit, false);
-  if (!decision.submit) assert.equal(decision.reason, 'proxy-forbidden');
 });
 
 test('self report writes the given operator and workstation, not a channel field', () => {
@@ -64,11 +51,10 @@ test('self report without an operator does not submit', () => {
   if (!decision.submit) assert.equal(decision.reason, 'missing-operator');
 });
 
-test('team report still builds a body when assign permission is absent', () => {
+test('team report builds a body without an operator', () => {
   const decision = buildQuickReportingBody({
     ...base,
     mode: 'team',
-    hasAssignPermission: false,
     operator: null,
     team: { id: 6, name: '甲班' },
   });

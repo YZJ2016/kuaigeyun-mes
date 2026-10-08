@@ -19,11 +19,16 @@ import {
   readShellWorkstationId,
   setStationExecutionSelection,
   setStationOperator,
+  setStationOperatorCandidate,
   setStationWorkstation,
   setTerminalAccountName,
   useStationEntrySnapshot,
   type StationOperator,
 } from './session';
+import {
+  closeStationOperatorSession,
+  confirmStationOperatorSession,
+} from '../operatorSession';
 
 const KIOSK_LINKS: Array<{ title: string; to: string }> = [
   { title: '报工', to: `${STATION_ENTRY_PATH}/reporting` },
@@ -120,12 +125,15 @@ function readSavedStation(): StationInfo | null {
 function StationHome() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { workstation, operator, terminalAccountName } = useStationEntrySnapshot();
+  const { workstation, operator, candidate, terminalAccountName } = useStationEntrySnapshot();
   const [binding, setBinding] = useState(false);
   const [operators, setOperators] = useState<Array<{ label: string; value: number }>>([]);
   const [operatorKeyword, setOperatorKeyword] = useState('');
   const [scanDraft, setScanDraft] = useState('');
   const [lastScan, setLastScan] = useState('');
+  const [employeeCode, setEmployeeCode] = useState('');
+  const [confirming, setConfirming] = useState(false);
+  const [exiting, setExiting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -192,8 +200,49 @@ function StationHome() {
     setBinding(false);
   };
 
+  // 点选姓名只产生候选人；刷脸或员工码与候选人一致并确认后才成为当前操作员
   const pickOperator = (next: StationOperator) => {
-    setStationOperator(next);
+    setStationOperatorCandidate(next);
+    setEmployeeCode('');
+  };
+
+  const confirmByEmployeeCode = async () => {
+    const code = employeeCode.trim();
+    if (!candidate || workstation?.stationId == null || !code || confirming) return;
+    const candidateId = candidate.id;
+    setConfirming(true);
+    try {
+      const session = await confirmStationOperatorSession({
+        workstationId: workstation.stationId,
+        candidateUserId: candidateId,
+        confirmMethod: 'employee_code',
+        employeeCode: code,
+      });
+      setStationOperator({ id: session.operator_user_id, name: session.operator_name });
+      setStationOperatorCandidate(null);
+      message.success('已确认当前操作员');
+    } catch {
+      // 通用失败文案：不回显员工码或失败原因细节
+      message.error('操作员确认失败，请重试');
+    } finally {
+      setEmployeeCode('');
+      setConfirming(false);
+    }
+  };
+
+  const exitOperator = async () => {
+    if (exiting) return;
+    setExiting(true);
+    try {
+      await closeStationOperatorSession();
+    } catch {
+      // 本地凭据已清空；服务端关闭失败不阻断退出
+    } finally {
+      setStationOperator(null);
+      setStationOperatorCandidate(null);
+      setEmployeeCode('');
+      setExiting(false);
+    }
   };
 
   return (
@@ -205,8 +254,24 @@ function StationHome() {
           </Typography.Text>
           <br />
           <Typography.Text>
-            当前操作员：{operator ? operator.name : '未选择'}
+            当前操作员：{operator ? operator.name : '未确认'}
           </Typography.Text>
+          {candidate ? (
+            <>
+              <br />
+              <Typography.Text>
+                候选人：{candidate.name}（待刷脸或员工码确认）
+              </Typography.Text>
+            </>
+          ) : null}
+          {operator ? (
+            <>
+              {' '}
+              <Button size="small" loading={exiting} onClick={() => void exitOperator()}>
+                退出操作员
+              </Button>
+            </>
+          ) : null}
           <br />
           <Typography.Text>
             当前工位：
@@ -274,7 +339,7 @@ function StationHome() {
         ) : null}
 
         <div>
-          <Typography.Text>点选当前操作员</Typography.Text>
+          <Typography.Text>点选候选操作员（确认前不产生业务归属）</Typography.Text>
           <Input
             size="large"
             value={operatorKeyword}
@@ -287,7 +352,7 @@ function StationHome() {
               <Button
                 key={item.value}
                 {...touchButtonProps({
-                  variant: operator?.id === item.value ? 'primary' : 'default',
+                  variant: candidate?.id === item.value ? 'primary' : 'default',
                   size: 'chip',
                 })}
                 onClick={() => pickOperator({ id: item.value, name: item.label })}
@@ -296,6 +361,43 @@ function StationHome() {
               </Button>
             ))}
           </Space>
+          {candidate ? (
+            <Space direction="vertical" size="middle" style={{ marginTop: 12, width: '100%' }}>
+              <Typography.Text>
+                候选人 {candidate.name}：请输入员工码确认，或到「刷脸交接」页刷脸确认。
+              </Typography.Text>
+              <Space wrap>
+                <Input
+                  size="large"
+                  value={employeeCode}
+                  placeholder="员工码"
+                  style={{ width: 240 }}
+                  onChange={(event) => setEmployeeCode(event.target.value)}
+                  onPressEnter={() => void confirmByEmployeeCode()}
+                />
+                <Button
+                  {...touchButtonProps({ variant: 'primary', size: 'action' })}
+                  loading={confirming}
+                  disabled={!workstation || !employeeCode.trim()}
+                  onClick={() => void confirmByEmployeeCode()}
+                >
+                  员工码确认
+                </Button>
+                <Button
+                  {...touchButtonProps({ size: 'action' })}
+                  onClick={() => {
+                    setStationOperatorCandidate(null);
+                    setEmployeeCode('');
+                  }}
+                >
+                  取消候选
+                </Button>
+              </Space>
+              {!workstation ? (
+                <Typography.Text type="warning">未绑定工位，无法确认操作员</Typography.Text>
+              ) : null}
+            </Space>
+          ) : null}
         </div>
       </Space>
     </TouchScreenTemplate>

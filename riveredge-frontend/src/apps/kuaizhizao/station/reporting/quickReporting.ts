@@ -3,7 +3,7 @@
  * 渠道不放进 body，由 apiRequest 的 X-Client-Channel 携带。
  */
 
-export type StationReportMode = 'self' | 'proxy' | 'team';
+export type StationReportMode = 'self' | 'team';
 
 export type StationOperator = {
   id: number;
@@ -11,9 +11,7 @@ export type StationOperator = {
 };
 
 export type QuickReportRefusal =
-  | 'proxy-forbidden'
   | 'missing-operator'
-  | 'missing-proxy-worker'
   | 'missing-team'
   | 'missing-workstation'
   | 'missing-work-order'
@@ -25,10 +23,8 @@ export type QuickReportRefusal =
 
 export type QuickReportInput = {
   mode: StationReportMode;
-  hasAssignPermission: boolean;
   workstationId: number | null;
   operator: StationOperator | null;
-  proxyWorker: StationOperator | null;
   team: { id: number; name: string } | null;
   workOrder: {
     id?: number | null;
@@ -95,10 +91,6 @@ function finiteNonNegative(raw: unknown): number | null {
 }
 
 export function buildQuickReportingBody(input: QuickReportInput): QuickReportDecision {
-  if (input.mode === 'proxy' && !input.hasAssignPermission) {
-    return { submit: false, reason: 'proxy-forbidden' };
-  }
-
   const workstationId = parseWorkstationId(input.workstationId);
   if (workstationId == null) {
     return { submit: false, reason: 'missing-workstation' };
@@ -175,14 +167,11 @@ export function buildQuickReportingBody(input: QuickReportInput): QuickReportDec
     return { submit: true, body };
   }
 
-  const person = input.mode === 'proxy' ? input.proxyWorker : input.operator;
-  const personId = positiveInt(person?.id);
-  const personName = String(person?.name ?? '').trim();
+  // 工位只保留已确认操作员的本人报工；不提供独立代报入口
+  const personId = positiveInt(input.operator?.id);
+  const personName = String(input.operator?.name ?? '').trim();
   if (personId == null || !personName) {
-    return {
-      submit: false,
-      reason: input.mode === 'proxy' ? 'missing-proxy-worker' : 'missing-operator',
-    };
+    return { submit: false, reason: 'missing-operator' };
   }
   body.worker_id = personId;
   body.worker_name = personName;

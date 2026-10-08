@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Button, Input, List } from 'antd';
 import { useCurrentUser } from '../../../../hooks/useCurrentUser';
+import { useStationWriteEnabled } from '../entry/session';
 import {
   ANDON_CALL_TYPES,
   FAULT_LEVELS,
@@ -76,6 +77,8 @@ export function StationAndonPage({
   operatorName = null,
 }: StationAndonPageProps) {
   const loginUser = useCurrentUser();
+  // 未确认操作员时可查看安灯列表，发起/响应/关闭/撤销禁用
+  const writeEnabled = useStationWriteEnabled();
   const loginUserId =
     typeof loginUser?.id === 'number' && Number.isInteger(loginUser.id) ? loginUser.id : null;
   const stationId = boundWorkstationId(workstationId);
@@ -306,17 +309,29 @@ export function StationAndonPage({
           {row.createdAt ? <div>发起时间 {timeText(row.createdAt)}</div> : null}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             {canAcknowledge ? (
-              <Button size="large" disabled={busy} onClick={() => void runAction(row, 'acknowledge')}>
+              <Button
+                size="large"
+                disabled={busy || !writeEnabled}
+                onClick={() => void runAction(row, 'acknowledge')}
+              >
                 响应
               </Button>
             ) : null}
             {canClose ? (
-              <Button size="large" disabled={busy} onClick={() => void runAction(row, 'close')}>
+              <Button
+                size="large"
+                disabled={busy || !writeEnabled}
+                onClick={() => void runAction(row, 'close')}
+              >
                 关闭
               </Button>
             ) : null}
             {canCancel ? (
-              <Button size="large" disabled={busy} onClick={() => void runAction(row, 'cancel')}>
+              <Button
+                size="large"
+                disabled={busy || !writeEnabled}
+                onClick={() => void runAction(row, 'cancel')}
+              >
                 撤销
               </Button>
             ) : null}
@@ -342,6 +357,13 @@ export function StationAndonPage({
       </div>
 
       {notice ? <Alert type={notice.type} message={notice.text} showIcon /> : null}
+      {!writeEnabled ? (
+        <Alert
+          type="info"
+          showIcon
+          message="未确认操作员：可查看安灯，发起、响应、关闭与撤销不可用"
+        />
+      ) : null}
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
         {ANDON_CALL_TYPES.map((item) => (
@@ -505,7 +527,13 @@ export function StationAndonPage({
         placeholder="备注（可选）"
         onChange={(event) => setRemarks(event.target.value)}
       />
-      <Button type="primary" size="large" loading={busy} onClick={() => void submit()}>
+      <Button
+        type="primary"
+        size="large"
+        loading={busy}
+        disabled={!writeEnabled}
+        onClick={() => void submit()}
+      >
         发起{callTypeText(callType)}安灯
       </Button>
 

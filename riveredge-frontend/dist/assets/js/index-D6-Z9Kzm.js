@@ -1,0 +1,1 @@
+import{R as t,ay as p,j as i,az as P}from"./vendor-CF9_m8U_.js";import{P as d}from"./index-_Z2c7ts7.js";var l=["fieldProps","proFieldProps"],m=function(r,o){var e=r.fieldProps,a=r.proFieldProps,s=p(r,l);return i.jsx(d,P({ref:o,valueType:"textarea",fieldProps:e,proFieldProps:a},s))};const c=t.forwardRef(m);export{c as P};

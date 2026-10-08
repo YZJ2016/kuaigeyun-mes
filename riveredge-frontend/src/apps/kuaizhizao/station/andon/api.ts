@@ -251,6 +251,7 @@ export async function createAndonCall(body: StationAndonCreateBody): Promise<Sta
   const payload = await apiRequest<unknown>('/apps/kuaizhizao/station/andon', {
     method: 'POST',
     data: body,
+    stationOperatorSession: true,
   });
   return readAndon(payload);
 }
@@ -258,7 +259,7 @@ export async function createAndonCall(body: StationAndonCreateBody): Promise<Sta
 export async function acknowledgeAndon(andonId: number): Promise<StationAndonRecord | null> {
   const payload = await apiRequest<unknown>(
     `/apps/kuaizhizao/station/andon/${andonId}/acknowledge`,
-    { method: 'POST' },
+    { method: 'POST', stationOperatorSession: true },
   );
   return readAndon(payload);
 }
@@ -266,7 +267,7 @@ export async function acknowledgeAndon(andonId: number): Promise<StationAndonRec
 export async function closeAndon(andonId: number): Promise<StationAndonRecord | null> {
   const payload = await apiRequest<unknown>(
     `/apps/kuaizhizao/station/andon/${andonId}/close`,
-    { method: 'POST' },
+    { method: 'POST', stationOperatorSession: true },
   );
   return readAndon(payload);
 }
@@ -274,7 +275,7 @@ export async function closeAndon(andonId: number): Promise<StationAndonRecord | 
 export async function cancelAndon(andonId: number): Promise<StationAndonRecord | null> {
   const payload = await apiRequest<unknown>(
     `/apps/kuaizhizao/station/andon/${andonId}/cancel`,
-    { method: 'POST' },
+    { method: 'POST', stationOperatorSession: true },
   );
   return readAndon(payload);
 }

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, Button, List, Switch } from 'antd';
+import { useStationWriteEnabled } from '../entry/session';
 import {
   DOWNTIME_REASONS,
   acknowledgeSop,
@@ -95,6 +96,8 @@ export function StationExecutionPage({
   );
 
   const stationId = boundWorkstationId(workstationId);
+  // 未确认操作员时可查看工单与状态，写动作按钮禁用
+  const writeEnabled = useStationWriteEnabled();
 
   const loadWorkOrders = useCallback(async (nextSkip: number, append: boolean) => {
     setListLoading(true);
@@ -291,6 +294,13 @@ export function StationExecutionPage({
       {notice ? (
         <Alert type={notice.type} message={notice.text} showIcon />
       ) : null}
+      {!writeEnabled ? (
+        <Alert
+          type="info"
+          showIcon
+          message="未确认操作员：可查看工单与状态，开工、暂停、恢复、结束、上下机与 SOP 确认不可用"
+        />
+      ) : null}
 
       <List
         loading={listLoading}
@@ -368,7 +378,7 @@ export function StationExecutionPage({
                       <Button
                         size="large"
                         type="primary"
-                        disabled={busy}
+                        disabled={busy || !writeEnabled}
                         onClick={() => void runStart(operation, false)}
                       >
                         开工
@@ -377,7 +387,7 @@ export function StationExecutionPage({
                         <Button
                           size="large"
                           type="primary"
-                          disabled={busy}
+                          disabled={busy || !writeEnabled}
                           onClick={() => void confirmSopAndStart(operation)}
                         >
                           确认 SOP 并开工
@@ -385,7 +395,7 @@ export function StationExecutionPage({
                       ) : null}
                       <Button
                         size="large"
-                        disabled={busy}
+                        disabled={busy || !writeEnabled}
                         onClick={() =>
                           void runAction(
                             () => withdrawOperationStart(selected.id, operation.id),
@@ -395,12 +405,16 @@ export function StationExecutionPage({
                     >
                       撤回开工
                     </Button>
-                    <Button size="large" disabled={busy} onClick={() => setPauseFor(operation.id)}>
+                    <Button
+                      size="large"
+                      disabled={busy || !writeEnabled}
+                      onClick={() => setPauseFor(operation.id)}
+                    >
                       暂停
                     </Button>
                     <Button
                       size="large"
-                      disabled={busy}
+                      disabled={busy || !writeEnabled}
                       onClick={() =>
                         void runAction(
                           () => resumeOperation(selected.id, operation.id),
@@ -412,7 +426,7 @@ export function StationExecutionPage({
                     </Button>
                     <Button
                       size="large"
-                      disabled={busy}
+                      disabled={busy || !writeEnabled}
                       onClick={() =>
                         void runAction(
                           () => completeOperation(selected.id, operation.id),
@@ -424,7 +438,7 @@ export function StationExecutionPage({
                     </Button>
                     <Button
                       size="large"
-                      disabled={busy}
+                      disabled={busy || !writeEnabled}
                       onClick={() =>
                         void runAction(
                           () => setMachineSession(selected.id, operation.id, 'on'),
@@ -436,7 +450,7 @@ export function StationExecutionPage({
                     </Button>
                     <Button
                       size="large"
-                      disabled={busy}
+                      disabled={busy || !writeEnabled}
                       onClick={() =>
                         void runAction(
                           () => setMachineSession(selected.id, operation.id, 'off'),
@@ -453,7 +467,7 @@ export function StationExecutionPage({
                           <Button
                             key={reason.code}
                             size="large"
-                            disabled={busy}
+                            disabled={busy || !writeEnabled}
                             onClick={() =>
                               void runAction(
                                 () =>
