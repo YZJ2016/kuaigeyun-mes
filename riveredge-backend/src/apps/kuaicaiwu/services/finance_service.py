@@ -425,8 +425,11 @@ class PayableService(AppBaseService[Payable]):
         async def _do_approve() -> PayableResponse:
             async with in_transaction():
                 payable = await self.get_payable_by_id(tenant_id, payable_id)
-                if payable.review_status != '待审核':
-                    raise BusinessLogicError("应付单审核状态不是待审核")
+                from apps.kuaicaiwu.services.finance_audit_workflow import _PENDING_REVIEW, _norm_review
+
+                rs = _norm_review(payable.review_status)
+                if rs not in _PENDING_REVIEW:
+                    raise BusinessLogicError(f"应付单审核状态不是待审核，当前: {payable.review_status!r}")
                 approver_name = await self.get_user_name(approved_by)
                 review_status = "驳回" if rejection_reason else "已审核"
                 await Payable.filter(tenant_id=tenant_id, id=payable_id).update(
@@ -994,8 +997,11 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
         async def _do_approve() -> PurchaseInvoiceResponse:
             async with in_transaction():
                 invoice = await self.get_purchase_invoice_by_id(tenant_id, invoice_id)
-                if invoice.review_status != '待审核':
-                    raise BusinessLogicError("发票审核状态不是待审核")
+                from apps.kuaicaiwu.services.finance_audit_workflow import _PENDING_REVIEW, _norm_review
+
+                rs = _norm_review(invoice.review_status)
+                if rs not in _PENDING_REVIEW:
+                    raise BusinessLogicError(f"发票审核状态不是待审核，当前: {invoice.review_status!r}")
                 approver_name = await self.get_user_name(approved_by)
                 review_status = "驳回" if rejection_reason else "已审核"
                 status = "已驳回" if rejection_reason else "已审核"
@@ -1374,8 +1380,11 @@ class ReceivableService(AppBaseService[Receivable]):
         async def _do_approve() -> ReceivableResponse:
             async with in_transaction():
                 receivable = await self.get_receivable_by_id(tenant_id, receivable_id)
-                if receivable.review_status != '待审核':
-                    raise BusinessLogicError("应收单审核状态不是待审核")
+                from apps.kuaicaiwu.services.finance_audit_workflow import _PENDING_REVIEW, _norm_review
+
+                rs = _norm_review(receivable.review_status)
+                if rs not in _PENDING_REVIEW:
+                    raise BusinessLogicError(f"应收单审核状态不是待审核，当前: {receivable.review_status!r}")
                 approver_name = await self.get_user_name(approved_by)
                 review_status = "驳回" if rejection_reason else "已审核"
                 await Receivable.filter(tenant_id=tenant_id, id=receivable_id).update(

@@ -856,11 +856,13 @@ class ApprovalInstanceService:
         Returns:
             {"success": bool, "flow_completed": bool, "flow_rejected": bool, "instance": ApprovalInstance}
         """
+        # ponytail: limit 500 + warning；entity 列/GIN 索引若并发>500 再上
+        _PENDING_SCAN_LIMIT = 500
         instances = await ApprovalInstance.filter(
             tenant_id=tenant_id,
             status="pending",
             deleted_at__isnull=True,
-        ).prefetch_related("process").order_by("-created_at").limit(100)
+        ).prefetch_related("process").order_by("-created_at").limit(_PENDING_SCAN_LIMIT)
 
         instance = None
         for inst in instances:
@@ -872,6 +874,21 @@ class ApprovalInstanceService:
                 break
 
         if not instance:
+            pending_count = await ApprovalInstance.filter(
+                tenant_id=tenant_id,
+                status="pending",
+                deleted_at__isnull=True,
+            ).count()
+            if pending_count > _PENDING_SCAN_LIMIT:
+                logger.warning(
+                    "execute_approval pending scan miss: tenant={} entity={}:{} "
+                    "pending_count={} limit={}",
+                    tenant_id,
+                    entity_type,
+                    entity_id,
+                    pending_count,
+                    _PENDING_SCAN_LIMIT,
+                )
             raise NotFoundError(f"实体 {entity_type}:{entity_id} 未找到待审批的流程实例")
 
         task = await ApprovalTask.filter(
@@ -1116,7 +1133,19 @@ class ApprovalInstanceService:
             entity_type=entity_type,
             entity_id=entity_id,
         )
-        if not instance or instance.status != "pending":
+        if not instance:
+            return False
+        if instance.status != "pending":
+            # completed/cancelled 仍留痕，避免反审核路径审计静默缺失
+            await ApprovalInstanceService._create_approval_history(
+                tenant_id=tenant_id,
+                approval_instance_id=instance.id,
+                action="revoke_noop",
+                action_by=operator_id,
+                comment=f"cancel_approval no-op: instance.status={instance.status}",
+                from_node=instance.current_node,
+                to_node=instance.current_node,
+            )
             return False
 
         withdraw_node = instance.current_node
@@ -1210,9 +1239,10 @@ class ApprovalInstanceService:
         entity_type: str,
         entity_id: int,
         *,
-        limit: int = 100,
+        limit: int = 500,
     ) -> List[ApprovalInstance]:
         """同一业务单据的全部审批实例（新→旧）。"""
+        # ponytail: 全租户扫描+limit；entity 冗余列/GIN 若命中率不足再上
         instances = await ApprovalInstance.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,
@@ -1225,6 +1255,20 @@ class ApprovalInstanceService:
                 d.get("entity_id"), entity_id
             ):
                 matched.append(inst)
+        if not matched:
+            total = await ApprovalInstance.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True
+            ).count()
+            if total > limit:
+                logger.warning(
+                    "_list_instances_by_entity scan miss risk: tenant={} entity={}:{} "
+                    "total={} limit={}",
+                    tenant_id,
+                    entity_type,
+                    entity_id,
+                    total,
+                    limit,
+                )
         return matched
 
     @staticmethod
@@ -3472,7 +3516,24 @@ class ApprovalInstanceService:
             handler = completion_handlers.get(entity_type)
             if handler:
                 await handler()
+                # 成功写回则清失败留痕，便于补齐重试
+                data = dict(approval_instance.data or {})
+                if data.pop("writeback_failure", None) is not None:
+                    approval_instance.data = data
+                    await approval_instance.save(update_fields=["data", "updated_at"])
 
         except Exception as e:
             logger.error(f"处理审批完成回调失败: {str(e)}")
+            try:
+                data = dict(approval_instance.data or {})
+                data["writeback_failure"] = {
+                    "error": str(e),
+                    "entity_type": (approval_instance.data or {}).get("entity_type"),
+                    "entity_id": (approval_instance.data or {}).get("entity_id"),
+                    "instance_status": approval_instance.status,
+                }
+                approval_instance.data = data
+                await approval_instance.save(update_fields=["data", "updated_at"])
+            except Exception as save_exc:
+                logger.error(f"记录审批完成回调失败留痕时出错: {save_exc}")
 

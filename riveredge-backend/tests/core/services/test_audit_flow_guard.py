@@ -45,6 +45,16 @@ def test_manual_reject_allowed_when_flow_completed_rejected():
     assert_manual_approval_action_allowed(gate, doc_label="发货通知单", verb="驳回")
 
 
+def test_manual_revoke_allowed_when_flow_completed():
+    gate = {
+        "has_pending_flow": False,
+        "flow_completed_approved": True,
+        "flow_completed_rejected": False,
+    }
+    assert_manual_approval_action_allowed(gate, doc_label="销售订单", verb="反审核")
+    assert_manual_approval_action_allowed(gate, doc_label="销售订单", verb="revoke")
+
+
 def test_approval_instance_finished_on_submit():
     from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit
 

@@ -471,7 +471,9 @@ class ChangeDeskService:
             await BOMChangeService.delete_change(tenant_id, change_uuid)
             return
         if change_type == "process_route":
-            await ProcessRouteChangeService.delete_change(tenant_id, change_uuid)
+            await ProcessRouteChangeService.delete_change(
+                tenant_id, change_uuid, operator_id=user_id or 0
+            )
             return
         if change_type == "drawing":
             await DrawingChangeService.delete_change(tenant_id, change_uuid)

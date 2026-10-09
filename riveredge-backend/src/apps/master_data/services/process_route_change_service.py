@@ -20,9 +20,11 @@ from apps.master_data.schemas.process_route_change_schemas import (
     ProcessRouteChangeListResponse,
 )
 from apps.kuaiplm.services.engineering_change_audit import (
+    cancel_change_approval_flow,
     is_audit_required,
     start_change_approval_flow,
 )
+from tortoise.transactions import in_transaction
 from apps.common.audit_actor import apply_create_audit, apply_update_audit, audit_response_fields
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
@@ -148,15 +150,16 @@ class ProcessRouteChangeService:
 
         audit_required = await is_audit_required(tenant_id, "process_route")
         if audit_required:
-            change.status = "pending"
-            await change.save()
             submitter_id = change.applicant_id or operator_id
-            instance = await start_change_approval_flow(
-                tenant_id,
-                "process_route",
-                change,
-                submitter_id=submitter_id,
-            )
+            async with in_transaction():
+                change.status = "pending"
+                await change.save()
+                instance = await start_change_approval_flow(
+                    tenant_id,
+                    "process_route",
+                    change,
+                    submitter_id=submitter_id,
+                )
             from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit
 
             if approval_instance_finished_on_submit(instance):
@@ -581,7 +584,8 @@ class ProcessRouteChangeService:
     @staticmethod
     async def delete_change(
         tenant_id: int,
-        change_uuid: str
+        change_uuid: str,
+        operator_id: int = 0,
     ) -> None:
         """
         删除变更记录（软删除）
@@ -589,9 +593,11 @@ class ProcessRouteChangeService:
         Args:
             tenant_id: 租户ID
             change_uuid: 变更记录UUID
+            operator_id: 操作人（取消 pending 审批用）
             
         Raises:
             NotFoundError: 当变更记录不存在时抛出
+            ValidationError: 已审批/已执行不可删
         """
         change = await ProcessRouteChange.filter(
             tenant_id=tenant_id,
@@ -601,6 +607,14 @@ class ProcessRouteChangeService:
         
         if not change:
             raise NotFoundError("工艺路线变更记录", change_uuid)
+
+        if change.status in ("approved", "executed"):
+            raise ValidationError(f"变更记录状态为 {change.status}，禁止删除")
+
+        if change.status == "pending":
+            await cancel_change_approval_flow(
+                tenant_id, "process_route", change.id, operator_id or 0
+            )
         
         # 软删除
         change.deleted_at = now_utc()

@@ -8,6 +8,7 @@
  */
 
 import { api, apiRequest } from './api';
+import { webClientChannelHeaders } from '../utils/clientChannel';
 
 /**
  * 平台设置接口定义
@@ -262,7 +263,10 @@ export async function registerInstallInstance(
   try {
     const response = await fetch('/api/v1/infra/install/register', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...webClientChannelHeaders(),
+      },
       body: JSON.stringify(payload),
     });
     if (!response.ok) return null;

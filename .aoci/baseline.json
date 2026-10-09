@@ -1,8 +1,20 @@
 {
   "version": 1,
   "created_at": "2026-10-07T06:04:21Z",
-  "updated_at": "2026-10-08T12:36:17Z",
+  "updated_at": "2026-10-09T17:14:09Z",
   "files": {
+    ".cursor/rules/aoci-git-commit.mdc": {
+      "role": "index",
+      "sha256": "82019426c8a09615d83e913027a53613351c73d693bc5a4d20a6e0635f040ce9",
+      "size": 2079,
+      "normalized_sha256": "bb0b592ffa6249903793108edf9ff732107885cc42de4611d89d35c7801e05a9"
+    },
+    ".cursor/rules/build-push-aoci.mdc": {
+      "role": "index",
+      "sha256": "0579adc91d8937bd5f271ffcdf82aa661071b2b80f76f7715cc5be7f59f7562a",
+      "size": 2422,
+      "normalized_sha256": "0579adc91d8937bd5f271ffcdf82aa661071b2b80f76f7715cc5be7f59f7562a"
+    },
     ".gitattributes": {
       "role": "index",
       "sha256": "21fa16a2122e2b0360b47502c577428b645437e08e9e87ffba661f84853cb476",
@@ -35,9 +47,9 @@
     },
     "aoci.code.txt": {
       "role": "index",
-      "sha256": "62bbbf4886c559570d41ede206ec13307794d88176e1f3415f9791879d49eb66",
-      "size": 977763,
-      "normalized_sha256": "62bbbf4886c559570d41ede206ec13307794d88176e1f3415f9791879d49eb66"
+      "sha256": "cabfb6810a5ec943f838bf8dac50d7a0f846264e00dc5d02f1c69a0988be23b0",
+      "size": 988953,
+      "normalized_sha256": "cabfb6810a5ec943f838bf8dac50d7a0f846264e00dc5d02f1c69a0988be23b0"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -155,9 +167,9 @@
     },
     "docs/core/application-layer-contract.md": {
       "role": "index",
-      "sha256": "6d086128f20d6c2c91d2a5fb1b1b361cc6f3591c4fe7a134c430bf9839595add",
-      "size": 4859,
-      "normalized_sha256": "87d626d4bb549c77326b72f40dc7c619287ffe8acd01f533769dd8203555b533"
+      "sha256": "0f6ad3c544c237b337d8b42f31cf1dea67371da1d660a3b22f1d214d211593ba",
+      "size": 5044,
+      "normalized_sha256": "0f6ad3c544c237b337d8b42f31cf1dea67371da1d660a3b22f1d214d211593ba"
     },
     "docs/core/permission-contract.md": {
       "role": "index",
@@ -221,9 +233,9 @@
     },
     "docs/部署指南.md": {
       "role": "index",
-      "sha256": "2af33473ae0e96b142ba48a2712b1a7ff142104bf03e00eaf68ac8f827b75b53",
-      "size": 28183,
-      "normalized_sha256": "8448d44f7304f0c2028f8ea2bee25132083446aa4f95178eda324e67d98c90f3"
+      "sha256": "138d50bce2d14ebea1ad942456f708379ed0f8ecabbb0ec9f5066ef0a89a7fc4",
+      "size": 27953,
+      "normalized_sha256": "138d50bce2d14ebea1ad942456f708379ed0f8ecabbb0ec9f5066ef0a89a7fc4"
     },
     "fast-deploy/README.md": {
       "role": "index",
@@ -251,9 +263,9 @@
     },
     "fast-deploy/config/deploy.env.example": {
       "role": "index",
-      "sha256": "8ea7f21bf64ee3e680807c5f9a064951aa2cf073d3fe14c42571b80a0a81911f",
-      "size": 6480,
-      "normalized_sha256": "e4fec1cf25d081b8fb0112f0e7f8f831402117d554e282c64ad26d8b48e9f361"
+      "sha256": "1d856d1f8763175a6acf03ef613617dcadf0df7d92a75a9f74d2957193f67493",
+      "size": 6735,
+      "normalized_sha256": "1d856d1f8763175a6acf03ef613617dcadf0df7d92a75a9f74d2957193f67493"
     },
     "fast-deploy/config/install-scripts.json": {
       "role": "index",
@@ -305,9 +317,9 @@
     },
     "fast-deploy/lib/common.sh": {
       "role": "index",
-      "sha256": "d38ed7529bc094a7562f1b3932b2dc79e9f802604e61f89cf233e9edaafd77c7",
-      "size": 279289,
-      "normalized_sha256": "ea3a4f8de606b47e70295a44d7341569525f8165466272b728bba0cdae1228b8"
+      "sha256": "852297ddbb2509d09b3a4eadf9c73b8e462bc0824c07fc394d9e2628a0ad3099",
+      "size": 278634,
+      "normalized_sha256": "852297ddbb2509d09b3a4eadf9c73b8e462bc0824c07fc394d9e2628a0ad3099"
     },
     "fast-deploy/lib/low_spec_mode.sh": {
       "role": "index",
@@ -505,9 +517,9 @@
     },
     "riveredge-backend/docs/api-write-protection-ops.md": {
       "role": "index",
-      "sha256": "18060f119a36a9a13a1a026ff4b31954f2dad45a30898f22911bcc0b69707435",
-      "size": 12193,
-      "normalized_sha256": "954d6d0d5128be330bb9da8125cc783fee6b5b3039a2266196db3388c8e222bc"
+      "sha256": "080642e291fedecf5e4f78b8a7b05a6a19d137412c5df1da69d49ec5daa7595d",
+      "size": 12226,
+      "normalized_sha256": "790abc3278fbe2dc044b25443f09a7be6c6ba036a533501ffa179f0e9bd6f7c9"
     },
     "riveredge-backend/docs/config-center-ops.md": {
       "role": "index",
@@ -5921,6 +5933,30 @@
       "size": 1445,
       "normalized_sha256": "9ea85e2ee5289bca38c33b516365cdb7fb2ed6b3aadaeb208803851960cd1dca"
     },
+    "riveredge-backend/migrations/models/842_20261008104700_l52_lab_request_workflow.py": {
+      "role": "index",
+      "sha256": "7279fcc0a20893a624ef3d9023b9d9d1ee3dbbf78895e0e9ae4f013daf7e6452",
+      "size": 3088,
+      "normalized_sha256": "7279fcc0a20893a624ef3d9023b9d9d1ee3dbbf78895e0e9ae4f013daf7e6452"
+    },
+    "riveredge-backend/migrations/models/843_20261008113000_rd_deliverable_issue.py": {
+      "role": "index",
+      "sha256": "42539e689fbd8798ab442147a1c0f7bf8ffeafef3d1d223070a4d9392a20010b",
+      "size": 1759,
+      "normalized_sha256": "42539e689fbd8798ab442147a1c0f7bf8ffeafef3d1d223070a4d9392a20010b"
+    },
+    "riveredge-backend/migrations/models/844_20261008120000_form_request_issue.py": {
+      "role": "index",
+      "sha256": "73981b5c8e7fd60405fbdaa0be04774bd4d7f433ded53aae119de320f0c4f32f",
+      "size": 1654,
+      "normalized_sha256": "73981b5c8e7fd60405fbdaa0be04774bd4d7f433ded53aae119de320f0c4f32f"
+    },
+    "riveredge-backend/migrations/models/845_20261008193000_backfill_login_location_zhou_suffix.py": {
+      "role": "index",
+      "sha256": "c2689af3a832cebb80427bdad7f94bdb8030a65ed5bfa3b426d0f28b8a105fef",
+      "size": 1378,
+      "normalized_sha256": "c2689af3a832cebb80427bdad7f94bdb8030a65ed5bfa3b426d0f28b8a105fef"
+    },
     "riveredge-backend/migrations/models/84_20260214000006_create_document_relations_table.py": {
       "role": "index",
       "sha256": "b4d9c82d420b927f4f38791bd0fe0afc9449425e06a92c7d9c40854d658c324c",
@@ -6043,9 +6079,9 @@
     },
     "riveredge-backend/pyproject.toml": {
       "role": "index",
-      "sha256": "36ae2c907e8d47da0e4310882f9a4289ae01a56b56aa2ef0886a036587da629f",
-      "size": 4960,
-      "normalized_sha256": "f0d7ea8f94752fb1424e0b25025d01b6f9aab11500057057a18d70d12629ca23"
+      "sha256": "faa9de6a230f0a212726517ace28deca260eb73e659763a6e8a1083a5c890d10",
+      "size": 5051,
+      "normalized_sha256": "abc98247b1cb9555a0c98a347bb3981d09d9121e6e787bd8d1c903f26222eaa8"
     },
     "riveredge-backend/scripts/pack_sensitive_words.py": {
       "role": "index",
@@ -6155,9 +6191,9 @@
     },
     "riveredge-backend/src/apps/ind_electronics/profiles.py": {
       "role": "index",
-      "sha256": "77d7e544b304dcd3ca7fb29457a0d7c8677e0b01d82989d393d51b7f17aba925",
-      "size": 28332,
-      "normalized_sha256": "77d7e544b304dcd3ca7fb29457a0d7c8677e0b01d82989d393d51b7f17aba925"
+      "sha256": "1229adc34d0c7592f8387774943305b395c3e6cc02d4959a98ea152b299945a3",
+      "size": 28575,
+      "normalized_sha256": "1229adc34d0c7592f8387774943305b395c3e6cc02d4959a98ea152b299945a3"
     },
     "riveredge-backend/src/apps/ind_electronics/seeds/annual_supplier_audit_clauses.py": {
       "role": "index",
@@ -6167,9 +6203,9 @@
     },
     "riveredge-backend/src/apps/ind_electronics/seeds/phase1_signoff_templates.py": {
       "role": "index",
-      "sha256": "c5e46d4254340b2656f82f84d8ee70629d081237139ab5bcd86ad41e964bb139",
-      "size": 7748,
-      "normalized_sha256": "c5e46d4254340b2656f82f84d8ee70629d081237139ab5bcd86ad41e964bb139"
+      "sha256": "8834b70a36dbc49be3428501af1d1e964eeb95e3acf388b1eb5a2ba1f73ab25d",
+      "size": 11267,
+      "normalized_sha256": "8834b70a36dbc49be3428501af1d1e964eeb95e3acf388b1eb5a2ba1f73ab25d"
     },
     "riveredge-backend/src/apps/ind_electronics/seeds/phase2_templates.py": {
       "role": "index",
@@ -6221,9 +6257,9 @@
     },
     "riveredge-backend/src/apps/ind_electronics/services/signoff_template_seed_service.py": {
       "role": "index",
-      "sha256": "3bfeb2f9601a1fc9760bd81f5c160743885738784065f274100d240cb54174d5",
-      "size": 2520,
-      "normalized_sha256": "3bfeb2f9601a1fc9760bd81f5c160743885738784065f274100d240cb54174d5"
+      "sha256": "16831c4d95c982013b4923c8d9e54fb43c679d5cb0b26a1e79880c4e369a549a",
+      "size": 2488,
+      "normalized_sha256": "16831c4d95c982013b4923c8d9e54fb43c679d5cb0b26a1e79880c4e369a549a"
     },
     "riveredge-backend/src/apps/ind_electronics/services/supplier_eval_seed_service.py": {
       "role": "index",
@@ -7030,9 +7066,9 @@
     },
     "riveredge-backend/src/apps/kuaicaiwu/services/finance_audit_workflow.py": {
       "role": "index",
-      "sha256": "6ea229bec78a83393c5a037a24768b0f1b8dbf7b2e321983dd960a2689e3d855",
-      "size": 8471,
-      "normalized_sha256": "f34dac60ee77d8ce34c17ab8866542f1a0838c17c0f7ff6152221d4c8a23e5ca"
+      "sha256": "5f78f32b428be7abbd3ebfe93e63a2661f758f951fad84eb834722631febe049",
+      "size": 8764,
+      "normalized_sha256": "fc1b1c75bed0a2cecb0c081d84fd4a2371789d35cb91cdf405af22eda20f1c18"
     },
     "riveredge-backend/src/apps/kuaicaiwu/services/finance_due_date.py": {
       "role": "index",
@@ -7066,9 +7102,9 @@
     },
     "riveredge-backend/src/apps/kuaicaiwu/services/finance_service.py": {
       "role": "index",
-      "sha256": "4c55777faa24e4309effa2d2a9c819c113d8a7a321649a7ed997c3c315cc9eb8",
-      "size": 134376,
-      "normalized_sha256": "9026023a8a22a83084ae4fe8243195dd55054f0510590d394f871708f57cd4c6"
+      "sha256": "5c89f5f14f76e1c022df0099c04ea762bb716a72d7f4bd1298db5349e1bdd66b",
+      "size": 134955,
+      "normalized_sha256": "4da6ebfd2a6036de2646fa8842d2eadd00d9b8233d7062686f24b18e8c44b009"
     },
     "riveredge-backend/src/apps/kuaicaiwu/services/finance_settlement_hierarchy.py": {
       "role": "index",
@@ -7532,9 +7568,9 @@
     },
     "riveredge-backend/src/apps/kuaioa/api/forms.py": {
       "role": "index",
-      "sha256": "d27598db4ec40db006dfa68cd7fed782b78218406fc1c726a4ad74a8ce0fd706",
-      "size": 9750,
-      "normalized_sha256": "d3dd57a309742b6f2613c7f4fc3b67765d781a7c0f71b8651480aaea6724d2dd"
+      "sha256": "9ba02c4934ab5ed387542d205c8640693ad1461f5535d689728a8e5b6220f97d",
+      "size": 12131,
+      "normalized_sha256": "9ba02c4934ab5ed387542d205c8640693ad1461f5535d689728a8e5b6220f97d"
     },
     "riveredge-backend/src/apps/kuaioa/api/leave.py": {
       "role": "index",
@@ -7614,6 +7650,12 @@
       "size": 1458,
       "normalized_sha256": "8a2cc03efbdfae22d80e607b78b5f618062b47e369186d3d37cd5f4a162a5450"
     },
+    "riveredge-backend/src/apps/kuaioa/constants/form_request_issue.py": {
+      "role": "index",
+      "sha256": "a6d84f5cdf70f64db00e2122041ab4ba487c1184f9292c81d7907b17373d8d94",
+      "size": 1132,
+      "normalized_sha256": "a6d84f5cdf70f64db00e2122041ab4ba487c1184f9292c81d7907b17373d8d94"
+    },
     "riveredge-backend/src/apps/kuaioa/constants/general_signoff_business_types.py": {
       "role": "index",
       "sha256": "6f80533cdb0e5a480f90339fbe370ad45f1962dcfd3e81db2699ef1e072fd3ce",
@@ -7675,9 +7717,15 @@
     },
     "riveredge-backend/src/apps/kuaioa/models/form_request.py": {
       "role": "index",
-      "sha256": "f576cc0cf346fe7c096c28d3cc7c676653ee440552fd2e2bdcb13943af29db1a",
-      "size": 1746,
-      "normalized_sha256": "c413f9829f6f8716d7a20ba2a27e4ff508c116797742f14c7c6a7e396cf8f37f"
+      "sha256": "89b002201e1962465d30dfce0efbd4e67409fa41e3afb9972f991ac67adfec5a",
+      "size": 1946,
+      "normalized_sha256": "89b002201e1962465d30dfce0efbd4e67409fa41e3afb9972f991ac67adfec5a"
+    },
+    "riveredge-backend/src/apps/kuaioa/models/form_request_issue.py": {
+      "role": "index",
+      "sha256": "5d337add9786ecb4daf21a9de2eaa6f5b84dcfa598c309d981068dd8e945ab41",
+      "size": 898,
+      "normalized_sha256": "5d337add9786ecb4daf21a9de2eaa6f5b84dcfa598c309d981068dd8e945ab41"
     },
     "riveredge-backend/src/apps/kuaioa/models/form_template.py": {
       "role": "index",
@@ -7735,9 +7783,9 @@
     },
     "riveredge-backend/src/apps/kuaioa/orm_models.py": {
       "role": "index",
-      "sha256": "af5cddf5cb21613c9bbadd123b0afee7655bef1ae7e835eee2d2e29e058b5f4b",
-      "size": 675,
-      "normalized_sha256": "c06fddb1cb30c0bc299986f0532cb76548793b4895891c55c120013076abb050"
+      "sha256": "c84dcb5e523853d2c109256810c0cdfe66e858e5a84e89505a4946bb3ca3e641",
+      "size": 700,
+      "normalized_sha256": "c84dcb5e523853d2c109256810c0cdfe66e858e5a84e89505a4946bb3ca3e641"
     },
     "riveredge-backend/src/apps/kuaioa/schemas/__init__.py": {
       "role": "index",
@@ -7782,9 +7830,9 @@
     },
     "riveredge-backend/src/apps/kuaioa/schemas/forms.py": {
       "role": "index",
-      "sha256": "68c20fc0d825619ef4dc7989592871e3c67dc32410bc415ffcc49858101159b6",
-      "size": 1460,
-      "normalized_sha256": "e34de75cb00a702997f096533d8fe6c1611bc8f1b061b387db12e4d88767090f"
+      "sha256": "1cb33ae6940372da2af183e5ea5c2dc829cc0894707b37fef3431efeeac350c6",
+      "size": 2969,
+      "normalized_sha256": "1cb33ae6940372da2af183e5ea5c2dc829cc0894707b37fef3431efeeac350c6"
     },
     "riveredge-backend/src/apps/kuaioa/schemas/leave.py": {
       "role": "index",
@@ -7899,17 +7947,23 @@
       "size": 1019,
       "normalized_sha256": "ab9bf57e56ec5bb68611e1e3c3a4f8dc041f896fda6b99ef6acd6bcad84cdfd6"
     },
+    "riveredge-backend/src/apps/kuaioa/services/form_request_issue_service.py": {
+      "role": "index",
+      "sha256": "85be16553393c7c83fbc0d77a9d9a31fb3c00f6ccfff252eac2eb02c093f4993",
+      "size": 7315,
+      "normalized_sha256": "85be16553393c7c83fbc0d77a9d9a31fb3c00f6ccfff252eac2eb02c093f4993"
+    },
     "riveredge-backend/src/apps/kuaioa/services/form_schema_validator.py": {
       "role": "index",
-      "sha256": "68ddf84c1b4839301a81d050cf3d1079f0a97529507c410800ca20565253090d",
-      "size": 2908,
-      "normalized_sha256": "70b9be44c0fee3b35cb0a5e36596159cf1d80f1e4bb5b84e6e65e388f2ab5aff"
+      "sha256": "9af43f91619799b2a6160798f6d923a345b7038a7456ce8a8b61b0788f354936",
+      "size": 3084,
+      "normalized_sha256": "9af43f91619799b2a6160798f6d923a345b7038a7456ce8a8b61b0788f354936"
     },
     "riveredge-backend/src/apps/kuaioa/services/form_service.py": {
       "role": "index",
-      "sha256": "d295530dac27467596ac41d043b80b504065889ab09e3816cd5be8f5cb1334fa",
-      "size": 15683,
-      "normalized_sha256": "9c6814790c67191c10af0d4a58e7c2dc180f959071f9af33c3c2ede77ba1f2e6"
+      "sha256": "8ea055f3b3d781ca878d4b8b868503973108d3ce9d284f122568078280483022",
+      "size": 20742,
+      "normalized_sha256": "8ea055f3b3d781ca878d4b8b868503973108d3ce9d284f122568078280483022"
     },
     "riveredge-backend/src/apps/kuaioa/services/form_template_menu_extension.py": {
       "role": "index",
@@ -8049,6 +8103,30 @@
       "size": 4689,
       "normalized_sha256": "eda15d50271c9ffba6b201c9bb244d78b380d358120e2c31024ae82f1384234c"
     },
+    "riveredge-backend/src/apps/kuaioa/utils/form_request_confirmation.py": {
+      "role": "index",
+      "sha256": "eb01039e2feab7ede8076f8251092ec4a881b3bee99232682b530c7aedf82495",
+      "size": 2504,
+      "normalized_sha256": "eb01039e2feab7ede8076f8251092ec4a881b3bee99232682b530c7aedf82495"
+    },
+    "riveredge-backend/src/apps/kuaioa/utils/form_request_issue_access.py": {
+      "role": "index",
+      "sha256": "6e8ceb67fc203aea2d9501f3931cd6b53a28cda4addf513c0c5c5d0e7399336d",
+      "size": 8514,
+      "normalized_sha256": "6e8ceb67fc203aea2d9501f3931cd6b53a28cda4addf513c0c5c5d0e7399336d"
+    },
+    "riveredge-backend/src/apps/kuaioa/utils/form_request_material_issue.py": {
+      "role": "index",
+      "sha256": "74518dc21433ec7f114b2f806cd4a36cb6f39554325cf98cc115069755212a42",
+      "size": 1291,
+      "normalized_sha256": "74518dc21433ec7f114b2f806cd4a36cb6f39554325cf98cc115069755212a42"
+    },
+    "riveredge-backend/src/apps/kuaioa/utils/form_request_review_sheet.py": {
+      "role": "index",
+      "sha256": "776d7e245da6d2d2e12aff81363842edf4eee784f189a97fbb81c583eb0aa729",
+      "size": 2417,
+      "normalized_sha256": "776d7e245da6d2d2e12aff81363842edf4eee784f189a97fbb81c583eb0aa729"
+    },
     "riveredge-backend/src/apps/kuaipd/__init__.py": {
       "role": "index",
       "sha256": "f3dd3bd1c0882dae128e50072e73ef6bb419abccb9661b4931a8c6d7654dae44",
@@ -8074,9 +8152,9 @@
     },
     "riveredge-backend/src/apps/kuaiplm/api/annual_lab_plans.py": {
       "role": "index",
-      "sha256": "a2ca4ade1f66b98dfa424ff69bdf4333a88c1ad4360d92f18281ef399d57cca6",
-      "size": 8242,
-      "normalized_sha256": "df4eddbb6d5e43e7aaa706cf0fea977c69347d7be63a5659eddff13538f25b57"
+      "sha256": "e89d359c8ba84ad80c6e783c3431b6d05c00d6cd9ca677b999eac6ea69feff7c",
+      "size": 8858,
+      "normalized_sha256": "e89d359c8ba84ad80c6e783c3431b6d05c00d6cd9ca677b999eac6ea69feff7c"
     },
     "riveredge-backend/src/apps/kuaiplm/api/bom_collaborations.py": {
       "role": "index",
@@ -8098,9 +8176,9 @@
     },
     "riveredge-backend/src/apps/kuaiplm/api/engineering_changes.py": {
       "role": "index",
-      "sha256": "d861e1d000fe8291dd5185e340c237e61ffddf75c36d8dc4dcfa79a19062027e",
-      "size": 6489,
-      "normalized_sha256": "281473204a9dadecb307cea53c8d07811b74fe7dd3edb188ccdee8f0172f081d"
+      "sha256": "3f39efff3966ef9315da6ee5b34a8a4fa443afbab331388a3be31e1939053694",
+      "size": 7301,
+      "normalized_sha256": "3f39efff3966ef9315da6ee5b34a8a4fa443afbab331388a3be31e1939053694"
     },
     "riveredge-backend/src/apps/kuaiplm/api/gate_templates.py": {
       "role": "index",
@@ -8122,9 +8200,9 @@
     },
     "riveredge-backend/src/apps/kuaiplm/api/lab_requests.py": {
       "role": "index",
-      "sha256": "c70b199512989bad314befdb8ce33be71e679a37abb8857c6ff48bb7fde7fc85",
-      "size": 12454,
-      "normalized_sha256": "f4b027f3a10ab1ec504c2f309e8b72dba8526b85d92ae4ec867db84747b9248a"
+      "sha256": "887af27570d2a665981e80f733a9f7f38005192b8e055fcc0db7b0d32e9ebf88",
+      "size": 13235,
+      "normalized_sha256": "887af27570d2a665981e80f733a9f7f38005192b8e055fcc0db7b0d32e9ebf88"
     },
     "riveredge-backend/src/apps/kuaiplm/api/material_reviews.py": {
       "role": "index",
@@ -8176,9 +8254,9 @@
     },
     "riveredge-backend/src/apps/kuaiplm/api/rd_deliverables.py": {
       "role": "index",
-      "sha256": "cd1af7ff4fcccbe6d0bf70d08893bc364ae0794b84f0efa39c015abfb14176f2",
-      "size": 10092,
-      "normalized_sha256": "cd1af7ff4fcccbe6d0bf70d08893bc364ae0794b84f0efa39c015abfb14176f2"
+      "sha256": "4c1cb6d68590f091268ea283e82e1de9ea5462208e41d3b1b14e81aa975bcfed",
+      "size": 11552,
+      "normalized_sha256": "4c1cb6d68590f091268ea283e82e1de9ea5462208e41d3b1b14e81aa975bcfed"
     },
     "riveredge-backend/src/apps/kuaiplm/api/router.py": {
       "role": "index",
@@ -8212,9 +8290,9 @@
     },
     "riveredge-backend/src/apps/kuaiplm/constants/lab_request_types.py": {
       "role": "index",
-      "sha256": "14aa1110dc55720341177eb50013bbff7cd10232d01340e80b07ea8c2f283273",
-      "size": 1437,
-      "normalized_sha256": "b1cfac9aece5ac4f94990824b0fc64554200e0848a65df7b373eeded28b6bb92"
+      "sha256": "58de5d2e8737dcca6cbf1373f80b706534dc6ea58d1093c891c1dbe465d8ed54",
+      "size": 2631,
+      "normalized_sha256": "58de5d2e8737dcca6cbf1373f80b706534dc6ea58d1093c891c1dbe465d8ed54"
     },
     "riveredge-backend/src/apps/kuaiplm/constants/production_file.py": {
       "role": "index",
@@ -8227,6 +8305,12 @@
       "sha256": "429c5cf0d237e424b274b7c39431e40adbc495b919856001e385a48678f3be88",
       "size": 1143,
       "normalized_sha256": "429c5cf0d237e424b274b7c39431e40adbc495b919856001e385a48678f3be88"
+    },
+    "riveredge-backend/src/apps/kuaiplm/constants/rd_deliverable_issue.py": {
+      "role": "index",
+      "sha256": "82a3be35d4365e1bf591eac25195069e1df761f122d1fb27ca25e752e9d9526b",
+      "size": 916,
+      "normalized_sha256": "82a3be35d4365e1bf591eac25195069e1df761f122d1fb27ca25e752e9d9526b"
     },
     "riveredge-backend/src/apps/kuaiplm/constants/rd_project.py": {
       "role": "index",
@@ -8242,9 +8326,9 @@
     },
     "riveredge-backend/src/apps/kuaiplm/manifest.json": {
       "role": "index",
-      "sha256": "1a22b806219460ae3a90be0378cfb65b83ce9163abdc2fc177d0d8e115f3f856",
-      "size": 19197,
-      "normalized_sha256": "1a22b806219460ae3a90be0378cfb65b83ce9163abdc2fc177d0d8e115f3f856"
+      "sha256": "cf4cbef95d5e2f5395178eff44c18e473d5c6813b08db3d108d6d9cffaf4944e",
+      "size": 20764,
+      "normalized_sha256": "cf4cbef95d5e2f5395178eff44c18e473d5c6813b08db3d108d6d9cffaf4944e"
     },
     "riveredge-backend/src/apps/kuaiplm/models/__init__.py": {
       "role": "index",
@@ -8290,9 +8374,9 @@
     },
     "riveredge-backend/src/apps/kuaiplm/models/lab_request.py": {
       "role": "index",
-      "sha256": "fcc87328797142672c068b9da702fa34fff5adff0e7ecf99b270260e32c5fd00",
-      "size": 7291,
-      "normalized_sha256": "044921b7bf5550b302c3c3fd215ca6841e5b8a5f748f56a742a0ab4779b1a1ba"
+      "sha256": "24a0937548cdfee5f455169f982731158b9bfa003daf90d52689cc1aa743e6b6",
+      "size": 8076,
+      "normalized_sha256": "24a0937548cdfee5f455169f982731158b9bfa003daf90d52689cc1aa743e6b6"
     },
     "riveredge-backend/src/apps/kuaiplm/models/material_review.py": {
       "role": "index",
@@ -8338,9 +8422,15 @@
     },
     "riveredge-backend/src/apps/kuaiplm/models/rd_project.py": {
       "role": "index",
-      "sha256": "a789c5913e46eb957646ed01444b6edaefc55cbd6747f8fc7573ca5aaaa571a8",
-      "size": 9853,
-      "normalized_sha256": "a789c5913e46eb957646ed01444b6edaefc55cbd6747f8fc7573ca5aaaa571a8"
+      "sha256": "46760e7921c45036cd5eac5b5755b9125e775ff069c6da5ccda0009c6997c3bb",
+      "size": 10095,
+      "normalized_sha256": "46760e7921c45036cd5eac5b5755b9125e775ff069c6da5ccda0009c6997c3bb"
+    },
+    "riveredge-backend/src/apps/kuaiplm/models/rd_project_deliverable_issue.py": {
+      "role": "index",
+      "sha256": "e7393e94a7de433a67e4c87cf6078106d50c9fe1b1e58e9f455d9f8dce230d1d",
+      "size": 921,
+      "normalized_sha256": "e7393e94a7de433a67e4c87cf6078106d50c9fe1b1e58e9f455d9f8dce230d1d"
     },
     "riveredge-backend/src/apps/kuaiplm/models/rd_project_deliverable_version.py": {
       "role": "index",
@@ -8380,15 +8470,15 @@
     },
     "riveredge-backend/src/apps/kuaiplm/schemas/annual_lab_plan.py": {
       "role": "index",
-      "sha256": "6fd178c6ee3fe5da20e5071da33affbe72e9947912fe3d4b8d267ddef3e2a458",
-      "size": 4891,
-      "normalized_sha256": "437568d166c3e4cc8a64c6fb119f1b1edcd8e4c79f06385904c4fe629393558e"
+      "sha256": "4d403d71a94e870525be968199865b0b23cf86501dfbe0338d94c0b30c68d3e4",
+      "size": 5352,
+      "normalized_sha256": "4d403d71a94e870525be968199865b0b23cf86501dfbe0338d94c0b30c68d3e4"
     },
     "riveredge-backend/src/apps/kuaiplm/schemas/bom_collaboration.py": {
       "role": "index",
-      "sha256": "e2779b071790a385c342e3b87e0c0910a0d3fa0720a8767a242569f48b7fe08e",
-      "size": 3874,
-      "normalized_sha256": "e3d7a4f9b0c0cf598a88dd15096ec62bc519f66e095a3692faa03842518db490"
+      "sha256": "9c2238ee18547e6a436f214b3c38656c5a992c932cdca8832d4e12c9102a92e1",
+      "size": 4026,
+      "normalized_sha256": "9c2238ee18547e6a436f214b3c38656c5a992c932cdca8832d4e12c9102a92e1"
     },
     "riveredge-backend/src/apps/kuaiplm/schemas/change_desk.py": {
       "role": "index",
@@ -8398,9 +8488,9 @@
     },
     "riveredge-backend/src/apps/kuaiplm/schemas/engineering_change.py": {
       "role": "index",
-      "sha256": "de77481ef162be1b890e4ed66c29756af667b8f2dfa5509d2da47d0d4aa465f9",
-      "size": 5013,
-      "normalized_sha256": "60fa7c6bf3764512e805607776bb486b08a14074af8597429287abd3bb6be98e"
+      "sha256": "aeb9de80b197d7cf982e2c53197e21b67f4524c46e7a8b845ea8a3c27b5fa6d8",
+      "size": 5354,
+      "normalized_sha256": "aeb9de80b197d7cf982e2c53197e21b67f4524c46e7a8b845ea8a3c27b5fa6d8"
     },
     "riveredge-backend/src/apps/kuaiplm/schemas/gate_template.py": {
       "role": "index",
@@ -8422,9 +8512,9 @@
     },
     "riveredge-backend/src/apps/kuaiplm/schemas/lab_request.py": {
       "role": "index",
-      "sha256": "b9610dd5e24739a9cd853ca671cc88bdee07f0a89c9a167711dc4a72eb8e9cd8",
-      "size": 9188,
-      "normalized_sha256": "51e453573c35de16ec23f6628774aa140a3f4280ec817eb5569bc79e9e7a6eef"
+      "sha256": "1190289b0c03be9dce09c9a21c6b061cbe01248cb9b28c4460eaca27da7bff15",
+      "size": 10242,
+      "normalized_sha256": "1190289b0c03be9dce09c9a21c6b061cbe01248cb9b28c4460eaca27da7bff15"
     },
     "riveredge-backend/src/apps/kuaiplm/schemas/material_review.py": {
       "role": "index",
@@ -8434,9 +8524,9 @@
     },
     "riveredge-backend/src/apps/kuaiplm/schemas/mold_sample_order.py": {
       "role": "index",
-      "sha256": "5cc175fc401b79a47b00884aef66656579b7af1a3c6766fabd3851d60029d153",
-      "size": 2389,
-      "normalized_sha256": "a56f47b71fcf150b7d11548e74d75c24ba13317011d702b7d7b37626f573b6c8"
+      "sha256": "8ace819ac05abde66baf34af941d6343ce25ac5c014f2c6b86682950fff20682",
+      "size": 3118,
+      "normalized_sha256": "8ace819ac05abde66baf34af941d6343ce25ac5c014f2c6b86682950fff20682"
     },
     "riveredge-backend/src/apps/kuaiplm/schemas/phase2.py": {
       "role": "index",
@@ -8458,21 +8548,21 @@
     },
     "riveredge-backend/src/apps/kuaiplm/schemas/project_proposal.py": {
       "role": "index",
-      "sha256": "8719115043be8ad4279905cfe28119f5ae6577dd43c91656ef3cf290a0d9983a",
-      "size": 5572,
-      "normalized_sha256": "8719115043be8ad4279905cfe28119f5ae6577dd43c91656ef3cf290a0d9983a"
+      "sha256": "3b0712861429cf720c29a10ab710b7ab67aa402cf2c4474ed48a0271c4a5c55a",
+      "size": 5799,
+      "normalized_sha256": "3b0712861429cf720c29a10ab710b7ab67aa402cf2c4474ed48a0271c4a5c55a"
     },
     "riveredge-backend/src/apps/kuaiplm/schemas/prototype_build_sheet.py": {
       "role": "index",
-      "sha256": "f0cd99857de1a51083d7f493815c748bfe6759e394b3704a3a0aa58acec35157",
-      "size": 3278,
-      "normalized_sha256": "f9bf5a043cc57bb583b3e7fc7ea7915ea09f9895802cc09d4ca5923aa7e1dab1"
+      "sha256": "87b92fe7f3b7aa9e0443eef55d22f5b464bce88639946b96d423603c523fc989",
+      "size": 3558,
+      "normalized_sha256": "87b92fe7f3b7aa9e0443eef55d22f5b464bce88639946b96d423603c523fc989"
     },
     "riveredge-backend/src/apps/kuaiplm/schemas/rd_project.py": {
       "role": "index",
-      "sha256": "405ac3817d9835d28de642cdf8ba406f48f33f44287913a63f0afcb3b5eb36cf",
-      "size": 14519,
-      "normalized_sha256": "405ac3817d9835d28de642cdf8ba406f48f33f44287913a63f0afcb3b5eb36cf"
+      "sha256": "2ebc88e213027a03dd07cf1e6ad4c56cd051802ee7e9e10ec009142906476290",
+      "size": 16900,
+      "normalized_sha256": "2ebc88e213027a03dd07cf1e6ad4c56cd051802ee7e9e10ec009142906476290"
     },
     "riveredge-backend/src/apps/kuaiplm/schemas/sample_process.py": {
       "role": "index",
@@ -8482,9 +8572,9 @@
     },
     "riveredge-backend/src/apps/kuaiplm/schemas/trial_flow.py": {
       "role": "index",
-      "sha256": "d6f9e888bc238e64c1ecaffca8cb5361febd09989c5f8b757b610f2ce425fc15",
-      "size": 4551,
-      "normalized_sha256": "62156546d696313c1350d0f3c072eb752fd2d8e11aab62ccd9c16989691d3d20"
+      "sha256": "3a25e1bcae65d4efa27a65e8aa545e742ec69eb010b0f6084f69285b58b1b378",
+      "size": 4738,
+      "normalized_sha256": "3a25e1bcae65d4efa27a65e8aa545e742ec69eb010b0f6084f69285b58b1b378"
     },
     "riveredge-backend/src/apps/kuaiplm/services/__init__.py": {
       "role": "index",
@@ -8500,21 +8590,21 @@
     },
     "riveredge-backend/src/apps/kuaiplm/services/annual_lab_plan_service.py": {
       "role": "index",
-      "sha256": "adfcd4a1e621bd024393ef5e20fb49eecfe15331a85522bb77ac93dab6e21851",
-      "size": 21527,
-      "normalized_sha256": "a2503eb5f751a6396f30e612b85618b7b37a5b5e92a6cac7e1b376ef6e87b285"
+      "sha256": "e13cee7e02f3e2aadb6515662148a10d082f0ea39e9a354f5e20d7eca841c681",
+      "size": 23763,
+      "normalized_sha256": "e13cee7e02f3e2aadb6515662148a10d082f0ea39e9a354f5e20d7eca841c681"
     },
     "riveredge-backend/src/apps/kuaiplm/services/bom_collaboration_service.py": {
       "role": "index",
-      "sha256": "874810929066ca39b05a195269e1225b0b688e967491d3b367c771756660517e",
-      "size": 18273,
-      "normalized_sha256": "ee2b2442d68d74b63dcf2706231b5f85abb3169b1aa53a1a155383ddf07f0fdf"
+      "sha256": "61ac16cfafcd50243486ad542c2e2f1addf511622506cac66db0ec9da7010cd2",
+      "size": 18747,
+      "normalized_sha256": "61ac16cfafcd50243486ad542c2e2f1addf511622506cac66db0ec9da7010cd2"
     },
     "riveredge-backend/src/apps/kuaiplm/services/change_desk_service.py": {
       "role": "index",
-      "sha256": "0838f75bb6b6a96cb74a376965fd2c832443a621a29e949d6b094758d99f1be4",
-      "size": 22047,
-      "normalized_sha256": "b3a18ec7efa150f575cc31012d2e01bdd69e7e04f1519d7a81a68940b799dd9f"
+      "sha256": "46fbce0c1bc34ad681bd0418021d9016b05a47b65dc5e274e5c9467d577cba2f",
+      "size": 23956,
+      "normalized_sha256": "46fbce0c1bc34ad681bd0418021d9016b05a47b65dc5e274e5c9467d577cba2f"
     },
     "riveredge-backend/src/apps/kuaiplm/services/dashboard_service.py": {
       "role": "index",
@@ -8530,9 +8620,9 @@
     },
     "riveredge-backend/src/apps/kuaiplm/services/engineering_change_service.py": {
       "role": "index",
-      "sha256": "97bf92008968cf858d423e8471ac73000ba8fe93ca6c7704e98f95a2c42ea02b",
-      "size": 22063,
-      "normalized_sha256": "1f97926cc1dd7811c25628829381c1f6b20e3dfb094f71ec2d605c629fbfb8d4"
+      "sha256": "e69269cd7c1dcbaba0780cbd721c785cfefd78676605f8490c9f26406c777402",
+      "size": 28393,
+      "normalized_sha256": "e69269cd7c1dcbaba0780cbd721c785cfefd78676605f8490c9f26406c777402"
     },
     "riveredge-backend/src/apps/kuaiplm/services/gate_template_service.py": {
       "role": "index",
@@ -8548,15 +8638,15 @@
     },
     "riveredge-backend/src/apps/kuaiplm/services/kuaiplm_business_notification.py": {
       "role": "index",
-      "sha256": "5e9daa7708582cda8bc35c05768b5a712006735fc14577c2448497e7c7ce9125",
-      "size": 11405,
-      "normalized_sha256": "fc8b8ce8bcb942ddf46bb1367f4e36fdeb915b61f53ebad779aa4270a26a5c63"
+      "sha256": "6f7e2d2f8de9a74f5d54e5661d9a49f9ee125e5863284c57803b7a86f43d540f",
+      "size": 12248,
+      "normalized_sha256": "6f7e2d2f8de9a74f5d54e5661d9a49f9ee125e5863284c57803b7a86f43d540f"
     },
     "riveredge-backend/src/apps/kuaiplm/services/kuaiplm_notification_rule_presets.py": {
       "role": "index",
-      "sha256": "61599d9b9c12a8f7ae1be6e11fa73c4b553e22da3fca02b65ff8809ae9214659",
-      "size": 11384,
-      "normalized_sha256": "95280dd5ffe17f85b76fde551a5f0e1a9bc3891fbb27de35d32a00c87746cf2a"
+      "sha256": "80c39589433a6a405bc017293d01111b4e2e9214f0e41731642a76c5f392e137",
+      "size": 11124,
+      "normalized_sha256": "80c39589433a6a405bc017293d01111b4e2e9214f0e41731642a76c5f392e137"
     },
     "riveredge-backend/src/apps/kuaiplm/services/lab_judgment_engine.py": {
       "role": "index",
@@ -8572,9 +8662,9 @@
     },
     "riveredge-backend/src/apps/kuaiplm/services/lab_request_service.py": {
       "role": "index",
-      "sha256": "a12bb10cbad072954e322dbb8841006d6e5bbf370e8f942b9ceadf86ea06b2a1",
-      "size": 39823,
-      "normalized_sha256": "6bc5f9d584a0931eb799ebf12a4e8fc4d17393d065f631c2a6f895fef545fdd5"
+      "sha256": "8bdbe9e3557cda64f586a862f365e637ecfa5220170c696b295334a8d8098b10",
+      "size": 51422,
+      "normalized_sha256": "8bdbe9e3557cda64f586a862f365e637ecfa5220170c696b295334a8d8098b10"
     },
     "riveredge-backend/src/apps/kuaiplm/services/material_review_service.py": {
       "role": "index",
@@ -8584,9 +8674,9 @@
     },
     "riveredge-backend/src/apps/kuaiplm/services/mold_sample_order_service.py": {
       "role": "index",
-      "sha256": "0ec1c07bca0250a03e2ebc6b23c0e01575ea5b5eef08e0c768551141a80594cd",
-      "size": 11235,
-      "normalized_sha256": "f235159c79960b315dd8dd02f68460d7f8eb7d5a7b6fe17a5850562ecb67d71a"
+      "sha256": "1a652e63ac61bb87de9476e4ee6f3c38ae2873ad80e0ff9608ac5e060c30a096",
+      "size": 11546,
+      "normalized_sha256": "1a652e63ac61bb87de9476e4ee6f3c38ae2873ad80e0ff9608ac5e060c30a096"
     },
     "riveredge-backend/src/apps/kuaiplm/services/pending_inbox_service.py": {
       "role": "index",
@@ -8614,9 +8704,9 @@
     },
     "riveredge-backend/src/apps/kuaiplm/services/plm_pending_approval_reminder_service.py": {
       "role": "index",
-      "sha256": "c1a9251992b0e09a51e8af244ec559a66cd17eae4aae2c8bb7cab3bcf12ee96a",
-      "size": 10405,
-      "normalized_sha256": "c1a9251992b0e09a51e8af244ec559a66cd17eae4aae2c8bb7cab3bcf12ee96a"
+      "sha256": "1dffc13a69102e007f5dda0062855af7dcce432118979e7153caf14d496963de",
+      "size": 11014,
+      "normalized_sha256": "1dffc13a69102e007f5dda0062855af7dcce432118979e7153caf14d496963de"
     },
     "riveredge-backend/src/apps/kuaiplm/services/product_firmware_service.py": {
       "role": "index",
@@ -8632,27 +8722,27 @@
     },
     "riveredge-backend/src/apps/kuaiplm/services/project_proposal_service.py": {
       "role": "index",
-      "sha256": "29884ee69339e1f858cab16fb09d84ce42ae22ea0006e0eed9b22b8418e79c1e",
-      "size": 18273,
-      "normalized_sha256": "29884ee69339e1f858cab16fb09d84ce42ae22ea0006e0eed9b22b8418e79c1e"
+      "sha256": "e18b559ea93fdf259578835950fb51ef46561b18d560baa31ce3a11239f08bea",
+      "size": 18294,
+      "normalized_sha256": "e18b559ea93fdf259578835950fb51ef46561b18d560baa31ce3a11239f08bea"
     },
     "riveredge-backend/src/apps/kuaiplm/services/prototype_build_sheet_service.py": {
       "role": "index",
-      "sha256": "938906142aa688b0726d7bcd8b813885d9cc06e596ff5a23735876e843e2c319",
-      "size": 14979,
-      "normalized_sha256": "37e39cb8828a7794eb4affb5b901608a91a9b67951d88d57589a7bc3a0d58b29"
+      "sha256": "c9f1667a22f6e51c3f0f073de870b713dc1b6dd4c3254f013531fcd993ff4ffd",
+      "size": 15113,
+      "normalized_sha256": "c9f1667a22f6e51c3f0f073de870b713dc1b6dd4c3254f013531fcd993ff4ffd"
     },
     "riveredge-backend/src/apps/kuaiplm/services/rd_project_service.py": {
       "role": "index",
-      "sha256": "7d1311e1a63ad8be71b5fa0069940c213bf0568c44789071f21911585abd7c3e",
-      "size": 86888,
-      "normalized_sha256": "7d1311e1a63ad8be71b5fa0069940c213bf0568c44789071f21911585abd7c3e"
+      "sha256": "42c91bde3786bc439c540d7a9fe19a20803690886234f86a234c488ff3975615",
+      "size": 99733,
+      "normalized_sha256": "42c91bde3786bc439c540d7a9fe19a20803690886234f86a234c488ff3975615"
     },
     "riveredge-backend/src/apps/kuaiplm/services/rd_project_system_archive_service.py": {
       "role": "index",
-      "sha256": "a00f037f28c3d0542105e5db88f4a5e2a8ad27f45115e777db5f27b684169f42",
-      "size": 15784,
-      "normalized_sha256": "b1c5cf8edc9ead10a973ccbcf1cf6b317186431c600c0fd4194663c5e980cc97"
+      "sha256": "bf36ec9d7720d990fe39aeabaffd1b7c9e8a22a93b1490244d3534eccab27d23",
+      "size": 18631,
+      "normalized_sha256": "bf36ec9d7720d990fe39aeabaffd1b7c9e8a22a93b1490244d3534eccab27d23"
     },
     "riveredge-backend/src/apps/kuaiplm/services/sample_process_service.py": {
       "role": "index",
@@ -8668,15 +8758,27 @@
     },
     "riveredge-backend/src/apps/kuaiplm/services/trial_flow_service.py": {
       "role": "index",
-      "sha256": "1d7283ccd77fd1bbd714d68405f89561c9dd10baf358d2693474112e97c04e34",
-      "size": 22583,
-      "normalized_sha256": "c60b54d05b262355fabe488b66e1d8736c98373e57f20e326d197f73a048205f"
+      "sha256": "7c595012ff0a9aacdd458274eeefd1b0955f9af4b59225ad468dc039bcd68507",
+      "size": 24406,
+      "normalized_sha256": "7c595012ff0a9aacdd458274eeefd1b0955f9af4b59225ad468dc039bcd68507"
+    },
+    "riveredge-backend/src/apps/kuaiplm/utils/bom_collab_capabilities.py": {
+      "role": "index",
+      "sha256": "e48e97b3a682af300e5345c7da54b95f39bff782f10cd66b58ef517ba182d88a",
+      "size": 978,
+      "normalized_sha256": "e48e97b3a682af300e5345c7da54b95f39bff782f10cd66b58ef517ba182d88a"
     },
     "riveredge-backend/src/apps/kuaiplm/utils/deliverable_version.py": {
       "role": "index",
       "sha256": "dd7b7a7e570a09934ce04681be021fd7a9816df952174c16edcab17b387742ce",
       "size": 1390,
       "normalized_sha256": "6950fb417b11a039c1bef8acf9b8253a48ebb5fdba2552146bdcc969f1ea9f4b"
+    },
+    "riveredge-backend/src/apps/kuaiplm/utils/engineering_change_capabilities.py": {
+      "role": "index",
+      "sha256": "4500db721a21c79883faf782e7e0237808d4a354493c23f6b8c6914118e2a9cc",
+      "size": 5435,
+      "normalized_sha256": "4500db721a21c79883faf782e7e0237808d4a354493c23f6b8c6914118e2a9cc"
     },
     "riveredge-backend/src/apps/kuaiplm/utils/firmware_version.py": {
       "role": "index",
@@ -8689,6 +8791,36 @@
       "sha256": "be7c5720658ccdd1d411d4d5f14051ecd240e58029ad4b045d11fb93b2b26fbe",
       "size": 6241,
       "normalized_sha256": "ffe3c71cdaed0804c6d1bbab8d776d6c194e24973fa758673c11c877c7a14c8a"
+    },
+    "riveredge-backend/src/apps/kuaiplm/utils/lab_request_outsource.py": {
+      "role": "index",
+      "sha256": "a030edde0cfbc5580d60f4dfdc1310b7a99a1bab91273a34db15fe8499d0c1d8",
+      "size": 2116,
+      "normalized_sha256": "a030edde0cfbc5580d60f4dfdc1310b7a99a1bab91273a34db15fe8499d0c1d8"
+    },
+    "riveredge-backend/src/apps/kuaiplm/utils/mold_sample_order_capabilities.py": {
+      "role": "index",
+      "sha256": "535e69060e3bed379b765745dc3c1a62f401d7ce4c7c5a8cfca3198a36832f65",
+      "size": 1369,
+      "normalized_sha256": "535e69060e3bed379b765745dc3c1a62f401d7ce4c7c5a8cfca3198a36832f65"
+    },
+    "riveredge-backend/src/apps/kuaiplm/utils/project_proposal_capabilities.py": {
+      "role": "index",
+      "sha256": "519ce7167654bee78e4de0628ce2b7fcd92d64f1722fcddae14051fcb4966cbd",
+      "size": 3259,
+      "normalized_sha256": "519ce7167654bee78e4de0628ce2b7fcd92d64f1722fcddae14051fcb4966cbd"
+    },
+    "riveredge-backend/src/apps/kuaiplm/utils/prototype_build_sheet_capabilities.py": {
+      "role": "index",
+      "sha256": "205fb5d8bc883a73eeb6ac60c8532bab4b6b07c6c393340c5f994e7ee0421154",
+      "size": 1732,
+      "normalized_sha256": "205fb5d8bc883a73eeb6ac60c8532bab4b6b07c6c393340c5f994e7ee0421154"
+    },
+    "riveredge-backend/src/apps/kuaiplm/utils/rd_deliverable_issue_access.py": {
+      "role": "index",
+      "sha256": "97d78d95393e5a39b65dc042643458c372c442d7dd4e9cf7b7d17f28bb0d354d",
+      "size": 4819,
+      "normalized_sha256": "97d78d95393e5a39b65dc042643458c372c442d7dd4e9cf7b7d17f28bb0d354d"
     },
     "riveredge-backend/src/apps/kuaiplm/utils/rd_deliverable_naming.py": {
       "role": "index",
@@ -8707,6 +8839,18 @@
       "sha256": "0dc23066e0ed080af42d86b8550eb533c5333232e09d9ea1de32f233312b46b6",
       "size": 2671,
       "normalized_sha256": "9c24de04de38e0bf8ce4e6194dd4d0155b8336a75b95e565cdbb3b5864e85bb1"
+    },
+    "riveredge-backend/src/apps/kuaiplm/utils/system_archive_capabilities.py": {
+      "role": "index",
+      "sha256": "aa0a864f52267a56364e5a38f8a2adfb0ca7b816a4a376448ac7c7113fba19ab",
+      "size": 1515,
+      "normalized_sha256": "aa0a864f52267a56364e5a38f8a2adfb0ca7b816a4a376448ac7c7113fba19ab"
+    },
+    "riveredge-backend/src/apps/kuaiplm/utils/trial_flow_complete_capabilities.py": {
+      "role": "index",
+      "sha256": "37df5f16ec9084c724925898138f3fb3567e19fb39d14500b02cfe2e6ea421cb",
+      "size": 3006,
+      "normalized_sha256": "37df5f16ec9084c724925898138f3fb3567e19fb39d14500b02cfe2e6ea421cb"
     },
     "riveredge-backend/src/apps/kuaiqms/__init__.py": {
       "role": "index",
@@ -9245,9 +9389,9 @@
     },
     "riveredge-backend/src/apps/kuaizhizao/api/productions/quality_qms.py": {
       "role": "index",
-      "sha256": "c309d012440a5019874fe3e419a3e45e111e9862d654bd1748ca67d5330159a8",
-      "size": 24410,
-      "normalized_sha256": "266786e3cac880e67e4e6f44e38df627847f1895ad748aa2c3348787ee510e16"
+      "sha256": "75ccb2cc4fe3a67b60be793881574ac3f645880f2267cb2c2d5212aa14c26381",
+      "size": 24687,
+      "normalized_sha256": "75ccb2cc4fe3a67b60be793881574ac3f645880f2267cb2c2d5212aa14c26381"
     },
     "riveredge-backend/src/apps/kuaizhizao/api/productions/reporting.py": {
       "role": "index",
@@ -9533,9 +9677,9 @@
     },
     "riveredge-backend/src/apps/kuaizhizao/authorization/data_scope_setup.py": {
       "role": "index",
-      "sha256": "710bc7145ad48805e3266110532d755905935daf899b6286de2db1baf553bb92",
-      "size": 4337,
-      "normalized_sha256": "7a574dd955476da4b544bbddd47f97f03049170988589697827a87e4cebe35e8"
+      "sha256": "4931df7f737ca9040e06a1d2327189c563a52880c9c8b16e7f0d15901b974742",
+      "size": 4574,
+      "normalized_sha256": "4931df7f737ca9040e06a1d2327189c563a52880c9c8b16e7f0d15901b974742"
     },
     "riveredge-backend/src/apps/kuaizhizao/bootstrap.py": {
       "role": "index",
@@ -9635,9 +9779,9 @@
     },
     "riveredge-backend/src/apps/kuaizhizao/manifest.json": {
       "role": "index",
-      "sha256": "52793c01b92422e41226079cd29befd31d1175414a030b1606b36a5b9c0b2717",
-      "size": 243946,
-      "normalized_sha256": "52793c01b92422e41226079cd29befd31d1175414a030b1606b36a5b9c0b2717"
+      "sha256": "457764ad7460587b1b5e72534e94846ad35b0996947a5f00257c0d00207626e6",
+      "size": 244394,
+      "normalized_sha256": "457764ad7460587b1b5e72534e94846ad35b0996947a5f00257c0d00207626e6"
     },
     "riveredge-backend/src/apps/kuaizhizao/migrations/migrate_computation_data.py": {
       "role": "index",
@@ -11272,9 +11416,9 @@
     },
     "riveredge-backend/src/apps/kuaizhizao/schemas/rework_order.py": {
       "role": "index",
-      "sha256": "47e15237825109d40fb4e7d163360935d19f73ff60b89675b796755dd10d228a",
-      "size": 23356,
-      "normalized_sha256": "47e15237825109d40fb4e7d163360935d19f73ff60b89675b796755dd10d228a"
+      "sha256": "c33f0c60cbc7bec47e96d2988ab5cf95afda2021160a32a8cf646bb3752276c9",
+      "size": 23764,
+      "normalized_sha256": "c33f0c60cbc7bec47e96d2988ab5cf95afda2021160a32a8cf646bb3752276c9"
     },
     "riveredge-backend/src/apps/kuaizhizao/schemas/rework_position_plan_template.py": {
       "role": "index",
@@ -12639,9 +12783,9 @@
     },
     "riveredge-backend/src/apps/kuaizhizao/services/purchase_service.py": {
       "role": "index",
-      "sha256": "7dcd5266477e1753f66e8d8fbdef59ff4e7ad7cd292dc2dff0673fab87b0700a",
-      "size": 151719,
-      "normalized_sha256": "8a8c02869f8c0af5563838698dae5ffe361a3d4aec8c33fbb37909e5ae4d8f7c"
+      "sha256": "56092c48926604d675cc65e0e9b22cf962f4d81e6c64ae5de0973fcf77fda42a",
+      "size": 151879,
+      "normalized_sha256": "760f8be2023c79535cabb287403cad6efa83a6fe5fd52d34999f0446620e8deb"
     },
     "riveredge-backend/src/apps/kuaizhizao/services/qms_clause_link_service.py": {
       "role": "index",
@@ -12753,9 +12897,9 @@
     },
     "riveredge-backend/src/apps/kuaizhizao/services/quality_qms_service.py": {
       "role": "index",
-      "sha256": "3ae1789b01bef2bd1bfbec5b0570a1d7f35d6c044ad68a2536cb3b78d5bc614b",
-      "size": 37262,
-      "normalized_sha256": "cf30ed0ac644bca193902dfe8c7a66096e76475ab32a18841f1dc6732423c2a9"
+      "sha256": "ed73f7511b678848365a5019dab85d29e14252fbec8966b9a511b74325e2e7fd",
+      "size": 42409,
+      "normalized_sha256": "ed73f7511b678848365a5019dab85d29e14252fbec8966b9a511b74325e2e7fd"
     },
     "riveredge-backend/src/apps/kuaizhizao/services/quality_service.py": {
       "role": "index",
@@ -12825,9 +12969,9 @@
     },
     "riveredge-backend/src/apps/kuaizhizao/services/rework_order_service.py": {
       "role": "index",
-      "sha256": "6fa26df0c9e731eb8ec6524d7d069a127c90b99425fd0710568006a46eccab37",
-      "size": 88195,
-      "normalized_sha256": "6fa26df0c9e731eb8ec6524d7d069a127c90b99425fd0710568006a46eccab37"
+      "sha256": "b164a1af38c6843b8948047228c052a56419f45ca97d7a55f6cc5276d9999589",
+      "size": 89656,
+      "normalized_sha256": "b164a1af38c6843b8948047228c052a56419f45ca97d7a55f6cc5276d9999589"
     },
     "riveredge-backend/src/apps/kuaizhizao/services/rework_order_workflow.py": {
       "role": "index",
@@ -12891,9 +13035,9 @@
     },
     "riveredge-backend/src/apps/kuaizhizao/services/sales_order_service.py": {
       "role": "index",
-      "sha256": "e62bf9b107b922a6ccba4442ae140d2c61c0cb75397c1b71c06f91308856f96b",
-      "size": 315939,
-      "normalized_sha256": "e62bf9b107b922a6ccba4442ae140d2c61c0cb75397c1b71c06f91308856f96b"
+      "sha256": "ed97ed480d66605f5b5d02804d0df630da5b0050bd4e37c47262e632794cf5fe",
+      "size": 317597,
+      "normalized_sha256": "ed97ed480d66605f5b5d02804d0df630da5b0050bd4e37c47262e632794cf5fe"
     },
     "riveredge-backend/src/apps/kuaizhizao/services/sales_order_sync_service.py": {
       "role": "index",
@@ -12915,9 +13059,9 @@
     },
     "riveredge-backend/src/apps/kuaizhizao/services/sales_service.py": {
       "role": "index",
-      "sha256": "8c7f2457b6336752ee41f33ad5e51de9687f0748cb1b6a4551d126f45b611001",
-      "size": 99272,
-      "normalized_sha256": "f232e2263b9493153dd4de8068ef333108a259ae9acd1ece3922e213abf2dcbb"
+      "sha256": "df82b88ec48436ecc875306b823a926af79f8b8b2e741e35491cfdbeed605bde",
+      "size": 99331,
+      "normalized_sha256": "122e1c25e678eae0addfa8fabf58fa1ad39a7008ffc7330080ce84f27fba18b2"
     },
     "riveredge-backend/src/apps/kuaizhizao/services/scheduling_ai_service.py": {
       "role": "index",
@@ -13203,9 +13347,9 @@
     },
     "riveredge-backend/src/apps/kuaizhizao/services/work_order_operation_steps.py": {
       "role": "index",
-      "sha256": "ddea5bd36b5c67359593320433dc5b86e43ef0cf4a05733c85fa1ddab2dcaf91",
-      "size": 2019,
-      "normalized_sha256": "819a5dcc82a280b7b2f40526f20df224cba1c693de57a833e9317d280025045e"
+      "sha256": "0754dc2fbf262cf11234b58ecd69c942ae458418b642a411283bcff92788b746",
+      "size": 2500,
+      "normalized_sha256": "210e2126966c22b335b2ff9dd07fa672a8bc1d9ee5b93f69b2e19bb3be89f8cf"
     },
     "riveredge-backend/src/apps/kuaizhizao/services/work_order_readiness_service.py": {
       "role": "index",
@@ -13221,9 +13365,9 @@
     },
     "riveredge-backend/src/apps/kuaizhizao/services/work_order_service.py": {
       "role": "index",
-      "sha256": "cf2e0e9ba8c84a5690f9f64b044cfa63c3932dd1073a63ff66039e621c8bec8c",
-      "size": 395286,
-      "normalized_sha256": "cf2e0e9ba8c84a5690f9f64b044cfa63c3932dd1073a63ff66039e621c8bec8c"
+      "sha256": "9ac6ea4f1313a985338bc17e323f231c2ee9fccdd75ed195c0121f53b9984804",
+      "size": 396960,
+      "normalized_sha256": "9ac6ea4f1313a985338bc17e323f231c2ee9fccdd75ed195c0121f53b9984804"
     },
     "riveredge-backend/src/apps/kuaizhizao/services/work_order_sync_service.py": {
       "role": "index",
@@ -13239,9 +13383,9 @@
     },
     "riveredge-backend/src/apps/kuaizhizao/services/work_order_tree_service.py": {
       "role": "index",
-      "sha256": "f36d97e62e78152a0217b176b51f17b4cb616dd7f162eaa18207478aeaa0ef51",
-      "size": 10208,
-      "normalized_sha256": "449562309f346a1ffb4179867c283e4d44473b6dad3f022ac4075f0788e43529"
+      "sha256": "8947ad378438c297c20e88de0409eacae026c40c778d05b333e50192373e8277",
+      "size": 14983,
+      "normalized_sha256": "8baaf8443966446de10a1142eeb88ad6f602adf57dcbed4c4226b8b4016e6009"
     },
     "riveredge-backend/src/apps/kuaizhizao/utils/bom_helper.py": {
       "role": "index",
@@ -13605,9 +13749,9 @@
     },
     "riveredge-backend/src/apps/master_data/api/process.py": {
       "role": "index",
-      "sha256": "bd0e79c84569d0b25ca4ec299982bc1827fc562d30c402a7842eac1dde09149a",
-      "size": 73157,
-      "normalized_sha256": "bd0e79c84569d0b25ca4ec299982bc1827fc562d30c402a7842eac1dde09149a"
+      "sha256": "acd6d7e3f738ac7d41754c87edb50b7c05769b9feb6adb48e2598d874e79a2cc",
+      "size": 73325,
+      "normalized_sha256": "acd6d7e3f738ac7d41754c87edb50b7c05769b9feb6adb48e2598d874e79a2cc"
     },
     "riveredge-backend/src/apps/master_data/api/product.py": {
       "role": "index",
@@ -14623,9 +14767,9 @@
     },
     "riveredge-backend/src/apps/master_data/services/process_route_change_service.py": {
       "role": "index",
-      "sha256": "de0a7a73a4dc6c3e12c03bb8158eab1d39f081ca7bf066b1c0a9224eae873b21",
-      "size": 22876,
-      "normalized_sha256": "c43b8dc5cfe51d1641dc1b622945668ee88277bde4d3db3a8bb90eb2972251ef"
+      "sha256": "b0a193bdc6f3603da73792e705f5b805682b95eed97707fb7f25a3d20ab61807",
+      "size": 23518,
+      "normalized_sha256": "9e0b1930da04f0f2ec4c06b90b602499739cf63b0d269a5a98ee23aeee2bd84f"
     },
     "riveredge-backend/src/apps/master_data/services/process_service.py": {
       "role": "index",
@@ -15794,15 +15938,15 @@
     },
     "riveredge-backend/src/core/config/audit_process_templates.py": {
       "role": "index",
-      "sha256": "da7dddbb8a6ac2d299619423268e507c2efe500abf39b347539ae1db19887dd4",
-      "size": 8536,
-      "normalized_sha256": "da7dddbb8a6ac2d299619423268e507c2efe500abf39b347539ae1db19887dd4"
+      "sha256": "2b25fbce00af0c4a6f11754f20fb94234a4b48784937753f216297326c2ffab1",
+      "size": 9533,
+      "normalized_sha256": "2b25fbce00af0c4a6f11754f20fb94234a4b48784937753f216297326c2ffab1"
     },
     "riveredge-backend/src/core/config/audit_registry.py": {
       "role": "index",
-      "sha256": "28986b095cc2f121ec723c4fd0940cf5ca5335b58dd7c00cf4de2cabbdcfdff6",
-      "size": 8399,
-      "normalized_sha256": "28986b095cc2f121ec723c4fd0940cf5ca5335b58dd7c00cf4de2cabbdcfdff6"
+      "sha256": "17e02d3486ffcfe6b539fea1acc27b4240d9a129f756ac0838d4a69bb9cad00c",
+      "size": 8454,
+      "normalized_sha256": "17e02d3486ffcfe6b539fea1acc27b4240d9a129f756ac0838d4a69bb9cad00c"
     },
     "riveredge-backend/src/core/config/client_product_registry.py": {
       "role": "index",
@@ -17123,9 +17267,9 @@
     },
     "riveredge-backend/src/core/services/approval/approval_document_view.py": {
       "role": "index",
-      "sha256": "8de60bc3b4cfa687d04d46fc847abd67577b3266b3d96a930e360fb2444e2f3a",
-      "size": 35179,
-      "normalized_sha256": "8de60bc3b4cfa687d04d46fc847abd67577b3266b3d96a930e360fb2444e2f3a"
+      "sha256": "0dd099b508f05d1e9bf25bc19d6b3546b4521ccfb1d676110e1a76af34be5a22",
+      "size": 35477,
+      "normalized_sha256": "0dd099b508f05d1e9bf25bc19d6b3546b4521ccfb1d676110e1a76af34be5a22"
     },
     "riveredge-backend/src/core/services/approval/approval_edit_guard.py": {
       "role": "index",
@@ -17141,9 +17285,9 @@
     },
     "riveredge-backend/src/core/services/approval/approval_instance_service.py": {
       "role": "index",
-      "sha256": "0ddf0754ed1d5f232eb963570562586c333e9559e4c7d2ee4eeded11f7b05102",
-      "size": 144259,
-      "normalized_sha256": "0ddf0754ed1d5f232eb963570562586c333e9559e4c7d2ee4eeded11f7b05102"
+      "sha256": "c8bd6d6610ddec33cff663443a7a83d33985bb9148c826b76e2dcb112b6299e5",
+      "size": 148591,
+      "normalized_sha256": "c8bd6d6610ddec33cff663443a7a83d33985bb9148c826b76e2dcb112b6299e5"
     },
     "riveredge-backend/src/core/services/approval/approval_process_service.py": {
       "role": "index",
@@ -17177,9 +17321,9 @@
     },
     "riveredge-backend/src/core/services/approval/audit_flow_guard.py": {
       "role": "index",
-      "sha256": "29d0e1b6dbc7be1f6881a5fda0325ca8c1cedf7aea852c9ef8e5632d16f425d3",
-      "size": 4261,
-      "normalized_sha256": "8cd3e774497d0cc365c949228903ad11e286bc1b0a9cd7c866f786bbbdb90f11"
+      "sha256": "4ca453100f7eb85e4cfeeac1c14db01b76355e02ab781ad3bc07f0ee6b710cf8",
+      "size": 4529,
+      "normalized_sha256": "47636d5813ea83b49390f4e4a39b81ca192ca899c9e19185c1e9171675f98d38"
     },
     "riveredge-backend/src/core/services/approval/audit_phase.py": {
       "role": "index",
@@ -17207,9 +17351,9 @@
     },
     "riveredge-backend/src/core/services/approval/uni_audit_handlers.py": {
       "role": "index",
-      "sha256": "87b2e73a9b958bbaae6cfc2f90d9121320494c7b6b93439037e10f195e381947",
-      "size": 52352,
-      "normalized_sha256": "87b2e73a9b958bbaae6cfc2f90d9121320494c7b6b93439037e10f195e381947"
+      "sha256": "98bc4b3db4ec8f8bd7575cf56eded7226ef8b9d5c44623e0df70dec974994567",
+      "size": 53487,
+      "normalized_sha256": "98bc4b3db4ec8f8bd7575cf56eded7226ef8b9d5c44623e0df70dec974994567"
     },
     "riveredge-backend/src/core/services/approval/uni_audit_service.py": {
       "role": "index",
@@ -17260,21 +17404,21 @@
     },
     "riveredge-backend/src/core/services/authorization/data_scope_resource_registry.py": {
       "role": "index",
-      "sha256": "8507ef42f8215b3434bb942dc4e15533d86c9761973d51476be7d9a2080e11ac",
-      "size": 1375,
-      "normalized_sha256": "3f01e74bd636c33810d0f5e2c45c8b824ab52a93594d43b43380d0449ad22733"
+      "sha256": "5a80358ba7a5ec657b08281d2f5c326be3fdfcd67edeebf3fd89b2db90550b98",
+      "size": 2163,
+      "normalized_sha256": "5a80358ba7a5ec657b08281d2f5c326be3fdfcd67edeebf3fd89b2db90550b98"
     },
     "riveredge-backend/src/core/services/authorization/data_scope_service.py": {
       "role": "index",
-      "sha256": "9d107cb0e0c4cff83e56a1f100a10ce290f1f1ffca14495a4101aa5442e48798",
-      "size": 22970,
-      "normalized_sha256": "c3a38f7469f93093d239dc09b1ff2bc8af94d129955deb0dca77538975fabee3"
+      "sha256": "043d3d3161e5090e81dbe9d005c6c4094b426b49cff2a05be5ea24c96ff6cdde",
+      "size": 22628,
+      "normalized_sha256": "043d3d3161e5090e81dbe9d005c6c4094b426b49cff2a05be5ea24c96ff6cdde"
     },
     "riveredge-backend/src/core/services/authorization/effective_access_service.py": {
       "role": "index",
-      "sha256": "1fb4d4c2e5b61f9f9498183d3cdfad379e53646be418e37672b27b1cf2b5f2df",
-      "size": 13395,
-      "normalized_sha256": "956a9d37d2fa50d2efa4d0e07ad05d4375dd7dec78f2e305cc01a005b8a857e5"
+      "sha256": "e527404c4556ec3f1a931fe5e60e2773e1897a54142eda3d4854ca0f62364ca1",
+      "size": 13180,
+      "normalized_sha256": "e527404c4556ec3f1a931fe5e60e2773e1897a54142eda3d4854ca0f62364ca1"
     },
     "riveredge-backend/src/core/services/authorization/menu_resource_resolver.py": {
       "role": "index",
@@ -18181,9 +18325,9 @@
     },
     "riveredge-backend/src/core/services/pdf/playwright_engine.py": {
       "role": "index",
-      "sha256": "336e1610e9d0e680ce0cacce46c23c168a536c3db58cb1d445bf00e1eeab5ab6",
-      "size": 7461,
-      "normalized_sha256": "b9055cf969824c9c3ace4f9cc07a4aa8e19a7056eec918098af89465e9f027d4"
+      "sha256": "e6558fdeb6024aaeda4c67a62acaf488f365af36c03ad6a892566ae89882e322",
+      "size": 7564,
+      "normalized_sha256": "e6558fdeb6024aaeda4c67a62acaf488f365af36c03ad6a892566ae89882e322"
     },
     "riveredge-backend/src/core/services/personal/mobile_inbox_service.py": {
       "role": "index",
@@ -18721,15 +18865,15 @@
     },
     "riveredge-backend/src/core/utils/interactive_client_guard.py": {
       "role": "index",
-      "sha256": "b9c9d8bf74c9342e50ff7e2f3d3170b3e14ebffd29185aa1fcb4d7a4cc03f68f",
-      "size": 4391,
-      "normalized_sha256": "8cd5925a7740bae61ee350a95e385a0adf7f3f8110ac45d16eb825a6620c9ce3"
+      "sha256": "545838c637facac72112dc0c3dec3022f3bcbe68031894b60c249b7984ee3c87",
+      "size": 4477,
+      "normalized_sha256": "6ded72e6a5ab2992ff4acaccc99986abdaad9527e1a2b8ea7f3e301af4cd1247"
     },
     "riveredge-backend/src/core/utils/ip_parser.py": {
       "role": "index",
-      "sha256": "9920151ab7e0740eedda41541b0e9bd04323782f6fc48e5404e94167c544605e",
-      "size": 39631,
-      "normalized_sha256": "9920151ab7e0740eedda41541b0e9bd04323782f6fc48e5404e94167c544605e"
+      "sha256": "2f778567451f845da53f55820f284c2ac3c8cee98af1e03f0e9d56d1d22f2086",
+      "size": 41315,
+      "normalized_sha256": "2f778567451f845da53f55820f284c2ac3c8cee98af1e03f0e9d56d1d22f2086"
     },
     "riveredge-backend/src/core/utils/json_site_timezone.py": {
       "role": "index",
@@ -21777,9 +21921,9 @@
     },
     "riveredge-backend/uv.lock": {
       "role": "index",
-      "sha256": "21b77d45365b4474f57a8d948fde474345bb0a73703e58a9ed2aaade6d8fe329",
-      "size": 232779,
-      "normalized_sha256": "21b77d45365b4474f57a8d948fde474345bb0a73703e58a9ed2aaade6d8fe329"
+      "sha256": "e4205199b9c178fa3154317a7e6af46cbe17488081eb679291ea8ee22902627c",
+      "size": 274091,
+      "normalized_sha256": "e4205199b9c178fa3154317a7e6af46cbe17488081eb679291ea8ee22902627c"
     },
     "riveredge-frontend/.env.development.example": {
       "role": "index",
@@ -21867,9 +22011,9 @@
     },
     "riveredge-frontend/package.json": {
       "role": "index",
-      "sha256": "e122d26d1f58a3ed599811955ee9a6e75d34c66743d4ecd11097a1b173834510",
-      "size": 5719,
-      "normalized_sha256": "32a3bdebf7e7e92246dfcb30a24d53ff27c1a2d1cbc9c0cacb5f8be25e190919"
+      "sha256": "b3ff941aae80c409950e56efe1e10f9b681a93c9c9befd9734ac0619a0b7c6cb",
+      "size": 5641,
+      "normalized_sha256": "b3ff941aae80c409950e56efe1e10f9b681a93c9c9befd9734ac0619a0b7c6cb"
     },
     "riveredge-frontend/playwright.config.ts": {
       "role": "index",
@@ -22045,6 +22189,18 @@
       "size": 1756,
       "normalized_sha256": "2c95378a1e97decba26f3a062d769165aa810ca00ad9abd2e0960bc9ad7f5446"
     },
+    "riveredge-frontend/scripts/fix_dedicated_mirror_imports.py": {
+      "role": "index",
+      "sha256": "a6ae929d0867266d67ab62770c797ae66bc3b67ed5d5f7153bab18ebb332fbea",
+      "size": 1739,
+      "normalized_sha256": "a6ae929d0867266d67ab62770c797ae66bc3b67ed5d5f7153bab18ebb332fbea"
+    },
+    "riveredge-frontend/scripts/fix_dedicated_mirror_urls.py": {
+      "role": "index",
+      "sha256": "f636161a0a244f7311f6a5dc169167ab5f8c3236b1fc243638e00d2004f54a9c",
+      "size": 1239,
+      "normalized_sha256": "f636161a0a244f7311f6a5dc169167ab5f8c3236b1fc243638e00d2004f54a9c"
+    },
     "riveredge-frontend/scripts/fix_erp_locale_terms.py": {
       "role": "index",
       "sha256": "b36a6b1edd0381922adb4ca92c58758b575948ec2062a438151b687ff5f8633b",
@@ -22171,6 +22327,12 @@
       "size": 2467,
       "normalized_sha256": "b9d715d8f1e6d69a3793c05851a05e4ce4383a903075c359639afaf924694a94"
     },
+    "riveredge-frontend/scripts/mirror_dedicated_host_pages.py": {
+      "role": "index",
+      "sha256": "1be32cf4e967de6869012e561df7ad7e19a9938a13386b76d0e8d8d804e0c35f",
+      "size": 18801,
+      "normalized_sha256": "1be32cf4e967de6869012e561df7ad7e19a9938a13386b76d0e8d8d804e0c35f"
+    },
     "riveredge-frontend/scripts/move-dist.js": {
       "role": "index",
       "sha256": "2f5e5b75f1a94c86352c62536ff3f25493c964c76cb663c85d1551165b73438e",
@@ -22207,6 +22369,18 @@
       "size": 24823,
       "normalized_sha256": "ea89516be09e50d35c53a6354ee387e5ad53e7a5e121cd89036766d3bf33b20b"
     },
+    "riveredge-frontend/scripts/prune-stale-dist.mjs": {
+      "role": "index",
+      "sha256": "3a949f0d67bb9bf340ff7f0e080e7199ec84490d1b8b7bdcd9b0288e75196569",
+      "size": 3849,
+      "normalized_sha256": "3a949f0d67bb9bf340ff7f0e080e7199ec84490d1b8b7bdcd9b0288e75196569"
+    },
+    "riveredge-frontend/scripts/regenerate_dedicated_mirror_routes.py": {
+      "role": "index",
+      "sha256": "43141957d8c7e0d227bac3610ab3602d58ef0720f59673586067f935ce3504a0",
+      "size": 5099,
+      "normalized_sha256": "43141957d8c7e0d227bac3610ab3602d58ef0720f59673586067f935ce3504a0"
+    },
     "riveredge-frontend/scripts/regression/current-page-export.test.mjs": {
       "role": "index",
       "sha256": "518c29cd154e9eb89a75e765df4555eead4b44ac3d82be531f45b8432ddfdb2a",
@@ -22236,6 +22410,12 @@
       "sha256": "8ac1c1ff1215c31ccc64b664d5642aa7a62301bd981f4415eb3e69eb0cf9f3a5",
       "size": 8515,
       "normalized_sha256": "23cda80f6af27daf916c7c9a2fb5f44dcb6004754ec54830d4fd7428c6e13ef2"
+    },
+    "riveredge-frontend/scripts/resync_dedicated_mirrors.py": {
+      "role": "index",
+      "sha256": "f9c473c8140968534f8a79e0dd83adc8ea266b8b7a450565c7eb1258a31dae3d",
+      "size": 3400,
+      "normalized_sha256": "f9c473c8140968534f8a79e0dd83adc8ea266b8b7a450565c7eb1258a31dae3d"
     },
     "riveredge-frontend/scripts/scan-row-action-kind.mjs": {
       "role": "index",
@@ -23479,11 +23659,29 @@
       "size": 1942,
       "normalized_sha256": "fe65bb9925a9801777a471d1f8e8d62cbd538d8ff1c50cb095c0ae9da9f3f034"
     },
+    "riveredge-frontend/src/apps/kuaioa/components/FormRequestCapabilitiesTags.tsx": {
+      "role": "index",
+      "sha256": "f7e8c2bd9e1fcda6c42e2070bc276a28d7974279751cbb1fa8149544edec6694",
+      "size": 1863,
+      "normalized_sha256": "f7e8c2bd9e1fcda6c42e2070bc276a28d7974279751cbb1fa8149544edec6694"
+    },
+    "riveredge-frontend/src/apps/kuaioa/components/FormRequestIssueModal.tsx": {
+      "role": "index",
+      "sha256": "ec617b3a86e09e1316e7018764b92c047d736b7aabc12ac2e4ae92823ae1bb12",
+      "size": 2470,
+      "normalized_sha256": "ec617b3a86e09e1316e7018764b92c047d736b7aabc12ac2e4ae92823ae1bb12"
+    },
     "riveredge-frontend/src/apps/kuaioa/components/FormRequestModalBody.tsx": {
       "role": "index",
       "sha256": "e91eee05280a6f9dba09c6ac706b6ff27f98d950844bf4de12dff85644288cf8",
       "size": 3410,
       "normalized_sha256": "ef599a817f42deef3a256ce3be5d14fbd95524fe003421486ffd161c0fc481bd"
+    },
+    "riveredge-frontend/src/apps/kuaioa/components/FormRequestSalesReplyModal.tsx": {
+      "role": "index",
+      "sha256": "6a162e76526170825f98ab86220a2f56c9ad970d4bb04a4483b773b62a292cce",
+      "size": 2224,
+      "normalized_sha256": "6a162e76526170825f98ab86220a2f56c9ad970d4bb04a4483b773b62a292cce"
     },
     "riveredge-frontend/src/apps/kuaioa/components/FormTemplateModalBody.tsx": {
       "role": "index",
@@ -23493,9 +23691,9 @@
     },
     "riveredge-frontend/src/apps/kuaioa/components/KuaioaCrudListPage.tsx": {
       "role": "index",
-      "sha256": "b36e45d8b06157dae2df1984c8abad005fb870f37d9293da232c57ab11544c63",
-      "size": 43405,
-      "normalized_sha256": "b36e45d8b06157dae2df1984c8abad005fb870f37d9293da232c57ab11544c63"
+      "sha256": "a17a2360862c251583caf8532dab33094dd38e41d783dcacf9bb04e471aec973",
+      "size": 43904,
+      "normalized_sha256": "a17a2360862c251583caf8532dab33094dd38e41d783dcacf9bb04e471aec973"
     },
     "riveredge-frontend/src/apps/kuaioa/components/KuaioaDetailDrawer.tsx": {
       "role": "index",
@@ -23505,9 +23703,9 @@
     },
     "riveredge-frontend/src/apps/kuaioa/components/OaDynamicFormFields.tsx": {
       "role": "index",
-      "sha256": "b1315229b69443c6b192632b8ae4ef965e07346f79ffdf5f7c2b742ab01cde83",
-      "size": 10422,
-      "normalized_sha256": "c4a32b1bd29dc684516e6b0d593a6c73745064c6478c4702485826f0e48569e2"
+      "sha256": "ee489f80427f375778a8a553cb83798fc9d9c1cf95db5ce1bfb920bf5258ac21",
+      "size": 11237,
+      "normalized_sha256": "ee489f80427f375778a8a553cb83798fc9d9c1cf95db5ce1bfb920bf5258ac21"
     },
     "riveredge-frontend/src/apps/kuaioa/components/OaFormSchemaPuckEditor.tsx": {
       "role": "index",
@@ -23517,9 +23715,9 @@
     },
     "riveredge-frontend/src/apps/kuaioa/components/OaLookupField.tsx": {
       "role": "index",
-      "sha256": "246a07f5d1eea81d4b33b20b149fbb5020bce547cbfed85306bc6aa08f026818",
-      "size": 7346,
-      "normalized_sha256": "2bfcf514cb81547c1a0f3b0ee7e37929b530f8ed64acc9b6632c11f2773a0784"
+      "sha256": "1d0264160916e3179a9d040ce8cb89f881f48a65a3ba5f111f08e31a42ab0630",
+      "size": 7158,
+      "normalized_sha256": "1d0264160916e3179a9d040ce8cb89f881f48a65a3ba5f111f08e31a42ab0630"
     },
     "riveredge-frontend/src/apps/kuaioa/components/OaSingleFileField.tsx": {
       "role": "index",
@@ -23613,9 +23811,9 @@
     },
     "riveredge-frontend/src/apps/kuaioa/pages/forms/mounted/index.tsx": {
       "role": "index",
-      "sha256": "e09bac76f086f0cf613d31f6e0630373852779b97e89d0bc7b6c13c92ca1de48",
-      "size": 5151,
-      "normalized_sha256": "bb02b358927e1bfb61ab327b88bbb0d211b4129e9a69d54bb412829581760995"
+      "sha256": "4998b4b61f11151a82c75d4126f37716f5a3a73a66b1bb599bf9998dc2a978e3",
+      "size": 10752,
+      "normalized_sha256": "4998b4b61f11151a82c75d4126f37716f5a3a73a66b1bb599bf9998dc2a978e3"
     },
     "riveredge-frontend/src/apps/kuaioa/pages/hr/annual-payroll-stats/index.tsx": {
       "role": "index",
@@ -23841,9 +24039,9 @@
     },
     "riveredge-frontend/src/apps/kuaioa/services/forms.ts": {
       "role": "index",
-      "sha256": "503daf3a28e81750bfd870dbdd0b80fc788373279986afaa7fe9dd27c1646cf2",
-      "size": 2562,
-      "normalized_sha256": "a98f76a4e29171baf63687e1957cceaa0f364458d4dcffb11a592c32082333e1"
+      "sha256": "401de766f5ad74e75a70f14fa7e2fbda208372189922f04fe5259cccb1275d5b",
+      "size": 3262,
+      "normalized_sha256": "401de766f5ad74e75a70f14fa7e2fbda208372189922f04fe5259cccb1275d5b"
     },
     "riveredge-frontend/src/apps/kuaioa/services/kuaioaApi.ts": {
       "role": "index",
@@ -23917,6 +24115,12 @@
       "size": 2640,
       "normalized_sha256": "1a3d205f57dcacdf57e57dade2ed357d7a167dd7e1168a2dee32743866bb7999"
     },
+    "riveredge-frontend/src/apps/kuaioa/utils/formRequestIssueScopedTypes.ts": {
+      "role": "index",
+      "sha256": "000afe72bf0f2f0dc96f0c9b2ae0277ce5da7c3503df873519c5c29066e26a77",
+      "size": 334,
+      "normalized_sha256": "000afe72bf0f2f0dc96f0c9b2ae0277ce5da7c3503df873519c5c29066e26a77"
+    },
     "riveredge-frontend/src/apps/kuaioa/utils/kuaioaDocRoutes.ts": {
       "role": "index",
       "sha256": "1b8c025d6e5344a8668a1daae9d03c7d2beaa94ebbecf499995ccf97d9f4a1d2",
@@ -23949,9 +24153,9 @@
     },
     "riveredge-frontend/src/apps/kuaioa/utils/oaFormSchema.ts": {
       "role": "index",
-      "sha256": "acb8818f34431ade3b26be075927b8102e3ce8a629c6bf9f35ededc50e11792f",
-      "size": 2367,
-      "normalized_sha256": "56610fff2c8227473d950409ce722f9b22c3c355ab4abbf568ea68d0ae9ab751"
+      "sha256": "16faa0b7d8100220fae5a5b51cd5790c3235e3acc90724df344c8fce2a5c6876",
+      "size": 2351,
+      "normalized_sha256": "16faa0b7d8100220fae5a5b51cd5790c3235e3acc90724df344c8fce2a5c6876"
     },
     "riveredge-frontend/src/apps/kuaioa/utils/oaListPresentation.tsx": {
       "role": "index",
@@ -23995,11 +24199,17 @@
       "size": 5804,
       "normalized_sha256": "11c8b2b3bcbdd887502f71c4d4cb1c2f7192e5149f839ddb011b073eda7543f1"
     },
+    "riveredge-frontend/src/apps/kuaiplm/components/BomCollabCapabilitiesTags.tsx": {
+      "role": "index",
+      "sha256": "a07dd2a905be551d6960518b649cc3b882745525b2ce5c00daf828a3ddcb944b",
+      "size": 1264,
+      "normalized_sha256": "a07dd2a905be551d6960518b649cc3b882745525b2ce5c00daf828a3ddcb944b"
+    },
     "riveredge-frontend/src/apps/kuaiplm/components/ChangeDetailDrawer.tsx": {
       "role": "index",
-      "sha256": "a3daf4dd5d31fa4f313daf20ca17dd73f93edc7133be36758b037917347ae59f",
-      "size": 17274,
-      "normalized_sha256": "b22124cecc91579a4078f6a389bb6440a11df352bf060a54a70dcbf712dd806d"
+      "sha256": "a5e535fe9ec8b8f5333c846952e344ba7adc19e4fb647eb6897ce1efc5086644",
+      "size": 21402,
+      "normalized_sha256": "a5e535fe9ec8b8f5333c846952e344ba7adc19e4fb647eb6897ce1efc5086644"
     },
     "riveredge-frontend/src/apps/kuaiplm/components/DrawingChangeFormModal.tsx": {
       "role": "index",
@@ -24007,11 +24217,17 @@
       "size": 3491,
       "normalized_sha256": "9dd810b3f1f59439a19654c886873eba59bae85ee9d8df4b4919e46d8855642f"
     },
+    "riveredge-frontend/src/apps/kuaiplm/components/EcnCapabilitiesTags.tsx": {
+      "role": "index",
+      "sha256": "9a2dd5cb72337928c4fdccd1774efa434cfc0695116bd8dbec98f9b9804c3a73",
+      "size": 2420,
+      "normalized_sha256": "9a2dd5cb72337928c4fdccd1774efa434cfc0695116bd8dbec98f9b9804c3a73"
+    },
     "riveredge-frontend/src/apps/kuaiplm/components/EcnChangeFormModal.tsx": {
       "role": "index",
-      "sha256": "ba86660ed89162de3093788e207514a8f8dcfcb9bd8273fd614c5b4f8274caa9",
-      "size": 11773,
-      "normalized_sha256": "2959b5ade74a49026c8b35a23f2d5a185ff828ba52e3c255b9a9c02729fcecfc"
+      "sha256": "5b604b1e6d675054a516ad6fb12ef10bc1314c8a968f7dd777a37ea2b56e2198",
+      "size": 11763,
+      "normalized_sha256": "5b604b1e6d675054a516ad6fb12ef10bc1314c8a968f7dd777a37ea2b56e2198"
     },
     "riveredge-frontend/src/apps/kuaiplm/components/EngineeringLinkTargetSelect.tsx": {
       "role": "index",
@@ -24019,17 +24235,47 @@
       "size": 6683,
       "normalized_sha256": "249f9d41a284313b02a360114faa72cd89841686e40c59dea4f0958b77bb8ced"
     },
+    "riveredge-frontend/src/apps/kuaiplm/components/LabRequestOutsourceCapabilitiesTags.tsx": {
+      "role": "index",
+      "sha256": "c3d6cfe7008741af88b2689cbb6b76e04d5504f10de10b8a0c12aa16a593c099",
+      "size": 1443,
+      "normalized_sha256": "c3d6cfe7008741af88b2689cbb6b76e04d5504f10de10b8a0c12aa16a593c099"
+    },
+    "riveredge-frontend/src/apps/kuaiplm/components/MoldSampleCapabilitiesTags.tsx": {
+      "role": "index",
+      "sha256": "f6d5938f3c9e4bb5b20899504e5d2e425e2ced25d652615ee69aceca2fe7248c",
+      "size": 1327,
+      "normalized_sha256": "f6d5938f3c9e4bb5b20899504e5d2e425e2ced25d652615ee69aceca2fe7248c"
+    },
     "riveredge-frontend/src/apps/kuaiplm/components/Phase2ProjectSelect.tsx": {
       "role": "index",
       "sha256": "d43e986e50a1f9e9173b67189df2f6204c07f73685987916f9ad7af5a7722f72",
       "size": 5320,
       "normalized_sha256": "052dff162763de1415dc5b8754540a4e5089bde80f73d615db3180164932e1a2"
     },
+    "riveredge-frontend/src/apps/kuaiplm/components/ProjectProposalCapabilitiesTags.tsx": {
+      "role": "index",
+      "sha256": "daed1a11f9259d43d14c5eead4d30cbfb18fb210b64bfed56661e0f8e6da19f8",
+      "size": 1353,
+      "normalized_sha256": "daed1a11f9259d43d14c5eead4d30cbfb18fb210b64bfed56661e0f8e6da19f8"
+    },
+    "riveredge-frontend/src/apps/kuaiplm/components/PrototypeBuildCapabilitiesTags.tsx": {
+      "role": "index",
+      "sha256": "4ee1525640a4510d89efe1e01cc79c9f02e5129a7853e2331453737d40b8db22",
+      "size": 1762,
+      "normalized_sha256": "4ee1525640a4510d89efe1e01cc79c9f02e5129a7853e2331453737d40b8db22"
+    },
+    "riveredge-frontend/src/apps/kuaiplm/components/RdDeliverableCapabilitiesTags.tsx": {
+      "role": "index",
+      "sha256": "6842d1efb751e8ab370e5f9492ada45611e00e5f39a61c1e83b6cf4126cd0631",
+      "size": 1342,
+      "normalized_sha256": "6842d1efb751e8ab370e5f9492ada45611e00e5f39a61c1e83b6cf4126cd0631"
+    },
     "riveredge-frontend/src/apps/kuaiplm/components/RdDeliverableTypeFormFields.tsx": {
       "role": "index",
-      "sha256": "ecb76538d6d1c8423b1068b60631389b87c1a2b4c155e25a9a7e195d9c7820f8",
-      "size": 6656,
-      "normalized_sha256": "ecb76538d6d1c8423b1068b60631389b87c1a2b4c155e25a9a7e195d9c7820f8"
+      "sha256": "803725f0e9170a0d6541ff12050cb001ff82b4417d5cbd8f20917537d3991a72",
+      "size": 8093,
+      "normalized_sha256": "803725f0e9170a0d6541ff12050cb001ff82b4417d5cbd8f20917537d3991a72"
     },
     "riveredge-frontend/src/apps/kuaiplm/components/RdProjectGanttChart.tsx": {
       "role": "index",
@@ -24051,9 +24297,21 @@
     },
     "riveredge-frontend/src/apps/kuaiplm/components/RdProjectSystemArchivePanel.tsx": {
       "role": "index",
-      "sha256": "dbed62d3001419017bd75b1108b5ac03a3ac7cc572b7608c3f6ef26f8367ef73",
-      "size": 14252,
-      "normalized_sha256": "4b50c7b5bf4658284fbfaf5603a87f4d7707e8922f749b576c7df791840f5abe"
+      "sha256": "3e17093b6a453df4ab61bd74aec64234a2f836ff0d67d7e774760da5d9cf5771",
+      "size": 14127,
+      "normalized_sha256": "3e17093b6a453df4ab61bd74aec64234a2f836ff0d67d7e774760da5d9cf5771"
+    },
+    "riveredge-frontend/src/apps/kuaiplm/components/SystemArchiveCapabilitiesTags.tsx": {
+      "role": "index",
+      "sha256": "b08bbf30bd2ee3be2aac083cd34ed141add52df8a40c00306157a729c9539eea",
+      "size": 2487,
+      "normalized_sha256": "b08bbf30bd2ee3be2aac083cd34ed141add52df8a40c00306157a729c9539eea"
+    },
+    "riveredge-frontend/src/apps/kuaiplm/components/TrialFlowCompleteCapabilitiesTags.tsx": {
+      "role": "index",
+      "sha256": "54b3d41b9f4a9ad7018e3a49605686110f23b1a890223bf755015c8c00b7e7cf",
+      "size": 1599,
+      "normalized_sha256": "54b3d41b9f4a9ad7018e3a49605686110f23b1a890223bf755015c8c00b7e7cf"
     },
     "riveredge-frontend/src/apps/kuaiplm/components/TrialFlowFormModal.tsx": {
       "role": "index",
@@ -24093,21 +24351,21 @@
     },
     "riveredge-frontend/src/apps/kuaiplm/pages/annual-lab-plans/index.tsx": {
       "role": "index",
-      "sha256": "4dffec62dadfc869db324e1246c77abb9932b73b7cca6d5990437c9ebe1eedf4",
-      "size": 27417,
-      "normalized_sha256": "4dffec62dadfc869db324e1246c77abb9932b73b7cca6d5990437c9ebe1eedf4"
+      "sha256": "800c5f90ee3d441a6a5796928fe594edba03e0405a7b3de0f3b8baaddc370dd3",
+      "size": 32847,
+      "normalized_sha256": "800c5f90ee3d441a6a5796928fe594edba03e0405a7b3de0f3b8baaddc370dd3"
     },
     "riveredge-frontend/src/apps/kuaiplm/pages/bom-collaborations/index.tsx": {
       "role": "index",
-      "sha256": "fd6e8f308381f500f047f2da16ea6f8f88aa648216d16e4e04642d84333a5861",
-      "size": 30444,
-      "normalized_sha256": "454da0d56bf7e2fda7a28e96e7e8c42bb0d201deaaf7d9b725d2cd0d907f9064"
+      "sha256": "7f3be8a7ec3be338c61a94854daccfc0ec9b8f6cb90858d47edf8d4ee483c44a",
+      "size": 30172,
+      "normalized_sha256": "7f3be8a7ec3be338c61a94854daccfc0ec9b8f6cb90858d47edf8d4ee483c44a"
     },
     "riveredge-frontend/src/apps/kuaiplm/pages/change-management/index.tsx": {
       "role": "index",
-      "sha256": "3455cde269b59c0274f7bacf3fa791b0c8de89c1f6c5faf3e8825c2feb0aec23",
-      "size": 19626,
-      "normalized_sha256": "f5c9b8a033ad3e52c9bcfa64db62bd442faf5d1479e9a949e44f76291da4400c"
+      "sha256": "db47af930cb2d32e833d4f090c44222847c24e29cc2c830e9e3d05cf844b5fc7",
+      "size": 21194,
+      "normalized_sha256": "db47af930cb2d32e833d4f090c44222847c24e29cc2c830e9e3d05cf844b5fc7"
     },
     "riveredge-frontend/src/apps/kuaiplm/pages/dashboard/index.tsx": {
       "role": "index",
@@ -24147,9 +24405,9 @@
     },
     "riveredge-frontend/src/apps/kuaiplm/pages/lab-requests/index.tsx": {
       "role": "index",
-      "sha256": "76e358bfb5910735626acf3ddd39cbe0f89a89174c667da6e33d5fb5a78dfa08",
-      "size": 109378,
-      "normalized_sha256": "76e358bfb5910735626acf3ddd39cbe0f89a89174c667da6e33d5fb5a78dfa08"
+      "sha256": "52dfab8b84cadcb4b0b4bffac1abb186a5db2d24fbc25ad244fbe829fbb1cc65",
+      "size": 116925,
+      "normalized_sha256": "52dfab8b84cadcb4b0b4bffac1abb186a5db2d24fbc25ad244fbe829fbb1cc65"
     },
     "riveredge-frontend/src/apps/kuaiplm/pages/material-reviews/index.tsx": {
       "role": "index",
@@ -24159,9 +24417,9 @@
     },
     "riveredge-frontend/src/apps/kuaiplm/pages/mold-sample-orders/index.tsx": {
       "role": "index",
-      "sha256": "cf0822588a6e619f8c4c01671fdd8677f08210b90329677cb80b69fc78ad80c7",
-      "size": 25227,
-      "normalized_sha256": "b1503220ab7b74a12a1fa8287a3ffaf22133e882d5fddfad031f5fef57adacf6"
+      "sha256": "9b776d3128eb294023579c53099e084044a5d8ebf429ed1c4bb45c909ef87640",
+      "size": 25229,
+      "normalized_sha256": "9b776d3128eb294023579c53099e084044a5d8ebf429ed1c4bb45c909ef87640"
     },
     "riveredge-frontend/src/apps/kuaiplm/pages/pending-inbox/index.tsx": {
       "role": "index",
@@ -24201,9 +24459,9 @@
     },
     "riveredge-frontend/src/apps/kuaiplm/pages/project-proposals/ProjectProposalsGenericPage.tsx": {
       "role": "index",
-      "sha256": "0a5332d322e9d7fb2c80fb49e5b4cc9b189ad2745e45ee9109a1d84beb75150e",
-      "size": 23914,
-      "normalized_sha256": "0a5332d322e9d7fb2c80fb49e5b4cc9b189ad2745e45ee9109a1d84beb75150e"
+      "sha256": "1262fdf712c180b6a71d5e27d204fa2678e5040ee31a6554ce2d405127ed493c",
+      "size": 24420,
+      "normalized_sha256": "1262fdf712c180b6a71d5e27d204fa2678e5040ee31a6554ce2d405127ed493c"
     },
     "riveredge-frontend/src/apps/kuaiplm/pages/project-proposals/index.tsx": {
       "role": "index",
@@ -24213,15 +24471,15 @@
     },
     "riveredge-frontend/src/apps/kuaiplm/pages/prototype-build-sheets/index.tsx": {
       "role": "index",
-      "sha256": "c198e2a1ba2ccdb3381ed8bdc8687282983e5e911409bf09e76b9f352f187a2f",
-      "size": 29135,
-      "normalized_sha256": "18aa3776eeb33adcd2bf7ec4ff62b326a0587130b9067ebc42c0a7e99dfffcb1"
+      "sha256": "5cbcd0cf7652e1c33a32c689e6d40efd741bb36718e81bb0ab08ace8f95eab9f",
+      "size": 28867,
+      "normalized_sha256": "5cbcd0cf7652e1c33a32c689e6d40efd741bb36718e81bb0ab08ace8f95eab9f"
     },
     "riveredge-frontend/src/apps/kuaiplm/pages/rd-deliverables/index.tsx": {
       "role": "index",
-      "sha256": "cd341ac252ed8389d6ee1b940fc05a06932f65bab293b31e8d28e5fd99985498",
-      "size": 24939,
-      "normalized_sha256": "cd341ac252ed8389d6ee1b940fc05a06932f65bab293b31e8d28e5fd99985498"
+      "sha256": "f8c11e4fe9a558484099de2139daeba2fb7355323d30f17e468706f9a616dea6",
+      "size": 30083,
+      "normalized_sha256": "f8c11e4fe9a558484099de2139daeba2fb7355323d30f17e468706f9a616dea6"
     },
     "riveredge-frontend/src/apps/kuaiplm/pages/rd-projects/detail.less": {
       "role": "index",
@@ -24231,15 +24489,15 @@
     },
     "riveredge-frontend/src/apps/kuaiplm/pages/rd-projects/detail.tsx": {
       "role": "index",
-      "sha256": "8873a6b2b841ef94766906a0a57e770ee1f53faf70589aa182d22497a5f909f9",
-      "size": 86690,
-      "normalized_sha256": "8873a6b2b841ef94766906a0a57e770ee1f53faf70589aa182d22497a5f909f9"
+      "sha256": "9fe099a12b0e72224053de85f2c0d35a461c0148c396af11ff20b8b2358fc91c",
+      "size": 77074,
+      "normalized_sha256": "9fe099a12b0e72224053de85f2c0d35a461c0148c396af11ff20b8b2358fc91c"
     },
     "riveredge-frontend/src/apps/kuaiplm/pages/rd-projects/index.tsx": {
       "role": "index",
-      "sha256": "919913156bd964287deec5d77a2d36f82523af22121a03fcdbb0fe48a4c5ebb6",
-      "size": 26863,
-      "normalized_sha256": "1bf1f733625ef9d6a94594b0aefd9d3b5599e3ab9f9e600cd09cb3312dc455d4"
+      "sha256": "3c45a43ba1678f8cfa5f71f0e65cb7c88d3309294e06ef519a202a1a5d9100bb",
+      "size": 26315,
+      "normalized_sha256": "3c45a43ba1678f8cfa5f71f0e65cb7c88d3309294e06ef519a202a1a5d9100bb"
     },
     "riveredge-frontend/src/apps/kuaiplm/pages/sample-process-applications/index.tsx": {
       "role": "index",
@@ -24249,27 +24507,27 @@
     },
     "riveredge-frontend/src/apps/kuaiplm/pages/trial-flows/index.tsx": {
       "role": "index",
-      "sha256": "a1929c29d83e08d74b8909d8d4e07a248b7ab31a58f77f731576b9574fc5c3de",
-      "size": 28037,
-      "normalized_sha256": "595507ef1fc1e4439e2f7161766a9f12dd856b56da4b467b8d3c17424354d9d8"
+      "sha256": "3b0ed746d1295e3b6cd363082ed389803654f0e8d47ef6c09aa8ff402a37b5f5",
+      "size": 27874,
+      "normalized_sha256": "3b0ed746d1295e3b6cd363082ed389803654f0e8d47ef6c09aa8ff402a37b5f5"
     },
     "riveredge-frontend/src/apps/kuaiplm/services/annual-lab-plan.ts": {
       "role": "index",
-      "sha256": "45abac0c90a6e8e5c1546c30c8acc2025684593d147d6f8bfc8d96ad4836065c",
-      "size": 3913,
-      "normalized_sha256": "4d57ef3c03390c2de00c8871088af5c9cd904f1bcbbd0d27d42133b2430a3d82"
+      "sha256": "098b973157a344d50bfb5bc233fc6af3e94b559a020e87101bba5f33ed31f516",
+      "size": 4155,
+      "normalized_sha256": "098b973157a344d50bfb5bc233fc6af3e94b559a020e87101bba5f33ed31f516"
     },
     "riveredge-frontend/src/apps/kuaiplm/services/bom-collaboration.ts": {
       "role": "index",
-      "sha256": "3c52f419ad79cae21d46683096278e443a97823def6544ed456b286508767337",
-      "size": 4123,
-      "normalized_sha256": "8afbbfa749d26bec26da913f500fbba251960130ee2926c212916b3c15fa9f91"
+      "sha256": "ec93a988c6619fae03bd66a82fb397650f0cbbe491c936f8b609dfd51393e5ff",
+      "size": 4184,
+      "normalized_sha256": "ec93a988c6619fae03bd66a82fb397650f0cbbe491c936f8b609dfd51393e5ff"
     },
     "riveredge-frontend/src/apps/kuaiplm/services/change-desk.ts": {
       "role": "index",
-      "sha256": "fddb79ad4c1ec69f268e82beb85091240807897cf1336a8f29a552752d982e24",
-      "size": 8447,
-      "normalized_sha256": "86acba4a35600d021eebbe36f8f18aa6f0b1ea38eb0c27efd46f1582e68a0dc2"
+      "sha256": "b6e8950ecfc7aa4d3fd31a3d0c9fdccfd21fa5b3b1d090469005d4d0828ceeb4",
+      "size": 8898,
+      "normalized_sha256": "b6e8950ecfc7aa4d3fd31a3d0c9fdccfd21fa5b3b1d090469005d4d0828ceeb4"
     },
     "riveredge-frontend/src/apps/kuaiplm/services/dashboard.ts": {
       "role": "index",
@@ -24279,9 +24537,9 @@
     },
     "riveredge-frontend/src/apps/kuaiplm/services/engineering-change.ts": {
       "role": "index",
-      "sha256": "50f84c9f2b6957d6e394d0a8b4637fcd5b4d20dab1a2b20556559e07678a6253",
-      "size": 4069,
-      "normalized_sha256": "7dcb0142440e2a5b315c7f10c8b9103585f51b3be14c495b47ccbd742530a8a8"
+      "sha256": "df2acb2f8840fd2d356adfa09ea4756cccfa8035f3ef2ab1d1a3d45ae90cab4e",
+      "size": 4503,
+      "normalized_sha256": "df2acb2f8840fd2d356adfa09ea4756cccfa8035f3ef2ab1d1a3d45ae90cab4e"
     },
     "riveredge-frontend/src/apps/kuaiplm/services/gate-template.ts": {
       "role": "index",
@@ -24303,9 +24561,9 @@
     },
     "riveredge-frontend/src/apps/kuaiplm/services/lab-request.ts": {
       "role": "index",
-      "sha256": "5ae41e66a231f322ac179b02135bcd20f221792ba5db73f1f94019c8827fae0a",
-      "size": 6839,
-      "normalized_sha256": "b4967fc31fbedb3c8767568462754bcbc5d4b3b115b36024cbc1962801225d03"
+      "sha256": "031c40477cf3a9dbad4f43e58b3fc70f75d5d7381d455a2a236103b3d3787ac6",
+      "size": 7953,
+      "normalized_sha256": "031c40477cf3a9dbad4f43e58b3fc70f75d5d7381d455a2a236103b3d3787ac6"
     },
     "riveredge-frontend/src/apps/kuaiplm/services/master-data-links.ts": {
       "role": "index",
@@ -24321,9 +24579,9 @@
     },
     "riveredge-frontend/src/apps/kuaiplm/services/mold-sample-order.ts": {
       "role": "index",
-      "sha256": "22303b315f4e04b889c8978f8fcd2bee44c150bf6aefea699921c084f4e0384e",
-      "size": 3151,
-      "normalized_sha256": "213d6a9cfdef516b51cef590e9b613622680c8193cde7f183a4b11bd84cc5546"
+      "sha256": "baeb1cf45c7636e3a4cebda1854685137043180e94d6aa80630ebd6a0a527c6a",
+      "size": 3248,
+      "normalized_sha256": "baeb1cf45c7636e3a4cebda1854685137043180e94d6aa80630ebd6a0a527c6a"
     },
     "riveredge-frontend/src/apps/kuaiplm/services/pending-inbox.ts": {
       "role": "index",
@@ -24351,27 +24609,27 @@
     },
     "riveredge-frontend/src/apps/kuaiplm/services/project-proposal.ts": {
       "role": "index",
-      "sha256": "e0f8b3883e3aa4ec314335dde2379c30a47c5b207e7a96985f114bb9420a0585",
-      "size": 4591,
-      "normalized_sha256": "e0f8b3883e3aa4ec314335dde2379c30a47c5b207e7a96985f114bb9420a0585"
+      "sha256": "69454474052cb2a90fe98c24150be9ec02d64d491ca58d7b56d63deeae21a1e7",
+      "size": 4790,
+      "normalized_sha256": "69454474052cb2a90fe98c24150be9ec02d64d491ca58d7b56d63deeae21a1e7"
     },
     "riveredge-frontend/src/apps/kuaiplm/services/prototype-build-sheet.ts": {
       "role": "index",
-      "sha256": "4f69ae5cc87b832947d5a65b714b0337f33b97a4029e7ab4790952e748ae5ae3",
-      "size": 3753,
-      "normalized_sha256": "fbc5b0e441674538d37b6d410ce6100a2354931a70349bbe3b048099c071bb73"
+      "sha256": "28405473cac85ef6b1258d18460e00f4b0d0c71b870264c6f71f57580fc7168d",
+      "size": 3903,
+      "normalized_sha256": "28405473cac85ef6b1258d18460e00f4b0d0c71b870264c6f71f57580fc7168d"
     },
     "riveredge-frontend/src/apps/kuaiplm/services/rd-deliverable.ts": {
       "role": "index",
-      "sha256": "ba8b8a95de2b6da3b32cd7ae5c214818e3d5b33788f49461b8f53501ee005ac3",
-      "size": 2799,
-      "normalized_sha256": "ba8b8a95de2b6da3b32cd7ae5c214818e3d5b33788f49461b8f53501ee005ac3"
+      "sha256": "9dcead2bad584b56cd4741562c6f47e836bae38190654b4f25db126b70ed6be9",
+      "size": 3185,
+      "normalized_sha256": "9dcead2bad584b56cd4741562c6f47e836bae38190654b4f25db126b70ed6be9"
     },
     "riveredge-frontend/src/apps/kuaiplm/services/rd-project.ts": {
       "role": "index",
-      "sha256": "601edfd8d1b3b9d402bb75e56755ea2888aaeed5b865260f98d884a3dacb738a",
-      "size": 16629,
-      "normalized_sha256": "601edfd8d1b3b9d402bb75e56755ea2888aaeed5b865260f98d884a3dacb738a"
+      "sha256": "4285ec80f30ececfc2337961c69ebabc8ae4ba3f417e0d98ef7fae717449999c",
+      "size": 17315,
+      "normalized_sha256": "4285ec80f30ececfc2337961c69ebabc8ae4ba3f417e0d98ef7fae717449999c"
     },
     "riveredge-frontend/src/apps/kuaiplm/services/sample-process.ts": {
       "role": "index",
@@ -24381,9 +24639,9 @@
     },
     "riveredge-frontend/src/apps/kuaiplm/services/trial-flow.ts": {
       "role": "index",
-      "sha256": "972b2adfc76cc128e38fd47ace2af905ef368feaf23c7cc5a09fabcb1ceb9b68",
-      "size": 4215,
-      "normalized_sha256": "c5c3af782aad3189150b6a3f8aa35f6614f117349d2c94ee580130d33b9dc5ee"
+      "sha256": "d6bef99630830a859d96acd57febe2f1877f3c28c68f6a6c8fb2ef2a6f549f61",
+      "size": 4305,
+      "normalized_sha256": "d6bef99630830a859d96acd57febe2f1877f3c28c68f6a6c8fb2ef2a6f549f61"
     },
     "riveredge-frontend/src/apps/kuaiplm/utils/bomCollabFormProfile.ts": {
       "role": "index",
@@ -24399,9 +24657,9 @@
     },
     "riveredge-frontend/src/apps/kuaiplm/utils/labRequestExtension.ts": {
       "role": "index",
-      "sha256": "460c94ba081ce83e637fb36a62a4020aa877a7bc1a6c97382433b832ec9091a5",
-      "size": 5608,
-      "normalized_sha256": "04a25669ed6b4bb5c281c37b2577d5b8a02cd356e0cf7716ecb2abf2495baef7"
+      "sha256": "0f07c4dfc527f607cbf594b1e033c84a5d825ea6ff9d97d5e4e879459b59782e",
+      "size": 7200,
+      "normalized_sha256": "0f07c4dfc527f607cbf594b1e033c84a5d825ea6ff9d97d5e4e879459b59782e"
     },
     "riveredge-frontend/src/apps/kuaiplm/utils/plmListCore.ts": {
       "role": "index",
@@ -24415,6 +24673,24 @@
       "size": 1927,
       "normalized_sha256": "c178bd94ddb3da3c02dc4fe5871ee0328ac0ad22d3a8d9d9a73aa2d531a19873"
     },
+    "riveredge-frontend/src/apps/kuaiplm/utils/rdDeliverableDepartmentPresets.ts": {
+      "role": "index",
+      "sha256": "535fd30b6adb30b397f8a6e396211004e0d5e7d06cc0c0303cc61b98ff5612dd",
+      "size": 1733,
+      "normalized_sha256": "535fd30b6adb30b397f8a6e396211004e0d5e7d06cc0c0303cc61b98ff5612dd"
+    },
+    "riveredge-frontend/src/apps/kuaiplm/utils/rdDeliverableIssueScopedTypes.ts": {
+      "role": "index",
+      "sha256": "6bc3d47360e2949772143ecd15ce20d3299968ce6f2ff679ca090dba22787f2c",
+      "size": 488,
+      "normalized_sha256": "6bc3d47360e2949772143ecd15ce20d3299968ce6f2ff679ca090dba22787f2c"
+    },
+    "riveredge-frontend/src/apps/kuaiplm/utils/rdDeliverablePayload.ts": {
+      "role": "index",
+      "sha256": "95e07271cdba2d0c8f2ec313fac8a50f7b475775d223363b8df122d3a9336e85",
+      "size": 3156,
+      "normalized_sha256": "95e07271cdba2d0c8f2ec313fac8a50f7b475775d223363b8df122d3a9336e85"
+    },
     "riveredge-frontend/src/apps/kuaiplm/utils/rdDeliverableTypePresentation.ts": {
       "role": "index",
       "sha256": "fe1fcf35134b07b5b6b24da5d7988584df9ffb31f3f14a6261a1edaa0d92ac6d",
@@ -24423,9 +24699,9 @@
     },
     "riveredge-frontend/src/apps/kuaiplm/utils/rdDeliverableTypes.ts": {
       "role": "index",
-      "sha256": "a759c54212da0d8be682497fcdeeebd97612659394bbef88d40f5836474f6b24",
-      "size": 1605,
-      "normalized_sha256": "a759c54212da0d8be682497fcdeeebd97612659394bbef88d40f5836474f6b24"
+      "sha256": "05fe8a3cea25c465014e730d8175d807e6b3edb466b389ada5cd7c6dae152694",
+      "size": 2213,
+      "normalized_sha256": "05fe8a3cea25c465014e730d8175d807e6b3edb466b389ada5cd7c6dae152694"
     },
     "riveredge-frontend/src/apps/kuaiplm/utils/rdProjectLifecycle.ts": {
       "role": "index",
@@ -25047,9 +25323,9 @@
     },
     "riveredge-frontend/src/apps/kuaizhizao/manifest.json": {
       "role": "index",
-      "sha256": "7d6d1956bbdcd90f8e492f29d1a796298b672478d2d8f51bd12e0e84ab5443bc",
-      "size": 238912,
-      "normalized_sha256": "7d6d1956bbdcd90f8e492f29d1a796298b672478d2d8f51bd12e0e84ab5443bc"
+      "sha256": "bd013eb6e79e0971c46c635daa345eb87f8bb5f3e5f2366af69bc0a3f0b5e229",
+      "size": 239360,
+      "normalized_sha256": "bd013eb6e79e0971c46c635daa345eb87f8bb5f3e5f2366af69bc0a3f0b5e229"
     },
     "riveredge-frontend/src/apps/kuaizhizao/pages/after-sales-service/dispatch-orders/DispatchOrderFormModal.tsx": {
       "role": "index",
@@ -26817,9 +27093,9 @@
     },
     "riveredge-frontend/src/apps/kuaizhizao/pages/production-execution/rework-orders/index.tsx": {
       "role": "index",
-      "sha256": "aef4a5f2cf1a6013717363695b8c19b74fc72abb26f380bb356b8d787bdff4e2",
-      "size": 121689,
-      "normalized_sha256": "aef4a5f2cf1a6013717363695b8c19b74fc72abb26f380bb356b8d787bdff4e2"
+      "sha256": "4931d41227f1e8ceac272bae6aab75c5eb50c1d49304094351955efeda33d2bf",
+      "size": 122665,
+      "normalized_sha256": "4931d41227f1e8ceac272bae6aab75c5eb50c1d49304094351955efeda33d2bf"
     },
     "riveredge-frontend/src/apps/kuaizhizao/pages/production-execution/rework-position-plan-templates/ReworkPositionPlanTemplatesScreen.tsx": {
       "role": "index",
@@ -27015,9 +27291,9 @@
     },
     "riveredge-frontend/src/apps/kuaizhizao/pages/production-execution/work-orders/index.tsx": {
       "role": "index",
-      "sha256": "3ec1c7c13f9c8d6a4c29a973d4cb6dec8c454e3ee2aa168fe4d62a515457e00e",
-      "size": 484340,
-      "normalized_sha256": "7b5c5827616435e21e1ba6978f3725a56ff9e6b1e1321e63f937a46bf7708530"
+      "sha256": "01f64a347f4579a3118953a8cbb03bcc844869314ecccf4958d6d8b68440d241",
+      "size": 485823,
+      "normalized_sha256": "2e40ff78ebde504bdd1b32a504a9c4166e27f2077bda93c869637cf71fa0532f"
     },
     "riveredge-frontend/src/apps/kuaizhizao/pages/production-execution/work-orders/kiosk.tsx": {
       "role": "index",
@@ -27033,9 +27309,9 @@
     },
     "riveredge-frontend/src/apps/kuaizhizao/pages/production-execution/work-orders/workOrderListGroupTree.ts": {
       "role": "index",
-      "sha256": "4e9b165e4f83717387484b2088bc697a408bc00600287e5f0dac0a97005591e8",
-      "size": 9508,
-      "normalized_sha256": "238589a0dc4b8f2ad1ad1bd773a4cec81cc35d72a94220563b63789cc9fedfaf"
+      "sha256": "33909b4b098df5ea8e0cafed8ba2ceae0e15a4d48826d6a54a2579b22661a18b",
+      "size": 10052,
+      "normalized_sha256": "425f3a45940c9fd687387b4cdfcd01ed693986fb15f67b9ac208c57bb51bde1b"
     },
     "riveredge-frontend/src/apps/kuaizhizao/pages/production-execution/work-orders/workOrderListScrollPreserve.ts": {
       "role": "index",
@@ -27045,9 +27321,9 @@
     },
     "riveredge-frontend/src/apps/kuaizhizao/pages/production-execution/work-orders/workOrderListTable.ts": {
       "role": "index",
-      "sha256": "c5042de6bca1b902e006e1f8b84f0e44e2da68ef91f75078c84f0ab5f2f338e1",
-      "size": 22031,
-      "normalized_sha256": "04c377cfe8cb504e468ffda180da4bd9b9f6544a2bf7022699f6f38f42f63589"
+      "sha256": "4f01ab941b2f7deb3cfc28d7d8d705ad0ab1bc46e9205a5447b763b29c748383",
+      "size": 22693,
+      "normalized_sha256": "f7146f4d8dfdd90bcfe45ac2c4e7229ec845e2e103ae01368cada1ace661bd1e"
     },
     "riveredge-frontend/src/apps/kuaizhizao/pages/production-execution/work-orders/workOrderListTreeTypes.ts": {
       "role": "index",
@@ -27057,9 +27333,9 @@
     },
     "riveredge-frontend/src/apps/kuaizhizao/pages/production-execution/work-orders/workOrderOperationSteps.ts": {
       "role": "index",
-      "sha256": "0fe0b84e41ff0de0cf0054b1aa948584af3b22ae016bba7788ff4582534b8323",
-      "size": 2428,
-      "normalized_sha256": "1823ecbf032078f11597a88d9f54572b08312119c54f6e6fcb74dd3645999bbf"
+      "sha256": "3f1bd81445ec8b741a1553c8ff3716f9151e3d19102327aef453f92a0a1d2ca6",
+      "size": 2945,
+      "normalized_sha256": "faa92f2d383b7f8c3d88a97ef614e2df7a35b2552975a6865dff5952902749eb"
     },
     "riveredge-frontend/src/apps/kuaizhizao/pages/production-execution/work-orders/workOrderRowExpandCache.ts": {
       "role": "index",
@@ -27171,9 +27447,9 @@
     },
     "riveredge-frontend/src/apps/kuaizhizao/pages/purchase-management/purchase-requisitions/index.tsx": {
       "role": "index",
-      "sha256": "9009be722dda07cc4cada71ec2a15dadd0de834385c50fa20145e117b33efdc7",
-      "size": 129379,
-      "normalized_sha256": "54fd3ca6a6828f24fd01970aba3e97ec84779f5f7132cced916651a84e3a23ec"
+      "sha256": "029dcfb173c5ba2aa181de5181cccd26abee2a213847cc2a3fee925e6b17809e",
+      "size": 129734,
+      "normalized_sha256": "ed75bb1b995e81f494b51565e20f3e1657efdb5b53083110beaca65107c62614"
     },
     "riveredge-frontend/src/apps/kuaizhizao/pages/purchase-management/purchase-returns/index.tsx": {
       "role": "index",
@@ -27309,9 +27585,9 @@
     },
     "riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/components/TraceSankeyChart.tsx": {
       "role": "index",
-      "sha256": "995328978818839243a30adb5883925af949ba7af94a0a0d3564969ba2c30781",
-      "size": 4009,
-      "normalized_sha256": "8ee49d839968576249c069dc170970833baa93e44be8268e40d71282368c2c77"
+      "sha256": "6c087decbfd0499e4f30738d2d211bd830479e31b897aed3b4ca3a96f3d7b7e6",
+      "size": 5164,
+      "normalized_sha256": "e0c4f0f53d517dff1f07547d2b3f57eb270b31752a6b1eeef08aca23afb0853c"
     },
     "riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/components/defectRecordLineTypes.ts": {
       "role": "index",
@@ -27375,9 +27651,9 @@
     },
     "riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/components/traceToSankey.ts": {
       "role": "index",
-      "sha256": "479c47f9cdfed1f6465d7c528427a5bc3164178683451e17a96ce4c0690105fd",
-      "size": 11111,
-      "normalized_sha256": "d0182e7f0c9ab0d6a50f67e603230a41e889387a94f4d4f216907d52a31d4f47"
+      "sha256": "4733b90c504910e90950d91ef835550988cd7de04ba6e5018a865c9446413c95",
+      "size": 12021,
+      "normalized_sha256": "0e5c0c57fca38d61b5e0f37e952b169a17d47cfdffbfc68b312a09639a71157e"
     },
     "riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/eight-d-reports/components/EightDActionItemsPanel.tsx": {
       "role": "index",
@@ -27585,9 +27861,9 @@
     },
     "riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/qms/qmsMeta.ts": {
       "role": "index",
-      "sha256": "774df0f7c9f66b659d63511def71a72500826a3cd046a661a66598ddada64728",
-      "size": 3141,
-      "normalized_sha256": "fe62627b56f2abbc2b74d01dff527aaa50031262c500a795af4ed886967182b4"
+      "sha256": "d5673d6aaed49975bf7e285c5f948801c9021c10a7aeda76ecc97cba172edc19",
+      "size": 3146,
+      "normalized_sha256": "d5673d6aaed49975bf7e285c5f948801c9021c10a7aeda76ecc97cba172edc19"
     },
     "riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/quality-complaints/index.tsx": {
       "role": "index",
@@ -27657,15 +27933,15 @@
     },
     "riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/system-documents/index.tsx": {
       "role": "index",
-      "sha256": "b736d8909ef579b9d885766eb9a8b0f115c43fbbbe01ce5be70368313ed368fa",
-      "size": 24903,
-      "normalized_sha256": "b736d8909ef579b9d885766eb9a8b0f115c43fbbbe01ce5be70368313ed368fa"
+      "sha256": "004f8aff4d0d7e6308cc6ebdb5a44edccadbe617b8263742e5284591776543e8",
+      "size": 25544,
+      "normalized_sha256": "004f8aff4d0d7e6308cc6ebdb5a44edccadbe617b8263742e5284591776543e8"
     },
     "riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/traceability/index.tsx": {
       "role": "index",
-      "sha256": "0d20bff2a6b9a59b3d2c95193b4f7d03bfa031c769e45942ec17ae4fb1c43a19",
-      "size": 22511,
-      "normalized_sha256": "88c1e50468ec0fbe7f5b860356e913741efaac8e9d90a68be67c37476a84c804"
+      "sha256": "7a0be5955b837a4f0b36d987890c5c9c54bf8874525c0539d8ffce1575dd4de5",
+      "size": 22939,
+      "normalized_sha256": "5858f92efd3aeb1ae1e93f0e6e0964a0c2dc5355fcf01262b3af99827c11ac22"
     },
     "riveredge-frontend/src/apps/kuaizhizao/pages/sales-management/customer-follow-ups/index.tsx": {
       "role": "index",
@@ -28323,9 +28599,9 @@
     },
     "riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/inboundHubNormalize.ts": {
       "role": "index",
-      "sha256": "ab3d92af0c8f6119b40bf9d131e3d1bcffc844a84af8bc8605505db87c133766",
-      "size": 13961,
-      "normalized_sha256": "9e73b334e133067a0946e3bfee45aa8f1e41a3d3074a8360357c5c4cc049309d"
+      "sha256": "6db9f039637d942ff942b8ceae4b2fb24b69b4d8a3e5af6128152aa84cbcd611",
+      "size": 14098,
+      "normalized_sha256": "3fd39fd73e954cab3e2cef6bcf5f19efdc989acb928b820ffa62f142235f640d"
     },
     "riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/inboundHubTypes.ts": {
       "role": "index",
@@ -28341,9 +28617,9 @@
     },
     "riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/inboundListAggregate.ts": {
       "role": "index",
-      "sha256": "fe5a007c58248e2dcb13964defa5d3e99c69b9a94714251d14a2dc70a936581c",
-      "size": 18589,
-      "normalized_sha256": "12487ea64a4aa129fbcfde53c20bd1d72942ed36c01976accd36d3a153b22cec"
+      "sha256": "95c4f889d034309fef23705efd2b8ac9ba57089eeb947bed3e62e3db391b3139",
+      "size": 19185,
+      "normalized_sha256": "307438c0153a3a5c4bf810ece0a11e3c230fc52dff3258c92feefb52ea4de17a"
     },
     "riveredge-frontend/src/apps/kuaizhizao/pages/warehouse-management/inbound/inboundPaths.ts": {
       "role": "index",
@@ -29025,9 +29301,9 @@
     },
     "riveredge-frontend/src/apps/kuaizhizao/services/quality-qms.ts": {
       "role": "index",
-      "sha256": "a268253544c0fb2286d926656bef43c3df0c823c741169a4c634876d97fb659a",
-      "size": 10238,
-      "normalized_sha256": "0a443612367912bcdda53cffbda38c28d1d434e4a44811d106ef310490320528"
+      "sha256": "27823e80d1fb32c43f257d5fc3bfc252af86cb1d9e81131c2c308067f8e92d9b",
+      "size": 10088,
+      "normalized_sha256": "27823e80d1fb32c43f257d5fc3bfc252af86cb1d9e81131c2c308067f8e92d9b"
     },
     "riveredge-frontend/src/apps/kuaizhizao/services/quality.ts": {
       "role": "index",
@@ -29169,9 +29445,9 @@
     },
     "riveredge-frontend/src/apps/kuaizhizao/services/traceability.ts": {
       "role": "index",
-      "sha256": "669438662d5b098a0df61177a56e0723b54f5d6eb7a960662e592986ee09dbf6",
-      "size": 3422,
-      "normalized_sha256": "4800e0279931ed62380bbb58209062a2844426f822704ea006deb0d8ee0d1612"
+      "sha256": "120372f42f378510782cbd730e88e8210d04a102171d526f63674b904493ab0e",
+      "size": 3937,
+      "normalized_sha256": "d43ddc8b93f3f0bb91ca6a137758adb76a54699359284f7f2cd063ee5020d171"
     },
     "riveredge-frontend/src/apps/kuaizhizao/services/warehouse-dashboard.ts": {
       "role": "index",
@@ -29625,9 +29901,9 @@
     },
     "riveredge-frontend/src/apps/kuaizhizao/utils/purchaseRequisitionSourceType.ts": {
       "role": "index",
-      "sha256": "fb1ab18b06eddb85a90168809c97e0201aa27876a1c73976747d30737d27c69e",
-      "size": 1061,
-      "normalized_sha256": "c9c7877f13e399d93f5822a36219c2241d41fb9a8549902d993ad4349039a8ed"
+      "sha256": "5d5a05a35b260ea53c46788d1896d779b1a6101b7d257e22a07230c87effb289",
+      "size": 1477,
+      "normalized_sha256": "1994a9ea6d52c7dc9e077333d0a9c272fb10bfee6ef1342ec3cbb3a7a02294b0"
     },
     "riveredge-frontend/src/apps/kuaizhizao/utils/purchaseReturnLifecycle.ts": {
       "role": "index",
@@ -29817,9 +30093,9 @@
     },
     "riveredge-frontend/src/apps/kuaizhizao/utils/workOrderLifecycle.ts": {
       "role": "index",
-      "sha256": "79e066f495b621d3d4d1390d1fe2187389d703083ffe8ee190d51ad765fc8533",
-      "size": 9487,
-      "normalized_sha256": "3d50eeba0ab56ff267488475d6851d4db3e1dce3bfa85e8194b6e1b984a6e0f2"
+      "sha256": "4ff43534bfc4592a226d124c390c2f8e23363e410a5913c97b5e7713c7ea3eab",
+      "size": 9733,
+      "normalized_sha256": "76cd6fdad884cdf02a501d480445f6d8e66c0aca1bc17c268a6cb3b9837be1a6"
     },
     "riveredge-frontend/src/apps/kuaizhizao/utils/workOrderReporting.ts": {
       "role": "index",
@@ -35565,9 +35841,9 @@
     },
     "riveredge-frontend/src/pages/system/approval-processes/instances/index.tsx": {
       "role": "index",
-      "sha256": "3f647239dcd1fe3fa759796131ec62e056708670886907fd632b94824165d9da",
-      "size": 27669,
-      "normalized_sha256": "ad07c08290bb2068ce1649902f97290b4895e8aa7757a5b1b3bba977e452b364"
+      "sha256": "3bc63ff5b50083024ca90448e61599b8483929cc080be10dc7142c555840f4f3",
+      "size": 27784,
+      "normalized_sha256": "2df9ad32382bff719dcd0f8445caf21906324b77746ddcf7b8603091bc1a3509"
     },
     "riveredge-frontend/src/pages/system/approval-processes/instances/kanban-view.tsx": {
       "role": "index",
@@ -35793,15 +36069,15 @@
     },
     "riveredge-frontend/src/pages/system/dashboard/platformUpdateLog.ts": {
       "role": "index",
-      "sha256": "b2d8278227620ba63830f60b73b146298a51af13b66f6fec8134ee2b81f7c3f9",
-      "size": 484816,
-      "normalized_sha256": "b2d8278227620ba63830f60b73b146298a51af13b66f6fec8134ee2b81f7c3f9"
+      "sha256": "413de2b37ed6742f0c55cf46396367f91a2e5170edbcc54b04a18fa362ec7864",
+      "size": 488842,
+      "normalized_sha256": "413de2b37ed6742f0c55cf46396367f91a2e5170edbcc54b04a18fa362ec7864"
     },
     "riveredge-frontend/src/pages/system/dashboard/platformUpdateLogDedicated.ts": {
       "role": "index",
-      "sha256": "d88ab73fcbe1a5a78510a05348b0d54c838a5f700fda49514a359df524ce792a",
-      "size": 29558,
-      "normalized_sha256": "d88ab73fcbe1a5a78510a05348b0d54c838a5f700fda49514a359df524ce792a"
+      "sha256": "3b2664258dd61975f495bc429367a67c1456152c63d45fef6da64d6583ef8820",
+      "size": 37314,
+      "normalized_sha256": "3b2664258dd61975f495bc429367a67c1456152c63d45fef6da64d6583ef8820"
     },
     "riveredge-frontend/src/pages/system/data-backups/card-view.tsx": {
       "role": "index",
@@ -36759,9 +37035,9 @@
     },
     "riveredge-frontend/src/services/platformSettings.ts": {
       "role": "index",
-      "sha256": "dce232272fdfd7451d561d4ed82fdceca4aef6887d90d2686351af252150bd98",
-      "size": 9016,
-      "normalized_sha256": "c5f37f4acb9ce5ef1100b0b987a0fb83684b26dcb040cbbee93790519f1c0788"
+      "sha256": "3fe7929bbf5492a20e07b30fde7bc1d2433151568274f93b51df812d6d66ce90",
+      "size": 9139,
+      "normalized_sha256": "1b5e915b59f4dc331eecca2e648ac8e76ee5c28557ed5c1c274b5a491de042bc"
     },
     "riveredge-frontend/src/services/position.ts": {
       "role": "index",
@@ -37249,6 +37525,12 @@
       "size": 12141,
       "normalized_sha256": "0f50daa81d2e0ab885c76c1c27163788e1257250e1586373ac1c950924dd0831"
     },
+    "riveredge-frontend/src/utils/dedicatedHostPathMap.ts": {
+      "role": "index",
+      "sha256": "1c8d270a6fece203267e1b86bf2c3778bc014eb59727aaeed3f76cd722d3de2e",
+      "size": 2820,
+      "normalized_sha256": "1c8d270a6fece203267e1b86bf2c3778bc014eb59727aaeed3f76cd722d3de2e"
+    },
     "riveredge-frontend/src/utils/dictionaryQuickCreate.ts": {
       "role": "index",
       "sha256": "34e9056c1cdcc6c7569fcd96496c6a6add35dffa3766f047cb08614b806e15fb",
@@ -37275,9 +37557,9 @@
     },
     "riveredge-frontend/src/utils/documentReplacementRegistry.ts": {
       "role": "index",
-      "sha256": "fd9e477f4bd56aa9cb14cd290124e137390a769b4debf49fa4010aecfaa49af4",
-      "size": 1743,
-      "normalized_sha256": "1e421fdeacb13dd0c9f1a8a5fe8383557300077ff41d2f9e6dffe78b8bc5632a"
+      "sha256": "2b0c30009d8adc40bb45fcbb7658fbd06de5d3c3217829bc9d0d7345fe216864",
+      "size": 2054,
+      "normalized_sha256": "2b0c30009d8adc40bb45fcbb7658fbd06de5d3c3217829bc9d0d7345fe216864"
     },
     "riveredge-frontend/src/utils/documentWorkflowPermission.ts": {
       "role": "index",
@@ -37431,9 +37713,9 @@
     },
     "riveredge-frontend/src/utils/globalLifecycleI18n.ts": {
       "role": "index",
-      "sha256": "b3f6c52b49a6bb4e933b41bc445eda7688dc3553283f4002fd758f9d11a59740",
-      "size": 14168,
-      "normalized_sha256": "af0824da939ae6ad6afbab1c90822c1957236a321fc700accb4cba146b0ae495"
+      "sha256": "93f82ae25b39a681afbe064b2854f90aee76955f7653aef0e3fe79dcaece6a01",
+      "size": 14793,
+      "normalized_sha256": "2339b4d2e2371be18f13811fbc4dacfbd3479f9e333c4c49485b59a8fed14caa"
     },
     "riveredge-frontend/src/utils/globalNewShortcut.ts": {
       "role": "index",
