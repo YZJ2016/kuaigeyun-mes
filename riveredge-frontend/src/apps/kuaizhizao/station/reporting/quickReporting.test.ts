@@ -4,6 +4,7 @@ import {
   buildMaterialBindingBody,
   buildQuickReportingBody,
   buildScrapBody,
+  parseWorkOrderScanCode,
   resolveWorkstationId,
   type QuickReportInput,
 } from './quickReporting.ts';
@@ -20,6 +21,14 @@ const base: QuickReportInput = {
   workHours: 1.5,
   reportedAt: '2026-09-29 10:00:00',
 };
+
+test('work order scan accepts a code or WO QR, not employee/equipment codes', () => {
+  assert.equal(parseWorkOrderScanCode(' WO-1 '), 'WO-1');
+  assert.equal(parseWorkOrderScanCode('{"type":"WO","data":{"work_order_code":"WO-2"}}'), 'WO-2');
+  assert.equal(parseWorkOrderScanCode('{"type":"EMP","data":{"code":"E-1"}}'), null);
+  assert.equal(parseWorkOrderScanCode('{"type":"WO","data":{"uuid":"only-uuid"}}'), null);
+  assert.equal(parseWorkOrderScanCode('{invalid'), null);
+});
 
 test('workstationId query is used when the page has no bound id', () => {
   assert.equal(resolveWorkstationId(null, '15'), 15);

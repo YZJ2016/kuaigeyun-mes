@@ -5,6 +5,20 @@
 
 export type StationReportMode = 'self' | 'team';
 
+export function parseWorkOrderScanCode(raw: string): string | null {
+  const text = raw.trim();
+  if (!text) return null;
+  if (!text.startsWith('{')) return text;
+  try {
+    const parsed = JSON.parse(text);
+    if (parsed?.type !== 'WO') return null;
+    const code = parsed.data?.work_order_code ?? parsed.data?.code;
+    return typeof code === 'string' ? code.trim() || null : null;
+  } catch {
+    return null;
+  }
+}
+
 export type StationOperator = {
   id: number;
   name: string;

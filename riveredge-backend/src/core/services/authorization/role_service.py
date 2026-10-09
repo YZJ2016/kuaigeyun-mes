@@ -1429,10 +1429,9 @@ class RoleService:
                     added = await RoleService._assign_preset_permissions(
                         tenant_id=tenant_id,
                         role=role,
-                        only_codes=frozenset({
-                            "master-data:factory:workshop:read",
-                            "master-data:process:sop:read",
-                        }),
+                        only_codes=RoleService.PRESET_ROLE_EXPLICIT_PERMISSION_CODES[
+                            "STATION_TERMINAL"
+                        ],
                     )
                     if added:
                         await PermissionVersionService.bump(tenant_id=tenant_id, user_id=None)
