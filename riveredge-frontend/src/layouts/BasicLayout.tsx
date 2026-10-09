@@ -66,8 +66,8 @@ import SplitSidebarMenu from './basicLayout/SplitSidebarMenu';
 import {
   buildSplitMenuRoots,
   computeSplitSecondaryOpenKeys,
+  findBestMenuMatch,
   FLAT_SIDEBAR_WIDTH,
-  menuPathMatchesLocation,
   readSidebarMenuLayoutPref,
   SPLIT_SIDEBAR_WIDTH,
 } from './basicLayout/sidebarMenuLayout';
@@ -604,30 +604,14 @@ type PermissionMenuDataItem = MenuDataItem &
     permissionCodes?: string[];
   };
 
-/** 根据当前路由计算侧栏应展开的分组 key（不含叶子节点 key） */
+/** 根据当前路由计算侧栏应展开的分组 key（不含叶子节点 key；同 path 多入口时按 query 匹配度最高项） */
 function computeMenuOpenKeysForPath(
   items: MenuDataItem[],
   currentPath: string,
   search = '',
 ): string[] {
-  const openKeys: string[] = [];
-  const walk = (nodes: MenuDataItem[], ancestors: string[]): boolean => {
-    for (const node of nodes) {
-      const nodeKey = node.key ?? node.path;
-      const keyStr = nodeKey ? String(nodeKey) : '';
-      const nextAncestors = keyStr ? [...ancestors, keyStr] : ancestors;
-      if (menuPathMatchesLocation(node.path, currentPath, search)) {
-        openKeys.push(...ancestors);
-        return true;
-      }
-      if (node.children?.length && walk(node.children, nextAncestors)) {
-        return true;
-      }
-    }
-    return false;
-  };
-  walk(items, []);
-  return [...new Set(openKeys)];
+  const best = findBestMenuMatch(items, currentPath, search);
+  return best ? [...new Set(best.ancestorKeys)] : [];
 }
 
 const getMenuConfig = (
@@ -2111,30 +2095,17 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       menu?: { items: Array<{ key: string; label: string; onClick: () => void }> };
     }[] = [];
 
-    // 查找当前路径对应的菜单项及其父级菜单
+    // 查找当前路径对应的菜单项及其父级菜单（同 pathname 多入口时优先带 query 的项）
     const findMenuPath = (
       items: MenuDataItem[] | undefined,
       targetPath: string,
-      path: MenuDataItem[] = [],
+      _path: MenuDataItem[] = [],
       search = '',
     ): MenuDataItem[] | null => {
       if (!items || !Array.isArray(items) || items.length === 0) {
         return null;
       }
-
-      for (const item of items) {
-        const currentPath = [...path, item];
-
-        if (menuPathMatchesLocation(item.path, targetPath, search)) {
-          return currentPath;
-        }
-
-        if (item.children) {
-          const found = findMenuPath(item.children, targetPath, currentPath, search);
-          if (found) return found;
-        }
-      }
-      return null;
+      return findBestMenuMatch(items, targetPath, search)?.chain ?? null;
     };
 
     // 统一的面包屑生成逻辑：使用 breadcrumbMenuData（保留完整层级），优先匹配菜单树，匹配不到时向上寻找最近的父级菜单
@@ -2286,30 +2257,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
    */
   const calculateSelectedKeys = React.useCallback(
     (menuItems: MenuDataItem[], currentPath: string, search = ''): string[] => {
-      const selectedKeys: string[] = [];
-
-      const findExactMatch = (items: MenuDataItem[], path: string, locSearch: string): boolean => {
-        for (const item of items) {
-          const itemKey = item.key || item.path;
-          if (!itemKey) continue;
-
-          if (menuPathMatchesLocation(item.path, path, locSearch)) {
-            selectedKeys.push(itemKey as string);
-            return true;
-          }
-
-          if (item.children && item.children.length > 0) {
-            const hasMatch = findExactMatch(item.children, path, locSearch);
-            if (hasMatch) {
-              return true;
-            }
-          }
-        }
-        return false;
-      };
-
-      findExactMatch(menuItems, currentPath, search);
-      return selectedKeys;
+      const best = findBestMenuMatch(menuItems, currentPath, search);
+      if (!best) return [];
+      const itemKey = best.item.key || best.item.path;
+      return itemKey ? [String(itemKey)] : [];
     },
     [],
   );

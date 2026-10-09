@@ -104,6 +104,30 @@ const MASTER_DATA_PARAMETER_CATEGORY: ConfigCategory = {
   ],
 };
 
+const KUAI_PLM_PARAMETER_CATEGORY: ConfigCategory = {
+  id: 'kuaiplm',
+  nameKey: 'pages.system.configCenter.category.kuaiplm',
+  descriptionKey: 'pages.system.configCenter.category.kuaiplmDesc',
+  params: [
+    {
+      key: 'kuaiplm.lab_request_delegate_dept_uuids',
+      nameKey: 'pages.system.configCenter.param.kuaiplm_lab_request_delegate_dept_uuids',
+      descriptionKey: 'pages.system.configCenter.param.kuaiplm_lab_request_delegate_dept_uuids_desc',
+      source: 'business_config',
+      sourcePath: 'parameters.kuaiplm.lab_request_delegate_dept_uuids',
+      type: 'tags',
+    },
+    {
+      key: 'kuaiplm.lab_request_test_dept_uuids',
+      nameKey: 'pages.system.configCenter.param.kuaiplm_lab_request_test_dept_uuids',
+      descriptionKey: 'pages.system.configCenter.param.kuaiplm_lab_request_test_dept_uuids_desc',
+      source: 'business_config',
+      sourcePath: 'parameters.kuaiplm.lab_request_test_dept_uuids',
+      type: 'tags',
+    },
+  ],
+};
+
 /** 1. 参数设置（设置业务本身） */
 export const PARAMETER_CATEGORIES: ConfigCategory[] = [
   ...createCategories({
@@ -563,6 +587,7 @@ export const PARAMETER_CATEGORIES: ConfigCategory[] = [
   ],
   }),
   MASTER_DATA_PARAMETER_CATEGORY,
+  KUAI_PLM_PARAMETER_CATEGORY,
 ];
 
 /** 2. 审核设置侧栏分类（条目真源：manifest.audit.config_category） */

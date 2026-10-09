@@ -16,6 +16,7 @@ from apps.master_data.models.warehouse import StorageArea, StorageLocation, Ware
 from apps.master_data.services.supply_chain_service import RESOURCE_SUPPLIER, RESOURCE_CUSTOMER, SupplyChainService
 from core.models.department import Department
 from core.models.position import Position
+from core.services.authorization.data_scope_resource_registry import resolve_host_reference_data_scope
 from core.services.authorization.data_scope_service import DataScopeService
 from core.services.reference.reference_display_provider_registry import register_reference_display_provider
 from core.services.reference.tenant_model_display_provider import make_tenant_model_display_provider
@@ -117,6 +118,17 @@ def _flatten_material_source_config(raw: Any) -> dict[str, Any]:
 class _CustomerDisplayProvider:
     resource_key = "master-data:supply-chain:customer"
 
+    @staticmethod
+    def _scope_resource(extra: dict[str, Any] | None) -> str:
+        host = str((extra or {}).get("host_resource") or "").strip()
+        return (
+            resolve_host_reference_data_scope(
+                "master-data:supply-chain:customer",
+                host,
+            )
+            or RESOURCE_CUSTOMER
+        )
+
     async def search(
         self,
         *,
@@ -136,6 +148,7 @@ class _CustomerDisplayProvider:
             keyword=keyword,
             is_active=is_active,
             current_user=user,
+            data_scope_resource=self._scope_resource(extra),
         )
         return {
             "items": [_customer_display_row(c) for c in items],

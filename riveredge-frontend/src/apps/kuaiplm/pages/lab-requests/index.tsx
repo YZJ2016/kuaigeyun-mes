@@ -36,7 +36,7 @@ import {
   Typography,
   Upload,
 } from 'antd';
-import { InboxOutlined } from '@ant-design/icons';
+import { InboxOutlined, SettingOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import type { DescriptionsProps } from 'antd';
 import { ThemedSegmented } from '../../../../components/themed-segmented';
@@ -65,6 +65,7 @@ import {
 import { useResourcePermissions } from '../../../../hooks/useResourcePermissions';
 import { useCurrentUser } from '../../../../hooks/useCurrentUser';
 import { getDepartmentTree, type DepartmentTreeItem } from '../../../../services/department';
+import { getBusinessConfig } from '../../../../services/businessConfig';
 import { searchUserDisplay } from '../../../../services/user';
 import { getApiErrorMessage } from '../../../../utils/errorHandler';
 import { formatDateTimeBySiteSetting } from '../../../../utils/format';
@@ -73,6 +74,14 @@ import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
 import { renderDocumentStatusTag } from '../../../../utils/documentLifecycleStatusTag';
 import { MarkerTag } from '../../../../constants/statusBadges';
 import { LabRequestOutsourceCapabilitiesTags } from '../../components/LabRequestOutsourceCapabilitiesTags';
+import { LabRequestDepartmentSettingsModal } from '../../components/LabRequestDepartmentSettingsModal';
+import {
+  filterLabDeptOptionsByWhitelist,
+  flattenLabDeptOptions,
+  labDeptSelectOptions,
+  resolveLabRequestDeptScopeFromConfig,
+  type LabDeptOption,
+} from '../../utils/labRequestDepartmentScope';
 import { formatUserDisplayLabel } from '../../../../utils/userDisplay';
 import { resolveSystemDictionaryValueLabel } from '../../../../utils/systemDictionaryI18n';
 import {
@@ -163,26 +172,6 @@ function labReportStatusMarkerColor(reportStatus?: string | null): string {
     default:
       return 'default';
   }
-}
-
-type DepartmentOption = { label: string; value: string };
-
-function flattenDepartmentOptions(
-  items: DepartmentTreeItem[],
-  prefix = '',
-): DepartmentOption[] {
-  const out: DepartmentOption[] = [];
-  for (const item of items) {
-    if (item.is_active === false) continue;
-    const name = String(item.name ?? '').trim();
-    if (!name) continue;
-    const label = prefix ? `${prefix} / ${name}` : name;
-    out.push({ label, value: name });
-    if (item.children?.length) {
-      out.push(...flattenDepartmentOptions(item.children, label));
-    }
-  }
-  return out;
 }
 
 function flattenDepartmentUuidMap(
@@ -410,8 +399,35 @@ const LabRequestsPage: React.FC = () => {
         resolveSystemDictionaryValueLabel(LAB_REQUEST_BUSINESS_TYPE_DICT, value, t) ?? value,
     }));
   }, [businessTypeOptions, t]);
-  const [departmentOptions, setDepartmentOptions] = useState<DepartmentOption[]>([]);
+  const [allLabDeptOptions, setAllLabDeptOptions] = useState<LabDeptOption[]>([]);
+  const [labDeptScope, setLabDeptScope] = useState<{
+    delegateUuids: string[];
+    testUuids: string[];
+  }>({ delegateUuids: [], testUuids: [] });
+  const [deptSettingsOpen, setDeptSettingsOpen] = useState(false);
   const departmentByUuidRef = useRef<Map<string, string>>(new Map());
+
+  const delegateDeptOptions = useMemo(() => {
+    const preserve = editing
+      ? [getLabRequestExtensionValue(editing, 'delegate_dept') as string | undefined]
+      : [defaultDelegateDept];
+    return labDeptSelectOptions(
+      filterLabDeptOptionsByWhitelist(
+        allLabDeptOptions,
+        labDeptScope.delegateUuids,
+        preserve,
+      ),
+    );
+  }, [allLabDeptOptions, labDeptScope.delegateUuids, editing, defaultDelegateDept]);
+
+  const testDeptOptions = useMemo(() => {
+    const preserve = editing
+      ? [getLabRequestExtensionValue(editing, 'test_dept') as string | undefined]
+      : [];
+    return labDeptSelectOptions(
+      filterLabDeptOptionsByWhitelist(allLabDeptOptions, labDeptScope.testUuids, preserve),
+    );
+  }, [allLabDeptOptions, labDeptScope.testUuids, editing]);
 
   useEffect(() => {
     void getDictionaryOptions(LAB_REQUEST_BUSINESS_TYPE_DICT)
@@ -420,15 +436,21 @@ const LabRequestsPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    void getBusinessConfig()
+      .then((config) => setLabDeptScope(resolveLabRequestDeptScopeFromConfig(config)))
+      .catch(() => setLabDeptScope({ delegateUuids: [], testUuids: [] }));
+  }, []);
+
+  useEffect(() => {
     if (!modalOpen) return;
     void getDepartmentTree({ is_active: true })
       .then((res) => {
         const items = res.items ?? [];
-        setDepartmentOptions(flattenDepartmentOptions(items));
+        setAllLabDeptOptions(flattenLabDeptOptions(items));
         departmentByUuidRef.current = flattenDepartmentUuidMap(items);
       })
       .catch(() => {
-        setDepartmentOptions([]);
+        setAllLabDeptOptions([]);
         departmentByUuidRef.current = new Map();
       });
   }, [modalOpen]);
@@ -1728,6 +1750,19 @@ const LabRequestsPage: React.FC = () => {
           setEditing(null);
           setModalOpen(true);
         }}
+        toolBarActionsAfterCreate={
+          perms.canUpdate
+            ? [
+                <Button
+                  key="lab-dept-settings"
+                  icon={<SettingOutlined />}
+                  onClick={() => setDeptSettingsOpen(true)}
+                >
+                  {t('app.kuaiplm.labRequest.deptSettings.button')}
+                </Button>,
+              ]
+            : []
+        }
         showExportButton={!!perms.canExport}
         params={{ listScope }}
         skipFuzzyPinyinClientFilter
@@ -1991,7 +2026,7 @@ const LabRequestsPage: React.FC = () => {
                       label={t('app.kuaiplm.labRequest.fields.delegateDept')}
                       showSearch
                       allowClear
-                      options={departmentOptions}
+                      options={delegateDeptOptions}
                       placeholder={t('common.selectField', {
                         field: t('app.kuaiplm.labRequest.fields.delegateDept'),
                       })}
@@ -2004,7 +2039,7 @@ const LabRequestsPage: React.FC = () => {
                       label={t('app.kuaiplm.labRequest.fields.testDept')}
                       showSearch
                       allowClear
-                      options={departmentOptions}
+                      options={testDeptOptions}
                       placeholder={t('common.selectField', {
                         field: t('app.kuaiplm.labRequest.fields.testDept'),
                       })}
@@ -2260,15 +2295,33 @@ const LabRequestsPage: React.FC = () => {
             }}
           </ProFormDependency>
         </Row>
+        <UniTableDetail
+          name="measure_items"
+          title={t('app.kuaiplm.labRequest.measure.sectionTitle')}
+          required={false}
+          columns={planColumns}
+          addText={t('app.kuaiplm.labRequest.measure.addItem')}
+          initialValue={{
+            item_name: '',
+            standard_value: '',
+          }}
+          tableProps={{ size: 'small', style: { width: '100%', margin: 0 } }}
+        />
         <ProFormDependency name={['business_type']}>
-          {({ business_type }) =>
-            resolveLabRequestFieldVisibility(business_type).requestAttachments ? (
+          {({ business_type }) => {
+            const visAttach = resolveLabRequestFieldVisibility(business_type);
+            if (!visAttach.requestAttachments) return null;
+            return (
               <ProFormUploadDragger
                 name="request_attachment_upload"
                 label={t('app.kuaiplm.labRequest.fields.requestAttachments')}
                 icon={<InboxOutlined />}
                 title={t('app.kuaiplm.labRequest.fields.requestAttachmentUploadHint')}
-                description={t('app.kuaiplm.labRequest.fields.requestAttachmentUploadSubHint')}
+                description={
+                  visAttach.requestAttachmentsRequired
+                    ? t('app.kuaiplm.labRequest.fields.requestAttachmentUploadSubHintRequired')
+                    : t('app.kuaiplm.labRequest.fields.requestAttachmentUploadSubHintOptional')
+                }
                 fieldProps={{
                   multiple: true,
                   style: { width: '100%' },
@@ -2288,21 +2341,9 @@ const LabRequestsPage: React.FC = () => {
                   },
                 }}
               />
-            ) : null
-          }
-        </ProFormDependency>
-        <UniTableDetail
-          name="measure_items"
-          title={t('app.kuaiplm.labRequest.measure.sectionTitle')}
-          required={false}
-          columns={planColumns}
-          addText={t('app.kuaiplm.labRequest.measure.addItem')}
-          initialValue={{
-            item_name: '',
-            standard_value: '',
+            );
           }}
-          tableProps={{ size: 'small', style: { width: '100%', margin: 0 } }}
-        />
+        </ProFormDependency>
         <ProFormDependency name={['business_type']}>
           {({ business_type }) =>
             resolveLabRequestFieldVisibility(business_type).outsourceCert ? (
@@ -3090,6 +3131,12 @@ const LabRequestsPage: React.FC = () => {
           disabled={reportRejectSubmitting}
         />
       </Modal>
+
+      <LabRequestDepartmentSettingsModal
+        open={deptSettingsOpen}
+        onClose={() => setDeptSettingsOpen(false)}
+        onSaved={(scope) => setLabDeptScope(scope)}
+      />
     </ListPageTemplate>
   );
 };

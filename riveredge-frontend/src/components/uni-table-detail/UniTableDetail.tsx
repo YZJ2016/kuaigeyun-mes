@@ -29,7 +29,7 @@ export interface UniTableDetailProps<RecordType = any> {
   addText?: string;
   /** 添加行时的默认值；可为函数以便读取表单上下文 */
   initialValue?: RecordType | (() => RecordType);
-  /** 自定义工具栏操作（右侧，如导入按钮） */
+  /** 自定义工具栏操作（排在「添加明细」之前，如下载模板 / Excel 导入） */
   headerExtra?: React.ReactNode;
   /** 底部额外按钮（如"物料批量选择"） */
   footerExtra?: React.ReactNode;
@@ -158,6 +158,7 @@ export const UniTableDetailHeader: React.FC<UniTableDetailHeaderProps> = ({
             {importText ?? t('common.importDetail')}
           </Button>
         )}
+        {headerExtra}
         {(actions || []).map((action) => (
           <Button
             key={action.key}
@@ -173,7 +174,6 @@ export const UniTableDetailHeader: React.FC<UniTableDetailHeaderProps> = ({
             {action.label}
           </Button>
         ))}
-        {headerExtra}
       </div>
     </div>
   );

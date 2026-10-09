@@ -110,6 +110,10 @@ class ReferenceDisplayService:
         if provider is None:
             raise ValidationError(f"引用资源 {key} 尚未注册 DisplayProvider")
 
+        search_extra = dict(extra or {})
+        if host_resource:
+            search_extra["host_resource"] = host_resource.strip()
+
         raw = await provider.search(
             tenant_id=tenant_id,
             user=user,
@@ -117,7 +121,7 @@ class ReferenceDisplayService:
             page_size=page_size,
             keyword=keyword,
             is_active=is_active,
-            extra=extra,
+            extra=search_extra,
         )
         items = [ReferenceDisplayService._to_item(i) for i in (raw.get("items") or [])]
         return {

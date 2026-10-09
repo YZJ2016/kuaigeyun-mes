@@ -267,3 +267,79 @@ async def test_roles_for_data_scope_internal_customer_key_inherits_host_module()
     )
     scoped = access.roles_for_data_scope("kuaizhizao:customer-follow-up-customer")
     assert scoped == [role_sales]
+
+
+@pytest.mark.asyncio
+async def test_policy_self_uses_profile_self_scope_resolver_followable():
+    """跟进父客户「本人」须含本人/协作/公海，不得只匹配 salesman_id。"""
+    from core.models.data_permission_policy import DataScopeType
+    from core.services.authorization.data_scope_constants import RESOLVER_CUSTOMER_SALESMAN_POOL
+    from core.services.authorization.data_scope_resource_registry import DataScopeResourceProfile
+    from core.services.authorization.data_scope_resolvers import register_builtin_scope_resolvers
+
+    register_builtin_scope_resolvers()
+    profile = DataScopeResourceProfile(
+        applicant_user_id_field="salesman_id",
+        department_uuid_field=None,
+        no_policy_default_resolver=RESOLVER_CUSTOMER_SALESMAN_POOL,
+        self_scope_resolver=RESOLVER_CUSTOMER_SALESMAN_POOL,
+    )
+    policy = SimpleNamespace(scope_type=DataScopeType.SELF, scope_payload=None)
+    mine_q = MagicMock(name="mine_q")
+    public_q = MagicMock(name="public_q")
+    combined = MagicMock(name="combined_q")
+    mine_q.__or__ = MagicMock(return_value=combined)
+
+    with patch(
+        "apps.kuaizhizao.services.customer_pool_service.list_collaborator_customer_ids",
+        new=AsyncMock(return_value=[9, 10]),
+    ), patch(
+        "apps.kuaizhizao.services.customer_pool_list_core.customer_pool_mine_scope_q",
+        return_value=mine_q,
+    ) as mine_scope, patch(
+        "apps.kuaizhizao.services.customer_pool_list_core.customer_pool_effective_public_q",
+        return_value=public_q,
+    ):
+        part = await DataScopeService._policy_to_q(
+            policy,
+            tenant_id=1,
+            user=SimpleNamespace(id=7),
+            resource="kuaizhizao:customer-follow-up-customer",
+            profile=profile,
+            dept_uuid=None,
+            dept_user_ids=[7],
+        )
+
+    assert part is combined
+    mine_scope.assert_called_once_with(
+        current_user_id=7,
+        collaborator_customer_ids=[9, 10],
+    )
+    mine_q.__or__.assert_called_once_with(public_q)
+
+
+def test_host_reference_data_scope_maps_follow_up_customer_dropdown():
+    from core.services.authorization.data_scope_resource_registry import (
+        register_host_reference_data_scope,
+        resolve_host_reference_data_scope,
+    )
+
+    register_host_reference_data_scope(
+        "master-data:supply-chain:customer",
+        "kuaizhizao:customer-follow-up",
+        "kuaizhizao:customer-follow-up-customer",
+    )
+    assert (
+        resolve_host_reference_data_scope(
+            "master-data:supply-chain:customer",
+            "kuaizhizao:customer-follow-up",
+        )
+        == "kuaizhizao:customer-follow-up-customer"
+    )
+    assert (
+        resolve_host_reference_data_scope(
+            "master-data:supply-chain:customer",
+            "kuaizhizao:sales-order",
+        )
+        is None
+    )

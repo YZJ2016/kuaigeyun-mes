@@ -47,8 +47,13 @@ export type LabRequestFieldVisibility = {
   structureElectronics: boolean;
   outsourceCert: boolean;
   payer: boolean;
-  /** L50 结构通用委托：须上传委托表附件 */
+  /**
+   * 试验项与标准旁的「试验要求相关文件」上传区：各委托类型均展示。
+   * 是否提交前强制见 requestAttachmentsRequired。
+   */
   requestAttachments: boolean;
+  /** 通用委托 / 材料试验：提交审批前须至少 1 个附件 */
+  requestAttachmentsRequired: boolean;
 };
 
 export type LabRequestStoredAttachment = {
@@ -87,7 +92,8 @@ export function resolveLabRequestFieldVisibility(
     structureElectronics: bt === 'project_product',
     outsourceCert: isOutsource,
     payer: isOutsource,
-    requestAttachments: isGeneral || isProjectMaterial,
+    requestAttachments: true,
+    requestAttachmentsRequired: isGeneral || isProjectMaterial,
   };
 }
 

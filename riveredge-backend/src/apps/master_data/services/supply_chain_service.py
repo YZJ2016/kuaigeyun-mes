@@ -507,6 +507,7 @@ class SupplyChainService:
         updated_start_date: Optional[str] = None,
         updated_end_date: Optional[str] = None,
         current_user: Optional[User] = None,
+        data_scope_resource: Optional[str] = None,
     ) -> Tuple[List[CustomerResponse], int]:
         """
         获取客户列表
@@ -521,6 +522,8 @@ class SupplyChainService:
             salesman_id: 归属业务员（可选）
             sort_by / sort_order: 排序字段与方向（asc/desc）
             current_user: 当前用户（用于数据隔离）
+            data_scope_resource: 行级范围资源键；默认主数据客户（含公海）。
+                宿主单据引用（如客户跟进）可传入父客户 scope，与保存门禁对齐。
             
         Returns:
             (客户列表, 总条数)
@@ -554,13 +557,14 @@ class SupplyChainService:
             default_sort_col="code",
         )
 
-        # 客户行级范围：统一走 DataScopeService（含公海 + 业务员默认解析器）
+        # 客户行级范围：统一走 DataScopeService（默认含公海；宿主可收窄为已归属）
         if current_user:
+            scope_key = (data_scope_resource or "").strip() or RESOURCE_CUSTOMER
             query = await DataScopeService.apply(
                 query,
                 tenant_id=tenant_id,
                 user=current_user,
-                resource=RESOURCE_CUSTOMER,
+                resource=scope_key,
             )
 
         total = await query.count()

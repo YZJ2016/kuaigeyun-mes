@@ -27,7 +27,9 @@ import {
   Row,
   Space,
   Table,
+  Upload,
 } from 'antd';
+import { DownloadOutlined, UploadOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { UniTable } from '../../../../components/uni-table';
 import { UniTableDetail } from '../../../../components/uni-table-detail';
@@ -68,6 +70,11 @@ import {
   sortedLineColumns,
   type BomCollabProfileColumn,
 } from '../../utils/bomCollabFormProfile';
+import {
+  buildBomLineTemplateColumns,
+  buildBomLineTemplateSample,
+  parseBomCollabLinesFromRows,
+} from '../../utils/bomCollabExcelImport';
 import {
   bomCollabApi,
   type BomCollabFormProfile,
@@ -244,6 +251,73 @@ const BomCollaborationsPage: React.FC = () => {
       }
     },
     [messageApi],
+  );
+
+  const templateColumns = useMemo(
+    () => buildBomLineTemplateColumns(profileLineColumns),
+    [profileLineColumns],
+  );
+
+  const downloadSectionTemplate = useCallback(
+    async (sectionKey: 'electronics' | 'structure') => {
+      const sectionName =
+        sectionKey === 'electronics' ? electronicsLabel : structureLabel;
+      await downloadRecordsAsXlsx(
+        [buildBomLineTemplateSample(profileLineColumns)],
+        `bom-collab-${sectionKey}-template-${todaySiteDateString()}.xlsx`,
+        { columns: templateColumns, sheetName: sectionName },
+      );
+      messageApi.success(t('app.kuaiplm.bomCollab.messages.templateDownloaded'));
+    },
+    [electronicsLabel, structureLabel, profileLineColumns, templateColumns, messageApi, t],
+  );
+
+  const importSectionFromFile = useCallback(
+    async (sectionKey: 'electronics' | 'structure', file: File) => {
+      try {
+        const XLSX = await import('xlsx');
+        const buffer = await file.arrayBuffer();
+        const workbook = XLSX.read(buffer, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        if (!sheetName) {
+          messageApi.error(t('app.kuaiplm.bomCollab.messages.templateEmpty'));
+          return false;
+        }
+        const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(
+          workbook.Sheets[sheetName],
+          { defval: '' },
+        );
+        const parsed = parseBomCollabLinesFromRows(rows, profileLineColumns);
+        if (!parsed.ok) {
+          if (parsed.error === 'row_invalid') {
+            messageApi.error(
+              t('app.kuaiplm.bomCollab.messages.templateRowInvalid', {
+                code: parsed.code || '-',
+              }),
+            );
+          } else {
+            messageApi.error(t('app.kuaiplm.bomCollab.messages.templateEmpty'));
+          }
+          return false;
+        }
+        const field =
+          sectionKey === 'electronics' ? 'electronics_lines' : 'structure_lines';
+        const sectionName =
+          sectionKey === 'electronics' ? electronicsLabel : structureLabel;
+        formRef.current?.setFieldsValue?.({ [field]: parsed.lines });
+        messageApi.success(
+          t('app.kuaiplm.bomCollab.messages.templateImported', {
+            count: parsed.lines.length,
+            section: sectionName,
+          }),
+        );
+        return false;
+      } catch (e) {
+        messageApi.error(getApiErrorMessage(e));
+        return false;
+      }
+    },
+    [profileLineColumns, electronicsLabel, structureLabel, messageApi, t],
   );
 
   const lineColumns = useMemo<ColumnsType>(() => {
@@ -751,9 +825,6 @@ const BomCollaborationsPage: React.FC = () => {
               rules={[{ required: true }]}
             />
           </Col>
-          <Col span={24}>
-            <ProFormTextArea name="remarks" label={t('common.remark')} />
-          </Col>
         </Row>
         <UniTableDetail
           name="electronics_lines"
@@ -761,6 +832,28 @@ const BomCollaborationsPage: React.FC = () => {
           columns={lineColumns}
           initialValue={emptyLineRecord}
           minRows={1}
+          headerExtra={
+            <Space size={8}>
+              <Button
+                icon={<DownloadOutlined />}
+                onClick={() => void downloadSectionTemplate('electronics')}
+              >
+                {t('app.kuaiplm.bomCollab.actions.downloadTemplate')}
+              </Button>
+              <Upload
+                accept=".xlsx,.xls"
+                showUploadList={false}
+                beforeUpload={(file) => {
+                  void importSectionFromFile('electronics', file);
+                  return false;
+                }}
+              >
+                <Button icon={<UploadOutlined />}>
+                  {t('app.kuaiplm.bomCollab.actions.importExcel')}
+                </Button>
+              </Upload>
+            </Space>
+          }
         />
         <UniTableDetail
           name="structure_lines"
@@ -768,7 +861,34 @@ const BomCollaborationsPage: React.FC = () => {
           columns={lineColumns}
           initialValue={emptyLineRecord}
           minRows={1}
+          headerExtra={
+            <Space size={8}>
+              <Button
+                icon={<DownloadOutlined />}
+                onClick={() => void downloadSectionTemplate('structure')}
+              >
+                {t('app.kuaiplm.bomCollab.actions.downloadTemplate')}
+              </Button>
+              <Upload
+                accept=".xlsx,.xls"
+                showUploadList={false}
+                beforeUpload={(file) => {
+                  void importSectionFromFile('structure', file);
+                  return false;
+                }}
+              >
+                <Button icon={<UploadOutlined />}>
+                  {t('app.kuaiplm.bomCollab.actions.importExcel')}
+                </Button>
+              </Upload>
+            </Space>
+          }
         />
+        <Row gutter={16} style={{ marginTop: 8 }}>
+          <Col span={24}>
+            <ProFormTextArea name="remarks" label={t('common.remark')} />
+          </Col>
+        </Row>
       </FormModalTemplate>
 
       <DetailDrawerTemplate

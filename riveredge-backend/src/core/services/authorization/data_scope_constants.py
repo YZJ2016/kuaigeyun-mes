@@ -8,6 +8,7 @@ RESOLVER_OUTSOURCED_UNIT = "outsourced_unit"
 RESOLVER_CUSTOMER_SALESMAN_POOL = "customer_salesman_pool"
 RESOLVER_CUSTOMER_OWNED_ONLY = "customer_owned_only"
 RESOLVER_CUSTOMER_OWNED_VIA_CUSTOMER_ID = "customer_owned_via_customer_id"
+RESOLVER_CUSTOMER_FOLLOWABLE_VIA_CUSTOMER_ID = "customer_followable_via_customer_id"
 
 # UserDataScopeBinding.dimension
 DIMENSION_OUTSOURCED_UNIT = "outsourced_unit"

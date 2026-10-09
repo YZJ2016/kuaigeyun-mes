@@ -128,14 +128,15 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
       .catch(() => setBusinessConfig(null));
   }, [open]);
 
+  /** 超限则忽略；合格必须放行（勿 return false，否则会跳过 customRequest、列表有文件却无 uuid） */
   const rejectOversizedDrawingFile = (file: File) => {
-    if (file.size <= drawingMaxUploadBytes) {
-      return false;
+    if (file.size > drawingMaxUploadBytes) {
+      messageApi.error(
+        t('components.fileUpload.sizeExceeded', { size: drawingMaxUploadMb }),
+      );
+      return Upload.LIST_IGNORE;
     }
-    messageApi.error(
-      t('components.fileUpload.sizeExceeded', { size: drawingMaxUploadMb }),
-    );
-    return Upload.LIST_IGNORE;
+    return true;
   };
 
   const loadRelationOptions = async () => {
@@ -250,6 +251,13 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
   const syncUploadField =
     (fieldName: 'mainFile' | 'supplementaryFiles') => (info: UploadChangeParam) => {
       formRef.current?.setFieldValue(fieldName, info.fileList);
+      // 保存触发的校验错误需在上传完成（或移除）后重验，否则红字会残留
+      if (
+        fieldName === 'mainFile' &&
+        info.fileList.every((file) => file.status !== 'uploading')
+      ) {
+        void formRef.current?.validateFields([fieldName]).catch(() => undefined);
+      }
     };
 
   const makeUploadFieldProps = (

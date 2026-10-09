@@ -4597,6 +4597,11 @@ export default {
   'app.kuaiplm.labRequest.fields.requesterName': '委托人',
   'app.kuaiplm.labRequest.fields.delegateDept': '委托部门',
   'app.kuaiplm.labRequest.fields.testDept': '检测部门',
+  'app.kuaiplm.labRequest.deptSettings.button': '部门设置',
+  'app.kuaiplm.labRequest.deptSettings.title': '实验委托部门设置',
+  'app.kuaiplm.labRequest.deptSettings.hint':
+    '分别指定委托部门与检测部门的可选范围；留空表示不限制，新建/编辑时可从全部启用部门中选择。',
+  'app.kuaiplm.labRequest.deptSettings.unlimitedPlaceholder': '留空表示不限制',
   'app.kuaiplm.labRequest.fields.inspectionSlipNo': '检验单号',
   'app.kuaiplm.labRequest.fields.customerName': '客户',
   'app.kuaiplm.labRequest.fields.supplierName': '供应商',
@@ -4658,10 +4663,14 @@ export default {
   'app.kuaiplm.labRequest.actions.reuploadReport': '补传报告文件',
   'app.kuaiplm.labRequest.actions.linkException': '关联异常',
   'app.kuaiplm.labRequest.fields.reportAttachment': '报告文件',
-  'app.kuaiplm.labRequest.fields.requestAttachments': '试验委托附件',
-  'app.kuaiplm.labRequest.fields.requestAttachmentUploadHint': '点击或拖拽上传委托表',
+  'app.kuaiplm.labRequest.fields.requestAttachments': '试验要求相关文件',
+  'app.kuaiplm.labRequest.fields.requestAttachmentUploadHint': '点击或拖拽上传试验要求相关文件',
   'app.kuaiplm.labRequest.fields.requestAttachmentUploadSubHint':
     '支持 doc、pdf、xls 等；保存草稿可不传，提交前须至少 1 个附件',
+  'app.kuaiplm.labRequest.fields.requestAttachmentUploadSubHintRequired':
+    '支持 doc、pdf、xls 等；保存草稿可不传，提交审批前须至少 1 个附件',
+  'app.kuaiplm.labRequest.fields.requestAttachmentUploadSubHintOptional':
+    '支持 doc、pdf、xls 等；可上传试验标准、图纸、规范等要求文件，非必传',
   'app.kuaiplm.labRequest.messages.attachmentOpenFailed': '附件打开失败，请重试',
   'app.kuaiplm.labRequest.messages.reportSaved': '实验报告已保存',
   'app.kuaiplm.labRequest.messages.reportSubmitted': '实验报告已提交审批',
@@ -5187,12 +5196,19 @@ export default {
   'app.kuaiplm.bomCollab.status.entered': '已录入',
   'app.kuaiplm.bomCollab.status.rejected': '已驳回',
   'app.kuaiplm.bomCollab.actions.enter': '文员录入',
+  'app.kuaiplm.bomCollab.actions.downloadTemplate': '下载填写模板',
+  'app.kuaiplm.bomCollab.actions.importExcel': 'Excel导入',
   'app.kuaiplm.bomCollab.messages.submitSuccess': '已提交审核',
   'app.kuaiplm.bomCollab.messages.approveSuccess': '审核通过',
   'app.kuaiplm.bomCollab.messages.rejectSuccess': '已驳回',
   'app.kuaiplm.bomCollab.messages.noExportData': '暂无可导出的 BOM 协同',
   'app.kuaiplm.bomCollab.messages.enterSuccess': '已完成文员录入',
   'app.kuaiplm.bomCollab.messages.deleteOnlyDraft': '仅草稿或已驳回可删除，请重新勾选',
+  'app.kuaiplm.bomCollab.messages.templateDownloaded': '填写模板已下载',
+  'app.kuaiplm.bomCollab.messages.templateImported': '已导入 {{count}} 行物料到「{{section}}」',
+  'app.kuaiplm.bomCollab.messages.templateEmpty': 'Excel 无有效数据行',
+  'app.kuaiplm.bomCollab.messages.templateRowInvalid':
+    '存在无效行（编码：{{code}}）：物料编码与物料名称须同时填写，请检查后重新导入',
   'app.kuaiplm.projectProposal.title': '项目建议',
   'app.kuaiplm.projectProposal.createButton': '新建项目建议',
   'app.kuaiplm.projectProposal.fields.code': '建议单号',
@@ -6148,11 +6164,16 @@ export default {
   'app.funide-oa.menu.r04.changeManagement': '工程变更 ECN',
   'app.funide-oa.menu.r04.concession': '让步放行',
   'app.funide-oa.menu.r04.materialReviews': '物料评审',
-  'app.funide-oa.menu.r04.sampleProcess': '样品检验',
+  'app.funide-oa.menu.r04.sampleProcess': '样品加工',
   'app.funide-oa.menu.r05.complaints': '质量投诉',
   'app.funide-oa.menu.r05.complaintAnalysis': '投诉月度分析',
+  'app.funide-oa.menu.r06.deliverables': '交付物',
   'app.funide-oa.menu.r06.productFirmwares': '产品固件',
+  'app.funide-oa.productFirmware.fields.softwareItemCode': '软件12编码',
+  'app.funide-oa.productFirmware.fields.softwareItemCodePlaceholder': '请输入12位软件编码',
+  'app.funide-oa.productFirmware.messages.softwareItemCodeLength': '软件编码须为12位',
   'app.funide-oa.menu.r06.productionFiles': '生产软件',
+  'app.funide-oa.menu.docControl.deliverables': '交付物',
   'app.funide-oa.menu.r07.annualLabPlans': '年度例试计划',
   'app.funide-oa.menu.r08.trialFlows': '试流单',
   'app.funide-oa.menu.r08.prototypeBuild': '样机制作书',
@@ -6275,7 +6296,7 @@ export default {
     '工作台为研发看板。请从左侧菜单进入受控文件、研发协同、样品打样、实验、质量、会签、生产、设备、培训与证照。',
   'app.funide-oa.workbench.hint.controlledDocs': '体系文件、图纸、SOP 与知识库。',
   'app.funide-oa.workbench.hint.rdCollab': '项目、跨项目待办、项目建议书、BOM 与工程变更。',
-  'app.funide-oa.workbench.hint.sampleBuild': '样机制作、试流、样品检验、物料评审与打样订单。',
+  'app.funide-oa.workbench.hint.sampleBuild': '样机制作、试流、样品加工、物料评审与打样订单。',
   'app.funide-oa.workbench.hint.projectDocs': '生产软件、产品固件。',
   'app.funide-oa.workbench.hint.lab': '实验委托、看板、判定规则与年度例试。',
   'app.funide-oa.workbench.hint.qualityLoop': '返工、返工策划、投诉、8D、供方评价与让步放行。',
@@ -25489,6 +25510,14 @@ export default {
   'pages.system.configCenter.category.systemDesc': '系统必备初始项的统一加载与补全',
   'pages.system.configCenter.category.master_data': '基础数据',
   'pages.system.configCenter.category.master_dataDesc': '主数据与文控相关参数',
+  'pages.system.configCenter.category.kuaiplm': '快研发',
+  'pages.system.configCenter.category.kuaiplmDesc': '实验委托等研发业务参数',
+  'pages.system.configCenter.param.kuaiplm_lab_request_delegate_dept_uuids': '实验委托可选委托部门',
+  'pages.system.configCenter.param.kuaiplm_lab_request_delegate_dept_uuids_desc':
+    '部门 UUID 白名单；空表示不限制。建议在实验委托列表「部门设置」中维护。',
+  'pages.system.configCenter.param.kuaiplm_lab_request_test_dept_uuids': '实验委托可选检测部门',
+  'pages.system.configCenter.param.kuaiplm_lab_request_test_dept_uuids_desc':
+    '部门 UUID 白名单；空表示不限制。建议在实验委托列表「部门设置」中维护。',
   'pages.system.configCenter.param.master_data_drawing_max_upload_size_mb': '图纸主文件上传大小',
   'pages.system.configCenter.param.master_data_drawing_max_upload_size_mb_desc':
     '新建、编辑与批量上传图纸时，主文件与附加页单文件大小上限（MB）；不超过平台文件服务硬上限 100 MB。',
@@ -30194,10 +30223,58 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.sidebar-menu-query-path-specificity-r01.title':
+    '侧栏同路径多入口按查询参数正确选中',
+  'pages.dashboard.updateLog.entries.sidebar-menu-query-path-specificity-r01.description':
+    '同一页面挂在多个菜单（如交付物与交付物带部门预筛选）时，选中态会优先匹配带查询参数的入口，不再跳回无参数的那一项。',
+  'pages.dashboard.updateLog.entries.kuaiplm-rd-deliverable-issue-orm-register-r01.title':
+    '研发交付物列表不再因下发对象模型未注册报错',
+  'pages.dashboard.updateLog.entries.kuaiplm-rd-deliverable-issue-orm-register-r01.description':
+    '交付物下发对象表已有迁移，但未挂入快研发 ORM 模块列表，列表接口会 500。现已注册该模型，重启后端后即可正常打开交付物。',
+  'pages.dashboard.updateLog.entries.kuaiplm-deliverable-issue-grants-audit-columns-r01.title':
+    '交付物列表不再因下发对象表缺审计列报错',
+  'pages.dashboard.updateLog.entries.kuaiplm-deliverable-issue-grants-audit-columns-r01.description':
+    '交付物下发对象表补齐创建人/更新人字段，打开交付物列表不再 500。请重启后端以执行迁移。',
+  'pages.dashboard.updateLog.entries.kuaiplm-bom-collab-excel-import-r01.title':
+    'BOM协同支持Excel导入物料行',
+  'pages.dashboard.updateLog.entries.kuaiplm-bom-collab-excel-import-r01.description':
+    '新建编辑时可按分区下载填写模板并用 Excel 批量导入物料行，无需逐行手工录入；导入将替换该分区当前明细。',
+  'pages.dashboard.updateLog.entries.funide-oa-sample-process-menu-release-date-r01.title':
+    '样品试流菜单更正为样品加工，资料发布日期固定当天',
+  'pages.dashboard.updateLog.entries.funide-oa-sample-process-menu-release-date-r01.description':
+    '侧栏「样品检验」更正为「样品加工」，与新建按钮及单据一致（样品检验单为另一单据）。新建时资料发布日期自动取站点当天且不可改选。',
+  'pages.dashboard.updateLog.entries.funide-oa-product-firmware-software-item-code-r01.title':
+    '产品固件可填写软件12编码',
+  'pages.dashboard.updateLog.entries.funide-oa-product-firmware-software-item-code-r01.description':
+    '新建编辑产品固件时可录入12位软件编码，列表与详情同步展示，并支持按该编码搜索；升版草稿默认沿用上一版编码。',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-electronics-menu-r04.title':
+    '福尼特OA研发电子部门菜单不再被其它分组冲掉',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-electronics-menu-r04.description':
+    '菜单同步按路径全局唯一，同路径只能挂一个分组。研发电子下的实验委托、工程图纸、工程变更等改为带 entry 查询参数的独立路径，同步后可与实验部门、文控等并存。请再次菜单同步并刷新。',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-electronics-menu-r03.title':
+    '福尼特OA研发电子菜单按部门补齐常用入口',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-electronics-menu-r03.description':
+    '「研发电子」下增加实验委托、交付物（电子类预筛选）、工程图纸、工程变更、试流单、样品检验、物料评审等入口，与需求清单对应；文控资料同步增加结构类交付物快捷入口。请应用中心菜单同步后刷新。',
+  'pages.dashboard.updateLog.entries.lab-request-measure-requirement-attachments-r01.title':
+    '实验委托试验项与标准可上传试验要求相关文件',
+  'pages.dashboard.updateLog.entries.lab-request-measure-requirement-attachments-r01.description':
+    '新建编辑时在「试验项与标准」下方提供附件上传，各委托类型均可挂试验标准、图纸等要求文件；通用委托与材料试验提交前仍须至少 1 个附件。',
+  'pages.dashboard.updateLog.entries.lab-request-dept-scope-settings-r01.title':
+    '实验委托可设置委托部门与检测部门可选范围',
+  'pages.dashboard.updateLog.entries.lab-request-dept-scope-settings-r01.description':
+    '列表「部门设置」可分别指定委托部门、检测部门白名单；留空不限制。新建编辑下拉仅显示范围内部门，编辑时仍保留已选部门。',
   'pages.dashboard.updateLog.entries.login-log-location-zhou-suffix-r01.title':
     '登录地点广州等城市不再截成单字',
   'pages.dashboard.updateLog.entries.login-log-location-zhou-suffix-r01.description':
     'IP 解析去行政区后缀时误把「州」当成尾缀，导致「广州」显示成「广」。现已保留两字市名，并优先识别「自治州」等完整后缀。',
+  'pages.dashboard.updateLog.entries.wecom-mobile-oauth-refresh-loop-r01.title':
+    '企微工作台打开手机端不再循环刷新登录页',
+  'pages.dashboard.updateLog.entries.wecom-mobile-oauth-refresh-loop-r01.description':
+    '企业微信内打开手机端时，若静默授权失败或未完成，不再反复跳转授权页导致登录页整页刷新；会停在账密登录并提示原因，账密登录成功后可恢复下次静默登录。',
+  'pages.dashboard.updateLog.entries.customer-follow-up-create-data-scope-r02.title':
+    '客户跟进支持未归属客户',
+  'pages.dashboard.updateLog.entries.customer-follow-up-create-data-scope-r02.description':
+    '新建跟进可选择本人负责、协作或未归属（公海）客户，下拉与保存同一范围；他人已归属客户不可跟进，不再误报笼统权限不足。',
   'pages.dashboard.updateLog.entries.pc-audit-unreview-empty-pending-r01.title':
     '审核反审核不再出现空壳待审与审计静默',
   'pages.dashboard.updateLog.entries.pc-audit-unreview-empty-pending-r01.description':
@@ -30482,6 +30559,18 @@ export default {
     '休息夜班登记支持日期区间与列表',
   'pages.dashboard.updateLog.entries.kuaioa-attendance-day-register-range-list-r01.description':
     '休息登记、夜班登记改为列表页并保留登记历史；新建弹窗可选日期区间，一次写入对应月度考勤草稿（休息√ / 夜班☆），可不选人员表示区间内全员。',
+  'pages.dashboard.updateLog.entries.dedicated-page-split-scan-r01.title':
+    '定制应用分流增加门禁扫描',
+  'pages.dashboard.updateLog.entries.dedicated-page-split-scan-r01.description':
+    '定制应用侧栏与路由不得再挂通用宿主页；新增只读扫描拦截菜单直链宿主、零拷贝挂载宿主页等回归，并去掉定制客户页跳回宿主客户池的入口。',
+  'pages.dashboard.updateLog.entries.drawing-main-file-beforeupload-r01.title':
+    '工程图纸新建上传主文件后不再误提示未上传',
+  'pages.dashboard.updateLog.entries.drawing-main-file-beforeupload-r01.description':
+    '新建图纸时主文件已出现在列表却仍提示「请上传主文件」：体积校验误拦截实际上传，文件未写入服务端故无文件标识；现已放行合格文件并完成上传后清除校验提示。',
+  'pages.dashboard.updateLog.entries.install-execution-detail-row-undefined-r01.title':
+    '安装执行详情不再报 row is not defined',
+  'pages.dashboard.updateLog.entries.install-execution-detail-row-undefined-r01.description':
+    '售后安装执行打开详情时，抽屉关闭/删除确认文案误用不存在的 row 变量导致整页加载失败；已改为使用当前详情记录。',
   'pages.dashboard.updateLog.entries.mrp-list-hide-soft-deleted-r01.title':
     '需求计算列表不再显示已删除单据',
   'pages.dashboard.updateLog.entries.mrp-list-hide-soft-deleted-r01.description':
