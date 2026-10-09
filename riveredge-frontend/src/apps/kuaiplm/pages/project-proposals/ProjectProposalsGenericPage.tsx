@@ -45,6 +45,7 @@ import {
   type ProjectProposalStatus,
 } from '../../services/project-proposal';
 import { resolvePlmStandardDocListSearch } from '../../utils/plmListCore';
+import { ProjectProposalCapabilitiesTags } from '../../components/ProjectProposalCapabilitiesTags';
 
 const RESOURCE = 'kuaiplm:project-proposal';
 const STATUS_KEYS: ProjectProposalStatus[] = [
@@ -180,6 +181,17 @@ const ProjectProposalsGenericPage: React.FC = () => {
         uniTableKeepWidth: true,
         resizable: false,
         render: (_, r) => formatDateBySiteSetting(r.expected_date) || '—',
+      },
+      {
+        title: t('app.kuaiplm.projectProposal.capabilitiesColumn'),
+        dataIndex: 'capabilities',
+        key: 'capabilities',
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+        width: 340,
+        minWidth: 300,
+        uniTableKeepWidth: true,
+        hideInSearch: true,
+        render: (_, row) => <ProjectProposalCapabilitiesTags capabilities={row.capabilities} />,
       },
       {
         ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
@@ -410,7 +422,7 @@ const ProjectProposalsGenericPage: React.FC = () => {
           tableRowsRef.current = rows;
         }}
         columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
-        columnPersistenceId="apps.kuaiplm.pages.project-proposals.width-v4-neutral"
+        columnPersistenceId="apps.kuaiplm.pages.project-proposals.width-v5-capabilities"
         showCreateButton={perms.canCreate}
         createButtonText={t('app.kuaiplm.projectProposal.createButton') + NEW_SHORTCUT_HINT}
         onCreate={openCreate}

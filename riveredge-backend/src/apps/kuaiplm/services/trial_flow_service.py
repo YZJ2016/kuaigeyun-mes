@@ -15,6 +15,7 @@ from apps.kuaiplm.models.trial_flow import (
     TrialFlowStepResult,
 )
 from apps.kuaiplm.schemas.trial_flow import (
+    TrialFlowCompleteCapabilities,
     TrialFlowConclude,
     TrialFlowCreate,
     TrialFlowFormProfile,
@@ -26,6 +27,10 @@ from apps.kuaiplm.schemas.trial_flow import (
     TrialFlowStepFill,
     TrialFlowStepOut,
     TrialFlowUpdate,
+)
+from apps.kuaiplm.utils.trial_flow_complete_capabilities import (
+    compute_trial_flow_complete_capabilities,
+    validate_complete_trial_on_submit,
 )
 from core.services.application.industry_extension_runtime_service import (
     IndustryExtensionRuntimeService,
@@ -138,6 +143,20 @@ class TrialFlowService(AppBaseService[TrialFlow]):
         )
         return materials, steps
 
+    def _complete_capabilities_payload(
+        self,
+        row: TrialFlow,
+        *,
+        steps: List[TrialFlowStepResult],
+        material_line_count: int,
+    ) -> Optional[TrialFlowCompleteCapabilities]:
+        caps = compute_trial_flow_complete_capabilities(
+            row, steps=steps, material_line_count=material_line_count
+        )
+        if not caps:
+            return None
+        return TrialFlowCompleteCapabilities.model_validate(caps)
+
     def _to_response(
         self,
         row: TrialFlow,
@@ -149,6 +168,9 @@ class TrialFlowService(AppBaseService[TrialFlow]):
             TrialFlowMaterialLineOut.model_validate(m) for m in materials
         ]
         data.steps = [TrialFlowStepOut.model_validate(s) for s in steps]
+        data.capabilities = self._complete_capabilities_payload(
+            row, steps=steps, material_line_count=len(materials)
+        )
         return data
 
     def _compute_current_step(self, steps: List[TrialFlowStepResult]) -> Optional[str]:
@@ -268,10 +290,37 @@ class TrialFlowService(AppBaseService[TrialFlow]):
             query = query.filter(title__icontains=keyword)
         total = await query.count()
         rows = await query.order_by("-updated_at", "-id").offset(skip).limit(limit)
-        return TrialFlowListResponse(
-            items=[TrialFlowListItem.model_validate(r) for r in rows],
-            total=total,
-        )
+        complete_ids = [
+            r.id for r in rows if (r.business_type or "").strip().lower() == "complete"
+        ]
+        steps_by_trial: Dict[int, List[TrialFlowStepResult]] = {}
+        mat_count_by_trial: Dict[int, int] = {}
+        if complete_ids:
+            step_rows = await TrialFlowStepResult.filter(
+                tenant_id=tenant_id,
+                trial_flow_id__in=complete_ids,
+                deleted_at__isnull=True,
+            )
+            for step in step_rows:
+                steps_by_trial.setdefault(step.trial_flow_id, []).append(step)
+            mat_rows = await TrialFlowMaterialLine.filter(
+                tenant_id=tenant_id,
+                trial_flow_id__in=complete_ids,
+                deleted_at__isnull=True,
+            ).values_list("trial_flow_id", flat=True)
+            for tid in mat_rows:
+                mat_count_by_trial[int(tid)] = mat_count_by_trial.get(int(tid), 0) + 1
+        items: List[TrialFlowListItem] = []
+        for r in rows:
+            item = TrialFlowListItem.model_validate(r)
+            if (r.business_type or "").strip().lower() == "complete":
+                item.capabilities = self._complete_capabilities_payload(
+                    r,
+                    steps=steps_by_trial.get(r.id, []),
+                    material_line_count=mat_count_by_trial.get(r.id, 0),
+                )
+            items.append(item)
+        return TrialFlowListResponse(items=items, total=total)
 
     async def get(self, tenant_id: int, trial_id: int) -> TrialFlowResponse:
         row = await self._get_row(tenant_id, trial_id)
@@ -304,6 +353,12 @@ class TrialFlowService(AppBaseService[TrialFlow]):
         mats, _ = await self._load_lines(tenant_id, trial_id)
         if not mats:
             raise ValidationError("提交前须至少一行试流物料")
+        if (row.business_type or "").strip().lower() == "complete":
+            validate_complete_trial_on_submit(
+                title=row.title,
+                extension_payload=row.extension_payload,
+                material_line_count=len(mats),
+            )
 
         row.status = "pending"
         row.submitted_at = resolve_business_datetime()

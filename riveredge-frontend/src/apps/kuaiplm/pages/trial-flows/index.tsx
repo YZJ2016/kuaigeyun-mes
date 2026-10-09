@@ -60,6 +60,7 @@ import {
   formatHeaderFieldDisplayValue,
   sortedHeaderFields,
 } from '../../utils/trialFlowFormProfile';
+import { TrialFlowCompleteCapabilitiesTags } from '../../components/TrialFlowCompleteCapabilitiesTags';
 
 const RESOURCE = 'kuaiplm:trial-flow';
 const STATUS_KEYS: TrialFlowStatus[] = [
@@ -240,6 +241,22 @@ const TrialFlowsPage: React.FC = () => {
         render: (_, r) => r.current_step_key || '—',
       },
       {
+        title: t('app.kuaiplm.trialFlow.capabilitiesColumn'),
+        dataIndex: 'capabilities',
+        key: 'capabilities',
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+        width: 400,
+        minWidth: 360,
+        uniTableKeepWidth: true,
+        hideInSearch: true,
+        render: (_, row) => (
+          <TrialFlowCompleteCapabilitiesTags
+            capabilities={row.capabilities}
+            businessType={row.business_type}
+          />
+        ),
+      },
+      {
         ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         title: t('common.status'),
         dataIndex: 'status',
@@ -404,7 +421,7 @@ const TrialFlowsPage: React.FC = () => {
           tableRowsRef.current = rows;
         }}
         columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
-        columnPersistenceId="apps.kuaiplm.pages.trial-flows.width-v2"
+        columnPersistenceId="apps.kuaiplm.pages.trial-flows.width-v3"
         showCreateButton={perms.canCreate}
         createButtonText={t('app.kuaiplm.trialFlow.createButton') + NEW_SHORTCUT_HINT}
         onCreate={openCreate}

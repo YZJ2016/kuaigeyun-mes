@@ -6,6 +6,8 @@ import {
   isPartSpecType,
   isSchematicGerberType,
   isSoftwareSpecType,
+  isStructureCatalogType,
+  isStructureDrawingType,
   isTestReportCompleteType,
   isTestReportPartType,
 } from '../utils/rdDeliverableTypes';
@@ -187,6 +189,46 @@ export const RdDeliverableTypeFormFields: React.FC<Props> = ({
               showIcon
               style={{ marginBottom: 16 }}
               title={t('app.kuaiplm.rdProjects.detail.deliverable.customerDocHint')}
+            />
+          );
+        }
+        if (isStructureDrawingType(dtype)) {
+          return (
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: 16 }}
+              title={t('app.kuaiplm.rdProjects.detail.deliverable.structureDrawingHint')}
+            />
+          );
+        }
+        if (dtype === 'mold_repair') {
+          return (
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: 16 }}
+              title={t('app.kuaiplm.rdProjects.detail.deliverable.moldRepairHint')}
+            />
+          );
+        }
+        if (isStructureCatalogType(dtype) && dtype !== 'mold_repair') {
+          return (
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: 16 }}
+              title={t('app.kuaiplm.rdProjects.detail.deliverable.structureCatalogHint')}
+            />
+          );
+        }
+        if (showStandaloneProjectCode && !hasProject && dtype && !isSoftwareSpecType(dtype)) {
+          return (
+            <ProFormText
+              name="project_code"
+              label={t('app.kuaiplm.rdDeliverables.form.projectCode')}
+              placeholder={t('app.kuaiplm.rdDeliverables.form.projectCodeOptionalPlaceholder')}
+              extra={t('app.kuaiplm.rdDeliverables.form.projectCodeOptionalHint')}
             />
           );
         }

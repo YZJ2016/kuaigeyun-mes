@@ -33,6 +33,9 @@ import {
   renderPlmChangeTypeMarker,
 } from '../utils/plmListPresentation';
 import type { ChangeDeskCategory, UnifiedChangeRow } from '../services/change-desk';
+import { useResourcePermissions } from '../../../hooks/useResourcePermissions';
+import { EcnCapabilitiesTags } from './EcnCapabilitiesTags';
+import type { EcnSignoff } from '../services/engineering-change';
 
 type DrawingChangeDetail = {
   drawing_uuid?: string;
@@ -87,6 +90,11 @@ const ChangeDetailDrawer: React.FC<ChangeDetailDrawerProps> = ({ row, onClose, o
   const [erpResult, setErpResult] = useState('pass');
   const [erpNotes, setErpNotes] = useState('');
   const [ecnFormProfile, setEcnFormProfile] = useState<EcnFormProfile | null>(null);
+  const ecnPerms = useResourcePermissions('kuaiplm:ecn');
+  const [signoffOpen, setSignoffOpen] = useState(false);
+  const [signoffTarget, setSignoffTarget] = useState<EcnSignoff | null>(null);
+  const [signoffResult, setSignoffResult] = useState('agree');
+  const [signoffNotes, setSignoffNotes] = useState('');
 
   useEffect(() => {
     if (row?.change_category !== 'ecn') {
@@ -212,7 +220,29 @@ const ChangeDetailDrawer: React.FC<ChangeDetailDrawerProps> = ({ row, onClose, o
         loading={loading}
         extra={
           row ? (
-            category === 'ecn' && ecnDetail?.status === 'erp_pending' ? (
+            category === 'ecn' &&
+            ecnDetail?.extension_payload?.entry_source === 'design_change_request' &&
+            ecnDetail.status === 'approved' &&
+            !ecnDetail.extension_payload?.rd_issued_at &&
+            ecnPerms.canAction?.('execute') &&
+            ecnDetail.id ? (
+              <Button
+                type="primary"
+                size="small"
+                onClick={async () => {
+                  try {
+                    await engineeringChangeApi.issueToRd(ecnDetail.id);
+                    messageApi.success(t('app.kuaiplm.designChangeRequest.messages.issuedToRd'));
+                    await load();
+                    onChanged?.();
+                  } catch (e) {
+                    messageApi.error(getApiErrorMessage(e));
+                  }
+                }}
+              >
+                {t('app.kuaiplm.designChangeRequest.actions.issueToRd')}
+              </Button>
+            ) : category === 'ecn' && ecnDetail?.status === 'erp_pending' ? (
               <Button
                 type="primary"
                 size="small"
@@ -337,6 +367,11 @@ const ChangeDetailDrawer: React.FC<ChangeDetailDrawerProps> = ({ row, onClose, o
                     />
                   </DetailDrawerSection>
                   <DetailDrawerSection title={t('app.kuaiplm.ecn.fields.signoffs')}>
+                    {ecnDetail.capabilities ? (
+                      <div style={{ marginBottom: 12 }}>
+                        <EcnCapabilitiesTags capabilities={ecnDetail.capabilities} />
+                      </div>
+                    ) : null}
                     <Table
                       size="small"
                       pagination={false}
@@ -349,6 +384,35 @@ const ChangeDetailDrawer: React.FC<ChangeDetailDrawerProps> = ({ row, onClose, o
                           title: t('app.kuaiplm.ecn.fields.signerName'),
                           dataIndex: 'signer_name',
                           render: (v) => v || '—',
+                        },
+                        {
+                          title: t('common.action'),
+                          key: 'op',
+                          width: 88,
+                          render: (_, sign: EcnSignoff) => {
+                            if (
+                              ecnDetail.status !== 'pending' ||
+                              sign.status !== 'pending' ||
+                              !ecnPerms.canUpdate ||
+                              !ecnDetail.id
+                            ) {
+                              return null;
+                            }
+                            return (
+                              <Button
+                                type="link"
+                                size="small"
+                                onClick={() => {
+                                  setSignoffTarget(sign);
+                                  setSignoffResult('agree');
+                                  setSignoffNotes('');
+                                  setSignoffOpen(true);
+                                }}
+                              >
+                                {t('app.kuaiplm.ecn.actions.signoff')}
+                              </Button>
+                            );
+                          },
                         },
                       ]}
                     />
@@ -363,6 +427,46 @@ const ChangeDetailDrawer: React.FC<ChangeDetailDrawerProps> = ({ row, onClose, o
           )
         }
       />
+
+      <Modal
+        title={t('app.kuaiplm.ecn.actions.signoff')}
+        open={signoffOpen}
+        destroyOnHidden
+        onCancel={() => setSignoffOpen(false)}
+        onOk={async () => {
+          if (!ecnDetail?.id || !signoffTarget?.dept_code) return;
+          try {
+            await engineeringChangeApi.signoff(ecnDetail.id, signoffTarget.dept_code, {
+              result: signoffResult,
+              notes: signoffNotes || undefined,
+            });
+            messageApi.success(t('app.kuaiplm.ecn.messages.signoffSuccess'));
+            setSignoffOpen(false);
+            await load();
+            onChanged?.();
+          } catch (e) {
+            messageApi.error(getApiErrorMessage(e));
+          }
+        }}
+      >
+        <div style={{ marginBottom: 8 }}>{signoffTarget?.dept_name}</div>
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ marginBottom: 4 }}>{t('app.kuaiplm.ecn.fields.signoffResult')}</div>
+          <Select
+            style={{ width: '100%' }}
+            value={signoffResult}
+            onChange={setSignoffResult}
+            options={[
+              { value: 'agree', label: t('app.kuaiplm.ecn.signoffResult.agree') },
+              { value: 'disagree', label: t('app.kuaiplm.ecn.signoffResult.disagree') },
+            ]}
+          />
+        </div>
+        <div>
+          <div style={{ marginBottom: 4 }}>{t('app.kuaiplm.ecn.fields.signoffNotes')}</div>
+          <Input.TextArea rows={3} value={signoffNotes} onChange={(e) => setSignoffNotes(e.target.value)} />
+        </div>
+      </Modal>
 
       <Modal
         title={t('app.kuaiplm.ecn.actions.erpAudit')}

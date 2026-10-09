@@ -17,12 +17,18 @@ from apps.kuaiplm.constants.project_proposal_template import (
 )
 from apps.kuaiplm.models.project_proposal import ProjectProposal
 from apps.kuaiplm.schemas.project_proposal import (
+    ProjectProposalCapabilities,
     ProjectProposalCreate,
     ProjectProposalListResponse,
     ProjectProposalResponse,
     ProjectProposalSupplierFill,
     ProjectProposalUpdate,
     SupplierAssessmentLine,
+)
+from apps.kuaiplm.utils.project_proposal_capabilities import (
+    compute_project_proposal_capabilities,
+    validate_sales_content_on_submit,
+    validate_supplier_on_submit,
 )
 from core.services.approval.approval_instance_service import ApprovalInstanceService
 from core.services.approval.audit_binding_service import AuditBindingService
@@ -63,6 +69,17 @@ class ProjectProposalService(AppBaseService[ProjectProposal]):
         if not name:
             raise ValidationError("请填写项目名称或标题")
         return name
+
+    @staticmethod
+    def _capabilities_payload(row: ProjectProposal) -> ProjectProposalCapabilities:
+        caps = compute_project_proposal_capabilities(row)
+        return ProjectProposalCapabilities.model_validate(caps)
+
+    @staticmethod
+    def _to_api_response(row: ProjectProposal) -> ProjectProposalResponse:
+        data = ProjectProposalResponse.model_validate(row)
+        data.capabilities = ProjectProposalService._capabilities_payload(row)
+        return data
 
     async def _get_row(self, tenant_id: int, proposal_id: int) -> ProjectProposal:
         row = await ProjectProposal.filter(
@@ -247,7 +264,7 @@ class ProjectProposalService(AppBaseService[ProjectProposal]):
         row.title = self._resolve_doc_title(row.title, row.project_name)
         apply_create_audit(row, user)
         await row.save()
-        return ProjectProposalResponse.model_validate(row)
+        return self._to_api_response(row)
 
     async def list(
         self,
@@ -271,13 +288,13 @@ class ProjectProposalService(AppBaseService[ProjectProposal]):
         total = await query.count()
         rows = await query.order_by("-updated_at", "-id").offset(skip).limit(limit)
         return ProjectProposalListResponse(
-            items=[ProjectProposalResponse.model_validate(r) for r in rows],
+            items=[self._to_api_response(r) for r in rows],
             total=total,
         )
 
     async def get(self, tenant_id: int, proposal_id: int) -> ProjectProposalResponse:
         row = await self._get_row(tenant_id, proposal_id)
-        return ProjectProposalResponse.model_validate(row)
+        return self._to_api_response(row)
 
     async def update(
         self, tenant_id: int, proposal_id: int, payload: ProjectProposalUpdate, user: User
@@ -289,7 +306,7 @@ class ProjectProposalService(AppBaseService[ProjectProposal]):
         row.title = self._resolve_doc_title(row.title, row.project_name)
         apply_update_audit(row, user)
         await row.save()
-        return ProjectProposalResponse.model_validate(row)
+        return self._to_api_response(row)
 
     async def fill_supplier(
         self,
@@ -331,7 +348,7 @@ class ProjectProposalService(AppBaseService[ProjectProposal]):
             row.supplier_remark = payload.supplier_remark
         apply_update_audit(row, user)
         await row.save()
-        return ProjectProposalResponse.model_validate(row)
+        return self._to_api_response(row)
 
     async def submit(
         self, tenant_id: int, proposal_id: int, user: User
@@ -339,14 +356,8 @@ class ProjectProposalService(AppBaseService[ProjectProposal]):
         row = await self._get_row(tenant_id, proposal_id)
         if row.status not in {"draft", "rejected"}:
             raise BusinessLogicError("仅草稿或已驳回可提交审核")
-        if self._needs_supplier_assessment(list(row.dev_req_types or [])):
-            if not (row.summary and str(row.summary).strip()):
-                raise ValidationError("请先填写开发要求概述")
-            lines = self._normalize_supplier_lines(list(row.supplier_assessment_lines or []))
-            if not self._supplier_assessment_ready(lines):
-                raise ValidationError("开发要求为 D/E/F 类时，采购须完整填写供应商评审表")
-        elif not (row.supplier_name or "").strip():
-            raise ValidationError("提交前须由采购填写供应商")
+        validate_sales_content_on_submit(row)
+        validate_supplier_on_submit(row)
 
         row.status = "pending"
         row.submitted_at = resolve_business_datetime()
@@ -375,7 +386,7 @@ class ProjectProposalService(AppBaseService[ProjectProposal]):
 
         if submit_instance_auto_passed(approval_instance):
             return await self.approve(tenant_id, proposal_id, user)
-        return ProjectProposalResponse.model_validate(row)
+        return self._to_api_response(row)
 
     async def approve(
         self, tenant_id: int, proposal_id: int, user: User
@@ -397,7 +408,7 @@ class ProjectProposalService(AppBaseService[ProjectProposal]):
         row.approved_at = resolve_business_datetime()
         apply_update_audit(row, user)
         await row.save()
-        return ProjectProposalResponse.model_validate(row)
+        return self._to_api_response(row)
 
     async def reject(
         self, tenant_id: int, proposal_id: int, user: User
@@ -418,7 +429,7 @@ class ProjectProposalService(AppBaseService[ProjectProposal]):
         row.status = "rejected"
         apply_update_audit(row, user)
         await row.save()
-        return ProjectProposalResponse.model_validate(row)
+        return self._to_api_response(row)
 
     async def issue(
         self, tenant_id: int, proposal_id: int, user: User
@@ -433,7 +444,7 @@ class ProjectProposalService(AppBaseService[ProjectProposal]):
         row.issued_by_name = getattr(user, "name", None) or getattr(user, "username", None)
         apply_update_audit(row, user)
         await row.save()
-        return ProjectProposalResponse.model_validate(row)
+        return self._to_api_response(row)
 
     async def delete(self, tenant_id: int, proposal_id: int, user: User) -> None:
         row = await self._get_row(tenant_id, proposal_id)

@@ -3120,6 +3120,8 @@
     "kuaizhizao:quality-management-system-documents:reject",
     "kuaizhizao:quality-management-system-documents:obsolete",
     "kuaizhizao:quality-management-system-documents:publish",
+    "kuaizhizao:quality-management-system-documents:submit",
+    "kuaizhizao:quality-management-system-documents:approve",
     "kuaizhizao:quality-management-traceability:read",
     "kuaizhizao:quality-management-traceability:print",
     "kuaizhizao:quotation:read",
@@ -4017,6 +4019,15 @@
       "config_category": "quality",
       "config_section": "quality_complaint",
       "business_type": "customer"
+    },
+    {
+      "node_key": "qms_system_document",
+      "entity_type": "qms_system_document",
+      "resource": "kuaizhizao:quality-management-system-documents",
+      "name": "体系文件审核",
+      "template": "qms_system_document",
+      "config_category": "quality",
+      "config_section": "qms_system_document"
     }
   ],
   "dependencies": {

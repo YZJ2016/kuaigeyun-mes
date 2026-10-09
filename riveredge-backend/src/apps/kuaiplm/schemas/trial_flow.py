@@ -104,6 +104,15 @@ class TrialFlowResponse(BaseModel):
     updated_by_name: Optional[str] = None
     materials: List[TrialFlowMaterialLineOut] = Field(default_factory=list)
     steps: List[TrialFlowStepOut] = Field(default_factory=list)
+    capabilities: Optional[TrialFlowCompleteCapabilities] = None
+
+
+class TrialFlowCompleteCapabilities(BaseModel):
+    filled: bool = False
+    dept_approved: bool = False
+    results_done: bool = False
+    conclusions_done: bool = False
+    archived: bool = False
 
 
 class TrialFlowListItem(BaseModel):
@@ -124,6 +133,7 @@ class TrialFlowListItem(BaseModel):
     updated_at: datetime
     created_by_name: Optional[str] = None
     updated_by_name: Optional[str] = None
+    capabilities: Optional[TrialFlowCompleteCapabilities] = None
 
 
 class TrialFlowListResponse(BaseModel):

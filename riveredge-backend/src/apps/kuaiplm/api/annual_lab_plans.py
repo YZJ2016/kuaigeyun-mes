@@ -8,6 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from apps.kuaiplm.schemas.annual_lab_plan import (
     AnnualLabPlanCreate,
+    AnnualLabPlanCreateLabRequestRequest,
+    AnnualLabPlanCreateLabRequestResponse,
     AnnualLabPlanIssueRejectRequest,
     AnnualLabPlanListResponse,
     AnnualLabPlanMonthUpdate,
@@ -207,6 +209,34 @@ async def update_month(
 ):
     try:
         return await service.update_month(
+            tenant_id, plan_id, month_id, data, current_user
+        )
+    except Exception as exc:
+        raise _http(exc) from exc
+
+
+@router.post(
+    "/{plan_id}/months/{month_id}/create-lab-request",
+    response_model=AnnualLabPlanCreateLabRequestResponse,
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaiplm:annual-lab-plan:update",
+                "kuaiplm:lab-request:create",
+                require_all=True,
+            )
+        )
+    ],
+)
+async def create_lab_request_for_month(
+    plan_id: int,
+    month_id: int,
+    data: AnnualLabPlanCreateLabRequestRequest,
+    tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        return await service.create_lab_request_for_month(
             tenant_id, plan_id, month_id, data, current_user
         )
     except Exception as exc:

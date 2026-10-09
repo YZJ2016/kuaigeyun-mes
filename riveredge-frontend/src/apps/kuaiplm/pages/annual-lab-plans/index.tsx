@@ -2,6 +2,7 @@
  * 年度实验计划（R-07）
  */
 import React, { useCallback, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import {
@@ -42,8 +43,10 @@ import {
   type AnnualLabPlanStatus,
 } from '../../services/annual-lab-plan';
 import { resolvePlmStandardDocListSearch } from '../../utils/plmListCore';
+import { listRdProjects } from '../../services/rd-project';
 
 const RESOURCE = 'kuaiplm:annual-lab-plan';
+const LAB_REQUEST_RESOURCE = 'kuaiplm:lab-request';
 const STATUS_KEYS: AnnualLabPlanStatus[] = [
   'draft',
   'pending',
@@ -55,7 +58,9 @@ const STATUS_KEYS: AnnualLabPlanStatus[] = [
 const AnnualLabPlansPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi, modal } = App.useApp();
+  const navigate = useNavigate();
   const perms = useResourcePermissions(RESOURCE);
+  const labRequestPerms = useResourcePermissions(LAB_REQUEST_RESOURCE);
   const canSubmit = !!perms.canAction?.('submit');
   const canApprove = !!perms.canAction?.('approve');
   const canReject = !!perms.canAction?.('reject');
@@ -71,6 +76,36 @@ const AnnualLabPlansPage: React.FC = () => {
   const detailRetryIdRef = useRef<number | null>(null);
   const [monthEdit, setMonthEdit] = useState<AnnualLabPlanMonth | null>(null);
   const [monthDraft, setMonthDraft] = useState<Partial<AnnualLabPlanMonth>>({});
+  const [createLabMonth, setCreateLabMonth] = useState<AnnualLabPlanMonth | null>(null);
+  const [createLabSubmitting, setCreateLabSubmitting] = useState(false);
+  const [createLabForm, setCreateLabForm] = useState<{
+    project_id?: number;
+    business_type: string;
+    title?: string;
+  }>({ business_type: 'project_product' });
+  const [projectOptions, setProjectOptions] = useState<{ value: number; label: string }[]>([]);
+  const [projectLoading, setProjectLoading] = useState(false);
+
+  const canCreateLabRequest = perms.canUpdate && labRequestPerms.canCreate;
+
+  const loadProjectOptions = useCallback(async (keyword?: string) => {
+    setProjectLoading(true);
+    try {
+      const res = await listRdProjects({
+        keyword: keyword?.trim() || undefined,
+        limit: 50,
+        project_type: 'RD',
+      });
+      setProjectOptions(
+        (res.items ?? []).map((item) => ({
+          value: item.id,
+          label: `${item.project_code ?? item.id} - ${item.project_name ?? ''}`.trim(),
+        })),
+      );
+    } finally {
+      setProjectLoading(false);
+    }
+  }, []);
 
   const statusLabel = useCallback(
     (v?: string) => t(`app.kuaiplm.annualLabPlan.status.${v || 'draft'}`),
@@ -443,13 +478,36 @@ const AnnualLabPlansPage: React.FC = () => {
       render: (v) => (v ? formatDateTimeBySiteSetting(String(v)) : '-'),
     },
     {
+      title: t('app.kuaiplm.annualLabPlan.colLabRequest'),
+      dataIndex: 'lab_request_code',
+      width: 140,
+      ellipsis: true,
+      render: (v) => v || '-',
+    },
+    {
       title: t('common.action'),
       key: 'action',
-      width: 220,
+      width: 280,
       render: (_, record) => {
         if (detail?.status !== 'approved' || !perms.canUpdate) return null;
         return (
           <>
+            {!record.lab_request_id && canCreateLabRequest && (
+              <Button
+                type="link"
+                size="small"
+                onClick={() => {
+                  setCreateLabMonth(record);
+                  setCreateLabForm({
+                    business_type: 'project_product',
+                    title: record.title || undefined,
+                  });
+                  void loadProjectOptions();
+                }}
+              >
+                {t('app.kuaiplm.annualLabPlan.actions.createLabRequest')}
+              </Button>
+            )}
             <Button
               type="link"
               size="small"
@@ -461,7 +519,6 @@ const AnnualLabPlansPage: React.FC = () => {
                   defect_desc: record.defect_desc,
                   treatment_result: record.treatment_result,
                   report_url: record.report_url,
-                  lab_request_code: record.lab_request_code,
                   month_status: record.month_status,
                 });
               }}
@@ -747,15 +804,12 @@ const AnnualLabPlansPage: React.FC = () => {
               }
             />
           </div>
-          <div>
-            <div>{t('app.kuaiplm.annualLabPlan.colLabRequest')}</div>
-            <Input
-              value={monthDraft.lab_request_code || ''}
-              onChange={(e) =>
-                setMonthDraft((d) => ({ ...d, lab_request_code: e.target.value }))
-              }
-            />
-          </div>
+          {monthEdit?.lab_request_code ? (
+            <div>
+              <div>{t('app.kuaiplm.annualLabPlan.colLabRequest')}</div>
+              <Input value={monthEdit.lab_request_code} disabled />
+            </div>
+          ) : null}
           <div>
             <div>{t('app.kuaiplm.annualLabPlan.colMonthStatus')}</div>
             <Select
@@ -766,6 +820,98 @@ const AnnualLabPlansPage: React.FC = () => {
                 label: monthStatusLabel(k),
               }))}
               onChange={(v) => setMonthDraft((d) => ({ ...d, month_status: v }))}
+            />
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        title={t('app.kuaiplm.annualLabPlan.createLabRequestTitle')}
+        open={!!createLabMonth}
+        destroyOnHidden
+        confirmLoading={createLabSubmitting}
+        onCancel={() => setCreateLabMonth(null)}
+        onOk={async () => {
+          if (!detail?.id || !createLabMonth?.id || !createLabForm.project_id) {
+            messageApi.warning(t('app.kuaiplm.annualLabPlan.createLabRequestNeedProject'));
+            return;
+          }
+          setCreateLabSubmitting(true);
+          try {
+            const res = await annualLabPlanApi.createLabRequestForMonth(
+              detail.id,
+              createLabMonth.id,
+              {
+                project_id: createLabForm.project_id,
+                business_type: createLabForm.business_type,
+                title: createLabForm.title?.trim() || undefined,
+              },
+            );
+            setDetail(res.plan);
+            messageApi.success(
+              t('app.kuaiplm.annualLabPlan.createLabRequestSuccess', {
+                code: res.lab_request_code,
+              }),
+            );
+            setCreateLabMonth(null);
+            navigate('/apps/kuaiplm/lab-requests');
+          } catch (error) {
+            messageApi.error(getApiErrorMessage(error));
+          } finally {
+            setCreateLabSubmitting(false);
+          }
+        }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div>
+            <div>{t('app.kuaiplm.annualLabPlan.colMonth')}</div>
+            <Input value={createLabMonth?.year_month || ''} disabled />
+          </div>
+          <div>
+            <div>{t('app.kuaiplm.labRequest.fields.projectCode')}</div>
+            <Select
+              showSearch
+              style={{ width: '100%' }}
+              placeholder={t('common.selectField', {
+                field: t('app.kuaiplm.labRequest.fields.projectCode'),
+              })}
+              loading={projectLoading}
+              filterOption={false}
+              options={projectOptions}
+              value={createLabForm.project_id}
+              onSearch={(kw) => void loadProjectOptions(kw)}
+              onFocus={() => {
+                if (!projectOptions.length) void loadProjectOptions();
+              }}
+              onChange={(v) => setCreateLabForm((f) => ({ ...f, project_id: v }))}
+            />
+          </div>
+          <div>
+            <div>{t('app.kuaiplm.labRequest.fields.businessType')}</div>
+            <Select
+              style={{ width: '100%' }}
+              value={createLabForm.business_type}
+              options={[
+                {
+                  value: 'project_product',
+                  label: t('app.kuaiplm.labRequest.type.project_product'),
+                },
+                {
+                  value: 'project_material',
+                  label: t('app.kuaiplm.labRequest.type.project_material'),
+                },
+              ]}
+              onChange={(v) => setCreateLabForm((f) => ({ ...f, business_type: v }))}
+            />
+          </div>
+          <div>
+            <div>{t('app.kuaiplm.labRequest.fields.title')}</div>
+            <Input
+              value={createLabForm.title || ''}
+              placeholder={createLabMonth?.title || ''}
+              onChange={(e) =>
+                setCreateLabForm((f) => ({ ...f, title: e.target.value || undefined }))
+              }
             />
           </div>
         </div>

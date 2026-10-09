@@ -101,6 +101,11 @@ class LabRequestBase(BaseModel):
     report_file_uuid: Optional[str] = Field(None, max_length=36)
     report_url: Optional[str] = Field(None, max_length=500)
     attachments: Optional[List[dict]] = None
+    structure_special_test: Optional[str] = None
+    electronics_special_test: Optional[str] = None
+    structure_manager_user_id: Optional[int] = None
+    electronics_manager_user_id: Optional[int] = None
+    notify_user_ids: Optional[List[int]] = None
     extension_payload: Optional[dict] = None
     remarks: Optional[str] = None
 
@@ -132,9 +137,26 @@ class LabRequestUpdate(BaseModel):
     report_file_uuid: Optional[str] = Field(None, max_length=36)
     report_url: Optional[str] = Field(None, max_length=500)
     attachments: Optional[List[dict]] = None
+    structure_special_test: Optional[str] = None
+    electronics_special_test: Optional[str] = None
+    structure_manager_user_id: Optional[int] = None
+    electronics_manager_user_id: Optional[int] = None
+    notify_user_ids: Optional[List[int]] = None
     extension_payload: Optional[dict] = None
     remarks: Optional[str] = None
     measure_items: Optional[List[LabRequestMeasurePlanItemInput]] = None
+
+
+class LabRequestSectionUpdate(BaseModel):
+    special_test: Optional[str] = None
+    attachments: Optional[List[dict]] = None
+
+
+class LabRequestOutsourceCapabilities(BaseModel):
+    filled: bool = False
+    dept_approved: bool = False
+    price_filled: bool = False
+    lab_accepted: bool = False
 
 
 class LabRequestResponse(LabRequestBase):
@@ -159,6 +181,13 @@ class LabRequestResponse(LabRequestBase):
     price_filled_at: Optional[datetime] = None
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
+    structure_section_attachments: Optional[List[dict]] = None
+    structure_section_status: Optional[str] = None
+    electronics_section_attachments: Optional[List[dict]] = None
+    electronics_section_status: Optional[str] = None
+    dispatched_at: Optional[datetime] = None
+    dispatched_by: Optional[int] = None
+    dispatched_by_name: Optional[str] = None
     submitted_at: Optional[datetime] = None
     accepted_at: Optional[datetime] = None
     rejected_at: Optional[datetime] = None
@@ -173,6 +202,7 @@ class LabRequestResponse(LabRequestBase):
     updated_at: datetime
     measure_items: List[LabRequestMeasureItemResponse] = Field(default_factory=list)
     has_ng: bool = False
+    capabilities: Optional[LabRequestOutsourceCapabilities] = None
 
 
 class LabRequestListItem(BaseModel):
@@ -205,6 +235,7 @@ class LabRequestListItem(BaseModel):
     updated_by_name: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    capabilities: Optional[LabRequestOutsourceCapabilities] = None
 
 
 class LabRequestListResponse(BaseModel):

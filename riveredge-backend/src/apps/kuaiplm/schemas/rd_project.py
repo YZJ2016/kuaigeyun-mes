@@ -9,7 +9,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 # ---------- Gates ----------
@@ -156,6 +156,56 @@ class RdProjectDeliverableUpdate(BaseModel):
     material_code: Optional[str] = Field(None, max_length=80)
     legacy_material_code: Optional[str] = Field(None, max_length=80)
     project_code: Optional[str] = Field(None, max_length=50)
+    project_id: Optional[int] = Field(
+        None, description="关联研发项目；显式传 null 解除关联并清除阶段门"
+    )
+
+
+class RdProjectDeliverableCapabilities(BaseModel):
+    uploaded: bool = False
+    approved: bool = False
+    issued: bool = False
+    can_download: bool = False
+
+
+class RdProjectDeliverableIssueGrantInput(BaseModel):
+    target_type: str = Field(..., description="user|role|department")
+    target_id: int = Field(..., ge=1)
+    target_label: Optional[str] = Field(None, max_length=200)
+
+
+class RdProjectDeliverableIssueRequest(BaseModel):
+    user_ids: List[int] = Field(default_factory=list, description="下发用户 id")
+    role_uuids: List[str] = Field(default_factory=list, description="下发角色 uuid")
+    department_ids: List[int] = Field(default_factory=list, description="下发部门 id")
+
+    def normalized_grants(self) -> List[RdProjectDeliverableIssueGrantInput]:
+        out: List[RdProjectDeliverableIssueGrantInput] = []
+        for uid in self.user_ids:
+            out.append(
+                RdProjectDeliverableIssueGrantInput(
+                    target_type="user", target_id=int(uid)
+                )
+            )
+        for rid in self.department_ids:
+            out.append(
+                RdProjectDeliverableIssueGrantInput(
+                    target_type="department", target_id=int(rid)
+                )
+            )
+        return out
+
+    @model_validator(mode="after")
+    def _require_targets(self) -> "RdProjectDeliverableIssueRequest":
+        if not self.user_ids and not self.role_uuids and not self.department_ids:
+            raise ValueError("须至少选择一个下发对象")
+        return self
+
+
+class RdProjectDeliverableIssueGrantResponse(BaseModel):
+    target_type: str
+    target_id: int
+    target_label: Optional[str] = None
 
 
 class RdProjectDeliverableResponse(RdProjectDeliverableBase):
@@ -168,10 +218,15 @@ class RdProjectDeliverableResponse(RdProjectDeliverableBase):
     project_code: Optional[str] = None
     submitted_at: Optional[datetime] = None
     approved_at: Optional[datetime] = None
+    issued_at: Optional[datetime] = None
+    issued_by: Optional[int] = None
+    issued_by_name: Optional[str] = None
     created_by: Optional[int] = None
     created_by_name: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    capabilities: Optional[RdProjectDeliverableCapabilities] = None
+    issue_grants: Optional[List[RdProjectDeliverableIssueGrantResponse]] = None
 
 
 class RdProjectDeliverableVersionResponse(BaseModel):
@@ -370,6 +425,13 @@ class RdProjectSystemArchiveItemResponse(BaseModel):
     updated_at: Optional[datetime] = None
 
 
+class RdProjectSystemArchiveCapabilities(BaseModel):
+    checklist_ready: bool = False
+    upload_link_started: bool = False
+    checklist_complete: bool = False
+    all_accepted: bool = False
+
+
 class RdProjectSystemArchiveSummary(BaseModel):
     total: int
     filled: int
@@ -379,6 +441,7 @@ class RdProjectSystemArchiveSummary(BaseModel):
     pending_acceptance: int
     complete: bool
     all_accepted: bool
+    capabilities: Optional[RdProjectSystemArchiveCapabilities] = None
 
 
 class RdProjectSystemArchiveListResponse(BaseModel):

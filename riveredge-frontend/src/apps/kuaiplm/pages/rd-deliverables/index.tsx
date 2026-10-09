@@ -14,7 +14,7 @@ import {
   ProFormTextArea,
   ProFormUploadDragger,
 } from '@ant-design/pro-components';
-import { App, Button, Modal, Result, Space, Spin, Table, Tag, Typography } from 'antd';
+import { Alert, App, Button, Modal, Result, Space, Spin, Table, Tag, Typography } from 'antd';
 import { ActionConfirmPopconfirm } from '../../../../components/action-confirm';
 import { MarkerTag } from '../../../../constants/statusBadges';
 import { rowActionKind, rowActionViewHistory } from '../../../../components/uni-action';
@@ -33,10 +33,6 @@ import {
 import { useResourcePermissions } from '../../../../hooks/useResourcePermissions';
 import { getApiErrorMessage } from '../../../../utils/errorHandler';
 import { uploadFile } from '../../../../services/file';
-import {
-  extractUploadFileUuids,
-  normalizeUploadFileList,
-} from '../../../../components/custom-fields/customFieldFileUtils';
 import { renderDocumentStatusTag } from '../../../../utils/documentLifecycleStatusTag';
 import { NEW_SHORTCUT_HINT } from '../../../../utils/globalNewShortcut';
 import { ThemedSegmented } from '../../../../components/themed-segmented';
@@ -44,9 +40,14 @@ import Phase2ProjectSelect from '../../components/Phase2ProjectSelect';
 import { RdDeliverableTypeFormFields } from '../../components/RdDeliverableTypeFormFields';
 import { getKuaiplmDeliverableStatusText } from '../../components/kuaiplmMeta';
 import {
-  needsMaterialCode,
-  needsProjectCodeWithoutProject,
-} from '../../utils/rdDeliverableTypes';
+  buildRdDeliverablePayload,
+  validateRdDeliverablePayloadClient,
+} from '../../utils/rdDeliverablePayload';
+import {
+  parseRdDeliverableDeptPreset,
+  rdDeliverableTypesForPreset,
+  rdDeliverableTypesQueryParam,
+} from '../../utils/rdDeliverableDepartmentPresets';
 import {
   buildRdDeliverableTypeSelectOptions,
   RD_DELIVERABLE_TYPE_COLUMN_WIDTH,
@@ -54,14 +55,23 @@ import {
 } from '../../utils/rdDeliverableTypePresentation';
 import type { RdProjectDeliverable } from '../../services/rd-project';
 import {
+  approveRdDeliverable,
   createRdDeliverable,
   deleteRdDeliverable,
+  getRdDeliverable,
+  issueRdDeliverable,
   listRdDeliverableVersions,
   listRdDeliverables,
+  rejectRdDeliverable,
   reviseRdDeliverable,
   submitRdDeliverable,
   updateRdDeliverable,
 } from '../../services/rd-deliverable';
+import { useAuditRequired } from '../../../../hooks/useAuditRequired';
+import { getRoleList } from '../../../../services/role';
+import { RdDeliverableCapabilitiesTags } from '../../components/RdDeliverableCapabilitiesTags';
+import { UniUserSelect } from '../../../../components/uni-user-select';
+import { isRdDeliverableIssueScopedType } from '../../utils/rdDeliverableIssueScopedTypes';
 
 const RESOURCE = 'kuaiplm:project';
 const DELIVERABLE_FILE_CATEGORY = 'rd_deliverable';
@@ -84,6 +94,8 @@ const RdDeliverablesPage: React.FC = () => {
   const formRef = useRef<ProFormInstance>();
   const tableRowsRef = useRef<RdProjectDeliverable[]>([]);
   const perms = useResourcePermissions(RESOURCE);
+  const deliverableAuditEnabled = useAuditRequired('rd_deliverable');
+  const canApprove = !!perms.canAction?.('approve');
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<RdProjectDeliverable | null>(null);
@@ -97,10 +109,25 @@ const RdDeliverablesPage: React.FC = () => {
   const [reviseOpen, setReviseOpen] = useState(false);
   const [reviseTarget, setReviseTarget] = useState<RdProjectDeliverable | null>(null);
   const reviseFormRef = useRef<ProFormInstance>();
+  const [issueOpen, setIssueOpen] = useState(false);
+  const [issueTarget, setIssueTarget] = useState<RdProjectDeliverable | null>(null);
+  const issueFormRef = useRef<ProFormInstance>();
 
   const scopeFilter = (searchParams.get('scope') as ScopeFilter) || 'all';
+  const deptPreset = parseRdDeliverableDeptPreset(searchParams.get('preset'));
+  const isCustomerDocPreset = deptPreset === 'customer';
+  const presetTypeCodes = useMemo(() => rdDeliverableTypesForPreset(deptPreset), [deptPreset]);
+  const typesQuery = useMemo(
+    () => rdDeliverableTypesQueryParam(presetTypeCodes),
+    [presetTypeCodes],
+  );
 
-  const deliverableTypeOptions = useMemo(() => buildRdDeliverableTypeSelectOptions(t), [t]);
+  const deliverableTypeOptions = useMemo(() => {
+    const all = buildRdDeliverableTypeSelectOptions(t);
+    if (!presetTypeCodes?.length) return all;
+    const allowed = new Set(presetTypeCodes);
+    return all.filter((o) => allowed.has(o.value));
+  }, [t, presetTypeCodes]);
 
   const typeLabel = useCallback(
     (v?: string | null) => resolveRdDeliverableTypeLabel(t, v),
@@ -124,6 +151,11 @@ const RdDeliverablesPage: React.FC = () => {
   const openDetail = (row: RdProjectDeliverable) => {
     setDetailRow(row);
     setDetailOpen(true);
+    if (row.id != null) {
+      void getRdDeliverable(row.id)
+        .then(setDetailRow)
+        .catch(() => undefined);
+    }
   };
 
   const openVersions = useCallback(
@@ -175,6 +207,15 @@ const RdDeliverablesPage: React.FC = () => {
               const label = typeLabel(row.deliverable_type);
               return label ? <MarkerTag>{label}</MarkerTag> : null;
             },
+          },
+          {
+            title: t('app.kuaiplm.rdDeliverables.columns.capabilities'),
+            key: 'capabilities',
+            width: 280,
+            minWidth: 240,
+            uniTableKeepWidth: true,
+            hideInSearch: true,
+            render: (_, row) => <RdDeliverableCapabilitiesTags capabilities={row.capabilities} />,
           },
           {
             title: t('app.kuaiplm.rdDeliverables.columns.projectCode'),
@@ -296,6 +337,77 @@ const RdDeliverablesPage: React.FC = () => {
                   />,
                 );
               }
+              if (
+                row.status === 'SUBMITTED' &&
+                canApprove &&
+                !deliverableAuditEnabled &&
+                row.id != null
+              ) {
+                actions.push(
+                  <Button
+                    key="approve"
+                    type="link"
+                    size="small"
+                    {...rowActionKind('approve')}
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      try {
+                        await approveRdDeliverable(row.id!);
+                        messageApi.success(
+                          t('app.kuaiplm.rdProjects.detail.deliverable.approveSuccess'),
+                        );
+                        reload();
+                      } catch (error) {
+                        messageApi.error(getApiErrorMessage(error, t('common.operationFailed')));
+                      }
+                    }}
+                  />,
+                );
+              }
+              if (row.status === 'SUBMITTED' && canApprove && row.id != null) {
+                actions.push(
+                  <Button
+                    key="reject"
+                    type="link"
+                    size="small"
+                    danger
+                    {...rowActionKind('reject')}
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      try {
+                        await rejectRdDeliverable(row.id!, t('common.rejected'));
+                        messageApi.success(
+                          t('app.kuaiplm.rdProjects.detail.deliverable.rejectSuccess'),
+                        );
+                        reload();
+                      } catch (error) {
+                        messageApi.error(getApiErrorMessage(error, t('common.operationFailed')));
+                      }
+                    }}
+                  />,
+                );
+              }
+              if (
+                row.status === 'APPROVED' &&
+                isRdDeliverableIssueScopedType(row.deliverable_type) &&
+                perms.canUpdate &&
+                row.id != null
+              ) {
+                actions.push(
+                  <Button
+                    key="issue"
+                    type="link"
+                    size="small"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIssueTarget(row);
+                      setIssueOpen(true);
+                    }}
+                  >
+                    {t('app.kuaiplm.rdDeliverables.actions.issue')}
+                  </Button>,
+                );
+              }
               if (isDeliverableDeletable(row) && perms.canDelete && row.id != null) {
                 actions.push(
                   <ActionConfirmPopconfirm
@@ -326,49 +438,8 @@ const RdDeliverablesPage: React.FC = () => {
         ] as ProColumns<RdProjectDeliverable>[],
         GLOBAL_DOC_LIST_FIELD_RANK,
       ),
-    [t, typeLabel, perms, messageApi, openVersions, reload],
+    [t, typeLabel, perms, messageApi, openVersions, reload, canApprove, deliverableAuditEnabled],
   );
-
-  const buildPayload = (values: Record<string, unknown>) => {
-    const formUpload = formRef.current?.getFieldValue?.('file_upload');
-    const uploadList = normalizeUploadFileList(formUpload ?? values.file_upload);
-    const uploadedUuids = extractUploadFileUuids(uploadList);
-    const fileUuid =
-      uploadedUuids[0] ||
-      String(formRef.current?.getFieldValue?.('file_uuid') ?? values.file_uuid ?? '').trim() ||
-      undefined;
-    const fileName =
-      String(formRef.current?.getFieldValue?.('file_name') ?? values.file_name ?? '').trim() ||
-      (uploadList[0]?.name as string | undefined) ||
-      undefined;
-    const dtype = String(values.deliverable_type || '').trim() || undefined;
-    const projectIdRaw = values.project_id;
-    const projectId =
-      projectIdRaw != null && projectIdRaw !== ''
-        ? Number(projectIdRaw)
-        : editing?.project_id ?? undefined;
-    return {
-      name: String(values.name || '').trim(),
-      deliverable_type: dtype,
-      status: values.status || 'PENDING',
-      description: values.description ? String(values.description) : undefined,
-      file_uuid: fileUuid,
-      file_name: fileName,
-      material_code: needsMaterialCode(dtype)
-        ? String(values.material_code || '').trim() || undefined
-        : values.material_code
-          ? String(values.material_code).trim() || undefined
-          : undefined,
-      legacy_material_code: values.legacy_material_code
-        ? String(values.legacy_material_code).trim() || undefined
-        : undefined,
-      project_id: projectId ?? null,
-      project_code:
-        !projectId && values.project_code
-          ? String(values.project_code).trim() || undefined
-          : undefined,
-    };
-  };
 
   if (!perms.canRead) {
     return (
@@ -380,10 +451,20 @@ const RdDeliverablesPage: React.FC = () => {
 
   return (
     <ListPageTemplate>
+      <Alert
+        type="info"
+        showIcon
+        style={{ marginBottom: 12 }}
+        title={
+          isCustomerDocPreset
+            ? t('app.kuaiplm.rdDeliverables.pageHintCustomer')
+            : t('app.kuaiplm.rdDeliverables.pageHint')
+        }
+      />
       <UniTable<RdProjectDeliverable>
         actionRef={actionRef}
         permissionResource={RESOURCE}
-        columnPersistenceId="apps.kuaiplm.pages.rd-deliverables.rank-v3"
+        columnPersistenceId="apps.kuaiplm.pages.rd-deliverables.rank-v4"
         rowKey="id"
         columns={columns}
         enableRowSelection
@@ -422,7 +503,11 @@ const RdDeliverablesPage: React.FC = () => {
           />
         }
         showCreateButton={perms.canCreate}
-        createButtonText={t('app.kuaiplm.rdDeliverables.createButton')}
+        createButtonText={
+          isCustomerDocPreset
+            ? t('app.kuaiplm.rdDeliverables.createButtonCustomer')
+            : t('app.kuaiplm.rdDeliverables.createButton')
+        }
         onCreate={openCreate}
         newShortcutHint={NEW_SHORTCUT_HINT}
         params={{ scope: scopeFilter }}
@@ -433,6 +518,7 @@ const RdDeliverablesPage: React.FC = () => {
             limit: params.pageSize || 20,
             keyword,
             deliverable_type: params.deliverable_type as string | undefined,
+            types: typesQuery,
             unlinked_only: scopeFilter === 'unlinked',
             linked_only: scopeFilter === 'linked',
           });
@@ -461,17 +547,10 @@ const RdDeliverablesPage: React.FC = () => {
             : { status: 'PENDING' }
         }
         onFinish={async (values) => {
-          const payload = buildPayload(values);
-          const dtype = payload.deliverable_type;
-          if (needsMaterialCode(dtype) && !payload.material_code) {
-            messageApi.error(t('app.kuaiplm.rdProjects.detail.deliverable.materialCodeRequired'));
-            return;
-          }
-          if (
-            needsProjectCodeWithoutProject(dtype, payload.project_id ?? undefined) &&
-            !payload.project_code
-          ) {
-            messageApi.error(t('app.kuaiplm.rdDeliverables.form.projectCodeRequired'));
+          const payload = buildRdDeliverablePayload(values, { formRef });
+          const clientErr = validateRdDeliverablePayloadClient(payload, t);
+          if (clientErr) {
+            messageApi.error(clientErr);
             return;
           }
           try {
@@ -608,9 +687,70 @@ const RdDeliverablesPage: React.FC = () => {
                 <div>{detailRow.file_name}</div>
               </div>
             ) : null}
+            <RdDeliverableCapabilitiesTags capabilities={detailRow.capabilities} />
+            {detailRow.issue_grants?.length ? (
+              <div>
+                <Typography.Text type="secondary">
+                  {t('app.kuaiplm.rdDeliverables.issueTargets')}
+                </Typography.Text>
+                <div>
+                  {detailRow.issue_grants.map((g) => g.target_label || g.target_id).join('、')}
+                </div>
+              </div>
+            ) : null}
           </Space>
         ) : null}
       </DetailDrawerTemplate>
+
+      <FormModalTemplate
+        title={t('app.kuaiplm.rdDeliverables.issueTitle')}
+        open={issueOpen}
+        onClose={() => {
+          setIssueOpen(false);
+          setIssueTarget(null);
+        }}
+        formRef={issueFormRef}
+        onFinish={async (values) => {
+          if (!issueTarget?.id) return;
+          const userIds = (values.issue_user_ids as number[] | undefined) ?? [];
+          const roleUuids = (values.issue_role_uuids as string[] | undefined) ?? [];
+          if (!userIds.length && !roleUuids.length) {
+            messageApi.warning(t('app.kuaiplm.rdDeliverables.issueNeedTargets'));
+            return;
+          }
+          try {
+            await issueRdDeliverable(issueTarget.id, {
+              user_ids: userIds,
+              role_uuids: roleUuids,
+            });
+            messageApi.success(t('app.kuaiplm.rdDeliverables.issueSuccess'));
+            setIssueOpen(false);
+            setIssueTarget(null);
+            reload();
+          } catch (error) {
+            messageApi.error(getApiErrorMessage(error, t('common.operationFailed')));
+          }
+        }}
+      >
+        <UniUserSelect
+          name="issue_user_ids"
+          label={t('app.kuaiplm.rdDeliverables.issueUsers')}
+          mode="multiple"
+        />
+        <ProFormSelect
+          name="issue_role_uuids"
+          label={t('app.kuaiplm.rdDeliverables.issueRoles')}
+          mode="multiple"
+          showSearch
+          request={async () => {
+            const res = await getRoleList({ page_size: 200, is_active: true });
+            return (res.items ?? []).map((r) => ({
+              value: r.uuid,
+              label: r.name,
+            }));
+          }}
+        />
+      </FormModalTemplate>
 
       <Modal
         title={t('app.kuaiplm.rdProjects.detail.deliverable.versionsTitle')}

@@ -79,6 +79,19 @@ export interface RdProjectTask {
   template_task_id?: number | null;
 }
 
+export interface RdProjectDeliverableCapabilities {
+  uploaded: boolean;
+  approved: boolean;
+  issued: boolean;
+  can_download: boolean;
+}
+
+export interface RdProjectDeliverableIssueGrant {
+  target_type: string;
+  target_id: number;
+  target_label?: string | null;
+}
+
 export interface RdProjectDeliverable {
   id?: number;
   project_id?: number | null;
@@ -94,6 +107,10 @@ export interface RdProjectDeliverable {
   file_uuid?: string | null;
   material_code?: string | null;
   legacy_material_code?: string | null;
+  issued_at?: string | null;
+  issued_by_name?: string | null;
+  capabilities?: RdProjectDeliverableCapabilities | null;
+  issue_grants?: RdProjectDeliverableIssueGrant[] | null;
 }
 
 export interface RdProjectDeliverableVersion {
@@ -142,6 +159,13 @@ export interface RdProjectSystemArchiveUploadTemplate {
   hint?: string;
 }
 
+export interface RdProjectSystemArchiveCapabilities {
+  checklist_ready?: boolean;
+  upload_link_started?: boolean;
+  checklist_complete?: boolean;
+  all_accepted?: boolean;
+}
+
 export interface RdProjectSystemArchiveSummary {
   total: number;
   filled: number;
@@ -151,6 +175,7 @@ export interface RdProjectSystemArchiveSummary {
   pending_acceptance: number;
   complete: boolean;
   all_accepted: boolean;
+  capabilities?: RdProjectSystemArchiveCapabilities | null;
 }
 
 export interface RdProjectSystemArchiveItem {

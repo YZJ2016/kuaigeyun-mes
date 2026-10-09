@@ -73,7 +73,7 @@ KUAIPLM_NOTIFICATION_RULE_PRESETS: List[Dict[str, Any]] = [
         "trigger_document": TRIGGER_LAB_REQUEST,
         "trigger_action": ACTION_LAB_COMPLETED,
         "template_code": "PLM_LAB_REQUEST_COMPLETED",
-        "recipient_scopes": ["creator"],
+        "recipient_scopes": ["creator", "project_owner", "lab_request_notify_users"],
         "enabled": False,
     },
     {

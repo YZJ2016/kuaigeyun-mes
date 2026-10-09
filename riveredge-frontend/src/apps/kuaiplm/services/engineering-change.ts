@@ -69,6 +69,16 @@ export interface EcnFormProfile {
   validation_rules: Array<Record<string, unknown>>;
 }
 
+export interface EcnCapabilities {
+  is_design_change_request?: boolean;
+  request_ready?: boolean;
+  issued_to_rd?: boolean;
+  rd_ready?: boolean;
+  signoffs_done?: boolean;
+  approved?: boolean;
+  erp_closed?: boolean;
+}
+
 export interface EcnSignoff {
   id: number;
   uuid: string;
@@ -107,6 +117,7 @@ export interface EngineeringChange {
   updated_by_name?: string | null;
   materials?: EcnMaterialLine[];
   signoffs?: EcnSignoff[];
+  capabilities?: EcnCapabilities | null;
 }
 
 export interface EngineeringChangeListResponse {
@@ -135,4 +146,8 @@ export const engineeringChangeApi = {
     (await api.post(`${BASE}/${id}/reject`)) as EngineeringChange,
   erpAudit: async (id: number, data: { erp_ecn_no: string; result: string; notes?: string }) =>
     (await api.post(`${BASE}/${id}/erp-audit`, data)) as EngineeringChange,
+  signoff: async (id: number, deptCode: string, data: { result: string; notes?: string }) =>
+    (await api.post(`${BASE}/${id}/signoffs/${encodeURIComponent(deptCode)}`, data)) as EngineeringChange,
+  issueToRd: async (id: number) =>
+    (await api.post(`${BASE}/${id}/issue-to-rd`)) as EngineeringChange,
 };

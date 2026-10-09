@@ -44,6 +44,38 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'customer-follow-up-create-data-scope-r01',
+    date: '2026-10-08',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.customer-follow-up-create-data-scope-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.customer-follow-up-create-data-scope-r01.description',
+  },
+  {
+    id: 'login-log-location-zhou-suffix-r02',
+    date: '2026-10-08',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.login-log-location-zhou-suffix-r02.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.login-log-location-zhou-suffix-r02.description',
+  },
+  {
+    id: 'qms-system-document-approval-chain',
+    date: '2026-10-08',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.qms-system-document-approval-chain.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.qms-system-document-approval-chain.description',
+  },
+  {
+    id: 'dedicated-app-fe-host-mirror-r01',
+    date: '2026-10-08',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.dedicated-app-fe-host-mirror-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.dedicated-app-fe-host-mirror-r01.description',
+  },
+  {
     id: 'work-order-split-completion-progress-r01',
     date: '2026-10-08',
     type: 'fix',
@@ -74,6 +106,23 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
     titleKey: 'pages.dashboard.updateLog.entries.inspection-plan-quick-type-default-r01.title',
     descriptionKey:
       'pages.dashboard.updateLog.entries.inspection-plan-quick-type-default-r01.description',
+  },
+  {
+    id: 'kuaiplm-l52-lab-request-workflow-r01',
+    date: '2026-10-08',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiplm-l52-lab-request-workflow-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-l52-lab-request-workflow-r01.description',
+  },
+  {
+    id: 'kuaiplm-rd-deliverables-dept-standalone-r02',
+    date: '2026-10-08',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-rd-deliverables-dept-standalone-r02.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-rd-deliverables-dept-standalone-r02.description',
   },
   {
     id: 'po-import-material-list-limit-r01',
@@ -214,6 +263,23 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
       'pages.dashboard.updateLog.entries.kuaiplm-annual-lab-plan-create-button-r01.title',
     descriptionKey:
       'pages.dashboard.updateLog.entries.kuaiplm-annual-lab-plan-create-button-r01.description',
+  },
+  {
+    id: 'kuaiplm-annual-lab-plan-create-lab-request-r01',
+    date: '2026-10-08',
+    type: 'feature',
+    titleKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-annual-lab-plan-create-lab-request-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-annual-lab-plan-create-lab-request-r01.description',
+  },
+  {
+    id: 'kuaiplm-rd-deliverable-issue-l53-r01',
+    date: '2026-10-08',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiplm-rd-deliverable-issue-l53-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-rd-deliverable-issue-l53-r01.description',
   },
   {
     id: 'kuaizhizao-production-daily-restore-route-r01',

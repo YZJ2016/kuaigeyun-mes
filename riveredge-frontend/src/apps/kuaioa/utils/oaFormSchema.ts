@@ -9,7 +9,9 @@ export type OaFormFieldType =
   | 'switch'
   | 'select'
   | 'user'
+  | 'user_ids'
   | 'department'
+  | 'department_ids'
   | 'file';
 
 export type OaFormFieldOption = {
@@ -35,7 +37,9 @@ const FIELD_TYPES: OaFormFieldType[] = [
   'switch',
   'select',
   'user',
+  'user_ids',
   'department',
+  'department_ids',
   'file',
 ];
 

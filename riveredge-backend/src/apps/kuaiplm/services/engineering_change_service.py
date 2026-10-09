@@ -15,10 +15,12 @@ from apps.kuaiplm.models.engineering_change import (
 )
 from apps.kuaiplm.models.rd_project import RdProject
 from apps.kuaiplm.schemas.engineering_change import (
+    EcnCapabilities,
     EcnMaterialLineIn,
     EcnMaterialLineOut,
     EcnSignoffOut,
     EcnFormProfile,
+    EcnSignoffUpdate,
     EngineeringChangeCreate,
     EngineeringChangeErpAudit,
     EngineeringChangeListItem,
@@ -26,12 +28,20 @@ from apps.kuaiplm.schemas.engineering_change import (
     EngineeringChangeResponse,
     EngineeringChangeUpdate,
 )
+from apps.kuaiplm.utils.engineering_change_capabilities import (
+    compute_engineering_change_capabilities,
+    is_design_change_request,
+    rd_issued_at,
+    signoffs_complete,
+    validate_dcr_on_submit,
+    validate_ecn_rd_on_submit,
+)
 from core.services.application.industry_extension_runtime_service import (
     IndustryExtensionRuntimeService,
 )
 from core.services.approval.approval_instance_service import ApprovalInstanceService
 from core.services.approval.audit_binding_service import AuditBindingService
-from core.utils.timezone_utils import resolve_business_datetime
+from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 from infra.models.user import User
 
@@ -46,6 +56,7 @@ ALLOWED_STATUS = {
     "closed",
 }
 ERP_RESULTS = {"pass", "fail"}
+SIGNOFF_RESULTS = {"agree", "disagree"}
 
 # 通用部门会签骨架；条件加签后续由审批引擎计算，禁止客户专名硬编码进分支
 DEFAULT_SIGNOFF_DEPTS: list[tuple[str, str]] = [
@@ -144,6 +155,18 @@ class EngineeringChangeService(AppBaseService[EngineeringChange]):
         )
         return materials, signoffs
 
+    def _capabilities_payload(
+        self,
+        row: EngineeringChange,
+        *,
+        signoffs: List[EngineeringChangeSignoff],
+        material_line_count: int,
+    ) -> EcnCapabilities:
+        caps = compute_engineering_change_capabilities(
+            row, signoffs=signoffs, material_line_count=material_line_count
+        )
+        return EcnCapabilities.model_validate(caps)
+
     def _to_response(
         self,
         row: EngineeringChange,
@@ -153,6 +176,9 @@ class EngineeringChangeService(AppBaseService[EngineeringChange]):
         data = EngineeringChangeResponse.model_validate(row)
         data.materials = [EcnMaterialLineOut.model_validate(m) for m in materials]
         data.signoffs = [EcnSignoffOut.model_validate(s) for s in signoffs]
+        data.capabilities = self._capabilities_payload(
+            row, signoffs=signoffs, material_line_count=len(materials)
+        )
         return data
 
     def _validate_disposition(self, disposition: Optional[str]) -> Optional[str]:
@@ -314,10 +340,29 @@ class EngineeringChangeService(AppBaseService[EngineeringChange]):
             query = query.filter(title__icontains=keyword)
         total = await query.count()
         rows = await query.order_by("-updated_at", "-id").offset(skip).limit(limit)
-        return EngineeringChangeListResponse(
-            items=[EngineeringChangeListItem.model_validate(r) for r in rows],
-            total=total,
-        )
+        ecn_ids = [r.id for r in rows]
+        signoffs_by_ecn: Dict[int, List[EngineeringChangeSignoff]] = {}
+        mat_count_by_ecn: Dict[int, int] = {}
+        if ecn_ids:
+            signoff_rows = await EngineeringChangeSignoff.filter(
+                tenant_id=tenant_id, ecn_id__in=ecn_ids, deleted_at__isnull=True
+            )
+            for sign in signoff_rows:
+                signoffs_by_ecn.setdefault(sign.ecn_id, []).append(sign)
+            mat_rows = await EngineeringChangeMaterialLine.filter(
+                tenant_id=tenant_id, ecn_id__in=ecn_ids, deleted_at__isnull=True
+            ).values_list("ecn_id", flat=True)
+            for eid in mat_rows:
+                mat_count_by_ecn[int(eid)] = mat_count_by_ecn.get(int(eid), 0) + 1
+        items: List[EngineeringChangeListItem] = []
+        for r in rows:
+            item = EngineeringChangeListItem.model_validate(r)
+            signs = signoffs_by_ecn.get(r.id, [])
+            item.capabilities = self._capabilities_payload(
+                r, signoffs=signs, material_line_count=mat_count_by_ecn.get(r.id, 0)
+            )
+            items.append(item)
+        return EngineeringChangeListResponse(items=items, total=total)
 
     async def get(self, tenant_id: int, ecn_id: int) -> EngineeringChangeResponse:
         row = await self._get_row(tenant_id, ecn_id)
@@ -349,7 +394,12 @@ class EngineeringChangeService(AppBaseService[EngineeringChange]):
         user: User,
     ) -> EngineeringChangeResponse:
         row = await self._get_row(tenant_id, ecn_id)
-        if row.status not in {"draft", "erp_failed"}:
+        rd_edit = (
+            is_design_change_request(row)
+            and row.status == "approved"
+            and rd_issued_at(row) is not None
+        )
+        if row.status not in {"draft", "erp_failed"} and not rd_edit:
             raise BusinessLogicError("仅草稿或 ERP 稽核退回可编辑")
         data = payload.model_dump(exclude_unset=True)
         materials = data.pop("materials", None)
@@ -366,16 +416,33 @@ class EngineeringChangeService(AppBaseService[EngineeringChange]):
         self, tenant_id: int, ecn_id: int, user: User
     ) -> EngineeringChangeResponse:
         row = await self._get_row(tenant_id, ecn_id)
-        if row.status not in {"draft", "erp_failed"}:
-            raise BusinessLogicError("仅草稿或 ERP 稽核退回可提交")
         mats, _ = await self._load_children(tenant_id, ecn_id)
-        if not mats:
-            raise ValidationError("提交前须至少一行变更物料")
-        for line in mats:
-            if not line.owner_user_id:
-                raise ValidationError(
-                    f"物料行 {line.material_code} 须指定会签负责人"
-                )
+        dcr = is_design_change_request(row)
+        issued = rd_issued_at(row)
+        if dcr and not issued:
+            if row.status not in {"draft", "erp_failed"}:
+                raise BusinessLogicError("仅草稿或 ERP 稽核退回可提交")
+            validate_dcr_on_submit(row)
+        elif dcr and issued:
+            if row.status != "approved":
+                raise BusinessLogicError("研发续办 ECN 须在已下发且已批准状态下提交")
+            if not mats:
+                raise ValidationError("提交前须至少一行变更物料")
+            for line in mats:
+                if not line.owner_user_id:
+                    raise ValidationError(
+                        f"物料行 {line.material_code} 须指定会签负责人"
+                    )
+        else:
+            if row.status not in {"draft", "erp_failed"}:
+                raise BusinessLogicError("仅草稿或 ERP 稽核退回可提交")
+            if not mats:
+                raise ValidationError("提交前须至少一行变更物料")
+            for line in mats:
+                if not line.owner_user_id:
+                    raise ValidationError(
+                        f"物料行 {line.material_code} 须指定会签负责人"
+                    )
 
         profile = await self._profile(tenant_id)
         enabled = await IndustryExtensionRuntimeService.is_industry_profile_enabled(
@@ -406,6 +473,11 @@ class EngineeringChangeService(AppBaseService[EngineeringChange]):
                         or f"请填写 {field_key}"
                     )
                     raise ValidationError(msg)
+
+        if dcr and not issued:
+            pass
+        else:
+            validate_ecn_rd_on_submit(row, material_line_count=len(mats))
 
         row.status = "pending"
         row.submitted_at = resolve_business_datetime()
@@ -445,6 +517,30 @@ class EngineeringChangeService(AppBaseService[EngineeringChange]):
         row = await self._get_row(tenant_id, ecn_id)
         if row.status != "pending":
             raise BusinessLogicError("仅待审工程变更可通过")
+        _, signoffs = await self._load_children(tenant_id, ecn_id)
+        dcr = is_design_change_request(row)
+        issued = rd_issued_at(row)
+        if dcr and not issued:
+            from apps.kuaiplm.services.plm_audit_flow_sync import assert_plm_manual_approval_action
+
+            await assert_plm_manual_approval_action(
+                tenant_id,
+                audit_node=AUDIT_NODE,
+                entity_type="engineering_change",
+                entity_id=ecn_id,
+                doc_label="设计更改申请",
+                verb="审核",
+            )
+            row.status = "approved"
+            row.approved_at = resolve_business_datetime()
+            row.erp_audit_status = None
+            apply_update_audit(row, user)
+            await row.save()
+            mats, signoffs = await self._load_children(tenant_id, ecn_id)
+            return self._to_response(row, mats, signoffs)
+
+        if not signoffs_complete(signoffs):
+            raise BusinessLogicError("尚有部门会签未完成，须各部门填写会签后再通过")
         from apps.kuaiplm.services.plm_audit_flow_sync import assert_plm_manual_approval_action
 
         await assert_plm_manual_approval_action(
@@ -458,6 +554,27 @@ class EngineeringChangeService(AppBaseService[EngineeringChange]):
         row.status = "erp_pending"
         row.approved_at = resolve_business_datetime()
         row.erp_audit_status = "pending"
+        apply_update_audit(row, user)
+        await row.save()
+        mats, signoffs = await self._load_children(tenant_id, ecn_id)
+        return self._to_response(row, mats, signoffs)
+
+    async def issue_to_rd(
+        self, tenant_id: int, ecn_id: int, user: User
+    ) -> EngineeringChangeResponse:
+        row = await self._get_row(tenant_id, ecn_id)
+        if not is_design_change_request(row):
+            raise BusinessLogicError("仅设计更改申请单可下发研发")
+        if row.status != "approved":
+            raise BusinessLogicError("仅已批准状态可下发研发")
+        if rd_issued_at(row):
+            raise BusinessLogicError("设计更改申请已下发研发")
+        ext = dict(row.extension_payload) if isinstance(row.extension_payload, dict) else {}
+        ext["rd_issued_at"] = to_api_isoformat(resolve_business_datetime())
+        actor = getattr(user, "name", None) or getattr(user, "username", None)
+        if actor:
+            ext["rd_issued_by_name"] = str(actor)
+        row.extension_payload = ext
         apply_update_audit(row, user)
         await row.save()
         mats, signoffs = await self._load_children(tenant_id, ecn_id)
@@ -479,10 +596,51 @@ class EngineeringChangeService(AppBaseService[EngineeringChange]):
             doc_label="工程变更",
             verb="驳回",
         )
-        row.status = "draft"
+        if is_design_change_request(row) and rd_issued_at(row):
+            row.status = "approved"
+        else:
+            row.status = "draft"
         row.submitted_at = None
         apply_update_audit(row, user)
         await row.save()
+        mats, signoffs = await self._load_children(tenant_id, ecn_id)
+        return self._to_response(row, mats, signoffs)
+
+    async def update_signoff(
+        self,
+        tenant_id: int,
+        ecn_id: int,
+        dept_code: str,
+        payload: EcnSignoffUpdate,
+        user: User,
+    ) -> EngineeringChangeResponse:
+        row = await self._get_row(tenant_id, ecn_id)
+        if row.status != "pending":
+            raise BusinessLogicError("仅待审状态可填写部门会签")
+        code = (dept_code or "").strip().lower()
+        if not code:
+            raise ValidationError("部门代码无效")
+        result = (payload.result or "").strip().lower()
+        if result not in SIGNOFF_RESULTS:
+            raise ValidationError("会签结果须为 agree 或 disagree")
+        signoff = await EngineeringChangeSignoff.filter(
+            tenant_id=tenant_id,
+            ecn_id=ecn_id,
+            dept_code=code,
+            deleted_at__isnull=True,
+        ).first()
+        if not signoff:
+            raise NotFoundError("会签部门不存在")
+        if signoff.status != "pending":
+            raise BusinessLogicError("该部门会签已填写")
+        signoff.status = "signed"
+        signoff.result = result
+        signoff.notes = (payload.notes or "").strip() or None
+        signoff.signer_id = user.id
+        signoff.signer_name = getattr(user, "name", None) or getattr(user, "username", None)
+        signoff.signed_at = resolve_business_datetime()
+        apply_update_audit(signoff, user)
+        await signoff.save()
         mats, signoffs = await self._load_children(tenant_id, ecn_id)
         return self._to_response(row, mats, signoffs)
 

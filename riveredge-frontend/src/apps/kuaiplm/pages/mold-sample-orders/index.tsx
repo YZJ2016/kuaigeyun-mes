@@ -52,6 +52,7 @@ import {
   type MoldSampleStatus,
 } from '../../services/mold-sample-order';
 import { resolvePlmStandardDocListSearch } from '../../utils/plmListCore';
+import { MoldSampleCapabilitiesTags } from '../../components/MoldSampleCapabilitiesTags';
 
 const RESOURCE = 'kuaiplm:mold-sample';
 const FILE_CATEGORY = 'mold_sample_order';
@@ -196,6 +197,17 @@ const MoldSampleOrdersPage: React.FC = () => {
         ellipsis: true,
         uniTableKeepWidth: true,
         render: (_, r) => r.party_name || '—',
+      },
+      {
+        title: t('app.kuaiplm.moldSample.capabilitiesColumn'),
+        dataIndex: 'capabilities',
+        key: 'capabilities',
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+        width: 320,
+        minWidth: 280,
+        uniTableKeepWidth: true,
+        hideInSearch: true,
+        render: (_, row) => <MoldSampleCapabilitiesTags capabilities={row.capabilities} />,
       },
       {
         ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
@@ -381,6 +393,11 @@ const MoldSampleOrdersPage: React.FC = () => {
         dataIndex: 'party_name',
       },
       {
+        key: 'capabilities',
+        title: t('app.kuaiplm.moldSample.capabilitiesColumn'),
+        render: (_, r) => <MoldSampleCapabilitiesTags capabilities={r.capabilities} />,
+      },
+      {
         key: 'lifecycle',
         title: t('common.status'),
         dataIndex: 'status',
@@ -430,7 +447,7 @@ const MoldSampleOrdersPage: React.FC = () => {
           tableRowsRef.current = rows;
         }}
         columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
-        columnPersistenceId="apps.kuaiplm.pages.mold-sample-orders.width-v3"
+        columnPersistenceId="apps.kuaiplm.pages.mold-sample-orders.width-v4-capabilities"
         showCreateButton={perms.canCreate}
         createButtonText={t('app.kuaiplm.moldSample.createButton') + NEW_SHORTCUT_HINT}
         onCreate={openCreate}

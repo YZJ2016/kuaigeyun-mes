@@ -19,6 +19,7 @@ from core.models.data_permission_policy import DataPermissionPolicy, DataScopeTy
 from core.models.model_fields import model_has_field
 from core.models.user_role import UserRole
 from core.services.authorization.data_scope_resource_registry import (
+    resolve_data_scope_function_grant_resource,
     get_resource_profile,
     normalize_resource_key,
 )
@@ -411,6 +412,9 @@ class DataScopeService:
             if (getattr(role, "uuid", None) or "").strip()
         ]
         policies = await cls._load_policies(tenant_id, granted_role_uuids, resource_key)
+        grant_source_key = resolve_data_scope_function_grant_resource(resource_key)
+        if not policies and grant_source_key != resource_key:
+            policies = await cls._load_policies(tenant_id, granted_role_uuids, grant_source_key)
         policies_by_role: dict[str, list[DataPermissionPolicy]] = {}
         for policy in policies:
             role_uuid = (getattr(policy, "role_uuid", None) or "").strip()

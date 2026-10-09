@@ -21,6 +21,7 @@ from apps.kuaiplm.schemas.bom_collaboration import (
     BomCollabFormProfileSection,
     BomCollabLineIn,
     BomCollabLineOut,
+    BomCollabCapabilities,
     BomCollabListItem,
     BomCollabListResponse,
     BomCollabResponse,
@@ -33,6 +34,7 @@ from core.services.application.industry_extension_runtime_service import (
 from core.services.approval.approval_instance_service import ApprovalInstanceService
 from core.services.approval.audit_binding_service import AuditBindingService
 from core.utils.timezone_utils import resolve_business_datetime
+from apps.kuaiplm.utils.bom_collab_capabilities import compute_bom_collab_capabilities
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 from infra.models.user import User
 
@@ -140,6 +142,20 @@ class BomCollaborationService(AppBaseService[BomCollaboration]):
             q = q.filter(section=section)
         return await q.order_by("section", "line_no", "id")
 
+    def _capabilities_payload(
+        self,
+        row: BomCollaboration,
+        *,
+        electronics_line_count: int,
+        structure_line_count: int,
+    ) -> BomCollabCapabilities:
+        caps = compute_bom_collab_capabilities(
+            row,
+            electronics_line_count=electronics_line_count,
+            structure_line_count=structure_line_count,
+        )
+        return BomCollabCapabilities.model_validate(caps)
+
     def _to_response(
         self, row: BomCollaboration, lines: List[BomCollaborationLine]
     ) -> BomCollabResponse:
@@ -154,6 +170,11 @@ class BomCollaborationService(AppBaseService[BomCollaboration]):
             for x in lines
             if x.section == SECTION_STRUCTURE
         ]
+        data.capabilities = self._capabilities_payload(
+            row,
+            electronics_line_count=len(data.electronics_lines),
+            structure_line_count=len(data.structure_lines),
+        )
         return data
 
     async def _replace_section_lines(
@@ -270,6 +291,9 @@ class BomCollaborationService(AppBaseService[BomCollaboration]):
             item = BomCollabListItem.model_validate(row)
             item.electronics_line_count = e_count
             item.structure_line_count = s_count
+            item.capabilities = self._capabilities_payload(
+                row, electronics_line_count=e_count, structure_line_count=s_count
+            )
             items.append(item)
         return BomCollabListResponse(items=items, total=total)
 

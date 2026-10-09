@@ -52,6 +52,13 @@ class BomCollabEnter(BaseModel):
     master_bom_code: Optional[str] = Field(None, max_length=80)
 
 
+class BomCollabCapabilities(BaseModel):
+    electronics_ready: bool = False
+    structure_ready: bool = False
+    approved: bool = False
+    clerk_entered: bool = False
+
+
 class BomCollabResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -81,6 +88,7 @@ class BomCollabResponse(BaseModel):
     updated_by_name: Optional[str] = None
     electronics_lines: List[BomCollabLineOut] = Field(default_factory=list)
     structure_lines: List[BomCollabLineOut] = Field(default_factory=list)
+    capabilities: Optional[BomCollabCapabilities] = None
 
 
 class BomCollabListItem(BaseModel):
@@ -102,6 +110,7 @@ class BomCollabListItem(BaseModel):
     updated_at: datetime
     created_by_name: Optional[str] = None
     updated_by_name: Optional[str] = None
+    capabilities: Optional[BomCollabCapabilities] = None
 
 
 class BomCollabListResponse(BaseModel):

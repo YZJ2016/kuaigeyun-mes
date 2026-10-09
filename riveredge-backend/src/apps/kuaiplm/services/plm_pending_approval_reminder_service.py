@@ -36,6 +36,7 @@ DELAY_HOURS_BY_ENTITY = {
     "engineering_drawing": 24,
     "drawing_change": 24,
     "sample_process": 24,
+    "lab_request": 8,
 }
 
 ENTITY_RD_DELIVERABLE = "rd_deliverable"
@@ -44,6 +45,7 @@ ENTITY_PRODUCTION_FILE = "production_file"
 ENTITY_ENGINEERING_DRAWING = "engineering_drawing"
 ENTITY_DRAWING_CHANGE = "drawing_change"
 ENTITY_SAMPLE_PROCESS = "sample_process"
+ENTITY_LAB_REQUEST = "lab_request"
 
 
 def approval_delay_hours(entity_type: str) -> int:
@@ -185,6 +187,12 @@ async def _load_pending_row(tenant_id: int, entity_type: str, entity_id: int):
         return await SampleProcessApplication.filter(
             tenant_id=tenant_id, id=entity_id, deleted_at__isnull=True
         ).first()
+    if entity_type == ENTITY_LAB_REQUEST:
+        from apps.kuaiplm.models.lab_request import LabRequest
+
+        return await LabRequest.filter(
+            tenant_id=tenant_id, id=entity_id, deleted_at__isnull=True
+        ).first()
     return None
 
 
@@ -197,6 +205,10 @@ def _is_still_pending(entity_type: str, row) -> bool:
         return (row.status or "") == "Pending"
     if entity_type == ENTITY_DRAWING_CHANGE:
         return (row.status or "") == "pending"
+    if entity_type == ENTITY_LAB_REQUEST:
+        from apps.kuaiplm.constants.lab_request_types import LAB_REQUEST_STATUS_PENDING_REVIEW
+
+        return (row.status or "") == LAB_REQUEST_STATUS_PENDING_REVIEW
     return (row.status or "") == "pending"
 
 
@@ -235,6 +247,8 @@ async def dispatch_plm_pending_approval_reminder(
             doc_code = str(getattr(row, "drawing_code", None) or f"变更#{row.id}")
         elif entity_type == ENTITY_SAMPLE_PROCESS:
             doc_code = row.application_code or f"样品加工#{row.id}"
+        elif entity_type == ENTITY_LAB_REQUEST:
+            doc_code = row.code or f"实验委托#{row.id}"
     if not title:
         if entity_type == ENTITY_DRAWING_CHANGE:
             title = str(

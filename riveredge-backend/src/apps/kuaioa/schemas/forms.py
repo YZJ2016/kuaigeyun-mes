@@ -2,7 +2,7 @@
 
 from typing import Any, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class FormTemplateCreate(BaseModel):
@@ -40,3 +40,42 @@ class FormRequestUpdate(BaseModel):
     form_data: Optional[dict[str, Any]] = None
     department_name: Optional[str] = None
     notes: Optional[str] = None
+
+
+class FormRequestCapabilities(BaseModel):
+    uploaded: bool = False
+    approved: bool = False
+    issued: bool = False
+    can_download: bool = False
+    responded: bool = False
+    countersign_selected: bool = False
+
+
+class FormRequestConfirmationReply(BaseModel):
+    confirmation_result: str = Field(..., min_length=1, max_length=50)
+
+
+class FormRequestIssueGrantInput(BaseModel):
+    target_type: str = Field(..., description="user|role|department")
+    target_id: int = Field(..., ge=1)
+    target_label: Optional[str] = Field(None, max_length=200)
+
+
+class FormRequestIssueRequest(BaseModel):
+    user_ids: List[int] = Field(default_factory=list, description="下发用户 id")
+    role_uuids: List[str] = Field(default_factory=list, description="下发角色 uuid")
+    department_ids: List[int] = Field(default_factory=list, description="下发部门 id")
+
+    def normalized_grants(self) -> List[FormRequestIssueGrantInput]:
+        out: List[FormRequestIssueGrantInput] = []
+        for uid in self.user_ids:
+            out.append(FormRequestIssueGrantInput(target_type="user", target_id=int(uid)))
+        for rid in self.department_ids:
+            out.append(FormRequestIssueGrantInput(target_type="department", target_id=int(rid)))
+        return out
+
+    @model_validator(mode="after")
+    def _require_targets(self) -> "FormRequestIssueRequest":
+        if not self.user_ids and not self.role_uuids and not self.department_ids:
+            raise ValueError("须至少选择一个下发对象")
+        return self

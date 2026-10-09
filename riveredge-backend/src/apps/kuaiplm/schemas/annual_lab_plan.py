@@ -96,6 +96,18 @@ class AnnualLabPlanIssueRejectRequest(BaseModel):
     reason: str = Field(..., min_length=1)
 
 
+class AnnualLabPlanCreateLabRequestRequest(BaseModel):
+    """年度例试月度台账一键生成实验委托（L52）。"""
+
+    project_id: int = Field(..., ge=1, description="关联研发项目")
+    business_type: str = Field(
+        "project_product",
+        max_length=40,
+        description="project_material | project_product",
+    )
+    title: Optional[str] = Field(None, max_length=200, description="试验名称，默认取月度标题")
+
+
 class AnnualLabPlanResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -126,6 +138,12 @@ class AnnualLabPlanResponse(BaseModel):
     months: List[AnnualLabPlanMonthResponse] = Field(default_factory=list)
     completed_months: int = 0
     total_months: int = 0
+
+
+class AnnualLabPlanCreateLabRequestResponse(BaseModel):
+    plan: AnnualLabPlanResponse
+    lab_request_id: int
+    lab_request_code: str
 
 
 class AnnualLabPlanListResponse(BaseModel):

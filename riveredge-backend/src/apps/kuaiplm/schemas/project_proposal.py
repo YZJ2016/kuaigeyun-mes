@@ -77,6 +77,13 @@ class ProjectProposalSupplierFill(BaseModel):
     procurement_reviewer_name: Optional[str] = Field(None, max_length=100)
 
 
+class ProjectProposalCapabilities(BaseModel):
+    sales_ready: bool = False
+    supplier_filled: bool = False
+    approved: bool = False
+    issued: bool = False
+
+
 class ProjectProposalResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -126,6 +133,7 @@ class ProjectProposalResponse(BaseModel):
     created_by_name: Optional[str] = None
     updated_by: Optional[int] = None
     updated_by_name: Optional[str] = None
+    capabilities: Optional[ProjectProposalCapabilities] = None
 
 
 class ProjectProposalListResponse(BaseModel):

@@ -73,6 +73,34 @@ async def _scope_report_submitter(_tenant_id: int, context: Dict) -> List[int]:
     return [uid] if uid > 0 else []
 
 
+async def _scope_project_owner(_tenant_id: int, context: Dict) -> List[int]:
+    del _tenant_id
+    raw = context.get("project_owner_user_id")
+    try:
+        uid = int(raw)
+    except (TypeError, ValueError):
+        return []
+    return [uid] if uid > 0 else []
+
+
+async def _scope_lab_request_notify_users(_tenant_id: int, context: Dict) -> List[int]:
+    del _tenant_id
+    raw = context.get("lab_request_notify_user_ids")
+    if not isinstance(raw, list):
+        return []
+    out: List[int] = []
+    seen: set[int] = set()
+    for item in raw:
+        try:
+            uid = int(item)
+        except (TypeError, ValueError):
+            continue
+        if uid > 0 and uid not in seen:
+            seen.add(uid)
+            out.append(uid)
+    return out
+
+
 async def _scope_month_owner(_tenant_id: int, context: Dict) -> List[int]:
     del _tenant_id
     raw = context.get("owner_user_id")
@@ -250,8 +278,10 @@ async def notify_lab_request_completed(
     title: str,
     creator_user_id: Optional[int],
     judgment: Optional[str] = None,
+    project_owner_user_id: Optional[int] = None,
+    notify_user_ids: Optional[List[int]] = None,
 ) -> int:
-    """实验完成：通知申请人查看结果。"""
+    """实验完成：通知发起人、项目负责人及指定关注人。"""
     return await dispatch_kuaiplm_notification(
         tenant_id,
         trigger_document=TRIGGER_LAB_REQUEST,
@@ -266,6 +296,8 @@ async def notify_lab_request_completed(
             "entity_type": "lab_request",
             "entity_id": request_id,
             "creator_user_id": creator_user_id,
+            "project_owner_user_id": project_owner_user_id,
+            "lab_request_notify_user_ids": list(notify_user_ids or []),
         },
     )
 
@@ -363,6 +395,10 @@ def ensure_kuaiplm_notification_scope_resolvers() -> None:
     register_notification_scope_resolver("pending_approvers", _scope_pending_approvers)
     register_notification_scope_resolver("report_submitter", _scope_report_submitter)
     register_notification_scope_resolver("month_owner", _scope_month_owner)
+    register_notification_scope_resolver("project_owner", _scope_project_owner)
+    register_notification_scope_resolver(
+        "lab_request_notify_users", _scope_lab_request_notify_users
+    )
     register_notification_scope_resolver(
         "ecn_close_participants", _scope_ecn_close_participants
     )

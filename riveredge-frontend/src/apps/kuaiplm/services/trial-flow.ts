@@ -51,6 +51,14 @@ export interface TrialFlowFormProfileHeaderField {
   options?: Array<{ value: string; label: string }>;
 }
 
+export interface TrialFlowCompleteCapabilities {
+  filled?: boolean;
+  dept_approved?: boolean;
+  results_done?: boolean;
+  conclusions_done?: boolean;
+  archived?: boolean;
+}
+
 export interface TrialFlowFormProfile {
   industry_profile_enabled?: boolean;
   field_labels: Record<string, string>;
@@ -80,6 +88,7 @@ export interface TrialFlow {
   updated_at?: string;
   created_by_name?: string | null;
   updated_by_name?: string | null;
+  capabilities?: TrialFlowCompleteCapabilities | null;
 }
 
 export interface TrialFlowPayload {

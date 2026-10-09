@@ -47,6 +47,20 @@ export type LabRequestFieldVisibility = {
   structureElectronics: boolean;
   outsourceCert: boolean;
   payer: boolean;
+  /** L50 结构通用委托：须上传委托表附件 */
+  requestAttachments: boolean;
+};
+
+export type LabRequestStoredAttachment = {
+  file_uuid: string;
+  file_name?: string | null;
+};
+
+type UploadFileLike = {
+  uid?: string;
+  name?: string;
+  status?: string;
+  response?: { uuid?: string; original_name?: string; name?: string };
 };
 
 export function resolveLabRequestFieldVisibility(
@@ -60,6 +74,7 @@ export function resolveLabRequestFieldVisibility(
   const isOutsource = bt === 'outsource';
   const isIqc = bt === 'iqc';
   const isGeneral = bt === 'general' || !bt;
+  const isProjectMaterial = bt === 'project_material';
 
   return {
     project: isRd || isProject,
@@ -72,7 +87,39 @@ export function resolveLabRequestFieldVisibility(
     structureElectronics: bt === 'project_product',
     outsourceCert: isOutsource,
     payer: isOutsource,
+    requestAttachments: isGeneral || isProjectMaterial,
   };
+}
+
+export function mapLabRequestAttachmentsToUploadList(
+  attachments?: LabRequestStoredAttachment[] | null,
+): UploadFileLike[] {
+  return (attachments || []).map((a) => ({
+    uid: a.file_uuid,
+    name: a.file_name || a.file_uuid,
+    status: 'done',
+  }));
+}
+
+export function labRequestAttachmentsFromUpload(
+  uploadList: UploadFileLike[] | undefined,
+): LabRequestStoredAttachment[] {
+  return (uploadList || [])
+    .filter((f) => f.status === 'done' || !f.status)
+    .map((f) => {
+      const response = f.response;
+      const fileUuid =
+        (typeof response === 'object' && response?.uuid) || f.uid || '';
+      const fileName =
+        (typeof response === 'object' && (response.original_name || response.name)) ||
+        f.name ||
+        null;
+      return {
+        file_uuid: String(fileUuid),
+        file_name: fileName,
+      };
+    })
+    .filter((a) => a.file_uuid);
 }
 
 export function flattenLabRequestForForm(
@@ -82,9 +129,18 @@ export function flattenLabRequestForForm(
   const base: Record<string, unknown> = { ...row };
   const payload = row.extension_payload || {};
   for (const key of LAB_REQUEST_EXTENSION_KEYS) {
+    if (key === 'structure_special_test' || key === 'electronics_special_test') {
+      continue;
+    }
     if (base[key] === undefined && payload[key] !== undefined) {
       base[key] = payload[key];
     }
+  }
+  if (row.structure_special_test != null && base.structure_special_test === undefined) {
+    base.structure_special_test = row.structure_special_test;
+  }
+  if (row.electronics_special_test != null && base.electronics_special_test === undefined) {
+    base.electronics_special_test = row.electronics_special_test;
   }
   return base;
 }

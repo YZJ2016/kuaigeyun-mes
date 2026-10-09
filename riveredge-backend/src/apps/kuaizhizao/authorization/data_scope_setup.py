@@ -7,6 +7,7 @@ from core.services.authorization.data_scope_constants import (
 )
 from core.services.authorization.data_scope_resource_registry import (
     DataScopeResourceProfile,
+    register_data_scope_function_grant_source,
     register_resource_profile,
 )
 
@@ -80,7 +81,15 @@ def register_kuaizhizao_data_scope_profiles() -> None:
     register_resource_profile("kuaizhizao:after-sales-ticket", _CUSTOMER_CHILD_DOC_PROFILE)
     register_resource_profile("kuaizhizao:sales-opportunity", _CUSTOMER_CHILD_DOC_PROFILE)
     register_resource_profile("kuaizhizao:customer-follow-up-customer", _CUSTOMER_OWNED_PARENT_PROFILE)
+    register_data_scope_function_grant_source(
+        "kuaizhizao:customer-follow-up-customer",
+        "kuaizhizao:customer-follow-up",
+    )
     register_resource_profile("kuaizhizao:after-sales-ticket-customer", _CUSTOMER_OWNED_PARENT_PROFILE)
+    register_data_scope_function_grant_source(
+        "kuaizhizao:after-sales-ticket-customer",
+        "kuaizhizao:after-sales-ticket",
+    )
     register_resource_profile("kuaizhizao:sales-contract", _KUAIZHIZAO_SALES_DOC_PROFILE)
     register_resource_profile("kuaizhizao:purchase-order", _KUAIZHIZAO_PURCHASE_DOC_PROFILE)
     register_resource_profile("kuaizhizao:work-order", _KUAIZHIZAO_WORK_ORDER_PROFILE)

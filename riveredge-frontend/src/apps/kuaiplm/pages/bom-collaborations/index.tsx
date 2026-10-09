@@ -47,6 +47,7 @@ import { downloadRecordsAsXlsx, type ExportXlsxColumn } from '../../../../utils/
 import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
 import { renderDocumentStatusTag } from '../../../../utils/documentLifecycleStatusTag';
 import { MarkerTag } from '../../../../constants/statusBadges';
+import { BomCollabCapabilitiesTags } from '../../components/BomCollabCapabilitiesTags';
 import {
   alignDescriptionColumns,
   alignProColumns,
@@ -354,6 +355,15 @@ const BomCollaborationsPage: React.FC = () => {
         ellipsis: true,
       },
       {
+        title: t('app.kuaiplm.bomCollab.capabilitiesColumn'),
+        key: 'capabilities',
+        width: 320,
+        minWidth: 280,
+        uniTableKeepWidth: true,
+        hideInSearch: true,
+        render: (_, row) => <BomCollabCapabilitiesTags capabilities={row.capabilities} />,
+      },
+      {
         ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         title: electronicsLabel,
         dataIndex: 'electronics_status',
@@ -517,6 +527,11 @@ const BomCollaborationsPage: React.FC = () => {
         dataIndex: 'title',
       },
       {
+        key: 'capabilities',
+        title: t('app.kuaiplm.bomCollab.capabilitiesColumn'),
+        render: (_, r) => <BomCollabCapabilitiesTags capabilities={r.capabilities} />,
+      },
+      {
         key: 'lifecycle',
         title: t('common.status'),
         dataIndex: 'status',
@@ -582,7 +597,7 @@ const BomCollaborationsPage: React.FC = () => {
           tableRowsRef.current = rows;
         }}
         columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
-        columnPersistenceId="apps.kuaiplm.pages.bom-collaborations.width-v3"
+        columnPersistenceId="apps.kuaiplm.pages.bom-collaborations.width-v4"
         showCreateButton={perms.canCreate}
         createButtonText={t('app.kuaiplm.bomCollab.createButton') + NEW_SHORTCUT_HINT}
         onCreate={openCreate}

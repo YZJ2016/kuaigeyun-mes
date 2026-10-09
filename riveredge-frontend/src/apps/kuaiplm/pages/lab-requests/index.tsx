@@ -18,6 +18,7 @@ import {
   ProFormSwitch,
   ProFormText,
   ProFormTextArea,
+  ProFormUploadDragger,
 } from '@ant-design/pro-components';
 import {
   App,
@@ -71,6 +72,7 @@ import { downloadRecordsAsXlsx, type ExportXlsxColumn } from '../../../../utils/
 import { fetchAllListItems } from '../../../../utils/fetchAllListPages';
 import { renderDocumentStatusTag } from '../../../../utils/documentLifecycleStatusTag';
 import { MarkerTag } from '../../../../constants/statusBadges';
+import { LabRequestOutsourceCapabilitiesTags } from '../../components/LabRequestOutsourceCapabilitiesTags';
 import { formatUserDisplayLabel } from '../../../../utils/userDisplay';
 import { resolveSystemDictionaryValueLabel } from '../../../../utils/systemDictionaryI18n';
 import {
@@ -89,8 +91,11 @@ import {
   getLabRequestExtensionValue,
   resolveLabRequestFieldVisibility,
   stripLabRequestExtensionFormValues,
+  labRequestAttachmentsFromUpload,
+  mapLabRequestAttachmentsToUploadList,
   type LabRequestOutsourceCertLine,
 } from '../../utils/labRequestExtension';
+import { buildDocumentAttachmentUploadHandlers } from '../../../kuaizhizao/utils/documentAttachments';
 import { resolvePlmStandardDocListSearch } from '../../utils/plmListCore';
 import {
   labRequestApi,
@@ -110,6 +115,7 @@ import {
 const { Text } = Typography;
 
 const LAB_REPORT_FILE_CATEGORY = 'lab-report';
+const LAB_REQUEST_ATTACHMENT_FILE_CATEGORY = 'lab-request-attachment';
 
 function labReportHasDocument(row: Pick<LabRequest, 'report_url' | 'report_file_uuid'>): boolean {
   return Boolean(
@@ -295,6 +301,7 @@ const LAB_REQUEST_BUSINESS_TYPE_CODES = [
 const STATUS_KEYS: LabRequestStatus[] = [
   'draft',
   'pending_review',
+  'awaiting_lab_dispatch',
   'pending',
   'in_lab',
   'completed',
@@ -834,6 +841,20 @@ const LabRequestsPage: React.FC = () => {
             ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
           },
           {
+            title: t('app.kuaiplm.labRequest.capabilitiesColumn'),
+            key: 'capabilities',
+            width: 320,
+            minWidth: 280,
+            uniTableKeepWidth: true,
+            hideInSearch: true,
+            render: (_, row) => (
+              <LabRequestOutsourceCapabilitiesTags
+                businessType={row.business_type}
+                capabilities={row.capabilities}
+              />
+            ),
+          },
+          {
             title: t('app.kuaiplm.labRequest.fields.priority'),
             dataIndex: 'priority',
             key: 'priority',
@@ -954,11 +975,33 @@ const LabRequestsPage: React.FC = () => {
                   {...rowActionKind('submit')}
                   onClick={async () => {
                     if (row.id == null) return;
-                    await labRequestApi.submit(row.id);
-                    messageApi.success(t('app.kuaiplm.labRequest.messages.submitSuccess'));
-                    reloadList();
+                    try {
+                      await labRequestApi.submit(row.id);
+                      messageApi.success(t('app.kuaiplm.labRequest.messages.submitSuccess'));
+                      reloadList();
+                    } catch (e) {
+                      messageApi.error(getApiErrorMessage(e));
+                    }
                   }}
                 />
+              ) : null,
+              canSubmit && row.status === 'awaiting_lab_dispatch' ? (
+                <Button
+                  key="dispatch"
+                  {...rowActionKind('submit')}
+                  onClick={async () => {
+                    if (row.id == null) return;
+                    try {
+                      await labRequestApi.dispatchToLaboratory(row.id);
+                      messageApi.success(t('app.kuaiplm.labRequest.messages.dispatchSuccess'));
+                      reloadList();
+                    } catch (e) {
+                      messageApi.error(getApiErrorMessage(e));
+                    }
+                  }}
+                >
+                  {t('app.kuaiplm.labRequest.actions.dispatchToLab')}
+                </Button>
               ) : null,
               canApprove && row.status === 'pending_review' ? (
                 <Button
@@ -1354,6 +1397,52 @@ const LabRequestsPage: React.FC = () => {
           label: t('app.kuaiplm.labRequest.fields.testReason'),
           children: detail.test_reason || '-',
         },
+        ...(detail.business_type === 'outsource' && detail.capabilities
+          ? [
+              {
+                key: 'capabilities',
+                label: t('app.kuaiplm.labRequest.capabilitiesColumn'),
+                children: (
+                  <LabRequestOutsourceCapabilitiesTags
+                    businessType={detail.business_type}
+                    capabilities={detail.capabilities}
+                  />
+                ),
+              },
+            ]
+          : []),
+        ...(vis.requestAttachments
+          ? [
+              {
+                key: 'attachments',
+                label: t('app.kuaiplm.labRequest.fields.requestAttachments'),
+                children:
+                  (detail.attachments || []).length > 0 ? (
+                    <Typography.Link
+                      onClick={() => {
+                        void (async () => {
+                          const first = detail.attachments?.[0];
+                          const uuid = String(first?.file_uuid || '').trim();
+                          if (!uuid) return;
+                          try {
+                            const url = await getFileDownloadUrlWithToken(uuid);
+                            window.open(url, '_blank', 'noopener,noreferrer');
+                          } catch (e) {
+                            messageApi.error(getApiErrorMessage(e));
+                          }
+                        })();
+                      }}
+                    >
+                      {(detail.attachments || [])
+                        .map((a) => a.file_name || a.file_uuid)
+                        .join('、')}
+                    </Typography.Link>
+                  ) : (
+                    '-'
+                  ),
+              },
+            ]
+          : []),
         ...(vis.structureElectronics
           ? [
               {
@@ -1365,6 +1454,22 @@ const LabRequestsPage: React.FC = () => {
                 key: 'electronics_special_test',
                 label: t('app.kuaiplm.labRequest.fields.electronicsSpecialTest'),
                 children: String(ext('electronics_special_test') || '-'),
+              },
+              {
+                key: 'structure_section_status',
+                label: t('app.kuaiplm.labRequest.fields.structureSectionStatus'),
+                children:
+                  detail.structure_section_status === 'ready'
+                    ? t('app.kuaiplm.labRequest.sectionStatus.ready')
+                    : t('app.kuaiplm.labRequest.sectionStatus.draft'),
+              },
+              {
+                key: 'electronics_section_status',
+                label: t('app.kuaiplm.labRequest.fields.electronicsSectionStatus'),
+                children:
+                  detail.electronics_section_status === 'ready'
+                    ? t('app.kuaiplm.labRequest.sectionStatus.ready')
+                    : t('app.kuaiplm.labRequest.sectionStatus.draft'),
               },
             ]
           : []),
@@ -1596,7 +1701,7 @@ const LabRequestsPage: React.FC = () => {
         actionRef={actionRef}
         headerTitle={t('app.kuaiplm.menu.lab-requests')}
         permissionResource={RESOURCE}
-        columnPersistenceId="apps.kuaiplm.pages.lab-requests-v6"
+        columnPersistenceId="apps.kuaiplm.pages.lab-requests-v7"
         rowKey="id"
         columns={columns}
         enableRowSelection
@@ -1685,6 +1790,9 @@ const LabRequestsPage: React.FC = () => {
           editing
             ? {
                 ...flattenLabRequestForForm(editing),
+                request_attachment_upload: mapLabRequestAttachmentsToUploadList(
+                  editing.attachments,
+                ),
                 measure_items: (editing.measure_items || []).map((m, idx) => ({
                   line_no: m.line_no || idx + 1,
                   item_name: m.item_name,
@@ -1703,8 +1811,17 @@ const LabRequestsPage: React.FC = () => {
           try {
             const extension_payload = buildLabRequestExtensionPayload(values);
             const rest = stripLabRequestExtensionFormValues(values);
+            const { request_attachment_upload, ...restFields } = rest as Record<string, unknown> & {
+              request_attachment_upload?: unknown;
+            };
+            const attachments = labRequestAttachmentsFromUpload(
+              request_attachment_upload as Parameters<typeof labRequestAttachmentsFromUpload>[0],
+            );
             const payload = {
-              ...rest,
+              ...restFields,
+              ...(attachments.length > 0 || request_attachment_upload != null
+                ? { attachments }
+                : {}),
               extension_payload,
               measure_items: (values.measure_items || []).map(
                 (row: Record<string, unknown>, idx: number) => ({
@@ -1721,10 +1838,21 @@ const LabRequestsPage: React.FC = () => {
                 }),
               ),
             };
-            if (editing?.id != null) {
-              await labRequestApi.update(editing.id, payload);
+            let savedId = editing?.id;
+            if (savedId != null) {
+              await labRequestApi.update(savedId, payload);
             } else {
-              await labRequestApi.create(payload);
+              const created = await labRequestApi.create(payload);
+              savedId = created.id;
+            }
+            const savedType = String(payload.business_type || restFields.business_type || '');
+            if (savedType === 'project_product' && savedId != null) {
+              await labRequestApi.updateSection(savedId, 'structure', {
+                special_test: (values.structure_special_test as string) || '',
+              });
+              await labRequestApi.updateSection(savedId, 'electronics', {
+                special_test: (values.electronics_special_test as string) || '',
+              });
             }
             messageApi.success(t('common.saveSuccess'));
             setModalOpen(false);
@@ -2051,13 +2179,22 @@ const LabRequestsPage: React.FC = () => {
                       fieldProps={{ rows: 1 }}
                     />
                   </Col>
-                  <Col span={12}>
-                    <ProFormTextArea
-                      name="test_reason"
-                      label={t('app.kuaiplm.labRequest.fields.testReason')}
-                      fieldProps={{ rows: 1 }}
-                    />
-                  </Col>
+                  <ProFormDependency name={['business_type']}>
+                    {({ business_type }) => (
+                      <Col span={12}>
+                        <ProFormTextArea
+                          name="test_reason"
+                          label={t('app.kuaiplm.labRequest.fields.testReason')}
+                          rules={
+                            String(business_type || '').trim().toLowerCase() === 'outsource'
+                              ? [{ required: true, message: t('app.kuaiplm.labRequest.messages.testReasonRequired') }]
+                              : undefined
+                          }
+                          fieldProps={{ rows: 1 }}
+                        />
+                      </Col>
+                    )}
+                  </ProFormDependency>
                   {vis.structureElectronics ? (
                     <>
                       <Col span={12}>
@@ -2123,6 +2260,37 @@ const LabRequestsPage: React.FC = () => {
             }}
           </ProFormDependency>
         </Row>
+        <ProFormDependency name={['business_type']}>
+          {({ business_type }) =>
+            resolveLabRequestFieldVisibility(business_type).requestAttachments ? (
+              <ProFormUploadDragger
+                name="request_attachment_upload"
+                label={t('app.kuaiplm.labRequest.fields.requestAttachments')}
+                icon={<InboxOutlined />}
+                title={t('app.kuaiplm.labRequest.fields.requestAttachmentUploadHint')}
+                description={t('app.kuaiplm.labRequest.fields.requestAttachmentUploadSubHint')}
+                fieldProps={{
+                  multiple: true,
+                  style: { width: '100%' },
+                  ...buildDocumentAttachmentUploadHandlers({
+                    onOpenFailed: () =>
+                      messageApi.error(t('app.kuaiplm.labRequest.messages.attachmentOpenFailed')),
+                  }),
+                  customRequest: async (options) => {
+                    try {
+                      const res = await uploadFile(options.file as File, {
+                        category: LAB_REQUEST_ATTACHMENT_FILE_CATEGORY,
+                      });
+                      options.onSuccess?.(res, options.file as File);
+                    } catch (err) {
+                      options.onError?.(err as Error);
+                    }
+                  },
+                }}
+              />
+            ) : null
+          }
+        </ProFormDependency>
         <UniTableDetail
           name="measure_items"
           title={t('app.kuaiplm.labRequest.measure.sectionTitle')}

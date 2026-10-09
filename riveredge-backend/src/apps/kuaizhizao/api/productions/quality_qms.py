@@ -60,6 +60,8 @@ _DOC_CREATE = Depends(require_permission_codes("kuaizhizao:quality-management-sy
 _DOC_UPDATE = Depends(require_permission_codes("kuaizhizao:quality-management-system-documents:update"))
 _DOC_DELETE = Depends(require_permission_codes("kuaizhizao:quality-management-system-documents:delete"))
 _DOC_PUBLISH = Depends(require_permission_codes("kuaizhizao:quality-management-system-documents:publish"))
+_DOC_SUBMIT = Depends(require_permission_codes("kuaizhizao:quality-management-system-documents:submit"))
+_DOC_APPROVE = Depends(require_permission_codes("kuaizhizao:quality-management-system-documents:approve"))
 _DOC_REJECT = Depends(require_permission_codes("kuaizhizao:quality-management-system-documents:reject"))
 _DOC_OBSOLETE = Depends(require_permission_codes("kuaizhizao:quality-management-system-documents:obsolete"))
 
@@ -253,6 +255,30 @@ async def update_system_document(
     tenant_id: int = Depends(get_current_tenant),
 ) -> QmsSystemDocumentResponse:
     return await doc_service.update_document(tenant_id=tenant_id, document_id=document_id, payload=payload)
+
+
+@router.post(
+    "/qms/system-documents/{document_id}/submit",
+    response_model=QmsSystemDocumentResponse,
+    summary="Submit system document for approval",
+)
+async def submit_system_document(
+    document_id: int,
+    _auth=_DOC_SUBMIT,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> QmsSystemDocumentResponse:
+    actor_name = (
+        getattr(current_user, "full_name", None)
+        or getattr(current_user, "username", None)
+        or str(current_user.id)
+    )
+    return await doc_service.submit_document(
+        tenant_id=tenant_id,
+        document_id=document_id,
+        actor_id=current_user.id,
+        actor_name=actor_name,
+    )
 
 
 @router.post(

@@ -579,6 +579,56 @@
       "config_category": "plm",
       "business_type": "",
       "config_section": "plm_project"
+    },
+    {
+      "node_key": "lab_request_rd",
+      "entity_type": "lab_request",
+      "resource": "kuaiplm:lab-request",
+      "name": "研发实验委托审核",
+      "template": "simple",
+      "config_category": "plm",
+      "business_type": "rd",
+      "config_section": "plm_project"
+    },
+    {
+      "node_key": "lab_request_general",
+      "entity_type": "lab_request",
+      "resource": "kuaiplm:lab-request",
+      "name": "通用实验委托审核",
+      "template": "simple",
+      "config_category": "plm",
+      "business_type": "general",
+      "config_section": "plm_project"
+    },
+    {
+      "node_key": "lab_request_project_material",
+      "entity_type": "lab_request",
+      "resource": "kuaiplm:lab-request",
+      "name": "材料试验委托审核",
+      "template": "simple",
+      "config_category": "plm",
+      "business_type": "project_material",
+      "config_section": "plm_project"
+    },
+    {
+      "node_key": "lab_request_project_product",
+      "entity_type": "lab_request",
+      "resource": "kuaiplm:lab-request",
+      "name": "整机例试委托审核",
+      "template": "lab_request_dual_mgr",
+      "config_category": "plm",
+      "business_type": "project_product",
+      "config_section": "plm_project"
+    },
+    {
+      "node_key": "lab_request_outsource",
+      "entity_type": "lab_request",
+      "resource": "kuaiplm:lab-request",
+      "name": "委外试验申请审核",
+      "template": "simple",
+      "config_category": "plm",
+      "business_type": "outsource",
+      "config_section": "plm_project"
     }
   ]
 }

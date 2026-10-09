@@ -50,14 +50,24 @@ from core.services.file.document_version_policy import (
 )
 from core.services.authorization.user_permission_service import UserPermissionService
 from core.utils.timezone_utils import resolve_business_datetime
-from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
+from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 from datetime import datetime
 import re
 
-DOC_STATUSES = {"draft", "effective", "obsolete", "rejected"}
+DOC_STATUSES = {"draft", "pending", "effective", "obsolete", "rejected"}
 DOC_ZONES = frozenset({"formal", "pending", "all"})
+QMS_SYSTEM_DOCUMENT_AUDIT_NODE = "qms_system_document"
+QMS_SYSTEM_DOCUMENT_ENTITY_TYPE = "qms_system_document"
 AUDIT_STATUSES = {"planned", "in_progress", "completed", "closed"}
 REVIEW_STATUSES = {"draft", "in_progress", "completed", "closed"}
+
+
+def _document_has_attachment(row: QmsSystemDocument) -> bool:
+    attachments = getattr(row, "attachments", None)
+    if isinstance(attachments, list) and len(attachments) > 0:
+        return True
+    file_url = (getattr(row, "file_url", None) or "").strip()
+    return bool(file_url)
 
 
 def _normalize_links(value: Any) -> Optional[List[Dict[str, Any]]]:
@@ -497,13 +507,148 @@ class QmsSystemDocumentService(AppBaseService[QmsSystemDocument], _QmsCrudMixin)
             )
         return await _document_response(tenant_id, row)
 
-    async def publish_document(self, tenant_id: int, document_id: int) -> QmsSystemDocumentResponse:
+    async def _is_audit_enabled(self, tenant_id: int) -> bool:
+        from core.services.approval.audit_binding_service import AuditBindingService
+
+        return await AuditBindingService.is_audit_enabled(tenant_id, QMS_SYSTEM_DOCUMENT_AUDIT_NODE)
+
+    async def submit_document(
+        self,
+        tenant_id: int,
+        document_id: int,
+        *,
+        actor_id: int,
+        actor_name: Optional[str] = None,
+    ) -> QmsSystemDocumentResponse:
+        """编制完成：提交审核（启用审核时走审批中心；未启用则等同发布）。"""
+        from core.services.approval.approval_instance_service import ApprovalInstanceService
+        from core.services.approval.audit_binding_service import AuditBindingService
+        from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit
+
+        row = await self._get_row(tenant_id, document_id)
+        if row.status not in ("draft", "rejected"):
+            raise BusinessLogicError("仅草稿或已驳回文件可提交审核")
+        if not _document_has_attachment(row):
+            raise ValidationError("提交前须上传受控文件附件")
+
+        if not await AuditBindingService.is_audit_enabled(tenant_id, QMS_SYSTEM_DOCUMENT_AUDIT_NODE):
+            return await self.publish_document(tenant_id, document_id)
+
+        row.status = "pending"
+        row.updated_by = actor_id
+        row.updated_by_name = actor_name
+        await row.save()
+
+        approval_instance = await ApprovalInstanceService.start_approval_for_node(
+            tenant_id=tenant_id,
+            user_id=actor_id,
+            node_key=QMS_SYSTEM_DOCUMENT_AUDIT_NODE,
+            entity_type=QMS_SYSTEM_DOCUMENT_ENTITY_TYPE,
+            entity_id=row.id,
+            entity_uuid=str(row.uuid),
+            title=f"体系文件审核 {row.document_code} {row.title}",
+            content=row.content or row.title,
+            send_notification=True,
+        )
+        if approval_instance is None:
+            raise ValidationError(
+                f"审核已开启但未找到可用审批流程，请检查 {QMS_SYSTEM_DOCUMENT_AUDIT_NODE} 绑定"
+            )
+        if approval_instance_finished_on_submit(approval_instance):
+            return await self.approve_document_after_audit(
+                tenant_id, document_id, actor_id=actor_id, actor_name=actor_name
+            )
+        return await _document_response(tenant_id, row)
+
+    async def approve_document_after_audit(
+        self,
+        tenant_id: int,
+        document_id: int,
+        *,
+        actor_id: int,
+        actor_name: Optional[str] = None,
+    ) -> QmsSystemDocumentResponse:
+        """审批通过后发布生效（下发）。"""
+        from core.services.approval.audit_binding_service import AuditBindingService
+        from core.services.approval.audit_flow_guard import (
+            assert_manual_approval_action_allowed,
+            get_approval_gate_status,
+        )
+
+        row = await self._get_row(tenant_id, document_id)
+        if row.status != "pending":
+            raise BusinessLogicError("仅待审文件可在审批通过后发布")
+        if await AuditBindingService.is_audit_enabled(tenant_id, QMS_SYSTEM_DOCUMENT_AUDIT_NODE):
+            gate = await get_approval_gate_status(
+                tenant_id=tenant_id,
+                entity_type=QMS_SYSTEM_DOCUMENT_ENTITY_TYPE,
+                entity_id=document_id,
+            )
+            assert_manual_approval_action_allowed(
+                gate,
+                doc_label="体系文件",
+                verb="审核",
+            )
+        if actor_id:
+            row.updated_by = actor_id
+            row.updated_by_name = actor_name
+            await row.save()
+        return await self.publish_document(tenant_id, document_id, skip_audit_guard=True)
+
+    async def reject_document_after_audit(
+        self,
+        tenant_id: int,
+        document_id: int,
+        *,
+        actor_id: int,
+        actor_name: Optional[str] = None,
+        reason: Optional[str] = None,
+    ) -> QmsSystemDocumentResponse:
+        from core.services.approval.audit_binding_service import AuditBindingService
+        from core.services.approval.audit_flow_guard import (
+            assert_manual_approval_action_allowed,
+            get_approval_gate_status,
+        )
+        from apps.kuaizhizao.schemas.quality_qms import QmsSystemDocumentRejectRequest
+
+        row = await self._get_row(tenant_id, document_id)
+        if await AuditBindingService.is_audit_enabled(tenant_id, QMS_SYSTEM_DOCUMENT_AUDIT_NODE):
+            gate = await get_approval_gate_status(
+                tenant_id=tenant_id,
+                entity_type=QMS_SYSTEM_DOCUMENT_ENTITY_TYPE,
+                entity_id=document_id,
+            )
+            assert_manual_approval_action_allowed(
+                gate,
+                doc_label="体系文件",
+                verb="驳回",
+            )
+        return await self.reject_document(
+            tenant_id,
+            document_id,
+            QmsSystemDocumentRejectRequest(reason=reason),
+            actor_id=actor_id,
+            actor_name=actor_name,
+        )
+
+    async def publish_document(
+        self,
+        tenant_id: int,
+        document_id: int,
+        *,
+        skip_audit_guard: bool = False,
+    ) -> QmsSystemDocumentResponse:
         from apps.kuaizhizao.models.qms_system_document_version import QmsSystemDocumentVersion
         from tortoise.transactions import in_transaction
 
         row = await self._get_row(tenant_id, document_id)
         if row.status == "obsolete":
             raise BusinessLogicError("已作废文件不可再次生效")
+        if not skip_audit_guard and await self._is_audit_enabled(tenant_id):
+            if row.status == "draft":
+                raise BusinessLogicError("审核已启用，请先提交审核")
+            if row.status == "pending":
+                raise BusinessLogicError("文件审核中，审批通过后将自动发布")
 
         async with in_transaction():
             # 旧生效版降为历史

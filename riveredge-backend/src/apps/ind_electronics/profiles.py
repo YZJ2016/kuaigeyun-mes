@@ -197,6 +197,12 @@ ELECTRONICS_TRIAL_FLOW_SEED: Dict[str, Any] = {
     "validation_rules": [
         {
             "when_business_type": "complete",
+            "when_step_keys": ["purchasing"],
+            "require": ["step_description", "result"],
+            "message": "采购工序须填写型号订单说明与判定",
+        },
+        {
+            "when_business_type": "complete",
             "when_step_keys": [
                 "iqc",
                 "pe",

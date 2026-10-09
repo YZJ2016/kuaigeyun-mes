@@ -21,6 +21,9 @@ class DataScopeResourceProfile:
 
 _PROFILES: dict[str, DataScopeResourceProfile] = {}
 
+# 仅用于行级校验的内部 scope 键（manifest 无对应功能码）→ 宿主模块功能键
+_FUNCTION_GRANT_SOURCES: dict[str, str] = {}
+
 
 def normalize_resource_key(resource: str) -> str:
     return (resource or "").strip().lower()
@@ -36,3 +39,17 @@ def register_resource_profile(resource: str, profile: DataScopeResourceProfile) 
 def get_resource_profile(resource: str) -> DataScopeResourceProfile:
     key = normalize_resource_key(resource)
     return _PROFILES.get(key) or DataScopeResourceProfile()
+
+
+def register_data_scope_function_grant_source(scope_resource: str, host_module_resource: str) -> None:
+    """scope 键参与数据范围时，用宿主模块已授功能角色/策略（如 *-customer 父客户校验）。"""
+    scope_key = normalize_resource_key(scope_resource)
+    host_key = normalize_resource_key(host_module_resource)
+    if not scope_key or not host_key:
+        raise ValueError("scope_resource 与 host_module_resource 均不能为空")
+    _FUNCTION_GRANT_SOURCES[scope_key] = host_key
+
+
+def resolve_data_scope_function_grant_resource(resource: str) -> str:
+    key = normalize_resource_key(resource)
+    return _FUNCTION_GRANT_SOURCES.get(key, key)

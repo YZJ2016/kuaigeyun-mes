@@ -15,6 +15,21 @@ export interface FormTemplate {
   show_in_menu?: boolean;
 }
 
+export interface FormRequestCapabilities {
+  uploaded: boolean;
+  approved: boolean;
+  issued: boolean;
+  can_download: boolean;
+  responded?: boolean;
+  countersign_selected?: boolean;
+}
+
+export interface FormRequestIssueGrant {
+  target_type: string;
+  target_id: number;
+  target_label?: string | null;
+}
+
 export interface FormRequest {
   id: number;
   uuid?: string;
@@ -29,6 +44,8 @@ export interface FormRequest {
   department_name?: string | null;
   approval_status?: string | null;
   notes?: string | null;
+  capabilities?: FormRequestCapabilities;
+  issue_grants?: FormRequestIssueGrant[];
 }
 
 export type FormBusinessType = { code: string; name: string };
@@ -72,3 +89,13 @@ export const submitFormRequest = (id: number) =>
 
 export const revokeFormRequest = (id: number) =>
   kuaioaPost<FormRequest>(`${BASE}/requests/${id}/revoke`);
+
+export const issueFormRequest = (
+  id: number,
+  data: { user_ids: number[]; role_uuids: string[]; department_ids?: number[] },
+) => kuaioaPost<FormRequest>(`${BASE}/requests/${id}/issue`, data);
+
+export const replyConfirmationFormRequest = (
+  id: number,
+  data: { confirmation_result: string },
+) => kuaioaPost<FormRequest>(`${BASE}/requests/${id}/confirmation-reply`, data);

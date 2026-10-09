@@ -174,17 +174,21 @@ export const qualityQmsApi = {
         method: 'PUT',
         data,
       }),
-  revise: (id: number, data?: { version?: string; change_summary?: string }) =>
+    revise: (id: number, data?: { version?: string; change_summary?: string }) =>
       apiRequest<QmsSystemDocument>(`/apps/kuaizhizao/qms/system-documents/${id}/revise`, {
         method: 'POST',
         data: data ?? {},
       }),
-  reject: (id: number, data?: { reason?: string }) =>
+    submit: (id: number) =>
+      apiRequest<QmsSystemDocument>(`/apps/kuaizhizao/qms/system-documents/${id}/submit`, {
+        method: 'POST',
+      }),
+    reject: (id: number, data?: { reason?: string }) =>
       apiRequest<QmsSystemDocument>(`/apps/kuaizhizao/qms/system-documents/${id}/reject`, {
         method: 'POST',
         data: data ?? {},
       }),
-  publish: (id: number) =>
+    publish: (id: number) =>
       apiRequest<QmsSystemDocument>(`/apps/kuaizhizao/qms/system-documents/${id}/publish`, {
         method: 'POST',
       }),

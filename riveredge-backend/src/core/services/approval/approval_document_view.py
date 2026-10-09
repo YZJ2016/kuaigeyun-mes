@@ -814,6 +814,12 @@ async def _load_prototype_build_sheet(tenant_id: int, entity_id: int) -> Any:
     return await PrototypeBuildSheetService().get(tenant_id, entity_id)
 
 
+async def _load_qms_system_document(tenant_id: int, entity_id: int) -> Any:
+    from apps.kuaizhizao.services.quality_qms_service import QmsSystemDocumentService
+
+    return await QmsSystemDocumentService().get_document(tenant_id, entity_id)
+
+
 async def _load_rd_deliverable(tenant_id: int, entity_id: int) -> Any:
     from apps.kuaiplm.models.rd_project import RdProjectDeliverable
     from apps.kuaiplm.schemas.rd_project import RdProjectDeliverableResponse
@@ -956,6 +962,7 @@ DOCUMENT_LOADERS: Dict[str, LoaderFn] = {
     "sample_process": _load_sample_process,
     "prototype_build_sheet": _load_prototype_build_sheet,
     "rd_deliverable": _load_rd_deliverable,
+    "qms_system_document": _load_qms_system_document,
     "material_review": _load_material_review,
     "bom_collaboration": _load_bom_collaboration,
     "project_proposal": _load_project_proposal,

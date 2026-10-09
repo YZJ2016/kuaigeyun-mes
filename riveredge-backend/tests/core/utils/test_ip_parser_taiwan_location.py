@@ -1,9 +1,11 @@
 from core.utils.ip_parser import (
+    _strip_admin_suffix,
     format_location_label,
     format_manual_user_location_label,
     merge_location_detail_with_zh_admin,
     normalize_login_location_label,
     pick_canonical_login_location,
+    repair_truncated_zhou_city_login_location,
     vote_ip_location_details,
 )
 
@@ -128,3 +130,29 @@ def test_merge_location_detail_alias_when_no_admin():
     assert merged["country"] == "中国"
     assert merged["region"] == "江苏"
     assert merged["city"] == "无锡"
+
+
+def test_strip_admin_suffix_keeps_zhou_in_two_char_city_names():
+    assert _strip_admin_suffix("广州") == "广州"
+    assert _strip_admin_suffix("广州市") == "广州"
+    assert _strip_admin_suffix("杭州") == "杭州"
+    assert _strip_admin_suffix("郑州市") == "郑州"
+    assert _strip_admin_suffix("凉山州") == "凉山"
+
+
+def test_merge_location_detail_keeps_guangzhou_from_zh_api():
+    merged = merge_location_detail_with_zh_admin(
+        {"city": "广州", "region": "广东", "country": "中国", "lat": 23.13, "lon": 113.26},
+        None,
+    )
+    assert merged["city"] == "广州"
+    assert format_location_label(**{k: merged[k] for k in ("country", "region", "city")}) == (
+        "中国 广东 广州"
+    )
+
+
+def test_repair_truncated_zhou_city_login_location():
+    assert repair_truncated_zhou_city_login_location("中国 广东 广") == "中国 广东 广州"
+    assert repair_truncated_zhou_city_login_location("中国 浙江 杭") == "中国 浙江 杭州"
+    assert repair_truncated_zhou_city_login_location("中国 广东 广州") == "中国 广东 广州"
+    assert repair_truncated_zhou_city_login_location("中国 江苏 无锡") == "中国 江苏 无锡"

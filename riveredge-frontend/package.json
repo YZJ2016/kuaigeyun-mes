@@ -12,6 +12,7 @@
         "build:no-move": "cross-env NODE_OPTIONS=--max-old-space-size=8192 vite build",
         "build:analyze": "cross-env ANALYZE=1 NODE_OPTIONS=--max-old-space-size=8192 vite build",
         "build:16g": "cross-env NODE_OPTIONS=--max-old-space-size=16384 vite build && node scripts/move-dist.js",
+        "prune:dist": "node scripts/prune-stale-dist.mjs",
         "build:monolithic": "cross-env NODE_OPTIONS=--max-old-space-size=8192 vite build",
         "build:saas": "cross-env NODE_OPTIONS=--max-old-space-size=8192 vite build",
         "sync:libredwg": "node scripts/sync-libredwg-wasm.mjs",

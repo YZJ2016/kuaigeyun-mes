@@ -40,6 +40,7 @@ import {
   type RdProjectSystemArchiveItem,
   type RdProjectSystemArchiveList,
 } from '../services/rd-project';
+import { SystemArchiveCapabilitiesTags } from './SystemArchiveCapabilitiesTags';
 
 const FILE_CATEGORY = 'kuaiplm-rd-project-system-archive';
 
@@ -241,6 +242,11 @@ export const RdProjectSystemArchivePanel: React.FC<RdProjectSystemArchivePanelPr
       <Space orientation="vertical" size={12} style={{ width: '100%' }}>
         {summary ? (
           <Typography.Text type="secondary">
+            {summary?.capabilities ? (
+              <div style={{ marginBottom: 8 }}>
+                <SystemArchiveCapabilitiesTags capabilities={summary.capabilities} />
+              </div>
+            ) : null}
             {t('app.kuaiplm.rdProjects.systemArchive.summaryLine', {
               filled: summary.filled,
               total: summary.total,

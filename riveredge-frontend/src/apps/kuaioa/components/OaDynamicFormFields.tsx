@@ -67,6 +67,13 @@ export function serializeDynamicFormValues(
       result[field.name] = parseStoredUser(raw) ?? null;
       continue;
     }
+    if (field.type === 'user_ids' || field.type === 'department_ids') {
+      const ids = Array.isArray(raw)
+        ? raw.map((v) => Number(v)).filter((n) => Number.isFinite(n) && n > 0)
+        : [];
+      result[field.name] = ids;
+      continue;
+    }
     if (field.type === 'file') {
       result[field.name] = extractOaSingleFileUuid(raw) ?? '';
       continue;
@@ -103,6 +110,10 @@ export function dynamicFormValuesFromRecord(
       nested[field.name] = raw ? dayjs(String(raw)) : undefined;
     } else if (field.type === 'user') {
       nested[field.name] = parseStoredUser(raw);
+    } else if (field.type === 'user_ids' || field.type === 'department_ids') {
+      nested[field.name] = Array.isArray(raw)
+        ? raw.map((v) => Number(v)).filter((n) => Number.isFinite(n) && n > 0)
+        : undefined;
     } else if (field.type === 'file') {
       nested[field.name] = typeof raw === 'string' && raw.trim() ? raw : undefined;
     } else {
@@ -116,6 +127,10 @@ export function renderDynamicFieldReadonly(field: OaFormFieldSchema, value: unkn
   if (field.type === 'user') {
     const user = parseStoredUser(value);
     return user?.name || '-';
+  }
+  if (field.type === 'user_ids' || field.type === 'department_ids') {
+    if (!Array.isArray(value) || !value.length) return '-';
+    return value.map((v) => String(v)).join(', ');
   }
   if (field.type === 'file') {
     const uuid = extractOaSingleFileUuid(value) ?? (typeof value === 'string' ? value.trim() : '');
@@ -257,7 +272,7 @@ const OaDynamicFormFields: React.FC<Props> = ({
             />
           );
         }
-        if (field.type === 'department') {
+        if (field.type === 'department' || field.type === 'department_ids') {
           return (
             <OaDepartmentSelect
               key={field.name}
@@ -267,6 +282,20 @@ const OaDynamicFormFields: React.FC<Props> = ({
               colProps={colProps}
               disabled={disabled}
               hostResource={hostResource}
+              mode={field.type === 'department_ids' ? 'multiple' : undefined}
+            />
+          );
+        }
+        if (field.type === 'user_ids') {
+          return (
+            <UniUserIdSelect
+              key={field.name}
+              name={itemName}
+              label={field.label}
+              required={field.required}
+              disabled={disabled}
+              colProps={colProps}
+              mode="multiple"
             />
           );
         }

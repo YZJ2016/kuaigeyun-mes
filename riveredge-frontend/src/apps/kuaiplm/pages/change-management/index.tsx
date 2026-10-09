@@ -35,6 +35,7 @@ import DrawingChangeFormModal from '../../components/DrawingChangeFormModal';
 import EcnChangeFormModal from '../../components/EcnChangeFormModal';
 import { useNewShortcut } from '../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../utils/globalNewShortcut';
+import { getApiErrorMessage } from '../../../../utils/errorHandler';
 import { getKuaiplmChangeStatusText } from '../../components/kuaiplmMeta';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../utils/uniTableLayoutColumns';
@@ -51,6 +52,8 @@ import {
   renderPlmChangeTypeMarker,
 } from '../../utils/plmListPresentation';
 import ChangeDetailDrawer from '../../components/ChangeDetailDrawer';
+import { EcnCapabilitiesTags } from '../../components/EcnCapabilitiesTags';
+import { engineeringChangeApi } from '../../services/engineering-change';
 import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
 
 type TabKey = 'all' | 'bom' | 'route' | 'drawing' | 'ecn';
@@ -79,6 +82,7 @@ const ChangeManagementPage: React.FC = () => {
   const [drawingCreateOpen, setDrawingCreateOpen] = useState(false);
   const [drawingCreateUuid, setDrawingCreateUuid] = useState<string | undefined>();
   const [ecnCreateOpen, setEcnCreateOpen] = useState(false);
+  const [ecnDefaultEntrySource, setEcnDefaultEntrySource] = useState<string | undefined>();
 
   const handleCreateBomChange = useCallback(() => {
     navigate(buildBomChangeCreateUrl());
@@ -100,9 +104,12 @@ const ChangeManagementPage: React.FC = () => {
   }, [handleCreateDrawingChange, searchParams, setSearchParams]);
   useEffect(() => {
     if (searchParams.get('create') !== 'ecn') return;
+    const entry = searchParams.get('entry_source')?.trim();
+    setEcnDefaultEntrySource(entry || undefined);
     setEcnCreateOpen(true);
     const next = new URLSearchParams(searchParams);
     next.delete('create');
+    next.delete('entry_source');
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
   useEffect(() => {
@@ -263,6 +270,20 @@ const ChangeManagementPage: React.FC = () => {
       },
       ...plmCreatedUpdatedColumns<UnifiedChangeRow>(t),
       {
+        title: t('app.kuaiplm.ecn.capabilitiesColumn'),
+        key: 'ecn_capabilities',
+        dataIndex: 'ecn_capabilities',
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+        width: 400,
+        minWidth: 360,
+        uniTableKeepWidth: true,
+        hideInSearch: true,
+        render: (_, row) =>
+          row.change_category === 'ecn' ? (
+            <EcnCapabilitiesTags capabilities={row.ecn_capabilities} />
+          ) : null,
+      },
+      {
         title: t('common.status'),
         key: 'lifecycle',
         dataIndex: 'status',
@@ -322,10 +343,39 @@ const ChangeManagementPage: React.FC = () => {
             </ActionConfirmPopconfirm>,
           );
         }
+        if (
+          isEcn &&
+          row.ecn_entry_source === 'design_change_request' &&
+          status === 'approved' &&
+          !row.ecn_rd_issued_at &&
+          ecnPerms.canAction?.('execute') &&
+          row.id
+        ) {
+          parts.push(
+            <Button
+              key="issue-rd"
+              type="link"
+              size="small"
+              {...rowActionKind('execute')}
+              onClick={async (e) => {
+                e.stopPropagation();
+                try {
+                  await engineeringChangeApi.issueToRd(Number(row.id));
+                  messageApi.success(t('app.kuaiplm.designChangeRequest.messages.issuedToRd'));
+                  actionRef.current?.reload();
+                } catch (err) {
+                  messageApi.error(getApiErrorMessage(err));
+                }
+              }}
+            >
+              {t('app.kuaiplm.designChangeRequest.actions.issueToRd')}
+            </Button>,
+          );
+        }
         return parts;
       }),
     ],
-    [executeExecute, t, changePerms.canUpdate],
+    [executeExecute, ecnPerms, messageApi, t, changePerms.canUpdate],
   );
 
   const toolbarMenuItems = useMemo(
@@ -351,7 +401,7 @@ const ChangeManagementPage: React.FC = () => {
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
-        columnPersistenceId={`apps.kuaiplm.pages.change-management.${activeTab}.list-v2`}
+        columnPersistenceId={`apps.kuaiplm.pages.change-management.${activeTab}.list-v4-dcr`}
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
         pinnedTabsField={PLM_CHANGE_PINNED_STATUS_FIELD}
@@ -461,7 +511,11 @@ const ChangeManagementPage: React.FC = () => {
       />
       <EcnChangeFormModal
         open={ecnCreateOpen}
-        onClose={() => setEcnCreateOpen(false)}
+        defaultEntrySource={ecnDefaultEntrySource}
+        onClose={() => {
+          setEcnCreateOpen(false);
+          setEcnDefaultEntrySource(undefined);
+        }}
         onSuccess={() => {
           setActiveTab('ecn');
           actionRef.current?.reload();

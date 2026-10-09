@@ -14,6 +14,7 @@ from apps.kuaiplm.constants.rd_project_system_archive import (
     RdSystemArchiveAcceptanceStatus,
     RdSystemArchiveFillStatus,
 )
+from apps.kuaiplm.utils.system_archive_capabilities import compute_system_archive_capabilities
 from apps.kuaiplm.models.rd_project_system_archive import RdProjectSystemArchiveItem
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 from core.utils.timezone_utils import resolve_business_datetime
@@ -66,7 +67,7 @@ def summarize_archive_items(items: List[RdProjectSystemArchiveItem]) -> Dict[str
         if _compute_fill_status(i) == RdSystemArchiveFillStatus.EMPTY.value
     )
     total = SYSTEM_ARCHIVE_TOTAL_COUNT
-    return {
+    payload = {
         "total": total,
         "filled": filled,
         "empty": empty,
@@ -76,6 +77,8 @@ def summarize_archive_items(items: List[RdProjectSystemArchiveItem]) -> Dict[str
         "complete": filled + missing_marked >= total,
         "all_accepted": accepted >= total,
     }
+    payload["capabilities"] = compute_system_archive_capabilities(payload)
+    return payload
 
 
 def item_to_dict(row: RdProjectSystemArchiveItem) -> Dict[str, Any]:
@@ -121,6 +124,72 @@ def item_to_dict(row: RdProjectSystemArchiveItem) -> Dict[str, Any]:
 
 
 class RdProjectSystemArchiveService:
+    async def _assert_link_target_belongs_to_project(
+        self,
+        tenant_id: int,
+        project_id: int,
+        *,
+        target_type: str,
+        linked_target_id: Optional[int],
+        linked_target_uuid: Optional[str],
+    ) -> None:
+        """关联单据须属于当前研发项目（L66 关联上传）。"""
+        from apps.kuaiplm.models.project_proposal import ProjectProposal
+        from apps.kuaiplm.models.prototype_build_sheet import PrototypeBuildSheet
+        from apps.kuaiplm.models.rd_project import RdProjectDeliverable
+        from apps.kuaiplm.models.trial_flow import TrialFlow
+
+        async def _project_id_of(model, *, id_val: Optional[int], uuid_val: Optional[str]):
+            if id_val:
+                row = await model.filter(
+                    tenant_id=tenant_id, id=id_val, deleted_at__isnull=True
+                ).first()
+            elif uuid_val:
+                row = await model.filter(
+                    tenant_id=tenant_id, uuid=uuid_val, deleted_at__isnull=True
+                ).first()
+            else:
+                return None
+            if not row:
+                raise NotFoundError("关联目标不存在")
+            return getattr(row, "project_id", None)
+
+        pid: Optional[int] = None
+        if target_type == "project_proposal":
+            pid = await _project_id_of(
+                ProjectProposal, id_val=linked_target_id, uuid_val=linked_target_uuid
+            )
+        elif target_type == "prototype_build_sheet":
+            pid = await _project_id_of(
+                PrototypeBuildSheet, id_val=linked_target_id, uuid_val=linked_target_uuid
+            )
+        elif target_type == "trial_flow":
+            pid = await _project_id_of(
+                TrialFlow, id_val=linked_target_id, uuid_val=linked_target_uuid
+            )
+        elif target_type == "rd_deliverable":
+            pid = await _project_id_of(
+                RdProjectDeliverable, id_val=linked_target_id, uuid_val=linked_target_uuid
+            )
+        elif target_type == "bom_collaboration":
+            from apps.kuaiplm.models.bom_collaboration import BomCollaboration
+
+            pid = await _project_id_of(
+                BomCollaboration, id_val=linked_target_id, uuid_val=linked_target_uuid
+            )
+        elif target_type == "lab_request":
+            from apps.kuaiplm.models.lab_request import LabRequest
+
+            pid = await _project_id_of(
+                LabRequest, id_val=linked_target_id, uuid_val=linked_target_uuid
+            )
+        else:
+            return
+        if pid is None:
+            raise ValidationError("关联单据未绑定研发项目，无法写入归档")
+        if int(pid) != int(project_id):
+            raise ValidationError("关联单据须属于当前研发项目")
+
     async def seed_for_project(
         self, tenant_id: int, project_id: int, *, actor_id: Optional[int] = None
     ) -> None:
@@ -245,6 +314,13 @@ class RdProjectSystemArchiveService:
             )
         if not linked_target_id and not linked_target_uuid:
             raise ValidationError("关联目标 ID 或 UUID 至少填一项")
+        await self._assert_link_target_belongs_to_project(
+            tenant_id,
+            project_id,
+            target_type=target_type,
+            linked_target_id=linked_target_id,
+            linked_target_uuid=linked_target_uuid,
+        )
         row.linked_target_type = target_type
         row.linked_target_id = linked_target_id
         row.linked_target_uuid = linked_target_uuid

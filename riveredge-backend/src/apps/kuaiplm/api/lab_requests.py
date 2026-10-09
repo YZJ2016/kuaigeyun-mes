@@ -20,6 +20,7 @@ from apps.kuaiplm.schemas.lab_request import (
     LabRequestReportSaveRequest,
     LabRequestResponse,
     LabRequestRevokeRequest,
+    LabRequestSectionUpdate,
     LabRequestUpdate,
 )
 from apps.kuaiplm.services.lab_request_service import LabRequestService
@@ -123,6 +124,38 @@ async def delete_lab_request(
     try:
         await service.delete(tenant_id, request_id, current_user)
         return {"success": True}
+    except Exception as e:
+        raise _http(e) from e
+
+
+@router.put(
+    "/{request_id}/sections/{section}",
+    response_model=LabRequestResponse,
+    summary="Update L52 structure/electronics section",
+)
+async def update_lab_request_section(
+    request_id: int,
+    section: str,
+    data: LabRequestSectionUpdate,
+    current_user: User = Depends(get_current_user),
+    _auth=Depends(require_permission_codes("kuaiplm:lab-request:update")),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await service.update_section(tenant_id, request_id, section, data, current_user)
+    except Exception as e:
+        raise _http(e) from e
+
+
+@router.post("/{request_id}/dispatch-to-laboratory", response_model=LabRequestResponse)
+async def dispatch_lab_request_to_laboratory(
+    request_id: int,
+    current_user: User = Depends(get_current_user),
+    _auth=Depends(require_permission_codes("kuaiplm:lab-request:submit")),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await service.dispatch_to_laboratory(tenant_id, request_id, current_user)
     except Exception as e:
         raise _http(e) from e
 

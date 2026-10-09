@@ -20,6 +20,14 @@ TEMPLATE_COMPLAINT_PQC = "complaint_pqc"
 TEMPLATE_COMPLAINT_OQC = "complaint_oqc"
 TEMPLATE_COMPLAINT_CUSTOMER = "complaint_customer"
 TEMPLATE_INVENTORY_VERIFY = "inventory_verify"
+TEMPLATE_LAB_REQUEST_DUAL_MGR = "lab_request_dual_mgr"
+TEMPLATE_QMS_SYSTEM_DOCUMENT = "qms_system_document"
+
+# 体系受控文件（第二版 #1 / L01）：审核 → 批准，24h 待审提醒
+QMS_SYSTEM_DOCUMENT_APPROVAL_STEPS: Tuple[str, ...] = (
+    "审核",
+    "批准",
+)
 
 # 研发文件下发变更（#31 / L34）：发起后五级签审
 RD_FILE_CHANGE_APPROVAL_STEPS: Tuple[str, ...] = (
@@ -53,6 +61,12 @@ COMPLAINT_CUSTOMER_STEPS: Tuple[str, ...] = ("责任人回复", "客服审核", 
 
 # 库存验证返工：质量、制造、负责人、采购、计划
 INVENTORY_VERIFY_STEPS: Tuple[str, ...] = ("质量", "制造", "负责人", "采购", "计划")
+
+# L52 整机例试：结构经理 → 电子经理（串行）
+LAB_REQUEST_PROJECT_PRODUCT_STEPS: Tuple[str, ...] = (
+    "结构经理批准",
+    "电子经理批准",
+)
 
 
 def build_serial_approval_flow(
@@ -208,6 +222,20 @@ def build_flow_from_template(template: str, label: str) -> Dict[str, Any]:
         return build_sample_smt_flow()
     if code == TEMPLATE_RD_FILE_CHANGE:
         return build_rd_file_change_flow()
+    if code == TEMPLATE_LAB_REQUEST_DUAL_MGR:
+        return build_serial_approval_flow(
+            step_labels=LAB_REQUEST_PROJECT_PRODUCT_STEPS,
+            default_approver_type="role",
+            empty_approver_policy="block",
+            timeout_hours=8,
+        )
+    if code == TEMPLATE_QMS_SYSTEM_DOCUMENT:
+        return build_serial_approval_flow(
+            step_labels=QMS_SYSTEM_DOCUMENT_APPROVAL_STEPS,
+            default_approver_type="role",
+            empty_approver_policy="block",
+            timeout_hours=24,
+        )
     if code in {TEMPLATE_SIMPLE, TEMPLATE_SME}:
         return build_simple_audit_flow(label)
     raise ValueError(f"未知审核流程模板: {template!r}")
