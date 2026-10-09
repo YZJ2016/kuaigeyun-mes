@@ -8,21 +8,19 @@
  * Date: 2026-01-27
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { App, Card, Button, Space, Input, Alert, Spin, Form, Radio, InputNumber, Row, Col, Tag, Divider, Modal } from 'antd';
+import { App, Card, Button, Space, Input, Alert, Spin, Form, Radio, InputNumber, Row, Col, Tag, Modal } from 'antd';
 import { QrcodeOutlined, ScanOutlined, CheckCircleOutlined, CloseCircleOutlined, ReloadOutlined } from '@ant-design/icons';
-import { TOUCH_SCREEN_CONFIG } from '../../../../../components/layout-templates';
 import { TouchScreenTemplate } from '../../../../../components/layout-templates/hmi';
 import { touchButtonProps, TouchChip } from '../../../../../components/touch-terminal';
 import { reportingApi, workOrderApi } from '../../../services/production';
-import { isStationEntryPath } from '../../../../../utils/clientChannel';
+import { isStationEntryPath, STATION_ENTRY_PATH } from '../../../../../utils/clientChannel';
 import { useStationWriteEnabled } from '../../../station/entry/session';
 import { QRCodeScanner } from '../../../../../components/qrcode';
 import { qrcodeApi } from '../../../../../services/qrcode';
-import { useTouchScreen } from '../../../../../hooks/useTouchScreen';
 import dayjs from 'dayjs';
 import { getRemainingReportableQuantity, getStatusReportingCompleteQuantity, resolveDefaultReportingQuantityFields } from '../../../utils/workOrderReporting';
 import {
@@ -95,6 +93,8 @@ interface Operation {
   reporting_type?: 'quantity' | 'status';
   standard_time?: number;
   completed_quantity?: number;
+  qualified_quantity?: number;
+  qualifiedQuantity?: number;
   allow_jump?: boolean;
   is_node_operation?: boolean;
   isNodeOperation?: boolean;
@@ -102,7 +102,6 @@ interface Operation {
   defectTypes?: Array<{ code?: string; name?: string; uuid?: string; id?: number }>;
   inspection_mode?: string;
   inspectionMode?: string;
-  allow_jump?: boolean;
   allowJump?: boolean;
 }
 
@@ -116,10 +115,11 @@ const ReportingKioskPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const location = useLocation();
+  const navigate = useNavigate();
   // 工位路径下未确认操作员时禁用提交报工；PC 路径（/production-execution/*）行为不变
   const stationWriteEnabled = useStationWriteEnabled();
-  const writeBlocked = isStationEntryPath(location.pathname) && !stationWriteEnabled;
-  const touchScreen = useTouchScreen();
+  const stationRoute = isStationEntryPath(location.pathname);
+  const writeBlocked = stationRoute && !stationWriteEnabled;
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [scanning, setScanning] = useState(false);
@@ -129,6 +129,7 @@ const ReportingKioskPage: React.FC = () => {
   const [workOrderOperations, setWorkOrderOperations] = useState<Operation[]>([]);
   const [currentOperation, setCurrentOperation] = useState<Operation | null>(null);
   const [jumpRuleError, setJumpRuleError] = useState<string>('');
+  const loadWorkOrderSeq = useRef(0);
   const { data: executionConfig } = useQuery({
     queryKey: ['workOrderExecutionConfig'],
     queryFn: () => workOrderApi.getExecutionConfig(),
@@ -174,23 +175,42 @@ const ReportingKioskPage: React.FC = () => {
    * 根据工单编号加载工单信息
    */
   const loadWorkOrderByCode = async (workOrderCode: string) => {
+    const code = workOrderCode.trim();
+    const requestSeq = stationRoute ? ++loadWorkOrderSeq.current : 0;
     setLoading(true);
     setJumpRuleError('');
+    if (stationRoute) {
+      setCurrentWorkOrder(null);
+      setCurrentOperation(null);
+      setWorkOrderOperations([]);
+      form.resetFields();
+      form.setFieldValue('work_order_code', code);
+    }
 
     try {
-      // 根据工单编号获取工单信息
-      const workOrders = await workOrderApi.list({ code: workOrderCode.trim() });
-      if (!workOrders || workOrders.length === 0) {
+      // 根据工单编号获取工单信息；列表可能模糊匹配，必须用编号精确命中
+      const workOrders = await workOrderApi.list({ code });
+      const rows = Array.isArray(workOrders)
+        ? workOrders
+        : Array.isArray(workOrders?.data)
+          ? workOrders.data
+          : Array.isArray(workOrders?.items)
+            ? workOrders.items
+            : [];
+      const workOrder = stationRoute
+        ? rows.find((row: WorkOrder) => String(row.code ?? '').trim() === code)
+        : workOrders?.[0];
+      if (stationRoute && requestSeq !== loadWorkOrderSeq.current) return;
+      if (stationRoute ? !workOrder?.id : !workOrders || workOrders.length === 0) {
         messageApi.error('未找到该工单');
-        setLoading(false);
         return;
       }
 
-      const workOrder = workOrders[0];
-      setCurrentWorkOrder(workOrder);
-
+      if (!stationRoute) setCurrentWorkOrder(workOrder);
       // 获取工单工序列表
-      const operations = await workOrderApi.getOperations(workOrder.id!.toString());
+      const operations = await workOrderApi.getOperations(String(workOrder.id));
+      if (stationRoute && requestSeq !== loadWorkOrderSeq.current) return;
+      if (stationRoute) setCurrentWorkOrder(workOrder);
       setWorkOrderOperations(operations || []);
 
       // 自动选择第一个未完成的工序
@@ -199,16 +219,20 @@ const ReportingKioskPage: React.FC = () => {
         setCurrentOperation(pendingOperation);
         // 检查跳转规则
         await checkJumpRule(pendingOperation, operations, workOrder);
-        
+
         // 自动填充表单
         autoFillForm(workOrder, pendingOperation);
       } else {
         messageApi.warning('该工单所有工序已完成');
       }
     } catch (error: any) {
-      messageApi.error(error.message || '获取工单信息失败');
+      if (!stationRoute || requestSeq === loadWorkOrderSeq.current) {
+        messageApi.error(error.message || '获取工单信息失败');
+      }
     } finally {
-      setLoading(false);
+      if (!stationRoute || requestSeq === loadWorkOrderSeq.current) {
+        setLoading(false);
+      }
     }
   };
 
@@ -304,6 +328,7 @@ const ReportingKioskPage: React.FC = () => {
    * 处理提交报工
    */
   const handleSubmit = async (values: any) => {
+    if (stationRoute && loading) return;
     if (!currentWorkOrder || !currentOperation) {
       messageApi.error('请先选择工单和工序');
       return;
@@ -386,7 +411,7 @@ const ReportingKioskPage: React.FC = () => {
       };
 
       const created = await reportingApi.quickCreate(reportingData, {
-        stationOperatorSession: true,
+        stationOperatorSession: stationRoute,
       });
       const createdId = Number((created as { id?: number } | null)?.id);
 
@@ -410,7 +435,7 @@ const ReportingKioskPage: React.FC = () => {
                 defect_reason: selected?.name || selected?.label || String(values.defect_type),
                 disposition: 'quarantine',
               },
-              { stationOperatorSession: true },
+              { stationOperatorSession: stationRoute },
             );
           } catch (defectErr: unknown) {
             console.error(defectErr);
@@ -455,6 +480,10 @@ const ReportingKioskPage: React.FC = () => {
    * 处理重置
    */
   const handleReset = () => {
+    if (stationRoute) {
+      loadWorkOrderSeq.current += 1;
+      setLoading(false);
+    }
     form.resetFields();
     setCurrentWorkOrder(null);
     setCurrentOperation(null);
@@ -471,7 +500,7 @@ const ReportingKioskPage: React.FC = () => {
           title: '提交报工',
           type: 'primary',
           onClick: () => form.submit(),
-          disabled: !currentWorkOrder || !currentOperation || !!jumpRuleError || writeBlocked,
+          disabled: !currentWorkOrder || !currentOperation || !!jumpRuleError || writeBlocked || (stationRoute && loading),
           block: true,
         },
         {
@@ -480,6 +509,12 @@ const ReportingKioskPage: React.FC = () => {
           onClick: handleReset,
           block: true,
         },
+        ...(stationRoute ? [{
+          title: '返回工位入口',
+          type: 'default' as const,
+          onClick: () => navigate(`${STATION_ENTRY_PATH}${location.search}`),
+          block: true,
+        }] : []),
       ]}
     >
       <Spin spinning={loading}>
@@ -538,7 +573,7 @@ const ReportingKioskPage: React.FC = () => {
 
               {/* 工单信息显示 */}
               {currentWorkOrder && (
-                <Card size="small" style={{ backgroundColor: '#f5f5f5' }}>
+                <Card size="small" style={stationRoute ? undefined : { backgroundColor: '#f5f5f5' }}>
                   <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
                     <div>
                       <strong>工单编号：</strong>
@@ -618,7 +653,7 @@ const ReportingKioskPage: React.FC = () => {
             <Card title="报工信息" style={{ marginBottom: 24 }}>
               <Space orientation="vertical" size="large" style={{ width: '100%' }}>
                 {/* 工序信息显示 */}
-                <Card size="small" style={{ backgroundColor: '#f5f5f5' }}>
+                <Card size="small" style={stationRoute ? undefined : { backgroundColor: '#f5f5f5' }}>
                   <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
                     <div>
                       <strong>工序编号：</strong>

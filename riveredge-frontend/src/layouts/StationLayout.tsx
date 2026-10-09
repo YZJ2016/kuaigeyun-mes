@@ -7,10 +7,12 @@
  */
 import React, { useCallback } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Button, Popconfirm, Typography, theme } from 'antd';
+import { Button, ConfigProvider, Popconfirm, Typography, theme } from 'antd';
 import { LockOutlined, LogoutOutlined } from '@ant-design/icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { useGlobalStore, useThemeStore, useUserPreferenceStore } from '../stores';
+import { createHmiTheme, HMI_DESIGN_TOKENS, HMI_TOUCH } from '../theme/hmi';
+import { touchButtonProps } from '../components/touch-terminal';
 import {
   setStationOperator,
   setStationOperatorCandidate,
@@ -21,11 +23,12 @@ import { getSessionCurrentUser } from '../utils/sessionCurrentUser';
 import { clearSessionScopedQueries } from '../utils/clearSessionQueries';
 import { clearLanguageForLogout } from '../config/i18n';
 import { redirectAfterLogout } from '../utils/loginEntry';
+import '../styles/hmi.css';
 
 const BAR_HEIGHT = 56;
+const hmiTheme = createHmiTheme();
 
 const StationLayout: React.FC = () => {
-  const { token } = theme.useToken();
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
@@ -39,9 +42,9 @@ const StationLayout: React.FC = () => {
 
   /** 锁屏：记录当前工位路径，解锁后由锁屏页回到 lockedPath */
   const handleLockScreen = useCallback(() => {
-    lockScreen(location.pathname);
+    lockScreen(`${location.pathname}${location.search}`);
     navigate('/lock-screen', { replace: true });
-  }, [lockScreen, location.pathname, navigate]);
+  }, [lockScreen, location.pathname, location.search, navigate]);
 
   /** 退出终端账号：先尝试关闭操作员会话（失败不阻塞），再与 BasicLayout.performLogout 同一套本地清理 */
   const handleLogout = useCallback(async () => {
@@ -60,56 +63,85 @@ const StationLayout: React.FC = () => {
     redirectAfterLogout(navigate);
   }, [queryClient, navigate]);
 
+  // 工位终端固定深色 HMI 主题（与 PremiumTerminalTemplate 同一套 token），不跟随用户偏好
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100vh',
-        overflow: 'hidden',
-        background: token.colorBgLayout,
+    <ConfigProvider
+      theme={{
+        ...hmiTheme,
+        algorithm: theme.darkAlgorithm,
+        token: {
+          ...hmiTheme.token,
+          colorBgBase: HMI_DESIGN_TOKENS.BG_PRIMARY,
+        },
       }}
     >
       <div
+        className="hmi-root"
         style={{
-          height: BAR_HEIGHT,
-          flexShrink: 0,
           display: 'flex',
-          alignItems: 'center',
-          gap: 16,
-          padding: '0 16px',
-          background: token.colorBgContainer,
-          borderBottom: `1px solid ${token.colorBorder}`,
-        }}
+          flexDirection: 'column',
+          height: '100vh',
+          overflow: 'hidden',
+          background: HMI_DESIGN_TOKENS.BG_PRIMARY,
+          // 顶栏高度经由 CSS 变量下发，TouchScreenTemplate 用它从 100vh 中扣除，避免双高
+          '--station-layout-bar-height': `${BAR_HEIGHT}px`,
+        } as React.CSSProperties}
       >
-        <Typography.Text strong style={{ fontSize: 16 }}>
-          {workstation
-            ? `${workstation.stationName}（${workstation.stationCode}）`
-            : '工位未绑定'}
-        </Typography.Text>
-        <div style={{ flex: 1 }} />
-        <Typography.Text>终端账号：{accountName}</Typography.Text>
-        <Typography.Text>
-          当前操作员：{operator ? operator.name : '未确认'}
-        </Typography.Text>
-        <Button size="large" icon={<LockOutlined />} onClick={handleLockScreen}>
-          锁屏
-        </Button>
-        <Popconfirm
-          title="退出当前终端账号？"
-          okText="退出"
-          cancelText="取消"
-          onConfirm={handleLogout}
+        <div
+          style={{
+            height: BAR_HEIGHT,
+            flexShrink: 0,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 16,
+            padding: '0 16px',
+            background: HMI_DESIGN_TOKENS.BG_PANEL,
+            borderBottom: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`,
+          }}
         >
-          <Button size="large" danger icon={<LogoutOutlined />}>
-            退出
+          <Typography.Text strong style={{ fontSize: 16 }}>
+            {workstation
+              ? `${workstation.stationName}（${workstation.stationCode}）`
+              : '工位未绑定'}
+          </Typography.Text>
+          <div style={{ flex: 1 }} />
+          <Typography.Text>终端账号：{accountName}</Typography.Text>
+          <Typography.Text>
+            当前操作员：{operator ? operator.name : '未确认'}
+          </Typography.Text>
+          <Button
+            {...touchButtonProps({
+              size: 'header',
+              style: { height: HMI_TOUCH.HEADER_BTN_HEIGHT },
+            })}
+            icon={<LockOutlined />}
+            onClick={handleLockScreen}
+          >
+            锁屏
           </Button>
-        </Popconfirm>
+          <Popconfirm
+            title="退出当前终端账号？"
+            okText="退出"
+            cancelText="取消"
+            onConfirm={handleLogout}
+          >
+            <Button
+              {...touchButtonProps({
+                variant: 'danger',
+                size: 'header',
+                style: { height: HMI_TOUCH.HEADER_BTN_HEIGHT },
+              })}
+              icon={<LogoutOutlined />}
+            >
+              退出
+            </Button>
+          </Popconfirm>
+        </div>
+        <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+          <Outlet />
+        </div>
       </div>
-      <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-        <Outlet />
-      </div>
-    </div>
+    </ConfigProvider>
   );
 };
 

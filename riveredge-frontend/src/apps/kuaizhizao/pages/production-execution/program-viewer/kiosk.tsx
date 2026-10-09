@@ -9,14 +9,16 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Card, Button, Space, message, Spin, Empty, Input, Tag } from 'antd';
-import { SearchOutlined, ReloadOutlined, DownloadOutlined, FullscreenOutlined, UpOutlined, DownOutlined } from '@ant-design/icons';
-import { TOUCH_SCREEN_CONFIG } from '../../../../../components/layout-templates';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { Card, Space, Spin, Empty, Input, Tag } from 'antd';
+import { SearchOutlined, DownloadOutlined, FullscreenOutlined, UpOutlined, DownOutlined, ArrowLeftOutlined } from '@ant-design/icons';
+import { HMI_DESIGN_TOKENS } from '../../../../../theme/hmi';
 import { TouchScreenTemplate } from '../../../../../components/layout-templates/hmi';
 import { CODE_FONT_FAMILY } from '../../../../../constants/fonts';
 import { useTouchScreen } from '../../../../../hooks/useTouchScreen';
 import { App } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { isStationEntryPath, STATION_ENTRY_PATH } from '../../../../../utils/clientChannel';
 
 const { Search } = Input;
 
@@ -24,6 +26,9 @@ const { Search } = Input;
  * 加工程序查看 - 工位机触屏模式页面
  */
 const ProgramViewerKioskPage: React.FC = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const stationRoute = isStationEntryPath(location.pathname);
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const touchScreen = useTouchScreen();
@@ -216,9 +221,15 @@ const ProgramViewerKioskPage: React.FC = () => {
             lineHeight: '40px',
             fontSize: '24px',
             fontFamily: CODE_FONT_FAMILY,
-            backgroundColor: isCurrentSearch ? '#fff3cd' : isSearchMatch ? '#f0f0f0' : 'transparent',
+            backgroundColor: stationRoute
+              ? isCurrentSearch
+                ? 'rgba(255, 179, 0, 0.22)'
+                : isSearchMatch ? HMI_DESIGN_TOKENS.LIST_CARD_BG : 'transparent'
+              : isCurrentSearch ? '#fff3cd' : isSearchMatch ? '#f0f0f0' : 'transparent',
             padding: '4px 8px',
-            borderLeft: isCurrentSearch ? '4px solid #ffc107' : '4px solid transparent',
+            borderLeft: isCurrentSearch
+              ? `4px solid ${stationRoute ? HMI_DESIGN_TOKENS.STATUS_WARNING : '#ffc107'}`
+              : '4px solid transparent',
           }}
         >
           <span
@@ -326,6 +337,13 @@ const ProgramViewerKioskPage: React.FC = () => {
           onClick: handleEnterFullscreen,
           block: false,
         },
+        ...(stationRoute ? [{
+          title: '返回工位入口',
+          type: 'default' as const,
+          icon: <ArrowLeftOutlined />,
+          onClick: () => navigate(`${STATION_ENTRY_PATH}${location.search}`),
+          block: false,
+        }] : []),
       ]}
     >
       <Spin spinning={loading}>
@@ -341,7 +359,7 @@ const ProgramViewerKioskPage: React.FC = () => {
             }}
           >
             {/* 程序信息 */}
-            <Card size="small" style={{ marginBottom: 24, backgroundColor: '#f5f5f5' }}>
+            <Card size="small" style={{ marginBottom: 24, ...(stationRoute ? {} : { backgroundColor: '#f5f5f5' }) }}>
               <Space orientation="vertical" size="small" style={{ width: '100%' }}>
                 <div>
                   <strong>{t('app.kuaizhizao.programViewer.nameLabel')}</strong>
@@ -387,7 +405,8 @@ const ProgramViewerKioskPage: React.FC = () => {
                   width: '100%',
                   height: '100%',
                   overflow: 'auto',
-                  backgroundColor: '#fafafa',
+                  backgroundColor: stationRoute ? HMI_DESIGN_TOKENS.BG_PRIMARY : '#fafafa',
+                  ...(stationRoute ? { color: HMI_DESIGN_TOKENS.TEXT_PRIMARY } : {}),
                   fontFamily: CODE_FONT_FAMILY,
                   fontSize: '24px',
                   lineHeight: '40px',
@@ -415,15 +434,15 @@ const ProgramViewerKioskPage: React.FC = () => {
           font-weight: 500;
         }
         .comment {
-          color: #8c8c8c;
+          color: ${stationRoute ? HMI_DESIGN_TOKENS.TEXT_SECONDARY : '#8c8c8c'};
           font-style: italic;
         }
         .number {
-          color: #722ed1;
+          color: ${stationRoute ? '#d3adf7' : '#722ed1'};
         }
         mark {
-          background-color: #fff3cd;
-          color: #856404;
+          background-color: ${stationRoute ? HMI_DESIGN_TOKENS.STATUS_WARNING : '#fff3cd'};
+          color: ${stationRoute ? HMI_DESIGN_TOKENS.BG_FLOAT : '#856404'};
           padding: 2px 4px;
           border-radius: 2px;
         }
@@ -431,7 +450,7 @@ const ProgramViewerKioskPage: React.FC = () => {
           animation: highlight 0.5s ease;
         }
         @keyframes highlight {
-          0% { background-color: #fff3cd; }
+          0% { background-color: ${stationRoute ? 'rgba(255, 179, 0, 0.35)' : '#fff3cd'}; }
           100% { background-color: transparent; }
         }
       `}</style>

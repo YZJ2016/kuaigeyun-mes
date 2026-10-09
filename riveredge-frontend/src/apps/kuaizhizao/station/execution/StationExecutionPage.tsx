@@ -1,5 +1,10 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, Button, List, Switch } from 'antd';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Alert, Button, List } from 'antd';
+import { TouchScreenTemplate } from '../../../../components/layout-templates/hmi';
+import { TouchChip, TouchListItem, touchButtonProps } from '../../../../components/touch-terminal';
+import { STATION_ENTRY_PATH } from '../../../../utils/clientChannel';
+import { HMI_TOUCH } from '../../../../theme/hmi';
 import { useStationWriteEnabled } from '../entry/session';
 import {
   DOWNTIME_REASONS,
@@ -94,15 +99,28 @@ export function StationExecutionPage({
   const [notice, setNotice] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(
     null,
   );
+  const operationsRequestSeq = useRef(0);
+  const workOrdersRequestSeq = useRef(0);
 
+  const navigate = useNavigate();
   const stationId = boundWorkstationId(workstationId);
   // 未确认操作员时可查看工单与状态，写动作按钮禁用
   const writeEnabled = useStationWriteEnabled();
 
+  // 返回工位入口：有效工位时保留 workstationId query
+  const backToStationEntry = () => {
+    const search = new URLSearchParams();
+    if (stationId != null) search.set('workstationId', String(stationId));
+    const query = search.toString();
+    navigate(query ? `${STATION_ENTRY_PATH}?${query}` : STATION_ENTRY_PATH);
+  };
+
   const loadWorkOrders = useCallback(async (nextSkip: number, append: boolean) => {
+    const requestSeq = ++workOrdersRequestSeq.current;
     setListLoading(true);
     try {
       const page = await listExecutableWorkOrders(nextSkip);
+      if (requestSeq !== workOrdersRequestSeq.current) return false;
       setWorkOrders((prev) => {
         const merged = append ? [...prev, ...page.rows] : page.rows;
         const byId = new Map<number, StationWorkOrder>();
@@ -111,22 +129,33 @@ export function StationExecutionPage({
       });
       setSkip(nextSkip);
       setHasMore(page.hasMore);
+      return true;
     } catch (error) {
-      setNotice({ type: 'error', text: apiErrorText(error) });
+      if (requestSeq === workOrdersRequestSeq.current) {
+        setNotice({ type: 'error', text: apiErrorText(error) });
+      }
+      return false;
     } finally {
-      setListLoading(false);
+      if (requestSeq === workOrdersRequestSeq.current) setListLoading(false);
     }
   }, []);
 
   const loadOperations = useCallback(async (workOrderId: number) => {
+    const requestSeq = ++operationsRequestSeq.current;
     setOpsLoading(true);
     try {
-      setOperations(await listOperations(workOrderId));
+      const rows = await listOperations(workOrderId);
+      if (requestSeq !== operationsRequestSeq.current) return false;
+      setOperations(rows);
+      return true;
     } catch (error) {
-      setOperations([]);
-      setNotice({ type: 'error', text: apiErrorText(error) });
+      if (requestSeq === operationsRequestSeq.current) {
+        setOperations([]);
+        setNotice({ type: 'error', text: apiErrorText(error) });
+      }
+      return false;
     } finally {
-      setOpsLoading(false);
+      if (requestSeq === operationsRequestSeq.current) setOpsLoading(false);
     }
   }, []);
 
@@ -134,9 +163,39 @@ export function StationExecutionPage({
     void loadWorkOrders(0, false);
   }, [loadWorkOrders]);
 
+  useEffect(() => {
+    if (selectedId == null || workOrders.some((row) => row.id === selectedId)) return;
+    operationsRequestSeq.current += 1;
+    setOpsLoading(false);
+    setSelectedId(null);
+    setSelectedOperationId(null);
+    setOperations([]);
+    setPauseFor(null);
+    setPendingSop(null);
+    onSelectionChange?.({ workOrderId: null, operationId: null });
+  }, [onSelectionChange, selectedId, workOrders]);
+
+  useEffect(() => {
+    if (
+      selectedOperationId == null ||
+      opsLoading ||
+      operations.some((row) => row.id === selectedOperationId)
+    ) {
+      return;
+    }
+    setSelectedOperationId(null);
+    onSelectionChange?.({ workOrderId: selectedId, operationId: null });
+  }, [onSelectionChange, operations, opsLoading, selectedId, selectedOperationId]);
+
   const refreshSelected = useCallback(
     async (workOrderId: number) => {
-      await Promise.all([loadWorkOrders(0, false), loadOperations(workOrderId)]);
+      const [workOrdersLoaded, operationsLoaded] = await Promise.all([
+        loadWorkOrders(0, false),
+        loadOperations(workOrderId),
+      ]);
+      if (!workOrdersLoaded || !operationsLoaded) {
+        throw new Error('station-execution-refresh-failed');
+      }
     },
     [loadOperations, loadWorkOrders],
   );
@@ -270,26 +329,32 @@ export function StationExecutionPage({
   const selected = workOrders.find((row) => row.id === selectedId) ?? null;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: 16 }}>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24, alignItems: 'center' }}>
-        <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 18 }}>
-          <Switch
-            checked={sopEnabled}
-            onChange={(checked) => {
-              setSopEnabled(checked);
-              if (!checked) setPendingSop(null);
+    <TouchScreenTemplate title="工位执行">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24, alignItems: 'center' }}>
+          <Button {...touchButtonProps({ size: 'header', style: { height: HMI_TOUCH.HEADER_BTN_HEIGHT } })} onClick={backToStationEntry}>
+            返回工位入口
+          </Button>
+          <TouchChip
+            selected={sopEnabled}
+            onClick={() => {
+              setSopEnabled(!sopEnabled);
+              if (sopEnabled) setPendingSop(null);
             }}
-          />
-          SOP 确认
-        </label>
-        <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 18 }}>
-          <Switch checked={skillEnabled} onChange={setSkillEnabled} />
-          上岗资质
-        </label>
-        <Button size="large" onClick={() => void loadWorkOrders(0, false)} loading={listLoading}>
-          刷新工单
-        </Button>
-      </div>
+          >
+            SOP 确认
+          </TouchChip>
+          <TouchChip selected={skillEnabled} onClick={() => setSkillEnabled(!skillEnabled)}>
+            上岗资质
+          </TouchChip>
+          <Button
+            {...touchButtonProps({ size: 'header', style: { height: HMI_TOUCH.HEADER_BTN_HEIGHT } })}
+            onClick={() => void loadWorkOrders(0, false)}
+            loading={listLoading}
+          >
+            刷新工单
+          </Button>
+        </div>
 
       {notice ? (
         <Alert type={notice.type} message={notice.text} showIcon />
@@ -307,15 +372,10 @@ export function StationExecutionPage({
         dataSource={workOrders}
         locale={{ emptyText: '没有已下达或执行中的工单' }}
         renderItem={(row) => (
-          <List.Item
-            style={{
-              cursor: 'pointer',
-              background: row.id === selectedId ? '#e6f4ff' : undefined,
-              padding: 12,
-            }}
-          >
-            <div
-              style={{ fontSize: 18, width: '100%' }}
+          <List.Item style={{ padding: 0, borderBlockEnd: 'none' }}>
+            <TouchListItem
+              style={{ width: '100%' }}
+              selected={row.id === selectedId}
               onClick={() => {
                 setSelectedId(row.id);
                 setSelectedOperationId(null);
@@ -324,18 +384,27 @@ export function StationExecutionPage({
                 onSelectionChange?.({ workOrderId: row.id, operationId: null });
                 void loadOperations(row.id);
               }}
-            >
-              <strong>{row.code || `工单 ${row.id}`}</strong>
-              <span style={{ marginLeft: 12 }}>{row.productName}</span>
-              {row.productCode ? <span style={{ marginLeft: 8 }}>{row.productCode}</span> : null}
-              <span style={{ marginLeft: 12 }}>数量 {row.quantity || '—'}</span>
-              <span style={{ marginLeft: 12 }}>{statusText(row.status, WORK_ORDER_STATUS_LABEL)}</span>
-            </div>
+              title={
+                <>
+                  <strong>{row.code || `工单 ${row.id}`}</strong>
+                  <span style={{ marginLeft: 12 }}>{row.productName}</span>
+                  {row.productCode ? <span style={{ marginLeft: 8 }}>{row.productCode}</span> : null}
+                  <span style={{ marginLeft: 12 }}>数量 {row.quantity || '—'}</span>
+                  <span style={{ marginLeft: 12 }}>
+                    {statusText(row.status, WORK_ORDER_STATUS_LABEL)}
+                  </span>
+                </>
+              }
+            />
           </List.Item>
         )}
       />
       {hasMore ? (
-        <Button size="large" onClick={() => void loadWorkOrders(skip + 50, true)} loading={listLoading}>
+        <Button
+          {...touchButtonProps({ size: 'action' })}
+          onClick={() => void loadWorkOrders(skip + 50, true)}
+          loading={listLoading}
+        >
           加载更多
         </Button>
       ) : null}
@@ -353,28 +422,37 @@ export function StationExecutionPage({
               const waitingSop =
                 pendingSop?.workOrderId === selected.id && pendingSop.operationId === operation.id;
               const selectedRow = operation.id === selectedOperationId;
+              const selectOperation = () => {
+                setSelectedOperationId(operation.id);
+                onSelectionChange?.({ workOrderId: selected.id, operationId: operation.id });
+              };
               return (
-                <List.Item
-                  style={{
-                    cursor: 'pointer',
-                    background: selectedRow ? '#e6f4ff' : undefined,
-                  }}
-                  onClick={() => {
-                    setSelectedOperationId(operation.id);
-                    onSelectionChange?.({ workOrderId: selected.id, operationId: operation.id });
-                  }}
-                >
-                  <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <div style={{ fontSize: 18 }}>
-                      {operation.sequence}. {operation.name || operation.code || `工序 ${operation.id}`}
-                      <span style={{ marginLeft: 12 }}>
-                        {statusText(operation.status, OPERATION_STATUS_LABEL)}
-                      </span>
-                      <span style={{ marginLeft: 12 }}>
-                        上下机 {operation.machineSessionState || 'none'}
-                      </span>
-                    </div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                <List.Item style={{ padding: 0, borderBlockEnd: 'none' }}>
+                  {/* 行内任意位置点击仍选中该工序（与原行为一致）；可键盘操作的选中控件是 TouchListItem */}
+                  <div
+                    style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}
+                    onClick={selectOperation}
+                  >
+                    <TouchListItem
+                      selected={selectedRow}
+                      onClick={selectOperation}
+                      title={
+                        <>
+                          {operation.sequence}.{' '}
+                          {operation.name || operation.code || `工序 ${operation.id}`}
+                          <span style={{ marginLeft: 12 }}>
+                            {statusText(operation.status, OPERATION_STATUS_LABEL)}
+                          </span>
+                          <span style={{ marginLeft: 12 }}>
+                            上下机 {operation.machineSessionState || 'none'}
+                          </span>
+                        </>
+                      }
+                    />
+                    <div
+                      style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}
+                      onClick={(event) => event.stopPropagation()}
+                    >
                       <Button
                         size="large"
                         type="primary"
@@ -462,7 +540,10 @@ export function StationExecutionPage({
                       </Button>
                     </div>
                     {pauseFor === operation.id ? (
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                      <div
+                      style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}
+                      onClick={(event) => event.stopPropagation()}
+                    >
                         {DOWNTIME_REASONS.map((reason) => (
                           <Button
                             key={reason.code}
@@ -490,6 +571,7 @@ export function StationExecutionPage({
           />
         </div>
       ) : null}
-    </div>
+      </div>
+    </TouchScreenTemplate>
   );
 }

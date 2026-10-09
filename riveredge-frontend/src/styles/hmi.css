@@ -148,10 +148,19 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+.hmi-root .hmi-list-item:not([role='button']) {
+  cursor: default;
+}
+
 .hmi-root .hmi-list-item--selected {
   border: 1px solid rgba(22, 119, 255, 0.55);
   background: rgba(22, 119, 255, 0.14);
   box-shadow: none;
+}
+
+.hmi-root .hmi-list-item:focus-visible {
+  outline: 2px solid rgba(22, 119, 255, 0.85);
+  outline-offset: 2px;
 }
 
 .hmi-root .hmi-list-item__title {

@@ -19,6 +19,7 @@ export function TouchChip({ selected, className, ...rest }: TouchChipProps) {
         variant: selected ? 'primary' : 'default',
         className: chipClass,
       })}
+      aria-pressed={selected}
       {...rest}
     />
   );

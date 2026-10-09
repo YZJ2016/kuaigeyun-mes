@@ -141,6 +141,8 @@ export function setStationWorkstation(
     void closeStationOperatorSession().catch(() => {});
     operator = null;
     operatorCandidate = null;
+    workOrderId = null;
+    operationId = null;
     clearStationOperatorSession();
   }
   if (options?.notifyShell && next && Number.isFinite(next.stationId)) {

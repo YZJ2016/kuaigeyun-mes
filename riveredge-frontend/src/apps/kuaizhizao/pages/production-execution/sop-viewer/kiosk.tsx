@@ -9,13 +9,16 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Card, Button, Space, Spin, Tag, Empty } from 'antd';
 import { LeftOutlined, RightOutlined, CheckCircleOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import { TouchScreenTemplate } from '../../../../../components/layout-templates/hmi';
+import { HMI_DESIGN_TOKENS } from '../../../../../theme/hmi';
 import { sopApi } from '../../../../master-data/services/process';
 import { App } from 'antd';
 import type { SOP } from '../../../../master-data/types/process';
 import { SecureImage } from '../../../../../components/secure-image';
+import { isStationEntryPath, STATION_ENTRY_PATH } from '../../../../../utils/clientChannel';
 
 /**
  * SOP步骤接口
@@ -49,6 +52,9 @@ function toAttachmentUuids(raw: unknown): string[] {
  * SOP查看 - 工位机触屏模式页面
  */
 const SOPViewerKioskPage: React.FC = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const stationRoute = isStationEntryPath(location.pathname);
   const { message: messageApi } = App.useApp();
   const [loading, setLoading] = useState(false);
   const [sop, setSop] = useState<SOP | null>(null);
@@ -229,6 +235,13 @@ const SOPViewerKioskPage: React.FC = () => {
           disabled: currentStepIndex >= steps.length - 1,
           block: false,
         },
+        ...(stationRoute ? [{
+          title: '返回工位入口',
+          type: 'default' as const,
+          icon: <LeftOutlined />,
+          onClick: () => navigate(`${STATION_ENTRY_PATH}${location.search}`),
+          block: false,
+        }] : []),
       ]}
     >
       <Spin spinning={loading}>
@@ -237,7 +250,7 @@ const SOPViewerKioskPage: React.FC = () => {
         ) : (
           <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
             {/* SOP基本信息 */}
-            <Card size="small" style={{ marginBottom: 24, backgroundColor: '#f5f5f5' }}>
+            <Card size="small" style={{ marginBottom: 24, ...(stationRoute ? {} : { backgroundColor: '#f5f5f5' }) }}>
               <Space orientation="vertical" size="small" style={{ width: '100%' }}>
                 <div>
                   <strong>SOP编号：</strong>
@@ -316,7 +329,7 @@ const SOPViewerKioskPage: React.FC = () => {
 
                   {/* 步骤描述 */}
                   {currentStep.description && (
-                    <div style={{ fontSize: 24, lineHeight: 1.8, padding: '16px', backgroundColor: '#fafafa', borderRadius: 8 }}>
+                    <div style={{ fontSize: 24, lineHeight: 1.8, padding: '16px', backgroundColor: stationRoute ? HMI_DESIGN_TOKENS.LIST_CARD_BG : '#fafafa', borderRadius: 8 }}>
                       {currentStep.description}
                     </div>
                   )}
@@ -329,7 +342,7 @@ const SOPViewerKioskPage: React.FC = () => {
                         gap: 16,
                         justifyContent: 'center',
                         padding: 16,
-                        backgroundColor: '#fafafa',
+                        backgroundColor: stationRoute ? HMI_DESIGN_TOKENS.LIST_CARD_BG : '#fafafa',
                         borderRadius: 8,
                       }}
                     >

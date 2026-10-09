@@ -8,10 +8,11 @@
  * Date: 2025-12-26
  */
 
-import React, { ReactNode, useEffect } from 'react';
+import React, { ReactNode } from 'react';
 import { theme, Button } from 'antd';
 import { TOUCH_SCREEN_CONFIG, ANT_DESIGN_TOKENS, HMI_DESIGN_TOKENS } from './constants';
 import { touchButtonProps } from '../touch-terminal';
+import '../../styles/hmi.css';
 
 const { useToken } = theme;
 
@@ -76,38 +77,15 @@ export const TouchScreenTemplate: React.FC<TouchScreenTemplateProps> = ({
 }) => {
   const { token } = useToken();
 
-  // 全屏模式处理
-  useEffect(() => {
-    if (fullscreen) {
-      // 进入全屏模式
-      const enterFullscreen = () => {
-        if (document.documentElement.requestFullscreen) {
-          document.documentElement.requestFullscreen().catch(() => {
-            // 忽略全屏请求失败
-          });
-        }
-      };
-
-      // 尝试进入全屏（需要用户交互）
-      // 这里不自动触发，由用户操作触发
-
-      return () => {
-        // 退出全屏模式
-        if (document.exitFullscreen) {
-          document.exitFullscreen().catch(() => {
-            // 忽略退出全屏失败
-          });
-        }
-      };
-    }
-  }, [fullscreen]);
-
   return (
     <div
       className={['hmi-root', className].filter(Boolean).join(' ')}
       style={{
         width: '100%',
-        height: fullscreen ? '100vh' : 'auto',
+        // StationLayout 顶栏经 --station-layout-bar-height 让出高度；独立 kiosk 路由下缺省仍为整屏 100vh
+        height: fullscreen
+          ? 'calc(100vh - var(--station-layout-bar-height, 0px))'
+          : 'auto',
         padding: `${ANT_DESIGN_TOKENS.SPACING.LG}px`,
         backgroundColor: token.colorBgLayout,
         display: 'flex',
