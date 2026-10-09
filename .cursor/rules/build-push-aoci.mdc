@@ -1,0 +1,46 @@
+---
+description: 构建推送与业务提交前必须先完成 AOCI 索引维护并提交正式资产
+alwaysApply: true
+---
+
+# 构建推送：提交前先完成 AOCI 索引
+
+用户约定（2026-10-09）：**每次业务/发版相关 `git commit` 之前**，先把本仓 AOCI 索引维护到与源码一致，再提交；然后再跑 Web / 移动 H5 / 工位打包推送。禁止「先 commit 再补 aoci」或「只推 dist、索引脏着」。
+
+## 适用范围
+
+- 用户说「web端构建推送」「移动端构建推送」「工位打包推送」「三仓构建推送」等
+- 任何会改动 AOCI 托管对象（源码/配置等受管文件）后的交付提交
+- 三仓各自绑定自己的 AOCI（主仓 `aoci` / client `aoci-client` / pro `aoci-pro`）
+
+## 标准顺序（不可颠倒）
+
+1. **源码改到最终稳定**（不含 dist / 工位 `release/`）
+2. **AOCI 索引**（本仓 MCP）：
+   - 一次 `aoci_maintain`（对象已稳定后再调，勿每改一文件就 maintain）
+   - 若有语义候选：按批次 `aoci_update_entry` 写全标签与 F/R/A/S（保留 `source_sha256` / `candidate_id`）
+   - 必要时 `verify`：业务相关 missing/stale 应为 0（策略性 skipped 除外）
+3. **`git add` 正式 AOCI 资产** + 业务文件（见 `aoci-git-commit.mdc`）
+4. **`git commit`**（源码与索引同批或紧随的对齐提交均可，但**索引不得落后于即将推送的 tip**）
+5. **构建推送**：
+   - Web：`BUILD_WEB_SKIP_HISTORY_REWRITE=1 ./fast-deploy/build.web.sh`
+   - 移动 H5：`./fast-deploy/build.mobile.web.sh` → client 提交 `web-dist` → `git push`
+   - 工位：`npm run pack` → 提交版本 bump → `git push`（`release/` 仍不入库）
+
+## 禁止
+
+- 工作区仍有未维护的 missing/stale（非 skipped）就 `build.web.sh` / 推 H5
+- 只提交业务文件、故意不跑 maintain / 不提 `aoci*.txt` / baseline
+- 用「构建后再补索引」跳过本顺序
+
+## 例外
+
+- 用户**明确禁止**改 AOCI / `.aoci`：服从，并报告索引与源码不一致
+- 纯 dist 由 `build.web.sh` 自动产生的 `chore: build-web sync`：脚本内提交，此前源码 tip 上索引须已对齐
+- 未改任何 AOCI 托管对象的纯说明性提交：可跳过 maintain，但仍勿留下未跟踪的正式 `aoci*.txt`
+
+## 关联
+
+- `.cursor/rules/aoci-git-commit.mdc`
+- `.cursor/memory/features/fast-deploy-scripts.md`
+- Vault：`web-build-push-sop.md`
