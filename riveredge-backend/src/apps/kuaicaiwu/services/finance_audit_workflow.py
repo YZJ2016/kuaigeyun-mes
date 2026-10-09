@@ -14,7 +14,13 @@ from infra.models.user import User
 from core.utils.timezone_utils import resolve_business_datetime
 
 _SUBMITTABLE_REVIEW = frozenset({"草稿", "draft", "驳回", "rejected", "已驳回"})
-_PENDING_REVIEW = frozenset({"待审核", "pending_review", "pending_approval", "已提交"})
+_PENDING_REVIEW = frozenset({
+    "待审核",
+    "pending_review",
+    "PENDING_REVIEW",
+    "pending_approval",
+    "已提交",
+})
 _APPROVED_REVIEW = frozenset({"approved", "已审核"})
 
 _DOC_CODE_ATTR = {
@@ -25,7 +31,14 @@ _DOC_CODE_ATTR = {
 
 
 def _norm_review(value: Any) -> str:
-    return str(value or "").strip()
+    raw = str(value or "").strip()
+    # 英文枚举大小写不敏感；中文原样
+    lower = raw.lower()
+    if lower in {"pending_review", "pending_approval"}:
+        return lower
+    if raw.upper() == "PENDING_REVIEW":
+        return "PENDING_REVIEW"
+    return raw
 
 
 async def _updated_audit_kwargs(updated_by: int) -> dict[str, Any]:

@@ -170,7 +170,7 @@ INTEGRATION_CLIENT_IP_ALLOWLIST=127.0.0.1,10.0.0.8,192.168.1.100
 
 文件：`src/core/utils/interactive_client_guard.py`
 
-- `_EXEMPT_EXACT_PATHS`：精确路径（登录/注册/超管登录/站点 LOGO 激活/`/api/v1/open/auth/token` 等）
+- `_EXEMPT_EXACT_PATHS`：精确路径（登录/注册/超管登录/站点 LOGO 激活/`/api/v1/infra/install/register`/`/api/v1/open/auth/token` 等）
 - `_EXEMPT_PREFIXES`：前缀（生物识别、企微登录等）
 
 **若新增「必须匿名可写」的公开 API**，把路径加进上述豁免，否则会被 403。

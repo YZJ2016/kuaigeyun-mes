@@ -868,20 +868,20 @@ class SalesForecastService(AppBaseService[SalesForecast]):
                 **(await self._audit_update_fields(approved_by)),
             )
 
-            demand_synced = False
-
-            updated_forecast = await self.get_sales_forecast_by_id(tenant_id, forecast_id)
-            out = updated_forecast.model_dump()
-            out["demand_synced"] = demand_synced
-            if not rejection_reason:
-                auto_push_result = await self._try_auto_push_forecast_to_computation(
-                    tenant_id=tenant_id,
-                    forecast_id=forecast_id,
-                    operator_id=approved_by,
-                )
-                if auto_push_result:
-                    out["auto_computation"] = auto_push_result
-            return SalesForecastResponse(**out)
+        demand_synced = False
+        updated_forecast = await self.get_sales_forecast_by_id(tenant_id, forecast_id)
+        out = updated_forecast.model_dump()
+        out["demand_synced"] = demand_synced
+        # 自动下推移出事务：失败不回滚已审核态，调用方可见 auto_computation
+        if not rejection_reason:
+            auto_push_result = await self._try_auto_push_forecast_to_computation(
+                tenant_id=tenant_id,
+                forecast_id=forecast_id,
+                operator_id=approved_by,
+            )
+            if auto_push_result:
+                out["auto_computation"] = auto_push_result
+        return SalesForecastResponse(**out)
 
     async def withdraw_forecast_approval(
         self,
@@ -900,15 +900,6 @@ class SalesForecastService(AppBaseService[SalesForecast]):
         )
         if not forecast_row:
             raise NotFoundError(f"销售预测不存在: {forecast_id}")
-        # 先清掉下推失败残留的未下推中间需求，再判定是否仍有真实下游
-        await self._cleanup_unpushed_forecast_demand(tenant_id, forecast_id)
-        has_downstream = await self._forecast_has_downstream(tenant_id, forecast_id)
-        assert_sales_forecast_capability(
-            forecast_row,
-            "revoke_approval",
-            has_downstream=has_downstream,
-        )
-
         from infra.services.business_config_service import BusinessConfigService
 
         audit_required = await BusinessConfigService().check_audit_required(
@@ -916,7 +907,15 @@ class SalesForecastService(AppBaseService[SalesForecast]):
         )
         _ = resolve_revoke_to_draft_landing_phase(manual_audit_enabled=audit_required)
 
+        # 清理与状态重置同事务，避免 DRAFT 但需求已删的中间态
         async with in_transaction():
+            await self._cleanup_unpushed_forecast_demand(tenant_id, forecast_id)
+            has_downstream = await self._forecast_has_downstream(tenant_id, forecast_id)
+            assert_sales_forecast_capability(
+                forecast_row,
+                "revoke_approval",
+                has_downstream=has_downstream,
+            )
             await SalesForecast.filter(tenant_id=tenant_id, id=forecast_id).update(
                 status=DocumentStatus.DRAFT.value,
                 review_status=ReviewStatus.PENDING.value,

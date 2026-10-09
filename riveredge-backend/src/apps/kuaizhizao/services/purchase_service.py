@@ -1272,33 +1272,31 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             )
             return await self.get_purchase_order_by_id(tenant_id, order_id)
 
-        # 启动审批流程（统一使用 ApprovalInstanceService）
-        try:
-            from core.services.approval.approval_instance_service import ApprovalInstanceService
-            instance = await ApprovalInstanceService.start_approval_for_node(
-                tenant_id=tenant_id,
-                user_id=submitted_by,
-                node_key="purchase_order",
-                entity_type="purchase_order",
-                entity_id=order_id,
-                entity_uuid=str(order.uuid),
-                title=f"采购订单审批: {order.order_code}",
-                content=f"供应商: {order.supplier_name}, 金额: {order.total_amount}",
-            )
-            status = DocumentStatus.PENDING_REVIEW.value
-        except Exception as e:
-            logger.warning(f"启动采购订单审批流程失败: {str(e)}，订单ID: {order_id}")
-            status = DocumentStatus.PENDING_REVIEW.value
+        from core.services.approval.audit_flow_guard import (
+            approval_instance_finished_on_submit,
+            start_document_approval_or_raise,
+        )
+
+        # 先启流程再落 PENDING：start 失败保持 DRAFT，禁止空壳待审
+        instance = await start_document_approval_or_raise(
+            tenant_id=tenant_id,
+            user_id=submitted_by,
+            node_key="purchase_order",
+            entity_type="purchase_order",
+            entity_id=order_id,
+            entity_uuid=str(order.uuid),
+            title=f"采购订单审批: {order.order_code}",
+            content=f"供应商: {order.supplier_name}, 金额: {order.total_amount}",
+            doc_label="采购订单",
+        )
 
         await order.update_from_dict({
-            'status': status,
+            'status': DocumentStatus.PENDING_REVIEW.value,
             'review_status': ReviewStatus.PENDING.value,
             'updated_by': submitted_by
         }).save()
 
-        from core.services.approval.audit_flow_guard import approval_instance_finished_on_submit
-
-        if instance and approval_instance_finished_on_submit(instance):
+        if approval_instance_finished_on_submit(instance):
             from apps.kuaizhizao.schemas.purchase_order import PurchaseOrderApprove
             return await self.approve_purchase_order(
                 tenant_id,
@@ -1316,6 +1314,11 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         withdrawn_by: int,
     ) -> PurchaseOrderResponse:
         """撤回提交：待审核 → 草稿（提交人撤回，非反审核）"""
+        from core.services.approval.audit_transition import (
+            resolve_revoke_to_draft_landing_phase,
+        )
+        from core.services.approval.approval_instance_service import ApprovalInstanceService
+
         order = await PurchaseOrder.get_or_none(
             tenant_id=tenant_id, id=order_id, deleted_at__isnull=True
         )
@@ -1323,9 +1326,13 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             raise NotFoundError(f"采购订单不存在: {order_id}")
         assert_purchase_order_capability(order, "withdraw_submit")
 
-        try:
-            from core.services.approval.approval_instance_service import ApprovalInstanceService
+        audit_required = await self.business_config_service.check_audit_required(
+            tenant_id, "purchase_order"
+        )
+        # 与销售/audit_transition 一致：撤回一律落 draft，须重新提交
+        _ = resolve_revoke_to_draft_landing_phase(manual_audit_enabled=audit_required)
 
+        try:
             await ApprovalInstanceService.cancel_approval(
                 tenant_id=tenant_id,
                 entity_type="purchase_order",

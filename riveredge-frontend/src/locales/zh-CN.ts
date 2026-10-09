@@ -30198,6 +30198,10 @@ export default {
     '登录地点广州等城市不再截成单字',
   'pages.dashboard.updateLog.entries.login-log-location-zhou-suffix-r01.description':
     'IP 解析去行政区后缀时误把「州」当成尾缀，导致「广州」显示成「广」。现已保留两字市名，并优先识别「自治州」等完整后缀。',
+  'pages.dashboard.updateLog.entries.pc-audit-unreview-empty-pending-r01.title':
+    '审核反审核不再出现空壳待审与审计静默',
+  'pages.dashboard.updateLog.entries.pc-audit-unreview-empty-pending-r01.description':
+    '采购订单/工艺路线变更提交时审批流程缺失不再落永久待审；审批完成回调失败会留痕可补齐；反审核对已结束实例记 revoke_noop；审批中心实例列表仅当前审批人可见同意/拒绝/转交。',
   'pages.dashboard.updateLog.entries.traceability-sankey-stack-overflow-r01.title':
     '追溯管理导出/看图不再拖垮快制造',
   'pages.dashboard.updateLog.entries.traceability-sankey-stack-overflow-r01.description':

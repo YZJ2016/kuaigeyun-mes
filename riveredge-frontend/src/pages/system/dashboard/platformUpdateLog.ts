@@ -44,6 +44,14 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'pc-audit-unreview-empty-pending-r01',
+    date: '2026-10-09',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.pc-audit-unreview-empty-pending-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.pc-audit-unreview-empty-pending-r01.description',
+  },
+  {
     id: 'traceability-sankey-stack-overflow-r01',
     date: '2026-10-09',
     type: 'fix',

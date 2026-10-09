@@ -85,6 +85,11 @@ def assert_manual_approval_action_allowed(
         return
     if verb == "驳回" and gate.get("flow_completed_rejected"):
         return
+    # 反审核补齐：实例已结束但单据仍待审/待撤时允许业务写回（对齐 approve/reject）
+    if verb in ("反审核", "revoke") and (
+        gate.get("flow_completed_approved") or gate.get("flow_completed_rejected")
+    ):
+        return
     raise BusinessLogicError(
         f"{doc_label}审核已开启但无进行中的审批流程，请先提交审批后再{verb}"
     )

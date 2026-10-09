@@ -756,10 +756,14 @@ async def delete_process_route_change(
     删除工艺路线变更记录（软删除）
     """
     try:
-        await ProcessRouteChangeService.delete_change(tenant_id, change_uuid)
+        await ProcessRouteChangeService.delete_change(
+            tenant_id, change_uuid, operator_id=current_user.id
+        )
         return {"message": "删除成功"}
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.get(

@@ -288,7 +288,9 @@ const ApprovalInstanceListPage: React.FC = () => {
         ];
 
         if (record.status === 'pending') {
-          if (record.current_approver_id) {
+          const isCurrentApprover =
+            currentUser?.id != null && record.current_approver_id === currentUser.id;
+          if (isCurrentApprover) {
             actions.push(
               <Button
                 key="approve"

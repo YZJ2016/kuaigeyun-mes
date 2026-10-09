@@ -3471,6 +3471,7 @@ class SalesOrderService:
             logger.info("销售订单 %s 审核流程关闭，提交后直接进入已确认", sales_order_id)
             from apps.common.base_service import AppBaseService
             submitter_name = await AppBaseService().get_user_name(submitted_by)
+            from_state = order.status
             async with in_transaction():
                 await SalesOrder.filter(tenant_id=tenant_id, id=sales_order_id).update(
                     status=DemandStatus.CONFIRMED,
@@ -3482,7 +3483,7 @@ class SalesOrderService:
                 )
                 await self._log_state_transition(
                     tenant_id, sales_order_id,
-                    DemandStatus.DRAFT, DemandStatus.CONFIRMED,
+                    from_state, DemandStatus.CONFIRMED,
                     submitted_by, submitter_name, "提交并自动确认",
                 )
                 # 不再在提交时自动创建 Demand；若历史已有关联需求则对齐生命周期状态。
@@ -3527,6 +3528,7 @@ class SalesOrderService:
         if instance:
             from apps.common.base_service import AppBaseService
             submitter_name = await AppBaseService().get_user_name(submitted_by)
+            from_state = order.status
             async with in_transaction():
                 await SalesOrder.filter(tenant_id=tenant_id, id=sales_order_id).update(
                     status=DemandStatus.PENDING_REVIEW,
@@ -3535,7 +3537,7 @@ class SalesOrderService:
                 )
                 await self._log_state_transition(
                     tenant_id, sales_order_id,
-                    DemandStatus.DRAFT, DemandStatus.PENDING_REVIEW,
+                    from_state, DemandStatus.PENDING_REVIEW,
                     submitted_by, submitter_name, "提交",
                 )
             # 空审批人 auto_pass 等可能导致提交瞬间流程已通过；须先落待审再走审核通过
@@ -3641,36 +3643,70 @@ class SalesOrderService:
             )
             result = await self.get_sales_order_by_id(tenant_id, sales_order_id)
             order_row = await SalesOrder.get(tenant_id=tenant_id, id=sales_order_id)
+            # 审核态已落库；下游副作用失败不得回滚审核，须留痕（ponytail: 无 outbox 表，remarks+返回字段）
+            side_effect_errors: list[str] = []
+
+            async def _run_side(name: str, coro) -> Any:
+                try:
+                    return await coro
+                except Exception as exc:
+                    msg = f"{name}: {exc}"
+                    logger.error(
+                        "销售订单审核后副作用失败 order_id={} {}",
+                        sales_order_id,
+                        msg,
+                    )
+                    side_effect_errors.append(msg)
+                    return None
+
             from apps.kuaicaiwu.services.finance_integration_hooks import (
                 ensure_prepayment_receipt_for_sales_order,
             )
 
-            await ensure_prepayment_receipt_for_sales_order(
-                tenant_id=tenant_id,
-                order_id=sales_order_id,
-                order_code=order_row.order_code,
-                customer_id=order_row.customer_id,
-                customer_name=order_row.customer_name,
-                prepayment_amount=order_row.prepayment_amount,
-                prepayment_bank_account_id=order_row.prepayment_bank_account_id,
-                operator_id=approved_by,
+            await _run_side(
+                "ensure_prepayment_receipt",
+                ensure_prepayment_receipt_for_sales_order(
+                    tenant_id=tenant_id,
+                    order_id=sales_order_id,
+                    order_code=order_row.order_code,
+                    customer_id=order_row.customer_id,
+                    customer_name=order_row.customer_name,
+                    prepayment_amount=order_row.prepayment_amount,
+                    prepayment_bank_account_id=order_row.prepayment_bank_account_id,
+                    operator_id=approved_by,
+                ),
             )
             from apps.kuaizhizao.services.contract_milestone_billing_service import (
                 ContractMilestoneBillingService,
             )
 
-            await ContractMilestoneBillingService().auto_generate_receivables_for_sales_order(
-                tenant_id, sales_order_id, approved_by
+            await _run_side(
+                "auto_generate_receivables",
+                ContractMilestoneBillingService().auto_generate_receivables_for_sales_order(
+                    tenant_id, sales_order_id, approved_by
+                ),
             )
             auto_push_result = await self._try_auto_push_order_to_computation(
                 tenant_id=tenant_id,
                 sales_order_id=sales_order_id,
                 operator_id=approved_by,
             )
+            if isinstance(auto_push_result, dict) and auto_push_result.get("success") is False:
+                side_effect_errors.append(
+                    f"auto_push_computation: {auto_push_result.get('message')}"
+                )
             out = result.model_dump()
             out["demand_synced"] = demand_synced
             if auto_push_result:
                 out["auto_computation"] = auto_push_result
+            if side_effect_errors:
+                note = "[审核后副作用待补偿] " + " | ".join(side_effect_errors)
+                prev = (order_row.review_remarks or "").strip()
+                merged = f"{prev}\n{note}".strip() if prev else note
+                await SalesOrder.filter(tenant_id=tenant_id, id=sales_order_id).update(
+                    review_remarks=merged[:2000],
+                )
+                out["review_remarks"] = merged[:2000]
             from apps.kuaizhizao.services.kuaizhizao_business_notification import (
                 notify_sales_order_approved,
                 notify_salesman_split_delivery_plan,
