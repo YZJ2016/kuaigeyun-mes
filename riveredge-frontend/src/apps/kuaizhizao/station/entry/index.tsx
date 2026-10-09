@@ -7,7 +7,7 @@ import { matchPath, useLocation, useNavigate, useSearchParams } from 'react-rout
 import { App, Button, Drawer, Input, List, Space, Typography } from 'antd';
 import { listExecutableWorkOrders, type StationWorkOrder } from '../execution/api';
 import { TouchScreenTemplate } from '../../../../components/layout-templates/hmi';
-import { HMI_DESIGN_TOKENS, HMI_TOUCH } from '../../../../theme/hmi';
+import { HMI_DESIGN_TOKENS, HMI_STATION_LAYOUT, HMI_TOUCH } from '../../../../theme/hmi';
 import { STATION_ENTRY_PATH } from '../../../../utils/clientChannel';
 import PageSkeleton from '../../../../components/page-skeleton';
 import { touchButtonProps } from '../../../../components/touch-terminal';
@@ -34,25 +34,56 @@ import {
   confirmStationOperatorSession,
 } from '../operatorSession';
 
-const KIOSK_LINKS: Array<{ title: string; to: string }> = [
+const EXECUTION_LINKS: Array<{ title: string; to: string }> = [
   { title: '报工', to: `${STATION_ENTRY_PATH}/reporting` },
+  { title: '执行', to: `${STATION_ENTRY_PATH}/execution` },
+];
+
+const RESOURCE_LINKS: Array<{ title: string; to: string }> = [
   { title: 'SOP', to: `${STATION_ENTRY_PATH}/sop-viewer/kiosk` },
   { title: '图纸', to: `${STATION_ENTRY_PATH}/drawing-viewer/kiosk` },
   { title: '程序查看', to: `${STATION_ENTRY_PATH}/program-viewer/kiosk` },
 ];
 
-const MODULE_LINKS: Array<{ title: string; to: string }> = [
-  { title: '执行', to: `${STATION_ENTRY_PATH}/execution` },
-  { title: '安灯', to: `${STATION_ENTRY_PATH}/andon` },
+const STATION_LINKS: Array<{ title: string; to: string }> = [
   { title: '刷脸交接', to: `${STATION_ENTRY_PATH}/face` },
+  { title: '安灯', to: `${STATION_ENTRY_PATH}/andon` },
 ];
 
 const OPERATOR_PAGE_SIZE = 20;
 
+const STATION_PANEL_STYLE: React.CSSProperties = {
+  background: HMI_DESIGN_TOKENS.BG_PANEL,
+  border: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`,
+  borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS,
+  padding: 20,
+};
+
+const STATION_STATUS_PILL_STYLE: React.CSSProperties = {
+  border: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`,
+  borderRadius: 999,
+  padding: '4px 12px',
+  fontSize: 14,
+  lineHeight: '22px',
+};
+
 function ModuleNotReady() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const stationId = positiveWorkstationId(searchParams.get('workstationId'));
+
   return (
-    <TouchScreenTemplate title="工位入口">
+    <TouchScreenTemplate
+      title="工位入口"
+      footerButtons={[
+        {
+          title: '返回工位入口',
+          onClick: () => navigate(withWorkstationId(STATION_ENTRY_PATH, stationId)),
+        },
+      ]}
+    >
       <Typography.Title level={3}>模块未就绪</Typography.Title>
+      <Typography.Text type="secondary">页面资源加载失败或暂未启用，请返回后重试。</Typography.Text>
     </TouchScreenTemplate>
   );
 }
@@ -359,62 +390,74 @@ function StationHome() {
   };
 
   return (
-    <TouchScreenTemplate title="工位入口">
-      <Space direction="vertical" size="large" style={{ width: '100%' }}>
-        <div>
-          <Typography.Text>
-            终端账号：{terminalAccountName || '未读取到登录账号'}
-          </Typography.Text>
-          <br />
-          <Typography.Text>
-            当前操作员：{operator ? operator.name : '未确认'}
-          </Typography.Text>
-          {candidate ? (
-            <>
-              <br />
-              <Typography.Text>
-                候选人：{candidate.name}（待刷脸或员工码确认）
-              </Typography.Text>
-            </>
-          ) : null}
-          {operator ? (
-            <>
-              {' '}
-              <Button
-                {...touchButtonProps({
-                  size: 'header',
-                  style: { height: HMI_TOUCH.HEADER_BTN_HEIGHT },
-                })}
-                loading={exiting}
-                onClick={() => void switchOperator()}
-              >
-                更换操作员
-              </Button>
-            </>
-          ) : null}
-          <br />
-          <Typography.Text>
-            当前工位：
-            {workstation
-              ? `${workstation.stationName}（${workstation.stationCode}）`
-              : '未绑定'}
-          </Typography.Text>
-        </div>
-
-        <Space wrap>
-          <Button {...touchButtonProps({ size: 'action' })} onClick={() => setBinding(true)}>
-            {workstation ? '切换工位' : '绑定工位'}
-          </Button>
-        </Space>
-        {binding ? (
-          <div
+    <TouchScreenTemplate>
+      <div
+        style={{
+          height: '100%',
+          minHeight: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: HMI_DESIGN_TOKENS.SECTION_GAP,
+        }}
+      >
+        <div
+          style={{
+            ...STATION_PANEL_STYLE,
+            minHeight: 64,
+            paddingBlock: 12,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 16,
+            flexWrap: 'wrap',
+          }}
+        >
+          <Typography.Text
             style={{
-              background: HMI_DESIGN_TOKENS.BG_PANEL,
-              borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS,
-              border: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`,
-              padding: HMI_DESIGN_TOKENS.SECTION_GAP,
+              color: HMI_DESIGN_TOKENS.TEXT_PRIMARY,
+              fontSize: 24,
+              fontWeight: 600,
             }}
           >
+            工位入口
+          </Typography.Text>
+          <Space size={20} wrap>
+            <Space size={8}>
+              <Typography.Text type="secondary">当前工位</Typography.Text>
+              <Typography.Text strong>
+                {workstation ? `${workstation.stationName}（${workstation.stationCode}）` : '未绑定'}
+              </Typography.Text>
+            </Space>
+            <Space size={8}>
+              <Typography.Text type="secondary">操作员</Typography.Text>
+              <Typography.Text strong>{operator?.name || candidate?.name || '未确认'}</Typography.Text>
+            </Space>
+            <Space size={8}>
+              <Typography.Text type="secondary">终端账号</Typography.Text>
+              <Typography.Text strong>{terminalAccountName || '未读取'}</Typography.Text>
+            </Space>
+            <span
+              style={{
+                ...STATION_STATUS_PILL_STYLE,
+                color: operator
+                  ? HMI_DESIGN_TOKENS.STATUS_OK
+                  : candidate
+                    ? HMI_DESIGN_TOKENS.STATUS_WARNING
+                    : HMI_DESIGN_TOKENS.TEXT_SECONDARY,
+                borderColor: operator
+                  ? HMI_DESIGN_TOKENS.STATUS_OK
+                  : candidate
+                    ? HMI_DESIGN_TOKENS.STATUS_WARNING
+                    : HMI_DESIGN_TOKENS.BORDER,
+              }}
+            >
+              {operator ? '已确认' : candidate ? '待确认' : '未确认'}
+            </span>
+          </Space>
+        </div>
+
+        {binding ? (
+          <div style={STATION_PANEL_STYLE}>
             <StationBinder
               persist
               showCancel
@@ -426,33 +469,77 @@ function StationHome() {
           </div>
         ) : null}
 
-        {!operator ? (
-          <div>
-            <Typography.Title level={3}>员工身份确认</Typography.Title>
-            <Button
-              {...touchButtonProps({
-                variant: 'primary',
-                size: 'primary',
-                style: { minWidth: 240 },
-              })}
-              onClick={openOperatorPicker}
-            >
-              选择员工
-            </Button>
-            {candidate ? (
-              <Space direction="vertical" size="middle" style={{ marginTop: 16, width: '100%' }}>
-                <Typography.Text>
-                  候选人 {candidate.name}：请输入员工码确认，或到「刷脸交接」页刷脸确认。
-                </Typography.Text>
+        <div className="hmi-station-home__main">
+
+          <div
+            style={{
+              ...STATION_PANEL_STYLE,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 16,
+              overflowY: 'auto',
+            }}
+          >
+            <Typography.Title level={3} style={{ margin: 0 }}>
+              {operator ? '当前操作员' : '员工身份确认'}
+            </Typography.Title>
+            {operator ? (
+              <>
+                <div
+                  style={{
+                    border: `1px solid ${HMI_DESIGN_TOKENS.STATUS_OK}`,
+                    borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS,
+                    background: 'rgba(0, 200, 83, 0.10)',
+                    padding: 16,
+                  }}
+                >
+                  <Typography.Text
+                    strong
+                    style={{ display: 'block', fontSize: 28, color: HMI_DESIGN_TOKENS.TEXT_PRIMARY }}
+                  >
+                    {operator.name}
+                  </Typography.Text>
+                  <Typography.Text style={{ color: HMI_DESIGN_TOKENS.STATUS_OK }}>
+                    已确认当前操作员
+                  </Typography.Text>
+                </div>
+                <Button
+                  {...touchButtonProps({ size: 'action' })}
+                  loading={exiting}
+                  onClick={() => void switchOperator()}
+                >
+                  更换操作员
+                </Button>
+              </>
+            ) : candidate ? (
+              <>
+                <div
+                  style={{
+                    border: `1px solid ${HMI_DESIGN_TOKENS.STATUS_WARNING}`,
+                    borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS,
+                    background: 'rgba(255, 179, 0, 0.10)',
+                    padding: 16,
+                  }}
+                >
+                  <Typography.Text
+                    strong
+                    style={{ display: 'block', fontSize: 28, color: HMI_DESIGN_TOKENS.TEXT_PRIMARY }}
+                  >
+                    {candidate.name}
+                  </Typography.Text>
+                  <Typography.Text style={{ color: HMI_DESIGN_TOKENS.STATUS_WARNING }}>
+                    待员工码或刷脸确认
+                  </Typography.Text>
+                </div>
+                <Input
+                  size="large"
+                  value={employeeCode}
+                  placeholder="员工码"
+                  style={{ minHeight: HMI_TOUCH.INPUT_HEIGHT, fontSize: 24 }}
+                  onChange={(event) => setEmployeeCode(event.target.value)}
+                  onPressEnter={() => void confirmByEmployeeCode()}
+                />
                 <Space wrap>
-                  <Input
-                    size="large"
-                    value={employeeCode}
-                    placeholder="员工码"
-                    style={{ width: 240 }}
-                    onChange={(event) => setEmployeeCode(event.target.value)}
-                    onPressEnter={() => void confirmByEmployeeCode()}
-                  />
                   <Button
                     {...touchButtonProps({ variant: 'primary', size: 'action' })}
                     loading={confirming}
@@ -468,6 +555,11 @@ function StationHome() {
                   >
                     刷脸确认
                   </Button>
+                </Space>
+                <Space wrap>
+                  <Button {...touchButtonProps({ size: 'action' })} onClick={openOperatorPicker}>
+                    重新选择
+                  </Button>
                   <Button
                     {...touchButtonProps({ size: 'action' })}
                     onClick={() => {
@@ -481,79 +573,199 @@ function StationHome() {
                 {!workstation ? (
                   <Typography.Text type="warning">未绑定工位，无法确认操作员</Typography.Text>
                 ) : null}
-              </Space>
+              </>
             ) : (
-              <Typography.Text type="secondary" style={{ display: 'block', marginTop: 12 }}>
-                点击“选择员工”查看可选员工；也可输入姓名缩小范围。
-              </Typography.Text>
+              <>
+                <Button
+                  {...touchButtonProps({
+                    variant: 'primary',
+                    size: 'primary',
+                    style: { minWidth: 240 },
+                  })}
+                  onClick={openOperatorPicker}
+                >
+                  选择员工
+                </Button>
+                <Typography.Text type="secondary">
+                  点击“选择员工”查看可选员工；也可输入姓名缩小范围。
+                </Typography.Text>
+              </>
             )}
           </div>
-        ) : (
-          <div>
-            <Typography.Title level={3}>我的派工工单</Typography.Title>
-            <List
-              bordered
-              loading={ordersLoading}
-              style={{ maxHeight: 420, overflowY: 'auto' }}
-              dataSource={assignedOrders}
-              locale={{ emptyText: '暂无本人派工；可扫描工单码或输入编号查找' }}
-              renderItem={(row) => (
-                <List.Item actions={[
-                  <Button key="report" type="primary" size="large" onClick={() => navigate(reportingPath(row.code))}>报工</Button>,
-                  <Button key="detail" size="large" onClick={() => navigate(withWorkstationId(`${STATION_ENTRY_PATH}/work-orders/${row.id}/kiosk`, workstation?.stationId))}>详情</Button>,
-                ]}>
-                  <List.Item.Meta title={row.code} description={`${row.productName} · ${row.status === 'released' ? '已下达' : '执行中'} · 数量 ${row.quantity}`} />
-                </List.Item>
-              )}
-            />
-            {ordersHasMore ? (
-              <Button size="large" loading={ordersLoading} onClick={() => setOrdersPage({ key: ordersKey, skip: ordersSkip + 50 })}>
-                加载更多
-              </Button>
-            ) : null}
-          </div>
-        )}
 
-        <div>
-          <Typography.Title level={3}>扫码或输入工单编号</Typography.Title>
-          <Space.Compact style={{ width: '100%' }}>
-            <Input
-              size="large"
-              value={scanDraft}
-              placeholder="扫描工单码 / 输入工单编号"
-              onChange={(event) => setScanDraft(event.target.value)}
-              onPressEnter={() => void openWorkOrderByCode()}
-            />
-            <Button type="primary" size="large" loading={openingWorkOrder} onClick={() => void openWorkOrderByCode()}>
-              查找并报工
-            </Button>
-            <Button size="large" disabled={openingWorkOrder} onClick={() => void openWorkOrderByCode(true)}>
-              工单详情
-            </Button>
-          </Space.Compact>
+          <div style={{ minHeight: 0, display: 'flex', flexDirection: 'column', gap: HMI_STATION_LAYOUT.SECTION_GAP }}>
+            <div style={STATION_PANEL_STYLE}>
+              <Typography.Title level={3} style={{ marginTop: 0 }}>
+                工单快捷入口
+              </Typography.Title>
+              <Space.Compact style={{ width: '100%' }}>
+                <Input
+                  size="large"
+                  value={scanDraft}
+                  placeholder="扫描工单码 / 输入工单编号"
+                  onChange={(event) => setScanDraft(event.target.value)}
+                  onPressEnter={() => void openWorkOrderByCode()}
+                  style={{ minHeight: HMI_TOUCH.INPUT_HEIGHT, fontSize: 24 }}
+                />
+                <Button
+                  {...touchButtonProps({ variant: 'primary', size: 'action' })}
+                  size="large"
+                  loading={openingWorkOrder}
+                  onClick={() => void openWorkOrderByCode()}
+                >
+                  查找并报工
+                </Button>
+                <Button
+                  {...touchButtonProps({ size: 'action' })}
+                  size="large"
+                  disabled={openingWorkOrder}
+                  onClick={() => void openWorkOrderByCode(true)}
+                >
+                  工单详情
+                </Button>
+              </Space.Compact>
+              <Typography.Text type="secondary" style={{ display: 'block', marginTop: 12 }}>
+                {operator ? '扫码用于定位工单，不改变当前操作员。' : '可先扫描工单；提交报工前仍需确认操作员。'}
+              </Typography.Text>
+            </div>
+
+            <div
+              style={{
+                ...STATION_PANEL_STYLE,
+                flex: 1,
+                minHeight: 0,
+                display: 'flex',
+                flexDirection: 'column',
+              }}
+            >
+              <Typography.Title level={3} style={{ marginTop: 0 }}>
+                我的派工工单
+              </Typography.Title>
+              {operator ? (
+                <>
+                  <List
+                    loading={ordersLoading}
+                    style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}
+                    dataSource={assignedOrders}
+                    locale={{ emptyText: '暂无本人派工；可扫描工单码或输入编号查找' }}
+                    renderItem={(row) => (
+                      <div
+                        className="hmi-list-item"
+                        style={{
+                          width: '100%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: 16,
+                        }}
+                      >
+                        <div style={{ minWidth: 0 }}>
+                          <div className="hmi-list-item__title">{row.code}</div>
+                          <div className="hmi-list-item__subtitle">
+                            {row.productName} · {row.status === 'released' ? '已下达' : '执行中'} · 数量 {row.quantity}
+                          </div>
+                        </div>
+                        <Space size={12}>
+                          <Button
+                            {...touchButtonProps({ variant: 'primary', size: 'action' })}
+                            onClick={() => navigate(reportingPath(row.code))}
+                          >
+                            报工
+                          </Button>
+                          <Button
+                            {...touchButtonProps({ size: 'action' })}
+                            onClick={() => navigate(withWorkstationId(`${STATION_ENTRY_PATH}/work-orders/${row.id}/kiosk`, workstation?.stationId))}
+                          >
+                            详情
+                          </Button>
+                        </Space>
+                      </div>
+                    )}
+                  />
+                  {ordersHasMore ? (
+                    <Button
+                      block
+                      size="large"
+                      loading={ordersLoading}
+                      onClick={() => setOrdersPage({ key: ordersKey, skip: ordersSkip + 50 })}
+                      style={{ minHeight: HMI_TOUCH.ACTION_BTN_HEIGHT }}
+                    >
+                      加载更多
+                    </Button>
+                  ) : null}
+                </>
+              ) : (
+                <div className="hmi-empty">
+                  <div className="hmi-empty__text">确认操作员后显示本人派工</div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
-        <Space wrap>
-          {KIOSK_LINKS.map((item) => (
-            <Button
-              key={item.to}
-              {...touchButtonProps({ size: 'action' })}
-              onClick={() => navigate(withWorkstationId(item.to, workstation?.stationId))}
-            >
-              {item.title}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'flex-end',
+            justifyContent: 'space-between',
+            gap: 20,
+            flexWrap: 'wrap',
+            borderTop: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`,
+            paddingTop: 16,
+          }}
+        >
+          <Space size={32} wrap>
+            <Space direction="vertical" size={8}>
+              <Typography.Text type="secondary">生产执行</Typography.Text>
+              <Space wrap>
+                {EXECUTION_LINKS.map((item, index) => (
+                  <Button
+                    key={item.to}
+                    {...touchButtonProps({ variant: index === 0 ? 'primary' : 'default', size: 'action' })}
+                    onClick={() => navigate(withWorkstationId(item.to, workstation?.stationId))}
+                  >
+                    {item.title}
+                  </Button>
+                ))}
+              </Space>
+            </Space>
+            <Space direction="vertical" size={8}>
+              <Typography.Text type="secondary">作业资料</Typography.Text>
+              <Space wrap>
+                {RESOURCE_LINKS.map((item) => (
+                  <Button
+                    key={item.to}
+                    {...touchButtonProps({ size: 'action' })}
+                    onClick={() => navigate(withWorkstationId(item.to, workstation?.stationId))}
+                  >
+                    {item.title}
+                  </Button>
+                ))}
+              </Space>
+            </Space>
+            <Space direction="vertical" size={8}>
+              <Typography.Text type="secondary">现场处理</Typography.Text>
+              <Space wrap>
+                {STATION_LINKS.map((item) => (
+                  <Button
+                    key={item.to}
+                    {...touchButtonProps({ variant: item.title === '安灯' ? 'danger' : 'default', size: 'action' })}
+                    onClick={() => navigate(withWorkstationId(item.to, workstation?.stationId))}
+                  >
+                    {item.title}
+                  </Button>
+                ))}
+              </Space>
+            </Space>
+          </Space>
+          <Space direction="vertical" size={8} style={{ alignItems: 'flex-end' }}>
+            <Typography.Text type="secondary">终端管理</Typography.Text>
+            <Button {...touchButtonProps({ size: 'action' })} onClick={() => setBinding(true)}>
+              {workstation ? '切换工位' : '绑定工位'}
             </Button>
-          ))}
-          {MODULE_LINKS.map((item) => (
-            <Button
-              key={item.to}
-              {...touchButtonProps({ size: 'action' })}
-              onClick={() => navigate(withWorkstationId(item.to, workstation?.stationId))}
-            >
-              {item.title}
-            </Button>
-          ))}
-        </Space>
-      </Space>
+          </Space>
+        </div>
+      </div>
 
       <Drawer
         title="选择员工"

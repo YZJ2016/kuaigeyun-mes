@@ -125,27 +125,37 @@ export const TouchScreenTemplate: React.FC<TouchScreenTemplateProps> = ({
         <div
           style={{
             display: 'flex',
-            flexDirection: 'column',
+            flexWrap: 'wrap',
+            alignItems: 'stretch',
+            justifyContent: 'center',
             gap: ANT_DESIGN_TOKENS.SPACING.MD,
             paddingTop: ANT_DESIGN_TOKENS.SPACING.MD,
             borderTop: `1px solid ${token.colorBorder}`,
           }}
         >
           {footerButtons.map((button, index) => (
-            <Button
+            <div
               key={index}
-              size="large"
-              {...touchButtonProps({
-                variant: button.type === 'primary' ? 'primary' : 'default',
-                size: 'action',
-              })}
-              icon={button.icon}
-              onClick={button.onClick}
-              disabled={button.disabled}
-              block={button.block !== false}
+              style={{
+                flex: button.block === false ? '0 1 auto' : '1 1 220px',
+                minWidth: button.block === false ? undefined : 220,
+                maxWidth: '100%',
+              }}
             >
-              {button.title}
-            </Button>
+              <Button
+                size="large"
+                {...touchButtonProps({
+                  variant: button.type === 'primary' ? 'primary' : 'default',
+                  size: 'action',
+                })}
+                icon={button.icon}
+                onClick={button.onClick}
+                disabled={button.disabled}
+                block
+              >
+                {button.title}
+              </Button>
+            </div>
           ))}
         </div>
       )}

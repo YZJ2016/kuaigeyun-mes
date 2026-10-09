@@ -330,8 +330,8 @@ export function StationExecutionPage({
 
   return (
     <TouchScreenTemplate title="工位执行">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24, alignItems: 'center' }}>
+      <div className="hmi-station-pane" style={{ flex: 1 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'center' }}>
           <Button {...touchButtonProps({ size: 'header', style: { height: HMI_TOUCH.HEADER_BTN_HEIGHT } })} onClick={backToStationEntry}>
             返回工位入口
           </Button>
@@ -356,221 +356,234 @@ export function StationExecutionPage({
           </Button>
         </div>
 
-      {notice ? (
-        <Alert type={notice.type} message={notice.text} showIcon />
-      ) : null}
-      {!writeEnabled ? (
-        <Alert
-          type="info"
-          showIcon
-          message="未确认操作员：可查看工单与状态，开工、暂停、恢复、结束、上下机与 SOP 确认不可用"
-        />
-      ) : null}
-
-      <List
-        loading={listLoading}
-        dataSource={workOrders}
-        locale={{ emptyText: '没有已下达或执行中的工单' }}
-        renderItem={(row) => (
-          <List.Item style={{ padding: 0, borderBlockEnd: 'none' }}>
-            <TouchListItem
-              style={{ width: '100%' }}
-              selected={row.id === selectedId}
-              onClick={() => {
-                setSelectedId(row.id);
-                setSelectedOperationId(null);
-                setPauseFor(null);
-                setPendingSop(null);
-                onSelectionChange?.({ workOrderId: row.id, operationId: null });
-                void loadOperations(row.id);
-              }}
-              title={
-                <>
-                  <strong>{row.code || `工单 ${row.id}`}</strong>
-                  <span style={{ marginLeft: 12 }}>{row.productName}</span>
-                  {row.productCode ? <span style={{ marginLeft: 8 }}>{row.productCode}</span> : null}
-                  <span style={{ marginLeft: 12 }}>数量 {row.quantity || '—'}</span>
-                  <span style={{ marginLeft: 12 }}>
-                    {statusText(row.status, WORK_ORDER_STATUS_LABEL)}
-                  </span>
-                </>
-              }
-            />
-          </List.Item>
-        )}
-      />
-      {hasMore ? (
-        <Button
-          {...touchButtonProps({ size: 'action' })}
-          onClick={() => void loadWorkOrders(skip + 50, true)}
-          loading={listLoading}
-        >
-          加载更多
-        </Button>
-      ) : null}
-
-      {selected ? (
-        <div>
-          <h2 style={{ fontSize: 22, margin: '8px 0' }}>
-            {selected.code} 的工序
-          </h2>
-          <List
-            loading={opsLoading}
-            dataSource={operations}
-            locale={{ emptyText: '该工单没有工序' }}
-            renderItem={(operation) => {
-              const waitingSop =
-                pendingSop?.workOrderId === selected.id && pendingSop.operationId === operation.id;
-              const selectedRow = operation.id === selectedOperationId;
-              const selectOperation = () => {
-                setSelectedOperationId(operation.id);
-                onSelectionChange?.({ workOrderId: selected.id, operationId: operation.id });
-              };
-              return (
-                <List.Item style={{ padding: 0, borderBlockEnd: 'none' }}>
-                  {/* 行内任意位置点击仍选中该工序（与原行为一致）；可键盘操作的选中控件是 TouchListItem */}
-                  <div
-                    style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}
-                    onClick={selectOperation}
-                  >
-                    <TouchListItem
-                      selected={selectedRow}
-                      onClick={selectOperation}
-                      title={
-                        <>
-                          {operation.sequence}.{' '}
-                          {operation.name || operation.code || `工序 ${operation.id}`}
-                          <span style={{ marginLeft: 12 }}>
-                            {statusText(operation.status, OPERATION_STATUS_LABEL)}
-                          </span>
-                          <span style={{ marginLeft: 12 }}>
-                            上下机 {operation.machineSessionState || 'none'}
-                          </span>
-                        </>
-                      }
-                    />
-                    <div
-                      style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      <Button
-                        size="large"
-                        type="primary"
-                        disabled={busy || !writeEnabled}
-                        onClick={() => void runStart(operation, false)}
-                      >
-                        开工
-                      </Button>
-                      {waitingSop ? (
-                        <Button
-                          size="large"
-                          type="primary"
-                          disabled={busy || !writeEnabled}
-                          onClick={() => void confirmSopAndStart(operation)}
-                        >
-                          确认 SOP 并开工
-                        </Button>
-                      ) : null}
-                      <Button
-                        size="large"
-                        disabled={busy || !writeEnabled}
-                        onClick={() =>
-                          void runAction(
-                            () => withdrawOperationStart(selected.id, operation.id),
-                            '已撤回开工',
-                          )
-                        }
-                    >
-                      撤回开工
-                    </Button>
-                    <Button
-                      size="large"
-                      disabled={busy || !writeEnabled}
-                      onClick={() => setPauseFor(operation.id)}
-                    >
-                      暂停
-                    </Button>
-                    <Button
-                      size="large"
-                      disabled={busy || !writeEnabled}
-                      onClick={() =>
-                        void runAction(
-                          () => resumeOperation(selected.id, operation.id),
-                          '已恢复',
-                        )
-                      }
-                    >
-                      恢复
-                    </Button>
-                    <Button
-                      size="large"
-                      disabled={busy || !writeEnabled}
-                      onClick={() =>
-                        void runAction(
-                          () => completeOperation(selected.id, operation.id),
-                          '已结束',
-                        )
-                      }
-                    >
-                      结束
-                    </Button>
-                    <Button
-                      size="large"
-                      disabled={busy || !writeEnabled}
-                      onClick={() =>
-                        void runAction(
-                          () => setMachineSession(selected.id, operation.id, 'on'),
-                          '已上机',
-                        )
-                      }
-                    >
-                      上机
-                    </Button>
-                    <Button
-                      size="large"
-                      disabled={busy || !writeEnabled}
-                      onClick={() =>
-                        void runAction(
-                          () => setMachineSession(selected.id, operation.id, 'off'),
-                          '已下机',
-                        )
-                      }
-                    >
-                        下机
-                      </Button>
-                    </div>
-                    {pauseFor === operation.id ? (
-                      <div
-                      style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                        {DOWNTIME_REASONS.map((reason) => (
-                          <Button
-                            key={reason.code}
-                            size="large"
-                            disabled={busy || !writeEnabled}
-                            onClick={() =>
-                              void runAction(
-                                () =>
-                                  pauseOperation(selected.id, operation.id, reason.code, stationId),
-                                stationId == null
-                                  ? `已暂停（${reason.label}）。入口未绑定工位，请求未带 workstation_id`
-                                  : `已暂停（${reason.label}）`,
-                              )
-                            }
-                          >
-                            {reason.label}
-                          </Button>
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
-                </List.Item>
-              );
-            }}
+        {notice ? (
+          <Alert type={notice.type} message={notice.text} showIcon />
+        ) : null}
+        {!writeEnabled ? (
+          <Alert
+            type="info"
+            showIcon
+            message="未确认操作员：可查看工单与状态，开工、暂停、恢复、结束、上下机与 SOP 确认不可用"
           />
+        ) : null}
+
+        <div className="hmi-station-split">
+          <div className="hmi-station-pane hmi-station-pane--scroll">
+            <h2 style={{ fontSize: 22, margin: 0 }}>可执行工单</h2>
+            <List
+              loading={listLoading}
+              dataSource={workOrders}
+              locale={{ emptyText: '没有已下达或执行中的工单' }}
+              renderItem={(row) => (
+                <List.Item style={{ padding: 0, borderBlockEnd: 'none' }}>
+                  <TouchListItem
+                    style={{ width: '100%' }}
+                    selected={row.id === selectedId}
+                    onClick={() => {
+                      setSelectedId(row.id);
+                      setSelectedOperationId(null);
+                      setPauseFor(null);
+                      setPendingSop(null);
+                      onSelectionChange?.({ workOrderId: row.id, operationId: null });
+                      void loadOperations(row.id);
+                    }}
+                    title={
+                      <>
+                        <strong>{row.code || `工单 ${row.id}`}</strong>
+                        <span style={{ marginLeft: 12 }}>{row.productName}</span>
+                        {row.productCode ? <span style={{ marginLeft: 8 }}>{row.productCode}</span> : null}
+                        <span style={{ marginLeft: 12 }}>数量 {row.quantity || '—'}</span>
+                        <span style={{ marginLeft: 12 }}>
+                          {statusText(row.status, WORK_ORDER_STATUS_LABEL)}
+                        </span>
+                      </>
+                    }
+                  />
+                </List.Item>
+              )}
+            />
+            {hasMore ? (
+              <Button
+                {...touchButtonProps({ size: 'action' })}
+                onClick={() => void loadWorkOrders(skip + 50, true)}
+                loading={listLoading}
+              >
+                加载更多
+              </Button>
+            ) : null}
+          </div>
+
+          <div className="hmi-station-pane hmi-station-pane--scroll">
+            {selected ? (
+              <div>
+                <h2 style={{ fontSize: 22, margin: '8px 0' }}>{selected.code} 的工序</h2>
+                <List
+                  loading={opsLoading}
+                  dataSource={operations}
+                  locale={{ emptyText: '该工单没有工序' }}
+                  renderItem={(operation) => {
+                    const waitingSop =
+                      pendingSop?.workOrderId === selected.id &&
+                      pendingSop.operationId === operation.id;
+                    const selectedRow = operation.id === selectedOperationId;
+                    const selectOperation = () => {
+                      setSelectedOperationId(operation.id);
+                      onSelectionChange?.({ workOrderId: selected.id, operationId: operation.id });
+                    };
+                    return (
+                      <List.Item style={{ padding: 0, borderBlockEnd: 'none' }}>
+                        {/* 行内任意位置点击仍选中该工序（与原行为一致）；可键盘操作的选中控件是 TouchListItem */}
+                        <div
+                          style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}
+                          onClick={selectOperation}
+                        >
+                          <TouchListItem
+                            selected={selectedRow}
+                            onClick={selectOperation}
+                            title={
+                              <>
+                                {operation.sequence}.{' '}
+                                {operation.name || operation.code || `工序 ${operation.id}`}
+                                <span style={{ marginLeft: 12 }}>
+                                  {statusText(operation.status, OPERATION_STATUS_LABEL)}
+                                </span>
+                                <span style={{ marginLeft: 12 }}>
+                                  上下机 {operation.machineSessionState || 'none'}
+                                </span>
+                              </>
+                            }
+                          />
+                          <div
+                            style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            <Button
+                              {...touchButtonProps({ variant: 'primary', size: 'action' })}
+                              disabled={busy || !writeEnabled}
+                              onClick={() => void runStart(operation, false)}
+                            >
+                              开工
+                            </Button>
+                            {waitingSop ? (
+                              <Button
+                                {...touchButtonProps({ variant: 'primary', size: 'action' })}
+                                disabled={busy || !writeEnabled}
+                                onClick={() => void confirmSopAndStart(operation)}
+                              >
+                                确认 SOP 并开工
+                              </Button>
+                            ) : null}
+                            <Button
+                              {...touchButtonProps({ size: 'action' })}
+                              disabled={busy || !writeEnabled}
+                              onClick={() =>
+                                void runAction(
+                                  () => withdrawOperationStart(selected.id, operation.id),
+                                  '已撤回开工',
+                                )
+                              }
+                            >
+                              撤回开工
+                            </Button>
+                            <Button
+                              {...touchButtonProps({ size: 'action' })}
+                              disabled={busy || !writeEnabled}
+                              onClick={() => setPauseFor(operation.id)}
+                            >
+                              暂停
+                            </Button>
+                            <Button
+                              {...touchButtonProps({ size: 'action' })}
+                              disabled={busy || !writeEnabled}
+                              onClick={() =>
+                                void runAction(
+                                  () => resumeOperation(selected.id, operation.id),
+                                  '已恢复',
+                                )
+                              }
+                            >
+                              恢复
+                            </Button>
+                            <Button
+                              {...touchButtonProps({ size: 'action' })}
+                              disabled={busy || !writeEnabled}
+                              onClick={() =>
+                                void runAction(
+                                  () => completeOperation(selected.id, operation.id),
+                                  '已结束',
+                                )
+                              }
+                            >
+                              结束
+                            </Button>
+                            <Button
+                              {...touchButtonProps({ size: 'action' })}
+                              disabled={busy || !writeEnabled}
+                              onClick={() =>
+                                void runAction(
+                                  () => setMachineSession(selected.id, operation.id, 'on'),
+                                  '已上机',
+                                )
+                              }
+                            >
+                              上机
+                            </Button>
+                            <Button
+                              {...touchButtonProps({ size: 'action' })}
+                              disabled={busy || !writeEnabled}
+                              onClick={() =>
+                                void runAction(
+                                  () => setMachineSession(selected.id, operation.id, 'off'),
+                                  '已下机',
+                                )
+                              }
+                            >
+                              下机
+                            </Button>
+                          </div>
+                          {pauseFor === operation.id ? (
+                            <div
+                              style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              {DOWNTIME_REASONS.map((reason) => (
+                                <Button
+                                  key={reason.code}
+                                  {...touchButtonProps({ size: 'action' })}
+                                  disabled={busy || !writeEnabled}
+                                  onClick={() =>
+                                    void runAction(
+                                      () =>
+                                        pauseOperation(
+                                          selected.id,
+                                          operation.id,
+                                          reason.code,
+                                          stationId,
+                                        ),
+                                      stationId == null
+                                        ? `已暂停（${reason.label}）。入口未绑定工位，请求未带 workstation_id`
+                                        : `已暂停（${reason.label}）`,
+                                    )
+                                  }
+                                >
+                                  {reason.label}
+                                </Button>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      </List.Item>
+                    );
+                  }}
+                />
+              </div>
+            ) : (
+              <div className="hmi-empty">
+                <div className="hmi-empty__text">从左侧选择工单后展示工序与操作</div>
+              </div>
+            )}
+          </div>
         </div>
-      ) : null}
       </div>
     </TouchScreenTemplate>
   );
