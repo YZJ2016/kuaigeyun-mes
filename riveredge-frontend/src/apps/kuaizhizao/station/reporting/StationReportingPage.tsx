@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -74,6 +74,7 @@ export const StationReportingPage: React.FC<StationReportingPageProps> = ({
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const workstationId = resolveWorkstationId(boundWorkstationId, searchParams.get('workstationId'));
+  const selectedWorkOrderCode = searchParams.get('workOrderCode')?.trim() ?? '';
   const stationEntryPath =
     workstationId == null
       ? STATION_ENTRY_PATH
@@ -116,9 +117,9 @@ export const StationReportingPage: React.FC<StationReportingPageProps> = ({
     });
   };
 
-  const loadWorkOrder = async () => {
-    if (loading) return;
-    const code = String(form.getFieldValue('work_order_code') ?? '').trim();
+  const loadWorkOrder = async (selectedCode?: string) => {
+    if (loading && !selectedCode) return;
+    const code = String(selectedCode ?? form.getFieldValue('work_order_code') ?? '').trim();
     const requestSeq = ++loadWorkOrderSeq.current;
     setWorkOrder(null);
     setOperations([]);
@@ -155,6 +156,12 @@ export const StationReportingPage: React.FC<StationReportingPageProps> = ({
       }
     }
   };
+
+  useEffect(() => {
+    if (!selectedWorkOrderCode) return;
+    form.setFieldValue('work_order_code', selectedWorkOrderCode);
+    void loadWorkOrder(selectedWorkOrderCode);
+  }, [selectedWorkOrderCode]);
 
   const submitReport = async () => {
     if (loading || !writeEnabled) return;

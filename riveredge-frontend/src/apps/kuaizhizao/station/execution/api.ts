@@ -145,11 +145,11 @@ export function apiErrorText(error: unknown): string {
   return '请求失败';
 }
 
-export async function listExecutableWorkOrders(skip: number): Promise<{
+export async function listExecutableWorkOrders(skip: number, assignedWorkerId?: number): Promise<{
   rows: StationWorkOrder[];
   hasMore: boolean;
 }> {
-  const params = { skip, limit: PAGE_SIZE, include_readiness: false };
+  const params = { skip, limit: PAGE_SIZE, include_readiness: false, ...(assignedWorkerId ? { assigned_worker_id: assignedWorkerId } : {}) };
   const [released, inProgress] = await Promise.all([
     workOrderApi.list({ ...params, status: 'released' }),
     workOrderApi.list({ ...params, status: 'in_progress' }),

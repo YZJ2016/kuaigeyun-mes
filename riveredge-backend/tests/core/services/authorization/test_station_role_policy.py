@@ -181,10 +181,10 @@ async def test_load_preset_backfills_existing_station_permissions(monkeypatch):
     assert len(created) == 1
     assign.assert_awaited_once()
     assert assign.await_args.kwargs["role"].code == "STATION_TERMINAL"
-    assert assign.await_args.kwargs["only_codes"] == frozenset({
-        "master-data:factory:workshop:read",
-        "master-data:process:sop:read",
-    })
+    assert (
+        assign.await_args.kwargs["only_codes"]
+        == RoleService.PRESET_ROLE_EXPLICIT_PERMISSION_CODES["STATION_TERMINAL"]
+    )
     bump.assert_awaited_once_with(tenant_id=1, user_id=None)
     bump_users.assert_awaited_once_with(role_id=101, tenant_id=1)
 
