@@ -145,7 +145,7 @@ const DrawingWhereUsedPage: React.FC = () => {
 
   const drawingColumns: ProColumns<EngineeringDrawing>[] = useMemo(
     () =>
-      alignProColumns(
+      alignProColumns<EngineeringDrawing>(
         [
           {
             // 稀疏查询结果：业务列不叠；名称 RemainderFlex；状态 StatusTag 右固
@@ -212,7 +212,7 @@ const DrawingWhereUsedPage: React.FC = () => {
 
   const usageColumns: ProColumns<DrawingWhereUsedUsage>[] = useMemo(
     () =>
-      alignProColumns(
+      alignProColumns<DrawingWhereUsedUsage>(
         [
           {
             title: t('app.master-data.drawingWhereUsed.usageKind'),

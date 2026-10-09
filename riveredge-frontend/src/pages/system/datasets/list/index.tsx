@@ -526,7 +526,7 @@ const DatasetListPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns = useMemo<ProColumns<Dataset>[]>(() => alignProColumns([
+  const columns = useMemo<ProColumns<Dataset>[]>(() => alignProColumns<Dataset>([
     {
       title: t('pages.system.datasets.columnName'),
       dataIndex: 'name',

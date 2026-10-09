@@ -416,7 +416,7 @@ const LanguageListPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns = useMemo<ProColumns<Language>[]>(() => alignProColumns([
+  const columns = useMemo<ProColumns<Language>[]>(() => alignProColumns<Language>([
     {
       title: t('field.language.code'),
       dataIndex: 'code',

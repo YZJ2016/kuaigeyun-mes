@@ -251,7 +251,7 @@ export const DocumentAttachmentCenterPane: React.FC<DocumentAttachmentCenterPane
         }}
         fileUuid={previewFile?.uuid}
         fileName={previewFile?.name}
-        fileExtension={previewFile?.name ? getFileExt(previewFile.name) : undefined}
+        fileExtension={previewFile?.name ? getFileExt({ fileName: previewFile.name }) : undefined}
         title={previewFile?.name}
       />
     </>

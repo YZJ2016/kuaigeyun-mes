@@ -15,6 +15,7 @@ export function IotConnectionModal({ open, type, onOpenChange, onCreated }: {
 }) {
   const { message } = App.useApp();
   return <FormModalTemplate
+    formName="iot-application-connection"
     title="新建 IoT 应用连接"
     open={open}
     onOpenChange={onOpenChange}

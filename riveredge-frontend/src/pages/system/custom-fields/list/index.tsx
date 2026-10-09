@@ -941,7 +941,7 @@ const CustomFieldListPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns = useMemo<ProColumns<CustomField>[]>(() => alignProColumns([
+  const columns = useMemo<ProColumns<CustomField>[]>(() => alignProColumns<CustomField>([
     {
       title: t('field.customField.name'),
       dataIndex: 'name',

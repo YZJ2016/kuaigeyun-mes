@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
 import {
   AUTOMATION_CATEGORIES,
   PARAMETER_CATEGORIES,
@@ -28,19 +29,19 @@ describe('configTree toolbar / empty modules', () => {
   it('does not expose toolbar sync/push in business config (moved to role permissions)', () => {
     const paths = new Set(allParams().map((p) => p.sourcePath));
     for (const path of REMOVED_TOOLBAR_SOURCE_PATHS) {
-      expect(paths.has(path)).toBe(false);
+      assert.strictEqual(paths.has(path), false);
     }
   });
 
   it('does not expose multi_unit fake switch', () => {
     const paths = allParams().map((p) => p.sourcePath);
-    expect(paths).not.toContain('parameters.warehouse.multi_unit');
+    assert.ok(!(paths).includes('parameters.warehouse.multi_unit'));
   });
 
   it('equipment module stays empty in parameter and automation trees', () => {
     const equipmentParam = PARAMETER_CATEGORIES.find((c) => c.id === 'equipment');
     const equipmentAuto = AUTOMATION_CATEGORIES.find((c) => c.id === 'equipment');
-    expect(equipmentParam?.params ?? []).toHaveLength(0);
-    expect(equipmentAuto?.params ?? []).toHaveLength(0);
+    assert.strictEqual((equipmentParam?.params ?? []).length, 0);
+    assert.strictEqual((equipmentAuto?.params ?? []).length, 0);
   });
 });

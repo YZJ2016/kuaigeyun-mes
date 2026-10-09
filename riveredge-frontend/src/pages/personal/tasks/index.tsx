@@ -282,7 +282,7 @@ const UserTasksPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns = useMemo<ProColumns<UserTask>[]>(() => alignProColumns([
+  const columns = useMemo<ProColumns<UserTask>[]>(() => alignProColumns<UserTask>([
     {
       title: t('pages.personal.tasks.title'),
       dataIndex: 'title',

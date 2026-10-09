@@ -307,7 +307,7 @@ const OnlineUsersPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns = useMemo<ProColumns<OnlineUser>[]>(() => alignProColumns([
+  const columns = useMemo<ProColumns<OnlineUser>[]>(() => alignProColumns<OnlineUser>([
     {
       title: t('pages.system.onlineUsers.username'),
       dataIndex: 'username',

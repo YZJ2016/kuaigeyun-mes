@@ -197,7 +197,7 @@ const ChartOfAccountsPage: React.FC = () => {
 
   const columns: ProColumns<GlAccount>[] = useMemo(
     () =>
-      alignProColumns(
+      alignProColumns<GlAccount>(
         [
           {
             // 稀疏：编码 KeepWidth；名称唯一 RemainderFlex；不叠列

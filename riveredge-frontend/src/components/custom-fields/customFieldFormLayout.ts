@@ -92,7 +92,7 @@ export function customFieldControlLayout(colProps?: { span?: number }) {
 /** 输入控件 fieldProps（唯一宽度来源，禁止页面内联 style.width） */
 export function customFieldFieldProps<T extends object = Record<never, never>>(
   extra?: T,
-): { style: { width: '100%' } } & Partial<T> {
+): { style: { width: '100%' } } & Partial<Omit<T, 'style'>> {
   return { style: { width: '100%' }, ...extra };
 }
 

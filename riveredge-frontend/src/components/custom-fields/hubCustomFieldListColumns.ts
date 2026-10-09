@@ -37,7 +37,7 @@ type HubFieldEntry = {
 export function dedupeCustomFieldsByLabel(fields: CustomField[]): CustomField[] {
   const sorted = [...fields]
     .filter((f) => f.is_active)
-    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.id - b.id)
+    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
   const seen = new Set<string>()
   const out: CustomField[] = []
   for (const field of sorted) {
@@ -87,7 +87,7 @@ export function buildHubMergedCustomFieldColumns<
 
   const merged = Array.from(byLabel.entries()).map(([label, entries]) => {
     const sortedEntries = [...entries].sort(
-      (a, b) => a.sortOrder - b.sortOrder || a.field.id - b.field.id,
+      (a, b) => a.sortOrder - b.sortOrder,
     )
     const minSort = sortedEntries[0]?.sortOrder ?? 0
     const sharedCode = sortedEntries.every(

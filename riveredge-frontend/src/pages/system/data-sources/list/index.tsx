@@ -7,7 +7,7 @@
 
 import React, { useRef, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDependency, ProFormDigit, ProFormInstance } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDependency, ProFormDigit, ProFormInstance, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Tag, Space, Badge, Typography, Alert, Tooltip, Card, Button, theme } from 'antd';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../utils/uniTableLayoutColumns';
@@ -634,7 +634,7 @@ const DataSourceListPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns = useMemo<ProColumns<DataSource>[]>(() => alignProColumns([
+  const columns = useMemo<ProColumns<DataSource>[]>(() => alignProColumns<DataSource>([
     {
       title: t('pages.system.dataSources.columnName'),
       dataIndex: 'name',
@@ -790,7 +790,7 @@ const DataSourceListPage: React.FC = () => {
   /**
    * 详情列定义
    */
-  const detailColumns = [
+  const detailColumns: ProDescriptionsItemProps<DataSourceDetail>[] = [
     {
       title: t('pages.system.dataSources.detailColumnName'),
       dataIndex: 'name',

@@ -105,7 +105,7 @@ const DocumentTimingPage: React.FC = () => {
     }
   };
 
-  const DOC_TYPE_MARKER_COLOR: Record<string, string> = {
+  const DOC_TYPE_MARKER_COLOR: Record<string, Parameters<typeof renderReportDocTypeMarker>[1]> = {
     work_order: 'processing',
     purchase_order: 'default',
     sales_order: 'success',

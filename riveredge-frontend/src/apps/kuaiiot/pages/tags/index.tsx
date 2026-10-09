@@ -1,3 +1,4 @@
+import { alignIotTableColumns } from '../../components/table-parity';
 /**
  * 点位映射：跨设备点位运营列表页。
  * 新建/编辑通过 DeviceSelect 选择设备，不再要求先在本页登记设备。
@@ -5,6 +6,7 @@
  * 行内写按钮用 rowActionKind('skip') + 显式权限判断（manifest 无 :update/:delete）。
  */
 
+import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   ActionType,
@@ -262,6 +264,7 @@ const TagsPage: React.FC = () => {
             ? [
                 <Button
                   key="edit"
+                  icon={<EditOutlined />}
                   type="link"
                   size="small"
                   {...rowActionKind('skip')}
@@ -274,7 +277,7 @@ const TagsPage: React.FC = () => {
                   title="确定删除该点位？"
                   onConfirm={() => void handleDelete(row)}
                 >
-                  <Button type="link" size="small" danger {...rowActionKind('skip')}>
+                  <Button type="link" size="small" danger icon={<DeleteOutlined />} {...rowActionKind('skip')}>
                     删除
                   </Button>
                 </Popconfirm>,
@@ -377,7 +380,7 @@ const TagsPage: React.FC = () => {
       <UniTable<TagRow>
         actionRef={actionRef}
         rowKey="id"
-        columns={columns}
+        columns={alignIotTableColumns(columns, 'tags')}
         columnPersistenceId="kuaiiot-tags-v1"
         permissionResource="kuaiiot:tag"
         showCreateButton

@@ -359,7 +359,7 @@ const MessageConfigListPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns = useMemo<ProColumns<MessageConfig>[]>(() => alignProColumns([
+  const columns = useMemo<ProColumns<MessageConfig>[]>(() => alignProColumns<MessageConfig>([
     {
       title: t('pages.system.messageConfig.code'),
       dataIndex: 'code',

@@ -50,6 +50,7 @@ export interface ReceiptVoucher {
 }
 
 export type ReceiptPullPreview = DocumentPushPreview & {
+  source_code?: string;
   source_type?: 'receivable';
   customer_id?: number;
   customer_name?: string;

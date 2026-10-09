@@ -805,7 +805,7 @@ const SettlementPage: React.FC = () => {
 
   const historyColumns: ProColumns<SettlementRecord>[] = useMemo(
     () =>
-      alignProColumns(
+      alignProColumns<SettlementRecord>(
         [
           {
             title: t(`${P}.history.col.settlementCode`),

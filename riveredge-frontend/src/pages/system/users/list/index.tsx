@@ -581,7 +581,7 @@ const UserListPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns: ProColumns<User>[] = React.useMemo(() => alignProColumns([
+  const columns: ProColumns<User>[] = React.useMemo(() => alignProColumns<User>([
     {
       title: t('field.user.avatar'),
       key: 'avatar',

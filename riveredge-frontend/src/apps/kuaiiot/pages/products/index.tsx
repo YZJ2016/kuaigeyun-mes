@@ -1,3 +1,4 @@
+import { alignIotTableColumns } from '../../components/table-parity';
 /**
  * 产品模型运营列表：模糊 + 高级搜索、新建、编辑、详情抽屉、删除 / 批量删除。
  * 列表接口为数组响应，筛选、排序、分页在前端完成。
@@ -5,6 +6,7 @@
  * 编辑/删除 kuaiiot:device:update（后端删除走 update 权限，无独立 delete/export 权限码）。
  */
 
+import { DeleteOutlined } from '@ant-design/icons';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -442,30 +444,15 @@ const ProductsPage: React.FC = () => {
             hideInSearch: true,
             render: (_, row) => row.description || '—',
           },
+          { title: t('common.remark'), dataIndex: 'remark', width: 160, ellipsis: true, hideInSearch: true, render: (_, row) => row.remark || '—' },
           {
-            title: t('app.kuaiiot.products.colTags'),
+            title: '点位数',
             dataIndex: 'tags',
             width: 220,
             minWidth: 160,
             ellipsis: true,
             hideInSearch: true,
-            render: (_, row) => {
-              const tags = row.tags || [];
-              if (!tags.length) return '—';
-              const shown = tags.slice(0, 3);
-              return (
-                <>
-                  {shown.map((tag) => (
-                    <Tag key={tag.tag_key} style={{ marginInlineEnd: 4 }}>
-                      {tag.tag_key}
-                    </Tag>
-                  ))}
-                  {tags.length > shown.length ? (
-                    <Tag>{`+${tags.length - shown.length}`}</Tag>
-                  ) : null}
-                </>
-              );
-            },
+            render: (_, row) => (row.tags || []).length,
           },
           {
             title: t('app.kuaiiot.products.colEvents'),
@@ -520,7 +507,7 @@ const ProductsPage: React.FC = () => {
                 title={t('app.kuaiiot.products.deleteConfirm', { name: row.name || row.code })}
                 onConfirm={() => void handleDelete(row)}
               >
-                <Button type="link" size="small" danger {...rowActionKind('update')}>
+                <Button type="link" size="small" danger icon={<DeleteOutlined />} {...rowActionKind('skip')}>
                   {t('common.delete')}
                 </Button>
               </Popconfirm>,
@@ -556,7 +543,7 @@ const ProductsPage: React.FC = () => {
         actionRef={actionRef}
         rowKey="id"
         headerTitle={t('app.kuaiiot.menu.products')}
-        columns={columns}
+        columns={alignIotTableColumns(columns, 'products')}
         showCreateButton={canCreate}
         createButtonText={withSingleNewShortcutHint(t('app.kuaiiot.action.createProduct'))}
         onCreate={openCreate}

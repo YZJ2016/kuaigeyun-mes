@@ -284,7 +284,7 @@ const PriceSettlementPanel: React.FC<SettlementPanelProps> = ({
 
   const columns: ProColumns<PriceSettlementRow>[] = useMemo(
     () =>
-      alignProColumns(
+      alignProColumns<PriceSettlementRow>(
         [
           {
             title: t(`${P}.col.orderCode`),

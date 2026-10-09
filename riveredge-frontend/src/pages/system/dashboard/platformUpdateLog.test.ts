@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
 import type { Application } from '../../../services/application';
 import type { PlatformUpdateLogEntry } from './platformUpdateLog';
 import {
@@ -56,14 +57,12 @@ const otherDedicatedEntry: PlatformUpdateLogEntry = {
 
 describe('isDedicatedPlatformUpdateEntry', () => {
   it('treats scope or dedicatedAppCode as dedicated record', () => {
-    expect(isDedicatedPlatformUpdateEntry(funideEntry)).toBe(true);
-    expect(
-      isDedicatedPlatformUpdateEntry({
+    assert.strictEqual(isDedicatedPlatformUpdateEntry(funideEntry), true);
+    assert.strictEqual(isDedicatedPlatformUpdateEntry({
         ...generalEntry,
         dedicatedAppCode: 'funide-oa',
-      }),
-    ).toBe(true);
-    expect(isDedicatedPlatformUpdateEntry(generalEntry)).toBe(false);
+      }), true);
+    assert.strictEqual(isDedicatedPlatformUpdateEntry(generalEntry), false);
   });
 });
 
@@ -79,7 +78,7 @@ describe('resolveEnabledDedicatedAppCodes', () => {
       ],
       catalog,
     );
-    expect([...codes]).toEqual(['funide-oa']);
+    assert.deepStrictEqual([...codes], ['funide-oa']);
   });
 
   it('does not drop apps when is_installed is omitted from API payload', () => {
@@ -92,7 +91,7 @@ describe('resolveEnabledDedicatedAppCodes', () => {
       ],
       catalog,
     );
-    expect([...codes]).toEqual(['funide-oa']);
+    assert.deepStrictEqual([...codes], ['funide-oa']);
   });
 });
 
@@ -105,7 +104,7 @@ describe('mergePlatformUpdateLogs', () => {
       ],
       [{ ...funideEntry, date: '2026-09-24' }],
     );
-    expect(merged.map((entry) => entry.id)).toEqual([
+    assert.deepStrictEqual(merged.map((entry) => entry.id), [
       'general-r01',
       'funide-r01',
       'general-old',
@@ -117,11 +116,11 @@ describe('filterPlatformUpdates dedicated tab', () => {
   const entries = [generalEntry, funideEntry];
 
   it('dedicated tab shows only dedicated entries', () => {
-    expect(filterPlatformUpdates('dedicated', entries).map((e) => e.id)).toEqual(['funide-r01']);
+    assert.deepStrictEqual(filterPlatformUpdates('dedicated', entries).map((e) => e.id), ['funide-r01']);
   });
 
   it('appends dedicated tab after type tabs when dedicated entries exist', () => {
-    expect(getAvailableUpdateLogTabs(entries)).toEqual([
+    assert.deepStrictEqual(getAvailableUpdateLogTabs(entries), [
       'all',
       'improvement',
       'fix',
@@ -130,7 +129,7 @@ describe('filterPlatformUpdates dedicated tab', () => {
   });
 
   it('omits dedicated tab when no dedicated entries in list', () => {
-    expect(getAvailableUpdateLogTabs([generalEntry])).toEqual(['all', 'fix']);
+    assert.deepStrictEqual(getAvailableUpdateLogTabs([generalEntry]), ['all', 'fix']);
   });
 });
 
@@ -139,12 +138,12 @@ describe('filterVisiblePlatformUpdates', () => {
 
   it('shows general entries when no dedicated app is enabled', () => {
     const visible = filterVisiblePlatformUpdates(entries, new Set());
-    expect(visible.map((e) => e.id)).toEqual(['general-r01']);
+    assert.deepStrictEqual(visible.map((e) => e.id), ['general-r01']);
   });
 
   it('shows only matching dedicated entries per enabled app', () => {
     const visible = filterVisiblePlatformUpdates(entries, new Set(['funide-oa']));
-    expect(visible.map((e) => e.id)).toEqual(['general-r01', 'funide-r01']);
+    assert.deepStrictEqual(visible.map((e) => e.id), ['general-r01', 'funide-r01']);
   });
 
   it('merges multiple enabled dedicated apps without cross-leak', () => {
@@ -152,6 +151,6 @@ describe('filterVisiblePlatformUpdates', () => {
       entries,
       new Set(['funide-oa', 'other-dedicated-app']),
     );
-    expect(visible.map((e) => e.id)).toEqual(['general-r01', 'funide-r01', 'other-dedicated-r01']);
+    assert.deepStrictEqual(visible.map((e) => e.id), ['general-r01', 'funide-r01', 'other-dedicated-r01']);
   });
 });

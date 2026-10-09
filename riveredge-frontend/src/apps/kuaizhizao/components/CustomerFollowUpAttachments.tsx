@@ -131,7 +131,7 @@ export const CustomerFollowUpAttachments: React.FC<CustomerFollowUpAttachmentsPr
         }}
         fileUuid={previewUuid}
         fileName={previewName}
-        fileExtension={previewName ? getFileExt(previewName) : undefined}
+        fileExtension={previewName ? getFileExt({ fileName: previewName }) : undefined}
         title={previewName}
       />
     </>

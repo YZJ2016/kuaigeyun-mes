@@ -387,7 +387,7 @@ export const InstallExecutionFormModal: React.FC<Props> = ({
                   const next = [...prev];
                   next[index] = {
                     ...next[index],
-                    planned_at: v ? v.format('YYYY-MM-DD HH:mm:ss') : undefined,
+                    planned_at: v && !Array.isArray(v) ? v.format('YYYY-MM-DD HH:mm:ss') : undefined,
                   };
                   return next;
                 });
@@ -411,7 +411,7 @@ export const InstallExecutionFormModal: React.FC<Props> = ({
                   const next = [...prev];
                   next[index] = {
                     ...next[index],
-                    actual_at: v ? v.format('YYYY-MM-DD HH:mm:ss') : undefined,
+                    actual_at: v && !Array.isArray(v) ? v.format('YYYY-MM-DD HH:mm:ss') : undefined,
                   };
                   return next;
                 });

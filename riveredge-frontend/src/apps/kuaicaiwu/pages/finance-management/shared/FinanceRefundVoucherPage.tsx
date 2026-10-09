@@ -581,7 +581,7 @@ const FinanceRefundVoucherPage: React.FC<Props> = ({ mode, columnPersistenceId }
 
   const columns: ProColumns<RefundVoucher>[] = useMemo(
     () =>
-      alignProColumns(
+      alignProColumns<RefundVoucher>(
         [
           ...financeDocCodePartnerSearchColumns({
             docCodeLabel: t(`${NS}.col.code`),

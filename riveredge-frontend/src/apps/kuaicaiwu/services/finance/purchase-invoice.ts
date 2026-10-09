@@ -9,6 +9,7 @@ import {
 const PURCHASE_INVOICE_API = '/apps/kuaicaiwu/purchase-invoices';
 
 export type PurchaseInvoicePullPreview = DocumentPushPreview & {
+  source_code?: string;
   source_type?: 'purchase_order' | 'purchase_receipt' | 'payable';
   supplier_id?: number;
   supplier_name?: string;

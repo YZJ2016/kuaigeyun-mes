@@ -205,7 +205,7 @@ const LoginLogsPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns = useMemo<ProColumns<LoginLog>[]>(() => alignProColumns([
+  const columns = useMemo<ProColumns<LoginLog>[]>(() => alignProColumns<LoginLog>([
     {
       title: t('pages.system.loginLogs.username'),
       dataIndex: 'username',

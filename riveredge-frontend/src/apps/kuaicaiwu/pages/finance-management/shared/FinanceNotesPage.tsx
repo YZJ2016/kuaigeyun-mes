@@ -279,7 +279,7 @@ const FinanceNotesPage: React.FC<Props> = ({ direction, resource, columnPersiste
             hideInSearch: true,
             render: (_, r) => statusTag(String(r.status)),
           },
-          ...financeDocCreatedUpdatedColumns(t),
+          ...financeDocCreatedUpdatedColumns<FinanceNote>(t),
           {
             title: t('common.actions'),
             key: 'action',

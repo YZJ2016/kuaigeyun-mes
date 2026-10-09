@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
 import { buildDataPolicySavePayload, defaultCustomPayloadForResource } from './dataPolicySave';
 import type { DataPermissionPolicy } from '../../../../services/role';
 
@@ -22,7 +23,7 @@ describe('buildDataPolicySavePayload', () => {
       batchScope: 'scope_all',
       grantedKeys: granted,
     });
-    expect(payload).toEqual([
+    assert.deepStrictEqual(payload, [
       { resource: 'app:a', scope_type: 'scope_all', scope_payload: undefined },
       { resource: 'app:b', scope_type: 'scope_all', scope_payload: undefined },
     ]);
@@ -36,7 +37,7 @@ describe('buildDataPolicySavePayload', () => {
       batchScope: 'scope_all',
       grantedKeys: granted,
     });
-    expect(payload).toEqual([
+    assert.deepStrictEqual(payload, [
       { resource: 'app:a', scope_type: 'scope_all', scope_payload: undefined },
       { resource: 'app:b', scope_type: 'scope_all', scope_payload: undefined },
     ]);
@@ -50,7 +51,7 @@ describe('buildDataPolicySavePayload', () => {
       batchScope: 'scope_self',
       grantedKeys: granted,
     });
-    expect(payload).toEqual([
+    assert.deepStrictEqual(payload, [
       { resource: 'app:a', scope_type: 'scope_self', scope_payload: undefined },
       { resource: 'app:b', scope_type: 'scope_self', scope_payload: undefined },
     ]);
@@ -64,24 +65,24 @@ describe('buildDataPolicySavePayload', () => {
       batchScope: 'scope_self',
       grantedKeys: granted,
     });
-    expect(payload).toEqual([
+    assert.deepStrictEqual(payload, [
       { resource: 'app:a', scope_type: 'scope_self', scope_payload: undefined },
       { resource: 'app:b', scope_type: 'scope_self', scope_payload: undefined },
     ]);
   });
 
   it('defaults acceptance custom payload to manufacturer partner scope', () => {
-    expect(defaultCustomPayloadForResource('haoligo:equipment-documents-acceptance')).toEqual({
+    assert.deepStrictEqual(defaultCustomPayloadForResource('haoligo:equipment-documents-acceptance'), {
       resolver: 'partner',
       dimension: 'manufacturer',
       code_field: 'manufacturer_code',
     });
-    expect(defaultCustomPayloadForResource('haoligo:injection-documents-acceptance')).toEqual({
+    assert.deepStrictEqual(defaultCustomPayloadForResource('haoligo:injection-documents-acceptance'), {
       resolver: 'partner',
       dimension: 'manufacturer',
       code_field: 'manufacturer_code',
     });
-    expect(defaultCustomPayloadForResource('haoligo:finance-equipment-contracts')).toEqual({
+    assert.deepStrictEqual(defaultCustomPayloadForResource('haoligo:finance-equipment-contracts'), {
       resolver: 'partner',
       dimension: 'manufacturer',
       code_field: 'manufacturer_code',
@@ -96,6 +97,6 @@ describe('buildDataPolicySavePayload', () => {
       batchScope: 'scope_self',
       grantedKeys: granted,
     });
-    expect(payload).toEqual([{ resource: 'app:a', scope_type: 'scope_all', scope_payload: undefined }]);
+    assert.deepStrictEqual(payload, [{ resource: 'app:a', scope_type: 'scope_all', scope_payload: undefined }]);
   });
 });

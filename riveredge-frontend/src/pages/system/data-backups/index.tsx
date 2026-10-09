@@ -613,7 +613,7 @@ const DataBackupsPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns = useMemo<ProColumns<DataBackup>[]>(() => alignProColumns([
+  const columns = useMemo<ProColumns<DataBackup>[]>(() => alignProColumns<DataBackup>([
     {
       // 名称长短不一：唯一 RemainderFlex
       title: t('pages.system.dataBackups.columnName'),

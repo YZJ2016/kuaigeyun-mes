@@ -329,7 +329,7 @@ const GlVouchersPage: React.FC = () => {
 
   const columns: ProColumns<GlVoucher>[] = useMemo(
     () =>
-      alignProColumns(
+      alignProColumns<GlVoucher>(
         [
           {
             title: t(`${NS}.col.voucherCode`),
