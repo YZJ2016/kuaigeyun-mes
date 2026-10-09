@@ -85,9 +85,12 @@ def _playwright_chromium_missing_hint(executable_path: str | None) -> str:
     return (
         f"未找到 Playwright Chromium（期望: {executable_path!r}）。"
         f"PLAYWRIGHT_BROWSERS_PATH={browsers_path}。"
-        "请在后端目录执行：uv run --extra pdf python -m playwright install chromium；"
-        "Linux 若仍启动失败再执行：uv run --extra pdf python -m playwright install-deps chromium。"
-        "并确认 deploy.env 未关闭 PLAYWRIGHT_POSTINSTALL_ENABLE，且 API 进程带有同一 PLAYWRIGHT_BROWSERS_PATH。"
+        "安装时必须导出与 API 相同的 PLAYWRIGHT_BROWSERS_PATH，否则会装到 ~/.cache/ms-playwright 而进程找不到。"
+        "示例：export PLAYWRIGHT_BROWSERS_PATH=/opt/kuaigeyun/.playwright-browsers；"
+        "若报 does not support … ubuntu26.04：再 export PLAYWRIGHT_HOST_PLATFORM_OVERRIDE=ubuntu24.04-x64；"
+        "然后：cd riveredge-backend && uv run --extra pdf python -m playwright install chromium；"
+        "Linux 缺库再：uv run --extra pdf python -m playwright install-deps chromium。"
+        "并确认 deploy.env 的 PLAYWRIGHT_BROWSERS_PATH 与 API 进程一致。"
     )
 
 
