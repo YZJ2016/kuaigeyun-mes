@@ -18,6 +18,7 @@ Author: Luigi Lu
 Date: 2026-01-27
 """
 
+import re
 from decimal import Decimal
 from typing import Dict, Any, List, Optional
 from loguru import logger
@@ -170,6 +171,10 @@ PARAMETER_REGISTRY_CATEGORY_META: Dict[str, Dict[str, str]] = {
     "master_data": {
         "labelKey": "pages.system.configCenter.category.master_data",
         "descriptionKey": "pages.system.configCenter.category.master_dataDesc",
+    },
+    "kuaiplm": {
+        "labelKey": "pages.system.configCenter.category.kuaiplm",
+        "descriptionKey": "pages.system.configCenter.category.kuaiplmDesc",
     },
 }
 
@@ -360,6 +365,8 @@ REGISTRY_PARAM_CONTROL_META: Dict[str, Dict[str, Any]] = {
     "parameters.work_order.picking_confirm_allowed_role_codes": {"type": "tags"},
     "parameters.work_order.picking_confirm_allowed_functional_domains": {"type": "multiselect"},
     "parameters.finance.gl_closed_periods": {"type": "object"},
+    "parameters.kuaiplm.lab_request_delegate_dept_uuids": {"type": "tags"},
+    "parameters.kuaiplm.lab_request_test_dept_uuids": {"type": "tags"},
 }
 
 
@@ -542,6 +549,8 @@ PARAMETER_KEYS = {
     "parameters.procurement.arrival_imminent_days",
     "parameters.automation.push_default_mode",
     "parameters.master_data.drawing_max_upload_size_mb",
+    "parameters.kuaiplm.lab_request_delegate_dept_uuids",
+    "parameters.kuaiplm.lab_request_test_dept_uuids",
 }
 
 # 已实装并在后端有明确生效点的配置项（用于前端禁用"假开关"）
@@ -623,6 +632,8 @@ IMPLEMENTED_PARAMETER_KEYS = {
     "parameters.planning.auto_push_sales_to_computation_on_approve",
     "parameters.automation.push_default_mode",
     "parameters.master_data.drawing_max_upload_size_mb",
+    "parameters.kuaiplm.lab_request_delegate_dept_uuids",
+    "parameters.kuaiplm.lab_request_test_dept_uuids",
 }
 
 # 默认仓管/生产领料确认角色
@@ -684,6 +695,45 @@ def coerce_master_data_parameters(master_data: Dict[str, Any]) -> Dict[str, Any]
     data = dict(master_data or {})
     data["drawing_max_upload_size_mb"] = coerce_drawing_max_upload_size_mb(
         data.get("drawing_max_upload_size_mb")
+    )
+    return data
+
+
+_UUID_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    re.IGNORECASE,
+)
+
+
+def coerce_uuid_string_list(raw: Any) -> list[str]:
+    """部门 UUID 白名单：仅保留合法 UUID 字符串；空/非法项丢弃。"""
+    if raw is None:
+        return []
+    if not isinstance(raw, (list, tuple)):
+        return []
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in raw:
+        if not isinstance(item, str):
+            continue
+        value = item.strip()
+        if not value or not _UUID_RE.match(value):
+            continue
+        key = value.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(value)
+    return out
+
+
+def coerce_kuaiplm_parameters(kuaiplm: Dict[str, Any]) -> Dict[str, Any]:
+    data = dict(kuaiplm or {})
+    data["lab_request_delegate_dept_uuids"] = coerce_uuid_string_list(
+        data.get("lab_request_delegate_dept_uuids")
+    )
+    data["lab_request_test_dept_uuids"] = coerce_uuid_string_list(
+        data.get("lab_request_test_dept_uuids")
     )
     return data
 
@@ -890,6 +940,10 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
     },
     "master_data": {
         "drawing_max_upload_size_mb": 100,
+    },
+    "kuaiplm": {
+        "lab_request_delegate_dept_uuids": [],
+        "lab_request_test_dept_uuids": [],
     },
     "finance": {
         "auto_write_off_precision_limit": 0,
@@ -1135,6 +1189,9 @@ class BusinessConfigService:
 
         if "master_data" in merged:
             merged["master_data"] = coerce_master_data_parameters(dict(merged["master_data"] or {}))
+
+        if "kuaiplm" in merged:
+            merged["kuaiplm"] = coerce_kuaiplm_parameters(dict(merged["kuaiplm"] or {}))
 
         strip_deprecated_parameters(merged)
         return {"parameters": merged}
@@ -1555,6 +1612,11 @@ class BusinessConfigService:
             business_config["parameters"]["master_data"] = coerce_master_data_parameters(
                 dict(business_config["parameters"].get("master_data") or {})
             )
+        if category == "kuaiplm":
+            business_config["parameters"]["kuaiplm"] = coerce_kuaiplm_parameters(
+                dict(business_config["parameters"].get("kuaiplm") or {})
+            )
+            value = business_config["parameters"]["kuaiplm"].get(parameter_key, value)
         if "finance" in business_config["parameters"]:
             business_config["parameters"]["finance"] = coerce_finance_parameter_dict(
                 business_config["parameters"]["finance"]
@@ -1605,6 +1667,10 @@ class BusinessConfigService:
         if "master_data" in business_config["parameters"]:
             business_config["parameters"]["master_data"] = coerce_master_data_parameters(
                 dict(business_config["parameters"]["master_data"] or {})
+            )
+        if "kuaiplm" in business_config["parameters"]:
+            business_config["parameters"]["kuaiplm"] = coerce_kuaiplm_parameters(
+                dict(business_config["parameters"]["kuaiplm"] or {})
             )
         if "finance" in business_config["parameters"]:
             business_config["parameters"]["finance"] = coerce_finance_parameter_dict(

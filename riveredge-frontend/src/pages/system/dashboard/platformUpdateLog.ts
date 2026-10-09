@@ -44,6 +44,99 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'kuaiplm-deliverable-issue-grants-audit-columns-r01',
+    date: '2026-10-10',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-deliverable-issue-grants-audit-columns-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-deliverable-issue-grants-audit-columns-r01.description',
+  },
+  {
+    id: 'kuaiplm-bom-collab-excel-import-r01',
+    date: '2026-10-10',
+    type: 'feature',
+    titleKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-bom-collab-excel-import-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-bom-collab-excel-import-r01.description',
+  },
+  {
+    id: 'sidebar-menu-query-path-specificity-r01',
+    date: '2026-10-10',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.sidebar-menu-query-path-specificity-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sidebar-menu-query-path-specificity-r01.description',
+  },
+  {
+    id: 'kuaiplm-rd-deliverable-issue-orm-register-r01',
+    date: '2026-10-10',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-rd-deliverable-issue-orm-register-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-rd-deliverable-issue-orm-register-r01.description',
+  },
+  {
+    id: 'lab-request-measure-requirement-attachments-r01',
+    date: '2026-10-10',
+    type: 'feature',
+    titleKey:
+      'pages.dashboard.updateLog.entries.lab-request-measure-requirement-attachments-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.lab-request-measure-requirement-attachments-r01.description',
+  },
+  {
+    id: 'lab-request-dept-scope-settings-r01',
+    date: '2026-10-10',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.lab-request-dept-scope-settings-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.lab-request-dept-scope-settings-r01.description',
+  },
+  {
+    id: 'dedicated-page-split-scan-r01',
+    date: '2026-10-10',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.dedicated-page-split-scan-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.dedicated-page-split-scan-r01.description',
+  },
+  {
+    id: 'drawing-main-file-beforeupload-r01',
+    date: '2026-10-10',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.drawing-main-file-beforeupload-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.drawing-main-file-beforeupload-r01.description',
+  },
+  {
+    id: 'install-execution-detail-row-undefined-r01',
+    date: '2026-10-09',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.install-execution-detail-row-undefined-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.install-execution-detail-row-undefined-r01.description',
+  },
+  {
+    id: 'wecom-mobile-oauth-refresh-loop-r01',
+    date: '2026-10-09',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.wecom-mobile-oauth-refresh-loop-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.wecom-mobile-oauth-refresh-loop-r01.description',
+  },
+  {
+    id: 'customer-follow-up-create-data-scope-r02',
+    date: '2026-10-09',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.customer-follow-up-create-data-scope-r02.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.customer-follow-up-create-data-scope-r02.description',
+  },
+  {
     id: 'pc-audit-unreview-empty-pending-r01',
     date: '2026-10-09',
     type: 'fix',

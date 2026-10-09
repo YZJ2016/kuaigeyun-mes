@@ -59,6 +59,17 @@ def _can_manage(permission_codes: Optional[Sequence[str]]) -> bool:
     return False
 
 
+def _normalize_software_item_code(value: object) -> Optional[str]:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    if len(text) != 12:
+        raise ValidationError("软件编码须为12位")
+    return text
+
+
 class ProductFirmwareService(AppBaseService[ProductFirmware]):
     code_field = "firmware_code"
     rule_code = "KUAI_PLM_PRODUCT_FIRMWARE_CODE"
@@ -243,6 +254,7 @@ class ProductFirmwareService(AppBaseService[ProductFirmware]):
 
         await self._ensure_firmware_file(tenant_id, data.get("file_uuid"))
 
+        software_item_code = _normalize_software_item_code(data.get("software_item_code"))
         row = ProductFirmware(
             tenant_id=tenant_id,
             firmware_code=data["firmware_code"],
@@ -252,6 +264,7 @@ class ProductFirmwareService(AppBaseService[ProductFirmware]):
             version=data["version"],
             title=data["title"],
             release_date=data.get("release_date"),
+            software_item_code=software_item_code,
             status="draft",
             file_uuid=data.get("file_uuid"),
             file_name=data.get("file_name"),
@@ -304,7 +317,11 @@ class ProductFirmwareService(AppBaseService[ProductFirmware]):
                 )
             )
         if keyword:
-            query = query.filter(title__icontains=keyword)
+            query = query.filter(
+                Q(title__icontains=keyword)
+                | Q(firmware_code__icontains=keyword)
+                | Q(software_item_code__icontains=keyword)
+            )
 
         # 先取候选再按 INF-05 过滤，再分页（固件量级可控）
         candidates = await query.order_by("-updated_at", "-id")
@@ -360,6 +377,8 @@ class ProductFirmwareService(AppBaseService[ProductFirmware]):
         if row.status not in {"draft", "pending"}:
             raise BusinessLogicError("仅草稿或待审固件可编辑")
         data = payload.model_dump(exclude_unset=True)
+        if "software_item_code" in data:
+            data["software_item_code"] = _normalize_software_item_code(data.get("software_item_code"))
         if "version" in data and data["version"] != row.version:
             clash_q = self._apply_same_project_scope(
                 ProductFirmware.filter(
@@ -626,6 +645,11 @@ class ProductFirmwareService(AppBaseService[ProductFirmware]):
         if not title:
             raise ValidationError("固件标题不能为空")
 
+        if "software_item_code" in data:
+            software_item_code = _normalize_software_item_code(data.get("software_item_code"))
+        else:
+            software_item_code = src.software_item_code
+
         row = ProductFirmware(
             tenant_id=tenant_id,
             firmware_code=await self._ensure_code(tenant_id, None),
@@ -635,6 +659,7 @@ class ProductFirmwareService(AppBaseService[ProductFirmware]):
             version=new_version,
             title=title,
             release_date=data.get("release_date") if "release_date" in data else None,
+            software_item_code=software_item_code,
             status="draft",
             file_uuid=file_uuid,
             file_name=file_name,

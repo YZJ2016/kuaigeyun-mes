@@ -9,6 +9,48 @@ import type { PlatformUpdateLogEntry } from './platformUpdateLog';
 
 export const PLATFORM_UPDATE_LOG_DEDICATED: PlatformUpdateLogEntry[] = [
   {
+    id: 'funide-oa-sample-process-menu-release-date-r01',
+    date: '2026-10-10',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey:
+      'pages.dashboard.updateLog.entries.funide-oa-sample-process-menu-release-date-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-sample-process-menu-release-date-r01.description',
+  },
+  {
+    id: 'funide-oa-product-firmware-software-item-code-r01',
+    date: '2026-10-10',
+    type: 'feature',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey:
+      'pages.dashboard.updateLog.entries.funide-oa-product-firmware-software-item-code-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-product-firmware-software-item-code-r01.description',
+  },
+  {
+    id: 'funide-oa-rd-electronics-menu-r04',
+    date: '2026-10-10',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-rd-electronics-menu-r04.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-rd-electronics-menu-r04.description',
+  },
+  {
+    id: 'funide-oa-rd-electronics-menu-r03',
+    date: '2026-10-10',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-rd-electronics-menu-r03.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-rd-electronics-menu-r03.description',
+  },
+  {
     id: 'funide-oa-l06-rework-direct-create-r01',
     date: '2026-10-08',
     type: 'improvement',

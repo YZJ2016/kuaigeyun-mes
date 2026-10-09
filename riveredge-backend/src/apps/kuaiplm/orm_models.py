@@ -5,6 +5,7 @@ ORM_MODEL_MODULES: list[str] = [
     "apps.kuaiplm.models.knowledge_base",
     "apps.kuaiplm.models.phase2",
     "apps.kuaiplm.models.rd_project",
+    "apps.kuaiplm.models.rd_project_deliverable_issue",
     "apps.kuaiplm.models.rd_project_deliverable_version",
     "apps.kuaiplm.models.rd_project_system_archive",
     "apps.kuaiplm.models.product_firmware",

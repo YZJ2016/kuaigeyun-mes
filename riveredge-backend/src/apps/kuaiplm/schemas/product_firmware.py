@@ -17,6 +17,7 @@ class ProductFirmwareCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
     release_date: Optional[date] = None
     firmware_code: Optional[str] = Field(None, max_length=50)
+    software_item_code: Optional[str] = Field(None, max_length=12, description="软件12位编码")
     file_uuid: Optional[str] = Field(None, max_length=36)
     file_name: Optional[str] = Field(None, max_length=200)
     checksum: Optional[str] = Field(None, max_length=128)
@@ -28,6 +29,7 @@ class ProductFirmwareReviseRequest(BaseModel):
     version: Optional[str] = Field(None, min_length=1, max_length=50)
     title: Optional[str] = Field(None, min_length=1, max_length=200)
     release_date: Optional[date] = None
+    software_item_code: Optional[str] = Field(None, max_length=12)
     file_uuid: Optional[str] = Field(None, max_length=36)
     file_name: Optional[str] = Field(None, max_length=200)
     checksum: Optional[str] = Field(None, max_length=128)
@@ -38,6 +40,7 @@ class ProductFirmwareUpdate(BaseModel):
     version: Optional[str] = Field(None, min_length=1, max_length=50)
     title: Optional[str] = Field(None, min_length=1, max_length=200)
     release_date: Optional[date] = None
+    software_item_code: Optional[str] = Field(None, max_length=12)
     file_uuid: Optional[str] = Field(None, max_length=36)
     file_name: Optional[str] = Field(None, max_length=200)
     checksum: Optional[str] = Field(None, max_length=128)
@@ -57,6 +60,7 @@ class ProductFirmwareResponse(BaseModel):
     version: str
     title: str
     release_date: Optional[date] = None
+    software_item_code: Optional[str] = None
     status: str
     file_uuid: Optional[str] = None
     file_name: Optional[str] = None

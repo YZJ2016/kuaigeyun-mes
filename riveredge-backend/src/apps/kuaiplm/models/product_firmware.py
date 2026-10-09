@@ -27,6 +27,11 @@ class ProductFirmware(BaseModel):
     version = fields.CharField(max_length=50, description="固件版本号")
     release_date = fields.DateField(null=True, description="发布日期")
     title = fields.CharField(max_length=200, description="固件标题")
+    software_item_code = fields.CharField(
+        max_length=12,
+        null=True,
+        description="软件料号/12位编码（定制页展示）",
+    )
     status = fields.CharField(
         max_length=20,
         default="draft",

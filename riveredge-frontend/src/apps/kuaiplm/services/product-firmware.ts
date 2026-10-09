@@ -23,6 +23,7 @@ export interface ProductFirmware {
   version: string;
   title: string;
   release_date?: string | null;
+  software_item_code?: string | null;
   status: ProductFirmwareStatus;
   file_uuid?: string | null;
   file_name?: string | null;
@@ -47,6 +48,7 @@ export interface ProductFirmwarePayload {
   title: string;
   release_date?: string | null;
   firmware_code?: string;
+  software_item_code?: string | null;
   file_uuid?: string | null;
   file_name?: string | null;
   checksum?: string | null;

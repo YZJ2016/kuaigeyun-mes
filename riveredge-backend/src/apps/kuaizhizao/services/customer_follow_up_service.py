@@ -25,7 +25,10 @@ from apps.kuaizhizao.schemas.customer_follow_up import (
     SalesTeamMemberStat,
     SalesTeamSnapshot,
 )
-from apps.kuaizhizao.services.customer_pool_list_core import customer_pool_mine_scope_q
+from apps.kuaizhizao.services.customer_pool_list_core import (
+    customer_pool_effective_public_q,
+    customer_pool_mine_scope_q,
+)
 from apps.kuaizhizao.services.customer_pool_service import list_collaborator_customer_ids
 from apps.kuaizhizao.schemas.sales_opportunity import SalesOpportunityEnsure
 from apps.kuaizhizao.services.sales_opportunity_service import SalesOpportunityService
@@ -146,12 +149,17 @@ class CustomerFollowUpService:
         if not customer:
             raise NotFoundError(f"客户不存在: {customer_id}")
         if current_user:
-            await DataScopeService.assert_row_visible(
+            visible = await DataScopeService.row_visible(
                 customer,
                 tenant_id=tenant_id,
                 user=current_user,
                 resource=RESOURCE_CUSTOMER_FOLLOW_UP_CUSTOMER,
             )
+            if not visible:
+                # 与跟进表单客户下拉同一 scope；勿用笼统「权限不足」误导为功能码缺失
+                raise ValidationError(
+                    "仅可对本人负责、协作或未归属（公海）的客户添加跟进；他人已归属客户不可跟进"
+                )
         return customer
 
     @staticmethod
@@ -247,12 +255,14 @@ class CustomerFollowUpService:
         user_id: int,
         market_scope: Optional[str] = None,
     ) -> List[int]:
+        """可跟进客户：本人负责、协作、无明确归属（公海）。"""
         collab_ids = await list_collaborator_customer_ids(tenant_id, user_id)
         query = Customer.filter(tenant_id=tenant_id, deleted_at__isnull=True).filter(
             customer_pool_mine_scope_q(
                 current_user_id=user_id,
                 collaborator_customer_ids=collab_ids,
             )
+            | customer_pool_effective_public_q()
         )
         scope = str(market_scope or "").strip().lower()
         if scope:

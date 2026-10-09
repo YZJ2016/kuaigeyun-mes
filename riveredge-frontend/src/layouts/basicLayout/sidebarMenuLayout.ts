@@ -145,45 +145,93 @@ export function menuItemKey(item: MenuDataItem): string {
 
 /**
  * 菜单 path 可含 query（如 /apps/…/day-register?mode=rest）。
- * 与 location.pathname + search 对齐；无 query 的菜单项只比 pathname。
+ * 匹配得分：-1 不匹配；0 仅 pathname（无 query 菜单）；>0 为命中的 query 参数个数。
+ * 同 pathname 多入口（如交付物 vs 交付物?preset=electronics）时取最高分，避免无 query 项抢走选中态。
  */
+export function menuPathMatchScore(
+  menuPath: string | undefined | null,
+  pathname: string,
+  search = '',
+): number {
+  if (!menuPath) return -1;
+  const qIndex = menuPath.indexOf('?');
+  const pathPart = qIndex >= 0 ? menuPath.slice(0, qIndex) : menuPath;
+  if (pathPart !== pathname) return -1;
+  if (qIndex < 0) return 0;
+  const required = new URLSearchParams(menuPath.slice(qIndex + 1));
+  const actual = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search);
+  let matched = 0;
+  for (const [key, value] of required.entries()) {
+    if (actual.get(key) !== value) return -1;
+    matched += 1;
+  }
+  return matched;
+}
+
 export function menuPathMatchesLocation(
   menuPath: string | undefined | null,
   pathname: string,
   search = '',
 ): boolean {
-  if (!menuPath) return false;
-  const qIndex = menuPath.indexOf('?');
-  const pathPart = qIndex >= 0 ? menuPath.slice(0, qIndex) : menuPath;
-  if (pathPart !== pathname) return false;
-  if (qIndex < 0) return true;
-  const required = new URLSearchParams(menuPath.slice(qIndex + 1));
-  const actual = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search);
-  for (const [key, value] of required.entries()) {
-    if (actual.get(key) !== value) return false;
-  }
-  return true;
+  return menuPathMatchScore(menuPath, pathname, search) >= 0;
 }
 
-function treeContainsPath(items: MenuDataItem[], pathname: string, search = ''): boolean {
-  for (const item of items) {
-    if (menuPathMatchesLocation(item.path, pathname, search)) return true;
-    if (item.children?.length && treeContainsPath(item.children, pathname, search)) return true;
-  }
-  return false;
+export type BestMenuMatch = {
+  item: MenuDataItem;
+  /** 不含叶子自身的祖先 key */
+  ancestorKeys: string[];
+  /** 含叶子到根的完整链（用于面包屑） */
+  chain: MenuDataItem[];
+  score: number;
+};
+
+/** 在整棵菜单树中找与当前路由匹配度最高的项（query 约束越多越优先） */
+export function findBestMenuMatch(
+  items: MenuDataItem[],
+  pathname: string,
+  search = '',
+): BestMenuMatch | null {
+  const holder: { best: BestMenuMatch | null } = { best: null };
+
+  const walk = (nodes: MenuDataItem[], ancestors: MenuDataItem[], ancestorKeys: string[]) => {
+    for (const node of nodes) {
+      const key = menuItemKey(node);
+      const chain = [...ancestors, node];
+      const score = menuPathMatchScore(node.path, pathname, search);
+      if (score >= 0 && (!holder.best || score > holder.best.score)) {
+        holder.best = { item: node, ancestorKeys, chain, score };
+      }
+      if (node.children?.length) {
+        walk(node.children, chain, key ? [...ancestorKeys, key] : ancestorKeys);
+      }
+    }
+  };
+
+  walk(items, [], []);
+  return holder.best;
 }
 
 export function findActiveRootKey(roots: MenuDataItem[], currentPath: string, search = ''): string {
+  let bestKey = '';
+  let bestScore = -1;
   for (const root of roots) {
     const key = menuItemKey(root);
     if (!key) continue;
-    if (menuPathMatchesLocation(root.path, currentPath, search)) return key;
-    if (root.children?.length && treeContainsPath(root.children, currentPath, search)) {
-      return key;
+    const rootScore = menuPathMatchScore(root.path, currentPath, search);
+    const childBest = root.children?.length
+      ? findBestMenuMatch(root.children, currentPath, search)
+      : null;
+    const score = Math.max(rootScore, childBest?.score ?? -1);
+    if (score > bestScore) {
+      bestScore = score;
+      bestKey = key;
     }
   }
-  const first = roots[0];
-  return first ? menuItemKey(first) : '';
+  if (bestScore < 0) {
+    const first = roots[0];
+    return first ? menuItemKey(first) : '';
+  }
+  return bestKey;
 }
 
 export function findFirstLeafPath(items: MenuDataItem[]): string | undefined {

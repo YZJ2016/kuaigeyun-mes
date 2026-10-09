@@ -24,6 +24,10 @@ CREATE TABLE IF NOT EXISTS "apps_kuaioa_form_request_issue_grants" (
     "target_label" VARCHAR(200),
     "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "created_by" INT,
+    "created_by_name" VARCHAR(100),
+    "updated_by" INT,
+    "updated_by_name" VARCHAR(100),
     "deleted_at" TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS "idx_kuaioa_fr_issue_grants_tenant_request"

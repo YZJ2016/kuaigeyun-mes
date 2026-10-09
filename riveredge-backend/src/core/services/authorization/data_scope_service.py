@@ -221,6 +221,22 @@ class DataScopeService:
         if scope == DataScopeType.ALL:
             return None
 
+        if scope == DataScopeType.SELF:
+            self_resolver_name = (getattr(profile, "self_scope_resolver", None) or "").strip().lower()
+            if self_resolver_name:
+                custom_self = get_scope_resolver(self_resolver_name)
+                if custom_self is not None:
+                    ctx = ScopeResolveContext(
+                        tenant_id=tenant_id,
+                        user_id=user.id,
+                        resource=resource,
+                        profile=profile,
+                        scope_payload=None,
+                        department_uuid=dept_uuid,
+                        department_user_ids=dept_user_ids,
+                    )
+                    return await custom_self(ctx)
+
         if scope in BUILTIN_SCOPE_RESOLVERS:
             ctx = ScopeResolveContext(
                 tenant_id=tenant_id,

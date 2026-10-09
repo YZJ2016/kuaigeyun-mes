@@ -1,6 +1,7 @@
 """快格轻制造 - 注册数据范围资源画像（启动时调用一次）。"""
 
 from core.services.authorization.data_scope_constants import (
+    RESOLVER_CUSTOMER_FOLLOWABLE_VIA_CUSTOMER_ID,
     RESOLVER_CUSTOMER_OWNED_ONLY,
     RESOLVER_CUSTOMER_OWNED_VIA_CUSTOMER_ID,
     RESOLVER_CUSTOMER_SALESMAN_POOL,
@@ -8,6 +9,7 @@ from core.services.authorization.data_scope_constants import (
 from core.services.authorization.data_scope_resource_registry import (
     DataScopeResourceProfile,
     register_data_scope_function_grant_source,
+    register_host_reference_data_scope,
     register_resource_profile,
 )
 
@@ -36,10 +38,25 @@ _CUSTOMER_CHILD_DOC_PROFILE = DataScopeResourceProfile(
     no_policy_default_resolver=RESOLVER_CUSTOMER_OWNED_VIA_CUSTOMER_ID,
 )
 
+_CUSTOMER_FOLLOWABLE_CHILD_DOC_PROFILE = DataScopeResourceProfile(
+    applicant_user_id_field="created_by",
+    created_by_user_id_field="created_by",
+    department_uuid_field=None,
+    no_policy_default_resolver=RESOLVER_CUSTOMER_FOLLOWABLE_VIA_CUSTOMER_ID,
+)
+
 _CUSTOMER_OWNED_PARENT_PROFILE = DataScopeResourceProfile(
     applicant_user_id_field="salesman_id",
     department_uuid_field=None,
     no_policy_default_resolver=RESOLVER_CUSTOMER_OWNED_ONLY,
+    self_scope_resolver=RESOLVER_CUSTOMER_OWNED_ONLY,
+)
+
+_CUSTOMER_FOLLOWABLE_PARENT_PROFILE = DataScopeResourceProfile(
+    applicant_user_id_field="salesman_id",
+    department_uuid_field=None,
+    no_policy_default_resolver=RESOLVER_CUSTOMER_SALESMAN_POOL,
+    self_scope_resolver=RESOLVER_CUSTOMER_SALESMAN_POOL,
 )
 
 _CUSTOMER_POOL_PROFILE = DataScopeResourceProfile(
@@ -77,18 +94,31 @@ def register_kuaizhizao_data_scope_profiles() -> None:
     for resource in _KUAIZHIZAO_SALES_CHILD_VIA_ORDER_RESOURCES:
         register_resource_profile(resource, _KUAIZHIZAO_SALES_DOC_PROFILE)
     register_resource_profile("kuaizhizao:customer-pool", _CUSTOMER_POOL_PROFILE)
-    register_resource_profile("kuaizhizao:customer-follow-up", _CUSTOMER_CHILD_DOC_PROFILE)
+    register_resource_profile("kuaizhizao:customer-follow-up", _CUSTOMER_FOLLOWABLE_CHILD_DOC_PROFILE)
     register_resource_profile("kuaizhizao:after-sales-ticket", _CUSTOMER_CHILD_DOC_PROFILE)
     register_resource_profile("kuaizhizao:sales-opportunity", _CUSTOMER_CHILD_DOC_PROFILE)
-    register_resource_profile("kuaizhizao:customer-follow-up-customer", _CUSTOMER_OWNED_PARENT_PROFILE)
+    register_resource_profile(
+        "kuaizhizao:customer-follow-up-customer",
+        _CUSTOMER_FOLLOWABLE_PARENT_PROFILE,
+    )
     register_data_scope_function_grant_source(
         "kuaizhizao:customer-follow-up-customer",
         "kuaizhizao:customer-follow-up",
+    )
+    register_host_reference_data_scope(
+        "master-data:supply-chain:customer",
+        "kuaizhizao:customer-follow-up",
+        "kuaizhizao:customer-follow-up-customer",
     )
     register_resource_profile("kuaizhizao:after-sales-ticket-customer", _CUSTOMER_OWNED_PARENT_PROFILE)
     register_data_scope_function_grant_source(
         "kuaizhizao:after-sales-ticket-customer",
         "kuaizhizao:after-sales-ticket",
+    )
+    register_host_reference_data_scope(
+        "master-data:supply-chain:customer",
+        "kuaizhizao:after-sales-ticket",
+        "kuaizhizao:after-sales-ticket-customer",
     )
     register_resource_profile("kuaizhizao:sales-contract", _KUAIZHIZAO_SALES_DOC_PROFILE)
     register_resource_profile("kuaizhizao:purchase-order", _KUAIZHIZAO_PURCHASE_DOC_PROFILE)

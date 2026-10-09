@@ -7,6 +7,7 @@ from tortoise.expressions import Q
 from core.models.data_permission_policy import DataScopeType
 from core.services.authorization.data_scope_constants import (
     DIMENSION_OUTSOURCED_UNIT,
+    RESOLVER_CUSTOMER_FOLLOWABLE_VIA_CUSTOMER_ID,
     RESOLVER_CUSTOMER_OWNED_ONLY,
     RESOLVER_CUSTOMER_OWNED_VIA_CUSTOMER_ID,
     RESOLVER_CUSTOMER_SALESMAN_POOL,
@@ -101,42 +102,76 @@ async def _resolve_outsourced_unit(ctx: ScopeResolveContext) -> Q:
 
 
 async def resolve_customer_salesman_pool(ctx: ScopeResolveContext) -> Q:
-    """客户默认可见性：归属业务员 + 公海 + 协作客户。"""
+    """客户默认可跟进/可见：本人负责 + 协作 + 无明确归属（公海）。"""
+    from apps.kuaizhizao.services.customer_pool_list_core import (
+        customer_pool_effective_public_q,
+        customer_pool_mine_scope_q,
+    )
     from apps.kuaizhizao.services.customer_pool_service import list_collaborator_customer_ids
 
-    field = ctx.profile.applicant_user_id_field or "salesman_id"
-    clause = Q(**{field: ctx.user_id}) | Q(pool_status="pool")
     collab_ids = await list_collaborator_customer_ids(ctx.tenant_id, ctx.user_id)
-    if collab_ids:
-        clause |= Q(id__in=collab_ids)
-    return clause
+    return customer_pool_mine_scope_q(
+        current_user_id=ctx.user_id,
+        collaborator_customer_ids=collab_ids,
+    ) | customer_pool_effective_public_q()
 
 
 async def resolve_customer_owned_only(ctx: ScopeResolveContext) -> Q:
-    """客户归属业务员或协作人（非公海），用于跟进/商机父客户校验。"""
-    from apps.kuaizhizao.services.customer_pool_list_core import customer_pool_effective_owned_q
+    """
+    本人负责或协作的客户（不含公海），用于售后等须已归属父客户的场景。
+    与客户池「我的」一致：以 salesman_id / 协作关系为准，不依赖 pool_status 脏数据。
+    """
+    from apps.kuaizhizao.services.customer_pool_list_core import customer_pool_mine_scope_q
     from apps.kuaizhizao.services.customer_pool_service import list_collaborator_customer_ids
 
-    field = ctx.profile.applicant_user_id_field or "salesman_id"
     collab_ids = await list_collaborator_customer_ids(ctx.tenant_id, ctx.user_id)
-    owned_clause = Q(**{field: ctx.user_id})
-    if collab_ids:
-        owned_clause |= Q(id__in=collab_ids)
-    return owned_clause & customer_pool_effective_owned_q()
+    return customer_pool_mine_scope_q(
+        current_user_id=ctx.user_id,
+        collaborator_customer_ids=collab_ids,
+    )
 
 
 async def resolve_customer_owned_via_customer_id(ctx: ScopeResolveContext) -> Q:
-    """子表通过 customer_id 关联 owned 客户（负责人或协作人）。"""
-    from apps.kuaizhizao.services.customer_pool_list_core import customer_pool_effective_owned_q
+    """子表通过 customer_id 关联本人负责或协作的客户。"""
     from apps.master_data.models.customer import Customer
+    from apps.kuaizhizao.services.customer_pool_list_core import customer_pool_mine_scope_q
     from apps.kuaizhizao.services.customer_pool_service import list_collaborator_customer_ids
 
     collab_ids = await list_collaborator_customer_ids(ctx.tenant_id, ctx.user_id)
     customer_query = Customer.filter(
         tenant_id=ctx.tenant_id,
         deleted_at__isnull=True,
-    ).filter(customer_pool_effective_owned_q()).filter(
-        Q(salesman_id=ctx.user_id) | Q(id__in=collab_ids) if collab_ids else Q(salesman_id=ctx.user_id)
+    ).filter(
+        customer_pool_mine_scope_q(
+            current_user_id=ctx.user_id,
+            collaborator_customer_ids=collab_ids,
+        )
+    )
+    ids = await customer_query.values_list("id", flat=True)
+    if not ids:
+        return Q(id=-1)
+    return Q(customer_id__in=list(ids))
+
+
+async def resolve_customer_followable_via_customer_id(ctx: ScopeResolveContext) -> Q:
+    """子表通过 customer_id 关联可跟进客户（本人/协作/无明确归属）。"""
+    from apps.master_data.models.customer import Customer
+    from apps.kuaizhizao.services.customer_pool_list_core import (
+        customer_pool_effective_public_q,
+        customer_pool_mine_scope_q,
+    )
+    from apps.kuaizhizao.services.customer_pool_service import list_collaborator_customer_ids
+
+    collab_ids = await list_collaborator_customer_ids(ctx.tenant_id, ctx.user_id)
+    customer_query = Customer.filter(
+        tenant_id=ctx.tenant_id,
+        deleted_at__isnull=True,
+    ).filter(
+        customer_pool_mine_scope_q(
+            current_user_id=ctx.user_id,
+            collaborator_customer_ids=collab_ids,
+        )
+        | customer_pool_effective_public_q()
     )
     ids = await customer_query.values_list("id", flat=True)
     if not ids:
@@ -150,6 +185,10 @@ def register_builtin_scope_resolvers() -> None:
     register_scope_resolver(RESOLVER_CUSTOMER_SALESMAN_POOL, resolve_customer_salesman_pool)
     register_scope_resolver(RESOLVER_CUSTOMER_OWNED_ONLY, resolve_customer_owned_only)
     register_scope_resolver(RESOLVER_CUSTOMER_OWNED_VIA_CUSTOMER_ID, resolve_customer_owned_via_customer_id)
+    register_scope_resolver(
+        RESOLVER_CUSTOMER_FOLLOWABLE_VIA_CUSTOMER_ID,
+        resolve_customer_followable_via_customer_id,
+    )
 
 
 BUILTIN_SCOPE_RESOLVERS = {
