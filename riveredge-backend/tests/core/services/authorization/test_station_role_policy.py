@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from apps.master_data.api._master_data_route_access import resolve_master_data_required_codes
 from core.schemas.role import RoleUpdate
 from core.schemas.user import UserCreate, UserUpdate
 from core.services.authorization import role_service as role_service_module
@@ -88,11 +89,13 @@ def test_is_station_role_type_normalizes():
 def _install_load_preset_mocks(monkeypatch):
     existing_codes: set[str] = set()
     created: list[dict] = []
+    roles: dict[str, MagicMock] = {}
 
     def _role_filter(**kwargs):
         qs = _qs()
         code = kwargs.get("code")
         qs.exists = AsyncMock(return_value=(code in existing_codes) if code else False)
+        qs.first = AsyncMock(return_value=roles.get(code))
         return qs
 
     async def _role_create(**kwargs):
@@ -102,9 +105,10 @@ def _install_load_preset_mocks(monkeypatch):
         role.id = 100 + len(created)
         role.code = kwargs["code"]
         role.role_type = kwargs["role_type"]
+        roles[role.code] = role
         return role
 
-    assign = AsyncMock()
+    assign = AsyncMock(return_value=0)
     monkeypatch.setattr(role_service_module.Role, "filter", _role_filter)
     monkeypatch.setattr(
         role_service_module.Role, "create", AsyncMock(side_effect=_role_create)
@@ -124,6 +128,21 @@ def test_station_terminal_preset_definition():
     assert "kuaizhizao:production-execution-reporting:assign" not in explicit
     assert "kuaizhizao:production-execution-terminal:read" in explicit
     assert "kuaizhizao:production-execution-terminal:execute" in explicit
+    assert "master-data:factory:workshop:read" in explicit
+    assert "master-data:process:sop:read" in explicit
+
+
+@pytest.mark.parametrize(
+    "module_code,path",
+    [
+        ("factory", "/apps/master-data/factory/workshops"),
+        ("process", "/apps/master-data/process/sop"),
+    ],
+)
+def test_station_preset_covers_reference_reads(module_code, path):
+    required = resolve_master_data_required_codes(module_code, "GET", path)
+    granted = RoleService.PRESET_ROLE_EXPLICIT_PERMISSION_CODES["STATION_TERMINAL"]
+    assert set(required).intersection(granted)
 
 
 @pytest.mark.asyncio
@@ -141,6 +160,53 @@ async def test_load_preset_creates_station_terminal(monkeypatch):
     assert created[0]["functional_domain"] == "production"
     assert created[0]["home_path"] == STATION_HOME_PATH
     assign.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_load_preset_backfills_existing_station_permissions(monkeypatch):
+    _, created, assign = _install_load_preset_mocks(monkeypatch)
+    await RoleService.load_preset_sme(tenant_id=1, current_user_id=1, codes=["STATION_TERMINAL"])
+    assign.reset_mock()
+    assign.return_value = 2
+    bump = AsyncMock()
+    bump_users = AsyncMock()
+    monkeypatch.setattr(role_service_module.PermissionVersionService, "bump", bump)
+    monkeypatch.setattr(RoleService, "_bump_role_users_permission_version", bump_users)
+
+    count = await RoleService.load_preset_sme(
+        tenant_id=1, current_user_id=1, codes=["STATION_TERMINAL"]
+    )
+
+    assert count == 0
+    assert len(created) == 1
+    assign.assert_awaited_once()
+    assert assign.await_args.kwargs["role"].code == "STATION_TERMINAL"
+    assert assign.await_args.kwargs["only_codes"] == frozenset({
+        "master-data:factory:workshop:read",
+        "master-data:process:sop:read",
+    })
+    bump.assert_awaited_once_with(tenant_id=1, user_id=None)
+    bump_users.assert_awaited_once_with(role_id=101, tenant_id=1)
+
+    assign.return_value = 0
+    await RoleService.load_preset_sme(tenant_id=1, current_user_id=1, codes=["STATION_TERMINAL"])
+    assert bump.await_count == 1
+    assert bump_users.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_load_preset_does_not_backfill_non_station_role(monkeypatch):
+    _, _, assign = _install_load_preset_mocks(monkeypatch)
+    await RoleService.load_preset_sme(tenant_id=1, current_user_id=1, codes=["STATION_TERMINAL"])
+    assign.await_args.kwargs["role"].role_type = "internal"
+    assign.reset_mock()
+
+    count = await RoleService.load_preset_sme(
+        tenant_id=1, current_user_id=1, codes=["STATION_TERMINAL"]
+    )
+
+    assert count == 0
+    assign.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -174,6 +240,8 @@ async def test_station_preset_permissions_explicit_only(monkeypatch):
         "master-data:factory:work-group:read",
         "master-data:factory:workstation:read",
         "master-data:factory:production-line:read",
+        "master-data:factory:workshop:read",
+        "master-data:process:sop:read",
         "system:user:display",
         *sorted(PermissionRegistryService.BASELINE_PERMISSION_CODES),
     ]
@@ -206,10 +274,11 @@ async def test_station_preset_permissions_explicit_only(monkeypatch):
     monkeypatch.setattr(
         "core.models.role_permission.RolePermission", fake_role_permission_cls
     )
+    quality_sync = AsyncMock(return_value=0)
     monkeypatch.setattr(
         PermissionSyncService,
         "ensure_quality_inspection_execute_grants",
-        AsyncMock(return_value=0),
+        quality_sync,
     )
 
     role = _role(9, "station", code="STATION_TERMINAL")
@@ -228,7 +297,27 @@ async def test_station_preset_permissions_explicit_only(monkeypatch):
         "master-data:factory:work-group:read",
         "master-data:factory:workstation:read",
         "master-data:factory:production-line:read",
+        "master-data:factory:workshop:read",
+        "master-data:process:sop:read",
         "system:user:display",
+        *PermissionRegistryService.BASELINE_PERMISSION_CODES,
+    }
+
+    bulk_create.reset_mock()
+    added = await RoleService._assign_preset_permissions(
+        tenant_id=1,
+        role=role,
+        only_codes=frozenset({
+            "master-data:factory:workshop:read",
+            "master-data:process:sop:read",
+        }),
+    )
+    backfilled_ids = {rp.permission_id for rp in bulk_create.await_args.args[0]}
+    assert added == len(backfilled_ids)
+    quality_sync.assert_awaited_once()
+    assert {code_by_id[i] for i in backfilled_ids} == {
+        "master-data:factory:workshop:read",
+        "master-data:process:sop:read",
         *PermissionRegistryService.BASELINE_PERMISSION_CODES,
     }
 
