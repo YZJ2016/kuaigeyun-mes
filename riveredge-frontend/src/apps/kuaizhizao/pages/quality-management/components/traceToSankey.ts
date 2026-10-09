@@ -237,6 +237,10 @@ export function promoteSameRankSankeyLinks(links: TraceSankeyLink[]): TraceSanke
   return current;
 }
 
+/**
+ * 去掉有向环边。用显式栈迭代 DFS，避免长链/深图递归爆栈
+ * （生产双向追溯报工链可达上千节点，递归 dfs 会 Maximum call stack size exceeded）。
+ */
 export function dropDirectedSankeyCycles(links: TraceSankeyLink[]): TraceSankeyLink[] {
   const adj = new Map<string, string[]>();
   for (const link of links) {
@@ -249,18 +253,38 @@ export function dropDirectedSankeyCycles(links: TraceSankeyLink[]): TraceSankeyL
   const visited = new Set<string>();
   const blocked = new Set<string>();
 
-  const dfs = (node: string): void => {
-    visiting.add(node);
-    for (const next of adj.get(node) ?? []) {
-      const edgeKey = `${node}\0${next}`;
-      if (visiting.has(next)) {
-        blocked.add(edgeKey);
+  const visitIterative = (start: string): void => {
+    const stack: Array<{ node: string; edgeIndex: number; entered: boolean }> = [
+      { node: start, edgeIndex: 0, entered: false },
+    ];
+    while (stack.length > 0) {
+      const frame = stack[stack.length - 1];
+      if (!frame.entered) {
+        if (visited.has(frame.node)) {
+          stack.pop();
+          continue;
+        }
+        visiting.add(frame.node);
+        frame.entered = true;
+      }
+      const neighbors = adj.get(frame.node) ?? [];
+      if (frame.edgeIndex < neighbors.length) {
+        const next = neighbors[frame.edgeIndex];
+        frame.edgeIndex += 1;
+        const edgeKey = `${frame.node}\0${next}`;
+        if (visiting.has(next)) {
+          blocked.add(edgeKey);
+          continue;
+        }
+        if (!visited.has(next)) {
+          stack.push({ node: next, edgeIndex: 0, entered: false });
+        }
         continue;
       }
-      if (!visited.has(next)) dfs(next);
+      visiting.delete(frame.node);
+      visited.add(frame.node);
+      stack.pop();
     }
-    visiting.delete(node);
-    visited.add(node);
   };
 
   const nodes = new Set<string>();
@@ -269,7 +293,7 @@ export function dropDirectedSankeyCycles(links: TraceSankeyLink[]): TraceSankeyL
     nodes.add(link.target);
   }
   for (const node of nodes) {
-    if (!visited.has(node)) dfs(node);
+    if (!visited.has(node)) visitIterative(node);
   }
 
   return links.filter((link) => !blocked.has(`${link.source}\0${link.target}`));

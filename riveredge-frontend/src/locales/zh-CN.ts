@@ -30198,6 +30198,10 @@ export default {
     '登录地点广州等城市不再截成单字',
   'pages.dashboard.updateLog.entries.login-log-location-zhou-suffix-r01.description':
     'IP 解析去行政区后缀时误把「州」当成尾缀，导致「广州」显示成「广」。现已保留两字市名，并优先识别「自治州」等完整后缀。',
+  'pages.dashboard.updateLog.entries.traceability-sankey-stack-overflow-r01.title':
+    '追溯管理导出/看图不再拖垮快制造',
+  'pages.dashboard.updateLog.entries.traceability-sankey-stack-overflow-r01.description':
+    '双向追溯节点链过长或成环时，桑基/流程图去环改为迭代算法并隔离图表错误，避免 Maximum call stack size exceeded 导致整个快制造应用加载失败；导出报告失败信息也会截断展示。',
   'pages.dashboard.updateLog.entries.customer-follow-up-create-data-scope-r01.title':
     '客户跟进新建不再误报权限不足',
   'pages.dashboard.updateLog.entries.customer-follow-up-create-data-scope-r01.description':

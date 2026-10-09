@@ -41,6 +41,7 @@ import {
 } from '../components/inspectionTemplateUtils';
 import { renderQualityQualityStatusTag } from '../components/qualityMeta';
 import TraceSankeyChart from '../components/TraceSankeyChart';
+import { dropDirectedSankeyCycles } from '../components/traceToSankey';
 import { traceabilityApi, type TraceDirection, type TraceProfile } from '../../../services/traceability';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { formatDateTimeBySiteSetting } from '../../../../../utils/format';
@@ -178,12 +179,20 @@ const TraceabilityPage: React.FC<TraceabilityPageProps> = ({
       };
     });
 
-    const edges = (data.edges || []).reduce<Array<{ source: string; target: string }>>((acc, e) => {
-      const key = `${e.source}\n${e.target}`;
-      if (acc.some((x) => `${x.source}\n${x.target}` === key)) return acc;
-      acc.push({ source: e.source, target: e.target });
-      return acc;
-    }, []);
+    // 去重 + 去环：dagre 遇有向环也会递归爆栈（与桑基图同类问题）
+    const rawEdges = (data.edges || []).reduce<Array<{ source: string; target: string }>>(
+      (acc, e) => {
+        if (!e.source || !e.target || e.source === e.target) return acc;
+        const key = `${e.source}\n${e.target}`;
+        if (acc.some((x) => `${x.source}\n${x.target}` === key)) return acc;
+        acc.push({ source: e.source, target: e.target });
+        return acc;
+      },
+      [],
+    );
+    const edges = dropDirectedSankeyCycles(
+      rawEdges.map((e) => ({ ...e, value: 1 })),
+    ).map(({ source, target }) => ({ source, target }));
 
     const flowKey = `${searchCode}-${direction}-${nodes.length}-${edges.length}`;
 

@@ -60,6 +60,20 @@ describe('traceToSankey', () => {
     expect(acyclic.length).toBe(2);
   });
 
+  it('handles long chains without call-stack overflow', () => {
+    const n = 4000;
+    const links = Array.from({ length: n }, (_, i) => ({
+      source: `n${i}`,
+      target: `n${i + 1}`,
+      value: 1,
+    }));
+    // 末尾加回边，确保去环逻辑也被覆盖
+    links.push({ source: `n${n}`, target: 'n0', value: 1 });
+    const acyclic = dropDirectedSankeyCycles(links);
+    expect(acyclic.length).toBe(n);
+    expect(acyclic.some((l) => l.source === `n${n}` && l.target === 'n0')).toBe(false);
+  });
+
   it('ranks reporting after picking', () => {
     expect(sankeyStageRank('production_picking:LL1')).toBeLessThan(
       sankeyStageRank('reporting_record:R1'),

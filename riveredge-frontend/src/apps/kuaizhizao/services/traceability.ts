@@ -99,25 +99,39 @@ export const traceabilityApi = {
     });
     if (!response.ok) {
       const text = await response.text();
-      let message = text;
+      let message: unknown = text;
       try {
-        const parsed = JSON.parse(text);
-        message = parsed.detail || parsed.message || text;
+        const parsed = JSON.parse(text) as { detail?: unknown; message?: unknown };
+        message = parsed.detail ?? parsed.message ?? text;
       } catch {
         /* keep text */
       }
-      throw new Error(typeof message === 'string' ? message : '导出追溯报告失败');
+      // Playwright 等后端堆栈可能极长；截断避免 UI/i18n 被拖垮
+      const raw =
+        typeof message === 'string'
+          ? message
+          : message != null
+            ? JSON.stringify(message)
+            : '导出追溯报告失败';
+      const short = raw.replace(/\s+/g, ' ').trim().slice(0, 280);
+      throw new Error(short || '导出追溯报告失败');
     }
     const blob = await response.blob();
+    if (!blob || blob.size <= 0) {
+      throw new Error('导出追溯报告失败：空文件');
+    }
     const disposition = response.headers.get('Content-Disposition') || '';
     const filename = parseDownloadFilename(disposition, `追溯报告_${code}.pdf`);
     const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
+    try {
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } finally {
+      URL.revokeObjectURL(url);
+    }
   },
 };
