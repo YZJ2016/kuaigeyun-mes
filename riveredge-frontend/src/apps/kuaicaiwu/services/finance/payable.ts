@@ -5,6 +5,7 @@ import { Payable, PayableCreateData, PayableListParams, PaymentRecordCreate } fr
 const PAYABLE_API = '/apps/kuaicaiwu/payables';
 
 export type PayablePullPreview = DocumentPushPreview & {
+  source_code?: string;
   source_type?: 'purchase_order' | 'purchase_receipt';
   supplier_id?: number;
   supplier_name?: string;

@@ -186,7 +186,6 @@ const MoldSampleOrdersPage: React.FC = () => {
         uniTableKeepWidth: true,
         resizable: false,
         ellipsis: true,
-        uniTableKeepWidth: true,
         render: (_, r) => r.contract_no || '—',
       },
       {

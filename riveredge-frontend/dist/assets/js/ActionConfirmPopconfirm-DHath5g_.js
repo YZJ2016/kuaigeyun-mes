@@ -1,0 +1,1 @@
+import{j as a,aw as m}from"./vendor-BOx9wUQH.js";function e({onConfirm:n,onCancel:r,getPopupContainer:t,children:i,...p}){return a.jsx(m,{...p,getPopupContainer:t??(o=>o?.ownerDocument?.body??document.body),onConfirm:o=>(o?.stopPropagation(),n()),onCancel:o=>{o?.stopPropagation(),r?.(o)},children:i})}e.displayName="ActionConfirmPopconfirm";export{e as A};

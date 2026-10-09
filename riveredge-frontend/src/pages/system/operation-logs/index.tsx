@@ -243,7 +243,7 @@ const OperationLogsPage: React.FC = () => {
   /**
    * 表格列定义（优化：突出对用户有用的信息）
    */
-  const columns = useMemo<ProColumns<OperationLog>[]>(() => alignProColumns([
+  const columns = useMemo<ProColumns<OperationLog>[]>(() => alignProColumns<OperationLog>([
     {
       title: t('pages.system.operationLogs.createdAt'),
       dataIndex: 'created_at',

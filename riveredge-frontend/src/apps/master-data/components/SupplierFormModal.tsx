@@ -1,3 +1,4 @@
+import type { PartnerContact } from '../types/supply-chain';
 /**
  * 供应商新建/编辑弹窗（可复用）
  */
@@ -182,7 +183,7 @@ export const SupplierFormModal: React.FC<SupplierFormModalProps> = ({
     try {
       setFormLoading(true);
       const { customData, standardValues } = extractFormValues(values);
-      const payload = {
+      const payload: Record<string, unknown> & { contacts: PartnerContact[]; code?: string; isActive?: boolean } = {
         ...standardValues,
         contacts: normalizePartnerContactsForSubmit(standardValues.contacts ?? values.contacts),
       };

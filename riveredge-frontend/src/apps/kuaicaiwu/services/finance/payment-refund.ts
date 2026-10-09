@@ -17,6 +17,7 @@ export type PaymentRefundPullCandidate = {
 };
 
 export type PaymentRefundPullPreview = DocumentPushPreview & {
+  source_code?: string;
   source_type?: 'payment';
   source_ids?: number[];
   supplier_id?: number;

@@ -221,7 +221,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
   const formModalZIndex = useStackedOverlayZIndex();
   const nestedQuickCreateZIndex = formModalZIndex + MODAL_NESTED_ABOVE_PARENT_OFFSET;
   const formRef = useRef<ProFormInstance>();
-  const [localMaterialGroups, setLocalMaterialGroups] = useState<MaterialGroup[]>(materialGroups);
+  const [localMaterialGroups, setLocalMaterialGroups] = useState<Array<Pick<MaterialGroup, 'id' | 'code' | 'name' | 'alias'>>>(materialGroups);
   const [groupFormModalOpen, setGroupFormModalOpen] = useState(false);
   const [routeFormModalOpen, setRouteFormModalOpen] = useState(false);
   const [supplierFormModalOpen, setSupplierFormModalOpen] = useState(false);
@@ -1736,7 +1736,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
               layout="vertical"
               submitter={false}
               scrollToFirstError
-              onFinish={handleSubmit}
+              onFinish={async (values) => { await handleSubmit(values); }}
               onFinishFailed={({ errorFields }) => {
                 const first = errorFields?.[0];
                 const text = first?.errors?.filter(Boolean)[0];
@@ -1755,7 +1755,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
           title={formTitle}
           open={open}
           onClose={onClose}
-          onFinish={handleSubmit}
+          onFinish={async (values) => { await handleSubmit(values); }}
           isEdit={isEdit}
           loading={loading}
           width={MODAL_CONFIG.LARGE_WIDTH}
@@ -1826,7 +1826,7 @@ interface BasicInfoTabProps {
   part: 1 | 2;
   formRef: any;
   material?: Material;
-  materialGroups: MaterialGroup[];
+  materialGroups: Array<Pick<MaterialGroup, 'id' | 'code' | 'name' | 'alias'>>;
   isEdit: boolean;
   suspendedModalReturnPath?: string;
   customFields?: CustomField[];

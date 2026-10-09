@@ -1,9 +1,11 @@
+import { alignIotTableColumns } from '../../components/table-parity';
 /**
  * 告警规则视图：阈值/离线两类规则的查询、新建、编辑与软删除。
  * 权限码与后端一致：读 = kuaiiot:alert:display，全部写操作 = kuaiiot:alert:create。
  * 后端约束：离线规则的 tag_key / operator / threshold_* 由服务固定，编辑时不下发这些字段。
  */
 
+import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import React, { useMemo, useRef, useState } from 'react';
 import { App, AutoComplete, Button, Descriptions, Popconfirm, Select, Tag } from 'antd';
 import {
@@ -140,7 +142,7 @@ export default function RulesView() {
         uniTablePrimaryFlex: true,
         resizable: false,
         ellipsis: true,
-        fixed: 'left',
+        render: (_, row) => canDisplay ? <Button type="link" size="small" onClick={() => { setDetail(row); setDetailOpen(true); }}>{row.name}</Button> : row.name,
       },
       {
         title: '编码',
@@ -170,6 +172,8 @@ export default function RulesView() {
         resizable: false,
         ellipsis: true,
       },
+      { title: '比较符', dataIndex: 'operator', ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS, hideInSearch: true },
+      { title: '阈值', key: 'threshold', dataIndex: 'threshold_number', hideInSearch: true, render: (_, row) => row.threshold_number != null ? Number(row.threshold_number) : row.threshold_text ?? '—' },
       {
         title: '触发条件',
         key: 'condition',
@@ -238,23 +242,9 @@ export default function RulesView() {
         hideInSearch: true,
         render: (_, row) => {
           const nodes: React.ReactNode[] = [];
-          if (canDisplay) {
-            nodes.push(
-              <Button
-                key="detail"
-                {...rowActionKind('display')}
-                onClick={() => {
-                  setDetail(row);
-                  setDetailOpen(true);
-                }}
-              >
-                详情
-              </Button>,
-            );
-          }
           if (canWrite) {
             nodes.push(
-              <Button key="edit" {...rowActionKind('skip')} onClick={() => openEdit(row)}>
+              <Button key="edit" icon={<EditOutlined />} {...rowActionKind('skip')} onClick={() => openEdit(row)}>
                 编辑
               </Button>,
               <Popconfirm
@@ -270,7 +260,7 @@ export default function RulesView() {
                   }
                 }}
               >
-                <Button {...rowActionKind('skip')} {...rowActionToneDestructive()}>
+                <Button icon={<DeleteOutlined />} {...rowActionKind('skip')} {...rowActionToneDestructive()}>
                   删除
                 </Button>
               </Popconfirm>,
@@ -291,7 +281,7 @@ export default function RulesView() {
         permissionResource="kuaiiot:alert"
         actionRef={actionRef}
         rowKey="id"
-        columns={columns}
+        columns={alignIotTableColumns(columns, 'rules')}
         viewTypes={['table', 'help']}
         helpViewConfig={{
           title: '使用帮助',
@@ -306,7 +296,7 @@ export default function RulesView() {
         }}
         fuzzySearchPlaceholder="编码 / 名称 / 点位键"
         showCreateButton={canWrite}
-        createButtonText="新建规则"
+        createButtonText="新建告警规则"
         onCreate={openCreate}
         enableRowSelection={canWrite}
         toolBarRender={(_action, selected) =>

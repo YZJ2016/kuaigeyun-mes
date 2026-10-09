@@ -98,20 +98,20 @@ export const EngineeringLinkTargetSelect: React.FC<EngineeringLinkTargetSelectPr
                 });
                 return (res.data ?? []).map((item) => ({
                   value: item.uuid,
-                  label: `${item.drawing_code ?? item.uuid} - ${item.drawing_name ?? ''}`.trim(),
+                  label: `${item.code ?? item.uuid} - ${item.name ?? ''}`.trim(),
                   drawing: item,
                 }));
               }}
               fieldProps={{
                 onChange: (_value, option) => {
-                  const drawing = (option as { drawing?: { uuid?: string; drawing_code?: string; drawing_name?: string } })
+                  const drawing = (option as { drawing?: { uuid?: string; code?: string; name?: string } })
                     ?.drawing;
                   if (!drawing?.uuid) return;
                   applyTargetFields(formRef, {
                     target_uuid: drawing.uuid,
                     target_id: undefined,
-                    target_code: drawing.drawing_code,
-                    target_name: drawing.drawing_name,
+                    target_code: drawing.code,
+                    target_name: drawing.name,
                   });
                 },
               }}
@@ -132,7 +132,7 @@ export const EngineeringLinkTargetSelect: React.FC<EngineeringLinkTargetSelectPr
                   limit: 50,
                   isActive: true,
                 });
-                const items = res.items ?? res.data ?? [];
+                const items = res.data ?? [];
                 return items.map((item: any) => ({
                   value: item.uuid,
                   label: `${item.code ?? item.uuid} - ${item.name ?? ''}`.trim(),

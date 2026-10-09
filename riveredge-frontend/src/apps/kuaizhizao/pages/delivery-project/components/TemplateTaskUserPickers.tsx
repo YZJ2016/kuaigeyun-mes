@@ -15,6 +15,7 @@ import {
   type UserDisplayItem,
 } from '../../../../../services/user';
 import { canReadUserDirectory, formatUserDisplayLabel } from '../../../../../utils/userDisplay';
+import type { CurrentUser } from '../../../../../types/api';
 import type { DeliveryMember } from '../../../services/delivery-project';
 
 function displayItemToUser(item: UserDisplayItem): User {
@@ -43,7 +44,7 @@ function mergeUsersById(prev: User[], next: User[]): User[] {
   return [...map.values()];
 }
 
-async function fetchUsers(keyword?: string, currentUser?: User | null): Promise<User[]> {
+async function fetchUsers(keyword?: string, currentUser?: CurrentUser | null): Promise<User[]> {
   if (!currentUser) return [];
   const useFullList = canReadUserDirectory(currentUser);
   const commonFilters = { is_active: true };

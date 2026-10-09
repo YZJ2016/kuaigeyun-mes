@@ -47,6 +47,7 @@ export type {
   ReportConfigSchema,
   ReportFieldMapping,
   ReportFilterConfig,
+  ReportParameterConfig,
   UniReportExportConfig,
   UniReportExecuteResult,
   UniReportRequestFn,

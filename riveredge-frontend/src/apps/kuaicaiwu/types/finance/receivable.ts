@@ -62,6 +62,7 @@ export interface ReceivableListParams {
 }
 
 export interface ReceivableCreateData {
+    attachments?: Record<string, unknown>[];
     source_type: string;
     source_id: number;
     source_code: string;

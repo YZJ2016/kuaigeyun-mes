@@ -463,7 +463,7 @@ const APIListPage: React.FC = () => {
     }
   }
 
-  const columns = useMemo<ProColumns<API>[]>(() => alignProColumns([
+  const columns = useMemo<ProColumns<API>[]>(() => alignProColumns<API>([
     {
       title: t('pages.system.apis.columnName'),
       dataIndex: 'name',

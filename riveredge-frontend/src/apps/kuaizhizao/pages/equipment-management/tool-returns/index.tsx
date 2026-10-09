@@ -273,7 +273,7 @@ const ToolReturnsPage: React.FC = () => {
               </Button>
             )}
             {perms.canDelete && (
-              <ActionConfirmPopconfirm title={t('common.deleteTitle')} onConfirm={() => record.id && void executeDelete([record.id])}>
+              <ActionConfirmPopconfirm title={t('common.deleteTitle')} onConfirm={() => record.id && void handleDelete([record.id])}>
               <Button
                 {...rowActionKind('delete')}
                 type="link"

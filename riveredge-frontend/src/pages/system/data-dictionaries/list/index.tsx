@@ -355,7 +355,7 @@ const DataDictionaryListPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns = useMemo<ProColumns<DataDictionary>[]>(() => alignProColumns([
+  const columns = useMemo<ProColumns<DataDictionary>[]>(() => alignProColumns<DataDictionary>([
     {
       title: t('field.dataDictionary.name'),
       dataIndex: 'name',

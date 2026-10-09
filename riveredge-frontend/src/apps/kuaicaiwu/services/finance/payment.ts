@@ -50,6 +50,7 @@ export interface PaymentVoucher {
 }
 
 export type PaymentPullPreview = DocumentPushPreview & {
+  source_code?: string;
   source_type?: 'payable';
   supplier_id?: number;
   supplier_name?: string;

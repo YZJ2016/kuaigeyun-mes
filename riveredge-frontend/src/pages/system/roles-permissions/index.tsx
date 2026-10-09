@@ -203,7 +203,7 @@ const FieldNameInput: React.FC<{
   item: FieldPermissionPolicy;
   displayLabel: string;
   onChange: (val: string) => void;
-  t: (key: string, opts?: { defaultValue?: string }) => string;
+  t: (key: string, opts?: { defaultValue?: string; name?: string }) => string;
 }> = ({ item, displayLabel, onChange, t }) => {
   const [focused, setFocused] = useState(false);
   const showLabel = !focused && displayLabel;

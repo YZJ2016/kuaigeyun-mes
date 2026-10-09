@@ -788,7 +788,7 @@ const MenuListPage: React.FC = () => {
     }
   }, [currentMenuUuid, formInitialValues, isEdit, menuTreeData, messageApi, refreshNavigationMenus, t]);
 
-  const columns: ProColumns<Menu>[] = useMemo(() => alignProColumns([
+  const columns: ProColumns<Menu>[] = useMemo(() => alignProColumns<Menu>([
     {
         title: t('pages.system.menus.menuName'),
         dataIndex: 'name',

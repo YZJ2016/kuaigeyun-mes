@@ -251,7 +251,7 @@ const MessageTemplateListPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns = useMemo<ProColumns<MessageTemplate>[]>(() => alignProColumns([
+  const columns = useMemo<ProColumns<MessageTemplate>[]>(() => alignProColumns<MessageTemplate>([
     {
       title: t('pages.system.messageTemplate.templateCode'),
       dataIndex: 'code',

@@ -237,7 +237,7 @@ export default function PipelinePage() {
   );
 
   return (
-    <Space direction="vertical" size={16} style={{ width: '100%', padding: 16 }}>
+    <Space direction="vertical" size={16} style={{ width: '100%', padding: 16, boxSizing: 'border-box' }}>
       <Space wrap>
         <Title level={4} style={{ margin: 0 }}>
           数采链路

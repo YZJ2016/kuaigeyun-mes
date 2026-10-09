@@ -199,7 +199,7 @@ const PositionListPage: React.FC = () => {
     }
   };
 
-  const columns = useMemo<ProColumns<Position>[]>(() => alignProColumns([
+  const columns = useMemo<ProColumns<Position>[]>(() => alignProColumns<Position>([
     {
       title: t('field.position.name'),
       dataIndex: 'name',

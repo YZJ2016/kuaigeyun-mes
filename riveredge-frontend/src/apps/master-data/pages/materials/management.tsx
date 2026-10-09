@@ -990,13 +990,13 @@ const MaterialsManagementPage: React.FC = () => {
    * 如果父分组匹配，显示父分组及其所有子分组
    * 如果子分组匹配，显示父分组和匹配的子分组
    */
-  const filterTreeData = useCallback((nodes: DataNode[], keyword: string): DataNode[] => {
+  const filterTreeData = useCallback((nodes: DataNode[], keyword: string): (DataNode & { searchLabel?: string })[] => {
     if (!keyword.trim()) {
       return nodes
     }
 
     const keywordLower = keyword.toLowerCase()
-    const filter = (data: DataNode[]): DataNode[] => {
+    const filter = (data: DataNode[]): (DataNode & { searchLabel?: string })[] => {
       const filtered: DataNode[] = []
       data.forEach(node => {
         // 检查当前节点是否匹配（排除"全部物料"节点）
@@ -1143,7 +1143,7 @@ const MaterialsManagementPage: React.FC = () => {
     (
       treeResponse: any[],
       summary?: { ungroupedMaterialCount?: number; totalMaterialCount?: number },
-    ): DataNode[] => {
+    ): (DataNode & { searchLabel?: string })[] => {
       const withCount = (label: string, count: number | undefined) =>
         typeof count === 'number' && Number.isFinite(count) ? `${label} (${count})` : label
 
@@ -1282,7 +1282,7 @@ const MaterialsManagementPage: React.FC = () => {
 
     // 具体分组才应用；restore=null（全部）不得冲掉内存中仍保留的树选中
     if (hasConcreteRestore) {
-      applyMaterialGroupSelection(restoreGroupId)
+      applyMaterialGroupSelection(restoreGroupId!)
     }
 
     // UniTabs 会再 navigate 剥离 closeTab；本次只同步分组，避免抢先 state:{} 丢掉 restore

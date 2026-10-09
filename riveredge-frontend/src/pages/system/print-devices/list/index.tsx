@@ -531,7 +531,7 @@ const PrintDeviceListPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns = useMemo<ProColumns<PrintDevice>[]>(() => alignProColumns([
+  const columns = useMemo<ProColumns<PrintDevice>[]>(() => alignProColumns<PrintDevice>([
     {
       title: t('pages.system.printDevices.columnCode'),
       dataIndex: 'code',

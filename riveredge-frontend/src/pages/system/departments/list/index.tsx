@@ -267,7 +267,7 @@ const DepartmentListPage: React.FC = () => {
     }
     let v: Record<string, unknown>;
     try {
-      v = await bindingCfgForm.validateFields();
+      v = { ...await bindingCfgForm.validateFields() };
     } catch {
       return;
     }
@@ -524,7 +524,7 @@ const DepartmentListPage: React.FC = () => {
     }
   };
 
-  const columns = useMemo<ProColumns<Department>[]>(() => alignProColumns([
+  const columns = useMemo<ProColumns<Department>[]>(() => alignProColumns<Department>([
     {
       title: t('field.department.name'),
       dataIndex: 'name',

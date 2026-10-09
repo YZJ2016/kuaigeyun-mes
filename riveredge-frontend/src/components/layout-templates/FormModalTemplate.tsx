@@ -60,6 +60,8 @@ function stripFormSubmitResponseMeta(
 
 export interface FormModalTemplateProps {
   title: ReactNode;
+  /** Namespace field DOM IDs when forms are nested. */
+  formName?: string;
   open: boolean;
   /** 关闭弹窗（与 Modal onCancel 一致） */
   onClose?: () => void;
@@ -119,6 +121,7 @@ export interface FormModalTemplateProps {
 
 export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
   title,
+  formName,
   open,
   onClose,
   onCancel,
@@ -286,6 +289,7 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
     >
       <div className="form-modal-content-inner">
         <ProForm
+          name={formName}
           formRef={formRef}
           form={form}
           readonly={readOnly}

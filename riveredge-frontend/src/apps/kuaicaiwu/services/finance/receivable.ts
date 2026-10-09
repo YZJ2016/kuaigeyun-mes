@@ -5,6 +5,7 @@ import { Receivable, ReceivableCreateData, ReceivableListParams, ReceiptRecordCr
 const RECEIVABLE_API = '/apps/kuaicaiwu/receivables';
 
 export type ReceivablePullPreview = DocumentPushPreview & {
+  source_code?: string;
   source_type?: 'sales_order' | 'sales_delivery';
   customer_id?: number;
   customer_name?: string;

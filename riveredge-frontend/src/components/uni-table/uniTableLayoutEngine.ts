@@ -304,6 +304,19 @@ function applyPrimaryFlexWidthPatch(
   // RemainderFlex：其它列定宽；余量列 = layoutWidth − 其它列（≥ minWidth）。
   // 够用 → 合计贴视口、无横滚；不够 → 余量=minWidth、合计>视口才横滚。
   if (hasRemainderFlex) {
+    const equalIndexes = columns.flatMap((column, index) =>
+      !column.hideInTable && isUniTableRemainderFlexColumn(column) && column.uniTableEqualRemainder === true ? [index] : [],
+    )
+    if (equalIndexes.length > 1) {
+      const otherWidth = baseScrollX - equalIndexes.reduce((sum, index) => sum + getUniTableColumnScrollContribution(columns[index]), 0)
+      const sharedWidth = Math.max(0, layoutWidth - otherWidth) / equalIndexes.length
+      for (const index of equalIndexes) {
+        const column = next[index]
+        const minWidth = parseUniTableColumnWidthValue(column.minWidth) ?? UNI_TABLE_PRIMARY_FLEX_DEFAULT_WIDTH
+        next[index] = { ...column, width: Math.max(minWidth, sharedWidth), minWidth }
+      }
+      return next
+    }
     const col = next[remainderIndex] as Record<string, unknown>
     const remainderBase = getUniTableColumnScrollContribution(col)
     const minW =

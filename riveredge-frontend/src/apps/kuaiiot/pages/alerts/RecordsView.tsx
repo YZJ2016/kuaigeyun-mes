@@ -1,3 +1,4 @@
+import { alignIotTableColumns } from '../../components/table-parity';
 /**
  * 告警记录视图：入站告警的查询、确认 / 处置（关闭）与软删除。
  * 状态机与后端 alert_service.transition_alert 一致：
@@ -67,7 +68,8 @@ export default function RecordsView() {
     if (busyKey) return;
     setBusyKey(key);
     try {
-      await transitionAlert(row.id, action);
+      const updated = await transitionAlert(row.id, action);
+      setDetail(current => current?.id === row.id ? { ...current, ...updated } : current);
       messageApi.success(action === 'acknowledge' ? '已确认' : '已处置');
       actionRef.current?.reload();
     } catch (error) {
@@ -101,6 +103,59 @@ export default function RecordsView() {
     }
   };
 
+  const renderRecordActions = (row: AlertRecordRow, inDetail = false) => {
+          const acknowledged = !!row.acknowledged_at || row.status === 'acknowledged';
+          const closed = row.status === 'closed' || !!row.closed_at;
+          const nodes: React.ReactNode[] = [];
+          if (canWrite) {
+            nodes.push(
+              <Button
+                key="ack"
+                {...rowActionKind('skip')}
+                disabled={acknowledged || closed || busyKey != null}
+                loading={rowBusy(row.id, 'acknowledge')}
+                onClick={() => void handleTransition(row, 'acknowledge')}
+              >
+                确认
+              </Button>,
+              <Popconfirm
+                key="close"
+                title={`确认处置告警 #${row.id}？`}
+                description="处置后进入终态，不可恢复"
+                onConfirm={() => void handleTransition(row, 'close')}
+              >
+                <Button
+                  {...rowActionKind('skip')}
+                  disabled={closed || busyKey != null}
+                  loading={rowBusy(row.id, 'close')}
+                >
+                  处置
+                </Button>
+              </Popconfirm>,
+              <Popconfirm
+                key="delete"
+                title={`确认删除告警 #${row.id}？`}
+                onConfirm={async () => {
+                  try {
+                    await deleteAlert(row.id);
+                    setDetailOpen(false);
+                    setDetail(null);
+                    messageApi.success('删除成功');
+                    actionRef.current?.reload();
+                  } catch (error) {
+                    messageApi.error(error instanceof Error ? error.message : '删除失败');
+                  }
+                }}
+              >
+                <Button {...rowActionKind('skip')} {...rowActionToneDestructive()}>
+                  删除
+                </Button>
+              </Popconfirm>,
+            );
+          }
+          return nodes.filter(node => React.isValidElement(node) && (inDetail ? node.key !== 'ack' : node.key === 'ack'));
+        };
+
   const columns: ProColumns<AlertRecordRow>[] = useMemo(() => {
     const deviceValueEnum: Record<string, { text: string }> = {};
     deviceMap.forEach((label, id) => {
@@ -117,7 +172,7 @@ export default function RecordsView() {
         uniTablePrimaryFlex: true,
         resizable: false,
         ellipsis: true,
-        fixed: 'left',
+        render: (_, row) => canDisplay ? <Button type="link" size="small" style={{maxWidth:'100%',overflow:'hidden',textOverflow:'ellipsis'}} onClick={() => {setDetail(row);setDetailOpen(true);}}>{row.message}</Button> : row.message,
       },
       {
         title: '点位键',
@@ -201,70 +256,7 @@ export default function RecordsView() {
         key: 'action',
         fixed: 'right',
         hideInSearch: true,
-        render: (_, row) => {
-          const acknowledged = !!row.acknowledged_at || row.status === 'acknowledged';
-          const closed = row.status === 'closed' || !!row.closed_at;
-          const nodes: React.ReactNode[] = [];
-          if (canDisplay) {
-            nodes.push(
-              <Button
-                key="detail"
-                {...rowActionKind('display')}
-                onClick={() => {
-                  setDetail(row);
-                  setDetailOpen(true);
-                }}
-              >
-                详情
-              </Button>,
-            );
-          }
-          if (canWrite) {
-            nodes.push(
-              <Button
-                key="ack"
-                {...rowActionKind('skip')}
-                disabled={acknowledged || closed || busyKey != null}
-                loading={rowBusy(row.id, 'acknowledge')}
-                onClick={() => void handleTransition(row, 'acknowledge')}
-              >
-                确认
-              </Button>,
-              <Popconfirm
-                key="close"
-                title={`确认处置告警 #${row.id}？`}
-                description="处置后进入终态，不可恢复"
-                onConfirm={() => void handleTransition(row, 'close')}
-              >
-                <Button
-                  {...rowActionKind('skip')}
-                  disabled={closed || busyKey != null}
-                  loading={rowBusy(row.id, 'close')}
-                >
-                  处置
-                </Button>
-              </Popconfirm>,
-              <Popconfirm
-                key="delete"
-                title={`确认删除告警 #${row.id}？`}
-                onConfirm={async () => {
-                  try {
-                    await deleteAlert(row.id);
-                    messageApi.success('删除成功');
-                    actionRef.current?.reload();
-                  } catch (error) {
-                    messageApi.error(error instanceof Error ? error.message : '删除失败');
-                  }
-                }}
-              >
-                <Button {...rowActionKind('skip')} {...rowActionToneDestructive()}>
-                  删除
-                </Button>
-              </Popconfirm>,
-            );
-          }
-          return nodes;
-        },
+        render: (_, row) => renderRecordActions(row),
       },
     ];
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -277,7 +269,7 @@ export default function RecordsView() {
         permissionResource="kuaiiot:alert"
         actionRef={actionRef}
         rowKey="id"
-        columns={columns}
+        columns={alignIotTableColumns(columns, 'records')}
         viewTypes={['table', 'help']}
         helpViewConfig={{
           title: '使用帮助',
@@ -374,6 +366,7 @@ export default function RecordsView() {
       <DetailDrawerTemplate
         title={`告警详情${detail ? ` - #${detail.id}` : ''}`}
         open={detailOpen}
+        extra={detail ? renderRecordActions(detail, true) : undefined}
         onClose={() => {
           setDetailOpen(false);
           setDetail(null);

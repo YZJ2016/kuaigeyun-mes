@@ -1,8 +1,10 @@
+import { alignIotTableColumns } from '../../components/table-parity';
 /**
  * 设备连接：IoT 设备运营列表页，左侧设备分组过滤。
  * 设备凭据只在建机/批量建机/轮换当次弹窗显示一次，列表与详情不回显。
  */
 
+import { DeleteOutlined, MoreOutlined } from '@ant-design/icons';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   ActionType,
@@ -532,7 +534,7 @@ const DevicesPage: React.FC = () => {
                   description="删除为软删除，点位与快照保留但不再写入"
                   onConfirm={() => void handleDelete(row)}
                 >
-                  <Button type="link" size="small" danger {...rowActionKind('update')}>
+                  <Button type="link" size="small" danger icon={<DeleteOutlined />} {...rowActionKind('skip')}>
                     删除
                   </Button>
                 </Popconfirm>,
@@ -556,7 +558,7 @@ const DevicesPage: React.FC = () => {
                     ],
                   }}
                 >
-                  <Button type="link" size="small">
+                  <Button type="link" size="small" icon={<MoreOutlined />}>
                     更多
                   </Button>
                 </Dropdown>,
@@ -704,7 +706,7 @@ const DevicesPage: React.FC = () => {
     <UniTable<DeviceRow>
       actionRef={actionRef}
       rowKey="id"
-      columns={columns}
+      columns={alignIotTableColumns(columns, 'devices')}
       columnPersistenceId="kuaiiot-devices-v1"
       permissionResource="kuaiiot:device"
       showCreateButton

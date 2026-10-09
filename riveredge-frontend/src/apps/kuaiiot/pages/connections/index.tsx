@@ -1,9 +1,11 @@
+import { alignIotTableColumns } from '../../components/table-parity';
 /**
  * 接入配置：数采连接运营列表页。
  * 写操作（新建/编辑/删除/启停）后端统一要求 kuaiiot:connection:create；
  * 行内按钮用 rowActionKind('skip') + 显式权限判断，避免 manifest 缺 :update/:delete 误隐藏。
  */
 
+import { EditOutlined, DeleteOutlined, MoreOutlined } from '@ant-design/icons';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import type {
   ActionType,
@@ -279,6 +281,7 @@ const ConnectionsPage: React.FC = () => {
             ? [
                 <Button
                   key="edit"
+                  icon={<EditOutlined />}
                   type="link"
                   size="small"
                   {...rowActionKind('skip')}
@@ -292,7 +295,7 @@ const ConnectionsPage: React.FC = () => {
                   description="删除为软删除，关联设备将失去连接来源"
                   onConfirm={() => void handleDelete(row)}
                 >
-                  <Button type="link" size="small" danger {...rowActionKind('skip')}>
+                  <Button type="link" size="small" icon={<DeleteOutlined />} danger {...rowActionKind('skip')}>
                     删除
                   </Button>
                 </Popconfirm>,
@@ -316,7 +319,7 @@ const ConnectionsPage: React.FC = () => {
                     ],
                   }}
                 >
-                  <Button type="link" size="small">
+                  <Button type="link" size="small" icon={<MoreOutlined />}>
                     更多
                   </Button>
                 </Dropdown>,
@@ -456,7 +459,7 @@ const ConnectionsPage: React.FC = () => {
       <UniTable<ConnectionRow>
         actionRef={actionRef}
         rowKey="id"
-        columns={columns}
+        columns={alignIotTableColumns(columns, 'connections')}
         columnPersistenceId="kuaiiot-connections-v1"
         permissionResource="kuaiiot:connection"
         showCreateButton

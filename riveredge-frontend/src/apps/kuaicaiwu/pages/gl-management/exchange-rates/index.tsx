@@ -206,7 +206,7 @@ const GlExchangeRatesPage: React.FC = () => {
 
   const columns: ProColumns<GlExchangeRate>[] = useMemo(
     () =>
-      alignProColumns(
+      alignProColumns<GlExchangeRate>(
         [
           {
             title: t(`${NS}.col.currencyCode`),

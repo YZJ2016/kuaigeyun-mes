@@ -804,7 +804,7 @@ const ApplicationListPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns = useMemo<ProColumns<Application>[]>(() => alignProColumns([
+  const columns = useMemo<ProColumns<Application>[]>(() => alignProColumns<Application>([
     {
       title: t('pages.system.applications.name'),
       dataIndex: 'name',

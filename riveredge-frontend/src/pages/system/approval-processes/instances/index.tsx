@@ -203,7 +203,7 @@ const ApprovalInstanceListPage: React.FC = () => {
     return renderSystemStatusTag(statusInfo.text, statusInfo.color);
   };
 
-  const columns = useMemo<ProColumns<ApprovalInstance>[]>(() => alignProColumns([
+  const columns = useMemo<ProColumns<ApprovalInstance>[]>(() => alignProColumns<ApprovalInstance>([
     {
       // 标题长短不一：唯一 RemainderFlex
       title: t('pages.system.approvalInstances.title'),

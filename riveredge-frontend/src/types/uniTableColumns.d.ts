@@ -5,6 +5,8 @@ import 'antd/lib/table/interface';
 interface UniTableColumnLayout {
   uniTableKeepWidth?: boolean;
   uniTableRemainderFlex?: boolean;
+  /** Opt-in equal sharing for reference tables with several flexible columns. */
+  uniTableEqualRemainder?: boolean;
   uniTablePrimaryFlex?: boolean;
   uniTablePrimaryFlexMaxWidth?: number;
   uniTableAuditStackedColumn?: boolean;

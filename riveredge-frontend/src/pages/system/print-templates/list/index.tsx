@@ -501,7 +501,7 @@ const PrintTemplateListPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns = useMemo<ProColumns<PrintTemplate>[]>(() => alignProColumns([
+  const columns = useMemo<ProColumns<PrintTemplate>[]>(() => alignProColumns<PrintTemplate>([
     {
       title: t('pages.system.printTemplates.columnCode'),
       dataIndex: 'code',

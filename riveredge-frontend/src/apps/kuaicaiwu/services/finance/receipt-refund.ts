@@ -17,6 +17,7 @@ export type ReceiptRefundPullCandidate = {
 };
 
 export type ReceiptRefundPullPreview = DocumentPushPreview & {
+  source_code?: string;
   source_type?: 'receipt';
   source_ids?: number[];
   customer_id?: number;

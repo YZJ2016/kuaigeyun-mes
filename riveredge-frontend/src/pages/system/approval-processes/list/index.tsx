@@ -293,7 +293,7 @@ const ApprovalProcessListPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns = useMemo<ProColumns<ApprovalProcess>[]>(() => alignProColumns([
+  const columns = useMemo<ProColumns<ApprovalProcess>[]>(() => alignProColumns<ApprovalProcess>([
     {
       title: t('pages.system.approvalProcesses.code'),
       dataIndex: 'code',

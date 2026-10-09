@@ -5,6 +5,7 @@ import type { SalesInvoice, SalesInvoiceListParams } from '../../types/finance/s
 export type { SalesInvoice, SalesInvoiceListParams };
 
 export type SalesInvoicePullPreview = DocumentPushPreview & {
+  source_code?: string;
   source_type?: 'sales_order' | 'sales_delivery' | 'receivable';
   customer_id?: number;
   customer_name?: string;

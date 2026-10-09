@@ -536,7 +536,7 @@ export async function apiRequest<T = any>(
 
           // 其它接口 401：只允许「访问令牌已失效且续期被服务端明确拒绝」时结束会话。
           // 续期成功后同一接口仍 401 = 业务/权限/上下文问题，禁止 clearAuth。
-          const throwTransient401 = (message: string) => {
+          const throwTransient401 = (message: string): never => {
             const error = new Error(message) as any;
             error.response = { data, status: response.status };
             error.isTransientAuthRefreshFailure = true;

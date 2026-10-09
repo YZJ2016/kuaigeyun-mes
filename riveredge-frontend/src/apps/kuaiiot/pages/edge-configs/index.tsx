@@ -1,3 +1,4 @@
+import { alignIotTableColumns } from '../../components/table-parity';
 /**
  * 边缘配置运营列表：模糊 + 高级搜索、新建、编辑、详情抽屉、删除/批量删除、
  * 客户端只读导出与 Modbus TCP 现场试读。
@@ -25,8 +26,8 @@ import {
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { Alert, App, Button, Descriptions, Popconfirm, Result, Table, Tag, Typography } from 'antd';
-import { PlusOutlined } from '@ant-design/icons';
+import { Alert, App, Button, Descriptions, Grid, Popconfirm, Result, Table, Tag, Typography } from 'antd';
+import { PlusOutlined, ExportOutlined, DeleteOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { UniBatchDeleteButton } from '../../../../components/uni-batch';
 import { UniExportMenuButton } from '../../../../components/uni-export/UniExportMenuButton';
@@ -116,6 +117,7 @@ const EdgeConfigsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const perms = useResourcePermissions('kuaiiot:device');
+  const screens = Grid.useBreakpoint();
   const canDisplay = perms.canAction?.('display') ?? false;
   const canUpdate = perms.canAction?.('update') ?? false;
 
@@ -589,7 +591,7 @@ const EdgeConfigsPage: React.FC = () => {
             sorter: true,
             render: (_, row) => (
               <Typography.Text type="secondary">
-                {`v${row.config_version} / Agent ${row.agent_config_version ?? '—'}`}
+                {row.config_version}
               </Typography.Text>
             ),
           },
@@ -611,7 +613,6 @@ const EdgeConfigsPage: React.FC = () => {
             fixed: 'right',
             hideInSearch: true,
             render: (_, row) => {
-              const trialDisabled = !row.is_enabled || row.protocol !== 'modbus_tcp';
               return [
                 <Button
                   key="detail"
@@ -621,17 +622,6 @@ const EdgeConfigsPage: React.FC = () => {
                   onClick={() => openDetail(row)}
                 >
                   {t('common.detail')}
-                </Button>,
-                <Button
-                  key="trial"
-                  type="link"
-                  size="small"
-                  {...rowActionKind('update')}
-                  disabled={trialDisabled}
-                  title={trialDisabled ? t('app.kuaiiot.edgeConfigs.trialDisabled') : undefined}
-                  onClick={() => void handleTrial(row)}
-                >
-                  {t('app.kuaiiot.edgeConfigs.trial')}
                 </Button>,
                 <Button
                   key="edit"
@@ -649,17 +639,18 @@ const EdgeConfigsPage: React.FC = () => {
                   })}
                   onConfirm={() => void handleDelete(row)}
                 >
-                  <Button type="link" size="small" danger {...rowActionKind('update')}>
+                  <Button type="link" size="small" danger icon={<DeleteOutlined />} {...rowActionKind('skip')}>
                     {t('common.delete')}
                   </Button>
                 </Popconfirm>,
+                <Button key="export" type="link" size="small" icon={<ExportOutlined />} {...rowActionKind('skip')} onClick={() => void handleExport('currentPage', undefined, [row])}>{t('common.export')}</Button>,
               ];
             },
           },
         ] as TableColumn<EdgeConfigRow>[],
         GLOBAL_DOC_LIST_FIELD_RANK,
       ),
-    [t, deviceSearchOptions, deviceLabel, protocolText, openDetail, openEdit, handleTrial, handleDelete],
+    [t, deviceSearchOptions, deviceLabel, protocolText, openDetail, openEdit, handleExport, handleDelete],
   );
 
   const detailColumns = useMemo<ProDescriptionsItemProps<EdgeConfigRow>[]>(
@@ -712,8 +703,13 @@ const EdgeConfigsPage: React.FC = () => {
         actionRef={actionRef}
         rowKey="id"
         headerTitle={t('app.kuaiiot.menu.edgeConfigs')}
-        columns={columns}
+        columns={alignIotTableColumns(columns, 'edge')}
         onCreate={openCreate}
+        betweenFuzzyAndAdvancedButtons={!screens.md && canUpdate ? (
+          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate} style={{ flexShrink: 0 }}>
+            {withSingleNewShortcutHint(t('app.kuaiiot.action.createEdgeConfig'))}
+          </Button>
+        ) : undefined}
         toolBarActions={[
           canUpdate ? (
             <Button key="create" type="primary" icon={<PlusOutlined />} onClick={openCreate}>
@@ -965,6 +961,7 @@ const EdgeConfigsPage: React.FC = () => {
         }}
         size={DRAWER_CONFIG.STANDARD_WIDTH}
         loading={detailLoading}
+        extra={detail && canUpdate ? <Button {...rowActionKind('update')} disabled={!detail.is_enabled || detail.protocol !== 'modbus_tcp'} onClick={() => void handleTrial(detail)}>{t('app.kuaiiot.edgeConfigs.trial')}</Button> : undefined}
         plainBody={
           detailError && !detail ? (
             <Result
