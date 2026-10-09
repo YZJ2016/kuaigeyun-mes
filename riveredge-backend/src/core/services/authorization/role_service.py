@@ -1072,6 +1072,8 @@ class RoleService:
                 "master-data:factory:work-group:read",
                 "master-data:factory:workstation:read",
                 "master-data:factory:production-line:read",
+                "master-data:factory:workshop:read",
+                "master-data:process:sop:read",
                 # 安灯页班长选择 /core/users/display-search（display 不含完整人员字段）
                 "system:user:display",
             }
@@ -1088,16 +1090,21 @@ class RoleService:
         return f"{parts[0]}:{':'.join(parts[1:-1])}"
 
     @staticmethod
-    async def _assign_preset_permissions(tenant_id: int, role: Role) -> None:
+    async def _assign_preset_permissions(
+        tenant_id: int, role: Role, only_codes: frozenset[str] | None = None
+    ) -> int:
         """为预设角色分配默认权限（按 code 前缀匹配，幂等）。"""
         from core.models.role_permission import RolePermission
 
         desired_codes = set((await PermissionRegistryService.collect_definitions(tenant_id=tenant_id)).keys())
         if not desired_codes:
-            return
+            return 0
 
         prefixes = RoleService.PRESET_ROLE_PERMISSION_PREFIXES.get(role.code, [])
-        explicit_codes = RoleService.PRESET_ROLE_EXPLICIT_PERMISSION_CODES.get(role.code)
+        explicit_codes = (
+            only_codes if only_codes is not None
+            else RoleService.PRESET_ROLE_EXPLICIT_PERMISSION_CODES.get(role.code)
+        )
         selected_permissions: list[Permission] = []
         if explicit_codes is not None:
             # 显式逐码列举（不做前缀扩权）：只授予已注册定义中的权限码
@@ -1150,13 +1157,13 @@ class RoleService:
         selected_ids = {*selected_ids, *[p.id for p in baseline_perms]}
 
         if not selected_ids:
-            return
+            return 0
 
         existing = await RolePermission.filter(role_id=role.id).all()
         existing_ids = {rp.permission_id for rp in existing}
         to_add = selected_ids - existing_ids
         if not to_add:
-            return
+            return 0
 
         await RolePermission.bulk_create(
             [RolePermission(role_id=role.id, permission_id=pid, created_at=now_utc()) for pid in to_add],
@@ -1166,9 +1173,11 @@ class RoleService:
         # 预设角色同步后同样补齐质检 :execute（与权限同步传播同语义）
         from core.services.authorization.permission_sync_service import PermissionSyncService
 
-        await PermissionSyncService.ensure_quality_inspection_execute_grants(tenant_id=tenant_id)
+        if only_codes is None:
+            await PermissionSyncService.ensure_quality_inspection_execute_grants(tenant_id=tenant_id)
 
         # 默认数据/字段权限均为开放（全部/明文），仅在显式收敛时落库策略。
+        return len(to_add)
 
     @staticmethod
     async def _merge_role_relations(
@@ -1409,6 +1418,27 @@ class RoleService:
                 code=item["code"],
                 deleted_at__isnull=True,
             ).exists()
+            if exists and item["code"] == "STATION_TERMINAL":
+                role = await Role.filter(
+                    tenant_id=tenant_id,
+                    code=item["code"],
+                    deleted_at__isnull=True,
+                    is_active=True,
+                ).first()
+                if role and is_station_role_type(role.role_type):
+                    added = await RoleService._assign_preset_permissions(
+                        tenant_id=tenant_id,
+                        role=role,
+                        only_codes=frozenset({
+                            "master-data:factory:workshop:read",
+                            "master-data:process:sop:read",
+                        }),
+                    )
+                    if added:
+                        await PermissionVersionService.bump(tenant_id=tenant_id, user_id=None)
+                        await RoleService._bump_role_users_permission_version(
+                            role_id=role.id, tenant_id=tenant_id
+                        )
             if not exists:
                 now = now_utc()
                 preset_domain = RoleService.resolve_preset_functional_domain(item["code"])
