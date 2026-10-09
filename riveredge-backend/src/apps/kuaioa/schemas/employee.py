@@ -47,6 +47,22 @@ class EmployeeBulkCreateRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
+class EmployeeAccountQuickCreateRequest(BaseModel):
+    """员工档案旁一键创建登录账号。"""
+
+    full_name: str = Field(..., min_length=1, max_length=100, description="姓名")
+    username: Optional[str] = Field(None, min_length=2, max_length=50, description="登录账号，留空自动生成")
+    phone: Optional[str] = Field(None, max_length=30, description="手机号")
+
+
+class EmployeeAccountQuickCreateResponse(BaseModel):
+    """一键创建账号结果（initial_password 仅此一次返回）。"""
+
+    user_id: int = Field(..., description="用户ID")
+    username: str = Field(..., description="登录账号")
+    initial_password: str = Field(..., description="初始密码")
+
+
 class EmployeeProfileUpdate(BaseModel):
     full_name: Optional[str] = Field(None, max_length=100)
     phone: Optional[str] = Field(None, max_length=30)

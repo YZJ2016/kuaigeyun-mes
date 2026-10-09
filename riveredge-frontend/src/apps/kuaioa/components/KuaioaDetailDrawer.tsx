@@ -137,7 +137,7 @@ const KuaioaDetailDrawer: React.FC<Props> = ({
 
   const descriptionItems = useMemo(() => {
     if (!record) return [];
-    const cols = fields.map((field) => ({
+    const cols = fields.filter((field) => !field.hideInDetail).map((field) => ({
       title: t(field.labelKey),
       dataIndex: field.name,
       render: () => renderFieldValue(field, record, t, statusEnum, statusPresentation),

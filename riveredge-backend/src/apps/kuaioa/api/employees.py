@@ -6,6 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 
 from apps.common.bulk_import import BulkCreateResponse
 from apps.kuaioa.schemas.employee import (
+    EmployeeAccountQuickCreateRequest,
+    EmployeeAccountQuickCreateResponse,
     EmployeeBulkCreateRequest,
     EmployeeProfileCreate,
     EmployeeProfileUpdate,
@@ -82,6 +84,30 @@ async def bulk_create_employees(
         tenant_id, list(data.items), current_user.id
     )
     return result
+
+
+@router.post(
+    "/quick-create-account",
+    response_model=EmployeeAccountQuickCreateResponse,
+    summary="Quick-create a PC Web login account for an employee",
+)
+async def quick_create_employee_account(
+    data: EmployeeAccountQuickCreateRequest,
+    current_user: User = Depends(get_current_user),
+    _auth=Depends(require_permission_codes("kuaioa:employee:create")),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    员工档案旁「一键创建账号」：生成登录账号 + 随机初始密码，无角色。
+
+    initial_password 仅在本次响应中返回，需管理员交付员工本人。
+    """
+    try:
+        return await service.create_linked_account(
+            tenant_id, data, operator_user_id=current_user.id
+        )
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"message": str(e)})
 
 
 @router.get("/{profile_id}", summary="Get employee profile")

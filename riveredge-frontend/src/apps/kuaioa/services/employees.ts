@@ -44,6 +44,20 @@ export const bulkCreateEmployees = async (
   };
 };
 
+export type EmployeeQuickCreatedAccount = {
+  user_id: number;
+  username: string;
+  initial_password: string;
+};
+
+/** 员工档案旁一键创建登录账号（无角色）；initial_password 仅此一次返回 */
+export const quickCreateEmployeeAccount = (data: {
+  full_name: string;
+  username?: string;
+  phone?: string;
+}) =>
+  kuaioaPost<EmployeeQuickCreatedAccount>(`${BASE}/quick-create-account`, data);
+
 export const updateEmployee = (id: number, data: Record<string, unknown>) =>
   kuaioaPut<Record<string, unknown>>(`${BASE}/${id}`, data);
 

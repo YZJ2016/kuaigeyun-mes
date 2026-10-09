@@ -16,6 +16,7 @@ import {
   listEmployees,
   updateEmployee,
 } from '../../../services/employees';
+import BoundAccountQuickCreate from './BoundAccountQuickCreate';
 import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
@@ -271,6 +272,21 @@ const EmployeesPage: React.FC = () => {
         options: lineOptions,
         width: 100,
         hideInTable: true,
+      },
+      {
+        name: 'user_display',
+        labelKey: 'app.kuaioa.employee.boundAccount',
+        width: 150,
+        hideInForm: true,
+      },
+      {
+        name: 'user_id',
+        labelKey: 'app.kuaioa.employee.boundAccount',
+        type: 'userId' as const,
+        hideInTable: true,
+        hideInDetail: true,
+        userIdFillNameField: 'full_name',
+        userIdExtra: <BoundAccountQuickCreate />,
       },
       {
         name: 'employment_type',
@@ -695,6 +711,10 @@ const EmployeesPage: React.FC = () => {
       createFn={createEmployee}
       updateFn={updateEmployee}
       deleteFn={deleteEmployee}
+      mapFormValuesToPayload={(values) => {
+        const { user_display: _userDisplay, ...rest } = values;
+        return { ...rest, user_id: values.user_id ?? null };
+      }}
       showImportButton
       onImport={handleImport}
       importHeaders={employeeImportTemplate.importHeaders}

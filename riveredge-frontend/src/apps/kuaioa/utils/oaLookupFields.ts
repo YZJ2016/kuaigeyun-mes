@@ -1,6 +1,6 @@
 import type { DepartmentTreeItem } from '../../../services/department';
 
-export type OaLookupKind = 'user' | 'customer' | 'material' | 'department' | 'supplier' | 'operation';
+export type OaLookupKind = 'user' | 'customer' | 'material' | 'department' | 'supplier' | 'operation' | 'userId';
 
 type OaLookupFieldRef = {
   name: string;
@@ -25,7 +25,8 @@ export function resolveOaLookupKind(field: Pick<OaLookupFieldRef, 'name' | 'type
     typed === 'material' ||
     typed === 'department' ||
     typed === 'supplier' ||
-    typed === 'operation'
+    typed === 'operation' ||
+    typed === 'userId'
   ) {
     return typed;
   }
