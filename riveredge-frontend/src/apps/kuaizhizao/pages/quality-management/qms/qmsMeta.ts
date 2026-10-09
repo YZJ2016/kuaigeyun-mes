@@ -57,6 +57,7 @@ export const QMS_DOC_TYPE_OPTIONS = [
 
 export const QMS_DOC_STATUS_OPTIONS = [
   { value: 'draft', labelKey: 'app.kuaizhizao.quality.qms.docStatus.draft' },
+  { value: 'pending', labelKey: 'app.kuaizhizao.quality.qms.docStatus.pending' },
   { value: 'effective', labelKey: 'app.kuaizhizao.quality.qms.docStatus.effective' },
   { value: 'obsolete', labelKey: 'app.kuaizhizao.quality.qms.docStatus.obsolete' },
   { value: 'rejected', labelKey: 'app.kuaizhizao.quality.qms.docStatus.rejected' },

@@ -66,7 +66,7 @@
 - `is_dedicated: true` 或 `market_category: "dedicated"`。
 - 未绑定租户：扫描注册时跳过，应用中心不可见。
 - 可声明 `industry_extensions`（与行业插件共用运行时）；侧栏走自有 `menu_config`，不挂行业包壳。
-- `hide_required_app_menus: true`：启用后按 `application_uuid` 抑制 `requires_apps`（含闭包）、`industry-pack`，以及同租户其它已安装业务应用整棵侧栏；系统应用与基础设施菜单除外。页面与 API 仍走宿主应用。core 不写死客户应用名。
+- `hide_required_app_menus: true`：启用后按 `application_uuid` 抑制 `requires_apps`（含闭包）、`industry-pack`，以及同租户其它已安装业务应用整棵侧栏；系统应用与基础设施菜单除外。依赖宿主仍安装；**定制侧栏 `menu_config.path` 须落在 `/apps/{dedicated}/...`**，页文件在定制包内；**REST / 表 / 权限码仍走宿主**（定制页 import 宿主 service、`useResourcePermissions` 用宿主 resource）。未绑定定制的租户继续使用宿主页 URL。core 不写死客户应用名。
 
 ## 仓库归属（部署）
 

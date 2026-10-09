@@ -5,9 +5,16 @@ Author: RiverEdge Team
 Date: 2026-05-28
 """
 
-from typing import Optional
+from typing import Dict, List, Optional, Tuple
 
-from apps.kuaiplm.models.engineering_change import EngineeringChange
+from apps.kuaiplm.models.engineering_change import (
+    EngineeringChange,
+    EngineeringChangeMaterialLine,
+    EngineeringChangeSignoff,
+)
+from apps.kuaiplm.utils.engineering_change_capabilities import (
+    compute_engineering_change_capabilities,
+)
 from apps.kuaiplm.schemas.change_desk import (
     ChangeApproveRequest,
     ChangeBatchActionResponse,
@@ -75,7 +82,46 @@ class ChangeDeskService:
             for item in items
         ]
 
-    def _append_ecn_row(self, items: list[ChangeDeskItem], row: EngineeringChange) -> None:
+    async def _ecn_signoff_material_context(
+        self, tenant_id: int, ecn_ids: List[int]
+    ) -> Tuple[Dict[int, List[EngineeringChangeSignoff]], Dict[int, int]]:
+        signoffs_by_ecn: Dict[int, List[EngineeringChangeSignoff]] = {}
+        mat_count_by_ecn: Dict[int, int] = {}
+        if not ecn_ids:
+            return signoffs_by_ecn, mat_count_by_ecn
+        signoff_rows = await EngineeringChangeSignoff.filter(
+            tenant_id=tenant_id, ecn_id__in=ecn_ids, deleted_at__isnull=True
+        )
+        for sign in signoff_rows:
+            signoffs_by_ecn.setdefault(sign.ecn_id, []).append(sign)
+        mat_rows = await EngineeringChangeMaterialLine.filter(
+            tenant_id=tenant_id, ecn_id__in=ecn_ids, deleted_at__isnull=True
+        ).values_list("ecn_id", flat=True)
+        for eid in mat_rows:
+            mat_count_by_ecn[int(eid)] = mat_count_by_ecn.get(int(eid), 0) + 1
+        return signoffs_by_ecn, mat_count_by_ecn
+
+    def _append_ecn_row(
+        self,
+        items: list[ChangeDeskItem],
+        row: EngineeringChange,
+        *,
+        capabilities: Optional[dict[str, bool]] = None,
+    ) -> None:
+        extra: dict = {
+            "project_id": row.project_id,
+            "project_code": row.project_code,
+            "project_name": row.project_name,
+            "erp_ecn_no": row.erp_ecn_no,
+            "erp_audit_status": row.erp_audit_status,
+        }
+        if capabilities:
+            extra["capabilities"] = capabilities
+        ext = row.extension_payload if isinstance(row.extension_payload, dict) else {}
+        if ext.get("entry_source"):
+            extra["entry_source"] = ext.get("entry_source")
+        if ext.get("rd_issued_at"):
+            extra["rd_issued_at"] = ext.get("rd_issued_at")
         items.append(
             ChangeDeskItem(
                 id=row.id,
@@ -92,13 +138,7 @@ class ChangeDeskService:
                 updated_by_name=row.updated_by_name,
                 entity_code=row.ecn_code,
                 entity_name=row.title,
-                extra={
-                    "project_id": row.project_id,
-                    "project_code": row.project_code,
-                    "project_name": row.project_name,
-                    "erp_ecn_no": row.erp_ecn_no,
-                    "erp_audit_status": row.erp_audit_status,
-                },
+                extra=extra,
             )
         )
 
@@ -263,8 +303,16 @@ class ChangeDeskService:
                 page=1,
                 page_size=fetch_limit,
             )
+            signoffs_map, mat_map = await self._ecn_signoff_material_context(
+                tenant_id, [r.id for r in ecn_rows]
+            )
             for row in ecn_rows:
-                self._append_ecn_row(items, row)
+                caps = compute_engineering_change_capabilities(
+                    row,
+                    signoffs=signoffs_map.get(row.id, []),
+                    material_line_count=mat_map.get(row.id, 0),
+                )
+                self._append_ecn_row(items, row, capabilities=caps)
 
             items.sort(key=lambda x: x.created_at, reverse=True)
             offset = (page - 1) * page_size
@@ -316,8 +364,16 @@ class ChangeDeskService:
                 page=page,
                 page_size=page_size,
             )
+            signoffs_map, mat_map = await self._ecn_signoff_material_context(
+                tenant_id, [r.id for r in ecn_rows]
+            )
             for row in ecn_rows:
-                self._append_ecn_row(items, row)
+                caps = compute_engineering_change_capabilities(
+                    row,
+                    signoffs=signoffs_map.get(row.id, []),
+                    material_line_count=mat_map.get(row.id, 0),
+                )
+                self._append_ecn_row(items, row, capabilities=caps)
             total = ecn_total
         else:
             raise ValidationError(f"未知变更类型: {change_type}")

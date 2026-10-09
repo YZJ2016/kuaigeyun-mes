@@ -23,6 +23,9 @@ class KuaioaFormRequest(BaseModel):
     department_name = fields.CharField(max_length=100, null=True, description="申请部门")
     notes = fields.TextField(null=True, description="备注")
     submitted_at = fields.DatetimeField(null=True, description="提交时间")
+    issued_at = fields.DatetimeField(null=True, description="下发时间")
+    issued_by = fields.IntField(null=True, description="下发人")
+    issued_by_name = fields.CharField(max_length=100, null=True, description="下发人姓名")
     deleted_at = fields.DatetimeField(null=True)
 
     class Meta:

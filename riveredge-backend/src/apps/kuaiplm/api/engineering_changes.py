@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from apps.kuaiplm.schemas.engineering_change import (
     EcnFormProfile,
+    EcnSignoffUpdate,
     EngineeringChangeCreate,
     EngineeringChangeErpAudit,
     EngineeringChangeListResponse,
@@ -154,6 +155,36 @@ async def reject_engineering_change(
 ):
     try:
         return await service.reject(tenant_id, ecn_id, current_user)
+    except Exception as e:
+        raise _http(e)
+
+
+@router.post("/{ecn_id}/signoffs/{dept_code}", response_model=EngineeringChangeResponse)
+async def update_ecn_signoff(
+    ecn_id: int,
+    dept_code: str,
+    data: EcnSignoffUpdate,
+    current_user: User = Depends(get_current_user),
+    _auth=Depends(require_permission_codes("kuaiplm:ecn:update")),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await service.update_signoff(
+            tenant_id, ecn_id, dept_code, data, current_user
+        )
+    except Exception as e:
+        raise _http(e)
+
+
+@router.post("/{ecn_id}/issue-to-rd", response_model=EngineeringChangeResponse)
+async def issue_design_change_to_rd(
+    ecn_id: int,
+    current_user: User = Depends(get_current_user),
+    _auth=Depends(require_permission_codes("kuaiplm:ecn:execute")),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await service.issue_to_rd(tenant_id, ecn_id, current_user)
     except Exception as e:
         raise _http(e)
 

@@ -42,6 +42,16 @@ class PrototypeBuildSignoffUpdate(BaseModel):
     quality_opinion: Optional[str] = None
 
 
+class PrototypeBuildCapabilities(BaseModel):
+    project_ready: bool = False
+    electronics_ready: bool = False
+    structure_ready: bool = False
+    approved: bool = False
+    issued: bool = False
+    signoffs_done: bool = False
+    closed: bool = False
+
+
 class PrototypeBuildSheetResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -75,6 +85,7 @@ class PrototypeBuildSheetResponse(BaseModel):
     created_by_name: Optional[str] = None
     updated_by: Optional[int] = None
     updated_by_name: Optional[str] = None
+    capabilities: Optional[PrototypeBuildCapabilities] = None
 
 
 class PrototypeBuildSheetListItem(BaseModel):
@@ -95,6 +106,7 @@ class PrototypeBuildSheetListItem(BaseModel):
     updated_at: datetime
     created_by_name: Optional[str] = None
     updated_by_name: Optional[str] = None
+    capabilities: Optional[PrototypeBuildCapabilities] = None
 
 
 class PrototypeBuildSheetListResponse(BaseModel):

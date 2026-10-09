@@ -31,8 +31,12 @@ from apps.kuaiplm.models.annual_lab_plan import (
     AnnualLabPlan,
     AnnualLabPlanMonth,
 )
+from apps.kuaiplm.constants.lab_request_types import LAB_REQUEST_TYPES_USE_LAB_DISPATCH
+from apps.kuaiplm.models.rd_project import RdProject
 from apps.kuaiplm.schemas.annual_lab_plan import (
     AnnualLabPlanCreate,
+    AnnualLabPlanCreateLabRequestRequest,
+    AnnualLabPlanCreateLabRequestResponse,
     AnnualLabPlanIssueRejectRequest,
     AnnualLabPlanListResponse,
     AnnualLabPlanMonthInput,
@@ -42,6 +46,8 @@ from apps.kuaiplm.schemas.annual_lab_plan import (
     AnnualLabPlanResponse,
     AnnualLabPlanUpdate,
 )
+from apps.kuaiplm.schemas.lab_request import LabRequestCreate
+from apps.kuaiplm.services.lab_request_service import LabRequestService
 from core.utils.timezone_utils import resolve_business_datetime, site_timezone_name
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 from infra.models.user import User
@@ -463,6 +469,67 @@ class AnnualLabPlanService(AppBaseService[AnnualLabPlan]):
                 tenant_id, plan, month
             )
         return await self._to_response(plan)
+
+    async def create_lab_request_for_month(
+        self,
+        tenant_id: int,
+        plan_id: int,
+        month_id: int,
+        data: AnnualLabPlanCreateLabRequestRequest,
+        current_user: User,
+    ) -> AnnualLabPlanCreateLabRequestResponse:
+        plan = await self._get_row(tenant_id, plan_id)
+        self._assert_plan_executable(plan)
+        month = await self._get_month(tenant_id, plan_id, month_id)
+        if month.lab_request_id:
+            raise BusinessLogicError("该月已有关联实验委托，请勿重复建单")
+
+        bt = (data.business_type or "").strip().lower()
+        if bt not in LAB_REQUEST_TYPES_USE_LAB_DISPATCH:
+            raise ValidationError("例试一键建单仅支持材料试验或整机例试类型")
+
+        project = await RdProject.filter(
+            tenant_id=tenant_id, id=data.project_id, deleted_at__isnull=True
+        ).first()
+        if not project:
+            raise ValidationError("研发项目不存在")
+
+        title = (data.title or month.title or "").strip()
+        if not title:
+            title = f"{plan.plan_year}年{month.month_no}月例试"
+        test_reason = f"年度例试计划 {plan.plan_code} {month.year_month}"
+
+        lab_svc = LabRequestService()
+        lab = await lab_svc.create(
+            tenant_id,
+            LabRequestCreate(
+                title=title,
+                business_type=bt,
+                project_id=project.id,
+                project_code=project.project_code,
+                expected_complete_at=month.due_at,
+                requester_name=month.owner_user_name or self._user_name(current_user),
+                test_reason=test_reason,
+                sample_desc=(month.material_desc or "").strip() or None,
+                remarks=f"来源 年度实验计划 {plan.plan_code} 月度 {month.year_month}",
+            ),
+            current_user,
+        )
+
+        month.lab_request_id = lab.id
+        month.lab_request_code = lab.code
+        if month.month_status == MONTH_STATUS_PENDING:
+            month.month_status = MONTH_STATUS_IN_PROGRESS
+        await month.save()
+        apply_update_audit(plan, current_user)
+        await plan.save()
+
+        plan_resp = await self._to_response(plan)
+        return AnnualLabPlanCreateLabRequestResponse(
+            plan=plan_resp,
+            lab_request_id=int(lab.id),
+            lab_request_code=str(lab.code),
+        )
 
     async def submit_issue(
         self, tenant_id: int, plan_id: int, month_id: int, current_user: User

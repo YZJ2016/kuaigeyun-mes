@@ -14,7 +14,10 @@ from typing import Any
 from core.models.permission import Permission, PermissionType
 from core.models.role_permission import RolePermission
 from core.models.user_role import UserRole
-from core.services.authorization.data_scope_resource_registry import normalize_resource_key
+from core.services.authorization.data_scope_resource_registry import (
+    normalize_resource_key,
+    resolve_data_scope_function_grant_resource,
+)
 from core.services.authorization.menu_resource_resolver import (
     is_generic_menu_permission_code,
     normalize_permission_code,
@@ -89,13 +92,14 @@ class EffectiveUserAccess:
         无一角色授予时返回空列表（由 DataScopeService 拒绝行可见），禁止回退全部角色。
         """
         key = normalize_resource_key(resource)
+        grant_key = resolve_data_scope_function_grant_resource(key)
         granted: list[Any] = []
         for role in self.roles:
             role_uuid = (getattr(role, "uuid", None) or "").strip()
             if not role_uuid:
                 continue
             keys = self.role_resource_keys.get(role_uuid) or frozenset()
-            if ALL_RESOURCES_MARKER in keys or key in keys:
+            if ALL_RESOURCES_MARKER in keys or grant_key in keys or key in keys:
                 granted.append(role)
         return granted
 

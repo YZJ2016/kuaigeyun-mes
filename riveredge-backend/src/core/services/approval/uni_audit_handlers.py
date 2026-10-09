@@ -1079,6 +1079,36 @@ async def _dispatch_prototype_build_sheet(
     _unsupported("prototype_build_sheet", action)
 
 
+async def _dispatch_qms_system_document(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.services.quality_qms_service import QmsSystemDocumentService
+
+    svc = QmsSystemDocumentService()
+    user = await _resolve_user_or_raise(user_id)
+    actor_name = getattr(user, "full_name", None) or getattr(user, "username", None) or str(user.id)
+    if action == "submit":
+        return await svc.submit_document(
+            tenant_id, entity_id, actor_id=user.id, actor_name=actor_name
+        )
+    if action == "approve":
+        return await svc.approve_document_after_audit(
+            tenant_id, entity_id, actor_id=user.id, actor_name=actor_name
+        )
+    if action == "reject":
+        return await svc.reject_document_after_audit(
+            tenant_id, entity_id, actor_id=user.id, actor_name=actor_name, reason=reason
+        )
+    if action in ("withdraw", "revoke"):
+        _unsupported("qms_system_document", action)
+    _unsupported("qms_system_document", action)
+
+
 async def _dispatch_rd_deliverable(
     action: str,
     *,
@@ -1470,6 +1500,7 @@ HANDLERS: Dict[str, DispatchFn] = {
     "sample_process": _dispatch_sample_process,
     "prototype_build_sheet": _dispatch_prototype_build_sheet,
     "rd_deliverable": _dispatch_rd_deliverable,
+    "qms_system_document": _dispatch_qms_system_document,
     "material_review": _dispatch_material_review,
     "bom_collaboration": _dispatch_bom_collaboration,
     "project_proposal": _dispatch_project_proposal,

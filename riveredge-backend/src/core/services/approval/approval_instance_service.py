@@ -3184,6 +3184,37 @@ class ApprovalInstanceService:
                     await svc.reject_deliverable_by_id(tenant_id, int(entity_id), approver)
                 logger.info(f"研发交付物 {entity_id} 审批回调完成: {approval_instance.status}")
 
+            async def _handle_qms_system_document() -> None:
+                from apps.kuaizhizao.services.quality_qms_service import QmsSystemDocumentService
+                from infra.models.user import User
+
+                if not entity_id:
+                    return
+                approver = await User.get_or_none(id=approver_id)
+                if not approver:
+                    return
+                actor_name = (
+                    getattr(approver, "full_name", None)
+                    or getattr(approver, "username", None)
+                    or str(approver.id)
+                )
+                svc = QmsSystemDocumentService()
+                if approval_instance.status == "approved":
+                    await svc.approve_document_after_audit(
+                        tenant_id,
+                        int(entity_id),
+                        actor_id=approver.id,
+                        actor_name=actor_name,
+                    )
+                elif approval_instance.status == "rejected":
+                    await svc.reject_document_after_audit(
+                        tenant_id,
+                        int(entity_id),
+                        actor_id=approver.id,
+                        actor_name=actor_name,
+                    )
+                logger.info(f"体系文件 {entity_id} 审批回调完成: {approval_instance.status}")
+
             async def _handle_material_review() -> None:
                 from apps.kuaiplm.services.material_review_service import MaterialReviewService
                 from infra.models.user import User
@@ -3428,6 +3459,7 @@ class ApprovalInstanceService:
                 "sample_process": _handle_sample_process,
                 "prototype_build_sheet": _handle_prototype_build_sheet,
                 "rd_deliverable": _handle_rd_deliverable,
+                "qms_system_document": _handle_qms_system_document,
                 "material_review": _handle_material_review,
                 "bom_collaboration": _handle_bom_collaboration,
                 "project_proposal": _handle_project_proposal,

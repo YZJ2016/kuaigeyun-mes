@@ -36,6 +36,8 @@ VALID_TEMPLATES = {
     "complaint_oqc",
     "complaint_customer",
     "inventory_verify",
+    "lab_request_dual_mgr",
+    "qms_system_document",
 }
 
 

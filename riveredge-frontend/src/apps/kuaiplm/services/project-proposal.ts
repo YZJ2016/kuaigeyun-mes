@@ -18,6 +18,13 @@ export type ProjectProposalStatus =
   | 'issued'
   | 'rejected';
 
+export interface ProjectProposalCapabilities {
+  sales_ready?: boolean;
+  supplier_filled?: boolean;
+  approved?: boolean;
+  issued?: boolean;
+}
+
 export interface ProjectProposal {
   id: number;
   uuid: string;
@@ -62,6 +69,7 @@ export interface ProjectProposal {
   updated_at?: string;
   created_by_name?: string | null;
   updated_by_name?: string | null;
+  capabilities?: ProjectProposalCapabilities | null;
 }
 
 export interface ProjectProposalSalesPayload {

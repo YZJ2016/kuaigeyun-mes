@@ -13,12 +13,17 @@ from apps.kuaiplm.models.prototype_build_sheet import (
 from apps.kuaiplm.models.rd_project import RdProject
 from apps.kuaiplm.schemas.prototype_build_sheet import (
     PrototypeBuildAttachment,
+    PrototypeBuildCapabilities,
     PrototypeBuildSectionUpdate,
     PrototypeBuildSheetCreate,
+    PrototypeBuildSheetListItem,
     PrototypeBuildSheetListResponse,
     PrototypeBuildSheetResponse,
     PrototypeBuildSheetUpdate,
     PrototypeBuildSignoffUpdate,
+)
+from apps.kuaiplm.utils.prototype_build_sheet_capabilities import (
+    compute_prototype_build_sheet_capabilities,
 )
 from core.services.approval.approval_instance_service import ApprovalInstanceService
 from core.services.approval.audit_binding_service import AuditBindingService
@@ -101,6 +106,20 @@ class PrototypeBuildSheetService(AppBaseService[PrototypeBuildSheet]):
             return True
         return len(attachments) > 0
 
+    @staticmethod
+    def _to_api_response(row: PrototypeBuildSheet) -> PrototypeBuildSheetResponse:
+        data = PrototypeBuildSheetResponse.model_validate(row)
+        caps = compute_prototype_build_sheet_capabilities(row)
+        data.capabilities = PrototypeBuildCapabilities.model_validate(caps)
+        return data
+
+    @staticmethod
+    def _list_item(row: PrototypeBuildSheet) -> PrototypeBuildSheetListItem:
+        item = PrototypeBuildSheetListItem.model_validate(row)
+        caps = compute_prototype_build_sheet_capabilities(row)
+        item.capabilities = PrototypeBuildCapabilities.model_validate(caps)
+        return item
+
     async def create(
         self, tenant_id: int, payload: PrototypeBuildSheetCreate, user: User
     ) -> PrototypeBuildSheetResponse:
@@ -127,7 +146,7 @@ class PrototypeBuildSheetService(AppBaseService[PrototypeBuildSheet]):
         )
         apply_create_audit(row, user)
         await row.save()
-        return PrototypeBuildSheetResponse.model_validate(row)
+        return self._to_api_response(row)
 
     async def list(
         self,
@@ -153,16 +172,14 @@ class PrototypeBuildSheetService(AppBaseService[PrototypeBuildSheet]):
             query = query.filter(title__icontains=keyword)
         total = await query.count()
         rows = await query.order_by("-updated_at", "-id").offset(skip).limit(limit)
-        from apps.kuaiplm.schemas.prototype_build_sheet import PrototypeBuildSheetListItem
-
         return PrototypeBuildSheetListResponse(
-            items=[PrototypeBuildSheetListItem.model_validate(r) for r in rows],
+            items=[self._list_item(r) for r in rows],
             total=total,
         )
 
     async def get(self, tenant_id: int, sheet_id: int) -> PrototypeBuildSheetResponse:
         row = await self._get_row(tenant_id, sheet_id)
-        return PrototypeBuildSheetResponse.model_validate(row)
+        return self._to_api_response(row)
 
     async def update(
         self,
@@ -184,7 +201,7 @@ class PrototypeBuildSheetService(AppBaseService[PrototypeBuildSheet]):
             row.remarks = payload.remarks
         apply_update_audit(row, user)
         await row.save()
-        return PrototypeBuildSheetResponse.model_validate(row)
+        return self._to_api_response(row)
 
     async def update_section(
         self,
@@ -212,7 +229,7 @@ class PrototypeBuildSheetService(AppBaseService[PrototypeBuildSheet]):
             row.structure_status = "ready" if ready else "draft"
         apply_update_audit(row, user)
         await row.save()
-        return PrototypeBuildSheetResponse.model_validate(row)
+        return self._to_api_response(row)
 
     async def update_signoff(
         self,
@@ -222,15 +239,15 @@ class PrototypeBuildSheetService(AppBaseService[PrototypeBuildSheet]):
         user: User,
     ) -> PrototypeBuildSheetResponse:
         row = await self._get_row(tenant_id, sheet_id)
-        if row.status not in {"approved", "issued", "closed"}:
-            raise BusinessLogicError("审核下发后才可填写制造/质量会签意见")
+        if row.status not in {"issued", "closed"}:
+            raise BusinessLogicError("下发制造样机组后才可填写制造/质量会签意见")
         if payload.manufacturing_opinion is not None:
             row.manufacturing_opinion = payload.manufacturing_opinion
         if payload.quality_opinion is not None:
             row.quality_opinion = payload.quality_opinion
         apply_update_audit(row, user)
         await row.save()
-        return PrototypeBuildSheetResponse.model_validate(row)
+        return self._to_api_response(row)
 
     async def submit(self, tenant_id: int, sheet_id: int, user: User) -> PrototypeBuildSheetResponse:
         row = await self._get_row(tenant_id, sheet_id)
@@ -267,7 +284,7 @@ class PrototypeBuildSheetService(AppBaseService[PrototypeBuildSheet]):
 
         if submit_instance_auto_passed(approval_instance):
             return await self.approve(tenant_id, sheet_id, user)
-        return PrototypeBuildSheetResponse.model_validate(row)
+        return self._to_api_response(row)
 
     async def approve(self, tenant_id: int, sheet_id: int, user: User) -> PrototypeBuildSheetResponse:
         row = await self._get_row(tenant_id, sheet_id)
@@ -287,7 +304,7 @@ class PrototypeBuildSheetService(AppBaseService[PrototypeBuildSheet]):
         row.approved_at = resolve_business_datetime()
         apply_update_audit(row, user)
         await row.save()
-        return PrototypeBuildSheetResponse.model_validate(row)
+        return self._to_api_response(row)
 
     async def reject(self, tenant_id: int, sheet_id: int, user: User) -> PrototypeBuildSheetResponse:
         row = await self._get_row(tenant_id, sheet_id)
@@ -306,7 +323,7 @@ class PrototypeBuildSheetService(AppBaseService[PrototypeBuildSheet]):
         row.status = "rejected"
         apply_update_audit(row, user)
         await row.save()
-        return PrototypeBuildSheetResponse.model_validate(row)
+        return self._to_api_response(row)
 
     async def issue(self, tenant_id: int, sheet_id: int, user: User) -> PrototypeBuildSheetResponse:
         row = await self._get_row(tenant_id, sheet_id)
@@ -316,11 +333,11 @@ class PrototypeBuildSheetService(AppBaseService[PrototypeBuildSheet]):
         row.issued_at = resolve_business_datetime()
         apply_update_audit(row, user)
         await row.save()
-        return PrototypeBuildSheetResponse.model_validate(row)
+        return self._to_api_response(row)
 
     async def close(self, tenant_id: int, sheet_id: int, user: User) -> PrototypeBuildSheetResponse:
         row = await self._get_row(tenant_id, sheet_id)
-        if row.status not in {"issued", "approved"}:
+        if row.status != "issued":
             raise BusinessLogicError("仅已下发状态可关闭")
         if not (row.manufacturing_opinion and str(row.manufacturing_opinion).strip()):
             raise ValidationError("制造会签意见必填")
@@ -330,7 +347,7 @@ class PrototypeBuildSheetService(AppBaseService[PrototypeBuildSheet]):
         row.closed_at = resolve_business_datetime()
         apply_update_audit(row, user)
         await row.save()
-        return PrototypeBuildSheetResponse.model_validate(row)
+        return self._to_api_response(row)
 
     async def delete(self, tenant_id: int, sheet_id: int, user: User) -> None:
         row = await self._get_row(tenant_id, sheet_id)

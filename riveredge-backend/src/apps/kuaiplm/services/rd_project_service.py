@@ -40,6 +40,8 @@ from apps.kuaiplm.models import (
     RdProjectTask,
     RdRequirement,
 )
+from apps.kuaiplm.constants.rd_deliverable_issue import RD_DELIVERABLE_ISSUE_TARGET_TYPES
+from apps.kuaiplm.models.rd_project_deliverable_issue import RdProjectDeliverableIssueGrant
 from apps.kuaiplm.models.rd_project_deliverable_version import RdProjectDeliverableVersion
 from apps.kuaiplm.schemas.rd_project import (
     PushTrialWorkOrderRequest,
@@ -48,7 +50,11 @@ from apps.kuaiplm.schemas.rd_project import (
     SpawnDeliveryProjectResponse,
     ProjectCollaborationSummary,
     RdProjectCreate,
+    RdProjectDeliverableCapabilities,
     RdProjectDeliverableCreate,
+    RdProjectDeliverableIssueGrantInput,
+    RdProjectDeliverableIssueGrantResponse,
+    RdProjectDeliverableIssueRequest,
     RdProjectDeliverableRejectRequest,
     RdProjectDeliverableResponse,
     RdProjectDeliverableListResponse,
@@ -80,9 +86,17 @@ from apps.kuaiplm.utils.deliverable_version import (
     head_status_to_version_status,
 )
 from apps.kuaiplm.utils.gate_template_seed import load_template_gate_defs
+from apps.kuaiplm.utils.rd_deliverable_issue_access import (
+    compute_deliverable_capabilities,
+    deliverable_type_requires_issue_scope,
+    load_user_role_ids,
+    user_can_view_deliverable_row,
+    user_maintains_deliverables,
+)
 from apps.kuaiplm.utils.rd_project_progress import compute_project_progress
 from apps.kuaiplm.utils.rd_project_execution import gates_not_executed
 from apps.master_data.models.material import Material
+from core.services.authorization.user_permission_service import UserPermissionService
 from core.services.file.document_version_policy import (
     can_download_historical_versions,
     can_view_historical_versions,
@@ -1135,6 +1149,7 @@ class RdProjectService(AppBaseService[RdProject]):
         if existing:
             existing.status = ver_status
             existing.is_effective = is_effective
+            existing.project_id = row.project_id
             existing.name = row.name
             existing.description = row.description
             existing.deliverable_type = row.deliverable_type
@@ -1279,6 +1294,169 @@ class RdProjectService(AppBaseService[RdProject]):
         code = (getattr(data, "project_code", None) or "").strip() or None
         return None, code
 
+    async def _grants_by_deliverable_ids(
+        self, tenant_id: int, deliverable_ids: List[int]
+    ) -> dict[int, List[RdProjectDeliverableIssueGrant]]:
+        if not deliverable_ids:
+            return {}
+        rows = await RdProjectDeliverableIssueGrant.filter(
+            tenant_id=tenant_id,
+            deliverable_id__in=deliverable_ids,
+            deleted_at__isnull=True,
+        ).all()
+        out: dict[int, List[RdProjectDeliverableIssueGrant]] = {}
+        for row in rows:
+            out.setdefault(int(row.deliverable_id), []).append(row)
+        return out
+
+    async def _clear_deliverable_issue(
+        self, tenant_id: int, deliverable_id: int, *, now: datetime
+    ) -> None:
+        await RdProjectDeliverableIssueGrant.filter(
+            tenant_id=tenant_id,
+            deliverable_id=deliverable_id,
+            deleted_at__isnull=True,
+        ).update(deleted_at=now)
+        await RdProjectDeliverable.filter(tenant_id=tenant_id, id=deliverable_id).update(
+            issued_at=None,
+            issued_by=None,
+            issued_by_name=None,
+        )
+
+    def _issue_grant_responses(
+        self, grants: List[RdProjectDeliverableIssueGrant]
+    ) -> List[RdProjectDeliverableIssueGrantResponse]:
+        return [
+            RdProjectDeliverableIssueGrantResponse(
+                target_type=g.target_type,
+                target_id=g.target_id,
+                target_label=g.target_label,
+            )
+            for g in grants
+        ]
+
+    async def _to_deliverable_response(
+        self,
+        row: RdProjectDeliverable,
+        *,
+        grants: Optional[List[RdProjectDeliverableIssueGrant]] = None,
+        current_user_id: Optional[int] = None,
+        permission_codes: Optional[List[str]] = None,
+        role_ids: Optional[List[int]] = None,
+        department_id: Optional[int] = None,
+        include_grants: bool = False,
+    ) -> RdProjectDeliverableResponse:
+        grant_list = grants if grants is not None else []
+        if include_grants and not grant_list and row.id is not None:
+            grant_list = await RdProjectDeliverableIssueGrant.filter(
+                tenant_id=row.tenant_id,
+                deliverable_id=row.id,
+                deleted_at__isnull=True,
+            ).all()
+        can_view = await user_can_view_deliverable_row(
+            row,
+            user_id=current_user_id,
+            permission_codes=permission_codes,
+            grants=grant_list,
+            role_ids=role_ids,
+            department_id=department_id,
+        )
+        caps = compute_deliverable_capabilities(
+            row,
+            can_view_row=can_view,
+            permission_codes=permission_codes,
+            user_id=current_user_id,
+        )
+        base = RdProjectDeliverableResponse.model_validate(row)
+        return base.model_copy(
+            update={
+                "capabilities": RdProjectDeliverableCapabilities.model_validate(caps),
+                "issue_grants": self._issue_grant_responses(grant_list)
+                if include_grants
+                else None,
+            }
+        )
+
+    async def issue_deliverable(
+        self,
+        tenant_id: int,
+        deliverable_id: int,
+        data: RdProjectDeliverableIssueRequest,
+        current_user: User,
+        *,
+        scope_project_id: Optional[int] = None,
+    ) -> RdProjectDeliverableResponse:
+        row = await self._get_scoped_deliverable(
+            tenant_id, deliverable_id, scope_project_id
+        )
+        if row.status != RdDeliverableStatus.APPROVED.value:
+            raise BusinessLogicError("仅已批准交付物可下发")
+        if not deliverable_type_requires_issue_scope(row.deliverable_type):
+            raise BusinessLogicError("该交付物类型无需单独下发")
+        grant_inputs = data.normalized_grants()
+        from core.models.role import Role
+
+        for role_uuid in data.role_uuids:
+            ru = (role_uuid or "").strip()
+            if not ru:
+                continue
+            role = await Role.get_or_none(tenant_id=tenant_id, uuid=ru)
+            if not role:
+                raise ValidationError(f"角色不存在: {role_uuid}")
+            grant_inputs.append(
+                RdProjectDeliverableIssueGrantInput(
+                    target_type="role",
+                    target_id=int(role.id),
+                    target_label=role.name,
+                )
+            )
+        if not grant_inputs:
+            raise ValidationError("须至少选择一个下发对象")
+        now = resolve_business_datetime()
+        user_info = await self.get_user_info(current_user.id)
+        actor_name = user_info["name"]
+        async with in_transaction():
+            await self._clear_deliverable_issue(tenant_id, deliverable_id, now=now)
+            for item in grant_inputs:
+                t = (item.target_type or "").strip().lower()
+                if t not in RD_DELIVERABLE_ISSUE_TARGET_TYPES:
+                    raise ValidationError(f"非法下发对象类型: {item.target_type}")
+                label = (item.target_label or "").strip() or None
+                if t == "user" and not label:
+                    uinfo = await self.get_user_info(int(item.target_id))
+                    label = uinfo.get("name")
+                await RdProjectDeliverableIssueGrant.create(
+                    tenant_id=tenant_id,
+                    deliverable_id=deliverable_id,
+                    target_type=t,
+                    target_id=int(item.target_id),
+                    target_label=label,
+                )
+            row.issued_at = now
+            row.issued_by = current_user.id
+            row.issued_by_name = actor_name
+            row.updated_by = current_user.id
+            row.updated_by_name = actor_name
+            await row.save()
+        grants = await RdProjectDeliverableIssueGrant.filter(
+            tenant_id=tenant_id,
+            deliverable_id=deliverable_id,
+            deleted_at__isnull=True,
+        ).all()
+        codes = sorted(
+            await UserPermissionService.get_user_permissions(
+                user_id=current_user.id,
+                tenant_id=tenant_id,
+            )
+        )
+        return await self._to_deliverable_response(
+            row,
+            grants=grants,
+            current_user_id=current_user.id,
+            permission_codes=codes,
+            include_grants=True,
+        )
+
     async def list_deliverables(
         self,
         tenant_id: int,
@@ -1287,10 +1465,13 @@ class RdProjectService(AppBaseService[RdProject]):
         limit: int = 20,
         keyword: Optional[str] = None,
         deliverable_type: Optional[str] = None,
+        deliverable_types: Optional[str] = None,
         material_code: Optional[str] = None,
         project_id: Optional[int] = None,
         unlinked_only: bool = False,
         linked_only: bool = False,
+        current_user_id: Optional[int] = None,
+        permission_codes: Optional[List[str]] = None,
     ) -> RdProjectDeliverableListResponse:
         qs = RdProjectDeliverable.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if unlinked_only:
@@ -1299,9 +1480,15 @@ class RdProjectService(AppBaseService[RdProject]):
             qs = qs.filter(project_id__isnull=False)
         elif project_id is not None:
             qs = qs.filter(project_id=project_id)
-        dtype = (deliverable_type or "").strip()
+        type_codes: List[str] = []
+        multi = (deliverable_types or "").strip()
+        if multi:
+            type_codes = [c.strip().lower() for c in multi.split(",") if c.strip()]
+        dtype = (deliverable_type or "").strip().lower()
         if dtype:
-            qs = qs.filter(deliverable_type=dtype)
+            type_codes = [dtype] if not type_codes else list(dict.fromkeys([*type_codes, dtype]))
+        if type_codes:
+            qs = qs.filter(deliverable_type__in=type_codes)
         mcode = (material_code or "").strip()
         if mcode:
             qs = qs.filter(material_code=mcode)
@@ -1315,9 +1502,57 @@ class RdProjectService(AppBaseService[RdProject]):
                 | Q(project_code__icontains=kw)
                 | Q(file_name__icontains=kw)
             )
-        total = await qs.count()
-        rows = await qs.order_by("-updated_at", "-id").offset(skip).limit(limit)
-        items = [RdProjectDeliverableResponse.model_validate(r) for r in rows]
+        role_ids: Optional[List[int]] = None
+        department_id: Optional[int] = None
+        if current_user_id is not None:
+            role_ids = await load_user_role_ids(current_user_id)
+            user_row = await User.get_or_none(id=current_user_id)
+            department_id = getattr(user_row, "department_id", None) if user_row else None
+
+        scope_filter = (
+            current_user_id is not None
+            and not user_maintains_deliverables(permission_codes)
+        )
+        if scope_filter:
+            candidate_rows = await qs.order_by("-updated_at", "-id").limit(500).all()
+        else:
+            total = await qs.count()
+            candidate_rows = await qs.order_by("-updated_at", "-id").offset(skip).limit(limit)
+
+        grant_map = await self._grants_by_deliverable_ids(
+            tenant_id, [int(r.id) for r in candidate_rows if r.id is not None]
+        )
+        visible_rows: List[RdProjectDeliverable] = []
+        for row in candidate_rows:
+            grants = grant_map.get(int(row.id), [])
+            can_view = await user_can_view_deliverable_row(
+                row,
+                user_id=current_user_id,
+                permission_codes=permission_codes,
+                grants=grants,
+                role_ids=role_ids,
+                department_id=department_id,
+            )
+            if can_view:
+                visible_rows.append(row)
+
+        if scope_filter:
+            total = len(visible_rows)
+            visible_rows = visible_rows[skip : skip + limit]
+
+        items: List[RdProjectDeliverableResponse] = []
+        for row in visible_rows:
+            grants = grant_map.get(int(row.id), [])
+            items.append(
+                await self._to_deliverable_response(
+                    row,
+                    grants=grants,
+                    current_user_id=current_user_id,
+                    permission_codes=permission_codes,
+                    role_ids=role_ids,
+                    department_id=department_id,
+                )
+            )
         return RdProjectDeliverableListResponse(items=items, total=total)
 
     async def get_deliverable(
@@ -1326,11 +1561,31 @@ class RdProjectService(AppBaseService[RdProject]):
         deliverable_id: int,
         *,
         scope_project_id: Optional[int] = None,
+        current_user_id: Optional[int] = None,
+        permission_codes: Optional[List[str]] = None,
     ) -> RdProjectDeliverableResponse:
         row = await self._get_scoped_deliverable(
             tenant_id, deliverable_id, scope_project_id
         )
-        return RdProjectDeliverableResponse.model_validate(row)
+        grants = await RdProjectDeliverableIssueGrant.filter(
+            tenant_id=tenant_id,
+            deliverable_id=deliverable_id,
+            deleted_at__isnull=True,
+        ).all()
+        if current_user_id is not None and not await user_can_view_deliverable_row(
+            row,
+            user_id=current_user_id,
+            permission_codes=permission_codes,
+            grants=grants,
+        ):
+            raise NotFoundError(f"交付物不存在: {deliverable_id}")
+        return await self._to_deliverable_response(
+            row,
+            grants=grants,
+            current_user_id=current_user_id,
+            permission_codes=permission_codes,
+            include_grants=True,
+        )
 
     async def create_deliverable(
         self,
@@ -1401,6 +1656,7 @@ class RdProjectService(AppBaseService[RdProject]):
             tenant_id, deliverable_id, scope_project_id
         )
         user_info = await self.get_user_info(updated_by)
+        patch = data.model_dump(exclude_unset=True)
         update_fields: Dict[str, Any] = {
             "updated_by": updated_by,
             "updated_by_name": user_info["name"],
@@ -1418,23 +1674,61 @@ class RdProjectService(AppBaseService[RdProject]):
             "legacy_material_code",
             "project_code",
         ):
-            val = getattr(data, field, None)
+            if field not in patch:
+                continue
+            val = patch[field]
             if val is not None:
                 if field in {"material_code", "legacy_material_code", "project_code"}:
                     update_fields[field] = str(val).strip() or None
                 else:
                     update_fields[field] = val
+            elif field in {"material_code", "legacy_material_code", "project_code", "gate_id"}:
+                update_fields[field] = None
+        if "project_id" in patch:
+            new_project_id = patch["project_id"]
+            if new_project_id is None:
+                update_fields["project_id"] = None
+                update_fields["gate_id"] = None
+            else:
+                project = await self._get_project_or_404(tenant_id, int(new_project_id))
+                update_fields["project_id"] = project.id
+                update_fields["project_code"] = (project.project_code or "").strip() or None
+                gate_id = update_fields.get("gate_id", row.gate_id)
+                if gate_id is not None:
+                    gate = await RdProjectGate.get_or_none(
+                        tenant_id=tenant_id, id=gate_id, project_id=project.id
+                    )
+                    if not gate:
+                        update_fields["gate_id"] = None
         merged_type = update_fields.get("deliverable_type", row.deliverable_type)
         merged_material = update_fields.get("material_code", row.material_code)
         merged_legacy = update_fields.get("legacy_material_code", row.legacy_material_code)
         merged_file = update_fields.get("file_name", row.file_name)
-        merged_project_code = update_fields.get("project_code", getattr(row, "project_code", None))
-        if row.project_id is not None and "project_code" in update_fields:
-            update_fields.pop("project_code", None)
-            merged_project_code = await self._resolve_deliverable_project_code(tenant_id, row)
-        naming_code = merged_project_code or await self._resolve_deliverable_project_code(
-            tenant_id, row
-        )
+        effective_project_id = update_fields.get("project_id", row.project_id)
+        final_gate_id = update_fields.get("gate_id", row.gate_id)
+        if final_gate_id is not None and effective_project_id is None:
+            raise BusinessLogicError("无项目归档的交付物不可关联阶段门")
+        if final_gate_id is not None and effective_project_id is not None:
+            gate = await RdProjectGate.get_or_none(
+                tenant_id=tenant_id,
+                id=final_gate_id,
+                project_id=effective_project_id,
+            )
+            if not gate:
+                raise BusinessLogicError(f"阶段门不存在: {final_gate_id}")
+        if effective_project_id is not None:
+            if "project_code" in update_fields:
+                update_fields.pop("project_code", None)
+            naming_code = (update_fields.get("project_code") or "").strip() or None
+            if "project_id" in update_fields or not naming_code:
+                project = await self._get_project_or_404(tenant_id, int(effective_project_id))
+                naming_code = (project.project_code or "").strip() or None
+            if not naming_code:
+                naming_code = await self._resolve_deliverable_project_code(tenant_id, row)
+        else:
+            naming_code = update_fields.get("project_code", getattr(row, "project_code", None))
+            if naming_code is not None:
+                naming_code = str(naming_code).strip() or None
         await self._validate_deliverable_write(
             tenant_id,
             project_code=naming_code,
@@ -1653,6 +1947,18 @@ class RdProjectService(AppBaseService[RdProject]):
         row = await self._get_scoped_deliverable(
             tenant_id, deliverable_id, scope_project_id
         )
+        grants = await RdProjectDeliverableIssueGrant.filter(
+            tenant_id=tenant_id,
+            deliverable_id=deliverable_id,
+            deleted_at__isnull=True,
+        ).all()
+        if not await user_can_view_deliverable_row(
+            row,
+            user_id=current_user_id,
+            permission_codes=permission_codes,
+            grants=grants,
+        ):
+            raise NotFoundError(f"交付物不存在: {deliverable_id}")
         versions = await RdProjectDeliverableVersion.filter(
             tenant_id=tenant_id,
             deliverable_id=deliverable_id,
@@ -1766,6 +2072,7 @@ class RdProjectService(AppBaseService[RdProject]):
             row.updated_by = actor_id
             row.updated_by_name = user_info["name"]
             await row.save()
+            await self._clear_deliverable_issue(tenant_id, deliverable_id, now=resolve_business_datetime())
         return RdProjectDeliverableResponse.model_validate(row)
 
     async def reject_deliverable(

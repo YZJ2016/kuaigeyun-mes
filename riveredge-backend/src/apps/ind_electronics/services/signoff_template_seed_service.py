@@ -1,24 +1,24 @@
-"""项目确认书、评审单行业预置写入轻办公表单模板。
+"""Funide 通用会签表单预置写入轻办公表单模板。
 
-真源：seeds/phase1_signoff_templates.py 中 funide_confirmation、funide_review_sheet。
-导航挂出「自定义审批」前按模板编码写入或对齐字段，避免手填评审类型。
+真源：seeds/phase1_signoff_templates.py（5M 变更、物料申请、样品检验等）。
+导航树挂「自定义审批」前 ensure，避免租户缺模板或字段落后于 seed。
 """
 
 from __future__ import annotations
 
-from apps.ind_electronics.seeds.phase1_signoff_templates import FUNIDE_PHASE1_SIGNOFF_TEMPLATES
+from apps.ind_electronics.seeds.phase1_signoff_templates import (
+    FUNIDE_PHASE1_SIGNOFF_TEMPLATES,
+    FUNIDE_PHASE1_SIGNOFF_TEMPLATE_CODES,
+)
 from apps.kuaioa.models.form_template import KuaioaFormTemplate
 from apps.kuaioa.services.form_schema_validator import normalize_fields_schema
 
-PROJECT_SIGNOFF_TEMPLATE_CODES = frozenset({"funide_confirmation", "funide_review_sheet"})
+# 兼容旧引用：与 Phase1 全会签模板集合一致
+PROJECT_SIGNOFF_TEMPLATE_CODES = FUNIDE_PHASE1_SIGNOFF_TEMPLATE_CODES
 
 
 async def ensure_project_signoff_templates(tenant_id: int) -> None:
-    presets = [
-        item
-        for item in FUNIDE_PHASE1_SIGNOFF_TEMPLATES
-        if item.get("template_code") in PROJECT_SIGNOFF_TEMPLATE_CODES
-    ]
+    presets = list(FUNIDE_PHASE1_SIGNOFF_TEMPLATES)
     for item in presets:
         code = str(item["template_code"])
         schema = normalize_fields_schema(item.get("fields_schema"))

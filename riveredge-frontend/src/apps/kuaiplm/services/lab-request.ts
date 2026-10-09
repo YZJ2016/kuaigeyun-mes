@@ -17,6 +17,7 @@ export type LabRequestBusinessType =
 export type LabRequestStatus =
   | 'draft'
   | 'pending_review'
+  | 'awaiting_lab_dispatch'
   | 'pending'
   | 'in_lab'
   | 'completed'
@@ -50,6 +51,13 @@ export interface LabRequestMeasureItem {
   quality_exception_uuid?: string | null;
   exception_linked_at?: string | null;
   remarks?: string | null;
+}
+
+export interface LabRequestOutsourceCapabilities {
+  filled?: boolean;
+  dept_approved?: boolean;
+  price_filled?: boolean;
+  lab_accepted?: boolean;
 }
 
 export interface LabRequest {
@@ -92,10 +100,23 @@ export interface LabRequest {
   report_rejected_at?: string | null;
   report_reject_reason?: string | null;
   remarks?: string | null;
+  attachments?: Array<{ file_uuid: string; file_name?: string | null }>;
+  structure_special_test?: string | null;
+  structure_section_attachments?: Array<{ file_uuid: string; file_name?: string | null }>;
+  structure_section_status?: string | null;
+  electronics_special_test?: string | null;
+  electronics_section_attachments?: Array<{ file_uuid: string; file_name?: string | null }>;
+  electronics_section_status?: string | null;
+  structure_manager_user_id?: number | null;
+  electronics_manager_user_id?: number | null;
+  notify_user_ids?: number[] | null;
+  dispatched_at?: string | null;
+  dispatched_by_name?: string | null;
   extension_payload?: Record<string, unknown> | null;
   reject_reason?: string | null;
   measure_items?: LabRequestMeasureItem[];
   has_ng?: boolean;
+  capabilities?: LabRequestOutsourceCapabilities | null;
   created_by?: number;
   created_by_name?: string;
   updated_by_name?: string;
@@ -137,6 +158,16 @@ export const labRequestApi = {
   delete: async (id: string | number) => api.delete(`${BASE}/${id}`),
   submit: async (id: string | number) =>
     (await api.post(`${BASE}/${id}/submit`)) as LabRequest,
+  dispatchToLaboratory: async (id: string | number) =>
+    (await api.post(`${BASE}/${id}/dispatch-to-laboratory`)) as LabRequest,
+  updateSection: async (
+    id: string | number,
+    section: 'structure' | 'electronics',
+    data: {
+      special_test?: string | null;
+      attachments?: Array<{ file_uuid: string; file_name?: string | null }>;
+    },
+  ) => (await api.put(`${BASE}/${id}/sections/${section}`, data)) as LabRequest,
   approve: async (id: string | number) =>
     (await api.post(`${BASE}/${id}/approve`)) as LabRequest,
   fillOutsourcePrice: async (id: string | number, outsource_price: number | string) =>

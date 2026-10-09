@@ -38,6 +38,7 @@ import {
   type RdProject,
   type RdProjectMember,
 } from '../../services/rd-project';
+import { SystemArchiveCapabilitiesTags } from '../../components/SystemArchiveCapabilitiesTags';
 import { listGateTemplates } from '../../services/gate-template';
 import {
   buildRdProjectLifecycleValueEnum,
@@ -368,18 +369,22 @@ const RdProjectsListPage: React.FC = () => {
         title: t('app.kuaiplm.rdProjects.systemArchive.listColumn'),
         dataIndex: 'system_archive_summary',
         key: 'system_archive_summary',
-        width: 108,
-        minWidth: 108,
+        width: 148,
+        minWidth: 132,
         uniTableKeepWidth: true,
         resizable: false,
         search: false,
         render: (_, row) => {
           const s = row.system_archive_summary;
           if (!s) return '—';
-          return t('app.kuaiplm.rdProjects.systemArchive.listCell', {
-            filled: s.filled,
-            total: s.total,
-          });
+          return (
+            <SystemArchiveCapabilitiesTags
+              compact
+              capabilities={s.capabilities}
+              filled={s.filled}
+              total={s.total}
+            />
+          );
         },
       },
       ...plmCreatedUpdatedColumns<RdProject>(t),
@@ -578,7 +583,7 @@ const RdProjectsListPage: React.FC = () => {
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         columns={alignProColumns(columns, GLOBAL_DOC_LIST_FIELD_RANK)}
-        columnPersistenceId="apps.kuaiplm.pages.rd-projects.list-v4"
+        columnPersistenceId="apps.kuaiplm.pages.rd-projects.list-v5-archive-capabilities"
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
         pinnedTabsField={LIST_LIFECYCLE_STAGE_FIELD}

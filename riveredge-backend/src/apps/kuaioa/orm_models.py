@@ -3,6 +3,7 @@
 ORM_MODEL_MODULES: list[str] = [
     "apps.kuaioa.models.form_template",
     "apps.kuaioa.models.form_request",
+    "apps.kuaioa.models.form_request_issue",
     "apps.kuaioa.models.training",
     "apps.kuaioa.models.license",
     "apps.kuaioa.models.asset",

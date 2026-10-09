@@ -56,6 +56,8 @@ export interface EcnChangeFormModalProps {
   open: boolean;
   editing?: EngineeringChange | null;
   projectId?: number;
+  /** 新建默认入口，如 design_change_request（L65） */
+  defaultEntrySource?: string;
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -114,6 +116,7 @@ const EcnChangeFormModal: React.FC<EcnChangeFormModalProps> = ({
   open,
   editing,
   projectId,
+  defaultEntrySource,
   onClose,
   onSuccess,
 }) => {
@@ -192,10 +195,10 @@ const EcnChangeFormModal: React.FC<EcnChangeFormModalProps> = ({
     return {
       project_id: projectId,
       change_kind: 'material',
-      entry_source: 'engineering_change',
+      entry_source: defaultEntrySource || 'engineering_change',
       materials: [emptyRow],
     };
-  }, [editing, materialColumns, projectId]);
+  }, [defaultEntrySource, editing, materialColumns, projectId]);
 
   const entrySourceOptions = useMemo(
     () =>
@@ -232,14 +235,17 @@ const EcnChangeFormModal: React.FC<EcnChangeFormModalProps> = ({
             .map((m) =>
               industryActive ? prepareMaterialLineForApi(m, materialColumns) : m,
             );
-          if (!cleanMaterials.length) {
-            messageApi.error(t('app.kuaiplm.ecn.messages.materialRequired'));
-            throw new Error('material required');
-          }
           const headerPayload = buildHeaderExtensionPayload(values, formProfile, industryActive) || {};
           const entrySource = values.entry_source
             ? String(values.entry_source).trim()
             : '';
+          const rdIssuedAt = editing?.extension_payload?.rd_issued_at;
+          const dcrInitPhase =
+            entrySource === 'design_change_request' && !rdIssuedAt;
+          if (!dcrInitPhase && !cleanMaterials.length) {
+            messageApi.error(t('app.kuaiplm.ecn.messages.materialRequired'));
+            throw new Error('material required');
+          }
           const extension_payload =
             entrySource || Object.keys(headerPayload).length
               ? {

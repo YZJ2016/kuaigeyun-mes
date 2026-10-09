@@ -11,6 +11,8 @@ export interface RdDeliverableListQuery {
   limit?: number;
   keyword?: string;
   deliverable_type?: string;
+  /** 逗号分隔类型码，与 deliverable_type 二选一 */
+  types?: string;
   material_code?: string;
   project_id?: number;
   unlinked_only?: boolean;
@@ -88,5 +90,19 @@ export async function rejectRdDeliverable(
   return apiRequest<RdProjectDeliverable>(`${BASE}/${id}/reject`, {
     method: 'POST',
     data: reason ? { reason } : {},
+  });
+}
+
+export async function issueRdDeliverable(
+  id: number | string,
+  data: {
+    user_ids?: number[];
+    role_uuids?: string[];
+    department_ids?: number[];
+  },
+): Promise<RdProjectDeliverable> {
+  return apiRequest<RdProjectDeliverable>(`${BASE}/${id}/issue`, {
+    method: 'POST',
+    data,
   });
 }

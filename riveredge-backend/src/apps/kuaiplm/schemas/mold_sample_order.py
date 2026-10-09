@@ -23,6 +23,14 @@ class MoldSampleOrderCreate(BaseModel):
     remarks: Optional[str] = None
 
 
+class MoldSampleCapabilities(BaseModel):
+    file_uploaded: bool = False
+    submitted: bool = False
+    approved: bool = False
+    sealed: bool = False
+    archived: bool = False
+
+
 class MoldSampleOrderUpdate(BaseModel):
     doc_kind: Optional[str] = Field(None, min_length=1, max_length=32)
     title: Optional[str] = Field(None, min_length=1, max_length=200)
@@ -64,8 +72,31 @@ class MoldSampleOrderResponse(BaseModel):
     created_by_name: Optional[str] = None
     updated_by: Optional[int] = None
     updated_by_name: Optional[str] = None
+    capabilities: Optional[MoldSampleCapabilities] = None
+
+
+class MoldSampleOrderListItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    uuid: UUID
+    order_code: str
+    project_id: int
+    project_code: str
+    project_name: str
+    doc_kind: str
+    title: str
+    contract_no: Optional[str] = None
+    party_name: Optional[str] = None
+    status: str
+    file_name: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    created_by_name: Optional[str] = None
+    updated_by_name: Optional[str] = None
+    capabilities: Optional[MoldSampleCapabilities] = None
 
 
 class MoldSampleOrderListResponse(BaseModel):
-    items: List[MoldSampleOrderResponse]
+    items: List[MoldSampleOrderListItem]
     total: int

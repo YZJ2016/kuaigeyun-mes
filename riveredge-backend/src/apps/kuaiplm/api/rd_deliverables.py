@@ -10,6 +10,7 @@ from loguru import logger
 
 from apps.kuaiplm.schemas.rd_project import (
     RdProjectDeliverableCreate,
+    RdProjectDeliverableIssueRequest,
     RdProjectDeliverableListResponse,
     RdProjectDeliverableRejectRequest,
     RdProjectDeliverableResponse,
@@ -55,23 +56,31 @@ async def list_rd_deliverables(
     limit: int = Query(20, ge=1, le=100),
     keyword: Optional[str] = Query(None),
     deliverable_type: Optional[str] = Query(None),
+    types: Optional[str] = Query(
+        None, description="逗号分隔的交付物类型码，与 deliverable_type 二选一"
+    ),
     material_code: Optional[str] = Query(None),
     project_id: Optional[int] = Query(None),
     unlinked_only: bool = Query(False),
     linked_only: bool = Query(False),
+    current_user: User = Depends(get_current_user),
     _auth=Depends(require_permission_codes("kuaiplm:project:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
+    codes = await _permission_codes(current_user, tenant_id)
     return await service.list_deliverables(
         tenant_id,
         skip=skip,
         limit=limit,
         keyword=keyword,
         deliverable_type=deliverable_type,
+        deliverable_types=types,
         material_code=material_code,
         project_id=project_id,
         unlinked_only=unlinked_only,
         linked_only=linked_only,
+        current_user_id=current_user.id,
+        permission_codes=codes,
     )
 
 
@@ -113,11 +122,18 @@ async def create_rd_deliverable(
 )
 async def get_rd_deliverable(
     deliverable_id: int = Path(...),
+    current_user: User = Depends(get_current_user),
     _auth=Depends(require_permission_codes("kuaiplm:project:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
-        return await service.get_deliverable(tenant_id, deliverable_id)
+        codes = await _permission_codes(current_user, tenant_id)
+        return await service.get_deliverable(
+            tenant_id,
+            deliverable_id,
+            current_user_id=current_user.id,
+            permission_codes=codes,
+        )
     except NotFoundError as e:
         raise _err(404, str(e), f"/rd-deliverables/{deliverable_id}", tenant_id)
 
@@ -269,6 +285,28 @@ async def approve_rd_deliverable(
         raise _err(404, str(e), f"/rd-deliverables/{deliverable_id}/approve", tenant_id)
     except BusinessLogicError as e:
         raise _err(400, str(e), f"/rd-deliverables/{deliverable_id}/approve", tenant_id)
+
+
+@router.post(
+    "/{deliverable_id}/issue",
+    response_model=RdProjectDeliverableResponse,
+    summary="Issue approved deliverable to selected targets",
+)
+async def issue_rd_deliverable(
+    data: RdProjectDeliverableIssueRequest,
+    deliverable_id: int = Path(...),
+    current_user: User = Depends(get_current_user),
+    _auth=Depends(require_permission_codes("kuaiplm:project:update")),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await service.issue_deliverable(
+            tenant_id, deliverable_id, data, current_user
+        )
+    except NotFoundError as e:
+        raise _err(404, str(e), f"/rd-deliverables/{deliverable_id}/issue", tenant_id)
+    except (BusinessLogicError, ValidationError) as e:
+        raise _err(422, str(e), f"/rd-deliverables/{deliverable_id}/issue", tenant_id)
 
 
 @router.post(

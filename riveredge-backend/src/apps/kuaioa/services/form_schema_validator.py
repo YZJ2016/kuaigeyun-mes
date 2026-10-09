@@ -22,7 +22,9 @@ def normalize_fields_schema(raw: Any) -> list[dict[str, Any]]:
         "select",
         "user",
         "department",
+        "department_ids",
         "file",
+        "user_ids",
     }
     for item in raw:
         if not isinstance(item, dict):
@@ -77,6 +79,10 @@ def validate_form_data(fields_schema: list[dict[str, Any]], form_data: dict[str,
             continue
         if field.get("type") == "file":
             if not str(value or "").strip():
+                raise BusinessLogicError(f"字段「{label}」必填")
+            continue
+        if field.get("type") in ("user_ids", "department_ids"):
+            if not isinstance(value, list) or not value:
                 raise BusinessLogicError(f"字段「{label}」必填")
             continue
         if value is None or value == "":

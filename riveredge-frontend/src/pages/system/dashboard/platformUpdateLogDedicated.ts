@@ -9,6 +9,216 @@ import type { PlatformUpdateLogEntry } from './platformUpdateLog';
 
 export const PLATFORM_UPDATE_LOG_DEDICATED: PlatformUpdateLogEntry[] = [
   {
+    id: 'funide-oa-l06-rework-direct-create-r01',
+    date: '2026-10-08',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-l06-rework-direct-create-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-l06-rework-direct-create-r01.description',
+  },
+  {
+    id: 'funide-oa-l67-mold-sample-order-r01',
+    date: '2026-10-08',
+    type: 'feature',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-l67-mold-sample-order-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-l67-mold-sample-order-r01.description',
+  },
+  {
+    id: 'funide-oa-l66-system-archive-r01',
+    date: '2026-10-08',
+    type: 'feature',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-l66-system-archive-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-l66-system-archive-r01.description',
+  },
+  {
+    id: 'funide-oa-l65-design-change-request-r01',
+    date: '2026-10-08',
+    type: 'feature',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-l65-design-change-request-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-l65-design-change-request-r01.description',
+  },
+  {
+    id: 'funide-oa-l64-prototype-build-sheet-r01',
+    date: '2026-10-08',
+    type: 'feature',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-l64-prototype-build-sheet-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-l64-prototype-build-sheet-r01.description',
+  },
+  {
+    id: 'funide-oa-l63-ecn-signoff-r01',
+    date: '2026-10-08',
+    type: 'feature',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-l63-ecn-signoff-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-l63-ecn-signoff-r01.description',
+  },
+  {
+    id: 'funide-oa-l62-project-proposal-r01',
+    date: '2026-10-08',
+    type: 'feature',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-l62-project-proposal-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-l62-project-proposal-r01.description',
+  },
+  {
+    id: 'funide-oa-l61-trial-flow-complete-r01',
+    date: '2026-10-08',
+    type: 'feature',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-l61-trial-flow-complete-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-l61-trial-flow-complete-r01.description',
+  },
+  {
+    id: 'funide-oa-l60-material-issue-r01',
+    date: '2026-10-08',
+    type: 'feature',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-l60-material-issue-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-l60-material-issue-r01.description',
+  },
+  {
+    id: 'funide-oa-l59-bom-collab-capabilities-r01',
+    date: '2026-10-08',
+    type: 'feature',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-l59-bom-collab-capabilities-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-l59-bom-collab-capabilities-r01.description',
+  },
+  {
+    id: 'funide-oa-l58-outsource-lab-request-r01',
+    date: '2026-10-08',
+    type: 'feature',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-l58-outsource-lab-request-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-l58-outsource-lab-request-r01.description',
+  },
+  {
+    id: 'funide-oa-l57-customer-spec-issue-r01',
+    date: '2026-10-08',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-l57-customer-spec-issue-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-l57-customer-spec-issue-r01.description',
+  },
+  {
+    id: 'funide-oa-l56-review-sheet-issue-r01',
+    date: '2026-10-08',
+    type: 'feature',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-l56-review-sheet-issue-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-l56-review-sheet-issue-r01.description',
+  },
+  {
+    id: 'funide-oa-l55-confirmation-issue-r01',
+    date: '2026-10-08',
+    type: 'feature',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-l55-confirmation-issue-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-l55-confirmation-issue-r01.description',
+  },
+  {
+    id: 'funide-oa-l54-tech-work-contact-issue-r01',
+    date: '2026-10-08',
+    type: 'feature',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-l54-tech-work-contact-issue-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-l54-tech-work-contact-issue-r01.description',
+  },
+  {
+    id: 'funide-oa-l52-lab-request-workflow-r01',
+    date: '2026-10-08',
+    type: 'feature',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-l52-lab-request-workflow-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-l52-lab-request-workflow-r01.description',
+  },
+  {
+    id: 'funide-oa-l50-lab-request-r01',
+    date: '2026-10-08',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-l50-lab-request-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-l50-lab-request-r01.description',
+  },
+  {
+    id: 'funide-oa-sample-inspection-file-r01',
+    date: '2026-10-08',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-sample-inspection-file-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-sample-inspection-file-r01.description',
+  },
+  {
+    id: 'funide-oa-material-request-fields-r01',
+    date: '2026-10-08',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-material-request-fields-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-material-request-fields-r01.description',
+  },
+  {
+    id: 'funide-oa-five-m-change-file-fields-r01',
+    date: '2026-10-08',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-five-m-change-file-fields-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-five-m-change-file-fields-r01.description',
+  },
+  {
+    id: 'funide-oa-rd-deliverables-dept-menu-r02',
+    date: '2026-10-08',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-rd-deliverables-dept-menu-r02.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-rd-deliverables-dept-menu-r02.description',
+  },
+  {
     id: 'funide-oa-rd-deliverables-menu-r01',
     date: '2026-10-08',
     type: 'improvement',

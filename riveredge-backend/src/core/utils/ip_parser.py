@@ -245,6 +245,7 @@ _ADMIN_SUFFIXES = (
     "回族自治区",
     "维吾尔自治区",
     "自治区",
+    "自治州",
     "地区",
     "省",
     "市",
@@ -337,8 +338,12 @@ def _strip_admin_suffix(text: str) -> str:
     if not s:
         return ""
     for suf in _ADMIN_SUFFIXES:
-        if s.endswith(suf) and len(s) > len(suf):
-            return s[: -len(suf)].strip()
+        if not s.endswith(suf) or len(s) <= len(suf):
+            continue
+        # 「州」是广州/杭州等市名用字，不是单字后缀；仅对三字及以上（如凉山州）去尾字
+        if suf == "州" and len(s) <= 2:
+            continue
+        return s[: -len(suf)].strip()
     return s
 
 
@@ -487,6 +492,47 @@ def vote_ip_location_details(candidates: list[Dict[str, Any]]) -> Optional[Dict[
 
 # 第三方 IP 库常把台湾标成独立国家/地区；登录地点须统一写成「中国 …」
 _TAIWAN_IN_LOCATION = re.compile(r"(台湾|台灣|Taiwan)", re.IGNORECASE)
+
+
+def _zhou_two_char_city_repair_by_first_char() -> Dict[str, str]:
+    """历史 bug：两字「*州」市名误去尾「州」后只剩首字；回填时按首字还原市名。"""
+    repair: Dict[str, str] = {}
+    ambiguous: set[str] = set()
+    for city in {c for c in _CITY_VOTE_ALIASES.values() if len(c) == 2 and c.endswith("州")}:
+        key = city[0]
+        if key in repair:
+            ambiguous.add(key)
+        else:
+            repair[key] = city
+    for key in ambiguous:
+        repair.pop(key, None)
+    return repair
+
+
+_ZHOU_CITY_REPAIR_BY_FIRST_CHAR = _zhou_two_char_city_repair_by_first_char()
+
+
+def repair_truncated_zhou_city_login_location(label: Optional[str]) -> Optional[str]:
+    """
+    修复 login_location 中因误剥「州」导致的单字市名（如「中国 广东 广」→「中国 广东 广州」）。
+    无法唯一还原时保持原文。
+    """
+    if label is None:
+        return None
+    normalized = normalize_login_location_label(str(label).strip())
+    if not normalized:
+        return normalized
+    parts = normalized.split()
+    if len(parts) < 3:
+        return normalized
+    city_fragment = parts[-1]
+    if len(city_fragment) != 1 or not _has_cjk(city_fragment):
+        return normalized
+    repair_city = _ZHOU_CITY_REPAIR_BY_FIRST_CHAR.get(city_fragment)
+    if not repair_city:
+        return normalized
+    parts[-1] = repair_city
+    return normalize_login_location_label(" ".join(parts))
 
 
 def normalize_login_location_label(label: Optional[str]) -> Optional[str]:

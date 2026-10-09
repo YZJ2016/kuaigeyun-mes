@@ -9,6 +9,13 @@ const BASE = '/apps/kuaiplm/bom-collaborations';
 export type BomCollabStatus = 'draft' | 'pending' | 'approved' | 'entered' | 'rejected';
 export type BomCollabSection = 'electronics' | 'structure';
 
+export interface BomCollabCapabilities {
+  electronics_ready?: boolean;
+  structure_ready?: boolean;
+  approved?: boolean;
+  clerk_entered?: boolean;
+}
+
 export interface BomCollabFormProfileSection {
   key: string;
   label: string;
@@ -70,6 +77,7 @@ export interface BomCollaboration {
   updated_at?: string;
   created_by_name?: string | null;
   updated_by_name?: string | null;
+  capabilities?: BomCollabCapabilities | null;
 }
 
 export interface BomCollabCreatePayload {

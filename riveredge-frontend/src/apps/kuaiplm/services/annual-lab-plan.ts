@@ -99,4 +99,14 @@ export const annualLabPlanApi = {
     (await api.post(`${BASE}/${planId}/months/${monthId}/issue/approve`)) as AnnualLabPlan,
   rejectIssue: async (planId: number, monthId: number, reason: string) =>
     (await api.post(`${BASE}/${planId}/months/${monthId}/issue/reject`, { reason })) as AnnualLabPlan,
+  createLabRequestForMonth: async (
+    planId: number,
+    monthId: number,
+    data: { project_id: number; business_type?: string; title?: string },
+  ) =>
+    (await api.post(`${BASE}/${planId}/months/${monthId}/create-lab-request`, data)) as {
+      plan: AnnualLabPlan;
+      lab_request_id: number;
+      lab_request_code: string;
+    },
 };

@@ -46,6 +46,7 @@ import {
   type PrototypeBuildSheetStatus,
 } from '../../services/prototype-build-sheet';
 import { resolvePlmStandardDocListSearch } from '../../utils/plmListCore';
+import { PrototypeBuildCapabilitiesTags } from '../../components/PrototypeBuildCapabilitiesTags';
 
 const RESOURCE = 'kuaiplm:prototype-build-sheet';
 const STATUS_KEYS: PrototypeBuildSheetStatus[] = [
@@ -188,6 +189,17 @@ const PrototypeBuildSheetsPage: React.FC = () => {
         ellipsis: true,
       },
       {
+        title: t('app.kuaiplm.prototypeBuildSheet.capabilitiesColumn'),
+        dataIndex: 'capabilities',
+        key: 'capabilities',
+        ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
+        width: 420,
+        minWidth: 380,
+        uniTableKeepWidth: true,
+        hideInSearch: true,
+        render: (_, row) => <PrototypeBuildCapabilitiesTags capabilities={row.capabilities} />,
+      },
+      {
         ...UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS,
         title: t('common.status'),
         dataIndex: 'status',
@@ -322,7 +334,7 @@ const PrototypeBuildSheetsPage: React.FC = () => {
           enableRowSelection
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
-          columnPersistenceId="apps.kuaiplm.pages.prototype-build-sheets.width-v3"
+          columnPersistenceId="apps.kuaiplm.pages.prototype-build-sheets.width-v4-capabilities"
           headerTitle={t('app.kuaiplm.prototypeBuildSheet.title')}
           showCreateButton={perms.canCreate}
           createButtonText={t('app.kuaiplm.prototypeBuildSheet.createButton') + NEW_SHORTCUT_HINT}
@@ -595,7 +607,7 @@ const PrototypeBuildSheetsPage: React.FC = () => {
                   {t('app.kuaiplm.prototypeBuildSheet.actions.issue')}
                 </Button>
               ) : null}
-              {perms.canUpdate && ['approved', 'issued'].includes(detail.status) ? (
+              {perms.canUpdate && ['issued', 'closed'].includes(detail.status) ? (
                 <Button
                   size="small"
                   onClick={() => {
@@ -607,7 +619,7 @@ const PrototypeBuildSheetsPage: React.FC = () => {
                   {t('app.kuaiplm.prototypeBuildSheet.actions.signoff')}
                 </Button>
               ) : null}
-              {perms.canAction?.('complete') && ['issued', 'approved'].includes(detail.status) ? (
+              {perms.canAction?.('complete') && detail.status === 'issued' ? (
                 <Button
                   type="primary"
                   size="small"

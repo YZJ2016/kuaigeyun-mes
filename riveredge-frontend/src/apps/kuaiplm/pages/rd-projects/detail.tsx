@@ -44,7 +44,6 @@ import {
 } from '@ant-design/icons';
 import {
   ProFormDatePicker,
-  ProFormDependency,
   ProFormSelect,
   ProFormText,
   ProFormTextArea,
@@ -98,8 +97,10 @@ import {
   type ProjectType,
 } from '../../services/rd-project';
 import { openMasterDataInNewTab, openProjectLinkInNewTab, type EngineeringLinkType } from '../../services/master-data-links';
+import { RdDeliverableTypeFormFields } from '../../components/RdDeliverableTypeFormFields';
 import { RdProjectGateStepper } from '../../components/RdProjectGateStepper';
 import { RdProjectSystemArchivePanel } from '../../components/RdProjectSystemArchivePanel';
+import { buildRdDeliverableTypeSelectOptions } from '../../utils/rdDeliverableTypePresentation';
 import EngineeringLinkTargetSelect from '../../components/EngineeringLinkTargetSelect';
 import {
   getKuaiplmDeliverableStatusOptions,
@@ -261,103 +262,7 @@ const RdProjectDetailPage: React.FC = () => {
     projectPerms.canCreate ||
     projectPerms.canUpdate ||
     Boolean(projectPerms.canAction?.('upload-part-spec'));
-  const deliverableTypeOptions = useMemo(
-    () => [
-      {
-        value: 'part_spec',
-        label: t('app.kuaiplm.rdProjects.detail.deliverable.type.partSpec'),
-      },
-      {
-        value: 'software_spec',
-        label: t('app.kuaiplm.rdProjects.detail.deliverable.type.softwareSpec'),
-      },
-      {
-        value: 'schematic',
-        label: t('app.kuaiplm.rdProjects.detail.deliverable.type.schematic'),
-      },
-      {
-        value: 'layout',
-        label: t('app.kuaiplm.rdProjects.detail.deliverable.type.layout'),
-      },
-      {
-        value: 'gerber',
-        label: t('app.kuaiplm.rdProjects.detail.deliverable.type.gerber'),
-      },
-      {
-        value: 'panelization',
-        label: t('app.kuaiplm.rdProjects.detail.deliverable.type.panelization'),
-      },
-      {
-        value: 'test_report_part',
-        label: t('app.kuaiplm.rdProjects.detail.deliverable.type.testReportPart'),
-      },
-      {
-        value: 'test_report_complete',
-        label: t('app.kuaiplm.rdProjects.detail.deliverable.type.testReportComplete'),
-      },
-      {
-        value: 'drawing_3d',
-        label: t('app.kuaiplm.rdProjects.detail.deliverable.type.drawing3d'),
-      },
-      {
-        value: 'drawing_cad',
-        label: t('app.kuaiplm.rdProjects.detail.deliverable.type.drawingCad'),
-      },
-      {
-        value: 'drawing_pdf',
-        label: t('app.kuaiplm.rdProjects.detail.deliverable.type.drawingPdf'),
-      },
-      {
-        value: 'mold_dfm',
-        label: t('app.kuaiplm.rdProjects.detail.deliverable.type.moldDfm'),
-      },
-      {
-        value: 'mold_drawing',
-        label: t('app.kuaiplm.rdProjects.detail.deliverable.type.moldDrawing'),
-      },
-      {
-        value: 'mold_acceptance',
-        label: t('app.kuaiplm.rdProjects.detail.deliverable.type.moldAcceptance'),
-      },
-      {
-        value: 'reliability_report',
-        label: t('app.kuaiplm.rdProjects.detail.deliverable.type.reliabilityReport'),
-      },
-      {
-        value: 'mold_repair',
-        label: t('app.kuaiplm.rdProjects.detail.deliverable.type.moldRepair'),
-      },
-      {
-        value: 'drawing_silkscreen',
-        label: t('app.kuaiplm.rdProjects.detail.deliverable.type.drawingSilkscreen'),
-      },
-      {
-        value: 'drawing_assembly',
-        label: t('app.kuaiplm.rdProjects.detail.deliverable.type.drawingAssembly'),
-      },
-      {
-        value: 'drawing_packaging',
-        label: t('app.kuaiplm.rdProjects.detail.deliverable.type.drawingPackaging'),
-      },
-      {
-        value: 'drawing_pcb_assembly',
-        label: t('app.kuaiplm.rdProjects.detail.deliverable.type.drawingPcbAssembly'),
-      },
-      {
-        value: 'customer_spec',
-        label: t('app.kuaiplm.rdProjects.detail.deliverable.type.customerSpec'),
-      },
-      {
-        value: 'customer_approval',
-        label: t('app.kuaiplm.rdProjects.detail.deliverable.type.customerApproval'),
-      },
-      {
-        value: 'document',
-        label: t('app.kuaiplm.rdProjects.detail.deliverable.type.document'),
-      },
-    ],
-    [t],
-  );
+  const deliverableTypeOptions = useMemo(() => buildRdDeliverableTypeSelectOptions(t), [t]);
   const { token } = theme.useToken();
   const { message: messageApi } = App.useApp();
   const [loading, setLoading] = useState(true);
@@ -1646,183 +1551,7 @@ const RdProjectDetailPage: React.FC = () => {
           showSearch
           allowClear
         />
-        <ProFormDependency name={['deliverable_type']}>
-          {({ deliverable_type }) => {
-            if (isPartSpecType(deliverable_type)) {
-              return (
-                <>
-                  <Alert
-                    type="info"
-                    showIcon
-                    style={{ marginBottom: 16 }}
-                    title={t('app.kuaiplm.rdProjects.detail.deliverable.partSpecHint')}
-                  />
-                  <ProFormText
-                    name="material_code"
-                    label={t('app.kuaiplm.rdProjects.detail.deliverable.materialCode')}
-                    rules={[
-                      {
-                        required: true,
-                        message: t('app.kuaiplm.rdProjects.detail.deliverable.materialCodeRequired'),
-                      },
-                    ]}
-                    placeholder={t('app.kuaiplm.rdProjects.detail.deliverable.materialCodePlaceholder')}
-                  />
-                </>
-              );
-            }
-            if (isSoftwareSpecType(deliverable_type)) {
-              const code = project?.project_code?.trim() || 'PROJECT';
-              return (
-                <Alert
-                  type="info"
-                  showIcon
-                  style={{ marginBottom: 16 }}
-                  title={t('app.kuaiplm.rdProjects.detail.deliverable.softwareSpecHint', {
-                    projectCode: code,
-                  })}
-                />
-              );
-            }
-            if (isSchematicGerberType(deliverable_type)) {
-              return (
-                <>
-                  <Alert
-                    type="info"
-                    showIcon
-                    style={{ marginBottom: 16 }}
-                    title={t('app.kuaiplm.rdProjects.detail.deliverable.schematicGerberHint')}
-                  />
-                  <ProFormText
-                    name="material_code"
-                    label={t('app.kuaiplm.rdProjects.detail.deliverable.pcbCode')}
-                    rules={[
-                      {
-                        required: true,
-                        message: t('app.kuaiplm.rdProjects.detail.deliverable.pcbCodeRequired'),
-                      },
-                    ]}
-                    placeholder={t('app.kuaiplm.rdProjects.detail.deliverable.pcbCodePlaceholder')}
-                  />
-                </>
-              );
-            }
-            if (isTestReportPartType(deliverable_type)) {
-              return (
-                <>
-                  <Alert
-                    type="info"
-                    showIcon
-                    style={{ marginBottom: 16 }}
-                    title={t('app.kuaiplm.rdProjects.detail.deliverable.testReportPartHint')}
-                  />
-                  <ProFormText
-                    name="material_code"
-                    label={t('app.kuaiplm.rdProjects.detail.deliverable.materialCode')}
-                    rules={[
-                      {
-                        required: true,
-                        message: t('app.kuaiplm.rdProjects.detail.deliverable.materialCodeRequired'),
-                      },
-                    ]}
-                    placeholder={t('app.kuaiplm.rdProjects.detail.deliverable.materialCodePlaceholder')}
-                  />
-                  <ProFormText
-                    name="legacy_material_code"
-                    label={t('app.kuaiplm.rdProjects.detail.deliverable.legacyMaterialCode')}
-                    placeholder={t(
-                      'app.kuaiplm.rdProjects.detail.deliverable.legacyMaterialCodePlaceholder',
-                    )}
-                  />
-                </>
-              );
-            }
-            if (
-              deliverable_type === 'drawing_silkscreen' ||
-              deliverable_type === 'drawing_assembly' ||
-              deliverable_type === 'drawing_packaging' ||
-              deliverable_type === 'drawing_pcb_assembly'
-            ) {
-              return (
-                <Alert
-                  type="info"
-                  showIcon
-                  style={{ marginBottom: 16 }}
-                  title={t('app.kuaiplm.rdProjects.detail.deliverable.projectDrawingHint')}
-                />
-              );
-            }
-            if (deliverable_type === 'customer_spec' || deliverable_type === 'customer_approval') {
-              return (
-                <Alert
-                  type="info"
-                  showIcon
-                  style={{ marginBottom: 16 }}
-                  title={t('app.kuaiplm.rdProjects.detail.deliverable.customerDocHint')}
-                />
-              );
-            }
-            if (isStructureDrawingType(deliverable_type)) {
-              return (
-                <Alert
-                  type="info"
-                  showIcon
-                  style={{ marginBottom: 16 }}
-                  title={t('app.kuaiplm.rdProjects.detail.deliverable.structureDrawingHint')}
-                />
-              );
-            }
-            if (deliverable_type === 'mold_repair') {
-              return (
-                <Alert
-                  type="info"
-                  showIcon
-                  style={{ marginBottom: 16 }}
-                  title={t('app.kuaiplm.rdProjects.detail.deliverable.moldRepairHint')}
-                />
-              );
-            }
-            if (
-              deliverable_type === 'mold_dfm' ||
-              deliverable_type === 'mold_drawing' ||
-              deliverable_type === 'mold_acceptance' ||
-              deliverable_type === 'reliability_report'
-            ) {
-              return (
-                <Alert
-                  type="info"
-                  showIcon
-                  style={{ marginBottom: 16 }}
-                  title={t('app.kuaiplm.rdProjects.detail.deliverable.structureCatalogHint')}
-                />
-              );
-            }
-            if (isTestReportCompleteType(deliverable_type)) {
-              return (
-                <>
-                  <Alert
-                    type="info"
-                    showIcon
-                    style={{ marginBottom: 16 }}
-                    title={t('app.kuaiplm.rdProjects.detail.deliverable.testReportCompleteHint')}
-                  />
-                  <ProFormText
-                    name="material_code"
-                    label={t('app.kuaiplm.rdProjects.detail.deliverable.completeMachineCode')}
-                    rules={[
-                      {
-                        required: true,
-                        message: t('app.kuaiplm.rdProjects.detail.deliverable.completeMachineCodeRequired'),
-                      },
-                    ]}
-                    placeholder={t('app.kuaiplm.rdProjects.detail.deliverable.completeMachineCodePlaceholder')}
-                  />
-                </>
-              );
-            }
-            return null;
-          }}
-        </ProFormDependency>
+        <RdDeliverableTypeFormFields linkedProjectCode={project?.project_code} />
         <ProFormSelect
           name="status"
           label={t('common.status')}

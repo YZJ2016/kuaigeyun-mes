@@ -10,10 +10,16 @@ from apps.kuaiplm.models.mold_sample_order import MoldSampleOrder
 from apps.kuaiplm.models.rd_project import RdProject
 from apps.kuaiplm.schemas.mold_sample_order import (
     DOC_KINDS,
+    MoldSampleCapabilities,
     MoldSampleOrderCreate,
+    MoldSampleOrderListItem,
     MoldSampleOrderListResponse,
     MoldSampleOrderResponse,
     MoldSampleOrderUpdate,
+)
+from apps.kuaiplm.utils.mold_sample_order_capabilities import (
+    compute_mold_sample_order_capabilities,
+    validate_mold_sample_file_on_submit,
 )
 from core.services.approval.approval_instance_service import ApprovalInstanceService
 from core.services.approval.audit_binding_service import AuditBindingService
@@ -62,6 +68,20 @@ class MoldSampleOrderService(AppBaseService[MoldSampleOrder]):
             raise NotFoundError("开模合同/打样订单不存在")
         return row
 
+    @staticmethod
+    def _to_api_response(row: MoldSampleOrder) -> MoldSampleOrderResponse:
+        data = MoldSampleOrderResponse.model_validate(row)
+        caps = compute_mold_sample_order_capabilities(row)
+        data.capabilities = MoldSampleCapabilities.model_validate(caps)
+        return data
+
+    @staticmethod
+    def _list_item(row: MoldSampleOrder) -> MoldSampleOrderListItem:
+        item = MoldSampleOrderListItem.model_validate(row)
+        caps = compute_mold_sample_order_capabilities(row)
+        item.capabilities = MoldSampleCapabilities.model_validate(caps)
+        return item
+
     async def create(
         self, tenant_id: int, payload: MoldSampleOrderCreate, user: User
     ) -> MoldSampleOrderResponse:
@@ -90,7 +110,7 @@ class MoldSampleOrderService(AppBaseService[MoldSampleOrder]):
         )
         apply_create_audit(row, user)
         await row.save()
-        return MoldSampleOrderResponse.model_validate(row)
+        return self._to_api_response(row)
 
     async def list(
         self,
@@ -117,13 +137,13 @@ class MoldSampleOrderService(AppBaseService[MoldSampleOrder]):
         total = await query.count()
         rows = await query.order_by("-updated_at", "-id").offset(skip).limit(limit)
         return MoldSampleOrderListResponse(
-            items=[MoldSampleOrderResponse.model_validate(r) for r in rows],
+            items=[self._list_item(r) for r in rows],
             total=total,
         )
 
     async def get(self, tenant_id: int, order_id: int) -> MoldSampleOrderResponse:
         row = await self._get_row(tenant_id, order_id)
-        return MoldSampleOrderResponse.model_validate(row)
+        return self._to_api_response(row)
 
     async def update(
         self, tenant_id: int, order_id: int, payload: MoldSampleOrderUpdate, user: User
@@ -144,7 +164,7 @@ class MoldSampleOrderService(AppBaseService[MoldSampleOrder]):
             setattr(row, key, value)
         apply_update_audit(row, user)
         await row.save()
-        return MoldSampleOrderResponse.model_validate(row)
+        return self._to_api_response(row)
 
     async def submit(
         self, tenant_id: int, order_id: int, user: User
@@ -152,8 +172,7 @@ class MoldSampleOrderService(AppBaseService[MoldSampleOrder]):
         row = await self._get_row(tenant_id, order_id)
         if row.status not in {"draft", "rejected"}:
             raise BusinessLogicError("仅草稿或已驳回可提交审核")
-        if not (row.file_uuid or "").strip():
-            raise ValidationError("提交前须上传合同或订单文件")
+        validate_mold_sample_file_on_submit(row)
 
         row.status = "pending"
         row.submitted_at = resolve_business_datetime()
@@ -182,7 +201,7 @@ class MoldSampleOrderService(AppBaseService[MoldSampleOrder]):
 
         if submit_instance_auto_passed(approval_instance):
             return await self.approve(tenant_id, order_id, user)
-        return MoldSampleOrderResponse.model_validate(row)
+        return self._to_api_response(row)
 
     async def approve(
         self, tenant_id: int, order_id: int, user: User
@@ -204,7 +223,7 @@ class MoldSampleOrderService(AppBaseService[MoldSampleOrder]):
         row.approved_at = resolve_business_datetime()
         apply_update_audit(row, user)
         await row.save()
-        return MoldSampleOrderResponse.model_validate(row)
+        return self._to_api_response(row)
 
     async def reject(
         self, tenant_id: int, order_id: int, user: User
@@ -225,7 +244,7 @@ class MoldSampleOrderService(AppBaseService[MoldSampleOrder]):
         row.status = "rejected"
         apply_update_audit(row, user)
         await row.save()
-        return MoldSampleOrderResponse.model_validate(row)
+        return self._to_api_response(row)
 
     async def seal(
         self, tenant_id: int, order_id: int, user: User
@@ -240,7 +259,7 @@ class MoldSampleOrderService(AppBaseService[MoldSampleOrder]):
         row.sealed_by_name = getattr(user, "name", None) or getattr(user, "username", None)
         apply_update_audit(row, user)
         await row.save()
-        return MoldSampleOrderResponse.model_validate(row)
+        return self._to_api_response(row)
 
     async def archive(
         self, tenant_id: int, order_id: int, user: User
@@ -255,7 +274,7 @@ class MoldSampleOrderService(AppBaseService[MoldSampleOrder]):
         row.archived_by_name = getattr(user, "name", None) or getattr(user, "username", None)
         apply_update_audit(row, user)
         await row.save()
-        return MoldSampleOrderResponse.model_validate(row)
+        return self._to_api_response(row)
 
     async def delete(self, tenant_id: int, order_id: int, user: User) -> None:
         row = await self._get_row(tenant_id, order_id)

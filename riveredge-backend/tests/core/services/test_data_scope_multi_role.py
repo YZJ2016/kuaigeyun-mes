@@ -242,3 +242,28 @@ async def test_roles_for_data_scope_prefers_granting_roles_only():
     )
     scoped = access.roles_for_data_scope("kuaizhizao:sales-order")
     assert scoped == [role_sales]
+
+
+@pytest.mark.asyncio
+async def test_roles_for_data_scope_internal_customer_key_inherits_host_module():
+    role_sales = SimpleNamespace(uuid="r-sales", role_type="internal", external_partner_type=None)
+    access = EffectiveUserAccess(
+        user_id=1,
+        tenant_id=1,
+        roles=(role_sales,),
+        permission_codes=frozenset({"kuaizhizao:customer-follow-up:create"}),
+        role_resource_keys={
+            "r-sales": frozenset({"kuaizhizao:customer-follow-up"}),
+        },
+        is_admin_bypass=False,
+    )
+    from core.services.authorization.data_scope_resource_registry import (
+        register_data_scope_function_grant_source,
+    )
+
+    register_data_scope_function_grant_source(
+        "kuaizhizao:customer-follow-up-customer",
+        "kuaizhizao:customer-follow-up",
+    )
+    scoped = access.roles_for_data_scope("kuaizhizao:customer-follow-up-customer")
+    assert scoped == [role_sales]

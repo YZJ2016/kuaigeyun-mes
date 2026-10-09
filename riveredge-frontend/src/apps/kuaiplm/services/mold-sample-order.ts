@@ -16,6 +16,14 @@ export type MoldSampleStatus =
   | 'archived'
   | 'rejected';
 
+export interface MoldSampleCapabilities {
+  file_uploaded?: boolean;
+  submitted?: boolean;
+  approved?: boolean;
+  sealed?: boolean;
+  archived?: boolean;
+}
+
 export interface MoldSampleOrder {
   id: number;
   uuid: string;
@@ -41,6 +49,7 @@ export interface MoldSampleOrder {
   updated_at?: string;
   created_by_name?: string | null;
   updated_by_name?: string | null;
+  capabilities?: MoldSampleCapabilities | null;
 }
 
 export interface MoldSampleOrderPayload {

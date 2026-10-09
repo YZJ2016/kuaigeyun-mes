@@ -9,10 +9,23 @@ const KUAIPLM_CHANGES = '/apps/kuaiplm/changes';
 export type ChangeDeskCategory = 'bom' | 'route' | 'drawing' | 'ecn';
 export type DeskApiChangeType = 'bom' | 'process_route' | 'drawing' | 'ecn';
 
+export type EcnDeskCapabilities = {
+  is_design_change_request?: boolean;
+  request_ready?: boolean;
+  issued_to_rd?: boolean;
+  rd_ready?: boolean;
+  signoffs_done?: boolean;
+  approved?: boolean;
+  erp_closed?: boolean;
+};
+
 export interface UnifiedChangeRow {
   id?: string | number;
   uuid?: string;
   change_category: ChangeDeskCategory;
+  ecn_capabilities?: EcnDeskCapabilities | null;
+  ecn_entry_source?: string;
+  ecn_rd_issued_at?: string;
   change_code?: string;
   change_type?: string;
   target_name?: string;
@@ -79,10 +92,16 @@ function mapDeskItem(row: Record<string, unknown>): UnifiedChangeRow {
     : categoryRaw === 'bom' || categoryRaw === 'process_route' || categoryRaw === 'ecn'
       ? ''
       : String(row.change_type ?? '');
+  const capabilities = extra.capabilities as EcnDeskCapabilities | undefined;
   return {
     id: row.id as string | number | undefined,
     uuid: row.uuid as string | undefined,
     change_category: changeCategory,
+    ecn_capabilities: changeCategory === 'ecn' ? capabilities ?? null : undefined,
+    ecn_entry_source:
+      changeCategory === 'ecn' ? (extra.entry_source as string | undefined) : undefined,
+    ecn_rd_issued_at:
+      changeCategory === 'ecn' ? (extra.rd_issued_at as string | undefined) : undefined,
     change_code: (row.entity_code ?? row.change_code ?? extra.bom_code) as string | undefined,
     change_type: detailChangeType || undefined,
     target_name: (row.entity_name ?? row.target_name) as string | undefined,

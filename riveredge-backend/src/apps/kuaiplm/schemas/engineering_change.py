@@ -75,6 +75,21 @@ class EngineeringChangeErpAudit(BaseModel):
     notes: Optional[str] = None
 
 
+class EcnSignoffUpdate(BaseModel):
+    result: str = Field(..., description="agree/disagree")
+    notes: Optional[str] = None
+
+
+class EcnCapabilities(BaseModel):
+    is_design_change_request: bool = False
+    request_ready: bool = False
+    issued_to_rd: bool = False
+    rd_ready: bool = False
+    signoffs_done: bool = False
+    approved: bool = False
+    erp_closed: bool = False
+
+
 class EngineeringChangeResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -104,6 +119,7 @@ class EngineeringChangeResponse(BaseModel):
     updated_by_name: Optional[str] = None
     materials: List[EcnMaterialLineOut] = Field(default_factory=list)
     signoffs: List[EcnSignoffOut] = Field(default_factory=list)
+    capabilities: Optional[EcnCapabilities] = None
 
 
 class EngineeringChangeListItem(BaseModel):
@@ -124,6 +140,7 @@ class EngineeringChangeListItem(BaseModel):
     updated_at: datetime
     created_by_name: Optional[str] = None
     updated_by_name: Optional[str] = None
+    capabilities: Optional[EcnCapabilities] = None
 
 
 class EngineeringChangeListResponse(BaseModel):

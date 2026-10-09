@@ -18,6 +18,16 @@ export interface PrototypeBuildAttachment {
   media_kind?: 'text' | 'image' | 'file';
 }
 
+export interface PrototypeBuildCapabilities {
+  project_ready?: boolean;
+  electronics_ready?: boolean;
+  structure_ready?: boolean;
+  approved?: boolean;
+  issued?: boolean;
+  signoffs_done?: boolean;
+  closed?: boolean;
+}
+
 export interface PrototypeBuildSheet {
   id: number;
   uuid: string;
@@ -49,6 +59,7 @@ export interface PrototypeBuildSheet {
   created_by_name?: string | null;
   updated_by?: number | null;
   updated_by_name?: string | null;
+  capabilities?: PrototypeBuildCapabilities | null;
 }
 
 export const prototypeBuildSheetApi = {

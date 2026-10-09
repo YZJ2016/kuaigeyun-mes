@@ -194,6 +194,10 @@ type Props = {
   autoOpenCreateQuery?: string;
   /** 列表表上方说明（流程提示等） */
   listBanner?: React.ReactNode;
+  /** 业务列之后、审计列之前追加列（如 L54 capabilities） */
+  listExtraColumns?: ProColumns<Record<string, unknown>>[];
+  /** 变更时触发表格 reload（如下发成功后） */
+  reloadSignal?: number;
   /** 工具栏新建按钮左侧追加节点（如行业包一键生成） */
   toolBarActionsBeforeCreate?: React.ReactNode[];
   /** 列表导出（须 manifest export 权限） */
@@ -262,6 +266,8 @@ const KuaioaCrudListPage: React.FC<Props> = ({
   createFormDefaults,
   autoOpenCreateQuery,
   listBanner,
+  listExtraColumns,
+  reloadSignal,
   toolBarActionsBeforeCreate,
   showExportButton = false,
   onExport,
@@ -306,6 +312,12 @@ const KuaioaCrudListPage: React.FC<Props> = ({
   const reloadTable = useCallback(() => {
     actionRef.current?.reload();
   }, []);
+
+  useEffect(() => {
+    if (reloadSignal != null && reloadSignal > 0) {
+      reloadTable();
+    }
+  }, [reloadSignal, reloadTable]);
 
   const resolveFormValues = useCallback(
     (record: Record<string, unknown>) => {
@@ -645,6 +657,10 @@ const KuaioaCrudListPage: React.FC<Props> = ({
       return col;
     });
 
+    if (listExtraColumns?.length) {
+      base.push(...listExtraColumns);
+    }
+
     if (showAuditColumns) {
       base.push(...buildDocumentAuditColumns<Record<string, unknown>>(t));
     }
@@ -792,6 +808,7 @@ const KuaioaCrudListPage: React.FC<Props> = ({
     extraActions,
     expiringListFn,
     fields,
+    listExtraColumns,
     executeDelete,
     listScope,
     messageApi,

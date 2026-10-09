@@ -65,6 +65,7 @@ const SystemDocumentsPage: React.FC = () => {
   const [historyLoading, setHistoryLoading] = useState(false);
   const { canCreate, canUpdate, canDelete, canAction } = useResourcePermissions(RESOURCE);
   const canPublish = !!canAction?.('publish');
+  const canSubmit = !!canAction?.('submit');
   const canObsolete = !!canAction?.('obsolete');
   const canReject = !!canAction?.('reject');
   const currentUser = useCurrentUser();
@@ -291,7 +292,21 @@ const SystemDocumentsPage: React.FC = () => {
                   {t('app.kuaizhizao.quality.qms.actions.revise')}
                 </Button>
               ) : null,
-              canPublish && row.status !== 'effective' && row.status !== 'obsolete' && row.status !== 'rejected' ? (
+              canSubmit && (row.status === 'draft' || row.status === 'rejected') ? (
+                <Button
+                  key="submit"
+                  {...rowActionKind('submit')}
+                  onClick={async () => {
+                    await qualityQmsApi.systemDocuments.submit(row.id);
+                    messageApi.success(t('app.kuaizhizao.quality.qms.messages.submitSuccess'));
+                    setZone('pending');
+                    actionRef.current?.reload();
+                  }}
+                >
+                  {t('app.kuaizhizao.quality.qms.actions.submit')}
+                </Button>
+              ) : null,
+              canPublish && row.status === 'draft' ? (
                 <Button
                   key="publish"
                   {...rowActionKind('execute')}
@@ -351,6 +366,7 @@ const SystemDocumentsPage: React.FC = () => {
       canDelete,
       canObsolete,
       canPublish,
+      canSubmit,
       canReject,
       canUpdate,
       isReviewDue,

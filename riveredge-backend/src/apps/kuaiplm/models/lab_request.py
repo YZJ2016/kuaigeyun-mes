@@ -31,7 +31,7 @@ class LabRequest(BaseModel):
     status = fields.CharField(
         max_length=30,
         default="draft",
-        description="draft/pending_review/pending/in_lab/completed/rejected/revoked",
+        description="draft/pending_review/awaiting_lab_dispatch/pending/in_lab/completed/rejected/revoked",
     )
     priority = fields.CharField(max_length=20, default="normal", description="normal/urgent")
     project_id = fields.IntField(null=True, description="研发项目ID")
@@ -72,6 +72,18 @@ class LabRequest(BaseModel):
     report_rejected_at = fields.DatetimeField(null=True)
     report_reject_reason = fields.TextField(null=True)
     attachments = fields.JSONField(null=True)
+    structure_special_test = fields.TextField(null=True, description="L52 结构特殊试验")
+    structure_section_attachments = fields.JSONField(null=True)
+    structure_section_status = fields.CharField(max_length=20, default="draft")
+    electronics_special_test = fields.TextField(null=True, description="L52 电子特殊试验")
+    electronics_section_attachments = fields.JSONField(null=True)
+    electronics_section_status = fields.CharField(max_length=20, default="draft")
+    structure_manager_user_id = fields.IntField(null=True)
+    electronics_manager_user_id = fields.IntField(null=True)
+    notify_user_ids = fields.JSONField(null=True, description="完成后额外通知用户 ID 列表")
+    dispatched_at = fields.DatetimeField(null=True, description="提交实验室时刻")
+    dispatched_by = fields.IntField(null=True)
+    dispatched_by_name = fields.CharField(max_length=100, null=True)
     extension_payload = fields.JSONField(null=True, description="行业扩展载荷（profile）")
     submitted_at = fields.DatetimeField(null=True)
     accepted_at = fields.DatetimeField(null=True)

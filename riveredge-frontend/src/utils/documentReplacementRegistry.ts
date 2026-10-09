@@ -19,6 +19,10 @@ export type DocumentReplacementDecl = {
 /** replacement_path → 懒加载组件（仅行业 APP 内页） */
 const REPLACEMENT_LOADERS: Record<string, () => Promise<{ default: ComponentType }>> = {
   '/apps/ind-electronics/label-oem': () => import('../apps/ind-electronics/pages/label-oem/index'),
+  '/apps/funide-oa/project-proposals': () =>
+    import('../apps/funide-oa/pages/project-proposals/index'),
+  '/apps/funide-oa/production-execution/label-station': () =>
+    import('../apps/ind-electronics/pages/label-oem/index'),
 };
 
 const lazyCache = new Map<string, LazyExoticComponent<ComponentType>>();

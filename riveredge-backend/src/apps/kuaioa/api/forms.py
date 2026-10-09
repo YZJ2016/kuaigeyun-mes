@@ -9,11 +9,15 @@ from apps.kuaioa.constants.general_signoff_business_types import (
 )
 from apps.kuaioa.schemas.forms import (
     FormRequestCreate,
+    FormRequestConfirmationReply,
+    FormRequestIssueRequest,
     FormRequestUpdate,
     FormTemplateCreate,
     FormTemplateUpdate,
 )
 from apps.kuaioa.services.form_service import FormRequestService, FormTemplateService
+from apps.kuaioa.services.form_request_issue_service import issue_form_request
+from core.services.permission.user_permission_service import UserPermissionService
 from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
@@ -133,6 +137,7 @@ async def list_form_requests(
     business_type: Optional[str] = Query(None),
     _auth=Depends(require_permission_codes("kuaioa:form-request:read")),
     tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
 ):
     rows = await request_service.list_requests(
         tenant_id,
@@ -140,6 +145,7 @@ async def list_form_requests(
         status=status_filter,
         template_id=template_id,
         business_type=business_type,
+        current_user_id=current_user.id,
     )
     return {"data": rows, "total": len(rows), "success": True}
 
@@ -149,9 +155,12 @@ async def get_form_request(
     request_id: int = Path(..., ge=1),
     _auth=Depends(require_permission_codes("kuaioa:form-request:read")),
     tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
 ):
     try:
-        row = await request_service.get_request(tenant_id, request_id)
+        row = await request_service.get_request(
+            tenant_id, request_id, current_user_id=current_user.id
+        )
         return {"data": row, "success": True}
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"message": str(e)})
@@ -211,6 +220,64 @@ async def submit_form_request(
         return {"data": row, "success": True}
     except (NotFoundError, BusinessLogicError) as e:
         code = status.HTTP_404_NOT_FOUND if isinstance(e, NotFoundError) else status.HTTP_409_CONFLICT
+        raise HTTPException(status_code=code, detail={"message": str(e)})
+
+
+@router.post("/requests/{request_id}/confirmation-reply", summary="Sales reply for complete machine confirmation")
+async def reply_confirmation_form_request(
+    data: FormRequestConfirmationReply,
+    request_id: int = Path(..., ge=1),
+    current_user: User = Depends(get_current_user),
+    _auth=Depends(require_permission_codes("kuaioa:form-request:approve")),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        row = await request_service.reply_confirmation(
+            tenant_id, request_id, data, current_user
+        )
+        return {"data": row, "success": True}
+    except (NotFoundError, BusinessLogicError, ValidationError) as e:
+        code = (
+            status.HTTP_404_NOT_FOUND
+            if isinstance(e, NotFoundError)
+            else status.HTTP_422_UNPROCESSABLE_ENTITY
+            if isinstance(e, ValidationError)
+            else status.HTTP_409_CONFLICT
+        )
+        raise HTTPException(status_code=code, detail={"message": str(e)})
+
+
+@router.post("/requests/{request_id}/issue", summary="Issue form request to users/roles")
+async def issue_form_request_api(
+    data: FormRequestIssueRequest,
+    request_id: int = Path(..., ge=1),
+    current_user: User = Depends(get_current_user),
+    _auth=Depends(require_permission_codes("kuaioa:form-request:update")),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        codes = sorted(
+            await UserPermissionService.get_user_permissions(
+                user_id=current_user.id,
+                tenant_id=tenant_id,
+            )
+        )
+        row = await issue_form_request(
+            tenant_id,
+            request_id,
+            data,
+            current_user,
+            permission_codes=codes,
+        )
+        return {"data": row, "success": True}
+    except (NotFoundError, BusinessLogicError, ValidationError) as e:
+        code = (
+            status.HTTP_404_NOT_FOUND
+            if isinstance(e, NotFoundError)
+            else status.HTTP_422_UNPROCESSABLE_ENTITY
+            if isinstance(e, ValidationError)
+            else status.HTTP_409_CONFLICT
+        )
         raise HTTPException(status_code=code, detail={"message": str(e)})
 
 
