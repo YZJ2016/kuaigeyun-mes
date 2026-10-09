@@ -126,9 +126,16 @@ export const StationFaceHandoverPage: React.FC<StationFaceHandoverPageProps> = (
     }
   }, [message]);
 
+  // 「我的模板」语义为已确认操作员的模板：未确认时无会话凭据，后端会回落到终端账号，
+  // 故不发请求并保持空态；确认后（writeEnabled 变 true）才拉取，退出/换绑后清空。
   useEffect(() => {
+    if (!writeEnabled) {
+      setTemplates([]);
+      setTemplatesLoading(false);
+      return;
+    }
     void loadTemplates();
-  }, [loadTemplates]);
+  }, [loadTemplates, writeEnabled]);
 
   useEffect(() => {
     setSummary(null);
@@ -371,7 +378,7 @@ export const StationFaceHandoverPage: React.FC<StationFaceHandoverPageProps> = (
           <Paragraph>
             登记使用入口传入的当前操作员
             {operatorUserId == null ? '（尚未传入，登记不可用）' : `（${operatorUserId}）`}
-            。「我的模板」只列出当前登录用户。刷脸确认与候选操作员一致后才写入入口当前操作员，不换登录令牌。
+            。「我的模板」只列出当前已确认操作员的模板；未确认操作员时不加载。刷脸确认与候选操作员一致后才写入入口当前操作员，不换登录令牌。
           </Paragraph>
           {!writeEnabled ? (
             <Paragraph type="warning">
@@ -386,7 +393,7 @@ export const StationFaceHandoverPage: React.FC<StationFaceHandoverPageProps> = (
           ) : null}
           {enrollsOtherOperator ? (
             <Paragraph>
-              当前操作员与终端登录用户不是同一人。登记写入该操作员的模板后，不会出现在「我的模板」里。
+              当前操作员与终端登录用户不是同一人。登记与「我的模板」列表都以已确认操作员为准。
             </Paragraph>
           ) : null}
           {identifiedOperator ? (
@@ -418,7 +425,11 @@ export const StationFaceHandoverPage: React.FC<StationFaceHandoverPageProps> = (
           </div>
           <Spin spinning={templatesLoading}>
             {templates.length === 0 ? (
-              <Empty description="当前登录用户没有人脸模板" />
+              <Empty
+                description={
+                  writeEnabled ? '当前操作员没有人脸模板' : '未确认操作员，不加载人脸模板'
+                }
+              />
             ) : (
               <Space direction="vertical" style={{ width: '100%' }}>
                 {templates.map((row) => (

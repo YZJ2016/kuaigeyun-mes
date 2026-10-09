@@ -404,13 +404,17 @@ async def create_quick_reporting_record(
     try:
         client_channel = _resolve_reporting_client_channel(request)
         # X-Client-Channel 只是来源标记（落库），不参与权限判定。
-        # 纯工位账号：以服务端操作员会话为事实边界——小组报工放行；
-        # 非小组报工的生产人员必须等于当前已确认操作员，代报/他人一律拒绝。
+        # 纯工位账号：以服务端操作员会话为事实边界——小组报工（不带 worker_id）
+        # 放行；请求显式携带的生产人员必须等于当前已确认操作员（含小组报工
+        # 夹带 worker_id 的情况），代报/他人一律拒绝。
         # 非纯工位账号：保持原代报判断（worker 非本人/缺省/小组需 reporting:assign）。
         if business_operator.user is None:
-            if reporting.team_id is None and (
+            if (
+                reporting.worker_id is not None
+                and int(reporting.worker_id) != business_operator.user_id
+            ) or (
                 reporting.worker_id is None
-                or int(reporting.worker_id) != business_operator.user_id
+                and reporting.team_id is None
             ):
                 raise HTTPException(
                     status_code=http_status.HTTP_400_BAD_REQUEST,

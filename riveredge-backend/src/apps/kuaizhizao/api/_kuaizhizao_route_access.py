@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-from fastapi import Depends, Request
+from fastapi import Depends, HTTPException, Request, status
 
 from core.api.deps.access import (
     AuthContext,
@@ -203,16 +203,27 @@ async def _resolve_station_terminal_required_codes(
 
     - 闭包 URL 单点定义在 ``deps.station_operator_session.GATED_WRITE_URL_MANIFEST``
       与 ``STATION_EXECUTE_PRECHECK_URLS``，此处不复制清单；
-    - 路径静态匹配先行，不命中直接返回 None —— 非闭包请求零额外开销；
-    - 命中后才查角色纯度；闭包外路径与所有非纯工位账号完全走原 URL→action 映射。
+    - 路径静态匹配先行；GET/HEAD/OPTIONS 与闭包外命中都直接返回 None——
+      读取请求零额外开销；
+    - 清单外的写方法（非 GET/HEAD/OPTIONS）：纯工位账号默认拒写，直接 403
+      通用文案；非纯工位账号返回 None 继续走原 URL→action 映射；
+    - 命中清单后才查角色纯度归一所需码；非纯工位账号完全走原映射。
     """
     from apps.kuaizhizao.api.deps.station_operator_session import (
+        STATION_OPERATOR_SESSION_DENIED_MESSAGE,
         STATION_TERMINAL_EXECUTE_PERMISSION,
         is_pure_station_terminal_user,
         is_station_terminal_execute_path,
     )
 
     if not is_station_terminal_execute_path(request.method, request.url.path):
+        if (request.method or "").upper() in ("GET", "HEAD", "OPTIONS"):
+            return None
+        if await is_pure_station_terminal_user(user_id=user_id, tenant_id=tenant_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=STATION_OPERATOR_SESSION_DENIED_MESSAGE,
+            )
         return None
     if not await is_pure_station_terminal_user(user_id=user_id, tenant_id=tenant_id):
         return None
@@ -313,6 +324,7 @@ def require_kuaizhizao_sales_order_access(
             required = list(collection_create_permissions)
         else:
             required = [build_permission_code("kuaizhizao", "sales-order", action)]
+        required = await _apply_station_terminal_required(request, auth, tenant_id, required)
         await ensure_permission_codes(
             auth,
             tenant_id,
@@ -388,6 +400,7 @@ def require_kuaizhizao_quality_execution_access(
                 )
         else:
             required = [build_permission_code("kuaizhizao", module_code, action)]
+        required = await _apply_station_terminal_required(request, auth, tenant_id, required)
         await ensure_permission_codes(
             auth,
             tenant_id,
@@ -655,6 +668,7 @@ def require_kuaizhizao_warehouse_execution_access(
             ]
         else:
             required = [build_permission_code("kuaizhizao", module_code, action)]
+        required = await _apply_station_terminal_required(request, auth, tenant_id, required)
         await ensure_permission_codes(
             auth,
             tenant_id,
