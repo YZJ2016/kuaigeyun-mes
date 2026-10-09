@@ -234,7 +234,8 @@ function StationHome() {
     if (exiting) return;
     setExiting(true);
     try {
-      await closeStationOperatorSession();
+      // 显式退出/换人：服务端记 explicit_switch（审计区分于工位换绑的 explicit_close）
+      await closeStationOperatorSession('explicit_switch');
     } catch {
       // 本地凭据已清空；服务端关闭失败不阻断退出
     } finally {

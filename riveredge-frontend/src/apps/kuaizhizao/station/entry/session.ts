@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react';
 import type { StationInfo } from '../../components/StationBinder';
 import {
   clearStationOperatorSession,
+  closeStationOperatorSession,
   hasStationOperatorSession,
   subscribeStationOperatorSession,
 } from '../operatorSession';
@@ -134,6 +135,10 @@ export function setStationWorkstation(
   workstation = next;
   // 会话绑定工位：换绑/解绑后旧凭据不再适用，候选人一并清掉
   if (changed) {
+    // 清本地状态前先通知服务端关闭会话（不带 reason 记 explicit_close），
+    // 避免遗留孤儿 active 行。无凭据时 closeStationOperatorSession 内部不发请求；
+    // 失败不阻断重绑——本地凭据随后一律清空。
+    void closeStationOperatorSession().catch(() => {});
     operator = null;
     operatorCandidate = null;
     clearStationOperatorSession();

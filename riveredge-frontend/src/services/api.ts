@@ -167,9 +167,10 @@ export async function apiRequest<T = any>(
     params?: Record<string, any>; // 查询参数
     headers?: Record<string, string>;
     /**
-     * 工位写请求显式 opt-in：命中且内存中持有操作员会话凭据时附加
+     * 工位操作员会话凭据显式 opt-in：命中且内存中持有凭据时附加
      * X-Station-Operator-Session；无凭据不附加也不报错（由服务端门禁拒绝）。
-     * GET/读请求一律不附加。
+     * 仅调用方显式标记的请求附加：含工位写请求与显式标记的操作员作用域读取；
+     * 未标记请求（含普通 GET）不附加。
      */
     stationOperatorSession?: boolean;
     /** 请求超时（毫秒）。启动壳层接口建议 12–15s，避免后端 reload 时长时间转圈 */
@@ -338,8 +339,9 @@ export async function apiRequest<T = any>(
     });
   }
 
-  // 工位操作员会话凭据：仅调用方显式 opt-in 的写请求附加；无凭据不附加（服务端门禁拒绝）。
-  // 读取请求一律不附加；调用方已显式给同名头时不覆盖。
+  // 工位操作员会话凭据：仅调用方显式 opt-in 的请求附加——含工位写请求与显式标记的
+  // 操作员作用域读取（如 face-templates/me、operator-session/current）；未标记请求不附加。
+  // 无凭据不附加（服务端门禁拒绝）；调用方已显式给同名头时不覆盖。
   applyStationOperatorSessionHeader(headers, {
     optIn: options?.stationOperatorSession === true,
     method,

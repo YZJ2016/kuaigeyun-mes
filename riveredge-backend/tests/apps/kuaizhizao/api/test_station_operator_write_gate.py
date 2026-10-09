@@ -5,8 +5,9 @@
 - 门禁行为：无头/坏头/错绑定（跨租户、跨终端账号、工位不匹配）拒绝，
   有效头放行，PC（非纯 station）账号不受影响；
 - 只读 GET 路径不挂门禁、无头仍可访问；
-- 路由级鉴权归一：纯工位账号命中闭包/前置端点时所需权限为 terminal:execute，
-  非纯工位账号与闭包外路径完全走原 URL→action 映射。
+- 路由级鉴权归一：纯工位账号命中闭包/前置端点时所需权限为 terminal:execute；
+  纯工位账号对清单外的写方法（非 GET/HEAD/OPTIONS）一律默认拒写 403；
+  非纯工位账号与所有 GET 路径完全走原 URL→action 映射。
 """
 
 import re
@@ -276,6 +277,7 @@ async def test_optional_business_operator_uses_valid_header_without_gating_get(
     monkeypatch,
 ):
     """只读接口携带有效凭据时识别实际操作员，但缺头仍保持原有可读行为。"""
+    _patch_pure_station(monkeypatch, True)
     get_current = _patch_session(
         monkeypatch,
         _session(operator_user_id=99, operator_name="操作员甲"),
@@ -295,6 +297,31 @@ async def test_optional_business_operator_uses_valid_header_without_gating_get(
         credential="cred",
         workstation_id=None,
     )
+
+
+@pytest.mark.asyncio
+async def test_optional_business_operator_ignores_header_for_non_station_user(
+    monkeypatch,
+):
+    """非纯工位账号（PC）带有效凭据头也不切换归属：仍读到自己（face-templates/me
+    的唯一消费场景）。"""
+    _patch_pure_station(monkeypatch, False)
+    get_current = _patch_session(
+        monkeypatch,
+        _session(operator_user_id=99, operator_name="操作员甲"),
+    )
+    current_user = _station_user()
+
+    actor = await gate_mod.get_optional_station_business_operator(
+        current_user=current_user,
+        tenant_id=1,
+        x_station_operator_session="cred",
+    )
+
+    assert actor.user_id == 7
+    assert actor.user_name == "终端账号"
+    assert actor.user is current_user
+    get_current.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -405,6 +432,45 @@ async def test_workstation_id_extraction(monkeypatch, request_kwargs, expected_w
     assert session.await_args.kwargs["workstation_id"] == expected_ws
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "request_kwargs",
+    [
+        {"query": {"workstation_id": "abc"}},  # query 非数字
+        {"query": {"workstation_id": "0"}},  # query 零
+        {"json_body": {"workstation_id": 0}},  # body 零
+        {"json_body": {"workstation_id": -3}},  # body 负数
+        {"json_body": {"workstation_id": "x5"}},  # body 非数字
+        {"json_body": {"workstation_id": True}},  # body 布尔
+        {"json_body": {"device_info": {"workstation_id": "oops"}}},  # device_info 非法
+        {"json_body": {"device_info": {"workstation_id": -1}}},  # device_info 负数
+    ],
+    ids=[
+        "query-non-numeric",
+        "query-zero",
+        "body-zero",
+        "body-negative",
+        "body-non-numeric",
+        "body-bool",
+        "device-info-non-numeric",
+        "device-info-negative",
+    ],
+)
+async def test_invalid_explicit_workstation_id_rejected(monkeypatch, request_kwargs):
+    """显式携带 workstation_id 但无法解析为正整数 → 按工位不匹配统一 403，
+    不再回落「未携带以会话绑定为准」。"""
+    _patch_pure_station(monkeypatch, True)
+    _patch_permission(monkeypatch)
+    session = _patch_session(monkeypatch, _session())
+
+    with pytest.raises(HTTPException) as raised:
+        await _run_gate(_request(**request_kwargs), credential="cred")
+
+    assert raised.value.status_code == 403
+    assert raised.value.detail == gate_mod.STATION_OPERATOR_SESSION_DENIED_MESSAGE
+    session.assert_not_awaited()
+
+
 # ---------------------------------------------------------------------------
 # is_pure_station_terminal_user 纯度判定
 # ---------------------------------------------------------------------------
@@ -438,6 +504,23 @@ async def test_pure_station_detection(monkeypatch, role_ids, role_types, expecte
 
     result = await gate_mod.is_pure_station_terminal_user(user_id=7, tenant_id=1)
     assert result is expected
+
+
+@pytest.mark.asyncio
+async def test_pure_station_detection_filters_inactive_roles(monkeypatch):
+    """角色查询带 is_active=True：只绑定已停用 station 角色的用户判为非纯工位，
+    与权限判定口径一致。"""
+    from core.models.role import Role
+    from core.models.user_role import UserRole
+
+    role_filter = MagicMock(return_value=_qs_mock([]))
+    monkeypatch.setattr(UserRole, "filter", MagicMock(return_value=_qs_mock([11])))
+    monkeypatch.setattr(Role, "filter", role_filter)
+
+    result = await gate_mod.is_pure_station_terminal_user(user_id=7, tenant_id=1)
+
+    assert result is False
+    assert role_filter.call_args.kwargs["is_active"] is True
 
 
 # ---------------------------------------------------------------------------
@@ -562,12 +645,6 @@ async def test_non_station_user_keeps_original_mapping(
             route_access_mod.require_kuaizhizao_work_order_access,
         ),
         (
-            "POST",
-            "/work-orders",
-            "kuaizhizao:work-order:create",
-            route_access_mod.require_kuaizhizao_work_order_access,
-        ),
-        (
             "GET",
             "/station/andon",
             "kuaizhizao:production-execution-terminal:read",
@@ -575,20 +652,12 @@ async def test_non_station_user_keeps_original_mapping(
                 "production-execution-terminal"
             ),
         ),
-        (
-            "POST",
-            "/station/work-orders/1/operations/2/documents",
-            "kuaizhizao:production-execution-terminal:create",
-            lambda: route_access_mod.require_kuaizhizao_module_access(
-                "production-execution-terminal"
-            ),
-        ),
     ],
 )
-async def test_pure_station_outside_closure_keeps_original_mapping(
+async def test_pure_station_outside_closure_get_keeps_original_mapping(
     monkeypatch, method, path, expected_code, dep_factory
 ):
-    """纯工位账号：闭包外路径不归一（读走 read、其他写仍按原映射拒绝）。"""
+    """纯工位账号：闭包外 GET 不归一也不拒读——未确认操作员仍可查看资料。"""
     captured = AsyncMock()
     monkeypatch.setattr(route_access_mod, "ensure_permission_codes", captured)
     _patch_pure_station(monkeypatch, True)
@@ -603,3 +672,206 @@ async def test_pure_station_outside_closure_keeps_original_mapping(
 
     captured.assert_awaited_once()
     assert captured.await_args.args[3] == [expected_code]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "method,path,dep_factory",
+    [
+        (
+            "POST",
+            "/work-orders",
+            route_access_mod.require_kuaizhizao_work_order_access,
+        ),
+        (
+            "DELETE",
+            "/work-orders/{work_order_id:int}",
+            route_access_mod.require_kuaizhizao_work_order_access,
+        ),
+        (
+            "POST",
+            "/reporting",
+            route_access_mod.require_kuaizhizao_productions_access,
+        ),
+        (
+            "DELETE",
+            "/material-binding/{binding_id}",
+            route_access_mod.require_kuaizhizao_productions_access,
+        ),
+        (
+            "POST",
+            "/station/work-orders/1/operations/2/documents",
+            lambda: route_access_mod.require_kuaizhizao_module_access(
+                "production-execution-terminal"
+            ),
+        ),
+        (
+            "POST",
+            "/sales-orders",
+            route_access_mod.require_kuaizhizao_sales_order_access,
+        ),
+        (
+            "POST",
+            "/process-inspections/1/conduct",
+            route_access_mod.require_kuaizhizao_quality_execution_access,
+        ),
+        (
+            "POST",
+            "/other-inbounds",
+            route_access_mod.require_kuaizhizao_warehouse_execution_access,
+        ),
+    ],
+    ids=lambda v: v if isinstance(v, str) else None,
+)
+async def test_pure_station_outside_closure_write_denied(
+    monkeypatch, method, path, dep_factory
+):
+    """纯工位账号 + 清单外写方法 → 默认拒写 403 通用文案，不再进入原权限判定。"""
+    captured = AsyncMock()
+    monkeypatch.setattr(route_access_mod, "ensure_permission_codes", captured)
+    _patch_pure_station(monkeypatch, True)
+
+    request = MagicMock()
+    request.method = method
+    request.url = SimpleNamespace(
+        path=f"/api/v1/apps/kuaizhizao{_concrete_path(path)}"
+    )
+    dep = dep_factory()
+    with pytest.raises(HTTPException) as raised:
+        await dep(request=request, auth=_auth(), tenant_id=1)
+
+    assert raised.value.status_code == 403
+    assert raised.value.detail == gate_mod.STATION_OPERATOR_SESSION_DENIED_MESSAGE
+    captured.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_non_station_outside_closure_write_keeps_original_mapping(
+    monkeypatch,
+):
+    """非纯工位账号：清单外写路径仍按原 URL→action 映射取权限码，不受默认拒写影响。"""
+    captured = AsyncMock()
+    monkeypatch.setattr(route_access_mod, "ensure_permission_codes", captured)
+    _patch_pure_station(monkeypatch, False)
+
+    dep = route_access_mod.require_kuaizhizao_productions_access()
+    await dep(
+        request=_access_request("POST", "/reporting"),
+        auth=_auth(),
+        tenant_id=1,
+    )
+
+    captured.assert_awaited_once()
+    assert captured.await_args.args[3] == [
+        "kuaizhizao:production-execution-reporting:create"
+    ]
+
+
+# ---------------------------------------------------------------------------
+# M-2 漂移测试：三个工位相关 router 的全部非 GET/HEAD/OPTIONS 路由必须被显式
+# 归类——工位写闭包 / 确认流前置 / PC 专用写。新增写路由不进任一类则测试红。
+# ---------------------------------------------------------------------------
+
+_SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+
+# PC 专用写路由：存在于工位相关 router，但对纯工位账号默认拒写（不代表工位可达）。
+PC_ONLY_WRITE_ROUTES: frozenset[tuple[str, str]] = frozenset({
+    # productions/work_orders.py
+    ("POST", "/work-orders"),
+    ("POST", "/work-orders/create-peer-group"),
+    ("POST", "/work-orders/dissolve-group"),
+    ("POST", "/work-orders/merge"),
+    ("POST", "/work-orders/merge-into-group"),
+    ("POST", "/work-orders/resolve-by-scan"),
+    ("POST", "/work-orders/scheduling-quick-action"),
+    ("POST", "/work-orders/scores/batch-refresh"),
+    ("POST", "/work-orders/sync-from-source"),
+    ("POST", "/work-orders/tracking/preview"),
+    ("POST", "/work-orders/{work_order_id}/complete"),
+    ("POST", "/work-orders/{work_order_id}/confirm-tracking"),
+    ("POST", "/work-orders/{work_order_id}/freeze"),
+    ("POST", "/work-orders/{work_order_id}/operations/{operation_id}/dispatch"),
+    ("POST", "/work-orders/{work_order_id}/outsource"),
+    ("POST", "/work-orders/{work_order_id}/push-purchase-requisition"),
+    ("POST", "/work-orders/{work_order_id}/release"),
+    ("POST", "/work-orders/{work_order_id}/remind-batching"),
+    ("POST", "/work-orders/{work_order_id}/revoke"),
+    ("POST", "/work-orders/{work_order_id}/rework"),
+    ("POST", "/work-orders/{work_order_id}/scores/refresh"),
+    ("POST", "/work-orders/{work_order_id}/split"),
+    ("POST", "/work-orders/{work_order_id}/unfreeze"),
+    ("POST", "/work-orders/{work_order_id}/unsplit"),
+    ("POST", "/work-orders/{work_order_id}/withdraw-manual-complete"),
+    ("POST", "/rework-orders"),
+    ("POST", "/rework-orders/{rework_order_id}/advance-next"),
+    ("POST", "/rework-orders/{rework_order_id}/approve"),
+    ("POST", "/rework-orders/{rework_order_id}/cancel"),
+    ("POST", "/rework-orders/{rework_order_id}/close"),
+    ("POST", "/rework-orders/{rework_order_id}/finance-sign"),
+    ("POST", "/rework-orders/{rework_order_id}/hold"),
+    ("POST", "/rework-orders/{rework_order_id}/oqc-notify"),
+    ("POST", "/rework-orders/{rework_order_id}/pqc-check"),
+    ("POST", "/rework-orders/{rework_order_id}/quality-release"),
+    ("POST", "/rework-orders/{rework_order_id}/reject"),
+    ("POST", "/rework-orders/{rework_order_id}/release"),
+    ("POST", "/rework-orders/{rework_order_id}/report"),
+    ("POST", "/rework-orders/{rework_order_id}/request-complete"),
+    ("POST", "/rework-orders/{rework_order_id}/resume"),
+    ("POST", "/rework-orders/{rework_order_id}/submit"),
+    ("POST", "/outsource-orders"),
+    ("POST", "/outsource-orders/{outsource_order_id}/link-purchase-receipt"),
+    ("PUT", "/work-orders/batch-priority"),
+    ("PUT", "/work-orders/batch-update-dates"),
+    ("PUT", "/work-orders/batch-update-operation-assignments"),
+    ("PUT", "/work-orders/batch-update-operation-dates"),
+    ("PUT", "/work-orders/batch-update-operation-stations"),
+    ("PUT", "/work-orders/push-binding"),
+    ("PUT", "/work-orders/sync-binding"),
+    ("PUT", "/work-orders/{work_order_id:int}"),
+    ("PUT", "/work-orders/{work_order_id}/operations"),
+    ("PUT", "/work-orders/{work_order_id}/priority"),
+    ("PUT", "/rework-orders/{rework_order_id}"),
+    ("PUT", "/outsource-orders/{outsource_order_id}"),
+    ("DELETE", "/work-orders/{work_order_id:int}"),
+    ("DELETE", "/rework-orders/{rework_order_id}"),
+    ("DELETE", "/outsource-orders/{outsource_order_id}"),
+    # productions/reporting.py
+    ("POST", "/reporting"),
+    ("POST", "/reporting/batch-revoke"),
+    ("POST", "/reporting/sync-from-source"),
+    ("POST", "/reporting/{record_id}/approve"),
+    ("POST", "/reporting/{record_id}/retry"),
+    ("POST", "/reporting/{record_id}/revoke"),
+    ("POST", "/scrap/{scrap_id}/approve"),
+    ("POST", "/defect/{defect_id}/approve-acceptance"),
+    ("PUT", "/reporting/sync-binding"),
+    ("PUT", "/reporting/{record_id}/correct"),
+    ("DELETE", "/reporting/{record_id}"),
+    ("DELETE", "/material-binding/{binding_id}"),
+})
+
+
+def test_all_write_routes_classified_for_station_terminal():
+    """station / work_orders / reporting 三个 router 的全部写路由必须 ∈
+    gated ∪ precheck ∪ PC_ONLY_WRITE_ROUTES——新增写路由不归类即红。"""
+    station_urls = (
+        set(gate_mod.GATED_WRITE_URL_MANIFEST)
+        | set(gate_mod.STATION_EXECUTE_PRECHECK_URLS)
+    )
+    assert not (PC_ONLY_WRITE_ROUTES & station_urls)
+    classified = station_urls | PC_ONLY_WRITE_ROUTES
+
+    unclassified = []
+    for router in (
+        station_api.router,
+        work_orders_api.router,
+        reporting_api.router,
+    ):
+        for route in router.routes:
+            for method in (route.methods or set()) - _SAFE_METHODS:
+                if (method, route.path) not in classified:
+                    unclassified.append(f"{method} {route.path}")
+    assert not unclassified, (
+        f"未归类的写路由（须加入工位写闭包、确认流前置或 PC_ONLY_WRITE_ROUTES）："
+        f"{unclassified}"
+    )

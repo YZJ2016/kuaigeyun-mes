@@ -1,8 +1,8 @@
 """快捷报工的工位边界（spec 180 STN-D15/Q4 修复语义）。
 
 - X-Client-Channel 只是来源标记，不再参与权限判定；
-- 纯工位账号以服务端操作员会话为边界：小组报工放行，非小组报工的
-  worker_id 必须等于会话确认的操作员用户，代报/他人一律拒绝；
+- 纯工位账号以服务端操作员会话为边界：小组报工（不带 worker_id）放行，
+  请求显式携带的 worker_id 必须等于会话确认的操作员用户，代报/他人一律拒绝；
 - 非纯工位账号保持原代报判断：伪造 station 渠道头不能跳过 assign。
 """
 
@@ -107,6 +107,54 @@ async def test_pure_station_team_report_passes(monkeypatch):
 
     denied.assert_not_awaited()
     assert create.await_args.kwargs["reported_by"] == 99
+
+
+@pytest.mark.asyncio
+async def test_pure_station_team_report_with_own_worker_passes(monkeypatch):
+    """纯工位账号 + 小组报工且 worker_id == 会话操作员 → 放行。"""
+    denied = AsyncMock(side_effect=HTTPException(status_code=403, detail="assign"))
+    create = AsyncMock(return_value=MagicMock())
+    monkeypatch.setattr(reporting_api, "ensure_permission_codes", denied)
+    monkeypatch.setattr(reporting_api.reporting_service, "create_reporting_record", create)
+
+    await reporting_api.create_quick_reporting_record(
+        reporting=_record(
+            worker_id=99, worker_name="操作员", team_id=6, team_name="甲班"
+        ),
+        request=_request("station"),
+        business_operator=_station_operator(),
+        auth=MagicMock(),
+        current_user=_user(7),
+        tenant_id=1,
+    )
+
+    denied.assert_not_awaited()
+    assert create.await_args.kwargs["reported_by"] == 99
+
+
+@pytest.mark.asyncio
+async def test_pure_station_team_report_with_other_worker_rejected(monkeypatch):
+    """纯工位账号 + 小组报工夹带他人 worker_id → 拒绝，不落库、不查 assign。"""
+    denied = AsyncMock(side_effect=HTTPException(status_code=403, detail="assign"))
+    create = AsyncMock(return_value=MagicMock())
+    monkeypatch.setattr(reporting_api, "ensure_permission_codes", denied)
+    monkeypatch.setattr(reporting_api.reporting_service, "create_reporting_record", create)
+
+    with pytest.raises(HTTPException) as raised:
+        await reporting_api.create_quick_reporting_record(
+            reporting=_record(
+                worker_id=88, worker_name="他人", team_id=6, team_name="甲班"
+            ),
+            request=_request("station"),
+            business_operator=_station_operator(),
+            auth=MagicMock(),
+            current_user=_user(7),
+            tenant_id=1,
+        )
+
+    assert raised.value.status_code == 400
+    denied.assert_not_awaited()
+    create.assert_not_awaited()
 
 
 @pytest.mark.asyncio
