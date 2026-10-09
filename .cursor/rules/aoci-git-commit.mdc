@@ -1,0 +1,36 @@
+---
+description: AOCI 正式认知资产应随业务变更一并提交；勿默认排除 aoci 索引
+alwaysApply: true
+---
+
+# AOCI 与 Git 提交
+
+**纠正旧偏好**：不要默认「提交业务代码时把 aoci 排除在外」。正式认知索引是仓库契约的一部分；漏提交会挡住 `fast-deploy` 干净树检查，也会让其他 Agent/机器读到过期认知。
+
+## 应提交（正式资产）
+
+与托管对象变更一并 `git add` / 提交：
+
+- `aoci.txt`、`aoci.meta.txt`、`aoci.code.txt`（及未来同类 volume）
+- `AGENTS.md` 中 `<!-- aoci:begin -->`…`<!-- aoci:end -->` 块（若有改动）
+- `.aoci/` 中 **被 `.aoci/.gitignore` 显式放行** 的治理资产：至少 `config.json`、`baseline.json`、`curation.json`、`.gitignore`（以该文件白名单为准）
+
+审计说明里可区分「业务文件」与「AOCI 正式资产」，但默认同一交付提交或紧随其后的认知对齐提交均可。
+
+## 勿提交（本地运行时）
+
+`.aoci/` 下默认 `*` 忽略的内容：lock、ledger、batch JSON、mk_batch*.py、mcp 调试产物、drafts、stale locks 等。这些是本机会话资产，不是正式索引。
+
+根 `.gitignore` **不要**写整夹 `.aoci/`；否则父目录被忽略后，`.aoci/.gitignore` 的 `!config.json` 等白名单无法生效。运行时忽略与正式放行只维护在 `.aoci/.gitignore`。
+
+## 例外
+
+仅当用户**明确禁止**改/提 `aoci.txt`、`.aoci`、metadata 时服从，并如实报告认知与源码不一致。用户只限制业务文件范围、未禁 AOCI 时，收尾仍可更新并提交正式 AOCI 资产（见 `AGENTS.md` task closing）。
+
+## 提交前先索引（强制）
+
+改动了托管对象时：**先** `aoci_maintain`（有候选则 `aoci_update_entry`）**再** `git commit`。构建推送总序见 `.cursor/rules/build-push-aoci.mdc`。
+
+## 与 deploy
+
+`build_web_assert_source_tree_committed` 要求工作区干净；未跟踪的 `aoci*.txt` / `AGENTS.md` 会失败。发版前先完成索引并提交正式 AOCI 资产。
