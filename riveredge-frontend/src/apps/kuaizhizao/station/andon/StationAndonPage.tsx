@@ -407,7 +407,7 @@ export function StationAndonPage({
 
   return (
     <TouchScreenTemplate title="安灯">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div className="hmi-station-pane" style={{ flex: 1 }}>
         <div
           style={{
             display: 'flex',
@@ -440,7 +440,9 @@ export function StationAndonPage({
           />
         ) : null}
 
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        <div className="hmi-station-split hmi-station-split--balanced">
+          <div className="hmi-station-pane">
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           {ANDON_CALL_TYPES.map((item) => (
             <TouchChip
               key={item.value}
@@ -591,38 +593,41 @@ export function StationAndonPage({
           placeholder="备注（可选）"
           onChange={(event) => setRemarks(event.target.value)}
         />
-        <Button
-          size="large"
-          {...touchButtonProps({ variant: 'primary', size: 'primary' })}
-          loading={busy}
-          disabled={!writeEnabled}
-          onClick={() => void submit()}
-        >
-          发起{callTypeText(callType)}安灯
-        </Button>
+            <Button
+              size="large"
+              {...touchButtonProps({ variant: 'primary', size: 'primary' })}
+              loading={busy}
+              disabled={!writeEnabled}
+              onClick={() => void submit()}
+            >
+              发起{callTypeText(callType)}安灯
+            </Button>
+          </div>
 
-        <h2 style={{ fontSize: 22, margin: '8px 0' }}>未响应</h2>
-        <List
-          loading={listLoading}
-          dataSource={openRows}
-          locale={{ emptyText: '没有未响应的安灯' }}
-          renderItem={renderRecord}
-        />
-        <h2 style={{ fontSize: 22, margin: '8px 0' }}>安灯列表</h2>
-        <Button
-          size="large"
-          {...touchButtonProps({ size: 'action' })}
-          onClick={() => void loadLists(stationId)}
-          loading={listLoading}
-        >
-          刷新
-        </Button>
-        <List
-          loading={listLoading}
-          dataSource={allRows}
-          locale={{ emptyText: '没有安灯记录' }}
-          renderItem={renderRecord}
-        />
+          <div className="hmi-station-pane hmi-station-pane--scroll">
+            <h2 style={{ fontSize: 22, margin: '8px 0' }}>未响应</h2>
+            <List
+              loading={listLoading}
+              dataSource={openRows}
+              locale={{ emptyText: '没有未响应的安灯' }}
+              renderItem={renderRecord}
+            />
+            <h2 style={{ fontSize: 22, margin: '8px 0' }}>安灯列表</h2>
+            <Button
+              {...touchButtonProps({ size: 'action' })}
+              onClick={() => void loadLists(stationId)}
+              loading={listLoading}
+            >
+              刷新
+            </Button>
+            <List
+              loading={listLoading}
+              dataSource={allRows}
+              locale={{ emptyText: '没有安灯记录' }}
+              renderItem={renderRecord}
+            />
+          </div>
+        </div>
       </div>
     </TouchScreenTemplate>
   );

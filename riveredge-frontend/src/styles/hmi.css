@@ -289,6 +289,40 @@
   flex-wrap: nowrap;
 }
 
+/* —— 工位入口双栏 —— */
+.hmi-root .hmi-station-home__main,
+.hmi-root .hmi-station-split {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(320px, 380px) minmax(0, 1fr);
+  gap: var(--hmi-gap);
+}
+
+.hmi-root .hmi-station-split--balanced {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.hmi-root .hmi-station-pane {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.hmi-root .hmi-station-pane--scroll {
+  overflow-y: auto;
+}
+
+@media (max-width: 1100px) {
+  .hmi-root .hmi-station-home__main,
+  .hmi-root .hmi-station-split,
+  .hmi-root .hmi-station-split--balanced {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .hmi-root .hmi-kiosk-footer {
   flex-shrink: 0;
   min-height: 72px;

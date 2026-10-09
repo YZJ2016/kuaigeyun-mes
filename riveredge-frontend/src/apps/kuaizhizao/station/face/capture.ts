@@ -1,4 +1,4 @@
-import { Human, type FaceResult } from '@vladmandic/human';
+import type { FaceResult, Human } from '@vladmandic/human';
 
 /** HSE FaceRes 输出维，见安装包 models/faceres.json 的 global_pooling/Mean。 */
 export const FACERES_DESCRIPTOR_LENGTH = 1024;
@@ -11,8 +11,9 @@ const MODEL_BASE_PATH = 'https://cdn.jsdelivr.net/npm/@vladmandic/human@3.3.6/mo
 
 let human: Human | null = null;
 
-function getHuman(): Human {
+async function getHuman(): Promise<Human> {
   if (!human) {
+    const { Human } = await import('@vladmandic/human');
     human = new Human({
       backend: 'webgl',
       modelBasePath: MODEL_BASE_PATH,
@@ -45,7 +46,8 @@ function faceResDescriptor(face: FaceResult): number[] | null {
 
 /** 从视频当前帧取 FaceRes 描述子。长度不是 1024 时抛错，调用方不得提交接口。 */
 export async function captureFaceResDescriptor(video: HTMLVideoElement): Promise<number[]> {
-  const result = await getHuman().detect(video);
+  const humanClient = await getHuman();
+  const result = await humanClient.detect(video);
   if (result.error) {
     throw new Error(String(result.error));
   }

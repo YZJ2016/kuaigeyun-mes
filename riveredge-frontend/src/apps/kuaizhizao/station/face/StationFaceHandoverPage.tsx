@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { App, Button, Card, DatePicker, Empty, Input, Popconfirm, Space, Spin, Tag, Typography } from 'antd';
 import type { Dayjs } from 'dayjs';
 import { TouchScreenTemplate } from '../../../../components/layout-templates/hmi';
+import { touchButtonProps } from '../../../../components/touch-terminal';
 import { STATION_ENTRY_PATH } from '../../../../utils/clientChannel';
 import { formatApiErrorDetail } from '../../../../services/api';
 import { useCurrentUser } from '../../../../hooks/useCurrentUser';
@@ -346,6 +347,14 @@ export const StationFaceHandoverPage: React.FC<StationFaceHandoverPageProps> = (
     }
   };
 
+  const openStationHome = () => {
+    const stationHomePath =
+      typeof workstationId === 'number' && Number.isInteger(workstationId) && workstationId > 0
+        ? `${STATION_ENTRY_PATH}?workstationId=${workstationId}`
+        : STATION_ENTRY_PATH;
+    navigate(stationHomePath);
+  };
+
   const openSop = (sopUuid: string) => {
     const search = new URLSearchParams({ sopUuid });
     if (typeof workstationId === 'number' && Number.isInteger(workstationId) && workstationId > 0) {
@@ -372,9 +381,15 @@ export const StationFaceHandoverPage: React.FC<StationFaceHandoverPageProps> = (
     operatorUserId != null && loginUserId != null && operatorUserId !== loginUserId;
 
   return (
-    <TouchScreenTemplate title="刷脸与交接班" fullscreen={false}>
-      <Space direction="vertical" size={16} style={{ width: '100%' }}>
-        <Card title="我的模板">
+    <TouchScreenTemplate
+      title="刷脸与交接班"
+      fullscreen={false}
+      footerButtons={[{ title: '返回工位入口', onClick: openStationHome }]}
+    >
+      <div className="hmi-station-pane" style={{ flex: 1 }}>
+        <div className="hmi-station-split hmi-station-split--balanced">
+          <div className="hmi-station-pane">
+            <Card title="我的模板">
           <Paragraph>
             登记使用入口传入的当前操作员
             {operatorUserId == null ? '（尚未传入，登记不可用）' : `（${operatorUserId}）`}
@@ -407,15 +422,14 @@ export const StationFaceHandoverPage: React.FC<StationFaceHandoverPageProps> = (
           <div style={{ margin: '12px 0' }}>
             <Space>
               <Button
-                size="large"
+                {...touchButtonProps({ size: 'action' })}
                 disabled={operatorUserId == null || capturing || !writeEnabled}
                 onClick={handleEnroll}
               >
                 登记
               </Button>
               <Button
-                size="large"
-                type="primary"
+                {...touchButtonProps({ variant: 'primary', size: 'action' })}
                 disabled={capturing || !candidate || workstationId == null}
                 onClick={handleConfirmOperator}
               >
@@ -444,7 +458,11 @@ export const StationFaceHandoverPage: React.FC<StationFaceHandoverPageProps> = (
                       cancelText="取消"
                       onConfirm={() => void handleDeleteTemplate(row.id)}
                     >
-                      <Button danger size="large" loading={deletingId === row.id} disabled={!writeEnabled}>
+                      <Button
+                        {...touchButtonProps({ variant: 'danger', size: 'action' })}
+                        loading={deletingId === row.id}
+                        disabled={!writeEnabled}
+                      >
                         删除
                       </Button>
                     </Popconfirm>
@@ -453,9 +471,11 @@ export const StationFaceHandoverPage: React.FC<StationFaceHandoverPageProps> = (
               </Space>
             )}
           </Spin>
-        </Card>
+            </Card>
+          </div>
 
-        <Card title="交接班">
+          <div className="hmi-station-pane">
+            <Card title="交接班">
           <Space direction="vertical" size={12} style={{ width: '100%' }}>
             <Text>
               工位：{workstationId == null ? '未传入' : workstationId}
@@ -483,11 +503,15 @@ export const StationFaceHandoverPage: React.FC<StationFaceHandoverPageProps> = (
               rows={2}
             />
             <Space>
-              <Button size="large" type="primary" loading={summaryLoading} onClick={() => void handleLoadSummary()}>
+              <Button
+                {...touchButtonProps({ variant: 'primary', size: 'action' })}
+                loading={summaryLoading}
+                onClick={() => void handleLoadSummary()}
+              >
                 查询汇总
               </Button>
               <Button
-                size="large"
+                {...touchButtonProps({ size: 'action' })}
                 loading={handoverLoading}
                 disabled={!summary || summaryKey !== currentShiftKey || !writeEnabled}
                 onClick={() => void handleConfirmHandover()}
@@ -543,7 +567,10 @@ export const StationFaceHandoverPage: React.FC<StationFaceHandoverPageProps> = (
                       SOP {documents.sop.name || documents.sop.uuid}
                       {documents.sop.current_revision ? ` · 修订 ${documents.sop.current_revision}` : ''}
                     </Text>
-                    <Button size="large" type="primary" onClick={() => openSop(documents.sop!.uuid)}>
+                    <Button
+                      {...touchButtonProps({ variant: 'primary', size: 'action' })}
+                      onClick={() => openSop(documents.sop!.uuid)}
+                    >
                       打开 SOP
                     </Button>
                   </Space>
@@ -570,7 +597,11 @@ export const StationFaceHandoverPage: React.FC<StationFaceHandoverPageProps> = (
                         {item.drawing_code ? ` · ${item.drawing_code}` : ''}
                         {item.drawing_revision ? ` ${item.drawing_revision}` : ''}
                       </Text>
-                      <Button size="large" disabled={!item.url} onClick={() => openDrawing(item)}>
+                      <Button
+                        {...touchButtonProps({ size: 'action' })}
+                        disabled={!item.url}
+                        onClick={() => openDrawing(item)}
+                      >
                         打开
                       </Button>
                     </Space>
@@ -579,8 +610,10 @@ export const StationFaceHandoverPage: React.FC<StationFaceHandoverPageProps> = (
               </Space>
             </Spin>
           )}
-        </Card>
-      </Space>
+            </Card>
+          </div>
+        </div>
+      </div>
     </TouchScreenTemplate>
   );
 };

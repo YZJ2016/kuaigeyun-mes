@@ -311,7 +311,7 @@ export const StationReportingPage: React.FC<StationReportingPageProps> = ({
           返回工位入口
         </Button>
       </div>
-      <Spin spinning={loading}>
+      <Spin spinning={loading} style={{ display: 'block', flex: 1, minHeight: 0 }}>
         <Form
           form={form}
           layout="vertical"
@@ -323,7 +323,7 @@ export const StationReportingPage: React.FC<StationReportingPageProps> = ({
             binding_quantity: 1,
           }}
         >
-          <Space direction="vertical" size="large" style={{ width: '100%' }}>
+          <div className="hmi-station-pane" style={{ flex: 1 }}>
             {workstationId == null ? <Alert type="warning" showIcon message="未绑定工位" /> : null}
             {mode === 'self' && !operator ? (
               <Alert type="warning" showIcon message="当前操作员未传入，本人报工不会提交" />
@@ -340,145 +340,159 @@ export const StationReportingPage: React.FC<StationReportingPageProps> = ({
               />
             ) : null}
 
-            <Card>
-              <Radio.Group
-                value={mode}
-                onChange={(event) => setMode(event.target.value as StationReportMode)}
-                buttonStyle="solid"
-                size="large"
-              >
-                <Radio.Button value="self">本人</Radio.Button>
-                <Radio.Button value="team">小组</Radio.Button>
-              </Radio.Group>
-            </Card>
-
-            {mode === 'team' ? (
-              <Form.Item label={t('app.kuaizhizao.workReporting.producerModeTeam')}>
-                <WorkGroupSelectDropdown
-                  onWorkGroupPick={(group: WorkGroup | null) => {
-                    if (!group?.id || !String(group.name || '').trim()) {
-                      setTeam(null);
-                      return;
-                    }
-                    setTeam({ id: Number(group.id), name: String(group.name).trim() });
-                  }}
-                />
-              </Form.Item>
-            ) : null}
-
-            <Card title="工单">
-              <Form.Item name="work_order_code" label="工单编号">
-                <Input
-                  size="large"
-                  disabled={loading}
-                  onChange={(event) => {
-                    if (workOrder && event.target.value.trim() !== String(workOrder.code ?? '').trim()) {
-                      setWorkOrder(null);
-                      setOperations([]);
-                      setOperation(null);
-                      clearSubmissionState();
-                    }
-                  }}
-                  onPressEnter={() => {
-                    void loadWorkOrder();
-                  }}
-                />
-              </Form.Item>
-              <Button size="large" disabled={loading} onClick={() => { void loadWorkOrder(); }}>
-                加载工单
-              </Button>
-              {workOrder ? (
-                <div style={{ marginTop: 12 }}>
-                  {workOrder.code} {workOrderDisplayName(workOrder)}
-                </div>
-              ) : null}
-              <Space wrap style={{ marginTop: 12 }}>
-                {operations.map((op) => (
-                  <Button
-                    key={String(op.operation_id)}
+            <div className="hmi-station-split hmi-station-split--balanced">
+              <div className="hmi-station-pane">
+                <Card title="报工对象">
+                  <Radio.Group
+                    value={mode}
+                    onChange={(event) => setMode(event.target.value as StationReportMode)}
+                    buttonStyle="solid"
                     size="large"
-                    type={op.operation_id === operation?.operation_id ? 'primary' : 'default'}
-                    onClick={() => setOperation(op)}
                   >
-                    {op.operation_name || op.operation_code}
-                  </Button>
-                ))}
-              </Space>
-            </Card>
-
-            <Card>
-              <Form.Item
-                name="qualified_quantity"
-                label={t('app.kuaizhizao.workReporting.colQualifiedQty')}
-              >
-                <InputNumber min={0} size="large" style={{ width: '100%' }} />
-              </Form.Item>
-              <Form.Item
-                name="unqualified_quantity"
-                label={t('app.kuaizhizao.workReporting.colUnqualifiedQty')}
-              >
-                <InputNumber min={0} size="large" style={{ width: '100%' }} />
-              </Form.Item>
-              <Form.Item
-                name="work_hours"
-                label={t('app.kuaizhizao.workReporting.colWorkHours')}
-              >
-                <InputNumber min={0} size="large" style={{ width: '100%' }} />
-              </Form.Item>
-              {Number(unqualified) > 0 ? (
-                <Form.Item name="defect_reason" label="不良原因">
-                  <Input size="large" />
-                </Form.Item>
-              ) : null}
-              <Form.Item name="remarks" label="备注">
-                <Input.TextArea rows={2} />
-              </Form.Item>
-              <Button
-                type="primary"
-                size="large"
-                block
-                disabled={!writeEnabled}
-                onClick={() => { void submitReport(); }}
-              >
-                提交报工
-              </Button>
-            </Card>
-
-            {recordId != null ? (
-              <Card title={`报工记录 ${recordId}`}>
-                <UniMaterialSelect
-                  name="material_id"
-                  label="物料"
-                  onChange={(_id, picked) => {
-                    setMaterial(picked && !Array.isArray(picked) ? picked : null);
-                  }}
-                />
-                <Form.Item name="binding_quantity" label="数量">
-                  <InputNumber min={0} size="large" style={{ width: '100%' }} />
-                </Form.Item>
-                <Space>
-                  <Button size="large" disabled={!writeEnabled} onClick={() => { void submitBinding('feeding'); }}>上料</Button>
-                  <Button size="large" disabled={!writeEnabled} onClick={() => { void submitBinding('discharging'); }}>下料</Button>
-                </Space>
-                <Form.Item name="scrap_quantity" label="报废数量" style={{ marginTop: 16 }}>
-                  <InputNumber min={0} size="large" style={{ width: '100%' }} />
-                </Form.Item>
-                <Form.Item name="scrap_type" label="报废类型">
-                  <Radio.Group size="large">
-                    <Radio.Button value="process">过程</Radio.Button>
-                    <Radio.Button value="material">物料</Radio.Button>
-                    <Radio.Button value="quality">质量</Radio.Button>
-                    <Radio.Button value="equipment">设备</Radio.Button>
-                    <Radio.Button value="other">其他</Radio.Button>
+                    <Radio.Button value="self">本人</Radio.Button>
+                    <Radio.Button value="team">小组</Radio.Button>
                   </Radio.Group>
-                </Form.Item>
-                <Form.Item name="scrap_reason" label="报废原因">
-                  <Input size="large" />
-                </Form.Item>
-                <Button size="large" disabled={!writeEnabled} onClick={() => { void submitScrap(); }}>报废</Button>
-              </Card>
-            ) : null}
-          </Space>
+                  {mode === 'team' ? (
+                    <Form.Item
+                      label={t('app.kuaizhizao.workReporting.producerModeTeam')}
+                      style={{ marginTop: 16, marginBottom: 0 }}
+                    >
+                      <WorkGroupSelectDropdown
+                        onWorkGroupPick={(group: WorkGroup | null) => {
+                          if (!group?.id || !String(group.name || '').trim()) {
+                            setTeam(null);
+                            return;
+                          }
+                          setTeam({ id: Number(group.id), name: String(group.name).trim() });
+                        }}
+                      />
+                    </Form.Item>
+                  ) : null}
+                </Card>
+
+                <Card title="工单">
+                  <Form.Item name="work_order_code" label="工单编号">
+                    <Input
+                      size="large"
+                      disabled={loading}
+                      style={{ minHeight: HMI_TOUCH.INPUT_HEIGHT, fontSize: 24 }}
+                      onChange={(event) => {
+                        if (workOrder && event.target.value.trim() !== String(workOrder.code ?? '').trim()) {
+                          setWorkOrder(null);
+                          setOperations([]);
+                          setOperation(null);
+                          clearSubmissionState();
+                        }
+                      }}
+                      onPressEnter={() => {
+                        void loadWorkOrder();
+                      }}
+                    />
+                  </Form.Item>
+                  <Button
+                    {...touchButtonProps({ variant: 'primary', size: 'action' })}
+                    disabled={loading}
+                    onClick={() => { void loadWorkOrder(); }}
+                  >
+                    加载工单
+                  </Button>
+                  {workOrder ? (
+                    <div style={{ marginTop: 12, fontSize: 18 }}>
+                      {workOrder.code} {workOrderDisplayName(workOrder)}
+                    </div>
+                  ) : null}
+                  <Space wrap style={{ marginTop: 12 }}>
+                    {operations.map((op) => (
+                      <Button
+                        key={String(op.operation_id)}
+                        {...touchButtonProps({
+                          variant: op.operation_id === operation?.operation_id ? 'primary' : 'default',
+                          size: 'chip',
+                        })}
+                        onClick={() => setOperation(op)}
+                      >
+                        {op.operation_name || op.operation_code}
+                      </Button>
+                    ))}
+                  </Space>
+                </Card>
+              </div>
+
+              <div className="hmi-station-pane">
+                <Card title="数量与提交">
+                  <Form.Item
+                    name="qualified_quantity"
+                    label={t('app.kuaizhizao.workReporting.colQualifiedQty')}
+                  >
+                    <InputNumber min={0} size="large" style={{ width: '100%', minHeight: HMI_TOUCH.INPUT_HEIGHT }} />
+                  </Form.Item>
+                  <Form.Item
+                    name="unqualified_quantity"
+                    label={t('app.kuaizhizao.workReporting.colUnqualifiedQty')}
+                  >
+                    <InputNumber min={0} size="large" style={{ width: '100%', minHeight: HMI_TOUCH.INPUT_HEIGHT }} />
+                  </Form.Item>
+                  <Form.Item
+                    name="work_hours"
+                    label={t('app.kuaizhizao.workReporting.colWorkHours')}
+                  >
+                    <InputNumber min={0} size="large" style={{ width: '100%', minHeight: HMI_TOUCH.INPUT_HEIGHT }} />
+                  </Form.Item>
+                  {Number(unqualified) > 0 ? (
+                    <Form.Item name="defect_reason" label="不良原因">
+                      <Input size="large" style={{ minHeight: HMI_TOUCH.INPUT_HEIGHT }} />
+                    </Form.Item>
+                  ) : null}
+                  <Form.Item name="remarks" label="备注">
+                    <Input.TextArea rows={2} />
+                  </Form.Item>
+                  <Button
+                    {...touchButtonProps({ variant: 'primary', size: 'primary' })}
+                    block
+                    disabled={!writeEnabled}
+                    onClick={() => { void submitReport(); }}
+                  >
+                    提交报工
+                  </Button>
+                </Card>
+
+                {recordId != null ? (
+                  <Card title={`报工记录 ${recordId}`}>
+                    <UniMaterialSelect
+                      name="material_id"
+                      label="物料"
+                      onChange={(_id, picked) => {
+                        setMaterial(picked && !Array.isArray(picked) ? picked : null);
+                      }}
+                    />
+                    <Form.Item name="binding_quantity" label="数量">
+                      <InputNumber min={0} size="large" style={{ width: '100%', minHeight: HMI_TOUCH.INPUT_HEIGHT }} />
+                    </Form.Item>
+                    <Space wrap>
+                      <Button {...touchButtonProps({ size: 'action' })} disabled={!writeEnabled} onClick={() => { void submitBinding('feeding'); }}>上料</Button>
+                      <Button {...touchButtonProps({ size: 'action' })} disabled={!writeEnabled} onClick={() => { void submitBinding('discharging'); }}>下料</Button>
+                    </Space>
+                    <Form.Item name="scrap_quantity" label="报废数量" style={{ marginTop: 16 }}>
+                      <InputNumber min={0} size="large" style={{ width: '100%', minHeight: HMI_TOUCH.INPUT_HEIGHT }} />
+                    </Form.Item>
+                    <Form.Item name="scrap_type" label="报废类型">
+                      <Radio.Group size="large">
+                        <Radio.Button value="process">过程</Radio.Button>
+                        <Radio.Button value="material">物料</Radio.Button>
+                        <Radio.Button value="quality">质量</Radio.Button>
+                        <Radio.Button value="equipment">设备</Radio.Button>
+                        <Radio.Button value="other">其他</Radio.Button>
+                      </Radio.Group>
+                    </Form.Item>
+                    <Form.Item name="scrap_reason" label="报废原因">
+                      <Input size="large" style={{ minHeight: HMI_TOUCH.INPUT_HEIGHT }} />
+                    </Form.Item>
+                    <Button {...touchButtonProps({ variant: 'danger', size: 'action' })} disabled={!writeEnabled} onClick={() => { void submitScrap(); }}>报废</Button>
+                  </Card>
+                ) : null}
+              </div>
+            </div>
+          </div>
         </Form>
       </Spin>
     </TouchScreenTemplate>
