@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { Component, useCallback, useMemo, type ErrorInfo, type ReactNode } from 'react';
 import { ChartSuspense, LazySankey } from '../../../../../components/common/lazyAntCharts';
 import { Empty } from 'antd';
 import { useTranslation } from 'react-i18next';
@@ -9,6 +9,7 @@ import {
   sankeyStageRank,
   TRACE_SANKEY_COLOR_SCALE,
   traceProfileToSankeyModel,
+  type TraceSankeyModel,
 } from './traceToSankey';
 
 export interface TraceSankeyChartProps {
@@ -26,13 +27,44 @@ function resolveSankeyEndpointId(endpoint: unknown): string {
   return String(endpoint);
 }
 
+/** 桑基图布局失败时只空态本区，不拖垮整个快制造 AppErrorBoundary */
+class SankeyChartErrorBoundary extends Component<
+  { children: ReactNode; fallback: ReactNode },
+  { hasError: boolean }
+> {
+  state = { hasError: false };
+
+  static getDerivedStateFromError(): { hasError: boolean } {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error('[TraceSankeyChart] layout/render failed:', error, info.componentStack);
+  }
+
+  render() {
+    if (this.state.hasError) return this.props.fallback;
+    return this.props.children;
+  }
+}
+
+const EMPTY_MODEL: TraceSankeyModel = {
+  links: [],
+  nodes: [],
+  labelById: new Map(),
+};
+
 const TraceSankeyChart: React.FC<TraceSankeyChartProps> = ({ profile, height = 480 }) => {
   const { t } = useTranslation();
 
-  const { links, nodes, labelById } = useMemo(
-    () => traceProfileToSankeyModel(profile, t),
-    [profile, t],
-  );
+  const { links, nodes, labelById } = useMemo(() => {
+    try {
+      return traceProfileToSankeyModel(profile, t);
+    } catch (err) {
+      console.error('[TraceSankeyChart] build model failed:', err);
+      return EMPTY_MODEL;
+    }
+  }, [profile, t]);
 
   const resolveLabel = useCallback(
     (id: string) => labelById.get(id) || formatTraceSankeyIdLabel(id, t),
@@ -56,65 +88,69 @@ const TraceSankeyChart: React.FC<TraceSankeyChartProps> = ({ profile, height = 4
     return (datum: { key?: string }) => map.get(String(datum?.key ?? '')) || String(datum?.key ?? '');
   }, [labelById]);
 
+  const emptyFallback = (
+    <Empty
+      description={t('app.kuaizhizao.quality.traceability.sankeyEmpty')}
+      style={{ paddingTop: height / 2 - 40 }}
+    />
+  );
+
   if (links.length === 0) {
-    return (
-      <Empty
-        description={t('app.kuaizhizao.quality.traceability.sankeyEmpty')}
-        style={{ paddingTop: height / 2 - 40 }}
-      />
-    );
+    return emptyFallback;
   }
 
   return (
-    <ChartSuspense>
-      <LazySankey
-        data={{ links, nodes }}
-        colorField="documentType"
-        autoFit
-        height={height}
-        scale={{
-          color: TRACE_SANKEY_COLOR_SCALE,
-        }}
-        layout={{
-          nodeAlign: 'left',
-          nodePadding: 0.03,
-          nodeWidth: 0.018,
-          iterations: 32,
-          nodeDepth,
-        }}
-        style={{
-          labelFontSize: 11,
-          labelFill: '#1f2937',
-          labelText,
-          linkFillOpacity: 0.55,
-          nodeStroke: '#e8e8e8',
-          nodeLineWidth: 1,
-        }}
-        tooltip={{
-          nodeTitle: (datum: { key?: string }) => resolveLabel(String(datum?.key ?? '')),
-          nodeItems: [{ field: 'value', name: t('common.quantity') }],
-          linkTitle: (datum: { source?: unknown; target?: unknown }) => {
-            const src = resolveLabel(resolveSankeyEndpointId(datum?.source));
-            const tgt = resolveLabel(resolveSankeyEndpointId(datum?.target));
-            return src && tgt ? `${src} → ${tgt}` : src || tgt;
-          },
-          linkItems: [
-            (datum: { source?: unknown }) => ({
-              name: t('app.kuaizhizao.quality.traceability.sankeyLinkSource'),
-              value: resolveLabel(resolveSankeyEndpointId(datum?.source)),
-            }),
-            (datum: { target?: unknown }) => ({
-              name: t('app.kuaizhizao.quality.traceability.sankeyLinkTarget'),
-              value: resolveLabel(resolveSankeyEndpointId(datum?.target)),
-            }),
-            (datum: { value?: number }) => ({
-              name: t('common.quantity'),
-              value: datum?.value ?? '',
-            }),
-          ],
-        }}
-      />
-    </ChartSuspense>
+    <SankeyChartErrorBoundary fallback={emptyFallback}>
+      <ChartSuspense>
+        <LazySankey
+          data={{ links, nodes }}
+          colorField="documentType"
+          autoFit
+          height={height}
+          scale={{
+            color: TRACE_SANKEY_COLOR_SCALE,
+          }}
+          layout={{
+            nodeAlign: 'left',
+            nodePadding: 0.03,
+            nodeWidth: 0.018,
+            iterations: 32,
+            nodeDepth,
+          }}
+          style={{
+            labelFontSize: 11,
+            labelFill: '#1f2937',
+            labelText,
+            linkFillOpacity: 0.55,
+            nodeStroke: '#e8e8e8',
+            nodeLineWidth: 1,
+          }}
+          tooltip={{
+            nodeTitle: (datum: { key?: string }) => resolveLabel(String(datum?.key ?? '')),
+            nodeItems: [{ field: 'value', name: t('common.quantity') }],
+            linkTitle: (datum: { source?: unknown; target?: unknown }) => {
+              const src = resolveLabel(resolveSankeyEndpointId(datum?.source));
+              const tgt = resolveLabel(resolveSankeyEndpointId(datum?.target));
+              return src && tgt ? `${src} → ${tgt}` : src || tgt;
+            },
+            linkItems: [
+              (datum: { source?: unknown }) => ({
+                name: t('app.kuaizhizao.quality.traceability.sankeyLinkSource'),
+                value: resolveLabel(resolveSankeyEndpointId(datum?.source)),
+              }),
+              (datum: { target?: unknown }) => ({
+                name: t('app.kuaizhizao.quality.traceability.sankeyLinkTarget'),
+                value: resolveLabel(resolveSankeyEndpointId(datum?.target)),
+              }),
+              (datum: { value?: number }) => ({
+                name: t('common.quantity'),
+                value: datum?.value ?? '',
+              }),
+            ],
+          }}
+        />
+      </ChartSuspense>
+    </SankeyChartErrorBoundary>
   );
 };
 
