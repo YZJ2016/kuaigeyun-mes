@@ -61,7 +61,8 @@ dependencies = [
 # Linux 系统库：libzbar0 + libgomp1 + libgl1（opencv）；Python 侧强制 opencv-python-headless，避免无头服务器缺 libGL。
 [project.optional-dependencies]
 pdf = [
-    "playwright>=1.57.0,<1.58",
+    # 1.61+ 才收录 ubuntu26.04；更旧版本 install chromium 会报 does not support
+    "playwright>=1.61.0,<1.64",
 ]
 ocr = [
     "pymupdf>=1.24.0",
