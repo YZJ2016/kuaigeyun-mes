@@ -10,6 +10,8 @@ import { CustomerSelectDropdown } from '../../master-data/components/CustomerSel
 import { SupplierSelectDropdown } from '../../master-data/components/SupplierSelectDropdown';
 import { getDepartmentTree } from '../../../services/department';
 import { operationApi, unwrapProcessPagedList } from '../../master-data/services/process';
+import { FormModalGridBlock } from '../../../components/layout-templates';
+import { searchUserIdOptions } from '../../../utils/userDisplay';
 import {
   companionIdField,
   flattenDepartmentOptions,
@@ -49,6 +51,49 @@ const OaLookupField: React.FC<Props> = ({
   const rules = required ? [{ required: true, message: `请选择${label}` }] : undefined;
   const pickName = `_pick_${field.name}`;
   const idName = companionIdField(field.name);
+
+  if (kind === 'userId') {
+    const select = (
+      <UniUserIdSelect
+        name={field.name}
+        label={label}
+        required={required}
+        colProps={field.userIdExtra ? undefined : colProps}
+        searchUsers={async (keyword, selectedIds) =>
+          searchUserIdOptions({
+            keyword,
+            selectedIds,
+            isActive: true,
+            hostResource: resource,
+            pageSize: 50,
+          })
+        }
+        onUserPicked={(user) => {
+          const fillTarget = field.userIdFillNameField;
+          if (user && fillTarget) {
+            const current = String(form.getFieldValue(fillTarget) ?? '').trim();
+            if (!current) {
+              form.setFieldsValue({
+                [fillTarget]: user.full_name || user.label || undefined,
+              });
+            }
+          }
+        }}
+      />
+    );
+    if (!field.userIdExtra) return select;
+    const content = (
+      <div>
+        {select}
+        {field.userIdExtra}
+      </div>
+    );
+    return colProps ? (
+      <FormModalGridBlock span={colProps.span}>{content}</FormModalGridBlock>
+    ) : (
+      content
+    );
+  }
 
   if (kind === 'user') {
     const presetId = Number(editing?.[idName]);

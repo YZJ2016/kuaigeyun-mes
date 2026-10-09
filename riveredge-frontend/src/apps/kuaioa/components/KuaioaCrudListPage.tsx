@@ -77,7 +77,8 @@ export type KuaioaFieldConfig = {
     | 'material'
     | 'department'
     | 'supplier'
-    | 'operation';
+    | 'operation'
+    | 'userId';
   options?: Array<{ label: string; value: string | number | boolean }>;
   /** select / userIds 多选 */
   mode?: 'multiple';
@@ -86,6 +87,12 @@ export type KuaioaFieldConfig = {
   required?: boolean;
   hideInTable?: boolean;
   hideInForm?: boolean;
+  /** 详情抽屉不渲染该字段（原始 id 等有展示字段替代时用） */
+  hideInDetail?: boolean;
+  /** type='userId'：选人控件下方附加节点（如「没有账号？一键创建」） */
+  userIdExtra?: React.ReactNode;
+  /** type='userId'：选中账号后若该表单项为空则回填姓名 */
+  userIdFillNameField?: string;
   width?: number;
 };
 
@@ -855,7 +862,7 @@ const KuaioaCrudListPage: React.FC<Props> = ({
                     kind={lookupKind}
                     label={label}
                     required={field.required}
-                    colProps={lookupKind === 'user' || lookupKind === 'department' || lookupKind === 'operation' ? colProps : undefined}
+                    colProps={lookupKind === 'user' || lookupKind === 'userId' || lookupKind === 'department' || lookupKind === 'operation' ? colProps : undefined}
                     form={form}
                     resource={resource}
                     editing={editing}

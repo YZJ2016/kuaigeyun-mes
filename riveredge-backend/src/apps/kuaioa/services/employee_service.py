@@ -3,12 +3,20 @@
 from __future__ import annotations
 
 import calendar
+import re
+import secrets
 from datetime import date
 from typing import Any, Optional
 
+from pydantic import ValidationError as PydanticValidationError
+
 from apps.kuaioa.models.employee import KuaioaEmployeeProfile
 from apps.common.bulk_import import BulkCreateResponse, run_bulk_create
-from apps.kuaioa.schemas.employee import EmployeeProfileCreate, EmployeeProfileUpdate
+from apps.kuaioa.schemas.employee import (
+    EmployeeAccountQuickCreateRequest,
+    EmployeeProfileCreate,
+    EmployeeProfileUpdate,
+)
 from apps.kuaioa.services.kuaioa_list_core import (
     apply_create_audit_by_user_id,
     build_keyword_q,
@@ -17,12 +25,37 @@ from apps.kuaioa.services.kuaioa_list_core import (
     parse_optional_date,
     touch_updated,
 )
+from core.schemas.user import UserCreate
+from core.services.user.user_service import UserService
 from core.utils.timezone_utils import resolve_business_datetime
-from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
+from infra.exceptions.exceptions import (
+    BusinessLogicError,
+    NotFoundError,
+    ValidationError,
+)
+from infra.domain.security.reserved_username import (
+    assert_tenant_user_username_allowed,
+)
+from infra.models.user import User
 
 _ALLOWED_EMPLOYMENT = frozenset({"formal", "temp", "labor"})
 _ALLOWED_PAY = frozenset({"piece", "time", "line"})
 _ALLOWED_STATUS = frozenset({"active", "left"})
+
+
+def _username_base_from_name(full_name: str) -> str:
+    """由姓名生成登录账号前缀（拼音小写），无法生成时回退随机段。"""
+    base = ""
+    try:
+        from pypinyin import lazy_pinyin
+
+        base = "".join(lazy_pinyin(full_name)).lower()
+    except Exception:
+        base = ""
+    base = re.sub(r"[^a-z0-9_]+", "", base)
+    if len(base) < 2:
+        base = f"yg{secrets.token_hex(3)}"
+    return base[:40]
 
 
 def _resolve_status(*, leave_date, status: Optional[str]) -> str:
@@ -62,7 +95,9 @@ class EmployeeProfileService:
                 )
             )
         rows = await q.order_by("-updated_at")
-        return [model_to_dict(row) for row in rows]
+        return await self._attach_user_display(
+            tenant_id, [model_to_dict(row) for row in rows]
+        )
 
     async def get_profile(self, tenant_id: int, profile_id: int) -> dict[str, Any]:
         row = await KuaioaEmployeeProfile.get_or_none(
@@ -70,7 +105,110 @@ class EmployeeProfileService:
         )
         if not row:
             raise NotFoundError("员工档案不存在")
-        return model_to_dict(row)
+        return (await self._attach_user_display(tenant_id, [model_to_dict(row)]))[0]
+
+    async def _attach_user_display(
+        self, tenant_id: int, rows: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """补出 user_display（姓名（账号））供列表/详情展示。"""
+        user_ids = {row.get("user_id") for row in rows if row.get("user_id")}
+        name_map: dict[int, str] = {}
+        if user_ids:
+            users = await User.filter(
+                id__in=list(user_ids), tenant_id=tenant_id
+            ).only("id", "username", "full_name")
+            name_map = {
+                u.id: f"{u.full_name or u.username}（{u.username}）" for u in users
+            }
+        for row in rows:
+            row["user_display"] = name_map.get(row.get("user_id"))
+        return rows
+
+    async def _validate_linked_user(
+        self,
+        tenant_id: int,
+        user_id: int,
+        *,
+        exclude_profile_id: Optional[int] = None,
+    ) -> None:
+        """校验绑定账号：存在、同租户、启用，且未被其他档案占用。"""
+        user = await User.filter(
+            id=user_id,
+            tenant_id=tenant_id,
+            is_active=True,
+            deleted_at__isnull=True,
+        ).first()
+        if user is None:
+            raise BusinessLogicError("绑定的登录账号不存在或已停用")
+        query = KuaioaEmployeeProfile.filter(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            deleted_at__isnull=True,
+        )
+        if exclude_profile_id:
+            query = query.exclude(id=exclude_profile_id)
+        if await query.exists():
+            raise BusinessLogicError("该登录账号已绑定其他员工档案")
+
+    async def _suggest_username(self, tenant_id: int, full_name: str) -> str:
+        base = _username_base_from_name(full_name)
+        candidate = base
+        for index in range(2, 50):
+            try:
+                assert_tenant_user_username_allowed(candidate)
+            except ValueError:
+                candidate = f"{base}{index}"
+                continue
+            exists = await User.filter(
+                tenant_id=tenant_id, username=candidate, deleted_at__isnull=True
+            ).exists()
+            if not exists:
+                return candidate
+            candidate = f"{base}{index}"
+        raise BusinessLogicError("无法生成可用登录账号，请手动指定")
+
+    async def create_linked_account(
+        self,
+        tenant_id: int,
+        data: EmployeeAccountQuickCreateRequest,
+        *,
+        operator_user_id: int,
+    ) -> dict[str, Any]:
+        """一键创建 PC Web 登录账号（无角色），返回仅本次可见的初始密码。"""
+        full_name = (data.full_name or "").strip()
+        if not full_name:
+            raise BusinessLogicError("姓名不能为空")
+        username = (data.username or "").strip() or await self._suggest_username(
+            tenant_id, full_name
+        )
+        password = secrets.token_urlsafe(9)
+        phone = (data.phone or "").strip() or None
+        try:
+            user_create = UserCreate(
+                username=username,
+                password=password,
+                full_name=full_name,
+                phone=phone,
+                tenant_id=tenant_id,
+                is_active=True,
+                is_tenant_admin=False,
+                source="kuaioa_employee",
+            )
+        except PydanticValidationError as exc:
+            raise BusinessLogicError(str(exc)) from exc
+        try:
+            user = await UserService.create_user(
+                tenant_id=tenant_id,
+                data=user_create,
+                current_user_id=operator_user_id,
+            )
+        except ValidationError as exc:
+            raise BusinessLogicError(str(exc)) from exc
+        return {
+            "user_id": int(user.id),
+            "username": user.username,
+            "initial_password": password,
+        }
 
     async def create_profile(
         self, tenant_id: int, data: EmployeeProfileCreate, user_id: int
@@ -91,6 +229,10 @@ class EmployeeProfileService:
         except ValueError as exc:
             raise BusinessLogicError(str(exc)) from exc
         status = _resolve_status(leave_date=leave_date, status=data.status)
+
+        linked_user_id = data.user_id or None
+        if linked_user_id is not None:
+            await self._validate_linked_user(tenant_id, linked_user_id)
 
         create_payload: dict[str, Any] = {
             "tenant_id": tenant_id,
@@ -114,7 +256,7 @@ class EmployeeProfileService:
             "welfare_dragon_boat": data.welfare_dragon_boat,
             "welfare_mid_autumn": data.welfare_mid_autumn,
             "welfare_spring_festival": data.welfare_spring_festival,
-            "user_id": data.user_id,
+            "user_id": linked_user_id,
             "department_name": (data.department_name or "").strip() or None,
             "status": status,
             "notes": data.notes,
@@ -208,6 +350,13 @@ class EmployeeProfileService:
         ):
             if key in payload and isinstance(payload[key], str):
                 payload[key] = payload[key].strip() or None
+        if "user_id" in payload:
+            linked_user_id = payload["user_id"] or None
+            if linked_user_id is not None:
+                await self._validate_linked_user(
+                    tenant_id, linked_user_id, exclude_profile_id=profile_id
+                )
+            payload["user_id"] = linked_user_id
 
         leave_date = payload["leave_date"] if "leave_date" in payload else row.leave_date
         status_in = payload.get("status") if "status" in payload else row.status
