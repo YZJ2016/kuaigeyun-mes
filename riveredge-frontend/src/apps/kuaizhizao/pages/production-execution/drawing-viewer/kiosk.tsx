@@ -9,17 +9,21 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Card, Button, Space, message, Spin, Empty, Tag } from 'antd';
-import { ZoomInOutlined, ZoomOutOutlined, ReloadOutlined, RotateLeftOutlined, RotateRightOutlined, DownloadOutlined, FullscreenOutlined } from '@ant-design/icons';
-import { TOUCH_SCREEN_CONFIG } from '../../../../../components/layout-templates';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { Card, Space, Spin, Empty, Tag } from 'antd';
+import { ZoomInOutlined, ZoomOutOutlined, ReloadOutlined, RotateLeftOutlined, RotateRightOutlined, DownloadOutlined, FullscreenOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import { TouchScreenTemplate } from '../../../../../components/layout-templates/hmi';
 import { useTouchScreen } from '../../../../../hooks/useTouchScreen';
+import { isStationEntryPath, STATION_ENTRY_PATH } from '../../../../../utils/clientChannel';
 import { App } from 'antd';
 
 /**
  * 图纸查看 - 工位机触屏模式页面
  */
 const DrawingViewerKioskPage: React.FC = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const stationRoute = isStationEntryPath(location.pathname);
   const { message: messageApi } = App.useApp();
   const touchScreen = useTouchScreen();
   const [loading, setLoading] = useState(false);
@@ -331,6 +335,13 @@ const DrawingViewerKioskPage: React.FC = () => {
           onClick: handleEnterFullscreen,
           block: false,
         },
+        ...(stationRoute ? [{
+          title: '返回工位入口',
+          type: 'default' as const,
+          icon: <ArrowLeftOutlined />,
+          onClick: () => navigate(`${STATION_ENTRY_PATH}${location.search}`),
+          block: false,
+        }] : []),
       ]}
     >
       <Spin spinning={loading}>
@@ -348,7 +359,7 @@ const DrawingViewerKioskPage: React.FC = () => {
             }}
           >
             {/* 图纸信息 */}
-            <Card size="small" style={{ marginBottom: 24, backgroundColor: '#f5f5f5' }}>
+            <Card size="small" style={{ marginBottom: 24, ...(stationRoute ? {} : { backgroundColor: '#f5f5f5' }) }}>
               <Space orientation="vertical" size="small" style={{ width: '100%' }}>
                 <div>
                   <strong>图纸URL：</strong>
@@ -373,7 +384,7 @@ const DrawingViewerKioskPage: React.FC = () => {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                backgroundColor: '#f0f0f0',
+                backgroundColor: stationRoute ? 'transparent' : '#f0f0f0',
                 position: 'relative',
                 touchAction: 'none', // 禁用默认触摸行为
               }}
@@ -406,7 +417,7 @@ const DrawingViewerKioskPage: React.FC = () => {
             </div>
 
             {/* 操作提示 */}
-            <Card size="small" style={{ marginTop: 24, backgroundColor: '#f5f5f5' }}>
+            <Card size="small" style={{ marginTop: 24, ...(stationRoute ? {} : { backgroundColor: '#f5f5f5' }) }}>
               <Space orientation="vertical" size="small" style={{ width: '100%', fontSize: 20 }}>
                 <div>
                   <strong>操作提示：</strong>

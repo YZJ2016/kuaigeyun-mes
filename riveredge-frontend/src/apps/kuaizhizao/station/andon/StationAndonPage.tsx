@@ -1,6 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Alert, Button, Input, List } from 'antd';
-import { useCurrentUser } from '../../../../hooks/useCurrentUser';
+import { TouchScreenTemplate } from '../../../../components/layout-templates/hmi';
+import { TouchChip, TouchListItem, touchButtonProps } from '../../../../components/touch-terminal';
+import { STATION_ENTRY_PATH } from '../../../../utils/clientChannel';
+import { HMI_TOUCH } from '../../../../theme/hmi';
 import { useStationWriteEnabled } from '../entry/session';
 import {
   ANDON_CALL_TYPES,
@@ -70,17 +74,22 @@ function timeText(value: string): string {
   return value.replace('T', ' ').replace(/\.\d+/, '').replace(/Z$/, '').replace(/\+.*/, '');
 }
 
+/** 返回工位入口；有已校验工位时保留 workstationId 查询参数。 */
+function stationEntryPath(workstationId: number | null): string {
+  return workstationId == null
+    ? STATION_ENTRY_PATH
+    : `${STATION_ENTRY_PATH}?workstationId=${workstationId}`;
+}
+
 export function StationAndonPage({
   workstationId = null,
   workstationName = null,
   operatorId = null,
   operatorName = null,
 }: StationAndonPageProps) {
-  const loginUser = useCurrentUser();
+  const navigate = useNavigate();
   // 未确认操作员时可查看安灯列表，发起/响应/关闭/撤销禁用
   const writeEnabled = useStationWriteEnabled();
-  const loginUserId =
-    typeof loginUser?.id === 'number' && Number.isInteger(loginUser.id) ? loginUser.id : null;
   const stationId = boundWorkstationId(workstationId);
   const stationName = typeof workstationName === 'string' ? workstationName.trim() : '';
   const operatorText = operatorName?.trim()
@@ -111,20 +120,27 @@ export function StationAndonPage({
   const [notice, setNotice] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(
     null,
   );
+  const operationsRequestSeq = useRef(0);
+  const listsRequestSeq = useRef(0);
+  const pickerRequestSeq = useRef(0);
 
   const loadLists = useCallback(async (id: number) => {
+    const requestSeq = ++listsRequestSeq.current;
     setListLoading(true);
     try {
       const [openList, allList] = await Promise.all([
         listOpenAndonCalls(id),
         listAndonCalls(id),
       ]);
+      if (requestSeq !== listsRequestSeq.current) return;
       setOpenRows(openList);
       setAllRows(allList);
     } catch (error) {
-      setNotice({ type: 'error', text: apiErrorText(error) });
+      if (requestSeq === listsRequestSeq.current) {
+        setNotice({ type: 'error', text: apiErrorText(error) });
+      }
     } finally {
-      setListLoading(false);
+      if (requestSeq === listsRequestSeq.current) setListLoading(false);
     }
   }, []);
 
@@ -134,38 +150,50 @@ export function StationAndonPage({
   }, [loadLists, stationId]);
 
   const loadWorkOrderChoices = useCallback(async (keyword: string) => {
+    const requestSeq = ++pickerRequestSeq.current;
     setPickerLoading(true);
     try {
-      setWorkOrders(await listWorkOrders(keyword));
+      const rows = await listWorkOrders(keyword);
+      if (requestSeq !== pickerRequestSeq.current) return;
+      setWorkOrders(rows);
     } catch (error) {
+      if (requestSeq !== pickerRequestSeq.current) return;
       setWorkOrders([]);
       setNotice({ type: 'error', text: apiErrorText(error) });
     } finally {
-      setPickerLoading(false);
+      if (requestSeq === pickerRequestSeq.current) setPickerLoading(false);
     }
   }, []);
 
   const loadEquipmentChoices = useCallback(async (keyword: string) => {
+    const requestSeq = ++pickerRequestSeq.current;
     setPickerLoading(true);
     try {
-      setEquipment(await listEquipment(keyword));
+      const rows = await listEquipment(keyword);
+      if (requestSeq !== pickerRequestSeq.current) return;
+      setEquipment(rows);
     } catch (error) {
+      if (requestSeq !== pickerRequestSeq.current) return;
       setEquipment([]);
       setNotice({ type: 'error', text: apiErrorText(error) });
     } finally {
-      setPickerLoading(false);
+      if (requestSeq === pickerRequestSeq.current) setPickerLoading(false);
     }
   }, []);
 
   const loadSupervisorChoices = useCallback(async (keyword: string) => {
+    const requestSeq = ++pickerRequestSeq.current;
     setPickerLoading(true);
     try {
-      setSupervisors(await searchSupervisors(keyword));
+      const rows = await searchSupervisors(keyword);
+      if (requestSeq !== pickerRequestSeq.current) return;
+      setSupervisors(rows);
     } catch (error) {
+      if (requestSeq !== pickerRequestSeq.current) return;
       setSupervisors([]);
       setNotice({ type: 'error', text: apiErrorText(error) });
     } finally {
-      setPickerLoading(false);
+      if (requestSeq === pickerRequestSeq.current) setPickerLoading(false);
     }
   }, []);
 
@@ -180,19 +208,35 @@ export function StationAndonPage({
     }
   }, [callType, loadEquipmentChoices, loadSupervisorChoices, loadWorkOrderChoices, stationId]);
 
-  const selectWorkOrder = async (row: WorkOrderChoice) => {
+  const loadSelectedWorkOrderOperations = useCallback(async (row: WorkOrderChoice) => {
+    const requestSeq = ++operationsRequestSeq.current;
+    const pickerSeq = ++pickerRequestSeq.current;
+    setPickerLoading(true);
+    try {
+      const rows = await listOperationRows(row.id);
+      if (requestSeq !== operationsRequestSeq.current) return;
+      setOperations(rows);
+    } catch (error) {
+      if (requestSeq === operationsRequestSeq.current) {
+        setNotice({ type: 'error', text: apiErrorText(error) });
+      }
+    } finally {
+      if (pickerSeq === pickerRequestSeq.current) setPickerLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (callType !== 'quality' || selectedWorkOrder == null) {
+      operationsRequestSeq.current += 1;
+      return;
+    }
+    void loadSelectedWorkOrderOperations(selectedWorkOrder);
+  }, [callType, loadSelectedWorkOrderOperations, selectedWorkOrder]);
+
+  const selectWorkOrder = (row: WorkOrderChoice) => {
     setSelectedWorkOrder(row);
     setSelectedOperationId(null);
     setOperations([]);
-    if (callType !== 'quality') return;
-    setPickerLoading(true);
-    try {
-      setOperations(await listOperationRows(row.id));
-    } catch (error) {
-      setNotice({ type: 'error', text: apiErrorText(error) });
-    } finally {
-      setPickerLoading(false);
-    }
   };
 
   const submit = async () => {
@@ -256,7 +300,7 @@ export function StationAndonPage({
   ) => {
     if (stationId == null || busy) return;
     if (action === 'cancel') {
-      if (row.status !== 'open' || loginUserId == null || row.callerId !== loginUserId) return;
+      if (row.status !== 'open' || operatorId == null || row.callerId !== operatorId) return;
     } else if (action === 'acknowledge') {
       if (row.status !== 'open') return;
     } else if (row.status !== 'open' && row.status !== 'acknowledged') {
@@ -288,7 +332,7 @@ export function StationAndonPage({
   const renderRecord = (row: StationAndonRecord) => {
     const canAcknowledge = row.status === 'open';
     const canClose = row.status === 'open' || row.status === 'acknowledged';
-    const canCancel = row.status === 'open' && loginUserId != null && row.callerId === loginUserId;
+    const canCancel = row.status === 'open' && operatorId != null && row.callerId === operatorId;
     return (
       <List.Item>
         <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -311,6 +355,7 @@ export function StationAndonPage({
             {canAcknowledge ? (
               <Button
                 size="large"
+                {...touchButtonProps({ size: 'action' })}
                 disabled={busy || !writeEnabled}
                 onClick={() => void runAction(row, 'acknowledge')}
               >
@@ -320,6 +365,7 @@ export function StationAndonPage({
             {canClose ? (
               <Button
                 size="large"
+                {...touchButtonProps({ size: 'action' })}
                 disabled={busy || !writeEnabled}
                 onClick={() => void runAction(row, 'close')}
               >
@@ -329,6 +375,7 @@ export function StationAndonPage({
             {canCancel ? (
               <Button
                 size="large"
+                {...touchButtonProps({ size: 'action' })}
                 disabled={busy || !writeEnabled}
                 onClick={() => void runAction(row, 'cancel')}
               >
@@ -343,217 +390,240 @@ export function StationAndonPage({
 
   if (stationId == null) {
     return (
-      <div style={{ padding: 16 }}>
+      <TouchScreenTemplate title="安灯">
         <Alert type="info" showIcon message="等待工位入口传入当前工位" />
-      </div>
+        <div style={{ marginTop: 16 }}>
+          <Button
+            size="large"
+            {...touchButtonProps({ size: 'action' })}
+            onClick={() => navigate(stationEntryPath(stationId))}
+          >
+            返回工位入口
+          </Button>
+        </div>
+      </TouchScreenTemplate>
     );
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: 16 }}>
-      <div style={{ fontSize: 18 }}>
-        工位 {stationName || stationId}
-        <span style={{ marginLeft: 16 }}>当前操作员 {operatorText}</span>
-      </div>
-
-      {notice ? <Alert type={notice.type} message={notice.text} showIcon /> : null}
-      {!writeEnabled ? (
-        <Alert
-          type="info"
-          showIcon
-          message="未确认操作员：可查看安灯，发起、响应、关闭与撤销不可用"
-        />
-      ) : null}
-
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-        {ANDON_CALL_TYPES.map((item) => (
+    <TouchScreenTemplate title="安灯">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 16,
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            fontSize: 18,
+          }}
+        >
+          <span>
+            工位 {stationName || stationId}
+            <span style={{ marginLeft: 16 }}>当前操作员 {operatorText}</span>
+          </span>
           <Button
-            key={item.value}
             size="large"
-            type={callType === item.value ? 'primary' : 'default'}
-            onClick={() => setCallType(item.value)}
+            {...touchButtonProps({ size: 'header', style: { height: HMI_TOUCH.HEADER_BTN_HEIGHT } })}
+            onClick={() => navigate(stationEntryPath(stationId))}
           >
-            {item.label}
+            返回工位入口
           </Button>
-        ))}
-      </div>
-
-      {(callType === 'quality' || callType === 'material') && (
-        <div>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-            <Input
-              size="large"
-              value={workOrderKeyword}
-              placeholder="工单编码或名称"
-              onChange={(event) => setWorkOrderKeyword(event.target.value)}
-              onPressEnter={() => void loadWorkOrderChoices(workOrderKeyword)}
-            />
-            <Button size="large" loading={pickerLoading} onClick={() => void loadWorkOrderChoices(workOrderKeyword)}>
-              查工单
-            </Button>
-          </div>
-          <List
-            loading={pickerLoading}
-            dataSource={workOrders}
-            locale={{ emptyText: '没有工单' }}
-            renderItem={(row) => (
-              <List.Item
-                style={{
-                  cursor: 'pointer',
-                  background: row.id === selectedWorkOrder?.id ? '#e6f4ff' : undefined,
-                  padding: 12,
-                }}
-                onClick={() => void selectWorkOrder(row)}
-              >
-                <div style={{ fontSize: 18 }}>
-                  <strong>{row.code || `工单 ${row.id}`}</strong>
-                  {row.name ? <span style={{ marginLeft: 12 }}>{row.name}</span> : null}
-                </div>
-              </List.Item>
-            )}
-          />
         </div>
-      )}
 
-      {callType === 'quality' && selectedWorkOrder ? (
-        <List
-          dataSource={operations}
-          locale={{ emptyText: '该工单没有工序' }}
-          renderItem={(row) => (
-            <List.Item
-              style={{
-                cursor: 'pointer',
-                background: row.id === selectedOperationId ? '#e6f4ff' : undefined,
-                padding: 12,
-              }}
-              onClick={() => setSelectedOperationId(row.id)}
+        {notice ? <Alert type={notice.type} message={notice.text} showIcon /> : null}
+        {!writeEnabled ? (
+          <Alert
+            type="info"
+            showIcon
+            message="未确认操作员：可查看安灯，发起、响应、关闭与撤销不可用"
+          />
+        ) : null}
+
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {ANDON_CALL_TYPES.map((item) => (
+            <TouchChip
+              key={item.value}
+              selected={callType === item.value}
+              onClick={() => setCallType(item.value)}
             >
-              <div style={{ fontSize: 18 }}>
-                {row.sequence}. {row.name || row.code || `工序 ${row.id}`}
-              </div>
-            </List.Item>
-          )}
-        />
-      ) : null}
+              {item.label}
+            </TouchChip>
+          ))}
+        </div>
 
-      {callType === 'material' ? <div style={{ fontSize: 18 }}>叫料模式 {MATERIAL_CALL_MODE}</div> : null}
-
-      {callType === 'equipment' && (
-        <div>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-            <Input
-              size="large"
-              value={equipmentKeyword}
-              placeholder="设备编码或名称"
-              onChange={(event) => setEquipmentKeyword(event.target.value)}
-              onPressEnter={() => void loadEquipmentChoices(equipmentKeyword)}
-            />
-            <Button size="large" loading={pickerLoading} onClick={() => void loadEquipmentChoices(equipmentKeyword)}>
-              查设备
-            </Button>
-          </div>
-          <List
-            loading={pickerLoading}
-            dataSource={equipment}
-            locale={{ emptyText: '没有设备' }}
-            renderItem={(row) => (
-              <List.Item
-                style={{
-                  cursor: 'pointer',
-                  background: row.uuid === selectedEquipmentUuid ? '#e6f4ff' : undefined,
-                  padding: 12,
-                }}
-                onClick={() => setSelectedEquipmentUuid(row.uuid)}
-              >
-                <div style={{ fontSize: 18 }}>
-                  <strong>{row.name || row.code || row.uuid}</strong>
-                  {row.code ? <span style={{ marginLeft: 12 }}>{row.code}</span> : null}
-                </div>
-              </List.Item>
-            )}
-          />
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
-            {FAULT_LEVELS.map((level) => (
-              <Button
-                key={level}
+        {(callType === 'quality' || callType === 'material') && (
+          <div>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+              <Input
                 size="large"
-                type={faultLevel === level ? 'primary' : 'default'}
-                onClick={() => setFaultLevel(level)}
+                value={workOrderKeyword}
+                placeholder="工单编码或名称"
+                onChange={(event) => setWorkOrderKeyword(event.target.value)}
+                onPressEnter={() => void loadWorkOrderChoices(workOrderKeyword)}
+              />
+              <Button
+                size="large"
+                {...touchButtonProps({ size: 'action' })}
+                loading={pickerLoading}
+                onClick={() => void loadWorkOrderChoices(workOrderKeyword)}
               >
-                {level}
+                查工单
               </Button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {callType === 'supervisor' && (
-        <div>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-            <Input
-              size="large"
-              value={supervisorKeyword}
-              placeholder="姓名或账号"
-              onChange={(event) => setSupervisorKeyword(event.target.value)}
-              onPressEnter={() => void loadSupervisorChoices(supervisorKeyword)}
+            </div>
+            <List
+              loading={pickerLoading}
+              dataSource={workOrders}
+              locale={{ emptyText: '没有工单' }}
+              renderItem={(row) => (
+                <TouchListItem
+                  selected={row.id === selectedWorkOrder?.id}
+                  onClick={() => void selectWorkOrder(row)}
+                  title={<strong>{row.code || `工单 ${row.id}`}</strong>}
+                  subtitle={row.name}
+                />
+              )}
             />
-            <Button size="large" loading={pickerLoading} onClick={() => void loadSupervisorChoices(supervisorKeyword)}>
-              查通知人
-            </Button>
           </div>
+        )}
+
+        {callType === 'quality' && selectedWorkOrder ? (
           <List
-            loading={pickerLoading}
-            dataSource={supervisors}
-            locale={{ emptyText: '没有可选通知人' }}
+            dataSource={operations}
+            locale={{ emptyText: '该工单没有工序' }}
             renderItem={(row) => (
-              <List.Item
-                style={{
-                  cursor: 'pointer',
-                  background: row.id === selectedSupervisorId ? '#e6f4ff' : undefined,
-                  padding: 12,
-                }}
-                onClick={() => setSelectedSupervisorId(row.id)}
-              >
-                <div style={{ fontSize: 18 }}>{row.label}</div>
-              </List.Item>
+              <TouchListItem
+                selected={row.id === selectedOperationId}
+                onClick={() => setSelectedOperationId(row.id)}
+                title={`${row.sequence}. ${row.name || row.code || `工序 ${row.id}`}`}
+              />
             )}
           />
-        </div>
-      )}
+        ) : null}
 
-      <Input.TextArea
-        value={remarks}
-        rows={2}
-        placeholder="备注（可选）"
-        onChange={(event) => setRemarks(event.target.value)}
-      />
-      <Button
-        type="primary"
-        size="large"
-        loading={busy}
-        disabled={!writeEnabled}
-        onClick={() => void submit()}
-      >
-        发起{callTypeText(callType)}安灯
-      </Button>
+        {callType === 'material' ? (
+          <div style={{ fontSize: 18 }}>叫料模式 {MATERIAL_CALL_MODE}</div>
+        ) : null}
 
-      <h2 style={{ fontSize: 22, margin: '8px 0' }}>未响应</h2>
-      <List
-        loading={listLoading}
-        dataSource={openRows}
-        locale={{ emptyText: '没有未响应的安灯' }}
-        renderItem={renderRecord}
-      />
-      <h2 style={{ fontSize: 22, margin: '8px 0' }}>安灯列表</h2>
-      <Button size="large" onClick={() => void loadLists(stationId)} loading={listLoading}>
-        刷新
-      </Button>
-      <List
-        loading={listLoading}
-        dataSource={allRows}
-        locale={{ emptyText: '没有安灯记录' }}
-        renderItem={renderRecord}
-      />
-    </div>
+        {callType === 'equipment' && (
+          <div>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+              <Input
+                size="large"
+                value={equipmentKeyword}
+                placeholder="设备编码或名称"
+                onChange={(event) => setEquipmentKeyword(event.target.value)}
+                onPressEnter={() => void loadEquipmentChoices(equipmentKeyword)}
+              />
+              <Button
+                size="large"
+                {...touchButtonProps({ size: 'action' })}
+                loading={pickerLoading}
+                onClick={() => void loadEquipmentChoices(equipmentKeyword)}
+              >
+                查设备
+              </Button>
+            </div>
+            <List
+              loading={pickerLoading}
+              dataSource={equipment}
+              locale={{ emptyText: '没有设备' }}
+              renderItem={(row) => (
+                <TouchListItem
+                  selected={row.uuid === selectedEquipmentUuid}
+                  onClick={() => setSelectedEquipmentUuid(row.uuid)}
+                  title={<strong>{row.name || row.code || row.uuid}</strong>}
+                  subtitle={row.name ? row.code : undefined}
+                />
+              )}
+            />
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+              {FAULT_LEVELS.map((level) => (
+                <TouchChip
+                  key={level}
+                  selected={faultLevel === level}
+                  onClick={() => setFaultLevel(level)}
+                >
+                  {level}
+                </TouchChip>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {callType === 'supervisor' && (
+          <div>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+              <Input
+                size="large"
+                value={supervisorKeyword}
+                placeholder="姓名或账号"
+                onChange={(event) => setSupervisorKeyword(event.target.value)}
+                onPressEnter={() => void loadSupervisorChoices(supervisorKeyword)}
+              />
+              <Button
+                size="large"
+                {...touchButtonProps({ size: 'action' })}
+                loading={pickerLoading}
+                onClick={() => void loadSupervisorChoices(supervisorKeyword)}
+              >
+                查通知人
+              </Button>
+            </div>
+            <List
+              loading={pickerLoading}
+              dataSource={supervisors}
+              locale={{ emptyText: '没有可选通知人' }}
+              renderItem={(row) => (
+                <TouchListItem
+                  selected={row.id === selectedSupervisorId}
+                  onClick={() => setSelectedSupervisorId(row.id)}
+                  title={row.label}
+                />
+              )}
+            />
+          </div>
+        )}
+
+        <Input.TextArea
+          value={remarks}
+          rows={2}
+          placeholder="备注（可选）"
+          onChange={(event) => setRemarks(event.target.value)}
+        />
+        <Button
+          size="large"
+          {...touchButtonProps({ variant: 'primary', size: 'primary' })}
+          loading={busy}
+          disabled={!writeEnabled}
+          onClick={() => void submit()}
+        >
+          发起{callTypeText(callType)}安灯
+        </Button>
+
+        <h2 style={{ fontSize: 22, margin: '8px 0' }}>未响应</h2>
+        <List
+          loading={listLoading}
+          dataSource={openRows}
+          locale={{ emptyText: '没有未响应的安灯' }}
+          renderItem={renderRecord}
+        />
+        <h2 style={{ fontSize: 22, margin: '8px 0' }}>安灯列表</h2>
+        <Button
+          size="large"
+          {...touchButtonProps({ size: 'action' })}
+          onClick={() => void loadLists(stationId)}
+          loading={listLoading}
+        >
+          刷新
+        </Button>
+        <List
+          loading={listLoading}
+          dataSource={allRows}
+          locale={{ emptyText: '没有安灯记录' }}
+          renderItem={renderRecord}
+        />
+      </div>
+    </TouchScreenTemplate>
   );
 }

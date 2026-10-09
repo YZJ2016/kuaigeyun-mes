@@ -43,6 +43,18 @@ export function createHmiTheme(overrides?: ThemeConfig): ThemeConfig {
       Form: {
         labelColor: 'rgba(255, 255, 255, 0.85)',
       },
+      Input: {
+        controlHeight: HMI_TOUCH.INPUT_HEIGHT,
+        controlHeightLG: HMI_TOUCH.INPUT_HEIGHT,
+        fontSize: HMI_DESIGN_TOKENS.FONT_BODY,
+        fontSizeLG: HMI_DESIGN_TOKENS.FONT_BODY_MIN,
+      },
+      InputNumber: {
+        controlHeight: HMI_TOUCH.INPUT_HEIGHT,
+        controlHeightLG: HMI_TOUCH.INPUT_HEIGHT,
+        fontSize: HMI_DESIGN_TOKENS.FONT_BODY,
+        fontSizeLG: HMI_DESIGN_TOKENS.FONT_BODY_MIN,
+      },
       Button: {
         defaultBg: HMI_DESIGN_TOKENS.BG_ELEVATED,
         defaultColor: HMI_DESIGN_TOKENS.TEXT_PRIMARY,

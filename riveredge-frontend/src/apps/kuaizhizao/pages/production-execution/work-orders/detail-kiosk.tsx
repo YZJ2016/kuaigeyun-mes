@@ -9,7 +9,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next'
-import { Card, Button, Row, Col, Tabs, Tag, Descriptions, message, Modal, Input, Space, Statistic, Progress, Alert } from 'antd';
+import { App, Card, Button, Row, Col, Tabs, Tag, Descriptions, Modal, Input, Space, Statistic, Progress, Alert } from 'antd';
 import { 
     ArrowLeftOutlined, 
     PlayCircleOutlined, 
@@ -25,20 +25,22 @@ import { TouchScreenTemplate } from '../../../../../components/layout-templates/
 import { touchButtonProps, touchQtyInputProps, TOUCH_INPUT_QTY_STYLE } from '../../../../../components/touch-terminal';
 import NumericKeypad from '../../../../../components/touch-keyboard/NumericKeypad';
 import { workOrderApi } from '../../../services/production';
-import { isStationEntryPath } from '../../../../../utils/clientChannel';
+import { isStationEntryPath, STATION_ENTRY_PATH } from '../../../../../utils/clientChannel';
 import { useStationWriteEnabled } from '../../../station/entry/session';
 
 const { Meta } = Card;
 
 const WorkOrderDetailKioskPage: React.FC = () => {
   const { t } = useTranslation()
+    const { message } = App.useApp();
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const location = useLocation();
     // 工位路径下未确认操作员时禁用写按钮；PC 路径（/production-execution/*）行为不变
     const stationWriteEnabled = useStationWriteEnabled();
-    const writeBlocked = isStationEntryPath(location.pathname) && !stationWriteEnabled;
-    const [loading, setLoading] = useState(false);
+    const stationRoute = isStationEntryPath(location.pathname);
+    const writeBlocked = stationRoute && !stationWriteEnabled;
+    const [loading, setLoading] = useState(true);
     const [workOrder, setWorkOrder] = useState<any>(null);
     const [activeOperation, setActiveOperation] = useState<any>(null);
     
@@ -82,7 +84,7 @@ const WorkOrderDetailKioskPage: React.FC = () => {
         }
         try {
             await workOrderApi.startOperation(workOrder.id, activeOperation.id, {
-                stationOperatorSession: true,
+                stationOperatorSession: stationRoute,
             });
             message.success(t('app.kuaizhizao.workOrder.kioskOpStarted'));
             loadWorkOrderDetail(workOrder.id);
@@ -137,7 +139,24 @@ const WorkOrderDetailKioskPage: React.FC = () => {
         setReportQuantity('');
     };
 
-    if (!workOrder) return <Card loading={true} />;
+    if (!workOrder) {
+        if (!stationRoute) return <Card loading={true} />;
+        return (
+            <TouchScreenTemplate
+                title="工单执行"
+                footerButtons={[{
+                    title: '返回工位入口',
+                    type: 'default',
+                    icon: <ArrowLeftOutlined />,
+                    onClick: () => navigate(`${STATION_ENTRY_PATH}${location.search}`),
+                }]}
+            >
+                <Card loading={loading}>
+                    {!loading && <Alert type="error" showIcon message={t('app.kuaizhizao.workOrder.kioskDetailLoadFailed')} />}
+                </Card>
+            </TouchScreenTemplate>
+        );
+    }
 
     return (
         <TouchScreenTemplate
@@ -153,10 +172,13 @@ const WorkOrderDetailKioskPage: React.FC = () => {
                     block: false
                 },
                  {
-                    title: t('app.kuaizhizao.workOrder.actionBackToList'),
+                    title: stationRoute ? '返回工位入口' : t('app.kuaizhizao.workOrder.actionBackToList'),
                     type: 'default',
                     icon: <ArrowLeftOutlined />,
-                    onClick: () => navigate(-1),
+                    onClick: () =>
+                        stationRoute
+                            ? navigate(`${STATION_ENTRY_PATH}${location.search}`)
+                            : navigate(-1),
                     block: false
                 }
             ]}
@@ -200,7 +222,7 @@ const WorkOrderDetailKioskPage: React.FC = () => {
                 </Card>
 
                 {/* 主内容区 Tabs */}
-                 <div style={{ flex: 1, backgroundColor: '#fff', padding: '16px', borderRadius: '8px' }}>
+                 <div style={{ flex: 1, ...(stationRoute ? {} : { backgroundColor: '#fff' }), padding: '16px', borderRadius: '8px' }}>
                      <Tabs
                         defaultActiveKey="sop"
                         items={[
@@ -208,10 +230,10 @@ const WorkOrderDetailKioskPage: React.FC = () => {
                                 key: 'sop',
                                 label: <span style={{ fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN, padding: '12px 16px', minHeight: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE, display: 'inline-flex', alignItems: 'center' }}><FileTextOutlined /> 作业指导 SOP</span>,
                                 children: (
-                                    <div style={{ height: '500px', display: 'flex', justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5f5f5', border: '1px dashed #d9d9d9' }}>
+                                    <div style={{ height: '500px', display: 'flex', justifyContent: 'center', alignItems: 'center', ... (stationRoute ? { border: '1px dashed currentColor' } : { backgroundColor: '#f5f5f5', border: '1px dashed #d9d9d9' }) }}>
                                         <div style={{ textAlign: 'center' }}>
-                                            <FileTextOutlined style={{ fontSize: '64px', color: '#bfbfbf' }} />
-                                            <div style={{ marginTop: '16px', fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN, color: '#999' }}>{t('app.kuaizhizao.workOrder.kioskNoSopPreview')}</div>
+                                            <FileTextOutlined style={{ fontSize: '64px', ...(stationRoute ? {} : { color: '#bfbfbf' }) }} />
+                                            <div style={{ marginTop: '16px', fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN, ...(stationRoute ? {} : { color: '#999' }) }}>{t('app.kuaizhizao.workOrder.kioskNoSopPreview')}</div>
                                             {/* 这里后续集成 PDF 预览或图片轮播 */}
                                         </div>
                                     </div>
@@ -225,7 +247,7 @@ const WorkOrderDetailKioskPage: React.FC = () => {
                                         <Button size="large" {...touchButtonProps({ size: 'action' })} icon={<BarcodeOutlined />} style={{ width: 200 }}>
                                             扫描投料
                                         </Button>
-                                        <div style={{ marginTop: '20px', color: '#999', fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>{t('app.kuaizhizao.workOrder.kioskDetailScanFeedHint')}</div>
+                                        <div style={{ marginTop: '20px', fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN, ...(stationRoute ? {} : { color: '#999' }) }}>{t('app.kuaizhizao.workOrder.kioskDetailScanFeedHint')}</div>
                                     </div>
                                 )
                             }
@@ -246,7 +268,7 @@ const WorkOrderDetailKioskPage: React.FC = () => {
             >
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '24px' }}>
                     <div style={{ width: '100%' }}>
-                         <div style={{ marginBottom: '8px', fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN, color: '#666' }}>本次报工数量:</div>
+                         <div style={{ marginBottom: '8px', fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN, ...(stationRoute ? {} : { color: '#666' }) }}>本次报工数量:</div>
                          <Input
                             {...touchQtyInputProps()}
                             style={TOUCH_INPUT_QTY_STYLE}

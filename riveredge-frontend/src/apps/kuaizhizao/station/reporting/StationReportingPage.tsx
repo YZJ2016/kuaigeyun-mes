@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import React, { useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   Alert,
@@ -13,9 +13,11 @@ import {
   Space,
   Spin,
 } from 'antd';
-import { TouchScreenTemplate } from '../../../../components/layout-templates/TouchScreenTemplate';
+import { TouchScreenTemplate } from '../../../../components/layout-templates/hmi';
+import { touchButtonProps } from '../../../../components/touch-terminal';
+import { HMI_TOUCH } from '../../../../theme/hmi';
 import { UniMaterialSelect } from '../../../../components/uni-material-select';
-import { reportingClientChannelSourceI18nKey } from '../../../../utils/clientChannel';
+import { reportingClientChannelSourceI18nKey, STATION_ENTRY_PATH } from '../../../../utils/clientChannel';
 import { convertProductionInputToBaseQty } from '../../../../utils/materialScenarioUnit';
 import { WorkGroupSelectDropdown } from '../../../master-data/components/WorkGroupSelectDropdown';
 import type { WorkGroup } from '../../../master-data/types/factory';
@@ -69,8 +71,13 @@ export const StationReportingPage: React.FC<StationReportingPageProps> = ({
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const workstationId = resolveWorkstationId(boundWorkstationId, searchParams.get('workstationId'));
+  const stationEntryPath =
+    workstationId == null
+      ? STATION_ENTRY_PATH
+      : `${STATION_ENTRY_PATH}?workstationId=${workstationId}`;
   // 未确认操作员时可查看页面，报工/上下料/报废提交禁用
   const writeEnabled = useStationWriteEnabled();
 
@@ -85,11 +92,38 @@ export const StationReportingPage: React.FC<StationReportingPageProps> = ({
   const [recordUnqualified, setRecordUnqualified] = useState<number>(0);
   const [sourceLabel, setSourceLabel] = useState<string>('');
   const [material, setMaterial] = useState<Material | null>(null);
+  const loadWorkOrderSeq = useRef(0);
 
   const unqualified = Form.useWatch('unqualified_quantity', form);
 
+  // 换工单时清除上一张报工的提交态，避免后续上料/下料/报废误绑到旧报工记录
+  const clearSubmissionState = () => {
+    setRecordId(null);
+    setRecordUnqualified(0);
+    setSourceLabel('');
+    setMaterial(null);
+    form.setFieldsValue({
+      qualified_quantity: 0,
+      unqualified_quantity: 0,
+      work_hours: 0,
+      defect_reason: undefined,
+      remarks: undefined,
+      material_id: undefined,
+      binding_quantity: 1,
+      scrap_quantity: undefined,
+      scrap_type: 'other',
+      scrap_reason: undefined,
+    });
+  };
+
   const loadWorkOrder = async () => {
+    if (loading) return;
     const code = String(form.getFieldValue('work_order_code') ?? '').trim();
+    const requestSeq = ++loadWorkOrderSeq.current;
+    setWorkOrder(null);
+    setOperations([]);
+    setOperation(null);
+    clearSubmissionState();
     if (!code) {
       messageApi.warning('请输入工单编号');
       return;
@@ -98,28 +132,32 @@ export const StationReportingPage: React.FC<StationReportingPageProps> = ({
     try {
       const raw = await workOrderApi.list({ code });
       const rows = rowsFromListResponse<WorkOrderRow>(raw);
-      const matched = rows.find((row) => String(row.code ?? '').trim() === code) ?? rows[0];
+      const matched = rows.find((row) => String(row.code ?? '').trim() === code);
+      if (requestSeq !== loadWorkOrderSeq.current) return;
       if (!matched?.id) {
         messageApi.error('未找到该工单');
-        setWorkOrder(null);
-        setOperations([]);
-        setOperation(null);
         return;
       }
-      setWorkOrder(matched);
       const opRaw = await workOrderApi.getOperations(String(matched.id));
+      if (requestSeq !== loadWorkOrderSeq.current) return;
       const list = rowsFromListResponse<OperationRow>(opRaw);
+      setWorkOrder(matched);
       setOperations(list);
       const pending = list.find((op) => op.status !== 'completed') ?? list[0] ?? null;
       setOperation(pending);
     } catch (error: unknown) {
-      messageApi.error(errorText(error) || '加载工单失败');
+      if (requestSeq === loadWorkOrderSeq.current) {
+        messageApi.error(errorText(error) || '加载工单失败');
+      }
     } finally {
-      setLoading(false);
+      if (requestSeq === loadWorkOrderSeq.current) {
+        setLoading(false);
+      }
     }
   };
 
   const submitReport = async () => {
+    if (loading || !writeEnabled) return;
     const values = form.getFieldsValue();
     const qualifiedDisplay = Number(values.qualified_quantity) || 0;
     const unqualifiedDisplay = Number(values.unqualified_quantity) || 0;
@@ -194,7 +232,7 @@ export const StationReportingPage: React.FC<StationReportingPageProps> = ({
   };
 
   const submitBinding = async (bindingType: 'feeding' | 'discharging') => {
-    if (recordId == null) return;
+    if (recordId == null || loading || !writeEnabled) return;
     const values = form.getFieldsValue();
     const decision = buildMaterialBindingBody({
       bindingType,
@@ -227,7 +265,7 @@ export const StationReportingPage: React.FC<StationReportingPageProps> = ({
   };
 
   const submitScrap = async () => {
-    if (recordId == null) return;
+    if (recordId == null || loading || !writeEnabled) return;
     const values = form.getFieldsValue();
     const decision = buildScrapBody({
       scrapQuantity: values.scrap_quantity,
@@ -258,6 +296,14 @@ export const StationReportingPage: React.FC<StationReportingPageProps> = ({
 
   return (
     <TouchScreenTemplate title="快捷报工">
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+        <Button
+          {...touchButtonProps({ size: 'header', style: { height: HMI_TOUCH.HEADER_BTN_HEIGHT } })}
+          onClick={() => navigate(stationEntryPath)}
+        >
+          返回工位入口
+        </Button>
+      </div>
       <Spin spinning={loading}>
         <Form
           form={form}
@@ -317,12 +363,21 @@ export const StationReportingPage: React.FC<StationReportingPageProps> = ({
               <Form.Item name="work_order_code" label="工单编号">
                 <Input
                   size="large"
+                  disabled={loading}
+                  onChange={(event) => {
+                    if (workOrder && event.target.value.trim() !== String(workOrder.code ?? '').trim()) {
+                      setWorkOrder(null);
+                      setOperations([]);
+                      setOperation(null);
+                      clearSubmissionState();
+                    }
+                  }}
                   onPressEnter={() => {
                     void loadWorkOrder();
                   }}
                 />
               </Form.Item>
-              <Button size="large" onClick={() => { void loadWorkOrder(); }}>
+              <Button size="large" disabled={loading} onClick={() => { void loadWorkOrder(); }}>
                 加载工单
               </Button>
               {workOrder ? (
@@ -402,7 +457,7 @@ export const StationReportingPage: React.FC<StationReportingPageProps> = ({
                   <InputNumber min={0} size="large" style={{ width: '100%' }} />
                 </Form.Item>
                 <Form.Item name="scrap_type" label="报废类型">
-                  <Radio.Group>
+                  <Radio.Group size="large">
                     <Radio.Button value="process">过程</Radio.Button>
                     <Radio.Button value="material">物料</Radio.Button>
                     <Radio.Button value="quality">质量</Radio.Button>

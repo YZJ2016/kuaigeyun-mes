@@ -4,15 +4,17 @@
  */
 import React, { Suspense, lazy, useEffect, useState } from 'react';
 import { matchPath, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { Button, Input, Space, Typography, message } from 'antd';
+import { App, Button, Input, Space, Typography } from 'antd';
 import { TouchScreenTemplate } from '../../../../components/layout-templates/hmi';
-import { HMI_DESIGN_TOKENS } from '../../../../theme/hmi';
+import { HMI_DESIGN_TOKENS, HMI_TOUCH } from '../../../../theme/hmi';
 import { STATION_ENTRY_PATH } from '../../../../utils/clientChannel';
 import PageSkeleton from '../../../../components/page-skeleton';
 import { touchButtonProps } from '../../../../components/touch-terminal';
 import { getCurrentUser } from '../../../../services/auth';
 import { searchUserIdOptions } from '../../../../utils/userDisplay';
 import StationBinder, { getStationStorageKey, type StationInfo } from '../../components/StationBinder';
+import { workOrderApi } from '../../services/production';
+import { rowsFromListResponse } from '../reporting/quickReporting';
 import { resolveWorkstation } from './resolveWorkstation';
 import {
   getStationWorkstation,
@@ -59,7 +61,8 @@ function lazyStationExport(loaders: Array<Record<string, () => Promise<unknown>>
       const page = await load();
       if (typeof page !== 'function') return { default: ModuleNotReady };
       return { default: page as React.ComponentType<any> };
-    } catch {
+    } catch (error) {
+      console.error('工位模块加载失败', error);
       return { default: ModuleNotReady };
     }
   });
@@ -123,6 +126,7 @@ function readSavedStation(): StationInfo | null {
 }
 
 function StationHome() {
+  const { message } = App.useApp();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { workstation, operator, candidate, terminalAccountName } = useStationEntrySnapshot();
@@ -131,6 +135,7 @@ function StationHome() {
   const [operatorKeyword, setOperatorKeyword] = useState('');
   const [scanDraft, setScanDraft] = useState('');
   const [lastScan, setLastScan] = useState('');
+  const [openingWorkOrder, setOpeningWorkOrder] = useState(false);
   const [employeeCode, setEmployeeCode] = useState('');
   const [confirming, setConfirming] = useState(false);
   const [exiting, setExiting] = useState(false);
@@ -149,7 +154,7 @@ function StationHome() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [message]);
 
   useEffect(() => {
     let cancelled = false;
@@ -174,7 +179,7 @@ function StationHome() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [operatorKeyword]);
+  }, [message, operatorKeyword]);
 
   const commitScan = (value: string) => {
     const text = value.trim();
@@ -183,13 +188,36 @@ function StationHome() {
     setScanDraft('');
   };
 
-  const openWorkOrderDetail = () => {
+  // kiosk 详情路由参数是数字工单 ID：先按工单编号精确解析，兼容数字编码；
+  // 未匹配且输入是纯数字时保留原有“直接输入工单 ID”入口。
+  const openWorkOrderDetail = async () => {
     const text = (scanDraft.trim() || lastScan).trim();
-    if (!/^[1-9]\d*$/.test(text)) {
-      message.info('工单详情地址需要数字工单 ID');
+    if (!text) {
+      message.info('请先扫码或输入工单编号');
       return;
     }
-    navigate(withWorkstationId(`${STATION_ENTRY_PATH}/work-orders/${text}/kiosk`, workstation?.stationId));
+    if (openingWorkOrder) return;
+    setOpeningWorkOrder(true);
+    try {
+      const raw = await workOrderApi.list({ code: text });
+      const matched = rowsFromListResponse<{ id?: number; code?: string }>(raw).find(
+        (row) => String(row.code ?? '').trim() === text,
+      );
+      const numericId = /^[1-9]\d*$/.test(text) ? Number(text) : null;
+      const workOrderId =
+        matched?.id ?? (numericId != null && Number.isSafeInteger(numericId) ? numericId : null);
+      if (workOrderId == null) {
+        message.error('未找到该工单');
+        return;
+      }
+      navigate(
+        withWorkstationId(`${STATION_ENTRY_PATH}/work-orders/${workOrderId}/kiosk`, workstation?.stationId),
+      );
+    } catch {
+      message.error('加载工单失败');
+    } finally {
+      setOpeningWorkOrder(false);
+    }
   };
 
   const onBind = (info: StationInfo) => {
@@ -268,7 +296,14 @@ function StationHome() {
           {operator ? (
             <>
               {' '}
-              <Button size="small" loading={exiting} onClick={() => void exitOperator()}>
+              <Button
+                {...touchButtonProps({
+                  size: 'header',
+                  style: { height: HMI_TOUCH.HEADER_BTN_HEIGHT },
+                })}
+                loading={exiting}
+                onClick={() => void exitOperator()}
+              >
                 退出操作员
               </Button>
             </>
@@ -296,7 +331,11 @@ function StationHome() {
           <Button {...touchButtonProps({ variant: 'primary', size: 'action' })} onClick={() => setBinding(true)}>
             {workstation ? '切换工位' : '绑定工位'}
           </Button>
-          <Button {...touchButtonProps({ size: 'action' })} onClick={openWorkOrderDetail}>
+          <Button
+            {...touchButtonProps({ size: 'action' })}
+            loading={openingWorkOrder}
+            onClick={() => void openWorkOrderDetail()}
+          >
             工单详情
           </Button>
           {KIOSK_LINKS.map((item) => (
@@ -322,7 +361,7 @@ function StationHome() {
         {binding ? (
           <div
             style={{
-              background: 'rgba(0, 12, 28, 0.95)',
+              background: HMI_DESIGN_TOKENS.BG_PANEL,
               borderRadius: HMI_DESIGN_TOKENS.PANEL_RADIUS,
               border: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`,
               padding: HMI_DESIGN_TOKENS.SECTION_GAP,
@@ -410,6 +449,7 @@ function matchStationLeaf(pathname: string, leaf: string): boolean {
 }
 
 export default function StationEntryPage() {
+  const { message } = App.useApp();
   const { pathname } = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const { workstation, operator, workOrderId, operationId } = useStationEntrySnapshot();
@@ -462,7 +502,7 @@ export default function StationEntryPage() {
     return () => {
       cancelled = true;
     };
-  }, [workstationQuery]);
+  }, [message, workstationQuery]);
 
   useEffect(() => {
     if (typeof workstationId !== 'number' || !Number.isInteger(workstationId) || workstationId <= 0) {

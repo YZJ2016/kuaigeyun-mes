@@ -15,12 +15,16 @@ export function TouchListItem({ title, subtitle, selected, onClick, style }: Tou
     <div
       role={onClick ? 'button' : undefined}
       tabIndex={onClick ? 0 : undefined}
+      aria-pressed={onClick ? Boolean(selected) : undefined}
       className={['hmi-list-item', selected ? 'hmi-list-item--selected' : undefined].filter(Boolean).join(' ')}
       onClick={onClick}
       onKeyDown={
         onClick
           ? (e) => {
-              if (e.key === 'Enter' || e.key === ' ') onClick();
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onClick();
+              }
             }
           : undefined
       }
