@@ -19,8 +19,9 @@ export type DocumentReplacementDecl = {
 /** replacement_path → 懒加载组件（仅行业 APP 内页） */
 const REPLACEMENT_LOADERS: Record<string, () => Promise<{ default: ComponentType }>> = {
   '/apps/ind-electronics/label-oem': () => import('../apps/ind-electronics/pages/label-oem/index'),
+  // 定制仓 compose 前无 funide-oa 目录（gitignore）；回退通用壳，组装后可再指回定制页
   '/apps/funide-oa/project-proposals': () =>
-    import('../apps/funide-oa/pages/project-proposals/index'),
+    import('../apps/kuaiplm/pages/project-proposals/ProjectProposalsGenericPage'),
   '/apps/funide-oa/production-execution/label-station': () =>
     import('../apps/ind-electronics/pages/label-oem/index'),
 };
