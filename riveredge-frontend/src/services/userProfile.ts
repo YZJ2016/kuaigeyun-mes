@@ -92,3 +92,71 @@ export async function unbindWecomAccount(): Promise<UnbindWecomAccountResponse> 
     method: 'POST',
   });
 }
+
+export interface BindDingtalkAccountResponse {
+  unionid?: string | null;
+  openid?: string | null;
+  message: string;
+}
+
+export async function bindDingtalkAccount(data: {
+  code: string;
+  state?: string;
+}): Promise<BindDingtalkAccountResponse> {
+  return apiRequest<BindDingtalkAccountResponse>('/auth/dingtalk/bind', {
+    method: 'POST',
+    data,
+  });
+}
+
+export async function unbindDingtalkAccount(): Promise<{ message: string }> {
+  return apiRequest<{ message: string }>('/auth/dingtalk/unbind', {
+    method: 'POST',
+  });
+}
+
+export interface BindFeishuAccountResponse {
+  open_id?: string | null;
+  union_id?: string | null;
+  message: string;
+}
+
+export async function bindFeishuAccount(data: {
+  code: string;
+  state?: string;
+  redirect_uri?: string;
+}): Promise<BindFeishuAccountResponse> {
+  return apiRequest<BindFeishuAccountResponse>('/auth/feishu/bind', {
+    method: 'POST',
+    data,
+  });
+}
+
+export async function unbindFeishuAccount(): Promise<{ message: string }> {
+  return apiRequest<{ message: string }>('/auth/feishu/unbind', {
+    method: 'POST',
+  });
+}
+
+export interface BindGiteeAccountResponse {
+  gitee_id: string;
+  message: string;
+}
+
+export async function bindGiteeAccount(data: {
+  code: string;
+  state?: string;
+  redirect_uri?: string;
+}): Promise<BindGiteeAccountResponse> {
+  return apiRequest<BindGiteeAccountResponse>('/auth/gitee/bind', {
+    method: 'POST',
+    data,
+  });
+}
+
+export async function unbindGiteeAccount(): Promise<{ message: string }> {
+  return apiRequest<{ message: string }>('/auth/gitee/unbind', {
+    method: 'POST',
+  });
+}
+

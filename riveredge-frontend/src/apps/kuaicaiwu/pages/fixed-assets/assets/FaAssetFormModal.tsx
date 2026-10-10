@@ -7,13 +7,15 @@ import {
   ProFormDigit,
   ProFormMoney,
   ProFormSelect,
+  ProFormSwitch,
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { Alert, Col, Divider, Form, Input, Row } from 'antd';
+import { Alert, App, Col, Divider, Form, Input, Row } from 'antd';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { getDepartmentTree, type DepartmentTreeItem } from '../../../../../services/department';
 import { glService, type GlAccount } from '../../../services/gl';
 import { fixedAssetService, type FaAsset, type FaCategory } from '../../../services/fixed-assets';
@@ -29,6 +31,7 @@ import {
 import { FA_ASSET_STATUS_LABELS, FA_DEPRECIATION_METHOD_LABELS } from './faAssetImportTemplate';
 
 const NS = 'app.kuaicaiwu.fixedAssets.assets';
+const MASTERS_NS = 'app.kuaicaiwu.fixedAssets.masters';
 
 type DepartmentOption = { label: string; value: string };
 
@@ -51,6 +54,8 @@ export interface FaAssetFormModalProps {
   onOpenChange: (open: boolean) => void;
   editing: FaAsset | null;
   categories: FaCategory[];
+  /** 快速新建类别后刷新父级列表 */
+  onCategoriesChange?: (items: FaCategory[]) => void;
   onSuccess: () => void;
 }
 
@@ -59,12 +64,21 @@ const FaAssetFormModal: React.FC<FaAssetFormModalProps> = ({
   onOpenChange,
   editing,
   categories,
+  onCategoriesChange,
   onSuccess,
 }) => {
   const { t } = useTranslation();
+  const { message } = App.useApp();
   const formRef = useRef<ProFormInstance>();
   const [departments, setDepartments] = useState<DepartmentOption[]>([]);
   const [accounts, setAccounts] = useState<GlAccount[]>([]);
+  const [localCategories, setLocalCategories] = useState<FaCategory[]>(categories);
+  const [categoryQuickOpen, setCategoryQuickOpen] = useState(false);
+
+  useEffect(() => {
+    setLocalCategories(categories);
+  }, [categories]);
+
   useEffect(() => {
     if (!open) return;
     void getDepartmentTree({ is_active: true })
@@ -75,6 +89,11 @@ const FaAssetFormModal: React.FC<FaAssetFormModalProps> = ({
       .then(setAccounts)
       .catch(() => setAccounts([]));
   }, [open]);
+
+  const categoryOptions = useMemo(
+    () => localCategories.map((c) => ({ label: c.category_name, value: c.id })),
+    [localCategories],
+  );
 
   const accountOptions = useMemo(
     () =>
@@ -128,6 +147,7 @@ const FaAssetFormModal: React.FC<FaAssetFormModalProps> = ({
   }, [editing]);
 
   return (
+    <>
     <FormModalTemplate
       key={editing?.id ?? 'create'}
       title={editing ? t(`${NS}.editTitle`) : t(`${NS}.createTitle`)}
@@ -190,12 +210,23 @@ const FaAssetFormModal: React.FC<FaAssetFormModalProps> = ({
           />
         </Col>
         <Col span={12}>
-          <ProFormSelect
+          <Form.Item
             name="category_id"
             label={t(`${NS}.col.category`)}
-            rules={[{ required: true }]}
-            options={categories.map((c) => ({ label: c.category_name, value: c.id }))}
-          />
+            rules={[{ required: true, message: t('common.pleaseSelect') }]}
+          >
+            <UniDropdown
+              options={categoryOptions}
+              placeholder={t('common.pleaseSelect')}
+              showSearch
+              allowClear
+              style={{ width: '100%' }}
+              quickCreate={{
+                label: t(`${NS}.form.quickCreateCategory`),
+                onClick: () => setCategoryQuickOpen(true),
+              }}
+            />
+          </Form.Item>
         </Col>
         <Col span={12}>
           <ProFormSelect
@@ -496,10 +527,59 @@ const FaAssetFormModal: React.FC<FaAssetFormModalProps> = ({
 
       <Row gutter={16}>
         <Col span={24}>
-          <ProFormTextArea name="notes" label={t('common.notes')} fieldProps={{ maxLength: 200, rows: 2 }} />
+          <ProFormTextArea name="notes" label={t('common.remark')} fieldProps={{ maxLength: 200, rows: 2 }} />
         </Col>
       </Row>
     </FormModalTemplate>
+    <FormModalTemplate
+      title={t(`${MASTERS_NS}.createTitle`)}
+      open={categoryQuickOpen}
+      onOpenChange={setCategoryQuickOpen}
+      grid={false}
+      width={MODAL_CONFIG.STANDARD_WIDTH}
+      modalProps={{
+        ...MODAL_CONFIG,
+        destroyOnHidden: true,
+        zIndex: 1100,
+      }}
+      initialValues={{ is_active: true }}
+      onFinish={async (values) => {
+        const created = await fixedAssetService.createCategory(values);
+        const next = await fixedAssetService.listCategories({ is_active: true });
+        setLocalCategories(next);
+        onCategoriesChange?.(next);
+        formRef.current?.setFieldsValue({ category_id: created.id });
+        message.success(t('common.saveSuccess'));
+        setCategoryQuickOpen(false);
+        return true;
+      }}
+    >
+      <Row gutter={16}>
+        <Col span={12}>
+          <ProFormText
+            name="category_code"
+            label={t(`${MASTERS_NS}.col.code`)}
+            rules={[{ required: true }]}
+            fieldProps={{ maxLength: 50 }}
+          />
+        </Col>
+        <Col span={12}>
+          <ProFormText
+            name="category_name"
+            label={t(`${MASTERS_NS}.col.name`)}
+            rules={[{ required: true }]}
+            fieldProps={{ maxLength: 200 }}
+          />
+        </Col>
+        <Col span={24}>
+          <ProFormTextArea name="notes" label={t('common.remark')} fieldProps={{ rows: 2, maxLength: 200 }} />
+        </Col>
+        <Col span={24}>
+          <ProFormSwitch name="is_active" label={t('common.enabled')} />
+        </Col>
+      </Row>
+    </FormModalTemplate>
+    </>
   );
 };
 

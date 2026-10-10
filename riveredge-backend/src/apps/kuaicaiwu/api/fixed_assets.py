@@ -153,10 +153,15 @@ def _err(exc: Exception):
 async def list_categories(
     keyword: Optional[str] = None,
     is_active: Optional[bool] = None,
+    ensure_defaults: bool = Query(False, description="租户无类别时写入产品默认资产类别"),
     current_user: User = Depends(get_current_user),
 ):
     return await category_service.list_categories(
-        current_user.tenant_id, keyword=keyword, is_active=is_active
+        current_user.tenant_id,
+        keyword=keyword,
+        is_active=is_active,
+        ensure_defaults=ensure_defaults,
+        user=current_user,
     )
 
 

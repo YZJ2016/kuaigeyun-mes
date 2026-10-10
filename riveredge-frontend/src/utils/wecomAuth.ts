@@ -45,6 +45,7 @@ export function decodeWecomOAuthState(state: string): { tenant_id: number; redir
 export function stripOAuthQueryFromUrl(): void {
   const url = new URL(window.location.href);
   url.searchParams.delete('code');
+  url.searchParams.delete('authCode');
   url.searchParams.delete('state');
   url.searchParams.delete('provider');
   window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);

@@ -163,10 +163,6 @@ export async function guestLogin(): Promise<LoginResponse> {
   return publicRequest<LoginResponse>('/auth/guest-login', { method: 'POST' });
 }
 
-export async function wechatLoginCallback(code: string): Promise<LoginResponse> {
-  return publicRequest<LoginResponse>('/auth/wechat/callback', { method: 'POST', data: { code } });
-}
-
 export interface WeComAuthorizeUrlResponse {
   authorize_url: string;
   state: string;
@@ -213,6 +209,131 @@ export async function wecomLoginCallback(data: {
   tenant_id?: number;
 }): Promise<LoginResponse> {
   return publicRequest<LoginResponse>('/auth/wecom/callback', { method: 'POST', data });
+}
+
+export interface GiteeAuthorizeUrlResponse {
+  authorize_url: string;
+  state: string;
+}
+
+export async function getGiteeAuthorizeUrl(params: {
+  redirect_uri: string;
+  tenant_id: number;
+  redirect?: string;
+}): Promise<GiteeAuthorizeUrlResponse> {
+  return publicRequest<GiteeAuthorizeUrlResponse>('/auth/gitee/authorize-url', {
+    params: {
+      redirect_uri: params.redirect_uri,
+      tenant_id: params.tenant_id,
+      redirect: params.redirect,
+    },
+  });
+}
+
+export interface GiteeProfilePreview {
+  id: string;
+  login?: string | null;
+  email?: string | null;
+  name?: string | null;
+  avatar_url?: string | null;
+  starred_official_repo?: boolean;
+}
+
+export type GiteeLoginCallbackResponse =
+  | (LoginResponse & { status: 'ok'; starred_official_repo?: boolean | null })
+  | {
+      status: 'needs_link';
+      ticket: string;
+      gitee: GiteeProfilePreview;
+      starred_official_repo?: boolean | null;
+    };
+
+export async function giteeLoginCallback(data: {
+  code: string;
+  state?: string;
+  tenant_id?: number;
+  redirect_uri?: string;
+}): Promise<GiteeLoginCallbackResponse> {
+  return publicRequest<GiteeLoginCallbackResponse>('/auth/gitee/callback', {
+    method: 'POST',
+    data,
+  });
+}
+
+export async function giteeFirstLogin(data: { ticket: string }): Promise<LoginResponse> {
+  return publicRequest<LoginResponse>('/auth/gitee/first-login', { method: 'POST', data });
+}
+
+export async function giteeLinkLogin(data: {
+  ticket: string;
+  username: string;
+  password: string;
+}): Promise<LoginResponse> {
+  return publicRequest<LoginResponse>('/auth/gitee/link-login', { method: 'POST', data });
+}
+
+export async function giteeStarOfficial(data: {
+  ticket: string;
+}): Promise<{ starred: boolean; message: string }> {
+  return publicRequest<{ starred: boolean; message: string }>('/auth/gitee/star-official', {
+    method: 'POST',
+    data,
+  });
+}
+
+export interface DingTalkAuthorizeUrlResponse {
+  authorize_url: string;
+  state: string;
+}
+
+export async function getDingtalkAuthorizeUrl(params: {
+  redirect_uri: string;
+  tenant_id: number;
+  redirect?: string;
+}): Promise<DingTalkAuthorizeUrlResponse> {
+  return publicRequest<DingTalkAuthorizeUrlResponse>('/auth/dingtalk/authorize-url', {
+    params: {
+      redirect_uri: params.redirect_uri,
+      tenant_id: params.tenant_id,
+      redirect: params.redirect,
+    },
+  });
+}
+
+export async function dingtalkLoginCallback(data: {
+  code: string;
+  state?: string;
+  tenant_id?: number;
+}): Promise<LoginResponse> {
+  return publicRequest<LoginResponse>('/auth/dingtalk/callback', { method: 'POST', data });
+}
+
+export interface FeishuAuthorizeUrlResponse {
+  authorize_url: string;
+  state: string;
+}
+
+export async function getFeishuAuthorizeUrl(params: {
+  redirect_uri: string;
+  tenant_id: number;
+  redirect?: string;
+}): Promise<FeishuAuthorizeUrlResponse> {
+  return publicRequest<FeishuAuthorizeUrlResponse>('/auth/feishu/authorize-url', {
+    params: {
+      redirect_uri: params.redirect_uri,
+      tenant_id: params.tenant_id,
+      redirect: params.redirect,
+    },
+  });
+}
+
+export async function feishuLoginCallback(data: {
+  code: string;
+  state?: string;
+  tenant_id?: number;
+  redirect_uri?: string;
+}): Promise<LoginResponse> {
+  return publicRequest<LoginResponse>('/auth/feishu/callback', { method: 'POST', data });
 }
 
 export async function searchTenants(keyword: string): Promise<TenantSearchResponse> {

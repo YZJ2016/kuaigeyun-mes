@@ -587,10 +587,44 @@ export default {
   'pages.login.searching': '搜索中...',
   'pages.login.noOrgMatch': '未找到匹配的组织',
   'pages.login.wechatLogin': '微信登录',
-  'pages.login.qqLogin': 'QQ登录',
+  'pages.login.giteeLogin': 'Gitee 登录',
+  'pages.login.giteeRedirectFailed': '跳转 Gitee 授权失败',
+  'pages.login.giteeVerifyFailed': 'Gitee 登录校验失败，请重试',
+  'pages.login.giteeLoginFailed': 'Gitee 登录失败',
+  'pages.login.giteeLinkModalTitle': '完成 Gitee 登录',
+  'pages.login.giteeLinkModalHint': '请填写系统账号与密码完成关联。',
+  'pages.login.giteeLinkModeFirst': '首次登录',
+  'pages.login.giteeLinkModeBind': '绑定已有账户',
+  'pages.login.giteeFirstLoginHint': '将用当前 Gitee 资料在本组织创建账号并直接登录，无需填写密码。',
+  'pages.login.giteeBindExistingHint': '请填写本组织已有系统账号与密码完成绑定。',
+  'pages.login.giteeFirstLoginSubmit': '创建并登录',
+  'pages.login.giteeFirstLoginFailed': 'Gitee 首次登录失败',
+  'pages.login.giteeLinkProfileLabel': 'Gitee 账号：{{name}}（{{email}}）',
+  'pages.login.giteeLinkSubmit': '绑定并登录',
+  'pages.login.giteeLinkFailed': '绑定已有账户失败',
+  'pages.login.giteeStarredOk': '已 Star 官方仓库 kuaigeyun/kuaigeyun',
+  'pages.login.giteeStarredMissing':
+    '尚未 Star 官方仓库。可直接在本窗口一键 Star，完成后即可关联登录。',
+  'pages.login.giteeStarredMissingLoginWarn':
+    '检测到您尚未 Star 官方仓库 kuaigeyun/kuaigeyun，欢迎支持开源。',
+  'pages.login.giteeStarPanelTitlePending': '支持开源',
+  'pages.login.giteeStarPanelTitleDone': '已 Star 官方仓库',
+  'pages.login.giteeStarPanelRepo': 'kuaigeyun/kuaigeyun',
+  'pages.login.giteeStarPanelDescPending': '欢迎点个 Star，让更多制造业同行看见',
+  'pages.login.giteeStarPanelDescDone': '感谢支持，可继续关联登录',
+  'pages.login.giteeStarRepoAction': '去 Star',
+  'pages.login.generateComplexPassword': '生成复杂密码',
+  'pages.login.generateComplexPasswordDone': '已生成复杂密码',
+  'pages.login.giteeEmailPrivate': '未公开邮箱',
   'pages.login.wechatWorkLogin': '企业微信登录',
   'pages.login.dingtalkLogin': '钉钉登录',
+  'pages.login.dingtalkRedirectFailed': '跳转钉钉授权失败',
+  'pages.login.dingtalkVerifyFailed': '钉钉登录校验失败，请重试',
+  'pages.login.dingtalkLoginFailed': '钉钉登录失败',
   'pages.login.feishuLogin': '飞书登录',
+  'pages.login.feishuRedirectFailed': '跳转飞书授权失败',
+  'pages.login.feishuVerifyFailed': '飞书登录校验失败，请重试',
+  'pages.login.feishuLoginFailed': '飞书登录失败',
   'pages.login.defaultTenantName': '默认组织',
   'pages.login.tenantSearchPlaceholder': '输入组织代码或组织名称搜索',
   'pages.login.inviteCodeOptional': '邀请码（可选）',
@@ -676,10 +710,45 @@ export default {
   'pages.personal.profile.qqHint': '填写 QQ 号，便于同事联系',
   'pages.personal.profile.dingtalk': '钉钉',
   'pages.personal.profile.dingtalkPlaceholder': '请输入钉钉账号或手机号',
-  'pages.personal.profile.dingtalkHint': '填写钉钉账号，便于同事联系',
+  'pages.personal.profile.dingtalkHint':
+    '扫码绑定后可用于登录页钉钉快捷登录；下方可另填钉钉号便于同事联系',
+  'pages.personal.profile.dingtalkOauthBindButton': '扫码绑定钉钉',
+  'pages.personal.profile.dingtalkOauthRebindButton': '重新扫码绑定',
+  'pages.personal.profile.dingtalkOauthUnbindButton': '解绑登录',
+  'pages.personal.profile.dingtalkOauthUnbindConfirm': '确定要解绑钉钉扫码登录吗？',
+  'pages.personal.profile.dingtalkOauthUnbindSuccess': '钉钉扫码登录已解绑',
+  'pages.personal.profile.dingtalkOauthUnbindFailed': '钉钉解绑失败',
+  'pages.personal.profile.dingtalkOauthBound': '已绑定登录：{{name}}',
+  'pages.personal.profile.dingtalkOauthNotBound': '未绑定扫码登录',
+  'pages.personal.profile.dingtalkOauthBindSuccess': '钉钉扫码登录绑定成功',
+  'pages.personal.profile.dingtalkOauthBindFailed': '钉钉扫码绑定失败',
   'pages.personal.profile.feishu': '飞书',
   'pages.personal.profile.feishuPlaceholder': '请输入飞书账号或手机号',
-  'pages.personal.profile.feishuHint': '填写飞书账号，便于同事联系',
+  'pages.personal.profile.feishuHint':
+    '扫码绑定后可用于登录页飞书快捷登录；下方可另填飞书号便于同事联系',
+  'pages.personal.profile.feishuOauthBindButton': '扫码绑定飞书',
+  'pages.personal.profile.feishuOauthRebindButton': '重新扫码绑定',
+  'pages.personal.profile.feishuOauthUnbindButton': '解绑登录',
+  'pages.personal.profile.feishuOauthUnbindConfirm': '确定要解绑飞书扫码登录吗？',
+  'pages.personal.profile.feishuOauthUnbindSuccess': '飞书扫码登录已解绑',
+  'pages.personal.profile.feishuOauthUnbindFailed': '飞书解绑失败',
+  'pages.personal.profile.feishuOauthBound': '已绑定登录：{{name}}',
+  'pages.personal.profile.feishuOauthNotBound': '未绑定扫码登录',
+  'pages.personal.profile.feishuOauthBindSuccess': '飞书扫码登录绑定成功',
+  'pages.personal.profile.feishuOauthBindFailed': '飞书扫码绑定失败',
+  'pages.personal.profile.gitee': 'Gitee',
+  'pages.personal.profile.giteeHint':
+    '授权绑定后可用于登录页 Gitee 快捷登录；请确保系统邮箱与 Gitee 邮箱一致，或在此页直接绑定。',
+  'pages.personal.profile.giteeOauthBindButton': '授权绑定 Gitee',
+  'pages.personal.profile.giteeOauthRebindButton': '重新授权绑定',
+  'pages.personal.profile.giteeOauthUnbindButton': '解绑登录',
+  'pages.personal.profile.giteeOauthUnbindConfirm': '确定要解绑 Gitee 登录吗？',
+  'pages.personal.profile.giteeOauthUnbindSuccess': 'Gitee 登录已解绑',
+  'pages.personal.profile.giteeOauthUnbindFailed': 'Gitee 解绑失败',
+  'pages.personal.profile.giteeOauthBound': '已绑定登录：{{name}}',
+  'pages.personal.profile.giteeOauthNotBound': '未绑定 Gitee 登录',
+  'pages.personal.profile.giteeOauthBindSuccess': 'Gitee 登录绑定成功',
+  'pages.personal.profile.giteeOauthBindFailed': 'Gitee 绑定失败',
   'pages.personal.profile.address': '地址',
   'pages.personal.profile.avatar': '头像',
   'pages.personal.profile.uploadAvatar': '上传头像',
@@ -2642,7 +2711,7 @@ export default {
   'components.techStackModal.copyright.assetsTitle': '其他资源',
   'components.techStackModal.copyright.assetsDesc': '以下资源及其许可说明：',
   'components.techStackModal.copyright.assetsLottie': 'lottie-react 库为 MIT 许可。动画 JSON 若来自 LottieFiles 等第三方，请遵守其各自许可。',
-  'components.techStackModal.copyright.assetsSocial': '微信、QQ、钉钉、飞书、企业微信等图标用于第三方登录品牌识别，请遵守各平台品牌使用规范。',
+  'components.techStackModal.copyright.assetsSocial': 'Gitee、微信、钉钉、飞书、企业微信等图标用于第三方登录品牌识别，请遵守各平台品牌使用规范。',
   'components.techStackModal.copyright.provenanceTitle': '构建来源与可选统计',
   'components.techStackModal.copyright.provenanceDesc': '系统可展示当前部署的 commit 与 git remote 来源；首次进入主界面时，可选择向官方上报不含业务数据的构建元数据，用于安全公告与渠道统计。关闭或失败不影响任何功能。',
   'components.techStackModal.copyright.telemetryLink': '阅读可选实例统计披露文档',
@@ -4316,6 +4385,7 @@ export default {
   'app.kuaicaiwu.fixedAssets.assets.form.sectionBasic': '基础信息',
   'app.kuaicaiwu.fixedAssets.assets.form.sectionDepreciation': '折旧信息',
   'app.kuaicaiwu.fixedAssets.assets.form.sectionAccounts': '科目信息',
+  'app.kuaicaiwu.fixedAssets.assets.form.quickCreateCategory': '快速新建资产类别',
   'app.kuaicaiwu.fixedAssets.assets.form.useSystemCode': '使用系统编号',
   'app.kuaicaiwu.fixedAssets.assets.form.initializeAsset': '初始化资产',
   'app.kuaicaiwu.fixedAssets.assets.form.initializeHint': '期初已有累计折旧时开启，可录入已折旧期间与累计折旧',
@@ -28062,6 +28132,15 @@ export default {
   'pages.system.applicationConnections.formAesKeyLabel': '加密 aes_key',
   'pages.system.applicationConnections.formTokenLabel': '签名 token',
   'pages.system.applicationConnections.formCorpIdLabel': '企业 ID',
+  'pages.system.applicationConnections.dingtalkAppIdLabel': 'App ID',
+  'pages.system.applicationConnections.dingtalkAppIdTooltip':
+    '对应钉钉开发者后台「应用凭证」中的 App ID；快捷登录可不填',
+  'pages.system.applicationConnections.dingtalkAgentIdLabel': 'AgentId',
+  'pages.system.applicationConnections.dingtalkAgentIdTooltip': '原企业内部应用 AgentId',
+  'pages.system.applicationConnections.dingtalkClientIdLabel': 'Client ID',
+  'pages.system.applicationConnections.dingtalkClientIdTooltip': '原 AppKey / SuiteKey；快捷登录必填',
+  'pages.system.applicationConnections.dingtalkClientSecretLabel': 'Client Secret',
+  'pages.system.applicationConnections.dingtalkClientSecretTooltip': '原 AppSecret / SuiteSecret；快捷登录必填',
   'pages.system.applicationConnections.formUsernameLabel': '用户名',
   'pages.system.applicationConnections.formPasswordLabel': '密码',
   'pages.system.applicationConnections.formInstanceIdLabel': '实例 ID / APP ID',
@@ -28073,7 +28152,7 @@ export default {
   'pages.system.applicationConnections.importExampleDescription': '选填',
   'pages.system.applicationConnections.detailTitle': '应用连接器详情',
   'pages.system.applicationConnections.descFeishu': '飞书开放平台自建应用',
-  'pages.system.applicationConnections.descDingtalk': '钉钉企业内部应用',
+  'pages.system.applicationConnections.descDingtalk': '钉钉企业内部应用（Client ID / Client Secret）',
   'pages.system.applicationConnections.descWecom': '企业微信自建应用（登录、消息、通讯录同步）',
   'pages.system.applicationConnections.descKingdee_galaxy': '面向中型企业',
   'pages.system.applicationConnections.descKingdee_cosmic': '企业级 PaaS 技术底座',
@@ -30868,6 +30947,74 @@ export default {
     '版权声明技术栈与当前产品依赖对齐',
   'pages.dashboard.updateLog.entries.tech-stack-copyright-align-r01.description':
     '按现行 pyproject 与 package.json 更新版本与清单：默认 PostgreSQL + Taskiq、无需 Redis；补充 Caddy、Electron、ECharts、CAD 图纸预览与实时通道，并标明 LibreDWG 的 GPL copyleft。',
+  'pages.dashboard.updateLog.entries.gitee-oauth-email-scope-bind-r01.title':
+    'Gitee 快捷登录可读取邮箱并支持个人资料绑定',
+  'pages.dashboard.updateLog.entries.gitee-oauth-email-scope-bind-r01.description':
+    '授权范围增加 emails，并在公开邮箱为空时从邮箱列表取主邮箱以自动匹配系统用户；个人资料补充 Gitee 授权绑定与解绑入口。',
+  'pages.dashboard.updateLog.entries.gitee-oauth-first-or-bind-r01.title':
+    'Gitee 登录支持首次建号或绑定已有账户',
+  'pages.dashboard.updateLog.entries.gitee-oauth-first-or-bind-r01.description':
+    '未绑定 Gitee 时可选「首次登录」直接创建系统账号进入，或「绑定已有账户」用系统密码关联；不再默认要求先输密码。',
+  'pages.dashboard.updateLog.entries.gitee-oauth-star-guide-only-r01.title':
+    'Gitee 关联窗 Star 改为仅引导不拦截',
+  'pages.dashboard.updateLog.entries.gitee-oauth-star-guide-only-r01.description':
+    'Gitee 已下线 Star 检测与代点接口；关联登录不再要求先 Star，仅保留「去 Star」官网引导。',
+  'pages.dashboard.updateLog.entries.gitee-oauth-star-api-deprecated-browser-r01.title':
+    '适配 Gitee 下线 Star 接口改为官网引导',
+  'pages.dashboard.updateLog.entries.gitee-oauth-star-api-deprecated-browser-r01.description':
+    'Gitee 已废弃 Star API，一键代点不再可用；关联窗改为「去 Star」打开官网引导。',
+  'pages.dashboard.updateLog.entries.gitee-oauth-star-detect-strict-r01.title':
+    '收紧 Gitee Star 检测避免取消后仍显示已 Star',
+  'pages.dashboard.updateLog.entries.gitee-oauth-star-detect-strict-r01.description':
+    '点查以 204/404 为准；200 仅在返回官方仓库对象时算已 Star，404 不再被列表结果覆盖，减少取消 Star 后的假阳性。',
+  'pages.dashboard.updateLog.entries.gitee-oauth-link-modal-layout-star-detect-r01.title':
+    '优化 Gitee 关联窗布局并修复 Star 误判',
+  'pages.dashboard.updateLog.entries.gitee-oauth-link-modal-layout-star-detect-r01.description':
+    '用户名与密码并排一行，密码支持生成复杂密码；Star 引导下移为紧凑条。Star 检测兼容 Gitee 返回 200，并在点查异常时回退列举已 Star 仓库，避免已 Star 仍被拦截。',
+  'pages.dashboard.updateLog.entries.gitee-oauth-star-panel-layout-r01.title':
+    '优化 Gitee 关联窗 Star 引导排版',
+  'pages.dashboard.updateLog.entries.gitee-oauth-star-panel-layout-r01.description':
+    'Star 模块改为独立引导卡，突出一键 Star；去掉打开仓库页入口，完成态与待 Star 态视觉区分更清晰。',
+  'pages.dashboard.updateLog.entries.gitee-oauth-in-modal-one-click-star-r01.title':
+    'Gitee 关联窗支持一键 Star 官方仓库',
+  'pages.dashboard.updateLog.entries.gitee-oauth-in-modal-one-click-star-r01.description':
+    '未 Star 时不必离开登录页：在关联弹窗内一键 Star kuaigeyun/kuaigeyun，成功后即可继续填写账号关联登录；授权范围增加 projects 以支持 Star API。',
+  'pages.dashboard.updateLog.entries.gitee-oauth-star-check-link-i18n-r01.title':
+    'Gitee 关联窗补齐文案并校验官方仓 Star',
+  'pages.dashboard.updateLog.entries.gitee-oauth-star-check-link-i18n-r01.description':
+    '登录 MPA 补齐关联弹窗中文；授权后展示 Gitee 头像与用户名，并检查是否已 Star kuaigeyun/kuaigeyun，未 Star 须先支持后再关联。',
+  'pages.dashboard.updateLog.entries.gitee-oauth-scope-user-info-only-r01.title':
+    '修复 Gitee 授权因无效 scope 失败',
+  'pages.dashboard.updateLog.entries.gitee-oauth-scope-user-info-only-r01.description':
+    '授权范围改为官方支持的 user_info，去掉不存在的 emails，避免 Gitee 提示「请求范围无效」。',
+  'pages.dashboard.updateLog.entries.gitee-oauth-link-complete-modal-r01.title':
+    'Gitee 授权后改为信息补全关联账号',
+  'pages.dashboard.updateLog.entries.gitee-oauth-link-complete-modal-r01.description':
+    '未绑定过的 Gitee 账号不再按邮箱/用户名静默自动绑定；授权成功后弹出窗口，填写系统账号密码完成关联并登录。',
+  'pages.dashboard.updateLog.entries.fa-asset-category-defaults-quick-create-r01.title':
+    '固定资产新建支持默认资产类别与快速新建',
+  'pages.dashboard.updateLog.entries.fa-asset-category-defaults-quick-create-r01.description':
+    '租户尚无资产类别时自动写入房屋建筑物、机器设备等产品默认项；新建固定资产下拉可快速新建类别并回填，无需先离开去基础资料页维护。',
+  'pages.dashboard.updateLog.entries.feishu-connector-test-url-r01.title':
+    '飞书连接器测试连接接口地址纠正',
+  'pages.dashboard.updateLog.entries.feishu-connector-test-url-r01.description':
+    '测试连接曾误打飞书旧路径，响应非 JSON 时出现 Extra data 解析错误；现改为官方 tenant_access_token 接口，与消息推送共用同一凭证校验。',
+  'pages.dashboard.updateLog.entries.dashboard-wip-cards-wecom-width-r01.title':
+    '工作台在制工序卡在企业微信中宽度对齐',
+  'pages.dashboard.updateLog.entries.dashboard-wip-cards-wecom-width-r01.description':
+    '企业微信内置浏览器对按钮作为网格子项时列宽计算异常，导致在制工序卡顶栏与邻卡错位；现由外层单元格承接列宽并去掉负边距，与钉钉等浏览器表现一致。',
+  'pages.dashboard.updateLog.entries.login-quick-dingtalk-feishu-oauth-r01.title':
+    '快捷登录接通钉钉与飞书',
+  'pages.dashboard.updateLog.entries.login-quick-dingtalk-feishu-oauth-r01.description':
+    '登录页可按组织发起钉钉/飞书 OAuth（凭证取自应用中心对应连接器）；按已绑定标识或手机号/邮箱自动匹配系统账号。个人资料支持扫码绑定与解绑。',
+  'pages.dashboard.updateLog.entries.login-quick-remove-wechat-r01.title':
+    '快捷登录去掉个人微信扫码',
+  'pages.dashboard.updateLog.entries.login-quick-remove-wechat-r01.description':
+    '登录页与平台管理不再提供个人微信快捷登录（开放平台网站应用认证成本高、难落地）；保留 Gitee、企业微信、钉钉、飞书等渠道，个人资料仍可填写微信号便于同事联系。',
+  'pages.dashboard.updateLog.entries.login-quick-gitee-replace-qq-r01.title':
+    '快捷登录以 Gitee 替换 QQ，并接通 OAuth',
+  'pages.dashboard.updateLog.entries.login-quick-gitee-replace-qq-r01.description':
+    '快捷登录去掉 QQ、改为 GITEE（排首位）。平台管理可配置 Gitee OAuth Client ID/Secret；登录页按组织发起授权，按邮箱或用户名自动绑定系统账号后签发登录态。',
   'pages.dashboard.updateLog.entries.login-quick-not-enabled-i18n-r01.title':
     '登录页未开启的快捷登录悬停改为中文提示',
   'pages.dashboard.updateLog.entries.login-quick-not-enabled-i18n-r01.description':
@@ -38416,10 +38563,21 @@ export default {
   'pages.infra.platform.loginGuestEnabled': '登录页显示免注册体验登录',
   'pages.infra.platform.loginGuestEnabledTooltip': '关闭后，登录页不再显示「免注册体验登录」按钮，且接口拒绝体验登录',
   'pages.infra.platform.loginQuickEnabled': '是否开启快捷登录',
-  'pages.infra.platform.loginQuickEnabledTooltip': '关闭后，登录页不再显示微信、QQ、企业微信、钉钉、飞书等快捷登录入口',
+  'pages.infra.platform.loginQuickEnabledTooltip':
+    '关闭后，登录页不再显示 Gitee、企业微信、钉钉、飞书等快捷登录入口',
   'pages.infra.platform.loginQuickProvidersTitle': '快捷登录方式',
-  'pages.infra.platform.loginQuickProviderWechat': '微信',
-  'pages.infra.platform.loginQuickProviderQq': 'QQ',
+  'pages.infra.platform.loginQuickProviderGitee': 'GITEE',
+  'pages.infra.platform.giteeOauthCredentialsTitle': 'Gitee OAuth 应用凭证',
+  'pages.infra.platform.giteeOauthConfigButton': '配置',
+  'pages.infra.platform.giteeOauthConfigDone': '完成',
+  'pages.infra.platform.giteeOauthCredentialsHint':
+    '在 Gitee 开放平台创建第三方应用，回调地址填写本站登录页（如 https://你的域名/login?provider=gitee）。Client Secret 仅保存在服务端，接口不下发明文。填完后点本页「保存设置」生效。',
+  'pages.infra.platform.giteeOauthClientId': 'Client ID',
+  'pages.infra.platform.giteeOauthClientIdPlaceholder': 'Gitee 应用 Client ID',
+  'pages.infra.platform.giteeOauthClientSecret': 'Client Secret',
+  'pages.infra.platform.giteeOauthClientSecretPlaceholder': 'Gitee 应用 Client Secret',
+  'pages.infra.platform.giteeOauthClientSecretKeepPlaceholder': '已配置，留空则保持不变',
+  'pages.infra.platform.giteeOauthClientSecretConfiguredHint': '已保存密钥；仅在需要轮换时填写新 Secret',
   'pages.infra.platform.loginQuickProviderWechatWork': '企业微信',
   'pages.infra.platform.loginQuickProviderDingtalk': '钉钉',
   'pages.infra.platform.loginQuickProviderFeishu': '飞书',

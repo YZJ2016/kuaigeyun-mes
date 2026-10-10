@@ -89,21 +89,27 @@ export function DashboardOperationCardsPanel({
       ) : showSkeleton ? (
         <div className="dashboard-operation-cards-panel__track">
           {Array.from({ length: initialVisibleCount }, (_, index) => (
-            <WipOperationCardSkeleton key={`skeleton-${index}`} colorIndex={index} />
+            <div key={`skeleton-${index}`} className="dashboard-operation-cards-panel__cell">
+              <WipOperationCardSkeleton colorIndex={index} />
+            </div>
           ))}
         </div>
       ) : (
         <>
           <div className="dashboard-operation-cards-panel__track">
             {visibleItems.map((item, index) => (
-              <WipOperationCardView
+              <div
                 key={`${item.process_id}-${item.process_name}`}
-                item={item}
-                colorIndex={index}
-                isDark={isDark}
-                t={t}
-                onClick={() => onNavigate(workOrdersPath)}
-              />
+                className="dashboard-operation-cards-panel__cell"
+              >
+                <WipOperationCardView
+                  item={item}
+                  colorIndex={index}
+                  isDark={isDark}
+                  t={t}
+                  onClick={() => onNavigate(workOrdersPath)}
+                />
+              </div>
             ))}
           </div>
           {hasMoreItems || canCollapse ? (

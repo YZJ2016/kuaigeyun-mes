@@ -52,8 +52,12 @@ export interface FaAsset {
 }
 
 export const fixedAssetService = {
-  listCategories: (params?: { keyword?: string; is_active?: boolean }) =>
-    apiRequest<FaCategory[]>(`${API}/categories`, { params }),
+  listCategories: (params?: {
+    keyword?: string;
+    is_active?: boolean;
+    /** 租户尚无类别时写入产品默认项 */
+    ensure_defaults?: boolean;
+  }) => apiRequest<FaCategory[]>(`${API}/categories`, { params }),
 
   createCategory: (body: Partial<FaCategory>) =>
     apiRequest<FaCategory>(`${API}/categories`, { method: 'POST', body }),

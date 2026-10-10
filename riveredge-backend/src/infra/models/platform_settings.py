@@ -211,7 +211,17 @@ class PlatformSettings(Model):
     )
     login_quick_providers = fields.JSONField(
         default=dict,
-        description="快捷登录分渠道开关（wechat/qq/wechat_work/dingtalk/feishu）",
+        description="快捷登录分渠道开关（gitee/wechat/wechat_work/dingtalk/feishu）",
+    )
+    gitee_oauth_client_id = fields.CharField(
+        max_length=200,
+        null=True,
+        description="Gitee OAuth 应用 Client ID（平台级）",
+    )
+    gitee_oauth_client_secret = fields.CharField(
+        max_length=200,
+        null=True,
+        description="Gitee OAuth 应用 Client Secret（平台级，勿对公开接口下发）",
     )
     enable_register = fields.BooleanField(
         default=True,

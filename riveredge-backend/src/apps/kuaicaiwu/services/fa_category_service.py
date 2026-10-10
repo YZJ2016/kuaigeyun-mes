@@ -12,15 +12,40 @@ from core.utils.timezone_utils import resolve_business_datetime
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 from infra.models.user import User
 
+# 租户尚无类别时写入的产品默认项（真源；非读侧猜值）
+DEFAULT_FA_CATEGORIES: tuple[dict[str, Any], ...] = (
+    {"category_code": "BUILDING", "category_name": "房屋建筑物", "useful_life_months": 240},
+    {"category_code": "MACHINE", "category_name": "机器设备", "useful_life_months": 120},
+    {"category_code": "VEHICLE", "category_name": "运输工具", "useful_life_months": 48},
+    {"category_code": "ELECTRONIC", "category_name": "电子设备", "useful_life_months": 36},
+    {"category_code": "OFFICE", "category_name": "办公设备", "useful_life_months": 60},
+    {"category_code": "OTHER", "category_name": "其他固定资产", "useful_life_months": 60},
+)
+
 
 class FaCategoryService:
+    async def ensure_default_categories(self, tenant_id: int, user: User) -> int:
+        """若租户尚无任何资产类别，写入产品默认类别；已有数据则不改动。"""
+        exists = await FaCategory.filter(tenant_id=tenant_id, deleted_at__isnull=True).exists()
+        if exists:
+            return 0
+        created = 0
+        for item in DEFAULT_FA_CATEGORIES:
+            await self.create_category(tenant_id, dict(item), user)
+            created += 1
+        return created
+
     async def list_categories(
         self,
         tenant_id: int,
         *,
         keyword: Optional[str] = None,
         is_active: Optional[bool] = None,
+        ensure_defaults: bool = False,
+        user: Optional[User] = None,
     ) -> list[dict[str, Any]]:
+        if ensure_defaults and user is not None:
+            await self.ensure_default_categories(tenant_id, user)
         q = FaCategory.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if is_active is not None:
             q = q.filter(is_active=is_active)

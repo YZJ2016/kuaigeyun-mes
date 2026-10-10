@@ -2904,9 +2904,18 @@ code {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
   align-items: stretch;
-  /* 为 hover 外扩阴影留边，避免贴边被父级裁切 */
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  /* 为 hover 外扩阴影留边；勿用负 margin（企微内置浏览器会把列宽算破） */
   padding: 4px;
-  margin: -4px;
+}
+/* 列宽由 div cell 承接：企微对 button 作 grid item 时常忽略 minmax(0,1fr) */
+.dashboard-operation-cards-panel__cell {
+  min-width: 0;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
 }
 .dashboard-quick-entry-section .quick-entry-grid-wrap {
   width: 100%;
@@ -3422,18 +3431,24 @@ code {
   background: color-mix(in srgb, var(--ant-color-primary, #1677ff) 10%, transparent) !important;
 }
 .dashboard-wip-operation-card {
+  -webkit-appearance: none;
   appearance: none;
   border: var(--dashboard-card-border);
   background: var(--ant-color-bg-container, #fff);
   --wip-card-radius: var(--ant-borderRadiusLG, var(--ant-borderRadius, 8px));
   border-radius: var(--wip-card-radius);
+  box-sizing: border-box;
   width: 100%;
+  max-width: 100%;
   min-width: 0;
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
+  /* 阴影需外溢；裁切由 head/body 自行 overflow:hidden */
   overflow: visible;
   text-align: left;
   padding: 0;
+  margin: 0;
   cursor: pointer;
   box-shadow: var(--dashboard-card-shadow);
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
@@ -3472,6 +3487,9 @@ code {
 }
 .dashboard-wip-operation-card__head {
   position: relative;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   min-height: 36px;
   overflow: hidden;
   border-radius: var(--wip-card-radius) var(--wip-card-radius) 0 0;
@@ -3482,6 +3500,7 @@ code {
   top: 0;
   bottom: 0;
   min-width: 0;
+  max-width: 100%;
   transition: width 0.65s cubic-bezier(0.22, 1, 0.36, 1);
 }
 @keyframes dashboard-wip-delta-flash {
@@ -3612,7 +3631,10 @@ code {
 }
 .dashboard-wip-operation-card__body {
   display: grid;
-  grid-template-columns: 92px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 92px) minmax(0, 1fr);
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   min-height: 96px;
   overflow: hidden;
   border-radius: 0 0 var(--wip-card-radius) var(--wip-card-radius);

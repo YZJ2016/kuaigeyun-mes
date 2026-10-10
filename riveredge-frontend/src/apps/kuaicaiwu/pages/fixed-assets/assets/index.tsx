@@ -40,7 +40,10 @@ const FaAssetsPage: React.FC = () => {
   const [categories, setCategories] = useState<FaCategory[]>([]);
 
   const loadCategories = async () => {
-    const items = await fixedAssetService.listCategories({ is_active: true });
+    const items = await fixedAssetService.listCategories({
+      is_active: true,
+      ensure_defaults: true,
+    });
     setCategories(items);
     return items;
   };
@@ -294,6 +297,7 @@ const FaAssetsPage: React.FC = () => {
         onOpenChange={setModalOpen}
         editing={editing}
         categories={categories}
+        onCategoriesChange={setCategories}
         onSuccess={() => {
           message.success(t('common.saveSuccess'));
           setModalOpen(false);

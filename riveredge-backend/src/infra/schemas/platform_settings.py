@@ -57,6 +57,9 @@ class PlatformSettingsBase(BaseSchema):
         default_factory=default_login_quick_providers,
         description="快捷登录分渠道开关",
     )
+    gitee_oauth_client_id: Optional[str] = Field(
+        None, max_length=200, description="Gitee OAuth Client ID（平台级）"
+    )
     enable_register: Optional[bool] = Field(True, description="是否启用公开注册（登录页注册链接）")
 
     @field_validator("login_quick_providers", mode="before")
@@ -117,6 +120,14 @@ class PlatformSettingsUpdate(BaseSchema):
         None,
         description="快捷登录分渠道开关",
     )
+    gitee_oauth_client_id: Optional[str] = Field(
+        None, max_length=200, description="Gitee OAuth Client ID；空字符串清除"
+    )
+    gitee_oauth_client_secret: Optional[str] = Field(
+        None,
+        max_length=200,
+        description="Gitee OAuth Client Secret；省略或空字符串表示不修改已有密钥",
+    )
     enable_register: Optional[bool] = Field(None, description="是否启用公开注册（登录页注册链接）")
 
     @field_validator("login_quick_providers", mode="before")
@@ -137,6 +148,9 @@ class PlatformSettingsResponse(PlatformSettingsBase):
     id: int = Field(..., description="设置ID")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    gitee_oauth_client_secret_configured: bool = Field(
+        False, description="是否已配置 Gitee OAuth Client Secret（不回传明文）"
+    )
     timezone: str = Field(
         default_factory=site_timezone_name,
         description="站点时区（infra_settings.TIMEZONE，只读下发；与 configs.timezone 一致）",

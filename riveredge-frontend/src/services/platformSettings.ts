@@ -49,6 +49,10 @@ export interface PlatformSettings {
   login_client_android_enabled?: boolean;
   login_quick_enabled?: boolean;
   login_quick_providers?: Record<string, boolean>;
+  /** Gitee OAuth Client ID（平台级） */
+  gitee_oauth_client_id?: string | null;
+  /** 是否已配置 Client Secret（不回传明文） */
+  gitee_oauth_client_secret_configured?: boolean;
   enable_register?: boolean;
   /** 站点时区（infra_settings.TIMEZONE，只读；写入 configs.timezone） */
   timezone?: string;
@@ -90,6 +94,9 @@ export interface PlatformSettingsUpdateRequest {
   login_client_android_enabled?: boolean;
   login_quick_enabled?: boolean;
   login_quick_providers?: Record<string, boolean>;
+  gitee_oauth_client_id?: string | null;
+  /** 省略或空字符串表示不修改已有密钥 */
+  gitee_oauth_client_secret?: string | null;
   enable_register?: boolean;
 }
 

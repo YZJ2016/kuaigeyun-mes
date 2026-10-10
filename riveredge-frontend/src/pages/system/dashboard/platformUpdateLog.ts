@@ -195,6 +195,136 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
     titleKey: 'pages.dashboard.updateLog.entries.customer-follow-up-create-data-scope-r02.title',
     descriptionKey:
       'pages.dashboard.updateLog.entries.customer-follow-up-create-data-scope-r02.description',
+    id: 'gitee-oauth-first-or-bind-r01',
+    date: '2026-10-10',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.gitee-oauth-first-or-bind-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.gitee-oauth-first-or-bind-r01.description',
+  },
+  {
+    id: 'gitee-oauth-star-guide-only-r01',
+    date: '2026-10-10',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.gitee-oauth-star-guide-only-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.gitee-oauth-star-guide-only-r01.description',
+  },
+  {
+    id: 'gitee-oauth-star-api-deprecated-browser-r01',
+    date: '2026-10-10',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.gitee-oauth-star-api-deprecated-browser-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.gitee-oauth-star-api-deprecated-browser-r01.description',
+  },
+  {
+    id: 'gitee-oauth-star-detect-strict-r01',
+    date: '2026-10-10',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.gitee-oauth-star-detect-strict-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.gitee-oauth-star-detect-strict-r01.description',
+  },
+  {
+    id: 'gitee-oauth-link-modal-layout-star-detect-r01',
+    date: '2026-10-10',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.gitee-oauth-link-modal-layout-star-detect-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.gitee-oauth-link-modal-layout-star-detect-r01.description',
+  },
+  {
+    id: 'gitee-oauth-star-panel-layout-r01',
+    date: '2026-10-10',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.gitee-oauth-star-panel-layout-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.gitee-oauth-star-panel-layout-r01.description',
+  },
+  {
+    id: 'gitee-oauth-in-modal-one-click-star-r01',
+    date: '2026-10-10',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.gitee-oauth-in-modal-one-click-star-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.gitee-oauth-in-modal-one-click-star-r01.description',
+  },
+  {
+    id: 'gitee-oauth-star-check-link-i18n-r01',
+    date: '2026-10-10',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.gitee-oauth-star-check-link-i18n-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.gitee-oauth-star-check-link-i18n-r01.description',
+  },
+  {
+    id: 'gitee-oauth-scope-user-info-only-r01',
+    date: '2026-10-10',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.gitee-oauth-scope-user-info-only-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.gitee-oauth-scope-user-info-only-r01.description',
+  },
+  {
+    id: 'gitee-oauth-link-complete-modal-r01',
+    date: '2026-10-10',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.gitee-oauth-link-complete-modal-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.gitee-oauth-link-complete-modal-r01.description',
+  },
+  {
+    id: 'fa-asset-category-defaults-quick-create-r01',
+    date: '2026-10-10',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.fa-asset-category-defaults-quick-create-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.fa-asset-category-defaults-quick-create-r01.description',
+  },
+  {
+    id: 'feishu-connector-test-url-r01',
+    date: '2026-10-10',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.feishu-connector-test-url-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.feishu-connector-test-url-r01.description',
+  },
+  {
+    id: 'dashboard-wip-cards-wecom-width-r01',
+    date: '2026-10-10',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.dashboard-wip-cards-wecom-width-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.dashboard-wip-cards-wecom-width-r01.description',
+  },
+  {
+    id: 'login-quick-dingtalk-feishu-oauth-r01',
+    date: '2026-10-10',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.login-quick-dingtalk-feishu-oauth-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.login-quick-dingtalk-feishu-oauth-r01.description',
+  },
+  {
+    id: 'login-quick-remove-wechat-r01',
+    date: '2026-10-10',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.login-quick-remove-wechat-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.login-quick-remove-wechat-r01.description',
+  },
+  {
+    id: 'login-quick-gitee-replace-qq-r01',
+    date: '2026-10-10',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.login-quick-gitee-replace-qq-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.login-quick-gitee-replace-qq-r01.description',
+  },
+  {
     id: 'material-sync-ferpclsid-source-type-r01',
     date: '2026-10-10',
     type: 'fix',

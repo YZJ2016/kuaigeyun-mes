@@ -1700,21 +1700,32 @@ class IntegrationConfigService:
 
     @staticmethod
     async def _test_feishu_connection(integration: IntegrationConfig) -> Dict[str, Any]:
-        """测试飞书连接（调用 app_access_token 接口）"""
+        """测试飞书连接（调用 tenant_access_token 接口）"""
         config = integration.get_config()
-        app_id = config.get("app_id")
-        app_secret = config.get("app_secret")
+        app_id = str(config.get("app_id") or "").strip()
+        app_secret = str(config.get("app_secret") or "").strip()
         if not app_id or not app_secret:
             raise ValueError("飞书配置缺少 app_id 或 app_secret")
-        url = "https://open.feishu.cn/openapi-connector/auth/v1/app_access_token/internal"
+        # 与 feishu_im_push_adapter 同一真源；勿用 openapi-connector 旧路径（返回非 JSON）
+        url = "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal"
         resp = await get_http_client().post(
             url,
             json={"app_id": app_id, "app_secret": app_secret},
             timeout=10.0,
         )
-        data = resp.json()
+        try:
+            data = resp.json()
+        except Exception as exc:
+            detail = (resp.text or "")[:200]
+            raise ValueError(
+                f"飞书返回无法解析（HTTP {resp.status_code}）: {detail or exc}"
+            ) from exc
+        if not isinstance(data, dict):
+            raise ValueError("飞书返回格式无效")
         if data.get("code") != 0:
-            raise ValueError(data.get("msg", "获取 token 失败"))
+            raise ValueError(data.get("msg") or data.get("error") or "获取 token 失败")
+        if not str(data.get("tenant_access_token") or "").strip():
+            raise ValueError("飞书返回缺少 tenant_access_token")
         return {"message": "飞书连接成功", "tenant_access_token": "***"}
 
     @staticmethod
