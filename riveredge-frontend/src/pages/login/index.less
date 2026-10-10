@@ -712,3 +712,106 @@
     }
   }
 }
+
+/* Gitee 关联弹窗 */
+.gitee-link-profile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 10px;
+  background: #fafafa;
+}
+
+.gitee-link-profile-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+}
+
+.gitee-link-profile-sub {
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.gitee-link-star-panel {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin-top: 4px;
+  padding: 10px 12px;
+  /* 外层沿用原星星小容器样式 */
+  border: 1px solid rgba(250, 173, 20, 0.28);
+  border-radius: 8px;
+  background: #fff7e6;
+  box-sizing: border-box;
+
+  &.is-starred {
+    background: #f6ffed;
+    border-color: rgba(82, 196, 26, 0.28);
+  }
+
+  .gitee-link-star-body {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .gitee-link-star-title {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 20px;
+    color: rgba(0, 0, 0, 0.88);
+  }
+
+  .gitee-link-star-icon {
+    font-size: 14px;
+    color: #d48806;
+  }
+
+  &.is-starred .gitee-link-star-icon {
+    color: #389e0d;
+  }
+
+  .gitee-link-star-desc {
+    margin-top: 2px;
+    font-size: 12px;
+    line-height: 18px;
+    color: rgba(0, 0, 0, 0.45);
+  }
+
+  /* 不用 type=primary，避免主题蓝与自定义橙互相覆盖导致 hover 闪烁 */
+  .gitee-link-star-action.ant-btn {
+    flex-shrink: 0;
+    color: #fff;
+    background: #faad14;
+    border-color: #faad14;
+    box-shadow: none;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+
+    &:hover,
+    &:focus,
+    &:focus-visible {
+      color: #fff !important;
+      background: #ffc53d !important;
+      border-color: #ffc53d !important;
+    }
+
+    &:active {
+      color: #fff !important;
+      background: #d48806 !important;
+      border-color: #d48806 !important;
+    }
+
+    &.ant-btn-loading {
+      opacity: 0.85;
+    }
+  }
+}

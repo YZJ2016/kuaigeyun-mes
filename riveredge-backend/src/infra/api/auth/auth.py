@@ -48,6 +48,43 @@ from core.services.integration.wecom_oauth_service import (
     resolve_wecom_user_id_from_code,
 )
 from core.services.integration.wecom_integration import get_wecom_credentials
+from core.services.integration.gitee_oauth_service import (
+    bind_gitee_for_current_user,
+    bind_gitee_id_to_user,
+    build_gitee_oauth_authorize_url,
+    build_gitee_profile_preview,
+    check_user_starred_official_repo,
+    decode_gitee_link_ticket,
+    decode_gitee_oauth_state,
+    encode_gitee_link_ticket,
+    encode_gitee_oauth_state,
+    exchange_gitee_code_for_access_token,
+    fetch_gitee_user,
+    find_user_by_gitee_id,
+    get_gitee_oauth_credentials,
+    provision_user_for_gitee_first_login,
+    resolve_user_for_gitee_login,
+    star_official_repo,
+    unbind_gitee_for_current_user,
+)
+from core.services.integration.dingtalk_oauth_service import (
+    bind_dingtalk_for_current_user,
+    build_dingtalk_oauth_authorize_url,
+    decode_dingtalk_oauth_state,
+    encode_dingtalk_oauth_state,
+    resolve_dingtalk_user_from_code,
+    resolve_user_for_dingtalk_login,
+    unbind_dingtalk_for_current_user,
+)
+from core.services.integration.feishu_oauth_service import (
+    bind_feishu_for_current_user,
+    build_feishu_oauth_authorize_url,
+    decode_feishu_oauth_state,
+    encode_feishu_oauth_state,
+    resolve_feishu_user_from_code,
+    resolve_user_for_feishu_login,
+    unbind_feishu_for_current_user,
+)
 
 
 class RefreshTokenBody(BaseModel):
@@ -100,6 +137,119 @@ class WeComBootstrapTenantResponse(BaseModel):
         0,
         description="启用企微连接器且凭证完整的组织数量",
     )
+
+
+class GiteeAuthorizeUrlResponse(BaseModel):
+    authorize_url: str
+    state: str
+
+
+class GiteeCallbackRequest(BaseModel):
+    """Gitee OAuth 回调。"""
+
+    code: str = Field(..., min_length=1, description="Gitee OAuth code")
+    state: str | None = Field(None, description="OAuth state（含 tenant_id / redirect_uri）")
+    tenant_id: int | None = Field(None, description="组织 ID（state 缺失时必填）")
+    redirect_uri: str | None = Field(
+        None, description="与授权时一致的回调地址（state 缺失时必填）"
+    )
+
+
+class GiteeBindResponse(BaseModel):
+    gitee_id: str
+    message: str = "Gitee 账号绑定成功"
+
+
+class GiteeUnbindResponse(BaseModel):
+    message: str = "Gitee 账号已解绑"
+
+
+class GiteeProfilePreview(BaseModel):
+    id: str
+    login: str | None = None
+    email: str | None = None
+    name: str | None = None
+    avatar_url: str | None = None
+    starred_official_repo: bool = False
+
+
+class GiteeLoginCallbackResponse(BaseModel):
+    """已绑定直接登录；未绑定返回 needs_link 供前端弹出信息补全窗。"""
+
+    status: str = Field("ok", description="ok | needs_link")
+    access_token: str | None = None
+    token_type: str = "bearer"
+    expires_in: int = 0
+    user: dict | None = None
+    tenants: list | None = None
+    default_tenant_id: int | None = None
+    requires_tenant_selection: bool = False
+    requires_phone_verification: bool = False
+    ticket: str | None = None
+    gitee: GiteeProfilePreview | None = None
+    starred_official_repo: bool | None = None
+
+
+class GiteeLinkLoginRequest(BaseModel):
+    ticket: str = Field(..., min_length=1, description="Gitee 关联凭证")
+    username: str = Field(..., min_length=1, description="系统账号或手机号")
+    password: str = Field(..., min_length=1, description="系统密码")
+
+
+class GiteeFirstLoginRequest(BaseModel):
+    ticket: str = Field(..., min_length=1, description="Gitee 关联凭证")
+
+
+class GiteeStarOfficialRequest(BaseModel):
+    ticket: str = Field(..., min_length=1, description="Gitee 关联凭证（含短时 access_token）")
+
+
+class GiteeStarOfficialResponse(BaseModel):
+    starred: bool = True
+    message: str = "已 Star 官方仓库"
+
+
+class DingTalkAuthorizeUrlResponse(BaseModel):
+    authorize_url: str
+    state: str
+
+
+class DingTalkCallbackRequest(BaseModel):
+    code: str = Field(..., min_length=1, description="钉钉 OAuth code / authCode")
+    state: str | None = Field(None, description="OAuth state（含 tenant_id / redirect_uri）")
+    tenant_id: int | None = Field(None, description="组织 ID（state 缺失时必填）")
+
+
+class DingTalkBindResponse(BaseModel):
+    unionid: str | None = None
+    openid: str | None = None
+    message: str = "钉钉账号绑定成功"
+
+
+class DingTalkUnbindResponse(BaseModel):
+    message: str = "钉钉账号已解绑"
+
+
+class FeishuAuthorizeUrlResponse(BaseModel):
+    authorize_url: str
+    state: str
+
+
+class FeishuCallbackRequest(BaseModel):
+    code: str = Field(..., min_length=1, description="飞书 OAuth code")
+    state: str | None = Field(None, description="OAuth state（含 tenant_id / redirect_uri）")
+    tenant_id: int | None = Field(None, description="组织 ID（state 缺失时必填）")
+    redirect_uri: str | None = Field(None, description="与授权时一致的回调地址")
+
+
+class FeishuBindResponse(BaseModel):
+    open_id: str | None = None
+    union_id: str | None = None
+    message: str = "飞书账号绑定成功"
+
+
+class FeishuUnbindResponse(BaseModel):
+    message: str = "飞书账号已解绑"
 
 
 # 创建路由
@@ -302,6 +452,396 @@ async def wecom_unbind(
     """
     await unbind_wecom_user_for_current_user(tenant_id=tenant_id, user=current_user)
     return WeComUnbindResponse()
+
+
+@router.get("/gitee/authorize-url", response_model=GiteeAuthorizeUrlResponse)
+async def gitee_authorize_url(
+    redirect_uri: str = Query(..., min_length=1, description="OAuth 回调地址（前端页面 URL）"),
+    tenant_id: int = Query(..., ge=1, description="组织 ID"),
+    redirect: str | None = Query(None, description="登录成功后前端跳转路径"),
+):
+    """
+    获取 Gitee OAuth 授权地址（依赖平台设置中的 Client ID / Secret）。
+    """
+    redirect_uri_clean = redirect_uri.strip()
+    state = encode_gitee_oauth_state(
+        tenant_id=tenant_id,
+        redirect_uri=redirect_uri_clean,
+        redirect=(redirect or "").strip(),
+    )
+    authorize_url = await build_gitee_oauth_authorize_url(
+        redirect_uri=redirect_uri_clean,
+        state=state,
+    )
+    return GiteeAuthorizeUrlResponse(authorize_url=authorize_url, state=state)
+
+
+@router.post("/gitee/callback", response_model=GiteeLoginCallbackResponse)
+async def gitee_callback(
+    data: GiteeCallbackRequest,
+    request: Request,
+    auth_service: Any = Depends(get_auth_service_with_fallback),
+):
+    """
+    Gitee OAuth 回调：已绑定则签发 JWT；未绑定不自动关联，返回 needs_link 供补全窗绑定。
+    """
+    tenant_id = data.tenant_id
+    redirect_uri = (data.redirect_uri or "").strip()
+    if data.state:
+        decoded = decode_gitee_oauth_state(data.state)
+        tenant_id = decoded["tenant_id"]
+        redirect_uri = decoded["redirect_uri"]
+    if tenant_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="缺少组织 ID，请重新发起 Gitee 登录",
+        )
+    if not redirect_uri:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="缺少回调地址，请重新发起 Gitee 登录",
+        )
+
+    access_token = await exchange_gitee_code_for_access_token(
+        code=data.code, redirect_uri=redirect_uri
+    )
+    gitee_user = await fetch_gitee_user(access_token=access_token)
+    starred = await check_user_starred_official_repo(access_token=access_token)
+    user = await resolve_user_for_gitee_login(tenant_id=tenant_id, gitee_user=gitee_user)
+    if user is not None:
+        result = await auth_service.generate_login_result(user, request, tenant_id)
+        return GiteeLoginCallbackResponse(
+            status="ok",
+            starred_official_repo=starred,
+            **result,
+        )
+
+    creds = await get_gitee_oauth_credentials()
+    if not creds:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="未配置 Gitee OAuth（平台设置中填写 Client ID 与 Client Secret）",
+        )
+    preview = build_gitee_profile_preview(gitee_user)
+    if not preview.get("id"):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="未能获取 Gitee 用户标识")
+    preview["starred_official_repo"] = starred
+    ticket = encode_gitee_link_ticket(
+        secret=creds.client_secret,
+        tenant_id=tenant_id,
+        gitee_id=str(preview["id"]),
+        login=preview.get("login"),
+        email=preview.get("email"),
+        name=preview.get("name"),
+        avatar_url=preview.get("avatar_url"),
+        access_token=access_token,
+    )
+    return GiteeLoginCallbackResponse(
+        status="needs_link",
+        ticket=ticket,
+        gitee=GiteeProfilePreview(**preview),
+        starred_official_repo=starred,
+    )
+
+
+@router.post("/gitee/star-official", response_model=GiteeStarOfficialResponse)
+async def gitee_star_official(data: GiteeStarOfficialRequest):
+    """关联弹窗内一键 Star 官方仓库（使用 ticket 内短时 access_token）。"""
+    creds = await get_gitee_oauth_credentials()
+    if not creds:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="未配置 Gitee OAuth（平台设置中填写 Client ID 与 Client Secret）",
+        )
+    ticket_data = decode_gitee_link_ticket(secret=creds.client_secret, ticket=data.ticket.strip())
+    access_token = ticket_data.get("access_token")
+    if not access_token:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="关联凭证缺少授权信息，请关闭窗口后重新使用 Gitee 登录",
+        )
+    await star_official_repo(access_token=str(access_token))
+    return GiteeStarOfficialResponse()
+
+
+@router.post("/gitee/first-login", response_model=LoginResponse)
+async def gitee_first_login(
+    data: GiteeFirstLoginRequest,
+    request: Request,
+):
+    """Gitee 首次登录：按授权资料在当前组织建号、绑定并签发会话（无需系统密码）。"""
+    creds = await get_gitee_oauth_credentials()
+    if not creds:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="未配置 Gitee OAuth（平台设置中填写 Client ID 与 Client Secret）",
+        )
+    ticket_data = decode_gitee_link_ticket(secret=creds.client_secret, ticket=data.ticket.strip())
+    tenant_id = int(ticket_data["tenant_id"])
+    user = await provision_user_for_gitee_first_login(
+        tenant_id=tenant_id,
+        gitee_id=str(ticket_data["gitee_id"]),
+        login=ticket_data.get("login"),
+        email=ticket_data.get("email"),
+        name=ticket_data.get("name"),
+    )
+    result = await AuthService().generate_login_result(user, request, tenant_id)
+    return LoginResponse(**result)
+
+
+@router.post("/gitee/link-login", response_model=LoginResponse)
+async def gitee_link_login(
+    data: GiteeLinkLoginRequest,
+    request: Request,
+):
+    """绑定已有系统账号：校验密码后写入 Gitee 绑定并登录。"""
+    creds = await get_gitee_oauth_credentials()
+    if not creds:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="未配置 Gitee OAuth（平台设置中填写 Client ID 与 Client Secret）",
+        )
+    ticket_data = decode_gitee_link_ticket(secret=creds.client_secret, ticket=data.ticket.strip())
+    tenant_id = int(ticket_data["tenant_id"])
+    gitee_id = str(ticket_data["gitee_id"])
+    occupied = await find_user_by_gitee_id(tenant_id=tenant_id, gitee_id=gitee_id)
+    if occupied:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="该 Gitee 账号已绑定其他用户，请直接使用 Gitee 登录",
+        )
+    # AuthServiceImpl 门面无验密私有方法；与 refresh_token 等路径一致，直接用 AuthService
+    auth_service = AuthService()
+    try:
+        user, password_matched_users = await auth_service._resolve_login_user(
+            data.username.strip(),
+            data.password,
+            tenant_id,
+        )
+    except HTTPException:
+        raise
+    if not user or not user.is_active:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="用户名或密码错误")
+    if user.tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="请使用当前组织下的系统账号完成绑定",
+        )
+    await bind_gitee_id_to_user(
+        user=user,
+        gitee_id=gitee_id,
+        gitee_login=ticket_data.get("login"),
+    )
+    result = await auth_service.generate_login_result(
+        user,
+        request,
+        tenant_id,
+        password_matched_users=password_matched_users,
+    )
+    return LoginResponse(**result)
+
+
+@router.post("/gitee/bind", response_model=GiteeBindResponse)
+async def gitee_bind(
+    data: GiteeCallbackRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    已登录用户绑定 Gitee（写入 contact_info.gitee_id）。
+    """
+    redirect_uri = (data.redirect_uri or "").strip()
+    if data.state:
+        decoded = decode_gitee_oauth_state(data.state)
+        redirect_uri = decoded["redirect_uri"]
+    if not redirect_uri:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="缺少回调地址，请重新发起 Gitee 绑定",
+        )
+    access_token = await exchange_gitee_code_for_access_token(
+        code=data.code, redirect_uri=redirect_uri
+    )
+    gitee_user = await fetch_gitee_user(access_token=access_token)
+    await bind_gitee_for_current_user(
+        tenant_id=tenant_id,
+        user=current_user,
+        gitee_user=gitee_user,
+    )
+    gitee_id = str(gitee_user.get("id") or "").strip()
+    return GiteeBindResponse(gitee_id=gitee_id)
+
+
+@router.post("/gitee/unbind", response_model=GiteeUnbindResponse)
+async def gitee_unbind(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """已登录用户解绑 Gitee。"""
+    await unbind_gitee_for_current_user(tenant_id=tenant_id, user=current_user)
+    return GiteeUnbindResponse()
+
+
+@router.get("/dingtalk/authorize-url", response_model=DingTalkAuthorizeUrlResponse)
+async def dingtalk_authorize_url(
+    redirect_uri: str = Query(..., min_length=1, description="OAuth 回调地址（前端页面 URL）"),
+    tenant_id: int = Query(..., ge=1, description="组织 ID"),
+    redirect: str | None = Query(None, description="登录成功后前端跳转路径"),
+):
+    """获取钉钉 OAuth 授权地址（依赖租户钉钉应用连接器）。"""
+    redirect_uri_clean = redirect_uri.strip()
+    state = encode_dingtalk_oauth_state(
+        tenant_id=tenant_id,
+        redirect_uri=redirect_uri_clean,
+        redirect=(redirect or "").strip(),
+    )
+    authorize_url = await build_dingtalk_oauth_authorize_url(
+        tenant_id=tenant_id,
+        redirect_uri=redirect_uri_clean,
+        state=state,
+    )
+    return DingTalkAuthorizeUrlResponse(authorize_url=authorize_url, state=state)
+
+
+@router.post("/dingtalk/callback", response_model=LoginResponse)
+async def dingtalk_callback(
+    data: DingTalkCallbackRequest,
+    request: Request,
+    auth_service: Any = Depends(get_auth_service_with_fallback),
+):
+    """钉钉 OAuth 回调：换票取用户信息，匹配本地用户并签发 JWT。"""
+    tenant_id = data.tenant_id
+    if data.state:
+        decoded = decode_dingtalk_oauth_state(data.state)
+        tenant_id = decoded["tenant_id"]
+    if tenant_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="缺少组织 ID，请重新发起钉钉登录",
+        )
+    dingtalk_user = await resolve_dingtalk_user_from_code(tenant_id=tenant_id, code=data.code)
+    user = await resolve_user_for_dingtalk_login(tenant_id=tenant_id, dingtalk_user=dingtalk_user)
+    result = await auth_service.generate_login_result(user, request, tenant_id)
+    return LoginResponse(**result)
+
+
+@router.post("/dingtalk/bind", response_model=DingTalkBindResponse)
+async def dingtalk_bind(
+    data: DingTalkCallbackRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """已登录用户绑定钉钉。"""
+    dingtalk_user = await resolve_dingtalk_user_from_code(tenant_id=tenant_id, code=data.code)
+    await bind_dingtalk_for_current_user(
+        tenant_id=tenant_id,
+        user=current_user,
+        dingtalk_user=dingtalk_user,
+    )
+    unionid = dingtalk_user.get("unionId") if isinstance(dingtalk_user.get("unionId"), str) else None
+    openid = dingtalk_user.get("openId") if isinstance(dingtalk_user.get("openId"), str) else None
+    return DingTalkBindResponse(unionid=unionid, openid=openid)
+
+
+@router.post("/dingtalk/unbind", response_model=DingTalkUnbindResponse)
+async def dingtalk_unbind(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """已登录用户解绑钉钉。"""
+    await unbind_dingtalk_for_current_user(tenant_id=tenant_id, user=current_user)
+    return DingTalkUnbindResponse()
+
+
+@router.get("/feishu/authorize-url", response_model=FeishuAuthorizeUrlResponse)
+async def feishu_authorize_url(
+    redirect_uri: str = Query(..., min_length=1, description="OAuth 回调地址（前端页面 URL）"),
+    tenant_id: int = Query(..., ge=1, description="组织 ID"),
+    redirect: str | None = Query(None, description="登录成功后前端跳转路径"),
+):
+    """获取飞书 OAuth 授权地址（依赖租户飞书应用连接器）。"""
+    redirect_uri_clean = redirect_uri.strip()
+    state = encode_feishu_oauth_state(
+        tenant_id=tenant_id,
+        redirect_uri=redirect_uri_clean,
+        redirect=(redirect or "").strip(),
+    )
+    authorize_url = await build_feishu_oauth_authorize_url(
+        tenant_id=tenant_id,
+        redirect_uri=redirect_uri_clean,
+        state=state,
+    )
+    return FeishuAuthorizeUrlResponse(authorize_url=authorize_url, state=state)
+
+
+@router.post("/feishu/callback", response_model=LoginResponse)
+async def feishu_callback(
+    data: FeishuCallbackRequest,
+    request: Request,
+    auth_service: Any = Depends(get_auth_service_with_fallback),
+):
+    """飞书 OAuth 回调：换票取用户信息，匹配本地用户并签发 JWT。"""
+    tenant_id = data.tenant_id
+    redirect_uri = (data.redirect_uri or "").strip()
+    if data.state:
+        decoded = decode_feishu_oauth_state(data.state)
+        tenant_id = decoded["tenant_id"]
+        redirect_uri = decoded["redirect_uri"]
+    if tenant_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="缺少组织 ID，请重新发起飞书登录",
+        )
+    if not redirect_uri:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="缺少回调地址，请重新发起飞书登录",
+        )
+    feishu_user = await resolve_feishu_user_from_code(
+        tenant_id=tenant_id, code=data.code, redirect_uri=redirect_uri
+    )
+    user = await resolve_user_for_feishu_login(tenant_id=tenant_id, feishu_user=feishu_user)
+    result = await auth_service.generate_login_result(user, request, tenant_id)
+    return LoginResponse(**result)
+
+
+@router.post("/feishu/bind", response_model=FeishuBindResponse)
+async def feishu_bind(
+    data: FeishuCallbackRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """已登录用户绑定飞书。"""
+    redirect_uri = (data.redirect_uri or "").strip()
+    if data.state:
+        decoded = decode_feishu_oauth_state(data.state)
+        redirect_uri = decoded["redirect_uri"]
+    if not redirect_uri:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="缺少回调地址，请重新发起飞书绑定",
+        )
+    feishu_user = await resolve_feishu_user_from_code(
+        tenant_id=tenant_id, code=data.code, redirect_uri=redirect_uri
+    )
+    await bind_feishu_for_current_user(
+        tenant_id=tenant_id,
+        user=current_user,
+        feishu_user=feishu_user,
+    )
+    open_id = feishu_user.get("open_id") if isinstance(feishu_user.get("open_id"), str) else None
+    union_id = feishu_user.get("union_id") if isinstance(feishu_user.get("union_id"), str) else None
+    return FeishuBindResponse(open_id=open_id, union_id=union_id)
+
+
+@router.post("/feishu/unbind", response_model=FeishuUnbindResponse)
+async def feishu_unbind(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """已登录用户解绑飞书。"""
+    await unbind_feishu_for_current_user(tenant_id=tenant_id, user=current_user)
+    return FeishuUnbindResponse()
 
 
 @router.get("/me", response_model=CurrentUserResponse)

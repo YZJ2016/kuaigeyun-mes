@@ -11,8 +11,22 @@ import { ProForm, ProFormTextArea, ProFormText, ProFormInstance } from '@ant-des
 import { App, Card, message, Upload, Space, Button, Row, Col, Divider, Typography, theme, Form, Tabs, Descriptions, Grid, Spin, Modal, Popconfirm, Tooltip, Input } from 'antd';
 import { WWLoginLangType } from '@wecom/jssdk';
 import { WecomWWLoginPanel } from '../../../components/WecomWWLoginPanel';
-import { getWecomWWLoginConfig, type WeComWWLoginConfigResponse } from '../../../services/publicAuth';
+import {
+  getDingtalkAuthorizeUrl,
+  getFeishuAuthorizeUrl,
+  getWecomWWLoginConfig,
+  type WeComWWLoginConfigResponse,
+} from '../../../services/publicAuth';
 import { saveWecomOAuthState } from '../../../utils/wecomAuth';
+import {
+  consumeDingtalkOAuthState,
+  saveDingtalkOAuthState,
+} from '../../../utils/dingtalkAuth';
+import {
+  consumeFeishuOAuthState,
+  decodeFeishuOAuthState,
+  saveFeishuOAuthState,
+} from '../../../utils/feishuAuth';
 import { ThemedSegmented } from '../../../components/themed-segmented';
 import { UserOutlined, UploadOutlined, DeleteOutlined, SyncOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import wechatLogo from '../../../assets/social/wechat.svg';
@@ -36,6 +50,10 @@ import {
   changePassword,
   bindWecomAccount,
   unbindWecomAccount,
+  bindDingtalkAccount,
+  unbindDingtalkAccount,
+  bindFeishuAccount,
+  unbindFeishuAccount,
   UserProfile,
   UpdateUserProfileData,
 } from '../../../services/userProfile';
@@ -166,9 +184,107 @@ const UserProfilePage: React.FC = () => {
   const [wecomBindLoading, setWecomBindLoading] = useState(false);
   const [wecomUnbindLoading, setWecomUnbindLoading] = useState(false);
   const [wecomBindConfig, setWecomBindConfig] = useState<WeComWWLoginConfigResponse | null>(null);
+  const [dingtalkBindLoading, setDingtalkBindLoading] = useState(false);
+  const [dingtalkUnbindLoading, setDingtalkUnbindLoading] = useState(false);
+  const [feishuBindLoading, setFeishuBindLoading] = useState(false);
+  const [feishuUnbindLoading, setFeishuUnbindLoading] = useState(false);
   const currentUser = useCurrentUser();
 
   const boundWecomUserid = profileData?.contact_info?.wecom_userid?.trim() || '';
+  const boundDingtalkId =
+    profileData?.contact_info?.dingtalk_unionid?.trim() ||
+    profileData?.contact_info?.dingtalk_openid?.trim() ||
+    profileData?.contact_info?.dingtalk_userid?.trim() ||
+    '';
+  const boundDingtalkName = profileData?.contact_info?.dingtalk_nickname?.trim() || '';
+  const boundFeishuId =
+    profileData?.contact_info?.feishu_union_id?.trim() ||
+    profileData?.contact_info?.feishu_open_id?.trim() ||
+    profileData?.contact_info?.feishu_user_id?.trim() ||
+    '';
+  const boundFeishuName = profileData?.contact_info?.feishu_name?.trim() || '';
+
+  const handleUnbindDingtalk = useCallback(async () => {
+    try {
+      setDingtalkUnbindLoading(true);
+      await unbindDingtalkAccount();
+      messageApi.success(t('pages.personal.profile.dingtalkOauthUnbindSuccess'));
+      const updatedData = await getUserProfile();
+      setProfileData(updatedData);
+    } catch (error: unknown) {
+      const errMsg =
+        error instanceof Error
+          ? error.message
+          : t('pages.personal.profile.dingtalkOauthUnbindFailed');
+      messageApi.error(errMsg);
+    } finally {
+      setDingtalkUnbindLoading(false);
+    }
+  }, [messageApi, t]);
+
+  const handleOpenDingtalkBind = useCallback(async () => {
+    const tenantId = getTenantId();
+    if (!tenantId) {
+      messageApi.warning(t('pages.personal.profile.dingtalkOauthBindFailed'));
+      return;
+    }
+    try {
+      setDingtalkBindLoading(true);
+      const redirectUri = `${window.location.origin}/personal/profile?provider=dingtalk_bind`;
+      const { authorize_url, state } = await getDingtalkAuthorizeUrl({
+        redirect_uri: redirectUri,
+        tenant_id: tenantId,
+      });
+      saveDingtalkOAuthState(state);
+      window.location.href = authorize_url;
+    } catch (error: unknown) {
+      const errMsg =
+        error instanceof Error
+          ? error.message
+          : t('pages.personal.profile.dingtalkOauthBindFailed');
+      messageApi.error(errMsg);
+      setDingtalkBindLoading(false);
+    }
+  }, [messageApi, t]);
+
+  const handleUnbindFeishu = useCallback(async () => {
+    try {
+      setFeishuUnbindLoading(true);
+      await unbindFeishuAccount();
+      messageApi.success(t('pages.personal.profile.feishuOauthUnbindSuccess'));
+      const updatedData = await getUserProfile();
+      setProfileData(updatedData);
+    } catch (error: unknown) {
+      const errMsg =
+        error instanceof Error ? error.message : t('pages.personal.profile.feishuOauthUnbindFailed');
+      messageApi.error(errMsg);
+    } finally {
+      setFeishuUnbindLoading(false);
+    }
+  }, [messageApi, t]);
+
+  const handleOpenFeishuBind = useCallback(async () => {
+    const tenantId = getTenantId();
+    if (!tenantId) {
+      messageApi.warning(t('pages.personal.profile.feishuOauthBindFailed'));
+      return;
+    }
+    try {
+      setFeishuBindLoading(true);
+      const redirectUri = `${window.location.origin}/personal/profile?provider=feishu_bind`;
+      const { authorize_url, state } = await getFeishuAuthorizeUrl({
+        redirect_uri: redirectUri,
+        tenant_id: tenantId,
+      });
+      saveFeishuOAuthState(state);
+      window.location.href = authorize_url;
+    } catch (error: unknown) {
+      const errMsg =
+        error instanceof Error ? error.message : t('pages.personal.profile.feishuOauthBindFailed');
+      messageApi.error(errMsg);
+      setFeishuBindLoading(false);
+    }
+  }, [messageApi, t]);
 
   const handleUnbindWecom = useCallback(async () => {
     try {
@@ -259,6 +375,76 @@ const UserProfilePage: React.FC = () => {
 
     initializeProfile();
   }, []);
+
+  /** 钉钉 / 飞书扫码绑定回调 */
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const provider = urlParams.get('provider');
+    const code = urlParams.get('code') || urlParams.get('authCode');
+    const state = urlParams.get('state');
+    if (!code || !state) {
+      return;
+    }
+    if (provider !== 'dingtalk_bind' && provider !== 'feishu_bind') {
+      return;
+    }
+
+    let cancelled = false;
+    const run = async () => {
+      try {
+        if (provider === 'dingtalk_bind') {
+          if (!consumeDingtalkOAuthState(state)) {
+            messageApi.error(t('pages.personal.profile.dingtalkOauthBindFailed'));
+            window.history.replaceState({}, '', window.location.pathname);
+            return;
+          }
+          setDingtalkBindLoading(true);
+          await bindDingtalkAccount({ code, state });
+          if (cancelled) return;
+          messageApi.success(t('pages.personal.profile.dingtalkOauthBindSuccess'));
+        } else {
+          if (!consumeFeishuOAuthState(state)) {
+            messageApi.error(t('pages.personal.profile.feishuOauthBindFailed'));
+            window.history.replaceState({}, '', window.location.pathname);
+            return;
+          }
+          setFeishuBindLoading(true);
+          const decoded = decodeFeishuOAuthState(state);
+          await bindFeishuAccount({
+            code,
+            state,
+            redirect_uri: decoded?.redirect_uri,
+          });
+          if (cancelled) return;
+          messageApi.success(t('pages.personal.profile.feishuOauthBindSuccess'));
+        }
+        const updatedData = await getUserProfile();
+        if (!cancelled) {
+          setProfileData(updatedData);
+        }
+      } catch (error: unknown) {
+        if (!cancelled) {
+          const errMsg =
+            error instanceof Error
+              ? error.message
+              : provider === 'dingtalk_bind'
+                ? t('pages.personal.profile.dingtalkOauthBindFailed')
+                : t('pages.personal.profile.feishuOauthBindFailed');
+          messageApi.error(errMsg);
+        }
+      } finally {
+        if (!cancelled) {
+          setDingtalkBindLoading(false);
+          setFeishuBindLoading(false);
+          window.history.replaceState({}, '', window.location.pathname);
+        }
+      }
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [messageApi, t]);
 
   const loadProfile = async () => {
     try {
@@ -1164,14 +1350,51 @@ const UserProfilePage: React.FC = () => {
                     brandColor={SOCIAL_BRAND.dingtalk}
                     title={t('pages.personal.profile.dingtalk')}
                     hint={t('pages.personal.profile.dingtalkHint')}
+                    titleExtra={
+                      boundDingtalkId
+                        ? t('pages.personal.profile.dingtalkOauthBound', {
+                            name: boundDingtalkName || boundDingtalkId,
+                          })
+                        : t('pages.personal.profile.dingtalkOauthNotBound')
+                    }
                   >
-                    <Form.Item name="contact_dingtalk" noStyle>
-                      <Input
-                        placeholder={t('pages.personal.profile.dingtalkPlaceholder')}
-                        maxLength={64}
-                        allowClear
-                      />
-                    </Form.Item>
+                    <Space orientation="vertical" size={8} style={{ width: '100%' }}>
+                      <Space wrap size={8}>
+                        {!boundDingtalkId ? (
+                          <Button
+                            type="primary"
+                            loading={dingtalkBindLoading}
+                            onClick={() => void handleOpenDingtalkBind()}
+                          >
+                            {t('pages.personal.profile.dingtalkOauthBindButton')}
+                          </Button>
+                        ) : (
+                          <>
+                            <Button
+                              loading={dingtalkBindLoading}
+                              onClick={() => void handleOpenDingtalkBind()}
+                            >
+                              {t('pages.personal.profile.dingtalkOauthRebindButton')}
+                            </Button>
+                            <Popconfirm
+                              title={t('pages.personal.profile.dingtalkOauthUnbindConfirm')}
+                              onConfirm={() => void handleUnbindDingtalk()}
+                            >
+                              <Button danger loading={dingtalkUnbindLoading}>
+                                {t('pages.personal.profile.dingtalkOauthUnbindButton')}
+                              </Button>
+                            </Popconfirm>
+                          </>
+                        )}
+                      </Space>
+                      <Form.Item name="contact_dingtalk" noStyle>
+                        <Input
+                          placeholder={t('pages.personal.profile.dingtalkPlaceholder')}
+                          maxLength={64}
+                          allowClear
+                        />
+                      </Form.Item>
+                    </Space>
                   </SocialContactCard>
                 </Col>
                 <Col xs={24} md={12}>
@@ -1180,14 +1403,51 @@ const UserProfilePage: React.FC = () => {
                     brandColor={SOCIAL_BRAND.feishu}
                     title={t('pages.personal.profile.feishu')}
                     hint={t('pages.personal.profile.feishuHint')}
+                    titleExtra={
+                      boundFeishuId
+                        ? t('pages.personal.profile.feishuOauthBound', {
+                            name: boundFeishuName || boundFeishuId,
+                          })
+                        : t('pages.personal.profile.feishuOauthNotBound')
+                    }
                   >
-                    <Form.Item name="contact_feishu" noStyle>
-                      <Input
-                        placeholder={t('pages.personal.profile.feishuPlaceholder')}
-                        maxLength={64}
-                        allowClear
-                      />
-                    </Form.Item>
+                    <Space orientation="vertical" size={8} style={{ width: '100%' }}>
+                      <Space wrap size={8}>
+                        {!boundFeishuId ? (
+                          <Button
+                            type="primary"
+                            loading={feishuBindLoading}
+                            onClick={() => void handleOpenFeishuBind()}
+                          >
+                            {t('pages.personal.profile.feishuOauthBindButton')}
+                          </Button>
+                        ) : (
+                          <>
+                            <Button
+                              loading={feishuBindLoading}
+                              onClick={() => void handleOpenFeishuBind()}
+                            >
+                              {t('pages.personal.profile.feishuOauthRebindButton')}
+                            </Button>
+                            <Popconfirm
+                              title={t('pages.personal.profile.feishuOauthUnbindConfirm')}
+                              onConfirm={() => void handleUnbindFeishu()}
+                            >
+                              <Button danger loading={feishuUnbindLoading}>
+                                {t('pages.personal.profile.feishuOauthUnbindButton')}
+                              </Button>
+                            </Popconfirm>
+                          </>
+                        )}
+                      </Space>
+                      <Form.Item name="contact_feishu" noStyle>
+                        <Input
+                          placeholder={t('pages.personal.profile.feishuPlaceholder')}
+                          maxLength={64}
+                          allowClear
+                        />
+                      </Form.Item>
+                    </Space>
                   </SocialContactCard>
                 </Col>
               </Row>

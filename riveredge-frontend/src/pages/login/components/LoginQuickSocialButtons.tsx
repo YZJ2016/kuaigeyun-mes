@@ -7,7 +7,7 @@ import {
   type LoginQuickProvidersMap,
 } from '../../../constants/loginQuickProviders';
 
-type SocialIconKey = 'wechat' | 'qq' | 'qwei' | 'dingtalk' | 'feishu';
+type SocialIconKey = 'gitee' | 'qwei' | 'dingtalk' | 'feishu';
 
 type ProviderConfig = {
   id: LoginQuickProviderId;
@@ -22,24 +22,14 @@ type ProviderConfig = {
 
 const PROVIDERS: ProviderConfig[] = [
   {
-    id: 'wechat',
-    iconKey: 'wechat',
-    className: 'social-login-btn-wechat',
-    labelKey: 'pages.login.wechatLogin',
-    enabledBg: 'rgba(7, 193, 96, 0.7)',
-    enabledBorder: 'rgba(7, 193, 96, 0.7)',
-    hoverBg: '#07C160',
-    hoverBorder: '#07C160',
-  },
-  {
-    id: 'qq',
-    iconKey: 'qq',
-    className: 'social-login-btn-qq',
-    labelKey: 'pages.login.qqLogin',
-    enabledBg: 'rgba(18, 183, 245, 0.7)',
-    enabledBorder: 'rgba(18, 183, 245, 0.7)',
-    hoverBg: '#12B7F5',
-    hoverBorder: '#12B7F5',
+    id: 'gitee',
+    iconKey: 'gitee',
+    className: 'social-login-btn-gitee',
+    labelKey: 'pages.login.giteeLogin',
+    enabledBg: 'rgba(199, 29, 35, 0.75)',
+    enabledBorder: 'rgba(199, 29, 35, 0.75)',
+    hoverBg: '#C71D23',
+    hoverBorder: '#C71D23',
   },
   {
     id: 'wechat_work',

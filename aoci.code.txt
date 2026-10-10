@@ -1048,6 +1048,9 @@ config-center-ops.md[SO2T]: F:config center ops | R:- | A:3 control points | S:c
 848_20261010120000_kuaioa_reward_performance_score.py[PD3T]: F:考勤奖励绩效得分列迁移 | R:- | A:upgrade,downgrade | S:reward表加performance_score
 849_20261010123000_kuaioa_leave_slip_file.py[PD3T]: F:请假条附件文件字段迁移 | R:- | A:upgrade,downgrade | S:leave表加slip文件关联列
 850_20261010124500_platform_settings_search_engine_indexing.py[PD3T]: F:平台设置搜索引擎收录开关迁移 | R:- | A:upgrade,downgrade | S:platform_settings加search_engine_indexing
+851_20261010160000_platform_settings_gitee_oauth.py[PC5T]: F:平台设置表增加 Gitee OAuth Client ID/Secret 列 | R:code:riveredge-backend/src/infra/models/platform_settings.py | A:upgrade,downgrade | S:平台级凭证列；downgrade 删除同名列
+852_20261010183000_platform_settings_wechat_oauth.py[PC4T]: F:曾为平台设置增加微信 OAuth 列的迁移 | R:code:riveredge-backend/migrations/models/853_20261010192000_drop_platform_settings_wechat_oauth.py | A:upgrade,downgrade | S:已被 853 回滚删除；勿再依赖这些列
+853_20261010192000_drop_platform_settings_wechat_oauth.py[PC4T]: F:删除平台设置中微信 OAuth 列 | R:code:riveredge-backend/migrations/models/852_20261010183000_platform_settings_wechat_oauth.py | A:upgrade,downgrade | S:微信快捷登录不走平台设置列
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/scripts/===
 pack_sensitive_words.py[XC3T]: F:敏感词打包脚本 | R:code:riveredge-backend/pyproject.toml | A:lexicon pack | S:gh mirror fallback; 90L
@@ -1151,7 +1154,7 @@ document_reconciliation.py[AE4S]: F:业财单据对账API | R:code:riveredge-bac
 exchange_rates.py[AE6L]: F:汇率设置API | R:code:riveredge-backend/src/apps/kuaicaiwu/api/document_reconciliation.py | A:6 endpoints | S:lookup+CRUD; 297L
 finance_notes.py[AE6L]: F:票据台账API | R:code:riveredge-backend/src/apps/kuaicaiwu/api/finance/sales_invoices.py | A:20 endpoints | S:5 bill types; 282L
 finance_settlement.py[AE5M]: F:往来核销API | R:code:riveredge-backend/src/apps/kuaicaiwu/api/finance_notes.py | A:5 endpoints | S:fx revaluation; 257L
-fixed_assets.py[AE8L]: F:固定资产API | R:code:riveredge-backend/src/apps/kuaicaiwu/api/finance_settlement.py | A:15 endpoints | S:depr reports; 521L
+fixed_assets.py[AE8L]: F:固定资产API含类别资产折旧调整变更处置关账报表 | R:code:riveredge-backend/src/apps/kuaicaiwu/services/fa_category_service.py | A:list_categories,create_asset,preview_depr_run | S:list_categories 可选 ensure_defaults 触发无类别种子；须 kuaicaiwu 模块权限
 gl.py[AE9L]: F:总账API | R:code:riveredge-backend/src/apps/kuaicaiwu/api/fixed_assets.py | A:25 endpoints | S:voucher+coa+period; 1042L
 management_report.py[AE4S]: F:管理会计报表API | R:code:riveredge-backend/src/apps/kuaicaiwu/api/gl.py | A:6 endpoints | S:KPI+WIP; 99L
 prepayments.py[AE3T]: F:预收/预付API | R:code:riveredge-backend/src/apps/kuaicaiwu/api/router.py | A:3 endpoints | S:apply to AR/AP; 98L
@@ -1250,7 +1253,7 @@ document_reconciliation_service.py[AD7L]: F:业财单据对账链路聚合 | R:c
 exchange_rate_service.py[AD6L]: F:汇率CRUD与参考拉取 | R:code:riveredge-backend/src/apps/kuaicaiwu/models/gl_exchange_rate.py, code:riveredge-backend/src/apps/kuaicaiwu/services/gl/settings_service.py | A:ExchangeRateService | S:本位币无汇率行; 参考源cfets/ecb; 6位小数HALF_UP; lookup取最近≤业务日
 fa_asset_import_template.py[AD4S]: F:固定资产导入模板列定义 | R:code:riveredge-backend/src/apps/kuaicaiwu/services/fa_depreciation_methods.py | A:resolve_header_index_map,row_to_create_payload | S:残值率>1自动/100; 状态标签中英映射; 变动方式默认import; 表头须匹配模板
 fa_asset_service.py[AD7L]: F:固定资产卡片CRUD与Excel导入 | R:code:riveredge-backend/src/apps/kuaicaiwu/models/fixed_asset.py, code:riveredge-backend/src/apps/kuaicaiwu/services/fa_core.py | A:FaAssetService | S:折旧参数卡片逐台维护不从类别继承; 工作量法须总工作量>0; 残值率默认5%; 码FAC+日期
-fa_category_service.py[AD5M]: F:固定资产类别CRUD | R:code:riveredge-backend/src/apps/kuaicaiwu/models/fixed_asset.py | A:FaCategoryService | S:类别仅分类用途; 被资产引用不可删; 默认科目1601/1602/6602; 残值率默认0.05
+fa_category_service.py[AD5S]: F:固定资产类别CRUD与默认类别种子 | R:code:riveredge-backend/src/apps/kuaicaiwu/models/fixed_asset.py | A:FaCategoryService,ensure_default_categories | S:仅租户无任何类别时写入 DEFAULT_FA_CATEGORIES；被资产引用不可删；默认科目1601/1602/6602
 fa_change_service.py[AD6M]: F:资产变动与清理服务 | R:code:riveredge-backend/src/apps/kuaicaiwu/models/fixed_asset.py, code:riveredge-backend/src/apps/kuaicaiwu/services/fa_core.py | A:FaChangeService,FaDisposalService | S:变动单draft→confirmed; 已清理资产不可变动; 确认清理发FA_DISPOSAL会计事件
 fa_core.py[AD4M]: F:固定资产通用辅助 | R:code:riveredge-backend/src/apps/kuaicaiwu/services/fa_depreciation_methods.py | A:model_to_dict,generate_daily_code,quantize_money,compute_period_depreciation | S:量化4位HALF_UP; 年数总和按月数向上取整; 工作量法无当期量返回单位折旧额
 fa_depreciation_methods.py[AC2T]: F:固定资产折旧方法码表 | R:- | A:normalize_depreciation_method,depreciation_method_label,is_valid_depreciation_method | S:直线法/双倍/年数总和/工作量/不折旧; 中英码互转
@@ -2839,7 +2842,7 @@ material_code_rules.py[IB5M]: F:物料编码规则配置 API 路由  提供物�
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/core/api/connector_definitions/===
 __init__.py[XC1T]: F:Implements __init__.py | R:- | A:- | S:1L
-connector_definitions.py[IB5S]: F:连接器定义 API 路由  返回预置及可配置的应用连接器定义，供连接器市场展示。 首批仅返回预置连接器，预留从配置/数据库读取自定义连接器的扩展能力。  ... | R:- | A:list_connector_definitions | S:156L
+connector_definitions.py[IB5S]: F:连接器定义 API 返回预置应用连接器清单 | R:code:riveredge-backend/src/core/services/integration/dingtalk_integration.py,code:riveredge-backend/src/core/services/integration/feishu_integration.py | A:list_connector_definitions | S:飞书/钉钉 default_config 字段即 OAuth 凭证键；勿另起平台设置旁路
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/core/api/custom_fields/===
 __init__.py[IB5T]: F:Implements __init__.py | R:- | A:- | S:4L
@@ -3452,7 +3455,7 @@ document_push_silent.py[SB5S]: F:审核动作成功后的无感外推（读绑�
 document_push_slo.py[SB5T]: F:外推 SLO：category × connector_type × target_profile。dry_run 单独计数。 | R:- | A:PushSloBucket,DocumentPushSloRegistry | S:94L
 feishu_im_push_adapter.py[SB5M]: F:飞书 IM 推送适配器：私有协议首个样板（tenant_access_token + 发消息）。  连接器 type=feishu，config 含 ap... | R:- | A:FeishuImPushAdapter | S:218L
 http_webhook_push_adapter.py[SB5S]: F:通用 HTTP Webhook 推送适配器：OA/CRM 首个通道。  对接方式：应用连接器 type=Webhook（或 weaver/seeyon 等... | R:- | A:HttpWebhookPushAdapter | S:166L
-integration_config_service.py[SB5L]: F:集成配置管理服务模块  提供集成配置的 CRUD 操作和连接测试功能。 系统默认数据源（code=system_default）：密码来自环境变量，不可编... | R:- | A:_config_only_user_message,_get_system_default_pg_config,_mask_config_password... | S:1990L
+integration_config_service.py[SB5L]: F:集成配置 CRUD 与各类型连接测试 | R:code:riveredge-backend/src/core/services/integration/dingtalk_integration.py,code:riveredge-backend/src/core/services/integration/feishu_integration.py | A:IntegrationConfigService,_test_feishu_connection,_test_dingtalk_connection | S:飞书测 tenant_access_token/internal；钉钉测 gettoken；勿走 openapi-connector 旧路径
 kingdee_active_scope_filter.py[SB5S]: F:金蝶 ExecuteBillQuery：按单据类型注入「有效主数据 / 未完成单据」FilterString。 | R:- | A:resolve_active_scope_filter,_filter_already_covers,_write_query_back,_strip_k... | S:175L
 kingdee_bill_query_page.py[SB5T]: F:金蝶 ExecuteBillQuery：按 StartRow/Limit 翻页，避免接口 Limit 截断导致主数据不全。 | R:- | A:parse_kingdee_query,is_kingdee_execute_bill_query,resolve_page_size,with_bill... | S:80L
 kingdee_cosmic_api_presets.py[SB5M]: F:金蝶AI苍穹 OpenAPI（kingdee_cosmic）入站常用接口预设。  与金蝶AI星空 WebAPI（ExecuteBillQuery / .k... | R:- | A:KingdeeCosmicApiPreset,_basedata_batch_query_preset,_sys_query_path,build_sys... | S:243L
@@ -3470,6 +3473,11 @@ mobile_jsapi_service.py[SB5M]: F:移动端 H5 容器 JSAPI 签名（企微 / 钉
 wecom_contact_sync_service.py[SB5M]: F:企业微信通讯录同步（部门树 + 成员 → 本系统组织架构 / 用户）。 | R:- | A:_as_int,_safe_phone,_safe_email,WeComContactSyncService | S:359L; 企业微信通讯录同步（部门树 + 成员 → 本系统组织架构 / 用户）。
 wecom_integration.py[SB5S]: F:企业微信连接器公共能力（OAuth / 消息 / 通讯录唯一真源：IntegrationConfig type=wecom）。 | R:- | A:WeComCredentials,get_active_wecom_integration,get_wecom_credentials,fetch_wec... | S:111L
 wecom_oauth_service.py[SB5M]: F:企业微信 OAuth 登录（应用连接器为唯一真源）。 | R:- | A:_extract_wecom_user_id,encode_wecom_oauth_state,decode_wecom_oauth_state,buil... | S:313L; 企业微信 OAuth 登录（应用连接器为唯一真源）。
+dingtalk_integration.py[II4T]: F:钉钉连接器凭证读取 | R:code:riveredge-backend/src/core/services/integration/dingtalk_oauth_service.py | A:get_dingtalk_credentials,DingTalkCredentials | S:唯一真源 IntegrationConfig type=dingtalk；缺 app_key/app_secret 返回 None
+dingtalk_oauth_service.py[II7L]: F:钉钉 OAuth 授权换票绑定与登录解析 | R:code:riveredge-backend/src/core/services/integration/dingtalk_integration.py,code:riveredge-backend/src/infra/api/auth/auth.py | A:build_dingtalk_oauth_authorize_url,resolve_user_for_dingtalk_login,bind_dingtalk_for_current_user | S:凭证只读租户 dingtalk 连接器；contact 键含 dingtalk_/ding_ 双前缀；无连接器 400
+feishu_integration.py[II4T]: F:飞书连接器凭证读取 | R:code:riveredge-backend/src/core/services/integration/feishu_oauth_service.py | A:get_feishu_credentials,FeishuCredentials | S:唯一真源 IntegrationConfig type=feishu；缺 app_id/app_secret 返回 None
+feishu_oauth_service.py[II7L]: F:飞书 OAuth 授权换票绑定与登录解析 | R:code:riveredge-backend/src/core/services/integration/feishu_integration.py,code:riveredge-backend/src/infra/api/auth/auth.py | A:build_feishu_oauth_authorize_url,resolve_user_for_feishu_login,bind_feishu_for_current_user | S:凭证只读租户 feishu 连接器；换票须带 redirect_uri；无连接器 400
+gitee_oauth_service.py[II8L]: F:Gitee OAuth 换票登录绑票与首次建户 | R:code:riveredge-backend/src/infra/models/platform_settings.py,code:riveredge-backend/src/infra/api/auth/auth.py | A:resolve_user_for_gitee_login,provision_user_for_gitee_first_login,encode_gitee_link_ticket,check_user_starred_official_repo | S:凭证仅平台设置；未绑定返回 needs_link+短票含 at；Star API 废弃时勿硬门禁；scope=user_info projects
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/core/services/interfaces/===
 event_system.py[SB5M]: F:层间事件通信系统  提供轻量级的事件驱动通信机制，实现层间解耦合。 各层可以通过事件进行异步通信，而不直接依赖。 | R:- | A:EventPriority,Event,EventBus,subscribe_event,publish_event,SystemEvents | S:257L
@@ -3659,7 +3667,7 @@ ip_parser.py[DB5L]: F:IP地址解析工具模块  提供IP地址地理位置解�
 json_site_timezone.py[DB5T]: F:API JSON 唯一时区出口：datetime → 站点墙钟字符串。  与 BaseSchema.field_serializer / to_api_i... | R:- | A:_parse_leaked_iso_datetime,convert_datetimes_for_api,SiteTimezoneJSONResponse | S:99L
 list_order.py[DB5T]: F:列表默认排序契约（PC / API 缺省时唯一真源）  缺省（未传 order_by / sort）时：按创建时间倒序，新建在上；同秒用 id 倒序稳定。... | R:- | A:resolve_default_list_order_by | S:35L
 login_page_settings.py[DB5T]: F:登录页左栏视觉层配置校验。 | R:- | A:is_login_visual_layer_enabled,validate_login_visual_layers,resolve_login_visu... | S:33L; 登录页左栏视觉层配置校验。
-login_quick_providers.py[DB5T]: F:快捷登录渠道开关（微信 / QQ / 企业微信 / 钉钉 / 飞书）。 | R:- | A:default_login_quick_providers,normalize_login_quick_providers,merge_login_qui... | S:44L; 快捷登录渠道开关（微信 / QQ / 企业微信 / 钉钉 / 飞书）。
+login_quick_providers.py[DB5T]: F:快捷登录渠道开关合并（Gitee/企微/钉钉/飞书） | R:code:riveredge-backend/src/infra/models/platform_settings.py | A:LOGIN_QUICK_PROVIDER_IDS,normalize_login_quick_providers,merge_login_quick_providers | S:顺序即 UI 序且 Gitee 居首；未出现渠道默认开；租户有非空 dict 整对象覆盖平台
 plugin_loader.py[DB5T]: F:插件加载器工具模块  提供插件动态加载和注册功能。 | R:- | A:PluginLoader | S:95L; 插件加载器工具模块  提供插件动态加载和注册功能。
 quantity_precision.py[DB5T]: F:业务数量小数位量化（与配置中心 common.quantity_decimal_places 对齐）。 | R:- | A:quantize_business_quantity | S:24L
 query_optimizer.py[DB5L]: F:查询优化工具模块  提供查询优化的工具函数，包括分页查询优化、查询语句优化等。  Author: Auto (AI Assistant) Date: 20... | R:- | A:QueryOptimizer | S:425L
@@ -3692,7 +3700,7 @@ application_dedicated.py[IB5T]: F:平台专用应用绑定：仅平台超级管�
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/infra/api/auth/===
 __init__.py[IB5T]: F:用户认证 API 模块  提供用户登录、注册、Token 刷新等认证相关的 API 接口 | R:- | A:- | S:10L
-auth.py[IB5L]: F:用户认证 API 路由  提供用户登录、注册、Token 刷新等认证相关的 RESTful API 接口。  Author: Luigi Lu Date:... | R:- | A:RefreshTokenBody,WeComCallbackRequest,WeComAuthorizeUrlResponse,WeComWWLoginC... | S:555L
+auth.py[IB8L]: F:认证 API含企微Gitee钉钉飞书 OAuth 与首次/绑定登录 | R:code:riveredge-backend/src/core/services/integration/gitee_oauth_service.py,code:riveredge-backend/src/core/services/integration/dingtalk_oauth_service.py,code:riveredge-backend/src/core/services/integration/feishu_oauth_service.py | A:gitee_callback,gitee_first_login,gitee_link_login,dingtalk_callback,feishu_callback | S:link-login 须 AuthService 具体类勿 facade；Gitee 未绑返回 needs_link；钉钉飞书凭证取连接器
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/infra/api/business_config/===
 business_config.py[IB5S]: F:业务配置 API 模块  提供业务「参数」配置相关的 API 接口（如 BOM 多版本、销售/采购/财务参数等）。  变更说明（2026 重构）： - 业... | R:- | A:get_config_schema,get_business_config,get_audit_required_map,update_process_p... | S:183L
@@ -3805,7 +3813,7 @@ infra_superadmin.py[PB5S]: F:平台超级管理员模型模块  定义平台超�
 install_registration.py[PB5T]: F:实例安装登记模型  平台级表，记录可选遥测登记（构建来源元数据，不含业务数据）。 | R:- | A:InstallRegistration | S:43L
 official_api_library.py[PB5T]: F:官方接口库模型  平台级表，仅在 kuaigeyun.com 官方 SaaS 落库；私有部署经固定地址拉取/提交。 | R:- | A:OfficialApiLibraryPack | S:41L
 package.py[PB5T]: F:套餐模型模块  定义套餐数据模型，用于套餐管理 | R:- | A:Package | S:69L; 套餐模型模块  定义套餐数据模型，用于套餐管理
-platform_settings.py[PB5M]: F:平台设置模型模块  定义平台设置数据模型，用于存储平台级配置信息。  Author: Auto (AI Assistant) Date: 2026-01-06 | R:- | A:PlatformSettings | S:234L
+platform_settings.py[PB5M]: F:平台设置模型含 Gitee OAuth 凭证与快捷登录开关 | R:code:riveredge-backend/migrations/models/851_20261010160000_platform_settings_gitee_oauth.py | A:PlatformSettings | S:gitee_oauth_client_* 平台级；勿对公开接口下发 secret；无微信 OAuth 列
 saved_search.py[PB5T]: F:保存搜索条件模型模块  定义保存搜索条件数据模型，用于存储用户保存的搜索条件 | R:- | A:SavedSearch | S:61L; 保存搜索条件模型模块  定义保存搜索条件数据模型，用于存储用户保存的搜索条件
 sensitive_word_control.py[PB5T]: F:敏感词黑名单、违规日志与组织级敏感词放行。 | R:- | A:SensitiveWordViolation,SensitiveWordBan,TenantSensitiveWordAllowlist | S:56L; 敏感词黑名单、违规日志与组织级敏感词放行。
 tenant.py[PB5S]: F:组织模型模块  定义组织数据模型，用于多组织系统的组织管理 | R:- | A:TenantStatus,TenantPlan,tenant_plan_sort_rank,Tenant | S:144L; 组织模型模块  定义组织数据模型，用于多组织系统的组织管理
@@ -3824,7 +3832,7 @@ infra_superadmin.py[DB5S]: F:平台超级管理员 Schema 模块  定义平台�
 init_wizard.py[DB5S]: F:初始化向导 Schema 模块  定义初始化向导相关的 Pydantic Schema，用于数据验证和序列化。  Author: Luigi Lu Dat... | R:- | A:InitStepConfig,InitWizardStepResponse,InitStepsResponse,Step1OrganizationInfo... | S:106L
 license_center.py[DB5T]: F:许可证中心 Schema。  用于平台级 License Key 管理（只保存摘要，不保存明文）。 | R:- | A:PlatformLicenseCreateRequest,PlatformLicenseResponse,PlatformLicenseGenerateR... | S:40L
 package.py[DB5S]: F:套餐管理 Schema 模块  定义套餐相关的 Pydantic Schema，用于 API 请求和响应的数据验证 | R:- | A:PackageBase,PackageCreate,PackageUpdate,PackageResponse,PackageListResponse | S:113L
-platform_settings.py[DB5S]: F:平台设置数据验证Schema模块  提供平台设置相关的数据验证和序列化。  Author: Auto (AI Assistant) Date: 2026-... | R:- | A:PlatformSettingsBase,PlatformSettingsCreate,PlatformSettingsUpdate,PlatformSe... | S:140L
+platform_settings.py[DB5S]: F:平台设置 Schema 含 Gitee OAuth 与配置态布尔 | R:code:riveredge-backend/src/infra/models/platform_settings.py | A:PlatformSettingsUpdate,PlatformSettingsResponse | S:响应用 gitee_oauth_client_secret_configured 不回传明文 secret
 saved_search.py[DB5T]: F:保存搜索条件 Schema 模块  定义保存搜索条件相关的 Pydantic Schema，用于 API 请求和响应的数据验证 | R:- | A:SavedSearchBase,SavedSearchCreate,SavedSearchUpdate,SavedSearchResponse,Saved... | S:95L
 sensitive_word_blacklist.py[DB5T]: F:敏感词黑名单 API 模型。 | R:- | A:SensitiveWordBlacklistMetaResponse,SensitiveWordBanItem,SensitiveWordBanListR... | S:57L; 敏感词黑名单 API 模型。
 tenant.py[DB5M]: F:组织 Schema 模块  定义组织相关的 Pydantic Schema，用于 API 请求和响应的数据验证 | R:- | A:TenantBase,TenantAdminAccountCreate,TenantCreate,TenantUpdate,TenantResponse,... | S:345L
@@ -3845,7 +3853,7 @@ license_center_service.py[SB5M]: F:平台许可证中心服务。  提供平台�
 login_brute_force_guard.py[SB5T]: F:登录防暴力破解守卫  PG Cache（CacheEntry）为跨进程失败计数与锁定真源；禁止进程内 limiter 或前端长按冒充防护。 | R:- | A:normalize_login_identity,_retry_minutes,_fail_key,_lock_key,LoginBruteForceGuard | S:96L
 official_api_library_service.py[SB5L]: F:官方接口库服务  - 官方 SaaS（INSTALL_REPO_SUMMARY_ADMIN_ENABLED）：直接读写本地表 - 其它部署：经 platf... | R:- | A:_slugify_pack_id,_strip_sensitive_headers,normalize_official_api_item,pack_to... | S:470L
 package_service.py[SB5M]: F:套餐服务模块  提供套餐的 CRUD 操作和业务逻辑处理 | R:- | A:PackageService | S:314L; 套餐服务模块  提供套餐的 CRUD 操作和业务逻辑处理
-platform_settings_service.py[SB5M]: F:平台设置服务模块  提供平台设置相关的业务逻辑处理。  Author: Auto (AI Assistant) Date: 2026-01-06 | R:- | A:PlatformSettingsService | S:213L
+platform_settings_service.py[SB5M]: F:平台设置读写并遮蔽 Gitee Client Secret | R:code:riveredge-backend/src/infra/models/platform_settings.py,code:riveredge-backend/src/infra/schemas/platform_settings.py | A:PlatformSettingsService | S:读出 pop secret 改 configured 布尔；空串更新不覆盖已有 secret
 saved_search_service.py[SB5M]: F:保存搜索条件服务模块  提供保存搜索条件的 CRUD 操作和业务逻辑处理 | R:- | A:SavedSearchService | S:207L; 保存搜索条件服务模块  提供保存搜索条件的 CRUD 操作和业务逻辑处理
 sensitive_word_blacklist_service.py[SB5M]: F:敏感词黑名单与组织级放行服务。 | R:- | A:_truncate_snippet,SensitiveWordBlacklistService | S:285L; 敏感词黑名单与组织级放行服务。
 service_registry.py[SB5S]: F:平台级服务注册表  为平台级服务提供统一的管理机制，与系统级服务注册表分离。  Author: Luigi Lu Date: 2025-12-27 | R:- | A:InfraServiceRegistry,InfraServiceLocator,ServiceNotFoundError | S:179L
@@ -3992,7 +4000,7 @@ uni-table-selection.mjs[OU5S]: F:/** * Real-browser regression for UniTable's co
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/===
 app.tsx[EU5L]: F:使用 routes 中的路由配置 | R:- | A:- | S:932L; 使用 routes 中的路由配置
 first-paint.css[DU5T]: F:html, body { margin: 0; padding: 0; height: 100%; box-sizing: border-box; } * { | R:- | A:- | S:17L
-global.less[DU5L]: F:/** * RiverEdge SaaS 多组织框架 - 全局样式 * * 只保留必要的全局样式，尽量使用 Ant Design 原生样式 */ :roo... | R:- | A:- | S:4193L
+global.less[DU5L]: F:全局样式与登录社交按钮等覆盖 | R:- | A:- | S:登录页局部样式优先 pages/login/index.less；禁止左侧装饰色条
 index.html[DU5M]: F:<!doctype html> <html lang="zh-CN"> <head> <meta charset="UTF-8" /> <link rel... | R:- | A:- | S:209L
 initSpinIndicator.tsx[EU5T]: F:Implements initSpinIndicator.tsx | R:- | A:- | S:8L
 login-shell.css[DU5T]: F:html, body { margin: 0; padding: 0; height: 100%; box-sizing: border-box; } *, | R:- | A:- | S:17L
@@ -4217,10 +4225,10 @@ FinanceRefundVoucherPage.tsx[EU5L]: F:有 RemainderFlex：主标识叠列 KeepWi
 FinanceVoucherDetailDrawer.tsx[EU5M]: F:Implements FinanceVoucherDetailDrawer.tsx | R:- | A:- | S:329L
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/apps/kuaicaiwu/pages/fixed-assets/assets/===
-FaAssetFormModal.tsx[EU5L]: F:Implements FaAssetFormModal.tsx | R:- | A:- | S:506L
+FaAssetFormModal.tsx[EU6L]: F:固定资产新建编辑弹窗含类别快捷新建 | R:code:riveredge-frontend/src/apps/kuaicaiwu/services/fixed-assets/index.ts | A:FaAssetFormModal | S:表单内可 createCategory 后刷新类别；折旧预览用 faAssetFormUtils；grid 手写 Row/Col
 faAssetFormUtils.ts[EU5S]: F:Implements faAssetFormUtils.ts | R:- | A:- | S:164L
 faAssetImportTemplate.ts[EU5M]: F:Implements faAssetImportTemplate.ts | R:- | A:- | S:202L
-index.tsx[EU5M]: F:Implements index.tsx | R:- | A:- | S:307L
+index.tsx[EU6M]: F:固定资产台账列表导入导出与表单 | R:code:riveredge-frontend/src/apps/kuaicaiwu/pages/fixed-assets/assets/FaAssetFormModal.tsx,code:riveredge-frontend/src/apps/kuaicaiwu/services/fixed-assets/index.ts | A:FaAssetsPage | S:loadCategories 传 ensure_defaults=true；行缓存仅 onTableDataChange 勿在 request 写
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/apps/kuaicaiwu/pages/fixed-assets/changes/===
 index.tsx[EU5S]: F:Implements index.tsx | R:- | A:- | S:186L
@@ -4235,7 +4243,7 @@ index.tsx[EU5M]: F:Implements index.tsx | R:- | A:- | S:229L
 index.tsx[EU5S]: F:Implements index.tsx | R:- | A:- | S:181L
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/apps/kuaicaiwu/pages/fixed-assets/masters/===
-index.tsx[EU5S]: F:Implements index.tsx | R:- | A:- | S:187L
+index.tsx[EU5S]: F:固定资产类别主数据列表与弹窗 | R:code:riveredge-frontend/src/apps/kuaicaiwu/services/fixed-assets/index.ts | A:FaMastersPage | S:资源码 kuaicaiwu:fixed-asset；启用用 MarkerTag filled
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/apps/kuaicaiwu/pages/fixed-assets/period-close/===
 index.tsx[EU5M]: F:Implements index.tsx | R:- | A:- | S:243L
@@ -4316,7 +4324,7 @@ sales-invoice.ts[EU5T]: F:Implements sales-invoice.ts | R:- | A:- | S:68L
 settlement.ts[EU5T]: F:Implements settlement.ts | R:- | A:- | S:78L
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/apps/kuaicaiwu/services/fixed-assets/===
-index.ts[EU5S]: F:Implements index.ts | R:- | A:- | S:177L
+index.ts[EU5S]: F:固定资产前端 API 封装 | R:code:riveredge-backend/src/apps/kuaicaiwu/api/fixed_assets.py | A:fixedAssetService,listCategories,createCategory | S:listCategories 支持 ensure_defaults 查询参数
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/apps/kuaicaiwu/services/gl/===
 index.ts[EU5M]: F:Implements index.ts | R:- | A:- | S:365L
@@ -6471,6 +6479,7 @@ feishu.svg[DU5T]: F:<?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-
 qq.svg[DU5T]: F:<?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.... | R:- | A:- | S:1L
 qwei.svg[DU5T]: F:<?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.... | R:- | A:- | S:1L
 wechat.svg[DU5T]: F:<?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.... | R:- | A:- | S:1L
+gitee.svg[FU3T]: F:Gitee 社交登录图标 SVG | R:code:riveredge-frontend/src/pages/login/components/LoginQuickSocialButtons.tsx | A:- | S:-
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/components/EnhancedHelpSystem/===
 index.tsx[EU5M]: F:根据帮助类型过滤 | R:- | A:- | S:302L; 根据帮助类型过滤
@@ -6760,12 +6769,12 @@ LoginBackgroundSettingsBlock.tsx[EU5S]: F:Implements LoginBackgroundSettingsBloc
 LoginDecorationSettingsBlock.tsx[EU5S]: F:Implements LoginDecorationSettingsBlock.tsx | R:- | A:- | S:115L
 LoginDescriptionContent.tsx[EU5T]: F:Implements LoginDescriptionContent.tsx | R:- | A:- | S:42L
 LoginDomainSettingsBlock.tsx[EU5S]: F:Implements LoginDomainSettingsBlock.tsx | R:- | A:- | S:105L
-LoginFeatureSwitchesBlock.tsx[EU5T]: F:Implements LoginFeatureSwitchesBlock.tsx | R:- | A:- | S:46L
+LoginFeatureSwitchesBlock.tsx[EU4T]: F:登录页编辑器功能开关区块 | R:code:riveredge-frontend/src/components/login-page-editor/LoginQuickProvidersSwitchesRow.tsx | A:LoginFeatureSwitchesBlock | S:快捷登录开关行嵌套本块；勿硬编码渠道列表
 LoginLeftColumnPreview.tsx[EU5M]: F:Implements LoginLeftColumnPreview.tsx | R:- | A:- | S:206L
 LoginLocaleSettingsFields.tsx[EU5S]: F:Implements LoginLocaleSettingsFields.tsx | R:- | A:- | S:102L
 LoginLogoSettingsBlock.tsx[EU5T]: F:Implements LoginLogoSettingsBlock.tsx | R:- | A:- | S:94L
 LoginPageEditorSplitPanel.tsx[EU5T]: F:Implements LoginPageEditorSplitPanel.tsx | R:- | A:- | S:21L
-LoginQuickProvidersSwitchesRow.tsx[EU5T]: F:Implements LoginQuickProvidersSwitchesRow.tsx | R:- | A:- | S:39L
+LoginQuickProvidersSwitchesRow.tsx[EU4T]: F:快捷登录分渠道开关行 | R:code:riveredge-frontend/src/constants/loginQuickProviders.ts | A:LoginQuickProvidersSwitchesRow | S:渠道序与 id 只读 loginQuickProviders 常量
 LoginRichTextEditor.tsx[EU5T]: F:Implements LoginRichTextEditor.tsx | R:- | A:- | S:80L
 index.ts[EU5T]: F:Implements index.ts | R:- | A:- | S:19L
 login-page-editor.less[DU5L]: F:.login-rich-text-editor-label-row { display: inline-flex; align-items: center... | R:- | A:- | S:503L
@@ -7294,7 +7303,7 @@ copyrightContent.ts[EU5T]: F:Implements copyrightContent.ts | R:- | A:- | S:5L
 documentStatusColors.ts[EU5M]: F:—— draft —— | R:- | A:- | S:279L; —— draft ——
 fieldPermissionResources.ts[EU5T]: F:Implements fieldPermissionResources.ts | R:- | A:- | S:20L
 fonts.ts[EU5T]: F:Implements fonts.ts | R:- | A:- | S:94L
-loginQuickProviders.ts[EU5T]: F:Implements loginQuickProviders.ts | R:- | A:- | S:43L
+loginQuickProviders.ts[FU5T]: F:前端快捷登录渠道 id 与展示序 | R:code:riveredge-backend/src/core/utils/login_quick_providers.py | A:LOGIN_QUICK_PROVIDER_IDS | S:须与后端 LOGIN_QUICK_PROVIDER_IDS 一致；Gitee 居首无个人微信
 siteAssets.ts[EU5T]: F:Implements siteAssets.ts | R:- | A:- | S:31L
 statusBadges.ts[EU5T]: F:Implements statusBadges.ts | R:- | A:- | S:73L
 version.ts[EU5T]: F:Implements version.ts | R:- | A:- | S:2L
@@ -7375,7 +7384,7 @@ en-US.login.ts[EU5S]: F:多组织选择弹窗（TenantSelectionModal，与 zh-CN
 ja-JP.login.ts[EU5S]: F:多组织选择弹窗（TenantSelectionModal，与 zh-CN.ts 保持一致） | R:- | A:- | S:192L
 lo-LA.login.ts[EU5S]: F:多组织选择弹窗（TenantSelectionModal，与 zh-CN.ts 保持一致） | R:- | A:- | S:192L
 vi-VN.login.ts[EU5S]: F:多组织选择弹窗（TenantSelectionModal，与 zh-CN.ts 保持一致） | R:- | A:- | S:192L
-zh-CN.login.ts[EU5M]: F:手机号后四位核验（与 zh-CN.ts 保持一致） | R:- | A:- | S:207L; 手机号后四位核验（与 zh-CN.ts 保持一致）
+zh-CN.login.ts[EU5M]: F:登录页独立语言包含 Gitee 首次绑定文案 | R:code:riveredge-frontend/src/pages/login/index.tsx | A:- | S:与 zh-CN.ts 登录相关 key 保持一致；勿写间隔号分隔
 zh-Hant.login.ts[EU5S]: F:多组织选择弹窗（TenantSelectionModal，与 zh-CN.ts 保持一致） | R:- | A:- | S:192L
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/locales/generated/codeRulePage/===
@@ -7444,7 +7453,7 @@ build-provenance-summary.tsx[EU5T]: F:Implements build-provenance-summary.tsx | 
 index.tsx[EU5S]: F:Implements index.tsx | R:- | A:- | S:133L
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/pages/infra/admin/settings/===
-index.tsx[EU5L]: F:LOGO上传相关状态 | R:- | A:- | S:1005L; LOGO上传相关状态
+index.tsx[EU6L]: F:平台管理设置页含 Gitee OAuth 凭证表单 | R:code:riveredge-frontend/src/services/platformSettings.ts | A:- | S:secret 空串不提交覆盖；展示 configured 布尔非明文
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/pages/infra/client-releases/===
 ClientMiniprogramQrModal.tsx[EU5S]: F:Implements ClientMiniprogramQrModal.tsx | R:- | A:- | S:195L
@@ -7504,11 +7513,11 @@ index.tsx[EU5L]: F:固定主题颜色（不受全局主题影响） | R:- | A:- 
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/pages/login/===
 RegisterDrawer.tsx[EU5L]: F:Implements RegisterDrawer.tsx | R:- | A:- | S:416L
-index.less[DU5L]: F:/* 登录页面样式 */ .login-container { display: flex; min-height: 100vh; /* 背景色通过内联样... | R:- | A:- | S:714L
-index.tsx[EU5L]: F:直连文件，避免 barrel 连带 login-page-editor 其它重模块（如 ReactQuill） | R:- | A:- | S:2581L
+index.less[DU5L]: F:登录页样式含 Gitee 绑票面板 | R:code:riveredge-frontend/src/pages/login/index.tsx | A:- | S:Star 引导区无左侧色条；避免 hover 闪烁靠稳定 class
+index.tsx[EU8L]: F:登录页含 Gitee needs_link 首次/绑定双路径 | R:code:riveredge-frontend/src/services/publicAuth.ts,code:riveredge-frontend/src/utils/giteeAuth.ts | A:- | S:未绑弹窗 Segmented 首次登录无密码与绑定已有账户；Star 仅引导开仓勿硬门禁
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/pages/login/components/===
-LoginQuickSocialButtons.tsx[EU5S]: F:Implements LoginQuickSocialButtons.tsx | R:- | A:- | S:157L
+LoginQuickSocialButtons.tsx[EU6S]: F:登录页快捷社交按钮含 Gitee/钉钉/飞书/企微 | R:code:riveredge-frontend/src/utils/giteeAuth.ts,code:riveredge-frontend/src/constants/loginQuickProviders.ts | A:LoginQuickSocialButtons | S:仅渲染已启用渠道；跳转各 *Auth 工具函数
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/pages/personal/messages/===
 card-view.tsx[EU5L]: F:如果是未读消息，自动标记为已读 | R:- | A:- | S:517L; 如果是未读消息，自动标记为已读
@@ -7521,7 +7530,7 @@ index.tsx[EU5L]: F:如果加载失败，使用默认语言列表 | R:- | A:- | S
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/pages/personal/profile/===
 ProfileNotionistsAvatar.tsx[EU5T]: F:Implements ProfileNotionistsAvatar.tsx | R:- | A:- | S:69L
-index.tsx[EU5L]: F:... (other imports) | R:- | A:- | S:1312L; ... (other imports)
+index.tsx[EU7L]: F:个人中心资料页含第三方账号绑定解绑 | R:code:riveredge-frontend/src/services/userProfile.ts,code:riveredge-frontend/src/utils/giteeAuth.ts | A:- | S:Gitee/钉钉/飞书/企微绑定走 OAuth 回调再调 bind API
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/pages/personal/tasks/===
 index.tsx[EU5L]: F:重新加载数据 | R:- | A:- | S:725L; 重新加载数据
@@ -7553,10 +7562,10 @@ index.tsx[EU5L]: F:Modal 相关状态（创建/编辑接口） | R:- | A:- | S:9
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/pages/system/application-connections/===
 AppConnectorMarket.tsx[EU5L]: F:旧版多 Tab 入口若仍传 erp_*，收拢到 ERP | R:- | A:- | S:403L; 旧版多 Tab 入口若仍传 erp_*，收拢到 ERP
-connectors.tsx[EU5L]: F:金蝶 | R:- | A:- | S:1132L; 金蝶
+connectors.tsx[EU5L]: F:连接器类型元数据含钉钉飞书字段说明 | R:code:riveredge-frontend/src/pages/system/application-connections/list/index.tsx | A:- | S:钉钉飞书 OAuth 凭证键与后端 connector_definitions 对齐
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/pages/system/application-connections/list/===
-index.tsx[EU5L]: F:脱敏占位勿回填进表单，否则保存会把 **** 当真实密钥 | R:- | A:- | S:1871L; 脱敏占位勿回填进表单，否则保存会把 **** 当真实密钥
+index.tsx[EU6L]: F:应用连接列表配置弹窗与脱敏保存 | R:code:riveredge-backend/src/core/api/connector_definitions/connector_definitions.py | A:- | S:脱敏占位勿回填否则保存会把掩码当密钥；Alert 须 FormModalGridBlock
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/pages/system/applications/===
 industryAppCatalog.ts[EU5S]: F:Implements industryAppCatalog.ts | R:- | A:- | S:105L
@@ -7597,7 +7606,7 @@ index.tsx[EU5L]: F:去重，获取所有唯一的表名 | R:- | A:- | S:1601L; �
 DashboardCalendarWeatherClock.tsx[EU5M]: F:Implements DashboardCalendarWeatherClock.tsx | R:- | A:- | S:230L
 DashboardKpiPanel.tsx[EU5M]: F:Implements DashboardKpiPanel.tsx | R:- | A:- | S:250L
 DashboardKpiRichCard.tsx[EU5M]: F:Implements DashboardKpiRichCard.tsx | R:- | A:- | S:276L
-DashboardOperationCardsPanel.tsx[EU5S]: F:Implements DashboardOperationCardsPanel.tsx | R:- | A:- | S:139L
+DashboardOperationCardsPanel.tsx[EU5S]: F:工作台运营卡片含更新日志入口 | R:code:riveredge-frontend/src/pages/system/dashboard/platformUpdateLog.ts | A:DashboardOperationCardsPanel | S:-
 DashboardSectionCard.tsx[EU5T]: F:Implements DashboardSectionCard.tsx | R:- | A:- | S:77L
 DashboardUpdateLogModal.tsx[EU5L]: F:Implements DashboardUpdateLogModal.tsx | R:- | A:- | S:992L
 DashboardUsageTipsCarousel.tsx[EU5S]: F:Implements DashboardUsageTipsCarousel.tsx | R:- | A:- | S:127L
@@ -7610,7 +7619,7 @@ analysis.tsx[EU5T]: F:Implements analysis.tsx | R:- | A:- | S:1L
 dashboardCardSurface.ts[EU5T]: F:Implements dashboardCardSurface.ts | R:- | A:- | S:10L
 dashboardTopBarTheme.ts[EU5T]: F:Implements dashboardTopBarTheme.ts | R:- | A:- | S:39L
 index.tsx[EU5L]: F:克制色：浅底 + 同系文字，避免高饱和色块 | R:- | A:- | S:980L; 克制色：浅底 + 同系文字，避免高饱和色块
-platformUpdateLog.ts[FD5L]: F:工作台通用更新目录合并定制日志并筛选 | R:code:riveredge-frontend/src/pages/system/dashboard/platformUpdateLogDedicated.ts | A:PLATFORM_UPDATE_LOG_GENERAL,getRecentPlatformUpdates | S:用户可见改动插GENERAL头部；须同步zh-CN键
+platformUpdateLog.ts[FD5L]: F:工作台通用更新目录合并定制日志并筛选 | R:code:riveredge-frontend/src/pages/system/dashboard/platformUpdateLogDedicated.ts | A:PLATFORM_UPDATE_LOG_GENERAL,getRecentPlatformUpdates | S:用户可见改动插 GENERAL 头部；须同步 zh-CN entries 键；勿写客户公司名
 platformUpdateLogDedicated.ts[EU5L]: F:Implements platformUpdateLogDedicated.ts | R:- | A:- | S:1076行;与源码摘要对齐
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/pages/system/dashboard/analysis/===
@@ -7862,7 +7871,7 @@ applicationDedicatedBindings.ts[EU5T]: F:Implements applicationDedicatedBindings
 approvalInstance.ts[EU5M]: F:Implements approvalInstance.ts | R:- | A:- | S:229L
 approvalProcess.ts[EU5S]: F:Implements approvalProcess.ts | R:- | A:- | S:106L
 auditBinding.ts[EU5T]: F:Implements auditBinding.ts | R:- | A:- | S:53L
-auth.ts[EU5M]: F:导出类型别名，便于在其他地方使用 | R:- | A:- | S:202L; 导出类型别名，便于在其他地方使用
+auth.ts[EI5M]: F:已登录会话认证 API 封装 | R:code:riveredge-frontend/src/services/publicAuth.ts | A:- | S:公开 OAuth 回调走 publicAuth；本文件仅需登录态接口
 businessBoardTitle.ts[EU5T]: F:Implements businessBoardTitle.ts | R:- | A:- | S:31L
 businessConfig.ts[EU5M]: F:Implements businessConfig.ts | R:- | A:- | S:254L
 clientRelease.ts[EU5L]: F:未部署 /downloads 或暂不可用时走 by-app 聚合 | R:- | A:- | S:401L; 未部署 /downloads 或暂不可用时走 by-app 聚合
@@ -7915,12 +7924,12 @@ operationLog.ts[EU5T]: F:Implements operationLog.ts | R:- | A:- | S:82L
 optimizationSuggestion.ts[EU5T]: F:Implements optimizationSuggestion.ts | R:- | A:- | S:83L
 permission.ts[EU5T]: F:Implements permission.ts | R:- | A:- | S:77L
 permissionPolicy.ts[EU5T]: F:Implements permissionPolicy.ts | R:- | A:- | S:6L
-platformSettings.ts[EU5M]: F:仅用于前端兜底（后端不可用时），避免生产每次刷新都动态变化 | R:- | A:- | S:299L; 仅用于前端兜底（后端不可用时），避免生产每次刷新都动态变化
+platformSettings.ts[EU5M]: F:平台设置前端 API 含 Gitee OAuth 字段 | R:code:riveredge-backend/src/infra/schemas/platform_settings.py | A:- | S:类型含 gitee_oauth_client_secret_configured；空 secret 勿当清空提交
 position.ts[EU5S]: F:Implements position.ts | R:- | A:- | S:170L
 printDevice.ts[EU5S]: F:Implements printDevice.ts | R:- | A:- | S:140L
 printTemplate.ts[EU5M]: F:Implements printTemplate.ts | R:- | A:- | S:200L
 privateFileVault.ts[EU5T]: F:Implements privateFileVault.ts | R:- | A:- | S:96L
-publicAuth.ts[EU5M]: F:Implements publicAuth.ts | R:- | A:- | S:226L
+publicAuth.ts[EI7M]: F:公开认证 API 含 Gitee/钉钉/飞书授权与绑票 | R:code:riveredge-backend/src/infra/api/auth/auth.py | A:giteeLoginCallback,giteeFirstLogin,giteeLinkLogin,getDingtalkAuthorizeUrl,getFeishuAuthorizeUrl | S:gitee callback 可返回 needs_link；first/link 分路径；无鉴权 publicRequest
 publicPlatformSettings.ts[EU5T]: F:Implements publicPlatformSettings.ts | R:- | A:- | S:67L
 qrcode.ts[EU5M]: F:Implements qrcode.ts | R:- | A:- | S:232L
 realtime.ts[EU5T]: F:Implements realtime.ts | R:- | A:- | S:50L
@@ -7941,7 +7950,7 @@ usageAnalysis.ts[EU5S]: F:Implements usageAnalysis.ts | R:- | A:- | S:189L
 user.ts[EU5L]: F:使用 apiRequest 统一处理 HTTP 请求 | R:- | A:- | S:566L; 使用 apiRequest 统一处理 HTTP 请求
 userMessage.ts[EU5T]: F:Implements userMessage.ts | R:- | A:- | S:88L
 userPreference.ts[EU5T]: F:Implements userPreference.ts | R:- | A:- | S:39L
-userProfile.ts[EU5T]: F:Implements userProfile.ts | R:- | A:- | S:94L
+userProfile.ts[EU5T]: F:个人资料与第三方绑定 API | R:code:riveredge-frontend/src/pages/personal/profile/index.tsx | A:- | S:含 Gitee/钉钉/飞书 bind/unbind 端点封装
 userTask.ts[EU5S]: F:Implements userTask.ts | R:- | A:- | S:116L
 weather.ts[EU5L]: F:静默失败 | R:- | A:- | S:471L; 静默失败
 
@@ -8128,10 +8137,13 @@ uiEnhancement.tsx[EU5M]: F:这里可以添加主题应用逻辑 | R:- | A:- | S:
 uniTableLayoutColumns.ts[EU5M]: F:slots=0 → 仅「更多」钮量级 + 内边距，约 86px，与状态徽章列同量级 | R:- | A:- | S:395L
 userDisplay.ts[EU5M]: F:业务选人优先走展示 API（带 host_resource）；目录读仅用于人员管理页。 | R:- | A:- | S:230L
 webauthn.ts[EU5S]: F:Implements webauthn.ts | R:- | A:- | S:101L
-wecomAuth.ts[EU5T]: F:Implements wecomAuth.ts | R:- | A:- | S:51L
+wecomAuth.ts[EI4T]: F:企业微信 OAuth state session 存取与解码 | R:code:riveredge-frontend/src/utils/giteeAuth.ts | A:saveWecomOAuthState,consumeWecomOAuthState,decodeWecomOAuthState | S:与其它 *Auth 工具同形；勿混用 storage key
 yieldToMain.ts[EU5T]: F:Implements yieldToMain.ts | R:- | A:- | S:17L
 dedicatedHostPathMap.ts[KB3T]: F:Implements dedicatedHostPathMap.ts | R:- | A:hostMenuPathToDedicatedRest,dedicatedRestToHostAppPageDir | S:Implements dedicatedHostPathMap.ts
 searchEngineIndexing.ts[EU4T]: F:按平台设置同步页面meta robots | R:- | A:applySearchEngineIndexing | S:enabled为false写noindex;缺省允许收录
+dingtalkAuth.ts[EI4T]: F:钉钉 OAuth state session 存取与解码 | R:code:riveredge-backend/src/core/services/integration/dingtalk_oauth_service.py | A:saveDingtalkOAuthState,consumeDingtalkOAuthState,decodeDingtalkOAuthState | S:payload 键 t/u/r 与后端 encode 对齐；consume 一次性
+feishuAuth.ts[EI4T]: F:飞书 OAuth state session 存取与解码 | R:code:riveredge-backend/src/core/services/integration/feishu_oauth_service.py | A:saveFeishuOAuthState,consumeFeishuOAuthState,decodeFeishuOAuthState | S:payload 键 t/u/r 与后端 encode 对齐；consume 一次性
+giteeAuth.ts[EI4T]: F:Gitee OAuth state session 存取与解码 | R:code:riveredge-backend/src/core/services/integration/gitee_oauth_service.py | A:saveGiteeOAuthState,peekGiteeOAuthState,consumeGiteeOAuthState,decodeGiteeOAuthState | S:Gitee 可能丢 redirect_uri 上 provider 时用 peek；consume 一次性
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/utils/generated/===
 codeRulePageRegistry.ts[EU5T]: F:Implements codeRulePageRegistry.ts | R:- | A:- | S:7L

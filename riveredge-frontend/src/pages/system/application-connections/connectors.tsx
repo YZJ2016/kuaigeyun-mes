@@ -190,7 +190,7 @@ export const APP_CONNECTOR_DEFINITIONS: AppConnectorDefinition[] = [
     name: '钉钉',
     type: 'dingtalk',
     category: 'collaboration',
-    description: '钉钉企业内部应用',
+    description: '钉钉企业内部应用（Client ID / Client Secret）',
     icon: <MessageOutlined />,
     defaultConfig: { corpid: '', agent_id: '', app_key: '', app_secret: '', aes_key: '', token: '' },
   },

@@ -133,6 +133,8 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
         login_client_android_enabled: data.login_client_android_enabled ?? true,
         login_quick_enabled: data.login_quick_enabled ?? true,
         login_quick_providers: resolveLoginQuickProviders(data.login_quick_providers),
+        gitee_oauth_client_id: data.gitee_oauth_client_id || undefined,
+        gitee_oauth_client_secret: undefined,
         enable_register: data.enable_register ?? true,
       });
       queryClient.setQueryData(['platformSettings'], data);
@@ -338,6 +340,8 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
         login_client_android_enabled: settings.login_client_android_enabled ?? true,
         login_quick_enabled: settings.login_quick_enabled ?? true,
         login_quick_providers: resolveLoginQuickProviders(settings.login_quick_providers),
+        gitee_oauth_client_id: settings.gitee_oauth_client_id || undefined,
+        gitee_oauth_client_secret: undefined,
         enable_register: settings.enable_register !== false,
       });
       
@@ -988,7 +992,10 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
                       />
                     </Col>
                     <Col span={24}>
-                      <LoginFeatureSwitchesBlock />
+                      <LoginFeatureSwitchesBlock
+                        showGiteeOauthCredentials
+                        giteeSecretConfigured={Boolean(settings?.gitee_oauth_client_secret_configured)}
+                      />
                     </Col>
                   </Row>
                 </Card>

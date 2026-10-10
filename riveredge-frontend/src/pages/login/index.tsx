@@ -6,7 +6,7 @@
  * 右侧：登录表单区
  */
 
-import { Form, Input, App, Typography, Button, Space, Tooltip, ConfigProvider, Modal, AutoComplete } from 'antd';
+import { Form, Input, App, Typography, Button, Space, Tooltip, ConfigProvider, Modal, AutoComplete, Avatar, Row, Col, Segmented } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -18,6 +18,8 @@ import {
   AndroidFilled,
   DownloadOutlined,
   AppstoreOutlined,
+  StarOutlined,
+  StarFilled,
 } from '@ant-design/icons';
 import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
 import { WecomWWLoginPanel } from '../../components/WecomWWLoginPanel';
@@ -30,15 +32,23 @@ import {
   searchTenants,
   login,
   guestLogin,
-  wechatLoginCallback,
   getWecomAuthorizeUrl,
   getWecomWWLoginConfig,
   wecomLoginCallback,
+  getGiteeAuthorizeUrl,
+  giteeLoginCallback,
+  giteeFirstLogin,
+  giteeLinkLogin,
+  getDingtalkAuthorizeUrl,
+  dingtalkLoginCallback,
+  getFeishuAuthorizeUrl,
+  feishuLoginCallback,
   checkTenantDomain,
   type TenantCheckResponse,
   type TenantSearchOption,
   type OrganizationRegisterRequest,
   type LoginResponse,
+  type GiteeProfilePreview,
   type WeComWWLoginConfigResponse,
   tenantNameFromLoginResponse,
 } from '../../services/publicAuth';
@@ -58,7 +68,11 @@ import { Spin } from 'antd';
 const LazyRegisterDrawer = lazy(() => import('./RegisterDrawer'));
 import { theme } from 'antd';
 import { getPlatformSettingsPublic, type PlatformSettings } from '../../services/publicPlatformSettings';
-import { isLoginQuickProviderEnabled, resolveLoginQuickProviders } from '../../constants/loginQuickProviders';
+import {
+  isLoginQuickProviderEnabled,
+  resolveLoginQuickProviders,
+  type LoginQuickProviderId,
+} from '../../constants/loginQuickProviders';
 import LoginQuickSocialButtons from './components/LoginQuickSocialButtons';
 import { getBuildProvenance } from '../../services/platformSettings';
 import {
@@ -68,6 +82,22 @@ import {
   saveWecomOAuthState,
   stripOAuthQueryFromUrl,
 } from '../../utils/wecomAuth';
+import {
+  consumeGiteeOAuthState,
+  decodeGiteeOAuthState,
+  peekGiteeOAuthState,
+  saveGiteeOAuthState,
+} from '../../utils/giteeAuth';
+import {
+  consumeDingtalkOAuthState,
+  decodeDingtalkOAuthState,
+  saveDingtalkOAuthState,
+} from '../../utils/dingtalkAuth';
+import {
+  consumeFeishuOAuthState,
+  decodeFeishuOAuthState,
+  saveFeishuOAuthState,
+} from '../../utils/feishuAuth';
 import { getLoginClientDownloads, type LoginClientDownload } from '../../services/clientRelease';
 import { applyFavicon } from '../../utils/favicon';
 import { applySearchEngineIndexing } from '../../utils/searchEngineIndexing';
@@ -395,13 +425,14 @@ export default function LoginPage() {
     let cancelled = false;
     const loadIcons = () => {
       Promise.all([
-        import('../../assets/social/wechat.svg').then((m) => m.default),
-        import('../../assets/social/qq.svg').then((m) => m.default),
+        import('../../assets/social/gitee.svg').then((m) => m.default),
         import('../../assets/social/qwei.svg').then((m) => m.default),
         import('../../assets/social/dingtalk.svg').then((m) => m.default),
         import('../../assets/social/feishu.svg').then((m) => m.default),
-      ]).then(([w, q, qw, d, f]) => {
-        if (!cancelled) setSocialIcons({ wechat: w, qq: q, qwei: qw, dingtalk: d, feishu: f });
+      ]).then(([gitee, qw, d, f]) => {
+        if (!cancelled) {
+          setSocialIcons({ gitee, qwei: qw, dingtalk: d, feishu: f });
+        }
       });
     };
     if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
@@ -714,10 +745,21 @@ export default function LoginPage() {
   const [searchingTenant, setSearchingTenant] = useState(false);
   const [selectedTenant, setSelectedTenant] = useState<TenantSearchOption | null>(null);
   const [wecomTenantModalOpen, setWecomTenantModalOpen] = useState(false);
+  /** 组织选择弹窗用途：企微或 Gitee */
+  const [oauthTenantPurpose, setOauthTenantPurpose] = useState<
+    'wecom' | 'gitee' | 'dingtalk' | 'feishu' | null
+  >(null);
   const [wecomTenantKeyword, setWecomTenantKeyword] = useState('');
   const [wecomTenantPick, setWecomTenantPick] = useState<TenantSearchOption | null>(null);
   const [wecomQrModalOpen, setWecomQrModalOpen] = useState(false);
   const [wecomWWLoginConfig, setWecomWWLoginConfig] = useState<WeComWWLoginConfigResponse | null>(null);
+  const [giteeLinkOpen, setGiteeLinkOpen] = useState(false);
+  const [giteeLinkTicket, setGiteeLinkTicket] = useState('');
+  const [giteeLinkProfile, setGiteeLinkProfile] = useState<GiteeProfilePreview | null>(null);
+  const [giteeLinkSubmitting, setGiteeLinkSubmitting] = useState(false);
+  const [giteeLinkMode, setGiteeLinkMode] = useState<'first' | 'bind'>('first');
+  const [giteeLinkPostRedirect, setGiteeLinkPostRedirect] = useState('');
+  const [giteeLinkForm] = Form.useForm<{ username: string; password: string }>();
 
   // 频繁操作检测状态
   const [loginFailCount, setLoginFailCount] = useState(0);
@@ -1169,43 +1211,6 @@ export default function LoginPage() {
   });
 
   /**
-   * 处理微信登录
-   * 
-   * 跳转到微信授权页面
-   */
-  const handleWechatLogin = async () => {
-    try {
-      // 微信授权 URL
-      // 注意：需要配置微信开放平台的 AppID 和回调地址
-      // 优先从环境变量获取，如果没有则提示配置
-      // 从环境变量获取微信 AppID（需要在 .env 文件中配置 VITE_WECHAT_APPID）
-      const WECHAT_APPID = (import.meta as any).env?.VITE_WECHAT_APPID || '';
-      
-      // 如果 AppID 未配置，提示用户
-      if (!WECHAT_APPID) {
-        message.warning(t('pages.login.wechatNotConfigured'));
-        return;
-      }
-
-      // 生成回调地址（前端地址）
-      const redirectUri = encodeURIComponent(`${window.location.origin}/login?provider=wechat`);
-      
-      // 生成随机 state，用于防止 CSRF 攻击
-      const state = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-      
-      // 保存 state 到 sessionStorage，用于回调时验证
-      sessionStorage.setItem('wechat_login_state', state);
-
-      // 跳转到微信授权页面
-      // 微信开放平台网站应用授权地址
-      const wechatAuthUrl = `https://open.weixin.qq.com/connect/qrconnect?appid=${WECHAT_APPID}&redirect_uri=${redirectUri}&response_type=code&scope=snsapi_login&state=${state}#wechat_redirect`;
-      window.location.href = wechatAuthUrl;
-    } catch (error: any) {
-      message.error(t('pages.login.wechatRedirectFailed'));
-    }
-  };
-
-  /**
    * 企业微信 OAuth 登录（依赖租户已配置 type=wecom 应用连接器）
    */
   const handleWecomPanelLoginSuccess = useCallback(async (code: string, state: string) => {
@@ -1318,10 +1323,67 @@ export default function LoginPage() {
     return null;
   }, [selectedTenant, platformSettings?.default_tenant_id]);
 
+  const startGiteeOAuthLogin = useCallback(async (tenantId: number) => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const postRedirect = urlParams.get('redirect')?.trim() || '';
+    const redirectUri = `${window.location.origin}/login?provider=gitee`;
+    const { authorize_url, state } = await getGiteeAuthorizeUrl({
+      redirect_uri: redirectUri,
+      tenant_id: tenantId,
+      redirect: postRedirect,
+    });
+    saveGiteeOAuthState(state);
+    window.location.href = authorize_url;
+  }, []);
+
+  const startDingtalkOAuthLogin = useCallback(async (tenantId: number) => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const postRedirect = urlParams.get('redirect')?.trim() || '';
+    const redirectUri = `${window.location.origin}/login?provider=dingtalk`;
+    const { authorize_url, state } = await getDingtalkAuthorizeUrl({
+      redirect_uri: redirectUri,
+      tenant_id: tenantId,
+      redirect: postRedirect,
+    });
+    saveDingtalkOAuthState(state);
+    window.location.href = authorize_url;
+  }, []);
+
+  const startFeishuOAuthLogin = useCallback(async (tenantId: number) => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const postRedirect = urlParams.get('redirect')?.trim() || '';
+    const redirectUri = `${window.location.origin}/login?provider=feishu`;
+    const { authorize_url, state } = await getFeishuAuthorizeUrl({
+      redirect_uri: redirectUri,
+      tenant_id: tenantId,
+      redirect: postRedirect,
+    });
+    saveFeishuOAuthState(state);
+    window.location.href = authorize_url;
+  }, []);
+
+  const handleGiteeLogin = async () => {
+    try {
+      const tenantId = await resolveWecomLoginTenantId();
+      if (!tenantId) {
+        setOauthTenantPurpose('gitee');
+        setWecomTenantPick(null);
+        setWecomTenantKeyword('');
+        setWecomTenantModalOpen(true);
+        return;
+      }
+      await startGiteeOAuthLogin(tenantId);
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : t('pages.login.giteeRedirectFailed');
+      message.error(errMsg);
+    }
+  };
+
   const handleWechatWorkLogin = async () => {
     try {
       const tenantId = await resolveWecomLoginTenantId();
       if (!tenantId) {
+        setOauthTenantPurpose('wecom');
         setWecomTenantPick(null);
         setWecomTenantKeyword('');
         setWecomTenantModalOpen(true);
@@ -1334,36 +1396,97 @@ export default function LoginPage() {
     }
   };
 
+  const handleDingtalkLogin = async () => {
+    try {
+      const tenantId = await resolveWecomLoginTenantId();
+      if (!tenantId) {
+        setOauthTenantPurpose('dingtalk');
+        setWecomTenantPick(null);
+        setWecomTenantKeyword('');
+        setWecomTenantModalOpen(true);
+        return;
+      }
+      await startDingtalkOAuthLogin(tenantId);
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : t('pages.login.dingtalkRedirectFailed');
+      message.error(errMsg);
+    }
+  };
+
+  const handleFeishuLogin = async () => {
+    try {
+      const tenantId = await resolveWecomLoginTenantId();
+      if (!tenantId) {
+        setOauthTenantPurpose('feishu');
+        setWecomTenantPick(null);
+        setWecomTenantKeyword('');
+        setWecomTenantModalOpen(true);
+        return;
+      }
+      await startFeishuOAuthLogin(tenantId);
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : t('pages.login.feishuRedirectFailed');
+      message.error(errMsg);
+    }
+  };
+
   const handleConfirmWecomTenant = async () => {
     const tenantId = wecomTenantPick?.tenant_id;
     if (!tenantId) {
       message.warning(t('pages.login.wecomSelectTenant'));
       return;
     }
+    const purpose = oauthTenantPurpose || 'wecom';
     try {
       setWecomTenantModalOpen(false);
-      await startWecomOAuthLogin(tenantId);
+      setOauthTenantPurpose(null);
+      if (purpose === 'gitee') {
+        await startGiteeOAuthLogin(tenantId);
+      } else if (purpose === 'dingtalk') {
+        await startDingtalkOAuthLogin(tenantId);
+      } else if (purpose === 'feishu') {
+        await startFeishuOAuthLogin(tenantId);
+      } else {
+        await startWecomOAuthLogin(tenantId);
+      }
     } catch (error: unknown) {
-      const errMsg = error instanceof Error ? error.message : t('pages.login.wecomRedirectFailed');
+      const errMsg =
+        error instanceof Error
+          ? error.message
+          : purpose === 'gitee'
+            ? t('pages.login.giteeRedirectFailed')
+            : purpose === 'dingtalk'
+              ? t('pages.login.dingtalkRedirectFailed')
+              : purpose === 'feishu'
+                ? t('pages.login.feishuRedirectFailed')
+                : t('pages.login.wecomRedirectFailed');
       message.error(errMsg);
     }
   };
 
   /**
    * 处理社交登录
-   * 
-   * @param provider - 社交登录提供商（wechat, qq, wechat_work, dingtalk, feishu）
+   *
+   * @param provider - 社交登录提供商（gitee, wechat_work, dingtalk, feishu）
    */
-  const handleSocialLogin = (provider: 'wechat' | 'qq' | 'wechat_work' | 'dingtalk' | 'feishu') => {
+  const handleSocialLogin = (provider: LoginQuickProviderId) => {
     if (!isLoginQuickProviderEnabled(loginQuickProviders, provider)) {
       return;
     }
-    if (provider === 'wechat') {
-      handleWechatLogin();
+    if (provider === 'gitee') {
+      void handleGiteeLogin();
       return;
     }
     if (provider === 'wechat_work') {
       void handleWechatWorkLogin();
+      return;
+    }
+    if (provider === 'dingtalk') {
+      void handleDingtalkLogin();
+      return;
+    }
+    if (provider === 'feishu') {
+      void handleFeishuLogin();
     }
   };
 
@@ -1374,57 +1497,9 @@ export default function LoginPage() {
    */
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
-    const code = urlParams.get('code');
+    const code = urlParams.get('code') || urlParams.get('authCode');
     const state = urlParams.get('state');
     const provider = urlParams.get('provider');
-
-    // 检查是否是微信登录回调
-    if (provider === 'wechat' && code && state) {
-      // 验证 state（防止 CSRF 攻击）
-      const savedState = sessionStorage.getItem('wechat_login_state');
-      if (savedState !== state) {
-        message.error(t('pages.login.wechatVerifyFailed'));
-        // 清除 URL 参数，避免重复处理
-        window.history.replaceState({}, '', buildTenantLoginPathForHistoryReplace());
-        return;
-      }
-
-      // 清除 state
-      sessionStorage.removeItem('wechat_login_state');
-
-      // 调用后端 API 完成登录
-      const handleWechatCallback = async () => {
-        try {
-          message.loading(t('pages.login.loading'), 0);
-          const response = await wechatLoginCallback(code);
-          message.destroy();
-          handleLoginSuccess(response);
-        } catch (error: any) {
-          message.destroy();
-          let errorMessage = t('pages.login.wechatLoginFailed');
-          
-          if (error?.response?.data) {
-            const errorData = error.response.data;
-            if (errorData.error?.message) {
-              errorMessage = errorData.error.message;
-            } else if (errorData.detail) {
-              errorMessage = typeof errorData.detail === 'string' ? errorData.detail : JSON.stringify(errorData.detail);
-            } else if (errorData.message) {
-              errorMessage = errorData.message;
-            }
-          } else if (error?.message) {
-            errorMessage = error.message;
-          }
-          
-          message.error(errorMessage);
-          // 清除 URL 参数
-          window.history.replaceState({}, '', buildTenantLoginPathForHistoryReplace());
-        }
-      };
-
-      handleWechatCallback();
-      return;
-    }
 
     if (provider === 'wecom_work' && code && state) {
       if (!consumeWecomOAuthState(state)) {
@@ -1476,6 +1551,201 @@ export default function LoginPage() {
       };
 
       void handleWecomCallback();
+      return;
+    }
+
+    // Gitee 回调：URL 带 provider=gitee，或 Gitee 丢掉 query 时用本地 state 识别
+    const isGiteeCallback =
+      Boolean(code && state) &&
+      (provider === 'gitee' || peekGiteeOAuthState() === state);
+    if (isGiteeCallback && code && state) {
+      if (!consumeGiteeOAuthState(state)) {
+        message.error(t('pages.login.giteeVerifyFailed'));
+        window.history.replaceState({}, '', buildTenantLoginPathForHistoryReplace());
+        return;
+      }
+
+      const handleGiteeCallback = async () => {
+        try {
+          message.loading(t('pages.login.loading'), 0);
+          const decoded = decodeGiteeOAuthState(state);
+          const response = await giteeLoginCallback({
+            code,
+            state,
+            tenant_id: decoded?.tenant_id,
+            redirect_uri: decoded?.redirect_uri,
+          });
+          message.destroy();
+          const postRedirect = decoded?.redirect?.trim() || '';
+          if (response.status === 'needs_link') {
+            stripOAuthQueryFromUrl();
+            if (!response.ticket || !response.gitee?.id) {
+              message.error(t('pages.login.giteeLinkFailed'));
+              return;
+            }
+            setGiteeLinkTicket(response.ticket);
+            setGiteeLinkProfile({
+              ...response.gitee,
+              starred_official_repo:
+                response.gitee.starred_official_repo ??
+                response.starred_official_repo ??
+                false,
+            });
+            setGiteeLinkPostRedirect(postRedirect);
+            setGiteeLinkMode('first');
+            giteeLinkForm.resetFields();
+            setGiteeLinkOpen(true);
+            return;
+          }
+          if (postRedirect) {
+            const url = new URL(window.location.href);
+            url.searchParams.set('redirect', postRedirect);
+            url.searchParams.delete('code');
+            url.searchParams.delete('state');
+            url.searchParams.delete('provider');
+            window.history.replaceState({}, '', `${url.pathname}${url.search}`);
+          } else {
+            stripOAuthQueryFromUrl();
+          }
+          handleLoginSuccess(response);
+        } catch (error: any) {
+          message.destroy();
+          let errorMessage = t('pages.login.giteeLoginFailed');
+          if (error?.response?.data) {
+            const errorData = error.response.data;
+            if (errorData.error?.message) {
+              errorMessage = errorData.error.message;
+            } else if (errorData.detail) {
+              errorMessage =
+                typeof errorData.detail === 'string'
+                  ? errorData.detail
+                  : JSON.stringify(errorData.detail);
+            } else if (errorData.message) {
+              errorMessage = errorData.message;
+            }
+          } else if (error?.message) {
+            errorMessage = error.message;
+          }
+          message.error(errorMessage);
+          window.history.replaceState({}, '', buildTenantLoginPathForHistoryReplace());
+        }
+      };
+
+      void handleGiteeCallback();
+      return;
+    }
+
+    if (provider === 'dingtalk' && code && state) {
+      if (!consumeDingtalkOAuthState(state)) {
+        message.error(t('pages.login.dingtalkVerifyFailed'));
+        window.history.replaceState({}, '', buildTenantLoginPathForHistoryReplace());
+        return;
+      }
+
+      const handleDingtalkCallback = async () => {
+        try {
+          message.loading(t('pages.login.loading'), 0);
+          const decoded = decodeDingtalkOAuthState(state);
+          const response = await dingtalkLoginCallback({
+            code,
+            state,
+            tenant_id: decoded?.tenant_id,
+          });
+          message.destroy();
+          const postRedirect = decoded?.redirect?.trim();
+          if (postRedirect) {
+            const url = new URL(window.location.href);
+            url.searchParams.set('redirect', postRedirect);
+            url.searchParams.delete('code');
+            url.searchParams.delete('authCode');
+            url.searchParams.delete('state');
+            url.searchParams.delete('provider');
+            window.history.replaceState({}, '', `${url.pathname}${url.search}`);
+          } else {
+            stripOAuthQueryFromUrl();
+          }
+          handleLoginSuccess(response);
+        } catch (error: any) {
+          message.destroy();
+          let errorMessage = t('pages.login.dingtalkLoginFailed');
+          if (error?.response?.data) {
+            const errorData = error.response.data;
+            if (errorData.error?.message) {
+              errorMessage = errorData.error.message;
+            } else if (errorData.detail) {
+              errorMessage =
+                typeof errorData.detail === 'string'
+                  ? errorData.detail
+                  : JSON.stringify(errorData.detail);
+            } else if (errorData.message) {
+              errorMessage = errorData.message;
+            }
+          } else if (error?.message) {
+            errorMessage = error.message;
+          }
+          message.error(errorMessage);
+          window.history.replaceState({}, '', buildTenantLoginPathForHistoryReplace());
+        }
+      };
+
+      void handleDingtalkCallback();
+      return;
+    }
+
+    if (provider === 'feishu' && code && state) {
+      if (!consumeFeishuOAuthState(state)) {
+        message.error(t('pages.login.feishuVerifyFailed'));
+        window.history.replaceState({}, '', buildTenantLoginPathForHistoryReplace());
+        return;
+      }
+
+      const handleFeishuCallback = async () => {
+        try {
+          message.loading(t('pages.login.loading'), 0);
+          const decoded = decodeFeishuOAuthState(state);
+          const response = await feishuLoginCallback({
+            code,
+            state,
+            tenant_id: decoded?.tenant_id,
+            redirect_uri: decoded?.redirect_uri,
+          });
+          message.destroy();
+          const postRedirect = decoded?.redirect?.trim();
+          if (postRedirect) {
+            const url = new URL(window.location.href);
+            url.searchParams.set('redirect', postRedirect);
+            url.searchParams.delete('code');
+            url.searchParams.delete('state');
+            url.searchParams.delete('provider');
+            window.history.replaceState({}, '', `${url.pathname}${url.search}`);
+          } else {
+            stripOAuthQueryFromUrl();
+          }
+          handleLoginSuccess(response);
+        } catch (error: any) {
+          message.destroy();
+          let errorMessage = t('pages.login.feishuLoginFailed');
+          if (error?.response?.data) {
+            const errorData = error.response.data;
+            if (errorData.error?.message) {
+              errorMessage = errorData.error.message;
+            } else if (errorData.detail) {
+              errorMessage =
+                typeof errorData.detail === 'string'
+                  ? errorData.detail
+                  : JSON.stringify(errorData.detail);
+            } else if (errorData.message) {
+              errorMessage = errorData.message;
+            }
+          } else if (error?.message) {
+            errorMessage = error.message;
+          }
+          message.error(errorMessage);
+          window.history.replaceState({}, '', buildTenantLoginPathForHistoryReplace());
+        }
+      };
+
+      void handleFeishuCallback();
       return;
     }
 
@@ -2465,6 +2735,164 @@ export default function LoginPage() {
             }}
           />
         )}
+      </Modal>
+
+      <Modal
+        title={t('pages.login.giteeLinkModalTitle')}
+        open={giteeLinkOpen}
+        onCancel={() => {
+          setGiteeLinkOpen(false);
+          setGiteeLinkTicket('');
+          setGiteeLinkProfile(null);
+          setGiteeLinkMode('first');
+          giteeLinkForm.resetFields();
+        }}
+        okText={
+          giteeLinkMode === 'first'
+            ? t('pages.login.giteeFirstLoginSubmit')
+            : t('pages.login.giteeLinkSubmit')
+        }
+        cancelText={t('common.cancel')}
+        confirmLoading={giteeLinkSubmitting}
+        destroyOnHidden
+        mask={{ closable: !giteeLinkSubmitting }}
+        onOk={() => {
+          const finish = async (response: Awaited<ReturnType<typeof giteeFirstLogin>>) => {
+            setGiteeLinkOpen(false);
+            if (giteeLinkPostRedirect) {
+              const url = new URL(window.location.href);
+              url.searchParams.set('redirect', giteeLinkPostRedirect);
+              window.history.replaceState({}, '', `${url.pathname}${url.search}`);
+            }
+            handleLoginSuccess(response);
+          };
+          void (async () => {
+            try {
+              setGiteeLinkSubmitting(true);
+              if (giteeLinkMode === 'first') {
+                const response = await giteeFirstLogin({ ticket: giteeLinkTicket });
+                await finish(response);
+                return;
+              }
+              const values = await giteeLinkForm.validateFields();
+              const response = await giteeLinkLogin({
+                ticket: giteeLinkTicket,
+                username: values.username.trim(),
+                password: values.password,
+              });
+              await finish(response);
+            } catch (error: unknown) {
+              if (error && typeof error === 'object' && 'errorFields' in error) {
+                return;
+              }
+              const errMsg =
+                error instanceof Error
+                  ? error.message
+                  : giteeLinkMode === 'first'
+                    ? t('pages.login.giteeFirstLoginFailed')
+                    : t('pages.login.giteeLinkFailed');
+              message.error(errMsg);
+            } finally {
+              setGiteeLinkSubmitting(false);
+            }
+          })();
+        }}
+      >
+        {giteeLinkProfile ? (
+          <div className="gitee-link-profile">
+            <Avatar
+              size={40}
+              src={giteeLinkProfile.avatar_url || undefined}
+              icon={<UserOutlined />}
+            />
+            <div className="gitee-link-profile-meta">
+              <Typography.Text strong>
+                {giteeLinkProfile.name || giteeLinkProfile.login || giteeLinkProfile.id}
+              </Typography.Text>
+              <Typography.Text type="secondary" className="gitee-link-profile-sub">
+                {t('pages.login.giteeLinkProfileLabel', {
+                  name: giteeLinkProfile.login || giteeLinkProfile.id,
+                  email: giteeLinkProfile.email || t('pages.login.giteeEmailPrivate'),
+                })}
+              </Typography.Text>
+            </div>
+          </div>
+        ) : null}
+        <Segmented
+          block
+          style={{ marginBottom: 16 }}
+          value={giteeLinkMode}
+          onChange={(value) => {
+            setGiteeLinkMode(value as 'first' | 'bind');
+            giteeLinkForm.resetFields();
+          }}
+          options={[
+            { label: t('pages.login.giteeLinkModeFirst'), value: 'first' },
+            { label: t('pages.login.giteeLinkModeBind'), value: 'bind' },
+          ]}
+        />
+        <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>
+          {giteeLinkMode === 'first'
+            ? t('pages.login.giteeFirstLoginHint')
+            : t('pages.login.giteeBindExistingHint')}
+        </Typography.Paragraph>
+        {giteeLinkMode === 'bind' ? (
+          <Form form={giteeLinkForm} layout="vertical" requiredMark={false}>
+            <Row gutter={12}>
+              <Col span={12}>
+                <Form.Item
+                  name="username"
+                  label={t('pages.login.username')}
+                  rules={[{ required: true, message: t('pages.login.usernameRequired') }]}
+                >
+                  <Input
+                    autoComplete="username"
+                    placeholder={t('pages.login.usernamePlaceholder')}
+                  />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item
+                  name="password"
+                  label={t('pages.login.password')}
+                  rules={[{ required: true, message: t('pages.login.passwordRequired') }]}
+                >
+                  <Input.Password
+                    autoComplete="current-password"
+                    placeholder={t('pages.login.passwordPlaceholder')}
+                  />
+                </Form.Item>
+              </Col>
+            </Row>
+          </Form>
+        ) : null}
+        {giteeLinkProfile ? (
+          <div className="gitee-link-star-panel">
+            <div className="gitee-link-star-body">
+              <div className="gitee-link-star-title">
+                <StarFilled className="gitee-link-star-icon" />
+                {t('pages.login.giteeStarPanelTitlePending')}
+              </div>
+              <div className="gitee-link-star-desc">
+                {t('pages.login.giteeStarPanelDescPending')}
+              </div>
+            </div>
+            <Button
+              className="gitee-link-star-action"
+              size="small"
+              icon={<StarOutlined />}
+              onClick={() => {
+                window.open(
+                  'https://gitee.com/kuaigeyun/kuaigeyun',
+                  '_blank',
+                  'noopener,noreferrer',
+                );
+              }}
+            >
+              {t('pages.login.giteeStarRepoAction')}
+            </Button>
+          </div>
+        ) : null}
       </Modal>
 
       {/* 企业微信登录 — 组织选择（主登录页无组织字段时使用） */}

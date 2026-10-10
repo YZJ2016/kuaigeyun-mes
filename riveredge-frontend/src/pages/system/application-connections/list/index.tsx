@@ -651,10 +651,32 @@ const ApplicationConnectionsListPage: React.FC = () => {
       case 'dingtalk':
         return (
           <>
-            <ProFormText name="corpid" label="Corpid" rules={[{ required: true }]} colProps={{ span: 12 }} />
-            <ProFormText name="agent_id" label="Agent ID" colProps={{ span: 12 }} />
-            <ProFormText name="app_key" label="App Key" rules={[{ required: true }]} colProps={{ span: 12 }} />
-            <ProFormText.Password name="app_secret" label="App Secret" rules={[{ required: true }]} colProps={{ span: 12 }} />
+            <ProFormText
+              name="corpid"
+              label={t('pages.system.applicationConnections.dingtalkAppIdLabel')}
+              tooltip={t('pages.system.applicationConnections.dingtalkAppIdTooltip')}
+              colProps={{ span: 12 }}
+            />
+            <ProFormText
+              name="agent_id"
+              label={t('pages.system.applicationConnections.dingtalkAgentIdLabel')}
+              tooltip={t('pages.system.applicationConnections.dingtalkAgentIdTooltip')}
+              colProps={{ span: 12 }}
+            />
+            <ProFormText
+              name="app_key"
+              label={t('pages.system.applicationConnections.dingtalkClientIdLabel')}
+              tooltip={t('pages.system.applicationConnections.dingtalkClientIdTooltip')}
+              rules={[{ required: true }]}
+              colProps={{ span: 12 }}
+            />
+            <ProFormText.Password
+              name="app_secret"
+              label={t('pages.system.applicationConnections.dingtalkClientSecretLabel')}
+              tooltip={t('pages.system.applicationConnections.dingtalkClientSecretTooltip')}
+              rules={[{ required: true }]}
+              colProps={{ span: 12 }}
+            />
             <ProFormText name="aes_key" label={t('pages.system.applicationConnections.formAesKeyLabel')} colProps={{ span: 12 }} />
             <ProFormText name="token" label={t('pages.system.applicationConnections.formTokenLabel')} colProps={{ span: 12 }} />
           </>

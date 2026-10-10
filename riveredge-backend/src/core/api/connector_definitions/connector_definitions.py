@@ -21,7 +21,7 @@ router = APIRouter(prefix="/connector-definitions", tags=["Core - Connector Defi
 # 预置应用连接器定义（与前端 connectors.tsx 保持一致，icon 为字符串供前端映射）
 PRESET_APP_CONNECTORS: List[Dict[str, Any]] = [
     {"id": "feishu", "name": "飞书", "type": "feishu", "category": "collaboration", "description": "飞书开放平台自建应用", "icon": "MessageOutlined", "default_config": {"app_id": "", "app_secret": "", "encrypt_key": "", "verification_token": ""}},
-    {"id": "dingtalk", "name": "钉钉", "type": "dingtalk", "category": "collaboration", "description": "钉钉企业内部应用", "icon": "MessageOutlined", "default_config": {"corpid": "", "agent_id": "", "app_key": "", "app_secret": "", "aes_key": "", "token": ""}},
+    {"id": "dingtalk", "name": "钉钉", "type": "dingtalk", "category": "collaboration", "description": "钉钉企业内部应用（Client ID / Client Secret）", "icon": "MessageOutlined", "default_config": {"corpid": "", "agent_id": "", "app_key": "", "app_secret": "", "aes_key": "", "token": ""}},
     {"id": "wecom", "name": "企业微信", "type": "wecom", "category": "collaboration", "description": "企业微信自建应用（登录、消息、通讯录同步）", "icon": "MessageOutlined", "default_config": {"corp_id": "", "corp_secret": "", "agent_id": "", "token": "", "encoding_aes_key": ""}},
     # ERP（精确到具体产品；与前端 connectors.tsx 云/传统分组一致）
     {"id": "kingdee_cosmic", "name": "金蝶AI苍穹 OpenAPI", "type": "kingdee_cosmic", "category": "erp", "description": "企业级 PaaS 技术底座", "icon": "CloudOutlined", "default_config": {"base_url": "", "account_id": "", "client_id": "", "client_secret": "", "x_acgw_identity": "", "username": "", "org_number": "", "language": "zh_CN"}},

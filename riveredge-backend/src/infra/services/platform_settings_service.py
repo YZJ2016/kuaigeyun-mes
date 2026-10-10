@@ -27,6 +27,16 @@ class PlatformSettingsService:
     
     处理平台设置相关的所有业务逻辑
     """
+
+    @staticmethod
+    def _to_response(settings: PlatformSettings) -> PlatformSettingsResponse:
+        """序列化时不下发 Secret 明文，仅回传是否已配置。"""
+        payload = PlatformSettingsResponse.model_validate(settings).model_dump()
+        payload.pop("gitee_oauth_client_secret", None)
+        payload["gitee_oauth_client_secret_configured"] = bool(
+            (settings.gitee_oauth_client_secret or "").strip()
+        )
+        return PlatformSettingsResponse.model_validate(payload)
     
     async def get_settings(self) -> Optional[PlatformSettingsResponse]:
         """
@@ -40,7 +50,7 @@ class PlatformSettingsService:
         settings = await PlatformSettings.first()
         if not settings:
             return None
-        return PlatformSettingsResponse.model_validate(settings)
+        return self._to_response(settings)
     
     async def get_or_create_default_settings(self) -> PlatformSettingsResponse:
         """
@@ -57,7 +67,7 @@ class PlatformSettingsService:
             settings = await PlatformSettings.create(
                 platform_name="星技谷"
             )
-        return PlatformSettingsResponse.model_validate(settings)
+        return self._to_response(settings)
     
     async def _validate_default_tenant_id(self, default_tenant_id: Optional[int]) -> None:
         """校验默认登录租户存在且为激活状态；None 表示清除。"""
@@ -94,8 +104,10 @@ class PlatformSettingsService:
             raise ValueError("平台设置已存在，请使用更新接口")
 
         await self._validate_default_tenant_id(data.default_tenant_id)
-        settings = await PlatformSettings.create(**data.model_dump())
-        return PlatformSettingsResponse.model_validate(settings)
+        create_payload = data.model_dump()
+        create_payload.pop("gitee_oauth_client_secret_configured", None)
+        settings = await PlatformSettings.create(**create_payload)
+        return self._to_response(settings)
     
     async def update_settings(
         self,
@@ -117,6 +129,19 @@ class PlatformSettingsService:
             update_data["login_quick_providers"] = normalize_login_quick_providers(
                 update_data.get("login_quick_providers")
             )
+        # Secret：省略或空字符串表示不改动已有密钥（表单留空保持）
+        if "gitee_oauth_client_secret" in update_data:
+            secret_raw = update_data.get("gitee_oauth_client_secret")
+            if secret_raw is None or str(secret_raw).strip() == "":
+                update_data.pop("gitee_oauth_client_secret", None)
+            else:
+                update_data["gitee_oauth_client_secret"] = str(secret_raw).strip()
+        if "gitee_oauth_client_id" in update_data:
+            cid = update_data.get("gitee_oauth_client_id")
+            if cid is None or str(cid).strip() == "":
+                update_data["gitee_oauth_client_id"] = None
+            else:
+                update_data["gitee_oauth_client_id"] = str(cid).strip()
         if "default_tenant_id" in update_data:
             await self._validate_default_tenant_id(update_data.get("default_tenant_id"))
         if "official_api_library_host" in update_data:
@@ -178,7 +203,12 @@ class PlatformSettingsService:
                 ),
                 enable_register=data.enable_register if data.enable_register is not None else True,
             )
-            settings = await PlatformSettings.create(**create_data.model_dump(exclude_unset=True))
+            create_kwargs = create_data.model_dump(exclude_unset=True)
+            if "gitee_oauth_client_id" in update_data:
+                create_kwargs["gitee_oauth_client_id"] = update_data["gitee_oauth_client_id"]
+            if "gitee_oauth_client_secret" in update_data:
+                create_kwargs["gitee_oauth_client_secret"] = update_data["gitee_oauth_client_secret"]
+            settings = await PlatformSettings.create(**create_kwargs)
         else:
             # 更新现有设置
             from core.utils.login_page_settings import resolve_login_visual_layers, validate_login_visual_layers
@@ -201,7 +231,7 @@ class PlatformSettingsService:
             settings.updated_at = now_utc()
             await settings.save()
         
-        return PlatformSettingsResponse.model_validate(settings)
+        return self._to_response(settings)
     
     async def delete_settings(self) -> bool:
         """

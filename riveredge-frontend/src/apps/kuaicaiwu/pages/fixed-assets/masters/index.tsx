@@ -178,7 +178,7 @@ const FaMastersPage: React.FC = () => {
         <ProFormText name="category_code" label={t(`${NS}.col.code`)} rules={[{ required: !editing }]} disabled={!!editing} />
         <ProFormText name="category_name" label={t(`${NS}.col.name`)} rules={[{ required: true }]} />
         <ProFormSwitch name="is_active" label={t('common.enabled')} />
-        <ProFormTextArea name="notes" label={t('common.notes')} />
+        <ProFormTextArea name="notes" label={t('common.remark')} />
       </FormModalTemplate>
     </ListPageTemplate>
   );
