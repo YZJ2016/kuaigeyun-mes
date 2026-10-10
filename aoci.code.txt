@@ -5,7 +5,7 @@
 .gitignore[XV3S]: F:repo ignore与Cursor/AOCI正式资产白名单 | R:- | A:py+node+env+build | S:.cursor放行memory/**与rules/**;勿整夹忽略.aoci/
 AGENTS.md[SV2S]: F:agent+AOCI contract | R:- | A:aoci managed block | S:cognition loop rules; 103L
 LICENSE[SV1S]: F:Apache 2.0 | R:- | A:Apache-2.0 | S:211L
-README.md[SG6M]: F:product overview | R:- | A:MES platform | S:deploy and open-source scope
+README.md[SG6M]: F:产品总览与体验接入入口 | R:- | A:MES platform | S:在线演示建议 Gitee 快捷登录；勿写免注册；仅供预览勿生产
 
 ===D:/kuaigeyun-pro/kuaigeyun/docs/apps/haoligo/===
 厂家外协账号配置说明.md[SB4M]: F:haoligo ODA config | R:- | A:manufacturer_code | S:6-step; user binds mfr code; tx-safe rename; 186L
