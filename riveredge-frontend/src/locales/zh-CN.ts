@@ -30355,6 +30355,10 @@ export default {
     '例试委托材料与整机双流程',
   'pages.dashboard.updateLog.entries.kuaiplm-l52-lab-request-workflow-r01.description':
     '材料试验与整机例试提交审批后进入待提交实验室，再提交实验室受理；整机支持结构/电子分区填写与双经理审核模板；实验完成可通知项目负责人与指定关注人。',
+  'pages.dashboard.updateLog.entries.funide-oa-l06-rework-direct-create-r02.title':
+    '福尼特OA返工单可不取单直接新建',
+  'pages.dashboard.updateLog.entries.funide-oa-l06-rework-direct-create-r02.description':
+    '返工单列表主按钮打开空白新建弹窗，物料与业务类型（含十段会签）可直接填写，原工单可选；右侧下拉仍可从生产工单或成品检验取单创建。',
   'pages.dashboard.updateLog.entries.funide-oa-l06-rework-direct-create-r01.title':
     '福尼特OA返工单支持直接新建',
   'pages.dashboard.updateLog.entries.funide-oa-l06-rework-direct-create-r01.description':

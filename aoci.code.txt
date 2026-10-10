@@ -1040,9 +1040,11 @@ config-center-ops.md[SO2T]: F:config center ops | R:- | A:3 control points | S:c
 840_20261008180000_sample_process_due_date.py[EM3T]: F:Implements 840_20261008180000_sample_process_due_date.py | R:- | A:- | S:20L
 841_20261008190000_rd_deliverable_project_optional.py[EM3T]: F:Implements 841_20261008190000_rd_deliverable_project_optional.py | R:- | A:- | S:35L
 842_20261008104700_l52_lab_request_workflow.py[PD4T]: F:试验委托分节状态与下发字段迁移 | R:- | A:upgrade,downgrade | S:RUN_IN_TRANSACTION; 从extension_payload回填structure/electronics_special_test
-843_20261008113000_rd_deliverable_issue.py[PD4T]: F:研发交付物下发时间与grant表迁移 | R:- | A:upgrade,downgrade | S:建apps_kuaiplm_rd_project_deliverable_issue_grants; deliverables加issued_*
-844_20261008120000_form_request_issue.py[PD4T]: F:会签申请下发时间与grant表迁移 | R:- | A:upgrade,downgrade | S:建apps_kuaioa_form_request_issue_grants; form_requests加issued_*
+843_20261008113000_rd_deliverable_issue.py[PD4T]: F:研发交付物下发时间与grant表迁移 | R:- | A:upgrade,downgrade | S:建issue_grants含BaseModel审计列; deliverables加issued_*
+844_20261008120000_form_request_issue.py[PD4T]: F:会签申请下发时间与grant表迁移 | R:- | A:upgrade,downgrade | S:建form_request_issue_grants含审计列; form_requests加issued_*
 845_20261008193000_backfill_login_location_zhou_suffix.py[PD4T]: F:回填登录地错误「州」后缀 | R:code:riveredge-backend/src/core/utils/ip_parser.py | A:upgrade | S:调repair_truncated_zhou_city_login_location写core_login_logs; downgrade空操作
+846_20261010080000_product_firmware_software_item_code.py[PD4T]: F:产品固件软件12位编码列迁移 | R:code:riveredge-backend/src/apps/kuaiplm/models/product_firmware.py | A:upgrade,downgrade | S:nullable software_item_code VARCHAR(12); 定制页录入
+847_20261010084500_issue_grants_audit_columns.py[PD4T]: F:下发grant表补审计列迁移 | R:code:riveredge-backend/migrations/models/843_20261008113000_rd_deliverable_issue.py | A:upgrade,downgrade | S:两grant表ADD created_by/updated_by*; 修列表SELECT 500
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/scripts/===
 pack_sensitive_words.py[XC3T]: F:敏感词打包脚本 | R:code:riveredge-backend/pyproject.toml | A:lexicon pack | S:gh mirror fallback; 90L
@@ -1452,7 +1454,7 @@ manifest.json[FC7L]: F:快交付应用清单 | R:code:riveredge-backend/src/apps
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaiplm/===
 __init__.py[AC1T]: F:快研发应用包 | R:code:riveredge-backend/src/apps/kuaiplm/api/router.py | A:- | S:模块docstring: 项目/NPI·变更工作台·知识库·二期
 manifest.json[FC9L]: F:快研发应用清单菜单权限审核节点 | R:- | A:permissions,audit | S:菜单含master-data接管项; 前后端manifest须同步再sync
-orm_models.py[FC1T]: F:ORM模块注册 | R:code:riveredge-backend/src/apps/kuaiplm/models/rd_project.py | A:ORM_MODEL_MODULES | S:19个模块路径字符串; 运行时按应用启用加载; 新增模型须在此登记
+orm_models.py[FC1T]: F:ORM模块注册 | R:code:riveredge-backend/src/apps/kuaiplm/models/rd_project.py | A:ORM_MODEL_MODULES | S:含product_firmware/deliverable_issue等路径; 按应用启用加载
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaiplm/api/===
 annual_lab_plans.py[EB5L]: F:年度实验计划API | R:code:riveredge-backend/src/apps/kuaiplm/services/annual_lab_plan_service.py | A:router | S:计划/月份两级; 月份派发驳回独立权限
@@ -1499,7 +1501,7 @@ lab_request.py[PB7L]: F:实验委托模型含分节状态与下发字段 | R:cod
 material_review.py[PB3S]: F:物料评审模型 | R:code:riveredge-backend/src/apps/kuaiplm/models/material_review.py | A:MaterialReviewLine | S:R-15#37头+明细; 物料标注优先/限用/禁用三态
 mold_sample_order.py[PB4T]: F:开模合同打样订单模型 | R:code:riveredge-backend/src/apps/kuaiplm/models/mold_sample_order.py | A:MoldSampleOrder | S:R-15#71单表; doc_kind区分; 审批→用印→归档时间戳链
 phase2.py[PB5M]: F:二期需求评审FMEA模型 | R:code:riveredge-backend/src/apps/kuaiplm/models/phase2.py | A:RdFmeaRecord | S:需求/设计评审/FMEA三表; FMEA类型默认DFMEA; 风险项JSON
-product_firmware.py[PB4T]: F:产品固件模型 | R:code:riveredge-backend/src/apps/kuaiplm/models/production_file.py | A:ProductFirmware | S:R-15#28版本台账; released后方可生产下载; 校验和快照
+product_firmware.py[PB4T]: F:产品固件模型 | R:code:riveredge-backend/src/apps/kuaiplm/models/production_file.py | A:ProductFirmware | S:R-15#28; software_item_code可空12位; released后方可生产下载
 production_file.py[PB7L]: F:生产文件中心模型 | R:code:riveredge-backend/src/apps/kuaiplm/constants/production_file.py | A:ProductionFileVersion | S:R-06头表当前版快照+版本链INF-05+访问日志; PE策略生产下发版标志
 project_proposal.py[PB5T]: F:项目建议书模型 | R:- | A:ProjectProposal | S:R-15#68销售发起→采购供应商补填→审批→下发研发; 供应商字段为遗留单行快照
 prototype_build_sheet.py[PB5M]: F:样机制作书模型 | R:code:riveredge-backend/src/apps/kuaiplm/models/prototype_build_sheet.py | A:PrototypeBuildSheet | S:R-01#2.15; round手板/T1-T3; 电子/结构并行+制造/质量会签; 默认T1
@@ -1523,7 +1525,7 @@ lab_request.py[PB4M]: F:实验委托Schema | R:code:riveredge-backend/src/apps/k
 material_review.py[PC4S]: F:物料评审Schema | R:code:riveredge-backend/src/apps/kuaiplm/models/material_review.py | A:MaterialReviewResponse | S:R-15#37头+行CRUD; usage_status优先/限用/禁用
 mold_sample_order.py[PB4S]: F:开模打样订单Schema | R:code:riveredge-backend/src/apps/kuaiplm/models/mold_sample_order.py | A:MoldSampleOrderResponse | S:R-15#71头CRUD+用印/归档请求; doc_kind区分开模/打样
 phase2.py[PC5S]: F:二期Schema | R:code:riveredge-backend/src/apps/kuaiplm/models/phase2.py | A:RdRequirementResponse | S:需求/设计评审/FMEA三组CRUD; 风险项JSON透传
-product_firmware.py[PC4M]: F:产品固件Schema | R:code:riveredge-backend/src/apps/kuaiplm/models/product_firmware.py | A:ProductFirmwareResponse | S:R-15#28头CRUD+修订/作废/下载请求; 生产视图可见性标志
+product_firmware.py[PC4T]: F:产品固件Schema | R:code:riveredge-backend/src/apps/kuaiplm/models/product_firmware.py | A:ProductFirmwareResponse | S:CRUD/修订含可选software_item_code max12; 生产下载响应
 production_file.py[PC6M]: F:生产文件中心Schema | R:code:riveredge-backend/src/apps/kuaiplm/models/production_file.py | A:ProductionFileResponse | S:R-06头+版本+访问日志响应; 分发/版本列表独立端点schema
 project_proposal.py[PB4S]: F:项目建议书Schema | R:- | A:ProjectProposalResponse | S:R-15#68头CRUD+供应商补填/下发请求; 评审行JSON嵌套
 prototype_build_sheet.py[PB4S]: F:样机制作书Schema | R:code:riveredge-backend/src/apps/kuaiplm/models/prototype_build_sheet.py | A:PrototypeBuildSheetResponse | S:头CRUD+分区/签核更新请求; round_key迭代
@@ -1554,7 +1556,7 @@ phase2_service.py[PC8L]: F:二期需求评审FMEA服务 | R:code:riveredge-backe
 plm_audit_flow_sync.py[PC4T]: F:PLM审批门控辅助 | R:code:riveredge-backend/src/apps/kuaiplm/services/plm_pending_approval_reminder_service.py | A:assert_plm_manual_approval_action | S:人工审核门控与audit_flow_guard同契约; auto_pass写回; 审核未启用直通
 plm_list_core.py[PC6M]: F:列表过滤排序工具 | R:code:riveredge-backend/src/apps/kuaiplm/services/phase2_service.py | A:apply_plm_list_filters | S:keyword+日期区间+camelCase→snake字段别名; 各模块可排序列frozenset
 plm_pending_approval_reminder_service.py[PC8M]: F:PLM待审超时提醒 | R:- | A:PlmPendingApprovalReminderService | S:INF-03; 5类实体默认24h; 注册reminder handler; 接收人scope解析
-product_firmware_service.py[PC9L]: F:产品固件服务 | R:code:riveredge-backend/src/apps/kuaiplm/models/product_firmware.py | A:ProductFirmwareService | S:R-15#28; 发布后可生产下载; INF-05版本可见性; 权限码过滤管理动作
+product_firmware_service.py[PC9L]: F:产品固件服务 | R:code:riveredge-backend/src/apps/kuaiplm/models/product_firmware.py | A:ProductFirmwareService | S:12位码归一化/关键词搜; 发布后可下载; 权限码过滤管理动作
 production_file_service.py[PC9L]: F:生产文件中心服务 | R:code:riveredge-backend/src/apps/kuaiplm/models/production_file.py | A:ProductionFileService | S:R-06; 版本bump+INF-05可见性; PE生产下发/版本日志; 发放/调阅/下载动作
 project_proposal_service.py[PC8L]: F:项目建议书服务 | R:- | A:ProjectProposalService | S:R-15#68; 销售发起→采购供应商补填独立端点→审批→下发研发; 单号XMJY
 prototype_build_sheet_service.py[PC8M]: F:样机制作书服务 | R:code:riveredge-backend/src/apps/kuaiplm/models/prototype_build_sheet.py | A:PrototypeBuildSheetService | S:§2.15; 电子/结构分区填写+制造/质量签核; 下发制造样机组; 单号YJZZ
@@ -1825,7 +1827,7 @@ visual_scheduling.py[EB7L]: F:视觉排程API | R:code:riveredge-backend/src/app
 wave_pickings.py[EB5M]: F:波次拣货API | R:code:riveredge-backend/src/apps/kuaizhizao/services/wave_picking_service.py | A:WavePickingService | S:波次生成/释放/拣货; 模块kuaizhizao:wave-picking; 244行
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaizhizao/authorization/===
-data_scope_setup.py[DB7S]: F:数据范围资源画像注册 | R:code:riveredge-backend/src/core/services/authorization/data_scope_resource_registry.py | A:register_kuaizhizao_data_scope_profiles | S:启动注册一次; 销售/采购/工单/客户画像; 98行
+data_scope_setup.py[DB7S]: F:快制造数据范围画像注册 | R:code:riveredge-backend/src/core/services/authorization/data_scope_resource_registry.py | A:register_kuaizhizao_data_scope_profiles | S:客户跟进用FOLLOWABLE; 宿主引用客户走*-customer键; 销售/采购/工单画像
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaizhizao/===
 bootstrap.py[AC2T]: F:快制造启动注册 | R:code:riveredge-backend/src/apps/kuaizhizao/authorization/data_scope_setup.py | A:register | S:注册数据范围+引用展示provider; 11行
@@ -2182,7 +2184,7 @@ cost_comparison_service.py[DA8L]: F:成本对比服务 | R:code:riveredge-backen
 cost_optimization_service.py[DA8L]: F:成本优化建议服务 | R:code:riveredge-backend/src/apps/kuaizhizao/services/cost_comparison_service.py | A:CostOptimizationService | S:基于物料来源类型优化建议; 456行
 cost_report_service.py[DA8L]: F:成本报表分析服务 | R:code:riveredge-backend/src/apps/kuaicaiwu/models/cost_calculation.py | A:CostReportService | S:成本趋势+结构分析; 基于物料来源类型; 356行
 customer_collaboration_service.py[DA6M]: F:客户协同服务 | R:code:riveredge-backend/src/apps/kuaizhizao/models/sales_order.py | A:CustomerCollaborationService | S:销售订单查看+生产进度查看; 192行
-customer_follow_up_service.py[DA9L]: F:客户跟进记录服务 | R:code:riveredge-backend/src/apps/kuaizhizao/models/customer_follow_up.py | A:CustomerFollowUpService | S:商机确保+数据域; 683行
+customer_follow_up_service.py[DA9L]: F:客户跟进记录服务 | R:code:riveredge-backend/src/apps/kuaizhizao/models/customer_follow_up.py | A:CustomerFollowUpService | S:列表/写走DataScope; 公海池mine Q; 商机阶段联动
 customer_material_registration_service.py[DA9L]: F:代工来料登记服务 | R:code:riveredge-backend/src/apps/kuaizhizao/models/customer_material_registration.py | A:CustomerMaterialRegistrationService | S:条码映射规则; 1278行
 customer_pool_list_core.py[DA6M]: F:客户池列表核心 | R:code:riveredge-backend/src/apps/kuaizhizao/services/equipment_list_core.py | A:apply_customer_pool_list_filters | S:排序白名单+keyword+日期区间; 211行
 customer_pool_service.py[DA9L]: F:客户池服务 | R:code:riveredge-backend/src/apps/kuaizhizao/services/customer_pool_list_core.py | A:CustomerPoolService | S:公海/私有池; 分配/回收; 1039行
@@ -2656,7 +2658,7 @@ warehouse.py[PB5M]: F:仓库数据模型模块  定义仓库数据模型（仓�
 work_calendar.py[PB5T]: F:厂级工作日历：工作时段配置 + 加班计划。  供 APS / MRP 等引用；与节假日（Holiday）组合构成有效可排日历。 | R:- | A:WorkCalendarConfig,OvertimePlan,StationUnavailableWindow | S:93L
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/master_data/reference_display/===
-setup.py[DB5L]: F:主数据引用展示 Provider 注册。 | R:- | A:_row,_partner_uuid,_partner_primary_contact_fields,_customer_display_row,_sup... | S:800L; 主数据引用展示 Provider 注册。
+setup.py[DB5L]: F:主数据引用展示Provider注册 | R:code:riveredge-backend/src/core/services/authorization/data_scope_resource_registry.py | A:register_master_data_reference_display_providers | S:客户搜索按host_resource解析行级scope; 联系人phone/email展平
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/master_data/schemas/===
 __init__.py[DB5T]: F:Implements __init__.py | R:- | A:- | S:6L
@@ -2743,7 +2745,7 @@ shift_scheduling_service.py[SB5L]: F:排班管理服务 | R:- | A:week_bounds,_n
 sop_control_service.py[SB5L]: F:SOP 文控：提交/审核/生效/作废/升版、受控份发放/回收、打印数据。 | R:- | A:_normalize_attachments,_has_controlled_original,_validate_carrier_content,_ne... | S:559L; SOP 文控：提交/审核/生效/作废/升版、受控份发放/回收、打印数据。
 supplier_governance.py[SB5S]: F:供应商准入与评级：门禁校验 + 周期评分回写。 | R:- | A:is_supplier_qualification_required,normalize_qualification_status,assert_supp... | S:164L; 供应商准入与评级：门禁校验 + 周期评分回写。
 supplier_sync_service.py[SB5M]: F:供应商从数据接口/数据集同步。 | R:- | A:SupplierSyncService | S:241L; 供应商从数据接口/数据集同步。
-supply_chain_service.py[SB5L]: F:供应链数据服务模块  提供供应链数据的业务逻辑处理（客户、供应商），支持多组织隔离。 | R:- | A:_strip_customer_pool_managed_fields,_assert_customer_phone_or_email,_normaliz... | S:1071L
+supply_chain_service.py[SB5L]: F:供应链客商数据服务 | R:code:riveredge-backend/src/apps/master_data/models/supply_chain.py | A:SupplyChainService | S:客户须phone或email; 池字段剥离; 归属assign/release权限门禁
 sync_association_service.py[SB5L]: F:主数据关联同步编排：先跑独立同步服务，再执行业务 upsert。 | R:- | A:_merge_prerequisite_errors,run_material_prerequisite_syncs,run_sales_order_pr... | S:558L; 主数据关联同步编排：先跑独立同步服务，再执行业务 upsert。
 unit_service.py[SB5L]: F:物料单位与全局换算服务。 | R:- | A:_actor_fields,_normalize_code,_collect_unit_tokens_from_material,MaterialUnit... | S:523L; 物料单位与全局换算服务。
 unit_sync_service.py[SB5M]: F:物料单位从数据接口/数据集独立同步。 | R:- | A:MaterialUnitSyncService | S:271L; 物料单位从数据接口/数据集独立同步。
@@ -3340,11 +3342,11 @@ uni_audit_service.py[SB5S]: F:统一审核生命周期服务。  提供 submit/a
 access_control_service.py[SB5M]: F:统一访问控制服务（PDP）  顺序： 1) RBAC 2) ABAC（策略） | R:- | A:AccessDecision,AccessControlService | S:256L; 统一访问控制服务（PDP）  顺序： 1) RBAC 2) ABAC（策略）
 access_policy_service.py[SB5T]: F:Implements access_policy_service.py | R:- | A:AccessPolicyService | S:75L
 data_scope_bootstrap.py[SB5T]: F:应用启动时注册框架级数据范围解析器（幂等）。 | R:- | A:ensure_data_scope_framework | S:13L; 应用启动时注册框架级数据范围解析器（幂等）。
-data_scope_constants.py[SB5T]: F:数据权限维度与 scope_custom 解析器名称（框架级常量）。 | R:- | A:- | S:16L; 数据权限维度与 scope_custom 解析器名称（框架级常量）。
+data_scope_constants.py[SB5T]: F:数据权限维度与resolver名常量 | R:- | A:- | S:含CUSTOMER_OWNED/FOLLOWABLE/SALESMAN_POOL; 禁止业务手写行过滤
 data_scope_resolver_registry.py[SB5T]: F:scope_custom 解析器注册表（应用可注册 partner / outsourced_unit 等）。 | R:- | A:ScopeResolveContext,register_scope_resolver,get_scope_resolver | S:55L
-data_scope_resolvers.py[SB5S]: F:内置与通用 scope_custom 解析器实现。 | R:- | A:_deny_all_q,resolve_scope_all,resolve_scope_self,resolve_scope_department,res... | S:159L; 内置与通用 scope_custom 解析器实现。
-data_scope_resource_registry.py[SB5T]: F:按资源注册数据范围字段画像（应用启动时注册，非硬编码在 DataScopeService 内）。 | R:- | A:DataScopeResourceProfile,normalize_resource_key,register_resource_profile,get... | S:38L
-data_scope_service.py[SB5L]: F:数据权限执行服务（RDBC 查询层）  读取 core_data_permission_policies + core_user_data_scope_b... | R:- | A:_request_memo,DataScopeService | S:633L
+data_scope_resolvers.py[SB5S]: F:内置scope_custom解析器 | R:code:riveredge-backend/src/core/services/authorization/data_scope_constants.py | A:resolve_scope_self,resolve_partner_scope | S:SELF含created_by并集; 客户池/归属/可跟进经customer_id解析
+data_scope_resource_registry.py[SB5T]: F:数据范围资源画像注册表 | R:- | A:DataScopeResourceProfile,register_resource_profile | S:no_policy/self_scope_resolver; 宿主引用与功能授权映射
+data_scope_service.py[SB5L]: F:数据权限查询执行服务 | R:code:riveredge-backend/src/core/services/authorization/data_scope_resource_registry.py | A:DataScopeService | S:无策略走no_policy_default_resolver; SELF可改self_scope_resolver; 禁止业务手写行过滤
 effective_access_service.py[SB5M]: F:用户有效访问真源（多角色先合并，再鉴权）  唯一路径：一次加载用户全部角色授权 → 并集成 EffectiveUserAccess → 功能判定 / 数据... | R:- | A:_memo,_permission_code_to_resource_key,_is_admin_system_role,EffectiveUserAcc... | S:361L
 menu_resource_resolver.py[SB5T]: F:菜单节点与功能权限 resource 绑定（仅认显式权限码真源）。 | R:- | A:normalize_permission_code,parse_permission_code,is_generic_menu_permission_co... | S:62L; 菜单节点与功能权限 resource 绑定（仅认显式权限码真源）。
 permission_policy_service.py[SB5L]: F:数据权限与字段权限策略服务。 | R:- | A:_create_policy_row,PermissionPolicyService | S:1059L; 数据权限与字段权限策略服务。
@@ -3566,7 +3568,7 @@ token_service.py[SB5T]: F:Centrifugo 连接 JWT。 | R:- | A:create_centrifugo_c
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/core/services/reference/===
 reference_display_provider_registry.py[SB5T]: F:引用资源 DisplayProvider 注册表。 | R:- | A:ReferenceDisplayProvider,register_reference_display_provider,get_reference_di... | S:53L; 引用资源 DisplayProvider 注册表。
-reference_display_service.py[SB5S]: F:引用资源展示服务：鉴权 + 路由至 DisplayProvider。 | R:- | A:ReferenceDisplayService | S:166L; 引用资源展示服务：鉴权 + 路由至 DisplayProvider。
+reference_display_service.py[SB5S]: F:引用资源展示服务 | R:code:riveredge-backend/src/core/services/authorization/data_scope_resource_registry.py | A:ReferenceDisplayService | S:鉴权后按host解析行级data scope再搜/resolve
 tenant_model_display_provider.py[SB5S]: F:租户模型引用展示 Provider 工厂（主数据 / 单据等简单 code+name 表）。 | R:- | A:_row,make_tenant_model_display_provider | S:142L
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/core/services/report_engines/===
@@ -3829,7 +3831,7 @@ user.py[DB5S]: F:用户 Schema 模块  定义用户相关的 Pydantic Schema，�
 auth_service.py[SB5L]: F:认证服务模块  提供用户认证相关的业务逻辑，包括注册、登录、Token 刷新等功能 | R:- | A:AuthService | S:1642L
 biometric_service.py[SB5S]: F:生物识别服务模块  实现 WebAuthn 注册和验证逻辑。 | R:- | A:BiometricService | S:144L; 生物识别服务模块  实现 WebAuthn 注册和验证逻辑。
 build_provenance_service.py[SB5M]: F:构建来源判定服务  根据部署元数据与 Gitee commit API 返回构建来源状态（软标识，不阻断业务）。 | R:- | A:_normalize_to_iso_utc,_try_git_short_sha_from_worktree,_try_git_remote_from_w... | S:276L
-business_config_service.py[SB5L]: F:业务配置服务模块  本模块只负责「业务参数（parameters.*）」与 PRO 功能相关逻辑。  变更说明（2026 重构，蓝图下线后）： - 业务是... | R:- | A:strip_deprecated_parameters,coerce_finance_parameter_dict,_control_meta_for,_... | S:1674L
+business_config_service.py[SB5L]: F:业务参数与PRO功能配置服务 | R:- | A:get_business_config,batch_update_process_parameters | S:只管parameters.*; 蓝图已下线; 批次更新校验控制元数据
 face_template_service.py[SB5M]: F:工位人脸特征模板：录入与比对（仅存 descriptor） | R:- | A:_as_vector,_cosine_similarity,FaceTemplateService | S:230L; 工位人脸特征模板：录入与比对（仅存 descriptor）
 industry_template_service.py[SB5L]: F:行业模板服务模块  提供行业模板相关的业务逻辑处理。  Author: Luigi Lu Date: 2025-01-15 | R:- | A:IndustryTemplateService | S:419L
 infra_superadmin_auth_service.py[SB5S]: F:平台超级管理员认证服务模块  提供平台超级管理员认证相关的业务逻辑处理。 平台超级管理员是平台唯一的，独立于租户系统。 | R:- | A:InfraSuperAdminAuthService | S:100L
@@ -3966,6 +3968,7 @@ mirror_dedicated_host_pages.py[XV3L]: F:一次性镜像：将 manifest 中宿主
 prune-stale-dist.mjs[XV3S]: F:Implements prune-stale-dist.mjs | R:- | A:- | S:Implements prune-stale-dist.mjs
 regenerate_dedicated_mirror_routes.py[XV3S]: F:从 manifest 已更新的 /apps/{dedicated}/ 菜单 path 重建 routes.host-mirror.generated.tsx | R:- | A:load_manifest,iter_paths,dedicated_rest_to_host_page | S:从 manifest 已更新的 /apps/{dedicated}/ 菜单 pa
 resync_dedicated_mirrors.py[XV3T]: F:按 manifest 重建定制镜像页（覆盖 copy + import + URL 修正）。 | R:- | A:load_manifest,iter_paths,is_mirror | S:按 manifest 重建定制镜像页（覆盖 copy + import + UR
+scan_dedicated_page_split.py[XQ5S]: F:定制页分流守门扫描 | R:- | A:- | S:禁manifest直链宿主; 禁lazy挂载宿主pages; --fail-on high
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/scripts/locale_glossary/===
 en_top_values.json[FC5L]: F:root array len=1200 | R:- | A:- | S:1202L; root array len=1200
@@ -4571,6 +4574,7 @@ PrototypeBuildCapabilitiesTags.tsx[AU5T]: F:Implements PrototypeBuildCapabilitie
 RdDeliverableCapabilitiesTags.tsx[AU5T]: F:Implements RdDeliverableCapabilitiesTags.tsx | R:- | A:RdDeliverableCapabilitiesTags | S:Implements RdDeliverableCapabilitiesTags
 SystemArchiveCapabilitiesTags.tsx[AU5T]: F:Implements SystemArchiveCapabilitiesTags.tsx | R:- | A:SystemArchiveCapabilitiesTags | S:Implements SystemArchiveCapabilitiesTags
 TrialFlowCompleteCapabilitiesTags.tsx[AU5T]: F:Implements TrialFlowCompleteCapabilitiesTags.tsx | R:- | A:TrialFlowCompleteCapabilitiesTags | S:Implements TrialFlowCompleteCapabilities
+LabRequestDepartmentSettingsModal.tsx[EU5S]: F:实验委托部门范围设置弹窗 | R:code:riveredge-frontend/src/apps/kuaiplm/utils/labRequestDepartmentScope.ts | A:LabRequestDepartmentSettingsModal | S:空=不限; 写入parameters.kuaiplm.*dept_uuids
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/apps/kuaiplm/===
 index.tsx[EU5T]: F:Implements index.tsx | R:- | A:- | S:80L
@@ -4580,7 +4584,7 @@ manifest.json[FC5L]: F:root keys: code, name, version, description, icon, author
 index.tsx[EU5L]: F:Implements index.tsx | R:- | A:- | S:777L
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/apps/kuaiplm/pages/bom-collaborations/===
-index.tsx[EU5L]: F:分区独立写入，互不覆盖 | R:- | A:- | S:858L; 分区独立写入，互不覆盖
+index.tsx[EU5L]: F:BOM协同列表与分区明细 | R:code:riveredge-frontend/src/apps/kuaiplm/utils/bomCollabExcelImport.ts | A:- | S:分区独立写入互不覆盖; 明细表headerExtra可Excel导入
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/apps/kuaiplm/pages/change-management/===
 index.tsx[EU5L]: F:稀疏：业务列不叠（编号 → 分类 → 类型 → 对象 → 原因）；审计叠列保留；状态 StatusTag | R:- | A:- | S:474L
@@ -4602,7 +4606,7 @@ index.tsx[EU5L]: F:eslint-disable-next-line react-hooks/exhaustive-deps | R:- | 
 index.tsx[EU5L]: F:Implements index.tsx | R:- | A:- | S:523L
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/apps/kuaiplm/pages/lab-requests/===
-index.tsx[EU5L]: F:列表名失败仍展示占位 | R:- | A:- | S:2929L; 列表名失败仍展示占位
+index.tsx[EU5L]: F:实验委托列表与表单 | R:code:riveredge-frontend/src/apps/kuaiplm/utils/labRequestDepartmentScope.ts | A:- | S:部门下拉受租户白名单; 列表名失败仍占位
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/apps/kuaiplm/pages/material-reviews/===
 index.tsx[EU5L]: F:尝试用编码匹配物料库 id（匹配不到仍可保存编码+名称） | R:- | A:- | S:979L; 尝试用编码匹配物料库 id（匹配不到仍可保存编码+名称）
@@ -4664,7 +4668,7 @@ material-review.ts[EU5S]: F:Implements material-review.ts | R:- | A:- | S:122L
 mold-sample-order.ts[EU5S]: F:Implements mold-sample-order.ts | R:- | A:- | S:110L
 pending-inbox.ts[EU5T]: F:Implements pending-inbox.ts | R:- | A:- | S:46L
 phase2.ts[EU5S]: F:Implements phase2.ts | R:- | A:- | S:168L
-product-firmware.ts[EU5S]: F:Implements product-firmware.ts | R:- | A:- | S:133L
+product-firmware.ts[II5S]: F:产品固件API客户端 | R:- | A:productFirmwareApi | S:Payload含可选software_item_code; 修订/下载/作废
 production-file.ts[EU5M]: F:Implements production-file.ts | R:- | A:- | S:225L
 project-proposal.ts[EU5S]: F:Implements project-proposal.ts | R:- | A:- | S:156L
 prototype-build-sheet.ts[EU5S]: F:Implements prototype-build-sheet.ts | R:- | A:- | S:127L
@@ -4676,7 +4680,7 @@ trial-flow.ts[EU5S]: F:Implements trial-flow.ts | R:- | A:- | S:142L
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/apps/kuaiplm/utils/===
 bomCollabFormProfile.ts[EU5S]: F:Implements bomCollabFormProfile.ts | R:- | A:- | S:143L
 ecnFormProfile.ts[EU5M]: F:Implements ecnFormProfile.ts | R:- | A:- | S:229L
-labRequestExtension.ts[EU5M]: F:Implements labRequestExtension.ts | R:- | A:- | S:173L
+labRequestExtension.ts[LU5S]: F:实验委托extension载荷工具 | R:- | A:- | S:结构/电子分区与附件字段归一; 与后端extension契约对齐
 plmListCore.ts[EU5M]: F:Implements plmListCore.ts | R:- | A:- | S:345L
 plmListPresentation.tsx[EU5T]: F:Implements plmListPresentation.tsx | R:- | A:- | S:56L
 rdDeliverableTypePresentation.ts[EU5T]: F:Implements rdDeliverableTypePresentation.ts | R:- | A:- | S:89L
@@ -4687,6 +4691,8 @@ trialFlowFormProfile.ts[EU5S]: F:Implements trialFlowFormProfile.ts | R:- | A:- 
 rdDeliverableDepartmentPresets.ts[KB3T]: F:Implements rdDeliverableDepartmentPresets.ts | R:- | A:parseRdDeliverableDeptPreset,rdDeliverableTypesForPreset,rdDeliverableTypesQueryParam | S:Implements rdDeliverableDepartmentPreset
 rdDeliverableIssueScopedTypes.ts[KB3T]: F:Implements rdDeliverableIssueScopedTypes.ts | R:- | A:isRdDeliverableIssueScopedType,RD_DELIVERABLE_TYPES_ISSUE_SCOPED | S:Implements rdDeliverableIssueScopedTypes
 rdDeliverablePayload.ts[KB3T]: F:Implements rdDeliverablePayload.ts | R:- | A:sanitizeRdDeliverableProjectId,buildRdDeliverablePayload,validateRdDeliverablePayloadClient | S:Implements rdDeliverablePayload.ts
+bomCollabExcelImport.ts[LU5S]: F:BOM协同Excel列模板与解析 | R:code:riveredge-frontend/src/apps/kuaiplm/utils/bomCollabFormProfile.ts | A:- | S:按line_columns; 物料编码多别名; 十进制列校验
+labRequestDepartmentScope.ts[LU5T]: F:实验委托部门白名单解析 | R:- | A:resolveLabRequestDeptScopeFromConfig,flattenLabDeptOptions | S:空数组=不限; 表单value存部门名非uuid
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/apps/kuaiqms/===
 index.tsx[EU5T]: F:Implements index.tsx | R:- | A:- | S:23L
@@ -4827,7 +4833,7 @@ DispatchOrderDetailDrawer.tsx[EU5S]: F:Implements DispatchOrderDetailDrawer.tsx 
 InstallExecutionDetailDrawer.tsx[EU5M]: F:Implements InstallExecutionDetailDrawer.tsx | R:- | A:- | S:259L
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/apps/kuaizhizao/pages/after-sales-service/install-execution/===
-index.tsx[EU5L]: F:现场地址长短不一：唯一 RemainderFlex，避免全 KeepWidth 在右固定前留空白 | R:- | A:- | S:1056L
+index.tsx[EU5L]: F:安装执行列表页 | R:code:riveredge-frontend/src/components/uni-pull/index.tsx | A:- | S:地址列唯一RemainderFlex; UniPullCreateToolbar取单+新建
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/apps/kuaizhizao/pages/after-sales-service/repair-orders/===
 RepairOrderFormModal.tsx[EU5M]: F:Implements RepairOrderFormModal.tsx | R:- | A:- | S:248L
@@ -6167,7 +6173,7 @@ CustomerSelectDropdown.tsx[EU5L]: F:Implements CustomerSelectDropdown.tsx | R:- 
 CustomerSyncFromSourceModal.tsx[EU5T]: F:Implements CustomerSyncFromSourceModal.tsx | R:- | A:- | S:18L
 DefectTypeFormModal.tsx[EU5S]: F:keep form code | R:- | A:- | S:192L; keep form code
 DrawingBatchUploadModal.tsx[EU5M]: F:ignore | R:- | A:- | S:291L; ignore
-DrawingFormModal.tsx[EU5L]: F:non-blocking | R:- | A:- | S:546L; non-blocking
+DrawingFormModal.tsx[EU5L]: F:图纸新建编辑弹窗 | R:- | A:DrawingFormModal | S:附件上传非阻塞; 物料关联校验在提交路径
 DrawingInlinePreview.tsx[EU5M]: F:Implements DrawingInlinePreview.tsx | R:- | A:- | S:297L
 FabricationRawMaterialWizard.tsx[EU5M]: F:Implements FabricationRawMaterialWizard.tsx | R:- | A:- | S:369L
 InspectionStagesEditor.tsx[EU5L]: F:含停用方案：编辑回显时已绑定方案仍须在选项中，否则 Select 空白像「没保存」 | R:- | A:- | S:446L
@@ -7201,7 +7207,7 @@ toolbarChrome.ts[EU5T]: F:Implements toolbarChrome.ts | R:- | A:- | S:42L
 index.tsx[EU5T]: F:Implements index.tsx | R:- | A:- | S:35L
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/components/uni-table-detail/===
-UniTableDetail.tsx[EU5M]: F:用「各列定义宽度之和」与容器可视宽度比较，而非渲染后表格的 scrollWidth。 | R:- | A:- | S:361L
+UniTableDetail.tsx[EU5M]: F:表单内明细表组件 | R:- | A:UniTableDetail | S:scroll用列定义宽之和比容器; 支持headerExtra在添加前
 index.less[DU5M]: F:/** * uni-table-detail 通用明细表样式 * * 框线：仅外层容器 1px 描边 + 表内行分隔 1px（避免与 global.les... | R:- | A:- | S:256L
 index.ts[EU5T]: F:Implements index.ts | R:- | A:- | S:1L
 
@@ -7347,14 +7353,14 @@ useUserPreferenceQuery.ts[EU5T]: F:Implements useUserPreferenceQuery.ts | R:- | 
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/layouts/===
 AiAssistantHeaderButton.tsx[EU5T]: F:Implements AiAssistantHeaderButton.tsx | R:- | A:- | S:35L
-BasicLayout.tsx[EU5L]: F:安全的翻译 hook，避免多语言初始化失败导致应用崩溃 | R:- | A:- | S:3547L; 安全的翻译 hook，避免多语言初始化失败导致应用崩溃
+BasicLayout.tsx[EU5L]: F:PC主布局与侧栏菜单 | R:code:riveredge-frontend/src/layouts/basicLayout/sidebarMenuLayout.ts | A:BasicLayout | S:i18n失败安全hook; 定制应用菜单与宿主替换共存
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/layouts/basicLayout/===
 LayoutStyleInjector.tsx[EU5T]: F:Implements LayoutStyleInjector.tsx | R:- | A:- | S:35L
 SplitSidebarMenu.tsx[EU5S]: F:Implements SplitSidebarMenu.tsx | R:- | A:- | S:197L
 buildInlineLayoutStyles.ts[EU5L]: F:主题切换：仅掐断布局壳常见层的过渡。避免使用全文档星号通配选择器及 ant-layout 下全后代通配，否则样式引擎需遍历巨量节点，易严重掉帧 | R:- | A:- | S:2915L
 sidebarMenuDensity.ts[EU5T]: F:Implements sidebarMenuDensity.ts | R:- | A:- | S:14L
-sidebarMenuLayout.ts[EU5M]: F:ProLayout transformRoute 可能把 `#app-group-x` 收成 `/#app-group-x` | R:- | A:- | S:240L
+sidebarMenuLayout.ts[EU5M]: F:侧栏菜单路径与分组规范化 | R:- | A:- | S:防ProLayout把#app-group收成/#app-group; 保留hash分组
 sidebarSearchBgFollow.ts[EU5T]: F:Implements sidebarSearchBgFollow.ts | R:- | A:- | S:14L
 splitSidebarMenuItems.tsx[EU5T]: F:Implements splitSidebarMenuItems.tsx | R:- | A:- | S:78L
 
@@ -7578,7 +7584,7 @@ index.tsx[EU5L]: F:去除未使用的 Text, Paragraph | R:- | A:- | S:937L; 去�
 AuditSettingsPanel.tsx[EU5M]: F:Implements AuditSettingsPanel.tsx | R:- | A:- | S:391L
 TenantInitDataPanel.tsx[EU5M]: F:Implements TenantInitDataPanel.tsx | R:- | A:- | S:244L
 WorkOrderScoreProfilesPanel.tsx[EU5M]: F:Implements WorkOrderScoreProfilesPanel.tsx | R:- | A:- | S:230L
-configTree.ts[EU5L]: F:—— 工单 —— | R:- | A:- | S:879L; —— 工单 ——
+configTree.ts[FC5L]: F:配置中心参数树定义 | R:- | A:- | S:含kuaiplm实验委托部门白名单键; 工单/财务等业务参数分组
 index.tsx[EU5L]: F:兼容历史链接：tab=flow 归并到 parameters | R:- | A:- | S:688L; 兼容历史链接：tab=flow 归并到 parameters
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/pages/system/custom-fields/list/===
@@ -7601,8 +7607,8 @@ analysis.tsx[EU5T]: F:Implements analysis.tsx | R:- | A:- | S:1L
 dashboardCardSurface.ts[EU5T]: F:Implements dashboardCardSurface.ts | R:- | A:- | S:10L
 dashboardTopBarTheme.ts[EU5T]: F:Implements dashboardTopBarTheme.ts | R:- | A:- | S:39L
 index.tsx[EU5L]: F:克制色：浅底 + 同系文字，避免高饱和色块 | R:- | A:- | S:980L; 克制色：浅底 + 同系文字，避免高饱和色块
-platformUpdateLog.ts[FD5L]: F:定义工作台通用更新目录，合并定制日志并按租户应用、日期和类型筛选 | R:code:riveredge-frontend/src/pages/system/dashboard/platformUpdateLogDedicated.ts | A:getRecentPlatformUpdates,filterVisiblePlatformUpdates,groupPlatformUpdatesByDate | S:定制记录仅对已启用对应应用可见；日期降序同日通用在前；文本键同步zh-CN；不收录HaoliGO和造数工具
-platformUpdateLogDedicated.ts[EU5L]: F:Implements platformUpdateLogDedicated.ts | R:- | A:- | S:812L
+platformUpdateLog.ts[FD5L]: F:工作台通用更新日志目录与筛选合并 | R:code:riveredge-frontend/src/pages/system/dashboard/platformUpdateLogDedicated.ts | A:getRecentPlatformUpdates,filterVisiblePlatformUpdates | S:定制仅启用应用可见; 日期降序同日通用在前; 不收录HaoliGO/造数工具
+platformUpdateLogDedicated.ts[FD5L]: F:定制应用专属更新日志条目 | R:code:riveredge-frontend/src/pages/system/dashboard/platformUpdateLog.ts | A:PLATFORM_UPDATE_LOG_DEDICATED | S:须scope dedicated+dedicatedAppCode; 新条插头部; 文案仅zh-CN
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/pages/system/dashboard/analysis/===
 BusinessBoardPage.tsx[EU5L]: F:没有亮色边框和切角，只有深色打底 | R:- | A:- | S:2105L; 没有亮色边框和切角，只有深色打底
