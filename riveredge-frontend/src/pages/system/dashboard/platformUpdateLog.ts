@@ -204,6 +204,66 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
       'pages.dashboard.updateLog.entries.reporting-block-revoke-after-sales-outbound-r01.description',
   },
   {
+    id: 'kuaioa-asset-registry-redirect-fa-r01',
+    date: '2026-10-10',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-asset-registry-redirect-fa-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-asset-registry-redirect-fa-r01.description',
+  },
+  {
+    id: 'uni-audit-flow-assignee-hint-r01',
+    date: '2026-10-10',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.uni-audit-flow-assignee-hint-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.uni-audit-flow-assignee-hint-r01.description',
+  },
+  {
+    id: 'kuaizhizao-demand-plan-custom-fields-slot-r01',
+    date: '2026-10-10',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.kuaizhizao-demand-plan-custom-fields-slot-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaizhizao-demand-plan-custom-fields-slot-r01.description',
+  },
+  {
+    id: 'platform-search-engine-indexing-toggle-r01',
+    date: '2026-10-10',
+    type: 'feature',
+    titleKey:
+      'pages.dashboard.updateLog.entries.platform-search-engine-indexing-toggle-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.platform-search-engine-indexing-toggle-r01.description',
+  },
+  {
+    id: 'kuaioa-attendance-ot-split-calendar-r01',
+    date: '2026-10-10',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.kuaioa-attendance-ot-split-calendar-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-attendance-ot-split-calendar-r01.description',
+  },
+  {
+    id: 'kuaioa-leave-slip-attachment-r01',
+    date: '2026-10-10',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-leave-slip-attachment-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-leave-slip-attachment-r01.description',
+  },
+  {
+    id: 'system-config-menu-groups-rebalance-r01',
+    date: '2026-10-10',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.system-config-menu-groups-rebalance-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.system-config-menu-groups-rebalance-r01.description',
+  },
+  {
     id: 'kuaiplm-deliverable-issue-grants-audit-columns-r01',
     date: '2026-10-10',
     type: 'fix',
