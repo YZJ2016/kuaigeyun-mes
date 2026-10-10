@@ -4226,15 +4226,8 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             elif work_order.status not in ["draft", "cancelled"]:
                 raise ValidationError("只能删除草稿、已取消或未执行的工单")
 
-            # 检查是否有有效报工（已软删的不算；取消工单时常会级联软删草稿报工）
-            reporting_count = await ReportingRecord.filter(
-                tenant_id=tenant_id,
-                work_order_id=work_order_id,
-                deleted_at__isnull=True,
-            ).count()
-
-            if reporting_count > 0:
-                raise ValidationError("工单存在相关的报工记录，不允许删除")
+            # 与撤回下达同一套下游硬校验（报工/领料/退料/入库/委外），禁止跳级删除
+            await self._assert_work_order_revoke_no_downstream(tenant_id, work_order_id)
 
             now = now_utc()
 

@@ -58,7 +58,7 @@ _SALES_ORDER_DOWNSTREAM_FK_SPECS: List[Tuple[Any, str]] = [
 async def sales_order_downstream_by_ids(
     tenant_id: int, sales_order_ids: List[int]
 ) -> dict[int, bool]:
-    """列表 capabilities 批量检测：工单/出库/发货通知/销售退货等 FK 下游。"""
+    """列表 capabilities 批量检测：工单/出库/发货通知/销售退货 FK + 关联表下推采购等。"""
     if not sales_order_ids:
         return {}
     result: dict[int, bool] = {int(i): False for i in sales_order_ids}
@@ -81,11 +81,31 @@ async def sales_order_downstream_by_ids(
         for oid in related_ids:
             if oid is not None:
                 _mark(int(oid))
+
+    # 直连下推采购订单/采购申请等无 sales_order_id FK，靠 DocumentRelation
+    rel_source_ids = await DocumentRelation.filter(
+        tenant_id=tenant_id,
+        source_type="sales_order",
+        source_id__in=sales_order_ids,
+        target_type__in=(
+            "purchase_order",
+            "purchase_requisition",
+            "work_order",
+            "demand_computation",
+            "shipment_notice",
+            "sales_delivery",
+        ),
+    ).values_list("source_id", flat=True)
+    for oid in rel_source_ids:
+        if oid is not None:
+            _mark(int(oid))
     return result
 
 
 _SALES_ORDER_DOWNSTREAM_TYPE_LABELS: Dict[str, str] = {
-    "work_order": "工单",
+    "work_order": "生产工单",
+    "purchase_order": "采购订单",
+    "purchase_requisition": "采购申请",
     "demand_computation": "需求计算",
     "shipment_notice": "发货通知",
     "sales_delivery": "销售出库",
@@ -150,7 +170,7 @@ async def list_sales_order_active_downstream_documents(
     if not downstream_map.get(sales_order_id, False):
         return []
 
-    # FK 兜底：追溯树为空但 FK 仍指向有效单据时，补齐明细
+    # FK / 关联表兜底：追溯树为空但仍有有效下游时，补齐明细
     docs: List[Dict[str, Any]] = []
     for loader, field in _SALES_ORDER_DOWNSTREAM_FK_SPECS:
         model = loader()
@@ -185,6 +205,27 @@ async def list_sales_order_active_downstream_documents(
                     "document_name": getattr(row, "name", None),
                 }
             )
+
+    rels = await DocumentRelation.filter(
+        tenant_id=tenant_id,
+        source_type="sales_order",
+        source_id=sales_order_id,
+        target_type__in=("purchase_order", "purchase_requisition", "work_order"),
+    ).limit(40)
+    seen = {(d["document_type"], int(d["document_id"])) for d in docs}
+    for rel in rels:
+        key = (str(rel.target_type), int(rel.target_id))
+        if key in seen:
+            continue
+        seen.add(key)
+        docs.append(
+            {
+                "document_type": str(rel.target_type),
+                "document_id": int(rel.target_id),
+                "document_code": None,
+                "document_name": None,
+            }
+        )
     return docs
 
 

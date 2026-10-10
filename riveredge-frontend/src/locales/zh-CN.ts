@@ -30441,6 +30441,10 @@ export default {
     '客户跟进支持未归属客户',
   'pages.dashboard.updateLog.entries.customer-follow-up-create-data-scope-r02.description':
     '新建跟进可选择本人负责、协作或未归属（公海）客户，下拉与保存同一范围；他人已归属客户不可跟进，不再误报笼统权限不足。',
+  'pages.dashboard.updateLog.entries.reporting-block-revoke-after-sales-outbound-r01.title':
+    '下推单据须先反审再删，禁止跳级冲销上游',
+  'pages.dashboard.updateLog.entries.reporting-block-revoke-after-sales-outbound-r01.description':
+    '销售订单下推生产工单/采购订单后，须先反审核并删除这些下游，才能反审或删除销售订单；需求计算撤回不再级联吞掉未执行工单。报工若已有已审核/已入库的生产入库单，须先反审删除入库再反审报工；销售已出库亦不可冲报工；出库撤回须先处理送货单/退货。',
   'pages.dashboard.updateLog.entries.pc-audit-unreview-empty-pending-r01.title':
     '审核反审核不再出现空壳待审与审计静默',
   'pages.dashboard.updateLog.entries.pc-audit-unreview-empty-pending-r01.description':
