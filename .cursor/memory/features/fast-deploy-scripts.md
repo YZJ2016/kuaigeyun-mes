@@ -1,0 +1,94 @@
+---
+title: fast-deploy 脚本入口（构建 / 部署）
+slug: fast-deploy-scripts
+status: delivered
+domain: deploy
+when: 构建前端 dist、本机起停、生产更新、H5、compose 专业包
+keywords:
+  - fast-deploy
+  - build.web.sh
+  - BUILD_WEB_SKIP_HISTORY_REWRITE
+  - deploy.sh
+  - launch.dev.sh
+  - cmd_ensure_frontend_dist
+  - build:16g
+standard: fast-deploy/README.md；禁止平行 npm run build 后手写 commit/push
+---
+
+# fast-deploy 脚本入口（构建 / 部署）
+
+- 日期：2026-10-03
+- 状态：已交付（文档化，供后续构建一律走脚本）
+
+## 目标
+
+主仓所有「构建前端、发 dist、本机起停、生产更新」只走 `fast-deploy/` 现有脚本。
+
+## 何时读 / 禁止另起
+
+- 何时读：发版、部署、本机 worker、H5、pro-apps
+- 禁止：平行发明 `npm run build` 后手写 commit/push；对 develop 擅自 `--force`；新步骤另起顶层脚本
+
+## 标准入口
+
+| 场景 | 命令 | 说明 |
+|------|------|------|
+| Web 构建并推送 dist | `BUILD_WEB_SKIP_HISTORY_REWRITE=1 ./fast-deploy/build.web.sh`（Windows 用 Git Bash） | 日常路径；只提交 `riveredge-frontend/dist` |
+| Web 历史瘦身 + 推送 | `./fast-deploy/build.web.sh` | 需 `git-filter-repo`，`force-with-lease` |
+| 部署机消费 dist | `./fast-deploy/deploy.sh update`（prod） | `cmd_ensure_frontend_dist`：有 Git dist 则不在服务器构建 |
+| 部署机强制本机构建 | `ALLOW_SERVER_BUILD=1` + `deploy.sh build` | 弱机不推荐；`npm run build`（非 `build:16g`） |
+| 移动端 H5 本地构建 | `./fast-deploy/build.mobile.web.sh` | `riveredge-app/mobile` → `web-dist`，默认不进主仓 |
+| 部署机装 H5 | `./fast-deploy/deploy.sh install-h5` | 拉 `kuaigeyun-client`，Caddy `/mobile` |
+| 统一部署向导 | `./fast-deploy/deploy.sh` / `dev` / `wizard` | check/install/configure/migrate/build/start/stop/status/update |
+| 本机开发起停 | `./fast-deploy/launch.dev.sh`（`with-h5` / `stop` / `status`） | 不走蓝绿；需蓝绿用 `deploy.sh dev` |
+| Windows PS 起停 | `.\fast-deploy\launch.dev.ps1 withh5` | **勿**在 PS 里直接 `.\launch.dev.sh`（会另开 git-bash、无输出）；手机口 **8098** |
+| 专业/定制组装 | `python fast-deploy/tools/workspace/compose.py` | 或 `deploy.sh pro-apps` |
+| Linux 薄封装 | `linux/dev.sh` / `linux/prod.sh` | 设 `DEPLOY_MODE` 后 `fd_dispatch` |
+| Windows PS | `windows/dev.ps1` / `windows/prod.ps1` | 逻辑在 `lib/common.ps1` |
+
+## 关键文件
+
+| 角色 | 路径 |
+|------|------|
+| 入口说明 | `fast-deploy/README.md` |
+| Web 发版脚本 | `fast-deploy/build.web.sh` |
+| Git 历史/脏检查/push | `fast-deploy/lib/build_web_git.sh` |
+| 部署总入口 | `fast-deploy/deploy.sh` → `lib/common.sh` `fd_dispatch` |
+| 服务器构建 / 跳过构建 | `cmd_build` / `cmd_ensure_frontend_dist`（`common.sh`） |
+| PS 对等实现 | `lib/common.ps1` `Invoke-Build` / `Ensure-FrontendDist` |
+| 蓝绿 | `lib/blue_green.sh` / `blue_green.ps1` |
+| 向导 | `lib/wizard.sh` |
+| 移动 H5 | `build.mobile.web.sh`；`cmd_install_client_repo` |
+| 配置样例 | `fast-deploy/config/deploy.env.example` |
+| Caddy 模板 | `fast-deploy/templates/Caddyfile.template` |
+
+## 构建链路（不要绕开）
+
+1. 发版机（本仓库 develop）：源码改到稳定 → **AOCI maintain/update-entry 对齐并提交正式资产** → 源码 commit（不含 dist）→ SOP 死代码门禁 → `build.web.sh`（见 `.cursor/rules/build-push-aoci.mdc`）
+2. 生产机：`git pull` 得到 tip 里的 dist → `deploy.sh update` → 发现 `index.html`+`login.html` 即跳过 npm
+3. `deploy.sh build` 只给「允许服务器构建」或调试；不是 Gitee 发版入口
+
+日常 Windows 必须带 `BUILD_WEB_SKIP_HISTORY_REWRITE=1`，否则会跑 filter-repo 并 `force-with-lease`。
+
+## 扩展点
+
+- 新部署步骤：挂 `fd_dispatch` / `KNOWN_CMDS`
+- 新前端产物检查：与 `cmd_ensure_frontend_dist`（须含 `login.html`）对齐
+- H5 / 专业包：分别走 `install-h5` 与 `compose.py`，不要写进 `build.web.sh`
+
+## 踩坑
+
+- PowerShell 执行 `.\fast-deploy\launch.dev.sh`：Windows 把 `.sh` 关联到 `git-bash.exe`，Cursor 终端无日志、exit 0，手机端未起。改用 `.\fast-deploy\launch.dev.ps1 withh5` 或 Git Bash。
+- 手机 H5 开发口默认 **8098**，不是 8081（Hyper-V 保留段）。
+- 工作区除 dist（及蓝绿槽、`.perf`）外必须干净，否则 `build_web_assert_source_tree_committed` 失败；**正式 AOCI 资产**（`aoci.txt` / `aoci.*.txt` / 放行的 `.aoci/config.json` 等）应已提交，勿故意排除——未跟踪的正式索引会挡住脚本；`.aoci` 下 lock/ledger/batch 助手文件仍勿提交（见 `.cursor/rules/aoci-git-commit.mdc`）
+- 跟踪远程以 `@{upstream}` 为准，勿写死 origin
+- 推送 HTTPS 用组织令牌 `oauth2:<token>`
+- `cmd_build` 用 `npm run build`；发版脚本用 `build:16g`
+- 阿里云 PyPI 偶发对 `uv.lock` hash 路径 `.whl.metadata` 404（如 `python-dotenv`）：`uv_sync_backend_with_fallback` 回退清华/官方，**成功源须写回父进程 `UV_INDEX_URL`**（勿在子 shell 里 export）；迁移用 `uv run --no-sync aerich upgrade` 禁止二次拉包。仍可显式 `UV_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple/`
+
+## 关联
+
+- `principles/reuse-existing-patterns.md`
+- `fast-deploy/README.md`
+- Vault SOP：`E:\AI-Memory\30-Knowledge\MES-Codebase\web-build-push-sop.md`
+- Vault 决策：`E:\AI-Memory\40-Decisions\2026-09-27-web-build-push-flow.md`

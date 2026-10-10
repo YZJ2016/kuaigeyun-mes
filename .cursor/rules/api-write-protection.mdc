@@ -1,0 +1,24 @@
+---
+description: API 写防护体系（渠道门禁/限流/幂等）永久记忆与运维约定
+alwaysApply: true
+---
+
+# API 写防护（2026-09-23）
+
+全站 `/api/*` 的 POST/PUT/PATCH/DELETE 受中间件保护：
+
+1. **X-Client-Channel 白名单**：`pc|station|android|ios|mobile_h5|miniprogram|integration`，否则 403
+2. **写限流**：普通 120/用户/分，关键动作 30/用户/分 → 429
+3. **幂等**：`Idempotency-Key` 可回放；关键路径短窗连点 → 409
+4. **integration IP 白名单**：`.env` 的 `INTEGRATION_CLIENT_IP_ALLOWLIST`（空=不限）
+5. **开放 API 账套鉴权**：`integration` 渠道写请求必须用账套+应用秘钥换票的 open Token（普通用户 JWT 拒绝）；管理页 `/infra/open-api`
+
+详细运维手册（白名单怎么加、权限码怎么配、对接怎么写头）：
+
+`riveredge-backend/docs/api-write-protection-ops.md`
+
+改防护相关代码时：
+- 新公开写接口必须加入 `interactive_client_guard.py` 豁免名单
+- 新「审核/下推/确认」类路径应能被 `write_path_policy._CRITICAL_PATH_RE` 匹配
+- 官方新端渠道改 `client_channel.py` 的 `CLIENT_CHANNEL_DEVICE_LABELS`，不要靠伪造 UA
+- 开关在 `.env`：`CLIENT_CHANNEL_WRITE_GUARD_ENABLED` / `API_WRITE_RATE_LIMIT_*` / `API_IDEMPOTENCY_*` / `OPEN_API_INTEGRATION_CREDENTIAL_REQUIRED` / `OPEN_API_TOKEN_EXPIRE_MINUTES`

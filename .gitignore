@@ -72,7 +72,13 @@ riveredge-backend/backups/
 !.aoci/database-baseline.json
 !.aoci/config.json
 !.aoci/curation.json
-.cursor/
+# Cursor：记忆库与 Agent 规则入库；本机 MCP/会话配置不入库
+.cursor/*
+!.cursor/memory/
+!.cursor/memory/**
+!.cursor/rules/
+!.cursor/rules/**
+.cursor/mcp.json
 .idea/
 .trae/
 .vscode/

@@ -1,0 +1,68 @@
+---
+description: 新功能交付清单：迁移、菜单同步、前后端 manifest 必须一起做完
+alwaysApply: true
+---
+
+# 新功能交付清单（迁移 + 同步）
+
+加菜单/权限/新表/新模块时，**代码合入不等于可用**。交付前必须在本环境做完下列事项，不要留给用户点。
+
+## 1. 数据库迁移
+
+- 有新 model / 改表：写 aerich 迁移文件（`riveredge-backend/migrations/models/`），并在 `orm_models` 注册
+- **当场执行**：Windows 下用 UTF-8 跑 upgrade，避免 gbk 读 pyproject 失败：
+
+```powershell
+$env:PYTHONUTF8='1'; $env:PYTHONIOENCODING='utf-8'; $env:AERICH_MIGRATE='1'
+$env:PYTHONPATH='D:\kuaigeyun-pro\kuaigeyun\riveredge-backend\src'
+cd D:\kuaigeyun-pro\kuaigeyun\riveredge-backend
+uv run aerich upgrade
+```
+
+- 或用 `fast-deploy` 的 `migrate` 步骤
+- 交付说明里写清迁移版本号（如 `813_..._kuaioa_daily_attendance`）
+
+## 2. 菜单 / 权限同步（应用中心）
+
+改了 `src/apps/<app>/manifest.json`（菜单 path、permission、permissions 数组、`module_references`）时：
+
+1. **前后端两份 manifest 一起改**（`riveredge-backend/src/apps/...` 与 `riveredge-frontend/src/apps/...`）
+2. **当场同步**，不要只口头说「请点菜单同步」：
+   - 优先单应用：`uv run python scripts/sync_kuaioa_manifest.py --tenant-id <id>`  
+     或 `--missing-only`；也可调 `POST /api/v1/core/applications/sync-manifest/{app_code}`（须写渠道头）
+   - 避免连点「一键同步全部」（可达数分钟；前端超时已放宽到 360s）
+   - 多租户时按租户串行；权限全量扫描较慢，跑完要抽查 `core_menus.path` / `core_permissions.code`
+3. 新权限码要出现在 manifest `permissions`，同步后角色侧才能勾选；引用部门等需在 `module_references`（或 `__all_modules__`）声明
+4. 同步后抽查：`core_menus` 是否有新 path；前端路由 `index.tsx` 与菜单 path 一致
+
+## 3. 前端联调配套
+
+- 路由、懒加载页、i18n（至少 zh-CN）
+- 列表导入：传 `importHeaders` / `importExampleRow` / `importFieldMap` / `importTemplateName`，不要传无效的 `importTemplate` 整包
+- 状态列：要传 `statusEnum`，不能只写 field.options
+
+## 4. 平台更新日志（用户可见改动）
+
+工作台版本卡读 `platformUpdateLog.ts`。用户能感知的功能、修复、改进、安全项，**每次交付都要在对应数组头部插一条**，并补 zh-CN。
+
+- 通用：`PLATFORM_UPDATE_LOG_GENERAL`（`riveredge-frontend/src/pages/system/dashboard/platformUpdateLog.ts`）
+- 定制应用：`platformUpdateLogDedicated.ts`（`scope: 'dedicated'` + `dedicatedAppCode`）
+- i18n：`pages.dashboard.updateLog.entries.{id}.title` / `.description`
+- 不写：HaoliGO、造数工具、用户无感知的内部重构
+
+完整约定：`.cursor/memory/features/platform-update-log.md`
+
+## 5. 对用户说明（同步已做完时）
+
+- 写清：迁移已 upgrade、某 app 菜单已 sync、需在角色里勾选哪些新权限码（若角色不是全权限）
+- 未做完的项单独标出，禁止默认假设「用户会去点同步」
+
+## 6. 跨端落点回写（多端改动时）
+
+改动若同时触及主仓 API/PC 与移动/工位/Pro 包（或改 Junction/组装边界）：
+
+1. 更新 `.cursor/memory/principles/three-repo-map.md` 对应行，**或**新增/更新主仓 `features/<slug>.md` 并在总表加链
+2. client/pro 仅在本仓独有坑时写薄笔记，并回链总表；不要复制整套主仓 features
+3. **单端内部改动**（只动一仓且无跨端契约变化）：不必改总表
+
+总表与三仓职责：`.cursor/memory/principles/three-repo-map.md`

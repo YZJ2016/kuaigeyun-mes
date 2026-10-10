@@ -31,6 +31,8 @@ alwaysApply: true
 
 改动了托管对象时：**先** `aoci_maintain`（有候选则 `aoci_update_entry`）**再** `git commit`。构建推送总序见 `.cursor/rules/build-push-aoci.mdc`。
 
+**不是每次 push 都跑**：未改托管对象的纯说明可跳过 maintain；`build.web.sh` 的 dist 提交不要求再 maintain（此前 tip 须已对齐）。判据检索：`.cursor/memory/principles/aoci-git-commit.md`。
+
 ## 与 deploy
 
 `build_web_assert_source_tree_committed` 要求工作区干净；未跟踪的 `aoci*.txt` / `AGENTS.md` 会失败。发版前先完成索引并提交正式 AOCI 资产。

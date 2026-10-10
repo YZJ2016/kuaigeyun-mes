@@ -1,0 +1,25 @@
+---
+description: 新功能交付须写入 .cursor/memory 永久记忆库，开发前先检索
+alwaysApply: true
+---
+
+# 开发记忆库（永久）
+
+位置：`.cursor/memory/`。原则 `principles/`，功能 `features/`。MCP `user-obsidian-memory` 可读该路径。
+
+书写与检索约定：`.cursor/memory/principles/memory-note-format.md`。
+
+## 开发前（Agent）
+
+1. MES 任务先读 Vault `architecture-map.md` + `ai-change-protocol.md`（见 `.cursor/memory/principles/mes-vault-index.md` 与 `.cursor/rules/ai-memory.mdc`）
+2. **再读** `.cursor/memory/README.md` 的「关键词路由」，不要通读全部笔记
+3. 打开命中的 1～3 篇 `features/` 或 `principles/`；按其中「标准入口 / 扩展点」实现
+4. 再用 Grep 在 `.cursor/memory/` 搜组件名、权限码、`source_type`、脚本名（frontmatter `keywords`）
+
+## 新功能交付后（必做）
+
+1. 复制 `features/_TEMPLATE.md` 为 `features/<slug>.md`（必须含 YAML frontmatter）
+2. 写清：何时读/禁止另起、标准入口、完整路径、扩展点、踩坑
+3. 更新 `.cursor/memory/README.md` 的路由表 + 索引表（漏登等于读不到）
+
+原则类约定写入 `principles/`，并与 `.cursor/rules/*.mdc` 保持一致（规则管行为，记忆库管可检索的实现过程）。

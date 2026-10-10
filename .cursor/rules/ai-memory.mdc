@@ -1,0 +1,28 @@
+---
+description: 共用 Vault 永久记忆 + MES 开发必读顺序
+alwaysApply: true
+---
+
+# 永久记忆（Vault + 仓库笔记）
+
+MCP：`obsidian-memory`（`E:\AI-Memory` 与本仓 `.cursor/memory`）。无独立「源码图数据库」MCP 时，结构以 Vault 图谱 + 当前源码为准。
+
+## 每个新任务开始
+
+1. 读 `E:\AI-Memory\MEMORY.md`、`E:\AI-Memory\AI_RULES.md`（只跟任务相关的链接，禁止扫整个 Vault）
+2. **本仓 MES 开发**再读：
+   - 必读：`E:\AI-Memory\30-Knowledge\MES-Codebase\architecture-map.md`（代码结构图谱）
+   - 必读：`E:\AI-Memory\30-Knowledge\MES-Codebase\ai-change-protocol.md`
+   - 按模块：`development-standards.md` 相关节、`correction-ledger.md` 关键词、`.cursor/memory/README.md` 路由
+3. 改代码前确认 D/E 工作区、Git 状态；保护用户已有 diff
+4. 构建/推送 Web：先读 `web-build-push-sop.md`，走 `fast-deploy`，见 `.cursor/memory/features/fast-deploy-scripts.md`
+
+## 按需再读（不要默认全文）
+
+- 提交/测试：`test-knowledge.md`（新测试只放 `D:\pytest`，仓库 `tests/` 只改已有文件）
+- 推送身份：`E:\AI-Memory\40-Decisions\2026-09-29-kuaigeyun-git-identity.md`（令牌不写入聊天）
+- 功能做法：`.cursor/memory/README.md` 关键词表 → `features/*.md`
+
+## 任务结束
+
+按 `AI_RULES.md` 做记忆检查：只写长期有效事实；秘密、全文记录、临时日志不写。

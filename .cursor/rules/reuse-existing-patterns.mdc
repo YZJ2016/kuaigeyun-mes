@@ -1,0 +1,29 @@
+---
+description: 同类功能必须复用已有标准实现，禁止平行做出第二套做法
+alwaysApply: true
+---
+
+# 复用优先：同一功能只有一套标准实现
+
+同样的功能不要做出两个不一样的。开发前**先搜索**仓库与永久记忆库；有则统一走那一套方法与交互，禁止平行发明第二套。
+
+永久记忆库：`.cursor/memory/`（详见 `dev-memory-library.mdc`）。原则全文：`.cursor/memory/principles/reuse-existing-patterns.md`。
+
+## 动手前
+
+1. **先找参照**：读 `.cursor/memory/README.md` 关键词路由，打开命中笔记；再搜代码（SyncPushHub、DocumentPushBatchPanel、sync-from-source、preferIds）
+2. **选定标准**：以已落地且用户熟悉的实现为唯一标准（例：销售订单外推 = SyncPushHub + DocumentPushBatchPanel + profiles 白名单 + 列表勾选传 ids）
+3. **对齐契约**：同一入口、同一组件/服务、同一权限与文案模式；只补业务差异（source_type、字段、候选加载），不改交互骨架
+
+## 禁止
+
+- 为「差不多」的需求再写一套面板、一套按钮门禁、一套 profile 过滤、一套勾选传递
+- 前端白名单 / 后端注册表漏登导致「看起来像另一套」或半残功能
+- 用「本次更快」跳过复用，事后再统一（默认不做）
+
+## 交付自检
+
+- [ ] 已对照至少一个现有页面/服务，行为与入口一致
+- [ ] 新增类型只挂到既有扩展点（注册表、props、配置），未新增平行抽象
+- [ ] 若现有标准有缺口，**先修标准实现再复用**，而不是旁路一份
+- [ ] 已在 `.cursor/memory/features/` 写实现笔记并更新记忆库 README 索引
