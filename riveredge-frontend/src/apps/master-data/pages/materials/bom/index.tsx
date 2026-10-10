@@ -780,6 +780,8 @@ const BOMPage: React.FC = () => {
 
   /**
    * 加载物料列表（仅创建/编辑弹窗下拉初始范围）。
+   * 自制件范围必须服务端按 sourceType=Make 过滤：全量前 1000 条往往全是 Buy，
+   * 本地再筛 Make 会得到空列表（Make 物料排序位常在 5000+）。
    * 必须与列表页 ensureMaterialsByIds 合并，禁止整表覆盖，否则会冲掉已按 ID 补齐的主数据。
    */
   useEffect(() => {
@@ -787,7 +789,12 @@ const BOMPage: React.FC = () => {
     const loadMaterials = async () => {
       try {
         setMaterialsLoading(true);
-        const result = await materialApi.list({ limit: 1000, isActive: true });
+        const result = await materialApi.list({
+          limit: 1000,
+          isActive: true,
+          mastersOnly: true,
+          ...(mainMaterialScope === 'make' ? { sourceType: 'Make' } : {}),
+        });
         const incoming = result.items ?? [];
         setMaterials((prev) => {
           const merged = [...incoming];
@@ -808,7 +815,7 @@ const BOMPage: React.FC = () => {
       }
     };
     loadMaterials();
-  }, [modalVisible]);
+  }, [modalVisible, mainMaterialScope]);
 
   const ensureMaterialsByIds = async (ids: Iterable<number>): Promise<Material[]> => {
     const uniqueIds = Array.from(
