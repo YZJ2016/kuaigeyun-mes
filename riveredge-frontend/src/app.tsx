@@ -52,6 +52,7 @@ import { useConfigStore } from './stores/configStore';
 import { useUserPreferenceStore } from './stores/userPreferenceStore';
 import { getPlatformSettingsPublic } from './services/platformSettings';
 import { applyFavicon } from './utils/favicon';
+import { applySearchEngineIndexing } from './utils/searchEngineIndexing';
 import { useThemeStore } from './stores/themeStore';
 import {
   ACTIVITY_STORAGE_KEY,
@@ -721,11 +722,17 @@ const AppContent: React.FC<{ touchScreen: any }> = ({ touchScreen }) => {
     }
   }, [touchScreen.isTouchScreenMode]);
 
-  // 应用平台 Favicon（从平台设置加载）
+  // 应用平台 Favicon / 搜索引擎收录策略（从平台设置加载）
   React.useEffect(() => {
     getPlatformSettingsPublic()
-      .then((settings) => applyFavicon(settings?.favicon))
-      .catch(() => applyFavicon(undefined));
+      .then((settings) => {
+        void applyFavicon(settings?.favicon);
+        applySearchEngineIndexing(settings?.search_engine_indexing_enabled);
+      })
+      .catch(() => {
+        void applyFavicon(undefined);
+        applySearchEngineIndexing(true);
+      });
   }, []);
 
   const routesElement = React.useMemo(

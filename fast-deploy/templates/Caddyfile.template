@@ -192,6 +192,17 @@
         header Cache-Control "no-cache"
     }
 
+    # 搜索引擎 robots.txt：走后端平台设置（是否接受被搜索引擎收录）
+    handle /robots.txt {
+        reverse_proxy {{BACKEND_ADDR}} {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+        header Cache-Control "no-cache"
+    }
+
     # 微信/平台域名校验 *.txt：只直出，禁止 try_files 回落 SPA
     # （否则路径首段会被前端当成组织域名，curl/校验拿到的是 index.html）
     @domain_verify_txt path_regexp domain_verify_txt ^/[A-Za-z0-9._-]+\.txt$

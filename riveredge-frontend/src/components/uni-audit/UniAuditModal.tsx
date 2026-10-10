@@ -30,6 +30,8 @@ import {
 
   Flex,
 
+  Alert,
+
 } from 'antd';
 
 import {
@@ -75,6 +77,9 @@ export interface UniAuditHubAction {
   danger?: boolean;
 
   primary?: boolean;
+
+  /** 不可执行时的原因（如非当前节点待办人）；优先于通用「无权限」提示 */
+  disabledReason?: string;
 
 }
 
@@ -626,8 +631,9 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
     return u?.id ?? u?.user_id ?? null;
   });
 
-  const effectiveHubActions = useMemo(() => {
+  const { effectiveHubActions, flowAssigneeBlockHint } = useMemo(() => {
     let items = [...hubActions];
+    let assigneeBlockHint: string | undefined;
     if (
       flowStatus?.has_instance
       && flowStatus.status === 'pending'
@@ -637,31 +643,43 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
       const hasMyPendingTask = (flowStatus.tasks ?? []).some(
         (t) => t.status === 'pending' && t.approver_id === currentUserId,
       );
+      if (!hasMyPendingTask) {
+        const currentNode = (flowStatus.nodes_overview ?? []).find((n) => n.is_current);
+        const names = (currentNode?.eligible_approvers ?? [])
+          .map((u) => String(u.name || '').trim())
+          .filter(Boolean);
+        assigneeBlockHint = names.length
+          ? t('components.uniAudit.notNodeAssigneeWithNames', { names: names.join('、') })
+          : t('components.uniAudit.notNodeAssignee');
+      }
       items = items.map((item) => {
         if (item.action !== 'approve' && item.action !== 'reject') {
           return item;
         }
+        const canExecute = item.canExecute && hasMyPendingTask;
         return {
           ...item,
-          canExecute: item.canExecute && hasMyPendingTask,
+          canExecute,
+          disabledReason:
+            item.canExecute && !hasMyPendingTask ? assigneeBlockHint : item.disabledReason,
         };
       });
       if (hasMyPendingTask && caps.allow_transfer) {
-        items.push({ action: 'transfer', title: '转交', canExecute: true });
+        items.push({ action: 'transfer', title: t('components.uniAudit.transfer'), canExecute: true });
       }
       if (hasMyPendingTask && caps.allow_add_sign) {
-        items.push({ action: 'add_sign', title: '加签', canExecute: true });
+        items.push({ action: 'add_sign', title: t('components.uniAudit.addSign'), canExecute: true });
       }
       if (hasMyPendingTask) {
-        items.push({ action: 'delegate', title: '委托', canExecute: true });
+        items.push({ action: 'delegate', title: t('components.uniAudit.delegate'), canExecute: true });
       }
       const isSubmitter = flowStatus.instance?.submitter_id === currentUserId;
       if (isSubmitter) {
-        items.push({ action: 'urge', title: '催办', canExecute: true });
+        items.push({ action: 'urge', title: t('components.uniAudit.urge'), canExecute: true });
       }
     }
-    return items;
-  }, [hubActions, flowStatus, currentUserId]);
+    return { effectiveHubActions: items, flowAssigneeBlockHint: assigneeBlockHint };
+  }, [hubActions, flowStatus, currentUserId, t]);
 
 
 
@@ -855,6 +873,24 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
 
 
+        {flowAssigneeBlockHint ? (
+
+          <Alert
+
+            type="info"
+
+            showIcon
+
+            title={flowAssigneeBlockHint}
+
+            style={{ marginBottom: 12 }}
+
+          />
+
+        ) : null}
+
+
+
         {effectiveHubActions.length > 0 ? (
 
           <Flex justify="space-between" align="center" wrap="wrap" gap={8}>
@@ -875,7 +911,7 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
                 loading={busyAction === item.action}
 
-                title={item.canExecute ? undefined : '您没有该操作权限'}
+                title={item.canExecute ? undefined : (item.disabledReason || t('components.uniAudit.noPermission'))}
 
                 icon={
 
@@ -987,7 +1023,7 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
         {!canExecute && (
 
-          <Typography.Text type="warning">您没有该操作权限</Typography.Text>
+          <Typography.Text type="warning">{t('components.uniAudit.noPermission')}</Typography.Text>
 
         )}
 

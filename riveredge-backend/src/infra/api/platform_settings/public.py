@@ -8,6 +8,7 @@ Date: 2026-01-06
 """
 
 from fastapi import APIRouter, Query
+from fastapi.responses import PlainTextResponse
 
 from core.utils.timezone_utils import now_utc, site_timezone_name
 from core.utils.login_quick_providers import merge_login_quick_providers
@@ -41,6 +42,25 @@ DEFAULT_PLATFORM_SETTINGS = PlatformSettingsResponse(
     created_at=now_utc(),
     updated_at=now_utc(),
 )
+
+
+def _robots_txt_body(*, allow_indexing: bool) -> str:
+    if allow_indexing:
+        return "User-agent: *\nAllow: /\n"
+    return "User-agent: *\nDisallow: /\n"
+
+
+@router.get("/robots.txt", response_class=PlainTextResponse)
+async def get_platform_robots_txt():
+    """按平台设置返回 robots.txt 正文（供根路径 /robots.txt 反代或调试）。"""
+    try:
+        service = PlatformSettingsService()
+        settings = await service.get_or_create_default_settings()
+        allow = getattr(settings, "search_engine_indexing_enabled", True) is not False
+        return PlainTextResponse(_robots_txt_body(allow_indexing=allow), media_type="text/plain")
+    except Exception as e:
+        logger.error("生成 robots.txt 失败，默认允许收录: {}", e, exc_info=True)
+        return PlainTextResponse(_robots_txt_body(allow_indexing=True), media_type="text/plain")
 
 
 @router.get("/public", response_model=PlatformSettingsResponse)

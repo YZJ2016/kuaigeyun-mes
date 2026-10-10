@@ -60,7 +60,6 @@ const PieceRateSalarySummaryPage = lazy(
 );
 const LicensesPage = lazy(() => import('./pages/compliance/licenses/index'));
 const AssetPurchasesPage = lazy(() => import('./pages/assets/purchases/index'));
-const AssetsRegistryPage = lazy(() => import('./pages/assets/registry/index'));
 const AnnouncementsPage = lazy(() => import('./pages/admin/announcements/index'));
 const SealPage = lazy(() => import('./pages/admin/seal/index'));
 
@@ -130,7 +129,11 @@ const KuaioaApp: React.FC = () => (
     />
     <Route path="compliance/licenses" element={withPageSuspense(LicensesPage)} />
     <Route path="assets/purchases" element={withPageSuspense(AssetPurchasesPage)} />
-    <Route path="assets/registry" element={withPageSuspense(AssetsRegistryPage)} />
+    {/* 固定资产台账已迁轻财务；旧书签/深链跳转资产清单 */}
+    <Route
+      path="assets/registry"
+      element={<Navigate to="/apps/kuaicaiwu/fixed-assets/assets" replace />}
+    />
     <Route path="admin/announcements" element={withPageSuspense(AnnouncementsPage)} />
     <Route path="admin/seal" element={withPageSuspense(SealPage)} />
     <Route path="" element={<Navigate to="workbench" replace />} />

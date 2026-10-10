@@ -108,6 +108,8 @@ export type KuaioaFieldConfig = {
   /** 配合 formTabs：字段归属的 Tab key；未设时归入第一个 Tab */
   formTab?: string;
   width?: number;
+  /** 表单栅格列宽；未设时 textarea/file 通栏 24，其余半宽 12 */
+  formColSpan?: 12 | 24;
 };
 
 export type KuaioaActionConfig = {
@@ -935,8 +937,10 @@ const KuaioaCrudListPage: React.FC<Props> = ({
                   : [];
                 const colProps = modalGrid
                   ? {
-                      // 通栏仅备注 / 附件；多选 select（用工类型等）与普通字段同为半宽
-                      span: field.type === 'textarea' || field.type === 'file' ? 24 : 12,
+                      // 通栏默认备注 / 附件；可用 formColSpan 覆盖（如事由与请假条并排）
+                      span:
+                        field.formColSpan ??
+                        (field.type === 'textarea' || field.type === 'file' ? 24 : 12),
                     }
                   : undefined;
                 const lookupKind = resolveOaLookupKind(field);

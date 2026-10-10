@@ -38,8 +38,15 @@ import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../.
 import { alignDescriptionColumns } from '../../../sales-management/shared/documentFieldAlignment';
 import { formatDateBySiteSetting, formatDateTimeBySiteSetting, formatQuantity } from '../../../../../../utils/format';
 import type { AuditPhaseRecord } from '../../../../../../components/uni-audit/AuditPhaseBadge';
+import { useCustomFieldsForList } from '../../../../../../hooks/useCustomFieldsForList';
+import {
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../../components/custom-fields';
 
 const DEMAND_RESOURCE = 'kuaizhizao:demand';
+/** 与 custom_field_pages.kuaizhizao-demand-plan.table_name 一致 */
+const DEMAND_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_demands';
 const PLACEHOLDER: Demand = { id: 0 };
 
 export const DEMAND_WORKFLOW_PROPS = {
@@ -289,6 +296,24 @@ export const DemandDetailDrawer: React.FC<DemandDetailDrawerProps> = ({
   const showError = Boolean(error) && !contentReady && !loading;
   const showLoading = loading || (!contentReady && !showError);
   const effective = demand ?? PLACEHOLDER;
+
+  const {
+    customFields: demandDetailCustomFields,
+    customFieldValues: demandDetailCustomFieldValues,
+    loadFieldValuesForDetail: loadDemandFieldValuesForDetail,
+    resetDetailFieldValues: resetDemandDetailFieldValues,
+  } = useCustomFieldsForList<Demand>({
+    tableName: DEMAND_CUSTOM_FIELD_TABLE,
+    hostResource: DEMAND_RESOURCE,
+  });
+
+  useEffect(() => {
+    if (open && demand?.id != null && Number(demand.id) > 0) {
+      void loadDemandFieldValuesForDetail(Number(demand.id));
+      return;
+    }
+    resetDemandDetailFieldValues();
+  }, [open, demand?.id, loadDemandFieldValuesForDetail, resetDemandDetailFieldValues]);
 
   const tracking = useDocumentTracking(
     open && contentReady ? 'demand' : undefined,
@@ -595,7 +620,17 @@ export const DemandDetailDrawer: React.FC<DemandDetailDrawerProps> = ({
       collaborationAuditRecord={contentReady ? (effective as AuditPhaseRecord) : null}
       basic={
         contentReady ? (
-          <Descriptions column={3} size="small" items={timeconfigBasicItems} />
+          <>
+            <Descriptions column={3} size="small" items={timeconfigBasicItems} />
+            {hasCustomFieldsDetailContent(demandDetailCustomFields, demandDetailCustomFieldValues) ? (
+              <div style={{ marginTop: 16 }}>
+                <CustomFieldsDetailSection
+                  customFields={demandDetailCustomFields}
+                  customFieldValues={demandDetailCustomFieldValues}
+                />
+              </div>
+            ) : null}
+          </>
         ) : showError ? null : (
           <div style={{ minHeight: 80 }} />
         )

@@ -35,12 +35,14 @@ class RewardRecordCreate(BaseModel):
     employee_id: int
     amount: Decimal
     reason: Optional[str] = Field(None, max_length=200)
+    performance_score: Optional[Decimal] = Field(None, description="绩效得分")
     notes: Optional[str] = None
 
 
 class RewardRecordUpdate(BaseModel):
     amount: Optional[Decimal] = None
     reason: Optional[str] = Field(None, max_length=200)
+    performance_score: Optional[Decimal] = Field(None, description="绩效得分")
     status: Optional[str] = Field(None, max_length=20)
     notes: Optional[str] = None
 

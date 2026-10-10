@@ -79,6 +79,9 @@ import {
 } from '../../sales-management/shared/pushProgress';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import { CustomFieldsFormSection } from '../../../../../components/custom-fields';
 import { UniAuditBatchMenuButton, createUniAuditBatchHandlers } from '../../../../../components/uni-batch';
 import { buildDemandBusinessModeValueEnum, translateDemandBusinessMode, renderDemandBusinessModeMarkerTag } from '../../../utils/businessMode';
 import { getDemandTypeTagProps, translateDemandType } from '../../../utils/demandType';
@@ -101,6 +104,8 @@ import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 const DEMAND_RESOURCE = 'kuaizhizao:demand';
+/** 与 custom_field_pages.kuaizhizao-demand-plan.table_name 一致 */
+const DEMAND_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_demands';
 
 /** 统一状态判断（兼容枚举与中文） */
 function isDemandDraft(d: Demand): boolean {
@@ -208,6 +213,28 @@ const DemandManagementPage: React.FC = () => {
   const [currentDemand, setCurrentDemand] = useState<Demand | null>(null);
   const [demandTrackingRefreshKey, setDemandTrackingRefreshKey] = useState(0);
 
+  const {
+    customFields: demandFormCustomFields,
+    customFieldValues: demandFormCustomFieldValues,
+    loadFieldValues: loadDemandFormFieldValues,
+    extractFormValues: extractDemandFormValues,
+    saveCustomFieldValues: saveDemandCustomFieldValues,
+    resetFieldValues: resetDemandFormFieldValues,
+  } = useCustomFields({
+    tableName: DEMAND_CUSTOM_FIELD_TABLE,
+    hostResource: DEMAND_RESOURCE,
+    loadWhenOpen: true,
+    open: createPlanModalVisible || modalVisible,
+  });
+
+  const {
+    generateCustomFieldColumns: generateDemandCustomFieldColumns,
+    enrichRecordsWithCustomFields: enrichDemandRecordsWithCustomFields,
+  } = useCustomFieldsForList<Demand>({
+    tableName: DEMAND_CUSTOM_FIELD_TABLE,
+    hostResource: DEMAND_RESOURCE,
+  });
+
   // 需求计划页仅管理手工需求计划（demand_plan）
   const demandType = 'demand_plan' as const;
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -234,9 +261,13 @@ const DemandManagementPage: React.FC = () => {
   const handleCreatePlanSubmit = async (values: any) => {
     setCreatePlanLoading(true);
     try {
-      const rawBusinessMode = String(values.business_mode ?? 'MTS').trim().toUpperCase();
+      const { customData, standardValues } = extractDemandFormValues(
+        values,
+        createPlanFormRef.current ?? undefined,
+      );
+      const rawBusinessMode = String(standardValues.business_mode ?? 'MTS').trim().toUpperCase();
       const createBusinessMode = rawBusinessMode === 'ATO' ? 'ATO' : 'MTS';
-      const items = (values.items || []).map((it: any) => ({
+      const items = (standardValues.items || []).map((it: any) => ({
         material_id: it.material_id,
         material_code: it.material_code || '',
         material_name: it.material_name || '',
@@ -248,23 +279,31 @@ const DemandManagementPage: React.FC = () => {
         messageApi.warning(t('app.kuaizhizao.demandManagement.planItemsQtyRequired'));
         return;
       }
-      await createDemand({
+      const created = await createDemand({
         demand_type: 'demand_plan',
-        demand_name: values.demand_name,
+        demand_name: standardValues.demand_name,
         business_mode: createBusinessMode,
-        start_date: values.start_date ? formatDateTimeValue(values.start_date, 'YYYY-MM-DD') : formatDateTimeValue(dayjs(), 'YYYY-MM-DD'),
-        end_date: values.end_date ? formatDateTimeValue(values.end_date, 'YYYY-MM-DD') : undefined,
+        start_date: standardValues.start_date
+          ? formatDateTimeValue(standardValues.start_date, 'YYYY-MM-DD')
+          : formatDateTimeValue(dayjs(), 'YYYY-MM-DD'),
+        end_date: standardValues.end_date
+          ? formatDateTimeValue(standardValues.end_date, 'YYYY-MM-DD')
+          : undefined,
         total_quantity: 0,
         total_amount: 0,
         status: DemandStatus.DRAFT,
         review_status: ReviewStatus.PENDING,
-        priority: values.priority ?? 5,
-        notes: values.notes,
+        priority: standardValues.priority ?? 5,
+        notes: standardValues.notes,
         items,
       });
+      if (created?.id != null) {
+        await saveDemandCustomFieldValues(Number(created.id), customData);
+      }
       messageApi.success(t('app.kuaizhizao.demandManagement.planCreated'));
       setCreatePlanModalVisible(false);
       createPlanFormRef.current?.resetFields();
+      resetDemandFormFieldValues();
       invalidateStatistics();
       actionRef.current?.reload();
     } catch (err: any) {
@@ -284,6 +323,8 @@ const DemandManagementPage: React.FC = () => {
         const data = await getDemand(id);
         setIsEditingDraft(isDemandDraft(data));
         formRef.current?.setFieldsValue(data);
+        const fieldFormValues = await loadDemandFormFieldValues(id);
+        formRef.current?.setFieldsValue(fieldFormValues);
       } catch (error: any) {
         messageApi.error(t('app.kuaizhizao.demandManagement.detailFailed'));
       }
@@ -296,9 +337,15 @@ const DemandManagementPage: React.FC = () => {
   const handleSubmit = async (values: any) => {
     if (!isEdit || !currentId) return;
     try {
-      await updateDemand(currentId, values);
+      const { customData, standardValues } = extractDemandFormValues(
+        values,
+        formRef.current ?? undefined,
+      );
+      await updateDemand(currentId, standardValues);
+      await saveDemandCustomFieldValues(currentId, customData);
       messageApi.success(t('app.kuaizhizao.demandManagement.updated'));
       setModalVisible(false);
+      resetDemandFormFieldValues();
       invalidateStatistics();
       actionRef.current?.reload();
     } catch (error: any) {
@@ -563,8 +610,9 @@ const DemandManagementPage: React.FC = () => {
     [t],
   );
 
-  const columns: ProColumns<Demand>[] = useMemo(
-    () => alignProColumns<Demand>([
+  const columns: ProColumns<Demand>[] = useMemo(() => {
+    const customFieldColumns = generateDemandCustomFieldColumns();
+    return alignProColumns<Demand>([
     {
       title: t('app.kuaizhizao.salesForecast.startDate'),
       dataIndex: 'start_date_range',
@@ -727,6 +775,7 @@ const DemandManagementPage: React.FC = () => {
         );
       },
     },
+    ...customFieldColumns,
     ...buildDocumentAuditColumns<Demand>(t),
     ...(demandAuditColumn ? [demandAuditColumn] : []),
     {
@@ -826,9 +875,22 @@ const DemandManagementPage: React.FC = () => {
         return parts;
       },
     },
-  ], SALES_DOC_LIST_FIELD_RANK),
-    [t, formatDemandTypeLabel, handleDelete, handleDetail, handleEdit, demandCanWithdrawComputation, executeWithdrawFromComputation, demandAuditColumn, demandPlanLifecycleValueEnum, drawerVisible, currentDemand?.id, demandPerms.canDelete]
-  );
+  ], SALES_DOC_LIST_FIELD_RANK);
+  }, [
+    t,
+    formatDemandTypeLabel,
+    handleDelete,
+    handleDetail,
+    handleEdit,
+    demandCanWithdrawComputation,
+    executeWithdrawFromComputation,
+    demandAuditColumn,
+    demandPlanLifecycleValueEnum,
+    drawerVisible,
+    currentDemand?.id,
+    demandPerms.canDelete,
+    generateDemandCustomFieldColumns,
+  ]);
 
   const statCards: StatCard[] = useMemo(
     () =>
@@ -961,7 +1023,7 @@ const DemandManagementPage: React.FC = () => {
     <>
       <ListPageTemplate statCards={statCards}>
         <UniTable<Demand>
-          columnPersistenceId="apps.kuaizhizao.pages.plan-management.demand-management-width-v3"
+          columnPersistenceId="apps.kuaizhizao.pages.plan-management.demand-management-width-v4"
         viewTypes={['table', 'help']}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.demandManagement)}
           headerTitle={t('app.kuaizhizao.demandManagement.title')}
@@ -1013,7 +1075,7 @@ const DemandManagementPage: React.FC = () => {
             try {
               const response = await listDemands(apiParams);
               // 行缓存唯一真源：onTableDataChange（prefetch 会走本 request，禁止在此覆盖）
-              const rows = response.data || [];
+              const rows = await enrichDemandRecordsWithCustomFields(response.data || []);
               return {
                 data: rows,
                 success: response.success !== false,
@@ -1087,6 +1149,9 @@ const DemandManagementPage: React.FC = () => {
                 messageApi.warning(t('common.exportNoData'));
                 return;
               }
+              if (type !== 'currentPage') {
+                items = await enrichDemandRecordsWithCustomFields(items);
+              }
               await downloadRecordsAsXlsx(
                 items as Array<Record<string, unknown>>,
                 `demands-${todaySiteDateString()}.xlsx`,
@@ -1108,6 +1173,7 @@ const DemandManagementPage: React.FC = () => {
         onClose={() => {
           setCreatePlanModalVisible(false);
           createPlanFormRef.current?.resetFields();
+          resetDemandFormFieldValues();
         }}
         onFinish={handleCreatePlanSubmit}
         isEdit={false}
@@ -1171,6 +1237,12 @@ const DemandManagementPage: React.FC = () => {
             />
           </Col>
         </Row>
+
+        <CustomFieldsFormSection
+          customFields={demandFormCustomFields}
+          customFieldValues={demandFormCustomFieldValues}
+          gridColumns={2}
+        />
 
         <UniTableDetail
           name="items"
@@ -1238,7 +1310,10 @@ const DemandManagementPage: React.FC = () => {
       {/* 编辑需求 Modal：非草稿仅可改优先级和备注；草稿可改更多字段 */}
       <Modal
         open={modalVisible}
-        onCancel={() => setModalVisible(false)}
+        onCancel={() => {
+          setModalVisible(false);
+          resetDemandFormFieldValues();
+        }}
         title={isEditingDraft ? t('app.kuaizhizao.demandManagement.editDemand') : t('app.kuaizhizao.demandManagement.modifyDemand')}
         width={MODAL_CONFIG.SMALL_WIDTH}
         footer={null}
@@ -1252,7 +1327,14 @@ const DemandManagementPage: React.FC = () => {
             render: () => (
               <div style={{ textAlign: 'right', marginTop: 16 }}>
                 <Space>
-                  <Button onClick={() => setModalVisible(false)}>{t('common.cancel')}</Button>
+                  <Button
+                    onClick={() => {
+                      setModalVisible(false);
+                      resetDemandFormFieldValues();
+                    }}
+                  >
+                    {t('common.cancel')}
+                  </Button>
                   <Button type="primary" onClick={() => formRef.current?.submit()}>
                     {t('app.kuaizhizao.demandManagement.update')}
                   </Button>
@@ -1261,7 +1343,7 @@ const DemandManagementPage: React.FC = () => {
             ),
           }}
         >
-          {/* 非草稿：仅可修改优先级和备注（与上游同步） */}
+          {/* 非草稿：仅可修改优先级（备注与自定义字段在下方统一） */}
           {!isEditingDraft && (
             <Row gutter={16}>
               <Col span={24}>
@@ -1270,13 +1352,6 @@ const DemandManagementPage: React.FC = () => {
                   label={t('app.kuaizhizao.demandManagement.priority')}
                   options={priorityOptions}
                   fieldProps={{ style: { width: 200 } }}
-                />
-              </Col>
-              <Col span={24}>
-                <ProFormTextArea
-                  name="notes"
-                  label={t('common.remark')}
-                  fieldProps={{ rows: 3 }}
                 />
               </Col>
             </Row>
@@ -1334,15 +1409,22 @@ const DemandManagementPage: React.FC = () => {
                   })}
                 />
               </Col>
-              <Col span={24}>
-                <ProFormTextArea
-                  name="notes"
-                  label={t('common.remark')}
-                  fieldProps={{ rows: 3 }}
-                />
-              </Col>
             </Row>
           )}
+          <CustomFieldsFormSection
+            customFields={demandFormCustomFields}
+            customFieldValues={demandFormCustomFieldValues}
+            gridColumns={2}
+          />
+          <Row gutter={16}>
+            <Col span={24}>
+              <ProFormTextArea
+                name="notes"
+                label={t('common.remark')}
+                fieldProps={{ rows: 3 }}
+              />
+            </Col>
+          </Row>
         </ProForm>
       </Modal>
 

@@ -178,6 +178,12 @@ class PlatformSettings(Model):
         description="是否显示应用中心定制应用空态的商务咨询二维码",
     )
 
+    # 搜索引擎收录（robots / meta robots）
+    search_engine_indexing_enabled = fields.BooleanField(
+        default=True,
+        description="是否接受被搜索引擎收录；关闭时 robots.txt 与页面 meta 拒绝爬取",
+    )
+
     login_guest_enabled = fields.BooleanField(
         default=True,
         description="登录页是否显示免注册体验登录"

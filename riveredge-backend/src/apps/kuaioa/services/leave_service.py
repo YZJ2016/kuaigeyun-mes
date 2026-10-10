@@ -145,6 +145,7 @@ def _payload_from_create(data: LeaveRequestCreate) -> dict[str, Any]:
         "employee_id": data.employee_id,
         "destination": data.destination,
         "reason": data.reason,
+        "leave_slip_file_uuid": (data.leave_slip_file_uuid or "").strip() or None,
         "department_name": data.department_name,
         "notes": data.notes,
     }
@@ -161,6 +162,8 @@ def _payload_from_update(data: LeaveRequestUpdate) -> dict[str, Any]:
         payload["workshop_name"] = str(payload["workshop_name"]).strip() or None
     if "production_line_name" in payload and payload["production_line_name"] is not None:
         payload["production_line_name"] = str(payload["production_line_name"]).strip() or None
+    if "leave_slip_file_uuid" in payload and payload["leave_slip_file_uuid"] is not None:
+        payload["leave_slip_file_uuid"] = str(payload["leave_slip_file_uuid"]).strip() or None
     return _normalize_leave_payload(payload, partial=True)
 
 

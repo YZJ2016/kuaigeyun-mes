@@ -684,8 +684,13 @@ const getMenuConfig = (
         { path: '/system/config-center', name: t('menu.system.business-config'), icon: getMenuIcon(t('menu.system.business-config'), '/system/config-center'), permissionCodes: ['system:config-center:create', 'system:config-center:read', 'system:config-center:update', 'system:config-center:delete'] },
         { path: '/system/data-dictionaries', name: t('menu.system.data-dictionaries'), icon: getMenuIcon(t('menu.system.data-dictionaries'), '/system/data-dictionaries'), permissionCodes: ['system:data-dictionary:create', 'system:data-dictionary:read', 'system:data-dictionary:update', 'system:data-dictionary:delete'] },
         { path: '/system/languages', name: t('menu.system.languages'), icon: getMenuIcon(t('menu.system.languages'), '/system/languages'), permissionCodes: ['system:language:create', 'system:language:read', 'system:language:update', 'system:language:delete'] },
-        { path: '/system/code-rules', name: t('menu.system.code-rules'), icon: getMenuIcon(t('menu.system.code-rules'), '/system/code-rules'), permissionCodes: ['system:code-rule:create', 'system:code-rule:read', 'system:code-rule:update', 'system:code-rule:delete'] },
-        { path: '/system/custom-fields', name: t('menu.system.custom-fields'), icon: getMenuIcon(t('menu.system.custom-fields'), '/system/custom-fields'), permissionCodes: ['system:custom-field:create', 'system:custom-field:read', 'system:custom-field:update', 'system:custom-field:delete'] },
+        { path: '/system/files', name: t('menu.system.files'), icon: getMenuIcon(t('menu.system.files'), '/system/files'), permissionCodes: ['system:file:create', 'system:file:read', 'system:file:update', 'system:file:delete', 'system:file:export'] },
+        {
+          path: '/system/initial-data',
+          name: t('menu.system.initial-data'),
+          icon: getMenuIcon(t('menu.system.initial-data'), '/system/initial-data'),
+          permissionCodes: ['kuaizhizao:warehouse-management-initial-data:read'],
+        },
         { path: '/system/onboarding-wizard', name: t('menu.system.onboarding-wizard'), icon: getMenuIcon(t('menu.system.onboarding-wizard'), '/system/onboarding-wizard'), permissionCodes: ['system:onboarding-wizard:read', 'system:onboarding-wizard:update'] },
       ]},
       { key: 'user-management-group', type: 'group', name: t('menu.group.user-management'), label: t('menu.group.user-management'), className: 'riveredge-menu-group-title', children: [
@@ -693,33 +698,6 @@ const getMenuConfig = (
         { path: '/system/positions', name: t('menu.system.positions'), icon: getMenuIcon(t('menu.system.positions'), '/system/positions'), permissionCodes: ['system:position:create', 'system:position:read', 'system:position:update', 'system:position:delete', 'system:position:import', 'system:position:export'] },
         { path: '/system/roles', name: t('menu.system.roles-permissions'), icon: getMenuIcon(t('menu.system.roles-permissions'), '/system/roles'), permissionCodes: ['system:role:create', 'system:role:read', 'system:role:update', 'system:role:delete', 'system:role:assign', 'system:role:import', 'system:role:export'] },
         { path: '/system/users', name: t('menu.system.users'), icon: getMenuIcon(t('menu.system.users'), '/system/users'), permissionCodes: ['system:user:create', 'system:user:read', 'system:user:update', 'system:user:delete', 'system:user:import', 'system:user:export'] },
-      ]},
-      { key: 'data-center-group', type: 'group', name: t('menu.group.data-center'), label: t('menu.group.data-center'), className: 'riveredge-menu-group-title', children: [
-        {
-          path: '/system/initial-data',
-          name: t('menu.system.initial-data'),
-          icon: getMenuIcon(t('menu.system.initial-data'), '/system/initial-data'),
-          permissionCodes: ['kuaizhizao:warehouse-management-initial-data:read'],
-        },
-        { path: '/system/files', name: t('menu.system.files'), icon: getMenuIcon(t('menu.system.files'), '/system/files'), permissionCodes: ['system:file:create', 'system:file:read', 'system:file:update', 'system:file:delete', 'system:file:export'] },
-        { path: '/system/application-connections', name: t('menu.system.application-connections'), icon: getMenuIcon(t('menu.system.application-connections'), '/system/application-connections'), permissionCodes: ['system:application-connection:create', 'system:application-connection:read', 'system:application-connection:update', 'system:application-connection:delete'] },
-        { path: '/system/apis', name: t('menu.system.apis'), icon: getMenuIcon(t('menu.system.apis'), '/system/apis'), permissionCodes: ['system:api:create', 'system:api:read', 'system:api:update', 'system:api:delete'] },
-        { path: '/system/data-sources', name: t('menu.system.data-sources'), icon: getMenuIcon(t('menu.system.data-sources'), '/system/data-sources'), permissionCodes: ['system:data-source:create', 'system:data-source:read', 'system:data-source:update', 'system:data-source:delete'] },
-        { path: '/system/datasets', name: t('menu.system.datasets'), icon: getMenuIcon(t('menu.system.datasets'), '/system/datasets'), permissionCodes: ['system:dataset:create', 'system:dataset:read', 'system:dataset:update', 'system:dataset:delete'] },
-      ]},
-      { key: 'process-management-group', type: 'group', name: t('menu.group.process-management'), label: t('menu.group.process-management'), className: 'riveredge-menu-group-title', children: [
-        { path: '/system/approval-processes', name: t('menu.system.approval-processes'), icon: getMenuIcon(t('menu.system.approval-processes'), '/system/approval-processes'), permissionCodes: ['system:approval-process:create', 'system:approval-process:read', 'system:approval-process:update', 'system:approval-process:delete'], children: [{ path: '/system/approval-processes/designer', name: t('path.system.approval-processes.designer'), hideInMenu: true, permissionCodes: ['system:approval-process:update'] }] },
-        { path: '/system/messages/template', name: t('menu.system.messages.template'), icon: getMenuIcon(t('menu.system.messages.template'), '/system/messages/template'), permissionCodes: ['system:message-template:create', 'system:message-template:read', 'system:message-template:update', 'system:message-template:delete'] },
-        { path: '/system/print-templates', name: t('menu.system.print-templates'), icon: getMenuIcon(t('menu.system.print-templates'), '/system/print-templates'), permissionCodes: ['system:print-template:create', 'system:print-template:read', 'system:print-template:update', 'system:print-template:delete'], children: [{ path: '/system/print-templates/design', name: t('path.system.print-templates.design'), hideInMenu: true, permissionCodes: ['system:print-template:update'] }] },
-        { path: '/system/approval-instances', name: t('menu.system.approval-instances'), icon: getMenuIcon(t('menu.system.approval-instances'), '/system/approval-instances'), permissionCodes: ['system:approval-instance:read', 'system:approval-instance:update'] },
-        { path: '/system/messages/config', name: t('menu.system.messages.config'), icon: getMenuIcon(t('menu.system.messages.config'), '/system/messages/config'), permissionCodes: ['system:message-config:create', 'system:message-config:read', 'system:message-config:update', 'system:message-config:delete'] },
-        { path: '/system/print-devices', name: t('menu.system.print-devices'), icon: getMenuIcon(t('menu.system.print-devices'), '/system/print-devices'), permissionCodes: ['system:print-device:create', 'system:print-device:read', 'system:print-device:update', 'system:print-device:delete'] },
-      ]},
-      { key: 'monitoring-ops-group', type: 'group', name: t('menu.group.monitoring-ops'), label: t('menu.group.monitoring-ops'), className: 'riveredge-menu-group-title', children: [
-        { path: '/system/operation-logs', name: t('menu.system.operation-logs'), icon: getMenuIcon(t('menu.system.operation-logs'), '/system/operation-logs'), permissionCodes: ['system:operation-log:read'] },
-        { path: '/system/login-logs', name: t('menu.system.login-logs'), icon: getMenuIcon(t('menu.system.login-logs'), '/system/login-logs'), permissionCodes: ['system:login-log:read'] },
-        { path: '/system/online-users', name: t('menu.system.online-users'), icon: getMenuIcon(t('menu.system.online-users'), '/system/online-users'), permissionCodes: ['system:online-user:read'] },
-        { path: '/system/data-backups', name: t('menu.system.data-backups'), icon: getMenuIcon(t('menu.system.data-backups'), '/system/data-backups'), permissionCodes: ['system:data-backup:read'] },
       ]},
       { key: 'personal-center-group', type: 'group', name: t('menu.personal'), label: t('menu.personal'), className: 'riveredge-menu-group-title', children: [
         {
@@ -746,6 +724,28 @@ const getMenuConfig = (
           icon: getMenuIcon(t('menu.personal.tasks'), '/personal/tasks'),
           permissionCodes: ['system:user-task:read', 'system:user-task:update'],
         },
+      ]},
+      { key: 'process-management-group', type: 'group', name: t('menu.group.process-management'), label: t('menu.group.process-management'), className: 'riveredge-menu-group-title', children: [
+        { path: '/system/approval-processes', name: t('menu.system.approval-processes'), icon: getMenuIcon(t('menu.system.approval-processes'), '/system/approval-processes'), permissionCodes: ['system:approval-process:create', 'system:approval-process:read', 'system:approval-process:update', 'system:approval-process:delete'], children: [{ path: '/system/approval-processes/designer', name: t('path.system.approval-processes.designer'), hideInMenu: true, permissionCodes: ['system:approval-process:update'] }] },
+        { path: '/system/approval-instances', name: t('menu.system.approval-instances'), icon: getMenuIcon(t('menu.system.approval-instances'), '/system/approval-instances'), permissionCodes: ['system:approval-instance:read', 'system:approval-instance:update'] },
+        { path: '/system/messages/template', name: t('menu.system.messages.template'), icon: getMenuIcon(t('menu.system.messages.template'), '/system/messages/template'), permissionCodes: ['system:message-template:create', 'system:message-template:read', 'system:message-template:update', 'system:message-template:delete'] },
+        { path: '/system/messages/config', name: t('menu.system.messages.config'), icon: getMenuIcon(t('menu.system.messages.config'), '/system/messages/config'), permissionCodes: ['system:message-config:create', 'system:message-config:read', 'system:message-config:update', 'system:message-config:delete'] },
+        { path: '/system/print-templates', name: t('menu.system.print-templates'), icon: getMenuIcon(t('menu.system.print-templates'), '/system/print-templates'), permissionCodes: ['system:print-template:create', 'system:print-template:read', 'system:print-template:update', 'system:print-template:delete'], children: [{ path: '/system/print-templates/design', name: t('path.system.print-templates.design'), hideInMenu: true, permissionCodes: ['system:print-template:update'] }] },
+        { path: '/system/print-devices', name: t('menu.system.print-devices'), icon: getMenuIcon(t('menu.system.print-devices'), '/system/print-devices'), permissionCodes: ['system:print-device:create', 'system:print-device:read', 'system:print-device:update', 'system:print-device:delete'] },
+        { path: '/system/code-rules', name: t('menu.system.code-rules'), icon: getMenuIcon(t('menu.system.code-rules'), '/system/code-rules'), permissionCodes: ['system:code-rule:create', 'system:code-rule:read', 'system:code-rule:update', 'system:code-rule:delete'] },
+        { path: '/system/custom-fields', name: t('menu.system.custom-fields'), icon: getMenuIcon(t('menu.system.custom-fields'), '/system/custom-fields'), permissionCodes: ['system:custom-field:create', 'system:custom-field:read', 'system:custom-field:update', 'system:custom-field:delete'] },
+      ]},
+      { key: 'monitoring-ops-group', type: 'group', name: t('menu.group.monitoring-ops'), label: t('menu.group.monitoring-ops'), className: 'riveredge-menu-group-title', children: [
+        { path: '/system/operation-logs', name: t('menu.system.operation-logs'), icon: getMenuIcon(t('menu.system.operation-logs'), '/system/operation-logs'), permissionCodes: ['system:operation-log:read'] },
+        { path: '/system/login-logs', name: t('menu.system.login-logs'), icon: getMenuIcon(t('menu.system.login-logs'), '/system/login-logs'), permissionCodes: ['system:login-log:read'] },
+        { path: '/system/online-users', name: t('menu.system.online-users'), icon: getMenuIcon(t('menu.system.online-users'), '/system/online-users'), permissionCodes: ['system:online-user:read'] },
+        { path: '/system/data-backups', name: t('menu.system.data-backups'), icon: getMenuIcon(t('menu.system.data-backups'), '/system/data-backups'), permissionCodes: ['system:data-backup:read'] },
+      ]},
+      { key: 'data-center-group', type: 'group', name: t('menu.group.data-center'), label: t('menu.group.data-center'), className: 'riveredge-menu-group-title', children: [
+        { path: '/system/application-connections', name: t('menu.system.application-connections'), icon: getMenuIcon(t('menu.system.application-connections'), '/system/application-connections'), permissionCodes: ['system:application-connection:create', 'system:application-connection:read', 'system:application-connection:update', 'system:application-connection:delete'] },
+        { path: '/system/apis', name: t('menu.system.apis'), icon: getMenuIcon(t('menu.system.apis'), '/system/apis'), permissionCodes: ['system:api:create', 'system:api:read', 'system:api:update', 'system:api:delete'] },
+        { path: '/system/data-sources', name: t('menu.system.data-sources'), icon: getMenuIcon(t('menu.system.data-sources'), '/system/data-sources'), permissionCodes: ['system:data-source:create', 'system:data-source:read', 'system:data-source:update', 'system:data-source:delete'] },
+        { path: '/system/datasets', name: t('menu.system.datasets'), icon: getMenuIcon(t('menu.system.datasets'), '/system/datasets'), permissionCodes: ['system:dataset:create', 'system:dataset:read', 'system:dataset:update', 'system:dataset:delete'] },
       ]},
     ],
   },
@@ -1245,9 +1245,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       'core-config-group',
       'user-management-group',
       'personal-center-group',
-      'data-center-group',
       'process-management-group',
       'monitoring-ops-group',
+      'data-center-group',
     ];
     const spanByKey: Record<string, number> = {
       // 按 24 栅格布局：
@@ -1255,10 +1255,10 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       'core-config-group': 12,
       'user-management-group': 6,
       'personal-center-group': 6,
-      // 第二行：数据中心(9) + 流程管理(9) + 监控运维(6) = 24
-      'data-center-group': 9,
-      'process-management-group': 9,
+      // 第二行：协同配置(12) + 监控运维(6) + 数据中心(6) = 24
+      'process-management-group': 12,
       'monitoring-ops-group': 6,
+      'data-center-group': 6,
     };
     const groups = (systemMenuEntry?.children ?? []) as MenuDataItem[];
     const visibleGroups = groups
@@ -1278,6 +1278,13 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         // 组宽度按设计占位，确保每行总占位凑满 12，避免右侧空白列
         const rawKey = String(group.key || group.name || `system-group-${index}`);
         const groupSpan = spanByKey[rawKey] ?? Math.min(6, Math.max(3, itemCols + 1));
+        // 数据中心后续将剥离为 PRO；浮层组标题与侧栏同款 PRO 徽标
+        const groupNameText = typeof group.name === 'string' ? group.name : '';
+        const showProBadge =
+          rawKey === 'data-center-group' ||
+          rawKey === 'menu.group.data-center' ||
+          groupNameText === 'menu.group.data-center' ||
+          groupNameText === t('menu.group.data-center');
         return {
           key: rawKey,
           name: group.name,
@@ -1285,6 +1292,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           itemCount,
           itemCols,
           groupSpan,
+          showProBadge,
         };
       })
       .filter((group) => group.itemCount > 0)
@@ -1297,7 +1305,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         return aOrder - bOrder;
       });
     return visibleGroups;
-  }, [systemMenuEntry]);
+  }, [systemMenuEntry, t]);
 
   const systemSettingsPanelGridColumns = useMemo(() => {
     if (!systemSettingsGroups.length) return 6;
@@ -3354,7 +3362,12 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                   style={{ gridColumn: `span ${group.groupSpan}` }}
                 >
                   <div className="riveredge-system-settings-group">
-                    <div className="riveredge-system-settings-group-title">{group.name as React.ReactNode}</div>
+                    <div className="riveredge-system-settings-group-title">
+                      {group.name as React.ReactNode}
+                      {group.showProBadge ? (
+                        <span className="menu-item-badge menu-item-badge-pro">PRO</span>
+                      ) : null}
+                    </div>
                     <div
                       className="riveredge-system-settings-grid"
                       style={{ gridTemplateColumns: `repeat(${group.itemCols}, minmax(0, 1fr))` }}

@@ -26,6 +26,11 @@ class KuaioaLeaveRequest(BaseModel):
     employee_name = fields.CharField(max_length=100, null=True, description="档案员工姓名")
     destination = fields.CharField(max_length=200, null=True, description="出差目的地")
     reason = fields.TextField(null=True, description="事由")
+    leave_slip_file_uuid = fields.CharField(
+        max_length=36,
+        null=True,
+        description="请假条附件 file UUID",
+    )
     status = fields.CharField(max_length=30, default="draft", description="状态")
     applicant_id = fields.IntField(null=True, description="申请人")
     applicant_name = fields.CharField(max_length=100, null=True, description="申请人姓名")
