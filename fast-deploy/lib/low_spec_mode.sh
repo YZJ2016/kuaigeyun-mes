@@ -38,8 +38,6 @@ low_spec_save_snapshot() {
     local tw pp nb tsto bsto bg dm dmax tmin tmax
     tw="$(read_deploy_env_value TASKIQ_WORKERS 2>/dev/null || true)"
     [ -n "$tw" ] || tw="${TASKIQ_WORKERS:-1}"
-    pp="$(read_deploy_env_value PLAYWRIGHT_POSTINSTALL_ENABLE 2>/dev/null || true)"
-    [ -n "$pp" ] || pp="${PLAYWRIGHT_POSTINSTALL_ENABLE:-1}"
     nb="$(read_deploy_env_value NODE_BUILD_MEM 2>/dev/null || true)"
     [ -n "$nb" ] || nb="${NODE_BUILD_MEM:-4096}"
     tsto="$(read_deploy_env_value TASKIQ_START_TIMEOUT 2>/dev/null || true)"
@@ -58,7 +56,6 @@ low_spec_save_snapshot() {
     [ -n "$tmax" ] || tmax="3"
 
     set_deploy_env_value "$(_low_spec_snap_key TASKIQ_WORKERS)" "$tw"
-    set_deploy_env_value "$(_low_spec_snap_key PLAYWRIGHT_POSTINSTALL_ENABLE)" "$pp"
     set_deploy_env_value "$(_low_spec_snap_key NODE_BUILD_MEM)" "$nb"
     set_deploy_env_value "$(_low_spec_snap_key TASKIQ_START_TIMEOUT)" "$tsto"
     set_deploy_env_value "$(_low_spec_snap_key BACKEND_START_TIMEOUT)" "$bsto"
@@ -78,8 +75,9 @@ low_spec_apply_profile() {
 
     set_deploy_env_value LOW_SPEC_MODE "1"
     set_deploy_env_value TASKIQ_WORKERS "1"
-    set_deploy_env_value PLAYWRIGHT_POSTINSTALL_ENABLE "0"
-    # 仅关闭 Chromium 后台补装以省内存/带宽；Playwright 包与已装浏览器目录保留
+    # Chromium 后台补装与低配解耦：不关闭 PLAYWRIGHT_POSTINSTALL_ENABLE；
+    # 若曾被旧版低配写成 0，开启/重开低配时恢复为 1，保证可补装。
+    set_deploy_env_value PLAYWRIGHT_POSTINSTALL_ENABLE "1"
     set_deploy_env_value NODE_BUILD_MEM "2048"
     set_deploy_env_value ALLOW_SERVER_BUILD "0"
     set_deploy_env_value TASKIQ_START_TIMEOUT "300"
@@ -110,7 +108,6 @@ low_spec_apply_normal_profile() {
     local tw pp nb tsto bsto bg dm dmax tmin tmax
 
     tw="$(_low_spec_read_snap_deploy TASKIQ_WORKERS "1")"
-    pp="$(_low_spec_read_snap_deploy PLAYWRIGHT_POSTINSTALL_ENABLE "1")"
     nb="$(_low_spec_read_snap_deploy NODE_BUILD_MEM "4096")"
     tsto="$(_low_spec_read_snap_deploy TASKIQ_START_TIMEOUT "180")"
     bsto="$(_low_spec_read_snap_deploy BACKEND_START_TIMEOUT "120")"
@@ -122,7 +119,7 @@ low_spec_apply_normal_profile() {
 
     set_deploy_env_value LOW_SPEC_MODE "0"
     set_deploy_env_value TASKIQ_WORKERS "$tw"
-    set_deploy_env_value PLAYWRIGHT_POSTINSTALL_ENABLE "$pp"
+    # 恢复一般模式不改动 PLAYWRIGHT_POSTINSTALL_ENABLE（与低配解耦）
     set_deploy_env_value NODE_BUILD_MEM "$nb"
     set_deploy_env_value TASKIQ_START_TIMEOUT "$tsto"
     set_deploy_env_value BACKEND_START_TIMEOUT "$bsto"
@@ -381,9 +378,9 @@ cmd_low_spec_mode() {
     echo "  内存: $(host_mem_summary)"
     _low_spec_swap_hint
     echo ""
-    echo "  开启后: Taskiq 单 worker、关闭 Playwright 后台补装、缩小 DB 连接池、"
-    echo "          关闭 Chromium 后台补装（已装浏览器保留）、禁用蓝绿双后端（更新固定传统部署）、"
-    echo "          延长启动等待；无 swap 时尝试自动创建（见 deploy.env SWAP_*）；适合约 4GB 及以下内存。"
+    echo "  开启后: Taskiq 单 worker、缩小 DB 连接池、禁用蓝绿双后端（更新固定传统部署）、"
+    echo "          延长启动等待；Chromium 后台补装不受影响（仍可按 OPT_PDF_PRINT 补装）；"
+    echo "          无 swap 时尝试自动创建（见 deploy.env SWAP_*）；适合约 4GB 及以下内存。"
     echo ""
     echo "  [1] 开启低配模式"
     echo "  [2] 恢复一般模式"
