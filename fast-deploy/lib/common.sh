@@ -136,11 +136,8 @@ print_special_deps_footnotes() {
     fi
     if [ "$cr_st" = "disabled-missing" ] || [ "$cr_st" = "disabled-present" ] || [ "$cr_st" = "skipped" ] || [ "$pw_st" = "skipped" ]; then
         [ "$has_note" -eq 0 ] && { echo "  提示:"; has_note=1; }
-        if low_spec_mode_enabled 2>/dev/null; then
-            echo "    - 低配模式关闭了 Chromium 后台补装；已有浏览器仍可用于打印，不会自动下载新浏览器。"
-        else
-            echo "    - PLAYWRIGHT_POSTINSTALL_ENABLE=0：仅关闭后台补装，不会删除已有 Chromium。"
-        fi
+        echo "    - PLAYWRIGHT_POSTINSTALL_ENABLE=0 或未开 OPT_PDF_PRINT：跳过 Chromium 后台补装（不删除已有浏览器）。"
+        echo "      需要打印 PDF 时：deploy.env 设 OPT_PDF_PRINT=1 且 PLAYWRIGHT_POSTINSTALL_ENABLE=1，再执行选装/start。"
     fi
     [ "$has_note" -eq 1 ] && echo ""
 }
@@ -2936,7 +2933,7 @@ playwright_apply_host_platform() {
 }
 
 playwright_export_env() {
-    # 无论是否后台补装，运行时都要指向同一浏览器目录（低配关闭补装≠删除已装 Chromium）
+    # 无论是否后台补装，运行时都要指向同一浏览器目录（关闭补装≠删除已装 Chromium）
     export PLAYWRIGHT_BROWSERS_PATH="$(resolve_playwright_browsers_path)"
     mkdir -p "$PLAYWRIGHT_BROWSERS_PATH"
     playwright_apply_host_platform
@@ -3477,7 +3474,7 @@ check_playwright() {
         if playwright_postinstall_enabled; then
             echo "ok"
         else
-            # 包仍在；仅后台补装开关关闭（常见于低配模式）
+            # 包仍在；仅后台补装开关关闭
             echo "skipped"
         fi
     else
