@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-10-07T06:04:21Z",
-  "updated_at": "2026-10-10T16:06:57Z",
+  "updated_at": "2026-10-10T19:13:56Z",
   "files": {
     ".cursor/rules/ai-memory.mdc": {
       "role": "index",
@@ -77,9 +77,9 @@
     },
     "aoci.code.txt": {
       "role": "index",
-      "sha256": "4d8c2dac808aca90b423a4a361ff44a840d28189387ec78f2454b9e46082701a",
-      "size": 1001637,
-      "normalized_sha256": "4d8c2dac808aca90b423a4a361ff44a840d28189387ec78f2454b9e46082701a"
+      "sha256": "63d281bec8def2aec211e8449e46fef7b86ff5ef4649cec7e41b8d8e52f50598",
+      "size": 1001642,
+      "normalized_sha256": "63d281bec8def2aec211e8449e46fef7b86ff5ef4649cec7e41b8d8e52f50598"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -18041,9 +18041,9 @@
     },
     "riveredge-backend/src/core/services/integration/gitee_oauth_service.py": {
       "role": "index",
-      "sha256": "02c5fc8666d1811107bbd24ab2610c192c61e87a56b820fd4097a5659e49d8fa",
-      "size": 29084,
-      "normalized_sha256": "02c5fc8666d1811107bbd24ab2610c192c61e87a56b820fd4097a5659e49d8fa"
+      "sha256": "654777e0affdca576ccbb6cdd8b797d4dcd2f5031d6f4302de4a31faebe61c02",
+      "size": 29164,
+      "normalized_sha256": "654777e0affdca576ccbb6cdd8b797d4dcd2f5031d6f4302de4a31faebe61c02"
     },
     "riveredge-backend/src/core/services/integration/http_webhook_push_adapter.py": {
       "role": "index",
@@ -36321,9 +36321,9 @@
     },
     "riveredge-frontend/src/pages/system/dashboard/platformUpdateLog.ts": {
       "role": "index",
-      "sha256": "458a211b8fd2b56d0294fa699ba96fd1c9d66c04dc86f96ac2ccbc012454b162",
-      "size": 512933,
-      "normalized_sha256": "0fb8019f1ace28571d7d1a988f77a52d4815208c110a3d36b8e52210957103ac"
+      "sha256": "0249a52e9f4a5768cf1a25924ede464ded6b2bbf05bd147ae3737496bb82114e",
+      "size": 513242,
+      "normalized_sha256": "e7ef68df43b1f83b39f6e91303a077d5125029c325f20995b1d8ccabe52a1313"
     },
     "riveredge-frontend/src/pages/system/dashboard/platformUpdateLogDedicated.ts": {
       "role": "index",

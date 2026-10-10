@@ -30951,6 +30951,10 @@ export default {
     'Gitee 快捷登录可读取邮箱并支持个人资料绑定',
   'pages.dashboard.updateLog.entries.gitee-oauth-email-scope-bind-r01.description':
     '授权范围增加 emails，并在公开邮箱为空时从邮箱列表取主邮箱以自动匹配系统用户；个人资料补充 Gitee 授权绑定与解绑入口。',
+  'pages.dashboard.updateLog.entries.gitee-oauth-drop-projects-scope-r01.title':
+    '修复生产环境 Gitee 授权提示请求范围无效',
+  'pages.dashboard.updateLog.entries.gitee-oauth-drop-projects-scope-r01.description':
+    '登录授权仅申请 user_info，去掉部分应用会拒收的 projects；Star 仍走官网引导，不再依赖该 scope。',
   'pages.dashboard.updateLog.entries.gitee-oauth-first-or-bind-r01.title':
     'Gitee 登录支持首次建号或绑定已有账户',
   'pages.dashboard.updateLog.entries.gitee-oauth-first-or-bind-r01.description':
