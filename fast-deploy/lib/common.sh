@@ -557,8 +557,8 @@ run_windows_boot_task_action() {
 
 apply_cn_mirrors() {
     [ "${USE_MIRROR}" = "0" ] && return 0
-    # 与 PGDG 国内源一致用阿里云。清华 tuna 在部分 Windows 网络上 Connect 超时。
-    export UV_INDEX_URL="${UV_INDEX_URL:-https://mirrors.aliyun.com/pypi/simple/}"
+    # 默认清华：阿里云对 uv.lock hash 路径 .whl.metadata 常 404；失败仍由 uv_sync 回退阿里云/官方
+    export UV_INDEX_URL="${UV_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple/}"
     export npm_config_registry="${npm_config_registry:-https://registry.npmmirror.com}"
     if command -v npm >/dev/null 2>&1; then
         npm config set registry https://registry.npmmirror.com 2>/dev/null || true
@@ -2768,7 +2768,7 @@ backend_dev_server_entry() {
 }
 
 # uv sync 用的 PyPI 源列表：显式 UV_INDEX_URL 优先，再国内镜像，最后官方。
-# 阿里云偶发对 lock 里 hash 路径的 .whl.metadata 返回 404，需回退。
+# 清华优先：阿里云对 lock hash 路径 .whl.metadata 常 404。
 backend_uv_index_urls() {
     local primary="${UV_INDEX_URL:-}"
     local url
@@ -2776,8 +2776,8 @@ backend_uv_index_urls() {
         printf '%s\n' "$primary"
     fi
     for url in \
-        "https://mirrors.aliyun.com/pypi/simple/" \
         "https://pypi.tuna.tsinghua.edu.cn/simple/" \
+        "https://mirrors.aliyun.com/pypi/simple/" \
         "https://pypi.org/simple/"; do
         if [ -z "$primary" ] || [ "$url" != "$primary" ]; then
             printf '%s\n' "$url"
@@ -3881,8 +3881,11 @@ cmd_migrate() {
         if [ "${DEPLOY_MIGRATE_VERBOSE:-0}" != "1" ]; then
             export LOG_LEVEL=INFO
         fi
-        # --no-sync：deps 已由 sync_backend_deps 落好；禁止 uv run 再按旧 UV_INDEX_URL 拉包踩阿里云 404
-        PYTHONUNBUFFERED=1 AERICH_MIGRATE=1 "$(resolve_uv)" run --no-sync aerich upgrade
+        # --no-sync：deps 已 sync；并显式带上当前 UV_INDEX_URL，避免旧脚本/环境残留阿里云
+        log_info "uv run aerich（no-sync, index=${UV_INDEX_URL:-unset}）"
+        PYTHONUNBUFFERED=1 AERICH_MIGRATE=1 \
+            UV_INDEX_URL="${UV_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple/}" \
+            "$(resolve_uv)" run --no-sync aerich upgrade
     ) || { log_error "数据库迁移失败"; DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"; exit 1; }
     if deploy_opt_kuaiai_vector_enabled; then
         ensure_kuaiai_vector_schema || { DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"; exit 1; }
