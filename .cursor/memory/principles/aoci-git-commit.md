@@ -57,14 +57,21 @@ standard: 改了托管对象才 maintain；正式资产随变更提交；构建�
 | `build.web.sh` 自动的 `chore: build-web sync` | 脚本只交 dist；**此前**源码 tip 索引须已对齐 |
 | 用户明确禁止改 AOCI / `.aoci` | 服从，并报告索引与源码不一致 |
 
-## 构建推送顺序（不可颠倒）
+## 与「构建推送」的关系
+
+AOCI → commit → **源码 `git push`** 是一条路径。  
+**产物构建**（`build.web.sh` / H5 / 工位 pack）是另一条路径，仅当对应 UI 源变更时才做。
+
+完整分流见 `principles/code-push-routing.md` 与规则 `build-push-aoci.mdc`。
+
+有产物构建时顺序（不可颠倒）：
 
 1. 源码改到稳定（不含 dist / 工位 `release/`）
-2. AOCI：`maintain` →（候选）`update_entry` → 必要时 verify（业务 missing/stale=0，skipped 除外）
-3. `git add` 正式 AOCI + 业务文件 → `git commit`（同批或紧随对齐提交均可）
-4. 再跑构建推送（Web：`BUILD_WEB_SKIP_HISTORY_REWRITE=1 ./fast-deploy/build.web.sh` 等）
+2. AOCI：`maintain` →（候选）`update_entry` → 必要时 verify
+3. `git add` 正式 AOCI + 业务 → `git commit`
+4. 再跑**对应**产物脚本（不要无前端改动却跑 Web 构建）
 
-禁止：先 commit 业务再补 aoci；索引脏着就 `build.web.sh` / 推 H5；用「构建后再补索引」跳过。
+禁止：先 commit 业务再补 aoci；索引脏着推产物；用「构建后再补索引」跳过。
 
 ## 应提交 / 勿提交
 

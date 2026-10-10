@@ -39,7 +39,8 @@ standard: E:\AI-Memory\30-Knowledge\MES-Codebase\architecture-map.md
 - 工单/库存/BOM/质量/权限：`development-standards.md` 对应节
 - 修过的同类坑：`correction-ledger.md` 按关键词搜
 - 跑测试或提交：`test-knowledge.md`
-- Web 构建推送：`web-build-push-sop.md` + `features/fast-deploy-scripts.md`
+- 推送分流（是否编前端）：主仓 `principles/code-push-routing.md`
+- Web 构建推送（仅前端产物需要时）：`web-build-push-sop.md` + `features/fast-deploy-scripts.md`
 - 同步/外推等已有标准实现：`.cursor/memory/README.md` 路由表
 
 **默认不读**

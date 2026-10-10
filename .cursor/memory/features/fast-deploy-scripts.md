@@ -3,7 +3,7 @@ title: fast-deploy 脚本入口（构建 / 部署）
 slug: fast-deploy-scripts
 status: delivered
 domain: deploy
-when: 构建前端 dist、本机起停、生产更新、H5、compose 专业包
+when: 构建前端 dist、本机起停、生产更新、H5、compose 专业包、要不要编前端
 keywords:
   - fast-deploy
   - build.web.sh
@@ -12,28 +12,31 @@ keywords:
   - launch.dev.sh
   - cmd_ensure_frontend_dist
   - build:16g
-standard: fast-deploy/README.md；禁止平行 npm run build 后手写 commit/push
+  - 没改前端
+standard: 先按 code-push-routing 分流；有 PC 前端改动才 build.web；禁止平行 npm run build 后手写 commit/push
 ---
 
 # fast-deploy 脚本入口（构建 / 部署）
 
-- 日期：2026-10-03
+- 日期：2026-10-03；分流澄清：2026-10-10
 - 状态：已交付（文档化，供后续构建一律走脚本）
 
 ## 目标
 
-主仓所有「构建前端、发 dist、本机起停、生产更新」只走 `fast-deploy/` 现有脚本。
+主仓所有「构建前端、发 dist、本机起停、生产更新」只走 `fast-deploy/` 现有脚本。  
+**源码-only 推送**（后端 / deploy / 记忆库）不走本篇的 `build.web.sh`，见 `principles/code-push-routing.md`。
 
 ## 何时读 / 禁止另起
 
-- 何时读：发版、部署、本机 worker、H5、pro-apps
-- 禁止：平行发明 `npm run build` 后手写 commit/push；对 develop 擅自 `--force`；新步骤另起顶层脚本
+- 何时读：已确认需要编 PC dist / 部署机更新 / H5 / pro-apps / 本机起停
+- 禁止：没改前端却跑 `build.web.sh`；平行 `npm run build` 后手写 commit/push；对 develop 擅自 `--force`；新步骤另起顶层脚本
 
 ## 标准入口
 
 | 场景 | 命令 | 说明 |
 |------|------|------|
-| Web 构建并推送 dist | `BUILD_WEB_SKIP_HISTORY_REWRITE=1 ./fast-deploy/build.web.sh`（Windows 用 Git Bash） | 日常路径；只提交 `riveredge-frontend/dist` |
+| 仅后端/deploy/记忆库 | `git push`（生产再 `deploy.sh update`） | **不**跑 `build.web.sh` |
+| Web 构建并推送 dist | `BUILD_WEB_SKIP_HISTORY_REWRITE=1 ./fast-deploy/build.web.sh`（Windows 用 Git Bash） | **仅** PC 前端源有关变更后；只提交 `riveredge-frontend/dist` |
 | Web 历史瘦身 + 推送 | `./fast-deploy/build.web.sh` | 需 `git-filter-repo`，`force-with-lease` |
 | 部署机消费 dist | `./fast-deploy/deploy.sh update`（prod） | `cmd_ensure_frontend_dist`：有 Git dist 则不在服务器构建 |
 | 部署机强制本机构建 | `ALLOW_SERVER_BUILD=1` + `deploy.sh build` | 弱机不推荐；`npm run build`（非 `build:16g`） |
@@ -62,11 +65,12 @@ standard: fast-deploy/README.md；禁止平行 npm run build 后手写 commit/pu
 | 配置样例 | `fast-deploy/config/deploy.env.example` |
 | Caddy 模板 | `fast-deploy/templates/Caddyfile.template` |
 
-## 构建链路（不要绕开）
+## 构建链路（仅 Web 产物需要时）
 
-1. 发版机（本仓库 develop）：源码改到稳定 → **AOCI maintain/update-entry 对齐并提交正式资产** → 源码 commit（不含 dist）→ SOP 死代码门禁 → `build.web.sh`（见 `.cursor/rules/build-push-aoci.mdc`）
-2. 生产机：`git pull` 得到 tip 里的 dist → `deploy.sh update` → 发现 `index.html`+`login.html` 即跳过 npm
-3. `deploy.sh build` 只给「允许服务器构建」或调试；不是 Gitee 发版入口
+1. 确认改动含 PC 前端（见 `principles/code-push-routing.md`）；否则只源码 push
+2. 发版机 develop：前端相关源码稳定 → AOCI 对齐并提交 → 源码 commit（不含 dist）→ `BUILD_WEB_SKIP_HISTORY_REWRITE=1 ./fast-deploy/build.web.sh`
+3. 生产机：`git pull` 得 tip 里 dist → `deploy.sh update` → 有 `index.html`+`login.html` 即跳过 npm
+4. `deploy.sh build` 只给「允许服务器构建」或调试；不是 Gitee 发版入口
 
 日常 Windows 必须带 `BUILD_WEB_SKIP_HISTORY_REWRITE=1`，否则会跑 filter-repo 并 `force-with-lease`。
 
