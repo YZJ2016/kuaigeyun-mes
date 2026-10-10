@@ -1,46 +1,72 @@
 ---
-description: 构建推送与业务提交前必须先完成 AOCI 索引维护并提交正式资产
+description: 按改动类型分流推送；仅产物相关变更才构建；改托管对象则先 AOCI 再 commit
 alwaysApply: true
 ---
 
-# 构建推送：提交前先完成 AOCI 索引
+# 代码推送分流（AOCI + 何时构建）
 
-用户约定（2026-10-09）：**每次业务/发版相关 `git commit` 之前**，先把本仓 AOCI 索引维护到与源码一致，再提交；然后再跑 Web / 移动 H5 / 工位打包推送。禁止「先 commit 再补 aoci」或「只推 dist、索引脏着」。
+用户约定（2026-10-09 起；2026-10-10 澄清）：**先按改动类型选推送路径**，再决定是否 AOCI、是否跑前端/H5/工位构建。  
+禁止把「业务 commit」默认等同于「必须 `build.web.sh`」；禁止「先 commit 再补 aoci」或「索引脏着推产物」。
 
-## 适用范围
+判据笔记：`.cursor/memory/principles/code-push-routing.md`。AOCI 细节：`.cursor/rules/aoci-git-commit.mdc`。
 
-- 用户说「web端构建推送」「移动端构建推送」「工位打包推送」「三仓构建推送」等
-- 任何会改动 AOCI 托管对象（源码/配置等受管文件）后的交付提交
-- 三仓各自绑定自己的 AOCI（主仓 `aoci` / client `aoci-client` / pro `aoci-pro`）
+## 1. 先分流（Agent 必做）
 
-## 标准顺序（不可颠倒）
+看本次稳定后的改动路径，选**最小集合**（可多选）：
 
-1. **源码改到最终稳定**（不含 dist / 工位 `release/`）
-2. **AOCI 索引**（本仓 MCP）：
-   - 一次 `aoci_maintain`（对象已稳定后再调，勿每改一文件就 maintain）
-   - 若有语义候选：按批次 `aoci_update_entry` 写全标签与 F/R/A/S（保留 `source_sha256` / `candidate_id`）
-   - 必要时 `verify`：业务相关 missing/stale 应为 0（策略性 skipped 除外）
-3. **`git add` 正式 AOCI 资产** + 业务文件（见 `aoci-git-commit.mdc`）
-4. **`git commit`**（源码与索引同批或紧随的对齐提交均可，但**索引不得落后于即将推送的 tip**）
-5. **构建推送**：
-   - Web：`BUILD_WEB_SKIP_HISTORY_REWRITE=1 ./fast-deploy/build.web.sh`
-   - 移动 H5：`./fast-deploy/build.mobile.web.sh` → client 提交 `web-dist` → `git push`
-   - 工位：`npm run pack` → 提交版本 bump → `git push`（`release/` 仍不入库）
+| 改动落在… | 推送动作 | 要不要产物构建 |
+|-----------|----------|----------------|
+| 仅 `riveredge-backend/`、`fast-deploy/`、迁移、后端测试 | AOCI（若改托管对象）→ commit → `git push` | **否**（不跑 `build.web.sh`） |
+| 仅 `.cursor/memory/`、`.cursor/rules/`、文档 | 一般可跳过 maintain → commit → push | **否** |
+| `riveredge-frontend/src`（或影响 PC 前端产物的配置） | AOCI → 源码 commit → **`BUILD_WEB_SKIP_HISTORY_REWRITE=1 ./fast-deploy/build.web.sh`** | **是（Web dist）** |
+| client：`riveredge-app-mobile/` 等影响 H5 | `aoci-client` → commit → `build.mobile.web.sh` → 交 `web-dist` → push | **是（H5）** |
+| client：工位源码/需发安装包 | `aoci-client` → commit → `npm run pack` → 版本 bump commit → push（`release/` 不入库） | **是（工位包）** |
+| pro 闭源包托管对象 | `aoci-pro` → commit → push | 按该仓既有发版约定；**不**默认跑主仓 `build.web.sh` |
+
+用户只说「构建推送」而未指端时：**先根据 diff 分流**；若只有后端/部署/记忆库，只做源码 push，并说明未构建前端的原因。用户明确说「web端构建推送」才跑 Web 构建。
+
+## 2. AOCI（仅托管对象变更）
+
+改了本仓 AOCI 托管对象时，源码稳定后：
+
+1. 一次 `aoci_maintain`（勿每改一文件就调）
+2. 有候选则整批 `aoci_update_entry`（保留 `source_sha256` / `candidate_id` / `code_batch_id`）
+3. 必要时 verify：业务 missing/stale=0（策略性 skipped 除外）
+4. `git add` 正式 AOCI + 业务 → `git commit`（同批或紧随均可；**即将推的 tip 索引不得落后**）
+
+可跳过 maintain：纯说明、未改托管对象；`build.web.sh` 自动的 dist 提交（此前 tip 须已对齐）。用户明确禁止改 AOCI 时服从并报告不一致。
+
+三仓 MCP：主仓 `aoci` / client `aoci-client` / pro `aoci-pro`。
+
+## 3. 产物构建顺序（仅当你选中了对应行）
+
+**Web（主仓）**
+
+1. 前端相关源码已 commit，工作区对脚本而言足够干净  
+2. `BUILD_WEB_SKIP_HISTORY_REWRITE=1 ./fast-deploy/build.web.sh`（Windows 用 Git Bash）  
+3. 脚本提交 `riveredge-frontend/dist` 并 push  
+
+**移动 H5（主仓脚本 + client 仓）**
+
+1. client 源码 + AOCI 已 commit  
+2. `./fast-deploy/build.mobile.web.sh` → client 提交 `web-dist` → `git push`  
+
+**工位（client）**
+
+1. 源码 + AOCI 已 commit  
+2. `npm run pack` → 版本 bump 提交 → `git push`（勿交 `release/`）  
 
 ## 禁止
 
-- 工作区仍有未维护的 missing/stale（非 skipped）就 `build.web.sh` / 推 H5
-- 只提交业务文件、故意不跑 maintain / 不提 `aoci*.txt` / baseline
-- 用「构建后再补索引」跳过本顺序
-
-## 例外
-
-- 用户**明确禁止**改 AOCI / `.aoci`：服从，并报告索引与源码不一致
-- 纯 dist 由 `build.web.sh` 自动产生的 `chore: build-web sync`：脚本内提交，此前源码 tip 上索引须已对齐
-- 未改任何 AOCI 托管对象的纯说明性提交：可跳过 maintain，但仍勿留下未跟踪的正式 `aoci*.txt`
+- 没改 PC 前端却默认跑 `build.web.sh`
+- 索引仍有未维护 missing/stale（非 skipped）就构建/推产物
+- 只交业务、故意不 maintain / 不提正式 `aoci*.txt`
+- 用「构建后再补索引」跳过顺序
+- 平行 `npm run build` 后手写 commit/push dist（须走 `build.web.sh`）
 
 ## 关联
 
+- `.cursor/memory/principles/code-push-routing.md`
 - `.cursor/rules/aoci-git-commit.mdc`
 - `.cursor/memory/features/fast-deploy-scripts.md`
-- Vault：`web-build-push-sop.md`
+- Vault：`web-build-push-sop.md`（若有）

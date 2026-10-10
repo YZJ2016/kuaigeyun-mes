@@ -31,7 +31,8 @@ alwaysApply: true
 
 改动了托管对象时：**先** `aoci_maintain`（有候选则 `aoci_update_entry`）**再** `git commit`。构建推送总序见 `.cursor/rules/build-push-aoci.mdc`。
 
-**不是每次 push 都跑**：未改托管对象的纯说明可跳过 maintain；`build.web.sh` 的 dist 提交不要求再 maintain（此前 tip 须已对齐）。判据检索：`.cursor/memory/principles/aoci-git-commit.md`。
+**不是每次 push 都跑**：未改托管对象的纯说明可跳过 maintain；`build.web.sh` 的 dist 提交不要求再 maintain（此前 tip 须已对齐）。  
+**推送 ≠ 构建前端**：何时只 `git push`、何时跑产物脚本见 `.cursor/memory/principles/code-push-routing.md` 与本仓 `build-push-aoci.mdc`。
 
 ## 与 deploy
 
