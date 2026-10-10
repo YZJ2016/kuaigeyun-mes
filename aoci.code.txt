@@ -69,9 +69,9 @@ blue_green.ps1[OV4M]: F:PS blue-green deploy | R:- | A:BG state+swap | S:low-spe
 blue_green.sh[OV5L]: F:sh blue-green deploy | R:- | A:BG state+swap | S:low-spec disables BG; 608L
 build_web_git.sh[OV3S]: F:dist-only git push | R:- | A:filter-repo+lease | S:assert committed; save/restore remotes; 137L
 common.ps1[OU5L]: F:Shared PowerShell helpers for fast-deploy build/push | R:- | A:- | S:deploy helpers
-common.sh[OV9L]: F:fast-deploy共享shell库装启迁Caddy蓝绿 | R:code:fast-deploy/config/deploy.env.example,code:fast-deploy/lib/wizard.sh | A:playwright_postinstall_enabled,ensure_playwright_chromium_sync,set_deploy_opt_flag | S:Chromium补装只看OPT_PDF_PRINT; 启用PDF时写回PLAYWRIGHT_POSTINSTALL=1
+common.sh[OV9L]: F:fast-deploy共享shell库装启迁Caddy蓝绿 | R:code:fast-deploy/config/deploy.env.example,code:fast-deploy/lib/wizard.sh | A:playwright_postinstall_enabled,ensure_playwright_chromium_postinstall,cmd_install_optional_deps | S:Chromium补装只看OPT_PDF_PRINT;[I]/install-optional走后台postinstall不阻塞;同步sync仅保留
 low_spec_mode.sh[OV4M]: F:低配模式内存调优与快照恢复 | R:code:fast-deploy/lib/common.sh | A:low_spec_apply_profile,low_spec_apply_normal_profile | S:开启低配写PLAYWRIGHT_POSTINSTALL_ENABLE=1不关闭Chromium补装; 恢复一般模式不改该开关; 缩池关蓝绿
-wizard.sh[OV8L]: F:交互部署向导与选装面板 | R:code:fast-deploy/lib/common.sh | A:wizard_ask_optional_deps_choice,cmd_install_optional_deps | S:启用PDF后须按I安装Chromium; 真彩色CJK对齐
+wizard.sh[OV8L]: F:交互部署向导与选装面板 | R:code:fast-deploy/lib/common.sh | A:wizard_ask_optional_deps_choice,cmd_install_optional_deps | S:PDF的Chromium由[I]后台补装;进度见playwright-install.log;真彩色CJK对齐
 
 ===D:/kuaigeyun-pro/kuaigeyun/fast-deploy/linux/===
 dev.sh[OV1T]: F:dev mode entry | R:- | A:DEPLOY_MODE=dev | S:fd_dispatch; 11L
@@ -109,10 +109,10 @@ riveredge-service.ps1[OV2T]: F:Win boot service entry | R:- | A:boot-service.env
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/===
 .env.example[CC3M]: F:backend env config example | R:- | A:DB+JWT+API+Taskiq | S:HOST=0.0.0.0 dev; 127.0.0.1 prod; 182L
-pyproject.toml[PC4S]: F:后端依赖与可选pdf/ocr extras | R:- | A:project deps | S:requires-python>=3.11,<3.12; tortoise0.21.1+aerich0.7.1钉死; 无build-system防egg-info
+pyproject.toml[PC4S]: F:后端依赖与可选pdf/ocr extras | R:code:riveredge-backend/uv.lock | A:project deps | S:requires-python>=3.11,<3.12;playwright==1.63.0钉死防Chromium revision漂移;tortoise0.21.1+aerich0.7.1钉死
 start-backend.sh[OU5T]: F:echo "RiverEdge SaaS 多组织框架 - 后端服务启动" echo "" if [ ! -f "pyproject.toml" ]; th... | R:- | A:- | S:97L
 start-worker.sh[OU5T]: F:SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)" cd "$SCRIPT_DIR" | R:- | A:- | S:47L
-uv.lock[DU5L]: F:version = 1 revision = 3 requires-python = "==3.11.*" [manifest] overrides = ... | R:- | A:- | S:2331L
+uv.lock[DU5L]: F:uv lockfile钉死后端与extra依赖版本 | R:code:riveredge-backend/pyproject.toml | A:- | S:playwright extra==1.63.0与pyproject一致;2331L
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/docs/===
 api-write-protection-ops.md[SO5M]: F:全站API写防护运维手册 | R:code:riveredge-backend/src/core/utils/interactive_client_guard.py | A:channel+rate+idempotency | S:须X-Client-Channel白名单否则403; 关键写30/分; Idempotency-Key可回放; 改.env后重启uvicorn

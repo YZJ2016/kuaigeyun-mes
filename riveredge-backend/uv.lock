@@ -2307,7 +2307,7 @@ requires-dist = [
     { name = "openpyxl", specifier = ">=3.1.0" },
     { name = "passlib", extras = ["bcrypt"], specifier = ">=1.7.4" },
     { name = "pgvector", marker = "extra == 'kuaiai-rag'", specifier = ">=0.3.0,<0.4" },
-    { name = "playwright", marker = "extra == 'pdf'", specifier = ">=1.61.0,<1.64" },
+    { name = "playwright", marker = "extra == 'pdf'", specifier = "==1.63.0" },
     { name = "prometheus-client", specifier = ">=0.26.0" },
     { name = "pyahocorasick", specifier = ">=2.1.0,<3" },
     { name = "pyaxmlparser", specifier = ">=0.3.31" },

@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-10-07T06:04:21Z",
-  "updated_at": "2026-10-10T05:41:58Z",
+  "updated_at": "2026-10-10T06:00:24Z",
   "files": {
     ".cursor/rules/aoci-git-commit.mdc": {
       "role": "index",
@@ -47,9 +47,9 @@
     },
     "aoci.code.txt": {
       "role": "index",
-      "sha256": "9fa722115f4a476e1932c26b2ad6e71ede3215228f7fafa2ad5535b24f7b5187",
-      "size": 993938,
-      "normalized_sha256": "9fa722115f4a476e1932c26b2ad6e71ede3215228f7fafa2ad5535b24f7b5187"
+      "sha256": "223534fd139b510cba8904ee779b6a0a663a9522dbeb8209151af5464da044af",
+      "size": 994100,
+      "normalized_sha256": "223534fd139b510cba8904ee779b6a0a663a9522dbeb8209151af5464da044af"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -317,9 +317,9 @@
     },
     "fast-deploy/lib/common.sh": {
       "role": "index",
-      "sha256": "f5b86a51595e47cb76916a2737d6a5e7a22755c0732434153589eeec8f6cf451",
-      "size": 279055,
-      "normalized_sha256": "f5b86a51595e47cb76916a2737d6a5e7a22755c0732434153589eeec8f6cf451"
+      "sha256": "cab54ec5baf82eaaa997df0131306f5b31619673ec3bfdecba2fd0bff967818e",
+      "size": 279234,
+      "normalized_sha256": "cab54ec5baf82eaaa997df0131306f5b31619673ec3bfdecba2fd0bff967818e"
     },
     "fast-deploy/lib/low_spec_mode.sh": {
       "role": "index",
@@ -329,9 +329,9 @@
     },
     "fast-deploy/lib/wizard.sh": {
       "role": "index",
-      "sha256": "cdf2ffef60a8fe917409e0e99a20f3fd7de77cef1c0ad8ee5523b3f407310b18",
-      "size": 83644,
-      "normalized_sha256": "735f74a313f2e1f8f300995c52e554a6b48d0a30c8f28b09878b4d4eb678cf88"
+      "sha256": "5ceeb97d507d0e3939483e4321aa999f5d1e6f14daf9057cdc6ec94524889b4a",
+      "size": 83696,
+      "normalized_sha256": "4f45bffd206f4338f50eea251ec0430803d8924c1ab9f96b5a7c4657943d748e"
     },
     "fast-deploy/linux/dev.sh": {
       "role": "index",
@@ -6109,9 +6109,9 @@
     },
     "riveredge-backend/pyproject.toml": {
       "role": "index",
-      "sha256": "faa9de6a230f0a212726517ace28deca260eb73e659763a6e8a1083a5c890d10",
-      "size": 5051,
-      "normalized_sha256": "abc98247b1cb9555a0c98a347bb3981d09d9121e6e787bd8d1c903f26222eaa8"
+      "sha256": "223ee6ecd04ffe1991c175e631886a35b99f349f5d22130c4ac6a85c1c439bca",
+      "size": 5057,
+      "normalized_sha256": "223ee6ecd04ffe1991c175e631886a35b99f349f5d22130c4ac6a85c1c439bca"
     },
     "riveredge-backend/scripts/pack_sensitive_words.py": {
       "role": "index",
@@ -21951,9 +21951,9 @@
     },
     "riveredge-backend/uv.lock": {
       "role": "index",
-      "sha256": "e4205199b9c178fa3154317a7e6af46cbe17488081eb679291ea8ee22902627c",
-      "size": 274091,
-      "normalized_sha256": "e4205199b9c178fa3154317a7e6af46cbe17488081eb679291ea8ee22902627c"
+      "sha256": "fe1de64c6982789811fcfa944b501509741286b1e6738b280fa78d252ab2af66",
+      "size": 274085,
+      "normalized_sha256": "fe1de64c6982789811fcfa944b501509741286b1e6738b280fa78d252ab2af66"
     },
     "riveredge-frontend/.env.development.example": {
       "role": "index",
