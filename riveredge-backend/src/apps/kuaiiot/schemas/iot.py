@@ -525,7 +525,7 @@ class EdgeConfigListResponse(BaseModel):
 class EdgeAgentSpecResponse(BaseModel):
     version: int
     protocol: str
-    device_token: str
+    device_token: Optional[str] = None
     config: Dict[str, Any]
     config_version: int = 1
 
@@ -544,6 +544,7 @@ class EdgeAgentHeartbeatPayload(BaseModel):
     buffer_pending_count: int = Field(default=0, ge=0)
     status: str = Field(default="online", max_length=20)
     message: Optional[str] = None
+    trial_result: Optional[Dict[str, Any]] = None
 
 
 class EdgeAgentHeartbeatResponse(BaseModel):
@@ -551,6 +552,8 @@ class EdgeAgentHeartbeatResponse(BaseModel):
     config_changed: bool
     pending_commands: List[Dict[str, Any]] = Field(default_factory=list)
     message: str = "ok"
+    collection_enabled: bool = True
+    trial_request_uuid: Optional[str] = None
 
 
 class EdgeAgentCommandResultPayload(BaseModel):
