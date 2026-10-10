@@ -31,9 +31,21 @@ standard: 改了托管对象才 maintain；正式资产随变更提交；构建�
 
 ## 一句话
 
-**不是每次 `git push` 都要跑。** 改了本仓 AOCI **托管对象**（源码、受管配置等）→ 源码稳定后 **先** `aoci_maintain`（有候选再 `aoci_update_entry`）**再** `git commit`；构建推送时 tip 上索引不得落后。未改托管对象的纯说明提交可跳过 maintain。
+**不是每次 `git push` 都要跑 AOCI 索引。**  
+**git 入库 ≠ 进 AOCI 索引。** 改了本仓 AOCI **托管（index）对象** → 稳定后 **先** `aoci_maintain`（有候选再 `aoci_update_entry`）**再** `git commit`。未改托管对象、或仅改 exclude/observe 路径（如 `.cursor/memory/**`）可跳过 maintain。
 
-旧偏好「永远排除 aoci」已废止；正式索引是仓库契约，默认与业务一并提交。
+旧偏好「永远排除 aoci」已废止；正式索引是仓库契约，与**业务托管对象**变更一并提交。
+
+## git 入库 vs AOCI 索引
+
+| 路径 | 进 git？ | 进 AOCI Code Entry？ | 推送时 maintain？ |
+|------|----------|----------------------|-------------------|
+| `riveredge-backend/`、`riveredge-frontend/src`、`fast-deploy/` 等业务/部署代码 | 是 | 是（托管） | **要**（改了才跑） |
+| `.cursor/rules/*.mdc` | 是 | 是（行为规则，宜索引） | 改了才跑 |
+| `.cursor/memory/**` 永久记忆库 | **是**（Agent 检索真源） | **否**（scope `exclude`） | **不要**为每篇笔记写 Entry |
+| `.cursor/mcp.json` | 否 | 否 | — |
+
+记忆库用 README 关键词路由 + Grep 阅读，不靠 AOCI Overview 扫笔记。Scope 规则：`project-exclude-cursor-memory`（`.aoci/config.json` managed_scope）。
 
 ## 要跑 maintain（强制）
 

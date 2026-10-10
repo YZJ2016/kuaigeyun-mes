@@ -1463,7 +1463,11 @@ function Sync-BackendDeps {
             Write-LogInfo "uv sync index: $idx"
             $env:UV_INDEX_URL = $idx
             & $uv @syncArgs
-            if ($LASTEXITCODE -eq 0) { $ok = $true; break }
+            if ($LASTEXITCODE -eq 0) {
+                $ok = $true
+                Write-LogInfo "uv sync 采用镜像: $idx"
+                break
+            }
             Write-LogWarn "uv sync 失败，尝试下一镜像: $idx"
         }
         if (-not $ok) { throw 'uv sync 失败' }
@@ -1730,7 +1734,8 @@ function Invoke-Migrate {
         $env:PYTHONPATH = Join-Path $script:BackendDir 'src'
         $env:PYTHONUNBUFFERED = '1'
         $env:AERICH_MIGRATE = '1'
-        & $uv run aerich upgrade
+        # --no-sync：deps 已 sync；避免 uv run 再按失败镜像拉 .whl.metadata
+        & $uv run --no-sync aerich upgrade
         if ($LASTEXITCODE -ne 0) { throw '数据库迁移失败' }
     } finally { Pop-Location }
     Ensure-IndRelayTables804
