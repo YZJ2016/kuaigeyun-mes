@@ -5417,12 +5417,14 @@ cmd_install_optional_deps() {
     fi
 
     if deploy_opt_pdf_print_enabled; then
-        log_info "[PDF 打印] Playwright Chromium..."
+        log_info "[PDF 打印] Playwright Chromium（后台补装，不阻塞面板）..."
         if [ "$(check_playwright)" = "missing" ]; then
             log_warn "Playwright Python 包未就绪"
             failed=1
+        else
+            # 与 start/deploy 一致：后台装浏览器。同步 install 会卡在下载数分钟，面板假死。
+            ensure_playwright_chromium_postinstall || failed=1
         fi
-        ensure_playwright_chromium_sync || failed=1
     fi
 
     if deploy_opt_kuaiai_vector_enabled; then

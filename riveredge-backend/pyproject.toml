@@ -61,8 +61,9 @@ dependencies = [
 # Linux 系统库：libzbar0 + libgomp1 + libgl1（opencv）；Python 侧强制 opencv-python-headless，避免无头服务器缺 libGL。
 [project.optional-dependencies]
 pdf = [
-    # 1.61+ 才收录 ubuntu26.04；更旧版本 install chromium 会报 does not support
-    "playwright>=1.61.0,<1.64",
+    # 钉死小版本：Chromium revision 随 Playwright 升级会变，导致生产已装浏览器「突然不可用」。
+    # 需要升级时显式改此版本并同步 uv.lock，再在生产重装 Chromium（面板 [I] / install-optional）。
+    "playwright==1.63.0",
 ]
 ocr = [
     "pymupdf>=1.24.0",
