@@ -1445,8 +1445,28 @@ function Sync-BackendDeps {
         # ocr：发票 PDF 明细识别；pdf：Playwright HTML→PDF
         $syncArgs = @('sync', '--no-install-project', '--extra', 'ocr')
         if (Test-PlaywrightPostInstallEnabled) { $syncArgs += '--extra', 'pdf' }
-        & $uv @syncArgs
-        if ($LASTEXITCODE -ne 0) { throw 'uv sync 失败' }
+        # 阿里云偶发对 lock hash 路径 .whl.metadata 404，依次回退清华 / 官方
+        $indexes = New-Object System.Collections.Generic.List[string]
+        if ($env:UV_INDEX_URL) { [void]$indexes.Add($env:UV_INDEX_URL) }
+        foreach ($u in @(
+                'https://mirrors.aliyun.com/pypi/simple/',
+                'https://pypi.tuna.tsinghua.edu.cn/simple/',
+                'https://pypi.org/simple/'
+            )) {
+            if (-not $indexes.Contains($u)) { [void]$indexes.Add($u) }
+        }
+        if ($env:USE_MIRROR -eq '0') {
+            $indexes = if ($env:UV_INDEX_URL) { @($env:UV_INDEX_URL) } else { @('https://pypi.org/simple/') }
+        }
+        $ok = $false
+        foreach ($idx in $indexes) {
+            Write-LogInfo "uv sync index: $idx"
+            $env:UV_INDEX_URL = $idx
+            & $uv @syncArgs
+            if ($LASTEXITCODE -eq 0) { $ok = $true; break }
+            Write-LogWarn "uv sync 失败，尝试下一镜像: $idx"
+        }
+        if (-not $ok) { throw 'uv sync 失败' }
     } finally { Pop-Location }
     Ensure-PyzbarWindowsNative
     $script:BackendDepsSynced = $true
