@@ -29670,7 +29670,7 @@ export default {
   'pages.system.apis.bodyValuePlaceholder': '值（支持字符串、数字、JSON）',
   'pages.system.apis.sourceTypeConversionLabel': '来源类型编码转换',
   'pages.system.apis.sourceTypeConversionHint':
-    '如金蝶 FErpClsID：1=Buy 外购件，2=Make 自制件（物料同步时按接口配置转换）；也可用于推送单位编码（field_name 如 unit_number）',
+    '如金蝶 FErpClsID：1=Buy 外购件，2=Make 自制件。须同时满足：①请求体 FieldKeys 含该来源字段；②物料同步字段映射把它映到 source_type。也可用于推送单位编码（field_name 如 unit_number）',
   'pages.system.apis.sourceCodeHint': '多个值用逗号分隔，如：1,2,3',
   'pages.system.apis.targetTypeHint': '多个值用逗号分隔，如：Buy,Make,Outsource',
   'pages.system.apis.sourceFieldLabel': '来源字段名',
@@ -30484,6 +30484,10 @@ export default {
     '客户跟进支持未归属客户',
   'pages.dashboard.updateLog.entries.customer-follow-up-create-data-scope-r02.description':
     '新建跟进可选择本人负责、协作或未归属（公海）客户，下拉与保存同一范围；他人已归属客户不可跟进，不再误报笼统权限不足。',
+  'pages.dashboard.updateLog.entries.material-sync-ferpclsid-source-type-r01.title':
+    '物料同步来源类型转换需拉取 FErpClsID',
+  'pages.dashboard.updateLog.entries.material-sync-ferpclsid-source-type-r01.description':
+    '金蝶物料查询预置 FieldKeys 补上物料属性 FErpClsID；接口里配置的来源类型编码转换（如 1→Buy、2→Make）在同步时才能真正生效。',
   'pages.dashboard.updateLog.entries.reporting-block-revoke-after-sales-outbound-r01.title':
     '下推单据须先反审再删，禁止跳级冲销上游',
   'pages.dashboard.updateLog.entries.reporting-block-revoke-after-sales-outbound-r01.description':

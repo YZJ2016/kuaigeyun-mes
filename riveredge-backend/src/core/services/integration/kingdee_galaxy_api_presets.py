@@ -46,9 +46,11 @@ MATERIAL_QUERY_FIELD_KEYS = (
     "FMATERIALID,FNumber,FName,FSpecification,"
     "FBaseUnitId.FNumber,FBaseUnitId.FName,"
     "FMaterialGroup.FNumber,FMaterialGroup.FName,"
+    "FErpClsID,"
     "FDocumentStatus,FForbidStatus"
 )
 MATERIAL_UNIT_NAME_MARKER = "FBaseUnitId.FName"
+MATERIAL_ERP_CLS_MARKER = "FErpClsID"
 
 UNIT_PRESET_CODE_SUFFIX = "query_unit"
 UNIT_QUERY_FIELD_KEYS = "FUNITID,FNumber,FName,FDocumentStatus,FForbidStatus"
@@ -1175,12 +1177,15 @@ def _parse_execute_bill_query(request_body: Any) -> Optional[dict]:
 
 
 def material_preset_needs_upgrade(request_body: Any) -> bool:
-    """旧预置缺单位字段，或未要求已审核有效时需升级。"""
+    """旧预置缺单位/物料属性字段，或未要求已审核有效时需升级。"""
     query = _parse_execute_bill_query(request_body)
     if query is None:
         return True
     field_keys = str(query.get("FieldKeys") or query.get("fieldKeys") or "")
     if MATERIAL_UNIT_NAME_MARKER not in field_keys:
+        return True
+    # 来源类型转换依赖 FErpClsID；缺列则映射/转换永远无值
+    if MATERIAL_ERP_CLS_MARKER not in field_keys:
         return True
     filter_string = str(query.get("FilterString") or query.get("filterString") or "")
     return MASTER_DATA_APPROVED_STATUS_MARKER not in filter_string.replace(" ", "")

@@ -1045,6 +1045,9 @@ config-center-ops.md[SO2T]: F:config center ops | R:- | A:3 control points | S:c
 845_20261008193000_backfill_login_location_zhou_suffix.py[PD4T]: F:回填登录地错误「州」后缀 | R:code:riveredge-backend/src/core/utils/ip_parser.py | A:upgrade | S:调repair_truncated_zhou_city_login_location写core_login_logs; downgrade空操作
 846_20261010080000_product_firmware_software_item_code.py[PD3T]: F:产品固件软件12位编码列迁移 | R:- | A:upgrade,downgrade | S:firmwares表加可空software_item_code(12)
 847_20261010084500_issue_grants_audit_columns.py[PD4T]: F:下发grant表补齐BaseModel审计列 | R:- | A:upgrade,downgrade | S:交付物与会签grant表补created_by/updated_by等；缺列会导致列表SELECT 500
+848_20261010120000_kuaioa_reward_performance_score.py[PD3T]: F:考勤奖励绩效得分列迁移 | R:- | A:upgrade,downgrade | S:reward表加performance_score
+849_20261010123000_kuaioa_leave_slip_file.py[PD3T]: F:请假条附件文件字段迁移 | R:- | A:upgrade,downgrade | S:leave表加slip文件关联列
+850_20261010124500_platform_settings_search_engine_indexing.py[PD3T]: F:平台设置搜索引擎收录开关迁移 | R:- | A:upgrade,downgrade | S:platform_settings加search_engine_indexing
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/scripts/===
 pack_sensitive_words.py[XC3T]: F:敏感词打包脚本 | R:code:riveredge-backend/pyproject.toml | A:lexicon pack | S:gh mirror fallback; 90L
@@ -3457,9 +3460,9 @@ kingdee_cosmic_mfg_api_presets.py[SB5T]: F:金蝶AI苍穹 · 制造链路 OpenAP
 kingdee_cosmic_paths.py[SB5M]: F:金蝶AI苍穹 OpenAPI 路径约定（无重依赖，供 connector_request 等直接引用）。 | R:- | A:rewrite_basedata_sys_query_path,strip_kingdee_cosmic_ierp_suffix_from_base,_k... | S:237L
 kingdee_cosmic_service.py[SB5L]: F:金蝶云苍穹 / 金蝶AI OpenAPI 连接（增强型 Token）。  鉴权：POST /kapi/oauth2/getToken 请求头须带 x-ac... | R:- | A:normalize_kingdee_cosmic_base_url,build_kingdee_cosmic_get_token_url,_config_... | S:508L
 kingdee_cosmic_since_filter.py[SB5M]: F:苍穹 OpenAPI：按修改时间注入增量 filter / start_modifytime，并支持本地行级水位过滤。 | R:- | A:_site_since_text,_cosmic_ge_clause,_merge_cosmic_filter,is_cosmic_paged_query... | S:224L
-kingdee_execute_bill_query_catalog.py[SB5M]: F:金蝶 ExecuteBillQuery 常用 FormId 与可选字段目录（编辑弹窗字段勾选）。  字段编码来自金蝶 WebAPI 文档与常用预设；可按 ... | R:- | A:KingdeeFieldOption,KingdeeFormCatalogEntry,_fields,list_kingdee_execute_bill_... | S:315L
+kingdee_execute_bill_query_catalog.py[SB5M]: F:金蝶ExecuteBillQuery FormId与字段目录 | R:- | A:list_kingdee_execute_bill_query_catalog | S:物料目录FieldKeys含FErpClsID供来源类型转换
 kingdee_field_keys.py[SB5T]: F:从金蝶 kdsvc ExecuteBillQuery 请求体解析 FieldKeys 列名。 | R:- | A:extract_kingdee_field_keys | S:35L
-kingdee_galaxy_api_presets.py[SB5L]: F:金蝶AI星空（kingdee_galaxy）常用接口预设。  绑定应用连接器后，path 为相对 K3Cloud 站点路径；请求体为 .common.kd... | R:- | A:KingdeeGalaxyApiPreset,build_kdsvc_envelope,build_execute_bill_query_body,bui... | S:1265L
+kingdee_galaxy_api_presets.py[SB5L]: F:金蝶AI星空常用接口预设 | R:code:riveredge-backend/src/core/services/integration/kingdee_execute_bill_query_catalog.py | A:build_execute_bill_query_body,KingdeeGalaxyApiPreset | S:物料查询预置FieldKeys含FErpClsID;否则来源类型转换不生效
 kingdee_galaxy_push_adapter.py[SB5S]: F:金蝶AI星空推送适配器：协议/会话/结果解析，不感知业务单据类型。 | R:- | A:extract_response_status,extract_saved_bill_ref,KingdeeGalaxyPushAdapter | S:180L; 金蝶AI星空推送适配器：协议/会话/结果解析，不感知业务单据类型。
 kingdee_galaxy_service.py[SB5M]: F:金蝶AI星空（K3Cloud）WebAPI 连接测试。  鉴权接口：LoginByAppSecret 文档：https://openapi.open.ki... | R:- | A:normalize_kingdee_galaxy_base_url,build_kingdee_login_url,build_kingdee_login... | S:282L
 kingdee_since_filter.py[SB5T]: F:金蝶 ExecuteBillQuery 请求体：按修改时间注入增量 FilterString。 | R:- | A:_parse_query_from_body,apply_kingdee_since_filter | S:68L
@@ -6258,7 +6261,7 @@ index.tsx[EU5L]: F:物料名称长短不一：唯一 RemainderFlex（台账无�
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/apps/master-data/pages/materials/bom/===
 BomInquiryDrawer.tsx[EU5M]: F:Implements BomInquiryDrawer.tsx | R:- | A:- | S:299L
 designer.tsx[EU5L]: F:MindMap 数据 | R:- | A:- | S:4393L; MindMap 数据
-index.tsx[EU5L]: F:Drawer 相关状态（详情查看） | R:- | A:- | S:5372L; Drawer 相关状态（详情查看）
+index.tsx[EU5L]: F:物料BOM列表与同步入口页 | R:- | A:- | S:来源类型转换须FieldKeys与字段映射同时配置
 utils.ts[EU5L]: F:Check if target is descendant of node (cannot move to own child) | R:- | A:- | S:851L
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/apps/master-data/pages/materials/===
@@ -7607,7 +7610,7 @@ analysis.tsx[EU5T]: F:Implements analysis.tsx | R:- | A:- | S:1L
 dashboardCardSurface.ts[EU5T]: F:Implements dashboardCardSurface.ts | R:- | A:- | S:10L
 dashboardTopBarTheme.ts[EU5T]: F:Implements dashboardTopBarTheme.ts | R:- | A:- | S:39L
 index.tsx[EU5L]: F:克制色：浅底 + 同系文字，避免高饱和色块 | R:- | A:- | S:980L; 克制色：浅底 + 同系文字，避免高饱和色块
-platformUpdateLog.ts[FD5L]: F:工作台通用更新目录合并定制日志并筛选 | R:code:riveredge-frontend/src/pages/system/dashboard/platformUpdateLogDedicated.ts | A:- | S:12603行;与源码摘要对齐
+platformUpdateLog.ts[FD5L]: F:工作台通用更新目录合并定制日志并筛选 | R:code:riveredge-frontend/src/pages/system/dashboard/platformUpdateLogDedicated.ts | A:PLATFORM_UPDATE_LOG_GENERAL,getRecentPlatformUpdates | S:用户可见改动插GENERAL头部；须同步zh-CN键
 platformUpdateLogDedicated.ts[EU5L]: F:Implements platformUpdateLogDedicated.ts | R:- | A:- | S:1076行;与源码摘要对齐
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/pages/system/dashboard/analysis/===
@@ -8128,6 +8131,7 @@ webauthn.ts[EU5S]: F:Implements webauthn.ts | R:- | A:- | S:101L
 wecomAuth.ts[EU5T]: F:Implements wecomAuth.ts | R:- | A:- | S:51L
 yieldToMain.ts[EU5T]: F:Implements yieldToMain.ts | R:- | A:- | S:17L
 dedicatedHostPathMap.ts[KB3T]: F:Implements dedicatedHostPathMap.ts | R:- | A:hostMenuPathToDedicatedRest,dedicatedRestToHostAppPageDir | S:Implements dedicatedHostPathMap.ts
+searchEngineIndexing.ts[EU4T]: F:按平台设置同步页面meta robots | R:- | A:applySearchEngineIndexing | S:enabled为false写noindex;缺省允许收录
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/utils/generated/===
 codeRulePageRegistry.ts[EU5T]: F:Implements codeRulePageRegistry.ts | R:- | A:- | S:7L
