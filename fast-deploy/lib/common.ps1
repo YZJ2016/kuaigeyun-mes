@@ -104,8 +104,8 @@ function Load-DeployEnv {
 function Apply-CN-Mirrors {
     if (-not $script:UseMirror) { return }
     if (-not $env:UV_INDEX_URL) {
-        # 与 PGDG 国内源一致用阿里云。清华 tuna 在部分 Windows 网络上 Connect 超时。
-        $env:UV_INDEX_URL = 'https://mirrors.aliyun.com/pypi/simple/'
+        # 默认清华：阿里云对 uv.lock hash 路径 .whl.metadata 常 404
+        $env:UV_INDEX_URL = 'https://pypi.tuna.tsinghua.edu.cn/simple/'
     }
     $env:npm_config_registry = 'https://registry.npmmirror.com'
     if (Get-Command npm -ErrorAction SilentlyContinue) {
@@ -1445,12 +1445,12 @@ function Sync-BackendDeps {
         # ocr：发票 PDF 明细识别；pdf：Playwright HTML→PDF
         $syncArgs = @('sync', '--no-install-project', '--extra', 'ocr')
         if (Test-PlaywrightPostInstallEnabled) { $syncArgs += '--extra', 'pdf' }
-        # 阿里云偶发对 lock hash 路径 .whl.metadata 404，依次回退清华 / 官方
+        # 清华优先；阿里云对 lock hash 路径 .whl.metadata 常 404，再回退官方
         $indexes = New-Object System.Collections.Generic.List[string]
         if ($env:UV_INDEX_URL) { [void]$indexes.Add($env:UV_INDEX_URL) }
         foreach ($u in @(
-                'https://mirrors.aliyun.com/pypi/simple/',
                 'https://pypi.tuna.tsinghua.edu.cn/simple/',
+                'https://mirrors.aliyun.com/pypi/simple/',
                 'https://pypi.org/simple/'
             )) {
             if (-not $indexes.Contains($u)) { [void]$indexes.Add($u) }
@@ -1734,6 +1734,10 @@ function Invoke-Migrate {
         $env:PYTHONPATH = Join-Path $script:BackendDir 'src'
         $env:PYTHONUNBUFFERED = '1'
         $env:AERICH_MIGRATE = '1'
+        if (-not $env:UV_INDEX_URL) {
+            $env:UV_INDEX_URL = 'https://pypi.tuna.tsinghua.edu.cn/simple/'
+        }
+        Write-LogInfo "uv run aerich（no-sync, index=$($env:UV_INDEX_URL)）"
         # --no-sync：deps 已 sync；避免 uv run 再按失败镜像拉 .whl.metadata
         & $uv run --no-sync aerich upgrade
         if ($LASTEXITCODE -ne 0) { throw '数据库迁移失败' }
