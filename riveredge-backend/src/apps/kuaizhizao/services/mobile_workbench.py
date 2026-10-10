@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+import time
 from pathlib import Path
 from typing import Any
 
@@ -180,6 +182,33 @@ def apply_workbench_badge_counts(
     return sections
 
 
+# 移动端工作台按 scope 并行调用，徽章集计按 (tenant,user) 共享一次计算；
+# TTL 与 PC 菜单徽章（dashboards._cached_menu_badge_counts, 45s）对齐。
+_MOBILE_BADGE_TTL = 45.0
+_mobile_badge_cache: dict[tuple[int, int], tuple[float, dict]] = {}
+_mobile_badge_inflight: dict[tuple[int, int], "asyncio.Task[dict]"] = {}
+
+
+async def _shared_menu_badge_counts(*, tenant_id: int, user: User) -> dict:
+    key = (tenant_id, user.id)
+    hit = _mobile_badge_cache.get(key)
+    if hit is not None and time.monotonic() - hit[0] < _MOBILE_BADGE_TTL:
+        return hit[1]
+    task = _mobile_badge_inflight.get(key)
+    if task is None or task.done():
+        task = asyncio.ensure_future(fetch_menu_badge_counts(tenant_id, user))
+        _mobile_badge_inflight[key] = task
+
+        def _forget(t: asyncio.Task) -> None:
+            if _mobile_badge_inflight.get(key) is t:
+                _mobile_badge_inflight.pop(key, None)
+
+        task.add_done_callback(_forget)
+    result = await task
+    _mobile_badge_cache[key] = (time.monotonic(), result)
+    return result
+
+
 async def attach_workbench_badge_counts(
     sections: list[dict[str, Any]],
     *,
@@ -197,7 +226,7 @@ async def attach_workbench_badge_counts(
                 entry.pop("_badge_keys", None)
                 entry["badge_count"] = 0
         return sections
-    counts = await fetch_menu_badge_counts(tenant_id, user)
+    counts = await _shared_menu_badge_counts(tenant_id=tenant_id, user=user)
     return apply_workbench_badge_counts(sections, counts)
 
 
