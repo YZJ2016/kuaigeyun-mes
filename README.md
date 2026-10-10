@@ -38,7 +38,7 @@
 
 ## 立即体验与接入
 
-- **在线演示**：[https://kuaigeyun.com](https://kuaigeyun.com)（支持免注册体验，数据可能定期重置）
+- **在线演示**：[https://kuaigeyun.com](https://kuaigeyun.com)（建议使用 Gitee 快捷登录；数据可能定期重置）
 - **部署入口**：[fast-deploy/deploy.sh](fast-deploy/README.md)（Windows / Linux）
 - **完整文档**：[docs/部署指南.md](docs/部署指南.md)
 

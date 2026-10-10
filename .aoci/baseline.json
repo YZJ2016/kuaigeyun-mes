@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-10-07T06:04:21Z",
-  "updated_at": "2026-10-10T19:13:56Z",
+  "updated_at": "2026-10-10T19:49:58Z",
   "files": {
     ".cursor/rules/ai-memory.mdc": {
       "role": "index",
@@ -71,15 +71,15 @@
     },
     "README.md": {
       "role": "index",
-      "sha256": "c4a50b9d607af5d1bf08beb27cb582f852bdf58f161c16138467f45ebe74fa5e",
-      "size": 12798,
-      "normalized_sha256": "ded8d5ce6de167ff15050a7c57d567aa83259d89214d7241cc3add296ac66cdc"
+      "sha256": "728c40f062aec26f55defd5cc33c5b7b3a0edf6bbf31811c6f5f23b5ec88213d",
+      "size": 12808,
+      "normalized_sha256": "58fc038711d638f4cfcef63096419375511957afb003ccb86c5a0fe25c338c45"
     },
     "aoci.code.txt": {
       "role": "index",
-      "sha256": "63d281bec8def2aec211e8449e46fef7b86ff5ef4649cec7e41b8d8e52f50598",
-      "size": 1001642,
-      "normalized_sha256": "63d281bec8def2aec211e8449e46fef7b86ff5ef4649cec7e41b8d8e52f50598"
+      "sha256": "9b3dacc20f8e3478c2f64b207280b4cb3daae4a1f5fe778f50f4b477b6841629",
+      "size": 1001710,
+      "normalized_sha256": "9b3dacc20f8e3478c2f64b207280b4cb3daae4a1f5fe778f50f4b477b6841629"
     },
     "aoci.meta.txt": {
       "role": "index",
