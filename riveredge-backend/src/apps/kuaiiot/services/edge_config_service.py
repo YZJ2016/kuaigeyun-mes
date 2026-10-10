@@ -257,6 +257,7 @@ class _EdgeConfigExecMixin:
             await ensure_device_connection(device)
         row = await EdgeConfigService._enabled_config(device, edge_config_code)
         body = {
+            "version": 1,
             "config_version": int(row.config_version),
             "protocol": row.protocol,
             "config": row.config,
@@ -335,6 +336,7 @@ class _EdgeConfigExecMixin:
                 collection_enabled = False
             pending_commands = await claim_pending_commands(tenant_id, device.id) if collection_enabled else []
         return {
+            "config_version": int(current.config_version),
             "config_changed": changed,
             "pending_commands": pending_commands,
             "collection_enabled": collection_enabled,
