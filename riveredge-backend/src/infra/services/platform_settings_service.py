@@ -164,6 +164,11 @@ class PlatformSettingsService:
                     if data.custom_apps_contact_qr_enabled is not None
                     else False
                 ),
+                search_engine_indexing_enabled=(
+                    data.search_engine_indexing_enabled
+                    if data.search_engine_indexing_enabled is not None
+                    else True
+                ),
                 login_guest_enabled=data.login_guest_enabled if data.login_guest_enabled is not None else True,
                 login_client_win_enabled=data.login_client_win_enabled if data.login_client_win_enabled is not None else True,
                 login_client_android_enabled=data.login_client_android_enabled if data.login_client_android_enabled is not None else True,

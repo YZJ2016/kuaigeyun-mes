@@ -70,6 +70,7 @@ import {
 } from '../../utils/wecomAuth';
 import { getLoginClientDownloads, type LoginClientDownload } from '../../services/clientRelease';
 import { applyFavicon } from '../../utils/favicon';
+import { applySearchEngineIndexing } from '../../utils/searchEngineIndexing';
 import { normalizeFilePreviewUrl, getSiteLogoPreview } from '../../services/file';
 // 直连文件，避免 barrel 连带 login-page-editor 其它重模块（如 ReactQuill）
 import LoginDescriptionContent from '../../components/login-page-editor/LoginDescriptionContent';
@@ -289,10 +290,14 @@ export default function LoginPage() {
         if (!cancelled) {
           setPlatformSettings(data);
           void applyFavicon(data?.favicon);
+          applySearchEngineIndexing(data?.search_engine_indexing_enabled);
         }
       })
       .catch(() => {
-        if (!cancelled) void applyFavicon(undefined);
+        if (!cancelled) {
+          void applyFavicon(undefined);
+          applySearchEngineIndexing(true);
+        }
       })
       .finally(() => {
         if (!cancelled) setIsLoadingPlatformSettings(false);

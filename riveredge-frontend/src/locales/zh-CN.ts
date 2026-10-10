@@ -239,17 +239,17 @@ export default {
   'menu.group.user-management': '用户管理',
   'menu.group.core-config': '核心配置',
   'menu.group.data-center': '数据中心', // 数据接入、抽取与对外接口
-  'menu.group.process-management': '流程管理',
+  'menu.group.process-management': '协同配置',
   'menu.group.monitoring-ops': '监控运维',
   /** 历史/同步落库的英文分组 slug（与上列分组同义，菜单管理展示用） */
   'menu.group.settings': '核心配置',
   'menu.group.organization': '用户管理',
   'menu.group.integration': '数据中心',
-  'menu.group.workflow-and-message': '流程管理',
+  'menu.group.workflow-and-message': '协同配置',
   'menu.group.security-and-logs': '监控运维',
   'menu.system.roles-permissions': '角色权限',
   'menu.system.data-center': '数据中心',
-  'menu.system.process-management': '流程管理',
+  'menu.system.process-management': '协同配置',
   'menu.system.appMenu': '应用',
   'menu.system.systemMenu': '系统',
   'menu.system.appMenuTip': '应用菜单（来源为「应用」）由各应用的 manifest.json 同步，不可在此编辑或删除。如需修改，请前往应用中心同步菜单。系统菜单可在此直接编辑。',
@@ -3735,6 +3735,7 @@ export default {
   'app.kuaioa.minimumWage.importSuccess': '成功导入 {{count}} 条最低工资配置',
   'app.kuaioa.leave.destination': '目的地',
   'app.kuaioa.leave.reason': '事由',
+  'app.kuaioa.leave.leaveSlipAttachment': '请假条附件',
   'app.kuaioa.trainingPlan.code': '计划编号',
   'app.kuaioa.trainingPlan.name': '计划名称',
   'app.kuaioa.trainingPlan.type': '计划类型',
@@ -3858,7 +3859,7 @@ export default {
   'app.kuaioa.attendance.fill': '填报',
   'app.kuaioa.attendance.fillTitle': '考勤填报',
   'app.kuaioa.attendance.fillHint':
-    '默认正常工时已填；请填写加班小时。状态可选正常/请假/休息；夜班模板可勾选☆。提交后锁定。',
+    '工作日默认正班已填，请填日常加班。周六标准工时计入周末加班；周日与法定节假日须手工填写加班小时。状态可选正常/请假/休息；夜班模板可勾选☆。提交后锁定。',
   'app.kuaioa.attendance.submit': '提交考勤',
   'app.kuaioa.attendance.reopen': '重新打开',
   'app.kuaioa.attendance.refreshRoster': '刷新名单',
@@ -3866,6 +3867,13 @@ export default {
   'app.kuaioa.attendance.batchRest': '当日全员休息',
   'app.kuaioa.attendance.batchNight': '当日全员夜班',
   'app.kuaioa.attendance.otTotal': '加班合计',
+  'app.kuaioa.attendance.dailyOtTotal': '日常加班合计',
+  'app.kuaioa.attendance.weekendOtTotal': '周末加班合计',
+  'app.kuaioa.attendance.legalOtTotal': '法定加班合计',
+  'app.kuaioa.attendance.dayKind.weekend': '周末加班',
+  'app.kuaioa.attendance.dayKind.legal': '法定加班',
+  'app.kuaioa.attendance.dayKind.weekendShort': '末',
+  'app.kuaioa.attendance.dayKind.legalShort': '法',
   'app.kuaioa.attendance.nightCount': '夜班次数',
   'app.kuaioa.attendance.mark.normal': '正常',
   'app.kuaioa.attendance.mark.leave': '请假',
@@ -6480,6 +6488,13 @@ export default {
   'app.haoligo.menu.customerDirectory': '客户名录',
   'app.haoligo.menu.productDirectory': '产品名录',
   'app.haoligo.menu.hr': '人事管理',
+  'app.haoligo.menu.rewards': '奖励绩效登记',
+  'app.haoligo.reward.createButton': '新建奖励绩效登记',
+  'app.haoligo.reward.exportFileName': '奖励绩效登记',
+  'app.haoligo.reward.importTitle': '导入奖励绩效登记',
+  'app.haoligo.reward.importSuccess': '成功导入 {{count}} 条奖励绩效登记',
+  'app.haoligo.reward.performanceScore': '绩效得分',
+  'app.haoligo.reward.performanceScoreInvalid': '绩效得分须为非负数',
   'app.haoligo.menu.performance': '绩效管理',
   'app.haoligo.menu.performance.reports': '绩效报表',
   'app.haoligo.menu.dashboard': '仪表板',
@@ -30389,6 +30404,34 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.kuaioa-asset-registry-redirect-fa-r01.title':
+    '行政办公资产台账改走轻财务资产清单',
+  'pages.dashboard.updateLog.entries.kuaioa-asset-registry-redirect-fa-r01.description':
+    '行政办公不再提供独立资产台账菜单；旧入口自动跳转轻财务固定资产清单，新建与查询以轻财务为准。采买申请仍在行政办公，建卡写入轻财务卡片。',
+  'pages.dashboard.updateLog.entries.uni-audit-flow-assignee-hint-r01.title':
+    '审批流待办人提示不再误报无权限',
+  'pages.dashboard.updateLog.entries.uni-audit-flow-assignee-hint-r01.description':
+    '已启用审批流时，非当前节点待办人打开审核会说明待办人姓名，不再误提示「没有操作权限」；角色审核权限与审批流指派仍须同时满足。',
+  'pages.dashboard.updateLog.entries.kuaizhizao-demand-plan-custom-fields-slot-r01.title':
+    '需求计划挂载自定义字段插槽',
+  'pages.dashboard.updateLog.entries.kuaizhizao-demand-plan-custom-fields-slot-r01.description':
+    '需求计划新建/编辑、详情与列表接入自定义字段读写；在自定义字段中为需求计划配置并启用的字段现可正常显示与保存。',
+  'pages.dashboard.updateLog.entries.platform-search-engine-indexing-toggle-r01.title':
+    '平台设置增加是否接受搜索引擎收录',
+  'pages.dashboard.updateLog.entries.platform-search-engine-indexing-toggle-r01.description':
+    '平台管理可开关搜索引擎收录；关闭时通过 robots.txt 与页面 meta 拒绝爬取，默认开启。',
+  'pages.dashboard.updateLog.entries.kuaioa-attendance-ot-split-calendar-r01.title':
+    '月度考勤按日常/周末/法定拆分加班合计',
+  'pages.dashboard.updateLog.entries.kuaioa-attendance-ot-split-calendar-r01.description':
+    '周六日与法定节假日工时计入对应加班合计；周日与法定日不再预填正班，须手工填写加班小时。法定日以主数据已导入的法定节假日为准。',
+  'pages.dashboard.updateLog.entries.kuaioa-leave-slip-attachment-r01.title':
+    '轻办公请假出差支持上传请假条附件',
+  'pages.dashboard.updateLog.entries.kuaioa-leave-slip-attachment-r01.description':
+    '新建/编辑请假出差时可在事由旁上传请假条附件，详情可下载查看。',
+  'pages.dashboard.updateLog.entries.system-config-menu-groups-rebalance-r01.title':
+    '系统配置菜单分组重新排布',
+  'pages.dashboard.updateLog.entries.system-config-menu-groups-rebalance-r01.description':
+    '文件管理、期初数据导入并入核心配置；编号规则、自定义字段并入协同配置（原流程管理）；浮层两行布局为 8+4+4 / 8+4+4。数据中心组标题标注与侧栏同款 PRO 徽标，便于后续剥离为专业版能力。请在菜单管理执行系统菜单同步后生效。',
   'pages.dashboard.updateLog.entries.sidebar-menu-query-path-specificity-r01.title':
     '侧栏同路径多入口按查询参数正确选中',
   'pages.dashboard.updateLog.entries.sidebar-menu-query-path-specificity-r01.description':
@@ -38363,6 +38406,9 @@ export default {
     '开启后，应用中心「定制应用」分类无已授权应用时，展示商务咨询二维码；默认关闭',
   'pages.infra.platform.copyrightMenuEnabled': '是否显示版权声明菜单',
   'pages.infra.platform.copyrightMenuEnabledTooltip': '开启后，顶栏用户菜单中显示「版权声明」入口；关闭后普通用户不可见该菜单项',
+  'pages.infra.platform.searchEngineIndexingEnabled': '是否接受被搜索引擎收录',
+  'pages.infra.platform.searchEngineIndexingEnabledTooltip':
+    '开启后允许搜索引擎抓取本站；关闭时 robots.txt 与页面 meta 为拒绝收录（默认开启）',
   'pages.infra.platform.loginGuestEnabled': '登录页显示免注册体验登录',
   'pages.infra.platform.loginGuestEnabledTooltip': '关闭后，登录页不再显示「免注册体验登录」按钮，且接口拒绝体验登录',
   'pages.infra.platform.loginQuickEnabled': '是否开启快捷登录',
@@ -41568,6 +41614,14 @@ export default {
   'components.uniAudit.phaseApproved': '已通过',
   'components.uniAudit.phaseRejected': '已驳回',
   'components.uniAudit.phaseNone': '—',
+  'components.uniAudit.noPermission': '您没有该操作权限',
+  'components.uniAudit.notNodeAssignee': '您不是当前节点的待办审批人，无法审核或驳回',
+  'components.uniAudit.notNodeAssigneeWithNames':
+    '当前节点待办人为：{{names}}，您无权在此节点审核或驳回',
+  'components.uniAudit.transfer': '转交',
+  'components.uniAudit.addSign': '加签',
+  'components.uniAudit.delegate': '委托',
+  'components.uniAudit.urge': '催办',
   'components.uniPush.disabled.noActions': '当前无可用下推操作',
   'components.uniPush.disabled.selection': '请先选择一条可下推单据',
   'components.uniPush.disabled.unavailable': '当前状态不可下推',

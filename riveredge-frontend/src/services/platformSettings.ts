@@ -42,6 +42,8 @@ export interface PlatformSettings {
   copyright_menu_enabled?: boolean;
   /** 是否显示应用中心定制应用空态的商务咨询二维码（默认否） */
   custom_apps_contact_qr_enabled?: boolean;
+  /** 是否接受被搜索引擎收录（默认是） */
+  search_engine_indexing_enabled?: boolean;
   login_guest_enabled?: boolean;
   login_client_win_enabled?: boolean;
   login_client_android_enabled?: boolean;
@@ -81,6 +83,8 @@ export interface PlatformSettingsUpdateRequest {
   copyright_menu_enabled?: boolean;
   /** 是否显示应用中心定制应用空态的商务咨询二维码（默认否） */
   custom_apps_contact_qr_enabled?: boolean;
+  /** 是否接受被搜索引擎收录（默认是） */
+  search_engine_indexing_enabled?: boolean;
   login_guest_enabled?: boolean;
   login_client_win_enabled?: boolean;
   login_client_android_enabled?: boolean;

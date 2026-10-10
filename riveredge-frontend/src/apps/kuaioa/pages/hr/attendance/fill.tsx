@@ -28,6 +28,8 @@ import {
   updateAttendanceDay,
 } from '../../../services/attendance';
 
+type DayKind = 'weekday' | 'weekend' | 'legal';
+
 type DayCell = {
   id: number;
   employee_id: number;
@@ -38,6 +40,7 @@ type DayCell = {
   ot_hours: number;
   mark: string;
   is_night: boolean;
+  day_kind?: DayKind;
 };
 
 type EmpRow = {
@@ -45,10 +48,17 @@ type EmpRow = {
   employee_id: number;
   employee_name: string;
   employee_code?: string;
-  ot_total: number;
+  daily_ot_total: number;
+  weekend_ot_total: number;
+  legal_ot_total: number;
   night_count: number;
   days: Record<string, DayCell>;
 };
+
+function asDayKind(raw: unknown): DayKind {
+  if (raw === 'weekend' || raw === 'legal' || raw === 'weekday') return raw;
+  return 'weekday';
+}
 
 function asDayCell(raw: Record<string, unknown>, fallback?: DayCell): DayCell {
   return {
@@ -64,7 +74,35 @@ function asDayCell(raw: Record<string, unknown>, fallback?: DayCell): DayCell {
     ot_hours: Number(raw.ot_hours ?? fallback?.ot_hours ?? 0),
     mark: String(raw.mark ?? fallback?.mark ?? 'normal'),
     is_night: Boolean(raw.is_night ?? fallback?.is_night ?? false),
+    day_kind: asDayKind(raw.day_kind ?? fallback?.day_kind),
   };
+}
+
+function utcWeekday(workDate: string): number {
+  const [y, m, d] = String(workDate)
+    .slice(0, 10)
+    .split('-')
+    .map((x) => Number(x));
+  if (!y || !m || !d) return 1;
+  return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+}
+
+function defaultHoursForKind(
+  kind: DayKind,
+  workDate: string,
+  standardHours: number,
+): { regular_hours: number; ot_hours: number } {
+  if (kind === 'legal') return { regular_hours: 0, ot_hours: 0 };
+  if (kind === 'weekend') {
+    // 周日手工；周六标准工时计入周末加班
+    if (utcWeekday(workDate) === 0) return { regular_hours: 0, ot_hours: 0 };
+    return { regular_hours: 0, ot_hours: standardHours };
+  }
+  return { regular_hours: standardHours, ot_hours: 0 };
+}
+
+function workedHours(cell: DayCell): number {
+  return Number(cell.regular_hours || 0) + Number(cell.ot_hours || 0);
 }
 
 const AttendanceFillPage: React.FC = () => {
@@ -128,7 +166,9 @@ const AttendanceFillPage: React.FC = () => {
           employee_id: cell.employee_id,
           employee_name: cell.employee_name,
           employee_code: cell.employee_code,
-          ot_total: 0,
+          daily_ot_total: 0,
+          weekend_ot_total: 0,
+          legal_ot_total: 0,
           night_count: 0,
           days: {},
         };
@@ -136,7 +176,14 @@ const AttendanceFillPage: React.FC = () => {
       }
       row.days[dateKey] = cell;
       if (cell.mark === 'normal') {
-        row.ot_total += Number(cell.ot_hours || 0);
+        const kind = asDayKind(cell.day_kind);
+        if (kind === 'weekday') {
+          row.daily_ot_total += Number(cell.ot_hours || 0);
+        } else if (kind === 'weekend') {
+          row.weekend_ot_total += workedHours(cell);
+        } else {
+          row.legal_ot_total += workedHours(cell);
+        }
       }
       if (cell.is_night) row.night_count += 1;
     }
@@ -147,24 +194,35 @@ const AttendanceFillPage: React.FC = () => {
   const patchCell = async (cell: DayCell, patch: Record<string, unknown>) => {
     if (locked || !perms.canUpdate) return;
 
+    const kind = asDayKind(cell.day_kind);
     const optimisticPatch: Record<string, unknown> = { ...patch };
     if (patch.mark === 'leave' || patch.mark === 'rest') {
       optimisticPatch.regular_hours = 0;
       optimisticPatch.ot_hours = 0;
     } else if (patch.mark === 'normal' && cell.mark !== 'normal') {
-      optimisticPatch.regular_hours = standardHours;
+      const defaults = defaultHoursForKind(kind, cell.work_date, standardHours);
+      optimisticPatch.regular_hours = defaults.regular_hours;
+      if (optimisticPatch.ot_hours === undefined) {
+        optimisticPatch.ot_hours = defaults.ot_hours;
+      }
+    } else if (kind === 'weekend' || kind === 'legal') {
+      optimisticPatch.regular_hours = 0;
     }
 
     const optimistic = asDayCell({ ...cell, ...optimisticPatch }, cell);
     mergeDayLocally(optimistic);
 
+    const apiPatch: Record<string, unknown> = { ...patch };
+    if (patch.mark === 'normal' && cell.mark !== 'normal') {
+      const defaults = defaultHoursForKind(kind, cell.work_date, standardHours);
+      apiPatch.regular_hours = defaults.regular_hours;
+      if (apiPatch.ot_hours === undefined) {
+        apiPatch.ot_hours = defaults.ot_hours;
+      }
+    }
+
     try {
-      const saved = await updateAttendanceDay(sheetId, cell.id, {
-        ...patch,
-        ...(patch.mark === 'normal' && cell.mark !== 'normal'
-          ? { regular_hours: standardHours }
-          : {}),
-      });
+      const saved = await updateAttendanceDay(sheetId, cell.id, apiPatch);
       mergeDayLocally(asDayCell(saved, optimistic));
     } catch (error) {
       message.error(getApiErrorMessage(error));
@@ -176,13 +234,20 @@ const AttendanceFillPage: React.FC = () => {
   const renderCell = (cell: DayCell | undefined) => {
     if (!cell) return '—';
     const isLeaveOrRest = cell.mark === 'leave' || cell.mark === 'rest';
+    const kind = asDayKind(cell.day_kind);
     const night = hasNight && cell.is_night ? ' ☆' : '';
-    const statusHint =
-      cell.mark === 'leave'
-        ? t('app.kuaioa.attendance.mark.leave')
-        : cell.mark === 'rest'
-          ? t('app.kuaioa.attendance.mark.rest')
-          : `${formatQuantity(cell.regular_hours)}h`;
+    let statusHint: string;
+    if (cell.mark === 'leave') {
+      statusHint = t('app.kuaioa.attendance.mark.leave');
+    } else if (cell.mark === 'rest') {
+      statusHint = t('app.kuaioa.attendance.mark.rest');
+    } else if (kind === 'legal') {
+      statusHint = t('app.kuaioa.attendance.dayKind.legal');
+    } else if (kind === 'weekend') {
+      statusHint = t('app.kuaioa.attendance.dayKind.weekend');
+    } else {
+      statusHint = `${formatQuantity(cell.regular_hours)}h`;
+    }
     return (
       <Space orientation="vertical" size={2} style={{ width: '100%' }}>
         <Typography.Text type="secondary" style={{ fontSize: 11 }}>
@@ -242,10 +307,24 @@ const AttendanceFillPage: React.FC = () => {
       width: 100,
     },
     {
-      title: t('app.kuaioa.attendance.otTotal'),
-      dataIndex: 'ot_total',
+      title: t('app.kuaioa.attendance.dailyOtTotal'),
+      dataIndex: 'daily_ot_total',
       fixed: 'left',
-      width: 80,
+      width: 96,
+      render: (v: number) => formatQuantity(v),
+    },
+    {
+      title: t('app.kuaioa.attendance.weekendOtTotal'),
+      dataIndex: 'weekend_ot_total',
+      fixed: 'left',
+      width: 96,
+      render: (v: number) => formatQuantity(v),
+    },
+    {
+      title: t('app.kuaioa.attendance.legalOtTotal'),
+      dataIndex: 'legal_ot_total',
+      fixed: 'left',
+      width: 96,
       render: (v: number) => formatQuantity(v),
     },
     ...(hasNight
@@ -258,12 +337,23 @@ const AttendanceFillPage: React.FC = () => {
           },
         ]
       : []),
-    ...dayKeys.map((dk) => ({
-      title: dk.slice(8),
-      key: dk,
-      width: 96,
-      render: (_: unknown, row: EmpRow) => renderCell(row.days[dk]),
-    })),
+    ...dayKeys.map((dk) => {
+      const sample = rows[0]?.days[dk];
+      const kind = asDayKind(sample?.day_kind);
+      const dayLabel = dk.slice(8);
+      const suffix =
+        kind === 'legal'
+          ? t('app.kuaioa.attendance.dayKind.legalShort')
+          : kind === 'weekend'
+            ? t('app.kuaioa.attendance.dayKind.weekendShort')
+            : '';
+      return {
+        title: suffix ? `${dayLabel}${suffix}` : dayLabel,
+        key: dk,
+        width: 96,
+        render: (_: unknown, row: EmpRow) => renderCell(row.days[dk]),
+      };
+    }),
   ];
 
   return (
@@ -418,7 +508,7 @@ const AttendanceFillPage: React.FC = () => {
         rowKey="key"
         columns={columns}
         dataSource={rows}
-        scroll={{ x: 120 + dayKeys.length * 96 }}
+        scroll={{ x: 400 + dayKeys.length * 96 }}
         pagination={false}
         bordered
       />

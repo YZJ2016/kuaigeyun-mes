@@ -1150,12 +1150,18 @@ export function buildThemeLayoutStyles(ctx: BasicLayoutStyleContext): string {
           box-shadow: ${startMenuTheme.panelGroupInsetShadow};
         }
         .riveredge-system-settings-group-title {
+          display: inline-flex;
+          align-items: center;
+          gap: 0;
           font-size: 13px;
           font-weight: 700;
           color: ${startMenuTheme.panelTitleColor};
           padding: 0 2px;
           line-height: 1.3;
           letter-spacing: 0.01em;
+        }
+        .riveredge-system-settings-group-title .menu-item-badge-pro {
+          flex-shrink: 0;
         }
         .riveredge-system-settings-grid {
           display: grid;

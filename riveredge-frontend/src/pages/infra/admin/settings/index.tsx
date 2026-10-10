@@ -25,6 +25,7 @@ import {
 import { uploadFile, getSiteLogoPreview, invalidateSiteLogoPreviewCache, FileUploadResponse } from '../../../../services/file';
 import ImageCropper from '../../../../components/image-cropper';
 import { applyFavicon } from '../../../../utils/favicon';
+import { applySearchEngineIndexing } from '../../../../utils/searchEngineIndexing';
 import {
   LoginLeftColumnPreview,
   LoginPageEditorSplitPanel,
@@ -126,6 +127,7 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
         float_button_enabled: data.float_button_enabled === true,
         copyright_menu_enabled: data.copyright_menu_enabled ?? true,
         custom_apps_contact_qr_enabled: data.custom_apps_contact_qr_enabled ?? false,
+        search_engine_indexing_enabled: data.search_engine_indexing_enabled !== false,
         login_guest_enabled: data.login_guest_enabled ?? true,
         login_client_win_enabled: data.login_client_win_enabled ?? true,
         login_client_android_enabled: data.login_client_android_enabled ?? true,
@@ -137,6 +139,7 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
       queryClient.invalidateQueries({ queryKey: ['platformSettings'] });
       queryClient.invalidateQueries({ queryKey: ['platformSettingsPublic'] });
       applyFavicon(data.favicon ?? undefined).catch(() => applyFavicon(undefined));
+      applySearchEngineIndexing(data.search_engine_indexing_enabled);
     },
     onError: (error: any) => {
       messageApi.error(error?.message || t('pages.infra.platform.updateFailed'));
@@ -329,6 +332,7 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
         float_button_enabled: settings.float_button_enabled === true,
         copyright_menu_enabled: settings.copyright_menu_enabled ?? true,
         custom_apps_contact_qr_enabled: settings.custom_apps_contact_qr_enabled ?? false,
+        search_engine_indexing_enabled: settings.search_engine_indexing_enabled !== false,
         login_guest_enabled: settings.login_guest_enabled ?? true,
         login_client_win_enabled: settings.login_client_win_enabled ?? true,
         login_client_android_enabled: settings.login_client_android_enabled ?? true,
@@ -878,6 +882,16 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
                     name="custom_apps_contact_qr_enabled"
                     label={t('pages.infra.platform.customAppsContactQrEnabled')}
                     tooltip={t('pages.infra.platform.customAppsContactQrEnabledTooltip')}
+                    valuePropName="checked"
+                  >
+                    <Switch />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={12}>
+                  <Form.Item
+                    name="search_engine_indexing_enabled"
+                    label={t('pages.infra.platform.searchEngineIndexingEnabled')}
+                    tooltip={t('pages.infra.platform.searchEngineIndexingEnabledTooltip')}
                     valuePropName="checked"
                   >
                     <Switch />

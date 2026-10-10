@@ -20,10 +20,11 @@ class LeaveRequestCreate(BaseModel):
     employee_id: Optional[int] = None
     destination: Optional[str] = Field(None, max_length=200)
     reason: Optional[str] = None
+    leave_slip_file_uuid: Optional[str] = Field(None, max_length=36, description="请假条附件")
     department_name: Optional[str] = None
     notes: Optional[str] = None
 
-    @field_validator("title", "leave_hours", "deduct_amount", mode="before")
+    @field_validator("title", "leave_hours", "deduct_amount", "leave_slip_file_uuid", mode="before")
     @classmethod
     def empty_to_none(cls, v):
         if v is None or v == "":
@@ -45,10 +46,11 @@ class LeaveRequestUpdate(BaseModel):
     employee_id: Optional[int] = None
     destination: Optional[str] = Field(None, max_length=200)
     reason: Optional[str] = None
+    leave_slip_file_uuid: Optional[str] = Field(None, max_length=36, description="请假条附件")
     department_name: Optional[str] = None
     notes: Optional[str] = None
 
-    @field_validator("title", "leave_hours", "deduct_amount", mode="before")
+    @field_validator("title", "leave_hours", "deduct_amount", "leave_slip_file_uuid", mode="before")
     @classmethod
     def empty_to_none(cls, v):
         if v is None or v == "":

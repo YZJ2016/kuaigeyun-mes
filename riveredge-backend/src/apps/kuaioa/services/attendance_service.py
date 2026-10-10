@@ -6,7 +6,7 @@ import calendar
 from datetime import date, timedelta
 from decimal import Decimal
 from io import BytesIO
-from typing import Any, Optional
+from typing import Any, Literal, Optional, Set
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font
@@ -39,12 +39,15 @@ from apps.kuaioa.services.kuaioa_list_core import (
     parse_optional_date,
     touch_updated,
 )
+from apps.master_data.models.performance import Holiday
+from apps.master_data.services.performance_service import HOLIDAY_TYPE_LEGAL
 from core.utils.timezone_utils import resolve_business_datetime, to_site_date
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
 from infra.models.user import User
 
 _ALLOWED_MARK = frozenset({"normal", "leave", "rest"})
 _DEFAULT_HOURS = Decimal("8")
+DayKind = Literal["weekday", "weekend", "legal"]
 
 
 def _parse_year_month(value: str) -> tuple[int, int]:
@@ -72,10 +75,63 @@ def _employee_eligible_on(emp: KuaioaEmployeeProfile, work_date: date) -> bool:
     return True
 
 
-def _default_cell_hours(standard: Decimal, mark: str) -> tuple[Decimal, Decimal]:
+def _coerce_work_date(value: Any) -> Optional[date]:
+    if isinstance(value, date):
+        return value
+    if value is None or value == "":
+        return None
+    text = str(value).strip()[:10]
+    try:
+        return date.fromisoformat(text)
+    except ValueError:
+        return None
+
+
+async def _load_legal_holiday_dates(
+    tenant_id: int, first: date, last: date
+) -> Set[date]:
+    """主数据「法定节假日」（含国庆等调休放假日，不含周休导入）。"""
+    rows = await Holiday.filter(
+        tenant_id=tenant_id,
+        holiday_date__gte=first,
+        holiday_date__lte=last,
+        is_active=True,
+        deleted_at__isnull=True,
+        holiday_type=HOLIDAY_TYPE_LEGAL,
+    ).only("holiday_date")
+    return {r.holiday_date for r in rows if r.holiday_date}
+
+
+def _classify_day(work_date: date, legal_dates: Set[date]) -> DayKind:
+    if work_date in legal_dates:
+        return "legal"
+    if work_date.weekday() >= 5:
+        return "weekend"
+    return "weekday"
+
+
+def _default_cell_hours(
+    standard: Decimal,
+    mark: str,
+    *,
+    kind: DayKind,
+    work_date: date,
+) -> tuple[Decimal, Decimal]:
+    """按日类型给默认正班/加班。周日与法定日不预填，须手工填加班。"""
     if mark in ("leave", "rest"):
         return Decimal("0"), Decimal("0")
+    if kind == "legal":
+        return Decimal("0"), Decimal("0")
+    if kind == "weekend":
+        # 周六：标准工时计入周末加班；周日：空着手工填
+        if work_date.weekday() == 6:
+            return Decimal("0"), Decimal("0")
+        return Decimal("0"), standard
     return standard, Decimal("0")
+
+
+def _worked_hours(regular: Decimal, ot: Decimal) -> Decimal:
+    return (regular or Decimal("0")) + (ot or Decimal("0"))
 
 
 class AttendanceService:
@@ -104,13 +160,23 @@ class AttendanceService:
 
     async def get_sheet(self, tenant_id: int, sheet_id: int) -> dict[str, Any]:
         sheet = await self._get_sheet_row(tenant_id, sheet_id)
+        year, month = _parse_year_month(sheet.year_month)
+        first, last, _ = _month_bounds(year, month)
+        legal_dates = await _load_legal_holiday_dates(tenant_id, first, last)
+        if sheet.status == "draft":
+            await self._normalize_seeded_calendar_hours(sheet, legal_dates)
         item = model_to_dict(sheet)
         days = await KuaioaAttendanceDay.filter(
             tenant_id=tenant_id, sheet_id=sheet_id, deleted_at__isnull=True
         ).order_by("employee_name", "employee_id", "work_date")
         day_dicts = [model_to_dict(d) for d in days]
+        for d in day_dicts:
+            wd = _coerce_work_date(d.get("work_date"))
+            d["day_kind"] = _classify_day(wd, legal_dates) if wd else "weekday"
         item["days"] = day_dicts
-        item["employee_summaries"] = self._summarize_employees(day_dicts, bool(sheet.has_night))
+        item["employee_summaries"] = self._summarize_employees(
+            day_dicts, bool(sheet.has_night), legal_dates
+        )
         item["attendance_hints"] = await self._build_attendance_hints(
             tenant_id, sheet, day_dicts
         )
@@ -195,17 +261,23 @@ class AttendanceService:
         wb = Workbook()
         ws = wb.active
         ws.title = "考勤"
-        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=6 + last_day)
+        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=9 + last_day)
         ws.cell(row=1, column=1, value=f"{sheet.year_month} {sheet.workshop_name} 考勤表")
         ws.cell(row=1, column=1).font = Font(bold=True)
 
-        headers = ["序号", "姓名", "行"] + [str(d) for d in day_keys] + ["正班", "加班", "考勤合计", "员工签字"]
+        headers = (
+            ["序号", "姓名", "行"]
+            + [str(d) for d in day_keys]
+            + ["正班", "日常加班", "周末加班", "法定加班", "考勤合计", "员工签字"]
+        )
         for col, h in enumerate(headers, start=1):
             cell = ws.cell(row=2, column=col, value=h)
             cell.font = Font(bold=True)
             cell.alignment = Alignment(horizontal="center")
 
-        from openpyxl.utils import get_column_letter
+        year_m, month_m = _parse_year_month(sheet.year_month)
+        first_m, last_m, _ = _month_bounds(year_m, month_m)
+        legal_dates = await _load_legal_holiday_dates(tenant_id, first_m, last_m)
 
         row_idx = 3
         summary_col = 3 + last_day
@@ -214,27 +286,55 @@ class AttendanceService:
             ws.cell(row=row_idx, column=1, value=seq)
             ws.cell(row=row_idx, column=2, value=bucket["name"])
             ws.cell(row=row_idx, column=3, value="时间")
+            daily_ot = Decimal("0")
+            weekend_ot = Decimal("0")
+            legal_ot = Decimal("0")
+            regular_sum = Decimal("0")
             for day_num in day_keys:
                 cell = bucket["days"].get(day_num)
                 if not cell:
                     ws.cell(row=row_idx, column=3 + day_num, value="")
                     continue
                 mark = str(cell.get("mark") or "normal")
+                wd = date(year_m, month_m, day_num)
+                kind = _classify_day(wd, legal_dates)
+                reg = Decimal(str(cell.get("regular_hours") or 0))
+                ot = Decimal(str(cell.get("ot_hours") or 0))
                 if mark == "leave":
                     val = "X"
                 elif mark == "rest":
                     val = "√"
                 else:
-                    reg = Decimal(str(cell.get("regular_hours") or 0))
-                    val = str(reg) if reg > 0 else ""
+                    if kind == "weekday":
+                        regular_sum += reg
+                        daily_ot += ot
+                        val = str(reg) if reg > 0 else ""
+                    elif kind == "weekend":
+                        worked = _worked_hours(reg, ot)
+                        weekend_ot += worked
+                        val = str(worked) if worked > 0 else ""
+                    else:
+                        worked = _worked_hours(reg, ot)
+                        legal_ot += worked
+                        val = str(worked) if worked > 0 else ""
                 ws.cell(row=row_idx, column=3 + day_num, value=val)
             row_idx += 1
-            ot_row = row_idx
             ws.cell(row=row_idx, column=3, value="加班")
             for day_num in day_keys:
                 cell = bucket["days"].get(day_num)
-                ot = Decimal(str(cell.get("ot_hours") or 0)) if cell else Decimal("0")
-                ws.cell(row=row_idx, column=3 + day_num, value=str(ot) if ot > 0 else "")
+                if not cell:
+                    ws.cell(row=row_idx, column=3 + day_num, value="")
+                    continue
+                mark = str(cell.get("mark") or "normal")
+                if mark in ("leave", "rest"):
+                    ws.cell(row=row_idx, column=3 + day_num, value="")
+                    continue
+                wd = date(year_m, month_m, day_num)
+                kind = _classify_day(wd, legal_dates)
+                reg = Decimal(str(cell.get("regular_hours") or 0))
+                ot = Decimal(str(cell.get("ot_hours") or 0))
+                shown = ot if kind == "weekday" else _worked_hours(reg, ot)
+                ws.cell(row=row_idx, column=3 + day_num, value=str(shown) if shown > 0 else "")
             row_idx += 1
             if has_night:
                 ws.cell(row=row_idx, column=3, value="夜班")
@@ -243,26 +343,16 @@ class AttendanceService:
                     night = cell and cell.get("is_night")
                     ws.cell(row=row_idx, column=3 + day_num, value="☆" if night else "")
                 row_idx += 1
-            time_end = 3 + last_day
+            ws.cell(row=time_row, column=summary_col + 1, value=float(regular_sum))
+            ws.cell(row=time_row, column=summary_col + 2, value=float(daily_ot))
+            ws.cell(row=time_row, column=summary_col + 3, value=float(weekend_ot))
+            ws.cell(row=time_row, column=summary_col + 4, value=float(legal_ot))
             ws.cell(
                 row=time_row,
-                column=summary_col + 1,
-                value=f"=SUM({get_column_letter(4)}{time_row}:{get_column_letter(time_end)}{time_row})",
+                column=summary_col + 5,
+                value=float(regular_sum + daily_ot + weekend_ot + legal_ot),
             )
-            ws.cell(
-                row=time_row,
-                column=summary_col + 2,
-                value=f"=SUM({get_column_letter(4)}{ot_row}:{get_column_letter(time_end)}{ot_row})",
-            )
-            ws.cell(
-                row=time_row,
-                column=summary_col + 3,
-                value=(
-                    f"={get_column_letter(summary_col + 1)}{time_row}"
-                    f"+{get_column_letter(summary_col + 2)}{time_row}"
-                ),
-            )
-            ws.cell(row=time_row, column=summary_col + 4, value="")
+            ws.cell(row=time_row, column=summary_col + 6, value="")
 
         stream = BytesIO()
         wb.save(stream)
@@ -270,7 +360,10 @@ class AttendanceService:
         return stream
 
     def _summarize_employees(
-        self, days: list[dict[str, Any]], has_night: bool
+        self,
+        days: list[dict[str, Any]],
+        has_night: bool,
+        legal_dates: Set[date],
     ) -> list[dict[str, Any]]:
         by_emp: dict[int, dict[str, Any]] = {}
         for d in days:
@@ -282,6 +375,9 @@ class AttendanceService:
                     "employee_code": d.get("employee_code"),
                     "employee_name": d.get("employee_name"),
                     "regular_total": Decimal("0"),
+                    "daily_ot_total": Decimal("0"),
+                    "weekend_ot_total": Decimal("0"),
+                    "legal_ot_total": Decimal("0"),
                     "ot_total": Decimal("0"),
                     "night_count": 0,
                     "leave_days": 0,
@@ -294,10 +390,25 @@ class AttendanceService:
             elif mark == "rest":
                 bucket["rest_days"] += 1
             else:
-                bucket["regular_total"] += Decimal(str(d.get("regular_hours") or 0))
-                bucket["ot_total"] += Decimal(str(d.get("ot_hours") or 0))
+                reg = Decimal(str(d.get("regular_hours") or 0))
+                ot = Decimal(str(d.get("ot_hours") or 0))
+                wd = _coerce_work_date(d.get("work_date"))
+                kind = _classify_day(wd, legal_dates) if wd else "weekday"
+                if kind == "weekday":
+                    bucket["regular_total"] += reg
+                    bucket["daily_ot_total"] += ot
+                elif kind == "weekend":
+                    bucket["weekend_ot_total"] += _worked_hours(reg, ot)
+                else:
+                    bucket["legal_ot_total"] += _worked_hours(reg, ot)
             if has_night and d.get("is_night"):
                 bucket["night_count"] += 1
+        for bucket in by_emp.values():
+            bucket["ot_total"] = (
+                bucket["daily_ot_total"]
+                + bucket["weekend_ot_total"]
+                + bucket["legal_ot_total"]
+            )
         return list(by_emp.values())
 
     async def create_sheet(
@@ -399,14 +510,37 @@ class AttendanceService:
         if not day:
             raise NotFoundError("考勤日格不存在")
         payload = data.model_dump(exclude_unset=True)
+        year, month = _parse_year_month(sheet.year_month)
+        first, last, _ = _month_bounds(year, month)
+        legal_dates = await _load_legal_holiday_dates(tenant_id, first, last)
+        kind = _classify_day(day.work_date, legal_dates)
+        standard = Decimal(str(sheet.standard_hours or _DEFAULT_HOURS))
         if "mark" in payload and payload["mark"] is not None:
             mark = str(payload["mark"]).strip()
             if mark not in _ALLOWED_MARK:
                 raise BusinessLogicError("日格标记无效")
             payload["mark"] = mark
+            mark_changed = mark != str(day.mark or "normal")
             if mark in ("leave", "rest"):
-                payload.setdefault("regular_hours", Decimal("0"))
-                payload.setdefault("ot_hours", Decimal("0"))
+                payload["regular_hours"] = Decimal("0")
+                payload["ot_hours"] = Decimal("0")
+            elif mark == "normal":
+                reg, ot = _default_cell_hours(
+                    standard, mark, kind=kind, work_date=day.work_date
+                )
+                # 周末/法定：正班恒为 0；仅在切换为正常时套用默认加班
+                if kind in ("weekend", "legal"):
+                    payload["regular_hours"] = Decimal("0")
+                    if mark_changed and "ot_hours" not in payload:
+                        payload["ot_hours"] = ot
+                elif mark_changed:
+                    if "regular_hours" not in payload:
+                        payload["regular_hours"] = reg
+                    if "ot_hours" not in payload:
+                        payload["ot_hours"] = ot
+        elif kind in ("weekend", "legal") and "regular_hours" not in payload:
+            # 仅改加班小时：周末/法定正班保持 0
+            payload["regular_hours"] = Decimal("0")
         if "is_night" in payload and payload["is_night"] and not sheet.has_night:
             raise BusinessLogicError("当前考勤单未启用夜班模板")
         for key, value in payload.items():
@@ -415,7 +549,9 @@ class AttendanceService:
         await day.save()
         await touch_updated(sheet, user_id)
         await sheet.save()
-        return model_to_dict(day)
+        result = model_to_dict(day)
+        result["day_kind"] = kind
+        return result
 
     async def batch_mark(
         self, tenant_id: int, sheet_id: int, data: AttendanceBatchMark, user_id: int
@@ -479,10 +615,16 @@ class AttendanceService:
             q = q.filter(employee_id__in=employee_ids)
         rows = await q
         standard = Decimal(str(sheet.standard_hours or _DEFAULT_HOURS))
+        year, month = _parse_year_month(sheet.year_month)
+        first, last, _ = _month_bounds(year, month)
+        legal_dates = await _load_legal_holiday_dates(int(sheet.tenant_id), first, last)
         for day in rows:
             if mark is not None:
                 day.mark = mark
-                reg, ot = _default_cell_hours(standard, mark)
+                kind = _classify_day(day.work_date, legal_dates)
+                reg, ot = _default_cell_hours(
+                    standard, mark, kind=kind, work_date=day.work_date
+                )
                 day.regular_hours = reg
                 day.ot_hours = ot
             if is_night is not None:
@@ -778,11 +920,45 @@ class AttendanceService:
             cur += timedelta(days=1)
         return updated
 
+    async def _normalize_seeded_calendar_hours(
+        self,
+        sheet: KuaioaAttendanceSheet,
+        legal_dates: Set[date],
+    ) -> int:
+        """草稿单：把仍是「标准正班、零加班」的周末/法定日格纠正为新规则默认值。"""
+        standard = Decimal(str(sheet.standard_hours or _DEFAULT_HOURS))
+        rows = await KuaioaAttendanceDay.filter(
+            tenant_id=sheet.tenant_id,
+            sheet_id=sheet.id,
+            deleted_at__isnull=True,
+            mark="normal",
+        )
+        changed = 0
+        for day in rows:
+            kind = _classify_day(day.work_date, legal_dates)
+            if kind == "weekday":
+                continue
+            reg = Decimal(str(day.regular_hours or 0))
+            ot = Decimal(str(day.ot_hours or 0))
+            if reg != standard or ot != 0:
+                continue
+            new_reg, new_ot = _default_cell_hours(
+                standard, "normal", kind=kind, work_date=day.work_date
+            )
+            if reg == new_reg and ot == new_ot:
+                continue
+            day.regular_hours = new_reg
+            day.ot_hours = new_ot
+            await day.save()
+            changed += 1
+        return changed
+
     async def _generate_days_for_sheet(
         self, sheet: KuaioaAttendanceSheet, *, only_missing: bool = False
     ) -> int:
         year, month = _parse_year_month(sheet.year_month)
         first, last, _ = _month_bounds(year, month)
+        legal_dates = await _load_legal_holiday_dates(int(sheet.tenant_id), first, last)
         employees = await self._list_workshop_employees(
             int(sheet.tenant_id),
             sheet.workshop_name,
@@ -808,6 +984,10 @@ class AttendanceService:
                 if key in existing:
                     cur += timedelta(days=1)
                     continue
+                kind = _classify_day(cur, legal_dates)
+                reg, ot = _default_cell_hours(
+                    standard, "normal", kind=kind, work_date=cur
+                )
                 await KuaioaAttendanceDay.create(
                     tenant_id=sheet.tenant_id,
                     sheet_id=int(sheet.id),
@@ -815,8 +995,8 @@ class AttendanceService:
                     employee_code=emp.employee_code,
                     employee_name=emp.full_name,
                     work_date=cur,
-                    regular_hours=standard,
-                    ot_hours=Decimal("0"),
+                    regular_hours=reg,
+                    ot_hours=ot,
                     mark="normal",
                     is_night=False,
                 )

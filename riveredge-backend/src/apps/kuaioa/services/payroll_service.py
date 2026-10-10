@@ -301,6 +301,8 @@ class RewardRecordService:
         ym = _parse_ym(data.year_month)
         if _d(data.amount) <= 0:
             raise BusinessLogicError("奖励金额须大于 0")
+        if data.performance_score is not None and _d(data.performance_score) < 0:
+            raise BusinessLogicError("绩效得分不能为负数")
         emp = await _get_employee(tenant_id, data.employee_id)
         code = await generate_daily_code(
             KuaioaRewardRecord, tenant_id, "RWD", code_field="reward_code"
@@ -315,6 +317,7 @@ class RewardRecordService:
             "workshop_name": emp.workshop_name,
             "amount": data.amount,
             "reason": data.reason,
+            "performance_score": data.performance_score,
             "status": "confirmed",
             "notes": data.notes,
         }
@@ -333,6 +336,9 @@ class RewardRecordService:
         payload = data.model_dump(exclude_unset=True)
         if "amount" in payload and _d(payload["amount"]) <= 0:
             raise BusinessLogicError("奖励金额须大于 0")
+        if "performance_score" in payload and payload["performance_score"] is not None:
+            if _d(payload["performance_score"]) < 0:
+                raise BusinessLogicError("绩效得分不能为负数")
         if "status" in payload and payload["status"] not in ("confirmed", "void"):
             raise BusinessLogicError("状态无效")
         for k, v in payload.items():

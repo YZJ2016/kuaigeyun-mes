@@ -46,6 +46,12 @@ class KuaioaRewardRecord(BaseModel):
     workshop_name = fields.CharField(max_length=100, null=True, description="车间快照")
     amount = fields.DecimalField(max_digits=12, decimal_places=2, description="奖励金额")
     reason = fields.CharField(max_length=200, null=True, description="奖励原因")
+    performance_score = fields.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        description="绩效得分（定制页展示）",
+    )
     status = fields.CharField(max_length=20, default="confirmed", description="confirmed/void")
     notes = fields.TextField(null=True, description="备注")
     deleted_at = fields.DatetimeField(null=True)
