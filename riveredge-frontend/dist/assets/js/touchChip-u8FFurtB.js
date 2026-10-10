@@ -1,0 +1,1 @@
+import{j as t,H as a}from"./vendor-BcwDzyu6.js";import{t as p}from"./hmi-BXeRw_0B.js";function h({selected:i,className:o,...r}){const s=["hmi-chip",i?"hmi-chip--selected":void 0,o].filter(Boolean).join(" ");return t.jsx(a,{size:"large",...p({size:"chip",variant:i?"primary":"default",className:s}),"aria-pressed":i,...r})}export{h as T};

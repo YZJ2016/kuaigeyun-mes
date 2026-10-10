@@ -1,374 +1,256 @@
-/**
- * 数采链路：连接源 → 设备 → 点位 → MES 设备 四列关联视图。
- * 数据来自 listConnections / listDevices / listTags 与设备运营馈送（或星制造设备
- * 列表兜底），在前端现建关联图。点击节点只高亮同一条关联路径；节点可 Tab 聚焦，
- * Enter/Space 触发；高亮同时用描边加粗、图标和透明度表达，不只看颜色。
- */
+import React, { useEffect, useMemo, useState } from 'react';
+import { Empty, Typography } from 'antd';
+import { RightOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
+import { ListPageTemplate } from '../../../../components/layout-templates';
+import { MarkerTag } from '../../../../constants/statusBadges';
+import { getPipelineGraph, type PipelineGraph } from '../../services/kuaiiot';
+import { translateConnectionType, translateMapTarget, translatePipelineStatus, formatIotTagLabel } from '../../constants/formOptions';
+import './index.less';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Button, Card, Col, Empty, Row, Space, Spin, Typography, theme } from 'antd';
-import { LinkOutlined, ReloadOutlined } from '@ant-design/icons';
-import {
-  HealthStatusTag,
-  OnlineTag,
-  ValueTypeTag,
-} from '../../components/status-tags';
-import { formatDateTimeBySiteSetting } from '../../../../utils/format';
-import type { ConnectionOut, DeviceOut, TagOut } from '../../services/kuaiiot';
-import { loadPipelineSources, type PipelineEquipment, type PipelineSources } from './api';
+type PipelineNode = PipelineGraph['nodes'][number];
 
-const { Title, Text } = Typography;
+const STAGE_ORDER = ['connection', 'device', 'tag', 'equipment'] as const;
+type StageKey = (typeof STAGE_ORDER)[number];
 
-type NodeKind = 'connection' | 'device' | 'tag' | 'equipment';
-type Selection = { kind: NodeKind; id: string } | null;
+const STAGE_I18N: Record<StageKey, string> = {
+  connection: 'app.kuaiiot.pipeline.connections',
+  device: 'app.kuaiiot.pipeline.devices',
+  tag: 'app.kuaiiot.pipeline.tags',
+  equipment: 'app.kuaiiot.pipeline.equipment',
+};
 
-function nodeKey(kind: NodeKind, id: string | number): string {
-  return `${kind}:${id}`;
+function markerColor(status: string): string {
+  if (['healthy', 'online', 'enabled', 'bound'].includes(status)) return 'success';
+  if (['offline', 'unhealthy', 'disabled'].includes(status)) return 'default';
+  if (status === 'open') return 'error';
+  return 'processing';
 }
 
-function PipelineNode({
-  title,
-  subtitle,
-  status,
-  active,
-  dimmed,
-  onToggle,
-}: {
-  title: string;
-  subtitle?: React.ReactNode;
-  status?: React.ReactNode;
-  active: boolean;
-  dimmed: boolean;
-  onToggle: () => void;
-}) {
-  const { token } = theme.useToken();
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      aria-pressed={active}
-      onClick={onToggle}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          onToggle();
-        }
-      }}
-      style={{
-        display: 'block',
-        width: '100%',
-        padding: '8px 10px',
-        marginBottom: 8,
-        cursor: 'pointer',
-        borderRadius: token.borderRadius,
-        border: active ? `2px solid ${token.colorPrimary}` : `1px ${dimmed ? 'dashed' : 'solid'} ${token.colorBorder}`,
-        background: active ? token.colorPrimaryBg : token.colorBgContainer,
-        opacity: dimmed ? 0.4 : 1,
-        fontWeight: active ? 600 : 400,
-      }}
-    >
-      <Space size={6} wrap>
-        {active ? <LinkOutlined style={{ color: token.colorPrimary }} aria-hidden /> : null}
-        <Text strong={active}>{title}</Text>
-        {status}
-      </Space>
-      {subtitle ? (
-        <div>
-          <Text type="secondary" style={{ fontSize: 12 }}>
-            {subtitle}
-          </Text>
-        </div>
-      ) : null}
-    </div>
-  );
+function buildAdjacency(edges: PipelineGraph['edges']) {
+  const forward = new Map<string, string[]>();
+  const backward = new Map<string, string[]>();
+  for (const edge of edges) {
+    if (!forward.has(edge.source)) forward.set(edge.source, []);
+    if (!backward.has(edge.target)) backward.set(edge.target, []);
+    forward.get(edge.source)!.push(edge.target);
+    backward.get(edge.target)!.push(edge.source);
+  }
+  return { forward, backward };
 }
 
-function Column({
-  title,
-  count,
-  error,
-  emptyText,
-  children,
-}: {
-  title: string;
-  count?: number;
-  error?: string;
-  emptyText: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <Card size="small" title={`${title}（${count ?? '—'}）`} style={{ height: '100%' }}>
-      {error ? (
-        <Alert type="warning" showIcon message={`数据不可用：${error}`} />
-      ) : (
-        <div style={{ maxHeight: '60vh', overflowY: 'auto' }}>
-          {count === 0 ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={emptyText} /> : children}
-        </div>
-      )}
-    </Card>
-  );
-}
-
-export default function PipelinePage() {
-  const [sources, setSources] = useState<PipelineSources>();
-  const [loading, setLoading] = useState(false);
-  const [selected, setSelected] = useState<Selection>(null);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      setSources(await loadPipelineSources());
-    } finally {
-      setLoading(false);
+function collectRelated(
+  seedId: string,
+  forward: Map<string, string[]>,
+  backward: Map<string, string[]>,
+): Set<string> {
+  const related = new Set<string>([seedId]);
+  const queue = [seedId];
+  while (queue.length) {
+    const current = queue.shift()!;
+    for (const next of [...(forward.get(current) ?? []), ...(backward.get(current) ?? [])]) {
+      if (related.has(next)) continue;
+      related.add(next);
+      queue.push(next);
     }
-  }, []);
+  }
+  return related;
+}
+
+const PipelinePage: React.FC = () => {
+  const { t } = useTranslation();
+  const [loading, setLoading] = useState(true);
+  const [graph, setGraph] = useState<PipelineGraph | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   useEffect(() => {
-    void load();
-  }, [load]);
-
-  const connections = useMemo(() => sources?.connections ?? [], [sources]);
-  const devices = useMemo(() => sources?.devices ?? [], [sources]);
-  const tags = useMemo(() => sources?.tags ?? [], [sources]);
-  const equipment = useMemo(() => sources?.equipment ?? [], [sources]);
-  const errors = sources?.errors ?? {};
-
-  const deviceById = useMemo(() => new Map(devices.map((d) => [d.id, d])), [devices]);
-  const tagById = useMemo(() => new Map(tags.map((t) => [t.id, t])), [tags]);
-  const equipmentByUuid = useMemo(() => new Map(equipment.map((e) => [e.uuid, e])), [equipment]);
-  const tagsByDevice = useMemo(() => {
-    const map = new Map<number, TagOut[]>();
-    for (const tag of tags) {
-      const list = map.get(tag.device_id) ?? [];
-      list.push(tag);
-      map.set(tag.device_id, list);
-    }
-    return map;
-  }, [tags]);
-  const devicesByConnection = useMemo(() => {
-    const map = new Map<number, DeviceOut[]>();
-    for (const device of devices) {
-      if (device.connection_id == null) continue;
-      const list = map.get(device.connection_id) ?? [];
-      list.push(device);
-      map.set(device.connection_id, list);
-    }
-    return map;
-  }, [devices]);
-  const devicesByEquipment = useMemo(() => {
-    const map = new Map<string, DeviceOut[]>();
-    for (const device of devices) {
-      if (!device.equipment_uuid) continue;
-      const list = map.get(device.equipment_uuid) ?? [];
-      list.push(device);
-      map.set(device.equipment_uuid, list);
-    }
-    return map;
-  }, [devices]);
-
-  /** 同一关联路径：选中点向上补连接、向下补点位、横向补 MES 设备。 */
-  const highlighted = useMemo(() => {
-    const keys = new Set<string>();
-    if (!selected) return keys;
-    const addDevice = (device: DeviceOut | undefined) => {
-      if (!device) return;
-      keys.add(nodeKey('device', device.id));
-      if (device.connection_id != null) keys.add(nodeKey('connection', device.connection_id));
-      if (device.equipment_uuid) keys.add(nodeKey('equipment', device.equipment_uuid));
-      for (const tag of tagsByDevice.get(device.id) ?? []) keys.add(nodeKey('tag', tag.id));
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await getPipelineGraph();
+        if (!cancelled) setGraph(data);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
     };
-    if (selected.kind === 'connection') {
-      keys.add(nodeKey('connection', selected.id));
-      for (const device of devicesByConnection.get(Number(selected.id)) ?? []) addDevice(device);
-    } else if (selected.kind === 'device') {
-      addDevice(deviceById.get(Number(selected.id)));
-    } else if (selected.kind === 'tag') {
-      keys.add(nodeKey('tag', selected.id));
-      addDevice(deviceById.get(tagById.get(Number(selected.id))?.device_id ?? -1));
-    } else {
-      keys.add(nodeKey('equipment', selected.id));
-      for (const device of devicesByEquipment.get(selected.id) ?? []) addDevice(device);
-    }
-    return keys;
-  }, [selected, devicesByConnection, devicesByEquipment, deviceById, tagById, tagsByDevice]);
+  }, []);
 
-  const toggle = (kind: NodeKind, id: string | number) => {
-    const idText = String(id);
-    setSelected((current) =>
-      current && current.kind === kind && current.id === idText ? null : { kind, id: idText },
+  const groupedNodes = useMemo(() => {
+    const groups: Record<StageKey, PipelineNode[]> = {
+      connection: [],
+      device: [],
+      tag: [],
+      equipment: [],
+    };
+    for (const node of graph?.nodes ?? []) {
+      if ((STAGE_ORDER as readonly string[]).includes(node.node_type)) {
+        groups[node.node_type as StageKey].push(node);
+      }
+    }
+    return groups;
+  }, [graph]);
+
+  const adjacency = useMemo(() => buildAdjacency(graph?.edges ?? []), [graph]);
+
+  const relatedIds = useMemo(() => {
+    if (!selectedId) return null;
+    return collectRelated(selectedId, adjacency.forward, adjacency.backward);
+  }, [selectedId, adjacency]);
+
+  const summary = graph?.summary ?? {};
+  const metrics = [
+    { key: 'connections', label: t('app.kuaiiot.pipeline.connections'), value: summary.connections ?? 0 },
+    { key: 'devices', label: t('app.kuaiiot.pipeline.devices'), value: summary.devices ?? 0 },
+    { key: 'tags', label: t('app.kuaiiot.pipeline.tags'), value: summary.tags ?? 0 },
+    { key: 'bound', label: t('app.kuaiiot.pipeline.boundDevices'), value: summary.bound_devices ?? 0 },
+    { key: 'alerts', label: t('app.kuaiiot.pipeline.openAlerts'), value: summary.open_alerts ?? 0 },
+  ];
+
+  const toggleSelect = (id: string) => {
+    setSelectedId((prev) => (prev === id ? null : id));
+  };
+
+  const renderNodeRow = (node: PipelineNode) => {
+    const active = selectedId === node.id;
+    const dimmed = relatedIds != null && !relatedIds.has(node.id);
+    const related = relatedIds != null && relatedIds.has(node.id) && !active;
+    const secondary =
+      node.node_type === 'device'
+        ? String(node.meta?.code ?? '')
+        : node.node_type === 'connection'
+          ? translateConnectionType(t, String(node.meta?.connection_type ?? ''))
+          : node.node_type === 'equipment'
+            ? ''
+            : '';
+    const tagKey = node.node_type === 'tag' ? String(node.meta?.tag_key ?? '') : '';
+    const tagName = node.node_type === 'tag' ? String(node.meta?.name ?? '') : '';
+    const primaryLabel =
+      node.node_type === 'tag'
+        ? tagName
+          ? formatIotTagLabel(tagName, tagKey)
+          : node.label
+        : node.label;
+    const tagTarget =
+      node.node_type === 'tag' && node.meta?.map_target
+        ? `${t('app.kuaiiot.pipeline.writeback')} ${translateMapTarget(
+            t,
+            String(node.meta.map_target),
+            tagName,
+          )}`
+        : '';
+
+    return (
+      <button
+        type="button"
+        key={node.id}
+        className={[
+          'kuaiiot-pipeline-row',
+          active ? 'is-active' : '',
+          related ? 'is-related' : '',
+          dimmed ? 'is-dimmed' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+        onClick={() => toggleSelect(node.id)}
+        title={node.label}
+      >
+        <span className="kuaiiot-pipeline-row-main">
+          <span className="kuaiiot-pipeline-row-label">{primaryLabel}</span>
+          {tagTarget ? (
+            <span className="kuaiiot-pipeline-row-meta">→ {tagTarget}</span>
+          ) : secondary ? (
+            <span className="kuaiiot-pipeline-row-meta">{secondary}</span>
+          ) : null}
+        </span>
+        <MarkerTag color={markerColor(node.status)} className="kuaiiot-pipeline-row-status">
+          {translatePipelineStatus(t, node.status)}
+        </MarkerTag>
+      </button>
     );
   };
 
-  const isActive = (kind: NodeKind, id: string | number) => highlighted.has(nodeKey(kind, id));
-  const isDimmed = (kind: NodeKind, id: string | number) =>
-    highlighted.size > 0 && !isActive(kind, id);
+  const renderStage = (stage: StageKey, index: number) => {
+    const nodes = groupedNodes[stage];
+    const visible =
+      relatedIds == null
+        ? nodes
+        : nodes.filter((node) => relatedIds.has(node.id));
+    const title = t(STAGE_I18N[stage]);
 
-  const namesInPath = (kind: NodeKind): string => {
-    const names: string[] = [];
-    if (kind === 'connection') {
-      for (const c of connections) if (isActive('connection', c.id)) names.push(c.name || c.code || `#${c.id}`);
-    } else if (kind === 'device') {
-      for (const d of devices) if (isActive('device', d.id)) names.push(d.name || d.code || `#${d.id}`);
-    } else if (kind === 'tag') {
-      for (const t of tags) if (isActive('tag', t.id)) names.push(t.name || t.tag_key || `#${t.id}`);
-    } else {
-      for (const key of highlighted) {
-        if (!key.startsWith('equipment:')) continue;
-        const uuid = key.slice('equipment:'.length);
-        const row = equipmentByUuid.get(uuid);
-        names.push(row ? row.name || row.code : `未取到名称 ${uuid.slice(0, 8)}`);
-      }
-    }
-    if (!names.length) return '—';
-    return names.length > 3 ? `${names.slice(0, 3).join('、')} 等 ${names.length} 项` : names.join('、');
+    return (
+      <React.Fragment key={stage}>
+        {index > 0 ? (
+          <div className="kuaiiot-pipeline-flow" aria-hidden>
+            <RightOutlined />
+          </div>
+        ) : null}
+        <section className="kuaiiot-pipeline-stage">
+          <header className="kuaiiot-pipeline-stage-header">
+            <Typography.Text strong>{title}</Typography.Text>
+            <span className="kuaiiot-pipeline-stage-count">
+              {relatedIds ? `${visible.length}/${nodes.length}` : nodes.length}
+            </span>
+          </header>
+          <div className="kuaiiot-pipeline-stage-body">
+            {loading ? (
+              <div className="kuaiiot-pipeline-empty">{t('common.loading')}</div>
+            ) : visible.length === 0 ? (
+              <div className="kuaiiot-pipeline-empty">
+                <Empty
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  description={
+                    stage === 'equipment'
+                      ? t('app.kuaiiot.pipeline.equipmentEmpty')
+                      : relatedIds
+                        ? t('app.kuaiiot.pipeline.noRelated')
+                        : t('common.noData')
+                  }
+                />
+                {stage === 'equipment' && !relatedIds ? (
+                  <Typography.Paragraph type="secondary" className="kuaiiot-pipeline-empty-hint">
+                    {t('app.kuaiiot.pipeline.equipmentEmptyHint')}
+                  </Typography.Paragraph>
+                ) : null}
+              </div>
+            ) : (
+              visible.map(renderNodeRow)
+            )}
+          </div>
+        </section>
+      </React.Fragment>
+    );
   };
 
-  const countLabel = (label: string, count?: number, error?: string) => (
-    <div style={{ flex: '1 1 120px', minWidth: 120 }}>
-      <Text type="secondary" style={{ fontSize: 12 }}>
-        {label}
-      </Text>
-      <div>
-        <Title level={4} style={{ margin: 0 }}>
-          {error ? '—' : count ?? '—'}
-        </Title>
-      </div>
-    </div>
-  );
-
   return (
-    <Space direction="vertical" size={16} style={{ width: '100%', padding: 16, boxSizing: 'border-box' }}>
-      <Space wrap>
-        <Title level={4} style={{ margin: 0 }}>
-          数采链路
-        </Title>
-        <Button icon={<ReloadOutlined />} loading={loading} onClick={() => void load()}>
-          刷新
-        </Button>
-      </Space>
-      <Text type="secondary">
-        点击或用 Tab + Enter/Space 选中节点，高亮同一条「连接源 → 设备 → 点位 → MES 设备」链路；再次触发取消选中。
-      </Text>
-
-      {loading && !sources ? (
-        <div style={{ textAlign: 'center', padding: '48px 0' }}>
-          <Spin size="large" />
-        </div>
-      ) : (
-        <>
-          <Card size="small">
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
-              {countLabel('连接源', sources ? connections.length : undefined, errors.connections)}
-              {countLabel('设备', sources ? devices.length : undefined, errors.devices)}
-              {countLabel('点位', sources ? tags.length : undefined, errors.tags)}
-              {countLabel('已绑定 MES', sources ? equipment.length : undefined, errors.equipment)}
-              {countLabel('未确认告警', sources ? (sources.alerts ?? []).filter(a => a.status === 'open').length : undefined, errors.alerts)}
+    <ListPageTemplate fillMain>
+      <div className="kuaiiot-pipeline">
+        <div className="kuaiiot-pipeline-metrics">
+          {metrics.map((item) => (
+            <div key={item.key} className="kuaiiot-pipeline-metric">
+              <div className="kuaiiot-pipeline-metric-value">{loading ? '—' : item.value}</div>
+              <div className="kuaiiot-pipeline-metric-label">{item.label}</div>
             </div>
-          </Card>
+          ))}
+        </div>
 
-          {selected ? (
-            <Alert
-              type="info"
-              showIcon
-              message={
-                <span>
-                  当前链路：连接源 <Text strong>{namesInPath('connection')}</Text> → 设备{' '}
-                  <Text strong>{namesInPath('device')}</Text> → 点位{' '}
-                  <Text strong>{namesInPath('tag')}</Text> → MES 设备{' '}
-                  <Text strong>{namesInPath('equipment')}</Text>
-                </span>
-              }
-            />
-          ) : null}
+        <div className="kuaiiot-pipeline-toolbar">
+          <Typography.Text type="secondary">{t('app.kuaiiot.pipeline.hint')}</Typography.Text>
+          {selectedId ? (
+            <button type="button" className="kuaiiot-pipeline-clear" onClick={() => setSelectedId(null)}>
+              {t('app.kuaiiot.pipeline.clearSelection')}
+            </button>
+          ) : (
+            <Typography.Text type="secondary">{t('app.kuaiiot.pipeline.selectHint')}</Typography.Text>
+          )}
+        </div>
 
-          <Row gutter={[16, 16]}>
-            <Col xs={24} sm={12} xl={6}>
-              <Column
-                title="连接源"
-                count={sources && !errors.connections ? connections.length : undefined}
-                error={errors.connections}
-                emptyText="暂无连接"
-              >
-                {connections.map((conn: ConnectionOut) => (
-                  <PipelineNode
-                    key={conn.id}
-                    title={conn.name || conn.code || `#${conn.id}`}
-                    subtitle={`${conn.connection_type} · 关联设备 ${devicesByConnection.get(conn.id)?.length ?? 0} 台`}
-                    status={<HealthStatusTag value={conn.health_status} />}
-                    active={isActive('connection', conn.id)}
-                    dimmed={isDimmed('connection', conn.id)}
-                    onToggle={() => toggle('connection', conn.id)}
-                  />
-                ))}
-              </Column>
-            </Col>
-            <Col xs={24} sm={12} xl={6}>
-              <Column
-                title="设备"
-                count={sources && !errors.devices ? devices.length : undefined}
-                error={errors.devices}
-                emptyText="暂无设备"
-              >
-                {devices.map((device: DeviceOut) => (
-                  <PipelineNode
-                    key={device.id}
-                    title={device.name || device.code || `#${device.id}`}
-                    subtitle={
-                      <>
-                        {`点位 ${tagsByDevice.get(device.id)?.length ?? 0} 个 · 最近上报 `}
-                        {device.last_seen_at ? formatDateTimeBySiteSetting(device.last_seen_at, '—') : '—'}
-                      </>
-                    }
-                    status={<OnlineTag online={device.is_online} />}
-                    active={isActive('device', device.id)}
-                    dimmed={isDimmed('device', device.id)}
-                    onToggle={() => toggle('device', device.id)}
-                  />
-                ))}
-              </Column>
-            </Col>
-            <Col xs={24} sm={12} xl={6}>
-              <Column
-                title="点位"
-                count={sources && !errors.tags ? tags.length : undefined}
-                error={errors.tags}
-                emptyText="暂无点位"
-              >
-                {tags.map((tag: TagOut) => (
-                  <PipelineNode
-                    key={tag.id}
-                    title={tag.name || tag.tag_key || `#${tag.id}`}
-                    subtitle={`${tag.tag_key} · ${deviceById.get(tag.device_id)?.name ?? `设备 #${tag.device_id}`}`}
-                    status={<ValueTypeTag value={tag.value_type} />}
-                    active={isActive('tag', tag.id)}
-                    dimmed={isDimmed('tag', tag.id)}
-                    onToggle={() => toggle('tag', tag.id)}
-                  />
-                ))}
-              </Column>
-            </Col>
-            <Col xs={24} sm={12} xl={6}>
-              <Column
-                title="MES 设备"
-                count={sources && !errors.equipment ? equipment.length : undefined}
-                error={errors.equipment}
-                emptyText="暂无绑定的 MES 设备"
-              >
-                {equipment.map((row: PipelineEquipment) => (
-                  <PipelineNode
-                    key={row.uuid}
-                    title={row.name || row.code || row.uuid.slice(0, 8)}
-                    subtitle={`${row.code} · 绑定设备 ${devicesByEquipment.get(row.uuid)?.length ?? 0} 台`}
-                    active={isActive('equipment', row.uuid)}
-                    dimmed={isDimmed('equipment', row.uuid)}
-                    onToggle={() => toggle('equipment', row.uuid)}
-                  />
-                ))}
-              </Column>
-            </Col>
-          </Row>
-        </>
-      )}
-    </Space>
+        <div className="kuaiiot-pipeline-stages">{STAGE_ORDER.map(renderStage)}</div>
+      </div>
+    </ListPageTemplate>
   );
-}
+};
+
+export default PipelinePage;

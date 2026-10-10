@@ -1,1 +1,0 @@
-const a=[{value:"kuaiiot_alert",labelKey:"kuaiiot.alert",fallback:"数采告警"}],e={kuaiiot_alert:[{value:"raised",labelKey:"kuaiiot.raised",fallback:"告警触发"},{value:"recovered",labelKey:"kuaiiot.recovered",fallback:"告警恢复"}]};export{e as KUAIIOT_NOTIFICATION_ACTION_OPTIONS,a as KUAIIOT_NOTIFICATION_DOCUMENT_OPTIONS};

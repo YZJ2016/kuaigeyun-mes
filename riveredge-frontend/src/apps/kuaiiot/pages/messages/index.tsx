@@ -5,7 +5,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button, Card, Form, InputNumber, Space, Table, Typography, message } from 'antd';
-import { listMessageLogs, type MessageLog } from '../../services/kuaiiot';
+import { listMessageLogs, type MessageLog } from '../../services/registry';
 
 const { Title } = Typography;
 

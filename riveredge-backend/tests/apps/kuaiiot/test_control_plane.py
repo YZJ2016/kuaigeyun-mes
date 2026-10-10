@@ -23,7 +23,7 @@ from infra.exceptions.exceptions import ValidationError
 def test_ingest_route_is_mounted_without_user_tenant():
     paths = {getattr(route, "path", "") for route in router.routes}
     assert "/ingest/{device_token}" in paths
-    assert "/devices/{device_id}/snapshots" in paths
+    assert "/registry/devices/{device_id}/snapshots" in paths
     assert "device_token" not in DeviceOut.model_fields
 
 

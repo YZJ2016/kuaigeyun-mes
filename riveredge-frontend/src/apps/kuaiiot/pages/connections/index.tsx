@@ -1,626 +1,523 @@
-import { alignIotTableColumns } from '../../components/table-parity';
-/**
- * 接入配置：数采连接运营列表页。
- * 写操作（新建/编辑/删除/启停）后端统一要求 kuaiiot:connection:create；
- * 行内按钮用 rowActionKind('skip') + 显式权限判断，避免 manifest 缺 :update/:delete 误隐藏。
- */
-
-import { EditOutlined, DeleteOutlined, MoreOutlined } from '@ant-design/icons';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import type {
-  ActionType,
-  ProColumns,
-  ProDescriptionsItemProps,
-  ProFormInstance,
-} from '@ant-design/pro-components';
-import { ProFormSwitch, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
-import { Alert, App, Button, Divider, Dropdown, Form, Popconfirm, Select, Space, Tag, Typography } from 'antd';
+import type { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
+import { Button, Form, Input, InputNumber, Modal, Select, Switch, Table, Typography, message } from 'antd';
+import { useTranslation } from 'react-i18next';
+import { rowActionKind, rowActionLabelKeep } from '../../../../components/uni-action';
+import { ListPageTemplate } from '../../../../components/layout-templates';
 import { UniTable } from '../../../../components/uni-table';
-import { rowActionKind } from '../../../../components/uni-action';
-import { UniBatchDeleteButton } from '../../../../components/uni-batch';
-import {
-  DetailDrawerTemplate,
-  DRAWER_CONFIG,
-  FormModalTemplate,
-  ListPageTemplate,
-  MODAL_CONFIG,
-} from '../../../../components/layout-templates';
-import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
 import { useResourcePermissions } from '../../../../hooks/useResourcePermissions';
+import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { buildDetailDrawerEditExtra } from '../../../kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
 import { formatDateTimeBySiteSetting } from '../../../../utils/format';
+import { IotMasterDetailDrawer } from '../shared/iotMasterDetailDrawer';
 import {
-  extractProTableSort,
-  filterRowsByListKeyword,
-  pickListSearchKeyword,
-  pickSearchString,
-  pickSearchTriStateBoolean,
-} from '../../../../utils/tableQueryKey';
+  buildConnectionTypeOptions,
+  buildPayloadFormatOptions,
+  QOS_OPTIONS,
+  translateHealthStatus,
+  translatePayloadFormat,
+} from '../../constants/formOptions';
 import {
-  getIntegrationConfigListAllMatching,
-  type IntegrationConfig,
-} from '../../../../services/integrationConfig';
-import { IotConnectionModal } from '../../../../pages/system/application-connections/IotConnectionModal';
-import { eligibleIotConnections } from '../../../../pages/system/application-connections/iotConnectionConfig';
-import { HealthStatusTag } from '../../components/status-tags';
+  IOT_LIST_COL,
+  renderIotConnectionTypeMarker,
+  renderIotEnabledMarker,
+  renderIotHealthMarker,
+} from '../../utils/iotListPresentation';
+import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
 import {
-  createConnectionRow,
-  deleteConnectionRow,
-  getConnectionRow,
-  listConnectionRows,
-  updateConnectionRow,
-  type ConnectionRow,
-} from './api';
-
-const CONNECTION_TYPE_OPTIONS = [
-  { value: 'http', label: 'HTTP（直接入站）' },
-  { value: 'mqtt', label: 'MQTT' },
-  { value: 'thingsboard', label: 'ThingsBoard' },
-  { value: 'jetlinks', label: 'JetLinks' },
-];
-
-const HEALTH_OPTIONS = [
-  { value: 'connected', label: '已连接' },
-  { value: 'connecting', label: '连接中' },
-  { value: 'receiving', label: '接收中' },
-  { value: 'authenticated', label: '已认证' },
-  { value: 'idle', label: '空闲' },
-  { value: 'disconnected', label: '已断开' },
-  { value: 'unavailable', label: '不可用' },
-  { value: 'disabled', label: '已停用' },
-  { value: 'unknown', label: '未知' },
-];
-
-/** 映射字段只允许这些键（后端 validate_mapping 强校验；地址与凭据在公共连接维护）。 */
-const MAPPING_FIELDS: Array<{ name: string; label: string; mqttOnly?: boolean }> = [
-  { name: 'topic', label: '订阅主题', mqttOnly: true },
-  { name: 'device_token_path', label: '设备凭据路径' },
-  { name: 'tags_path', label: '点位路径' },
-  { name: 'events_path', label: '事件路径' },
-  { name: 'timestamp_path', label: '采样时间路径' },
-  { name: 'idempotency_key_path', label: '幂等键路径' },
-];
-
-function fmtTime(value?: string | null): string {
-  return value ? formatDateTimeBySiteSetting(value, '—') : '—';
-}
-
-function sortRows(rows: ConnectionRow[], sort: Record<string, 'ascend' | 'descend' | null>) {
-  const { sortBy, sortOrder } = extractProTableSort(sort);
-  const sorted = [...rows].sort((a, b) => {
-    const av = (a as Record<string, unknown>)[sortBy ?? 'created_at'];
-    const bv = (b as Record<string, unknown>)[sortBy ?? 'created_at'];
-    if (av == null && bv == null) return 0;
-    if (av == null) return 1;
-    if (bv == null) return -1;
-    return String(av).localeCompare(String(bv), 'zh-CN');
-  });
-  return sortOrder === 'asc' ? sorted : sorted.reverse();
-}
+  createConnection,
+  deleteConnection,
+  healthCheckConnection,
+  listConnectionRecentMessages,
+  listConnections,
+  pullConnectionTelemetry,
+  syncConnectionDevices,
+  updateConnection,
+  type Connection,
+  type ConnectionRecentMessage,
+} from '../../services/kuaiiot';
 
 const ConnectionsPage: React.FC = () => {
-  const { message: messageApi, modal } = App.useApp();
+  const { t } = useTranslation();
   const perms = useResourcePermissions('kuaiiot:connection');
-  const canWrite = perms.canCreate;
   const actionRef = useRef<ActionType>();
-  const formRef = useRef<ProFormInstance>();
-  /** 跨页批量删除解析：request 内增量累积（只增不覆盖），不依赖当前展示页。 */
-  const allRowsRef = useRef<Map<number, ConnectionRow>>(new Map());
+  const [form] = Form.useForm();
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<Connection | null>(null);
+  const [drawerVisible, setDrawerVisible] = useState(false);
+  const [detail, setDetail] = useState<Connection | null>(null);
+  const [recentMessages, setRecentMessages] = useState<ConnectionRecentMessage[]>([]);
+  const [messagesLoading, setMessagesLoading] = useState(false);
+  const [messageDetail, setMessageDetail] = useState<ConnectionRecentMessage | null>(null);
+  const connectionType = Form.useWatch('connection_type', form);
+  const connectionTypeOptions = buildConnectionTypeOptions(t);
+  const payloadFormatOptions = buildPayloadFormatOptions(t);
 
-  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editing, setEditing] = useState<ConnectionRow | null>(null);
-  const [formConnType, setFormConnType] = useState('http');
-  const [iotModalOpen, setIotModalOpen] = useState(false);
-  const [coreLoading, setCoreLoading] = useState(false);
-  const [coreError, setCoreError] = useState(false);
-  const [coreConnections, setCoreConnections] = useState<IntegrationConfig[]>([]);
-  const [detail, setDetail] = useState<ConnectionRow | null>(null);
-  const [detailOpen, setDetailOpen] = useState(false);
-  const [detailLoading, setDetailLoading] = useState(false);
-
-  const loadCoreConnections = useCallback(async () => {
-    setCoreLoading(true);
-    setCoreError(false);
-    try {
-      setCoreConnections(await getIntegrationConfigListAllMatching({ is_active: true }));
-    } catch {
-      setCoreError(true);
-    } finally {
-      setCoreLoading(false);
-    }
-  }, []);
-
-  const openCreate = useCallback(() => {
-    setEditing(null);
-    setIotModalOpen(false);
-    setFormConnType('http');
-    void loadCoreConnections();
-    setModalOpen(true);
-  }, [loadCoreConnections]);
-
-  const openEdit = useCallback((row: ConnectionRow) => {
-    setEditing(row);
-    setModalOpen(true);
-  }, []);
-
-  const openDetail = useCallback(async (row: ConnectionRow) => {
-    setDetail(row);
-    setDetailOpen(true);
-    setDetailLoading(true);
-    try {
-      setDetail(await getConnectionRow(row.id));
-    } catch (error) {
-      messageApi.error(error instanceof Error ? error.message : '读取连接详情失败');
-    } finally {
-      setDetailLoading(false);
-    }
-  }, [messageApi]);
-
-  const handleToggleEnabled = useCallback(
-    async (row: ConnectionRow) => {
-      try {
-        await updateConnectionRow(row.id, { is_enabled: !row.is_enabled });
-        messageApi.success(row.is_enabled ? '已停用' : '已启用');
-        actionRef.current?.reload();
-      } catch (error) {
-        messageApi.error(error instanceof Error ? error.message : '操作失败');
+  const loadRecentMessages = useCallback(
+    async (row: Connection, opts?: { notifyEmpty?: boolean }) => {
+      if (row.connection_type !== 'mqtt') {
+        setRecentMessages([]);
+        return;
       }
-    },
-    [messageApi],
-  );
-
-  const handleDelete = useCallback(
-    async (row: ConnectionRow) => {
+      setMessagesLoading(true);
       try {
-        await deleteConnectionRow(row.id);
-        messageApi.success('删除成功');
-        setSelectedRowKeys((keys) => keys.filter((k) => k !== row.id));
-        actionRef.current?.reload();
-      } catch (error) {
-        messageApi.error(error instanceof Error ? error.message : '删除失败');
-      }
-    },
-    [messageApi],
-  );
-
-  /** 批删串行执行：任一失败即停止，报告成功数与失败明细；跨页选中行从 allRowsRef 解析名称。 */
-  const handleBatchDelete = useCallback(
-    async (keys: React.Key[]) => {
-      let done = 0;
-      for (const key of keys) {
-        const row = allRowsRef.current.get(Number(key));
-        const label = row ? `${row.name} (${row.code})` : `#${key}`;
-        try {
-          await deleteConnectionRow(Number(key));
-          done += 1;
-        } catch (error) {
-          modal.warning({
-            title: '批量删除未完成',
-            content: `已删除 ${done} 条；“${label}”删除失败：${
-              error instanceof Error ? error.message : '未知错误'
-            }。后续 ${keys.length - done - 1} 条未执行。`,
-          });
-          actionRef.current?.reload();
-          setSelectedRowKeys([]);
-          return;
+        const res = await listConnectionRecentMessages(row.uuid, 20);
+        setRecentMessages(res.items || []);
+        if (opts?.notifyEmpty && !res.items?.length) {
+          message.info(t('app.kuaiiot.message.recentMessagesEmpty'));
         }
+      } catch {
+        setRecentMessages([]);
+        message.error(t('app.kuaiiot.message.recentMessagesFailed'));
+      } finally {
+        setMessagesLoading(false);
       }
-      messageApi.success(`成功删除 ${done} 条记录`);
-      setSelectedRowKeys([]);
-      actionRef.current?.reload();
     },
-    [messageApi, modal],
+    [t],
   );
 
-  const columns = useMemo<ProColumns<ConnectionRow>[]>(
-    () => [
+  const columns: ProColumns<Connection>[] = alignProColumns(
+    [
       {
-        title: '编码',
+        title: t('common.code'),
         dataIndex: 'code',
-        key: 'code',
-        sorter: true,
-        copyable: true,
-        ellipsis: true,
-        width: 140,
+        ...IOT_LIST_COL.code,
       },
-      { title: '名称', dataIndex: 'name', key: 'name', sorter: true, ellipsis: true, minWidth: 160 },
       {
-        title: '类型',
+        title: t('common.name'),
+        dataIndex: 'name',
+        ...IOT_LIST_COL.name,
+      },
+      {
+        title: t('app.kuaiiot.field.type'),
         dataIndex: 'connection_type',
-        key: 'connection_type',
-        valueType: 'select',
-        valueEnum: Object.fromEntries(CONNECTION_TYPE_OPTIONS.map((o) => [o.value, { text: o.label }])),
-        width: 110,
-        render: (_, row) => <Tag>{row.connection_type}</Tag>,
+        ...IOT_LIST_COL.markerMd,
+        render: (_, row) => renderIotConnectionTypeMarker(t, row.connection_type),
       },
       {
-        title: '健康状态',
+        title: t('app.kuaiiot.field.health'),
         dataIndex: 'health_status',
-        key: 'health_status',
-        valueType: 'select',
-        valueEnum: Object.fromEntries(HEALTH_OPTIONS.map((o) => [o.value, { text: o.label }])),
-        width: 110,
-        render: (_, row) => <HealthStatusTag value={row.health_status} />,
+        ...IOT_LIST_COL.marker,
+        render: (_, row) => renderIotHealthMarker(t, row.health_status),
       },
       {
-        title: '启用',
+        title: t('common.enabled'),
         dataIndex: 'is_enabled',
-        key: 'is_enabled',
-        valueType: 'select',
-        valueEnum: { true: { text: '启用' }, false: { text: '停用' } },
-        width: 80,
-        render: (_, row) =>
-          row.is_enabled ? <Tag color="green">启用</Tag> : <Tag>停用</Tag>,
+        ...IOT_LIST_COL.marker,
+        render: (_, row) => renderIotEnabledMarker(t, row.is_enabled),
       },
       {
-        title: '创建时间',
-        dataIndex: 'created_at',
-        key: 'created_at',
-        sorter: true,
-        hideInSearch: true,
-        width: 160,
-        render: (_, row) => fmtTime(row.created_at),
-      },
-      {
-        title: '操作',
+        title: t('common.action'),
         key: 'action',
         fixed: 'right',
         hideInSearch: true,
-        render: (_, row) => [
-          <Button
-            key="detail"
-            type="link"
-            size="small"
-            {...rowActionKind('display')}
-            onClick={() => void openDetail(row)}
-          >
-            详情
-          </Button>,
-          ...(canWrite
-            ? [
+        render: (_, row) => {
+          const nodes: React.ReactNode[] = [];
+          if (perms.canRead) {
+            nodes.push(
+              <Button
+                key="detail"
+                {...rowActionKind('read')}
+                onClick={() => {
+                  setDetail(row);
+                  setDrawerVisible(true);
+                  void loadRecentMessages(row);
+                }}
+              />,
+            );
+          }
+          if (perms.canUpdate) {
+            nodes.push(
+              <Button key="edit" {...rowActionKind('update')} onClick={() => openEdit(row)} />,
+              <Button
+                key="sync"
+                {...rowActionKind('skip')}
+                {...rowActionLabelKeep()}
+                onClick={async () => {
+                  const res = await syncConnectionDevices(row.uuid);
+                  message.success(t('app.kuaiiot.message.syncedDevices', { count: res.synced_devices }));
+                  actionRef.current?.reload();
+                }}
+              >
+                同步
+              </Button>,
+            );
+            if (row.connection_type === 'thingsboard' || row.connection_type === 'jetlinks') {
+              nodes.push(
                 <Button
-                  key="edit"
-                  icon={<EditOutlined />}
-                  type="link"
-                  size="small"
+                  key="pull"
                   {...rowActionKind('skip')}
-                  onClick={() => openEdit(row)}
-                >
-                  编辑
-                </Button>,
-                <Popconfirm
-                  key="delete"
-                  title="确定删除该连接？"
-                  description="删除为软删除，关联设备将失去连接来源"
-                  onConfirm={() => void handleDelete(row)}
-                >
-                  <Button type="link" size="small" icon={<DeleteOutlined />} danger {...rowActionKind('skip')}>
-                    删除
-                  </Button>
-                </Popconfirm>,
-                <Dropdown
-                  key="more"
-                  {...rowActionKind('skip')}
-                  trigger={['click']}
-                  menu={{
-                    items: [
-                      {
-                        key: 'toggle-enabled',
-                        label: row.is_enabled ? '停用' : '启用',
-                        onClick: () => {
-                          modal.confirm({
-                            title: row.is_enabled ? '确认停用该连接？' : '确认启用该连接？',
-                            content: row.is_enabled ? '停用后将不再接收数据' : undefined,
-                            onOk: () => handleToggleEnabled(row),
-                          });
-                        },
-                      },
-                    ],
+                  {...rowActionLabelKeep()}
+                  onClick={async () => {
+                    const res = await pullConnectionTelemetry(row.uuid);
+                    message.success(
+                      t('app.kuaiiot.message.pulledTelemetry', {
+                        ingested: res.ingested_devices,
+                        skipped: res.skipped_devices,
+                      }),
+                    );
+    actionRef.current?.reload();
                   }}
                 >
-                  <Button type="link" size="small" icon={<MoreOutlined />}>
-                    更多
-                  </Button>
-                </Dropdown>,
-              ]
-            : []),
-        ],
+                  拉取
+                </Button>,
+              );
+            }
+            nodes.push(
+              <Button
+                key="health"
+                {...rowActionKind('skip')}
+                {...rowActionLabelKeep()}
+                onClick={async () => {
+                  const res = await healthCheckConnection(row.uuid);
+                  message.info(`${t('app.kuaiiot.field.health')}: ${translateHealthStatus(t, res.health_status)}`);
+    actionRef.current?.reload();
+                }}
+              >
+                检查
+              </Button>,
+            );
+          }
+          if (perms.canDelete) {
+            nodes.push(
+              <Button
+                key="delete"
+                {...rowActionKind('delete')}
+                onClick={async () => {
+                  await deleteConnection(row.uuid);
+                  message.success(t('common.deleteSuccess'));
+    actionRef.current?.reload();
+                }}
+              />,
+            );
+          }
+          return nodes;
+        },
       },
     ],
-    [canWrite, openDetail, openEdit, handleToggleEnabled, handleDelete, modal],
+    GLOBAL_DOC_LIST_FIELD_RANK,
   );
 
-  const modalInitialValues = useMemo(() => {
-    if (editing) {
-      return {
-        name: editing.name,
-        is_enabled: editing.is_enabled,
-        config_json: editing.config ? JSON.stringify(editing.config, null, 2) : undefined,
-      };
-    }
-    return { connection_type: 'http', is_enabled: true };
-  }, [editing]);
-
-  const handleFinish = useCallback(
-    async (values: Record<string, any>) => {
-      try {
-        if (editing) {
-          const payload: Record<string, unknown> = {
-            name: String(values.name ?? '').trim(),
-            is_enabled: Boolean(values.is_enabled),
-          };
-          if (typeof values.remark === 'string' && values.remark.trim()) {
-            payload.remark = values.remark.trim();
-          }
-          const rawConfig = String(values.config_json ?? '').trim();
-          if (rawConfig) {
-            let parsed: unknown;
-            try {
-              parsed = JSON.parse(rawConfig);
-            } catch {
-              messageApi.error('映射配置不是合法 JSON');
-              return;
-            }
-            if (parsed == null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-              messageApi.error('映射配置必须是 JSON 对象');
-              return;
-            }
-            payload.config = parsed;
-          }
-          await updateConnectionRow(editing.id, payload);
-          messageApi.success('更新成功');
-        } else {
-          const config = Object.fromEntries(
-            MAPPING_FIELDS.map((f) => [
-              f.name,
-              typeof values[f.name] === 'string' ? values[f.name].trim() : '',
-            ]).filter(([, v]) => v),
-          ) as Record<string, string>;
-          await createConnectionRow({
-            code: String(values.code ?? '').trim(),
-            name: String(values.name ?? '').trim(),
-            connection_type: values.connection_type,
-            integration_uuid: values.integration_uuid || undefined,
-            config: Object.keys(config).length ? config : undefined,
-            is_enabled: Boolean(values.is_enabled ?? true),
-            remark: typeof values.remark === 'string' && values.remark.trim() ? values.remark.trim() : undefined,
-          });
-          messageApi.success('创建成功');
-        }
-        setModalOpen(false);
-        actionRef.current?.reload();
-      } catch (error) {
-        messageApi.error(error instanceof Error ? error.message : '保存失败');
-      }
-    },
-    [editing, messageApi],
-  );
-
-  const coreOptions = useMemo(
-    () =>
-      eligibleIotConnections(coreConnections, formConnType).map((row) => ({
-        value: row.uuid,
-        label: `${row.name} (${row.code})`,
-      })),
-    [coreConnections, formConnType],
-  );
-
-  const detailColumns = useMemo<ProDescriptionsItemProps<ConnectionRow>[]>(
+  const detailColumns = useMemo<ProDescriptionsItemProps<Connection>[]>(
     () => [
-      { title: '编码', dataIndex: 'code' },
-      { title: '名称', dataIndex: 'name' },
+      { title: t('common.code'), dataIndex: 'code', copyable: true },
+      { title: t('common.name'), dataIndex: 'name' },
       {
-        title: '类型',
+        title: t('app.kuaiiot.field.type'),
         dataIndex: 'connection_type',
-        render: (_, row) =>
-          CONNECTION_TYPE_OPTIONS.find((o) => o.value === row.connection_type)?.label ??
-          row.connection_type,
+        render: (_, row) => renderIotConnectionTypeMarker(t, row.connection_type),
       },
       {
-        title: '健康状态',
+        title: t('app.kuaiiot.field.health'),
         dataIndex: 'health_status',
-        render: (_, row) => <HealthStatusTag value={row.health_status} />,
+        render: (_, row) => renderIotHealthMarker(t, row.health_status),
       },
       {
-        title: '启用',
+        title: t('common.enabled'),
         dataIndex: 'is_enabled',
-        render: (_, row) => (row.is_enabled ? '启用' : '停用'),
+        render: (_, row) => renderIotEnabledMarker(t, row.is_enabled),
       },
       {
-        title: '公共连接',
-        dataIndex: 'integration_id',
-        render: (_, row) => (row.integration_id != null ? `#${row.integration_id}` : '—'),
+        title: t('app.kuaiiot.field.lastSeen'),
+        dataIndex: 'last_health_at',
+        render: (_, row) => (row.last_health_at ? formatDateTimeBySiteSetting(row.last_health_at) : '-'),
       },
-      { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' },
-      { title: 'UUID', dataIndex: 'uuid' },
-      {
-        title: '映射配置（已脱敏）',
-        dataIndex: 'config',
-        span: 2,
-        render: (_, row) =>
-          row.config ? (
-            <Typography.Paragraph
-              style={{ marginBottom: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}
-              copyable={{ text: JSON.stringify(row.config, null, 2) }}
-            >
-              {JSON.stringify(row.config, null, 2)}
-            </Typography.Paragraph>
-          ) : (
-            '—'
-          ),
-      },
+      { title: t('common.remark'), dataIndex: 'remark' },
     ],
-    [],
+    [t],
   );
+
+  const openCreate = () => {
+    setEditing(null);
+    form.resetFields();
+    form.setFieldsValue({
+      is_enabled: true,
+      connection_type: 'http_webhook',
+      topic_filter: 'kuaiiot/ingest/+',
+      broker_port: 1883,
+      qos: 1,
+      payload_format: 'auto',
+    });
+    setOpen(true);
+  };
+
+  const openEdit = (row: Connection) => {
+    setEditing(row);
+    form.setFieldsValue({
+      ...row,
+      base_url: row.config?.base_url,
+      username: row.config?.username,
+      password: row.config?.password,
+      token: row.config?.token,
+      broker_host: row.config?.broker_host,
+      broker_port: row.config?.broker_port,
+      topic_filter: row.config?.topic_filter,
+      qos: row.config?.qos,
+      use_tls: row.config?.use_tls,
+      payload_format: row.config?.payload_format || 'auto',
+      client_id: row.config?.client_id,
+    });
+    setOpen(true);
+  };
+
+  const handleSubmit = async () => {
+    const values = await form.validateFields();
+    const payload = {
+      code: values.code,
+      name: values.name,
+      connection_type: values.connection_type,
+      is_enabled: values.is_enabled,
+      remark: values.remark,
+      config: {
+        base_url: values.base_url,
+        username: values.username,
+        password: values.password,
+        token: values.token,
+        broker_host: values.broker_host,
+        broker_port: values.broker_port,
+        topic_filter: values.topic_filter,
+        qos: values.qos,
+        use_tls: values.use_tls,
+        payload_format: values.payload_format || 'auto',
+        client_id: values.client_id,
+      },
+    };
+    if (editing) {
+      await updateConnection(editing.uuid, payload);
+      message.success(t('common.updateSuccess'));
+    } else {
+      await createConnection(payload);
+      message.success(t('common.createSuccess'));
+    }
+    setOpen(false);
+    actionRef.current?.reload();
+  };
 
   return (
     <ListPageTemplate>
-      <UniTable<ConnectionRow>
+      <UniTable<Connection>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('kuaiiot.connections')}
         actionRef={actionRef}
-        rowKey="id"
-        columns={alignIotTableColumns(columns, 'connections')}
-        columnPersistenceId="kuaiiot-connections-v1"
-        permissionResource="kuaiiot:connection"
-        showCreateButton
-        createButtonText="新建接入配置"
-        onCreate={openCreate}
-        enableRowSelection
-        selectedRowKeys={selectedRowKeys}
-        onRowSelectionChange={setSelectedRowKeys}
-        toolBarActionsAfterCreate={
-          canWrite
+        columns={columns}
+        rowKey="uuid"
+        columnPersistenceId="apps.kuaiiot.pages.connections.list-v3"
+        request={async (params) => {
+          const res = await listConnections({
+            page: params.current,
+            page_size: params.pageSize,
+            q: params.keyword as string | undefined,
+          });
+          return { data: res.items, total: res.total, success: true };
+        }}
+        enableRowSelection={perms.canDelete}
+        showDeleteButton={perms.canDelete}
+        onDelete={async (keys) => {
+          await Promise.all(keys.map((key) => deleteConnection(String(key))));
+          message.success(t('common.batchDeleteSuccess', { count: keys.length }));
+          actionRef.current?.reload();
+        }}
+        toolBarActions={
+          perms.canCreate
             ? [
-                <UniBatchDeleteButton
-                  key="batch-delete"
-                  selectedRowKeys={selectedRowKeys}
-                  onConfirm={handleBatchDelete}
-                  confirmTitle={(count) => `确定批量删除 ${count} 条连接？`}
-                  confirmDescription="逐条删除，任一失败即停止并报告明细"
-                />,
+                <Button {...rowActionKind('create')} key="create" type="primary" onClick={openCreate}>
+                  {t('common.create')}
+                </Button>,
               ]
             : []
         }
-        helpViewConfig={buildListPageHelpViewConfig('kuaiiot.connections')}
-        defaultPageSize={20}
-        request={async (params, sort, _filter, searchFormValues) => {
-          try {
-            const rows = await listConnectionRows();
-            for (const row of rows) {
-              allRowsRef.current.set(row.id, row);
-            }
-            let filtered = filterRowsByListKeyword(
-              rows,
-              pickListSearchKeyword(searchFormValues),
-              (row) => [row.code, row.name, row.connection_type],
-            );
-            const connType = pickSearchString(searchFormValues, 'connection_type');
-            if (connType) filtered = filtered.filter((row) => row.connection_type === connType);
-            const health = pickSearchString(searchFormValues, 'health_status');
-            if (health) filtered = filtered.filter((row) => (row.health_status || 'unknown') === health);
-            const enabled = pickSearchTriStateBoolean(searchFormValues, 'is_enabled');
-            if (enabled !== undefined) filtered = filtered.filter((row) => row.is_enabled === enabled);
-            const sorted = sortRows(filtered, sort);
-            const { current = 1, pageSize = 20 } = params;
-            return {
-              data: sorted.slice((current - 1) * pageSize, current * pageSize),
-              success: true,
-              total: sorted.length,
-            };
-          } catch (error) {
-            messageApi.error(error instanceof Error ? error.message : '连接列表加载失败');
-            return { data: [], success: false, total: 0 };
-          }
-        }}
       />
 
-      <FormModalTemplate
-        title={editing ? '编辑接入配置' : '新建接入配置'}
-        open={modalOpen}
-        onOpenChange={(open) => { setModalOpen(open); if (!open) setIotModalOpen(false); }}
-        width={MODAL_CONFIG.STANDARD_WIDTH}
-        initialValues={modalInitialValues}
-        formRef={formRef}
-        onValuesChange={(changed) => {
-          if (!editing && changed?.connection_type != null) {
-            setFormConnType(String(changed.connection_type));
-            formRef.current?.setFieldValue?.('integration_uuid', undefined);
-          }
+      <IotMasterDetailDrawer
+        title={t('common.detail')}
+        open={drawerVisible}
+        onClose={() => {
+          setDrawerVisible(false);
+          setDetail(null);
+          setRecentMessages([]);
         }}
-        onFinish={handleFinish}
+        detail={detail}
+        detailColumns={detailColumns}
+        extra={buildDetailDrawerEditExtra(t, Boolean(detail) && perms.canUpdate, () => {
+          if (!detail) return;
+          setDrawerVisible(false);
+          openEdit(detail);
+        })}
+        supplementaryTitle={
+          detail?.connection_type === 'mqtt' ? t('app.kuaiiot.tab.recentMessages') : undefined
+        }
+        supplementary={
+          detail?.connection_type === 'mqtt' ? (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+                <Button
+                  size="small"
+                  loading={messagesLoading}
+                  onClick={() => detail && void loadRecentMessages(detail, { notifyEmpty: true })}
+                >
+                  {t('app.kuaiiot.action.refreshMessages')}
+                </Button>
+              </div>
+              <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
+                {t('app.kuaiiot.message.recentMessagesHint')}
+              </Typography.Paragraph>
+              <Table<ConnectionRecentMessage>
+                size="small"
+                rowKey="uuid"
+                loading={messagesLoading}
+                pagination={false}
+                dataSource={recentMessages}
+                locale={{ emptyText: t('app.kuaiiot.message.recentMessagesEmpty') }}
+                columns={[
+                  {
+                    title: t('app.kuaiiot.field.topicFilter'),
+                    dataIndex: 'topic',
+                    ellipsis: true,
+                    width: 160,
+                  },
+                  {
+                    title: t('app.kuaiiot.field.payloadFormat'),
+                    dataIndex: 'payload_format',
+                    width: 120,
+                    render: (value) => translatePayloadFormat(t, value),
+                  },
+                  {
+                    title: t('common.createdAt'),
+                    dataIndex: 'received_at',
+                    width: 160,
+                    render: (value) => (value ? formatDateTimeBySiteSetting(value) : '-'),
+                  },
+                  {
+                    title: t('app.kuaiiot.field.messageBody'),
+                    dataIndex: 'payload',
+                    ellipsis: true,
+                    render: (_, row) => {
+                      const preview = JSON.stringify(row.payload ?? {});
+                      return preview.length > 80 ? `${preview.slice(0, 80)}...` : preview;
+                    },
+                  },
+                  {
+                    title: t('common.action'),
+                    key: 'action',
+                    width: 80,
+                    render: (_, row) => (
+                      <Button type="link" size="small" onClick={() => setMessageDetail(row)}>
+                        {t('app.kuaiiot.action.viewMessageBody')}
+                      </Button>
+                    ),
+                  },
+                ]}
+              />
+            </div>
+          ) : undefined
+        }
+      />
+
+      <Modal
+        open={!!messageDetail}
+        title={t('app.kuaiiot.field.messageBody')}
+        onCancel={() => setMessageDetail(null)}
+        footer={null}
+        width={720}
+        destroyOnHidden
       >
-        {!editing ? (
+        {messageDetail ? (
           <>
-            <ProFormText
-              name="code"
-              label="编码"
-              rules={[{ required: true, message: '请填写编码' }]}
-              fieldProps={{ maxLength: 50 }}
-            />
-            <ProFormText
-              name="name"
-              label="名称"
-              rules={[{ required: true, message: '请填写名称' }]}
-              fieldProps={{ maxLength: 100 }}
-            />
-            <SafeProFormSelect
-              name="connection_type"
-              label="类型"
-              options={CONNECTION_TYPE_OPTIONS}
-              rules={[{ required: true, message: '请选择类型' }]}
-            />
-            <Form.Item
-              name="integration_uuid"
-              label="应用连接"
-              rules={[
-                { required: formConnType !== 'http', message: '该类型必须绑定同租户公共连接' },
-              ]}
-              extra="选择当前租户的一条应用连接；可维护多条同类型连接。直接 HTTP 入站可不选。"
-            >
-              <Select allowClear showSearch loading={coreLoading} optionFilterProp="label" options={coreOptions} placeholder="选择已启用的应用连接（名称 / 编码）" />
-            </Form.Item>
-            <Space wrap style={{ marginBottom: 16 }}>
-              {formConnType !== 'http' ? <Button disabled={coreLoading} onClick={() => setIotModalOpen(true)}>新建 IoT 应用连接</Button> : null}
-              <Button loading={coreLoading} onClick={() => void loadCoreConnections()}>刷新连接</Button>
-            </Space>
-            {coreError ? <Alert type="warning" showIcon message="应用连接列表读取失败，请检查权限后刷新重试" style={{ marginBottom: 16 }} /> : null}
-            {MAPPING_FIELDS.filter((f) => (f.mqttOnly ? formConnType === 'mqtt' : formConnType !== 'http')).map(
-              (field) => (
-                <ProFormText
-                  key={field.name}
-                  name={field.name}
-                  label={field.label}
-                  fieldProps={{ placeholder: '载荷中的点分路径' }}
-                />
-              ),
-            )}
+            <Typography.Paragraph>
+              <strong>{t('app.kuaiiot.field.payloadFormat')}:</strong>{' '}
+              {translatePayloadFormat(t, messageDetail.payload_format)}
+            </Typography.Paragraph>
+            {messageDetail.error ? (
+              <Typography.Paragraph type="danger">{messageDetail.error}</Typography.Paragraph>
+            ) : null}
+            {messageDetail.ingest_summary && Object.keys(messageDetail.ingest_summary).length > 0 ? (
+              <>
+                <Typography.Title level={5}>{t('app.kuaiiot.field.ingestSummary')}</Typography.Title>
+                <pre style={{ whiteSpace: 'pre-wrap', fontSize: 12, maxHeight: 160, overflow: 'auto' }}>
+                  {JSON.stringify(messageDetail.ingest_summary, null, 2)}
+                </pre>
+              </>
+            ) : null}
+            <Typography.Title level={5}>{t('app.kuaiiot.field.messageBody')}</Typography.Title>
+            <pre style={{ whiteSpace: 'pre-wrap', fontSize: 12, maxHeight: 420, overflow: 'auto' }}>
+              {JSON.stringify(messageDetail.payload, null, 2)}
+            </pre>
           </>
-        ) : (
-          <>
-            <ProFormText
-              name="name"
-              label="名称"
-              rules={[{ required: true, message: '请填写名称' }]}
-              fieldProps={{ maxLength: 100 }}
-            />
-            <Divider titlePlacement="left" plain>
-              高级配置
-            </Divider>
-            <ProFormTextArea
-              name="config_json"
-              label="映射配置（JSON，可空表示不修改）"
-              fieldProps={{ rows: 4, placeholder: '{"topic": "plant/+"}' }}
-            />
-          </>
-        )}
-        <ProFormSwitch name="is_enabled" label="启用" />
-        {!editing ? (
-          <ProFormTextArea name="remark" label="备注" fieldProps={{ rows: 2, maxLength: 500 }} />
         ) : null}
-      </FormModalTemplate>
+      </Modal>
 
-      <IotConnectionModal
-        key={formConnType}
-        open={iotModalOpen && modalOpen && !editing}
-        type={formConnType}
-        onOpenChange={setIotModalOpen}
-        onCreated={(connection) => {
-          setCoreConnections(rows => [...rows.filter(row => row.uuid !== connection.uuid), connection]);
-          formRef.current?.setFieldValue('integration_uuid', connection.uuid);
-          setCoreError(false);
-        }}
-      />
-
-      <DetailDrawerTemplate
-        title={detail ? `接入配置：${detail.name}` : '接入配置详情'}
-        open={detailOpen}
-        onClose={() => setDetailOpen(false)}
-        size={DRAWER_CONFIG.SMALL_WIDTH}
-        loading={detailLoading}
-        columns={detailColumns}
-        dataSource={detail ?? undefined}
-        column={2}
-      />
+      <Modal
+        open={open}
+        title={editing ? t('common.edit') : t('common.create')}
+        onCancel={() => setOpen(false)}
+        onOk={handleSubmit}
+        destroyOnHidden
+      >
+        <Form form={form} layout="vertical">
+          <Form.Item name="code" label={t('common.code')} rules={[{ required: !editing }]}>
+            <Input disabled={!!editing} />
+          </Form.Item>
+          <Form.Item name="name" label={t('common.name')} rules={[{ required: true }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="connection_type" label={t('app.kuaiiot.field.type')} rules={[{ required: true }]}>
+            <Select options={connectionTypeOptions} />
+          </Form.Item>
+          {(connectionType === 'thingsboard' || connectionType === 'jetlinks') && (
+            <>
+              <Form.Item name="base_url" label={t('app.kuaiiot.field.baseUrl')}>
+                <Input />
+              </Form.Item>
+              <Form.Item name="username" label={t('app.kuaiiot.field.username')}>
+                <Input />
+              </Form.Item>
+              <Form.Item name="password" label={t('app.kuaiiot.field.password')}>
+                <Input.Password />
+              </Form.Item>
+              <Form.Item name="token" label={t('app.kuaiiot.field.token')}>
+                <Input />
+              </Form.Item>
+            </>
+          )}
+          {connectionType === 'mqtt' && (
+            <>
+              <Form.Item name="broker_host" label={t('app.kuaiiot.field.brokerHost')} rules={[{ required: true }]}>
+                <Input />
+              </Form.Item>
+              <Form.Item name="broker_port" label={t('app.kuaiiot.field.brokerPort')}>
+                <InputNumber min={1} max={65535} style={{ width: '100%' }} />
+              </Form.Item>
+              <Form.Item name="topic_filter" label={t('app.kuaiiot.field.topicFilter')}>
+                <Input placeholder={t('app.kuaiiot.placeholder.topicFilter')} />
+              </Form.Item>
+              <Form.Item name="qos" label={t('app.kuaiiot.field.qos')}>
+                <Select options={QOS_OPTIONS} />
+              </Form.Item>
+              <Form.Item name="payload_format" label={t('app.kuaiiot.field.payloadFormat')}>
+                <Select options={payloadFormatOptions} />
+              </Form.Item>
+              <Form.Item name="client_id" label={t('app.kuaiiot.field.clientId')}>
+                <Input placeholder={t('app.kuaiiot.placeholder.clientId')} />
+              </Form.Item>
+              <Form.Item name="username" label={t('app.kuaiiot.field.username')}>
+                <Input />
+              </Form.Item>
+              <Form.Item name="password" label={t('app.kuaiiot.field.password')}>
+                <Input.Password />
+              </Form.Item>
+              <Form.Item name="use_tls" label={t('app.kuaiiot.field.useTls')} valuePropName="checked">
+                <Switch />
+              </Form.Item>
+            </>
+          )}
+          <Form.Item name="remark" label={t('common.remark')}>
+            <Input.TextArea rows={2} />
+          </Form.Item>
+          <Form.Item name="is_enabled" label={t('common.enabled')} valuePropName="checked">
+            <Switch />
+          </Form.Item>
+        </Form>
+      </Modal>
     </ListPageTemplate>
   );
 };

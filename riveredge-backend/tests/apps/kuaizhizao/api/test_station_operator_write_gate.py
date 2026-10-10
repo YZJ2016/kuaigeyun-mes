@@ -835,6 +835,8 @@ PC_ONLY_WRITE_ROUTES: frozenset[tuple[str, str]] = frozenset({
     ("DELETE", "/work-orders/{work_order_id:int}"),
     ("DELETE", "/rework-orders/{rework_order_id}"),
     ("DELETE", "/outsource-orders/{outsource_order_id}"),
+    # api/station/station.py（require_station_settings，PC 侧人脸模板管理）
+    ("DELETE", "/station/face-templates/by-user/{user_id}"),
     # productions/reporting.py
     ("POST", "/reporting"),
     ("POST", "/reporting/batch-revoke"),

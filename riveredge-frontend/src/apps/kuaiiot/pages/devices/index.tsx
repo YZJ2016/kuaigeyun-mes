@@ -1,1031 +1,1249 @@
-import { alignIotTableColumns } from '../../components/table-parity';
-/**
- * 设备连接：IoT 设备运营列表页，左侧设备分组过滤。
- * 设备凭据只在建机/批量建机/轮换当次弹窗显示一次，列表与详情不回显。
- */
-
-import { DeleteOutlined, MoreOutlined } from '@ant-design/icons';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type {
-  ActionType,
-  ProColumns,
-  ProDescriptionsItemProps,
-} from '@ant-design/pro-components';
-import { ProFormDependency, ProFormDigit, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
+import type { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
+import { Line } from '@ant-design/charts';
 import {
-  App,
-  Alert,
-  Button,
-  DatePicker,
-  Dropdown,
-  Empty,
-  Form,
-  Grid,
-  InputNumber,
-  Popconfirm,
-  Select,
-  Space,
-  Spin,
-  Table,
-  Tree,
-  Typography,
-} from 'antd';
-import type { DataNode } from 'antd/es/tree';
-import dayjs from 'dayjs';
+  CompressOutlined,
+  ExpandOutlined,
+  FolderFilled,
+  FolderOpenFilled,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
+  PlusOutlined,
+} from '@ant-design/icons';
+import { AutoComplete, Button, Drawer, Form, Input, InputNumber, Modal, Select, Space, Table, Tabs, Tooltip, Typography, message } from 'antd';
+import type { DataNode, TreeProps } from 'antd/es/tree';
+import { useTranslation } from 'react-i18next';
+import { rowActionKind, rowActionLabelKeep } from '../../../../components/uni-action';
+import { TwoColumnLayout } from '../../../../components/layout-templates';
+import { LIST_PAGE_TABLE_SCROLL } from '../../../../components/layout-templates/constants';
 import { UniTable } from '../../../../components/uni-table';
-import { rowActionKind } from '../../../../components/uni-action';
-import { UniBatchDeleteButton } from '../../../../components/uni-batch';
-import {
-  DetailDrawerSection,
-  DetailDrawerTemplate,
-  DRAWER_CONFIG,
-  FormModalTemplate,
-  ListPageTemplate,
-  MODAL_CONFIG,
-  TwoColumnLayout,
-} from '../../../../components/layout-templates';
-import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
 import { useResourcePermissions } from '../../../../hooks/useResourcePermissions';
+import { API_BASE_URL } from '../../../../services/api';
 import { formatDateTimeBySiteSetting } from '../../../../utils/format';
-import {
-  extractProTableSort,
-  filterRowsByListKeyword,
-  pickListSearchKeyword,
-  pickSearchString,
-  pickSearchTriStateBoolean,
-} from '../../../../utils/tableQueryKey';
-import { equipmentApi } from '../../../kuaizhizao/services/equipment';
+import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
+import { buildDetailDrawerEditExtra } from '../../../kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
+import { IOT_LIST_COL, renderIotOnlineMarker } from '../../utils/iotListPresentation';
+import { IotMasterDetailDrawer } from '../shared/iotMasterDetailDrawer';
 import {
   batchCreateDevices,
+  createDevice,
+  createDeviceCommand,
+  createDeviceGroup,
+  deleteDevice,
+  ingestDeviceData,
+  listConnectionDiscoveredDevices,
+  listAllDiscoveredMqttDevices,
   listConnections,
-  listDeviceGroups,
+  listDeviceCommands,
+  listDeviceGroupsTree,
+  listDeviceHistory,
+  listDeviceMessageLogs,
+  listDeviceSnapshots,
+  listDevices,
+  listEquipmentOptions,
   listProducts,
-  listSnapshots,
-  listTemplates,
-  type ConnectionOut,
-  type DeviceGroup,
-  type SnapshotOut,
-} from '../../services/kuaiiot';
-import {
-  ConnectionSelect,
-  EquipmentSelect,
-  ProductSelect,
-} from '../../components/entity-selects';
-import { OnlineTag } from '../../components/status-tags';
-import {
-  createDeviceRow,
-  deleteDeviceRow,
-  getDeviceRow,
-  listDeviceRows,
+  listTags,
   rotateDeviceToken,
-  updateDeviceRow,
-  type DeviceRow,
-} from './api';
-import { ExternalDeviceInput } from './ExternalDeviceInput';
+  updateDevice,
+  type Connection,
+  type Device,
+  type DeviceBatchItem,
+  type DeviceCommand,
+  type DeviceGroup,
+  type DiscoveredMqttDevice,
+  type MessageLog,
+  type Product,
+  type TagDefinition,
+  type TagHistory,
+  type TagSnapshot,
+  type TagTemplate,
+} from '../../services/kuaiiot';
+import { getAntdModal } from '../../../../utils/antdAppApis';
+import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
 
-const GROUP_ALL = 'all';
-const GROUP_NONE = 'ungrouped';
-
-function fmtTime(value?: string | null): string {
-  return value ? formatDateTimeBySiteSetting(value, '—') : '—';
-}
-
-/** 快照值统一成文本展示；三类值互斥，都不存在时显示 —。 */
-function snapshotValueText(row: SnapshotOut): string {
+const formatTagValue = (row: TagSnapshot | TagHistory) => {
+  if (row.value_text != null && row.value_text !== '') return row.value_text;
   if (row.value_number != null) return String(row.value_number);
   if (row.value_bool != null) return row.value_bool ? 'true' : 'false';
-  if (row.value_text != null) return String(row.value_text);
-  return '—';
-}
+  return '-';
+};
 
-function buildGroupTree(groups: DeviceGroup[]): DataNode[] {
-  const ids = new Set(groups.map((g) => g.id));
-  const childrenOf = new Map<number | null, DeviceGroup[]>();
-  for (const g of groups) {
-    // 父节点已删除/不可见时按根节点展示，避免设备分组“消失”
-    const pid = g.parent_id != null && ids.has(g.parent_id) ? g.parent_id : null;
-    const list = childrenOf.get(pid) ?? [];
-    list.push(g);
-    childrenOf.set(pid, list);
+const DEVICE_GROUP_FOLDER_ICON_STYLE = { fontSize: 16, verticalAlign: 'middle' } as const;
+const DEVICE_GROUP_FOLDER_COLOR_CLOSED = '#e8b347';
+const DEVICE_GROUP_FOLDER_COLOR_OPEN = '#d4a028';
+
+function renderDeviceGroupFolderIcon(props: { expanded: boolean; isLeaf: boolean }) {
+  if (!props.isLeaf && props.expanded) {
+    return (
+      <FolderOpenFilled
+        style={{ ...DEVICE_GROUP_FOLDER_ICON_STYLE, color: DEVICE_GROUP_FOLDER_COLOR_OPEN }}
+      />
+    );
   }
-  const toNode = (g: DeviceGroup): DataNode => ({
-    key: g.id,
-    title: `${g.name} (${g.code})`,
-    children: (childrenOf.get(g.id) ?? [])
-      .sort((a, b) => a.sort_order - b.sort_order || a.id - b.id)
-      .map(toNode),
-  });
-  return (childrenOf.get(null) ?? [])
-    .sort((a, b) => a.sort_order - b.sort_order || a.id - b.id)
-    .map(toNode);
+  return (
+    <FolderFilled style={{ ...DEVICE_GROUP_FOLDER_ICON_STYLE, color: DEVICE_GROUP_FOLDER_COLOR_CLOSED }} />
+  );
 }
 
-function sortRows(rows: DeviceRow[], sort: Record<string, 'ascend' | 'descend' | null>) {
-  const { sortBy, sortOrder } = extractProTableSort(sort);
-  const sorted = [...rows].sort((a, b) => {
-    const av = (a as Record<string, unknown>)[sortBy ?? 'created_at'];
-    const bv = (b as Record<string, unknown>)[sortBy ?? 'created_at'];
-    if (av == null && bv == null) return 0;
-    if (av == null) return 1;
-    if (bv == null) return -1;
-    return String(av).localeCompare(String(bv), 'zh-CN');
+const collectTreeKeys = (nodes: DataNode[]): React.Key[] =>
+  nodes.flatMap((node) => [node.key, ...(node.children?.length ? collectTreeKeys(node.children) : [])]);
+
+const filterTreeByKeyword = (nodes: DataNode[], keyword: string): DataNode[] => {
+  const q = keyword.trim().toLowerCase();
+  if (!q) return nodes;
+  const walk = (items: DataNode[]): DataNode[] =>
+    items
+      .map((node) => {
+        const title = String(node.title ?? '').toLowerCase();
+        const children = node.children ? walk(node.children) : [];
+        if (title.includes(q) || children.length > 0) {
+          return { ...node, children: children.length > 0 ? children : undefined };
+        }
+        return null;
+      })
+      .filter((node): node is DataNode => node != null);
+  return walk(nodes);
+};
+
+const flattenGroups = (groups: DeviceGroup[], prefix = ''): { label: string; value: number }[] =>
+  groups.flatMap((group) => {
+    const label = prefix ? `${prefix} / ${group.name}` : group.name;
+    const current = [{ label, value: group.id }];
+    const children = group.children?.length ? flattenGroups(group.children, label) : [];
+    return [...current, ...children];
   });
-  return sortOrder === 'asc' ? sorted : sorted.reverse();
-}
+
+const normalizeDeviceName = (name?: string) =>
+  (name || '').replace(/[\s/\\_-]+/g, '').toLowerCase();
+
+const matchMqttByMesName = (
+  devices: DiscoveredMqttDevice[],
+  mesName?: string,
+  mesCode?: string,
+) => {
+  if (!devices.length) return undefined;
+  const name = (mesName || '').trim();
+  const code = (mesCode || '').trim();
+  if (name) {
+    const exact = devices.find((item) => item.device_name === name);
+    if (exact) return exact;
+    const normalized = normalizeDeviceName(name);
+    if (normalized.length >= 2) {
+      const fuzzy = devices.find((item) => {
+        const deviceName = normalizeDeviceName(item.device_name);
+        return (
+          deviceName.length >= 2 &&
+          (deviceName === normalized || deviceName.includes(normalized) || normalized.includes(deviceName))
+        );
+      });
+      if (fuzzy) return fuzzy;
+    }
+  }
+  if (code) {
+    return devices.find(
+      (item) => item.device_key === code || item.external_device_id === code,
+    );
+  }
+  return undefined;
+};
+
+const buildDeviceCodeFromMqtt = (device: DiscoveredMqttDevice) => {
+  const source = (device.device_key || device.device_name || device.external_device_id).trim();
+  const slug = source
+    .replace(/[^\w\u4e00-\u9fff-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 40);
+  if (slug) return slug;
+  return device.external_device_id.slice(0, 36);
+};
+
+const buildGroupTreeData = (groups: DeviceGroup[]): DataNode[] =>
+  groups.map((group) => ({
+    key: String(group.id),
+    title: group.name,
+    children: group.children?.length ? buildGroupTreeData(group.children) : undefined,
+  }));
 
 const DevicesPage: React.FC = () => {
-  const { message: messageApi, modal } = App.useApp();
+  const { t } = useTranslation();
   const perms = useResourcePermissions('kuaiiot:device');
-  const screens = Grid.useBreakpoint();
-  const isMobile = !screens.md;
+  const groupPerms = useResourcePermissions('kuaiiot:device-group');
   const actionRef = useRef<ActionType>();
-  /** 跨页批量删除解析：request 内增量累积（只增不覆盖），不依赖当前展示页。 */
-  const allRowsRef = useRef<Map<number, DeviceRow>>(new Map());
-  const groupFilterRef = useRef<React.Key>(GROUP_ALL);
-  const [oeeForm] = Form.useForm();
-  const [deviceForm] = Form.useForm();
-
-  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  const [groups, setGroups] = useState<DeviceGroup[]>([]);
-  const [groupsError, setGroupsError] = useState<string>();
-  const [selectedGroup, setSelectedGroup] = useState<React.Key>(GROUP_ALL);
-  const [connections, setConnections] = useState<ConnectionOut[]>([]);
-  const [equipmentLabels, setEquipmentLabels] = useState<Map<string, string>>(new Map());
-  const [products, setProducts] = useState<{ id: number; code: string; name: string }[]>([]);
-  const [templates, setTemplates] = useState<{ code: string; name: string }[]>([]);
-
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editing, setEditing] = useState<DeviceRow | null>(null);
+  const [form] = Form.useForm();
+  const [batchForm] = Form.useForm();
+  const [open, setOpen] = useState(false);
   const [batchOpen, setBatchOpen] = useState(false);
-  const [detail, setDetail] = useState<DeviceRow | null>(null);
-  const [detailOpen, setDetailOpen] = useState(false);
-  const [detailLoading, setDetailLoading] = useState(false);
-  const [snapshots, setSnapshots] = useState<SnapshotOut[]>([]);
-  const [snapshotsLoading, setSnapshotsLoading] = useState(false);
-  const [snapshotsError, setSnapshotsError] = useState<string>();
-  const [oeeLoading, setOeeLoading] = useState(false);
-  const [oeeSaving, setOeeSaving] = useState(false);
+  const [batchResult, setBatchResult] = useState<DeviceBatchItem[]>([]);
+  const [editing, setEditing] = useState<Device | null>(null);
+  const [drawerVisible, setDrawerVisible] = useState(false);
+  const [detail, setDetail] = useState<Device | null>(null);
+  const [connections, setConnections] = useState<Connection[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [equipmentOptions, setEquipmentOptions] = useState<
+    { label: string; value: string; name?: string; code?: string }[]
+  >([]);
+  const [discoveredDevices, setDiscoveredDevices] = useState<DiscoveredMqttDevice[]>([]);
+  const [discoveredLoading, setDiscoveredLoading] = useState(false);
+  const watchedConnectionId = Form.useWatch('connection_id', form);
+  const [tagTemplates, setTagTemplates] = useState<TagTemplate[]>([]);
+  const [dataOpen, setDataOpen] = useState(false);
+  const [debugOpen, setDebugOpen] = useState(false);
+  const [dataDevice, setDataDevice] = useState<Device | null>(null);
+  const [snapshots, setSnapshots] = useState<TagSnapshot[]>([]);
+  const [history, setHistory] = useState<TagHistory[]>([]);
+  const [deviceTags, setDeviceTags] = useState<TagDefinition[]>([]);
+  const [trendTagKey, setTrendTagKey] = useState<string>();
+  const [trendHistory, setTrendHistory] = useState<TagHistory[]>([]);
+  const [tsdbConfigured, setTsdbConfigured] = useState(false);
+  const [dataLoading, setDataLoading] = useState(false);
+  const [debugPayload, setDebugPayload] = useState('{\n  "tags": {}\n}');
+  const [debugResponse, setDebugResponse] = useState<string>('');
+  const [groupTree, setGroupTree] = useState<DeviceGroup[]>([]);
+  const [selectedGroupKeys, setSelectedGroupKeys] = useState<React.Key[]>(['all']);
+  const [groupSearchValue, setGroupSearchValue] = useState('');
+  const [expandedKeys, setExpandedKeys] = useState<React.Key[]>(['all']);
+  const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
+  const [groupModalOpen, setGroupModalOpen] = useState(false);
+  const [groupForm] = Form.useForm();
+  const [commands, setCommands] = useState<DeviceCommand[]>([]);
+  const [messageLogs, setMessageLogs] = useState<MessageLog[]>([]);
+  const [commandForm] = Form.useForm();
+  const [selectedFunctionKey, setSelectedFunctionKey] = useState<string>();
+  const hasGroupSelectionInitializedRef = useRef(false);
 
-  const connectionLabelById = useMemo(() => {
-    const map = new Map<number, string>();
-    for (const row of connections) map.set(row.id, `${row.name} (${row.code})`);
-    return map;
-  }, [connections]);
-
-  const productLabelById = useMemo(() => {
-    const map = new Map<number, string>();
-    for (const row of products) map.set(row.id, `${row.name} (${row.code})`);
-    return map;
-  }, [products]);
-
-  const groupLabelById = useMemo(() => {
-    const map = new Map<number, string>();
-    for (const g of groups) map.set(g.id, `${g.name} (${g.code})`);
-    return map;
-  }, [groups]);
-
-  const loadSidebarSources = useCallback(async () => {
-    void equipmentApi.list({ limit: 500 }).then((res: any) => {
-      setEquipmentLabels(new Map((res?.items ?? []).map((row: { uuid: string; name: string; code: string }) => [row.uuid, `${row.name} (${row.code})`])));
-    }).catch(() => setEquipmentLabels(new Map()));
-    try {
-      setGroups(await listDeviceGroups());
-      setGroupsError(undefined);
-    } catch (error) {
-      setGroupsError(error instanceof Error ? error.message : '分组加载失败');
-      setGroups([]);
-    }
-    try {
-      setConnections(await listConnections());
-    } catch {
-      setConnections([]);
-    }
-    try {
-      const rows = await listProducts();
-      setProducts((rows || []).map((r) => ({ id: r.id, code: r.code, name: r.name })));
-    } catch {
-      setProducts([]);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadSidebarSources();
-  }, [loadSidebarSources]);
+  const selectedGroupId = useMemo(() => {
+    const key = selectedGroupKeys[0];
+    if (!key || key === 'all') return undefined;
+    return Number(key);
+  }, [selectedGroupKeys]);
 
   const groupTreeData = useMemo<DataNode[]>(
+    () => [{ key: 'all', title: t('app.kuaiiot.option.allGroups'), children: buildGroupTreeData(groupTree) }],
+    [groupTree, t],
+  );
+
+  const filteredGroupTreeData = useMemo(
+    () => filterTreeByKeyword(groupTreeData, groupSearchValue),
+    [groupTreeData, groupSearchValue],
+  );
+
+  const reloadGroupTree = useCallback(async () => {
+    const groupRes = await listDeviceGroupsTree().catch(() => ({ items: [] }));
+    setGroupTree(groupRes.items || []);
+  }, []);
+
+  const equipmentLabelMap = useMemo(
+    () => Object.fromEntries(equipmentOptions.map((item) => [item.value, item.label])),
+    [equipmentOptions],
+  );
+  const productLabelMap = useMemo(
+    () => Object.fromEntries(products.map((item) => [item.id, `${item.code} - ${item.name}`])),
+    [products],
+  );
+  const groupLabelMap = useMemo(
+    () => Object.fromEntries(flattenGroups(groupTree).map((item) => [item.value, item.label])),
+    [groupTree],
+  );
+  const numberTags = useMemo(() => deviceTags.filter((item) => item.value_type === 'number'), [deviceTags]);
+  const detailColumns = useMemo<ProDescriptionsItemProps<Device>[]>(
     () => [
-      { key: GROUP_ALL, title: '全部设备' },
-      { key: GROUP_NONE, title: '未分组' },
-      ...buildGroupTree(groups),
+      { title: t('common.code'), dataIndex: 'code', copyable: true },
+      { title: t('common.name'), dataIndex: 'name' },
+      { title: t('app.kuaiiot.field.externalId'), dataIndex: 'external_device_id' },
+      {
+        title: t('app.kuaiiot.field.online'),
+        dataIndex: 'is_online',
+        render: (_, row) => renderIotOnlineMarker(t, row.is_online),
+      },
+      {
+        title: t('app.kuaiiot.field.equipment'),
+        dataIndex: 'equipment_uuid',
+        render: (_, row) => equipmentLabelMap[row.equipment_uuid || ''] || row.equipment_uuid || '-',
+      },
+      {
+        title: t('app.kuaiiot.field.lastSeen'),
+        dataIndex: 'last_seen_at',
+        render: (_, row) => (row.last_seen_at ? formatDateTimeBySiteSetting(row.last_seen_at) : '-'),
+      },
+      { title: t('common.remark'), dataIndex: 'remark' },
     ],
-    [groups],
+    [equipmentLabelMap, t],
+  );
+  const currentProduct = useMemo(
+    () => products.find((item) => item.id === dataDevice?.product_id),
+    [products, dataDevice?.product_id],
+  );
+  const functionOptions = useMemo(
+    () => (currentProduct?.functions || []).map((item) => ({ label: item.name, value: item.function_key })),
+    [currentProduct],
+  );
+  const selectedFunction = useMemo(
+    () => currentProduct?.functions?.find((item) => item.function_key === selectedFunctionKey),
+    [currentProduct, selectedFunctionKey],
   );
 
-  const groupOptions = useMemo(
-    () => [
-      { value: GROUP_ALL, label: '全部设备' },
-      { value: GROUP_NONE, label: '未分组' },
-      ...groups.map((g) => ({ value: g.id, label: `${g.name} (${g.code})` })),
-    ],
-    [groups],
-  );
+  const reloadFormOptions = useCallback(async () => {
+    const [connRes, eqOptions, productRes] = await Promise.all([
+      listConnections({ page: 1, page_size: 200 }).catch(() => ({ items: [] as Connection[], total: 0 })),
+      listEquipmentOptions().catch(() => []),
+      listProducts({ page: 1, page_size: 200 }).catch(() => ({ items: [] as Product[], total: 0 })),
+    ]);
+    setConnections(connRes.items || []);
+    setEquipmentOptions(eqOptions || []);
+    setProducts(productRes.items || []);
+    await reloadGroupTree();
+  }, [reloadGroupTree]);
 
-  const handleGroupSelect = useCallback((keys: React.Key[]) => {
-    const key = keys[0] ?? GROUP_ALL;
-    setSelectedGroup(key);
-    groupFilterRef.current = key;
-    actionRef.current?.reload();
-  }, []);
+  useEffect(() => {
+    void reloadFormOptions();
+  }, [reloadFormOptions]);
 
-  const showTokenOnce = useCallback(
-    (rows: Array<{ code: string; name: string; device_token: string }>, title: string) => {
-      modal.warning({
-        title,
-        width: 640,
-        content: (
-          <div>
-            <Alert
-              type="warning"
-              showIcon
-              message="设备凭据只在本次结果显示，关闭后无法再次查看，请立即复制保存。"
-              style={{ marginBottom: 12 }}
-            />
-            <Table
-              size="small"
-              rowKey="code"
-              pagination={false}
-              scroll={{ x: 'max-content' }}
-              dataSource={rows}
-              columns={[
-                { title: '编码', dataIndex: 'code' },
-                { title: '名称', dataIndex: 'name' },
-                {
-                  title: '设备凭据',
-                  dataIndex: 'device_token',
-                  render: (token: string) => (
-                    <Typography.Paragraph copyable style={{ marginBottom: 0, wordBreak: 'break-all' }}>
-                      {token}
-                    </Typography.Paragraph>
-                  ),
-                },
-              ]}
-            />
-          </div>
-        ),
-      });
-    },
-    [modal],
-  );
-
-  const openCreate = useCallback(() => {
-    setEditing(null);
-    setModalOpen(true);
-    listTemplates()
-      .then((rows) => setTemplates((rows || []).map((r) => ({ code: r.code, name: r.name }))))
-      .catch(() => setTemplates([]));
-  }, []);
-
-  const openEdit = useCallback((row: DeviceRow) => {
-    setEditing(row);
-    setModalOpen(true);
-  }, []);
-
-  /** OEE 计算依据读写与旧 pipeline 页一致：equipment.technical_parameters.oee。 */
-  const loadOeeBasis = useCallback(async (equipmentUuid: string) => {
-    setOeeLoading(true);
-    try {
-      const row = (await equipmentApi.get(equipmentUuid)) as {
-        technical_parameters?: {
-          oee?: {
-            ideal_cycle_seconds?: number;
-            planned_windows?: Array<{ start: string; end: string }>;
-          };
-        };
-      };
-      const config = row.technical_parameters?.oee;
-      oeeForm.setFieldsValue({
-        ideal_cycle_seconds: config?.ideal_cycle_seconds,
-        planned_windows: (config?.planned_windows ?? []).map((w) => ({
-          range: [dayjs(w.start), dayjs(w.end)],
-        })),
-      });
-    } catch {
-      messageApi.error('设备 OEE 配置读取失败');
-    } finally {
-      setOeeLoading(false);
+  useEffect(() => {
+    if (!hasGroupSelectionInitializedRef.current) {
+      hasGroupSelectionInitializedRef.current = true;
+      return;
     }
-  }, [messageApi, oeeForm]);
+    actionRef.current?.reload();
+  }, [selectedGroupKeys]);
 
-  const openDetail = useCallback(
-    async (row: DeviceRow) => {
-      setDetail(row);
-      setDetailOpen(true);
-      setDetailLoading(true);
-      oeeForm.resetFields();
-      setSnapshots([]);
-      setSnapshotsError(undefined);
-      setSnapshotsLoading(true);
+  const loadDiscoveredDevices = useCallback(
+    async (connectionId?: number) => {
+      setDiscoveredLoading(true);
       try {
-        setSnapshots(await listSnapshots(row.id));
-      } catch (error) {
-        setSnapshotsError(error instanceof Error ? error.message : '快照读取失败');
-      } finally {
-        setSnapshotsLoading(false);
-      }
-      let equipmentUuid = row.equipment_uuid;
-      try {
-        const fresh = await getDeviceRow(row.id);
-        setDetail(fresh);
-        equipmentUuid = fresh.equipment_uuid;
-      } catch (error) {
-        messageApi.error(error instanceof Error ? error.message : '读取设备详情失败');
-      } finally {
-        setDetailLoading(false);
-      }
-      if (equipmentUuid) {
-        void loadOeeBasis(equipmentUuid);
-      }
-    },
-    [messageApi, oeeForm, loadOeeBasis],
-  );
-
-  const handleSaveOee = useCallback(
-    async (values: { ideal_cycle_seconds?: number; planned_windows?: Array<{ range: [dayjs.Dayjs, dayjs.Dayjs] }> }) => {
-      const equipmentUuid = detail?.equipment_uuid;
-      if (!equipmentUuid) return;
-      setOeeSaving(true);
-      try {
-        const row = (await equipmentApi.get(equipmentUuid)) as {
-          technical_parameters?: Record<string, unknown>;
-        };
-        await equipmentApi.update(equipmentUuid, {
-          technical_parameters: {
-            ...(row.technical_parameters ?? {}),
-            oee: {
-              ideal_cycle_seconds: values.ideal_cycle_seconds,
-              planned_windows: (values.planned_windows ?? []).map((w) => ({
-                start: w.range[0].toISOString(),
-                end: w.range[1].toISOString(),
-              })),
-            },
-          },
-        });
-        messageApi.success('OEE 依据已保存');
-      } catch {
-        messageApi.error('保存失败，请检查窗口重叠、理想节拍和编辑权限');
-      } finally {
-        setOeeSaving(false);
-      }
-    },
-    [detail, messageApi],
-  );
-
-  const handleDelete = useCallback(
-    async (row: DeviceRow) => {
-      try {
-        await deleteDeviceRow(row.id);
-        messageApi.success('删除成功');
-        setSelectedRowKeys((keys) => keys.filter((k) => k !== row.id));
-        actionRef.current?.reload();
-      } catch (error) {
-        messageApi.error(error instanceof Error ? error.message : '删除失败');
-      }
-    },
-    [messageApi],
-  );
-
-  const handleRotateToken = useCallback(
-    async (row: DeviceRow) => {
-      try {
-        const res = await rotateDeviceToken(row.id);
-        showTokenOnce([{ code: res.code, name: res.name, device_token: res.device_token }], '设备凭据已轮换');
-      } catch (error) {
-        messageApi.error(error instanceof Error ? error.message : '轮换凭据失败');
-      }
-    },
-    [messageApi, showTokenOnce],
-  );
-
-  /** 批删串行执行：任一失败即停止，报告成功数与失败明细；跨页选中行从 allRowsRef 解析名称。 */
-  const handleBatchDelete = useCallback(
-    async (keys: React.Key[]) => {
-      let done = 0;
-      for (const key of keys) {
-        const row = allRowsRef.current.get(Number(key));
-        const label = row ? `${row.name} (${row.code})` : `#${key}`;
-        try {
-          await deleteDeviceRow(Number(key));
-          done += 1;
-        } catch (error) {
-          modal.warning({
-            title: '批量删除未完成',
-            content: `已删除 ${done} 条；“${label}”删除失败：${
-              error instanceof Error ? error.message : '未知错误'
-            }。后续 ${keys.length - done - 1} 条未执行。`,
-          });
-          actionRef.current?.reload();
-          setSelectedRowKeys([]);
-          return;
+        if (connectionId) {
+          const connection = connections.find((item) => item.id === connectionId);
+          if (connection?.connection_type === 'mqtt') {
+            const res = await listConnectionDiscoveredDevices(connection.uuid, 50);
+            const items = res.items || [];
+            setDiscoveredDevices(items);
+            return items;
+          }
         }
+        const res = await listAllDiscoveredMqttDevices(200);
+        const items = res.items || [];
+        setDiscoveredDevices(items);
+        return items;
+    } catch (error) {
+        setDiscoveredDevices([]);
+        message.warning(t('app.kuaiiot.message.mqttDevicePickEmpty'));
+        return [] as DiscoveredMqttDevice[];
+      } finally {
+        setDiscoveredLoading(false);
       }
-      messageApi.success(`成功删除 ${done} 条记录`);
-      setSelectedRowKeys([]);
-      actionRef.current?.reload();
     },
-    [messageApi, modal],
-  );
-
-  const connectionOptions = useMemo(
-    () => connections.map((c) => ({ value: c.id, label: `${c.name} (${c.code})` })),
     [connections],
   );
 
-  const columns = useMemo<ProColumns<DeviceRow>[]>(
-    () => [
-      { title: '编码', dataIndex: 'code', key: 'code', sorter: true, copyable: true, width: 140 },
-      { title: '名称', dataIndex: 'name', key: 'name', sorter: true, ellipsis: true, minWidth: 140 },
-      { title: '产品', dataIndex: 'product_id', key: 'product_id', hideInSearch: true, width: 160,
-        render: (_, row) => row.product_id != null ? productLabelById.get(row.product_id) ?? `#${row.product_id}` : '—' },
-      { title: 'MES 设备', dataIndex: 'equipment_uuid', key: 'equipment_uuid', hideInSearch: true, width: 160,
-        render: (_, row) => row.equipment_uuid ? equipmentLabels.get(row.equipment_uuid) ?? row.equipment_uuid : '—' },
+  useEffect(() => {
+    if (!open) return;
+    void loadDiscoveredDevices(watchedConnectionId);
+  }, [open, watchedConnectionId, loadDiscoveredDevices]);
+
+  const mqttDeviceOptions = useMemo(
+    () =>
+      discoveredDevices.map((item) => ({
+        label: item.already_bound
+          ? `${item.label}${t('app.kuaiiot.option.mqttDeviceBoundSuffix')}`
+          : item.label,
+        value: item.external_device_id,
+        disabled: Boolean(item.already_bound && item.external_device_id !== editing?.external_device_id),
+      })),
+    [discoveredDevices, editing?.external_device_id, t],
+  );
+
+  const applyMqttDevice = (device: DiscoveredMqttDevice, fillIdentity: boolean) => {
+    const remarkParts = [device.workshop_name, device.line_name].filter(Boolean);
+    const next: Record<string, unknown> = {
+      external_device_id: device.external_device_id,
+    };
+    if (device.connection_id) next.connection_id = device.connection_id;
+    if (fillIdentity) {
+      if (!form.getFieldValue('name') || !editing) {
+        next.name = device.device_name || form.getFieldValue('name');
+      }
+      if (!editing && !form.getFieldValue('code')) {
+        next.code = buildDeviceCodeFromMqtt(device);
+      }
+      if (remarkParts.length && !form.getFieldValue('remark')) {
+        next.remark = remarkParts.join(' / ');
+      }
+    }
+    form.setFieldsValue(next);
+  };
+
+  const handleMqttDevicePick = (externalId?: string) => {
+    if (!externalId) return;
+    const device = discoveredDevices.find((item) => item.external_device_id === externalId);
+    if (!device) return;
+    applyMqttDevice(device, !form.getFieldValue('equipment_uuid'));
+  };
+
+  const handleMesEquipmentPick = async (equipmentUuid?: string) => {
+    if (!equipmentUuid) return;
+    const eq = equipmentOptions.find((item) => item.value === equipmentUuid);
+    if (!eq) return;
+    const next: Record<string, string> = {};
+    if (eq.name) next.name = eq.name;
+    if (!editing && eq.code) next.code = eq.code;
+    if (Object.keys(next).length) form.setFieldsValue(next);
+
+    const devices = discoveredDevices.length
+      ? discoveredDevices
+      : await loadDiscoveredDevices(form.getFieldValue('connection_id'));
+    const matched = matchMqttByMesName(devices, eq.name, eq.code);
+    if (matched) {
+      applyMqttDevice(matched, false);
+      message.success(t('app.kuaiiot.message.mqttDeviceMatched'));
+      return;
+    }
+    message.warning(t('app.kuaiiot.message.mqttDeviceMatchMiss'));
+  };
+
+  const handleGroupSelect: TreeProps['onSelect'] = (keys) => {
+    if (keys.length > 0) {
+      setSelectedGroupKeys(keys);
+    }
+  };
+
+  const handleGroupExpand: TreeProps['onExpand'] = (keys) => {
+    setExpandedKeys(keys);
+  };
+
+  const handleToggleExpand = () => {
+    const targetData = filteredGroupTreeData.length > 0 || !groupSearchValue.trim() ? filteredGroupTreeData : groupTreeData;
+    const allKeys = collectTreeKeys(targetData);
+    if (expandedKeys.length <= 1) {
+      setExpandedKeys(allKeys);
+    } else {
+      setExpandedKeys(['all']);
+    }
+  };
+
+  const handleSubmitGroup = async () => {
+    const values = await groupForm.validateFields();
+    await createDeviceGroup(values);
+    message.success(t('common.createSuccess'));
+    setGroupModalOpen(false);
+    groupForm.resetFields();
+    await reloadGroupTree();
+  };
+
+  const reloadDeviceData = async (row: Device) => {
+    setDataLoading(true);
+    try {
+      const [snapshotRes, historyRes, tagRes, commandRes, messageLogRes] = await Promise.all([
+        listDeviceSnapshots(row.uuid),
+        listDeviceHistory(row.uuid, { limit: 100 }),
+        listTags({ page: 1, page_size: 200, device_id: row.id }),
+        listDeviceCommands(row.uuid, { page: 1, page_size: 50 }).catch(() => ({ items: [], total: 0 })),
+        listDeviceMessageLogs(row.uuid, { page: 1, page_size: 50 }).catch(() => ({ items: [], total: 0 })),
+      ]);
+      setSnapshots(snapshotRes);
+      setHistory(historyRes.items);
+      setTsdbConfigured(historyRes.tsdb_configured);
+      setDeviceTags(tagRes.items);
+      setCommands(commandRes.items);
+      setMessageLogs(messageLogRes.items);
+      const firstNumberTag = tagRes.items.find((item) => item.value_type === 'number')?.tag_key;
+      setTrendTagKey(firstNumberTag);
+      if (firstNumberTag && historyRes.tsdb_configured) {
+        const trendRes = await listDeviceHistory(row.uuid, { tag_key: firstNumberTag, limit: 200 });
+        setTrendHistory(trendRes.items);
+      } else {
+        setTrendHistory([]);
+      }
+    } finally {
+      setDataLoading(false);
+    }
+  };
+
+  const openDataDrawer = async (row: Device) => {
+    setDataDevice(row);
+    setDataOpen(true);
+    await reloadDeviceData(row);
+  };
+
+  const openDebugDrawer = async (row: Device) => {
+    setDataDevice(row);
+    setDebugOpen(true);
+    setDebugResponse('');
+    const tagRes = await listTags({ page: 1, page_size: 200, device_id: row.id });
+    setDeviceTags(tagRes.items);
+    const sampleTags: Record<string, unknown> = {};
+    for (const tag of tagRes.items) {
+      if (tag.value_type === 'boolean') sampleTags[tag.tag_key] = true;
+      else if (tag.value_type === 'number') sampleTags[tag.tag_key] = 1;
+      else sampleTags[tag.tag_key] = 'sample';
+    }
+    setDebugPayload(JSON.stringify({ tags: sampleTags }, null, 2));
+    await reloadDeviceData(row);
+  };
+
+  const handleTrendTagChange = async (tagKey: string) => {
+    setTrendTagKey(tagKey);
+    if (!dataDevice) return;
+    const trendRes = await listDeviceHistory(dataDevice.uuid, { tag_key: tagKey, limit: 200 });
+    setTrendHistory(trendRes.items);
+  };
+
+  const handleSimulateIngest = async () => {
+    if (!dataDevice) return;
+    try {
+      const payload = JSON.parse(debugPayload) as { tags: Record<string, unknown>; timestamp?: string };
+      const res = await ingestDeviceData(dataDevice.device_token, payload);
+      setDebugResponse(JSON.stringify(res, null, 2));
+      message.success(
+        t('app.kuaiiot.message.ingestSuccess', {
+          accepted: res.accepted,
+          synced: res.synced_to_mes ? 'yes' : 'no',
+        }),
+      );
+      await reloadDeviceData(dataDevice);
+    } catch (error) {
+      setDebugResponse(String(error));
+      message.error(String(error));
+    }
+  };
+
+  const accessGuide = useMemo(() => {
+    if (!dataDevice) return '';
+    const base = `${window.location.origin}${API_BASE_URL}`;
+    return [
+      `HTTP POST ${base}/apps/kuaiiot/ingest/${dataDevice.device_token}`,
+      `curl -X POST "${base}/apps/kuaiiot/ingest/${dataDevice.device_token}" -H "Content-Type: application/json" -d '{"tags":{"temp":26.5}}'`,
+      `MQTT topic: kuaiiot/ingest/${dataDevice.device_token}`,
+      `Edge Agent config.yaml:\nbase_url: "${window.location.origin}"\ndevice_token: "${dataDevice.device_token}"\nedge_config_code: "<your-edge-config-code>"`,
+    ].join('\n\n');
+  }, [dataDevice]);
+
+  const trendChartData = useMemo(
+    () =>
+      [...trendHistory]
+        .reverse()
+        .map((item) => ({
+          time: formatDateTimeBySiteSetting(item.sampled_at),
+          value: item.value_number ?? 0,
+        })),
+    [trendHistory],
+  );
+
+  const handleDispatchCommand = async () => {
+    if (!dataDevice) return;
+    const values = await commandForm.validateFields();
+    await createDeviceCommand(dataDevice.uuid, {
+      function_key: values.function_key,
+      params: values.params || {},
+      dispatch_channel: values.dispatch_channel,
+    });
+    message.success(t('app.kuaiiot.message.commandDispatched'));
+    commandForm.resetFields();
+    setSelectedFunctionKey(undefined);
+    await reloadDeviceData(dataDevice);
+  };
+
+  const columns: ProColumns<Device>[] = alignProColumns(
+    [
       {
-        title: '外部标识',
-        dataIndex: 'external_device_id',
-        key: 'external_device_id',
-        ellipsis: true,
-        width: 140,
+        title: t('common.code'),
+        dataIndex: 'code',
+        ...IOT_LIST_COL.code,
       },
       {
-        title: '所属连接',
-        dataIndex: 'connection_id',
-        key: 'connection_id',
-        valueType: 'select',
-        fieldProps: { options: connectionOptions, showSearch: true, optionFilterProp: 'label' },
-        width: 140,
-        render: (_, row) =>
-          row.connection_id != null ? connectionLabelById.get(row.connection_id) ?? `#${row.connection_id}` : '—',
+        title: t('common.name'),
+        dataIndex: 'name',
+        ...IOT_LIST_COL.name,
       },
       {
-        title: '分组',
+        title: t('app.kuaiiot.field.product'),
+        dataIndex: 'product_id',
+        ...IOT_LIST_COL.ref,
+        render: (_, row) => productLabelMap[row.product_id || 0] || '-',
+      },
+      {
+        title: t('app.kuaiiot.field.group'),
         dataIndex: 'group_id',
-        key: 'group_id',
-        hideInSearch: true,
-        width: 120,
-        render: (_, row) =>
-          row.group_id != null ? groupLabelById.get(row.group_id) ?? `#${row.group_id}` : '—',
+        ...IOT_LIST_COL.ref,
+        render: (_, row) => groupLabelMap[row.group_id || 0] || '-',
       },
       {
-        title: '在线状态',
+        title: t('app.kuaiiot.field.externalId'),
+        dataIndex: 'external_device_id',
+        ...IOT_LIST_COL.externalId,
+      },
+      {
+        title: t('app.kuaiiot.field.online'),
         dataIndex: 'is_online',
-        key: 'is_online',
-        valueType: 'select',
-        valueEnum: { true: { text: '在线' }, false: { text: '离线' } },
-        width: 90,
-        render: (_, row) => <OnlineTag online={row.is_online} />,
+        ...IOT_LIST_COL.marker,
+        render: (_, row) => renderIotOnlineMarker(t, row.is_online),
       },
       {
-        title: '最近上报',
+        title: t('app.kuaiiot.field.equipment'),
+        dataIndex: 'equipment_uuid',
+        ...IOT_LIST_COL.ref,
+        render: (_, row) => equipmentLabelMap[row.equipment_uuid || ''] || row.equipment_uuid || '-',
+      },
+      {
+        title: t('app.kuaiiot.field.lastSeen'),
         dataIndex: 'last_seen_at',
-        key: 'last_seen_at',
-        sorter: true,
-        hideInSearch: true,
-        width: 160,
-        render: (_, row) => fmtTime(row.last_seen_at),
+        ...IOT_LIST_COL.datetime,
+        render: (_, row) => (row.last_seen_at ? formatDateTimeBySiteSetting(row.last_seen_at) : '-'),
       },
       {
-        title: '创建时间',
-        dataIndex: 'created_at',
-        key: 'created_at',
-        sorter: true,
-        hideInSearch: true,
-        width: 160,
-        render: (_, row) => fmtTime(row.created_at),
-      },
-      {
-        title: '操作',
+        title: t('common.action'),
         key: 'action',
         fixed: 'right',
         hideInSearch: true,
-        render: (_, row) => [
-          <Button
-            key="detail"
-            type="link"
-            size="small"
-            {...rowActionKind('display')}
-            onClick={() => void openDetail(row)}
-          >
-            详情
-          </Button>,
-          ...(perms.canUpdate
-            ? [
-                <Button
-                  key="edit"
-                  type="link"
-                  size="small"
-                  {...rowActionKind('update')}
-                  onClick={() => openEdit(row)}
-                >
-                  编辑
-                </Button>,
-                <Popconfirm
-                  key="delete"
-                  title="确定删除该设备？"
-                  description="删除为软删除，点位与快照保留但不再写入"
-                  onConfirm={() => void handleDelete(row)}
-                >
-                  <Button type="link" size="small" danger icon={<DeleteOutlined />} {...rowActionKind('skip')}>
-                    删除
-                  </Button>
-                </Popconfirm>,
-                <Dropdown
-                  key="more"
-                  {...rowActionKind('skip')}
-                  trigger={['click']}
-                  menu={{
-                    items: [
-                      {
-                        key: 'rotate-token',
-                        label: '轮换凭据',
-                        onClick: () => {
-                          modal.confirm({
-                            title: '轮换设备凭据？',
-                            content: '旧凭据立即失效；新凭据只在确认后的弹窗显示一次',
-                            onOk: () => handleRotateToken(row),
-                          });
-                        },
-                      },
-                    ],
-                  }}
-                >
-                  <Button type="link" size="small" icon={<MoreOutlined />}>
-                    更多
-                  </Button>
-                </Dropdown>,
-              ]
-            : []),
-        ],
-      },
-    ],
-    [
-      perms.canUpdate,
-      connectionOptions,
-      connectionLabelById,
-      groupLabelById,
-      productLabelById,
-      equipmentLabels,
-      openDetail,
-      openEdit,
-      handleDelete,
-      handleRotateToken,
-      modal,
-    ],
-  );
-
-  const modalInitialValues = useMemo(() => {
-    if (editing) {
-      return {
-        name: editing.name,
-        connection_id: editing.connection_id ?? undefined,
-        product_id: editing.product_id ?? undefined,
-        equipment_uuid: editing.equipment_uuid ?? undefined,
-        group_id: editing.group_id ?? undefined,
-        remark: editing.remark ?? undefined,
-      };
-    }
-    return {};
-  }, [editing]);
-
-  const handleFinish = useCallback(
-    async (values: Record<string, any>) => {
-      try {
-        if (editing) {
-          const payload: Record<string, unknown> = {
-            name: String(values.name ?? '').trim(),
-            connection_id: values.connection_id ?? null,
-            product_id: values.product_id ?? null,
-            group_id: values.group_id ?? null,
-            // 备注可清空：空字符串也要下发，不能只带非空值
-            remark: typeof values.remark === 'string' ? values.remark.trim() : '',
-          };
-          if (typeof values.equipment_uuid === 'string' && values.equipment_uuid.trim()) {
-            payload.equipment_uuid = values.equipment_uuid.trim();
-          } else if (editing.equipment_uuid) {
-            payload.clear_equipment = true;
-          }
-          await updateDeviceRow(editing.id, payload);
-          messageApi.success('更新成功');
-        } else {
-          const res = await createDeviceRow({
-            connection_id: values.connection_id || undefined,
-            external_device_id: String(values.external_device_id ?? '').trim(),
-            code: String(values.code ?? '').trim(),
-            name: String(values.name ?? '').trim(),
-            equipment_uuid: values.equipment_uuid || undefined,
-            product_id: values.product_id || undefined,
-            group_id: values.group_id || undefined,
-            template_code: values.template_code || undefined,
-            remark: typeof values.remark === 'string' && values.remark.trim() ? values.remark.trim() : undefined,
-          });
-          showTokenOnce([{ code: res.code, name: res.name, device_token: res.device_token }], '设备已创建');
-        }
-        setModalOpen(false);
-        actionRef.current?.reload();
-      } catch (error) {
-        messageApi.error(error instanceof Error ? error.message : '保存失败');
-      }
-    },
-    [editing, messageApi, showTokenOnce],
-  );
-
-  const handleBatchCreate = useCallback(
-    async (values: Record<string, any>) => {
-      try {
-        const rows = await batchCreateDevices({
-          product_id: Number(values.product_id),
-          name_prefix: String(values.name_prefix ?? '').trim(),
-          code_prefix: String(values.code_prefix ?? '').trim(),
-          count: Number(values.count),
-        });
-        setBatchOpen(false);
-        actionRef.current?.reload();
-        showTokenOnce(rows, `已批量创建 ${rows.length} 台设备`);
-      } catch (error) {
-        messageApi.error(error instanceof Error ? error.message : '批量创建失败');
-      }
-    },
-    [messageApi, showTokenOnce],
-  );
-
-  const detailColumns = useMemo<ProDescriptionsItemProps<DeviceRow>[]>(
-    () => [
-      { title: '编码', dataIndex: 'code' },
-      { title: '名称', dataIndex: 'name' },
-      { title: '外部标识', dataIndex: 'external_device_id' },
-      {
-        title: '所属连接',
-        dataIndex: 'connection_id',
-        render: (_, row) =>
-          row.connection_id != null
-            ? connectionLabelById.get(row.connection_id) ?? `#${row.connection_id}`
-            : '—',
-      },
-      {
-        title: '产品模型',
-        dataIndex: 'product_id',
-        render: (_, row) =>
-          row.product_id != null
-            ? productLabelById.get(row.product_id) ?? `#${row.product_id}`
-            : '—',
-      },
-      {
-        title: '分组',
-        dataIndex: 'group_id',
-        render: (_, row) =>
-          row.group_id != null ? groupLabelById.get(row.group_id) ?? `#${row.group_id}` : '—',
-      },
-      {
-        title: 'MES 设备',
-        dataIndex: 'equipment_uuid',
-        render: (_, row) => row.equipment_uuid ? equipmentLabels.get(row.equipment_uuid) ?? row.equipment_uuid : '—',
-      },
-      {
-        title: '在线状态',
-        dataIndex: 'is_online',
-        render: (_, row) => <OnlineTag online={row.is_online} />,
-      },
-      { title: '备注', dataIndex: 'remark', span: 2, render: (_, row) => row.remark || '—' },
-      { title: '最近上报', dataIndex: 'last_seen_at', valueType: 'dateTime' },
-      { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' },
-      { title: 'UUID', dataIndex: 'uuid' },
-    ],
-    [connectionLabelById, groupLabelById, productLabelById],
-  );
-
-  const table = (
-    <UniTable<DeviceRow>
-      actionRef={actionRef}
-      rowKey="id"
-      columns={alignIotTableColumns(columns, 'devices')}
-      columnPersistenceId="kuaiiot-devices-v1"
-      permissionResource="kuaiiot:device"
-      showCreateButton
-      createButtonText="新建设备"
-      onCreate={openCreate}
-      enableRowSelection
-      selectedRowKeys={selectedRowKeys}
-      onRowSelectionChange={setSelectedRowKeys}
-      betweenFuzzyAndAdvancedButtons={
-        isMobile ? (
-          <Select
-            style={{ minWidth: 140 }}
-            value={selectedGroup}
-            onChange={(v) => handleGroupSelect(v == null ? [GROUP_ALL] : [v])}
-            options={groupOptions}
-            placeholder="设备分组"
-          />
-        ) : undefined
-      }
-      toolBarActionsAfterCreate={[
-        ...(perms.canCreate
-          ? [
-              <Button key="batch-create" onClick={() => setBatchOpen(true)}>
-                批量新建
+        render: (_, row) => {
+          const nodes: React.ReactNode[] = [
+            <Button
+              key="detail"
+              {...rowActionKind('read')}
+              onClick={() => {
+                setDetail(row);
+                setDrawerVisible(true);
+              }}
+            />,
+            <Button
+              key="data"
+              {...rowActionKind('skip')}
+              {...rowActionLabelKeep()}
+              onClick={() => openDataDrawer(row)}
+            >
+              数据
+            </Button>,
+            <Button
+              key="debug"
+              {...rowActionKind('skip')}
+              {...rowActionLabelKeep()}
+              onClick={() => openDebugDrawer(row)}
+            >
+              调试
+            </Button>,
+          ];
+          if (perms.canUpdate) {
+            nodes.push(
+              <Button key="edit" {...rowActionKind('update')} onClick={() => openEdit(row)} />,
+              <Button
+                key="rotate"
+                {...rowActionKind('skip')}
+                {...rowActionLabelKeep()}
+                onClick={async () => {
+                  const updated = await rotateDeviceToken(row.uuid);
+                  getAntdModal().info({
+                    title: t('app.kuaiiot.action.rotateToken'),
+                    content: updated.device_token,
+                  });
+    actionRef.current?.reload();
+                }}
+              >
+                轮换
               </Button>,
-            ]
-          : []),
-        ...(perms.canUpdate
-          ? [
-              <UniBatchDeleteButton
-                key="batch-delete"
-                selectedRowKeys={selectedRowKeys}
-                onConfirm={handleBatchDelete}
-                confirmTitle={(count) => `确定批量删除 ${count} 台设备？`}
-                confirmDescription="逐条删除，任一失败即停止并报告明细"
+            );
+          }
+          if (perms.canDelete) {
+            nodes.push(
+              <Button
+                key="delete"
+                {...rowActionKind('delete')}
+                onClick={async () => {
+                  await deleteDevice(row.uuid);
+                  message.success(t('common.deleteSuccess'));
+    actionRef.current?.reload();
+                }}
               />,
-            ]
-          : []),
-      ]}
-      helpViewConfig={buildListPageHelpViewConfig('kuaiiot.devices')}
-      defaultPageSize={20}
-      request={async (params, sort, _filter, searchFormValues) => {
-        try {
-          const rows = await listDeviceRows();
-          for (const row of rows) {
-            allRowsRef.current.set(row.id, row);
+            );
           }
-          let filtered = filterRowsByListKeyword(
-            rows,
-            pickListSearchKeyword(searchFormValues),
-            (row) => [row.code, row.name, row.external_device_id],
-          );
-          const groupKey = groupFilterRef.current;
-          if (groupKey === GROUP_NONE) {
-            filtered = filtered.filter((row) => row.group_id == null);
-          } else if (groupKey !== GROUP_ALL && groupKey != null) {
-            filtered = filtered.filter((row) => row.group_id === Number(groupKey));
-          }
-          const connId = pickSearchString(searchFormValues, 'connection_id');
-          if (connId) filtered = filtered.filter((row) => row.connection_id === Number(connId));
-          const online = pickSearchTriStateBoolean(searchFormValues, 'is_online');
-          if (online !== undefined) filtered = filtered.filter((row) => row.is_online === online);
-          const sorted = sortRows(filtered, sort);
-          const { current = 1, pageSize = 20 } = params;
-          return {
-            data: sorted.slice((current - 1) * pageSize, current * pageSize),
-            success: true,
-            total: sorted.length,
-          };
-        } catch (error) {
-          messageApi.error(error instanceof Error ? error.message : '设备列表加载失败');
-          return { data: [], success: false, total: 0 };
-        }
-      }}
-    />
+          return nodes;
+        },
+      },
+    ],
+    GLOBAL_DOC_LIST_FIELD_RANK,
   );
 
-  const sidebar = (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {groupsError ? <Alert type="warning" showIcon message={`分组不可用：${groupsError}`} /> : null}
-      <Tree
-        blockNode
-        defaultExpandAll
-        treeData={groupTreeData}
-        selectedKeys={[selectedGroup]}
-        onSelect={(keys) => handleGroupSelect(keys as React.Key[])}
-      />
-    </div>
-  );
+  const openCreate = async () => {
+    setEditing(null);
+    form.resetFields();
+    setDiscoveredDevices([]);
+    setOpen(true);
+    await reloadFormOptions();
+    const latestConnections = await listConnections({ page: 1, page_size: 200 }).catch(() => ({
+      items: [] as Connection[],
+      total: 0,
+    }));
+    const items = latestConnections.items || [];
+    setConnections(items);
+    const defaultConnection = items.find((item) => item.connection_type === 'mqtt') || items[0];
+    if (defaultConnection) {
+      form.setFieldsValue({ connection_id: defaultConnection.id });
+    }
+    await loadDiscoveredDevices(defaultConnection?.id);
+  };
+
+  const openBatchCreate = () => {
+    batchForm.resetFields();
+    batchForm.setFieldsValue({ count: 10, name_prefix: '设备', code_prefix: 'dev' });
+    setBatchResult([]);
+    setBatchOpen(true);
+  };
+
+  const openEdit = (row: Device) => {
+    setEditing(row);
+    form.setFieldsValue(row);
+    setOpen(true);
+  };
+
+  const handleSubmit = async () => {
+    const values = await form.validateFields();
+    if (editing) {
+      await updateDevice(editing.uuid, values);
+      message.success(t('common.updateSuccess'));
+    } else {
+      await createDevice(values);
+      message.success(t('common.createSuccess'));
+    }
+    setOpen(false);
+    actionRef.current?.reload();
+  };
+
+  const handleBatchSubmit = async () => {
+    const values = await batchForm.validateFields();
+    const res = await batchCreateDevices(values);
+    setBatchResult(res.items);
+    message.success(t('app.kuaiiot.message.batchCreateSuccess', { total: res.total }));
+    actionRef.current?.reload();
+  };
+
+  const exportBatchCsv = () => {
+    const header = 'code,name,device_token,uuid\n';
+    const rows = batchResult
+      .map((item) => `${item.code},${item.name},${item.device_token},${item.uuid}`)
+      .join('\n');
+    const blob = new Blob([header + rows], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'kuaiiot-devices.csv';
+    link.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
-    <ListPageTemplate fillMain>
-      {isMobile ? (
-        table
-      ) : (
-        <TwoColumnLayout
-          style={{ flex: 1, minHeight: 0, height: '100%' }}
-          layoutPersistenceId="kuaiiot.devices"
-          leftPanel={{ leftContent: sidebar }}
-          rightPanel={{ content: table, contentPadding: 0 }}
-        />
-      )}
+    <>
+      <TwoColumnLayout
+        leftPanel={{
+          collapsed: !groupPerms.canRead || leftPanelCollapsed,
+          search: groupPerms.canRead
+            ? {
+                placeholder: t('app.kuaiiot.deviceGroup.searchGroup'),
+                value: groupSearchValue,
+                onChange: setGroupSearchValue,
+                allowClear: true,
+              }
+            : undefined,
+          actions: groupPerms.canRead
+            ? [
+                <div key="group-actions" style={{ display: 'flex', gap: 8 }}>
+                  {groupPerms.canCreate ? (
+                    <Button type="primary" icon={<PlusOutlined />} style={{ flex: 1 }} onClick={() => setGroupModalOpen(true)}>
+                      {t('app.kuaiiot.deviceGroup.createGroup')}
+                    </Button>
+                  ) : (
+                    <div style={{ flex: 1 }} />
+                  )}
+                  <Button
+                    icon={expandedKeys.length > 1 ? <CompressOutlined /> : <ExpandOutlined />}
+                    onClick={handleToggleExpand}
+                    title={
+                      expandedKeys.length > 1
+                        ? t('app.kuaiiot.deviceGroup.collapseAll')
+                        : t('app.kuaiiot.deviceGroup.expandAll')
+                    }
+                  />
+                </div>,
+              ]
+            : undefined,
+          tree: groupPerms.canRead
+            ? {
+                className: 'kuaiiot-device-group-tree',
+                showLine: true,
+                icon: renderDeviceGroupFolderIcon,
+                treeData: filteredGroupTreeData.length > 0 || !groupSearchValue.trim() ? filteredGroupTreeData : groupTreeData,
+                selectedKeys: selectedGroupKeys,
+                expandedKeys,
+                onSelect: handleGroupSelect,
+                onExpand: handleGroupExpand,
+                showIcon: true,
+                blockNode: true,
+              }
+            : undefined,
+          width: 320,
+          minWidth: 200,
+        }}
+        rightPanel={{
+          content: (
+            <div
+              style={{
+                ['--uni-table-scroll-offset' as string]: `${LIST_PAGE_TABLE_SCROLL.BASE_OFFSET_PX + 2 * LIST_PAGE_TABLE_SCROLL.GAP_PX}px`,
+              }}
+            >
+              <UniTable<Device>
+        viewTypes={['table', 'help']}
+          helpViewConfig={buildListPageHelpViewConfig('kuaiiot.devices')}
+                actionRef={actionRef}
+                columns={columns}
+                rowKey="uuid"
+                columnPersistenceId="apps.kuaiiot.pages.devices.list-v3"
+                request={async (params) => {
+                  const res = await listDevices({
+                    page: params.current,
+                    page_size: params.pageSize,
+                    q: params.keyword as string | undefined,
+                    group_id: selectedGroupId,
+                  });
+                  return { data: res.items, total: res.total, success: true };
+                }}
+                beforeSearchButtons={
+                  groupPerms.canRead ? (
+                    <Tooltip
+                      title={
+                        leftPanelCollapsed
+                          ? t('app.kuaiiot.deviceGroup.expandPanel')
+                          : t('app.kuaiiot.deviceGroup.collapsePanel')
+                      }
+                    >
+                      <Button
+                        icon={leftPanelCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+                        onClick={() => setLeftPanelCollapsed(!leftPanelCollapsed)}
+                        style={{ marginRight: 8 }}
+                      />
+                    </Tooltip>
+                  ) : undefined
+                }
+                toolBarActionsAfterCreate={
+                  perms.canCreate
+                    ? [
+                        <Button key="batch-create" onClick={openBatchCreate}>
+                          {t('app.kuaiiot.action.batchCreate')}
+                        </Button>,
+                      ]
+                    : []
+                }
+                showCreateButton={perms.canCreate}
+                createButtonText={t('app.kuaiiot.action.createDevice')}
+                onCreate={openCreate}
+                enableRowSelection={perms.canDelete}
+                showDeleteButton={perms.canDelete}
+                onDelete={async (keys) => {
+                  await Promise.all(keys.map((key) => deleteDevice(String(key))));
+                  message.success(t('common.batchDeleteSuccess', { count: keys.length }));
+    actionRef.current?.reload();
+                }}
+              />
+            </div>
+          ),
+        }}
+      />
 
-      <FormModalTemplate
-        title={editing ? '编辑设备' : '新建设备'}
-        open={modalOpen}
-        onOpenChange={setModalOpen}
-        width={MODAL_CONFIG.STANDARD_WIDTH}
-        initialValues={modalInitialValues}
-        form={deviceForm}
-        onValuesChange={changed => { if (!editing && 'connection_id' in changed) deviceForm.setFieldValue('external_device_id', undefined); }}
-        onFinish={handleFinish}
+      <Modal
+        open={groupModalOpen}
+        title={t('app.kuaiiot.deviceGroup.createGroup')}
+        onCancel={() => setGroupModalOpen(false)}
+        onOk={handleSubmitGroup}
+        destroyOnHidden
       >
-        {editing ? (
-          <>
-            <ProFormText
-              name="name"
-              label="名称"
-              rules={[{ required: true, message: '请填写名称' }]}
-              fieldProps={{ maxLength: 100 }}
+        <Form form={groupForm} layout="vertical">
+          <Form.Item name="code" label={t('common.code')} rules={[{ required: true }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="name" label={t('common.name')} rules={[{ required: true }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="parent_id" label={t('app.kuaiiot.deviceGroup.parentGroup')}>
+            <Select allowClear options={flattenGroups(groupTree)} />
+          </Form.Item>
+          <Form.Item name="remark" label={t('common.remark')}>
+            <Input.TextArea rows={2} />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal open={open} title={editing ? t('common.edit') : t('common.create')} onCancel={() => setOpen(false)} onOk={handleSubmit} destroyOnHidden>
+        <Form form={form} layout="vertical">
+          <Form.Item
+            name="equipment_uuid"
+            label={t('app.kuaiiot.field.equipment')}
+            extra={t('app.kuaiiot.hint.equipment')}
+          >
+            <Select
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              options={equipmentOptions}
+              notFoundContent={t('app.kuaiiot.message.optionsLoadEmpty.equipment')}
+              onChange={(value) => {
+                void handleMesEquipmentPick(value as string | undefined);
+              }}
             />
-            <Form.Item name="connection_id" label="数采连接" extra="清空并保存将解除当前绑定">
-              <ConnectionSelect />
-            </Form.Item>
-            <Form.Item name="product_id" label="产品模型">
-              <ProductSelect />
-            </Form.Item>
-            <Form.Item name="equipment_uuid" label="MES 设备" extra="清空并保存将解除当前绑定">
-              <EquipmentSelect />
-            </Form.Item>
-            <Form.Item name="group_id" label="设备分组">
+          </Form.Item>
+          <Form.Item
+            name="connection_id"
+            label={t('app.kuaiiot.menu.connections')}
+            extra={t('app.kuaiiot.hint.connection')}
+            rules={[{ required: true }]}
+          >
+            <Select
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              options={connections.map((item) => ({
+                label: `${item.name}${item.connection_type === 'mqtt' ? ' (MQTT)' : ''}`,
+                value: item.id,
+              }))}
+              notFoundContent={t('app.kuaiiot.message.optionsLoadEmpty.connection')}
+            />
+          </Form.Item>
+          <Form.Item
+            name="external_device_id"
+            label={t('app.kuaiiot.field.externalId')}
+            extra={t('app.kuaiiot.hint.externalId')}
+            rules={[{ required: true }]}
+          >
+            <AutoComplete
+              allowClear
+              options={mqttDeviceOptions}
+              placeholder={t('app.kuaiiot.placeholder.externalId')}
+              filterOption={(input, option) =>
+                String(option?.label ?? '')
+                  .toLowerCase()
+                  .includes(input.toLowerCase())
+              }
+              onSelect={(value) => handleMqttDevicePick(String(value))}
+            />
+          </Form.Item>
+          <Form.Item name="code" label={t('common.code')} rules={[{ required: !editing }]}>
+            <Input disabled={!!editing} />
+          </Form.Item>
+          <Form.Item name="name" label={t('common.name')} rules={[{ required: true }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item
+            name="product_id"
+            label={t('app.kuaiiot.field.product')}
+            extra={t('app.kuaiiot.hint.product')}
+          >
+            <Select
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              options={products.map((item) => ({ label: `${item.code} - ${item.name}`, value: item.id }))}
+              notFoundContent={t('app.kuaiiot.message.optionsLoadEmpty.product')}
+            />
+          </Form.Item>
+          <Form.Item name="group_id" label={t('app.kuaiiot.field.group')} extra={t('app.kuaiiot.hint.group')}>
+            <Select allowClear options={flattenGroups(groupTree)} />
+          </Form.Item>
+          {!editing && (
+            <Form.Item name="tag_template_code" label={t('app.kuaiiot.field.tagTemplate')}>
               <Select
                 allowClear
-                showSearch
-                optionFilterProp="label"
-                options={groups.map((g) => ({ value: g.id, label: `${g.name} (${g.code})` }))}
-                placeholder="选择设备分组"
+                options={tagTemplates.map((item) => ({
+                  label: `${item.name} (${item.tag_count})`,
+                  value: item.code,
+                }))}
               />
             </Form.Item>
-          </>
-        ) : (
+          )}
+          <Form.Item name="remark" label={t('common.remark')}>
+            <Input.TextArea rows={2} />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal open={batchOpen} title={t('app.kuaiiot.action.batchCreate')} onCancel={() => setBatchOpen(false)} onOk={handleBatchSubmit} width={720} destroyOnHidden>
+        <Form form={batchForm} layout="vertical">
+          <Form.Item name="product_id" label={t('app.kuaiiot.field.product')} rules={[{ required: true }]}>
+            <Select options={products.map((item) => ({ label: `${item.code} - ${item.name}`, value: item.id }))} />
+          </Form.Item>
+          <Form.Item name="name_prefix" label={t('app.kuaiiot.field.namePrefix')} rules={[{ required: true }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="code_prefix" label={t('app.kuaiiot.field.codePrefix')}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="count" label={t('app.kuaiiot.field.batchCount')} rules={[{ required: true }]}>
+            <InputNumber min={1} max={100} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="connection_id" label={t('app.kuaiiot.menu.connections')}>
+            <Select allowClear options={connections.map((item) => ({ label: item.name, value: item.id }))} />
+          </Form.Item>
+          <Form.Item name="equipment_uuid" label={t('app.kuaiiot.field.equipment')}>
+            <Select allowClear showSearch optionFilterProp="label" options={equipmentOptions} />
+          </Form.Item>
+        </Form>
+        {batchResult.length ? (
           <>
-            <Form.Item name="connection_id" label="数采连接">
-              <ConnectionSelect />
-            </Form.Item>
-            <ProFormDependency name={['connection_id']}>
-              {({ connection_id }) => <Form.Item name="external_device_id" label="外部设备 ID" rules={[{ required: true, message: '请选择或填写外部设备标识' }]}>
-                <ExternalDeviceInput connectionId={connection_id} connectionType={connections.find(row => row.id === Number(connection_id))?.connection_type} />
-              </Form.Item>}
-            </ProFormDependency>
-            <ProFormText
-              name="code"
-              label="编码"
-              rules={[{ required: true, message: '请填写编码' }]}
-              fieldProps={{ maxLength: 50 }}
-            />
-            <ProFormText
-              name="name"
-              label="名称"
-              rules={[{ required: true, message: '请填写名称' }]}
-              fieldProps={{ maxLength: 100 }}
-            />
-            <Form.Item name="equipment_uuid" label="MES 设备">
-              <EquipmentSelect />
-            </Form.Item>
-            <Form.Item name="product_id" label="产品模型" extra="创建时初始化产品点位；模板只补充产品未定义的点位">
-              <ProductSelect />
-            </Form.Item>
-            <Form.Item name="group_id" label="设备分组">
-              <Select allowClear showSearch optionFilterProp="label" options={groups.map(g => ({ value: g.id, label: `${g.name} (${g.code})` }))} placeholder="选择设备分组" />
-            </Form.Item>
-            <SafeProFormSelect
-              name="template_code"
-              label="点位模板"
-              options={templates.map((t) => ({ value: t.code, label: `${t.name} (${t.code})` }))}
-              fieldProps={{ allowClear: true, showSearch: true, optionFilterProp: 'label' }}
-              placeholder="选择后立即生成该设备点位"
-            />
-          </>
-        )}
-        <ProFormTextArea name="remark" label="备注" fieldProps={{ rows: 2, maxLength: 500 }} />
-      </FormModalTemplate>
-
-      <FormModalTemplate
-        title="批量新建设备"
-        open={batchOpen}
-        onOpenChange={setBatchOpen}
-        width={MODAL_CONFIG.SMALL_WIDTH}
-        onFinish={handleBatchCreate}
-        submitText="创建"
-      >
-        <Form.Item
-          name="product_id"
-          label="产品模型"
-          rules={[{ required: true, message: '请选择产品模型' }]}
-        >
-          <ProductSelect />
-        </Form.Item>
-        <ProFormText
-          name="name_prefix"
-          label="名称前缀"
-          rules={[{ required: true, message: '请填写名称前缀' }]}
-          fieldProps={{ maxLength: 80 }}
-        />
-        <ProFormText
-          name="code_prefix"
-          label="编码前缀"
-          rules={[{ required: true, message: '请填写编码前缀' }]}
-          fieldProps={{ maxLength: 40 }}
-        />
-        <ProFormDigit
-          name="count"
-          label="数量"
-          min={1}
-          max={100}
-          rules={[{ required: true, message: '请填写数量（1-100）' }]}
-          fieldProps={{ precision: 0 }}
-        />
-      </FormModalTemplate>
-
-      <DetailDrawerTemplate
-        title={detail ? `设备：${detail.name}` : '设备详情'}
-        open={detailOpen}
-        onClose={() => setDetailOpen(false)}
-        size={DRAWER_CONFIG.SMALL_WIDTH}
-        loading={detailLoading}
-        columns={detailColumns}
-        dataSource={detail ?? undefined}
-        column={2}
-      >
-        <DetailDrawerSection title="最新快照">
-          {snapshotsLoading ? (
-            <div style={{ textAlign: 'center', padding: '24px 0' }}>
-              <Spin />
-            </div>
-          ) : snapshotsError ? (
-            <Alert type="warning" showIcon message={`快照不可用：${snapshotsError}`} />
-          ) : (
+            <Button style={{ marginBottom: 12 }} onClick={exportBatchCsv}>
+              {t('app.kuaiiot.action.copyCsv')}
+            </Button>
             <Table
               size="small"
-              rowKey="id"
+              rowKey="uuid"
               pagination={false}
-              scroll={{ x: 'max-content' }}
-              dataSource={snapshots}
-              locale={{
-                emptyText: (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无快照" />
-                ),
-              }}
+              dataSource={batchResult}
               columns={[
-                { title: '点位键', dataIndex: 'tag_key' },
-                {
-                  title: '值',
-                  key: 'value',
-                  render: (_: unknown, row: SnapshotOut) => snapshotValueText(row),
-                },
-                { title: '质量', dataIndex: 'quality', width: 90 },
-                {
-                  title: '采样时间',
-                  dataIndex: 'sampled_at',
-                  width: 170,
-                  render: (value: string) => fmtTime(value),
-                },
+                { title: t('common.code'), dataIndex: 'code' },
+                { title: t('common.name'), dataIndex: 'name' },
+                { title: t('app.kuaiiot.field.deviceToken'), dataIndex: 'device_token', ellipsis: true },
               ]}
             />
-          )}
-        </DetailDrawerSection>
-        <DetailDrawerSection title="OEE 计算依据">
-          {!detail?.equipment_uuid ? (
-            <Typography.Text type="secondary">
-              该设备未绑定 MES 设备，无法维护 OEE 计算依据；请先在「编辑」中绑定 MES 设备。
-            </Typography.Text>
-          ) : (
-            <Spin spinning={oeeLoading}>
-              <Typography.Paragraph type="secondary">
-                维护理想节拍和实际计划生产窗口。两端按同一口径计算；计划时间不使用默认每天 8
-                小时。保存需要制造设备编辑权限。
-              </Typography.Paragraph>
-              <Form form={oeeForm} layout="vertical" onFinish={(values) => void handleSaveOee(values)}>
-                <Form.Item
-                  name="ideal_cycle_seconds"
-                  label="理想节拍（秒/件）"
-                  rules={[{ required: true, message: '请填写理想节拍' }]}
-                >
-                  <InputNumber min={0.001} style={{ width: '100%' }} />
-                </Form.Item>
-                <Form.List name="planned_windows">
-                  {(fields, { add, remove }) => (
-                    <>
-                      {fields.map((field) => (
-                        <Space key={field.key} align="baseline">
-                          <Form.Item
-                            name={[field.name, 'range']}
-                            label="计划生产窗口"
-                            rules={[{ required: true, message: '请选择计划生产窗口' }]}
-                          >
-                            <DatePicker.RangePicker showTime />
-                          </Form.Item>
-                          <Button onClick={() => remove(field.name)}>移除</Button>
-                        </Space>
+          </>
+        ) : null}
+      </Modal>
+
+      <IotMasterDetailDrawer
+        title={t('common.detail')}
+        open={drawerVisible}
+        onClose={() => {
+          setDrawerVisible(false);
+          setDetail(null);
+        }}
+        detail={detail}
+        detailColumns={detailColumns}
+        extra={buildDetailDrawerEditExtra(t, Boolean(detail) && perms.canUpdate, () => {
+          if (!detail) return;
+          setDrawerVisible(false);
+          openEdit(detail);
+        })}
+      />
+
+      <Drawer
+        open={dataOpen}
+        size={760}
+        title={dataDevice ? `${dataDevice.name} ${t('app.kuaiiot.action.viewData')}` : t('app.kuaiiot.action.viewData')}
+        onClose={() => setDataOpen(false)}
+        extra={
+          dataDevice ? (
+            <Button loading={dataLoading} onClick={() => reloadDeviceData(dataDevice)}>
+              {t('common.refresh')}
+            </Button>
+          ) : null
+        }
+      >
+        <Tabs
+          items={[
+            {
+              key: 'snapshots',
+              label: t('app.kuaiiot.tab.snapshots'),
+              children: (
+                <Table
+                  loading={dataLoading}
+                  rowKey={(row) => `${row.tag_key}-${row.sampled_at}`}
+                  pagination={false}
+                  size="small"
+                  dataSource={snapshots}
+                  columns={[
+                    { title: t('app.kuaiiot.field.tagKey'), dataIndex: 'tag_key' },
+                    { title: t('app.kuaiiot.field.value'), render: (_, row) => formatTagValue(row) },
+                    {
+                      title: t('app.kuaiiot.field.lastSeen'),
+                      dataIndex: 'sampled_at',
+                      render: (value) => (value ? formatDateTimeBySiteSetting(value) : '-'),
+                    },
+                  ]}
+                />
+              ),
+            },
+            {
+              key: 'history',
+              label: t('app.kuaiiot.tab.historyTable'),
+              children: !tsdbConfigured ? (
+                <div>{t('app.kuaiiot.message.tsdbNotConfigured')}</div>
+              ) : (
+                <Table
+                  loading={dataLoading}
+                  rowKey={(row) => `${row.tag_key}-${row.sampled_at}`}
+                  pagination={{ pageSize: 20 }}
+                  size="small"
+                  dataSource={history}
+                  columns={[
+                    { title: t('app.kuaiiot.field.tagKey'), dataIndex: 'tag_key' },
+                    { title: t('app.kuaiiot.field.value'), render: (_, row) => formatTagValue(row) },
+                    {
+                      title: t('app.kuaiiot.field.lastSeen'),
+                      dataIndex: 'sampled_at',
+                      render: (value) => (value ? formatDateTimeBySiteSetting(value) : '-'),
+                    },
+                  ]}
+                />
+              ),
+            },
+            {
+              key: 'commands',
+              label: t('app.kuaiiot.tab.commands'),
+              children: (
+                <>
+                  {perms.canUpdate ? (
+                    <Form form={commandForm} layout="vertical" style={{ marginBottom: 16 }}>
+                      <Form.Item name="function_key" label={t('app.kuaiiot.field.functionKey')} rules={[{ required: true }]}>
+                        <Select
+                          allowClear
+                          options={functionOptions}
+                          onChange={(value) => {
+                            setSelectedFunctionKey(value);
+                            commandForm.setFieldValue('params', {});
+                          }}
+                        />
+                      </Form.Item>
+                      {(selectedFunction?.params || []).map((param) => (
+                        <Form.Item
+                          key={param.key}
+                          name={['params', param.key]}
+                          label={param.name}
+                          rules={[{ required: param.required !== false }]}
+                        >
+                          {param.value_type === 'boolean' ? (
+                            <Select
+                              options={[
+                                { label: t('common.yes'), value: true },
+                                { label: t('common.no'), value: false },
+                              ]}
+                            />
+                          ) : param.value_type === 'number' ? (
+                            <InputNumber style={{ width: '100%' }} />
+                          ) : (
+                            <Input />
+                          )}
+                        </Form.Item>
                       ))}
-                      <Button onClick={() => add()}>添加计划窗口</Button>
-                    </>
-                  )}
-                </Form.List>
-                <Button
-                  type="primary"
-                  htmlType="submit"
-                  loading={oeeSaving}
-                  style={{ marginTop: 16 }}
-                >
-                  保存计算依据
-                </Button>
-              </Form>
-            </Spin>
-          )}
-        </DetailDrawerSection>
-      </DetailDrawerTemplate>
-    </ListPageTemplate>
+                      <Button type="primary" onClick={handleDispatchCommand} disabled={!functionOptions.length}>
+                        {t('app.kuaiiot.action.dispatchCommand')}
+                      </Button>
+                    </Form>
+                  ) : null}
+                  <Table
+                    loading={dataLoading}
+                    rowKey="uuid"
+                    size="small"
+                    pagination={{ pageSize: 10 }}
+                    dataSource={commands}
+                    columns={[
+                      { title: t('app.kuaiiot.field.functionKey'), dataIndex: 'function_key' },
+                      {
+                        title: t('app.kuaiiot.field.dispatchChannel'),
+                        dataIndex: 'dispatch_channel',
+                        render: (value) => translateDispatchChannel(t, value),
+                      },
+                      {
+                        title: t('common.status'),
+                        dataIndex: 'status',
+                        render: (value) => translateCommandStatus(t, value),
+                      },
+                      {
+                        title: t('common.createdAt'),
+                        dataIndex: 'created_at',
+                        render: (value) => (value ? formatDateTimeBySiteSetting(value) : '-'),
+                      },
+                    ]}
+                  />
+                </>
+              ),
+            },
+            {
+              key: 'messageLogs',
+              label: t('app.kuaiiot.tab.messageLogs'),
+              children: (
+                <Table
+                  loading={dataLoading}
+                  rowKey="uuid"
+                  size="small"
+                  pagination={{ pageSize: 20 }}
+                  dataSource={messageLogs}
+                  columns={[
+                    {
+                      title: t('app.kuaiiot.field.direction'),
+                      dataIndex: 'direction',
+                      render: (value) => translateMessageDirection(t, value),
+                    },
+                    {
+                      title: t('app.kuaiiot.field.msgType'),
+                      dataIndex: 'msg_type',
+                      render: (value) => translateMessageType(t, value),
+                    },
+                    {
+                      title: t('app.kuaiiot.field.result'),
+                      dataIndex: 'result',
+                      render: (value) => translateMessageResult(t, value),
+                    },
+                    {
+                      title: t('common.createdAt'),
+                      dataIndex: 'created_at',
+                      render: (value) => (value ? formatDateTimeBySiteSetting(value) : '-'),
+                    },
+                  ]}
+                />
+              ),
+            },
+            {
+              key: 'trend',
+              label: t('app.kuaiiot.field.trendChart'),
+              children: !tsdbConfigured ? (
+                <div>{t('app.kuaiiot.message.tsdbNotConfigured')}</div>
+              ) : (
+                <>
+                  <Select
+                    style={{ width: 240, marginBottom: 16 }}
+                    value={trendTagKey}
+                    onChange={handleTrendTagChange}
+                    options={numberTags.map((item) => ({ label: item.tag_key, value: item.tag_key }))}
+                  />
+                  <Line data={trendChartData} xField="time" yField="value" height={280} autoFit />
+                </>
+              ),
+            },
+          ]}
+        />
+      </Drawer>
+
+      <Drawer
+        open={debugOpen}
+        size={760}
+        title={dataDevice ? `${dataDevice.name} ${t('app.kuaiiot.action.debugAccess')}` : t('app.kuaiiot.action.debugAccess')}
+        onClose={() => setDebugOpen(false)}
+      >
+        <Typography.Title level={5}>{t('app.kuaiiot.field.accessGuide')}</Typography.Title>
+        <Typography.Paragraph copyable={{ text: accessGuide }}>
+          <pre style={{ whiteSpace: 'pre-wrap', fontSize: 12 }}>{accessGuide}</pre>
+        </Typography.Paragraph>
+        <Typography.Title level={5}>{t('app.kuaiiot.field.ingestPayload')}</Typography.Title>
+        <Input.TextArea rows={8} value={debugPayload} onChange={(e) => setDebugPayload(e.target.value)} />
+        <Button type="primary" style={{ marginTop: 12 }} onClick={handleSimulateIngest}>
+          {t('app.kuaiiot.action.simulateIngest')}
+        </Button>
+        {debugResponse ? (
+          <pre style={{ marginTop: 12, whiteSpace: 'pre-wrap', fontSize: 12 }}>{debugResponse}</pre>
+        ) : null}
+        <Typography.Title level={5} style={{ marginTop: 24 }}>
+          {t('app.kuaiiot.tab.snapshots')}
+        </Typography.Title>
+        <Table
+          loading={dataLoading}
+          rowKey={(row) => `${row.tag_key}-${row.sampled_at}`}
+          pagination={false}
+          size="small"
+          dataSource={snapshots}
+          columns={[
+            { title: t('app.kuaiiot.field.tagKey'), dataIndex: 'tag_key' },
+            { title: t('app.kuaiiot.field.value'), render: (_, row) => formatTagValue(row) },
+            {
+              title: t('app.kuaiiot.field.lastSeen'),
+              dataIndex: 'sampled_at',
+              render: (value) => (value ? formatDateTimeBySiteSetting(value) : '-'),
+            },
+          ]}
+        />
+      </Drawer>
+    </>
   );
 };
 

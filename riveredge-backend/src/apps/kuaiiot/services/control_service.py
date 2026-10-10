@@ -363,7 +363,7 @@ async def create_tag(
         raise NotFoundError("IoT 设备不存在")
     value_type = (payload.value_type or "number").strip()
     if value_type not in VALUE_TYPES:
-        raise ValidationError("点位值类型仅允许 number、boolean、text")
+        raise ValidationError("点位值类型仅允许 number、boolean、text、string")
     tag_key = payload.tag_key.strip()
     if not tag_key:
         raise ValidationError("点位键不能为空")
@@ -459,7 +459,7 @@ async def update_tag(
     if "value_type" in fields and payload.value_type is not None:
         value_type = payload.value_type.strip()
         if value_type not in VALUE_TYPES:
-            raise ValidationError("点位值类型仅允许 number、boolean、text")
+            raise ValidationError("点位值类型仅允许 number、boolean、text、string")
         row.value_type = value_type
     if "unit" in fields:
         row.unit = (payload.unit or "").strip() or None

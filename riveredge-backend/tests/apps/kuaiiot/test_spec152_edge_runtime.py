@@ -104,7 +104,7 @@ async def test_pull_paths_heartbeat_and_tenant_isolation(db):
 
     clear_tenant_context()
     with pytest.raises(TenantContextError):
-        await EdgeConfigService.list_configs(1)
+        await EdgeConfigService.list_config_dicts(1)
 
     pulled = await EdgeConfigService.pull_runtime_config(own.device_token, "line1")
     assert pulled["config_version"] == 1

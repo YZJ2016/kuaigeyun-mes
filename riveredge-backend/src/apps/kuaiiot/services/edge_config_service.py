@@ -1,26 +1,183 @@
-"""边缘配置校验、下发、心跳与批量续传。批量每条走 IngestService.ingest。"""
+"""快数采边缘 Agent 配置服务。"""
 
 from __future__ import annotations
 
-from datetime import timedelta
 from typing import Any, Optional
-from uuid import uuid4
 
-from apps.kuaiiot.constants import (
-    EDGE_PROTOCOLS,
-    INGEST_BATCH_MAX_ITEMS,
-    MODBUS_DATA_TYPES,
-    PUBLISH_MODES,
-)
-from apps.kuaiiot.models.device import KuaiiotDevice
-from apps.kuaiiot.models.edge_config import KuaiiotEdgeConfig
-from apps.kuaiiot.schemas.ingest import IngestBody
-from apps.kuaiiot.services.command_service import claim_pending_commands
-from apps.kuaiiot.services.connection_runtime import ensure_device_connection
-from apps.kuaiiot.services.ingest_service import IngestService
-from core.utils.timezone_utils import resolve_business_datetime
-from infra.domain.tenant_context import TenantContextError, get_current_tenant_id, unscoped, with_tenant
-from infra.exceptions.exceptions import AuthenticationError, NotFoundError, ValidationError
+from apps.kuaiiot.constants import EDGE_PROTOCOLS, MODBUS_DATA_TYPES
+from apps.kuaiiot.models.iot import IotDevice, IotEdgeConfig
+from apps.kuaiiot.schemas.iot import EdgeConfigCreate, EdgeConfigUpdate
+from infra.exceptions.exceptions import NotFoundError, ValidationError
+
+
+class EdgeConfigService:
+    @staticmethod
+    def _validate_registers(
+        registers: Any,
+        *,
+        tag_key_field: str = "tag_key",
+        require_modbus_fields: bool = False,
+    ) -> None:
+        if not isinstance(registers, list) or not registers:
+            raise ValidationError("config.registers 或 config.nodes 不能为空")
+        for item in registers:
+            if not isinstance(item, dict):
+                raise ValidationError("映射项必须为对象")
+            if not item.get(tag_key_field):
+                raise ValidationError(f"{tag_key_field} 不能为空")
+            if require_modbus_fields:
+                EdgeConfigService._validate_modbus_register(item, tag_key_field=tag_key_field)
+
+    @staticmethod
+    def _validate_modbus_register(item: dict[str, Any], *, tag_key_field: str = "tag_key") -> None:
+        address = item.get("address")
+        if address is None:
+            raise ValidationError(f"{item.get(tag_key_field)} 缺少 address")
+        try:
+            address_int = int(address)
+        except (TypeError, ValueError) as exc:
+            raise ValidationError(f"{item.get(tag_key_field)} 的 address 必须为整数") from exc
+        if address_int < 0:
+            raise ValidationError(f"{item.get(tag_key_field)} 的 address 不能为负数")
+        data_type = str(item.get("data_type") or "").strip().lower()
+        if not data_type:
+            raise ValidationError(f"{item.get(tag_key_field)} 缺少 data_type")
+        if data_type not in MODBUS_DATA_TYPES:
+            raise ValidationError(
+                f"{item.get(tag_key_field)} 的 data_type 必须为 {', '.join(sorted(MODBUS_DATA_TYPES))}"
+            )
+
+    @staticmethod
+    def _validate_publish(config: dict[str, Any]) -> None:
+        publish = config.get("publish")
+        if not isinstance(publish, dict):
+            raise ValidationError("config.publish 不能为空")
+        mode = publish.get("mode")
+        if mode not in {"http_ingest", "mqtt"}:
+            raise ValidationError("config.publish.mode 必须为 http_ingest 或 mqtt")
+
+    @staticmethod
+    def _validate_config(protocol: str, config: dict[str, Any]) -> None:
+        _reject_secrets(config)
+        if protocol not in EDGE_PROTOCOLS:
+            raise ValidationError(f"不支持的协议: {protocol}")
+        if protocol in {"modbus_tcp", "modbus_rtu"}:
+            EdgeConfigService._validate_registers(config.get("registers"), require_modbus_fields=True)
+            EdgeConfigService._validate_publish(config)
+            return
+        if protocol == "opc_ua":
+            if not str(config.get("endpoint") or "").strip():
+                raise ValidationError("config.endpoint 不能为空")
+            EdgeConfigService._validate_registers(config.get("nodes"), tag_key_field="tag_key")
+            EdgeConfigService._validate_publish(config)
+            return
+        if protocol == "s7":
+            if not str(config.get("host") or "").strip():
+                raise ValidationError("config.host 不能为空")
+            if config.get("rack") is None or config.get("slot") is None:
+                raise ValidationError("config.rack 与 config.slot 不能为空")
+            if not isinstance(config.get("db_blocks"), list) or not config["db_blocks"]:
+                raise ValidationError("db_blocks 不能为空")
+            EdgeConfigService._validate_registers(config.get("db_blocks"), tag_key_field="tag_key")
+            EdgeConfigService._validate_publish(config)
+
+    @staticmethod
+    def build_agent_spec(device: IotDevice, item: IotEdgeConfig) -> dict[str, Any]:
+        return {
+            "version": 1,
+            "protocol": item.protocol,
+            "device_token": device.device_token,
+            "config": item.config,
+            "config_version": item.config_version,
+        }
+
+    @staticmethod
+    async def list_configs(
+        tenant_id: int,
+        page: int = 1,
+        page_size: int = 20,
+        device_id: Optional[int] = None,
+        q: Optional[str] = None,
+    ) -> tuple[list[IotEdgeConfig], int]:
+        query = IotEdgeConfig.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        if device_id is not None:
+            query = query.filter(device_id=device_id)
+        if q:
+            query = query.filter(name__icontains=q)
+        total = await query.count()
+        items = await query.order_by("-created_at", "-id").offset((page - 1) * page_size).limit(page_size)
+        return items, total
+
+    @staticmethod
+    async def get_by_uuid(tenant_id: int, uuid: str) -> IotEdgeConfig:
+        item = await IotEdgeConfig.filter(tenant_id=tenant_id, uuid=uuid, deleted_at__isnull=True).first()
+        if not item:
+            raise NotFoundError(f"边缘配置不存在: {uuid}")
+        return item
+
+    @staticmethod
+    async def create(tenant_id: int, data: EdgeConfigCreate) -> IotEdgeConfig:
+        exists = await IotEdgeConfig.filter(tenant_id=tenant_id, code=data.code, deleted_at__isnull=True).exists()
+        if exists:
+            raise ValidationError(f"配置编码已存在: {data.code}")
+        device = await IotDevice.filter(id=data.device_id, tenant_id=tenant_id, deleted_at__isnull=True).first()
+        if not device:
+            raise NotFoundError(f"IoT 设备不存在: {data.device_id}")
+        EdgeConfigService._validate_config(data.protocol, data.config or {})
+        return await IotEdgeConfig.create(tenant_id=tenant_id, **data.model_dump())
+
+    @staticmethod
+    async def update(tenant_id: int, uuid: str, data: EdgeConfigUpdate) -> IotEdgeConfig:
+        item = await EdgeConfigService.get_by_uuid(tenant_id, uuid)
+        payload = data.model_dump(exclude_unset=True)
+        if "device_id" in payload:
+            device = await IotDevice.filter(
+                id=payload["device_id"], tenant_id=tenant_id, deleted_at__isnull=True
+            ).first()
+            if not device:
+                raise NotFoundError(f"IoT 设备不存在: {payload['device_id']}")
+        protocol = payload.get("protocol", item.protocol)
+        if "config" in payload:
+            EdgeConfigService._validate_config(protocol, payload["config"] or {})
+        bump_version = any(key in payload for key in ("protocol", "config", "is_enabled", "device_id"))
+        for key, value in payload.items():
+            setattr(item, key, value)
+        if bump_version:
+            item.config_version = int(item.config_version or 1) + 1
+        await item.save()
+        return item
+
+    @staticmethod
+    async def delete(tenant_id: int, uuid: str) -> None:
+        item = await EdgeConfigService.get_by_uuid(tenant_id, uuid)
+        from core.utils.timezone_utils import resolve_business_datetime
+
+        item.deleted_at = resolve_business_datetime()
+        await item.save()
+
+    @staticmethod
+    async def export_agent_spec(tenant_id: int, uuid: str) -> dict[str, Any]:
+        item = await EdgeConfigService.get_by_uuid(tenant_id, uuid)
+        device = await IotDevice.filter(id=item.device_id, tenant_id=tenant_id, deleted_at__isnull=True).first()
+        if not device:
+            raise NotFoundError(f"IoT 设备不存在: {item.device_id}")
+        return EdgeConfigService.build_agent_spec(device, item)
+
+
+# ---- 星数采本地执行版：凭据下发、心跳、批量续传与离线标记 ----
+
+from datetime import timedelta as _timedelta  # noqa: E402
+from uuid import uuid4  # noqa: E402
+
+from apps.kuaiiot.constants import INGEST_BATCH_MAX_ITEMS  # noqa: E402
+from apps.kuaiiot.schemas.ingest import IngestBody  # noqa: E402
+from apps.kuaiiot.services.command_service import claim_pending_commands  # noqa: E402
+from apps.kuaiiot.services.connection_runtime import ensure_device_connection  # noqa: E402
+from apps.kuaiiot.services.ingest_service import IngestService  # noqa: E402
+from apps.kuaiiot.services.tag_template_service import _require_tenant  # noqa: E402
+from core.utils.timezone_utils import resolve_business_datetime  # noqa: E402
+from infra.domain.tenant_context import unscoped, with_tenant  # noqa: E402
+from infra.exceptions.exceptions import AuthenticationError  # noqa: E402
 
 # 与 message_log_service._SECRET_PARTS 同款口径：键名包含任意子串即视为口令。
 _SECRET_PARTS = (
@@ -33,17 +190,8 @@ _SECRET_PARTS = (
     "credential",
 )
 _API_PREFIX = "/api/v1/apps/kuaiiot"
-_DEVICE_OFFLINE = timedelta(minutes=5)
-_AGENT_OFFLINE = timedelta(minutes=3)
-
-
-def _require_tenant(explicit: int) -> int:
-    current = get_current_tenant_id()
-    if current is None:
-        raise TenantContextError("组织上下文未设置")
-    if int(current) != int(explicit):
-        raise ValidationError("租户上下文不匹配")
-    return int(current)
+_DEVICE_OFFLINE = _timedelta(minutes=5)
+_AGENT_OFFLINE = _timedelta(minutes=3)
 
 
 def _reject_secrets(value: Any) -> None:
@@ -59,105 +207,30 @@ def _reject_secrets(value: Any) -> None:
             _reject_secrets(item)
 
 
-def _require_publish(config: dict) -> None:
-    publish = config.get("publish")
-    mode = publish.get("mode") if isinstance(publish, dict) else None
-    if mode not in PUBLISH_MODES:
-        raise ValidationError("publish.mode 只能是 http_ingest 或 mqtt")
-
-
 def _missing(name: str) -> ValidationError:
     return ValidationError(f"缺少字段 {name}")
 
 
-class EdgeConfigService:
+class _EdgeConfigExecMixin:
     @staticmethod
-    def _validate_config(protocol: str, config: dict) -> None:
-        if protocol not in EDGE_PROTOCOLS:
-            raise ValidationError("不支持的协议")
-        if not isinstance(config, dict):
-            raise ValidationError("config 必须是对象")
-        _reject_secrets(config)
-        _require_publish(config)
-        if protocol in {"modbus_tcp", "modbus_rtu"}:
-            EdgeConfigService._validate_modbus(config)
-            return
-        if protocol == "opc_ua":
-            EdgeConfigService._validate_opc(config)
-            return
-        EdgeConfigService._validate_s7(config)
-
-    @staticmethod
-    def _validate_modbus(config: dict) -> None:
-        registers = config.get("registers")
-        if not isinstance(registers, list) or not registers:
-            raise _missing("registers")
-        for item in registers:
-            if not isinstance(item, dict):
-                raise _missing("registers")
-            if not str(item.get("tag_key") or "").strip():
-                raise _missing("tag_key")
-            if "address" not in item or item.get("address") is None:
-                raise _missing("address")
-            try:
-                address = int(item.get("address"))
-            except (TypeError, ValueError) as exc:
-                raise _missing("address") from exc
-            if address < 0:
-                raise _missing("address")
-            data_type = item.get("data_type")
-            if not isinstance(data_type, str) or not data_type.strip():
-                raise _missing("data_type")
-            if data_type.strip().lower() not in MODBUS_DATA_TYPES:
-                raise ValidationError("data_type 无效")
-        if not str(config.get("host") or "").strip():
-            raise _missing("host")
-        port = config.get("port")
-        unit_id = config.get("unit_id")
-        if isinstance(port, bool) or not isinstance(port, int) or port < 1 or port > 65535:
-            raise _missing("port")
-        if isinstance(unit_id, bool) or not isinstance(unit_id, int) or unit_id < 0:
-            raise _missing("unit_id")
-
-    @staticmethod
-    def _validate_opc(config: dict) -> None:
-        if not str(config.get("endpoint") or "").strip():
-            raise _missing("endpoint")
-        nodes = config.get("nodes")
-        if not isinstance(nodes, list) or not nodes:
-            raise _missing("nodes")
-
-    @staticmethod
-    def _validate_s7(config: dict) -> None:
-        if not str(config.get("host") or "").strip():
-            raise _missing("host")
-        if config.get("rack") is None or isinstance(config.get("rack"), bool):
-            raise _missing("rack")
-        if config.get("slot") is None or isinstance(config.get("slot"), bool):
-            raise _missing("slot")
-        blocks = config.get("db_blocks")
-        if not isinstance(blocks, list) or not blocks:
-            raise _missing("db_blocks")
-
-    @staticmethod
-    async def _device_for_token(device_token: str) -> KuaiiotDevice:
+    async def _device_for_token(device_token: str) -> IotDevice:
         token = (device_token or "").strip()
         if not token:
             raise AuthenticationError("设备凭据无效")
-        async with unscoped(reason="按设备凭据匹配唯一未删除设备", resource="KuaiiotDevice"):
-            rows = await KuaiiotDevice.filter(device_token=token, deleted_at__isnull=True).limit(2)
+        async with unscoped(reason="按设备凭据匹配唯一未删除设备", resource="IotDevice"):
+            rows = await IotDevice.filter(device_token=token, deleted_at__isnull=True).limit(2)
         if len(rows) != 1 or rows[0].tenant_id is None:
             raise AuthenticationError("设备凭据无效")
         return rows[0]
 
     @staticmethod
-    async def _enabled_config(device: KuaiiotDevice, edge_config_code: str, *, allow_disabled: bool = False) -> KuaiiotEdgeConfig:
+    async def _enabled_config(device: IotDevice, edge_config_code: str, *, allow_disabled: bool = False) -> IotEdgeConfig:
         code = (edge_config_code or "").strip()
         if not code:
             raise NotFoundError("边缘配置不存在")
         tenant_id = int(device.tenant_id)
         async with with_tenant(tenant_id, reason="边缘配置按凭据命中的设备租户读取"):
-            row = await KuaiiotEdgeConfig.filter(
+            row = await IotEdgeConfig.filter(
                 tenant_id=tenant_id,
                 device_id=device.id,
                 code=code,
@@ -218,7 +291,7 @@ class EdgeConfigService:
         tenant_id = int(device.tenant_id)
         async with with_tenant(tenant_id, reason="心跳写入凭据命中的边缘配置"):
             # 校验到写入之间可能被禁用/删除，重取时复查（TOCTOU）。
-            current = await KuaiiotEdgeConfig.get_or_none(
+            current = await IotEdgeConfig.get_or_none(
                 id=row.id, tenant_id=tenant_id, deleted_at__isnull=True
             )
             if current is None:
@@ -236,7 +309,14 @@ class EdgeConfigService:
                 raw_values = trial_result.get("raw_values") or {}
                 if not isinstance(raw_values, dict) or len(raw_values) > 200:
                     raise ValidationError("试读原始值无效")
-                current.trial_result = {"request_uuid": current.trial_request_uuid, "tags": tags, "raw_values": {key: value for key, value in raw_values.items() if key in tags}, "qualities": {key: "bad" if value is None else "good" for key, value in tags.items()}, "config_version": int(config_version), "received_at": resolve_business_datetime().isoformat()}
+                current.trial_result = {
+                    "request_uuid": current.trial_request_uuid,
+                    "tags": tags,
+                    "raw_values": {key: value for key, value in raw_values.items() if key in tags},
+                    "qualities": {key: "bad" if value is None else "good" for key, value in tags.items()},
+                    "config_version": int(config_version),
+                    "received_at": resolve_business_datetime().isoformat(),
+                }
             await current.save(
                 update_fields=[
                     "last_agent_heartbeat_at",
@@ -254,12 +334,17 @@ class EdgeConfigService:
             except ValidationError:
                 collection_enabled = False
             pending_commands = await claim_pending_commands(tenant_id, device.id) if collection_enabled else []
-        return {"config_changed": changed, "pending_commands": pending_commands, "collection_enabled": collection_enabled, "trial_request_uuid": current.trial_request_uuid if collection_enabled else None}
+        return {
+            "config_changed": changed,
+            "pending_commands": pending_commands,
+            "collection_enabled": collection_enabled,
+            "trial_request_uuid": current.trial_request_uuid if collection_enabled else None,
+        }
 
     @staticmethod
     async def request_trial(tenant_id: int, config_id: int) -> dict:
         tid = _require_tenant(tenant_id)
-        row = await KuaiiotEdgeConfig.filter(id=config_id, tenant_id=tid, deleted_at__isnull=True).first()
+        row = await IotEdgeConfig.filter(id=config_id, tenant_id=tid, deleted_at__isnull=True).first()
         if row is None or not row.is_enabled or row.protocol != "modbus_tcp":
             raise ValidationError("试读需要已启用的 Modbus TCP 配置和在线 Agent")
         row.trial_request_uuid = str(uuid4())
@@ -282,7 +367,7 @@ class EdgeConfigService:
         return {"count": count}
 
     @staticmethod
-    def _public(row: KuaiiotEdgeConfig) -> dict[str, Any]:
+    def _public(row: IotEdgeConfig) -> dict[str, Any]:
         seen = row.last_agent_heartbeat_at
         return {
             "id": row.id,
@@ -303,15 +388,15 @@ class EdgeConfigService:
         }
 
     @staticmethod
-    async def list_configs(tenant_id: int) -> list[dict[str, Any]]:
+    async def list_config_dicts(tenant_id: int) -> list[dict[str, Any]]:
         tid = _require_tenant(tenant_id)
-        rows = await KuaiiotEdgeConfig.filter(tenant_id=tid, deleted_at__isnull=True).order_by("id").limit(500)
+        rows = await IotEdgeConfig.filter(tenant_id=tid, deleted_at__isnull=True).order_by("id").limit(500)
         return [EdgeConfigService._public(row) for row in rows]
 
     @staticmethod
     async def get_config(tenant_id: int, config_id: int) -> dict[str, Any]:
         tid = _require_tenant(tenant_id)
-        row = await KuaiiotEdgeConfig.filter(
+        row = await IotEdgeConfig.filter(
             tenant_id=tid, id=config_id, deleted_at__isnull=True
         ).first()
         if row is None:
@@ -332,7 +417,7 @@ class EdgeConfigService:
         user_id: Optional[int] = None,
     ) -> dict[str, Any]:
         tid = _require_tenant(tenant_id)
-        row = await KuaiiotEdgeConfig.filter(
+        row = await IotEdgeConfig.filter(
             tenant_id=tid, id=config_id, deleted_at__isnull=True
         ).first()
         if row is None:
@@ -342,10 +427,10 @@ class EdgeConfigService:
         if not text or len(text) > 50 or not title or len(title) > 100:
             raise ValidationError("配置编码和名称不能为空")
         EdgeConfigService._validate_config(protocol, config)
-        device = await KuaiiotDevice.filter(tenant_id=tid, id=device_id, deleted_at__isnull=True).first()
+        device = await IotDevice.filter(tenant_id=tid, id=device_id, deleted_at__isnull=True).first()
         if device is None:
             raise ValidationError("设备不存在")
-        conflict = await KuaiiotEdgeConfig.filter(
+        conflict = await IotEdgeConfig.filter(
             tenant_id=tid, code=text, deleted_at__isnull=True
         ).exclude(id=row.id).exists()
         if conflict:
@@ -384,7 +469,7 @@ class EdgeConfigService:
     @staticmethod
     async def delete_config(tenant_id: int, config_id: int, *, user_id: Optional[int] = None) -> None:
         tid = _require_tenant(tenant_id)
-        row = await KuaiiotEdgeConfig.filter(
+        row = await IotEdgeConfig.filter(
             tenant_id=tid, id=config_id, deleted_at__isnull=True
         ).first()
         if row is None:
@@ -411,12 +496,12 @@ class EdgeConfigService:
         if not text or len(text) > 50 or not title or len(title) > 100:
             raise ValidationError("配置编码和名称不能为空")
         EdgeConfigService._validate_config(protocol, config)
-        device = await KuaiiotDevice.filter(tenant_id=tid, id=device_id, deleted_at__isnull=True).first()
+        device = await IotDevice.filter(tenant_id=tid, id=device_id, deleted_at__isnull=True).first()
         if device is None:
             raise ValidationError("设备不存在")
-        existing = await KuaiiotEdgeConfig.filter(tenant_id=tid, code=text, deleted_at__isnull=True).first()
+        existing = await IotEdgeConfig.filter(tenant_id=tid, code=text, deleted_at__isnull=True).first()
         if existing is None:
-            created = await KuaiiotEdgeConfig.create(
+            created = await IotEdgeConfig.create(
                 tenant_id=tid,
                 code=text,
                 name=title,
@@ -460,8 +545,8 @@ class EdgeConfigService:
     async def mark_devices_offline() -> dict[str, Any]:
         checked_at = resolve_business_datetime()
         cutoff = checked_at - _DEVICE_OFFLINE
-        async with unscoped(reason="定时任务标记超过5分钟无入站的在线设备", resource="KuaiiotDevice"):
-            rows = await KuaiiotDevice.filter(
+        async with unscoped(reason="定时任务标记超过5分钟无入站的在线设备", resource="IotDevice"):
+            rows = await IotDevice.filter(
                 is_online=True,
                 last_seen_at__lt=cutoff,
                 deleted_at__isnull=True,
@@ -489,8 +574,8 @@ class EdgeConfigService:
     async def mark_agents_offline() -> dict[str, int]:
         cutoff = resolve_business_datetime() - _AGENT_OFFLINE
         marked = 0
-        async with unscoped(reason="定时任务标记超过3分钟无心跳的边缘配置", resource="KuaiiotEdgeConfig"):
-            rows = await KuaiiotEdgeConfig.filter(
+        async with unscoped(reason="定时任务标记超过3分钟无心跳的边缘配置", resource="IotEdgeConfig"):
+            rows = await IotEdgeConfig.filter(
                 last_agent_heartbeat_at__lt=cutoff,
                 deleted_at__isnull=True,
             )
@@ -501,3 +586,7 @@ class EdgeConfigService:
                 await row.save(update_fields=["agent_status", "updated_at"])
                 marked += 1
         return {"agents_marked_offline": marked}
+
+
+class EdgeConfigService(EdgeConfigService, _EdgeConfigExecMixin):
+    pass

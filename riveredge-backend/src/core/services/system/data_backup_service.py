@@ -68,7 +68,7 @@ class DataBackupService:
         # 全平台包仅平台管理员；指定组织包 = 归属组织 + 平台管理员
         if is_infra_admin:
             return True
-        if backup.backup_scope == "all" or backup.tenant_id is None:
+        if getattr(backup, "backup_scope", None) == "all" or backup.tenant_id is None:
             return False
         return tenant_id is not None and backup.tenant_id == tenant_id
 
@@ -91,7 +91,7 @@ class DataBackupService:
             query = DataBackup.all()
         else:
             # 组织侧：仅本组织非全平台包；全平台包不对组织用户暴露
-            query = DataBackup.filter(tenant_id=tenant_id).exclude(backup_scope="all")
+            query = DataBackup.filter(tenant_id=tenant_id, backup_scope__not="all")
 
         if backup_type:
             query = query.filter(backup_type=backup_type)
@@ -154,8 +154,13 @@ class DataBackupService:
         """
         通过 UUID 获取备份详情
         """
+        async def _load():
+            if is_infra_admin:
+                return await DataBackup.get(uuid=uuid)
+            return await DataBackup.get(tenant_id=tenant_id, uuid=uuid)
+
         try:
-            backup = await DataBackup.get(uuid=uuid)
+            backup = await DataBackupService._query_in_tenant(tenant_id, _load)
         except DoesNotExist:
             logger.error(f"备份不存在: {uuid}")
             raise ValueError("备份不存在")

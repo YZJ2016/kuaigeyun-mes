@@ -5,7 +5,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button, Card, Form, InputNumber, Select, Space, Typography, message } from 'antd';
-import { applyTemplate, listTemplates, type TemplateOut } from '../../services/kuaiiot';
+import { applyTemplate, listTemplates, type TemplateOut } from '../../services/registry';
 
 const { Title, Paragraph } = Typography;
 

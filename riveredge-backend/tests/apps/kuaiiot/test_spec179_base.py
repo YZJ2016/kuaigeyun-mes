@@ -35,13 +35,13 @@ def _modbus_config() -> dict:
 
 def test_standard_action_routes_are_mounted():
     paths = {getattr(route, "path", "") for route in router.routes}
-    assert "/connections/{connection_id}" in paths
-    assert "/devices/{device_id}" in paths
-    assert "/tags" in paths
-    assert "/tags/{tag_id}" in paths
-    assert "/alert-rules" in paths
-    assert "/alert-rules/{rule_id}" in paths
-    assert "/edge-configs/{config_id}" in paths
+    assert "/registry/connections/{connection_id}" in paths
+    assert "/registry/devices/{device_id}" in paths
+    assert "/registry/tags" in paths
+    assert "/registry/tags/{tag_id}" in paths
+    assert "/alerts/rules" in paths
+    assert "/alerts/rules/{uuid}" in paths
+    assert "/registry/edge-configs/{config_id}" in paths
 
 
 @pytest.mark.asyncio
@@ -316,7 +316,7 @@ async def test_edge_config_detail_update_and_delete(db):
     await EdgeConfigService.delete_config(1, saved["id"])
     with pytest.raises(NotFoundError):
         await EdgeConfigService.get_config(1, saved["id"])
-    rows = await EdgeConfigService.list_configs(1)
+    rows = await EdgeConfigService.list_config_dicts(1)
     assert {row["code"] for row in rows} == {"agent-b"}
 
 
@@ -343,10 +343,11 @@ def test_tags_read_endpoints_use_display_permission():
     for route in router.routes:
         for method in getattr(route, "methods", set()) or set():
             table[(method, getattr(route, "path", ""))] = _required_permissions(route)
-    assert table[("GET", "/tags")] == {"kuaiiot:tag:display"}
-    assert table[("GET", "/tags/{tag_id}")] == {"kuaiiot:tag:display"}
-    assert table[("PUT", "/tags/{tag_id}")] == {"kuaiiot:tag:create"}
-    assert table[("DELETE", "/tags/{tag_id}")] == {"kuaiiot:tag:create"}
+    assert table[("GET", "/tags")] == {"kuaiiot:tag:read"}
+    assert table[("GET", "/registry/tags")] == {"kuaiiot:tag:display"}
+    assert table[("GET", "/registry/tags/{tag_id}")] == {"kuaiiot:tag:display"}
+    assert table[("PUT", "/registry/tags/{tag_id}")] == {"kuaiiot:tag:create"}
+    assert table[("DELETE", "/registry/tags/{tag_id}")] == {"kuaiiot:tag:create"}
 
 
 @pytest.mark.asyncio

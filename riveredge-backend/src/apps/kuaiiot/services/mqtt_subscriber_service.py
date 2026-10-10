@@ -92,6 +92,21 @@ class MqttSubscriberService:
         return part or None
 
     @staticmethod
+    def _resolve_format(payload_format: str, payload_data: Any) -> str:
+        """识别报文格式（上游三易产线适配兼容）。"""
+        from apps.kuaiiot.services.sanyi_line_adapter import is_sanyi_line_payload
+
+        if payload_format not in {"auto", "kuaiiot", "sanyi_line"}:
+            return "kuaiiot"
+        if payload_format == "sanyi_line":
+            return "sanyi_line"
+        if payload_format == "kuaiiot":
+            return "kuaiiot"
+        if is_sanyi_line_payload(payload_data):
+            return "sanyi_line"
+        return "kuaiiot"
+
+    @staticmethod
     async def accept_topic_telemetry(
         topic: str,
         *,
@@ -112,13 +127,19 @@ class MqttSubscriberService:
         )
 
     @staticmethod
-    async def reload() -> dict[str, int]:
+    async def reload(force_restart: bool = False) -> dict[str, int]:
         async with MqttSubscriberService._reload_lock:
-            return await MqttSubscriberService._reload()
+            return await MqttSubscriberService._reload(force_restart=force_restart)
 
     @staticmethod
-    async def _reload() -> dict[str, int]:
+    async def _reload(force_restart: bool = False) -> dict[str, int]:
         """对齐本进程订阅；返回配置对齐数，连接结果另查健康状态。"""
+        if force_restart:
+            for key, (_, task) in list(MqttSubscriberService._tasks.items()):
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+            MqttSubscriberService._tasks.clear()
+            MqttSubscriberService._health.clear()
         async with unscoped(reason="订阅对齐只读取各租户 MQTT 连接的 topic", resource="KuaiiotConnection"):
             rows = await KuaiiotConnection.filter(
                 connection_type__iexact="mqtt",

@@ -12,7 +12,7 @@ import {
   listDevices,
   type DeviceGroup,
   type DeviceOut,
-} from '../../services/kuaiiot';
+} from '../../services/registry';
 
 const { Title, Text } = Typography;
 

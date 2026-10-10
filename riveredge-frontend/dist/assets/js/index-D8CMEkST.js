@@ -1,1 +1,0 @@
-import{j as a}from"./vendor-BOx9wUQH.js";import{N as t}from"./clientRelease-KPW18Q9J.js";const e=()=>a.jsx(t,{to:"/apps/kuaicaiwu/cost-management/cost-calculations?cat=compare",replace:!0});export{e as default};
