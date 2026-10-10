@@ -1244,7 +1244,7 @@ wizard_show_optional_deps_panel() {
     echo -e "  ${WIZARD_DIM}[0]${WIZARD_RESET} 返回主菜单"
     echo ""
     wizard_say "「已装」仅表示机上具备，不等于已写入开关；纳入安装须先启用"
-    wizard_say "先启用再按 [I] 安装；若开了 KU-AI 向量，装完后仍需 migrate 补列"
+    wizard_say "先启用再按 [I] 安装（PDF 启用后 [I] 会安装 Chromium）；KU-AI 向量装完后仍需 migrate"
 }
 
 # 切换单项选装开关；成功返回 0

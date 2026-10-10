@@ -61,7 +61,7 @@ launch.dev.sh[OV6L]: F:启停并检查API、Taskiq、Vite及可选Expo Web开发
 
 ===D:/kuaigeyun-pro/kuaigeyun/fast-deploy/config/===
 caddy-extra-proxies.list.example[CC1T]: F:Caddy extra proxy list | R:- | A:site→upstream lines | S:http=no TLS; https=auto; 11L
-deploy.env.example[CC3S]: F:fast-deploy层环境变量模板 | R:code:fast-deploy/lib/common.sh | A:ports+blue-green+opts | S:默认真源用Git dist; 低配不关Chromium补装
+deploy.env.example[CC3S]: F:fast-deploy层环境变量模板 | R:code:fast-deploy/lib/common.sh | A:ports+blue-green+opts | S:OPT_PDF_PRINT=1即补装Chromium; PLAYWRIGHT字段兼容
 install-scripts.json[CC1S]: F:OS install commands | R:- | A:6 tools × 5 OS | S:winget/apt/dnf per OS; 76L
 
 ===D:/kuaigeyun-pro/kuaigeyun/fast-deploy/lib/===
@@ -69,9 +69,9 @@ blue_green.ps1[OV4M]: F:PS blue-green deploy | R:- | A:BG state+swap | S:low-spe
 blue_green.sh[OV5L]: F:sh blue-green deploy | R:- | A:BG state+swap | S:low-spec disables BG; 608L
 build_web_git.sh[OV3S]: F:dist-only git push | R:- | A:filter-repo+lease | S:assert committed; save/restore remotes; 137L
 common.ps1[OU5L]: F:Shared PowerShell helpers for fast-deploy build/push | R:- | A:- | S:deploy helpers
-common.sh[OV9L]: F:fast-deploy共享shell库装启迁Caddy蓝绿 | R:code:fast-deploy/config/deploy.env.example,code:fast-deploy/lib/low_spec_mode.sh | A:load_deploy_env,sync_*,playwright_postinstall_enabled | S:Chromium补装需OPT_PDF_PRINT且PLAYWRIGHT_POSTINSTALL≠0; 与低配解耦
+common.sh[OV9L]: F:fast-deploy共享shell库装启迁Caddy蓝绿 | R:code:fast-deploy/config/deploy.env.example,code:fast-deploy/lib/wizard.sh | A:playwright_postinstall_enabled,ensure_playwright_chromium_sync,set_deploy_opt_flag | S:Chromium补装只看OPT_PDF_PRINT; 启用PDF时写回PLAYWRIGHT_POSTINSTALL=1
 low_spec_mode.sh[OV4M]: F:低配模式内存调优与快照恢复 | R:code:fast-deploy/lib/common.sh | A:low_spec_apply_profile,low_spec_apply_normal_profile | S:开启低配写PLAYWRIGHT_POSTINSTALL_ENABLE=1不关闭Chromium补装; 恢复一般模式不改该开关; 缩池关蓝绿
-wizard.sh[OV8L]: F:8-stage deploy wizard | R:- | A:interactive prompts | S:truecolor; CJK align; 2233L
+wizard.sh[OV8L]: F:交互部署向导与选装面板 | R:code:fast-deploy/lib/common.sh | A:wizard_ask_optional_deps_choice,cmd_install_optional_deps | S:启用PDF后须按I安装Chromium; 真彩色CJK对齐
 
 ===D:/kuaigeyun-pro/kuaigeyun/fast-deploy/linux/===
 dev.sh[OV1T]: F:dev mode entry | R:- | A:DEPLOY_MODE=dev | S:fd_dispatch; 11L

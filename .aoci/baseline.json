@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-10-07T06:04:21Z",
-  "updated_at": "2026-10-10T05:33:37Z",
+  "updated_at": "2026-10-10T05:41:58Z",
   "files": {
     ".cursor/rules/aoci-git-commit.mdc": {
       "role": "index",
@@ -47,9 +47,9 @@
     },
     "aoci.code.txt": {
       "role": "index",
-      "sha256": "919336f5eb5b87a317e8708b8ab85ab19d6c560f3561609c776535222ed59081",
-      "size": 993805,
-      "normalized_sha256": "919336f5eb5b87a317e8708b8ab85ab19d6c560f3561609c776535222ed59081"
+      "sha256": "9fa722115f4a476e1932c26b2ad6e71ede3215228f7fafa2ad5535b24f7b5187",
+      "size": 993938,
+      "normalized_sha256": "9fa722115f4a476e1932c26b2ad6e71ede3215228f7fafa2ad5535b24f7b5187"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -263,9 +263,9 @@
     },
     "fast-deploy/config/deploy.env.example": {
       "role": "index",
-      "sha256": "3fd428b6779174d36f3e6067544b867d75ddd8c97c3fcd2f3540391002c7663a",
-      "size": 6848,
-      "normalized_sha256": "3fd428b6779174d36f3e6067544b867d75ddd8c97c3fcd2f3540391002c7663a"
+      "sha256": "bcef5e122244146bcf8fbf35e4437e95bb1599e9307671c8b7cfdc4504ca0107",
+      "size": 6813,
+      "normalized_sha256": "bcef5e122244146bcf8fbf35e4437e95bb1599e9307671c8b7cfdc4504ca0107"
     },
     "fast-deploy/config/install-scripts.json": {
       "role": "index",
@@ -317,9 +317,9 @@
     },
     "fast-deploy/lib/common.sh": {
       "role": "index",
-      "sha256": "bb92f665471a4aec5f0fb4c32bab2d7c9a19acfec7d1ad2c3cf1be4d607f0cb4",
-      "size": 278550,
-      "normalized_sha256": "bb92f665471a4aec5f0fb4c32bab2d7c9a19acfec7d1ad2c3cf1be4d607f0cb4"
+      "sha256": "f5b86a51595e47cb76916a2737d6a5e7a22755c0732434153589eeec8f6cf451",
+      "size": 279055,
+      "normalized_sha256": "f5b86a51595e47cb76916a2737d6a5e7a22755c0732434153589eeec8f6cf451"
     },
     "fast-deploy/lib/low_spec_mode.sh": {
       "role": "index",
@@ -329,9 +329,9 @@
     },
     "fast-deploy/lib/wizard.sh": {
       "role": "index",
-      "sha256": "c0b404a196ccb48da074f5a45497dde6d03db4bffe3be79c93dbcdcf45d06d7a",
-      "size": 83622,
-      "normalized_sha256": "842a942e5e388f6639ce345f7161d169fa96548c89ed27d57384e15cd4c42882"
+      "sha256": "cdf2ffef60a8fe917409e0e99a20f3fd7de77cef1c0ad8ee5523b3f407310b18",
+      "size": 83644,
+      "normalized_sha256": "735f74a313f2e1f8f300995c52e554a6b48d0a30c8f28b09878b4d4eb678cf88"
     },
     "fast-deploy/linux/dev.sh": {
       "role": "index",

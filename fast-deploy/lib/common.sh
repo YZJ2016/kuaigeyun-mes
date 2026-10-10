@@ -134,10 +134,16 @@ print_special_deps_footnotes() {
         echo "    - Chromium 缺 Linux 共享库，打印 PDF 会失败。"
         echo "      修复: cd riveredge-backend && sudo $(resolve_uv) run --extra pdf python -m playwright install-deps chromium"
     fi
-    if [ "$cr_st" = "disabled-missing" ] || [ "$cr_st" = "disabled-present" ] || [ "$cr_st" = "skipped" ] || [ "$pw_st" = "skipped" ]; then
+    if [ "$cr_st" = "missing" ] || [ "$cr_st" = "disabled-missing" ]; then
         [ "$has_note" -eq 0 ] && { echo "  提示:"; has_note=1; }
-        echo "    - PLAYWRIGHT_POSTINSTALL_ENABLE=0 或未开 OPT_PDF_PRINT：跳过 Chromium 后台补装（不删除已有浏览器）。"
-        echo "      需要打印 PDF 时：deploy.env 设 OPT_PDF_PRINT=1 且 PLAYWRIGHT_POSTINSTALL_ENABLE=1，再执行选装/start。"
+        if deploy_opt_pdf_print_enabled 2>/dev/null; then
+            echo "    - PDF 打印已启用但 Chromium 未装：在选装菜单按 [I] 安装已启用，或执行"
+            echo "      ./fast-deploy/deploy.sh install-optional"
+            echo "      进度见 .logs/playwright-install.log"
+        else
+            echo "    - 未开 OPT_PDF_PRINT：不会补装 Chromium（不删除已有浏览器）。"
+            echo "      需要打印 PDF：选装菜单启用 [2] PDF 打印后再按 [I] 安装。"
+        fi
     fi
     [ "$has_note" -eq 1 ] && echo ""
 }
@@ -389,6 +395,10 @@ set_deploy_opt_flag() {
             ;;
     esac
     set_deploy_env_value "$key" "$val"
+    # 启用 PDF 打印时同步打开 Chromium 补装开关（清除旧低配留下的 =0）
+    if [ "$key" = "OPT_PDF_PRINT" ] && [ "$val" = "1" ]; then
+        set_deploy_env_value PLAYWRIGHT_POSTINSTALL_ENABLE "1"
+    fi
     load_deploy_env
     sync_deploy_optional_features_to_backend_env
 }
@@ -2692,7 +2702,7 @@ cmd_configure() {
 }
 
 # 后端 uv sync/run extras：由 deploy.env OPT_INVOICE_OCR / OPT_PDF_PRINT 选装。
-# Chromium 浏览器是否后台补装由 OPT_PDF_PRINT + PLAYWRIGHT_POSTINSTALL_ENABLE 控制。
+# Chromium 浏览器是否补装由 OPT_PDF_PRINT 控制（开启即装）。
 backend_uv_extra_args() {
     local args=""
     if deploy_opt_invoice_ocr_enabled; then
@@ -2782,8 +2792,9 @@ sync_backend_deps() {
 }
 
 playwright_postinstall_enabled() {
-    deploy_opt_pdf_print_enabled || return 1
-    [ "${PLAYWRIGHT_POSTINSTALL_ENABLE:-1}" != "0" ]
+    # PDF 选装开启即补装 Chromium（不再被 PLAYWRIGHT_POSTINSTALL_ENABLE=0 挡住；
+    # 该变量仅作文档/兼容字段，开启 OPT_PDF_PRINT 时会写回 1）。
+    deploy_opt_pdf_print_enabled
 }
 
 resolve_playwright_browsers_path() {
@@ -3606,7 +3617,7 @@ ensure_playwright_chromium_sync() {
 ensure_playwright_chromium_postinstall() {
     # 后台补装 Chromium，不阻塞 start / deploy 主流程（PDF 打印就绪前可能短暂不可用）
     if ! playwright_postinstall_enabled; then
-        log_special "Playwright Chromium 已跳过 (PLAYWRIGHT_POSTINSTALL_ENABLE=0)"
+        log_special "Playwright Chromium 已跳过（OPT_PDF_PRINT 未启用）"
         return 0
     fi
     ensure_logs_dir
