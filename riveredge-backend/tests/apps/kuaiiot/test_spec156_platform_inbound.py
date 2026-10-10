@@ -109,7 +109,7 @@ async def test_unregistered_topic_and_pull_write_nothing(db, monkeypatch):
 
     monkeypatch.setattr(platform_telemetry, "load_platform_records", _unknown)
     pulled = await run_kuaiiot_telemetry_pull()
-    assert pulled == {"stored": 0, "skipped_unregistered": 1}
+    assert pulled["stored"] == 0 and pulled["skipped_unregistered"] == 1
     assert await KuaiiotTagSnapshot.all().count() == 0
 
 
@@ -166,7 +166,7 @@ async def test_mqtt_and_pull_call_ingest_once_per_idempotency_key(db, monkeypatc
 
     monkeypatch.setattr(platform_telemetry, "load_platform_records", _again)
     pulled = await run_kuaiiot_telemetry_pull()
-    assert pulled == {"stored": 1, "skipped_unregistered": 0}
+    assert pulled["stored"] == 1 and pulled["skipped_unregistered"] == 0
     again = await KuaiiotTagSnapshot.filter(device_id=device.id)
     assert len(again) == 1
     assert again[0].value_number == Decimal("25.5")
@@ -176,7 +176,8 @@ async def test_mqtt_and_pull_call_ingest_once_per_idempotency_key(db, monkeypatc
 @pytest.mark.asyncio
 async def test_ticks_do_not_open_broker_or_fetch(db):
     assert await run_kuaiiot_mqtt_reload() == {"subscriptions_aligned": 0}
-    assert await run_kuaiiot_telemetry_pull() == {"stored": 0, "skipped_unregistered": 0}
+    pulled = await run_kuaiiot_telemetry_pull()
+    assert pulled["stored"] == 0 and pulled["skipped_unregistered"] == 0
     await MqttSubscriberService.start_all()
     await MqttSubscriberService.stop_all()
 
@@ -340,7 +341,8 @@ async def test_pull_stays_empty_when_platform_connections_exist(db):
             ),
         )
     assert platform_telemetry.load_platform_records() == []
-    assert await run_kuaiiot_telemetry_pull() == {"stored": 0, "skipped_unregistered": 0}
+    pulled = await run_kuaiiot_telemetry_pull()
+    assert pulled["stored"] == 0 and pulled["skipped_unregistered"] == 0
 
 
 @pytest.mark.asyncio
@@ -384,7 +386,8 @@ async def test_normalizers_ingest_from_config_and_hide_passwords(db):
     jl_connection, jl_device = await _mapped_device("jl", "jetlinks", dict(_PATH_CONFIG))
     stored = await platform_telemetry.normalize_jetlinks(jl_connection, _mapped_payload(jl_device, "jl-once"))
     assert stored == {"stored": True}
-    assert await run_kuaiiot_telemetry_pull() == {"stored": 0, "skipped_unregistered": 0}
+    pulled = await run_kuaiiot_telemetry_pull()
+    assert pulled["stored"] == 0 and pulled["skipped_unregistered"] == 0
     assert await run_kuaiiot_mqtt_reload() == {"subscriptions_aligned": 1}
     assert "do-not-leak" not in str(await run_kuaiiot_mqtt_reload())
 
@@ -539,7 +542,7 @@ async def test_pull_skips_invalid_records_without_breaking(db, monkeypatch):
 
     monkeypatch.setattr(platform_telemetry, "load_platform_records", _mixed)
     pulled = await run_kuaiiot_telemetry_pull()
-    assert pulled == {"stored": 1, "skipped_unregistered": 2}
+    assert pulled["stored"] == 1 and pulled["skipped_unregistered"] == 2
     snapshots = await KuaiiotTagSnapshot.filter(device_id=device.id)
     assert len(snapshots) == 1
     assert snapshots[0].value_number == Decimal("3")

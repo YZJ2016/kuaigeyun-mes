@@ -1,1 +1,3 @@
-"""星数采请求与响应。"""
+"""快数采 Schema 导出。"""
+
+from apps.kuaiiot.schemas.iot import *  # noqa: F403

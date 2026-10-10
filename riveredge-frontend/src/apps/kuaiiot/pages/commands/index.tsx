@@ -5,7 +5,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button, Card, Form, Input, InputNumber, Space, Table, Typography, message } from 'antd';
-import { createDeviceCommand, listDeviceCommands, type DeviceCommand } from '../../services/kuaiiot';
+import { createDeviceCommand, listDeviceCommands, type DeviceCommand } from '../../services/registry';
 
 const { Title, Text } = Typography;
 

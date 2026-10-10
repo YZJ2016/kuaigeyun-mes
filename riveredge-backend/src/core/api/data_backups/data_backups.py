@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, Query, HTTPException, status, UploadFile
 from fastapi.responses import FileResponse
 from loguru import logger
 from pydantic import BaseModel
-from core.api.deps import get_current_user
+from core.api.deps import get_current_tenant, get_current_user
 from infra.models.user import User
 from core.models.data_backup import DataBackup
 from core.schemas.data_backup import DataBackupCreate, DataBackupResponse, DataBackupListResponse
@@ -65,18 +65,22 @@ async def _load_worker_health_counts(
     is_infra_admin: bool,
 ) -> tuple[int, int, int, int]:
     # PostgreSQL 连接偶发中断时，允许一次短重试，避免前端偶发 500。
-    scope_q = _backup_list_q(tenant_id, is_infra_admin=is_infra_admin)
+    scope_kwargs = (
+        {}
+        if is_infra_admin
+        else {"tenant_id": tenant_id, "backup_scope__not": "all"}
+    )
     for attempt in range(2):
         try:
-            pending_total = await DataBackup.filter(scope_q, status="pending").count()
+            pending_total = await DataBackup.filter(**scope_kwargs, status="pending").count()
             pending_stalled = await DataBackup.filter(
-                scope_q,
+                **scope_kwargs,
                 status="pending",
                 created_at__lt=stale_threshold,
             ).count()
-            running_count = await DataBackup.filter(scope_q, status="running").count()
+            running_count = await DataBackup.filter(**scope_kwargs, status="running").count()
             recent_completed = await DataBackup.filter(
-                scope_q,
+                **scope_kwargs,
                 status__in=["success", "failed"],
                 completed_at__gte=recent_window,
             ).count()
@@ -100,6 +104,7 @@ async def _load_worker_health_counts(
 
 @router.get("/worker-health", response_model=BackupWorkerHealthResponse)
 async def get_worker_health(
+    tenant_id: int = Depends(get_current_tenant),
     current_user: User = Depends(get_current_user),
 ) -> Any:
     """
@@ -114,7 +119,6 @@ async def get_worker_health(
     stale_threshold = now - timedelta(minutes=2)
     recent_window = now - timedelta(minutes=10)
 
-    tenant_id = current_user.tenant_id
     pending_total, pending_stalled, running_count, recent_completed = await _load_worker_health_counts(
         tenant_id=tenant_id,
         stale_threshold=stale_threshold,
@@ -179,6 +183,7 @@ async def get_backups(
     backup_scope: Optional[str] = None,
     backup_status: Optional[str] = Query(None, alias="status"),
     keyword: Optional[str] = Query(None, description="模糊搜索备份名称"),
+    tenant_id: int = Depends(get_current_tenant),
     current_user: User = Depends(get_current_user),
 ) -> Any:
     """
@@ -190,7 +195,7 @@ async def get_backups(
             detail="普通租户无权访问全量备份数据",
         )
     items, total = await DataBackupService.get_backups(
-        current_user.tenant_id,
+        tenant_id,
         page,
         page_size,
         backup_type,
@@ -293,6 +298,7 @@ async def create_backup(
 @router.get("/{uuid}", response_model=DataBackupResponse)
 async def get_backup(
     uuid: str,
+    tenant_id: int = Depends(get_current_tenant),
     current_user: User = Depends(get_current_user),
 ) -> Any:
     """
@@ -300,7 +306,7 @@ async def get_backup(
     """
     try:
         backup = await DataBackupService.get_backup_by_uuid(
-            current_user.tenant_id, uuid, is_infra_admin=_is_platform_backup_admin(current_user)
+            tenant_id, uuid, is_infra_admin=_is_platform_backup_admin(current_user)
         )
         # 详情可读 zip 内轻量 metadata；禁止解压 dump
         return DataBackupService.to_response(backup, enrich=True)
@@ -311,6 +317,7 @@ async def get_backup(
 @router.get("/{uuid}/download-url", response_model=BackupDownloadUrlResponse)
 async def get_backup_download_url(
     uuid: str,
+    tenant_id: int = Depends(get_current_tenant),
     current_user: User = Depends(get_current_user),
 ) -> Any:
     """
@@ -318,15 +325,15 @@ async def get_backup_download_url(
     """
     try:
         backup = await DataBackupService.get_backup_by_uuid(
-            current_user.tenant_id, uuid, is_infra_admin=_is_platform_backup_admin(current_user)
+            tenant_id, uuid, is_infra_admin=_is_platform_backup_admin(current_user)
         )
         if backup.status != "success":
             raise HTTPException(status_code=400, detail="只能下载成功的备份")
-        BackupDownloadService.resolve_backup_file(uuid, current_user.tenant_id, backup.file_path)
+        BackupDownloadService.resolve_backup_file(uuid, tenant_id, backup.file_path)
         return BackupDownloadUrlResponse(
             download_url=BackupDownloadService.build_download_url(
                 uuid,
-                current_user.tenant_id,
+                tenant_id,
                 is_infra_admin=_is_platform_backup_admin(current_user),
             ),
         )
@@ -378,6 +385,7 @@ async def download_backup(
 @router.delete("/{uuid}")
 async def delete_backup(
     uuid: str,
+    tenant_id: int = Depends(get_current_tenant),
     current_user: User = Depends(get_current_user),
 ) -> Any:
     """
@@ -385,7 +393,7 @@ async def delete_backup(
     """
     try:
         await DataBackupService.delete_backup(
-            current_user.tenant_id, uuid, is_infra_admin=_is_platform_backup_admin(current_user)
+            tenant_id, uuid, is_infra_admin=_is_platform_backup_admin(current_user)
         )
         return {"success": True}
     except ValueError as e:
@@ -410,6 +418,7 @@ async def restore_backup(
     uuid: str,
     data: RestoreRequest,
     current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
 ) -> Any:
     """
     恢复备份
@@ -422,7 +431,7 @@ async def restore_backup(
 
     try:
         success = await DataBackupService.restore_backup(
-            current_user.tenant_id,
+            tenant_id,
             uuid,
             create_pre_restore_backup=data.create_pre_restore_backup,
             source_tenant_id=data.source_tenant_id,
@@ -435,7 +444,7 @@ async def restore_backup(
                 message="恢复任务已提交，请稍后在列表中查看恢复状态",
             )
         backup = await DataBackupService.get_backup_by_uuid(
-            current_user.tenant_id, uuid, is_infra_admin=_is_platform_backup_admin(current_user)
+            tenant_id, uuid, is_infra_admin=_is_platform_backup_admin(current_user)
         )
         return RestoreBackupResponse(
             success=False,

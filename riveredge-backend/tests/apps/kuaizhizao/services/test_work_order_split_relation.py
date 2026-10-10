@@ -44,6 +44,7 @@ def _parent_work_order():
         workshop_name=None,
         work_center_id=None,
         work_center_name=None,
+        work_order_group_id=None,
         priority=1,
         planned_start_date=None,
         planned_end_date=None,

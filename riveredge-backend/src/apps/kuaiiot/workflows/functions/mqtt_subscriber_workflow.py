@@ -6,5 +6,5 @@
 from apps.kuaiiot.services.mqtt_subscriber_service import MqttSubscriberService
 
 
-async def run_kuaiiot_mqtt_reload() -> dict:
-    return await MqttSubscriberService.reload()
+async def run_kuaiiot_mqtt_reload(force_restart: bool = False) -> dict:
+    return await MqttSubscriberService.reload(force_restart=force_restart)

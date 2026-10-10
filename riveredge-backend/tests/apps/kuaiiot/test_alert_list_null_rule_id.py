@@ -2,8 +2,8 @@
 
 import pytest
 
-from apps.kuaiiot.api.prefill import api_list_alerts
 from apps.kuaiiot.models.alert import KuaiiotAlert
+from apps.kuaiiot.services.alert_service import list_alerts
 from core.utils.timezone_utils import resolve_business_datetime
 from infra.domain.tenant_context import set_current_tenant_id
 
@@ -22,7 +22,7 @@ async def test_list_alerts_returns_row_with_null_rule_id(db):
         triggered_at=resolve_business_datetime(),
     )
 
-    listed = await api_list_alerts(1)
+    listed = await list_alerts(1)
 
     found = next(item for item in listed if item.id == created.id)
     assert found.rule_id is None

@@ -1,15 +1,5 @@
-/**
- * 数采中心：运营总览。KPI 与分区全部来自真实接口：
- * - getDiagnostics：在线/超时/异常连接/最近上报/离线设备/边缘代理/待投递
- * - listAlerts：未确认与打开的告警
- * - getEquipmentOpsFeed(24)：OEE 分区
- * - listMessageLogs：今日点数（按返回的消息追踪现算，最多 100 条）
- * 某源不可用时对应位置显示 “—” 与原因，不补零。
- */
-
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Alert, Empty, Space, Table, Tooltip, Typography } from 'antd';
+import { Table } from 'antd';
 import {
   AlertOutlined,
   ApiOutlined,
@@ -20,276 +10,552 @@ import {
   LinkOutlined,
   TagsOutlined,
 } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { formatDateTimeBySiteSetting } from '../../../../utils/format';
 import {
-  AgentStatusTag,
-  HealthStatusTag,
-  OnlineTag,
-  SeverityTag,
-} from '../../components/status-tags';
-import { formatBusinessDateOnly, formatDateTimeBySiteSetting } from '../../../../utils/format';
-import type { DiagnosticsOut } from '../../services/kuaiiot';
-import { loadDashboardSources, type DashboardSourceKey, type DashboardSources } from './api';
+  ModuleCenterLayout,
+  ModuleKpiRow,
+  ModuleShortcutGrid,
+  ModuleActionPanel,
+  ModuleActionMasonry,
+  ModuleTodoList,
+  ModuleChartPanel,
+  ModuleFeedList,
+  showMasonryCard,
+  masonryWeightFromRows,
+  resolveMasonryEmptyFallback,
+} from '../../../kuaizhizao/components/module-center';
+import type { ModuleKpiDef, ModuleShortcutDef, ModuleTodoItem } from '../../../kuaizhizao/components/module-center';
+import {
+  getDashboardSummary,
+  getOpsSummary,
+  listAlerts,
+  listConnections,
+  listEdgeConfigs,
+  listOeeLive,
+  type AlertRecord,
+  type Connection,
+  type DashboardSummary,
+  type EdgeConfig,
+  type OeeLiveItem,
+  type OpsSummary,
+} from '../../services/kuaiiot';
+import { translateSeverity } from '../../constants/formOptions';
+import {
+  IOT_LIST_COL,
+  renderIotAgentStatusMarker,
+  renderIotHealthMarker,
+  renderIotOnlineMarker,
+} from '../../utils/iotListPresentation';
 
-import { ModuleCenterLayout, ModuleKpiRow, ModuleShortcutGrid, ModuleActionMasonry, ModuleActionPanel, ModuleChartPanel, ModuleTodoList, ModuleFeedList } from '../../../kuaizhizao/components/module-center';
-import type { ModuleKpiDef } from '../../../kuaizhizao/components/module-center/types';
+const POLL_MS = 30000;
 
-const { Text } = Typography;
-
-/** 与后端 run_kuaiiot_offline_check 的设备离线口径一致：超过 5 分钟未上报。 */
-const STALE_DEVICE_MS = 5 * 60 * 1000;
-const SECTION_LIMIT = 8;
-const ABNORMAL_HEALTH = new Set(['disconnected', 'unavailable']);
-
-type DiagnosticDevice = DiagnosticsOut['devices'][number];
-
-function fmtTime(value?: string | null): string {
-  return value ? formatDateTimeBySiteSetting(value, '—') : '—';
-}
-
-function isStale(device: DiagnosticDevice, now: number): boolean {
-  if (!device.is_online) return false;
-  if (!device.last_seen_at) return true;
-  const ts = Date.parse(device.last_seen_at);
-  return Number.isNaN(ts) || now - ts > STALE_DEVICE_MS;
-}
-
-function isToday(value?: string | null): boolean {
-  if (!value) return false;
-  return formatBusinessDateOnly(value, '') === formatBusinessDateOnly(new Date(), '');
-}
-
-function SectionCard({
-  title,
-  to,
-  error,
-  children,
-}: {
-  title: string;
-  to?: string;
-  error?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <ModuleActionPanel
-      layout="masonry"
-      title={title}
-      extra={to ? <Link to={to}>查看全部</Link> : null}
-    >
-      {error ? <Alert type="warning" showIcon message={`数据不可用：${error}`} /> : children}
-    </ModuleActionPanel>
-  );
-}
-
-export default function DashboardPage() {
+const KuaiiotDashboardPage: React.FC = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
-  const [sources, setSources] = useState<DashboardSources>();
-  const [loading, setLoading] = useState(false);
-  const [loadedAt, setLoadedAt] = useState<Date>();
+  const [loading, setLoading] = useState(true);
+  const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [ops, setOps] = useState<OpsSummary | null>(null);
+  const [openAlerts, setOpenAlerts] = useState<AlertRecord[]>([]);
+  const [unhealthyConnections, setUnhealthyConnections] = useState<Connection[]>([]);
+  const [edgeIssues, setEdgeIssues] = useState<EdgeConfig[]>([]);
+  const [oeeItems, setOeeItems] = useState<OeeLiveItem[]>([]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const loadDashboard = useCallback(async (showLoading = false) => {
+    if (showLoading) setLoading(true);
     try {
-      setSources(await loadDashboardSources());
-      setLoadedAt(new Date());
+      const [summaryRes, opsRes, alertsRes, connectionsRes, edgeRes, oeeRes] = await Promise.all([
+        getDashboardSummary(),
+        getOpsSummary().catch(() => null),
+        listAlerts({ status: 'open', page_size: 8 }).catch(() => ({ items: [], total: 0 })),
+        listConnections({ page_size: 50 }).catch(() => ({ items: [], total: 0 })),
+        listEdgeConfigs({ page_size: 30 }).catch(() => ({ items: [], total: 0 })),
+        listOeeLive({ hours: 24, limit: 8 }).catch(() => ({ items: [], total: 0 })),
+      ]);
+      setSummary(summaryRes);
+      setOps(opsRes);
+      setOpenAlerts(alertsRes.items ?? []);
+      setUnhealthyConnections(
+        (connectionsRes.items ?? []).filter((row) => String(row.health_status).toLowerCase() === 'unhealthy'),
+      );
+      setEdgeIssues(
+        (edgeRes.items ?? []).filter((row) => {
+          const status = String(row.agent_status ?? '').toLowerCase();
+          return status === 'offline' || Number(row.buffer_pending_count ?? 0) > 0;
+        }),
+      );
+      setOeeItems(oeeRes.items ?? []);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void loadDashboard(true);
+    const timer = window.setInterval(() => {
+      void loadDashboard(false);
+    }, POLL_MS);
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [loadDashboard]);
 
-  const now = Date.now();
-  const devices = sources?.diagnostics?.devices ?? [];
-  const connections = sources?.diagnostics?.connections ?? [];
-  const agents = sources?.diagnostics?.agents ?? [];
-  const deliveries = sources?.diagnostics?.deliveries ?? [];
-  const alerts = sources?.alerts ?? [];
-  const metrics = sources?.feed?.ops_metrics ?? [];
-  const errors = sources?.errors ?? {};
+  const offlineRecentDevices = useMemo(
+    () => (summary?.recent_devices ?? []).filter((d) => !d.is_online).slice(0, 8),
+    [summary?.recent_devices],
+  );
 
-  const err = (key: DashboardSourceKey) => errors[key];
-
-  const onlineCount = devices.filter((d) => d.is_online).length;
-  const staleDevices = devices.filter((d) => isStale(d, now));
-  const offlineDevices = devices.filter((d) => !d.is_online);
-  const abnormalConnections = connections.filter((c) => ABNORMAL_HEALTH.has((c.health_status || '').trim()));
-  const openAlerts = alerts.filter((a) => (a.status || '').trim() === 'open');
-  const abnormalAgents = agents.filter((a) => ['offline', 'error'].includes((a.agent_status || '').trim()));
-
-  const todayPoints = useMemo(() => {
-    if (!sources?.messages) return null;
-    let total = 0;
-    for (const row of sources.messages) {
-      if (row.direction !== 'in' || row.msg_type !== 'ingest' || !isToday(row.created_at)) continue;
-      const keys = (row.payload as { tag_keys?: unknown } | undefined)?.tag_keys;
-      total += Array.isArray(keys) ? keys.length : 1;
+  const opsTodos: ModuleTodoItem[] = useMemo(() => {
+    const items: ModuleTodoItem[] = [];
+    const push = (
+      id: string,
+      title: string,
+      link: string,
+      priority: 'high' | 'medium' | 'low',
+    ) => {
+      items.push({
+        id,
+        type: 'kuaiiot',
+        title,
+        priority,
+        status: 'pending',
+        link,
+        created_at: new Date().toISOString(),
+      });
+    };
+    const openCount = ops?.alerts?.open ?? 0;
+    if (openCount > 0) {
+      push(
+        'open-alerts',
+        t('app.kuaiiot.dashboard.todoOpenAlerts', { count: openCount }),
+        '/apps/kuaiiot/alerts',
+        'high',
+      );
     }
-    return total;
-  }, [sources?.messages]);
+    const unhealthy = ops?.connections?.unhealthy ?? 0;
+    if (unhealthy > 0) {
+      push(
+        'unhealthy-conn',
+        t('app.kuaiiot.dashboard.todoUnhealthyConnections', { count: unhealthy }),
+        '/apps/kuaiiot/connections',
+        'high',
+      );
+    }
+    const stale = ops?.devices?.stale ?? 0;
+    if (stale > 0) {
+      push(
+        'stale-devices',
+        t('app.kuaiiot.dashboard.todoStaleDevices', { count: stale }),
+        '/apps/kuaiiot/devices',
+        'medium',
+      );
+    }
+    const offlineAgents = (ops?.edge_agents?.total ?? 0) - (ops?.edge_agents?.online ?? 0);
+    if (offlineAgents > 0) {
+      push(
+        'edge-offline',
+        t('app.kuaiiot.dashboard.todoEdgeOffline', { count: offlineAgents }),
+        '/apps/kuaiiot/edge-configs',
+        'medium',
+      );
+    }
+    return items;
+  }, [ops, t]);
 
-  const deviceNameById = useMemo(() => {
-    const map = new Map<number, string>();
-    for (const d of devices) map.set(d.id, d.name);
-    return map;
-  }, [devices]);
+  const alertFeedItems = useMemo(
+    () =>
+      openAlerts.map((row) => ({
+        id: row.uuid,
+        title: row.tag_key,
+        subtitle: row.message,
+        tag: {
+          label: translateSeverity(t, row.severity),
+          color: row.severity === 'critical' ? 'error' : row.severity === 'warning' ? 'warning' : 'default',
+        },
+        meta: (
+          <span style={{ fontSize: 10, color: 'var(--ant-color-text-secondary)' }}>
+            {formatDateTimeBySiteSetting(row.triggered_at)}
+          </span>
+        ),
+        onClick: () => navigate('/apps/kuaiiot/alerts'),
+      })),
+    [navigate, openAlerts, t],
+  );
 
-  const recentDevices = [...devices]
-    .sort((a, b) => (Date.parse(b.last_seen_at ?? '') || 0) - (Date.parse(a.last_seen_at ?? '') || 0))
-    .slice(0, SECTION_LIMIT);
-  const sortedOpenAlerts = [...openAlerts]
-    .sort((a, b) => (Date.parse(b.triggered_at) || 0) - (Date.parse(a.triggered_at) || 0))
-    .slice(0, SECTION_LIMIT);
+  const kpis: ModuleKpiDef[] = useMemo(
+    () => [
+      {
+        key: 'online',
+        title: t('app.kuaiiot.dashboard.onlineDevices'),
+        value: summary?.online_devices ?? 0,
+        subtitle: t('app.kuaiiot.dashboard.kpiOnlineSubtitle', {
+          total: summary?.total_devices ?? 0,
+        }),
+        icon: <CloudServerOutlined style={{ fontSize: 24, color: '#fff' }} />,
+        gradient: 'linear-gradient(135deg, #52c41a 0%, #95de64 100%)',
+        onClick: () => navigate('/apps/kuaiiot/devices'),
+        sideMetrics: [
+          {
+            label: t('app.kuaiiot.ops.staleDevices'),
+            value: ops?.devices?.stale ?? 0,
+          },
+        ],
+      },
+      {
+        key: 'ingest',
+        title: t('app.kuaiiot.dashboard.pointsToday'),
+        value: summary?.points_today ?? 0,
+        subtitle: t('app.kuaiiot.dashboard.kpiIngestSubtitle'),
+        icon: <ApiOutlined style={{ fontSize: 24, color: '#fff' }} />,
+        gradient: 'linear-gradient(135deg, #1890ff 0%, #36cfc9 100%)',
+        onClick: () => navigate('/apps/kuaiiot/pipeline'),
+      },
+      {
+        key: 'alerts',
+        title: t('app.kuaiiot.ops.openAlerts'),
+        value: ops?.alerts?.open ?? 0,
+        subtitle: t('app.kuaiiot.dashboard.kpiAlertsSubtitle'),
+        icon: <AlertOutlined style={{ fontSize: 24, color: '#fff' }} />,
+        gradient: 'linear-gradient(135deg, #ff4d4f 0%, #ff7875 100%)',
+        onClick: () => navigate('/apps/kuaiiot/alerts'),
+      },
+      {
+        key: 'connections',
+        title: t('app.kuaiiot.ops.unhealthyConnections'),
+        value: ops?.connections?.unhealthy ?? 0,
+        subtitle: t('app.kuaiiot.dashboard.kpiConnectionsSubtitle', {
+          total: ops?.connections?.total ?? summary?.total_connections ?? 0,
+        }),
+        icon: <LinkOutlined style={{ fontSize: 24, color: '#fff' }} />,
+        gradient: 'linear-gradient(135deg, #fa8c16 0%, #ffc069 100%)',
+        onClick: () => navigate('/apps/kuaiiot/connections'),
+        sideMetrics: [
+          {
+            label: t('app.kuaiiot.dashboard.enabledConnections'),
+            value: summary?.enabled_connections ?? 0,
+          },
+        ],
+      },
+    ],
+    [navigate, ops, summary, t],
+  );
 
-  const todos: Array<{ key: string; text: string; to?: string }> = [];
-  if (!err('diagnostics')) {
-    if (abnormalConnections.length) {
-      todos.push({ key: 'conn', text: `${abnormalConnections.length} 个连接健康异常`, to: '/apps/kuaiiot/connections' });
-    }
-    if (staleDevices.length) {
-      todos.push({ key: 'stale', text: `${staleDevices.length} 台设备超过 5 分钟未上报`, to: '/apps/kuaiiot/devices' });
-    }
-    if (offlineDevices.length) {
-      todos.push({ key: 'offline', text: `${offlineDevices.length} 台设备离线`, to: '/apps/kuaiiot/devices' });
-    }
-    if (abnormalAgents.length) {
-      todos.push({ key: 'agent', text: `${abnormalAgents.length} 个边缘代理不在线`, to: '/apps/kuaiiot/edge-configs' });
-    }
-    if (deliveries.length) {
-      todos.push({ key: 'delivery', text: `${deliveries.length} 条历史/通知投递待完成` });
-    }
-  }
-  if (!err('alerts') && openAlerts.length) {
-    todos.unshift({ key: 'alert', text: `${openAlerts.length} 条告警未确认`, to: '/apps/kuaiiot/alerts' });
-  }
+  const shortcuts: ModuleShortcutDef[] = useMemo(
+    () => [
+      {
+        key: 'connections',
+        title: t('app.kuaiiot.menu.connections'),
+        icon: <LinkOutlined style={{ fontSize: 22, color: '#1890ff' }} />,
+        path: '/apps/kuaiiot/connections',
+      },
+      {
+        key: 'devices',
+        title: t('app.kuaiiot.menu.devices'),
+        icon: <DeploymentUnitOutlined style={{ fontSize: 22, color: '#52c41a' }} />,
+        path: '/apps/kuaiiot/devices',
+      },
+      {
+        key: 'alerts',
+        title: t('app.kuaiiot.menu.alerts'),
+        icon: <AlertOutlined style={{ fontSize: 22, color: '#ff4d4f' }} />,
+        path: '/apps/kuaiiot/alerts',
+      },
+      {
+        key: 'pipeline',
+        title: t('app.kuaiiot.menu.pipeline'),
+        icon: <ClusterOutlined style={{ fontSize: 22, color: '#722ed1' }} />,
+        path: '/apps/kuaiiot/pipeline',
+      },
+      {
+        key: 'edge',
+        title: t('app.kuaiiot.menu.edgeConfigs'),
+        icon: <DashboardOutlined style={{ fontSize: 22, color: '#13c2c2' }} />,
+        path: '/apps/kuaiiot/edge-configs',
+      },
+      {
+        key: 'tags',
+        title: t('app.kuaiiot.menu.tags'),
+        icon: <TagsOutlined style={{ fontSize: 22, color: '#fa8c16' }} />,
+        path: '/apps/kuaiiot/tags',
+      },
+    ],
+    [t],
+  );
 
-  const kpis: ModuleKpiDef[] = [
-    { key: 'online', title: '在线设备', value: err('diagnostics') ? '—' : onlineCount, subtitle: err('diagnostics') ? `不可用：${err('diagnostics')}` : `设备总数 ${devices.length}`, icon: <CloudServerOutlined />, gradient: 'linear-gradient(135deg, #52c41a, #95de64)', sideMetrics: [{label: '超时未上报', value: err('diagnostics') ? '—' : staleDevices.length}], onClick: () => navigate('/apps/kuaiiot/devices') },
-    { key: 'points', title: '今日点数', value: err('messages') ? '—' : (todayPoints ?? '—'), subtitle: err('messages') ? `不可用：${err('messages')}` : `最近 ${(sources?.messages ?? []).length} 条消息内统计`, icon: <ApiOutlined />, gradient: 'linear-gradient(135deg, #1890ff, #69c0ff)' },
-    { key: 'alerts', title: '未确认告警', value: err('alerts') ? '—' : openAlerts.length, subtitle: err('alerts') ? `不可用：${err('alerts')}` : '待确认告警', icon: <AlertOutlined />, gradient: 'linear-gradient(135deg, #ff4d4f, #ff7875)', onClick: () => navigate('/apps/kuaiiot/alerts') },
-    { key: 'connections', title: '异常连接', value: err('diagnostics') ? '—' : abnormalConnections.length, subtitle: err('diagnostics') ? `不可用：${err('diagnostics')}` : '连接健康异常', icon: <LinkOutlined />, gradient: 'linear-gradient(135deg, #fa8c16, #ffc069)', sideMetrics: [{label: '启用连接', value: err('connections') ? '—' : (sources?.connections ?? []).filter(c => c.is_enabled).length}], onClick: () => navigate('/apps/kuaiiot/connections') },
-  ];
-  return <ModuleCenterLayout loading={loading}
-    kpiRow={<ModuleKpiRow items={kpis} colProps={{xs:24, sm:12, lg:6}} />}
-    shortcutRow={<ModuleShortcutGrid items={[
-      {key:'connections',title:'接入配置',icon:<LinkOutlined />,path:'/apps/kuaiiot/connections'},
-      {key:'devices',title:'设备连接',icon:<DeploymentUnitOutlined />,path:'/apps/kuaiiot/devices'},
-      {key:'alerts',title:'告警中心',icon:<AlertOutlined />,path:'/apps/kuaiiot/alerts'},
-      {key:'pipeline',title:'数采链路',icon:<ClusterOutlined />,path:'/apps/kuaiiot/pipeline'},
-      {key:'edge',title:'边缘配置',icon:<DashboardOutlined />,path:'/apps/kuaiiot/edge-configs'},
-      {key:'tags',title:'点位映射',icon:<TagsOutlined />,path:'/apps/kuaiiot/tags'},
-    ]} />}
-    actionRow={<ModuleActionMasonry>
-      <SectionCard title="待办事项"><ModuleTodoList items={todos.map(todo => ({id:todo.key,type:'kuaiiot',title:todo.text,priority:['alert','conn'].includes(todo.key)?'high':'medium',status:'pending',link:todo.to,created_at:loadedAt?.toISOString() ?? ''}))} emptyText={Object.keys(errors).length ? '部分数据源不可用，待办无法完整计算' : '暂无待办'} /></SectionCard>
-<SectionCard title="打开告警" to="/apps/kuaiiot/alerts" error={err('alerts')}>
-          <ModuleFeedList emptyText="无打开告警" items={sortedOpenAlerts.map(row => ({
-            id: row.id, title: row.tag_key,
-            subtitle: row.message, meta: <Space size={8}><SeverityTag value={row.severity} /><Text type="secondary" style={{fontSize: 11}}>{fmtTime(row.triggered_at)}</Text></Space>,
-            onClick: () => navigate('/apps/kuaiiot/alerts'),
-          }))} />
-        </SectionCard>
-<SectionCard title="异常连接" to="/apps/kuaiiot/connections" error={err('diagnostics')}>
-                <Table
-                  size="small"
-                  rowKey="id"
-                  pagination={false}
-                  scroll={{ x: 'max-content' }}
-                  dataSource={abnormalConnections.slice(0, SECTION_LIMIT)}
-                  locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="无异常连接" /> }}
-                  columns={[
-                    {
-                      title: '名称',
-                      dataIndex: 'name',
-                      render: (value: string, row) => <Link to="/apps/kuaiiot/connections">{value || `#${row.id}`}</Link>,
-                    },
-                    { title: '类型', dataIndex: 'type' },
-                    { title: '健康状态', dataIndex: 'health_status', render: (v: string) => <HealthStatusTag value={v} /> },
-                    { title: '最近检查', dataIndex: 'last_health_at', render: fmtTime },
-                  ]}
-                />
-              </SectionCard>
-<SectionCard title="离线设备" to="/apps/kuaiiot/devices" error={err('diagnostics')}>
-                <Table
-                  size="small"
-                  rowKey="id"
-                  pagination={false}
-                  scroll={{ x: 'max-content' }}
-                  dataSource={offlineDevices.slice(0, SECTION_LIMIT)}
-                  locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="无离线设备" /> }}
-                  columns={[
-                    {
-                      title: '设备',
-                      dataIndex: 'name',
-                      render: (value: string, row) => <Link to="/apps/kuaiiot/devices">{value || `#${row.id}`}</Link>,
-                    },
-                    { title: '状态', dataIndex: 'is_online', render: (v: boolean) => <OnlineTag online={v} /> },
-                    { title: '最近上报', dataIndex: 'last_seen_at', render: fmtTime },
-                  ]}
-                />
-              </SectionCard>
-<SectionCard title="最近上报设备" to="/apps/kuaiiot/devices" error={err('diagnostics')}>
-                <Table
-                  size="small"
-                  rowKey="id"
-                  pagination={false}
-                  scroll={{ x: 'max-content' }}
-                  dataSource={recentDevices}
-                  locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无设备" /> }}
-                  columns={[
-                    {
-                      title: '设备',
-                      dataIndex: 'name',
-                      render: (value: string, row) => <Link to="/apps/kuaiiot/devices">{value || `#${row.id}`}</Link>,
-                    },
-                    { title: '状态', dataIndex: 'is_online', render: (v: boolean) => <OnlineTag online={v} /> },
-                    { title: '最近上报', dataIndex: 'last_seen_at', render: fmtTime },
-                  ]}
-                />
-              </SectionCard>
-<SectionCard title="边缘代理" to="/apps/kuaiiot/edge-configs" error={err('diagnostics')}>
-                <Table
-                  size="small"
-                  rowKey="id"
-                  pagination={false}
-                  scroll={{ x: 'max-content' }}
-                  dataSource={agents.slice(0, SECTION_LIMIT)}
-                  locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无边缘配置" /> }}
-                  columns={[
-                    {
-                      title: '配置',
-                      dataIndex: 'name',
-                      render: (value: string, row) => <Link to="/apps/kuaiiot/edge-configs">{value || `#${row.id}`}</Link>,
-                    },
-                    { title: 'Agent 状态', dataIndex: 'agent_status', render: (v: string) => <AgentStatusTag value={v} /> },
-                    { title: '待补传', dataIndex: 'buffer_pending_count' },
-                    { title: '最近心跳', dataIndex: 'last_agent_heartbeat_at', render: fmtTime },
-                  ]}
-                />
-              </SectionCard>
-<ModuleChartPanel layout="masonry" title="OEE 实时信号">{err('feed') ? <Alert type="warning" showIcon message={`数据不可用：${err('feed')}`} /> : (
-                <Table
-                  size="small"
-                  rowKey="equipment_uuid"
-                  pagination={false}
-                  scroll={{ x: 'max-content' }}
-                  dataSource={metrics.slice(0, SECTION_LIMIT)}
-                  locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无绑定 MES 设备" /> }}
-                  columns={[
-                    { title: 'MES 设备', dataIndex: 'name' },
-                    {
-                      title: 'Sensor 可用率',
-                      dataIndex: 'availability_rate',
-                      render: (v: number | null) => (v == null ? '—' : `${(v * 100).toFixed(1)}%`),
-                    },
-                  {
-                      title: 'OEE Live',
-                      dataIndex: 'oee_live',
-                      render: (v: number | null, row) => <Tooltip title={`覆盖率：${row.coverage_rate == null ? '—' : `${(row.coverage_rate * 100).toFixed(1)}%`}；${row.unavailable_reasons?.join('；') || '近 24 小时实时信号'}`}>{v == null ? '—' : `${(v * 100).toFixed(1)}%`}</Tooltip>,
-                    },
-                    ]}
-                />
-              )}</ModuleChartPanel>
-    </ModuleActionMasonry>}
-  />;
-}
+  const deviceColumns = useMemo(
+    () => [
+      {
+        title: t('common.code'),
+        dataIndex: 'code',
+        width: IOT_LIST_COL.code.width,
+        ellipsis: true,
+      },
+      {
+        title: t('common.name'),
+        dataIndex: 'name',
+        width: IOT_LIST_COL.name.width,
+        ellipsis: true,
+      },
+      {
+        title: t('app.kuaiiot.field.online'),
+        dataIndex: 'is_online',
+        width: IOT_LIST_COL.marker.width,
+        render: (online: boolean) => renderIotOnlineMarker(t, online),
+      },
+      {
+        title: t('app.kuaiiot.field.lastSeen'),
+        dataIndex: 'last_seen_at',
+        width: IOT_LIST_COL.datetime.width,
+        render: (val: string | undefined) => (val ? formatDateTimeBySiteSetting(val) : '-'),
+      },
+    ],
+    [t],
+  );
+
+  const connectionColumns = useMemo(
+    () => [
+      {
+        title: t('common.code'),
+        dataIndex: 'code',
+        width: IOT_LIST_COL.code.width,
+        ellipsis: true,
+      },
+      {
+        title: t('common.name'),
+        dataIndex: 'name',
+        width: IOT_LIST_COL.name.width,
+        ellipsis: true,
+      },
+      {
+        title: t('app.kuaiiot.field.health'),
+        dataIndex: 'health_status',
+        width: IOT_LIST_COL.marker.width,
+        render: (val: string) => renderIotHealthMarker(t, val),
+      },
+    ],
+    [t],
+  );
+
+  const oeeColumns = useMemo(
+    () => [
+      {
+        title: t('app.kuaiiot.field.equipment'),
+        dataIndex: 'equipment_name',
+        width: IOT_LIST_COL.name.width,
+        ellipsis: true,
+      },
+      {
+        title: t('app.kuaiiot.dashboard.availabilityRate'),
+        width: IOT_LIST_COL.count.width,
+        render: (_: unknown, row: OeeLiveItem) =>
+          row.sensor?.availability_rate != null ? `${row.sensor.availability_rate}%` : '-',
+      },
+      {
+        title: t('app.kuaiiot.dashboard.oeeLiveValue'),
+        width: IOT_LIST_COL.count.width,
+        render: (_: unknown, row: OeeLiveItem) => (row.oee_live != null ? `${row.oee_live}%` : '-'),
+      },
+    ],
+    [t],
+  );
+
+  const edgeColumns = useMemo(
+    () => [
+      {
+        title: t('common.code'),
+        dataIndex: 'code',
+        width: IOT_LIST_COL.code.width,
+        ellipsis: true,
+      },
+      {
+        title: t('common.name'),
+        dataIndex: 'name',
+        width: IOT_LIST_COL.name.width,
+        ellipsis: true,
+      },
+      {
+        title: t('app.kuaiiot.field.agentStatus'),
+        dataIndex: 'agent_status',
+        width: IOT_LIST_COL.markerMd.width,
+        render: (val: string) => renderIotAgentStatusMarker(t, val),
+      },
+      {
+        title: t('app.kuaiiot.field.bufferPending'),
+        dataIndex: 'buffer_pending_count',
+        width: IOT_LIST_COL.count.width,
+        render: (val: number | undefined) => Number(val ?? 0),
+      },
+    ],
+    [t],
+  );
+
+  const hasOeeData = oeeItems.some(
+    (row) => row.oee_live != null || row.sensor?.availability_rate != null,
+  );
+
+  const masonryEmptyFallback = resolveMasonryEmptyFallback(loading, [
+    opsTodos.length > 0,
+    openAlerts.length > 0,
+    unhealthyConnections.length > 0,
+    offlineRecentDevices.length > 0,
+    (summary?.recent_devices?.length ?? 0) > 0,
+    edgeIssues.length > 0,
+    hasOeeData,
+  ]);
+
+  return (
+    <ModuleCenterLayout
+      moduleHelpKey="kuaiiot"
+      loading={loading && !summary}
+      kpiRow={<ModuleKpiRow items={kpis} colProps={{ xs: 24, sm: 12, lg: 6 }} />}
+      shortcutRow={<ModuleShortcutGrid items={shortcuts} />}
+      actionRow={
+        <ModuleActionMasonry>
+          {showMasonryCard(loading, opsTodos.length > 0, masonryEmptyFallback) ? (
+            <ModuleActionPanel
+              layout="masonry"
+              title={t('app.kuaiiot.dashboard.todosTitle')}
+              loading={loading}
+              masonryWeight={masonryWeightFromRows(opsTodos.length)}
+            >
+              <ModuleTodoList items={opsTodos} emptyText={t('app.kuaiiot.dashboard.noTodos')} />
+            </ModuleActionPanel>
+          ) : null}
+
+          {showMasonryCard(loading, openAlerts.length > 0, masonryEmptyFallback) ? (
+            <ModuleActionPanel
+              layout="masonry"
+              title={t('app.kuaiiot.dashboard.panel.openAlerts')}
+              loading={loading}
+              masonryWeight={masonryWeightFromRows(openAlerts.length)}
+              extra={
+                <a onClick={() => navigate('/apps/kuaiiot/alerts')}>
+                  {t('app.kuaiiot.dashboard.viewAll')}
+                </a>
+              }
+            >
+              <ModuleFeedList items={alertFeedItems} emptyText={t('common.noData')} />
+            </ModuleActionPanel>
+          ) : null}
+
+          {showMasonryCard(loading, unhealthyConnections.length > 0, masonryEmptyFallback) ? (
+            <ModuleActionPanel
+              layout="masonry"
+              title={t('app.kuaiiot.dashboard.panel.unhealthyConnections')}
+              loading={loading}
+              masonryWeight={masonryWeightFromRows(unhealthyConnections.length)}
+              extra={
+                <a onClick={() => navigate('/apps/kuaiiot/connections')}>
+                  {t('app.kuaiiot.dashboard.viewAll')}
+                </a>
+              }
+            >
+              <Table
+                size="small"
+                tableLayout="fixed"
+                rowKey="uuid"
+                pagination={false}
+                dataSource={unhealthyConnections.slice(0, 8)}
+                columns={connectionColumns}
+              />
+            </ModuleActionPanel>
+          ) : null}
+
+          {showMasonryCard(loading, offlineRecentDevices.length > 0, masonryEmptyFallback) ? (
+            <ModuleActionPanel
+              layout="masonry"
+              title={t('app.kuaiiot.dashboard.panel.offlineDevices')}
+              loading={loading}
+              masonryWeight={masonryWeightFromRows(offlineRecentDevices.length)}
+              extra={
+                <a onClick={() => navigate('/apps/kuaiiot/devices')}>
+                  {t('app.kuaiiot.dashboard.viewAll')}
+                </a>
+              }
+            >
+              <Table
+                size="small"
+                tableLayout="fixed"
+                rowKey="uuid"
+                pagination={false}
+                dataSource={offlineRecentDevices}
+                columns={deviceColumns}
+              />
+            </ModuleActionPanel>
+          ) : null}
+
+          {showMasonryCard(
+            loading,
+            (summary?.recent_devices?.length ?? 0) > 0,
+            masonryEmptyFallback,
+          ) ? (
+            <ModuleActionPanel
+              layout="masonry"
+              title={t('app.kuaiiot.dashboard.recentDevices')}
+              loading={loading}
+              masonryWeight={masonryWeightFromRows(Math.min(summary?.recent_devices?.length ?? 0, 8))}
+              extra={
+                <a onClick={() => navigate('/apps/kuaiiot/devices')}>
+                  {t('app.kuaiiot.dashboard.viewAll')}
+                </a>
+              }
+            >
+              <Table
+                size="small"
+                tableLayout="fixed"
+                rowKey="uuid"
+                pagination={false}
+                dataSource={(summary?.recent_devices ?? []).slice(0, 8)}
+                columns={deviceColumns}
+              />
+            </ModuleActionPanel>
+          ) : null}
+
+          {showMasonryCard(loading, edgeIssues.length > 0, masonryEmptyFallback) ? (
+            <ModuleActionPanel
+              layout="masonry"
+              title={t('app.kuaiiot.dashboard.panel.edgeAgents')}
+              loading={loading}
+              masonryWeight={masonryWeightFromRows(edgeIssues.length)}
+              extra={
+                <a onClick={() => navigate('/apps/kuaiiot/edge-configs')}>
+                  {t('app.kuaiiot.dashboard.viewAll')}
+                </a>
+              }
+            >
+              <Table
+                size="small"
+                tableLayout="fixed"
+                rowKey="uuid"
+                pagination={false}
+                dataSource={edgeIssues.slice(0, 8)}
+                columns={edgeColumns}
+              />
+            </ModuleActionPanel>
+          ) : null}
+
+          {showMasonryCard(loading, hasOeeData, masonryEmptyFallback) ? (
+            <ModuleChartPanel
+              layout="masonry"
+              title={t('app.kuaiiot.dashboard.oeeLive')}
+              loading={loading}
+              masonryWeight={3}
+            >
+              <Table
+                size="small"
+                tableLayout="fixed"
+                rowKey="equipment_uuid"
+                pagination={false}
+                dataSource={oeeItems}
+                columns={oeeColumns}
+              />
+            </ModuleChartPanel>
+          ) : null}
+        </ModuleActionMasonry>
+      }
+    />
+  );
+};
+
+export default KuaiiotDashboardPage;

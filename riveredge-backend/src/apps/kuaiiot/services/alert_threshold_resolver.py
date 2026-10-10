@@ -1,4 +1,6 @@
-"""点位阈值比较。只做 gt/lt/gte/lte/eq/ne。"""
+"""IoT 点位阈值判定。"""
+
+from __future__ import annotations
 
 from decimal import Decimal
 from typing import Optional
@@ -6,25 +8,10 @@ from typing import Optional
 OPERATORS = frozenset({"gt", "lt", "gte", "lte", "eq", "ne"})
 
 
-def _decimal(value: object) -> Decimal:
-    return Decimal(str(value))
-
-
-def format_actual_value(
-    value_text: Optional[str],
-    value_number: Optional[Decimal],
-    value_bool: Optional[bool],
-) -> str:
-    if value_number is not None:
-        text = format(_decimal(value_number), "f")
-        if "." in text:
-            text = text.rstrip("0").rstrip(".")
-        return text
-    if value_bool is not None:
-        return "true" if value_bool else "false"
-    if value_text is not None:
-        return str(value_text)
-    return ""
+def _to_decimal(raw: Optional[Decimal]) -> Optional[Decimal]:
+    if raw is None:
+        return None
+    return Decimal(str(raw))
 
 
 def is_threshold_breached(
@@ -36,14 +23,12 @@ def is_threshold_breached(
     value_text: Optional[str],
     value_bool: Optional[bool],
 ) -> bool:
-    op = (operator or "").strip()
-    if op not in OPERATORS:
-        return False
+    op = str(operator or "").lower()
     if op in {"gt", "lt", "gte", "lte"}:
-        if threshold_number is None or value_number is None:
+        left = _to_decimal(value_number)
+        right = _to_decimal(threshold_number)
+        if left is None or right is None:
             return False
-        left = _decimal(value_number)
-        right = _decimal(threshold_number)
         if op == "gt":
             return left > right
         if op == "lt":
@@ -51,12 +36,33 @@ def is_threshold_breached(
         if op == "gte":
             return left >= right
         return left <= right
-    if threshold_number is not None and value_number is not None:
-        same = _decimal(value_number) == _decimal(threshold_number)
-    elif threshold_text is not None and value_text is not None:
-        same = str(value_text) == str(threshold_text)
-    elif value_bool is not None and threshold_text in {"true", "false"}:
-        same = value_bool is (threshold_text == "true")
-    else:
+
+    actual = value_text
+    if actual is None and value_number is not None:
+        actual = str(value_number)
+    if actual is None and value_bool is not None:
+        actual = "true" if value_bool else "false"
+    expected = threshold_text
+    if expected is None and threshold_number is not None:
+        expected = str(threshold_number)
+    if actual is None or expected is None:
         return False
-    return same if op == "eq" else not same
+    if op == "eq":
+        return str(actual).strip().lower() == str(expected).strip().lower()
+    if op == "ne":
+        return str(actual).strip().lower() != str(expected).strip().lower()
+    return False
+
+
+def format_actual_value(
+    value_text: Optional[str],
+    value_number: Optional[Decimal],
+    value_bool: Optional[bool],
+) -> str:
+    if value_text is not None and str(value_text).strip():
+        return str(value_text)
+    if value_number is not None:
+        return str(value_number)
+    if value_bool is not None:
+        return "true" if value_bool else "false"
+    return ""

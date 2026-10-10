@@ -72,10 +72,10 @@ async def _device(suffix: str, equipment_uuid: str | None = None) -> KuaiiotDevi
 
 
 def test_device_token_only_returned_on_create_and_rotate():
-    assert _route("/devices", "POST").response_model is DeviceTokenOut
-    assert _route("/devices/{device_id}/rotate-token", "POST").response_model is DeviceTokenOut
-    assert _route("/devices/{device_id}", "PUT").response_model is DeviceOut
-    assert _route("/devices", "GET").response_model == list[DeviceOut]
+    assert _route("/registry/devices", "POST").response_model is DeviceTokenOut
+    assert _route("/registry/devices/{device_id}/rotate-token", "POST").response_model is DeviceTokenOut
+    assert _route("/registry/devices/{device_id}", "PUT").response_model is DeviceOut
+    assert _route("/registry/devices", "GET").response_model == list[DeviceOut]
 
 
 @pytest.mark.asyncio

@@ -64,17 +64,17 @@ async def test_single_device_rejects_foreign_associations(db, field):
 async def test_builtin_load_idempotent_preserves_edits_and_deleted_codes(db):
     set_current_tenant_id(1)
     first = await product_service.load_builtin_products(1, user_id=7)
-    assert first == {"created": 3, "skipped": 0}
+    assert first == {"created": 4, "skipped": 0}
     row = await KuaiiotProduct.get(tenant_id=1, code="generic_line")
     row.name = "用户修改"
     await row.save()
     deleted = await KuaiiotProduct.get(tenant_id=1, code="cnc")
     await product_service.delete_product(1, deleted.id)
-    assert await product_service.load_builtin_products(1) == {"created": 0, "skipped": 3}
+    assert await product_service.load_builtin_products(1) == {"created": 0, "skipped": 4}
     assert (await KuaiiotProduct.get(id=row.id)).name == "用户修改"
     assert (await KuaiiotProduct.get(id=deleted.id)).deleted_at is not None
     set_current_tenant_id(2)
-    assert await product_service.load_builtin_products(2) == {"created": 3, "skipped": 0}
+    assert await product_service.load_builtin_products(2) == {"created": 4, "skipped": 0}
 
 
 @pytest.mark.asyncio

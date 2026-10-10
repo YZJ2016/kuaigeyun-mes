@@ -5,7 +5,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Alert, Button, Card, Form, Input, Space, Table, Typography, message } from 'antd';
-import { queryTrend, type TrendPoint } from '../../services/kuaiiot';
+import { queryTrend, type TrendPoint } from '../../services/registry';
 
 const { Title } = Typography;
 

@@ -32,6 +32,7 @@ from apps.kuaiiot.schemas.ingest import IngestBody
 from apps.kuaiiot.services.connection_runtime import ensure_device_connection
 from apps.kuaiiot.services.alert_service import evaluate_thresholds
 from apps.kuaiiot.services.delivery_service import enqueue
+from apps.kuaiiot.services.tag_history_store import TagHistoryPoint, TagHistoryStore
 from apps.kuaiiot.services.status_mapper import (
     BLOCKED_EQUIPMENT_STATUSES,
     MONITOR_STATUS_WHEN_ABSENT,
@@ -100,7 +101,7 @@ def _typed_snapshot(value_type: str, raw: Any) -> tuple[Optional[str], Optional[
         return None, None, None
     if value_type == "boolean":
         return None, None, _as_bool(raw)
-    if value_type == "text":
+    if value_type in ("text", "string"):
         return str(raw), None, None
     return None, _as_decimal(raw), None
 
@@ -239,6 +240,7 @@ class IngestService:
         by_key = {item.tag_key: item for item in definitions}
         planned: list[tuple[KuaiiotTagDefinition, Optional[str], Optional[Decimal], Optional[bool]]] = []
         monitor_fields: dict[str, Any] = {}
+        history_points: list[dict[str, Any]] = []
         for tag_key, raw in (body.tags or {}).items():
             definition = by_key.get(tag_key)
             if definition is None:
@@ -276,6 +278,15 @@ class IngestService:
                     )
                     if updated and quality == "good" and (newest_sample is None or _aware(sampled_at) >= _aware(newest_sample)):
                         fresh.append((definition, value_text, value_number, value_bool))
+                        history_points.append(
+                            {
+                                "tag_key": definition.tag_key,
+                                "value_text": value_text,
+                                "value_number": value_number,
+                                "value_bool": value_bool,
+                                "sampled_at": sampled_at,
+                            }
+                        )
                         _apply_monitor(definition.map_target, definition.tag_key, body.tags[definition.tag_key], monitor_fields)
                 if is_current:
                     current.latest_sampled_at = sampled_at
@@ -355,6 +366,12 @@ class IngestService:
                 if stored is not None:
                     return stored
             raise
+        if history_points:
+            await TagHistoryStore.write_points(
+                tenant_id=tenant_id,
+                device_id=device.id,
+                points=[TagHistoryPoint(**item) for item in history_points],
+            )
         return json.loads(text)
 
     @staticmethod
@@ -542,3 +559,62 @@ class IngestService:
             status__in=list(OPEN_REPAIR_STATUSES),
             deleted_at__isnull=True,
         ).exists()
+
+
+# ---- 上游集成面：批量入站与离线写回 ----
+
+from apps.kuaiiot.schemas.iot import IngestBatchResponse  # noqa: E402
+
+
+async def ingest_batch(device_token: str, payload) -> IngestBatchResponse:
+    """上游批量入站协议；内部逐条走星数采执行版 ingest。"""
+    from apps.kuaiiot.constants import INGEST_BATCH_MAX_ITEMS
+
+    items = getattr(payload, "items", None) or []
+    if len(items) > INGEST_BATCH_MAX_ITEMS:
+        raise ValidationError(f"单次批量入站最多 {INGEST_BATCH_MAX_ITEMS} 条")
+
+    total = len(items)
+    accepted = 0
+    duplicates = 0
+    failed = 0
+
+    for item in items:
+        tags = getattr(item, "tags", None) or {}
+        if not tags:
+            failed += 1
+            continue
+        body = IngestBody(
+            tags=tags,
+            timestamp=item.timestamp.isoformat() if getattr(item, "timestamp", None) else None,
+            idempotency_key=getattr(item, "idempotency_key", None),
+        )
+        try:
+            result = await IngestService.ingest(device_token, body)
+            accepted += len(result.get("snapshot_keys") or [])
+        except ValidationError:
+            failed += 1
+
+    return IngestBatchResponse(
+        total=total,
+        accepted=accepted,
+        duplicates=duplicates,
+        failed=failed,
+        synced_to_mes=accepted > 0,
+    )
+
+
+async def sync_offline_to_mes(device: KuaiiotDevice) -> bool:
+    """设备离线时向 MES 写回一条离线监控行（走本地护栏）。"""
+    tenant_id = int(device.tenant_id)
+    equipment = await IngestService._bound_equipment(tenant_id, device.equipment_uuid)
+    if equipment is None:
+        return False
+    now = resolve_business_datetime()
+    return await IngestService._maybe_insert_monitor(
+        tenant_id,
+        equipment,
+        {"is_online": False},
+        now,
+        now,
+    )

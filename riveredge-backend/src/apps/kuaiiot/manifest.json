@@ -2,98 +2,126 @@
   "code": "kuaiiot",
   "name": "星数采",
   "version": "1.0.0",
-  "is_pro": true,
-  "market_category": "pro",
-  "description": "登记连接、IoT 设备与点位，收下 HTTP 入站并查看最新快照",
+  "description": "工业物联网设备数采与集成平台（星数采）",
   "icon": "api",
   "author": "StarTech",
   "entry_point": "../apps/kuaiiot/index.tsx",
   "route_path": "/apps/kuaiiot",
   "sort_order": 320,
+  "is_pro": true,
+  "market_category": "pro",
   "menu_config": {
     "title": "app.kuaiiot.name",
     "icon": "api",
     "path": "/apps/kuaiiot",
-    "permission": "kuaiiot:registry:display",
+    "permission": "kuaiiot:entry:read",
     "children": [
       {
         "title": "app.kuaiiot.menu.group.monitorOps",
+        "icon": "layout",
         "sort_order": 1,
         "children": [
           {
             "title": "app.kuaiiot.menu.dashboard",
             "path": "/apps/kuaiiot/dashboard",
-            "permission": "kuaiiot:registry:display",
-            "sort_order": 1
+            "sort_order": 1,
+            "permission": "kuaiiot:dashboard:read"
           },
           {
             "title": "app.kuaiiot.menu.pipeline",
             "path": "/apps/kuaiiot/pipeline",
-            "permission": "kuaiiot:device:display",
-            "sort_order": 2
+            "sort_order": 2,
+            "permission": "kuaiiot:pipeline:read"
           },
           {
             "title": "app.kuaiiot.menu.alerts",
             "path": "/apps/kuaiiot/alerts",
-            "permission": "kuaiiot:alert:display",
-            "sort_order": 3
+            "sort_order": 3,
+            "permission": "kuaiiot:alert:read"
           }
         ]
       },
       {
         "title": "app.kuaiiot.menu.group.modelAccess",
+        "icon": "hardDrive",
         "sort_order": 2,
         "children": [
           {
             "title": "app.kuaiiot.menu.products",
             "path": "/apps/kuaiiot/products",
-            "permission": "kuaiiot:device:display",
-            "sort_order": 1
+            "sort_order": 1,
+            "permission": "kuaiiot:product:read"
           },
           {
             "title": "app.kuaiiot.menu.devices",
             "path": "/apps/kuaiiot/devices",
-            "permission": "kuaiiot:device:display",
-            "sort_order": 2
+            "sort_order": 2,
+            "permission": "kuaiiot:device:read"
           },
           {
             "title": "app.kuaiiot.menu.tags",
             "path": "/apps/kuaiiot/tags",
-            "permission": "kuaiiot:tag:display",
-            "sort_order": 3
+            "sort_order": 3,
+            "permission": "kuaiiot:tag:read"
           },
           {
             "title": "app.kuaiiot.menu.connections",
             "path": "/apps/kuaiiot/connections",
-            "permission": "kuaiiot:connection:display",
-            "sort_order": 4
+            "sort_order": 4,
+            "permission": "kuaiiot:connection:read"
           },
           {
             "title": "app.kuaiiot.menu.edgeConfigs",
             "path": "/apps/kuaiiot/edge-configs",
-            "permission": "kuaiiot:device:display",
-            "sort_order": 5
+            "sort_order": 5,
+            "permission": "kuaiiot:edge-config:read"
           }
         ]
       }
     ]
   },
   "permissions": [
-    "kuaiiot:registry:display",
-    "kuaiiot:connection:display",
+    "kuaiiot:entry:read",
+    "kuaiiot:dashboard:read",
+    "kuaiiot:product:read",
+    "kuaiiot:product:create",
+    "kuaiiot:product:update",
+    "kuaiiot:product:delete",
+    "kuaiiot:connection:read",
     "kuaiiot:connection:create",
-    "kuaiiot:device:display",
+    "kuaiiot:connection:update",
+    "kuaiiot:connection:delete",
+    "kuaiiot:device:read",
     "kuaiiot:device:create",
     "kuaiiot:device:update",
-    "kuaiiot:tag:display",
+    "kuaiiot:device:delete",
+    "kuaiiot:device-group:read",
+    "kuaiiot:device-group:create",
+    "kuaiiot:device-group:update",
+    "kuaiiot:device-group:delete",
+    "kuaiiot:tag:read",
     "kuaiiot:tag:create",
-    "kuaiiot:snapshot:read",
+    "kuaiiot:tag:update",
+    "kuaiiot:tag:delete",
+    "kuaiiot:alert:read",
+    "kuaiiot:alert:create",
+    "kuaiiot:alert:update",
+    "kuaiiot:alert:delete",
+    "kuaiiot:edge-config:read",
+    "kuaiiot:edge-config:create",
+    "kuaiiot:edge-config:update",
+    "kuaiiot:edge-config:delete",
+    "kuaiiot:analytics:read",
+    "kuaiiot:pipeline:read",
+    "kuaiiot:ops:read",
+    "kuaiiot:device:display",
+    "kuaiiot:tag:display",
     "kuaiiot:template:display",
     "kuaiiot:template:create",
-    "kuaiiot:alert:display",
-    "kuaiiot:alert:create",
+    "kuaiiot:snapshot:read",
     "kuaiiot:fill:read",
-    "kuaiiot:analytics:read"
+    "kuaiiot:alert:display",
+    "kuaiiot:connection:display"
   ],
   "dependencies": {
     "riveredge-backend": ">=1.0.0",

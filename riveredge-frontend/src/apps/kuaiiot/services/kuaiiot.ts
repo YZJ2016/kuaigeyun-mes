@@ -1,605 +1,526 @@
-/**
- * 星数采控制面。请求走现有 apiRequest，响应不含设备凭据。
- */
-
 import { apiRequest } from '../../../services/api';
 
-export type ConnectionOut = {
-  id: number;
+export type DashboardSummary = {
+  total_devices: number;
+  online_devices: number;
+  total_connections: number;
+  enabled_connections: number;
+  total_tags: number;
+  points_today: number;
+  recent_devices: Device[];
+};
+
+export type Connection = {
   uuid: string;
+  id: number;
   code: string;
   name: string;
   connection_type: string;
-  integration_id?: number | null;
+  config?: Record<string, unknown>;
   is_enabled: boolean;
   health_status: string;
+  last_health_at?: string;
+  remark?: string;
 };
 
-export type DeviceOut = {
-  id: number;
+export type Device = {
   uuid: string;
-  connection_id?: number | null;
-  external_device_id: string;
+  id: number;
   code: string;
   name: string;
-  equipment_uuid?: string | null;
-  group_id?: number | null;
-  product_id?: number | null;
-  remark?: string | null;
+  external_device_id: string;
+  connection_id?: number;
+  product_id?: number;
+  group_id?: number;
+  equipment_uuid?: string;
+  device_token: string;
   is_online: boolean;
-  last_seen_at?: string | null;
+  last_seen_at?: string;
+  remark?: string;
 };
 
-export type TagOut = {
-  id: number;
-  device_id: number;
+export type TagSnapshot = {
   tag_key: string;
-  name: string;
-  value_type: string;
-  map_target: string;
-  is_enabled: boolean;
-};
-
-export type SnapshotOut = {
-  id: number;
-  device_id: number;
-  tag_key: string;
-  value_text?: string | null;
-  value_number?: string | number | null;
-  value_bool?: boolean | null;
+  value_text?: string;
+  value_number?: number;
+  value_bool?: boolean;
   quality: string;
   sampled_at: string;
 };
 
-export function createConnection(payload: {
-  code: string;
-  name: string;
-  connection_type: string;
-  integration_uuid?: string;
-  config?: Record<string, string>;
-}): Promise<ConnectionOut> {
-  return apiRequest<ConnectionOut>('/apps/kuaiiot/connections', { method: 'POST', data: payload });
-}
+export type TagHistory = TagSnapshot;
 
-export function listConnections(): Promise<ConnectionOut[]> {
-  return apiRequest<ConnectionOut[]>('/apps/kuaiiot/connections');
-}
-
-export function getConnection(connectionId: number): Promise<ConnectionOut> {
-  return apiRequest<ConnectionOut>(`/apps/kuaiiot/connections/${connectionId}`);
-}
-
-export function updateConnection(
-  connectionId: number,
-  payload: {
-    name?: string;
-    config?: Record<string, string> | null;
-    is_enabled?: boolean;
-    remark?: string | null;
-  },
-): Promise<ConnectionOut> {
-  return apiRequest<ConnectionOut>(`/apps/kuaiiot/connections/${connectionId}`, {
-    method: 'PUT',
-    data: payload,
-  });
-}
-
-export function deleteConnection(connectionId: number): Promise<void> {
-  return apiRequest<void>(`/apps/kuaiiot/connections/${connectionId}`, { method: 'DELETE' });
-}
-
-export function createDevice(payload: {
-  connection_id?: number;
-  external_device_id: string;
-  code: string;
-  name: string;
-  equipment_uuid?: string;
-}): Promise<DeviceOut> {
-  return apiRequest<DeviceOut>('/apps/kuaiiot/devices', { method: 'POST', data: payload });
-}
-
-export function listDevices(): Promise<DeviceOut[]> {
-  return apiRequest<DeviceOut[]>('/apps/kuaiiot/devices');
-}
-
-export function getDevice(deviceId: number): Promise<DeviceOut> {
-  return apiRequest<DeviceOut>(`/apps/kuaiiot/devices/${deviceId}`);
-}
-
-export function updateDevice(
-  deviceId: number,
-  payload: {
-    name?: string;
-    connection_id?: number | null;
-    equipment_uuid?: string;
-    clear_equipment?: boolean;
-    group_id?: number | null;
-    product_id?: number | null;
-    remark?: string | null;
-  },
-): Promise<DeviceOut> {
-  return apiRequest<DeviceOut>(`/apps/kuaiiot/devices/${deviceId}`, {
-    method: 'PUT',
-    data: payload,
-  });
-}
-
-export function deleteDevice(deviceId: number): Promise<void> {
-  return apiRequest<void>(`/apps/kuaiiot/devices/${deviceId}`, { method: 'DELETE' });
-}
-
-export function createTag(
-  deviceId: number,
-  payload: { tag_key: string; name: string; value_type: string; map_target: string },
-): Promise<TagOut> {
-  return apiRequest<TagOut>(`/apps/kuaiiot/devices/${deviceId}/tags`, { method: 'POST', data: payload });
-}
-
-export function listSnapshots(deviceId: number): Promise<SnapshotOut[]> {
-  return apiRequest<SnapshotOut[]>(`/apps/kuaiiot/devices/${deviceId}/snapshots`);
-}
-
-export function listTags(params?: { device_id?: number }): Promise<TagOut[]> {
-  return apiRequest<TagOut[]>('/apps/kuaiiot/tags', {
-    params: params?.device_id ? { device_id: params.device_id } : undefined,
-  });
-}
-
-export function getTag(tagId: number): Promise<TagOut> {
-  return apiRequest<TagOut>(`/apps/kuaiiot/tags/${tagId}`);
-}
-
-export function updateTag(
-  tagId: number,
-  payload: {
-    name?: string;
-    value_type?: string;
-    unit?: string | null;
-    map_target?: string;
-    fill_target?: string | null;
-    is_enabled?: boolean;
-  },
-): Promise<TagOut> {
-  return apiRequest<TagOut>(`/apps/kuaiiot/tags/${tagId}`, { method: 'PUT', data: payload });
-}
-
-export function deleteTag(tagId: number): Promise<void> {
-  return apiRequest<void>(`/apps/kuaiiot/tags/${tagId}`, { method: 'DELETE' });
-}
-
-export type TemplateOut = {
-  code: string;
-  name: string;
-  tags: Array<{ tag_key: string; name: string; value_type: string; map_target: string; unit?: string | null }>;
+export type TagHistoryList = {
+  items: TagHistory[];
+  tsdb_configured: boolean;
 };
 
-export type AlertOut = {
+export type TagDefinition = {
+  uuid: string;
   id: number;
-  rule_id: number | null;
   device_id: number;
   tag_key: string;
-  severity: string;
-  message: string;
-  actual_value?: string | null;
-  status: string;
-  triggered_at: string;
-  acknowledged_at?: string | null;
-  recovered_at?: string | null;
-  closed_at?: string | null;
+  name: string;
+  value_type: string;
+  unit?: string;
+  map_target: string;
+  fill_target?: string;
+  is_enabled: boolean;
 };
 
-export function listTemplates(): Promise<TemplateOut[]> {
-  return apiRequest<TemplateOut[]>('/apps/kuaiiot/tag-templates');
-}
-
-export function applyTemplate(deviceId: number, code: string): Promise<{ code: string; tag_keys: string[] }> {
-  return apiRequest(`/apps/kuaiiot/devices/${deviceId}/template`, { method: 'POST', data: { code } });
-}
-
-export function listAlerts(): Promise<AlertOut[]> {
-  return apiRequest<AlertOut[]>('/apps/kuaiiot/alerts');
-}
-
-export function transitionAlert(id: number, action: 'acknowledge' | 'close'): Promise<AlertOut> {
-  return apiRequest(`/apps/kuaiiot/alerts/${id}/${action}`, { method: 'POST' });
-}
-
-export function createAlertRule(payload: {
+export type AlertRule = {
+  uuid: string;
+  id: number;
   code: string;
   name: string;
+  rule_type?: string;
+  device_id?: number;
+  equipment_uuid?: string;
   tag_key: string;
   operator: string;
   threshold_number?: number;
   threshold_text?: string;
-  device_id?: number;
-  equipment_uuid?: string;
-  severity?: string;
-  cooldown_seconds?: number;
-  notify_enabled?: boolean;
-  is_enabled?: boolean;
-  remark?: string;
-}): Promise<AlertRuleOut> {
-  return apiRequest('/apps/kuaiiot/alert-rules', { method: 'POST', data: payload });
-}
-
-export type AlertRuleOut = {
-  id: number;
-  uuid: string;
-  code: string;
-  name: string;
-  tag_key: string;
-  operator: string;
-  threshold_number?: string | number | null;
-  threshold_text?: string | null;
-  device_id?: number | null;
-  equipment_uuid?: string | null;
   severity: string;
   cooldown_seconds: number;
   notify_enabled: boolean;
   is_enabled: boolean;
-  rule_type: string;
+  remark?: string;
 };
 
-export function listAlertRules(): Promise<AlertRuleOut[]> {
-  return apiRequest<AlertRuleOut[]>('/apps/kuaiiot/alert-rules');
+export type AlertRecord = {
+  uuid: string;
+  id: number;
+  rule_id: number;
+  device_id: number;
+  equipment_uuid?: string;
+  tag_key: string;
+  severity: string;
+  message: string;
+  actual_value?: string;
+  status: string;
+  triggered_at: string;
+};
+
+export type EdgeConfig = {
+  uuid: string;
+  id: number;
+  code: string;
+  name: string;
+  device_id: number;
+  protocol: string;
+  config: Record<string, unknown>;
+  config_version?: number;
+  last_agent_heartbeat_at?: string;
+  agent_version?: string;
+  agent_status?: string;
+  buffer_pending_count?: number;
+  is_enabled: boolean;
+  remark?: string;
+};
+
+export type OpsSummary = {
+  connections: Record<string, number>;
+  devices: Record<string, number>;
+  edge_agents: Record<string, number>;
+  alerts: Record<string, number>;
+  ingest: Record<string, number>;
+  tsdb_configured: boolean;
+};
+
+export async function getDashboardSummary() {
+  return apiRequest<DashboardSummary>('/apps/kuaiiot/dashboard/summary', { method: 'GET' });
 }
 
-export function updateAlertRule(
-  ruleId: number,
-  payload: {
-    name?: string;
-    tag_key?: string;
-    operator?: string;
-    threshold_number?: number | null;
-    threshold_text?: string | null;
-    device_id?: number | null;
-    equipment_uuid?: string | null;
-    severity?: string;
-    cooldown_seconds?: number;
-    notify_enabled?: boolean;
-    is_enabled?: boolean;
-    remark?: string | null;
-  },
-): Promise<AlertRuleOut> {
-  return apiRequest<AlertRuleOut>(`/apps/kuaiiot/alert-rules/${ruleId}`, {
-    method: 'PUT',
-    data: payload,
+export async function getOpsSummary() {
+  return apiRequest<OpsSummary>('/apps/kuaiiot/ops/summary', { method: 'GET' });
+}
+
+export async function listConnections(params?: { page?: number; page_size?: number; q?: string }) {
+  return apiRequest<{ items: Connection[]; total: number }>('/apps/kuaiiot/connections', {
+    method: 'GET',
+    params,
   });
 }
 
-export function deleteAlertRule(ruleId: number): Promise<void> {
-  return apiRequest<void>(`/apps/kuaiiot/alert-rules/${ruleId}`, { method: 'DELETE' });
+export async function createConnection(data: Partial<Connection>) {
+  return apiRequest<Connection>('/apps/kuaiiot/connections', { method: 'POST', data });
 }
 
-export function createOfflineRule(payload: {
-  code: string;
-  name: string;
-  device_id?: number;
-  severity?: string;
-}): Promise<AlertRuleOut> {
-  return apiRequest<AlertRuleOut>('/apps/kuaiiot/offline-rules', { method: 'POST', data: payload });
+export async function updateConnection(uuid: string, data: Partial<Connection>) {
+  return apiRequest<Connection>(`/apps/kuaiiot/connections/${uuid}`, { method: 'PUT', data });
 }
 
-export function deleteAlert(alertId: number): Promise<void> {
-  return apiRequest<void>(`/apps/kuaiiot/alerts/${alertId}`, { method: 'DELETE' });
+export async function deleteConnection(uuid: string) {
+  return apiRequest<void>(`/apps/kuaiiot/connections/${uuid}`, { method: 'DELETE' });
 }
 
-export type ProductTag = {
-  tag_key: string;
-  name: string;
-  value_type: string;
-  map_target: string;
-  unit?: string;
-  fill_target?: string | null;
-  is_enabled?: boolean;
-};
-
-export type ProductEvent = {
-  event_key: string;
-  name: string;
-  severity: string;
-  message?: string;
-};
-
-export type ProductFunction = {
-  function_key: string;
-  name: string;
-  timeout_seconds?: number;
-  params?: Array<{ key: string; name?: string; value_type?: string; required?: boolean }>;
-  edge_action?: {
-    type?: string;
-    param_key?: string;
-    address?: number;
-    data_type?: string;
-    scale?: number;
-  };
-};
-
-export type ProductOut = {
-  id: number;
+export type ConnectionRecentMessage = {
   uuid: string;
-  code: string;
-  name: string;
-  description?: string | null;
-  tags: ProductTag[];
-  events?: ProductEvent[];
-  functions?: ProductFunction[];
+  topic: string;
+  qos: number;
+  retained: boolean;
+  received_at: string;
+  payload?: unknown;
+  payload_format: string;
+  ingest_summary?: Record<string, unknown>;
+  error?: string;
 };
 
-export type BatchDeviceOut = {
-  id: number;
-  code: string;
-  name: string;
+export async function listConnectionRecentMessages(uuid: string, limit = 20) {
+  return apiRequest<{ items: ConnectionRecentMessage[]; total: number }>(
+    `/apps/kuaiiot/connections/${uuid}/recent-messages`,
+    { method: 'GET', params: { limit } },
+  );
+}
+
+export type DiscoveredMqttDevice = {
+  external_device_id: string;
+  device_name: string;
+  device_key?: string;
+  line_name?: string;
+  line_code?: string;
+  workshop_name?: string;
+  workshop_code?: string;
+  status?: string;
+  last_seen_at?: string;
+  topic?: string;
+  already_bound: boolean;
+  label: string;
+  connection_id?: number;
+};
+
+export async function listConnectionDiscoveredDevices(uuid: string, limit = 50) {
+  return apiRequest<{ items: DiscoveredMqttDevice[]; total: number }>(
+    `/apps/kuaiiot/connections/${uuid}/discovered-devices`,
+    { method: 'GET', params: { limit } },
+  );
+}
+
+export async function listAllDiscoveredMqttDevices(limit = 200) {
+  return apiRequest<{ items: DiscoveredMqttDevice[]; total: number }>(
+    '/apps/kuaiiot/connections/discovered-devices',
+    { method: 'GET', params: { limit } },
+  );
+}
+
+export async function syncConnectionDevices(connectionUuid: string) {
+  return apiRequest<{ synced_devices: number; message: string }>('/apps/kuaiiot/connectors/sync', {
+    method: 'POST',
+    data: { connection_uuid: connectionUuid },
+  });
+}
+
+export async function healthCheckConnection(connectionUuid: string) {
+  return apiRequest<{ health_status: string; last_health_at?: string }>(
+    `/apps/kuaiiot/connectors/health-check/${connectionUuid}`,
+    { method: 'POST' },
+  );
+}
+
+
+export async function pullConnectionTelemetry(connectionUuid: string) {
+  return apiRequest<{ pulled_points: number; message: string }>(
+    `/apps/kuaiiot/connectors/pull-telemetry/${connectionUuid}`,
+    { method: 'POST' },
+  );
+}
+
+
+export async function listDevices(params?: { page?: number; page_size?: number; q?: string; group_id?: number }) {
+  return apiRequest<{ items: Device[]; total: number }>('/apps/kuaiiot/devices', {
+    method: 'GET',
+    params,
+  });
+}
+
+export async function createDevice(data: Partial<Device> & { tag_template_code?: string; product_id?: number }) {
+  return apiRequest<Device>('/apps/kuaiiot/devices', { method: 'POST', data });
+}
+
+export async function batchCreateDevices(data: {
   product_id: number;
-  device_token: string;
-};
+  name_prefix: string;
+  count: number;
+  code_prefix?: string;
+  connection_id?: number;
+  equipment_uuid?: string;
+  remark?: string;
+}) {
+  return apiRequest<{ items: DeviceBatchItem[]; total: number }>('/apps/kuaiiot/devices/batch', {
+    method: 'POST',
+    data,
+  });
+}
 
-export type TrendPoint = {
-  time: string;
-  value: number;
-};
+export async function ingestDeviceData(deviceToken: string, payload: { tags: Record<string, unknown>; timestamp?: string }) {
+  return apiRequest<IngestResponse>(`/apps/kuaiiot/ingest/${deviceToken}`, { method: 'POST', data: payload });
+}
 
-export function createProduct(payload: {
+export async function updateDevice(uuid: string, data: Partial<Device>) {
+  return apiRequest<Device>(`/apps/kuaiiot/devices/${uuid}`, { method: 'PUT', data });
+}
+
+export async function deleteDevice(uuid: string) {
+  return apiRequest<void>(`/apps/kuaiiot/devices/${uuid}`, { method: 'DELETE' });
+}
+
+export async function rotateDeviceToken(uuid: string) {
+  return apiRequest<Device>(`/apps/kuaiiot/devices/${uuid}/rotate-token`, { method: 'POST' });
+}
+
+export async function listDeviceSnapshots(uuid: string) {
+  return apiRequest<TagSnapshot[]>(`/apps/kuaiiot/devices/${uuid}/snapshots`, { method: 'GET' });
+}
+
+export async function listDeviceHistory(uuid: string, params?: { tag_key?: string; limit?: number }) {
+  return apiRequest<TagHistoryList>(`/apps/kuaiiot/devices/${uuid}/history`, {
+    method: 'GET',
+    params,
+  });
+}
+
+export async function listTags(params?: { page?: number; page_size?: number; device_id?: number; q?: string }) {
+  return apiRequest<{ items: TagDefinition[]; total: number }>('/apps/kuaiiot/tags', {
+    method: 'GET',
+    params,
+  });
+}
+
+export async function createTag(data: Partial<TagDefinition>) {
+  return apiRequest<TagDefinition>('/apps/kuaiiot/tags', { method: 'POST', data });
+}
+
+export async function updateTag(uuid: string, data: Partial<TagDefinition>) {
+  return apiRequest<TagDefinition>(`/apps/kuaiiot/tags/${uuid}`, { method: 'PUT', data });
+}
+
+export async function deleteTag(uuid: string) {
+  return apiRequest<void>(`/apps/kuaiiot/tags/${uuid}`, { method: 'DELETE' });
+}
+
+export async function listEquipmentOptions() {
+  const res = await apiRequest<{ items?: Array<{ uuid: string; code: string; name: string }>; total?: number }>(
+    '/apps/kuaizhizao/equipment',
+    {
+      method: 'GET',
+      params: {
+        skip: 0,
+        limit: 500,
+        order_by: '-created_at',
+        exclude_equipment_nature: '测量设备',
+      },
+    },
+  );
+  const items = res.items ?? (Array.isArray(res) ? res : []);
+  // 与设备台账展示一致：名称/编码
+  return items.map((item) => ({
+    label: `${item.name} / ${item.code}`,
+    value: item.uuid,
+    name: item.name,
+    code: item.code,
+  }));
+}
+
+export async function listAlertRules(params?: { page?: number; page_size?: number; device_id?: number; q?: string }) {
+  return apiRequest<{ items: AlertRule[]; total: number }>('/apps/kuaiiot/alerts/rules', { method: 'GET', params });
+}
+
+export async function createAlertRule(data: Partial<AlertRule>) {
+  return apiRequest<AlertRule>('/apps/kuaiiot/alerts/rules', { method: 'POST', data });
+}
+
+export async function updateAlertRule(uuid: string, data: Partial<AlertRule>) {
+  return apiRequest<AlertRule>(`/apps/kuaiiot/alerts/rules/${uuid}`, { method: 'PUT', data });
+}
+
+export async function deleteAlertRule(uuid: string) {
+  return apiRequest<void>(`/apps/kuaiiot/alerts/rules/${uuid}`, { method: 'DELETE' });
+}
+
+export async function listAlerts(params?: { page?: number; page_size?: number; status?: string; device_id?: number }) {
+  return apiRequest<{ items: AlertRecord[]; total: number }>('/apps/kuaiiot/alerts', { method: 'GET', params });
+}
+
+export async function acknowledgeAlert(uuid: string) {
+  return apiRequest<AlertRecord>(`/apps/kuaiiot/alerts/${uuid}/acknowledge`, { method: 'POST' });
+}
+
+export async function listEdgeConfigs(params?: { page?: number; page_size?: number; device_id?: number; q?: string }) {
+  return apiRequest<{ items: EdgeConfig[]; total: number }>('/apps/kuaiiot/edge-configs', { method: 'GET', params });
+}
+
+export async function createEdgeConfig(data: Partial<EdgeConfig>) {
+  return apiRequest<EdgeConfig>('/apps/kuaiiot/edge-configs', { method: 'POST', data });
+}
+
+export async function updateEdgeConfig(uuid: string, data: Partial<EdgeConfig>) {
+  return apiRequest<EdgeConfig>(`/apps/kuaiiot/edge-configs/${uuid}`, { method: 'PUT', data });
+}
+
+export async function deleteEdgeConfig(uuid: string) {
+  return apiRequest<void>(`/apps/kuaiiot/edge-configs/${uuid}`, { method: 'DELETE' });
+}
+
+export async function exportEdgeAgentSpec(uuid: string) {
+  return apiRequest<{ version: number; protocol: string; device_token: string; config: Record<string, unknown> }>(
+    `/apps/kuaiiot/edge-configs/${uuid}/agent-spec`,
+    { method: 'GET' },
+  );
+}
+
+
+export type Product = {
+  uuid: string;
+  id: number;
   code: string;
   name: string;
   description?: string;
-  tags: ProductTag[];
-}): Promise<ProductOut> {
-  return apiRequest<ProductOut>('/apps/kuaiiot/products', { method: 'POST', data: payload });
-}
+  tags: Array<Record<string, unknown>>;
+  remark?: string;
+};
 
-export function listProducts(): Promise<ProductOut[]> {
-  return apiRequest<ProductOut[]>('/apps/kuaiiot/products');
-}
+export type DeviceBatchItem = {
+  uuid: string;
+  code: string;
+  name: string;
+  device_token: string;
+};
 
-export function getProduct(productId: number): Promise<ProductOut> {
-  return apiRequest<ProductOut>(`/apps/kuaiiot/products/${productId}`);
-}
+export type IngestResponse = {
+  accepted: number;
+  mes_updated?: boolean;
+};
 
-export function updateProduct(
-  productId: number,
-  payload: {
-    events?: ProductEvent[];
-    functions?: ProductFunction[];
-    name?: string;
-    description?: string;
-    tags?: ProductTag[];
-    remark?: string;
-  },
-): Promise<ProductOut> {
-  return apiRequest<ProductOut>(`/apps/kuaiiot/products/${productId}`, { method: 'PUT', data: payload });
-}
-
-export function deleteProduct(productId: number): Promise<void> {
-  return apiRequest<void>(`/apps/kuaiiot/products/${productId}`, { method: 'DELETE' });
-}
+export type TagTemplate = {
+  code: string;
+  name: string;
+  description?: string;
+  tag_count: number;
+};
 
 export type DeviceGroup = {
-  id: number;
   uuid: string;
-  code: string;
-  name: string;
-  parent_id?: number | null;
-  sort_order: number;
-  remark?: string | null;
-};
-
-export function listDeviceGroups(): Promise<DeviceGroup[]> {
-  return apiRequest<DeviceGroup[]>('/apps/kuaiiot/device-groups');
-}
-
-export function createDeviceGroup(payload: {
-  code: string;
-  name: string;
+  id: number;
   parent_id?: number;
-  sort_order?: number;
-}): Promise<DeviceGroup> {
-  return apiRequest<DeviceGroup>('/apps/kuaiiot/device-groups', { method: 'POST', data: payload });
-}
-
-export function assignDeviceGroup(deviceId: number, groupId: number | null): Promise<{ device_id: number; group_id: number | null }> {
-  return apiRequest(`/apps/kuaiiot/devices/${deviceId}/group`, { method: 'PUT', data: { group_id: groupId } });
-}
+  code: string;
+  name: string;
+  sort_order: number;
+  children?: DeviceGroup[];
+};
 
 export type DeviceCommand = {
-  id: number;
   uuid: string;
-  device_id: number;
+  id: number;
   function_key: string;
-  params: Record<string, unknown>;
-  dispatch_channel: string;
   status: string;
-  result?: Record<string, unknown> | null;
-  error_message?: string | null;
-  sent_at?: string | null;
-  completed_at?: string | null;
-  expires_at?: string | null;
-};
-
-export function listDeviceCommands(deviceId: number): Promise<DeviceCommand[]> {
-  return apiRequest<DeviceCommand[]>(`/apps/kuaiiot/devices/${deviceId}/commands`);
-}
-
-export function createDeviceCommand(
-  deviceId: number,
-  payload: { function_key: string; params?: Record<string, unknown> },
-): Promise<DeviceCommand> {
-  return apiRequest<DeviceCommand>(`/apps/kuaiiot/devices/${deviceId}/commands`, { method: 'POST', data: payload });
-}
-
-export type MessageLog = {
-  id: number;
-  uuid: string;
-  device_id: number;
-  direction: string;
-  msg_type: string;
-  payload?: Record<string, unknown> | null;
-  result: string;
-  error_message?: string | null;
+  dispatch_channel?: string;
   created_at: string;
 };
 
-export function listMessageLogs(deviceId?: number): Promise<MessageLog[]> {
-  return apiRequest<MessageLog[]>('/apps/kuaiiot/message-logs', {
-    params: deviceId ? { device_id: deviceId } : undefined,
-  });
-}
-
-export function batchCreateDevices(payload: {
-  product_id: number;
-  name_prefix: string;
-  code_prefix: string;
-  count: number;
-}): Promise<BatchDeviceOut[]> {
-  return apiRequest<BatchDeviceOut[]>('/apps/kuaiiot/device-batches', { method: 'POST', data: payload });
-}
-
-export function queryTrend(params: {
-  device_id: number;
-  tag_key: string;
-  start: string;
-  stop: string;
-}): Promise<TrendPoint[]> {
-  return apiRequest<TrendPoint[]>('/apps/kuaiiot/trends', { params });
-}
-
-export type EdgeConfigOut = {
+export type MessageLog = {
+  uuid: string;
   id: number;
-  code: string;
-  name: string;
-  device_id: number;
-  protocol: string;
-  config: Record<string, unknown>;
-  is_enabled: boolean;
-  config_version: number;
-  agent_status: string;
-  agent_config_version?: number | null;
-  agent_version?: string | null;
-  buffer_pending_count: number;
-  last_agent_heartbeat_at?: string | null;
-  trial_request_uuid?: string | null;
-  trial_result?: {
-    request_uuid: string;
-    tags: Record<string, unknown>;
-    raw_values?: Record<string, unknown>;
-    qualities?: Record<string, string>;
-    config_version: number;
-    received_at: string;
-  } | null;
+  direction: string;
+  msg_type: string;
+  payload?: Record<string, unknown>;
+  created_at: string;
 };
 
-export type EdgeConfigWrite = {
-  code: string;
-  name: string;
-  device_id: number;
-  protocol: string;
-  config: Record<string, unknown>;
-  is_enabled: boolean;
-};
-
-export function listEdgeConfigs(): Promise<EdgeConfigOut[]> {
-  return apiRequest<EdgeConfigOut[]>('/apps/kuaiiot/edge-configs');
-}
-
-export function getEdgeConfig(configId: number): Promise<EdgeConfigOut> {
-  return apiRequest<EdgeConfigOut>(`/apps/kuaiiot/edge-configs/${configId}`);
-}
-
-export function saveEdgeConfig(payload: EdgeConfigWrite): Promise<EdgeConfigOut> {
-  return apiRequest<EdgeConfigOut>('/apps/kuaiiot/edge-configs', { method: 'POST', data: payload });
-}
-
-export function updateEdgeConfig(configId: number, payload: EdgeConfigWrite): Promise<EdgeConfigOut> {
-  return apiRequest<EdgeConfigOut>(`/apps/kuaiiot/edge-configs/${configId}`, {
-    method: 'PUT',
-    data: payload,
-  });
-}
-
-export function deleteEdgeConfig(configId: number): Promise<void> {
-  return apiRequest<void>(`/apps/kuaiiot/edge-configs/${configId}`, { method: 'DELETE' });
-}
-
-export function requestTrial(configId: number): Promise<EdgeConfigOut> {
-  return apiRequest<EdgeConfigOut>(`/apps/kuaiiot/edge-configs/${configId}/trial`, { method: 'POST' });
-}
-
-export type DiagnosticsOut = {
-  connections: Array<{
-    id: number;
-    name: string;
-    type: string;
-    health_status: string;
-    last_health_at?: string | null;
-  }>;
-  devices: Array<{
-    id: number;
-    name: string;
-    is_online: boolean;
-    last_seen_at?: string | null;
-  }>;
-  agents: Array<Omit<EdgeConfigOut, 'config'>>;
-  deliveries: Array<{
-    id: number;
-    kind: string;
-    status: string;
-    attempts: number;
-    last_error?: string | null;
-  }>;
-};
-
-export function getDiagnostics(): Promise<DiagnosticsOut> {
-  return apiRequest<DiagnosticsOut>('/apps/kuaiiot/diagnostics');
-}
-
-export type OpsFeedEquipment = {
-  equipment_uuid: string;
-  equipment_id: number;
-  code: string;
-  name: string;
-  workshop_id?: number | null;
-  workshop_name?: string | null;
-  status?: string | null;
-  is_online?: boolean | null;
-};
-
-export type OpsMetric = {
-  equipment_uuid: string;
-  equipment_id: number;
-  code: string;
-  name: string;
-  availability_rate: number | null;
-  quality_rate: number | null;
-  performance_rate: number | null;
-  coverage_rate: number | null;
-  unavailable_reasons: string[];
-  oee_live: number | null;
-};
-
-export type OpsFeedSpotCheck = {
+export type OeeLiveItem = {
   equipment_uuid: string;
   equipment_code: string;
   equipment_name: string;
-  document_no: string;
-  check_date?: string | null;
-  status: string;
-  has_abnormality: boolean;
+  sensor: Record<string, number>;
+  mes_quality_rate?: number;
+  oee_live?: number;
+  oee_note: string;
+  latest_status?: string;
+  is_online: boolean;
+  monitor_points: number;
 };
 
-export type EquipmentOpsFeed = {
-  equipment_list: OpsFeedEquipment[];
-  ops_metrics: OpsMetric[];
-  status_dist: Array<{ status: string; count: number }>;
-  workshop_stats: Array<{
-    workshop_id: number | null;
-    workshop_name: string | null;
-    equipment_count: number;
-  }>;
-  spot_check_recent: OpsFeedSpotCheck[];
+export type PipelineGraph = {
+  nodes: Array<{ id: string; node_type: string; label: string; status: string; meta?: Record<string, unknown> }>;
+  edges: Array<{ source: string; target: string; edge_type: string }>;
+  summary: Record<string, number>;
 };
 
-export function getEquipmentOpsFeed(hours?: number): Promise<EquipmentOpsFeed> {
-  return apiRequest<EquipmentOpsFeed>('/apps/kuaiiot/analytics/equipment-ops-feed', {
-    params: hours ? { hours } : undefined,
+export async function listOeeLive(params?: { hours?: number; limit?: number }) {
+  return apiRequest<{ items: OeeLiveItem[]; total: number }>('/apps/kuaiiot/analytics/oee-live', {
+    method: 'GET',
+    params,
+  });
+}
+
+export async function getPipelineGraph() {
+  return apiRequest<PipelineGraph>('/apps/kuaiiot/analytics/pipeline', { method: 'GET' });
+}
+
+export async function getEquipmentOpsFeed(params?: { hours?: number }) {
+  return apiRequest<Record<string, unknown>>('/apps/kuaiiot/analytics/equipment-ops-feed', {
+    method: 'GET',
+    params,
+  });
+}
+
+export async function listProducts(params?: { page?: number; page_size?: number; q?: string }) {
+  return apiRequest<{ items: Product[]; total: number }>('/apps/kuaiiot/products', { method: 'GET', params });
+}
+
+export async function createProduct(data: Partial<Product>) {
+  return apiRequest<Product>('/apps/kuaiiot/products', { method: 'POST', data });
+}
+
+export async function updateProduct(uuid: string, data: Partial<Product>) {
+  return apiRequest<Product>(`/apps/kuaiiot/products/${uuid}`, { method: 'PUT', data });
+}
+
+export async function deleteProduct(uuid: string) {
+  return apiRequest<void>(`/apps/kuaiiot/products/${uuid}`, { method: 'DELETE' });
+}
+
+export async function loadBuiltinProductPresets() {
+  return apiRequest<{ created: number; skipped: number; total: number }>('/apps/kuaiiot/products/load-builtin-presets', {
+    method: 'POST',
+  });
+}
+
+export async function listDeviceGroupsTree() {
+  return apiRequest<{ items: DeviceGroup[] }>('/apps/kuaiiot/device-groups/tree', { method: 'GET' });
+}
+
+export async function createDeviceGroup(data: Partial<DeviceGroup>) {
+  return apiRequest<DeviceGroup>('/apps/kuaiiot/device-groups', { method: 'POST', data });
+}
+
+export async function updateDeviceGroup(uuid: string, data: Partial<DeviceGroup>) {
+  return apiRequest<DeviceGroup>(`/apps/kuaiiot/device-groups/${uuid}`, { method: 'PUT', data });
+}
+
+export async function deleteDeviceGroup(uuid: string) {
+  return apiRequest<void>(`/apps/kuaiiot/device-groups/${uuid}`, { method: 'DELETE' });
+}
+
+export async function listDeviceCommands(deviceUuid: string, params?: { page?: number; page_size?: number }) {
+  return apiRequest<{ items: DeviceCommand[]; total: number }>(`/apps/kuaiiot/devices/${deviceUuid}/commands`, {
+    method: 'GET',
+    params,
+  });
+}
+
+export async function createDeviceCommand(
+  deviceUuid: string,
+  data: { function_key: string; params?: Record<string, unknown>; dispatch_channel?: string },
+) {
+  return apiRequest<DeviceCommand>(`/apps/kuaiiot/devices/${deviceUuid}/commands`, { method: 'POST', data });
+}
+
+export async function listDeviceMessageLogs(
+  deviceUuid: string,
+  params?: { page?: number; page_size?: number; direction?: string; msg_type?: string },
+) {
+  return apiRequest<{ items: MessageLog[]; total: number }>(`/apps/kuaiiot/devices/${deviceUuid}/message-logs`, {
+    method: 'GET',
+    params,
   });
 }

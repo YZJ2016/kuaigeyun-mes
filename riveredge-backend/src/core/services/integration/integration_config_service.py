@@ -400,7 +400,8 @@ class IntegrationConfigService:
             if integration is None:
                 raise NotFoundError("集成配置不存在")
             # 专业应用未安装时不引入其模型；已加载时检查所有未删除引用（含停用）。
-            connection_model = Tortoise.apps.get("models", {}).get("KuaiiotConnection")
+            models_registry = Tortoise.apps.get("models", {})
+            connection_model = models_registry.get("KuaiiotConnection") or models_registry.get("IotConnection")
             if connection_model is not None and await connection_model.filter(
                 integration_id=integration.id, tenant_id=tenant_id, deleted_at__isnull=True,
             ).exists():
