@@ -2789,30 +2789,32 @@ uv_sync_backend_with_fallback() {
     local extras_args="$1"
     local url synced=0
     local -a urls=()
+    local _old_pwd="$PWD"
     mapfile -t urls < <(backend_uv_index_urls)
     # 未开国内镜像时只走官方，避免海外机绕阿里云
     if [ "${USE_MIRROR}" = "0" ]; then
         urls=("https://pypi.org/simple/")
         [ -n "${UV_INDEX_URL:-}" ] && urls=("${UV_INDEX_URL}")
     fi
-    (
-        cd "$BACKEND_DIR"
-        export SETUPTOOLS_EGG_INFO_DIR="$LOGS_DIR"
-        export UV_LINK_MODE="${UV_LINK_MODE:-copy}"
-        export UV_HTTP_TIMEOUT="${UV_HTTP_TIMEOUT:-600}"
-        for url in "${urls[@]}"; do
-            [ -n "$url" ] || continue
-            log_info "uv sync index: $url"
-            export UV_INDEX_URL="$url"
-            # shellcheck disable=SC2086
-            if "$(resolve_uv)" sync --no-install-project ${extras_args}; then
-                synced=1
-                break
-            fi
-            log_warn "uv sync 失败，尝试下一镜像: $url"
-        done
-        [ "$synced" = "1" ]
-    )
+    # 勿用子 shell：成功源必须写回父进程 UV_INDEX_URL，否则后续 uv run 仍打阿里云 404
+    cd "$BACKEND_DIR" || return 1
+    export SETUPTOOLS_EGG_INFO_DIR="$LOGS_DIR"
+    export UV_LINK_MODE="${UV_LINK_MODE:-copy}"
+    export UV_HTTP_TIMEOUT="${UV_HTTP_TIMEOUT:-600}"
+    for url in "${urls[@]}"; do
+        [ -n "$url" ] || continue
+        log_info "uv sync index: $url"
+        export UV_INDEX_URL="$url"
+        # shellcheck disable=SC2086
+        if "$(resolve_uv)" sync --no-install-project ${extras_args}; then
+            synced=1
+            log_info "uv sync 采用镜像: $url"
+            break
+        fi
+        log_warn "uv sync 失败，尝试下一镜像: $url"
+    done
+    cd "$_old_pwd" || true
+    [ "$synced" = "1" ]
 }
 
 sync_backend_deps() {
@@ -3879,7 +3881,8 @@ cmd_migrate() {
         if [ "${DEPLOY_MIGRATE_VERBOSE:-0}" != "1" ]; then
             export LOG_LEVEL=INFO
         fi
-        PYTHONUNBUFFERED=1 AERICH_MIGRATE=1 "$(resolve_uv)" run aerich upgrade
+        # --no-sync：deps 已由 sync_backend_deps 落好；禁止 uv run 再按旧 UV_INDEX_URL 拉包踩阿里云 404
+        PYTHONUNBUFFERED=1 AERICH_MIGRATE=1 "$(resolve_uv)" run --no-sync aerich upgrade
     ) || { log_error "数据库迁移失败"; DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"; exit 1; }
     if deploy_opt_kuaiai_vector_enabled; then
         ensure_kuaiai_vector_schema || { DEPLOY_SPECIAL_DEPS_QUIET="${_prev_quiet}"; exit 1; }

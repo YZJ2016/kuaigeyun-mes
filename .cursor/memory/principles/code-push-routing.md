@@ -37,7 +37,8 @@ standard: 按改动路径选最小推送集；产物构建与源码 push 分离�
 |------------|------|-----------|----------|
 | 后端 API / 服务 / 迁移 | 要（托管对象） | `git push` | 不要 |
 | `fast-deploy/` 部署脚本 | 要 | `git push`；生产 `deploy.sh update` | 不要 |
-| `.cursor/memory` / rules / 说明文档 | 通常可跳过 maintain | `git push` | 不要 |
+| `.cursor/memory/**` 记忆库 | **跳过** maintain（scope 已 exclude，不建 Entry） | `git push` | 不要 |
+| `.cursor/rules` / 说明文档 | 改了 rules 则 maintain；纯说明可跳过 | `git push` | 不要 |
 | `riveredge-frontend/src` 等 PC 前端 | 要 | 先源码 commit | **要**：`BUILD_WEB_SKIP_HISTORY_REWRITE=1 ./fast-deploy/build.web.sh` |
 | 移动端 UI（client） | `aoci-client` | client commit | **要** H5：`build.mobile.web.sh` → 交 `web-dist` |
 | 工位需发安装包（client） | `aoci-client` | client commit | **要**：`npm run pack`（`release/` 不入库） |
@@ -54,9 +55,10 @@ standard: 按改动路径选最小推送集；产物构建与源码 push 分离�
 
 ## 与 AOCI 的衔接
 
-- 改托管对象：稳定后一次 maintain →（候选）update_entry → 再 commit  
-- 纯说明：可跳过  
-- 跑产物构建前：当前 tip 索引不得落后于即将推送的源码  
+- **要索引**：改了业务/部署等 AOCI 托管（index）对象 → 稳定后一次 maintain →（候选）update_entry → 再 commit  
+- **不要索引**：只改 `.cursor/memory/**`（已 exclude）或纯说明 → 直接 commit/push  
+- **git 入库记忆库**是为了 Agent 能读，**不是**为了每篇笔记进 `aoci.code.txt`  
+- 跑产物构建前：当前 tip 上**业务相关** missing/stale 须清零（skipped / exclude 除外）  
 
 细节见 `principles/aoci-git-commit.md`。
 

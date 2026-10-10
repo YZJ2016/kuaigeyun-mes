@@ -148,6 +148,17 @@
         "created_by": "cfdd100",
         "order": 201,
         "enabled": true
+      },
+      {
+        "rule_id": "project-exclude-cursor-memory",
+        "action": "exclude",
+        "pattern": ".cursor/memory/**",
+        "pattern_kind": "glob",
+        "reason": "永久记忆库随 git 供 Agent 检索阅读；不做 AOCI Code Entry，避免推送时为每篇笔记批量索引",
+        "source": "user",
+        "created_by": "cursor-agent",
+        "order": 210,
+        "enabled": true
       }
     ]
   },

@@ -17,7 +17,8 @@ alwaysApply: true
 | 改动落在… | 推送动作 | 要不要产物构建 |
 |-----------|----------|----------------|
 | 仅 `riveredge-backend/`、`fast-deploy/`、迁移、后端测试 | AOCI（若改托管对象）→ commit → `git push` | **否**（不跑 `build.web.sh`） |
-| 仅 `.cursor/memory/`、`.cursor/rules/`、文档 | 一般可跳过 maintain → commit → push | **否** |
+| 仅 `.cursor/memory/**`（记忆库，AOCI exclude） | **跳过** maintain → commit → push | **否** |
+| 仅 `.cursor/rules/`、说明文档 | 改了 rules 则 maintain；否则可跳过 → push | **否** |
 | `riveredge-frontend/src`（或影响 PC 前端产物的配置） | AOCI → 源码 commit → **`BUILD_WEB_SKIP_HISTORY_REWRITE=1 ./fast-deploy/build.web.sh`** | **是（Web dist）** |
 | client：`riveredge-app-mobile/` 等影响 H5 | `aoci-client` → commit → `build.mobile.web.sh` → 交 `web-dist` → push | **是（H5）** |
 | client：工位源码/需发安装包 | `aoci-client` → commit → `npm run pack` → 版本 bump commit → push（`release/` 不入库） | **是（工位包）** |

@@ -2,7 +2,7 @@
 
 ===D:/kuaigeyun-pro/kuaigeyun/===
 .gitattributes[XV1T]: F:git LF lock | R:- | A:eol=lf | S:no autocrlf; bytes-stable; 5L
-.gitignore[XV3S]: F:repo ignore rules | R:- | A:py+node+env+build | S:dist/ committed; cad-workers excluded; 169L
+.gitignore[XV3S]: F:repo ignore与Cursor/AOCI正式资产白名单 | R:- | A:py+node+env+build | S:.cursor放行memory/**与rules/**;勿整夹忽略.aoci/
 AGENTS.md[SV2S]: F:agent+AOCI contract | R:- | A:aoci managed block | S:cognition loop rules; 103L
 LICENSE[SV1S]: F:Apache 2.0 | R:- | A:Apache-2.0 | S:211L
 README.md[SG6M]: F:product overview | R:- | A:MES platform | S:deploy and open-source scope
@@ -61,15 +61,15 @@ launch.dev.sh[OV6L]: F:启停并检查API、Taskiq、Vite及可选Expo Web开发
 
 ===D:/kuaigeyun-pro/kuaigeyun/fast-deploy/config/===
 caddy-extra-proxies.list.example[CC1T]: F:Caddy extra proxy list | R:- | A:site→upstream lines | S:http=no TLS; https=auto; 11L
-deploy.env.example[CC3S]: F:fast-deploy层环境变量模板 | R:code:fast-deploy/lib/common.sh | A:ports+blue-green+opts+UV_INDEX_URL | S:OPT_PDF_PRINT开即补Chromium;镜像404改UV_INDEX_URL
+deploy.env.example[CC3S]: F:fast-deploy层环境变量模板 | R:code:fast-deploy/lib/common.sh | A:ports+blue-green+opts+UV_INDEX_URL | S:成功镜像写回UV_INDEX_URL;迁移用uv run --no-sync
 install-scripts.json[CC1S]: F:OS install commands | R:- | A:6 tools × 5 OS | S:winget/apt/dnf per OS; 76L
 
 ===D:/kuaigeyun-pro/kuaigeyun/fast-deploy/lib/===
 blue_green.ps1[OV4M]: F:PS blue-green deploy | R:- | A:BG state+swap | S:low-spec disables BG; 437L
 blue_green.sh[OV5L]: F:sh blue-green deploy | R:- | A:BG state+swap | S:low-spec disables BG; 608L
 build_web_git.sh[OV3S]: F:dist-only git push | R:- | A:filter-repo+lease | S:assert committed; save/restore remotes; 137L
-common.ps1[OV6L]: F:fast-deploy共享PowerShell库装启迁与依赖同步 | R:code:fast-deploy/lib/common.sh,code:fast-deploy/config/deploy.env.example | A:Sync-BackendDeps,Apply-CN-Mirrors | S:Sync-BackendDeps遇阿里云.whl.metadata404依次回退清华与官方;USE_MIRROR=0只走官方或显式UV_INDEX_URL
-common.sh[OV9L]: F:fast-deploy共享shell库装启迁Caddy蓝绿与uv依赖同步 | R:code:fast-deploy/config/deploy.env.example,code:fast-deploy/lib/wizard.sh,code:fast-deploy/lib/common.ps1 | A:uv_sync_backend_with_fallback,sync_backend_deps,playwright_postinstall_enabled,ensure_playwright_chromium_postinstall | S:Chromium补装只看OPT_PDF_PRINT;uv sync经uv_sync_backend_with_fallback在阿里云.whl.metadata404时回退清华与官方;USE_MIRROR=0不绕国内源
+common.ps1[OV6L]: F:fast-deploy共享PowerShell库装启迁与依赖同步 | R:code:fast-deploy/lib/common.sh,code:fast-deploy/config/deploy.env.example | A:Sync-BackendDeps,Invoke-Migrate,Apply-CN-Mirrors | S:Sync-BackendDeps镜像失败回退清华/官方且成功源留在UV_INDEX_URL;Invoke-Migrate用uv run --no-sync避二次拉包
+common.sh[OV9L]: F:fast-deploy共享shell库装启迁Caddy蓝绿与uv依赖同步 | R:code:fast-deploy/config/deploy.env.example,code:fast-deploy/lib/wizard.sh,code:fast-deploy/lib/common.ps1 | A:uv_sync_backend_with_fallback,sync_backend_deps,cmd_migrate,playwright_postinstall_enabled | S:uv_sync勿用子shell以便成功UV_INDEX_URL写回父进程;cmd_migrate用--no-sync;USE_MIRROR=0不绕国内源;Chromium补装只看OPT_PDF_PRINT
 low_spec_mode.sh[OV4M]: F:低配模式内存调优与快照恢复 | R:code:fast-deploy/lib/common.sh | A:low_spec_apply_profile,low_spec_apply_normal_profile | S:开启低配写PLAYWRIGHT_POSTINSTALL_ENABLE=1不关闭Chromium补装; 恢复一般模式不改该开关; 缩池关蓝绿
 wizard.sh[OV8L]: F:交互部署向导与选装面板 | R:code:fast-deploy/lib/common.sh | A:wizard_ask_optional_deps_choice,cmd_install_optional_deps | S:PDF的Chromium由[I]后台补装;进度见playwright-install.log;真彩色CJK对齐
 
@@ -8167,8 +8167,13 @@ qwei.svg[DU5T]: F:<?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//
 wechat.svg[DU5T]: F:<?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.... | R:- | A:- | S:1L
 
 ===D:/kuaigeyun-pro/kuaigeyun/.cursor/rules/===
-aoci-git-commit.mdc[XV5T]: F:约定提交须含正式AOCI资产且先maintain | R:code:.cursor/rules/build-push-aoci.mdc | A:- | S:勿gitignore整夹.aoci/以免白名单失效; 禁提lock/ledger/drafts
-build-push-aoci.mdc[XV5T]: F:构建推送前强制AOCI对齐再commit | R:code:.cursor/rules/aoci-git-commit.mdc | A:- | S:序=源码稳→maintain/update→commit→build.web/H5/pack; 业务missing/stale须0
+aoci-git-commit.mdc[XV5T]: F:约定提交须含正式AOCI且改托管对象先maintain | R:code:.cursor/rules/build-push-aoci.mdc | A:- | S:勿gitignore整夹.aoci/;memory进git但scope exclude勿为笔记写Entry;推送≠build.web
+build-push-aoci.mdc[XV6S]: F:按改动类型分流推送并仅产物相关变更才构建 | R:code:.cursor/rules/aoci-git-commit.mdc | A:- | S:仅backend/fast-deploy/memory则push不跑build.web;改托管对象序=maintain→commit→再构建;用户说构建推送先看diff分流
+ai-memory.mdc[XC5S]: F:约定Agent开任务先读Vault与本仓memory路由 | R:code:.cursor/rules/dev-memory-library.mdc | A:- | S:MES必读architecture-map+ai-change-protocol;禁扫全Vault;秘密不入库
+api-write-protection.mdc[XS6S]: F:固化/api写防护渠道限流幂等与开放账套约定 | R:code:riveredge-backend/docs/api-write-protection-ops.md | A:- | S:新公开写接口须进interactive_client_guard豁免;关键路径须匹配_CRITICAL_PATH_RE;integration写须open Token
+dev-memory-library.mdc[XC5S]: F:约定.cursor/memory开发前检索与交付后写笔记 | R:code:.cursor/rules/ai-memory.mdc | A:- | S:先读README关键词路由再开1-3篇;交付须features笔记并更新README索引;与rules行为分工不重复
+feature-delivery-checklist.mdc[XC6M]: F:强制新功能交付完成迁移菜单同步与更新日志 | R:code:.cursor/rules/dev-memory-library.mdc | A:- | S:前后端manifest同改并当场sync;Windows aerich须UTF-8;用户可见改动写platformUpdateLog;勿留给用户点同步
+reuse-existing-patterns.mdc[XC5S]: F:禁止同类功能平行第二套实现须复用标准入口 | R:code:.cursor/rules/dev-memory-library.mdc | A:- | S:先搜memory与代码定唯一标准;只挂既有扩展点;标准有缺口先修标准再复用
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaioa/utils/===
 form_request_confirmation.py[KB3T]: F:确认单kind/附件/销售回复校验 | R:- | A:confirmation_kind_from_form_data | S:kind=complete_machine|material; 查附件字段
