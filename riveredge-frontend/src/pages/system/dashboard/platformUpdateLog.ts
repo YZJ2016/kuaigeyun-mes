@@ -135,6 +135,13 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
     titleKey: 'pages.dashboard.updateLog.entries.customer-follow-up-create-data-scope-r02.title',
     descriptionKey:
       'pages.dashboard.updateLog.entries.customer-follow-up-create-data-scope-r02.description',
+    id: 'reporting-block-revoke-after-sales-outbound-r01',
+    date: '2026-10-10',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.reporting-block-revoke-after-sales-outbound-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.reporting-block-revoke-after-sales-outbound-r01.description',
   },
   {
     id: 'pc-audit-unreview-empty-pending-r01',
