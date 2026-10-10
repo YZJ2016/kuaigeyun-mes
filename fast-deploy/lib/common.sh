@@ -2767,6 +2767,54 @@ backend_dev_server_entry() {
     printf '%s' "python scripts/run_dev_server.py"
 }
 
+# uv sync 用的 PyPI 源列表：显式 UV_INDEX_URL 优先，再国内镜像，最后官方。
+# 阿里云偶发对 lock 里 hash 路径的 .whl.metadata 返回 404，需回退。
+backend_uv_index_urls() {
+    local primary="${UV_INDEX_URL:-}"
+    local url
+    if [ -n "$primary" ]; then
+        printf '%s\n' "$primary"
+    fi
+    for url in \
+        "https://mirrors.aliyun.com/pypi/simple/" \
+        "https://pypi.tuna.tsinghua.edu.cn/simple/" \
+        "https://pypi.org/simple/"; do
+        if [ -z "$primary" ] || [ "$url" != "$primary" ]; then
+            printf '%s\n' "$url"
+        fi
+    done
+}
+
+uv_sync_backend_with_fallback() {
+    local extras_args="$1"
+    local url synced=0
+    local -a urls=()
+    mapfile -t urls < <(backend_uv_index_urls)
+    # 未开国内镜像时只走官方，避免海外机绕阿里云
+    if [ "${USE_MIRROR}" = "0" ]; then
+        urls=("https://pypi.org/simple/")
+        [ -n "${UV_INDEX_URL:-}" ] && urls=("${UV_INDEX_URL}")
+    fi
+    (
+        cd "$BACKEND_DIR"
+        export SETUPTOOLS_EGG_INFO_DIR="$LOGS_DIR"
+        export UV_LINK_MODE="${UV_LINK_MODE:-copy}"
+        export UV_HTTP_TIMEOUT="${UV_HTTP_TIMEOUT:-600}"
+        for url in "${urls[@]}"; do
+            [ -n "$url" ] || continue
+            log_info "uv sync index: $url"
+            export UV_INDEX_URL="$url"
+            # shellcheck disable=SC2086
+            if "$(resolve_uv)" sync --no-install-project ${extras_args}; then
+                synced=1
+                break
+            fi
+            log_warn "uv sync 失败，尝试下一镜像: $url"
+        done
+        [ "$synced" = "1" ]
+    )
+}
+
 sync_backend_deps() {
     if [ "${_BACKEND_DEPS_SYNCED:-0}" = "1" ]; then
         return 0
@@ -2775,14 +2823,8 @@ sync_backend_deps() {
     ensure_uv || { log_error "Python 依赖同步失败"; exit 1; }
     log_info "同步 Python 依赖..."
     log_special "uv sync extras:$(backend_uv_extra_args)（选装见 OPT_INVOICE_OCR / OPT_PDF_PRINT；Chromium 见 PLAYWRIGHT_POSTINSTALL_ENABLE）"
-    (
-        cd "$BACKEND_DIR"
-        export SETUPTOOLS_EGG_INFO_DIR="$LOGS_DIR"
-        export UV_LINK_MODE="${UV_LINK_MODE:-copy}"
-        export UV_HTTP_TIMEOUT="${UV_HTTP_TIMEOUT:-600}"
-        # shellcheck disable=SC2046
-        "$(resolve_uv)" sync --no-install-project $(backend_uv_extra_args)
-    ) || { log_error "Python 依赖同步失败"; exit 1; }
+    uv_sync_backend_with_fallback "$(backend_uv_extra_args)" \
+        || { log_error "Python 依赖同步失败"; exit 1; }
     if is_windows_gitbash; then
         ensure_pyzbar_windows_native
     elif [ "$(uname -s)" = "Linux" ] && deploy_opt_invoice_ocr_enabled; then
