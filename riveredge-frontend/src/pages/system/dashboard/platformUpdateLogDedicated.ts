@@ -9,6 +9,17 @@ import type { PlatformUpdateLogEntry } from './platformUpdateLog';
 
 export const PLATFORM_UPDATE_LOG_DEDICATED: PlatformUpdateLogEntry[] = [
   {
+    id: 'funide-oa-l06-rework-direct-create-r02',
+    date: '2026-10-10',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey:
+      'pages.dashboard.updateLog.entries.funide-oa-l06-rework-direct-create-r02.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-l06-rework-direct-create-r02.description',
+  },
+  {
     id: 'funide-oa-sample-process-menu-release-date-r01',
     date: '2026-10-10',
     type: 'fix',
