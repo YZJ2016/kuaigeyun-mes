@@ -487,6 +487,15 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
       'pages.dashboard.updateLog.entries.material-sync-ferpclsid-source-type-r01.description',
   },
   {
+    id: 'reporting-block-revoke-after-sales-outbound-r01',
+    date: '2026-10-10',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.reporting-block-revoke-after-sales-outbound-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.reporting-block-revoke-after-sales-outbound-r01.description',
+  },
+  {
     id: 'pc-audit-unreview-empty-pending-r01',
     date: '2026-10-09',
     type: 'fix',

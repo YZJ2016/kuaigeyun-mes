@@ -87,4 +87,4 @@ def test_format_downstream_labels():
             {"document_type": "shipment_notice", "document_code": "SN-2"},
         ]
     )
-    assert labels == "工单WO-1、发货通知SN-2"
+    assert labels == "生产工单WO-1、发货通知SN-2"

@@ -215,7 +215,8 @@ export const SALES_ORDER_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
   'sales_order.update.not_allowed': '只能更新草稿或待审核的销售订单',
   'sales_order.update.locked': '销售订单已生效或执行中，禁止直接修改，请通过销售变更单变更',
   'sales_order.delete.not_allowed': '只能删除草稿或待审核状态的订单',
-  'sales_order.delete.has_downstream': '该销售订单已有下游单据，不能删除',
+  'sales_order.delete.has_downstream':
+    '该销售订单已有下游单据，请先反审核并删除下游后再删除',
   'sales_order.submit.not_draft': '只能提交草稿状态的订单',
   'sales_order.approve.not_pending': '只有待审核状态的订单可审核',
   'sales_order.print.requires_audit': '已开启「打印须审核」，未审核通过的销售订单不可打印',
@@ -232,7 +233,8 @@ export const SALES_ORDER_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
   'sales_order.withdraw_submit.not_allowed': '只能撤回已提交且未审核的订单（待审核或已生效）',
   'sales_order.withdraw_submit.computation_pushed': '订单已下推需求计算，请先在「下推」菜单中撤回计算后再撤回提交',
   'sales_order.revoke_approval.not_allowed': '只能撤销审核已审核或已驳回的订单',
-  'sales_order.revoke_approval.has_downstream': '该销售订单已有下游单据，不能撤销审核；如需变更请走销售变更单',
+  'sales_order.revoke_approval.has_downstream':
+    '该销售订单已有下游单据，请先反审核并删除下游后再撤销审核',
   'sales_order.push.requires_approved': '只能下推已审核的销售订单',
   'sales_order.push.closed': '订单已关闭，无法继续执行',
   'sales_order.push.cancelled': '订单已取消，无法继续执行',
@@ -812,12 +814,14 @@ export function purchaseInquiryCapabilityReasonMessage(
 export const PURCHASE_ORDER_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
   'purchase_order.update.not_allowed': '只能更新草稿或待审核的采购订单',
   'purchase_order.delete.not_allowed': '只能删除草稿或待审核的采购订单',
-  'purchase_order.delete.has_downstream': '该采购订单已有下游单据或收货记录，不能删除',
+  'purchase_order.delete.has_downstream':
+    '该采购订单已有下游单据或收货记录，请先反审核并删除下游后再删除',
   'purchase_order.submit.not_draft': '只能提交草稿状态的订单',
   'purchase_order.withdraw_submit.not_pending': '只有待审核状态的采购订单可撤回提交',
   'purchase_order.approve.not_pending': '只有待审核状态的采购订单可审核',
   'purchase_order.revoke_approval.not_allowed': '只能撤销审核已确认或已驳回的采购订单',
-  'purchase_order.revoke_approval.has_downstream': '该采购订单已有下游单据或收货记录，不能撤销审核',
+  'purchase_order.revoke_approval.has_downstream':
+    '该采购订单已有下游单据或收货记录，请先反审核并删除下游后再撤销审核',
   'purchase_order.push.no_supplier': '采购订单未指定供应商，无法下推',
   'purchase_order.push_receipt.not_audited': '只有已审核或已确认的采购单才能下推收货/入库',
   'purchase_order.push_receipt.no_items': '采购单没有明细，无法下推收货/入库',
@@ -1093,8 +1097,15 @@ export const BATCHING_ORDER_CAPABILITY_REASON_MESSAGES: Record<string, string> =
 export const REPORTING_RECORD_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
   'reporting_record.update.not_pending': '仅待审核报工记录可编辑',
   'reporting_record.delete.not_pending': '仅待审核报工记录可删除',
+  'reporting_record.delete.has_sales_outbound': '关联销售订单已出库，不能删除报工记录',
+  'reporting_record.delete.has_inbound':
+    '关联生产入库单已审核且未删除，请先反审核并删除入库单后再删除报工',
   'reporting_record.approve.not_pending': '只有待审核状态的报工记录才可以审核',
   'reporting_record.revoke_approval.not_approved': '只有已审核通过的报工记录才可以撤回审核',
+  'reporting_record.revoke_approval.has_sales_outbound':
+    '关联销售订单已出库，不能撤回报工审核',
+  'reporting_record.revoke_approval.has_inbound':
+    '关联生产入库单已审核且未删除，请先反审核并删除入库单后再撤回报工审核',
 };
 
 export const EXCEPTION_PROCESS_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
@@ -1208,6 +1219,9 @@ export const OUTBOUND_HUB_CAPABILITY_REASON_MESSAGES: Record<string, string> = {
   'outbound_hub.confirm.outsource_issue': '委外发料不支持在此确认',
   'outbound_hub.withdraw.not_posted': '当前状态不可撤回出库',
   'outbound_hub.withdraw.outsource_issue': '委外发料不支持撤回',
+  'outbound_hub.withdraw.has_delivery_notice':
+    '存在非待发送状态的送货单，请先原路处理后再撤回出库',
+  'outbound_hub.withdraw.has_sales_return': '存在已确认的销售退货单，无法撤回出库',
   'outbound_hub.delete.not_allowed': '当前状态不可删除出库单',
   'outbound_hub.delete.audited': '已审核通过，请先撤销审核后再删除',
   'outbound_hub.delete.posted': '已出库单据不可删除，请先撤回出库',

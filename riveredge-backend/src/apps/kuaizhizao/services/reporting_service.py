@@ -748,6 +748,177 @@ class ReportingService(AppBaseService[ReportingRecord]):
 
         return None, None
 
+    async def batch_work_orders_have_posted_sales_outbound(
+        self,
+        tenant_id: int,
+        work_order_ids: list[int],
+    ) -> Dict[int, bool]:
+        """工单关联销售订单是否已有「已出库」销售出库（按工单产品匹配明细）。
+
+        用于报工反审核/删除门禁：货物已发不能再冲销报工痕迹。
+        """
+        ids = sorted({int(i) for i in work_order_ids if i})
+        result: Dict[int, bool] = {i: False for i in ids}
+        if not ids:
+            return result
+
+        work_orders = await WorkOrder.filter(
+            tenant_id=tenant_id,
+            id__in=ids,
+            deleted_at__isnull=True,
+        ).only("id", "sales_order_id", "product_id")
+        so_to_wos: Dict[int, list[tuple[int, Optional[int]]]] = {}
+        for wo in work_orders:
+            so_id = getattr(wo, "sales_order_id", None)
+            if not so_id:
+                continue
+            so_to_wos.setdefault(int(so_id), []).append(
+                (int(wo.id), int(wo.product_id) if wo.product_id else None)
+            )
+        if not so_to_wos:
+            return result
+
+        from apps.kuaizhizao.models.sales_delivery import SalesDelivery
+        from apps.kuaizhizao.models.sales_delivery_item import SalesDeliveryItem
+
+        deliveries = await SalesDelivery.filter(
+            tenant_id=tenant_id,
+            sales_order_id__in=list(so_to_wos.keys()),
+            status="已出库",
+            deleted_at__isnull=True,
+        ).only("id", "sales_order_id")
+        if not deliveries:
+            return result
+
+        delivery_ids = [int(d.id) for d in deliveries]
+        so_by_delivery = {int(d.id): int(d.sales_order_id) for d in deliveries if d.sales_order_id}
+        items = await SalesDeliveryItem.filter(
+            tenant_id=tenant_id,
+            delivery_id__in=delivery_ids,
+            deleted_at__isnull=True,
+        ).only("delivery_id", "material_id")
+
+        # sales_order_id -> set of materials already shipped
+        shipped_materials_by_so: Dict[int, set[int]] = {}
+        so_has_any_shipped: Dict[int, bool] = {}
+        for item in items:
+            so_id = so_by_delivery.get(int(item.delivery_id))
+            if not so_id:
+                continue
+            so_has_any_shipped[so_id] = True
+            mid = getattr(item, "material_id", None)
+            if mid:
+                shipped_materials_by_so.setdefault(so_id, set()).add(int(mid))
+
+        for so_id, wo_rows in so_to_wos.items():
+            materials = shipped_materials_by_so.get(so_id) or set()
+            any_shipped = so_has_any_shipped.get(so_id, False)
+            for wo_id, product_id in wo_rows:
+                if product_id is not None:
+                    result[wo_id] = product_id in materials
+                else:
+                    # 无产品时保守：订单任一已出库即阻断
+                    result[wo_id] = any_shipped
+        return result
+
+    async def _work_order_has_posted_sales_outbound(
+        self,
+        tenant_id: int,
+        work_order_id: Optional[int],
+    ) -> bool:
+        if not work_order_id:
+            return False
+        m = await self.batch_work_orders_have_posted_sales_outbound(
+            tenant_id, [int(work_order_id)]
+        )
+        return bool(m.get(int(work_order_id), False))
+
+    _INBOUND_APPROVED_REVIEW = frozenset(
+        {"已通过", "审核通过", "approved", "APPROVED", "通过"}
+    )
+    _INBOUND_POSTED_STATUS = frozenset({"已入库"})
+
+    async def batch_reporting_have_approved_inbound_downstream(
+        self,
+        tenant_id: int,
+        reporting_record_ids: list[int],
+    ) -> Dict[int, bool]:
+        """报工关联成品/半成品入库是否已审核或已入库且未删除。
+
+        有则禁止反审/删除报工，须先原路反审并删除入库单。
+        """
+        ids = sorted({int(i) for i in reporting_record_ids if i})
+        result: Dict[int, bool] = {i: False for i in ids}
+        if not ids:
+            return result
+
+        relations = await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            source_type="reporting_record",
+            source_id__in=ids,
+            target_type__in=["finished_goods_receipt", "semi_finished_goods_receipt"],
+        ).all()
+        if not relations:
+            return result
+
+        fg_ids = [
+            int(r.target_id)
+            for r in relations
+            if r.target_type == "finished_goods_receipt"
+        ]
+        semi_ids = [
+            int(r.target_id)
+            for r in relations
+            if r.target_type == "semi_finished_goods_receipt"
+        ]
+
+        from apps.kuaizhizao.models.finished_goods_receipt import FinishedGoodsReceipt
+        from apps.kuaizhizao.models.semi_finished_goods_receipt import (
+            SemiFinishedGoodsReceipt,
+        )
+
+        blocking_fg: set[int] = set()
+        blocking_semi: set[int] = set()
+        if fg_ids:
+            for row in await FinishedGoodsReceipt.filter(
+                tenant_id=tenant_id,
+                id__in=fg_ids,
+                deleted_at__isnull=True,
+            ).only("id", "status", "review_status"):
+                st = str(row.status or "").strip()
+                rv = str(row.review_status or "").strip()
+                if st in self._INBOUND_POSTED_STATUS or rv in self._INBOUND_APPROVED_REVIEW:
+                    blocking_fg.add(int(row.id))
+        if semi_ids:
+            for row in await SemiFinishedGoodsReceipt.filter(
+                tenant_id=tenant_id,
+                id__in=semi_ids,
+                deleted_at__isnull=True,
+            ).only("id", "status", "review_status"):
+                st = str(row.status or "").strip()
+                rv = str(getattr(row, "review_status", None) or "").strip()
+                if st in self._INBOUND_POSTED_STATUS or rv in self._INBOUND_APPROVED_REVIEW:
+                    blocking_semi.add(int(row.id))
+
+        for rel in relations:
+            rid = int(rel.source_id)
+            tid = int(rel.target_id)
+            if rel.target_type == "finished_goods_receipt" and tid in blocking_fg:
+                result[rid] = True
+            elif rel.target_type == "semi_finished_goods_receipt" and tid in blocking_semi:
+                result[rid] = True
+        return result
+
+    async def _reporting_has_approved_inbound_downstream(
+        self,
+        tenant_id: int,
+        reporting_record_id: int,
+    ) -> bool:
+        m = await self.batch_reporting_have_approved_inbound_downstream(
+            tenant_id, [int(reporting_record_id)]
+        )
+        return bool(m.get(int(reporting_record_id), False))
+
     async def _direct_inbound_receipt_exists_for_reporting(
         self,
         tenant_id: int,
@@ -829,9 +1000,10 @@ class ReportingService(AppBaseService[ReportingRecord]):
         reporting_record_id: int,
         revoked_by: int,
     ) -> None:
-        """报工撤回审核时，级联撤回关联成品/半成品入库确认，避免库存双计。
+        """报工撤回审核后的入库收尾（仅未确认入库可跳过）。
 
-        已入库单据撤回失败须向上抛出；未入库（无可冲减库存）可跳过。
+        已审核/已入库的关联入库须在撤回报工前由门禁拦截（原路反审删除入库），
+        本方法不再替用户跳级冲销已入库单据。
         """
         relations = await DocumentRelation.filter(
             tenant_id=tenant_id,
@@ -841,15 +1013,9 @@ class ReportingService(AppBaseService[ReportingRecord]):
         ).all()
         if not relations:
             return
-        from apps.kuaizhizao.services.warehouse_service import FinishedGoodsReceiptService
-        from apps.kuaizhizao.services.semi_finished_goods_receipt_service import (
-            SemiFinishedGoodsReceiptService,
-        )
         from apps.kuaizhizao.models.finished_goods_receipt import FinishedGoodsReceipt
         from apps.kuaizhizao.models.semi_finished_goods_receipt import SemiFinishedGoodsReceipt
 
-        fg_svc = FinishedGoodsReceiptService()
-        semi_svc = SemiFinishedGoodsReceiptService()
         failures: list[str] = []
         for rel in relations:
             try:
@@ -861,7 +1027,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
                     )
                     if not receipt:
                         continue
-                    # 未入库：无库存可冲，跳过
+                    # 未入库：无库存可冲，跳过；已入库须原路先反审删除入库，禁止在此跳级冲销
                     if str(receipt.status or "").strip() != "已入库":
                         logger.info(
                             "报工撤回级联跳过未入库成品单 reporting={} receipt={} status={}",
@@ -870,10 +1036,8 @@ class ReportingService(AppBaseService[ReportingRecord]):
                             receipt.status,
                         )
                         continue
-                    await fg_svc.withdraw_receipt_confirmation(
-                        tenant_id=tenant_id,
-                        receipt_id=int(rel.target_id),
-                        updated_by=revoked_by,
+                    failures.append(
+                        f"finished_goods_receipt:{rel.target_id}:已入库，请先反审核并删除入库单"
                     )
                 elif rel.target_type == "semi_finished_goods_receipt":
                     receipt = await SemiFinishedGoodsReceipt.get_or_none(
@@ -891,15 +1055,8 @@ class ReportingService(AppBaseService[ReportingRecord]):
                             receipt.status,
                         )
                         continue
-                    if not hasattr(semi_svc, "withdraw_receipt_confirmation"):
-                        failures.append(
-                            f"semi_finished_goods_receipt:{rel.target_id}:无撤回方法"
-                        )
-                        continue
-                    await semi_svc.withdraw_receipt_confirmation(
-                        tenant_id=tenant_id,
-                        receipt_id=int(rel.target_id),
-                        updated_by=revoked_by,
+                    failures.append(
+                        f"semi_finished_goods_receipt:{rel.target_id}:已入库，请先反审核并删除入库单"
                     )
             except Exception as exc:
                 logger.error(
@@ -2132,7 +2289,18 @@ class ReportingService(AppBaseService[ReportingRecord]):
         from core.services.approval.audit_record_enricher import enrich_record
 
         enriched = await enrich_record(tenant_id, "reporting_record", resp)
-        return enrich_reporting_record_capabilities_on_response(record, enriched)
+        has_outbound = await self._work_order_has_posted_sales_outbound(
+            tenant_id, getattr(record, "work_order_id", None)
+        )
+        has_inbound = await self._reporting_has_approved_inbound_downstream(
+            tenant_id, int(record.id)
+        )
+        return enrich_reporting_record_capabilities_on_response(
+            record,
+            enriched,
+            has_posted_sales_outbound=has_outbound,
+            has_approved_inbound_downstream=has_inbound,
+        )
 
     async def list_reporting_pull_candidates(
         self,
@@ -2501,7 +2669,19 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 resp.material_spec = product_info.get("material_spec")
             rows.append(resp)
         rows = await enrich_items(tenant_id, "reporting_record", rows)
-        enriched = enrich_reporting_record_list_capabilities(records, rows)
+        outbound_by_wo = await self.batch_work_orders_have_posted_sales_outbound(
+            tenant_id, wo_ids
+        )
+        record_ids = [int(r.id) for r in records if getattr(r, "id", None)]
+        inbound_by_rid = await self.batch_reporting_have_approved_inbound_downstream(
+            tenant_id, record_ids
+        )
+        enriched = enrich_reporting_record_list_capabilities(
+            records,
+            rows,
+            has_posted_sales_outbound_by_wo_id=outbound_by_wo,
+            has_approved_inbound_by_record_id=inbound_by_rid,
+        )
         return {
             "data": [r.model_dump() for r in enriched],
             "total": total,
@@ -2729,7 +2909,18 @@ class ReportingService(AppBaseService[ReportingRecord]):
             if not record:
                 raise NotFoundError(f"报工记录不存在: {record_id}")
 
-            assert_reporting_record_capability(record, "revoke_approval")
+            has_outbound = await self._work_order_has_posted_sales_outbound(
+                tenant_id, getattr(record, "work_order_id", None)
+            )
+            has_inbound = await self._reporting_has_approved_inbound_downstream(
+                tenant_id, int(record.id)
+            )
+            assert_reporting_record_capability(
+                record,
+                "revoke_approval",
+                has_posted_sales_outbound=has_outbound,
+                has_approved_inbound_downstream=has_inbound,
+            )
 
             if record.status != 'approved':
                 raise ValidationError("只有已审核通过的报工记录才可以撤回审核")
@@ -2928,6 +3119,19 @@ class ReportingService(AppBaseService[ReportingRecord]):
 
         if not record:
             raise NotFoundError(f"报工记录不存在: {record_id}")
+
+        has_outbound = await self._work_order_has_posted_sales_outbound(
+            tenant_id, getattr(record, "work_order_id", None)
+        )
+        has_inbound = await self._reporting_has_approved_inbound_downstream(
+            tenant_id, int(record.id)
+        )
+        assert_reporting_record_capability(
+            record,
+            "delete",
+            has_posted_sales_outbound=has_outbound,
+            has_approved_inbound_downstream=has_inbound,
+        )
 
         # 检查是否可以删除
         if record.status == 'approved':
