@@ -116,6 +116,10 @@ class ApprovalInstanceResponse(ApprovalInstanceBase):
     current_node: Optional[str] = Field(None, description="当前节点")
     current_node_label: Optional[str] = Field(None, description="当前节点展示名")
     current_approver_id: Optional[int] = Field(None, description="当前审批人ID")
+    has_my_pending_task: Optional[bool] = Field(
+        None,
+        description="当前登录用户是否对该实例有 pending 审批任务（会签/或签；列表接口填充）",
+    )
     inngest_run_id: Optional[str] = Field(None, description="Inngest 运行ID")
     submitter_id: int = Field(..., description="提交人ID")
     submitter_name: Optional[str] = Field(None, description="提交人姓名")

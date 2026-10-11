@@ -106,7 +106,23 @@ async def list_approval_instances(
         pending_for_user_id=pending_for_user_id,
         keyword=keyword,
     )
-    return [ApprovalInstanceResponse.model_validate(ai) for ai in approval_instances]
+    my_pending_ids: set[int] = set()
+    if approval_instances:
+        from core.models.approval_task import ApprovalTask
+
+        my_pending_ids = set(
+            await ApprovalTask.filter(
+                tenant_id=tenant_id,
+                approver_id=current_user.id,
+                status="pending",
+                approval_instance_id__in=[ai.id for ai in approval_instances],
+            ).values_list("approval_instance_id", flat=True)
+        )
+    out: List[ApprovalInstanceResponse] = []
+    for ai in approval_instances:
+        row = ApprovalInstanceResponse.model_validate(ai)
+        out.append(row.model_copy(update={"has_my_pending_task": ai.id in my_pending_ids}))
+    return out
 
 
 @router.post("/batch-action", response_model=ApprovalInstanceBatchResult)
