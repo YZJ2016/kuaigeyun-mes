@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 340" role="img">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1d39c4"/>
+      <stop offset="0.55" stop-color="#2f54eb"/>
+      <stop offset="1" stop-color="#722ed1"/>
+    </linearGradient>
+    <linearGradient id="spark" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#d6e4ff"/>
+    </linearGradient>
+    <linearGradient id="ring" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#85a5ff"/>
+      <stop offset="1" stop-color="#b37feb"/>
+    </linearGradient>
+  </defs>
+  <rect width="300" height="340" fill="url(#bg)"/>
+  <circle cx="262" cy="30" r="96" fill="#ffffff" opacity="0.06"/>
+  <circle cx="18" cy="318" r="120" fill="#ffffff" opacity="0.06"/>
+  <g opacity="0.35" stroke="#adc6ff" stroke-width="1">
+    <path d="M0 110 H300"/>
+    <path d="M0 220 H300"/>
+  </g>
+  <!-- 中心星徽与轨道 -->
+  <g transform="translate(150 168)">
+    <ellipse rx="112" ry="42" fill="none" stroke="url(#ring)" stroke-width="2.5" opacity="0.7" transform="rotate(-18)"/>
+    <ellipse rx="112" ry="42" fill="none" stroke="url(#ring)" stroke-width="2" opacity="0.35" transform="rotate(24)"/>
+    <circle cx="96" cy="-34" r="6" fill="#ffd666"/>
+    <circle cx="-100" cy="30" r="4" fill="#85a5ff"/>
+    <path d="M0 -64 L11 -16 L60 -16 L20 12 L34 60 L0 30 L-34 60 L-20 12 L-60 -16 L-11 -16 Z" fill="url(#spark)"/>
+    <circle r="10" fill="#fff"/>
+  </g>
+  <g transform="translate(150 286)" text-anchor="middle">
+    <rect x="-56" y="-14" width="112" height="10" rx="5" fill="#f0f5ff" opacity="0.85"/>
+    <rect x="-34" y="4" width="68" height="8" rx="4" fill="#d6e4ff" opacity="0.5"/>
+  </g>
+</svg>

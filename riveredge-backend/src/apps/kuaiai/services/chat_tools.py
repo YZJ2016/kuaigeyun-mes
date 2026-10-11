@@ -47,9 +47,9 @@ _ERR_NO_HIT = "未检索到相关知识"
 _KNOWLEDGE_RESULT_MAX_CHARS = KNOWLEDGE_RESULT_MAX_CHARS
 
 # update_workorder_status 允许的目标状态：draft/released/split 走专门流程
-# （提交/下达/拆分），不开放给 Tool 直改。
+# （提交/下达/拆分），completed 走完工流程，均不开放给 Tool 直改。
 _UPDATEABLE_WORK_ORDER_STATUSES = frozenset(
-    {"in_progress", "paused", "completed", "cancelled"}
+    {"in_progress", "paused", "cancelled"}
 )
 
 # update_workorder_status 迁移白名单（当前态 → 允许目标态）：只放开
@@ -130,6 +130,39 @@ def _display_name(user: Any) -> str:
         or ""
     )
     return str(name).strip() or f"用户{getattr(user, 'id', '')}"
+
+
+async def _work_order_in_scope(
+    ctx: AiRuntimeContext, work_order_id: Any
+) -> bool:
+    """by-ID 行级数据范围复核（spec 181 §84 适配层补齐）。
+
+    对 ``kuaizhizao:work-order`` 资源套 DataScopeService 行级范围
+    （复用 scene_tools 的 ``_scoped_row_ids``/``_SCOPE_WORK_ORDER``）；
+    范围外/非法 id 一律按不存在处理（不泄露存在性），范围解析异常失败关闭。
+    """
+    try:
+        wid = int(work_order_id)
+    except (TypeError, ValueError):
+        return False
+    if wid <= 0:
+        return False
+    try:
+        from apps.kuaiai.services.scene_tools import (
+            _SCOPE_WORK_ORDER,
+            _scoped_row_ids,
+        )
+        from apps.kuaizhizao.models.work_order import WorkOrder
+
+        visible = await _scoped_row_ids(
+            WorkOrder, ctx, _SCOPE_WORK_ORDER, {wid}
+        )
+        return wid in visible
+    except Exception as exc:
+        logger.warning(
+            "AI tool 工单数据范围解析失败 error_type={}", type(exc).__name__
+        )
+        return False
 
 
 def _format_knowledge_hits(hits: List[dict]) -> str:
@@ -221,6 +254,9 @@ async def query_workorder(
 
         service = WorkOrderService()
         if work_order_id:
+            # by-ID 路径补行级数据范围：范围外按不存在回复，不泄露存在性
+            if not await _work_order_in_scope(ctx, work_order_id):
+                return f"工单不存在：{work_order_id}"
             wo = await service.get_work_order_by_id(ctx.tenant_id, int(work_order_id))
             return _fmt_work_order_row(wo)
         rows, total = await service.list_work_orders(
@@ -255,6 +291,9 @@ async def list_workorder_tasks(
     ctx = _resolve_ctx(ctx)
     if not _ctx_ok(ctx):
         return _ERR_NO_CONTEXT
+    # by-ID 路径补行级数据范围：范围外按不存在回复，不泄露存在性
+    if not await _work_order_in_scope(ctx, work_order_id):
+        return f"工单不存在：{work_order_id}"
     try:
         from apps.kuaizhizao.services.work_order_service import WorkOrderService
 
@@ -320,6 +359,9 @@ async def submit_production_feedback(
         return "数量/工时参数无效"
     if unq < 0 or qual < 0 or hours < 0:
         return "数量/工时不能为负数"
+    # by-ID 路径补行级数据范围：范围外按不存在回复，不泄露存在性
+    if not await _work_order_in_scope(ctx, work_order_id):
+        return f"工单不存在：{work_order_id}"
     try:
         from apps.kuaizhizao.schemas.reporting_record import ReportingRecordCreate
         from apps.kuaizhizao.services.reporting_service import ReportingService
@@ -403,6 +445,9 @@ async def update_workorder_status(
     if target not in _UPDATEABLE_WORK_ORDER_STATUSES:
         allowed = "、".join(sorted(_UPDATEABLE_WORK_ORDER_STATUSES))
         return f"不支持的目标状态：{target or '空'}（允许：{allowed}）"
+    # by-ID 路径补行级数据范围：范围外按不存在回复，不泄露存在性
+    if not await _work_order_in_scope(ctx, work_order_id):
+        return f"工单不存在：{work_order_id}"
     try:
         from apps.kuaizhizao.services.work_order_service import WorkOrderService
 
@@ -526,7 +571,7 @@ CHAT_TOOL_DEFINITIONS: List[dict] = [
                     "work_order_id": {"type": "integer", "description": "工单 ID"},
                     "status": {
                         "type": "string",
-                        "enum": ["in_progress", "paused", "completed", "cancelled"],
+                        "enum": ["in_progress", "paused", "cancelled"],
                         "description": "目标状态",
                     },
                 },

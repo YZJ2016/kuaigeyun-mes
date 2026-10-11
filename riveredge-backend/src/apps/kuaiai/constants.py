@@ -15,6 +15,7 @@ MODEL_TYPE_CHAT = "chat"
 MODEL_TYPE_EMBED = "embed"
 
 # KR-D10 受控写 Tool 闭集五值：保存时校验，未知名 400；写 Tool 默认不勾
+# spec 181 扩展六个领域只读 Tool（无写权限映射，预置档案不勾选写 Tool）
 ENABLED_TOOL_NAMES = frozenset(
     {
         "search_knowledge",
@@ -22,6 +23,25 @@ ENABLED_TOOL_NAMES = frozenset(
         "list_workorder_tasks",
         "submit_production_feedback",
         "update_workorder_status",
+        "query_inventory_balance",
+        "query_delivery_risk",
+        "query_purchase_followup",
+        "query_published_schedule",
+        "query_quality_anomalies",
+        "query_supplier_orders",
+    }
+)
+
+# spec 181 场景预置档案最小只读 Tool 子集（禁止包含写 Tool；
+# 该集合的补集内的写 Tool 不得进入任何预置档案 enabled_tools）
+SCENE_READONLY_TOOL_NAMES = frozenset(
+    {
+        "query_inventory_balance",
+        "query_delivery_risk",
+        "query_purchase_followup",
+        "query_published_schedule",
+        "query_quality_anomalies",
+        "query_supplier_orders",
     }
 )
 

@@ -21,7 +21,9 @@ class AiStatsOverviewResponse(BaseModel):
     days: int = 7
     total_calls: int = 0
     avg_latency_ms: Optional[int] = None
-    pulse_suggestion_count: int = 0
+    # spec 184：SuggestionService 不存在/失败时为 None（数据源不可用），
+    # 不允许回假 0
+    pulse_suggestion_count: Optional[int] = None
     knowledge_document_count: int = 0
     by_capability: List[AiCapabilityStat] = Field(default_factory=list)
     by_day: List[AiDayStat] = Field(default_factory=list)

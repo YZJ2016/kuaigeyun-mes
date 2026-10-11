@@ -130,8 +130,15 @@ def _vector_literal(vector: List[float]) -> str:
     return "[" + ",".join(str(float(v)) for v in vector) + "]"
 
 
+def _faq_raw_content(question: str, answer: str) -> str:
+    """FAQ 文档正文（spec 183）：创建与解析兜底共用同一格式。"""
+    return f"问题：{question}\n答案：{answer}"
+
+
 async def _extract_document_text(tenant_id: int, doc) -> str:
-    """取原文：file_uuid → 对象存储读流 → extract_text；raw_content 直接用。"""
+    """取原文：file_uuid → 对象存储读流 → extract_text；raw_content 直接用；
+    FAQ 行（source_type=faq）raw_content 缺失时按创建时同一格式由问答列
+    重建，仍走同一切块/向量管线。"""
     file_uuid = (getattr(doc, "file_uuid", None) or "").strip()
     if file_uuid:
         from core.services.file.file_service import FileService
@@ -141,6 +148,11 @@ async def _extract_document_text(tenant_id: int, doc) -> str:
     raw = getattr(doc, "raw_content", None)
     if raw and str(raw).strip():
         return str(raw)
+    if (getattr(doc, "source_type", "") or "") == "faq":
+        question = (getattr(doc, "faq_question", None) or "").strip()
+        answer = (getattr(doc, "faq_answer", None) or "").strip()
+        if question and answer:
+            return _faq_raw_content(question, answer)
     raise BusinessLogicError("文档缺少可解析内容（file_uuid/raw_content 均为空）")
 
 
@@ -254,6 +266,49 @@ class KnowledgeService:
             source_type=source_type,
             file_uuid=file_uuid,
             raw_content=raw,
+            status=_STATUS_PENDING,
+            **_audit_create(user),
+        )
+
+    @classmethod
+    async def create_faq(
+        cls,
+        tenant_id: int,
+        user,
+        knowledge_id: int,
+        *,
+        question: str,
+        answer: str,
+        is_active: bool = True,
+    ) -> KuaiaiKnowledgeDocument:
+        """新建 FAQ 文档（spec 183）：同表 ``source_type=faq``。
+
+        KB 归属+启用校验；问题/答案去空白必填；标题=去空白问题截 300；
+        ``raw_content`` 按 ``问题：{q}\\n答案：{a}`` 生成（合计 ≤200000），
+        落库 ``pending`` 后沿用同一 request_parse/index_document 生命周期，
+        不另建 FAQ 表、不冒充 txt、不复制解析器。
+        """
+        await cls._get_enabled_kb(tenant_id, knowledge_id)
+        question = (question or "").strip()
+        answer = (answer or "").strip()
+        if not question:
+            raise BusinessLogicError("FAQ 问题不能为空")
+        if not answer:
+            raise BusinessLogicError("FAQ 答案不能为空")
+        raw_content = _faq_raw_content(question, answer)
+        if len(raw_content) > _RAW_CONTENT_MAX_LENGTH:
+            raise BusinessLogicError(
+                f"FAQ 问答正文长度超过 {_RAW_CONTENT_MAX_LENGTH} 字符上限"
+            )
+        return await KuaiaiKnowledgeDocument.create(
+            tenant_id=tenant_id,
+            knowledge_id=int(knowledge_id),
+            title=question[:300],
+            source_type="faq",
+            faq_question=question,
+            faq_answer=answer,
+            raw_content=raw_content,
+            is_active=bool(is_active),
             status=_STATUS_PENDING,
             **_audit_create(user),
         )

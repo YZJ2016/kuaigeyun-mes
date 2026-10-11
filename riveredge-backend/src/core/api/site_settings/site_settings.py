@@ -53,7 +53,7 @@ async def _include_company_seal_in_response(auth: AuthContext) -> bool:
 class DeepSeekIntegrationStatusResponse(BaseModel):
     configured: bool
     enabled: bool
-    model: str
+    model: Optional[str] = None
 
 
 class DeepSeekChatCompletionRequest(BaseModel):

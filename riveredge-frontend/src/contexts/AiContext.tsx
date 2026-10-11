@@ -24,6 +24,10 @@ export type AiContextPayload = {
   capabilityMode?: AiCapabilityMode;
   /** 智能体库 id */
   agentId?: string;
+  /** 智能体库场景实例稳定 key（spec 181；服务端复核模板/开关/绑定/使用权） */
+  agentKey?: string;
+  /** 场景首问标识（仅作标记，不代替服务端档案/权限检查） */
+  presetPrompt?: string;
 };
 
 export type PendingAssistantRequest = {
@@ -104,6 +108,8 @@ export function toAiContextApiPayload(context: AiContextPayload | null): Record<
   const extra: Record<string, unknown> = {};
   if (context.capabilityMode) extra.capability_mode = context.capabilityMode;
   if (context.agentId) extra.agent_id = context.agentId;
+  if (context.agentKey) extra.agent_key = context.agentKey;
+  if (context.presetPrompt) extra.preset_prompt = context.presetPrompt;
   if (Object.keys(extra).length) payload.extra = extra;
   return Object.keys(payload).length ? payload : undefined;
 }

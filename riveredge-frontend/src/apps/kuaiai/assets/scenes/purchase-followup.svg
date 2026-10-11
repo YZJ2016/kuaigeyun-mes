@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 420" role="img">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#08979c"/>
+      <stop offset="1" stop-color="#006d75"/>
+    </linearGradient>
+    <linearGradient id="truck" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#87e8de"/>
+      <stop offset="1" stop-color="#36cfc9"/>
+    </linearGradient>
+  </defs>
+  <rect width="280" height="420" fill="url(#bg)"/>
+  <circle cx="240" cy="60" r="88" fill="#ffffff" opacity="0.05"/>
+  <circle cx="30" cy="366" r="108" fill="#ffffff" opacity="0.05"/>
+  <g opacity="0.3" stroke="#87e8de" stroke-width="1" stroke-dasharray="6 6">
+    <path d="M20 300 H260"/>
+  </g>
+  <!-- 货车 -->
+  <g transform="translate(40 170)">
+    <rect x="0" y="34" width="120" height="62" rx="6" fill="url(#truck)"/>
+    <path d="M120 52 h42 l26 28 v16 h-68 z" fill="#5cdbd3"/>
+    <path d="M132 60 h24 l18 20 h-42 z" fill="#e6fffb"/>
+    <rect x="14" y="48" width="34" height="22" rx="3" fill="#006d75" opacity="0.35"/>
+    <rect x="56" y="48" width="34" height="22" rx="3" fill="#006d75" opacity="0.35"/>
+    <circle cx="36" cy="102" r="15" fill="#003a40"/>
+    <circle cx="36" cy="102" r="6" fill="#b5f5ec"/>
+    <circle cx="152" cy="102" r="15" fill="#003a40"/>
+    <circle cx="152" cy="102" r="6" fill="#b5f5ec"/>
+    <!-- 速度线 -->
+    <line x1="-24" y1="52" x2="-6" y2="52" stroke="#b5f5ec" stroke-width="5" stroke-linecap="round"/>
+    <line x1="-34" y1="70" x2="-10" y2="70" stroke="#b5f5ec" stroke-width="5" stroke-linecap="round" opacity="0.7"/>
+    <line x1="-22" y1="88" x2="-4" y2="88" stroke="#b5f5ec" stroke-width="5" stroke-linecap="round" opacity="0.5"/>
+  </g>
+  <!-- 跟单清单 -->
+  <g transform="translate(66 70)">
+    <rect x="0" y="0" width="148" height="84" rx="10" fill="#ffffff" opacity="0.12"/>
+    <g transform="translate(14 14)">
+      <circle cx="6" cy="6" r="6" fill="#5cdbd3"/>
+      <path d="M3.4 6 l2 2 3.6 -4" stroke="#006d75" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      <rect x="20" y="2" width="92" height="8" rx="4" fill="#e6fffb" opacity="0.85"/>
+    </g>
+    <g transform="translate(14 40)">
+      <circle cx="6" cy="6" r="6" fill="#5cdbd3" opacity="0.7"/>
+      <path d="M3.4 6 l2 2 3.6 -4" stroke="#006d75" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      <rect x="20" y="2" width="72" height="8" rx="4" fill="#e6fffb" opacity="0.55"/>
+    </g>
+    <g transform="translate(14 64)">
+      <circle cx="6" cy="6" r="6" fill="none" stroke="#ffd666" stroke-width="2.4"/>
+      <rect x="20" y="2" width="104" height="8" rx="4" fill="#ffd666" opacity="0.8"/>
+    </g>
+  </g>
+  <g transform="translate(40 340)">
+    <rect x="0" y="0" width="96" height="8" rx="4" fill="#e6fffb" opacity="0.85"/>
+    <rect x="0" y="16" width="150" height="8" rx="4" fill="#e6fffb" opacity="0.4"/>
+    <rect x="0" y="32" width="70" height="8" rx="4" fill="#5cdbd3" opacity="0.7"/>
+  </g>
+</svg>

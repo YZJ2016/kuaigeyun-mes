@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 420" role="img">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1d39c4"/>
+      <stop offset="1" stop-color="#10239e"/>
+    </linearGradient>
+    <linearGradient id="box1" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#85a5ff"/>
+      <stop offset="1" stop-color="#597ef7"/>
+    </linearGradient>
+    <linearGradient id="box2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#adc6ff"/>
+      <stop offset="1" stop-color="#85a5ff"/>
+    </linearGradient>
+  </defs>
+  <rect width="280" height="420" fill="url(#bg)"/>
+  <circle cx="238" cy="52" r="86" fill="#ffffff" opacity="0.05"/>
+  <circle cx="34" cy="360" r="110" fill="#ffffff" opacity="0.05"/>
+  <g opacity="0.35" stroke="#adc6ff" stroke-width="1">
+    <path d="M0 96 H280"/>
+    <path d="M0 210 H280"/>
+    <path d="M0 324 H280"/>
+  </g>
+  <!-- 仓架 -->
+  <g transform="translate(52 120)">
+    <rect x="0" y="150" width="176" height="10" rx="3" fill="#d6e4ff" opacity="0.9"/>
+    <rect x="0" y="78" width="176" height="10" rx="3" fill="#d6e4ff" opacity="0.55"/>
+    <!-- 下层箱 -->
+    <g>
+      <path d="M8 118 h56 v32 h-56 z" fill="url(#box1)"/>
+      <path d="M8 118 l14 -14 h56 l-14 14 z" fill="#adc6ff"/>
+      <path d="M64 118 l14 -14 v32 l-14 14 z" fill="#4668d8"/>
+      <rect x="30" y="126" width="12" height="12" rx="1" fill="#10239e" opacity="0.35"/>
+    </g>
+    <g>
+      <path d="M112 118 h56 v32 h-56 z" fill="url(#box2)"/>
+      <path d="M112 118 l14 -14 h56 l-14 14 z" fill="#d6e4ff"/>
+      <path d="M168 118 l14 -14 v32 l-14 14 z" fill="#597ef7"/>
+      <rect x="134" y="126" width="12" height="12" rx="1" fill="#10239e" opacity="0.35"/>
+    </g>
+    <!-- 上层箱 -->
+    <g>
+      <path d="M60 46 h56 v32 h-56 z" fill="url(#box2)"/>
+      <path d="M60 46 l14 -14 h56 l-14 14 z" fill="#d6e4ff"/>
+      <path d="M116 46 l14 -14 v32 l-14 14 z" fill="#597ef7"/>
+      <rect x="82" y="54" width="12" height="12" rx="1" fill="#10239e" opacity="0.35"/>
+    </g>
+    <!-- 放大镜 -->
+    <g transform="translate(120 -30)">
+      <circle cx="0" cy="0" r="22" fill="none" stroke="#f0f5ff" stroke-width="7"/>
+      <line x1="16" y1="16" x2="34" y2="34" stroke="#f0f5ff" stroke-width="7" stroke-linecap="round"/>
+      <circle cx="0" cy="0" r="22" fill="#85a5ff" opacity="0.25"/>
+    </g>
+  </g>
+  <g transform="translate(52 340)">
+    <rect x="0" y="0" width="92" height="8" rx="4" fill="#d6e4ff" opacity="0.85"/>
+    <rect x="0" y="16" width="140" height="8" rx="4" fill="#d6e4ff" opacity="0.4"/>
+    <rect x="0" y="32" width="64" height="8" rx="4" fill="#85a5ff" opacity="0.7"/>
+  </g>
+</svg>

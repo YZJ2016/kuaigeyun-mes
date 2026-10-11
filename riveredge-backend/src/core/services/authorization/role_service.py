@@ -1080,6 +1080,20 @@ class RoleService:
         ),
     }
 
+    # 预设角色追加权限集合（逐码列举）：在前缀/显式/兜底任一授权分支的结果上
+    # 做并集追加，不改变角色既有授权模式。spec 181：普通员工追加 KU-AI 运营层
+    # 展示权限（display 码不经 :read/:view 兜底分支覆盖）；不写场景档案使用权，
+    # 使用权仍由管理员在既有 /agents 按 ROLE/USER 显式配置。
+    PRESET_ROLE_ADDITIVE_PERMISSION_CODES: dict[str, frozenset[str]] = {
+        "EMPLOYEE": frozenset(
+            {
+                "kuaiai:hub:display",
+                "kuaiai:library:display",
+                "kuaiai:pulse:display",
+            }
+        ),
+    }
+
     GUEST_ROLE_CODE = "GUEST"
 
     @staticmethod
@@ -1148,6 +1162,18 @@ class RoleService:
             ).all()
             selected_permissions = read_perms
             selected_ids = {p.id for p in read_perms}
+
+        # 追加码集：逐码列举、只对已注册权限放行；任一授权分支结果上做并集
+        additive_codes = RoleService.PRESET_ROLE_ADDITIVE_PERMISSION_CODES.get(role.code)
+        if additive_codes:
+            registered_additives = [c for c in additive_codes if c in desired_codes]
+            if registered_additives:
+                additive_perms = await Permission.filter(
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True,
+                    code__in=registered_additives,
+                ).all()
+                selected_ids = {*selected_ids, *[p.id for p in additive_perms]}
 
         baseline_perms = await Permission.filter(
             tenant_id=tenant_id,

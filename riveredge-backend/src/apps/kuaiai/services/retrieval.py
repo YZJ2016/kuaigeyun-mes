@@ -418,6 +418,28 @@ async def _retrieve(
     return await _expand_window(tenant_id, ranked[:top_k])
 
 
+async def _rag_enabled(tenant_id: int) -> bool:
+    """租户级「知识语料 RAG」开关（``integrations.kuaiai.rag_enabled``）。
+
+    缺键/读取失败按默认 ``True`` 处理（与 settings_service 展示口径一致，
+    不因设置读取异常静默禁用检索）；显式 ``False`` 才关闭。
+    """
+    try:
+        from core.services.system.site_setting_service import SiteSettingService
+        from core.utils.integration_settings import get_kuaiai_integration
+
+        site = await SiteSettingService.get_settings(tenant_id)
+        kuaiai = get_kuaiai_integration(site.settings or {})
+        return kuaiai.get("rag_enabled", True) is not False
+    except Exception as exc:
+        logger.warning(
+            "KU-AI RAG 开关读取失败 tenant_id={} error_type={}",
+            tenant_id,
+            type(exc).__name__,
+        )
+        return True
+
+
 async def retrieve(
     tenant_id: int,
     query: str,
@@ -425,7 +447,9 @@ async def retrieve(
     *,
     top_k: int = 5,
 ) -> List[Dict[str, Any]]:
-    """检索唯一入口；整体失败关闭返回 ``[]``（调用方走纯对话）。"""
+    """检索唯一入口；rag_enabled=False 或整体失败关闭返回 ``[]``（调用方走纯对话）。"""
+    if not await _rag_enabled(tenant_id):
+        return []
     try:
         return await _retrieve(
             tenant_id, query, knowledge_ids, top_k=top_k

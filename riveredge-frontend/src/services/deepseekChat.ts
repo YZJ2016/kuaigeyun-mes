@@ -10,11 +10,11 @@ import { webClientChannelHeaders } from '../utils/clientChannel';
 import i18n from '../config/i18n';
 
 const DEEPSEEK_STATUS_URL = '/core/site-settings/integrations/deepseek/status';
-const DEEPSEEK_COMPLETIONS_PATH = '/core/site-settings/integrations/deepseek/completions';
-/** 新 AI Runtime 网关（与 site-settings 路径等价，stream 由后端统一处理） */
+/** canonical AI Runtime 对话端点（site-settings 旧别名仅保留兼容，前端不再调用；
+ *  该端点要求 kuaiai:act:execute，403/404/400 透出真实 detail/error.message） */
 export const AI_RUNTIME_COMPLETIONS_PATH = '/core/ai/chat/completions';
 
-export const KUAI_CHAT_COMPLETIONS_URL = `${API_BASE_URL}${DEEPSEEK_COMPLETIONS_PATH}`;
+export const KUAI_CHAT_COMPLETIONS_URL = `${API_BASE_URL}${AI_RUNTIME_COMPLETIONS_PATH}`;
 
 export interface ChatIntegrationStatus {
   configured: boolean;

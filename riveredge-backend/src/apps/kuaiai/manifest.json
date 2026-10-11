@@ -17,32 +17,95 @@
     "permission": "kuaiai:entry:read",
     "children": [
       {
-        "title": "app.kuaiai.menu.chat",
-        "path": "/apps/kuaiai/chat",
-        "icon": "message",
-        "permission": "kuaiai:entry:read",
-        "sort_order": 1
+        "title": "app.kuaiai.menu.ai-operations",
+        "icon": "radar",
+        "sort_order": 1,
+        "children": [
+          {
+            "title": "app.kuaiai.menu.hub",
+            "path": "/apps/kuaiai/hub",
+            "icon": "appstore",
+            "permission": "kuaiai:hub:display",
+            "sort_order": 1
+          },
+          {
+            "title": "app.kuaiai.menu.agent-library",
+            "path": "/apps/kuaiai/agent-library",
+            "icon": "robot",
+            "permission": "kuaiai:library:display",
+            "sort_order": 2
+          },
+          {
+            "title": "app.kuaiai.menu.pulse",
+            "path": "/apps/kuaiai/pulse",
+            "icon": "triangle-alert",
+            "permission": "kuaiai:pulse:display",
+            "sort_order": 3
+          },
+          {
+            "title": "app.kuaiai.menu.chat",
+            "path": "/apps/kuaiai/chat",
+            "icon": "message",
+            "permission": "kuaiai:entry:read",
+            "sort_order": 4
+          }
+        ]
       },
       {
-        "title": "app.kuaiai.menu.agents",
-        "path": "/apps/kuaiai/agents",
-        "icon": "robot",
-        "permission": "kuaiai:agent:display",
-        "sort_order": 2
-      },
-      {
-        "title": "app.kuaiai.menu.knowledge",
-        "path": "/apps/kuaiai/knowledge",
-        "icon": "book",
-        "permission": "kuaiai:knowledge:display",
-        "sort_order": 3
-      },
-      {
-        "title": "app.kuaiai.menu.mcp",
-        "path": "/apps/kuaiai/mcp",
-        "icon": "api",
-        "permission": "kuaiai:mcp:display",
-        "sort_order": 5
+        "title": "app.kuaiai.menu.ai-governance",
+        "icon": "control",
+        "sort_order": 2,
+        "children": [
+          {
+            "title": "app.kuaiai.menu.corpus",
+            "path": "/apps/kuaiai/corpus",
+            "icon": "database",
+            "permission": "kuaiai:corpus:display",
+            "sort_order": 1
+          },
+          {
+            "title": "app.kuaiai.menu.agents",
+            "path": "/apps/kuaiai/agents",
+            "icon": "team",
+            "permission": "kuaiai:agent:display",
+            "sort_order": 2
+          },
+          {
+            "title": "app.kuaiai.menu.knowledge",
+            "path": "/apps/kuaiai/knowledge",
+            "icon": "book",
+            "permission": "kuaiai:knowledge:display",
+            "sort_order": 3
+          },
+          {
+            "title": "app.kuaiai.menu.mcp",
+            "path": "/apps/kuaiai/mcp",
+            "icon": "api",
+            "permission": "kuaiai:mcp:display",
+            "sort_order": 4
+          },
+          {
+            "title": "app.kuaiai.menu.trust",
+            "path": "/apps/kuaiai/trust",
+            "icon": "safety-certificate",
+            "permission": "kuaiai:trust:display",
+            "sort_order": 5
+          },
+          {
+            "title": "app.kuaiai.menu.insights",
+            "path": "/apps/kuaiai/insights",
+            "icon": "bar-chart",
+            "permission": "kuaiai:insights:display",
+            "sort_order": 6
+          },
+          {
+            "title": "app.kuaiai.menu.settings",
+            "path": "/apps/kuaiai/settings",
+            "icon": "cogs",
+            "permission": "kuaiai:settings:display",
+            "sort_order": 7
+          }
+        ]
       }
     ]
   },
@@ -73,7 +136,20 @@
     "kuaiai:model:read",
     "kuaiai:model:create",
     "kuaiai:model:update",
-    "kuaiai:model:delete"
+    "kuaiai:model:delete",
+    "kuaiai:hub:display",
+    "kuaiai:library:display",
+    "kuaiai:library:manage",
+    "kuaiai:pulse:display",
+    "kuaiai:corpus:display",
+    "kuaiai:corpus:create",
+    "kuaiai:corpus:update",
+    "kuaiai:corpus:delete",
+    "kuaiai:corpus:export",
+    "kuaiai:trust:display",
+    "kuaiai:insights:display",
+    "kuaiai:settings:display",
+    "kuaiai:settings:update"
   ],
   "ai_tools": [
     {
@@ -84,9 +160,14 @@
       "parameters": {
         "type": "object",
         "properties": {
-          "query": {"type": "string", "description": "检索问题"}
+          "query": {
+            "type": "string",
+            "description": "检索问题"
+          }
         },
-        "required": ["query"]
+        "required": [
+          "query"
+        ]
       }
     },
     {
@@ -97,11 +178,26 @@
       "parameters": {
         "type": "object",
         "properties": {
-          "work_order_id": {"type": "integer", "description": "工单 ID"},
-          "code": {"type": "string", "description": "工单编码（模糊）"},
-          "keyword": {"type": "string", "description": "关键词（编码/名称/产品）"},
-          "status": {"type": "string", "description": "工单状态过滤"},
-          "limit": {"type": "integer", "description": "返回条数上限（默认10）"}
+          "work_order_id": {
+            "type": "integer",
+            "description": "工单 ID"
+          },
+          "code": {
+            "type": "string",
+            "description": "工单编码（模糊）"
+          },
+          "keyword": {
+            "type": "string",
+            "description": "关键词（编码/名称/产品）"
+          },
+          "status": {
+            "type": "string",
+            "description": "工单状态过滤"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "返回条数上限（默认10）"
+          }
         }
       }
     },
@@ -113,9 +209,14 @@
       "parameters": {
         "type": "object",
         "properties": {
-          "work_order_id": {"type": "integer", "description": "工单 ID"}
+          "work_order_id": {
+            "type": "integer",
+            "description": "工单 ID"
+          }
         },
-        "required": ["work_order_id"]
+        "required": [
+          "work_order_id"
+        ]
       }
     },
     {
@@ -126,15 +227,40 @@
       "parameters": {
         "type": "object",
         "properties": {
-          "work_order_id": {"type": "integer", "description": "工单 ID"},
-          "operation_id": {"type": "integer", "description": "工序 ID（list_workorder_tasks 返回的 operation_id）"},
-          "reported_quantity": {"type": "number", "description": "报工数量"},
-          "qualified_quantity": {"type": "number", "description": "合格数量（缺省=报工-不合格）"},
-          "unqualified_quantity": {"type": "number", "description": "不合格数量"},
-          "work_hours": {"type": "number", "description": "工时（小时，可空）"},
-          "remarks": {"type": "string", "description": "备注"}
+          "work_order_id": {
+            "type": "integer",
+            "description": "工单 ID"
+          },
+          "operation_id": {
+            "type": "integer",
+            "description": "工序 ID（list_workorder_tasks 返回的 operation_id）"
+          },
+          "reported_quantity": {
+            "type": "number",
+            "description": "报工数量"
+          },
+          "qualified_quantity": {
+            "type": "number",
+            "description": "合格数量（缺省=报工-不合格）"
+          },
+          "unqualified_quantity": {
+            "type": "number",
+            "description": "不合格数量"
+          },
+          "work_hours": {
+            "type": "number",
+            "description": "工时（小时，可空）"
+          },
+          "remarks": {
+            "type": "string",
+            "description": "备注"
+          }
         },
-        "required": ["work_order_id", "operation_id", "reported_quantity"]
+        "required": [
+          "work_order_id",
+          "operation_id",
+          "reported_quantity"
+        ]
       }
     },
     {
@@ -145,14 +271,181 @@
       "parameters": {
         "type": "object",
         "properties": {
-          "work_order_id": {"type": "integer", "description": "工单 ID"},
+          "work_order_id": {
+            "type": "integer",
+            "description": "工单 ID"
+          },
           "status": {
             "type": "string",
-            "enum": ["in_progress", "paused", "completed", "cancelled"],
+            "enum": [
+              "in_progress",
+              "paused",
+              "cancelled"
+            ],
             "description": "目标状态"
           }
         },
-        "required": ["work_order_id", "status"]
+        "required": [
+          "work_order_id",
+          "status"
+        ]
+      }
+    },
+    {
+      "name": "query_inventory_balance",
+      "description": "查询即时库存余额（物料×仓库结存，支持关键词/仓库过滤）",
+      "permission": "kuaizhizao:inventory:read",
+      "handler": "apps.kuaiai.services.scene_tools:query_inventory_balance",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "keyword": {
+            "type": "string",
+            "description": "关键词（物料编码/名称/仓库）"
+          },
+          "warehouse_id": {
+            "type": "integer",
+            "description": "仓库 ID"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "返回条数上限（默认10，最大20）"
+          }
+        }
+      }
+    },
+    {
+      "name": "query_delivery_risk",
+      "description": "查询工单交期风险（逾期/MTO连带），按当前用户工单数据范围过滤",
+      "permission": "kuaizhizao:work-order:read",
+      "handler": "apps.kuaiai.services.scene_tools:query_delivery_risk",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "description": "返回条数上限（默认10，最大20）"
+          }
+        }
+      }
+    },
+    {
+      "name": "query_purchase_followup",
+      "description": "查询采购订单跟单摘要（供应商/采购员/状态/到货日期过滤）",
+      "permission": "kuaizhizao:purchase-order:read",
+      "handler": "apps.kuaiai.services.scene_tools:query_purchase_followup",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "supplier_id": {
+            "type": "integer",
+            "description": "供应商 ID"
+          },
+          "buyer_id": {
+            "type": "integer",
+            "description": "采购员 ID"
+          },
+          "status": {
+            "type": "string",
+            "description": "订单状态"
+          },
+          "delivery_date_from": {
+            "type": "string",
+            "description": "要求到货日期起（YYYY-MM-DD）"
+          },
+          "delivery_date_to": {
+            "type": "string",
+            "description": "要求到货日期止（YYYY-MM-DD）"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "返回条数上限（默认10，最大20）"
+          }
+        }
+      }
+    },
+    {
+      "name": "query_published_schedule",
+      "description": "查询某日已发布滚动排程摘要（仅 published/closed 计划可读）",
+      "permission": "kuaizhizao:plan-management-rolling-scheduling:read",
+      "handler": "apps.kuaiai.services.scene_tools:query_published_schedule",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "plan_date": {
+            "type": "string",
+            "description": "计划日期（YYYY-MM-DD）"
+          }
+        },
+        "required": [
+          "plan_date"
+        ]
+      }
+    },
+    {
+      "name": "query_quality_anomalies",
+      "description": "查询质量异常记录摘要（不合格检验，按检验类型/日期/物料/供应商过滤）",
+      "permission": "kuaizhizao:quality-analysis:read",
+      "handler": "apps.kuaiai.services.scene_tools:query_quality_anomalies",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "inspection_type": {
+            "type": "string",
+            "enum": [
+              "incoming",
+              "process",
+              "finished"
+            ],
+            "description": "检验类型"
+          },
+          "start_date": {
+            "type": "string",
+            "description": "开始日期（YYYY-MM-DD）"
+          },
+          "end_date": {
+            "type": "string",
+            "description": "结束日期（YYYY-MM-DD）"
+          },
+          "material_id": {
+            "type": "integer",
+            "description": "物料 ID"
+          },
+          "supplier_id": {
+            "type": "integer",
+            "description": "供应商 ID（仅来料检验）"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "返回条数上限（默认10，最大20）"
+          }
+        }
+      }
+    },
+    {
+      "name": "query_supplier_orders",
+      "description": "查询指定供应商的采购订单摘要（按当前用户采购数据范围过滤）",
+      "permission": "kuaizhizao:purchase-order:read",
+      "handler": "apps.kuaiai.services.scene_tools:query_supplier_orders",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "supplier_id": {
+            "type": "integer",
+            "description": "供应商 ID"
+          },
+          "status": {
+            "type": "string",
+            "description": "订单状态"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "返回条数上限（默认10，最大20）"
+          }
+        },
+        "required": [
+          "supplier_id"
+        ]
       }
     }
   ],

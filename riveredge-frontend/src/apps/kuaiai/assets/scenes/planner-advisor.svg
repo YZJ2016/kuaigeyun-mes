@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 420" role="img">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#531dab"/>
+      <stop offset="1" stop-color="#391085"/>
+    </linearGradient>
+    <linearGradient id="bar" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#d3adf7"/>
+      <stop offset="1" stop-color="#b37feb"/>
+    </linearGradient>
+  </defs>
+  <rect width="280" height="420" fill="url(#bg)"/>
+  <circle cx="246" cy="46" r="92" fill="#ffffff" opacity="0.05"/>
+  <circle cx="28" cy="374" r="104" fill="#ffffff" opacity="0.05"/>
+  <!-- 计划板 -->
+  <g transform="translate(40 96)">
+    <rect x="0" y="0" width="200" height="212" rx="12" fill="#ffffff" opacity="0.08"/>
+    <rect x="0" y="0" width="200" height="34" rx="12" fill="#ffffff" opacity="0.12"/>
+    <circle cx="16" cy="17" r="4" fill="#efdbff"/>
+    <circle cx="30" cy="17" r="4" fill="#b37feb" opacity="0.7"/>
+    <rect x="120" y="12" width="66" height="10" rx="5" fill="#efdbff" opacity="0.8"/>
+    <!-- 甘特条 -->
+    <g>
+      <rect x="14" y="52" width="96" height="16" rx="8" fill="url(#bar)"/>
+      <rect x="14" y="80" width="140" height="16" rx="8" fill="url(#bar)" opacity="0.8"/>
+      <rect x="60" y="108" width="126" height="16" rx="8" fill="#f759ab" opacity="0.9"/>
+      <rect x="14" y="136" width="112" height="16" rx="8" fill="url(#bar)" opacity="0.6"/>
+      <rect x="40" y="164" width="88" height="16" rx="8" fill="url(#bar)" opacity="0.45"/>
+    </g>
+    <!-- 今日线 -->
+    <line x1="60" y1="44" x2="60" y2="196" stroke="#ffd666" stroke-width="2" stroke-dasharray="4 4"/>
+    <circle cx="60" cy="44" r="4" fill="#ffd666"/>
+  </g>
+  <!-- 风险角标 -->
+  <g transform="translate(196 262)">
+    <circle r="20" fill="#ff4d4f"/>
+    <path d="M0 -9 L9 8 H-9 Z" fill="#fff"/>
+    <rect x="-1.6" y="-5" width="3.2" height="7" rx="1.6" fill="#ff4d4f"/>
+    <circle cy="5" r="1.9" fill="#ff4d4f"/>
+  </g>
+  <g transform="translate(40 340)">
+    <rect x="0" y="0" width="96" height="8" rx="4" fill="#efdbff" opacity="0.85"/>
+    <rect x="0" y="16" width="150" height="8" rx="4" fill="#efdbff" opacity="0.4"/>
+    <rect x="0" y="32" width="70" height="8" rx="4" fill="#b37feb" opacity="0.7"/>
+  </g>
+</svg>
