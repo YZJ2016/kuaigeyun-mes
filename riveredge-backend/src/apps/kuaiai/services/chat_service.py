@@ -784,6 +784,34 @@ async def create_chat_completion(
     # 路径 B 装配：显式 context.agent_id 或 agent 路径默认档案；
     # 授权/归属失败在此抛出（404/403），先于一切上游调用与落库（KR-D9）
     agent_id = _context_int(context, "agent_id")
+
+    # spec 181 T9：agent_key 场景守卫——同租户实例解析、模板总开关、
+    # 实例 enabled、请求 agent_id 与实例绑定一致、档案启用/使用权、chat 就绪；
+    # 失败先于 assemble 与落库。不携带 agent_key 的普通 /chat 不受场景开关影响。
+    # HTTP 路径上 AiBusinessContext.to_broker_dict 已把 extra.* 摊平为顶层键，
+    # 嵌套 extra 形态经 _context_value 一并兼容（review 修复：原只读
+    # context["extra"] 在真实请求上恒为 None，守卫不触发）。
+    agent_key = str(_context_value(context, "agent_key") or "").strip()
+    # capability_mode 场景首问标识闭集 ask|query|guide：携带即校验（不再以
+    # agent_key 为前提），缺省放行；「agent」为 spec 135 agent 路径内部标记
+    # （见 _is_agent_path），非场景能力值但属合法标记不误拒。
+    capability_mode = str(
+        _context_value(context, "capability_mode") or ""
+    ).strip()
+    if capability_mode and capability_mode not in {
+        "ask",
+        "query",
+        "guide",
+        "agent",
+    }:
+        raise ValidationError("capability_mode 仅支持 ask|query|guide")
+    if agent_key:
+        from apps.kuaiai.services.agent_scene_service import (
+            guard_scene_agent_key,
+        )
+
+        await guard_scene_agent_key(tenant_id, agent_key, agent_id, user)
+
     agent_path = agent_id is None and _is_agent_path(context)
     assembled: Optional[AssembledAgent] = None
     if agent_id is not None or agent_path:

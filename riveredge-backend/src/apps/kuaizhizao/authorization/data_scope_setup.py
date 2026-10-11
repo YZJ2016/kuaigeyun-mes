@@ -134,4 +134,18 @@ def register_kuaizhizao_data_scope_profiles() -> None:
     register_resource_profile("kuaizhizao:sales-return", _KUAIZHIZAO_OUTBOUND_DOC_PROFILE)
     register_resource_profile("kuaizhizao:purchase-return", _KUAIZHIZAO_PURCHASE_DOC_PROFILE)
     register_resource_profile("kuaizhizao:plan-management-scheduling", _KUAIZHIZAO_WORK_ORDER_PROFILE)
+    # spec 181：场景只读 Tool 适配层补充的行级范围资源键。
+    # rolling-scheduling 为 manifest 已声明 data_scope_key；quality-analysis /
+    # inventory 仅服务 Tool 适配层 DataScopeService.apply（无显式策略=全部，
+    # 有策略按 created_by 收敛），不影响各业务列表既有语义。
+    register_resource_profile(
+        "kuaizhizao:plan-management-rolling-scheduling",
+        _KUAIZHIZAO_WORK_ORDER_PROFILE,
+    )
+    register_resource_profile(
+        "kuaizhizao:quality-analysis", _KUAIZHIZAO_WORK_ORDER_PROFILE
+    )
+    register_resource_profile(
+        "kuaizhizao:inventory", _KUAIZHIZAO_WORK_ORDER_PROFILE
+    )
     _registered = True

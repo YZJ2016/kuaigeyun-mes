@@ -39,6 +39,13 @@ _EXPECTED_PERMISSIONS = {
     "list_workorder_tasks": "kuaizhizao:work-order:read",
     "submit_production_feedback": "kuaizhizao:production-execution-reporting:create",
     "update_workorder_status": "kuaizhizao:work-order:update",
+    # spec 181 六个只读场景 Tool
+    "query_inventory_balance": "kuaizhizao:inventory:read",
+    "query_delivery_risk": "kuaizhizao:work-order:read",
+    "query_purchase_followup": "kuaizhizao:purchase-order:read",
+    "query_published_schedule": "kuaizhizao:plan-management-rolling-scheduling:read",
+    "query_quality_anomalies": "kuaizhizao:quality-analysis:read",
+    "query_supplier_orders": "kuaizhizao:purchase-order:read",
 }
 
 
@@ -111,6 +118,17 @@ def _patch_tx():
     )
 
 
+def _patch_scope(visible=True):
+    """by-ID 路径数据范围替身：默认放行，越界用例显式传 False。
+
+    行级范围解析本身由 scene_tools._scoped_row_ids/DataScopeService 承担，
+    本替身只隔离 RBAC 存储依赖，专注 handler 行为。
+    """
+    return patch.object(
+        chat_tools, "_work_order_in_scope", AsyncMock(return_value=visible)
+    )
+
+
 class TestManifestAiTools:
     def test_manifest_names_match_closed_set(self):
         manifest_path = (
@@ -164,9 +182,12 @@ class TestToolBridgeEndToEnd:
     async def test_query_workorder_detail_by_id(self, ai_ctx):
         service = MagicMock()
         service.get_work_order_by_id = AsyncMock(return_value=_wo())
-        with patch(
-            "apps.kuaizhizao.services.work_order_service.WorkOrderService",
-            return_value=service,
+        with (
+            patch(
+                "apps.kuaizhizao.services.work_order_service.WorkOrderService",
+                return_value=service,
+            ),
+            _patch_scope(),
         ):
             tools = registry_to_lc_tools(["query_workorder"])
             result = await tools[0].ainvoke({"work_order_id": 11})
@@ -199,9 +220,12 @@ class TestToolBridgeEndToEnd:
     async def test_list_workorder_tasks(self, ai_ctx):
         service = MagicMock()
         service.get_work_order_operations = AsyncMock(return_value=[_op()])
-        with patch(
-            "apps.kuaizhizao.services.work_order_service.WorkOrderService",
-            return_value=service,
+        with (
+            patch(
+                "apps.kuaizhizao.services.work_order_service.WorkOrderService",
+                return_value=service,
+            ),
+            _patch_scope(),
         ):
             tools = registry_to_lc_tools(["list_workorder_tasks"])
             result = await tools[0].ainvoke({"work_order_id": 11})
@@ -221,6 +245,7 @@ class TestToolBridgeEndToEnd:
                 return_value=service,
             ),
             _patch_tx(),
+            _patch_scope(),
         ):
             tools = registry_to_lc_tools(["update_workorder_status"])
             result = await tools[0].ainvoke(
@@ -256,6 +281,7 @@ class TestToolBridgeEndToEnd:
                 "apps.kuaizhizao.services.reporting_service.ReportingService",
                 return_value=reporting_service,
             ),
+            _patch_scope(),
         ):
             tools = registry_to_lc_tools(["submit_production_feedback"])
             result = await tools[0].ainvoke(
@@ -318,6 +344,7 @@ class TestUpdateWorkorderStatusTransitions:
                 return_value=service,
             ),
             _patch_tx(),
+            _patch_scope(),
         ):
             result = await chat_tools.update_workorder_status(
                 11, target, ctx=_ctx()
@@ -345,6 +372,7 @@ class TestUpdateWorkorderStatusTransitions:
                 return_value=batching,
             ),
             _patch_tx(),
+            _patch_scope(),
         ):
             result = await chat_tools.update_workorder_status(
                 11, "cancelled", ctx=_ctx()
@@ -369,6 +397,7 @@ class TestUpdateWorkorderStatusTransitions:
                 return_value=batching,
             ),
             _patch_tx(),
+            _patch_scope(),
         ):
             result = await chat_tools.update_workorder_status(
                 11, "paused", ctx=_ctx()
@@ -381,9 +410,8 @@ class TestUpdateWorkorderStatusTransitions:
         "current,target",
         [
             ("completed", "in_progress"),
-            ("draft", "completed"),
+            ("draft", "paused"),
             ("cancelled", "in_progress"),
-            ("in_progress", "completed"),
             ("released", "cancelled"),
         ],
     )
@@ -396,6 +424,7 @@ class TestUpdateWorkorderStatusTransitions:
                 return_value=service,
             ),
             _patch_tx(),
+            _patch_scope(),
         ):
             result = await chat_tools.update_workorder_status(
                 11, target, ctx=_ctx()
@@ -403,6 +432,26 @@ class TestUpdateWorkorderStatusTransitions:
         assert "不允许变更" in result
         assert current in result and target in result
         service.update_work_order_status.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_completed_target_not_updateable(self, ai_ctx):
+        """completed 走完工流程：不在目标态闭集，取工单前即拒绝（review 修复）。"""
+        service = self._service("in_progress")
+        with (
+            patch(
+                "apps.kuaizhizao.services.work_order_service.WorkOrderService",
+                return_value=service,
+            ),
+            _patch_tx(),
+            _patch_scope(),
+        ):
+            result = await chat_tools.update_workorder_status(
+                11, "completed", ctx=_ctx()
+            )
+        assert "不支持的目标状态" in result
+        service.get_by_id.assert_not_called()
+        service.update_work_order_status.assert_not_called()
+        assert "completed" not in chat_tools._UPDATEABLE_WORK_ORDER_STATUSES
 
     @pytest.mark.asyncio
     async def test_frozen_work_order_rejected(self, ai_ctx):
@@ -418,11 +467,116 @@ class TestUpdateWorkorderStatusTransitions:
                 return_value=service,
             ),
             _patch_tx(),
+            _patch_scope(),
         ):
             result = await chat_tools.update_workorder_status(
                 11, "in_progress", ctx=_ctx()
             )
         assert "已冻结" in result
+        service.update_work_order_status.assert_not_called()
+
+
+class TestWorkOrderDataScope:
+    """spec 181 §84 review 修复：by-ID 路径行级数据范围。
+
+    ``kuaizhizao:work-order`` 范围外工单一律回「工单不存在」（不泄露存在性），
+    且不触达底层 service；范围内正常放行。
+    """
+
+    @pytest.mark.asyncio
+    async def test_scope_uses_work_order_resource(self, ai_ctx):
+        """_work_order_in_scope 经 scene_tools._scoped_row_ids 套 work-order 资源。"""
+        scoped = AsyncMock(return_value={11})
+        with patch(
+            "apps.kuaiai.services.scene_tools._scoped_row_ids", scoped
+        ):
+            assert await chat_tools._work_order_in_scope(_ctx(), 11) is True
+        args = scoped.await_args.args
+        assert args[2] == "kuaizhizao:work-order"
+        assert args[3] == {11}
+
+        denied = AsyncMock(return_value=set())
+        with patch(
+            "apps.kuaiai.services.scene_tools._scoped_row_ids", denied
+        ):
+            assert await chat_tools._work_order_in_scope(_ctx(), 11) is False
+
+    @pytest.mark.asyncio
+    async def test_scope_resolution_failure_closes(self, ai_ctx):
+        """范围解析异常 → 失败关闭（视为不可见）。"""
+        with patch(
+            "apps.kuaiai.services.scene_tools._scoped_row_ids",
+            AsyncMock(side_effect=RuntimeError("rbac down")),
+        ):
+            assert await chat_tools._work_order_in_scope(_ctx(), 11) is False
+
+    @pytest.mark.asyncio
+    async def test_query_workorder_out_of_scope_not_found(self, ai_ctx):
+        service = MagicMock()
+        service.get_work_order_by_id = AsyncMock()
+        with (
+            patch(
+                "apps.kuaizhizao.services.work_order_service.WorkOrderService",
+                return_value=service,
+            ),
+            _patch_scope(visible=False),
+        ):
+            result = await chat_tools.query_workorder(
+                work_order_id=11, ctx=_ctx()
+            )
+        assert result == "工单不存在：11"
+        service.get_work_order_by_id.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_list_workorder_tasks_out_of_scope_not_found(self, ai_ctx):
+        service = MagicMock()
+        service.get_work_order_operations = AsyncMock()
+        with (
+            patch(
+                "apps.kuaizhizao.services.work_order_service.WorkOrderService",
+                return_value=service,
+            ),
+            _patch_scope(visible=False),
+        ):
+            result = await chat_tools.list_workorder_tasks(11, ctx=_ctx())
+        assert result == "工单不存在：11"
+        service.get_work_order_operations.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_submit_feedback_out_of_scope_not_found(self, ai_ctx):
+        service = MagicMock()
+        service.get_work_order_by_id = AsyncMock()
+        with (
+            patch(
+                "apps.kuaizhizao.services.work_order_service.WorkOrderService",
+                return_value=service,
+            ),
+            _patch_scope(visible=False),
+        ):
+            result = await chat_tools.submit_production_feedback(
+                11, 88, 5, ctx=_ctx()
+            )
+        assert result == "工单不存在：11"
+        service.get_work_order_by_id.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_update_status_out_of_scope_not_found(self, ai_ctx):
+        service = MagicMock()
+        service.get_by_id = AsyncMock()
+        service.update_work_order_status = AsyncMock()
+        with (
+            patch(
+                "apps.kuaizhizao.services.work_order_service.WorkOrderService",
+                return_value=service,
+            ),
+            _patch_tx(),
+            _patch_scope(visible=False),
+        ):
+            result = await chat_tools.update_workorder_status(
+                11, "in_progress", ctx=_ctx()
+            )
+        assert result == "工单不存在：11"
+        service.get_by_id.assert_not_called()
         service.update_work_order_status.assert_not_called()
 
 

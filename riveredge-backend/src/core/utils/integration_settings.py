@@ -766,7 +766,9 @@ def build_deepseek_public_status_from_active(active: Dict[str, Any]) -> Dict[str
     """由已解析的 active LLM 视图生成公开状态。"""
     configured = is_llm_api_key_configured(active)
     enabled = bool(active.get("enabled"))
-    model = active.get("model") or DEEPSEEK_DEFAULT_MODEL
+    # 未配置（无 API Key）时 model 置空，不下发出厂默认名伪装成已生效模型；
+    # 消费方先判 configured/enabled 再读 model。
+    model = (active.get("model") or DEEPSEEK_DEFAULT_MODEL) if configured else None
     return {
         "configured": configured,
         "enabled": enabled and configured,
@@ -867,3 +869,108 @@ def merge_integrations_update(
         merged[provider] = next_provider
 
     return merged
+
+
+# ============================================================ spec 185：设置聚合页
+# agent_switches 六模板总开关与能力字段白名单；写入只落 integrations.kuaiai
+# 槽的白名单字段，保留同槽其他键，不触碰 IntegrationConfig.config。
+
+AGENT_SWITCHES_SETTING_KEY = "agent_switches"
+
+# 设置页可编辑的 kuaiai 能力字段闭集（role UUID / agent_switches 单独处理）
+KUAIAI_CAPABILITY_SETTING_KEYS = (
+    "tools_enabled",
+    "rag_enabled",
+    "rag_use_embedding",
+    "rag_backend",
+    "rag_top_k",
+    "stream_enabled",
+    "custom_system_prompt",
+)
+
+
+def read_agent_switches(
+    kuaiai: Dict[str, Any], template_keys
+) -> Dict[str, bool]:
+    """模板总开关读视图：字段/单键缺失默认 True（仅表示卡片可发现）。"""
+    raw = kuaiai.get(AGENT_SWITCHES_SETTING_KEY) if isinstance(kuaiai, dict) else None
+    mapping = raw if isinstance(raw, dict) else {}
+    out: Dict[str, bool] = {}
+    for key in template_keys:
+        value = mapping.get(key)
+        out[key] = True if value is None else bool(value)
+    return out
+
+
+def validate_agent_switches_payload(
+    value: Any, template_keys
+) -> Dict[str, bool]:
+    """设置页保存载荷校验：必须为 template_keys 的闭集 bool map，否则 422。"""
+    from infra.exceptions.exceptions import ValidationError
+
+    keys = list(template_keys)
+    if not isinstance(value, dict) or set(value.keys()) != set(keys):
+        raise ValidationError("agent_switches 必须且只能包含全部出厂模板 key")
+    out: Dict[str, bool] = {}
+    for key in keys:
+        item = value[key]
+        if not isinstance(item, bool):
+            raise ValidationError("agent_switches 的值必须为布尔开关")
+        out[key] = item
+    return out
+
+
+def merge_kuaiai_capability_fields(
+    kuaiai: Dict[str, Any], capabilities: Dict[str, Any]
+) -> List[str]:
+    """把设置页能力字段白名单就地写入 kuaiai 槽，返回变更的字段名列表。"""
+    changed: List[str] = []
+    for key in KUAIAI_CAPABILITY_SETTING_KEYS:
+        new_value = capabilities.get(key)
+        if kuaiai.get(key) != new_value:
+            changed.append(f"capabilities.{key}")
+        kuaiai[key] = new_value
+    return changed
+
+
+def validate_llm_role_candidate(connection: Any, role: str) -> None:
+    """复用 select_llm_connection_role 的候选连接校验语义，但指定目标角色。
+
+    供设置页聚合保存使用：只校验不保存（角色 UUID 由调用方在事务内写回）。
+    """
+    from infra.exceptions.exceptions import ValidationError
+
+    if getattr(connection, "type", None) not in LLM_PROVIDER_SPECS:
+        raise ValidationError("仅 AI 连接可选用为模型角色")
+    if getattr(connection, "is_active", None) is not True:
+        raise ValidationError("请先启用该连接再选用")
+    cfg = _connection_config(connection)
+    stored_role = str(cfg.get("model_role") or "").strip()
+    if stored_role != role:
+        raise ValidationError("选用连接的角色与调用场景不匹配")
+    if not str(cfg.get("base_url") or "").strip() or not str(
+        cfg.get("model") or ""
+    ).strip():
+        raise ValidationError("连接缺少 Base URL 或模型名")
+    api_key = str(cfg.get("api_key") or "").strip()
+    if not api_key or _is_masked_api_key(api_key):
+        raise ValidationError("连接缺少 API Key")
+
+
+def mask_connection_base_url(base_url: Any) -> str:
+    """脱敏展示连接 Base URL：保留 scheme://host，掩去路径与查询参数。"""
+    url = str(base_url or "").strip()
+    if not url:
+        return ""
+    try:
+        from urllib.parse import urlparse
+
+        parsed = urlparse(url)
+    except Exception:
+        return INTEGRATION_API_KEY_MASK
+    if not parsed.scheme or not parsed.netloc:
+        return INTEGRATION_API_KEY_MASK
+    masked = f"{parsed.scheme}://{parsed.netloc}"
+    if parsed.path and parsed.path != "/":
+        masked += "/***"
+    return masked

@@ -52,7 +52,12 @@ from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 
+from apps.kuaiai.api import operations as operations_api
+
 router = APIRouter(prefix="", tags=["App - KU-AI"])
+
+# spec 181：运营层 hub / 智能体库（/operations/*）
+router.include_router(operations_api.router)
 
 
 @router.get(

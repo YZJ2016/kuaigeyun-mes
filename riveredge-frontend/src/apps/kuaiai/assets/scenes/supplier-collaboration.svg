@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 420" role="img">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ad4e00"/>
+      <stop offset="1" stop-color="#873800"/>
+    </linearGradient>
+    <linearGradient id="node" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffd8bf"/>
+      <stop offset="1" stop-color="#ffbb96"/>
+    </linearGradient>
+  </defs>
+  <rect width="280" height="420" fill="url(#bg)"/>
+  <circle cx="240" cy="58" r="90" fill="#ffffff" opacity="0.05"/>
+  <circle cx="32" cy="368" r="106" fill="#ffffff" opacity="0.05"/>
+  <!-- 协同网络 -->
+  <g stroke="#ffbb96" stroke-width="3" opacity="0.8">
+    <line x1="140" y1="140" x2="70" y2="220"/>
+    <line x1="140" y1="140" x2="140" y2="240"/>
+    <line x1="140" y1="140" x2="212" y2="220"/>
+    <line x1="70" y1="220" x2="140" y2="240" opacity="0.5"/>
+    <line x1="140" y1="240" x2="212" y2="220" opacity="0.5"/>
+  </g>
+  <!-- 中心节点 -->
+  <g transform="translate(140 140)">
+    <circle r="34" fill="url(#node)"/>
+    <circle r="34" fill="none" stroke="#ffd8bf" stroke-width="6" opacity="0.4"/>
+    <rect x="-16" y="-10" width="32" height="20" rx="4" fill="#873800" opacity="0.8"/>
+    <path d="M-16 -10 l16 10 16 -10" stroke="#ffd8bf" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <!-- 卫星节点 -->
+  <g transform="translate(70 220)">
+    <circle r="24" fill="url(#node)" opacity="0.9"/>
+    <rect x="-10" y="-12" width="20" height="24" rx="3" fill="#873800" opacity="0.7"/>
+    <line x1="-5" y1="-6" x2="5" y2="-6" stroke="#ffd8bf" stroke-width="2" stroke-linecap="round"/>
+    <line x1="-5" y1="0" x2="5" y2="0" stroke="#ffd8bf" stroke-width="2" stroke-linecap="round"/>
+    <line x1="-5" y1="6" x2="3" y2="6" stroke="#ffd8bf" stroke-width="2" stroke-linecap="round"/>
+  </g>
+  <g transform="translate(140 240)">
+    <circle r="24" fill="url(#node)" opacity="0.9"/>
+    <circle cx="-5" cy="-3" r="5" fill="#873800" opacity="0.7"/>
+    <circle cx="6" cy="-3" r="5" fill="#873800" opacity="0.45"/>
+    <rect x="-11" y="4" width="22" height="10" rx="5" fill="#873800" opacity="0.7"/>
+  </g>
+  <g transform="translate(212 220)">
+    <circle r="24" fill="url(#node)" opacity="0.9"/>
+    <path d="M-10 2 L-2 10 L11 -8" stroke="#873800" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.8"/>
+  </g>
+  <!-- 待办浮标 -->
+  <g transform="translate(52 78)">
+    <rect x="0" y="0" width="120" height="36" rx="10" fill="#ffffff" opacity="0.12"/>
+    <circle cx="18" cy="18" r="7" fill="#ffd8bf"/>
+    <rect x="34" y="10" width="72" height="7" rx="3.5" fill="#fff7e6" opacity="0.85"/>
+    <rect x="34" y="22" width="48" height="6" rx="3" fill="#fff7e6" opacity="0.45"/>
+  </g>
+  <g transform="translate(48 344)">
+    <rect x="0" y="0" width="96" height="8" rx="4" fill="#fff7e6" opacity="0.85"/>
+    <rect x="0" y="16" width="150" height="8" rx="4" fill="#fff7e6" opacity="0.4"/>
+    <rect x="0" y="32" width="70" height="8" rx="4" fill="#ffbb96" opacity="0.7"/>
+  </g>
+</svg>

@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 420" role="img">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2f54eb"/>
+      <stop offset="1" stop-color="#1d39c4"/>
+    </linearGradient>
+    <linearGradient id="spark" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#d6e4ff"/>
+      <stop offset="1" stop-color="#85a5ff"/>
+    </linearGradient>
+  </defs>
+  <rect width="280" height="420" fill="url(#bg)"/>
+  <circle cx="240" cy="56" r="90" fill="#ffffff" opacity="0.06"/>
+  <circle cx="30" cy="370" r="106" fill="#ffffff" opacity="0.06"/>
+  <g transform="translate(140 190)" fill="url(#spark)">
+    <path d="M0 -86 L14 -22 L78 -22 L26 16 L44 80 L0 42 L-44 80 L-26 16 L-78 -22 L-14 -22 Z"/>
+    <circle cx="0" cy="0" r="14" fill="#f0f5ff"/>
+  </g>
+  <g transform="translate(52 344)">
+    <rect x="0" y="0" width="96" height="8" rx="4" fill="#f0f5ff" opacity="0.85"/>
+    <rect x="0" y="16" width="150" height="8" rx="4" fill="#f0f5ff" opacity="0.4"/>
+    <rect x="0" y="32" width="70" height="8" rx="4" fill="#85a5ff" opacity="0.7"/>
+  </g>
+</svg>

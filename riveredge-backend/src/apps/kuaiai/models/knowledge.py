@@ -4,7 +4,7 @@
   切块参数 chunk_size/chunk_overlap/expand_enabled 可空回落租户可运营配置 +
   status 闭集 启用|停用）
 - KuaiaiKnowledgeDocument：文档表（既有表 apps_kuaiai_knowledge_documents
-  映射 + 新增 knowledge_id 挂库；faq_* 列本期不接产品）
+  映射 + 新增 knowledge_id 挂库；faq_* 列自 spec 183 起承接 FAQ 语料）
 - KuaiaiKnowledgeChunk：切块表（既有表映射；embedding_vector 物理列为
   pgvector vector(768)，tortoise 无原生类型，仅占位映射——向量写入/检索
   一律走原始 SQL，不经 ORM 字段读写）
@@ -57,7 +57,8 @@ class KuaiaiKnowledgeBase(BaseModel):
 class KuaiaiKnowledgeDocument(BaseModel):
     """KU-AI 知识文档（既有表映射 + knowledge_id 挂库）。
 
-    faq_question/faq_answer 为既有遗留列，本期不接产品（KR-D18），仅作映射。
+    faq_question/faq_answer 为既有遗留列，自 spec 183（corpus FAQ）起接产品：
+    source_type=faq 时写入问答对，raw_content 由问答生成走同一解析管线。
     status 为文档解析状态机（pending|parsing|ready|failed，服务层流转）。
     """
 
@@ -84,8 +85,8 @@ class KuaiaiKnowledgeDocument(BaseModel):
     file_uuid = fields.CharField(
         max_length=36, null=True, description="附件 file_uuid（对象存储读流解析）"
     )
-    faq_question = fields.TextField(null=True, description="FAQ 问题（遗留列，本期不接产品）")
-    faq_answer = fields.TextField(null=True, description="FAQ 答案（遗留列，本期不接产品）")
+    faq_question = fields.TextField(null=True, description="FAQ 问题（source_type=faq 时写入）")
+    faq_answer = fields.TextField(null=True, description="FAQ 答案（source_type=faq 时写入）")
     status = fields.CharField(max_length=20, default="pending", description="解析状态（默认 pending）")
     chunk_count = fields.IntField(default=0, description="切块数")
     error_message = fields.TextField(null=True, description="解析失败文案")

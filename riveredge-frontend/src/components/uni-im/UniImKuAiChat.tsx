@@ -11,6 +11,7 @@ import { useAiContext, toAiContextApiPayload } from '../../contexts/AiContext';
 import { useChatIntegrationStatus } from '../../hooks/useChatIntegrationStatus';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useUserAvatarUrl } from '../../hooks/useUserAvatarUrl';
+import { hasPermission } from '../../utils/permission';
 import {
   buildKuaiChatAuthHeaders,
   KuaiDeepSeekChatProvider,
@@ -89,6 +90,9 @@ export default function UniImKuAiChat({ active }: UniImKuAiChatProps) {
 
   const model = chatStatus?.model?.trim() || 'deepseek-chat';
   const chatReady = !!chatStatus?.configured && !!chatStatus?.enabled;
+  // canonical /core/ai/chat/completions 需 kuaiai:act:execute；缺权限时禁用发送，
+  // 若请求仍发出则由 requestFallback 展示后端真实 403 文案
+  const canSend = hasPermission(currentUser, 'kuaiai:act:execute');
   const provider = useMemo(() => getKuaiImChatProvider(model), [model]);
 
   const chat = useXChat<XChatMessage, XChatMessage, Record<string, unknown>, Record<string, unknown>>({
@@ -125,7 +129,7 @@ export default function UniImKuAiChat({ active }: UniImKuAiChatProps) {
 
   const onSend = useCallback(() => {
     const q = draft.trim();
-    if (!q || chat.isRequesting || !chatReady) {
+    if (!q || chat.isRequesting || !chatReady || !canSend) {
       return;
     }
     setDraft('');
@@ -137,7 +141,7 @@ export default function UniImKuAiChat({ active }: UniImKuAiChatProps) {
       },
       { extraInfo: {} },
     );
-  }, [chat, chatReady, context, draft]);
+  }, [chat, chatReady, canSend, context, draft]);
 
   const statusHint = useMemo(() => {
     if (statusLoading) {
@@ -152,8 +156,13 @@ export default function UniImKuAiChat({ active }: UniImKuAiChatProps) {
     if (!chatStatus?.enabled) {
       return t('ui.aiAssistant.notEnabled');
     }
+    if (!canSend) {
+      return t('app.kuaiai.chat.noSendPermission', {
+        defaultValue: '当前账号无对话发送权限（kuaiai:act:execute）',
+      });
+    }
     return null;
-  }, [chatStatus?.configured, chatStatus?.enabled, statusError, statusLoading, t]);
+  }, [chatStatus?.configured, chatStatus?.enabled, statusError, statusLoading, canSend, t]);
 
   const messageAvatarSize = 36;
 
@@ -232,11 +241,11 @@ export default function UniImKuAiChat({ active }: UniImKuAiChatProps) {
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder={
-              chatReady
+              chatReady && canSend
                 ? t('ui.aiAssistant.senderPlaceholder')
                 : t('components.uniIm.kuAiUnavailablePlaceholder')
             }
-            disabled={!chatReady || chat.isRequesting}
+            disabled={!chatReady || !canSend || chat.isRequesting}
             autoSize={{ minRows: 3, maxRows: 6 }}
             onPressEnter={(e) => {
               if (!e.shiftKey) {
@@ -251,7 +260,7 @@ export default function UniImKuAiChat({ active }: UniImKuAiChatProps) {
               className={styles.sendBtn}
               onClick={onSend}
               loading={chat.isRequesting}
-              disabled={!chatReady || !draft.trim()}
+              disabled={!chatReady || !canSend || !draft.trim()}
             >
               {t('pages.personal.im.send')}
             </Button>

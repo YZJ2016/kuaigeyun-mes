@@ -1,0 +1,858 @@
+/* KU-AI 运营层共享视觉基线（设计 §2）：灰底白卡、8px 标准圆角、
+   特色卡 12px、页头 24/32 + 14px 副标题 + 32px 动作。 */
+
+.kuaiai-ops-page {
+  min-height: 100%;
+  padding: 16px 16px 24px;
+  background: var(--ant-color-bg-layout, #f5f5f5);
+  box-sizing: border-box;
+  overflow-x: hidden;
+}
+
+.kuaiai-ops-inner {
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+/* ---------------------------------------------------------- 标准页头 */
+
+.kuaiai-ops-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 88px;
+  flex-wrap: wrap;
+}
+
+.kuaiai-ops-header-text {
+  min-width: 0;
+  flex: 1 1 320px;
+}
+
+.kuaiai-ops-header-title {
+  margin: 0 !important;
+}
+
+.kuaiai-ops-header-subtitle {
+  margin-top: 8px;
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--ant-color-text-secondary, rgba(0, 0, 0, 0.45));
+}
+
+.kuaiai-ops-header-actions {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+/* ---------------------------------------------------------- 能力标签行 */
+
+.kuaiai-ops-cap-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+/* ---------------------------------------------------------- 指标卡 */
+
+.kuaiai-ops-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.kuaiai-ops-metric {
+  background: var(--ant-color-bg-container, #fff);
+  border: 1px solid var(--ant-color-border-secondary, #f0f0f0);
+  border-radius: 8px;
+  padding: 16px;
+  min-height: 95px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.kuaiai-ops-metric--clickable {
+  cursor: pointer;
+}
+
+.kuaiai-ops-metric--clickable:hover,
+.kuaiai-ops-metric--clickable:focus-visible {
+  border-color: var(--ant-color-primary, #1677ff);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  outline: none;
+}
+
+.kuaiai-ops-metric--clickable:focus-visible {
+  box-shadow: 0 0 0 2px var(--ant-color-primary-outline, rgba(22, 119, 255, 0.2));
+}
+
+.kuaiai-ops-metric-title {
+  font-size: 14px;
+  color: var(--ant-color-text-secondary, rgba(0, 0, 0, 0.45));
+}
+
+.kuaiai-ops-metric-value {
+  margin-top: 8px;
+  font-size: 26px;
+  line-height: 34px;
+  font-weight: 600;
+  color: var(--ant-color-text, rgba(0, 0, 0, 0.88));
+}
+
+.kuaiai-ops-metric-unit {
+  margin-left: 4px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--ant-color-text-secondary, rgba(0, 0, 0, 0.45));
+}
+
+.kuaiai-ops-metric-desc {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--ant-color-text-tertiary, rgba(0, 0, 0, 0.45));
+}
+
+/* ---------------------------------------------------------- hub 主区 */
+
+.kuaiai-ops-section-title {
+  margin: 24px 0 0 !important;
+}
+
+.kuaiai-ops-hub-main {
+  display: flex;
+  gap: 16px;
+  margin-top: 16px;
+  align-items: stretch;
+}
+
+.kuaiai-ops-brand-card {
+  width: 300px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: var(--ant-color-bg-container, #fff);
+  border: 1px solid var(--ant-color-border-secondary, #f0f0f0);
+}
+
+.kuaiai-ops-brand-visual {
+  flex: 1;
+  min-height: 240px;
+  display: block;
+  width: 100%;
+  object-fit: cover;
+}
+
+.kuaiai-ops-brand-body {
+  padding: 16px;
+}
+
+.kuaiai-ops-cap-grid {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.kuaiai-ops-cap-card {
+  background: var(--ant-color-bg-container, #fff);
+  border: 1px solid var(--ant-color-border-secondary, #f0f0f0);
+  border-radius: 12px;
+  padding: 16px;
+  min-height: 150px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+
+.kuaiai-ops-cap-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.kuaiai-ops-cap-card-name {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 24px;
+  color: var(--ant-color-text, rgba(0, 0, 0, 0.88));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kuaiai-ops-cap-card-desc {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--ant-color-text-secondary, rgba(0, 0, 0, 0.45));
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 40px;
+}
+
+.kuaiai-ops-cap-card-foot {
+  margin-top: auto;
+  padding-top: 12px;
+}
+
+/* ---------------------------------------------------------- 智能体库 */
+
+.kuaiai-ops-library-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.kuaiai-ops-agent-card {
+  position: relative;
+  background: var(--ant-color-bg-container, #fff);
+  border: 1px solid var(--ant-color-border-secondary, #f0f0f0);
+  border-radius: 12px;
+  padding: 16px;
+  box-sizing: border-box;
+  display: flex;
+  gap: 16px;
+  min-height: 244px;
+}
+
+.kuaiai-ops-agent-illustration {
+  width: 140px;
+  height: 210px;
+  border-radius: 10px;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: var(--ant-color-fill-tertiary, rgba(0, 0, 0, 0.04));
+}
+
+.kuaiai-ops-agent-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.kuaiai-ops-agent-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.kuaiai-ops-agent-name {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 26px;
+  color: var(--ant-color-text, rgba(0, 0, 0, 0.88));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kuaiai-ops-agent-desc {
+  margin-top: 6px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--ant-color-text-secondary, rgba(0, 0, 0, 0.65));
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.kuaiai-ops-agent-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.kuaiai-ops-agent-sample {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--ant-color-text-tertiary, rgba(0, 0, 0, 0.45));
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.kuaiai-ops-agent-actions {
+  margin-top: auto;
+  padding-top: 12px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.kuaiai-ops-agent-manage {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+}
+
+/* ---------------------------------------------------------- 模型设置（spec 185） */
+
+.kuaiai-ops-settings-form {
+  max-width: 951px;
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.kuaiai-ops-settings-block {
+  background: var(--ant-color-bg-container, #fff);
+  border: 1px solid var(--ant-color-border-secondary, #f0f0f0);
+  border-radius: 8px;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.kuaiai-ops-settings-block-title {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 24px;
+  color: var(--ant-color-text, rgba(0, 0, 0, 0.88));
+}
+
+.kuaiai-ops-settings-block-desc {
+  margin-top: 8px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--ant-color-text-secondary, rgba(0, 0, 0, 0.45));
+}
+
+.kuaiai-ops-settings-ocr-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.kuaiai-ops-settings-label {
+  padding-bottom: 8px;
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--ant-color-text, rgba(0, 0, 0, 0.88));
+}
+
+.kuaiai-ops-settings-switches {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.kuaiai-ops-settings-switch-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+}
+
+.kuaiai-ops-settings-switch-name {
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--ant-color-text, rgba(0, 0, 0, 0.88));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kuaiai-ops-settings-cap-switches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  margin-top: 16px;
+}
+
+.kuaiai-ops-settings-cap-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+/* ---------------------------------------------------------- Pulse 异常感知（spec 182） */
+
+.kuaiai-ops-pulse-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.kuaiai-ops-pulse-loading {
+  display: flex;
+  justify-content: center;
+  padding: 64px 0;
+}
+
+.kuaiai-ops-pulse-metrics {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.kuaiai-ops-pulse-section {
+  margin-top: 24px;
+}
+
+.kuaiai-ops-pulse-section-title {
+  margin: 0 !important;
+  font-size: 18px !important;
+  font-weight: 600 !important;
+  line-height: 26px;
+}
+
+.kuaiai-ops-pulse-section-count {
+  margin-left: 8px;
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--ant-color-text-secondary, rgba(0, 0, 0, 0.45));
+}
+
+.kuaiai-ops-pulse-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.kuaiai-ops-pulse-card {
+  background: var(--ant-color-bg-container, #fff);
+  border: 1px solid var(--ant-color-border-secondary, #f0f0f0);
+  border-radius: 8px;
+  padding: 16px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  min-height: 173px;
+}
+
+.kuaiai-ops-pulse-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.kuaiai-ops-pulse-card-title {
+  margin-top: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 24px;
+  color: var(--ant-color-text, rgba(0, 0, 0, 0.88));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kuaiai-ops-pulse-card-fact {
+  margin-top: 6px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--ant-color-text-secondary, rgba(0, 0, 0, 0.65));
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 60px;
+}
+
+.kuaiai-ops-pulse-card-suggestion {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--ant-color-text-tertiary, rgba(0, 0, 0, 0.45));
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.kuaiai-ops-pulse-card-foot {
+  margin-top: auto;
+  padding-top: 12px;
+}
+
+.kuaiai-ops-pulse-pagination {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 24px;
+}
+
+/* ---------------------------------------------------------- Corpus 知识语料（spec 183） */
+
+.kuaiai-ops-corpus {
+  width: 100%;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+.kuaiai-ops-corpus-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-height: 48px;
+}
+
+.kuaiai-ops-corpus-status-tags {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.kuaiai-ops-corpus-filters-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.kuaiai-ops-corpus-advanced {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: var(--ant-color-bg-container, #fff);
+  border: 1px solid var(--ant-color-border-secondary, #f0f0f0);
+  border-radius: 8px;
+}
+
+.kuaiai-ops-corpus-panel {
+  margin-top: 12px;
+  background: var(--ant-color-bg-container, #fff);
+  border: 1px solid var(--ant-color-border-secondary, #f0f0f0);
+  border-radius: 8px;
+  padding: 0 16px 16px;
+}
+
+.kuaiai-ops-corpus-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-height: 56px;
+  padding: 12px 0;
+}
+
+.kuaiai-ops-corpus-actions-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.kuaiai-ops-corpus-col-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 140px;
+}
+
+.kuaiai-ops-corpus-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.kuaiai-ops-corpus-footer-total {
+  font-size: 13px;
+  color: var(--ant-color-text-secondary, rgba(0, 0, 0, 0.45));
+}
+
+.kuaiai-ops-corpus-modal-hint {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--ant-color-text-secondary, rgba(0, 0, 0, 0.45));
+}
+
+/* ---------------------------------------------------------- Trust 信任中心（spec 184） */
+
+.kuaiai-ops-trust-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.kuaiai-ops-trust-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 140px;
+  padding: 16px;
+  background: var(--ant-color-bg-container, #fff);
+  border: 1px solid var(--ant-color-border-secondary, #f0f0f0);
+  border-radius: 8px;
+}
+
+.kuaiai-ops-trust-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.kuaiai-ops-trust-card-icon {
+  font-size: 18px;
+  color: var(--ant-color-primary, #1677ff);
+}
+
+.kuaiai-ops-trust-card-name {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ant-color-text, rgba(0, 0, 0, 0.88));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kuaiai-ops-trust-card-desc {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--ant-color-text-secondary, rgba(0, 0, 0, 0.65));
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.kuaiai-ops-trust-evidence {
+  margin: 0;
+  padding-left: 16px;
+  max-width: 320px;
+}
+
+.kuaiai-ops-trust-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.kuaiai-ops-trust-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  line-height: 22px;
+  font-family: var(--ant-font-family-code, monospace);
+}
+
+.kuaiai-ops-trust-chip-state {
+  margin-left: 4px;
+  font-family: var(--ant-font-family, inherit);
+}
+
+.kuaiai-ops-trust-audit {
+  background: var(--ant-color-bg-container, #fff);
+  border: 1px solid var(--ant-color-border-secondary, #f0f0f0);
+  border-radius: 8px;
+  padding: 8px 16px 16px;
+}
+
+.kuaiai-ops-trust-note {
+  margin-top: 16px;
+  font-size: 13px;
+}
+
+/* ---------------------------------------------------------- Insights 调用分析（spec 184） */
+
+.kuaiai-ops-insights-charts {
+  display: flex;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.kuaiai-ops-insights-chart-card {
+  background: var(--ant-color-bg-container, #fff);
+  border: 1px solid var(--ant-color-border-secondary, #f0f0f0);
+  border-radius: 8px;
+  padding: 0 16px 12px;
+  min-width: 0;
+}
+
+.kuaiai-ops-insights-chart-trend {
+  flex: 0 0 65%;
+  max-width: 65%;
+}
+
+.kuaiai-ops-insights-chart-pie {
+  flex: 1 1 auto;
+}
+
+.kuaiai-ops-insights-chart-head {
+  display: flex;
+  align-items: center;
+  height: 48px;
+  border-bottom: 1px solid var(--ant-color-border-secondary, #f0f0f0);
+}
+
+.kuaiai-ops-insights-chart-body {
+  margin-top: 8px;
+}
+
+.kuaiai-ops-insights-chart-note {
+  display: block;
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.kuaiai-ops-insights-chart-summary {
+  margin: 8px 0 0;
+  font-size: 12px;
+}
+
+/* ---------------------------------------------------------- 响应式 */
+
+@media (max-width: 1279px) {
+  .kuaiai-ops-cap-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1100px) {
+  .kuaiai-ops-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .kuaiai-ops-pulse-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .kuaiai-ops-pulse-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 960px) {
+  .kuaiai-ops-insights-charts {
+    flex-direction: column;
+  }
+
+  .kuaiai-ops-insights-chart-trend {
+    flex: none;
+    max-width: 100%;
+  }
+
+  .kuaiai-ops-hub-main {
+    flex-direction: column;
+  }
+
+  .kuaiai-ops-brand-card {
+    width: 100%;
+  }
+
+  .kuaiai-ops-cap-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .kuaiai-ops-library-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .kuaiai-ops-settings-ocr-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .kuaiai-ops-settings-switches {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .kuaiai-ops-header-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .kuaiai-ops-corpus-filters-right {
+    margin-left: 0;
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .kuaiai-ops-corpus-actions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .kuaiai-ops-corpus-actions-right {
+    align-self: flex-end;
+  }
+
+  .kuaiai-ops-corpus-footer {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .kuaiai-ops-cap-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .kuaiai-ops-metrics {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .kuaiai-ops-pulse-metrics {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .kuaiai-ops-pulse-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .kuaiai-ops-agent-card {
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .kuaiai-ops-agent-illustration {
+    width: 100%;
+    height: 140px;
+  }
+
+  .kuaiai-ops-settings-ocr-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .kuaiai-ops-settings-switches {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .kuaiai-ops-settings-cap-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .kuaiai-ops-trust-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

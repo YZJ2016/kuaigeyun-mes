@@ -20,6 +20,8 @@ import {
   type KuaiToolTrace,
 } from '../../services/deepseekChat'
 import { useChatIntegrationStatus } from '../../hooks/useChatIntegrationStatus'
+import { useCurrentUser } from '../../hooks/useCurrentUser'
+import { hasPermission } from '../../utils/permission'
 import { useAiContext, toAiContextApiPayload } from '../../contexts/AiContext'
 import { executeAiAction } from '../../apps/kuaiai/services/catalog'
 import assistAnimation from '../../../static/lottie/assist.json'
@@ -237,6 +239,8 @@ type AIAssistantDialogUIProps = {
   onSubmit: (question: string) => void
   onNewChat: () => void
   senderDisabled?: boolean
+  /** 输入框上方常显的禁用原因（如缺少 kuaiai:act:execute） */
+  senderHint?: React.ReactNode
   welcomeHint?: React.ReactNode
   modelName?: string
   contextBadge?: string | null
@@ -251,6 +255,7 @@ const AIAssistantDialogUI: React.FC<AIAssistantDialogUIProps> = ({
   onSubmit,
   onNewChat,
   senderDisabled = false,
+  senderHint,
   welcomeHint,
   modelName,
   contextBadge,
@@ -485,6 +490,7 @@ const AIAssistantDialogUI: React.FC<AIAssistantDialogUIProps> = ({
       </div>
 
       <div className="ai-qa-composer">
+        {senderHint ? <p className="ai-qa-disclaimer">{senderHint}</p> : null}
         <div className="ai-qa-sender-wrap">
           <Sender {...senderProps} />
         </div>
@@ -522,6 +528,9 @@ type AIAssistantLivePanelProps = {
 const AIAssistantLivePanel: React.FC<AIAssistantLivePanelProps> = ({ open, onClose, model }) => {
   const { t } = useTranslation()
   const { context, contextBadge, pendingAssistant, setPendingAssistant } = useAiContext()
+  const currentUser = useCurrentUser()
+  // 发送走 canonical /core/ai/chat/completions，需 kuaiai:act:execute（与全宽对话页一致）
+  const canSend = hasPermission(currentUser, 'kuaiai:act:execute')
   const provider = useMemo(() => getKuaiChatProvider(model), [model])
 
   const chat = useXChat<XChatMessage, XChatMessage, Record<string, unknown>, Record<string, unknown>>({
@@ -592,7 +601,7 @@ const AIAssistantLivePanel: React.FC<AIAssistantLivePanelProps> = ({ open, onClo
 
   const handleSubmit = (question: string) => {
     const q = question?.trim?.() || ''
-    if (!q || chat.isRequesting) return
+    if (!q || chat.isRequesting || !canSend) return
     const apiContext = toAiContextApiPayload(context)
     chat.onRequest(
       {
@@ -621,6 +630,14 @@ const AIAssistantLivePanel: React.FC<AIAssistantLivePanelProps> = ({ open, onClo
     const pendingContext = pendingAssistant.context ?? context
     setPendingAssistant(null)
     if (!prompt) return
+    if (!canSend) {
+      message.warning(
+        t('app.kuaiai.chat.noSendPermission', {
+          defaultValue: '当前账号无对话发送权限（kuaiai:act:execute）',
+        }),
+      )
+      return
+    }
     const apiContext = toAiContextApiPayload(pendingContext)
     chat.onRequest(
       {
@@ -629,7 +646,7 @@ const AIAssistantLivePanel: React.FC<AIAssistantLivePanelProps> = ({ open, onClo
       },
       { extraInfo: {} },
     )
-  }, [open, pendingAssistant, chat.isRequesting, context, setPendingAssistant, chat])
+  }, [open, pendingAssistant, chat.isRequesting, context, setPendingAssistant, chat, canSend, t])
 
   return (
     <AIAssistantDialogUI
@@ -639,6 +656,14 @@ const AIAssistantLivePanel: React.FC<AIAssistantLivePanelProps> = ({ open, onClo
       isLoading={chat.isRequesting}
       onSubmit={handleSubmit}
       onNewChat={handleNewChat}
+      senderDisabled={!canSend}
+      senderHint={
+        canSend
+          ? null
+          : t('app.kuaiai.chat.noSendPermission', {
+              defaultValue: '当前账号无对话发送权限（kuaiai:act:execute）',
+            })
+      }
       modelName={model}
       contextBadge={contextBadge}
       onConfirmAction={(token) => void handleConfirmAction(token)}

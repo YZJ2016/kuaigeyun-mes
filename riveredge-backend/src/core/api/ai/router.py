@@ -35,7 +35,7 @@ router = APIRouter(prefix="/ai", tags=["Core - AI Runtime"])
 class AiIntegrationStatusResponse(BaseModel):
     configured: bool
     enabled: bool
-    model: str
+    model: Optional[str] = None
 
 
 @router.get(

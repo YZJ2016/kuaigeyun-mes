@@ -1,9 +1,18 @@
-"""AI 审计日志聚合统计（只读）。"""
+"""AI 审计日志聚合统计（只读）。
+
+spec 184 条件修复（契约不变）：
+- ``pulse_suggestion_count``：真实 SuggestionService 不存在或失败时回
+  ``None``（数据源不可用），不再回假 0；
+- ``by_day`` 分桶与日期序列改用站点时区（Asia/Shanghai），原先按 UTC
+  分桶会把站点次日 0:00–8:00 的调用错记到前一天。
+"""
 
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
+
+from loguru import logger
 
 from core.ai.schemas.stats import (
     AiAuditLogItem,
@@ -13,7 +22,7 @@ from core.ai.schemas.stats import (
     AiStatsOverviewResponse,
 )
 from core.models.ai_audit_log import AiAuditLog
-from core.utils.timezone_utils import to_api_isoformat
+from core.utils.timezone_utils import to_api_isoformat, to_site_date
 
 
 class AiStatsService:
@@ -36,7 +45,8 @@ class AiStatsService:
         for row in logs:
             cap = (row.capability or "unknown").strip() or "unknown"
             cap_map[cap] = cap_map.get(cap, 0) + 1
-            day_key = row.created_at.astimezone(timezone.utc).strftime("%Y-%m-%d")
+            # 站点日历日分桶（Asia/Shanghai）；naive 按 UTC 解释（与落库口径一致）
+            day_key = to_site_date(row.created_at).isoformat()
             day_map[day_key] = day_map.get(day_key, 0) + 1
 
         by_capability = [
@@ -44,8 +54,8 @@ class AiStatsService:
             for k, v in sorted(cap_map.items(), key=lambda x: (-x[1], x[0]))
         ]
 
-        day_cursor = since.astimezone(timezone.utc).date()
-        end_day = datetime.now(timezone.utc).date()
+        day_cursor = to_site_date(since)
+        end_day = to_site_date(datetime.now(timezone.utc))
         by_day: List[AiDayStat] = []
         while day_cursor <= end_day:
             key = day_cursor.isoformat()
@@ -122,17 +132,23 @@ class AiStatsService:
         )
 
     @staticmethod
-    async def _pulse_suggestion_count(tenant_id: int) -> int:
+    async def _pulse_suggestion_count(tenant_id: int) -> Optional[int]:
+        """Pulse 建议数：SuggestionService 缺失或失败 → None（不伪造 0）。"""
         try:
             from apps.kuaiai.services.suggestion_service import SuggestionService
-
+        except ImportError:
+            return None
+        try:
             service = SuggestionService()
             items = await service.get_pulse_suggestions(tenant_id)
             return len(items or [])
-        except ImportError:
-            return 0
-        except Exception:
-            return 0
+        except Exception as exc:
+            logger.warning(
+                "pulse suggestion 计数失败 tenant_id={} error_type={}",
+                tenant_id,
+                type(exc).__name__,
+            )
+            return None
 
     @staticmethod
     async def _knowledge_document_count(tenant_id: int) -> int:
