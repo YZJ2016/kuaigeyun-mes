@@ -1,1 +1,0 @@
-import{r as u}from"./vendor-B-FIDc1E.js";import{u as n}from"./main-CNqw-0pf.js";function o(t){const[i]=n(),e=u.useRef(!1);u.useEffect(()=>{const s=i.get("highlight")?.trim();if(!s){e.current=!1;return}if(e.current)return;e.current=!0;const r=Number(s);Number.isFinite(r)&&r>0&&t(r)},[t,i])}export{o as u};

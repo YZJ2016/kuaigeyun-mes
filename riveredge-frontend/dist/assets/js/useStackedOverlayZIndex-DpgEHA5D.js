@@ -1,0 +1,1 @@
+import{V as a}from"./vendor-e54ZTplE.js";import{ax as o,ay as t,az as s}from"./main-CXF7PSXi.js";function O(e){const{token:r}=a.useToken(),n=o();return e??(n?.zIndex!=null?n.zIndex+t:r.zIndexPopupBase+s)}export{O as u};
