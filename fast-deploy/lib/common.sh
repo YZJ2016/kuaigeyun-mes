@@ -48,6 +48,10 @@ SYSTEMD_BACKEND_EXEC_SCRIPT="$FAST_DEPLOY_DIR/linux/systemd-exec-backend.sh"
 SYSTEMD_TASKIQ_WORKER_EXEC_SCRIPT="$FAST_DEPLOY_DIR/linux/systemd-exec-taskiq-worker.sh"
 SYSTEMD_TASKIQ_SCHEDULER_EXEC_SCRIPT="$FAST_DEPLOY_DIR/linux/systemd-exec-taskiq-scheduler.sh"
 SYSTEMD_CADDY_EXEC_SCRIPT="$FAST_DEPLOY_DIR/linux/systemd-exec-caddy.sh"
+SYSTEMD_WORKBUDDY_MCP_UNIT_NAME="riveredge-workbuddy-mcp.service"
+SYSTEMD_WORKBUDDY_MCP_UNIT_PATH="/etc/systemd/system/${SYSTEMD_WORKBUDDY_MCP_UNIT_NAME}"
+SYSTEMD_WORKBUDDY_MCP_UNIT_TEMPLATE="$FAST_DEPLOY_DIR/templates/riveredge-workbuddy-mcp.service.template"
+SYSTEMD_WORKBUDDY_MCP_EXEC_SCRIPT="$FAST_DEPLOY_DIR/linux/systemd-exec-workbuddy-mcp.sh"
 SYSTEMD_SERVICE_SCRIPT="$FAST_DEPLOY_DIR/linux/riveredge-service.sh"
 WINDOWS_BOOT_TASK_NAME="RiverEdge"
 WINDOWS_BOOT_TASK_STOP_NAME="RiverEdge-Stop"
@@ -251,6 +255,9 @@ load_deploy_env() {
     OPT_KUAI_VECTOR="${OPT_KUAI_VECTOR:-0}"
     OPT_SENSITIVE_LEXICON="${OPT_SENSITIVE_LEXICON:-0}"
     OPT_LIBREOFFICE="${OPT_LIBREOFFICE:-0}"
+    WORKBUDDY_MCP_ENABLE="${WORKBUDDY_MCP_ENABLE:-0}"
+    WORKBUDDY_MCP_PORT="${WORKBUDDY_MCP_PORT:-8765}"
+    WORKBUDDY_MCP_ENV_FILE="${WORKBUDDY_MCP_ENV_FILE:-$FAST_DEPLOY_CONFIG_DIR/workbuddy-mcp.env}"
 }
 
 # deploy.env 选装开关：1 / true / yes / on 视为启用；未设置时在 load_deploy_env 已默认 0
@@ -4190,6 +4197,107 @@ EOF
     log_ok "已追加 ${count} 条额外反向代理"
 }
 
+resolve_workbuddy_mcp_dir() {
+    load_deploy_env
+    local pro_path
+    pro_path="$(read_deploy_env_value PRO_REPO_PATH || true)"
+    pro_path="${pro_path//\\//}"
+    if [ -z "$pro_path" ]; then
+        log_error "WORKBUDDY MCP 需要 PRO_REPO_PATH（kuaigeyun-pro 克隆路径）"
+        return 1
+    fi
+    local sidecar_dir="${pro_path%/}/tools/workbuddy-mcp"
+    if [ ! -f "$sidecar_dir/server.py" ]; then
+        log_error "未找到 Sidecar: $sidecar_dir（请先 pro-apps / 克隆 kuaigeyun-pro）"
+        return 1
+    fi
+    printf '%s\n' "$sidecar_dir"
+}
+
+workbuddy_mcp_enabled() {
+    load_deploy_env
+    deploy_env_flag_enabled "${WORKBUDDY_MCP_ENABLE:-0}"
+}
+
+workbuddy_mcp_render_caddy_block() {
+    if ! workbuddy_mcp_enabled; then
+        cat <<'EOF'
+    # WORKBUDDY_MCP_ENABLE=0：/mcp 未反代至 Sidecar（仍可能落入前端 SPA）
+EOF
+        return 0
+    fi
+    load_deploy_env
+    local port="${WORKBUDDY_MCP_PORT:-8765}"
+    cat <<EOF
+    # KU-Bridge WorkBuddy MCP（Sidecar streamable-http；须在 SPA try_files 之前）
+    handle /mcp* {
+        reverse_proxy 127.0.0.1:${port} {
+            transport http {
+                read_timeout 300s
+                write_timeout 300s
+                response_header_timeout 300s
+                keepalive 30s
+            }
+        }
+    }
+EOF
+}
+
+apply_workbuddy_mcp_caddy_placeholder() {
+    local target_file=$1
+    local snippet_file
+    snippet_file="$(mktemp)"
+    workbuddy_mcp_render_caddy_block > "$snippet_file"
+    if ! grep -q '{{WORKBUDDY_MCP_CADDY_BLOCK}}' "$target_file"; then
+        log_error "Caddy 模板缺少 {{WORKBUDDY_MCP_CADDY_BLOCK}}"
+        return 1
+    fi
+    awk -v snippet="$snippet_file" '
+        /\{\{WORKBUDDY_MCP_CADDY_BLOCK\}\}/ {
+            while ((getline line < snippet) > 0) {
+                print line
+            }
+            close(snippet)
+            next
+        }
+        { print }
+    ' "$target_file" > "${target_file}.wb" && mv "${target_file}.wb" "$target_file"
+    rm -f "$snippet_file"
+}
+
+ensure_workbuddy_mcp_sidecar_deps() {
+    workbuddy_mcp_enabled || return 0
+    local sidecar_dir uv_bin
+    sidecar_dir="$(resolve_workbuddy_mcp_dir)" || return 1
+    uv_bin="$(resolve_uv)" || return 1
+    log_info "同步 WorkBuddy MCP Sidecar 依赖 (uv sync)..."
+    (cd "$sidecar_dir" && "$uv_bin" sync) || {
+        log_error "Sidecar uv sync 失败: $sidecar_dir"
+        return 1
+    }
+    log_ok "WorkBuddy MCP Sidecar 依赖已就绪"
+}
+
+validate_workbuddy_mcp_production_config() {
+    workbuddy_mcp_enabled || return 0
+    local env_file="${WORKBUDDY_MCP_ENV_FILE:-$FAST_DEPLOY_CONFIG_DIR/workbuddy-mcp.env}"
+    resolve_workbuddy_mcp_dir >/dev/null || return 1
+    if [ ! -f "$env_file" ]; then
+        log_error "已启用 WORKBUDDY_MCP_ENABLE，但缺少 $env_file"
+        log_error "请执行: cp fast-deploy/config/workbuddy-mcp.env.example fast-deploy/config/workbuddy-mcp.env"
+        return 1
+    fi
+    local missing=0 key
+    for key in RIVEREDGE_BASE_URL OPEN_API_ACCT_ID OPEN_API_APP_ID OPEN_API_APP_SECRET OPEN_API_TENANT_ID; do
+        if ! grep -qE "^[[:space:]]*${key}=.+" "$env_file" 2>/dev/null; then
+            log_error "workbuddy-mcp.env 缺少或未填写: ${key}"
+            missing=1
+        fi
+    done
+    [ "$missing" -eq 0 ] || return 1
+    return 0
+}
+
 gen_caddyfile() {
     load_deploy_env
     sync_prod_app_urls
@@ -4236,6 +4344,11 @@ gen_caddyfile() {
         -e "s|{{CLIENT_RELEASE_ROOT}}|${client_release_root}|g" \
         -e "s|{{FILE_UPLOAD_ROOT}}|${file_upload_root}|g" \
         "$CADDY_TEMPLATE" > "$CADDYFILE.tmp"
+
+    apply_workbuddy_mcp_caddy_placeholder "$CADDYFILE.tmp" || {
+        rm -f "$CADDYFILE.tmp"
+        exit 1
+    }
 
     append_caddy_extra_proxy_blocks "$CADDYFILE.tmp"
 
@@ -4901,6 +5014,17 @@ _render_systemd_unit_template() {
     load_deploy_env
     local caddy_data="${CADDY_DATA_DIR:-$PROJECT_ROOT/.caddy-data}"
     local caddy_config_dir="${CADDY_CONFIG_DIR:-$PROJECT_ROOT/.caddy-config}"
+    local workbuddy_wants_suffix="" workbuddy_dir workbuddy_env workbuddy_port
+    if workbuddy_mcp_enabled; then
+        workbuddy_wants_suffix=" riveredge-workbuddy-mcp.service"
+        workbuddy_dir="$(resolve_workbuddy_mcp_dir)" || return 1
+        workbuddy_env="${WORKBUDDY_MCP_ENV_FILE:-$FAST_DEPLOY_CONFIG_DIR/workbuddy-mcp.env}"
+        workbuddy_port="${WORKBUDDY_MCP_PORT:-8765}"
+    else
+        workbuddy_dir=""
+        workbuddy_env=""
+        workbuddy_port="8765"
+    fi
     sed \
         -e "s|{{SERVICE_USER}}|${service_user}|g" \
         -e "s|{{SERVICE_GROUP}}|${service_group}|g" \
@@ -4916,6 +5040,11 @@ _render_systemd_unit_template() {
         -e "s|{{TASKIQ_WORKER_EXEC_SCRIPT}}|${SYSTEMD_TASKIQ_WORKER_EXEC_SCRIPT}|g" \
         -e "s|{{TASKIQ_SCHEDULER_EXEC_SCRIPT}}|${SYSTEMD_TASKIQ_SCHEDULER_EXEC_SCRIPT}|g" \
         -e "s|{{CADDY_EXEC_SCRIPT}}|${SYSTEMD_CADDY_EXEC_SCRIPT}|g" \
+        -e "s|{{WORKBUDDY_MCP_WANTS_SUFFIX}}|${workbuddy_wants_suffix}|g" \
+        -e "s|{{WORKBUDDY_MCP_DIR}}|${workbuddy_dir}|g" \
+        -e "s|{{WORKBUDDY_MCP_ENV_FILE}}|${workbuddy_env}|g" \
+        -e "s|{{WORKBUDDY_MCP_PORT}}|${workbuddy_port}|g" \
+        -e "s|{{WORKBUDDY_MCP_EXEC_SCRIPT}}|${SYSTEMD_WORKBUDDY_MCP_EXEC_SCRIPT}|g" \
         "$template_path"
 }
 
@@ -4928,6 +5057,9 @@ install_systemd_stack_units() {
         "$SYSTEMD_TASKIQ_SCHEDULER_UNIT_TEMPLATE|$SYSTEMD_TASKIQ_SCHEDULER_UNIT_PATH"
         "$SYSTEMD_CADDY_UNIT_TEMPLATE|$SYSTEMD_CADDY_UNIT_PATH"
     )
+    if workbuddy_mcp_enabled; then
+        templates+=("$SYSTEMD_WORKBUDDY_MCP_UNIT_TEMPLATE|$SYSTEMD_WORKBUDDY_MCP_UNIT_PATH")
+    fi
     local pair template_path dest_path unit_content tmp
     for pair in "${templates[@]}"; do
         template_path="${pair%%|*}"
@@ -5025,12 +5157,15 @@ cmd_install_service() {
     [ -f "$SYSTEMD_SERVICE_SCRIPT" ] || { log_error "缺少 $SYSTEMD_SERVICE_SCRIPT"; exit 1; }
     chmod +x "$SYSTEMD_SERVICE_SCRIPT" "$FAST_DEPLOY_DIR/linux/prod.sh" \
         "$SYSTEMD_BACKEND_EXEC_SCRIPT" "$SYSTEMD_TASKIQ_WORKER_EXEC_SCRIPT" \
-        "$SYSTEMD_TASKIQ_SCHEDULER_EXEC_SCRIPT" "$SYSTEMD_CADDY_EXEC_SCRIPT" 2>/dev/null || true
+        "$SYSTEMD_TASKIQ_SCHEDULER_EXEC_SCRIPT" "$SYSTEMD_CADDY_EXEC_SCRIPT" \
+        "$SYSTEMD_WORKBUDDY_MCP_EXEC_SCRIPT" 2>/dev/null || true
 
     local service_user
     service_user="$(resolve_service_user)" || exit 1
 
     load_deploy_env
+    validate_workbuddy_mcp_production_config || exit 1
+    ensure_workbuddy_mcp_sidecar_deps || exit 1
     [ -f "$FRONTEND_DIR/dist/index.html" ] || {
         log_error "缺少前端 dist，请先执行: ./fast-deploy/deploy.sh build"
         exit 1
@@ -5073,6 +5208,9 @@ cmd_install_service() {
 
     log_ok "服务已运行: ${SYSTEMD_UNIT_NAME}"
     echo "  子单元: ${SYSTEMD_BACKEND_UNIT_NAME} ${SYSTEMD_TASKIQ_WORKER_UNIT_NAME} ${SYSTEMD_TASKIQ_SCHEDULER_UNIT_NAME} ${SYSTEMD_CADDY_UNIT_NAME}"
+    if workbuddy_mcp_enabled; then
+        echo "           ${SYSTEMD_WORKBUDDY_MCP_UNIT_NAME}（/mcp → 127.0.0.1:${WORKBUDDY_MCP_PORT:-8765}）"
+    fi
     echo "  开机自启: sudo systemctl is-enabled riveredge"
     echo "  立即启动: sudo systemctl start riveredge"
     echo "  查看状态: sudo systemctl status riveredge-backend"

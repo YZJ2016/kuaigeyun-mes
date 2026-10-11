@@ -31033,6 +31033,14 @@ export default {
     '修复会签时审批中心不显示同意/拒绝按钮',
   'pages.dashboard.updateLog.entries.approval-countersign-my-pending-task-r01.description':
     '实例列表按当前用户是否有待办任务判断操作按钮；会签成员不再因仅记录首位审批人而看不到同意/拒绝/转交。',
+  'pages.dashboard.updateLog.entries.workbuddy-mcp-caddy-path-b-r01.title':
+    '生产 Caddy 支持主站 /mcp 反代 WorkBuddy Sidecar',
+  'pages.dashboard.updateLog.entries.workbuddy-mcp-caddy-path-b-r01.description':
+    'fast-deploy 可启用 WORKBUDDY_MCP_ENABLE，将 https://域名/mcp 反代至本机 Sidecar（streamable-http），避免落入前端 HTML；含 systemd 单元与 workbuddy-mcp.env 模板。',
+  'pages.dashboard.updateLog.entries.personal-profile-wecom-gitee-contact-r01.title':
+    '个人资料联系方式完善企微与 Gitee',
+  'pages.dashboard.updateLog.entries.personal-profile-wecom-gitee-contact-r01.description':
+    '企业微信卡片支持手动填写账号并随资料保存；新增 Gitee 授权绑定与解绑，便于登录页快捷登录。',
   'pages.dashboard.updateLog.entries.workbuddy-mcp-host-only-r01.title':
     'WorkBuddy 连接器 MCP 改为仅填域名',
   'pages.dashboard.updateLog.entries.workbuddy-mcp-host-only-r01.description':

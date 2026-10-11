@@ -166,6 +166,7 @@ riveredge-adapt/
 fast-deploy/caddy/
 fast-deploy/.tools/
 fast-deploy/config/deploy.env
+fast-deploy/config/workbuddy-mcp.env
 fast-deploy/config/boot-service.env
 fast-deploy/config/caddy-extra-proxies.list
 

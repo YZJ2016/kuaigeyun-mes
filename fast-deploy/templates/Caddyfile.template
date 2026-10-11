@@ -212,6 +212,8 @@
         header Cache-Control "no-cache"
     }
 
+{{WORKBUDDY_MCP_CADDY_BLOCK}}
+
     handle {
         root * {{FRONTEND_ROOT}}
         try_files {path} /index.html

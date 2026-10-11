@@ -28,7 +28,17 @@ WorkBuddy Agent
    - `kuaizhizao:warehouse-management-inventory:read`（库存查询走报表接口）
 4. 生产 `.env`：按需配置 `INTEGRATION_CLIENT_IP_ALLOWLIST`（MCP 服务器出口 IP）。
 5. 部署 Sidecar：见 `kuaigeyun-pro/tools/workbuddy-mcp/README.md`。
-6. WorkBuddy 管理后台：新建自定义连接器，MCP Server URL 指向 Sidecar HTTPS 地址。
+6. WorkBuddy / `~/.workbuddy/mcp.json`：`type` 为 **`http`**，URL 为 **`https://<生产域名>/mcp`**（方案 B，与 MES 连接器「只填域名」一致）。
+
+### 生产方案 B（主站 `/mcp` → Sidecar，fast-deploy）
+
+在 **生产机**（与 MES 同机 Caddy）：
+
+1. `fast-deploy/config/deploy.env`：`WORKBUDDY_MCP_ENABLE=1`，`PRO_REPO_PATH` 指向已克隆的 `kuaigeyun-pro`。
+2. `cp fast-deploy/config/workbuddy-mcp.env.example fast-deploy/config/workbuddy-mcp.env`，填写 `RIVEREDGE_BASE_URL` 与 `OPEN_API_*`（勿写入 WorkBuddy）。
+3. 重新生成 Caddy 并重载：`./fast-deploy/deploy.sh prod start` 或 `sudo systemctl reload riveredge-caddy` 前先 `./fast-deploy/linux/prod.sh` 触发生成（`install-service` 会注册 `riveredge-workbuddy-mcp.service`）。
+4. 校验：`curl -sI https://<域名>/mcp` **不应**再是 `Content-Type: text/html`（Sidecar 未起时可能为 502，仍优于 SPA）。
+5. WorkBuddy：`"url": "https://<域名>/mcp"`，`disabled` 设为 false；勿用 `sse` 类型。
 
 ## Sidecar 环境变量
 

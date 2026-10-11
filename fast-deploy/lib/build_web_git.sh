@@ -172,10 +172,14 @@ build_web_strip_dist_from_history() {
   build_web_require_filter_repo
   build_web_save_remotes
 
-  echo "剥离 Git 历史中的 frontend dist（filter-repo，可能较慢）..."
+  echo "剥离 Git 历史中的 frontend dist / 旧 mobile web-dist（filter-repo，可能较慢）..."
   rm -rf .git/filter-repo
   GIT_FILTER_REPO_SQUELCH_WARNING=1 git filter-repo \
     --path riveredge-frontend/dist \
+    --path riveredge-frontend/dist-blue \
+    --path riveredge-frontend/dist-green \
+    --path riveredge-frontend/dist-live \
+    --path mobile/web-dist \
     --invert-paths \
     --force
 

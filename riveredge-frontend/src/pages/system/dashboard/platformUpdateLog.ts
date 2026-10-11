@@ -202,6 +202,20 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
       'pages.dashboard.updateLog.entries.approval-countersign-my-pending-task-r01.title',
     descriptionKey:
       'pages.dashboard.updateLog.entries.approval-countersign-my-pending-task-r01.description',
+    id: 'workbuddy-mcp-caddy-path-b-r01',
+    date: '2026-10-11',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.workbuddy-mcp-caddy-path-b-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.workbuddy-mcp-caddy-path-b-r01.description',
+  },
+  {
+    id: 'personal-profile-wecom-gitee-contact-r01',
+    date: '2026-10-11',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.personal-profile-wecom-gitee-contact-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.personal-profile-wecom-gitee-contact-r01.description',
+  },
+  {
     id: 'workbuddy-mcp-host-only-r01',
     date: '2026-10-11',
     type: 'improvement',
