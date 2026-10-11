@@ -17,6 +17,8 @@ export interface ApprovalInstance {
   status: 'pending' | 'approved' | 'rejected' | 'cancelled';
   current_node?: string;
   current_approver_id?: number;
+  /** 当前用户是否有 pending 任务（会签/或签，列表接口填充） */
+  has_my_pending_task?: boolean;
   inngest_run_id?: string;
   submitter_id: number;
   submitted_at: string;

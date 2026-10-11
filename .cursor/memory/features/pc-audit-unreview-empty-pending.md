@@ -33,7 +33,7 @@ standard: 启流程失败不得落 pending；完成回调失败写 instance.data
 | BE 启流程 | `audit_flow_guard.start_document_approval_or_raise`（先启再落 pending） |
 | BE 门控 | `assert_manual_approval_action_allowed`（审核/驳回/反审核补齐） |
 | BE 取消 | `ApprovalInstanceService.cancel_approval`（pending 真取消；否则 `revoke_noop` 历史） |
-| FE 实例列表 | `current_approver_id === currentUser.id` 才显示同意/拒绝/转交 |
+| FE 实例列表 | `has_my_pending_task === true` 或 `current_approver_id === me` 才显示同意/拒绝/转交 |
 
 ## 关键文件
 
@@ -54,6 +54,8 @@ standard: 启流程失败不得落 pending；完成回调失败写 instance.data
 
 - 销售/采购单张路由已由 `require_kuaizhizao_*_access` 按 path 映射 `audit`/`revoke`，B-11 属 informational
 - 销售订单审核后副作用失败：落 `review_remarks` 补偿标记，未建 outbox（ponytail）
+- `sales_service.py` 内遗留整份 `SalesOrderService`（与 `sales_order_service.py` 双轨）已删；真源仅后者
+- 会签：列表补 `has_my_pending_task`，勿只靠 `current_approver_id===me`（后者只存 `approvers[0]`）
 
 ## 关联
 

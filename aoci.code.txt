@@ -1051,6 +1051,7 @@ config-center-ops.md[SO2T]: F:config center ops | R:- | A:3 control points | S:c
 851_20261010160000_platform_settings_gitee_oauth.py[PC5T]: F:平台设置表增加 Gitee OAuth Client ID/Secret 列 | R:code:riveredge-backend/src/infra/models/platform_settings.py | A:upgrade,downgrade | S:平台级凭证列；downgrade 删除同名列
 852_20261010183000_platform_settings_wechat_oauth.py[PC4T]: F:曾为平台设置增加微信 OAuth 列的迁移 | R:code:riveredge-backend/migrations/models/853_20261010192000_drop_platform_settings_wechat_oauth.py | A:upgrade,downgrade | S:已被 853 回滚删除；勿再依赖这些列
 853_20261010192000_drop_platform_settings_wechat_oauth.py[PC4T]: F:删除平台设置中微信 OAuth 列 | R:code:riveredge-backend/migrations/models/852_20261010183000_platform_settings_wechat_oauth.py | A:upgrade,downgrade | S:微信快捷登录不走平台设置列
+854_20261011094500_backfill_missing_audit_columns.py[PV5T]: F:补齐漏加BaseModel审计列created_by等避免SELECT500 | R:- | A:upgrade,downgrade | S:ADD COLUMN IF NOT EXISTS；覆盖print_jobs/price_settlement_lines/mold与kuaiai pending表
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/scripts/===
 pack_sensitive_words.py[XC3T]: F:敏感词打包脚本 | R:code:riveredge-backend/pyproject.toml | A:lexicon pack | S:gh mirror fallback; 90L
@@ -2367,7 +2368,7 @@ sales_order_service.py[DB8L]: F:销售订单服务：CRUD下推与反审删除�
 sales_order_sync_service.py[SB5L]: F:销售订单从数据接口/数据集同步服务。 | R:- | A:SalesOrderSyncService | S:934L; 销售订单从数据接口/数据集同步服务。
 sales_order_terms_service.py[SB5S]: F:销售订单条款与收款里程碑（与框架合同共用条款目录）。 | R:- | A:SalesOrderTermsService | S:192L; 销售订单条款与收款里程碑（与框架合同共用条款目录）。
 sales_review_service.py[SB5L]: F:订单评审服务：CRUD、下达/撤回、部门意见、驳回、下推销售订单。 | R:- | A:_audit_update_kwargs,SalesReviewService | S:1015L; 订单评审服务：CRUD、下达/撤回、部门意见、驳回、下推销售订单。
-sales_service.py[SB5L]: F:销售管理服务模块  提供销售管理相关的业务逻辑处理。  Author: Luigi Lu Date: 2025-12-30 | R:- | A:SalesForecastService,SalesOrderService | S:2197L
+sales_service.py[SB6L]: F:销售预测服务SalesForecastService业务逻辑 | R:code:riveredge-backend/src/apps/kuaizhizao/services/sales_order_service.py | A:SalesForecastService | S:已删除遗留SalesOrderService双轨；销售订单真源sales_order_service.py
 scheduling_ai_service.py[SB5L]: F:可视排产 AI 助手  复用站点 DeepSeek 集成；结合 board-scan / 工单上下文生成解读、排序与改期提案。 | R:- | A:_parse_plan_date,_dt_iso,_is_overdue,SchedulingAiService | S:570L
 scheduling_config_service.py[SB5M]: F:排程配置服务模块  提供排程配置相关的业务逻辑处理。  Author: Plan - 排程管理增强 Date: 2026-02-26 | R:- | A:_normalize_constraints_payload,SchedulingConfigService | S:205L
 scheduling_freeze.py[SB5T]: F:可视排产冻结窗与工单锁定判定（前后端语义一致）。 | R:- | A:freeze_anchor_datetime,_as_datetime,is_planned_start_in_freeze_window,work_or... | S:77L; 可视排产冻结窗与工单锁定判定（前后端语义一致）。
@@ -2828,7 +2829,7 @@ applications.py[IB5L]: F:应用管理 API 路由  提供应用的 CRUD 操作和
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/core/api/approval_processes/===
 __init__.py[IB5T]: F:审批流程 API 模块  包含审批流程和审批实例的 API 路由。 | R:- | A:- | S:18L; 审批流程 API 模块  包含审批流程和审批实例的 API 路由。
 approval_histories.py[IB5T]: F:审批历史记录 API 路由  提供审批历史记录的查询功能。 | R:- | A:list_approval_histories,get_approval_history | S:78L; 审批历史记录 API 路由  提供审批历史记录的查询功能。
-approval_instances.py[IB5M]: F:审批实例管理 API 路由  提供审批实例的 CRUD 操作和审批操作功能。 | R:- | A:create_approval_instance,list_approval_instances,batch_perform_approval_actio... | S:296L; 审批实例管理 API 路由  提供审批实例的 CRUD 操作和审批操作功能。
+approval_instances.py[IB6M]: F:审批实例CRUD与批量审批API | R:code:riveredge-backend/src/core/schemas/approval_instance.py | A:list_approval_instances,batch_perform_approval_action,create_approval_instance | S:列表填充has_my_pending_task=当前用户对该实例有pending ApprovalTask；勿只靠current_approver_id
 approval_processes.py[IB5M]: F:审批流程管理 API 路由  提供审批流程的 CRUD 操作。 | R:- | A:_normalize_json_object,_to_response_model,create_approval_process,list_approv... | S:355L; 审批流程管理 API 路由  提供审批流程的 CRUD 操作。
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/core/api/audit_bindings/===
@@ -3223,7 +3224,7 @@ api.py[DB5M]: F:接口 Schema 模块  定义接口相关的 Pydantic Schema，�
 application.py[DB5T]: F:应用管理 Schema 模块  定义应用管理相关的 Pydantic Schema，用于 API 请求和响应验证。 | R:- | A:ApplicationBase,ApplicationCreate,ApplicationUpdate,ApplicationResponse,ProAc... | S:90L
 approval_flow_schema.py[DB5M]: F:审批流程节点 Schema：normalize + validate（前后端契约唯一真源）。 | R:- | A:_as_list,normalize_node_data,normalize_flow_graph,validate_flow_graph,assert_... | S:217L
 approval_history.py[DB5T]: F:审批历史记录 Schema 模块  定义审批历史记录相关的 Pydantic Schema，用于数据验证和序列化。 | R:- | A:ApprovalHistoryResponse | S:31L
-approval_instance.py[DB5S]: F:审批实例 Schema 模块  定义审批实例相关的 Pydantic Schema，用于数据验证和序列化。 | R:- | A:ApprovalInstanceBase,ApprovalInstanceCreate,ApprovalInstanceUpdate,ApprovalIn... | S:134L
+approval_instance.py[DB5S]: F:审批实例Pydantic Schema验证与序列化 | R:code:riveredge-backend/src/core/api/approval_processes/approval_instances.py | A:ApprovalInstanceResponse,ApprovalInstanceCreate,ApprovalInstanceUpdate | S:has_my_pending_task仅列表接口填充；会签时current_approver_id可能只是approvers[0]
 approval_process.py[DB5T]: F:审批流程 Schema 模块  定义审批流程相关的 Pydantic Schema，用于数据验证和序列化。 | R:- | A:ApprovalProcessBase,ApprovalProcessCreate,ApprovalProcessUpdate,AuditSwitchTo... | S:73L
 audit_binding.py[DB5T]: F:审核单据绑定 Schema | R:- | A:AuditBindingItemResponse,AuditProcessOptionResponse,AuditBindingListResponse,... | S:47L; 审核单据绑定 Schema
 base.py[DB5T]: F:系统级基础Schema模块  提供统一的BaseSchema基类，用于应用级schema继承。 | R:- | A:BaseSchema,UuidStrCoerceMixin | S:77L
@@ -7583,7 +7584,7 @@ index.tsx[EU5L]: F:@ts-ignore | R:- | A:- | S:546L; @ts-ignore
 NodePropertyForms.tsx[EU5M]: F:必须用 `'approvers' in v`：空数组是合法清空；且不能让残留的旧 approvers 覆盖已写入的 approverIds | R:- | A:- | S:338L
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/pages/system/approval-processes/instances/===
-index.tsx[EU5L]: F:Modal 相关状态（提交审批） | R:- | A:- | S:722L; Modal 相关状态（提交审批）
+index.tsx[EU6L]: F:审批实例列表页含提交审批与同意拒绝转交 | R:code:riveredge-frontend/src/services/approvalInstance.ts | A:ApprovalInstanceListPage | S:同意/拒绝/转交可见性=has_my_pending_task或current_approver_id===me；会签勿只比current_approver_id
 kanban-view.tsx[EU5L]: F:计算统计 | R:- | A:- | S:526L; 计算统计
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/pages/system/approval-processes/list/===
@@ -7619,7 +7620,7 @@ analysis.tsx[EU5T]: F:Implements analysis.tsx | R:- | A:- | S:1L
 dashboardCardSurface.ts[EU5T]: F:Implements dashboardCardSurface.ts | R:- | A:- | S:10L
 dashboardTopBarTheme.ts[EU5T]: F:Implements dashboardTopBarTheme.ts | R:- | A:- | S:39L
 index.tsx[EU5L]: F:克制色：浅底 + 同系文字，避免高饱和色块 | R:- | A:- | S:980L; 克制色：浅底 + 同系文字，避免高饱和色块
-platformUpdateLog.ts[FD5L]: F:工作台通用更新目录合并定制日志并筛选 | R:code:riveredge-frontend/src/pages/system/dashboard/platformUpdateLogDedicated.ts | A:PLATFORM_UPDATE_LOG_GENERAL,getRecentPlatformUpdates | S:用户可见改动插 GENERAL 头部；须同步 zh-CN entries 键；勿写客户公司名
+platformUpdateLog.ts[FD5L]: F:工作台通用更新目录合并定制日志并筛选 | R:code:riveredge-frontend/src/pages/system/dashboard/platformUpdateLogDedicated.ts | A:PLATFORM_UPDATE_LOG_GENERAL,getRecentPlatformUpdates | S:用户可见改动插GENERAL头部；须同步zh-CN entries键；勿写客户公司名
 platformUpdateLogDedicated.ts[EU5L]: F:Implements platformUpdateLogDedicated.ts | R:- | A:- | S:1076行;与源码摘要对齐
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/pages/system/dashboard/analysis/===
@@ -7868,7 +7869,7 @@ apiManagement.ts[EU5M]: F:Implements apiManagement.ts | R:- | A:- | S:358L
 application.ts[EU5L]: F:壳层启动接口：后端 reload 时快速失败并出「重试」，避免空白转圈数分钟 | R:- | A:- | S:458L; 壳层启动接口：后端 reload 时快速失败并出「重试」，避免空白转圈数分钟
 applicationConnection.ts[EU5M]: F:Implements applicationConnection.ts | R:- | A:- | S:227L
 applicationDedicatedBindings.ts[EU5T]: F:Implements applicationDedicatedBindings.ts | R:- | A:- | S:58L
-approvalInstance.ts[EU5M]: F:Implements approvalInstance.ts | R:- | A:- | S:229L
+approvalInstance.ts[IU5M]: F:审批实例前端API与类型定义 | R:code:riveredge-frontend/src/pages/system/approval-processes/instances/index.tsx | A:ApprovalInstance,listApprovalInstances | S:类型含可选has_my_pending_task供会签按钮门禁
 approvalProcess.ts[EU5S]: F:Implements approvalProcess.ts | R:- | A:- | S:106L
 auditBinding.ts[EU5T]: F:Implements auditBinding.ts | R:- | A:- | S:53L
 auth.ts[EI5M]: F:已登录会话认证 API 封装 | R:code:riveredge-frontend/src/services/publicAuth.ts | A:- | S:公开 OAuth 回调走 publicAuth；本文件仅需登录态接口
