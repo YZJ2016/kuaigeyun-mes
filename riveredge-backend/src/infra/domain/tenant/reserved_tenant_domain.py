@@ -12,6 +12,7 @@ RESERVED_TENANT_DOMAINS: frozenset[str] = frozenset(
         "admin",
         "login",
         "infra",
+        "mcp",
         "system",
         "apps",
         "api",

@@ -14,6 +14,7 @@ import { isPlatformAdminEntryPathname, isReservedTenantDomain } from './reserved
 export const TENANT_PATH_RESERVED_SEGMENTS = new Set([
   'login',
   'infra',
+  'mcp',
   'apps',
   'system',
   'personal',

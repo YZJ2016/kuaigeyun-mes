@@ -6,6 +6,7 @@ export const RESERVED_TENANT_DOMAINS = new Set([
   'admin',
   'login',
   'infra',
+  'mcp',
   'system',
   'apps',
   'api',

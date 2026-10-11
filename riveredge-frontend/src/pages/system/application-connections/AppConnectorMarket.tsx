@@ -10,7 +10,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Modal, Card, Row, Col, Input, Space, Typography, Spin, Tag, theme } from 'antd';
-import { MarkerTag, StatusTag } from '../../../constants/statusBadges';
+import { MarkerTag } from '../../../constants/statusBadges';
 import {
   SearchOutlined,
   MessageOutlined,
@@ -318,14 +318,6 @@ const AppConnectorMarket: React.FC<AppConnectorMarketProps> = ({
             } as React.CSSProperties
           }
         >
-          {keyConfigured ? (
-            <StatusTag
-              color="success"
-              className="app-connector-market-card-configured"
-            >
-              {t('pages.system.applicationConnections.marketConfigured')}
-            </StatusTag>
-          ) : null}
           <div className="app-connector-market-card-inner">
             <AppConnectorBrandIcon connectorId={connector.id} fallbackIcon={connector.icon} />
             <div className="app-connector-market-card-main">
@@ -337,7 +329,8 @@ const AppConnectorMarket: React.FC<AppConnectorMarketProps> = ({
                 </div>
                 {(connector.marketLabBadge ||
                   isKuaiaiWorkbuddyConnectionType(connector.type) ||
-                  showCategoryTag) && (
+                  showCategoryTag ||
+                  keyConfigured) && (
                   <div className="app-connector-market-card-tags">
                     {connector.marketLabBadge || isKuaiaiWorkbuddyConnectionType(connector.type) ? (
                       <MarkerTag color="default">{t('app.kuaiai.hub.labBadge')}</MarkerTag>
@@ -345,6 +338,11 @@ const AppConnectorMarket: React.FC<AppConnectorMarketProps> = ({
                     {showCategoryTag ? (
                       <MarkerTag color={connector.category === 'ai' ? 'purple' : 'blue'}>
                         {tagLabel}
+                      </MarkerTag>
+                    ) : null}
+                    {keyConfigured ? (
+                      <MarkerTag color="success">
+                        {t('pages.system.applicationConnections.marketConfigured')}
                       </MarkerTag>
                     ) : null}
                   </div>
@@ -530,14 +528,6 @@ const AppConnectorMarket: React.FC<AppConnectorMarketProps> = ({
             .app-connector-market-card.ant-card-hoverable:hover::before {
               opacity: 0.09;
             }
-            .app-connector-market-card-configured {
-              position: absolute;
-              top: 10px;
-              right: 10px;
-              margin: 0;
-              z-index: 3;
-              font-size: 12px;
-            }
             .app-connector-market-card-inner {
               display: flex;
               gap: 12px;
@@ -547,9 +537,6 @@ const AppConnectorMarket: React.FC<AppConnectorMarketProps> = ({
             .app-connector-market-card-main {
               flex: 1;
               min-width: 0;
-            }
-            .app-connector-market-card:has(.app-connector-market-card-configured) .app-connector-market-card-main {
-              padding-right: 52px;
             }
             .app-connector-market-card-title-row {
               display: flex;
