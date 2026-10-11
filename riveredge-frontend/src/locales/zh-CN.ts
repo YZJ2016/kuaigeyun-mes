@@ -30653,6 +30653,10 @@ export default {
     '物料同步来源类型转换需拉取 FErpClsID',
   'pages.dashboard.updateLog.entries.material-sync-ferpclsid-source-type-r01.description':
     '金蝶物料查询预置 FieldKeys 补上物料属性 FErpClsID；接口里配置的来源类型编码转换（如 1→Buy、2→Make）在同步时才能真正生效。',
+  'pages.dashboard.updateLog.entries.reporting-block-revoke-after-sales-outbound-r01.title':
+    '下推单据须先反审再删，禁止跳级冲销上游',
+  'pages.dashboard.updateLog.entries.reporting-block-revoke-after-sales-outbound-r01.description':
+    '销售订单下推生产工单/采购订单后，须先反审核并删除这些下游，才能反审或删除销售订单。报工若已有已审核/已入库的生产入库单，须先反审删除入库再反审报工；销售已出库亦不可冲报工；出库撤回须先处理送货单/退货。需求计算撤回仍对未执行（含草稿）下游级联删除。',
   'pages.dashboard.updateLog.entries.pc-audit-unreview-empty-pending-r01.title':
     '审核反审核不再出现空壳待审与审计静默',
   'pages.dashboard.updateLog.entries.pc-audit-unreview-empty-pending-r01.description':

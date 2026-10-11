@@ -1378,10 +1378,12 @@ class SalesOrderService:
                     labels = format_sales_order_downstream_labels(downstream_docs)
                     if action == "delete":
                         raise BusinessLogicError(
-                            f"该销售订单已有下游单据（{labels}），请先撤回或删除下游后再删除订单"
+                            f"该销售订单已有下游单据（{labels}），"
+                            f"请先反审核并删除这些下游单据后再删除订单"
                         )
                     raise BusinessLogicError(
-                        f"该销售订单已有下游单据（{labels}），不能撤销审核；如需变更请走销售变更单"
+                        f"该销售订单已有下游单据（{labels}），不能撤销审核；"
+                        f"请先反审核并删除这些下游单据后再操作（业务变更也可走销售变更单）"
                     )
                 raise
             return
@@ -3872,7 +3874,7 @@ class SalesOrderService:
         revoke_state = resolve_sales_order_revoke_state(landing=landing)
 
         async def _do_revoke() -> SalesOrderResponse:
-            # 历史兼容：若历史订单曾产生 Demand 且已下推需求计算，则先执行撤回下推。
+            # 撤回需求计算：未执行（含草稿）下游由 withdraw 级联删除；已执行则拦截。
             demand = await self._get_linked_demand(tenant_id, sales_order_id)
             if demand and demand.pushed_to_computation:
                 await self.withdraw_sales_order_from_computation(tenant_id, sales_order_id)

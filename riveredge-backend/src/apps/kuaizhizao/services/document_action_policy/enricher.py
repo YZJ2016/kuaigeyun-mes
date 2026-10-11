@@ -1423,8 +1423,18 @@ def enrich_work_order_list_item_dicts(
     return item_dicts
 
 
-def enrich_reporting_record_capabilities_on_response(record: Any, response: T) -> T:
-    caps = derive_reporting_record_capabilities(record)
+def enrich_reporting_record_capabilities_on_response(
+    record: Any,
+    response: T,
+    *,
+    has_posted_sales_outbound: bool | None = None,
+    has_approved_inbound_downstream: bool | None = None,
+) -> T:
+    caps = derive_reporting_record_capabilities(
+        record,
+        has_posted_sales_outbound=has_posted_sales_outbound,
+        has_approved_inbound_downstream=has_approved_inbound_downstream,
+    )
     if hasattr(response, "model_copy"):
         return _attach_capabilities_to_response(response, caps)
     return response
@@ -1433,10 +1443,27 @@ def enrich_reporting_record_capabilities_on_response(record: Any, response: T) -
 def enrich_reporting_record_list_capabilities(
     records: List[Any],
     responses: List[T],
+    *,
+    has_posted_sales_outbound_by_wo_id: dict[int, bool] | None = None,
+    has_approved_inbound_by_record_id: dict[int, bool] | None = None,
 ) -> List[T]:
+    outbound_lookup = has_posted_sales_outbound_by_wo_id or {}
+    inbound_lookup = has_approved_inbound_by_record_id or {}
     out: List[T] = []
     for record, resp in zip(records, responses):
-        caps = derive_reporting_record_capabilities(record)
+        wo_id = getattr(record, "work_order_id", None)
+        rid = getattr(record, "id", None)
+        has_outbound = (
+            outbound_lookup.get(int(wo_id)) if wo_id is not None else None
+        )
+        has_inbound = (
+            inbound_lookup.get(int(rid)) if rid is not None else None
+        )
+        caps = derive_reporting_record_capabilities(
+            record,
+            has_posted_sales_outbound=has_outbound,
+            has_approved_inbound_downstream=has_inbound,
+        )
         if hasattr(resp, "model_copy"):
             out.append(_attach_capabilities_to_response(resp, caps))
         else:
