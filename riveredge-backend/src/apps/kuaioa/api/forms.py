@@ -17,7 +17,7 @@ from apps.kuaioa.schemas.forms import (
 )
 from apps.kuaioa.services.form_service import FormRequestService, FormTemplateService
 from apps.kuaioa.services.form_request_issue_service import issue_form_request
-from core.services.permission.user_permission_service import UserPermissionService
+from core.services.authorization.user_permission_service import UserPermissionService
 from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
