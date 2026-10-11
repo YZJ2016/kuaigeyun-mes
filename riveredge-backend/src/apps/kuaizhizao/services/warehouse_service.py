@@ -5394,28 +5394,6 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
             if receipt.status != "已入库":
                 raise BusinessLogicError("只有已入库状态的成品入库单才能撤回入库")
 
-            # 与删除对齐：存在装箱绑定须先原路解除，禁止跳级撤回入库
-            from apps.kuaizhizao.models.packing_binding import PackingBinding
-
-            if await PackingBinding.filter(
-                tenant_id=tenant_id,
-                finished_goods_receipt_id=receipt_id,
-                deleted_at__isnull=True,
-            ).exists():
-                raise BusinessLogicError("已存在装箱绑定记录，请先删除绑定后再撤回入库")
-
-            # 关联工单产品已销售出库时禁止撤回（与报工反审门禁一致）
-            wo_id = getattr(receipt, "work_order_id", None)
-            if wo_id:
-                from apps.kuaizhizao.services.reporting_service import ReportingService
-
-                if await ReportingService()._work_order_has_posted_sales_outbound(
-                    tenant_id, int(wo_id)
-                ):
-                    raise BusinessLogicError(
-                        "关联销售订单已出库，不能撤回生产入库；请先原路撤回销售出库"
-                    )
-
             try:
                 from apps.kuaizhizao.services.inventory_service import InventoryService
 
@@ -7300,37 +7278,6 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
 
             if delivery.status != "已出库":
                 raise ValidationError("只有已出库状态的销售出库单才能撤回")
-
-            # 与 delete_sales_delivery 对齐：下游送货单/退货须先原路处理，禁止跳级撤回出库
-            from apps.kuaizhizao.models.delivery_notice import DeliveryNotice
-            from apps.kuaizhizao.models.sales_return import SalesReturn
-            from apps.kuaizhizao.services.document_action_policy.types import (
-                CAPABILITY_REASON_MESSAGES,
-            )
-
-            if await DeliveryNotice.filter(
-                tenant_id=tenant_id,
-                sales_delivery_id=delivery_id,
-                deleted_at__isnull=True,
-            ).exclude(status="待发送").exists():
-                raise BusinessLogicError(
-                    CAPABILITY_REASON_MESSAGES.get(
-                        "outbound_hub.withdraw.has_delivery_notice",
-                        "存在非待发送状态的送货单，请先原路处理后再撤回出库",
-                    )
-                )
-
-            if await SalesReturn.filter(
-                tenant_id=tenant_id,
-                sales_delivery_id=delivery_id,
-                deleted_at__isnull=True,
-            ).exclude(status__in=["待退货", "draft", "草稿", "已取消", "cancelled"]).exists():
-                raise BusinessLogicError(
-                    CAPABILITY_REASON_MESSAGES.get(
-                        "outbound_hub.withdraw.has_sales_return",
-                        "存在已确认的销售退货单，无法撤回出库",
-                    )
-                )
 
             items = await SalesDeliveryItem.filter(
                 tenant_id=tenant_id,
