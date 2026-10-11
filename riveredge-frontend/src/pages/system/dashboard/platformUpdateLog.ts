@@ -44,7 +44,6 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
-<<<<<<< HEAD
     id: 'kuaioa-asset-registry-redirect-fa-r01',
     date: '2026-10-10',
     type: 'fix',
@@ -203,7 +202,6 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
       'pages.dashboard.updateLog.entries.approval-countersign-my-pending-task-r01.title',
     descriptionKey:
       'pages.dashboard.updateLog.entries.approval-countersign-my-pending-task-r01.description',
-=======
     id: 'infra-open-api-workbuddy-preset-r01',
     date: '2026-10-11',
     type: 'feature',
@@ -277,7 +275,15 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
     titleKey: 'pages.dashboard.updateLog.entries.workplace-weather-15s-flash-r01.title',
     descriptionKey:
       'pages.dashboard.updateLog.entries.workplace-weather-15s-flash-r01.description',
->>>>>>> 4a43e11ac (feat(infra): 开放平台 WorkBuddy 预置与连接器实验室联调)
+  },
+  {
+    id: 'approval-countersign-my-pending-task-r01',
+    date: '2026-10-11',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.approval-countersign-my-pending-task-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.approval-countersign-my-pending-task-r01.description',
   },
   {
     id: 'gitee-oauth-drop-projects-scope-r01',
