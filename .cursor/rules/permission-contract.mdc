@@ -1,0 +1,66 @@
+---
+description: 系统 RBAC 权限契约——manifest 唯一真源，禁止旁路推断与混用 action
+alwaysApply: true
+---
+
+# 系统权限契约（禁止旁路）
+
+全应用（非仅 haoligo）须遵守 `docs/core/permission-contract.md` 与 `docs/core/permission-responsibility.md`。
+
+提交前运行：`cd riveredge-backend && python scripts/scan_permission_bypass.py --fail-on high`  
+时区契约：`cd riveredge-backend && python scripts/scan_timezone_contract.py --fail-on high`（见 `timezone-contract.mdc`）
+
+## 权限码
+
+- 格式：`{app}:{module}:{action}`，action 仅来自 `STANDARD_ACTIONS`（`permission_action_spec.py`）。
+- **唯一声明**：应用 `manifest.json` 的 `permissions` + 核心注册表；改码后须权限同步。
+
+## 基线权限（必开）
+
+- 真源：`PermissionRegistryService.BASELINE_PERMISSION_CODES`（前端镜像 `BASELINE_PERMISSION_CODES` in `permissionContract.ts`）。
+- 当前范围：个人中心 8 码（`system:user-profile|preference|message|task` × `read|update`）。
+- 行为：新建角色 / 预设分配 / 矩阵保存 / 权限同步强制授予；矩阵勾选禁用；`UserPermissionService` 对有角色用户合并基线。
+- **禁止**仅在前端勾选、或业务旁路绕过服务端合并。
+
+## 后端（必须）
+
+- **新业务 / 非 CRUD 子路径**：`require_permission_codes("app:module:action")` 或 `require_module_access(..., route_permission_codes=[...])`。
+- **禁止**：为掩盖 403 在 `access.py` 的 `_resolve_action_by_request` 堆路径特例而不改 manifest（标准 REST 遗留推断除外）。
+- **禁止**：`require_module_access(app, "workspace")` 或其它模块冒充单据权限。
+- **禁止**：应用内自建 `assert_*_access` 使用与 manifest 不一致的码；应复用 `core/config/permission_contract.py`（`build_permission_code`、`review_permission_codes`）。
+- 审核：`*review_permission_codes(app, module)`，不得用 `update` 代替。
+- 应用内细粒度 RBAC：`require_permission_codes(..., check_abac=False)` 除非明确需要 ABAC。
+
+## 前端（必须）
+
+- 按钮/操作：`useResourcePermissions(resource)` 的 `canRead` / `canUpdate` / `canPrint` 等，或 `permissionContract.ts` 的 `hasReviewPermission` / `hasModulePermission`。
+- **禁止**：`hasPermission(..., 'update')` 控制审核、打印、完修。
+- **禁止**：`hasUpdate || isExternalPartner || !canUpdate` 等组合冒充 manifest action；`isExternalPartner` 仅用于 UI 文案/数据范围，不得门控 RBAC。
+- **外协身份（唯一真源）**：`role_type === 'external'` 且 `external_partner_type` 非空（与 `_data_scope.user_is_external_partner` 一致）；PC/手机均用 `utils/externalPartner.ts`。
+- **禁止外协身份旁路**：`detectIsOutsource`、角色 code/name 正则、权限集合推断、缺 `role_type` 时默认 `internal`/厂内、`catch` 后假定为厂内。
+- **禁止**：HaoliGO 页面直接 `hasPermission(...)`；须 `useResourcePermissions` / `hasModulePermission`。
+- **禁止**：HaoliGO 后端 `_haoligo_route_access` 回落 `_resolve_action_by_request`。
+
+## 宿主页跨模块读（默认严格 + 白名单 OR）
+
+- **默认**：关联模块 list 须有该模块 `:read`；前端 `useResourcePermissions` 无 `canRead` 则不请求；无权限用宿主快照回显，区块隐藏或灰显。
+- **OR 例外**：仅 [`affiliate_read_allowlist.py`](riveredge-backend/src/core/config/affiliate_read_allowlist.py) 登记的附属只读 GET；禁止在 `*_route_access.py` 内联堆 OR。
+- **错误面**：仅主资源 API 失败可写宿主 `*DetailError` / 整页「权限不足」；次要请求失败独立降级（见 `docs/core/permission-contract.md`）。
+- **module 参数**：`require_*_module_access("material")` 禁止传 `master-data:material`（双前缀）；扫描器 fail-on high。
+
+## 数据范围
+
+- RBAC 管「能否操作」；`DataScopeService` 管「能看哪些行」。不得用 ABAC 替代未授予的 RBAC 码。
+
+## 展示顺序与文案（唯一真源，禁止补丁）
+
+| 项 | 真源 | 禁止 |
+|----|------|------|
+| 角色矩阵勾选顺序 | `manifest.json` → `permissions` 数组下标 | `permission_action_spec` 硬编码排序、前端 `actions.sort` |
+| 操作展示文案 | `permission_action_spec.ACTION_DISPLAY_LABELS` → 同步 `core_permissions.name` → grant API `label` | 前端 `actionFallback` / `simpleActionLabel` / 兜底「权限」 |
+| 业务门控 | manifest action + 后端依赖 | `update`/`read` 混用、`isExternalPartner` 代替 RBAC |
+
+## 完成前自检
+
+- manifest 已加权限码 → 已同步 → 后端显式依赖 → 前端同一 resource 门控。
+- `python scripts/scan_permission_bypass.py --fail-on high` 通过。

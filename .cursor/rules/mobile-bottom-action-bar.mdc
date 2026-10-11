@@ -1,0 +1,41 @@
+---
+description: 手机端底栏按钮契约（ActionBarButton 唯一路径，禁止 antd Button 内容宽左对齐）
+globs: riveredge-app/mobile/**/*.{tsx,ts}
+alwaysApply: false
+---
+
+# 手机端底栏按钮契约（禁止旁路）
+
+改 `riveredge-app/mobile` 详情 / 确认 / 执行页底栏时必须遵守。用户已明确：靠人工截图指出宽度边距错误不可接受。
+
+## 唯一路径
+
+| 场景 | 真源 | 禁止 |
+|------|------|------|
+| 详情 / 确认底栏按钮 | `ActionBarButton`（`src/components/BottomActionBar.tsx`） | Ant Design `Button` |
+| 底栏容器 | `BottomActionBar`；按钮为**直接子节点** | 外包 `View` 抢 `flex`（`CreateBottomBar` 除外） |
+| `DocReadDetail` / 同类 `footer` | 只放 `ActionBarButton`（可多个平铺） | `footer` 里塞 antd `Button` / 内容宽按钮 |
+| 列表「新建 / 执行」绿底栏 | `CreateBottomBar` | 手写 antd 主按钮冒充底栏 |
+
+## 严禁
+
+- 底栏里 `<Button type="primary" style={styles.btn}>` → 内容宽、左对齐
+- `BottomActionBar` → `<View style={footerCol}>` → 多个 Button（破坏均分）
+- 「先能点再调样式」的补丁写法；规范不是建议，是底线
+
+## 正确示例
+
+```tsx
+<BottomActionBar>
+  <ActionBarButton type="primary" label="转维修" onPress={...} />
+  <ActionBarButton type="default" label="查看设备" onPress={...} />
+</BottomActionBar>
+```
+
+## 完成前自检（必做）
+
+```bash
+cd riveredge-app/mobile && python scripts/scan_bottom_action_bar.py --fail-on high
+```
+
+或 `npm run scan:ui`。high 非 0 视为未完成，不得交付。

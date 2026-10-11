@@ -1,0 +1,31 @@
+---
+description: 业务类单据详情抽屉（销售订单试点）；基础资料见 master-data-detail-drawer
+alwaysApply: true
+---
+
+# 业务类单据详情抽屉
+
+改 **销售/采购/工单/仓储/检验等业务单据** 详情抽屉时遵守；细则见 `.cursor/skills/detail-drawer/SKILL.md`。
+**基础资料**（客商/厂区/物料/设备台账）见 `.cursor/skills/master-data-detail-drawer/SKILL.md`，不要套 HALF_WIDTH / 全链路。
+
+## 唯一路径
+
+| 关注点 | 真源 | 禁止 |
+|---|---|---|
+| 壳 | 单一 `DetailDrawerTemplate`，`loading` 遮罩 | 加载/有数据各 return 一棵 Template |
+| 正文 | 插槽 `basic` / `collaboration` / `lines` / `timeline` | 关联入口 `plainBody` 另写精简详情 |
+| 列表与关联 | 同一 `XxxDetailDrawer` | Linked 抽屉复制一份 Descriptions |
+| 关联打开 | `openLinkedDocumentDetail` | `navigate` 到列表再弹抽屉 |
+| 关联单号 | 无 dummy `render`，自动挂链 | 页面手写 `onClick` 开抽屉 |
+| 全链路 | `traceDocument` 懒 Tab | 协作区预挂 `DetailDrawerInlineFullChain` |
+| 宽度 | `DRAWER_CONFIG.HALF_WIDTH` | 页面手写宽度数字 |
+| 详情 Tab 板块标题 | `DetailDrawerSection` `titleAccent`（默认开） | 手写 Card 标题；单页补 CSS 竖条 |
+| 基本信息字段序 | `GLOBAL_DOC_DETAIL_BASIC_FIELD_RANK` + `alignDescriptionColumns` | 手排 Descriptions；误用列表 rank |
+| 有二维码时列数 | `detailDrawerBasicColumn(true)` = 2 + `basicExtra` 码 1 列 | 有码仍 3 列字段挤成 4 栏；独立 Tab 详情页套用 |
+| 右上角操作 | `extra`：列表完整 / 嵌套只读工作流+打印 | `footer` 当标题按钮；嵌套塞编辑删除；`type="link"` extra |
+
+## 严禁（血泪）
+
+- **双树滑入两次**：`if (loading) return <DetailDrawerTemplate plainBody={<Spin/>}/>` 再 return 内容壳
+- **失败直接 onClose**：取数失败须 `Result` + 重试，留在壳内
+- **Linked 精简版**：采购订单/工单等 Linked 抽屉仍是反例，迁改时对齐销售订单试点，勿继续补字段

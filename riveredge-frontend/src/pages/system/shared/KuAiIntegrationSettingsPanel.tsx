@@ -1,5 +1,5 @@
 /**
- * KU-AI / DeepSeek / OCR 集成设置（原站点设置「集成设置」Tab）
+ * KU-AI / DeepSeek 集成设置（原站点设置「集成设置」Tab）
  * 数据仍写入 site-settings.integrations，供 AI 运行时读取。
  */
 
@@ -23,8 +23,6 @@ import { ReloadOutlined, SaveOutlined } from '@ant-design/icons';
 import { getSiteSetting, updateSiteSetting } from '../../../services/siteSetting';
 import { useConfigStore } from '../../../stores/configStore';
 import {
-  DEEPSEEK_OCR_EXAMPLE_BASE_URL,
-  DEEPSEEK_OCR_EXAMPLE_MODEL,
   DEEPSEEK_V4_MODEL_OPTIONS,
 } from '../../../utils/integrationSettings';
 import {
@@ -52,14 +50,9 @@ const KuAiIntegrationSettingsPanel: React.FC<KuAiIntegrationSettingsPanelProps> 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deepseekApiKeyConfigured, setDeepseekApiKeyConfigured] = useState(false);
-  const [deepseekOcrApiKeyConfigured, setDeepseekOcrApiKeyConfigured] = useState(false);
-
   const applySettingsToForm = useCallback((settings: Record<string, any> | undefined) => {
     form.setFieldsValue(buildKuAiIntegrationFormValues(settings?.integrations));
     setDeepseekApiKeyConfigured(settings?.integrations?.deepseek?.api_key_configured === true);
-    setDeepseekOcrApiKeyConfigured(
-      settings?.integrations?.deepseek?.ocr_api_key_configured === true,
-    );
   }, [form]);
 
   const loadSettings = useCallback(async () => {
@@ -163,52 +156,6 @@ const KuAiIntegrationSettingsPanel: React.FC<KuAiIntegrationSettingsPanelProps> 
                         deepseekApiKeyConfigured
                           ? t('pages.system.siteSettings.integrationsDeepseekApiKeyPlaceholderConfigured')
                           : t('pages.system.siteSettings.integrationsDeepseekApiKeyPlaceholder')
-                      }
-                      autoComplete="new-password"
-                    />
-                  </Form.Item>
-                </Col>
-              </Row>
-            </Card>
-          </Col>
-          <Col span={24}>
-            <Card title={t('pages.system.siteSettings.integrationsDeepseekOcrTitle')} size="small">
-              <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>
-                {t('pages.system.siteSettings.integrationsDeepseekOcrHint')}
-              </Typography.Paragraph>
-              <Row gutter={[16, 16]}>
-                <Col xs={24} md={8}>
-                  <Form.Item
-                    name="integrations.deepseek.ocr_base_url"
-                    label={t('pages.system.siteSettings.integrationsDeepseekOcrBaseUrl')}
-                  >
-                    <Input placeholder={DEEPSEEK_OCR_EXAMPLE_BASE_URL} />
-                  </Form.Item>
-                </Col>
-                <Col xs={24} md={8}>
-                  <Form.Item
-                    name="integrations.deepseek.ocr_model"
-                    label={t('pages.system.siteSettings.integrationsDeepseekOcrModel')}
-                  >
-                    <Input placeholder={DEEPSEEK_OCR_EXAMPLE_MODEL} />
-                  </Form.Item>
-                </Col>
-                <Col xs={24} md={8}>
-                  <Form.Item
-                    name="integrations.deepseek.ocr_api_key"
-                    label={t('pages.system.siteSettings.integrationsDeepseekOcrApiKey')}
-                    tooltip={t('pages.system.siteSettings.integrationsDeepseekOcrApiKeyTooltip')}
-                    extra={
-                      deepseekOcrApiKeyConfigured
-                        ? t('pages.system.siteSettings.integrationsDeepseekApiKeyConfigured')
-                        : undefined
-                    }
-                  >
-                    <Input.Password
-                      placeholder={
-                        deepseekOcrApiKeyConfigured
-                          ? t('pages.system.siteSettings.integrationsDeepseekApiKeyPlaceholderConfigured')
-                          : t('pages.system.siteSettings.integrationsDeepseekOcrApiKeyPlaceholder')
                       }
                       autoComplete="new-password"
                     />

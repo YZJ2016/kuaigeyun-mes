@@ -12,6 +12,7 @@
 | KU-Suggest | 单据内推荐、半写回 | Wave 2 |
 | KU-Know | SOP/知识 RAG 侧栏 | Wave 2 |
 | KU-Act | 人审后 Agent 执行 | Wave 3 |
+| KU-Bridge（实验室） | 外部 Agent 经 MCP 只读访问 MES | Wave 4 实验室 |
 
 ## Wave 1 — Assist 落地
 
@@ -33,6 +34,14 @@
 - 审计与人审确认
 - `kuaiai:act:execute` 权限
 - 首批短链路 Agent（催交期草稿等）
+
+## Wave 4 — 实验室：KU-Bridge
+
+- 站点配置 `integrations.kuaiai.channels.workbuddy`（默认关闭，`maturity: lab`）
+- KU-AI 设置与 Hub 能力卡（实验室徽章）
+- Sidecar MCP（`kuaigeyun-pro/tools/workbuddy-mcp`）+ 开放 API 只读：销售订单、工单、库存
+- WorkBuddy 企业后台登记 MCP 连接器（非 MES 应用连接器市场）
+- 对接说明：[EXTERNAL-AGENT-WORKBUDDY.md](./EXTERNAL-AGENT-WORKBUDDY.md)
 
 ## 治理契约
 

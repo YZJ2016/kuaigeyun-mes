@@ -9,7 +9,7 @@
  */
 
 import i18n from '../config/i18n';
-import { resolveWeatherCityLabel } from '../constants/chinaAdminRegions';
+import { resolveChinaAdminRegionLabels, resolveWeatherCityLabel } from '../constants/chinaAdminRegions';
 import { useConfigStore } from '../stores/configStore';
 
 /**
@@ -90,25 +90,87 @@ export async function getLocationByIP(): Promise<LocationData | null> {
 /**
  * 通过 Open-Meteo 地理编号 API 将城市名解析为经纬度
  */
-async function geocodeCity(cityName: string, language: WeatherLang = 'zh'): Promise<{ lat: number; lon: number; label?: string } | null> {
+type GeoHit = { lat: number; lon: number; label?: string; admin1?: string };
+
+const ADMIN_SUFFIX =
+  /(?:维吾尔自治区|壮族自治区|回族自治区|特别行政区|自治区|自治州|地区|盟|省|市|区|县|旗)$/u;
+
+function adminStem(name: string): string {
+  return name.replace(ADMIN_SUFFIX, '').trim();
+}
+
+function isPlaceholderAdminLabel(name: string): boolean {
+  return name === '市辖区' || name === '县' || name === '省直辖县级行政区划';
+}
+
+async function searchGeo(name: string, language: WeatherLang): Promise<GeoHit[]> {
   try {
-    const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(cityName)}&count=1&language=${language}`;
+    const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=8&language=${language}`;
     const res = await window.fetch(url, { signal: (window.AbortSignal as any).timeout(5000) });
-    if (!res.ok) return null;
+    if (!res.ok) return [];
     const data = await res.json();
     const results = data.results;
-    if (Array.isArray(results) && results.length > 0) {
-      const r = results[0];
+    if (!Array.isArray(results)) return [];
+    const hits: GeoHit[] = [];
+    for (const r of results) {
       const lat = parseFloat(r.latitude);
       const lon = parseFloat(r.longitude);
-      if (!isNaN(lat) && !isNaN(lon)) {
-        return { lat, lon, label: r.name as string | undefined };
-      }
+      if (Number.isNaN(lat) || Number.isNaN(lon)) continue;
+      hits.push({
+        lat,
+        lon,
+        label: typeof r.name === 'string' ? r.name : undefined,
+        admin1: typeof r.admin1 === 'string' ? r.admin1 : undefined,
+      });
     }
+    return hits;
   } catch {
-    // 静默失败
+    return [];
+  }
+}
+
+function admin1Matches(admin1: string | undefined, provinceKey: string): boolean {
+  if (!provinceKey) return true;
+  if (!admin1) return false;
+  const stem = adminStem(admin1);
+  return stem === provinceKey || stem.includes(provinceKey) || provinceKey.includes(stem);
+}
+
+/**
+ * 手工行政区：Open-Meteo 没有「玄武区」这类区县，且去掉「区」后会命中外省同名点。
+ * 区县用上一级市名查询，再用省名对上 admin1。
+ */
+async function geocodeChinaAdminLabels(
+  labels: string[],
+  language: WeatherLang,
+): Promise<GeoHit | null> {
+  const usable = labels.map((x) => String(x).trim()).filter((x) => x && !isPlaceholderAdminLabel(x));
+  if (!usable.length) return null;
+  const provinceKey = adminStem(usable[0]);
+  const names: string[] = [];
+  const push = (raw: string | undefined) => {
+    if (!raw) return;
+    const stem = adminStem(raw);
+    if (stem && !names.includes(stem)) names.push(stem);
+    if (raw !== stem && !names.includes(raw)) names.push(raw);
+  };
+  const last = usable[usable.length - 1];
+  const isDistrict = /(区|县|旗)$/.test(last);
+  if (isDistrict && usable.length >= 2) {
+    push(usable[usable.length - 2]);
+  }
+  for (let i = usable.length - 1; i >= 0; i -= 1) push(usable[i]);
+  for (const name of names) {
+    const hits = await searchGeo(name, language);
+    const matched = hits.find((hit) => admin1Matches(hit.admin1, provinceKey));
+    if (matched) return matched;
   }
   return null;
+}
+
+async function geocodeCity(cityName: string, language: WeatherLang = 'zh'): Promise<GeoHit | null> {
+  const hits = await searchGeo(cityName, language);
+  return hits[0] ?? null;
 }
 
 /** 逆地理：按当前语言返回城市/地区名（经后端代理，Open-Meteo 无 reverse 端点） */
@@ -167,70 +229,31 @@ async function getWeatherByCoords(
 }
 
 /**
- * 获取天气信息
- * 优先使用 Open-Meteo（国内可访问）；城市名时先地理编号再取天气，避免依赖 wttr.in
+ * 获取天气信息。只走 Open-Meteo。
+ * 经纬度不再把 "lat,lon" 当城市名再查一遍，也不再串 wttr.in。
+ * 三段超时（约 6s + 5s + 4s）会在工作台已经画完后约 15 秒才返回，并带动日历天空背景重绘。
  *
  * @param city 城市名称或经纬度（格式：lat,lon）
  */
 export async function getWeather(city: string, language: WeatherLang = resolveWeatherLanguage()): Promise<WeatherData | null> {
   try {
-    // 1. 若有经纬度，直接使用 Open-Meteo
     if (city.includes(',')) {
       const parts = city.split(',');
       const lat = parseFloat(parts[0]);
       const lon = parseFloat(parts[1]);
       if (!isNaN(lat) && !isNaN(lon)) {
-        const result = await getWeatherByCoords(lat, lon, undefined, language);
-        if (result) return result;
+        return getWeatherByCoords(lat, lon, undefined, language);
       }
     }
 
-    // 2. 城市名：通过 Open-Meteo 地理编号获取经纬度，再取天气
     const coords = await geocodeCity(city, language);
-    if (coords) {
-      const result = await getWeatherByCoords(
-        coords.lat,
-        coords.lon,
-        coords.label ?? city,
-        language
-      );
-      if (result) return result;
-    }
-
-    // 3. 备选：wttr.in（国内可能超时）
-    try {
-      const wttrLang = language === 'zh' ? 'zh' : 'en';
-      const wttrUrl = `https://wttr.in/${encodeURIComponent(city)}?format=j1&lang=${wttrLang}`;
-      const wttrResponse = await window.fetch(wttrUrl, {
-        headers: { Accept: 'application/json' },
-        signal: (window.AbortSignal as any).timeout(4000),
-      });
-      if (wttrResponse.ok) {
-        const data = await wttrResponse.json();
-        if (data.current_condition?.[0]) {
-          const current = data.current_condition[0];
-          const location = data.nearest_area?.[0] || {};
-          const weatherCode = parseInt(current.weatherCode) || 100;
-          const areaName =
-            language === 'zh'
-              ? location.areaName?.[0]?.value || city
-              : location.areaName?.[0]?.value || city;
-          return {
-            city: areaName,
-            temperature: parseInt(current.temp_C) || 0,
-            description: getWeatherDescription(weatherCode, language),
-            iconCode: weatherCode.toString(),
-            humidity: parseInt(current.humidity) || 0,
-            windSpeed: parseInt(current.windspeedKmph) || 0,
-            feelsLike: parseInt(current.FeelsLikeC) || 0,
-          };
-        }
-      }
-    } catch {
-      // wttr.in 失败静默跳过
-    }
-
-    return null;
+    if (!coords) return null;
+    return getWeatherByCoords(
+      coords.lat,
+      coords.lon,
+      coords.label ?? city,
+      language
+    );
   } catch (error) {
     if (typeof window !== 'undefined') {
       window.console.error('获取天气信息失败:', error);
@@ -338,9 +361,17 @@ export function getSiteWeatherLocationMode(): SiteWeatherLocationMode {
   return mode === 'manual' ? 'manual' : 'ip';
 }
 
+function readManualRegionLabels(): string[] {
+  const stored = useConfigStore.getState().getConfig<string[]>('user_location.region_labels', []);
+  if (Array.isArray(stored) && stored.length > 0) {
+    return stored.map((item) => String(item));
+  }
+  const codes = useConfigStore.getState().getConfig<string[]>('user_location.region_codes', []);
+  return resolveChinaAdminRegionLabels(Array.isArray(codes) ? codes.map((item) => String(item)) : []);
+}
+
 export function getSiteWeatherManualCity(): string | null {
-  const labels = useConfigStore.getState().getConfig<string[]>('user_location.region_labels', []);
-  return resolveWeatherCityLabel(Array.isArray(labels) ? labels : null);
+  return resolveWeatherCityLabel(readManualRegionLabels());
 }
 
 export function getSiteWeatherLocationKey(): string {
@@ -416,9 +447,12 @@ export async function getSiteWeather(force = false, language?: string): Promise<
 
     let weather: WeatherData | null = null;
     if (getSiteWeatherLocationMode() === 'manual') {
-      const city = getSiteWeatherManualCity();
+      const labels = readManualRegionLabels();
+      const city = resolveWeatherCityLabel(labels);
       if (!city) return null;
-      weather = await getWeather(city, lang);
+      const coords = await geocodeChinaAdminLabels(labels, lang);
+      if (!coords) return null;
+      weather = await getWeatherByCoords(coords.lat, coords.lon, city, lang);
       if (weather) {
         weather.city = city;
         weather.description = getWeatherDescription(parseInt(weather.iconCode, 10) || 0, lang);
@@ -438,13 +472,8 @@ export async function getSiteWeather(force = false, language?: string): Promise<
         if (location.lat != null && location.lon != null) {
           weather.lat = location.lat;
           weather.lon = location.lon;
-          const localizedCity = await reverseGeocodeLabel(location.lat, location.lon, lang);
-          if (localizedCity) {
-            weather.city = localizedCity;
-          } else if (!weather.city || weather.city.includes(',')) {
-            weather.city = location.city || location.region || weather.city;
-          }
-        } else {
+        }
+        if (!weather.city || weather.city.includes(',')) {
           weather.city = location.city || location.region || weather.city;
         }
         weather.description = getWeatherDescription(parseInt(weather.iconCode, 10) || 0, lang);

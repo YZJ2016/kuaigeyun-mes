@@ -9,7 +9,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Modal, Card, Row, Col, Input, Radio, Space, Typography, Spin, theme } from 'antd';
+import { Modal, Card, Row, Col, Input, Space, Typography, Spin, Tag, theme } from 'antd';
 import { MarkerTag, StatusTag } from '../../../constants/statusBadges';
 import {
   SearchOutlined,
@@ -30,11 +30,14 @@ import {
 import { MODAL_CONFIG } from '../../../components/layout-templates/constants';
 import {
   APP_CONNECTOR_DEFINITIONS,
+  AppConnectorCategory,
   AppConnectorDefinition,
   ERP_DEPLOYMENT_KIND_ORDER,
   ERP_VENDOR_GROUP_ORDER,
   ErpDeploymentKind,
   ErpVendorGroup,
+  isKuaiaiOcrConnectionType,
+  isKuaiaiWorkbuddyConnectionType,
   isLlmConnectionType,
   resolveErpDeploymentKind,
   resolveErpVendorGroup,
@@ -44,8 +47,25 @@ import {
   getConnectorDefinitions,
   ConnectorDefinition,
 } from '../../../services/applicationConnection';
+import {
+  AppConnectorBrandIcon,
+  resolveConnectorMarketCardAccent,
+} from './connectorBrandPresentation';
 
 const { Text } = Typography;
+
+const CATEGORY_MARKET_ACCENT: Record<AppConnectorCategory, string> = {
+  collaboration: '#2BA245',
+  erp: '#1677ff',
+  plm: '#531dab',
+  crm: '#eb2f96',
+  oa: '#13c2c2',
+  iot: '#fa8c16',
+  wms: '#597ef7',
+  storage: '#722ed1',
+  ai: '#722ed1',
+  other: '#1677ff',
+};
 
 const ICON_MAP: Record<string, React.ReactNode> = {
   MessageOutlined: <MessageOutlined />,
@@ -190,7 +210,11 @@ const AppConnectorMarket: React.FC<AppConnectorMarketProps> = ({
         if (cancelled) return;
         const next = new Set<string>();
         for (const row of items) {
-          if (isLlmConnectionType(row.type)) {
+          if (
+            isLlmConnectionType(row.type) ||
+            isKuaiaiOcrConnectionType(row.type) ||
+            isKuaiaiWorkbuddyConnectionType(row.type)
+          ) {
             next.add(row.type);
           }
         }
@@ -259,11 +283,26 @@ const AppConnectorMarket: React.FC<AppConnectorMarketProps> = ({
 
   const renderConnectorCard = (connector: AppConnectorDefinition, options?: { hideCategoryTag?: boolean }) => {
     const keyConfigured =
-      isLlmConnectionType(connector.type) && configuredAiTypes.has(connector.type);
+      (isLlmConnectionType(connector.type) ||
+        isKuaiaiOcrConnectionType(connector.type) ||
+        isKuaiaiWorkbuddyConnectionType(connector.type)) &&
+      configuredAiTypes.has(connector.type);
     const tagLabel = CATEGORY_KEYS[connector.category]
       ? t(`pages.system.applicationConnections.${CATEGORY_KEYS[connector.category]}`)
       : connector.category;
     const showCategoryTag = Boolean(connector.category) && !options?.hideCategoryTag;
+    const title = t(`pages.system.applicationConnections.${connectorTypeKey(connector.id)}`, {
+      defaultValue: connector.name,
+    });
+    const description = connector.description
+      ? t(`pages.system.applicationConnections.${connectorDescKey(connector.id)}`, {
+          defaultValue: connector.description,
+        })
+      : '';
+    const cardAccent =
+      resolveConnectorMarketCardAccent(connector.id) ??
+      CATEGORY_MARKET_ACCENT[connector.category] ??
+      token.colorPrimary;
     return (
       <Col key={connector.id} xs={24} sm={12} md={8}>
         <Card
@@ -271,38 +310,57 @@ const AppConnectorMarket: React.FC<AppConnectorMarketProps> = ({
           hoverable
           size="small"
           onClick={() => handleSelect(connector)}
-          style={{ height: '100%', position: 'relative' }}
+          style={
+            {
+              height: '100%',
+              position: 'relative',
+              '--connector-card-accent': cardAccent,
+            } as React.CSSProperties
+          }
         >
           {keyConfigured ? (
             <StatusTag
               color="success"
-              style={{ position: 'absolute', top: 8, right: 8, margin: 0, zIndex: 1 }}
+              className="app-connector-market-card-configured"
             >
               {t('pages.system.applicationConnections.marketConfigured')}
             </StatusTag>
           ) : null}
-          <Space orientation="vertical" size="small" style={{ width: '100%' }}>
-            <Space wrap>
-              <span style={{ fontSize: 24, color: token.colorPrimary }}>{connector.icon}</span>
-              <Text strong>
-                {t(`pages.system.applicationConnections.${connectorTypeKey(connector.id)}`, {
-                  defaultValue: connector.name,
-                })}
-              </Text>
-              {showCategoryTag ? (
-                <MarkerTag color={connector.category === 'ai' ? 'purple' : 'blue'}>
-                  {tagLabel}
-                </MarkerTag>
+          <div className="app-connector-market-card-inner">
+            <AppConnectorBrandIcon connectorId={connector.id} fallbackIcon={connector.icon} />
+            <div className="app-connector-market-card-main">
+              <div className="app-connector-market-card-title-row">
+                <div className="app-connector-market-card-title">
+                  <Text strong ellipsis={{ tooltip: title }}>
+                    {title}
+                  </Text>
+                </div>
+                {(connector.marketLabBadge ||
+                  isKuaiaiWorkbuddyConnectionType(connector.type) ||
+                  showCategoryTag) && (
+                  <div className="app-connector-market-card-tags">
+                    {connector.marketLabBadge || isKuaiaiWorkbuddyConnectionType(connector.type) ? (
+                      <MarkerTag color="default">{t('app.kuaiai.hub.labBadge')}</MarkerTag>
+                    ) : null}
+                    {showCategoryTag ? (
+                      <MarkerTag color={connector.category === 'ai' ? 'purple' : 'blue'}>
+                        {tagLabel}
+                      </MarkerTag>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+              {description ? (
+                <div
+                  className="app-connector-market-card-desc"
+                  style={{ color: token.colorTextSecondary }}
+                  title={description}
+                >
+                  {description}
+                </div>
               ) : null}
-            </Space>
-            {connector.description ? (
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                {t(`pages.system.applicationConnections.${connectorDescKey(connector.id)}`, {
-                  defaultValue: connector.description,
-                })}
-              </Text>
-            ) : null}
-          </Space>
+            </div>
+          </div>
         </Card>
       </Col>
     );
@@ -316,33 +374,215 @@ const AppConnectorMarket: React.FC<AppConnectorMarketProps> = ({
       footer={null}
       width={MODAL_CONFIG.CONNECTOR_MARKET_WIDTH}
       destroyOnHidden
+      styles={{
+        body: {
+          paddingTop: token.paddingSM,
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+        },
+      }}
     >
-      <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
-        <Radio.Group
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          optionType="button"
-          size="medium"
-        >
-          {categories.map((c) => (
-            <Radio.Button key={c.key} value={c.key}>
-              {c.label}
-            </Radio.Button>
-          ))}
-        </Radio.Group>
-        <Input
-          placeholder={t('pages.system.applicationConnections.searchPlaceholder')}
-          prefix={<SearchOutlined />}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          allowClear
-        />
-        <Spin spinning={loading}>
-          <div style={{ '--connector-primary': token.colorPrimary } as React.CSSProperties}>
+      <div
+        className="app-connector-market-shell"
+        style={
+          {
+            '--connector-tag-idle-bg': token.colorFillTertiary,
+            '--connector-tag-idle-color': token.colorText,
+            '--connector-market-toolbar-bg': token.colorBgContainer,
+            '--connector-market-toolbar-border': token.colorBorderSecondary,
+          } as React.CSSProperties
+        }
+      >
+        <style>{`
+        .app-connector-market-shell {
+          display: flex;
+          flex-direction: column;
+          width: 100%;
+          max-height: min(72vh, 720px);
+          min-height: 280px;
+        }
+        .app-connector-market-toolbar {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px 16px;
+          width: 100%;
+          flex-shrink: 0;
+          padding-bottom: 12px;
+          background: var(--connector-market-toolbar-bg);
+          border-bottom: 1px solid var(--connector-market-toolbar-border);
+        }
+        .app-connector-market-scroll {
+          flex: 1 1 auto;
+          min-height: 0;
+          overflow-y: auto;
+          overflow-x: hidden;
+          padding-top: 16px;
+          scrollbar-width: none;
+          -ms-overflow-style: none;
+        }
+        .app-connector-market-scroll::-webkit-scrollbar {
+          display: none;
+          width: 0;
+          height: 0;
+        }
+        .app-connector-market-category-tags {
+          display: flex;
+          flex-wrap: wrap;
+          justify-content: flex-start;
+          align-items: center;
+          gap: 8px;
+          flex: 1 1 auto;
+          min-width: 0;
+        }
+        .app-connector-market-category-tags .ant-tag {
+          margin-inline-end: 0;
+          display: inline-flex;
+          align-items: center;
+          min-height: 32px;
+          padding-inline: 12px;
+          padding-block: 5px;
+          font-size: 14px;
+          line-height: 22px;
+          border-radius: 6px;
+        }
+        .app-connector-market-category-tags .ant-tag-checkable:not(.ant-tag-checkable-checked) {
+          background: var(--connector-tag-idle-bg);
+          color: var(--connector-tag-idle-color);
+        }
+        .app-connector-market-search {
+          width: 272px;
+          max-width: 100%;
+          flex: 0 0 auto;
+          margin-inline-start: auto;
+        }
+      `}</style>
+        <div className="app-connector-market-toolbar">
+          <div className="app-connector-market-category-tags">
+            {categories.map((c) => (
+              <Tag.CheckableTag
+                key={c.key}
+                checked={category === c.key}
+                onChange={(checked) => {
+                  if (checked) setCategory(c.key);
+                }}
+              >
+                {c.label}
+              </Tag.CheckableTag>
+            ))}
+          </div>
+          <Input
+            className="app-connector-market-search"
+            placeholder={t('pages.system.applicationConnections.searchPlaceholder')}
+            prefix={<SearchOutlined />}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            allowClear
+          />
+        </div>
+        <div className="app-connector-market-scroll">
+          <Spin spinning={loading}>
+            <div
+            style={
+              {
+                '--connector-primary': token.colorPrimary,
+                '--connector-border': token.colorBorderSecondary,
+                '--connector-fill': token.colorFillQuaternary,
+                '--connector-card-bg': token.colorBgContainer,
+              } as React.CSSProperties
+            }
+          >
             <style>{`
+            .app-connector-market-card {
+              border-radius: 10px;
+              border: 1px solid var(--connector-border);
+              box-shadow: none;
+              overflow: hidden;
+              background: var(--connector-card-bg, #ffffff);
+            }
+            .app-connector-market-card::before {
+              content: '';
+              position: absolute;
+              left: 0;
+              right: 0;
+              top: 0;
+              height: 72px;
+              pointer-events: none;
+              z-index: 2;
+              background: var(--connector-card-accent, var(--connector-primary));
+              opacity: 0.065;
+              -webkit-mask-image: linear-gradient(180deg, #000 0%, transparent 100%);
+              mask-image: linear-gradient(180deg, #000 0%, transparent 100%);
+            }
+            .app-connector-market-card .ant-card-body {
+              padding: 18px 16px 17px;
+              position: relative;
+              z-index: 1;
+              background: transparent !important;
+            }
             .app-connector-market-card.ant-card-hoverable:hover {
               box-shadow: none !important;
-              border: 1px solid var(--connector-primary) !important;
+              border-color: var(--connector-primary) !important;
+              background: var(--connector-fill);
+            }
+            .app-connector-market-card.ant-card-hoverable:hover::before {
+              opacity: 0.09;
+            }
+            .app-connector-market-card-configured {
+              position: absolute;
+              top: 10px;
+              right: 10px;
+              margin: 0;
+              z-index: 3;
+              font-size: 12px;
+            }
+            .app-connector-market-card-inner {
+              display: flex;
+              gap: 12px;
+              align-items: flex-start;
+              min-height: 58px;
+            }
+            .app-connector-market-card-main {
+              flex: 1;
+              min-width: 0;
+            }
+            .app-connector-market-card:has(.app-connector-market-card-configured) .app-connector-market-card-main {
+              padding-right: 52px;
+            }
+            .app-connector-market-card-title-row {
+              display: flex;
+              align-items: center;
+              flex-wrap: wrap;
+              gap: 4px 6px;
+              margin-bottom: 6px;
+              line-height: 1.35;
+            }
+            .app-connector-market-card-title {
+              flex: 1 1 auto;
+              min-width: 0;
+            }
+            .app-connector-market-card-tags {
+              display: inline-flex;
+              flex-wrap: wrap;
+              align-items: center;
+              gap: 4px;
+              flex-shrink: 0;
+            }
+            .app-connector-market-card-desc {
+              font-size: 12px;
+              line-height: 1.55;
+              min-height: 2.85em;
+              display: -webkit-box;
+              -webkit-line-clamp: 2;
+              -webkit-box-orient: vertical;
+              overflow: hidden;
+            }
+            .app-connector-brand-icon--fallback {
+              background: var(--connector-fill);
+              color: var(--connector-primary);
+              border: 1px solid var(--connector-border);
             }
           `}</style>
             {erpVendorSections ? (
@@ -386,16 +626,21 @@ const AppConnectorMarket: React.FC<AppConnectorMarketProps> = ({
                 ))}
               </Space>
             ) : (
-              <Row gutter={[16, 16]}>{filteredConnectors.map((c) => renderConnectorCard(c))}</Row>
+              <Row gutter={[16, 16]}>
+                {filteredConnectors.map((c) =>
+                  renderConnectorCard(c, { hideCategoryTag: category !== 'all' }),
+                )}
+              </Row>
             )}
             {filteredConnectors.length === 0 && !loading && (
               <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>
                 {t('pages.system.applicationConnections.noMatch')}
               </div>
             )}
-          </div>
-        </Spin>
-      </Space>
+            </div>
+          </Spin>
+        </div>
+      </div>
     </Modal>
   );
 };

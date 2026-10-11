@@ -163,6 +163,19 @@ export async function createOpenApiApp(body: {
   });
 }
 
+export interface ProvisionWorkbuddyOpenApiPresetResult {
+  app: OpenApiApp;
+  created: boolean;
+  grants_updated: boolean;
+  app_secret?: string | null;
+}
+
+export async function provisionWorkbuddyOpenApiPreset(): Promise<ProvisionWorkbuddyOpenApiPresetResult> {
+  return apiRequest<ProvisionWorkbuddyOpenApiPresetResult>('/core/open-api/apps/presets/workbuddy', {
+    method: 'POST',
+  });
+}
+
 export async function updateOpenApiApp(
   uuid: string,
   body: {

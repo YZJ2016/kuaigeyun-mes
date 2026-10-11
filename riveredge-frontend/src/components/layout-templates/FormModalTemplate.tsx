@@ -22,11 +22,17 @@ import { MODAL_ISOLATE_POINTER_PROPS } from '../../utils/modalEventIsolation';
 export function FormModalGridBlock({
   children,
   span = 24,
+  style,
 }: {
   children: ReactNode;
   span?: number;
+  style?: React.CSSProperties;
 }) {
-  return <Col span={span}>{children}</Col>;
+  return (
+    <Col span={span} style={style}>
+      {children}
+    </Col>
+  );
 }
 
 /**

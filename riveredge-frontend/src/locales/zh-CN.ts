@@ -231,6 +231,56 @@ export default {
   'pages.infra.openApi.selectTenantRequired': '请选择有效组织',
   'pages.infra.openApi.tenantSwitched': '已切换到组织 {{id}}',
   'pages.infra.openApi.orgContextHint': '平台超管须指定组织后管理该租户的开放凭证',
+  'pages.infra.openApi.tabApps': '对接应用',
+  'pages.infra.openApi.tabDocs': '接入文档',
+  'pages.infra.openApi.acctIdTitle': '账套 ID',
+  'pages.infra.openApi.appCountTitle': '对接应用数',
+  'pages.infra.openApi.pageHintTitle': '对接鉴权说明',
+  'pages.infra.openApi.pageHintButton': '鉴权说明',
+  'pages.infra.openApi.pageHintDesc':
+    '官方 PC 与 App 仍使用登录 Token。外部对接与脚本须使用账套 ID 与应用秘钥换票，请求头携带 X-Client-Channel: integration。授权可按 GET、POST 等动作细粒度勾选。',
+  'pages.infra.openApi.createApp': '新建应用',
+  'pages.infra.openApi.rotateAcctId': '重置账套 ID',
+  'pages.infra.openApi.rotateAcctConfirmTitle': '重置账套 ID 后，对接方须同步更新，确认继续？',
+  'pages.infra.openApi.columnAppName': '应用名称',
+  'pages.infra.openApi.columnAppId': 'App ID',
+  'pages.infra.openApi.columnGrants': '已授权接口',
+  'pages.infra.openApi.grantsEmpty': '未授权',
+  'pages.infra.openApi.actionEditGrants': '编辑授权',
+  'pages.infra.openApi.actionResetSecret': '重置秘钥',
+  'pages.infra.openApi.resetSecretConfirmTitle': '重置后旧秘钥立即失效，确认继续？',
+  'pages.infra.openApi.createModalTitle': '新建开放应用',
+  'pages.infra.openApi.editModalTitle': '编辑应用授权',
+  'pages.infra.openApi.appNameRequired': '请输入应用名称',
+  'pages.infra.openApi.appNamePlaceholder': '如正式 ERP 对接、测试脚本',
+  'pages.infra.openApi.grantsPickerLabel': '接口授权（按 HTTP 与动作）',
+  'pages.infra.openApi.grantsPickerExtra': '可只勾选 GET 查询，不必开放 POST 写权限',
+  'pages.infra.openApi.ipAllowlistLabel': 'IP 白名单（可选，逗号分隔）',
+  'pages.infra.openApi.ipAllowlistPlaceholder': '留空表示不限制',
+  'pages.infra.openApi.createSuccess': '应用已创建',
+  'pages.infra.openApi.createFailed': '创建失败',
+  'pages.infra.openApi.docNotesTitle': '对接要点',
+  'pages.infra.openApi.docBaseUrlPrefix': '示例根地址：',
+  'pages.infra.openApi.docBaseUrlSuffix': '（按当前站点自动生成，可复制后替换为正式域名）',
+  'pages.infra.openApi.docLoading': '文档加载中或暂无数据',
+  'pages.infra.openApi.secretModalTitle': '请立即保存应用秘钥',
+  'pages.infra.openApi.secretOnceWarning': '秘钥仅显示一次，关闭后无法再次查看（可重置生成新秘钥）',
+  'pages.infra.openApi.copySecret': '复制秘钥',
+  'pages.infra.openApi.secretSaved': '我已保存',
+  'pages.infra.openApi.presetWorkbuddy': '预置 WorkBuddy 应用',
+  'pages.infra.openApi.presetWorkbuddyConfirmTitle': '预置 WorkBuddy 开放应用？',
+  'pages.infra.openApi.presetWorkbuddyConfirmDesc':
+    '将创建或对齐名为「WorkBuddy（实验室）」的应用，仅授予销售订单、生产工单、库存只读接口，供 MCP Sidecar 换票对接。',
+  'pages.infra.openApi.presetWorkbuddyCreated': '已预置 WorkBuddy 应用，请保存应用秘钥',
+  'pages.infra.openApi.presetWorkbuddyExists': 'WorkBuddy 预置应用已存在，授权无需变更',
+  'pages.infra.openApi.presetWorkbuddySynced': '已对齐 WorkBuddy 预置应用的只读授权',
+  'pages.infra.openApi.presetWorkbuddyFailed': '预置 WorkBuddy 应用失败',
+  'pages.infra.openApi.batchEnable': '批量启用',
+  'pages.infra.openApi.batchDisable': '批量停用',
+  'pages.infra.openApi.batchStatusSuccess': '已{{action}} {{count}} 个应用',
+  'pages.infra.openApi.selectToOperate': '请先勾选要操作的应用',
+  'pages.infra.openApi.batchDeleteTitle': '确认批量删除所选应用？',
+  'pages.infra.openApi.batchDeleteDescription': '将删除 {{count}} 个开放应用，对接方秘钥立即失效，此操作不可恢复。',
   'menu.infra.scripts': '脚本管理',
   'menu.infra.scheduled-tasks': '定时任务',
   'menu.infra.client-releases': '客户端发布',
@@ -6055,7 +6105,7 @@ export default {
   'app.kuaiai.library.bindPlaceholder': '选择本租户 Agent 档案，清空即解绑',
   'app.kuaiai.library.sourcePlaceholder': '选择要克隆的本租户 Agent 档案',
   'app.kuaiai.settings.title': '模型设置',
-  'app.kuaiai.settings.subtitle': '选用对话模型连接，并配置 KU-AI 能力与 OCR 视觉端点',
+  'app.kuaiai.settings.subtitle': '选用对话模型连接，并配置 KU-AI 能力',
   'app.kuaiai.settings.providerCardTitle': '对话模型',
   'app.kuaiai.settings.providerCardHint':
     '请先在应用连接器中新建 AI 连接（同一提供商可建多条不同模型），再在此选用当前对话使用的连接。',
@@ -6131,6 +6181,9 @@ export default {
   'app.kuaiai.hub.cap.suggestDesc': '单据内智能推荐与半写回',
   'app.kuaiai.hub.cap.knowDesc': 'SOP 与知识语料 RAG',
   'app.kuaiai.hub.cap.actDesc': '人审后 Agent 执行',
+  'app.kuaiai.hub.cap.bridge': 'KU-Bridge 外部 Agent',
+  'app.kuaiai.hub.cap.bridgeDesc': '实验室：WorkBuddy 等外部 Agent 经 MCP 只读访问生产数据',
+  'app.kuaiai.hub.labBadge': '实验室',
   'app.kuaiai.hub.tryIt': '去体验',
   'app.kuaiai.hub.capEntryAria': '进入能力入口：{{name}}',
   'app.kuaiai.hub.brandDesc': '面向制造场景的智能辅助能力矩阵',
@@ -6145,6 +6198,21 @@ export default {
   'app.kuaiai.catalog.blocker.no_knowledge_documents': '暂无知识语料',
   'app.kuaiai.catalog.blocker.agent_not_ready': '智能体未就绪',
   'app.kuaiai.catalog.blocker.missing_permission': '缺少权限：{{permission}}',
+  'app.kuaiai.catalog.blocker.external_agent_channel_disabled': '实验室通道未启用',
+  'app.kuaiai.settings.workbuddyCardTitle': '外部 Agent / WorkBuddy（实验室）',
+  'app.kuaiai.settings.workbuddyLabAlertTitle': '实验室能力',
+  'app.kuaiai.settings.workbuddyLabAlertDesc':
+    '实验室只读联调，接口可能变更，勿用于生产。请先在开放 API 创建应用并仅授予销售订单、生产工单、库存只读权限，再部署 workbuddy-mcp Sidecar 并在 WorkBuddy 登记下方 MCP 地址。',
+  'app.kuaiai.settings.workbuddyHint': '外部 Agent 通过 MCP 调用开放 API，请配置应用授权。',
+  'app.kuaiai.settings.openOpenApi': '打开开放 API',
+  'app.kuaiai.settings.workbuddyGrantsHint': '开放 API 建议仅勾选上述三类只读权限。',
+  'app.kuaiai.settings.workbuddyEnabled': '启用实验室通道',
+  'app.kuaiai.settings.workbuddyMcpUrl': 'MCP 公网地址',
+  'app.kuaiai.settings.workbuddyMcpUrlExtra': 'Sidecar 对外 HTTPS 地址，保存后复制到 WorkBuddy 企业连接器。',
+  'app.kuaiai.settings.workbuddyNotes': '备注',
+  'app.kuaiai.settings.workbuddyNotesPlaceholder': '选填',
+  'app.kuaiai.settings.workbuddySteps':
+    '开放 API 只读授权 → 部署 workbuddy-mcp → WorkBuddy 登记 MCP 地址 → 启用本连接。',
   'app.kuaiai.query.title': '智能问数',
   'app.kuaiai.query.subtitle': '用自然语言查询报表与业务指标',
   'app.kuaiai.query.intro': '描述您想看的指标或汇总维度，助手会先匹配报表再执行查询，并以表格呈现结果。',
@@ -25168,12 +25236,12 @@ export default {
   'pages.system.siteSettings.integrationsDeepseekBaseUrlPlaceholder': 'https://api.deepseek.com',
   'pages.system.siteSettings.integrationsDeepseekOcrTitle': 'OCR 视觉识别（智能录单）',
   'pages.system.siteSettings.integrationsDeepseekOcrHint':
-    'DeepSeek 对话 API 不支持图片输入。销售订单 AI 录单需在此配置支持 image_url 的 OCR 视觉端点；识别出的文本再由上方 DeepSeek 模型结构化。示例：硅基流动 Base URL https://api.siliconflow.cn/v1，模型 deepseek-ai/DeepSeek-OCR。',
+    'DeepSeek 等对话 API 不支持图片输入。请在应用连接器「其他」中启用本连接，配置支持 image_url 的 OCR 视觉端点；识别出的文本由 KU-AI 模型设置中选用的对话模型结构化。示例：硅基流动 Base URL https://api.siliconflow.cn/v1，模型 deepseek-ai/DeepSeek-OCR。',
   'pages.system.siteSettings.integrationsDeepseekOcrBaseUrl': 'OCR Base URL',
   'pages.system.siteSettings.integrationsDeepseekOcrModel': 'OCR 模型',
   'pages.system.siteSettings.integrationsDeepseekOcrApiKey': 'OCR API Key（可选）',
   'pages.system.siteSettings.integrationsDeepseekOcrApiKeyTooltip':
-    '与 OCR 端点配套的 API Key；留空则使用上方 DeepSeek API Key（仅当同一服务商时适用）',
+    '与 OCR 端点配套的 API Key；留空则沿用 KU-AI 当前选用的对话模型 API Key（仅当同一服务商时适用）',
   'pages.system.siteSettings.integrationsDeepseekOcrApiKeyPlaceholder': '留空则沿用 DeepSeek API Key',
   'pages.system.siteSettings.integrationsDeepseekAiTitle': 'KU-AI 能力配置',
   'pages.system.siteSettings.integrationsDeepseekAiHint':
@@ -27958,7 +28026,7 @@ export default {
   'pages.system.applicationConnections.noMatch': '暂无匹配的连接器',
   'pages.system.applicationConnections.categoryAll': '全部',
   'pages.system.applicationConnections.categoryCollaboration': '协作',
-  'pages.system.applicationConnections.categoryErp': 'ERP 企业资源',
+  'pages.system.applicationConnections.categoryErp': 'ERP',
   'pages.system.applicationConnections.erpVendorKingdee': '金蝶',
   'pages.system.applicationConnections.erpVendorYonyou': '用友',
   'pages.system.applicationConnections.erpVendorDigiwin': '鼎捷',
@@ -27966,11 +28034,11 @@ export default {
   'pages.system.applicationConnections.erpVendorOther': '其他',
   'pages.system.applicationConnections.erpDeploymentCloud': '云产品',
   'pages.system.applicationConnections.erpDeploymentTraditional': '传统产品',
-  'pages.system.applicationConnections.categoryPlm': 'PLM 产品生命周期',
-  'pages.system.applicationConnections.categoryCrm': 'CRM 客户管理',
-  'pages.system.applicationConnections.categoryOa': 'OA 办公',
-  'pages.system.applicationConnections.categoryIot': 'IoT 物联网',
-  'pages.system.applicationConnections.categoryWms': 'WMS 仓储',
+  'pages.system.applicationConnections.categoryPlm': 'PLM',
+  'pages.system.applicationConnections.categoryCrm': 'CRM',
+  'pages.system.applicationConnections.categoryOa': 'OA',
+  'pages.system.applicationConnections.categoryIot': 'IoT',
+  'pages.system.applicationConnections.categoryWms': 'WMS',
   'pages.system.applicationConnections.categoryStorage': '存储',
   'pages.system.applicationConnections.categoryAi': 'AI',
   'pages.system.applicationConnections.kuAiSettingsButton': 'KU-AI 配置',
@@ -27999,6 +28067,12 @@ export default {
   'pages.system.applicationConnections.typeZhipu': '智谱 GLM',
   'pages.system.applicationConnections.typeMoonshot': '月之暗面 Kimi',
   'pages.system.applicationConnections.typeSiliconflow': '硅基流动',
+  'pages.system.applicationConnections.typeKuaiai_workbuddy': 'WorkBuddy',
+  'pages.system.applicationConnections.descKuaiai_workbuddy':
+    '外部 Agent 经 MCP 调 Open API 只读查单',
+  'pages.system.applicationConnections.typeKuaiai_ocr': 'OCR 视觉识别',
+  'pages.system.applicationConnections.descKuaiai_ocr':
+    '智能录单与图片 OCR 视觉端点（OpenAI 兼容 image_url）',
   'pages.system.applicationConnections.descDeepseek': 'DeepSeek OpenAI 兼容 API（可建多条不同模型）',
   'pages.system.applicationConnections.descOpenai': 'OpenAI Chat Completions API（可建多条不同模型）',
   'pages.system.applicationConnections.descQwen': '阿里云百炼兼容模式（可建多条不同模型）',
@@ -30951,10 +31025,51 @@ export default {
     'Gitee 快捷登录可读取邮箱并支持个人资料绑定',
   'pages.dashboard.updateLog.entries.gitee-oauth-email-scope-bind-r01.description':
     '授权范围增加 emails，并在公开邮箱为空时从邮箱列表取主邮箱以自动匹配系统用户；个人资料补充 Gitee 授权绑定与解绑入口。',
+<<<<<<< HEAD
   'pages.dashboard.updateLog.entries.approval-countersign-my-pending-task-r01.title':
     '修复会签时审批中心不显示同意/拒绝按钮',
   'pages.dashboard.updateLog.entries.approval-countersign-my-pending-task-r01.description':
     '实例列表按当前用户是否有待办任务判断操作按钮；会签成员不再因仅记录首位审批人而看不到同意/拒绝/转交。',
+=======
+  'pages.dashboard.updateLog.entries.infra-open-api-workbuddy-preset-r01.title': '开放平台一键预置 WorkBuddy 只读应用',
+  'pages.dashboard.updateLog.entries.infra-open-api-workbuddy-preset-r01.description':
+    '对接应用工具栏可预置「WorkBuddy（实验室）」开放应用，自动勾选销售订单、工单与库存只读授权；鉴权说明按钮移至工具栏末尾。',
+  'pages.dashboard.updateLog.entries.infra-open-api-layout-r01.title': '开放平台页面对齐平台列表布局',
+  'pages.dashboard.updateLog.entries.infra-open-api-layout-r01.description':
+    '基础设施开放平台改为指标卡、多标签与 UniTable 管理对接应用，接入文档独立标签并统一表单弹窗与说明区行距。',
+  'pages.dashboard.updateLog.entries.workbuddy-connector-form-copy-r01.title':
+    'WorkBuddy 连接器表单说明精简',
+  'pages.dashboard.updateLog.entries.workbuddy-connector-form-copy-r01.description':
+    '新建 WorkBuddy 应用连接时合并为一条实验室提示与 MCP 地址字段，去掉重复备注与冗长步骤段落。',
+  'pages.dashboard.updateLog.entries.kuaiai-workbuddy-application-connector-r01.title':
+    'WorkBuddy 实验室通道迁入应用连接器「协同」',
+  'pages.dashboard.updateLog.entries.kuaiai-workbuddy-application-connector-r01.description':
+    'KU-Bridge WorkBuddy 在应用连接器协同分类中新建并启用；KU-AI 能力矩阵 KU-Bridge 依连接行与开放 API 鉴权生效。',
+  'pages.dashboard.updateLog.entries.kuaiai-settings-no-ocr-card-r01.title':
+    'KU-AI 模型设置不再展示 OCR 配置入口',
+  'pages.dashboard.updateLog.entries.kuaiai-settings-no-ocr-card-r01.description':
+    'OCR 视觉端点仅在应用连接器列表中新建与管理；模型设置页只保留对话模型选用与 KU-AI 能力。',
+  'pages.dashboard.updateLog.entries.kuaiai-ocr-application-connector-r01.title':
+    'OCR 视觉识别迁至应用连接器「其他」',
+  'pages.dashboard.updateLog.entries.kuaiai-ocr-application-connector-r01.description':
+    '智能录单 OCR 端点改为在应用连接器「其他」中配置并启用；KU-AI 模型设置保留说明与跳转，已有站点 OCR 配置仍可用直至迁移。',
+  'pages.dashboard.updateLog.entries.kuaiai-bridge-workbuddy-lab-r01.title':
+    'KU-AI 新增 KU-Bridge 实验室通道（WorkBuddy 只读）',
+  'pages.dashboard.updateLog.entries.kuaiai-bridge-workbuddy-lab-r01.description':
+    '能力矩阵与设置中可启用实验室外部 Agent 通道，经开放 API 只读查销售订单、工单与库存；Sidecar 部署说明见产品文档。',
+  'pages.dashboard.updateLog.entries.workplace-weather-manual-region-r01.title':
+    '修复手工选择行政区后天气不可用',
+  'pages.dashboard.updateLog.entries.workplace-weather-manual-region-r01.description':
+    '区县名（如玄武区）在天气地理编码里没有对应点，单独查询会失败。手工位置改为用上一级市名查询，并用省份对上结果，展示名仍是所选地区。',
+  'pages.dashboard.updateLog.entries.workplace-weather-no-refetch-stall-r01.title':
+    '工作台天气不再反复重拉拖慢首屏',
+  'pages.dashboard.updateLog.entries.workplace-weather-no-refetch-stall-r01.description':
+    '天气在翻译更新时会把进行中的定位请求作废再重开，并等逆地理返回后才显示。现同一位置只请求一次，城市名稍后补上，不再挡住工作台其它数据。',
+  'pages.dashboard.updateLog.entries.workplace-weather-15s-flash-r01.title':
+    '修复工作台加载完成后再闪一下',
+  'pages.dashboard.updateLog.entries.workplace-weather-15s-flash-r01.description':
+    '天气在站点位置就绪前就请求，Open-Meteo 失败后还会再查地理编码和 wttr.in，三段超时约 15 秒才返回，日历天空背景随之重绘。现等位置配置完成且只请求 Open-Meteo，已有天气时不再换成加载中。',
+>>>>>>> 4a43e11ac (feat(infra): 开放平台 WorkBuddy 预置与连接器实验室联调)
   'pages.dashboard.updateLog.entries.gitee-oauth-drop-projects-scope-r01.title':
     '修复生产环境 Gitee 授权提示请求范围无效',
   'pages.dashboard.updateLog.entries.gitee-oauth-drop-projects-scope-r01.description':

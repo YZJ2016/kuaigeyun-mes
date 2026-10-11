@@ -30,6 +30,18 @@ const WEATHER_REFRESH_ONCE_PER_PAGE_KEY = 'RIVEREDGE_WEATHER_REFRESH_ONCE_PER_PA
 /** Zustand selector 缺省值须稳定引用，禁止 inline []（每次 render 新数组 → 无限重渲染 React #185） */
 const EMPTY_REGION_CODES: string[] = [];
 
+function weatherVisualKey(data: WeatherData | null): string {
+  if (!data) return '';
+  return [
+    data.iconCode,
+    data.temperature,
+    data.city,
+    data.description,
+    data.lat ?? '',
+    data.lon ?? '',
+  ].join('|');
+}
+
 interface WeatherWidgetProps {
   /** 是否显示刷新按钮 */
   showRefresh?: boolean;
@@ -57,6 +69,7 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({
   tone = 'dark',
 }) => {
   const { t, i18n } = useTranslation();
+  const configInitialized = useConfigStore((s) => s.initialized);
   const locationMode = useConfigStore((s) => s.getConfig<string>('user_location.mode', 'ip'));
   const locationCodes = useConfigStore((s) =>
     s.getConfig<string[]>('user_location.region_codes', EMPTY_REGION_CODES),
@@ -72,6 +85,10 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [localizedCity, setLocalizedCity] = useState<string | null>(null);
   const weatherRef = useRef<WeatherData | null>(cachedWeather);
+  /** 位置配置未就绪时发出的请求作废，避免约 15 秒后覆盖已画好的天气并重绘天空背景 */
+  const requestGenRef = useRef(0);
+  /** 同一位置只自动请求一次。翻译函数换引用不能把进行中的 IP 定位和 Open-Meteo 作废重开 */
+  const startedKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     weatherRef.current = weather;
@@ -86,22 +103,24 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({
    * @param force 是否强制刷新
    */
   const loadWeather = useCallback(async (force = false) => {
+    const gen = ++requestGenRef.current;
     const hasCurrentWeather = !!weatherRef.current;
-    // 只有在没数据或者是强制刷新时才显示 loading 状态
-    if (!hasCurrentWeather || force) {
+    // 已有天气时后台刷新，不要换成 Spin，否则 请求结束会把日历顶栏再画一遍
+    if (!hasCurrentWeather) {
       setLoading(true);
     }
     setError(null);
     try {
       const data = await getWeatherByIP(force, i18n.language);
+      if (gen !== requestGenRef.current) return;
       if (data) {
-        setWeather(data);
+        setWeather((prev) => (weatherVisualKey(prev) === weatherVisualKey(data) ? prev : data));
       } else if (!hasCurrentWeather) {
-        // 只有既没有新数据也没有缓存数据时才报错
         setWeather(null);
         setError(t('components.weather.loadFailed'));
       }
     } catch (err: unknown) {
+      if (gen !== requestGenRef.current) return;
       if (typeof window !== 'undefined') {
         window.console.error('加载天气失败:', err);
       }
@@ -110,9 +129,14 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({
         setError(err instanceof Error ? err.message : t('components.weather.loadFailed'));
       }
     } finally {
-      setLoading(false);
+      if (gen === requestGenRef.current) {
+        setLoading(false);
+      }
     }
-  }, [onWeatherChange, i18n.language]);
+  }, [t, i18n.language]);
+
+  const loadWeatherRef = useRef(loadWeather);
+  loadWeatherRef.current = loadWeather;
 
   const displayWeather = useMemo(
     () => (weather ? localizeWeatherData(weather, i18n.language) : null),
@@ -135,19 +159,25 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({
   }, [weather?.lat, weather?.lon, i18n.language]);
 
   useEffect(() => {
+    // 工作台要等站点配置才挂上，这里再等一次只是避免配置未到时打错位置。
+    // 同一位置只发一次，且不跳过缓存。天气还没返回时不能因为 t 换引用就重开 IP 定位。
+    if (!configInitialized) return;
+    const runKey = `${locationKey}|${i18n.language}`;
     const pageKey = `${WEATHER_REFRESH_ONCE_PER_PAGE_KEY}:${locationKey}`;
     const cached = getCachedWeather(i18n.language);
     if (cached && !isWeatherCacheExpired()) {
-      setWeather(cached);
+      requestGenRef.current += 1;
+      startedKeyRef.current = runKey;
+      setWeather((prev) => (weatherVisualKey(prev) === weatherVisualKey(cached) ? prev : cached));
+      setLoading(false);
       window.sessionStorage.setItem(pageKey, '1');
       return;
     }
-    const hasCheckedThisPage = window.sessionStorage.getItem(pageKey) === '1';
-    if (!hasCheckedThisPage || !weatherRef.current) {
-      window.sessionStorage.setItem(pageKey, '1');
-      loadWeather(true);
-    }
-  }, [loadWeather, locationKey, i18n.language]);
+    if (startedKeyRef.current === runKey) return;
+    startedKeyRef.current = runKey;
+    window.sessionStorage.setItem(pageKey, '1');
+    void loadWeatherRef.current(false);
+  }, [configInitialized, locationKey, i18n.language]);
 
   const iconBox = mini ? 48 : 56;
   const tempSize = mini ? 16 : compact ? 24 : 20;

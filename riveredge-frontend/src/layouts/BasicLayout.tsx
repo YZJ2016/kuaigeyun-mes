@@ -1400,7 +1400,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       '/system/initial-data': 'fluent-color:text-bullet-list-square-sparkle-16',
       '/system/apis': 'fluent-color:puzzle-piece-16',
       '/system/data-sources': 'fluent-color:database-24',
-      '/system/application-connections': 'fluent-color:data-pie-24',
+      '/system/application-connections': 'fluent-color:diversity-48',
       '/system/datasets': 'fluent-color:table-24',
       '/system/approval-processes': 'fluent-color:clipboard-task-24',
       '/system/approval-instances': 'fluent-color:checkmark-circle-24',

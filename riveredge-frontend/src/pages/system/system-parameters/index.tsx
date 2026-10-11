@@ -249,9 +249,9 @@ const SystemParametersPage: React.FC = () => {
         activeTabKey={activeTabKey}
         onTabChange={setActiveTabKey}
         tabs={[
-          { key: 'security', label: (<Space><SafetyOutlined /><span>{t('pages.system.parameters.security', '安全与会话')}</span></Space>), children: securityContent },
-          { key: 'ui', label: (<Space><BgColorsOutlined /><span>{t('pages.system.parameters.ui', '界面与交互')}</span></Space>), children: uiContent },
-          { key: 'system', label: (<Space><GlobalOutlined /><span>{t('pages.system.parameters.network', '网络与系统')}</span></Space>), children: systemContent },
+          { key: 'security', label: t('pages.system.parameters.security', '安全与会话'), children: securityContent },
+          { key: 'ui', label: t('pages.system.parameters.ui', '界面与交互'), children: uiContent },
+          { key: 'system', label: t('pages.system.parameters.network', '网络与系统'), children: systemContent },
         ]}
       />
     </Form>

@@ -6,7 +6,6 @@
  */
 
 import { App } from 'antd';
-import { SettingOutlined, UserOutlined, GlobalOutlined, DeploymentUnitOutlined } from '@ant-design/icons';
 import { useMemo, useState, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { MultiTabListPageTemplate } from '../../../components/layout-templates';
@@ -67,22 +66,12 @@ export default function InfraSuperAdminPage() {
     const items = [
       {
         key: 'settings',
-        label: (
-          <span>
-            <SettingOutlined />
-            {t('pages.infra.admin.tabSettings')}
-          </span>
-        ),
+        label: t('pages.infra.admin.tabSettings'),
         children: <PlatformSettingsPage mode="basic" />,
       },
       {
         key: 'login-settings',
-        label: (
-          <span>
-            <GlobalOutlined />
-            {t('pages.infra.platform.loginConfig')}
-          </span>
-        ),
+        label: t('pages.infra.platform.loginConfig'),
         children: <PlatformSettingsPage mode="login" />,
       },
     ];
@@ -90,24 +79,14 @@ export default function InfraSuperAdminPage() {
     if (showProvenanceSummaryTab) {
       items.push({
         key: 'provenance-summary',
-        label: (
-          <span>
-            <DeploymentUnitOutlined />
-            {t('pages.infra.admin.tabProvenanceSummary')}
-          </span>
-        ),
+        label: t('pages.infra.admin.tabProvenanceSummary'),
         children: <BuildProvenanceSummaryTab />,
       });
     }
 
     items.push({
       key: 'admin',
-      label: (
-        <span>
-          <UserOutlined />
-          {t('pages.infra.admin.tabAdmin')}
-        </span>
-      ),
+      label: t('pages.infra.admin.tabAdmin'),
       children: (
         <InfraAdminInfoPane
           admin={admin}

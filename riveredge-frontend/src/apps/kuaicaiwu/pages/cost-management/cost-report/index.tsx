@@ -13,7 +13,6 @@ import {
 } from '@ant-design/pro-components';
 import type { TabsProps } from 'antd';
 import { App, Tag, Divider, Row, Col, Statistic, Space, Tabs, Empty, Descriptions, Typography, Timeline, theme } from 'antd';
-import { BarChartOutlined, LineChartOutlined, FileTextOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useNumericPrecisionPlaces } from '../../../../../hooks/useNumericPrecision';
 import { MultiTabListPageTemplate, DetailDrawerSection } from '../../../../../components/layout-templates';
@@ -445,32 +444,17 @@ const CostReportPage: React.FC = () => {
       tabs={[
         {
           key: 'comprehensive',
-          label: (
-            <Space>
-              <FileTextOutlined />
-              {t('app.kuaicaiwu.costReport.tab.comprehensive')}
-            </Space>
-          ),
+          label: t('app.kuaicaiwu.costReport.tab.comprehensive'),
           children: comprehensivePanel,
         },
         {
           key: 'trend',
-          label: (
-            <Space>
-              <LineChartOutlined />
-              {t('app.kuaicaiwu.costReport.tab.trend')}
-            </Space>
-          ),
+          label: t('app.kuaicaiwu.costReport.tab.trend'),
           children: trendPanel,
         },
         {
           key: 'structure',
-          label: (
-            <Space>
-              <BarChartOutlined />
-              {t('app.kuaicaiwu.costReport.tab.structure')}
-            </Space>
-          ),
+          label: t('app.kuaicaiwu.costReport.tab.structure'),
           children: structurePanel,
         },
       ]}

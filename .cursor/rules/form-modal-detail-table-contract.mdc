@@ -1,0 +1,69 @@
+---
+description: FormModal 栅格、明细表与整单字段竖序契约（禁止裸 Alert、grid 包明细、备注/启用塞表头）
+alwaysApply: true
+---
+
+# FormModal 栅格与明细表布局契约（零容忍）
+
+改 **FormModalTemplate / 新建编辑弹窗** 时必须遵守。
+细则见 `.cursor/skills/form-modal/SKILL.md`。
+
+对照：
+
+- 仅表头 + 提示框：`application-connections` 高德连接器（`grid` + `FormModalGridBlock` + `Alert`）
+- 表头 + 明细表：`plan-management/demand-management` 新建计划（`grid={false}` + `Row`/`Col` + `UniTableDetail`；**备注在明细下方**）
+
+## 整单字段竖序（全站 Modal 唯一，零容忍）
+
+**明细表（排位行 / 行项目 / 物料明细等）算整单里的一块字段**，不是「表头之外可忽略」。
+
+有表头 + 明细时，竖序必须是：
+
+1. **业务表头字段**（两列：`Col span={12}`；识别/必填靠前）
+2. **明细表**（`UniTableDetail` / 行项目 Table）
+3. **备注**（倒数第二；**通栏 `Col span={24}`**）
+4. **启用 / 开关类尾字段**（倒数第一；无启用则备注仍在明细后）
+
+| 对 | 错（血泪，用户已纠正多次） |
+|----|---------------------------|
+| 编码 → 名称 → … → **明细** → **备注通栏** → **启用** | 备注/启用塞在表头里、明细在下方；备注与启用并排半宽 |
+| 把排位行/行项目当成整单字段序的一环 | 以为「倒数第二」只相对表头其它输入框 |
+
+无明细时：业务字段 → **备注（倒数第二）** → **启用（最后）**。
+
+## 为什么会出格 / 裁切
+
+`FormModalTemplate` 的 `grid={true}` 会给 ProForm 包一层 Ant Design `Row` + `gutter`（负边距）。
+
+- 带 `colProps` 的字段在 `Col` 里，左右与输入框对齐。
+- **裸 `Alert` / 说明 / Divider** 不是 Col → 吃掉负边距，比上下输入框更宽（连接器提示框）。
+- **明细表放进同一套 grid**（含 `colProps` / `ProFormItem`+`noStyle`）→ 左右被 Modal `overflow` 剪裁或表头表体错位。
+
+都是栅格机制问题，不是再调列宽 / margin 能修好的。
+
+## 唯一路径
+
+| 关注点 | 真源 | 禁止 |
+|---|---|---|
+| 整单竖序 | 表头业务 → 明细 → 备注通栏 → 启用 | 备注/启用插在明细前；备注半宽；把明细当「非字段」 |
+| 提示 / Alert / 说明 / Divider | `FormModalGridBlock`（`Col span={24}`） | 裸 `<Alert>` 当 ProForm children；负 margin 对齐 |
+| 有明细的 Modal | `grid={false}` | `grid` / `grid={true}` |
+| 表头多栏（有明细时） | 手写 `Row gutter={16}` + `Col span={8\|12\|24}` | 靠 ProForm `colProps` 当整页栅格，再塞 Table |
+| 明细区 | Modal 内、**表头 Row 之外**的兄弟：`UniTableDetail` 或裸 `Table`；其后再跟备注/启用 Row | 明细塞进 `ProFormItem colProps` / grid 的 `Col` |
+| 明细操作列删除 | `Button type="link" danger size="small" icon={<DeleteOutlined />}`（`UniTableDetail` 真源，宽 48、居中） | 文案链「删除」；裸 `<a>` |
+| 仅表头、无明细 | 可用 `grid` + `colProps`（如 8D 创建、连接器） | 有明细后仍保留 `grid`；非字段节点不进 Col |
+
+## 严禁（血泪）
+
+- **备注/启用插明细前**：把「倒数第二/最后」理解成只相对表头，排位行/行项目不算字段 → **不可接受**
+- **裸 Alert 出格**：`grid` 开着把 `<Alert>` 直接塞进 ProForm / `ProFormDependency`（连接器高德提示框）
+- **`grid` + 明细同树**：`grid` 开着又把特性/行项目 Table 放进 ProForm children
+- **用列宽 / margin 掩盖**：`tableLayout` / 加宽 / 改 `scroll.x` / 负 margin / `overflow: visible` 假装修「出格或两边被剪」
+- **发明第二套**：再包一层负 margin 抵消、`overflow: visible` 打洞
+
+## 自检（改 FormModal 前）
+
+1. 是否有行项目/特性/明细 Table？→ 必须 `grid={false}`；表头手写 `Row`/`Col`；明细在表头 Row **外面**；**备注、启用在明细之后**
+2. 整单竖序是否为：业务表头 → 明细 → 备注 → 启用？
+3. `grid` 开启时是否有 `Alert` / 说明 / Divider？→ 必须 `FormModalGridBlock`
+4. 搜索该页是否还有未包 `FormModalGridBlock` 的 `<Alert` 出现在 FormModal children 内

@@ -1,0 +1,34 @@
+---
+description: 用户可见修复/功能完成后必须计入工作台更新日志
+alwaysApply: true
+---
+
+# 平台更新日志（必做）
+
+完成一项**用户可见**的修复、优化或功能后，须同步计入工作台更新日志，禁止漏记或攒到会话结束才写。
+
+## 唯一路径
+
+| 步骤 | 真源 |
+|------|------|
+| **通用**记录 | [`platformUpdateLog.ts`](riveredge-frontend/src/pages/system/dashboard/platformUpdateLog.ts) 的 `PLATFORM_UPDATE_LOG_GENERAL` **头部**追加 |
+| **定制**记录 | [`platformUpdateLogDedicated.ts`](riveredge-frontend/src/pages/system/dashboard/platformUpdateLogDedicated.ts) 的 `PLATFORM_UPDATE_LOG_DEDICATED` **头部**追加 |
+| 文案 | 仅 `zh-CN.ts`：`pages.dashboard.updateLog.entries.{id}.title` / `.description` |
+| type | `fix` / `improvement` / `feature` / `major` / `security`（与改动性质一致） |
+
+## 通用 vs 定制
+
+| 类别 | 写入数组 | 必填字段 | 展示 |
+|------|----------|----------|------|
+| 通用产品能力 | `PLATFORM_UPDATE_LOG_GENERAL` | 无 `scope` | 所有租户可见 |
+| 某定制应用专属 | `PLATFORM_UPDATE_LOG_DEDICATED` | `scope: 'dedicated'` + `dedicatedAppCode`（manifest code） | 仅该定制应用已安装且启用时可见；UI 显示「定制」徽章，**不展示**应用 code |
+
+## 禁止
+
+- 只改代码不写日志
+- 默认改其它 locale（见 `i18n-zh-cn-only`）
+- 把 HaoliGO（好力 GO）定制变动写入本日志
+- 把 **DocToolkit / `.gen/docgen` 造数工具**相关变动写入本日志（含仅为该工具服务的时间改写/链条对齐等）
+- 把定制应用变动写进 `PLATFORM_UPDATE_LOG_GENERAL`（须进 dedicated 并标 `dedicatedAppCode`）
+
+同一会话连续多项修复：**每项做完即追加一条**，勿合并成含糊总述（除非用户明确要求合并为一条 major）。

@@ -1,0 +1,32 @@
+---
+description: 全站时区唯一契约（禁止旁路、补丁、兜底、兼容）
+alwaysApply: true
+---
+
+# 系统时区契约（唯一真源）
+
+全应用必须遵守；**禁止**为「先跑起来」叠加第二套时区逻辑。
+
+## 唯一路径
+
+| 阶段 | 真源 | 禁止 |
+|------|------|------|
+| **写入业务时刻** | `resolve_business_datetime()` / `coerce_business_datetime_to_utc()`（`core/utils/timezone_utils.py`） | `datetime.now()` / `datetime.utcnow()` 赋给业务 `DatetimeField`；naive 墙钟直接落库 |
+| **存储** | UTC（`USE_TZ=true`，ORM aware UTC） | 按服务器本地、按上海硬编码偏移写入 |
+| **API JSON** | `BaseSchema` 序列化或全局 `SiteTimezoneJSONResponse` → 站点墙钟 `YYYY-MM-DD HH:MM:SS`（无时区后缀） | 裸 ISO/`Z` 给前端再猜；`strftime` 手工拼；`jsonable_encoder` 旁路未转换的 datetime |
+| **前端展示** | `formatDateTimeBySiteSetting` / `formatDateBySiteSetting` / `formatBusinessDateOnly` | `.replace('T',' ').slice(...)`；业务列裸 `dayjs(x).format`；硬 `+8` / `setDefault('Asia/Shanghai')` 当第二套逻辑 |
+| **业务日历日 / 单号日期** | `today_site_str()` / `to_site_date(resolve_business_datetime())` | `datetime.now().strftime("%Y%m%d")`、`datetime.now().date()` |
+
+站点时区配置：`infra_settings.TIMEZONE`（与前端 `configs.timezone` 一致）。配置缺省值只允许出现在 **配置定义处**，禁止在业务代码里再写死 `Asia/Shanghai` 分支。
+
+## 严禁
+
+- **补丁**：未来时刻再重解释、读写双路径、按字段特例 `timedelta(hours=8)`
+- **兜底**：失败则假设 UTC/本地/上海；API 失败后前端自己加时区
+- **兼容**：保留 `datetime.now()`「旧写法」与 resolve 并存；infra 再包一层「兼容 shim」冒充第二真源
+
+## 完成前自检
+
+```bash
+cd riveredge-backend && python scripts/scan_timezone_contract.py --fail-on high
+```

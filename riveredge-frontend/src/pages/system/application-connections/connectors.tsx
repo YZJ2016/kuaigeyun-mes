@@ -115,6 +115,18 @@ export function isLlmConnectionType(type: string): type is LlmConnectionType {
   return (LLM_CONNECTION_TYPES as readonly string[]).includes(type);
 }
 
+export const KUAIAI_OCR_CONNECTION_TYPE = 'kuaiai_ocr' as const;
+
+export function isKuaiaiOcrConnectionType(type: string): boolean {
+  return type === KUAIAI_OCR_CONNECTION_TYPE;
+}
+
+export const KUAIAI_WORKBUDDY_CONNECTION_TYPE = 'kuaiai_workbuddy' as const;
+
+export function isKuaiaiWorkbuddyConnectionType(type: string): boolean {
+  return type === KUAIAI_WORKBUDDY_CONNECTION_TYPE;
+}
+
 export function appConnectorTypeI18nKey(type: string): string {
   if (!type) return '';
   const tc = `type${type.charAt(0).toUpperCase()}${type.slice(1)}`;
@@ -152,6 +164,8 @@ export interface AppConnectorDefinition {
   description?: string;
   icon?: ReactNode;
   defaultConfig?: Record<string, any>;
+  /** 市场卡片标题旁展示「实验室」徽章（与分类 Tag 并列） */
+  marketLabBadge?: boolean;
 }
 
 export function resolveErpVendorGroup(
@@ -175,15 +189,29 @@ export function resolveErpDeploymentKind(
 }
 
 export const APP_CONNECTOR_DEFINITIONS: AppConnectorDefinition[] = [
-  // 协作
+  // 协作（展示序：WorkBuddy → 企业微信 → 钉钉 → 飞书）
   {
-    id: 'feishu',
-    name: '飞书',
-    type: 'feishu',
+    id: 'kuaiai_workbuddy',
+    name: 'WorkBuddy',
+    type: 'kuaiai_workbuddy',
     category: 'collaboration',
-    description: '飞书开放平台自建应用',
+    description: '外部 Agent 经 MCP 调 Open API 只读查单',
+    icon: <InteractionOutlined />,
+    marketLabBadge: true,
+    defaultConfig: {
+      mcp_public_url: '',
+      notes: '',
+      tool_profile: 'read_ops_v1',
+    },
+  },
+  {
+    id: 'wecom',
+    name: '企业微信',
+    type: 'wecom',
+    category: 'collaboration',
+    description: '企业微信自建应用（登录、消息、通讯录同步）',
     icon: <MessageOutlined />,
-    defaultConfig: { app_id: '', app_secret: '', encrypt_key: '', verification_token: '' },
+    defaultConfig: { corp_id: '', corp_secret: '', agent_id: '', token: '', encoding_aes_key: '' },
   },
   {
     id: 'dingtalk',
@@ -195,13 +223,13 @@ export const APP_CONNECTOR_DEFINITIONS: AppConnectorDefinition[] = [
     defaultConfig: { corpid: '', agent_id: '', app_key: '', app_secret: '', aes_key: '', token: '' },
   },
   {
-    id: 'wecom',
-    name: '企业微信',
-    type: 'wecom',
+    id: 'feishu',
+    name: '飞书',
+    type: 'feishu',
     category: 'collaboration',
-    description: '企业微信自建应用（登录、消息、通讯录同步）',
+    description: '飞书开放平台自建应用',
     icon: <MessageOutlined />,
-    defaultConfig: { corp_id: '', corp_secret: '', agent_id: '', token: '', encoding_aes_key: '' },
+    defaultConfig: { app_id: '', app_secret: '', encrypt_key: '', verification_token: '' },
   },
   // ERP（Tab 内按厂商 → 云产品/传统产品；各厂商内大型在前）
   // 金蝶云：苍穹 → 星瀚 → EAS Cloud → AI套件 → 星空 → 星辰 → KIS云 → 精斗云
@@ -1060,6 +1088,19 @@ export const APP_CONNECTOR_DEFINITIONS: AppConnectorDefinition[] = [
     },
   },
   {
+    id: 'kuaiai_ocr',
+    name: 'OCR 视觉识别',
+    type: 'kuaiai_ocr',
+    category: 'other',
+    description: '智能录单与图片 OCR 视觉端点（OpenAI 兼容 image_url）',
+    icon: <RobotOutlined />,
+    defaultConfig: {
+      base_url: 'https://api.siliconflow.cn/v1',
+      model: 'deepseek-ai/DeepSeek-OCR',
+      api_key: '',
+    },
+  },
+  {
     id: 'amap',
     name: '高德地图',
     type: 'amap',
@@ -1129,12 +1170,12 @@ export const APP_CONNECTOR_DEFINITIONS: AppConnectorDefinition[] = [
 export const APP_CONNECTOR_CATEGORIES = [
   { key: 'all', label: '全部' },
   { key: 'collaboration', label: '协作' },
-  { key: 'erp', label: 'ERP 企业资源' },
-  { key: 'plm', label: 'PLM 产品生命周期' },
-  { key: 'crm', label: 'CRM 客户管理' },
-  { key: 'oa', label: 'OA 办公' },
-  { key: 'iot', label: 'IoT 物联网' },
-  { key: 'wms', label: 'WMS 仓储' },
+  { key: 'erp', label: 'ERP' },
+  { key: 'plm', label: 'PLM' },
+  { key: 'crm', label: 'CRM' },
+  { key: 'oa', label: 'OA' },
+  { key: 'iot', label: 'IoT' },
+  { key: 'wms', label: 'WMS' },
   { key: 'storage', label: '存储' },
   { key: 'ai', label: 'AI' },
   { key: 'other', label: '其他' },

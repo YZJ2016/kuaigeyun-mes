@@ -4001,7 +4001,7 @@ uni-table-selection.mjs[OU5S]: F:/** * Real-browser regression for UniTable's co
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/===
 app.tsx[EU5L]: F:使用 routes 中的路由配置 | R:- | A:- | S:932L; 使用 routes 中的路由配置
 first-paint.css[DU5T]: F:html, body { margin: 0; padding: 0; height: 100%; box-sizing: border-box; } * { | R:- | A:- | S:17L
-global.less[DU5L]: F:全局样式与登录社交按钮等覆盖 | R:- | A:- | S:登录页局部样式优先 pages/login/index.less；禁止左侧装饰色条
+global.less[DU5L]: F:全局样式与登录社交按钮等覆盖 | R:- | A:- | S:登录页局部样式优先 pages/login/index.less；禁止左侧装饰色条。工作台日历顶栏 .dashboard-cwc-top 不设 background 过渡，避免天气晚到时整卡渐变闪一下。
 index.html[DU5M]: F:<!doctype html> <html lang="zh-CN"> <head> <meta charset="UTF-8" /> <link rel... | R:- | A:- | S:209L
 initSpinIndicator.tsx[EU5T]: F:Implements initSpinIndicator.tsx | R:- | A:- | S:8L
 login-shell.css[DU5T]: F:html, body { margin: 0; padding: 0; height: 100%; box-sizing: border-box; } *, | R:- | A:- | S:17L
@@ -7279,7 +7279,7 @@ index.tsx[EU5T]: F:Implements index.tsx | R:- | A:- | S:34L
 index.tsx[EU5S]: F:计算是否启用虚拟滚动（数据量大于 100 时启用） | R:- | A:- | S:102L; 计算是否启用虚拟滚动（数据量大于 100 时启用）
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/components/weather/===
-WeatherWidget.tsx[EU5M]: F:1. 优先从本地缓存读取，实现"秒开" | R:- | A:- | S:298L; 1. 优先从本地缓存读取，实现"秒开"
+WeatherWidget.tsx[EU5M]: F:按站点位置显示天气，缓存先画，同一位置只自动请求一次 | R:code:riveredge-frontend/src/services/weather.ts | A:WeatherWidget | S:同一 locationKey 与语言只自动请求一次。不得因 t 换引用重开 IP 定位。有未过期缓存不走网络。已有天气禁止改成 Spin。
 weatherBackground.ts[EU5S]: F:雷阵雨/暴雨 | R:- | A:- | S:165L; 雷阵雨/暴雨
 weatherIcons.tsx[EU5T]: F:Implements weatherIcons.tsx | R:- | A:- | S:40L
 
@@ -7953,7 +7953,7 @@ userMessage.ts[EU5T]: F:Implements userMessage.ts | R:- | A:- | S:88L
 userPreference.ts[EU5T]: F:Implements userPreference.ts | R:- | A:- | S:39L
 userProfile.ts[EU5T]: F:个人资料与第三方绑定 API | R:code:riveredge-frontend/src/pages/personal/profile/index.tsx | A:- | S:含 Gitee/钉钉/飞书 bind/unbind 端点封装
 userTask.ts[EU5S]: F:Implements userTask.ts | R:- | A:- | S:116L
-weather.ts[EU5L]: F:静默失败 | R:- | A:- | S:471L; 静默失败
+weather.ts[IU5L]: F:用 Open-Meteo 按站点位置取天气并写一小时本地缓存 | R:code:riveredge-frontend/src/constants/chinaAdminRegions.ts | A:getWeather,getSiteWeather,getCachedWeather | S:经纬度只请求一次 Open-Meteo，失败直接返回。getSiteWeather 返回前不得等逆地理。手工区县不能单独查地理编码；须用上级市名并对齐省 admin1，否则玄武会命中外省。
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/stores/===
 configStore.ts[EU5M]: F:安全与会话 | R:- | A:- | S:307L; 安全与会话

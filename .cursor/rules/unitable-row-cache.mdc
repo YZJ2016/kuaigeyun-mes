@@ -1,0 +1,49 @@
+---
+description: UniTable 列表行缓存唯一真源（禁止 request 内同步选中行）
+alwaysApply: true
+---
+
+# UniTable 列表行缓存契约
+
+报错「所选记录不在当前列表」的根因几乎总是：**在 `request` 里写入行缓存，被 `prefetchNextPage` 用下一页数据覆盖**。
+
+## 唯一路径
+
+| 用途 | 真源 | 禁止 |
+|---|---|---|
+| 当前展示页行数据（下推/批量/选中解析） | `onTableDataChange` | 在 `request` 内写 `tableRowsRef` / `listRowsRef` / `setTableRows` |
+| 列表网络取数 | `request`（可被 prefetch 调用） | 用 prefetch 结果覆盖「当前页」缓存 |
+| 预取意图 | `request(..., meta)` 且 `meta.purpose === 'prefetch'` | 把 prefetch 当展示页副作用入口 |
+
+`enableRowSelection={viewType !== 'detailTable'}` 的单据列表：订单视图下 `onTableDataChange` 写入头表行即可；明细视图通常无勾选。
+
+## 正确示例
+
+```tsx
+// request：只返回 data，不写行缓存
+request={async (params, sort, filter, search) => {
+  const res = await api.list(...)
+  return { data: res.items, success: true, total: res.total }
+}}
+onTableDataChange={(rows) => {
+  tableRowsRef.current = rows
+}}
+```
+
+## 错误示例
+
+```tsx
+request={async (...) => {
+  const items = ...
+  tableRowsRef.current = items // ❌ prefetch 下一页会冲掉当前页
+  return { data: items, success: true, total }
+}}
+```
+
+## 自检
+
+改 UniTable 列表的下推/批量前：搜索该页是否还有 `tableRowsRef.current =` / `listRowsRef.current =` 出现在 `request` 回调内。
+
+```bash
+cd riveredge-frontend && python scripts/scan_unitable_row_cache.py --fail-on high
+```

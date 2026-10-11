@@ -1633,6 +1633,21 @@ OPEN_API_MODULE_CATALOG: dict[str, dict[str, Any]] = {
             },
         ],
     },
+    "kuaizhizao:warehouse-management-inventory": {
+        "label": "库存查询",
+        "group": "仓存",
+        "app": "kuaizhizao",
+        "base_path": "/api/v1/apps/kuaizhizao/reports/inventory/material-balances",
+        "actions": [
+            {
+                "code": "kuaizhizao:warehouse-management-inventory:read",
+                "label": "查询（GET）",
+                "http_methods": ["GET"],
+                "path": "/api/v1/apps/kuaizhizao/reports/inventory/material-balances",
+                "description": "库存余额查询（GET）",
+            },
+        ],
+    },
     "kuaizhizao:warehouse-management-assembly-orders": {
         "label": "组装单",
         "group": "仓存",

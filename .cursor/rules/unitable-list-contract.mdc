@@ -1,0 +1,48 @@
+---
+description: UniTable 列表列宽/列序/徽章/新建按钮文案唯一真源（禁止灌余量、裸「新建」、单页抬 max）
+alwaysApply: true
+---
+
+# UniTable 列表布局契约
+
+改 UniTable/ProTable 列表列宽、列序、徽章、工具栏新建文案时遵守；细则见 `.cursor/skills/unitable-list/SKILL.md`。
+
+## 列序 × 列宽各司其职（禁止竞争 / 重复定义）
+
+| 职责 | 真源 | 禁止 |
+|---|---|---|
+| **列序** | rank map + `alignProColumns`（`key`/`dataIndex`） | 为改宽另起 key；数组序 / `columns.sort` 冒充表体序 |
+| **列宽** | `resolveLayoutPlan` 三桶 flag | 改宽时动 key 导致 rank 漂移；SystemFixed 页面再写 width |
+
+改宽不改身份 key；改序只动 rank 段位。
+
+## 唯一路径
+
+| 关注点 | 真源 | 禁止 |
+|---|---|---|
+| 普通单据列序 | `GLOBAL_DOC_LIST_FIELD_RANK` + `alignProColumns` | 页面另起 map / `columns.sort` |
+| 仓储单据列序 | `WAREHOUSE_DOC_LIST_FIELD_RANK`（唯一领域旁路） | 第三张 rank map |
+| 列宽 / scroll.x | `uniTableLayoutEngine.resolveLayoutPlan` | 页面手算 scroll.x；忽略 expand |
+| 操作列宽 | `uniTableLayoutColumns` 槽位预算 + UniTable 实测 `.uni-table-operation-actions` | 页面 `width` / `minWidth`；`TABLE_CONFIG.ACTION_COLUMN_WIDTH` |
+| 行操作文案 / 图标 / 排序 / 直出数 | `uni-action` 目录（`actionCatalog` / `actionText` / `normalize`）+ 全局 `ROW_ACTIONS_DIRECT_MAX` | 页面传 `icon` / 自写文案 / `data-action-priority` / `uniActionRenderOptions.directMax` |
+| 主从叠列 | `UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS`（max 280） | 页面抬 `uniTablePrimaryFlexMaxWidth` 吃空白；主数据多数页不叠业务列，**物料管理**除外 |
+| 流程状态 | `StatusTag` / `renderDocumentStatusTag`，`key: 'lifecycle'` + `fixed: 'right'` | 状态用裸 Tag；非状态冒充右固定状态 |
+| 非状态徽章 | `MarkerTag`（filled） | 结果/优先级/类型/启用用 solid |
+| 工具栏新建文案 | `createButtonText` = i18n「新建XXX」（委托单/销售订单…） | 裸 `common.create` / 只写「新建」；Modal 标题同理须「新建XXX」/「编辑XXX」 |
+
+## 严禁（血泪）
+
+- **余量灌首列**：`primaryFlex` 吃满 max 后再把剩余像素灌进第一主列 → 全站巨宽物料/单号列。无余量列时尾余由 `UNI_TABLE_FILLER_COLUMN` 吸收；有 `uniTableRemainderFlex` 时尾余只进该列且禁止 filler。定宽的 状态/进度/操作 列不得被按比例拉伸。视口够用时禁止假横滚（仅定宽+余量 minWidth 真正超出才 `scroll.x > layoutWidth`）
+- **改宽搅乱列序**：为挂 RemainderFlex / keepWidth 另起未进 rank 的 key → `alignProColumns` 把列甩到错误段位
+- **expandable 漏计**：有展开行却未计入 `scroll.x`（引擎 `includeExpandable` / `UNI_TABLE_EXPAND_COL_WIDTH`）→ 表头表体错位、邻列叠字
+- **单页补丁**：为「这一页好看」改引擎全局行为或只抬本页 max，把错乱赶到库存/补料等其它页
+- **操作列凭感觉改**：报「操作列宽不对」必须先 Playwright 实测（th 宽 / 动作条内容宽 / scroll.x vs 容器）再动手，对基线 176–244；处置顺序见 SKILL「操作列宽不对」
+
+## 改列表前自检
+
+- 新字段进对应 rank 同段位；同类单据（设备/模具/工装等）字段与 key 对齐
+- 改宽未改 key；改序未写第二套 width
+- 状态 solid 右固定；其余徽章 filled
+- 工具栏/弹窗新建文案是「新建XXX」，禁止裸「新建」
+- 内容窄列：`width` + `uniTableKeepWidth`；余量列 `uniTableRemainderFlex`；勿无上限变宽
+- 有 expandable 时确认 expand 宽已进布局；`columnPersistenceId` 已 bump
