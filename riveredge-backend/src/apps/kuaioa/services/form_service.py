@@ -50,7 +50,7 @@ from apps.kuaioa.utils.form_request_review_sheet import validate_review_sheet_on
 from apps.kuaioa.schemas.forms import FormRequestConfirmationReply
 from apps.common.audit_actor import apply_create_audit
 from core.services.system.menu_service import MenuService
-from core.services.permission.user_permission_service import UserPermissionService
+from core.services.authorization.user_permission_service import UserPermissionService
 from core.utils.timezone_utils import resolve_business_datetime
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 from infra.models.user import User
