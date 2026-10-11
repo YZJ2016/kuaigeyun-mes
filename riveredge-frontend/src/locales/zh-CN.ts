@@ -30657,14 +30657,6 @@ export default {
     '下推单据须先反审再删，禁止跳级冲销上游',
   'pages.dashboard.updateLog.entries.reporting-block-revoke-after-sales-outbound-r01.description':
     '销售订单下推生产工单/采购订单后，须先反审核并删除这些下游，才能反审或删除销售订单。报工若已有已审核/已入库的生产入库单，须先反审删除入库再反审报工；销售已出库亦不可冲报工；出库撤回须先处理送货单/退货。需求计算撤回仍对未执行（含草稿）下游级联删除。',
-  'pages.dashboard.updateLog.entries.wecom-mobile-oauth-refresh-loop-r01.title':
-    '企微工作台打开手机端不再循环刷新登录页',
-  'pages.dashboard.updateLog.entries.wecom-mobile-oauth-refresh-loop-r01.description':
-    '企业微信内打开手机端时，若静默授权失败或未完成，不再反复跳转授权页导致登录页整页刷新；会停在账密登录并提示原因，账密登录成功后可恢复下次静默登录。',
-  'pages.dashboard.updateLog.entries.customer-follow-up-create-data-scope-r02.title':
-    '客户跟进支持未归属客户',
-  'pages.dashboard.updateLog.entries.customer-follow-up-create-data-scope-r02.description':
-    '新建跟进可选择本人负责、协作或未归属（公海）客户，下拉与保存同一范围；他人已归属客户不可跟进，不再误报笼统权限不足。',
   'pages.dashboard.updateLog.entries.pc-audit-unreview-empty-pending-r01.title':
     '审核反审核不再出现空壳待审与审计静默',
   'pages.dashboard.updateLog.entries.pc-audit-unreview-empty-pending-r01.description':
@@ -31001,18 +30993,6 @@ export default {
     '即时库存同步支持无批号行',
   'pages.dashboard.updateLog.entries.inventory-sync-empty-batch-no-r01.description':
     '从数据接口同步即时库存时，源数据没有批号会报 batch_no 不能为空。现已按空批号写入并更新已有库存行，无批次物料可以正常同步。',
-  'pages.dashboard.updateLog.entries.oa-hire-form-pay-month-r01.title':
-    '入职登记字段与员工档案对齐并支持月薪',
-  'pages.dashboard.updateLog.entries.oa-hire-form-pay-month-r01.description':
-    '入职登记、临时工登记补齐产线、银行卡、生活费、岗位工资、社保公积金、房租电费与节日福利等档案字段；计薪方式新增月薪，结算时按岗位工资计发、不再按计时单价折算。',
-  'pages.dashboard.updateLog.entries.workshop-create-unique-pkey-r01.title':
-    '车间新建不再误报编码已存在',
-  'pages.dashboard.updateLog.entries.workshop-create-unique-pkey-r01.description':
-    '新建车间按精确编码判重，并校准主键序列；主键冲突不再被说成编码已存在，未占用的编码可以正常保存。',
-  'pages.dashboard.updateLog.entries.login-log-ip-location-sticky-r01.title':
-    '登录日志同一 IP 地点不再中英混跳',
-  'pages.dashboard.updateLog.entries.login-log-ip-location-sticky-r01.description':
-    '新 IP 首次登录多源按省→市投票定坐标，再逆地理写成中文地址落库；同一 IP 第二次及以后直接复用首次结果，不再重投。',
   'pages.dashboard.updateLog.entries.im-module-notify-dedupe-r01.title':
     '模块群工序交接通知不再重复两条',
   'pages.dashboard.updateLog.entries.im-module-notify-dedupe-r01.description':
@@ -31111,10 +31091,6 @@ export default {
     '修复工作台加载完成后再闪一下',
   'pages.dashboard.updateLog.entries.workplace-weather-15s-flash-r01.description':
     '天气在站点位置就绪前就请求，Open-Meteo 失败后还会再查地理编码和 wttr.in，三段超时约 15 秒才返回，日历天空背景随之重绘。现等位置配置完成且只请求 Open-Meteo，已有天气时不再换成加载中。',
-  'pages.dashboard.updateLog.entries.approval-countersign-my-pending-task-r01.title':
-    '修复会签时审批中心不显示同意/拒绝按钮',
-  'pages.dashboard.updateLog.entries.approval-countersign-my-pending-task-r01.description':
-    '实例列表按当前用户是否有待办任务判断操作按钮；会签成员不再因仅记录首位审批人而看不到同意/拒绝/转交。',
   'pages.dashboard.updateLog.entries.gitee-oauth-drop-projects-scope-r01.title':
     '修复生产环境 Gitee 授权提示请求范围无效',
   'pages.dashboard.updateLog.entries.gitee-oauth-drop-projects-scope-r01.description':

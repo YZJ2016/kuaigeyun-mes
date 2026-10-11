@@ -195,6 +195,8 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
     titleKey: 'pages.dashboard.updateLog.entries.customer-follow-up-create-data-scope-r02.title',
     descriptionKey:
       'pages.dashboard.updateLog.entries.customer-follow-up-create-data-scope-r02.description',
+  },
+  {
     id: 'approval-countersign-my-pending-task-r01',
     date: '2026-10-11',
     type: 'fix',
@@ -202,6 +204,8 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
       'pages.dashboard.updateLog.entries.approval-countersign-my-pending-task-r01.title',
     descriptionKey:
       'pages.dashboard.updateLog.entries.approval-countersign-my-pending-task-r01.description',
+  },
+  {
     id: 'purchase-order-batch-push-in-menu-r01',
     date: '2026-10-11',
     type: 'improvement',
@@ -335,15 +339,6 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
     titleKey: 'pages.dashboard.updateLog.entries.workplace-weather-15s-flash-r01.title',
     descriptionKey:
       'pages.dashboard.updateLog.entries.workplace-weather-15s-flash-r01.description',
-  },
-  {
-    id: 'approval-countersign-my-pending-task-r01',
-    date: '2026-10-11',
-    type: 'fix',
-    titleKey:
-      'pages.dashboard.updateLog.entries.approval-countersign-my-pending-task-r01.title',
-    descriptionKey:
-      'pages.dashboard.updateLog.entries.approval-countersign-my-pending-task-r01.description',
   },
   {
     id: 'gitee-oauth-drop-projects-scope-r01',
@@ -499,159 +494,6 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
       'pages.dashboard.updateLog.entries.reporting-block-revoke-after-sales-outbound-r01.title',
     descriptionKey:
       'pages.dashboard.updateLog.entries.reporting-block-revoke-after-sales-outbound-r01.description',
-  },
-  {
-    id: 'kuaioa-asset-registry-redirect-fa-r01',
-    date: '2026-10-10',
-    type: 'fix',
-    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-asset-registry-redirect-fa-r01.title',
-    descriptionKey:
-      'pages.dashboard.updateLog.entries.kuaioa-asset-registry-redirect-fa-r01.description',
-  },
-  {
-    id: 'uni-audit-flow-assignee-hint-r01',
-    date: '2026-10-10',
-    type: 'fix',
-    titleKey: 'pages.dashboard.updateLog.entries.uni-audit-flow-assignee-hint-r01.title',
-    descriptionKey:
-      'pages.dashboard.updateLog.entries.uni-audit-flow-assignee-hint-r01.description',
-  },
-  {
-    id: 'kuaizhizao-demand-plan-custom-fields-slot-r01',
-    date: '2026-10-10',
-    type: 'fix',
-    titleKey:
-      'pages.dashboard.updateLog.entries.kuaizhizao-demand-plan-custom-fields-slot-r01.title',
-    descriptionKey:
-      'pages.dashboard.updateLog.entries.kuaizhizao-demand-plan-custom-fields-slot-r01.description',
-  },
-  {
-    id: 'platform-search-engine-indexing-toggle-r01',
-    date: '2026-10-10',
-    type: 'feature',
-    titleKey:
-      'pages.dashboard.updateLog.entries.platform-search-engine-indexing-toggle-r01.title',
-    descriptionKey:
-      'pages.dashboard.updateLog.entries.platform-search-engine-indexing-toggle-r01.description',
-  },
-  {
-    id: 'kuaioa-attendance-ot-split-calendar-r01',
-    date: '2026-10-10',
-    type: 'improvement',
-    titleKey:
-      'pages.dashboard.updateLog.entries.kuaioa-attendance-ot-split-calendar-r01.title',
-    descriptionKey:
-      'pages.dashboard.updateLog.entries.kuaioa-attendance-ot-split-calendar-r01.description',
-  },
-  {
-    id: 'kuaioa-leave-slip-attachment-r01',
-    date: '2026-10-10',
-    type: 'feature',
-    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-leave-slip-attachment-r01.title',
-    descriptionKey:
-      'pages.dashboard.updateLog.entries.kuaioa-leave-slip-attachment-r01.description',
-  },
-  {
-    id: 'system-config-menu-groups-rebalance-r01',
-    date: '2026-10-10',
-    type: 'improvement',
-    titleKey:
-      'pages.dashboard.updateLog.entries.system-config-menu-groups-rebalance-r01.title',
-    descriptionKey:
-      'pages.dashboard.updateLog.entries.system-config-menu-groups-rebalance-r01.description',
-  },
-  {
-    id: 'kuaiplm-deliverable-issue-grants-audit-columns-r01',
-    date: '2026-10-10',
-    type: 'fix',
-    titleKey:
-      'pages.dashboard.updateLog.entries.kuaiplm-deliverable-issue-grants-audit-columns-r01.title',
-    descriptionKey:
-      'pages.dashboard.updateLog.entries.kuaiplm-deliverable-issue-grants-audit-columns-r01.description',
-  },
-  {
-    id: 'kuaiplm-bom-collab-excel-import-r01',
-    date: '2026-10-10',
-    type: 'feature',
-    titleKey:
-      'pages.dashboard.updateLog.entries.kuaiplm-bom-collab-excel-import-r01.title',
-    descriptionKey:
-      'pages.dashboard.updateLog.entries.kuaiplm-bom-collab-excel-import-r01.description',
-  },
-  {
-    id: 'sidebar-menu-query-path-specificity-r01',
-    date: '2026-10-10',
-    type: 'fix',
-    titleKey:
-      'pages.dashboard.updateLog.entries.sidebar-menu-query-path-specificity-r01.title',
-    descriptionKey:
-      'pages.dashboard.updateLog.entries.sidebar-menu-query-path-specificity-r01.description',
-  },
-  {
-    id: 'kuaiplm-rd-deliverable-issue-orm-register-r01',
-    date: '2026-10-10',
-    type: 'fix',
-    titleKey:
-      'pages.dashboard.updateLog.entries.kuaiplm-rd-deliverable-issue-orm-register-r01.title',
-    descriptionKey:
-      'pages.dashboard.updateLog.entries.kuaiplm-rd-deliverable-issue-orm-register-r01.description',
-  },
-  {
-    id: 'lab-request-measure-requirement-attachments-r01',
-    date: '2026-10-10',
-    type: 'feature',
-    titleKey:
-      'pages.dashboard.updateLog.entries.lab-request-measure-requirement-attachments-r01.title',
-    descriptionKey:
-      'pages.dashboard.updateLog.entries.lab-request-measure-requirement-attachments-r01.description',
-  },
-  {
-    id: 'lab-request-dept-scope-settings-r01',
-    date: '2026-10-10',
-    type: 'feature',
-    titleKey: 'pages.dashboard.updateLog.entries.lab-request-dept-scope-settings-r01.title',
-    descriptionKey:
-      'pages.dashboard.updateLog.entries.lab-request-dept-scope-settings-r01.description',
-  },
-  {
-    id: 'dedicated-page-split-scan-r01',
-    date: '2026-10-10',
-    type: 'improvement',
-    titleKey: 'pages.dashboard.updateLog.entries.dedicated-page-split-scan-r01.title',
-    descriptionKey:
-      'pages.dashboard.updateLog.entries.dedicated-page-split-scan-r01.description',
-  },
-  {
-    id: 'drawing-main-file-beforeupload-r01',
-    date: '2026-10-10',
-    type: 'fix',
-    titleKey: 'pages.dashboard.updateLog.entries.drawing-main-file-beforeupload-r01.title',
-    descriptionKey:
-      'pages.dashboard.updateLog.entries.drawing-main-file-beforeupload-r01.description',
-  },
-  {
-    id: 'install-execution-detail-row-undefined-r01',
-    date: '2026-10-09',
-    type: 'fix',
-    titleKey: 'pages.dashboard.updateLog.entries.install-execution-detail-row-undefined-r01.title',
-    descriptionKey:
-      'pages.dashboard.updateLog.entries.install-execution-detail-row-undefined-r01.description',
-  },
-  {
-    id: 'wecom-mobile-oauth-refresh-loop-r01',
-    date: '2026-10-09',
-    type: 'fix',
-    titleKey: 'pages.dashboard.updateLog.entries.wecom-mobile-oauth-refresh-loop-r01.title',
-    descriptionKey:
-      'pages.dashboard.updateLog.entries.wecom-mobile-oauth-refresh-loop-r01.description',
-  },
-  {
-    id: 'customer-follow-up-create-data-scope-r02',
-    date: '2026-10-09',
-    type: 'fix',
-    titleKey: 'pages.dashboard.updateLog.entries.customer-follow-up-create-data-scope-r02.title',
-    descriptionKey:
-      'pages.dashboard.updateLog.entries.customer-follow-up-create-data-scope-r02.description',
   },
   {
     id: 'pc-audit-unreview-empty-pending-r01',
@@ -4271,14 +4113,6 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
     titleKey: 'pages.dashboard.updateLog.entries.uni-import-live-sheet-precheck-r01.title',
     descriptionKey:
       'pages.dashboard.updateLog.entries.uni-import-live-sheet-precheck-r01.description',
-  },
-  {
-    id: 'kuaioa-employee-batch-import-r01',
-    date: '2026-09-24',
-    type: 'feature',
-    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-employee-batch-import-r01.title',
-    descriptionKey:
-      'pages.dashboard.updateLog.entries.kuaioa-employee-batch-import-r01.description',
   },
   {
     id: 'drawing-upload-size-config-r01',
