@@ -645,7 +645,13 @@ export default {
   'pages.login.giteeLinkModalHint': '请填写系统账号与密码完成关联。',
   'pages.login.giteeLinkModeFirst': '首次登录',
   'pages.login.giteeLinkModeBind': '绑定已有账户',
-  'pages.login.giteeFirstLoginHint': '将用当前 Gitee 资料在本组织创建账号并直接登录，无需填写密码。',
+  'pages.login.giteeFirstLoginHint':
+    '确认 Gitee 账户与登录密码，在本组织创建账号并登录；手机号与邮箱为选填。',
+  'pages.login.giteeFirstLoginUsername': 'Gitee 账户',
+  'pages.login.giteeFirstLoginUsernamePlaceholder': '默认为 Gitee 登录名，可修改',
+  'pages.login.giteeFirstLoginUsernameLen': '用户名长度为 2-50 个字符',
+  'pages.login.giteeFieldPhoneOptional': '手机号（选填）',
+  'pages.login.giteeFieldEmailOptional': '邮箱（选填）',
   'pages.login.giteeBindExistingHint': '请填写本组织已有系统账号与密码完成绑定。',
   'pages.login.giteeFirstLoginSubmit': '创建并登录',
   'pages.login.giteeFirstLoginFailed': 'Gitee 首次登录失败',
@@ -31033,6 +31039,10 @@ export default {
     '修复会签时审批中心不显示同意/拒绝按钮',
   'pages.dashboard.updateLog.entries.approval-countersign-my-pending-task-r01.description':
     '实例列表按当前用户是否有待办任务判断操作按钮；会签成员不再因仅记录首位审批人而看不到同意/拒绝/转交。',
+  'pages.dashboard.updateLog.entries.gitee-first-login-profile-form-r01.title':
+    'Gitee 首次登录可确认账户并设置密码',
+  'pages.dashboard.updateLog.entries.gitee-first-login-profile-form-r01.description':
+    '首次登录窗预填 Gitee 账户（可改），须设置登录密码；手机号与邮箱选填后写入个人资料。',
   'pages.dashboard.updateLog.entries.workbuddy-mcp-caddy-path-b-r01.title':
     '生产 Caddy 支持主站 /mcp 反代 WorkBuddy Sidecar',
   'pages.dashboard.updateLog.entries.workbuddy-mcp-caddy-path-b-r01.description':
