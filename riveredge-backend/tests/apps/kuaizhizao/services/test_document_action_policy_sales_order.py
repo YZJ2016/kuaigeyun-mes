@@ -114,7 +114,7 @@ def test_revoke_approval_denied_when_has_downstream():
             has_downstream_documents=True,
         )
     assert "下游单据" in str(exc.value)
-    assert "反审核并删除下游" in str(exc.value)
+    assert "销售变更单" in str(exc.value)
 
 
 def test_create_change_order_when_locked():

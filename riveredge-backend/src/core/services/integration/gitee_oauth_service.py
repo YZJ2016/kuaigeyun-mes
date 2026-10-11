@@ -26,9 +26,10 @@ GITEE_EMAILS_API = "https://gitee.com/api/v5/emails"
 GITEE_STARRED_API = "https://gitee.com/api/v5/user/starred/{owner}/{repo}"
 GITEE_STARRED_LIST_API = "https://gitee.com/api/v5/user/starred"
 # Gitee 官方 OAuth scope：白名单无 emails；写 emails 会直接 400「请求范围无效」。
-# 登录只需 user_info。勿再带 projects——部分生产应用会拒收并报「请求范围无效」；
-# Star 已改为官网引导，不再依赖 Star API 授权。
-GITEE_OAUTH_SCOPE = "user_info"
+# 本仓保留 user_info projects：Star 官方仓库检查需要 projects。
+# 注意：若部署的 Gitee OAuth 应用为受限白名单应用，projects 可能被拒并报「请求范围无效」，
+# 此时可将 scope 收窄为 "user_info"（Star 检查会降级为官网引导）。
+GITEE_OAUTH_SCOPE = "user_info projects"
 
 _GITEE_ID_KEYS = ("gitee_id", "gitee_user_id")
 _GITEE_NOREPLY_SUFFIX = "@user.noreply.gitee.com"
