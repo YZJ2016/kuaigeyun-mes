@@ -1,6 +1,6 @@
 [Unit]
 Description=RiverEdge Production (API + Taskiq + Caddy)
-Wants=riveredge-backend.service riveredge-taskiq-worker.service riveredge-taskiq-scheduler.service riveredge-caddy.service
+Wants=riveredge-backend.service riveredge-taskiq-worker.service riveredge-taskiq-scheduler.service riveredge-caddy.service{{WORKBUDDY_MCP_WANTS_SUFFIX}}
 After=network-online.target postgresql.service
 Conflicts=caddy.service
 

@@ -1,0 +1,25 @@
+[Unit]
+Description=RiverEdge KU-Bridge WorkBuddy MCP Sidecar (lab)
+After=network-online.target riveredge-backend.service
+Wants=riveredge-backend.service
+PartOf=riveredge.service
+
+[Service]
+Type=simple
+User={{SERVICE_USER}}
+Group={{SERVICE_GROUP}}
+WorkingDirectory={{WORKBUDDY_MCP_DIR}}
+Environment=HOME={{SERVICE_HOME}}
+Environment=MCP_HOST=127.0.0.1
+Environment=MCP_PORT={{WORKBUDDY_MCP_PORT}}
+Environment=MCP_TRANSPORT=streamable-http
+EnvironmentFile={{WORKBUDDY_MCP_ENV_FILE}}
+StandardOutput=journal
+StandardError=journal
+ExecStart={{WORKBUDDY_MCP_EXEC_SCRIPT}}
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+
+[Install]
+WantedBy=riveredge.service

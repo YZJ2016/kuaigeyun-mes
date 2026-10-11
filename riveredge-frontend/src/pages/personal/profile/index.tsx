@@ -14,6 +14,7 @@ import { WecomWWLoginPanel } from '../../../components/WecomWWLoginPanel';
 import {
   getDingtalkAuthorizeUrl,
   getFeishuAuthorizeUrl,
+  getGiteeAuthorizeUrl,
   getWecomWWLoginConfig,
   type WeComWWLoginConfigResponse,
 } from '../../../services/publicAuth';
@@ -27,6 +28,12 @@ import {
   decodeFeishuOAuthState,
   saveFeishuOAuthState,
 } from '../../../utils/feishuAuth';
+import {
+  consumeGiteeOAuthState,
+  decodeGiteeOAuthState,
+  peekGiteeOAuthState,
+  saveGiteeOAuthState,
+} from '../../../utils/giteeAuth';
 import { ThemedSegmented } from '../../../components/themed-segmented';
 import { UserOutlined, UploadOutlined, DeleteOutlined, SyncOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import wechatLogo from '../../../assets/social/wechat.svg';
@@ -34,6 +41,7 @@ import qqLogo from '../../../assets/social/qq.svg';
 import wecomLogo from '../../../assets/social/qwei.svg';
 import dingtalkLogo from '../../../assets/social/dingtalk.svg';
 import feishuLogo from '../../../assets/social/feishu.svg';
+import giteeLogo from '../../../assets/social/gitee.svg';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
 
 // ... (other imports)
@@ -54,6 +62,8 @@ import {
   unbindDingtalkAccount,
   bindFeishuAccount,
   unbindFeishuAccount,
+  bindGiteeAccount,
+  unbindGiteeAccount,
   UserProfile,
   UpdateUserProfileData,
 } from '../../../services/userProfile';
@@ -78,6 +88,7 @@ const SOCIAL_BRAND = {
   wecom: '#78C340',
   dingtalk: '#0075FF',
   feishu: '#3370FF',
+  gitee: '#C71D23',
 } as const;
 
 type SocialContactCardProps = {
@@ -188,6 +199,8 @@ const UserProfilePage: React.FC = () => {
   const [dingtalkUnbindLoading, setDingtalkUnbindLoading] = useState(false);
   const [feishuBindLoading, setFeishuBindLoading] = useState(false);
   const [feishuUnbindLoading, setFeishuUnbindLoading] = useState(false);
+  const [giteeBindLoading, setGiteeBindLoading] = useState(false);
+  const [giteeUnbindLoading, setGiteeUnbindLoading] = useState(false);
   const currentUser = useCurrentUser();
 
   const boundWecomUserid = profileData?.contact_info?.wecom_userid?.trim() || '';
@@ -203,6 +216,11 @@ const UserProfilePage: React.FC = () => {
     profileData?.contact_info?.feishu_user_id?.trim() ||
     '';
   const boundFeishuName = profileData?.contact_info?.feishu_name?.trim() || '';
+  const boundGiteeId =
+    profileData?.contact_info?.gitee_id?.trim() ||
+    profileData?.contact_info?.gitee_user_id?.trim() ||
+    '';
+  const boundGiteeName = profileData?.contact_info?.gitee_login?.trim() || '';
 
   const handleUnbindDingtalk = useCallback(async () => {
     try {
@@ -283,6 +301,49 @@ const UserProfilePage: React.FC = () => {
         error instanceof Error ? error.message : t('pages.personal.profile.feishuOauthBindFailed');
       messageApi.error(errMsg);
       setFeishuBindLoading(false);
+    }
+  }, [messageApi, t]);
+
+  const handleUnbindGitee = useCallback(async () => {
+    try {
+      setGiteeUnbindLoading(true);
+      await unbindGiteeAccount();
+      messageApi.success(t('pages.personal.profile.giteeOauthUnbindSuccess'));
+      const updatedData = await getUserProfile();
+      setProfileData(updatedData);
+    } catch (error: unknown) {
+      const errMsg =
+        error instanceof Error
+          ? error.message
+          : t('pages.personal.profile.giteeOauthUnbindFailed');
+      messageApi.error(errMsg);
+    } finally {
+      setGiteeUnbindLoading(false);
+    }
+  }, [messageApi, t]);
+
+  const handleOpenGiteeBind = useCallback(async () => {
+    const tenantId = getTenantId();
+    if (!tenantId) {
+      messageApi.warning(t('pages.personal.profile.giteeOauthBindFailed'));
+      return;
+    }
+    try {
+      setGiteeBindLoading(true);
+      const redirectUri = `${window.location.origin}/personal/profile?provider=gitee_bind`;
+      const { authorize_url, state } = await getGiteeAuthorizeUrl({
+        redirect_uri: redirectUri,
+        tenant_id: tenantId,
+      });
+      saveGiteeOAuthState(state);
+      window.location.href = authorize_url;
+    } catch (error: unknown) {
+      const errMsg =
+        error instanceof Error
+          ? error.message
+          : t('pages.personal.profile.giteeOauthBindFailed');
+      messageApi.error(errMsg);
+      setGiteeBindLoading(false);
     }
   }, [messageApi, t]);
 
@@ -376,7 +437,7 @@ const UserProfilePage: React.FC = () => {
     initializeProfile();
   }, []);
 
-  /** 钉钉 / 飞书扫码绑定回调 */
+  /** 钉钉 / 飞书 / Gitee 授权绑定回调 */
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const provider = urlParams.get('provider');
@@ -385,14 +446,21 @@ const UserProfilePage: React.FC = () => {
     if (!code || !state) {
       return;
     }
-    if (provider !== 'dingtalk_bind' && provider !== 'feishu_bind') {
+
+    const isDingtalk = provider === 'dingtalk_bind';
+    const isFeishu = provider === 'feishu_bind';
+    const isGitee =
+      provider === 'gitee_bind' ||
+      (peekGiteeOAuthState() === state && provider !== 'dingtalk_bind' && provider !== 'feishu_bind');
+
+    if (!isDingtalk && !isFeishu && !isGitee) {
       return;
     }
 
     let cancelled = false;
     const run = async () => {
       try {
-        if (provider === 'dingtalk_bind') {
+        if (isDingtalk) {
           if (!consumeDingtalkOAuthState(state)) {
             messageApi.error(t('pages.personal.profile.dingtalkOauthBindFailed'));
             window.history.replaceState({}, '', window.location.pathname);
@@ -402,7 +470,7 @@ const UserProfilePage: React.FC = () => {
           await bindDingtalkAccount({ code, state });
           if (cancelled) return;
           messageApi.success(t('pages.personal.profile.dingtalkOauthBindSuccess'));
-        } else {
+        } else if (isFeishu) {
           if (!consumeFeishuOAuthState(state)) {
             messageApi.error(t('pages.personal.profile.feishuOauthBindFailed'));
             window.history.replaceState({}, '', window.location.pathname);
@@ -417,6 +485,21 @@ const UserProfilePage: React.FC = () => {
           });
           if (cancelled) return;
           messageApi.success(t('pages.personal.profile.feishuOauthBindSuccess'));
+        } else {
+          if (!consumeGiteeOAuthState(state)) {
+            messageApi.error(t('pages.personal.profile.giteeOauthBindFailed'));
+            window.history.replaceState({}, '', window.location.pathname);
+            return;
+          }
+          setGiteeBindLoading(true);
+          const decoded = decodeGiteeOAuthState(state);
+          await bindGiteeAccount({
+            code,
+            state,
+            redirect_uri: decoded?.redirect_uri,
+          });
+          if (cancelled) return;
+          messageApi.success(t('pages.personal.profile.giteeOauthBindSuccess'));
         }
         const updatedData = await getUserProfile();
         if (!cancelled) {
@@ -427,15 +510,18 @@ const UserProfilePage: React.FC = () => {
           const errMsg =
             error instanceof Error
               ? error.message
-              : provider === 'dingtalk_bind'
+              : isDingtalk
                 ? t('pages.personal.profile.dingtalkOauthBindFailed')
-                : t('pages.personal.profile.feishuOauthBindFailed');
+                : isFeishu
+                  ? t('pages.personal.profile.feishuOauthBindFailed')
+                  : t('pages.personal.profile.giteeOauthBindFailed');
           messageApi.error(errMsg);
         }
       } finally {
         if (!cancelled) {
           setDingtalkBindLoading(false);
           setFeishuBindLoading(false);
+          setGiteeBindLoading(false);
           window.history.replaceState({}, '', window.location.pathname);
         }
       }
@@ -802,6 +888,9 @@ const UserProfilePage: React.FC = () => {
       if (values.contact_feishu !== undefined && values.contact_feishu !== null) {
         contact_info.feishu = values.contact_feishu.trim() || null;
       }
+      if (values.contact_wecom_userid !== undefined && values.contact_wecom_userid !== null) {
+        contact_info.wecom_userid = values.contact_wecom_userid.trim() || null;
+      }
       
       // 只发送可编辑的字段：username、email、full_name、phone、bio、gender、contact_info
       // 注意：avatar 已经在上传时自动保存，这里不再发送
@@ -986,6 +1075,12 @@ const UserProfilePage: React.FC = () => {
                     )}
                     {profileData.contact_info.wecom_userid && (
                       <div>{t('pages.personal.profile.wecomUserid')}：{profileData.contact_info.wecom_userid}</div>
+                    )}
+                    {(profileData.contact_info.gitee_login || profileData.contact_info.gitee_id) && (
+                      <div>
+                        {t('pages.personal.profile.gitee')}：
+                        {profileData.contact_info.gitee_login || profileData.contact_info.gitee_id}
+                      </div>
                     )}
                   </div>
                 </Descriptions.Item>
@@ -1317,30 +1412,39 @@ const UserProfilePage: React.FC = () => {
                         : t('pages.personal.profile.wecomNotBound')
                     }
                   >
-                    <Space wrap size={8}>
-                      {!boundWecomUserid ? (
-                        <Button
-                          type="primary"
-                          loading={wecomBindLoading}
-                          onClick={() => void handleOpenWecomBind()}
-                        >
-                          {t('pages.personal.profile.wecomBindButton')}
-                        </Button>
-                      ) : (
-                        <>
-                          <Button loading={wecomBindLoading} onClick={() => void handleOpenWecomBind()}>
-                            {t('pages.personal.profile.wecomRebindButton')}
-                          </Button>
-                          <Popconfirm
-                            title={t('pages.personal.profile.wecomUnbindConfirm')}
-                            onConfirm={() => void handleUnbindWecom()}
+                    <Space orientation="vertical" size={8} style={{ width: '100%' }}>
+                      <Space wrap size={8}>
+                        {!boundWecomUserid ? (
+                          <Button
+                            type="primary"
+                            loading={wecomBindLoading}
+                            onClick={() => void handleOpenWecomBind()}
                           >
-                            <Button danger loading={wecomUnbindLoading}>
-                              {t('pages.personal.profile.wecomUnbindButton')}
+                            {t('pages.personal.profile.wecomBindButton')}
+                          </Button>
+                        ) : (
+                          <>
+                            <Button loading={wecomBindLoading} onClick={() => void handleOpenWecomBind()}>
+                              {t('pages.personal.profile.wecomRebindButton')}
                             </Button>
-                          </Popconfirm>
-                        </>
-                      )}
+                            <Popconfirm
+                              title={t('pages.personal.profile.wecomUnbindConfirm')}
+                              onConfirm={() => void handleUnbindWecom()}
+                            >
+                              <Button danger loading={wecomUnbindLoading}>
+                                {t('pages.personal.profile.wecomUnbindButton')}
+                              </Button>
+                            </Popconfirm>
+                          </>
+                        )}
+                      </Space>
+                      <Form.Item name="contact_wecom_userid" noStyle>
+                        <Input
+                          placeholder={t('pages.personal.profile.wecomUseridPlaceholder')}
+                          maxLength={64}
+                          allowClear
+                        />
+                      </Form.Item>
                     </Space>
                   </SocialContactCard>
                 </Col>
@@ -1447,6 +1551,50 @@ const UserProfilePage: React.FC = () => {
                           allowClear
                         />
                       </Form.Item>
+                    </Space>
+                  </SocialContactCard>
+                </Col>
+                <Col xs={24} md={12}>
+                  <SocialContactCard
+                    logo={giteeLogo}
+                    brandColor={SOCIAL_BRAND.gitee}
+                    title={t('pages.personal.profile.gitee')}
+                    hint={t('pages.personal.profile.giteeHint')}
+                    titleExtra={
+                      boundGiteeId
+                        ? t('pages.personal.profile.giteeOauthBound', {
+                            name: boundGiteeName || boundGiteeId,
+                          })
+                        : t('pages.personal.profile.giteeOauthNotBound')
+                    }
+                  >
+                    <Space wrap size={8}>
+                      {!boundGiteeId ? (
+                        <Button
+                          type="primary"
+                          loading={giteeBindLoading}
+                          onClick={() => void handleOpenGiteeBind()}
+                        >
+                          {t('pages.personal.profile.giteeOauthBindButton')}
+                        </Button>
+                      ) : (
+                        <>
+                          <Button
+                            loading={giteeBindLoading}
+                            onClick={() => void handleOpenGiteeBind()}
+                          >
+                            {t('pages.personal.profile.giteeOauthRebindButton')}
+                          </Button>
+                          <Popconfirm
+                            title={t('pages.personal.profile.giteeOauthUnbindConfirm')}
+                            onConfirm={() => void handleUnbindGitee()}
+                          >
+                            <Button danger loading={giteeUnbindLoading}>
+                              {t('pages.personal.profile.giteeOauthUnbindButton')}
+                            </Button>
+                          </Popconfirm>
+                        </>
+                      )}
                     </Space>
                   </SocialContactCard>
                 </Col>

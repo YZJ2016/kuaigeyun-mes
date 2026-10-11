@@ -98,6 +98,8 @@ function Load-DeployEnv {
     if (-not $script:GIT_BRANCH) { $script:GIT_BRANCH = 'develop' }
     if (-not $script:GIT_REMOTE) { $script:GIT_REMOTE = 'origin' }
     if (-not $script:LOW_SPEC_MODE) { $script:LOW_SPEC_MODE = '0' }
+    if (-not $script:WORKBUDDY_MCP_ENABLE) { $script:WORKBUDDY_MCP_ENABLE = '0' }
+    if (-not $script:WORKBUDDY_MCP_PORT) { $script:WORKBUDDY_MCP_PORT = '8765' }
     Initialize-BgDefaults
 }
 
@@ -1966,6 +1968,37 @@ function Add-CaddyExtraProxyBlocks {
     Write-LogOk "已追加 $count 条额外反向代理"
 }
 
+function Test-DeployEnvFlagEnabled([string]$Raw) {
+    switch ($Raw.Trim().ToLowerInvariant()) {
+        '1' { return $true }
+        'true' { return $true }
+        'yes' { return $true }
+        'on' { return $true }
+        default { return $false }
+    }
+}
+
+function Get-WorkbuddyMcpCaddyBlock {
+    Load-DeployEnv
+    if (-not (Test-DeployEnvFlagEnabled $script:WORKBUDDY_MCP_ENABLE)) {
+        return "    # WORKBUDDY_MCP_ENABLE=0：/mcp 未反代至 Sidecar（仍可能落入前端 SPA）"
+    }
+    $port = if ($script:WORKBUDDY_MCP_PORT) { $script:WORKBUDDY_MCP_PORT } else { '8765' }
+    return @"
+    # KU-Bridge WorkBuddy MCP（Sidecar streamable-http；须在 SPA try_files 之前）
+    handle /mcp* {
+        reverse_proxy 127.0.0.1:${port} {
+            transport http {
+                read_timeout 300s
+                write_timeout 300s
+                response_header_timeout 300s
+                keepalive 30s
+            }
+        }
+    }
+"@
+}
+
 function New-Caddyfile {
     Load-DeployEnv
     Sync-ProdAppUrls
@@ -2000,6 +2033,8 @@ function New-Caddyfile {
     }
 
     $content = (Get-Content $script:CaddyTemplate -Raw).Replace('{{ADDR}}', $addr).Replace('{{BACKEND_ADDR}}', $backendAddr).Replace('{{FRONTEND_ROOT}}', $frontendRoot).Replace('{{MOBILE_WEB_ROOT}}', $mobileWebRoot).Replace('{{CLIENT_RELEASE_ROOT}}', $clientReleaseRoot).Replace('{{FILE_UPLOAD_ROOT}}', $fileUploadRoot)
+    $workbuddyBlock = Get-WorkbuddyMcpCaddyBlock
+    $content = $content.Replace('{{WORKBUDDY_MCP_CADDY_BLOCK}}', $workbuddyBlock)
 
     $tmp = "$script:Caddyfile.tmp"
     Set-Content -Path $tmp -Value $content -Encoding UTF8
