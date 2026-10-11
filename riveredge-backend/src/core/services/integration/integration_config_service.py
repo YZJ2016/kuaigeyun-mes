@@ -13,6 +13,7 @@ from tortoise.exceptions import IntegrityError
 from tortoise import Tortoise
 from tortoise.transactions import in_transaction
 import httpx  # 仅用于 BasicAuth 等类型
+from fastapi import HTTPException
 
 from core.models.integration_config import IntegrationConfig
 from core.schemas.integration_config import IntegrationConfigCreate, IntegrationConfigUpdate
@@ -182,9 +183,11 @@ class IntegrationConfigService:
             from core.utils.integration_settings import require_llm_model_role
 
             require_llm_model_role(data.type, data.config if isinstance(data.config, dict) else {})
+            payload = data.model_dump()
+            IntegrationConfigService._normalize_config_on_save(payload.get("type"), payload.get("config"))
             integration = IntegrationConfig(
                 tenant_id=tenant_id,
-                **data.model_dump()
+                **payload,
             )
             await integration.save()
             return integration
@@ -354,6 +357,7 @@ class IntegrationConfigService:
                 if new_val in (None, "", "****") and old_cfg.get(sk) not in (None, "", "****"):
                     merged[sk] = old_cfg[sk]
             merged.pop("api_key_configured", None)
+            IntegrationConfigService._normalize_config_on_save(integration.type, merged)
             update_data["config"] = merged
 
         next_type = update_data.get("type", integration.type)
@@ -373,6 +377,17 @@ class IntegrationConfigService:
 
             evict_model_cache(tenant_id)
         return integration
+
+    @staticmethod
+    def _normalize_config_on_save(integration_type: str | None, config: dict | None) -> None:
+        if integration_type != "kuaiai_workbuddy" or not isinstance(config, dict):
+            return
+        from core.utils.workbuddy_mcp_public_url import normalize_workbuddy_mcp_public_url
+        raw = config.get("mcp_public_url") or config.get("mcp_public_host")
+        config.pop("mcp_public_host", None)
+        config["mcp_public_url"] = normalize_workbuddy_mcp_public_url(
+            str(raw) if raw is not None else ""
+        )
     
     @staticmethod
     async def delete_integration(
@@ -1704,12 +1719,22 @@ class IntegrationConfigService:
 
     @staticmethod
     async def _test_kuaiai_workbuddy_connection(integration: IntegrationConfig) -> Dict[str, Any]:
+        from core.utils.workbuddy_mcp_public_url import (
+            WORKBUDDY_MCP_PUBLIC_PATH,
+            normalize_workbuddy_mcp_public_url,
+        )
+
         cfg = integration.config or {}
-        url = str(cfg.get("mcp_public_url") or "").strip()
-        if not url:
-            return {"success": False, "message": "请填写 MCP 公网地址"}
-        if not url.startswith(("http://", "https://")):
-            return {"success": False, "message": "MCP 公网地址须以 http:// 或 https:// 开头"}
+        raw = str(cfg.get("mcp_public_url") or cfg.get("mcp_public_host") or "").strip()
+        if not raw:
+            return {"success": False, "message": "请填写 MCP 公网域名"}
+        try:
+            url = normalize_workbuddy_mcp_public_url(raw)
+        except HTTPException as exc:
+            detail = exc.detail if isinstance(exc.detail, str) else str(exc.detail)
+            return {"success": False, "message": detail}
+        if not url.startswith("https://") or not url.endswith(WORKBUDDY_MCP_PUBLIC_PATH):
+            return {"success": False, "message": f"MCP 地址须为 https://域名{WORKBUDDY_MCP_PUBLIC_PATH}"}
         return {
             "success": True,
             "message": "MCP 地址格式校验通过（实验室通道，未探测远端连通性）",

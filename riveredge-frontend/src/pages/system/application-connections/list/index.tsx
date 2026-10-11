@@ -98,6 +98,12 @@ import {
 } from '../../../../utils/tableQueryKey';
 import { useResourcePermissions } from '../../../../hooks/useResourcePermissions';
 import { todaySiteDateString } from '../../../../utils/format';
+import {
+  buildWorkbuddyMcpPublicUrl,
+  parseWorkbuddyMcpPublicHost,
+  validateWorkbuddyMcpPublicHostInput,
+  WORKBUDDY_MCP_PUBLIC_PATH,
+} from '../../../../utils/workbuddyMcpPublicUrl';
 import { buildListPageHelpViewConfig } from '../../../../components/page-help-wiki';
 
 // 映射类型保留服务字段，并满足表格布局的 Record 约束。
@@ -408,6 +414,10 @@ const ApplicationConnectionsListPage: React.FC = () => {
         }
       }
       setSensitiveConfigured(configured);
+      if (isKuaiaiWorkbuddyConnectionType(detail.type)) {
+        config.mcp_public_host = parseWorkbuddyMcpPublicHost(String(config.mcp_public_url ?? ''));
+        delete config.mcp_public_url;
+      }
       setFormInitialValues({
         name: detail.name,
         code: detail.code,
@@ -637,6 +647,11 @@ const ApplicationConnectionsListPage: React.FC = () => {
           // 编辑留空/占位：交给后端合并保留原密钥；新建则字段缺失由必填校验拦截
           delete config[key];
         }
+      }
+      if (isKuaiaiWorkbuddyConnectionType(type)) {
+        const hostInput = String(config.mcp_public_host ?? config.mcp_public_url ?? '').trim();
+        delete config.mcp_public_host;
+        config.mcp_public_url = buildWorkbuddyMcpPublicUrl(hostInput);
       }
       if (isEdit && currentUuid) {
         await updateApplicationConnection(currentUuid, {
@@ -1412,12 +1427,27 @@ const ApplicationConnectionsListPage: React.FC = () => {
               />
             </FormModalGridBlock>
             <ProFormText
-              name="mcp_public_url"
-              label={t('app.kuaiai.settings.workbuddyMcpUrl')}
-              rules={[{ required: true }]}
+              name="mcp_public_host"
+              label={t('app.kuaiai.settings.workbuddyMcpHost')}
+              rules={[
+                { required: true, message: t('app.kuaiai.settings.workbuddyMcpHostRequired') },
+                {
+                  validator: async (_, value) => {
+                    const result = validateWorkbuddyMcpPublicHostInput(value);
+                    if (result === true) return;
+                    throw new Error(result);
+                  },
+                },
+              ]}
               colProps={{ span: 24 }}
-              extra={t('app.kuaiai.settings.workbuddyMcpUrlExtra')}
-              placeholder="https://your-mcp-host/mcp"
+              extra={t('app.kuaiai.settings.workbuddyMcpHostExtra', {
+                path: WORKBUDDY_MCP_PUBLIC_PATH,
+              })}
+              placeholder="kuaigeyun.com"
+              fieldProps={{
+                addonBefore: 'https://',
+                addonAfter: WORKBUDDY_MCP_PUBLIC_PATH,
+              }}
               formItemProps={{
                 style: { marginTop: 8 },
               }}
