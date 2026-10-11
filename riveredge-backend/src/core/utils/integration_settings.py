@@ -53,6 +53,9 @@ LLM_PROVIDER_SPECS: Dict[str, Dict[str, str]] = {
 
 LLM_PROVIDER_IDS: List[str] = list(LLM_PROVIDER_SPECS.keys())
 
+KUAIAI_OCR_CONNECTION_TYPE = "kuaiai_ocr"
+KUAIAI_WORKBUDDY_CONNECTION_TYPE = "kuaiai_workbuddy"
+
 # 仅存在于 integrations.kuaiai 的能力/OCR/选用字段
 AI_MODEL_ROLES = ("chat", "embed", "vision", "rerank")
 
@@ -683,6 +686,77 @@ def get_active_llm_integration(settings: Dict[str, Any]) -> Dict[str, Any]:
     )
 
 
+async def overlay_kuaiai_workbuddy_from_connection(
+    tenant_id: int,
+    kuaiai: Dict[str, Any],
+) -> Dict[str, Any]:
+    """已启用的 kuaiai_workbuddy 应用连接覆盖站点 integrations.kuaiai.channels.workbuddy。"""
+    from core.models.integration_config import IntegrationConfig
+
+    row = (
+        await IntegrationConfig.filter(
+            tenant_id=tenant_id,
+            type=KUAIAI_WORKBUDDY_CONNECTION_TYPE,
+            is_active=True,
+            deleted_at__isnull=True,
+        )
+        .order_by("-updated_at", "-id")
+        .first()
+    )
+    if row is None:
+        return kuaiai
+
+    cfg = row.get_config() if hasattr(row, "get_config") else (row.config or {})
+    if not isinstance(cfg, dict):
+        cfg = {}
+
+    channels = dict(kuaiai.get("channels") or {}) if isinstance(kuaiai.get("channels"), dict) else {}
+    channels["workbuddy"] = {
+        "enabled": True,
+        "maturity": "lab",
+        "tool_profile": str(cfg.get("tool_profile") or "read_ops_v1").strip() or "read_ops_v1",
+        "mcp_public_url": str(cfg.get("mcp_public_url") or "").strip(),
+        "notes": str(cfg.get("notes") or "").strip(),
+    }
+    return {**kuaiai, "channels": channels}
+
+
+async def overlay_kuaiai_ocr_from_connection(
+    tenant_id: int,
+    active: Dict[str, Any],
+) -> Dict[str, Any]:
+    """启用中的 kuaiai_ocr 应用连接覆盖站点 integrations.kuaiai OCR 槽（向后兼容未迁移租户）。"""
+    from core.models.integration_config import IntegrationConfig
+
+    row = (
+        await IntegrationConfig.filter(
+            tenant_id=tenant_id,
+            type=KUAIAI_OCR_CONNECTION_TYPE,
+            is_active=True,
+            deleted_at__isnull=True,
+        )
+        .order_by("-updated_at", "-id")
+        .first()
+    )
+    if row is None:
+        return active
+
+    cfg = row.get_config() if hasattr(row, "get_config") else (row.config or {})
+    if not isinstance(cfg, dict):
+        return active
+
+    base_url = str(cfg.get("base_url") or "").strip()
+    model = str(cfg.get("model") or "").strip()
+    if not base_url or not model:
+        return active
+
+    merged = {**active, "ocr_base_url": base_url, "ocr_model": model}
+    api_key = cfg.get("api_key")
+    if isinstance(api_key, str) and api_key.strip() and not _is_masked_api_key(api_key):
+        merged["ocr_api_key"] = api_key.strip()
+    return merged
+
+
 async def resolve_active_llm_integration(tenant_id: int) -> Dict[str, Any]:
     """当前选用应用连接的密钥 + KU-AI 能力（运行时唯一路径）。"""
     from core.models.integration_config import IntegrationConfig
@@ -707,32 +781,24 @@ async def resolve_active_llm_integration(tenant_id: int) -> Dict[str, Any]:
 
     if connection is None:
         provider_id = get_active_provider_id(settings)
-        return merge_llm_connection_with_kuaiai(
+        active = merge_llm_connection_with_kuaiai(
             kuaiai,
             provider_id=provider_id,
             connection_uuid=None,
             is_active=False,
             config={},
         )
+    else:
+        provider_id = connection.type if connection.type in LLM_PROVIDER_SPECS else "deepseek"
+        active = merge_llm_connection_with_kuaiai(
+            kuaiai,
+            provider_id=provider_id,
+            connection_uuid=str(connection.uuid),
+            is_active=bool(connection.is_active),
+            config=connection.get_config(),
+        )
 
-    provider_id = connection.type if connection.type in LLM_PROVIDER_SPECS else "deepseek"
-    merged = merge_llm_connection_with_kuaiai(
-        kuaiai,
-        provider_id=provider_id,
-        connection_uuid=str(connection.uuid),
-        is_active=bool(connection.is_active),
-        config=connection.get_config(),
-    )
-    vision = await _load_llm_connection(
-        tenant_id, str(kuaiai.get(role_connection_setting_key("vision")) or "").strip()
-    )
-    if vision is not None:
-        vcfg = _connection_config(vision)
-        merged["ocr_base_url"] = str(vcfg.get("base_url") or "").strip() or None
-        merged["ocr_model"] = str(vcfg.get("model") or "").strip() or None
-        merged["ocr_api_key"] = str(vcfg.get("api_key") or "").strip() or None
-        merged["ocr_configured"] = bool(merged["ocr_base_url"] and merged["ocr_model"])
-    return merged
+    return await overlay_kuaiai_ocr_from_connection(tenant_id, active)
 
 
 def get_deepseek_integration(settings: Dict[str, Any]) -> Dict[str, Any]:

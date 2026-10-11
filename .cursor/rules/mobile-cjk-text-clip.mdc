@@ -1,0 +1,27 @@
+---
+description: 手机端中文末字禁止裁切（每一处文字同一条规则，禁止漏组件）
+globs: riveredge-app/mobile/**/*.{tsx,ts}
+alwaysApply: false
+---
+
+# 手机端中文末字禁止裁切
+
+缺字不允许存在。任何一处看得见的中文，末字被切掉都是缺陷。
+
+## 唯一路径
+
+| 关注点 | 真源 | 禁止 |
+|---|---|---|
+| 入口 | babel → `CjkText` 对每一处文字执行 `splitTextFlexLayout` | `nested \|\| !wrap` 在无 flex 时跳过规则 |
+| 字重 | `theme.typography` 的 `type()`：Android 写 `400` | 运行时把 600/700 改成 400；换字族；估 minWidth |
+| 同行弹性 | flex / minWidth 只在 View 上 | Text 上写 `flex` / `minWidth: 0` |
+| 字盒 | 系统默认 font padding | `includeFontPadding: false` |
+| 清单 | `scan_cjk_text_clip.py` 列出全部源文件，漏已知排字文件即 fail | 把新截图说成另一类控件 |
+
+## 完成前自检（只读）
+
+```bash
+cd riveredge-app/mobile && python scripts/scan_cjk_text_clip.py --fail-on high
+```
+
+扫描打印 OK 不算完成。任一屏幕上还有末字被切掉，这次就不算做完。

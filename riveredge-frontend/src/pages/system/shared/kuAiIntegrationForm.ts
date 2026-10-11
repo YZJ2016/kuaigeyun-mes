@@ -15,9 +15,6 @@ export const KU_AI_INTEGRATION_FORM_FIELDS = [
   'integrations.deepseek.rag_backend',
   'integrations.deepseek.rag_top_k',
   'integrations.deepseek.custom_system_prompt',
-  'integrations.deepseek.ocr_base_url',
-  'integrations.deepseek.ocr_model',
-  'integrations.deepseek.ocr_api_key',
 ] as const;
 
 export function buildKuAiIntegrationFormValues(
@@ -35,9 +32,6 @@ export function buildKuAiIntegrationFormValues(
     'integrations.deepseek.rag_backend': deepseek?.rag_backend ?? 'native',
     'integrations.deepseek.rag_top_k': deepseek?.rag_top_k ?? 5,
     'integrations.deepseek.custom_system_prompt': deepseek?.custom_system_prompt ?? '',
-    'integrations.deepseek.ocr_base_url': deepseek?.ocr_base_url ?? '',
-    'integrations.deepseek.ocr_model': deepseek?.ocr_model ?? '',
-    'integrations.deepseek.ocr_api_key': '',
   };
 }
 
@@ -45,7 +39,6 @@ export function buildKuAiIntegrationSettingsPayload(
   values: Record<string, unknown>,
 ): Record<string, unknown> {
   const deepseekApiKey = String(values['integrations.deepseek.api_key'] ?? '').trim();
-  const deepseekOcrApiKey = String(values['integrations.deepseek.ocr_api_key'] ?? '').trim();
   const deepseekPayload: Record<string, unknown> = {
     enabled: values['integrations.deepseek.enabled'] === true,
     model:
@@ -60,14 +53,9 @@ export function buildKuAiIntegrationSettingsPayload(
     rag_backend: String(values['integrations.deepseek.rag_backend'] ?? 'native').trim() || 'native',
     rag_top_k: Number(values['integrations.deepseek.rag_top_k']) || 5,
     custom_system_prompt: String(values['integrations.deepseek.custom_system_prompt'] ?? '').trim(),
-    ocr_base_url: String(values['integrations.deepseek.ocr_base_url'] ?? '').trim(),
-    ocr_model: String(values['integrations.deepseek.ocr_model'] ?? '').trim(),
   };
   if (deepseekApiKey && deepseekApiKey !== INTEGRATION_API_KEY_MASK) {
     deepseekPayload.api_key = deepseekApiKey;
-  }
-  if (deepseekOcrApiKey && deepseekOcrApiKey !== INTEGRATION_API_KEY_MASK) {
-    deepseekPayload.ocr_api_key = deepseekOcrApiKey;
   }
   return { deepseek: deepseekPayload };
 }

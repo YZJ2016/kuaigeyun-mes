@@ -1,0 +1,43 @@
+---
+description: 全站禁止左侧装饰色条（blockquote / 引用条 / 选中色条，典型 AI 味）
+alwaysApply: true
+---
+
+# 禁止左侧装饰色条（零容忍）
+
+用户明确要求：**永久禁止**。典型 AI 生成样式，再出现不可接受。
+
+适用范围：PC（`riveredge-frontend`）、工位端、移动端、弹窗、卡片、引用块、消息原文展示等一切 UI。
+
+## 禁止
+
+- `border-left: Npx solid <accent/primary>` 作装饰（含引用块、消息原文、提示条）
+- `::before` / `::after` 画左侧竖条
+- `box-shadow: inset Npx 0 0 <color>` 左边 inset 色条
+- 卡片 / 列表选中项 / 面板标题旁的左侧 accent bar
+- 类名或结构暗示「quote stripe」（如为好看再加回左色条）
+
+## 应如何表达层次
+
+用**四周均匀描边** + 浅底即可，例如：
+
+```css
+.panel {
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 6px;
+  background: #f7f8fa;
+  padding: 10px 12px;
+}
+```
+
+选中态同理：四周描边 + 背景提亮，禁止只加左边条。
+
+## 允许（非装饰色条）
+
+- 布局/输入框的 `border-left: none` 重置
+- 中性分隔线（非品牌色竖条装饰）
+- Ant Design 组件自带且无法关闭的边框（勿再包一层左色条）
+
+## 自检
+
+改 UI / CSS 前搜索：`border-left:`、`inset .* 0 0`、左侧 `::before` 色条。用户可见装饰不得出现。

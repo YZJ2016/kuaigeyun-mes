@@ -7,6 +7,7 @@
 import React, { useRef, useState, useMemo, useCallback, useEffect } from 'react';
 import { rowActionKind, rowActionLabelKeep, rowActionTestConnection } from '../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ActionType,
   ProColumns,
@@ -24,7 +25,6 @@ import {
   Popconfirm,
   Space,
   Badge,
-  Typography,
   Alert,
   Button,
 } from 'antd';
@@ -42,6 +42,7 @@ import {
   DatabaseOutlined,
   TeamOutlined,
   RocketOutlined,
+  RobotOutlined,
   InteractionOutlined,
   ApartmentOutlined,
   SyncOutlined,
@@ -61,7 +62,15 @@ import { getApiErrorMessage } from '../../../../utils/errorHandler';
 import AppConnectorMarket from '../AppConnectorMarket';
 import { IotConnectionFields } from '../IotConnectionFields';
 import type { AppConnectorDefinition } from '../connectors';
-import { isKingdeeCosmicOpenApiType, isLlmConnectionType, resolveAppConnectorTypeLabel } from '../connectors';
+import {
+  isKingdeeCosmicOpenApiType,
+  isKuaiaiOcrConnectionType,
+  isKuaiaiWorkbuddyConnectionType,
+  isLlmConnectionType,
+  resolveAppConnectorTypeLabel,
+  getAppConnectorDefinitionByType,
+} from '../connectors';
+import { AppConnectorBrandIcon } from '../connectorBrandPresentation';
 import {
   getApplicationConnectionList,
   getApplicationConnectionListAll,
@@ -100,6 +109,7 @@ type ConnectionColumn = ProColumns<ApplicationConnection> & {
 
 const TYPE_COLORS: Record<string, { color: string; icon: React.ReactNode }> = {
   feishu: { color: 'blue', icon: <MessageOutlined /> },
+  kuaiai_workbuddy: { color: 'purple', icon: <InteractionOutlined /> },
   dingtalk: { color: 'cyan', icon: <MessageOutlined /> },
   wecom: { color: 'green', icon: <MessageOutlined /> },
   kingdee_galaxy: { color: 'orange', icon: <CloudOutlined /> },
@@ -184,6 +194,7 @@ const TYPE_COLORS: Record<string, { color: string; icon: React.ReactNode }> = {
   zhipu: { color: 'purple', icon: <RocketOutlined /> },
   moonshot: { color: 'cyan', icon: <RocketOutlined /> },
   siliconflow: { color: 'geekblue', icon: <RocketOutlined /> },
+  kuaiai_ocr: { color: 'purple', icon: <RobotOutlined /> },
   amap: { color: 'green', icon: <EnvironmentOutlined /> },
   kuaidi100: { color: 'orange', icon: <CarOutlined /> },
   kdniao: { color: 'cyan', icon: <CarOutlined /> },
@@ -214,6 +225,7 @@ const SENSITIVE_KEYS = [
 ];
 
 const ApplicationConnectionsListPage: React.FC = () => {
+  const navigate = useNavigate();
   const { t, i18n } = useTranslation();
 
   const getConnectionStatus = (
@@ -229,6 +241,33 @@ const ApplicationConnectionsListPage: React.FC = () => {
     const text = resolveAppConnectorTypeLabel(type, t);
     const info = TYPE_COLORS[type] || { color: 'default', icon: <AppstoreOutlined /> };
     return { ...info, text: text || type };
+  };
+
+  const renderConnectorTypeMarker = (type: string, options?: { hideIcon?: boolean }) => {
+    const info = getTypeInfo(type);
+    const connectorId = getAppConnectorDefinitionByType(type)?.id ?? type;
+    const iconNode = options?.hideIcon ? null : (
+      <AppConnectorBrandIcon
+        connectorId={connectorId}
+        fallbackIcon={info.icon}
+        size={22}
+      />
+    );
+    if (isKuaiaiWorkbuddyConnectionType(type)) {
+      return (
+        <Space size={6} wrap align="center">
+          {iconNode}
+          <MarkerTag color={info.color}>{info.text}</MarkerTag>
+          <MarkerTag color="default">{t('app.kuaiai.hub.labBadge')}</MarkerTag>
+        </Space>
+      );
+    }
+    return (
+      <Space size={6} wrap align="center">
+        {iconNode}
+        <MarkerTag color={info.color}>{info.text}</MarkerTag>
+      </Space>
+    );
   };
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
@@ -270,6 +309,16 @@ const ApplicationConnectionsListPage: React.FC = () => {
   const canSyncContacts = !connectionPerms.enabled || !!connectionPerms.canAction?.('execute');
   const canLoadApiPresets = !apiPerms.enabled || !!apiPerms.canCreate;
   const formRef = useRef<ProFormInstance>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  useEffect(() => {
+    if (searchParams.get('market') !== 'other') return;
+    setConnectorMarketInitialCategory('other');
+    setConnectorMarketVisible(true);
+    const next = new URLSearchParams(searchParams);
+    next.delete('market');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const applicationConnectionImportTemplate = useMemo(
     () =>
@@ -320,14 +369,18 @@ const ApplicationConnectionsListPage: React.FC = () => {
     const modelHint = String(defaults.model || 'default')
       .replace(/[^a-zA-Z0-9._-]+/g, '_')
       .slice(0, 24);
-    const suggestedCode = isLlmConnectionType(connector.type)
+    const suggestLlmLikeDefaults =
+      isLlmConnectionType(connector.type) ||
+      isKuaiaiOcrConnectionType(connector.type) ||
+      isKuaiaiWorkbuddyConnectionType(connector.type);
+    const suggestedCode = suggestLlmLikeDefaults
       ? `${connector.type}_${modelHint}`.slice(0, 50)
       : undefined;
     setSensitiveConfigured({});
     setFormInitialValues({
       type: connector.type,
       is_active: true,
-      ...(isLlmConnectionType(connector.type)
+      ...(suggestLlmLikeDefaults
         ? {
             name: `${connector.name} ${defaults.model || ''}`.trim(),
             code: suggestedCode,
@@ -1324,6 +1377,95 @@ const ApplicationConnectionsListPage: React.FC = () => {
             />
           </>
         );
+      case 'kuaiai_workbuddy':
+        return (
+          <>
+            <FormModalGridBlock style={{ marginBottom: 4 }}>
+              <Alert
+                type="warning"
+                showIcon
+                title={t('app.kuaiai.settings.workbuddyLabAlertTitle')}
+                styles={{
+                  body: { lineHeight: 1.625 },
+                }}
+                style={{ marginBottom: 0 }}
+                description={
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'flex-start',
+                      gap: 8,
+                      lineHeight: 1.625,
+                    }}
+                  >
+                    <span>{t('app.kuaiai.settings.workbuddyLabAlertDesc')}</span>
+                    <Button
+                      type="link"
+                      style={{ paddingInline: 0, height: 'auto' }}
+                      onClick={() => navigate('/infra/open-api')}
+                    >
+                      {t('app.kuaiai.settings.openOpenApi')}
+                    </Button>
+                  </div>
+                }
+              />
+            </FormModalGridBlock>
+            <ProFormText
+              name="mcp_public_url"
+              label={t('app.kuaiai.settings.workbuddyMcpUrl')}
+              rules={[{ required: true }]}
+              colProps={{ span: 24 }}
+              extra={t('app.kuaiai.settings.workbuddyMcpUrlExtra')}
+              placeholder="https://your-mcp-host/mcp"
+              formItemProps={{
+                style: { marginTop: 8 },
+              }}
+            />
+            <ProFormText name="notes" hidden initialValue="" />
+            <ProFormText name="tool_profile" hidden initialValue="read_ops_v1" />
+          </>
+        );
+      case 'kuaiai_ocr':
+        return (
+          <>
+            <FormModalGridBlock>
+              <Alert
+                type="info"
+                showIcon
+                title={t('pages.system.siteSettings.integrationsDeepseekOcrTitle')}
+                description={t('pages.system.siteSettings.integrationsDeepseekOcrHint')}
+                style={{ marginBottom: 16 }}
+              />
+            </FormModalGridBlock>
+            <ProFormText
+              name="base_url"
+              label={t('pages.system.siteSettings.integrationsDeepseekOcrBaseUrl')}
+              rules={[{ required: true }]}
+              colProps={{ span: 24 }}
+              placeholder="https://api.siliconflow.cn/v1"
+            />
+            <ProFormText
+              name="model"
+              label={t('pages.system.siteSettings.integrationsDeepseekOcrModel')}
+              rules={[{ required: true }]}
+              colProps={{ span: 12 }}
+              placeholder="deepseek-ai/DeepSeek-OCR"
+            />
+            <ProFormText.Password
+              name="api_key"
+              label={t('pages.system.siteSettings.integrationsDeepseekOcrApiKey')}
+              tooltip={t('pages.system.siteSettings.integrationsDeepseekOcrApiKeyTooltip')}
+              colProps={{ span: 12 }}
+              placeholder={
+                isEdit
+                  ? t('pages.system.siteSettings.integrationsDeepseekApiKeyPlaceholderConfigured')
+                  : t('pages.system.siteSettings.integrationsDeepseekOcrApiKeyPlaceholder')
+              }
+              fieldProps={{ autoComplete: 'new-password' }}
+            />
+          </>
+        );
       case 'deepseek':
       case 'openai':
       case 'qwen':
@@ -1386,7 +1528,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
 
   const canTestInForm = (type: string) => {
     return [
-      'feishu', 'dingtalk', 'wecom',
+      'feishu', 'dingtalk', 'wecom', 'kuaiai_workbuddy',
       'kingdee_cosmic', 'kingdee_xinghan', 'kingdee_ai_suite', 'kingdee_galaxy', 'kingdee_xingchen',
       'kingdee_eas_cloud', 'kingdee_kis_cloud', 'kingdee_jingdouyun', 'kingdee_k3_wise', 'kingdee_eas', 'kingdee_kis',
       'yonyou_yonbip', 'yonyou_yonsuite', 'yonyou_u9_cloud', 'yonyou_u8_cloud', 'yonyou_nc',
@@ -1402,7 +1544,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
       'rootcloud', 'casicloud', 'alicloud_iot', 'huaweicloud_iot', 'thingsboard', 'jetlinks', 'mqtt',
       'flux_wms', 'kejian_wms', 'digiwin_wms', 'openwms',
       'alicloud_oss', 'tencent_cos', 'huaweicloud_obs', 'aws_s3', 'minio', 'qiniu_kodo',
-      'nas_webdav', 'nas_smb', 'amap', 'kuaidi100', 'kdniao', 'aliyun_market', 'tencent_market',
+      'nas_webdav', 'nas_smb', 'kuaiai_ocr', 'amap', 'kuaidi100', 'kdniao', 'aliyun_market', 'tencent_market',
       'deepseek', 'openai', 'qwen', 'zhipu', 'moonshot', 'siliconflow',
     ].includes(type);
   };
@@ -1429,14 +1571,11 @@ const ApplicationConnectionsListPage: React.FC = () => {
     {
       title: t('pages.system.applicationConnections.columnType'),
       dataIndex: 'type',
-      width: 200,
-      minWidth: 200,
+      width: 228,
+      minWidth: 228,
       uniTableKeepWidth: true,
       resizable: false,
-      render: (_, record) => {
-        const info = getTypeInfo(record.type);
-        return <MarkerTag color={info.color}>{info.text}</MarkerTag>;
-      },
+      render: (_, record) => renderConnectorTypeMarker(record.type),
     },
     {
       title: t('pages.system.applicationConnections.columnModel'),
@@ -1448,7 +1587,9 @@ const ApplicationConnectionsListPage: React.FC = () => {
       ellipsis: true,
       hideInSearch: true,
       render: (_, record) => {
-        if (!isLlmConnectionType(record.type)) return t('common.dash');
+        if (!isLlmConnectionType(record.type) && !isKuaiaiOcrConnectionType(record.type)) {
+          return t('common.dash');
+        }
         return record.config?.model || t('common.dash');
       },
     },
@@ -1605,16 +1746,15 @@ const ApplicationConnectionsListPage: React.FC = () => {
     {
       title: t('pages.system.applicationConnections.columnType'),
       dataIndex: 'type',
-      render: (_, record) => {
-        const info = getTypeInfo(record.type);
-        return <MarkerTag color={info.color}>{info.text}</MarkerTag>;
-      },
+      render: (v: string) => renderConnectorTypeMarker(v),
     },
     {
       title: t('pages.system.applicationConnections.columnModel'),
       dataIndex: 'config',
       render: (_: any, record: ApplicationConnection) =>
-        isLlmConnectionType(record.type) ? record.config?.model || t('common.dash') : t('common.dash'),
+        isLlmConnectionType(record.type) || isKuaiaiOcrConnectionType(record.type)
+          ? record.config?.model || t('common.dash')
+          : t('common.dash'),
     },
     { title: t('common.remark'), dataIndex: 'description' },
     {
@@ -1814,11 +1954,9 @@ const ApplicationConnectionsListPage: React.FC = () => {
                 ? t('pages.system.applicationConnections.editModalTitle')
                 : t('pages.system.applicationConnections.createModalTitle')}
             </span>
-            {formInitialValues?.type ? (
-              <MarkerTag color={getTypeInfo(String(formInitialValues.type)).color}>
-                {getTypeInfo(String(formInitialValues.type)).text}
-              </MarkerTag>
-            ) : null}
+            {formInitialValues?.type
+              ? renderConnectorTypeMarker(String(formInitialValues.type), { hideIcon: true })
+              : null}
           </Space>
         }
         open={modalVisible}

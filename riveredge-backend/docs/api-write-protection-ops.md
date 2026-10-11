@@ -166,6 +166,12 @@ INTEGRATION_CLIENT_IP_ALLOWLIST=127.0.0.1,10.0.0.8,192.168.1.100
 
 注意：若前面有反向代理，需保证后端拿到的是真实客户端 IP（`X-Forwarded-For` / 现有 `get_client_ip`）。
 
+### 1.2）KU-AI 外部 Agent（WorkBuddy）实验室通道
+
+KU-Bridge 为 **实验室** 能力：外部 Agent 经独立 MCP Sidecar 调用上述开放 API（只读 GET），**不是** MES「应用连接器」目录项。启用、建议 grants、Sidecar 与 WorkBuddy 登记步骤见：
+
+`docs/apps/kuaiai/EXTERNAL-AGENT-WORKBUDDY.md`
+
 ### 2）公开写接口豁免名单（不要求渠道）
 
 文件：`src/core/utils/interactive_client_guard.py`

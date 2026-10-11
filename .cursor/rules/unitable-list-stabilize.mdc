@@ -1,0 +1,20 @@
+---
+description: UniTable 列表跨页改造稳定性（严禁批量；菜单序认 manifest）
+alwaysApply: true
+---
+
+# UniTable 列表跨页改造（流程锁）
+
+连改多页列表（售后/绩效/物流/轻财务等）时：
+
+| 锁 | 要求 |
+|----|------|
+| **脚本/codemod** | **严禁** 跑 `convert_*.py` 或任何批量写多文件脚本；见 `no-batch-codemod.mdc` |
+| **四禁** | **严禁** 补丁/兼容/映射/兜底；见 `no-fallback-patches.mdc` |
+| 并行/子代理 | **严禁** Task 扫模块、并行改多页 |
+| 菜单下一页 | 只认应用 `manifest.json` navigation，禁止 locale / 目录序 |
+| 收工 | 用户说「不要做一个问一个 / 减少确认 / 继续完善」时按菜单序**连续逐页改**，禁止每页停问；否则改完点名下一页即可 |
+| 稀疏列宽 | 列少时 KeepWidth 适当加宽；估宽同时看**表头**与表身；**稀疏页业务列不堆叠** |
+
+布局三桶与徽章契约见 `.cursor/skills/unitable-list/SKILL.md`。  
+逐页清单与收工话术见 `.cursor/skills/unitable-list-stabilize/SKILL.md`（「继续」时必读）。

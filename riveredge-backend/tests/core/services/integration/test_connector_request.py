@@ -4,10 +4,13 @@ from pathlib import Path
 import pytest
 
 from core.config.integration_type_spec import (
+    ALLOWED_INTEGRATION_TYPES,
     BUSINESS_SYSTEM_CONNECTOR_TYPES,
+    assert_allowed_integration_type,
     assert_business_system_connector_type,
     is_business_system_connector_type,
 )
+from core.schemas.integration_config import IntegrationConfigCreate
 from infra.exceptions.exceptions import ValidationError
 
 _SRC = Path(__file__).resolve().parents[4] / "src"
@@ -35,6 +38,30 @@ class _FakeIntegrationConfig:
 
     def get_config(self) -> dict:
         return self.config
+
+
+def test_kuaiai_workbuddy_is_allowed_application_connector_type():
+    assert assert_allowed_integration_type("kuaiai_workbuddy") == "kuaiai_workbuddy"
+    assert "kuaiai_workbuddy" in ALLOWED_INTEGRATION_TYPES
+    row = IntegrationConfigCreate(
+        name="WorkBuddy 实验室",
+        code="kuaiai_workbuddy_lab",
+        type="kuaiai_workbuddy",
+        config={"mcp_public_url": "https://mcp.example.com/mcp", "tool_profile": "read_ops_v1"},
+    )
+    assert row.type == "kuaiai_workbuddy"
+
+
+def test_kuaiai_ocr_is_allowed_application_connector_type():
+    assert assert_allowed_integration_type("kuaiai_ocr") == "kuaiai_ocr"
+    assert "kuaiai_ocr" in ALLOWED_INTEGRATION_TYPES
+    row = IntegrationConfigCreate(
+        name="OCR 视觉识别",
+        code="kuaiai_ocr_test",
+        type="kuaiai_ocr",
+        config={"base_url": "https://api.siliconflow.cn/v1", "model": "deepseek-ai/DeepSeek-OCR"},
+    )
+    assert row.type == "kuaiai_ocr"
 
 
 def test_business_system_connector_types_exclude_ai_and_storage():

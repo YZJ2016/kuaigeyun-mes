@@ -1,0 +1,52 @@
+---
+description: 硬拦截：永久禁止补丁、兼容、映射、兜底；只修真源
+alwaysApply: true
+---
+
+# 四禁硬拦截：补丁 / 兼容 / 映射 / 兜底
+
+**零容忍，硬拦截。** 不得以任何理由违反（先跑起来、兼容旧数据、用户催、只改展示、临时、批量赶工）。  
+与 `no-batch-codemod.mdc` 同级：违反即 **停手**，不得「先合进去再说」。
+
+## 四禁（永久）
+
+| 禁 | 含义 | 典型嘴脸 |
+|----|------|----------|
+| **补丁** | 不修根因，另加一层「看起来对了」 | 读时补字段、部署后补救脚本、前端绕过坏 API |
+| **兼容** | 新旧双路径、静默降级、shim | `if old_fmt … else …`、双写、保留坏默认 |
+| **映射** | 用对照表/别名把错码、空值、旧契约「翻译」成对的 | alias map、旧码→新码、缺字段再 JOIN 冒充快照 |
+| **兜底** | 失败仍继续；猜一个值 | 空 `catch`、缺省 `adjust`/`未知`/`-`、A 失败试 B |
+
+## Agent 硬拦截（动手前必答）
+
+以下任一为 **是** → **禁止写代码**，先改真源或问用户：
+
+1. 是否在 **读侧/展示层** 补数据，而不是修 **写路径/迁移/契约**？
+2. 是否新增 `if (old…)` / `?? '-'` / `|| '未知'` / `defaultValue` 掩盖空值？
+3. 是否新增 alias map、码表翻译、第二套时区/权限/菜单序？
+4. 是否 `catch` 后静默继续或换备用 API？
+5. 是否「只为这一页好看」而不修全站契约？
+
+## 唯一正确路径
+
+1. **定位根因**：写路径、迁移缺失、契约不一致、未重启——不是展示层
+2. **只改真源**：必要时 **迁移回填真源表**
+3. **失败即暴露**：明确 `throw` 或面向用户的清晰错误
+
+## 血泪（再犯不可接受）
+
+| 场景 | 真源 | 禁止 |
+|------|------|------|
+| 库存流水 | 过账写入快照字段；缺则报错 | 报表 `_enrich_*`、读时 JOIN 补、`未知` |
+| 时区 | `timezone-contract.mdc` | 硬 `+8`、前端猜 ISO |
+| 权限 | `permission-contract.mdc` | `actionFallback`、旁路 RBAC |
+| Popconfirm 脚本 | 逐页手工 + 单页验证 | 批量 codemod（见 `no-batch-codemod.mdc`） |
+
+## 自检命令（改「缺数据/不对/旧格式」前）
+
+```bash
+cd riveredge-backend && python scripts/scan_timezone_contract.py --fail-on high
+cd riveredge-backend && python scripts/scan_permission_bypass.py --fail-on high
+```
+
+细则见 `.cursor/skills/no-fallback-patches/SKILL.md`。

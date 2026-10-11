@@ -36,18 +36,7 @@ import {
   Typography,
 } from 'antd';
 import { ProDescriptions } from '@ant-design/pro-components';
-import {
-  CalculatorOutlined,
-  BarChartOutlined,
-  LineChartOutlined,
-  ToolOutlined,
-  TeamOutlined,
-  ShoppingOutlined,
-  SafetyCertificateOutlined,
-  TableOutlined,
-  ExperimentOutlined,
-  BulbOutlined,
-} from '@ant-design/icons';
+import { CalculatorOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import {
   UniTableStackedPrimaryCell,
@@ -1487,42 +1476,22 @@ const CostCalculationPage: React.FC = () => {
       items={[
         {
           key: 'production',
-          label: (
-            <Space>
-              <ToolOutlined />
-              {t('app.kuaicaiwu.productionCost.title')}
-            </Space>
-          ),
+          label: t('app.kuaicaiwu.productionCost.title'),
           children: <ProductionCostPage embedded />,
         },
         {
           key: 'outsource',
-          label: (
-            <Space>
-              <TeamOutlined />
-              {t('app.kuaicaiwu.outsourceCost.title')}
-            </Space>
-          ),
+          label: t('app.kuaicaiwu.outsourceCost.title'),
           children: <OutsourceCostPage embedded />,
         },
         {
           key: 'purchase',
-          label: (
-            <Space>
-              <ShoppingOutlined />
-              {t('app.kuaicaiwu.purchaseCost.title')}
-            </Space>
-          ),
+          label: t('app.kuaicaiwu.purchaseCost.title'),
           children: <PurchaseCostPage embedded />,
         },
         {
           key: 'quality',
-          label: (
-            <Space>
-              <SafetyCertificateOutlined />
-              {t('app.kuaicaiwu.qualityCost.title')}
-            </Space>
-          ),
+          label: t('app.kuaicaiwu.qualityCost.title'),
           children: <QualityCostPage embedded />,
         },
       ]}
@@ -1532,52 +1501,27 @@ const CostCalculationPage: React.FC = () => {
   const topTabItems = [
     {
       key: 'ledger',
-      label: (
-        <Space>
-          <TableOutlined />
-          {t('app.kuaicaiwu.costCalculation.tab.ledger')}
-        </Space>
-      ),
+      label: t('app.kuaicaiwu.costCalculation.tab.ledger'),
       children: ledgerPanel,
     },
     {
       key: 'compare',
-      label: (
-        <Space>
-          <BarChartOutlined />
-          {t('app.kuaicaiwu.costCalculation.tab.compare')}
-        </Space>
-      ),
+      label: t('app.kuaicaiwu.costCalculation.tab.compare'),
       children: comparePanel,
     },
     {
       key: 'analyze',
-      label: (
-        <Space>
-          <LineChartOutlined />
-          {t('app.kuaicaiwu.costCalculation.tab.analyze')}
-        </Space>
-      ),
+      label: t('app.kuaicaiwu.costCalculation.tab.analyze'),
       children: analyzePanel,
     },
     {
       key: 'optimization',
-      label: (
-        <Space>
-          <BulbOutlined />
-          {t('app.kuaicaiwu.costCalculation.tab.optimization')}
-        </Space>
-      ),
+      label: t('app.kuaicaiwu.costCalculation.tab.optimization'),
       children: <CostOptimizationPanel />,
     },
     {
       key: 'trial',
-      label: (
-        <Space>
-          <ExperimentOutlined />
-          {t('app.kuaicaiwu.costCalculation.tab.trial')}
-        </Space>
-      ),
+      label: t('app.kuaicaiwu.costCalculation.tab.trial'),
       children: trialPanel,
     },
   ];

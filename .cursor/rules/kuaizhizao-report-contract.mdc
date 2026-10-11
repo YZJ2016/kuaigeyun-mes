@@ -1,0 +1,24 @@
+---
+description: 快制造系统自带报表规范化（中国式账表、筛选进功能区、禁止彩标与报表复制）
+alwaysApply: true
+---
+
+# 快制造系统自带报表
+
+改 **KuaizhizaoReport / UniReport / `pages/**/reports/`** 时遵守；细则见 `.cursor/skills/kuaizhizao-report/SKILL.md`。
+业务单据列表不是报表，复制与 StatusTag 仍走 unitable-list。
+
+## 唯一路径
+
+| 关注点 | 真源 | 禁止 |
+|---|---|---|
+| 页壳 | `KuaizhizaoReport` → UniReport `searchPlacement="toolbarLeft"` | 表上再占一行搜索；再传 `headerTitle` |
+| 报表视图切换 | `beforeSearchButtons` + `params.reportType`（切换即重取） | `children` 再占一行；只改列不 reload |
+| 表体限高 | `uniReportScrollPolicy`：托盘底对滚动口底；有合计 / 无合计只是两种 DOM | 像素常数、`calc(100vh - REPORT_*)`、`fillViewportBody` |
+| 状态 / 类型 | 汉字或 `valueEnum: { KEY: { text } }` | `Tag` / `StatusTag` / `Progress` / `valueEnum.status` |
+| 报表复制 / 链接 | UniReport `stripReportCopyable`：`copyable: false` + `skipLinkedDocumentLink` | 单号旁复制图标、蓝字挂抽屉；页面不设 copyable 不够 |
+| 单元格溢出 | UniReport 默认 ellipsis | 长编码叠邻列 |
+| 明细 | 后端 join 行项目，一行一物料 | 头表冒充明细表 |
+| 人列 / 菜单 | 「销售人员」；存货/客户销售汇总 | 职员、销汇总、间隔号 |
+
+改列后 bump `columnPersistenceId`。新 key 五语齐全。

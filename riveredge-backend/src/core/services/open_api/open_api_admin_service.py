@@ -14,6 +14,10 @@ from core.config.open_api_module_catalog import (
     list_module_catalog,
     module_keys_from_codes,
 )
+from core.config.open_api_presets import (
+    WORKBUDDY_OPEN_API_PRESET_APP_NAME,
+    WORKBUDDY_OPEN_API_PRESET_PERMISSION_CODES,
+)
 from core.models.open_api_account import OpenApiAccount, OpenApiApp, OpenApiAppGrant
 from core.services.open_api.open_api_auth_service import (
     OpenApiAuthService,
@@ -204,6 +208,50 @@ class OpenApiAdminService:
         data = OpenApiAdminService.serialize_app(app, grants)
         data["app_secret"] = plain
         return data
+
+    @staticmethod
+    async def provision_workbuddy_preset(tenant_id: int) -> dict[str, Any]:
+        """幂等：同名应用已存在则对齐 grants；不存在则创建并返回一次性秘钥。"""
+        preset_codes = list(WORKBUDDY_OPEN_API_PRESET_PERMISSION_CODES)
+        preset_sorted = sorted(preset_codes)
+        apps = await OpenApiAdminService.list_apps(tenant_id)
+        existing = next(
+            (a for a in apps if a.get("name") == WORKBUDDY_OPEN_API_PRESET_APP_NAME),
+            None,
+        )
+        if existing:
+            current_sorted = sorted(existing.get("grants") or [])
+            grants_updated = current_sorted != preset_sorted
+            if grants_updated:
+                app_data = await OpenApiAdminService.update_app(
+                    tenant_id,
+                    existing["uuid"],
+                    status="active",
+                    permission_codes=preset_codes,
+                    update_grants=True,
+                )
+            else:
+                app_data = existing
+            return {
+                "app": app_data,
+                "created": False,
+                "grants_updated": grants_updated,
+                "app_secret": None,
+            }
+        created = await OpenApiAdminService.create_app(
+            tenant_id,
+            name=WORKBUDDY_OPEN_API_PRESET_APP_NAME,
+            permission_codes=preset_codes,
+            module_keys=[],
+        )
+        secret = created.get("app_secret")
+        app_data = {k: v for k, v in created.items() if k != "app_secret"}
+        return {
+            "app": app_data,
+            "created": True,
+            "grants_updated": False,
+            "app_secret": secret,
+        }
 
     @staticmethod
     async def delete_app(tenant_id: int, app_uuid: str) -> None:

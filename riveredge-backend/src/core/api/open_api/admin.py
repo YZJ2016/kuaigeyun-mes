@@ -78,6 +78,14 @@ async def list_apps(tenant_id: int = Depends(get_current_tenant)):
 
 
 @router.post(
+    "/apps/presets/workbuddy",
+    dependencies=[Depends(require_permission_codes("system:open-api:manage"))],
+)
+async def provision_workbuddy_preset(tenant_id: int = Depends(get_current_tenant)):
+    return await OpenApiAdminService.provision_workbuddy_preset(tenant_id)
+
+
+@router.post(
     "/apps",
     dependencies=[Depends(require_permission_codes("system:open-api:manage"))],
 )

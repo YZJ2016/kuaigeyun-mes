@@ -544,7 +544,7 @@ class IntegrationConfigService:
             elif integration.type in OBJECT_STORAGE_TYPES:
                 result = await IntegrationConfigService._test_object_storage_connection(integration)
             elif integration.type in (
-                "deepseek", "openai", "qwen", "zhipu", "moonshot", "siliconflow",
+                "deepseek", "openai", "qwen", "zhipu", "moonshot", "siliconflow", "kuaiai_ocr",
             ):
                 result = await IntegrationConfigService._test_llm_connection(integration)
             elif integration.type == "amap":
@@ -563,6 +563,8 @@ class IntegrationConfigService:
                 from core.services.logistics_service import test_cloud_market_connection_config
 
                 result = await test_cloud_market_connection_config(integration.config or {})
+            elif integration.type == "kuaiai_workbuddy":
+                result = await IntegrationConfigService._test_kuaiai_workbuddy_connection(integration)
             else:
                 raise ValueError(f"不支持的集成类型: {integration.type}")
 
@@ -807,7 +809,7 @@ class IntegrationConfigService:
             elif temp.type in OBJECT_STORAGE_TYPES:
                 result = await IntegrationConfigService._test_object_storage_connection(temp)
             elif temp.type in (
-                "deepseek", "openai", "qwen", "zhipu", "moonshot", "siliconflow",
+                "deepseek", "openai", "qwen", "zhipu", "moonshot", "siliconflow", "kuaiai_ocr",
             ):
                 result = await IntegrationConfigService._test_llm_connection(temp)
             elif temp.type == "amap":
@@ -826,6 +828,8 @@ class IntegrationConfigService:
                 from core.services.logistics_service import test_cloud_market_connection_config
 
                 result = await test_cloud_market_connection_config(temp.config or {})
+            elif temp.type == "kuaiai_workbuddy":
+                result = await IntegrationConfigService._test_kuaiai_workbuddy_connection(temp)
             else:
                 raise ValueError(f"不支持的集成类型: {temp.type}")
             if isinstance(result, dict) and result.get("success") is False:
@@ -1697,6 +1701,19 @@ class IntegrationConfigService:
             detail = (resp.text or "")[:200]
             raise ValueError(f"HTTP {resp.status_code}: {detail or '鉴权或地址失败'}")
         return {"message": f"{integration.type} 连接成功", "model": model, "probe": "models"}
+
+    @staticmethod
+    async def _test_kuaiai_workbuddy_connection(integration: IntegrationConfig) -> Dict[str, Any]:
+        cfg = integration.config or {}
+        url = str(cfg.get("mcp_public_url") or "").strip()
+        if not url:
+            return {"success": False, "message": "请填写 MCP 公网地址"}
+        if not url.startswith(("http://", "https://")):
+            return {"success": False, "message": "MCP 公网地址须以 http:// 或 https:// 开头"}
+        return {
+            "success": True,
+            "message": "MCP 地址格式校验通过（实验室通道，未探测远端连通性）",
+        }
 
     @staticmethod
     async def _test_feishu_connection(integration: IntegrationConfig) -> Dict[str, Any]:

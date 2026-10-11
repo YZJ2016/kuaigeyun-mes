@@ -1,0 +1,34 @@
+---
+description: Ant Design 6 API only — no v5 legacy props when editing frontend
+globs: riveredge-frontend/**/*.{ts,tsx,js,jsx}
+alwaysApply: true
+---
+
+# Ant Design 6 API（禁止再写 v5）
+
+项目已升至 **antd ^6.x**。改前端时只写 v6 API；扫描清单见 `riveredge-frontend/scripts/scan_antd6_legacy.py`。
+
+## 必换（高频）
+
+| 禁止（v5） | 必须（v6） |
+|---|---|
+| `Alert` `message=` | `title=` |
+| `destroyOnClose` | `destroyOnHidden` |
+| `destroyInactiveTabPane` | `destroyOnHidden` |
+| `maskClosable=` | `mask={{ closable }}` |
+| `Space` / `Divider` / `Steps` `direction=` | `orientation=` |
+| `size="middle"` / `size="default"` | `size="medium"` |
+| `Spin` `tip=` | `description=` |
+| `Tag bordered={false}` | `variant="filled"` |
+| `popupClassName` / `dropdownClassName` | `classNames.popup` / `classNames.popup.root` |
+| `dropdownRender` | `popupRender` |
+| `onDropdownVisibleChange` | `onOpenChange` |
+| `bodyStyle` / `maskStyle` / `headStyle` | `styles.body` / `styles.mask` / `styles.header` |
+| `Input.Group` / `Button.Group` | `Space.Compact` |
+| `Tabs.TabPane` / `Timeline.Item` / `Breadcrumb.Item` | `items` |
+
+## 纪律
+
+- **新写 / 改到的 JSX**：不得再引入上表左侧写法；顺手改同文件内触及到的遗留即可。
+- **禁止**为「兼容 antd 5」保留双路径或注释掉的旧 prop。
+- 不确定时查官方 v5→v6 迁移说明或跑：`python riveredge-frontend/scripts/scan_antd6_legacy.py`。

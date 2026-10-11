@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="jetlinks">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="keywords" content="物联网平台,IoT平台,AI平台,开源物联网,JetLinks,工业物联网,物联网解决方案" />
+    <meta
+      name="description"
+      content="JetLinks AI 连接设备、视频与 AI 能力，为企业提供物联网平台、边缘计算、行业解决方案与私有化部署服务。"
+    />
+    <title>JetLinks - 物联网与 AI 融合平台</title>
+    <script type="module" crossorigin src="/assets/index-Ne7Znl7v.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/style-BWRjV_uq.css">
+  </head>
+  <body>
+    <div id="app"></div>
+  </body>
+</html>

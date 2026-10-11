@@ -1,0 +1,40 @@
+---
+description: 禁止投机取巧；必须定位根因并在唯一正确路径上修复
+alwaysApply: true
+---
+
+# 禁止投机取巧
+
+不得为「先跑起来再说」而采用掩盖根因的手段。与 `no-fallback-patches.mdc` **硬拦截四禁**配套；本规则补充**时序、并发、依赖、架构**上的投机写法。违反任一条 → **停手**。
+
+## 禁止
+
+- **延时碰运气**：`setTimeout` / `sleep` / 固定毫秒等待 / `requestAnimationFrame` 轮询，用来等 DOM、等布局、等第三方 init、消 Strict Mode 竞态
+- **并发令牌掩盖**：`generationRef`、`initId++`、自增 epoch 等，替代正确的 effect cleanup + 同步挂载点
+- **DOM 投机重建**：无业务必要地改 `key` 强制 remount、重复 `dispose`+重建，掩盖生命周期或 state 设计错误
+- **依赖/分包补丁**：`resolve.dedupe`、手工 chunk 合并、多路径 import 同一库，用来掩盖「两份 `@univerjs/core`」而不统一入口
+- **吞错继续**：空 `catch`、失败静默忽略、多路径 fallback（A 失败试 B）代替修复 A
+- **配置掩盖**：Vite/webpack/部署脚本里加特殊分支，绕过未修复的模块解析或 API 契约
+
+## 必须
+
+1. **先定位根因**（未挂载、重复实例、DI token 不一致、路由未注册、迁移缺失等）
+2. **在唯一正确路径修复**（例：`useLayoutEffect` 同步 init、单一 bootstrap 模块、state 驱动重载、显式 dispose）
+3. **失败即暴露**：明确 `throw` 或面向用户的清晰错误，便于立刻发现配置/代码问题
+
+## 示例
+
+| ❌ 投机 | ✅ 根因修复 |
+|--------|------------|
+| 同步 `createWorkbook` / `autoResizeColumns` | 等 SheetsRenderService 注册 renderer 后再建表（`runAfterUniverSheetsRenderServiceInit`） |
+| `initGenerationRef` 丢弃过期 async init | init 同步完成；effect cleanup 里 `dispose`，不启动无法取消的 async init |
+| `sheetMountKey++` 强制 remount 表格 | `uploadedSheetRows` 进 effect 依赖，cleanup 后在同一容器重建 |
+| vite `dedupe: ['@univerjs/core']` | 单一 `bootstrap-sheet.ts` 入口；不直接从多条路径 import 同一运行时 |
+| 父组件 `open=true` 时 ref 为空就 `throw` | 根因是 Modal 子树尚未挂载；init 下沉到 Modal **children** 组件，不在 Modal 外层 effect |
+
+## 自检（改 Univer / Modal / 懒加载 chunk 前）
+
+- 是否还有「等一等也许就好了」的延时？
+- 竞态是否靠 generation/epoch 挡住，而不是 cleanup？
+- 同一第三方运行时是否只有一个 import 入口、一条 init 路径？
+- 失败时能否立刻看出是配置/代码问题，而不是被吞掉或绕路？

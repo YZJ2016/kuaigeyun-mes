@@ -20,9 +20,10 @@ router = APIRouter(prefix="/connector-definitions", tags=["Core - Connector Defi
 
 # 预置应用连接器定义（与前端 connectors.tsx 保持一致，icon 为字符串供前端映射）
 PRESET_APP_CONNECTORS: List[Dict[str, Any]] = [
-    {"id": "feishu", "name": "飞书", "type": "feishu", "category": "collaboration", "description": "飞书开放平台自建应用", "icon": "MessageOutlined", "default_config": {"app_id": "", "app_secret": "", "encrypt_key": "", "verification_token": ""}},
-    {"id": "dingtalk", "name": "钉钉", "type": "dingtalk", "category": "collaboration", "description": "钉钉企业内部应用（Client ID / Client Secret）", "icon": "MessageOutlined", "default_config": {"corpid": "", "agent_id": "", "app_key": "", "app_secret": "", "aes_key": "", "token": ""}},
+    {"id": "kuaiai_workbuddy", "name": "WorkBuddy", "type": "kuaiai_workbuddy", "category": "collaboration", "description": "外部 Agent 经 MCP 调 Open API 只读查单", "icon": "InteractionOutlined", "default_config": {"mcp_public_url": "", "notes": "", "tool_profile": "read_ops_v1"}, "market_lab_badge": True},
     {"id": "wecom", "name": "企业微信", "type": "wecom", "category": "collaboration", "description": "企业微信自建应用（登录、消息、通讯录同步）", "icon": "MessageOutlined", "default_config": {"corp_id": "", "corp_secret": "", "agent_id": "", "token": "", "encoding_aes_key": ""}},
+    {"id": "dingtalk", "name": "钉钉", "type": "dingtalk", "category": "collaboration", "description": "钉钉企业内部应用（Client ID / Client Secret）", "icon": "MessageOutlined", "default_config": {"corpid": "", "agent_id": "", "app_key": "", "app_secret": "", "aes_key": "", "token": ""}},
+    {"id": "feishu", "name": "飞书", "type": "feishu", "category": "collaboration", "description": "飞书开放平台自建应用", "icon": "MessageOutlined", "default_config": {"app_id": "", "app_secret": "", "encrypt_key": "", "verification_token": ""}},
     # ERP（精确到具体产品；与前端 connectors.tsx 云/传统分组一致）
     {"id": "kingdee_cosmic", "name": "金蝶AI苍穹 OpenAPI", "type": "kingdee_cosmic", "category": "erp", "description": "企业级 PaaS 技术底座", "icon": "CloudOutlined", "default_config": {"base_url": "", "account_id": "", "client_id": "", "client_secret": "", "x_acgw_identity": "", "username": "", "org_number": "", "language": "zh_CN"}},
     {"id": "kingdee_xinghan", "name": "金蝶AI星瀚", "type": "kingdee_xinghan", "category": "erp", "description": "面向央国企及大型集团", "icon": "CloudOutlined", "default_config": {"base_url": "", "account_id": "", "client_id": "", "client_secret": "", "x_acgw_identity": "", "username": "", "org_number": "", "language": "zh_CN"}},
@@ -114,6 +115,7 @@ PRESET_APP_CONNECTORS: List[Dict[str, Any]] = [
     {"id": "zhipu", "name": "智谱 GLM", "type": "zhipu", "category": "ai", "description": "智谱开放平台 API（可建多条不同模型）", "icon": "RobotOutlined", "default_config": {"base_url": "https://open.bigmodel.cn/api/paas/v4", "model": "glm-4-flash"}},
     {"id": "moonshot", "name": "月之暗面 Kimi", "type": "moonshot", "category": "ai", "description": "Moonshot OpenAI 兼容 API（可建多条不同模型）", "icon": "RobotOutlined", "default_config": {"base_url": "https://api.moonshot.cn/v1", "model": "moonshot-v1-auto"}},
     {"id": "siliconflow", "name": "硅基流动", "type": "siliconflow", "category": "ai", "description": "SiliconFlow OpenAI 兼容 API（可建多条不同模型）", "icon": "RobotOutlined", "default_config": {"base_url": "https://api.siliconflow.cn/v1", "model": "deepseek-ai/DeepSeek-V3"}},
+    {"id": "kuaiai_ocr", "name": "OCR 视觉识别", "type": "kuaiai_ocr", "category": "other", "description": "智能录单与图片 OCR 视觉端点（OpenAI 兼容 image_url）", "icon": "RobotOutlined", "default_config": {"base_url": "https://api.siliconflow.cn/v1", "model": "deepseek-ai/DeepSeek-OCR", "api_key": ""}},
     {"id": "amap", "name": "高德地图", "type": "amap", "category": "other", "description": "物流跟踪看板地图与地址地理编码（JS Key + REST Key）", "icon": "EnvironmentOutlined", "default_config": {"js_key": "", "security_code": "", "rest_key": ""}},
     {"id": "kuaidi100", "name": "快递100", "type": "kuaidi100", "category": "other", "description": "实时快递轨迹查询（授权码 + API Key）", "icon": "CarOutlined", "default_config": {"customer": "", "api_key": ""}},
     {"id": "kdniao", "name": "快递鸟", "type": "kdniao", "category": "other", "description": "即时查询轨迹（用户 ID + API Key）", "icon": "CarOutlined", "default_config": {"ebusiness_id": "", "api_key": ""}},
@@ -124,12 +126,12 @@ PRESET_APP_CONNECTORS: List[Dict[str, Any]] = [
 CATEGORIES = [
     {"key": "all", "label": "全部"},
     {"key": "collaboration", "label": "协作"},
-    {"key": "erp", "label": "ERP 企业资源"},
-    {"key": "plm", "label": "PLM 产品生命周期"},
-    {"key": "crm", "label": "CRM 客户管理"},
-    {"key": "oa", "label": "OA 办公"},
-    {"key": "iot", "label": "IoT 物联网"},
-    {"key": "wms", "label": "WMS 仓储"},
+    {"key": "erp", "label": "ERP"},
+    {"key": "plm", "label": "PLM"},
+    {"key": "crm", "label": "CRM"},
+    {"key": "oa", "label": "OA"},
+    {"key": "iot", "label": "IoT"},
+    {"key": "wms", "label": "WMS"},
     {"key": "storage", "label": "存储"},
     {"key": "ai", "label": "AI"},
     {"key": "other", "label": "其他"},

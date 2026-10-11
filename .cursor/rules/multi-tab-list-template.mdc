@@ -1,0 +1,23 @@
+# MultiTabListPageTemplate Tab 标签
+
+## 默认
+
+`MultiTabListPageTemplate` 的 `tabs[].label` 使用 **纯文案**（`t('…')` 或短中文），**禁止**在 Tab 上挂 `@ant-design/icons`。
+
+## 唯一例外（保留 Tab 图标）
+
+| 页面 | 路径 |
+|---|---|
+| 站点设置 | `pages/system/site-settings` |
+| 配置中心 | `pages/system/config-center` |
+
+上述两页 Tab 可继续使用 `Space + Outlined`；其余所有 `MultiTabListPageTemplate` 页面不得添加 Tab 图标。
+
+## 禁止
+
+- 为「好看」或对齐菜单图标而在业务多 Tab 页（开放平台、成本、报表中心、平台超管等）给 Tab 加图标
+- 脚本批量改多文件 Tab 结构（触达单页时手工改）
+
+## 自检
+
+改 `MultiTabListPageTemplate` 前：Tab `label` 是否仅文案；新页不得复制带图标的 Tab 写法（配置中心/站点设置除外）。
