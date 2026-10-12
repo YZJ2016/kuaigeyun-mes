@@ -23,7 +23,29 @@ from core.utils.timezone_utils import resolve_business_datetime, to_site_timezon
 from infra.exceptions.exceptions import ValidationError
 from infra.models.platform_settings import PlatformSettings
 
+from contextlib import asynccontextmanager
+
+from infra.domain.tenant_context import get_current_tenant_id, unscoped, with_tenant
+
 POLICY_KEY = "data_backup_policy"
+
+
+@asynccontextmanager
+async def _backup_policy_scope(tenant_id: Optional[int]):
+    """spec 143：备份策略读写显式声明组织执行域（worker/平台超管无环境上下文）。"""
+    if tenant_id is not None:
+        if get_current_tenant_id() == int(tenant_id):
+            yield
+        else:
+            async with with_tenant(
+                int(tenant_id), reason="数据备份策略按指定组织读写"
+            ):
+                yield
+    else:
+        async with unscoped(
+            reason="数据备份策略平台级读写（无组织归属）", resource="DataBackup"
+        ):
+            yield
 
 
 async def _get_or_create_platform_settings() -> PlatformSettings:
@@ -141,11 +163,12 @@ async def _validate_storage_for_tenant(tenant_id: int, policy: Dict[str, Any]) -
     conn_uuid = storage.get("connection_uuid")
     if not conn_uuid:
         raise ValidationError("请选择对象存储连接")
-    ic = await IntegrationConfig.filter(
-        tenant_id=tenant_id,
-        uuid=conn_uuid,
-        deleted_at__isnull=True,
-    ).first()
+    async with _backup_policy_scope(int(tenant_id)):
+        ic = await IntegrationConfig.filter(
+            tenant_id=tenant_id,
+            uuid=conn_uuid,
+            deleted_at__isnull=True,
+        ).first()
     if not ic or not ic.is_active:
         raise ValidationError("对象存储连接不存在或未启用")
     if ic.type not in SUPPORTED_OBJECT_STORAGE_TYPES:
@@ -342,7 +365,8 @@ async def delete_remote_backup_object(backup: DataBackup) -> None:
             backend,
         )
         return
-    adapter = await load_object_storage(int(owner), str(conn_uuid))
+    async with _backup_policy_scope(int(owner)):
+        adapter = await load_object_storage(int(owner), str(conn_uuid))
     await adapter.delete(str(key))
 
 
@@ -369,7 +393,8 @@ async def ensure_local_backup_file(backup: DataBackup) -> str:
     if not conn_uuid or not key or not owner:
         raise ValueError("备份远程存储信息不完整，无法下载")
 
-    adapter = await load_object_storage(int(owner), str(conn_uuid))
+    async with _backup_policy_scope(int(owner)):
+        adapter = await load_object_storage(int(owner), str(conn_uuid))
     data = await adapter.get(str(key))
     backup_dir = resolve_data_backup_dir()
     os.makedirs(backup_dir, exist_ok=True)
@@ -411,39 +436,41 @@ async def apply_retention_for_policy(
     now = resolve_business_datetime()
     q = _retention_candidates_query(backup_scope=backup_scope, tenant_id=tenant_id)
 
-    if mode == "days":
-        days = int((policy.get("retention") or {}).get("days") or 30)
-        cutoff = now - timedelta(days=days)
-        rows = await q.filter(completed_at__lt=cutoff).all()
-        for row in rows:
-            await DataBackupService.delete_backup(
-                tenant_id if backup_scope != "all" else None,
-                str(row.uuid),
-                is_infra_admin=backup_scope == "all",
-            )
-            deleted += 1
-        return {"deleted": deleted}
+    async with _backup_policy_scope(tenant_id if backup_scope != "all" else None):
+        if mode == "days":
+            days = int((policy.get("retention") or {}).get("days") or 30)
+            cutoff = now - timedelta(days=days)
+            rows = await q.filter(completed_at__lt=cutoff).all()
+            for row in rows:
+                await DataBackupService.delete_backup(
+                    tenant_id if backup_scope != "all" else None,
+                    str(row.uuid),
+                    is_infra_admin=backup_scope == "all",
+                )
+                deleted += 1
+            return {"deleted": deleted}
 
-    if mode == "keep_count":
-        keep = int((policy.get("retention") or {}).get("keep_count") or 7)
-        rows = await q.order_by("-completed_at", "-id").all()
-        for row in rows[keep:]:
-            await DataBackupService.delete_backup(
-                tenant_id if backup_scope != "all" else None,
-                str(row.uuid),
-                is_infra_admin=backup_scope == "all",
-            )
-            deleted += 1
-        return {"deleted": deleted}
+        if mode == "keep_count":
+            keep = int((policy.get("retention") or {}).get("keep_count") or 7)
+            rows = await q.order_by("-completed_at", "-id").all()
+            for row in rows[keep:]:
+                await DataBackupService.delete_backup(
+                    tenant_id if backup_scope != "all" else None,
+                    str(row.uuid),
+                    is_infra_admin=backup_scope == "all",
+                )
+                deleted += 1
+            return {"deleted": deleted}
 
     return {"deleted": 0}
 
 
 async def _has_active_backup(*, backup_scope: str, tenant_id: Optional[int]) -> bool:
-    q = DataBackup.filter(status__in=["pending", "running"], backup_scope=backup_scope)
-    if backup_scope == "all":
-        return await q.exists()
-    return await q.filter(tenant_id=tenant_id).exists()
+    async with _backup_policy_scope(tenant_id):
+        q = DataBackup.filter(status__in=["pending", "running"], backup_scope=backup_scope)
+        if backup_scope == "all":
+            return await q.exists()
+        return await q.filter(tenant_id=tenant_id).exists()
 
 
 async def _mark_policy_stamp(
@@ -567,31 +594,33 @@ async def run_data_backup_policy_tick() -> Dict[str, Any]:
     scheduled = 0
     retention_deleted = 0
 
-    # 平台策略
+    # 平台策略（spec 143：worker 无组织上下文，平台级读写须显式 unscoped）
     try:
-        plat = await get_platform_data_backup_policy()
-        if await maybe_trigger_scheduled_backup(
-            plat,
-            backup_scope="all",
-            tenant_id=None,
-            is_platform=True,
-            now=now,
-        ):
-            scheduled += 1
-        retention_deleted += await maybe_run_retention(
-            plat,
-            backup_scope="all",
-            tenant_id=None,
-            is_platform=True,
-            now=now,
-        )
+        async with _backup_policy_scope(None):
+            plat = await get_platform_data_backup_policy()
+            if await maybe_trigger_scheduled_backup(
+                plat,
+                backup_scope="all",
+                tenant_id=None,
+                is_platform=True,
+                now=now,
+            ):
+                scheduled += 1
+            retention_deleted += await maybe_run_retention(
+                plat,
+                backup_scope="all",
+                tenant_id=None,
+                is_platform=True,
+                now=now,
+            )
     except Exception:
         logger.exception("平台备份策略 tick 失败")
 
     # 租户策略：仅扫 settings 中已写入 data_backup_policy 的组织
     tenant_ids: List[int] = []
     try:
-        rows = await SiteSetting.filter(deleted_at__isnull=True).all()
+        async with _backup_policy_scope(None):
+            rows = await SiteSetting.filter(deleted_at__isnull=True).all()
         seen = set()
         for row in rows:
             tid = getattr(row, "tenant_id", None)
@@ -608,26 +637,27 @@ async def run_data_backup_policy_tick() -> Dict[str, Any]:
 
     for tid in tenant_ids:
         try:
-            policy = await get_tenant_data_backup_policy(tid)
-            if not policy.get("schedule_enabled") and (
-                (policy.get("retention") or {}).get("mode") or "none"
-            ) == "none":
-                continue
-            if await maybe_trigger_scheduled_backup(
-                policy,
-                backup_scope="tenant",
-                tenant_id=tid,
-                is_platform=False,
-                now=now,
-            ):
-                scheduled += 1
-            retention_deleted += await maybe_run_retention(
-                policy,
-                backup_scope="tenant",
-                tenant_id=tid,
-                is_platform=False,
-                now=now,
-            )
+            async with _backup_policy_scope(tid):
+                policy = await get_tenant_data_backup_policy(tid)
+                if not policy.get("schedule_enabled") and (
+                    (policy.get("retention") or {}).get("mode") or "none"
+                ) == "none":
+                    continue
+                if await maybe_trigger_scheduled_backup(
+                    policy,
+                    backup_scope="tenant",
+                    tenant_id=tid,
+                    is_platform=False,
+                    now=now,
+                ):
+                    scheduled += 1
+                retention_deleted += await maybe_run_retention(
+                    policy,
+                    backup_scope="tenant",
+                    tenant_id=tid,
+                    is_platform=False,
+                    now=now,
+                )
         except Exception:
             logger.exception("租户备份策略 tick 失败 tenant_id={}", tid)
 
@@ -643,38 +673,39 @@ async def run_policy_backup_now(
     """按当前策略立即发起一次测试备份（不写 last_scheduled_at，不依赖 cron 窗口）。"""
     from core.services.system.data_backup_service import DataBackupService
 
-    if is_platform:
-        policy = await get_platform_data_backup_policy()
-        backup_scope = "all"
-        tenant_id = None
-    else:
-        if tenant_id is None:
-            raise ValidationError("本组织测试备份缺少组织号")
-        policy = await get_tenant_data_backup_policy(int(tenant_id))
-        backup_scope = "tenant"
+    async with _backup_policy_scope(tenant_id if not is_platform else None):
+        if is_platform:
+            policy = await get_platform_data_backup_policy()
+            backup_scope = "all"
+            tenant_id = None
+        else:
+            if tenant_id is None:
+                raise ValidationError("本组织测试备份缺少组织号")
+            policy = await get_tenant_data_backup_policy(int(tenant_id))
+            backup_scope = "tenant"
 
-    if await _has_active_backup(backup_scope=backup_scope, tenant_id=tenant_id):
-        raise ValidationError("已有进行中的备份任务，请稍后再试")
+        if await _has_active_backup(backup_scope=backup_scope, tenant_id=tenant_id):
+            raise ValidationError("已有进行中的备份任务，请稍后再试")
 
-    now = resolve_business_datetime()
-    wall = _site_wall_clock(now)
-    include_files = bool(policy.get("include_files", True))
-    backup_type = await DataBackupService.resolve_auto_backup_type(
-        tenant_id=tenant_id,
-        backup_scope=backup_scope,
-    )
-    type_label = "全量" if backup_type == "full" else "增量"
-    name = f"测试{type_label}备份_{wall.strftime('%Y%m%d_%H%M')}"
-    data = DataBackupCreate(
-        name=name,
-        backup_type=backup_type,
-        backup_scope=backup_scope,
-        include_files=include_files,
-        trigger_source="manual",
-    )
-    backup = await DataBackupService.create_backup_task(tenant_id, data)
-    if getattr(backup, "status", None) == "failed":
-        raise ValidationError(
-            getattr(backup, "error_message", None) or "测试备份投递失败，请确认 Taskiq worker 已运行"
+        now = resolve_business_datetime()
+        wall = _site_wall_clock(now)
+        include_files = bool(policy.get("include_files", True))
+        backup_type = await DataBackupService.resolve_auto_backup_type(
+            tenant_id=tenant_id,
+            backup_scope=backup_scope,
         )
-    return backup
+        type_label = "全量" if backup_type == "full" else "增量"
+        name = f"测试{type_label}备份_{wall.strftime('%Y%m%d_%H%M')}"
+        data = DataBackupCreate(
+            name=name,
+            backup_type=backup_type,
+            backup_scope=backup_scope,
+            include_files=include_files,
+            trigger_source="manual",
+        )
+        backup = await DataBackupService.create_backup_task(tenant_id, data)
+        if getattr(backup, "status", None) == "failed":
+            raise ValidationError(
+                getattr(backup, "error_message", None) or "测试备份投递失败，请确认 Taskiq worker 已运行"
+            )
+        return backup
