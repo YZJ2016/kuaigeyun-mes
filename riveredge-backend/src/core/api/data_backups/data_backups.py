@@ -41,6 +41,7 @@ from core.services.system.data_backup_policy import (
 )
 from core.services.system.backup_download_service import BackupDownloadService
 from core.utils.timezone_utils import resolve_business_datetime
+from infra.domain.tenant_context import unscoped
 from infra.exceptions.exceptions import ValidationError
 from tortoise.exceptions import DoesNotExist
 from tortoise.expressions import Q
@@ -92,21 +93,30 @@ async def _load_worker_health_counts(
 ) -> tuple[int, int, int, int]:
     # PostgreSQL 连接偶发中断时，允许一次短重试，避免前端偶发 500。
     scope_q = _backup_list_q(tenant_id, is_infra_admin=is_infra_admin)
+    # spec 143：平台超管请求无组织上下文，平台级聚合须显式 unscoped
+    async def _run_counts():
+        pending_total = await DataBackup.filter(scope_q, status="pending").count()
+        pending_stalled = await DataBackup.filter(
+            scope_q,
+            status="pending",
+            created_at__lt=stale_threshold,
+        ).count()
+        running_count = await DataBackup.filter(scope_q, status="running").count()
+        recent_completed = await DataBackup.filter(
+            scope_q,
+            status__in=["success", "failed"],
+            completed_at__gte=recent_window,
+        ).count()
+        return pending_total, pending_stalled, running_count, recent_completed
+
     for attempt in range(2):
         try:
-            pending_total = await DataBackup.filter(scope_q, status="pending").count()
-            pending_stalled = await DataBackup.filter(
-                scope_q,
-                status="pending",
-                created_at__lt=stale_threshold,
-            ).count()
-            running_count = await DataBackup.filter(scope_q, status="running").count()
-            recent_completed = await DataBackup.filter(
-                scope_q,
-                status__in=["success", "failed"],
-                completed_at__gte=recent_window,
-            ).count()
-            return pending_total, pending_stalled, running_count, recent_completed
+            if is_infra_admin:
+                async with unscoped(
+                    reason="平台管理员备份 worker-health 全量聚合", resource="DataBackup"
+                ):
+                    return await _run_counts()
+            return await _run_counts()
         except Exception as exc:
             exc_name = exc.__class__.__name__
             message = str(exc)
@@ -418,7 +428,11 @@ async def create_backup(
                 )
             from infra.models.tenant import Tenant
 
-            target = await Tenant.filter(id=int(chosen)).first()
+            # spec 143：平台超管无组织上下文，跨组织核验须显式 unscoped
+            async with unscoped(
+                reason="平台管理员为指定组织创建备份前校验目标组织", resource="Tenant"
+            ):
+                target = await Tenant.filter(id=int(chosen)).first()
             if target is None:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -511,7 +525,10 @@ async def download_backup(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="下载链接与备份不匹配")
 
     try:
-        backup = await DataBackup.get(uuid=uuid)
+        # spec 143：token 下载端点无请求组织上下文，按 uuid 内部定位须显式 unscoped
+        # （授权由 download_token 负载与 backup_visible_to_user 兜底）
+        async with unscoped(reason="备份下载 token 校验后按 uuid 定位", resource=f"DataBackup:{uuid}"):
+            backup = await DataBackup.get(uuid=uuid)
         if not DataBackupService.backup_visible_to_user(
             backup,
             int(payload["tenant_id"]) if payload.get("tenant_id") is not None else None,
@@ -594,7 +611,8 @@ async def restore_backup(
     if effective_target is not None:
         from infra.models.tenant import Tenant
 
-        target = await Tenant.filter(id=int(effective_target)).first()
+        async with unscoped(reason="恢复备份前校验目标组织存在", resource="Tenant"):
+            target = await Tenant.filter(id=int(effective_target)).first()
         if target is None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,

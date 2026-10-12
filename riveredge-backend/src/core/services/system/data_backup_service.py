@@ -23,7 +23,7 @@ from core.services.system.backup_storage import (
 from core.schemas.data_backup import DataBackupCreate
 from core.tasks.dispatcher import TaskEvent, dispatch_event
 from core.utils.timezone_utils import resolve_business_datetime
-from infra.domain.tenant_context import get_current_tenant_id, with_tenant
+from infra.domain.tenant_context import get_current_tenant_id, unscoped, with_tenant
 
 
 class DataBackupService:
@@ -39,6 +39,10 @@ class DataBackupService:
         # 只在本次查询进入该组织，退出后还原调用方上下文。
         if tenant_id is not None and get_current_tenant_id() != tenant_id:
             async with with_tenant(int(tenant_id), reason="数据备份按指定组织查询"):
+                return await action()
+        if tenant_id is None and get_current_tenant_id() is None:
+            # 平台级操作（超管不绑定组织 / worker 无上下文）：spec 143 要求显式 unscoped
+            async with unscoped(reason="数据备份平台级按 uuid/范围操作", resource="DataBackup"):
                 return await action()
         return await action()
 
@@ -196,6 +200,34 @@ class DataBackupService:
         backup_scope: str,
     ) -> str:
         """无落点全量 → full；已有落点全量 → incremental。"""
+        from core.services.system.data_backup_policy import (
+            get_platform_data_backup_policy,
+            get_tenant_data_backup_policy,
+            normalize_data_backup_policy,
+        )
+
+        scope = (backup_scope or "tenant").strip().lower()
+        # spec 143：worker / 平台超管无环境上下文时须显式声明执行域
+        if tenant_id is not None and get_current_tenant_id() != int(tenant_id):
+            async with with_tenant(int(tenant_id), reason="备份按指定组织判定全量/增量"):
+                return await DataBackupService._resolve_auto_backup_type_scoped(
+                    tenant_id=tenant_id, backup_scope=scope
+                )
+        if tenant_id is None and get_current_tenant_id() is None:
+            async with unscoped(reason="平台级备份判定全量/增量", resource="DataBackup"):
+                return await DataBackupService._resolve_auto_backup_type_scoped(
+                    tenant_id=None, backup_scope=scope
+                )
+        return await DataBackupService._resolve_auto_backup_type_scoped(
+            tenant_id=tenant_id, backup_scope=scope
+        )
+
+    @staticmethod
+    async def _resolve_auto_backup_type_scoped(
+        *,
+        tenant_id: Optional[int],
+        backup_scope: str,
+    ) -> str:
         from core.services.system.data_backup_policy import (
             get_platform_data_backup_policy,
             get_tenant_data_backup_policy,
@@ -387,6 +419,14 @@ class DataBackupService:
         """
         回收堆积：无 advisory lock 的 running 标失败；pending 且队列无消息则重新投递。
         """
+        if tenant_id is not None and get_current_tenant_id() != int(tenant_id):
+            async with with_tenant(int(tenant_id), reason="备份堆积回收按指定组织执行"):
+                return await DataBackupService.reclaim_stalled_backups(tenant_id=tenant_id)
+        if tenant_id is None and get_current_tenant_id() is None:
+            # spec 143：taskiq tick 无组织上下文，全量回收需显式 unscoped
+            async with unscoped(reason="备份堆积回收（全平台范围）", resource="DataBackup"):
+                return await DataBackupService.reclaim_stalled_backups(tenant_id=None)
+
         from core.services.system.data_backup_jobs import is_backup_advisory_lock_held
 
         now = resolve_business_datetime()
