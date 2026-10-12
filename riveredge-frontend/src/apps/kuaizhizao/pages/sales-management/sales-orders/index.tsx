@@ -59,7 +59,7 @@ import { MaterialInventoryIndicator } from '../../../components/MaterialInventor
 import { MaterialBomIndicator } from '../../../components/MaterialBomIndicator';
 import { SalesOrderIndicatorsProvider } from '../../../components/SalesOrderIndicatorsProvider';
 import { SalesOrderAiCreateTrigger } from './components/SalesOrderAiCreateDrawer';
-import { useKuaiaiEntryAvailable } from '../../../../../hooks/useKuaiaiEntryAvailable';
+import { useKuaiaiEntryAvailable } from '../../../../kuaiai/hooks/useKuaiaiEntryAvailable';
 import { SalesOrderDetailDrawer } from './components/SalesOrderDetailDrawer';
 import {
   alignProColumns,
@@ -94,8 +94,8 @@ import {
   type ContractTermFieldBindingContext,
 } from '../sales-contracts/contract-term-placeholders';
 import { formatBusinessDateOnly } from '../../../../../utils/format';
-import { glService } from '../../../services/finance/gl';
-import { exchangeRateService } from '../../../services/finance/exchange-rate';
+import { glService } from '../../../../kuaicaiwu/services/gl';
+import { exchangeRateService } from '../../../../kuaicaiwu/services/exchange-rate';
 import {
   documentCurrencyTitleVars,
   resolveDocumentCurrencyInputPrefix,

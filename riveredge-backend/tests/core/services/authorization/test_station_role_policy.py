@@ -16,6 +16,9 @@ from core.services.authorization.permission_registry_service import (
     PermissionRegistryService,
 )
 from core.services.authorization.permission_sync_service import PermissionSyncService
+from core.services.authorization.reference_registry_service import (
+    ReferenceRegistryService,
+)
 from core.services.authorization.role_service import RoleService
 from core.services.authorization.role_type_policy import (
     assert_pure_role_types,
@@ -114,6 +117,11 @@ def _install_load_preset_mocks(monkeypatch):
         role_service_module.Role, "create", AsyncMock(side_effect=_role_create)
     )
     monkeypatch.setattr(RoleService, "_assign_preset_permissions", assign)
+    monkeypatch.setattr(
+        RoleService,
+        "ensure_preset_default_display_permissions",
+        AsyncMock(return_value=0),
+    )
     return existing_codes, created, assign
 
 
@@ -284,6 +292,17 @@ async def test_station_preset_permissions_explicit_only(monkeypatch):
     role = _role(9, "station", code="STATION_TERMINAL")
     await RoleService._assign_preset_permissions(tenant_id=1, role=role)
 
+    # 上游语义：预设角色分配恒并入登记回显与预设默认回显（以已注册权限为限）
+    expected_display_codes = {
+        code
+        for code, _source in ReferenceRegistryService.collect_display_permission_codes()
+        if code in perm_by_code
+    } | {
+        code
+        for code in RoleService.PRESET_DEFAULT_DISPLAY_CODES
+        if code in perm_by_code
+    }
+
     bulk_create.assert_awaited_once()
     granted_ids = {rp.permission_id for rp in bulk_create.await_args.args[0]}
     code_by_id = {p.id: p.code for p in perm_by_code.values()}
@@ -301,6 +320,7 @@ async def test_station_preset_permissions_explicit_only(monkeypatch):
         "master-data:process:sop:read",
         "system:user:display",
         *PermissionRegistryService.BASELINE_PERMISSION_CODES,
+        *expected_display_codes,
     }
 
     bulk_create.reset_mock()
@@ -319,6 +339,7 @@ async def test_station_preset_permissions_explicit_only(monkeypatch):
         "master-data:factory:workshop:read",
         "master-data:process:sop:read",
         *PermissionRegistryService.BASELINE_PERMISSION_CODES,
+        *expected_display_codes,
     }
 
 
