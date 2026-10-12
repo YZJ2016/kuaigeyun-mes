@@ -191,6 +191,7 @@ const TYPE_COLORS: Record<string, { color: string; icon: React.ReactNode }> = {
   huaweicloud_obs: { color: 'red', icon: <CloudOutlined /> },
   aws_s3: { color: 'gold', icon: <CloudOutlined /> },
   minio: { color: 'geekblue', icon: <DatabaseOutlined /> },
+  rustfs: { color: 'volcano', icon: <DatabaseOutlined /> },
   qiniu_kodo: { color: 'cyan', icon: <CloudOutlined /> },
   nas_webdav: { color: 'purple', icon: <DatabaseOutlined /> },
   nas_smb: { color: 'magenta', icon: <DatabaseOutlined /> },
@@ -1159,6 +1160,8 @@ const ApplicationConnectionsListPage: React.FC = () => {
           </>
         );
       case 'minio':
+      case 'rustfs': {
+        const product = type === 'rustfs' ? 'RustFS' : 'MinIO';
         return (
           <>
             <ProFormText
@@ -1166,22 +1169,26 @@ const ApplicationConnectionsListPage: React.FC = () => {
               label="Endpoint"
               rules={[{ required: true }]}
               colProps={{ span: 24 }}
-              placeholder="minio.example.com:9000 或 http://192.168.1.10:9000"
-              extra="填 S3 API 地址（常见 :9000），不要填控制台（:9001），也不要带 Bucket 路径；未写协议时由「使用 HTTPS」补全"
+              placeholder={
+                type === 'rustfs'
+                  ? 'rustfs.example.com:9000 或 http://192.168.1.10:9000'
+                  : 'minio.example.com:9000 或 http://192.168.1.10:9000'
+              }
+              extra="填 S3 API 地址（常见 :9000），不要填控制台端口，也不要带 Bucket 路径；未写协议时由「使用 HTTPS」补全"
             />
             <ProFormSwitch
               name="use_ssl"
               label="使用 HTTPS"
               initialValue={true}
               colProps={{ span: 12 }}
-              extra="强制走 TLS。若 MinIO 仅 HTTP（常见 9000 端口），请关闭，否则会报 WRONG_VERSION_NUMBER"
+              extra={`强制走 TLS。若 ${product} 仅 HTTP（常见 9000 端口），请关闭，否则会报 WRONG_VERSION_NUMBER`}
             />
             <ProFormText
               name="region"
               label="Region"
               colProps={{ span: 12 }}
               placeholder="us-east-1"
-              extra="多数自建 MinIO 可填 us-east-1"
+              extra={`多数自建 ${product} 可填 us-east-1`}
             />
             <ProFormText name="access_key" label="Access Key" rules={[{ required: true }]} colProps={{ span: 12 }} />
             <ProFormText.Password name="secret_key" label="Secret Key" rules={[{ required: true }]} colProps={{ span: 12 }} />
@@ -1194,6 +1201,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
             />
           </>
         );
+      }
       case 'qiniu_kodo':
         return (
           <>
@@ -1573,7 +1581,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
       'weaver', 'seeyon', 'landray', 'cloudhub', 'tongda_oa',
       'rootcloud', 'casicloud', 'alicloud_iot', 'huaweicloud_iot', 'thingsboard', 'jetlinks', 'mqtt',
       'flux_wms', 'kejian_wms', 'digiwin_wms', 'openwms',
-      'alicloud_oss', 'tencent_cos', 'huaweicloud_obs', 'aws_s3', 'minio', 'qiniu_kodo',
+      'alicloud_oss', 'tencent_cos', 'huaweicloud_obs', 'aws_s3', 'minio', 'rustfs', 'qiniu_kodo',
       'nas_webdav', 'nas_smb', 'kuaiai_ocr', 'amap', 'kuaidi100', 'kdniao', 'aliyun_market', 'tencent_market',
       'deepseek', 'openai', 'qwen', 'zhipu', 'moonshot', 'siliconflow',
     ].includes(type);
