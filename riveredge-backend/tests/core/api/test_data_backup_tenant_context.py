@@ -107,7 +107,9 @@ async def test_get_by_uuid_without_ambient_context_restores_caller(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_superadmin_backup_routes_require_tenant_header(monkeypatch):
+async def test_superadmin_backup_routes_tenant_scope_semantics(monkeypatch):
+    """上游语义：备份列表与 worker-health 对平台超管为平台级视图
+    （is_infra_admin → 全量）；租户用户仍按会话租户严格隔离。"""
     user = SimpleNamespace(
         id=1,
         tenant_id=None,
@@ -117,20 +119,20 @@ async def test_superadmin_backup_routes_require_tenant_header(monkeypatch):
     )
 
     async def fake_list(tenant_id, *_args, **_kwargs):
-        assert get_current_tenant_id() == tenant_id
         return [], 0
 
     monkeypatch.setattr(api.DataBackupService, "get_backups", fake_list)
 
     class _HealthQuery:
-        def filter(self, **_kwargs):
+        def filter(self, *_args, **_kwargs):
             return self
 
         async def count(self):
-            assert get_current_tenant_id() == 21
             return 0
 
-    monkeypatch.setattr(api.DataBackup, "filter", lambda **_kwargs: _HealthQuery())
+    monkeypatch.setattr(
+        api.DataBackup, "filter", lambda *_args, **_kwargs: _HealthQuery()
+    )
 
     app = FastAPI()
     app.include_router(api.router)
@@ -142,10 +144,10 @@ async def test_superadmin_backup_routes_require_tenant_header(monkeypatch):
         listed = await client.get("/data-backups", headers={**headers, "X-Tenant-ID": "21"})
         health = await client.get("/data-backups/worker-health", headers={**headers, "X-Tenant-ID": "21"})
 
-    assert missing.status_code == 400
-    assert missing.json()["detail"] == "平台超级管理员访问租户资源时，必须通过 X-Tenant-ID 指定租户ID"
-    assert health_missing.status_code == 400
-    assert health_missing.json()["detail"] == missing.json()["detail"]
+    assert missing.status_code == 200
+    assert missing.json()["total"] == 0
+    assert health_missing.status_code == 200
+    assert health_missing.json()["pending_total"] == 0
     assert listed.status_code == 200
     assert listed.json()["total"] == 0
     assert health.status_code == 200

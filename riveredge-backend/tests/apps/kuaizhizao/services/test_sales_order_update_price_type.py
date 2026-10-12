@@ -36,6 +36,8 @@ async def test_item_update_resolves_price_type_and_persists(monkeypatch, submitt
     monkeypatch.setattr(module.SalesOrderItem, "filter", lambda **kw: query)
     create = AsyncMock()
     monkeypatch.setattr(module.SalesOrderItem, "create", create)
+    bulk_create = AsyncMock()
+    monkeypatch.setattr(module.SalesOrderItem, "bulk_create", bulk_create)
     monkeypatch.setattr(AppBaseService, "get_user_name", AsyncMock(return_value="fixture"))
     monkeypatch.setattr(DocumentRelationService, "apply_upstream_change_impact", AsyncMock())
     monkeypatch.setattr(DemandChangeEventService, "create_event", AsyncMock())
@@ -57,5 +59,6 @@ async def test_item_update_resolves_price_type_and_persists(monkeypatch, submitt
     assert pricing.call_args.kwargs["price_type"] == expected
     if submitted is not None:
         assert query.update.call_args_list[0].kwargs["price_type"] == expected
-    assert create.call_args.kwargs["order_quantity"] == Decimal(2)
-    assert create.call_args.kwargs["total_amount"] == Decimal(20)
+    created_items = bulk_create.call_args.args[0]
+    assert created_items[0].order_quantity == Decimal(2)
+    assert created_items[0].total_amount == Decimal(20)
