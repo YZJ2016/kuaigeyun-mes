@@ -44,6 +44,14 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'data-backup-restore-target-tenant-r01',
+    date: '2026-10-12',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.data-backup-restore-target-tenant-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.data-backup-restore-target-tenant-r01.description',
+  },
+  {
     id: 'kuaioa-asset-registry-redirect-fa-r01',
     date: '2026-10-10',
     type: 'fix',
