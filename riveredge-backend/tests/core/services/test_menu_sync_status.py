@@ -1,6 +1,25 @@
 """菜单同步状态检测。"""
 
+import asyncio
+from unittest.mock import AsyncMock, patch
+
 from core.services.application.application_service import ApplicationService
+from core.services.system.menu_takeover_service import MenuTakeoverService
+
+
+def test_is_consumer_effective_requires_deployed_manifest():
+    with patch.object(ApplicationService, "_get_manifest_by_code", return_value=None), patch.object(
+        MenuTakeoverService, "is_consumer_active", new=AsyncMock(return_value=True)
+    ):
+        assert asyncio.run(MenuTakeoverService.is_consumer_effective(1, "kuaicaiwu")) is False
+
+
+def test_is_consumer_effective_requires_active_consumer():
+    with patch.object(ApplicationService, "_get_manifest_by_code", return_value={"code": "kuaicaiwu"}):
+        with patch.object(MenuTakeoverService, "is_consumer_active", new=AsyncMock(return_value=True)):
+            assert asyncio.run(MenuTakeoverService.is_consumer_effective(1, "kuaicaiwu")) is True
+        with patch.object(MenuTakeoverService, "is_consumer_active", new=AsyncMock(return_value=False)):
+            assert asyncio.run(MenuTakeoverService.is_consumer_effective(1, "kuaicaiwu")) is False
 
 
 def test_stable_menu_config_digest_same_structure():

@@ -1507,6 +1507,15 @@ class ApplicationService:
         return plugins
     
     @staticmethod
+    def is_manifest_deployed_on_node(code: str) -> bool:
+        """
+        当前运行节点 src/apps 是否已部署该应用（存在可读 manifest.json）。
+
+        侧栏 navigation-tree、启用/安装门禁均以此为准；库内 is_installed 不能代替磁盘包。
+        """
+        return ApplicationService._get_manifest_by_code(code) is not None
+
+    @staticmethod
     def _get_manifest_by_code(code: str) -> Optional[Dict[str, Any]]:
         """
         根据应用 code 读取 manifest.json，用于获取 is_pro 等字段。
