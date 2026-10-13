@@ -49,6 +49,16 @@ class MenuTakeoverService:
         return app is not None
 
     @staticmethod
+    async def is_consumer_effective(tenant_id: int, consumer_app_code: str) -> bool:
+        """接管是否应生效：consumer 已启用且本节点已部署 manifest（PRO 未 compose 时不接管）。"""
+        from core.services.application.application_service import ApplicationService
+
+        code = str(consumer_app_code or "").strip()
+        if not code or not ApplicationService.is_manifest_deployed_on_node(code):
+            return False
+        return await MenuTakeoverService.is_consumer_active(tenant_id, code)
+
+    @staticmethod
     async def _dedicated_shell_may_apply(tenant_id: int, consumer_app_code: str) -> bool:
         """定制壳侧栏抑制：租户须已绑定该专用应用且应用已启用。"""
         from core.services.application.application_dedicated_binding_service import (
