@@ -40,6 +40,7 @@ from apps.kuaiiot.services.status_mapper import (
     OPEN_REPAIR_STATUSES,
     normalize_equipment_status,
 )
+from core.services.realtime import schedule_tenant_realtime_event
 from core.utils.timezone_utils import resolve_business_datetime
 from infra.domain.tenant_context import unscoped, with_tenant
 from infra.exceptions.exceptions import AuthenticationError, NotFoundError, ValidationError
@@ -190,6 +191,28 @@ def _parse_sampled_at(raw: Optional[str], server_now: datetime) -> datetime:
 
 class IngestService:
     @staticmethod
+    def schedule_device_update(device: Any, *, synced_to_mes: bool) -> None:
+        schedule_tenant_realtime_event(
+            tenant_id=int(getattr(device, "tenant_id", 0) or 0),
+            scope="kuaiiot",
+            event="kuaiiot.device.updated",
+            payload={
+                "device_uuid": getattr(device, "uuid", None),
+                "device_id": getattr(device, "id", None),
+                "code": getattr(device, "code", None),
+                "external_device_id": getattr(device, "external_device_id", None),
+                "is_online": bool(getattr(device, "is_online", False)),
+                "last_seen_at": (
+                    getattr(device, "last_seen_at").isoformat()
+                    if getattr(device, "last_seen_at", None) is not None
+                    else None
+                ),
+                "equipment_uuid": getattr(device, "equipment_uuid", None),
+                "synced_to_mes": bool(synced_to_mes),
+            },
+        )
+
+    @staticmethod
     async def ingest(device_token: str, body: IngestBody) -> dict[str, Any]:
         token = (device_token or "").strip()
         if not token:
@@ -302,6 +325,7 @@ class IngestService:
                         sampled_at,
                         server_now,
                     )
+                IngestService.schedule_device_update(current, synced_to_mes=monitor_written)
                 if fresh:
                     samples = {
                         definition.tag_key: (value_text, value_number, value_bool)
