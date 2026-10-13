@@ -8224,3 +8224,81 @@ slide-backgrounds.csv[XE2T]: F:将演示页类型映射为背景图类别、叠�
 slide-charts.csv[XE3T]: F:提供25类演示图表的适用数据、场景、避用条件和可访问性提示 | R:code:.agents/skills/design-system/SKILL.md | A:id/chart_type,when_to_use,when_to_avoid,max_categories,css_implementation,accessibility_notes | S:饼图不用于过多类别或精确比较，须标百分比且禁止3D；图形均保留文本替代说明
 slide-color-logic.csv[XE2T]: F:按演示页情绪映射背景、文字、强调色、渐变与卡片表现 | R:code:.agents/skills/design-system/SKILL.md | A:emotion,background,text_color,accent_usage,use_full_bleed,gradient/card_style | S:-
 slide-copy.csv[XE3T]: F:收录25种演示文案公式、场景与情绪触发，用于生成问题、方案及行动页 | R:code:.agents/skills/design-system/SKILL.md | A:id/formula_name,components,use_case,example_template,emotion_trigger,slide_type | S:Proof Stack中的统计值须标可核对的来源，不应把公式占位符当作真实案例
+slide-layout-logic.csv[XE2T]: F:按演示目标与情绪选布局、方向、视觉权重及背景图 | R:code:.agents/skills/design-system/SKILL.md | A:goal,emotion,layout_pattern,direction,visual_weight,break_pattern/use_bg_image | S:agitation、social、cta与vision标记为打破常规版式
+slide-layouts.csv[XE2T]: F:定义25种演示版式的内容区、视觉比例、组件变体及动画 | R:code:.agents/skills/design-system/SKILL.md | A:id/layout_name,content_zones,visual_weight,recommended_for,avoid_for,animation_class | S:Quote Testimonial不用于没有真实引述的页；Chart Focus避免低质量数据
+slide-strategies.csv[XE2T]: F:提供融资、销售、培训与内部汇报等15种演示结构及情绪叙事弧线 | R:code:.agents/skills/design-system/SKILL.md | A:id/strategy_name,slide_count,structure,goal/audience,emotion_arc,sparkline_beats | S:模板中的关键指标是展示目标，不是实际业务测量结果
+slide-typography.csv[XE2T]: F:按演示页内容类型提供主次文字字号、字重、字距与行高 | R:code:.agents/skills/design-system/SKILL.md | A:content_type,primary_size,secondary_size,accent_size,weight_contrast,letter_spacing/line_height | S:-
+
+===D:/kuaigeyun-pro/kuaigeyun/.agents/skills/design-system/references/===
+component-specs.md[XE3M]: F:给按钮、输入框、卡片、徽标、提示框、弹窗和表格列出变体、尺寸与交互状态规格 | R:code:.agents/skills/design-system/SKILL.md,code:.agents/skills/design-system/references/component-tokens.md | A:Button/Input/Card/Badge/Alert/Dialog/Table规格表 | S:危险操作才用destructive按钮；数字表格右对齐而状态列居中
+component-tokens.md[XE3M]: F:定义按钮、输入框、卡片、徽标、警告框、对话框和表格的组件级CSS变量 | R:code:.agents/skills/design-system/references/semantic-tokens.md,code:.agents/skills/design-system/references/primitive-tokens.md | A:--button-*;--input-*;--card-*;--badge-*;--alert-*;--dialog-*;--table-* | S:组件颜色引用语义层，间距和圆角可引用原始尺度；勿将展示值固化在组件规则里
+primitive-tokens.md[XE3M]: F:列出颜色、间距、字体、圆角、阴影、动画时长与层级的原始设计值 | R:code:.agents/skills/design-system/references/token-architecture.md,code:.agents/skills/design-system/references/semantic-tokens.md | A:--color-*;--space-*;--font-size-*;--radius-*;--shadow-*;--z-* | S:间距以4px为基础单位；原始值不承担语义，主题切换应由语义层承接
+semantic-tokens.md[XE3M]: F:将原始颜色、间距和排版值映射成用途明确的语义CSS变量 | R:code:.agents/skills/design-system/references/primitive-tokens.md,code:.agents/skills/design-system/references/component-tokens.md | A:--color-primary;--color-background;--spacing-section;--font-body | S:暗色模式覆盖语义变量；页面组件应读语义别名，不直接依赖原始色阶
+states-and-variants.md[XE3M]: F:规范组件悬浮、焦点、激活、禁用、加载和错误态及颜色尺寸变体 | R:code:.agents/skills/design-system/references/component-specs.md,code:.agents/skills/design-system/references/semantic-tokens.md | A:交互态优先级;focus ring;ARIA状态用法 | S:禁用优先于加载、激活、焦点与悬浮；状态不可仅靠颜色区分
+tailwind-integration.md[XE3M]: F:将语义CSS变量映射到Tailwind主题、组件类、暗色模式及动画配置 | R:code:.agents/skills/design-system/references/semantic-tokens.md,code:.agents/skills/design-system/references/token-architecture.md | A:tailwind.config.ts示例;@layer base/components;dark class | S:HSL变量用空格分隔数值以支持bg-primary/50等透明度修饰
+token-architecture.md[XE4M]: F:阐明原始值、语义别名和组件专用值三层设计Token架构及迁移组织方式 | R:code:.agents/skills/design-system/references/semantic-tokens.md,code:.agents/skills/design-system/references/component-tokens.md | A:primitive/semantic/component命名与CSS组织约定 | S:主题切换应调整语义层；组件例外留在组件层，不直接改变原始值含义
+
+===D:/kuaigeyun-pro/kuaigeyun/.agents/skills/design-system/templates/===
+design-tokens-starter.json[XE3S]: F:提供可复用的原始、语义、组件和暗色主题设计Token JSON样例 | R:code:.agents/skills/design-system/references/token-architecture.md | A:$schema;primitive;semantic;component;dark | S:语义与组件条目用{primitive.*}或{semantic.*}引用，不把示例颜色当作实际品牌
+
+===D:/kuaigeyun-pro/kuaigeyun/.agents/skills/slides/===
+SKILL.md[XE3T]: F:提供面向营销和数据展示的战略HTML幻灯片制作入口与知识路由 | R:code:.agents/skills/slides/references/create.md,code:.agents/skills/slides/references/copywriting-formulas.md | A:slides create;topic/slide-count | S:由create子命令进入文稿制作，引用版式、图表与文案知识库
+
+===D:/kuaigeyun-pro/kuaigeyun/.agents/skills/slides/references/===
+copywriting-formulas.md[XE3T]: F:整理PAS、AIDA、FAB等文案公式与演示页情绪和结构的映射 | R:code:.agents/skills/slides/SKILL.md,code:.agents/skills/design-system/data/slide-copy.csv | A:文案公式模板;Formula-to-Slide映射表 | S:统计与客户背书模板为占位语句，实际呈现须有可核实证据
+create.md[XE2T]: F:转交幻灯片创作任务，要求以设计Token、Chart.js和知识库制作HTML页面 | R:code:.agents/skills/slides/SKILL.md | A:<task>$ARGUMENTS</task> | S:-
+html-template.md[XE3M]: F:提供带导航、响应式16:9画布、设计变量和Chart.js图表的HTML幻灯片模板 | R:code:.agents/skills/slides/SKILL.md | A:slide-deck;showSlide/nextSlide/prevSlide;Chart.js示例 | S:桌面画布锁定16:9；内容置于slide-content内避免溢出，键盘方向键与空格可翻页
+layout-patterns.md[XE3S]: F:说明演示版式选型、响应式网格、组件变体和视觉处理方法 | R:code:.agents/skills/slides/SKILL.md | A:版式用途表;CSS布局与动画类;版式决策流程 | S:双列、三列与指标网格在窄屏须折为单列；转场节奏需按页位置调整
+slide-strategies.md[XE3T]: F:按目标和受众选择融资、销售、演示、培训等15种演示策略和情绪弧线 | R:code:.agents/skills/slides/SKILL.md | A:策略对照表;YC/Sales/Demo页序;Duarte Sparkline | S:Sparkline交替呈现现状与可能性，约1/3及2/3位置打破视觉节奏
+
+===D:/kuaigeyun-pro/kuaigeyun/.agents/skills/ui-styling/===
+LICENSE.txt[SE2M]: F:载明随UI样式技能附带的Apache License 2.0版权和专利授权条件 | R:code:.agents/skills/ui-styling/SKILL.md | A:Apache-2.0许可正文 | S:再分发须随附许可文本、保留归属声明；修改文件须有显著变更告知
+SKILL.md[XE4M]: F:提供shadcn/ui、Tailwind、响应式、无障碍与Canvas视觉设计的技能入口 | R:code:.agents/skills/ui-styling/references/shadcn-accessibility.md | A:ui-styling;组件与布局参考;shadcn_add.py | S:组件以Radix语义及键盘支持为基础，先按移动端布局设计，再检验暗色模式与可访问性
+
+===D:/kuaigeyun-pro/kuaigeyun/.agents/skills/ui-styling/references/===
+canvas-design-system.md[XE3M]: F:以视觉哲学和视觉表达两阶段组织画布设计、排版与多页一致性 | R:code:.agents/skills/ui-styling/SKILL.md | A:设计哲学文档与PDF/PNG画布交付清单 | S:视觉表达约90%、必要文字约10%；最终画布不得越界或互相遮挡
+shadcn-accessibility.md[XE4L]: F:提供Radix/shadcn组件的焦点管理、键盘导航、ARIA、表单错误及动效可访问性用法 | R:code:.agents/skills/ui-styling/SKILL.md | A:对话框/菜单/表单无障碍示例;测试清单 | S:弹窗关闭后焦点归还触发控件；常规文字对比度至少4.5:1，尊重减少动画偏好
+shadcn-components.md[XE3L]: F:给出shadcn/ui表单、导航、弹层、反馈与展示组件的安装及组合示例 | R:code:.agents/skills/ui-styling/SKILL.md | A:npx shadcn add;components/ui组件用法 | S:CLI把组件复制到项目components/ui/并管理依赖，不是运行时远程组件服务
+shadcn-theming.md[XE3M]: F:说明shadcn/ui明暗主题、CSS变量、Tailwind映射和组件变体定制 | R:code:.agents/skills/ui-styling/SKILL.md | A:ThemeProvider;CSS变量;dark class;主题切换示例 | S:HSL变量不含hsl()包装以支持透明度；配色变更要分别检验明暗主题对比度
+tailwind-customization.md[XE3L]: F:说明Tailwind主题变量、自定义工具类与变体、分层、插件及配置示例 | R:code:.agents/skills/ui-styling/SKILL.md | A:@theme;@utility;@custom-variant;@layer;@apply | S:仅在真正重复时提取@apply组件样式；动态类须列入safelist以免被清除
+tailwind-responsive.md[XE3M]: F:汇总Tailwind移动优先断点、容器查询、布局自适应与响应式验收方法 | R:code:.agents/skills/ui-styling/SKILL.md | A:sm/md/lg/xl/2xl;max-*;@container;响应式示例 | S:默认样式先适配小屏，断点附近须实测；固定栏不可遮住滚动内容
+tailwind-utilities.md[XE3L]: F:列出Tailwind布局、间距、字体、颜色、边框、阴影及任意值实用类 | R:code:.agents/skills/ui-styling/SKILL.md | A:flex/grid;spacing;typography;colors;arbitrary-value;overflow | S:任意值用方括号语法；斜杠修饰不透明度，组合类须匹配实际布局需求
+
+===D:/kuaigeyun-pro/kuaigeyun/.agents/skills/ui-ux-pro-max/===
+SKILL.md[XE4L]: F:提供跨Web与移动UI的样式、图标、交互、无障碍及技术栈指南检索流程 | R:code:.agents/skills/ui-ux-pro-max/data/app-interface.csv | A:search.py --design-system/--domain/--stack;--persist | S:移动安全区与44pt/48dp触控规范不得直接套Web；检索为空仅重试一次并标注未验证结果
+
+===D:/kuaigeyun-pro/kuaigeyun/.agents/skills/ui-ux-pro-max/data/===
+app-interface.csv[XE4T]: F:收录移动应用导航、无障碍、触控、反馈与性能问题的建议和反例 | R:code:.agents/skills/ui-ux-pro-max/SKILL.md | A:No,Category,Issue,Keywords,Platform,Severity | S:iOS触控至少44pt、Android至少48dp；Web尺寸需按独立WCAG规则判断
+catalog-summary.json[XE4T]: F:记录设计知识库样式、产品配色、字体、图标等条目数及快照校验值 | R:code:.agents/skills/ui-ux-pro-max/SKILL.md | A:schemaVersion;verifiedAt;counts;snapshots;promotionPolicy | S:变更字体家族集合须显式批准；不纳入无授权字体，候选仍需相关性审核
+charts.csv[XE3T]: F:按数据类型推荐图表、避用条件、数据量阈值与无障碍替代方案 | R:code:.agents/skills/ui-ux-pro-max/SKILL.md | A:Data Type,Best Chart Type,When to Use,When NOT to Use,Accessibility Risk,A11y Fallback | S:图表不能仅用颜色区分信息；高风险图形要提供可访问的表格与键盘操作
+colors.csv[XE3S]: F:为192类产品提供主辅色、强调色、背景、前景及交互状态的配色建议 | R:code:.agents/skills/ui-ux-pro-max/SKILL.md | A:Product Type,Primary/On Primary,Accent/On Accent,Background/Foreground,Notes | S:前景色须与对应背景色成对使用并实测对比度，不能直接套用其他产品类型
+data-provenance.json[XE4L]: F:保存设计推理记录的来源文件、键、验证日期、状态与可信度证据 | R:code:.agents/skills/ui-ux-pro-max/data/products.csv | A:schemaVersion;generatedAt;freshnessPolicy;records | S:手工核验365天、待审90天的期限不同；过期证据不能视作持续有效
+google-font-licenses.json[XE4L]: F:登记Google Fonts字体家族许可类别、设计者及核验状态的上游元数据快照 | R:code:.agents/skills/ui-ux-pro-max/data/google-fonts.csv | A:schemaVersion;source.revision;familyCount;families | S:数据取自google/fonts的METADATA.pb快照；使用前仍需核实字体授权与状态
+google-fonts.csv[XE3L]: F:提供Google Fonts家族分类、字重、可变轴、字符子集、排名和样本链接 | R:code:.agents/skills/ui-ux-pro-max/data/google-font-licenses.json | A:Family,Category,Styles,Variable Axes,Subsets,Google Fonts URL | S:选字族前须结合许可快照与字符子集核对；不能只按人气排名决定
+icons.csv[XE3S]: F:提供105个精选图标的类别、用途、Phosphor导入与上下文语义建议 | R:code:.agents/skills/ui-ux-pro-max/SKILL.md | A:Icon Name,Library,Import Code,Semantic Role,Allowed Contexts | S:同一图标按装饰、承载信息或交互控制的实际用途分别处理无障碍名称和状态
+landing.csv[XE3T]: F:列出落地页区块顺序、CTA位置、颜色策略、动效与转化注意事项 | R:code:.agents/skills/ui-ux-pro-max/SKILL.md | A:Pattern Name,Section Order,Primary CTA Placement,Conversion Optimization,Pattern ID | S:证言和人数须真实可核；轮播需可暂停且减少动画时呈静态最终态
+motion.csv[XE3T]: F:提供17种按强度分层的GSAP悬停、滚动、转场与轮播动画示例 | R:code:.agents/skills/ui-ux-pro-max/SKILL.md | A:Category,Intensity Tier,Trigger,Duration,GSAP Snippet,Performance Notes | S:循环动画离屏或隐藏时暂停、卸载时清理；减少动画偏好应显示静态终态
+phosphor-icons-upstream.json[XE3L]: F:保存Phosphor上游图标组件、名称、类别、权重及客户端和SSR导入路径快照 | R:code:.agents/skills/ui-ux-pro-max/data/icons.csv | A:source;iconCount;weights;reactImports;icons | S:SSR须用专用/ssr入口，不能沿用客户端导入
+products.csv[XE3S]: F:按192类产品推荐视觉风格、落地页结构、看板模式与配色方向 | R:code:.agents/skills/ui-ux-pro-max/data/colors.csv | A:Product Type,Primary Style Recommendation,Landing Page Pattern,Dashboard Style,Key Considerations | S:推荐只作产品类型选型依据；实际页面需按受众与可访问性重新验证
+react-performance.csv[XE3T]: F:收录React与Next.js异步瀑布、包体积、服务端、渲染和重渲染优化建议 | R:code:.agents/skills/ui-ux-pro-max/SKILL.md | A:Category,Guideline/Issue,Do,Don't,Severity | S:含Next.js专属服务端优化，引用前必须确认当前框架适用
+
+===D:/kuaigeyun-pro/kuaigeyun/.agents/skills/ui-ux-pro-max/data/stacks/===
+angular.csv[XE3T]: F:提供Angular组件、路由、signals、表单及性能实现建议和反例 | R:code:.agents/skills/ui-ux-pro-max/SKILL.md | A:Guideline,Do,Don't,Severity,Docs URL,Applies To | S:条目适用Angular 22.x；不能直接套用到当前React端
+astro.csv[XE3T]: F:提供Astro Islands、内容集合、按需水合、路由与样式性能建议 | R:code:.agents/skills/ui-ux-pro-max/SKILL.md | A:Guideline,Do,Don't,Severity,Docs URL,Applies To | S:数据限定Astro 7.1.6；非交互组件默认不加载客户端JS
+avalonia.csv[XE3T]: F:记录Avalonia XAML、编译绑定、跨平台资源、MVVM与性能建议 | R:code:.agents/skills/ui-ux-pro-max/SKILL.md | A:Guideline,Do,Don't,Severity,Docs URL,Applies To | S:仅适用Avalonia 12；XAML命名空间与WPF不同，DataGrid还需对应主题
+flutter.csv[XE3T]: F:汇总Flutter组件、状态、列表、路由、异步与主题实现实践 | R:code:.agents/skills/ui-ux-pro-max/SKILL.md | A:Guideline,Do,Don't,Severity,Docs URL,Applies To | S:针对Flutter 3.44.x；控制器与订阅须在dispose时清理
+html-tailwind.csv[XE3T]: F:列出HTML与Tailwind布局、动效、图像和语义色实现建议及反例 | R:code:.agents/skills/ui-ux-pro-max/SKILL.md | A:Guideline,Do,Don't,Severity,Docs URL,Applies To | S:按Tailwind 4.3核对，持续动画须支持motion-reduce而非无界播放
+javafx.csv[XE3T]: F:覆盖JavaFX界面启动、线程、FXML、CSS、布局及数据绑定建议 | R:code:.agents/skills/ui-ux-pro-max/SKILL.md | A:Guideline,Do,Don't,Severity,Docs URL,Applies To | S:针对JavaFX 26；后台任务不可直接改Scene Graph，须切回FX线程
+jetpack-compose.csv[XE3T]: F:汇总Compose无状态组件、状态提升、单向数据流与生命周期处理建议 | R:code:.agents/skills/ui-ux-pro-max/SKILL.md | A:Guideline,Do,Don't,Severity,Docs URL,Applies To | S:适用Jetpack Compose 1.11.4；导航事件不宜存成可重放StateFlow
+laravel.csv[XE3T]: F:提供Laravel Blade、Livewire与Inertia页面复用、表单和布局规范 | R:code:.agents/skills/ui-ux-pro-max/SKILL.md | A:Guideline,Do,Don't,Severity,Docs URL,Applies To | S:限定Laravel 13.x；Blade动态文本需默认转义，不能把不可信输入交给{!! !!}
+nextjs.csv[XE3T]: F:给出Next.js App Router、Server Components、数据缓存和图片优化实践 | R:code:.agents/skills/ui-ux-pro-max/SKILL.md | A:Guideline,Do,Don't,Severity,Docs URL,Applies To | S:适用Next.js 16.2；缓存语义须显式声明，不能把该规则套当前Vite前端
+nuxt-ui.csv[XE3T]: F:提供Nuxt UI组件、主题、表单和弹层API的版本化用法 | R:code:.agents/skills/ui-ux-pro-max/SKILL.md | A:Guideline,Do,Don't,Severity,Docs URL,Applies To | S:针对Nuxt UI 4.10；图标用i-前缀且弹层需由UApp承载
+nuxtjs.csv[XE3T]: F:汇总Nuxt文件路由、SSR、数据获取与生命周期实践 | R:code:.agents/skills/ui-ux-pro-max/SKILL.md | A:Guideline,Do,Don't,Severity,Docs URL,Applies To | S:适用Nuxt 4.5；server:false只用于浏览器状态依赖，非所有认证请求
+react-native.csv[XE3T]: F:列出React Native组件、样式、导航、列表及跨平台状态实践 | R:code:.agents/skills/ui-ux-pro-max/SKILL.md | A:Guideline,Do,Don't,Severity,Docs URL,Applies To | S:针对RN 0.86.x；平台差异须显式处理，长列表优先FlatList
+react.csv[XE3T]: F:提供React状态、Effect、组件拆分和渲染性能建议 | R:code:.agents/skills/ui-ux-pro-max/SKILL.md | A:Guideline,Do,Don't,Severity,Docs URL,Applies To | S:建议针对React 19.2.x，不能据此升级当前React 18项目
+shadcn.csv[XE3T]: F:记录shadcn CLI安装、主题Token、组件变体和表单模式的指南 | R:code:.agents/skills/ui-ux-pro-max/SKILL.md | A:Guideline,Do,Don't,Severity,Docs URL,Applies To | S:针对CLI 4，组件底座可选base/radix/aria；勿套旧FormField或HSL片段
+svelte.csv[XE3T]: F:区分Svelte 5 Runes状态语法与遗留响应式写法并给出组件实践 | R:code:.agents/skills/ui-ux-pro-max/SKILL.md | A:Guideline,Do,Don't,Severity,Docs URL,Applies To | S:legacy的$:与export let已标弃用，Runes模式用$state/$props
+swiftui.csv[XE3T]: F:提供SwiftUI视图结构、状态属性、导航与可观察对象建议 | R:code:.agents/skills/ui-ux-pro-max/SKILL.md | A:Guideline,Do,Don't,Severity,Docs URL,Applies To | S:Observation需iOS17+，导航栈需iOS16+
+threejs.csv[XE3T]: F:说明Three.js渲染器、相机、几何材质、光照和GPU资源管理 | R:code:.agents/skills/ui-ux-pro-max/SKILL.md | A:Guideline,Do,Don't,Severity,Docs URL,Applies To | S:针对0.185.1；核/附加模块须同版，移除场景时显式dispose GPU资源
+uno.csv[XE3T]: F:汇总Uno WinUI XAML、跨平台资源、导航和渲染差异指南 | R:code:.agents/skills/ui-ux-pro-max/SKILL.md | A:Guideline,Do,Don't,Severity,Docs URL,Applies To | S:Uno各平台WinUI API不齐；WinAppSDK桌面禁无保护的BackRequested
+uwp.csv[XE3T]: F:保留UWP旧版XAML绑定、导航、主题与控件实现指导 | R:code:.agents/skills/ui-ux-pro-max/SKILL.md | A:Guideline,Do,Don't,Severity,Docs URL,Applies To | S:本表标记legacy/deprecated，不应作为新Windows UI工程的默认技术选型
