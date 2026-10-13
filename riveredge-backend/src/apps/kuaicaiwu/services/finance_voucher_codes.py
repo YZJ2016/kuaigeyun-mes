@@ -16,11 +16,15 @@ _RECEIPT_PAGE = "kuaicaiwu-finance-receipt"
 _PAYMENT_PAGE = "kuaicaiwu-finance-payment"
 _RECEIPT_REFUND_PAGE = "kuaicaiwu-finance-receipt-refund"
 _PAYMENT_REFUND_PAGE = "kuaicaiwu-finance-payment-refund"
+_OTHER_INCOME_PAGE = "kuaicaiwu-finance-other-income"
+_OTHER_EXPENSE_PAGE = "kuaicaiwu-finance-other-expense"
 
 RECEIPT_RULE = "RECEIPT_CODE"
 PAYMENT_RULE = "PAYMENT_CODE"
 RECEIPT_REFUND_RULE = "RECEIPT_REFUND_CODE"
 PAYMENT_REFUND_RULE = "PAYMENT_REFUND_CODE"
+OTHER_INCOME_RULE = "OTHER_INCOME_CODE"
+OTHER_EXPENSE_RULE = "OTHER_EXPENSE_CODE"
 
 
 async def _ensure_rule(tenant_id: int, rule_code: str, page_code: str) -> None:
@@ -65,4 +69,22 @@ async def allocate_payment_refund_code(tenant_id: int) -> str:
     today = today_site_str()
     return await AppBaseService().generate_code(
         tenant_id, PAYMENT_REFUND_RULE, prefix=f"TP{today}"
+    )
+
+
+async def allocate_other_income_code(tenant_id: int) -> str:
+    """其他费用收入单号（QS + YYYYMMDD + 序号）。"""
+    await _ensure_rule(tenant_id, OTHER_INCOME_RULE, _OTHER_INCOME_PAGE)
+    today = today_site_str()
+    return await AppBaseService().generate_code(
+        tenant_id, OTHER_INCOME_RULE, prefix=f"QS{today}"
+    )
+
+
+async def allocate_other_expense_code(tenant_id: int) -> str:
+    """其他费用支出单号（QZ + YYYYMMDD + 序号）。"""
+    await _ensure_rule(tenant_id, OTHER_EXPENSE_RULE, _OTHER_EXPENSE_PAGE)
+    today = today_site_str()
+    return await AppBaseService().generate_code(
+        tenant_id, OTHER_EXPENSE_RULE, prefix=f"QZ{today}"
     )

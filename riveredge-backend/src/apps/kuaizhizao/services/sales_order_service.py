@@ -103,7 +103,13 @@ class SalesOrderService:
     ) -> Decimal:
         base = await self._tenant_base_currency(tenant_id)
         if not base:
-            raise ValidationError("未配置总账本位币，无法保存销售订单汇率")
+            # 无轻财务总账时：未填汇率默认 1；已填则只校验正数
+            if not exchange_rate_provided or exchange_rate is None:
+                return Decimal("1")
+            rate = Decimal(str(exchange_rate))
+            if rate <= 0:
+                raise ValidationError("汇率须大于 0")
+            return rate
         code = (currency_code or base).strip().upper()
         if code == base.strip().upper():
             return Decimal("1")
@@ -231,7 +237,7 @@ class SalesOrderService:
         partner_settlement_method: Optional[str] = None,
         price_type: Optional[str] = None,
     ) -> Dict[str, Any]:
-        from apps.kuaicaiwu.utils.price_settlement_helpers import (
+        from apps.kuaizhizao.utils.price_settlement_helpers import (
             derive_price_settlement_status,
             derive_provisional_unit_price,
         )
@@ -1320,6 +1326,7 @@ class SalesOrderService:
                 Decimal("0"),
             )
         remaining_wo = order_total - pushed_wo_qty
+        invoice_remainder = Decimal("0")
         from apps.kuaicaiwu.services.sales_invoice_service import SalesInvoiceService
 
         invoice_remainder = await SalesInvoiceService().resolve_sales_order_invoice_remainder(
@@ -2916,10 +2923,13 @@ class SalesOrderService:
 
         downstream_by_order = await sales_order_downstream_by_ids(tenant_id, order_ids)
 
+        invoice_remainder_by_order: Dict[int, Decimal] = {}
         from apps.kuaicaiwu.services.sales_invoice_service import SalesInvoiceService
 
-        invoice_remainder_by_order = await SalesInvoiceService().batch_sales_order_invoice_remainder(
-            tenant_id, orders
+        invoice_remainder_by_order = (
+            await SalesInvoiceService().batch_sales_order_invoice_remainder(
+                tenant_id, orders
+            )
         )
         from apps.kuaizhizao.services.sales_order_purchase_push import (
             batch_has_purchasable_remaining,
@@ -3145,22 +3155,35 @@ class SalesOrderService:
             if "currency_code" in upd or rate_provided:
                 base = await self._tenant_base_currency(tenant_id)
                 if not base:
-                    raise ValidationError("未配置总账本位币，无法保存销售订单汇率")
-                foreign_code = (effective_currency or base).strip().upper()
-                is_foreign = foreign_code != base.strip().upper()
-                if is_foreign and "currency_code" in upd and not rate_provided:
-                    prev_code = (getattr(order, "currency_code", None) or base).strip().upper()
-                    if prev_code != foreign_code:
-                        raise ValidationError("外币销售订单须填写汇率")
-                effective_rate = (
-                    upd["exchange_rate"] if rate_provided else getattr(order, "exchange_rate", None)
-                )
-                upd["exchange_rate"] = await self._resolve_sales_order_exchange_rate(
-                    tenant_id,
-                    effective_currency,
-                    effective_rate,
-                    exchange_rate_provided=rate_provided or not is_foreign,
-                )
+                    effective_rate = (
+                        upd["exchange_rate"]
+                        if rate_provided
+                        else getattr(order, "exchange_rate", None)
+                    )
+                    upd["exchange_rate"] = await self._resolve_sales_order_exchange_rate(
+                        tenant_id,
+                        effective_currency,
+                        effective_rate,
+                        exchange_rate_provided=rate_provided,
+                    )
+                else:
+                    foreign_code = (effective_currency or base).strip().upper()
+                    is_foreign = foreign_code != base.strip().upper()
+                    if is_foreign and "currency_code" in upd and not rate_provided:
+                        prev_code = (getattr(order, "currency_code", None) or base).strip().upper()
+                        if prev_code != foreign_code:
+                            raise ValidationError("外币销售订单须填写汇率")
+                    effective_rate = (
+                        upd["exchange_rate"]
+                        if rate_provided
+                        else getattr(order, "exchange_rate", None)
+                    )
+                    upd["exchange_rate"] = await self._resolve_sales_order_exchange_rate(
+                        tenant_id,
+                        effective_currency,
+                        effective_rate,
+                        exchange_rate_provided=rate_provided or not is_foreign,
+                    )
             if "price_type" in upd and not upd["price_type"]:
                 upd["price_type"] = order.price_type or DEFAULT_SALES_PRICE_TYPE
             if "term_group_id" in sales_order_data.model_fields_set or sales_order_data.contract_terms is not None:
@@ -6811,8 +6834,8 @@ class SalesOrderService:
         if order_total <= Decimal("0"):
             raise BusinessLogicError("订单无计费金额，无法下推销售发票")
 
-        from apps.kuaicaiwu.services.invoice_service import InvoiceService
         from apps.kuaicaiwu.schemas.invoice import InvoiceCreate, InvoiceItemCreate
+        from apps.kuaicaiwu.services.invoice_service import InvoiceService
 
         money_q = Decimal("0.01")
 

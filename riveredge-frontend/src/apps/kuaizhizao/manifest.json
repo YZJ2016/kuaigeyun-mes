@@ -365,6 +365,16 @@
             "permission": "kuaizhizao:purchase-order:read"
           },
           {
+            "title": "app.kuaizhizao.menu.purchase-management.payment-applications",
+            "path": "/apps/kuaizhizao/purchase-management/payment-applications",
+            "sort_order": 3.5,
+            "meta": {
+              "node": "payment_application",
+              "module": "purchase"
+            },
+            "permission": "kuaizhizao:payment-application:read"
+          },
+          {
             "title": "app.kuaizhizao.menu.purchase-management.arrival-warnings",
             "path": "/apps/kuaizhizao/purchase-management/arrival-warnings",
             "sort_order": 4,
@@ -1177,6 +1187,39 @@
       ],
       "data_scope_key": "kuaizhizao:purchase-order"
     },
+    "payment-application": {
+      "permission_prefix": "kuaizhizao:payment-application",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "kuaizhizao:payment-application"
+    },
+    "purchase-requisition": {
+      "permission_prefix": "kuaizhizao:purchase-requisition",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "kuaizhizao:purchase-requisition"
+    },
+    "purchase-inquiry": {
+      "permission_prefix": "kuaizhizao:purchase-inquiry",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "kuaizhizao:purchase-inquiry"
+    },
     "rework-order": {
       "permission_prefix": "kuaizhizao:rework-order",
       "display_fields": [
@@ -1693,6 +1736,24 @@
       "master-data:material",
       "master-data:warehouse:warehouse",
       "kuaicaiwu:bank-account"
+    ],
+    "payment-application": [
+      "master-data:supply-chain:supplier",
+      "kuaicaiwu:payable"
+    ],
+    "other-income": [
+      "kuaicaiwu:bank-account",
+      "master-data:supply-chain:customer",
+      "master-data:supply-chain:supplier",
+      "master-data:department:read",
+      "system:user"
+    ],
+    "other-expense": [
+      "kuaicaiwu:bank-account",
+      "master-data:supply-chain:customer",
+      "master-data:supply-chain:supplier",
+      "master-data:department:read",
+      "system:user"
     ],
     "purchase-order-change": [
       "master-data:supply-chain:supplier",
@@ -2226,6 +2287,8 @@
     "kuaizhizao:freight-order:export",
     "kuaizhizao:freight-order:print",
     "kuaizhizao:freight-order:execute",
+    "kuaizhizao:freight-order:dispatch",
+    "kuaizhizao:freight-order:revoke",
     "kuaizhizao:inbound:read",
     "kuaizhizao:inbound:create",
     "kuaizhizao:inbound:delete",
@@ -2301,6 +2364,7 @@
     "kuaizhizao:material-borrow:audit",
     "kuaizhizao:material-borrow:reject",
     "kuaizhizao:material-borrow:print",
+    "kuaizhizao:material-borrow:execute",
     "kuaizhizao:material-return:read",
     "kuaizhizao:material-return:create",
     "kuaizhizao:material-return:delete",
@@ -2313,6 +2377,7 @@
     "kuaizhizao:material-return:audit",
     "kuaizhizao:material-return:reject",
     "kuaizhizao:material-return:print",
+    "kuaizhizao:material-return:execute",
     "kuaizhizao:measuring-instrument-calibration-reminder:read",
     "kuaizhizao:measuring-instrument-calibration-reminder:create",
     "kuaizhizao:measuring-instrument-calibration-reminder:delete",
@@ -2513,6 +2578,7 @@
     "kuaizhizao:other-inbound:audit",
     "kuaizhizao:other-inbound:reject",
     "kuaizhizao:other-inbound:print",
+    "kuaizhizao:other-inbound:execute",
     "kuaizhizao:other-outbound:read",
     "kuaizhizao:other-outbound:create",
     "kuaizhizao:other-outbound:delete",
@@ -2525,6 +2591,7 @@
     "kuaizhizao:other-outbound:audit",
     "kuaizhizao:other-outbound:reject",
     "kuaizhizao:other-outbound:print",
+    "kuaizhizao:other-outbound:execute",
     "kuaizhizao:outbound:read",
     "kuaizhizao:outbound:create",
     "kuaizhizao:outbound:delete",
@@ -2767,6 +2834,7 @@
     "kuaizhizao:plan-management-demand-management:audit",
     "kuaizhizao:plan-management-demand-management:reject",
     "kuaizhizao:plan-management-demand-management:print",
+    "kuaizhizao:plan-management-demand-management:execute",
     "kuaizhizao:plan-management-reports-capacity-load-analysis:read",
     "kuaizhizao:plan-management-reports-capacity-load-analysis:export",
     "kuaizhizao:plan-management-reports-capacity-load-analysis:print",
@@ -2908,6 +2976,7 @@
     "kuaizhizao:production-execution-terminal:audit",
     "kuaizhizao:production-execution-terminal:reject",
     "kuaizhizao:production-execution-terminal:print",
+    "kuaizhizao:production-execution-terminal:execute",
     "kuaizhizao:purchase-arrival-delay:read",
     "kuaizhizao:purchase-arrival-delay:create",
     "kuaizhizao:purchase-arrival-delay:update",
@@ -2926,6 +2995,7 @@
     "kuaizhizao:purchase-inquiry:audit",
     "kuaizhizao:purchase-inquiry:reject",
     "kuaizhizao:purchase-inquiry:print",
+    "kuaizhizao:purchase-inquiry:execute",
     "kuaizhizao:purchase-management-dashboard:read",
     "kuaizhizao:purchase-management-dashboard:print",
     "kuaizhizao:purchase-management-reports-purchase-cost-trend:read",
@@ -2974,8 +3044,48 @@
     "kuaizhizao:purchase-order:revoke",
     "kuaizhizao:purchase-order:audit",
     "kuaizhizao:purchase-order:print",
+    "kuaizhizao:purchase-order:execute",
     "kuaizhizao:purchase-order:sync",
     "kuaizhizao:purchase-order:push",
+    "kuaizhizao:payment-application:read",
+    "kuaizhizao:payment-application:create",
+    "kuaizhizao:payment-application:delete",
+    "kuaizhizao:payment-application:update",
+    "kuaizhizao:payment-application:import",
+    "kuaizhizao:payment-application:export",
+    "kuaizhizao:payment-application:submit",
+    "kuaizhizao:payment-application:revoke",
+    "kuaizhizao:payment-application:approve",
+    "kuaizhizao:payment-application:audit",
+    "kuaizhizao:payment-application:reject",
+    "kuaizhizao:payment-application:print",
+    "kuaizhizao:payment-application:push",
+    "kuaicaiwu:finance-misc-category:read",
+    "kuaicaiwu:finance-misc-category:create",
+    "kuaicaiwu:finance-misc-category:update",
+    "kuaicaiwu:finance-misc-category:delete",
+    "kuaicaiwu:other-income:read",
+    "kuaicaiwu:other-income:create",
+    "kuaicaiwu:other-income:update",
+    "kuaicaiwu:other-income:delete",
+    "kuaicaiwu:other-income:submit",
+    "kuaicaiwu:other-income:approve",
+    "kuaicaiwu:other-income:reject",
+    "kuaicaiwu:other-income:audit",
+    "kuaicaiwu:other-income:revoke",
+    "kuaicaiwu:other-income:export",
+    "kuaicaiwu:other-income:print",
+    "kuaicaiwu:other-expense:read",
+    "kuaicaiwu:other-expense:create",
+    "kuaicaiwu:other-expense:update",
+    "kuaicaiwu:other-expense:delete",
+    "kuaicaiwu:other-expense:submit",
+    "kuaicaiwu:other-expense:approve",
+    "kuaicaiwu:other-expense:reject",
+    "kuaicaiwu:other-expense:audit",
+    "kuaicaiwu:other-expense:revoke",
+    "kuaicaiwu:other-expense:export",
+    "kuaicaiwu:other-expense:print",
     "kuaizhizao:purchase-requisition:read",
     "kuaizhizao:purchase-requisition:create",
     "kuaizhizao:purchase-requisition:delete",
@@ -3000,6 +3110,7 @@
     "kuaizhizao:purchase-return:audit",
     "kuaizhizao:purchase-return:reject",
     "kuaizhizao:purchase-return:print",
+    "kuaizhizao:purchase-return:execute",
     "kuaizhizao:quality-analysis:read",
     "kuaizhizao:quality-analysis:update",
     "kuaizhizao:quality-analysis:export",
@@ -3265,6 +3376,7 @@
     "kuaizhizao:sales-contract:approve",
     "kuaizhizao:sales-contract:reject",
     "kuaizhizao:sales-contract:print",
+    "kuaizhizao:sales-contract:execute",
     "kuaizhizao:sales-forecast:read",
     "kuaizhizao:sales-forecast:create",
     "kuaizhizao:sales-forecast:delete",
@@ -3329,6 +3441,7 @@
     "kuaizhizao:sales-order-change:revoke",
     "kuaizhizao:sales-order-change:audit",
     "kuaizhizao:sales-order-change:print",
+    "kuaizhizao:sales-order-change:execute",
     "kuaizhizao:sales-order:read",
     "kuaizhizao:sales-order:create",
     "kuaizhizao:sales-order:delete",
@@ -3339,6 +3452,7 @@
     "kuaizhizao:sales-order:revoke",
     "kuaizhizao:sales-order:audit",
     "kuaizhizao:sales-order:print",
+    "kuaizhizao:sales-order:execute",
     "kuaizhizao:sales-order:sync",
     "kuaizhizao:sales-order:push",
     "kuaizhizao:sales-return:read",
@@ -3353,6 +3467,7 @@
     "kuaizhizao:sales-return:audit",
     "kuaizhizao:sales-return:reject",
     "kuaizhizao:sales-return:print",
+    "kuaizhizao:sales-return:execute",
     "kuaizhizao:sales-review:read",
     "kuaizhizao:sales-review:create",
     "kuaizhizao:sales-review:delete",
@@ -3385,6 +3500,7 @@
     "kuaizhizao:service-settlement:update",
     "kuaizhizao:service-settlement:export",
     "kuaizhizao:service-settlement:audit",
+    "kuaizhizao:service-settlement:submit",
     "kuaizhizao:service-settlement:print",
     "kuaizhizao:shipment-notice:read",
     "kuaizhizao:shipment-notice:create",
@@ -3592,6 +3708,7 @@
     "kuaizhizao:warehouse-management-assembly-orders:audit",
     "kuaizhizao:warehouse-management-assembly-orders:reject",
     "kuaizhizao:warehouse-management-assembly-orders:print",
+    "kuaizhizao:warehouse-management-assembly-orders:execute",
     "kuaizhizao:warehouse-management-backflush-records:read",
     "kuaizhizao:warehouse-management-backflush-records:create",
     "kuaizhizao:warehouse-management-backflush-records:delete",
@@ -3630,6 +3747,7 @@
     "kuaizhizao:warehouse-management-batching-center:audit",
     "kuaizhizao:warehouse-management-batching-center:reject",
     "kuaizhizao:warehouse-management-batching-center:print",
+    "kuaizhizao:warehouse-management-batching-center:execute",
     "kuaizhizao:warehouse-management-customer-material-registration:read",
     "kuaizhizao:warehouse-management-customer-material-registration:create",
     "kuaizhizao:warehouse-management-customer-material-registration:delete",
@@ -3655,6 +3773,7 @@
     "kuaizhizao:warehouse-management-disassembly-orders:audit",
     "kuaizhizao:warehouse-management-disassembly-orders:reject",
     "kuaizhizao:warehouse-management-disassembly-orders:print",
+    "kuaizhizao:warehouse-management-disassembly-orders:execute",
     "kuaizhizao:warehouse-management-initial-data:read",
     "kuaizhizao:warehouse-management-initial-data:create",
     "kuaizhizao:warehouse-management-initial-data:delete",
@@ -3692,6 +3811,7 @@
     "kuaizhizao:warehouse-management-inventory-transfer:audit",
     "kuaizhizao:warehouse-management-inventory-transfer:reject",
     "kuaizhizao:warehouse-management-inventory-transfer:print",
+    "kuaizhizao:warehouse-management-inventory-transfer:execute",
     "kuaizhizao:warehouse-management-inventory:read",
     "kuaizhizao:warehouse-management-inventory:create",
     "kuaizhizao:warehouse-management-inventory:delete",
@@ -3782,6 +3902,7 @@
     "kuaizhizao:warehouse-management-stocktaking:audit",
     "kuaizhizao:warehouse-management-stocktaking:reject",
     "kuaizhizao:warehouse-management-stocktaking:print",
+    "kuaizhizao:warehouse-management-stocktaking:execute",
     "kuaizhizao:work-order:read",
     "kuaizhizao:work-order:create",
     "kuaizhizao:work-order:delete",
@@ -3873,6 +3994,24 @@
       "config_section": "warehouse_logistics"
     },
     {
+      "node_key": "other_income",
+      "entity_type": "other_income",
+      "resource": "kuaicaiwu:other-income",
+      "name": "其他费用收入审核",
+      "template": "simple",
+      "config_category": "finance",
+      "config_section": "finance_misc"
+    },
+    {
+      "node_key": "other_expense",
+      "entity_type": "other_expense",
+      "resource": "kuaicaiwu:other-expense",
+      "name": "其他费用支出审核",
+      "template": "simple",
+      "config_category": "finance",
+      "config_section": "finance_misc"
+    },
+    {
       "node_key": "sales_return",
       "entity_type": "sales_return",
       "resource": "kuaizhizao:sales-return",
@@ -3933,6 +4072,15 @@
       "template": "simple",
       "config_category": "procurement",
       "config_section": "procurement_request"
+    },
+    {
+      "node_key": "payment_application",
+      "entity_type": "payment_application",
+      "resource": "kuaizhizao:payment-application",
+      "name": "付款申请审核",
+      "template": "simple",
+      "config_category": "procurement",
+      "config_section": "procurement_order"
     },
     {
       "node_key": "purchase_inquiry",
@@ -4175,6 +4323,18 @@
       "module_icon": "tool",
       "auto_generate": true,
       "rule_code": "PURCHASE_REQUISITION_CODE",
+      "allow_manual_edit": true
+    },
+    {
+      "page_code": "kuaizhizao-payment-application",
+      "page_name": "付款申请",
+      "page_path": "/apps/kuaizhizao/purchase-management/payment-applications",
+      "code_field": "application_code",
+      "code_field_label": "申请单号",
+      "module": "快制造",
+      "module_icon": "tool",
+      "auto_generate": true,
+      "rule_code": "PAYMENT_APPLICATION_CODE",
       "allow_manual_edit": true
     },
     {

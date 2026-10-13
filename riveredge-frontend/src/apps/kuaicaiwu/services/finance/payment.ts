@@ -51,7 +51,7 @@ export interface PaymentVoucher {
 
 export type PaymentPullPreview = DocumentPushPreview & {
   source_code?: string;
-  source_type?: 'payable';
+  source_type?: 'payable' | 'payment_application';
   supplier_id?: number;
   supplier_name?: string;
   payable_id?: number | null;
@@ -82,7 +82,7 @@ export type PaymentCreateData = {
   settlement_type?: string;
   notes?: string;
   attachments?: unknown;
-  source_type?: 'payable';
+  source_type?: 'payable' | 'payment_application';
   source_id?: number;
 };
 
@@ -149,4 +149,21 @@ export const paymentService = {
     apiRequest<PaymentPullPreview>(`${PAYMENT_API}/from-payable/${payableId}/pull-preview`, {
       method: 'GET',
     }),
+
+  listPaymentApplicationPullCandidates: async (params?: {
+    skip?: number;
+    limit?: number;
+    keyword?: string;
+    supplier_id?: number;
+  }) =>
+    apiRequest<{ data: PaymentPullCandidate[]; total: number; success: boolean }>(
+      `${PAYMENT_API}/pull-candidates/payment-applications`,
+      { method: 'GET', params },
+    ),
+
+  previewPullFromPaymentApplication: async (applicationId: number) =>
+    apiRequest<PaymentPullPreview>(
+      `${PAYMENT_API}/from-payment-application/${applicationId}/pull-preview`,
+      { method: 'GET' },
+    ),
 };

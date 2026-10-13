@@ -31,7 +31,12 @@ import {
   findExistingDictionaryOption,
 } from '../../../utils/dictionaryQuickCreate';
 import { QuickCreateModal } from '../../../components/uni-dropdown';
-import { normalizePartnerContactsForSubmit, supplierDetailToFormValues } from '../utils/partner-form-map';
+import {
+  normalizePartnerContactsForSubmit,
+  normalizePartnerSettlementAccountsForSubmit,
+  supplierDetailToFormValues,
+} from '../utils/partner-form-map';
+import { PartnerSettlementAccountsFormTable } from './PartnerSettlementAccountsFormTable';
 import { SupplierContactsFormTable } from './SupplierContactsFormTable';
 import { useCustomFields } from '../../../hooks/useCustomFields';
 import { CustomFieldsFormSection } from '../../../components/custom-fields';
@@ -186,6 +191,9 @@ export const SupplierFormModal: React.FC<SupplierFormModalProps> = ({
       const payload: Record<string, unknown> & { contacts: PartnerContact[]; code?: string; isActive?: boolean } = {
         ...standardValues,
         contacts: normalizePartnerContactsForSubmit(standardValues.contacts ?? values.contacts),
+        settlementAccounts: normalizePartnerSettlementAccountsForSubmit(
+          standardValues.settlementAccounts ?? values.settlementAccounts,
+        ),
       };
       if (isEdit && editUuid) {
         await supplierApi.update(editUuid, payload as SupplierUpdate);
@@ -334,6 +342,9 @@ export const SupplierFormModal: React.FC<SupplierFormModalProps> = ({
                           });
                         }}
                       />
+                    </Col>
+                    <Col span={24}>
+                      <PartnerSettlementAccountsFormTable titleKey="field.supplier.paymentAccounts" />
                     </Col>
                     <SchemaFormRenderer
                       schema={supplierFormSchemaBasicTail}
