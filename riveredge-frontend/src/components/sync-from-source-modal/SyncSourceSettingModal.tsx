@@ -281,14 +281,14 @@ export const SyncSourceSettingModal: React.FC<SyncSourceSettingModalProps> = ({
       setPreviewRows(rows);
       setPreviewColumns(columns);
 
-      if (Object.keys(targetToSource).length > 0) {
-        const fromBinding = mappingFromBinding(columns, invertFieldMapping(targetToSource));
-        mergeAddedKeysFromMapping(fromBinding);
-        const suggested = suggestTargetToSourceMapping(columns, targetFieldValues);
-        setTargetToSource({ ...suggested, ...fromBinding, ...targetToSource });
-      } else {
-        setTargetToSource(suggestTargetToSourceMapping(columns, targetFieldValues));
-      }
+      const merged = mergeSuggestedMapping(
+        columns,
+        targetFieldValues,
+        targetToSource,
+        config.targetAliases,
+      );
+      mergeAddedKeysFromMapping(merged);
+      setTargetToSource(merged);
       messageApi.success(t('components.syncFromSource.previewOk', { count: rows.length }));
     } catch (error: unknown) {
       const detail = formatSyncErrorMessage(error, t('components.syncFromSource.queryFailed'));
@@ -364,7 +364,11 @@ export const SyncSourceSettingModal: React.FC<SyncSourceSettingModalProps> = ({
     });
     if (previewColumns.length > 0) {
       setTargetToSource((prev) => ({
-        ...suggestTargetToSourceMapping(previewColumns, pendingAddTargetKeys),
+        ...suggestTargetToSourceMapping(
+          previewColumns,
+          pendingAddTargetKeys,
+          config.targetAliases,
+        ),
         ...prev,
       }));
     }
