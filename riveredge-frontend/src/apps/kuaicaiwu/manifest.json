@@ -200,6 +200,24 @@
             "path": "/apps/kuaicaiwu/finance-management/notes-payable",
             "permission": "kuaicaiwu:notes-payable:read",
             "sort_order": 16
+          },
+          {
+            "title": "app.kuaicaiwu.menu.finance-management.other-incomes",
+            "path": "/apps/kuaicaiwu/finance-management/other-incomes",
+            "permission": "kuaicaiwu:other-income:read",
+            "sort_order": 17
+          },
+          {
+            "title": "app.kuaicaiwu.menu.finance-management.other-expenses",
+            "path": "/apps/kuaicaiwu/finance-management/other-expenses",
+            "permission": "kuaicaiwu:other-expense:read",
+            "sort_order": 18
+          },
+          {
+            "title": "app.kuaicaiwu.menu.finance-management.finance-misc-categories",
+            "path": "/apps/kuaicaiwu/finance-management/finance-misc-categories",
+            "permission": "kuaicaiwu:finance-misc-category:read",
+            "sort_order": 19
           }
         ]
       },

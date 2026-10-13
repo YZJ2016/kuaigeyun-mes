@@ -279,6 +279,26 @@ class PaymentPullService(AppBaseService[Payment]):
         source_id: int,
         total_amount: Decimal,
     ) -> Dict[str, Any]:
+        if source_type == "payment_application":
+            from apps.kuaizhizao.services.payment_application_pull_service import (
+                PaymentApplicationPullService,
+            )
+
+            preview = await PaymentApplicationPullService().preview_pull_for_payment(
+                tenant_id, source_id
+            )
+            if preview.get("has_blocking_issues"):
+                reason = preview.get("blocking_reason") or "当前不可加载付款单"
+                raise BusinessLogicError(reason)
+            items = preview.get("items") or []
+            if not items:
+                raise BusinessLogicError("无可付款金额")
+            max_push = Decimal(str(items[0].get("max_push_quantity") or 0))
+            if total_amount > max_push:
+                raise BusinessLogicError(
+                    f"付款金额 {total_amount} 超过可付款金额 {max_push}"
+                )
+            return preview
         if source_type != "payable":
             raise BusinessLogicError(f"不支持的加载源单类型: {source_type}")
         preview = await self.preview_pull_from_payable(tenant_id, source_id)

@@ -845,3 +845,141 @@ class SettlementRecordListResponse(BaseSchema):
     total: int
     skip: int
     limit: int
+
+
+# === 其他收支类别 ===
+
+class MiscCategoryCreate(BaseSchema):
+    """其他收支类别创建schema（快捷创建仅传 name）"""
+    code: Optional[str] = Field(None, max_length=50, description="类别编码（留空自动分配）")
+    name: str = Field(..., min_length=1, max_length=200, description="类别名称")
+    is_active: bool = Field(True, description="是否启用")
+    default_gl_account_code: Optional[str] = Field(None, max_length=20, description="默认会计科目编码")
+    sort_order: int = Field(0, description="排序")
+
+
+class MiscCategoryUpdate(BaseSchema):
+    """其他收支类别更新schema"""
+    code: Optional[str] = Field(None, max_length=50)
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
+    is_active: Optional[bool] = None
+    default_gl_account_code: Optional[str] = Field(None, max_length=20)
+    sort_order: Optional[int] = None
+
+
+class MiscCategoryResponse(BaseSchema):
+    """其他收支类别响应schema"""
+    id: int
+    code: str
+    name: str
+    is_active: bool = True
+    default_gl_account_code: Optional[str] = None
+    sort_order: int = 0
+
+    class Config:
+        from_attributes = True
+
+
+# === 其他费用收入/支出 ===
+
+class OtherVoucherLineIn(BaseSchema):
+    """其他收支明细行入参"""
+    category_code: str = Field(..., max_length=50, description="收支类别编码")
+    category_name: Optional[str] = Field(None, max_length=200, description="收支类别名称（留空按编码带出）")
+    amount: Decimal = Field(..., gt=0, description="金额")
+    description: Optional[str] = Field(None, description="说明")
+    gl_account_code: Optional[str] = Field(None, max_length=20, description="会计科目编码")
+
+
+class OtherVoucherLineOut(OtherVoucherLineIn):
+    """其他收支明细行出参"""
+    id: int
+    line_no: int
+
+    class Config:
+        from_attributes = True
+
+
+class OtherVoucherCreate(BaseSchema):
+    """其他费用收入/支出创建schema"""
+    business_date: date = Field(..., description="业务日期")
+    counterparty_kind: str = Field("none", max_length=20, description="往来对象类型 none/customer/supplier/employee/other")
+    counterparty_id: Optional[int] = Field(None, description="往来对象ID")
+    counterparty_name: Optional[str] = Field(None, max_length=200, description="往来对象名称")
+    payment_method: str = Field(..., max_length=50, description="收/付款方式")
+    bank_account_id: Optional[int] = Field(None, description="收/付款账户ID")
+    bank_account: Optional[str] = Field(None, max_length=100, description="收/付款账户")
+    department_id: Optional[int] = Field(None, description="部门ID")
+    department_name: Optional[str] = Field(None, max_length=200, description="部门名称")
+    project_id: Optional[int] = Field(None, description="项目ID")
+    project_name: Optional[str] = Field(None, max_length=200, description="项目名称")
+    notes: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
+    lines: List[OtherVoucherLineIn] = Field(..., min_length=1, description="明细行")
+
+
+class OtherVoucherUpdate(BaseSchema):
+    """其他费用收入/支出更新schema"""
+    business_date: Optional[date] = None
+    counterparty_kind: Optional[str] = Field(None, max_length=20)
+    counterparty_id: Optional[int] = None
+    counterparty_name: Optional[str] = Field(None, max_length=200)
+    payment_method: Optional[str] = Field(None, max_length=50)
+    bank_account_id: Optional[int] = None
+    bank_account: Optional[str] = Field(None, max_length=100)
+    department_id: Optional[int] = None
+    department_name: Optional[str] = Field(None, max_length=200)
+    project_id: Optional[int] = None
+    project_name: Optional[str] = Field(None, max_length=200)
+    notes: Optional[str] = None
+    attachments: Optional[List[dict]] = None
+    lines: Optional[List[OtherVoucherLineIn]] = Field(None, min_length=1)
+
+
+class OtherVoucherReviewAction(BaseSchema):
+    """审核动作入参"""
+    approved: Optional[bool] = Field(None, description="是否通过（approve/reject 端点兼容字段）")
+    review_remarks: Optional[str] = Field(None, description="审核备注")
+
+
+class OtherVoucherResponse(BaseSchema):
+    """其他费用收入/支出响应schema（income_code/expense_code 二选一返回）"""
+    id: int
+    income_code: Optional[str] = None
+    expense_code: Optional[str] = None
+    business_date: date
+    counterparty_kind: str = "none"
+    counterparty_id: Optional[int] = None
+    counterparty_name: Optional[str] = None
+    total_amount: Decimal = Decimal("0")
+    payment_method: Optional[str] = None
+    bank_account_id: Optional[int] = None
+    bank_account: Optional[str] = None
+    status: str = "Draft"
+    reviewer_id: Optional[int] = None
+    reviewer_name: Optional[str] = None
+    review_time: Optional[datetime] = None
+    review_remarks: Optional[str] = None
+    department_id: Optional[int] = None
+    department_name: Optional[str] = None
+    project_id: Optional[int] = None
+    project_name: Optional[str] = None
+    notes: Optional[str] = None
+    attachments: Optional[List[dict]] = None
+    lines: List[OtherVoucherLineOut] = []
+    capabilities: Optional[Dict[str, Any]] = None
+    created_at: datetime
+    updated_at: datetime
+    created_by_name: Optional[str] = None
+    updated_by_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class OtherVoucherListResponse(BaseSchema):
+    """其他费用收入/支出列表响应schema"""
+    items: List[OtherVoucherResponse]
+    total: int
+    skip: int
+    limit: int

@@ -242,6 +242,49 @@ async def preview_pull_payment_from_payable(
     )
 
 
+@router.get(
+    "/pull-candidates/payment-applications",
+    summary="List payment application pull candidates for payment",
+)
+async def list_payment_application_pull_candidates(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None),
+    supplier_id: Optional[int] = Query(None),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:payment:read")),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    from apps.kuaizhizao.services.payment_application_pull_service import (
+        PaymentApplicationPullService,
+    )
+
+    return await PaymentApplicationPullService().list_for_payment_pull(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        keyword=keyword,
+        supplier_id=supplier_id,
+    )
+
+
+@router.get(
+    "/from-payment-application/{application_id}/pull-preview",
+    summary="Preview pull payment from payment application",
+)
+async def preview_pull_payment_from_payment_application(
+    application_id: int = Path(..., description="付款申请单ID"),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:payment:read")),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    from apps.kuaizhizao.services.payment_application_pull_service import (
+        PaymentApplicationPullService,
+    )
+
+    return await PaymentApplicationPullService().preview_pull_for_payment(
+        tenant_id, application_id
+    )
+
+
 @router.get("/{id}", response_model=PaymentVoucherResponse)
 async def get_payment(
     id: int,

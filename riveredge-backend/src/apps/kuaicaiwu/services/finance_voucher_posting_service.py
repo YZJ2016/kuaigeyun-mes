@@ -210,6 +210,15 @@ class FinanceVoucherPostingService:
                     payment_id=payment_id,
                     operator_id=op_id,
                 )
+                from apps.kuaizhizao.services.payment_application_push_service import (
+                    PaymentApplicationPushService,
+                )
+
+                await PaymentApplicationPushService().apply_payment_confirmed(
+                    tenant_id=tenant_id,
+                    payment_id=payment_id,
+                    operator_id=op_id,
+                )
             return await self._finalize_payment_confirmed(
                 tenant_id=tenant_id,
                 payment_id=payment_id,

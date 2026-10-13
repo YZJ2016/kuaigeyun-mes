@@ -173,7 +173,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         explicit_provisional_price: Optional[Decimal] = None,
     ) -> None:
         """明细落库前推导定价状态，避免 schema 默认 None 覆盖模型非空字段。"""
-        from apps.kuaicaiwu.utils.price_settlement_helpers import (
+        from apps.kuaizhizao.utils.price_settlement_helpers import (
             derive_price_settlement_status,
             derive_provisional_unit_price,
         )
@@ -2245,13 +2245,19 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         if not order_model:
             raise NotFoundError(f"采购订单不存在: {order_id}")
 
+        from infra.services.business_config_service import BusinessConfigService
+
         prepay_map = await _order_prepayment_linked_by_ids(
             tenant_id, [order_id], source_type="purchase_order", target_type="payment"
+        )
+        require_app = await BusinessConfigService().get_finance_require_payment_application(
+            tenant_id
         )
         assert_purchase_order_capability(
             order_model,
             "push_prepayment",
             has_prepayment_payment=prepay_map.get(order_id, False),
+            require_payment_application=require_app,
         )
 
         amount = quantize_money(Decimal(str(order_model.prepayment_amount or 0)))
@@ -2302,14 +2308,20 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             _order_prepayment_linked_by_ids,
         )
 
+        from infra.services.business_config_service import BusinessConfigService
+
         order = await self.get_purchase_order_by_id(tenant_id, order_id)
         prepay_map = await _order_prepayment_linked_by_ids(
             tenant_id, [order_id], source_type="purchase_order", target_type="payment"
+        )
+        require_app = await BusinessConfigService().get_finance_require_payment_application(
+            tenant_id
         )
         assert_purchase_order_capability(
             order,
             "push_prepayment",
             has_prepayment_payment=prepay_map.get(order_id, False),
+            require_payment_application=require_app,
         )
 
         amount_override = None

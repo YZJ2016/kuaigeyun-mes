@@ -56,6 +56,12 @@ def build_voucher_bank_summary(
     elif kind == "payment":
         label = "合并付款" if len(codes) > 1 else "付款"
         source_label = "应付"
+    elif kind == "other_income":
+        label = "其他收入"
+        source_label = ""
+    elif kind == "other_expense":
+        label = "其他支出"
+        source_label = ""
     else:
         return None
 
@@ -64,7 +70,7 @@ def build_voucher_bank_summary(
         parts.append(code)
     if partner:
         parts.append(partner)
-    if codes:
+    if codes and source_label:
         parts.append(f"{source_label} {','.join(codes)}")
     return clip_bank_summary(" ".join(parts))
 
@@ -369,6 +375,39 @@ class BankAccountService:
         from apps.kuaicaiwu.models.payment import Payment
         from apps.kuaicaiwu.models.bank_transaction import BankTransaction
 
+        if voucher_type in ("other_income", "other_expense"):
+            from apps.kuaicaiwu.models.other_voucher import OtherExpense, OtherIncome
+
+            model = OtherIncome if voucher_type == "other_income" else OtherExpense
+            row = await model.get_or_none(
+                tenant_id=tenant_id, id=voucher_id, deleted_at__isnull=True
+            )
+            if not row or not row.bank_account_id:
+                return None
+            summary = await self._resolve_voucher_bank_summary(tenant_id, voucher_type, row)
+            existing = await BankTransaction.filter(
+                tenant_id=tenant_id,
+                source_doc_type=voucher_type,
+                source_doc_id=voucher_id,
+                deleted_at__isnull=True,
+            ).first()
+            if existing:
+                await self._fill_transaction_summary_if_blank(existing, summary)
+                return None
+            doc_code = getattr(row, "income_code", None) or getattr(row, "expense_code", None)
+            return await self.record_transaction(
+                tenant_id,
+                bank_account_id=int(row.bank_account_id),
+                direction="in" if voucher_type == "other_income" else "out",
+                amount=row.total_amount,
+                transaction_date=row.business_date,
+                source_doc_type=voucher_type,
+                source_doc_id=row.id,
+                source_doc_code=doc_code,
+                summary=summary,
+                operator_id=operator_id or getattr(row, "updated_by", None) or getattr(row, "created_by", None),
+            )
+
         if voucher_type == "receipt":
             row = await Receipt.get_or_none(tenant_id=tenant_id, id=voucher_id, deleted_at__isnull=True)
             if not row or not row.bank_account_id:
@@ -435,7 +474,10 @@ class BankAccountService:
         """冲回收/付款确认产生的银行流水，并回滚账户余额。返回冲回条数。"""
         from apps.kuaicaiwu.models.bank_transaction import BankTransaction
 
-        source_type = "receipt" if voucher_type == "receipt" else "payment"
+        if voucher_type in ("other_income", "other_expense"):
+            source_type = voucher_type
+        else:
+            source_type = "receipt" if voucher_type == "receipt" else "payment"
         txs = await BankTransaction.filter(
             tenant_id=tenant_id,
             source_doc_type=source_type,
@@ -495,6 +537,14 @@ class BankAccountService:
         return codes
 
     async def _resolve_voucher_bank_summary(self, tenant_id: int, voucher_type: str, row: Any) -> Optional[str]:
+        if voucher_type in ("other_income", "other_expense"):
+            return build_voucher_bank_summary(
+                voucher_kind=voucher_type,
+                voucher_code=getattr(row, "income_code", None) or getattr(row, "expense_code", None),
+                partner_name=getattr(row, "counterparty_name", None),
+                source_codes=[],
+                notes=getattr(row, "notes", None),
+            )
         if voucher_type == "receipt":
             codes = await self._related_source_codes(
                 tenant_id,
