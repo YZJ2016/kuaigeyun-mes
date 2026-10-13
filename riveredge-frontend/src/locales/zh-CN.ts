@@ -38172,6 +38172,14 @@ export default {
     '修复采购申请审核误报权限不足',
   'pages.dashboard.updateLog.entries.purchase-requisition-uni-audit-resource-fix-r01.description':
     'manifest.audit 中采购申请 resource 与模块权限 kuaizhizao:purchase-requisition 对齐，uni-audit 不再校验错误的 purchase-request 前缀导致 403。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-audit-status-fix-r01.title':
+    '修复采购申请审核与审批状态查询失败',
+  'pages.dashboard.updateLog.entries.purchase-requisition-audit-status-fix-r01.description':
+    '审批状态按单据精确查找实例，避免全表扫描漏实例导致 400/500；采购申请行内与批量审核统一走 uni-audit，与详情抽屉一致。',
+  'pages.dashboard.updateLog.entries.uni-audit-flow-gate-unified-r02.title':
+    '行内审核、批量审核与详情审核同一门控',
+  'pages.dashboard.updateLog.entries.uni-audit-flow-gate-unified-r02.description':
+    '列表与详情响应写入 record.audit.viewer_actions，行内 UniWorkflowActions、批量审核菜单与审核弹窗共用 auditFlowViewerGate 解析；与 execute_approval 一致，非待办人不再仅因 :review 权限显示可审。',
   'pages.dashboard.updateLog.entries.uni-audit-flow-viewer-actions-r01.title':
     '审核按钮与流程待办统一门控',
   'pages.dashboard.updateLog.entries.uni-audit-flow-viewer-actions-r01.description':
