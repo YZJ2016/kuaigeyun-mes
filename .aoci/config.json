@@ -229,6 +229,7 @@
   "automation": {
     "mode": "auto"
   },
+  "code_cognition_batch_entries": 10,
   "ai": {
     "enabled": false,
     "provider": "openai-compatible",
