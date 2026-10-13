@@ -1103,6 +1103,7 @@ class BusinessConfigService:
             "purchase_inquiry",
             "purchase_contract",
             "quality_analysis",
+            "drawing_balloon_annotation",
             "customer_material",
             "warehouse_optimization",
             "supply_chain",

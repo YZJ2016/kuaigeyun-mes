@@ -275,10 +275,13 @@ const MENU_BADGE_PATH_KEY: Record<string, string> = {
   // 质量
   '/apps/kuaizhizao/quality-management/inspection-center': 'quality_inspection',
   '/apps/kuaizhizao/quality-management/incoming-inspection': 'incoming_inspection',
+  '/apps/kuaizhizao/quality-management/outsource-inspection': 'outsource_inspection',
   '/apps/kuaizhizao/quality-management/process-inspection': 'process_inspection',
   '/apps/kuaizhizao/quality-management/finished-goods-inspection': 'finished_goods_inspection',
   '/apps/kuaizhizao/quality-management/oqc-inspection': 'oqc_inspection',
   '/apps/kuaizhizao/quality-management/fai-orders': 'fai_order',
+  '/apps/kuaizhizao/quality-management/quality-patrol': 'quality_patrol',
+  '/apps/kuaizhizao/quality-management/drawing-balloon-sheets': 'drawing_balloon_sheet',
   '/apps/kuaizhizao/quality-management/inspection-plans': 'inspection_plan',
   // 仓储
   '/apps/kuaizhizao/warehouse-management/inbound': 'inbound',
@@ -3017,7 +3020,17 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         }}
         menuTextRender={(item: any, defaultText: React.ReactNode) => {
           // 应用分组标题：全部套主色样式；PRO 徽标仅对 PRO 应用
-          if (!isSidebarAppGroupTitleItem(item)) return defaultText;
+          if (!isSidebarAppGroupTitleItem(item)) {
+            if (item?.meta?.is_pro === true) {
+              return (
+                <>
+                  {defaultText}
+                  <span className="menu-item-badge menu-item-badge-pro">PRO</span>
+                </>
+              );
+            }
+            return defaultText;
+          }
           const appCode = resolveSidebarAppGroupCode(item);
           const showPro = Boolean(appCode && (PRO_APP_CODES as readonly string[]).includes(appCode));
           return (

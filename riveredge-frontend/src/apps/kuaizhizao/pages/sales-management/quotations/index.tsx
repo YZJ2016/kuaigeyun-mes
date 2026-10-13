@@ -185,7 +185,15 @@ import {
   mapGiftFieldsForSubmit,
   resolveMaterialGiftable,
 } from '../../../utils/giftLineUi';
-import { applyDocumentLineTaxRateChange, resolveDocumentLineDisplayAmounts, stripExclusiveUnitAnchor, EXCLUSIVE_UNIT_ANCHOR_KEY } from '../../../utils/documentLineAmounts';
+import {
+  applyDocumentLineInclAmountEdit,
+  applyDocumentLineTaxRateChange,
+  calcDocumentLineAmountsFromInclTotal,
+  recalcDocumentStoredLineAmount,
+  resolveDocumentLineDisplayAmounts,
+  stripExclusiveUnitAnchor,
+  EXCLUSIVE_UNIT_ANCHOR_KEY,
+} from '../../../utils/documentLineAmounts';
 import {
   documentCurrencyTitleVars,
   resolveDocumentCurrencyInputPrefix,
@@ -613,9 +621,42 @@ function resolveQuotationLineMaterialFields(
   return { material_code, material_name };
 }
 
-function mapQuotationSubmitItem(it: any, materialList: any[], mainDeliveryStr?: string) {
+function resolveQuotationFormLineItemAmount(
+  storedInclusiveTotal: number | undefined,
+  taxRate: number,
+  priceType: string,
+): number | undefined {
+  if (storedInclusiveTotal == null || !Number.isFinite(Number(storedInclusiveTotal))) {
+    return undefined;
+  }
+  const incl = Number(storedInclusiveTotal);
+  const pt = salesFormPriceType(priceType);
+  if (pt === 'tax_inclusive') {
+    return incl;
+  }
+  return calcDocumentLineAmountsFromInclTotal(incl, taxRate).excl;
+}
+
+function mapQuotationSubmitItem(
+  it: any,
+  materialList: any[],
+  priceType: string,
+  mainDeliveryStr?: string,
+) {
   const { material_code, material_name } = resolveQuotationLineMaterialFields(it, materialList);
   const giftFields = mapGiftFieldsForSubmit(it);
+  const pt = salesFormPriceType(priceType);
+  const line = resolveDocumentLineDisplayAmounts(
+    {
+      qty: it.quote_quantity,
+      unit_price: giftFields.unit_price,
+      tax_rate: it.tax_rate ?? 0,
+      item_amount: it.item_amount,
+      is_gift: giftFields.is_gift,
+    },
+    pt,
+  );
+  const total_amount = giftFields.is_gift ? 0 : line.incl;
   return {
     material_id: it.material_id,
     material_code,
@@ -625,6 +666,7 @@ function mapQuotationSubmitItem(it: any, materialList: any[], mainDeliveryStr?: 
     quote_quantity: it.quote_quantity,
     unit_price: giftFields.unit_price,
     tax_rate: it.tax_rate ?? 0,
+    total_amount,
     is_gift: giftFields.is_gift,
     gift_ref_unit_price: giftFields.gift_ref_unit_price,
     variant_attributes: parseVariantAttributesValue(it.variant_attributes) ?? it.variant_attributes,
@@ -881,6 +923,7 @@ const QuotationsPage: React.FC = () => {
     null,
   );
   const quotationEditingInclValueRef = useRef<number | null>(null);
+  const skipLineAmountResyncRef = useRef(false);
 
   const handleQuotationPriceTypeChange = useCallback((nextChecked: boolean) => {
     const nextType: PriceTypeValue = nextChecked ? 'tax_inclusive' : 'tax_exclusive';
@@ -891,6 +934,14 @@ const QuotationsPage: React.FC = () => {
     deferConvertLineItemsByPriceType(formRef.current, fromType, nextType, {
       quantityField: 'quote_quantity',
       priceDecimals,
+      beginSkipLineAmountResync: () => {
+        skipLineAmountResyncRef.current = true;
+      },
+      endSkipLineAmountResync: () => {
+        queueMicrotask(() => {
+          skipLineAmountResyncRef.current = false;
+        });
+      },
     });
   }, [priceDecimals]);
 
@@ -1658,6 +1709,10 @@ const QuotationsPage: React.FC = () => {
           quote_quantity: quantity,
           unit_price: unitPrice,
           tax_rate: taxR,
+          item_amount: recalcDocumentStoredLineAmount(
+            { qty: quantity, unit_price: unitPrice, tax_rate: taxR },
+            priceTypeForm,
+          ),
           delivery_date: deliveryDate ? (dayjs(deliveryDate).isValid() ? dayjs(deliveryDate) : undefined) : undefined,
         };
       })
@@ -2654,7 +2709,10 @@ const QuotationsPage: React.FC = () => {
         attachments: mapAttachmentsToUploadList(detail.attachments),
         price_type: normalizeSalesPriceType(detail.price_type),
         discount_amount: Number(detail.discount_amount ?? 0) || 0,
-        items: (detail.items || []).map((it) => ({
+        items: (detail.items || []).map((it) => {
+          const taxRate = Number(it.tax_rate) || 0;
+          const priceType = normalizeSalesPriceType(detail.price_type);
+          return {
           material_id: it.material_id!,
           material_code: it.material_code || '',
           material_name: it.material_name || '',
@@ -2662,7 +2720,12 @@ const QuotationsPage: React.FC = () => {
           material_unit: it.material_unit || '',
           quote_quantity: Number(it.quote_quantity) || 0,
           unit_price: Number(it.unit_price) || 0,
-          tax_rate: Number(it.tax_rate) || 0,
+          tax_rate: taxRate,
+          item_amount: resolveQuotationFormLineItemAmount(
+            it.total_amount != null ? Number(it.total_amount) : undefined,
+            taxRate,
+            priceType,
+          ),
           is_gift: Boolean((it as any).is_gift),
           gift_ref_unit_price:
             (it as any).gift_ref_unit_price != null
@@ -2671,7 +2734,8 @@ const QuotationsPage: React.FC = () => {
           variant_attributes: parseVariantAttributesValue((it as any).variant_attributes) ?? (it as any).variant_attributes,
           delivery_date: it.delivery_date ? dayjs(it.delivery_date) : undefined,
           notes: it.notes,
-        })),
+        };
+        }),
       };
       setTimeout(() => {
         formRef.current?.setFieldsValue(editValues);
@@ -2709,7 +2773,9 @@ const QuotationsPage: React.FC = () => {
       throw new Error(t('app.kuaizhizao.quotation.validLineHint'));
     }
     const mainDeliveryStr = toApiDateString(values.delivery_date);
-    const submitItems = validItems.map((it: any) => mapQuotationSubmitItem(it, materialList, mainDeliveryStr));
+    const submitItems = validItems.map((it: any) =>
+      mapQuotationSubmitItem(it, materialList, values.price_type, mainDeliveryStr),
+    );
     const missingMaterialMeta = submitItems.find((it) => !it.material_code || !it.material_name);
     if (missingMaterialMeta) {
       messageApi.error(t('app.kuaizhizao.quotation.lineMaterialMissing'));
@@ -2831,7 +2897,9 @@ const QuotationsPage: React.FC = () => {
       throw new Error(t('app.kuaizhizao.quotation.validLineHint'));
     }
     const mainDeliveryStr = toApiDateString(values.delivery_date);
-    const submitItems = validItems.map((it: any) => mapQuotationSubmitItem(it, materialList, mainDeliveryStr));
+    const submitItems = validItems.map((it: any) =>
+      mapQuotationSubmitItem(it, materialList, values.price_type, mainDeliveryStr),
+    );
     const missingMaterialMeta = submitItems.find((it) => !it.material_code || !it.material_name);
     if (missingMaterialMeta) {
       messageApi.error(t('app.kuaizhizao.quotation.lineMaterialMissing'));
@@ -3011,11 +3079,23 @@ const QuotationsPage: React.FC = () => {
       }
       const items = [...normalizeFormListItems<any>(formRef.current?.getFieldValue('items'))];
       if (items[index]) {
-        items[index] = {
+        const nextRow = {
           ...items[index],
           unit_price: up,
           tax_rate: taxRate,
           variant_attributes: attrs ?? items[index].variant_attributes,
+        };
+        items[index] = {
+          ...nextRow,
+          item_amount: recalcDocumentStoredLineAmount(
+            {
+              qty: nextRow.quote_quantity,
+              unit_price: nextRow.unit_price,
+              tax_rate: nextRow.tax_rate,
+              is_gift: nextRow.is_gift,
+            },
+            pt,
+          ),
         };
         formRef.current?.setFieldsValue({ items });
         formRef.current?.setFieldValue(['items', index, 'unit_price'], up);
@@ -3050,6 +3130,10 @@ const QuotationsPage: React.FC = () => {
         quote_quantity: 1,
         unit_price: pricing.unitPrice,
         tax_rate: pricing.taxRate,
+        item_amount: recalcDocumentStoredLineAmount(
+          { qty: 1, unit_price: pricing.unitPrice, tax_rate: pricing.taxRate },
+          pt,
+        ),
         variant_attributes: undefined,
         _sourceType: m.sourceType ?? (m as any).source_type,
         _masterMaterialUuid: m.uuid,
@@ -3101,7 +3185,7 @@ const QuotationsPage: React.FC = () => {
         }
       }
       const changedItems = changed.items;
-      if (Array.isArray(changedItems)) {
+      if (Array.isArray(changedItems) && !skipLineAmountResyncRef.current) {
         const priceType = salesFormPriceType(all.price_type);
         const currentItems = normalizeFormListItems<any>(all.items);
         let dirty = false;
@@ -3109,7 +3193,12 @@ const QuotationsPage: React.FC = () => {
           const patch = changedItems[index];
           if (patch == null || typeof patch !== 'object') return row;
           const keys = Object.keys(patch as object);
-          if (keys.includes('tax_rate')) {
+          const drivers = keys.filter((k) =>
+            k === 'quote_quantity' || k === 'unit_price' || k === 'tax_rate' || k === 'is_gift',
+          );
+          if (drivers.length === 0) return row;
+
+          if (drivers.includes('tax_rate')) {
             const applied = applyDocumentLineTaxRateChange({
               row,
               qty: row.quote_quantity,
@@ -3127,11 +3216,24 @@ const QuotationsPage: React.FC = () => {
             }
             return row;
           }
-          if (keys.includes('unit_price') && row[EXCLUSIVE_UNIT_ANCHOR_KEY] != null) {
+
+          let nextRow = row;
+          if (drivers.includes('unit_price') && row[EXCLUSIVE_UNIT_ANCHOR_KEY] != null) {
+            nextRow = stripExclusiveUnitAnchor(row);
             dirty = true;
-            return stripExclusiveUnitAnchor(row);
           }
-          return row;
+          const item_amount = recalcDocumentStoredLineAmount(
+            {
+              qty: nextRow.quote_quantity,
+              unit_price: nextRow.unit_price,
+              tax_rate: nextRow.tax_rate,
+              is_gift: nextRow.is_gift,
+            },
+            priceType,
+          );
+          if (Number(nextRow.item_amount) === item_amount) return nextRow;
+          dirty = true;
+          return { ...nextRow, item_amount };
         });
         if (dirty) {
           formRef.current?.setFieldsValue({ items: nextItems });
@@ -3443,7 +3545,17 @@ const QuotationsPage: React.FC = () => {
                                     }
                                     onChange={(checked) => {
                                       const nextItems = [...itemsVal];
-                                      nextItems[index] = applyGiftToggleToLine(row, checked, material);
+                                      const toggled = applyGiftToggleToLine(row, checked, material);
+                                      const item_amount = recalcDocumentStoredLineAmount(
+                                        {
+                                          qty: toggled.quote_quantity,
+                                          unit_price: toggled.unit_price,
+                                          tax_rate: toggled.tax_rate,
+                                          is_gift: toggled.is_gift,
+                                        },
+                                        priceType,
+                                      );
+                                      nextItems[index] = { ...toggled, item_amount };
                                       formRef.current?.setFieldsValue({ items: nextItems });
                                     }}
                                   />
@@ -3467,45 +3579,50 @@ const QuotationsPage: React.FC = () => {
                               const row = normalizeFormListItems<any>(gfPrice('items'))[index] ?? {};
                               const isGift = Boolean(row.is_gift);
                               return (
-                                <Form.Item
-                                  name={[index, 'unit_price']}
-                                  style={{ margin: 0 }}
-                                  rules={
-                                    isGift
-                                      ? []
-                                      : [
-                                          { required: true, message: t('app.kuaizhizao.salesOrder.unitPriceRequired') },
-                                          {
-                                            validator: (_: unknown, value: unknown) => {
-                                              const n = Number(value);
-                                              if (value == null || value === '') {
+                                <>
+                                  <Form.Item name={[index, 'item_amount']} hidden>
+                                    <InputNumber />
+                                  </Form.Item>
+                                  <Form.Item
+                                    name={[index, 'unit_price']}
+                                    style={{ margin: 0 }}
+                                    rules={
+                                      isGift
+                                        ? []
+                                        : [
+                                            { required: true, message: t('app.kuaizhizao.salesOrder.unitPriceRequired') },
+                                            {
+                                              validator: (_: unknown, value: unknown) => {
+                                                const n = Number(value);
+                                                if (value == null || value === '') {
+                                                  return Promise.resolve();
+                                                }
+                                                if (Number.isNaN(n) || n <= 0) {
+                                                  return Promise.reject(
+                                                    new Error(t('app.kuaizhizao.salesOrder.unitPricePositive')),
+                                                  );
+                                                }
                                                 return Promise.resolve();
-                                              }
-                                              if (Number.isNaN(n) || n <= 0) {
-                                                return Promise.reject(
-                                                  new Error(t('app.kuaizhizao.salesOrder.unitPricePositive')),
-                                                );
-                                              }
-                                              return Promise.resolve();
+                                              },
                                             },
-                                          },
-                                        ]
-                                  }
-                                >
-                                  <InputNumber
-                                    placeholder={
-                                      priceType === 'tax_inclusive'
-                                        ? t('app.kuaizhizao.salesOrder.unitPricePlaceholderTaxInclusive')
-                                        : t('app.kuaizhizao.salesOrder.unitPricePlaceholder')
+                                          ]
                                     }
-                                    min={0}
-                                    precision={priceDecimals}
-                                    prefix={moneyPrefix}
-                                    style={{ width: '100%' }}
-                                    size={DOCUMENT_DETAIL_CONTROL_SIZE}
-                                    disabled={isGift}
-                                  />
-                                </Form.Item>
+                                  >
+                                    <InputNumber
+                                      placeholder={
+                                        priceType === 'tax_inclusive'
+                                          ? t('app.kuaizhizao.salesOrder.unitPricePlaceholderTaxInclusive')
+                                          : t('app.kuaizhizao.salesOrder.unitPricePlaceholder')
+                                      }
+                                      min={0}
+                                      precision={priceDecimals}
+                                      prefix={moneyPrefix}
+                                      style={{ width: '100%' }}
+                                      size={DOCUMENT_DETAIL_CONTROL_SIZE}
+                                      disabled={isGift}
+                                    />
+                                  </Form.Item>
+                                </>
                               );
                             }}
                           </Form.Item>
@@ -3661,14 +3778,24 @@ const QuotationsPage: React.FC = () => {
                                     onBlur={() => {
                                       const incl = quotationEditingInclValueRef.current;
                                       if (quotationEditingIncl?.index === index && incl != null && qty > 0) {
-                                        const factor = 1 + taxRate / 100;
-                                        const newPrice =
-                                          priceType === 'tax_inclusive'
-                                            ? incl / qty
-                                            : (factor > 0 ? incl / factor : incl) / qty;
+                                        const applied = applyDocumentLineInclAmountEdit({
+                                          qty,
+                                          taxRate: row?.tax_rate,
+                                          priceType,
+                                          inclAmount: incl,
+                                          priceDecimals,
+                                        });
                                         const next = [...itemsVal];
-                                        next[index] = { ...row, unit_price: newPrice };
+                                        next[index] = stripExclusiveUnitAnchor({
+                                          ...row,
+                                          unit_price: applied.unit_price,
+                                          item_amount: applied.item_amount,
+                                        });
+                                        skipLineAmountResyncRef.current = true;
                                         formRef.current?.setFieldsValue({ items: next });
+                                        queueMicrotask(() => {
+                                          skipLineAmountResyncRef.current = false;
+                                        });
                                       }
                                       setQuotationEditingIncl(null);
                                     }}
