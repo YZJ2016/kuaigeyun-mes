@@ -38172,6 +38172,10 @@ export default {
     '修复采购申请审核误报权限不足',
   'pages.dashboard.updateLog.entries.purchase-requisition-uni-audit-resource-fix-r01.description':
     'manifest.audit 中采购申请 resource 与模块权限 kuaizhizao:purchase-requisition 对齐，uni-audit 不再校验错误的 purchase-request 前缀导致 403。',
+  'pages.dashboard.updateLog.entries.approval-status-viewer-import-fix-r01.title':
+    '修复打开审核弹窗审批状态 500',
+  'pages.dashboard.updateLog.entries.approval-status-viewer-import-fix-r01.description':
+    '审批状态接口在部分单据上因 viewer_actions 导入作用域错误返回 500，已改为函数入口统一导入，审核弹窗可正常加载流程与按钮门控。',
   'pages.dashboard.updateLog.entries.purchase-requisition-audit-status-fix-r01.title':
     '修复采购申请审核与审批状态查询失败',
   'pages.dashboard.updateLog.entries.purchase-requisition-audit-status-fix-r01.description':
