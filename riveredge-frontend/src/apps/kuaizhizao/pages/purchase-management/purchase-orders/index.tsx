@@ -210,6 +210,7 @@ import { collectPurchaseOrderPushDocuments } from '../../sales-management/shared
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import type { SubStage } from '../../../../../components/uni-lifecycle/types';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
+import { useDeferAfterPaint } from '../../../../../hooks/useDeferAfterPaint';
 import { useNumericPrecision } from '../../../../../hooks/useNumericPrecision';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import {
@@ -747,9 +748,11 @@ const PurchaseOrdersPage: React.FC = () => {
     loadCurrency();
   }, [t, messageApi]);
 
+  const secondaryStatsReady = useDeferAfterPaint();
   const { data: statistics } = useQuery({
     queryKey: ['purchaseOrderStatistics'],
     queryFn: getPurchaseOrderStatistics,
+    enabled: secondaryStatsReady,
   });
 
   // 下推入库 Modal
