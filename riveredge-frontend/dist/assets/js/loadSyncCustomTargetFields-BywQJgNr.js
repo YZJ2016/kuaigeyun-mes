@@ -1,0 +1,1 @@
+import{g as t}from"./customField-DWBWM_Qt.js";import{s as o}from"./index-B_w4KDDe.js";async function u(s){return(await t(s,!0)).map(e=>({value:o(e.code),label:e.label||e.name,kind:"custom",required:e.is_required||void 0}))}export{u as l};
