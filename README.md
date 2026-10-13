@@ -212,6 +212,52 @@ cd kuaigeyun   # 或 kuaigeyun-mes，取决于 clone 目录名
 
 ---
 
+## 上游同步台账（私有分叉维护）
+
+> 本节为本 fork 的维护记录，非上游产品文档。用途：下次同步时快速定位「已评到哪个上游提交、哪些已取/已跳过」。
+
+**同步策略**：上游（Gitee/GitHub 开源仓）做底座，本地 `kuaiiot`/星数采等重建功能叠加其上。只摘取有价值且不影响现有功能的变更；上游放在 pro 仓、OSS 缺失的后端按前端契约+迁移 DDL 本地重建（同 kuaiiot 还原模式）。红线：不删现有功能、不并立两套同功能实现、保住租户隔离/权限/审核门控/MES 回写语义。
+
+**远端与水位**
+
+- `gitee` = `git@gitee.com:kuaigeyun/kuaigeyun.git`（上游主源）；`upstream` = GitHub 镜像；`origin` = 本私有 fork
+- **已评估到的上游 tip：`6da00ec43f`**（gitee/develop，截至 2026-10-13）。该提交及更早的全部上游提交均已逐一评估（取/适配/跳过）
+- 下次同步：`git fetch gitee && git log --oneline 6da00ec43f..gitee/develop`，范围内即未评新提交
+
+**已同步映射（上游 → 本地，2026-10 批次）**
+
+| 上游提交 | 本地提交 | 方式 | 内容与备注 |
+| --- | --- | --- | --- |
+| `4fcecb1987` | `5f48a9e8ee` | 摘取 | 备份定时任务全局锁、Gitee OAuth state 签名、远程删除失败关闭 |
+| `5afa59d5bc` | `a5c803750f` | 摘取 | 采购申请审核权限前缀 `purchase-request`→`purchase-requisition` |
+| `8640dc6747` | `86e2cd8069` | 摘取+适配 | 设备点检计划/方案绑定；迁移重映射 859/860 |
+| `fad5c06716` | `b006f69253` | 摘取+适配 | 委外检验 + 质量巡检；迁移→861/862；10 处冲突逐个解决 |
+| `99ce86ec13` | `d2131f34a5` | 摘取+适配 | 图纸气泡标注 + 计划质检修复；BasicLayout 只移植 `meta.is_pro` 徽标分支 |
+| （批次适配） | `d24170f8cd` | 本地补 | kuaiiot `schedule_device_update` 实时事件发布端（上游在 pro）；`collapse_material_rows_to_unique_units` 移植；`quality_fai` Body import；测试桩 |
+| `bcc4a735a5` | `56ea63a289` | 摘取+重建 | 财务包：付款申请、客商多账户直接落地；**其他收支后端系 pro 侧，已按契约本地重建**（`kuaicaiwu`：other_voucher/finance_misc_category 模型、misc_voucher_* 服务、3 组 API、QS/QZ 编码）；迁移→864–873 |
+| `e249516c6c` | `5c3b124c2b` | 摘取+适配 | 金蝶预置/供应商同步进度；`approval_viewer_actions` 门控底座；付款申请 pull 端点 |
+| `ab3cc22e5e` | `694893c95d` | 摘取 | 审核三端统一 `viewer_actions` 门控（`audit_flow_viewer_gate`+`audit_record_enricher`）；审批状态精确查实例 |
+| `2d72a1f181` | `bce5df3894` | 摘取 | `get_approval_status` UnboundLocalError→500 修复 |
+| `fcf571bbc4` | `c772f1f3ac` | 摘取 | 配置中心 `sectionKey`、菜单同步联动刷新、审批节点总览；**行为变更：停发拆分交付计划站内提醒** |
+| `56d484fdf8` | `5328598368` | 摘取 | 生产领料创建即启审、工单单位缓存、销售合同 hooks 顺序 |
+| `7af3b0c7e9` | `f24d3db7f6` | **手工复刻** | 性能：三单据详情 gather、生命周期里程碑→业务事实、trace 引擎缓存/并行/批量删除标记、附件中心并行、前端物料按需缓存 + `useDeferAfterPaint`、InfluxDB 实测连通 |
+
+**明确跳过 / 剔除（勿重复评估）**
+
+- `9e7bc7fc9d` 侧边栏重构——与本地 BasicLayout 路线冲突，只取了 `meta.is_pro` 徽标分支
+- 上游 pro 侧代码（OSS 无对应文件）：其他收支后端（已本地重建）、kuaiai 设置页去 OCR/WorkBuddy、kuaiiot-command-device-id 迁移——对应 updateLog 条目均已剔除
+- `cd30a1c98` kuaiiot realtime：通道/前端早前已取；发布端在 pro，已由 `d24170f8cd` 本地补 `schedule_device_update`
+- 更新日志条目凡代码在 pro 或未摘取者一律剔除，不虚报
+
+**维护约定**
+
+- 迁移号避让：上游占用段一律重映射到本地连续段（当前已到 873），不改已入库 aerich 记录的文件名
+- 每批摘取后：`uv run pytest`（后端全量）+ `npm run build`（前端）；dist 单独 `chore: build-web sync` 提交
+- spec-143 裸查：新代码禁无 `tenant_id` 的租户表查询；`import_pro_*` 全仓清零，遇上游新增一律转本地直接 import
+- AOCI：`aoci maintain` CLI 目前无法写正式卷（blocked 存量态），提交照常、如实记录
+
+---
+
 ## 许可证
 
 见 [LICENSE](LICENSE)。
