@@ -499,10 +499,12 @@ const QuotationMaterialSelectCell: React.FC<{
   index: number;
   materialList: Material[];
   sourceType?: string;
+  onMaterialCached?: (material: Material) => void;
 }> = ({
   index,
   materialList,
   sourceType,
+  onMaterialCached,
 }) => {
   const { t } = useTranslation();
   const form = Form.useFormInstance();
@@ -523,6 +525,7 @@ const QuotationMaterialSelectCell: React.FC<{
   const onMaterialPicked = useCallback(
     (_val: number | undefined, material: Material | undefined) => {
       if (!material) return;
+      onMaterialCached?.(material);
       form.setFieldValue(
         ['items', index, '_sourceType'],
         (material as any)?.sourceType || (material as any)?.source_type,
@@ -538,7 +541,7 @@ const QuotationMaterialSelectCell: React.FC<{
         asOfField: 'quotation_date',
       });
     },
-    [form, index, materialList],
+    [form, index, materialList, onMaterialCached],
   );
   return (
     <div
@@ -967,6 +970,26 @@ const QuotationsPage: React.FC = () => {
     [customerList],
   );
   const [materialList, setMaterialList] = useState<any[]>([]);
+  const materialListRef = React.useRef(materialList);
+  materialListRef.current = materialList;
+
+  /** 物料缓存：选中/导入时按需写入，禁止进页预拉全量 */
+  const mergeMaterialsCache = useCallback((rows: Material[]) => {
+    if (!rows.length) return;
+    setMaterialList((prev) => {
+      const byId = new Map<number, any>();
+      for (const m of prev) {
+        const id = Number((m as any).id);
+        if (Number.isFinite(id) && id > 0) byId.set(id, m);
+      }
+      for (const m of rows) {
+        const id = Number((m as any).id);
+        if (Number.isFinite(id) && id > 0) byId.set(id, m);
+      }
+      return Array.from(byId.values());
+    });
+  }, []);
+
   const [productScope, setProductScope] = useState<'make' | 'all'>('make');
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   const materialSourceType = productScope === 'make' ? 'Make' : undefined;
@@ -1037,21 +1060,6 @@ const QuotationsPage: React.FC = () => {
       cancelled = true;
     };
   }, [currentUser, isFormPage]);
-
-  useEffect(() => {
-    if (!isFormPage) return;
-    let cancelled = false;
-    const loadMaterials = async () => {
-      const list = await loadMaterialFormReferenceList(KUAIZHIZAO_DOC_HOST.quotation);
-      if (cancelled) return;
-      registerMaterialsForUnitSelect(list);
-      setMaterialList(list);
-    };
-    void loadMaterials();
-    return () => {
-      cancelled = true;
-    };
-  }, [isFormPage]);
 
   useEffect(() => {
     if (materialList.length > 0) {
@@ -1678,8 +1686,17 @@ const QuotationsPage: React.FC = () => {
     }
   };
 
-  const handleItemImport = (data: any[][]) => {
+  const handleItemImport = async (data: any[][]) => {
     const priceTypeForm = salesFormPriceType(formRef.current?.getFieldValue('price_type'));
+    // 明细 Excel 按编码匹配：仅在导入时按需拉引用清单，不在进页预拉
+    let materialsForImport = materialListRef.current;
+    if (materialsForImport.length < 50) {
+      const rows = await loadMaterialFormReferenceList(KUAIZHIZAO_DOC_HOST.quotation);
+      if (rows.length) {
+        mergeMaterialsCache(rows);
+        materialsForImport = rows;
+      }
+    }
     const rows = data.slice(2);
     const newItems = rows
       .map((row) => {
@@ -1693,7 +1710,7 @@ const QuotationsPage: React.FC = () => {
 
         if (!materialCode) return null;
 
-        const material = materialList.find((m: any) => (m.main_code ?? m.mainCode ?? m.code) === materialCode);
+        const material = materialsForImport.find((m: any) => (m.main_code ?? m.mainCode ?? m.code) === materialCode);
         const taxR = material ? getMaterialDefaultTaxRate(material) : 0;
         let unitPrice = price || Number(material?.defaults?.defaultSalePrice ?? material?.default_sale_price) || 0;
         if (priceTypeForm === 'tax_inclusive' && unitPrice > 0) {
@@ -3107,6 +3124,8 @@ const QuotationsPage: React.FC = () => {
 
   const appendQuotationItemsFromMaterials = useCallback(
     async (selected: Material[]) => {
+      if (!selected?.length) return;
+      mergeMaterialsCache(selected);
       const pt = salesFormPriceType(formRef.current?.getFieldValue('price_type'));
       const defaultDelivery = coerceFormDate(formRef.current?.getFieldValue('delivery_date')) ?? undefined;
       const customerId = formRef.current?.getFieldValue('customer_id');
@@ -3118,7 +3137,7 @@ const QuotationsPage: React.FC = () => {
         customerId: customerId ? Number(customerId) : undefined,
         asOf,
         priceType: pt,
-        materialList: materialList as Material[],
+        materialList: materialListRef.current as Material[],
       });
 
       const rowFromMaterial = (m: Material, pricing: (typeof priced)[number]) => ({
@@ -3159,7 +3178,7 @@ const QuotationsPage: React.FC = () => {
       formRef.current?.setFieldsValue({ items });
       messageApi.success(t('app.kuaizhizao.common.materialBatchAdded', { count: selected.length }));
     },
-    [materialList, messageApi, t]
+    [mergeMaterialsCache, messageApi, t]
   );
 
   useEffect(() => {
@@ -3444,6 +3463,7 @@ const QuotationsPage: React.FC = () => {
                             index={index}
                             materialList={materialList as Material[]}
                             sourceType={materialSourceType}
+                            onMaterialCached={(m) => mergeMaterialsCache([m])}
                           />
                         ),
                       },

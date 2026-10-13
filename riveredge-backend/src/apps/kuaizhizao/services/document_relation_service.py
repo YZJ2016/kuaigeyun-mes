@@ -2252,98 +2252,112 @@ class DocumentRelationService:
         order_id: int
     ) -> List[Dict[str, Any]]:
         """获取销售订单的下游单据（需求计算、工单、销售出库单）"""
-        downstream = []
+        import asyncio
 
-        # 通过 Demand 查找需求计算
-        demand = await Demand.get_or_none(
-            tenant_id=tenant_id,
-            source_type="sales_order",
-            source_id=order_id,
-            deleted_at__isnull=True,
-        )
-        if demand and demand.computation_id:
+        async def _demand_computation() -> List[Dict[str, Any]]:
+            # 通过 Demand 查找需求计算
+            demand = await Demand.get_or_none(
+                tenant_id=tenant_id,
+                source_type="sales_order",
+                source_id=order_id,
+                deleted_at__isnull=True,
+            )
+            if not demand or not demand.computation_id:
+                return []
             comp = await DemandComputation.get_or_none(
                 tenant_id=tenant_id, id=demand.computation_id, deleted_at__isnull=True
             )
-            if comp:
-                downstream.append({
-                    "document_type": "demand_computation",
-                    "document_id": comp.id,
-                    "document_code": comp.computation_code,
-                    "document_name": f"需求计算-{comp.computation_code}",
-                    "status": comp.computation_status,
-                    "created_at": to_api_isoformat(comp.computation_start_time) if comp.computation_start_time else None
-                })
+            if not comp:
+                return []
+            return [{
+                "document_type": "demand_computation",
+                "document_id": comp.id,
+                "document_code": comp.computation_code,
+                "document_name": f"需求计算-{comp.computation_code}",
+                "status": comp.computation_status,
+                "created_at": to_api_isoformat(comp.computation_start_time) if comp.computation_start_time else None
+            }]
 
-        # 工单（MTO模式）
-        work_orders = await WorkOrder.filter(
-            tenant_id=tenant_id,
-            sales_order_id=order_id,
-            deleted_at__isnull=True,
-        ).limit(10)
-        for wo in work_orders:
-            downstream.append({
+        async def _work_orders() -> List[Dict[str, Any]]:
+            # 工单（MTO模式）
+            work_orders = await WorkOrder.filter(
+                tenant_id=tenant_id,
+                sales_order_id=order_id,
+                deleted_at__isnull=True,
+            ).limit(10)
+            return [{
                 "document_type": "work_order",
                 "document_id": wo.id,
                 "document_code": wo.code,
                 "document_name": wo.name,
                 "status": wo.status,
                 "created_at": to_api_isoformat(wo.created_at) if wo.created_at else None
-            })
+            } for wo in work_orders]
 
-        # 销售出库单
-        deliveries = await SalesDelivery.filter(
-            tenant_id=tenant_id,
-            sales_order_id=order_id,
-            deleted_at__isnull=True,
-        ).limit(10)
-        for delivery in deliveries:
-            downstream.append({
+        async def _deliveries() -> List[Dict[str, Any]]:
+            # 销售出库单
+            deliveries = await SalesDelivery.filter(
+                tenant_id=tenant_id,
+                sales_order_id=order_id,
+                deleted_at__isnull=True,
+            ).limit(10)
+            return [{
                 "document_type": "sales_delivery",
                 "document_id": delivery.id,
                 "document_code": delivery.delivery_code if hasattr(delivery, 'delivery_code') else None,
                 "document_name": None,
                 "status": delivery.status if hasattr(delivery, 'status') else None,
                 "created_at": to_api_isoformat(delivery.created_at) if delivery.created_at else None
-            })
+            } for delivery in deliveries]
 
-        so = await SalesOrder.get_or_none(
-            tenant_id=tenant_id, id=order_id, deleted_at__isnull=True
-        )
-        if so and (so.order_code or "").strip():
+        async def _invoices() -> List[Dict[str, Any]]:
+            so = await SalesOrder.get_or_none(
+                tenant_id=tenant_id, id=order_id, deleted_at__isnull=True
+            )
+            if not (so and (so.order_code or "").strip()):
+                return []
             oc = so.order_code.strip()
             invs = await Invoice.filter(
                 tenant_id=tenant_id,
                 category="OUT",
                 source_document_code=oc,
             ).limit(20)
-            for inv in invs:
-                downstream.append({
-                    "document_type": "sales_invoice",
-                    "document_id": inv.id,
-                    "document_code": inv.invoice_code,
-                    "document_name": inv.invoice_number,
-                    "status": inv.status,
-                    "created_at": to_api_isoformat(inv.created_at) if inv.created_at else None,
-                })
+            return [{
+                "document_type": "sales_invoice",
+                "document_id": inv.id,
+                "document_code": inv.invoice_code,
+                "document_name": inv.invoice_number,
+                "status": inv.status,
+                "created_at": to_api_isoformat(inv.created_at) if inv.created_at else None,
+            } for inv in invs]
 
-        downstream.extend(await self._after_sales_for_sales_order(tenant_id, order_id))
-
-        delivery_projects = await DeliveryProject.filter(
-            tenant_id=tenant_id,
-            sales_order_id=order_id,
-            deleted_at__isnull=True,
-        ).exclude(status=DeliveryProjectStatus.CANCELLED.value).limit(20)
-        for project in delivery_projects:
-            downstream.append(
+        async def _delivery_projects() -> List[Dict[str, Any]]:
+            delivery_projects = await DeliveryProject.filter(
+                tenant_id=tenant_id,
+                sales_order_id=order_id,
+                deleted_at__isnull=True,
+            ).exclude(status=DeliveryProjectStatus.CANCELLED.value).limit(20)
+            return [
                 _rel_doc(
                     "delivery_project",
                     project,
                     "project_code",
                     project.project_name,
                 )
-            )
+                for project in delivery_projects
+            ]
 
+        chunks = await asyncio.gather(
+            _demand_computation(),
+            _work_orders(),
+            _deliveries(),
+            _invoices(),
+            self._after_sales_for_sales_order(tenant_id, order_id),
+            _delivery_projects(),
+        )
+        downstream: List[Dict[str, Any]] = []
+        for chunk in chunks:
+            downstream.extend(chunk)
         return _dedupe_relation_documents(downstream)
 
     async def _get_delivery_project_upstream(
@@ -3177,14 +3191,111 @@ class DocumentRelationService:
         work_order_id: int
     ) -> List[Dict[str, Any]]:
         """获取工单的下游单据（生产领料、报工记录、成品入库、销售出库）"""
-        downstream = []
+        import asyncio
+        from apps.kuaizhizao.models.batching_order import BatchingOrder
+        from apps.kuaizhizao.models.material_call_request import MaterialCallRequest
+        from apps.kuaizhizao.models.backflush_record import BackflushRecord
+        from apps.kuaizhizao.models.scrap_record import ScrapRecord
 
-        # 生产领料单（软删单据不进全链路推导）
-        pickings = await ProductionPicking.filter(
-            tenant_id=tenant_id,
-            work_order_id=work_order_id,
-            deleted_at__isnull=True,
-        ).limit(10)
+        (
+            pickings,
+            production_returns,
+            reporting_records,
+            receipts,
+            semi_receipts,
+            rework_orders,
+            outsource_orders,
+            batching_orders,
+            material_calls,
+            backflushes,
+            scraps,
+            process_inspections,
+            finished_inspections,
+            split_relations,
+        ) = await asyncio.gather(
+            # 生产领料单（软删单据不进全链路推导）
+            ProductionPicking.filter(
+                tenant_id=tenant_id,
+                work_order_id=work_order_id,
+                deleted_at__isnull=True,
+            ).limit(10),
+            # 生产退料单
+            ProductionReturn.filter(
+                tenant_id=tenant_id,
+                work_order_id=work_order_id,
+                deleted_at__isnull=True,
+            ).limit(10),
+            # 报工记录
+            ReportingRecord.filter(
+                tenant_id=tenant_id,
+                work_order_id=work_order_id,
+                deleted_at__isnull=True,
+            ).order_by("operation_id", "id").limit(self.REPORTING_RECORD_TRACE_LIMIT),
+            # 成品入库单
+            FinishedGoodsReceipt.filter(
+                tenant_id=tenant_id,
+                work_order_id=work_order_id,
+                deleted_at__isnull=True,
+            ).limit(10),
+            SemiFinishedGoodsReceipt.filter(
+                tenant_id=tenant_id,
+                work_order_id=work_order_id,
+                deleted_at__isnull=True,
+            ).limit(10),
+            # 返工单（工单作为原工单）
+            ReworkOrder.filter(
+                tenant_id=tenant_id,
+                original_work_order_id=work_order_id,
+                deleted_at__isnull=True
+            ).limit(10),
+            # 工序委外单
+            OutsourceOrder.filter(
+                tenant_id=tenant_id,
+                work_order_id=work_order_id,
+                deleted_at__isnull=True
+            ).limit(10),
+            # 线边备料单
+            BatchingOrder.filter(
+                tenant_id=tenant_id, work_order_id=work_order_id, deleted_at__isnull=True
+            ).limit(10),
+            # 补料申请
+            MaterialCallRequest.filter(
+                tenant_id=tenant_id, work_order_id=work_order_id, deleted_at__isnull=True
+            ).limit(10),
+            # 倒冲记录
+            BackflushRecord.filter(
+                tenant_id=tenant_id,
+                work_order_id=work_order_id,
+                deleted_at__isnull=True,
+            ).limit(10),
+            # 报废记录
+            ScrapRecord.filter(
+                tenant_id=tenant_id,
+                work_order_id=work_order_id,
+                deleted_at__isnull=True,
+            ).limit(10),
+            # 过程检验单
+            ProcessInspection.filter(
+                tenant_id=tenant_id,
+                work_order_id=work_order_id,
+                deleted_at__isnull=True,
+            ).limit(10),
+            # 成品检验单
+            FinishedGoodsInspection.filter(
+                tenant_id=tenant_id,
+                work_order_id=work_order_id,
+                deleted_at__isnull=True,
+            ).limit(10),
+            # 拆分工单（通过 DocumentRelation 追溯）
+            DocumentRelation.filter(
+                tenant_id=tenant_id,
+                source_type="work_order",
+                source_id=work_order_id,
+                target_type="work_order",
+            ).limit(10),
+        )
+
+        downstream: List[Dict[str, Any]] = []
         for picking in pickings:
             downstream.append({
                 "document_type": "production_picking",
@@ -3195,12 +3306,6 @@ class DocumentRelationService:
                 "created_at": to_api_isoformat(picking.created_at) if picking.created_at else None
             })
 
-        # 生产退料单
-        production_returns = await ProductionReturn.filter(
-            tenant_id=tenant_id,
-            work_order_id=work_order_id,
-            deleted_at__isnull=True,
-        ).limit(10)
         for ret in production_returns:
             downstream.append({
                 "document_type": "production_return",
@@ -3211,21 +3316,9 @@ class DocumentRelationService:
                 "created_at": to_api_isoformat(ret.created_at) if ret.created_at else None
             })
 
-        # 报工记录
-        reporting_records = await ReportingRecord.filter(
-            tenant_id=tenant_id,
-            work_order_id=work_order_id,
-            deleted_at__isnull=True,
-        ).order_by("operation_id", "id").limit(self.REPORTING_RECORD_TRACE_LIMIT)
         for record in reporting_records:
             downstream.append(self._reporting_record_trace_dict(record))
 
-        # 成品入库单
-        receipts = await FinishedGoodsReceipt.filter(
-            tenant_id=tenant_id,
-            work_order_id=work_order_id,
-            deleted_at__isnull=True,
-        ).limit(10)
         for receipt in receipts:
             downstream.append({
                 "document_type": "finished_goods_receipt",
@@ -3236,11 +3329,6 @@ class DocumentRelationService:
                 "created_at": to_api_isoformat(receipt.created_at) if receipt.created_at else None
             })
 
-        semi_receipts = await SemiFinishedGoodsReceipt.filter(
-            tenant_id=tenant_id,
-            work_order_id=work_order_id,
-            deleted_at__isnull=True,
-        ).limit(10)
         for receipt in semi_receipts:
             downstream.append({
                 "document_type": "semi_finished_goods_receipt",
@@ -3251,30 +3339,39 @@ class DocumentRelationService:
                 "created_at": to_api_isoformat(receipt.created_at) if receipt.created_at else None
             })
 
-        # 销售出库单（通过成品入库单关联）
-        for receipt in receipts:
-            if receipt.sales_order_id:
-                deliveries = await SalesDelivery.filter(
-                    tenant_id=tenant_id,
-                    sales_order_id=receipt.sales_order_id,
-                    deleted_at__isnull=True,
-                ).limit(5)
-                for delivery in deliveries:
-                    downstream.append({
-                        "document_type": "sales_delivery",
-                        "document_id": delivery.id,
-                        "document_code": delivery.delivery_code if hasattr(delivery, 'delivery_code') else None,
-                        "document_name": None,
-                        "status": delivery.status if hasattr(delivery, 'status') else None,
-                        "created_at": to_api_isoformat(delivery.created_at) if delivery.created_at else None
-                    })
+        # 销售出库单（通过成品入库单关联，批量取代逐单查询）
+        so_ids = list({
+            int(r.sales_order_id)
+            for r in receipts
+            if getattr(r, "sales_order_id", None)
+        })
+        split_ids = [int(rel.target_id) for rel in split_relations if rel.target_id]
 
-        # 返工单（工单作为原工单）
-        rework_orders = await ReworkOrder.filter(
-            tenant_id=tenant_id,
-            original_work_order_id=work_order_id,
-            deleted_at__isnull=True
-        ).limit(10)
+        async def _empty_list():
+            return []
+
+        delivery_rows, split_wos = await asyncio.gather(
+            SalesDelivery.filter(
+                tenant_id=tenant_id,
+                sales_order_id__in=so_ids,
+                deleted_at__isnull=True,
+            ).limit(50) if so_ids else _empty_list(),
+            WorkOrder.filter(
+                tenant_id=tenant_id,
+                id__in=split_ids,
+                deleted_at__isnull=True,
+            ) if split_ids else _empty_list(),
+        )
+        for delivery in delivery_rows:
+            downstream.append({
+                "document_type": "sales_delivery",
+                "document_id": delivery.id,
+                "document_code": delivery.delivery_code if hasattr(delivery, 'delivery_code') else None,
+                "document_name": None,
+                "status": delivery.status if hasattr(delivery, 'status') else None,
+                "created_at": to_api_isoformat(delivery.created_at) if delivery.created_at else None
+            })
+
         for ro in rework_orders:
             downstream.append({
                 "document_type": "rework_order",
@@ -3285,12 +3382,6 @@ class DocumentRelationService:
                 "created_at": to_api_isoformat(ro.created_at) if ro.created_at else None
             })
 
-        # 工序委外单
-        outsource_orders = await OutsourceOrder.filter(
-            tenant_id=tenant_id,
-            work_order_id=work_order_id,
-            deleted_at__isnull=True
-        ).limit(10)
         for os_order in outsource_orders:
             downstream.append({
                 "document_type": "outsource_order",
@@ -3301,12 +3392,6 @@ class DocumentRelationService:
                 "created_at": to_api_isoformat(os_order.created_at) if os_order.created_at else None
             })
 
-        # 线边备料单
-        from apps.kuaizhizao.models.batching_order import BatchingOrder
-
-        batching_orders = await BatchingOrder.filter(
-            tenant_id=tenant_id, work_order_id=work_order_id, deleted_at__isnull=True
-        ).limit(10)
         for bo in batching_orders:
             downstream.append({
                 "document_type": "batching_order",
@@ -3317,12 +3402,6 @@ class DocumentRelationService:
                 "created_at": to_api_isoformat(bo.created_at) if bo.created_at else None,
             })
 
-        # 补料申请
-        from apps.kuaizhizao.models.material_call_request import MaterialCallRequest
-
-        material_calls = await MaterialCallRequest.filter(
-            tenant_id=tenant_id, work_order_id=work_order_id, deleted_at__isnull=True
-        ).limit(10)
         for mc in material_calls:
             downstream.append({
                 "document_type": "material_call_request",
@@ -3333,14 +3412,6 @@ class DocumentRelationService:
                 "created_at": to_api_isoformat(mc.created_at) if mc.created_at else None,
             })
 
-        # 倒冲记录
-        from apps.kuaizhizao.models.backflush_record import BackflushRecord
-
-        backflushes = await BackflushRecord.filter(
-            tenant_id=tenant_id,
-            work_order_id=work_order_id,
-            deleted_at__isnull=True,
-        ).limit(10)
         for bf in backflushes:
             downstream.append({
                 "document_type": "backflush_record",
@@ -3351,14 +3422,6 @@ class DocumentRelationService:
                 "created_at": to_api_isoformat(bf.created_at) if bf.created_at else None,
             })
 
-        # 报废记录
-        from apps.kuaizhizao.models.scrap_record import ScrapRecord
-
-        scraps = await ScrapRecord.filter(
-            tenant_id=tenant_id,
-            work_order_id=work_order_id,
-            deleted_at__isnull=True,
-        ).limit(10)
         for scrap in scraps:
             downstream.append({
                 "document_type": "scrap_record",
@@ -3369,12 +3432,6 @@ class DocumentRelationService:
                 "created_at": to_api_isoformat(scrap.created_at) if scrap.created_at else None,
             })
 
-        # 过程检验单
-        process_inspections = await ProcessInspection.filter(
-            tenant_id=tenant_id,
-            work_order_id=work_order_id,
-            deleted_at__isnull=True,
-        ).limit(10)
         for pi in process_inspections:
             downstream.append({
                 "document_type": "process_inspection",
@@ -3385,12 +3442,6 @@ class DocumentRelationService:
                 "created_at": to_api_isoformat(pi.created_at) if pi.created_at else None
             })
 
-        # 成品检验单
-        finished_inspections = await FinishedGoodsInspection.filter(
-            tenant_id=tenant_id,
-            work_order_id=work_order_id,
-            deleted_at__isnull=True,
-        ).limit(10)
         for fi in finished_inspections:
             downstream.append({
                 "document_type": "finished_goods_inspection",
@@ -3401,28 +3452,15 @@ class DocumentRelationService:
                 "created_at": to_api_isoformat(fi.created_at) if fi.created_at else None
             })
 
-        # 拆分工单（通过 DocumentRelation 追溯）
-        split_relations = await DocumentRelation.filter(
-            tenant_id=tenant_id,
-            source_type="work_order",
-            source_id=work_order_id,
-            target_type="work_order",
-        ).limit(10)
-        for rel in split_relations:
-            split_wo = await WorkOrder.get_or_none(
-                tenant_id=tenant_id,
-                id=rel.target_id,
-                deleted_at__isnull=True
-            )
-            if split_wo:
-                downstream.append({
-                    "document_type": "work_order",
-                    "document_id": split_wo.id,
-                    "document_code": split_wo.code,
-                    "document_name": split_wo.name,
-                    "status": split_wo.status,
-                    "created_at": to_api_isoformat(split_wo.created_at) if split_wo.created_at else None
-                })
+        for split_wo in split_wos:
+            downstream.append({
+                "document_type": "work_order",
+                "document_id": split_wo.id,
+                "document_code": split_wo.code,
+                "document_name": split_wo.name,
+                "status": split_wo.status,
+                "created_at": to_api_isoformat(split_wo.created_at) if split_wo.created_at else None
+            })
 
         return downstream
 
