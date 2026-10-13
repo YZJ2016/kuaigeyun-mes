@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-10-07T06:04:21Z",
-  "updated_at": "2026-10-13T06:41:07Z",
+  "updated_at": "2026-10-13T07:10:59Z",
   "files": {
     ".agents/skills/banner-design/SKILL.md": {
       "role": "index",
@@ -123,6 +123,366 @@
       "size": 6427,
       "normalized_sha256": "43152937a0e598b3fbfdd418684311c105d44e3c5b333703ddb0b8cb28e40658"
     },
+    ".agents/skills/design-system/data/slide-layout-logic.csv": {
+      "role": "index",
+      "sha256": "26b5b75782d5aba89836c0479acd3111cc69b67853db9c2259b30ac1e966bc62",
+      "size": 981,
+      "normalized_sha256": "26b5b75782d5aba89836c0479acd3111cc69b67853db9c2259b30ac1e966bc62"
+    },
+    ".agents/skills/design-system/data/slide-layouts.csv": {
+      "role": "index",
+      "sha256": "95d558c1b7d2552d7a75402dc68facbd16125e574985851db5729d1145e14896",
+      "size": 8760,
+      "normalized_sha256": "95d558c1b7d2552d7a75402dc68facbd16125e574985851db5729d1145e14896"
+    },
+    ".agents/skills/design-system/data/slide-strategies.csv": {
+      "role": "index",
+      "sha256": "f656be0ab0b3a85fa7fc74202e9701a7236220412d67d5f63eb6dbb100bb2639",
+      "size": 8232,
+      "normalized_sha256": "f656be0ab0b3a85fa7fc74202e9701a7236220412d67d5f63eb6dbb100bb2639"
+    },
+    ".agents/skills/design-system/data/slide-typography.csv": {
+      "role": "index",
+      "sha256": "b96cd11dd4ff1dea8a9454b0b9e898e7f82f9243182f8f237af1f2c9b8824ce5",
+      "size": 735,
+      "normalized_sha256": "b96cd11dd4ff1dea8a9454b0b9e898e7f82f9243182f8f237af1f2c9b8824ce5"
+    },
+    ".agents/skills/design-system/references/component-specs.md": {
+      "role": "index",
+      "sha256": "b265d979a741dd748d4e595e6898ae430faeef4f6d13d7a634fa6241b91d2da4",
+      "size": 6914,
+      "normalized_sha256": "b265d979a741dd748d4e595e6898ae430faeef4f6d13d7a634fa6241b91d2da4"
+    },
+    ".agents/skills/design-system/references/component-tokens.md": {
+      "role": "index",
+      "sha256": "e27f8f5999badee425c98235eabbd2cb3ebe2a1a364766d5c7a6b3134ceaaec8",
+      "size": 4986,
+      "normalized_sha256": "e27f8f5999badee425c98235eabbd2cb3ebe2a1a364766d5c7a6b3134ceaaec8"
+    },
+    ".agents/skills/design-system/references/primitive-tokens.md": {
+      "role": "index",
+      "sha256": "91e6caa12646c08c8aadf8e09399aed65760a25c8d80595936d81a9131118fc3",
+      "size": 4562,
+      "normalized_sha256": "91e6caa12646c08c8aadf8e09399aed65760a25c8d80595936d81a9131118fc3"
+    },
+    ".agents/skills/design-system/references/semantic-tokens.md": {
+      "role": "index",
+      "sha256": "97e16d8061bbc22e82b51966a7015e3fc990932902e4647843506669a1cdebcc",
+      "size": 4245,
+      "normalized_sha256": "97e16d8061bbc22e82b51966a7015e3fc990932902e4647843506669a1cdebcc"
+    },
+    ".agents/skills/design-system/references/states-and-variants.md": {
+      "role": "index",
+      "sha256": "8dacb95d57d4bb37d8a99cc55515ff26da272056f837d29abc74aedcaa3ba104",
+      "size": 4771,
+      "normalized_sha256": "8dacb95d57d4bb37d8a99cc55515ff26da272056f837d29abc74aedcaa3ba104"
+    },
+    ".agents/skills/design-system/references/tailwind-integration.md": {
+      "role": "index",
+      "sha256": "6d01092db1479dbd2060567b4232bb2b4bc16e89730ab07e1f87a3e7f5c406b9",
+      "size": 5633,
+      "normalized_sha256": "6d01092db1479dbd2060567b4232bb2b4bc16e89730ab07e1f87a3e7f5c406b9"
+    },
+    ".agents/skills/design-system/references/token-architecture.md": {
+      "role": "index",
+      "sha256": "925f4049c4c4313d9fd5df98cdfd52004112aca49fba1664ad85e76bc9dce4d3",
+      "size": 5365,
+      "normalized_sha256": "925f4049c4c4313d9fd5df98cdfd52004112aca49fba1664ad85e76bc9dce4d3"
+    },
+    ".agents/skills/design-system/templates/design-tokens-starter.json": {
+      "role": "index",
+      "sha256": "5444f477b06bab9c72e2cc289d4a9104efef653391c9639972bcb712d5f2d81e",
+      "size": 7184,
+      "normalized_sha256": "5444f477b06bab9c72e2cc289d4a9104efef653391c9639972bcb712d5f2d81e"
+    },
+    ".agents/skills/slides/SKILL.md": {
+      "role": "index",
+      "sha256": "2b90bdaf63f231919a01f4962f374ecd84af101a7e7545f8d9c68e049025accb",
+      "size": 1137,
+      "normalized_sha256": "2b90bdaf63f231919a01f4962f374ecd84af101a7e7545f8d9c68e049025accb"
+    },
+    ".agents/skills/slides/references/copywriting-formulas.md": {
+      "role": "index",
+      "sha256": "03733d5916ab771834745550045b736deeb94a08226f2b200f7953009c35b219",
+      "size": 2604,
+      "normalized_sha256": "03733d5916ab771834745550045b736deeb94a08226f2b200f7953009c35b219"
+    },
+    ".agents/skills/slides/references/create.md": {
+      "role": "index",
+      "sha256": "792d647a5d4f87d765cf417f7ac54dd0b2fc4d229cc23ea9df56282d4c1ee086",
+      "size": 153,
+      "normalized_sha256": "792d647a5d4f87d765cf417f7ac54dd0b2fc4d229cc23ea9df56282d4c1ee086"
+    },
+    ".agents/skills/slides/references/html-template.md": {
+      "role": "index",
+      "sha256": "fd5b051a37365fc6059c75bb388ec6f64daf1bd9ae938b287b6d762dc83c0c35",
+      "size": 9004,
+      "normalized_sha256": "fd5b051a37365fc6059c75bb388ec6f64daf1bd9ae938b287b6d762dc83c0c35"
+    },
+    ".agents/skills/slides/references/layout-patterns.md": {
+      "role": "index",
+      "sha256": "0a967ca3bd829d3234e6f1802bade6c76447fabbaddbc8117c41adbae7dfb6df",
+      "size": 3691,
+      "normalized_sha256": "0a967ca3bd829d3234e6f1802bade6c76447fabbaddbc8117c41adbae7dfb6df"
+    },
+    ".agents/skills/slides/references/slide-strategies.md": {
+      "role": "index",
+      "sha256": "27ee3e53ffa0ea679ec83ebeacb0bcfbce498df57277e99f574b9c139dc44286",
+      "size": 2715,
+      "normalized_sha256": "27ee3e53ffa0ea679ec83ebeacb0bcfbce498df57277e99f574b9c139dc44286"
+    },
+    ".agents/skills/ui-styling/LICENSE.txt": {
+      "role": "index",
+      "sha256": "58d1e17ffe5109a7ae296caafcadfdbe6a7d176f0bc4ab01e12a689b0499d8bd",
+      "size": 11357,
+      "normalized_sha256": "58d1e17ffe5109a7ae296caafcadfdbe6a7d176f0bc4ab01e12a689b0499d8bd"
+    },
+    ".agents/skills/ui-styling/SKILL.md": {
+      "role": "index",
+      "sha256": "f8b6c3832d2af51f67b3932e3c4a79bcd8a8596cc61ce1547a686fc951e5c62d",
+      "size": 10045,
+      "normalized_sha256": "f8b6c3832d2af51f67b3932e3c4a79bcd8a8596cc61ce1547a686fc951e5c62d"
+    },
+    ".agents/skills/ui-styling/references/canvas-design-system.md": {
+      "role": "index",
+      "sha256": "f5de85ff39d9f3a8275c4164b921ba72d5e1d34b8d7a9243d9ee34b3870a4f5f",
+      "size": 7888,
+      "normalized_sha256": "f5de85ff39d9f3a8275c4164b921ba72d5e1d34b8d7a9243d9ee34b3870a4f5f"
+    },
+    ".agents/skills/ui-styling/references/shadcn-accessibility.md": {
+      "role": "index",
+      "sha256": "a22cd4ccf82b635b2b2c4f12416a0c4f7edcd825d219d6089450fa797a0d9511",
+      "size": 9976,
+      "normalized_sha256": "a22cd4ccf82b635b2b2c4f12416a0c4f7edcd825d219d6089450fa797a0d9511"
+    },
+    ".agents/skills/ui-styling/references/shadcn-components.md": {
+      "role": "index",
+      "sha256": "79c4f91cbf68993a43fa3a95889c35db73de45bdd3dfd83a6830863c01aa598a",
+      "size": 11155,
+      "normalized_sha256": "79c4f91cbf68993a43fa3a95889c35db73de45bdd3dfd83a6830863c01aa598a"
+    },
+    ".agents/skills/ui-styling/references/shadcn-theming.md": {
+      "role": "index",
+      "sha256": "d17d641474221123ff0e0288043ca2f2dab3ac96908a19eed28d82f9e58865ed",
+      "size": 8672,
+      "normalized_sha256": "d17d641474221123ff0e0288043ca2f2dab3ac96908a19eed28d82f9e58865ed"
+    },
+    ".agents/skills/ui-styling/references/tailwind-customization.md": {
+      "role": "index",
+      "sha256": "4c5adeed6263a274f74f6eb2c816ca420fd6ef4f35683582988bacd404799afe",
+      "size": 10171,
+      "normalized_sha256": "4c5adeed6263a274f74f6eb2c816ca420fd6ef4f35683582988bacd404799afe"
+    },
+    ".agents/skills/ui-styling/references/tailwind-responsive.md": {
+      "role": "index",
+      "sha256": "8d00ae620df26daea4623c7bf996d6e612e09d359305fcfa2b40cab757ed840c",
+      "size": 8270,
+      "normalized_sha256": "8d00ae620df26daea4623c7bf996d6e612e09d359305fcfa2b40cab757ed840c"
+    },
+    ".agents/skills/ui-styling/references/tailwind-utilities.md": {
+      "role": "index",
+      "sha256": "aba1c40ef84f43beea142ae310371e332541f39d973df90a71f1854823effda1",
+      "size": 9980,
+      "normalized_sha256": "aba1c40ef84f43beea142ae310371e332541f39d973df90a71f1854823effda1"
+    },
+    ".agents/skills/ui-ux-pro-max/SKILL.md": {
+      "role": "index",
+      "sha256": "5905a2b470ca86077daf03f3c13361b949a702ae9f98399515abc55882cb9aa3",
+      "size": 28032,
+      "normalized_sha256": "5905a2b470ca86077daf03f3c13361b949a702ae9f98399515abc55882cb9aa3"
+    },
+    ".agents/skills/ui-ux-pro-max/data/app-interface.csv": {
+      "role": "index",
+      "sha256": "331e7cf2c0b222d80c566c5f255c63cb339f65bfd02e471a720f28e4864a9f08",
+      "size": 11046,
+      "normalized_sha256": "331e7cf2c0b222d80c566c5f255c63cb339f65bfd02e471a720f28e4864a9f08"
+    },
+    ".agents/skills/ui-ux-pro-max/data/catalog-summary.json": {
+      "role": "index",
+      "sha256": "65fe0b64480a8a827738297d0a64ca55c627d4afcb774fe4555c59cea8dd6905",
+      "size": 2392,
+      "normalized_sha256": "65fe0b64480a8a827738297d0a64ca55c627d4afcb774fe4555c59cea8dd6905"
+    },
+    ".agents/skills/ui-ux-pro-max/data/charts.csv": {
+      "role": "index",
+      "sha256": "4115cf1120680f2cedef0676cb648f30c7ef4699e2a947535d4113e71ed3b12a",
+      "size": 23365,
+      "normalized_sha256": "4115cf1120680f2cedef0676cb648f30c7ef4699e2a947535d4113e71ed3b12a"
+    },
+    ".agents/skills/ui-ux-pro-max/data/colors.csv": {
+      "role": "index",
+      "sha256": "8162429222bce22df62b564085946a30d07cc9722c58d0a3a494bd0d1d00841c",
+      "size": 37940,
+      "normalized_sha256": "8162429222bce22df62b564085946a30d07cc9722c58d0a3a494bd0d1d00841c"
+    },
+    ".agents/skills/ui-ux-pro-max/data/data-provenance.json": {
+      "role": "index",
+      "sha256": "e82fb33ed49375a300e93d9c11ccd1c1493c999e84ee7ee295e527634786e2e0",
+      "size": 36686,
+      "normalized_sha256": "e82fb33ed49375a300e93d9c11ccd1c1493c999e84ee7ee295e527634786e2e0"
+    },
+    ".agents/skills/ui-ux-pro-max/data/google-font-licenses.json": {
+      "role": "index",
+      "sha256": "35688523f2955795caa1a47c53b83099e60c1708461476f9cc3a050cf3b0148a",
+      "size": 433127,
+      "normalized_sha256": "35688523f2955795caa1a47c53b83099e60c1708461476f9cc3a050cf3b0148a"
+    },
+    ".agents/skills/ui-ux-pro-max/data/google-fonts.csv": {
+      "role": "index",
+      "sha256": "1c8c3b2ea1faf6a1012da463756def8b3889db33f2226f0343bb4daa80307d03",
+      "size": 747241,
+      "normalized_sha256": "1c8c3b2ea1faf6a1012da463756def8b3889db33f2226f0343bb4daa80307d03"
+    },
+    ".agents/skills/ui-ux-pro-max/data/icons.csv": {
+      "role": "index",
+      "sha256": "50816c6012030178195a16ee481ebf58b47bd985d70e8ec58886cc83f6eddafc",
+      "size": 57945,
+      "normalized_sha256": "50816c6012030178195a16ee481ebf58b47bd985d70e8ec58886cc83f6eddafc"
+    },
+    ".agents/skills/ui-ux-pro-max/data/landing.csv": {
+      "role": "index",
+      "sha256": "9a2edd3bb676c2a58f00ade7a062e285222d4297bfd847c8d5b056f0dbbf52d0",
+      "size": 25449,
+      "normalized_sha256": "9a2edd3bb676c2a58f00ade7a062e285222d4297bfd847c8d5b056f0dbbf52d0"
+    },
+    ".agents/skills/ui-ux-pro-max/data/motion.csv": {
+      "role": "index",
+      "sha256": "381affe8df8ea1f66fbbda2598827f9f54299107bbe6a1b4e9b68f6b62091ceb",
+      "size": 14679,
+      "normalized_sha256": "381affe8df8ea1f66fbbda2598827f9f54299107bbe6a1b4e9b68f6b62091ceb"
+    },
+    ".agents/skills/ui-ux-pro-max/data/phosphor-icons-upstream.json": {
+      "role": "index",
+      "sha256": "2399325233b277b5c97a80e6a5e8941154f5d057beee4e7613db87c87d700236",
+      "size": 823933,
+      "normalized_sha256": "2399325233b277b5c97a80e6a5e8941154f5d057beee4e7613db87c87d700236"
+    },
+    ".agents/skills/ui-ux-pro-max/data/products.csv": {
+      "role": "index",
+      "sha256": "42473f75e8dde5987bdf89ce55d8c168091b80a356cae691dd60247d80720b70",
+      "size": 75623,
+      "normalized_sha256": "42473f75e8dde5987bdf89ce55d8c168091b80a356cae691dd60247d80720b70"
+    },
+    ".agents/skills/ui-ux-pro-max/data/react-performance.csv": {
+      "role": "index",
+      "sha256": "3d925802539abac5afeb63ae8aa1960b7229ad271b3a47caed40ab2d97ad0734",
+      "size": 15080,
+      "normalized_sha256": "3d925802539abac5afeb63ae8aa1960b7229ad271b3a47caed40ab2d97ad0734"
+    },
+    ".agents/skills/ui-ux-pro-max/data/stacks/angular.csv": {
+      "role": "index",
+      "sha256": "704be83f2bad30c7e6de01afb113ffa01e0c458762f48b7102f31ba2367b5553",
+      "size": 19863,
+      "normalized_sha256": "704be83f2bad30c7e6de01afb113ffa01e0c458762f48b7102f31ba2367b5553"
+    },
+    ".agents/skills/ui-ux-pro-max/data/stacks/astro.csv": {
+      "role": "index",
+      "sha256": "2c2f55fadaafc05e04cc321c8194a1a28b656e6757fe2ba316f41b16428299c6",
+      "size": 14591,
+      "normalized_sha256": "2c2f55fadaafc05e04cc321c8194a1a28b656e6757fe2ba316f41b16428299c6"
+    },
+    ".agents/skills/ui-ux-pro-max/data/stacks/avalonia.csv": {
+      "role": "index",
+      "sha256": "442fca14675a020683473e7e49f08abb27b9df0765c80efe54aef61f1a4ac258",
+      "size": 27327,
+      "normalized_sha256": "442fca14675a020683473e7e49f08abb27b9df0765c80efe54aef61f1a4ac258"
+    },
+    ".agents/skills/ui-ux-pro-max/data/stacks/flutter.csv": {
+      "role": "index",
+      "sha256": "64dba0ac17349f28bce517a0f5f48c54d9ed2e487ec0c0258303463b382f41a0",
+      "size": 14192,
+      "normalized_sha256": "64dba0ac17349f28bce517a0f5f48c54d9ed2e487ec0c0258303463b382f41a0"
+    },
+    ".agents/skills/ui-ux-pro-max/data/stacks/html-tailwind.csv": {
+      "role": "index",
+      "sha256": "d05a581d20af57b8ca0104a6d31d90a07c437d500662a96c3029fc2f9a4678ee",
+      "size": 16551,
+      "normalized_sha256": "d05a581d20af57b8ca0104a6d31d90a07c437d500662a96c3029fc2f9a4678ee"
+    },
+    ".agents/skills/ui-ux-pro-max/data/stacks/javafx.csv": {
+      "role": "index",
+      "sha256": "2e819b8d5abdd23ad4dae0991650fdb57af497aabd68b37463aa9c442944c869",
+      "size": 33577,
+      "normalized_sha256": "2e819b8d5abdd23ad4dae0991650fdb57af497aabd68b37463aa9c442944c869"
+    },
+    ".agents/skills/ui-ux-pro-max/data/stacks/jetpack-compose.csv": {
+      "role": "index",
+      "sha256": "699de218b286948eaec7d15767b6e1350ee299167e49bf476d82e3ff58724e0a",
+      "size": 12295,
+      "normalized_sha256": "699de218b286948eaec7d15767b6e1350ee299167e49bf476d82e3ff58724e0a"
+    },
+    ".agents/skills/ui-ux-pro-max/data/stacks/laravel.csv": {
+      "role": "index",
+      "sha256": "854ea4daa5fc61292d22235ad33b49ba3fe22423c3de8d3cb03758ffed3b59f9",
+      "size": 20163,
+      "normalized_sha256": "854ea4daa5fc61292d22235ad33b49ba3fe22423c3de8d3cb03758ffed3b59f9"
+    },
+    ".agents/skills/ui-ux-pro-max/data/stacks/nextjs.csv": {
+      "role": "index",
+      "sha256": "ecd2c27b2ea0127d203ae726060efcdd7335b5e83f96b99e4f3befbbfeebd5a4",
+      "size": 18687,
+      "normalized_sha256": "ecd2c27b2ea0127d203ae726060efcdd7335b5e83f96b99e4f3befbbfeebd5a4"
+    },
+    ".agents/skills/ui-ux-pro-max/data/stacks/nuxt-ui.csv": {
+      "role": "index",
+      "sha256": "c36ee8470926b4a0748d241363c71664c9969c2edbc62f7f72de0db73880fac6",
+      "size": 24106,
+      "normalized_sha256": "c36ee8470926b4a0748d241363c71664c9969c2edbc62f7f72de0db73880fac6"
+    },
+    ".agents/skills/ui-ux-pro-max/data/stacks/nuxtjs.csv": {
+      "role": "index",
+      "sha256": "3d9b54ed2d151bd9c86e9e5609b8a6f88a00c4c52fa601a30af96c49b2c4d176",
+      "size": 23014,
+      "normalized_sha256": "3d9b54ed2d151bd9c86e9e5609b8a6f88a00c4c52fa601a30af96c49b2c4d176"
+    },
+    ".agents/skills/ui-ux-pro-max/data/stacks/react-native.csv": {
+      "role": "index",
+      "sha256": "ba31dd9c0c04da6bc02a74448bf121f9c0728ae5ba3b4d47b487778b0a1135b5",
+      "size": 14049,
+      "normalized_sha256": "ba31dd9c0c04da6bc02a74448bf121f9c0728ae5ba3b4d47b487778b0a1135b5"
+    },
+    ".agents/skills/ui-ux-pro-max/data/stacks/react.csv": {
+      "role": "index",
+      "sha256": "2d2b9c198e875106a30f7ee68341a9ee0033cad60a7e130cf23152783e08aeda",
+      "size": 19036,
+      "normalized_sha256": "2d2b9c198e875106a30f7ee68341a9ee0033cad60a7e130cf23152783e08aeda"
+    },
+    ".agents/skills/ui-ux-pro-max/data/stacks/shadcn.csv": {
+      "role": "index",
+      "sha256": "e56cfde5b74907836ac3582a4779d5b7f3d206a702ab81b8669a1b668c3eeb51",
+      "size": 23184,
+      "normalized_sha256": "e56cfde5b74907836ac3582a4779d5b7f3d206a702ab81b8669a1b668c3eeb51"
+    },
+    ".agents/skills/ui-ux-pro-max/data/stacks/svelte.csv": {
+      "role": "index",
+      "sha256": "f6e379ba802941ba26b01d4ffbe3cd39120f2587659a1d93851c707f66bc13db",
+      "size": 15078,
+      "normalized_sha256": "f6e379ba802941ba26b01d4ffbe3cd39120f2587659a1d93851c707f66bc13db"
+    },
+    ".agents/skills/ui-ux-pro-max/data/stacks/swiftui.csv": {
+      "role": "index",
+      "sha256": "bdd9231ff3ad658f4e7c063e1eb49df2fd09ac8d90631a86df899b39833b9623",
+      "size": 15323,
+      "normalized_sha256": "bdd9231ff3ad658f4e7c063e1eb49df2fd09ac8d90631a86df899b39833b9623"
+    },
+    ".agents/skills/ui-ux-pro-max/data/stacks/threejs.csv": {
+      "role": "index",
+      "sha256": "97542e0ba34915a0ff7578be20e1619495df47c95c8c1c39b83e3785e1de771f",
+      "size": 46051,
+      "normalized_sha256": "97542e0ba34915a0ff7578be20e1619495df47c95c8c1c39b83e3785e1de771f"
+    },
+    ".agents/skills/ui-ux-pro-max/data/stacks/uno.csv": {
+      "role": "index",
+      "sha256": "a0474363e4225b5367214d5675fd3e075f137026f9500f0d04357882ef4f6d48",
+      "size": 30091,
+      "normalized_sha256": "a0474363e4225b5367214d5675fd3e075f137026f9500f0d04357882ef4f6d48"
+    },
+    ".agents/skills/ui-ux-pro-max/data/stacks/uwp.csv": {
+      "role": "index",
+      "sha256": "c409f08c1fbba1f1029f1acaa554e7b4471cc85517a5751c9f2e62465badcd5c",
+      "size": 24692,
+      "normalized_sha256": "c409f08c1fbba1f1029f1acaa554e7b4471cc85517a5751c9f2e62465badcd5c"
+    },
     ".cursor/rules/ai-memory.mdc": {
       "role": "index",
       "sha256": "951b627dbc3f33a34861e6e8f0f8a8d83e9ebb271de0a82bb5a8085660f135f2",
@@ -197,9 +557,9 @@
     },
     "aoci.code.txt": {
       "role": "index",
-      "sha256": "54240198d3bf7890d286d8bd56312f1cfec6635ec5f82d72422889298f81b46d",
-      "size": 1009704,
-      "normalized_sha256": "54240198d3bf7890d286d8bd56312f1cfec6635ec5f82d72422889298f81b46d"
+      "sha256": "0febb3d6c543a32e48d13a4d72608a2e24d72d6eb231bc02f614d97efa8c990a",
+      "size": 1029071,
+      "normalized_sha256": "0febb3d6c543a32e48d13a4d72608a2e24d72d6eb231bc02f614d97efa8c990a"
     },
     "aoci.meta.txt": {
       "role": "index",
