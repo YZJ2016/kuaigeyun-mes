@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 
 _BASEDATA_BATCH_OBJECTS = {
@@ -235,3 +235,46 @@ def normalize_kingdee_cosmic_api_path(endpoint: str) -> str:
     if ep.startswith("kapi/sys/"):
         return f"ierp/{ep}"
     return ep
+
+
+def collapse_material_rows_to_unique_units(rows: List[Any]) -> List[Dict[str, Any]]:
+    """
+    物料行 → 按基础单位编码去重。
+    单位同步源常是物料 batchQuery；同一 kg 会在每条物料上重复出现。
+    """
+    seen: set[str] = set()
+    out: List[Dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        code = (
+            row.get("baseunit_number")
+            or row.get("baseunit.number")
+            or row.get("measureunitid_number")
+            or row.get("measureunitid.number")
+        )
+        name = (
+            row.get("baseunit_name")
+            or row.get("baseunit.name")
+            or row.get("measureunitid_name")
+            or row.get("measureunitid.name")
+            or code
+        )
+        code_s = str(code or "").strip()
+        name_s = str(name or "").strip() or code_s
+        if not code_s:
+            continue
+        key = code_s.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(
+            {
+                "baseunit_number": code_s,
+                "baseunit_name": name_s,
+                "number": code_s,
+                "name": name_s,
+                "code": code_s,
+            }
+        )
+    return out

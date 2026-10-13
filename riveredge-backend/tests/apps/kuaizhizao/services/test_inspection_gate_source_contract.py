@@ -28,11 +28,13 @@ from infra.exceptions.exceptions import BusinessLogicError
 
 def _cfg(**over):
     cfg = {
-        "stage_enabled": {"iqc": True, "ipqc": True, "fqc": True, "oqc": True},
+        "stage_enabled": {"iqc": True, "osqc": True, "ipqc": True, "fqc": True, "oqc": True},
         "module_enabled": {
             "incoming": True,
+            "outsource": True,
             "process": True,
             "finished": True,
+            "patrol": True,
             "defect_handling": True,
         },
         "auto_create": {},

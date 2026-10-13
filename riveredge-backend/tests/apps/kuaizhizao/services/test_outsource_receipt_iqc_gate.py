@@ -104,6 +104,14 @@ def _posting_patches(svc, *, stock_error=None, cost_error=None, payable_error=No
             "apps.kuaicaiwu.services.inventory_cost_service.InventoryCostService.on_outsource_receipt_confirmed",
             new=on_cost,
         ),
+        patch(
+            "apps.kuaizhizao.models.outsource_work_order.OutsourceWorkOrder.get_or_none",
+            new=AsyncMock(return_value=None),
+        ),
+        patch(
+            "apps.kuaizhizao.services.inspection_policy_service.assert_osqc_for_outsource_receipt",
+            new=AsyncMock(),
+        ),
     ):
         yield state
 
