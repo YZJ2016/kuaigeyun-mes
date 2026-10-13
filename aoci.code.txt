@@ -2782,9 +2782,7 @@ services.py[DB5S]: F:辐条轮毂总装 — 服务层 | R:- | A:_gen_code_sync,_
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/core/ai/===
 __init__.py[XC1T]: F:Implements __init__.py | R:- | A:- | S:1L
-agent_runner.py[DB5S]: F:Agent 工具循环：从 DeepSeekService 抽出的平台层。 | R:- | A:AgentRunner | S:103L; Agent 工具循环：从 DeepSeekService 抽出的平台层。
 chat_handler.py[DB5S]: F:统一 Chat Completion 入口（core 网关 + site-settings 薄转发）。 | R:- | A:_normalize_user_chat_messages,_kuaiai_composed,create_chat_completion | S:113L
-completion_service.py[DB5S]: F:DeepSeek Chat Completions 代理（非流式 + SSE 流式）。 | R:- | A:CompletionService | S:158L
 deps.py[DB5T]: F:RiverEdge AI FastAPI 依赖链。 | R:- | A:AiAuth,get_ai_runtime,get_ai_auth,require_ai_capability | S:56L; RiverEdge AI FastAPI 依赖链。
 draft_profiles.py[DB5S]: F:业务 StructuredDraft 配置注册。 | R:- | A:_sales_meaningful,_po_meaningful,ensure_draft_profiles | S:140L; 业务 StructuredDraft 配置注册。
 jobs.py[DB5S]: F:AI 异步长任务（TaskIQ + 内存状态）。 | R:- | A:_AiJobRecord,AiJobService | S:116L; AI 异步长任务（TaskIQ + 内存状态）。
@@ -8192,3 +8190,37 @@ form_request_confirmation.py[KB3T]: F:确认单kind/附件/销售回复校验 | 
 form_request_issue_access.py[DI5M]: F:会签下发可见性与能力位计算 | R:code:riveredge-backend/src/apps/kuaioa/constants/form_request_issue.py, code:riveredge-backend/src/apps/kuaioa/models/form_request_issue.py | A:compute_form_request_capabilities,user_can_view_form_request_row | S:issue范围类型非维护人须命中grant才可见
 form_request_material_issue.py[KB3T]: F:发料单提交内容与会签目标校验 | R:code:riveredge-backend/src/apps/kuaioa/utils/form_request_review_sheet.py | A:validate_material_issue_on_submit | S:须purpose+lines; 会签复用countersign
 form_request_review_sheet.py[KB3T]: F:评审单会签人解析与提交校验 | R:- | A:countersign_user_ids | S:从form_data解析正整数user id列表
+
+===D:/kuaigeyun-pro/kuaigeyun/.agents/skills/banner-design/===
+SKILL.md[XE4S]: F:编排横幅需求采集、艺术方向、视觉生成、按尺寸导出与迭代 | R:code:.agents/skills/banner-design/references/banner-sizes-and-styles.md | A:banner-design;platform/style/dimensions | S:只负责横幅设计，不承接视频、完整网站或印刷制作；多尺寸输出用{style}-{width}x{height}命名
+
+===D:/kuaigeyun-pro/kuaigeyun/.agents/skills/banner-design/references/===
+banner-sizes-and-styles.md[XE3S]: F:汇总社媒、网页、展示广告与印刷横幅尺寸、22种视觉风格及设计规则 | R:code:.agents/skills/banner-design/SKILL.md | A:横幅尺寸表;艺术方向与安全区规则 | S:YouTube安全区1546×423置于2560×1440画布；印刷300DPI、3-5mm出血
+
+===D:/kuaigeyun-pro/kuaigeyun/.agents/skills/brand/===
+SKILL.md[XE4T]: F:提供品牌语气、视觉标识、资产组织与一致性维护的Agent技能入口 | R:code:.agents/skills/brand/references/brand-guideline-template.md,code:.agents/skills/brand/references/consistency-checklist.md | A:brand update;品牌上下文注入与素材校验脚本入口 | S:品牌指南为真源，更新后须同步到design-tokens.json/css并验证注入结果
+
+===D:/kuaigeyun-pro/kuaigeyun/.agents/skills/brand/references/===
+approval-checklist.md[XE3S]: F:提供营销素材发布前视觉、可访问性、文案、技术和合规审核清单 | R:code:.agents/skills/brand/SKILL.md,code:.agents/skills/brand/references/logo-usage-rules.md | A:审核状态与签字表;素材审批清单 | S:所有审核领域通过且修订完成后才可标记最终批准并上传发布
+asset-organization.md[XE3S]: F:规定营销素材目录、命名、资产清单元数据、标签和归档方式 | R:code:.agents/skills/brand/SKILL.md | A:.assets/manifest.json;{type}_{campaign}_{description}_{timestamp}_{variant}.{ext} | S:素材按版本归档而不是删除；超过100MB的视频建议外存并保留链接
+brand-guideline-template.md[XE3S]: F:提供品牌配色、字体、标识、语气和图像规范的可填写模板 | R:code:.agents/skills/brand/SKILL.md | A:docs/brand-guidelines.md模板;colors/typography/voice/logo字段 | S:复制模板后须填入品牌实际取值，不能将占位符当作正式品牌规范
+color-palette-management.md[XE3S]: F:说明品牌配色层级、CSS变量、颜色提取及一致性与对比度检查 | R:code:.agents/skills/brand/SKILL.md,code:.agents/skills/brand/references/brand-guideline-template.md | A:调色板表;CSS变量;合规检查指标 | S:普通文本须满足WCAG AA 4.5:1对比度；非品牌色占比最多20%
+consistency-checklist.md[XE3T]: F:列出品牌标识、配色、字体、语气和跨渠道一致性的审计检查项 | R:code:.agents/skills/brand/SKILL.md | A:视觉/语气/渠道审计清单;审核频率表 | S:网站按月、社媒与邮件及销售资料按季、全品牌按年审核
+logo-usage-rules.md[XE3S]: F:定义Logo变体、最小尺寸、留白、配色、文件格式与联合品牌摆放规范 | R:code:.agents/skills/brand/SKILL.md,code:.agents/skills/brand/references/approval-checklist.md | A:Logo使用规范;数字与印刷尺寸表 | S:非标准Logo用法须先提交含使用场景的样稿、取得品牌团队批准并记录例外
+messaging-framework.md[XE3T]: F:组织使命、愿景、价值主张、定位、核心信息与分受众传播框架 | R:code:.agents/skills/brand/SKILL.md | A:品牌陈述模板;受众信息表;信息测试问题 | S:信息发布前须确认表达清晰、差异化、可信且有证据支撑
+typography-specifications.md[XE3M]: F:规定品牌字体栈、字号比例、字重、行高、字距及CSS与Tailwind实现方式 | R:code:.agents/skills/brand/SKILL.md | A:字体变量与排版尺度表;响应式排版示例 | S:正文至少16px且行宽宜65-75字符；小字号避免细字重；普通文本对比度不低于4.5:1
+update.md[XE4S]: F:指导品牌主题、颜色、字体更新及设计Token同步和验证 | R:code:.agents/skills/brand/SKILL.md | A:/brand:update;品牌输入与同步步骤 | S:更新品牌必须同步brand-guidelines.md、design-tokens.json与design-tokens.css，随后验证上下文提取
+visual-identity.md[XE3T]: F:提供标识、调色板、排版与图像风格的视觉规范模板和检查项 | R:code:.agents/skills/brand/SKILL.md,code:.agents/skills/brand/references/logo-usage-rules.md | A:视觉规范模板;标识与色彩快速核对清单 | S:标识不得拉伸或擅自改色；文本对比度至少4.5:1
+voice-framework.md[XE3T]: F:定义品牌语调维度、人格特质、分场景语气调整与测试方法 | R:code:.agents/skills/brand/SKILL.md | A:品牌语气表;语句改写模板;语气测试问题 | S:品牌Voice保持一致，Tone仅随社媒、客服、法律与销售等场景调整
+
+===D:/kuaigeyun-pro/kuaigeyun/.agents/skills/brand/templates/===
+brand-guidelines-starter.md[XE3M]: F:提供配色、字体、标识、语气、图像和组件规范的品牌指南初稿示例 | R:code:.agents/skills/brand/SKILL.md | A:品牌指南模板;设计组件尺度与示例Prompt | S:文件状态为Draft，含日期与生成提示占位符；不得直接把示例值当成项目正式品牌
+
+===D:/kuaigeyun-pro/kuaigeyun/.agents/skills/design-system/===
+SKILL.md[XE4M]: F:提供三层设计Token、组件规范与品牌一致的演示文稿制作流程 | R:code:.agents/skills/brand/SKILL.md,code:.agents/skills/design-system/data/slide-charts.csv | A:generate-tokens.cjs;validate-tokens.cjs;/slides:create | S:幻灯片必须引入design-tokens.css，用CSS变量取色并使用Chart.js绘图；不可硬编码颜色
+
+===D:/kuaigeyun-pro/kuaigeyun/.agents/skills/design-system/data/===
+slide-backgrounds.csv[XE2T]: F:将演示页类型映射为背景图类别、叠加样式、文字位置和搜索词 | R:code:.agents/skills/design-system/SKILL.md | A:slide_type,image_category,overlay_style,text_placement,image_sources,search_keywords | S:图片源限表中列出的Pexels与Unsplash类别
+slide-charts.csv[XE3T]: F:提供25类演示图表的适用数据、场景、避用条件和可访问性提示 | R:code:.agents/skills/design-system/SKILL.md | A:id/chart_type,when_to_use,when_to_avoid,max_categories,css_implementation,accessibility_notes | S:饼图不用于过多类别或精确比较，须标百分比且禁止3D；图形均保留文本替代说明
+slide-color-logic.csv[XE2T]: F:按演示页情绪映射背景、文字、强调色、渐变与卡片表现 | R:code:.agents/skills/design-system/SKILL.md | A:emotion,background,text_color,accent_usage,use_full_bleed,gradient/card_style | S:-
+slide-copy.csv[XE3T]: F:收录25种演示文案公式、场景与情绪触发，用于生成问题、方案及行动页 | R:code:.agents/skills/design-system/SKILL.md | A:id/formula_name,components,use_case,example_template,emotion_trigger,slide_type | S:Proof Stack中的统计值须标可核对的来源，不应把公式占位符当作真实案例
