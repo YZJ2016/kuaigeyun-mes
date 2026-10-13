@@ -360,12 +360,26 @@ const CAMEL_SNAKE_PAIRS: Array<[string, string]> = [
   ['short_name', 'shortName'],
 ];
 
-function columnMatchesTarget(column: string, target: string): boolean {
+function resolveTargetAliases(
+  target: string,
+  targetAliases?: Record<string, string[]> | null,
+): string[] {
+  if (targetAliases && Object.prototype.hasOwnProperty.call(targetAliases, target)) {
+    return targetAliases[target] ?? [];
+  }
+  return KINGDEE_TARGET_ALIASES[target] ?? [];
+}
+
+function columnMatchesTarget(
+  column: string,
+  target: string,
+  targetAliases?: Record<string, string[]> | null,
+): boolean {
   const col = column.trim();
   const tgt = target.trim();
   if (!col || !tgt) return false;
   if (col === tgt) return true;
-  const aliases = KINGDEE_TARGET_ALIASES[tgt] ?? [];
+  const aliases = resolveTargetAliases(tgt, targetAliases);
   if (aliases.includes(col)) return true;
   const colLower = col.toLowerCase();
   const tgtLower = tgt.replace(/^item\./, '').toLowerCase();
@@ -385,21 +399,46 @@ function columnMatchesTarget(column: string, target: string): boolean {
 export function suggestTargetToSourceMapping(
   columns: string[],
   targetFields: string[],
+  targetAliases?: Record<string, string[]> | null,
 ): Record<string, string> {
   const mapping: Record<string, string> = {};
   const columnByLower = new Map(columns.map((column) => [column.toLowerCase(), column]));
   for (const target of targetFields) {
-    let hit: string | undefined;
-    for (const alias of KINGDEE_TARGET_ALIASES[target] ?? []) {
-      hit = columnByLower.get(alias.toLowerCase());
-      if (hit) break;
+    // 优先同名列（苍穹 name→物料名称），避免被 baseunit_name 等别名抢先
+    let hit = columnByLower.get(target.toLowerCase());
+    if (!hit) {
+      for (const alias of resolveTargetAliases(target, targetAliases)) {
+        hit = columnByLower.get(alias.toLowerCase());
+        if (hit) break;
+      }
     }
     if (!hit) {
-      hit = columns.find((column) => columnMatchesTarget(column, target));
+      hit = columns.find((column) =>
+        columnMatchesTarget(column, target, targetAliases),
+      );
     }
     if (hit) mapping[target] = hit;
   }
   return mapping;
+}
+
+/** 丢弃来源列已不在预览中的映射，再用建议补齐空目标 */
+export function mergeSuggestedMapping(
+  columns: string[],
+  targetFields: string[],
+  existing: Record<string, string>,
+  targetAliases?: Record<string, string[]> | null,
+): Record<string, string> {
+  const suggested = suggestTargetToSourceMapping(columns, targetFields, targetAliases);
+  const columnSet = new Set(columns);
+  const next: Record<string, string> = { ...suggested };
+  for (const [target, source] of Object.entries(existing)) {
+    if (!target || !source) continue;
+    if (columnSet.size === 0 || columnSet.has(source)) {
+      next[target] = source;
+    }
+  }
+  return next;
 }
 
 export function invertFieldMapping(targetToSource: Record<string, string>): Record<string, string> {

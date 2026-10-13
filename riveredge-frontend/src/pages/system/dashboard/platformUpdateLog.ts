@@ -44,6 +44,54 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'notify-warehouse-nested-tx-deadlock-r01',
+    date: '2026-10-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.notify-warehouse-nested-tx-deadlock-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.notify-warehouse-nested-tx-deadlock-r01.description',
+  },
+  {
+    id: 'sales-return-customer-name-string-r01',
+    date: '2026-10-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-return-customer-name-string-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-return-customer-name-string-r01.description',
+  },
+  {
+    id: 'unit-material-sync-decouple-r01',
+    date: '2026-10-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.unit-material-sync-decouple-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.unit-material-sync-decouple-r01.description',
+  },
+  {
+    id: 'quality-patrol-form-list-r01',
+    date: '2026-10-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.quality-patrol-form-list-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.quality-patrol-form-list-r01.description',
+  },
+  {
+    id: 'quality-outsource-list-align-r01',
+    date: '2026-10-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.quality-outsource-list-align-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.quality-outsource-list-align-r01.description',
+  },
+  {
+    id: 'quality-plan-types-osqc-patrol-r01',
+    date: '2026-10-13',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.quality-plan-types-osqc-patrol-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.quality-plan-types-osqc-patrol-r01.description',
+  },
+  {
     id: 'equip-ops-scheme-bind-clients-r01',
     date: '2026-10-13',
     type: 'improvement',
@@ -51,7 +99,6 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
     descriptionKey:
       'pages.dashboard.updateLog.entries.equip-ops-scheme-bind-clients-r01.description',
   },
-  {
     id: 'plan-scheme-bind-r01',
     date: '2026-10-13',
     type: 'improvement',
@@ -74,6 +121,7 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
     descriptionKey:
       'pages.dashboard.updateLog.entries.customer-pool-hide-create-r01.description',
   },
+  {
   {
     id: 'purchase-requisition-uni-audit-resource-fix-r01',
     date: '2026-10-13',

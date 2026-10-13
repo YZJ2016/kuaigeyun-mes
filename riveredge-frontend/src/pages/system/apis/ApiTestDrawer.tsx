@@ -31,6 +31,14 @@ const JSON_PRE_STYLE: React.CSSProperties = {
   fontFamily: CODE_FONT_FAMILY,
 };
 
+const UNIT_SYNC_MATERIAL_SELECT = 'number,name,baseunit.number,baseunit.name';
+
+/** 仅单位同步预置 code（query_measureunits）；禁止用名称/baseunit 推断，以免误伤物料接口测试 */
+function isCosmicUnitSyncMaterialApi(api: API): boolean {
+  const code = String(api.code || '').toLowerCase();
+  return code.includes('query_measureunits');
+}
+
 function buildTestRequestPreview(api: API): APITestRequest {
   const preview: APITestRequest = {};
   if (api.request_headers && Object.keys(api.request_headers).length > 0) {

@@ -10,7 +10,6 @@ Date: 2025-01-14
 
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
-from tortoise.transactions import in_transaction
 from loguru import logger
 
 from apps.kuaizhizao.models.document_relation import DocumentRelation
@@ -24,6 +23,7 @@ from apps.kuaizhizao.schemas.document_relation import (
     DocumentTraceReportingEntry,
 )
 from apps.common.audit_actor import audit_response_fields
+from core.utils.db_transaction import reuse_or_begin_transaction
 from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
@@ -145,7 +145,8 @@ class DocumentRelationNewService:
         Returns:
             DocumentRelationResponse: 创建的关联关系响应
         """
-        async with in_transaction():
+        # 禁止裸 in_transaction：外层建单事务内再嵌套会 Nested 死锁（通知仓库 504）。
+        async with reuse_or_begin_transaction():
             # 检查关联关系是否已存在
             existing = await DocumentRelation.get_or_none(
                 tenant_id=tenant_id,
@@ -420,7 +421,7 @@ class DocumentRelationNewService:
         Returns:
             List[DocumentRelationResponse]: 创建的关联关系列表
         """
-        async with in_transaction():
+        async with reuse_or_begin_transaction():
             relations = []
             
             for target in target_documents:
