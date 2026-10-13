@@ -44,7 +44,6 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
-  {
     id: 'master-data-units-sync-i18n-r01',
     date: '2026-10-13',
     type: 'fix',
@@ -170,6 +169,7 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
     descriptionKey:
       'pages.dashboard.updateLog.entries.equip-ops-scheme-bind-clients-r01.description',
   },
+  {
     id: 'plan-scheme-bind-r01',
     date: '2026-10-13',
     type: 'improvement',
@@ -192,7 +192,6 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
     descriptionKey:
       'pages.dashboard.updateLog.entries.customer-pool-hide-create-r01.description',
   },
-  {
   {
     id: 'purchase-requisition-uni-audit-resource-fix-r01',
     date: '2026-10-13',
