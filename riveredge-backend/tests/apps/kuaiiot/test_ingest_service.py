@@ -177,3 +177,43 @@ async def test_missing_timestamp_uses_server_time(db):
     await IngestService.ingest(device.device_token, IngestBody(tags={"temp": 1}))
     snapshot = await KuaiiotTagSnapshot.get(device_id=device.id, tag_key="temp")
     assert snapshot.sampled_at >= before
+
+
+@pytest.mark.asyncio
+async def test_ingest_http_endpoints_accept_ingest_body_contract(db):
+    """API 回归：/ingest/{token} 与 /batch 走执行版契约（IngestBody / 模块级 ingest_batch）。"""
+    import httpx
+    from fastapi import FastAPI
+
+    from apps.kuaiiot.api.ingest import router as ingest_router
+
+    set_current_tenant_id(1)
+    device = await _register_pair(None, "api")
+
+    app = FastAPI()
+    app.include_router(ingest_router)
+    transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        single = await client.post(
+            f"/ingest/{device.device_token}",
+            json={
+                "tags": {"temp": "25.5", "run": "运行中", "ghost": 9},
+                "idempotency_key": "api-single-1",
+            },
+        )
+        batch = await client.post(
+            f"/ingest/{device.device_token}/batch",
+            json={"items": [{"tags": {"temp": "26"}, "idempotency_key": "api-batch-1"}]},
+        )
+
+    assert single.status_code == 200
+    single_body = single.json()
+    assert single_body["accepted"] is True
+    assert single_body["device_uuid"] == device.uuid
+    assert sorted(single_body["snapshot_keys"]) == ["run", "temp"]
+
+    assert batch.status_code == 200
+    batch_body = batch.json()
+    assert batch_body["total"] == 1
+    assert batch_body["accepted"] == 1
+    assert batch_body["failed"] == 0

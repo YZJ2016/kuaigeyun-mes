@@ -1,4 +1,4 @@
-"""三易产线 MQTT 报文适配：devices[] + variables[] → 快数采 IngestPayload。"""
+"""三易产线 MQTT 报文适配：devices[] + variables[] → 快数采 IngestBody。"""
 
 from __future__ import annotations
 

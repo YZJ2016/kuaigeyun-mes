@@ -8,7 +8,8 @@ import httpx
 from loguru import logger
 
 from apps.kuaiiot.models.iot import IotConnection, IotDevice
-from apps.kuaiiot.schemas.iot import ConnectorPullTelemetryResponse, IngestPayload
+from apps.kuaiiot.schemas.ingest import IngestBody
+from apps.kuaiiot.schemas.iot import ConnectorPullTelemetryResponse
 from apps.kuaiiot.services.connection_service import ConnectionService
 from apps.kuaiiot.services.ingest_service import IngestService
 from infra.domain.tenant_context import unscoped, with_tenant
@@ -47,7 +48,7 @@ class TelemetrySyncService:
                 if not tags:
                     skipped += 1
                     continue
-                await IngestService.ingest(device.device_token, IngestPayload(tags=tags))
+                await IngestService.ingest(device.device_token, IngestBody(tags=tags))
                 ingested += 1
 
         return ConnectorPullTelemetryResponse(

@@ -25,7 +25,7 @@ TAG_TEMPLATES: dict[str, dict[str, Any]] = {
     "generic_line": {
         "name": "通用产线",
         "tags": [
-            _tag("status", "状态", "text", "status"),
+            _tag("status", "状态", "string", "status"),
             _tag("online", "在线", "boolean", "is_online"),
             _tag("temperature", "温度", "number", "temperature", "℃"),
             _tag("pressure", "压力", "number", "pressure"),
@@ -35,7 +35,7 @@ TAG_TEMPLATES: dict[str, dict[str, Any]] = {
     "injection_molding": {
         "name": "注塑机",
         "tags": [
-            _tag("status", "状态", "text", "status"),
+            _tag("status", "状态", "string", "status"),
             _tag("online", "在线", "boolean", "is_online"),
             _tag("barrel_temperature", "料筒温度", "number", "temperature", "℃"),
             _tag("injection_pressure", "注射压力", "number", "pressure"),
@@ -45,7 +45,7 @@ TAG_TEMPLATES: dict[str, dict[str, Any]] = {
     "cnc": {
         "name": "CNC",
         "tags": [
-            _tag("status", "状态", "text", "status"),
+            _tag("status", "状态", "string", "status"),
             _tag("online", "在线", "boolean", "is_online"),
             _tag("spindle_temperature", "主轴温度", "number", "temperature", "℃"),
             _tag("spindle_load", "主轴负载", "number", "vibration"),
