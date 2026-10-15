@@ -4,13 +4,17 @@
 
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Button, Card, Form, InputNumber, Space, Table, Typography, message } from 'antd';
+import { UniTable } from '../../../../components/uni-table';
+import { Button, Card, Form, InputNumber, Space, Typography, message } from 'antd';
 import { listMessageLogs, type MessageLog } from '../../services/registry';
 
 const { Title } = Typography;
 
 export default function MessagesPage({ title = '消息追踪' }: { title?: string }) {
   const [rows, setRows] = useState<MessageLog[]>([]);
+
+  const [form] = Form.useForm();
+  const refresh = () => form.submit();
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%', padding: 16 }}>
@@ -22,6 +26,7 @@ export default function MessagesPage({ title = '消息追踪' }: { title?: strin
       </Space>
       <Card title="列表">
         <Form
+          form={form}
           layout="inline"
           onFinish={async (values: { device_id?: number }) => {
             try {
@@ -39,11 +44,19 @@ export default function MessagesPage({ title = '消息追踪' }: { title?: strin
             查询
           </Button>
         </Form>
-        <Table
+        <UniTable
+          columnPersistenceId="apps.kuaiiot.pages.messages.list-1"
+          viewTypes={['table']}
+          showImportButton={false}
+          showExportButton={false}
+          showFuzzySearch={false}
+          showAdvancedSearch={false}
+          options={{ reload: refresh }}
           style={{ marginTop: 16 }}
           rowKey="id"
           pagination={false}
-          dataSource={rows}
+          params={{ rows: rows }}
+          request={async () => ({ data: rows, total: rows.length, success: true })}
           columns={[
             { title: '设备', dataIndex: 'device_id' },
             { title: '方向', dataIndex: 'direction' },
@@ -52,7 +65,7 @@ export default function MessagesPage({ title = '消息追踪' }: { title?: strin
             {
               title: '内容',
               dataIndex: 'payload',
-              render: (payload: MessageLog['payload']) => JSON.stringify(payload || {}),
+              render: (_, row) => JSON.stringify(row.payload || {}),
             },
             { title: '错误', dataIndex: 'error_message' },
           ]}

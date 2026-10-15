@@ -811,7 +811,7 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    */
   showPrintButton?: boolean
   /**
-   * 打印按钮点击回调（默认按选中行触发；未选中或多选时按钮禁用）。
+   * 打印按钮点击回调（报表打印当前页；其他列表按单行选中触发）。
    */
   onPrint?: (selectedRowKeys: React.Key[], currentPageData?: T[]) => void
   /**
@@ -2768,7 +2768,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         <Button
           size={toolBarButtonSize}
           icon={<PrinterOutlined />}
-          disabled={selectedRowKeys.length !== 1 || printButtonDisabled}
+          disabled={printButtonDisabled || (reportLayout ? tableData.length === 0 : selectedRowKeys.length !== 1)}
           onClick={() => onPrint(selectedRowKeys, tableData)}
           aria-label={printLabel}
         >

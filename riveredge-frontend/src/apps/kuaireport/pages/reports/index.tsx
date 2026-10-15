@@ -8,7 +8,6 @@ import { App, Button, Modal, Popconfirm, Space, Tag, Typography } from 'antd';
 import {
   AppstoreOutlined,
   DatabaseOutlined,
-  DeleteOutlined,
   PlusOutlined,
   UserOutlined,
 } from '@ant-design/icons';
@@ -17,6 +16,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { MultiTabListPageTemplate } from '../../../../components/layout-templates';
 import { renderUniTableOperationCell, rowActionKind, rowActionLabelKeep } from '../../../../components/uni-action';
 import { UniTable } from '../../../../components/uni-table';
+import { UniBatchDeleteButton } from '../../../../components/uni-batch';
 import { parseColumnFiltersParam } from '../../../../components/uni-query/columnFilterContract';
 import { MountReportModal } from './MountReportModal';
 import {
@@ -326,21 +326,7 @@ function ReportTable({
               </Button>
             ) : null}
             {mine ? (
-              <Button
-                danger
-                icon={<DeleteOutlined />}
-                disabled={selectedKeys.length === 0}
-                onClick={() => {
-                  Modal.confirm({
-                    title: `确定删除选中的 ${selectedKeys.length} 张报表？`,
-                    okText: '删除',
-                    okButtonProps: { danger: true },
-                    onOk: () => onBatchDelete(selectedKeys),
-                  });
-                }}
-              >
-                批量删除
-              </Button>
+              <UniBatchDeleteButton selectedRowKeys={selectedKeys} onConfirm={onBatchDelete} disabled={false} />
             ) : null}
             <Button icon={<DatabaseOutlined />} onClick={goSources}>
               管理数据源

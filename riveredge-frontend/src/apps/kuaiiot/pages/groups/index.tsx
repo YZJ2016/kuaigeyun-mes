@@ -4,7 +4,8 @@
 
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Button, Card, Form, Input, InputNumber, Space, Table, Typography, message } from 'antd';
+import { UniTable } from '../../../../components/uni-table';
+import { Button, Card, Form, Input, InputNumber, Space, Typography, message } from 'antd';
 import {
   assignDeviceGroup,
   createDeviceGroup,
@@ -24,6 +25,10 @@ export default function GroupsPage() {
     const [groupRows, deviceRows] = await Promise.all([listDeviceGroups(), listDevices()]);
     setGroups(Array.isArray(groupRows) ? groupRows : []);
     setDevices(Array.isArray(deviceRows) ? deviceRows : []);
+  };
+
+  const refresh = () => {
+    void load().catch((error) => message.error(error instanceof Error ? error.message : '读取失败'));
   };
 
   return (
@@ -63,15 +68,20 @@ export default function GroupsPage() {
           <Button type="primary" htmlType="submit">
             保存
           </Button>
-          <Button onClick={() => load().catch((error) => message.error(error instanceof Error ? error.message : '读取失败'))}>
-            刷新
-          </Button>
         </Form>
-        <Table
+        <UniTable
+          columnPersistenceId="apps.kuaiiot.pages.groups.list-1"
+          viewTypes={['table']}
+          showImportButton={false}
+          showExportButton={false}
+          showFuzzySearch={false}
+          showAdvancedSearch={false}
+          options={{ reload: refresh }}
           style={{ marginTop: 16 }}
           rowKey="id"
           pagination={false}
-          dataSource={groups}
+          params={{ rows: groups }}
+          request={async () => ({ data: groups, total: groups.length, success: true })}
           columns={[
             { title: '编号', dataIndex: 'id' },
             { title: '编码', dataIndex: 'code' },
@@ -104,11 +114,19 @@ export default function GroupsPage() {
             归组
           </Button>
         </Form>
-        <Table
+        <UniTable
+          columnPersistenceId="apps.kuaiiot.pages.groups.list-2"
+          viewTypes={['table']}
+          showImportButton={false}
+          showExportButton={false}
+          showFuzzySearch={false}
+          showAdvancedSearch={false}
+          options={{ reload: refresh }}
           style={{ marginTop: 16 }}
           rowKey="id"
           pagination={false}
-          dataSource={devices}
+          params={{ rows: devices }}
+          request={async () => ({ data: devices, total: devices.length, success: true })}
           columns={[
             { title: '编号', dataIndex: 'id' },
             { title: '编码', dataIndex: 'code' },

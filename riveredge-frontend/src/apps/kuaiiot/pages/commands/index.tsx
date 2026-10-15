@@ -4,7 +4,8 @@
 
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Button, Card, Form, Input, InputNumber, Space, Table, Typography, message } from 'antd';
+import { UniTable } from '../../../../components/uni-table';
+import { Button, Card, Form, Input, InputNumber, Space, Typography, message } from 'antd';
 import { createDeviceCommand, listDeviceCommands, type DeviceCommand } from '../../services/registry';
 
 const { Title, Text } = Typography;
@@ -16,6 +17,14 @@ export default function CommandsPage() {
   const load = async (id: number) => {
     const data = await listDeviceCommands(id);
     setRows(Array.isArray(data) ? data : []);
+  };
+
+  const refresh = () => {
+    if (deviceId == null) {
+      message.error('请先创建或填写设备编号');
+      return;
+    }
+    void load(deviceId).catch((error) => message.error(error instanceof Error ? error.message : '读取失败'));
   };
 
   return (
@@ -65,23 +74,20 @@ export default function CommandsPage() {
           <Button type="primary" htmlType="submit">
             创建
           </Button>
-          <Button
-            onClick={() => {
-              if (deviceId == null) {
-                message.error('请先创建或填写设备编号');
-                return;
-              }
-              load(deviceId).catch((error) => message.error(error instanceof Error ? error.message : '读取失败'));
-            }}
-          >
-            刷新
-          </Button>
         </Form>
-        <Table
+        <UniTable
+          columnPersistenceId="apps.kuaiiot.pages.commands.list-1"
+          viewTypes={['table']}
+          showImportButton={false}
+          showExportButton={false}
+          showFuzzySearch={false}
+          showAdvancedSearch={false}
+          options={{ reload: refresh }}
           style={{ marginTop: 16 }}
           rowKey="id"
           pagination={false}
-          dataSource={rows}
+          params={{ rows: rows }}
+          request={async () => ({ data: rows, total: rows.length, success: true })}
           columns={[
             { title: '指令', dataIndex: 'function_key' },
             { title: '状态', dataIndex: 'status' },

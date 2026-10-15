@@ -218,7 +218,9 @@ const TagsPage: React.FC = () => {
         }}
         enableRowSelection={perms.canDelete}
         showDeleteButton={perms.canDelete}
+        deleteButtonDisabled={false}
         onDelete={async (keys) => {
+          if (!keys.length) return;
           await Promise.all(keys.map((key) => deleteTag(String(key))));
           message.success(t('common.batchDeleteSuccess', { count: keys.length }));
           actionRef.current?.reload();
