@@ -31241,6 +31241,10 @@ export default {
     '加快工单开单、出库与报价列表打开',
   'pages.dashboard.updateLog.entries.frontend-perf-wo-outbound-quote-r02.description':
     '工单新建编辑弹窗不再打开时全量预拉物料，改为选料与来源单据按需解析；销售出库列表详情抽屉与报价详情时间线改为按需加载，减轻列表首屏体积。',
+  'pages.dashboard.updateLog.entries.tenant-restore-dept-parent-fk-r01.title':
+    '修复租户备份恢复时部门树父级外键失败',
+  'pages.dashboard.updateLog.entries.tenant-restore-dept-parent-fk-r01.description':
+    '恢复导入后若父部门缺失或被孤儿清理删掉，重建 parent_id 外键会整单回滚。现改为对悬空自引用外键置空，并多轮清理普通孤儿引用。',
   'pages.dashboard.updateLog.entries.stocktaking-list-params-typo-r01.title':
     '修复库存盘点创建成功后列表看不到',
   'pages.dashboard.updateLog.entries.stocktaking-list-params-typo-r01.description':
