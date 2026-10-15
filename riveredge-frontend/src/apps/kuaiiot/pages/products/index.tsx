@@ -205,7 +205,9 @@ const ProductsPage: React.FC = () => {
         onCreate={openCreate}
         enableRowSelection={perms.canDelete}
         showDeleteButton={perms.canDelete}
+        deleteButtonDisabled={false}
         onDelete={async (keys) => {
+          if (!keys.length) return;
           await Promise.all(keys.map((key) => deleteProduct(String(key))));
           message.success(t('common.batchDeleteSuccess', { count: keys.length }));
     actionRef.current?.reload();

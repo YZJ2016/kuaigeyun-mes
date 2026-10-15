@@ -1,11 +1,12 @@
 /**
  * 系统报表预览。config 模式交给 UniReport（内部调用 executeReport，打印走 useUniReportPrint）。
  * 全量 Excel 另请求星报表后端生成工作簿。
- * 通过 datasetExecute 透传同一 executeReport，并记录最近一次筛选用于导出。
+ * 顶部按格式导出、表格按范围导出统一走 UniReport。
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, App, Button, Space, Spin } from 'antd';
+import { Alert, App, Button } from 'antd';
+import type { ActionType } from '@ant-design/pro-components';
 import { useNavigate, useParams } from 'react-router-dom';
 import { UniReport } from '../../../../components/uni-report';
 import { downloadFile } from '../../../../utils/fileDownload';
@@ -14,14 +15,11 @@ import { ChartCanvas, DrillDrawer, QueryPanel } from './ChartPanel';
 import { downloadFullExcel, getReport, type ReportCenterRow } from './api';
 
 export default function ReportPreviewPage() {
-  const { message } = App.useApp();
   const navigate = useNavigate();
   const params = useParams();
   const reportId = Number(params.reportId);
   const [report, setReport] = useState<ReportCenterRow | null>(null);
   const [loadError, setLoadError] = useState('');
-  const [exporting, setExporting] = useState(false);
-  const filtersRef = useRef<Record<string, unknown>>({});
 
   useEffect(() => {
     if (!Number.isInteger(reportId) || reportId <= 0) {
@@ -41,29 +39,11 @@ export default function ReportPreviewPage() {
     };
   }, [reportId]);
 
-  // UniReport config 模式不向外暴露筛选值；经 datasetExecute 记录最近一次执行筛选，
-  // 导出全量 Excel 时原样转发（后端忽略 limit/offset）。
-  const recordFiltersExecute = useCallback(
-    async (filters: Record<string, unknown>) => {
-      filtersRef.current = filters || {};
-      const res = await executeReport(reportId, filtersRef.current);
-      return { ...res, data: (res.data ?? []) as Record<string, unknown>[] };
-    },
-    [reportId],
-  );
-
-  const onExport = async () => {
+  const onExport = async (filters: Record<string, unknown>) => {
     if (!report) return;
-    setExporting(true);
-    try {
-      const { limit: _limit, offset: _offset, ...rest } = filtersRef.current;
-      const blob = await downloadFullExcel(report.id, rest);
-      downloadFile(blob, `${report.code}.xlsx`);
-    } catch (err) {
-      message.error(err instanceof Error ? err.message : '全量 Excel 导出失败');
-    } finally {
-      setExporting(false);
-    }
+    const { limit: _limit, offset: _offset, ...rest } = filters;
+    const blob = await downloadFullExcel(report.id, rest);
+    downloadFile(blob, `${report.code}.xlsx`);
   };
 
   if (loadError) {
@@ -90,10 +70,6 @@ export default function ReportPreviewPage() {
       <DatasetChartView
         report={report}
         onExport={onExport}
-        exporting={exporting}
-        onFilters={(next) => {
-          filtersRef.current = next;
-        }}
       />
     );
   }
@@ -105,16 +81,11 @@ export default function ReportPreviewPage() {
       columnPersistenceId={`kuaireport.reports.${report.code}`}
       reportId={report.id}
       reportConfig={report.report_config}
-      datasetExecute={recordFiltersExecute}
       showPrintButton
-      showExportButton={false}
+      showFormatExportButton
+      exportAllExcel={onExport}
       headerLeft={
-        <Space>
-          <Button onClick={() => navigate('/apps/kuaireport/reports')}>返回</Button>
-          <Button type="primary" loading={exporting} onClick={() => void onExport()}>
-            全量 Excel
-          </Button>
-        </Space>
+        <Button onClick={() => navigate('/apps/kuaireport/reports')}>返回</Button>
       }
     />
   );
@@ -123,13 +94,9 @@ export default function ReportPreviewPage() {
 function DatasetChartView({
   report,
   onExport,
-  exporting,
-  onFilters,
 }: {
   report: ReportCenterRow;
-  onExport: () => Promise<void>;
-  exporting: boolean;
-  onFilters: (filters: Record<string, unknown>) => void;
+  onExport: (filters: Record<string, unknown>) => Promise<void>;
 }) {
   const { message } = App.useApp();
   const navigate = useNavigate();
@@ -139,29 +106,18 @@ function DatasetChartView({
   const yField = fields.find((field) => field.y_axis)?.field;
   const drill = config.interaction?.drilldown;
   const [rows, setRows] = useState<Record<string, unknown>[]>([]);
-  const [loading, setLoading] = useState(false);
+  const actionRef = useRef<ActionType>();
+  const filtersRef = useRef<Record<string, unknown>>({});
   const [filters, setFilters] = useState<Record<string, unknown>>({});
   const [drillValue, setDrillValue] = useState<string | null>(null);
   const [drillRows, setDrillRows] = useState<Record<string, unknown>[]>([]);
 
-  const load = useCallback(
-    async (next: Record<string, unknown>) => {
-      setLoading(true);
-      try {
-        const res = await executeReport(report.id, { ...next, limit: config.page_size || 50, offset: 0 });
-        setRows((res.data || []) as Record<string, unknown>[]);
-      } catch (err) {
-        message.error(err instanceof Error ? err.message : '报表加载失败');
-      } finally {
-        setLoading(false);
-      }
-    },
-    [config.page_size, message, report.id],
-  );
-
-  useEffect(() => {
-    void load({});
-  }, [load]);
+  const load = useCallback(async (pageFilters: Record<string, unknown>) => {
+    const next = { ...pageFilters, ...filtersRef.current };
+    const res = await executeReport(report.id, next);
+    const data = (res.data || []) as Record<string, unknown>[];
+    return { ...res, data };
+  }, [report.id]);
 
   const openDrill = async (value: string) => {
     const dimension = drill?.dimension_field || xField;
@@ -184,23 +140,28 @@ function DatasetChartView({
   };
 
   return (
-    <div style={{ padding: 16 }}>
-      <Space style={{ marginBottom: 12 }}>
-        <Button onClick={() => navigate('/apps/kuaireport/reports')}>返回</Button>
-        <Button type="primary" loading={exporting} onClick={() => void onExport()}>
-          全量 Excel
-        </Button>
-        <span style={{ fontWeight: 600 }}>{report.name}</span>
-      </Space>
+    <UniReport
+      mode="config"
+      title={report.name}
+      columnPersistenceId={`kuaireport.reports.${report.code}`}
+      reportId={report.id}
+      reportConfig={config}
+      datasetExecute={load}
+      onPageDataChange={setRows}
+      actionRef={actionRef}
+      showFormatExportButton
+      exportAllExcel={(next) => onExport({ ...next, ...filtersRef.current })}
+      headerLeft={<Button onClick={() => navigate('/apps/kuaireport/reports')}>返回</Button>}
+    >
       <QueryPanel
         parameters={config.parameters || []}
         onSubmit={(next) => {
           setFilters(next);
-          onFilters(next);
-          void load(next);
+          filtersRef.current = next;
+          actionRef.current?.reload?.();
         }}
       />
-      <Spin spinning={loading}>
+      {config.chart_type !== 'table' ? (
         <ChartCanvas
           chartType={config.chart_type || 'table'}
           rows={rows}
@@ -210,7 +171,7 @@ function DatasetChartView({
           drillEnabled={Boolean(drill?.enabled)}
           onDrill={(value) => void openDrill(value)}
         />
-      </Spin>
+      ) : null}
       {drill?.enabled ? <div style={{ marginTop: 8, color: '#8c8c8c' }}>点击图表维度可下钻明细</div> : null}
       <DrillDrawer
         open={drillValue != null}
@@ -219,6 +180,6 @@ function DatasetChartView({
         fields={fields}
         onClose={() => setDrillValue(null)}
       />
-    </div>
+    </UniReport>
   );
 }

@@ -7,7 +7,7 @@
  * - 动作行：加载出厂 FAQ（知识库选择）、添加 FAQ（Modal 720px）、
  *   前往知识库添加文档（kuaiai:knowledge:display，缺失禁用+原因）、
  *   导出训练 JSONL（corpus:export，按当前筛选）、批量删除（红色描边 +
- *   二次确认 Modal）、批量操作下拉（索引/重试 → batch-index，corpus:update）；
+ *   通用二次确认）、批量操作下拉（索引/重试 → batch-index，corpus:update）；
  * - 表格固定列：选择/标题/所属知识库/类型/分块数/创建时间/索引状态/操作；
  *   行操作：详情→/knowledge（无权限禁用+原因）、删除（确认）；
  * - 页脚：左「共 N 条记录，显示 A-B 条」+ 右分页（默认 20）；
@@ -19,32 +19,27 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   App,
   Button,
-  Checkbox,
   DatePicker,
-  Dropdown,
   Empty,
   Form,
   Input,
   Modal,
-  Pagination,
   Popconfirm,
-  Popover,
   Result,
   Segmented,
   Select,
   Space,
   Switch,
-  Table,
   Tag,
   Tooltip,
 } from 'antd';
 import {
   DownOutlined,
   QuestionCircleOutlined,
-  ReloadOutlined,
-  SettingOutlined,
 } from '@ant-design/icons';
-import type { ColumnsType } from 'antd/es/table';
+import type { ProColumns } from '@ant-design/pro-components';
+import { UniTable } from '../../../../components/uni-table';
+import { UniBatchDeleteButton, UniBatchMenuButton } from '../../../../components/uni-batch';
 import { useQuery } from '@tanstack/react-query';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
@@ -71,8 +66,6 @@ import '../../ops.less';
 const K = 'app.kuaiai.corpus';
 
 const DEFAULT_PAGE_SIZE = 20;
-const COLUMN_STORAGE_KEY = 'apps.kuaiai.pages.corpus.columns-v1';
-
 const STATUS_ORDER: CorpusDocStatus[] = [
   'ready',
   'pending',
@@ -93,15 +86,6 @@ const TYPE_TAG: Record<string, { color: string; labelKey: string; fallback: stri
   file: { color: 'cyan', labelKey: `${K}.type.file`, fallback: '文件' },
 };
 
-/** 列设置可开关的列（标题/索引状态/操作恒显） */
-const TOGGLEABLE_COLUMNS = [
-  'knowledge_name',
-  'type',
-  'chunk_count',
-  'created_at',
-] as const;
-type ToggleableColumn = (typeof TOGGLEABLE_COLUMNS)[number];
-
 function fmtTime(v?: string | null) {
   return v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '—';
 }
@@ -121,23 +105,6 @@ function typeTag(type: string, t: (k: string, o?: any) => string) {
   const conf = TYPE_TAG[type];
   if (!conf) return <Tag>{type || '—'}</Tag>;
   return <Tag color={conf.color}>{t(conf.labelKey, { defaultValue: conf.fallback })}</Tag>;
-}
-
-function loadVisibleColumns(): ToggleableColumn[] {
-  try {
-    const raw = localStorage.getItem(COLUMN_STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        return parsed.filter((c): c is ToggleableColumn =>
-          (TOGGLEABLE_COLUMNS as readonly string[]).includes(c),
-        );
-      }
-    }
-  } catch {
-    /* 本地存储不可用时回落默认 */
-  }
-  return [...TOGGLEABLE_COLUMNS];
 }
 
 const CorpusPage: React.FC = () => {
@@ -225,7 +192,6 @@ const CorpusPage: React.FC = () => {
   // ---------------------------------------------------------- 本地 UI 状态
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  const [visibleColumns, setVisibleColumns] = useState<ToggleableColumn[]>(loadVisibleColumns);
   const [faqModalOpen, setFaqModalOpen] = useState(false);
   const [faqSubmitting, setFaqSubmitting] = useState(false);
   const [seedModalOpen, setSeedModalOpen] = useState(false);
@@ -299,33 +265,19 @@ const CorpusPage: React.FC = () => {
     }
   };
 
-  const handleBatchDelete = () => {
-    if (!selectedRowKeys.length) return;
-    modal.confirm({
-      title: t(`${K}.batchDeleteConfirm`, {
-        defaultValue: '确认删除选中的 {{count}} 条语料？',
-        count: selectedRowKeys.length,
-      }),
-      content: t(`${K}.batchDeleteConfirmHint`, {
-        defaultValue: '删除后不可恢复，关联切块将一并移除',
-      }),
-      okText: t('common.confirm', { defaultValue: '确定' }),
-      okButtonProps: { danger: true },
-      cancelText: t('common.cancel', { defaultValue: '取消' }),
-      onOk: async () => {
-        setBatchRunning(true);
-        try {
-          const res = await batchDeleteCorpus(selectedRowKeys.map(Number));
-          showBatchResult(res, 'delete');
-          setSelectedRowKeys([]);
-          refresh();
-        } catch (error: any) {
-          message.error(error?.message || t('common.deleteFailed', { defaultValue: '删除失败' }));
-        } finally {
-          setBatchRunning(false);
-        }
-      },
-    });
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    if (!canDelete || !keys.length) return;
+    setBatchRunning(true);
+    try {
+      const res = await batchDeleteCorpus(keys.map(Number));
+      showBatchResult(res, 'delete');
+      setSelectedRowKeys([]);
+      refresh();
+    } catch (error: any) {
+      message.error(error?.message || t('common.deleteFailed', { defaultValue: '删除失败' }));
+    } finally {
+      setBatchRunning(false);
+    }
   };
 
   const handleRowDelete = async (doc: CorpusItemOut) => {
@@ -405,67 +357,45 @@ const CorpusPage: React.FC = () => {
     }
   };
 
-  const toggleColumn = (col: ToggleableColumn, checked: boolean) => {
-    setVisibleColumns((prev) => {
-      const next = checked
-        ? TOGGLEABLE_COLUMNS.filter((c) => prev.includes(c) || c === col)
-        : prev.filter((c) => c !== col);
-      try {
-        localStorage.setItem(COLUMN_STORAGE_KEY, JSON.stringify(next));
-      } catch {
-        /* 本地存储不可用时仅会话内生效 */
-      }
-      return next;
-    });
-  };
-
   // ---------------------------------------------------------- 表格列
-  const columns: ColumnsType<CorpusItemOut> = useMemo(() => {
-    const cols: ColumnsType<CorpusItemOut> = [
+  const columns: ProColumns<CorpusItemOut>[] = useMemo(() => {
+    const cols: ProColumns<CorpusItemOut>[] = [
       {
         title: t(`${K}.colTitle`, { defaultValue: '标题' }),
         dataIndex: 'title',
         ellipsis: true,
-        render: (v: string, r) => (
+        render: (_, r) => (
           <Tooltip title={!r.is_active ? t(`${K}.inactiveHint`, { defaultValue: '已停用，不参与检索' }) : undefined}>
-            <span style={!r.is_active ? { opacity: 0.55 } : undefined}>{v}</span>
+            <span style={!r.is_active ? { opacity: 0.55 } : undefined}>{r.title}</span>
           </Tooltip>
         ),
       },
     ];
-    if (visibleColumns.includes('knowledge_name')) {
-      cols.push({
-        title: t(`${K}.colKnowledge`, { defaultValue: '所属知识库' }),
-        dataIndex: 'knowledge_name',
-        width: 140,
-        ellipsis: true,
-        render: (v: string | null) => v || '—',
-      });
-    }
-    if (visibleColumns.includes('type')) {
-      cols.push({
+    cols.push({
+      title: t(`${K}.colKnowledge`, { defaultValue: '所属知识库' }),
+      dataIndex: 'knowledge_name',
+      width: 140,
+      ellipsis: true,
+      render: (_, row) => row.knowledge_name || '—',
+    });
+    cols.push({
         title: t(`${K}.colType`, { defaultValue: '类型' }),
         dataIndex: 'type',
         width: 80,
-        render: (v: string) => typeTag(v, t),
+        render: (_, row) => typeTag(row.type, t),
       });
-    }
-    if (visibleColumns.includes('chunk_count')) {
       cols.push({
         title: t(`${K}.colChunks`, { defaultValue: '分块数' }),
         dataIndex: 'chunk_count',
         width: 80,
         align: 'right',
       });
-    }
-    if (visibleColumns.includes('created_at')) {
       cols.push({
         title: t('common.createdAt', { defaultValue: '创建时间' }),
         dataIndex: 'created_at',
         width: 170,
-        render: (v: string) => fmtTime(v),
+        render: (_, row) => fmtTime(row.created_at),
       });
-    }
     cols.push({
       title: t(`${K}.colStatus`, { defaultValue: '索引状态' }),
       dataIndex: 'status',
@@ -518,30 +448,7 @@ const CorpusPage: React.FC = () => {
     });
     return cols;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visibleColumns, canKnowledgeDisplay, canDelete, t, navigate]);
-
-  const columnSettingsContent = (
-    <div className="kuaiai-ops-corpus-col-settings">
-      {TOGGLEABLE_COLUMNS.map((col) => {
-        const labelMap: Record<ToggleableColumn, string> = {
-          knowledge_name: t(`${K}.colKnowledge`, { defaultValue: '所属知识库' }),
-          type: t(`${K}.colType`, { defaultValue: '类型' }),
-          chunk_count: t(`${K}.colChunks`, { defaultValue: '分块数' }),
-          created_at: t('common.createdAt', { defaultValue: '创建时间' }),
-        };
-        return (
-          <div key={col}>
-            <Checkbox
-              checked={visibleColumns.includes(col)}
-              onChange={(e) => toggleColumn(col, e.target.checked)}
-            >
-              {labelMap[col]}
-            </Checkbox>
-          </div>
-        );
-      })}
-    </div>
-  );
+  }, [canKnowledgeDisplay, canDelete, t, navigate]);
 
   const advancedCount = (knowledgeId ? 1 : 0) + (docType ? 1 : 0) + (createdFrom || createdTo ? 1 : 0);
 
@@ -578,9 +485,6 @@ const CorpusPage: React.FC = () => {
       </div>
     );
   }
-
-  const rangeStart = total === 0 ? 0 : (page - 1) * pageSize + 1;
-  const rangeEnd = Math.min(total, page * pageSize);
 
   return (
     <div className="kuaiai-ops-page">
@@ -687,8 +591,32 @@ const CorpusPage: React.FC = () => {
 
         {/* 白色主面板 */}
         <div className="kuaiai-ops-corpus-panel">
-          <div className="kuaiai-ops-corpus-actions">
-            <Space size={8} wrap>
+          <UniTable<CorpusItemOut>
+            rowKey="id"
+            columnPersistenceId="apps.kuaiai.pages.corpus.list"
+            viewTypes={['table']}
+            showImportButton={false}
+            showExportButton={false}
+            showAdvancedSearch={false}
+            showFuzzySearch={false}
+            options={{ reload: refresh }}
+            loading={corpusQuery.isLoading}
+            columns={columns}
+            params={{ ...query, dataUpdatedAt: corpusQuery.dataUpdatedAt }}
+            request={async () => ({ data: items, total, success: true })}
+            enableRowSelection={canDelete || canUpdate}
+            selectedRowKeys={selectedRowKeys}
+            onRowSelectionChange={setSelectedRowKeys}
+            pagination={{
+              current: page, pageSize, total, showSizeChanger: true,
+              pageSizeOptions: [10, 20, 50, 100],
+              onChange: (p, ps) => updateParams({
+                page: p > 1 ? String(p) : undefined,
+                page_size: ps !== DEFAULT_PAGE_SIZE ? String(ps) : undefined,
+              }, false),
+            }}
+            locale={{ emptyText: <Empty description={t(`${K}.empty`, { defaultValue: '暂无语料记录' })} /> }}
+            headerActions={<Space size={8} wrap>
               {/* 未授权动作一律禁用 + Tooltip 原因，不隐藏（与 agent-library 约定一致） */}
               <Tooltip
                 title={
@@ -756,14 +684,11 @@ const CorpusPage: React.FC = () => {
                     : t(`${K}.noDeletePerm`, { defaultValue: '缺少语料删除权限' })
                 }
               >
-                <Button
-                  danger
-                  disabled={!canDelete || !selectedRowKeys.length}
-                  onClick={handleBatchDelete}
-                  loading={batchRunning}
-                >
-                  {t(`${K}.batchDelete`, { defaultValue: '批量删除' })}
-                </Button>
+                <UniBatchDeleteButton
+                  selectedRowKeys={selectedRowKeys}
+                  onConfirm={handleBatchDelete}
+                  disabled={!canDelete || batchRunning}
+                />
               </Tooltip>
               <Tooltip
                 title={
@@ -772,10 +697,10 @@ const CorpusPage: React.FC = () => {
                     : t(`${K}.noUpdatePerm`, { defaultValue: '缺少语料更新权限' })
                 }
               >
-                <Dropdown
-                  disabled={!canUpdate}
-                  menu={{
-                    items: [
+                <UniBatchMenuButton
+                  selectedRowKeys={selectedRowKeys}
+                  disabled={!canUpdate || !selectedRowKeys.length || batchRunning}
+                  menuItems={[
                       {
                         key: 'index',
                         label: t(`${K}.batchIndex`, { defaultValue: '索引' }),
@@ -788,94 +713,11 @@ const CorpusPage: React.FC = () => {
                         disabled: !selectedRowKeys.length,
                         onClick: () => void handleBatchIndex(),
                       },
-                    ],
-                  }}
-                >
-                  <Button
-                    disabled={!canUpdate || !selectedRowKeys.length || batchRunning}
-                  >
-                    {t(`${K}.batchOps`, { defaultValue: '批量操作' })} <DownOutlined />
-                  </Button>
-                </Dropdown>
-              </Tooltip>
-            </Space>
-            <div className="kuaiai-ops-corpus-actions-right">
-              <Tooltip title={t('common.refresh', { defaultValue: '刷新' })}>
-                <Button
-                  type="text"
-                  icon={<ReloadOutlined spin={corpusQuery.isFetching} />}
-                  onClick={refresh}
-                  aria-label={t('common.refresh', { defaultValue: '刷新' })}
+                  ]}
                 />
               </Tooltip>
-              <Popover
-                content={columnSettingsContent}
-                title={t(`${K}.columnSettings`, { defaultValue: '列设置' })}
-                trigger="click"
-                placement="bottomRight"
-              >
-                <Button
-                  type="text"
-                  icon={<SettingOutlined />}
-                  aria-label={t(`${K}.columnSettings`, { defaultValue: '列设置' })}
-                />
-              </Popover>
-            </div>
-          </div>
-
-          <Table<CorpusItemOut>
-            rowKey="id"
-            size="middle"
-            loading={corpusQuery.isLoading}
-            columns={columns}
-            dataSource={items}
-            pagination={false}
-            scroll={{ x: 900 }}
-            rowSelection={
-              canDelete || canUpdate
-                ? {
-                    selectedRowKeys,
-                    onChange: setSelectedRowKeys,
-                    columnWidth: 48,
-                    preserveSelectedRowKeys: false,
-                  }
-                : undefined
-            }
-            locale={{
-              emptyText: (
-                <Empty
-                  description={t(`${K}.empty`, { defaultValue: '暂无语料记录' })}
-                />
-              ),
-            }}
+            </Space>}
           />
-
-          {/* 页脚 */}
-          <div className="kuaiai-ops-corpus-footer">
-            <span className="kuaiai-ops-corpus-footer-total">
-              {t(`${K}.footerTotal`, {
-                defaultValue: '共 {{total}} 条记录，显示 {{start}}-{{end}} 条',
-                total,
-                start: rangeStart,
-                end: rangeEnd,
-              })}
-            </span>
-            <Pagination
-              current={page}
-              pageSize={pageSize}
-              total={total}
-              showSizeChanger
-              pageSizeOptions={[10, 20, 50, 100]}
-              showQuickJumper
-              onChange={(p, ps) => {
-                const patch: Record<string, string | undefined> = {
-                  page: p > 1 ? String(p) : undefined,
-                  page_size: ps !== DEFAULT_PAGE_SIZE ? String(ps) : undefined,
-                };
-                updateParams(patch, false);
-              }}
-            />
-          </div>
         </div>
       </div>
 

@@ -130,10 +130,15 @@ export type UniReportProps<T = Record<string, unknown>> = {
   params?: Record<string, unknown>;
   /** 报表头左侧操作（如返回），与标题同一行 */
   headerLeft?: ReactNode;
+  /** 报表头按格式全量导出，与表格工具栏按范围导出共用数据与筛选。 */
+  showFormatExportButton?: boolean;
+  exportAllExcel?: (filters: Record<string, unknown>) => Promise<void>;
   /** config 模式（快报表） */
   reportConfig?: ReportConfigSchema;
   reportId?: string | number;
   datasetExecute?: (filters: Record<string, unknown>) => Promise<UniReportExecuteResult<T>>;
+  /** 当前页数据供同一报表的图表展示；导出读取不会触发。 */
+  onPageDataChange?: (rows: T[]) => void;
   /** 覆盖模板默认 */
   showSummaryRow?: boolean;
   showIndexColumn?: boolean;

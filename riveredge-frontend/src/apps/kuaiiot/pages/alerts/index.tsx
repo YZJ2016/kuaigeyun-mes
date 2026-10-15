@@ -286,7 +286,9 @@ const AlertsPage: React.FC = () => {
                 onCreate={openCreate}
                 enableRowSelection={rulePerms.canDelete}
                 showDeleteButton={rulePerms.canDelete}
+                deleteButtonDisabled={false}
                 onDelete={async (keys) => {
+                  if (!keys.length) return;
                   await Promise.all(keys.map((key) => deleteAlertRule(String(key))));
                   message.success(t('common.batchDeleteSuccess', { count: keys.length }));
                   ruleActionRef.current?.reload();

@@ -5,27 +5,12 @@ import type { ProColumns } from '@ant-design/pro-components';
 import { exportDomainReport, type ReportParams } from '../../apps/kuaizhizao/services/reports';
 import type { UniReportExportConfig } from './types';
 import { todaySiteDateString } from '../../utils/format';
-
-function escapeCsvCell(v: unknown): string {
-  const s = v == null ? '' : String(v);
-  if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-  return s;
-}
+import { downloadFile } from '../../utils/fileDownload';
+import { downloadRecordsAsXlsx } from '../../utils/exportRecordsXlsx';
+import { buildReportCsv, buildReportHtml, selectReportExportRows } from './reportExportData';
 
 function downloadCsv(filename: string, headers: string[], rows: Record<string, unknown>[], keys: string[]) {
-  const lines = [
-    headers.map(escapeCsvCell).join(','),
-    ...rows.map((row) => keys.map((k) => escapeCsvCell(row[k])).join(',')),
-  ];
-  const blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  downloadFile(new Blob([buildReportCsv(headers, keys, rows)], { type: 'text/csv;charset=utf-8' }), filename);
 }
 
 export type UseUniReportExportOptions = {
@@ -33,12 +18,15 @@ export type UseUniReportExportOptions = {
   exportConfig?: UniReportExportConfig;
   columns: ProColumns[];
   getFilters: () => ReportParams;
+  rowKey?: string;
+  getAllRows?: () => Promise<Record<string, unknown>[]>;
+  exportAllExcel?: (filters: Record<string, unknown>) => Promise<void>;
 };
 
 export function useUniReportExport(options: UseUniReportExportOptions) {
   const { message } = App.useApp();
   const { t } = useTranslation();
-  const { title, exportConfig, columns, getFilters } = options;
+  const { title, exportConfig, columns, getFilters, rowKey = 'id', getAllRows, exportAllExcel } = options;
 
   const exportableKeys = columns
     .filter((c) => c.dataIndex && !c.hideInTable)
@@ -53,9 +41,40 @@ export function useUniReportExport(options: UseUniReportExportOptions) {
       type: 'selected' | 'currentPage' | 'all',
       selectedRowKeys?: React.Key[],
       currentPageData?: Record<string, unknown>[],
+      format: 'csv' | 'excel' | 'html' = 'csv',
     ) => {
       const dateStr = todaySiteDateString();
       const baseName = `${title}-${dateStr}.csv`;
+
+      if (getAllRows || (format === 'excel' && exportAllExcel)) {
+        const hide = message.loading(t('components.uniReport.exporting'), 0);
+        try {
+          if (format === 'excel' && type === 'all' && exportAllExcel) {
+            await exportAllExcel({ ...getFilters() });
+          } else {
+            const rows = type === 'all'
+              ? await getAllRows!()
+              : selectReportExportRows(type, selectedRowKeys, currentPageData, rowKey);
+            if (!rows.length) {
+              message.warning(t('components.uniReport.exportEmpty'));
+              return;
+            }
+            if (format === 'html') {
+              downloadFile(new Blob([buildReportHtml(title, exportableTitles, exportableKeys, rows)], { type: 'text/html;charset=utf-8' }), `${title}-${dateStr}.html`);
+            } else if (format === 'excel') {
+              await downloadRecordsAsXlsx(rows, exportableKeys.map((key, index) => ({ key, title: exportableTitles[index] })), `${title}-${dateStr}.xlsx`);
+            } else {
+              downloadFile(new Blob([buildReportCsv(exportableTitles, exportableKeys, rows)], { type: 'text/csv;charset=utf-8' }), baseName);
+            }
+          }
+          message.success(t('components.uniReport.exportSuccess', { title }));
+        } catch (error) {
+          message.error(t('components.uniReport.exportFailed', { message: (error as Error).message }));
+        } finally {
+          hide();
+        }
+        return;
+      }
 
       if (type === 'all') {
         if (!exportConfig?.domain || !exportConfig?.reportType) {
@@ -77,11 +96,7 @@ export function useUniReportExport(options: UseUniReportExportOptions) {
         return;
       }
 
-      let rows = currentPageData ?? [];
-      if (type === 'selected' && selectedRowKeys?.length) {
-        const keySet = new Set(selectedRowKeys.map(String));
-        rows = rows.filter((r) => keySet.has(String((r as { id?: unknown }).id ?? '')));
-      }
+      const rows = selectReportExportRows(type, selectedRowKeys, currentPageData, rowKey);
       if (!rows.length) {
         message.warning(t('components.uniReport.exportEmpty'));
         return;
@@ -89,7 +104,7 @@ export function useUniReportExport(options: UseUniReportExportOptions) {
       downloadCsv(baseName, exportableTitles, rows, exportableKeys);
       message.success(t('components.uniReport.exportSuccess', { title }));
     },
-    [columns, exportConfig, exportableKeys, exportableTitles, getFilters, message, t, title],
+    [columns, exportConfig, exportableKeys, exportableTitles, getFilters, getAllRows, exportAllExcel, rowKey, message, t, title],
   );
 }
 

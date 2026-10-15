@@ -4,7 +4,8 @@
 
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Alert, Button, Card, Form, Input, Space, Table, Typography, message } from 'antd';
+import { UniTable } from '../../../../components/uni-table';
+import { Alert, Button, Card, Form, Input, Space, Typography, message } from 'antd';
 import { queryTrend, type TrendPoint } from '../../services/registry';
 
 const { Title } = Typography;
@@ -19,6 +20,8 @@ export default function TrendPage() {
   const [range] = useState(defaultRange);
   const [unavailable, setUnavailable] = useState(false);
   const [points, setPoints] = useState<TrendPoint[] | null>(null);
+  const [form] = Form.useForm();
+  const refresh = () => form.submit();
 
   useEffect(() => {
     let cancelled = false;
@@ -49,6 +52,7 @@ export default function TrendPage() {
       ) : (
         <Card title="查询">
           <Form
+          form={form}
             layout="inline"
             initialValues={{ tag_key: 'temp', start: range.start, stop: range.stop }}
             onFinish={async (values: { device_id: string; tag_key: string; start: string; stop: string }) => {
@@ -90,11 +94,19 @@ export default function TrendPage() {
             </Button>
           </Form>
           {points ? (
-            <Table
+            <UniTable
+              columnPersistenceId="apps.kuaiiot.pages.trend.list-1"
+              viewTypes={['table']}
+              showImportButton={false}
+              showExportButton={false}
+              showFuzzySearch={false}
+              showAdvancedSearch={false}
+              options={{ reload: refresh }}
               style={{ marginTop: 16 }}
               rowKey={(row) => `${row.time}-${row.value}`}
               pagination={false}
-              dataSource={points}
+              params={{ rows: points }}
+              request={async () => ({ data: points, total: points.length, success: true })}
               locale={{ emptyText: '这段时间没有数值' }}
               columns={[
                 { title: '时间', dataIndex: 'time' },

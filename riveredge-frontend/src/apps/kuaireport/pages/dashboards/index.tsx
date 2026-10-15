@@ -5,13 +5,14 @@
 
 import React, { useCallback, useRef, useState } from 'react';
 import { App, Button, Dropdown, Modal, Popconfirm, Select, Space, Tag, Typography } from 'antd';
-import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
+import { PlusOutlined } from '@ant-design/icons';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { useNavigate } from 'react-router-dom';
 import { ListPageTemplate } from '../../../../components/layout-templates';
 import { downloadRecordsAsXlsx } from '../../../../utils/exportRecordsXlsx';
 import { renderUniTableOperationCell, rowActionKind, rowActionLabelKeep } from '../../../../components/uni-action';
 import { UniTable } from '../../../../components/uni-table';
+import { UniBatchDeleteButton } from '../../../../components/uni-batch';
 import { parseColumnFiltersParam } from '../../../../components/uni-query/columnFilterContract';
 import { MountReportModal } from '../reports/MountReportModal';
 import { ShareModal } from './ShareModal';
@@ -325,21 +326,7 @@ export default function DashboardListPage() {
             >
               从模板新建
             </Button>
-            <Button
-              danger
-              icon={<DeleteOutlined />}
-              disabled={selectedKeys.length === 0}
-              onClick={() => {
-                Modal.confirm({
-                  title: `确定删除选中的 ${selectedKeys.length} 个大屏？`,
-                  okText: '删除',
-                  okButtonProps: { danger: true },
-                  onOk: () => onBatchDelete(selectedKeys),
-                });
-              }}
-            >
-              批量删除
-            </Button>
+            <UniBatchDeleteButton selectedRowKeys={selectedKeys} onConfirm={onBatchDelete} disabled={false} />
           </Space>
         }
         cardViewConfig={{

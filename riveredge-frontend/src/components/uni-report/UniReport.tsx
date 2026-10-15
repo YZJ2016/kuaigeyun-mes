@@ -1,4 +1,6 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
+import { Button, Dropdown, Space } from 'antd';
+import { DownOutlined, ExportOutlined } from '@ant-design/icons';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../uni-table';
@@ -32,6 +34,7 @@ import { stableJsonForQueryKey } from '../../utils/tableQueryKey';
 import { pickListPageToolbarSearchParams } from '../../utils/listLifecycleStage';
 import { useUserPreferenceStore } from '../../stores/userPreferenceStore';
 import { resolveDefaultTablePageSize } from './uniReportPagination';
+import { fetchAllReportRows } from './reportExportData';
 
 /** 专业包 kuaireport：未 compose 时不可用，避免壳层静态依赖导致主仓白屏 */
 const KUAIREPORT_SERVICE = import.meta.glob('../../apps/kuaireport/services/kuaireport.ts');
@@ -143,15 +146,18 @@ export function UniReport<T extends Record<string, unknown> = Record<string, unk
   request,
   summaryRequest,
   exportConfig,
-  rowKey = 'id',
+  rowKey: rowKeyProp,
   actionRef: externalActionRef,
   children,
   beforeSearchButtons,
   params,
   headerLeft,
+  showFormatExportButton = false,
+  exportAllExcel,
   reportConfig,
   reportId,
   datasetExecute,
+  onPageDataChange,
   showSummaryRow: showSummaryRowProp,
   showIndexColumn: showIndexColumnProp,
   summaryFields: summaryFieldsProp,
@@ -170,6 +176,8 @@ export function UniReport<T extends Record<string, unknown> = Record<string, unk
     periodFilterEnabled ? buildReportPeriodSearchSeed() : undefined,
   );
   const searchValuesRef = useRef<Record<string, unknown>>({});
+  const executeFiltersRef = useRef<Record<string, unknown>>({});
+  const rowKey = rowKeyProp ?? (mode === 'config' ? '__uniReportRowKey' : 'id');
   const [globalSummary, setGlobalSummary] = useState<Record<string, number>>({});
   const [pageData, setPageData] = useState<T[]>([]);
   const [columnFilters, setColumnFilters] = useState<ReportColumnFilter[]>([]);
@@ -243,15 +251,26 @@ export function UniReport<T extends Record<string, unknown> = Record<string, unk
   }, [beforeSearchButtons, periodFilterNode]);
 
   const getFilters = useCallback(
-    () => searchValuesRef.current as Record<string, unknown>,
-    [],
+    () => mode === 'config' ? executeFiltersRef.current : searchValuesRef.current,
+    [mode],
   );
+
+  const getAllRows = useMemo(() => {
+    if (mode !== 'config') return undefined;
+    return () => fetchAllReportRows(
+      datasetExecute ?? ((filters) => executeReport(reportId!, filters)),
+      executeFiltersRef.current,
+    );
+  }, [mode, datasetExecute, reportId]);
 
   const handleExport = useUniReportExport({
     title,
     exportConfig,
     columns: columns as ProColumns[],
     getFilters,
+    rowKey: String(rowKey),
+    getAllRows,
+    exportAllExcel,
   });
 
   const resolvedSubtitle =
@@ -333,6 +352,7 @@ export function UniReport<T extends Record<string, unknown> = Record<string, unk
         current: params.current as number,
         pageSize: params.pageSize as number,
       });
+      executeFiltersRef.current = filters;
 
       const exec =
         datasetExecute ??
@@ -342,7 +362,10 @@ export function UniReport<T extends Record<string, unknown> = Record<string, unk
         });
 
       const res = await exec(filters);
-      const rows = (res.data ?? []) as T[];
+      const rows = ((res.data ?? []) as T[]).map((row, index) => ({
+        ...row,
+        __uniReportRowKey: Number(filters.offset ?? 0) + index,
+      })) as T[];
       setPageData(rows);
       const facets = (res as { column_facets?: ReportColumnFacets }).column_facets;
       if (facets && typeof facets === 'object') {
@@ -362,7 +385,7 @@ export function UniReport<T extends Record<string, unknown> = Record<string, unk
         success: res.success ?? true,
       };
     },
-    [columnFilters, columns, datasetExecute, mode, reportConfig, reportId, request, summaryFields, summaryRequest],
+    [columnFilters, columns, datasetExecute, onPageDataChange, mode, reportConfig, reportId, request, summaryFields, summaryRequest],
   );
 
   const handleTableChange = useCallback(
@@ -407,7 +430,20 @@ export function UniReport<T extends Record<string, unknown> = Record<string, unk
 
   return (
     <ListPageTemplate>
-      <UniReportMetaHeader title={title} subtitle={resolvedSubtitle} extraLeft={headerLeft} />
+      <UniReportMetaHeader title={title} subtitle={resolvedSubtitle} extraLeft={
+        <Space>
+          {headerLeft}
+          {showFormatExportButton ? (
+            <Dropdown trigger={['click']} menu={{ items: [
+              { key: 'excel', label: '导出Excel', onClick: () => void handleExport('all', undefined, undefined, 'excel') },
+              { key: 'csv', label: '导出CSV', onClick: () => void handleExport('all', undefined, undefined, 'csv') },
+              { key: 'html', label: '导出PDF(HTML)', onClick: () => void handleExport('all', undefined, undefined, 'html') },
+            ] }}>
+              <Button icon={<ExportOutlined />}>{t('common.export')} <DownOutlined /></Button>
+            </Dropdown>
+          ) : null}
+        </Space>
+      } />
       {children}
       <UniTable<T>
           columnPersistenceId={columnPersistenceId}
@@ -423,8 +459,10 @@ export function UniReport<T extends Record<string, unknown> = Record<string, unk
           permissionResource={permissionResource}
           showExportButton={showExportButton}
           onExport={handleExport}
+          enableRowSelection={mode === 'config' && showExportButton}
           showPrintButton={showPrintButton}
           onPrint={handlePrint}
+          onTableDataChange={onPageDataChange}
           bordered={template.bordered ?? true}
           size={template.tableSize ?? 'small'}
           summary={tableSummary}
