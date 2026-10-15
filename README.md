@@ -228,10 +228,39 @@ cd kuaigeyun   # 或 kuaigeyun-mes，取决于 clone 目录名
 **远端与水位**
 
 - `gitee` = `git@gitee.com:kuaigeyun/kuaigeyun.git`（上游主源）；`upstream` = GitHub 镜像；`origin` = 本私有 fork
-- **已评估到的上游 tip：`6da00ec43f`**（gitee/develop，截至 2026-10-13）。该提交及更早的全部上游提交均已逐一评估（取/适配/跳过）
-- 下次同步：`git fetch gitee && git log --oneline 6da00ec43f..gitee/develop`，范围内即未评新提交
+- **已评估到的上游 tip：`91b95d2ada`**（gitee/develop，新链 tip 为 dist 提交，最后业务提交 `9ffd857453`/`a9bf3a6e2f` merge）。该提交及更早的全部上游提交均已逐一评估（取/适配/跳过）
+- ⚠️ **上游曾 force-push 重写历史**（oss-pro 解耦 + dist 历史剥离，`7808de234d→ffe8ffd7fa`）：2026-10-13 之前批次的旧上游哈希在新链上已全部失效，下表旧批哈希仅为历史记录锚点；新链上以内容对应（`001af8dc75` ≈ 旧 `56d484fdf8`）
+- 下次同步：`git fetch gitee && git log --oneline a9bf3a6e2f..gitee/develop`（业务提交口径），范围内即未评新提交
 
-**已同步映射（上游 → 本地，2026-10 批次）**
+**已同步映射（上游 → 本地，2026-10-15 新链批次）**
+
+| 上游提交 | 本地提交 | 方式 | 内容与备注 |
+| --- | --- | --- | --- |
+| `a0ea4efd00` `656e38eb95` `0fc8362431` `d05ceb48ad` | `c8b7739ae6` `10c44a470e` `bbbfcb9a3f` `9d5dbb18d9` | 摘取 | 单位治理 4 连击：失效生产单位映射裁撤、工单计划数量跟基础单位、单位名称为真源、单位快照回填；迁移重映射 |
+| `978a1fb9e5` | `798229b9ef` | 摘取 | 保养/点检方案参数与任务落库、租户初始化引导；迁移重映射 874/875 |
+| `66bea0e68c` | `fc25cc3bf0` | 摘取 | 造数同步操作日志、全有或全无落库 |
+| `a0787316f3` | `2570bd6627` | 摘取 | 盘点列表取数参数误用未定义变量 |
+| `40599c81ed` | `551a68e18e` | 摘取+本地化 | kuaiai 能力矩阵提速（`_audit_bundle`+gather+Pulse TTL）；保留 `to_site_date` 分桶与 `Optional[int]` Pulse 语义 |
+| `c16a17ebba` | `167481a393` | 摘取 | 系统架构图 + 禁止间隔号规则（纯文档） |
+| `2bd59d411f` | `d4991eef70` | 摘取+适配 | 图档发放借阅、业务附件鉴权、工程图纸图档格式；迁移重映射 |
+| `8597d7a461` | `bdb64b09f9` | 摘取+适配 | 销售订单字段脱敏、交付物体系清单迁移；剥离 kuaiplm(pro) 内容 |
+| `3e128b1459` | `57f8389c81` | 摘取 | UniImport 失败原因汇总、菜单分组、导入/项目建议书配套；剔除 funide_oa(pro) 测试 |
+| `6b3722a9ab` | `da374cfba4` | 摘取 | 审批提交增强（发起人自选审批人）、付款申请上拉、杂项财务前端 |
+| `7ba631a5f0` `23bc264280` `88d46269e4` `0b2fb040e9` | `8ab7281391` `6fe3d3f4cd` `79887ff4c0` `72c47d6dff` | 摘取 | 菜单链 4 修：接管只认启用应用、同步只认磁盘 manifest、财务接管 canonical 来源、scan/sync-all 物化 |
+| `073902612c` `2bde760cab` `4409dcbd5d` | `19b96aac8a` `a08eaf1447` `ab8461510f` | 摘取 | 审核按钮门禁 3 修：当前待审保留按钮、hub 不被过期列表门阻断、提示对齐当前节点 |
+| `2377282bd8` | —— | **跳过（决策B）** | 上游 OSS 版其他收支挂 `kuaizhizao`——与本地 `kuaicaiwu` 重建版同功能双实现，不取 impl，只移植后续修复 |
+| `3e42e979d0` `84dd5d74ac` `6a308850dc` `de8009abf0` | `b6192a882e` `07a033a6e2` `07b6885ac4` `3d55a4e25f` | 摘取 | 分支条件审批链 4 修：前节点先决策、批准显式选边+AR/AP 回写、保留选边显示未来待办、条件路由选边人/弹窗 UX |
+| `ef73ad9afe` | `fbe1795be7` | 摘取+适配 | CRM 公海 crm scope、收款单、应用中心提速；合并 workspace PRO_APPS 目录与本地 report/AI 生命周期 seeding |
+| `d8d297794c` `98cfb42b0c` `af81d592c3` | `350a1f1556` | **移植到 kuaicaiwu** | 其他收支三连修复（行保存 AttributeError、发起人快照、自选审批人弹窗）——按决策B适配到本地 `MiscVoucherService` 架构 |
+| `455137c39c` | `deeadd7aca` | 摘取+适配 | 流程造数增强 + 租户恢复悬空部门外键置空；`force_simple_when_unset` 与本地 `default_none` 语义合并 |
+| `f55fe1a6a1` | `82b3404046` | 摘取（决策A） | **下线点检计划模块**跟随上游；迁移 `887_drop_equipment_spot_check_plans`；剔除 kuaiiot-device-trend-chart 日志条目（本地为重建版） |
+| `6a40c12117` | `5d8465af09` | 摘取 | RBAC：取单来源回显即可不必开查看 |
+| `af81d592c3` | （见上 350a1f1556） | 移植 | — |
+| `d9b02748d5` | `4cbc5b0777` | 摘取 | 补料领料同步、保养要求展示、其他入库编辑 |
+| `9ffd857453` | `1678ae4b1f` | 摘取 | 销售订单明细物料显示、工单出库报价列表性能 |
+| `304c2884f8` | —— | 跳过 | funide-oa 研发交付物文案（客户专属应用，无通用代码落点） |
+
+**已同步映射（上游 → 本地，2026-10 早期批次，旧链哈希）**
 
 | 上游提交 | 本地提交 | 方式 | 内容与备注 |
 | --- | --- | --- | --- |
@@ -251,6 +280,8 @@ cd kuaigeyun   # 或 kuaigeyun-mes，取决于 clone 目录名
 
 **明确跳过 / 剔除（勿重复评估）**
 
+- `2377282bd8` 上游 OSS 版其他收支（`kuaizhizao` impl）——决策B保本地 `kuaicaiwu` 重建版，后续修复以移植方式进入
+- `304c2884f8` funide-oa 研发交付物文案——客户专属应用
 - `9e7bc7fc9d` 侧边栏重构——与本地 BasicLayout 路线冲突，只取了 `meta.is_pro` 徽标分支
 - 上游 pro 侧代码（OSS 无对应文件）：其他收支后端（已本地重建）、kuaiai 设置页去 OCR/WorkBuddy、kuaiiot-command-device-id 迁移——对应 updateLog 条目均已剔除
 - `cd30a1c98` kuaiiot realtime：通道/前端早前已取；发布端在 pro，已由 `d24170f8cd` 本地补 `schedule_device_update`
@@ -258,7 +289,7 @@ cd kuaigeyun   # 或 kuaigeyun-mes，取决于 clone 目录名
 
 **维护约定**
 
-- 迁移号避让：上游占用段一律重映射到本地连续段（当前已到 873），不改已入库 aerich 记录的文件名
+- 迁移号避让：上游占用段一律重映射到本地连续段（当前已到 887），不改已入库 aerich 记录的文件名
 - 每批摘取后：`uv run pytest`（后端全量）+ `npm run build`（前端）；dist 单独 `chore: build-web sync` 提交
 - spec-143 裸查：新代码禁无 `tenant_id` 的租户表查询；`import_pro_*` 全仓清零，遇上游新增一律转本地直接 import
 - AOCI：`aoci maintain` CLI 目前无法写正式卷（blocked 存量态），提交照常、如实记录
