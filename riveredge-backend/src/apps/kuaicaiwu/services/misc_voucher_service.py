@@ -272,7 +272,15 @@ class MiscVoucherService:
             "review_remarks": remarks,
         }
 
-    async def submit(self, tenant_id: int, doc_id: int, user: User):
+    async def submit(
+        self,
+        tenant_id: int,
+        doc_id: int,
+        user: User,
+        *,
+        selected_approver_user_ids: Optional[List[int]] = None,
+        selected_approver_by_node: Optional[Dict[str, List[int]]] = None,
+    ):
         doc = await self.get_or_404(tenant_id, doc_id)
         status = str(doc.status)
         audit_required = await self.audit_required(tenant_id)
@@ -306,6 +314,8 @@ class MiscVoucherService:
             title=f"{self.spec.doc_label}审核: {doc_code}",
             content=content,
             doc_label=self.spec.doc_label,
+            selected_approver_user_ids=selected_approver_user_ids,
+            selected_approver_by_node=selected_approver_by_node,
         )
         patch: Dict[str, Any] = {"status": "PendingReview"}
         apply_update_audit(patch, user)
@@ -360,6 +370,33 @@ class MiscVoucherService:
         return await self._review(
             tenant_id, doc_id, user, approve=False, remarks=remarks
         )
+
+    async def withdraw(self, tenant_id: int, doc_id: int, user: User):
+        doc = await self.get_or_404(tenant_id, doc_id)
+        if str(doc.status) != "PendingReview":
+            raise BusinessLogicError(f"仅待审核状态可撤回，当前状态: {doc.status}")
+        patch: Dict[str, Any] = {"status": "Draft"}
+        apply_update_audit(patch, user)
+        await self.spec.model.filter(id=doc_id).update(**patch)
+        return await self.get_or_404(tenant_id, doc_id)
+
+    async def revoke(self, tenant_id: int, doc_id: int, user: User):
+        doc = await self.get_or_404(tenant_id, doc_id)
+        status = str(doc.status)
+        if status == "Confirmed":
+            raise BusinessLogicError(f"{self.spec.label}已确认过账，请先取消确认")
+        if status != "Approved":
+            raise BusinessLogicError(f"仅已审核状态可反审，当前状态: {doc.status}")
+        patch: Dict[str, Any] = {
+            "status": "Draft",
+            "reviewer_id": None,
+            "reviewer_name": None,
+            "review_time": None,
+            "review_remarks": None,
+        }
+        apply_update_audit(patch, user)
+        await self.spec.model.filter(id=doc_id).update(**patch)
+        return await self.get_or_404(tenant_id, doc_id)
 
     async def confirm(self, tenant_id: int, doc_id: int, user: User):
         doc = await self.get_or_404(tenant_id, doc_id)

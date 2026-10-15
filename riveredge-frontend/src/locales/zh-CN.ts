@@ -31204,6 +31204,18 @@ export default {
     '修复应用中心一键同步菜单误报专业版权限',
   'pages.dashboard.updateLog.entries.application-center-sync-menu-permission-r01.description':
     '菜单同步改用应用更新或菜单更新权限，与安装/激活专业版解耦；本节点未 compose 的专业应用跳过，不影响基础与定制应用同步。',
+  'pages.dashboard.updateLog.entries.misc-voucher-submit-initiator-select-r01.title':
+    '其他收支提交会弹出发起人自选审批人',
+  'pages.dashboard.updateLog.entries.misc-voucher-submit-initiator-select-r01.description':
+    '列表行无 audit 快照时，工作流按钮改按单据 entityType 识别是否启用人工审核，避免误跳过发起人自选弹窗导致「缺少人员快照」无法提交。',
+  'pages.dashboard.updateLog.entries.quality-inspection-export-route-r01.title':
+    '修复检验业务列表导出全部报错',
+  'pages.dashboard.updateLog.entries.quality-inspection-export-route-r01.description':
+    '来料/过程/成品检验导出接口路由注册顺序已调整，不再把 export 误当成检验单 ID，导出全部可正常下载 Excel。',
+  'pages.dashboard.updateLog.entries.other-expense-submit-approver-snapshot-r01.title':
+    '修复其他费用收支提交审核须选审批人',
+  'pages.dashboard.updateLog.entries.other-expense-submit-approver-snapshot-r01.description':
+    '审批流配置为发起时勾选审批人时，其他费用支出/收入提交会弹出选人并写入人员快照，不再报缺少快照而无法提交。',
   'pages.dashboard.updateLog.entries.sales-order-list-line-materials-r01.title':
     '修复销售订单列表明细列不显示物料',
   'pages.dashboard.updateLog.entries.sales-order-list-line-materials-r01.description':
