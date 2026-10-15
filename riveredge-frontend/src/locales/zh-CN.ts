@@ -31204,6 +31204,14 @@ export default {
     '修复应用中心一键同步菜单误报专业版权限',
   'pages.dashboard.updateLog.entries.application-center-sync-menu-permission-r01.description':
     '菜单同步改用应用更新或菜单更新权限，与安装/激活专业版解耦；本节点未 compose 的专业应用跳过，不影响基础与定制应用同步。',
+  'pages.dashboard.updateLog.entries.sales-order-list-line-materials-r01.title':
+    '修复销售订单列表明细列不显示物料',
+  'pages.dashboard.updateLog.entries.sales-order-list-line-materials-r01.description':
+    '订单视图「明细」预览列依赖行项目数据，列表请求已始终带上 include_items，与报价单、采购订单一致，不再整列显示为「-」。',
+  'pages.dashboard.updateLog.entries.frontend-perf-wo-outbound-quote-r02.title':
+    '加快工单开单、出库与报价列表打开',
+  'pages.dashboard.updateLog.entries.frontend-perf-wo-outbound-quote-r02.description':
+    '工单新建编辑弹窗不再打开时全量预拉物料，改为选料与来源单据按需解析；销售出库列表详情抽屉与报价详情时间线改为按需加载，减轻列表首屏体积。',
   'pages.dashboard.updateLog.entries.stocktaking-list-params-typo-r01.title':
     '修复库存盘点创建成功后列表看不到',
   'pages.dashboard.updateLog.entries.stocktaking-list-params-typo-r01.description':
