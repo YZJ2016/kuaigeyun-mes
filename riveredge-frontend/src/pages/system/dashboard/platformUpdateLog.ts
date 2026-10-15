@@ -44,36 +44,20 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'tenant-restore-dept-parent-fk-r01',
+    date: '2026-10-15',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.tenant-restore-dept-parent-fk-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.tenant-restore-dept-parent-fk-r01.description',
+  },
+  {
     id: 'funide-oa-rd-archive-merge-module-r01',
     date: '2026-10-15',
     type: 'fix',
     titleKey: 'pages.dashboard.updateLog.entries.funide-oa-rd-archive-merge-module-r01.title',
     descriptionKey:
       'pages.dashboard.updateLog.entries.funide-oa-rd-archive-merge-module-r01.description',
-  },
-  {
-    id: 'ind-foreign-trade-unified-crm-r01',
-    date: '2026-10-15',
-    type: 'feature',
-    titleKey: 'pages.dashboard.updateLog.entries.ind-foreign-trade-unified-crm-r01.title',
-    descriptionKey:
-      'pages.dashboard.updateLog.entries.ind-foreign-trade-unified-crm-r01.description',
-  },
-  {
-    id: 'ind-foreign-trade-crm-gapfill-r01',
-    date: '2026-10-15',
-    type: 'improvement',
-    titleKey: 'pages.dashboard.updateLog.entries.ind-foreign-trade-crm-gapfill-r01.title',
-    descriptionKey:
-      'pages.dashboard.updateLog.entries.ind-foreign-trade-crm-gapfill-r01.description',
-  },
-  {
-    id: 'ind-foreign-trade-unitable-3bucket-r01',
-    date: '2026-10-15',
-    type: 'improvement',
-    titleKey: 'pages.dashboard.updateLog.entries.ind-foreign-trade-unitable-3bucket-r01.title',
-    descriptionKey:
-      'pages.dashboard.updateLog.entries.ind-foreign-trade-unitable-3bucket-r01.description',
   },
   {
     id: 'industry-pack-menu-bind-wipe-r01',
@@ -211,14 +195,6 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
     titleKey: 'pages.dashboard.updateLog.entries.audit-block-reason-current-node-r01.title',
     descriptionKey:
       'pages.dashboard.updateLog.entries.audit-block-reason-current-node-r01.description',
-  },
-  {
-    id: 'finance-misc-categories-kuaizhizao-api-r01',
-    date: '2026-10-14',
-    type: 'fix',
-    titleKey: 'pages.dashboard.updateLog.entries.finance-misc-categories-kuaizhizao-api-r01.title',
-    descriptionKey:
-      'pages.dashboard.updateLog.entries.finance-misc-categories-kuaizhizao-api-r01.description',
   },
   {
     id: 'audit-hub-stale-list-gate-click-r01',
