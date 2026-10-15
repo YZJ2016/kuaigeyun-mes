@@ -1896,8 +1896,7 @@ const MaterialUnitsEditor: React.FC<MaterialUnitsEditorProps> = ({ value, onChan
   const form = Form.useFormInstance();
   const units = value?.units ?? [];
   const scenarios = value?.scenarios ?? {};
-  const { options: unitOptions, valueToLabel: unitValueToLabel, isLoading: loadingUnits } =
-    useMaterialUnitOptions();
+  const { options: unitOptions, isLoading: loadingUnits } = useMaterialUnitOptions();
 
   const baseUnit = (Form.useWatch('baseUnit', form) ?? '') as string;
 
@@ -1995,7 +1994,7 @@ const MaterialUnitsEditor: React.FC<MaterialUnitsEditorProps> = ({ value, onChan
         const conversionRate = numerator / denominator;
         const isInteger = Number.isInteger(conversionRate);
         const previewText = baseUnit
-          ? `= ${isInteger ? conversionRate : `${numerator}/${denominator}`} ${unitValueToLabel[baseUnit] || baseUnit}`
+          ? `= ${isInteger ? conversionRate : `${numerator}/${denominator}`} ${baseUnit}`
           : '';
 
         return (
@@ -2095,7 +2094,7 @@ const MaterialUnitsEditor: React.FC<MaterialUnitsEditorProps> = ({ value, onChan
             fontSize: '12px',
             color: '#1890ff',
           }}>
-            {t('app.master-data.materialForm.baseUnitColon')}<strong>{unitValueToLabel[baseUnit] || baseUnit}</strong>
+            {t('app.master-data.materialForm.baseUnitColon')}<strong>{baseUnit}</strong>
           </div>
         )}
       </div>
@@ -2175,7 +2174,7 @@ const MaterialUnitsEditor: React.FC<MaterialUnitsEditorProps> = ({ value, onChan
             <Col span={6}>
               <div style={{ marginBottom: 8 }}>{t('app.master-data.materialForm.inventoryUnit')}</div>
               <Input
-                value={baseUnit ? (unitValueToLabel[baseUnit] || baseUnit) : ''}
+                value={baseUnit || ''}
                 disabled
                 placeholder={t('app.master-data.materialForm.baseUnitLabel')}
               />
