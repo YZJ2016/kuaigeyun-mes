@@ -31180,17 +31180,10 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
-<<<<<<< HEAD
-=======
-  'pages.dashboard.updateLog.entries.kuaiiot-device-trend-chart-r01.title':
-    '修复接入设备查看数据趋势图选点位后空白',
-  'pages.dashboard.updateLog.entries.kuaiiot-device-trend-chart-r01.description':
-    '趋势图 Tab 改为可见时再挂载图表并固定容器高度；数值字段兼容字符串小数；无数据时给出明确空态提示。',
   'pages.dashboard.updateLog.entries.stocktaking-list-params-typo-r01.title':
     '修复库存盘点创建成功后列表看不到',
   'pages.dashboard.updateLog.entries.stocktaking-list-params-typo-r01.description':
     '盘点列表取数参数误用未定义变量导致请求失败并静默显示空表；已改为正确读取搜索条件，创建后可正常刷新看到单据。',
->>>>>>> a0787316f3 (fix(warehouse): 盘点列表取数参数误用未定义变量导致空表)
   'pages.dashboard.updateLog.entries.equip-ops-plan-scheme-params-r01.title':
     '点检保养计划设备与周期统一取自方案',
   'pages.dashboard.updateLog.entries.equip-ops-plan-scheme-params-r01.description':
@@ -31561,6 +31554,10 @@ export default {
     '样品加工研发项目支持手填代号',
   'pages.dashboard.updateLog.entries.kuaiplm-sample-process-manual-project-r01.description':
     '新建样品加工申请时，研发项目可从系统项目选择，也可直接输入项目代号，不再因项目主数据未建档而无法保存。',
+  'pages.dashboard.updateLog.entries.finance-menu-manifest-disk-source-r01.title':
+    '财务管理菜单同步只认后端清单文件',
+  'pages.dashboard.updateLog.entries.finance-menu-manifest-disk-source-r01.description':
+    '同步菜单时以服务器上的后端应用清单为准并写回库内配置，纠正快财务收款管理、付款管理仍按旧平铺结构落库的问题。',
   'pages.dashboard.updateLog.entries.finance-menu-single-source-r01.title':
     '财务管理侧栏本地与生产同一套结构',
   'pages.dashboard.updateLog.entries.finance-menu-single-source-r01.description':
