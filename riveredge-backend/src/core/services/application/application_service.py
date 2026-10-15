@@ -1526,6 +1526,17 @@ class ApplicationService:
         Returns:
             manifest 字典，不存在则返回 None
         """
+        manifest_path = None
+        if code and code not in (".", "..") and "/" not in code and "\\" not in code:
+            manifest_path = ApplicationService._resolve_manifest_path(code)
+        if manifest_path:
+            try:
+                with manifest_path.open("r", encoding="utf-8") as handle:
+                    data = json.load(handle)
+                if data.get("code") == code:
+                    return data
+            except (json.JSONDecodeError, IOError):
+                pass
         plugins_dir = ApplicationService._get_plugins_directory()
         # 支持 code 与目录名不一致（如 master-data / master_data）
         for plugin_dir in plugins_dir.iterdir():
@@ -1927,6 +1938,7 @@ class ApplicationService:
 
         # 一次性按 tenant 取出所有已存在应用（code -> row），消除 N+1 启动期 DB 查询
         existing_by_code: Dict[str, Dict[str, Any]] = {}
+        apps_prefetched = False
         try:
             conn = await get_db_connection()
             try:
@@ -1958,6 +1970,7 @@ class ApplicationService:
                             drop_id,
                             tenant_id,
                         )
+                apps_prefetched = True
             finally:
                 await conn.close()
         except Exception as e:
@@ -1999,7 +2012,7 @@ class ApplicationService:
                     continue
                 
                 # 优先用预取结果；预取失败时回退到单次查询
-                if existing_by_code:
+                if apps_prefetched:
                     existing_app = existing_by_code.get(code)
                 else:
                     existing_app = await ApplicationService.get_application_by_code(
@@ -2013,7 +2026,7 @@ class ApplicationService:
                 is_active = (existing_app.get('is_active', True) if existing_app else False) if is_installed else False
                 
                 # 系统内置应用默认自动安装；但 PRO 应用必须已激活 License Key，避免后台误开。
-                should_auto_install = await ApplicationService._can_enable_or_install_app(
+                should_auto_install = not is_installed and await ApplicationService._can_enable_or_install_app(
                     tenant_id=tenant_id,
                     app_code=code,
                 )
@@ -2067,12 +2080,18 @@ class ApplicationService:
                         permission_code=app_data.permission_code,
                         sort_order=app_sort_order,
                     )
-                    application = await ApplicationService.update_application(
-                        tenant_id=tenant_id,
-                        uuid=existing_app.get('uuid'),
-                        data=update_data,
-                        sync_derived_resources=False,
-                    )
+                    if any(
+                        existing_app.get(key) != value
+                        for key, value in update_data.model_dump(exclude_unset=True).items()
+                    ):
+                        application = await ApplicationService.update_application(
+                            tenant_id=tenant_id,
+                            uuid=existing_app.get('uuid'),
+                            data=update_data,
+                            sync_derived_resources=False,
+                        )
+                    else:
+                        application = dict(existing_app)
 
                     if needs_auto_install:
                         await ApplicationService.install_application(
@@ -2109,7 +2128,8 @@ class ApplicationService:
                     await seed_kuaiai_agent_scenes_on_lifecycle(tenant_id)
 
                 ded = ApplicationService._manifest_is_dedicated(manifest)
-                await ApplicationService._persist_is_dedicated(tenant_id, code, ded)
+                if not existing_app or bool(existing_app.get("is_dedicated")) != ded:
+                    await ApplicationService._persist_is_dedicated(tenant_id, code, ded)
                 if isinstance(application, dict):
                     application["is_dedicated"] = ded
 
