@@ -169,6 +169,8 @@ const ProductsPage: React.FC = () => {
         }),
       );
       actionRef.current?.reload();
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : t('common.operationFailed'));
     } finally {
       setPresetLoading(false);
     }

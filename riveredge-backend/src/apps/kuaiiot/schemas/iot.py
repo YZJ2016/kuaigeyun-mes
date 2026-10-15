@@ -224,25 +224,14 @@ class TagHistoryListResponse(BaseModel):
     tsdb_configured: bool
 
 
-class IngestPayload(BaseModel):
-    tags: Dict[str, Any] = Field(default_factory=dict)
-    events: List[Dict[str, Any]] = Field(default_factory=list)
-    timestamp: Optional[datetime] = None
-    idempotency_key: Optional[str] = Field(None, max_length=128)
-
-    @field_validator("tags")
-    @classmethod
-    def validate_tags_limit(cls, value: Dict[str, Any]) -> Dict[str, Any]:
-        if len(value) > INGEST_MAX_TAGS_PER_PAYLOAD:
-            raise ValueError(f"单次入站 tags 最多 {INGEST_MAX_TAGS_PER_PAYLOAD} 个")
-        return value
-
-
 class IngestResponse(BaseModel):
-    accepted: int
-    events_accepted: int = 0
-    synced_to_mes: bool
-    message: str = "ok"
+    """单条入站响应：与服务返回一致；幂等回放原样返回首次存下的结果。"""
+
+    accepted: bool
+    device_uuid: str
+    sampled_at: str
+    snapshot_keys: List[str] = Field(default_factory=list)
+    monitor_written: bool = False
 
 
 class IngestBatchItem(BaseModel):

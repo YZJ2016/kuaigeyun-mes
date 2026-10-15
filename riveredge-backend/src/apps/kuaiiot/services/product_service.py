@@ -228,24 +228,25 @@ class ProductService:
     async def load_builtin_presets(tenant_id: int) -> LoadBuiltinProductPresetsResponse:
         created = 0
         skipped = 0
-        for code, template in TAG_TEMPLATES.items():
-            exists = await IotProduct.filter(tenant_id=tenant_id, code=code, deleted_at__isnull=True).exists()
-            if exists:
-                skipped += 1
-                continue
-            tags = ProductService._validate_tags(template.get("tags") or [])
-            events = ProductService._validate_events(template.get("events") or [])
-            functions = ProductService._validate_functions(template.get("functions") or [])
-            await IotProduct.create(
-                tenant_id=tenant_id,
-                code=code,
-                name=str(template.get("name") or code),
-                description=template.get("description"),
-                tags=tags,
-                events=events,
-                functions=functions,
-            )
-            created += 1
+        async with in_transaction():
+            for code, template in TAG_TEMPLATES.items():
+                exists = await IotProduct.filter(tenant_id=tenant_id, code=code, deleted_at__isnull=True).exists()
+                if exists:
+                    skipped += 1
+                    continue
+                tags = ProductService._validate_tags(template.get("tags") or [])
+                events = ProductService._validate_events(template.get("events") or [])
+                functions = ProductService._validate_functions(template.get("functions") or [])
+                await IotProduct.create(
+                    tenant_id=tenant_id,
+                    code=code,
+                    name=str(template.get("name") or code),
+                    description=template.get("description"),
+                    tags=tags,
+                    events=events,
+                    functions=functions,
+                )
+                created += 1
         total = await IotProduct.filter(tenant_id=tenant_id, deleted_at__isnull=True).count()
         return LoadBuiltinProductPresetsResponse(created=created, skipped=skipped, total=total)
 
