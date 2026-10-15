@@ -9,19 +9,20 @@ from core.services.application.application_service import ApplicationService
 from core.services.system.menu_takeover_service import MenuTakeoverService
 
 
-def test_is_consumer_effective_requires_deployed_manifest():
+def test_is_consumer_effective_ignores_deployed_manifest():
+    """上游 7ba631a5f0 后：接管生效只认库内已安装且已启用，磁盘 manifest 不再参与
+    （各节点须凭同一张 core_menus 一致行动）。"""
     with patch.object(ApplicationService, "_get_manifest_by_code", return_value=None), patch.object(
         MenuTakeoverService, "is_consumer_active", new=AsyncMock(return_value=True)
     ):
-        assert asyncio.run(MenuTakeoverService.is_consumer_effective(1, "kuaicaiwu")) is False
+        assert asyncio.run(MenuTakeoverService.is_consumer_effective(1, "kuaicaiwu")) is True
 
 
 def test_is_consumer_effective_requires_active_consumer():
-    with patch.object(ApplicationService, "_get_manifest_by_code", return_value={"code": "kuaicaiwu"}):
-        with patch.object(MenuTakeoverService, "is_consumer_active", new=AsyncMock(return_value=True)):
-            assert asyncio.run(MenuTakeoverService.is_consumer_effective(1, "kuaicaiwu")) is True
-        with patch.object(MenuTakeoverService, "is_consumer_active", new=AsyncMock(return_value=False)):
-            assert asyncio.run(MenuTakeoverService.is_consumer_effective(1, "kuaicaiwu")) is False
+    with patch.object(MenuTakeoverService, "is_consumer_active", new=AsyncMock(return_value=True)):
+        assert asyncio.run(MenuTakeoverService.is_consumer_effective(1, "kuaicaiwu")) is True
+    with patch.object(MenuTakeoverService, "is_consumer_active", new=AsyncMock(return_value=False)):
+        assert asyncio.run(MenuTakeoverService.is_consumer_effective(1, "kuaicaiwu")) is False
 
 
 def test_stable_menu_config_digest_same_structure():

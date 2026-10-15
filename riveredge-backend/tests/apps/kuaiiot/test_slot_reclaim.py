@@ -19,9 +19,12 @@ def test_slot_reclaim_keeps_edge_agent_and_other_apps():
     assert "apps/kuaiiot 槽位收归本仓" in gitignore
 
     workspace = (REPO / "fast-deploy/tools/workspace/generate_workspace.py").read_text(encoding="utf-8")
-    assert 'PRO_APPS = ["kuaiai"]' in workspace
-    assert "kuaiiot" not in workspace
-    assert "kuaireport" not in workspace
+    # 上游 ef73ad9afe 起 PRO 目录拆分为 PRO_CORE_APPS + PRO_INDUSTRY_APPS；
+    # 目录仅作专业仓组装排序参考，本仓源码槽位由 .gitignore 与 manifest 约束。
+    assert "PRO_CORE_APPS" in workspace
+    assert "PRO_INDUSTRY_APPS" in workspace
+    assert "PRO_APPS = PRO_CORE_APPS + PRO_INDUSTRY_APPS" in workspace
+    assert '"kuaiai"' in workspace
 
     assert (REPO / "riveredge-backend/src/apps/kuaiiot/edge-agent/agent.py").is_file()
     backend_manifest = (REPO / "riveredge-backend/src/apps/kuaiiot/manifest.json").read_text(encoding="utf-8")

@@ -11,6 +11,8 @@
 - stats 缺陷修复：apps.kuaiai.services.suggestion_service 不存在（spec 182 以
   pulse registry 实现），原 _pulse_suggestion_count 恒回假 0；修复后为
   Optional[int]，缺失/失败回 None；by_day 改站点时区分桶（Asia/Shanghai）。
+  上游提速后改名 `_pulse_suggestion_count_uncached` 并加 `get_overview` 的
+  `include_pulse` 参数（默认 False → 响应回 0，不算 Pulse）。
 
 覆盖：三卡状态闭集与文案真实性、当前用户权限（无 user_id 入参）、
 HITL not_ready、审计不可用 partial、权限读取失败降级、错误脱敏、
@@ -30,6 +32,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi.routing import APIRoute
 
+import core.ai.stats_service as stats_svc
 import core.utils.timezone_utils as tz_utils
 from apps.kuaiai.api.router import router
 from apps.kuaiai.schemas.operations import TrustOut
@@ -266,6 +269,19 @@ def _patch_audit_rows(rows):
     def _filter(**kwargs):
         # created_at__gte 过滤在 mock 层近似实现：直接返回全部行
         qs = _qs(rows)
+        # 上游提速后改查聚合列 .values()，回 dict 序列
+        qs.values = MagicMock(
+            return_value=AsyncMock(
+                return_value=[
+                    {
+                        "created_at": r.created_at,
+                        "latency_ms": getattr(r, "latency_ms", None),
+                        "capability": getattr(r, "capability", None),
+                    }
+                    for r in rows
+                ]
+            )()
+        )
         return qs
 
     return patch(
@@ -281,7 +297,7 @@ class TestStatsServiceSemantics:
         assert (
             "apps.kuaiai.services.suggestion_service" not in sys.modules
         )
-        count = await AiStatsService._pulse_suggestion_count(TENANT)
+        count = await AiStatsService._pulse_suggestion_count_uncached(TENANT)
         assert count is None
 
     async def test_pulse_count_none_when_service_raises(self):
@@ -296,7 +312,7 @@ class TestStatsServiceSemantics:
             sys.modules,
             {"apps.kuaiai.services.suggestion_service": fake_mod},
         ):
-            count = await AiStatsService._pulse_suggestion_count(TENANT)
+            count = await AiStatsService._pulse_suggestion_count_uncached(TENANT)
         assert count is None
 
     async def test_pulse_count_real_value_when_service_exists(self):
@@ -311,7 +327,7 @@ class TestStatsServiceSemantics:
             sys.modules,
             {"apps.kuaiai.services.suggestion_service": fake_mod},
         ):
-            count = await AiStatsService._pulse_suggestion_count(TENANT)
+            count = await AiStatsService._pulse_suggestion_count_uncached(TENANT)
         assert count == 2
 
     async def test_by_day_buckets_use_site_timezone(self):
@@ -352,7 +368,10 @@ class TestStatsServiceSemantics:
             created_at=aware_sh.astimezone(timezone.utc).replace(tzinfo=None)
         )
         with _patch_audit_rows([row]):
-            out = await AiStatsService.get_overview(tenant_id=TENANT, days=7)
+            stats_svc._PULSE_COUNT_CACHE.clear()
+            out = await AiStatsService.get_overview(
+                tenant_id=TENANT, days=7, include_pulse=True
+            )
         day_map = {d.day: d.count for d in out.by_day}
         assert day_map.get(site_today.isoformat()) == 1
         # pulse 数据源缺失 → None
@@ -362,7 +381,10 @@ class TestStatsServiceSemantics:
 
     async def test_empty_overview_has_reason_and_none_pulse(self):
         with _patch_audit_rows([]):
-            out = await AiStatsService.get_overview(tenant_id=TENANT, days=7)
+            stats_svc._PULSE_COUNT_CACHE.clear()
+            out = await AiStatsService.get_overview(
+                tenant_id=TENANT, days=7, include_pulse=True
+            )
         assert out.total_calls == 0
         assert out.empty_reason
         assert out.pulse_suggestion_count is None
