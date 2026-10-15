@@ -15,6 +15,7 @@ from infra.exceptions.exceptions import ValidationError
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[3]
 _KUAIZHIZAO_MANIFEST = _BACKEND_ROOT / "src" / "apps" / "kuaizhizao" / "manifest.json"
+_KUAICAIWU_MANIFEST = _BACKEND_ROOT / "src" / "apps" / "kuaicaiwu" / "manifest.json"
 
 
 def _load_kuaizhizao_menu_config() -> dict:
@@ -25,35 +26,54 @@ def _load_kuaizhizao_menu_config() -> dict:
     return menu_config
 
 
-def test_kuaizhizao_manifest_finance_receivables_parent_is_receipts_group():
-    menu_config = _load_kuaizhizao_menu_config()
+def _load_kuaicaiwu_menu_config() -> dict:
+    """本地架构：财务菜单由 kuaicaiwu manifest 自承载（/apps/kuaicaiwu/finance-management），
+    kuaizhizao manifest 不含 finance 段（上游 source+接管物化结构不适用于本地路径布局，
+    前端财务页面路由均在 /apps/kuaicaiwu/ 下）。"""
+    assert _KUAICAIWU_MANIFEST.is_file(), f"缺少 manifest: {_KUAICAIWU_MANIFEST}"
+    manifest = json.loads(_KUAICAIWU_MANIFEST.read_text(encoding="utf-8"))
+    menu_config = manifest.get("menu_config")
+    assert isinstance(menu_config, dict)
+    return menu_config
+
+
+def test_kuaicaiwu_manifest_finance_receivables_parent_is_receipts_group():
+    menu_config = _load_kuaicaiwu_menu_config()
     parents = ApplicationService.collect_manifest_leaf_immediate_parent_titles(menu_config)
-    path = "/apps/kuaizhizao/finance-management/receivables"
+    path = "/apps/kuaicaiwu/finance-management/receivables"
     assert parents[path] == "app.kuaicaiwu.menu.group.finance-receipts"
 
 
-def test_kuaizhizao_manifest_finance_payables_parent_is_payments_group():
-    menu_config = _load_kuaizhizao_menu_config()
+def test_kuaicaiwu_manifest_finance_payables_parent_is_payments_group():
+    menu_config = _load_kuaicaiwu_menu_config()
     parents = ApplicationService.collect_manifest_leaf_immediate_parent_titles(menu_config)
-    path = "/apps/kuaizhizao/finance-management/payables"
+    path = "/apps/kuaicaiwu/finance-management/payables"
     assert parents[path] == "app.kuaicaiwu.menu.group.finance-payments"
 
 
-def test_kuaizhizao_manifest_finance_grouped_paths_not_direct_under_finance_folder():
+def test_kuaicaiwu_manifest_finance_grouped_paths_not_direct_under_finance_folder():
     """分组 manifest 下，应收/应付等不得声明为 finance-management 的直接子节点。"""
-    menu_config = _load_kuaizhizao_menu_config()
+    menu_config = _load_kuaicaiwu_menu_config()
     parents = ApplicationService.collect_manifest_leaf_immediate_parent_titles(menu_config)
     finance_folder = "app.kuaicaiwu.menu.finance-management"
     grouped_paths = [
-        "/apps/kuaizhizao/finance-management/receivables",
-        "/apps/kuaizhizao/finance-management/payables",
-        "/apps/kuaizhizao/finance-management/receipts",
-        "/apps/kuaizhizao/finance-management/payments",
+        "/apps/kuaicaiwu/finance-management/receivables",
+        "/apps/kuaicaiwu/finance-management/payables",
+        "/apps/kuaicaiwu/finance-management/receipts",
+        "/apps/kuaicaiwu/finance-management/payments",
     ]
     for path in grouped_paths:
         assert path in parents
         assert parents[path] != finance_folder
         assert ".menu.group." in parents[path]
+
+
+def test_kuaizhizao_manifest_has_no_finance_source_section():
+    """本地 kuaizhizao manifest 不携带 finance-management source 段：
+    上游 source+consumer 物化机制在本地不启用（财务页面路由在 /apps/kuaicaiwu/ 下）。"""
+    menu_config = _load_kuaizhizao_menu_config()
+    parents = ApplicationService.collect_manifest_leaf_immediate_parent_titles(menu_config)
+    assert not any("finance-management" in p for p in parents)
 
 
 def test_kuaicaiwu_takeover_children_are_materialized_from_kuaizhizao_manifest():

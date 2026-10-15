@@ -40,11 +40,13 @@ def sales_content_ready(row: Any) -> bool:
     return bool(customer or summary or product_lines or proposer)
 
 
-def supplier_fill_ready(row: Any) -> bool:
+def supplier_fill_ready(row: Any, supplier_assessment_optional: bool = False) -> bool:
     dev_req = list(getattr(row, "dev_req_types", None) or [])
     if _needs_supplier_assessment(dev_req):
         if not str(getattr(row, "summary", None) or "").strip():
             return False
+        if supplier_assessment_optional:
+            return True
         return _supplier_assessment_ready(list(getattr(row, "supplier_assessment_lines", None) or []))
     return bool(str(getattr(row, "supplier_name", None) or "").strip())
 
@@ -56,10 +58,10 @@ def validate_sales_content_on_submit(row: Any) -> None:
         raise ValidationError("销售发起须填写客户、摘要、产品类型或提出人至少一项")
 
 
-def validate_supplier_on_submit(row: Any) -> None:
+def validate_supplier_on_submit(row: Any, supplier_assessment_optional: bool = False) -> None:
     from infra.exceptions.exceptions import ValidationError
 
-    if not supplier_fill_ready(row):
+    if not supplier_fill_ready(row, supplier_assessment_optional=supplier_assessment_optional):
         dev_req = list(getattr(row, "dev_req_types", None) or [])
         if _needs_supplier_assessment(dev_req):
             raise ValidationError("开发要求为 D/E/F 类时，采购须完整填写供应商评审表")
