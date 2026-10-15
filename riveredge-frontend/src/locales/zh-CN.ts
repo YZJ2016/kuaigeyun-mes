@@ -31180,6 +31180,18 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.inbound-hub-other-inbound-edit-r01.title':
+    '入库管理其他入库单支持编辑',
+  'pages.dashboard.updateLog.entries.inbound-hub-other-inbound-edit-r01.description':
+    '待入库的其他入库单在入库 Hub 列表与详情中可编辑，可改原因说明、备注及明细数量与单价后再确认入库。',
+  'pages.dashboard.updateLog.entries.maintenance-execution-item-requirement-r01.title':
+    '保养执行记录展示保养项要求',
+  'pages.dashboard.updateLog.entries.maintenance-execution-item-requirement-r01.description':
+    '执行记录详情与计划执行保养时在保养项名称下展示主数据「要求」；新建执行写入要求快照，历史记录在详情接口按保养项补全。',
+  'pages.dashboard.updateLog.entries.material-call-picking-sync-r01.title':
+    '修复补料下推领料出库后仍显示备料中',
+  'pages.dashboard.updateLog.entries.material-call-picking-sync-r01.description':
+    '生产领料确认出库后回写关联补料申请的已送达数量与状态（已完成/部分送达）；撤回领料确认时同步回滚。',
   'pages.dashboard.updateLog.entries.pull-source-display-echo-r01.title':
     '取单通用：来源单据回显即可，不必开查看',
   'pages.dashboard.updateLog.entries.pull-source-display-echo-r01.description':
@@ -31422,6 +31434,62 @@ export default {
     '项目建议书供应商评审改为选填',
   'pages.dashboard.updateLog.entries.funide-oa-project-proposal-supplier-optional-r01.description':
     'funide-oa 项目建议书在开发要求为 D/E/F 类时，提交审核不再强制完整填写供应商评审表，可按需补填。',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-no-preset-r01.title':
+    '研发工作台交付物改为按需添加',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-no-preset-r01.description':
+    '启用定制 OA 的研发项目不再自动预置阶段门交付物与 26 项体系清单；工作台交付物列表默认为空，由用户通过「新建交付物」自行维护。已存在项目的预置行不会被自动删除。',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-actions-simplify-r01.title':
+    '体系交付物操作列按状态精简',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-actions-simplify-r01.description':
+    '已验收仅保留查看关联或查看文件与撤回修改；已有内容时不再显示标记待补；已关联显示改关联，已上传显示重新上传。',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-view-linked-r01.title':
+    '体系交付物支持查看关联单据',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-view-linked-r01.description':
+    '已关联的体系预置交付物在操作列可点「查看关联」预览关联单号与名称，项目建议书可查看主要字段，并可在新标签打开对应列表定位。',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-status-composite-r01.title':
+    '体系交付物状态合并展示与撤回验收',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-status-composite-r01.description':
+    '已关联且已验收合并为一条绿色状态「已关联 已验收」；操作列提供「撤回修改」恢复待验收并保留关联内容，便于重新调整。',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-link-status-r01.title':
+    '修复关联后交付物状态仍显示缺项',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-link-status-r01.description':
+    '合并模式下工作台刷新不再用旧体系归档表覆盖交付物关联；关联成功保存后状态应显示「已关联」，并同步回写体系归档行。',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-link-save-r01.title':
+    '修复研发交付物关联单据保存无效',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-link-save-r01.description':
+    '关联项目建议书保存时会正确写入关联 ID 并提示失败原因；已审核/已下发且尚未绑定项目的建议书可在当前研发项目工作台完成关联。',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-actions-layout-r01.title':
+    '研发交付物操作列不再挤出表格外',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-actions-layout-r01.description':
+    '工作台交付物表操作列支持换行并加宽，验收状态改在状态列展示；含「打开工程对象」等多按钮行不再溢出列宽。',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-system-archive-delete-r01.title':
+    '体系交付物与关联单据可删除',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-system-archive-delete-r01.description':
+    '研发项目工作台中体系预置交付物（含关联单据行）在待提交或已驳回状态下可删除，与普通交付物一致；已关联内容仍可用「清除」仅去掉关联与附件。',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-type-column-r02.title':
+    '修复研发工作台交付物类型列仍显示内部码',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-type-column-r02.description':
+    '福尼特研发项目工作台交付物「类型」列已改为与体系清单一致的中文展示，不再把 system_archive:project_proposal 等内部码直接显示在表格里。',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-link-document-r01.title':
+    '研发交付物区块增加关联单据',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-link-document-r01.description':
+    '研发项目工作台各阶段「交付物名称」标题旁新增「关联单据」，与「新建交付物」并列；可选择体系交付物并关联项目建议书等业务单据，行内「关联」同样支持单据搜索选择。',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-type-system-archive-r01.title':
+    '研发交付物类型显示体系预置中文名',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-type-system-archive-r01.description':
+    '工作台交付物「类型」列不再展示 system_archive:project_proposal 等内部码，改为项目建议书等与体系清单一致的中文名称。',
+  'pages.dashboard.updateLog.entries.funide-oa-proposal-rd-project-link-r01.title':
+    '项目建议书与研发项目双向关联',
+  'pages.dashboard.updateLog.entries.funide-oa-proposal-rd-project-link-r01.description':
+    '已审核建议书可下推创建研发项目；下发研发时自动建项并关联。研发项目编辑页可选择关联建议书，列表与工作台展示互链入口。',
+  'pages.dashboard.updateLog.entries.funide-oa-project-proposal-supplier-submit-r01.title':
+    '项目建议书未填供应商可提交审核',
+  'pages.dashboard.updateLog.entries.funide-oa-project-proposal-supplier-submit-r01.description':
+    '修复 funide-oa 租户提交项目建议书时仍提示「提交前须由采购填写供应商」的问题，提交接口已接入定制选填策略。',
+  'pages.dashboard.updateLog.entries.funide-oa-bom-collab-kingdee-import-r01.title':
+    'BOM 协同支持 ERP 多级 BOM 整表导入',
+  'pages.dashboard.updateLog.entries.funide-oa-bom-collab-kingdee-import-r01.description':
+    '新建 BOM 协同时可上传金蝶「BOM多级展开」Excel，自动映射层次、子项料号、规格、用量、位号与小米料号，并按位号与线路板子树拆入电子/结构分区。',
   'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-type-label-r01.title':
     '体系预置交付物类型列显示中文名称',
   'pages.dashboard.updateLog.entries.funide-oa-rd-deliverable-type-label-r01.description':
