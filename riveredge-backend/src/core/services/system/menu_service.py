@@ -39,10 +39,10 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.infrastructure.cache.cache_manager import cache_manager
 
 
-# 宿主应用菜单同步后，须从 manifest 刷新对应 PRO consumer 侧栏（同路径接管，结构须一致）
-_MENU_PEER_SYNC_AFTER_SOURCE: Dict[str, str] = {
-    "kuaizhizao": "kuaicaiwu",
-}
+# 宿主应用菜单同步后，须从 manifest 刷新对应 PRO consumer 侧栏（同路径接管，结构须一致）。
+# 本地 kuaicaiwu 自承载财务菜单（不走 kuaizhizao source 物化），映射表当前为空，
+# 保留机制供后续同路径接管规则使用。
+_MENU_PEER_SYNC_AFTER_SOURCE: Dict[str, str] = {}
 
 
 class ManifestMenuSortIndex(TypedDict):

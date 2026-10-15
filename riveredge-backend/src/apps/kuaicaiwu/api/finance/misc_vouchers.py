@@ -14,6 +14,7 @@ from apps.kuaicaiwu.schemas.finance import (
     OtherVoucherListResponse,
     OtherVoucherResponse,
     OtherVoucherReviewAction,
+    OtherVoucherSubmitAction,
     OtherVoucherUpdate,
 )
 from apps.kuaicaiwu.services.misc_voucher_service import (
@@ -199,12 +200,19 @@ def _build_router(spec: MiscVoucherSpec) -> APIRouter:
     @router.post("/{doc_id}/submit", response_model=OtherVoucherResponse)
     async def submit_voucher(
         doc_id: int,
+        body: Optional[OtherVoucherSubmitAction] = None,
         _auth: object = Depends(require_permission_codes(f"{resource}:submit")),
         current_user: User = Depends(get_current_user),
         tenant_id: int = Depends(get_current_tenant),
     ):
         try:
-            doc = await service.submit(tenant_id, doc_id, current_user)
+            doc = await service.submit(
+                tenant_id,
+                doc_id,
+                current_user,
+                selected_approver_user_ids=body.selected_approver_user_ids if body else None,
+                selected_approver_by_node=body.selected_approver_by_node if body else None,
+            )
         except Exception as exc:
             raise _raise_mapped(exc, f"{router.prefix}/{{id}}/submit", tenant_id) from exc
         return await _serialize(tenant_id, doc, with_lines=True)

@@ -76,34 +76,20 @@ def test_kuaizhizao_manifest_has_no_finance_source_section():
     assert not any("finance-management" in p for p in parents)
 
 
-def test_kuaicaiwu_takeover_children_are_materialized_from_kuaizhizao_manifest():
+def test_kuaicaiwu_manifest_is_not_materialized_from_kuaizhizao():
+    """本地架构：kuaicaiwu manifest 自承载 /apps/kuaicaiwu/finance-management 菜单树，
+    接管规则仅保留 path_prefixes 抑制库内残留 source 行——不做 source 物化，
+    _materialize_takeover_manifest 须原样返回。"""
     consumer = {
         "code": "kuaicaiwu",
         "menu_config": {
             "children": [
                 {
                     "title": "app.kuaicaiwu.menu.finance-management",
-                    "meta": {"menu_takeover": "kuaizhizao-finance-management"},
-                    "children": [],
-                },
-            ],
-        },
-    }
-    source = {
-        "code": "kuaizhizao",
-        "menu_config": {
-            "children": [
-                {
-                    "title": "app.kuaicaiwu.menu.finance-management",
                     "children": [
                         {
-                            "title": "app.kuaicaiwu.menu.group.finance-receipts",
-                            "children": [
-                                {
-                                    "title": "app.kuaicaiwu.menu.finance-management.receivables",
-                                    "path": "/apps/kuaizhizao/finance-management/receivables",
-                                },
-                            ],
+                            "title": "app.kuaicaiwu.menu.finance-management.receivables",
+                            "path": "/apps/kuaicaiwu/finance-management/receivables",
                         },
                     ],
                 },
@@ -111,24 +97,18 @@ def test_kuaicaiwu_takeover_children_are_materialized_from_kuaizhizao_manifest()
         },
     }
 
-    with patch.object(
-        ApplicationService,
-        "_get_raw_manifest_by_code",
-        return_value=source,
-    ):
-        materialized = ApplicationService._materialize_takeover_manifest(
-            "kuaicaiwu",
-            consumer,
-        )
+    materialized = ApplicationService._materialize_takeover_manifest(
+        "kuaicaiwu",
+        consumer,
+    )
 
-    parents = ApplicationService.collect_manifest_leaf_immediate_parent_titles(
-        materialized["menu_config"]
-    )
+    assert materialized is consumer
     assert (
-        parents["/apps/kuaizhizao/finance-management/receivables"]
-        == "app.kuaicaiwu.menu.group.finance-receipts"
+        ApplicationService.collect_manifest_leaf_immediate_parent_titles(
+            materialized["menu_config"]
+        )["/apps/kuaicaiwu/finance-management/receivables"]
+        == "app.kuaicaiwu.menu.finance-management"
     )
-    assert consumer["menu_config"]["children"][0]["children"] == []
 
 
 def test_hierarchy_stale_true_when_leaf_parent_name_differs_from_manifest():

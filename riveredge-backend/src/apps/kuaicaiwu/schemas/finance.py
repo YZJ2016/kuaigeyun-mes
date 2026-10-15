@@ -942,6 +942,16 @@ class OtherVoucherReviewAction(BaseSchema):
     review_remarks: Optional[str] = Field(None, description="审核备注")
 
 
+class OtherVoucherSubmitAction(BaseSchema):
+    """提交审核入参（发起人自选审批人，与统一审核入口语义一致）"""
+    selected_approver_user_ids: Optional[List[int]] = Field(
+        None, description="提交时选定的审批人用户ID列表"
+    )
+    selected_approver_by_node: Optional[Dict[str, List[int]]] = Field(
+        None, description="按审批节点选定的审批人用户ID映射"
+    )
+
+
 class OtherVoucherResponse(BaseSchema):
     """其他费用收入/支出响应schema（income_code/expense_code 二选一返回）"""
     id: int
