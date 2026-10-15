@@ -138,6 +138,8 @@ function inferResourceByNodeKey(nodeKey?: string): string {
     receivable: 'kuaicaiwu:receivable',
     payable: 'kuaicaiwu:payable',
     purchase_invoice: 'kuaicaiwu:purchase-invoice',
+    other_income: 'kuaicaiwu:other-income',
+    other_expense: 'kuaicaiwu:other-expense',
     payment_application: 'kuaizhizao:payment-application',
     bom_change: 'kuaiplm:change',
     process_route_change: 'kuaiplm:change',

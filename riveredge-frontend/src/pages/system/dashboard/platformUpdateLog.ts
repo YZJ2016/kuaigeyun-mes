@@ -60,14 +60,6 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
       'pages.dashboard.updateLog.entries.tenant-restore-dept-parent-fk-r01.description',
   },
   {
-    id: 'funide-oa-rd-archive-merge-module-r01',
-    date: '2026-10-15',
-    type: 'fix',
-    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-rd-archive-merge-module-r01.title',
-    descriptionKey:
-      'pages.dashboard.updateLog.entries.funide-oa-rd-archive-merge-module-r01.description',
-  },
-  {
     id: 'industry-pack-menu-bind-wipe-r01',
     date: '2026-10-15',
     type: 'fix',

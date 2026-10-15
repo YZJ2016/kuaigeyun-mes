@@ -48,9 +48,10 @@ MENU_TAKEOVER_RULES: Dict[str, MenuTakeoverRule] = {
     "kuaicaiwu": MenuTakeoverRule(
         consumer_app_code="kuaicaiwu",
         source_app_code="kuaizhizao",
+        # 本地架构：kuaicaiwu manifest 自承载 /apps/kuaicaiwu/finance-management 菜单树，
+        # 不走上游「source manifest 同路径物化」；path_prefixes 仅用于隐藏库内残留的
+        # kuaizhizao 财务菜单行（存量租户兼容）。
         path_prefixes=("/apps/kuaizhizao/finance-management",),
-        source_menu_title="app.kuaicaiwu.menu.finance-management",
-        consumer_takeover_key="kuaizhizao-finance-management",
     ),
 }
 
