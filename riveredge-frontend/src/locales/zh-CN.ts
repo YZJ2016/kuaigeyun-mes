@@ -31513,10 +31513,6 @@ export default {
     '实验委托可设置委托部门与检测部门可选范围',
   'pages.dashboard.updateLog.entries.lab-request-dept-scope-settings-r01.description':
     '列表「部门设置」可分别指定委托部门、检测部门白名单；留空不限制。新建编辑下拉仅显示范围内部门，编辑时仍保留已选部门。',
-  'pages.dashboard.updateLog.entries.login-log-location-zhou-suffix-r01.title':
-    '登录地点广州等城市不再截成单字',
-  'pages.dashboard.updateLog.entries.login-log-location-zhou-suffix-r01.description':
-    'IP 解析去行政区后缀时误把「州」当成尾缀，导致「广州」显示成「广」。现已保留两字市名，并优先识别「自治州」等完整后缀。',
   'pages.dashboard.updateLog.entries.wecom-mobile-oauth-refresh-loop-r01.title':
     '企微工作台打开手机端不再循环刷新登录页',
   'pages.dashboard.updateLog.entries.wecom-mobile-oauth-refresh-loop-r01.description':
@@ -31629,18 +31625,6 @@ export default {
     '定制 OA 研发项目列表可正常打开',
   'pages.dashboard.updateLog.entries.funide-oa-rd-archive-merge-module-r01.description':
     '补全研发项目体系清单合并判断模块，修复「研发项目」列表加载时报缺少 Python 模块的问题。',
-  'pages.dashboard.updateLog.entries.ind-foreign-trade-unified-crm-r01.title':
-    '外贸销售插件内统一内外贸客户跟进',
-  'pages.dashboard.updateLog.entries.ind-foreign-trade-unified-crm-r01.description':
-    '销售客户菜单支持全部/外贸/国内视图，内贸可手工新建与统一筛选导出；跟进与工作台统计覆盖内外贸，无需再进快制造客户池。',
-  'pages.dashboard.updateLog.entries.ind-foreign-trade-crm-gapfill-r01.title':
-    '外贸销售补齐询盘归属与跟进管理',
-  'pages.dashboard.updateLog.entries.ind-foreign-trade-crm-gapfill-r01.description':
-    '询盘导入与新建外贸客户自动归属当前销售；客户跟进支持待跟进筛选、下次跟进与导出；工作台可按业务员钻取跟进；客户列表展示项目描述与 D/已成交级别。',
-  'pages.dashboard.updateLog.entries.ind-foreign-trade-unitable-3bucket-r01.title':
-    '外贸客户与客户跟进列表列宽对齐三桶规范',
-  'pages.dashboard.updateLog.entries.ind-foreign-trade-unitable-3bucket-r01.description':
-    '外贸客户、客户跟进列表按 KeepWidth / RemainderFlex 定宽，「所需生产能力」等表头完整显示；工作台与询盘导入非列表页保持原交互。',
   'pages.dashboard.updateLog.entries.industry-pack-menu-bind-wipe-r01.title':
     '启用行业应用后侧栏能显示行业菜单',
   'pages.dashboard.updateLog.entries.industry-pack-menu-bind-wipe-r01.description':
@@ -32069,18 +32053,10 @@ export default {
     '版权声明技术栈与当前产品依赖对齐',
   'pages.dashboard.updateLog.entries.tech-stack-copyright-align-r01.description':
     '按现行 pyproject 与 package.json 更新版本与清单：默认 PostgreSQL + Taskiq、无需 Redis；补充 Caddy、Electron、ECharts、CAD 图纸预览与实时通道，并标明 LibreDWG 的 GPL copyleft。',
-  'pages.dashboard.updateLog.entries.gitee-oauth-email-scope-bind-r01.title':
-    'Gitee 快捷登录可读取邮箱并支持个人资料绑定',
-  'pages.dashboard.updateLog.entries.gitee-oauth-email-scope-bind-r01.description':
-    '授权范围增加 emails，并在公开邮箱为空时从邮箱列表取主邮箱以自动匹配系统用户；个人资料补充 Gitee 授权绑定与解绑入口。',
   'pages.dashboard.updateLog.entries.approval-countersign-my-pending-task-r01.title':
     '修复会签时审批中心不显示同意/拒绝按钮',
   'pages.dashboard.updateLog.entries.approval-countersign-my-pending-task-r01.description':
     '实例列表按当前用户是否有待办任务判断操作按钮；会签成员不再因仅记录首位审批人而看不到同意/拒绝/转交。',
-  'pages.dashboard.updateLog.entries.purchase-requisition-inquiry-display-r01.title':
-    '采购申请与询价单支持回显权限',
-  'pages.dashboard.updateLog.entries.purchase-requisition-inquiry-display-r01.description':
-    '将采购申请、询价单登记为可引用资源，角色矩阵出现「回显」勾选，供下游取单/关联时按回显权限加载。',
   'pages.dashboard.updateLog.entries.data-backup-broker-type-r01.title':
     '修复定时备份投递失败与备份类型展示',
   'pages.dashboard.updateLog.entries.data-backup-broker-type-r01.description':
@@ -32133,98 +32109,6 @@ export default {
     '平台恢复租户备份须指定目标组织',
   'pages.dashboard.updateLog.entries.data-backup-restore-target-tenant-r01.description':
     '平台管理员恢复组织级备份时可选择写入的目标组织，并随请求传 target_tenant_id，避免未绑定组织时报「缺少目标 tenant_id」。',
-  'pages.dashboard.updateLog.entries.reference-display-single-source-r01.title':
-    '引用回显统一由登记资源控制',
-  'pages.dashboard.updateLog.entries.reference-display-single-source-r01.description':
-    '矩阵「回显」与引用下拉放行均以 reference_resources 登记为准；取消回显后不再依赖宿主建单权限或 module_references 隐式放行，无权限时提示授予目标查看或回显。',
-  'pages.dashboard.updateLog.entries.kuaizhizao-reference-resources-peer-gap-r01.title':
-    '快制造同组单据补齐回显权限',
-  'pages.dashboard.updateLog.entries.kuaizhizao-reference-resources-peer-gap-r01.description':
-    '按菜单同组对照补登记销售预测、到货通知、需求与需求计算、借还料、送货单等 reference_resources，角色矩阵可勾选对应回显。',
-  'pages.dashboard.updateLog.entries.role-matrix-node-clear-select-all-r01.title':
-    '角色权限节点全选可取消',
-  'pages.dashboard.updateLog.entries.role-matrix-node-clear-select-all-r01.description':
-    '功能权限树节点在子权限已全部勾选时，节点旁按钮变为实心「取消全选」，再次点击可清空该节点下全部勾选。',
-  'pages.dashboard.updateLog.entries.role-matrix-node-select-all-r01.title':
-    '角色权限树节点旁可全选',
-  'pages.dashboard.updateLog.entries.role-matrix-node-select-all-r01.description':
-    '功能权限树每个菜单节点标题后增加「全选」，一键勾选该节点及其下级全部可配置操作。',
-  'pages.dashboard.updateLog.entries.role-matrix-one-click-display-r01.title':
-    '角色功能权限一键回显',
-  'pages.dashboard.updateLog.entries.role-matrix-one-click-display-r01.description':
-    '功能权限工具栏在「管理者」旁增加「一键回显」，对当前可见范围勾选全部回显权限，不影响其它已勾选操作。',
-  'pages.dashboard.updateLog.entries.kuaiconnect-system-routes-gate-r01.title':
-    '快连接启用后连接管理可进入业务页',
-  'pages.dashboard.updateLog.entries.kuaiconnect-system-routes-gate-r01.description':
-    '应用连接器、接口、数据源、数据集等系统路由不再写死升级占位页；快连接已安装启用且授权通过后直接打开业务页面。',
-  'pages.dashboard.updateLog.entries.pro-app-license-key-menu-r01.title':
-    '专业应用可随时输入 License Key',
-  'pages.dashboard.updateLog.entries.pro-app-license-key-menu-r01.description':
-    '应用中心「更多操作」增加「输入 License Key」；已启用但未授权时不必先关掉开关。升级提示页也可跳转应用中心激活。',
-  'pages.dashboard.updateLog.entries.kuaiconnect-pro-activation-rename-r01.title':
-    '快连接改名后 PRO 激活仍识别',
-  'pages.dashboard.updateLog.entries.kuaiconnect-pro-activation-rename-r01.description':
-    '应用编码由 pro-data-center 迁为 kuaiconnect 后，历史 License 激活登记自动映射到新编码；已启用快连接但误提示升级套餐的问题已修复。',
-  'pages.dashboard.updateLog.entries.permission-display-echo-matrix-r01.title':
-    '权限矩阵回显与引用鉴权收紧',
-  'pages.dashboard.updateLog.entries.permission-display-echo-matrix-r01.description':
-    '功能权限中的 display 展示为「回显」并可勾选；引用下拉仅认目标查看或回显权限，取消回显后不再因宿主建单权限隐式放行。新建角色与权限同步会默认授予非敏感回显，取消后不会被同步强制恢复。',
-  'pages.dashboard.updateLog.entries.sidebar-pro-badge-kuaipd-host-r01.title':
-    '快交付等专业应用侧栏 PRO 徽标',
-  'pages.dashboard.updateLog.entries.sidebar-pro-badge-kuaipd-host-r01.description':
-    '侧栏应用 code 优先读应用根路径，快交付等托管在快制造路由下的 PRO 应用与行业包应用根菜单均显示 PRO 徽标。',
-  'pages.dashboard.updateLog.entries.master-data-process-drawings-menu-r01.title':
-    '主数据工艺数据图纸菜单分组',
-  'pages.dashboard.updateLog.entries.master-data-process-drawings-menu-r01.description':
-    '图纸管理、图纸反查、图纸发放与图纸借阅收拢为「图纸管理」子菜单，整组排在标准操作 (SOP) 之后。',
-  'pages.dashboard.updateLog.entries.user-mgmt-list-audit-datetime-r01.title':
-    '用户管理列表补全创建与更新时间',
-  'pages.dashboard.updateLog.entries.user-mgmt-list-audit-datetime-r01.description':
-    '部门树、职位列表、用户列表与角色列表接口返回 created_at/updated_at，部门树此前未带审计时间导致列表显示为横线。',
-  'pages.dashboard.updateLog.entries.system-users-list-roles-preview-r01.title':
-    '账户管理角色列单行预览',
-  'pages.dashboard.updateLog.entries.system-users-list-roles-preview-r01.description':
-    '用户列表角色列占表格剩余宽度，最多展示两枚角色徽章，超出显示等共 N 项；悬停摘要可看其余角色。',
-  'pages.dashboard.updateLog.entries.kuaiplm-off-master-data-process-menu-r01.title':
-    '快研发关闭后主数据恢复工艺菜单',
-  'pages.dashboard.updateLog.entries.kuaiplm-off-master-data-process-menu-r01.description':
-    '快研发禁用或未部署到当前节点时，自动交还主数据「工艺数据」菜单；侧栏拉取导航树前对齐菜单接管状态，避免工艺入口长期不可见。',
-  'pages.dashboard.updateLog.entries.kuaiconnect-popover-no-upgrade-btn-r01.title':
-    '连接管理 Popover 不再跳转组织管理',
-  'pages.dashboard.updateLog.entries.kuaiconnect-popover-no-upgrade-btn-r01.description':
-    '快连接未启用时的说明弹层去掉「升级套餐」入口，文案改为联系管理员开通；保留前往应用中心。',
-  'pages.dashboard.updateLog.entries.kuaiconnect-popover-pro-features-r01.title':
-    '连接管理未开通时展示能力说明与升级引导',
-  'pages.dashboard.updateLog.entries.kuaiconnect-popover-pro-features-r01.description':
-    '系统配置浮层内快连接入口布局不变；点击各图标 Popover 分别说明该项专业版能力，并支持升级套餐或前往应用中心安装。',
-  'pages.dashboard.updateLog.entries.menu-group-kuaiconnect-rename-r01.title':
-    '系统菜单分组更名为连接管理',
-  'pages.dashboard.updateLog.entries.menu-group-kuaiconnect-rename-r01.description':
-    '系统配置浮层与系统菜单原「数据中心」分组改为四字「连接管理」，对应快连接专业应用；金蝶等对接文案中的「数据中心 ID」不变。',
-  'pages.dashboard.updateLog.entries.data-center-popover-kuaiconnect-r01.title':
-    '系统设置数据中心入口未启用时 Popover 提示',
-  'pages.dashboard.updateLog.entries.data-center-popover-kuaiconnect-r01.description':
-    '快连接未安装或未启用时，系统配置浮层内四个数据中心入口点击弹出说明，不再直接进入升级占位页；可一键跳转应用中心。',
-  'pages.dashboard.updateLog.entries.pro-app-placeholder-scan-install-r01.title':
-    '专业应用占位卡支持扫描并注册',
-  'pages.dashboard.updateLog.entries.pro-app-placeholder-scan-install-r01.description':
-    '未入库的专业应用（如快连接）不再误显示为需升级专业版；更多操作提供扫描并注册，compose 后扫描即可出现安装入口。',
-  'pages.dashboard.updateLog.entries.dedicated-host-disable-separation-r01.title':
-    '定制应用不再阻止停用通用宿主应用',
-  'pages.dashboard.updateLog.entries.dedicated-host-disable-separation-r01.description':
-    '应用中心停用轻办公等专业/基础应用时，已启用的定制壳（如好力 GO）不再拦截；定制仍通过 requires_apps 在运行时加载宿主 API，侧栏按 hide_required_app_menus 与定制菜单展示。',
-  'pages.dashboard.updateLog.entries.pro-app-center-order-kuailianjie-r01.title':
-    '应用中心专业应用排序与快连接命名',
-  'pages.dashboard.updateLog.entries.pro-app-center-order-kuailianjie-r01.description':
-    '专业 Tab 展示顺序调整为快研发、快交付、轻办公、轻财务、快数采、快报表、快连接、KU-AI；快连接应用编码为 kuaiconnect（原 pro-data-center）。',
-  'pages.dashboard.updateLog.entries.sidebar-navigation-tree-pro-compose-r01.title':
-    '修复未 compose 专业应用时侧栏 APP 菜单空白',
-  'pages.dashboard.updateLog.entries.sidebar-navigation-tree-pro-compose-r01.description':
-    '侧栏导航只纳入本节点已部署 manifest 的应用；未 compose 的专业包不得启用/安装，避免整棵菜单树因缺 manifest 排序而失败。',
-  'pages.dashboard.updateLog.entries.app-pro-migration-wave1-r01.title':
-    '专业应用与行业包迁私仓、财务管理托管快制造',
-  'pages.dashboard.updateLog.entries.app-pro-migration-wave1-r01.description':
-    '快交付/快研发/轻财务/轻办公与行业插件改 PRO compose；开源主仓保留应用中心占位与数据中心升级提示；应收应付菜单归属快制造，轻财务启用时侧栏接管。',
   'pages.dashboard.updateLog.entries.purchase-order-batch-push-in-menu-r01.title':
     '采购订单批量下推收进批量操作',
   'pages.dashboard.updateLog.entries.purchase-order-batch-push-in-menu-r01.description':
@@ -33375,10 +33259,6 @@ export default {
     '工序派工设备卡片化选择',
   'pages.dashboard.updateLog.entries.work-order-equipment-dispatch-cards-r02.description':
     '工单工序派工改为卡片列表选设备，打开弹窗即可看到台账状态、实时状态、在制派工、故障与保养点检摘要；点击卡片选中，可进一步打开详情弹窗查看完整追溯。',
-  'pages.dashboard.updateLog.entries.work-order-equipment-dispatch-preview-r01.title':
-    '工序派工可查看设备状态',
-  'pages.dashboard.updateLog.entries.work-order-equipment-dispatch-preview-r01.description':
-    '工单工序派工在分配设备旁增加设备状态入口，选中设备后可查看台账与实时状态、保养点检及该设备在制派工工单，支持日期区间筛选，不离开派工弹窗。',
   'pages.dashboard.updateLog.entries.packing-binding-qrcode-preview-r01.title':
     '装箱绑定批量二维码可预览下载',
   'pages.dashboard.updateLog.entries.packing-binding-qrcode-preview-r01.description':
@@ -36846,6 +36726,14 @@ export default {
     '修复入库管理出库管理列表制单日期显示为空',
   'pages.dashboard.updateLog.entries.warehouse-hub-document-date-display-r01.description':
     '成品入库、采购入库等 Hub 列表「制单日期」改为正确读取业务入库/出库时刻（兼容空串与驼峰字段），并按业务日历日展示；确认写入逻辑不变。',
+  'pages.dashboard.updateLog.entries.audit-writeback-finance-docs-r01.title':
+    '财务单据审批写回闭环',
+  'pages.dashboard.updateLog.entries.audit-writeback-finance-docs-r01.description':
+    '付款申请与其他收入/支出单从审批中心或单据页审核后单据状态即刻一致，不再停留待审核；撤回重提不再产生重复审批流程；付款确认按实际下推行与付款金额回写已付。',
+  'pages.dashboard.updateLog.entries.fa-depr-syd-uop-calc-r01.title':
+    '固定资产折旧支持年数总和法与工作量法',
+  'pages.dashboard.updateLog.entries.fa-depr-syd-uop-calc-r01.description':
+    '固定资产折旧计提在直线法之外补齐年数总和法与工作量法两种口径，资产卡片可按折旧方法正确计算每期折旧额。',
   'pages.dashboard.updateLog.entries.balance-sheet-child-accounts-r01.title':
     '修复资产负债表漏计明细科目余额',
   'pages.dashboard.updateLog.entries.balance-sheet-child-accounts-r01.description':
@@ -37700,10 +37588,6 @@ export default {
     '仓储库存管理增加批号与序列号查询入口',
   'pages.dashboard.updateLog.entries.warehouse-batch-serial-ledger-menu-r01.description':
     '库存管理菜单新增「批号查询」「序列号查询」，分别跳转主数据批号台账与序列号台账；批次库存查询仍查仓储现存量，批号/序列号规则与台账维护仍在主数据物料下。',
-  'pages.dashboard.updateLog.entries.warehouse-serial-inventory-menu-r01.title':
-    '仓储库存管理增加序列号查询入口',
-  'pages.dashboard.updateLog.entries.warehouse-serial-inventory-menu-r01.description':
-    '库存管理菜单新增「序列号查询」，跳转主数据序列号台账查看入库生成与手工维护的全部序列号；序列号规则与台账维护仍保留在主数据物料下，与批号规则/批号记录分工一致。',
   'pages.dashboard.updateLog.entries.traceability-serial-resolve-work-order-r01.title':
     '修复追溯管理按序列号查不到工单已占号记录',
   'pages.dashboard.updateLog.entries.traceability-serial-resolve-work-order-r01.description':

@@ -194,22 +194,43 @@ class PaymentApplicationPushService:
             return
         pay_total = Decimal(str(payment.total_amount or 0))
         line_payments: List[tuple[int, Decimal]] = []
+        remaining = pay_total
         if str(payment.settlement_type) == "prepayment":
             for line in lines:
-                open_amt = Decimal(str(line.request_amount or 0)) - Decimal(
-                    str(line.paid_amount or 0)
-                )
-                if open_amt > 0 and str(line.line_kind) == "prepayment":
-                    line_payments.append((int(line.id), min(open_amt, pay_total)))
+                if remaining <= 0:
                     break
-        else:
-            for line in lines:
-                if not line.payable_id:
+                if str(line.line_kind) != "prepayment":
                     continue
                 open_amt = Decimal(str(line.request_amount or 0)) - Decimal(
                     str(line.paid_amount or 0)
                 )
                 if open_amt > 0:
-                    line_payments.append((int(line.id), open_amt))
+                    amt = min(open_amt, remaining)
+                    line_payments.append((int(line.id), amt))
+                    remaining -= amt
+        else:
+            pushed_payable_ids = set(
+                await DocumentRelation.filter(
+                    tenant_id=tenant_id,
+                    source_type="payable",
+                    target_type="payment",
+                    target_id=payment_id,
+                ).values_list("source_id", flat=True)
+            )
+            for line in lines:
+                if remaining <= 0:
+                    break
+                if (
+                    not line.payable_id
+                    or int(line.payable_id) not in pushed_payable_ids
+                ):
+                    continue
+                open_amt = Decimal(str(line.request_amount or 0)) - Decimal(
+                    str(line.paid_amount or 0)
+                )
+                if open_amt > 0:
+                    amt = min(open_amt, remaining)
+                    line_payments.append((int(line.id), amt))
+                    remaining -= amt
         if line_payments:
             await self._app_svc.record_line_paid(tenant_id, app_id, line_payments)

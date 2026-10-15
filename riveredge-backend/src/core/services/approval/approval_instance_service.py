@@ -4114,6 +4114,87 @@ class ApprovalInstanceService:
                     )
                 logger.info(f"生产工单 {entity_id} 审批回调完成: {approval_instance.status}")
 
+            async def _handle_payment_application() -> None:
+                from apps.kuaizhizao.services.payment_application_service import (
+                    PaymentApplicationService,
+                )
+
+                service = PaymentApplicationService()
+                if approval_instance.status == "approved":
+                    await service.approve_application(
+                        tenant_id,
+                        int(entity_id),
+                        approved=True,
+                        approved_by=approver_id,
+                        is_auto_approve=True,
+                    )
+                elif approval_instance.status == "rejected":
+                    await service.approve_application(
+                        tenant_id,
+                        int(entity_id),
+                        approved=False,
+                        approved_by=approver_id,
+                        review_remarks="审批驳回",
+                        is_auto_approve=True,
+                    )
+                logger.info(
+                    f"付款申请 {entity_id} 审批回调完成: {approval_instance.status}"
+                )
+
+            async def _handle_other_income() -> None:
+                from apps.kuaicaiwu.services.other_income_service import (
+                    OtherIncomeService,
+                )
+
+                service = OtherIncomeService()
+                if approval_instance.status == "approved":
+                    await service.approve_income(
+                        tenant_id,
+                        int(entity_id),
+                        approved=True,
+                        operator_id=approver_id,
+                        is_auto_approve=True,
+                    )
+                elif approval_instance.status == "rejected":
+                    await service.approve_income(
+                        tenant_id,
+                        int(entity_id),
+                        approved=False,
+                        operator_id=approver_id,
+                        review_remarks="审批驳回",
+                        is_auto_approve=True,
+                    )
+                logger.info(
+                    f"其他收入单 {entity_id} 审批回调完成: {approval_instance.status}"
+                )
+
+            async def _handle_other_expense() -> None:
+                from apps.kuaicaiwu.services.other_expense_service import (
+                    OtherExpenseService,
+                )
+
+                service = OtherExpenseService()
+                if approval_instance.status == "approved":
+                    await service.approve_expense(
+                        tenant_id,
+                        int(entity_id),
+                        approved=True,
+                        operator_id=approver_id,
+                        is_auto_approve=True,
+                    )
+                elif approval_instance.status == "rejected":
+                    await service.approve_expense(
+                        tenant_id,
+                        int(entity_id),
+                        approved=False,
+                        operator_id=approver_id,
+                        review_remarks="审批驳回",
+                        is_auto_approve=True,
+                    )
+                logger.info(
+                    f"其他支出单 {entity_id} 审批回调完成: {approval_instance.status}"
+                )
+
             completion_handlers = {
                 "sales_order": _handle_sales_order,
                 "demand": _handle_demand,
@@ -4134,6 +4215,9 @@ class ApprovalInstanceService:
                 "payable": _handle_payable,
                 "receivable": _handle_receivable,
                 "purchase_invoice": _handle_purchase_invoice,
+                "payment_application": _handle_payment_application,
+                "other_income": _handle_other_income,
+                "other_expense": _handle_other_expense,
                 "product_firmware": _handle_product_firmware,
                 "lab_request": _handle_lab_request,
                 "production_file": _handle_production_file,
