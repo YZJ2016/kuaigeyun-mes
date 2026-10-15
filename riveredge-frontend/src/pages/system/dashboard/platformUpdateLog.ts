@@ -1191,14 +1191,6 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
     descriptionKey: 'pages.dashboard.updateLog.entries.plan-scheme-bind-r01.description',
   },
   {
-    id: 'equipment-spot-check-plan-r01',
-    date: '2026-10-13',
-    type: 'feature',
-    titleKey: 'pages.dashboard.updateLog.entries.equipment-spot-check-plan-r01.title',
-    descriptionKey:
-      'pages.dashboard.updateLog.entries.equipment-spot-check-plan-r01.description',
-  },
-  {
     id: 'customer-pool-hide-create-r01',
     date: '2026-10-13',
     type: 'fix',
