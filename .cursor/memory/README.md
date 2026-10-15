@@ -88,6 +88,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 付款申请、采购请款、push_payment_application、可请款占用 | `features/payment-application-procurement.md` |
 | 其他费用收入、其他费用支出、收支类别、other_income | `features/finance-other-misc-vouchers.md` |
 | 其他费用应收应付、misc_voucher_finance_bridge、确认收款付款 | `features/finance-other-misc-ar-ap-chain.md` |
+| 应付/应收审核要点两遍、流程过了单据仍待审、FinanceService | `features/finance-ar-ap-audit-writeback.md` |
 | 新建销售订单很慢、进页预拉物料 2000 | `features/sales-order-form-material-preload.md` |
 | 角色同步创建职位、职位代码已存在 | `features/role-create-position-reuse-code.md` |
 | SOP 配错物料、工序兜底、QC 分域 | `features/sop-shopfloor-match-domain.md` |
