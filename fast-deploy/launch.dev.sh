@@ -727,11 +727,11 @@ case "$CMD" in
     "")
         mkdir -p .logs
         stop_all
-        # 前端必须先起：Vite 只做反向代理，不依赖后端就绪。
-        # 若排在 start_backend（最长等 90s health）+ start_worker 之后，前端会离线约 2 分钟，
-        # 期间浏览器里的 @vite/client 进入 "server connection lost. Polling for restart..."，
-        # 并在 Vite 回来的那一秒执行 location.reload() —— 表现为「系统开着好一会儿后页面自己刷一下」。
-        if start_frontend && start_backend 1 && start_worker; then
+        # 顺序：后端 → 前端 → Worker（按需求调整，后端就绪后再挂前端）。
+        # 注意：前端排在 start_backend（最长等 90s health）之后，期间 8100 无服务；
+        # 已打开的浏览器里 @vite/client 会进入 "server connection lost. Polling for restart..."，
+        # 并在 Vite 回来的那一秒执行 location.reload() —— 表现为「页面自己刷一下」，属预期。
+        if start_backend 1 && start_frontend && start_worker; then
             if [ "$WITH_H5" = "1" ]; then
                 note_h5_hbuilderx
             fi
