@@ -41,6 +41,7 @@ class OtherIncomeService(MiscVoucherService):
         approved: bool,
         operator_id: int,
         review_remarks: Optional[str] = None,
+        is_auto_approve: bool = False,
     ):
         return await self._review(
             tenant_id,
@@ -48,6 +49,7 @@ class OtherIncomeService(MiscVoucherService):
             await self._user(operator_id),
             approve=approved,
             remarks=review_remarks,
+            is_auto_approve=is_auto_approve,
         )
 
     async def withdraw_income_submit(

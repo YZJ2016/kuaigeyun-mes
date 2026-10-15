@@ -278,6 +278,12 @@ cd kuaigeyun   # 或 kuaigeyun-mes，取决于 clone 目录名
 | `56d484fdf8` | `5328598368` | 摘取 | 生产领料创建即启审、工单单位缓存、销售合同 hooks 顺序 |
 | `7af3b0c7e9` | `f24d3db7f6` | **手工复刻** | 性能：三单据详情 gather、生命周期里程碑→业务事实、trace 引擎缓存/并行/批量删除标记、附件中心并行、前端物料按需缓存 + `useDeferAfterPaint`、InfluxDB 实测连通 |
 
+**本地领先上游的修复（上游 tip 同款 bug，本地已修——后续同步注意比对，勿回退）**
+
+- `payment_application`/`other_income`/`other_expense` 补 `completion_handlers` 写回回调（`approval_instance_service.py`）：上游无回调，审批完成单据滞留「待审核」
+- `MiscVoucherService._review` 走 `UniAuditService.approve/reject_with_flow_fallback` + `withdraw` 调 `cancel_approval`：本地重建版补齐审批闭环（孤儿实例、撤回重提重复实例）
+- `apply_payment_confirmed`（`payment_application_push_service.py`）按 payable 行级关联+`pay_total` 封顶分摊；预付行逐行分摊——上游版本全行整记/只记首行
+
 **明确跳过 / 剔除（勿重复评估）**
 
 - `2377282bd8` 上游 OSS 版其他收支（`kuaizhizao` impl）——决策B保本地 `kuaicaiwu` 重建版，后续修复以移植方式进入

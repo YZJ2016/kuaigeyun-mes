@@ -36,12 +36,15 @@ from apps.kuaicaiwu.services.misc_voucher_posting_service import (
 from core.services.approval.audit_flow_guard import (
     approval_instance_finished_on_submit,
     assert_pending_approval_instance,
+    get_approval_gate_status,
+    should_sync_doc_after_flow_completed,
     start_document_approval_or_raise,
 )
 from core.utils.timezone_utils import resolve_business_datetime
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 from infra.models.user import User
 from infra.services.business_config_service import BusinessConfigService
+from loguru import logger
 
 
 @dataclass(frozen=True)
@@ -334,6 +337,7 @@ class MiscVoucherService:
         *,
         approve: bool,
         remarks: Optional[str],
+        is_auto_approve: bool = False,
     ):
         doc = await self.get_or_404(tenant_id, doc_id)
         if str(doc.status) != "PendingReview":
@@ -341,6 +345,19 @@ class MiscVoucherService:
                 f"仅待审核状态可审核/驳回，当前状态: {doc.status}"
             )
         audit_required = await self.audit_required(tenant_id)
+
+        async def _do_decide():
+            patch = {
+                "status": "Approved" if approve else "Rejected",
+                **self._reviewer_patch(user, remarks),
+            }
+            apply_update_audit(patch, user)
+            await self.spec.model.filter(id=doc_id).update(**patch)
+            return await self.get_or_404(tenant_id, doc_id)
+
+        if is_auto_approve:
+            return await _do_decide()
+
         await assert_pending_approval_instance(
             tenant_id=tenant_id,
             entity_type=self.spec.voucher_type,
@@ -349,32 +366,95 @@ class MiscVoucherService:
             doc_label=self.spec.doc_label,
             verb="审核" if approve else "驳回",
         )
-        patch = {
-            "status": "Approved" if approve else "Rejected",
-            **self._reviewer_patch(user, remarks),
-        }
-        apply_update_audit(patch, user)
-        await self.spec.model.filter(id=doc_id).update(**patch)
-        return await self.get_or_404(tenant_id, doc_id)
+
+        gate = await get_approval_gate_status(
+            tenant_id=tenant_id,
+            entity_type=self.spec.voucher_type,
+            entity_id=doc_id,
+        )
+        if audit_required and should_sync_doc_after_flow_completed(
+            gate, approve=approve
+        ):
+            return await _do_decide()
+
+        from core.services.approval.uni_audit_service import UniAuditService
+
+        if approve:
+            result = await UniAuditService.approve_with_flow_fallback(
+                tenant_id=tenant_id,
+                entity_type=self.spec.voucher_type,
+                entity_id=doc_id,
+                approver_id=int(user.id),
+                flow_approve=_do_decide,
+            )
+        else:
+            result = await UniAuditService.reject_with_flow_fallback(
+                tenant_id=tenant_id,
+                entity_type=self.spec.voucher_type,
+                entity_id=doc_id,
+                approver_id=int(user.id),
+                reason=remarks,
+                flow_reject=lambda _reason: _do_decide(),
+            )
+        return result if result is not None else await self.get_or_404(
+            tenant_id, doc_id
+        )
 
     async def approve(
-        self, tenant_id: int, doc_id: int, user: User, remarks: Optional[str] = None
+        self,
+        tenant_id: int,
+        doc_id: int,
+        user: User,
+        remarks: Optional[str] = None,
+        *,
+        is_auto_approve: bool = False,
     ):
         return await self._review(
-            tenant_id, doc_id, user, approve=True, remarks=remarks
+            tenant_id,
+            doc_id,
+            user,
+            approve=True,
+            remarks=remarks,
+            is_auto_approve=is_auto_approve,
         )
 
     async def reject(
-        self, tenant_id: int, doc_id: int, user: User, remarks: Optional[str] = None
+        self,
+        tenant_id: int,
+        doc_id: int,
+        user: User,
+        remarks: Optional[str] = None,
+        *,
+        is_auto_approve: bool = False,
     ):
         return await self._review(
-            tenant_id, doc_id, user, approve=False, remarks=remarks
+            tenant_id,
+            doc_id,
+            user,
+            approve=False,
+            remarks=remarks,
+            is_auto_approve=is_auto_approve,
         )
 
     async def withdraw(self, tenant_id: int, doc_id: int, user: User):
         doc = await self.get_or_404(tenant_id, doc_id)
         if str(doc.status) != "PendingReview":
             raise BusinessLogicError(f"仅待审核状态可撤回，当前状态: {doc.status}")
+        try:
+            from core.services.approval.approval_instance_service import (
+                ApprovalInstanceService,
+            )
+
+            await ApprovalInstanceService.cancel_approval(
+                tenant_id=tenant_id,
+                entity_type=self.spec.voucher_type,
+                entity_id=doc_id,
+                operator_id=int(user.id),
+            )
+        except Exception as e:
+            logger.warning(
+                "取消{}审批流程失败或无需取消: {}", self.spec.doc_label, e
+            )
         patch: Dict[str, Any] = {"status": "Draft"}
         apply_update_audit(patch, user)
         await self.spec.model.filter(id=doc_id).update(**patch)
