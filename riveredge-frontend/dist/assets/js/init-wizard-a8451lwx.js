@@ -1,1 +1,0 @@
-import{a as e}from"./clientRelease-DnK2iptg.js";import"./vendor-BtD0SEcN.js";async function r(t){return e(`/infra/init/steps?tenant_id=${t}`,{method:"GET"})}export{r as getInitSteps};
