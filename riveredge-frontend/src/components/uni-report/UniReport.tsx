@@ -273,6 +273,12 @@ export function UniReport<T extends Record<string, unknown> = Record<string, unk
     exportAllExcel,
   });
 
+  const handlePageDataChange = useCallback((rows: T[]) => {
+    // config 结果可能没有业务主键；翻页或筛选重取后清除旧行位置的选择。
+    if (mode === 'config') actionRef.current?.clearSelected?.();
+    onPageDataChange?.(rows);
+  }, [actionRef, mode, onPageDataChange]);
+
   const resolvedSubtitle =
     typeof subtitle === 'function'
       ? subtitle({ filters: searchValuesRef.current })
@@ -462,7 +468,7 @@ export function UniReport<T extends Record<string, unknown> = Record<string, unk
           enableRowSelection={mode === 'config' && showExportButton}
           showPrintButton={showPrintButton}
           onPrint={handlePrint}
-          onTableDataChange={onPageDataChange}
+          onTableDataChange={handlePageDataChange}
           bordered={template.bordered ?? true}
           size={template.tableSize ?? 'small'}
           summary={tableSummary}
