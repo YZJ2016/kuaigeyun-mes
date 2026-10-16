@@ -551,7 +551,11 @@ def test_preview_page_uses_unireport_not_browser_export():
     assert "UniReport" in preview
     assert 'mode="config"' in preview
     assert "showPrintButton" in preview
-    assert "showExportButton={false}" in preview
+    # 顶部按格式导出、右侧按范围导出均复用 UniReport，两个入口同时保留。
+    assert "showExportButton={false}" not in preview
+    assert "showExportButton" in preview
+    assert "showFormatExportButton" in preview
+    assert "exportAllExcel={" in preview
     assert "useUniReportExport" not in preview
     assert "exportDomainReport" not in preview
     joined = "\n".join(path.read_text(encoding="utf-8") for path in FRONTEND_REPORTS.glob("*.tsx"))
