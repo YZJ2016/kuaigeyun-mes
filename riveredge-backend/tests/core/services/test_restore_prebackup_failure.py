@@ -2,6 +2,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+from core.services.system import data_backup_policy as backup_policy
 from core.tasks import data_backup_handlers as worker
 
 
@@ -18,6 +19,8 @@ async def test_restore_requires_requested_prebackup(monkeypatch, tmp_path, reque
     monkeypatch.setattr(worker, "is_tenant_sql_dump", lambda p: False)
     monkeypatch.setattr(worker, "is_full_logical_csv_dump", lambda p: False)
     monkeypatch.setattr(worker.DataBackup, "create", AsyncMock(return_value=SimpleNamespace(uuid="fixture")))
+    monkeypatch.setattr(worker.DataBackup, "get", AsyncMock(return_value=SimpleNamespace(file_path=str(archive))))
+    monkeypatch.setattr(backup_policy, "ensure_local_backup_file", AsyncMock(return_value=str(archive)))
     mark = AsyncMock()
     monkeypatch.setattr(worker, "_mark_restore_status", mark)
     calls = []
