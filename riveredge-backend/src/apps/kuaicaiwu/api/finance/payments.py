@@ -20,7 +20,7 @@ from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User
-from infra.exceptions.exceptions import BusinessLogicError
+from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 
 router = APIRouter(prefix="/payments", tags=["App - Kuaicaiwu - Finance"])
 payment_pull_service = PaymentPullService()
@@ -55,7 +55,11 @@ async def _get_or_404(tenant_id: int, payment_id: int, route: str = "/payments/{
 
 
 def _serialize(obj: Payment) -> PaymentVoucherResponse:
-    return PaymentVoucherResponse.model_validate(obj)
+    resp = PaymentVoucherResponse.model_validate(obj)
+    caps = dict(resp.capabilities or {})
+    caps["print"] = {"allowed": True}
+    resp.capabilities = caps
+    return resp
 
 
 async def _serialize_detail(tenant_id: int, obj: Payment) -> PaymentVoucherResponse:
@@ -294,6 +298,52 @@ async def get_payment(
     """获取付款单详情"""
     payment = await _get_or_404(tenant_id, id)
     return await _serialize_detail(tenant_id, payment)
+
+
+@router.get("/{id}/print", summary="Print payment voucher")
+async def print_payment(
+    id: int,
+    template_code: Optional[str] = Query(None, description="打印模板代码"),
+    template_uuid: Optional[str] = Query(None, description="打印模板UUID"),
+    output_format: str = Query("html", description="输出格式"),
+    response_format: str = Query("json", description="响应格式"),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:payment:print")),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """打印付款单"""
+    import base64
+
+    from apps.kuaizhizao.services.print_service import DocumentPrintService
+    from fastapi.responses import HTMLResponse, JSONResponse, Response
+
+    try:
+        result = await DocumentPrintService().print_document(
+            tenant_id=tenant_id,
+            document_type="finance_payment",
+            document_id=id,
+            template_code=template_code,
+            template_uuid=template_uuid,
+            output_format=output_format,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/payments/{id}/print", tenant_id) from e
+    except ValidationError as e:
+        raise _http_exception_with_trace(400, str(e), "/payments/{id}/print", tenant_id) from e
+
+    if (
+        (output_format or "html").lower() == "pdf"
+        and (response_format or "json").lower() in {"pdf", "binary", "raw"}
+        and result.get("mime_type") == "application/pdf"
+    ):
+        raw = base64.b64decode(result.get("content") or "")
+        return Response(
+            content=raw,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'inline; filename="payment-{id}.pdf"'},
+        )
+    if response_format == "html":
+        return HTMLResponse(content=result.get("content", ""), status_code=200)
+    return JSONResponse(content=result, status_code=200)
 
 
 @router.put("/{id}", response_model=PaymentVoucherResponse)

@@ -502,6 +502,92 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
             return_offset_credit_doc_type=SETTLEMENT_CREDIT_PURCHASE_RETURN_OFFSET,
         )
 
+    async def enrich_lines_invoice_dates(
+        self,
+        tenant_id: int,
+        lines: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        """对账单行补开票日期：应付单→采购收票，应收单→销项发票（多张取最近）。"""
+        if not lines:
+            return lines
+        from apps.kuaicaiwu.models.invoice import Invoice
+        from apps.kuaicaiwu.models.purchase_invoice import PurchaseInvoice
+        from apps.kuaizhizao.models.document_relation import DocumentRelation
+
+        excluded_statuses = ("已作废", "已红冲")
+        payable_ids = [
+            int(ln["doc_id"])
+            for ln in lines
+            if ln.get("doc_type") == "应付单" and ln.get("doc_id")
+        ]
+        receivable_ids = [
+            int(ln["doc_id"])
+            for ln in lines
+            if ln.get("doc_type") == "应收单" and ln.get("doc_id")
+        ]
+        if not payable_ids and not receivable_ids:
+            return lines
+
+        dates_by_doc: Dict[Tuple[str, int], List[date]] = defaultdict(list)
+        if payable_ids:
+            relations = await DocumentRelation.filter(
+                tenant_id=tenant_id,
+                source_type="payable",
+                source_id__in=payable_ids,
+                target_type="purchase_invoice",
+            ).all()
+            invoice_ids = [int(r.target_id) for r in relations if r.target_id]
+            if invoice_ids:
+                date_by_id = {
+                    int(inv.id): inv.invoice_date
+                    for inv in await PurchaseInvoice.filter(
+                        tenant_id=tenant_id,
+                        id__in=invoice_ids,
+                        deleted_at__isnull=True,
+                    ).exclude(status__in=list(excluded_statuses))
+                    if inv.invoice_date
+                }
+                for rel in relations:
+                    if not rel.source_id or not rel.target_id:
+                        continue
+                    inv_date = date_by_id.get(int(rel.target_id))
+                    if inv_date:
+                        dates_by_doc[("应付单", int(rel.source_id))].append(inv_date)
+
+        if receivable_ids:
+            relations = await DocumentRelation.filter(
+                tenant_id=tenant_id,
+                source_type="receivable",
+                source_id__in=receivable_ids,
+                target_type="sales_invoice",
+            ).all()
+            invoice_ids = [int(r.target_id) for r in relations if r.target_id]
+            if invoice_ids:
+                date_by_id = {
+                    int(inv.id): inv.invoice_date
+                    for inv in await Invoice.filter(
+                        tenant_id=tenant_id,
+                        id__in=invoice_ids,
+                        category="OUT",
+                        deleted_at__isnull=True,
+                    ).exclude(status__in=list(excluded_statuses))
+                    if inv.invoice_date
+                }
+                for rel in relations:
+                    if not rel.source_id or not rel.target_id:
+                        continue
+                    inv_date = date_by_id.get(int(rel.target_id))
+                    if inv_date:
+                        dates_by_doc[("应收单", int(rel.source_id))].append(inv_date)
+
+        for ln in lines:
+            if ln.get("doc_id") is None:
+                continue
+            dates = dates_by_doc.get((str(ln.get("doc_type") or ""), int(ln["doc_id"])))
+            if dates:
+                ln["invoice_date"] = to_api_isoformat(max(dates))
+        return lines
+
     async def ensure_statement_line_hierarchy(
         self,
         tenant_id: int,
@@ -671,6 +757,7 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         # 已纳入其它对账单的本期发生额并入期初，剩余行续算余额
         opening = _q_money(opening + excluded_net)
         debit_total, credit_total, closing, lines = self._apply_running_balance(opening, raw_lines)
+        lines = await self.enrich_lines_invoice_dates(tenant_id, lines)
         company_name = await self._get_tenant_company_name(tenant_id)
         balance_label = "应收余额" if partner_type == "Customer" else "应付余额"
         stmt_period = start_date.strftime("%Y-%m")
@@ -1167,6 +1254,7 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
             _q_money(obj.opening_balance),
             list(details.get("lines") or []),
         )
+        lines = await self.enrich_lines_invoice_dates(obj.tenant_id, lines)
         return {
             "statement_code": obj.statement_code,
             "company_name": obj.company_name or "本公司",

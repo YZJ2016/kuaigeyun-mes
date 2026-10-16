@@ -67,8 +67,7 @@ async def _to_response(obj) -> PartnerStatementResponse:
         obj.opening_balance,
         lines,
     )
-    if hydrated is lines:
-        return resp
+    hydrated = await service.enrich_lines_invoice_dates(obj.tenant_id, hydrated)
     new_details = dict(details)
     new_details["lines"] = hydrated
     return resp.model_copy(update={"transaction_details": new_details})

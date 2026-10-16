@@ -314,6 +314,13 @@ class PartnerStatementBriefRef(BaseSchema):
     status: str
 
 
+class LinkedSourceDocumentRef(BaseSchema):
+    """收/付款单加载来源单据引用（应付单 / 应收单 / 付款申请）"""
+    source_type: str
+    id: int
+    code: str
+
+
 class PaymentVoucherBase(BaseSchema):
     """付款单基础schema"""
     supplier_id: int = Field(..., description="供应商ID")
@@ -371,6 +378,9 @@ class PaymentVoucherResponse(PaymentVoucherBase):
     )
     linked_refund_vouchers: Optional[List["FinanceVoucherLinkRef"]] = None
     linked_partner_statements: Optional[List["PartnerStatementBriefRef"]] = None
+    linked_source_documents: Optional[List["LinkedSourceDocumentRef"]] = Field(
+        None, description="加载来源单据（应付单 / 付款申请）"
+    )
     capabilities: Optional[Dict[str, Any]] = None
 
     class Config:
@@ -608,6 +618,9 @@ class PartnerStatementLineResponse(BaseSchema):
         None, description="可展开入库明细类型：purchase_receipt / outsource_material_receipt"
     )
     inbound_detail_doc_id: Optional[int] = Field(None, description="可展开入库明细单据 ID")
+    invoice_date: Optional[str] = Field(
+        None, description="关联发票开票日期（应付→采购收票，应收→销项发票）"
+    )
 
 
 class PartnerStatementLineAmountInput(BaseSchema):

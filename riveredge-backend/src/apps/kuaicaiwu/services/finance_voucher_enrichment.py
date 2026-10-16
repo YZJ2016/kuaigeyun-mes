@@ -90,6 +90,68 @@ async def _get_source_voucher_ref(
     return refs[0] if refs else None
 
 
+async def _list_linked_source_documents(
+    tenant_id: int,
+    payment_id: int,
+) -> List[Dict[str, Any]]:
+    """付款单加载来源单据（应付单 / 付款申请），读 DocumentRelation pull。"""
+    relations = await DocumentRelation.filter(
+        tenant_id=tenant_id,
+        target_type="payment",
+        target_id=payment_id,
+        relation_mode="pull",
+        source_type__in=["payable", "payment_application"],
+    ).all()
+    if not relations:
+        return []
+
+    payable_ids = [
+        int(rel.source_id)
+        for rel in relations
+        if rel.source_type == "payable" and rel.source_id
+    ]
+    application_ids = [
+        int(rel.source_id)
+        for rel in relations
+        if rel.source_type == "payment_application" and rel.source_id
+    ]
+
+    codes: Dict[tuple, str] = {}
+    if payable_ids:
+        from apps.kuaicaiwu.models.payable import Payable
+
+        rows = await Payable.filter(
+            tenant_id=tenant_id, id__in=payable_ids, deleted_at__isnull=True
+        )
+        for row in rows:
+            codes[("payable", int(row.id))] = str(row.payable_code or row.id)
+    if application_ids:
+        from apps.kuaizhizao.models.payment_application import PaymentApplication
+
+        rows = await PaymentApplication.filter(
+            tenant_id=tenant_id, id__in=application_ids, deleted_at__isnull=True
+        )
+        for row in rows:
+            codes[("payment_application", int(row.id))] = str(
+                row.application_code or row.id
+            )
+
+    refs: List[Dict[str, Any]] = []
+    for rel in relations:
+        if not rel.source_id:
+            continue
+        sid = int(rel.source_id)
+        source_type = str(rel.source_type)
+        refs.append(
+            {
+                "source_type": source_type,
+                "id": sid,
+                "code": codes.get((source_type, sid)) or str(rel.source_code or sid),
+            }
+        )
+    return refs
+
+
 async def _list_refund_voucher_refs(
     tenant_id: int,
     source_id: int,
@@ -277,6 +339,10 @@ async def enrich_voucher_detail(
         enriched["linked_refund_vouchers"] = await _list_refund_voucher_refs(
             tenant_id, voucher_id, kind
         )
+        if kind == "payment":
+            enriched["linked_source_documents"] = await _list_linked_source_documents(
+                tenant_id, voucher_id
+            )
         model = await (
             Receipt.get_or_none(tenant_id=tenant_id, id=voucher_id, deleted_at__isnull=True)
             if kind == "receipt"
@@ -285,7 +351,9 @@ async def enrich_voucher_detail(
         if model:
             cap = await _build_refund_pull_capability(tenant_id, model, kind)
             if cap:
-                enriched["capabilities"] = cap
+                caps = dict(enriched.get("capabilities") or {})
+                caps.update(cap)
+                enriched["capabilities"] = caps
 
     enriched["linked_partner_statements"] = await list_partner_statements_for_document(
         tenant_id, kind, voucher_id
