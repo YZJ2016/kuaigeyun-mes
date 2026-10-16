@@ -50,7 +50,7 @@ import { UniTableStackedPrimaryCell } from '../../../../../components/uni-table/
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import {
   LedgerAccountFormFields,
-} from '../../../components/LedgerAccountFormFields';
+} from '../../../../kuaicaiwu/components/LedgerAccountFormFields';
 import {
   mapAttachmentsToUploadList,
   normalizeDocumentAttachments,
