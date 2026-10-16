@@ -233,6 +233,25 @@ cd kuaigeyun   # 或 kuaigeyun-mes，取决于 clone 目录名
 - ⚠️ gitee 直 fetch 曾遇 upload-pack 超时（历史体量过大）：可先浅克隆 `git clone --depth 300 --single-branch -b develop https://gitee.com/kuaigeyun/kuaigeyun.git <tmp>` 再 `git fetch <tmp> develop:refs/remotes/gitee/develop` 进对象库
 - 下次同步：`git fetch gitee && git log --oneline b268a0691..gitee/develop`，范围内即未评新提交
 
+**已同步映射（上游 → 本地，2026-10-16 批次）**
+
+| 上游提交 | 本地提交 | 方式 | 内容与备注 |
+| --- | --- | --- | --- |
+| `1c16ccff1` | `bb7cf66227` | 摘取（含行为变更，用户已确认整取） | 数量/单价/金额小数位 4→6（迁移 888 直用，DO 块扫 `apps_*`/`haoligo_*` scale=4 列）；销售订单列表默认范围放开为「全部」；列表串行查询改 `asyncio.gather`；入库详情规格型号、PDF/追溯导出尾部根因、菜单徽章性能。`sales_order_service` 与已摘 `9ffd85745` 同区冲突，按上游 merge `dc2e573c6` 解法套并；`pro_app_available`/`import_pro_attr` 转本地直 import（kuaicaiwu 内建） |
+| `eef82af06` | `f5fe55b24c` | 摘取 | 平台超管不再写 `core_user_preferences`（修 FK 违例）；产线 reference-display 带车间名供 kuaioa 下拉 |
+| `1b63f8125` | `8bec6f0b2a` | 摘取 | kuaioa 工资结算使用说明文档 + 人事回显更新日志（纯文档） |
+| `1b86ccdac` | `a3f775add1` | 摘取+移植 | 付款申请 4 字段（事由/方式/发票/条件）+打印取单+对账下推开票日期+多级上级不足 N 级 `auto_pass` 跳过（行为变更，用户已确认）+采购撤回缺 BusinessConfigService 修复+质量投诉 Descriptions 修复。迁移 889 直用；财务前端经 git 改名检测自动落 `kuaicaiwu/` 对应物，跨 app import（payment-application / useKuaizhizaoPrintModal / finance/bank-account / finance services / LedgerAccountFormFields）改 `../../../../kuaicaiwu\|kuaizhizao/...`；保本地 `completion_handlers` 闭环与 `apply_payment_confirmed` 行级分摊 |
+| `ad79914d5` | `7b85cfc28e` | 摘取 | 根菜单 name≠title 键时按根 path 判定，`hierarchy_stale`/`realign` 不再误判待同步 |
+| `42919b00d` | `bf31745f05` | 摘取 | 8D 工作台 `:id` 路由排前 + 深链 `?report_id=` 抢回列表修复；funide-oa dedicated 日志条目保留（本地已有同先例） |
+| `dc2e573c6` merge、6 个 `chore: build-web sync` | —— | 不摘 | merge 仅并入已评估内容；dist 本地重建 |
+| —— | `7c03d5e99a` | 验证修复 | `payment-applications/index.tsx` 的 `LedgerAccountFormFields` import 指回 `kuaicaiwu/components/` |
+| `1b86ccdac` pro 侧配套 | `b93b4c5e23` | 按契约本地重建 | 上游付款单打印/来源/开票日期后端在 pro 仓（OSS diff 不含），前端已随 `a3f775add1` 落本地——补建 kuaicaiwu 等价物：`GET /apps/kuaicaiwu/payments/{id}/print`（`kuaicaiwu:payment:print`）、payments 序列化 `capabilities.print`、`enrich_voucher_detail` 产出 `linked_source_documents`（payable/payment_application，读 DocumentRelation pull）、`PartnerStatementService.enrich_lines_invoice_dates`（应付→PurchaseInvoice、应收→Invoice OUT，挂 preview/detail/export 三链路）+ `PartnerStatementLineResponse.invoice_date` 字段 |
+
+**2026-10-16 批次复查结论（3 路并行 code review）**
+
+- 摘取对齐：6 个业务提交逐文件核对无遗漏；merge `dc2e573c6` 解法、两段 gather、本地领先修复（completion_handlers/行级分摊/直 import）均保住
+- 已知差异（不随上游改，备忘）：①`.cursor/memory/features/` 本批带入的 `partner-statement-push-invoice-date.md`/`finance-payment-source-print.md` 等按上游 pro 视角写成 `kuaizhizao/` 路径与上游迁移号（862/864/865），本地实际为 `kuaicaiwu/` 与重映射号 867/869/870——按用户决定不动文档；②`permission-display-echo.md` 提及的 `scripts/scan_route_manifest_alignment.py` 本仓不存在，`scan_permission_bypass.py` 惰性 import 该文件（`56ea63a289` 批带入的存量问题，非本批）；③上游 `approval_instance_service` auto_pass 留痕匹配大小写死分支随车带入（被中文文案兜住）；④迁移 888 只扫 `apps_*`/`haoligo_*` 表，`core_custom_field_values.value_number`/`exchange_rate`/`weight`/`hourly_rate` 等列保持 scale=4（与上游同构，静默舍入）
+
 **已同步映射（上游 → 本地，2026-10-15 新链批次）**
 
 | 上游提交 | 本地提交 | 方式 | 内容与备注 |
@@ -260,19 +279,6 @@ cd kuaigeyun   # 或 kuaigeyun-mes，取决于 clone 目录名
 | `d9b02748d5` | `4cbc5b0777` | 摘取 | 补料领料同步、保养要求展示、其他入库编辑 |
 | `9ffd857453` | `1678ae4b1f` | 摘取 | 销售订单明细物料显示、工单出库报价列表性能 |
 | `304c2884f8` | —— | 跳过 | funide-oa 研发交付物文案（客户专属应用，无通用代码落点） |
-
-**已同步映射（上游 → 本地，2026-10-16 批次）**
-
-| 上游提交 | 本地提交 | 方式 | 内容与备注 |
-| --- | --- | --- | --- |
-| `1c16ccff1` | `bb7cf66227` | 摘取（含行为变更，用户已确认整取） | 数量/单价/金额小数位 4→6（迁移 888 直用，DO 块扫 `apps_*`/`haoligo_*` scale=4 列）；销售订单列表默认范围放开为「全部」；列表串行查询改 `asyncio.gather`；入库详情规格型号、PDF/追溯导出尾部根因、菜单徽章性能。`sales_order_service` 与已摘 `9ffd85745` 同区冲突，按上游 merge `dc2e573c6` 解法套并；`pro_app_available`/`import_pro_attr` 转本地直 import（kuaicaiwu 内建） |
-| `eef82af06` | `f5fe55b24c` | 摘取 | 平台超管不再写 `core_user_preferences`（修 FK 违例）；产线 reference-display 带车间名供 kuaioa 下拉 |
-| `1b63f8125` | `8bec6f0b2a` | 摘取 | kuaioa 工资结算使用说明文档 + 人事回显更新日志（纯文档） |
-| `1b86ccdac` | `a3f775add1` | 摘取+移植 | 付款申请 4 字段（事由/方式/发票/条件）+打印取单+对账下推开票日期+多级上级不足 N 级 `auto_pass` 跳过（行为变更，用户已确认）+采购撤回缺 BusinessConfigService 修复+质量投诉 Descriptions 修复。迁移 889 直用；财务前端经 git 改名检测自动落 `kuaicaiwu/` 对应物，跨 app import（payment-application / useKuaizhizaoPrintModal / finance/bank-account / finance services / LedgerAccountFormFields）改 `../../../../kuaicaiwu\|kuaizhizao/...`；保本地 `completion_handlers` 闭环与 `apply_payment_confirmed` 行级分摊 |
-| `ad79914d5` | `7b85cfc28e` | 摘取 | 根菜单 name≠title 键时按根 path 判定，`hierarchy_stale`/`realign` 不再误判待同步 |
-| `42919b00d` | `bf31745f05` | 摘取 | 8D 工作台 `:id` 路由排前 + 深链 `?report_id=` 抢回列表修复；funide-oa dedicated 日志条目保留（本地已有同先例） |
-| `dc2e573c6` merge、6 个 `chore: build-web sync` | —— | 不摘 | merge 仅并入已评估内容；dist 本地重建 |
-| —— | （验证修复） | 本地补 | `payment-applications/index.tsx` 的 `LedgerAccountFormFields` import 指回 `kuaicaiwu/components/` |
 
 **已同步映射（上游 → 本地，2026-10 早期批次，旧链哈希）**
 
