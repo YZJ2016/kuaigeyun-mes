@@ -82,7 +82,7 @@ export default function ReportPreviewPage() {
       reportId={report.id}
       reportConfig={report.report_config}
       showPrintButton
-      showExportButton={false}
+      showExportButton
       showFormatExportButton
       exportAllExcel={onExport}
       headerLeft={
@@ -150,7 +150,7 @@ function DatasetChartView({
       datasetExecute={load}
       onPageDataChange={setRows}
       actionRef={actionRef}
-      showExportButton={false}
+      showExportButton
       showFormatExportButton
       exportAllExcel={(next) => onExport({ ...next, ...filtersRef.current })}
       headerLeft={<Button onClick={() => navigate('/apps/kuaireport/reports')}>返回</Button>}
