@@ -245,7 +245,7 @@ cd kuaigeyun   # 或 kuaigeyun-mes，取决于 clone 目录名
 | `42919b00d` | `bf31745f05` | 摘取 | 8D 工作台 `:id` 路由排前 + 深链 `?report_id=` 抢回列表修复；funide-oa dedicated 日志条目保留（本地已有同先例） |
 | `dc2e573c6` merge、6 个 `chore: build-web sync` | —— | 不摘 | merge 仅并入已评估内容；dist 本地重建 |
 | —— | `7c03d5e99a` | 验证修复 | `payment-applications/index.tsx` 的 `LedgerAccountFormFields` import 指回 `kuaicaiwu/components/` |
-| `1b86ccdac` pro 侧配套 | `b93b4c5e23` | 按契约本地重建 | 上游付款单打印/来源/开票日期后端在 pro 仓（OSS diff 不含），前端已随 `a3f775add1` 落本地——补建 kuaicaiwu 等价物：`GET /apps/kuaicaiwu/payments/{id}/print`（`kuaicaiwu:payment:print`）、payments 序列化 `capabilities.print`、`enrich_voucher_detail` 产出 `linked_source_documents`（payable/payment_application，读 DocumentRelation pull）、`PartnerStatementService.enrich_lines_invoice_dates`（应付→PurchaseInvoice、应收→Invoice OUT，挂 preview/detail/export 三链路）+ `PartnerStatementLineResponse.invoice_date` 字段 |
+| `1b86ccdac` pro 侧配套 | `4c26f0b1b0` | 按契约本地重建 | 上游付款单打印/来源/开票日期后端在 pro 仓（OSS diff 不含），前端已随 `a3f775add1` 落本地——补建 kuaicaiwu 等价物：`GET /apps/kuaicaiwu/payments/{id}/print`（`kuaicaiwu:payment:print`）、payments 序列化 `capabilities.print`、`enrich_voucher_detail` 产出 `linked_source_documents`（payable/payment_application，读 DocumentRelation pull）、`PartnerStatementService.enrich_lines_invoice_dates`（应付→PurchaseInvoice、应收→Invoice OUT，挂 preview/detail/export 三链路）+ `PartnerStatementLineResponse.invoice_date` 字段 |
 
 **2026-10-16 批次复查结论（3 路并行 code review）**
 
