@@ -5,11 +5,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { App } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { FinanceVoucherDetailDrawer } from '../../../apps/kuaizhizao/pages/finance-management/shared/FinanceVoucherDetailDrawer';
+import { FinanceVoucherDetailDrawer } from '../../../apps/kuaicaiwu/pages/finance-management/shared/FinanceVoucherDetailDrawer';
 import {
   paymentService,
   type PaymentVoucher,
-} from '../../../apps/kuaizhizao/services/finance/payment';
+} from '../../../apps/kuaicaiwu/services/finance/payment';
 import { getApiErrorMessage } from '../../../utils/errorHandler';
 
 export type PaymentLinkedDetailDrawerProps = {

@@ -41,8 +41,8 @@ def test_infer_decision_for_two_edge_condition_even_without_boolean_rules():
     spec = ApprovalInstanceService._resolve_decision_on_approve_spec(graph, graph["nodes"][0])
     assert spec is not None
     assert spec["label"] == "是否总经理特批"
-    assert spec["trueBranchLabel"] == "总经理(特殊情况)"
-    assert spec["falseBranchLabel"] == "采购副总"
+    assert spec["trueBranchLabel"] == "分支1"
+    assert spec["falseBranchLabel"] == "分支2"
     assert spec["requireExplicit"] is True
     assert spec["conditionNodeId"] == "cond"
 
@@ -139,6 +139,7 @@ def test_explicit_decision_on_approve_wins_over_infer():
                 "type": "condition",
                 "data": {
                     "label": "是否总经理特批",
+                    "routeMode": "previous_approver",
                     "conditions": [{"field": "require_gm_special_approval", "operator": "==", "value": True}],
                 },
             },
@@ -152,7 +153,9 @@ def test_explicit_decision_on_approve_wins_over_infer():
         ],
     }
     spec = ApprovalInstanceService._resolve_decision_on_approve_spec(graph, graph["nodes"][0])
-    assert spec["field"] == "custom_flag"
+    assert spec is not None
+    assert spec["label"] == "自定义"
+    assert spec["defaultValue"] == 0
 
 
 @pytest.mark.asyncio
