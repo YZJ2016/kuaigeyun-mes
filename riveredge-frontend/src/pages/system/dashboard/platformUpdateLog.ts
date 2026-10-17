@@ -52,6 +52,13 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
       'pages.dashboard.updateLog.entries.data-backup-restore-unique-remap-r01.description',
   },
   {
+    id: 'audit-modal-no-scrollbars-r01',
+    date: '2026-10-17',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.audit-modal-no-scrollbars-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.audit-modal-no-scrollbars-r01.description',
+  },
+  {
     id: 'audit-modal-preview-match-designer-r01',
     date: '2026-10-17',
     type: 'improvement',
