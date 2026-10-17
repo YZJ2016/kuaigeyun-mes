@@ -52,6 +52,14 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
       'pages.dashboard.updateLog.entries.data-backup-restore-unique-remap-r01.description',
   },
   {
+    id: 'approval-flow-shared-branch-handle-r01',
+    date: '2026-10-17',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.approval-flow-shared-branch-handle-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.approval-flow-shared-branch-handle-r01.description',
+  },
+  {
     id: 'approval-flow-bezier-edges-r01',
     date: '2026-10-17',
     type: 'improvement',
