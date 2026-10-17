@@ -518,7 +518,7 @@ class IntegrationConfigService:
                 async with PlatformClient(integration.type, integration.get_config()) as client:
                     result = await client.probe()
             elif integration.type == "mqtt":
-                result = IntegrationConfigService._validate_mqtt_config(integration.get_config())
+                result = await IntegrationConfigService._test_mqtt_connection(integration)
             elif integration.type == "feishu":
                 result = await IntegrationConfigService._test_feishu_connection(integration)
             elif integration.type == "dingtalk":
@@ -591,7 +591,7 @@ class IntegrationConfigService:
             if isinstance(result, dict) and result.get("success") is False:
                 raise ValueError(result.get("message", "连接失败"))
 
-            if integration.type in DATA_SOURCE_CONFIG_ONLY_TYPES or integration.type in {"Database", "mqtt"}:
+            if integration.type in DATA_SOURCE_CONFIG_ONLY_TYPES or integration.type in {"Database"}:
                 # 未真实建连：不标记为已连接，避免列表/详情出现「已连通」误导；也不写入 last_error（非失败）
                 integration.update_connection_status(False, None)
                 await integration.save()
@@ -785,7 +785,7 @@ class IntegrationConfigService:
                 async with PlatformClient(temp.type, temp.get_config()) as client:
                     result = await client.probe()
             elif temp.type == "mqtt":
-                result = IntegrationConfigService._validate_mqtt_config(temp.get_config())
+                result = await IntegrationConfigService._test_mqtt_connection(temp)
             elif temp.type == "feishu":
                 result = await IntegrationConfigService._test_feishu_connection(temp)
             elif temp.type == "dingtalk":
@@ -860,7 +860,7 @@ class IntegrationConfigService:
                 }
             if not isinstance(result, dict):
                 result = {"message": str(result)}
-            if temp.type in DATA_SOURCE_CONFIG_ONLY_TYPES or temp.type in {"Database", "mqtt"}:
+            if temp.type in DATA_SOURCE_CONFIG_ONLY_TYPES or temp.type in {"Database"}:
                 return {
                     "success": True,
                     "message": _config_only_user_message(temp.type),
@@ -1890,6 +1890,20 @@ class IntegrationConfigService:
         if isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65535:
             raise ValueError("MQTT port 必须在 1 到 65535 之间")
         return {"message": "MQTT 配置校验通过，未建立 Broker 连接"}
+
+    @staticmethod
+    async def _test_mqtt_connection(integration: IntegrationConfig) -> Dict[str, Any]:
+        """MQTT 连接器测试：先校验字段，再对 Broker 发起真实 CONNECT 握手。"""
+        config = integration.get_config()
+        IntegrationConfigService._validate_mqtt_config(config)
+        from apps.kuaiiot.services.mqtt_paho_bridge import probe_broker_sync
+
+        settings = dict(config)
+        settings["client_id"] = "kuai-conn-test"
+        ok = await asyncio.to_thread(probe_broker_sync, settings)
+        if not ok:
+            raise ValueError("无法连接 MQTT Broker，请检查地址、端口与账号密码")
+        return {"message": "MQTT Broker 连接成功"}
 
     @staticmethod
     async def _test_rest_api_connection(integration: IntegrationConfig) -> Dict[str, Any]:

@@ -1,6 +1,6 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { Button, Form, Input, InputNumber, Modal, Select, Switch, Table, Typography, message } from 'antd';
+import { Button, Form, Input, Modal, Select, Switch, Table, Typography, message } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { rowActionKind, rowActionLabelKeep } from '../../../../components/uni-action';
 import { ListPageTemplate } from '../../../../components/layout-templates';
@@ -9,11 +9,10 @@ import { useResourcePermissions } from '../../../../hooks/useResourcePermissions
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { buildDetailDrawerEditExtra } from '../../../kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
 import { formatDateTimeBySiteSetting } from '../../../../utils/format';
+import { getIntegrationConfigList } from '../../../../services/integrationConfig';
 import { IotMasterDetailDrawer } from '../shared/iotMasterDetailDrawer';
 import {
   buildConnectionTypeOptions,
-  buildPayloadFormatOptions,
-  QOS_OPTIONS,
   translateHealthStatus,
   translatePayloadFormat,
 } from '../../constants/formOptions';
@@ -49,9 +48,20 @@ const ConnectionsPage: React.FC = () => {
   const [recentMessages, setRecentMessages] = useState<ConnectionRecentMessage[]>([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [messageDetail, setMessageDetail] = useState<ConnectionRecentMessage | null>(null);
+  const [mqttConnectors, setMqttConnectors] = useState<{ label: string; value: string }[]>([]);
   const connectionType = Form.useWatch('connection_type', form);
   const connectionTypeOptions = buildConnectionTypeOptions(t);
-  const payloadFormatOptions = buildPayloadFormatOptions(t);
+
+  useEffect(() => {
+    if (!open || connectionType !== 'mqtt') return;
+    getIntegrationConfigList({ type: 'mqtt', is_active: true, page_size: 1000 })
+      .then((res) =>
+        setMqttConnectors(
+          res.items.map((item) => ({ label: `${item.name}（${item.code}）`, value: item.uuid })),
+        ),
+      )
+      .catch(() => setMqttConnectors([]));
+  }, [open, connectionType]);
 
   const loadRecentMessages = useCallback(
     async (row: Connection, opts?: { notifyEmpty?: boolean }) => {
@@ -233,10 +243,12 @@ const ConnectionsPage: React.FC = () => {
     form.setFieldsValue({
       is_enabled: true,
       connection_type: 'http_webhook',
-      topic_filter: 'kuaiiot/ingest/+',
-      broker_port: 1883,
-      qos: 1,
-      payload_format: 'auto',
+      topic: 'kuaiiot/ingest/+',
+      device_token_path: 'device_token',
+      tags_path: 'tags',
+      events_path: 'events',
+      timestamp_path: 'timestamp',
+      idempotency_key_path: 'idempotency_key',
     });
     setOpen(true);
   };
@@ -249,38 +261,42 @@ const ConnectionsPage: React.FC = () => {
       username: row.config?.username,
       password: row.config?.password,
       token: row.config?.token,
-      broker_host: row.config?.broker_host,
-      broker_port: row.config?.broker_port,
-      topic_filter: row.config?.topic_filter,
-      qos: row.config?.qos,
-      use_tls: row.config?.use_tls,
-      payload_format: row.config?.payload_format || 'auto',
-      client_id: row.config?.client_id,
+      topic: row.config?.topic,
+      device_token_path: row.config?.device_token_path || 'device_token',
+      tags_path: row.config?.tags_path || 'tags',
+      events_path: row.config?.events_path || 'events',
+      timestamp_path: row.config?.timestamp_path || 'timestamp',
+      idempotency_key_path: row.config?.idempotency_key_path || 'idempotency_key',
     });
     setOpen(true);
   };
 
   const handleSubmit = async () => {
     const values = await form.validateFields();
+    const config: Record<string, unknown> =
+      values.connection_type === 'mqtt'
+        ? {
+            topic: values.topic,
+            device_token_path: values.device_token_path,
+            tags_path: values.tags_path,
+            events_path: values.events_path,
+            timestamp_path: values.timestamp_path,
+            idempotency_key_path: values.idempotency_key_path,
+          }
+        : {
+            base_url: values.base_url,
+            username: values.username,
+            password: values.password,
+            token: values.token,
+          };
     const payload = {
       code: values.code,
       name: values.name,
       connection_type: values.connection_type,
+      integration_uuid: values.integration_uuid,
       is_enabled: values.is_enabled,
       remark: values.remark,
-      config: {
-        base_url: values.base_url,
-        username: values.username,
-        password: values.password,
-        token: values.token,
-        broker_host: values.broker_host,
-        broker_port: values.broker_port,
-        topic_filter: values.topic_filter,
-        qos: values.qos,
-        use_tls: values.use_tls,
-        payload_format: values.payload_format || 'auto',
-        client_id: values.client_id,
-      },
+      config,
     };
     if (editing) {
       await updateConnection(editing.uuid, payload);
@@ -483,32 +499,36 @@ const ConnectionsPage: React.FC = () => {
           )}
           {connectionType === 'mqtt' && (
             <>
-              <Form.Item name="broker_host" label={t('app.kuaiiot.field.brokerHost')} rules={[{ required: true }]}>
-                <Input />
+              <Form.Item
+                name="integration_uuid"
+                label={t('app.kuaiiot.field.integration')}
+                rules={[{ required: true, message: t('app.kuaiiot.placeholder.mqttConnector') }]}
+                extra={t('app.kuaiiot.hint.mqttConnector')}
+              >
+                <Select
+                  options={mqttConnectors}
+                  showSearch
+                  optionFilterProp="label"
+                  placeholder={t('app.kuaiiot.placeholder.mqttConnector')}
+                />
               </Form.Item>
-              <Form.Item name="broker_port" label={t('app.kuaiiot.field.brokerPort')}>
-                <InputNumber min={1} max={65535} style={{ width: '100%' }} />
-              </Form.Item>
-              <Form.Item name="topic_filter" label={t('app.kuaiiot.field.topicFilter')}>
+              <Form.Item name="topic" label={t('app.kuaiiot.field.topicFilter')} rules={[{ required: true }]}>
                 <Input placeholder={t('app.kuaiiot.placeholder.topicFilter')} />
               </Form.Item>
-              <Form.Item name="qos" label={t('app.kuaiiot.field.qos')}>
-                <Select options={QOS_OPTIONS} />
+              <Form.Item name="device_token_path" label={t('app.kuaiiot.field.deviceTokenPath')} rules={[{ required: true }]}>
+                <Input placeholder="device_token" />
               </Form.Item>
-              <Form.Item name="payload_format" label={t('app.kuaiiot.field.payloadFormat')}>
-                <Select options={payloadFormatOptions} />
+              <Form.Item name="tags_path" label={t('app.kuaiiot.field.tagsPath')} rules={[{ required: true }]}>
+                <Input placeholder="tags" />
               </Form.Item>
-              <Form.Item name="client_id" label={t('app.kuaiiot.field.clientId')}>
-                <Input placeholder={t('app.kuaiiot.placeholder.clientId')} />
+              <Form.Item name="events_path" label={t('app.kuaiiot.field.eventsPath')}>
+                <Input placeholder="events" />
               </Form.Item>
-              <Form.Item name="username" label={t('app.kuaiiot.field.username')}>
-                <Input />
+              <Form.Item name="timestamp_path" label={t('app.kuaiiot.field.timestampPath')}>
+                <Input placeholder="timestamp" />
               </Form.Item>
-              <Form.Item name="password" label={t('app.kuaiiot.field.password')}>
-                <Input.Password />
-              </Form.Item>
-              <Form.Item name="use_tls" label={t('app.kuaiiot.field.useTls')} valuePropName="checked">
-                <Switch />
+              <Form.Item name="idempotency_key_path" label={t('app.kuaiiot.field.idempotencyKeyPath')}>
+                <Input placeholder="idempotency_key" />
               </Form.Item>
             </>
           )}

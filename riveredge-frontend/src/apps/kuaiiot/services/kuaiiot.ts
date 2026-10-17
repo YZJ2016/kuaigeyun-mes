@@ -16,6 +16,7 @@ export type Connection = {
   code: string;
   name: string;
   connection_type: string;
+  integration_uuid?: string | null;
   config?: Record<string, unknown>;
   is_enabled: boolean;
   health_status: string;
