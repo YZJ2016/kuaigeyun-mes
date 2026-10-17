@@ -17,6 +17,7 @@ PRO_APP_CODES: FrozenSet[str] = frozenset(
         "kuaiai",
         "kuaireport",
         "kuaiiot",
+        "kuaivision",
     }
 )
 
@@ -24,6 +25,7 @@ PRO_APP_CODES: FrozenSet[str] = frozenset(
 PRO_APP_SORT_ORDER: dict[str, int] = {
     "kuaireport": 310,
     "kuaiiot": 320,
+    "kuaivision": 322,
     "kuaiai": 350,
 }
 
