@@ -1,4 +1,4 @@
-"""快视觉 API Schema。"""
+"""星视觉 API Schema。"""
 
 from __future__ import annotations
 

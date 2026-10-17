@@ -2903,7 +2903,7 @@ export default {
   'app.kuaipd.short': '交付',
   'app.kuaipd.homeHint': '请从左侧菜单进入交付项目、物流与售后（页面仍由快制造承载）',
   'app.kuaiiot.name': '星数采',
-  'app.kuaivision.name': '快视觉',
+  'app.kuaivision.name': '星视觉',
   'app.kuaivision.menu.group.monitorOps': '检测运维',
   'app.kuaivision.menu.group.visionSetup': '视觉配置',
   'app.kuaivision.menu.dashboard': '视觉中心',
@@ -25801,7 +25801,7 @@ export default {
   'sys.app.master-data.desc': '系统的唯一数据源',
   'sys.app.kuaiiot.name': '星数采',
   'sys.app.kuaiiot.desc': '工业物联网设备数采与集成平台，支持 MQTT/ThingsBoard/JetLinks 接入与 MES 设备态写回',
-  'sys.app.kuaivision.name': '快视觉',
+  'sys.app.kuaivision.name': '星视觉',
   'sys.app.kuaivision.desc': '工业视觉检测：方案、入站结果、原图留痕与复核',
   'sys.app.kuaiai.name': 'KU-AI',
   'sys.app.kuaiai.desc': '嵌入业务场景的 AI 智能辅助引擎，提供对话助手与业务智能建议',
@@ -31458,27 +31458,27 @@ export default {
   'pages.dashboard.updateLog.entries.app-center-self-service-lifecycle-r01.description':
     '开启分类自主启停后，组织管理员与具备应用更新权限的账号可按分类启停；修正能力接口与分类判定，并明确专业版首次启用仍须 License Key。',
   'pages.dashboard.updateLog.entries.kuaivision-menu-group-detection-ops-r01.title':
-    '快视觉菜单组与快数采区分命名',
+    '星视觉菜单组与快数采区分命名',
   'pages.dashboard.updateLog.entries.kuaivision-menu-group-detection-ops-r01.description':
     '侧栏「监控运维」改为「检测运维」，避免与快数采同名菜单组不易分辨。',
   'pages.dashboard.updateLog.entries.kuaivision-list-norm-r01.title':
-    '快视觉列表补齐删除确认与批量启停',
+    '星视觉列表补齐删除确认与批量启停',
   'pages.dashboard.updateLog.entries.kuaivision-list-norm-r01.description':
     '相机、方案、样本、模型、边缘节点列表：删除前二次确认；支持批量启用/停用；边缘节点补齐多选、批量删除与行删除。',
   'pages.dashboard.updateLog.entries.kuaivision-p3-r01.title':
-    '快视觉：样本库、模型制品与运维保留',
+    '星视觉：样本库、模型制品与运维保留',
   'pages.dashboard.updateLog.entries.kuaivision-p3-r01.description':
     '支持检测记录入库为样本并导出训练包；模型制品可绑定方案版本；可配原图/事件保留与节点缓冲磁盘告警；附现场联调手册。',
   'pages.dashboard.updateLog.entries.kuaivision-p2-r01.title':
-    '快视觉：Edge Agent 与厚度/步骤实验室 POC',
+    '星视觉：Edge Agent 与厚度/步骤实验室 POC',
   'pages.dashboard.updateLog.entries.kuaivision-p2-r01.description':
     '边缘节点支持心跳在线判定、配置热更与断网续传；方案可绑默认相机与触发方式；检测记录展示节点与耗时；附带实验室 Edge Agent。',
   'pages.dashboard.updateLog.entries.kuaivision-p1-r01.title':
-    '快视觉支持相机方案与人工复核',
+    '星视觉支持相机方案与人工复核',
   'pages.dashboard.updateLog.entries.kuaivision-p1-r01.description':
     '新增相机与工位、视觉方案版本发布、低置信度/未知结果自动进复核队列；视觉中心展示待复核与节点心跳。',
   'pages.dashboard.updateLog.entries.kuaivision-p0-r01.title':
-    '专业版新增快视觉应用',
+    '专业版新增星视觉应用',
   'pages.dashboard.updateLog.entries.kuaivision-p0-r01.description':
     '工业视觉检测 P0：边缘节点 Token 入站、检测记录与测量/原图留痕、视觉中心指标；可按节点上报 OK/NG 结果。',
   'pages.dashboard.updateLog.entries.kuaioa-expense-reimbursement-r01.title':

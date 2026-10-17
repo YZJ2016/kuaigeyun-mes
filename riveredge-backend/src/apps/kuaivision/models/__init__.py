@@ -1,4 +1,4 @@
-"""快视觉模型。"""
+"""星视觉模型。"""
 
 from apps.kuaivision.models.vision import (
     VisionAgent,

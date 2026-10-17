@@ -1,4 +1,4 @@
-"""快视觉 API 路由。"""
+"""星视觉 API 路由。"""
 
 from fastapi import APIRouter
 

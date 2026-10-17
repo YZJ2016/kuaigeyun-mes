@@ -1,5 +1,5 @@
 /**
- * 快视觉应用路由
+ * 星视觉应用路由
  */
 
 import React, { Suspense, lazy } from 'react';
