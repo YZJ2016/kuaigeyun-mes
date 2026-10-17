@@ -1,0 +1,1 @@
+import{a as n}from"./clientRelease-Bpg8Lnrs.js";async function s(o){return n("/core/login-logs",{params:o})}async function g(){return n("/core/login-logs/statistics")}async function i(o){return n("/core/login-logs/map-points",{params:o})}export{s as a,i as b,g};
