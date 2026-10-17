@@ -31337,6 +31337,10 @@ export default {
     '修复补料下推领料出库后仍显示备料中',
   'pages.dashboard.updateLog.entries.material-call-picking-sync-r01.description':
     '生产领料确认出库后回写关联补料申请的已送达数量与状态（已完成/部分送达）；撤回领料确认时同步回滚。',
+  'pages.dashboard.updateLog.entries.data-backup-restore-unique-remap-r01.title':
+    '备份恢复加固：解压防护与唯一列冲突避让',
+  'pages.dashboard.updateLog.entries.data-backup-restore-unique-remap-r01.description':
+    '恢复备份 zip 改为逐条校验解压，拦截越界路径与超大解压包；跨组织恢复时全局唯一的 uuid 仅重写真正冲突的值，KG000001 类前缀编码按目标库最大序号自动续排，租户归属列不再误报冲突。',
   'pages.dashboard.updateLog.entries.data-backup-restore-serial-remap-r01.title':
     '修复跨组织恢复因主键冲突失败',
   'pages.dashboard.updateLog.entries.data-backup-restore-serial-remap-r01.description':

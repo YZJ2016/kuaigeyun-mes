@@ -1294,6 +1294,7 @@ async def _load_unique_id_only_tables(conn, table_names: list[str]) -> set[str]:
         WHERE n.nspname = 'public'
           AND i.indisunique
           AND i.indnkeyatts = 1
+          AND i.indpred IS NULL
           AND a.attname = 'id'
           AND t.relname = ANY($1::text[])
         """,
@@ -1505,6 +1506,7 @@ async def _load_single_col_unique_columns_async(conn, table_names: list[str]) ->
         WHERE n.nspname = 'public'
           AND i.indisunique
           AND i.indnkeyatts = 1
+          AND i.indpred IS NULL
           AND t.relname = ANY($1::text[])
           AND c.oid IS NULL
         """,
@@ -1762,8 +1764,8 @@ async def _remap_import_plan_global_unique_uuids_if_needed(
     remapped: dict[str, tuple[list[str], str]] = dict(import_plan)
     total_remapped = 0
     for _attempt in range(max(1, int(max_attempts))):
-        # 收集备份中的 uuid 值并探测与库内其它行的冲突（全局唯一，不分租户；
-        # 目标租户旧行会在事务内 DELETE，仍按全库探测，误删风险为零）
+        # 收集备份中的 uuid 值并探测与库内其它行的冲突（全局唯一索引，跨租户；
+        # 目标租户旧行会在事务内 DELETE，探测时排除，同租户恢复不误判自身）
         value_maps: dict[str, dict[str, str]] = {}
         for table, col in uuid_candidate.items():
             _columns, csv_text = remapped[table]
@@ -1771,12 +1773,21 @@ async def _remap_import_plan_global_unique_uuids_if_needed(
             if not values:
                 continue
             # 仅重写真正冲突的值：未冲突行保持原 UUID，减少无谓重排
+            # 目标租户旧行会在事务内 DELETE，探测时排除，同租户恢复不误判自身
             lowers = [value.lower() for value in values]
-            hits = await conn.execute_query_dict(
-                f'SELECT "{col}" AS v FROM "{table}" '
-                f'WHERE LOWER("{col}"::text) = ANY($1::text[])',
-                [lowers],
-            )
+            if "tenant_id" in (table_column_map.get(table) or []):
+                hits = await conn.execute_query_dict(
+                    f'SELECT "{col}" AS v FROM "{table}" '
+                    f'WHERE LOWER("{col}"::text) = ANY($1::text[]) '
+                    f"AND tenant_id IS DISTINCT FROM $2",
+                    [lowers, int(target_tenant_id)],
+                )
+            else:
+                hits = await conn.execute_query_dict(
+                    f'SELECT "{col}" AS v FROM "{table}" '
+                    f'WHERE LOWER("{col}"::text) = ANY($1::text[])',
+                    [lowers],
+                )
             colliding = {str(r.get("v", "")).lower() for r in (hits or []) if r.get("v") is not None}
             if not colliding:
                 continue
@@ -2654,9 +2665,10 @@ def _safe_extract_zip_member(
 def _check_zip_restore_budget(zf: zipfile.ZipFile, names: list[str]) -> None:
     if len(names) > _RESTORE_ZIP_MAX_ENTRIES:
         raise ValueError(f"备份 zip 条目过多（{len(names)}），已拒绝恢复以保护磁盘")
+    name_set = set(names)
     total = 0
     for info in zf.infolist():
-        if info.filename in set(names):
+        if info.filename in name_set:
             total += info.file_size
             if total > _RESTORE_ZIP_MAX_TOTAL_BYTES:
                 raise ValueError("备份 zip 解压后体积超过 20GB 上限，已拒绝恢复")

@@ -44,6 +44,14 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'data-backup-restore-unique-remap-r01',
+    date: '2026-10-17',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.data-backup-restore-unique-remap-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.data-backup-restore-unique-remap-r01.description',
+  },
+  {
     id: 'eight-d-workbench-nav-bounce-r01',
     date: '2026-10-16',
     type: 'fix',

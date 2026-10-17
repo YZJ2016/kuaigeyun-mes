@@ -125,13 +125,16 @@ async def test_global_unique_uuid_only_colliding_values_remapped():
         ),
     }
     remapped = await jobs._remap_import_plan_global_unique_uuids_if_needed(
-        plan, target_tenant_id=3, table_column_map={}, fk_rows=[], conn=Connection(),
+        plan, target_tenant_id=3, table_column_map={"settings": ["tenant_id", "uuid"]},
+        fk_rows=[], conn=Connection(),
     )
     values = jobs._extract_csv_column_values(remapped["settings"][1], "uuid")
     assert values[1] == "free-two"
     assert values[0] != "used-one"
     uuid_module.UUID(values[0])
     assert len(seen_queries) >= 2  # 初检 + 重检各一次
+    assert "IS DISTINCT FROM" in seen_queries[0][0]  # 探测排除目标租户自身
+    assert seen_queries[0][1][1] == 3
 
 
 @pytest.mark.asyncio
@@ -224,27 +227,31 @@ async def test_sequential_code_conflict_remaps_after_db_max():
 
 
 async def test_tenant_id_unique_table_dedupes_instead_of_failing():
-    """UNIQUE(tenant_id) 表（如 core_permission_versions）不误报，重复行去重保末行."""
+    """全量 UNIQUE(tenant_id) 表（如 apps_kuaicaiwu_gl_book_settings）不误报，重复行去重保末行.
+
+    注意：仅全量唯一（indpred IS NULL）才走此分支；partial unique（如
+    core_permission_versions 的 WHERE user_id IS NULL）不参与判定。
+    """
 
     class Connection:
         async def execute_query_dict(self, sql, args=None):
             if "FROM pg_index" in sql:
-                return [{"table_name": "core_permission_versions", "column_name": "tenant_id"}]
+                return [{"table_name": "apps_kuaicaiwu_gl_book_settings", "column_name": "tenant_id"}]
             raise AssertionError(f"tenant_id 唯一表不应再查库: {sql}")
 
     remapped = await jobs._remap_import_plan_global_unique_uuids_if_needed(
         {
-            "core_permission_versions": (
+            "apps_kuaicaiwu_gl_book_settings": (
                 ["tenant_id", "version"],
                 "tenant_id,version\n26,v1\n26,v2\n",
             )
         },
         target_tenant_id=26,
-        table_column_map={"core_permission_versions": ["tenant_id", "version"]},
+        table_column_map={"apps_kuaicaiwu_gl_book_settings": ["tenant_id", "version"]},
         fk_rows=[],
         conn=Connection(),
     )
-    csv_text = remapped["core_permission_versions"][1]
+    csv_text = remapped["apps_kuaicaiwu_gl_book_settings"][1]
     assert csv_text.splitlines() == ["tenant_id,version", "26,v2"]
 
 
