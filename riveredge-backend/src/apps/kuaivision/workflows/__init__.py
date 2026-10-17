@@ -1,1 +1,1 @@
-"""快视觉 workflows。"""
+"""星视觉 workflows。"""

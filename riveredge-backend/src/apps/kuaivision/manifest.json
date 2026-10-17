@@ -1,6 +1,6 @@
 {
   "code": "kuaivision",
-  "name": "快视觉",
+  "name": "星视觉",
   "version": "0.3.1",
   "description": "工业视觉检测：方案、入站结果、原图留痕、复核、样本与模型治理",
   "icon": "eye",

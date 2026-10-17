@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""快视觉 Edge Agent：拉配置、心跳、本地 pipeline、断网续传。"""
+"""星视觉 Edge Agent：拉配置、心跳、本地 pipeline、断网续传。"""
 
 from __future__ import annotations
 

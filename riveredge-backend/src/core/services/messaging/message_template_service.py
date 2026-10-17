@@ -1443,7 +1443,7 @@ class MessageTemplateService:
             "name": "视觉节点运维告警",
             "code": "VISION_AGENT_OPS_ALERT",
             "type": "internal",
-            "description": "快视觉边缘节点磁盘不足或缓冲积压时发送的站内信",
+            "description": "星视觉边缘节点磁盘不足或缓冲积压时发送的站内信",
             "subject": "【视觉节点】{agent_name} 运维告警",
             "content": "边缘节点 {agent_name}（{agent_code}）触发运维告警。\n详情：{message}\n缓冲：{buffer_pending_count}\n磁盘剩余(MB)：{disk_free_mb}",
             "variables": {

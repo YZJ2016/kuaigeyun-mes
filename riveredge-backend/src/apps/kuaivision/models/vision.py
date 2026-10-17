@@ -1,4 +1,4 @@
-"""快视觉模型：Agent、检测、相机、方案、复核。"""
+"""星视觉模型：Agent、检测、相机、方案、复核。"""
 
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ class VisionAgent(BaseModel):
 
     class Meta:
         table = "apps_kuaivision_agents"
-        table_description = "快视觉 - 边缘节点"
+        table_description = "星视觉 - 边缘节点"
         unique_together = (("tenant_id", "code"),)
         indexes = [
             ("device_token",),
@@ -70,7 +70,7 @@ class VisionInspectionEvent(BaseModel):
 
     class Meta:
         table = "apps_kuaivision_inspection_events"
-        table_description = "快视觉 - 检测事件"
+        table_description = "星视觉 - 检测事件"
         unique_together = (("tenant_id", "event_id"),)
         indexes = [
             ("tenant_id", "occurred_at"),
@@ -95,7 +95,7 @@ class VisionMeasurement(BaseModel):
 
     class Meta:
         table = "apps_kuaivision_measurements"
-        table_description = "快视觉 - 测量值"
+        table_description = "星视觉 - 测量值"
         indexes = [
             ("tenant_id", "event_id"),
         ]
@@ -116,7 +116,7 @@ class VisionInspectionImage(BaseModel):
 
     class Meta:
         table = "apps_kuaivision_inspection_images"
-        table_description = "快视觉 - 检测原图"
+        table_description = "星视觉 - 检测原图"
         indexes = [
             ("tenant_id", "event_id"),
         ]
@@ -139,7 +139,7 @@ class VisionCamera(BaseModel):
 
     class Meta:
         table = "apps_kuaivision_cameras"
-        table_description = "快视觉 - 相机"
+        table_description = "星视觉 - 相机"
         unique_together = (("tenant_id", "code"),)
         indexes = [("tenant_id", "is_enabled")]
 
@@ -161,7 +161,7 @@ class VisionStationBind(BaseModel):
 
     class Meta:
         table = "apps_kuaivision_station_binds"
-        table_description = "快视觉 - 相机工位绑定"
+        table_description = "星视觉 - 相机工位绑定"
         indexes = [
             ("tenant_id", "camera_id"),
             ("tenant_id", "station_code"),
@@ -192,7 +192,7 @@ class VisionRecipe(BaseModel):
 
     class Meta:
         table = "apps_kuaivision_recipes"
-        table_description = "快视觉 - 视觉方案"
+        table_description = "星视觉 - 视觉方案"
         unique_together = (("tenant_id", "code"),)
         indexes = [("tenant_id", "recipe_type"), ("tenant_id", "is_enabled")]
 
@@ -218,7 +218,7 @@ class VisionRecipeVersion(BaseModel):
 
     class Meta:
         table = "apps_kuaivision_recipe_versions"
-        table_description = "快视觉 - 方案版本"
+        table_description = "星视觉 - 方案版本"
         unique_together = (("tenant_id", "recipe_id", "version"),)
         indexes = [("tenant_id", "recipe_id", "status")]
 
@@ -244,7 +244,7 @@ class VisionModelArtifact(BaseModel):
 
     class Meta:
         table = "apps_kuaivision_model_artifacts"
-        table_description = "快视觉 - 模型制品"
+        table_description = "星视觉 - 模型制品"
         unique_together = (("tenant_id", "code"),)
         indexes = [("tenant_id", "is_enabled"), ("tenant_id", "checksum")]
 
@@ -265,7 +265,7 @@ class VisionSampleSet(BaseModel):
 
     class Meta:
         table = "apps_kuaivision_sample_sets"
-        table_description = "快视觉 - 样本集"
+        table_description = "星视觉 - 样本集"
         unique_together = (("tenant_id", "code"),)
         indexes = [("tenant_id", "recipe_code"), ("tenant_id", "is_enabled")]
 
@@ -287,7 +287,7 @@ class VisionSampleItem(BaseModel):
 
     class Meta:
         table = "apps_kuaivision_sample_items"
-        table_description = "快视觉 - 样本条目"
+        table_description = "星视觉 - 样本条目"
         indexes = [
             ("tenant_id", "sample_set_id"),
             ("tenant_id", "label"),
@@ -314,7 +314,7 @@ class VisionReviewTask(BaseModel):
 
     class Meta:
         table = "apps_kuaivision_review_tasks"
-        table_description = "快视觉 - 复核任务"
+        table_description = "星视觉 - 复核任务"
         indexes = [
             ("tenant_id", "status"),
             ("tenant_id", "event_id"),
@@ -340,7 +340,7 @@ class VisionSettings(BaseModel):
 
     class Meta:
         table = "apps_kuaivision_settings"
-        table_description = "快视觉 - 租户配置"
+        table_description = "星视觉 - 租户配置"
         unique_together = (("tenant_id",),)
 
     class PydanticMeta:

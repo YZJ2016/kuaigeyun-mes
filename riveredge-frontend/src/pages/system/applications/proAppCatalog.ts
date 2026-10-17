@@ -51,7 +51,7 @@ export const PRO_PLACEHOLDER_META: Record<ProAppCode, ProPlaceholderMeta> = {
   kuaivision: {
     nameKey: 'sys.app.kuaivision.name',
     descKey: 'sys.app.kuaivision.desc',
-    nameDefault: '快视觉',
+    nameDefault: '星视觉',
     descDefault: '工业视觉检测：方案、入站结果、原图留痕与复核',
     version: 'PRO',
   },

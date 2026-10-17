@@ -1,1 +1,1 @@
-"""快视觉 services。"""
+"""星视觉 services。"""

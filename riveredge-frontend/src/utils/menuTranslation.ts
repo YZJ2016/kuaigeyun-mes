@@ -204,7 +204,7 @@ const BUILTIN_APP_DISPLAY_NAME_ALIASES: Record<string, readonly string[]> = {
   kuaireport: ['快报表', '快報表', '星报表', '星報表'],
   'master-data': ['主数据', '主資料', '基础数据管理', '基礎資料管理'],
   kuaiiot: ['快数采', '快數採', '星数采', '星數採'],
-  kuaivision: ['快视觉', '快視覺'],
+  kuaivision: ['快视觉', '快視覺', '星视觉', '星視覺'],
   kuaiai: ['KU-AI', '星AI'],
   haoligo: ['好力 GO'],
   system: ['系统配置', '系統配置'],
