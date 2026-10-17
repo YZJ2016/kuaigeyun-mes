@@ -10,6 +10,7 @@
 export const PRO_APP_CODES = [
   'kuaireport',
   'kuaiiot',
+  'kuaivision',
   'kuaiai',
 ] as const;
 
@@ -19,6 +20,7 @@ export type ProAppCode = (typeof PRO_APP_CODES)[number];
 export const PRO_APP_SORT_ORDER: Record<ProAppCode, number> = {
   kuaireport: 310,
   kuaiiot: 320,
+  kuaivision: 322,
   kuaiai: 350,
 };
 
@@ -44,6 +46,13 @@ export const PRO_PLACEHOLDER_META: Record<ProAppCode, ProPlaceholderMeta> = {
     descKey: 'sys.app.kuaiiot.desc',
     nameDefault: '星数采',
     descDefault: '工业物联网设备数采集成平台，敬请期待',
+    version: 'PRO',
+  },
+  kuaivision: {
+    nameKey: 'sys.app.kuaivision.name',
+    descKey: 'sys.app.kuaivision.desc',
+    nameDefault: '快视觉',
+    descDefault: '工业视觉检测：方案、入站结果、原图留痕与复核',
     version: 'PRO',
   },
   kuaiai: {
