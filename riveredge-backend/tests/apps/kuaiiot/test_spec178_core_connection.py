@@ -119,13 +119,29 @@ async def test_unused_core_can_be_deleted(db):
 
 
 @pytest.mark.asyncio
-async def test_mqtt_test_only_validates_configuration(db):
+async def test_mqtt_test_probes_broker_and_marks_connected(db, monkeypatch):
+    from apps.kuaiiot.services import mqtt_paho_bridge
+
+    monkeypatch.setattr(mqtt_paho_bridge, "probe_broker_sync", lambda settings, timeout=8.0: True)
     core = await _core()
     result = await IntegrationConfigService.test_connection(1, str(core.uuid))
     assert result["success"] is True
-    assert result["data"]["verification_level"] == "config_only"
+    assert result["data"]["verification_level"] == "live"
+    await core.refresh_from_db()
+    assert core.is_connected is True
+
+
+@pytest.mark.asyncio
+async def test_mqtt_test_marks_disconnected_when_probe_fails(db, monkeypatch):
+    from apps.kuaiiot.services import mqtt_paho_bridge
+
+    monkeypatch.setattr(mqtt_paho_bridge, "probe_broker_sync", lambda settings, timeout=8.0: False)
+    core = await _core(code="broker-down")
+    result = await IntegrationConfigService.test_connection(1, str(core.uuid))
+    assert result["success"] is False
     await core.refresh_from_db()
     assert core.is_connected is False
+    assert core.last_error
 
 
 @pytest.mark.parametrize("port", [0, 65536, True, "1883"])

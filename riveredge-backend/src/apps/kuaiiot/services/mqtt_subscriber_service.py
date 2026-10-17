@@ -13,8 +13,10 @@ from tortoise.expressions import Q
 from core.utils.timezone_utils import resolve_business_datetime
 
 from apps.kuaiiot.models.connection import KuaiiotConnection
+from apps.kuaiiot.services.mqtt_message_buffer import MqttMessageBuffer
 from apps.kuaiiot.services.platform_telemetry import TOPIC_FIELD, deliver_registered_telemetry, normalize_mqtt
 from infra.domain.tenant_context import unscoped, with_tenant
+from infra.exceptions.exceptions import ValidationError
 from apps.kuaiiot.services.connection_runtime import connection_is_active, resolve_core_connection
 
 
@@ -44,9 +46,40 @@ class MqttSubscriberService:
                             owned = await KuaiiotConnection.filter(id=connection.id, tenant_id=connection.tenant_id, subscriber_owner=expected_owner, subscriber_lease_until__gt=resolve_business_datetime(), is_enabled=True, deleted_at__isnull=True).exists()
                             if not owned:
                                 return
-                        await normalize_mqtt(connection, str(message.topic), payload)
+                        result = await normalize_mqtt(connection, str(message.topic), payload)
+                        conn_config = connection.config if isinstance(connection.config, dict) else {}
+                        await MqttMessageBuffer.persist(
+                            int(connection.tenant_id),
+                            connection.id,
+                            topic=str(message.topic),
+                            qos=int(getattr(message, "qos", 0) or 0),
+                            retained=bool(getattr(message, "retain", False)),
+                            payload=payload,
+                            payload_format=MqttSubscriberService._resolve_format(
+                                str(conn_config.get("payload_format") or "auto"), payload
+                            ),
+                            ingest_summary=result if isinstance(result, dict) else {},
+                        )
                 except (ValueError, TypeError):
                     continue
+
+    @staticmethod
+    async def probe_broker(connection: KuaiiotConnection) -> bool:
+        """探测 Broker 连通性，凭据只从公共连接读。"""
+        from apps.kuaiiot.services.mqtt_paho_bridge import probe_broker_sync
+
+        try:
+            core = await resolve_core_connection(connection)
+        except ValidationError:
+            return False
+        if core is None:
+            return False
+        config = core.get_config()
+        if not isinstance(config, dict) or not config.get("host"):
+            return False
+        settings = dict(config)
+        settings["client_id"] = f"kuaiiot-probe-{connection.tenant_id}-{connection.id}"
+        return await asyncio.to_thread(probe_broker_sync, settings)
 
     @staticmethod
     async def _listen(connection: KuaiiotConnection, config: dict) -> None:

@@ -15,6 +15,7 @@ class ConnectionBase(BaseModel):
     code: str = Field(..., max_length=50)
     name: str = Field(..., max_length=100)
     connection_type: str = Field(..., max_length=30)
+    integration_uuid: Optional[str] = Field(None, max_length=36)
     config: Optional[Dict[str, Any]] = None
     is_enabled: bool = True
     remark: Optional[str] = None
@@ -27,6 +28,7 @@ class ConnectionCreate(ConnectionBase):
 class ConnectionUpdate(BaseModel):
     name: Optional[str] = Field(None, max_length=100)
     connection_type: Optional[str] = Field(None, max_length=30)
+    integration_uuid: Optional[str] = Field(None, max_length=36)
     config: Optional[Dict[str, Any]] = None
     is_enabled: Optional[bool] = None
     remark: Optional[str] = None
