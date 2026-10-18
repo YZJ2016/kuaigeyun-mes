@@ -3,7 +3,7 @@
  * 表格单元格内打开弹层时，会误触底层行选中/行点击。
  *
  * 标准用法：
- * - 全局：`patches/isolatedRcDialog.tsx` 经 vite alias 注入（入口无需逐页传）
+ * - 全局：`global.less` 恢复 `.ant-modal-mask { pointer-events: auto }`，遮罩点击不落底层
  * - 单页：传给 Modal 的 maskProps / wrapProps（或等价容器）
  */
 import type { HTMLAttributes, SyntheticEvent } from 'react';
