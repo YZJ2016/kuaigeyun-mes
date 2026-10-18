@@ -44,14 +44,6 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
-    id: 'data-backup-restore-unique-remap-r01',
-    date: '2026-10-17',
-    type: 'fix',
-    titleKey: 'pages.dashboard.updateLog.entries.data-backup-restore-unique-remap-r01.title',
-    descriptionKey:
-      'pages.dashboard.updateLog.entries.data-backup-restore-unique-remap-r01.description',
-  },
-  {
     id: 'attendance-fill-bottom-gap-r01',
     date: '2026-10-18',
     type: 'fix',
@@ -106,6 +98,14 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
     titleKey: 'pages.dashboard.updateLog.entries.purchase-requisition-line-delivery-carry-r01.title',
     descriptionKey:
       'pages.dashboard.updateLog.entries.purchase-requisition-line-delivery-carry-r01.description',
+  },
+  {
+    id: 'data-backup-restore-unique-remap-r01',
+    date: '2026-10-17',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.data-backup-restore-unique-remap-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.data-backup-restore-unique-remap-r01.description',
   },
   {
     id: 'modal-portal-click-isolation-r01',
@@ -739,30 +739,6 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
     titleKey: 'pages.dashboard.updateLog.entries.frontend-perf-wo-outbound-quote-r02.title',
     descriptionKey:
       'pages.dashboard.updateLog.entries.frontend-perf-wo-outbound-quote-r02.description',
-  },
-  {
-    id: 'inbound-hub-other-inbound-edit-r01',
-    date: '2026-10-15',
-    type: 'improvement',
-    titleKey: 'pages.dashboard.updateLog.entries.inbound-hub-other-inbound-edit-r01.title',
-    descriptionKey:
-      'pages.dashboard.updateLog.entries.inbound-hub-other-inbound-edit-r01.description',
-  },
-  {
-    id: 'maintenance-execution-item-requirement-r01',
-    date: '2026-10-15',
-    type: 'improvement',
-    titleKey: 'pages.dashboard.updateLog.entries.maintenance-execution-item-requirement-r01.title',
-    descriptionKey:
-      'pages.dashboard.updateLog.entries.maintenance-execution-item-requirement-r01.description',
-  },
-  {
-    id: 'material-call-picking-sync-r01',
-    date: '2026-10-15',
-    type: 'fix',
-    titleKey: 'pages.dashboard.updateLog.entries.material-call-picking-sync-r01.title',
-    descriptionKey:
-      'pages.dashboard.updateLog.entries.material-call-picking-sync-r01.description',
   },
   {
     id: 'pull-source-display-echo-r01',
