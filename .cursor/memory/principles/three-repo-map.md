@@ -55,6 +55,7 @@ standard: 主仓记跨端总表；client/pro 薄入口指路；AOCI 分仓不合
 | API 写防护 / 渠道头 | `interactive_client_guard`、`client_channel.py`；手册 `riveredge-backend/docs/api-write-protection-ops.md` | 各端写请求带 `X-Client-Channel` | 经主仓 API，同白名单 | `pc\|station\|android\|ios\|mobile_h5\|miniprogram\|integration` | `principles/api-write-protection.md` |
 | 快数采 kuaiiot | 组装态 `riveredge-*/src/apps/kuaiiot/`（gitignore）；单测可在主仓 `tests/apps/kuaiiot/` | - | `{backend,frontend}/apps/kuaiiot/` 真源 | 权限见前后端 `manifest.json`；MES 写回走 MesGuard | `features/kuaiiot-phased-hardening.md` |
 | 主仓↔client 组装 | `riveredge-app/`（gitignore）+ Junction | `riveredge-app-{mobile,station,tv,mini-program}/`（四端源码默认一并入库，见 client `client-terminals-checkin.mdc`） | - | 部署 H5 见 fast-deploy | `features/riveredge-app-client-junctions.md` |
+| 请假回写月度考勤 | 组装态 `kuaioa` `AttendanceService.apply_leave_to_attendance`；i18n/更新日志在主仓 | - | BE/FE 真源 `kuaigeyun-pro/.../kuaioa/`；haoligo 填报表真源 `kuaigeyun-custom/.../attendance/fill.tsx` | 请假模块审批/更新权限 | `features/leave-attendance-employee-match.md` |
 | 移动 H5 构建部署 | `fast-deploy/build.mobile.web.sh`、`deploy.sh install-h5` | 构建产物 `riveredge-app-mobile/web-dist`（默认不进主仓） | - | Caddy `/mobile` | `features/fast-deploy-scripts.md` |
 
 ## 交付时回写
