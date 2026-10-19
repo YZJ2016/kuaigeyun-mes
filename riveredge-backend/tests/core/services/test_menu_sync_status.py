@@ -221,6 +221,7 @@ async def test_bind_menu_config_prefers_disk_manifest_over_stale_db_snapshot():
     }
     conn = AsyncMock()
     conn.execute = AsyncMock()
+    conn.fetchrow = AsyncMock(return_value=None)
     conn.close = AsyncMock()
 
     with (
@@ -245,4 +246,5 @@ async def test_bind_menu_config_prefers_disk_manifest_over_stale_db_snapshot():
         == "app.kuaicaiwu.menu.group.finance-receipts"
     )
     conn.execute.assert_awaited()
-    assert conn.execute.await_args.args[-1] == "1.0.1"
+    # 库内无 app 行（fetchrow=None）时按上游 91ce38417a 语义 bump patch 写库
+    assert conn.execute.await_args.args[-1] == "1.0.2"
