@@ -394,8 +394,12 @@ async def wecom_bootstrap_tenant(
     )
     from infra.models.tenant import Tenant
 
-    if corp_id and agent_id is not None:
-        resolved = await resolve_tenant_by_wecom_corp_agent(corp_id=corp_id, agent_id=agent_id)
+    if corp_id or agent_id is not None:
+        resolved = None
+        if corp_id and agent_id is not None:
+            resolved = await resolve_tenant_by_wecom_corp_agent(
+                corp_id=corp_id, agent_id=agent_id
+            )
         if resolved:
             return WeComBootstrapTenantResponse(
                 tenant_id=resolved.tenant_id,

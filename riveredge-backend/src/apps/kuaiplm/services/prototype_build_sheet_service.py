@@ -59,6 +59,22 @@ class PrototypeBuildSheetService(AppBaseService[PrototypeBuildSheet]):
             raise ValidationError("研发项目不存在")
         return project
 
+    async def _resolve_project_snapshot(
+        self,
+        tenant_id: int,
+        *,
+        project_id: Optional[int],
+        project_code: Optional[str],
+        project_name: Optional[str],
+    ) -> tuple[Optional[int], str, str]:
+        """研发项目可选：传 id 以档案为准；否则沿用手填代号/名称（默认同代号）。"""
+        if project_id is not None:
+            project = await self._require_project(tenant_id, int(project_id))
+            return project.id, project.project_code, project.project_name
+        code = str(project_code or "").strip()
+        name = str(project_name or "").strip() or code
+        return None, code, name
+
     async def _get_row(self, tenant_id: int, sheet_id: int) -> PrototypeBuildSheet:
         row = await PrototypeBuildSheet.filter(
             tenant_id=tenant_id, id=sheet_id, deleted_at__isnull=True
@@ -123,7 +139,12 @@ class PrototypeBuildSheetService(AppBaseService[PrototypeBuildSheet]):
     async def create(
         self, tenant_id: int, payload: PrototypeBuildSheetCreate, user: User
     ) -> PrototypeBuildSheetResponse:
-        project = await self._require_project(tenant_id, payload.project_id)
+        project_id, project_code, project_name = await self._resolve_project_snapshot(
+            tenant_id,
+            project_id=payload.project_id,
+            project_code=payload.project_code,
+            project_name=payload.project_name,
+        )
         code = await self._ensure_code(tenant_id, payload.sheet_code)
         exists = await PrototypeBuildSheet.filter(
             tenant_id=tenant_id, sheet_code=code, deleted_at__isnull=True
@@ -134,9 +155,9 @@ class PrototypeBuildSheetService(AppBaseService[PrototypeBuildSheet]):
         row = PrototypeBuildSheet(
             tenant_id=tenant_id,
             sheet_code=code,
-            project_id=project.id,
-            project_code=project.project_code,
-            project_name=project.project_name,
+            project_id=project_id,
+            project_code=project_code,
+            project_name=project_name,
             round_key=self._normalize_round(payload.round_key),
             title=payload.title.strip(),
             status="draft",

@@ -2015,6 +2015,7 @@ export default {
   'common.exportNoData': '暂无数据可导出',
   'common.exportSuccess': '已导出 {{count}} 条记录',
   'common.exportFailed': '导出失败',
+  'common.copy': '复制',
   'common.copySuccess': '已复制到剪贴板',
   'common.copyFailed': '复制失败',
   'common.refresh': '刷新',

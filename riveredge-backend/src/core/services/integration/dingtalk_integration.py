@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 from core.models.integration_config import IntegrationConfig
+from infra.domain.tenant_context import with_tenant
 
 
 @dataclass(frozen=True)
@@ -16,16 +17,18 @@ class DingTalkCredentials:
 
 
 async def get_active_dingtalk_integration(tenant_id: int) -> Optional[IntegrationConfig]:
-    return (
-        await IntegrationConfig.filter(
-            tenant_id=tenant_id,
-            type="dingtalk",
-            is_active=True,
-            deleted_at__isnull=True,
+    # 公开端点无 ambient 组织上下文，以 with_tenant 显式声明执行域。
+    async with with_tenant(int(tenant_id), reason="钉钉连接器按组织读取"):
+        return (
+            await IntegrationConfig.filter(
+                tenant_id=tenant_id,
+                type="dingtalk",
+                is_active=True,
+                deleted_at__isnull=True,
+            )
+            .order_by("-updated_at")
+            .first()
         )
-        .order_by("-updated_at")
-        .first()
-    )
 
 
 async def get_dingtalk_credentials(tenant_id: int) -> Optional[DingTalkCredentials]:

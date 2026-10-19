@@ -7,6 +7,7 @@ from urllib.parse import quote
 
 from core.models.integration_config import IntegrationConfig
 from core.services.client_release_service import build_public_origin
+from infra.domain.tenant_context import unscoped
 from infra.exceptions.exceptions import ValidationError
 from infra.models.tenant import Tenant
 
@@ -44,11 +45,15 @@ async def assert_wecom_corp_agent_unique_across_tenants(
     if not corp_id or agent_id is None:
         return
 
-    rows = await IntegrationConfig.filter(
-        type="wecom",
-        is_active=True,
-        deleted_at__isnull=True,
-    ).all()
+    async with unscoped(
+        reason="企业微信 CorpID+AgentId 跨组织唯一性校验",
+        resource="IntegrationConfig",
+    ):
+        rows = await IntegrationConfig.filter(
+            type="wecom",
+            is_active=True,
+            deleted_at__isnull=True,
+        ).all()
     for row in rows:
         if int(row.tenant_id) == int(tenant_id):
             continue

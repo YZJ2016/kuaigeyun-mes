@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 from core.models.integration_config import IntegrationConfig
+from infra.domain.tenant_context import with_tenant
 from infra.infrastructure.http.client import get_http_client
 
 WECOM_API_BASE = "https://qyapi.weixin.qq.com/cgi-bin"
@@ -19,16 +20,19 @@ class WeComCredentials:
 
 
 async def get_active_wecom_integration(tenant_id: int) -> Optional[IntegrationConfig]:
-    return (
-        await IntegrationConfig.filter(
-            tenant_id=tenant_id,
-            type="wecom",
-            is_active=True,
-            deleted_at__isnull=True,
+    # 公开端点（/wecom/authorize-url、/wecom/callback 等）无 ambient 组织上下文；
+    # 以 with_tenant 显式声明执行域，spec-143 失败关闭下仍可查询本组织连接器。
+    async with with_tenant(int(tenant_id), reason="企业微信连接器按组织读取"):
+        return (
+            await IntegrationConfig.filter(
+                tenant_id=tenant_id,
+                type="wecom",
+                is_active=True,
+                deleted_at__isnull=True,
+            )
+            .order_by("-updated_at")
+            .first()
         )
-        .order_by("-updated_at")
-        .first()
-    )
 
 
 async def get_wecom_credentials(tenant_id: int) -> Optional[WeComCredentials]:

@@ -13,6 +13,7 @@ from fastapi import HTTPException, status
 from loguru import logger
 
 from core.services.integration.feishu_integration import get_feishu_credentials
+from infra.domain.tenant_context import with_tenant
 from infra.infrastructure.http.client import get_http_client
 from infra.models.user import User
 
@@ -202,11 +203,13 @@ async def find_user_by_feishu_ids(
     open_id: str | None,
     user_id: str | None,
 ) -> User | None:
-    users = await User.filter(
-        tenant_id=tenant_id,
-        is_active=True,
-        deleted_at__isnull=True,
-    )
+    # 公开回调路径无 ambient 组织上下文，显式声明执行域。
+    async with with_tenant(int(tenant_id), reason="飞书登录按组织匹配用户"):
+        users = await User.filter(
+            tenant_id=tenant_id,
+            is_active=True,
+            deleted_at__isnull=True,
+        )
     union_norm = union_id.strip() if union_id else ""
     open_norm = open_id.strip() if open_id else ""
     user_norm = user_id.strip() if user_id else ""
@@ -229,11 +232,12 @@ async def find_user_by_feishu_ids(
 
 
 async def _list_active_tenant_users(tenant_id: int) -> list[User]:
-    return await User.filter(
-        tenant_id=tenant_id,
-        is_active=True,
-        deleted_at__isnull=True,
-    )
+    async with with_tenant(int(tenant_id), reason="飞书登录按组织列举候选用户"):
+        return await User.filter(
+            tenant_id=tenant_id,
+            is_active=True,
+            deleted_at__isnull=True,
+        )
 
 
 def _dedupe_users(users: list[User]) -> list[User]:
