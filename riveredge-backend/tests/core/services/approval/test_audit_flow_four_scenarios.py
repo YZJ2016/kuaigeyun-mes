@@ -225,12 +225,21 @@ class TestScenarioRecallOwn:
         def _filter(**kwargs):
             qs = MagicMock()
             node_id = kwargs.get("node_id")
+            node_id_in = kwargs.get("node_id__in")
             status = kwargs.get("status")
             if status == "approved" and "approver_id" in kwargs:
                 qs.first = AsyncMock(
                     return_value=SimpleNamespace(node_id=node_id, status="approved")
                     if node_id == "n1" and n1_has_approved
                     else None
+                )
+            elif status == "approved" and node_id_in is not None:
+                ids = {str(nid) for nid in node_id_in}
+                qs.exists = AsyncMock(
+                    return_value=(
+                        ("n2" in ids and n2_has_approved)
+                        or ("n3" in ids and n3_has_approved)
+                    )
                 )
             elif status == "approved" and node_id == "n2":
                 qs.exists = AsyncMock(return_value=n2_has_approved)

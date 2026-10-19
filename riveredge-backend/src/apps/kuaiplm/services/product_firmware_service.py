@@ -65,8 +65,19 @@ def _normalize_software_item_code(value: object) -> Optional[str]:
     text = str(value).strip()
     if not text:
         return None
-    if len(text) != 12:
-        raise ValidationError("软件编码须为12位")
+    if len(text) > 50:
+        raise ValidationError("软件编码最长50字符")
+    return text
+
+
+def _normalize_software_description(value: object) -> Optional[str]:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    if len(text) > 200:
+        raise ValidationError("软件描述最长200字符")
     return text
 
 
@@ -255,6 +266,7 @@ class ProductFirmwareService(AppBaseService[ProductFirmware]):
         await self._ensure_firmware_file(tenant_id, data.get("file_uuid"))
 
         software_item_code = _normalize_software_item_code(data.get("software_item_code"))
+        software_description = _normalize_software_description(data.get("software_description"))
         row = ProductFirmware(
             tenant_id=tenant_id,
             firmware_code=data["firmware_code"],
@@ -265,6 +277,7 @@ class ProductFirmwareService(AppBaseService[ProductFirmware]):
             title=data["title"],
             release_date=data.get("release_date"),
             software_item_code=software_item_code,
+            software_description=software_description,
             status="draft",
             file_uuid=data.get("file_uuid"),
             file_name=data.get("file_name"),
@@ -379,6 +392,10 @@ class ProductFirmwareService(AppBaseService[ProductFirmware]):
         data = payload.model_dump(exclude_unset=True)
         if "software_item_code" in data:
             data["software_item_code"] = _normalize_software_item_code(data.get("software_item_code"))
+        if "software_description" in data:
+            data["software_description"] = _normalize_software_description(
+                data.get("software_description")
+            )
         if "version" in data and data["version"] != row.version:
             clash_q = self._apply_same_project_scope(
                 ProductFirmware.filter(
@@ -649,6 +666,12 @@ class ProductFirmwareService(AppBaseService[ProductFirmware]):
             software_item_code = _normalize_software_item_code(data.get("software_item_code"))
         else:
             software_item_code = src.software_item_code
+        if "software_description" in data:
+            software_description = _normalize_software_description(
+                data.get("software_description")
+            )
+        else:
+            software_description = src.software_description
 
         row = ProductFirmware(
             tenant_id=tenant_id,
@@ -660,6 +683,7 @@ class ProductFirmwareService(AppBaseService[ProductFirmware]):
             title=title,
             release_date=data.get("release_date") if "release_date" in data else None,
             software_item_code=software_item_code,
+            software_description=software_description,
             status="draft",
             file_uuid=file_uuid,
             file_name=file_name,
