@@ -15,6 +15,7 @@ import { hasModulePermission, hasReviewPermission } from '../../utils/permission
 import { isAdminBypass, resolveUserForMenuPermission } from '../../utils/permission';
 import UniAuditModal, { type UniAuditHubAction } from './UniAuditModal';
 import UniAuditInitiatorSubmitModal from './UniAuditInitiatorSubmitModal';
+import { resolveRecordDocumentCode } from './resolveRecordDocumentCode';
 import {
   fetchSubmitInitiatorRequirements,
   type SubmitInitiatorBranchHint,
@@ -214,6 +215,7 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
   const rawCurrentUser = useCurrentUser();
   const currentUser = useMemo(() => resolveUserForMenuPermission(rawCurrentUser), [rawCurrentUser]);
   const adminOpen = isAdminBypass(currentUser);
+  const documentCode = useMemo(() => resolveRecordDocumentCode(record), [record]);
 
   const inferredNodeKey = useMemo(() => auditNodeKey || inferAuditNodeKey(apiPrefix), [auditNodeKey, apiPrefix]);
 
@@ -716,6 +718,7 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
           mode="hub"
           hubTitle="审核"
           entityName={entityName}
+          documentCode={documentCode}
           entityType={resolvedEntityType || undefined}
           entityId={recordId}
           hubActions={hubActions}
@@ -730,6 +733,7 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
           open
           action={activeAction}
           entityName={entityName}
+          documentCode={documentCode}
           actionTitle={getActionTitle(activeAction)}
           actionDescription={
             confirmMessages[activeAction]
