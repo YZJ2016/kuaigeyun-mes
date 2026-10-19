@@ -53603,188 +53603,6 @@ export default {
     '试流单研发项目支持关联或手填代号',
   'pages.dashboard.updateLog.entries.kuaiplm-trial-flow-project-ref-r01.description':
     '新建试流单时研发项目与产品固件、样品加工一致：可从列表选择项目，也可直接手填项目代号（无需先建项目档案）。',
-  'pages.dashboard.updateLog.entries.mrp-work-order-bom-snapshot-r01.title':
-    '需求计算下推工单锁定 BOM 版本',
-  'pages.dashboard.updateLog.entries.mrp-work-order-bom-snapshot-r01.description':
-    '从需求计算下推生产工单时，将计算所用的全局/按物料 BOM 版本写入工单并在齐套、缺料与领料上限展开中沿用；工单详情展示成品 BOM 版本。已下推的历史工单不受影响，需重新下推或手工对齐。',
-  'pages.dashboard.updateLog.entries.approval-previous-approver-bridge-r01.title':
-    '修复「上一节点人员」分支在首审即报错',
-  'pages.dashboard.updateLog.entries.approval-previous-approver-bridge-r01.description':
-    '条件分支设为上一节点人员选择时，若中间还有空审批人自动跳过的节点，现由当前有人的审批节点先选分支再审核通过，不再在首审推进时提示禁止默认跳转。',
-  'pages.dashboard.updateLog.entries.sales-direct-push-bom-r01.title':
-    '销售订单直推工单可选 BOM 版本',
-  'pages.dashboard.updateLog.entries.sales-direct-push-bom-r01.description':
-    '销售订单直推工单预览在启用多版本 BOM 时可按订单行产品指定 BOM 版本，下推后写入工单快照，与需求计算下推一致用于齐套与领料展开。',
-  'pages.dashboard.updateLog.entries.mobile-equipment-photo-preview-r01.title':
-    '移动端设备作业照片预览修复',
-  'pages.dashboard.updateLog.entries.mobile-equipment-photo-preview-r01.description':
-    '工位 App 点检保养等拍照上传后，预览链补充鉴权参数并在缩略图失败时自动重取预览地址，避免附件区长期显示加载失败。',
-  'pages.dashboard.updateLog.entries.inventory-cost-resolve-costing-warehouses-r01.title':
-    '修复运营看板库存金额报错',
-  'pages.dashboard.updateLog.entries.inventory-cost-resolve-costing-warehouses-r01.description':
-    '库存成本服务补回按仓核算方法，排除赠品仓等只计数量仓库后再汇总库存金额，运营看板与仓储汇总不再因缺方法报错。',
-  'pages.dashboard.updateLog.entries.material-form-hide-default-supplier-prop-r01.title':
-    '修复新建物料选采购件报错',
-  'pages.dashboard.updateLog.entries.material-form-hide-default-supplier-prop-r01.description':
-    '物料来源/默认值子页未接收默认供应商字段掩码参数，选择采购件时抛出 hideDefaultSupplierField is not defined；已向下传入该标志。',
-  'pages.dashboard.updateLog.entries.sales-contract-create-staticmethod-r01.title':
-    '修复新建销售合同失败',
-  'pages.dashboard.updateLog.entries.sales-contract-create-staticmethod-r01.description':
-    '框架合同创建时服务层静态方法签名错误导致 500，已纠正明细汇总与落库方法，新建数量框架与金额总框可正常提交。',
-  'pages.dashboard.updateLog.entries.material-unit-select-no-limit-2000-r01.title':
-    '物料单位下拉不再一次拉两千物料',
-  'pages.dashboard.updateLog.entries.material-unit-select-no-limit-2000-r01.description':
-    '采购订单等页的单位选择在只有数字物料 ID 时改为按 ids 精确查询，不再请求 materials?limit=2000，避免网关 504 并弹出服务器暂时不可用。',
-  'pages.dashboard.updateLog.entries.cosmic-warehouse-getlist-org-priority-r01.title':
-    '苍穹接口组织编码改取连接器',
-  'pages.dashboard.updateLog.entries.cosmic-warehouse-getlist-org-priority-r01.description':
-    '仓库列表、库存查询及出站单据中的组织字段统一取连接器 org_number，预设不再写死 BU-00000；历史硬编码在调用时会被连接器组织覆盖。',
-  'pages.dashboard.updateLog.entries.cosmic-warehouse-basedata-query-r01.title':
-    '苍穹仓库列表维持 getList',
-  'pages.dashboard.updateLog.entries.cosmic-warehouse-basedata-query-r01.description':
-    '实测测试账套：/v2/basedata/bd_warehouse/query 与 batchQuery 返回 2530 路由未找到；已注册的仓库列表是 /v2/sbd/bd_warehouse/getList。调用会改写回 getList，并带上 data.createorg_number。',
-  'pages.dashboard.updateLog.entries.cosmic-warehouse-612-preview-r01.title':
-    '苍穹仓库查询 612 不再误显示为预览行',
-  'pages.dashboard.updateLog.entries.cosmic-warehouse-612-preview-r01.description':
-    '开放平台返回失败码且无 status=false 时，同步预览改为明确报错，不再把 errorCode/message 外壳显示成一行仓库数据。',
-  'pages.dashboard.updateLog.entries.purchase-receipt-external-push-gate-r01.title':
-    '采购入库外推预览报不支持源类型',
-  'pages.dashboard.updateLog.entries.purchase-receipt-external-push-gate-r01.description':
-    '外推权限映射补登 purchase_receipt→kuaizhizao:inbound:push，数据互通 dry-run/手动推送不再误报未配置。',
-  'pages.dashboard.updateLog.entries.purchase-receipt-kingdee-doc-fields-r01.title':
-    '采购入库单补齐金蝶外推单据字段',
-  'pages.dashboard.updateLog.entries.purchase-receipt-kingdee-doc-fields-r01.description':
-    '空白新建可填供应商、采购员与工号、验收人、付款方式、税率、币别；外推优先读单据字段（工号/付款方式/税率/验收人），组织与单据类型等仍在业务配置。',
-  'pages.dashboard.updateLog.entries.purchase-receipt-blank-create-po-fk-r01.title':
-    '空白新建采购入库单保存外键报错',
-  'pages.dashboard.updateLog.entries.purchase-receipt-blank-create-po-fk-r01.description':
-    '无采购订单来源的入库单不再写入 purchase_order_id=0（违反外键）；改为可空 NULL，写路径将 0/缺省规范为空。',
-  'pages.dashboard.updateLog.entries.purchase-center-overdue-count-504-r01.title':
-    '采购管理页超时「正在维护」排查修复',
-  'pages.dashboard.updateLog.entries.purchase-center-overdue-count-504-r01.description':
-    '采购中心汇总与菜单角标逾期计数曾按「百万条预警列表」全量装配（含行影响溯源），叠加订单列表读侧回写已到货数量，易触发网关 504。现改为库内条件计数、预警等级下推过滤、本页再解析影响，并去掉列表读侧 sync。',
-  'pages.dashboard.updateLog.entries.purchase-receipt-auto-push-binding-r01.title':
-    '采购入库单接入自动推送',
-  'pages.dashboard.updateLog.entries.purchase-receipt-auto-push-binding-r01.description':
-    '入库管理「数据互通」可记住出站目标与「确认入库」触发动作；确认入库成功后按绑定配置无感外推金蝶云苍穹采购入库单（默认优先【自定义】add2 含验收人接口）。',
-  'pages.dashboard.updateLog.entries.cosmic-purinbill-add2-acceptor-r01.title':
-    '苍穹采购入库自定义接口（含验收人）',
-  'pages.dashboard.updateLog.entries.cosmic-purinbill-add2-acceptor-r01.description':
-    '接口库保留标品「采购入库单新增」，并新增带【自定义】标识的「采购入库单新增(含验收人)」（add2，字段 fd81_yanshou）。需验收人时请加载该自定义接口，并将推送配置的 save_path / save_api_uuid 与 acceptor_field 指向它。',
-  'pages.dashboard.updateLog.entries.cosmic-outbound-api-sync-direction-r01.title':
-    '苍穹单据新增接口标为出站同步',
-  'pages.dashboard.updateLog.entries.cosmic-outbound-api-sync-direction-r01.description':
-    '采购入库、销售出库、其他出库、盘盈、盘亏等新增/批量新增接口在接口管理中正确显示为出站同步；重新加载金蝶AI苍穹常用接口即可纠正已有条目。',
-  'pages.dashboard.updateLog.entries.cosmic-inventory-balance-inbound-r01.title':
-    '金蝶苍穹库存余额入站接口',
-  'pages.dashboard.updateLog.entries.cosmic-inventory-balance-inbound-r01.description':
-    '接口库「金蝶AI苍穹」新增库存余额（getInventoryAvbQty）与即时库存明细（getInventoryDetail）查询预设，可对接即时库存从数据接口同步；请将请求体中的库存组织编码改为本环境组织，或在连接器填写组织编码。',
-  'pages.dashboard.updateLog.entries.finance-sales-delivery-confirm-r01.title':
-    '销售出库确认失败修复',
-  'pages.dashboard.updateLog.entries.finance-sales-delivery-confirm-r01.description':
-    '修复销售出库确认时因事务工具重复导入导致无法过账的问题，出库后可正常自动生成应收并按订单预收自动冲减。',
-  'pages.dashboard.updateLog.entries.finance-prepay-receivable-settlement-r01.title':
-    '采购预付与销售预收标准核销',
-  'pages.dashboard.updateLog.entries.finance-prepay-receivable-settlement-r01.description':
-    '应付/应收按业务全额立账，入库出库或收付款确认时同事务自动冲减未核销预付/预收；开关开启时核销失败将阻断确认，避免新单已立账却显示已核销为 0。',
-  'pages.dashboard.updateLog.entries.config-center-notification-advanced-search-r01.title':
-    '配置中心消息提醒支持高级搜索',
-  'pages.dashboard.updateLog.entries.config-center-notification-advanced-search-r01.description':
-    '消息提醒列表与系统消息配置页一致，提供标准模糊搜索与高级搜索，可按场景、单据类型、触发动作、渠道、通知对象与启用状态组合筛选。',
-  'pages.dashboard.updateLog.entries.approval-wecom-sync-config-r01.title':
-    '审批通知企微推送改为消息渠道开关',
-  'pages.dashboard.updateLog.entries.approval-wecom-sync-config-r01.description':
-    '消息配置中企微推送渠道可勾选「同步推送审批通知」；开启后审批站内信发出时同步推企微，关闭则仅站内信。须绑定企微账号。',
-  'pages.dashboard.updateLog.entries.approval-pending-wecom-push-r01.title':
-    '审批待办同步推送企业微信',
-  'pages.dashboard.updateLog.entries.approval-pending-wecom-push-r01.description':
-    '单据提交进入审批、驳回、转交等审批类站内信发出后，若已配置启用的企微推送渠道，审批人会额外收到企业微信应用消息（含待办跳转链接）；须绑定企微账号。',
-  'pages.dashboard.updateLog.entries.purchase-requisition-save-submit-branch-r01.title':
-    '采购申请保存并提交可选审批分支',
-  'pages.dashboard.updateLog.entries.purchase-requisition-save-submit-branch-r01.description':
-    '新建页点保存并提交时，与列表提交审核一致，先选择「是否总经理特批」等发起人分支再提交，不再出现保存成功但提交失败的黄色提示。',
-  'pages.dashboard.updateLog.entries.payment-employee-advance-r01.title': '付款单员工垫付与领款人',
-  'pages.dashboard.updateLog.entries.payment-employee-advance-r01.description':
-    '付款方式新增员工垫付；须指定领款人并由公司出账账户打款补垫，同时核销供应商应付。付款申请可预选垫付方式与领款人，出纳取单自动带入。',
-  'pages.dashboard.updateLog.entries.tenant-show-pro-badge-r01.title':
-    '组织可关闭侧栏PRO徽章',
-  'pages.dashboard.updateLog.entries.tenant-show-pro-badge-r01.description':
-    '平台组织管理新增「高级应用是否显示PRO徽章」开关，默认开启；关闭后该组织侧栏与系统配置浮层不再显示PRO标。',
-  'pages.dashboard.updateLog.entries.finance-refund-list-batch-r01.title': '收付款退款列表对齐单据规范',
-  'pages.dashboard.updateLog.entries.finance-refund-list-batch-r01.description':
-    '付款退款与收款退款列表支持多选、批量确认与批量作废，新建按钮改为「新建收/付款退款」并支持 Alt+N 打开取单；付款申请列表同步注册 Alt+N。',
-  'pages.dashboard.updateLog.entries.po-prepayment-auto-apply-payable-r01.title':
-    '采购应付开立自动冲预付',
-  'pages.dashboard.updateLog.entries.po-prepayment-auto-apply-payable-r01.description':
-    '采购入库或订单里程碑生成应付后，默认可按 FIFO 用同订单未核销预付冲减应付；采购订单详情与表单汇总展示预付未核销与预计待付（扣预付）；可在组织参数关闭自动冲减。',
-  'pages.dashboard.updateLog.entries.payable-red-amount-schema-r01.title': '修复应付列表红字金额校验失败',
-  'pages.dashboard.updateLog.entries.payable-red-amount-schema-r01.description':
-    '采购退货、委外红字、采购调价等负金额应付单可正常列表与详情序列化，不再误报 total_amount 须大于 0。',
-  'pages.dashboard.updateLog.entries.payment-application-linked-payment-r01.title':
-    '修复付款申请幽灵付款单链接',
-  'pages.dashboard.updateLog.entries.payment-application-linked-payment-r01.description':
-    '付款单删除后同步清理与付款申请的关联；详情「已下推付款单」仅展示仍存在的付款单，避免点开提示不存在。',
-  'pages.dashboard.updateLog.entries.payment-print-api-r01.title': '修复付款单打印 404',
-  'pages.dashboard.updateLog.entries.payment-print-api-r01.description':
-    '补注册付款单打印接口，打印预览与 PDF 可正常加载默认模板；宿主财务管理环境不再误依赖轻财务专业包 ORM。',
-  'pages.dashboard.updateLog.entries.payment-form-account-sections-r01.title': '付款单账户信息分组',
-  'pages.dashboard.updateLog.entries.payment-form-account-sections-r01.description':
-    '新建、编辑与取单创建付款单时，出款账户与对方账户分别置于独立区块，便于对照填写与核对。',
-  'pages.dashboard.updateLog.entries.payment-counterparty-account-r01.title': '付款单对方收款账户',
-  'pages.dashboard.updateLog.entries.payment-counterparty-account-r01.description':
-    '新建与编辑付款单可填写对方户名、开户行与账号；从付款申请取单创建时自动带入申请单上的收款账户信息。',
-  'pages.dashboard.updateLog.entries.purchase-requisition-form-field-settings-r01.title':
-    '采购申请表单字段设置',
-  'pages.dashboard.updateLog.entries.purchase-requisition-form-field-settings-r01.description':
-    '新建与编辑页基本信息区可打开字段设置，按个人偏好显示或隐藏申请名称；隐藏时保存仍按编号生成默认名称。',
-  'pages.dashboard.updateLog.entries.purchase-requisition-name-field-restore-r01.title':
-    '采购申请恢复填写申请名称',
-  'pages.dashboard.updateLog.entries.purchase-requisition-name-field-restore-r01.description':
-    '新建与编辑页基本信息区恢复申请名称；留空保存仍按申请编号生成默认名称，填写则按用户输入落库。',
-  'pages.dashboard.updateLog.entries.purchase-requisition-auto-name-r01.title':
-    '采购申请名称改为自动生成',
-  'pages.dashboard.updateLog.entries.purchase-requisition-auto-name-r01.description':
-    '新建与编辑采购申请不再填写申请名称，保存时按申请编号生成「采购申请-单号」；列表与详情仍展示名称字段。',
-  'pages.dashboard.updateLog.entries.org-master-data-audit-write-backfill-r01.title':
-    '组织主数据列表补全操作人姓名',
-  'pages.dashboard.updateLog.entries.org-master-data-audit-write-backfill-r01.description':
-    '部门/职位/角色/账户在创建、编辑、加载预设、导入与企微同步时写入操作人快照；core_users 历史账户迁移回填创建人姓名，账户列表更新时间列可显示操作人。',
-  'pages.dashboard.updateLog.entries.system-user-mgmt-audit-fields-api-r01.title':
-    '修复用户管理列表审计时间为空',
-  'pages.dashboard.updateLog.entries.system-user-mgmt-audit-fields-api-r01.description':
-    '部门树、职位与账户列表接口补齐审计时间与人名；创建/预设/导入/同步写入操作人快照，历史无主数据行按组织管理员回填姓名。',
-  'pages.dashboard.updateLog.entries.system-user-mgmt-list-audit-column-r01.title':
-    '用户管理列表合并创建与更新时间列',
-  'pages.dashboard.updateLog.entries.system-user-mgmt-list-audit-column-r01.description':
-    '部门、职位、账户管理列表与业务单据一致，将创建时间与更新时间合并为一列，上为人名、下为时间，优先展示最近更新。',
-  'pages.dashboard.updateLog.entries.drawing-balloon-sheet-lines-audit-r01.title':
-    '修复图纸气泡标注加载报错',
-  'pages.dashboard.updateLog.entries.drawing-balloon-sheet-lines-audit-r01.description':
-    '特性行表补齐与模型一致的审计字段，打开或保存气泡标注单时不再出现 updated_by 列不存在的数据库错误。',
-  'pages.dashboard.updateLog.entries.kuaiems-menu-functional-groups-r01.title':
-    '快设备侧栏按资料、业务分组与报表重组',
-  'pages.dashboard.updateLog.entries.kuaiems-menu-functional-groups-r01.description':
-    '设备管理下原「设备单据」拆为点检巡检、保养维护、报修维修、设备事务；模具、工装、计量器具同步按借还、保养维修、处置检定或检定业务分组，与各自资料、报表并列，便于按职能查找菜单。',
-  'pages.dashboard.updateLog.entries.maintenance-plan-equipment-preload-r01.title':
-    '保养计划创建时可预载方案设备并排除',
-  'pages.dashboard.updateLog.entries.maintenance-plan-equipment-preload-r01.description':
-    '新建或编辑保养计划时，选择保养方案后自动列出台账已绑定设备并默认全选，可取消勾选仅影响本计划；设备台账详情增加保养方案绑定；历史计划按方案绑定回填设备范围。',
-  'pages.dashboard.updateLog.entries.approval-condition-advance-not-pinned-r01.title':
-    '是否总经理特批按提交时决定自动分流',
-  'pages.dashboard.updateLog.entries.approval-condition-advance-not-pinned-r01.description':
-    '「是否总经理特批」在提交时选定；二级上级通过后按该决定自动走总经理或采购副总。总经理节点撤回本级后仍保留提交选边并本级重审；缺选边不再卡死在条件节点。',
-  'pages.dashboard.updateLog.entries.approval-recall-gm-branch-disconnect-r01.title':
-    '条件分支节点撤回本级后流程不再断开',
-  'pages.dashboard.updateLog.entries.approval-recall-gm-branch-disconnect-r01.description':
-    '在「总经理(特殊情况)」撤回本级时保留提交时的「是否总经理特批」选边，按原决定继续；审核概况缺选边不再报错成未绑定。',
-  'pages.dashboard.updateLog.entries.approval-nodes-overview-passed-not-waiting-r01.title':
-    '审核执行记录已过节点不再显示待到达',
-  'pages.dashboard.updateLog.entries.approval-nodes-overview-passed-not-waiting-r01.description':
-    '流程已离开的审批节点（含仅有提交/撤回等执行史）在节点概况中显示为已通过，不再误标「待到达」。',
-  'pages.dashboard.updateLog.entries.dashboard-todo-purchase-requisition-assignee-only-r01.title':
-    '工作台采购申请待办仅显示本人待审',
-  'pages.dashboard.updateLog.entries.dashboard-todo-purchase-requisition-assignee-only-r01.description':
-    '采购申请待审核改由审批任务指派承载；有查看权限不再看到全租户待审单。已处理完的待办（任务非 pending）不会留在待办事项里。',
   'pages.dashboard.updateLog.entries.purchase-requisition-list-audit-enrich-422-r01.title':
     '采购申请列表不再因审批选边校验空白',
   'pages.dashboard.updateLog.entries.purchase-requisition-list-audit-enrich-422-r01.description':
@@ -54460,4 +54278,16 @@ export default {
   'pages.dashboard.updateLog.entries.fa-depr-syd-uop-calc-r01.description':
     '固定资产折旧计提在直线法之外补齐年数总和法与工作量法两种口径，资产卡片可按折旧方法正确计算每期折旧额。',
   'field.user.errorRoleTypeStationMixed': '触屏专用（工位）角色不能与内部/外部角色同时绑定，请分开保存',
+  'pages.dashboard.updateLog.entries.purchase-requisition-list-audit-enrich-422-r01.title':
+    '采购申请列表不再因审批选边校验空白',
+  'pages.dashboard.updateLog.entries.purchase-requisition-list-audit-enrich-422-r01.description':
+    '列表嵌入审核门控时，单条缺「是否总经理特批」等选边不再把整页打成 422；前端不再误显示暂无数据（菜单角标仍有数字）。',
+  'pages.dashboard.updateLog.entries.unitable-reset-clear-search-params-r01.title':
+    '列表点重置后真正清空筛选',
+  'pages.dashboard.updateLog.entries.unitable-reset-clear-search-params-r01.description':
+    '重置不再回退到表单残留条件；避免钉住看似未选中却仍按旧生命周期/关键词筛成空表（同角色一人正常一人空白）。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-lifecycle-pin-mode-a-r01.title':
+    '采购申请草稿驳回钉住可筛出单据',
+  'pages.dashboard.updateLog.entries.purchase-requisition-lifecycle-pin-mode-a-r01.description':
+    '开启审核后生命周期主轴不展示草稿/驳回；钉住「草稿」「已驳回」改为按单据状态筛选，不再因阶段名为「—」导致列表空白（菜单角标仍有数字）。',
 };
