@@ -1,1 +1,0 @@
-import{j as d}from"./vendor-DUUTE2UQ.js";import{ap as s,J as i}from"./main-DyR0q0Vq.js";function x({sourceType:e,sourceId:o,sourceCode:t,emptyText:n="-",copyable:r=!0,ellipsis:m=!0,style:u}){const c=s(e);return d.jsx(i,{documentType:c,documentId:o,code:t,emptyText:n,copyable:r,ellipsis:m,style:u})}export{x as S};

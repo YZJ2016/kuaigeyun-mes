@@ -1,0 +1,1 @@
+import{j as s}from"./vendor-Dy18fkRl.js";import{f as a}from"./materialUnitDisplay-B4zs4wMa.js";const p=({quantity:t,unit:i,className:r,style:n})=>s.jsx("span",{className:r,style:n,children:a(t,i)});export{p as Q};
