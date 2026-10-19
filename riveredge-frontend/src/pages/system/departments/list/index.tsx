@@ -28,6 +28,7 @@ import {
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { renderSystemActiveTag, renderSystemTypeMarker } from '../../utils/systemListPresentation';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../utils/uniTableLayoutColumns';
+import { buildDocumentAuditColumns } from '../../../../apps/kuaizhizao/pages/shared/documentAuditColumns';
 import { ListPageTemplate } from '../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../utils/errorHandler';
 import { buildDetailDrawerEditExtra } from '../../../../apps/kuaizhizao/pages/equipment-management/shared/equipmentMasterDataDetail';
@@ -612,28 +613,7 @@ const DepartmentListPage: React.FC = () => {
       render: (_, record) =>
         renderSystemActiveTag(t, record.is_active, 'common.enabled', 'common.disabled'),
     },
-    {
-      title: t('common.createdAt'),
-      dataIndex: 'created_at',
-      width: 180,
-      minWidth: 180,
-      uniTableKeepWidth: true,
-      resizable: false,
-      valueType: 'dateTime',
-      hideInSearch: true,
-      sorter: (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
-    },
-    {
-      title: t('common.updatedAt'),
-      dataIndex: 'updated_at',
-      width: 180,
-      minWidth: 180,
-      uniTableKeepWidth: true,
-      resizable: false,
-      valueType: 'dateTime',
-      hideInSearch: true,
-      sorter: (a, b) => new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime(),
-    },
+    ...buildDocumentAuditColumns<Department>(t),
     {
       title: t('common.actions'),
       key: 'action',
@@ -670,7 +650,7 @@ const DepartmentListPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<Department>
-        columnPersistenceId="pages.system.departments.list-v6"
+        columnPersistenceId="pages.system.departments.list-v8"
         showAdvancedSearch
         permissionResource="system:department"
         viewTypes={['table', 'help']}
