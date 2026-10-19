@@ -16,6 +16,7 @@ from core.services.integration.wecom_integration import (
     fetch_wecom_access_token_for_tenant,
     get_wecom_credentials,
 )
+from infra.domain.tenant_context import with_tenant
 from infra.infrastructure.http.client import get_http_client
 from infra.models.user import User
 
@@ -118,11 +119,13 @@ async def resolve_wecom_user_id_from_code(*, tenant_id: int, code: str) -> str:
 
 
 async def find_user_by_wecom_userid(*, tenant_id: int, wecom_userid: str) -> User | None:
-    users = await User.filter(
-        tenant_id=tenant_id,
-        is_active=True,
-        deleted_at__isnull=True,
-    )
+    # 公开回调路径无 ambient 组织上下文，显式声明执行域。
+    async with with_tenant(int(tenant_id), reason="企业微信登录按组织匹配用户"):
+        users = await User.filter(
+            tenant_id=tenant_id,
+            is_active=True,
+            deleted_at__isnull=True,
+        )
     target = wecom_userid.strip().lower()
     for user in users:
         bound = _extract_wecom_user_id(user)
@@ -167,11 +170,12 @@ async def fetch_wecom_member_contact(*, tenant_id: int, wecom_userid: str) -> di
 
 
 async def _list_active_tenant_users(tenant_id: int) -> list[User]:
-    return await User.filter(
-        tenant_id=tenant_id,
-        is_active=True,
-        deleted_at__isnull=True,
-    )
+    async with with_tenant(int(tenant_id), reason="企业微信登录按组织列举候选用户"):
+        return await User.filter(
+            tenant_id=tenant_id,
+            is_active=True,
+            deleted_at__isnull=True,
+        )
 
 
 def _dedupe_users(users: list[User]) -> list[User]:

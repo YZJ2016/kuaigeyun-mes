@@ -28,7 +28,7 @@ class MaterialReview(BaseModel):
 
     id = fields.IntField(pk=True)
     review_code = fields.CharField(max_length=50, description="评审单号")
-    project_id = fields.IntField(description="研发项目ID")
+    project_id = fields.IntField(null=True, description="研发项目ID（可选；存量项目可仅填代号）")
     project_code = fields.CharField(max_length=50, description="项目代号快照")
     project_name = fields.CharField(max_length=200, description="项目名称快照")
     title = fields.CharField(max_length=200, description="标题")

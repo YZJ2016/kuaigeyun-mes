@@ -16,7 +16,9 @@ class SampleProcessAttachment(BaseModel):
 
 
 class SampleProcessCreate(BaseModel):
-    project_id: int = Field(..., description="研发项目ID")
+    project_id: Optional[int] = Field(None, description="研发项目ID（与 project_code 二选一或皆空）")
+    project_code: Optional[str] = Field(None, max_length=50, description="项目代号（存量项目手填）")
+    project_name: Optional[str] = Field(None, max_length=200, description="项目名称（手填时可空，默认同代号）")
     request_kind: str = Field(default="general", max_length=30)
     title: str = Field(..., min_length=1, max_length=200)
     application_code: Optional[str] = Field(None, max_length=50)
@@ -47,7 +49,7 @@ class SampleProcessResponse(BaseModel):
     id: int
     uuid: UUID
     application_code: str
-    project_id: int
+    project_id: Optional[int] = None
     project_code: str
     project_name: str
     request_kind: str

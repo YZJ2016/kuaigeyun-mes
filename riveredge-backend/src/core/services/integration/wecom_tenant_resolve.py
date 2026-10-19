@@ -10,6 +10,7 @@ from core.services.integration.wecom_connector_guidance import (
     _normalize_corp_id,
     _parse_wecom_agent_id,
 )
+from infra.domain.tenant_context import unscoped
 from infra.models.tenant import Tenant
 
 
@@ -29,11 +30,15 @@ async def resolve_tenant_by_wecom_corp_agent(
     if not corp:
         return None
 
-    rows = await IntegrationConfig.filter(
-        type="wecom",
-        is_active=True,
-        deleted_at__isnull=True,
-    ).all()
+    async with unscoped(
+        reason="企业微信 CorpID+AgentId 跨组织反查租户（公开登录入口）",
+        resource="IntegrationConfig",
+    ):
+        rows = await IntegrationConfig.filter(
+            type="wecom",
+            is_active=True,
+            deleted_at__isnull=True,
+        ).all()
 
     matched_tenant_ids: list[int] = []
     for row in rows:
@@ -56,11 +61,15 @@ async def resolve_tenant_by_wecom_corp_agent(
 
 
 async def list_wecom_enabled_tenant_ids() -> list[int]:
-    rows = await IntegrationConfig.filter(
-        type="wecom",
-        is_active=True,
-        deleted_at__isnull=True,
-    ).all()
+    async with unscoped(
+        reason="企业微信启用组织候选扫描（公开登录入口）",
+        resource="IntegrationConfig",
+    ):
+        rows = await IntegrationConfig.filter(
+            type="wecom",
+            is_active=True,
+            deleted_at__isnull=True,
+        ).all()
     ids: list[int] = []
     seen: set[int] = set()
     for row in rows:

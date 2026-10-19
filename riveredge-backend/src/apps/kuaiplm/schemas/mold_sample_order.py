@@ -12,7 +12,9 @@ DOC_KINDS = ("mold_contract", "sample_order")
 
 
 class MoldSampleOrderCreate(BaseModel):
-    project_id: int
+    project_id: Optional[int] = Field(None, description="研发项目ID（与 project_code 二选一或皆空）")
+    project_code: Optional[str] = Field(None, max_length=50, description="项目代号（存量项目手填）")
+    project_name: Optional[str] = Field(None, max_length=200, description="项目名称（手填时可空，默认同代号）")
     doc_kind: str = Field(..., min_length=1, max_length=32)
     title: str = Field(..., min_length=1, max_length=200)
     order_code: Optional[str] = Field(None, max_length=50)
@@ -47,7 +49,7 @@ class MoldSampleOrderResponse(BaseModel):
     id: int
     uuid: UUID
     order_code: str
-    project_id: int
+    project_id: Optional[int] = None
     project_code: str
     project_name: str
     doc_kind: str
@@ -81,7 +83,7 @@ class MoldSampleOrderListItem(BaseModel):
     id: int
     uuid: UUID
     order_code: str
-    project_id: int
+    project_id: Optional[int] = None
     project_code: str
     project_name: str
     doc_kind: str

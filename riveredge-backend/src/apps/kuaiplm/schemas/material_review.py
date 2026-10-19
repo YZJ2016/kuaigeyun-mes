@@ -26,7 +26,9 @@ class MaterialReviewLineOut(MaterialReviewLineIn):
 
 
 class MaterialReviewCreate(BaseModel):
-    project_id: int
+    project_id: Optional[int] = Field(None, description="研发项目ID（与 project_code 二选一或皆空）")
+    project_code: Optional[str] = Field(None, max_length=50, description="项目代号（存量项目手填）")
+    project_name: Optional[str] = Field(None, max_length=200, description="项目名称（手填时可空，默认同代号）")
     title: str = Field(..., min_length=1, max_length=200)
     review_code: Optional[str] = Field(None, max_length=50)
     remarks: Optional[str] = None
@@ -45,7 +47,7 @@ class MaterialReviewResponse(BaseModel):
     id: int
     uuid: UUID
     review_code: str
-    project_id: int
+    project_id: Optional[int] = None
     project_code: str
     project_name: str
     title: str
@@ -69,7 +71,7 @@ class MaterialReviewListItem(BaseModel):
     id: int
     uuid: UUID
     review_code: str
-    project_id: int
+    project_id: Optional[int] = None
     project_code: str
     project_name: str
     title: str

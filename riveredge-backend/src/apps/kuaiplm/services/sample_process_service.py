@@ -77,6 +77,22 @@ class SampleProcessService(AppBaseService[SampleProcessApplication]):
             raise ValidationError("研发项目不存在")
         return project
 
+    async def _resolve_project_snapshot(
+        self,
+        tenant_id: int,
+        *,
+        project_id: Optional[int],
+        project_code: Optional[str],
+        project_name: Optional[str],
+    ) -> tuple[Optional[int], str, str]:
+        """研发项目可选：传 id 以档案为准；否则沿用手填代号/名称（默认同代号）。"""
+        if project_id is not None:
+            project = await self._require_project(tenant_id, int(project_id))
+            return project.id, project.project_code, project.project_name
+        code = str(project_code or "").strip()
+        name = str(project_name or "").strip() or code
+        return None, code, name
+
     async def _validate_kind(self, tenant_id: int, kind: str, profile: Dict[str, Any]) -> str:
         raw = (kind or "").strip() or "general"
         allowed = IndustryExtensionRuntimeService.active_kind_codes(profile)
@@ -117,7 +133,12 @@ class SampleProcessService(AppBaseService[SampleProcessApplication]):
         self, tenant_id: int, payload: SampleProcessCreate, user: User
     ) -> SampleProcessResponse:
         profile = await self._profile(tenant_id)
-        project = await self._require_project(tenant_id, payload.project_id)
+        project_id, project_code, project_name = await self._resolve_project_snapshot(
+            tenant_id,
+            project_id=payload.project_id,
+            project_code=payload.project_code,
+            project_name=payload.project_name,
+        )
         kind = await self._validate_kind(tenant_id, payload.request_kind, profile)
         attachments = await self._normalize_attachments(tenant_id, payload.attachments, profile)
         code = await self._ensure_code(tenant_id, payload.application_code)
@@ -132,9 +153,9 @@ class SampleProcessService(AppBaseService[SampleProcessApplication]):
         row = SampleProcessApplication(
             tenant_id=tenant_id,
             application_code=code,
-            project_id=project.id,
-            project_code=project.project_code,
-            project_name=project.project_name,
+            project_id=project_id,
+            project_code=project_code,
+            project_name=project_name,
             request_kind=kind,
             title=payload.title.strip(),
             material_code=(payload.material_code or "").strip() or None,

@@ -1428,54 +1428,6 @@ async def _dispatch_freight_bill(
     _unsupported("freight_bill", action)
 
 
-async def _dispatch_kuaioa_form_request(
-    action: str,
-    *,
-    tenant_id: int,
-    entity_id: int,
-    user_id: int,
-    reason: Optional[str],
-) -> Any:
-    from apps.kuaioa.services.form_service import FormRequestService, apply_form_request_decision
-
-    svc = FormRequestService()
-    if action == "submit":
-        return await svc.submit_request(tenant_id, entity_id, user_id)
-    if action == "approve":
-        await apply_form_request_decision(tenant_id, entity_id, True, user_id)
-        return await svc.get_request(tenant_id, entity_id)
-    if action == "reject":
-        await apply_form_request_decision(tenant_id, entity_id, False, user_id)
-        return await svc.get_request(tenant_id, entity_id)
-    if action == "revoke":
-        return await svc.revoke_request(tenant_id, entity_id, user_id)
-    _unsupported("kuaioa_form_request", action)
-
-
-async def _dispatch_kuaioa_asset_purchase(
-    action: str,
-    *,
-    tenant_id: int,
-    entity_id: int,
-    user_id: int,
-    reason: Optional[str],
-) -> Any:
-    from apps.kuaioa.services.asset_service import AssetPurchaseService, apply_asset_purchase_decision
-
-    svc = AssetPurchaseService()
-    if action == "submit":
-        return await svc.submit_purchase(tenant_id, entity_id, user_id)
-    if action == "approve":
-        await apply_asset_purchase_decision(tenant_id, entity_id, True, user_id)
-        return await svc.get_purchase(tenant_id, entity_id)
-    if action == "reject":
-        await apply_asset_purchase_decision(tenant_id, entity_id, False, user_id)
-        return await svc.get_purchase(tenant_id, entity_id)
-    if action == "revoke":
-        return await svc.revoke_purchase(tenant_id, entity_id, user_id)
-    _unsupported("kuaioa_asset_purchase", action)
-
-
 def _make_kuaioa_dispatch(
     *,
     entity_key: str,
@@ -1520,7 +1472,7 @@ def _make_kuaioa_dispatch(
         if action == "reject":
             from core.services.approval.uni_audit_service import UniAuditService
 
-            async def flow_reject() -> Any:
+            async def flow_reject(_reason: Optional[str] = None) -> Any:
                 await getattr(mod, decision_fn)(tenant_id, entity_id, False, user_id)
                 return await get_fn(tenant_id, entity_id)
 
@@ -1540,6 +1492,28 @@ def _make_kuaioa_dispatch(
         _unsupported(entity_key, action)
 
     return dispatch
+
+
+_dispatch_kuaioa_form_request = _make_kuaioa_dispatch(
+    entity_key="kuaioa_form_request",
+    service_import="apps.kuaioa.services.form_service",
+    service_cls="FormRequestService",
+    get_method="get_request",
+    submit_method="submit_request",
+    revoke_method="revoke_request",
+    decision_import="apps.kuaioa.services.form_service",
+    decision_fn="apply_form_request_decision",
+)
+_dispatch_kuaioa_asset_purchase = _make_kuaioa_dispatch(
+    entity_key="kuaioa_asset_purchase",
+    service_import="apps.kuaioa.services.asset_service",
+    service_cls="AssetPurchaseService",
+    get_method="get_purchase",
+    submit_method="submit_purchase",
+    revoke_method="revoke_purchase",
+    decision_import="apps.kuaioa.services.asset_service",
+    decision_fn="apply_asset_purchase_decision",
+)
 
 
 _dispatch_kuaioa_leave = _make_kuaioa_dispatch(
