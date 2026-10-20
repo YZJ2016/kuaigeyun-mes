@@ -44,56 +44,50 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
-    id: 'purchase-requisition-list-audit-enrich-422-r01',
+    id: 'purchase-inquiry-vendor-system-pdf-r01',
+    date: '2026-10-20',
+    type: 'feature',
+    titleKey:
+      'pages.dashboard.updateLog.entries.purchase-inquiry-vendor-system-pdf-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-inquiry-vendor-system-pdf-r01.description',
+  },
+  {
+    id: 'purchase-inquiry-attachment-upload-r01',
     date: '2026-10-19',
     type: 'fix',
     titleKey:
-      'pages.dashboard.updateLog.entries.purchase-requisition-list-audit-enrich-422-r01.title',
+      'pages.dashboard.updateLog.entries.purchase-inquiry-attachment-upload-r01.title',
     descriptionKey:
-      'pages.dashboard.updateLog.entries.purchase-requisition-list-audit-enrich-422-r01.description',
+      'pages.dashboard.updateLog.entries.purchase-inquiry-attachment-upload-r01.description',
   },
   {
-    id: 'unitable-reset-clear-search-params-r01',
+    id: 'purchase-inquiry-attach-approval-tabs-r01',
     date: '2026-10-19',
-    type: 'fix',
-    titleKey: 'pages.dashboard.updateLog.entries.unitable-reset-clear-search-params-r01.title',
-    descriptionKey:
-      'pages.dashboard.updateLog.entries.unitable-reset-clear-search-params-r01.description',
-  },
-  {
-    id: 'purchase-requisition-lifecycle-pin-mode-a-r01',
-    date: '2026-10-19',
-    type: 'fix',
+    type: 'feature',
     titleKey:
-      'pages.dashboard.updateLog.entries.purchase-requisition-lifecycle-pin-mode-a-r01.title',
+      'pages.dashboard.updateLog.entries.purchase-inquiry-attach-approval-tabs-r01.title',
     descriptionKey:
-      'pages.dashboard.updateLog.entries.purchase-requisition-lifecycle-pin-mode-a-r01.description',
+      'pages.dashboard.updateLog.entries.purchase-inquiry-attach-approval-tabs-r01.description',
   },
   {
-    id: 'purchase-requisition-list-audit-enrich-422-r01',
+    id: 'purchase-inquiry-demand-party-commercial-r01',
     date: '2026-10-19',
-    type: 'fix',
+    type: 'feature',
     titleKey:
-      'pages.dashboard.updateLog.entries.purchase-requisition-list-audit-enrich-422-r01.title',
+      'pages.dashboard.updateLog.entries.purchase-inquiry-demand-party-commercial-r01.title',
     descriptionKey:
-      'pages.dashboard.updateLog.entries.purchase-requisition-list-audit-enrich-422-r01.description',
+      'pages.dashboard.updateLog.entries.purchase-inquiry-demand-party-commercial-r01.description',
   },
   {
-    id: 'unitable-reset-clear-search-params-r01',
+    id: 'customer-pool-claim-tenant-row-r01',
     date: '2026-10-19',
     type: 'fix',
-    titleKey: 'pages.dashboard.updateLog.entries.unitable-reset-clear-search-params-r01.title',
+    titleKey: 'pages.dashboard.updateLog.entries.customer-pool-claim-tenant-row-r01.title',
     descriptionKey:
-      'pages.dashboard.updateLog.entries.unitable-reset-clear-search-params-r01.description',
+      'pages.dashboard.updateLog.entries.customer-pool-claim-tenant-row-r01.description',
   },
   {
-    id: 'purchase-requisition-lifecycle-pin-mode-a-r01',
-    date: '2026-10-19',
-    type: 'fix',
-    titleKey:
-      'pages.dashboard.updateLog.entries.purchase-requisition-lifecycle-pin-mode-a-r01.title',
-    descriptionKey:
-      'pages.dashboard.updateLog.entries.purchase-requisition-lifecycle-pin-mode-a-r01.description',
   },
   {
     id: 'kuaiplm-design-docs-optional-project-title-first-r01',

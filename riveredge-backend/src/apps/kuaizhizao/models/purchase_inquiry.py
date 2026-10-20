@@ -37,8 +37,24 @@ class PurchaseInquiry(BaseModel):
         description="状态",
     )
 
-    buyer_id = fields.IntField(null=True, description="采购员ID")
-    buyer_name = fields.CharField(max_length=100, null=True, description="采购员姓名")
+    demand_party_id = fields.IntField(null=True, description="需方ID")
+    demand_party_name = fields.CharField(max_length=200, null=True, description="需方名称")
+
+    buyer_id = fields.IntField(null=True, description="采购负责人ID")
+    buyer_name = fields.CharField(max_length=100, null=True, description="采购负责人姓名")
+    buyer_phone = fields.CharField(max_length=50, null=True, description="采购负责人手机")
+
+    currency = fields.CharField(max_length=10, null=True, default="CNY", description="交易币种")
+    exchange_rate = fields.DecimalField(
+        max_digits=12, decimal_places=6, null=True, default=1, description="汇率"
+    )
+    invoice_type = fields.CharField(max_length=50, null=True, description="发票类型")
+    tax_rate = fields.DecimalField(
+        max_digits=8, decimal_places=4, null=True, default=0, description="税率（小数，如 0.13）"
+    )
+    payment_method = fields.CharField(max_length=50, null=True, description="付款方式")
+    payment_terms = fields.CharField(max_length=100, null=True, description="付款条件")
+    trade_mode = fields.CharField(max_length=50, null=True, description="成交方式")
 
     source_type = fields.CharField(max_length=50, null=True, description="来源类型")
     source_id = fields.IntField(null=True, description="来源ID")
@@ -110,6 +126,10 @@ class PurchaseInquiryVendor(BaseModel):
     inquiry_id = fields.IntField(description="询价单ID")
     supplier_id = fields.IntField(description="供应商ID")
     supplier_name = fields.CharField(max_length=200, description="供应商名称")
+    contact_name = fields.CharField(max_length=100, null=True, description="联系人")
+    contact_phone = fields.CharField(max_length=50, null=True, description="联系电话")
+    contact_email = fields.CharField(max_length=100, null=True, description="邮箱")
+    email_notify = fields.BooleanField(default=False, description="是否邮件通知（仅落库）")
     status = fields.CharField(
         max_length=30,
         default=PurchaseInquiryVendorStatus.INVITED.value,

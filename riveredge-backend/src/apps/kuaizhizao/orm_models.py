@@ -100,6 +100,7 @@ ORM_MODEL_MODULES: list[str] = [
     "apps.kuaizhizao.models.production_return_item",
     "apps.kuaizhizao.models.purchase_arrival_delay_report",
     "apps.kuaizhizao.models.purchase_inquiry",
+    "apps.kuaizhizao.models.purchase_demand_party",
     "apps.kuaizhizao.models.purchase_order",
     "apps.kuaizhizao.models.purchase_order_change_order",
     "apps.kuaizhizao.models.purchase_order_sync_binding",

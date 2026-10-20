@@ -453,8 +453,20 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
             code = data.inquiry_code
             if not code:
                 code = await self._generate_inquiry_code(tenant_id)
-            buyer_name_info = await self.get_user_info(created_by)
-            buyer_name = buyer_name_info["name"]
+            creator_info = await self.get_user_info(created_by)
+            buyer_id = data.buyer_id if data.buyer_id is not None else created_by
+            if data.buyer_name:
+                buyer_name = data.buyer_name
+            elif buyer_id == created_by:
+                buyer_name = creator_info["name"]
+            else:
+                buyer_name = (await self.get_user_info(buyer_id))["name"]
+            buyer_phone = data.buyer_phone
+            if buyer_phone is None and buyer_id:
+                from infra.models.user import User as InfraUser
+
+                buyer_user = await InfraUser.get_or_none(id=buyer_id)
+                buyer_phone = getattr(buyer_user, "phone", None) if buyer_user else None
             total_qty = sum((i.quantity for i in data.items), Decimal(0))
             inquiry = await PurchaseInquiry.create(
                 tenant_id=tenant_id,
@@ -464,17 +476,28 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
                 quote_deadline=data.quote_deadline,
                 status=PurchaseInquiryStatus.DRAFT.value,
                 review_status=DocumentStatus.DRAFT.value,
-                buyer_id=created_by,
+                demand_party_id=data.demand_party_id,
+                demand_party_name=data.demand_party_name,
+                buyer_id=buyer_id,
                 buyer_name=buyer_name,
+                buyer_phone=buyer_phone,
+                currency=data.currency or "CNY",
+                exchange_rate=data.exchange_rate if data.exchange_rate is not None else Decimal("1"),
+                invoice_type=data.invoice_type,
+                tax_rate=data.tax_rate if data.tax_rate is not None else Decimal("0"),
+                payment_method=data.payment_method,
+                payment_terms=data.payment_terms,
+                trade_mode=data.trade_mode,
                 source_type=data.source_type,
                 source_id=data.source_id,
                 source_code=data.source_code,
                 total_quantity=total_qty,
                 notes=data.notes,
+                attachments=data.attachments,
                 created_by=created_by,
-                created_by_name=buyer_name_info["name"],
+                created_by_name=creator_info["name"],
                 updated_by=created_by,
-                updated_by_name=buyer_name_info["name"],
+                updated_by_name=creator_info["name"],
             )
             for item in data.items:
                 await PurchaseInquiryItem.create(
@@ -496,6 +519,10 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
                     inquiry_id=inquiry.id,
                     supplier_id=vendor.supplier_id,
                     supplier_name=vendor.supplier_name,
+                    contact_name=vendor.contact_name,
+                    contact_phone=vendor.contact_phone,
+                    contact_email=vendor.contact_email,
+                    email_notify=bool(vendor.email_notify),
                     status=PurchaseInquiryVendorStatus.INVITED.value,
                     notes=vendor.notes,
                 )
@@ -518,7 +545,30 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
             raise NotFoundError(f"询价单不存在: {inquiry_id}")
         is_draft = inquiry.status == PurchaseInquiryStatus.DRAFT.value
         if not is_draft:
-            raise BusinessLogicError("只有草稿状态的询价单可编辑")
+            # 非草稿仅允许维护人工附件；系统按供应商生成的 PDF 服务端强制保留
+            from apps.kuaizhizao.services.purchase_inquiry_vendor_pdf import (
+                is_vendor_system_attachment,
+                keep_manual_attachments,
+            )
+
+            extra_fields = set(data.model_fields_set) - {"attachments"}
+            if extra_fields or "attachments" not in data.model_fields_set:
+                raise BusinessLogicError("只有草稿状态的询价单可编辑")
+            user_info = await self.get_user_info(updated_by)
+            existing_system = [
+                dict(e) if isinstance(e, dict) else e
+                for e in (inquiry.attachments or [])
+                if is_vendor_system_attachment(e)
+            ]
+            merged = existing_system + keep_manual_attachments(data.attachments)
+            await inquiry.update_from_dict(
+                {
+                    "attachments": merged,
+                    "updated_by": updated_by,
+                    "updated_by_name": user_info["name"],
+                }
+            ).save()
+            return await self.get_inquiry_by_id(tenant_id, inquiry_id)
 
         from core.services.approval.approval_instance_service import ApprovalInstanceService
 
@@ -542,7 +592,25 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
             from core.config.audit_editable_fields import is_field_editable
 
             node_editable = approval_edit_context.get("editable_fields")
-            for field in ("inquiry_name", "inquiry_date", "quote_deadline", "notes"):
+            header_edit_fields = (
+                "inquiry_name",
+                "inquiry_date",
+                "quote_deadline",
+                "notes",
+                "demand_party_id",
+                "demand_party_name",
+                "buyer_id",
+                "buyer_name",
+                "buyer_phone",
+                "currency",
+                "exchange_rate",
+                "invoice_type",
+                "tax_rate",
+                "payment_method",
+                "payment_terms",
+                "trade_mode",
+            )
+            for field in header_edit_fields:
                 val = getattr(data, field, None)
                 if val is None:
                     continue
@@ -559,10 +627,29 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
                 "updated_by": updated_by,
                 "updated_by_name": user_info["name"],
             }
-            for field in ("inquiry_name", "inquiry_date", "quote_deadline", "notes"):
-                val = getattr(data, field, None)
-                if val is not None:
-                    update_fields[field] = val
+            header_fields = (
+                "inquiry_name",
+                "inquiry_date",
+                "quote_deadline",
+                "notes",
+                "demand_party_id",
+                "demand_party_name",
+                "buyer_id",
+                "buyer_name",
+                "buyer_phone",
+                "currency",
+                "exchange_rate",
+                "invoice_type",
+                "tax_rate",
+                "payment_method",
+                "payment_terms",
+                "trade_mode",
+                "attachments",
+            )
+            for field in header_fields:
+                if field not in data.model_fields_set:
+                    continue
+                update_fields[field] = getattr(data, field)
             if data.items is not None:
                 await PurchaseInquiryItem.filter(tenant_id=tenant_id, inquiry_id=inquiry_id).delete()
                 total_qty = Decimal(0)
@@ -590,6 +677,10 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
                         inquiry_id=inquiry_id,
                         supplier_id=vendor.supplier_id,
                         supplier_name=vendor.supplier_name,
+                        contact_name=vendor.contact_name,
+                        contact_phone=vendor.contact_phone,
+                        contact_email=vendor.contact_email,
+                        email_notify=bool(vendor.email_notify),
                         status=PurchaseInquiryVendorStatus.INVITED.value,
                         notes=vendor.notes,
                     )
@@ -827,6 +918,11 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
             raise BusinessLogicError(f"所选采购申请行已在进行中的询价单（{codes}），不可重复下推或直转采购订单")
 
     async def publish_inquiry(self, tenant_id: int, inquiry_id: int, user_id: int) -> PurchaseInquiryResponse:
+        from apps.kuaizhizao.services.purchase_inquiry_vendor_pdf import (
+            generate_purchase_inquiry_vendor_attachments,
+            keep_manual_attachments,
+        )
+
         inquiry = await PurchaseInquiry.get_or_none(
             tenant_id=tenant_id, id=inquiry_id, deleted_at__isnull=True
         )
@@ -843,8 +939,18 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
         audit_required = await self.business_config_service.check_audit_required(tenant_id, "purchase_inquiry")
         if audit_required and inquiry.review_status != ReviewStatus.APPROVED.value:
             raise BusinessLogicError("询价单需审核通过后方可发布")
+
+        # 先生成系统附件；失败则不改状态（禁止半发布）
+        system_attachments = await generate_purchase_inquiry_vendor_attachments(
+            tenant_id=tenant_id,
+            inquiry=inquiry,
+            user_id=user_id,
+        )
+        merged_attachments = keep_manual_attachments(inquiry.attachments) + system_attachments
+
         await inquiry.update_from_dict({
             "status": PurchaseInquiryStatus.QUOTING.value,
+            "attachments": merged_attachments,
             "updated_by": user_id,
             "updated_by_name": (await self.get_user_info(user_id))["name"],
         }).save()

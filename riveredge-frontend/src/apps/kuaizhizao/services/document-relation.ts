@@ -155,6 +155,10 @@ export interface DocumentAttachmentCenterItem {
   uid: string;
   name: string;
   status?: string;
+  /** system：发布等流程生成的系统附件，不可删除 */
+  kind?: string;
+  source?: string;
+  supplier_id?: number;
 }
 
 export interface DocumentAttachmentCenterGroup {

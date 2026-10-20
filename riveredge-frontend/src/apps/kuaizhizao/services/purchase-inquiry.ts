@@ -42,6 +42,11 @@ export interface PurchaseInquiryVendor {
   inquiry_id?: number;
   supplier_id?: number;
   supplier_name?: string;
+  contact_name?: string;
+  contact_phone?: string;
+  contact_email?: string;
+  email_notify?: boolean;
+  notes?: string;
   status?: string;
   quoted_at?: string;
 }
@@ -78,8 +83,18 @@ export interface PurchaseInquiry {
   inquiry_date?: string;
   quote_deadline?: string;
   status?: string;
+  demand_party_id?: number;
+  demand_party_name?: string;
   buyer_id?: number;
   buyer_name?: string;
+  buyer_phone?: string;
+  currency?: string;
+  exchange_rate?: number;
+  invoice_type?: string;
+  tax_rate?: number;
+  payment_method?: string;
+  payment_terms?: string;
+  trade_mode?: string;
   source_type?: string;
   source_id?: number;
   source_code?: string;
@@ -88,6 +103,7 @@ export interface PurchaseInquiry {
   total_quantity?: number;
   total_amount?: number;
   notes?: string;
+  attachments?: unknown[];
   items?: PurchaseInquiryItem[];
   vendors?: PurchaseInquiryVendor[];
   quotes?: PurchaseSupplierQuote[];

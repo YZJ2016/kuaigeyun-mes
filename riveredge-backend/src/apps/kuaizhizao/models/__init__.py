@@ -135,6 +135,7 @@ from .purchase_inquiry import (
     PurchaseSupplierQuote,
     PurchaseSupplierQuoteItem,
 )
+from .purchase_demand_party import PurchaseDemandParty
 
 # 质量管理模块
 from .incoming_inspection import IncomingInspection
@@ -401,6 +402,7 @@ __all__ = [
     'PurchaseInquiry',
     'PurchaseInquiryItem',
     'PurchaseInquiryVendor',
+    'PurchaseDemandParty',
     'PurchaseSupplierQuote',
     'PurchaseSupplierQuoteItem',
 

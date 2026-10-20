@@ -6,10 +6,22 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useSearchParams } from 'react-router-dom';
-import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormDatePicker, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Col, DatePicker, Descriptions, Empty, Form, Input, InputNumber, Modal, Row, Select, Space, Spin, Switch, Table, Tag, Typography, Alert } from 'antd';
+import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormDatePicker, ProFormDigit, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
+import { App, Button, Checkbox, Col, DatePicker, Descriptions, Empty, Form, Input, InputNumber, Modal, Row, Select, Space, Spin, Switch, Table, Tag, Typography, Alert } from 'antd';
 import { CheckOutlined, EditOutlined, FormOutlined, PlusOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
+import { DictionarySelect } from '../../../../../components/dictionary-select';
+import { UniDropdown } from '../../../../../components/uni-dropdown';
+import {
+  getChineseInvoiceTypeOptions,
+  getPaymentMethodOptions,
+} from '../../../utils/financeSharedOptions';
+import { searchUserDisplay, type User } from '../../../../../services/user';
+import { displayItemsToUsers, normalizeUserDisplayName } from '../../../../../utils/userDisplay';
+import {
+  listPurchaseDemandParties,
+  type PurchaseDemandParty,
+} from '../../../services/purchase-demand-party';
 import { UniTable, readPersistedUniTableViewType } from '../../../../../components/uni-table';
 import { UniAuditBatchMenuButton } from '../../../../../components/uni-batch';
 import {
@@ -21,7 +33,7 @@ import {
   DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
   renderDocumentLineMaterialsPreview,
 } from '../../sales-management/shared/documentLineMaterialsPreview';
-import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, FORM_LAYOUT, MODAL_CONFIG,   useDetailDrawerDescriptionItems } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, FormModalTemplate, DRAWER_CONFIG, FORM_LAYOUT, MODAL_CONFIG,   useDetailDrawerDescriptionItems } from '../../../../../components/layout-templates';
 import { MarkerTag } from '../../../../../constants/statusBadges';
 import { SourceDocumentCode } from '../../../../../components/linked-document-code/SourceDocumentCode';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
@@ -83,7 +95,14 @@ import {
   documentAttachmentsFromRecord,
   hasDocumentAttachments,
 } from '../../../components/DocumentAttachmentsReadonly';
-import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
+import { DocumentApprovalRecordsPane } from '../../../components/DocumentApprovalRecordsPane';
+import {
+  isSystemDocumentAttachment,
+  mapAttachmentsToUploadList,
+  normalizeDocumentAttachments,
+  resolveDocumentAttachmentFileUuid,
+  type DocumentAttachmentFile,
+} from '../../../utils/documentAttachments';
 import {
   buildPurchaseInquiryLifecycleValueEnum,
   getPurchaseInquiryLifecycle,
@@ -173,7 +192,18 @@ const PurchaseInquiriesPage: React.FC = () => {
   const [compareRows, setCompareRows] = useState<ComparisonRow[]>([]);
   const [awardSelection, setAwardSelection] = useState<Record<number, number>>({});
   const [supplierOptions, setSupplierOptions] = useState<Array<{ id: number; name: string; code?: string }>>([]);
+  const [demandPartyOptions, setDemandPartyOptions] = useState<PurchaseDemandParty[]>([]);
+  const [userList, setUserList] = useState<User[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const editFormRef = useRef(editForm);
+  editFormRef.current = editForm;
+  const paymentMethodOptions = useMemo(() => getPaymentMethodOptions(t), [t]);
+  const invoiceTypeOptions = useMemo(() => getChineseInvoiceTypeOptions(t, { includeOther: true }), [t]);
+  const taxRatePercentOptions = useMemo(
+    () => [0, 1, 3, 6, 9, 13].map((n) => ({ label: `${n}%`, value: n })),
+    [],
+  );
 
   const pullSourceRequisitionIdRef = useRef<number | undefined>(undefined);
   const [pullSourceRequisitionId, setPullSourceRequisitionId] = useState<number | undefined>();
@@ -221,6 +251,21 @@ const PurchaseInquiriesPage: React.FC = () => {
     void loadSupplierFormReferenceList(KUAIZHIZAO_DOC_HOST.purchaseInquiry).then((list) =>
       setSupplierOptions(list.map((s) => ({ id: s.id!, name: s.name ?? '', code: s.code }))),
     );
+    void listPurchaseDemandParties({ is_active: true, limit: 500 }).then((res) => {
+      setDemandPartyOptions(res.data ?? []);
+    }).catch(() => setDemandPartyOptions([]));
+    const loadUsers = async () => {
+      setUsersLoading(true);
+      try {
+        const res = await searchUserDisplay({ page_size: 200, is_active: true });
+        setUserList(displayItemsToUsers(res.items || []));
+      } catch {
+        setUserList([]);
+      } finally {
+        setUsersLoading(false);
+      }
+    };
+    void loadUsers();
   }, []);
 
   const openDetail = async (record: PurchaseInquiry) => {
@@ -234,10 +279,26 @@ const PurchaseInquiriesPage: React.FC = () => {
     setEditingId(full.id!);
     setEditItems(full.items ?? []);
     setEditVendors(full.vendors ?? []);
+    const taxRatePercent =
+      full.tax_rate != null && full.tax_rate !== undefined
+        ? Number(full.tax_rate) * 100
+        : undefined;
     setPendingEditFormValues({
       inquiry_name: full.inquiry_name,
       inquiry_date: full.inquiry_date ? dayjs(full.inquiry_date) : undefined,
       quote_deadline: full.quote_deadline ? dayjs(full.quote_deadline) : undefined,
+      demand_party_id: full.demand_party_id,
+      demand_party_name: full.demand_party_name,
+      buyer_id: full.buyer_id,
+      buyer_name: full.buyer_name,
+      buyer_phone: full.buyer_phone,
+      currency: full.currency || 'CNY',
+      exchange_rate: full.exchange_rate ?? 1,
+      invoice_type: full.invoice_type,
+      tax_rate_percent: taxRatePercent,
+      payment_method: full.payment_method,
+      payment_terms: full.payment_terms,
+      trade_mode: full.trade_mode,
       notes: full.notes,
       attachments: mapAttachmentsToUploadList(full.attachments),
       __inquiry_edit_item: (full.items ?? []).map((item) => ({ material_id: item.material_id })),
@@ -247,10 +308,23 @@ const PurchaseInquiriesPage: React.FC = () => {
 
   const handleSaveEdit = async () => {
     const values = await editForm.validateFields();
+    const taxRatePercent = Number(values.tax_rate_percent);
     const payload = {
       inquiry_name: values.inquiry_name,
       inquiry_date: values.inquiry_date?.format('YYYY-MM-DD'),
       quote_deadline: values.quote_deadline?.format('YYYY-MM-DD'),
+      demand_party_id: values.demand_party_id,
+      demand_party_name: values.demand_party_name,
+      buyer_id: values.buyer_id,
+      buyer_name: values.buyer_name,
+      buyer_phone: values.buyer_phone,
+      currency: values.currency || 'CNY',
+      exchange_rate: values.exchange_rate ?? 1,
+      invoice_type: values.invoice_type,
+      tax_rate: Number.isFinite(taxRatePercent) ? taxRatePercent / 100 : 0,
+      payment_method: values.payment_method,
+      payment_terms: values.payment_terms,
+      trade_mode: values.trade_mode,
       notes: values.notes,
       attachments: normalizeDocumentAttachments(values.attachments),
       items: editItems.map((item) => ({
@@ -267,6 +341,10 @@ const PurchaseInquiriesPage: React.FC = () => {
       vendors: editVendors.map((v) => ({
         supplier_id: v.supplier_id!,
         supplier_name: v.supplier_name!,
+        contact_name: v.contact_name,
+        contact_phone: v.contact_phone,
+        contact_email: v.contact_email,
+        email_notify: Boolean(v.email_notify),
         notes: v.notes,
       })),
     };
@@ -288,6 +366,10 @@ const PurchaseInquiriesPage: React.FC = () => {
     setEditVendors([]);
     setPendingEditFormValues({
       inquiry_date: dayjs(),
+      currency: 'CNY',
+      exchange_rate: 1,
+      tax_rate_percent: 13,
+      invoice_type: '增值税专用发票',
       attachments: [],
       __inquiry_edit_item: [],
     });
@@ -1099,7 +1181,14 @@ const PurchaseInquiriesPage: React.FC = () => {
     }
     setEditVendors((prev) => [
       ...prev,
-      ...toAdd.map((s) => ({ supplier_id: s.id, supplier_name: s.name })),
+      ...toAdd.map((s) => ({
+        supplier_id: s.id,
+        supplier_name: s.name,
+        contact_name: undefined,
+        contact_phone: undefined,
+        contact_email: undefined,
+        email_notify: false,
+      })),
     ]);
     setAddVendorModalOpen(false);
     setSelectedSupplierIdsForAdd([]);
@@ -1111,19 +1200,74 @@ const PurchaseInquiriesPage: React.FC = () => {
     [],
   );
 
+  const patchEditVendor = useCallback((supplierId: number, patch: Partial<PurchaseInquiryVendor>) => {
+    setEditVendors((prev) =>
+      prev.map((v) => (v.supplier_id === supplierId ? { ...v, ...patch } : v)),
+    );
+  }, []);
+
   const editVendorColumns = useMemo(
     () => [
       {
         title: t('app.kuaizhizao.purchaseInquiry.supplier'),
         dataIndex: 'supplier_name',
+        width: 180,
+        ellipsis: true,
         render: (name: string, record: PurchaseInquiryVendor) => {
           const matched = supplierOptions.find((s) => s.id === record.supplier_id);
           return matched ? formatSupplierLabel(matched) : name;
         },
       },
       {
+        title: t('app.kuaizhizao.purchaseInquiry.vendorContact'),
+        width: 120,
+        render: (_: unknown, r: PurchaseInquiryVendor) => (
+          <Input
+            size="small"
+            value={r.contact_name}
+            placeholder={t('app.kuaizhizao.purchaseInquiry.vendorContact')}
+            onChange={(e) => patchEditVendor(r.supplier_id!, { contact_name: e.target.value })}
+          />
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.purchaseInquiry.vendorPhone'),
+        width: 120,
+        render: (_: unknown, r: PurchaseInquiryVendor) => (
+          <Input
+            size="small"
+            value={r.contact_phone}
+            placeholder={t('app.kuaizhizao.purchaseInquiry.vendorPhone')}
+            onChange={(e) => patchEditVendor(r.supplier_id!, { contact_phone: e.target.value })}
+          />
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.purchaseInquiry.vendorEmail'),
+        width: 160,
+        render: (_: unknown, r: PurchaseInquiryVendor) => (
+          <Input
+            size="small"
+            value={r.contact_email}
+            placeholder={t('app.kuaizhizao.purchaseInquiry.vendorEmail')}
+            onChange={(e) => patchEditVendor(r.supplier_id!, { contact_email: e.target.value })}
+          />
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.purchaseInquiry.emailNotify'),
+        width: 100,
+        align: 'center' as const,
+        render: (_: unknown, r: PurchaseInquiryVendor) => (
+          <Checkbox
+            checked={Boolean(r.email_notify)}
+            onChange={(e) => patchEditVendor(r.supplier_id!, { email_notify: e.target.checked })}
+          />
+        ),
+      },
+      {
         title: t('common.actions'),
-        width: 80,
+        width: 72,
         render: (_: unknown, r: PurchaseInquiryVendor) => (
           <Button type="link" danger size="small" onClick={() => setEditVendors((prev) => prev.filter((v) => v.supplier_id !== r.supplier_id))}>
             {t('common.remove')}
@@ -1131,7 +1275,7 @@ const PurchaseInquiriesPage: React.FC = () => {
         ),
       },
     ],
-    [supplierOptions, t, formatSupplierLabel],
+    [supplierOptions, t, formatSupplierLabel, patchEditVendor],
   );
 
   const editItemColumns = useMemo(
@@ -1224,6 +1368,14 @@ const PurchaseInquiriesPage: React.FC = () => {
   const detailVendorColumns = useMemo(
     () => [
       { title: t('app.kuaizhizao.purchaseInquiry.supplier'), dataIndex: 'supplier_name', ellipsis: true },
+      { title: t('app.kuaizhizao.purchaseInquiry.vendorContact'), dataIndex: 'contact_name', width: 100, ellipsis: true },
+      { title: t('app.kuaizhizao.purchaseInquiry.vendorEmail'), dataIndex: 'contact_email', width: 140, ellipsis: true },
+      {
+        title: t('app.kuaizhizao.purchaseInquiry.emailNotify'),
+        dataIndex: 'email_notify',
+        width: 90,
+        render: (v: boolean) => (v ? t('common.yes') : t('common.no')),
+      },
       {
         title: t('app.kuaizhizao.purchaseInquiry.quoteStatus'),
         width: 100,
@@ -1291,8 +1443,16 @@ const PurchaseInquiriesPage: React.FC = () => {
           ),
         },
         {
+          title: t('app.kuaizhizao.purchaseInquiry.demandPartyName'),
+          dataIndex: 'demand_party_name',
+        },
+        {
           title: t('app.kuaizhizao.purchaseInquiry.colBuyer'),
           dataIndex: 'buyer_name',
+        },
+        {
+          title: t('app.kuaizhizao.purchaseInquiry.buyerPhone'),
+          dataIndex: 'buyer_phone',
         },
         {
           title: t('app.kuaizhizao.purchaseInquiry.inquiryDate'),
@@ -1303,6 +1463,36 @@ const PurchaseInquiriesPage: React.FC = () => {
           title: t('app.kuaizhizao.purchaseInquiry.colQuoteDeadline'),
           dataIndex: 'quote_deadline',
           valueType: 'date',
+        },
+        {
+          title: t('app.kuaizhizao.purchaseInquiry.currency'),
+          dataIndex: 'currency',
+        },
+        {
+          title: t('app.kuaizhizao.purchaseInquiry.exchangeRate'),
+          dataIndex: 'exchange_rate',
+        },
+        {
+          title: t('app.kuaizhizao.purchaseInquiry.invoiceType'),
+          dataIndex: 'invoice_type',
+        },
+        {
+          title: t('app.kuaizhizao.purchaseInquiry.taxRate'),
+          dataIndex: 'tax_rate',
+          render: (_, r) =>
+            r?.tax_rate != null ? `${(Number(r.tax_rate) * 100).toFixed(0)}%` : '—',
+        },
+        {
+          title: t('app.kuaizhizao.purchaseInquiry.paymentMethod'),
+          dataIndex: 'payment_method',
+        },
+        {
+          title: t('app.kuaizhizao.purchaseInquiry.paymentTerms'),
+          dataIndex: 'payment_terms',
+        },
+        {
+          title: t('app.kuaizhizao.purchaseInquiry.tradeMode'),
+          dataIndex: 'trade_mode',
         },
         {
           title: t('common.remark'),
@@ -1645,17 +1835,74 @@ const PurchaseInquiriesPage: React.FC = () => {
         grid={false}
       >
         <Row gutter={FORM_LAYOUT.GRID_GUTTER}>
-          <Col span={10}>
+          <Col span={8}>
             <ProFormText name="inquiry_name" label={t('app.kuaizhizao.purchaseInquiry.inquiryName')} rules={[{ required: true }]} />
           </Col>
-          <Col span={7}>
+          <Col span={8}>
             <ProFormDatePicker
               name="inquiry_date"
               label={t('app.kuaizhizao.purchaseInquiry.inquiryDate')}
               fieldProps={{ style: { width: '100%' } }}
             />
           </Col>
-          <Col span={7}>
+          <Col span={8}>
+            <ProFormSelect
+              name="demand_party_id"
+              label={t('app.kuaizhizao.purchaseInquiry.demandPartyName')}
+              rules={[{ required: true, message: t('app.kuaizhizao.purchaseInquiry.demandPartyRequired') }]}
+              options={demandPartyOptions.map((p) => ({
+                value: p.id,
+                label: p.code ? `${p.code} - ${p.name}` : p.name,
+              }))}
+              fieldProps={{
+                showSearch: true,
+                optionFilterProp: 'label',
+                onChange: (id: number) => {
+                  const party = demandPartyOptions.find((p) => p.id === id);
+                  editForm.setFieldsValue({
+                    demand_party_id: id,
+                    demand_party_name: party?.name,
+                  });
+                },
+              }}
+            />
+            <Form.Item name="demand_party_name" hidden>
+              <Input />
+            </Form.Item>
+          </Col>
+        </Row>
+        <Row gutter={FORM_LAYOUT.GRID_GUTTER}>
+          <Col span={8}>
+            <Form.Item name="buyer_id" label={t('app.kuaizhizao.purchaseInquiry.buyer')}>
+              <UniDropdown
+                showSearch
+                allowClear
+                loading={usersLoading}
+                style={{ width: '100%' }}
+                placeholder={t('app.kuaizhizao.purchaseInquiry.buyerPlaceholder')}
+                options={userList.map((u) => ({
+                  value: Number(u.id),
+                  label: normalizeUserDisplayName(u.full_name || u.username),
+                }))}
+                onChange={(val, opt: any) => {
+                  const uid = val != null && Number.isFinite(Number(val)) ? Number(val) : undefined;
+                  const user = userList.find((u) => Number(u.id) === uid);
+                  editForm.setFieldsValue({
+                    buyer_id: uid,
+                    buyer_name: opt?.label,
+                    buyer_phone: user?.phone || undefined,
+                  });
+                }}
+              />
+            </Form.Item>
+            <Form.Item name="buyer_name" hidden>
+              <Input />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <ProFormText name="buyer_phone" label={t('app.kuaizhizao.purchaseInquiry.buyerPhone')} />
+          </Col>
+          <Col span={8}>
             <ProFormDatePicker
               name="quote_deadline"
               label={t('app.kuaizhizao.purchaseInquiry.quoteDeadline')}
@@ -1682,6 +1929,7 @@ const PurchaseInquiriesPage: React.FC = () => {
             <Table
               size="small"
               pagination={false}
+              scroll={{ x: 900 }}
               rowKey={(r) => r.supplier_id!}
               dataSource={editVendors}
               columns={editVendorColumns}
@@ -1689,7 +1937,7 @@ const PurchaseInquiriesPage: React.FC = () => {
           ) : (
             <div
               style={{
-                padding: 24,
+                padding: '12px 16px',
                 background: '#fafafa',
                 borderRadius: 4,
                 border: '1px dashed var(--river-border-color)',
@@ -1697,13 +1945,81 @@ const PurchaseInquiriesPage: React.FC = () => {
                 color: '#999',
               }}
             >
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.purchaseInquiry.emptyInvitedVendors')} />
-              <Button type="primary" ghost icon={<PlusOutlined />} onClick={openAddVendorModal} style={{ marginTop: 12 }}>
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description={t('app.kuaizhizao.purchaseInquiry.emptyInvitedVendors')}
+              />
+              <Button type="primary" ghost icon={<PlusOutlined />} onClick={openAddVendorModal} style={{ marginTop: 8 }}>
                 {t('app.kuaizhizao.purchaseInquiry.addVendor')}
               </Button>
             </div>
           )}
         </div>
+
+        <Row gutter={FORM_LAYOUT.GRID_GUTTER}>
+          <Col span={8}>
+            <ProFormSelect
+              name="payment_method"
+              label={t('app.kuaizhizao.purchaseInquiry.paymentMethod')}
+              options={paymentMethodOptions}
+              fieldProps={{ allowClear: true }}
+            />
+          </Col>
+          <Col span={8}>
+            <DictionarySelect
+              dictionaryCode="PAYMENT_TERMS"
+              name="payment_terms"
+              label={t('app.kuaizhizao.purchaseInquiry.paymentTerms')}
+              formRef={editFormRef}
+              hostResource={PURCHASE_INQUIRY_RESOURCE}
+            />
+          </Col>
+          <Col span={8}>
+            <DictionarySelect
+              dictionaryCode="TRADE_MODE"
+              name="trade_mode"
+              label={t('app.kuaizhizao.purchaseInquiry.tradeMode')}
+              formRef={editFormRef}
+              hostResource={PURCHASE_INQUIRY_RESOURCE}
+            />
+          </Col>
+        </Row>
+        <Row gutter={FORM_LAYOUT.GRID_GUTTER}>
+          <Col span={6}>
+            <DictionarySelect
+              dictionaryCode="CURRENCY"
+              name="currency"
+              label={t('app.kuaizhizao.purchaseInquiry.currency')}
+              formRef={editFormRef}
+              valueEqualsLabel={false}
+              hostResource={PURCHASE_INQUIRY_RESOURCE}
+              rules={[{ required: true }]}
+            />
+          </Col>
+          <Col span={6}>
+            <ProFormDigit
+              name="exchange_rate"
+              label={t('app.kuaizhizao.purchaseInquiry.exchangeRate')}
+              min={0}
+              fieldProps={{ precision: 6, style: { width: '100%' } }}
+            />
+          </Col>
+          <Col span={6}>
+            <ProFormSelect
+              name="invoice_type"
+              label={t('app.kuaizhizao.purchaseInquiry.invoiceType')}
+              options={invoiceTypeOptions}
+              rules={[{ required: true }]}
+            />
+          </Col>
+          <Col span={6}>
+            <ProFormSelect
+              name="tax_rate_percent"
+              label={t('app.kuaizhizao.purchaseInquiry.taxRate')}
+              options={taxRatePercentOptions}
+            />
+          </Col>
+        </Row>
 
         <div className="uni-table-detail" style={{ marginBottom: 24 }}>
           <Space style={{ marginBottom: 8 }}>
@@ -1721,8 +2037,12 @@ const PurchaseInquiriesPage: React.FC = () => {
           />
         </div>
 
-        <ProFormTextArea name="notes" label={t('common.remark')} fieldProps={{ rows: 2 }} />
-        <DocumentAttachmentsField category="purchase_inquiry_attachments" />
+        <DetailDrawerSection titleAccent title={t('common.remark')}>
+          <ProFormTextArea name="notes" label={false} fieldProps={{ rows: 2 }} />
+        </DetailDrawerSection>
+        <DetailDrawerSection titleAccent title={t('app.uniDetail.sectionAttachments')} marginBottom={0}>
+          <DocumentAttachmentsField category="purchase_inquiry_attachments" label={false} />
+        </DetailDrawerSection>
       </FormModalTemplate>
 
       <Modal
@@ -1853,6 +2173,59 @@ const PurchaseInquiriesPage: React.FC = () => {
               <Typography.Text type="danger">{inquiryTracking.error}</Typography.Text>
             ) : null
           ) : null
+        }
+        historyTab={
+          detail?.id != null
+            ? {
+                documentId: detail.id,
+                label: t('app.kuaizhizao.purchaseInquiry.approvalRecords'),
+                children: (
+                  <DocumentApprovalRecordsPane
+                    entityType="purchase_inquiry"
+                    entityId={detail.id}
+                    refreshKey={inquiryTrackingRefreshKey}
+                  />
+                ),
+              }
+            : undefined
+        }
+        attachmentCenter={
+          detail?.id != null
+            ? {
+                documentType: 'purchase_inquiry',
+                documentId: detail.id,
+                attachmentCategory: 'purchase_inquiry_attachments',
+                canManageSelfAttachments: purchaseInquiryPerms.canUpdate,
+                onDeleteSelfAttachment: async (fileUid: string) => {
+                  const current = documentAttachmentsFromRecord(detail);
+                  const target = current.find((f: DocumentAttachmentFile) => {
+                    const uid = resolveDocumentAttachmentFileUuid(f) || String(f.uid || '').trim();
+                    return uid === fileUid;
+                  });
+                  if (isSystemDocumentAttachment(target)) {
+                    message.warning(t('app.uniDetail.attachmentCenter.systemDeleteForbidden'));
+                    throw new Error('system attachment cannot delete');
+                  }
+                  const next = current.filter((f: DocumentAttachmentFile) => {
+                    const uid = resolveDocumentAttachmentFileUuid(f) || String(f.uid || '').trim();
+                    return uid !== fileUid;
+                  });
+                  await updatePurchaseInquiry(detail.id!, {
+                    attachments: normalizeDocumentAttachments(next),
+                  });
+                  setDetail(await getPurchaseInquiry(detail.id!));
+                  setInquiryTrackingRefreshKey((k) => k + 1);
+                },
+                onAddSelfAttachments: async (files: DocumentAttachmentFile[]) => {
+                  const latest = await getPurchaseInquiry(detail.id!);
+                  const current = documentAttachmentsFromRecord(latest);
+                  const merged = normalizeDocumentAttachments([...current, ...files]);
+                  await updatePurchaseInquiry(detail.id!, { attachments: merged });
+                  setDetail(await getPurchaseInquiry(detail.id!));
+                  setInquiryTrackingRefreshKey((k) => k + 1);
+                },
+              }
+            : undefined
         }
         traceDocument={
           detail?.id != null

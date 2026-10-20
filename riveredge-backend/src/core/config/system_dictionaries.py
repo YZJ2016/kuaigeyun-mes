@@ -161,6 +161,19 @@ SYSTEM_DICTIONARIES: List[Dict[str, Any]] = [
         ],
     },
     {
+        "code": "TRADE_MODE",
+        "name": "成交方式",
+        "description": "采购询价、采购订单等单据的成交方式",
+        "items": [
+            {"label": "含税送到", "value": "TAX_INCLUDED_DELIVERY", "description": "含税送到买方指定地点", "sort_order": 1},
+            {"label": "买方自提", "value": "BUYER_PICKUP", "description": "买方到卖方仓库自提", "sort_order": 2},
+            {"label": "FOB", "value": "FOB", "description": "船上交货", "sort_order": 3},
+            {"label": "CIF", "value": "CIF", "description": "成本加运保费", "sort_order": 4},
+            {"label": "EXW", "value": "EXW", "description": "工厂交货", "sort_order": 5},
+            {"label": "其他", "value": "OTHER", "description": "其他成交方式", "sort_order": 99},
+        ],
+    },
+    {
         "code": "ORDER_TYPE",
         "name": "订单类型",
         "description": "采购订单等业务单据的订单类型",
