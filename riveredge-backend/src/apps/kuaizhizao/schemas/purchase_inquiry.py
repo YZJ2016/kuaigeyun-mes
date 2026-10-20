@@ -49,6 +49,10 @@ class PurchaseInquiryVendorBase(BaseModel):
 
     supplier_id: int
     supplier_name: str
+    contact_name: Optional[str] = None
+    contact_phone: Optional[str] = None
+    contact_email: Optional[str] = None
+    email_notify: bool = False
     notes: Optional[str] = None
 
 
@@ -121,6 +125,18 @@ class PurchaseInquiryCreate(BaseModel):
     inquiry_name: Optional[str] = None
     inquiry_date: Optional[date] = None
     quote_deadline: Optional[date] = None
+    demand_party_id: Optional[int] = None
+    demand_party_name: Optional[str] = None
+    buyer_id: Optional[int] = None
+    buyer_name: Optional[str] = None
+    buyer_phone: Optional[str] = None
+    currency: Optional[str] = "CNY"
+    exchange_rate: Optional[Decimal] = Decimal("1")
+    invoice_type: Optional[str] = None
+    tax_rate: Optional[Decimal] = Decimal("0")
+    payment_method: Optional[str] = None
+    payment_terms: Optional[str] = None
+    trade_mode: Optional[str] = None
     source_type: Optional[str] = None
     source_id: Optional[int] = None
     source_code: Optional[str] = None
@@ -134,6 +150,18 @@ class PurchaseInquiryUpdate(BaseModel):
     inquiry_name: Optional[str] = None
     inquiry_date: Optional[date] = None
     quote_deadline: Optional[date] = None
+    demand_party_id: Optional[int] = None
+    demand_party_name: Optional[str] = None
+    buyer_id: Optional[int] = None
+    buyer_name: Optional[str] = None
+    buyer_phone: Optional[str] = None
+    currency: Optional[str] = None
+    exchange_rate: Optional[Decimal] = None
+    invoice_type: Optional[str] = None
+    tax_rate: Optional[Decimal] = None
+    payment_method: Optional[str] = None
+    payment_terms: Optional[str] = None
+    trade_mode: Optional[str] = None
     notes: Optional[str] = None
     attachments: Optional[list] = None
     items: Optional[List[PurchaseInquiryItemCreate]] = None
@@ -149,8 +177,18 @@ class PurchaseInquiryResponse(BaseSchema):
     inquiry_date: Optional[date] = None
     quote_deadline: Optional[date] = None
     status: str
+    demand_party_id: Optional[int] = None
+    demand_party_name: Optional[str] = None
     buyer_id: Optional[int] = None
     buyer_name: Optional[str] = None
+    buyer_phone: Optional[str] = None
+    currency: Optional[str] = None
+    exchange_rate: Optional[Decimal] = None
+    invoice_type: Optional[str] = None
+    tax_rate: Optional[Decimal] = None
+    payment_method: Optional[str] = None
+    payment_terms: Optional[str] = None
+    trade_mode: Optional[str] = None
     source_type: Optional[str] = None
     source_id: Optional[int] = None
     source_code: Optional[str] = None

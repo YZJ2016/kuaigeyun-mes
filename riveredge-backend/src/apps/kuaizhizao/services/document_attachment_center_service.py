@@ -90,11 +90,15 @@ def _normalize_attachments(raw: Any) -> List[DocumentAttachmentCenterItem]:
         normalized = normalize_attachment_entry(entry)
         if not normalized:
             continue
+        supplier_id = normalized.get("supplier_id")
         items.append(
             DocumentAttachmentCenterItem(
                 uid=str(normalized["uid"]),
                 name=str(normalized.get("name") or "附件"),
                 status=str(normalized.get("status") or "done"),
+                kind=str(normalized["kind"]).strip() if normalized.get("kind") else None,
+                source=str(normalized["source"]).strip() if normalized.get("source") else None,
+                supplier_id=int(supplier_id) if supplier_id is not None else None,
             )
         )
     return items

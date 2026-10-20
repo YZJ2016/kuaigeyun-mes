@@ -44,12 +44,25 @@ def normalize_attachment_entry(entry: Any) -> Optional[Dict[str, Any]]:
             or "附件"
         ).strip() or "附件"
         url = entry.get("url") or f"/api/v1/core/files/{uid}/download"
-        return {
+        normalized: Dict[str, Any] = {
             "uid": uid,
             "name": name,
             "status": "done",
             "url": url,
         }
+        kind = entry.get("kind")
+        if kind is not None and str(kind).strip():
+            normalized["kind"] = str(kind).strip()
+        source = entry.get("source")
+        if source is not None and str(source).strip():
+            normalized["source"] = str(source).strip()
+        supplier_id = entry.get("supplier_id")
+        if supplier_id is not None and str(supplier_id).strip() != "":
+            try:
+                normalized["supplier_id"] = int(supplier_id)
+            except (TypeError, ValueError):
+                pass
+        return normalized
     return None
 
 

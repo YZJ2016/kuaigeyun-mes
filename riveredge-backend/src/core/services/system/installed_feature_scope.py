@@ -104,6 +104,7 @@ _SYSTEM_DICTIONARY_REQUIRES_APPS: Dict[str, FrozenSet[str]] = {
     "SALES_OPPORTUNITY_STAGE": frozenset({"master-data"}),
     "SHIPPING_METHOD": frozenset({"kuaizhizao"}),
     "PAYMENT_TERMS": frozenset({"kuaizhizao"}),
+    "TRADE_MODE": frozenset({"kuaizhizao"}),
     "ORDER_TYPE": frozenset({"kuaizhizao"}),
     "RETURN_REASON": frozenset({"kuaizhizao"}),
     "RETURN_TYPE": frozenset({"kuaizhizao"}),

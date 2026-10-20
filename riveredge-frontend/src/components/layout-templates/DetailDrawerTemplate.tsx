@@ -152,6 +152,15 @@ export interface DetailDrawerTemplateProps<T extends Record<string, any> = Recor
   attachmentCenter?: {
     documentType: string;
     documentId: number;
+    /** 上传分类（草稿可上传时必填，如 purchase_inquiry_attachments） */
+    attachmentCategory?: string;
+    /** 是否允许上传/删除本单附件 */
+    canManageSelfAttachments?: boolean;
+    onDeleteSelfAttachment?: (fileUid: string) => Promise<void>;
+    /** 上传成功后写回本单 attachments */
+    onAddSelfAttachments?: (
+      files: Array<{ uid?: string; name?: string; status?: string; url?: string }>,
+    ) => Promise<void>;
   } | null;
 }
 
@@ -303,6 +312,12 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
       return {
         documentType: traceDocument.documentType,
         documentId: traceDocument.documentId,
+        attachmentCategory: undefined as string | undefined,
+        canManageSelfAttachments: undefined as boolean | undefined,
+        onDeleteSelfAttachment: undefined as ((fileUid: string) => Promise<void>) | undefined,
+        onAddSelfAttachments: undefined as
+          | ((files: Array<{ uid?: string; name?: string; status?: string; url?: string }>) => Promise<void>)
+          | undefined,
       };
     }
     return null;
@@ -482,6 +497,10 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
           documentType={resolvedAttachmentCenter.documentType}
           documentId={resolvedAttachmentCenter.documentId}
           active={isOpen && activeTab === ATTACHMENT_CENTER_TAB_KEY}
+          attachmentCategory={resolvedAttachmentCenter.attachmentCategory}
+          canManageSelfAttachments={resolvedAttachmentCenter.canManageSelfAttachments}
+          onDeleteSelfAttachment={resolvedAttachmentCenter.onDeleteSelfAttachment}
+          onAddSelfAttachments={resolvedAttachmentCenter.onAddSelfAttachments}
         />
       </Suspense>
     ) : null;

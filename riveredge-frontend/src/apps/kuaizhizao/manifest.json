@@ -355,6 +355,16 @@
             "permission": "kuaizhizao:purchase-inquiry:read"
           },
           {
+            "title": "app.kuaizhizao.menu.purchase-management.purchase-demand-parties",
+            "path": "/apps/kuaizhizao/purchase-management/purchase-demand-parties",
+            "sort_order": 2.5,
+            "meta": {
+              "node": "purchase_demand_party",
+              "module": "purchase"
+            },
+            "permission": "kuaizhizao:purchase-demand-party:read"
+          },
+          {
             "title": "app.kuaizhizao.menu.purchase-management.purchase-orders",
             "path": "/apps/kuaizhizao/purchase-management/purchase-orders",
             "sort_order": 3,
@@ -1220,6 +1230,17 @@
       ],
       "data_scope_key": "kuaizhizao:purchase-inquiry"
     },
+    "purchase-demand-party": {
+      "permission_prefix": "kuaizhizao:purchase-demand-party",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "kuaizhizao:purchase-demand-party"
+    },
     "rework-order": {
       "permission_prefix": "kuaizhizao:rework-order",
       "display_fields": [
@@ -1770,6 +1791,12 @@
     "purchase-requisition": [
       "master-data:supply-chain:supplier",
       "master-data:material"
+    ],
+    "purchase-inquiry": [
+      "master-data:supply-chain:supplier",
+      "master-data:material",
+      "kuaizhizao:purchase-demand-party",
+      "system:user"
     ],
     "work-order": [
       "master-data:material",
@@ -2984,6 +3011,10 @@
     "kuaizhizao:purchase-inquiry:reject",
     "kuaizhizao:purchase-inquiry:print",
     "kuaizhizao:purchase-inquiry:execute",
+    "kuaizhizao:purchase-demand-party:read",
+    "kuaizhizao:purchase-demand-party:create",
+    "kuaizhizao:purchase-demand-party:update",
+    "kuaizhizao:purchase-demand-party:delete",
     "kuaizhizao:purchase-management-dashboard:read",
     "kuaizhizao:purchase-management-dashboard:print",
     "kuaizhizao:purchase-management-reports-purchase-cost-trend:read",

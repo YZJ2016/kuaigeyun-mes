@@ -1,18 +1,33 @@
 /**
- * 详情抽屉「附件中心」Tab 面板：聚合本单 + 全链路关联单据附件，预览走 FilePreviewModal。
+ * 详情抽屉「附件中心」Tab 面板：聚合本单 + 全链路关联单据附件。
+ * 预览走 FilePreviewModal；下载走带 token URL；本单附件可上传/删除（由宿主回调写回单据）。
  */
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { App, Button, Collapse, Empty, Result, Spin, Typography } from 'antd';
-import { EyeOutlined, PaperClipOutlined } from '@ant-design/icons';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { App, Button, Collapse, Empty, Popconfirm, Result, Spin, Typography, Upload } from 'antd';
+import {
+  DeleteOutlined,
+  DownloadOutlined,
+  EyeOutlined,
+  PaperClipOutlined,
+  UploadOutlined,
+} from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { SecureImage } from '../../../components/secure-image';
 import FilePreviewModal from '../../../components/file-preview';
 import { getFileExt } from '../../../utils/filePreviewKind';
+import { getFileDownloadUrl, uploadMultipleFiles } from '../../../services/file';
 import {
   getDocumentAttachmentCenter,
   type DocumentAttachmentCenterData,
   type DocumentAttachmentCenterGroup,
 } from '../services/document-relation';
+import {
+  downloadDocumentAttachment,
+  isSystemDocumentAttachment,
+  normalizeDocumentAttachments,
+  type DocumentAttachmentFile,
+} from '../utils/documentAttachments';
+import { getApiErrorMessage } from '../../../utils/errorHandler';
 
 const IMAGE_EXT_RE = /\.(png|jpe?g|gif|webp|bmp|svg)$/i;
 
@@ -28,20 +43,40 @@ export type DocumentAttachmentCenterPaneProps = {
   documentId: number;
   /** 抽屉打开且 Tab 激活 */
   active?: boolean;
+  /** 上传分类；与 canManage + onAdd 同时有值时显示上传 */
+  attachmentCategory?: string;
+  /** 是否允许上传/删除本单（is_self）附件 */
+  canManageSelfAttachments?: boolean;
+  /** 删除本单附件；成功后本面板会 reload */
+  onDeleteSelfAttachment?: (fileUid: string) => Promise<void>;
+  /** 上传成功后追加本单附件 */
+  onAddSelfAttachments?: (files: DocumentAttachmentFile[]) => Promise<void>;
 };
 
 export const DocumentAttachmentCenterPane: React.FC<DocumentAttachmentCenterPaneProps> = ({
   documentType,
   documentId,
   active = true,
+  attachmentCategory,
+  canManageSelfAttachments = false,
+  onDeleteSelfAttachment,
+  onAddSelfAttachments,
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<DocumentAttachmentCenterData | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewFile, setPreviewFile] = useState<{ uuid: string; name: string } | null>(null);
+  const [deletingUid, setDeletingUid] = useState<string | null>(null);
+  const uploadChainRef = useRef(Promise.resolve());
+
+  const canUpload =
+    Boolean(canManageSelfAttachments) &&
+    Boolean(attachmentCategory) &&
+    typeof onAddSelfAttachments === 'function';
 
   const load = useCallback(async () => {
     if (!documentType || !documentId) return;
@@ -77,6 +112,61 @@ export const DocumentAttachmentCenterPane: React.FC<DocumentAttachmentCenterPane
     setPreviewOpen(true);
   }, [messageApi, t]);
 
+  const handleDownload = useCallback(
+    async (uuid: string, name: string) => {
+      try {
+        await downloadDocumentAttachment({ uid: uuid, name });
+      } catch (e) {
+        messageApi.error(getApiErrorMessage(e, t('app.uniDetail.attachmentCenter.downloadFailed')));
+      }
+    },
+    [messageApi, t],
+  );
+
+  const handleDelete = useCallback(
+    async (uuid: string) => {
+      if (!onDeleteSelfAttachment) return;
+      setDeletingUid(uuid);
+      try {
+        await onDeleteSelfAttachment(uuid);
+        messageApi.success(t('common.deleteSuccess'));
+        await load();
+      } catch (e) {
+        messageApi.error(getApiErrorMessage(e, t('common.deleteFailed')));
+      } finally {
+        setDeletingUid(null);
+      }
+    },
+    [load, messageApi, onDeleteSelfAttachment, t],
+  );
+
+  const handleUploadFiles = useCallback(
+    async (fileList: File[]) => {
+      if (!canUpload || !attachmentCategory || !onAddSelfAttachments) return;
+      if (fileList.length === 0) return;
+      setUploading(true);
+      try {
+        const uploaded = await uploadMultipleFiles(fileList, { category: attachmentCategory });
+        const asUploadList: DocumentAttachmentFile[] = uploaded.map((f) => ({
+          uid: f.uuid,
+          name: f.original_name || f.uuid,
+          status: 'done',
+          url: getFileDownloadUrl(f.uuid),
+          response: { uuid: f.uuid, original_name: f.original_name },
+        }));
+        const normalized = normalizeDocumentAttachments(asUploadList);
+        await onAddSelfAttachments(normalized);
+        messageApi.success(t('components.fileUpload.uploadMultiSuccess', { count: normalized.length }));
+        await load();
+      } catch (e) {
+        messageApi.error(getApiErrorMessage(e, t('app.uniDetail.attachmentCenter.uploadFailed')));
+      } finally {
+        setUploading(false);
+      }
+    },
+    [attachmentCategory, canUpload, load, messageApi, onAddSelfAttachments, t],
+  );
+
   const resolveDocTypeLabel = useCallback(
     (type: string) =>
       t(`components.documentTrackingPanel.docType.${type}`, {
@@ -85,11 +175,37 @@ export const DocumentAttachmentCenterPane: React.FC<DocumentAttachmentCenterPane
     [t],
   );
 
+  const uploadButton = canUpload ? (
+    <Upload
+      multiple
+      showUploadList={false}
+      disabled={uploading}
+      customRequest={(options) => {
+        const run = async () => {
+          try {
+            await handleUploadFiles([options.file as File]);
+            options.onSuccess?.({}, options.file as any);
+          } catch (err) {
+            options.onError?.(err as Error);
+          }
+        };
+        uploadChainRef.current = uploadChainRef.current.then(run, run);
+        return uploadChainRef.current;
+      }}
+    >
+      <Button type="primary" icon={<UploadOutlined />} loading={uploading}>
+        {t('app.uniDetail.attachmentCenter.upload')}
+      </Button>
+    </Upload>
+  ) : null;
+
   const collapseItems = useMemo(() => {
     const groups = data?.groups ?? [];
     return groups.map((group: DocumentAttachmentCenterGroup) => {
       const typeLabel = resolveDocTypeLabel(group.document_type);
       const code = String(group.document_code || '').trim();
+      const canDeleteBase =
+        Boolean(group.is_self) && canManageSelfAttachments && typeof onDeleteSelfAttachment === 'function';
       const header = (
         <span style={{ display: 'inline-flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
           <Typography.Text strong>
@@ -107,6 +223,43 @@ export const DocumentAttachmentCenterPane: React.FC<DocumentAttachmentCenterPane
         </span>
       );
 
+      const actionButtons = (uid: string, name: string, isSystem: boolean) => (
+        <>
+          <Button
+            type="link"
+            size="small"
+            icon={<EyeOutlined />}
+            onClick={() => openPreview(uid, name)}
+          >
+            {t('app.uniDetail.attachmentCenter.preview')}
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            icon={<DownloadOutlined />}
+            onClick={() => void handleDownload(uid, name)}
+          >
+            {t('app.uniDetail.attachmentCenter.download')}
+          </Button>
+          {canDeleteBase && !isSystem ? (
+            <Popconfirm
+              title={t('app.uniDetail.attachmentCenter.confirmDelete')}
+              onConfirm={() => void handleDelete(uid)}
+            >
+              <Button
+                type="link"
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+                loading={deletingUid === uid}
+              >
+                {t('common.delete')}
+              </Button>
+            </Popconfirm>
+          ) : null}
+        </>
+      );
+
       const body =
         group.attachments.length > 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -114,6 +267,19 @@ export const DocumentAttachmentCenterPane: React.FC<DocumentAttachmentCenterPane
               const uid = String(file.uid || '').trim();
               if (!uid) return null;
               const name = file.name || t('components.documentAttachments.label');
+              const isSystem = isSystemDocumentAttachment(file);
+              const nameNode = (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
+                  <Typography.Text ellipsis style={{ flex: 1, minWidth: 0 }}>
+                    {name}
+                  </Typography.Text>
+                  {isSystem ? (
+                    <Typography.Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
+                      {t('app.uniDetail.attachmentCenter.systemBadge')}
+                    </Typography.Text>
+                  ) : null}
+                </span>
+              );
               if (looksLikeImage(name)) {
                 return (
                   <div
@@ -140,17 +306,8 @@ export const DocumentAttachmentCenterPane: React.FC<DocumentAttachmentCenterPane
                         style={{ objectFit: 'cover', borderRadius: 4 }}
                       />
                     </button>
-                    <Typography.Text ellipsis style={{ flex: 1, minWidth: 0 }}>
-                      {name}
-                    </Typography.Text>
-                    <Button
-                      type="link"
-                      size="small"
-                      icon={<EyeOutlined />}
-                      onClick={() => openPreview(uid, name)}
-                    >
-                      {t('app.uniDetail.attachmentCenter.preview')}
-                    </Button>
+                    {nameNode}
+                    {actionButtons(uid, name, isSystem)}
                   </div>
                 );
               }
@@ -160,17 +317,8 @@ export const DocumentAttachmentCenterPane: React.FC<DocumentAttachmentCenterPane
                   style={{ display: 'flex', alignItems: 'center', gap: 8 }}
                 >
                   <PaperClipOutlined />
-                  <Typography.Text ellipsis style={{ flex: 1, minWidth: 0 }}>
-                    {name}
-                  </Typography.Text>
-                  <Button
-                    type="link"
-                    size="small"
-                    icon={<EyeOutlined />}
-                    onClick={() => openPreview(uid, name)}
-                  >
-                    {t('app.uniDetail.attachmentCenter.preview')}
-                  </Button>
+                  {nameNode}
+                  {actionButtons(uid, name, isSystem)}
                 </div>
               );
             })}
@@ -185,7 +333,17 @@ export const DocumentAttachmentCenterPane: React.FC<DocumentAttachmentCenterPane
         children: body,
       };
     });
-  }, [data?.groups, openPreview, resolveDocTypeLabel, t]);
+  }, [
+    canManageSelfAttachments,
+    data?.groups,
+    deletingUid,
+    handleDelete,
+    handleDownload,
+    onDeleteSelfAttachment,
+    openPreview,
+    resolveDocTypeLabel,
+    t,
+  ]);
 
   const defaultActiveKeys = useMemo(() => {
     const groups = data?.groups ?? [];
@@ -201,6 +359,20 @@ export const DocumentAttachmentCenterPane: React.FC<DocumentAttachmentCenterPane
   const totalFiles = useMemo(
     () => (data?.groups ?? []).reduce((sum, g) => sum + g.attachments.length, 0),
     [data?.groups],
+  );
+
+  const previewModal = (
+    <FilePreviewModal
+      open={previewOpen}
+      onClose={() => {
+        setPreviewOpen(false);
+        setPreviewFile(null);
+      }}
+      fileUuid={previewFile?.uuid}
+      fileName={previewFile?.name}
+      fileExtension={previewFile?.name ? getFileExt(previewFile.name) : undefined}
+      title={previewFile?.name}
+    />
   );
 
   if (!active) return null;
@@ -229,15 +401,37 @@ export const DocumentAttachmentCenterPane: React.FC<DocumentAttachmentCenterPane
 
   if (!data || totalFiles === 0) {
     return (
-      <Empty
-        image={Empty.PRESENTED_IMAGE_SIMPLE}
-        description={t('app.uniDetail.attachmentCenter.empty')}
-      />
+      <>
+        <div
+          style={{
+            minHeight: 160,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 16,
+          }}
+        >
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description={
+              canUpload
+                ? t('app.uniDetail.attachmentCenter.emptyUploadHint')
+                : t('app.uniDetail.attachmentCenter.empty')
+            }
+          />
+          {uploadButton}
+        </div>
+        {previewModal}
+      </>
     );
   }
 
   return (
     <>
+      {canUpload ? (
+        <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'flex-end' }}>{uploadButton}</div>
+      ) : null}
       <Collapse
         size="small"
         defaultActiveKey={defaultActiveKeys}

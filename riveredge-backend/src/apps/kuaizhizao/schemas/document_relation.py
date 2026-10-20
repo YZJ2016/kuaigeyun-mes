@@ -136,6 +136,9 @@ class DocumentAttachmentCenterItem(BaseModel):
     uid: str = Field(..., description="core_files UUID")
     name: str = Field(..., description="文件名")
     status: Optional[str] = Field("done", description="上传状态")
+    kind: Optional[str] = Field(None, description="附件类别，如 system")
+    source: Optional[str] = Field(None, description="系统附件来源标识")
+    supplier_id: Optional[int] = Field(None, description="关联供应商 ID（询价系统附件）")
 
 
 class DocumentAttachmentCenterGroup(BaseModel):

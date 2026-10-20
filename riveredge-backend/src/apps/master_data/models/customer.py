@@ -4,7 +4,12 @@
 定义客户数据模型，支持多组织隔离。
 """
 
+from typing import Iterable, Optional
+
 from tortoise import fields
+from tortoise.exceptions import IntegrityError
+from tortoise.timezone import now as tortoise_now
+
 from core.models.base import BaseModel
 
 
@@ -145,4 +150,47 @@ class Customer(BaseModel):
     def __str__(self):
         """字符串表示"""
         return f"{self.code} - {self.name}"
+
+    async def save(
+        self,
+        using_db=None,
+        update_fields: Optional[Iterable[str]] = None,
+        force_create: bool = False,
+        force_update: bool = False,
+    ) -> None:
+        """按租户更新。表上 id 被多租户复用且无主键，按 id 更新会改到其他租户并撞编码唯一索引。"""
+        if force_create or self.pk is None or not self._saved_in_db:
+            await super().save(
+                using_db=using_db,
+                update_fields=update_fields,
+                force_create=force_create,
+                force_update=force_update,
+            )
+            return
+
+        updated_field = self._meta.fields_map.get("updated_at")
+        if updated_field is not None and getattr(updated_field, "auto_now", False):
+            self.updated_at = tortoise_now()
+
+        names = (
+            list(update_fields)
+            if update_fields
+            else [name for name in self._meta.db_fields if name != self._meta.pk_attr]
+        )
+        if "updated_at" in self._meta.db_fields and "updated_at" not in names:
+            names.append("updated_at")
+        payload = {
+            name: getattr(self, name)
+            for name in names
+            if name != self._meta.pk_attr
+        }
+        query = type(self).filter(id=self.id, tenant_id=self.tenant_id)
+        if using_db is not None:
+            query = query.using_db(using_db)
+        rows = await query.update(**payload)
+        if rows == 0:
+            raise IntegrityError(
+                f"Can't update customer that doesn't exist. id={self.id} tenant_id={self.tenant_id}"
+            )
+        self._saved_in_db = True
 
