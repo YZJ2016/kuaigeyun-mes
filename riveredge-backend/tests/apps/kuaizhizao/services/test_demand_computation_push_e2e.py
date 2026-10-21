@@ -165,6 +165,19 @@ def test_push_all_passes_production_item_ids(monkeypatch):
         "apps.kuaizhizao.models.demand_computation.DemandComputation.get_or_none",
         _fake_get,
     )
+    comp_items = [
+        SimpleNamespace(id=21, material_source_type=SOURCE_TYPE_MAKE, suggested_work_order_quantity=1),
+        SimpleNamespace(id=22, material_source_type=SOURCE_TYPE_MAKE, suggested_work_order_quantity=1),
+    ]
+
+    class _ItemQuery:
+        async def all(self):
+            return comp_items
+
+    monkeypatch.setattr(
+        "apps.kuaizhizao.models.demand_computation_item.DemandComputationItem.filter",
+        lambda *_args, **_kwargs: _ItemQuery(),
+    )
     monkeypatch.setattr(svc, "generate_work_orders_and_purchase_orders", _fake_generate)
 
     async def _run():
