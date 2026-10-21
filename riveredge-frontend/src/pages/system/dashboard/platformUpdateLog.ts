@@ -44,6 +44,15 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'kuaiplm-prototype-build-sheet-optional-project-r01',
+    date: '2026-10-21',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-prototype-build-sheet-optional-project-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiplm-prototype-build-sheet-optional-project-r01.description',
+  },
+  {
     id: 'kuaizhizao-inventory-transfer-batch-inbound-date-r01',
     date: '2026-10-21',
     type: 'fix',
