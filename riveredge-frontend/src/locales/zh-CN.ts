@@ -31585,6 +31585,10 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.kuaiplm-prototype-build-sheet-optional-project-r01.title':
+    '样机制作书关联项目可选可手填',
+  'pages.dashboard.updateLog.entries.kuaiplm-prototype-build-sheet-optional-project-r01.description':
+    '新建样机制作书时关联项目不再强制从列表选择，可下拉选研发项目、手填项目代号或留空，与试流单等项目字段一致。',
   'pages.dashboard.updateLog.entries.kuaizhizao-inventory-transfer-batch-inbound-date-r01.title':
     '调拨执行批号物料不再误报缺入库日期',
   'pages.dashboard.updateLog.entries.kuaizhizao-inventory-transfer-batch-inbound-date-r01.description':
@@ -32424,6 +32428,10 @@ export default {
     '表单保存失败会提示原因',
   'pages.dashboard.updateLog.entries.form-modal-save-error-visible-r01.description':
     '新建编辑弹窗保存时，接口校验失败会弹出具体原因，不再出现点了保存却没有任何提示。',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-dashboard-structure-drawings-r01.title':
+    '研发看板增加 2D/3D/模具图入口',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-dashboard-structure-drawings-r01.description':
+    '福尼特OA 研发看板快捷入口与项目工作台协同事项增加 2D图、3D图、模具图及DFM，与文控资料菜单同页；从项目进入时按项目筛选交付物列表。',
   'pages.dashboard.updateLog.entries.funide-oa-trial-flow-profile-tenant-import-r01.title':
     '试流单表单配置加载修复',
   'pages.dashboard.updateLog.entries.funide-oa-trial-flow-profile-tenant-import-r01.description':

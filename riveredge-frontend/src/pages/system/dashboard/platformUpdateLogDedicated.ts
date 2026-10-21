@@ -9,6 +9,16 @@ import type { PlatformUpdateLogEntry } from './platformUpdateLog';
 
 export const PLATFORM_UPDATE_LOG_DEDICATED: PlatformUpdateLogEntry[] = [
   {
+    id: 'funide-oa-rd-dashboard-structure-drawings-r01',
+    date: '2026-10-21',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-rd-dashboard-structure-drawings-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-rd-dashboard-structure-drawings-r01.description',
+  },
+  {
     id: 'funide-oa-trial-flow-profile-tenant-import-r01',
     date: '2026-10-19',
     type: 'fix',
