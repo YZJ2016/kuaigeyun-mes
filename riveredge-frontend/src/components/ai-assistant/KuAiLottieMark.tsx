@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useLayoutEffect, useRef } from 'react';
 import Lottie from 'lottie-react';
 import assistAnimation from '../../../static/lottie/assist.json';
 
@@ -16,6 +16,10 @@ export function KuAiLottieMark({
   hoverPlay = false,
 }: KuAiLottieMarkProps) {
   const lottieRef = useRef<any>(null);
+
+  useLayoutEffect(() => {
+    lottieRef.current?.goToAndStop?.(0, true);
+  }, []);
 
   const hoverHandlers = hoverPlay
     ? {

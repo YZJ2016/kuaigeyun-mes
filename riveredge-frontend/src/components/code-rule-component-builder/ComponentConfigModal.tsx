@@ -23,6 +23,8 @@ interface CodeRuleComponentConfigModalProps {
   availableFields?: Array<{ field_name: string; field_label: string; field_type: string }>;
   onSave: (component: CodeRuleComponent) => void;
   onCancel: () => void;
+  /** 弹窗内未点确定时的草稿，用于编号预览实时联动 */
+  onDraftChange?: (draft: CodeRuleComponent) => void;
 }
 
 const CodeRuleComponentConfigModal: React.FC<CodeRuleComponentConfigModalProps> = ({
@@ -31,6 +33,7 @@ const CodeRuleComponentConfigModal: React.FC<CodeRuleComponentConfigModalProps> 
   availableFields = [],
   onSave,
   onCancel,
+  onDraftChange,
 }) => {
   const { token } = theme.useToken();
   const { t } = useTranslation();
@@ -122,7 +125,8 @@ const CodeRuleComponentConfigModal: React.FC<CodeRuleComponentConfigModalProps> 
               ]}
               initialValue={(component as DateComponent).format_type}
             />
-            {(formValues as DateComponent).format_type === 'preset' || (component as DateComponent).format_type === 'preset' ? (
+            {((formValues as DateComponent).format_type ?? (component as DateComponent).format_type) ===
+            'preset' ? (
               <ProFormSelect
                 name="preset_format"
                 label={t('components.codeRuleComponentConfig.date.presetFormat')}
@@ -201,8 +205,10 @@ const CodeRuleComponentConfigModal: React.FC<CodeRuleComponentConfigModalProps> 
         form={form}
         submitter={false}
         layout="vertical"
-        onValuesChange={(changedValues) => {
-          setFormValues(prev => ({ ...prev, ...changedValues }));
+        onValuesChange={(_changedValues, allValues) => {
+          const merged = { ...component, ...allValues } as CodeRuleComponent;
+          setFormValues(merged);
+          onDraftChange?.(merged);
         }}
       >
         {renderComponentConfig()}

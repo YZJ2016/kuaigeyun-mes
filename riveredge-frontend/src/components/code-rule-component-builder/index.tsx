@@ -4,7 +4,7 @@
  * 参考简道云流水号规则设计，提供拖拽式规则配置界面
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { 
   DndContext, 
@@ -174,6 +174,16 @@ const CodeRuleComponentBuilder: React.FC<CodeRuleComponentBuilderProps> = ({
   const [editingComponent, setEditingComponent] = useState<CodeRuleComponent | null>(null);
   const [configModalVisible, setConfigModalVisible] = useState(false);
   const [addComponentType, setAddComponentType] = useState<CodeRuleComponentType | null>(null);
+  const [editingDraft, setEditingDraft] = useState<CodeRuleComponent | null>(null);
+
+  const componentsForPreview = useMemo(() => {
+    if (!configModalVisible || editingIndex === null || !editingDraft) {
+      return components;
+    }
+    return components.map((comp, index) =>
+      index === editingIndex ? ({ ...comp, ...editingDraft } as CodeRuleComponent) : comp,
+    );
+  }, [components, configModalVisible, editingDraft, editingIndex]);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -271,6 +281,7 @@ const CodeRuleComponentBuilder: React.FC<CodeRuleComponentBuilderProps> = ({
     // 自动打开编辑对话框
     setEditingComponent(newComponent);
     setEditingIndex(newComponents.length - 1);
+    setEditingDraft(newComponent);
     setConfigModalVisible(true);
   }, [components, handleComponentsChange, t]);
 
@@ -278,6 +289,7 @@ const CodeRuleComponentBuilder: React.FC<CodeRuleComponentBuilderProps> = ({
   const handleEditComponent = useCallback((component: CodeRuleComponent, index: number) => {
     setEditingComponent(component);
     setEditingIndex(index);
+    setEditingDraft(component);
     setConfigModalVisible(true);
   }, []);
 
@@ -321,6 +333,7 @@ const CodeRuleComponentBuilder: React.FC<CodeRuleComponentBuilderProps> = ({
     setConfigModalVisible(false);
     setEditingComponent(null);
     setEditingIndex(null);
+    setEditingDraft(null);
   }, [components, editingIndex, handleComponentsChange]);
 
   // 获取可添加的组件类型
@@ -413,7 +426,8 @@ const CodeRuleComponentBuilder: React.FC<CodeRuleComponentBuilderProps> = ({
               color: token.colorText,
               letterSpacing: '1px',
             }}>
-              {CodeRuleComponentService.previewComponents(components) || t('components.codeRuleComponentBuilder.preview.placeholder')}
+              {CodeRuleComponentService.previewComponents(componentsForPreview) ||
+                t('components.codeRuleComponentBuilder.preview.placeholder')}
             </div>
             <div style={{ 
               fontSize: '12px', 
@@ -437,10 +451,12 @@ const CodeRuleComponentBuilder: React.FC<CodeRuleComponentBuilderProps> = ({
           component={editingComponent}
           availableFields={availableFields}
           onSave={handleSaveComponentConfig}
+          onDraftChange={setEditingDraft}
           onCancel={() => {
             setConfigModalVisible(false);
             setEditingComponent(null);
             setEditingIndex(null);
+            setEditingDraft(null);
           }}
         />
       )}

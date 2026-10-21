@@ -1,6 +1,6 @@
 ---
 title: 业务单位存名称直出（禁止 code→name 映射）
-keywords: [单位名称, MaterialUnitLabel, useMaterialUnitOptions, base_unit, 四禁映射]
+keywords: [单位名称, MaterialUnitLabel, useMaterialUnitOptions, base_unit, 五禁映射]
 updated: 2026-10-13
 ---
 
@@ -19,7 +19,7 @@ updated: 2026-10-13
 | 列表/数量旁展示 | 业务字段**直出**，禁止 code→name 对照表 |
 | 历史仍存编码 | 迁移 `876_*_material_unit_business_uses_name` 回填为名称 |
 
-## 禁止（四禁·映射）
+## 禁止（五禁·映射）
 
 - `buildUnitDisplayMap` / `resolveMaterialUnitLabel` 做读侧翻译
 - Select `value=code` 再在展示层翻成 name

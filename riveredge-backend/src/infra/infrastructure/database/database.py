@@ -257,6 +257,7 @@ TORTOISE_ORM = {
                 "core.models.operation_log",
                 "core.models.login_log",
                 "core.models.ai_audit_log",
+                "core.models.kuaiai_assistant_conversation",
                 "core.models.user_activity",
                 "core.models.cache_entry",
                 "core.models.mobile_submission",

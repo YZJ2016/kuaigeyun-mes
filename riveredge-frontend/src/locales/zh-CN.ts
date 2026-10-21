@@ -325,6 +325,17 @@ export default {
   'ui.aiAssistant.title': '星AI',
   'ui.aiAssistant.beta': '测试版',
   'ui.aiAssistant.newChat': '新对话',
+  'ui.aiAssistant.openAssistantTab': '在新标签页打开',
+  'ui.aiAssistant.tabTitle': 'KU-AI 对话',
+  'ui.aiAssistant.newConversationTitle': '新对话',
+  'ui.aiAssistant.historySidebar': '对话记录',
+  'ui.aiAssistant.historyRecent': '最近',
+  'ui.aiAssistant.historyEmpty': '暂无历史对话',
+  'ui.aiAssistant.historyRequiresLogin': '登录后对话记录将保存到账号（云端）',
+  'ui.aiAssistant.historyLoadFailedTitle': '无法加载对话记录',
+  'ui.aiAssistant.historyLoadFailed': '加载对话失败：{{message}}',
+  'ui.aiAssistant.historySaveFailed': '保存对话失败：{{message}}',
+  'ui.aiAssistant.deleteConversationConfirm': '确定删除这条对话记录？',
   'ui.aiAssistant.ariaLabel': 'AI 助手',
   'ui.aiAssistant.welcomeHi': '你好',
   'ui.aiAssistant.welcomeTitle': '我是 星AI 助手',
@@ -18074,6 +18085,9 @@ export default {
   'app.kuaizhizao.warehouseOutbound.entry.fillOutboundQty': '请至少填写一行出库数量',
   'app.kuaizhizao.warehouseOutbound.entry.fillIssueQty': '请至少填写一行本次发料数量',
   'app.kuaizhizao.warehouseOutbound.entry.batchSetLineWarehouse': '批量设置出库仓库',
+  'app.kuaizhizao.warehouseOutbound.entry.addNonBomMaterial': '添加物料',
+  'app.kuaizhizao.warehouseOutbound.entry.addNonBomMaterialTitle': '添加 BOM 外物料',
+  'app.kuaizhizao.warehouseOutbound.entry.nonBomMaterialDuplicate': '该物料已在领料明细中',
   'app.kuaizhizao.warehouseOutbound.entry.batchWarehouseApplied': '已将 {{count}} 行出库仓库设置为同一仓库',
   'app.kuaizhizao.warehouseOutbound.entry.serialCountMismatch': '物料 {{material}} 须选择 {{required}} 个序列号，当前 {{actual}} 个',
   'app.kuaizhizao.warehouseOutbound.entry.outsourceIssueCreated': '委外发料单已创建',
@@ -26958,6 +26972,9 @@ export default {
   'pages.system.configCenter.param.warehouse_over_issue_allowance_ratio': '允许超发比例',
   'pages.system.configCenter.param.warehouse_over_issue_allowance_ratio_desc':
     '相对可下推/可领基准允许超出的比例（0-1，0.20 表示可超 20%）；为组织默认，物料主数据非空时按物料覆盖。为 0 时禁止超发（仅允许数量精度步长内误差；补料须走补料申请）。',
+  'pages.system.configCenter.param.warehouse_allow_non_bom_production_issue': '生产领料允许 BOM 外物料',
+  'pages.system.configCenter.param.warehouse_allow_non_bom_production_issue_desc':
+    '开启后，从工单取单开生产领料时可手工添加不在 BOM 内的主数据物料，确认时不按 BOM 配方与补料额度拦截（仍受库存与负库存规则约束）。倒冲/不发料物料仍不可通过领料单发放。',
   'pages.system.configCenter.param.warehouse_fifo_mode': '先进先出判定方式',
   'pages.system.configCenter.param.warehouse_fifo_mode_desc': '出库扣减库存时，按何种规则确定优先出库批次',
   'pages.system.configCenter.param.warehouse_fifo_mode_opt_batch_id': '按批号入库顺序',
@@ -31568,6 +31585,82 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.kuaizhizao-inventory-transfer-batch-inbound-date-r01.title':
+    '调拨执行批号物料不再误报缺入库日期',
+  'pages.dashboard.updateLog.entries.kuaizhizao-inventory-transfer-batch-inbound-date-r01.description':
+    '执行调拨时调入仓入库会带上调出批次的入库日期；若无则使用调拨单上的调拨日期，与已填业务日期一致。',
+  'pages.dashboard.updateLog.entries.kuaizhizao-non-bom-production-picking-r01.title':
+    '生产领料可添加 BOM 外物料',
+  'pages.dashboard.updateLog.entries.kuaizhizao-non-bom-production-picking-r01.description':
+    '配置中心新增「生产领料允许 BOM 外物料」（默认关）。开启后从工单取单开领料时可手工添加主数据物料，创建与确认不再按 BOM 配方与补料额度拦截；倒冲/不发料仍不可领料。',
+  'pages.dashboard.updateLog.entries.kuaizhizao-mrp-push-buy-line-resolve-r01.title':
+    'MRP 下推采购单勾选明细报错修复',
+  'pages.dashboard.updateLog.entries.kuaizhizao-mrp-push-buy-line-resolve-r01.description':
+    '修复预览显示可下推但确认时报「所选明细均不可下推」：采购单下推不再把采购明细 id 误用于工单粒度校验；同一物料多条采购明细时按物料汇总判定；预览行绑定有建议量的明细 id。',
+  'pages.dashboard.updateLog.entries.kuaiai-bubble-avatar-static-r14.title':
+    'KU-AI 对话气泡助手头像放大',
+  'pages.dashboard.updateLog.entries.kuaiai-bubble-avatar-static-r14.description':
+    'AI 回复气泡旁机器人改为与顶栏一致的 54px 静态首帧 Lottie，头像与气泡正文间距加至约 32px，不再循环播放。',
+  'pages.dashboard.updateLog.entries.kuaiai-history-radius-token-r13.title':
+    'KU-AI 最近列表圆角跟随系统',
+  'pages.dashboard.updateLog.entries.kuaiai-history-radius-token-r13.description':
+    '对话侧栏会话卡片圆角改为使用 Ant Design 的 borderRadiusLG 令牌，与站点圆角设置一致。',
+  'pages.dashboard.updateLog.entries.site-timezone-bootstrap-r01.title':
+    '登录后站点时区未下发修复',
+  'pages.dashboard.updateLog.entries.site-timezone-bootstrap-r01.description':
+    '部分租户登录后站点 settings 尚未写入 timezone 即进入业务页导致报错；壳层拉取站点设置后会从平台公开配置补齐 configs.timezone，并在时区就绪前短暂等待再渲染页面。',
+  'pages.dashboard.updateLog.entries.kuaiai-history-list-order-lock-r12.title':
+    'KU-AI 最近列表切换不重排',
+  'pages.dashboard.updateLog.entries.kuaiai-history-list-order-lock-r12.description':
+    '取消按 updatedAt 整表排序；仅在新消息条数变长（继续对话）时把该会话移到最前。修复切换会话时旧消息误写入新会话标题、侧栏两条显示成同一标题，数秒后才恢复的问题。',
+  'pages.dashboard.updateLog.entries.kuaiai-conversation-refresh-restore-r11.title':
+    'KU-AI 刷新后对话恢复修复',
+  'pages.dashboard.updateLog.entries.kuaiai-conversation-refresh-restore-r11.description':
+    '修复刷新后左侧有标题、右侧无气泡：详情就绪后再挂载聊天区，并在拉取服务端消息后写入 useXChat 缓存（避免 SDK 按会话键复用空消息）；列表拉取需等租户就绪。',
+  'pages.dashboard.updateLog.entries.kuaiai-history-order-on-chat-r10.title':
+    'KU-AI 最近对话切换不置顶',
+  'pages.dashboard.updateLog.entries.kuaiai-history-order-on-chat-r10.description':
+    '仅切换左侧会话时保持列表顺序不变；有新消息并保存成功后才按最近活跃置顶。',
+  'pages.dashboard.updateLog.entries.kuaiai-conversation-ui-trim-r09.title':
+    'KU-AI 对话界面精简',
+  'pages.dashboard.updateLog.entries.kuaiai-conversation-ui-trim-r09.description':
+    '对话按账号隔离，侧栏卡片与气泡下方不再展示询问人与时间，仅保留会话标题与消息正文。',
+  'pages.dashboard.updateLog.entries.kuaiai-conversation-cloud-bootstrap-r08.title':
+    'KU-AI 跨浏览器对话同步说明与加载修复',
+  'pages.dashboard.updateLog.entries.kuaiai-conversation-cloud-bootstrap-r08.description':
+    '对话列表改为等当前登录用户就绪后再从服务端拉取，优先打开已有内容的会话；侧栏补充同一组织与账号下跨浏览器同步说明。',
+  'pages.dashboard.updateLog.entries.kuaiai-conversation-persist-flush-r07.title':
+    'KU-AI 对话刷新后丢失修复',
+  'pages.dashboard.updateLog.entries.kuaiai-conversation-persist-flush-r07.description':
+    '对话内容改为回复完成后立即写入服务端，用户提问在生成过程中也会保存；关闭或刷新页面前增加 keepalive 落库，避免仅停留在内存或未等延迟保存。',
+  'pages.dashboard.updateLog.entries.kuaiai-history-sidebar-cards-r06.title':
+    'KU-AI 对话列表卡片化',
+  'pages.dashboard.updateLog.entries.kuaiai-history-sidebar-cards-r06.description':
+    '标签页左侧最近对话改为小卡片展示，发言人与时间以图标胶囊标签区分，选中态四周描边高亮。',
+  'pages.dashboard.updateLog.entries.batch-rule-custom-date-preview-r01.title':
+    '批号规则自定义日期预览修复',
+  'pages.dashboard.updateLog.entries.batch-rule-custom-date-preview-r01.description':
+    '提交日期选「自定义格式」（如仅 MM）时，编号预览与保存表达式与后端一致；配置弹窗内改格式时预览即时更新。',
+  'pages.dashboard.updateLog.entries.kuaiai-assistant-conversation-message-meta-r05.title':
+    'KU-AI 对话记录发言人与时间',
+  'pages.dashboard.updateLog.entries.kuaiai-assistant-conversation-message-meta-r05.description':
+    '每条消息保存发言显示名与站点墙钟时刻，聊天气泡与左侧最近列表均可查看；历史数据在下次对话保存后自动补齐。',
+  'pages.dashboard.updateLog.entries.kuaiai-assistant-conversation-history-db-r04.title':
+    'KU-AI 对话记录改为账号云端保存',
+  'pages.dashboard.updateLog.entries.kuaiai-assistant-conversation-history-db-r04.description':
+    '标签页助手会话写入服务端数据库，换浏览器或换电脑登录同一账号可恢复；首次打开会自动导入本机此前仅保存在浏览器里的历史。',
+  'pages.dashboard.updateLog.entries.kuaiai-assistant-conversation-history-r03.title':
+    'KU-AI 标签页保留对话记录',
+  'pages.dashboard.updateLog.entries.kuaiai-assistant-conversation-history-r03.description':
+    '全屏标签页左侧展示最近对话列表，支持新建与删除；按租户与用户本地保存，切换会话可恢复历史消息。',
+  'pages.dashboard.updateLog.entries.kuaiai-assistant-chat-tab-r02.title':
+    'KU-AI 全屏改为独立标签页',
+  'pages.dashboard.updateLog.entries.kuaiai-assistant-chat-tab-r02.description':
+    '点击全屏会新开 UniTabs 标签 /apps/kuaiai/chat，不再覆盖当前业务页；标签标题为 KU-AI 对话。',
+  'pages.dashboard.updateLog.entries.kuaiai-assistant-unitab-fullscreen-r01.title':
+    'KU-AI 对话框支持内容区全屏',
+  'pages.dashboard.updateLog.entries.kuaiai-assistant-unitab-fullscreen-r01.description':
+    '悬浮助手全屏改为新开 UniTabs 标签页 /apps/kuaiai/chat，在内容区 16px 留白内对话，无流光外框。',
   'pages.dashboard.updateLog.entries.kuaiai-chat-403-client-channel-r01.title':
     '修复 KU-AI 对话请求 403',
   'pages.dashboard.updateLog.entries.kuaiai-chat-403-client-channel-r01.description':

@@ -11,6 +11,7 @@ from apps.kuaizhizao.utils.picking_posting import (
     picking_item_belongs_to_work_order,
     resolve_work_order_pick_cap,
     resolve_work_order_pick_limit,
+    skip_work_order_pick_limit_for_non_bom_extra,
 )
 from types import SimpleNamespace
 
@@ -96,3 +97,39 @@ def test_picking_item_belongs_to_work_order_falls_back_to_header():
 def test_is_staging_transfer_picking_notes():
     assert is_staging_transfer_picking_notes("叫料单 MC001") is True
     assert is_staging_transfer_picking_notes("批量合并领料") is False
+
+
+def test_skip_non_bom_pick_limit_when_flag_off():
+    assert (
+        skip_work_order_pick_limit_for_non_bom_extra(
+            Decimal("0"), Decimal("0"), allow_non_bom_production_issue=False
+        )
+        is False
+    )
+
+
+def test_skip_non_bom_pick_limit_when_flag_on_and_no_bom_or_call():
+    assert (
+        skip_work_order_pick_limit_for_non_bom_extra(
+            Decimal("0"), Decimal("0"), allow_non_bom_production_issue=True
+        )
+        is True
+    )
+
+
+def test_skip_non_bom_pick_limit_not_for_bom_component():
+    assert (
+        skip_work_order_pick_limit_for_non_bom_extra(
+            Decimal("10"), Decimal("0"), allow_non_bom_production_issue=True
+        )
+        is False
+    )
+
+
+def test_skip_non_bom_pick_limit_not_for_material_call_extra_only():
+    assert (
+        skip_work_order_pick_limit_for_non_bom_extra(
+            Decimal("0"), Decimal("5"), allow_non_bom_production_issue=True
+        )
+        is False
+    )

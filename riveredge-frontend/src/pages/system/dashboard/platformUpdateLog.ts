@@ -44,6 +44,151 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'kuaizhizao-inventory-transfer-batch-inbound-date-r01',
+    date: '2026-10-21',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.kuaizhizao-inventory-transfer-batch-inbound-date-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaizhizao-inventory-transfer-batch-inbound-date-r01.description',
+  },
+  {
+    id: 'kuaizhizao-non-bom-production-picking-r01',
+    date: '2026-10-21',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaizhizao-non-bom-production-picking-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaizhizao-non-bom-production-picking-r01.description',
+  },
+  {
+    id: 'kuaizhizao-mrp-push-buy-line-resolve-r01',
+    date: '2026-10-21',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaizhizao-mrp-push-buy-line-resolve-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaizhizao-mrp-push-buy-line-resolve-r01.description',
+  },
+  {
+    id: 'kuaiai-bubble-avatar-static-r14',
+    date: '2026-10-21',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiai-bubble-avatar-static-r14.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.kuaiai-bubble-avatar-static-r14.description',
+  },
+  {
+    id: 'kuaiai-history-radius-token-r13',
+    date: '2026-10-21',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiai-history-radius-token-r13.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.kuaiai-history-radius-token-r13.description',
+  },
+  {
+    id: 'site-timezone-bootstrap-r01',
+    date: '2026-10-21',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.site-timezone-bootstrap-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.site-timezone-bootstrap-r01.description',
+  },
+  {
+    id: 'kuaiai-history-list-order-lock-r12',
+    date: '2026-10-21',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiai-history-list-order-lock-r12.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.kuaiai-history-list-order-lock-r12.description',
+  },
+  {
+    id: 'kuaiai-conversation-refresh-restore-r11',
+    date: '2026-10-21',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiai-conversation-refresh-restore-r11.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiai-conversation-refresh-restore-r11.description',
+  },
+  {
+    id: 'kuaiai-history-order-on-chat-r10',
+    date: '2026-10-21',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiai-history-order-on-chat-r10.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.kuaiai-history-order-on-chat-r10.description',
+  },
+  {
+    id: 'kuaiai-conversation-ui-trim-r09',
+    date: '2026-10-21',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiai-conversation-ui-trim-r09.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.kuaiai-conversation-ui-trim-r09.description',
+  },
+  {
+    id: 'kuaiai-conversation-cloud-bootstrap-r08',
+    date: '2026-10-21',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiai-conversation-cloud-bootstrap-r08.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiai-conversation-cloud-bootstrap-r08.description',
+  },
+  {
+    id: 'kuaiai-conversation-persist-flush-r07',
+    date: '2026-10-21',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiai-conversation-persist-flush-r07.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiai-conversation-persist-flush-r07.description',
+  },
+  {
+    id: 'kuaiai-history-sidebar-cards-r06',
+    date: '2026-10-21',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiai-history-sidebar-cards-r06.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.kuaiai-history-sidebar-cards-r06.description',
+  },
+  {
+    id: 'batch-rule-custom-date-preview-r01',
+    date: '2026-10-21',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.batch-rule-custom-date-preview-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.batch-rule-custom-date-preview-r01.description',
+  },
+  {
+    id: 'kuaiai-assistant-conversation-message-meta-r05',
+    date: '2026-10-21',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiai-assistant-conversation-message-meta-r05.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiai-assistant-conversation-message-meta-r05.description',
+  },
+  {
+    id: 'kuaiai-assistant-conversation-history-db-r04',
+    date: '2026-10-21',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiai-assistant-conversation-history-db-r04.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiai-assistant-conversation-history-db-r04.description',
+  },
+  {
+    id: 'kuaiai-assistant-conversation-history-r03',
+    date: '2026-10-21',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiai-assistant-conversation-history-r03.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiai-assistant-conversation-history-r03.description',
+  },
+  {
+    id: 'kuaiai-assistant-chat-tab-r02',
+    date: '2026-10-21',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiai-assistant-chat-tab-r02.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.kuaiai-assistant-chat-tab-r02.description',
+  },
+  {
+    id: 'kuaiai-assistant-unitab-fullscreen-r01',
+    date: '2026-10-21',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiai-assistant-unitab-fullscreen-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiai-assistant-unitab-fullscreen-r01.description',
+  },
+  {
     id: 'kuaiai-chat-403-client-channel-r01',
     date: '2026-10-21',
     type: 'fix',

@@ -438,6 +438,17 @@ export const PARAMETER_CATEGORIES: ConfigCategory[] = [
       sectionNameKey: 'pages.system.configCenter.paramSection.warehouse_over_issue',
       sectionDescriptionKey: 'pages.system.configCenter.paramSection.warehouse_over_issue_desc',
     },
+    {
+      key: 'warehouse.allow_non_bom_production_issue',
+      nameKey: 'pages.system.configCenter.param.warehouse_allow_non_bom_production_issue',
+      descriptionKey: 'pages.system.configCenter.param.warehouse_allow_non_bom_production_issue_desc',
+      source: 'business_config',
+      sourcePath: 'parameters.warehouse.allow_non_bom_production_issue',
+      type: 'boolean',
+      sectionKey: 'warehouse.over_issue',
+      sectionNameKey: 'pages.system.configCenter.paramSection.warehouse_over_issue',
+      sectionDescriptionKey: 'pages.system.configCenter.paramSection.warehouse_over_issue_desc',
+    },
   ],
   quality: [
     {

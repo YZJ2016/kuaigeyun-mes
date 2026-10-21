@@ -105,6 +105,7 @@ export function refreshAppShellFromApi(options?: { force?: boolean }): Promise<v
       }
       useThemeStore.setState({ siteThemeSettings: siteSettings });
     }
+    await useConfigStore.getState().ensureSiteTimezoneConfig();
 
     const prefs =
       userPreference?.preferences && typeof userPreference.preferences === 'object'

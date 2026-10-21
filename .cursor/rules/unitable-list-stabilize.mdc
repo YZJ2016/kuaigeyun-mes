@@ -10,7 +10,7 @@ alwaysApply: true
 | 锁 | 要求 |
 |----|------|
 | **脚本/codemod** | **严禁** 跑 `convert_*.py` 或任何批量写多文件脚本；见 `no-batch-codemod.mdc` |
-| **四禁** | **严禁** 补丁/兼容/映射/兜底；见 `no-fallback-patches.mdc` |
+| **五禁** | **严禁** 补丁/兼容/映射/兜底/猜测；见 `no-fallback-patches.mdc` |
 | 并行/子代理 | **严禁** Task 扫模块、并行改多页 |
 | 菜单下一页 | 只认应用 `manifest.json` navigation，禁止 locale / 目录序 |
 | 收工 | 用户说「不要做一个问一个 / 减少确认 / 继续完善」时按菜单序**连续逐页改**，禁止每页停问；否则改完点名下一页即可 |

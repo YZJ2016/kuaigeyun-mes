@@ -39,7 +39,7 @@ from apps.kuaizhizao.schemas.inventory_transfer import (
 from apps.common.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from infra.services.business_config_service import BusinessConfigService
-from core.utils.timezone_utils import resolve_business_datetime, today_site_str
+from core.utils.timezone_utils import resolve_business_datetime, today_site_str, to_site_date
 
 
 class InventoryTransferService(AppBaseService[InventoryTransfer]):
@@ -796,6 +796,10 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
                         f"物料 {material.name}（{material_code}）启用了批号管理，调拨须指定批号"
                     )
 
+            transfer_ledger_date = (
+                to_site_date(transfer.transfer_date) if transfer.transfer_date else None
+            )
+
             for item in items:
                 qty = Decimal(str(item.quantity or 0))
                 if qty <= 0:
@@ -805,6 +809,15 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
                     qty,
                     from_unit=getattr(item, "material_unit", None),
                 )
+                item_batch_no = getattr(item, "batch_no", None)
+                ledger_production_date = await InventoryService._resolve_ledger_production_date(
+                    tenant_id=tenant_id,
+                    material_id=int(item.material_id),
+                    batch_no=item_batch_no,
+                    warehouse_id=item.from_warehouse_id,
+                )
+                if ledger_production_date is None:
+                    ledger_production_date = transfer_ledger_date
                 await InventoryService.decrease_stock(
                     tenant_id=tenant_id,
                     material_id=item.material_id,
@@ -826,13 +839,14 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
                     material_id=item.material_id,
                     quantity=base_qty,
                     warehouse_id=item.to_warehouse_id,
-                    batch_no=getattr(item, "batch_no", None),
+                    batch_no=item_batch_no,
                     source_type="inventory_transfer",
                     source_doc_id=transfer_id,
                     source_doc_code=transfer.code,
                     movement_type="transfer",
                     from_warehouse_id=item.from_warehouse_id,
                     to_warehouse_id=item.to_warehouse_id,
+                    ledger_production_date=ledger_production_date,
                     idempotency_key=f"inventory_transfer:{transfer_id}:inc:{item.id}",
                     operator_id=executed_by,
                     operator_name=None,

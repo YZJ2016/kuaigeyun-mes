@@ -32,6 +32,7 @@ export function useSiteSettingQuery(options: UseSiteSettingQueryOptions = {}) {
     const settings = query.data?.settings;
     if (!settings || typeof settings !== 'object') return;
     useConfigStore.getState().hydrateFromSettings(settings);
+    void useConfigStore.getState().ensureSiteTimezoneConfig();
     useThemeStore.setState({ siteThemeSettings: settings });
     const inactivity = Number(
       (settings as { security?: { inactivity_timeout?: number } }).security?.inactivity_timeout,
