@@ -1,0 +1,1 @@
+import{S as s,e as u,T as r}from"./clientRelease-B66gEy_p.js";const i=["businessConfigTrialRunMode"];function a(){return u({queryKey:i,queryFn:r,staleTime:5*60*1e3})}function t(n=!1){const{data:e}=a();return e===void 0?n:s(e)}export{i as T,t as u};
