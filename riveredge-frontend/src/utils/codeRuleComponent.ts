@@ -4,6 +4,7 @@
  * 提供规则组件与表达式之间的转换功能
  */
 
+import dayjs from '../config/dayjs';
 import {
   CodeRuleComponent,
   AutoCounterComponent,
@@ -12,6 +13,35 @@ import {
   FormFieldComponent,
   createDefaultAutoCounterComponent,
 } from '../types/codeRuleComponent';
+import { getTimezoneFromSiteSetting } from './format';
+
+/** 与后端 code_rule_component_service 自定义日期格式转换一致 */
+export function customCodeRuleDateFormatToExpression(customFormat: string): string {
+  const raw = customFormat.trim() || 'yMd';
+  return raw
+    .replace(/yyyy/g, '{YYYY}')
+    .replace(/yy/g, '{YY}')
+    .replace(/y/g, '{YYYY}')
+    .replace(/MM/g, '{MM}')
+    .replace(/M/g, '{MM}')
+    .replace(/dd/g, '{DD}')
+    .replace(/d/g, '{DD}');
+}
+
+/** 将 y/M/d 自定义格式转为 dayjs 格式串（替换顺序与后端 strftime 转换一致） */
+export function customCodeRuleDateFormatToDayjs(customFormat: string): string {
+  const raw = customFormat.trim() || 'yMd';
+  return raw
+    .replace(/yyyy/g, 'YYYY')
+    .replace(/yy/g, 'YY')
+    .replace(/y/g, 'YYYY')
+    .replace(/dd/g, 'DD')
+    .replace(/d/g, 'D');
+}
+
+function codeRulePreviewNow() {
+  return dayjs().tz(getTimezoneFromSiteSetting());
+}
 
 /**
  * 规则组件服务类（前端版本）
@@ -155,8 +185,7 @@ export class CodeRuleComponentService {
             };
             parts.push(dateMap[presetFormat] || '{YYYY}{MM}{DD}');
           } else {
-            // 自定义格式暂时转换为默认格式
-            parts.push('{YYYY}{MM}{DD}');
+            parts.push(customCodeRuleDateFormatToExpression(date.custom_format || 'yMd'));
           }
           break;
 
@@ -191,7 +220,7 @@ export class CodeRuleComponentService {
     const sortedComponents = [...components].sort((a, b) => a.order - b.order);
 
     const parts: string[] = [];
-    const now = new Date();
+    const now = codeRulePreviewNow();
 
     for (const comp of sortedComponents) {
       switch (comp.type) {
@@ -212,26 +241,17 @@ export class CodeRuleComponentService {
           if (date.format_type === 'preset') {
             const presetFormat = date.preset_format || 'YYYYMMDD';
             const dateMap: Record<string, string> = {
-              'YYYYMMDD': now.getFullYear().toString() + 
-                          String(now.getMonth() + 1).padStart(2, '0') + 
-                          String(now.getDate()).padStart(2, '0'),
-              'YYYYMM': now.getFullYear().toString() + 
-                       String(now.getMonth() + 1).padStart(2, '0'),
-              'YYYY': now.getFullYear().toString(),
-              'YYMMDD': String(now.getFullYear()).slice(-2) + 
-                       String(now.getMonth() + 1).padStart(2, '0') + 
-                       String(now.getDate()).padStart(2, '0'),
-              'YYMM': String(now.getFullYear()).slice(-2) + 
-                     String(now.getMonth() + 1).padStart(2, '0'),
-              'YY': String(now.getFullYear()).slice(-2),
+              YYYYMMDD: now.format('YYYYMMDD'),
+              YYYYMM: now.format('YYYYMM'),
+              YYYY: now.format('YYYY'),
+              YYMMDD: now.format('YYMMDD'),
+              YYMM: now.format('YYMM'),
+              YY: now.format('YY'),
             };
-            parts.push(dateMap[presetFormat] || dateMap['YYYYMMDD']);
+            parts.push(dateMap[presetFormat] || dateMap.YYYYMMDD);
           } else {
-            // 自定义格式暂时使用默认格式
-            const year = now.getFullYear().toString();
-            const month = String(now.getMonth() + 1).padStart(2, '0');
-            const day = String(now.getDate()).padStart(2, '0');
-            parts.push(year + month + day);
+            const dayjsFormat = customCodeRuleDateFormatToDayjs(date.custom_format || 'yMd');
+            parts.push(now.format(dayjsFormat));
           }
           break;
 

@@ -159,6 +159,18 @@ def format_pick_limit_qty(value: Decimal) -> str:
     return text or "0"
 
 
+def skip_work_order_pick_limit_for_non_bom_extra(
+    allowed_bom: Decimal,
+    call_extra: Decimal,
+    *,
+    allow_non_bom_production_issue: bool,
+) -> bool:
+    """组织开启 BOM 外领料且该料无 BOM 配方与补料额度时，确认时不做防超发校验。"""
+    if not allow_non_bom_production_issue:
+        return False
+    return mrp_qty(allowed_bom) <= 0 and mrp_qty(call_extra) <= 0
+
+
 def picking_item_belongs_to_work_order(
     item: object,
     picking: object,

@@ -21,7 +21,8 @@ import {
   Table,
   Typography,
 } from 'antd';
-import { ArrowLeftOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, DeleteOutlined } from '@ant-design/icons';
+import { useQuery } from '@tanstack/react-query';
 import { type Dayjs } from 'dayjs';
 import {
   DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
@@ -94,6 +95,10 @@ import {
   isMaterialSerialEntryEnabled,
   useWarehouseTrackingFlags,
 } from '../shared/warehouseTrackingFlags';
+import { getBusinessConfig } from '../../../../../services/businessConfig';
+import { TOOLBAR_SYNC_PUSH_FLAGS_QUERY_KEY } from '../../../../../hooks/useToolbarSyncPushFlags';
+import { UniMaterialSelect } from '../../../../../components/uni-material-select';
+import { resolveMaterialScenarioUnit } from '../../../../../utils/materialScenarioUnit';
 
 type PickLine = {
   key: number;
@@ -105,6 +110,8 @@ type PickLine = {
   pickedQuantity: number;
   pendingQuantity: number;
   issueQuantity: number;
+  /** 组织开启 BOM 外领料时手工添加的行 */
+  isNonBomExtra?: boolean;
 };
 
 function lineBatchKey(materialId: number, warehouseId?: number): string {
@@ -127,6 +134,23 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const productionPickingAuditRequired = useAuditRequired('production_picking', false);
   const initRef = useRef(false);
+  const extraLineKeyRef = useRef(-1);
+  const { data: businessConfig } = useQuery({
+    queryKey: TOOLBAR_SYNC_PUSH_FLAGS_QUERY_KEY,
+    queryFn: getBusinessConfig,
+    staleTime: 60_000,
+  });
+  const allowNonBomProductionIssue =
+    !fromMaterialCall &&
+    Boolean(businessConfig?.parameters?.warehouse?.allow_non_bom_production_issue);
+  const [addMaterialModalOpen, setAddMaterialModalOpen] = useState(false);
+  const [addMaterialForm] = Form.useForm<{
+    material_id?: number;
+    material_code?: string;
+    material_name?: string;
+    material_unit?: string;
+    issue_quantity?: number;
+  }>();
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -469,21 +493,24 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
         dataIndex: 'requiredQuantity',
         width: 120,
         align: 'right' as const,
-        render: (value: number, line: PickLine) => formatQuantityWithUnit(value, line.unit),
+        render: (value: number, line: PickLine) =>
+          line.isNonBomExtra ? '—' : formatQuantityWithUnit(value, line.unit),
       },
       {
         title: t('app.kuaizhizao.warehouseOutbound.pull.colPickedQty'),
         dataIndex: 'pickedQuantity',
         width: 120,
         align: 'right' as const,
-        render: (value: number, line: PickLine) => formatQuantityWithUnit(value, line.unit),
+        render: (value: number, line: PickLine) =>
+          line.isNonBomExtra ? '—' : formatQuantityWithUnit(value, line.unit),
       },
       {
         title: t('app.kuaizhizao.warehouseOutbound.pull.colPickableQty'),
         dataIndex: 'pendingQuantity',
         width: 120,
         align: 'right' as const,
-        render: (value: number, line: PickLine) => formatQuantityWithUnit(value, line.unit),
+        render: (value: number, line: PickLine) =>
+          line.isNonBomExtra ? '—' : formatQuantityWithUnit(value, line.unit),
       },
       {
         title: t('app.kuaizhizao.warehouseOutbound.pull.colCurrentStock'),
@@ -497,7 +524,7 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
           const stock = sumInventoryPickOptionQty(
             batchOptionsByKey[lineBatchKey(line.materialId, whId)],
           );
-          const insufficient = stock < line.pendingQuantity;
+          const insufficient = !line.isNonBomExtra && stock < line.pendingQuantity;
           return (
             <Typography.Text type={insufficient ? 'danger' : undefined}>
               {formatQuantity(stock)}
@@ -588,7 +615,7 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
         render: (_: unknown, line: PickLine) => (
           <InputNumber
             min={0}
-            max={line.pendingQuantity}
+            max={line.isNonBomExtra ? undefined : line.pendingQuantity}
             value={line.issueQuantity}
             onChange={(v) => {
               const qty = Number(v ?? 0);
@@ -602,11 +629,51 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
           />
         ),
       },
+      ...(allowNonBomProductionIssue
+        ? [
+            {
+              title: t('common.action'),
+              key: 'rowActions',
+              width: 56,
+              align: 'center' as const,
+              fixed: 'right' as const,
+              render: (_: unknown, line: PickLine) =>
+                line.isNonBomExtra ? (
+                  <Button
+                    type="link"
+                    danger
+                    size="small"
+                    icon={<DeleteOutlined />}
+                    aria-label={t('common.delete')}
+                    onClick={() => {
+                      setPickLines((prev) => prev.filter((row) => row.key !== line.key));
+                      setLineWh((prev) => {
+                        const next = { ...prev };
+                        delete next[line.materialId];
+                        return next;
+                      });
+                      setBatchAllocations((prev) => {
+                        const next = { ...prev };
+                        delete next[line.materialId];
+                        return next;
+                      });
+                      setSerials((prev) => {
+                        const next = { ...prev };
+                        delete next[line.materialId];
+                        return next;
+                      });
+                    }}
+                  />
+                ) : null,
+            },
+          ]
+        : []),
       { title: t('common.unit'), dataIndex: 'unit', width: 60 },
         ],
         trackingFlags,
       ),
     [
+      allowNonBomProductionIssue,
       applyLineWarehouse,
       batchAllocations,
       batchOptionsByKey,
@@ -792,15 +859,17 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
       return;
     }
     for (const line of activeLines) {
-      const max = Number(maxQuantities[line.materialId] ?? line.pendingQuantity ?? 0);
-      if (line.issueQuantity > max) {
-        messageApi.error(
-          t('app.kuaizhizao.warehouseOutbound.entry.qtyExceedsPending', {
-            material: line.materialCode || line.materialName,
-            max,
-          }),
-        );
-        return;
+      if (!line.isNonBomExtra) {
+        const max = Number(maxQuantities[line.materialId] ?? line.pendingQuantity ?? 0);
+        if (line.issueQuantity > max) {
+          messageApi.error(
+            t('app.kuaizhizao.warehouseOutbound.entry.qtyExceedsPending', {
+              material: line.materialCode || line.materialName,
+              max,
+            }),
+          );
+          return;
+        }
       }
       const wh = lineWh[line.materialId];
       if (wh == null || !(wh > 0)) {
@@ -1046,6 +1115,11 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
                   <Button size="small" onClick={() => setBatchWhModalOpen(true)} disabled={!pickLines.length}>
                     {t('app.kuaizhizao.warehouseOutbound.entry.batchSetLineWarehouse')}
                   </Button>
+                  {allowNonBomProductionIssue ? (
+                    <Button size="small" type="primary" ghost onClick={() => setAddMaterialModalOpen(true)}>
+                      {t('app.kuaizhizao.warehouseOutbound.entry.addNonBomMaterial')}
+                    </Button>
+                  ) : null}
                 </Space>
               }
             />
@@ -1072,6 +1146,87 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
           ) : null}
         </Card>
       </Spin>
+      <Modal
+        {...MODAL_CONFIG}
+        title={t('app.kuaizhizao.warehouseOutbound.entry.addNonBomMaterialTitle')}
+        open={addMaterialModalOpen}
+        onCancel={() => {
+          setAddMaterialModalOpen(false);
+          addMaterialForm.resetFields();
+        }}
+        onOk={() => {
+          void (async () => {
+            try {
+              const values = await addMaterialForm.validateFields();
+              const materialId = Number(values.material_id);
+              if (!(materialId > 0)) return;
+              if (pickLines.some((row) => row.materialId === materialId)) {
+                messageApi.error(t('app.kuaizhizao.warehouseOutbound.entry.nonBomMaterialDuplicate'));
+                return;
+              }
+              const nextKey = extraLineKeyRef.current;
+              extraLineKeyRef.current -= 1;
+              const unit = String(values.material_unit ?? '个');
+              const newLine: PickLine = {
+                key: nextKey,
+                materialId,
+                materialCode: String(values.material_code ?? ''),
+                materialName: String(values.material_name ?? ''),
+                unit,
+                requiredQuantity: 0,
+                pickedQuantity: 0,
+                pendingQuantity: 0,
+                issueQuantity: Number(values.issue_quantity ?? 0),
+                isNonBomExtra: true,
+              };
+              setPickLines((prev) => [...prev, newLine]);
+              const meta = await loadConfirmPreviewMaterialMeta([
+                { id: materialId, material_id: materialId, material_code: newLine.materialCode },
+              ]);
+              setMaterialMeta((prev) => ({ ...prev, ...meta }));
+              addMaterialForm.resetFields();
+              setAddMaterialModalOpen(false);
+            } catch {
+              /* 校验未通过 */
+            }
+          })();
+        }}
+        destroyOnHidden
+      >
+        <Form form={addMaterialForm} layout="vertical" requiredMark={false}>
+          <UniMaterialSelect
+            name="material_id"
+            label={t('app.kuaizhizao.warehouseOutbound.field.selectMaterial')}
+            placeholder={t('app.kuaizhizao.warehouseOutbound.field.selectMaterial')}
+            required
+            fillMapping={{
+              material_code: 'mainCode',
+              material_name: 'name',
+            }}
+            showQuickCreate
+            showAdvancedSearch
+            onChange={(_val, material) => {
+              if (material && !Array.isArray(material)) {
+                addMaterialForm.setFieldsValue({
+                  material_unit: resolveMaterialScenarioUnit(material, 'production'),
+                });
+              }
+            }}
+          />
+          <Form.Item name="material_code" hidden />
+          <Form.Item name="material_name" hidden />
+          <Form.Item name="material_unit" hidden />
+          <Form.Item
+            name="issue_quantity"
+            label={t('app.kuaizhizao.warehouseOutbound.entry.thisIssue')}
+            rules={[
+              { required: true, message: t('app.kuaizhizao.warehouseOutbound.entry.fillIssueQty') },
+            ]}
+          >
+            <InputNumber min={0} style={{ width: '100%' }} />
+          </Form.Item>
+        </Form>
+      </Modal>
       <Modal
         {...MODAL_CONFIG}
         title={t('app.kuaizhizao.warehouseOutbound.entry.batchSetLineWarehouse')}

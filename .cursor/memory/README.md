@@ -44,6 +44,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 同步/推送 Hub、外推、DocumentPush、preferIds、`:sync` / `:push` | `features/sync-push-hub-master-data.md` |
 | SyncFromSource、多源映射、只补缺字段、match_key 合并 | `features/sync-from-source-multi-source-merge.md` |
 | 通知仓库 504、服务器暂时不可用、NestedTransaction 死锁 | `features/notify-warehouse-nested-tx-deadlock.md` |
+| BOM 外领料、allow_non_bom_production_issue、工单取单加料 | `features/non-bom-production-picking.md` |
 | 企业微信、消息提醒推企微、push wecom、站内信不进企微 | `features/wecom-push-from-pc-messages.md` |
 | 单位/物料同步串扰、单位写成物料编码、query_measureunits | `features/unit-material-sync-decouple.md` |
 | 单位显示成编码、库存/工单见吨(T)、MaterialUnitLabel、单位名称 | `features/material-unit-display-name.md` |
@@ -215,6 +216,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | `features/sync-push-hub-master-data.md` | 物料/BOM/工序 SyncPushHub + 外推 | sync-push | 已交付 |
 | `features/sync-from-source-multi-source-merge.md` | 入站多源：只补缺字段 + 匹配键合并 | sync-from-source | 已交付 |
 | `features/notify-warehouse-nested-tx-deadlock.md` | 通知仓库 Nested 事务死锁修复 | kuaizhizao-warehouse | 已交付 |
+| `features/non-bom-production-picking.md` | 生产领料 BOM 外物料组织开关 | kuaizhizao-warehouse | 已交付 |
 | `features/wecom-push-from-pc-messages.md` | PC 业务消息提醒推企业微信（user_id 解析） | messaging | 已交付 |
 | `features/unit-material-sync-decouple.md` | 单位/物料同步别名与写入前去重拆开 | sync-from-source | 已交付 |
 | `features/material-unit-display-name.md` | 用户可见单位一律显示目录名称 | materialUnitDisplay / MaterialUnitLabel | 已交付 |

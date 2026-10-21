@@ -48,6 +48,8 @@ interface ConfigState {
    *（真源仍为 infra_settings.TIMEZONE，经 /platform-settings/public 下发）
    */
   ensureTimezoneFromPlatform: () => Promise<void>;
+  /** 站点 settings 与本地缓存均无 timezone 时，从平台公开设置补齐 */
+  ensureSiteTimezoneConfig: () => Promise<boolean>;
   updateConfig: (key: string, value: any) => Promise<void>;
   updateConfigs: (settings: Record<string, any>) => Promise<void>;
   getConfig: <T>(key: string, defaultValue: T) => T;
@@ -140,12 +142,12 @@ export const useConfigStore = create<ConfigState>()(
           });
           const tz = backendConfigs.timezone;
           if (tz == null || String(tz).trim() === '') {
-            await get().ensureTimezoneFromPlatform();
+            await get().ensureSiteTimezoneConfig();
           }
         } catch (error) {
           console.error('获取系统配置失败:', error);
           set({ initialized: true });
-          await get().ensureTimezoneFromPlatform();
+          await get().ensureSiteTimezoneConfig();
         } finally {
           set({ loading: false });
         }
@@ -160,6 +162,20 @@ export const useConfigStore = create<ConfigState>()(
           },
           initialized: true,
         });
+        const tz = backendConfigs.timezone;
+        if (tz == null || String(tz).trim() === '') {
+          void get().ensureSiteTimezoneConfig();
+        }
+      },
+
+      ensureSiteTimezoneConfig: async () => {
+        const existing = get().configs?.timezone;
+        if (existing != null && String(existing).trim() !== '') {
+          return true;
+        }
+        await get().ensureTimezoneFromPlatform();
+        const after = get().configs?.timezone;
+        return after != null && String(after).trim() !== '';
       },
 
       ensureTimezoneFromPlatform: async () => {

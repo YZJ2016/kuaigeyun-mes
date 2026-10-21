@@ -515,6 +515,7 @@ PARAMETER_KEYS = {
     "parameters.warehouse.auto_outbound",
     "parameters.warehouse.allow_negative_inventory",
     "parameters.warehouse.over_issue_allowance_ratio",
+    "parameters.warehouse.allow_non_bom_production_issue",
     "parameters.purchase.tolerance_percentage",
     "parameters.purchase.price_fluctuation_limit_percent",
     "parameters.quality.incoming_inspection",
@@ -600,6 +601,7 @@ IMPLEMENTED_PARAMETER_KEYS = {
     "parameters.warehouse.auto_outbound",
     "parameters.warehouse.allow_negative_inventory",
     "parameters.warehouse.over_issue_allowance_ratio",
+    "parameters.warehouse.allow_non_bom_production_issue",
     "parameters.purchase.tolerance_percentage",
     "parameters.purchase.price_fluctuation_limit_percent",
     "parameters.quality.incoming_inspection",
@@ -863,6 +865,7 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
         "auto_outbound": True,
         "allow_negative_inventory": False,
         "over_issue_allowance_ratio": 0,
+        "allow_non_bom_production_issue": False,
         "kingdee_inventory_push": {
             "enabled": False,
             "form_id": "STK_Miscellaneous",
@@ -1270,6 +1273,16 @@ class BusinessConfigService:
         if ratio > 1:
             return Decimal("1")
         return ratio
+
+    async def get_allow_non_bom_production_issue(self, tenant_id: int) -> bool:
+        """生产领料是否允许添加 BOM 外主数据物料（默认关）。"""
+        config = await self.get_business_config(tenant_id)
+        raw = (
+            config.get("parameters", {})
+            .get("warehouse", {})
+            .get("allow_non_bom_production_issue", False)
+        )
+        return bool(raw)
 
     async def get_price_decimal_places(self, tenant_id: int) -> int:
         """单价小数位（默认 2，上限 4，对齐采购单价 Decimal 字段）。"""

@@ -498,6 +498,27 @@ def test_grouped_push_counts_one_group_for_multi_line_order():
     assert count == 1
 
 
+def test_resolve_buy_selected_material_ids_uses_material_aggregate():
+    """同一物料多条采购明细时，所选行可无建议量，按物料汇总判定可下推。"""
+    svc = DemandComputationService()
+    items = [
+        SimpleNamespace(
+            id=100,
+            material_id=501,
+            material_source_type=SOURCE_TYPE_BUY,
+            suggested_purchase_order_quantity=0.0,
+        ),
+        SimpleNamespace(
+            id=101,
+            material_id=501,
+            material_source_type=SOURCE_TYPE_BUY,
+            suggested_purchase_order_quantity=72.0,
+        ),
+    ]
+    selected = svc._resolve_buy_selected_material_ids(items, [100])
+    assert selected == {501}
+
+
 def test_resolve_production_selected_computation_item_ids():
     items = [
         SimpleNamespace(

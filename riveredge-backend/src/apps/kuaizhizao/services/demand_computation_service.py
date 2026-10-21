@@ -3880,14 +3880,16 @@ class DemandComputationService(AppBaseService):
         if selected_item_ids is None:
             return None
         selected_ids = {int(i) for i in selected_item_ids if i is not None}
+        suggested_by_material = self._aggregate_buy_suggested_qty_by_material(items)
         selected_material_ids: Set[int] = set()
         for item in items:
             if item.id not in selected_ids or item.material_id is None:
                 continue
             if item.material_source_type != SOURCE_TYPE_BUY:
                 continue
-            if item.suggested_purchase_order_quantity and item.suggested_purchase_order_quantity > 0:
-                selected_material_ids.add(int(item.material_id))
+            mid = int(item.material_id)
+            if suggested_by_material.get(mid, 0.0) > 0:
+                selected_material_ids.add(mid)
         if not selected_material_ids:
             raise BusinessLogicError("所选明细均不可下推，请重新选择")
         return selected_material_ids
@@ -4018,13 +4020,16 @@ class DemandComputationService(AppBaseService):
         if not items:
             raise BusinessLogicError("计算结果明细为空，无法生成工单和采购单")
 
+        wo_selection_item_ids = (
+            None if generate_mode == "purchase_only" else selected_item_ids
+        )
         wo_granularity = await self.resolve_effective_work_order_granularity(
             tenant_id,
             computation,
             items,
             work_order_granularity,
             generate_mode=generate_mode,
-            selected_item_ids=selected_item_ids,
+            selected_item_ids=wo_selection_item_ids,
         )
         selected_computation_item_ids = (
             None
@@ -6084,14 +6089,19 @@ class DemandComputationService(AppBaseService):
 
         preview_items: List[Dict[str, Any]] = []
         skipped_without_supplier = 0
-        seen_material_ids: set = set()
+        representative_buy_item_by_material: Dict[int, DemandComputationItem] = {}
         for item in items:
             if item.material_source_type != SOURCE_TYPE_BUY:
                 continue
-            if item.material_id is None or item.material_id in seen_material_ids:
+            if item.material_id is None:
                 continue
-            seen_material_ids.add(item.material_id)
+            qty = float(item.suggested_purchase_order_quantity or 0)
+            if qty <= 0:
+                continue
             mid = int(item.material_id)
+            if mid not in representative_buy_item_by_material:
+                representative_buy_item_by_material[mid] = item
+        for mid, item in representative_buy_item_by_material.items():
             suggested = suggested_by_material.get(mid, 0.0)
             if suggested <= 0:
                 continue
@@ -6558,19 +6568,38 @@ class DemandComputationService(AppBaseService):
             raise BusinessLogicError("仅支持「直接生成工单」生产路径")
 
         if production == "work_order":
-            r = await self.generate_work_orders_and_purchase_orders(
-                tenant_id=tenant_id,
-                computation_id=computation_id,
-                created_by=created_by,
-                generate_mode="work_order_only",
-                push_mode=resolved_push_mode,
-                selected_item_ids=production_item_ids,
-                work_order_granularity=work_order_granularity,
-                omit_document_notes=omit_document_notes,
-            )
-            results["work_orders"] = r.get("work_orders", [])
-            results["outsource_work_orders"] = r.get("outsource_work_orders", [])
-            results["work_order_groups"] = r.get("work_order_groups", [])
+            run_work_order_push = True
+            if production_item_ids is not None and len(production_item_ids) == 0:
+                run_work_order_push = False
+            elif production_item_ids is not None:
+                comp_items = await DemandComputationItem.filter(
+                    tenant_id=tenant_id,
+                    computation_id=computation_id,
+                ).all()
+                try:
+                    self._resolve_production_selected_computation_item_ids(
+                        comp_items,
+                        production_item_ids,
+                    )
+                except BusinessLogicError:
+                    if purchase in ("requisition", "purchase_order"):
+                        run_work_order_push = False
+                    else:
+                        raise
+            if run_work_order_push:
+                r = await self.generate_work_orders_and_purchase_orders(
+                    tenant_id=tenant_id,
+                    computation_id=computation_id,
+                    created_by=created_by,
+                    generate_mode="work_order_only",
+                    push_mode=resolved_push_mode,
+                    selected_item_ids=production_item_ids,
+                    work_order_granularity=work_order_granularity,
+                    omit_document_notes=omit_document_notes,
+                )
+                results["work_orders"] = r.get("work_orders", [])
+                results["outsource_work_orders"] = r.get("outsource_work_orders", [])
+                results["work_order_groups"] = r.get("work_order_groups", [])
 
         if purchase == "requisition":
             from apps.kuaizhizao.services.document_push_pull_service import DocumentPushPullService

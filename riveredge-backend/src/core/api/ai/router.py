@@ -25,6 +25,14 @@ from core.ai.schemas.chat import (
 from core.ai.schemas.draft import StructuredDraftRequest, StructuredDraftResult
 from core.ai.schemas.jobs import AiJobCreateRequest, AiJobStatusResponse
 from core.ai.schemas.stats import AiAuditLogListResponse, AiStatsOverviewResponse
+from core.ai.kuaiai_conversation_service import KuaiaiConversationService
+from core.ai.schemas.kuaiai_conversation import (
+    KuAiConversationCreateBody,
+    KuAiConversationDetailSchema,
+    KuAiConversationImportBody,
+    KuAiConversationListResponse,
+    KuAiConversationUpsertBody,
+)
 from core.ai.stats_service import AiStatsService
 from core.ai.structured_draft import StructuredDraftService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
@@ -228,3 +236,115 @@ async def ai_audit_logs(
         page_size=page_size,
         capability=capability,
     )
+
+
+@router.get(
+    "/conversations",
+    response_model=KuAiConversationListResponse,
+    dependencies=[Depends(require_ai_capability("entry"))],
+)
+async def list_kuaiai_conversations(ai_auth: AiAuth = Depends(get_ai_auth)):
+    return await KuaiaiConversationService.list_conversations(
+        tenant_id=ai_auth.tenant_id,
+        user_id=ai_auth.user.id,
+    )
+
+
+@router.get(
+    "/conversations/{conversation_uuid}",
+    response_model=KuAiConversationDetailSchema,
+    dependencies=[Depends(require_ai_capability("entry"))],
+)
+async def get_kuaiai_conversation(
+    conversation_uuid: str,
+    ai_auth: AiAuth = Depends(get_ai_auth),
+):
+    try:
+        return await KuaiaiConversationService.get_conversation(
+            tenant_id=ai_auth.tenant_id,
+            user_id=ai_auth.user.id,
+            conversation_uuid=conversation_uuid,
+        )
+    except NotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.post(
+    "/conversations",
+    response_model=KuAiConversationDetailSchema,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_ai_capability("entry"))],
+)
+async def create_kuaiai_conversation(
+    body: KuAiConversationCreateBody,
+    ai_auth: AiAuth = Depends(get_ai_auth),
+):
+    try:
+        return await KuaiaiConversationService.create_conversation(
+            tenant_id=ai_auth.tenant_id,
+            user_id=ai_auth.user.id,
+            body=body,
+        )
+    except ValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.put(
+    "/conversations/{conversation_uuid}",
+    response_model=KuAiConversationDetailSchema,
+    dependencies=[Depends(require_ai_capability("entry"))],
+)
+async def upsert_kuaiai_conversation(
+    conversation_uuid: str,
+    body: KuAiConversationUpsertBody,
+    ai_auth: AiAuth = Depends(get_ai_auth),
+):
+    try:
+        return await KuaiaiConversationService.upsert_conversation(
+            tenant_id=ai_auth.tenant_id,
+            user_id=ai_auth.user.id,
+            conversation_uuid=conversation_uuid,
+            title=body.title,
+            messages=body.messages,
+        )
+    except ValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.delete(
+    "/conversations/{conversation_uuid}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_ai_capability("entry"))],
+)
+async def delete_kuaiai_conversation(
+    conversation_uuid: str,
+    ai_auth: AiAuth = Depends(get_ai_auth),
+):
+    try:
+        await KuaiaiConversationService.delete_conversation(
+            tenant_id=ai_auth.tenant_id,
+            user_id=ai_auth.user.id,
+            conversation_uuid=conversation_uuid,
+        )
+    except NotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return None
+
+
+@router.post(
+    "/conversations/import",
+    response_model=KuAiConversationListResponse,
+    dependencies=[Depends(require_ai_capability("entry"))],
+)
+async def import_kuaiai_conversations(
+    body: KuAiConversationImportBody,
+    ai_auth: AiAuth = Depends(get_ai_auth),
+):
+    try:
+        return await KuaiaiConversationService.import_conversations(
+            tenant_id=ai_auth.tenant_id,
+            user_id=ai_auth.user.id,
+            items=body.items,
+        )
+    except ValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc

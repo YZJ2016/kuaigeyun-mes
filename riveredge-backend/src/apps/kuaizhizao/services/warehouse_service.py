@@ -2731,6 +2731,12 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                     load_work_order_material_call_extra_map,
                     resolve_work_order_pick_cap,
                     resolve_work_order_pick_limit,
+                    skip_work_order_pick_limit_for_non_bom_extra,
+                )
+                from infra.services.business_config_service import BusinessConfigService
+
+                allow_non_bom_production_issue = await BusinessConfigService().get_allow_non_bom_production_issue(
+                    tenant_id
                 )
                 from apps.kuaizhizao.utils.over_qty_tolerance import OverQtyToleranceResolver
                 from apps.kuaizhizao.utils.mrp_quantity import mrp_qty
@@ -2852,6 +2858,12 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                                     mat_id
                                 )
                                 call_extra = call_extra_map.get(mat_id, Decimal(0))
+                                if skip_work_order_pick_limit_for_non_bom_extra(
+                                    allowed_bom,
+                                    call_extra,
+                                    allow_non_bom_production_issue=allow_non_bom_production_issue,
+                                ):
+                                    continue
                                 allowed = resolve_work_order_pick_cap(
                                     allowed_bom,
                                     over_issue_ratio,
@@ -3480,6 +3492,19 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
         from apps.kuaizhizao.utils.over_qty_tolerance import OverQtyToleranceResolver
         from apps.kuaizhizao.utils.picking_posting import resolve_work_order_pick_limit
 
+        from infra.services.business_config_service import BusinessConfigService
+
+        allow_non_bom = await BusinessConfigService().get_allow_non_bom_production_issue(tenant_id)
+        non_pick_bom_material_ids: set[int] = set()
+        for item in kitting.items or []:
+            if not is_pick_list_material(
+                getattr(item, "issue_method", None),
+                getattr(item, "source_type", None),
+            ):
+                mid = int(getattr(item, "material_id", 0) or 0)
+                if mid > 0:
+                    non_pick_bom_material_ids.add(mid)
+
         tolerance_resolver = OverQtyToleranceResolver(tenant_id)
         max_by_material: Dict[int, Decimal] = {}
         meta_by_material: Dict[int, Dict[str, str]] = {}
@@ -3568,19 +3593,47 @@ class ProductionPickingService(AppBaseService[ProductionPicking]):
                         or ""
                     )
                     label = f"{code} {name}".strip() if name else str(code)
-                    raise BusinessLogicError(
-                        f"物料 {label}（ID {material_id}）不在工单可领料范围内："
-                        f"仅 BOM 中发料方式为「事前领料(pick)」的物料可领；"
-                        f"倒冲/不发料不进领料单。请确认该物料来源与发料方式后重试"
+                    if material_id in non_pick_bom_material_ids:
+                        raise BusinessLogicError(
+                            f"物料 {label}（ID {material_id}）在 BOM 中为倒冲/不发料，"
+                            f"不可通过生产领料单发放"
+                        )
+                    if not allow_non_bom:
+                        raise BusinessLogicError(
+                            f"物料 {label}（ID {material_id}）不在工单可领料范围内："
+                            f"仅 BOM 中发料方式为「事前领料(pick)」的物料可领；"
+                            f"倒冲/不发料不进领料单。请确认该物料来源与发料方式后重试"
+                        )
+                    from apps.master_data.models.material import Material
+
+                    mat = await Material.get_or_none(
+                        tenant_id=tenant_id, id=material_id, deleted_at__isnull=True
                     )
-                issued_so_far = issued_by_material.get(material_id, Decimal("0"))
-                if issued_so_far + issue_qty > max_qty:
-                    code = str(getattr(line, "material_code", "") or line.get("material_code", "") or material_id)
-                    raise BusinessLogicError(
-                        f"领料数量超过可领数量：{code}（可领 {float(max_qty)}，"
-                        f"本单已计 {float(issued_so_far)}，本行 {float(issue_qty)}）"
+                    if not mat:
+                        raise NotFoundError(f"物料不存在: {material_id}")
+                    meta_by_material.setdefault(
+                        material_id,
+                        {
+                            "material_code": str(getattr(mat, "main_code", "") or ""),
+                            "material_name": str(getattr(mat, "name", "") or ""),
+                            "material_unit": str(getattr(mat, "base_unit", "") or "个"),
+                        },
                     )
-                issued_by_material[material_id] = issued_so_far + issue_qty
+                    issued_so_far = issued_by_material.get(material_id, Decimal("0"))
+                    issued_by_material[material_id] = issued_so_far + issue_qty
+                else:
+                    issued_so_far = issued_by_material.get(material_id, Decimal("0"))
+                    if issued_so_far + issue_qty > max_qty:
+                        code = str(
+                            getattr(line, "material_code", "")
+                            or line.get("material_code", "")
+                            or material_id
+                        )
+                        raise BusinessLogicError(
+                            f"领料数量超过可领数量：{code}（可领 {float(max_qty)}，"
+                            f"本单已计 {float(issued_so_far)}，本行 {float(issue_qty)}）"
+                        )
+                    issued_by_material[material_id] = issued_so_far + issue_qty
 
                 line_wh_id = getattr(line, "warehouse_id", None)
                 if line_wh_id is None and isinstance(line, dict):

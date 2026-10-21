@@ -1,15 +1,24 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { useNavigate } from 'react-router-dom'
 import { createCache, StyleProvider } from '@ant-design/cssinjs'
-import { message, Button, Spin, theme, Tag } from 'antd'
+import { message, Button, Spin, theme, Tag, Empty, Popconfirm, Result } from 'antd'
 import BorderBeam from 'antd/es/border-beam'
-import { CloseOutlined, CopyOutlined, ReloadOutlined, PlusOutlined, CaretDownOutlined, FullscreenOutlined } from '@ant-design/icons'
+import {
+  CloseOutlined,
+  CopyOutlined,
+  ReloadOutlined,
+  PlusOutlined,
+  CaretDownOutlined,
+  FullscreenOutlined,
+  DeleteOutlined,
+} from '@ant-design/icons'
 import { Bubble, Prompts, Sender } from '@ant-design/x'
 import type { PromptsItemType } from '@ant-design/x'
 import { useXChat, XRequest } from '@ant-design/x-sdk'
+import { chatMessagesStoreHelper } from '@ant-design/x-sdk/es/x-chat/store'
 import Lottie from 'lottie-react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
 import {
   buildKuaiChatAuthHeaders,
   KuaiDeepSeekChatProvider,
@@ -24,9 +33,45 @@ import { useCurrentUser } from '../../hooks/useCurrentUser'
 import { hasPermission } from '../../utils/permission'
 import { useAiContext, toAiContextApiPayload } from '../../contexts/AiContext'
 import { executeAiAction } from '../../apps/kuaiai/services/catalog'
-import assistAnimation from '../../../static/lottie/assist.json'
 import welcomeAnimation from '../../../static/lottie/welcome.json'
+import { KuAiLottieMark } from './KuAiLottieMark'
 import AiAssistantMarkdown from './AiAssistantMarkdown'
+import { KUAIAI_ASSISTANT_TAB_PATH } from '../../constants/kuaiaiAssistantTab'
+import { resolveSessionTenantScope } from '../../config/sessionQueries'
+import { useCurrentUserQuery } from '../../hooks/useCurrentUserQuery'
+import { getTenantId, getToken, getTokenTenantId, isInfraSuperAdminFromToken } from '../../utils/auth'
+import { nowSiteDateTimeString } from '../../utils/formDate'
+import {
+  buildKuAiStoredMessagesFromChat,
+  deriveKuAiInquirerName,
+  deriveKuAiLastMessageMeta,
+  resolveKuAiUserDisplayName,
+  buildXChatMessagesFromKuAiStored,
+  kuAiConversationMessagesFingerprint,
+  seedKuAiMessageMetaFromStored,
+  type KuAiMessageMeta,
+} from './kuAiMessageMeta'
+import {
+  createKuAiConversationRemote,
+  deleteKuAiConversationRemote,
+  fetchKuAiConversationDetail,
+  fetchKuAiConversationList,
+  importKuAiConversationsRemote,
+  upsertKuAiConversationKeepalive,
+  upsertKuAiConversationRemote,
+} from './kuAiConversationApi'
+import {
+  clearKuAiConversationsLocal,
+  createKuAiConversationId,
+  deriveKuAiConversationTitle,
+  listKuAiConversationsFromLocal,
+  mergeKuAiConversationDetailIntoRecord,
+  moveKuAiConversationToFront,
+  resolveKuAiConversationScope,
+  shouldMoveKuAiThreadToFrontOnPersist,
+  type KuAiConversationRecord,
+  type KuAiStoredMessage,
+} from './kuAiConversationStore'
 import './index.less'
 
 type XChatMessage = {
@@ -245,6 +290,10 @@ type AIAssistantDialogUIProps = {
   modelName?: string
   contextBadge?: string | null
   onConfirmAction?: (confirmToken: string) => void
+  embedded?: boolean
+  embeddedSplit?: boolean
+  canOpenAssistantTab?: boolean
+  onOpenAssistantTab?: () => void
 }
 
 const AIAssistantDialogUI: React.FC<AIAssistantDialogUIProps> = ({
@@ -260,6 +309,10 @@ const AIAssistantDialogUI: React.FC<AIAssistantDialogUIProps> = ({
   modelName,
   contextBadge,
   onConfirmAction,
+  embedded = false,
+  embeddedSplit = false,
+  canOpenAssistantTab = false,
+  onOpenAssistantTab,
 }) => {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -360,22 +413,35 @@ const AIAssistantDialogUI: React.FC<AIAssistantDialogUIProps> = ({
             aria-label={t('ui.aiAssistant.newChat')}
             title={t('ui.aiAssistant.newChat')}
           />
-          <Button
-            type="text"
-            icon={<FullscreenOutlined />}
-            onClick={handleOpenFullChat}
-            className="ai-qa-header-icon-btn"
-            aria-label={t('ui.aiAssistant.openFullChat', { defaultValue: '打开全宽对话' })}
-            title={t('ui.aiAssistant.openFullChat', { defaultValue: '打开全宽对话' })}
-          />
-          <Button
-            type="text"
-            icon={<CloseOutlined />}
-            onClick={onClose}
-            className="ai-qa-header-icon-btn"
-            aria-label={t('common.close')}
-            title={t('common.close')}
-          />
+          {!embedded && canOpenAssistantTab && onOpenAssistantTab ? (
+            <Button
+              type="text"
+              icon={<FullscreenOutlined />}
+              onClick={onOpenAssistantTab}
+              className="ai-qa-header-icon-btn"
+              aria-label={t('ui.aiAssistant.openAssistantTab')}
+              title={t('ui.aiAssistant.openAssistantTab')}
+            />
+          ) : !embedded ? (
+            <Button
+              type="text"
+              icon={<FullscreenOutlined />}
+              onClick={handleOpenFullChat}
+              className="ai-qa-header-icon-btn"
+              aria-label={t('ui.aiAssistant.openFullChat', { defaultValue: '打开全宽对话' })}
+              title={t('ui.aiAssistant.openFullChat', { defaultValue: '打开全宽对话' })}
+            />
+          ) : null}
+          {!embedded ? (
+            <Button
+              type="text"
+              icon={<CloseOutlined />}
+              onClick={onClose}
+              className="ai-qa-header-icon-btn"
+              aria-label={t('common.close')}
+              title={t('common.close')}
+            />
+          ) : null}
         </div>
       </header>
 
@@ -416,17 +482,19 @@ const AIAssistantDialogUI: React.FC<AIAssistantDialogUIProps> = ({
                   placement: 'start',
                   contentRender: renderAiBubbleContent,
                   styles: {
+                    root: {
+                      // 默认 columnGap≈paddingSM(12)；54px 头像耳机略出框，略增至 padding(16)
+                      columnGap: token.padding,
+                    },
                     content: {
                       background: token.colorFillTertiary,
                       color: token.colorText,
                     },
                   },
                   avatar: (
-                    <Lottie
-                      className="ai-qa-lottie-enhance"
-                      animationData={assistAnimation}
-                      loop
-                      style={{ width: 32, height: 32 }}
+                    <KuAiLottieMark
+                      size={54}
+                      className="ai-qa-lottie-enhance ai-qa-bubble-avatar-mark"
                     />
                   ),
                   footer: (content: unknown, info: { status?: string; extraInfo?: { lastUserMessage?: string; toolTraces?: KuaiToolTrace[] } }) => {
@@ -436,7 +504,7 @@ const AIAssistantDialogUI: React.FC<AIAssistantDialogUIProps> = ({
                     const traces = info?.extraInfo?.toolTraces ?? []
                     const confirmToken = extractConfirmToken(text)
                     return (
-                      <>
+                      <div className="ai-qa-bubble-footer-wrap">
                         <ToolTraceList traces={traces} />
                       <div className="ai-qa-bubble-actions">
                         {confirmToken && onConfirmAction ? (
@@ -470,7 +538,7 @@ const AIAssistantDialogUI: React.FC<AIAssistantDialogUIProps> = ({
                           </span>
                         ) : null}
                       </div>
-                      </>
+                      </div>
                     )
                   },
                 },
@@ -499,6 +567,26 @@ const AIAssistantDialogUI: React.FC<AIAssistantDialogUIProps> = ({
     </div>
   )
 
+  const panelContainer = (
+    <div className="ai-qa-panel-container">
+      <div className="ai-qa-panel-content">
+        <div className="ai-qa-panel-body ai-assistant-modal-content">{qaContent}</div>
+      </div>
+    </div>
+  )
+
+  if (embedded) {
+    return (
+      <div
+        className={`ai-qa-panel ai-qa-panel--embedded${embeddedSplit ? ' ai-qa-panel--embedded-split' : ''}`}
+        role="region"
+        aria-label={t('ui.aiAssistant.ariaLabel')}
+      >
+        {panelContainer}
+      </div>
+    )
+  }
+
   return (
     <div
       className="ai-qa-panel"
@@ -507,41 +595,127 @@ const AIAssistantDialogUI: React.FC<AIAssistantDialogUIProps> = ({
       aria-modal={false}
     >
       <div className="ai-qa-panel-glow">
-        <BorderBeam color={borderBeamColor}>
-          <div className="ai-qa-panel-container">
-            <div className="ai-qa-panel-content">
-              <div className="ai-qa-panel-body ai-assistant-modal-content">{qaContent}</div>
-            </div>
-          </div>
-        </BorderBeam>
+        <BorderBeam color={borderBeamColor}>{panelContainer}</BorderBeam>
       </div>
     </div>
   )
+}
+
+type AIAssistantShellLayoutProps = {
+  embedded?: boolean
+  embeddedSplit?: boolean
+  canOpenAssistantTab?: boolean
+  onOpenAssistantTab?: () => void
+  conversationId?: string
+  initialMessages?: KuAiStoredMessage[]
+  onPersistConversation?: (conversationId: string, messages: KuAiStoredMessage[]) => void
+  onNewChatExternal?: () => void
 }
 
 type AIAssistantLivePanelProps = {
   open: boolean
   onClose?: () => void
   model: string
-}
+} & AIAssistantShellLayoutProps
 
-const AIAssistantLivePanel: React.FC<AIAssistantLivePanelProps> = ({ open, onClose, model }) => {
+const AIAssistantLivePanel: React.FC<AIAssistantLivePanelProps> = ({
+  open,
+  onClose,
+  model,
+  embedded,
+  embeddedSplit,
+  canOpenAssistantTab,
+  onOpenAssistantTab,
+  conversationId,
+  initialMessages,
+  onPersistConversation,
+  onNewChatExternal,
+}) => {
   const { t } = useTranslation()
-  const { context, contextBadge, pendingAssistant, setPendingAssistant } = useAiContext()
   const currentUser = useCurrentUser()
+  const userDisplayName = useMemo(() => resolveKuAiUserDisplayName(currentUser), [currentUser])
+  const assistantDisplayName = t('ui.aiAssistant.title')
+  const { context, contextBadge, pendingAssistant, setPendingAssistant } = useAiContext()
   // 发送走 canonical /core/ai/chat/completions，需 kuaiai:act:execute（与全宽对话页一致）
   const canSend = hasPermission(currentUser, 'kuaiai:act:execute')
   const provider = useMemo(() => getKuaiChatProvider(model), [model])
+  const [messageMeta, setMessageMeta] = useState<Map<string, KuAiMessageMeta>>(() => new Map())
+  const messageMetaRef = useRef(messageMeta)
+  messageMetaRef.current = messageMeta
+
+  const conversationKey = conversationId
+    ? `riveredge-kuaiai-${conversationId}`
+    : 'riveredge-ai-assistant-qa'
+
+  const defaultMessages = useMemo(
+    () =>
+      (initialMessages ?? []).map((m, index) => ({
+        id: `stored-${conversationId ?? 'float'}-${index}`,
+        message: { role: m.role, content: m.content },
+        status: 'success' as const,
+      })),
+    [conversationId, initialMessages],
+  )
 
   const chat = useXChat<XChatMessage, XChatMessage, Record<string, unknown>, Record<string, unknown>>({
     provider,
-    conversationKey: 'riveredge-ai-assistant-qa',
-    defaultMessages: [],
+    conversationKey,
+    defaultMessages,
     requestFallback: (_requestParams, { error }) => ({
       role: 'assistant',
       content: error?.message || t('ui.aiAssistant.requestFailed'),
     }),
   })
+
+  const { setMessages: setChatMessages } = chat
+  const hydratedMessagesFingerprintRef = useRef('')
+
+  useEffect(() => {
+    if (!conversationId) return
+    return () => {
+      chatMessagesStoreHelper.delete(conversationKey)
+      hydratedMessagesFingerprintRef.current = ''
+    }
+  }, [conversationId, conversationKey])
+
+  useEffect(() => {
+    if (!conversationId) return
+    const stored = initialMessages ?? []
+    const fingerprint = kuAiConversationMessagesFingerprint(conversationId, stored)
+    if (fingerprint === hydratedMessagesFingerprintRef.current) return
+    setChatMessages(buildXChatMessagesFromKuAiStored(conversationId, stored))
+    hydratedMessagesFingerprintRef.current = fingerprint
+  }, [conversationId, initialMessages, setChatMessages])
+
+  useEffect(() => {
+    if (!conversationId) return
+    setMessageMeta((prev) => {
+      const next = new Map(prev)
+      seedKuAiMessageMetaFromStored(next, conversationId, initialMessages ?? [])
+      return next
+    })
+  }, [conversationId, initialMessages])
+
+  useEffect(() => {
+    if (!userDisplayName && !assistantDisplayName) return
+    setMessageMeta((prev) => {
+      const next = new Map(prev)
+      let changed = false
+      for (const item of chat.messages) {
+        const role = (item.message as XChatMessage)?.role
+        if (role !== 'user' && role !== 'assistant') continue
+        if (role === 'assistant' && item.status !== 'success') continue
+        const id = String(item.id)
+        if (next.has(id)) continue
+        if (id.startsWith('stored-')) continue
+        const speaker_name = role === 'user' ? userDisplayName : assistantDisplayName
+        if (!speaker_name) continue
+        next.set(id, { speaker_name, spoken_at: nowSiteDateTimeString() })
+        changed = true
+      }
+      return changed ? next : prev
+    })
+  }, [chat.messages, chat.isRequesting, userDisplayName, assistantDisplayName])
 
   const bubbleItems = useMemo(() => {
     return chat.messages.map((m, i) => {
@@ -589,6 +763,10 @@ const AIAssistantLivePanel: React.FC<AIAssistantLivePanelProps> = ({ open, onClo
   }, [bubbleItems, chat.isRequesting])
 
   const handleNewChat = () => {
+    if (onNewChatExternal) {
+      onNewChatExternal()
+      return
+    }
     const c = chat as {
       clearMessages?: () => void
       setMessages?: (messages: []) => void
@@ -648,6 +826,20 @@ const AIAssistantLivePanel: React.FC<AIAssistantLivePanelProps> = ({ open, onClo
     )
   }, [open, pendingAssistant, chat.isRequesting, context, setPendingAssistant, chat, canSend, t])
 
+  useEffect(() => {
+    if (!conversationId || !onPersistConversation) return
+    const metaById = new Map(messageMetaRef.current)
+    const messages = buildKuAiStoredMessagesFromChat({
+      chatMessages: chat.messages,
+      metaById,
+      userDisplayName,
+      assistantDisplayName,
+      stripAssistantContent: stripAssistantThinkContent,
+    }).filter((msg) => msg.content.trim().length > 0 || msg.role === 'user')
+    if (messages.length === 0) return
+    onPersistConversation(conversationId, messages)
+  }, [chat.messages, conversationId, onPersistConversation, userDisplayName, assistantDisplayName])
+
   return (
     <AIAssistantDialogUI
       open={open}
@@ -667,6 +859,10 @@ const AIAssistantLivePanel: React.FC<AIAssistantLivePanelProps> = ({ open, onClo
       modelName={model}
       contextBadge={contextBadge}
       onConfirmAction={(token) => void handleConfirmAction(token)}
+      embedded={embedded}
+      embeddedSplit={embeddedSplit}
+      canOpenAssistantTab={canOpenAssistantTab}
+      onOpenAssistantTab={onOpenAssistantTab}
     />
   )
 }
@@ -679,7 +875,7 @@ type AIAssistantFallbackPanelProps = {
   reason: FallbackReason
   chatStatus?: ChatIntegrationStatus | null
   statusError?: string | null
-}
+} & AIAssistantShellLayoutProps
 
 const AIAssistantFallbackPanel: React.FC<AIAssistantFallbackPanelProps> = ({
   open,
@@ -687,6 +883,9 @@ const AIAssistantFallbackPanel: React.FC<AIAssistantFallbackPanelProps> = ({
   reason,
   chatStatus,
   statusError,
+  embedded,
+  canOpenAssistantTab,
+  onOpenAssistantTab,
 }) => {
   const { t } = useTranslation()
   const [messages, setMessages] = useState<BubbleItem[]>([])
@@ -782,6 +981,9 @@ const AIAssistantFallbackPanel: React.FC<AIAssistantFallbackPanelProps> = ({
       senderDisabled={reason === 'loading'}
       welcomeHint={welcomeHint}
       modelName={chatStatus?.model}
+      embedded={embedded}
+      canOpenAssistantTab={canOpenAssistantTab}
+      onOpenAssistantTab={onOpenAssistantTab}
     />
   )
 }
@@ -790,9 +992,21 @@ type AIAssistantPanelProps = {
   open: boolean
   onClose?: () => void
   designOnly?: boolean
-}
+} & AIAssistantShellLayoutProps
 
-const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({ open, onClose, designOnly }) => {
+const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
+  open,
+  onClose,
+  designOnly,
+  embedded,
+  embeddedSplit,
+  canOpenAssistantTab,
+  onOpenAssistantTab,
+  conversationId,
+  initialMessages,
+  onPersistConversation,
+  onNewChatExternal,
+}) => {
   const { t } = useTranslation()
   const {
     data: chatStatus,
@@ -800,12 +1014,23 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({ open, onClose, desi
     error: statusQueryError,
   } = useChatIntegrationStatus({ enabled: designOnly !== true })
 
+  const layoutProps = {
+    embedded,
+    embeddedSplit,
+    canOpenAssistantTab,
+    onOpenAssistantTab,
+    conversationId,
+    initialMessages,
+    onPersistConversation,
+    onNewChatExternal,
+  }
+
   if (designOnly === true) {
-    return <AIAssistantFallbackPanel open={open} onClose={onClose} reason="preview" />
+    return <AIAssistantFallbackPanel open={open} onClose={onClose} reason="preview" {...layoutProps} />
   }
 
   if (statusPending) {
-    return <AIAssistantFallbackPanel open={open} onClose={onClose} reason="loading" />
+    return <AIAssistantFallbackPanel open={open} onClose={onClose} reason="loading" {...layoutProps} />
   }
 
   const statusError =
@@ -822,20 +1047,29 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({ open, onClose, desi
         onClose={onClose}
         reason="status_error"
         statusError={statusError}
+        {...layoutProps}
       />
     )
   }
 
   if (!chatStatus) {
-    return <AIAssistantFallbackPanel open={open} onClose={onClose} reason="loading" />
+    return <AIAssistantFallbackPanel open={open} onClose={onClose} reason="loading" {...layoutProps} />
   }
 
   if (chatStatus.configured && chatStatus.enabled) {
-    return <AIAssistantLivePanel open={open} onClose={onClose} model={chatStatus.model} />
+    return (
+      <AIAssistantLivePanel open={open} onClose={onClose} model={chatStatus.model} {...layoutProps} />
+    )
   }
 
   return (
-    <AIAssistantFallbackPanel open={open} onClose={onClose} reason="unconfigured" chatStatus={chatStatus} />
+    <AIAssistantFallbackPanel
+      open={open}
+      onClose={onClose}
+      reason="unconfigured"
+      chatStatus={chatStatus}
+      {...layoutProps}
+    />
   )
 }
 
@@ -843,11 +1077,17 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ open = false, onClose, design
   // 生命周期约定：Portal 常驻 + ai-qa-modal-hidden 隐藏；禁止 if (!open) return null，避免卸载触发全局样式误清理。
   const shellRef = useRef<HTMLDivElement | null>(null)
   const [styleContainer, setStyleContainer] = useState<HTMLElement | null>(null)
+  const navigate = useNavigate()
 
   const handleClose = useCallback(() => {
     blurPanelFocus(shellRef.current)
     onClose?.()
   }, [onClose])
+
+  const handleOpenAssistantTab = useCallback(() => {
+    navigate(KUAIAI_ASSISTANT_TAB_PATH)
+    handleClose()
+  }, [navigate, handleClose])
 
   useEffect(() => {
     if (!open) return
@@ -874,14 +1114,491 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ open = false, onClose, design
         shellRef.current = node
         if (node !== styleContainer) setStyleContainer(node)
       }}
-      className={`ai-qa-modal-bottom-right${open ? '' : ' ai-qa-modal-hidden'}`}
+      className={`ai-qa-modal-shell ai-qa-modal-bottom-right${open ? '' : ' ai-qa-modal-hidden'}`}
       aria-hidden={!open}
     >
       <StyleProvider cache={aiAssistantStyleCache} container={styleContainer ?? document.body}>
-        <AIAssistantPanel open={open} onClose={handleClose} designOnly={designOnly} />
+        <AIAssistantPanel
+          open={open}
+          onClose={handleClose}
+          designOnly={designOnly}
+          canOpenAssistantTab
+          onOpenAssistantTab={handleOpenAssistantTab}
+        />
       </StyleProvider>
     </div>,
     document.body,
+  )
+}
+
+function pickDefaultActiveThreadId(sorted: KuAiConversationRecord[]): string {
+  const withInquirer = sorted.find((item) => (item.inquirer_name?.trim()?.length ?? 0) > 0)
+  return (withInquirer ?? sorted[0]).id
+}
+
+/** 列表/落库 API 须带租户；超管未选组织时不应误判为空并新建会话 */
+function isKuAiConversationApiTenantReady(): boolean {
+  if (isInfraSuperAdminFromToken()) {
+    const tenantId = getTenantId()
+    return tenantId != null && String(tenantId).trim() !== ''
+  }
+  return getTokenTenantId() != null || getTenantId() != null
+}
+
+const AIAssistantEmbeddedWithHistory: React.FC = () => {
+  const { t } = useTranslation()
+  const tokenPresent = !!getToken()
+  const userQuery = useCurrentUserQuery({ enabled: tokenPresent })
+  const currentUser = useCurrentUser()
+  const userId = currentUser?.id != null ? Number(currentUser.id) : null
+  const scopeKey = useMemo(() => resolveKuAiConversationScope(userId), [userId])
+  const historyEligible =
+    tokenPresent && userQuery.isFetched && userId != null && Number.isFinite(userId) && !!scopeKey
+  const newTitle = t('ui.aiAssistant.newConversationTitle')
+
+  const [threads, setThreads] = useState<KuAiConversationRecord[]>([])
+  const [activeId, setActiveId] = useState<string>(() => createKuAiConversationId())
+  const [activeMessages, setActiveMessages] = useState<KuAiStoredMessage[]>([])
+  const [scopeReady, setScopeReady] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [activeDetailLoading, setActiveDetailLoading] = useState(false)
+  const tenantScope = resolveSessionTenantScope()
+  const activeLoadGenRef = useRef(0)
+  const pendingPersistRef = useRef<KuAiConversationRecord | null>(null)
+  const lastPersistFingerprintRef = useRef('')
+  const listBootstrappedKeyRef = useRef<string | null>(null)
+  const threadsRef = useRef(threads)
+  threadsRef.current = threads
+  const activeIdRef = useRef(activeId)
+  activeIdRef.current = activeId
+
+  const createEmptyThreadRemote = useCallback(async () => {
+    const id = createKuAiConversationId()
+    const record: KuAiConversationRecord = {
+      id,
+      title: newTitle,
+      updatedAt: Date.now(),
+      messages: [],
+    }
+    const created = await createKuAiConversationRemote(record)
+    setThreads((prev) => [created, ...prev.filter((item) => item.id !== created.id)])
+    setActiveId(created.id)
+    setActiveMessages([])
+    return created.id
+  }, [newTitle])
+
+  useEffect(() => {
+    if (!tokenPresent) {
+      setScopeReady(true)
+      return
+    }
+    if (!userQuery.isFetched) {
+      setScopeReady(false)
+      return
+    }
+    if (userId == null || !Number.isFinite(userId) || !scopeKey) {
+      setScopeReady(true)
+      return
+    }
+    if (!isKuAiConversationApiTenantReady()) {
+      setScopeReady(false)
+      return
+    }
+    const bootstrapKey = `${scopeKey}:${tenantScope ?? 'none'}`
+    if (listBootstrappedKeyRef.current === bootstrapKey) {
+      setScopeReady(true)
+      return
+    }
+    let cancelled = false
+    setScopeReady(false)
+    setLoadError(null)
+    ;(async () => {
+      try {
+        let list = await fetchKuAiConversationList()
+        if (list.length === 0) {
+          const legacy = listKuAiConversationsFromLocal(scopeKey)
+          if (legacy.length > 0) {
+            list = await importKuAiConversationsRemote(legacy)
+            clearKuAiConversationsLocal(scopeKey)
+          }
+        }
+        if (cancelled) return
+        if (list.length === 0) {
+          await createEmptyThreadRemote()
+          if (cancelled) return
+        } else {
+          setThreads(list)
+          setActiveId((current) =>
+            list.some((item) => item.id === current) ? current : pickDefaultActiveThreadId(list),
+          )
+        }
+        listBootstrappedKeyRef.current = bootstrapKey
+      } catch (err) {
+        if (cancelled) return
+        const msg = err instanceof Error ? err.message : String(err)
+        setLoadError(msg)
+      } finally {
+        if (!cancelled) setScopeReady(true)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [
+    tokenPresent,
+    userQuery.isFetched,
+    userId,
+    scopeKey,
+    tenantScope,
+    createEmptyThreadRemote,
+  ])
+
+  useEffect(() => {
+    if (!scopeKey || !scopeReady || loadError) return
+    if (!activeId) return
+
+    const cached = threadsRef.current.find((item) => item.id === activeId)
+    const cachedMessages = cached?.messages ?? []
+    const hasCachedMessages = cachedMessages.length > 0
+
+    if (hasCachedMessages) {
+      lastPersistFingerprintRef.current = kuAiConversationMessagesFingerprint(activeId, cachedMessages)
+      setActiveMessages(cachedMessages)
+      setActiveDetailLoading(false)
+    } else {
+      lastPersistFingerprintRef.current = ''
+      setActiveMessages([])
+      setActiveDetailLoading(true)
+    }
+
+    const generation = ++activeLoadGenRef.current
+    ;(async () => {
+      try {
+        const detail = await fetchKuAiConversationDetail(activeId)
+        if (generation !== activeLoadGenRef.current) return
+        setActiveMessages(detail.messages)
+        setThreads((prev) =>
+          prev.map((item) =>
+            item.id === detail.id
+              ? mergeKuAiConversationDetailIntoRecord(item, detail)
+              : item,
+          ),
+        )
+        lastPersistFingerprintRef.current = kuAiConversationMessagesFingerprint(
+          detail.id,
+          detail.messages,
+        )
+      } catch (err) {
+        if (generation !== activeLoadGenRef.current) return
+        const msg = err instanceof Error ? err.message : String(err)
+        message.error(t('ui.aiAssistant.historyLoadFailed', { message: msg }))
+      } finally {
+        if (generation === activeLoadGenRef.current) {
+          setActiveDetailLoading(false)
+        }
+      }
+    })()
+  }, [activeId, scopeKey, scopeReady, loadError, t])
+
+  const handleSelectThread = useCallback(
+    (threadId: string) => {
+      if (threadId === activeIdRef.current) return
+      const cached = threadsRef.current.find((item) => item.id === threadId)
+      const cachedMessages = cached?.messages ?? []
+      if (cachedMessages.length > 0) {
+        lastPersistFingerprintRef.current = kuAiConversationMessagesFingerprint(
+          threadId,
+          cachedMessages,
+        )
+        setActiveMessages(cachedMessages)
+        setActiveDetailLoading(false)
+      } else {
+        lastPersistFingerprintRef.current = ''
+        setActiveMessages([])
+        setActiveDetailLoading(true)
+      }
+      setActiveId(threadId)
+    },
+    [],
+  )
+
+  const commitPersistRemote = useCallback(
+    async (record: KuAiConversationRecord) => {
+      pendingPersistRef.current = null
+      const saved = await upsertKuAiConversationRemote(record)
+      const savedLast = deriveKuAiLastMessageMeta(saved.messages)
+      setThreads((prev) =>
+        prev.map((item) =>
+          item.id === saved.id
+            ? {
+                ...item,
+                title: saved.title,
+                updatedAt: saved.updatedAt,
+                messages: saved.messages,
+                ...savedLast,
+                last_speaker_name: saved.last_speaker_name ?? savedLast.last_speaker_name,
+                last_spoken_at: saved.last_spoken_at ?? savedLast.last_spoken_at,
+                inquirer_name: saved.inquirer_name ?? deriveKuAiInquirerName(saved.messages),
+              }
+            : item,
+        ),
+      )
+    },
+    [],
+  )
+
+  useEffect(() => {
+    const flushKeepalive = () => {
+      const pending = pendingPersistRef.current
+      if (pending) upsertKuAiConversationKeepalive(pending)
+    }
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') flushKeepalive()
+    }
+    window.addEventListener('pagehide', flushKeepalive)
+    document.addEventListener('visibilitychange', onHide)
+    return () => {
+      window.removeEventListener('pagehide', flushKeepalive)
+      document.removeEventListener('visibilitychange', onHide)
+      const pending = pendingPersistRef.current
+      if (pending) {
+        void commitPersistRemote(pending).catch(() => {
+          upsertKuAiConversationKeepalive(pending)
+        })
+      }
+    }
+  }, [commitPersistRemote])
+
+  const handleCreateThread = useCallback(() => {
+    if (!scopeKey) return
+    void createEmptyThreadRemote().catch((err) => {
+      const msg = err instanceof Error ? err.message : String(err)
+      message.error(t('ui.aiAssistant.historySaveFailed', { message: msg }))
+    })
+  }, [scopeKey, createEmptyThreadRemote, t])
+
+  const handleDeleteThread = useCallback(
+    (id: string) => {
+      if (!scopeKey) return
+      void (async () => {
+        await deleteKuAiConversationRemote(id)
+        const next = threads.filter((item) => item.id !== id)
+        setThreads(next)
+        if (activeId !== id) return
+        if (next.length > 0) {
+          setActiveId(next[0].id)
+          return
+        }
+        await createEmptyThreadRemote()
+      })().catch((err) => {
+        const msg = err instanceof Error ? err.message : String(err)
+        message.error(t('ui.aiAssistant.historySaveFailed', { message: msg }))
+      })
+    },
+    [scopeKey, activeId, createEmptyThreadRemote, t, threads],
+  )
+
+  const handlePersist = useCallback(
+    (conversationId: string, messages: KuAiStoredMessage[]) => {
+      if (!scopeKey) return
+      if (conversationId !== activeIdRef.current) return
+      const fingerprint = kuAiConversationMessagesFingerprint(conversationId, messages)
+      if (fingerprint === lastPersistFingerprintRef.current) return
+
+      const title = deriveKuAiConversationTitle(messages, newTitle)
+      const lastMeta = deriveKuAiLastMessageMeta(messages)
+      const inquirerName = deriveKuAiInquirerName(messages)
+      let contentChanged = false
+      let updatedAt = Date.now()
+
+      setThreads((prev) => {
+        const existing = prev.find((item) => item.id === conversationId)
+        const prevFingerprint = kuAiConversationMessagesFingerprint(
+          conversationId,
+          existing?.messages ?? [],
+        )
+        if (fingerprint === prevFingerprint) return prev
+        contentChanged = true
+        updatedAt = Date.now()
+        const moveToFront = shouldMoveKuAiThreadToFrontOnPersist(existing, messages)
+        const mapped = prev.map((item) =>
+          item.id === conversationId
+            ? { ...item, title, updatedAt, messages, ...lastMeta, inquirer_name: inquirerName }
+            : item,
+        )
+        return moveToFront ? moveKuAiConversationToFront(mapped, conversationId) : mapped
+      })
+
+      if (!contentChanged) return
+
+      setActiveMessages(messages)
+      const record: KuAiConversationRecord = {
+        id: conversationId,
+        title,
+        updatedAt,
+        messages,
+        ...lastMeta,
+        inquirer_name: inquirerName,
+      }
+      lastPersistFingerprintRef.current = fingerprint
+      pendingPersistRef.current = record
+      void commitPersistRemote(record).catch((err) => {
+        lastPersistFingerprintRef.current = ''
+        const msg = err instanceof Error ? err.message : String(err)
+        message.error(t('ui.aiAssistant.historySaveFailed', { message: msg }))
+      })
+    },
+    [scopeKey, newTitle, t, commitPersistRemote],
+  )
+
+  if (!scopeReady) {
+    return (
+      <div className="ai-qa-embedded-page ai-qa-embedded-page--loading">
+        <Spin />
+      </div>
+    )
+  }
+
+  if (!historyEligible) {
+    return (
+      <div className="ai-qa-embedded-page ai-qa-embedded-page--empty">
+        <Empty description={t('ui.aiAssistant.historyRequiresLogin')} />
+      </div>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <div className="ai-qa-embedded-page ai-qa-embedded-page--empty">
+        <Result
+          status="error"
+          title={t('ui.aiAssistant.historyLoadFailedTitle')}
+          subTitle={loadError}
+          extra={
+            <Button
+              type="primary"
+              onClick={() => {
+                setLoadError(null)
+                listBootstrappedKeyRef.current = null
+                setScopeReady(false)
+                void (async () => {
+                  try {
+                    let list = await fetchKuAiConversationList()
+                    if (list.length === 0) {
+                      await createEmptyThreadRemote()
+                    } else {
+                      setThreads(list)
+                      setActiveId((current) =>
+                        list.some((item) => item.id === current)
+                          ? current
+                          : pickDefaultActiveThreadId(list),
+                      )
+                    }
+                    listBootstrappedKeyRef.current = `${scopeKey}:${tenantScope ?? 'none'}`
+                  } catch (err) {
+                    const msg = err instanceof Error ? err.message : String(err)
+                    setLoadError(msg)
+                  } finally {
+                    setScopeReady(true)
+                  }
+                })()
+              }}
+            >
+              {t('common.retry')}
+            </Button>
+          }
+        />
+      </div>
+    )
+  }
+
+  return (
+    <div className="ai-qa-embedded-layout">
+      <aside className="ai-qa-history-sidebar" aria-label={t('ui.aiAssistant.historySidebar')}>
+        <Button type="primary" icon={<PlusOutlined />} block className="ai-qa-history-new-btn" onClick={handleCreateThread}>
+          {t('ui.aiAssistant.newChat')}
+        </Button>
+        <div className="ai-qa-history-section-label">{t('ui.aiAssistant.historyRecent')}</div>
+        <div className="ai-qa-history-list">
+          {threads.length === 0 ? (
+            <div className="ai-qa-history-empty">{t('ui.aiAssistant.historyEmpty')}</div>
+          ) : (
+            threads.map((thread) => {
+              const active = thread.id === activeId
+              return (
+                <div
+                  key={thread.id}
+                  className={`ai-qa-history-card${active ? ' ai-qa-history-card--active' : ''}`}
+                >
+                  <button
+                    type="button"
+                    className="ai-qa-history-card-body"
+                    onClick={() => handleSelectThread(thread.id)}
+                    title={thread.title}
+                  >
+                    <span className="ai-qa-history-card-title">{thread.title}</span>
+                  </button>
+                  <div className="ai-qa-history-card-delete-slot">
+                    <Popconfirm
+                      title={t('ui.aiAssistant.deleteConversationConfirm')}
+                      onConfirm={() => handleDeleteThread(thread.id)}
+                      okText={t('common.confirm')}
+                      cancelText={t('common.cancel')}
+                    >
+                      <Button
+                        type="text"
+                        size="small"
+                        className="ai-qa-history-card-delete"
+                        icon={<DeleteOutlined />}
+                        aria-label={t('common.delete')}
+                      />
+                    </Popconfirm>
+                  </div>
+                </div>
+              )
+            })
+          )}
+        </div>
+      </aside>
+      <div className="ai-qa-embedded-chat-main">
+        {activeDetailLoading ? (
+          <div className="ai-qa-embedded-page ai-qa-embedded-page--loading">
+            <Spin />
+          </div>
+        ) : (
+          <AIAssistantPanel
+            key={activeId}
+            open
+            embedded
+            embeddedSplit
+            conversationId={activeId}
+            initialMessages={activeMessages}
+            onPersistConversation={handlePersist}
+            onNewChatExternal={handleCreateThread}
+          />
+        )}
+      </div>
+    </div>
+  )
+}
+
+/** UniTabs 独立标签页内嵌对话（/apps/kuaiai/chat） */
+export function AIAssistantEmbedded() {
+  const shellRef = useRef<HTMLDivElement | null>(null)
+  const [styleContainer, setStyleContainer] = useState<HTMLElement | null>(null)
+
+  return (
+    <div
+      ref={node => {
+        shellRef.current = node
+        if (node !== styleContainer) setStyleContainer(node)
+      }}
+      className="ai-qa-modal-shell ai-qa-embedded-page-shell"
+    >
+      <StyleProvider cache={aiAssistantStyleCache} container={styleContainer ?? document.body}>
+        <AIAssistantEmbeddedWithHistory />
+      </StyleProvider>
+    </div>
   )
 }
 

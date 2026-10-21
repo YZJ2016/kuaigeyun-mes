@@ -1,0 +1,35 @@
+---
+description: 面向用户的人名/发言人展示禁止胶囊框、徽章框、描边圈住姓名（用户明确不吉利）
+alwaysApply: true
+---
+
+# 人名不带框（零容忍）
+
+用户明确要求：**给人名、发言人、对话人、操作人姓名等「指人」的展示加框（胶囊 Tag、描边 pill、圈住姓名的 Badge）不可接受**，视为不吉利；Agent 必须理解并永久遵守。
+
+适用范围：PC、工位端、移动端、弹窗、列表、卡片、聊天气泡、消息时间线、审计「某某 于 某时」等一切**用户可见** UI。
+
+## 禁止（指人字段）
+
+- 用 `Tag` / `MarkerTag` / `StatusTag` / Ant Design `Badge` **包住整段人名**作装饰
+- 给人名单独加 **border + 圆角 pill / 胶囊**（含 `ai-qa-history-card-tag--speaker` 一类）
+- 用 **Avatar + 粗描边圈** 仅作装饰（功能头像除外）
+- 列表/卡片里「发言人：张三」把 **张三** 放进带框 chip，而时间可以轻量装饰
+
+## 允许
+
+- **纯文字 + 可选小图标**（无 border、无背景块）：如 `UserOutlined` + 姓名
+- **整卡片/整行** 的边框（框的是会话/单据，不是人名）
+- **时间、状态、类型、编号** 等非「指人」字段仍可用 filled 徽章 / 轻量 capsule（与 `unitable-list` 契约一致）
+- `@某人`、人员选择器 Select 的 **选项行**（控件本身，不是只读展示人名）
+
+## 与其它规则
+
+- 左侧色条：见 `no-left-accent-bars.mdc`（仍禁止）
+- 列表状态/类型：人名列走文字或 `UserAvatar`+姓名，勿为人名再套 Tag
+
+## 自检
+
+改 UI / 聊天气泡 / 历史侧栏 / 审计展示前：人名是否被 border/background pill 单独圈住？是则改为无框文字（图标可保留）。
+
+参照实现：`riveredge-frontend/src/components/ai-assistant/index.less` 中 `.ai-qa-history-card-speaker`（无框） vs `.ai-qa-history-card-tag--time`（时间可带轻框）。

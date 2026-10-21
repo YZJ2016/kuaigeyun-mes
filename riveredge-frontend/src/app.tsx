@@ -161,35 +161,34 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
     enabled: shouldFetchUser && !!currentUser && tenantId != null && currentUser.id != null,
   });
 
-  const [infraTimezoneReady, setInfraTimezoneReady] = useState(true);
+  const siteTimezoneName = useConfigStore((s) => {
+    const tz = s.configs?.timezone;
+    return tz != null ? String(tz).trim() : '';
+  });
+  const [siteTimezoneReady, setSiteTimezoneReady] = useState(() => siteTimezoneName.length > 0);
 
-  // 平台超管可能无租户、拉不到 site-settings：须从平台公开设置补齐 configs.timezone
+  // 站点 settings 未带 timezone 或壳层先于 Query 渲染时：从平台公开设置补齐 configs.timezone
   useEffect(() => {
     if (isPublicPath || !shouldFetchUser) {
-      setInfraTimezoneReady(true);
+      setSiteTimezoneReady(true);
       return;
     }
-    if (!resolveIsInfraSuperAdminSession()) {
-      setInfraTimezoneReady(true);
-      return;
-    }
-    const tz = useConfigStore.getState().configs?.timezone;
-    if (tz != null && String(tz).trim() !== '') {
-      setInfraTimezoneReady(true);
+    if (siteTimezoneName) {
+      setSiteTimezoneReady(true);
       return;
     }
     let cancelled = false;
-    setInfraTimezoneReady(false);
+    setSiteTimezoneReady(false);
     void useConfigStore
       .getState()
-      .ensureTimezoneFromPlatform()
+      .ensureSiteTimezoneConfig()
       .finally(() => {
-        if (!cancelled) setInfraTimezoneReady(true);
+        if (!cancelled) setSiteTimezoneReady(true);
       });
     return () => {
       cancelled = true;
     };
-  }, [isPublicPath, shouldFetchUser, currentUser?.id, tenantId]);
+  }, [isPublicPath, shouldFetchUser, siteTimezoneName, tenantId]);
 
   // 处理用户信息加载成功（普通用户：/auth/me；平台超管：infra /me + 组织名补全）
   useEffect(() => {
@@ -635,8 +634,8 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
   const shouldShowLoading =
     hasToken && !isPublicPath && !hasAuthenticatedUser && (loading || isLoading);
   const shouldRedirect = redirectTarget !== null;
-  const shouldWaitInfraTimezone =
-    hasToken && !isPublicPath && resolveIsInfraSuperAdminSession() && !infraTimezoneReady;
+  const shouldWaitSiteTimezone =
+    hasToken && !isPublicPath && !siteTimezoneName && !siteTimezoneReady;
 
   if (shouldBypassAuth) {
     return <>{children}</>;
@@ -646,7 +645,7 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
     return <Navigate to={redirectTarget} replace />;
   }
 
-  if (shouldShowLoading || shouldWaitInfraTimezone) {
+  if (shouldShowLoading || shouldWaitSiteTimezone) {
     return <DelayedFallback delayMs={0} fullHeight />;
   }
 
