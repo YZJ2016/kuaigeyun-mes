@@ -11,11 +11,11 @@ from infra.exceptions.exceptions import AuthorizationError
 
 
 def setup(monkeypatch, *, administrator=False, target_admin=False):
-    target = SimpleNamespace(id=51, tenant_id=1, username="fixture", department_id=None,
-        position_id=None, is_active=True, is_tenant_admin=target_admin, is_infra_admin=False,
-        save=AsyncMock(), fetch_related=AsyncMock())
-    actor = SimpleNamespace(id=50, tenant_id=1, is_active=True, is_tenant_admin=administrator,
-        is_infra_admin=False)
+    target = SimpleNamespace(id=51, tenant_id=1, username="fixture", full_name="fixture",
+        department_id=None, position_id=None, is_active=True, is_tenant_admin=target_admin,
+        is_infra_admin=False, save=AsyncMock(), fetch_related=AsyncMock())
+    actor = SimpleNamespace(id=50, tenant_id=1, username="operator", full_name="操作员",
+        is_active=True, is_tenant_admin=administrator, is_infra_admin=False)
     query = MagicMock()
     query.first = AsyncMock(return_value=target)
     query.using_db.return_value = query
