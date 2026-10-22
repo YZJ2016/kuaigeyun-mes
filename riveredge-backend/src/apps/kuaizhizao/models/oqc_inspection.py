@@ -41,6 +41,8 @@ class OQCInspection(BaseModel):
     material_id = fields.IntField(description="成品物料ID")
     material_code = fields.CharField(max_length=50, description="成品物料编码")
     material_name = fields.CharField(max_length=200, description="成品物料名称")
+    material_spec = fields.CharField(max_length=200, null=True, description="成品规格")
+    material_model = fields.CharField(max_length=200, null=True, description="成品型号")
     material_unit = fields.CharField(max_length=20, null=True, description="物料单位（基础单位）")
     batch_number = fields.CharField(max_length=50, null=True, description="批次号")
 

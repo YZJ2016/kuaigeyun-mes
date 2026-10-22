@@ -4,9 +4,12 @@
 
 from tortoise import fields
 from core.models.base import BaseModel
+from apps.kuaizhizao.models.mixins.document_line_partner_material import (
+    DocumentLinePartnerMaterialSnapshotMixin,
+)
 
 
-class SalesContractItem(BaseModel):
+class SalesContractItem(DocumentLinePartnerMaterialSnapshotMixin, BaseModel):
     """销售合同明细"""
 
     tenant_id = fields.IntField(description="租户ID")

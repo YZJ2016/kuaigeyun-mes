@@ -20,6 +20,7 @@ from apps.master_data.schemas.partner_price_book_schemas import (
     PartnerPriceBookBulkCreate,
     PartnerPriceBookBulkResponse,
     PartnerPriceBookCreate,
+    PartnerPriceBookFilterPartnerOption,
     PartnerPriceBookResponse,
     PartnerPriceBookUpdate,
     PartnerPriceResolveBatchRequest,
@@ -561,11 +562,14 @@ class PartnerPriceBookService:
         created_count = 0
         skipped_count = 0
         overwritten_count = 0
+        sync_alias = True if data.sync_partner_alias is None else bool(data.sync_partner_alias)
 
         async with in_transaction():
             for partner_id, line in pairs:
                 key = (partner_id, line.material_id)
                 overlap = overlap_map.get(key)
+                alias_code = (line.partner_material_code or "").strip() or None
+                alias_name = (line.partner_material_name or "").strip() or None
                 if overlap:
                     if policy == "skip":
                         skipped_count += 1
@@ -582,6 +586,15 @@ class PartnerPriceBookService:
                     overlap.is_active = is_active
                     apply_update_audit(overlap, current_user)
                     await overlap.save()
+                    await cls._sync_alias_if_needed(
+                        tenant_id,
+                        partner_type,
+                        partner_id,
+                        line.material_id,
+                        alias_code,
+                        alias_name,
+                        sync_alias,
+                    )
                     overwritten_count += 1
                     continue
 
@@ -605,6 +618,15 @@ class PartnerPriceBookService:
                     tenant_id=tenant_id,
                     partner_type=partner_type,
                     **payload,
+                )
+                await cls._sync_alias_if_needed(
+                    tenant_id,
+                    partner_type,
+                    partner_id,
+                    line.material_id,
+                    alias_code,
+                    alias_name,
+                    sync_alias,
                 )
                 created_count += 1
 
@@ -630,6 +652,40 @@ class PartnerPriceBookService:
         if not row:
             raise NotFoundError("价格本记录不存在")
         return await cls._enrich_response(tenant_id, row)
+
+    @classmethod
+    async def list_partners_with_data(
+        cls,
+        tenant_id: int,
+        partner_type: str,
+    ) -> List[PartnerPriceBookFilterPartnerOption]:
+        """列表快速筛选：仅返回当前类型价格本中已出现过的客户/供应商。"""
+        if partner_type not in cls.PARTNER_TYPES:
+            raise ValidationError(f"无效的伙伴类型: {partner_type}")
+        partner_ids = await PartnerPriceBook.filter(
+            tenant_id=tenant_id,
+            partner_type=partner_type,
+            deleted_at__isnull=True,
+        ).distinct().values_list("partner_id", flat=True)
+        ids = [int(pid) for pid in partner_ids if pid]
+        if not ids:
+            return []
+        if partner_type == "customer":
+            rows = await Customer.filter(
+                tenant_id=tenant_id, id__in=ids, deleted_at__isnull=True
+            ).order_by("code")
+        else:
+            rows = await Supplier.filter(
+                tenant_id=tenant_id, id__in=ids, deleted_at__isnull=True
+            ).order_by("code")
+        return [
+            PartnerPriceBookFilterPartnerOption(
+                id=int(row.id),
+                code=getattr(row, "code", None),
+                name=getattr(row, "name", None),
+            )
+            for row in rows
+        ]
 
     @classmethod
     async def list_rows(

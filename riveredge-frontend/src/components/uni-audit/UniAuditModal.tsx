@@ -449,14 +449,14 @@ function AuditHubDetailPanel({
       gutter={16}
       wrap={false}
       align="stretch"
-      style={{ height: '100%', minHeight: 0, overflow: 'hidden' }}
+      style={{ height: '100%', minHeight: 360, overflow: 'hidden' }}
     >
 
       <Col
         flex="0 0 44%"
         style={{
           minWidth: 0,
-          minHeight: 0,
+          minHeight: 360,
           display: 'flex',
           flexDirection: 'column',
           alignSelf: 'stretch',
@@ -485,7 +485,7 @@ function AuditHubDetailPanel({
 
           </div>
 
-          <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+          <div style={{ flex: 1, minHeight: 360, overflow: 'hidden' }}>
             {flowCanvasReady ? (
               <ApprovalFlowPreview
                 graph={process?.nodes}
@@ -844,6 +844,8 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
   /** null=未选择；双分支条件必须显式选是/否，禁止默认跳边 */
   const [branchDecision, setBranchDecision] = useState<number | null>(null);
   const [rejectTarget, setRejectTarget] = useState<'previous' | 'submitter'>('previous');
+  /** Hub：点「驳回」后再弹出落点与原因，避免底栏常驻占位 */
+  const [rejectConfirmOpen, setRejectConfirmOpen] = useState(false);
   /** antd Modal 默认 zoom 动画期间父级有 transform；结束后再挂流程预览 */
   const [flowCanvasReady, setFlowCanvasReady] = useState(false);
 
@@ -1139,6 +1141,13 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
     }
   }, [rejectOptions?.default_target, open]);
 
+  useEffect(() => {
+    if (!open) {
+      setRejectConfirmOpen(false);
+      setReason('');
+    }
+  }, [open]);
+
   const buildRejectPayload = (): Record<string, unknown> => ({
     reject_target: rejectTarget,
   });
@@ -1150,6 +1159,19 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
         [nodeDecision.field]: branchDecision,
       },
     };
+  };
+
+  const openRejectConfirm = () => {
+    const target = rejectOptions?.default_target;
+    if (target === 'previous' || target === 'submitter') {
+      setRejectTarget(target);
+    } else if (rejectOptions?.allowed_targets?.includes('previous')) {
+      setRejectTarget('previous');
+    } else if (rejectOptions?.allowed_targets?.includes('submitter')) {
+      setRejectTarget('submitter');
+    }
+    setReason('');
+    setRejectConfirmOpen(true);
   };
 
   const handleOk = async () => {
@@ -1171,7 +1193,29 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
   };
 
-
+  const executeHubReject = async () => {
+    if (!onAction) return;
+    setBusyAction('reject');
+    try {
+      const keepOpen = await onAction('reject', reason.trim() || undefined, buildRejectPayload());
+      setRejectConfirmOpen(false);
+      setReason('');
+      if (keepOpen && entityType && entityId) {
+        setBranchDecision(null);
+        setFlowLoading(true);
+        try {
+          const res = await getApprovalStatus(entityType, entityId);
+          setFlowStatus(res);
+        } catch {
+          setFlowStatus(null);
+        } finally {
+          setFlowLoading(false);
+        }
+      }
+    } finally {
+      setBusyAction(null);
+    }
+  };
 
   const handleHubAction = async (item: UniAuditHubAction) => {
 
@@ -1187,6 +1231,11 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
       return;
     }
 
+    if (item.action === 'reject') {
+      openRejectConfirm();
+      return;
+    }
+
     if (item.action === 'approve' && nodeDecision?.field && branchDecision === null) {
       message.warning(
         t('components.uniAudit.branchDecisionRequired', { label: nodeDecision.label }),
@@ -1197,15 +1246,10 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
     setBusyAction(item.action);
 
     try {
-      const payload =
-        item.action === 'approve'
-          ? buildApprovePayload()
-          : item.action === 'reject'
-            ? buildRejectPayload()
-            : undefined;
+      const payload = item.action === 'approve' ? buildApprovePayload() : undefined;
       const keepOpen = await onAction(
         item.action,
-        item.action === 'reject' || item.action === 'urge' ? reason.trim() || undefined : undefined,
+        item.action === 'urge' ? reason.trim() || undefined : undefined,
         payload,
       );
       if (keepOpen && entityType && entityId) {
@@ -1258,7 +1302,6 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
       if (flowLoading) return false;
       return Boolean(item.canExecute);
     });
-    const hasReject = visibleHubActions.some((a) => a.action === 'reject' && a.canExecute);
     const hasVisibleApprove = visibleHubActions.some((a) => a.action === 'approve');
 
     return (
@@ -1343,41 +1386,6 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
             background: '#fff',
           }}
         >
-
-          {hasReject && (
-            <>
-              {(rejectOptions?.allowed_targets?.length ?? 0) > 1 ? (
-                <div style={{ marginBottom: 12 }}>
-                  <Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 12 }}>
-                    {t('components.uniAudit.rejectTargetHint')}
-                  </Text>
-                  <Radio.Group
-                    value={rejectTarget}
-                    onChange={(e) => setRejectTarget(e.target.value)}
-                  >
-                    {rejectOptions?.allowed_targets?.includes('previous') ? (
-                      <Radio value="previous">
-                        {t('components.uniAudit.rejectTargetPrevious')}
-                        {rejectOptions?.previous_node_label
-                          ? ` (${rejectOptions.previous_node_label})`
-                          : ''}
-                      </Radio>
-                    ) : null}
-                    {rejectOptions?.allowed_targets?.includes('submitter') ? (
-                      <Radio value="submitter">{t('components.uniAudit.rejectTargetSubmitter')}</Radio>
-                    ) : null}
-                  </Radio.Group>
-                </div>
-              ) : null}
-              <Input.TextArea
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                rows={3}
-                placeholder={t('components.uniAudit.rejectReasonPlaceholder')}
-                style={{ marginBottom: 12 }}
-              />
-            </>
-          )}
 
           {flowAssigneeBlockHint ? (
 
@@ -1532,6 +1540,54 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
           }}
         />
 
+        <Modal
+          open={rejectConfirmOpen}
+          title={t('components.uniAudit.rejectConfirmTitle')}
+          onCancel={() => {
+            setRejectConfirmOpen(false);
+            setReason('');
+          }}
+          onOk={() => void executeHubReject()}
+          okText={t('components.uniAudit.rejectConfirmOk')}
+          cancelText={t('common.cancel')}
+          okButtonProps={{ danger: true }}
+          confirmLoading={busyAction === 'reject'}
+          destroyOnHidden
+          maskProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
+          wrapProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
+        >
+          {(rejectOptions?.allowed_targets?.length ?? 0) > 1 ? (
+            <div style={{ marginBottom: 12 }}>
+              <Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 12 }}>
+                {t('components.uniAudit.rejectTargetHint')}
+              </Text>
+              <Radio.Group
+                value={rejectTarget}
+                onChange={(e) => setRejectTarget(e.target.value)}
+              >
+                {rejectOptions?.allowed_targets?.includes('previous') ? (
+                  <Radio value="previous">
+                    {t('components.uniAudit.rejectTargetPrevious')}
+                    {rejectOptions?.previous_node_label
+                      ? ` (${rejectOptions.previous_node_label})`
+                      : ''}
+                  </Radio>
+                ) : null}
+                {rejectOptions?.allowed_targets?.includes('submitter') ? (
+                  <Radio value="submitter">{t('components.uniAudit.rejectTargetSubmitter')}</Radio>
+                ) : null}
+              </Radio.Group>
+            </div>
+          ) : null}
+          <Input.TextArea
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            rows={3}
+            placeholder={t('components.uniAudit.rejectReasonPlaceholder')}
+            autoFocus
+          />
+        </Modal>
+
       </Modal>
 
     );
@@ -1572,9 +1628,20 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
       wrapProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
 
+      styles={{
+        body: {
+          paddingTop: 12,
+          // 提交/驳回等动作弹窗无定高时，流程图 height:100% 会塌缩；给流程区保底高度
+          minHeight: 'min(560px, calc(100vh - 160px))',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        },
+      }}
+
     >
 
-      <Space orientation="vertical" style={{ width: '100%' }} size={12}>
+      <Space orientation="vertical" style={{ width: '100%', flex: 1, minHeight: 0 }} size={12}>
 
         <Space>
 
@@ -1627,19 +1694,21 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
           </>
         )}
 
-        <AuditHubDetailPanel
+        <div style={{ flex: 1, minHeight: 360, overflow: 'hidden' }}>
+          <AuditHubDetailPanel
 
-          entityName={entityName}
+            entityName={entityName}
 
-          documentCode={documentCode}
+            documentCode={documentCode}
 
-          flowStatus={flowStatus}
+            flowStatus={flowStatus}
 
-          flowLoading={flowLoading}
+            flowLoading={flowLoading}
 
-          flowCanvasReady={flowCanvasReady}
+            flowCanvasReady={flowCanvasReady}
 
-        />
+          />
+        </div>
 
       </Space>
 

@@ -42,6 +42,9 @@ export interface QuotationItem {
   material_code?: string;
   material_name?: string;
   material_spec?: string;
+  material_model?: string;
+  partner_material_code?: string;
+  partner_material_name?: string;
   material_unit?: string;
   quote_quantity?: number;
   unit_price?: number;

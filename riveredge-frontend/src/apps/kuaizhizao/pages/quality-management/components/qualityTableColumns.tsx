@@ -425,6 +425,7 @@ export function buildQualityInspectionListMaterialColumn<T extends object>(t: TF
         <MaterialStackedCell
           material_name={row.material_name as string | undefined}
           material_code={row.material_code as string | undefined}
+          material_spec={row.material_spec as string | undefined}
         />
       );
     },

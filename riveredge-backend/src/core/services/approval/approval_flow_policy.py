@@ -510,7 +510,10 @@ async def compute_viewer_flow_withdraw_revoke(
             out["viewer_can_revoke"] = False
         elif admin_bypass:
             out["viewer_can_revoke"] = True
-        elif has_revoke_permission and vid in final_approvers:
+        elif has_revoke_permission and (
+            # auto_pass / 无人工终审人：有 revoke 码即可反审回草稿
+            not final_approvers or vid in final_approvers
+        ):
             out["viewer_can_revoke"] = True
 
     if admin_bypass and instance.status == "pending":
@@ -601,7 +604,8 @@ async def assert_revoke_allowed_for_viewer(
         return
     if not has_revoke_permission:
         raise AuthorizationError("无反审权限")
-    if int(operator_id) not in final_approvers:
+    # auto_pass 等场景 final_approvers 为空：凭 revoke 权限即可反审落草稿
+    if final_approvers and int(operator_id) not in final_approvers:
         raise AuthorizationError("仅终审通过人可反审")
 
 

@@ -5,16 +5,19 @@ import {
   ProColumns,
   ProDescriptionsItemProps,
   ProFormDigit,
-  ProFormSelect,
   ProFormSwitch,
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Modal, Row, Col } from 'antd';
+import { App, Form, Row, Col } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
-import { FormListDetailTable } from '../../../../../components/form-list-detail-table';
+import {
+  FormListDetailTable,
+  type FormListDetailTableHandle,
+} from '../../../../../components/form-list-detail-table';
+import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
@@ -37,11 +40,17 @@ import {
   renderIsActiveTag,
   useEquipmentDetailDrawer,
 } from '../shared/equipmentMasterDataDetail';
+import {
+  ToolOpsItemQuickCreateModal,
+  type ToolOpsItemCreated,
+} from '../shared/ToolOpsItemQuickCreateModal';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../../utils/uniTableLayoutColumns';
 
 const P = 'app.kuaizhizao.toolOps.repairScheme';
+const ITEM_P = 'app.kuaizhizao.toolOps.repairItem';
 const RESOURCE = 'kuaizhizao:tool-repair-scheme';
+const ITEM_RESOURCE = 'kuaizhizao:tool-repair-item';
 
 interface SchemeLine {
   item_id?: number;
@@ -65,12 +74,16 @@ const ToolRepairSchemesPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const perms = useResourcePermissions(RESOURCE);
+  const itemPerms = useResourcePermissions(ITEM_RESOURCE);
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<any>(null);
+  const linesTableRef = useRef<FormListDetailTableHandle>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [current, setCurrent] = useState<RepairScheme | null>(null);
   const [itemOptions, setItemOptions] = useState<{ label: string; value: number }[]>([]);
+  const [itemQuickCreateOpen, setItemQuickCreateOpen] = useState(false);
+  const itemQuickCreateTargetRef = useRef<'bulk' | number | null>(null);
   const {
     open: detailVisible,
     loading: detailLoading,
@@ -78,6 +91,36 @@ const ToolRepairSchemesPage: React.FC = () => {
     openDetail,
     closeDetail,
   } = useEquipmentDetailDrawer<RepairScheme>();
+
+  const openItemQuickCreate = useCallback((target: 'bulk' | number) => {
+    itemQuickCreateTargetRef.current = target;
+    setItemQuickCreateOpen(true);
+  }, []);
+
+  const handleItemQuickCreated = useCallback((item: ToolOpsItemCreated) => {
+    setItemOptions((prev) => {
+      if (prev.some((opt) => opt.value === item.id)) return prev;
+      return [...prev, { label: `${item.code} - ${item.name}`, value: item.id }];
+    });
+    const target = itemQuickCreateTargetRef.current;
+    itemQuickCreateTargetRef.current = null;
+    if (target === 'bulk') {
+      linesTableRef.current?.pickBulkValue(item.id);
+    } else if (typeof target === 'number') {
+      formRef.current?.setFieldValue(['lines', target, 'item_id'], item.id);
+    }
+  }, []);
+
+  const itemQuickCreateConfig = useMemo(
+    () =>
+      itemPerms.canCreate
+        ? {
+            label: t(`${ITEM_P}.quickCreate`),
+            onClick: () => openItemQuickCreate('bulk'),
+          }
+        : undefined,
+    [itemPerms.canCreate, openItemQuickCreate, t],
+  );
 
   const loadItemOptions = async () => {
     const res = await repairItemsApi.list({ limit: 1000, is_active: true });
@@ -369,6 +412,7 @@ const ToolRepairSchemesPage: React.FC = () => {
           </Col>
         </Row>
         <FormListDetailTable
+          ref={linesTableRef}
           name="lines"
           label={t(`${P}.form.lines`)}
           addButtonText={t(`${P}.form.addLine`)}
@@ -377,20 +421,34 @@ const ToolRepairSchemesPage: React.FC = () => {
             title: t('common.bulkAddPickTitle', { item: t(`${P}.form.item`) }),
             options: itemOptions,
             valueField: 'item_id',
+            quickCreate: itemQuickCreateConfig,
           }}
           columns={[
             {
               title: t(`${P}.form.item`),
               key: 'item_id',
               render: (field) => (
-                <ProFormSelect
+                <Form.Item
                   name={[field.name, 'item_id']}
-                  options={itemOptions}
-                  rules={[{ required: true }]}
-                  showSearch
-                  formItemProps={{ noStyle: true }}
-                  fieldProps={{ style: { width: '100%' }, placeholder: t('common.select') }}
-                />
+                  rules={[{ required: true, message: t('common.required') }]}
+                  noStyle
+                >
+                  <UniDropdown
+                    options={itemOptions}
+                    showSearch
+                    optionFilterProp="label"
+                    style={{ width: '100%' }}
+                    placeholder={t('common.select')}
+                    quickCreate={
+                      itemPerms.canCreate
+                        ? {
+                            label: t(`${ITEM_P}.quickCreate`),
+                            onClick: () => openItemQuickCreate(field.name),
+                          }
+                        : undefined
+                    }
+                  />
+                </Form.Item>
               ),
             },
             {
@@ -418,6 +476,16 @@ const ToolRepairSchemesPage: React.FC = () => {
           </Col>
         </Row>
       </FormModalTemplate>
+
+      <ToolOpsItemQuickCreateModal
+        kind="repair"
+        open={itemQuickCreateOpen}
+        onClose={() => {
+          setItemQuickCreateOpen(false);
+          itemQuickCreateTargetRef.current = null;
+        }}
+        onCreated={handleItemQuickCreated}
+      />
     </>
   );
 };

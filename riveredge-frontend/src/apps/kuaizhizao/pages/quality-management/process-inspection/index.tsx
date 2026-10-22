@@ -81,6 +81,7 @@ import { apiRequest } from '../../../../../services/api';
 import { qualityApi } from '../../../services/production';
 import type { DocumentPushPreview } from '../../../services/purchase-requisition';
 import InspectionTemplateConductFields from '../components/InspectionTemplateConductFields';
+import { InspectionConductInfoCard } from '../components/InspectionConductInfoCard';
 import { QualityInspectionDetailDrawer } from '../components/QualityInspectionDetailDrawer';
 import {
   buildQualityInspectionDetailSupplementNode,
@@ -1151,31 +1152,21 @@ const ProcessInspectionPage: React.FC = () => {
       >
         {currentInspection ? (
           <Col span={24}>
-            <Card title={t('app.kuaizhizao.quality.common.sections.inspectionInfo')} size="small" style={{ marginBottom: 8 }}>
-              <Row gutter={16}>
-                <Col span={8}>
-                  <strong>{t('app.kuaizhizao.quality.common.label.workOrderCode')}：</strong>{currentInspection.work_order_code}
-                </Col>
-                <Col span={8}>
-                  <strong>{t('app.kuaizhizao.quality.common.label.operationName')}：</strong>{currentInspection.operation_name}
-                </Col>
-                <Col span={8}>
-                  <strong>{t('app.kuaizhizao.quality.common.label.materialCode')}：</strong>{currentInspection.material_code}
-                </Col>
-              </Row>
-              <Row gutter={16} style={{ marginTop: 8 }}>
-                <Col span={8}>
-                  <strong>{t('app.kuaizhizao.quality.common.label.materialName')}：</strong>{currentInspection.material_name}
-                </Col>
-                <Col span={8}>
-                  <strong>{t('app.kuaizhizao.quality.common.label.inspectionQty')}：</strong>
-                  {formatQuantityWithUnit(
-                    currentInspection.inspection_quantity,
-                    currentInspection.material_unit,
-                  )}
-                </Col>
-              </Row>
-            </Card>
+            <InspectionConductInfoCard
+              inspection={currentInspection as Record<string, unknown>}
+              leading={
+                <>
+                  <Col span={8}>
+                    <strong>{t('app.kuaizhizao.quality.common.label.workOrderCode')}：</strong>
+                    {currentInspection.work_order_code}
+                  </Col>
+                  <Col span={8}>
+                    <strong>{t('app.kuaizhizao.quality.common.label.operationName')}：</strong>
+                    {currentInspection.operation_name}
+                  </Col>
+                </>
+              }
+            />
           </Col>
         ) : null}
         <InspectionTemplateConductFields

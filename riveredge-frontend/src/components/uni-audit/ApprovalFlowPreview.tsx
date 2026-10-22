@@ -182,6 +182,10 @@ function ApprovalFlowPreviewCanvas({
     return null;
   }
 
+  // 提交/审核动作弹窗父级常无定高：height=100% 会塌成一条；预览区保底高度避免流程图缩成小方块
+  const resolvedMinHeight =
+    typeof height === 'number' ? height : 360;
+
   return (
     <div
       ref={hostRef}
@@ -189,7 +193,7 @@ function ApprovalFlowPreviewCanvas({
       style={{
         width: '100%',
         height,
-        minHeight: 0,
+        minHeight: resolvedMinHeight,
         borderRadius: token.borderRadiusLG,
         border: `1px solid ${token.colorBorderSecondary}`,
         overflow: 'hidden',

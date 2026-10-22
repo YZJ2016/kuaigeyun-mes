@@ -12,6 +12,7 @@ import {
   renderQualityQualityStatusTag,
   renderQualityResultTag,
 } from './qualityMeta';
+import { formatInspectionMaterialDisplayValue } from './InspectionConductInfoCard';
 
 export function buildQualityInspectionDetailCodeColumn<T extends Record<string, unknown>>(
   t: TFunction,
@@ -28,6 +29,16 @@ export function buildQualityInspectionDetailMaterialColumns<T extends Record<str
   return [
     { title: t('app.kuaizhizao.quality.common.columns.materialCode'), dataIndex: 'material_code' },
     { title: t('app.kuaizhizao.quality.common.columns.materialName'), dataIndex: 'material_name' },
+    {
+      title: t('app.kuaizhizao.quality.common.columns.materialSpec'),
+      dataIndex: 'material_spec',
+      render: (_, r) => formatInspectionMaterialDisplayValue(r.material_spec),
+    },
+    {
+      title: t('app.master-data.materials.model', '型号'),
+      dataIndex: 'material_model',
+      render: (_, r) => formatInspectionMaterialDisplayValue(r.material_model),
+    },
   ];
 }
 

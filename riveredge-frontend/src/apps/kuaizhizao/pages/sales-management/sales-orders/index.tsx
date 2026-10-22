@@ -68,6 +68,15 @@ import {
   SALES_DOC_LIST_FIELD_RANK,
 } from '../shared/documentFieldAlignment';
 import {
+  buildDocumentMaterialLineExtensionColumns,
+  buildPartnerMaterialLineColumns,
+} from '../shared/materialLineColumns';
+import {
+  buildDocumentDetailPartnerMaterialFormColumns,
+  buildDocumentDetailSpecModelFormColumns,
+  withMaterialLineFillMapping,
+} from '../shared/materialLineFormDetail';
+import {
   DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
   renderDocumentLineMaterialsPreview,
 } from '../shared/documentLineMaterialsPreview';
@@ -833,7 +842,7 @@ const SalesOrdersPage: React.FC = () => {
     invoice: true,
   };
   // 与 UniTable viewTypes 同步：table=订单维度；其余视图键（明细表格、帮助）走明细数据维度
-  const salesOrderListPersistenceId = 'apps.kuaizhizao.pages.sales-management.sales-orders-width-v1';
+  const salesOrderListPersistenceId = 'apps.kuaizhizao.pages.sales-management.sales-orders-width-v2';
   const [viewTypeState, setViewTypeState] = useState<'table' | 'detailTable' | 'help'>(() =>
     readPersistedUniTableViewType(salesOrderListPersistenceId, 'table', [
       'table',
@@ -3516,11 +3525,13 @@ const SalesOrdersPage: React.FC = () => {
       const rowFromMaterial = (m: Material, pricing: (typeof priced)[number]) => {
         const mainCode = m.mainCode ?? m.code ?? '';
         const st = m.sourceType ?? (m as any).source_type;
+        const snap = pricing.material as Material;
         return {
           material_id: m.id,
           material_code: mainCode,
           material_name: m.name ?? '',
-          material_spec: m.specification ?? '',
+          material_spec: snap.specification ?? m.specification ?? '',
+          material_model: snap.model ?? m.model ?? '',
           material_unit: m.baseUnit ?? '',
           required_quantity: 1,
           delivery_date: coerceFormDate(formRef.current?.getFieldValue('delivery_date')) ?? undefined,
@@ -4365,6 +4376,7 @@ const SalesOrdersPage: React.FC = () => {
       dataIndex: 'material_spec',
       hideInTable: true,
     },
+    ...buildDocumentMaterialLineExtensionColumns(t, 'customer'),
     {
       title: t('common.unit'),
       dataIndex: 'material_unit',
@@ -4511,6 +4523,13 @@ const SalesOrdersPage: React.FC = () => {
           />
         );
       },
+    },
+    ...buildPartnerMaterialLineColumns(t, 'customer'),
+    {
+      title: t('common.remark'),
+      dataIndex: 'notes',
+      width: 120,
+      ellipsis: true,
     },
     {
       title: t('app.kuaizhizao.salesOrder.lifecycle'),
@@ -4957,15 +4976,13 @@ const SalesOrdersPage: React.FC = () => {
                                 <div style={{ flex: 1, minWidth: 200 }}>
                                   <UniMaterialSelect
                                     name={[index, 'material_id']}
+                                    listFieldKey={index}
+                                    listFieldName="items"
                                     label=""
                                     placeholder={t('app.kuaizhizao.salesOrder.selectMaterial')}
                                     required
                                     size={DOCUMENT_DETAIL_CONTROL_SIZE}
-                                    fillMapping={{
-                                      material_code: 'mainCode',
-                                      material_name: 'name',
-                                      material_spec: 'specification',
-                                    }}
+                                    fillMapping={withMaterialLineFillMapping()}
                                     fallbackOption={fallback}
                                     formItemProps={{ style: { margin: 0 } }}
                                     showQuickCreate
@@ -5022,17 +5039,7 @@ const SalesOrdersPage: React.FC = () => {
                           />
                         ) : null,
                     },
-                    {
-                      title: t('app.kuaizhizao.salesOrder.spec'),
-                      dataIndex: 'material_spec',
-                      width: DOCUMENT_DETAIL_COL_WIDTH.spec,
-                      ...DOCUMENT_DETAIL_TEXT_COL,
-                      render: (_: any, __: any, index: number) => (
-                        <AntForm.Item name={[index, 'material_spec']} style={{ margin: 0 }}>
-                          <Input placeholder={t('app.kuaizhizao.salesOrder.spec')} size={DOCUMENT_DETAIL_CONTROL_SIZE} />
-                        </AntForm.Item>
-                      ),
-                    },
+                    ...buildDocumentDetailSpecModelFormColumns(t),
                     {
                       title: t('common.unit'),
                       dataIndex: 'material_unit',
@@ -5438,6 +5445,7 @@ const SalesOrdersPage: React.FC = () => {
                         </AntForm.Item>
                       ),
                     },
+                    ...buildDocumentDetailPartnerMaterialFormColumns(t, 'customer'),
                     {
                       title: t('common.remark'),
                       dataIndex: 'notes',

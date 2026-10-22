@@ -120,6 +120,7 @@ class QualityPatrolService(AppBaseService[QualityPatrol]):
         self, tenant_id: int, user_id: int, payload: QualityPatrolCreate
     ) -> QualityPatrolResponse:
         from apps.kuaizhizao.services.quality_service import (
+            _ensure_inspection_material_spec_model,
             _ensure_inspection_material_unit,
             _quality_inspection_initial_review_fields,
         )
@@ -131,6 +132,7 @@ class QualityPatrolService(AppBaseService[QualityPatrol]):
             await _quality_inspection_initial_review_fields(tenant_id, "quality_patrol")
         )
         await _ensure_inspection_material_unit(tenant_id, create_fields)
+        await _ensure_inspection_material_spec_model(tenant_id, create_fields)
         template = await self._load_patrol_template(
             tenant_id,
             int(create_fields["material_id"]),

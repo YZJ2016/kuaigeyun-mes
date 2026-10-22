@@ -515,8 +515,27 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
     }
 
     const singleVal = typeof val === 'number' ? val : uniMaterialSelectValueFromEvent(val);
-    const selectedMaterial =
+    let selectedMaterial =
       singleVal != null ? await resolveSelectedMaterial(singleVal, opt, data) : undefined;
+
+    if (selectedMaterial && fillMapping && singleVal != null) {
+      const needsLineSnapshot =
+        'material_spec' in fillMapping ||
+        'material_model' in fillMapping ||
+        Object.values(fillMapping).some((f) => f === 'specification' || f === 'model');
+      if (needsLineSnapshot) {
+        const specField = fillMapping.material_spec ?? 'specification';
+        const modelField = fillMapping.material_model ?? 'model';
+        const specVal = getMaterialField(selectedMaterial as any, specField);
+        const modelVal = getMaterialField(selectedMaterial as any, modelField);
+        const specMissing = specVal == null || String(specVal).trim() === '';
+        const modelMissing = modelVal == null || String(modelVal).trim() === '';
+        if (specMissing || modelMissing) {
+          const enriched = await resolveSelectedMaterial(singleVal, opt, []);
+          if (enriched) selectedMaterial = enriched;
+        }
+      }
+    }
 
     if (selectedMaterial && fillMapping && form) {
       const isListContext = listFieldKey !== undefined && listFieldKey !== null;

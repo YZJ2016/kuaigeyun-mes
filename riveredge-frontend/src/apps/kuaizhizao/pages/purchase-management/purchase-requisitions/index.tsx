@@ -54,6 +54,11 @@ import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
 import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
+import {
+  buildDocumentDetailPartnerMaterialFormColumns,
+  buildDocumentDetailSpecModelFormColumns,
+  withMaterialLineFillMapping,
+} from '../../sales-management/shared/materialLineFormDetail';
 import { MaterialUnitSelect, prefetchMaterialsForUnitSelect } from '../../../../../components/material-unit-select';
 import { DocumentLineUnitSelect } from '../../../../../components/quantity-with-unit';
 import { resolveMaterialScenarioUnit } from '../../../../../utils/materialScenarioUnit';
@@ -169,6 +174,9 @@ const INITIAL_PR_FORM_ITEM_ROW = {
   material_code: '',
   material_name: '',
   material_spec: '',
+  material_model: '',
+  partner_material_code: '',
+  partner_material_name: '',
   unit: '件',
   quantity: 1,
   suggested_unit_price: 0,
@@ -2080,11 +2088,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
                                     size="small"
                                     listFieldKey={index}
                                     listFieldName="items"
-                                    fillMapping={{
-                                      material_code: 'mainCode',
-                                      material_name: 'name',
-                                      material_spec: 'specification',
-                                    }}
+                                    fillMapping={withMaterialLineFillMapping()}
                                     onChange={(_val, material) => {
                                       if (!material) return;
                                       createFormRef.current?.setFieldValue(
@@ -2137,16 +2141,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
                       </AntForm.Item>
                     ),
                   },
-                  {
-                    title: t('app.kuaizhizao.purchaseRequisition.form.spec'),
-                    dataIndex: 'material_spec',
-                    width: 120,
-                    render: (_: any, __: any, index: number) => (
-                      <AntForm.Item name={[index, 'material_spec']} style={{ margin: 0 }}>
-                        <Input placeholder={t('app.kuaizhizao.purchaseRequisition.form.spec')} size="small" />
-                      </AntForm.Item>
-                    ),
-                  },
+                  ...buildDocumentDetailSpecModelFormColumns(t, { width: 120, inputSize: 'small' }),
                   {
                     title: t('common.unit'),
                     dataIndex: 'unit',
@@ -2261,6 +2256,10 @@ const PurchaseRequisitionsPage: React.FC = () => {
                       </AntForm.Item>
                     ),
                   },
+                  ...buildDocumentDetailPartnerMaterialFormColumns(t, 'supplier', {
+                    width: 120,
+                    inputSize: 'small',
+                  }),
                   {
                     title: t('app.kuaizhizao.purchaseRequisition.form.lineNotes'),
                     dataIndex: 'notes',

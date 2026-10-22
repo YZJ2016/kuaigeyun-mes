@@ -110,6 +110,8 @@ export interface PartnerPriceBookBulkLine {
   materialId: number;
   unitPrice: number;
   unit?: string;
+  partnerMaterialCode?: string;
+  partnerMaterialName?: string;
 }
 
 export type PartnerPriceBookBulkConflictPolicy = 'skip' | 'overwrite';
@@ -123,6 +125,8 @@ export interface PartnerPriceBookBulkCreate {
   effectiveTo?: string;
   remark?: string;
   isActive?: boolean;
+  /** 有伙伴料号时回写物料编号映射（仅尚无映射时） */
+  syncPartnerAlias?: boolean;
   conflictPolicy?: PartnerPriceBookBulkConflictPolicy | null;
 }
 

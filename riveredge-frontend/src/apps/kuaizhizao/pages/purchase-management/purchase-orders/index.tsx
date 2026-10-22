@@ -32,6 +32,11 @@ import {
   buildImportPriceTypeOptions,
   parseImportPriceType,
 } from '../../sales-management/shared/salesPriceType';
+import {
+  buildDocumentDetailPartnerMaterialFormColumns,
+  buildDocumentDetailSpecModelFormColumns,
+  withMaterialLineFillMapping,
+} from '../../sales-management/shared/materialLineFormDetail';
 import { PlusOutlined, EditOutlined, DeleteOutlined, DownOutlined, FileTextOutlined, AppstoreAddOutlined, ArrowLeftOutlined, ImportOutlined, PrinterOutlined } from '@ant-design/icons';
 import { getDataDictionaryByCode, getDictionaryItemList, type DictionaryItem } from '../../../../../services/dataDictionary';
 import { mapSystemDictionaryItemOptions, resolveSystemDictionaryItemLabel } from '../../../../../utils/systemDictionaryI18n';
@@ -451,7 +456,7 @@ const PurchaseOrdersPage: React.FC = () => {
   /** 列表当前页数据（唯一源：UniTable onTableDataChange，与表格展示一致） */
   const [tableOrders, setTableOrders] = useState<PurchaseOrder[]>([]);
   const purchaseOrderListPersistenceId =
-    'apps.kuaizhizao.pages.purchase-management.purchase-orders-width-v1';
+    'apps.kuaizhizao.pages.purchase-management.purchase-orders-width-v2';
   const [viewTypeState, setViewTypeState] = useState<'table' | 'detailTable' | 'help'>(() =>
     readPersistedUniTableViewType(purchaseOrderListPersistenceId, 'table', [
       'table',
@@ -3480,11 +3485,7 @@ const PurchaseOrdersPage: React.FC = () => {
                               size={DOCUMENT_DETAIL_CONTROL_SIZE}
                               listFieldKey={index}
                               listFieldName="items"
-                              fillMapping={{
-                                material_code: 'mainCode',
-                                material_name: 'name',
-                                material_spec: 'specification',
-                              }}
+                              fillMapping={withMaterialLineFillMapping()}
                               onChange={(_val, material) => {
                                 if (!material) return;
                                 formRef.current?.setFieldValue(
@@ -3509,17 +3510,8 @@ const PurchaseOrdersPage: React.FC = () => {
                       </AntForm.Item>
                     ),
                   },
-                  {
-                    title: t('app.kuaizhizao.purchaseOrder.form.spec'),
-                    dataIndex: 'material_spec',
-                    width: DOCUMENT_DETAIL_COL_WIDTH.spec,
-                    ...DOCUMENT_DETAIL_TEXT_COL,
-                    render: (_: any, __: any, index: number) => (
-                      <AntForm.Item name={[index, 'material_spec']} style={{ margin: 0 }}>
-                        <Input placeholder={t('app.kuaizhizao.purchaseOrder.form.spec')} size={DOCUMENT_DETAIL_CONTROL_SIZE} />
-                      </AntForm.Item>
-                    ),
-                  },
+                  ...buildDocumentDetailSpecModelFormColumns(t),
+                  ...buildDocumentDetailPartnerMaterialFormColumns(t, 'supplier'),
                   {
                     title: t('common.unit'),
                     dataIndex: 'unit',

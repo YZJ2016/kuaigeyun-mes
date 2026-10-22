@@ -73,7 +73,11 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 快视觉样本、模型制品、保留天数、运维告警、promote-sample | `features/kuaivision-p3-governance.md` |
 | 编码规则、页面配置、testGenerateCode、编号预览慢 | `features/code-rule-page-config-load.md` |
 | 设备台账、车间/产线/工位快速新增、UniDropdown.quickCreate | `features/equipment-factory-binding-quick-add.md` |
+| 工装保养/维修方案、快速新建保养项/维修项、bulkAdd.quickCreate | `features/tool-scheme-item-quick-create.md` |
 | 好力 GO 模具/设备台账批量导出、导出选中 | `features/haoligo-ledger-batch-export.md` |
+| 月度工厂台账提交财务、开票信息、finance_submitted | `features/haoligo-monthly-ledger-submit-finance.md` |
+| 订单跟踪发货付款、排产完成拆分、submit-production | `features/haoligo-order-tracking-workflow.md` |
+| 产出单扫码带出生产部门、注塑机/设备产出单 | `features/haoligo-output-record-production-dept.md` |
 | 质检方案快速新建、方案类型空白、defaultPlanType | `features/inspection-plan-quick-type-default.md` |
 | 委外检验、质量巡检、OSQC、plan_type outsource/patrol | `features/quality-outsource-patrol.md` |
 | 图纸气泡标注、drawing_balloon、FAI 导入特性、PRO OCR | `features/drawing-balloon-sheet-pro.md` |
@@ -98,7 +102,11 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | kuaicaiwu receivable ModuleNotFound、compose 空壳、external_master_data_sync | `features/compose-kuaicaiwu-empty-husk.md` |
 | 回显权限、display、reference_resources、轻办公人事选人/车间回显、预设角色物料回显 | `features/permission-display-echo.md` |
 | 轻办公报销单、费用报销、kuaioa_expense、报销明细 | `features/kuaioa-expense-reimbursement.md` |
-| 请假考勤没扣、代录请假、apply_leave_to_attendance、半天假仍正常 | `features/leave-attendance-employee-match.md` |
+| 年度工资统计、车间联动人员、月度工资宽表导入、annual-stats | `features/kuaioa-annual-payroll-stats-import.md` |
+| 请假考勤没扣、代录请假、apply_leave_to_attendance、半天假仍正常、自动通过撤销审核 | `features/leave-attendance-employee-match.md` |
+| 月度考勤选产线后人员空白、分产线刷新名单 | `features/kuaioa-attendance-line-roster.md` |
+| 入离职登记接收人、人员接收人、车间主任通知、employee-movements recipient | `features/kuaioa-employee-movement-recipient.md` |
+| 生活费预支勾选带动发放表、living-payout 独立权限 | `features/kuaioa-living-payout-permission-split.md` |
 | 取单 403、pull-lines 要不要开查看、来源筛选项直调 list | `features/pull-source-display-echo.md` |
 | 采购合计取舍、单价 0.195 合计 0.20、DocumentAmountSummary | `features/document-amount-summary-precision.md` |
 | 数值精度、数量/单价/金额小数位、0–6、configTree max | `features/numeric-precision-decimal-places-6.md` |
@@ -106,6 +114,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 采购收票预览、开票明细、进项发票源单物料 | `features/purchase-invoice-pull-detail-lines.md` |
 | 选物料 403、仅回显加载物料列表失败、UniMaterialSelect | `features/uni-material-select-reference-display.md` |
 | 个性化主题保存后又暗、偏好与标签互相冲掉、jsonb merge | `features/user-preference-atomic-merge.md` |
+| 单据明细客户料号、伙伴料号、material_model、document_line_material_snapshot | `features/document-line-partner-material-snapshot.md` |
 | 建议供应商无搜索、SupplierSelectDropdown、UniDropdown 可搜 | `features/supplier-select-dropdown.md` |
 | 客户供应商多收付款账户、settlementAccounts、付款账户 | `features/partner-settlement-accounts.md` |
 | 付款申请、采购请款、push_payment_application、可请款占用 | `features/payment-application-procurement.md` |
@@ -177,6 +186,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 
 | slug | 标题 | domain | 状态 |
 |------|------|--------|------|
+| `features/kuaioa-annual-payroll-stats-import.md` | 年度工资统计车间联动与月度工资导入 | kuaioa-hr | 已交付 |
 | `features/app-enable-disable-perf.md` | 应用启用/禁用增量权限同步 | core-platform | 已交付 |
 | `features/funide-oa-rd-electronics-structure-menu.md` | 定制研发电子/结构菜单 | funide-oa | 已交付 |
 | `features/funide-oa-drawing-detail-files-section.md` | 定制工程图纸详情图纸文件板块 | funide-oa | 已交付 |
@@ -248,7 +258,11 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | `features/iot-line-clear-mqtt.md` | 产线 MQTT 清零（接入/发送 + 手动/自动） | kuaiiot | 已交付 |
 | `features/code-rule-page-config-load.md` | 编码规则页面配置加载 | code-rule | 已交付 |
 | `features/equipment-factory-binding-quick-add.md` | 设备台账工厂绑定快速新增 | master-data-ui | 已交付 |
+| `features/tool-scheme-item-quick-create.md` | 工装方案快速新建保养项/维修项 | master-data-ui | 已交付 |
 | `features/haoligo-ledger-batch-export.md` | 好力 GO 模具/设备台账批量导出 | dedicated-haoligo | 已交付 |
+| `features/haoligo-monthly-ledger-submit-finance.md` | 月度工厂台账提交财务选人与开票 | dedicated-haoligo | 已交付 |
+| `features/haoligo-order-tracking-workflow.md` | 订单跟踪发货付款与排产拆分 | dedicated-haoligo | 已交付 |
+| `features/haoligo-output-record-production-dept.md` | 产出单制令单带出生产部门 | dedicated-haoligo | 已交付 |
 | `features/inspection-plan-quick-type-default.md` | 快速新建质检方案默认锁定类型 | master-data-ui | 已交付 |
 | `features/quality-outsource-patrol.md` | 委外检验 OSQC 与质量巡检 | quality | 已交付 |
 | `features/fast-deploy-scripts.md` | fast-deploy 脚本入口 | deploy | 已交付 |
@@ -286,6 +300,9 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | `features/payment-require-voucher.md` | 付款申请要求付款单上传凭证 | finance | 已交付 |
 | `features/kuaioa-expense-reimbursement.md` | 轻办公费用报销单与独立审核流 | kuaioa | 已交付 |
 | `features/leave-attendance-employee-match.md` | 请假回写考勤优先档案员工匹配 | kuaioa | 已交付 |
+| `features/kuaioa-attendance-line-roster.md` | 月度考勤按产线拉人 | kuaioa | 已交付 |
+| `features/kuaioa-employee-movement-recipient.md` | 入离职登记人员接收人站内通知 | kuaioa | 已交付 |
+| `features/kuaioa-living-payout-permission-split.md` | 生活费发放表与预支权限拆分 | kuaioa | 已交付 |
 | `features/gl-nonleaf-opening-residual.md` | 总账非末级残留期初与科目余额表轧卷 | kuaicaiwu | 已交付 |
 
 Obsidian 镜像可用 wikilink，Agent 检索请用上表路径，不要只依赖 `[[...]]`。

@@ -384,6 +384,8 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   haoligo_eq_repair_content: 25.45,
   haoligo_eq_repair_result: 22.51,
   haoligo_eq_wo: 11.16,
+  /** 产出单：生产部门（制令单带出），列在设备前 */
+  haoligo_eq_prod_dept: 11.5,
   haoligo_eq_fp_code: 12.8,
   haoligo_eq_fp_name: 12.81,
   haoligo_eq_planned_qty: 31.22,
@@ -962,7 +964,10 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   materialName: 79.3,
   material_id: 79.35,
   materialId: 79.35,
+  material_spec: 79.37,
+  materialSpec: 79.37,
   materialModel: 79.4,
+  material_model: 79.4,
   /** 轻财务等列表备注（RemainderFlex 真源段） */
   notes: 80,
   /** 轻财务发票：关联应收/应付（勿用裸 receivable_code=10） */
@@ -1030,6 +1035,8 @@ export const GLOBAL_DOC_DETAIL_TABLE_FIELD_RANK = {
   material_code: 20.1,
   materialName: 20,
   materialCode: 20.1,
+  material_spec: 20.72,
+  material_model: 20.74,
   // 类型类
   forecast_period: 25,
   forecast_type: 25.2,
@@ -1064,6 +1071,11 @@ export const GLOBAL_DOC_DETAIL_TABLE_FIELD_RANK = {
   delivery_date: 61,
   required_date: 62,
   quote_deadline: 63,
+  partnerMaterialCode: 79.6,
+  partnerMaterialName: 79.8,
+  notes: 80,
+  remark: 80,
+  remarks: 80,
   // 系统尾部
   updated_at: 88,
   audit_phase: 89,

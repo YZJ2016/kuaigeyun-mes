@@ -44,6 +44,213 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'kuaioa-attendance-line-roster-r01',
+    date: '2026-10-21',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-attendance-line-roster-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-attendance-line-roster-r01.description',
+  },
+  {
+    id: 'attendance-fill-viewport-height-r02',
+    date: '2026-10-21',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.attendance-fill-viewport-height-r02.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.attendance-fill-viewport-height-r02.description',
+  },
+  {
+    id: 'purchase-receipt-spec-model-snapshot-r01',
+    date: '2026-10-21',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-receipt-spec-model-snapshot-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-receipt-spec-model-snapshot-r01.description',
+  },
+  {
+    id: 'uni-audit-reject-confirm-modal-r01',
+    date: '2026-10-21',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.uni-audit-reject-confirm-modal-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.uni-audit-reject-confirm-modal-r01.description',
+  },
+  {
+    id: 'tool-calibration-tool-id-r01',
+    date: '2026-10-21',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.tool-calibration-tool-id-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.tool-calibration-tool-id-r01.description',
+  },
+  {
+    id: 'tool-maintenance-repair-preview-scheme-r01',
+    date: '2026-10-21',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.tool-maintenance-repair-preview-scheme-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.tool-maintenance-repair-preview-scheme-r01.description',
+  },
+  {
+    id: 'kuaioa-living-payout-permission-split-r01',
+    date: '2026-10-21',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-living-payout-permission-split-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-living-payout-permission-split-r01.description',
+  },
+  {
+    id: 'tool-return-tool-id-required-r01',
+    date: '2026-10-21',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.tool-return-tool-id-required-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.tool-return-tool-id-required-r01.description',
+  },
+  {
+    id: 'tool-borrow-work-order-select-r01',
+    date: '2026-10-21',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.tool-borrow-work-order-select-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.tool-borrow-work-order-select-r01.description',
+  },
+  {
+    id: 'kuaioa-employee-movement-recipient-r01',
+    date: '2026-10-21',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-employee-movement-recipient-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-employee-movement-recipient-r01.description',
+  },
+  {
+    id: 'kuaioa-leave-attendance-work-injury-r01',
+    date: '2026-10-21',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-leave-attendance-work-injury-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-leave-attendance-work-injury-r01.description',
+  },
+  {
+    id: 'tool-scheme-item-quick-create-r01',
+    date: '2026-10-21',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.tool-scheme-item-quick-create-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.tool-scheme-item-quick-create-r01.description',
+  },
+  {
+    id: 'kuaioa-leave-auto-approve-revoke-r01',
+    date: '2026-10-21',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-leave-auto-approve-revoke-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-leave-auto-approve-revoke-r01.description',
+  },
+  {
+    id: 'uni-audit-submit-flow-preview-minheight-r01',
+    date: '2026-10-21',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.uni-audit-submit-flow-preview-minheight-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.uni-audit-submit-flow-preview-minheight-r01.description',
+  },
+  {
+    id: 'kuaioa-annual-payroll-workshop-import-r01',
+    date: '2026-10-21',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-annual-payroll-workshop-import-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-annual-payroll-workshop-import-r01.description',
+  },
+  {
+    id: 'kuaioa-attendance-day-register-actions-r01',
+    date: '2026-10-21',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-attendance-day-register-actions-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-attendance-day-register-actions-r01.description',
+  },
+  {
+    id: 'kuaioa-employee-search-select-filters-r01',
+    date: '2026-10-21',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-employee-search-select-filters-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-employee-search-select-filters-r01.description',
+  },
+  {
+    id: 'quality-inspection-header-spec-model-r01',
+    date: '2026-10-21',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.quality-inspection-header-spec-model-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.quality-inspection-header-spec-model-r01.description',
+  },
+  {
+    id: 'document-partner-material-columns-rollout-r01',
+    date: '2026-10-21',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.document-partner-material-columns-rollout-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.document-partner-material-columns-rollout-r01.description',
+  },
+  {
+    id: 'quotation-partner-material-columns-r01',
+    date: '2026-10-21',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.quotation-partner-material-columns-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.quotation-partner-material-columns-r01.description',
+  },
+  {
+    id: 'document-material-line-form-standard-r01',
+    date: '2026-10-21',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.document-material-line-form-standard-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.document-material-line-form-standard-r01.description',
+  },
+  {
+    id: 'document-line-spec-before-model-r01',
+    date: '2026-10-21',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.document-line-spec-before-model-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.document-line-spec-before-model-r01.description',
+  },
+  {
+    id: 'sales-order-line-material-spec-fill-r01',
+    date: '2026-10-21',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-order-line-material-spec-fill-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-order-line-material-spec-fill-r01.description',
+  },
+  {
+    id: 'document-line-partner-material-model-spec-r01',
+    date: '2026-10-21',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.document-line-partner-material-model-spec-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.document-line-partner-material-model-spec-r01.description',
+  },
+  {
+    id: 'partner-price-book-quick-partner-filter-r01',
+    date: '2026-10-21',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.partner-price-book-quick-partner-filter-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.partner-price-book-quick-partner-filter-r01.description',
+  },
+  {
+    id: 'partner-price-book-bulk-alias-fields-r01',
+    date: '2026-10-21',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.partner-price-book-bulk-alias-fields-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.partner-price-book-bulk-alias-fields-r01.description',
+  },
+  {
     id: 'planning-procurement-automation-r01',
     date: '2026-10-21',
     type: 'feature',

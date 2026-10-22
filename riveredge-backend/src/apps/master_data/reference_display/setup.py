@@ -291,6 +291,7 @@ class _MaterialDisplayProvider:
                 {
                     **_row(id=r.id, uuid=r.uuid, code=r.main_code or r.code, name=r.name),
                     "specification": r.specification,
+                    "model": r.model,
                     "base_unit": r.base_unit,
                     "units": r.units,
                     "source_type": r.source_type,
@@ -329,6 +330,7 @@ class _MaterialDisplayProvider:
             {
                 **_row(id=r.id, uuid=r.uuid, code=r.main_code or r.code, name=r.name),
                 "specification": r.specification,
+                "model": r.model,
                 "base_unit": r.base_unit,
                 "units": r.units,
                 "source_type": r.source_type,

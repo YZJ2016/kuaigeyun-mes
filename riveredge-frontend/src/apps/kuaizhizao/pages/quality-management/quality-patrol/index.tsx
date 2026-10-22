@@ -43,6 +43,7 @@ import EquipmentFactoryBindingFields from '../../../components/EquipmentFactoryB
 import { operationApi, unwrapProcessPagedList } from '../../../../master-data/services/process';
 import { workOrderApi } from '../../../services/work-order';
 import InspectionTemplateConductFields from '../components/InspectionTemplateConductFields';
+import { InspectionConductInfoCard } from '../components/InspectionConductInfoCard';
 import {
   buildConductStepResultDefaults,
   getInspectionTemplateSource,
@@ -737,6 +738,9 @@ const QualityPatrolPage: React.FC = () => {
       >
         {conductRow ? (
           <>
+            <Col span={24}>
+              <InspectionConductInfoCard inspection={conductRow as Record<string, unknown>} />
+            </Col>
             <InspectionTemplateConductFields
               inspection={conductRow as Record<string, unknown>}
               photoCategory="quality_patrol_attachments"
@@ -776,6 +780,14 @@ const QualityPatrolPage: React.FC = () => {
               </Descriptions.Item>
               <Descriptions.Item label={t('app.kuaizhizao.quality.common.material', { defaultValue: '物料' })}>
                 {`${detailRow.material_code || ''} ${detailRow.material_name || ''}`.trim()}
+              </Descriptions.Item>
+              <Descriptions.Item label={t('app.kuaizhizao.quality.common.columns.materialSpec')}>
+                {detailRow.material_spec?.trim() ? detailRow.material_spec : '—'}
+              </Descriptions.Item>
+              <Descriptions.Item label={t('app.master-data.materials.model', '型号')}>
+                {(detailRow as { material_model?: string }).material_model?.trim()
+                  ? (detailRow as { material_model?: string }).material_model
+                  : '—'}
               </Descriptions.Item>
               <Descriptions.Item label={t('app.kuaizhizao.quality.common.label.inspectionQty', { defaultValue: '检验数量' })}>
                 {detailRow.inspection_quantity}

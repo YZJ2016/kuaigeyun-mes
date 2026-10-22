@@ -83,6 +83,7 @@ import { apiRequest } from '../../../../../services/api';
 import { qualityApi } from '../../../services/production';
 import type { PushPreviewResponse } from '../../../services/sales-order';
 import InspectionTemplateConductFields from '../components/InspectionTemplateConductFields';
+import { InspectionConductInfoCard } from '../components/InspectionConductInfoCard';
 import { QualityInspectionDetailDrawer } from '../components/QualityInspectionDetailDrawer';
 import {
   buildQualityInspectionDetailSupplementNode,
@@ -1386,26 +1387,18 @@ const FinishedGoodsInspectionPage: React.FC = () => {
       >
         {currentInspection ? (
           <Col span={24}>
-            <Card title={t('app.kuaizhizao.quality.common.sections.inspectionInfo')} size="small" style={{ marginBottom: 8 }}>
-              <Row gutter={16}>
-                <Col span={6}>
-                  <strong>{t('app.kuaizhizao.quality.common.label.workOrderCode')}：</strong>{currentInspection.work_order_code}
-                </Col>
-                <Col span={6}>
-                  <strong>{t('app.kuaizhizao.quality.common.label.materialCode')}：</strong>{currentInspection.material_code}
-                </Col>
-                <Col span={6}>
-                  <strong>{t('app.kuaizhizao.quality.common.label.materialName')}：</strong>{currentInspection.material_name}
-                </Col>
-                <Col span={6}>
-                  <strong>{t('app.kuaizhizao.quality.common.label.inspectionQty')}：</strong>
-                  {formatQuantityWithUnit(
-                    currentInspection.inspection_quantity,
-                    currentInspection.material_unit,
-                  )}
-                </Col>
-              </Row>
-            </Card>
+            <InspectionConductInfoCard
+              inspection={currentInspection as Record<string, unknown>}
+              colSpan={6}
+              leading={
+                <>
+                  <Col span={6}>
+                    <strong>{t('app.kuaizhizao.quality.common.label.workOrderCode')}：</strong>
+                    {currentInspection.work_order_code}
+                  </Col>
+                </>
+              }
+            />
           </Col>
         ) : null}
         <InspectionTemplateConductFields

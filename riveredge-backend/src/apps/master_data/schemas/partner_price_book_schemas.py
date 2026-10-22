@@ -217,6 +217,12 @@ class PartnerPriceBookBulkLine(BaseModel):
     material_id: int = Field(..., alias="materialId")
     unit_price: Decimal = Field(..., alias="unitPrice", gt=0)
     unit: Optional[str] = Field(None, description="计价单位，空则取物料主单位")
+    partner_material_code: Optional[str] = Field(
+        None, alias="partnerMaterialCode", description="伙伴料号（可选，可回写编号映射）"
+    )
+    partner_material_name: Optional[str] = Field(
+        None, alias="partnerMaterialName", description="伙伴品名（可选）"
+    )
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -234,6 +240,11 @@ class PartnerPriceBookBulkCreate(BaseModel):
     effective_to: Optional[date] = Field(None, alias="effectiveTo")
     remark: Optional[str] = None
     is_active: Optional[bool] = Field(True, alias="isActive")
+    sync_partner_alias: Optional[bool] = Field(
+        True,
+        alias="syncPartnerAlias",
+        description="有伙伴料号时是否回写物料编号映射（仅尚无映射时）",
+    )
     conflict_policy: Optional[Literal["skip", "overwrite"]] = Field(
         None,
         alias="conflictPolicy",
@@ -268,5 +279,21 @@ class PartnerPriceBookBulkResponse(BaseModel):
     created_count: int = Field(0, alias="createdCount")
     skipped_count: int = Field(0, alias="skippedCount")
     overwritten_count: int = Field(0, alias="overwrittenCount")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class PartnerPriceBookFilterPartnerOption(BaseModel):
+    """列表筛选：仅返回价格本中已有数据的客户/供应商。"""
+
+    id: int
+    code: Optional[str] = None
+    name: Optional[str] = None
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class PartnerPriceBookFilterPartnerListResponse(BaseModel):
+    data: List[PartnerPriceBookFilterPartnerOption]
 
     model_config = ConfigDict(populate_by_name=True)

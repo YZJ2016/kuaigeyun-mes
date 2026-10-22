@@ -48,6 +48,7 @@ antd Modal 默认 `zoom` 进场动画给 `.ant-modal` 加 `transform`。React Fl
 
 1. `transitionName=""` 关掉审核弹窗 zoom
 2. `afterOpenChange` 置 `flowCanvasReady` 后再挂载 `ApprovalFlowPreview`
+3. 提交/驳回等动作弹窗父级常无定高：`ApprovalFlowPreview` 在 `height=100%` 时须 `minHeight≥360`，动作 Modal body / 流程外包一层也要保底高度，否则画布塌成小方块
 3. `fitView` 前 `updateNodeInternals`
 
 ## 踩坑

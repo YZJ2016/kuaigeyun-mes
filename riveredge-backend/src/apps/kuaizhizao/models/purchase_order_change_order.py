@@ -2,6 +2,9 @@
 
 from tortoise import fields
 from core.models.base import BaseModel
+from apps.kuaizhizao.models.mixins.document_line_partner_material import (
+    DocumentLinePartnerMaterialSnapshotMixin,
+)
 from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus
 
 
@@ -54,7 +57,7 @@ class PurchaseOrderChangeOrder(BaseModel):
         ]
 
 
-class PurchaseOrderChangeItem(BaseModel):
+class PurchaseOrderChangeItem(DocumentLinePartnerMaterialSnapshotMixin, BaseModel):
     tenant_id = fields.IntField(description="租户ID")
     change_order: fields.ForeignKeyRelation[PurchaseOrderChangeOrder] = fields.ForeignKeyField(
         "models.PurchaseOrderChangeOrder", related_name="items", description="变更单"

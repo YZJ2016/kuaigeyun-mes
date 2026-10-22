@@ -35,6 +35,7 @@ import {
 } from '../../../../../components/layout-templates';
 import { qualityApi } from '../../../services/quality-execution';
 import InspectionTemplateConductFields from '../components/InspectionTemplateConductFields';
+import { InspectionConductInfoCard } from '../components/InspectionConductInfoCard';
 import {
   buildConductStepResultDefaults,
   getInspectionTemplateSource,
@@ -554,6 +555,14 @@ const OutsourceInspectionPage: React.FC = () => {
               >
                 {`${detailRow.material_code || ''} ${detailRow.material_name || ''}`.trim()}
               </Descriptions.Item>
+              <Descriptions.Item label={t('app.kuaizhizao.quality.common.columns.materialSpec')}>
+                {detailRow.material_spec?.trim() ? detailRow.material_spec : '—'}
+              </Descriptions.Item>
+              <Descriptions.Item label={t('app.master-data.materials.model', '型号')}>
+                {(detailRow as { material_model?: string }).material_model?.trim()
+                  ? (detailRow as { material_model?: string }).material_model
+                  : '—'}
+              </Descriptions.Item>
               <Descriptions.Item
                 label={t('app.kuaizhizao.quality.common.quantity', { defaultValue: '检验数量' })}
               >
@@ -610,6 +619,7 @@ const OutsourceInspectionPage: React.FC = () => {
       >
         {conductRow ? (
           <>
+            <InspectionConductInfoCard inspection={conductRow as Record<string, unknown>} />
             <InspectionConductQuantityFields
               t={t}
               scenario="purchase"

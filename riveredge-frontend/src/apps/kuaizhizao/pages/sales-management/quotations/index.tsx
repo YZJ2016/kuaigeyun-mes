@@ -59,6 +59,15 @@ import {
   parseImportPriceType,
   salesFormPriceType,
 } from '../shared/salesPriceType';
+import {
+  buildDocumentDetailPartnerMaterialFormColumns,
+  buildDocumentDetailSpecModelFormColumns,
+  withMaterialLineFillMapping,
+} from '../shared/materialLineFormDetail';
+import {
+  buildMaterialModelSpecColumns,
+  buildPartnerMaterialLineColumns,
+} from '../shared/materialLineColumns';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import { getMaterialField } from '../../../../../components/uni-material-batch-picker/utils';
@@ -556,11 +565,7 @@ const QuotationMaterialSelectCell: React.FC<{
           size={DOCUMENT_DETAIL_CONTROL_SIZE}
           listFieldKey={index}
           listFieldName="items"
-          fillMapping={{
-            material_code: 'mainCode',
-            material_name: 'name',
-            material_spec: 'specification',
-          }}
+          fillMapping={withMaterialLineFillMapping()}
           fallbackOption={fallback}
           formItemProps={{ style: { margin: 0 } }}
           showQuickCreate
@@ -664,6 +669,9 @@ function mapQuotationSubmitItem(
     material_code,
     material_name,
     material_spec: it.material_spec,
+    material_model: (it as { material_model?: string }).material_model,
+    partner_material_code: (it as { partner_material_code?: string }).partner_material_code,
+    partner_material_name: (it as { partner_material_name?: string }).partner_material_name,
     material_unit: it.material_unit,
     quote_quantity: it.quote_quantity,
     unit_price: giftFields.unit_price,
@@ -1489,6 +1497,8 @@ const QuotationsPage: React.FC = () => {
             dataIndex: 'material_code',
             hideInTable: true,
           },
+          ...buildMaterialModelSpecColumns(t, { readOnly: true, specWidth: 100, modelWidth: 100 }),
+          ...buildPartnerMaterialLineColumns(t, 'customer', { readOnly: true, width: 110 }),
           {
             title: t('common.quantity'),
             dataIndex: 'quote_quantity',
@@ -2614,6 +2624,9 @@ const QuotationsPage: React.FC = () => {
     material_code: '',
     material_name: '',
     material_spec: '',
+    material_model: '',
+    partner_material_code: '',
+    partner_material_name: '',
     material_unit: '件',
     quote_quantity: 1,
     unit_price: undefined,
@@ -2729,6 +2742,9 @@ const QuotationsPage: React.FC = () => {
           material_code: it.material_code || '',
           material_name: it.material_name || '',
           material_spec: it.material_spec,
+          material_model: (it as { material_model?: string }).material_model ?? '',
+          partner_material_code: (it as { partner_material_code?: string }).partner_material_code ?? '',
+          partner_material_name: (it as { partner_material_name?: string }).partner_material_name ?? '',
           material_unit: it.material_unit || '',
           quote_quantity: Number(it.quote_quantity) || 0,
           unit_price: Number(it.unit_price) || 0,
@@ -3278,6 +3294,9 @@ const QuotationsPage: React.FC = () => {
       material_code: '',
       material_name: '',
       material_spec: '',
+      material_model: '',
+      partner_material_code: '',
+      partner_material_name: '',
       material_unit: '',
       quote_quantity: 1,
       unit_price: undefined,
@@ -3479,17 +3498,10 @@ const QuotationsPage: React.FC = () => {
                             />
                           ) : null,
                       },
-                      {
-                        title: t('app.kuaizhizao.salesOrder.spec'),
-                        dataIndex: 'material_spec',
+                      ...buildDocumentDetailSpecModelFormColumns(t, {
                         width: 140,
-                        ...QUOTATION_DETAIL_TEXT_COL,
-                        render: (_: unknown, __: unknown, index: number) => (
-                          <Form.Item name={[index, 'material_spec']} style={{ margin: 0 }}>
-                            <Input placeholder={t('app.kuaizhizao.salesOrder.spec')} size={DOCUMENT_DETAIL_CONTROL_SIZE} />
-                          </Form.Item>
-                        ),
-                      },
+                        textCol: QUOTATION_DETAIL_TEXT_COL,
+                      }),
                       {
                         title: t('common.unit'),
                         dataIndex: 'material_unit',
@@ -3850,6 +3862,7 @@ const QuotationsPage: React.FC = () => {
                           </Form.Item>
                         ),
                       },
+                      ...buildDocumentDetailPartnerMaterialFormColumns(t, 'customer'),
                       {
                         title: t('common.remark'),
                         dataIndex: 'notes',
@@ -3949,6 +3962,9 @@ const QuotationsPage: React.FC = () => {
                   material_code: '',
                   material_name: '',
                   material_spec: '',
+                  material_model: '',
+                  partner_material_code: '',
+                  partner_material_name: '',
                   material_unit: '',
                   quote_quantity: 1,
                   unit_price: undefined,
@@ -4560,7 +4576,9 @@ const QuotationsPage: React.FC = () => {
                       return [
                         { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true, ...QUOTATION_DETAIL_TEXT_COL },
                         { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true, ...QUOTATION_DETAIL_TEXT_COL },
-                        { title: t('app.kuaizhizao.salesOrder.spec'), dataIndex: 'material_spec', width: 120, ellipsis: true, ...QUOTATION_DETAIL_TEXT_COL },
+                        ...buildMaterialModelSpecColumns(t, { readOnly: true, specWidth: 120, modelWidth: 100 }).map(
+                          (col) => ({ ...col, ellipsis: true, ...QUOTATION_DETAIL_TEXT_COL }),
+                        ),
                         {
                           title: t('common.unit'),
                           dataIndex: 'material_unit',
@@ -4673,6 +4691,11 @@ const QuotationsPage: React.FC = () => {
                           },
                         },
                         { title: t('app.kuaizhizao.salesOrder.deliveryDate'), dataIndex: 'delivery_date', width: 120, ellipsis: true, ...QUOTATION_DETAIL_TEXT_COL },
+                        ...buildPartnerMaterialLineColumns(t, 'customer', { readOnly: true, width: 120 }).map((col) => ({
+                          ...col,
+                          ellipsis: true,
+                          ...QUOTATION_DETAIL_TEXT_COL,
+                        })),
                         { title: t('common.remark'), dataIndex: 'notes', width: 160, ellipsis: true, ...QUOTATION_DETAIL_TEXT_COL },
                       ];
                     })()}

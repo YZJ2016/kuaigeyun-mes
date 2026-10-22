@@ -28,6 +28,10 @@ import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../.
 import { DetailDrawerSection, useDetailDrawerDescriptionItems, type TraceBriefDocument } from '../../../../../../components/layout-templates';
 import { MarkerTag } from '../../../../../../constants/statusBadges';
 import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
+import {
+  buildDocumentMaterialLineExtensionColumns,
+  buildPartnerMaterialLineColumns,
+} from '../../shared/materialLineColumns';
 import { alignDescriptionColumns } from '../../shared/documentFieldAlignment';
 import { OrderPaymentMilestonesReadOnly } from '../../shared/orderPaymentMilestonesFields';
 import { useResourcePermissions } from '../../../../../../hooks/useResourcePermissions';
@@ -641,7 +645,12 @@ export const SalesOrderDetailLinesPane: React.FC = () => {
                   </span>
                 ),
               },
-              { title: t('app.kuaizhizao.salesOrder.materialSpec'), dataIndex: 'material_spec', width: 120 },
+              ...buildDocumentMaterialLineExtensionColumns(t, 'customer').map((col) => ({
+                title: col.title,
+                dataIndex: col.dataIndex as string,
+                width: col.width,
+                ellipsis: true,
+              })),
               {
                 title: t('common.unit'),
                 dataIndex: 'material_unit',
@@ -712,6 +721,13 @@ export const SalesOrderDetailLinesPane: React.FC = () => {
                 align: 'right' as const,
                 render: (text: number) => formatQuantity(text ?? 0),
               },
+              ...buildPartnerMaterialLineColumns(t, 'customer').map((col) => ({
+                title: col.title,
+                dataIndex: col.dataIndex as string,
+                width: col.width,
+                ellipsis: true,
+              })),
+              { title: t('common.remark'), dataIndex: 'notes', width: 120, ellipsis: true },
             ]}
             dataSource={order.items}
             rowKey="id"

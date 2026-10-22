@@ -9,9 +9,12 @@ Date: 2025-12-30
 
 from tortoise import fields
 from core.models.base import BaseModel
+from apps.kuaizhizao.models.mixins.document_line_partner_material import (
+    DocumentLinePartnerMaterialSnapshotMixin,
+)
 
 
-class FinishedGoodsReceiptItem(BaseModel):
+class FinishedGoodsReceiptItem(DocumentLinePartnerMaterialSnapshotMixin, BaseModel):
     """
     成品入库单明细
 

@@ -165,6 +165,9 @@ export interface SalesOrderItem {
   material_code?: string;
   material_name?: string;
   material_spec?: string;
+  material_model?: string;
+  partner_material_code?: string;
+  partner_material_name?: string;
   material_unit?: string;
   /** 单位换算因子（业务单位 -> 基础单位） */
   conversion_factor?: number;

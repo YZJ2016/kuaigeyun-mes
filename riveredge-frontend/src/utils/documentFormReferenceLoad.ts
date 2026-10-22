@@ -233,6 +233,7 @@ export function referenceDisplayItemsToMaterials(items: ReferenceDisplayItem[]):
         code,
         name: item.name ?? undefined,
         specification: extra.specification as string | undefined,
+        model: extra.model as string | undefined,
         baseUnit,
         base_unit: baseUnit,
         units,

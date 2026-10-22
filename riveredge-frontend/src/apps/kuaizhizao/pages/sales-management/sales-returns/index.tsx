@@ -81,6 +81,11 @@ import dayjs from 'dayjs';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { getSalesReturnLifecycle, buildSalesReturnLifecycleValueEnum, resolveSalesReturnListApiParams } from '../../../utils/salesReturnLifecycle';
 import { createListAuditPhaseColumn } from '../shared/listAuditPhaseColumn';
+import {
+  buildDocumentDetailPartnerMaterialFormColumns,
+  buildDocumentDetailSpecModelFormColumns,
+  withMaterialLineFillMapping,
+} from '../shared/materialLineFormDetail';
 import { alignProColumns, alignDescriptionColumns, SALES_DOC_LIST_FIELD_RANK } from '../shared/documentFieldAlignment';
 import {
   DOCUMENT_LINE_MATERIALS_COLUMN_WIDTH_FLAGS,
@@ -894,6 +899,9 @@ const SalesReturnsPage: React.FC = () => {
         material_code: it.material_code || '',
         material_name: it.material_name || '',
         material_spec: it.material_spec ?? undefined,
+        material_model: it.material_model ?? undefined,
+        partner_material_code: it.partner_material_code ?? undefined,
+        partner_material_name: it.partner_material_name ?? undefined,
         material_unit: it.material_unit || t('app.kuaizhizao.salesReturn.defaultUnit'),
         return_quantity: qty,
         unit_price: price,
@@ -2240,18 +2248,15 @@ const SalesReturnsPage: React.FC = () => {
                           size={DOCUMENT_DETAIL_CONTROL_SIZE}
                           listFieldKey={index}
                           listFieldName="items"
-                          fillMapping={{
-                            material_code: 'mainCode',
-                            material_name: 'name',
-                            material_spec: 'specification',
-                            material_unit: 'baseUnit',
-                          }}
+                          fillMapping={withMaterialLineFillMapping({ material_unit: 'baseUnit' })}
                           sourceType={materialSourceType}
                           showAdvancedSearch
                         skipFuzzyPinyinClientFilter
                         />
                       ),
                     },
+                    ...buildDocumentDetailSpecModelFormColumns(t),
+                    ...buildDocumentDetailPartnerMaterialFormColumns(t, 'customer'),
                     {
                       title: t('app.kuaizhizao.salesReturn.batchNumber'),
                       dataIndex: 'batch_number',

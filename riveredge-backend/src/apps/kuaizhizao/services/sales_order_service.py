@@ -31,6 +31,11 @@ from apps.master_data.models.customer import Customer
 from apps.master_data.models.process import ProcessRoute
 from apps.kuaizhizao.schemas.quote import QuoteBreakdownResponse, QuoteItemResponse
 from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
+from apps.kuaizhizao.utils.document_line_material_snapshot import (
+    enrich_line_dicts_with_partner_snapshots,
+    partner_snapshot_fields_from_source_line,
+    snapshot_kwargs_for_orm,
+)
 from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.models.demand import Demand
 from apps.kuaizhizao.models.demand_item import DemandItem
@@ -1175,6 +1180,9 @@ class SalesOrderService:
                     material_code=_material_val(it, "material_code", "code"),
                     material_name=_material_val(it, "material_name", "name", 200),
                     material_spec=_material_val(it, "material_spec", "spec", 200),
+                    material_model=(getattr(it, "material_model", None) or None),
+                    partner_material_code=(getattr(it, "partner_material_code", None) or None),
+                    partner_material_name=(getattr(it, "partner_material_name", None) or None),
                     material_unit=_material_val(it, "material_unit", "unit"),
                     required_quantity=it.order_quantity if getattr(it, "order_quantity", None) is not None else Decimal("0"),
                     delivery_date=getattr(it, "delivery_date", date.today()),
@@ -2021,6 +2029,13 @@ class SalesOrderService:
                 subtotal += row["_item_amount"]
                 item_rows.append(row)
 
+            item_rows = await enrich_line_dicts_with_partner_snapshots(
+                tenant_id,
+                partner_type="customer",
+                partner_id=int(order_dict.get("customer_id") or 0) or None,
+                lines=item_rows,
+            )
+
             discount = Decimal(str(getattr(sales_order_data, "discount_amount", None) or 0))
             # 仅调用方显式传入 total_amount 时才整单覆盖；省略（含旧默认 0）按明细汇总
             provided_total = (
@@ -2060,6 +2075,7 @@ class SalesOrderService:
                         material_name=row["material_name"],
                         material_spec=row["material_spec"],
                         material_unit=row["material_unit"],
+                        **snapshot_kwargs_for_orm(row),
                         order_quantity=row["order_quantity"],
                         delivered_quantity=row["delivered_quantity"],
                         remaining_quantity=row["remaining_quantity"],
@@ -3304,6 +3320,12 @@ class SalesOrderService:
                     total_qty += row["order_quantity"]
                     subtotal += row["_item_amount"]
                     item_rows.append(row)
+                item_rows = await enrich_line_dicts_with_partner_snapshots(
+                    tenant_id,
+                    partner_type="customer",
+                    partner_id=int(getattr(order, "customer_id", None) or 0) or None,
+                    lines=item_rows,
+                )
                 discount = Decimal(str(getattr(sales_order_data, "discount_amount", None) or 0))
                 provided_total = (
                     sales_order_data.total_amount
@@ -3342,6 +3364,7 @@ class SalesOrderService:
                             material_name=row["material_name"],
                             material_spec=row["material_spec"],
                             material_unit=row["material_unit"],
+                            **snapshot_kwargs_for_orm(row),
                             order_quantity=row["order_quantity"],
                             delivered_quantity=row["delivered_quantity"],
                             remaining_quantity=row["remaining_quantity"],
@@ -6108,6 +6131,7 @@ class SalesOrderService:
                     material_name=it.material_name or "",
                     material_spec=it.material_spec,
                     material_unit=it.material_unit or "",
+                    **partner_snapshot_fields_from_source_line(it),
                     notice_quantity=qty,
                     unit_price=it.unit_price or Decimal("0"),
                     total_amount=amt,
@@ -6344,6 +6368,7 @@ class SalesOrderService:
                         material_name=it.material_name or "",
                         material_spec=it.material_spec,
                         material_unit=it.material_unit or "",
+                        **partner_snapshot_fields_from_source_line(it),
                         notice_quantity=qty,
                         unit_price=it.unit_price or Decimal("0"),
                         total_amount=amt,

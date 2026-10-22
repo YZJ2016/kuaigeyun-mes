@@ -1018,9 +1018,13 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
         create_fields.update(
             await _quality_inspection_initial_review_fields(tenant_id, "oqc_inspection")
         )
-        from apps.kuaizhizao.services.quality_service import _ensure_inspection_material_unit
+        from apps.kuaizhizao.services.quality_service import (
+            _ensure_inspection_material_spec_model,
+            _ensure_inspection_material_unit,
+        )
 
         await _ensure_inspection_material_unit(tenant_id, create_fields)
+        await _ensure_inspection_material_spec_model(tenant_id, create_fields)
         user_info = await self.get_user_info(user_id)
         create_fields["created_by"] = user_id
         create_fields["created_by_name"] = user_info["name"]
@@ -1879,6 +1883,7 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
         from apps.kuaizhizao.models.shipment_notice_item import ShipmentNoticeItem
         from apps.kuaizhizao.services.inspection_policy_service import resolve_inspection_policy
         from apps.kuaizhizao.services.quality_service import (
+            _ensure_inspection_material_spec_model,
             _resolve_inspection_template_fields,
             _quality_inspection_initial_review_fields,
             _resolve_material_base_unit,
@@ -1952,6 +1957,12 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
                 material_unit = str(getattr(item, "material_unit", "") or "").strip()
                 if not material_unit:
                     material_unit = await _resolve_material_base_unit(tenant_id, item.material_id)
+                material_snapshot: dict = {
+                    "material_id": item.material_id,
+                    "material_spec": getattr(item, "material_spec", None),
+                    "material_model": getattr(item, "material_model", None),
+                }
+                await _ensure_inspection_material_spec_model(tenant_id, material_snapshot)
                 row = await OQCInspection.create(
                     tenant_id=tenant_id,
                     inspection_code=inspection_code,
@@ -1967,6 +1978,8 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
                     material_id=item.material_id,
                     material_code=item.material_code,
                     material_name=item.material_name,
+                    material_spec=material_snapshot.get("material_spec"),
+                    material_model=material_snapshot.get("material_model"),
                     material_unit=material_unit,
                     inspection_quantity=item.notice_quantity,
                     status="待检验",
@@ -1996,6 +2009,7 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
         from apps.kuaizhizao.models.sales_delivery_item import SalesDeliveryItem
         from apps.kuaizhizao.services.inspection_policy_service import resolve_inspection_policy
         from apps.kuaizhizao.services.quality_service import (
+            _ensure_inspection_material_spec_model,
             _resolve_inspection_template_fields,
             _quality_inspection_initial_review_fields,
             _resolve_material_base_unit,
@@ -2094,6 +2108,12 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
                 material_unit = str(getattr(item, "material_unit", "") or "").strip()
                 if not material_unit:
                     material_unit = await _resolve_material_base_unit(tenant_id, item.material_id)
+                material_snapshot: dict = {
+                    "material_id": item.material_id,
+                    "material_spec": getattr(item, "material_spec", None),
+                    "material_model": getattr(item, "material_model", None),
+                }
+                await _ensure_inspection_material_spec_model(tenant_id, material_snapshot)
                 row = await OQCInspection.create(
                     tenant_id=tenant_id,
                     inspection_code=inspection_code,
@@ -2109,6 +2129,8 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
                     material_id=item.material_id,
                     material_code=item.material_code,
                     material_name=item.material_name,
+                    material_spec=material_snapshot.get("material_spec"),
+                    material_model=material_snapshot.get("material_model"),
                     material_unit=material_unit,
                     batch_number=item.batch_number,
                     inspection_quantity=item.delivery_quantity,

@@ -21,6 +21,10 @@ import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../.
 import { UniWorkflowActions } from '../../../../../../components/uni-workflow-actions';
 import { rowActionKind } from '../../../../../../components/uni-action';
 import { QuantityWithUnitDisplay } from '../../../../../../components/quantity-with-unit';
+import {
+  buildDocumentMaterialLineExtensionColumns,
+  buildPartnerMaterialLineColumns,
+} from '../../../sales-management/shared/materialLineColumns';
 import { CustomFieldsDetailSection, hasCustomFieldsDetailContent } from '../../../../../../components/custom-fields';
 import { WarehouseTraceBriefPrimaryActions } from '../../../warehouse-management/WarehouseTraceBriefFooter';
 import { getPurchaseOrderLifecycle } from '../../../../utils/purchaseOrderLifecycle';
@@ -460,6 +464,12 @@ export const PurchaseOrderDetailDrawer: React.FC<PurchaseOrderDetailDrawerProps>
                   render: (_: unknown, record: PurchaseOrderItem) =>
                     record.material_name || (record as { materialName?: string }).materialName || '—',
                 },
+                ...buildDocumentMaterialLineExtensionColumns(t, 'supplier').map((col) => ({
+                  title: col.title,
+                  dataIndex: col.dataIndex as string,
+                  width: col.width,
+                  ellipsis: true,
+                })),
                 {
                   title: t('app.kuaizhizao.purchaseOrder.col.orderedQty'),
                   dataIndex: 'ordered_quantity',
@@ -507,6 +517,13 @@ export const PurchaseOrderDetailDrawer: React.FC<PurchaseOrderDetailDrawerProps>
                   align: 'right',
                 },
                 { title: t('app.kuaizhizao.purchaseOrder.form.requiredDate'), dataIndex: 'required_date', width: 120 },
+                ...buildPartnerMaterialLineColumns(t, 'supplier').map((col) => ({
+                  title: col.title,
+                  dataIndex: col.dataIndex as string,
+                  width: col.width,
+                  ellipsis: true,
+                })),
+                { title: t('common.remark'), dataIndex: 'notes', width: 120, ellipsis: true },
                 {
                   title: t('app.kuaizhizao.purchaseOrder.col.inspectionRequired'),
                   dataIndex: 'inspection_required',

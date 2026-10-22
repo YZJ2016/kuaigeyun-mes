@@ -31,6 +31,15 @@ import {
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniCapabilityBatchButton, UniAuditBatchMenuButton, createUniAuditBatchHandlers } from '../../../../../components/uni-batch';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
+import {
+  buildDocumentDetailPartnerMaterialFormColumns,
+  buildDocumentDetailSpecModelFormColumns,
+  withMaterialLineFillMapping,
+} from '../shared/materialLineFormDetail';
+import {
+  buildMaterialModelSpecColumns,
+  buildPartnerMaterialLineColumns,
+} from '../shared/materialLineColumns';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
 const LazyUniImport = lazy(() =>
@@ -199,6 +208,9 @@ const ShipmentNoticesPage: React.FC = () => {
       material_code: '',
       material_name: '',
       material_spec: '',
+      material_model: '',
+      partner_material_code: '',
+      partner_material_name: '',
       material_unit: defaultUnit,
       notice_quantity: 1,
       unit_price: 0,
@@ -640,6 +652,8 @@ const ShipmentNoticesPage: React.FC = () => {
         dataIndex: 'material_code',
         hideInTable: true,
       },
+      ...buildMaterialModelSpecColumns(t, { readOnly: true, specWidth: 100, modelWidth: 100 }),
+      ...buildPartnerMaterialLineColumns(t, 'customer', { readOnly: true, width: 110 }),
       {
         title: t('common.quantity'),
         dataIndex: 'notice_quantity',
@@ -1497,13 +1511,10 @@ const ShipmentNoticesPage: React.FC = () => {
                               size="small"
                               listFieldKey={index}
                               listFieldName="items"
-                              fillMapping={{
-                                material_code: 'mainCode',
-                                material_name: 'name',
-                                material_spec: 'specification',
+                              fillMapping={withMaterialLineFillMapping({
                                 material_unit: 'baseUnit',
                                 unit_price: 'defaults.defaultSalePrice' as any,
-                              }}
+                              })}
                               fallbackOption={fallback}
                               formItemProps={{ style: { margin: 0 } }}
                               showQuickCreate
@@ -1517,16 +1528,11 @@ const ShipmentNoticesPage: React.FC = () => {
                     </AntForm.Item>
                   ),
                 },
-                {
-                  title: t('app.kuaizhizao.shipmentNotice.import.specification'),
-                  dataIndex: 'material_spec',
+                ...buildDocumentDetailSpecModelFormColumns(t, { width: 120, inputSize: 'small' }),
+                ...buildDocumentDetailPartnerMaterialFormColumns(t, 'customer', {
                   width: 120,
-                  render: (_: any, __: any, index: number) => (
-                    <AntForm.Item name={[index, 'material_spec']} style={{ margin: 0 }}>
-                      <Input placeholder={t('app.kuaizhizao.shipmentNotice.import.specification')} size="small" />
-                    </AntForm.Item>
-                  ),
-                },
+                  inputSize: 'small',
+                }),
                 {
                   title: t('common.unit'),
                   dataIndex: 'material_unit',

@@ -23,6 +23,7 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
 import { toolApi } from '../../../services/equipment';
 import { borrowsApi } from '../../../services/toolOps';
+import { workOrderApi } from '../../../services/work-order';
 import { formatDateTime } from '../../../../../utils/format';
 import { formDateRangeFormItemProps, formDateFormItemProps, coerceFormDate } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
@@ -46,6 +47,17 @@ import { ActionConfirmPopconfirm } from '../../../../../components/action-confir
 const P = 'app.kuaizhizao.toolOps.borrow';
 const RESOURCE = 'kuaizhizao:tool-borrow';
 
+const IN_PROGRESS_WO_STATUSES = new Set([
+  'released',
+  '已下达',
+  'in_progress',
+  '执行中',
+  '进行中',
+  '生产中',
+  'IN_PROGRESS',
+  'RELEASED',
+]);
+
 function toApiBorrowDateTimeString(value: unknown): string | undefined {
   const d = coerceFormDate(value);
   return d ? d.format('YYYY-MM-DD HH:mm:ss') : undefined;
@@ -57,6 +69,12 @@ function buildToolBorrowSubmitPayload(values: Record<string, unknown>) {
     remarkParts.push(`计划数量: ${values.planned_qty}`);
   }
   if (values.remark) remarkParts.push(String(values.remark));
+  const workOrderId =
+    typeof values.work_order_id === 'number'
+      ? values.work_order_id
+      : values.work_order_id != null && values.work_order_id !== ''
+        ? Number(values.work_order_id)
+        : undefined;
   const workOrderNo =
     typeof values.work_order_no === 'string' ? values.work_order_no.trim() : undefined;
   return {
@@ -65,7 +83,8 @@ function buildToolBorrowSubmitPayload(values: Record<string, unknown>) {
     borrower_id: values.borrower_id,
     borrower_name: values.borrower_name,
     department_name: values.department,
-    source_type: workOrderNo ? 'work_order' : undefined,
+    source_type: workOrderId || workOrderNo ? 'work_order' : undefined,
+    source_id: Number.isFinite(workOrderId) ? workOrderId : undefined,
     source_no: workOrderNo || undefined,
     remark: remarkParts.length ? remarkParts.join('\n') : undefined,
   };
@@ -80,6 +99,8 @@ interface ToolBorrow {
   tool_name?: string;
   work_order_no?: string;
   source_no?: string;
+  source_id?: number;
+  source_type?: string;
   department?: string;
   department_name?: string;
   borrower_id?: number;
@@ -141,6 +162,7 @@ const ToolBorrowsPage: React.FC = () => {
       setCurrent(detail);
       setFormInitialValues({
         tool_id: detail.tool_id,
+        work_order_id: detail.source_id,
         work_order_no: detail.source_no ?? detail.work_order_no,
         department: detail.department_name ?? detail.department,
         borrower_uuid: borrowerUuid,
@@ -478,7 +500,37 @@ const ToolBorrowsPage: React.FC = () => {
             />
           </Col>
           <Col span={12}>
-            <ProFormText name="work_order_no" label={t(`${P}.col.workOrderNo`)} />
+            <ProFormSelect
+              name="work_order_id"
+              label={t(`${P}.col.workOrderNo`)}
+              showSearch
+              fieldProps={{
+                allowClear: true,
+                filterOption: false,
+                onChange: (_value, option) => {
+                  const opt = Array.isArray(option) ? option[0] : option;
+                  const code =
+                    opt && typeof opt === 'object' && 'workOrderCode' in opt
+                      ? String((opt as { workOrderCode?: string }).workOrderCode || '')
+                      : '';
+                  formRef.current?.setFieldsValue({ work_order_no: code || undefined });
+                },
+              }}
+              request={async () => {
+                const res = await workOrderApi.list({ limit: 300 });
+                const items = res?.items ?? res?.data ?? (Array.isArray(res) ? res : []);
+                return items
+                  .filter((wo: { status?: string }) =>
+                    IN_PROGRESS_WO_STATUSES.has(String(wo.status || '')),
+                  )
+                  .map((wo: { id: number; code?: string; name?: string; product_name?: string }) => ({
+                    label: `${wo.code || ''} - ${wo.name || wo.product_name || ''}`.trim(),
+                    value: wo.id,
+                    workOrderCode: wo.code,
+                  }));
+              }}
+            />
+            <ProFormText name="work_order_no" hidden />
           </Col>
           <Col span={12}>
             <ProFormText name="department" label={t(`${P}.col.department`)} />

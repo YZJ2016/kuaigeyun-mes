@@ -9,9 +9,12 @@ Date: 2026-02-19
 
 from tortoise import fields
 from core.models.base import BaseModel
+from apps.kuaizhizao.models.mixins.document_line_partner_material import (
+    DocumentLinePartnerMaterialSnapshotMixin,
+)
 
 
-class QuotationItem(BaseModel):
+class QuotationItem(DocumentLinePartnerMaterialSnapshotMixin, BaseModel):
     """
     报价单明细
 
