@@ -21,6 +21,15 @@ async def resolve_audit_actor(tenant_id: int, user_id: int) -> Tuple[int, str]:
         deleted_at__isnull=True,
     ).first()
     if not user:
+        # 平台管理员（tenant_id=None + is_infra_admin）可经租户上下文操作，与
+        # user_administrator_guard 的放行契约一致；其余跨租户命中仍按不存在处理。
+        user = await User.filter(
+            id=user_id,
+            tenant_id__isnull=True,
+            is_infra_admin=True,
+            deleted_at__isnull=True,
+        ).first()
+    if not user:
         raise ValueError(f"操作用户不存在: id={user_id}, tenant_id={tenant_id}")
     return user.id, user_audit_display_name(user)
 
