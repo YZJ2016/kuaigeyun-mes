@@ -116,14 +116,14 @@ prod.ps1[OV1T]: F:Win prod deploy entry | R:- | A:DEPLOY_MODE=prod | S:fd_dispat
 riveredge-service.ps1[OV2T]: F:Win boot service entry | R:- | A:boot-service.env | S:3 retries; UV/CADDY env; 60L
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/===
-.env.example[CC3M]: F:backend env config example | R:- | A:DB+JWT+API+Taskiq | S:HOST=0.0.0.0 dev; 127.0.0.1 prod; 182L
+.env.example[SC3S]: F:后端环境变量示例(应用/写防护/DB池/JWT/CORS/超管/文件/推送) | R:- | A:HOST+PORT,DB_*,JWT_SECRET_KEY,CLIENT_CHANNEL_WRITE_GUARD_ENABLED,API_WRITE_RATE_LIMIT_*,PUSH_PROVIDER | S:HOST=0.0.0.0 dev/127.0.0.1 prod;含写防护/开放API/溯源/推送开关
 pyproject.toml[PC4S]: F:后端依赖与可选pdf/ocr extras | R:code:riveredge-backend/uv.lock | A:project deps | S:requires-python>=3.11,<3.12;playwright==1.63.0钉死防Chromium revision漂移;tortoise0.21.1+aerich0.7.1钉死
 start-backend.sh[OU5T]: F:echo "RiverEdge SaaS 多组织框架 - 后端服务启动" echo "" if [ ! -f "pyproject.toml" ]; th... | R:- | A:- | S:97L
 start-worker.sh[OU5T]: F:SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)" cd "$SCRIPT_DIR" | R:- | A:- | S:47L
 uv.lock[DU5L]: F:uv lockfile钉死后端与extra依赖版本 | R:code:riveredge-backend/pyproject.toml | A:- | S:playwright extra==1.63.0与pyproject一致;2331L
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/docs/===
-api-write-protection-ops.md[SO5M]: F:全站API写防护运维手册 | R:code:riveredge-backend/src/core/utils/interactive_client_guard.py | A:channel+rate+idempotency | S:须X-Client-Channel白名单否则403; 关键写30/分; Idempotency-Key可回放; 改.env后重启uvicorn
+api-write-protection-ops.md[SO5M]: F:全站API写防护改动总结与运维手册(渠道/限流/幂等/开放API) | R:code:riveredge-backend/src/core/utils/interactive_client_guard.py | A:X-Client-Channel,Idempotency-Key,_CRITICAL_PATH_RE,INTEGRATION_CLIENT_IP_ALLOWLIST,CLIENT_CHANNEL_DEVICE_LABELS,update_where_expected | S:写须X-Client-Channel否则403;限流429/幂等409;改.env重启
 config-center-ops.md[SO2T]: F:config center ops | R:- | A:3 control points | S:check_node_enabled deprecated; 38L
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/migrations/models/===
@@ -1060,6 +1060,12 @@ config-center-ops.md[SO2T]: F:config center ops | R:- | A:3 control points | S:c
 852_20261010183000_platform_settings_wechat_oauth.py[PC4T]: F:曾为平台设置增加微信 OAuth 列的迁移 | R:code:riveredge-backend/migrations/models/853_20261010192000_drop_platform_settings_wechat_oauth.py | A:upgrade,downgrade | S:已被 853 回滚删除；勿再依赖这些列
 853_20261010192000_drop_platform_settings_wechat_oauth.py[PC4T]: F:删除平台设置中微信 OAuth 列 | R:code:riveredge-backend/migrations/models/852_20261010183000_platform_settings_wechat_oauth.py | A:upgrade,downgrade | S:微信快捷登录不走平台设置列
 854_20261011094500_backfill_missing_audit_columns.py[PV5T]: F:补齐漏加BaseModel审计列created_by等避免SELECT500 | R:- | A:upgrade,downgrade | S:ADD COLUMN IF NOT EXISTS；覆盖print_jobs/price_settlement_lines/mold与kuaiai pending表
+20260924130000_kuaiai_chat_tables.py[SM4S]: F:建apps_kuaiai_chat_sessions+apps_kuaiai_chat_messages并补种core_applications(kuaiai) | R:- | A:upgrade,downgrade,apps_kuaiai_chat_sessions,apps_kuaiai_chat_messages,core_applications,RUN_IN_TRANSACTION | S:tool列预留;(租户+uuid/会话+seq)唯一索引;补种kuaiai应用(未安装)
+20260925100000_kuaiai_catalog_agent_tables.py[SM4S]: F:建apps_kuaiai_llm_providers+llm_models+agent_profiles+agent_grants | R:- | A:upgrade,downgrade,apps_kuaiai_llm_providers,apps_kuaiai_llm_models,apps_kuaiai_agent_profiles,apps_kuaiai_agent_grants | S:api_key打码;grant_mode ROLE|USER互斥;唯一键走软删部分索引
+20260925110000_kuaiai_knowledge_base.py[SM4T]: F:建apps_kuaiai_knowledge_bases;apps_kuaiai_knowledge_documents增knowledge_id | R:- | A:upgrade,downgrade,apps_kuaiai_knowledge_bases,knowledge_id,embedding_model_id,chunk_size | S:无FK服务层校验;(tenant,name)部分唯一;documents增knowledge_id列
+20260925120000_kuaiai_chunk_unique.py[SM3T]: F:apps_kuaiai_knowledge_chunks补(tenant_id,document_id,chunk_index)部分唯一索引 | R:- | A:upgrade,downgrade,uidx_kuaiai_kchunk_doc_chunk,apps_kuaiai_knowledge_chunks | S:deleted_at IS NULL部分唯一;防并发重入双写兜底
+20260925130000_kuaiai_mcp_servers.py[SM4T]: F:建apps_kuaiai_mcp_servers(MCP白名单) | R:- | A:upgrade,downgrade,apps_kuaiai_mcp_servers,transport,endpoint,allowed_tools | S:仅http传输;endpoint/token服务层守卫复核;token出参打码
+20260927190000_serial_numbers_on_other_stock_item_lines.py[SM4T]: F:other_inbound/other_outbound/material_borrow/material_return/semi_finished_goods_receipt/production_return六张items表加serial_numbers | R:- | A:upgrade,downgrade,serial_numbers,apps_kuaizhizao_other_inbound_items,apps_kuaizhizao_production_return_items | S:spec141撤回回冲链路;JSONB存多序列号;6明细表统一补列
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/scripts/===
 pack_sensitive_words.py[XC3T]: F:敏感词打包脚本 | R:code:riveredge-backend/pyproject.toml | A:lexicon pack | S:gh mirror fallback; 90L
@@ -8929,6 +8935,104 @@ link-webview.uvue[CC4T]: F:uni-link内置浏览器页面：web-view加载query�
 
 ===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-nav-bar-x/===
 changelog.md[CO2T]: F:uni-nav-bar-x插件变更日志：1.0.0首发组件,1.0.1纠正类名拼写错误 | R:- | A:1.0.0,1.0.1 | S:两条版本记录
+package.json[CD2T]: F:uni-nav-bar-x插件清单:版本1.0.1/引擎要求/uni-app-x平台兼容矩阵 | R:code:kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-nav-bar-x/components/uni-nav-bar/uni-nav-bar.uvue | A:uni_modules.platforms,dcloudext,engines,isExt | S:声明HBuilderX^5.0与uni-app-x^5.07,免费组件插件
+readme.md[CO3T]: F:uni-nav-bar自定义导航栏用法文档:属性/三插槽/小程序胶囊避让示例 | R:code:kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-nav-bar-x/components/uni-nav-bar/uni-nav-bar.uvue | A:hideDefaultBack,title,navigationBarTextStyle,left-class,right-class,uni.getMenuButtonBoundingClientRect | S:navigationStyle:custom后使用,自适应安全区,净高44px
 
 ===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-nav-bar-x/components/uni-nav-bar/===
 uni-nav-bar.uvue[CC4M]: F:uni-app-x自定义导航栏：状态栏留白+左返回箭头/中标题/右插槽三段布局,前景色与externalClasses可配 | R:- | A:hideDefaultBack,title,navigationBarTextStyle,leftClass,back,navigateBack | S:旋转边框绘返回箭头;三段slot可覆盖;back走navigateBack
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-number-box-x/===
+changelog.md[CO2T]: F:uni-number-box-x版本日志:1.0.0支持组件/1.0.1移除无用依赖 | R:- | A:- | S:两版本同日2026-05-07发布,仅依赖清理变更
+package.json[CD2T]: F:uni-number-box-x插件清单:元数据/引擎/uni-app-x平台矩阵 | R:- | A:uni_modules.platforms,dcloudext,engines,dependencies | S:uni-app-x^5.07,免费,支持app三端/微信小程序/web
+readme.md[CO3T]: F:uni-number-box用法文档:min/max/step/disabled/自定义样式类/事件表 | R:- | A:v-model,min,max,step,disabled,change | S:含小数步长示例与btn/input/icon-class样式定制
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-number-box-x/components/uni-number-box/===
+uni-number-box.uvue[CC4L]: F:带加减按钮数字输入框组件:步进/范围钳制/小数精度/v-model | R:- | A:defineProps,defineEmits,onMinus,onPlus,onBlur,getDecimalScale | S:步长整数化运算防浮点误差,Web端pointerdown规避Chrome133延迟
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-rate-x/===
+changelog.md[CO2T]: F:uni-rate-x评分插件版本记录 | R:- | A:- | S:1.0.0首发；1.0.1修复starClass/starActiveClass不生效
+package.json[CD2T]: F:uni-rate-x插件清单，声明版本/引擎/uni-app-x平台兼容矩阵 | R:- | A:id,version,engines,dcloudext,uni_modules | S:isExt扩展插件，uni-app-x≥5.07，覆盖app/mp-weixin/web
+readme.md[CO3T]: F:uni-rate用法文档，full双模式与属性/事件说明 | R:- | A:- | S:full切换高性能只读/交互版；列star-*样式属性与change事件
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-rate-x/components/uni-rate/===
+uni-rate.uvue[CC4M]: F:uni-app-x评分组件，Unicode星形渲染，支持v-model与点击评分 | R:- | A:value,modelValue,full,readonly,starActiveClass,change | S:full=false单层只读亮星；full=true灰星叠层裁剪，点击按x坐标算分
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-refresh-box/===
+changelog.md[CO2T]: F:uni-refresh-box下拉刷新插件版本记录 | R:- | A:- | S:仅1.0.0首发记录
+package.json[CD2T]: F:uni-refresh-box插件清单，声明版本/引擎/uni-app-x平台兼容矩阵 | R:- | A:id,version,engines,dcloudext,uni_modules | S:isExt扩展插件，uni-app-x≥5.07，覆盖app/mp-weixin/web
+readme.md[CO3T]: F:uni-refresh-box用法文档，含scroll-view接入示例与状态表 | R:- | A:- | S:refresher插槽接入示例+state0-4说明+loading自定义插槽
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-refresh-box/components/uni-refresh-box/===
+uni-refresh-box.uvue[CC4M]: F:scroll-view refresher插槽的自定义下拉刷新指示器 | R:- | A:pullingDistance,refreshing,threshold,currentState,tipText,defineExpose | S:状态机0-4驱动文案；watch下拉距离旋转loading图标
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-tab-bar/===
+changelog.md[CO2T]: F:uni-tab-bar底部标签栏插件版本记录 | R:- | A:- | S:1.0.0首发；1.0.1宽度计算优化；1.0.2修微信小程序内容穿透
+package.json[CD2T]: F:uni_modules插件清单，声明版本1.0.2、示例链接、引擎与平台兼容矩阵 | R:- | A:id,version,engines,dcloudext,uni_modules | S:免费component-vue插件，支持app/web/微信小程序，HBuilderX≥5.07
+readme.md[CO3T]: F:组件集使用文档，含结构说明、基础示例、API表与13条注意事项 | R:- | A:uni-tab,uni-tab-bar,uni-tab-item,uni-tab-content,uni-tab-midbutton | S:对比pages.json tabBar，说明懒渲染、偶数项与badge规则
+todo.md[CO2T]: F:待办清单：凸起midbutton过渡曲线、左右滑切换、高斯模糊示例 | R:- | A:- | S:三项规划均未实现，注明平台与CSS能力依赖
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-tab-bar/components/===
+types.uts[CC2T]: F:导出 UniTabBarLayout 类型，声明底栏基础高度与内容区通高标志 | R:- | A:UniTabBarLayout | S:纯类型导出，含tabListBaseHeight和tabContentHeightFull两字段
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-tab-bar/components/uni-tab-bar/===
+uni-tab-bar.uvue[CC4S]: F:底部选项卡栏容器，注册普通项与中间按钮并校验偶数均分布局 | R:- | A:registerItem,registerMidButton,syncOccupiedHeight,inject,provide | S:inject通高与切页，provide三注册键，flex底栏含安全区padding
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-tab-bar/components/uni-tab-content/===
+uni-tab-content.uvue[CC4T]: F:选项卡内容容器，挂载时注册索引并按激活态懒渲染与显隐切换 | R:- | A:registerContent,hasRendered,isActive,contentStyle | S:onMounted注册索引，watch首次激活才渲染，非激活用absolute隐藏
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-tab-bar/components/uni-tab-item/===
+uni-tab-item.uvue[CC4S]: F:普通tab项组件，注册索引点击切换，支持badge文本或红点 | R:- | A:badgeText,badgeClass,handleClick,registerItem,externalClasses | S:onMounted注册索引，点击注入changeTab，badge绝对定位含样式
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-tab-bar/components/uni-tab-midbutton/===
+uni-tab-midbutton.uvue[CC4S]: F:中间悬浮按钮占位容器，向父级注册宽高不占激活索引 | R:- | A:width,height,registerMidButton | S:props宽高默认90px，onMounted上报父级校验布局
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-tab-bar/components/uni-tab/===
+uni-tab.uvue[CC4S]: F:选项卡最外层容器，管理激活索引、change事件与content注册分发 | R:- | A:activeIndex,tabContentHeightFull,changeTab,registerContent,provide | S:watch同步props，provide四键供子孙inject，切换时emit索引
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-time-format/===
+changelog.md[CO2T]: F:uni-time-format 组件版本变更记录 | R:- | A:uni-time-format | S:仅1.0.0一条,记录组件首发支持
+package.json[CD2T]: F:uni-time-format 插件清单,声明版本/引擎/平台兼容矩阵 | R:- | A:id,version,engines,dcloudext,uni_modules | S:v1.0.0,uni-app-x≥5.07,无依赖,web/app/微信小程序兼容
+readme.md[CO3T]: F:uni-time-format 用法文档:格式选项、relative规则与多语言 | R:- | A:timestamp,format,relative,appLanguage | S:说明datetime/date/time/relative模式,简繁英法拉丁多语,非法时间戳返空串
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-time-format/components/uni-time-format/===
+uni-time-format.uvue[CC4M]: F:时间格式化展示组件,按format输出绝对或相对时间文本 | R:- | A:Props,formattedTime,refreshFormattedTime,getRelativeTime,getLocaleKey,normalizeTimestamp | S:text渲染+watch/onMounted刷新,按appLanguage多语,秒级自动转毫秒
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-ui-x/===
+changelog.md[CO2T]: F:uni-ui-x 组件库版本变更记录 | R:- | A:uni-tab-bar,uni-badge-view,uni-collapse,uni-nav-bar,uni-number-box,uni-rate | S:1.0.0-1.0.5六版,记录tab-bar/badge/collapse等组件修复与新增
+package.json[CD2T]: F:uni-ui-x 组件库插件清单,聚合12个子组件依赖并声明平台 | R:- | A:version,engines,uni_modules.dependencies,platforms | S:v1.0.5,需uni-app-x5.08,聚合12个uni-*子组件依赖,声明各端兼容
+readme.md[CO3S]: F:uni-ui x组件库说明文档:介绍性能/样式自定义/AI友好/中性风格特性,列12个已支持组件及uni-ui到uni-app x升级映射表 | R:code:kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-ui-x/package.json | A:uni-badge-view,uni-collapse,uni-drag-cell,uni-fab-button,uni-index-bar,uni-tab | S:纯文档无代码,含组件清单表与老版uni-ui升级映射表
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/uni_modules/uts-openSchema/===
+changelog.md[CO2T]: F:插件版本变更记录，仅 1.0.0 首版条目 | R:- | A:- | S:记录2026-04-30首发，声明支持uts-openSchema API
+package.json[CD2T]: F:uni_modules插件清单，声明id/版本/引擎/三端平台兼容矩阵 | R:- | A:id,version,engines,dcloudext,uni_modules.platforms | S:声明uni-app-x各端extVersion与minVersion及免费售卖信息
+readme.md[CO3T]: F:使用文档：openSchema/canOpenURL导入调用示例与参数说明 | R:- | A:openSchema,canOpenURL | S:含浏览器/App商店/地图schema示例及条件编译写法
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/uni_modules/uts-openSchema/utssdk/app-android/===
+config.json[CD2T]: F:Android端UTS编译配置，声明最低SDK版本 | R:- | A:minSdkVersion | S:仅含minSdkVersion=21一项
+index.uts[CC4T]: F:Android端实现：Intent ACTION_VIEW打开第三方schema链接 | R:- | A:openSchema,canOpenURL,Intent,Uri,UTSAndroid.getUniActivity,startActivity | S:canOpenURL经resolveActivity判定，通过则设NEW_TASK标志startActivity
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/uni_modules/uts-openSchema/utssdk/app-harmony/===
+index.uts[CC4T]: F:HarmonyOS端实现：UIAbilityContext.openLink打开链接 | R:- | A:openSchema,canOpenURL,bundleManager.canOpenLink,getAbilityContext,OpenLinkOptions | S:appLinkingOnly=false调openLink；canOpenLink异常捕获返回false
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/uni_modules/uts-openSchema/utssdk/app-ios/===
+config.json[CD2T]: F:iOS端UTS编译配置，声明最低部署目标 | R:- | A:deploymentTarget | S:仅含deploymentTarget=12.0一项
+index.uts[CC4T]: F:iOS端实现：UIApplication.shared.open打开URL链接 | R:- | A:openSchema,canOpenURL,UIApplication.shared,URL,open | S:经canOpenURL校验后构造URL并调shared.open，失败打console.error
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/uni_modules/uts-openSchema/utssdk/===
+interface.uts[CC4T]: F:跨端共享类型契约：导出OpenSchema/CanOpenURL函数签名 | R:- | A:OpenSchema,CanOpenURL | S:两个函数类型别名，统一四端实现签名
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/uni_modules/uts-openSchema/utssdk/web/===
+index.uts[CC4T]: F:Web端实现：location.href赋值跳转打开链接 | R:- | A:openSchema,canOpenURL,location.href | S:直接赋location.href；canOpenURL仅判url非空
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-station/===
+.gitignore[CD2T]: F:工位端Git忽略清单:依赖目录、构建产物、日志、.env与本机shell配置文件不入库 | R:- | A:node_modules,dist,out,release,.env,station-shell.json | S:7行规则,屏蔽产物与本机敏感配置文件
+README.md[CO3T]: F:工位机Electron壳说明:服务器源取值顺序、本机配置位置、运行方式、加载失败回退与导航限制行为 | R:- | A:STATION_SERVER_ORIGIN,station-shell.json,window.stationShell,setWorkstationId,getWorkstationId,loadURL | S:壳只loadURL服务器工位入口,配置页连通性测试通过才写本机源
+config.example.json[CD2T]: F:工位端本机配置示例:仅给出serverOrigin与workstationId字段形状,值留空 | R:- | A:serverOrigin,workstationId | S:两字段空值示例,提示真实地址写本机文件勿提交入仓
+main.js[CC4M]: F:Electron工位壳主进程:环境变量优先取服务器源,全屏BrowserWindow载工位入口,缺源开配置页,IPC读写源与工位ID并白名单拦站外导航 | R:- | A:createWindow,openSetupWindow,serverOrigin,assertStationReachable,stationUrl,isNavigationAllowed | S:env>本机JSON取源,net.fetch连通测试后写配置,禁新窗,打包态才注册登录自启
+navigation-policy.js[CC4T]: F:工位壳整页导航白名单判定纯函数 | R:code:kuaigeyun-client/riveredge-app-station/main.js | A:isNavigationAllowed,parseHttpOrigin,isAllowedPathname,ALLOWED_PATHS,STATION_ENTRY_PATH | S:同源http(s)且路径精确或斜杠前缀匹配，拒凭据URL
+package-lock.json[CD2S]: F:锁定Electron44.4.5及传递依赖版本 | R:- | A:lockfileVersion,electron,@electron/get,@electron-internal/extract-zip,@types/node | S:lockfileVersion3，仅devDependencies，npmmirror源
+package.json[CD2T]: F:工位壳包清单，定义启动测试脚本与Electron依赖 | R:code:kuaigeyun-client/riveredge-app-station/main.js | A:main,scripts.start,scripts.test,devDependencies.electron | S:main指向main.js，electron44.4.5唯一依赖
+preload.js[CC4T]: F:工位窗口contextBridge暴露stationShell IPC桥 | R:code:kuaigeyun-client/riveredge-app-station/main.js | A:contextBridge.exposeInMainWorld,ipcRenderer.invoke,setWorkstationId,getWorkstationId,notifyStationRejected | S:三invoke通道对应主进程ipcMain.handle
+setup-preload.js[CC4T]: F:配置窗口contextBridge暴露stationSetup IPC桥 | R:code:kuaigeyun-client/riveredge-app-station/main.js | A:contextBridge.exposeInMainWorld,ipcRenderer.invoke,saveServerOrigin | S:单通道转发主进程校验保存
+setup.html[CC4T]: F:首配服务器地址表单页 | R:code:kuaigeyun-client/riveredge-app-station/main.js | A:form#form,input#origin,button#save,p#status,script.src=setup.js | S:内联CSS卡片居中，加载setup.js处理提交
+setup.js[CC4T]: F:配置页提交逻辑，调saveServerOrigin并显示状态 | R:code:kuaigeyun-client/riveredge-app-station/main.js | A:form.addEventListener,window.stationSetup.saveServerOrigin,setStatus | S:submit拦截禁重入，按result.ok显错误成功
