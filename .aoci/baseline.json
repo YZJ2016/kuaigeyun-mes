@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-10-07T06:04:21Z",
-  "updated_at": "2026-10-13T07:10:59Z",
+  "updated_at": "2026-10-22T04:51:18Z",
   "files": {
     ".agents/skills/banner-design/SKILL.md": {
       "role": "index",
@@ -483,11 +483,65 @@
       "size": 24692,
       "normalized_sha256": "c409f08c1fbba1f1029f1acaa554e7b4471cc85517a5751c9f2e62465badcd5c"
     },
+    ".agents/skills/ui-ux-pro-max/data/stacks/vue.csv": {
+      "role": "index",
+      "sha256": "b655f1ebb9dff2652d15981f31b1784c8a6d4759efd2815a14f3088257569f95",
+      "size": 12813,
+      "normalized_sha256": "b655f1ebb9dff2652d15981f31b1784c8a6d4759efd2815a14f3088257569f95"
+    },
+    ".agents/skills/ui-ux-pro-max/data/stacks/winui.csv": {
+      "role": "index",
+      "sha256": "e676dc1c13ee6c205c40b0746f1335150a346c7a49a0616d2545bc3d2c930c85",
+      "size": 27890,
+      "normalized_sha256": "e676dc1c13ee6c205c40b0746f1335150a346c7a49a0616d2545bc3d2c930c85"
+    },
+    ".agents/skills/ui-ux-pro-max/data/stacks/wpf.csv": {
+      "role": "index",
+      "sha256": "9781a9950b20333637b30a02e498b7efca21b618a3eeb8665836f3ac6e974da7",
+      "size": 24158,
+      "normalized_sha256": "9781a9950b20333637b30a02e498b7efca21b618a3eeb8665836f3ac6e974da7"
+    },
+    ".agents/skills/ui-ux-pro-max/data/styles.csv": {
+      "role": "index",
+      "sha256": "a93a4d9d7025856575d7b7583bda020be9043013432c5af7c58af9dbdfb206b7",
+      "size": 149478,
+      "normalized_sha256": "a93a4d9d7025856575d7b7583bda020be9043013432c5af7c58af9dbdfb206b7"
+    },
+    ".agents/skills/ui-ux-pro-max/data/typography.csv": {
+      "role": "index",
+      "sha256": "321fc446e89024488ebae96dda93efc4d2307bd8bddb240857ad51364f6782c8",
+      "size": 49997,
+      "normalized_sha256": "321fc446e89024488ebae96dda93efc4d2307bd8bddb240857ad51364f6782c8"
+    },
+    ".agents/skills/ui-ux-pro-max/data/ui-reasoning.csv": {
+      "role": "index",
+      "sha256": "f0774dd741cecdad5eec842034bd6d5e9ea50e9f220a1910069748daa0bb8e9a",
+      "size": 77360,
+      "normalized_sha256": "f0774dd741cecdad5eec842034bd6d5e9ea50e9f220a1910069748daa0bb8e9a"
+    },
+    ".agents/skills/ui-ux-pro-max/data/ux-guidelines.csv": {
+      "role": "index",
+      "sha256": "ff81ec613f70ba9fc3fcce52dbe4ae35d44b2079dbe6dc066d2d6e38c28facd5",
+      "size": 27516,
+      "normalized_sha256": "ff81ec613f70ba9fc3fcce52dbe4ae35d44b2079dbe6dc066d2d6e38c28facd5"
+    },
+    ".audit-mobile/report.md": {
+      "role": "index",
+      "sha256": "d877951ff04ffbad0254880ff37750deaed39187baaebfb47551fa815c24d571",
+      "size": 9843,
+      "normalized_sha256": "d877951ff04ffbad0254880ff37750deaed39187baaebfb47551fa815c24d571"
+    },
     ".cursor/rules/ai-memory.mdc": {
       "role": "index",
       "sha256": "951b627dbc3f33a34861e6e8f0f8a8d83e9ebb271de0a82bb5a8085660f135f2",
       "size": 1471,
       "normalized_sha256": "98692caf96ec9f1961c7ccd4e719f03c6248c1d7df299c73b7e0cd2f75a2f02d"
+    },
+    ".cursor/rules/antd6-api.mdc": {
+      "role": "index",
+      "sha256": "69f31c5ec89c32d5370566c9ee462ce223b55e770e8a7893fdd685e9b1ea81e3",
+      "size": 1471,
+      "normalized_sha256": "69f31c5ec89c32d5370566c9ee462ce223b55e770e8a7893fdd685e9b1ea81e3"
     },
     ".cursor/rules/aoci-git-commit.mdc": {
       "role": "index",
@@ -507,6 +561,12 @@
       "size": 3889,
       "normalized_sha256": "81817bc9f05d312ce00375a62c5ccc61e42e6d78507e020d139a21b6b58b460b"
     },
+    ".cursor/rules/detail-drawer-contract.mdc": {
+      "role": "index",
+      "sha256": "9bd50d66f15e5007efe58e4340dc640bcf2ed5497f232b9cd2abd69bc5082929",
+      "size": 2056,
+      "normalized_sha256": "9bd50d66f15e5007efe58e4340dc640bcf2ed5497f232b9cd2abd69bc5082929"
+    },
     ".cursor/rules/dev-memory-library.mdc": {
       "role": "index",
       "sha256": "5a19f523cb92b1c87599e71c333b5410364b7eb6d74e6bf760ae07478866fcce",
@@ -519,11 +579,143 @@
       "size": 3743,
       "normalized_sha256": "2a2501eb406ed8157de853add105324e61ca78cce1272169ad95c546fdd0f707"
     },
+    ".cursor/rules/form-modal-detail-table-contract.mdc": {
+      "role": "index",
+      "sha256": "bffba578e1c0724279eeb99c6262d28f7bb0f3ab9f9874b3d3902bf9ebbe1d62",
+      "size": 4276,
+      "normalized_sha256": "bffba578e1c0724279eeb99c6262d28f7bb0f3ab9f9874b3d3902bf9ebbe1d62"
+    },
+    ".cursor/rules/generic-product-no-customer-brand.mdc": {
+      "role": "index",
+      "sha256": "14d84ba6f856c7ae7f98f6bfcfcd11e6f81f18c9884056da1a138419b09fd39e",
+      "size": 1462,
+      "normalized_sha256": "14d84ba6f856c7ae7f98f6bfcfcd11e6f81f18c9884056da1a138419b09fd39e"
+    },
+    ".cursor/rules/git-push-sop.mdc": {
+      "role": "index",
+      "sha256": "73e2643c248b696ecd42a9d7993e5db23e9e3b28278937f04201c6ba5b99de5a",
+      "size": 3441,
+      "normalized_sha256": "73e2643c248b696ecd42a9d7993e5db23e9e3b28278937f04201c6ba5b99de5a"
+    },
+    ".cursor/rules/i18n-zh-cn-only.mdc": {
+      "role": "index",
+      "sha256": "dcbfae627ee55ff6b3ce6434ae3b37661e73a7579e705ff813b6e5e9d0816005",
+      "size": 1360,
+      "normalized_sha256": "dcbfae627ee55ff6b3ce6434ae3b37661e73a7579e705ff813b6e5e9d0816005"
+    },
+    ".cursor/rules/kuaizhizao-report-contract.mdc": {
+      "role": "index",
+      "sha256": "676ce95fb1f77f9de2ddc2d43bb54ff83d491e5afdd91ee1a6331f9d6bcb1dba",
+      "size": 1499,
+      "normalized_sha256": "676ce95fb1f77f9de2ddc2d43bb54ff83d491e5afdd91ee1a6331f9d6bcb1dba"
+    },
+    ".cursor/rules/master-data-detail-drawer-contract.mdc": {
+      "role": "index",
+      "sha256": "344a6fa23a096eec171f921c1244c4cf83cb2825a381bb34820851f8912bd1b9",
+      "size": 1105,
+      "normalized_sha256": "344a6fa23a096eec171f921c1244c4cf83cb2825a381bb34820851f8912bd1b9"
+    },
+    ".cursor/rules/mobile-bottom-action-bar.mdc": {
+      "role": "index",
+      "sha256": "aec2f9423c9f54712e5a2f5d8bb853af5c17c8b866936d2fbf54472c0617da08",
+      "size": 1594,
+      "normalized_sha256": "aec2f9423c9f54712e5a2f5d8bb853af5c17c8b866936d2fbf54472c0617da08"
+    },
+    ".cursor/rules/mobile-cjk-text-clip.mdc": {
+      "role": "index",
+      "sha256": "183a4be0498cc3ba7ca6fed93a4498ca0b12d3609074cc2ad3c8300da88c3131",
+      "size": 1120,
+      "normalized_sha256": "183a4be0498cc3ba7ca6fed93a4498ca0b12d3609074cc2ad3c8300da88c3131"
+    },
+    ".cursor/rules/model-audit-write.mdc": {
+      "role": "index",
+      "sha256": "9913245095edd09652d4006c45860350b1e1360796575fe8de5230cf4b0c7b56",
+      "size": 1047,
+      "normalized_sha256": "9913245095edd09652d4006c45860350b1e1360796575fe8de5230cf4b0c7b56"
+    },
+    ".cursor/rules/multi-tab-list-template.mdc": {
+      "role": "index",
+      "sha256": "d75f95f8833bb3ad09f9c83b3c0fd66eb15961dd520c2d0a31cd2451e1cab712",
+      "size": 871,
+      "normalized_sha256": "d75f95f8833bb3ad09f9c83b3c0fd66eb15961dd520c2d0a31cd2451e1cab712"
+    },
+    ".cursor/rules/no-batch-codemod.mdc": {
+      "role": "index",
+      "sha256": "2b06764b6db8e95e8cdd4f16840717198fb0f0eaaf90c4a2f87683bd23efa519",
+      "size": 2153,
+      "normalized_sha256": "2b06764b6db8e95e8cdd4f16840717198fb0f0eaaf90c4a2f87683bd23efa519"
+    },
+    ".cursor/rules/no-fallback-patches.mdc": {
+      "role": "index",
+      "sha256": "1b943ce6a86957d4530ff0b1eea257faec1333c043cd641ef81d3e91ef5b4ac0",
+      "size": 3143,
+      "normalized_sha256": "1b943ce6a86957d4530ff0b1eea257faec1333c043cd641ef81d3e91ef5b4ac0"
+    },
+    ".cursor/rules/no-left-accent-bars.mdc": {
+      "role": "index",
+      "sha256": "9b07409d51741a9f67451e1b865f2dbaea171d8c18b7e8b816efb9684f87cdae",
+      "size": 1378,
+      "normalized_sha256": "9b07409d51741a9f67451e1b865f2dbaea171d8c18b7e8b816efb9684f87cdae"
+    },
+    ".cursor/rules/no-middle-dot-separator.mdc": {
+      "role": "index",
+      "sha256": "8ca6ed5edb013534bbf2c63cfef9841351a7236621083388dc83856ab7eb6b1d",
+      "size": 1452,
+      "normalized_sha256": "8ca6ed5edb013534bbf2c63cfef9841351a7236621083388dc83856ab7eb6b1d"
+    },
+    ".cursor/rules/no-person-name-box.mdc": {
+      "role": "index",
+      "sha256": "3e3f69c56e9af7d882979b9e066870811eeb61c8a0f67602f59a05534c6557b1",
+      "size": 1941,
+      "normalized_sha256": "3e3f69c56e9af7d882979b9e066870811eeb61c8a0f67602f59a05534c6557b1"
+    },
+    ".cursor/rules/no-speculative-shortcuts.mdc": {
+      "role": "index",
+      "sha256": "fbd2053c3cf1f87a8c4017fc1c2c61bf82d89d098fd7a4cb248b2e2609372bac",
+      "size": 2676,
+      "normalized_sha256": "fbd2053c3cf1f87a8c4017fc1c2c61bf82d89d098fd7a4cb248b2e2609372bac"
+    },
+    ".cursor/rules/permission-contract.mdc": {
+      "role": "index",
+      "sha256": "df1abd17cc0476134c349d7d89b2b49d373417579349720a340ce1f1509eccf4",
+      "size": 4754,
+      "normalized_sha256": "df1abd17cc0476134c349d7d89b2b49d373417579349720a340ce1f1509eccf4"
+    },
+    ".cursor/rules/platform-update-log.mdc": {
+      "role": "index",
+      "sha256": "6f8886aef1da214f72ba8088a87d920a4b1bd5a83c5d1c1fcd6536dfae787c86",
+      "size": 1850,
+      "normalized_sha256": "6f8886aef1da214f72ba8088a87d920a4b1bd5a83c5d1c1fcd6536dfae787c86"
+    },
     ".cursor/rules/reuse-existing-patterns.mdc": {
       "role": "index",
-      "sha256": "3064fcc384d3ff6e194502fa35f1bb8b3ac38137691c990d91f361b8aee62dd5",
-      "size": 1724,
-      "normalized_sha256": "dcb1a8365af59896e11fae5ba3d965bb93099a1ca3f367e46f2e1018db500671"
+      "sha256": "56bd4c728421dfc40516d2ddacc7dad375e7e868bea8792625bdc7ba473f1e4e",
+      "size": 2500,
+      "normalized_sha256": "56bd4c728421dfc40516d2ddacc7dad375e7e868bea8792625bdc7ba473f1e4e"
+    },
+    ".cursor/rules/timezone-contract.mdc": {
+      "role": "index",
+      "sha256": "651d02d9e86bf63709203598c0934f2fe36c13a1c7f06a8dce9e04d3387a17f6",
+      "size": 1935,
+      "normalized_sha256": "651d02d9e86bf63709203598c0934f2fe36c13a1c7f06a8dce9e04d3387a17f6"
+    },
+    ".cursor/rules/unitable-list-contract.mdc": {
+      "role": "index",
+      "sha256": "13e15a8c72a44ee567a894d2fbb5dae49d951e78a0fb04017c6e4329b843310d",
+      "size": 3746,
+      "normalized_sha256": "13e15a8c72a44ee567a894d2fbb5dae49d951e78a0fb04017c6e4329b843310d"
+    },
+    ".cursor/rules/unitable-list-stabilize.mdc": {
+      "role": "index",
+      "sha256": "e60a5ad112b987460686410b965c50a5931b998d36727bbca423471428d306be",
+      "size": 1116,
+      "normalized_sha256": "e60a5ad112b987460686410b965c50a5931b998d36727bbca423471428d306be"
+    },
+    ".cursor/rules/unitable-row-cache.mdc": {
+      "role": "index",
+      "sha256": "1320ec79c440dccfc1557aa4d5ec2842a0681a14ec0cb277c4d35165fea07953",
+      "size": 1656,
+      "normalized_sha256": "1320ec79c440dccfc1557aa4d5ec2842a0681a14ec0cb277c4d35165fea07953"
     },
     ".gitattributes": {
       "role": "index",
@@ -533,9 +725,531 @@
     },
     ".gitignore": {
       "role": "index",
-      "sha256": "9618fddecbb42d5802e7a209ac606deb0129a652b4a57c05768b02cad480dc40",
-      "size": 5643,
-      "normalized_sha256": "9618fddecbb42d5802e7a209ac606deb0129a652b4a57c05768b02cad480dc40"
+      "sha256": "4a0a6a4d65c475a2060736ef4d05c5bfa2d78314f1ae091574680c837ab9e602",
+      "size": 6203,
+      "normalized_sha256": "4a0a6a4d65c475a2060736ef4d05c5bfa2d78314f1ae091574680c837ab9e602"
+    },
+    ".windsurf/skills/banner-design/SKILL.md": {
+      "role": "index",
+      "sha256": "913d9c4b2a3b405d638d50131e0dd3fe2787c839423d79287b7858ac29255acc",
+      "size": 8326,
+      "normalized_sha256": "913d9c4b2a3b405d638d50131e0dd3fe2787c839423d79287b7858ac29255acc"
+    },
+    ".windsurf/skills/banner-design/references/banner-sizes-and-styles.md": {
+      "role": "index",
+      "sha256": "c8906fb1073a576ee8c680d9bc8586249cbc4ed36690da960d65a1c9c37143b7",
+      "size": 4993,
+      "normalized_sha256": "c8906fb1073a576ee8c680d9bc8586249cbc4ed36690da960d65a1c9c37143b7"
+    },
+    ".windsurf/skills/brand/SKILL.md": {
+      "role": "index",
+      "sha256": "6a450ee1a83a403d47cec2ede9030feb60a67a81fc425d2406e975339313bd44",
+      "size": 2939,
+      "normalized_sha256": "6a450ee1a83a403d47cec2ede9030feb60a67a81fc425d2406e975339313bd44"
+    },
+    ".windsurf/skills/brand/references/approval-checklist.md": {
+      "role": "index",
+      "sha256": "4bf8549687f53a7b9684005b4b87de93c26f018e00609b4c506a5812abd13d20",
+      "size": 4245,
+      "normalized_sha256": "4bf8549687f53a7b9684005b4b87de93c26f018e00609b4c506a5812abd13d20"
+    },
+    ".windsurf/skills/brand/references/asset-organization.md": {
+      "role": "index",
+      "sha256": "de98123417e9c5a1cc71a78131bba979c4c8ed2e5289e6c7a7f166576e488101",
+      "size": 5110,
+      "normalized_sha256": "de98123417e9c5a1cc71a78131bba979c4c8ed2e5289e6c7a7f166576e488101"
+    },
+    ".windsurf/skills/brand/references/brand-guideline-template.md": {
+      "role": "index",
+      "sha256": "392db8cf10fef492221c15a86e68590074bf5716de1f2982f41c01fbe30567cc",
+      "size": 3572,
+      "normalized_sha256": "392db8cf10fef492221c15a86e68590074bf5716de1f2982f41c01fbe30567cc"
+    },
+    ".windsurf/skills/brand/references/color-palette-management.md": {
+      "role": "index",
+      "sha256": "c429298ffe3955edb8b22c9f51426fef75e83d02848cd4300e89c0d3fc34b44a",
+      "size": 4254,
+      "normalized_sha256": "c429298ffe3955edb8b22c9f51426fef75e83d02848cd4300e89c0d3fc34b44a"
+    },
+    ".windsurf/skills/brand/references/consistency-checklist.md": {
+      "role": "index",
+      "sha256": "56d8b2d4852cda11e600adec4b9dd68fc89a1b8265382359953bec5c5e5e2c36",
+      "size": 1926,
+      "normalized_sha256": "56d8b2d4852cda11e600adec4b9dd68fc89a1b8265382359953bec5c5e5e2c36"
+    },
+    ".windsurf/skills/brand/references/logo-usage-rules.md": {
+      "role": "index",
+      "sha256": "044c5ddf30cfe0eea047451cfce6ea654939198ffdd8968a19161c97066a5a26",
+      "size": 5464,
+      "normalized_sha256": "044c5ddf30cfe0eea047451cfce6ea654939198ffdd8968a19161c97066a5a26"
+    },
+    ".windsurf/skills/brand/references/messaging-framework.md": {
+      "role": "index",
+      "sha256": "24b2500a72867b55dd10f4bf359178b0eb347fddd852659ce47b69d9f597d4e6",
+      "size": 1763,
+      "normalized_sha256": "24b2500a72867b55dd10f4bf359178b0eb347fddd852659ce47b69d9f597d4e6"
+    },
+    ".windsurf/skills/brand/references/typography-specifications.md": {
+      "role": "index",
+      "sha256": "921c3d9e6ddfde2677b9a3e32eee94c7922f54f22c1f380c5ed2eb25a7d5bfa9",
+      "size": 5042,
+      "normalized_sha256": "921c3d9e6ddfde2677b9a3e32eee94c7922f54f22c1f380c5ed2eb25a7d5bfa9"
+    },
+    ".windsurf/skills/brand/references/update.md": {
+      "role": "index",
+      "sha256": "537cb55ebe260e1de127bd6288b19d8d7b15b6c893545442a58b739cbd342b37",
+      "size": 3365,
+      "normalized_sha256": "537cb55ebe260e1de127bd6288b19d8d7b15b6c893545442a58b739cbd342b37"
+    },
+    ".windsurf/skills/brand/references/visual-identity.md": {
+      "role": "index",
+      "sha256": "63f0cfc5d95403d8e12aca4d839cc28471515574d9a431334bfbb96c15407c31",
+      "size": 1884,
+      "normalized_sha256": "63f0cfc5d95403d8e12aca4d839cc28471515574d9a431334bfbb96c15407c31"
+    },
+    ".windsurf/skills/brand/references/voice-framework.md": {
+      "role": "index",
+      "sha256": "08c15ac79f81cd964c5efbe593131b61a093c7e1b060d5dd28b17f3cc5b331fb",
+      "size": 1997,
+      "normalized_sha256": "08c15ac79f81cd964c5efbe593131b61a093c7e1b060d5dd28b17f3cc5b331fb"
+    },
+    ".windsurf/skills/brand/templates/brand-guidelines-starter.md": {
+      "role": "index",
+      "sha256": "d157a57b15f0b458c79636d11de42f3c89f03d8c0bbea1bdd3cf1c3542b2140d",
+      "size": 6638,
+      "normalized_sha256": "d157a57b15f0b458c79636d11de42f3c89f03d8c0bbea1bdd3cf1c3542b2140d"
+    },
+    ".windsurf/skills/design-system/SKILL.md": {
+      "role": "index",
+      "sha256": "655468bb723a6bc9d17fcb09a6a005e10e313d63b879f4d74fb2abdc3041ae3f",
+      "size": 6875,
+      "normalized_sha256": "655468bb723a6bc9d17fcb09a6a005e10e313d63b879f4d74fb2abdc3041ae3f"
+    },
+    ".windsurf/skills/design-system/data/slide-backgrounds.csv": {
+      "role": "index",
+      "sha256": "d1bb701b87bef493d72974d6fac1087c8ba4e2df14185fe3e0c36a13fe35f3d1",
+      "size": 1038,
+      "normalized_sha256": "d1bb701b87bef493d72974d6fac1087c8ba4e2df14185fe3e0c36a13fe35f3d1"
+    },
+    ".windsurf/skills/design-system/data/slide-charts.csv": {
+      "role": "index",
+      "sha256": "12ef876cd76e67a6553444bfa2ebf1d5d4d6216289d34db052a6e87421135033",
+      "size": 8631,
+      "normalized_sha256": "12ef876cd76e67a6553444bfa2ebf1d5d4d6216289d34db052a6e87421135033"
+    },
+    ".windsurf/skills/design-system/data/slide-color-logic.csv": {
+      "role": "index",
+      "sha256": "ea68c737075f1615b2a7e461e2878c06bfe8f803dcabfbcc2977ffe5f9ec9ded",
+      "size": 877,
+      "normalized_sha256": "ea68c737075f1615b2a7e461e2878c06bfe8f803dcabfbcc2977ffe5f9ec9ded"
+    },
+    ".windsurf/skills/design-system/data/slide-copy.csv": {
+      "role": "index",
+      "sha256": "43152937a0e598b3fbfdd418684311c105d44e3c5b333703ddb0b8cb28e40658",
+      "size": 6427,
+      "normalized_sha256": "43152937a0e598b3fbfdd418684311c105d44e3c5b333703ddb0b8cb28e40658"
+    },
+    ".windsurf/skills/design-system/data/slide-layout-logic.csv": {
+      "role": "index",
+      "sha256": "26b5b75782d5aba89836c0479acd3111cc69b67853db9c2259b30ac1e966bc62",
+      "size": 981,
+      "normalized_sha256": "26b5b75782d5aba89836c0479acd3111cc69b67853db9c2259b30ac1e966bc62"
+    },
+    ".windsurf/skills/design-system/data/slide-layouts.csv": {
+      "role": "index",
+      "sha256": "95d558c1b7d2552d7a75402dc68facbd16125e574985851db5729d1145e14896",
+      "size": 8760,
+      "normalized_sha256": "95d558c1b7d2552d7a75402dc68facbd16125e574985851db5729d1145e14896"
+    },
+    ".windsurf/skills/design-system/data/slide-strategies.csv": {
+      "role": "index",
+      "sha256": "f656be0ab0b3a85fa7fc74202e9701a7236220412d67d5f63eb6dbb100bb2639",
+      "size": 8232,
+      "normalized_sha256": "f656be0ab0b3a85fa7fc74202e9701a7236220412d67d5f63eb6dbb100bb2639"
+    },
+    ".windsurf/skills/design-system/data/slide-typography.csv": {
+      "role": "index",
+      "sha256": "b96cd11dd4ff1dea8a9454b0b9e898e7f82f9243182f8f237af1f2c9b8824ce5",
+      "size": 735,
+      "normalized_sha256": "b96cd11dd4ff1dea8a9454b0b9e898e7f82f9243182f8f237af1f2c9b8824ce5"
+    },
+    ".windsurf/skills/design-system/references/component-specs.md": {
+      "role": "index",
+      "sha256": "b265d979a741dd748d4e595e6898ae430faeef4f6d13d7a634fa6241b91d2da4",
+      "size": 6914,
+      "normalized_sha256": "b265d979a741dd748d4e595e6898ae430faeef4f6d13d7a634fa6241b91d2da4"
+    },
+    ".windsurf/skills/design-system/references/component-tokens.md": {
+      "role": "index",
+      "sha256": "e27f8f5999badee425c98235eabbd2cb3ebe2a1a364766d5c7a6b3134ceaaec8",
+      "size": 4986,
+      "normalized_sha256": "e27f8f5999badee425c98235eabbd2cb3ebe2a1a364766d5c7a6b3134ceaaec8"
+    },
+    ".windsurf/skills/design-system/references/primitive-tokens.md": {
+      "role": "index",
+      "sha256": "91e6caa12646c08c8aadf8e09399aed65760a25c8d80595936d81a9131118fc3",
+      "size": 4562,
+      "normalized_sha256": "91e6caa12646c08c8aadf8e09399aed65760a25c8d80595936d81a9131118fc3"
+    },
+    ".windsurf/skills/design-system/references/semantic-tokens.md": {
+      "role": "index",
+      "sha256": "97e16d8061bbc22e82b51966a7015e3fc990932902e4647843506669a1cdebcc",
+      "size": 4245,
+      "normalized_sha256": "97e16d8061bbc22e82b51966a7015e3fc990932902e4647843506669a1cdebcc"
+    },
+    ".windsurf/skills/design-system/references/states-and-variants.md": {
+      "role": "index",
+      "sha256": "8dacb95d57d4bb37d8a99cc55515ff26da272056f837d29abc74aedcaa3ba104",
+      "size": 4771,
+      "normalized_sha256": "8dacb95d57d4bb37d8a99cc55515ff26da272056f837d29abc74aedcaa3ba104"
+    },
+    ".windsurf/skills/design-system/references/tailwind-integration.md": {
+      "role": "index",
+      "sha256": "6d01092db1479dbd2060567b4232bb2b4bc16e89730ab07e1f87a3e7f5c406b9",
+      "size": 5633,
+      "normalized_sha256": "6d01092db1479dbd2060567b4232bb2b4bc16e89730ab07e1f87a3e7f5c406b9"
+    },
+    ".windsurf/skills/design-system/references/token-architecture.md": {
+      "role": "index",
+      "sha256": "925f4049c4c4313d9fd5df98cdfd52004112aca49fba1664ad85e76bc9dce4d3",
+      "size": 5365,
+      "normalized_sha256": "925f4049c4c4313d9fd5df98cdfd52004112aca49fba1664ad85e76bc9dce4d3"
+    },
+    ".windsurf/skills/design-system/templates/design-tokens-starter.json": {
+      "role": "index",
+      "sha256": "5444f477b06bab9c72e2cc289d4a9104efef653391c9639972bcb712d5f2d81e",
+      "size": 7184,
+      "normalized_sha256": "5444f477b06bab9c72e2cc289d4a9104efef653391c9639972bcb712d5f2d81e"
+    },
+    ".windsurf/skills/slides/SKILL.md": {
+      "role": "index",
+      "sha256": "2b90bdaf63f231919a01f4962f374ecd84af101a7e7545f8d9c68e049025accb",
+      "size": 1137,
+      "normalized_sha256": "2b90bdaf63f231919a01f4962f374ecd84af101a7e7545f8d9c68e049025accb"
+    },
+    ".windsurf/skills/slides/references/copywriting-formulas.md": {
+      "role": "index",
+      "sha256": "03733d5916ab771834745550045b736deeb94a08226f2b200f7953009c35b219",
+      "size": 2604,
+      "normalized_sha256": "03733d5916ab771834745550045b736deeb94a08226f2b200f7953009c35b219"
+    },
+    ".windsurf/skills/slides/references/create.md": {
+      "role": "index",
+      "sha256": "792d647a5d4f87d765cf417f7ac54dd0b2fc4d229cc23ea9df56282d4c1ee086",
+      "size": 153,
+      "normalized_sha256": "792d647a5d4f87d765cf417f7ac54dd0b2fc4d229cc23ea9df56282d4c1ee086"
+    },
+    ".windsurf/skills/slides/references/html-template.md": {
+      "role": "index",
+      "sha256": "fd5b051a37365fc6059c75bb388ec6f64daf1bd9ae938b287b6d762dc83c0c35",
+      "size": 9004,
+      "normalized_sha256": "fd5b051a37365fc6059c75bb388ec6f64daf1bd9ae938b287b6d762dc83c0c35"
+    },
+    ".windsurf/skills/slides/references/layout-patterns.md": {
+      "role": "index",
+      "sha256": "0a967ca3bd829d3234e6f1802bade6c76447fabbaddbc8117c41adbae7dfb6df",
+      "size": 3691,
+      "normalized_sha256": "0a967ca3bd829d3234e6f1802bade6c76447fabbaddbc8117c41adbae7dfb6df"
+    },
+    ".windsurf/skills/slides/references/slide-strategies.md": {
+      "role": "index",
+      "sha256": "27ee3e53ffa0ea679ec83ebeacb0bcfbce498df57277e99f574b9c139dc44286",
+      "size": 2715,
+      "normalized_sha256": "27ee3e53ffa0ea679ec83ebeacb0bcfbce498df57277e99f574b9c139dc44286"
+    },
+    ".windsurf/skills/ui-styling/LICENSE.txt": {
+      "role": "index",
+      "sha256": "58d1e17ffe5109a7ae296caafcadfdbe6a7d176f0bc4ab01e12a689b0499d8bd",
+      "size": 11357,
+      "normalized_sha256": "58d1e17ffe5109a7ae296caafcadfdbe6a7d176f0bc4ab01e12a689b0499d8bd"
+    },
+    ".windsurf/skills/ui-styling/SKILL.md": {
+      "role": "index",
+      "sha256": "f8b6c3832d2af51f67b3932e3c4a79bcd8a8596cc61ce1547a686fc951e5c62d",
+      "size": 10045,
+      "normalized_sha256": "f8b6c3832d2af51f67b3932e3c4a79bcd8a8596cc61ce1547a686fc951e5c62d"
+    },
+    ".windsurf/skills/ui-styling/references/canvas-design-system.md": {
+      "role": "index",
+      "sha256": "f5de85ff39d9f3a8275c4164b921ba72d5e1d34b8d7a9243d9ee34b3870a4f5f",
+      "size": 7888,
+      "normalized_sha256": "f5de85ff39d9f3a8275c4164b921ba72d5e1d34b8d7a9243d9ee34b3870a4f5f"
+    },
+    ".windsurf/skills/ui-styling/references/shadcn-accessibility.md": {
+      "role": "index",
+      "sha256": "a22cd4ccf82b635b2b2c4f12416a0c4f7edcd825d219d6089450fa797a0d9511",
+      "size": 9976,
+      "normalized_sha256": "a22cd4ccf82b635b2b2c4f12416a0c4f7edcd825d219d6089450fa797a0d9511"
+    },
+    ".windsurf/skills/ui-styling/references/shadcn-components.md": {
+      "role": "index",
+      "sha256": "79c4f91cbf68993a43fa3a95889c35db73de45bdd3dfd83a6830863c01aa598a",
+      "size": 11155,
+      "normalized_sha256": "79c4f91cbf68993a43fa3a95889c35db73de45bdd3dfd83a6830863c01aa598a"
+    },
+    ".windsurf/skills/ui-styling/references/shadcn-theming.md": {
+      "role": "index",
+      "sha256": "d17d641474221123ff0e0288043ca2f2dab3ac96908a19eed28d82f9e58865ed",
+      "size": 8672,
+      "normalized_sha256": "d17d641474221123ff0e0288043ca2f2dab3ac96908a19eed28d82f9e58865ed"
+    },
+    ".windsurf/skills/ui-styling/references/tailwind-customization.md": {
+      "role": "index",
+      "sha256": "4c5adeed6263a274f74f6eb2c816ca420fd6ef4f35683582988bacd404799afe",
+      "size": 10171,
+      "normalized_sha256": "4c5adeed6263a274f74f6eb2c816ca420fd6ef4f35683582988bacd404799afe"
+    },
+    ".windsurf/skills/ui-styling/references/tailwind-responsive.md": {
+      "role": "index",
+      "sha256": "8d00ae620df26daea4623c7bf996d6e612e09d359305fcfa2b40cab757ed840c",
+      "size": 8270,
+      "normalized_sha256": "8d00ae620df26daea4623c7bf996d6e612e09d359305fcfa2b40cab757ed840c"
+    },
+    ".windsurf/skills/ui-styling/references/tailwind-utilities.md": {
+      "role": "index",
+      "sha256": "aba1c40ef84f43beea142ae310371e332541f39d973df90a71f1854823effda1",
+      "size": 9980,
+      "normalized_sha256": "aba1c40ef84f43beea142ae310371e332541f39d973df90a71f1854823effda1"
+    },
+    ".windsurf/skills/ui-ux-pro-max/SKILL.md": {
+      "role": "index",
+      "sha256": "046424c4d24b95182c3fbaead12f75c48022f265eb67ae8d77eb2fd858ed5a2d",
+      "size": 28066,
+      "normalized_sha256": "046424c4d24b95182c3fbaead12f75c48022f265eb67ae8d77eb2fd858ed5a2d"
+    },
+    ".windsurf/skills/ui-ux-pro-max/data/app-interface.csv": {
+      "role": "index",
+      "sha256": "331e7cf2c0b222d80c566c5f255c63cb339f65bfd02e471a720f28e4864a9f08",
+      "size": 11046,
+      "normalized_sha256": "331e7cf2c0b222d80c566c5f255c63cb339f65bfd02e471a720f28e4864a9f08"
+    },
+    ".windsurf/skills/ui-ux-pro-max/data/catalog-summary.json": {
+      "role": "index",
+      "sha256": "65fe0b64480a8a827738297d0a64ca55c627d4afcb774fe4555c59cea8dd6905",
+      "size": 2392,
+      "normalized_sha256": "65fe0b64480a8a827738297d0a64ca55c627d4afcb774fe4555c59cea8dd6905"
+    },
+    ".windsurf/skills/ui-ux-pro-max/data/charts.csv": {
+      "role": "index",
+      "sha256": "4115cf1120680f2cedef0676cb648f30c7ef4699e2a947535d4113e71ed3b12a",
+      "size": 23365,
+      "normalized_sha256": "4115cf1120680f2cedef0676cb648f30c7ef4699e2a947535d4113e71ed3b12a"
+    },
+    ".windsurf/skills/ui-ux-pro-max/data/colors.csv": {
+      "role": "index",
+      "sha256": "8162429222bce22df62b564085946a30d07cc9722c58d0a3a494bd0d1d00841c",
+      "size": 37940,
+      "normalized_sha256": "8162429222bce22df62b564085946a30d07cc9722c58d0a3a494bd0d1d00841c"
+    },
+    ".windsurf/skills/ui-ux-pro-max/data/data-provenance.json": {
+      "role": "index",
+      "sha256": "e82fb33ed49375a300e93d9c11ccd1c1493c999e84ee7ee295e527634786e2e0",
+      "size": 36686,
+      "normalized_sha256": "e82fb33ed49375a300e93d9c11ccd1c1493c999e84ee7ee295e527634786e2e0"
+    },
+    ".windsurf/skills/ui-ux-pro-max/data/google-font-licenses.json": {
+      "role": "index",
+      "sha256": "35688523f2955795caa1a47c53b83099e60c1708461476f9cc3a050cf3b0148a",
+      "size": 433127,
+      "normalized_sha256": "35688523f2955795caa1a47c53b83099e60c1708461476f9cc3a050cf3b0148a"
+    },
+    ".windsurf/skills/ui-ux-pro-max/data/google-fonts.csv": {
+      "role": "index",
+      "sha256": "1c8c3b2ea1faf6a1012da463756def8b3889db33f2226f0343bb4daa80307d03",
+      "size": 747241,
+      "normalized_sha256": "1c8c3b2ea1faf6a1012da463756def8b3889db33f2226f0343bb4daa80307d03"
+    },
+    ".windsurf/skills/ui-ux-pro-max/data/icons.csv": {
+      "role": "index",
+      "sha256": "50816c6012030178195a16ee481ebf58b47bd985d70e8ec58886cc83f6eddafc",
+      "size": 57945,
+      "normalized_sha256": "50816c6012030178195a16ee481ebf58b47bd985d70e8ec58886cc83f6eddafc"
+    },
+    ".windsurf/skills/ui-ux-pro-max/data/landing.csv": {
+      "role": "index",
+      "sha256": "9a2edd3bb676c2a58f00ade7a062e285222d4297bfd847c8d5b056f0dbbf52d0",
+      "size": 25449,
+      "normalized_sha256": "9a2edd3bb676c2a58f00ade7a062e285222d4297bfd847c8d5b056f0dbbf52d0"
+    },
+    ".windsurf/skills/ui-ux-pro-max/data/motion.csv": {
+      "role": "index",
+      "sha256": "381affe8df8ea1f66fbbda2598827f9f54299107bbe6a1b4e9b68f6b62091ceb",
+      "size": 14679,
+      "normalized_sha256": "381affe8df8ea1f66fbbda2598827f9f54299107bbe6a1b4e9b68f6b62091ceb"
+    },
+    ".windsurf/skills/ui-ux-pro-max/data/phosphor-icons-upstream.json": {
+      "role": "index",
+      "sha256": "2399325233b277b5c97a80e6a5e8941154f5d057beee4e7613db87c87d700236",
+      "size": 823933,
+      "normalized_sha256": "2399325233b277b5c97a80e6a5e8941154f5d057beee4e7613db87c87d700236"
+    },
+    ".windsurf/skills/ui-ux-pro-max/data/products.csv": {
+      "role": "index",
+      "sha256": "42473f75e8dde5987bdf89ce55d8c168091b80a356cae691dd60247d80720b70",
+      "size": 75623,
+      "normalized_sha256": "42473f75e8dde5987bdf89ce55d8c168091b80a356cae691dd60247d80720b70"
+    },
+    ".windsurf/skills/ui-ux-pro-max/data/react-performance.csv": {
+      "role": "index",
+      "sha256": "3d925802539abac5afeb63ae8aa1960b7229ad271b3a47caed40ab2d97ad0734",
+      "size": 15080,
+      "normalized_sha256": "3d925802539abac5afeb63ae8aa1960b7229ad271b3a47caed40ab2d97ad0734"
+    },
+    ".windsurf/skills/ui-ux-pro-max/data/stacks/angular.csv": {
+      "role": "index",
+      "sha256": "704be83f2bad30c7e6de01afb113ffa01e0c458762f48b7102f31ba2367b5553",
+      "size": 19863,
+      "normalized_sha256": "704be83f2bad30c7e6de01afb113ffa01e0c458762f48b7102f31ba2367b5553"
+    },
+    ".windsurf/skills/ui-ux-pro-max/data/stacks/astro.csv": {
+      "role": "index",
+      "sha256": "2c2f55fadaafc05e04cc321c8194a1a28b656e6757fe2ba316f41b16428299c6",
+      "size": 14591,
+      "normalized_sha256": "2c2f55fadaafc05e04cc321c8194a1a28b656e6757fe2ba316f41b16428299c6"
+    },
+    ".windsurf/skills/ui-ux-pro-max/data/stacks/avalonia.csv": {
+      "role": "index",
+      "sha256": "442fca14675a020683473e7e49f08abb27b9df0765c80efe54aef61f1a4ac258",
+      "size": 27327,
+      "normalized_sha256": "442fca14675a020683473e7e49f08abb27b9df0765c80efe54aef61f1a4ac258"
+    },
+    ".windsurf/skills/ui-ux-pro-max/data/stacks/flutter.csv": {
+      "role": "index",
+      "sha256": "64dba0ac17349f28bce517a0f5f48c54d9ed2e487ec0c0258303463b382f41a0",
+      "size": 14192,
+      "normalized_sha256": "64dba0ac17349f28bce517a0f5f48c54d9ed2e487ec0c0258303463b382f41a0"
+    },
+    ".windsurf/skills/ui-ux-pro-max/data/stacks/html-tailwind.csv": {
+      "role": "index",
+      "sha256": "d05a581d20af57b8ca0104a6d31d90a07c437d500662a96c3029fc2f9a4678ee",
+      "size": 16551,
+      "normalized_sha256": "d05a581d20af57b8ca0104a6d31d90a07c437d500662a96c3029fc2f9a4678ee"
+    },
+    ".windsurf/skills/ui-ux-pro-max/data/stacks/javafx.csv": {
+      "role": "index",
+      "sha256": "2e819b8d5abdd23ad4dae0991650fdb57af497aabd68b37463aa9c442944c869",
+      "size": 33577,
+      "normalized_sha256": "2e819b8d5abdd23ad4dae0991650fdb57af497aabd68b37463aa9c442944c869"
+    },
+    ".windsurf/skills/ui-ux-pro-max/data/stacks/jetpack-compose.csv": {
+      "role": "index",
+      "sha256": "699de218b286948eaec7d15767b6e1350ee299167e49bf476d82e3ff58724e0a",
+      "size": 12295,
+      "normalized_sha256": "699de218b286948eaec7d15767b6e1350ee299167e49bf476d82e3ff58724e0a"
+    },
+    ".windsurf/skills/ui-ux-pro-max/data/stacks/laravel.csv": {
+      "role": "index",
+      "sha256": "854ea4daa5fc61292d22235ad33b49ba3fe22423c3de8d3cb03758ffed3b59f9",
+      "size": 20163,
+      "normalized_sha256": "854ea4daa5fc61292d22235ad33b49ba3fe22423c3de8d3cb03758ffed3b59f9"
+    },
+    ".windsurf/skills/ui-ux-pro-max/data/stacks/nextjs.csv": {
+      "role": "index",
+      "sha256": "ecd2c27b2ea0127d203ae726060efcdd7335b5e83f96b99e4f3befbbfeebd5a4",
+      "size": 18687,
+      "normalized_sha256": "ecd2c27b2ea0127d203ae726060efcdd7335b5e83f96b99e4f3befbbfeebd5a4"
+    },
+    ".windsurf/skills/ui-ux-pro-max/data/stacks/nuxt-ui.csv": {
+      "role": "index",
+      "sha256": "c36ee8470926b4a0748d241363c71664c9969c2edbc62f7f72de0db73880fac6",
+      "size": 24106,
+      "normalized_sha256": "c36ee8470926b4a0748d241363c71664c9969c2edbc62f7f72de0db73880fac6"
+    },
+    ".windsurf/skills/ui-ux-pro-max/data/stacks/nuxtjs.csv": {
+      "role": "index",
+      "sha256": "3d9b54ed2d151bd9c86e9e5609b8a6f88a00c4c52fa601a30af96c49b2c4d176",
+      "size": 23014,
+      "normalized_sha256": "3d9b54ed2d151bd9c86e9e5609b8a6f88a00c4c52fa601a30af96c49b2c4d176"
+    },
+    ".windsurf/skills/ui-ux-pro-max/data/stacks/react-native.csv": {
+      "role": "index",
+      "sha256": "ba31dd9c0c04da6bc02a74448bf121f9c0728ae5ba3b4d47b487778b0a1135b5",
+      "size": 14049,
+      "normalized_sha256": "ba31dd9c0c04da6bc02a74448bf121f9c0728ae5ba3b4d47b487778b0a1135b5"
+    },
+    ".windsurf/skills/ui-ux-pro-max/data/stacks/react.csv": {
+      "role": "index",
+      "sha256": "2d2b9c198e875106a30f7ee68341a9ee0033cad60a7e130cf23152783e08aeda",
+      "size": 19036,
+      "normalized_sha256": "2d2b9c198e875106a30f7ee68341a9ee0033cad60a7e130cf23152783e08aeda"
+    },
+    ".windsurf/skills/ui-ux-pro-max/data/stacks/shadcn.csv": {
+      "role": "index",
+      "sha256": "e56cfde5b74907836ac3582a4779d5b7f3d206a702ab81b8669a1b668c3eeb51",
+      "size": 23184,
+      "normalized_sha256": "e56cfde5b74907836ac3582a4779d5b7f3d206a702ab81b8669a1b668c3eeb51"
+    },
+    ".windsurf/skills/ui-ux-pro-max/data/stacks/svelte.csv": {
+      "role": "index",
+      "sha256": "f6e379ba802941ba26b01d4ffbe3cd39120f2587659a1d93851c707f66bc13db",
+      "size": 15078,
+      "normalized_sha256": "f6e379ba802941ba26b01d4ffbe3cd39120f2587659a1d93851c707f66bc13db"
+    },
+    ".windsurf/skills/ui-ux-pro-max/data/stacks/swiftui.csv": {
+      "role": "index",
+      "sha256": "bdd9231ff3ad658f4e7c063e1eb49df2fd09ac8d90631a86df899b39833b9623",
+      "size": 15323,
+      "normalized_sha256": "bdd9231ff3ad658f4e7c063e1eb49df2fd09ac8d90631a86df899b39833b9623"
+    },
+    ".windsurf/skills/ui-ux-pro-max/data/stacks/threejs.csv": {
+      "role": "index",
+      "sha256": "97542e0ba34915a0ff7578be20e1619495df47c95c8c1c39b83e3785e1de771f",
+      "size": 46051,
+      "normalized_sha256": "97542e0ba34915a0ff7578be20e1619495df47c95c8c1c39b83e3785e1de771f"
+    },
+    ".windsurf/skills/ui-ux-pro-max/data/stacks/uno.csv": {
+      "role": "index",
+      "sha256": "a0474363e4225b5367214d5675fd3e075f137026f9500f0d04357882ef4f6d48",
+      "size": 30091,
+      "normalized_sha256": "a0474363e4225b5367214d5675fd3e075f137026f9500f0d04357882ef4f6d48"
+    },
+    ".windsurf/skills/ui-ux-pro-max/data/stacks/uwp.csv": {
+      "role": "index",
+      "sha256": "c409f08c1fbba1f1029f1acaa554e7b4471cc85517a5751c9f2e62465badcd5c",
+      "size": 24692,
+      "normalized_sha256": "c409f08c1fbba1f1029f1acaa554e7b4471cc85517a5751c9f2e62465badcd5c"
+    },
+    ".windsurf/skills/ui-ux-pro-max/data/stacks/vue.csv": {
+      "role": "index",
+      "sha256": "b655f1ebb9dff2652d15981f31b1784c8a6d4759efd2815a14f3088257569f95",
+      "size": 12813,
+      "normalized_sha256": "b655f1ebb9dff2652d15981f31b1784c8a6d4759efd2815a14f3088257569f95"
+    },
+    ".windsurf/skills/ui-ux-pro-max/data/stacks/winui.csv": {
+      "role": "index",
+      "sha256": "e676dc1c13ee6c205c40b0746f1335150a346c7a49a0616d2545bc3d2c930c85",
+      "size": 27890,
+      "normalized_sha256": "e676dc1c13ee6c205c40b0746f1335150a346c7a49a0616d2545bc3d2c930c85"
+    },
+    ".windsurf/skills/ui-ux-pro-max/data/stacks/wpf.csv": {
+      "role": "index",
+      "sha256": "9781a9950b20333637b30a02e498b7efca21b618a3eeb8665836f3ac6e974da7",
+      "size": 24158,
+      "normalized_sha256": "9781a9950b20333637b30a02e498b7efca21b618a3eeb8665836f3ac6e974da7"
+    },
+    ".windsurf/skills/ui-ux-pro-max/data/styles.csv": {
+      "role": "index",
+      "sha256": "a93a4d9d7025856575d7b7583bda020be9043013432c5af7c58af9dbdfb206b7",
+      "size": 149478,
+      "normalized_sha256": "a93a4d9d7025856575d7b7583bda020be9043013432c5af7c58af9dbdfb206b7"
+    },
+    ".windsurf/skills/ui-ux-pro-max/data/typography.csv": {
+      "role": "index",
+      "sha256": "321fc446e89024488ebae96dda93efc4d2307bd8bddb240857ad51364f6782c8",
+      "size": 49997,
+      "normalized_sha256": "321fc446e89024488ebae96dda93efc4d2307bd8bddb240857ad51364f6782c8"
+    },
+    ".windsurf/skills/ui-ux-pro-max/data/ui-reasoning.csv": {
+      "role": "index",
+      "sha256": "f0774dd741cecdad5eec842034bd6d5e9ea50e9f220a1910069748daa0bb8e9a",
+      "size": 77360,
+      "normalized_sha256": "f0774dd741cecdad5eec842034bd6d5e9ea50e9f220a1910069748daa0bb8e9a"
+    },
+    ".windsurf/skills/ui-ux-pro-max/data/ux-guidelines.csv": {
+      "role": "index",
+      "sha256": "ff81ec613f70ba9fc3fcce52dbe4ae35d44b2079dbe6dc066d2d6e38c28facd5",
+      "size": 27516,
+      "normalized_sha256": "ff81ec613f70ba9fc3fcce52dbe4ae35d44b2079dbe6dc066d2d6e38c28facd5"
     },
     "AGENTS.md": {
       "role": "index",
@@ -551,15 +1265,15 @@
     },
     "README.md": {
       "role": "index",
-      "sha256": "728c40f062aec26f55defd5cc33c5b7b3a0edf6bbf31811c6f5f23b5ec88213d",
-      "size": 12808,
-      "normalized_sha256": "58fc038711d638f4cfcef63096419375511957afb003ccb86c5a0fe25c338c45"
+      "sha256": "bc4031f01b408381fbc769db3d7b28a1bedbc37b665dc8101793d86866374294",
+      "size": 14815,
+      "normalized_sha256": "bc4031f01b408381fbc769db3d7b28a1bedbc37b665dc8101793d86866374294"
     },
     "aoci.code.txt": {
       "role": "index",
-      "sha256": "0febb3d6c543a32e48d13a4d72608a2e24d72d6eb231bc02f614d97efa8c990a",
-      "size": 1029071,
-      "normalized_sha256": "0febb3d6c543a32e48d13a4d72608a2e24d72d6eb231bc02f614d97efa8c990a"
+      "sha256": "d1eb7e45f16e0f754087602d68778baf53d07d34520b3d1e5a40d01f7910338a",
+      "size": 1156682,
+      "normalized_sha256": "d1eb7e45f16e0f754087602d68778baf53d07d34520b3d1e5a40d01f7910338a"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -585,23 +1299,29 @@
       "size": 11379,
       "normalized_sha256": "e8b824c8a982db74252a4d6c0725f05d6ae67f0960f478cb948d9063c1442e98"
     },
+    "docs/apps/kuaiai/EXTERNAL-AGENT-WORKBUDDY.md": {
+      "role": "index",
+      "sha256": "9a3c0c83c53cef7769fd7e9eb6a703be679f86f105dda86af18232e025e14a4c",
+      "size": 4611,
+      "normalized_sha256": "9a3c0c83c53cef7769fd7e9eb6a703be679f86f105dda86af18232e025e14a4c"
+    },
     "docs/apps/kuaiai/MASCOT-PROMPTS.md": {
       "role": "index",
-      "sha256": "a961365d95b47d6546e0ad6289dcfa5e44f541df27f7f1a76513db78c7bed221",
+      "sha256": "28246b60e5afb59898b086efb669ff40f56d364c13feaf90b8ae37d579e6e54c",
       "size": 5839,
-      "normalized_sha256": "56f36b5c424461cb34a82e2090376be85db9e20ab9e2db3f052a26523a50a1e9"
+      "normalized_sha256": "d98e6d2309478d70a90b6f79589e5ee89fb8a6e434d628279798c7a952a24554"
     },
     "docs/apps/kuaiai/RAG-RETRIEVAL.md": {
       "role": "index",
-      "sha256": "c575bc4d16831ca5e9cc92c2d0e03446b78b3b16ceba270b6e82d5679ed4ef51",
+      "sha256": "1200b95706f7ad4ccb539494d50c2f0f3c6f85a3f7ad2afc929cb9288f4f241d",
       "size": 3346,
-      "normalized_sha256": "b256d8ae04bc75b5db6fa028fcef9043b9d71e3ad0dc704f8f3e9f4a449a1303"
+      "normalized_sha256": "324d631d141f15edf89ebdf21bcfb5b50beba877599b38bc55ed3647696496c9"
     },
     "docs/apps/kuaiai/ROADMAP.md": {
       "role": "index",
-      "sha256": "8b5d75885dc4ac72a06b9560f10fdf0ca4d948caf784a7d70c85b5d44788e60f",
-      "size": 1480,
-      "normalized_sha256": "be2e617ade82b721817fd957538de4cdbda49b8f243a219610b257b7fa31f26f"
+      "sha256": "c3f2d8633641b663c9a6913acef2248f416d5c700de38d7ec0d3a3d8c7131b29",
+      "size": 1969,
+      "normalized_sha256": "c3f2d8633641b663c9a6913acef2248f416d5c700de38d7ec0d3a3d8c7131b29"
     },
     "docs/apps/kuaicaiwu/general-ledger.md": {
       "role": "index",
@@ -611,33 +1331,57 @@
     },
     "docs/apps/kuaiiot/COMPLIANCE.md": {
       "role": "index",
-      "sha256": "9523b59677e188fc0d79fdaad18d25abf44893774249bb4c85fc2507c3688e84",
+      "sha256": "a9bbc5097f425ef87a7380fd9816a79d1a989670b4ac77b20bc0847f81e2f785",
       "size": 1432,
-      "normalized_sha256": "4544a5e996fa6872298d36d3743a6ad4c389ddbd48f3cfd3b1247145a00532b1"
+      "normalized_sha256": "598df8e51ce13c7dc2196768e2ded40920d62522ebb1664fe0ba3687ebd9d9d5"
     },
     "docs/apps/kuaiiot/EDGE-AGENT-RUNTIME.md": {
       "role": "index",
-      "sha256": "d9dc65a848a17ae0454a3087df0a12b9f8b286a75b8afae5a8015f237ae2a793",
+      "sha256": "b0128dd27be92853074854b8dca5c8c84027f17e2f0b37c26e217736dab46bb9",
       "size": 2637,
-      "normalized_sha256": "ba4e9d42600b81bcff905fe3c601e62297ac540cded75486f3c9b183481f1157"
+      "normalized_sha256": "5e2f7fbb158acaa9ee2ce4e30cb99802fa84e95e4b0e388f24290ab71a67761d"
     },
     "docs/apps/kuaiiot/KUAIREPORT-LINK.md": {
       "role": "index",
-      "sha256": "a7afd2b091307222dec541b277a17fc5cd2497e4bfc4afcf0b0fc35f633ea135",
-      "size": 1136,
-      "normalized_sha256": "c8ff0a2a4d827fcda38b6badbccf82bdfda4af73c4779504de73b8e92939394e"
+      "sha256": "09a80ad369b84c00e2db57309bdfffe5f54f1390ac8b7a6522b7a653a6882bb9",
+      "size": 1218,
+      "normalized_sha256": "644f3ea4fea534e47c089ef189bd9d9b8fe7fd20e6b7583026cab52d939b2a7e"
     },
     "docs/apps/kuaiiot/ROADMAP.md": {
       "role": "index",
-      "sha256": "90223c5beedb8f6c4d72b30d5c40c195db22663cf9ac9f6c6733b0e6ebda1cea",
+      "sha256": "0a1447d969dd8cb11e3c7b997283dd332c2bf9eb98c5fd00e5ce1ddd24f6bd0c",
       "size": 7197,
-      "normalized_sha256": "574c20cd5a9fe6b8a8cfd8341419097dbf0fb77898db718afda35dcfe9cce58b"
+      "normalized_sha256": "0c425c0994c897763659ec7d1257a6076064abd08d901a931448736d8b371461"
+    },
+    "docs/apps/kuaioa/工资结算使用说明.md": {
+      "role": "index",
+      "sha256": "3d6849d75c9dcaa5742260244c9230881dc320f757460a93a6f6c4ecceb6d004",
+      "size": 7868,
+      "normalized_sha256": "3d6849d75c9dcaa5742260244c9230881dc320f757460a93a6f6c4ecceb6d004"
+    },
+    "docs/apps/kuaivision/ROADMAP.md": {
+      "role": "index",
+      "sha256": "b16b228eb64ae4542e6ba808c1144b1dee2749a59d278bd14e3e9903cb473de8",
+      "size": 19610,
+      "normalized_sha256": "b16b228eb64ae4542e6ba808c1144b1dee2749a59d278bd14e3e9903cb473de8"
+    },
+    "docs/apps/kuaivision/现场联调手册.md": {
+      "role": "index",
+      "sha256": "4b66238284934ea6d8edcbdd3ecdbffffd258cdaf0b918210fde6d96a58934b9",
+      "size": 1964,
+      "normalized_sha256": "4b66238284934ea6d8edcbdd3ecdbffffd258cdaf0b918210fde6d96a58934b9"
     },
     "docs/apps/kuaizhizao/FIFO-AUDIT-EVIDENCE.md": {
       "role": "index",
       "sha256": "2f74a4de2803885cd0fb442a14ac1730f4c63eb8126c9ca065a1f06a2caf1596",
       "size": 2382,
       "normalized_sha256": "49a69119bf7294f802eef2116b923dd4408caf7e133dd06695dfbe6050ee5657"
+    },
+    "docs/apps/kuaizhizao/MES需求适配与缺项分析-2026.07.24.md": {
+      "role": "index",
+      "sha256": "ad192796965321caffdf2a417d6738dcf9159a65bd55d82af32bfd618595125c",
+      "size": 40727,
+      "normalized_sha256": "ad192796965321caffdf2a417d6738dcf9159a65bd55d82af32bfd618595125c"
     },
     "docs/apps/kuaizhizao/delivery-project-p1-backlog.md": {
       "role": "index",
@@ -647,21 +1391,21 @@
     },
     "docs/apps/kuaizhizao/fai.md": {
       "role": "index",
-      "sha256": "1f6f47633ff3e8e4d87316f01b33254ed70e5582344e420467258c8518bc3843",
+      "sha256": "b699330ba9f678b7d7767bdfd64592c01955c51fe7a3bcab607df2c4bfe47944",
       "size": 2690,
-      "normalized_sha256": "44a7f8b28b955896c02506d741208cf72f279fcc25864c28c21b9e298efecb4d"
+      "normalized_sha256": "a4398f442dafbbf712d4b63a14c61e031389374ef71c61e7ec06be1fd358bd00"
     },
     "docs/apps/kuaizhizao/quality-system.md": {
       "role": "index",
-      "sha256": "fd4003ab893812414c1b68bba6b2160f733ce6ff83f257e017e6f8b3932a8832",
+      "sha256": "1b89b0cb89b3be53aaa05f9be75f4c58da4efef628009b5b2e03b21258453c80",
       "size": 2243,
-      "normalized_sha256": "ee948d10a343bba3bbd5f79c8763ee42aa15c9cd83d671795306e1032ee00aa0"
+      "normalized_sha256": "2b5efd53a1d4ab71141069fe330e5b58b16f2f26359d29c18c5cad7f08d24048"
     },
     "docs/apps/master-data/drawings.md": {
       "role": "index",
-      "sha256": "d9beec9c59e5c97ca88be4b6a3b24f08a6ba2e82b3e84c533f90692a0182b801",
+      "sha256": "bf3f2c3a31ddc2478747f57329e83702e8220ad235e666549a7f08096fa02abc",
       "size": 4114,
-      "normalized_sha256": "d9e82b96c7e7218cc4e193174fa8943e69c0f23df517e900af302166cb39d7ed"
+      "normalized_sha256": "b430e5d7b93cf0d398de6c3d149285b0d8715e5acc3016250532a557d96af369"
     },
     "docs/apps/master-data/sop.md": {
       "role": "index",
@@ -677,9 +1421,9 @@
     },
     "docs/core/application-layer-contract.md": {
       "role": "index",
-      "sha256": "0f6ad3c544c237b337d8b42f31cf1dea67371da1d660a3b22f1d214d211593ba",
+      "sha256": "38d7c099506b34c52a4bb239ab81d1455f78db0646dc6ce81ddaea45b2bd6a97",
       "size": 5044,
-      "normalized_sha256": "0f6ad3c544c237b337d8b42f31cf1dea67371da1d660a3b22f1d214d211593ba"
+      "normalized_sha256": "38d7c099506b34c52a4bb239ab81d1455f78db0646dc6ce81ddaea45b2bd6a97"
     },
     "docs/core/permission-contract.md": {
       "role": "index",
@@ -699,11 +1443,17 @@
       "size": 1867,
       "normalized_sha256": "45d1c4223b3fc00af925f649417be7845a407b901b41db6fd3fb93b681d1433c"
     },
+    "docs/上游同步台账.md": {
+      "role": "index",
+      "sha256": "ad40105637695d7978b24f6ac877af75a8e9f4179a3da7029db04bfd86df4469",
+      "size": 67358,
+      "normalized_sha256": "ad40105637695d7978b24f6ac877af75a8e9f4179a3da7029db04bfd86df4469"
+    },
     "docs/功能清单.md": {
       "role": "index",
-      "sha256": "043d034357eeaaf6746573871c7e3e597c8f8c441cc572421c5211069633d70c",
-      "size": 7325,
-      "normalized_sha256": "68a0b0ee71d37be8b6b614fe0ecbf39888d6e1aaab0aecc42ac9972796ec8ed3"
+      "sha256": "5a6f271756cb3bc2b8224ca004d5d745fa8592aa6e5aae4be4a1932f44eedc61",
+      "size": 7150,
+      "normalized_sha256": "5a6f271756cb3bc2b8224ca004d5d745fa8592aa6e5aae4be4a1932f44eedc61"
     },
     "docs/单公网IP双机Caddy反向代理.md": {
       "role": "index",
@@ -716,6 +1466,12 @@
       "sha256": "545e138a4dfa5a9320bc35e7cd497b8de197d9558d564af3e8294c498e2719b9",
       "size": 2647,
       "normalized_sha256": "545e138a4dfa5a9320bc35e7cd497b8de197d9558d564af3e8294c498e2719b9"
+    },
+    "docs/成熟度与技术再评估.md": {
+      "role": "index",
+      "sha256": "569473a76f5c1b8fe53cbbae29ef1fb2ab04628d926895c705a2eb984d8527de",
+      "size": 35622,
+      "normalized_sha256": "569473a76f5c1b8fe53cbbae29ef1fb2ab04628d926895c705a2eb984d8527de"
     },
     "docs/报工.md": {
       "role": "index",
@@ -743,21 +1499,21 @@
     },
     "docs/部署指南.md": {
       "role": "index",
-      "sha256": "138d50bce2d14ebea1ad942456f708379ed0f8ecabbb0ec9f5066ef0a89a7fc4",
-      "size": 27953,
-      "normalized_sha256": "138d50bce2d14ebea1ad942456f708379ed0f8ecabbb0ec9f5066ef0a89a7fc4"
+      "sha256": "420b08565d564fec84ccc82567e41bc2ebad8073b43c19f528e5c82d0a865d2f",
+      "size": 28382,
+      "normalized_sha256": "420b08565d564fec84ccc82567e41bc2ebad8073b43c19f528e5c82d0a865d2f"
     },
     "fast-deploy/README.md": {
       "role": "index",
-      "sha256": "48e7b55a4c8c9e60533528fcf44747079af5a442a071b5fefb89860169cfd7a9",
-      "size": 6187,
-      "normalized_sha256": "3ec5ef3157ca258a4979b6a9cc13689336a453289d8696669ec38bb080455265"
+      "sha256": "130fc2767b04c39013b800b1002fd3e07938f833b540424f46af5df946a8b160",
+      "size": 6345,
+      "normalized_sha256": "d68fc6a5b77b30ab06a70816b22006aebe868b172a530e4154dca3aaba0bd51a"
     },
     "fast-deploy/build.mobile.web.sh": {
       "role": "index",
-      "sha256": "392717535f3adad3c147a8848de4dd6700f51ad95f69f1538b48e8dd125d5fe0",
-      "size": 962,
-      "normalized_sha256": "0e15429664b3c602bdf0b9d7de86c263a5a7de993c230132e2e9731dbf0c937f"
+      "sha256": "96b285e692a8b2dc86b7922b5710625425351ebf386491032fe64f78c5cadf26",
+      "size": 1161,
+      "normalized_sha256": "6580ac8e8977c7c1ff0ef1371ce36f10ca65246a18e18920a3880ba12d2a7ccb"
     },
     "fast-deploy/build.web.sh": {
       "role": "index",
@@ -773,9 +1529,9 @@
     },
     "fast-deploy/config/deploy.env.example": {
       "role": "index",
-      "sha256": "5d63da7fa236d37aac6308702069330cee783f0174283f8ef70a6f0b9843a9ce",
-      "size": 6982,
-      "normalized_sha256": "5d63da7fa236d37aac6308702069330cee783f0174283f8ef70a6f0b9843a9ce"
+      "sha256": "01c34749a63f5bdf39484385b63b1d2332800c6151c30c9be1deeacb4009b29d",
+      "size": 7678,
+      "normalized_sha256": "01c34749a63f5bdf39484385b63b1d2332800c6151c30c9be1deeacb4009b29d"
     },
     "fast-deploy/config/install-scripts.json": {
       "role": "index",
@@ -783,17 +1539,23 @@
       "size": 6181,
       "normalized_sha256": "bd1997232147460aef56cdb0f0b54f9097bac81df0543d5cf8fb661ed68a18a9"
     },
+    "fast-deploy/config/workbuddy-mcp.env.example": {
+      "role": "index",
+      "sha256": "eefbf436567724c816ad94b7535beb7fbc9a15040d83f7e37772c37edb006fbf",
+      "size": 521,
+      "normalized_sha256": "eefbf436567724c816ad94b7535beb7fbc9a15040d83f7e37772c37edb006fbf"
+    },
     "fast-deploy/deploy.sh": {
       "role": "index",
-      "sha256": "aa2e7d6f47e3d93ea37783c3e6d61261e8fc4b5052cd509b3e672fee16d76931",
-      "size": 3825,
-      "normalized_sha256": "3994de409777c0681ea7409e0df8f24a5cae172807c9380f3a19fc30a629ebfe"
+      "sha256": "5a487be360783514db15f7067d87b543ede508a60bb479af5b19ccfd5ff27223",
+      "size": 3773,
+      "normalized_sha256": "5a487be360783514db15f7067d87b543ede508a60bb479af5b19ccfd5ff27223"
     },
     "fast-deploy/launch.dev.sh": {
       "role": "index",
-      "sha256": "a8433fef44ddb414b22c779cab80d517fb1e6d8293fead9607e05a70e7872e57",
-      "size": 31180,
-      "normalized_sha256": "a8433fef44ddb414b22c779cab80d517fb1e6d8293fead9607e05a70e7872e57"
+      "sha256": "77e56a71015d632cdd40c923f0f10d561757b84382cb8bc7d926cd81a93e9c9f",
+      "size": 28803,
+      "normalized_sha256": "77e56a71015d632cdd40c923f0f10d561757b84382cb8bc7d926cd81a93e9c9f"
     },
     "fast-deploy/lib/blue_green.ps1": {
       "role": "index",
@@ -803,27 +1565,27 @@
     },
     "fast-deploy/lib/blue_green.sh": {
       "role": "index",
-      "sha256": "1c79cbb8d0482eedbcfe76016f70a695ec53375be5eb5d6c07b0303479c66d99",
-      "size": 20153,
-      "normalized_sha256": "85d232ace29424b263da398d0c26929dbf5c5377d962c813392f16f368a6c65f"
+      "sha256": "a48c60e7d9a155fc19878bc41ac22905b7edf833139a63404660254ec986a65f",
+      "size": 19680,
+      "normalized_sha256": "a48c60e7d9a155fc19878bc41ac22905b7edf833139a63404660254ec986a65f"
     },
     "fast-deploy/lib/build_web_git.sh": {
       "role": "index",
-      "sha256": "88361adad03ab056f9a5e755565742c9e3023aa275bbb5792e79fd2b1ec0f3d4",
-      "size": 7029,
-      "normalized_sha256": "88361adad03ab056f9a5e755565742c9e3023aa275bbb5792e79fd2b1ec0f3d4"
+      "sha256": "9df9cf372eecbdffd6c7d2bc092fed16c988c5e69e8fb8b1977287f1b9326ce3",
+      "size": 7207,
+      "normalized_sha256": "9df9cf372eecbdffd6c7d2bc092fed16c988c5e69e8fb8b1977287f1b9326ce3"
     },
     "fast-deploy/lib/common.ps1": {
       "role": "index",
-      "sha256": "ce5ac66e05782ccf26070f02102423c4feebb1961fa1bf6a6cce00b590ffd7d5",
-      "size": 115826,
-      "normalized_sha256": "ce5ac66e05782ccf26070f02102423c4feebb1961fa1bf6a6cce00b590ffd7d5"
+      "sha256": "25d16a7381a10c0dd6537b92b7bb2e556baa8b3953f24ebcb7a0c8364598153a",
+      "size": 120124,
+      "normalized_sha256": "25d16a7381a10c0dd6537b92b7bb2e556baa8b3953f24ebcb7a0c8364598153a"
     },
     "fast-deploy/lib/common.sh": {
       "role": "index",
-      "sha256": "204d041b338821c14bc1595ad1edb69a2ef68c96f95a020a2eeda99e6585ae57",
-      "size": 281082,
-      "normalized_sha256": "204d041b338821c14bc1595ad1edb69a2ef68c96f95a020a2eeda99e6585ae57"
+      "sha256": "dd880e31e98d4859833a7dfe953081758230a43c46690f44c91c3fd241bc7b1f",
+      "size": 313880,
+      "normalized_sha256": "dd880e31e98d4859833a7dfe953081758230a43c46690f44c91c3fd241bc7b1f"
     },
     "fast-deploy/lib/low_spec_mode.sh": {
       "role": "index",
@@ -833,9 +1595,15 @@
     },
     "fast-deploy/lib/wizard.sh": {
       "role": "index",
-      "sha256": "4f45bffd206f4338f50eea251ec0430803d8924c1ab9f96b5a7c4657943d748e",
-      "size": 81463,
-      "normalized_sha256": "4f45bffd206f4338f50eea251ec0430803d8924c1ab9f96b5a7c4657943d748e"
+      "sha256": "892f66ed341bf13dae3bfa9e5246bf3daa35cf69cd8ee476b1bd54dc57607d54",
+      "size": 82524,
+      "normalized_sha256": "892f66ed341bf13dae3bfa9e5246bf3daa35cf69cd8ee476b1bd54dc57607d54"
+    },
+    "fast-deploy/linux/.gitattributes": {
+      "role": "index",
+      "sha256": "930741efcedba5f4816c305e8f4805e291d885dec965d82c96c9db82f68e5e22",
+      "size": 47,
+      "normalized_sha256": "930741efcedba5f4816c305e8f4805e291d885dec965d82c96c9db82f68e5e22"
     },
     "fast-deploy/linux/dev.sh": {
       "role": "index",
@@ -879,6 +1647,12 @@
       "size": 762,
       "normalized_sha256": "a4ca256e191ccf19a17d893db82957dc26e8cb2793182e4753029a4554fd3da5"
     },
+    "fast-deploy/linux/systemd-exec-workbuddy-mcp.sh": {
+      "role": "index",
+      "sha256": "1a3f6e5502b3861928ce1c64bc155691e3662c7c337b16692089db85f0251c48",
+      "size": 880,
+      "normalized_sha256": "1a3f6e5502b3861928ce1c64bc155691e3662c7c337b16692089db85f0251c48"
+    },
     "fast-deploy/templates/Caddyfile.dev-api.template": {
       "role": "index",
       "sha256": "482fa02b5ab6857acc0fc5ae16082e0a675cc2458f83bfbe17bf4c5c387f1a9c",
@@ -887,9 +1661,9 @@
     },
     "fast-deploy/templates/Caddyfile.template": {
       "role": "index",
-      "sha256": "b08efccc014a76c2b94ad58f0b9b0ea484a0df22f4a61ea67b0b88d6f078755b",
-      "size": 7690,
-      "normalized_sha256": "b08efccc014a76c2b94ad58f0b9b0ea484a0df22f4a61ea67b0b88d6f078755b"
+      "sha256": "18d7349454c63176eea099af025a498906d8567be0e180695d17fc06e0b2b715",
+      "size": 7721,
+      "normalized_sha256": "18d7349454c63176eea099af025a498906d8567be0e180695d17fc06e0b2b715"
     },
     "fast-deploy/templates/riveredge-backend.service.template": {
       "role": "index",
@@ -915,29 +1689,35 @@
       "size": 850,
       "normalized_sha256": "cbcf4c93614f3f43c94af6353a4c4197baa68af22c3b4585b49b9948c8a511b7"
     },
+    "fast-deploy/templates/riveredge-workbuddy-mcp.service.template": {
+      "role": "index",
+      "sha256": "d0b9f626aa19881fec5f7203ece32f238a5cd057fa1a39a845d9981bd4ae0e2a",
+      "size": 649,
+      "normalized_sha256": "d0b9f626aa19881fec5f7203ece32f238a5cd057fa1a39a845d9981bd4ae0e2a"
+    },
     "fast-deploy/templates/riveredge.service.template": {
       "role": "index",
-      "sha256": "15bf634c93a14880155cf839c0d0de6025ac0a6cb4ffdf17314846e0da6d34f2",
-      "size": 519,
-      "normalized_sha256": "d1b1ea360d1928f2d5d0b09c4a2e6d0e65b25e3aba3b96a797605902695dfe8a"
+      "sha256": "e95385be0dcc69dd6cff48ed158cdbed768deb56d9ff43482e5ed1b7a03c3866",
+      "size": 535,
+      "normalized_sha256": "e95385be0dcc69dd6cff48ed158cdbed768deb56d9ff43482e5ed1b7a03c3866"
     },
     "fast-deploy/tools/workspace/README.md": {
       "role": "index",
-      "sha256": "31510102dfd2d185d32d5907ec977a6ca5ddca348e1380d6809ccd0e7ad80118",
-      "size": 2749,
-      "normalized_sha256": "13ca7b6dc64975c4b59c7e3142202d2664e72ed241c5b069aa8f5456dfcfebab"
+      "sha256": "216fa51822fb325a05b96d6d925c9cc645719622fb7c2cb419021bca508b8b9b",
+      "size": 3393,
+      "normalized_sha256": "216fa51822fb325a05b96d6d925c9cc645719622fb7c2cb419021bca508b8b9b"
     },
     "fast-deploy/tools/workspace/compose.py": {
       "role": "index",
-      "sha256": "85b3ebe979cbc8feeb0b997e1fdc3a1774156c34392d21338870e499c59f23ac",
-      "size": 7333,
-      "normalized_sha256": "51ba9c626bed8401a5df1d8a8cf97716b0ea5f0aed39280b359f6890506c7edf"
+      "sha256": "72bdfb5af355d5ead56a8d9c2602dd8a1a47ab2c60445071de4d727e9e496f29",
+      "size": 7764,
+      "normalized_sha256": "72bdfb5af355d5ead56a8d9c2602dd8a1a47ab2c60445071de4d727e9e496f29"
     },
     "fast-deploy/tools/workspace/generate_workspace.py": {
       "role": "index",
-      "sha256": "2dee3a073fb47476fd6736e042a3ccbe6b2a1bde8c5df2eb9dd2822fce9ef898",
-      "size": 9177,
-      "normalized_sha256": "6198a6dd80c41b9ef8086fb05bf619cfd27af151749e27ca84b22ec59ee52211"
+      "sha256": "71a86606895973ab2ed100b958ed2e97c3093e70185398da57df300c7212b444",
+      "size": 12068,
+      "normalized_sha256": "71a86606895973ab2ed100b958ed2e97c3093e70185398da57df300c7212b444"
     },
     "fast-deploy/tools/workspace/workspace.example.yaml": {
       "role": "index",
@@ -992,6 +1772,1734 @@
       "sha256": "6f5f6bad0f369eee074914b8622f3d0f4886a2f3522707f8cd9df80a30ca0203",
       "size": 1893,
       "normalized_sha256": "eb81d0027c0917358382d22092458b1a5fc7a6868de8576a6de8f7031c9a8774"
+    },
+    "kuaigeyun-client/mobile-static-preview/index.html": {
+      "role": "index",
+      "sha256": "1661961f3873fe1eccbe50aa24f28d74010039d50ab7d89b5118124b79826c91",
+      "size": 1310,
+      "normalized_sha256": "28f103daac97fca711ee43cc22a947670f42e90ff04b9f30b9348885017911d2"
+    },
+    "kuaigeyun-client/mobile-static-preview/preview.css": {
+      "role": "index",
+      "sha256": "13bbc92fea99db4c881ff8dbd7c97d38405d31c5eb5ee1e363ffba19e3153289",
+      "size": 14475,
+      "normalized_sha256": "c01c9b77dbdce62ff86bc171cecff363643edeadde624b90eee1fcf8b3984212"
+    },
+    "kuaigeyun-client/mobile-static-preview/preview.js": {
+      "role": "index",
+      "sha256": "8b4579a2c2d692419683f839cdcf40138959b6bc5fcd778c34f935d830a5a96d",
+      "size": 115437,
+      "normalized_sha256": "cbd7db77d07f26f2f0fe525fdbb38b0b8fab81ee5b6415580fbaae424a754f83"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/.editorconfig": {
+      "role": "index",
+      "sha256": "73390272b3d3f358ae63642c7548839f3af7c68b81f4dfe71fedb58c783eb6c0",
+      "size": 154,
+      "normalized_sha256": "6b2074bb10aa8d4dbb22e4123f90e66e8cef6681bef9a3ede9fe68def2e98dee"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/.gitignore": {
+      "role": "index",
+      "sha256": "c4a18fe2ed65f809c9fd9e11ddb102512950c5d48208193fdbd78409a79a2721",
+      "size": 65,
+      "normalized_sha256": "c0fc8ead632a6f0daf3851e8a230603880df76628ba45016db51630f5ccecf85"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/App.uvue": {
+      "role": "index",
+      "sha256": "d4be75f16cd12f3832f1e455d10e2578903d584a78970c3cea18e1ce0b17c5a7",
+      "size": 6505,
+      "normalized_sha256": "49b7c4d83ef1c1fdd7b57a16a4ae23e75543c01b2426bd9e3a2bff513fd7e791"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/README.md": {
+      "role": "index",
+      "sha256": "f22dfdcc244c290a80707d5be83be8fa972556bfc69acd2d065780a97faff294",
+      "size": 557,
+      "normalized_sha256": "b465d4848cb698290d2991bfda08c5827f0444f2fb14dc71def5315a050aa3b3"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/RELEASE.md": {
+      "role": "index",
+      "sha256": "f3391dc880479124729212a0e199bccf23d8e8e8ade67ed644d1ed525fa22052",
+      "size": 585,
+      "normalized_sha256": "f3391dc880479124729212a0e199bccf23d8e8e8ade67ed644d1ed525fa22052"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/apps/README.md": {
+      "role": "index",
+      "sha256": "59e3838416e9f7cbdc27a421ebe9bbdbe7ca70e3cb72421f6fdc3512fd04a7f4",
+      "size": 90,
+      "normalized_sha256": "59e3838416e9f7cbdc27a421ebe9bbdbe7ca70e3cb72421f6fdc3512fd04a7f4"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/equipment/components/master-picker.uvue": {
+      "role": "index",
+      "sha256": "0134d0b42523b026b905231251f74f5b10dac4105e4963ac366bafb1072dbbcb",
+      "size": 9121,
+      "normalized_sha256": "e50bd200e4bebf8cde23b630f56d163c13844156bd960570dceaadb448f680fc"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/equipment/detail/index.uvue": {
+      "role": "index",
+      "sha256": "eca0ae8633c04edda334f5c216f1173670f37985e4853fd03120d832d5abf0b7",
+      "size": 2529,
+      "normalized_sha256": "09533ead70444193363b7639d49d7aa871b28e178be7f0f76864a8304768c3bc"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/equipment/faults/index.uvue": {
+      "role": "index",
+      "sha256": "e70e99b4711af324c74867b7a6a07d46ca1564d2efa3a19a044b79d5d97d678b",
+      "size": 20118,
+      "normalized_sha256": "f01aaf69f48b771d02676826270d23903ebc888183fc9c15d9d72f42400fd10c"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/equipment/index.uts": {
+      "role": "index",
+      "sha256": "4336b97dc3931de3ce6be965bf3f587323b2a09a1f029e232528bf10f9b02378",
+      "size": 2660,
+      "normalized_sha256": "4336b97dc3931de3ce6be965bf3f587323b2a09a1f029e232528bf10f9b02378"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/equipment/json-text.uts": {
+      "role": "index",
+      "sha256": "52823ce67872c8cde8518aa769a273e533b0a3803800f877ebe2f181a9789ed4",
+      "size": 2549,
+      "normalized_sha256": "52823ce67872c8cde8518aa769a273e533b0a3803800f877ebe2f181a9789ed4"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/equipment/line-rebinds/index.uvue": {
+      "role": "index",
+      "sha256": "c4cecece3ea1959644b9b1888c472fb4985d4b28e9749e958a3becd3f7cf6884",
+      "size": 5276,
+      "normalized_sha256": "a30ba2b979844ed68a57f8728bd347b5305956d0f05a90e4b330e0a069241d2b"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/equipment/maintenance-executions/index.uvue": {
+      "role": "index",
+      "sha256": "dffe77c1b988975a0a92445de4d416cb8d48af4dac171cdb7e39a4500aea98d8",
+      "size": 2729,
+      "normalized_sha256": "a8e7fd769b86f8b7da06311f9a28ab531c8fa65e22c78dc16a7bbcf1779cdbf4"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/equipment/maintenance-reminders/index.uvue": {
+      "role": "index",
+      "sha256": "764548cb572ad82d2e8713fa6c829d61041cf6452f6d4b1452196484044b0236",
+      "size": 4807,
+      "normalized_sha256": "c2c682bdc0a1c919b007a2e9626629403d1c85b517d2e51888f246d005d365a5"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/equipment/pages.entries.json": {
+      "role": "index",
+      "sha256": "908c4cccce7ec90256fe8a46d2185336737c033ae7ae3ea1725c2f5473dbe339",
+      "size": 1196,
+      "normalized_sha256": "908c4cccce7ec90256fe8a46d2185336737c033ae7ae3ea1725c2f5473dbe339"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/equipment/repairs/index.uvue": {
+      "role": "index",
+      "sha256": "c385d3874b093bd40d58f29f633fef1fcda8af77ed8d8f1725dfdff7ab68080b",
+      "size": 6796,
+      "normalized_sha256": "0127cad50dc1adadd98991918ce8bbd96167175e5ef22fbbf07922262fe47d51"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/equipment/route-patrol-create.uts": {
+      "role": "index",
+      "sha256": "70b2e2f2ab41557499d40253e6e4bbe3f1a3abf7498a683845e5a1f5a9f3280c",
+      "size": 7502,
+      "normalized_sha256": "70b2e2f2ab41557499d40253e6e4bbe3f1a3abf7498a683845e5a1f5a9f3280c"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/equipment/route-patrols/index.uvue": {
+      "role": "index",
+      "sha256": "b9452406103e33626efc52978f42346c2bb3b703179980fd0e283d5a33e21d45",
+      "size": 9682,
+      "normalized_sha256": "e95790ab7a417961e760927f198cc3d57622e0af97fbe6a130573de20432dbae"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/equipment/scan/index.uvue": {
+      "role": "index",
+      "sha256": "339a58693b0fbdd34ed6c4a30130422f53ebe686ecd82aa58133418aef9f8702",
+      "size": 2348,
+      "normalized_sha256": "36e44197f2f5247fa9b33e4e1296e7e1b9924be8edb36b9f089c414087550ff5"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/equipment/selection.uts": {
+      "role": "index",
+      "sha256": "f2dd05eedabbb7eb448b3ebec05c3a48e87f65d7f976fbdb476ea9841f9899dd",
+      "size": 1468,
+      "normalized_sha256": "f2dd05eedabbb7eb448b3ebec05c3a48e87f65d7f976fbdb476ea9841f9899dd"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/equipment/spot-check-conduct/index.uvue": {
+      "role": "index",
+      "sha256": "1e0232fafa6bf1dfe4d95ca6a5204e7ee6d7b71a9fda419f083735ad69b5e3ac",
+      "size": 10822,
+      "normalized_sha256": "e0c222b32a56b7a4470959232e8c496d06ddac506f57f8efa1fad15eec653b25"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/equipment/spot-check-create.uts": {
+      "role": "index",
+      "sha256": "3b98fa801e459f32d92b2d4a9c6f14013c34826cfa33107fe5f4c5a595a6421f",
+      "size": 7720,
+      "normalized_sha256": "3b98fa801e459f32d92b2d4a9c6f14013c34826cfa33107fe5f4c5a595a6421f"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/equipment/spot-checks/index.uvue": {
+      "role": "index",
+      "sha256": "ed6421da8a72cbb1cd46253ca9257732b9990fac645a751189661d6ab8d40ea9",
+      "size": 11139,
+      "normalized_sha256": "8c4d0e3696f6593be16162adc999c89eeca14e3757addb9d6f7ce5f1238081ae"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/mold/http.uts": {
+      "role": "index",
+      "sha256": "3d5751911fc14d57de8da5e5416453623ab305ed61f416eb1fb1e6f8a80af479",
+      "size": 5407,
+      "normalized_sha256": "753ae1adb2cc9fdce95a489a23b172b7497689224a7b970f520d8d02745c72ed"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/mold/index.uts": {
+      "role": "index",
+      "sha256": "0eaf317bdddc462e69267615bde6d9e9cd4a4672bcec1333eba85ad839abaf42",
+      "size": 1095,
+      "normalized_sha256": "0eaf317bdddc462e69267615bde6d9e9cd4a4672bcec1333eba85ad839abaf42"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/mold/mold-borrows/index.uvue": {
+      "role": "index",
+      "sha256": "c9304a91daafcebd6dfa5f36ded7419795fd135ff483e2e53619098fc3c8b2a2",
+      "size": 7109,
+      "normalized_sha256": "53cdd3fc53d0cb566aa065c66482a630f803ce66ef4764eccc2bf2f27f3502a6"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/mold/mold-maintenances/index.uvue": {
+      "role": "index",
+      "sha256": "a94d3654eca429e2fd29b2e10e7012277d87fcca9f15096bc15c73d56dd55ca5",
+      "size": 9732,
+      "normalized_sha256": "db62b61d3ec4a9e73b9aeb6081fd1960f06274d753c7c650fce1efed2cf3a534"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/mold/mold-reminders/index.uvue": {
+      "role": "index",
+      "sha256": "b1ad9852e8f0a24b824d6f413ef847a81eab3e15a0f3f49ae273b20d1b42aff7",
+      "size": 3061,
+      "normalized_sha256": "50bb2177b2bdab18e6738297b5428e4037bfb6bbc70d3bc531fd6d5f6a76d945"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/mold/mold-repairs/index.uvue": {
+      "role": "index",
+      "sha256": "b0f808977be24c3d944e7463b1773fa5b00592a9b8c49f406e923b49c59f4cbf",
+      "size": 10306,
+      "normalized_sha256": "f52acbf234135e74001f787dc34f4ee628c34deb4f83536d70126b5474c59df5"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/mold/mold-returns/index.uvue": {
+      "role": "index",
+      "sha256": "8cfca4808d9de0a2277f6da986e7e4c40b29f09f06ae42bcddb14b78d74033d6",
+      "size": 14037,
+      "normalized_sha256": "07801d71849b64cb5e93fe1f19b86b3f8bab2c8c3c4835d3c0789b92c2ef58bd"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/mold/mold-scan/index.uvue": {
+      "role": "index",
+      "sha256": "30496c4c3cb35cfda68e72f59571b1dc9b520b905f5dcbdd43c9da59e07283b0",
+      "size": 5493,
+      "normalized_sha256": "78a130dce96ab395017d52d1a32d5563a3bce764c2a4d2d03cf5a960258a8094"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/mold/pages.entries.json": {
+      "role": "index",
+      "sha256": "82f3f4b4e58951f5bc11818780ade2be09f2ce224851fa1d973c4ecdb5093735",
+      "size": 700,
+      "normalized_sha256": "82f3f4b4e58951f5bc11818780ade2be09f2ce224851fa1d973c4ecdb5093735"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/quality/components/inspection-board.uvue": {
+      "role": "index",
+      "sha256": "854cee2f147b006f9cfa8ed19296c938fa377dbb48f71719824c9dea76cb4c0b",
+      "size": 42295,
+      "normalized_sha256": "d5a0461965bccd877aab6bd7a465e16bf8fd2645591d40e7518d018f112e942a"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/quality/finished/index.uvue": {
+      "role": "index",
+      "sha256": "528a18ae8325db84838605059511658fa7b012fb2cf9d1eec67c5c46f305e8e0",
+      "size": 693,
+      "normalized_sha256": "b9dd8bf9b425899a10719535dad9fb9f3f6cdf04115eac672289790432f8df63"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/quality/incoming/index.uvue": {
+      "role": "index",
+      "sha256": "a0ea6d0c0934d16547ac32b18e4ac8d28fd33b93ff7817c1fdf4beae62da3688",
+      "size": 675,
+      "normalized_sha256": "d12a5ac6359dd1ce05599ae84d0d781695a8facacdc907b37f541205ef5ef04f"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/quality/index.uts": {
+      "role": "index",
+      "sha256": "551e1956c122b0721bee6a17be9e6582338e317445ed6b294b106346a6da3fa8",
+      "size": 1302,
+      "normalized_sha256": "551e1956c122b0721bee6a17be9e6582338e317445ed6b294b106346a6da3fa8"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/quality/nonconforming/index.uvue": {
+      "role": "index",
+      "sha256": "5551b820a7784e16e32204df9056135b9b99a0590295d034b9c260d6b76743ea",
+      "size": 8824,
+      "normalized_sha256": "4a9c58d6d92d58bec590a3257bc837cde9e90cdc4c8a9ad4d4d795638a32098f"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/quality/oqc/index.uvue": {
+      "role": "index",
+      "sha256": "c821f1565ff0e5306e5ce69dcfdde98cc22bf0d7b22a88d7afff9af34cfb8f2f",
+      "size": 624,
+      "normalized_sha256": "8f8fb948434dad74435655ae4514a845dca4ef85af641edaf7eeeb4a3a2f59a1"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/quality/pages.entries.json": {
+      "role": "index",
+      "sha256": "860eaf1d2ce089ef609af14f27a4baa4940ce2d584b2b2b2e12e2f0f6c8e4979",
+      "size": 685,
+      "normalized_sha256": "860eaf1d2ce089ef609af14f27a4baa4940ce2d584b2b2b2e12e2f0f6c8e4979"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/quality/process-scan/index.uvue": {
+      "role": "index",
+      "sha256": "a6b573eb627b8070e447926b1ef1f5634f7475e01b89806cc4db5e03300f1f4c",
+      "size": 672,
+      "normalized_sha256": "787ddecd55d629e0851e91a7582d326472af95e5b97519feba90d26d28413db3"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/quality/quality-hub/index.uvue": {
+      "role": "index",
+      "sha256": "09ce9df2480332dc22cd9486c6adbe0bf3f3ba50403db71a8ffabe9ffdf296a8",
+      "size": 3696,
+      "normalized_sha256": "aed334e4094bf71af09de695941c1db140764fdad8fd45ec026549576433debd"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/warehouse/board.uvue": {
+      "role": "index",
+      "sha256": "46f31134e126e6e6953189b40a8f7e8c7ae7dc34a67d8b7429c09e20a614d1d4",
+      "size": 26812,
+      "normalized_sha256": "436642afb3a2b62fb2c98b2bc8e1b72da7b17f564e7649b975bb9bf8670075cd"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/warehouse/delivery-notices/index.uvue": {
+      "role": "index",
+      "sha256": "46794b0c353a56620545d27cf661ad5269653a4094ef204a9b346882c2b56888",
+      "size": 630,
+      "normalized_sha256": "a110f63b982830db27535691258be262af924e8d9319f20bca8514c680c9a343"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/warehouse/fg-receipts/index.uvue": {
+      "role": "index",
+      "sha256": "165bc185d344d75003ece9c753610add0ae07f07bcde6557055ce01401ae9c88",
+      "size": 625,
+      "normalized_sha256": "6f16dbc71332945e0f43ea78cf1ce22b279a20711868305d1d65b3f1797cb937"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/warehouse/http.uts": {
+      "role": "index",
+      "sha256": "caedb865732d564e053b15e968abd92849cedfbf387ed960991a3295db14670f",
+      "size": 2717,
+      "normalized_sha256": "caedb865732d564e053b15e968abd92849cedfbf387ed960991a3295db14670f"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/warehouse/index.uts": {
+      "role": "index",
+      "sha256": "31aef0f18c4c4a6f93ce5e2cd6227d0b4f104d75dfbc776fc73cf07fcd9199f3",
+      "size": 1657,
+      "normalized_sha256": "31aef0f18c4c4a6f93ce5e2cd6227d0b4f104d75dfbc776fc73cf07fcd9199f3"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/warehouse/inventory-alerts/index.uvue": {
+      "role": "index",
+      "sha256": "d0130fff23f61d93104b89e00ba472c74540d803626ecc0252b411325f744f07",
+      "size": 630,
+      "normalized_sha256": "7564fe79cae2a41e7ba13d4286c99d8b5ac4cd64ae88ab24efadb307a5134eda"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/warehouse/inventory-query/index.uvue": {
+      "role": "index",
+      "sha256": "c26bddebf2705719079e01d33b49c635fe18e6f6464e9fcc6560792da377946d",
+      "size": 629,
+      "normalized_sha256": "a2121be83189a68f78573ea5d39b0f5715b7ccb4e2d779933d07514a071a4e2f"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/warehouse/inventory-transfer/index.uvue": {
+      "role": "index",
+      "sha256": "d1b54aa1808eec1d6fd69d5388bff24ac2b775465d85458ea423be6067477a45",
+      "size": 632,
+      "normalized_sha256": "a31ff9ebc369563301a2180e50858dde89fe4e11d99b3cbf79917799816f12b9"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/warehouse/models.uts": {
+      "role": "index",
+      "sha256": "95e575ff39680361496527d2047f9568a309ff973ba0b8d22ae248bb38d2b2f7",
+      "size": 709,
+      "normalized_sha256": "95e575ff39680361496527d2047f9568a309ff973ba0b8d22ae248bb38d2b2f7"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/warehouse/other-inbound/index.uvue": {
+      "role": "index",
+      "sha256": "0e03463eed272f5d6b28e6e5f7eaee1e6c5ee3bfe501bdab3719f0422a1777ea",
+      "size": 627,
+      "normalized_sha256": "e9a559800bca228abf3963eac5af81e647da8810ff46c5201099fb743cb66b7c"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/warehouse/other-outbound/index.uvue": {
+      "role": "index",
+      "sha256": "c744782b4672404d21c232b5ec8a5006b0db7e1401e730390d250555875b217e",
+      "size": 628,
+      "normalized_sha256": "31424056e63933698a249605982df202e93af4de1aa1ee3a6914e9af54b3b7cf"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/warehouse/pages.entries.json": {
+      "role": "index",
+      "sha256": "8a734afaed374fa420ec74a9e67d4dbdf88103b47708fb2afdee9245c87931ee",
+      "size": 1446,
+      "normalized_sha256": "8a734afaed374fa420ec74a9e67d4dbdf88103b47708fb2afdee9245c87931ee"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/warehouse/payload.uts": {
+      "role": "index",
+      "sha256": "c5f61522b591a9b6da4545c4594d3239f86da1bc4475fa2b5c8a0a6bd5b20e9b",
+      "size": 5432,
+      "normalized_sha256": "4e41dcac311ddb0d81b9d75b39bbb19878910e0680cabf350989ebfc55138a1e"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/warehouse/pickings/index.uvue": {
+      "role": "index",
+      "sha256": "7b1873318fb6567f4bd74fd49630d01af65454e3b3402a5ec25efc41bcadd644",
+      "size": 622,
+      "normalized_sha256": "da0d75a6ed9a42e13e35fc909086b83ae628629231c4cada9fbd5c2378c2cba6"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/warehouse/purchase-receipts/index.uvue": {
+      "role": "index",
+      "sha256": "2463e042ec4a9caec579ed0760710c17084077d93bf2468387da6cdbb09b9837",
+      "size": 631,
+      "normalized_sha256": "13ab67ea030822808ad4e03f3e7252cfcede9c4fb1a980511495ac803b21db1c"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/warehouse/read.uts": {
+      "role": "index",
+      "sha256": "c876a32c468be22f3675c8fc9e7ed7347e34d15609f392caf0ce27f8347a492e",
+      "size": 6585,
+      "normalized_sha256": "c876a32c468be22f3675c8fc9e7ed7347e34d15609f392caf0ce27f8347a492e"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/warehouse/returns/index.uvue": {
+      "role": "index",
+      "sha256": "be9aba9e6f38ecfda15243247a8e303891ccd77d808d5fe8e886b6dc990b4ffe",
+      "size": 621,
+      "normalized_sha256": "1766396aaa2e9d83d3f2ad8c3cca878db3ff42e6a61d2b0a3384ffbc3b169628"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/warehouse/sales-deliveries/index.uvue": {
+      "role": "index",
+      "sha256": "44cd8292a194468499b731fedb98978c6456c61d53047cdd3b0b16a84b8664b1",
+      "size": 630,
+      "normalized_sha256": "b991d187e2aa4422321436861cbe6aa1d0b2c99e0c4b61a843dbbe86ad8f98f3"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/warehouse/stocktaking/index.uvue": {
+      "role": "index",
+      "sha256": "8a405c6d31519dc67cbc3a9c935de4b908872f7321966efeac37423bc53f0a19",
+      "size": 625,
+      "normalized_sha256": "87ba364a22f918b0d9c29f16f7f0af66775477695e426834cb3da7b4c5cbeb80"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/workshop/exception-report/index.uvue": {
+      "role": "index",
+      "sha256": "5da78c400846c3561aed8e19f3cce7ddebba93a1ac6c710812d85a7e3319737b",
+      "size": 9035,
+      "normalized_sha256": "b3f234a7078c1afe87e6c38a8be2363b950f4cf9a809318fc61aa8b84701c4af"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/workshop/exceptions/index.uvue": {
+      "role": "index",
+      "sha256": "4b4415cd8cc310ea2145cf4dcbc5777a03d1ea89f000ac6a8e219130c8d15432",
+      "size": 3336,
+      "normalized_sha256": "3646e58f16a5db5706f38f8c95a73b5da2d145786182344b64b93640a92cbe23"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/workshop/index.uts": {
+      "role": "index",
+      "sha256": "c67851255841247ddc548070405658155a423f005ac4d0edd18934b14ce22a9d",
+      "size": 1639,
+      "normalized_sha256": "c67851255841247ddc548070405658155a423f005ac4d0edd18934b14ce22a9d"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/workshop/json.uts": {
+      "role": "index",
+      "sha256": "58859ad581ade02971fb8244b382294fe1f543bf565dca0e28df1c53db5ca9d9",
+      "size": 1453,
+      "normalized_sha256": "58859ad581ade02971fb8244b382294fe1f543bf565dca0e28df1c53db5ca9d9"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/workshop/my-work-orders/index.uvue": {
+      "role": "index",
+      "sha256": "bc8e45fec489e1657936e247d35bc6204aa429ae94fd9328d91b28810a8644ba",
+      "size": 7476,
+      "normalized_sha256": "27a6185f8ac6a0d8b028e6cc0d904a1cc5bb3bc375231057f003da006b2ee788"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/workshop/packing-binding/index.uvue": {
+      "role": "index",
+      "sha256": "7a31b24ed5e17ee8dfa66aa02a815db25178e94728cce86d1ee6ef1079d0c52b",
+      "size": 12713,
+      "normalized_sha256": "abc1d1ac17151109c2421d3808ea864414839946e7ce23b81449d26bf3e14f7d"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/workshop/pages.entries.json": {
+      "role": "index",
+      "sha256": "bd0d6630031a43fa3a34b71167ab69cac891f821105ffaa999f4601498916a91",
+      "size": 1152,
+      "normalized_sha256": "bd0d6630031a43fa3a34b71167ab69cac891f821105ffaa999f4601498916a91"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/workshop/performance/index.uvue": {
+      "role": "index",
+      "sha256": "a5208b6088b3f5c4fe46cf6caa7f487a14347639d568a7ea914e3e55f928a4d6",
+      "size": 4425,
+      "normalized_sha256": "d742fe04c8013042ece8d21ec1df4911152fd69c6e4bce54be9a0b4809860f90"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/workshop/reporting-approve/index.uvue": {
+      "role": "index",
+      "sha256": "adba32effec4e70fee623fd47de8b15b21bf073923f5b31b2813241921eba128",
+      "size": 4542,
+      "normalized_sha256": "f91f5454e3818eab2d7916cb5147071e7c944e9b067562b0c1c828945139b055"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/workshop/reporting-history/index.uvue": {
+      "role": "index",
+      "sha256": "324850ebe41be263e8faadd03e01dd93d5f61f4f442b73efd60c8c2eb80f348c",
+      "size": 3571,
+      "normalized_sha256": "dba8936f4f4028fc5b5c81e092e92aacb161a3477b6a9851313cd73c08b0d18a"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/workshop/scan-report/index.uvue": {
+      "role": "index",
+      "sha256": "24d489b1daf3a122d2b7ac91d8810849c35bcea7ca4d489c0f4fa089f8a30f06",
+      "size": 17682,
+      "normalized_sha256": "5c93d3d13a55648ada39088be403297c05772aedb55a5d545b979adcaa6eaf43"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/workshop/session.uts": {
+      "role": "index",
+      "sha256": "9875f1d401490928bbd7b0bb4123a89cdd7c40789faeb593c6891f9158ff5c0d",
+      "size": 1174,
+      "normalized_sha256": "9875f1d401490928bbd7b0bb4123a89cdd7c40789faeb593c6891f9158ff5c0d"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/workshop/work-order-assign/index.uvue": {
+      "role": "index",
+      "sha256": "16db8566a2cab6ff8de76bb8af2bbf9c18a95d38dd54cd481213aae1901ddeaf",
+      "size": 10464,
+      "normalized_sha256": "6ef2b8a8956144667e2521cab50791b8e60c1f5274f80100b3477ab692995f51"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/features/workshop/work-orders/index.uvue": {
+      "role": "index",
+      "sha256": "9ab3f1cf8557820b1d1573c2ee0e6f16208f4204759c22ff01137b9ba06837ec",
+      "size": 7257,
+      "normalized_sha256": "9e91546589d357ba3733697e71f10f54b7d4c5433ec069f1a886f31561f13800"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/index.html": {
+      "role": "index",
+      "sha256": "c60ad3bb1c18d98e10c65ca0807338fbd0ef75f4d7274a0ca5831e3e4859537a",
+      "size": 1894,
+      "normalized_sha256": "410c25ad2a2e896c3b6a3f8e17e9a4fa092d1587deafe27de0454040b080e0f9"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/main.uts": {
+      "role": "index",
+      "sha256": "9e7ff559a5c2d3e43c123661a2f380adc0c8da0a4ee0428aa7edc160e500ae11",
+      "size": 156,
+      "normalized_sha256": "c01815c96186eb60b86fd26fe62d08b92b73e14fcf688f7d9cf2613abbeefec5"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/manifest.json": {
+      "role": "index",
+      "sha256": "44cb384911f967ac4dbd71abbce461e8294c9b636e2a59bbbfdffcbd3c9b05e4",
+      "size": 1312,
+      "normalized_sha256": "44cb384911f967ac4dbd71abbce461e8294c9b636e2a59bbbfdffcbd3c9b05e4"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/pages.json": {
+      "role": "index",
+      "sha256": "f4f522b8cd68a245378991245a55af51aeccd046e7f7954748898fc6460ca3c2",
+      "size": 6939,
+      "normalized_sha256": "b498beda78cef29b8ab890f9063eb839afc5e6a126b47adddfa71911a20a9ab7"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/platformConfig.json": {
+      "role": "index",
+      "sha256": "56df69e118b86e820e37b70bf06ed819f5810bc8adda83d7534f1a052520787e",
+      "size": 127,
+      "normalized_sha256": "6d21c6a76a467fd71d51700fdfa9917049df9368a5bacdb9f40a4f0dd10834eb"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/shared/api/app-entry.uts": {
+      "role": "index",
+      "sha256": "a99c372207f8f9c0c56ee7badf57ad462dbc3f62695602675424835bcf6d14a5",
+      "size": 5389,
+      "normalized_sha256": "a99c372207f8f9c0c56ee7badf57ad462dbc3f62695602675424835bcf6d14a5"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/shared/api/fields.uts": {
+      "role": "index",
+      "sha256": "3f14e90fad631665936ca1939d0d75aea3bf624a03ce7bb28053f8447a1258ed",
+      "size": 5641,
+      "normalized_sha256": "3f14e90fad631665936ca1939d0d75aea3bf624a03ce7bb28053f8447a1258ed"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/shared/api/http.uts": {
+      "role": "index",
+      "sha256": "31e32e064f74f374d26e84c85bb7cc7126796a741e1d970992d3d82ea5eca95d",
+      "size": 12194,
+      "normalized_sha256": "511341f35c0066d56547498475c5da9179a633380dbfbca822d56c6608828b72"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/shared/api/index.uts": {
+      "role": "index",
+      "sha256": "b5b93334786684f5af90f54806946f577ed91c8d5b456ddffd5cedb0bfa6530f",
+      "size": 3802,
+      "normalized_sha256": "b5b93334786684f5af90f54806946f577ed91c8d5b456ddffd5cedb0bfa6530f"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/shared/api/origin.example.uts": {
+      "role": "index",
+      "sha256": "a7f0a99fd6c4520867f401186883ff43ec84034f29c781a21f98d0834dc9fad2",
+      "size": 100,
+      "normalized_sha256": "a7f0a99fd6c4520867f401186883ff43ec84034f29c781a21f98d0834dc9fad2"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/shared/api/origin.uts": {
+      "role": "index",
+      "sha256": "cf1f15d726c58df649d8ad498e40102dfee115add1b13afe2ca4a56c8a8bcd3c",
+      "size": 251,
+      "normalized_sha256": "77bd15e3f5f40eef6fcec1d411ab1fa971bac5816fa7d4d6f4a1ceda45196827"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/shared/api/pick-image.uts": {
+      "role": "index",
+      "sha256": "962c0f8a3149046e33fb7931f2752b81333e8bbda37780340610bb8c027ef7a2",
+      "size": 1364,
+      "normalized_sha256": "962c0f8a3149046e33fb7931f2752b81333e8bbda37780340610bb8c027ef7a2"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/shared/api/session.uts": {
+      "role": "index",
+      "sha256": "b70a294f95e90cf13822f10596a5430bbd26a412e379aaae099467600bb10a62",
+      "size": 3124,
+      "normalized_sha256": "95aee20328b67070606a13adea1e6c98039a950842d674d4843fff693a72d0b1"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/shared/api/submission-recovery.uts": {
+      "role": "index",
+      "sha256": "2359544eafe1ce142dbc2635c97591ec2107e08502c94dfc9fbf2e01c64d3ae1",
+      "size": 14531,
+      "normalized_sha256": "8fe464e0867c837963ec78fa9b27732c1c04fff3a34679c11d1c1ec70cfe3c22"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/shared/api/upload.uts": {
+      "role": "index",
+      "sha256": "e83fc6dd704c2677abfc0b8094ebbb98db07c9ae8737d783948736461efceff0",
+      "size": 3293,
+      "normalized_sha256": "e83fc6dd704c2677abfc0b8094ebbb98db07c9ae8737d783948736461efceff0"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/shared/channel/app/index.uts": {
+      "role": "index",
+      "sha256": "4a3a2051da8fb19dec5e62512a763cdc6823379a513ff5e0665c380d07828165",
+      "size": 1567,
+      "normalized_sha256": "4a3a2051da8fb19dec5e62512a763cdc6823379a513ff5e0665c380d07828165"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/shared/channel/h5/index.uts": {
+      "role": "index",
+      "sha256": "9cd53f49bc7cc77021fb5e202686cbb01c686af95f08184f584dcc038adb36b2",
+      "size": 11613,
+      "normalized_sha256": "9cd53f49bc7cc77021fb5e202686cbb01c686af95f08184f584dcc038adb36b2"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/shared/channel/headers.uts": {
+      "role": "index",
+      "sha256": "9279c5de2ef484d8da862c0161b6d66e935a47766640992a794f944f011a0f7b",
+      "size": 1329,
+      "normalized_sha256": "9279c5de2ef484d8da862c0161b6d66e935a47766640992a794f944f011a0f7b"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/shared/channel/index.uts": {
+      "role": "index",
+      "sha256": "1481c25346602230feb1d5887ba65431f16be51980c3bea36ea8509125c37935",
+      "size": 4773,
+      "normalized_sha256": "1481c25346602230feb1d5887ba65431f16be51980c3bea36ea8509125c37935"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/shared/channel/mp-weixin/index.uts": {
+      "role": "index",
+      "sha256": "13cc54ab8a1fe7c597594d996587087629360e3a2fe9104a69a770145ee832ee",
+      "size": 1572,
+      "normalized_sha256": "13cc54ab8a1fe7c597594d996587087629360e3a2fe9104a69a770145ee832ee"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/shared/ui/action-button.uvue": {
+      "role": "index",
+      "sha256": "869a6ba38c9a438b87be0186c4f418eaa48352ec3c7c8270046908ce76d43a11",
+      "size": 1435,
+      "normalized_sha256": "ba740c17d05646130f693cd8189df81e589e53aba21e3846148e5d651f044bed"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/shared/ui/action-card.uvue": {
+      "role": "index",
+      "sha256": "51e31afcf1ce01c60dfb8703aca62ee50a7eb27ef4ae78626a5752c486a082a7",
+      "size": 1225,
+      "normalized_sha256": "756febc89dc074a0e25d51b4dfc9c649eb22eab95f94d4863abd564ad7b69706"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/shared/ui/choice-button.uvue": {
+      "role": "index",
+      "sha256": "0ef6f9863feb846a04be8901343d37b8079d06b50597bc6c174fe72b72265fef",
+      "size": 1153,
+      "normalized_sha256": "36e44285a7464453481eb8b8f277801c3b9ff3d5a3cc352aeabc3e4319dc067f"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/shared/ui/date-field.uvue": {
+      "role": "index",
+      "sha256": "08a8941c5805654586f5ab50923b745602b61f60fd4b633712be396da4f345ac",
+      "size": 2610,
+      "normalized_sha256": "08a8941c5805654586f5ab50923b745602b61f60fd4b633712be396da4f345ac"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/shared/ui/date.uts": {
+      "role": "index",
+      "sha256": "3efe026f61e425010f984bb834160600f0629adf58b63cf2c135781b293f0089",
+      "size": 1232,
+      "normalized_sha256": "d1cfb5b13e2e9e9134731b56a46acf8c624a4bad14b905abcecbdae461b4352e"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/shared/ui/empty-state.uvue": {
+      "role": "index",
+      "sha256": "2c6dcf2d401fd673e22f4a05e71e27f18d196a0e24502909ac78b6a5f8fa531f",
+      "size": 1690,
+      "normalized_sha256": "ae1ec8a1c8f644056a6e71113f6446fc40899d0ae1a3f2ae6151977d5632d5d5"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/shared/ui/home-link.uvue": {
+      "role": "index",
+      "sha256": "3c066900e710864e880ea26b7f28663b056d10a8beb5de2f49aeca2d30145b12",
+      "size": 3866,
+      "normalized_sha256": "0a5cd9f254926019ea26351cc8367ce882f355d6ea560dc9ae58a3f790af26e8"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/shared/ui/load-feedback.uvue": {
+      "role": "index",
+      "sha256": "51504d5a4dbb12b4a48edf80fbb97d108d21f5100697986311ad2d73a0405b26",
+      "size": 2491,
+      "normalized_sha256": "51504d5a4dbb12b4a48edf80fbb97d108d21f5100697986311ad2d73a0405b26"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/shared/ui/navigate.uts": {
+      "role": "index",
+      "sha256": "9dacdb19baaf578afba70a8bfd6c2028136c883d0e29604b3a2aed9a853f6b68",
+      "size": 280,
+      "normalized_sha256": "9dacdb19baaf578afba70a8bfd6c2028136c883d0e29604b3a2aed9a853f6b68"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/shared/ui/selection-row.uvue": {
+      "role": "index",
+      "sha256": "9622dfb7287a3ffb255e67df8767d55118a95cfdcd003b3581411e9cda55f6df",
+      "size": 1802,
+      "normalized_sha256": "0c79bb1f6379534f4081d5c8600c2b9acc55b37c0975863978db80118e65e85e"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/shared/ui/sheet-option.uts": {
+      "role": "index",
+      "sha256": "a673f0a9c9fab72ace9b88e0b9c49060f76116346ace1ad32d292001ddd4e50a",
+      "size": 309,
+      "normalized_sha256": "027fa8576696ca8dff133a5645710fa891bb3fb8eb19b0e3cd99e9ca6ef42a75"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/shared/ui/sheet-picker.uvue": {
+      "role": "index",
+      "sha256": "7209ac56f9f8f6b3b4e1baebba2a185f75c6f738045631cb4f90086fd0efd093",
+      "size": 5300,
+      "normalized_sha256": "33b7ac4339241ee1e0644653074a93e7c208265a4d7324e831de64ce9050bc62"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/shared/ui/status-badge.uvue": {
+      "role": "index",
+      "sha256": "5af40382b30c2b930db872c848a419808569e6826f0428ed8b69cc94c5bbdb1c",
+      "size": 914,
+      "normalized_sha256": "0590d72352d3196450af30886a1c974040579f16bfda64e12899597ddc00b600"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/shell/account/bind.uts": {
+      "role": "index",
+      "sha256": "66e2361b74e38b8c77d57772e7a9a11b534516b7bda4427d953f81ffb94cdd04",
+      "size": 1481,
+      "normalized_sha256": "66e2361b74e38b8c77d57772e7a9a11b534516b7bda4427d953f81ffb94cdd04"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/shell/account/edit.uvue": {
+      "role": "index",
+      "sha256": "c512ba8b06480280b4e444bc6eaef1f817e8fff28dd941bc2a678465058c6faf",
+      "size": 6572,
+      "normalized_sha256": "80d4fbef9a227a0b1393ce7f49d67465814d1077579651ae24d5bf52681d8747"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/shell/account/index.uvue": {
+      "role": "index",
+      "sha256": "aac74c69bdeb65457ef398c46f044cdf248972c733cca8e6941dc84c54fdb75a",
+      "size": 13929,
+      "normalized_sha256": "cc2697790bd8f98ffb7814be601a4abdc264da67d8b89dcce88c89459861ad58"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/shell/account/password.uvue": {
+      "role": "index",
+      "sha256": "f06ee711a97c193c619e85c02f2e80bf13660dc1549cab89fe4534f991afb9d9",
+      "size": 2442,
+      "normalized_sha256": "c1b9daa367bc3ca69597620aada58f8e22dbb7e4dbece5403ab70da7cf7136ef"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/shell/account/profile.uts": {
+      "role": "index",
+      "sha256": "6b0bc225ccd9750b9379c8c3a652a2b5ab327981da9caacdec86fd922614e789",
+      "size": 4163,
+      "normalized_sha256": "6b0bc225ccd9750b9379c8c3a652a2b5ab327981da9caacdec86fd922614e789"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/shell/apps/index.uvue": {
+      "role": "index",
+      "sha256": "d411d0af02e9ca18d698cfaed71a612d1f547bc910ad4d2da9ae2216ded01518",
+      "size": 7676,
+      "normalized_sha256": "6cd433ed5bcbd7110cff7c7a52399874c0d5d54c8f0cdd59603e54ae5879ec0f"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/shell/login/flow.uts": {
+      "role": "index",
+      "sha256": "17ef46545484e63f42bce73f6dc83ec5d558f771f4076e8923bb95e370cef3b4",
+      "size": 10430,
+      "normalized_sha256": "6805d0281577c056351c4c928dd45d6715ae8ff609f038ade87679d1133ea984"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/shell/login/index.uvue": {
+      "role": "index",
+      "sha256": "01845cbf467532e2615ead26db800093620e2cabff6aefa7785d6fc1c32d58cc",
+      "size": 9629,
+      "normalized_sha256": "e0316efaae98d68a44238df496814cd3aea601f3433532dacda981d287d04cef"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/shell/registry/index.uts": {
+      "role": "index",
+      "sha256": "a1179bd02416374507f8b39dd64afb27189419bfca0991061ce715430074613e",
+      "size": 8742,
+      "normalized_sha256": "f63a7d3cbe85cf21ef9f4b68615269377168813253c90e4758db813299af8a6f"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/shell/tenant/index.uvue": {
+      "role": "index",
+      "sha256": "490165029c9c81c040455b9b05a42dd27912bac5e62287236467a56a4dbba3d2",
+      "size": 4962,
+      "normalized_sha256": "16f8e56732b17c82a96412b9c17cbd716a5b95b653a11ed63d165bd8468edb0a"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/shell/tenant/probe.uts": {
+      "role": "index",
+      "sha256": "b082f18aaa4d69c605ce6b0205bd154ce0f84f679069b4776cb2d6f3d2c6a80e",
+      "size": 1805,
+      "normalized_sha256": "b082f18aaa4d69c605ce6b0205bd154ce0f84f679069b4776cb2d6f3d2c6a80e"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts": {
+      "role": "index",
+      "sha256": "127a40ab37de3945c810c8c46c0f6548cceada9e31372ca0aa94d355cc7d814d",
+      "size": 4630,
+      "normalized_sha256": "493872ba6edcfec9bbd358c12b6f6b94092fa9d76c759de2db3fe41b538e4245"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/shell/workbench/index.uvue": {
+      "role": "index",
+      "sha256": "abcd576e8e8b696e5ae356e95af4d94c0f152af3cdd1e6744f42a64efaf5c53c",
+      "size": 24436,
+      "normalized_sha256": "b454df5a2b675d81017a7ed92e0d444f9568bfeb4c64c4bcac854ae9be32447f"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/shell/workbench/load.uts": {
+      "role": "index",
+      "sha256": "a06911020b9f31ca1137a42f65cdd6f72222b714671bee3904fff5eb189c0234",
+      "size": 6266,
+      "normalized_sha256": "40459d9ff43f634e8d4ed48556155bf5fe9cacd565255bb150ec28c34ce1f019"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/shell/workbench/recent.uts": {
+      "role": "index",
+      "sha256": "5a1827f9424dd79896631b6e93a102470e68dda3b59f633dd1de4b1cbaf30522",
+      "size": 1216,
+      "normalized_sha256": "5a1827f9424dd79896631b6e93a102470e68dda3b59f633dd1de4b1cbaf30522"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/equipment/audit.svg": {
+      "role": "index",
+      "sha256": "dd2c6806bf2a955bda5c010669c527a8cce26e2d00b243a015dccb8800d2a161",
+      "size": 270,
+      "normalized_sha256": "00e165f261248ed8e06f66205034bfeca06565581abbbd39a20d85a095c6b499"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/equipment/bell.svg": {
+      "role": "index",
+      "sha256": "dffdeb08943cc63d0e7632f10717720061810701b7bb03f1595eddc86232898c",
+      "size": 269,
+      "normalized_sha256": "4a42724e61349021f68bdfa18b33c1571513ca6f3fa003dfff83645aa9d8061f"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/equipment/chart.svg": {
+      "role": "index",
+      "sha256": "b7708003a7ebe19feeaa11c0dde17ee782a8bc564cde722c4ab38e53b36e5aed",
+      "size": 246,
+      "normalized_sha256": "e071d85bc326417fe1b053ac7be638803152d2dab4d2ea27a4fdeafbc0d3fe74"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/equipment/check-circle.svg": {
+      "role": "index",
+      "sha256": "ec3febcbf3a08dfc805b138205c0528c217777bef65f75bc721e3d4e5daba28d",
+      "size": 256,
+      "normalized_sha256": "6896a6913ce21ba73ef19d00a1bb9441f1f040a5019a41f0b6d5d7529d21891e"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/equipment/check.svg": {
+      "role": "index",
+      "sha256": "71bda6549236cff7bdc29dd2123b8515e6b75d5e1cf66bc9869857dd393647d2",
+      "size": 218,
+      "normalized_sha256": "a07f1208c53827d4cc5a63676ae8a115751cc61a231f7693b01ed8bc1a248de9"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/equipment/close-circle.svg": {
+      "role": "index",
+      "sha256": "6ef9e928524f817afa2f089377352a320441ecb0145b70941af7c52c75971ba8",
+      "size": 248,
+      "normalized_sha256": "f9aa3332a4624d66776a8a04b5aad3d948ef693db0b94665c8f4b730154cfed8"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/equipment/export.svg": {
+      "role": "index",
+      "sha256": "bf9263ab31bf85e238ef2afd7c353ec48a0480675badf650e90e71a533897463",
+      "size": 289,
+      "normalized_sha256": "6c6467191d429b9daefc86b3f722bcca09906599f46d0cfeaa953a5d5edaa7b3"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/equipment/file.svg": {
+      "role": "index",
+      "sha256": "77b32f1fb84e889eb79fa6e00d3e12ca7e5e290129e1e7e3c8142bdb3762ffe9",
+      "size": 318,
+      "normalized_sha256": "5f9b62014e116992c61781fb3075c0b93991662904a54ec386bbcebec95dbee7"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/equipment/history.svg": {
+      "role": "index",
+      "sha256": "8197112009497f60b1e28208c3ff2cfc2034ffb97ed514447e572f830973bda1",
+      "size": 243,
+      "normalized_sha256": "5c7dd1151478669cb4cc4723b6aa232ecde521d4aa8ba2bf41dc336b9addf92b"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/equipment/import.svg": {
+      "role": "index",
+      "sha256": "6aa630f04b25d83b07618f5c1c43ba3c92b8c0fb4c852bb4cc83ff6463675bb2",
+      "size": 288,
+      "normalized_sha256": "8541f9cd5b71a6bee95b4bc6a88cf2c3518ebb303731c66a5495738fd3837d4b"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/equipment/inbox.svg": {
+      "role": "index",
+      "sha256": "b64c4e48f046cbc881c6ebc02af440ca344a94dc2fe0d93c4a5e0385e7066543",
+      "size": 341,
+      "normalized_sha256": "5a477e0f696cec5aa54c8384b640e0c3b3e25ec61eb2ce32c3503403a60ee3c2"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/equipment/link.svg": {
+      "role": "index",
+      "sha256": "8b641281380b49d9c2ff043d8d1dc950c2bfd28e31cb44caeabbff89b6311c6b",
+      "size": 309,
+      "normalized_sha256": "f002f18680aaf7f3b2a43c4735d149397ec9069c04e96084259da3d2a4687125"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/equipment/list.svg": {
+      "role": "index",
+      "sha256": "094bdd32f9e6dd768f03f1e9570d35f7ba2ab8edced73e61661825f128fb26c2",
+      "size": 260,
+      "normalized_sha256": "eda4fae9b6794fa5c3a323df6d326a62b7b90f1a41eaaa641633060b3dbb8a09"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/equipment/maintain.svg": {
+      "role": "index",
+      "sha256": "402add943aa86d8fdaf4cc6348975ebd4f15f68b3c6a9680c25da27985570f4d",
+      "size": 277,
+      "normalized_sha256": "ff5f0b65587717a47687cd71e4222a813651ef1ab55507f41497f1355cdfef21"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/equipment/minus-square.svg": {
+      "role": "index",
+      "sha256": "2e35a7686dca29da4e04cc2a57c4b7c43d40a7221842e32c876b17fef6ac592c",
+      "size": 259,
+      "normalized_sha256": "7b532751906ddf5f4788b4314bf0898c3fe16df4d236dfff6312b631f589d94b"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/equipment/plus-square.svg": {
+      "role": "index",
+      "sha256": "39736ca9cb579fa7e6d400f44024ebcd0edd004adc06df00b9e0e5c6d6d5b08c",
+      "size": 266,
+      "normalized_sha256": "746459888ee32e15f773a21df15c3b5bdbc163a07110f7812bdc45568fd4425f"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/equipment/rollback.svg": {
+      "role": "index",
+      "sha256": "3bec8c88bad4afca9a21aa246bcd936e852cdae3332c017d4db29b3e87980a3f",
+      "size": 252,
+      "normalized_sha256": "9f0bc2dd3f4b96bda79bab137f80a2072741ebac75ab6ba9a504b7ddc807f566"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/equipment/scan.svg": {
+      "role": "index",
+      "sha256": "a9db220703ff0ef48e12ebcd4efa3c28dab9970abaab5a781309180196cd9302",
+      "size": 376,
+      "normalized_sha256": "3e28f14463f65407acfb1df7631a0cab7224a46878556ea8d13feace991b384c"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/equipment/search.svg": {
+      "role": "index",
+      "sha256": "23977509cc8c640ecad7f67a6994ad125c43c06dae3d82941b8702bf3b6f9190",
+      "size": 240,
+      "normalized_sha256": "6dab5a47e2edccd18e1bfd4e91cf7644e9c3058df9dfae6f628054c3ce809a05"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/equipment/shield.svg": {
+      "role": "index",
+      "sha256": "c1b5e11057731f3f764f9b1231bff1f3d5da6d2413b5760f6a6a70cedeab18fb",
+      "size": 262,
+      "normalized_sha256": "930f38a93d6327752829772d3dbd938b1338681fc59ba3669455b15b7636f3ed"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/equipment/shopping.svg": {
+      "role": "index",
+      "sha256": "22fd93125f010b3177a11b915cdc379e5c20b0a18e00638d71c1d4eda0de9315",
+      "size": 317,
+      "normalized_sha256": "7b2b853e85ac2450e11b412ae8265dff27c6b05d12c719be5b1a622c3b80d987"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/equipment/swap.svg": {
+      "role": "index",
+      "sha256": "f229ae14d25baeff4963d5b3d45856570b4b7d97f29272ddf3848f07aa979204",
+      "size": 235,
+      "normalized_sha256": "ba0eae840a401ec7ef8b5d2d64d023627b6f820f6a7b97f480f43156c8b41e04"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/equipment/tool.svg": {
+      "role": "index",
+      "sha256": "1a8b1aa77142714966cac26a6ee7a84bd05049fc1ebef8b8dfc77d45d0905edb",
+      "size": 281,
+      "normalized_sha256": "b87aca58fc43c79d2e716e1407bed036c6038cd5fb82ec6878f45894f22a75e9"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/equipment/truck.svg": {
+      "role": "index",
+      "sha256": "42df3d77ce610f99e7f105d815b6bbfeedc9b2f6aa337bb150f9d69d6e51d87c",
+      "size": 310,
+      "normalized_sha256": "0cab71a5e38877f3dc8bb1d345d693a9675366439d11a3a1129760767c036b40"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/equipment/user.svg": {
+      "role": "index",
+      "sha256": "d9b939ad2be7e22834e0c7f60140fd40ab0a7a4b5774fe0a1a4d6eb7ffaff496",
+      "size": 278,
+      "normalized_sha256": "546d3d126a644e1b14b3906a847f8b34448fab18e4ed64e89ac68d594f2b4f92"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/equipment/warning.svg": {
+      "role": "index",
+      "sha256": "cf9fec30676ce5e34a92d0961bc51ebd7a0a9c4056253870256ca83a196c92df",
+      "size": 263,
+      "normalized_sha256": "79905e1fbbcda0ab59bf6929778c368c0f57faeca738ff30341edf58dc90852b"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/mold/audit.svg": {
+      "role": "index",
+      "sha256": "4eeb0fb25be3387ab5da7120953c5b050e4d0cd00ad2a66967b9663361e483ee",
+      "size": 270,
+      "normalized_sha256": "b5788eea05a872b87e1c4bbd7800a4c8961e3bf5a6450ff6061b4f13e2e9c02b"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/mold/bell.svg": {
+      "role": "index",
+      "sha256": "c608e9c13d7fc025b374d515b5ab8e172f0ae14565caedf5b8201397b5a7f51c",
+      "size": 269,
+      "normalized_sha256": "f668bfca88badd80640bbbe52c4a6305c96822947af83ed871ca0c588877beb2"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/mold/chart.svg": {
+      "role": "index",
+      "sha256": "517c3e4d17aa9bff8fa092eca7894b26c5d7adaaa7710ef8b6e34a4830cd3dd4",
+      "size": 246,
+      "normalized_sha256": "e0a85f6eea15aee09bf94d4ffb2ba2c1b1253e15def0f66be2c7a3a0a8147e95"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/mold/check-circle.svg": {
+      "role": "index",
+      "sha256": "5865dc8846ae3c06a67f5eb579f6aef7e613b9603dab7f7ed60530311c26c824",
+      "size": 256,
+      "normalized_sha256": "d2935f13b46941f467e3f9ec84f5723660475772ccf0594e9007434df496092e"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/mold/check.svg": {
+      "role": "index",
+      "sha256": "9639e816a1812cd6be5aad0f53f862a9e43cf21e1ac68a12e1441035c1d78a14",
+      "size": 218,
+      "normalized_sha256": "14e9d981953268be6f5612d1103867c7c90468c8fadbc295d1ec4b4ae0555d79"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/mold/close-circle.svg": {
+      "role": "index",
+      "sha256": "ac2b8e03a71cbc5b870802fa88f48d9957d07613e33b3753871c011d7e1d1b90",
+      "size": 248,
+      "normalized_sha256": "f80a85ab7ee880e5021495d5ee7eb74bbc6b72660ceeb7855e566451946c22f5"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/mold/export.svg": {
+      "role": "index",
+      "sha256": "ed18d636da5a7154f185a72ecfbb99b1e70c836df8727fcad5ac062236ab988c",
+      "size": 289,
+      "normalized_sha256": "eba9c91413b8883ee8d7b9403044285f51a3f5e686dbcfb4cce553906ec7f617"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/mold/file.svg": {
+      "role": "index",
+      "sha256": "cfa02e17f6d7a444d154fd0d3e3c216db41869eb877468b8c796d4440994aad0",
+      "size": 318,
+      "normalized_sha256": "6d4d998414935badc439762a0b26bd745c2d0d81f9329b7fbe1421b889e4c112"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/mold/history.svg": {
+      "role": "index",
+      "sha256": "4f5a193784aeacd980aed6d6445c8fa0c4f1ac033bd4db7cf7bd56c125ff1624",
+      "size": 243,
+      "normalized_sha256": "e80732b622751b878ba5abe2fe3d8ca266863b4ac357008ba864baedd6daf6d0"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/mold/import.svg": {
+      "role": "index",
+      "sha256": "cd98f8be6973c6a6ffcf20420a144074b75591258b1a322a068aebac4db6d155",
+      "size": 288,
+      "normalized_sha256": "660c56de804f807c8939122ace0a44164005411068f8f29de9142548ba4dfae5"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/mold/inbox.svg": {
+      "role": "index",
+      "sha256": "309b72ec5f29c1eea7eb5e7a013784e206cc5aff1744c39be58ebeaec5ba7d7e",
+      "size": 341,
+      "normalized_sha256": "4bacefdf4e6b1e61f8d3ac36e8bd4c21b559780d356128aa77415159335d470c"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/mold/link.svg": {
+      "role": "index",
+      "sha256": "6450214e4707e9943ba11514d2e50188131a271772ccd5742412006a5d53c581",
+      "size": 309,
+      "normalized_sha256": "acbfc6cf01bccbd14b5786f9dc5b6bf00a3f3c9d8b2009782f37ae240c0b72d4"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/mold/list.svg": {
+      "role": "index",
+      "sha256": "8e3aa92032fbc310a5b30c7616a8d184c11f1be9459f0cd5ae1c5bb27156b42c",
+      "size": 260,
+      "normalized_sha256": "b8d992455976af4cdcad4aa51032bb8ed8fee4384e8b5896f16b8cb69e109044"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/mold/maintain.svg": {
+      "role": "index",
+      "sha256": "3c282d09eec1141b376458fb7fda3dbaf19afb4d1c0ff12a7bd84c35fb1af97f",
+      "size": 277,
+      "normalized_sha256": "420fa669f0ad43c17f1190542bd46cffb99023b6091d0a8d92d272be0423ac0a"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/mold/minus-square.svg": {
+      "role": "index",
+      "sha256": "e4003d1d98b6e6dc69ec89b972539dd568bcdccea9cde2ef662b3ca41b3b5136",
+      "size": 259,
+      "normalized_sha256": "a848d96806b12449d3b6be2ee3f6c8b206f02b9aca6e389b0b82846ef61b3a60"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/mold/plus-square.svg": {
+      "role": "index",
+      "sha256": "7faccdbc3a527b77791f8b537597e10752a6b7df1a785950b9fd5165e335e978",
+      "size": 266,
+      "normalized_sha256": "9f3187cdf64027085abe9696dc84f1ac07f9d21112651e398aec6f42ef46c795"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/mold/rollback.svg": {
+      "role": "index",
+      "sha256": "37755f633de11c982e51992f06d46ec1165f9ff80cb61bcd60e417bb30d15d33",
+      "size": 252,
+      "normalized_sha256": "8cb2421ed8c16cee5ee31eb9554833d642700ba13bfc3988f63fee04e0e0d902"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/mold/scan.svg": {
+      "role": "index",
+      "sha256": "4cd6a7ede052ae50de1cd4aaebee5e60c92fa3fa66dd80d5d0b5fb6b0d497b53",
+      "size": 376,
+      "normalized_sha256": "c1585ca3b72b6573e77764e9c424c59e443bbb52afc3ea65f6108e85831079cd"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/mold/search.svg": {
+      "role": "index",
+      "sha256": "5dc8c37347f3512a00eefa9ca84cc19a4c69d3108fb5b91321a46234bbc86ae6",
+      "size": 240,
+      "normalized_sha256": "2fecc9b309e355d852058698a6fbc963044f8a284476943eed0d3b1a58334e17"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/mold/shield.svg": {
+      "role": "index",
+      "sha256": "7acfbc1fa52a70ea7304bc06eebbb0aed1f04c9787d82d32b5c36cf2a068413c",
+      "size": 262,
+      "normalized_sha256": "eaa0d60e841979ff85436b3c3d19a4d724e3c9361cc83e772a4ac5dcdba02a1e"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/mold/shopping.svg": {
+      "role": "index",
+      "sha256": "f3539b023ffe9f682ae33f520d83ca513c3a13e94f3f1b56c493f3a7d88e20f1",
+      "size": 317,
+      "normalized_sha256": "c9f01acecfdc2d652bcb9f65447556fc5f1efce05365f82dae36148e9eb71af1"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/mold/swap.svg": {
+      "role": "index",
+      "sha256": "fb9c934dda1a86e81a180c745118c7cbc5a5731637f2bf122f57a5fbfcbab43d",
+      "size": 235,
+      "normalized_sha256": "d4128a5cf53db4df6a23e0b2aff439916dc9dbeed84f0b7a00ee123be2cf1ee1"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/mold/tool.svg": {
+      "role": "index",
+      "sha256": "aac1da009fbd19d967f522e28a623e90b07290011eb0d28eb7335d40a86a311f",
+      "size": 281,
+      "normalized_sha256": "ed14baee48f114cff4b7e4e5aba47db77fdab998b835e1843aba8b04ab992921"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/mold/truck.svg": {
+      "role": "index",
+      "sha256": "54ba46382cd5ba055d42c99acdea3e71b7571a44162c44a0719dd599b85d3a7a",
+      "size": 310,
+      "normalized_sha256": "4318c03f35b08c322c75efdd59ecf9c17dc61ecebc315ccc4ea5972a93d77b0c"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/mold/user.svg": {
+      "role": "index",
+      "sha256": "b6914729cb56ad62ba85332217960dd215dd3ccb1a462657ca1d4c6e6fc1f693",
+      "size": 278,
+      "normalized_sha256": "be55bb65ce051127524d205af368f42bfbc6c589a4a2e8596cef9d33b4710361"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/mold/warning.svg": {
+      "role": "index",
+      "sha256": "26045809d2989c9e178033b40f406f5ac4ad2ae1798c324f97a765d56a9e145c",
+      "size": 263,
+      "normalized_sha256": "858be913303ae897b885a07a9370c87fe93d2a98cc954197419aa882a76feac5"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/quality/audit.svg": {
+      "role": "index",
+      "sha256": "871e8ebdb3f79c0f5f9888d7c3858ead47a81f907d7b9c53ee1122a41812bc38",
+      "size": 270,
+      "normalized_sha256": "997ead8bc1228faaaffd476695b3426a6a9a519ce783df1904753c6eb16b91f1"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/quality/bell.svg": {
+      "role": "index",
+      "sha256": "d598dfaf49be88e31a846279cae484de1b675f96227b94c5fd9e6ecaa02f9350",
+      "size": 269,
+      "normalized_sha256": "1f8decdcb71d53513d86b566ab5e477254da4d3d8b7ef3da18b845bdf35d6e81"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/quality/chart.svg": {
+      "role": "index",
+      "sha256": "61e2b002512e6d273e7e960c6adbc301da688fa614f7cc737616e151e66dabc4",
+      "size": 246,
+      "normalized_sha256": "81a1307e88e10f0b2adac3b152ccde898d3a0fc88a5777d35208c345d3955d8c"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/quality/check-circle.svg": {
+      "role": "index",
+      "sha256": "8958e651e796506a2167cb07c209e9a66b83341107a824de1e33b34a7ed8847a",
+      "size": 256,
+      "normalized_sha256": "6efd20c1c60b3255cc9d353be152e035c5ce6cdba6bd4890cc35656ed7202b06"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/quality/check.svg": {
+      "role": "index",
+      "sha256": "1390a7bca0be41ebda145a9b67028cf1ea41031d4fd24780f5e4fa469e07d63f",
+      "size": 218,
+      "normalized_sha256": "78e16f7a47c1854046a2f0402d3388085ba208309725592e817091c32ada0c60"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/quality/close-circle.svg": {
+      "role": "index",
+      "sha256": "a3429bdeb32cd4017ac01632ef7668fe2a5251c787b229301649b11fdf8dd1e7",
+      "size": 248,
+      "normalized_sha256": "0bc3aa3c1dcf5e8a80c7437afbbd96c3b8082d56c5789b5e5f573b9c3f8ff0ab"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/quality/export.svg": {
+      "role": "index",
+      "sha256": "38e6ff4168696922c449a70edbbef40d9dc2180088a31f06922a3acf8b81e94c",
+      "size": 289,
+      "normalized_sha256": "b9ca2e2f3d7b44586c13b842a1824a8aa81ec5c3eedec5de96b79327d64ee976"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/quality/file.svg": {
+      "role": "index",
+      "sha256": "febb78f6b74b126eb6babc07092f864b946d66b1b6c1e99b76ca613d9e1e90b4",
+      "size": 318,
+      "normalized_sha256": "4ebe687d6b561b04d20adcb5a1f2812128397079e4ac68b55e9e521b9162e866"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/quality/history.svg": {
+      "role": "index",
+      "sha256": "aad7ea00f7ea089883bfb1c1a235f114a298ee5b1509cfed92ccfdc940872841",
+      "size": 243,
+      "normalized_sha256": "5da1885c4c7e8893cc3bb5f572bb654d030466d7058b13b741e4cd153a27b4a1"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/quality/import.svg": {
+      "role": "index",
+      "sha256": "a09bef06b6ab82089e6f4dcc6dc57876ac0c6151401852ac96009f6fa5b51db4",
+      "size": 288,
+      "normalized_sha256": "0707383c5cb767d5b7691ae5725d027776d602479d9c361bfcbcfe635ff5eda6"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/quality/inbox.svg": {
+      "role": "index",
+      "sha256": "1f68358e458df2f291457b7024542e13b8afd3914839b6cb741b818f3b0d025b",
+      "size": 341,
+      "normalized_sha256": "8a52cfac4b30480654a6d7d93dd40df379ed40101638bfc2fd07ecac8605e60b"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/quality/link.svg": {
+      "role": "index",
+      "sha256": "0ececa83854b754cb55e4693a41820c5006ab69e11e5596d9a9d8ce4a65a2a46",
+      "size": 309,
+      "normalized_sha256": "1bd2ebb850881eee9f4783c34311d368e60601213c7e5cbe08681d4ddd3d59e8"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/quality/list.svg": {
+      "role": "index",
+      "sha256": "2d146cec03bd06dfeba0624a69f736cab57e21f5344dac4170aa488684ff596c",
+      "size": 260,
+      "normalized_sha256": "c1f37ff969c7336e1e7fa0aef80e4a459acc239c18998a7b4774b5afba68c309"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/quality/maintain.svg": {
+      "role": "index",
+      "sha256": "96684e7aaae849a3ea934ae4543e1741b33a5aa194925388504b01b29baf7576",
+      "size": 277,
+      "normalized_sha256": "b8dea2a000b370cb207386a44b8bb252299d09ec165af7f06883d25a423e9dbd"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/quality/minus-square.svg": {
+      "role": "index",
+      "sha256": "c9b89f7b22f82d1a8db32193aa35de4b56df2d7263c131e0bda38ee65086c15f",
+      "size": 259,
+      "normalized_sha256": "bece536b151b9a51e45a82b6c4cb92064288ee25855aed3c7bb6767157211899"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/quality/plus-square.svg": {
+      "role": "index",
+      "sha256": "d9eaa6bac15ef16c88409d8ef5cdc618008b045fe472697a5b9cedbdf9c24d07",
+      "size": 266,
+      "normalized_sha256": "8c4bb8746f765a1d2578771f187c5e8882c99e64ccf874d3d4cd1a57f8c9dbca"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/quality/rollback.svg": {
+      "role": "index",
+      "sha256": "dafbad3a4e82382303dd04abc9c53b94faa95332b4ac6fa26b20a234f3f2dc9b",
+      "size": 252,
+      "normalized_sha256": "36a3eb0bae3167bb3ab0335323afe4f52bd7bba5a3339e73f135ff3e5cbbbbe6"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/quality/scan.svg": {
+      "role": "index",
+      "sha256": "079fea3046d39b504eea7e8f4b3b17526e0268af2808c27cf98f40e706704a96",
+      "size": 376,
+      "normalized_sha256": "06e04d2a3e346e8900822034c4a56f4db3e1e57e8923197163926c0419ef9469"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/quality/search.svg": {
+      "role": "index",
+      "sha256": "8fe595d216a47705fb362728bb636bc32baae7031171f46c2d78d7adccdd62d3",
+      "size": 240,
+      "normalized_sha256": "19d84935096209fedaa1984b45c1ba519d901f4203c0a0b4fdfd1450c3dfd3c6"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/quality/shield.svg": {
+      "role": "index",
+      "sha256": "cd6efebecdd70bcfd3603ddfaaed16c3be6adc7078e2f99244f5b6e59ef75469",
+      "size": 262,
+      "normalized_sha256": "b84429553101b4988e29b825e497fc9a08ca50dec042a3cf83d0d7a1f953af40"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/quality/shopping.svg": {
+      "role": "index",
+      "sha256": "af17f40f5a00d57deee9506e913da7477348d3ea12efa0815352ad895ddbad0c",
+      "size": 317,
+      "normalized_sha256": "b9add5053dd18512c431ac3d8feda075ad3436bcc57f502ac04a132e8ed6d894"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/quality/swap.svg": {
+      "role": "index",
+      "sha256": "95d0455faffc585bd74218ee6372d10cfb93e7cf654ca5c724ded73a10a9af7a",
+      "size": 235,
+      "normalized_sha256": "9f2017ae6c4a73b30980db6cb96fcbf1f6570268ebe36427b1f01b67863a482e"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/quality/tool.svg": {
+      "role": "index",
+      "sha256": "8f42cc0aa74070b03f73bbe9db8d3f568ab69ca4fd06d3755a4d401f82dc0b57",
+      "size": 281,
+      "normalized_sha256": "5ca721b70730a812971f12c11fc74e675e4897752b035667890de4c2ab99bf37"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/quality/truck.svg": {
+      "role": "index",
+      "sha256": "faa69e929c98bd5f00e85c1f3f8a3810a73ebf5e8056f43818315f2c70c1b19c",
+      "size": 310,
+      "normalized_sha256": "b359e95df571be575d83e75ec4b929c0905b681f90efd397e837f3a640f238a6"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/quality/user.svg": {
+      "role": "index",
+      "sha256": "3c5bb06680ea08e1386fe8848eec4ac8048d816c0b5f5058b69450bb44af5748",
+      "size": 278,
+      "normalized_sha256": "72047105d35197ef383128473da77bdca2839b90c8597ee7cef2bb6b85dc6673"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/quality/warning.svg": {
+      "role": "index",
+      "sha256": "a43c7e40c4f022442ea2b82ff5e413e41a2143195cfc6377f01da112f8c0b24b",
+      "size": 263,
+      "normalized_sha256": "d550414979cdc18021269c94b20802ca25ac8a650ebe03e8b3b08abde2c63b3d"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/warehouse/audit.svg": {
+      "role": "index",
+      "sha256": "f98616e506949dac5d8ac186f6c2ee05fc32fb2af1e31059f80d32aaf38162c0",
+      "size": 270,
+      "normalized_sha256": "29596f6b4d4c2f71064eaa82862827e793e37c341b8116cbaa3188e6d4c202b5"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/warehouse/bell.svg": {
+      "role": "index",
+      "sha256": "7cef9fff2c63336f9c66cfae6ca774ec6549976ca3936d8821d6740dc1bc630c",
+      "size": 269,
+      "normalized_sha256": "7dcbf500a3fc648d49bfb7e290a4fb9e8db22c60902a0a705c1915b7f62dfdf2"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/warehouse/chart.svg": {
+      "role": "index",
+      "sha256": "cc4e42bec923994f68e2fa015562c7c1bfc09c449fa5a73c597a334e87614595",
+      "size": 246,
+      "normalized_sha256": "01ab1a0f3024e17f5226d48e54ec4e51f9c6422683c7426b39da6b3a4f239c8f"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/warehouse/check-circle.svg": {
+      "role": "index",
+      "sha256": "61838e5255e1c22791c78b7cf120763ed37dab431c76ae833348f2d0a1f348ce",
+      "size": 256,
+      "normalized_sha256": "84fdd504f097db3272d67d189d23ae36a04f03ba07191897b3ad203c576ebddc"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/warehouse/check.svg": {
+      "role": "index",
+      "sha256": "3ccf758711db85e14ae3c7a5f41b2ae1288edbe9d9617126edc04cae0b6084ff",
+      "size": 218,
+      "normalized_sha256": "ecba10e64ac3ca66e13cee6261cf70a51bff32adcf4b9ef83a0c9970c63e0745"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/warehouse/close-circle.svg": {
+      "role": "index",
+      "sha256": "122e8f1170f26ce9d6605c3ad69b0e95ac285725acd02d487f848364251838c7",
+      "size": 248,
+      "normalized_sha256": "362f51494ff8d2b25fe8c4656081bdd37c9c933e25a7c27f0a6e6955924c5682"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/warehouse/export.svg": {
+      "role": "index",
+      "sha256": "3fc064e94f02691898319e73262b91246171695230452abbd651d543a27b28d5",
+      "size": 289,
+      "normalized_sha256": "9f6e72f797c87fcc5f77db699daf90f71a284b23a064c72a12eaf75402023c08"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/warehouse/file.svg": {
+      "role": "index",
+      "sha256": "c379859d88ac8b354fd756c6c4e265fa128717e82bad8ebbcaea440360ebe0c7",
+      "size": 318,
+      "normalized_sha256": "68d0e07d70c32199b0675a36faf608f05143bbc07672df66252f81cdbb6e01fa"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/warehouse/history.svg": {
+      "role": "index",
+      "sha256": "85a6dd72b734118ac27441966d0ac40371b8ed2ff2ad2bd4cb193da84a509b7d",
+      "size": 243,
+      "normalized_sha256": "8a8b1472ad096b0c337bca4edde8520a5718ce925bf72185da4de66bb562deab"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/warehouse/import.svg": {
+      "role": "index",
+      "sha256": "faaecd6da5f08d4581a42a66d7e4a4e7fcd14f000679164931f15a379798cbf4",
+      "size": 288,
+      "normalized_sha256": "6e08fca2fce150858f3f3319fa4f47b685439a389685f7c08fb14fa4d3dc1a9c"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/warehouse/inbox.svg": {
+      "role": "index",
+      "sha256": "7b42bec717aef94513f546d9944a10adfec4de2538ccc103fcd2e42123e992a6",
+      "size": 341,
+      "normalized_sha256": "6cb56b896f95c4042da9a4247ecf9848ba1c5e92b55a08b224bcdf9d1e517faa"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/warehouse/link.svg": {
+      "role": "index",
+      "sha256": "460eb21696102e044bee7e474aea3231cb383091552bfc9da243725dedb38dfc",
+      "size": 309,
+      "normalized_sha256": "900fbfebc09d37da41e279486ca6cbbebdc2b3febf1d7672e50c2ca4a7327fd7"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/warehouse/list.svg": {
+      "role": "index",
+      "sha256": "cf3768066fadb32cd96363e41725d5379dbcbac2832932db8c12666e74259f9e",
+      "size": 260,
+      "normalized_sha256": "e9d566b0fb257c48b84188b2bb2fbe35854b39fb894efb2561d7d3ac2c85dbc5"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/warehouse/maintain.svg": {
+      "role": "index",
+      "sha256": "4490005e4bbf3dd2a328beaf2e0340ba1d44ac0110b51a123069e432982329cb",
+      "size": 277,
+      "normalized_sha256": "a498211cfb6dc528995be4bc4438cea3cfd1bae22a570a4c02f4046129a3b5d7"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/warehouse/minus-square.svg": {
+      "role": "index",
+      "sha256": "2a2b77184d758530a7b82241814f51c3717838dadf3d417aede97cb85d829fa5",
+      "size": 259,
+      "normalized_sha256": "889609e6dac2232105eb817833f9e5eef603a32f64024fb1e3dfe0a4b2899fbf"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/warehouse/plus-square.svg": {
+      "role": "index",
+      "sha256": "151c743d2088c4a69323cb4b19449650e1aeaefa2a94166dfff1687ae32c142b",
+      "size": 266,
+      "normalized_sha256": "2d96dc5fb8342c000bfe138d02876950af2e4138d56c2cab9325c0fa186cf3a9"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/warehouse/rollback.svg": {
+      "role": "index",
+      "sha256": "2820a14cb54a008d44565a4597b344746b8e050fbabb1ba74852b60d7aa37ff2",
+      "size": 252,
+      "normalized_sha256": "2bf357560ccaa23c24d8d1639acb57cfbe858cef7e307e640af60b2a8f4cc51b"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/warehouse/scan.svg": {
+      "role": "index",
+      "sha256": "54c2316709166183933f5ba9654ea5729a0803ba03e34e9f851cc836c8e9ced9",
+      "size": 376,
+      "normalized_sha256": "594305d8948fe9274a41ed243b7beed01528c52d2e7f86197f7a5cc503762edc"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/warehouse/search.svg": {
+      "role": "index",
+      "sha256": "6e9ea6654a8c9384dcb63e6e85098685a56931d55e9082ea55cae4be4c581d29",
+      "size": 240,
+      "normalized_sha256": "8bd9adc452a10f8d92f7a1671eb4cf7645c5a2ba564c00846e7aae98cf13cef1"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/warehouse/shield.svg": {
+      "role": "index",
+      "sha256": "4b8f2c9397edeca74465d4b07b5cff5ad2a028024353a11d1d48b0afef2b129b",
+      "size": 262,
+      "normalized_sha256": "1e657f69fa686dadbbb478788544f0da8d532913ea0d0851a9e63d426b2f1fee"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/warehouse/shopping.svg": {
+      "role": "index",
+      "sha256": "e5fc0814187d2239c3b39f65a4d75f6a3806bccd9a6c949bc297e1e7321088e4",
+      "size": 317,
+      "normalized_sha256": "8021003e4f36eb2fbe88d9d78655c577125f6d0a8a0429d7c20ff40b5aeb1a29"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/warehouse/swap.svg": {
+      "role": "index",
+      "sha256": "b6b38c486de767e287bfb1c513dc0914e1960833d9fcb19533043ca1999e5a3b",
+      "size": 235,
+      "normalized_sha256": "02475473ac96b7966aaad563f00e668cda91c36c6fbf271b2b4580d9df963496"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/warehouse/tool.svg": {
+      "role": "index",
+      "sha256": "726be6a2f8de3bbdb2b8afa24553c67e3e104675b0b62623a0925a79f2f89760",
+      "size": 281,
+      "normalized_sha256": "c88246d69a610d874bb73d7f759a2b4c677dac8951be9dc0135fda1c41f75383"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/warehouse/truck.svg": {
+      "role": "index",
+      "sha256": "c7a0502b7030d6441e0ee25ea6cf3f187d88d962dae3754f7aec30c79e1a8689",
+      "size": 310,
+      "normalized_sha256": "baebf9dd30d0bf8ed9feaba389fb171b597eb34fe1b07cb5dc77e184b4809787"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/warehouse/user.svg": {
+      "role": "index",
+      "sha256": "59bb8d66155b303b9dcb841815cd714ca1da3467c94922e3b631c0cbb976084b",
+      "size": 278,
+      "normalized_sha256": "6caf7256f569545f9713aafe8d83ad3ae5565e4108c050f82a57a8ec49bb08c5"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/warehouse/warning.svg": {
+      "role": "index",
+      "sha256": "82dea1928ab63008d3ca75990bdb93860101fbcb3bf0aeab78d5c0c075349789",
+      "size": 263,
+      "normalized_sha256": "58879e18f082cbeb7f791b014e37fd7f76bf012cd414946dbec22fbac6d3b9ea"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/workshop/audit.svg": {
+      "role": "index",
+      "sha256": "eaf71bf37729c08cbb818e4705c7d22a9b97960263e0e56084c08447b5cdfc4e",
+      "size": 270,
+      "normalized_sha256": "4f5fb6ee29726833b07a1a3f244ab61cd7988c94848ec6fe300ba8d1c1cfc60e"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/workshop/bell.svg": {
+      "role": "index",
+      "sha256": "d198393e5db28601d412d8e66168fcc47b80a2def1a315774d1191f28e7ce6b4",
+      "size": 269,
+      "normalized_sha256": "cb64e304b127a5de16d2ebe22c57357507db80b049e26ba8bb2debcf6b21883b"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/workshop/chart.svg": {
+      "role": "index",
+      "sha256": "c2240d285685c8a27960ae1514d1b66f89d3db12310af4520f1ec4ba7037b522",
+      "size": 246,
+      "normalized_sha256": "e84a63a6d4c391f4b20f0ecdaf8f82786cafe3d5ba2c2b7d414faf8c5aed873a"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/workshop/check-circle.svg": {
+      "role": "index",
+      "sha256": "60e7bd597061e788747e367dc8d66c4d6fbf05ba91888371a85de9dfceb4c4f5",
+      "size": 256,
+      "normalized_sha256": "fde7cd0236d6cec03b3dbf7aad7df5935d394b8be4f5a01db6d74a8ff41ff0e1"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/workshop/check.svg": {
+      "role": "index",
+      "sha256": "2cc967b4ba82d9101271de778621e1dfa1f1d1a35af20f11224f1d6b0cac01ba",
+      "size": 218,
+      "normalized_sha256": "1d2fdce2b831bf0e7d81fbe0d831d03c37b9a043667386048dbf104f73263f52"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/workshop/close-circle.svg": {
+      "role": "index",
+      "sha256": "4fcc2a9504973b9169793bd24b9efed85a9c33e64f6690f9475d8870c5359d04",
+      "size": 248,
+      "normalized_sha256": "080afd945cba2e00d799b4707c3de52c996f9f74d25d1dfbda1401115ac4def2"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/workshop/export.svg": {
+      "role": "index",
+      "sha256": "0b576ffa3f08e35968265c8f46a46b8fbf69fa95ce19ac03ab06f3c4c14ba1d4",
+      "size": 289,
+      "normalized_sha256": "ba101ba3fe1345dc2475abae93c6577f4dfcf2370f177c6e175289a8ee874824"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/workshop/file.svg": {
+      "role": "index",
+      "sha256": "221104765a31a6a1d45b8ba5dd4fed3e5c2e5e0e0a7811ab275b32ddfb0ed5dd",
+      "size": 318,
+      "normalized_sha256": "759c6dd4eb3124cb5740d58aefdc630b4db2820b1b840cb15f28790180151a38"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/workshop/history.svg": {
+      "role": "index",
+      "sha256": "ac13cb867c0ded98d2091fa2460abd0c1a7b19e14c4a4ea25699e00d743125af",
+      "size": 243,
+      "normalized_sha256": "44496cfd3d4bf9a174c98448400f740ac61ef269cf90cfb3420431d206bd3f76"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/workshop/import.svg": {
+      "role": "index",
+      "sha256": "966575d5234eddd76314bafc6c15d0a91e2a04c7c73d48303bd3dddcbd1d55fe",
+      "size": 288,
+      "normalized_sha256": "3355ef361f514b2b0a8b8c5e79f47c6ef0a3e4cba01b6eea7e120eca59554b9b"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/workshop/inbox.svg": {
+      "role": "index",
+      "sha256": "ed0e4faaf486241d55d91e0f3f95d67d05354ab11f6023eab042e01c1ab3b8f9",
+      "size": 341,
+      "normalized_sha256": "bcc0af3f03e0abe02bd3535c98324223ea2c71c8979a4c621dacb5c02d356188"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/workshop/link.svg": {
+      "role": "index",
+      "sha256": "0885459d94588e4c26f9e35a63e7305179426032168189d8edb79ddb9e98715e",
+      "size": 309,
+      "normalized_sha256": "20155c56469867d75a475d9cdade32de4eba3558a4e7b5e8629c54a5f82625f3"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/workshop/list.svg": {
+      "role": "index",
+      "sha256": "27ca9dffd0de84e57295201766d865709a777576b5a1393ecf04254c17725beb",
+      "size": 260,
+      "normalized_sha256": "872237fbbe88f2880d201a84890aaccb7fe7715810a57feac7ce2a9f9ea4776b"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/workshop/maintain.svg": {
+      "role": "index",
+      "sha256": "6631c8739b9023a9aeef2758f614881f14dee17fc10b4535590058c38dd5d153",
+      "size": 277,
+      "normalized_sha256": "202818e101d0b72eaec00d61635628fa9e10732f1dc9ebaff0d4a886e20341ec"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/workshop/minus-square.svg": {
+      "role": "index",
+      "sha256": "b531e0e03f86749ca7fe7998de3d313a9529f090b06ea69ed5bda45d8dd90d18",
+      "size": 259,
+      "normalized_sha256": "4b8886c2434e071e9fca062d1421c8ca62249a013a1c3ff3be376f915540c542"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/workshop/plus-square.svg": {
+      "role": "index",
+      "sha256": "9c20db5f8335afd018118f55fddebef86a0f147728b4e2dc6ce38629f4f131d7",
+      "size": 266,
+      "normalized_sha256": "01a0e13ade734ea469dc9d11c249371bd66222036aeb3e643cb9ca5025e79249"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/workshop/rollback.svg": {
+      "role": "index",
+      "sha256": "f22c229ef93aebb154c7432f65575cc81e418914e861260d0dce17cfa689093c",
+      "size": 252,
+      "normalized_sha256": "193c90d6e73da839f52f1db487080092dcaa8d3a571d61da184be3d7c739e684"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/workshop/scan.svg": {
+      "role": "index",
+      "sha256": "6e6abed6f559e889207b8f6436ca34e366534913a8302c46f37ddf34b0cef0a4",
+      "size": 376,
+      "normalized_sha256": "2eaf0c4d2c751aaf3e44aead5f1567ab8e20b9c195c35e545f95292a9ed1a8a5"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/workshop/search.svg": {
+      "role": "index",
+      "sha256": "b7f828f9a4c57bfa894f1fbcee3d535241569dfd7477814c77e2d47de3a798cb",
+      "size": 240,
+      "normalized_sha256": "2f877cdee7dbd4d364a0eb7d8535c963baa8102d533cd325b80c9f97169310be"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/workshop/shield.svg": {
+      "role": "index",
+      "sha256": "e3221963e4e418c0cef21e101e728b7f19b5d87e811d48ed2948655b1d5533d6",
+      "size": 262,
+      "normalized_sha256": "6f2102185698020be7f75a77c90b1b9d7bf4cbff79d7d96a2b2edcd19b1befa3"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/workshop/shopping.svg": {
+      "role": "index",
+      "sha256": "febf8a6ce5310e37107a39360d91f1732728c8657884c36a9596565655d8d997",
+      "size": 317,
+      "normalized_sha256": "e046ef0664eec8615e79557d4d9da08524c7ecf755bc602f24c3f8fe1dd1f813"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/workshop/swap.svg": {
+      "role": "index",
+      "sha256": "95de1079fd9cb4327102e86f66e54c93a2788b144d29cee6a645afb132af2fd6",
+      "size": 235,
+      "normalized_sha256": "4f178864bcaaafb5c66b8969121c571001edcd9a0b7edfd55b4fa842d6dfae6c"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/workshop/tool.svg": {
+      "role": "index",
+      "sha256": "ab1b6936997af8c23838da2caf1e814bc9c5adb7d6b9279e26385c80517ee0fa",
+      "size": 281,
+      "normalized_sha256": "060ce53b9287c7bd87cf56a35533c7ce199bbb5fe063df6b585ee5e0c16f44d2"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/workshop/truck.svg": {
+      "role": "index",
+      "sha256": "ac142be7fd06b673fae8f420d0ff149b0a092269de641fcf7f754e4d2337f106",
+      "size": 310,
+      "normalized_sha256": "b9f1fac899e533a4154369b1600c5f9cbbedaf0eab88c2eddc80226a3484c842"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/workshop/user.svg": {
+      "role": "index",
+      "sha256": "12010d8edba5ba1532a83871975a1c4565514a47dda360e760286d2d10f74349",
+      "size": 278,
+      "normalized_sha256": "795438ca18c2f706d692a2530cc2bc473df0970fe1cabc9ed17b03e568cb63a5"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/workshop/warning.svg": {
+      "role": "index",
+      "sha256": "72b63f9b8249768eb1240ec42a533eb6d666f9a598b76061e3d9632257f63881",
+      "size": 263,
+      "normalized_sha256": "072cb98dbd3efd1140edde44193306761fe495716714a9f54fe8762ab912056e"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/uni.scss": {
+      "role": "index",
+      "sha256": "8d574a8c81ec0c8cc7480d215bfc382f73a3ceaabbb8b0ec6e7b1d38f7315ce1",
+      "size": 2487,
+      "normalized_sha256": "0e552172fa5fadccff3e556b05ebeac258d973c6677fcd9b43ca56c695355e05"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-badge-view/changelog.md": {
+      "role": "index",
+      "sha256": "c05657d533257898a1bed16b2313a21d0b8d0760e9d9f2b84980e220dcc82b3d",
+      "size": 154,
+      "normalized_sha256": "efe5866533ece4fa1ddaa077b3ed5776fd5588e6657579d35213ef35cb719820"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-badge-view/components/uni-badge-view/uni-badge-view.uvue": {
+      "role": "index",
+      "sha256": "8f200dcfa1e4b06f82bff9e9dc336bc7e8ad791ba6840b0adc4f1b2779a19870",
+      "size": 7546,
+      "normalized_sha256": "dec1143e91f306dc24615052695cac39a238bcc420c238e968dcd16eaa6897c1"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-badge-view/package.json": {
+      "role": "index",
+      "sha256": "447371be473928a2b81867909a9db1c8186ea6a12d17b3911d2107df77c62fbc",
+      "size": 1597,
+      "normalized_sha256": "7c7b5e1e0121d4d5188121cab9cae505f8ace531c7a86d59561b494b97c6495f"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-badge-view/readme.md": {
+      "role": "index",
+      "sha256": "6444c060cd1b62858bdd5fc6f70c17cf9acca32091e7694d277044370c49f6a9",
+      "size": 1954,
+      "normalized_sha256": "86772ea4a71551f18ce8e925578955afeebd410dad280be7fd2b8def86d07af1"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-collapse-x/changelog.md": {
+      "role": "index",
+      "sha256": "67fb09f5954b1572e403261f01e265fabfcee9922ff685e7e695825bba217baf",
+      "size": 136,
+      "normalized_sha256": "88d704df4e2e8c1baa21910860e1f634969b46e705202396734059fe6ae9c777"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-collapse-x/components/common.ts": {
+      "role": "index",
+      "sha256": "4b0b1894a175783328f2c8af8067c1f7b7c4aac4efef71c59bc87d04d68d99df",
+      "size": 222,
+      "normalized_sha256": "9d6717ff100ba130c6e63606adf5cb9482b487fb73050b992b9065959ff9758c"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-collapse-x/components/common.uts": {
+      "role": "index",
+      "sha256": "4b0b1894a175783328f2c8af8067c1f7b7c4aac4efef71c59bc87d04d68d99df",
+      "size": 222,
+      "normalized_sha256": "9d6717ff100ba130c6e63606adf5cb9482b487fb73050b992b9065959ff9758c"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-collapse-x/components/type.ts": {
+      "role": "index",
+      "sha256": "06dd09cb4fac1f5c4d69cd3abc5c8fd2403128d441cbdbd32d3cb0f32cfb6737",
+      "size": 162,
+      "normalized_sha256": "dfbda55e87fc428741543139f772c3b9ec54b0968cf4c19ae0491f661b6dea9b"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-collapse-x/components/type.uts": {
+      "role": "index",
+      "sha256": "06dd09cb4fac1f5c4d69cd3abc5c8fd2403128d441cbdbd32d3cb0f32cfb6737",
+      "size": 162,
+      "normalized_sha256": "dfbda55e87fc428741543139f772c3b9ec54b0968cf4c19ae0491f661b6dea9b"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-collapse-x/components/uni-collapse-item/uni-collapse-item.uvue": {
+      "role": "index",
+      "sha256": "5b3fdc4f39af77ab8461f337c056d6487f1bcf84dbf5cefcfcc8bc0e05853a76",
+      "size": 18710,
+      "normalized_sha256": "14c191f596b97dcb124bacff55b82e66c9f23acca5d4d63846d3f62e9523aa03"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-collapse-x/components/uni-collapse/uni-collapse.uvue": {
+      "role": "index",
+      "sha256": "29b492733d81f1dccae1e6c7c5d3ec3069b3095749b96d897c96db91b5689c24",
+      "size": 3142,
+      "normalized_sha256": "a96daeeb59f1fe08cdd2f44c79ce6fc28115f09b295eb9b942475ec365003c7f"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-collapse-x/package.json": {
+      "role": "index",
+      "sha256": "f1116247c6ce126b92de81bed53e722be3b193ec396324a93db4db6ff16c196e",
+      "size": 1543,
+      "normalized_sha256": "0e6fb0b1706e7c7d83dd2b79bcf2ac95cfd30a1b531de36ae45c4eab6e280e4e"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-collapse-x/readme.md": {
+      "role": "index",
+      "sha256": "4033ecee975bcf0ac69e5e3796bfa2d401a40dee1150820fa75fe0ef09700496",
+      "size": 3580,
+      "normalized_sha256": "9d3df38ce818286ebebbeaff1e5abe987c94d0f51dbcd6f3d9197ad30b93d7a1"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-drag-cell/changelog.md": {
+      "role": "index",
+      "sha256": "0c264ce272d901571a55d426725e38b96f02f01a50754549139c586849e26fba",
+      "size": 57,
+      "normalized_sha256": "066f9420a0bc3e56bdd16337f1a6b21be82da0e3cdd27288d93a9aa5374828a8"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-drag-cell/components/uni-drag-cell/uni-drag-cell.uvue": {
+      "role": "index",
+      "sha256": "b04897328c4e0582ea5fb64e6c8eadd0f2501fd5643129b32bea9dfb91be160a",
+      "size": 36173,
+      "normalized_sha256": "ea85ce983189f141c3e1f64687aa578db111524c49276adbe88ae8c7030258f5"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-drag-cell/package.json": {
+      "role": "index",
+      "sha256": "b6377aa5ebb0cb4db86d0b6f9e26bf7b73fba3326f16e5661e21f1ae5c295e9a",
+      "size": 1330,
+      "normalized_sha256": "d7f4fff1f2d57f495592bd6fcd8d9b977a1e0df4f51532c5c2dd9fc7e7beadb9"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-drag-cell/readme.md": {
+      "role": "index",
+      "sha256": "0c51b41e1d17f7343996ae234bcc84b4493f974851cf1ed529f019c29d4e6a9b",
+      "size": 9353,
+      "normalized_sha256": "ca24a386b18296a35545529f6de110fca71a17bc6c0bc9341be70ca8fda2b23f"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-fab-button/changelog.md": {
+      "role": "index",
+      "sha256": "b05d014ccbe542b6b20f17da0d19bd066d8ed596a85d96b7a44e27754ccfdd1a",
+      "size": 58,
+      "normalized_sha256": "76ab59bb68a4b88ed8e8f75b824cfa33f2f1e0f180146ad9540d8da03f09b2ac"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-fab-button/components/uni-fab-button/uni-fab-button.uvue": {
+      "role": "index",
+      "sha256": "eccd6d76481c0ee61bb9b418f0355950d6ad5c38879aaf43e3b8beb94cbc5f59",
+      "size": 3532,
+      "normalized_sha256": "88ef3b2f21b527de19b9e1065d25a36bc6a97caef87a0cbefa5362604b2508ae"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-fab-button/package.json": {
+      "role": "index",
+      "sha256": "5abe8ad2e6c57b0ce7122dcb7125f33d30cc2ce84b3a0145a874330eae9b9b72",
+      "size": 1319,
+      "normalized_sha256": "291f82b3409d3227bc93f9ff70a9541e950f463c999ad4f839209404a1cd257c"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-fab-button/readme.md": {
+      "role": "index",
+      "sha256": "e35babd7f9a36a480c0aa46d10edbf12e6ed3bebb357c0158f8458290a8de277",
+      "size": 721,
+      "normalized_sha256": "6058a6bd9fab2b3bf341d1b06c5ae3412de14da1a6f2dc9da0e50429c2aba47b"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-index-bar/changelog.md": {
+      "role": "index",
+      "sha256": "cca09c5cb1de5f67ea806715f5a6d45c66074dee1e6fd4ff69fb912fc040b53d",
+      "size": 99,
+      "normalized_sha256": "e3dba1a2a1be82e783902f2f3d5f4f797df1f68541205e8b27618f49af5fb30e"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-index-bar/components/uni-index-bar/uni-index-bar.uvue": {
+      "role": "index",
+      "sha256": "03b5b1b41bb7821f8ffd9a8ef694da30cf8e5172f279c9e8e7c926f1be30076c",
+      "size": 9343,
+      "normalized_sha256": "cc1ccfb722d7f62f45c8deb3cadfea5670aae3c55e329d991cfb6a54105a95d5"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-index-bar/package.json": {
+      "role": "index",
+      "sha256": "0dd3af85182a28ba177478e61adf513ebb015a8c4cf77c69a5d6a593b1343b9c",
+      "size": 1466,
+      "normalized_sha256": "be96853f8fe5c82dfc36ca479b5fbb5c72e9b7098a4675f9b7073dbc60cf4b49"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-index-bar/readme.md": {
+      "role": "index",
+      "sha256": "ef2047952a678c276744199a5e9531c158c908e32061a6fbd561944e826c4780",
+      "size": 2896,
+      "normalized_sha256": "69d7cc2cd18abf1ba09b7956dee420cb2f36795bc2fa0629c79a71d9833d53cb"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-link-x/changelog.md": {
+      "role": "index",
+      "sha256": "64d947582a0fa77648c8557fa21931263207b848470e09b4d94281c5ebd32df8",
+      "size": 52,
+      "normalized_sha256": "b10284bef2dc615139a5f1adb8e54e244aee297c78320dd4949b1ac9a7722c6f"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-link-x/components/uni-link/uni-link.uvue": {
+      "role": "index",
+      "sha256": "bb1969eab303fd7524083fd288bae391bf79fb13424dd324e03752b18696cefc",
+      "size": 10481,
+      "normalized_sha256": "e68abb5cf32ab364063f4436ed20134ad5b0b7ab6d9a462decfda9776d4665ab"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-link-x/package.json": {
+      "role": "index",
+      "sha256": "bcbdf781d81953181977709a497840e084fa67405525cad83aa735fe3a9bc300",
+      "size": 1533,
+      "normalized_sha256": "852cb777a9955aa18b4e113b072e47be8b6f3df20e8129bdc26c3c29ed00faa3"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-link-x/pages/link-webview.uvue": {
+      "role": "index",
+      "sha256": "e6d02f82a9203c6e6417185faa3a6649755d33d9c9d9bb50e1f25eff3536f7da",
+      "size": 704,
+      "normalized_sha256": "a9dcd8ec828809b634fa96688559980b55e064d5bb578bd294e5f03bce1576b1"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-link-x/readme.md": {
+      "role": "index",
+      "sha256": "4b98a1f12256ac7c747817bc04d7fa09d2f1bc4f9d067d18c016922389b2b89a",
+      "size": 2431,
+      "normalized_sha256": "8bad30dd1c29fce7de4d82215a995e246fe28cdce08a6d7276d3e6aefb135e92"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-nav-bar-x/changelog.md": {
+      "role": "index",
+      "sha256": "09669c66c3f96566d8264544160ba01d17c04afd380e4040010d68cf97ff6ced",
+      "size": 109,
+      "normalized_sha256": "6b78bf52879fc0ae74229cf579c38edb013b2013d22ee54af0cb99b4cdfd801d"
+    },
+    "kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-nav-bar-x/components/uni-nav-bar/uni-nav-bar.uvue": {
+      "role": "index",
+      "sha256": "217b0bce1020a3ecc68d64d9a9df11c39dd57930d14789e3cadb698697fe8f2d",
+      "size": 10527,
+      "normalized_sha256": "a27841f59427f4abc6b2ac80a0f9409184a54dae2d4b19e24e8e3b6fc88f6013"
     },
     "riveredge-app/mobile/assets/fonts/antfill.ttf": {
       "role": "observe",
