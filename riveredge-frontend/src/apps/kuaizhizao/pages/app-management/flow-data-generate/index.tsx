@@ -333,7 +333,7 @@ export default function FlowDataGeneratePage() {
     return items.map((o) => ({
       value: o.id,
       disabled: o.eligible === false,
-      label: `${o.order_code}${o.customer_name ? ` · ${o.customer_name}` : ''}${
+      label: `${o.order_code}${o.customer_name ? ` ${o.customer_name}` : ''}${
         o.block_reason ? `（${o.block_reason}）` : ''
       }`,
     }));
@@ -344,7 +344,7 @@ export default function FlowDataGeneratePage() {
     return items.map((o) => ({
       value: o.id,
       disabled: o.eligible === false,
-      label: `${o.forecast_code}${o.forecast_name ? ` · ${o.forecast_name}` : ''}${
+      label: `${o.forecast_code}${o.forecast_name ? ` ${o.forecast_name}` : ''}${
         o.block_reason ? `（${o.block_reason}）` : ''
       }`,
     }));

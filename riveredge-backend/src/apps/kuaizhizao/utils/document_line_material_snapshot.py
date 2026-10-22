@@ -82,7 +82,7 @@ async def resolve_line_material_snapshots(
             external_entity_type=ptype,
             external_entity_id=pid,
             deleted_at__isnull=True,
-        ).all()
+        ).order_by("id").all()
         alias_by_material = {a.material_id: a for a in aliases}
 
     out: Dict[int, LineMaterialSnapshot] = {}
@@ -100,10 +100,13 @@ def apply_snapshot_to_line_dict(
     *,
     fill_spec_if_empty: bool = True,
 ) -> Dict[str, Any]:
-    """将快照写入行 dict（create/update/push 共用）。"""
-    line["partner_material_code"] = snapshot.partner_material_code
-    line["partner_material_name"] = snapshot.partner_material_name
-    line["material_model"] = snapshot.material_model
+    """将快照写入行 dict（create/update/push 共用）；快照为 None 的字段不覆盖调用方已填值。"""
+    if snapshot.partner_material_code is not None:
+        line["partner_material_code"] = snapshot.partner_material_code
+    if snapshot.partner_material_name is not None:
+        line["partner_material_name"] = snapshot.partner_material_name
+    if snapshot.material_model is not None:
+        line["material_model"] = snapshot.material_model
     if fill_spec_if_empty and snapshot.material_spec:
         existing = str(line.get("material_spec") or "").strip()
         if not existing:

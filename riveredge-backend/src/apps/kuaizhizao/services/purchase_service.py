@@ -22,7 +22,10 @@ from infra.models.user import User as CurrentUser
 from loguru import logger
 
 from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem, PurchaseOrderChange, effective_po_item_outstanding
-from apps.kuaizhizao.utils.document_line_material_snapshot import enrich_line_dicts_with_partner_snapshots
+from apps.kuaizhizao.utils.document_line_material_snapshot import (
+    apply_snapshot_to_line_dict,
+    resolve_line_material_snapshots,
+)
 from apps.master_data.models.supplier import Supplier
 from apps.master_data.models.material import Material
 from apps.kuaizhizao.schemas.purchase import (
@@ -319,6 +322,12 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             total_amount = Decimal(0)
             partner_settlement_method = supplier.settlement_method_code if supplier else None
 
+            line_snapshots = await resolve_line_material_snapshots(
+                tenant_id,
+                partner_type="supplier",
+                partner_id=int(order_dict.get("supplier_id") or 0) or None,
+                material_ids=[it.material_id for it in order_data.items if it.material_id],
+            )
             for item_data in order_data.items:
                 # 验证物料
                 material = await Material.get_or_none(tenant_id=tenant_id, id=item_data.material_id)
@@ -363,13 +372,9 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                     'updated_by': created_by
                 })
 
-                enriched_rows = await enrich_line_dicts_with_partner_snapshots(
-                    tenant_id,
-                    partner_type="supplier",
-                    partner_id=int(order_dict.get("supplier_id") or 0) or None,
-                    lines=[item_dict],
-                )
-                item_dict = enriched_rows[0]
+                snap = line_snapshots.get(int(item_dict.get("material_id") or 0))
+                if snap is not None:
+                    apply_snapshot_to_line_dict(item_dict, snap)
 
                 await PurchaseOrderItem.create(**item_dict)
 
@@ -1202,6 +1207,14 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 total_quantity = Decimal(0)
                 total_amount = Decimal(0)
 
+                line_snapshots = await resolve_line_material_snapshots(
+                    tenant_id,
+                    partner_type="supplier",
+                    partner_id=int(next_supplier_id or order.supplier_id or 0) or None,
+                    material_ids=[
+                        it.material_id for it in order_data.items if it.material_id
+                    ],
+                )
                 for item_data in order_data.items:
                     material = await Material.get_or_none(tenant_id=tenant_id, id=item_data.material_id)
                     if not material:
@@ -1242,13 +1255,9 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                         'updated_by': updated_by
                     })
 
-                    enriched_rows = await enrich_line_dicts_with_partner_snapshots(
-                        tenant_id,
-                        partner_type="supplier",
-                        partner_id=int(next_supplier_id or order.supplier_id or 0) or None,
-                        lines=[item_dict],
-                    )
-                    item_dict = enriched_rows[0]
+                    snap = line_snapshots.get(int(item_dict.get("material_id") or 0))
+                    if snap is not None:
+                        apply_snapshot_to_line_dict(item_dict, snap)
 
                     if requires_audit:
                         # 对于明细的变更，目前简化记录为"明细整批更新"，后续可根据需求实现行级更细精度的对比
@@ -1685,6 +1694,21 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                         "自动审核跳过：草稿未指定供应商",
                     )
                     return
+                # 与 submit_purchase_order 同门禁：自动审核不得确认人工提交会拒的草稿
+                has_items = await PurchaseOrderItem.filter(
+                    order_id=order_id, tenant_id=tenant_id, deleted_at__isnull=True
+                ).exists()
+                assert_purchase_order_capability(order, "submit", has_items=has_items)
+                supplier = await Supplier.get_or_none(
+                    tenant_id=tenant_id, id=int(order.supplier_id)
+                )
+                if not supplier:
+                    raise NotFoundError(f"供应商不存在: {order.supplier_id}")
+                from apps.master_data.services.supplier_governance import (
+                    assert_supplier_purchasable_for_tenant,
+                )
+
+                await assert_supplier_purchasable_for_tenant(tenant_id, supplier)
                 audit_required = await cfg.check_audit_required(
                     tenant_id, "purchase_order"
                 )

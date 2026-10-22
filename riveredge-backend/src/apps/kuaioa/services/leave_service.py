@@ -283,6 +283,9 @@ class LeaveRequestService:
     async def revoke_request(self, tenant_id: int, request_id: int, user_id: int) -> dict[str, Any]:
         return await _SVC.revoke_row(tenant_id, request_id, user_id)
 
+    async def withdraw_request(self, tenant_id: int, request_id: int, user_id: int) -> dict[str, Any]:
+        return await _SVC.revoke_row(tenant_id, request_id, user_id)
+
 
 async def apply_leave_request_decision(
     tenant_id: int, request_id: int, approved: bool, user_id: int
