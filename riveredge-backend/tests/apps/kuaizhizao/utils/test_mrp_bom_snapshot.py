@@ -44,6 +44,13 @@ def test_bom_expand_kwargs_from_work_order():
     assert kw["bom_version"] == "2.0"
     assert kw["material_bom_versions"] == {"633": "1.0"}
     assert kw["use_default_bom"] is False
+    assert kw["bom_id"] == 10
+
+
+def test_bom_expand_kwargs_bom_id_only():
+    wo = _Wo(bom_id=42)
+    kw = bom_expand_kwargs_from_work_order(wo)
+    assert kw == {"bom_id": 42}
 
 
 def test_bom_expand_kwargs_empty_without_snapshot():

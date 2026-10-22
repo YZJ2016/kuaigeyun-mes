@@ -127,6 +127,7 @@ async def _walk_bom_children(
         only_approved=True,
         version=bom_version,
         use_default=use_default_bom,
+        strict_version=True,
     )
     if not bom_items:
         return []
@@ -146,8 +147,9 @@ async def _walk_bom_children(
             continue
 
         st = component.source_type or await get_material_source_type(tenant_id, component.id)
-        child_version = bom_version
-        child_use_default = use_default_bom
+        # 全局/父级版本不递归到子件：仅按物料版本表指定；带版本上下文时未指定子件走默认版
+        child_version = None
+        child_use_default = use_default_bom or bool(bom_version or material_bom_versions)
         if material_bom_versions:
             v = material_bom_versions.get(component.id) or material_bom_versions.get(str(component.id))
             if v:

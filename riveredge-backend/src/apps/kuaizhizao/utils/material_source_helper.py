@@ -84,16 +84,38 @@ async def _get_bom_for_material(
     use_default_bom: bool,
     material_bom_versions: Optional[Dict[int, str]],
     as_of_date: Optional[datetime] = None,
+    *,
+    apply_global_version: bool = True,
+    version_context: bool = False,
+    bom_id: Optional[int] = None,
 ) -> Optional[BOM]:
-    """根据版本参数获取物料的 BOM（支持指定版本或默认版本）"""
+    """根据版本参数获取物料的 BOM（统一解析契约）。
+
+    - ``bom_id``（工单快照锚点）在 ``apply_global_version`` 为真（顶层/seed 物料）时优先生效，
+      精确指向一行 BOM，不叠加版本/默认解析与生效期过滤；
+    - 全局 ``bom_version`` 同样仅顶层生效；下层物料不再继承全局版本；
+    - ``material_bom_versions`` 显式条目对所有层级生效；
+    - 显式版本未命中抛 ``NotFoundError``（fail fast，不再静默回退）；
+    - 带版本上下文的未指定物料（中间层）走「默认版→最新版」；不带上下文时按
+      ``use_default_bom`` 决定默认版还是按版本号最新。
+    """
     versions = material_bom_versions or {}
     version = versions.get(material_id) or versions.get(str(material_id))  # 兼容 JSON 字符串 key
-    if not version:
+    if not version and apply_global_version:
         version = bom_version
-    # 当使用 material_bom_versions 模式时，未指定版本的物料（如下层 BOM）使用默认版本，确保能正确展开
-    use_default = (use_default_bom and not version) or (
-        bool(material_bom_versions) and not version
-    )
+
+    if bom_id and apply_global_version:
+        anchored = await BOM.get_or_none(
+            id=bom_id,
+            tenant_id=tenant_id,
+            material_id=material_id,
+            deleted_at__isnull=True,
+        )
+        if anchored is None:
+            raise NotFoundError(
+                f"快照 BOM 不存在或已删除: bom_id={bom_id}, material_id={material_id}"
+            )
+        return anchored
 
     query = BOM.filter(
         tenant_id=tenant_id,
@@ -107,9 +129,14 @@ async def _get_bom_for_material(
         query = query.filter(approval_status="approved")
 
     if version:
-        query = query.filter(version=version)
-        return await query.first()
-    if use_default:
+        bom = await query.filter(version=version).first()
+        if not bom:
+            raise NotFoundError(
+                f"物料 {material_id} 指定 BOM 版本 \"{version}\" 不存在或未审核"
+            )
+        return bom
+    # 版本上下文内的中间层：未指定版本走默认版→最新版
+    if use_default_bom or version_context:
         bom = await query.filter(is_default=True).first()
         if bom:
             return bom
@@ -435,6 +462,8 @@ async def expand_bom_with_source_control(
     configurable_selections: Optional[Dict[str, int]] = None,
     as_of_date: Optional[datetime] = None,
     flatten_intermediate_subassemblies: bool = False,
+    bom_id: Optional[int] = None,
+    apply_global_version: Optional[bool] = None,
 ) -> List[Dict[str, Any]]:
     """
     展开BOM（物料来源控制）
@@ -456,6 +485,8 @@ async def expand_bom_with_source_control(
         configurable_selections: 配置位选择（可选），格式 {"parentMaterialId_configurableGroupId": componentId}
         as_of_date: 基准日期（可选），仅使用该日期生效的 BOM（effective_date<=as_of_date 且 expiry_date>=as_of_date 或 null）
         flatten_intermediate_subassemblies: True=齐套；False=MRP
+        bom_id: 工单快照锚点 BOM id（可选），仅顶层物料生效
+        apply_global_version: 全局 bom_version/bom_id 是否作用于本物料；None 时默认仅 level==0（顶层/seed）生效，下层一律 False
 
     Returns:
         List[Dict]: 展开后的物料需求列表
@@ -470,6 +501,11 @@ async def expand_bom_with_source_control(
         return []
     
     source_type = material.source_type
+
+    # 全局 bom_version / bom_id 仅顶层（seed）物料生效；下层一律按物料版本表或默认版
+    if apply_global_version is None:
+        apply_global_version = level == 0
+    version_context = bool(bom_version or material_bom_versions or bom_id)
 
     # 配置件：根据属性解析 BOM 版本
     effective_material_bom_versions = dict(material_bom_versions) if material_bom_versions else {}
@@ -490,6 +526,9 @@ async def expand_bom_with_source_control(
             tenant_id, material_id, only_approved,
             bom_version, use_default_bom, effective_material_bom_versions,
             as_of_date=as_of_date,
+            apply_global_version=apply_global_version,
+            version_context=version_context,
+            bom_id=bom_id,
         )
         if not target_bom:
             logger.warning(f"虚拟件没有BOM，物料ID: {material_id}")
@@ -517,6 +556,7 @@ async def expand_bom_with_source_control(
             variant_attributes=variant_attributes,
             configurable_selections=configurable_selections,
             as_of_date=as_of_date,
+            apply_global_version=False,
         )
 
         if flatten_intermediate_subassemblies:
@@ -604,6 +644,9 @@ async def expand_bom_with_source_control(
         tenant_id, material_id, only_approved,
         bom_version, use_default_bom, effective_material_bom_versions,
         as_of_date=as_of_date,
+        apply_global_version=apply_global_version,
+        version_context=version_context,
+        bom_id=bom_id,
     )
     if not target_bom:
         return []
@@ -630,6 +673,7 @@ async def expand_bom_with_source_control(
         variant_attributes=variant_attributes,
         configurable_selections=configurable_selections,
         as_of_date=as_of_date,
+        apply_global_version=False,
     )
 
     if flatten_intermediate_subassemblies:
@@ -716,6 +760,7 @@ async def explode_bom_one_level_for_mrp(
     configurable_selections: Optional[Dict[str, int]] = None,
     as_of_date: Optional[datetime] = None,
     max_phantom_depth: int = 10,
+    apply_global_version: bool = True,
 ) -> List[Dict[str, Any]]:
     """
     LLC/时间分桶 MRP：按父件「计划订单量」只展开一层实件。
@@ -750,6 +795,8 @@ async def explode_bom_one_level_for_mrp(
         use_default_bom,
         effective_material_bom_versions,
         as_of_date=as_of_date,
+        apply_global_version=apply_global_version,
+        version_context=bool(bom_version or material_bom_versions),
     )
     if not target_bom:
         return []
@@ -793,6 +840,7 @@ async def explode_bom_one_level_for_mrp(
                 configurable_selections=configurable_selections,
                 as_of_date=as_of_date,
                 max_phantom_depth=max_phantom_depth,
+                apply_global_version=False,
             )
             for row in nested:
                 row["phantom_material_id"] = component.id
@@ -812,6 +860,7 @@ async def explode_bom_one_level_for_mrp(
                 configurable_selections=configurable_selections,
                 as_of_date=as_of_date,
                 max_phantom_depth=max_phantom_depth,
+                apply_global_version=False,
             )
             if nested:
                 for row in nested:

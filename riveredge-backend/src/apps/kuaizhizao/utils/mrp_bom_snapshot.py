@@ -107,6 +107,7 @@ async def build_bom_snapshot_from_params(
         only_approved=True,
         version=version,
         use_default=use_default if not version else False,
+        strict_version=True,
     )
     snapshot: Dict[str, Any] = {}
     if global_v:
@@ -160,8 +161,9 @@ def bom_expand_kwargs_from_work_order(work_order: WorkOrder) -> Dict[str, Any]:
         kwargs["material_bom_versions"] = mbv
     if global_v or mbv:
         kwargs["use_default_bom"] = False
-    elif bom_id:
-        kwargs["use_default_bom"] = False
+    if bom_id:
+        # 快照锚点：回放时优先按该行 BOM 展开，不再走版本解析
+        kwargs["bom_id"] = int(bom_id)
     return kwargs
 
 
