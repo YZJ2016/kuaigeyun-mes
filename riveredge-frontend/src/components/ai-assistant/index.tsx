@@ -884,6 +884,7 @@ const AIAssistantFallbackPanel: React.FC<AIAssistantFallbackPanelProps> = ({
   chatStatus,
   statusError,
   embedded,
+  embeddedSplit,
   canOpenAssistantTab,
   onOpenAssistantTab,
 }) => {
@@ -982,6 +983,7 @@ const AIAssistantFallbackPanel: React.FC<AIAssistantFallbackPanelProps> = ({
       welcomeHint={welcomeHint}
       modelName={chatStatus?.model}
       embedded={embedded}
+      embeddedSplit={embeddedSplit}
       canOpenAssistantTab={canOpenAssistantTab}
       onOpenAssistantTab={onOpenAssistantTab}
     />
@@ -1382,6 +1384,7 @@ const AIAssistantEmbeddedWithHistory: React.FC = () => {
       if (!scopeKey) return
       void (async () => {
         await deleteKuAiConversationRemote(id)
+        if (pendingPersistRef.current?.id === id) pendingPersistRef.current = null
         const next = threads.filter((item) => item.id !== id)
         setThreads(next)
         if (activeId !== id) return
@@ -1408,18 +1411,19 @@ const AIAssistantEmbeddedWithHistory: React.FC = () => {
       const title = deriveKuAiConversationTitle(messages, newTitle)
       const lastMeta = deriveKuAiLastMessageMeta(messages)
       const inquirerName = deriveKuAiInquirerName(messages)
-      let contentChanged = false
-      let updatedAt = Date.now()
+
+      // 在 updater 外基于 threadsRef 判定变化：updater 可能延迟到渲染期执行，
+      // 在其中写副作用标志会静默跳过远端持久化。
+      const snapshot = threadsRef.current.find((item) => item.id === conversationId)
+      const snapshotFingerprint = kuAiConversationMessagesFingerprint(
+        conversationId,
+        snapshot?.messages ?? [],
+      )
+      if (fingerprint === snapshotFingerprint) return
+      const updatedAt = Date.now()
 
       setThreads((prev) => {
         const existing = prev.find((item) => item.id === conversationId)
-        const prevFingerprint = kuAiConversationMessagesFingerprint(
-          conversationId,
-          existing?.messages ?? [],
-        )
-        if (fingerprint === prevFingerprint) return prev
-        contentChanged = true
-        updatedAt = Date.now()
         const moveToFront = shouldMoveKuAiThreadToFrontOnPersist(existing, messages)
         const mapped = prev.map((item) =>
           item.id === conversationId
@@ -1428,8 +1432,6 @@ const AIAssistantEmbeddedWithHistory: React.FC = () => {
         )
         return moveToFront ? moveKuAiConversationToFront(mapped, conversationId) : mapped
       })
-
-      if (!contentChanged) return
 
       setActiveMessages(messages)
       const record: KuAiConversationRecord = {
