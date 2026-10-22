@@ -31849,6 +31849,10 @@ export default {
     '业务自动化：需求计算执行与采购下推',
   'pages.dashboard.updateLog.entries.planning-procurement-automation-r01.description':
     '配置中心「业务自动化」新增需求计算创建后自动执行、完成后自动下推采购，以及采购管理自动审核与下推收货通知；默认关闭，须先采购申请时改推采购申请。',
+  'pages.dashboard.updateLog.entries.flow-generate-preview-precheck-timeout-r01.title':
+    '修复流程造数预检与时间线预览无结果',
+  'pages.dashboard.updateLog.entries.flow-generate-preview-precheck-timeout-r01.description':
+    '大 BOM 订单展开下级自制件时预检/预览会超时空白；现改为浅层优先截断、批量解析工艺，下级缺工艺改为软告警，前端超时放宽到 3 分钟。',
   'pages.dashboard.updateLog.entries.data-backup-restore-unique-dedupe-r01.title':
     '修复数据备份恢复撞编码规则唯一约束',
   'pages.dashboard.updateLog.entries.data-backup-restore-unique-dedupe-r01.description':

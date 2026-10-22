@@ -162,16 +162,6 @@ riveredge-adapt/
 # ===== 本地单据产生工具（整目录不入库） =====
 .gen/
 
-# ===== 运维造数（流程造数 / 设备点检保养造数：本机保留，不入库） =====
-riveredge-backend/src/apps/kuaizhizao/services/flow_data_generate_service.py
-riveredge-backend/src/apps/kuaizhizao/services/flow_sim/
-riveredge-backend/src/apps/kuaizhizao/services/equipment_ops_data_generate_service.py
-riveredge-frontend/src/apps/kuaizhizao/services/flow-data-generate.ts
-riveredge-frontend/src/apps/kuaizhizao/services/equipment-ops-data-generate.ts
-riveredge-frontend/src/apps/kuaizhizao/pages/app-management/flow-data-generate/
-.cursor/memory/features/flow-data-generate-operator-modes.md
-.cursor/memory/features/equipment-ops-data-generate.md
-
 # ===== fast-deploy 本地生成物 =====
 fast-deploy/caddy/
 fast-deploy/.tools/
