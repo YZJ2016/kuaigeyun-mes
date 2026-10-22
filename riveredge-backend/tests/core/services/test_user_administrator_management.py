@@ -164,3 +164,38 @@ async def test_service_adapter_preserves_authenticated_platform_actor(monkeypatc
     monkeypatch.setattr(service.UserService, "create_user", create)
     await UserServiceImpl().create_user(1, object(), 50, current_user=actor)
     assert create.call_args.kwargs["current_user"] is actor
+
+
+@pytest.mark.asyncio
+async def test_audit_actor_resolves_platform_administrator(monkeypatch):
+    """resolve_audit_actor：租户过滤 miss 时放行 NULL 租户 + is_infra_admin 的平台管理员。"""
+    from core.utils import model_audit
+
+    platform_admin = SimpleNamespace(
+        id=1, tenant_id=None, is_infra_admin=True, username="sa", full_name="平台管理员",
+    )
+
+    def _fake_filter(**kwargs):
+        q = MagicMock()
+        q.first = AsyncMock(
+            return_value=platform_admin if kwargs.get("tenant_id__isnull") else None
+        )
+        return q
+
+    monkeypatch.setattr(model_audit.User, "filter", _fake_filter)
+    user_id, name = await model_audit.resolve_audit_actor(5, 1)
+    assert (user_id, name) == (1, "平台管理员")
+
+
+@pytest.mark.asyncio
+async def test_audit_actor_rejects_plain_null_tenant_user(monkeypatch):
+    """resolve_audit_actor：tenant_id 为 NULL 但非 is_infra_admin 的用户不得逃逸租户过滤。"""
+    from core.utils import model_audit
+
+    monkeypatch.setattr(
+        model_audit.User,
+        "filter",
+        lambda **_kwargs: MagicMock(first=AsyncMock(return_value=None)),
+    )
+    with pytest.raises(ValueError):
+        await model_audit.resolve_audit_actor(5, 1)

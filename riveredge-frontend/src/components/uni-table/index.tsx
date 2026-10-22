@@ -145,6 +145,7 @@ import {
   ROW_ACTIONS_STRIP_CLASS,
 } from '../uni-action'
 import { UNI_TABLE_STACKED_IDENTITY_CLASS } from './stackedPrimaryColumn'
+import { INLINE_MARKER_TAG_GROUP_CLASS } from '../inline-marker-tag-preview'
 import { LIST_PAGE_TABLE_SCROLL, getViewportHeightExpr } from '../layout-templates/constants'
 import { shouldEnableUniTableBodyScrollY } from './uniTableScrollPolicy'
 import { useUniTableLayoutEffects } from './useUniTableLayoutEffects'
@@ -3418,11 +3419,19 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         const colKey = cell.dataset.uniFlexCol
         if (!colKey) return
         const identity = cell.querySelector<HTMLElement>(`.${UNI_TABLE_STACKED_IDENTITY_CLASS}`)
-        if (!identity) return
-        // 标识行右缘相对单元格左缘：天然含左内边距与树形缩进
-        const width = resolveUniTablePrimaryFlexWidthFromContent(
-          identity.getBoundingClientRect().right - cell.getBoundingClientRect().left,
-        )
+        const markerGroup = cell.querySelector<HTMLElement>(`.${INLINE_MARKER_TAG_GROUP_CLASS}`)
+        if (!identity && !markerGroup) return
+        let requiredPx = 0
+        if (identity) {
+          // 标识行右缘相对单元格左缘：天然含左内边距与树形缩进
+          requiredPx = identity.getBoundingClientRect().right - cell.getBoundingClientRect().left
+        } else if (markerGroup) {
+          // overflow:hidden 下 scrollWidth 仍为徽章组固有宽
+          requiredPx =
+            markerGroup.scrollWidth +
+            Math.max(0, markerGroup.getBoundingClientRect().left - cell.getBoundingClientRect().left)
+        }
+        const width = resolveUniTablePrimaryFlexWidthFromContent(requiredPx)
         if (!(width > 0)) return
         primaryFlexWidths[colKey] = Math.max(primaryFlexWidths[colKey] ?? 0, width)
       })
