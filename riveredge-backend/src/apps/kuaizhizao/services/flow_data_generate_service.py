@@ -3841,7 +3841,9 @@ class FlowDataGenerateService:
             created_by=operator_id,
         )
         computation_id = int(push["computation_id"])
-        computation = await DemandComputation.get(id=computation_id)
+        computation = await DemandComputation.get(
+            id=computation_id, tenant_id=tenant_id
+        )
         demand_id = getattr(computation, "demand_id", None)
 
         # 执行计算
@@ -3907,7 +3909,9 @@ class FlowDataGenerateService:
             user_id=operator_id,
         )
         computation_id = int(push["computation_id"])
-        computation = await DemandComputation.get(id=computation_id)
+        computation = await DemandComputation.get(
+            id=computation_id, tenant_id=tenant_id
+        )
         demand_id = getattr(computation, "demand_id", None)
 
         await DemandComputationService().execute_computation(
