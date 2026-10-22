@@ -123,10 +123,10 @@ export function seedKuAiMessageMetaFromStored(
   stored: KuAiStoredMessage[],
 ): void {
   stored.forEach((m, index) => {
-    if (!m.speaker_name || !m.spoken_at) return;
+    if (!m.speaker_name && !m.spoken_at) return;
     metaById.set(`stored-${conversationId}-${index}`, {
-      speaker_name: m.speaker_name,
-      spoken_at: m.spoken_at,
+      speaker_name: m.speaker_name ?? '',
+      spoken_at: m.spoken_at ?? '',
     });
   });
 }
