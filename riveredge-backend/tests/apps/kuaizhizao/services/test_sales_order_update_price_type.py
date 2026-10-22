@@ -47,6 +47,11 @@ async def test_item_update_resolves_price_type_and_persists(monkeypatch, submitt
     obj = module.SalesOrderService()
     monkeypatch.setattr(obj, "_assert_sales_order_capability_for_order", AsyncMock())
     monkeypatch.setattr(obj, "_load_material_master_map", AsyncMock(return_value={}))
+
+    async def _passthrough(tenant_id, *, partner_type, partner_id, lines, material_id_key="material_id"):
+        return [dict(r) for r in lines]
+
+    monkeypatch.setattr(module, "enrich_line_dicts_with_partner_snapshots", _passthrough)
     monkeypatch.setattr(obj, "get_sales_order_by_id", AsyncMock(return_value=SimpleNamespace(model_dump=lambda: {"id": 1})))
     monkeypatch.setattr(obj, "_log_state_transition", AsyncMock())
     monkeypatch.setattr(obj, "_sync_demand_if_exists", AsyncMock(return_value=False))
