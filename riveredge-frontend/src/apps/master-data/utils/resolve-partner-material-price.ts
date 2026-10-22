@@ -16,6 +16,31 @@ type FormWithLineItems = {
   setFieldValue?: (name: string | (string | number)[], value: unknown) => void;
 };
 
+function readMaterialTextField(obj: Record<string, unknown>, key: string): string {
+  const camel = obj[key];
+  if (camel != null && String(camel).trim()) return String(camel).trim();
+  const snake = key.replace(/([A-Z])/g, '_$1').toLowerCase();
+  const snakeVal = obj[snake];
+  if (snakeVal != null && String(snakeVal).trim()) return String(snakeVal).trim();
+  return '';
+}
+
+/** 引用展示/列表常缺型号，选料写行快照前按需拉物料详情 */
+async function ensureMaterialMasterSnapshot(
+  material: Material | Record<string, unknown>,
+): Promise<Material | Record<string, unknown>> {
+  const uuid = String((material as Record<string, unknown>).uuid ?? '').trim();
+  if (!uuid) return material;
+  const spec = readMaterialTextField(material as Record<string, unknown>, 'specification');
+  const model = readMaterialTextField(material as Record<string, unknown>, 'model');
+  if (spec && model) return material;
+  try {
+    return await materialApi.get(uuid);
+  } catch {
+    return material;
+  }
+}
+
 function pickNumberField(
   obj: Record<string, unknown> | null | undefined,
   ...keys: string[]
@@ -300,6 +325,10 @@ export type ResolvedSalesMaterialLinePricing = {
   unitPrice: number;
   taxRate: number;
   pricingSnapshot?: Record<string, unknown> | null;
+  material_spec?: string;
+  material_model?: string;
+  partner_material_code?: string;
+  partner_material_name?: string;
 };
 
 /** 批量选料：客户价本 + 物料默认价税（与单行 applySalesDocumentLineMaterialPricing 一致） */
@@ -323,7 +352,9 @@ export async function resolveSalesDocumentMaterialLinesPricing(
       : dayjs();
 
   const enriched = await Promise.all(
-    materials.map((m) => resolveMaterialForPricing(m, options?.materialList)),
+    materials.map(async (m) =>
+      ensureMaterialMasterSnapshot(await resolveMaterialForPricing(m, options?.materialList)),
+    ),
   );
 
   const resolveMap = new Map<number, PartnerPriceResolveResult>();
@@ -366,7 +397,17 @@ export async function resolveSalesDocumentMaterialLinesPricing(
       if (pt === 'tax_inclusive' && unitPrice > 0) {
         unitPrice = convertUnitPriceByPriceType(unitPrice, taxRate, 'tax_exclusive', 'tax_inclusive');
       }
-      return { material: full, unitPrice, taxRate, pricingSnapshot };
+      const partner = pickPartnerMaterialSnapshotFields(resolved);
+      return {
+        material: full,
+        unitPrice,
+        taxRate,
+        pricingSnapshot,
+        material_spec: readMaterialTextField(full as Record<string, unknown>, 'specification'),
+        material_model: readMaterialTextField(full as Record<string, unknown>, 'model'),
+        partner_material_code: partner.partner_material_code,
+        partner_material_name: partner.partner_material_name,
+      };
     }),
   );
 }
@@ -397,19 +438,35 @@ export async function resolveOrderLineSalePrice(
     };
   };
   if (!customerId || !materialId) {
-    return fallbackMarket();
+    const fb = await fallbackMarket();
+    return { ...fb, resolved: undefined };
   }
   try {
     const resolved = await resolveCustomerSalePrice(customerId, materialId, asOf, attrs);
+    const taxRate = pickResolvedTaxRate(resolved) ?? taxR;
     if (resolved?.found) {
-      const taxRate = pickResolvedTaxRate(resolved) ?? taxR;
       const unitPrice = pickSaleUnitPrice(material ?? {}, resolved);
       return { unitPrice, taxRate, resolved, snapshot: null };
     }
+    const fb = await fallbackMarket();
+    return { unitPrice: fb.unitPrice, taxRate: fb.taxRate, resolved, snapshot: fb.snapshot };
   } catch {
     /* 无价目表则走物料取价 */
   }
-  return fallbackMarket();
+  const fb = await fallbackMarket();
+  return { ...fb, resolved: undefined };
+}
+
+function pickPartnerMaterialSnapshotFields(
+  resolved?: PartnerPriceResolveResult | null,
+): { partner_material_code: string; partner_material_name: string } {
+  if (!resolved) {
+    return { partner_material_code: '', partner_material_name: '' };
+  }
+  const raw = resolved as Record<string, unknown>;
+  const code = String(resolved.partnerMaterialCode ?? raw.partner_material_code ?? '').trim();
+  const name = String(resolved.partnerMaterialName ?? raw.partner_material_name ?? '').trim();
+  return { partner_material_code: code, partner_material_name: name };
 }
 
 const toSafeNumber = (value: unknown): number => {
@@ -454,7 +511,11 @@ export async function applySalesDocumentLineMaterialPricing(
   },
 ): Promise<void> {
   if (!form) return;
-  const full = await resolveMaterialForPricing(material, options?.materialList);
+  const full = await ensureMaterialMasterSnapshot(
+    await resolveMaterialForPricing(material, options?.materialList),
+  );
+  const materialSpec = readMaterialTextField(full as Record<string, unknown>, 'specification');
+  const materialModel = readMaterialTextField(full as Record<string, unknown>, 'model');
   const customerId = form.getFieldValue('customer_id');
   const asOfField = options?.asOfField ?? 'order_date';
   const asOfRaw = form.getFieldValue(asOfField);
@@ -469,6 +530,7 @@ export async function applySalesDocumentLineMaterialPricing(
   let unitPrice = 0;
   let taxRate = getMaterialDefaultTaxRate(full);
   let snapshot: Record<string, unknown> | null = null;
+  let partnerSnapshot = { partner_material_code: '', partner_material_name: '' };
   try {
     const resolved = await resolveOrderLineSalePrice(
       customerId ? Number(customerId) : undefined,
@@ -480,6 +542,7 @@ export async function applySalesDocumentLineMaterialPricing(
     unitPrice = resolved.unitPrice;
     taxRate = resolved.taxRate;
     snapshot = resolved.snapshot ?? null;
+    partnerSnapshot = pickPartnerMaterialSnapshotFields(resolved.resolved);
   } catch (e: unknown) {
     message.error(getApiErrorMessage(e, '未维护该日原料行情，请到原料行情录入'));
   }
@@ -489,12 +552,25 @@ export async function applySalesDocumentLineMaterialPricing(
   }
   const items = [...normalizeFormListItems<Record<string, unknown>>(form.getFieldValue('items'))];
   if (!items[index]) return;
-  items[index] = { ...items[index], unit_price: up, tax_rate: taxRate, pricing_snapshot: snapshot ?? null };
+  items[index] = {
+    ...items[index],
+    unit_price: up,
+    tax_rate: taxRate,
+    pricing_snapshot: snapshot ?? null,
+    material_spec: materialSpec,
+    material_model: materialModel,
+    partner_material_code: partnerSnapshot.partner_material_code,
+    partner_material_name: partnerSnapshot.partner_material_name,
+  };
   form.setFieldsValue({ items });
   // 嵌套字段显式写入，避免 Form.List 行内 InputNumber 与 store 不同步
   form.setFieldValue?.(['items', index, 'unit_price'], up);
   form.setFieldValue?.(['items', index, 'tax_rate'], taxRate);
   form.setFieldValue?.(['items', index, 'pricing_snapshot'], snapshot ?? null);
+  form.setFieldValue?.(['items', index, 'material_spec'], materialSpec);
+  form.setFieldValue?.(['items', index, 'material_model'], materialModel);
+  form.setFieldValue?.(['items', index, 'partner_material_code'], partnerSnapshot.partner_material_code);
+  form.setFieldValue?.(['items', index, 'partner_material_name'], partnerSnapshot.partner_material_name);
 }
 
 export type ResolvedPurchaseMaterialLinePricing = {
@@ -516,6 +592,7 @@ export async function resolveOrderLinePurchasePrice(
     return {
       unitPrice: material ? getMaterialDefaultPurchasePrice(material) : 0,
       taxRate: taxR,
+      resolved: undefined,
     };
   }
   try {
@@ -527,6 +604,7 @@ export async function resolveOrderLinePurchasePrice(
     return {
       unitPrice: material ? getMaterialDefaultPurchasePrice(material) : 0,
       taxRate: taxR,
+      resolved: undefined,
     };
   }
 }
@@ -552,7 +630,9 @@ export async function resolvePurchaseDocumentMaterialLinesPricing(
       : dayjs();
 
   const enriched = await Promise.all(
-    materials.map((m) => resolveMaterialForPricing(m, options?.materialList)),
+    materials.map(async (m) =>
+      ensureMaterialMasterSnapshot(await resolveMaterialForPricing(m, options?.materialList)),
+    ),
   );
 
   const resolveMap = new Map<number, PartnerPriceResolveResult>();
@@ -587,7 +667,16 @@ export async function resolvePurchaseDocumentMaterialLinesPricing(
     if (pt === 'tax_inclusive' && unitPrice > 0) {
       unitPrice = convertUnitPriceByPriceType(unitPrice, taxRate, 'tax_exclusive', 'tax_inclusive');
     }
-    return { material: full, unitPrice, taxRate };
+    const partner = pickPartnerMaterialSnapshotFields(resolved);
+    return {
+      material: full,
+      unitPrice,
+      taxRate,
+      material_spec: readMaterialTextField(full as Record<string, unknown>, 'specification'),
+      material_model: readMaterialTextField(full as Record<string, unknown>, 'model'),
+      partner_material_code: partner.partner_material_code,
+      partner_material_name: partner.partner_material_name,
+    };
   });
 }
 
@@ -609,7 +698,11 @@ export async function applyPurchaseDocumentLineMaterialPricing(
   },
 ): Promise<void> {
   if (!form) return;
-  const full = await resolveMaterialForPricing(material, options?.materialList);
+  const full = await ensureMaterialMasterSnapshot(
+    await resolveMaterialForPricing(material, options?.materialList),
+  );
+  const materialSpec = readMaterialTextField(full as Record<string, unknown>, 'specification');
+  const materialModel = readMaterialTextField(full as Record<string, unknown>, 'model');
   const unitPriceField = options?.unitPriceField ?? 'unit_price';
   const includeTaxRate = options?.includeTaxRate !== false && unitPriceField === 'unit_price';
   const asOfField = options?.asOfField ?? 'order_date';
@@ -634,13 +727,14 @@ export async function applyPurchaseDocumentLineMaterialPricing(
           ? headerSupplier
           : undefined;
   const materialId = Number((full as Material).id ?? (material as Record<string, unknown>).id);
-  const { unitPrice, taxRate } = await resolveOrderLinePurchasePrice(
+  const { unitPrice, taxRate, resolved } = await resolveOrderLinePurchasePrice(
     supplierId,
     Number.isFinite(materialId) ? materialId : undefined,
     undefined,
     full,
     asOf,
   );
+  const partnerSnapshot = pickPartnerMaterialSnapshotFields(resolved);
   let up = unitPrice;
   if (pt === 'tax_inclusive' && up > 0) {
     up = convertUnitPriceByPriceType(up, taxRate, 'tax_exclusive', 'tax_inclusive');
@@ -648,6 +742,10 @@ export async function applyPurchaseDocumentLineMaterialPricing(
   const nextRow: Record<string, unknown> = {
     ...items[index],
     [unitPriceField]: up,
+    material_spec: materialSpec,
+    material_model: materialModel,
+    partner_material_code: partnerSnapshot.partner_material_code,
+    partner_material_name: partnerSnapshot.partner_material_name,
   };
   if (includeTaxRate) {
     nextRow.tax_rate = taxRate;
@@ -655,6 +753,10 @@ export async function applyPurchaseDocumentLineMaterialPricing(
   items[index] = nextRow;
   form.setFieldsValue({ items });
   form.setFieldValue?.(['items', index, unitPriceField], up);
+  form.setFieldValue?.(['items', index, 'material_spec'], materialSpec);
+  form.setFieldValue?.(['items', index, 'material_model'], materialModel);
+  form.setFieldValue?.(['items', index, 'partner_material_code'], partnerSnapshot.partner_material_code);
+  form.setFieldValue?.(['items', index, 'partner_material_name'], partnerSnapshot.partner_material_name);
   if (includeTaxRate) {
     form.setFieldValue?.(['items', index, 'tax_rate'], taxRate);
   }

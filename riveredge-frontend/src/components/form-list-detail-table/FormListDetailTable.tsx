@@ -3,13 +3,15 @@
  * 视觉与交互对齐工艺路线 OperationSequenceEditor / 主数据明细表。
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { forwardRef, useImperativeHandle, useMemo, useState } from 'react';
 import { Form, Button, Table, Space, Typography, Modal, Select, App, theme } from 'antd';
 import { PlusOutlined, CopyOutlined, DeleteOutlined } from '@ant-design/icons';
 import type { FormListFieldData } from 'antd/es/form';
 import type { ColumnsType, TableProps } from 'antd/es/table';
 import { useTranslation } from 'react-i18next';
 import { MODAL_NESTED_ABOVE_PARENT_OFFSET } from '../layout-templates/constants';
+import { UniDropdown } from '../uni-dropdown';
+import type { QuickCreateConfig } from '../uni-dropdown/types';
 import { MODAL_ISOLATE_POINTER_PROPS } from '../../utils/modalEventIsolation';
 
 export interface FormListDetailColumn {
@@ -27,6 +29,13 @@ export interface FormListBulkAddConfig {
   searchPlaceholder?: string;
   /** 跳过列表中已存在的 valueField 值，默认 true */
   dedupe?: boolean;
+  /** 选择弹窗下拉底部「快速新建」；与 UniDropdown.quickCreate 同契约 */
+  quickCreate?: QuickCreateConfig;
+}
+
+export interface FormListDetailTableHandle {
+  /** 快速新建成功后：若选择弹窗已打开则勾选新项，否则追加一行 */
+  pickBulkValue: (value: string | number) => void;
 }
 
 export interface FormListDetailTableProps {
@@ -53,227 +62,279 @@ function resolveDefaultRow(
   return typeof defaultRow === 'function' ? defaultRow() : { ...(defaultRow ?? {}) };
 }
 
-export const FormListDetailTable: React.FC<FormListDetailTableProps> = ({
-  name,
-  label,
-  columns,
-  addButtonText,
-  defaultRow,
-  minRows = 0,
-  copyEnabled = true,
-  emptyText,
-  bulkAdd,
-  pickModalZIndex,
-  tableScroll = { x: 'max-content' },
-  renderSummary,
-}) => {
-  const { t } = useTranslation();
-  const { message } = App.useApp();
-  const { token } = theme.useToken();
-  const form = Form.useFormInstance();
-  const lineValues = Form.useWatch(name, form) as Record<string, unknown>[] | undefined;
-  const [pickOpen, setPickOpen] = useState(false);
-  const [pickedValues, setPickedValues] = useState<Array<string | number>>([]);
+export const FormListDetailTable = forwardRef<FormListDetailTableHandle, FormListDetailTableProps>(
+  function FormListDetailTable(
+    {
+      name,
+      label,
+      columns,
+      addButtonText,
+      defaultRow,
+      minRows = 0,
+      copyEnabled = true,
+      emptyText,
+      bulkAdd,
+      pickModalZIndex,
+      tableScroll = { x: 'max-content' },
+      renderSummary,
+    },
+    ref,
+  ) {
+    const { t } = useTranslation();
+    const { message } = App.useApp();
+    const { token } = theme.useToken();
+    const form = Form.useFormInstance();
+    const lineValues = Form.useWatch(name, form) as Record<string, unknown>[] | undefined;
+    const [pickOpen, setPickOpen] = useState(false);
+    const [pickedValues, setPickedValues] = useState<Array<string | number>>([]);
 
-  const modalZIndex = pickModalZIndex ?? token.zIndexPopupBase + MODAL_NESTED_ABOVE_PARENT_OFFSET;
+    const modalZIndex = pickModalZIndex ?? token.zIndexPopupBase + MODAL_NESTED_ABOVE_PARENT_OFFSET;
 
-  const existingValues = useMemo(() => {
-    if (!bulkAdd) return new Set<string | number>();
-    const list = (form.getFieldValue(name) ?? []) as Record<string, unknown>[];
-    return new Set(
-      list
-        .map((row) => row[bulkAdd.valueField])
-        .filter((v): v is string | number => v !== undefined && v !== null && v !== ''),
-    );
-  }, [bulkAdd, form, name, pickOpen]);
+    const existingValues = useMemo(() => {
+      if (!bulkAdd) return new Set<string | number>();
+      const list = (form.getFieldValue(name) ?? []) as Record<string, unknown>[];
+      return new Set(
+        list
+          .map((row) => row[bulkAdd.valueField])
+          .filter((v): v is string | number => v !== undefined && v !== null && v !== ''),
+      );
+    }, [bulkAdd, form, name, pickOpen]);
 
-  const availableOptions = useMemo(() => {
-    if (!bulkAdd) return [];
-    const dedupe = bulkAdd.dedupe !== false;
-    return dedupe ? bulkAdd.options.filter((opt) => !existingValues.has(opt.value)) : bulkAdd.options;
-  }, [bulkAdd, existingValues, pickOpen]);
+    const availableOptions = useMemo(() => {
+      if (!bulkAdd) return [];
+      const dedupe = bulkAdd.dedupe !== false;
+      return dedupe ? bulkAdd.options.filter((opt) => !existingValues.has(opt.value)) : bulkAdd.options;
+    }, [bulkAdd, existingValues, pickOpen]);
 
-  const openPickModal = () => {
-    setPickedValues([]);
-    setPickOpen(true);
-  };
+    const appendLineWithValue = (value: string | number) => {
+      if (!bulkAdd) return;
+      const list = [...((form.getFieldValue(name) ?? []) as Record<string, unknown>[])];
+      const dedupe = bulkAdd.dedupe !== false;
+      if (dedupe && list.some((row) => row[bulkAdd.valueField] === value)) {
+        return;
+      }
+      const baseDefault = resolveDefaultRow(defaultRow);
+      const maxSort = list.reduce((max, row) => Math.max(max, Number(row.sort_order) || 0), -1);
+      form.setFieldValue(name, [
+        ...list,
+        {
+          ...baseDefault,
+          [bulkAdd.valueField]: value,
+          ...(Object.prototype.hasOwnProperty.call(baseDefault, 'sort_order')
+            ? { sort_order: maxSort + 1 }
+            : {}),
+        },
+      ]);
+    };
 
-  const handlePickConfirm = () => {
-    if (!bulkAdd) return;
-    if (!pickedValues.length) {
-      message.warning(t('common.bulkAddSelectRequired'));
-      return;
-    }
-    const dedupe = bulkAdd.dedupe !== false;
-    const list = [...((form.getFieldValue(name) ?? []) as Record<string, unknown>[])];
-    const existSet = dedupe
-      ? new Set(list.map((row) => row[bulkAdd.valueField]).filter((v) => v !== undefined && v !== null && v !== ''))
-      : new Set<unknown>();
-    const toAdd = pickedValues.filter((v) => !existSet.has(v));
-    if (!toAdd.length) {
-      message.warning(t('common.bulkAddAllExist'));
-      return;
-    }
-    const baseDefault = resolveDefaultRow(defaultRow);
-    const maxSort = list.reduce((max, row) => Math.max(max, Number(row.sort_order) || 0), -1);
-    const nextList = [
-      ...list,
-      ...toAdd.map((value, index) => ({
-        ...baseDefault,
-        [bulkAdd.valueField]: value,
-        ...(Object.prototype.hasOwnProperty.call(baseDefault, 'sort_order')
-          ? { sort_order: maxSort + 1 + index }
-          : {}),
-      })),
-    ];
-    form.setFieldValue(name, nextList);
-    setPickOpen(false);
-    setPickedValues([]);
-    message.success(t('common.bulkAddSuccess', { count: toAdd.length }));
-  };
+    useImperativeHandle(ref, () => ({
+      pickBulkValue: (value) => {
+        if (!bulkAdd) return;
+        if (pickOpen) {
+          setPickedValues((prev) => (prev.includes(value) ? prev : [...prev, value]));
+          return;
+        }
+        appendLineWithValue(value);
+      },
+    }));
 
-  const handleAddClick = () => {
-    if (bulkAdd) {
-      openPickModal();
-      return;
-    }
-    const next = resolveDefaultRow(defaultRow);
-    const list = (form.getFieldValue(name) ?? []) as Record<string, unknown>[];
-    form.setFieldValue(name, [...list, next]);
-  };
+    const openPickModal = () => {
+      setPickedValues([]);
+      setPickOpen(true);
+    };
 
-  return (
-    <Form.List name={name}>
-      {(fields, { add, remove }, { errors }) => {
-        const tableColumns: ColumnsType<FormListFieldData> = [
-          {
-            title: '#',
-            width: 48,
-            align: 'center',
-            render: (_value, _field, index) => index + 1,
-          },
-          ...columns.map((col) => ({
-            title: col.title,
-            key: col.key,
-            width: col.width,
-            align: col.align,
-            render: (_value: unknown, field: FormListFieldData, index: number) =>
-              col.render(field, index),
-          })),
-          {
-            title: t('common.actions'),
-            key: '_actions',
-            width: 80,
-            align: 'center' as const,
-            fixed: 'right' as const,
-            render: (_value, field) => (
-              <Space size={0}>
-                {copyEnabled ? (
+    const handlePickConfirm = () => {
+      if (!bulkAdd) return;
+      if (!pickedValues.length) {
+        message.warning(t('common.bulkAddSelectRequired'));
+        return;
+      }
+      const dedupe = bulkAdd.dedupe !== false;
+      const list = [...((form.getFieldValue(name) ?? []) as Record<string, unknown>[])];
+      const existSet = dedupe
+        ? new Set(list.map((row) => row[bulkAdd.valueField]).filter((v) => v !== undefined && v !== null && v !== ''))
+        : new Set<unknown>();
+      const toAdd = pickedValues.filter((v) => !existSet.has(v));
+      if (!toAdd.length) {
+        message.warning(t('common.bulkAddAllExist'));
+        return;
+      }
+      const baseDefault = resolveDefaultRow(defaultRow);
+      const maxSort = list.reduce((max, row) => Math.max(max, Number(row.sort_order) || 0), -1);
+      const nextList = [
+        ...list,
+        ...toAdd.map((value, index) => ({
+          ...baseDefault,
+          [bulkAdd.valueField]: value,
+          ...(Object.prototype.hasOwnProperty.call(baseDefault, 'sort_order')
+            ? { sort_order: maxSort + 1 + index }
+            : {}),
+        })),
+      ];
+      form.setFieldValue(name, nextList);
+      setPickOpen(false);
+      setPickedValues([]);
+      message.success(t('common.bulkAddSuccess', { count: toAdd.length }));
+    };
+
+    const handleAddClick = () => {
+      if (bulkAdd) {
+        openPickModal();
+        return;
+      }
+      const next = resolveDefaultRow(defaultRow);
+      const list = (form.getFieldValue(name) ?? []) as Record<string, unknown>[];
+      form.setFieldValue(name, [...list, next]);
+    };
+
+    return (
+      <Form.List name={name}>
+        {(fields, { add, remove }, { errors }) => {
+          const tableColumns: ColumnsType<FormListFieldData> = [
+            {
+              title: '#',
+              width: 48,
+              align: 'center',
+              render: (_value, _field, index) => index + 1,
+            },
+            ...columns.map((col) => ({
+              title: col.title,
+              key: col.key,
+              width: col.width,
+              align: col.align,
+              render: (_value: unknown, field: FormListFieldData, index: number) =>
+                col.render(field, index),
+            })),
+            {
+              title: t('common.actions'),
+              key: '_actions',
+              width: 80,
+              align: 'center' as const,
+              fixed: 'right' as const,
+              render: (_value, field) => (
+                <Space size={0}>
+                  {copyEnabled ? (
+                    <Button
+                      type="text"
+                      size="small"
+                      icon={<CopyOutlined />}
+                      title={t('common.copyRow')}
+                      onClick={() => {
+                        const list = (form.getFieldValue(name) ?? []) as Record<string, unknown>[];
+                        const row = list[field.name];
+                        if (row && typeof row === 'object') {
+                          add({ ...row }, field.name + 1);
+                        } else {
+                          add({}, field.name + 1);
+                        }
+                      }}
+                    />
+                  ) : null}
                   <Button
                     type="text"
                     size="small"
-                    icon={<CopyOutlined />}
-                    title={t('common.copyRow')}
-                    onClick={() => {
-                      const list = (form.getFieldValue(name) ?? []) as Record<string, unknown>[];
-                      const row = list[field.name];
-                      if (row && typeof row === 'object') {
-                        add({ ...row }, field.name + 1);
-                      } else {
-                        add({}, field.name + 1);
-                      }
-                    }}
+                    danger
+                    icon={<DeleteOutlined />}
+                    title={t('common.delete')}
+                    disabled={fields.length <= minRows}
+                    onClick={() => remove(field.name)}
                   />
-                ) : null}
-                <Button
-                  type="text"
-                  size="small"
-                  danger
-                  icon={<DeleteOutlined />}
-                  title={t('common.delete')}
-                  disabled={fields.length <= minRows}
-                  onClick={() => remove(field.name)}
-                />
-              </Space>
-            ),
-          },
-        ];
+                </Space>
+              ),
+            },
+          ];
 
-        return (
-          <div style={{ marginBottom: 16, width: '100%' }}>
-            {label ? (
-              <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
-                {label}
-              </Typography.Text>
-            ) : null}
-            <Table<FormListFieldData>
-              size="small"
-              pagination={false}
-              rowKey="key"
-              dataSource={fields}
-              columns={tableColumns}
-              scroll={tableScroll === false ? undefined : tableScroll}
-              style={{ width: '100%' }}
-              tableLayout="fixed"
-              locale={{ emptyText: emptyText ?? t('common.noData') }}
-              summary={
-                renderSummary
-                  ? () => renderSummary(Array.isArray(lineValues) ? lineValues : [])
-                  : undefined
-              }
-            />
-            {errors?.length ? (
-              <div style={{ marginTop: 4 }}>
-                <Form.ErrorList errors={errors} />
-              </div>
-            ) : null}
-            <Button
-              type="dashed"
-              block
-              icon={<PlusOutlined />}
-              style={{ marginTop: 8 }}
-              onClick={handleAddClick}
-            >
-              {addButtonText}
-            </Button>
-
-            {bulkAdd ? (
-              <Modal
-                title={bulkAdd.title}
-                open={pickOpen}
-                zIndex={modalZIndex}
-                destroyOnHidden
-                maskProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
-                wrapProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
-                onCancel={() => {
-                  setPickOpen(false);
-                  setPickedValues([]);
-                }}
-                onOk={handlePickConfirm}
-                okText={t('common.confirm')}
-                cancelText={t('common.cancel')}
-              >
-                <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
-                  {t('common.bulkAddSelected', { count: pickedValues.length })}
+          return (
+            <div style={{ marginBottom: 16, width: '100%' }}>
+              {label ? (
+                <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
+                  {label}
                 </Typography.Text>
-                <Select
-                  mode="multiple"
-                  allowClear
-                  showSearch
-                  optionFilterProp="label"
-                  style={{ width: '100%' }}
-                  placeholder={bulkAdd.searchPlaceholder ?? t('common.bulkAddSearchPlaceholder')}
-                  value={pickedValues}
-                  options={availableOptions}
-                  onChange={(vals) => setPickedValues(vals)}
-                />
-              </Modal>
-            ) : null}
-          </div>
-        );
-      }}
-    </Form.List>
-  );
-};
+              ) : null}
+              <Table<FormListFieldData>
+                size="small"
+                pagination={false}
+                rowKey="key"
+                dataSource={fields}
+                columns={tableColumns}
+                scroll={tableScroll === false ? undefined : tableScroll}
+                style={{ width: '100%' }}
+                tableLayout="fixed"
+                locale={{ emptyText: emptyText ?? t('common.noData') }}
+                summary={
+                  renderSummary
+                    ? () => renderSummary(Array.isArray(lineValues) ? lineValues : [])
+                    : undefined
+                }
+              />
+              {errors?.length ? (
+                <div style={{ marginTop: 4 }}>
+                  <Form.ErrorList errors={errors} />
+                </div>
+              ) : null}
+              <Button
+                type="dashed"
+                block
+                icon={<PlusOutlined />}
+                style={{ marginTop: 8 }}
+                onClick={handleAddClick}
+              >
+                {addButtonText}
+              </Button>
+
+              {bulkAdd ? (
+                <Modal
+                  title={bulkAdd.title}
+                  open={pickOpen}
+                  zIndex={modalZIndex}
+                  destroyOnHidden
+                  maskProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
+                  wrapProps={{ ...MODAL_ISOLATE_POINTER_PROPS }}
+                  onCancel={() => {
+                    setPickOpen(false);
+                    setPickedValues([]);
+                  }}
+                  onOk={handlePickConfirm}
+                  okText={t('common.confirm')}
+                  cancelText={t('common.cancel')}
+                >
+                  <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
+                    {t('common.bulkAddSelected', { count: pickedValues.length })}
+                  </Typography.Text>
+                  {bulkAdd.quickCreate ? (
+                    <UniDropdown
+                      mode="multiple"
+                      allowClear
+                      showSearch
+                      optionFilterProp="label"
+                      style={{ width: '100%' }}
+                      placeholder={bulkAdd.searchPlaceholder ?? t('common.bulkAddSearchPlaceholder')}
+                      value={pickedValues}
+                      options={availableOptions}
+                      onChange={(vals) => setPickedValues(vals as Array<string | number>)}
+                      quickCreate={bulkAdd.quickCreate}
+                    />
+                  ) : (
+                    <Select
+                      mode="multiple"
+                      allowClear
+                      showSearch
+                      optionFilterProp="label"
+                      style={{ width: '100%' }}
+                      placeholder={bulkAdd.searchPlaceholder ?? t('common.bulkAddSearchPlaceholder')}
+                      value={pickedValues}
+                      options={availableOptions}
+                      onChange={(vals) => setPickedValues(vals)}
+                    />
+                  )}
+                </Modal>
+              ) : null}
+            </div>
+          );
+        }}
+      </Form.List>
+    );
+  },
+);
 
 export default FormListDetailTable;

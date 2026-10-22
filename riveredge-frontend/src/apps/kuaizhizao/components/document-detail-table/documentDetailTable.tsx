@@ -6,7 +6,7 @@
  */
 
 import React from 'react';
-import { Button, Form, InputNumber, Space } from 'antd';
+import { Button, Form, Input, InputNumber, Space } from 'antd';
 import { useTranslation } from 'react-i18next';
 
 /** 与报价单明细表一致的 table className */
@@ -52,6 +52,33 @@ export const DOCUMENT_DETAIL_TABLE_PROPS = {
 
 /** 明细表行内 Input / Select / DatePicker 等与 Table middle 对齐 */
 export const DOCUMENT_DETAIL_CONTROL_SIZE = 'middle' as const;
+
+/** 明细表行内文本框空值占位（规格/型号/伙伴料号等统一，禁止混用列标题文案） */
+export const DOCUMENT_DETAIL_LINE_EMPTY_PLACEHOLDER = '—';
+
+export type DocumentDetailLineTextInputProps = React.ComponentProps<typeof Input>;
+
+/** 明细表行内文本：空值占位统一为 DOCUMENT_DETAIL_LINE_EMPTY_PLACEHOLDER */
+export function DocumentDetailLineTextInput({
+  readOnly,
+  placeholder = DOCUMENT_DETAIL_LINE_EMPTY_PLACEHOLDER,
+  size = DOCUMENT_DETAIL_CONTROL_SIZE,
+  ...rest
+}: DocumentDetailLineTextInputProps) {
+  return <Input readOnly={readOnly} placeholder={placeholder} size={size} {...rest} />;
+}
+
+export function DocumentDetailLineReadonlyTextInput(
+  props: Omit<DocumentDetailLineTextInputProps, 'readOnly' | 'placeholder'>,
+) {
+  return (
+    <DocumentDetailLineTextInput
+      readOnly
+      placeholder={DOCUMENT_DETAIL_LINE_EMPTY_PLACEHOLDER}
+      {...props}
+    />
+  );
+}
 
 const DOCUMENT_DETAIL_TABLE_STYLE_BLOCK = `
   .quotation-detail-table .quotation-material-cell .ant-form-item,

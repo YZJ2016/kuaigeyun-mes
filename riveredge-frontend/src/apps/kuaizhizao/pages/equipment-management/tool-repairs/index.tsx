@@ -22,11 +22,12 @@ import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { toolApi } from '../../../services/equipment';
-import { repairSchemesApi, repairsApi } from '../../../services/toolOps';
+import { repairSchemesApi, repairsApi, schemeBindingsApi } from '../../../services/toolOps';
 import { formatDateTime } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import {
   APPROVAL_DOC_PINNED_STATUS_FIELD,
   buildApprovalDocStatusValueEnum,
@@ -126,17 +127,44 @@ const ToolRepairsPage: React.FC = () => {
   };
 
   const handlePreview = async (toolId?: number, schemeId?: number) => {
-    if (!toolId) {
+    if (!toolId || !schemeId) {
       setPreviewLines([]);
       return;
     }
     try {
       const res = await repairsApi.previewLines({ tool_id: toolId, scheme_id: schemeId });
       setPreviewLines(res.lines ?? []);
-    } catch {
-      messageApi.error(t(`${P}.previewFailed`));
+      if (res.scheme_id) {
+        formRef.current?.setFieldsValue({ scheme_id: res.scheme_id });
+      }
+    } catch (error: unknown) {
+      messageApi.error(getApiErrorMessage(error, t(`${P}.previewFailed`)));
       setPreviewLines([]);
     }
+  };
+
+  const handleToolChange = async (toolId?: number) => {
+    if (!toolId) {
+      setPreviewLines([]);
+      return;
+    }
+    let schemeId = formRef.current?.getFieldValue('scheme_id') as number | undefined;
+    if (!isEdit) {
+      try {
+        const bindings = await schemeBindingsApi.list({
+          tool_id: toolId,
+          scheme_type: 'repair',
+        });
+        const list = Array.isArray(bindings) ? bindings : [];
+        if (list.length === 1 && list[0]?.scheme_id != null) {
+          schemeId = Number(list[0].scheme_id);
+          formRef.current?.setFieldsValue({ scheme_id: schemeId });
+        }
+      } catch {
+        // 无绑定或无方案绑定读权限时不阻断建单，等用户手动选方案
+      }
+    }
+    await handlePreview(toolId, schemeId);
   };
 
   const handleCreate = () => {
@@ -634,8 +662,7 @@ const ToolRepairsPage: React.FC = () => {
               disabled={isEdit}
               fieldProps={{
                 onChange: (val: number) => {
-                  const schemeId = formRef.current?.getFieldValue('scheme_id');
-                  void handlePreview(val, schemeId);
+                  void handleToolChange(val);
                 },
               }}
             />
@@ -645,6 +672,7 @@ const ToolRepairsPage: React.FC = () => {
               name="scheme_id"
               label={t(`${P}.form.scheme`)}
               options={schemeOptions}
+              rules={[{ required: true, message: t(`${P}.schemeRequired`) }]}
               showSearch
               fieldProps={{
                 onChange: (val: number) => {

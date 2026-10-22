@@ -19,6 +19,10 @@ import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../.
 import { UniWorkflowActions } from '../../../../../../components/uni-workflow-actions';
 import { rowActionKind } from '../../../../../../components/uni-action';
 import { QuantityWithUnitDisplay } from '../../../../../../components/quantity-with-unit';
+import {
+  buildMaterialModelSpecColumns,
+  buildPartnerMaterialLineColumns,
+} from '../../../sales-management/shared/materialLineColumns';
 import { MaterialUnitSelect } from '../../../../../../components/material-unit-select';
 import { SourceDocumentCode } from '../../../../../../components/linked-document-code/SourceDocumentCode';
 import { WarehouseTraceBriefPrimaryActions } from '../../../warehouse-management/WarehouseTraceBriefFooter';
@@ -285,12 +289,20 @@ export const PurchaseRequisitionDetailDrawer: React.FC<PurchaseRequisitionDetail
                   width: 160,
                   ellipsis: true,
                 },
-                {
-                  title: t('app.kuaizhizao.purchaseRequisition.col.spec'),
-                  dataIndex: 'material_spec',
-                  width: 120,
+                ...buildMaterialModelSpecColumns(t, { readOnly: true, specWidth: 100, modelWidth: 100 }).map(
+                  (col) => ({
+                    title: col.title,
+                    dataIndex: col.dataIndex as string,
+                    width: col.width,
+                    ellipsis: true,
+                  }),
+                ),
+                ...buildPartnerMaterialLineColumns(t, 'supplier', { readOnly: true, width: 110 }).map((col) => ({
+                  title: col.title,
+                  dataIndex: col.dataIndex as string,
+                  width: col.width,
                   ellipsis: true,
-                },
+                })),
                 {
                   title: t('common.quantity'),
                   dataIndex: 'quantity',

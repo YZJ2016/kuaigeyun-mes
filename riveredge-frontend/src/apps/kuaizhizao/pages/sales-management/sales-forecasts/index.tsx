@@ -43,6 +43,15 @@ import { UniTable, readPersistedUniTableViewType } from '../../../../../componen
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki'
 import { buildFactoryImportTemplate } from '../../../../../utils/spreadsheetImportTemplate'
 import { useImportMaterialUnitOptions } from '../../../../master-data/hooks/useImportMaterialUnitOptions'
+import {
+  buildDocumentDetailPartnerMaterialFormColumns,
+  buildDocumentDetailSpecModelFormColumns,
+  withMaterialLineFillMapping,
+} from '../shared/materialLineFormDetail';
+import {
+  buildMaterialModelSpecColumns,
+  buildPartnerMaterialLineColumns,
+} from '../shared/materialLineColumns'
 import { pickImportExampleValue } from '../../../../../utils/loadImportDictionaryValues'
 import { UniAuditBatchMenuButton, UniCapabilityBatchButton } from '../../../../../components/uni-batch';
 import { buildUniPushMenuItems, buildUniPushToolbarDisabledReason, UniPushToolbarButton } from '../../../../../components/uni-push';
@@ -1341,6 +1350,8 @@ export default function SalesForecastsPage() {
         hideInTable: true,
         hideInSearch: true,
       },
+      ...buildMaterialModelSpecColumns(t, { readOnly: true, specWidth: 100, modelWidth: 100 }),
+      ...buildPartnerMaterialLineColumns(t, 'customer', { readOnly: true, width: 110 }),
       {
         title: t('app.kuaizhizao.salesForecast.forecastPeriod'),
         dataIndex: 'forecast_period',
@@ -1723,12 +1734,7 @@ export default function SalesForecastsPage() {
                         size={DOCUMENT_DETAIL_CONTROL_SIZE}
                         listFieldKey={index}
                         listFieldName="items"
-                        fillMapping={{
-                          material_code: 'mainCode',
-                          material_name: 'name',
-                          material_spec: 'specification',
-                          material_unit: 'baseUnit',
-                        }}
+                        fillMapping={withMaterialLineFillMapping({ material_unit: 'baseUnit' })}
                         sourceType={materialSourceType}
                         formItemProps={{ style: { margin: 0 } }}
                         showAdvancedSearch
@@ -1750,16 +1756,10 @@ export default function SalesForecastsPage() {
                       </AntForm.Item>
                     ),
                   },
-                  {
-                    title: t('app.kuaizhizao.salesForecast.spec'),
-                    dataIndex: 'material_spec',
+                  ...buildDocumentDetailSpecModelFormColumns(t, { width: 120 }),
+                  ...buildDocumentDetailPartnerMaterialFormColumns(t, 'customer', {
                     width: 120,
-                    render: (_: any, __: any, index: number) => (
-                      <AntForm.Item name={[index, 'material_spec']} style={{ margin: 0 }}>
-                        <Input placeholder={t('app.kuaizhizao.salesForecast.specPlaceholder')} size={DOCUMENT_DETAIL_CONTROL_SIZE} />
-                      </AntForm.Item>
-                    ),
-                  },
+                  }),
                   {
                     title: t('common.unit'),
                     dataIndex: 'material_unit',

@@ -55,6 +55,7 @@ class IncomingInspection(BaseModel):
     material_code = fields.CharField(max_length=50, description="物料编码")
     material_name = fields.CharField(max_length=200, description="物料名称")
     material_spec = fields.CharField(max_length=200, null=True, description="物料规格")
+    material_model = fields.CharField(max_length=200, null=True, description="物料型号")
     material_unit = fields.CharField(max_length=20, description="物料单位")
 
     # 检验信息

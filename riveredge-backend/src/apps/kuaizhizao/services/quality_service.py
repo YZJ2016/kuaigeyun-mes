@@ -571,6 +571,29 @@ async def _ensure_inspection_material_unit(
     payload["material_unit"] = await _resolve_material_base_unit(tenant_id, mid)
 
 
+async def _ensure_inspection_material_spec_model(
+    tenant_id: int,
+    payload: Dict[str, Any],
+) -> None:
+    """建单前补齐物料规格/型号快照（仅填空，不覆盖已有值）。"""
+    mid = payload.get("material_id")
+    if not mid:
+        return
+    need_spec = not str(payload.get("material_spec") or "").strip()
+    need_model = not str(payload.get("material_model") or "").strip()
+    if not need_spec and not need_model:
+        return
+    from apps.master_data.models.material import Material
+
+    mat = await Material.get_or_none(tenant_id=tenant_id, id=int(mid))
+    if not mat:
+        return
+    if need_spec:
+        payload["material_spec"] = getattr(mat, "specification", None)
+    if need_model:
+        payload["material_model"] = getattr(mat, "model", None)
+
+
 def _summarize_pull_preview_items(preview_items: List[Dict[str, Any]]) -> Dict[str, Any]:
     """加载候选：明细行数、可加载行数、物料摘要（供取单弹窗展示）。"""
     pushable_count = sum(
@@ -1118,6 +1141,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                 await _quality_inspection_initial_review_fields(tenant_id, "incoming_inspection")
             )
             await _ensure_inspection_material_unit(tenant_id, create_data)
+            await _ensure_inspection_material_spec_model(tenant_id, create_data)
 
             inspection = await IncomingInspection.create(
                 tenant_id=tenant_id,
@@ -2342,6 +2366,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                 "material_code": item.material_code,
                 "material_name": item.material_name,
                 "material_spec": item.material_spec,
+                "material_model": getattr(item, "material_model", None),
                 "material_unit": item.material_unit,
                 "inspection_quantity": item.receipt_quantity,
                 "qualified_quantity": 0,
@@ -2353,6 +2378,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                 **template,
             }
             create_kwargs.update(initial_review_fields)
+            await _ensure_inspection_material_spec_model(tenant_id, create_kwargs)
             if created_by:
                 creator_name = await self.get_user_name(created_by)
                 create_kwargs["created_by_name"] = creator_name
@@ -4265,6 +4291,7 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
                 await _quality_inspection_initial_review_fields(tenant_id, "process_inspection")
             )
             await _ensure_inspection_material_unit(tenant_id, create_data)
+            await _ensure_inspection_material_spec_model(tenant_id, create_data)
 
             inspection = await ProcessInspection.create(
                 tenant_id=tenant_id,
@@ -5962,6 +5989,7 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
                 await _quality_inspection_initial_review_fields(tenant_id, "finished_goods_inspection")
             )
             await _ensure_inspection_material_unit(tenant_id, create_data)
+            await _ensure_inspection_material_spec_model(tenant_id, create_data)
             customer_id, customer_name = await _resolve_fqc_customer_snapshot(
                 tenant_id,
                 sales_order_id=create_data.get("sales_order_id"),

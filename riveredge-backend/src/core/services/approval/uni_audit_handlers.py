@@ -1438,6 +1438,7 @@ def _make_kuaioa_dispatch(
     revoke_method: str,
     decision_import: str,
     decision_fn: str,
+    withdraw_method: Optional[str] = None,
 ):
     async def dispatch(
         action: str,
@@ -1487,6 +1488,9 @@ def _make_kuaioa_dispatch(
             if result is not None:
                 return result
             return await get_fn(tenant_id, entity_id)
+        if action == "withdraw":
+            method = withdraw_method or revoke_method
+            return await getattr(svc, method)(tenant_id, entity_id, user_id)
         if action == "revoke":
             return await getattr(svc, revoke_method)(tenant_id, entity_id, user_id)
         _unsupported(entity_key, action)
@@ -1523,6 +1527,7 @@ _dispatch_kuaioa_leave = _make_kuaioa_dispatch(
     get_method="get_request",
     submit_method="submit_request",
     revoke_method="revoke_request",
+    withdraw_method="withdraw_request",
     decision_import="apps.kuaioa.services.leave_service",
     decision_fn="apply_leave_request_decision",
 )

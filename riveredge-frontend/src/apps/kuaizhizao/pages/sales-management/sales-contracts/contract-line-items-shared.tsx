@@ -15,6 +15,7 @@ import {
 import { DOCUMENT_DETAIL_CONTROL_SIZE } from '../../../components/document-detail-table/documentDetailTable';
 import { normalizeFormListItems } from '../../../../../utils/formListItems';
 import { DEFAULT_SALES_PRICE_TYPE, salesFormPriceType } from '../shared/salesPriceType';
+import { withMaterialLineFillMapping } from '../shared/materialLineFormDetail';
 import { resolveDocumentLineDisplayAmounts } from '../../../utils/documentLineAmounts';
 
 export { convertUnitPriceByPriceType };
@@ -24,6 +25,9 @@ export const defaultContractItem = {
   material_code: '',
   material_name: '',
   material_spec: '',
+  material_model: '',
+  partner_material_code: '',
+  partner_material_name: '',
   material_unit: '',
   contract_quantity: 1,
   unit_price: undefined as number | undefined,
@@ -142,12 +146,7 @@ export const ContractMaterialSelectCell: React.FC<{
           size={DOCUMENT_DETAIL_CONTROL_SIZE}
           listFieldKey={index}
           listFieldName="items"
-          fillMapping={{
-            material_code: 'mainCode',
-            material_name: 'name',
-            material_spec: 'specification',
-            material_unit: 'baseUnit',
-          }}
+          fillMapping={withMaterialLineFillMapping({ material_unit: 'baseUnit' })}
           fallbackOption={fallback}
           formItemProps={{ style: { margin: 0 } }}
           showQuickCreate

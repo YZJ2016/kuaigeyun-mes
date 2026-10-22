@@ -18,6 +18,9 @@ class SalesContractItemCreate(BaseModel):
     material_code: str
     material_name: str
     material_spec: Optional[str] = None
+    material_model: Optional[str] = Field(None, max_length=200, description="物料型号")
+    partner_material_code: Optional[str] = Field(None, max_length=100, description="客户料号")
+    partner_material_name: Optional[str] = Field(None, max_length=200, description="客户品名")
     material_unit: str
     contract_quantity: Decimal
     unit_price: Decimal

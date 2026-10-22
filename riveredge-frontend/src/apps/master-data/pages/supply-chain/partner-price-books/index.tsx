@@ -2,7 +2,7 @@
  * 客户/供应商价格本（共用列表页）
  */
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
@@ -15,6 +15,7 @@ import {
   InputNumber,
   Modal,
   Popconfirm,
+  Select,
   Switch,
   Typography,
   Row,
@@ -141,6 +142,8 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
     : 'master-data:supply-chain:supplier-price-book';
   const { canCreate } = useResourcePermissions(pagePermissionResource);
   const [batchRegisterOpen, setBatchRegisterOpen] = useState(false);
+  const [quickPartnerId, setQuickPartnerId] = useState<number | undefined>(undefined);
+  const quickPartnerIdRef = useRef<number | undefined>(undefined);
 
   const priceBookActiveValueEnum = useMemo(
     () => buildMasterCrudActiveValueEnum(t, 'common.enabled', 'common.disabled'),
@@ -159,6 +162,8 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
   const [aliasPreview, setAliasPreview] = useState<{ code?: string; name?: string }>({});
   const [aliasLocked, setAliasLocked] = useState(false);
   const [partnerOptions, setPartnerOptions] = useState<{ label: string; value: number }[]>([]);
+  /** 列表筛选专用：仅价格本中已有数据的客户/供应商 */
+  const [partnerFilterOptions, setPartnerFilterOptions] = useState<{ label: string; value: number }[]>([]);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const { options: unitOptions, isLoading: unitOptionsLoading } = useMaterialUnitOptions();
   const [materialAllowedUnits, setMaterialAllowedUnits] = useState<string[]>([]);
@@ -175,6 +180,24 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
     }
     return filtered;
   }, [materialAllowedUnits, unitOptions, watchedUnit]);
+
+  const loadPartnerFilterOptions = useCallback(async () => {
+    try {
+      const res = await priceBookApi.listPartnersWithData();
+      const opts = (res.data ?? []).map((p) => ({
+        label: [p.code, p.name].filter(Boolean).join(' - ') || String(p.id),
+        value: p.id,
+      }));
+      setPartnerFilterOptions(opts);
+      const selected = quickPartnerIdRef.current;
+      if (selected != null && !opts.some((o) => o.value === selected)) {
+        quickPartnerIdRef.current = undefined;
+        setQuickPartnerId(undefined);
+      }
+    } catch {
+      setPartnerFilterOptions([]);
+    }
+  }, [priceBookApi]);
 
   useEffect(() => {
     let cancelled = false;
@@ -198,6 +221,27 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
       cancelled = true;
     };
   }, [isCustomer]);
+
+  useEffect(() => {
+    quickPartnerIdRef.current = undefined;
+    setQuickPartnerId(undefined);
+    void loadPartnerFilterOptions();
+  }, [partnerType, loadPartnerFilterOptions]);
+
+  const partnerNameLabel = isCustomer
+    ? t('field.customer.name', '客户名称')
+    : t('field.supplier.name', '供应商名称');
+
+  const handleQuickPartnerChange = useCallback((value: number | undefined) => {
+    quickPartnerIdRef.current = value;
+    setQuickPartnerId(value);
+    actionRef.current?.reloadAndRest?.() ?? actionRef.current?.reload();
+  }, []);
+
+  const reloadListAfterMutation = useCallback(async () => {
+    await loadPartnerFilterOptions();
+    actionRef.current?.reload();
+  }, [loadPartnerFilterOptions]);
 
   const pageTitle = isCustomer
     ? t('app.master-data.menu.supply-chain.customer-price-books', '客户价格本')
@@ -326,7 +370,7 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
         messageApi.success(t('common.createSuccess'));
       }
       setModalVisible(false);
-      actionRef.current?.reload();
+      await reloadListAfterMutation();
     } catch (error: any) {
       if (error?.errorFields) return;
       messageApi.error(error?.message || t('common.operationFailed'));
@@ -339,7 +383,7 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
     try {
       await priceBookApi.delete(record.uuid);
       messageApi.success(t('common.deleteSuccess'));
-      actionRef.current?.reload();
+      await reloadListAfterMutation();
     } catch (error: any) {
       messageApi.error(error?.message || t('common.deleteFailed'));
     }
@@ -362,7 +406,7 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
         );
       }
       setSelectedRowKeys([]);
-      actionRef.current?.reload();
+      await reloadListAfterMutation();
     } catch (error: any) {
       messageApi.error(error?.message || t('common.batchDeleteFailed'));
     }
@@ -467,10 +511,7 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
 
   const columns: ProColumns<PartnerPriceBook>[] = useMemo(
     () => [
-      partnerPriceBookPartnerSearchColumn(
-        isCustomer ? t('field.customer.code', '客户') : t('field.supplier.code', '供应商'),
-        partnerOptions,
-      ),
+      partnerPriceBookPartnerSearchColumn(partnerNameLabel, partnerFilterOptions),
       {
         title: isCustomer
           ? t('field.customer.code', '客户编号')
@@ -659,7 +700,27 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
         ],
       },
     ],
-    [handleDelete, handleEdit, isCustomer, t, partnerOptions, priceBookActiveValueEnum, openDetail],
+    [handleDelete, handleEdit, isCustomer, t, partnerFilterOptions, partnerNameLabel, priceBookActiveValueEnum, openDetail],
+  );
+
+  /** 固定宽度外壳：勿直接用 UniDropdown（其外层 width:100% 会挤掉模糊搜索） */
+  const partnerQuickFilter = useMemo(
+    () => (
+      <div style={{ width: 220, flex: '0 0 220px' }}>
+        <Select
+          allowClear
+          showSearch
+          optionFilterProp="label"
+          placeholder={partnerNameLabel}
+          options={partnerFilterOptions}
+          value={quickPartnerId}
+          onChange={(v) => handleQuickPartnerChange(v != null ? Number(v) : undefined)}
+          popupMatchSelectWidth={false}
+          style={{ width: '100%' }}
+        />
+      </div>
+    ),
+    [handleQuickPartnerChange, partnerNameLabel, partnerFilterOptions, quickPartnerId],
   );
 
   const createButtonLabel = isCustomer
@@ -722,13 +783,19 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
               ]}
             />,
           ]}
+          beforeSearchButtons={partnerQuickFilter}
+          onSearchReset={() => {
+            quickPartnerIdRef.current = undefined;
+            setQuickPartnerId(undefined);
+          }}
           request={async (params, sort, _filter, searchFormValues) => {
             const listParams = resolvePartnerPriceBookListParams(searchFormValues, sort);
-            lastListParamsRef.current = listParams;
+            const partnerId = quickPartnerIdRef.current ?? (listParams.partnerId as number | undefined);
+            lastListParamsRef.current = { ...listParams, partnerId };
             const res = await priceBookApi.list({
               skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
               limit: params.pageSize ?? 20,
-              partnerId: listParams.partnerId as number | undefined,
+              partnerId,
               materialId: listParams.materialId as number | undefined,
               keyword: listParams.keyword as string | undefined,
               activeOnly: listParams.activeOnly as boolean | undefined,
@@ -752,7 +819,9 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
         partnerType={partnerType}
         open={batchRegisterOpen}
         onClose={() => setBatchRegisterOpen(false)}
-        onSuccess={() => actionRef.current?.reload()}
+        onSuccess={() => {
+          void reloadListAfterMutation();
+        }}
         partnerOptions={partnerOptions}
       />
 

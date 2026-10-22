@@ -4,6 +4,7 @@ import json
 import uuid
 from datetime import date
 from typing import Annotated, Any, Dict, Optional
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, status
 from loguru import logger
@@ -12,6 +13,7 @@ from apps.master_data.schemas.partner_price_book_schemas import (
     PartnerPriceBookBulkCreate,
     PartnerPriceBookBulkResponse,
     PartnerPriceBookCreate,
+    PartnerPriceBookFilterPartnerListResponse,
     PartnerPriceBookListResponse,
     PartnerPriceBookResponse,
     PartnerPriceBookUpdate,
@@ -114,6 +116,25 @@ def _register_price_book_routes(partner_type: str, resource: str) -> None:
         )
         return PartnerPriceBookListResponse(data=items, total=total)
 
+    @router.get(
+        f"{base}/partners-with-data",
+        response_model=PartnerPriceBookFilterPartnerListResponse,
+        dependencies=[module_dep],
+    )
+    async def list_partners_with_price_book_data(
+        current_user: Annotated[User, Depends(get_current_user)],
+        tenant_id: Annotated[int, Depends(get_current_tenant)],
+        _partner_type: str = partner_type,
+    ):
+        """列表筛选下拉：仅返回价格本中已有数据的客户/供应商。"""
+        try:
+            data = await PartnerPriceBookService.list_partners_with_data(
+                tenant_id, _partner_type
+            )
+            return PartnerPriceBookFilterPartnerListResponse(data=data)
+        except ValidationError as e:
+            raise _http_exception(status.HTTP_400_BAD_REQUEST, str(e))
+
     def _parse_variant_attributes_query(raw: Optional[str]) -> Optional[Dict[str, Any]]:
         if not raw or not str(raw).strip():
             return None
@@ -175,21 +196,24 @@ def _register_price_book_routes(partner_type: str, resource: str) -> None:
         items = await PartnerPriceBookService.resolve_batch(tenant_id, _partner_type, data)
         return PartnerPriceResolveBatchResponse(items=items)
 
-    @router.get(f"{base}/{{book_uuid}}", response_model=PartnerPriceBookResponse, dependencies=[module_dep])
+    # 必须用 :uuid 约束，否则会把 partners-with-data / resolve 等静态段当成详情 UUID 打进 PG
+    @router.get(f"{base}/{{book_uuid:uuid}}", response_model=PartnerPriceBookResponse, dependencies=[module_dep])
     async def get_price_book(
-        book_uuid: str,
+        book_uuid: UUID,
         current_user: Annotated[User, Depends(get_current_user)],
         tenant_id: Annotated[int, Depends(get_current_tenant)],
         _partner_type: str = partner_type,
     ):
         try:
-            return await PartnerPriceBookService.get_by_uuid(tenant_id, _partner_type, book_uuid)
+            return await PartnerPriceBookService.get_by_uuid(
+                tenant_id, _partner_type, str(book_uuid)
+            )
         except NotFoundError as e:
             raise _http_exception(status.HTTP_404_NOT_FOUND, str(e))
 
-    @router.put(f"{base}/{{book_uuid}}", response_model=PartnerPriceBookResponse, dependencies=[module_dep])
+    @router.put(f"{base}/{{book_uuid:uuid}}", response_model=PartnerPriceBookResponse, dependencies=[module_dep])
     async def update_price_book(
-        book_uuid: str,
+        book_uuid: UUID,
         data: PartnerPriceBookUpdate,
         current_user: Annotated[User, Depends(get_current_user)],
         tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -197,22 +221,22 @@ def _register_price_book_routes(partner_type: str, resource: str) -> None:
     ):
         try:
             return await PartnerPriceBookService.update(
-                tenant_id, _partner_type, book_uuid, data, current_user=current_user
+                tenant_id, _partner_type, str(book_uuid), data, current_user=current_user
             )
         except NotFoundError as e:
             raise _http_exception(status.HTTP_404_NOT_FOUND, str(e))
         except ValidationError as e:
             raise _http_exception(status.HTTP_400_BAD_REQUEST, str(e))
 
-    @router.delete(f"{base}/{{book_uuid}}", dependencies=[module_dep])
+    @router.delete(f"{base}/{{book_uuid:uuid}}", dependencies=[module_dep])
     async def delete_price_book(
-        book_uuid: str,
+        book_uuid: UUID,
         current_user: Annotated[User, Depends(get_current_user)],
         tenant_id: Annotated[int, Depends(get_current_tenant)],
         _partner_type: str = partner_type,
     ):
         try:
-            await PartnerPriceBookService.delete(tenant_id, _partner_type, book_uuid)
+            await PartnerPriceBookService.delete(tenant_id, _partner_type, str(book_uuid))
         except NotFoundError as e:
             raise _http_exception(status.HTTP_404_NOT_FOUND, str(e))
 

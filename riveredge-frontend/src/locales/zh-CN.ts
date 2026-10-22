@@ -4219,9 +4219,13 @@ export default {
   'app.kuaioa.attendance.restRegister': '休息登记',
   'app.kuaioa.attendance.nightRegister': '夜班登记',
   'app.kuaioa.attendance.restRegisterCreate': '新建休息登记',
+  'app.kuaioa.attendance.restRegisterEdit': '编辑休息登记',
   'app.kuaioa.attendance.nightRegisterCreate': '新建夜班登记',
+  'app.kuaioa.attendance.nightRegisterEdit': '编辑夜班登记',
   'app.kuaioa.attendance.restRegisterHint':
     '新建时选择车间与休息日期区间，写入对应月度考勤草稿（标记√）。可不选人员表示区间内全员。',
+  'app.kuaioa.attendance.registerDeleteHint':
+    '将回滚对应月度考勤草稿中的休息/夜班标记；若相关考勤单已提交则无法删除。',
   'app.kuaioa.attendance.nightRegisterHint':
     '新建时选择车间与夜班日期区间，写入夜班模板考勤草稿（标记☆）。可不选人员表示区间内全员。',
   'app.kuaioa.attendance.workshopRequired': '请填写车间',
@@ -4368,12 +4372,13 @@ export default {
   'app.kuaioa.welfare.amountTotal': '金额合计',
   'app.kuaioa.annualStats.title': '年度工资统计',
   'app.kuaioa.annualStats.hint':
-    '默认按当年已确认工资结算汇总。输入姓名或工号后点查询：有结算则显示全年金额，无结算也会列出该员工（金额为 0）。月工资为应发小计。',
+    '按当年已确认工资结算汇总。先选车间可联动人员下拉；也可批量导入 1～12 月应发工资（写入对应月结算单并确认）。月工资为应发小计。',
   'app.kuaioa.annualStats.namePlaceholder': '姓名或工号',
+  'app.kuaioa.annualStats.employeePlaceholder': '选择人员（随车间联动）',
   'app.kuaioa.annualStats.emptyYear':
-    '该年没有已确认的工资结算。请先完成工资结算并确认，或输入姓名查询员工档案。',
+    '该年没有已确认的工资结算。请先完成工资结算并确认，或使用导入写入月度工资，或选择人员查询。',
   'app.kuaioa.annualStats.emptyName':
-    '没有匹配的员工姓名或工号，请核对档案后重试。',
+    '没有匹配的员工，请核对档案或调整车间筛选后重试。',
   'app.kuaioa.annualStats.yearInvalid': '请输入有效年份',
   'app.kuaioa.annualStats.unit': '单位',
   'app.kuaioa.annualStats.seq': '序号',
@@ -4386,6 +4391,13 @@ export default {
   'app.kuaioa.annualStats.annualWage': '1-12月工资统计',
   'app.kuaioa.annualStats.balanceTotal': '结余总工资',
   'app.kuaioa.annualStats.exportFileName': '工资统计表',
+  'app.kuaioa.annualStats.importTemplateName': '年度工资明细导入',
+  'app.kuaioa.annualStats.importWorkshopRequired': '缺少车间（请填行内车间、筛选车间或档案车间）',
+  'app.kuaioa.annualStats.importAmountInvalid': '月份金额格式无效',
+  'app.kuaioa.annualStats.importAmountNegative': '月份金额不能为负',
+  'app.kuaioa.annualStats.importNoMonth': '请至少填写一列月份工资',
+  'app.kuaioa.annualStats.importSuccess':
+    '已导入 {{lines}} 条月度工资，涉及 {{settlements}} 张结算单并已确认',
   'app.kuaioa.personalPayroll.title': '个人工资明细',
   'app.kuaioa.personalPayroll.hint': '按已确认结算汇总每月工资金额、支出金额与结余金额。',
   'app.kuaioa.personalPayroll.needEmployee': '请选择员工与年份',
@@ -4396,7 +4408,7 @@ export default {
   'app.kuaioa.personalPayroll.exportFileName': '个人工资明细',
   'app.kuaioa.movement.title': '入离职明细',
   'app.kuaioa.movement.hint':
-    '按入职日或离职日落在所选月份统计。可在本页办理入职登记、临时工登记、离职登记。',
+    '按入职日或离职日落在所选月份统计。可在本页办理入职登记、临时工登记、离职登记；登记须选择人员接收人，提交后向其发送站内通知。',
   'app.kuaioa.movement.typeLabel': '类型',
   'app.kuaioa.movement.type.hire': '入职',
   'app.kuaioa.movement.type.leave': '离职',
@@ -4411,6 +4423,10 @@ export default {
   'app.kuaioa.movement.hireSuccess': '入职登记成功',
   'app.kuaioa.movement.tempSuccess': '临时工登记成功',
   'app.kuaioa.movement.leaveSuccess': '离职登记成功',
+  'app.kuaioa.movement.recipient': '人员接收人',
+  'app.kuaioa.movement.recipientRequired': '请选择人员接收人',
+  'app.kuaioa.movement.recipientHirePlaceholder': '选择车间主任或部门负责人',
+  'app.kuaioa.movement.recipientLeavePlaceholder': '选择人事或车间主任',
   'app.kuaioa.postSubsidy.createButton': '新建岗位补贴',
   'app.kuaioa.postSubsidy.code': '补贴单号',
   'app.kuaioa.postSubsidy.itemName': '补贴项目',
@@ -7768,6 +7784,9 @@ export default {
   'app.haoligo.equipment.documents.colFinishedProductCode': '成品编码',
   'app.haoligo.equipment.documents.colFinishedProductName': '成品名称',
   'app.haoligo.equipment.documents.colPlannedQty': '计划数量',
+  'app.haoligo.equipment.documents.colProductionDepartment': '生产部门',
+  'app.haoligo.equipment.documents.searchByProductionDepartment': '按照生产部门查询',
+  'app.haoligo.equipment.documents.searchByProductionDepartmentPh': '输入生产部门',
   'app.haoligo.equipment.documents.colCompletedQty': '完成数量',
   'app.haoligo.equipment.documents.formStartupAt': '开机时间',
   'app.haoligo.equipment.documents.formCompletedAt': '完工时间',
@@ -7790,13 +7809,13 @@ export default {
   'app.haoligo.equipment.documents.outputWorkOrderRequired': '请先填写制令单号',
   'app.haoligo.equipment.documents.outputWorkOrderPh': '选填；不填写时可只选设备并录入产量',
   'app.haoligo.equipment.documents.outputWorkOrderTooltip':
-    '选填。填写制令单号后点右侧「带出」可从数据集拉取成品代号、成品名称与计划数量；不绑定制令时可直接选择设备并填写完成数量。',
+    '选填。填写制令单号后点右侧「带出」可从数据集拉取成品代号、成品名称、计划数量与生产部门；不绑定制令时可直接选择设备并填写完成数量。',
   'app.haoligo.equipment.documents.outputPrefilledPlaceholder': '由「带出」填入',
   'app.haoligo.equipment.documents.outputProductFieldPh': '选填，可手工填写或由「带出」填入',
   'app.haoligo.equipment.documents.outputPrefilledFieldTooltip':
     '选填；填写制令单号后点「带出」自动填入，也可手工填写。',
   'app.haoligo.equipment.settings.outputDatasetIntro':
-    '配置用于「设备产出单」按制令单号查询的数据集及列映射（成品代号、成品名称、计划数量，与模具领用单一致）；保存后在产出单弹窗点「带出」。在列表工具栏点击「数据集」进行配置。',
+    '配置用于「设备产出单」按制令单号查询的数据集及列映射（成品代号、成品名称、计划数量、生产部门）；保存后在产出单弹窗点「带出」。在列表工具栏点击「数据集」进行配置。',
   'app.haoligo.equipment.settings.outputDatasetSelect': '数据集',
   'app.haoligo.equipment.settings.outputDatasetSelectPh': '选择数据集',
   'app.haoligo.equipment.settings.workOrderParamKey': '制令单号 SQL 参数名',
@@ -7805,6 +7824,7 @@ export default {
   'app.haoligo.equipment.settings.finishedProductCodeColumn': '成品编码列（可选）',
   'app.haoligo.equipment.settings.finishedProductNameColumn': '成品名称列（可选）',
   'app.haoligo.equipment.settings.plannedQtyColumn': '计划数量列（可选）',
+  'app.haoligo.equipment.settings.productionDepartmentColumn': '生产部门列（可选）',
   'app.haoligo.equipment.settings.clearBinding': '清除配置',
   'app.haoligo.equipment.updateSuccess': '已保存',
   'app.haoligo.equipment.createSuccess': '已创建',
@@ -19314,6 +19334,7 @@ export default {
   'app.kuaizhizao.toolOps.return.col.manufactureQty': '生产数量',
   'app.kuaizhizao.toolOps.return.col.usageCount': '使用次数',
   'app.kuaizhizao.toolOps.return.form.borrow': '领用单',
+  'app.kuaizhizao.toolOps.return.toolRequired': '请选择有效的领用单以确定工装',
   'app.kuaizhizao.toolOps.maintenance.title': '工装保养单',
   'app.kuaizhizao.toolOps.maintenance.create': '新建保养单',
   'app.kuaizhizao.toolOps.maintenance.createModal': '新建保养单',
@@ -19331,6 +19352,7 @@ export default {
   'app.kuaizhizao.toolOps.maintenance.col.executor': '执行人',
   'app.kuaizhizao.toolOps.maintenance.form.tool': '工装',
   'app.kuaizhizao.toolOps.maintenance.form.scheme': '保养方案',
+  'app.kuaizhizao.toolOps.maintenance.schemeRequired': '请选择保养方案',
   'app.kuaizhizao.toolOps.maintenance.form.rejectReason': '驳回原因',
   'app.kuaizhizao.toolOps.maintenance.action.approve': '批准',
   'app.kuaizhizao.toolOps.maintenance.action.reject': '驳回',
@@ -19359,6 +19381,7 @@ export default {
   'app.kuaizhizao.toolOps.repair.col.completionResult': '完修结果',
   'app.kuaizhizao.toolOps.repair.form.tool': '工装',
   'app.kuaizhizao.toolOps.repair.form.scheme': '维修方案',
+  'app.kuaizhizao.toolOps.repair.schemeRequired': '请选择维修方案',
   'app.kuaizhizao.toolOps.repair.form.rejectReason': '驳回原因',
   'app.kuaizhizao.toolOps.repair.action.approve': '批准',
   'app.kuaizhizao.toolOps.repair.action.reject': '驳回',
@@ -27194,6 +27217,7 @@ export default {
   'app.kuaizhizao.quality.common.columns.workshop': '车间',
   'app.kuaizhizao.quality.common.columns.workstation': '工位',
   'app.kuaizhizao.quality.common.columns.materialSpec': '规格',
+  'app.kuaizhizao.quality.common.columns.materialModel': '型号',
   'app.kuaizhizao.quality.common.columns.inspectionNotes': '检验备注',
   'app.kuaizhizao.quality.common.actions.inspect': '检验',
   'app.kuaizhizao.quality.common.actions.createDefect': '创建不合格品记录',
@@ -31617,6 +31641,102 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.purchase-receipt-spec-model-snapshot-r01.title':
+    '采购入库明细显示规格与型号',
+  'pages.dashboard.updateLog.entries.purchase-receipt-spec-model-snapshot-r01.description':
+    '采购入库创建/更新时写入物料规格与型号快照，详情接口返回型号字段；历史空缺行已按物料档案回填，打开明细即可看到规格型号。',
+  'pages.dashboard.updateLog.entries.uni-audit-reject-confirm-modal-r01.title':
+    '审核驳回落点改为点击驳回后再选择',
+  'pages.dashboard.updateLog.entries.uni-audit-reject-confirm-modal-r01.description':
+    '审核弹窗底栏不再常驻「驳回落点」选项；点击驳回后弹出确认框，再选择驳回到上一级或制单人并填写原因。',
+  'pages.dashboard.updateLog.entries.tool-calibration-tool-id-r01.title':
+    '工装校准新建提交 tool_id 必填',
+  'pages.dashboard.updateLog.entries.tool-calibration-tool-id-r01.description':
+    '新建工装校准记录时工装下拉改为提交数字 ID（tool_id），与后端契约一致，避免界面已选工装仍报 tool_id 必填。',
+  'pages.dashboard.updateLog.entries.tool-maintenance-repair-preview-scheme-r01.title':
+    '工装保养/维修单未选方案不再误报预览失败',
+  'pages.dashboard.updateLog.entries.tool-maintenance-repair-preview-scheme-r01.description':
+    '新建保养单或维修单时须先选方案再预览行；仅选工装时若已绑定唯一方案则自动带出，否则清空预览行不报错，与设备点检一致。',
+  'pages.dashboard.updateLog.entries.kuaioa-living-payout-permission-split-r01.title':
+    '生活费发放表权限与预支独立',
+  'pages.dashboard.updateLog.entries.kuaioa-living-payout-permission-split-r01.description':
+    '生活费发放表改为独立权限码（查看/导出），与生活费预支分开勾选；原先共用预支权限导致矩阵联动勾选。',
+  'pages.dashboard.updateLog.entries.tool-return-tool-id-required-r01.title':
+    '工装归还单保存提示 tool_id 必填',
+  'pages.dashboard.updateLog.entries.tool-return-tool-id-required-r01.description':
+    '新建归还单时按所选领用单带回工装 ID 并提交；领用单下拉改为显示单号而非 undefined，与模具归还一致。',
+  'pages.dashboard.updateLog.entries.kuaioa-employee-movement-recipient-r01.title':
+    '入离职登记可选人员接收人并通知',
+  'pages.dashboard.updateLog.entries.kuaioa-employee-movement-recipient-r01.description':
+    '入职、临时工、离职登记须选择人员接收人（如车间主任、部门负责人或人事）；提交后向其发送站内通知，列表展示接收人姓名。',
+  'pages.dashboard.updateLog.entries.kuaioa-leave-attendance-work-injury-r01.title':
+    '请假回写考勤与工伤类型',
+  'pages.dashboard.updateLog.entries.kuaioa-leave-attendance-work-injury-r01.description':
+    '事假病假等审批通过后扣减月度考勤出勤，出差不回写考勤；免审或提交即自动通过时也会补写；请假类型新增工伤。',
+  'pages.dashboard.updateLog.entries.tool-borrow-work-order-select-r01.title':
+    '工装领用单工单号改为下拉选择',
+  'pages.dashboard.updateLog.entries.tool-borrow-work-order-select-r01.description':
+    '新建或编辑工装领用单时，工单号与模具领用一致改为可选的生产工单下拉（已下达/进行中），保存时写入来源工单编号与 ID。',
+  'pages.dashboard.updateLog.entries.tool-scheme-item-quick-create-r01.title':
+    '工装保养/维修方案支持快速新建保养项与维修项',
+  'pages.dashboard.updateLog.entries.tool-scheme-item-quick-create-r01.description':
+    '编辑保养方案或维修方案时，可在添加项目多选框与行内下拉中快速新建保养项/维修项，保存后自动纳入当前方案，无需先离开去主数据页建档。',
+  'pages.dashboard.updateLog.entries.kuaioa-leave-auto-approve-revoke-r01.title':
+    '请假出差自动通过后可撤销审核回草稿',
+  'pages.dashboard.updateLog.entries.kuaioa-leave-auto-approve-revoke-r01.description':
+    '自动通过或已审通过的请假出差可撤销审核回草稿并作废审批实例；撤回提交仅作用于待审；撤销时回滚未提交考勤上的请假标记；auto_pass 无终审人时有撤销权限即可反审。',
+  'pages.dashboard.updateLog.entries.uni-audit-submit-flow-preview-minheight-r01.title':
+    '提交审核弹窗流程图预览高度过小',
+  'pages.dashboard.updateLog.entries.uni-audit-submit-flow-preview-minheight-r01.description':
+    '提交等动作确认弹窗为流程图预览容器增加最小高度，避免父级未定高时流程画布缩成一小块难以查看。',
+  'pages.dashboard.updateLog.entries.kuaioa-annual-payroll-workshop-import-r01.title':
+    '年度工资统计支持车间联动人员与月度工资导入',
+  'pages.dashboard.updateLog.entries.kuaioa-annual-payroll-workshop-import-r01.description':
+    '选择车间后人员下拉仅显示该车间员工；提供 1～12 月应发工资宽表导入，写入对应车间月度结算单并确认后纳入年度汇总。',
+  'pages.dashboard.updateLog.entries.kuaioa-attendance-day-register-actions-r01.title':
+    '休息与夜班登记补齐详情编辑删除与批量删除',
+  'pages.dashboard.updateLog.entries.kuaioa-attendance-day-register-actions-r01.description':
+    '休息登记、夜班登记列表增加操作列与多选批量删除：详情抽屉、编辑重写草稿日格、删除并回滚草稿标记；相关月度考勤单已提交时不可撤销。',
+  'pages.dashboard.updateLog.entries.kuaioa-employee-search-select-filters-r01.title':
+    '员工档案列表支持车间部门用工类型快捷筛选',
+  'pages.dashboard.updateLog.entries.kuaioa-employee-search-select-filters-r01.description':
+    '人事基础员工档案在模糊搜索前增加所属车间、部门、用工类型下拉，点选即筛；重置一并清空；部门筛选同步后端精确过滤。',
+  'pages.dashboard.updateLog.entries.quality-inspection-header-spec-model-r01.title':
+    '检验单头与详情展示物料规格与型号',
+  'pages.dashboard.updateLog.entries.quality-inspection-header-spec-model-r01.description':
+    '来料、过程、成品、出货、委外与质量巡检的检验弹窗「检验信息」及详情抽屉增加规格、型号；新建检验单从物料主数据写入快照，历史单迁移后按物料回填。',
+  'pages.dashboard.updateLog.entries.document-partner-material-columns-rollout-r01.title':
+    '销售采购单据明细补齐客户与供应商料号品名',
+  'pages.dashboard.updateLog.entries.document-partner-material-columns-rollout-r01.description':
+    '销售合同、销售预测、发货通知、销售退货、报价列表明细，以及采购订单、采购申请、采购退货等 Form 与详情在备注前展示伙伴料号品名；选料按价本与编号映射回填；销售合同保存写入行快照。',
+  'pages.dashboard.updateLog.entries.quotation-partner-material-columns-r01.title':
+    '报价单明细展示客户料号与客户品名',
+  'pages.dashboard.updateLog.entries.quotation-partner-material-columns-r01.description':
+    '报价单新建编辑与详情明细在备注前增加客户料号、客户品名只读列；选料后按客户编号映射与客户价本解析自动回填。',
+  'pages.dashboard.updateLog.entries.document-material-line-form-standard-r01.title':
+    '有物料明细的单据统一规格型号选料逻辑',
+  'pages.dashboard.updateLog.entries.document-material-line-form-standard-r01.description':
+    '销售采购等单据明细选料统一回填规格与型号、列序规格在前型号在后、空值占位一致；选料组件在缺字段时自动补全主数据快照。',
+  'pages.dashboard.updateLog.entries.document-line-spec-before-model-r01.title':
+    '单据明细规格列统一排在型号列之前',
+  'pages.dashboard.updateLog.entries.document-line-spec-before-model-r01.description':
+    '销售采购等单据明细、列表与详情抽屉中，凡同时展示规格与型号时，列序统一为规格在前、型号在后，与库存与主数据列表一致。',
+  'pages.dashboard.updateLog.entries.sales-order-line-material-spec-fill-r01.title':
+    '销售订单选产品后自动带出型号规格',
+  'pages.dashboard.updateLog.entries.sales-order-line-material-spec-fill-r01.description':
+    '修复新建或编辑销售订单时在明细行选择产品后，型号与规格未写入当前行的问题；选料后按需拉取物料详情补齐型号，批量选商品同样带出型号规格。',
+  'pages.dashboard.updateLog.entries.document-line-partner-material-model-spec-r01.title':
+    '销售采购单据明细展示客户料号与型号规格',
+  'pages.dashboard.updateLog.entries.document-line-partner-material-model-spec-r01.description':
+    '销售与采购链路单据明细保存伙伴料号品名及型号规格快照；销售订单、采购订单、报价、成品入库等明细与列表可查看型号、规格与客户或供应商料号品名。',
+  'pages.dashboard.updateLog.entries.partner-price-book-quick-partner-filter-r01.title':
+    '价格本列表可按客户名称快速筛选',
+  'pages.dashboard.updateLog.entries.partner-price-book-quick-partner-filter-r01.description':
+    '客户/供应商价格本列表在模糊搜索前增加名称下拉；选项仅展示价格本中已有数据的客户或供应商，无数据的不出现。',
+  'pages.dashboard.updateLog.entries.partner-price-book-bulk-alias-fields-r01.title':
+    '批量登记价格本可填客户料号与品名',
+  'pages.dashboard.updateLog.entries.partner-price-book-bulk-alias-fields-r01.description':
+    '客户/供应商价格本批量登记明细增加客户料号与客户品名，并可同步写入物料编号映射。',
   'pages.dashboard.updateLog.entries.kuaiplm-prototype-build-sheet-optional-project-r01.title':
     '样机制作书关联项目可选可手填',
   'pages.dashboard.updateLog.entries.kuaiplm-prototype-build-sheet-optional-project-r01.description':
@@ -32500,6 +32620,14 @@ export default {
     '图档发放保存需填写部门与使用人',
   'pages.dashboard.updateLog.entries.funide-oa-drawing-distribution-party-r01.description':
     '图纸下发的新建图档发放补回部门与使用人。这两项是发放单必填，缺了保存会被拒绝且之前没有提示。',
+  'pages.dashboard.updateLog.entries.kuaioa-attendance-line-roster-r01.title':
+    '月度考勤按产线拉人空白',
+  'pages.dashboard.updateLog.entries.kuaioa-attendance-line-roster-r01.description':
+    '考勤单填写产线后，名单改为按产线匹配员工（兼容编码+名称与纯名称），不再被车间名不一致卡成空白；草稿单可点「刷新名单」补人。',
+  'pages.dashboard.updateLog.entries.attendance-fill-viewport-height-r02.title':
+    '月度考勤填报表体铺满剩余高度',
+  'pages.dashboard.updateLog.entries.attendance-fill-viewport-height-r02.description':
+    '填报页表托盘占满标签内容区剩余高度，表体限高按托盘与横向滚动条实测，消除表底大块留白；页外仍只留一档 16px 间距。',
   'pages.dashboard.updateLog.entries.attendance-fill-bottom-gap-r01.title':
     '月度考勤填报表底只留一档间距',
   'pages.dashboard.updateLog.entries.attendance-fill-bottom-gap-r01.description':
@@ -32856,10 +32984,30 @@ export default {
     '订单跟踪顶栏模糊搜索不生效',
   'pages.dashboard.updateLog.entries.haoligo-order-tracking-fuzzy-search-r01.description':
     '列表请求误从 params 取 keyword，而 UniTable 模糊词在 searchFormValues；已改为 pickListSearchKeyword，搜订单号等可正确过滤。',
+  'pages.dashboard.updateLog.entries.haoligo-output-record-prod-dept-list-r01.title':
+    '产出单列表生产部门列与筛选',
+  'pages.dashboard.updateLog.entries.haoligo-output-record-prod-dept-list-r01.description':
+    '注塑机/设备产出单列表将生产部门列排在设备前，并增加「按照生产部门查询」筛选。',
+  'pages.dashboard.updateLog.entries.haoligo-output-record-production-dept-r01.title':
+    '产出单扫码带出生产部门',
+  'pages.dashboard.updateLog.entries.haoligo-output-record-production-dept-r01.description':
+    '注塑机产出单与设备产出单在扫码或「带出」制令单时，同步带出制令单生产部门；数据集配置可映射生产部门列；手机端同步。',
+  'pages.dashboard.updateLog.entries.haoligo-order-tracking-workflow-r01.title':
+    '订单跟踪发货付款与排产拆分',
+  'pages.dashboard.updateLog.entries.haoligo-order-tracking-workflow-r01.description':
+    '取消行内「价格/生产/财务」：新建含合同金额与附件并提交生产选人；排产与完成分开更新；「发货信息跟踪」支持分批明细；「付款信息跟踪」提交财务后由财务填开票。',
+  'pages.dashboard.updateLog.entries.haoligo-monthly-ledger-submit-finance-r01.title':
+    '月度工厂台账提交财务选人',
+  'pages.dashboard.updateLog.entries.haoligo-monthly-ledger-submit-finance-r01.description':
+    '销售填完后点「提交财务」多选接收人并通知；财务账号看到已提交单据后点「开票信息」填写发票号、金额与时间。',
+  'pages.dashboard.updateLog.entries.haoligo-monthly-ledger-uninvoiced-calc-r01.title':
+    '月度工厂台账开票总数与未开票自动计算',
+  'pages.dashboard.updateLog.entries.haoligo-monthly-ledger-uninvoiced-calc-r01.description':
+    '「本月开票明细」改为「本月开票总数」；未开票总数=本月发货总数−本月开票总数，表单只读自动回填，保存时后端同步重算。',
   'pages.dashboard.updateLog.entries.haoligo-monthly-ledger-invoice-fields-r01.title':
     '月度工厂台账补齐开票明细与发票号',
   'pages.dashboard.updateLog.entries.haoligo-monthly-ledger-invoice-fields-r01.description':
-    '销售新建/编辑可填本月开票明细、未开票总数并上传开票明细 Excel；财务跟踪改为下载该 Excel，不再录入未开票总数，并增加发票号。',
+    '销售新建/编辑可填本月开票总数、未开票总数并上传开票明细 Excel；财务跟踪改为下载该 Excel，不再录入未开票总数，并增加发票号。',
   'pages.dashboard.updateLog.entries.haoligo-order-tracking-list-route-r01.title':
     '订单跟踪列表接口误挂路由导致整页无数据',
   'pages.dashboard.updateLog.entries.haoligo-order-tracking-list-route-r01.description':
@@ -43069,6 +43217,7 @@ export default {
   'app.kuaioa.formBusinessType.review_sheet': '评审单',
   'app.kuaioa.formBusinessType.material_issue': '领料单',
   'app.kuaioa.leave.type.annual': '年假',
+  'app.kuaioa.leave.type.work_injury': '工伤',
   'app.kuaioa.leave.type.business_trip': '出差',
   'app.kuaioa.leave.type.personal': '事假',
   'app.kuaioa.leave.type.sick': '病假',
@@ -44251,6 +44400,8 @@ export default {
   'components.uniAudit.rejectTargetHint': '请选择驳回落点',
   'components.uniAudit.rejectTargetPrevious': '驳回到上一级',
   'components.uniAudit.rejectTargetSubmitter': '驳回到制单人',
+  'components.uniAudit.rejectConfirmTitle': '确认驳回',
+  'components.uniAudit.rejectConfirmOk': '确认驳回',
   'components.uniAudit.rejectReasonPlaceholder': '请输入驳回原因（可选）',
   'components.uniAudit.transfer': '转交',
   'components.uniAudit.addSign': '加签',

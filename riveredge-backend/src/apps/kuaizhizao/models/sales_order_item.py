@@ -9,9 +9,12 @@ Date: 2025-12-30
 
 from tortoise import fields
 from core.models.base import BaseModel
+from apps.kuaizhizao.models.mixins.document_line_partner_material import (
+    DocumentLinePartnerMaterialSnapshotMixin,
+)
 
 
-class SalesOrderItem(BaseModel):
+class SalesOrderItem(DocumentLinePartnerMaterialSnapshotMixin, BaseModel):
     """
     销售订单明细
 

@@ -742,6 +742,12 @@ class QuotationService:
                 tenant_id,
                 [item_data.material_id for item_data in quotation_data.items],
             )
+            from apps.kuaizhizao.utils.document_line_material_snapshot import (
+                enrich_line_dicts_with_partner_snapshots,
+                snapshot_kwargs_for_orm,
+            )
+
+            item_rows: List[Dict[str, Any]] = []
             for item_data in quotation_data.items:
                 row = self._process_quotation_item_pricing(
                     item_data,
@@ -751,6 +757,14 @@ class QuotationService:
                 )
                 total_qty += row["quote_quantity"]
                 total_amt += row["total_amount"]
+                item_rows.append(row)
+            item_rows = await enrich_line_dicts_with_partner_snapshots(
+                tenant_id,
+                partner_type="customer",
+                partner_id=int(q_dict.get("customer_id") or 0) or None,
+                lines=item_rows,
+            )
+            for row in item_rows:
                 await QuotationItem.create(
                     tenant_id=tenant_id,
                     quotation_id=quotation.id,
@@ -759,6 +773,7 @@ class QuotationService:
                     material_name=row["material_name"],
                     material_spec=row["material_spec"],
                     material_unit=row["material_unit"],
+                    **snapshot_kwargs_for_orm(row),
                     quote_quantity=row["quote_quantity"],
                     unit_price=row["unit_price"],
                     tax_rate=row["tax_rate"],

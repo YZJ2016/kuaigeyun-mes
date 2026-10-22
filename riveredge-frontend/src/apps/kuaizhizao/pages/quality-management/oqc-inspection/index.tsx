@@ -38,6 +38,7 @@ import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../.
 import { OQCInspection, qualityImprovementApi } from '../../../services/quality-improvement';
 import type { DocumentPushPreview } from '../../../services/purchase-requisition';
 import InspectionTemplateConductFields from '../components/InspectionTemplateConductFields';
+import { InspectionConductInfoCard } from '../components/InspectionConductInfoCard';
 import { QualityInspectionDetailDrawer } from '../components/QualityInspectionDetailDrawer';
 import {
   buildQualityInspectionDetailSupplementNode,
@@ -1008,22 +1009,10 @@ const OQCInspectionPage: React.FC = () => {
         >
           {currentRow ? (
             <Col span={24}>
-              <Card size="small" style={{ marginBottom: 8 }}>
-                <Row gutter={16}>
-                  <Col span={8}>
-                    <strong>{t('app.kuaizhizao.quality.common.label.materialCode')}：</strong>
-                    {currentRow.material_code}
-                  </Col>
-                  <Col span={8}>
-                    <strong>{t('app.kuaizhizao.quality.common.label.materialName')}：</strong>
-                    {currentRow.material_name}
-                  </Col>
-                  <Col span={8}>
-                    <strong>{t('app.kuaizhizao.quality.common.label.inspectionQty')}：</strong>
-                    {formatQuantityWithUnit(currentRow.inspection_quantity, currentRow.material_unit)}
-                  </Col>
-                </Row>
-              </Card>
+              <InspectionConductInfoCard
+                inspection={currentRow as Record<string, unknown>}
+                showSectionTitle={false}
+              />
             </Col>
           ) : null}
           <InspectionTemplateConductFields

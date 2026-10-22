@@ -23,6 +23,7 @@ class OutsourceInspectionBase(BaseSchema):
     material_code: str = Field(..., description="物料编码")
     material_name: str = Field(..., description="物料名称")
     material_spec: Optional[str] = Field(None, description="物料规格")
+    material_model: Optional[str] = Field(None, description="物料型号")
     material_unit: Optional[str] = Field(None, max_length=20, description="物料单位")
     batch_number: Optional[str] = Field(None, description="批次号")
     inspection_quantity: float = Field(..., description="检验数量")

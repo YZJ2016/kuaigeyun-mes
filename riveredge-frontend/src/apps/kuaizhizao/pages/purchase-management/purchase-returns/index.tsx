@@ -127,6 +127,11 @@ import {
 } from '../../../utils/purchaseReturnLifecycle';
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
 import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
+import {
+  buildDocumentDetailPartnerMaterialFormColumns,
+  buildDocumentDetailSpecModelFormColumns,
+  withMaterialLineFillMapping,
+} from '../../sales-management/shared/materialLineFormDetail';
 import { alignProColumns, alignDescriptionColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { LinkedDocumentCode } from '../../../../../components/linked-document-code';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
@@ -1741,17 +1746,14 @@ const PurchaseReturnsPage: React.FC = () => {
             size={DOCUMENT_DETAIL_CONTROL_SIZE}
             listFieldKey={index}
             listFieldName="items"
-            fillMapping={{
-              material_code: 'mainCode',
-              material_name: 'name',
-              material_spec: 'specification',
-              material_unit: 'baseUnit',
-            }}
+            fillMapping={withMaterialLineFillMapping({ material_unit: 'baseUnit' })}
             showAdvancedSearch
           skipFuzzyPinyinClientFilter
           />
         ),
       },
+      ...buildDocumentDetailSpecModelFormColumns(t),
+      ...buildDocumentDetailPartnerMaterialFormColumns(t, 'supplier'),
       {
         title: t('app.kuaizhizao.purchaseReturn.batchNumber'),
         dataIndex: 'batch_number',

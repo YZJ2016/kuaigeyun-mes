@@ -209,10 +209,14 @@ def _build_purchase_receipt_item_response(item: Any) -> PurchaseReceiptItemRespo
         "tenant_id": int(getattr(item, "tenant_id")),
         "receipt_id": int(getattr(item, "receipt_id")),
         "purchase_order_item_id": int(getattr(item, "purchase_order_item_id", 0) or 0),
+        "receipt_notice_item_id": getattr(item, "receipt_notice_item_id", None),
         "material_id": int(getattr(item, "material_id")),
         "material_code": str(getattr(item, "material_code", "") or ""),
         "material_name": str(getattr(item, "material_name", "") or ""),
         "material_spec": getattr(item, "material_spec", None),
+        "material_model": getattr(item, "material_model", None),
+        "partner_material_code": getattr(item, "partner_material_code", None),
+        "partner_material_name": getattr(item, "partner_material_name", None),
         "material_unit": str(getattr(item, "material_unit", "") or ""),
         "receipt_quantity": float(getattr(item, "receipt_quantity", 0) or 0),
         "unit_price": float(getattr(item, "unit_price", 0) or 0),
@@ -5137,7 +5141,17 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                 from apps.kuaizhizao.models.finished_goods_receipt_item import FinishedGoodsReceiptItem
                 from apps.master_data.models.material import Material
                 from apps.kuaizhizao.services.batch_serial_helper import ensure_batch_no_for_item
+                from apps.kuaizhizao.utils.document_line_material_snapshot import (
+                    enrich_line_dicts_with_partner_snapshots,
+                    resolve_customer_id_for_finished_goods_receipt,
+                    snapshot_kwargs_for_orm,
+                )
+
                 location_required, _ = await _get_warehouse_policy_flags(tenant_id)
+                customer_id = await resolve_customer_id_for_finished_goods_receipt(
+                    tenant_id,
+                    sales_order_id=receipt_data.sales_order_id,
+                )
 
                 for item_data in items:
                     material = await Material.get_or_none(
@@ -5161,14 +5175,27 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                         material_label=getattr(item_data, "material_name", None) or getattr(item_data, "material_code", "未知物料"),
                     )
 
+                    line_payload = {
+                        "material_id": item_data.material_id,
+                        "material_spec": getattr(item_data, "material_spec", None),
+                    }
+                    enriched = await enrich_line_dicts_with_partner_snapshots(
+                        tenant_id,
+                        partner_type="customer" if customer_id else None,
+                        partner_id=customer_id,
+                        lines=[line_payload],
+                    )
+                    snap = snapshot_kwargs_for_orm(enriched[0])
+
                     await FinishedGoodsReceiptItem.create(
                         tenant_id=tenant_id,
                         receipt_id=receipt.id,
                         material_id=item_data.material_id,
                         material_code=item_data.material_code,
                         material_name=item_data.material_name,
-                        material_spec=getattr(item_data, 'material_spec', None),
+                        material_spec=getattr(item_data, 'material_spec', None) or enriched[0].get("material_spec"),
                         material_unit=item_data.material_unit,
+                        **snap,
                         receipt_quantity=item_data.receipt_quantity,
                         qualified_quantity=item_data.qualified_quantity,
                         unqualified_quantity=item_data.unqualified_quantity,
@@ -6639,6 +6666,24 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                     
                     so_line_id = getattr(item_data, "sales_order_item_id", None)
                     sn_line_id = getattr(item_data, "shipment_notice_item_id", None)
+                    from apps.kuaizhizao.utils.document_line_material_snapshot import (
+                        partner_snapshot_fields_from_source_line,
+                    )
+                    line_snap: Dict[str, Optional[str]] = {}
+                    if sn_line_id:
+                        sn_it = await ShipmentNoticeItem.get_or_none(
+                            tenant_id=tenant_id, id=int(sn_line_id)
+                        )
+                        if sn_it:
+                            line_snap = partner_snapshot_fields_from_source_line(sn_it)
+                    elif so_line_id:
+                        from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
+
+                        so_it = await SalesOrderItem.get_or_none(
+                            tenant_id=tenant_id, id=int(so_line_id)
+                        )
+                        if so_it:
+                            line_snap = partner_snapshot_fields_from_source_line(so_it)
                     await SalesDeliveryItem.create(
                         tenant_id=tenant_id,
                         delivery_id=delivery.id,
@@ -6649,6 +6694,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                         material_name=item_data.material_name,
                         material_spec=getattr(item_data, 'material_spec', None),
                         material_unit=item_data.material_unit,
+                        **line_snap,
                         delivery_quantity=item_data.delivery_quantity,
                         unit_price=item_data.unit_price,
                         total_amount=item_data.total_amount,
@@ -9612,6 +9658,10 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 # 批号管理物料：未填写批号时自动生成
                 from apps.master_data.models.material import Material
                 from apps.kuaizhizao.services.batch_serial_helper import ensure_batch_no_for_item
+                from apps.kuaizhizao.utils.document_line_material_snapshot import (
+                    enrich_line_dicts_with_partner_snapshots,
+                    snapshot_kwargs_for_orm,
+                )
                 material = await Material.get_or_none(tenant_id=tenant_id, id=item_data.material_id, deleted_at__isnull=True)
                 if not material:
                     raise ValidationError(f"物料不存在: {item_data.material_id}")
@@ -9661,6 +9711,24 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 item_dict["qualified_quantity"] = resolved_qualified_qty
                 item_dict["unqualified_quantity"] = resolved_unqualified_qty
                 item_dict["quality_status"] = resolved_quality_status
+
+                # 写路径快照：规格/型号 + 供应商料号（与成品入库一致）
+                snap_supplier_id = int(supplier_id or 0) or None
+                enriched = await enrich_line_dicts_with_partner_snapshots(
+                    tenant_id,
+                    partner_type="supplier" if snap_supplier_id else None,
+                    partner_id=snap_supplier_id,
+                    lines=[{
+                        "material_id": item_data.material_id,
+                        "material_spec": item_dict.get("material_spec"),
+                        "material_model": item_dict.get("material_model"),
+                        "partner_material_code": item_dict.get("partner_material_code"),
+                        "partner_material_name": item_dict.get("partner_material_name"),
+                    }],
+                )
+                if not str(item_dict.get("material_spec") or "").strip():
+                    item_dict["material_spec"] = enriched[0].get("material_spec")
+                item_dict.update(snapshot_kwargs_for_orm(enriched[0]))
                 
                 await PurchaseReceiptItem.create(**item_dict)
                 
@@ -10209,6 +10277,9 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 if header_wh_id is None:
                     header_wh_id = line_wh_id
                     header_wh_name = line_wh_name
+                from apps.kuaizhizao.utils.document_line_material_snapshot import (
+                    partner_snapshot_fields_from_source_line,
+                )
                 receipt_items.append(
                     PurchaseReceiptItemCreate(
                         purchase_order_item_id=int(item.purchase_order_item_id or 0),
@@ -10227,6 +10298,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                         warehouse_name=line_wh_name,
                         location_id=loc_id,
                         location_code=loc_code,
+                        **partner_snapshot_fields_from_source_line(item),
                     )
                 )
             if not receipt_items or header_wh_id is None:
@@ -10442,6 +10514,10 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
 
                     from apps.master_data.models.material import Material
                     from apps.kuaizhizao.services.batch_serial_helper import ensure_batch_no_for_item
+                    from apps.kuaizhizao.utils.document_line_material_snapshot import (
+                        enrich_line_dicts_with_partner_snapshots,
+                        snapshot_kwargs_for_orm,
+                    )
 
                     material = await Material.get_or_none(
                         tenant_id=tenant_id,
@@ -10477,6 +10553,24 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                     item_dict["quality_status"] = resolved_quality_status
                     if auto_batch_no is not None:
                         item_dict["batch_number"] = auto_batch_no
+
+                    snap_supplier_id = int(supplier_id or 0) or None
+                    enriched = await enrich_line_dicts_with_partner_snapshots(
+                        tenant_id,
+                        partner_type="supplier" if snap_supplier_id else None,
+                        partner_id=snap_supplier_id,
+                        lines=[{
+                            "material_id": getattr(item_data, "material_id", None),
+                            "material_spec": item_dict.get("material_spec"),
+                            "material_model": item_dict.get("material_model"),
+                            "partner_material_code": item_dict.get("partner_material_code"),
+                            "partner_material_name": item_dict.get("partner_material_name"),
+                        }],
+                    )
+                    if not str(item_dict.get("material_spec") or "").strip():
+                        item_dict["material_spec"] = enriched[0].get("material_spec")
+                    item_dict.update(snapshot_kwargs_for_orm(enriched[0]))
+
                     await PurchaseReceiptItem.create(**item_dict)
                     total_quantity += qty
                     total_amount += line_amount

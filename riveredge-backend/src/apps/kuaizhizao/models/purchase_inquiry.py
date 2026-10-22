@@ -11,6 +11,9 @@ from tortoise import fields
 
 from core.models.base import BaseModel
 from apps.kuaizhizao.constants import DocumentStatus
+from apps.kuaizhizao.models.mixins.document_line_partner_material import (
+    DocumentLinePartnerMaterialSnapshotMixin,
+)
 from apps.kuaizhizao.constants.purchase_inquiry import (
     PurchaseInquiryStatus,
     PurchaseInquiryVendorStatus,
@@ -70,7 +73,7 @@ class PurchaseInquiry(BaseModel):
         exclude = ["deleted_at"]
 
 
-class PurchaseInquiryItem(BaseModel):
+class PurchaseInquiryItem(DocumentLinePartnerMaterialSnapshotMixin, BaseModel):
     """采购询价明细"""
 
     tenant_id = fields.IntField(description="租户ID")

@@ -293,6 +293,9 @@ class SalesContractService(AppBaseService[SalesContract]):
                     material_code=it.material_code,
                     material_name=it.material_name,
                     material_spec=it.material_spec,
+                    material_model=getattr(it, "material_model", None),
+                    partner_material_code=getattr(it, "partner_material_code", None),
+                    partner_material_name=getattr(it, "partner_material_name", None),
                     material_unit=it.material_unit,
                     contract_quantity=it.contract_quantity,
                     released_quantity=it.released_quantity,
@@ -367,6 +370,45 @@ class SalesContractService(AppBaseService[SalesContract]):
         )
 
     @staticmethod
+    async def _persist_contract_items(
+        self,
+        tenant_id: int,
+        contract_id: int,
+        customer_id: Optional[int],
+        items: List[SalesContractItemCreate],
+    ) -> None:
+        from apps.kuaizhizao.utils.document_line_material_snapshot import (
+            enrich_line_dicts_with_partner_snapshots,
+            snapshot_kwargs_for_orm,
+        )
+
+        rows = [it.model_dump() for it in items]
+        rows = await enrich_line_dicts_with_partner_snapshots(
+            tenant_id,
+            partner_type="customer",
+            partner_id=int(customer_id or 0) or None,
+            lines=rows,
+        )
+        for it, row in zip(items, rows):
+            spec = row.get("material_spec") if row.get("material_spec") else it.material_spec
+            await SalesContractItem.create(
+                tenant_id=tenant_id,
+                contract_id=contract_id,
+                material_id=it.material_id,
+                material_code=it.material_code,
+                material_name=it.material_name,
+                material_spec=spec,
+                material_unit=it.material_unit,
+                contract_quantity=it.contract_quantity,
+                unit_price=it.unit_price,
+                tax_rate=it.tax_rate or Decimal("0"),
+                total_amount=it.total_amount,
+                variant_attributes=it.variant_attributes,
+                delivery_date=it.delivery_date,
+                notes=it.notes,
+                **snapshot_kwargs_for_orm(row),
+            )
+
     def _sum_items(items: List[SalesContractItemCreate]) -> tuple[Decimal, Decimal]:
         total_qty = Decimal("0")
         total_amt = Decimal("0")
@@ -575,26 +617,9 @@ class SalesContractService(AppBaseService[SalesContract]):
                 if q:
                     contract.quotation_code = q.quotation_code
                     await contract.save(update_fields=["quotation_code"])
-            item_rows = []
-            for it in data.items:
-                item_rows.append(
-                    await SalesContractItem.create(
-                        tenant_id=tenant_id,
-                        contract_id=contract.id,
-                        material_id=it.material_id,
-                        material_code=it.material_code,
-                        material_name=it.material_name,
-                        material_spec=it.material_spec,
-                        material_unit=it.material_unit,
-                        contract_quantity=it.contract_quantity,
-                        unit_price=it.unit_price,
-                        tax_rate=it.tax_rate or Decimal("0"),
-                        total_amount=it.total_amount,
-                        variant_attributes=it.variant_attributes,
-                        delivery_date=it.delivery_date,
-                        notes=it.notes,
-                    )
-                )
+            await self._persist_contract_items(
+                tenant_id, contract.id, data.customer_id, list(data.items)
+            )
             contract.root_contract_id = contract.id
             await contract.save(update_fields=["root_contract_id"])
         if auto_submit:
@@ -893,23 +918,9 @@ class SalesContractService(AppBaseService[SalesContract]):
                     valid_to=contract.valid_to,
                 )
                 await SalesContractItem.filter(tenant_id=tenant_id, contract_id=contract_id).delete()
-                for it in item_list:
-                    await SalesContractItem.create(
-                        tenant_id=tenant_id,
-                        contract_id=contract_id,
-                        material_id=it.material_id,
-                        material_code=it.material_code,
-                        material_name=it.material_name,
-                        material_spec=it.material_spec,
-                        material_unit=it.material_unit,
-                        contract_quantity=it.contract_quantity,
-                        unit_price=it.unit_price,
-                        tax_rate=it.tax_rate or Decimal("0"),
-                        total_amount=it.total_amount,
-                        variant_attributes=it.variant_attributes,
-                        delivery_date=it.delivery_date,
-                        notes=it.notes,
-                    )
+                await self._persist_contract_items(
+                    tenant_id, contract_id, contract.customer_id, list(item_list)
+                )
                 await self._refresh_contract_totals(
                     tenant_id,
                     contract_id,

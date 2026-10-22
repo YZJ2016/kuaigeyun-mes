@@ -26,7 +26,10 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import LineAttachmentsUpload from '../../../components/LineAttachmentsUpload';
-import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
+import {
+  normalizeDocumentAttachments,
+  resolveDocumentAttachmentFileUuid,
+} from '../../../utils/documentAttachments';
 import { toolApi } from '../../../services/equipment';
 import { calibrationsApi } from '../../../services/toolOps';
 import { useEquipmentDetailDrawer } from '../shared/equipmentMasterDataDetail';
@@ -35,6 +38,7 @@ import { formatDateTime } from '../../../../../utils/format';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../../../../components/page-help-wiki';
 import {
   normalizeEquipmentListResponse,
@@ -47,7 +51,9 @@ const RESOURCE = 'kuaizhizao:tool-calibration';
 const P = 'app.kuaizhizao.toolCalibration';
 
 interface ToolCalibration {
+  id?: number;
   uuid?: string;
+  tool_id?: number;
   tool_uuid?: string;
   tool_code?: string;
   tool_name?: string;
@@ -77,12 +83,20 @@ const ToolCalibrationsPage: React.FC = () => {
     useEquipmentDetailDrawer<ToolCalibration>();
   const [modalVisible, setModalVisible] = useState(false);
   const formRef = useRef<any>(null);
-  const [toolOptions, setToolOptions] = useState<{ label: string; value: string }[]>([]);
+  const [toolOptions, setToolOptions] = useState<{ label: string; value: number }[]>([]);
 
   React.useEffect(() => {
-    toolApi.list({ limit: 500 }).then((res: any) => {
-      setToolOptions((res.items || []).map((item: any) => ({ label: `${item.code} - ${item.name}`, value: item.uuid })));
-    }).catch(() => {});
+    toolApi
+      .list({ limit: 500 })
+      .then((res: { items?: Array<{ id: number; code: string; name: string }> }) => {
+        setToolOptions(
+          (res.items || []).map((item) => ({
+            label: `${item.code} - ${item.name}`,
+            value: item.id,
+          })),
+        );
+      })
+      .catch(() => {});
   }, []);
 
   const handleCreate = () => {
@@ -95,29 +109,44 @@ const ToolCalibrationsPage: React.FC = () => {
 
   const handleDetail = useCallback(
     (record: ToolCalibration) => {
-      if (!record.uuid) return;
+      if (!record.uuid && record.id == null) return;
       void openDetail(async () => record as ToolCalibration);
     },
     [openDetail],
   );
 
-  const handleSubmit = async (values: any) => {
+  const handleSubmit = async (values: Record<string, unknown>) => {
+    const toolId = Number(values.tool_id);
+    if (!Number.isFinite(toolId) || toolId <= 0) {
+      messageApi.error(t(`${P}.formSelectToolRequired`));
+      return;
+    }
+    const attachments = normalizeDocumentAttachments(
+      values.attachments as Parameters<typeof normalizeDocumentAttachments>[0],
+    );
+    const firstAttachmentUuid = attachments?.[0]
+      ? resolveDocumentAttachmentFileUuid(attachments[0])
+      : undefined;
     try {
       await calibrationsApi.create({
-        tool_uuid: values.tool_uuid,
-        calibration_date: values.calibration_date?.format?.('YYYY-MM-DD') || values.calibration_date,
+        tool_id: toolId,
+        calibration_date:
+          (values.calibration_date as { format?: (f: string) => string })?.format?.('YYYY-MM-DD') ||
+          values.calibration_date,
         result: values.result,
         certificate_no: values.certificate_no,
-        expiry_date: values.expiry_date?.format?.('YYYY-MM-DD') || values.expiry_date,
+        expiry_date:
+          (values.expiry_date as { format?: (f: string) => string })?.format?.('YYYY-MM-DD') ||
+          values.expiry_date,
         calibration_org: values.calibration_org,
         remark: values.remark,
-        attachments: normalizeDocumentAttachments(values.attachments),
+        attachment_uuid: firstAttachmentUuid,
       });
       messageApi.success(t(`${P}.saveSuccess`));
       setModalVisible(false);
       actionRef.current?.reload();
-    } catch (e: any) {
-      messageApi.error(e?.message || t('common.saveFailed'));
+    } catch (e: unknown) {
+      messageApi.error(getApiErrorMessage(e, t('common.saveFailed')));
       throw e;
     }
   };
@@ -316,7 +345,7 @@ const ToolCalibrationsPage: React.FC = () => {
         enableRowSelection
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
-        rowKey="uuid"
+        rowKey={(r) => String(r.id ?? r.uuid ?? '')}
         columns={alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK)}
         showAdvancedSearch
         skipFuzzyPinyinClientFilter
@@ -332,7 +361,6 @@ const ToolCalibrationsPage: React.FC = () => {
           const res = await calibrationsApi.list({
             skip: ((params.current || 1) - 1) * (params.pageSize || 20),
             limit: params.pageSize || 20,
-            tool_uuid: params.tool_uuid,
             ...listParams,
           });
           const { data, total } = normalizeEquipmentListResponse(res);
@@ -361,9 +389,10 @@ const ToolCalibrationsPage: React.FC = () => {
         grid
       >
         <ProFormSelect
-          name="tool_uuid"
+          name="tool_id"
           label={t(`${P}.formTool`)}
           options={toolOptions}
+          showSearch
           placeholder={t(`${P}.formSelectTool`)}
           rules={[{ required: true, message: t(`${P}.formSelectToolRequired`) }]}
           colProps={{ span: 12 }}

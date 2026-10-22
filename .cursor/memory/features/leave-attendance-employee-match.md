@@ -47,14 +47,19 @@ standard: AttendanceService.apply_leave_to_attendance 优先 employee_id；已�
 1. 匹配序：`employee_id` → `employee_name` → `applicant_id`（用户）→ `applicant_name`
 2. 满勤日：`mark=leave`，工时清零；不足一天：`mark=normal`，`regular_hours = 标准 − 请假小时`，清零加班，挂 `leave_request_id`
 3. 仅未提交考勤单日格可写；已提交跳过
+4. **出差 `business_trip` 不回写考勤**；其余类型（含 `work_injury` 工伤）扣出勤
+5. 免审 / 提交 auto_pass：`LeaveRequestService.submit_request` 在 status=approved 后补 `apply_leave_to_attendance`；流程引擎完成回调登记 `kuaioa_leave`
 
 ## 踩坑
 
 - HR 代录时 `applicant_id` 是录入人，旧逻辑只认申请人 → 考勤落到错误人或 0 格（吴兆君 9 号半天假未扣）
 - 半天假不会变成「请假」下拉，需看正班工时或「请假扣 Nh」提示，勿当成未回写
 - 改主仓组装文件后必须回写 pro / custom，否则 compose 会冲掉
+- 通用 `submit_row` 只落 approved、不写考勤；请假须在 submit 后补写，勿只靠人工审回调
+- 对应月度考勤单须已建且为草稿，否则回写格数为 0
 
 ## 关联
 
 - 三仓：`principles/three-repo-map.md`
 - 平台日志：`leave-attendance-employee-match-r01`
+- 自动通过后撤销：`KuaioaApprovalDocService.unapprove_row` + `clear_leave_from_attendance`；勿再只允许 pending 撤销

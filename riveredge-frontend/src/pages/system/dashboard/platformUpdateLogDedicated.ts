@@ -9,6 +9,56 @@ import type { PlatformUpdateLogEntry } from './platformUpdateLog';
 
 export const PLATFORM_UPDATE_LOG_DEDICATED: PlatformUpdateLogEntry[] = [
   {
+    id: 'haoligo-output-record-prod-dept-list-r01',
+    date: '2026-10-21',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey: 'pages.dashboard.updateLog.entries.haoligo-output-record-prod-dept-list-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-output-record-prod-dept-list-r01.description',
+  },
+  {
+    id: 'haoligo-output-record-production-dept-r01',
+    date: '2026-10-21',
+    type: 'feature',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey: 'pages.dashboard.updateLog.entries.haoligo-output-record-production-dept-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-output-record-production-dept-r01.description',
+  },
+  {
+    id: 'haoligo-order-tracking-workflow-r01',
+    date: '2026-10-21',
+    type: 'feature',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey: 'pages.dashboard.updateLog.entries.haoligo-order-tracking-workflow-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-order-tracking-workflow-r01.description',
+  },
+  {
+    id: 'haoligo-monthly-ledger-submit-finance-r01',
+    date: '2026-10-21',
+    type: 'feature',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey: 'pages.dashboard.updateLog.entries.haoligo-monthly-ledger-submit-finance-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-monthly-ledger-submit-finance-r01.description',
+  },
+  {
+    id: 'haoligo-monthly-ledger-uninvoiced-calc-r01',
+    date: '2026-10-21',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey: 'pages.dashboard.updateLog.entries.haoligo-monthly-ledger-uninvoiced-calc-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-monthly-ledger-uninvoiced-calc-r01.description',
+  },
+  {
     id: 'funide-oa-rd-dashboard-structure-drawings-r01',
     date: '2026-10-21',
     type: 'improvement',

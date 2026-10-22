@@ -10,6 +10,9 @@ Date: 2025-12-30
 from tortoise import fields
 from core.models.base import BaseModel
 from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus
+from apps.kuaizhizao.models.mixins.document_line_partner_material import (
+    DocumentLinePartnerMaterialSnapshotMixin,
+)
 from decimal import Decimal
 
 
@@ -120,7 +123,7 @@ class PurchaseOrder(BaseModel):
         exclude = ["deleted_at"]
 
 
-class PurchaseOrderItem(BaseModel):
+class PurchaseOrderItem(DocumentLinePartnerMaterialSnapshotMixin, BaseModel):
     """
     采购订单行
 

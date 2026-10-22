@@ -234,6 +234,10 @@ import {
   salesContractOrderPushPercent,
 } from '../shared/pushProgress';
 import { applyCustomerFormFields } from '../shared/applyCustomerFormFields';
+import {
+  buildMaterialModelSpecColumns,
+  buildPartnerMaterialLineColumns,
+} from '../shared/materialLineColumns';
 import { SalesDocumentSalesmanField } from '../shared/SalesDocumentSalesmanField';
 import { searchUserDisplay, type User } from '../../../../../services/user';
 import { displayItemsToUsers } from '../../../../../utils/userDisplay';
@@ -719,7 +723,13 @@ const SalesContractsPage: React.FC = () => {
 
         material_name: m.name ?? '',
 
-        material_spec: m.specification ?? '',
+        material_spec: priced[i].material_spec ?? m.specification ?? '',
+
+        material_model: priced[i].material_model ?? '',
+
+        partner_material_code: priced[i].partner_material_code ?? '',
+
+        partner_material_name: priced[i].partner_material_name ?? '',
 
         material_unit: m.baseUnit ?? t('app.kuaizhizao.salesContract.defaultUnit'),
 
@@ -1035,6 +1045,9 @@ const SalesContractsPage: React.FC = () => {
           material_code: resolved.material_code,
           material_name: resolved.material_name,
           material_spec: it.material_spec,
+          material_model: it.material_model ?? '',
+          partner_material_code: it.partner_material_code ?? '',
+          partner_material_name: it.partner_material_name ?? '',
           material_unit: resolved.material_unit,
           contract_quantity: Number(it.contract_quantity),
           unit_price: Number(it.unit_price),
@@ -2292,6 +2305,8 @@ const SalesContractsPage: React.FC = () => {
         dataIndex: 'material_code',
         hideInTable: true,
       },
+      ...buildMaterialModelSpecColumns(t, { readOnly: true, specWidth: 100, modelWidth: 100 }),
+      ...buildPartnerMaterialLineColumns(t, 'customer', { readOnly: true, width: 110 }),
       {
         title: t('app.kuaizhizao.salesContract.contractQuantity'),
         dataIndex: 'contract_quantity',
@@ -2909,6 +2924,17 @@ const SalesContractsPage: React.FC = () => {
                     { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 120 },
 
                     { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', ellipsis: true },
+
+                    { title: t('app.kuaizhizao.salesOrder.spec', '规格'), dataIndex: 'material_spec', width: 100, ellipsis: true },
+
+                    { title: t('app.master-data.materials.model', '型号'), dataIndex: 'material_model', width: 100, ellipsis: true },
+
+                    ...buildPartnerMaterialLineColumns(t, 'customer', { readOnly: true, width: 110 }).map((col) => ({
+                      title: col.title,
+                      dataIndex: col.dataIndex as string,
+                      width: col.width,
+                      ellipsis: true,
+                    })),
 
                     { title: t('app.kuaizhizao.salesContract.contractQuantity'), dataIndex: 'contract_quantity', width: 100, align: 'right' as const, render: formatQuantity },
 

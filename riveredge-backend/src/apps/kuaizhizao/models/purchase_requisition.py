@@ -10,6 +10,9 @@ Date: 2025-02-01
 from tortoise import fields
 from core.models.base import BaseModel
 from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus
+from apps.kuaizhizao.models.mixins.document_line_partner_material import (
+    DocumentLinePartnerMaterialSnapshotMixin,
+)
 
 
 class PurchaseRequisition(BaseModel):
@@ -52,7 +55,7 @@ class PurchaseRequisition(BaseModel):
         table_description = "快格轻制造 - 采购申请"
 
 
-class PurchaseRequisitionItem(BaseModel):
+class PurchaseRequisitionItem(DocumentLinePartnerMaterialSnapshotMixin, BaseModel):
     """
     采购申请行
 

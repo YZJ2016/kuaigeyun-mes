@@ -22,6 +22,7 @@ from infra.models.user import User as CurrentUser
 from loguru import logger
 
 from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem, PurchaseOrderChange, effective_po_item_outstanding
+from apps.kuaizhizao.utils.document_line_material_snapshot import enrich_line_dicts_with_partner_snapshots
 from apps.master_data.models.supplier import Supplier
 from apps.master_data.models.material import Material
 from apps.kuaizhizao.schemas.purchase import (
@@ -361,6 +362,14 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                     'created_by': created_by,
                     'updated_by': created_by
                 })
+
+                enriched_rows = await enrich_line_dicts_with_partner_snapshots(
+                    tenant_id,
+                    partner_type="supplier",
+                    partner_id=int(order_dict.get("supplier_id") or 0) or None,
+                    lines=[item_dict],
+                )
+                item_dict = enriched_rows[0]
 
                 await PurchaseOrderItem.create(**item_dict)
 
@@ -1232,6 +1241,14 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                         'outstanding_quantity': outstanding_quantity,
                         'updated_by': updated_by
                     })
+
+                    enriched_rows = await enrich_line_dicts_with_partner_snapshots(
+                        tenant_id,
+                        partner_type="supplier",
+                        partner_id=int(next_supplier_id or order.supplier_id or 0) or None,
+                        lines=[item_dict],
+                    )
+                    item_dict = enriched_rows[0]
 
                     if requires_audit:
                         # 对于明细的变更，目前简化记录为"明细整批更新"，后续可根据需求实现行级更细精度的对比

@@ -21,6 +21,7 @@ import { MODAL_CONFIG } from '../../../../../components/layout-templates/constan
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { formatQuantityWithUnit } from '../../../../../utils/materialUnitDisplay';
 import { formatQuantity } from '../../../../../utils/format';
+import { formatInspectionMaterialDisplayValue } from './InspectionConductInfoCard';
 import { getQualityDefectTypeOptions, getQualityDispositionValueEnum } from './qualityMeta';
 import { InspectionDefectLineExtraFields } from './InspectionDefectLineExtraFields';
 import {
@@ -347,6 +348,16 @@ export function CreateInspectionDefectModal({
               <Col span={12}>
                 <strong>{t('app.kuaizhizao.quality.common.label.materialName')}：</strong>
                 {inspection.material_name}
+              </Col>
+            </Row>
+            <Row gutter={16} style={{ marginTop: 8 }}>
+              <Col span={12}>
+                <strong>{t('app.kuaizhizao.quality.common.columns.materialSpec')}：</strong>
+                {formatInspectionMaterialDisplayValue(inspection.material_spec)}
+              </Col>
+              <Col span={12}>
+                <strong>{t('app.master-data.materials.model', '型号')}：</strong>
+                {formatInspectionMaterialDisplayValue(inspection.material_model)}
               </Col>
             </Row>
             <Row gutter={16} style={{ marginTop: 8 }}>

@@ -326,6 +326,25 @@ class MaterialCodeService:
         ).first()
 
     @staticmethod
+    async def resolve_line_partner_material_snapshots(
+        tenant_id: int,
+        *,
+        partner_type: str,
+        partner_id: int,
+        material_ids: List[int],
+    ) -> Dict[int, Dict[str, Optional[str]]]:
+        from apps.kuaizhizao.utils.document_line_material_snapshot import (
+            resolve_line_partner_material_snapshots as _resolve,
+        )
+
+        return await _resolve(
+            tenant_id,
+            partner_type=partner_type,
+            partner_id=partner_id,
+            material_ids=material_ids,
+        )
+
+    @staticmethod
     async def sync_partner_alias_from_price_book(
         tenant_id: int,
         material_id: int,

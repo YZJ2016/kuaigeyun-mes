@@ -50,6 +50,9 @@ export function createPartnerPriceBookApi(partnerType: PartnerPriceBookType) {
       api.post(`${base}/resolve-batch`, data),
     bulkCreate: (data: PartnerPriceBookBulkCreate): Promise<PartnerPriceBookBulkResponse> =>
       api.post(`${base}/bulk`, data),
+    /** 列表筛选：仅返回价格本中已有数据的客户/供应商 */
+    listPartnersWithData: (): Promise<{ data: { id: number; code?: string; name?: string }[] }> =>
+      api.get(`${base}/partners-with-data`),
   };
 }
 

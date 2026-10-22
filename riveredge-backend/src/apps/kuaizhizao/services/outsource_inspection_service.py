@@ -59,6 +59,7 @@ class OutsourceInspectionService(AppBaseService[OutsourceInspection]):
         self, tenant_id: int, user_id: int, payload: OutsourceInspectionCreate
     ) -> OutsourceInspectionResponse:
         from apps.kuaizhizao.services.quality_service import (
+            _ensure_inspection_material_spec_model,
             _ensure_inspection_material_unit,
             _quality_inspection_initial_review_fields,
             _resolve_inspection_template_fields,
@@ -71,6 +72,7 @@ class OutsourceInspectionService(AppBaseService[OutsourceInspection]):
             await _quality_inspection_initial_review_fields(tenant_id, "outsource_inspection")
         )
         await _ensure_inspection_material_unit(tenant_id, create_fields)
+        await _ensure_inspection_material_spec_model(tenant_id, create_fields)
         template = await _resolve_inspection_template_fields(
             tenant_id,
             int(create_fields["material_id"]),

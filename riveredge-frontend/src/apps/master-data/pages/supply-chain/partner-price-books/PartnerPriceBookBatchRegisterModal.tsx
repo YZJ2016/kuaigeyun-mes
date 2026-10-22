@@ -54,6 +54,8 @@ type BulkLineForm = {
   materialName?: string;
   unit?: string;
   unitPrice?: number;
+  partnerMaterialCode?: string;
+  partnerMaterialName?: string;
 };
 
 function parseBulkConflicts(error: unknown): PartnerPriceBookBulkConflictItem[] {
@@ -125,6 +127,7 @@ export const PartnerPriceBookBatchRegisterModal: React.FC<PartnerPriceBookBatchR
       effectiveTo?: dayjs.Dayjs;
       remark?: string;
       isActive?: boolean;
+      syncPartnerAlias?: boolean;
       lines?: BulkLineForm[];
     };
     const partnerIds = (values.partnerIds ?? []).filter((id) => id != null);
@@ -133,6 +136,8 @@ export const PartnerPriceBookBatchRegisterModal: React.FC<PartnerPriceBookBatchR
         materialId: Number(row.materialId),
         unitPrice: Number(row.unitPrice),
         unit: row.unit?.trim() || undefined,
+        partnerMaterialCode: row.partnerMaterialCode?.trim() || undefined,
+        partnerMaterialName: row.partnerMaterialName?.trim() || undefined,
       }))
       .filter((row) => row.materialId > 0 && Number.isFinite(row.unitPrice) && row.unitPrice > 0);
 
@@ -160,6 +165,7 @@ export const PartnerPriceBookBatchRegisterModal: React.FC<PartnerPriceBookBatchR
       effectiveTo: values.effectiveTo ? values.effectiveTo.format('YYYY-MM-DD') : undefined,
       remark: values.remark?.trim() || undefined,
       isActive: values.isActive !== false,
+      syncPartnerAlias: values.syncPartnerAlias !== false,
     };
   }, [messageApi, t]);
 
@@ -190,6 +196,7 @@ export const PartnerPriceBookBatchRegisterModal: React.FC<PartnerPriceBookBatchR
             effectiveTo: payload.effectiveTo,
             remark: payload.remark,
             isActive: payload.isActive,
+            syncPartnerAlias: payload.syncPartnerAlias,
           };
           setConflicts(list);
           setApplyToAllConflicts(true);
@@ -234,18 +241,30 @@ export const PartnerPriceBookBatchRegisterModal: React.FC<PartnerPriceBookBatchR
         materialName: m.name,
         unit: m.baseUnit ?? (m as { base_unit?: string }).base_unit,
         unitPrice: undefined,
+        partnerMaterialCode: undefined,
+        partnerMaterialName: undefined,
       });
     }
     form.setFieldsValue({ lines });
     setMaterialPickerOpen(false);
   }, []);
 
+  const partnerMaterialCodeLabel = isCustomer
+    ? t('app.master-data.priceBook.customerMaterialCode')
+    : t('app.master-data.priceBook.supplierMaterialCode');
+  const partnerMaterialNameLabel = isCustomer
+    ? t('app.master-data.priceBook.customerMaterialName')
+    : t('app.master-data.priceBook.supplierMaterialName');
+  const partnerMaterialCodePlaceholder = isCustomer
+    ? t('app.master-data.priceBook.customerMaterialCodePlaceholder')
+    : t('app.master-data.priceBook.supplierMaterialCodePlaceholder');
+
   const lineColumns = useMemo(
     () => [
       {
         title: t('app.master-data.materialForm.mainCode', '内部物料'),
         dataIndex: 'materialId',
-        width: 300,
+        width: 260,
         render: (_: unknown, __: unknown, index: number) => (
           <>
             <UniMaterialSelect
@@ -274,9 +293,33 @@ export const PartnerPriceBookBatchRegisterModal: React.FC<PartnerPriceBookBatchR
         ),
       },
       {
+        title: partnerMaterialCodeLabel,
+        dataIndex: 'partnerMaterialCode',
+        width: 150,
+        render: (_: unknown, __: unknown, index: number) => (
+          <Form.Item name={[index, 'partnerMaterialCode']} style={{ margin: 0 }}>
+            <Input size="small" allowClear placeholder={partnerMaterialCodePlaceholder} />
+          </Form.Item>
+        ),
+      },
+      {
+        title: partnerMaterialNameLabel,
+        dataIndex: 'partnerMaterialName',
+        width: 150,
+        render: (_: unknown, __: unknown, index: number) => (
+          <Form.Item name={[index, 'partnerMaterialName']} style={{ margin: 0 }}>
+            <Input
+              size="small"
+              allowClear
+              placeholder={t('app.master-data.priceBook.partnerMaterialNamePlaceholder')}
+            />
+          </Form.Item>
+        ),
+      },
+      {
         title: t('app.master-data.priceBook.standardUnitPrice', '标准价'),
         dataIndex: 'unitPrice',
-        width: 140,
+        width: 120,
         align: 'right' as const,
         render: (_: unknown, __: unknown, index: number) => (
           <Form.Item
@@ -294,7 +337,7 @@ export const PartnerPriceBookBatchRegisterModal: React.FC<PartnerPriceBookBatchR
       {
         title: t('app.master-data.materialForm.baseUnit', '基础单位'),
         dataIndex: 'unit',
-        width: 120,
+        width: 110,
         render: (_: unknown, __: unknown, index: number) => (
           <Form.Item name={[index, 'unit']} style={{ margin: 0 }}>
             <UniDropdown
@@ -311,7 +354,14 @@ export const PartnerPriceBookBatchRegisterModal: React.FC<PartnerPriceBookBatchR
         ),
       },
     ],
-    [t, unitOptions, unitOptionsLoading],
+    [
+      t,
+      unitOptions,
+      unitOptionsLoading,
+      partnerMaterialCodeLabel,
+      partnerMaterialNameLabel,
+      partnerMaterialCodePlaceholder,
+    ],
   );
 
   const modalTitle = isCustomer
@@ -330,13 +380,14 @@ export const PartnerPriceBookBatchRegisterModal: React.FC<PartnerPriceBookBatchR
         onFinish={handleFinish}
         isEdit={false}
         formRef={formRef as React.RefObject<ProFormInstance>}
-        width={MODAL_CONFIG.LARGE_WIDTH}
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
         loading={submitting}
         grid={false}
         initialValues={{
           partnerIds: [],
           priceType: 'tax_inclusive',
           isActive: true,
+          syncPartnerAlias: true,
           lines: [],
         }}
       >
@@ -365,7 +416,22 @@ export const PartnerPriceBookBatchRegisterModal: React.FC<PartnerPriceBookBatchR
               />
             </Form.Item>
           </Col>
-          <Col span={24}>
+          <Col xs={24} sm={6}>
+            <Form.Item name="taxRate" label={t('app.master-data.defaults.defaultTaxRate', '默认税率')}>
+              <InputNumber min={0} max={100} precision={2} style={{ width: '100%' }} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} sm={6}>
+            <Form.Item name="effectiveFrom" label={t('app.master-data.priceBook.effectiveFrom', '生效起始')}>
+              <DatePicker style={{ width: '100%' }} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} sm={6}>
+            <Form.Item name="effectiveTo" label={t('app.master-data.priceBook.effectiveTo', '生效截止')}>
+              <DatePicker style={{ width: '100%' }} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} sm={2}>
             <Form.Item name="priceType" hidden initialValue="tax_inclusive">
               <Input />
             </Form.Item>
@@ -388,19 +454,17 @@ export const PartnerPriceBookBatchRegisterModal: React.FC<PartnerPriceBookBatchR
               </Form.Item>
             </Form.Item>
           </Col>
-          <Col xs={24} sm={12}>
-            <Form.Item name="taxRate" label={t('app.master-data.defaults.defaultTaxRate', '默认税率')}>
-              <InputNumber min={0} max={100} precision={2} style={{ width: '100%' }} />
-            </Form.Item>
-          </Col>
-          <Col xs={24} sm={12}>
-            <Form.Item name="effectiveFrom" label={t('app.master-data.priceBook.effectiveFrom', '生效起始')}>
-              <DatePicker style={{ width: '100%' }} />
-            </Form.Item>
-          </Col>
-          <Col xs={24} sm={12}>
-            <Form.Item name="effectiveTo" label={t('app.master-data.priceBook.effectiveTo', '生效截止')}>
-              <DatePicker style={{ width: '100%' }} />
+          <Col xs={24} sm={4}>
+            <Form.Item
+              name="syncPartnerAlias"
+              label={t('app.master-data.priceBook.syncPartnerAlias', '同步到物料编号映射')}
+              valuePropName="checked"
+              tooltip={t(
+                'app.master-data.priceBook.syncPartnerAliasHint',
+                '保存价格本时写入物料「编号映射」，仅在该客户/供应商尚无映射时生效',
+              )}
+            >
+              <Switch checkedChildren={t('common.yes', '是')} unCheckedChildren={t('common.no', '否')} />
             </Form.Item>
           </Col>
         </Row>
@@ -424,6 +488,8 @@ export const PartnerPriceBookBatchRegisterModal: React.FC<PartnerPriceBookBatchR
                     materialName: '',
                     unit: undefined,
                     unitPrice: undefined,
+                    partnerMaterialCode: undefined,
+                    partnerMaterialName: undefined,
                   });
                   formRef.current?.setFieldsValue({ lines });
                 }}
@@ -442,8 +508,14 @@ export const PartnerPriceBookBatchRegisterModal: React.FC<PartnerPriceBookBatchR
             materialName: '',
             unit: undefined,
             unitPrice: undefined,
+            partnerMaterialCode: undefined,
+            partnerMaterialName: undefined,
           }}
-          tableProps={{ size: 'small', style: { width: '100%', margin: 0 } }}
+          tableProps={{
+            size: 'small',
+            style: { width: '100%', margin: 0 },
+            scroll: { x: 960 },
+          }}
         />
 
         <Row gutter={16}>

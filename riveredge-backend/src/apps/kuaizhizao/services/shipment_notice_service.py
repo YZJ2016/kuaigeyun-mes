@@ -440,16 +440,35 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
             items = getattr(notice_data, "items", None) or []
             total_quantity = Decimal(0)
             total_amount = Decimal(0)
-            for item_data in items:
+            from apps.kuaizhizao.utils.document_line_material_snapshot import (
+                enrich_line_dicts_with_partner_snapshots,
+                snapshot_kwargs_for_orm,
+            )
+
+            item_rows = [it.model_dump(exclude_unset=True) for it in items]
+            item_rows = await enrich_line_dicts_with_partner_snapshots(
+                tenant_id,
+                partner_type="customer",
+                partner_id=int(getattr(notice, "customer_id", 0) or 0) or None,
+                lines=item_rows,
+            )
+            for item_data, row in zip(items, item_rows):
                 qty = Decimal(str(item_data.notice_quantity))
                 amt = item_data.total_amount if item_data.total_amount is not None else qty * Decimal(str(item_data.unit_price or 0))
+                dump = item_data.model_dump(
+                    exclude_unset=True,
+                    exclude={"notice_quantity", "unit_price", "total_amount"},
+                )
+                spec = row.get("material_spec") or dump.get("material_spec")
                 await ShipmentNoticeItem.create(
                     tenant_id=tenant_id,
                     notice_id=notice.id,
                     notice_quantity=qty,
                     unit_price=Decimal(str(item_data.unit_price or 0)),
                     total_amount=amt,
-                    **item_data.model_dump(exclude_unset=True, exclude={"notice_quantity", "unit_price", "total_amount"})
+                    **dump,
+                    material_spec=spec,
+                    **snapshot_kwargs_for_orm(row),
                 )
                 total_quantity += qty
                 total_amount += amt

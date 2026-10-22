@@ -11,6 +11,10 @@ import { useNumericPrecision } from '../../../../../hooks/useNumericPrecision';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import PriceTypeSwitch from '../../../../../components/price-type-switch/PriceTypeSwitch';
 import { DEFAULT_SALES_PRICE_TYPE, salesFormPriceType } from '../shared/salesPriceType';
+import {
+  buildDocumentDetailPartnerMaterialFormColumns,
+  buildDocumentDetailSpecModelFormColumns,
+} from '../shared/materialLineFormDetail';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import {
   DOCUMENT_DETAIL_AMOUNT_STYLE,
@@ -135,17 +139,8 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                           />
                         ) : null,
                     },
-                    {
-                      title: t('app.kuaizhizao.salesOrder.spec'),
-                      dataIndex: 'material_spec',
-                      width: DOCUMENT_DETAIL_COL_WIDTH.spec,
-                      ...DOCUMENT_DETAIL_TEXT_COL,
-                      render: (_: unknown, __: unknown, index: number) => (
-                        <Form.Item name={[index, 'material_spec']} style={{ margin: 0 }}>
-                          <Input placeholder={t('app.kuaizhizao.salesOrder.spec')} size={DOCUMENT_DETAIL_CONTROL_SIZE} />
-                        </Form.Item>
-                      ),
-                    },
+                    ...buildDocumentDetailSpecModelFormColumns(t),
+                    ...buildDocumentDetailPartnerMaterialFormColumns(t, 'customer'),
                     {
                       title: t('common.unit'),
                       dataIndex: 'material_unit',

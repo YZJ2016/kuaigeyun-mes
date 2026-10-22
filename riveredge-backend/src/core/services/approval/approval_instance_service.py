@@ -4923,6 +4923,17 @@ class ApprovalInstanceService:
                 )
                 logger.info(f"轻办公申请单 {entity_id} 审批回调完成: {approval_instance.status}")
 
+            async def _handle_kuaioa_leave() -> None:
+                from apps.kuaioa.services.leave_service import apply_leave_request_decision
+
+                if not entity_id:
+                    return
+                approved = approval_instance.status == "approved"
+                await apply_leave_request_decision(
+                    tenant_id, int(entity_id), approved, approver_id
+                )
+                logger.info(f"请假出差 {entity_id} 审批回调完成: {approval_instance.status}")
+
             async def _handle_kuaioa_asset_purchase() -> None:
                 from apps.kuaioa.services.asset_service import apply_asset_purchase_decision
 
@@ -5562,6 +5573,7 @@ class ApprovalInstanceService:
                 "process_route_change": _handle_process_route_change,
                 "quotation": _handle_quotation,
                 "kuaioa_form_request": _handle_kuaioa_form_request,
+                "kuaioa_leave": _handle_kuaioa_leave,
                 "kuaioa_asset_purchase": _handle_kuaioa_asset_purchase,
                 "kuaioa_dept_training_application": _handle_kuaioa_dept_training_application,
                 "kuaioa_training_plan": _handle_kuaioa_training_plan,
