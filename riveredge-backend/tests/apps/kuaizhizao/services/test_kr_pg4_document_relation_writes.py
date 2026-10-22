@@ -203,7 +203,8 @@ async def test_create_computation_existing_relation_continues():
     demand_svc.sync_upstream_planning_on_push = AsyncMock()
     svc = DemandComputationService()
     svc._generate_computation_code = AsyncMock(return_value="MRP001")
-    svc._build_computation_response = AsyncMock(return_value="built")
+    svc._build_computation_response = AsyncMock(return_value=SimpleNamespace(id=50))
+    svc._maybe_enqueue_computation_automation = AsyncMock()
 
     with (
         patch(
@@ -244,7 +245,7 @@ async def test_create_computation_existing_relation_continues():
             9,
         )
 
-    assert result == "built"
+    assert result.id == 50
     rel_svc.create_relation.assert_awaited()
 
 
