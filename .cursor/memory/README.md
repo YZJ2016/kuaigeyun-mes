@@ -56,6 +56,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 苍穹增量、水位、无变更跳过、batchQuery | `features/sync-from-source-cosmic-incremental.md` |
 | 仓库列表、createorg_number、苍穹组织编码 | `features/cosmic-warehouse-createorg.md` |
 | 导入 limit 2000、物料列表 le、采购订单 Excel | `features/list-api-import-limit.md` |
+| 业务自动化、需求计算自动执行、采购自动审核、收货通知自动下推 | `features/planning-procurement-automation.md` |
 | 定时任务、Taskiq、缺少 event、租户隔离 | `features/scheduled-task-tenant-isolation-event.md` |
 | 数据备份、任务堆积、pending 卡住、reclaim | `features/data-backup-stalled-reclaim.md` |
 | 数据备份定时、对象存储落点、保留天数/份数清理 | `features/data-backup-policy-schedule-storage.md` |
@@ -123,7 +124,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 运营看板、参观模式、visit_mode、手填指标 | `features/business-board-visit-mode.md` |
 | 价格本批量登记、bulk、partner-price-book | `features/partner-price-book-bulk-register.md` |
 | 简易/加强密码、password_mode、强制改密、站点登录密码策略 | `features/tenant-password-policy.md` |
-| 流程造数、操作用户、预检、工单自选并行、失败不跳过、工序流转间隔、造数进度条、flow-generate job | `features/flow-data-generate-operator-modes.md` |
+| 流程造数、sim_mode、场景段、BusinessClock、Kit 预检、操作用户、质检旁路、flow-generate job | `features/flow-data-generate-operator-modes.md` |
 | 设备点检造数、保养执行造数、点检单导入 | `features/equipment-ops-data-generate.md` |
 | 点检计划已拆除、DJJH、勿再实现计划层、造数改选点检单 | `features/equipment-spot-check-plan.md` |
 | 应用初始化缓慢、首次组织引导、消息模板预设、失败重试 | `features/tenant-bootstrap-initialization.md` |
@@ -195,6 +196,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | `features/pull-source-display-echo.md` | 取单来源回显（不必开查看） | rbac | 已交付 |
 | `features/document-amount-summary-precision.md` | 单据合计金额精度（先乘后舍） | finance-ui | 已交付 |
 | `features/numeric-precision-decimal-places-6.md` | 配置中心数值精度 0–6 与库表 scale | platform-config | 已交付 |
+| `features/planning-procurement-automation.md` | 需求计算/采购业务自动化开关与 Taskiq | platform-config | 已交付 |
 | `features/partner-statement-push-invoice-date.md` | 对账单下推请款/收票与开票日期列 | finance-ui | 已交付 |
 | `features/purchase-invoice-pull-detail-lines.md` | 收票预览展示源单物料明细 | finance-ui | 已交付 |
 | `features/uni-material-select-reference-display.md` | 物料选择器走 reference-display | rbac | 已交付 |

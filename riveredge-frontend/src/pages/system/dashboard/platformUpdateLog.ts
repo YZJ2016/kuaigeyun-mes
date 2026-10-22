@@ -44,6 +44,33 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'planning-procurement-automation-r01',
+    date: '2026-10-21',
+    type: 'feature',
+    titleKey:
+      'pages.dashboard.updateLog.entries.planning-procurement-automation-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.planning-procurement-automation-r01.description',
+  },
+  {
+    id: 'flow-generate-preview-precheck-timeout-r01',
+    date: '2026-10-21',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.flow-generate-preview-precheck-timeout-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.flow-generate-preview-precheck-timeout-r01.description',
+  },
+  {
+    id: 'data-backup-restore-unique-dedupe-r01',
+    date: '2026-10-20',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.data-backup-restore-unique-dedupe-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.data-backup-restore-unique-dedupe-r01.description',
+  },
+  {
     id: 'kuaiplm-prototype-build-sheet-optional-project-r01',
     date: '2026-10-21',
     type: 'improvement',

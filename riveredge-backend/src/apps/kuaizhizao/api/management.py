@@ -112,13 +112,26 @@ class FlowGenerateBody(BaseModel):
         None, ge=1, le=9999, description="数量并行组每组最大件数（如 3）"
     )
     flow_end_at: Optional[datetime] = Field(
-        None, description="流程结束锚点；与 anchor_at 组成时间窗推算步骤间隔"
+        None,
+        description="流程结束锚点；仅填数模式与 anchor_at 组成时间窗均摊间隔",
     )
     allow_skip_iqc: bool = Field(
-        False, description="来料检建单失败时允许直推入库（默认关闭）"
+        False,
+        description="来料检建单失败时允许直推入库（仅填数模式生效；真实模式强制关）",
     )
     resume_run_id: Optional[str] = Field(
         None, description="续跑：失败轮次的 run_id，按检查点跳过已完成阶段"
+    )
+    sim_mode: str = Field(
+        "real",
+        description="仿真模式：real=验收级真实仿真（默认）；fill=快速填数",
+    )
+    scenarios: Optional[list[str]] = Field(
+        None,
+        description=(
+            "场景段：mrp_push/purchase_inbound/wo_complete/owo_fulfill/ship；"
+            "空或不传=全链路串联"
+        ),
     )
 
 
@@ -195,6 +208,12 @@ def _to_flow_request(body: FlowGenerateBody) -> FlowGenerateRequest:
         resume_run_id=(str(body.resume_run_id).strip() or None)
         if body.resume_run_id
         else None,
+        sim_mode=(body.sim_mode or "real").strip().lower() or "real",
+        scenarios=(
+            [str(x).strip() for x in body.scenarios if str(x).strip()]
+            if body.scenarios
+            else None
+        ),
     )
 
 

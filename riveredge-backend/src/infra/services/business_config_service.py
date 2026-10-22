@@ -325,6 +325,10 @@ REGISTRY_PARAM_CONTROL_META: Dict[str, Dict[str, Any]] = {
     "parameters.sales.require_audit_before_print": {"type": "boolean"},
     "parameters.sales.require_shipment_notice_before_delivery": {"type": "boolean"},
     "parameters.planning.auto_push_sales_to_computation_on_approve": {"type": "boolean"},
+    "parameters.planning.auto_execute_computation_on_create": {"type": "boolean"},
+    "parameters.planning.auto_push_purchase_on_computation_complete": {"type": "boolean"},
+    "parameters.procurement.auto_approve_purchase_order_on_create": {"type": "boolean"},
+    "parameters.procurement.auto_push_receipt_notice_on_approve": {"type": "boolean"},
     "parameters.sales.contract_expiry_alert_days": {"type": "number", "min": 1, "max": 365},
     "parameters.sales.contract_auto_close_on_full_release": {"type": "boolean"},
     "parameters.sales.contract_milestone_required": {"type": "boolean"},
@@ -549,6 +553,10 @@ PARAMETER_KEYS = {
     "parameters.sales.contract_auto_close_on_full_release",
     "parameters.sales.sales_review",
     "parameters.planning.auto_push_sales_to_computation_on_approve",
+    "parameters.planning.auto_execute_computation_on_create",
+    "parameters.planning.auto_push_purchase_on_computation_complete",
+    "parameters.procurement.auto_approve_purchase_order_on_create",
+    "parameters.procurement.auto_push_receipt_notice_on_approve",
     "parameters.procurement.arrival_imminent_days",
     "parameters.automation.push_default_mode",
     "parameters.master_data.drawing_max_upload_size_mb",
@@ -635,6 +643,10 @@ IMPLEMENTED_PARAMETER_KEYS = {
     "parameters.sales.contract_auto_close_on_full_release",
     "parameters.sales.sales_review",
     "parameters.planning.auto_push_sales_to_computation_on_approve",
+    "parameters.planning.auto_execute_computation_on_create",
+    "parameters.planning.auto_push_purchase_on_computation_complete",
+    "parameters.procurement.auto_approve_purchase_order_on_create",
+    "parameters.procurement.auto_push_receipt_notice_on_approve",
     "parameters.automation.push_default_mode",
     "parameters.master_data.drawing_max_upload_size_mb",
     "parameters.kuaiplm.lab_request_delegate_dept_uuids",
@@ -934,9 +946,13 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
         "require_supplier_qualification": False,
         "require_purchase_order_change_confirm": False,
         "arrival_imminent_days": 3,
+        "auto_approve_purchase_order_on_create": False,
+        "auto_push_receipt_notice_on_approve": False,
     },
     "planning": {
         "auto_push_sales_to_computation_on_approve": False,
+        "auto_execute_computation_on_create": False,
+        "auto_push_purchase_on_computation_complete": False,
     },
     "automation": {
         "push_default_mode": "confirm",
@@ -1489,6 +1505,51 @@ class BusinessConfigService:
             config["parameters"]
             .get("planning", {})
             .get("auto_push_sales_to_computation_on_approve", False)
+        )
+
+    async def auto_execute_computation_on_create(self, tenant_id: int) -> bool:
+        """需求计算创建后是否自动执行（组织级开关，默认关闭）。"""
+        config = await self.get_business_config(tenant_id)
+        return bool(
+            config["parameters"]
+            .get("planning", {})
+            .get("auto_execute_computation_on_create", False)
+        )
+
+    async def auto_push_purchase_on_computation_complete(self, tenant_id: int) -> bool:
+        """需求计算完成后是否自动下推采购件（组织级开关，默认关闭）。"""
+        config = await self.get_business_config(tenant_id)
+        return bool(
+            config["parameters"]
+            .get("planning", {})
+            .get("auto_push_purchase_on_computation_complete", False)
+        )
+
+    async def auto_approve_purchase_order_on_create(self, tenant_id: int) -> bool:
+        """采购订单创建后是否自动审核通过（组织级开关，默认关闭）。"""
+        config = await self.get_business_config(tenant_id)
+        return bool(
+            config["parameters"]
+            .get("procurement", {})
+            .get("auto_approve_purchase_order_on_create", False)
+        )
+
+    async def auto_push_receipt_notice_on_approve(self, tenant_id: int) -> bool:
+        """采购订单审核通过后是否自动下推收货通知（组织级开关，默认关闭）。"""
+        config = await self.get_business_config(tenant_id)
+        return bool(
+            config["parameters"]
+            .get("procurement", {})
+            .get("auto_push_receipt_notice_on_approve", False)
+        )
+
+    async def require_purchase_requisition(self, tenant_id: int) -> bool:
+        """是否必须先采购申请再下采购订单。"""
+        config = await self.get_business_config(tenant_id)
+        return bool(
+            config["parameters"]
+            .get("procurement", {})
+            .get("require_purchase_requisition", False)
         )
 
     async def get_push_default_mode(self, tenant_id: int) -> str:

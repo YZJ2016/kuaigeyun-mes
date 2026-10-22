@@ -11020,7 +11020,9 @@ export default {
   'app.kuaizhizao.flowDataGenerate.repairMaterialIdsError': '修复物料 ID 失败',
   'app.kuaizhizao.flowDataGenerate.workOrderSelectCard': '工单自选与并行完成',
   'app.kuaizhizao.flowDataGenerate.workOrderSelectHint':
-    '预检后勾选需走生产链完工的自制件；未勾选的工单仍会下推，但不自动领料/报工/入库。多张勾选时可并行推进业务时刻。',
+    '预检后勾选需走生产链完工的自制件（含 BOM 下级自制件）；未勾选的工单仍会下推，但不自动领料/报工/入库。多张勾选时可并行推进业务时刻。',
+  'app.kuaizhizao.flowDataGenerate.bomLevelRoot': '成品',
+  'app.kuaizhizao.flowDataGenerate.bomLevelTag': '下级 L{{level}}',
   'app.kuaizhizao.flowDataGenerate.workOrderSelectRequired': '请至少勾选一张需完工的工单物料',
   'app.kuaizhizao.flowDataGenerate.parallelWorkOrders': '工单并行完成',
   'app.kuaizhizao.flowDataGenerate.parallelWorkOrdersHint': '多工单生产链并行，共用时间锚点后各自推进',
@@ -11029,9 +11031,26 @@ export default {
     '填写每组件数范围（如 1–3）：订单数量会拆成多组，同工序各组按报工间隔错开；不填则走下方报工分批。',
   'app.kuaizhizao.flowDataGenerate.parallelGroupMin': '每组最少',
   'app.kuaizhizao.flowDataGenerate.parallelGroupMax': '每组最多',
+  'app.kuaizhizao.flowDataGenerate.simMode': '仿真模式',
+  'app.kuaizhizao.flowDataGenerate.simModeHint':
+    '真实模式按标准工时与工作时段推进，禁止时间窗压缩与质检旁路；填数模式才允许快速压缩与旁路。',
+  'app.kuaizhizao.flowDataGenerate.simModeReal': '真实仿真',
+  'app.kuaizhizao.flowDataGenerate.simModeFill': '快速填数',
+  'app.kuaizhizao.flowDataGenerate.scenarios': '造数场景',
+  'app.kuaizhizao.flowDataGenerate.scenariosHint':
+    '场景为步骤真源（不再另勾生成步骤）；可只跑一段，全选即一键全链路。单段采购/工单/委外须先跑过「需求计算与下推」或续跑。',
+  'app.kuaizhizao.flowDataGenerate.scenariosRequired': '请至少勾选一个造数场景',
+  'app.kuaizhizao.flowDataGenerate.scenario.mrp_push': '需求计算与下推',
+  'app.kuaizhizao.flowDataGenerate.scenario.purchase_inbound': '采购审核入库',
+  'app.kuaizhizao.flowDataGenerate.scenario.owo_fulfill': '委外发料收货',
+  'app.kuaizhizao.flowDataGenerate.scenario.wo_complete': '工单生产链完工',
+  'app.kuaizhizao.flowDataGenerate.scenario.ship': '发货出库',
   'app.kuaizhizao.flowDataGenerate.flowEndAt': '流程结束时间（可选）',
   'app.kuaizhizao.flowDataGenerate.flowEndAtHint':
-    '与时间锚点组成时间窗：点「预览」会推算并回填各步骤间隔；改分批/工作时段后再预览可看新的完成时刻。',
+    '仅填数模式：与时间锚点组成时间窗，预览会推算并回填各步骤间隔。',
+  'app.kuaizhizao.flowDataGenerate.flowEndAtRealHint':
+    '真实模式不使用结束时间压缩；流程结束时刻由标准工时自然推完。',
+  'app.kuaizhizao.flowDataGenerate.flowEndAtDisabled': '真实模式已禁用（请改用填数模式）',
   'app.kuaizhizao.flowDataGenerate.estimatedFinish': '预估完成时刻：{{time}}',
   'app.kuaizhizao.flowDataGenerate.intervalsFilled': '已按起止时间回填步骤间隔，可微调后再次预览',
   'app.kuaizhizao.flowDataGenerate.candidateNotReady': '未就绪',
@@ -27022,6 +27041,18 @@ export default {
   'pages.system.configCenter.param.sales_require_contract_before_order_desc': '已废弃并自动剥离：框架合同与单次订单已合并，开启无效且禁止再写入。',
   'pages.system.configCenter.param.planning_auto_push_sales_to_computation_on_approve': '审核通过自动下推需求计算',
   'pages.system.configCenter.param.planning_auto_push_sales_to_computation_on_approve_desc': '销售订单/销售预测审核通过后，自动下推到需求计算（默认关闭）。',
+  'pages.system.configCenter.param.planning_auto_execute_computation_on_create': '创建后自动执行需求计算',
+  'pages.system.configCenter.param.planning_auto_execute_computation_on_create_desc':
+    '需求计算创建（含销售订单自动下推）后，由后台任务自动执行 MRP（默认关闭）。',
+  'pages.system.configCenter.param.planning_auto_push_purchase_on_computation_complete': '计算完成后自动下推采购',
+  'pages.system.configCenter.param.planning_auto_push_purchase_on_computation_complete_desc':
+    '需求计算执行成功后，自动下推采购件：未开「必须采购申请」时下推采购订单，已开则下推采购申请（默认关闭）。',
+  'pages.system.configCenter.param.procurement_auto_approve_purchase_order_on_create': '创建后自动审核采购订单',
+  'pages.system.configCenter.param.procurement_auto_approve_purchase_order_on_create_desc':
+    '采购订单创建后自动提交并审核通过；草稿且无供应商时跳过并记备注（默认关闭）。',
+  'pages.system.configCenter.param.procurement_auto_push_receipt_notice_on_approve': '审核通过自动下推收货通知',
+  'pages.system.configCenter.param.procurement_auto_push_receipt_notice_on_approve_desc':
+    '采购订单审核通过（或无需审核直接确认）后，自动下推收货通知单（默认关闭）。',
   'pages.system.configCenter.param.sales_require_shipment_notice_before_delivery': '出库前须发货通知',
   'pages.system.configCenter.param.sales_require_shipment_notice_before_delivery_desc':
     '开启后禁止销售订单直连出库；须先下推发货通知，再从发货通知生成销售出库单。',
@@ -31694,6 +31725,18 @@ export default {
     '修复平台看板图表加载失败',
   'pages.dashboard.updateLog.entries.antd-charts-vite-prebundle-504-r01.description':
     '开发态将图表库纳入 Vite 预构建，避免冷启动按需打包超时导致看板白屏；图表懒加载失败时只降级图表区，不再拖垮整页。',
+  'pages.dashboard.updateLog.entries.planning-procurement-automation-r01.title':
+    '业务自动化：需求计算执行与采购下推',
+  'pages.dashboard.updateLog.entries.planning-procurement-automation-r01.description':
+    '配置中心「业务自动化」新增需求计算创建后自动执行、完成后自动下推采购，以及采购管理自动审核与下推收货通知；默认关闭，须先采购申请时改推采购申请。',
+  'pages.dashboard.updateLog.entries.flow-generate-preview-precheck-timeout-r01.title':
+    '修复流程造数预检与时间线预览无结果',
+  'pages.dashboard.updateLog.entries.flow-generate-preview-precheck-timeout-r01.description':
+    '大 BOM 订单展开下级自制件时预检/预览会超时空白；现改为浅层优先截断、批量解析工艺，下级缺工艺改为软告警，前端超时放宽到 3 分钟。',
+  'pages.dashboard.updateLog.entries.data-backup-restore-unique-dedupe-r01.title':
+    '修复数据备份恢复撞编码规则唯一约束',
+  'pages.dashboard.updateLog.entries.data-backup-restore-unique-dedupe-r01.description':
+    '租户恢复时若备份内存在多条未删除的同编码规则等 live 唯一键重复，导入前自动去重保留最后一行，避免 COPY 报 uidx_*_live 失败整单回滚。',
   'pages.dashboard.updateLog.entries.data-backup-restore-id-align-r01.title':
     '修复数据备份恢复后关联 ID 对不上',
   'pages.dashboard.updateLog.entries.data-backup-restore-id-align-r01.description':

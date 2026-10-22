@@ -54,17 +54,20 @@ import { listSalesOrders } from '../../../services/sales-order';
 import { listSalesForecasts } from '../../../services/sales-forecast';
 import {
   executeFlowGenerate,
+  FLOW_SCENARIO_OPTIONS,
   FlowGenerateExecuteError,
   getFlowOperatorDefaults,
   precheckFlowGenerate,
   previewFlowGenerate,
   repairFlowMaterialIds,
   revertFlowGenerate,
+  stepsFromScenarios,
   type FlowExecuteResult,
   type FlowGenerateJob,
   type FlowGeneratePayload,
   type FlowPrecheckResult,
   type FlowPreviewResult,
+  type FlowSimMode,
   type FlowSourceType,
   type FlowStepResult,
   type StepOperatorMode,
@@ -456,11 +459,14 @@ export default function FlowDataGeneratePage() {
     // 确保请求头落到所选组织
     setTenantId(selectedTenantId);
     const values = await form.validateFields();
-    const steps: Record<string, boolean> = {};
-    for (const opt of STEP_OPTIONS) {
-      steps[opt.key] = (values.enabled_steps || []).includes(opt.key);
+    const scenarioKeys: string[] = Array.isArray(values.scenarios)
+      ? values.scenarios.map(String)
+      : FLOW_SCENARIO_OPTIONS.map((s) => s.key);
+    if (scenarioKeys.length === 0) {
+      throw new Error(t('app.kuaizhizao.flowDataGenerate.scenariosRequired'));
     }
-    steps.demand_computation = true;
+    // 场景为唯一步骤真源（禁止与「生成步骤」勾选双轨）
+    const steps = stepsFromScenarios(scenarioKeys);
     const intervals: Record<string, { min_seconds: number; max_seconds: number }> = {};
     for (const opt of STEP_OPTIONS) {
       const minV = values[`interval_min_${opt.key}`];
@@ -527,9 +533,13 @@ export default function FlowDataGeneratePage() {
       groupMinRaw != null && Number(groupMinRaw) > 0 ? Math.floor(Number(groupMinRaw)) : null;
     const groupMax =
       groupMaxRaw != null && Number(groupMaxRaw) > 0 ? Math.floor(Number(groupMaxRaw)) : null;
-    const flowEnd: Dayjs | undefined = values.flow_end_at;
-    // 填了结束时间但未预览回填过间隔 → 交给后端按时间窗均摊
-    const useBackendBudget = Boolean(flowEnd) && !estimatedFinishAt;
+    const simMode: FlowSimMode =
+      values.sim_mode === 'fill' ? 'fill' : 'real';
+    const flowEnd: Dayjs | undefined =
+      simMode === 'fill' ? values.flow_end_at : undefined;
+    // 填数模式：填了结束时间但未预览回填过间隔 → 交给后端按时间窗均摊
+    const useBackendBudget =
+      simMode === 'fill' && Boolean(flowEnd) && !estimatedFinishAt;
     return {
       source_type: sourceType,
       sales_order_id: sourceType === 'sales_order' ? docId : null,
@@ -562,8 +572,10 @@ export default function FlowDataGeneratePage() {
       parallel_work_orders: parallelWorkOrders,
       parallel_group_size_min: groupMin,
       parallel_group_size_max: groupMax ?? groupMin,
-      allow_skip_iqc: Boolean(values.allow_skip_iqc),
+      allow_skip_iqc: simMode === 'fill' && Boolean(values.allow_skip_iqc),
       resume_run_id: opts?.resumeRunId ? String(opts.resumeRunId) : null,
+      sim_mode: simMode,
+      scenarios: scenarioKeys.length > 0 ? scenarioKeys : null,
     };
   };
 
@@ -972,13 +984,16 @@ export default function FlowDataGeneratePage() {
               form={form}
               layout="vertical"
               onValuesChange={(changed) => {
-                if ('flow_end_at' in changed) setEstimatedFinishAt(null);
+                if ('flow_end_at' in changed || 'sim_mode' in changed) {
+                  setEstimatedFinishAt(null);
+                }
               }}
               initialValues={{
-                enabled_steps: STEP_OPTIONS.map((s) => s.key),
+                sim_mode: 'real' as FlowSimMode,
+                scenarios: FLOW_SCENARIO_OPTIONS.map((s) => s.key),
                 default_min_minutes: 5,
                 default_max_minutes: 30,
-                use_work_schedule: false,
+                use_work_schedule: true,
                 allow_skip_iqc: false,
                 reporting_batches_min: DEFAULT_REPORTING_BATCHES_MIN,
                 reporting_batches_max: DEFAULT_REPORTING_BATCHES_MAX,
@@ -992,6 +1007,49 @@ export default function FlowDataGeneratePage() {
               }}
             >
               <Row gutter={16}>
+                <Col xs={24} md={24}>
+                  <Form.Item
+                    name="sim_mode"
+                    label={t('app.kuaizhizao.flowDataGenerate.simMode')}
+                    extra={t('app.kuaizhizao.flowDataGenerate.simModeHint')}
+                  >
+                    <Radio.Group
+                      optionType="button"
+                      options={[
+                        {
+                          value: 'real',
+                          label: t('app.kuaizhizao.flowDataGenerate.simModeReal'),
+                        },
+                        {
+                          value: 'fill',
+                          label: t('app.kuaizhizao.flowDataGenerate.simModeFill'),
+                        },
+                      ]}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} md={24}>
+                  <Form.Item
+                    name="scenarios"
+                    label={t('app.kuaizhizao.flowDataGenerate.scenarios')}
+                    extra={t('app.kuaizhizao.flowDataGenerate.scenariosHint')}
+                    rules={[
+                      {
+                        required: true,
+                        type: 'array',
+                        min: 1,
+                        message: t('app.kuaizhizao.flowDataGenerate.scenariosRequired'),
+                      },
+                    ]}
+                  >
+                    <Checkbox.Group
+                      options={FLOW_SCENARIO_OPTIONS.map((s) => ({
+                        value: s.key,
+                        label: t(s.labelKey),
+                      }))}
+                    />
+                  </Form.Item>
+                </Col>
                 <Col xs={24} md={24}>
                   <Form.Item label={t('app.kuaizhizao.flowDataGenerate.sourceType')}>
                     <Radio.Group
@@ -1102,12 +1160,27 @@ export default function FlowDataGeneratePage() {
                   </Form.Item>
                 </Col>
                 <Col xs={24} md={12}>
-                  <Form.Item
-                    name="flow_end_at"
-                    label={t('app.kuaizhizao.flowDataGenerate.flowEndAt')}
-                    extra={t('app.kuaizhizao.flowDataGenerate.flowEndAtHint')}
-                  >
-                    <DatePicker showTime style={{ width: '100%' }} />
+                  <Form.Item noStyle shouldUpdate={(prev, cur) => prev.sim_mode !== cur.sim_mode}>
+                    {() =>
+                      form.getFieldValue('sim_mode') === 'fill' ? (
+                        <Form.Item
+                          name="flow_end_at"
+                          label={t('app.kuaizhizao.flowDataGenerate.flowEndAt')}
+                          extra={t('app.kuaizhizao.flowDataGenerate.flowEndAtHint')}
+                        >
+                          <DatePicker showTime style={{ width: '100%' }} />
+                        </Form.Item>
+                      ) : (
+                        <Form.Item
+                          label={t('app.kuaizhizao.flowDataGenerate.flowEndAt')}
+                          extra={t('app.kuaizhizao.flowDataGenerate.flowEndAtRealHint')}
+                        >
+                          <Typography.Text type="secondary">
+                            {t('app.kuaizhizao.flowDataGenerate.flowEndAtDisabled')}
+                          </Typography.Text>
+                        </Form.Item>
+                      )
+                    }
                   </Form.Item>
                 </Col>
                 <Col xs={24} md={6}>
@@ -1140,16 +1213,6 @@ export default function FlowDataGeneratePage() {
                 />
               ) : null}
 
-              <Form.Item name="enabled_steps" label={t('app.kuaizhizao.flowDataGenerate.steps')}>
-                <Checkbox.Group
-                  options={STEP_OPTIONS.map((s) => ({
-                    value: s.key,
-                    disabled: s.required,
-                    label: t(`app.kuaizhizao.flowDataGenerate.step.${s.key}`),
-                  }))}
-                />
-              </Form.Item>
-
               <Form.Item
                 name="use_work_schedule"
                 label={t('app.kuaizhizao.flowDataGenerate.useWorkSchedule')}
@@ -1158,13 +1221,19 @@ export default function FlowDataGeneratePage() {
                 <Switch />
               </Form.Item>
 
-              <Form.Item
-                name="allow_skip_iqc"
-                label={t('app.kuaizhizao.flowDataGenerate.allowSkipIqc')}
-                extra={t('app.kuaizhizao.flowDataGenerate.allowSkipIqcHint')}
-                valuePropName="checked"
-              >
-                <Switch />
+              <Form.Item noStyle shouldUpdate={(prev, cur) => prev.sim_mode !== cur.sim_mode}>
+                {() =>
+                  form.getFieldValue('sim_mode') === 'fill' ? (
+                    <Form.Item
+                      name="allow_skip_iqc"
+                      label={t('app.kuaizhizao.flowDataGenerate.allowSkipIqc')}
+                      extra={t('app.kuaizhizao.flowDataGenerate.allowSkipIqcHint')}
+                      valuePropName="checked"
+                    >
+                      <Switch />
+                    </Form.Item>
+                  ) : null
+                }
               </Form.Item>
 
               <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
@@ -1545,17 +1614,24 @@ export default function FlowDataGeneratePage() {
                         .filter((id) => id > 0),
                     )
                   }
-                  options={(precheck.work_order_candidates || []).map((c) => ({
-                    value: c.material_id,
-                    disabled: c.ready === false,
-                    label: `${c.material_code}${c.material_name ? ` ${c.material_name}` : ''}${
+                  options={(precheck.work_order_candidates || []).map((c) => {
+                    const level = Number(c.bom_level ?? 0);
+                    const levelTag =
+                      level > 0
+                        ? t('app.kuaizhizao.flowDataGenerate.bomLevelTag', { level })
+                        : t('app.kuaizhizao.flowDataGenerate.bomLevelRoot');
+                    const status =
                       c.ready === false
                         ? `（${(c.blockers || []).join('、') || t('app.kuaizhizao.flowDataGenerate.candidateNotReady')}）`
                         : c.has_process
-                          ? `（工序 ${c.process_operation_count ?? 0}）`
-                          : ''
-                    }`,
-                  }))}
+                          ? `（${levelTag}，工序 ${c.process_operation_count ?? 0}）`
+                          : `（${levelTag}）`;
+                    return {
+                      value: c.material_id,
+                      disabled: c.ready === false,
+                      label: `${c.material_code}${c.material_name ? ` ${c.material_name}` : ''}${status}`,
+                    };
+                  })}
                 />
               ) : (
                 <Alert

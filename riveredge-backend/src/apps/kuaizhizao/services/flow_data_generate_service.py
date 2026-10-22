@@ -23,6 +23,19 @@ from core.models.operation_log import OperationLog
 from core.utils.timezone_utils import now_utc, resolve_business_datetime, site_timezone_name
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 
+from apps.kuaizhizao.services.flow_sim.clock import BusinessClock, IntervalSpec
+from apps.kuaizhizao.services.flow_sim.engine import (
+    apply_mode_gates,
+    map_steps_for_scenarios,
+    scenario_phase_message,
+)
+from apps.kuaizhizao.services.flow_sim.kit import precheck_simulation_kit
+from apps.kuaizhizao.services.flow_sim.modes import (
+    is_budget_time_allowed,
+    normalize_sim_mode,
+)
+from apps.kuaizhizao.services.flow_sim.scenarios import resolve_scenario_ids
+
 ProgressCallback = Callable[[int, str], Any]
 
 # 操作日志 content：`[run_id][step_key][wo=123] label: code`（wo 段可选）
@@ -80,6 +93,13 @@ DEFAULT_REPORTING_BATCHES_MAX = 5
 OP_FLOW_GAP_MIN_SECONDS = 600
 OP_FLOW_GAP_MAX_SECONDS = 7 * 24 * 3600
 OP_JUMP_GAP_RATIO = 0.15  # 可跳转时仅占用上道标准工时的一小段
+# BOM 下级展开：避免深树/无工艺子件把预检预览拖死（实测 260 自制件 → 数分钟超时）
+FLOW_BOM_MAX_LEVEL = 5
+FLOW_PREVIEW_BOM_MAX_LEVEL = 3
+FLOW_PREVIEW_MAKE_WITH_OPS_MAX = 24
+FLOW_PREVIEW_MAKE_NODES_MAX = 48
+FLOW_PRECHECK_MAKE_NODES_MAX = 60
+FLOW_PRECHECK_KIT_MATERIALS_MAX = 40
 
 
 @dataclass
@@ -206,12 +226,16 @@ class FlowGenerateRequest:
     # 数量并行组：每组报工件数范围（如 1–3）；启用后同工序各组按报工间隔错开
     parallel_group_size_min: Optional[int] = None
     parallel_group_size_max: Optional[int] = None
-    # 流程结束锚点：与 anchor_at 组成时间窗，用于推算步骤间隔
+    # 流程结束锚点：仅填数模式与 anchor_at 组成时间窗均摊间隔
     flow_end_at: Optional[datetime] = None
-    # 来料检建单失败时是否允许直推入库（默认关，禁止静默旁路）
+    # 来料检建单失败时是否允许直推入库（真实模式强制 False）
     allow_skip_iqc: bool = False
     # 续跑：沿用失败轮次的 run_id，按操作日志检查点跳过已完成阶段
     resume_run_id: Optional[str] = None
+    # real=验收级真实仿真（默认）；fill=快速填数（时间窗/旁路）
+    sim_mode: str = "real"
+    # 场景段：空=全链路串联；单项可只跑一段
+    scenarios: Optional[list[str]] = None
 
     def parallel_group_range(self) -> Optional[tuple[int, int]]:
         lo = int(self.parallel_group_size_min or 0)
@@ -239,8 +263,8 @@ class FlowGenerateRequest:
         return ids
 
 
-class TimelinePlanner:
-    """按间隔随机生成严格递增的业务时刻（禁止整分整秒；可钳工作时段）。"""
+class TimelinePlanner(BusinessClock):
+    """兼容别名：真源为 flow_sim.BusinessClock（preview/execute 共用）。"""
 
     def __init__(
         self,
@@ -253,198 +277,66 @@ class TimelinePlanner:
         deadline: Optional[datetime] = None,
         remaining_events: Optional[int] = None,
     ) -> None:
-        self._default = default_interval.clamp()
-        self._intervals = {k: v.clamp() for k, v in intervals.items()}
-        self._schedule = work_schedule
-        self._use_schedule = bool(use_work_schedule and work_schedule)
-        self._tz = ZoneInfo(site_timezone_name())
-        self._deadline = (
-            resolve_business_datetime(deadline).replace(microsecond=0)
-            if deadline is not None
-            else None
+        default_cfg = default_interval.clamp()
+        interval_cfgs = {k: v.clamp() for k, v in intervals.items()}
+        super().__init__(
+            anchor=anchor,
+            default_interval=IntervalSpec(
+                default_cfg.min_seconds, default_cfg.max_seconds
+            ),
+            intervals={
+                k: IntervalSpec(v.min_seconds, v.max_seconds)
+                for k, v in interval_cfgs.items()
+            },
+            work_schedule=work_schedule,
+            use_work_schedule=use_work_schedule,
+            deadline=deadline,
+            remaining_events=remaining_events,
         )
-        self._remaining = (
-            max(1, int(remaining_events)) if remaining_events is not None else None
-        )
-        # 锚点先钳进工作时段，避免从凌晨起算
-        self._cursor = self._normalize_to_work(
-            resolve_business_datetime(anchor).replace(microsecond=0)
-        )
+        self._default_cfg = default_cfg
+        self._interval_cfgs = interval_cfgs
 
     def interval_for(self, step_key: str) -> IntervalConfig:
-        return self._intervals.get(step_key, self._default)
-
-    def current(self) -> datetime:
-        return self._cursor
-
-    def set_cursor(self, when: datetime) -> None:
-        """设置游标（可回拨，用于多工单/可跳转工序并行时间线）。"""
-        self._cursor = self._normalize_to_work(
-            resolve_business_datetime(when).replace(microsecond=0)
-        )
-
-    def bump_to(self, when: datetime) -> None:
-        """游标仅向前对齐到 when（取较晚者）。"""
-        when_utc = self._normalize_to_work(
-            resolve_business_datetime(when).replace(microsecond=0)
-        )
-        if when_utc > self._cursor:
-            self._cursor = when_utc
+        return self._interval_cfgs.get(step_key, self._default_cfg)
 
     def fork(self) -> "TimelinePlanner":
-        """复制当前游标与间隔配置，独立推进（多工单并行报工）。"""
         other = TimelinePlanner(
-            anchor=self._cursor,
-            default_interval=self._default,
-            intervals=dict(self._intervals),
+            anchor=self.current(),
+            default_interval=self._default_cfg,
+            intervals=dict(self._interval_cfgs),
             work_schedule=self._schedule,
             use_work_schedule=self._use_schedule,
             deadline=self._deadline,
             remaining_events=self._remaining,
         )
-        other._cursor = self._cursor
+        other.set_cursor(self.current())
         return other
 
-    @staticmethod
-    def _avoid_round_clock(when: datetime) -> datetime:
-        """禁止整秒（:00）；秒落在 7–53 的不规则区。"""
-        when = when.replace(microsecond=0)
-        if when.second == 0 or when.second >= 57:
-            when = when + timedelta(seconds=random.randint(7, 53))
-        return when
-
-    def _normalize_to_work(self, when_utc: datetime) -> datetime:
-        """UTC 时刻 → 避整秒；开启工作时段则钳到 09:00–18:00 工作日。"""
-        when_utc = self._avoid_round_clock(when_utc)
-        if not (self._use_schedule and self._schedule is not None):
-            return when_utc
-        site = when_utc.astimezone(self._tz)
-        site = self._clamp_forward(site)
-        return self._avoid_round_clock(
-            site.astimezone(timezone.utc).replace(microsecond=0)
-        )
-
-    def work_seconds_between(self, start_utc: datetime, end_utc: datetime) -> float:
-        """两时刻之间的可用工作秒（仅工作日窗口内）。无工作时段则退回墙钟差。"""
-        start_utc = resolve_business_datetime(start_utc)
-        end_utc = resolve_business_datetime(end_utc)
-        if end_utc <= start_utc:
-            return 0.0
-        if not (self._use_schedule and self._schedule is not None):
-            return max(0.0, (end_utc - start_utc).total_seconds())
-        start_site = start_utc.astimezone(self._tz)
-        end_site = end_utc.astimezone(self._tz)
-        total = 0.0
-        day = start_site.date()
-        while day <= end_site.date():
-            window = self._schedule.window_on(day, self._tz)
-            if window is not None:
-                a, b = window
-                lo = max(a, start_site)
-                hi = min(b, end_site)
-                if hi > lo:
-                    total += (hi - lo).total_seconds()
-            day += timedelta(days=1)
-        return max(0.0, total)
-
-    def next(self, step_key: str) -> datetime:
-        # 时间窗模式：按剩余事件均分「剩余工作秒」，再钳回工作时段
-        if self._deadline is not None and self._remaining is not None:
-            remain_sec = self.work_seconds_between(self._cursor, self._deadline)
-            left = max(1, int(self._remaining))
-            base = max(1.0, (remain_sec * 0.92) / left) if remain_sec > 0 else 60.0
-            gap = random.uniform(base * 0.78, base * 0.98)
-            gap += random.uniform(3.0, 17.0)
-            self._remaining = left - 1
-            return self.advance_by_seconds(gap)
-
-        cfg = self.interval_for(step_key)
-        gap = random.uniform(float(cfg.min_seconds), float(cfg.max_seconds))
-        nearest_min = round(gap / 60.0) * 60.0
-        if abs(gap - nearest_min) < 8.0:
-            gap += random.uniform(11.0, 47.0)
-        else:
-            gap += random.uniform(3.0, 29.0)
-        return self.advance_by_seconds(gap)
-
-    def advance_capped(
-        self,
-        desired_seconds: float,
+    @classmethod
+    def for_request(
+        cls,
         *,
-        max_fraction_of_remain: float = 0.28,
-    ) -> datetime:
-        """推进 desired 秒；有截止窗时不超过剩余工作秒的比例份额（保留标准工时意图）。"""
-        gap = max(1.0, float(desired_seconds))
-        if self._deadline is not None:
-            remain = self.work_seconds_between(self._cursor, self._deadline)
-            if remain > 0:
-                cap = max(12.0, remain * max(0.05, float(max_fraction_of_remain)))
-                gap = min(gap, cap)
-            else:
-                gap = random.uniform(11.0, 47.0)
-        return self.advance_by_seconds(gap)
-
-    def advance_by_seconds(self, seconds: float) -> datetime:
-        """按明确秒数推进游标；开启工作时段时过 18:00 滚到下一工作日 09:00。"""
-        gap = max(1.0, float(seconds))
-        nxt = self._cursor + timedelta(seconds=gap)
-        nxt = self._normalize_to_work(nxt)
-        if nxt <= self._cursor:
-            # 钳制后仍未前进：强制滚到下一工作空隙
-            nxt = self._normalize_to_work(
-                self._cursor + timedelta(seconds=random.randint(60, 180))
-            )
-            if nxt <= self._cursor and self._use_schedule and self._schedule is not None:
-                site = self._cursor.astimezone(self._tz)
-                day = site.date() + timedelta(days=1)
-                for _ in range(14):
-                    window = self._schedule.window_on(day, self._tz)
-                    if window is not None:
-                        nxt = self._avoid_round_clock(
-                            window[0].astimezone(timezone.utc).replace(microsecond=0)
-                        )
-                        break
-                    day += timedelta(days=1)
-        if self._deadline is not None and nxt >= self._deadline:
-            # 压回截止前，并再次钳工作时段（禁止凌晨）
-            remain_work = self.work_seconds_between(self._cursor, self._deadline)
-            step = max(8.0, min(remain_work * 0.5, 120.0)) if remain_work > 0 else 8.0
-            nxt = self._normalize_to_work(
-                self._cursor + timedelta(seconds=step)
-            )
-            if nxt >= self._deadline:
-                nxt = self._normalize_to_work(
-                    self._deadline - timedelta(seconds=random.randint(11, 47))
-                )
-                if nxt <= self._cursor:
-                    nxt = self._cursor
-        self._cursor = nxt
-        return nxt
-
-    def _clamp_forward(self, when_site: datetime) -> datetime:
-        """保证落在工作时段内；过晚/非工作日则推到下一工作日上班时刻。"""
-        assert self._schedule is not None
-        cur = when_site.replace(microsecond=0)
-        day = cur.date()
-        for _ in range(400):
-            window = self._schedule.window_on(day, self._tz)
-            if window is None:
-                day += timedelta(days=1)
-                continue
-            start, end = window
-            last = end - timedelta(seconds=1)
-            if last < start:
-                last = start
-            if cur.date() < day:
-                return self._avoid_round_clock(start)
-            if cur < start:
-                return self._avoid_round_clock(start)
-            if cur > last:
-                day += timedelta(days=1)
-                cur = datetime(day.year, day.month, day.day, tzinfo=self._tz)
-                continue
-            return self._avoid_round_clock(cur)
-        return when_site
+        req: "FlowGenerateRequest",
+        anchor: datetime,
+        tick_count: Optional[int] = None,
+    ) -> "TimelinePlanner":
+        """按 sim_mode 构建时钟：真实模式永不挂 flow_end_at 截止窗。"""
+        mode = normalize_sim_mode(getattr(req, "sim_mode", None))
+        allow_budget = is_budget_time_allowed(mode)
+        deadline = None
+        remain = None
+        if allow_budget and req.flow_end_at is not None:
+            deadline = resolve_business_datetime(req.flow_end_at)
+            remain = tick_count
+        return cls(
+            anchor=anchor,
+            default_interval=req.default_interval,
+            intervals=req.intervals,
+            work_schedule=req.work_schedule,
+            use_work_schedule=bool(req.use_work_schedule),
+            deadline=deadline,
+            remaining_events=remain,
+        )
 
 
 @dataclass
@@ -696,22 +588,262 @@ class FlowDataGenerateService:
             return out
         return []
 
+    async def _batch_resolve_operations(
+        self,
+        tenant_id: int,
+        material_ids: list[int],
+    ) -> dict[int, list[dict[str, Any]]]:
+        """批量解析工序：无产品工艺/路线线索的跳过，避免深树对无工艺件 N 次慢查询。"""
+        from apps.master_data.models.material import Material, MaterialGroup
+        from apps.master_data.models.material_product_process import MaterialProductProcess
+        from apps.master_data.services.material_product_process_service import (
+            MaterialProductProcessService,
+        )
+
+        ids = sorted({int(x) for x in material_ids if int(x or 0) > 0})
+        out: dict[int, list[dict[str, Any]]] = {i: [] for i in ids}
+        if not ids:
+            return out
+        pp_rows = await MaterialProductProcess.filter(
+            tenant_id=tenant_id,
+            material_id__in=ids,
+            deleted_at__isnull=True,
+        ).all()
+        pp_by_mid = {int(r.material_id): r for r in pp_rows}
+        mats = await Material.filter(
+            tenant_id=tenant_id, id__in=ids, deleted_at__isnull=True
+        ).all()
+        mats_by_id = {int(m.id): m for m in mats}
+        group_ids = [
+            int(m.group_id)
+            for m in mats
+            if int(getattr(m, "group_id", 0) or 0) > 0
+        ]
+        group_route_ids: set[int] = set()
+        if group_ids:
+            groups = await MaterialGroup.filter(
+                tenant_id=tenant_id,
+                id__in=sorted(set(group_ids)),
+                deleted_at__isnull=True,
+            ).all()
+            group_route_ids = {
+                int(g.id)
+                for g in groups
+                if int(getattr(g, "process_route_id", 0) or 0) > 0
+            }
+
+        def _likely_has_process(mid: int) -> bool:
+            pp = pp_by_mid.get(mid)
+            if pp is not None:
+                if getattr(pp, "lines", None):
+                    return True
+                if int(getattr(pp, "process_route_id", 0) or 0) > 0:
+                    return True
+            m = mats_by_id.get(mid)
+            if not m:
+                return False
+            if int(getattr(m, "process_route_id", 0) or 0) > 0:
+                return True
+            gid = int(getattr(m, "group_id", 0) or 0)
+            if gid and gid in group_route_ids:
+                return True
+            sc = getattr(m, "source_config", None) or {}
+            if isinstance(sc, dict) and sc.get("process_route_id"):
+                return True
+            return False
+
+        to_resolve = [i for i in ids if _likely_has_process(i)]
+        for mid in to_resolve:
+            try:
+                seq, _ = await MaterialProductProcessService.resolve_sequence_for_material(
+                    tenant_id, mid
+                )
+                out[mid] = self._ops_from_operation_sequence(seq)
+            except Exception as exc:
+                logger.info(
+                    "flow_generate bom make resolve sequence material={}: {}",
+                    mid,
+                    exc,
+                )
+                out[mid] = []
+        return out
+
+    async def _make_process_plans_for_material(
+        self,
+        tenant_id: int,
+        material_id: int,
+        quantity: Decimal,
+        *,
+        material_code: Optional[str] = None,
+        material_name: Optional[str] = None,
+        resolve_operations: bool = True,
+        bom_max_level: int = FLOW_BOM_MAX_LEVEL,
+        max_make_nodes: Optional[int] = None,
+    ) -> list[dict[str, Any]]:
+        """成品 + BOM 下级自制件：BFS 浅层优先，凑够节点即停（避免整树展开拖死预检/预览）。"""
+        from collections import deque
+
+        from apps.kuaizhizao.utils.bom_helper import (
+            bom_item_base_quantity,
+            bom_line_required_quantity,
+            get_bom_items_by_material_id,
+        )
+        from apps.kuaizhizao.utils.material_source_helper import (
+            SOURCE_TYPE_BUY,
+            SOURCE_TYPE_CONFIGURE,
+            SOURCE_TYPE_MAKE,
+            SOURCE_TYPE_PHANTOM,
+        )
+        from apps.master_data.models.material import Material
+
+        material = await Material.get_or_none(
+            id=material_id, tenant_id=tenant_id, deleted_at__isnull=True
+        )
+        if not material:
+            return []
+        code = (
+            material_code
+            or getattr(material, "main_code", None)
+            or getattr(material, "code", None)
+            or str(material_id)
+        )
+        name = material_name or getattr(material, "name", None) or ""
+        st = str(getattr(material, "source_type", None) or "").strip() or SOURCE_TYPE_MAKE
+        qty = quantity if quantity > 0 else Decimal("1")
+        level_cap = max(0, int(bom_max_level or FLOW_BOM_MAX_LEVEL))
+        node_cap = (
+            int(max_make_nodes)
+            if max_make_nodes is not None and int(max_make_nodes) > 0
+            else 10_000
+        )
+        # 与工单组生产树一致：仅自制/配置件继续下钻；虚拟件透明展开
+        expand_types = frozenset(
+            {SOURCE_TYPE_MAKE, SOURCE_TYPE_CONFIGURE, SOURCE_TYPE_PHANTOM}
+        )
+        nodes: list[dict[str, Any]] = []
+        seen_make: set[int] = set()
+        # mid, qty, level, parent_id, code, name, source_type
+        queue: deque[
+            tuple[int, Decimal, int, Optional[int], str, str, str]
+        ] = deque(
+            [
+                (
+                    int(material_id),
+                    qty,
+                    0,
+                    None,
+                    str(code),
+                    str(name),
+                    st,
+                )
+            ]
+        )
+        while queue and len(nodes) < node_cap:
+            mid, nqty, level, parent_id, mcode, mname, mst = queue.popleft()
+            if mst == SOURCE_TYPE_MAKE and mid not in seen_make:
+                seen_make.add(mid)
+                nodes.append(
+                    {
+                        "material_id": mid,
+                        "material_code": mcode or str(mid),
+                        "material_name": mname or "",
+                        "bom_level": level,
+                        "parent_material_id": parent_id,
+                        "quantity": nqty if nqty > 0 else Decimal("1"),
+                    }
+                )
+                if len(nodes) >= node_cap:
+                    break
+            if level >= level_cap or mst not in expand_types:
+                continue
+            if mst == SOURCE_TYPE_BUY:
+                continue
+            try:
+                bom_items = await get_bom_items_by_material_id(
+                    tenant_id=tenant_id,
+                    material_id=mid,
+                    only_approved=True,
+                )
+            except Exception as exc:
+                logger.info(
+                    "flow_generate bom expand material={} failed: {}", mid, exc
+                )
+                continue
+            child_parent = parent_id if mst == SOURCE_TYPE_PHANTOM else mid
+            for bom_item in bom_items:
+                if len(nodes) >= node_cap:
+                    break
+                component = await bom_item.component
+                if not component:
+                    continue
+                try:
+                    child_qty = bom_line_required_quantity(
+                        bom_item.quantity or Decimal("0"),
+                        bom_item_base_quantity(bom_item),
+                        float(nqty),
+                        bom_item.waste_rate or Decimal("0"),
+                    )
+                except Exception:
+                    continue
+                if child_qty <= 0:
+                    continue
+                child_st = str(
+                    getattr(component, "source_type", None) or ""
+                ).strip()
+                if not child_st or child_st == SOURCE_TYPE_BUY:
+                    continue
+                if child_st not in expand_types:
+                    continue
+                cid = int(component.id)
+                queue.append(
+                    (
+                        cid,
+                        Decimal(str(child_qty)),
+                        level + 1,
+                        child_parent,
+                        str(
+                            getattr(component, "main_code", None)
+                            or getattr(component, "code", None)
+                            or cid
+                        ),
+                        str(getattr(component, "name", None) or ""),
+                        child_st,
+                    )
+                )
+        ops_by_mid: dict[int, list[dict[str, Any]]] = {}
+        if resolve_operations and nodes:
+            ops_by_mid = await self._batch_resolve_operations(
+                tenant_id, [int(n["material_id"]) for n in nodes]
+            )
+        plans: list[dict[str, Any]] = []
+        for node in nodes:
+            mid = int(node["material_id"])
+            operations = ops_by_mid.get(mid) or []
+            plans.append(
+                {
+                    **node,
+                    "operations": operations,
+                    "has_process": bool(operations),
+                    "process_operation_count": len(operations),
+                }
+            )
+        return plans
+
     async def _resolve_source_process_operations(
         self,
         tenant_id: int,
         source: str,
         doc: Any,
     ) -> dict[str, Any]:
-        """从源单据首个可解析工艺的物料取工序序列，供预览展开报工节点。"""
+        """源单据行成品 + BOM 下级自制件工序，供预览展开报工节点。"""
         from apps.kuaizhizao.models.sales_forecast_item import SalesForecastItem
         from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
+        from apps.master_data.constants.material_source_type import SOURCE_TYPE_MAKE
         from apps.master_data.models.material import Material
-        from apps.master_data.services.material_product_process_service import (
-            MaterialProductProcessService,
-        )
 
         empty: dict[str, Any] = {
             "operations": [],
+            "materials": [],
             "quantity": Decimal("1"),
             "material_code": None,
         }
@@ -740,27 +872,24 @@ class FlowDataGenerateService:
         if not items:
             return empty
 
+        materials: list[dict[str, Any]] = []
+        seen: set[int] = set()
+        # 整单共享节点预算：66 行各自展开仍会拖到分钟级
+        remaining_nodes = FLOW_PREVIEW_MAKE_NODES_MAX
         for item in items:
+            if remaining_nodes <= 0:
+                break
             material_id = int(getattr(item, "material_id", 0) or 0)
             if material_id <= 0:
-                continue
-            try:
-                seq, _allow = await MaterialProductProcessService.resolve_sequence_for_material(
-                    tenant_id, material_id
-                )
-            except Exception as exc:
-                logger.info(
-                    "flow_generate preview resolve sequence material={}: {}",
-                    material_id,
-                    exc,
-                )
-                continue
-            operations = self._ops_from_operation_sequence(seq)
-            if not operations:
                 continue
             material = await Material.get_or_none(
                 id=material_id, tenant_id=tenant_id, deleted_at__isnull=True
             )
+            if not material:
+                continue
+            st = str(getattr(material, "source_type", None) or "").strip()
+            if st != SOURCE_TYPE_MAKE:
+                continue
             qty_raw = getattr(item, qty_attr, None)
             try:
                 qty = Decimal(str(qty_raw if qty_raw is not None else 1))
@@ -768,23 +897,85 @@ class FlowDataGenerateService:
                 qty = Decimal("1")
             if qty <= 0:
                 qty = Decimal("1")
-            code = None
-            if material:
-                code = getattr(material, "main_code", None) or getattr(material, "code", None)
-            if not code:
-                code = getattr(item, "material_code", None)
-            return {
-                "operations": operations,
-                "quantity": qty,
-                "material_code": str(code) if code else None,
-            }
-        return empty
+            code = (
+                getattr(material, "main_code", None)
+                or getattr(material, "code", None)
+                or getattr(item, "material_code", None)
+            )
+            name = getattr(material, "name", None) or getattr(item, "material_name", None)
+            for plan in await self._make_process_plans_for_material(
+                tenant_id,
+                material_id,
+                qty,
+                material_code=str(code) if code else None,
+                material_name=str(name) if name else None,
+                bom_max_level=FLOW_PREVIEW_BOM_MAX_LEVEL,
+                max_make_nodes=remaining_nodes,
+            ):
+                mid = int(plan["material_id"])
+                if mid in seen:
+                    continue
+                seen.add(mid)
+                materials.append(plan)
+                remaining_nodes -= 1
+                if remaining_nodes <= 0:
+                    break
+
+        if not materials:
+            return empty
+        # 预览时间线：有工序的物料按层优先，超出上限仅保留元数据（避免 900+ 步拖死请求）
+        with_ops = [m for m in materials if m.get("operations")]
+        without_ops = [m for m in materials if not m.get("operations")]
+        with_ops.sort(
+            key=lambda m: (int(m.get("bom_level") or 0), int(m.get("material_id") or 0))
+        )
+        truncated = max(0, len(with_ops) - FLOW_PREVIEW_MAKE_WITH_OPS_MAX)
+        timeline_ops = with_ops[:FLOW_PREVIEW_MAKE_WITH_OPS_MAX]
+        materials_out: list[dict[str, Any]] = [dict(m) for m in timeline_ops]
+        for m in with_ops[FLOW_PREVIEW_MAKE_WITH_OPS_MAX:]:
+            materials_out.append(
+                {
+                    **m,
+                    "operations": [],
+                    "has_process": True,
+                    "process_operation_count": int(
+                        m.get("process_operation_count")
+                        or len(m.get("operations") or [])
+                    ),
+                    "preview_ops_truncated": True,
+                }
+            )
+        materials_out.extend(dict(m) for m in without_ops)
+        # 兼容旧字段：首个有工序的物料；全量工序按物料展开在 preview 用 materials
+        primary = next(
+            (m for m in materials_out if m.get("operations")), materials_out[0]
+        )
+        flat_ops: list[dict[str, Any]] = []
+        for m in materials_out:
+            code = m.get("material_code") or m.get("material_id")
+            level = int(m.get("bom_level") or 0)
+            for op in m.get("operations") or []:
+                row = dict(op)
+                row["material_id"] = m.get("material_id")
+                row["material_code"] = code
+                row["bom_level"] = level
+                flat_ops.append(row)
+        return {
+            "operations": flat_ops or list(primary.get("operations") or []),
+            "materials": materials_out,
+            "quantity": primary.get("quantity") or Decimal("1"),
+            "material_code": primary.get("material_code"),
+            "preview_ops_truncated_count": truncated,
+        }
 
     async def preview(
         self,
         tenant_id: int,
         req: FlowGenerateRequest,
     ) -> dict[str, Any]:
+        mode_meta = apply_mode_gates(req)
+        scenarios = resolve_scenario_ids(req.scenarios)
+        req.steps = map_steps_for_scenarios(scenarios, base_steps=req.steps)
         source = req.normalized_source()
         if source == "sales_forecast":
             doc = await self._load_and_validate_sales_forecast(tenant_id, int(req.sales_forecast_id or 0))
@@ -803,7 +994,11 @@ class FlowDataGenerateService:
         anchor = resolve_business_datetime(req.anchor_at or anchor_src)
         op_plan = await self._resolve_source_process_operations(tenant_id, source, doc)
         suggested_intervals: Optional[dict[str, dict[str, int]]] = None
-        budget_mode = req.flow_end_at is not None
+        # 仅填数模式允许 flow_end_at 时间窗（真实模式已被 apply_mode_gates 清空）
+        budget_mode = bool(
+            is_budget_time_allowed(normalize_sim_mode(req.sim_mode))
+            and req.flow_end_at is not None
+        )
         flow_deadline: Optional[datetime] = None
         if budget_mode:
             flow_deadline = resolve_business_datetime(req.flow_end_at)
@@ -826,62 +1021,78 @@ class FlowDataGenerateService:
         tick_count = self._count_timeline_ticks(
             req=req, enabled=enabled, op_plan=op_plan, budget_mode=budget_mode
         )
-        planner = TimelinePlanner(
-            anchor=anchor,
-            default_interval=req.default_interval,
-            intervals=req.intervals,
-            work_schedule=req.work_schedule,
-            use_work_schedule=bool(req.use_work_schedule),
-            deadline=flow_deadline,
-            remaining_events=tick_count if budget_mode else None,
+        planner = TimelinePlanner.for_request(
+            req=req, anchor=anchor, tick_count=tick_count if budget_mode else None
         )
         preview_times: list[dict[str, Any]] = []
+        material_plans: list[dict[str, Any]] = list(op_plan.get("materials") or [])
+        if not material_plans and op_plan.get("operations"):
+            material_plans = [
+                {
+                    "material_code": op_plan.get("material_code"),
+                    "bom_level": 0,
+                    "quantity": op_plan.get("quantity") or Decimal("1"),
+                    "operations": op_plan.get("operations") or [],
+                }
+            ]
         for key, label in planned_steps:
-            if key == "reporting" and op_plan.get("operations"):
-                ops_list = op_plan["operations"]
-                qty = Decimal(str(op_plan.get("quantity") or 1))
-                parts = self._reporting_parts_for_qty(qty, req)
-                group_n = len(parts)
-                prev_op: Optional[dict[str, Any]] = None
-                for idx, op in enumerate(ops_list):
-                    if prev_op is not None:
-                        gap = self._operation_flow_gap_seconds(
-                            prev_op=prev_op,
-                            next_op=op,
-                            quantity=qty,
-                            reporting_cfg=req.intervals.get("reporting")
-                            or req.default_interval,
+            if key == "reporting" and material_plans:
+                for mat_plan in material_plans:
+                    ops_list = list(mat_plan.get("operations") or [])
+                    if not ops_list:
+                        continue
+                    qty = Decimal(str(mat_plan.get("quantity") or 1))
+                    parts = self._reporting_parts_for_qty(qty, req)
+                    group_n = len(parts)
+                    mat_code = mat_plan.get("material_code") or ""
+                    bom_level = int(mat_plan.get("bom_level") or 0)
+                    level_tag = f"L{bom_level}" if bom_level > 0 else "成品"
+                    prev_op: Optional[dict[str, Any]] = None
+                    for idx, op in enumerate(ops_list):
+                        if prev_op is not None:
+                            gap = self._operation_flow_gap_seconds(
+                                prev_op=prev_op,
+                                next_op=op,
+                                quantity=qty,
+                                reporting_cfg=req.intervals.get("reporting")
+                                or req.default_interval,
+                            )
+                            planner.advance_capped(gap)
+                        flow_mode = (
+                            "可跳转" if bool(op.get("allow_jump")) else "须完上道"
                         )
-                        # 时间窗内按标准工时意图推进，超额由 advance_capped 压回剩余工作秒
-                        planner.advance_capped(gap)
-                    flow_mode = (
-                        "可跳转" if bool(op.get("allow_jump")) else "须完上道"
-                    )
-                    for g_idx, part_qty in enumerate(parts, start=1):
-                        if g_idx == 1 and prev_op is not None:
-                            issued = planner.current()
-                        else:
-                            issued = planner.next("reporting")
-                        preview_times.append(
-                            {
-                                "step_key": "reporting",
-                                "label": (
-                                    f"工序报工-{op.get('name') or op.get('code') or idx + 1}"
-                                    f" 组{g_idx}/{group_n}"
-                                ),
-                                "issued_at": issued.isoformat(),
-                                "operation_sequence": int(op.get("sequence") or idx + 1),
-                                "operation_code": op.get("code"),
-                                "operation_name": op.get("name"),
-                                "flow_mode": flow_mode,
-                                "note": (
-                                    f"流转={flow_mode}"
-                                    f"；qty={part_qty}"
-                                    f"；标准工时={op.get('standard_time') or '-'}h/件"
-                                ),
-                            }
-                        )
-                    prev_op = op
+                        for g_idx, part_qty in enumerate(parts, start=1):
+                            if g_idx == 1 and prev_op is not None:
+                                issued = planner.current()
+                            else:
+                                issued = planner.next("reporting")
+                            preview_times.append(
+                                {
+                                    "step_key": "reporting",
+                                    "label": (
+                                        f"[{level_tag}:{mat_code}] "
+                                        f"工序报工-{op.get('name') or op.get('code') or idx + 1}"
+                                        f" 组{g_idx}/{group_n}"
+                                    ),
+                                    "issued_at": issued.isoformat(),
+                                    "operation_sequence": int(
+                                        op.get("sequence") or idx + 1
+                                    ),
+                                    "operation_code": op.get("code"),
+                                    "operation_name": op.get("name"),
+                                    "material_id": mat_plan.get("material_id"),
+                                    "material_code": mat_code,
+                                    "bom_level": bom_level,
+                                    "flow_mode": flow_mode,
+                                    "note": (
+                                        f"物料={mat_code}({level_tag})"
+                                        f"；流转={flow_mode}"
+                                        f"；qty={part_qty}"
+                                        f"；标准工时={op.get('standard_time') or '-'}h/件"
+                                    ),
+                                }
+                            )
+                        prev_op = op
                 continue
             issued = planner.next(key)
             preview_times.append(
@@ -892,7 +1103,16 @@ class FlowDataGenerateService:
                 }
             )
         warnings = self._preview_warnings(doc, enabled, source_type=source)
-        if enabled.get("reporting", True) and op_plan.get("operations"):
+        make_with_ops = sum(
+            1 for m in material_plans if m.get("operations")
+        )
+        make_without_ops = sum(
+            1
+            for m in material_plans
+            if not m.get("operations") and not m.get("preview_ops_truncated")
+        )
+        truncated_ops = int(op_plan.get("preview_ops_truncated_count") or 0)
+        if enabled.get("reporting", True) and make_with_ops:
             if budget_mode:
                 warnings.append(
                     "时间窗模式下跨工序按报工间隔推进（不用标准工时），"
@@ -902,8 +1122,20 @@ class FlowDataGenerateService:
                 warnings.append(
                     "工序报工按工艺流转：须完上道则按上道标准工时推进时刻；"
                     "可跳转工序使用较短间隔。同工序多组按报工间隔错开。"
+                    f"已展开成品及 BOM 下级自制件共 {make_with_ops} 个物料的工序。"
                 )
-        elif enabled.get("reporting", True) and not op_plan.get("operations"):
+            if truncated_ops > 0:
+                warnings.append(
+                    f"有工序的自制件超过预览上限 {FLOW_PREVIEW_MAKE_WITH_OPS_MAX}，"
+                    f"另有 {truncated_ops} 个物料仅保留元数据、未展开时间线节点，"
+                    "执行造数仍按全量 BOM/工艺。"
+                )
+            if make_without_ops:
+                warnings.append(
+                    f"有 {make_without_ops} 个自制件（含下级）未配置工艺工序，"
+                    "执行时对应工单报工将跳过或失败。"
+                )
+        elif enabled.get("reporting", True) and not make_with_ops:
             warnings.append(
                 "未解析到源单据物料工艺工序，预览仅显示报工步骤总节点；"
                 "执行时将按工单实际工序与流转规则间隔报工。"
@@ -937,6 +1169,14 @@ class FlowDataGenerateService:
                     f"警告：仍有 {bad} 个预览节点落在工作时段外，请反馈以便排查。"
                 )
         finish_at = preview_times[-1]["issued_at"] if preview_times else anchor.isoformat()
+        if mode_meta["sim_mode"] == "real":
+            warnings.insert(
+                0,
+                "真实仿真模式：按标准工时+工作时段推进，不使用流程结束时间压缩；"
+                "已关闭强制简易质检与 IQC 旁路。",
+            )
+        elif budget_mode:
+            warnings.insert(0, "填数模式：已启用时间窗均摊（与真实模式隔离）。")
         return {
             "source_type": source,
             "sales_order_id": doc_id if source == "sales_order" else None,
@@ -950,7 +1190,26 @@ class FlowDataGenerateService:
             "steps": preview_times,
             "process_operations": op_plan.get("operations") or [],
             "process_material_code": op_plan.get("material_code"),
+            "process_materials": [
+                {
+                    "material_id": m.get("material_id"),
+                    "material_code": m.get("material_code"),
+                    "material_name": m.get("material_name"),
+                    "bom_level": int(m.get("bom_level") or 0),
+                    "parent_material_id": m.get("parent_material_id"),
+                    "quantity": float(m.get("quantity") or 0),
+                    "process_operation_count": int(
+                        m.get("process_operation_count")
+                        or len(m.get("operations") or [])
+                    ),
+                    "has_process": bool(m.get("operations")),
+                    "operations": m.get("operations") or [],
+                }
+                for m in material_plans
+            ],
             "warnings": warnings,
+            "sim_mode": mode_meta["sim_mode"],
+            "scenarios": list(scenarios),
         }
 
     async def precheck(
@@ -959,6 +1218,9 @@ class FlowDataGenerateService:
         req: FlowGenerateRequest,
     ) -> dict[str, Any]:
         """执行前数据预检：仓库/行物料/工艺/BOM/供应商/开关/操作人池；硬拦进 errors。"""
+        mode_meta = apply_mode_gates(req)
+        scenarios = resolve_scenario_ids(req.scenarios)
+        req.steps = map_steps_for_scenarios(scenarios, base_steps=req.steps)
         from apps.master_data.constants.material_source_type import (
             SOURCE_TYPE_BUY,
             SOURCE_TYPE_MAKE,
@@ -966,9 +1228,6 @@ class FlowDataGenerateService:
         )
         from apps.master_data.models.material import Material
         from apps.master_data.models.supplier import Supplier
-        from apps.master_data.services.material_product_process_service import (
-            MaterialProductProcessService,
-        )
         from apps.master_data.services.material_service import MaterialService
         from apps.kuaizhizao.models.sales_forecast_item import SalesForecastItem
         from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
@@ -1038,6 +1297,8 @@ class FlowDataGenerateService:
         material_id_issues: list[dict[str, Any]] = []
         seen_make: set[int] = set()
         has_buy_lines = False
+        remaining_make_nodes = FLOW_PRECHECK_MAKE_NODES_MAX
+        bom_expand_truncated = False
 
         def _line_label(row: Any, mid: int) -> str:
             code = str(getattr(row, "material_code", None) or "").strip()
@@ -1094,30 +1355,10 @@ class FlowDataGenerateService:
                 qty = Decimal(str(getattr(row, qty_attr, None) or 0))
             except Exception:
                 qty = Decimal("0")
-            has_process = False
-            process_ops = 0
-            try:
-                seq, _ = await MaterialProductProcessService.resolve_sequence_for_material(
-                    tenant_id, mid
-                )
-                ops = self._ops_from_operation_sequence(seq)
-                process_ops = len(ops)
-                has_process = process_ops > 0
-            except Exception as exc:
-                warnings.append(f"{label} 工艺解析失败: {exc}")
             has_bom = bool(bom_map.get(mid) or bom_map.get(str(mid)))
-            ready = True
-            blockers: list[str] = []
             if st == SOURCE_TYPE_MAKE:
-                if not has_process and enabled.get("reporting", True):
-                    ready = False
-                    blockers.append("无工艺工序")
-                    errors.append(f"自制件 {label} 未配置工艺工序，报工将失败")
-                    _add_block("NO_PROCESS")
                 if not has_bom:
                     if need_bom:
-                        ready = False
-                        blockers.append("无BOM")
                         errors.append(
                             f"自制件 {label} 未配置 BOM，领料/报工造数将失败"
                         )
@@ -1126,18 +1367,105 @@ class FlowDataGenerateService:
                         warnings.append(
                             f"自制件 {label} 未检出 BOM，需求展开可能失败"
                         )
-                if mid not in seen_make:
-                    seen_make.add(mid)
-                    candidates.append(
+                # 成品 + BOM 下级自制件均作为工单候选（含各层工序数）
+                if remaining_make_nodes <= 0:
+                    bom_expand_truncated = True
+                    make_plans = [
                         {
                             "material_id": mid,
                             "material_code": code,
                             "material_name": name,
-                            "source_type": st,
-                            "quantity": float(qty),
+                            "bom_level": 0,
+                            "quantity": qty,
+                            "operations": [],
+                            "has_process": False,
+                            "process_operation_count": 0,
+                        }
+                    ]
+                else:
+                    try:
+                        make_plans = await self._make_process_plans_for_material(
+                            tenant_id,
+                            mid,
+                            qty,
+                            material_code=code,
+                            material_name=name,
+                            bom_max_level=FLOW_BOM_MAX_LEVEL,
+                            max_make_nodes=remaining_make_nodes,
+                        )
+                    except Exception as exc:
+                        warnings.append(f"{label} BOM/工艺展开失败: {exc}")
+                        make_plans = []
+                if not make_plans:
+                    # 无树时仍登记行物料本身
+                    make_plans = [
+                        {
+                            "material_id": mid,
+                            "material_code": code,
+                            "material_name": name,
+                            "bom_level": 0,
+                            "quantity": qty,
+                            "operations": [],
+                            "has_process": False,
+                            "process_operation_count": 0,
+                        }
+                    ]
+                for plan in make_plans:
+                    pmid = int(plan.get("material_id") or 0)
+                    if pmid <= 0 or pmid in seen_make:
+                        continue
+                    seen_make.add(pmid)
+                    remaining_make_nodes = max(0, remaining_make_nodes - 1)
+                    pcode = str(plan.get("material_code") or pmid)
+                    pname = str(plan.get("material_name") or "")
+                    plabel = f"{pcode} {pname}".strip()
+                    bom_level = int(plan.get("bom_level") or 0)
+                    process_ops = int(
+                        plan.get("process_operation_count")
+                        or len(plan.get("operations") or [])
+                    )
+                    has_process = bool(plan.get("operations"))
+                    ready = True
+                    blockers: list[str] = []
+                    if not has_process and enabled.get("reporting", True):
+                        blockers.append("无工艺工序")
+                        level_hint = (
+                            f"（BOM L{bom_level}）" if bom_level > 0 else ""
+                        )
+                        if bom_level == 0:
+                            # 行上成品无工艺：硬阻断（报工必败）
+                            ready = False
+                            errors.append(
+                                f"自制件 {plabel}{level_hint} 未配置工艺工序，报工将失败"
+                            )
+                            _add_block("NO_PROCESS")
+                        else:
+                            # 下级自制件缺工艺：软告警，不拖死预检、不挡整单预览
+                            ready = False
+                            warnings.append(
+                                f"下级自制件 {plabel}{level_hint} 未配置工艺工序，"
+                                "对应工单报工将跳过或失败"
+                            )
+                    if bom_level == 0 and not has_bom and need_bom:
+                        ready = False
+                        if "无BOM" not in blockers:
+                            blockers.append("无BOM")
+                    try:
+                        pq = float(plan.get("quantity") or qty)
+                    except Exception:
+                        pq = float(qty)
+                    candidates.append(
+                        {
+                            "material_id": pmid,
+                            "material_code": pcode,
+                            "material_name": pname,
+                            "source_type": SOURCE_TYPE_MAKE,
+                            "quantity": pq,
                             "has_process": has_process,
                             "process_operation_count": process_ops,
-                            "has_bom": has_bom,
+                            "has_bom": has_bom if bom_level == 0 else True,
+                            "bom_level": bom_level,
+                            "parent_material_id": plan.get("parent_material_id"),
                             "ready": ready,
                             "blockers": blockers,
                         }
@@ -1231,7 +1559,7 @@ class FlowDataGenerateService:
                 "来料/过程/成品检按物料质检策略：有方案走真方案；模式为无质检则跳过或直入库（不强制简易）"
             )
             if req.allow_skip_iqc:
-                warnings.append("已开启「来料检失败允许直入库」旁路")
+                warnings.append("已开启「来料检失败允许直入库」旁路（仅填数模式）")
             else:
                 warnings.append("来料检建单失败将中断整轮（无质检直入库除外；未开启失败旁路）")
         if enabled.get("outsource", True):
@@ -1249,6 +1577,68 @@ class FlowDataGenerateService:
                     "组织要求先发货通知后出库；造数将按真实门禁走发货通知链"
                 )
 
+        # Kit 硬预检：只抽检成品行（L0），避免对全部下级自制件再 resolve
+        selected = req.selected_material_id_set()
+        kit_material_ids = [
+            int(c["material_id"])
+            for c in candidates
+            if int(c.get("material_id") or 0) > 0
+            and int(c.get("bom_level") or 0) == 0
+        ]
+        if selected:
+            kit_material_ids = [i for i in kit_material_ids if i in selected] or [
+                i for i in selected if int(i or 0) > 0
+            ]
+        kit_truncated = max(0, len(kit_material_ids) - FLOW_PRECHECK_KIT_MATERIALS_MAX)
+        kit_material_ids = kit_material_ids[:FLOW_PRECHECK_KIT_MATERIALS_MAX]
+        need_kit = any(
+            enabled.get(k, True)
+            for k in (
+                "reporting",
+                "production_picking",
+                "process_inspection",
+                "finished_goods_inspection",
+                "finished_goods_receipt",
+            )
+        )
+        kit_result = None
+        if need_kit and kit_material_ids:
+            kit_result = await precheck_simulation_kit(
+                tenant_id,
+                material_ids=kit_material_ids,
+                mode=normalize_sim_mode(req.sim_mode),
+                warehouse_id=int(warehouse["id"]),
+            )
+            for msg in kit_result.blocking:
+                errors.append(msg)
+                if "BOM" in msg:
+                    _add_block("NO_BOM")
+                elif "工艺" in msg:
+                    _add_block("NO_PROCESS")
+                elif "标准工时" in msg:
+                    _add_block("NO_STD_TIME")
+                else:
+                    _add_block("KIT_INCOMPLETE")
+            warnings.extend(kit_result.warnings)
+
+        if bom_expand_truncated:
+            warnings.append(
+                f"自制件 BOM 展开已达预检上限 {FLOW_PRECHECK_MAKE_NODES_MAX} 个节点，"
+                "其余行仅登记成品本身；执行造数仍按全量 BOM。"
+            )
+        if kit_truncated > 0:
+            warnings.append(
+                f"Kit 成品抽检已达上限 {FLOW_PRECHECK_KIT_MATERIALS_MAX}，"
+                f"另有 {kit_truncated} 个成品行未重复解析工艺；候选列表仍含展开结果。"
+            )
+        if mode_meta["sim_mode"] == "real":
+            warnings.insert(
+                0,
+                "真实仿真：禁止强制简易质检与 IQC 旁路；Kit 缺项禁止开跑。",
+            )
+        else:
+            warnings.insert(0, "填数模式：允许时间窗压缩与 IQC 旁路（与真实隔离）。")
+
         ok = len(errors) == 0
         return {
             "ok": ok,
@@ -1265,6 +1655,10 @@ class FlowDataGenerateService:
             "material_id_issues": material_id_issues,
             "can_repair_material_ids": len(material_id_issues) > 0,
             "parallel_work_orders_default": True,
+            "sim_mode": mode_meta["sim_mode"],
+            "scenarios": list(scenarios),
+            "kit": kit_result.as_dict() if kit_result else None,
+            "force_simple_when_unset": bool(mode_meta.get("force_simple_when_unset")),
         }
 
     async def _probe_random_operator_pool(
@@ -1508,6 +1902,11 @@ class FlowDataGenerateService:
         req: FlowGenerateRequest,
         progress_cb: Optional[ProgressCallback] = None,
     ) -> dict[str, Any]:
+        mode_meta = apply_mode_gates(req)
+        scenarios = resolve_scenario_ids(req.scenarios)
+        req.scenarios = list(scenarios)
+        req.steps = map_steps_for_scenarios(scenarios, base_steps=req.steps)
+
         resume_id = str(req.resume_run_id or "").strip() or None
         run_id = resume_id or str(uuid.uuid4())
         checkpoint: Optional[FlowResumeCheckpoint] = None
@@ -1536,15 +1935,18 @@ class FlowDataGenerateService:
         warehouse = await self._resolve_warehouse(tenant_id, req.warehouse_id)
         enabled = self._enabled_steps(req.steps)
         anchor = resolve_business_datetime(req.anchor_at or anchor_src)
-        flow_deadline: Optional[datetime] = None
         tick_count: Optional[int] = None
         op_plan_budget: Optional[dict[str, Any]] = None
-        if req.flow_end_at is not None:
+        budget_mode = bool(
+            is_budget_time_allowed(normalize_sim_mode(req.sim_mode))
+            and req.flow_end_at is not None
+        )
+        if budget_mode:
             flow_deadline = resolve_business_datetime(req.flow_end_at)
             op_plan_budget = await self._resolve_source_process_operations(
                 tenant_id, source, sales_order or sales_forecast
             )
-            # 未手填步骤间隔：把时间窗均摊进各步骤
+            # 未手填步骤间隔：把时间窗均摊进各步骤（仅填数模式）
             if not req.intervals:
                 budgeted = self._suggest_intervals_for_window(
                     anchor=anchor,
@@ -1563,14 +1965,16 @@ class FlowDataGenerateService:
                 op_plan=op_plan_budget or {},
                 budget_mode=True,
             )
-        planner = TimelinePlanner(
-            anchor=anchor,
-            default_interval=req.default_interval,
-            intervals=req.intervals,
-            work_schedule=req.work_schedule,
-            use_work_schedule=bool(req.use_work_schedule),
-            deadline=flow_deadline,
-            remaining_events=tick_count,
+        planner = TimelinePlanner.for_request(
+            req=req, anchor=anchor, tick_count=tick_count
+        )
+        await self._emit_progress(
+            progress_cb,
+            2,
+            scenario_phase_message(
+                scenarios[0],
+                f"模式={mode_meta['sim_mode']} 场景={'→'.join(scenarios)}",
+            ),
         )
 
         timeline: list[TimelineEntry] = []
@@ -1591,7 +1995,7 @@ class FlowDataGenerateService:
         else:
             timeline_rewrite_from = 0
 
-        await self._emit_progress(progress_cb, 2, "解析步骤操作人")
+        await self._emit_progress(progress_cb, 3, "解析步骤操作人")
         ops, op_notes = await self._resolve_step_operators(
             tenant_id=tenant_id,
             fallback_user_id=operator_id,
@@ -1615,89 +2019,127 @@ class FlowDataGenerateService:
                 f"reporting: 报工操作人池 {len(reporting_pool)} 人，将按批次轮换"
             )
 
+        current_scenario: Optional[str] = None
         try:
             computation_id: Optional[int] = None
             work_orders: list[dict[str, Any]] = []
             purchase_orders: list[dict[str, Any]] = []
 
-            # 1) 需求计算
+            # 1) 需求计算（场景 mrp_push；未含该场景时须续跑或仅跑不依赖下推的段）
             skip_demand = bool(checkpoint and checkpoint.computation_id)
             if skip_demand:
+                current_scenario = "mrp_push"
                 computation_id = int(checkpoint.computation_id)  # type: ignore[arg-type]
                 demand_id = checkpoint.demand_id
                 skipped_count += 1
                 outsource_notes.append(f"跳过需求计算（沿用 computation #{computation_id}）")
-                await self._emit_progress(progress_cb, 8, "跳过需求计算")
-            else:
-                await self._emit_progress(progress_cb, 8, "需求计算")
-                if enabled.get("demand_computation", True):
-                    if source == "sales_forecast":
-                        computation_id, demand_id = await self._step_push_and_execute_computation_from_forecast(
-                            tenant_id=tenant_id,
-                            operator_id=ops["demand_computation"],
-                            sales_forecast_id=doc_id,
-                            planner=planner,
-                            timeline=timeline,
-                            step_results=step_results,
-                            run_id=run_id,
-                        )
-                    else:
-                        computation_id, demand_id = await self._step_push_and_execute_computation(
-                            tenant_id=tenant_id,
-                            operator_id=ops["demand_computation"],
-                            sales_order_id=doc_id,
-                            planner=planner,
-                            timeline=timeline,
-                            step_results=step_results,
-                            run_id=run_id,
-                        )
+                await self._emit_progress(
+                    progress_cb, 8, scenario_phase_message("mrp_push", "跳过需求计算")
+                )
+            elif enabled.get("demand_computation", True):
+                current_scenario = "mrp_push"
+                await self._emit_progress(
+                    progress_cb, 8, scenario_phase_message("mrp_push", "需求计算")
+                )
+                if source == "sales_forecast":
+                    computation_id, demand_id = await self._step_push_and_execute_computation_from_forecast(
+                        tenant_id=tenant_id,
+                        operator_id=ops["demand_computation"],
+                        sales_forecast_id=doc_id,
+                        planner=planner,
+                        timeline=timeline,
+                        step_results=step_results,
+                        run_id=run_id,
+                    )
                 else:
-                    raise BusinessLogicError("需求计算步骤为必选，无法关闭")
-
-            assert computation_id is not None and computation_id > 0
+                    computation_id, demand_id = await self._step_push_and_execute_computation(
+                        tenant_id=tenant_id,
+                        operator_id=ops["demand_computation"],
+                        sales_order_id=doc_id,
+                        planner=planner,
+                        timeline=timeline,
+                        step_results=step_results,
+                        run_id=run_id,
+                    )
+            else:
+                needs_upstream = any(
+                    enabled.get(k, False)
+                    for k in (
+                        "purchase",
+                        "incoming_inspection",
+                        "outsource",
+                        "inventory_topup",
+                        "production_picking",
+                        "reporting",
+                        "process_inspection",
+                        "finished_goods_inspection",
+                        "finished_goods_receipt",
+                    )
+                )
+                if needs_upstream:
+                    raise BusinessLogicError(
+                        "当前场景未含「需求计算与下推」(mrp_push)。"
+                        "请勾选该场景，或使用「继续未完成」从已有 run_id 续跑。"
+                    )
+                computation_id = 0
+                demand_id = None
+                outsource_notes.append("场景未含 mrp_push，跳过需求计算与下推")
 
             # 2) 一键下推工单 + 采购单（续跑优先从需求计算下推关系恢复）
             owos: list[dict[str, Any]] = []
-            if checkpoint and checkpoint.computation_id == computation_id:
-                (
-                    work_orders,
-                    purchase_orders,
-                    owos,
-                ) = await self._load_docs_from_computation_push(
-                    tenant_id, computation_id
-                )
+            if computation_id and computation_id > 0:
+                current_scenario = "mrp_push"
+                if checkpoint and checkpoint.computation_id == computation_id:
+                    (
+                        work_orders,
+                        purchase_orders,
+                        owos,
+                    ) = await self._load_docs_from_computation_push(
+                        tenant_id, computation_id
+                    )
 
-            if work_orders or purchase_orders or owos:
-                skipped_count += 1
-                outsource_notes.append(
-                    f"跳过下推（已有工单 {len(work_orders)} / 采购 {len(purchase_orders)}）"
-                )
-                await self._emit_progress(progress_cb, 18, "跳过下推")
-            else:
-                await self._emit_progress(progress_cb, 18, "下推工单与采购单")
-                push_results = await self._step_push_orders(
-                    tenant_id=tenant_id,
-                    operator_id=ops["demand_computation"],
-                    computation_id=computation_id,
-                    planner=planner,
-                    timeline=timeline,
-                    step_results=step_results,
-                    run_id=run_id,
-                    enable_purchase=enabled.get("purchase", True),
-                )
-                work_orders = await self._enrich_work_orders_product_id(
-                    tenant_id, push_results.get("work_orders") or []
-                )
-                purchase_orders = push_results.get("purchase_orders") or []
-                for warn in push_results.get("push_warnings") or []:
-                    outsource_notes.append(str(warn))
-                owos = push_results.get("outsource_work_orders") or []
+                if work_orders or purchase_orders or owos:
+                    skipped_count += 1
+                    outsource_notes.append(
+                        f"跳过下推（已有工单 {len(work_orders)} / 采购 {len(purchase_orders)}）"
+                    )
+                    await self._emit_progress(
+                        progress_cb, 18, scenario_phase_message("mrp_push", "跳过下推")
+                    )
+                else:
+                    await self._emit_progress(
+                        progress_cb, 18, scenario_phase_message("mrp_push", "下推工单与采购单")
+                    )
+                    # mrp_push 或入库场景任一选中即下推 PO；入库确认仅看 purchase 开关
+                    enable_purchase_push = (
+                        "mrp_push" in scenarios
+                        or "purchase_inbound" in scenarios
+                        or bool(enabled.get("purchase"))
+                    )
+                    push_results = await self._step_push_orders(
+                        tenant_id=tenant_id,
+                        operator_id=ops.get("demand_computation", operator_id),
+                        computation_id=computation_id,
+                        planner=planner,
+                        timeline=timeline,
+                        step_results=step_results,
+                        run_id=run_id,
+                        enable_purchase=enable_purchase_push,
+                    )
+                    work_orders = await self._enrich_work_orders_product_id(
+                        tenant_id, push_results.get("work_orders") or []
+                    )
+                    purchase_orders = push_results.get("purchase_orders") or []
+                    for warn in push_results.get("push_warnings") or []:
+                        outsource_notes.append(str(warn))
+                    owos = push_results.get("outsource_work_orders") or []
 
             item_phase = True
             timeline_rewrite_from = len(timeline)
 
             # 2b) 委外：下达 → 补库 → 发料 → 收货
             if enabled.get("outsource", True) and owos:
+                current_scenario = "owo_fulfill"
                 pending_owos: list[dict[str, Any]] = []
                 for owo in owos:
                     owo_id = int(owo.get("id") or 0)
@@ -1708,7 +2150,11 @@ class FlowDataGenerateService:
                         continue
                     pending_owos.append(owo)
                 if pending_owos:
-                    await self._emit_progress(progress_cb, 24, "委外发料收货")
+                    await self._emit_progress(
+                        progress_cb,
+                        24,
+                        scenario_phase_message("owo_fulfill", "委外发料收货"),
+                    )
                     await self._step_outsource_fulfillment(
                         tenant_id=tenant_id,
                         operator_id=ops["outsource"],
@@ -1726,6 +2172,7 @@ class FlowDataGenerateService:
 
             # 3) 采购：仅处理仍需入库的 PO
             if enabled.get("purchase", True) and purchase_orders:
+                current_scenario = "purchase_inbound"
                 pending_pos: list[dict[str, Any]] = []
                 for po in purchase_orders:
                     po_id = int(po.get("id") or 0)
@@ -1737,9 +2184,17 @@ class FlowDataGenerateService:
                         skipped_count += 1
                 if not pending_pos:
                     outsource_notes.append("跳过采购入库（订单已全部入库）")
-                    await self._emit_progress(progress_cb, 28, "跳过采购入库")
+                    await self._emit_progress(
+                        progress_cb,
+                        28,
+                        scenario_phase_message("purchase_inbound", "跳过采购入库"),
+                    )
                 else:
-                    await self._emit_progress(progress_cb, 28, "采购审核与入库")
+                    await self._emit_progress(
+                        progress_cb,
+                        28,
+                        scenario_phase_message("purchase_inbound", "采购审核与入库"),
+                    )
                     approved_pos = await self._step_approve_purchase_orders(
                         tenant_id=tenant_id,
                         operator_id=ops["purchase"],
@@ -1792,7 +2247,10 @@ class FlowDataGenerateService:
                 pending_wos.append(wo)
             completed_wo_count = len(complete_wos)
             if pending_wos:
-                await self._emit_progress(progress_cb, 35, "生产链完工")
+                current_scenario = "wo_complete"
+                await self._emit_progress(
+                    progress_cb, 35, scenario_phase_message("wo_complete", "生产链完工")
+                )
                 await self._complete_work_orders_production_chain(
                     tenant_id=tenant_id,
                     ops=ops,
@@ -1814,10 +2272,13 @@ class FlowDataGenerateService:
                 outsource_notes.append(
                     f"跳过生产链（{len(complete_wos)} 张工单已完成）"
                 )
-                await self._emit_progress(progress_cb, 80, "跳过生产链")
+                await self._emit_progress(
+                    progress_cb, 80, scenario_phase_message("wo_complete", "跳过生产链")
+                )
 
             # 5) 发货 / 出库
             if enabled.get("shipment_delivery", True):
+                current_scenario = "ship"
                 if await self._is_shipment_done(
                     tenant_id=tenant_id,
                     source=source,
@@ -1826,9 +2287,13 @@ class FlowDataGenerateService:
                 ):
                     skipped_count += 1
                     outsource_notes.append("跳过发货出库（已出库）")
-                    await self._emit_progress(progress_cb, 88, "跳过发货出库")
+                    await self._emit_progress(
+                        progress_cb, 88, scenario_phase_message("ship", "跳过发货出库")
+                    )
                 else:
-                    await self._emit_progress(progress_cb, 88, "发货出库")
+                    await self._emit_progress(
+                        progress_cb, 88, scenario_phase_message("ship", "发货出库")
+                    )
                     if source == "sales_forecast":
                         await self._step_shipment_delivery_from_forecast(
                             tenant_id=tenant_id,
@@ -1852,10 +2317,22 @@ class FlowDataGenerateService:
                             run_id=run_id,
                         )
 
-            await self._emit_progress(progress_cb, 94, "改写业务时间与操作日志")
+            # 真实模式：纠偏系统戳/单号日期，保留业务日；填数模式才全量压时刻
+            preserve_dates = normalize_sim_mode(req.sim_mode) == "real"
+            await self._emit_progress(
+                progress_cb,
+                94,
+                "纠偏单号日期与操作日志"
+                if preserve_dates
+                else "改写业务时间与操作日志",
+            )
             new_timeline = timeline[timeline_rewrite_from:]
             if new_timeline:
-                await self._rewrite_timeline(tenant_id, new_timeline)
+                await self._rewrite_timeline(
+                    tenant_id,
+                    new_timeline,
+                    preserve_business_dates=preserve_dates,
+                )
                 await self._align_operation_logs(new_timeline)
             await self._emit_progress(progress_cb, 100, "完成")
 
@@ -1864,9 +2341,13 @@ class FlowDataGenerateService:
         except Exception as exc:
             logger.exception("flow-generate failed: {}", exc)
             detail = str(exc).strip() or exc.__class__.__name__
+            scenario_hint = ""
+            if current_scenario:
+                scenario_hint = f"场景={current_scenario}；"
             if item_phase:
                 raise FlowGenerateFailedError(
-                    f"流程造数未通过，请修改后可「继续未完成」（run_id={run_id}）：{detail}",
+                    f"流程造数未通过，请修改后可「继续未完成」"
+                    f"（{scenario_hint}run_id={run_id}）：{detail}",
                     run_id=run_id,
                     resumable=True,
                 ) from exc
@@ -1878,7 +2359,8 @@ class FlowDataGenerateService:
             if revert_notes:
                 detail = f"{detail}；回滚提示：{'；'.join(revert_notes[:5])}"
             raise FlowGenerateFailedError(
-                f"流程造数未通过，请修改后重试（本轮写入已撤销）：{detail}",
+                f"流程造数未通过，请修改后重试"
+                f"（{scenario_hint}本轮写入已撤销）：{detail}",
                 run_id=run_id,
                 resumable=False,
             ) from exc
@@ -1913,6 +2395,8 @@ class FlowDataGenerateService:
             "errors": [],
             "skipped_count": skipped_count,
             "completed_work_order_count": completed_wo_count,
+            "sim_mode": mode_meta["sim_mode"],
+            "scenarios": list(scenarios),
         }
 
     # ── helpers ──────────────────────────────────────────────
@@ -3066,15 +3550,25 @@ class FlowDataGenerateService:
         budget_mode：跨工序也按报工间隔推进（不再叠标准工时），并计入工序间空档。
         """
         ticks = 0
+        material_plans: list[dict[str, Any]] = list(op_plan.get("materials") or [])
+        if not material_plans and op_plan.get("operations"):
+            material_plans = [
+                {
+                    "quantity": op_plan.get("quantity") or Decimal("1"),
+                    "operations": op_plan.get("operations") or [],
+                }
+            ]
         for key, _label in self._planned_step_labels(enabled):
-            if key == "reporting" and op_plan.get("operations"):
-                ops_list = op_plan["operations"]
-                qty = Decimal(str(op_plan.get("quantity") or 1))
-                parts = self._reporting_parts_for_qty(qty, req)
-                n_ops = max(1, len(ops_list))
-                n_parts = max(1, len(parts))
-                # 每组一次 next；跨工序空档走短 advance，不另占 tick
-                ticks += n_ops * n_parts
+            if key == "reporting" and material_plans:
+                for mat_plan in material_plans:
+                    ops_list = list(mat_plan.get("operations") or [])
+                    if not ops_list:
+                        continue
+                    qty = Decimal(str(mat_plan.get("quantity") or 1))
+                    parts = self._reporting_parts_for_qty(qty, req)
+                    n_ops = max(1, len(ops_list))
+                    n_parts = max(1, len(parts))
+                    ticks += n_ops * n_parts
             else:
                 ticks += 1
         return max(1, ticks)
@@ -3277,7 +3771,14 @@ class FlowDataGenerateService:
             }
         )
 
-    async def _rewrite_timeline(self, tenant_id: int, timeline: list[TimelineEntry]) -> None:
+    async def _rewrite_timeline(
+        self,
+        tenant_id: int,
+        timeline: list[TimelineEntry],
+        *,
+        preserve_business_dates: bool = True,
+    ) -> None:
+        """对齐系统戳/单号日期；真实模式默认保留业务日字段（纠偏，非主时钟）。"""
         by_type: dict[str, list[dict[str, Any]]] = {}
         for t in timeline:
             by_type.setdefault(t.doc_type, []).append(
@@ -3291,7 +3792,7 @@ class FlowDataGenerateService:
                 items=items,
                 sync_operator=True,
                 rewrite_code_date=doc_type != "reporting_record",
-                preserve_business_dates=False,
+                preserve_business_dates=preserve_business_dates,
             )
             failed = int(result.get("failed") or 0)
             if failed > 0:

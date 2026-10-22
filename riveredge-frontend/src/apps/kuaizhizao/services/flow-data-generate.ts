@@ -85,12 +85,78 @@ export interface FlowGeneratePayload {
   parallel_group_size_min?: number | null;
   /** 数量并行组每组最大件数（如 3） */
   parallel_group_size_max?: number | null;
-  /** 流程结束锚点；与 anchor_at 组成时间窗推算步骤间隔 */
+  /** 流程结束锚点；仅填数模式与 anchor_at 组成时间窗均摊间隔 */
   flow_end_at?: string | null;
-  /** 来料检建单失败时允许直推入库（默认关） */
+  /** 来料检建单失败时允许直推入库（仅填数模式；真实模式强制关） */
   allow_skip_iqc?: boolean;
   /** 续跑：失败轮次 run_id，按检查点跳过已完成阶段 */
   resume_run_id?: string | null;
+  /** real=验收级真实仿真（默认）；fill=快速填数 */
+  sim_mode?: 'real' | 'fill';
+  /** 场景段；空=全链路串联 */
+  scenarios?: string[] | null;
+}
+
+export type FlowSimMode = 'real' | 'fill';
+
+export const FLOW_SCENARIO_OPTIONS = [
+  {
+    key: 'mrp_push',
+    labelKey: 'app.kuaizhizao.flowDataGenerate.scenario.mrp_push',
+    stepKeys: ['demand_computation'] as const,
+  },
+  {
+    key: 'purchase_inbound',
+    labelKey: 'app.kuaizhizao.flowDataGenerate.scenario.purchase_inbound',
+    stepKeys: ['purchase', 'incoming_inspection'] as const,
+  },
+  {
+    key: 'owo_fulfill',
+    labelKey: 'app.kuaizhizao.flowDataGenerate.scenario.owo_fulfill',
+    stepKeys: ['outsource'] as const,
+  },
+  {
+    key: 'wo_complete',
+    labelKey: 'app.kuaizhizao.flowDataGenerate.scenario.wo_complete',
+    stepKeys: [
+      'inventory_topup',
+      'production_picking',
+      'reporting',
+      'process_inspection',
+      'finished_goods_inspection',
+      'finished_goods_receipt',
+    ] as const,
+  },
+  {
+    key: 'ship',
+    labelKey: 'app.kuaizhizao.flowDataGenerate.scenario.ship',
+    stepKeys: ['shipment_delivery'] as const,
+  },
+] as const;
+
+/** 场景 → 步骤开关（前端真源，与后端 SCENARIO_DEFS 对齐） */
+export function stepsFromScenarios(scenarioKeys: string[]): Record<string, boolean> {
+  const all = [
+    'demand_computation',
+    'purchase',
+    'incoming_inspection',
+    'outsource',
+    'inventory_topup',
+    'production_picking',
+    'reporting',
+    'process_inspection',
+    'finished_goods_inspection',
+    'finished_goods_receipt',
+    'shipment_delivery',
+  ] as const;
+  const enabled = new Set<string>();
+  for (const key of scenarioKeys) {
+    const def = FLOW_SCENARIO_OPTIONS.find((s) => s.key === key);
+    if (def) {
+      for (const sk of def.stepKeys) enabled.add(sk);
+    }
+  }
+  return Object.fromEntries(all.map((k) => [k, enabled.has(k)]));
 }
 
 export interface FlowWorkOrderCandidate {
@@ -102,6 +168,9 @@ export interface FlowWorkOrderCandidate {
   has_process?: boolean;
   process_operation_count?: number;
   has_bom?: boolean;
+  /** 0=订单行成品；>0=BOM 下级自制件 */
+  bom_level?: number;
+  parent_material_id?: number | null;
   ready?: boolean;
   blockers?: string[];
 }
@@ -200,6 +269,18 @@ export interface FlowPreviewResult {
     setup_time?: number | null;
   }>;
   process_material_code?: string | null;
+  /** 成品 + BOM 下级自制件工序明细 */
+  process_materials?: Array<{
+    material_id?: number;
+    material_code?: string;
+    material_name?: string;
+    bom_level?: number;
+    parent_material_id?: number | null;
+    quantity?: number;
+    process_operation_count?: number;
+    has_process?: boolean;
+    operations?: Array<Record<string, unknown>>;
+  }>;
   warnings?: string[];
 }
 
@@ -284,7 +365,8 @@ export async function previewFlowGenerate(
   return apiRequest(BASE + '/preview', {
     method: 'POST',
     data: body,
-    timeoutMs: 60_000,
+    // BOM 展开 + 工艺解析在大树下可达数十秒；与后端上限对齐
+    timeoutMs: 180_000,
   });
 }
 
@@ -294,7 +376,7 @@ export async function precheckFlowGenerate(
   return apiRequest(BASE + '/precheck', {
     method: 'POST',
     data: body,
-    timeoutMs: 60_000,
+    timeoutMs: 180_000,
   });
 }
 
