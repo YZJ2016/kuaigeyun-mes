@@ -159,6 +159,28 @@
         "created_by": "cursor-agent",
         "order": 210,
         "enabled": true
+      },
+      {
+        "rule_id": "project-exclude-binary-images",
+        "action": "exclude",
+        "pattern": "**/*.png",
+        "pattern_kind": "glob",
+        "reason": "binary image assets; no code cognition (与 docs/screenshots、wasm 排除同类)",
+        "source": "user",
+        "created_by": "devin",
+        "order": 220,
+        "enabled": true
+      },
+      {
+        "rule_id": "project-exclude-binary-icons",
+        "action": "exclude",
+        "pattern": "**/*.ico",
+        "pattern_kind": "glob",
+        "reason": "binary icon assets; no code cognition",
+        "source": "user",
+        "created_by": "devin",
+        "order": 221,
+        "enabled": true
       }
     ]
   },
@@ -168,7 +190,7 @@
     "whole_index": {
       "target_tokens": 200000,
       "warning_tokens": 300000,
-      "max_tokens": 400000
+      "max_tokens": 600000
     },
     "r": [
       {
