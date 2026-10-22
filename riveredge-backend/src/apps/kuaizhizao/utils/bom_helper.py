@@ -158,6 +158,8 @@ async def get_bom_by_material_id(
     version: Optional[str] = None,
     use_default: bool = False,
     as_of_date: Optional[datetime] = None,
+    strict_version: bool = False,
+    bom_id: Optional[int] = None,
 ) -> Optional[BOM]:
     """
     根据物料ID获取BOM（从master_data）
@@ -169,10 +171,26 @@ async def get_bom_by_material_id(
         version: 指定版本号（可选），若提供则按版本查询
         use_default: 是否使用默认版本（is_default=True），当 version 未指定时生效
         as_of_date: 基准日期（可选），仅返回该日期生效的 BOM（effective_date<=as_of_date 且 expiry_date>=as_of_date 或 null）
+        strict_version: version 显式指定但未命中时抛 ValidationError（fail fast），否则静默回退默认/最新
+        bom_id: 快照锚点（可选），精确指向一行 BOM 时优先生效，不走版本/默认解析与生效期过滤
 
     Returns:
         BOM对象或None
     """
+    if bom_id:
+        # 快照锚点：锁定的是「那一行 BOM」，不再走版本/默认解析与生效期过滤
+        anchored = await BOM.get_or_none(
+            id=bom_id,
+            tenant_id=tenant_id,
+            material_id=material_id,
+            deleted_at__isnull=True,
+        )
+        if anchored is None:
+            raise NotFoundError(
+                f"快照 BOM 不存在或已删除: bom_id={bom_id}, material_id={material_id}"
+            )
+        return anchored
+
     query = BOM.filter(
         tenant_id=tenant_id,
         material_id=material_id,
@@ -188,6 +206,10 @@ async def get_bom_by_material_id(
     if version:
         query = query.filter(version=version)
         bom = await query.first()
+        if not bom and strict_version:
+            raise ValidationError(
+                f"物料 {material_id} 指定 BOM 版本 \"{version}\" 不存在或未审核"
+            )
         # 指定版本查不到时回退到默认版本，避免因版本格式/审核状态差异导致无法展开下层 BOM
         if not bom and use_default is False:
             fallback = BOM.filter(
@@ -232,6 +254,8 @@ async def get_bom_items_by_material_id(
     use_default: bool = False,
     apply_alternative_selection: bool = True,
     as_of_date: Optional[datetime] = None,
+    strict_version: bool = False,
+    bom_id: Optional[int] = None,
 ) -> List[BOM]:
     """
     根据物料ID获取BOM明细列表（从master_data）
@@ -244,6 +268,8 @@ async def get_bom_items_by_material_id(
         use_default: 是否使用默认版本（is_default=True），当 version 未指定时生效
         apply_alternative_selection: 是否应用替代料选择（默认：True），同组互斥选一
         as_of_date: 基准日期（可选），仅返回该日期生效的 BOM 明细
+        strict_version: version 显式指定但未命中时抛 ValidationError
+        bom_id: 快照锚点（可选），优先生效
 
     Returns:
         BOM明细列表
@@ -255,6 +281,8 @@ async def get_bom_items_by_material_id(
         version=version,
         use_default=use_default,
         as_of_date=as_of_date,
+        strict_version=strict_version,
+        bom_id=bom_id,
     )
     if not bom:
         return []
@@ -284,6 +312,7 @@ async def calculate_material_requirements_from_bom(
     bom_version: Optional[str] = None,
     use_default_bom: bool = False,
     material_bom_versions: Optional[Dict[int, str]] = None,
+    bom_id: Optional[int] = None,
 ) -> List[Any]:
     """
     根据BOM计算物料需求（从master_data）
@@ -320,6 +349,7 @@ async def calculate_material_requirements_from_bom(
         bom_version=bom_version,
         use_default_bom=use_default_bom,
         material_bom_versions=material_bom_versions,
+        bom_id=bom_id,
     )
 
     if expanded:
@@ -374,12 +404,23 @@ async def calculate_material_requirements_from_bom(
     if strict_configure:
         raise NotFoundError(f"物料 {material_id} 的BOM不存在或未审核（配置件需匹配属性）")
 
+    # 带版本/快照上下文的回退必须沿用同一解析口径（快照锚点>显式版本>默认版），
+    # 否则展开为空时会静默换到最新版 BOM 明细
+    has_version_ctx = bool(bom_version or material_bom_versions or bom_id)
+    top_version = None
+    if has_version_ctx and not bom_id:
+        mbv = material_bom_versions or {}
+        top_version = mbv.get(material_id) or mbv.get(str(material_id)) or bom_version
     bom_items = await get_bom_items_by_material_id(
         tenant_id=tenant_id,
         material_id=material_id,
         only_approved=only_approved,
         apply_alternative_selection=True,
         as_of_date=as_of_date,
+        bom_id=bom_id,
+        version=top_version if has_version_ctx else None,
+        use_default=has_version_ctx and not top_version and not bom_id,
+        strict_version=has_version_ctx,
     )
     
     if not bom_items:

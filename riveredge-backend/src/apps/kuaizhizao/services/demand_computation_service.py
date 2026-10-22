@@ -2995,6 +2995,7 @@ class DemandComputationService(AppBaseService):
                     use_default_bom=use_default_bom,
                     material_bom_versions=material_bom_versions,
                     as_of_date=_mrp_bom_as_of_datetime(due),
+                    apply_global_version=mid in all_seed_mids,
                 )
                 for child in children:
                     cid = int(child["material_id"])
@@ -3040,6 +3041,7 @@ class DemandComputationService(AppBaseService):
                     use_default_bom=use_default_bom,
                     material_bom_versions=material_bom_versions,
                     as_of_date=_mrp_bom_as_of_datetime(schedule_today),
+                    apply_global_version=parent_id in all_seed_mids,
                 )
             except Exception as e:
                 logger.warning(f"LLC 结构展开失败 material_id={parent_id}: {e}")
@@ -3314,6 +3316,7 @@ class DemandComputationService(AppBaseService):
                                 use_default_bom=use_default_bom,
                                 material_bom_versions=material_bom_versions,
                                 as_of_date=_mrp_bom_as_of_datetime(child_due),
+                                apply_global_version=material_id in all_seed_mids,
                             )
                         except Exception as e:
                             logger.warning(

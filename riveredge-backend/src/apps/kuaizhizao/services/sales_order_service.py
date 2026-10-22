@@ -4753,6 +4753,7 @@ class SalesOrderService:
                 only_approved=True,
                 version=root_version,
                 use_default=root_use_default if not root_version else False,
+                strict_version=True,
             )
             material_row = await Material.get_or_none(
                 tenant_id=tenant_id, id=material_id, deleted_at__isnull=True
