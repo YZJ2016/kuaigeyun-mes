@@ -5,73 +5,78 @@
 .gitignore[XV3S]: F:repo ignore与Cursor/AOCI正式资产白名单 | R:- | A:py+node+env+build | S:.cursor放行memory/**与rules/**;勿整夹忽略.aoci/
 AGENTS.md[SV2S]: F:agent+AOCI contract | R:- | A:aoci managed block | S:cognition loop rules; 103L
 LICENSE[SV1S]: F:Apache 2.0 | R:- | A:Apache-2.0 | S:211L
-README.md[SG6M]: F:产品总览与体验接入入口 | R:- | A:MES platform | S:在线演示建议 Gitee 快捷登录；勿写免注册；仅供预览勿生产
+README.md[SG6M]: F:星技谷制造MES产品总览：能力、插件、终端矩阵与部署接入入口 | R:code:fast-deploy/deploy.sh | A:15秒了解,立即体验与接入,核心能力,插件应用,终端形态,快速开始 | S:演示仅供预览勿生产;无需Redis;TV看板不在本仓;Python锁3.11
 
 ===D:/kuaigeyun-pro/kuaigeyun/docs/apps/haoligo/===
 厂家外协账号配置说明.md[SB4M]: F:haoligo ODA config | R:- | A:manufacturer_code | S:6-step; user binds mfr code; tx-safe rename; 186L
 设备合同与设备应付款使用说明.md[SB4M]: F:equipment contract+AP | R:- | A:contract→AP→pay | S:2 paths; report read-only; 255L
 
 ===D:/kuaigeyun-pro/kuaigeyun/docs/apps/kuaiai/===
-MASCOT-PROMPTS.md[SA3S]: F:KU-AI mascot spec | R:- | A:BASE_BLOCK DNA | S:1 base+6 roles; fixed identity; 159L
-RAG-RETRIEVAL.md[SB3T]: F:KU-Know RAG design | R:- | A:RetrievalBackend | S:native+llamaindex; pgvector; tenant-isolated; 86L
-ROADMAP.md[SA3T]: F:KU-AI roadmap | R:- | A:6 mod 3 waves | S:Assist/Recommend/Act; HITL; RBAC; 47L
+MASCOT-PROMPTS.md[SU2S]: F:星AI 3D小人出图规范：1母版+6职业变体的Prompt公式与一致性QA | R:code:riveredge-frontend/src/apps/kuaiai | A:资产清单,母版DNA,共享Negative,出图公式,六职业变体,一致性QA | S:7图必复用BASE_BLOCK;仅改服装道具;能力矩阵不出图
+RAG-RETRIEVAL.md[SB3T]: F:KU-Know知识库RAG双引擎检索架构、配置项与pgvector部署排障 | R:code:riveredge-backend/src/apps/kuaiai/services/retrieval.py | A:架构不变契约,配置项,LlamaIndex部署,pgvector,错误策略,代码位置 | S:检索必带tenant_id;llamaindex失败抛错不降级;维度768
+ROADMAP.md[SG3T]: F:星AI能力路线图：Assist→Recommend→Act→外部Agent桥四波次 | R:code:riveredge-frontend/src/components/ai-assistant | A:产品模块,Wave1 Assist,Wave2 Recommend,Wave3 Act,Wave4 KU-Bridge,治理契约 | S:写须HITL确认；无权限record拒注入；Bridge默认关
+EXTERNAL-AGENT-WORKBUDDY.md[SG3S]: F:WorkBuddy外部Agent经MCP Sidecar只读访问MES的对接步骤与生产排障 | R:code:fast-deploy/deploy.sh | A:架构,启用步骤,生产方案B,Sidecar环境变量,首版MCP工具,禁止事项 | S:type为http;env未填齐故意不写反代;首版仅只读授权
 
 ===D:/kuaigeyun-pro/kuaigeyun/docs/apps/kuaicaiwu/===
 general-ledger.md[SB4M]: F:kuaicaiwu GL spec | R:- | A:voucher→GL close | S:state machine; balance on posting only; U8 ref; 117L
 
 ===D:/kuaigeyun-pro/kuaigeyun/docs/apps/kuaiiot/===
-COMPLIANCE.md[SN3T]: F:kuaiiot compliance | R:- | A:3 components | S:InfluxDB MIT OSS; aiomqtt BSD3; 42L
-EDGE-AGENT-RUNTIME.md[SN3T]: F:edge agent runtime API | R:- | A:device_token auth | S:config+heartbeat+batch; 92L
-KUAIREPORT-LINK.md[SA2T]: F:iot→report link | R:- | A:5-field feed | S:HTTP data source; RBAC kuaiiot; 34L
-ROADMAP.md[SN3M]: F:kuaiiot roadmap | R:- | A:IoT-Hub+EdgeAgent | S:10 mod 3 waves; MQTT/TB/JetLinks; 134L
+COMPLIANCE.md[SQ2T]: F:星数采第三方组件许可与部署合规（InfluxDB/aiomqtt） | R:code:riveredge-backend/src/apps/kuaiiot | A:InfluxDB 2.x OSS,influxdb-client,aiomqtt,租户配置,不推荐组件 | S:禁内置Cloud版TSDB；TDengine因AGPL排除
+EDGE-AGENT-RUNTIME.md[SN3T]: F:边缘Agent云侧运行时契约：token拉配置、心跳、批量续传 | R:code:riveredge-backend/src/apps/kuaiiot/edge-agent | A:鉴权,配置下发,心跳,批量续传,离线判定,协议映射 | S:批量≤100条需幂等键；心跳3min判离线
+KUAIREPORT-LINK.md[SB2T]: F:星数采→星报表equipment-ops大屏馈送API契约 | R:code:riveredge-backend/src/apps/kuaiiot/services/equipment_ops_feed_service.py | A:端点与RBAC,响应字段→模板映射,HTTP数据源配置,OEE Live说明 | S:缺指标禁填默认值；oee_live须双源并存
+ROADMAP.md[SN3S]: F:星数采IoT数采集成路线图：云接入→边缘→分析→物模型 | R:code:riveredge-backend/src/apps/kuaiiot | A:产品模块,Wave1云侧接入,Wave1.5 MES护栏,Wave2边缘与填充,MES集成契约,验收清单 | S:写回≥5s节流；data_source固定sensor；禁跨租户绑定
 
 ===D:/kuaigeyun-pro/kuaigeyun/docs/apps/kuaizhizao/===
 FIFO-AUDIT-EVIDENCE.md[SQ3T]: F:FIFO audit guide | R:- | A:3-layer proof | S:config+demo+doc; fifo_mode 3 types; 54L
 delivery-project-p1-backlog.md[SB3T]: F:delivery P1 backlog | R:- | A:5 P1 items | S:WO/PO/QM linkage; change baseline; 48L
-fai.md[SQ3T]: F:FAI first-article insp | R:- | A:balloon OCR | S:OpenFAI ref no-copy; org gate; 53L
-quality-system.md[SQ3T]: F:QMS ISO clause tree | R:- | A:4 modules | S:ISO9001 preset; coverage gap logic; 46L
+fai.md[SQ2T]: F:自研FAI首件检验:气泡图/OCR候选、特性确认、状态机与报工放行门禁 | R:code:riveredge-backend/src/apps/kuaizhizao/models/fai_order.py | A:落点与权限,OpenFAI对照,气泡图流程,候选JSON约定,许可说明,状态与放行 | S:禁止移植OpenFAI源码与模板;require_fai门禁未批准合格禁批量报工
+quality-system.md[SQ3T]: F:QMS落星制造质量管理，首批四模块+条款落实口径+证据链接JSON约定 | R:code:riveredge-backend/src/apps/kuaizhizao | A:落点,首批范围,明确不做,ISO条款与落实口径,证据链接约定 | S:不开独立QMS应用;培训校准仅存跨应用引用;纠正措施走8D
+MES需求适配与缺项分析-2026.07.24.md[SG3M]: F:168条MES需求逐条对照的适配/部分适配/缺项差距分析 | R:code:riveredge-backend/src/apps/kuaizhizao | A:总览统计,一期六大新建能力,二期整模块缺失,各模块汇总,逐条对照,口径说明 | S:适配不等于租户已开通权限;现状以缺口列为准;不替代立项范围书
 
 ===D:/kuaigeyun-pro/kuaigeyun/docs/apps/master-data/===
-drawings.md[SB4M]: F:drawing control lifecycle | R:- | A:6-state machine | S:checkout/checkin; release only from Pending; 64L
+drawings.md[SB3T]: F:工程图纸受控契约：状态机、权限码、发放借阅、密级与打印水印四波落地 | R:code:riveredge-backend/src/apps/master_data | A:状态机,权限,仓库树+图档反查,工程变更+图档发放,密级+借阅+打印水印 | S:同图号仅一版Released;无密级授权按公开;发放开关失败不回落
 sop.md[SB3T]: F:SOP carrier lifecycle | R:- | A:electronic+paper | S:4 st; 75L
 
 ===D:/kuaigeyun-pro/kuaigeyun/docs/core/===
-application-layer-contract.md[SC5S]: F:基础/专业/行业/定制四层应用契约 | R:code:riveredge-backend/src/core/config/industry_document_profiles.py | A:- | S:行业仅industry_extensions; 禁基础import行业; 定制勿把客户流程写回基础默认
+application-layer-contract.md[SG5T]: F:基础/专业/行业/定制四层定位、判定三问与扩展点唯一引擎契约 | R:code:riveredge-backend/src/core/config/industry_document_profiles.py | A:应用中心顺序,四层定位,判定三问,扩展点industry_extensions,基础应用自检,仓库归属 | S:基础禁import行业定制;行业名客户名禁入基础种子
 permission-contract.md[SS5M]: F:RBAC permission contract | R:- | A:require_* helpers | S:module param bare; no double-prefix; 69L
 permission-responsibility.md[SS4M]: F:permission duty split | R:- | A:manifest→route→UI | S:composite page material pilot; 64L
 realtime-im.md[SM3T]: F:realtime IM transport | R:- | A:3 backends | S:socketio default; centrifugo separate; 56L
 aoci-cursor-setup.md[SU3T]: F:说明Cursor三仓AOCI接入、选仓与本机检查流程 | R:- | A:- | S:单个MCP进程只能绑定一个仓库；文中进度和路径须现场核对
 
 ===D:/kuaigeyun-pro/kuaigeyun/docs/===
-功能清单.md[SB4M]: F:product feature matrix | R:- | A:8 domains | S:master data through kuaiai; 175L
+功能清单.md[SG3S]: F:星技谷制造全功能地图：主数据到AI十一模块组加多端与分期实施建议 | R:code:riveredge-backend/src/apps | A:主数据,星制造核心MES,星研发PLM,轻财务,行业扩展,平台与系统能力 | S:渐进上线按插件装配;行业包按需选装勿首期摊大
 单公网IP双机Caddy反向代理.md[SO4M]: F:1-IP 2-VM Caddy guide | R:- | A:port fwd+reverse | S:80/443 to edge VM only; 186L
-部署指南.md[OV5L]: F:RiverEdge Win/Linux部署与升级指南 | R:code:fast-deploy/config/deploy.env.example | A:fast-deploy wizard | S:升级前必备份PG+.env+deploy.env+uploads; 推荐空机; 未备份禁装/迁
+部署指南.md[SV5L]: F:fast-deploy双平台部署总册,覆盖向导,端口,蓝绿,备份与故障排查 | R:code:fast-deploy/deploy.sh,code:fast-deploy/config/deploy.env.example | A:环境要求,快速开始,向导流程,蓝绿部署,子命令参考,故障排查 | S:生产改前必先全备份;勿在业务机试装;8200勿裸暴露公网
 即时库存.md[DU3S]: F:Implements 即时库存.md | R:- | A:- | S:103L
 报工.md[DU3T]: F:Implements 报工.md | R:- | A:- | S:35L
 报工思路.md[DU3T]: F:Implements 报工思路.md | R:- | A:- | S:59L
 报工新思路.md[DU3S]: F:Implements 报工新思路.md | R:- | A:- | S:143L
 文件路径.md[DU3T]: F:Implements 文件路径.md | R:- | A:- | S:33L
+上游同步台账.md[SW3M]: F:私有fork上游同步台账：gitee主源与水位29b785f655、cherry/range-diff逐批摘取映射、本地领先修复与跳过清单 | R:code:AGENTS.md | A:远端与水位,已同步映射,本地领先上游的修复,明确跳过剔除,维护约定 | S:勿用upstream镜像;fetch仅--filter=blob:none;新批次置顶
+成熟度与技术再评估.md[SG4M]: F:MES/MOM全领域成熟度再评估,含领域评分,链路核查与Q01-Q20问题清单 | R:code:riveredge-backend/src/apps/kuaicaiwu/services/posting_service.py | A:总评,各领域成熟度盘点,业务主链路评估,技术评估,Q01-Q20具体问题,优先补齐方向 | S:评分非上线验收;spec标记≠运行证据;历史测试不作本轮验证
 
 ===D:/kuaigeyun-pro/kuaigeyun/fast-deploy/===
-README.md[SV3S]: F:fast-deploy README | R:- | A:deploy entry points | S:deploy.sh 8-stage wizard; blue-green optional; 99L
-build.mobile.web.sh[OV1T]: F:Expo Web build | R:- | A:mobile web-dist | S:npm run build:web; 32L
+README.md[SV3T]: F:fast-deploy脚本导览,统一入口,默认端口,蓝绿与H5发行要点 | R:code:fast-deploy/deploy.sh | A:推荐入口,脚本对照,环境要求,默认端口,蓝绿部署,Windows要点 | S:H5不npm构建须HBuilderX发行;install-h5缺省不阻断主仓
+build.mobile.web.sh[OV3T]: F:复制本机HBuilderX已发行H5产物到/mobile部署目录,缺失则写占位页 | R:code:fast-deploy/lib/common.sh | A:copy_mobile_h5_publish_to_web_dir,write_mobile_web_dist_placeholder,MOBILE_H5_PUBLISH_DIR | S:uni-app x无npm构建;缺产物仍exit0仅留占位页
 build.web.sh[OV2S]: F:frontend build+git push | R:- | A:dist-only commit | S:filter-repo strip; force-with-lease; 117L
-deploy.sh[OV3S]: F:unified deploy entry | R:- | A:dispatch+win PS fallback | S:14 subcmds; dev/prod mode; 110L
-launch.dev.sh[OV6L]: F:启停并检查API、Taskiq、Vite及可选Expo Web开发服务 | R:code:riveredge-backend/scripts/run_dev_server.py,code:fast-deploy/launch.dev.ps1 | A:start_backend,start_worker,start_frontend,start_mobile,stop_all | S:端口8200/8100/8098；全启动先起Vite避免轮询重载；Windows清理进程树，Taskiq默认单worker
+deploy.sh[OV6S]: F:统一部署入口:dev/prod前缀+白名单分发到common.sh子命令 | R:code:fast-deploy/lib/common.sh | A:wizard,install,configure,update,pro-apps,install-h5 | S:未知命令即退出;USE_MIRROR默认1;Win install先试PS再回退bash
+launch.dev.sh[OV6L]: F:一键启停API/Taskiq/Vite开发栈,H5由HBuilderX发行不起Expo | R:code:riveredge-backend/scripts/run_dev_server.py | A:start_backend,start_worker,start_frontend,stop_all,kill_port,status | S:Taskiq默认1worker防占PG;Win按树清理;with-h5不启动Expo
 
 ===D:/kuaigeyun-pro/kuaigeyun/fast-deploy/config/===
 caddy-extra-proxies.list.example[CC1T]: F:Caddy extra proxy list | R:- | A:site→upstream lines | S:http=no TLS; https=auto; 11L
-deploy.env.example[CC3S]: F:fast-deploy层环境变量模板 | R:code:fast-deploy/lib/common.sh | A:ports+blue-green+opts+UV_INDEX_URL | S:示例默认钉清华UV_INDEX_URL;迁移用uv run --no-sync
+deploy.env.example[CC4S]: F:deploy.env全量配置模板,端口,蓝绿,域名HTTPS,扩展仓与OPT选装 | R:code:fast-deploy/deploy.sh | A:BACKEND_PORT,BLUE_GREEN_DEPLOY,CADDY_DOMAIN,TASKIQ_WORKERS,OPT_选装项,UV_INDEX_URL | S:各仓分支一律develop禁main;OPT默认0不装;dist不含.gz/.br
 install-scripts.json[CC1S]: F:OS install commands | R:- | A:6 tools × 5 OS | S:winget/apt/dnf per OS; 76L
+workbuddy-mcp.env.example[CC3T]: F:WorkBuddy MCP Sidecar密钥env模板，复制为workbuddy-mcp.env使用 | R:code:docs/apps/kuaiai/EXTERNAL-AGENT-WORKBUDDY.md | A:RIVEREDGE_BASE_URL,OPEN_API_ACCT_ID,OPEN_API_APP_ID,OPEN_API_APP_SECRET,OPEN_API_TENANT_ID,MCP_PORT | S:秘钥勿提交Git;与mcp.json无关;MCP_HOST等由systemd注入
 
 ===D:/kuaigeyun-pro/kuaigeyun/fast-deploy/lib/===
 blue_green.ps1[OV4M]: F:PS blue-green deploy | R:- | A:BG state+swap | S:low-spec disables BG; 437L
-blue_green.sh[OV5L]: F:sh blue-green deploy | R:- | A:BG state+swap | S:low-spec disables BG; 608L
-build_web_git.sh[OV3S]: F:dist-only git push | R:- | A:filter-repo+lease | S:assert committed; save/restore remotes; 137L
-common.ps1[OV6L]: F:fast-deploy共享PowerShell库装启迁与依赖同步 | R:code:fast-deploy/lib/common.sh,code:fast-deploy/config/deploy.env.example | A:Sync-BackendDeps,Invoke-Migrate,Apply-CN-Mirrors | S:Apply-CN-Mirrors默认清华;Sync回退阿里云/官方且成功源写回UV_INDEX_URL;Migrate用--no-sync并确保UV_INDEX_URL
-common.sh[OV9L]: F:fast-deploy共享shell库装启迁Caddy蓝绿与uv依赖同步 | R:code:fast-deploy/config/deploy.env.example,code:fast-deploy/lib/wizard.sh,code:fast-deploy/lib/common.ps1 | A:uv_sync_backend_with_fallback,sync_backend_deps,cmd_migrate,apply_cn_mirrors | S:apply_cn_mirrors默认清华;uv_sync勿用子shell写回UV_INDEX_URL;cmd_migrate--no-sync并显式带index
+blue_green.sh[OV5L]: F:蓝绿双槽位后端与前端dist-live切换,update尽量不停机可回滚 | R:code:fast-deploy/lib/common.sh | A:bg_enabled,bg_run_update_prod,bg_run_update_dev,bg_start_backend_slot,bg_flip_frontend_to_slot,bg_rollback_update | S:低配强制单槽清state;非交互默认传统;槽位8201/8202;worker先drain
+build_web_git.sh[OV5M]: F:build.web.sh专用:剥离Git历史dist提交仅tip保留 | R:code:fast-deploy/build.web.sh | A:assert_source_tree_committed,drop_pure_dist_commits,strip_dist_from_history,restore_remotes,push_with_lease | S:未commit拒跑;遇merge转filter-repo;重写后恢复remote
+common.ps1[OV9L]: F:Windows 侧部署共享库：依赖检测安装、env 读写、Caddy 生成、服务启停、迁移与开机任务 | R:code:fast-deploy/lib/common.sh | A:Load-DeployEnv,Get-EnhancedPath,Invoke-Configure,Invoke-Migrate,New-Caddyfile,Install-RiverEdgeBootTask | S:PS 侧不复制 H5 产物；须 PYTHONUTF8=1 防 GBK 读 pyproject 失败
+common.sh[OV9L]: F:全平台部署共享库：依赖检测安装、deploy.env 管理、Caddy/systemd、迁移、选装依赖与私仓组装 | R:code:fast-deploy/deploy.sh | A:load_deploy_env,sync_git_from_origin,cmd_migrate,gen_caddyfile,cmd_install_service,sync_sibling_git_repo | S:systemd 包装脚本缺 +x/CRLF 即 203/EXEC；deploy.env 须归服务用户
 low_spec_mode.sh[OV4M]: F:低配模式内存调优与快照恢复 | R:code:fast-deploy/lib/common.sh | A:low_spec_apply_profile,low_spec_apply_normal_profile | S:开启低配写PLAYWRIGHT_POSTINSTALL_ENABLE=1不关闭Chromium补装; 恢复一般模式不改该开关; 缩池关蓝绿
-wizard.sh[OV8L]: F:交互部署向导与选装面板 | R:code:fast-deploy/lib/common.sh | A:wizard_ask_optional_deps_choice,cmd_install_optional_deps | S:PDF的Chromium由[I]后台补装;进度见playwright-install.log;真彩色CJK对齐
+wizard.sh[OV8L]: F:对话式部署向导：面板 UI、意图分发、依赖安装计划、扩展/选装菜单与 8 阶段安装流程 | R:code:fast-deploy/lib/common.sh | A:cmd_wizard,wizard_show_home_panel,cmd_wizard_fresh,wizard_install_deps,wizard_ask_optional_deps_choice,wizard_update_app | S:面板宽取 /dev/tty 防 tee 误判；git reset 后须重 source common.sh
 
 ===D:/kuaigeyun-pro/kuaigeyun/fast-deploy/linux/===
 dev.sh[OV1T]: F:dev mode entry | R:- | A:DEPLOY_MODE=dev | S:fd_dispatch; 11L
@@ -81,20 +86,23 @@ systemd-exec-backend.sh[OV1T]: F:systemd uvicorn exec | R:- | A:backend+PG env |
 systemd-exec-caddy.sh[OV1T]: F:systemd Caddy exec | R:- | A:Caddyfile gen+run | S:bind caps; validate; 22L
 systemd-exec-taskiq-scheduler.sh[OV1T]: F:taskiq scheduler exec | R:- | A:scheduler taskiq | S:uv run taskiq scheduler; 20L
 systemd-exec-taskiq-worker.sh[OV1T]: F:taskiq worker exec | R:- | A:worker tasks | S:TASKIQ_WORKERS; 4 taskiq mods; 21L
+.gitattributes[FC6T]: F:强制 linux 下 sh 脚本按 LF 入库检出，防 CRLF 致 systemd 203/EXEC | R:code:fast-deploy/lib/common.sh | A:systemd-exec-*.sh text eol=lf,*.sh text eol=lf | S:勿删勿改：CRLF checkout 会让 ExecStart 包装脚本报 203/EXEC
+systemd-exec-workbuddy-mcp.sh[OV6T]: F:WorkBuddy MCP Sidecar 的 systemd ExecStart 包装：加载 env 后 exec uv run server.py | R:code:docs/apps/kuaiai/EXTERNAL-AGENT-WORKBUDDY.md | A:DEPLOY_MODE=prod,resolve_workbuddy_mcp_dir,workbuddy-mcp.env 校验,MCP_HOST/PORT/TRANSPORT,exec uv run server.py | S:仅绑 127.0.0.1 由 Caddy /mcp 反代；缺 env 文件直接 exit 1
 
 ===D:/kuaigeyun-pro/kuaigeyun/fast-deploy/templates/===
 Caddyfile.dev-api.template[CC1T]: F:dev Caddy API proxy | R:- | A:BG dev proxy | S:stable port for BG; 36L
-Caddyfile.template[CC4M]: F:prod Caddy config | R:- | A:reverse+static+redirects | S:long-running 300s; /m→/mobile; 214L
+Caddyfile.template[CC4M]: F:Caddy反代模板:API/WS/静态包/H5重定向/SPA回落 | R:code:fast-deploy/deploy.sh | A:admin:2018,@api_long_running超时,/socket.io*+centrifugo,/m/*→/mobile重定向,@login_mpa,SPA try_files | S:长耗时API块须先于/api/*;admin用2018避系统Caddy;*.txt校验禁try_files回落SPA
 riveredge-backend.service.template[CC1T]: F:backend systemd unit | R:- | A:uvicorn service | S:Restart=always; malloc env; 29L
 riveredge-caddy.service.template[CC1T]: F:Caddy systemd unit | R:- | A:Caddy service | S:Conflicts=caddy; Restart=always; 26L
 riveredge-taskiq-scheduler.service.template[FC1T]: F:taskiq scheduler systemd unit | R:- | A:Restart=always | S:PartOf riveredge.service; 27L
 riveredge-taskiq-worker.service.template[FC1T]: F:taskiq worker systemd unit | R:- | A:Restart=always | S:PartOf riveredge.service; 27L
-riveredge.service.template[FC1T]: F:production systemd umbrella | R:- | A:oneshot+RemainAfterExit | S:ExecStop stops 4 child units; 14L
+riveredge.service.template[CV3T]: F:systemd伞单元:编排backend/taskiq/caddy子服务 | R:code:fast-deploy/deploy.sh | A:Wants子单元,Type=oneshot,RemainAfterExit,ExecStop停子服务,Conflicts=caddy.service,WORKBUDDY_MCP_WANTS_SUFFIX | S:oneshot仅编排不驻留进程;Conflicts防与系统caddy并存
+riveredge-workbuddy-mcp.service.template[CV2T]: F:WorkBuddy MCP sidecar的systemd单元模板(lab) | R:code:fast-deploy/templates/riveredge.service.template | A:PartOf=riveredge.service,EnvironmentFile,MCP_TRANSPORT=streamable-http,ExecStart,WantedBy=riveredge.service | S:PartOf随主服务启停;仅绑127.0.0.1;端口经占位符渲染
 
 ===D:/kuaigeyun-pro/kuaigeyun/fast-deploy/tools/workspace/===
-README.md[SV2S]: F:workspace compose guide | R:- | A:link/copy modes | S:private repo overlay; CUSTOM_PROJECTS; 70L
-compose.py[OB3M]: F:workspace app assembler | R:- | A:link/copy private repos | S:junction on Win; PyYAML; 211L
-generate_workspace.py[OB3M]: F:workspace.yaml generator | R:- | A:deploy.env+registry | S:PRO_APPS; CUSTOM_PROJECTS; 239L
+README.md[SV3T]: F:工作区组装说明:私仓APP经workspace.yaml链入主仓src/apps | R:code:fast-deploy/deploy.sh | A:行业包来源表,一次性准备,命令表,私有仓目录约定,CUSTOM_ENABLED/CUSTOM_PROJECTS,mode link/copy | S:私仓须同级develop分支;CUSTOM_ENABLED=1须配PROJECTS
+compose.py[OV3M]: F:按workspace.yaml将私仓APP链接/复制进主仓src/apps | R:code:fast-deploy/deploy.sh | A:_iter_app_bindings,_link_or_copy,_is_link_or_junction,compose,status,remove_composed | S:mode仅link/copy;Win走mklink /J;源缺失即失败退出
+generate_workspace.py[OV3M]: F:按deploy.env与定制仓registry生成workspace.yaml插件组装清单 | R:code:fast-deploy/lib/common.sh | A:PRO_APPS行业包清单,resolve_pro_apps仓内实存交集,_resolve_custom_bindings注册表校验,build_workspace,custom_projects_csv_from_yaml回填,main参数环境变量 | S:仅scope=pro可缺CUSTOM_PROJECTS;专业仓清单必含ind-*
 workspace.example.yaml[FC1T]: F:workspace config example | R:- | A:link mode default | S:copy for CI; 21L
 
 ===D:/kuaigeyun-pro/kuaigeyun/fast-deploy/windows/===
@@ -4909,7 +4917,6 @@ DeliveryNodeTaskParticipantPanel.tsx[EU5S]: F:Implements DeliveryNodeTaskPartici
 DeliveryProjectGanttChart.tsx[EU5M]: F:Implements DeliveryProjectGanttChart.tsx | R:- | A:- | S:336L
 DeliveryProjectNodeStepper.less[DU5T]: F:.delivery-project-node-stepper { padding: 16px 20px 12px; overflow: visible; ... | R:- | A:- | S:37L
 DeliveryProjectNodeStepper.tsx[EU5S]: F:Implements DeliveryProjectNodeStepper.tsx | R:- | A:- | S:140L
-DeliveryTaskScheduleBars.tsx[EU5T]: F:Implements DeliveryTaskScheduleBars.tsx | R:- | A:- | S:92L
 DurationRulesByProductModelEditor.tsx[EU5M]: F:Implements DurationRulesByProductModelEditor.tsx | R:- | A:- | S:240L
 TemplateTaskUserPickers.tsx[EU5M]: F:Implements TemplateTaskUserPickers.tsx | R:- | A:- | S:267L
 
@@ -5617,7 +5624,6 @@ EightDWorkbench.tsx[EU5L]: F:Implements EightDWorkbench.tsx | R:- | A:- | S:603L
 workbench.less[DU5T]: F:@import '../../../../../../components/layout-templates/projectWorkbenchShell.... | R:- | A:- | S:54L
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/apps/kuaizhizao/pages/quality-management/fai-orders/===
-FaiBalloonEditor.tsx[EU5L]: F:Implements FaiBalloonEditor.tsx | R:- | A:- | S:655L
 FaiDrawingPickerModal.tsx[EU5M]: F:ignore preview miss | R:- | A:- | S:271L; ignore preview miss
 balloon.tsx[EU5S]: F:Implements balloon.tsx | R:- | A:- | S:114L
 index.tsx[EU5L]: F:无行项目明细：标题吃掉视口剩余（RemainderFlex） | R:- | A:- | S:962L; 无行项目明细：标题吃掉视口剩余（RemainderFlex）
@@ -8183,7 +8189,31 @@ ai-memory.mdc[XC5S]: F:约定Agent开任务先读Vault与本仓memory路由 | R:
 api-write-protection.mdc[XS6S]: F:固化/api写防护渠道限流幂等与开放账套约定 | R:code:riveredge-backend/docs/api-write-protection-ops.md | A:- | S:新公开写接口须进interactive_client_guard豁免;关键路径须匹配_CRITICAL_PATH_RE;integration写须open Token
 dev-memory-library.mdc[XC5S]: F:约定.cursor/memory开发前检索与交付后写笔记 | R:code:.cursor/rules/ai-memory.mdc | A:- | S:先读README关键词路由再开1-3篇;交付须features笔记并更新README索引;与rules行为分工不重复
 feature-delivery-checklist.mdc[XC6M]: F:强制新功能交付完成迁移菜单同步与更新日志 | R:code:.cursor/rules/dev-memory-library.mdc | A:- | S:前后端manifest同改并当场sync;Windows aerich须UTF-8;用户可见改动写platformUpdateLog;勿留给用户点同步
-reuse-existing-patterns.mdc[XC5S]: F:禁止同类功能平行第二套实现须复用标准入口 | R:code:.cursor/rules/dev-memory-library.mdc | A:- | S:先搜memory与代码定唯一标准;只挂既有扩展点;标准有缺口先修标准再复用
+reuse-existing-patterns.mdc[XC5T]: F:同类功能禁平行第二套实现须先搜定唯一标准复用 | R:code:.cursor/memory/principles/reuse-existing-patterns.md | A:SyncPushHub,DocumentPushBatchPanel,UniDropdown.quickCreate,QuickCreateModal,ThemedSegmented | S:先搜memory定唯一标准;新类型只挂既有扩展点;缺口先修标准
+antd6-api.mdc[XG6T]: F:前端只写antd v6 API并固化v5→v6禁用替换对照表 | R:code:riveredge-frontend/scripts/scan_antd6_legacy.py | A:- | S:新写或改到的JSX不得引入v5写法;禁止为兼容v5保留双路径或注释旧prop
+detail-drawer-contract.mdc[XU6T]: F:业务单据详情抽屉唯一路径，统一DetailDrawerTemplate壳、插槽、关联打开、宽度与字段序 | R:code:.cursor/skills/detail-drawer/SKILL.md,code:.cursor/skills/master-data-detail-drawer/SKILL.md | A:DetailDrawerTemplate,openLinkedDocumentDetail,traceDocument,DRAWER_CONFIG.HALF_WIDTH,DetailDrawerSection | S:禁止loading与有数据各return一棵Template致双树滑入;取数失败须Result+重试留在壳内不得onClose;基础资料勿套HALF_WIDTH与全链路
+form-modal-detail-table-contract.mdc[XU6T]: F:FormModal栅格与明细表竖序契约：表头业务字段→明细→备注通栏→启用 | R:code:.cursor/skills/form-modal/SKILL.md | A:FormModalTemplate,FormModalGridBlock,UniTableDetail | S:有明细必须grid={false}且明细放表头Row之外;裸Alert/说明/Divider须包FormModalGridBlock;备注倒数第二启用最后且明细算整单字段;禁用列宽margin或overflow:visible掩盖出格裁切
+generic-product-no-customer-brand.mdc[XB6T]: F:交付一律按通用产品实现客户公司名禁进产品真源无法通用走行业插件 | R:- | A:industry_plugin_*,INDUSTRY_*,CODE_RULE_PAGES | S:代码注释manifest编码规则探针与更新日志禁出现客户中文名及拼音商标;禁为单一客户复制审批/消息/文件/打印/权限引擎;.custom/<客户>/商务文档可保留但禁回流riveredge-*产品代码
+git-push-sop.mdc[XV6T]: F:develop推送SOP先核历史条数异常须cherry-pick整理前端改动必走build.web.sh构建后推送 | R:code:fast-deploy/build.web.sh | A:develop,./fast-deploy/build.web.sh,BUILD_WEB_SKIP_HISTORY_REWRITE=1 | S:禁推main/master与手写--force;分叉须备份后cherry-pick自己提交;除dist外须全commit;dist缺index.html/login.html禁推
+i18n-zh-cn-only.mdc[XL5T]: F:i18n默认只改zh-CN.ts禁同次顺带同步其余五语除非用户明确要求 | R:code:riveredge-frontend/src/locales/zh-CN.ts,code:.cursor/rules/no-middle-dot-separator.mdc | A:zh-CN,t() | S:用户未点名补齐六语时不展开en-US/zh-Hant/ja-JP/vi-VN/lo-LA;组件禁硬编码面向用户中文须走t()+zh-CN;新key命名沿用app.*/pages.*前缀;禁仅为i18n对称改后端detail/message多语言
+kuaizhizao-report-contract.mdc[XU6T]: F:快制造报表统一走KuaizhizaoReport与UniReport契约筛选进功能区禁彩标复制图标与头表冒充明细 | R:code:.cursor/skills/kuaizhizao-report/SKILL.md | A:KuaizhizaoReport,UniReport,uniReportScrollPolicy,stripReportCopyable,columnPersistenceId | S:搜索须toolbarLeft禁另占行与headerTitle;状态用汉字或valueEnum.text禁Tag/StatusTag;复制须stripReportCopyable;限高用uniReportScrollPolicy禁像素常数;改列须bump columnPersistenceId
+master-data-detail-drawer-contract.mdc[XU6T]: F:基础资料详情抽屉契约：STANDARD_WIDTH+双列+主数据rank+MarkerTag，勿套业务单据壳 | R:code:.cursor/rules/detail-drawer-contract.mdc,code:riveredge-frontend/src/components/layout-templates/DetailDrawerTemplate.tsx | A:DetailDrawerTemplate,DRAWER_CONFIG.STANDARD_WIDTH,MASTER_DATA_DETAIL_BASIC_FIELD_RANK,MarkerTag,renderMasterActiveTag,detailDrawerDescriptionItems | S:勿套HALF_WIDTH与业务rank；rank须显式传；禁用traceDocument/流程StatusTag；编辑extra只走FormModal
+mobile-bottom-action-bar.mdc[XU5T]: F:手机端底栏按钮契约，ActionBarButton直挂BottomActionBar唯一路径，禁antd Button | R:code:kuaigeyun-client/riveredge-app-mobile/shared/ui/action-button.uvue | A:ActionBarButton,BottomActionBar,CreateBottomBar,DocReadDetail,scan_bottom_action_bar.py,scan:ui | S:禁antd Button；直挂BottomActionBar；high非0拒收
+mobile-cjk-text-clip.mdc[XU5T]: F:手机端可见中文末字一律禁止裁切，统一babel+CjkText执行splitTextFlexLayout | R:code:.cursor/rules/mobile-bottom-action-bar.mdc | A:CjkText,splitTextFlexLayout,includeFontPadding,scan_cjk_text_clip.py | S:扫描OK≠完成；任一屏末字被切即未做完
+model-audit-write.mdc[XD6T]: F:BaseModel业务表创建更新必须写操作人审计字段，统一走load_audit_fields_* | R:code:riveredge-backend/src/core/utils/model_audit.py | A:load_audit_fields_for_create,load_audit_fields_for_update,created_by,created_by_name,core_users | S:有current_user_id也必须传审计字段；导入/预设/同步同样；禁Schema层join或-兜底冒充created_by_name
+multi-tab-list-template.mdc[XU5T]: F:MultiTabListPageTemplate的tabs[].label只许纯文案禁图标，仅两页例外 | R:code:riveredge-frontend/src/components/layout-templates/MultiTabListPageTemplate.tsx | A:MultiTabListPageTemplate,tabs[].label,Space,Outlined,pages/system/site-settings,pages/system/config-center | S:例外仅站点设置/配置中心；业务多Tab页禁挂图标；禁脚本批量改
+no-batch-codemod.mdc[XQ6T]: F:严禁脚本/批量codemod改多文件，只允许单文件手工改与只读扫描 | R:code:riveredge-frontend/scripts/convert_confirm_to_popconfirm.py | A:convert_confirm_to_popconfirm.py,scan_*.py --fail-on high,Task | S:禁脚本/sed/Task并行改>1文件相同补丁；试点1页编译+浏览器验证后逐页手工改；批量改坏禁用批量补
+no-fallback-patches.mdc[XQ6T]: F:五禁硬拦截：补丁/兼容/映射/兜底/猜测，只定位根因改真源 | R:code:riveredge-backend/scripts/scan_timezone_contract.py,code:riveredge-backend/scripts/scan_permission_bypass.py | A:scan_timezone_contract.py --fail-on high,scan_permission_bypass.py --fail-on high | S:禁读侧补字段/新旧双路径/alias map/空catch兜底/未核实真源试数值；失败须throw暴露不得静默降级
+no-left-accent-bars.mdc[XU5T]: F:全站UI禁止左侧装饰色条，改用四周均匀描边+浅底表达层次 | R:code:riveredge-frontend | A:border-left,::before,::after,box-shadow inset | S:选中态同禁左色条；Ant自带边框勿再包一层左条
+no-middle-dot-separator.mdc[XL5T]: F:面向用户文案禁用「·」「・」「•」作分隔，改空格/顿号/斜杠/连写 | R:code:riveredge-frontend/src/components/business-notification-rules/stripMiddleDotSeparator.ts | A:stripMiddleDotSeparator,U+00B7,U+30FB,U+2022,scene_name | S:仅N·m等单位例外；加载预设须清洗库内历史间隔号
+no-person-name-box.mdc[XU5T]: F:人名/发言人等指人展示禁胶囊Tag描边pill圈姓名，用纯文字+小图标 | R:code:riveredge-frontend/src/components/ai-assistant/index.less,code:.cursor/rules/no-left-accent-bars.mdc | A:Tag,Badge,UserOutlined,UserAvatar,ai-qa-history-card-tag--speaker,ai-qa-history-card-speaker | S:指人姓名禁border/背景pill圈住；时间状态等非指人字段仍可轻框
+no-speculative-shortcuts.mdc[XQ6T]: F:禁止延时碰运气并发令牌掩盖等投机写法须定位根因唯一路径修复 | R:code:.cursor/rules/no-fallback-patches.mdc | A:runAfterUniverSheetsRenderServiceInit,bootstrap-sheet.ts | S:禁延时/轮询等竞态;禁generation令牌代cleanup;同一运行时仅单一init入口;失败须throw暴露
+permission-contract.mdc[XI6T]: F:全站RBAC契约manifest唯一真源禁旁路推断与action混用 | R:code:riveredge-backend/scripts/scan_permission_bypass.py,code:docs/core/permission-contract.md | A:scan_permission_bypass.py,require_permission_codes,useResourcePermissions,STANDARD_ACTIONS,BASELINE_PERMISSION_CODES | S:审核须review码禁update冒充;外协仅role_type=external;附属只读OR仅allowlist登记;禁双前缀module参数
+platform-update-log.mdc[XU5T]: F:用户可见改动须即项追加工作台更新日志通用与定制分置 | R:code:riveredge-frontend/src/pages/system/dashboard/platformUpdateLog.ts | A:PLATFORM_UPDATE_LOG_GENERAL,PLATFORM_UPDATE_LOG_DEDICATED,dedicatedAppCode | S:定制进DEDICATED并标dedicatedAppCode;每项即记禁攒写
+timezone-contract.mdc[XG6T]: F:全站时区唯一契约业务时刻UTC存站点墙钟出禁旁路补丁 | R:code:riveredge-backend/src/core/utils/timezone_utils.py,code:riveredge-backend/scripts/scan_timezone_contract.py | A:resolve_business_datetime,coerce_business_datetime_to_utc,SiteTimezoneJSONResponse,formatDateTimeBySiteSetting,today_site_str,scan_timezone_contract.py | S:禁datetime.now/utcnow赋业务字段;API输出站点墙钟无后缀;时区缺省仅许配置定义处;禁失败后假设UTC/上海
+unitable-list-contract.mdc[XQ6T]: F:UniTable列表列宽列序徽章新建文案唯一真源契约 | R:code:riveredge-frontend/src/components/uni-table,code:riveredge-frontend/src/apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment.ts | A:resolveLayoutPlan,GLOBAL_DOC_LIST_FIELD_RANK,alignProColumns,uniTableLayoutColumns,createButtonText,columnPersistenceId | S:改宽不改key改序只动rank;禁余量灌首列/单页补丁;操作列宽须Playwright实测176-244
+unitable-list-stabilize.mdc[XQ5T]: F:UniTable列表跨页改造流程锁:禁批量并行菜单序认manifest | R:code:.cursor/rules/no-batch-codemod.mdc,code:.cursor/rules/no-fallback-patches.mdc | A:manifest.json navigation,convert_*.py,uniTableKeepWidth | S:禁codemod/并行改多页;下一页只认manifest navigation
+unitable-row-cache.mdc[XQ5T]: F:UniTable行缓存唯一真源:request禁写行缓存防prefetch覆盖 | R:code:riveredge-frontend/scripts/scan_unitable_row_cache.py,code:riveredge-frontend/src/components/uni-table/index.tsx | A:onTableDataChange,tableRowsRef,meta.purpose='prefetch',scan_unitable_row_cache.py,prefetchNextPage | S:request禁写行缓存防prefetch覆盖;只写onTableDataChange
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaioa/utils/===
 form_request_confirmation.py[KB3T]: F:确认单kind/附件/销售回复校验 | R:- | A:confirmation_kind_from_form_data | S:kind=complete_machine|material; 查附件字段
@@ -8281,6 +8311,10 @@ motion.csv[XE3T]: F:提供17种按强度分层的GSAP悬停、滚动、转场与
 phosphor-icons-upstream.json[XE3L]: F:保存Phosphor上游图标组件、名称、类别、权重及客户端和SSR导入路径快照 | R:code:.agents/skills/ui-ux-pro-max/data/icons.csv | A:source;iconCount;weights;reactImports;icons | S:SSR须用专用/ssr入口，不能沿用客户端导入
 products.csv[XE3S]: F:按192类产品推荐视觉风格、落地页结构、看板模式与配色方向 | R:code:.agents/skills/ui-ux-pro-max/data/colors.csv | A:Product Type,Primary Style Recommendation,Landing Page Pattern,Dashboard Style,Key Considerations | S:推荐只作产品类型选型依据；实际页面需按受众与可访问性重新验证
 react-performance.csv[XE3T]: F:收录React与Next.js异步瀑布、包体积、服务端、渲染和重渲染优化建议 | R:code:.agents/skills/ui-ux-pro-max/SKILL.md | A:Category,Guideline/Issue,Do,Don't,Severity | S:含Next.js专属服务端优化，引用前必须确认当前框架适用
+styles.csv[XE3T]: F:88 条视觉风格与页面类型目录，含配色、动效、适用/禁用场景、性能与无障碍风险、AI 提示词、CSS 关键词、实施清单与设计变量 | R:code:.agents/skills/ui-ux-pro-max/SKILL.md,code:.agents/skills/ui-ux-pro-max/data/landing.csv | A:No,Style Category,Type,Style ID,Status,Replacement Domain | S:deprecated行须经Replacement Domain+ID重定向勿直用
+typography.csv[XE3T]: F:74 组字体配对，含标题/正文字体、气质与场景关键词、Google Fonts URL、CSS @import 与 Tailwind 配置 | R:code:.agents/skills/ui-ux-pro-max/SKILL.md,code:.agents/skills/ui-ux-pro-max/data/data-provenance.json | A:No,Font Pairing Name,Heading Font,Body Font,Google Fonts URL,Notes | S:Display/Script字体仅限标题或点缀不得作正文
+ui-reasoning.csv[XE4S]: F:192 类产品的 UI 决策表，给出推荐页面模式、风格优先级、色彩与字体基调、关键效果、JSON 决策规则、反模式与置信度 | R:code:.agents/skills/ui-ux-pro-max/data/styles.csv,code:.agents/skills/ui-ux-pro-max/data/landing.csv | A:No,UI_Category,Recommended_Pattern,Style_Priority,Decision_Rules,Confidence | S:Decision_Rules内style:/pattern:标识须解析到styles.csv与landing.csv的ID
+ux-guidelines.csv[XE3S]: F:119 条跨端 UX 规范，覆盖导航、动画、布局、触控、交互、无障碍、性能、表单、响应式、排版、反馈、AI 与空间交互，带 Do/Don't 与代码示例 | R:code:.agents/skills/ui-ux-pro-max/SKILL.md,code:.agents/skills/ui-ux-pro-max/data/data-provenance.json | A:No,Category,Issue,Platform,Description,Severity | S:须按Platform(Web/Mobile等)过滤勿跨端套用
 
 ===D:/kuaigeyun-pro/kuaigeyun/.agents/skills/ui-ux-pro-max/data/stacks/===
 angular.csv[XE3T]: F:提供Angular组件、路由、signals、表单及性能实现建议和反例 | R:code:.agents/skills/ui-ux-pro-max/SKILL.md | A:Guideline,Do,Don't,Severity,Docs URL,Applies To | S:条目适用Angular 22.x；不能直接套用到当前React端
@@ -8302,3 +8336,599 @@ swiftui.csv[XE3T]: F:提供SwiftUI视图结构、状态属性、导航与可观�
 threejs.csv[XE3T]: F:说明Three.js渲染器、相机、几何材质、光照和GPU资源管理 | R:code:.agents/skills/ui-ux-pro-max/SKILL.md | A:Guideline,Do,Don't,Severity,Docs URL,Applies To | S:针对0.185.1；核/附加模块须同版，移除场景时显式dispose GPU资源
 uno.csv[XE3T]: F:汇总Uno WinUI XAML、跨平台资源、导航和渲染差异指南 | R:code:.agents/skills/ui-ux-pro-max/SKILL.md | A:Guideline,Do,Don't,Severity,Docs URL,Applies To | S:Uno各平台WinUI API不齐；WinAppSDK桌面禁无保护的BackRequested
 uwp.csv[XE3T]: F:保留UWP旧版XAML绑定、导航、主题与控件实现指导 | R:code:.agents/skills/ui-ux-pro-max/SKILL.md | A:Guideline,Do,Don't,Severity,Docs URL,Applies To | S:本表标记legacy/deprecated，不应作为新Windows UI工程的默认技术选型
+vue.csv[XE3T]: F:Vue 3.5 的 49 条实现规范，覆盖组合式 API、响应式、侦听、组件、Pinia、路由、性能、TS 与 SSR 的 Do/Don't 代码对照 | R:code:.agents/skills/ui-ux-pro-max/SKILL.md | A:No,Category,Guideline,Severity,Docs URL,Applies To | S:仅适用Applies To=vue 3.5.x且Status=active行
+winui.csv[XE3T]: F:WinUI 3/Windows App SDK 的 59 条 XAML、控件、绑定、导航、线程、打包、生命周期与无障碍规范及对错代码 | R:code:.agents/skills/ui-ux-pro-max/SKILL.md | A:No,Category,Guideline,Severity,Docs URL,Applies To | S:x:Bind默认OneTime；须用Microsoft.UI.Xaml命名空间
+wpf.csv[XE3T]: F:WPF 的 56 条 XAML、数据绑定、布局、样式模板、命令、性能、线程与 MVVM 规范及对错代码 | R:code:.agents/skills/ui-ux-pro-max/SKILL.md | A:No,Category,Guideline,Severity,Docs URL,Applies To | S:自定义控件绑定目标须为DependencyProperty
+
+===D:/kuaigeyun-pro/kuaigeyun/.audit-mobile/===
+report.md[SA4T]: F:移动端原型与正式工程UX审查，列P0-P2改进项、原型不可直搬的口径差异与验证边界 | R:code:AGENTS.md,code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/load.uts | A:GET /mobile/home,POST /reporting/{id}/approve,work-orders/resolve-by-scan,fetch_work_order_mobile_kpi | S:原型与后端口径未确认不可互替;前端禁连点不替代后端幂等
+
+===D:/kuaigeyun-pro/kuaigeyun/.windsurf/skills/banner-design/===
+SKILL.md[XE3S]: F:多平台横幅设计技能:AI生图+HTML合成+导出PNG流程 | R:code:.windsurf/skills/banner-design/references/banner-sizes-and-styles.md,code:.windsurf/skills/ui-ux-pro-max/SKILL.md | A:banner-design,inject-brand-context.cjs,gemini_batch_process.py,screenshot.js,ui-ux-pro-max,AskUserQuestion | S:.claude/skills路径本仓缺失需改造;Windows用python非python3
+
+===D:/kuaigeyun-pro/kuaigeyun/.windsurf/skills/banner-design/references/===
+banner-sizes-and-styles.md[XE3S]: F:汇总社媒/广告/网站/印刷的Banner尺寸表、22种美术指导风格与视觉层级/CTA/印刷规范 | R:code:.windsurf/skills/banner-design/SKILL.md | A:Social Media Sizes,22 Art Direction Styles,3-Zone Rule,Safe Zones,CTA Rules,Print Specs | S:每Banner仅一CTA;Meta广告文字<20%;印刷300DPI+CMYK+3mm出血
+
+===D:/kuaigeyun-pro/kuaigeyun/.windsurf/skills/brand/===
+SKILL.md[XE4T]: F:brand技能入口：品牌语调、视觉识别、消息框架与资产管理，含同步流程、脚本清单与参考路由 | R:code:.windsurf/skills/brand/references/update.md,code:.windsurf/skills/brand/templates/brand-guidelines-starter.md | A:When to Use,Quick Start,Brand Sync Workflow,Subcommands,References,Routing | S:所列scripts/*.cjs与docs/brand-guidelines.md均未随仓库分发，勿直接执行
+
+===D:/kuaigeyun-pro/kuaigeyun/.windsurf/skills/brand/references/===
+approval-checklist.md[XE3S]: F:营销资产上线前审批清单，覆盖视觉、无障碍、文案、技术规格、法务合规与分级签核 | R:code:.windsurf/skills/brand/SKILL.md | A:Visual Elements,Accessibility,Content Quality,Technical Requirements,Legal & Compliance,Reviewer Sign-off | S:文本对比度≥4.5:1;Email素材<1MB;通过后回写manifest.json归档旧版
+asset-organization.md[XE3S]: F:营销资产组织规范：.assets元数据+assets实体目录、五段式命名、manifest版本Schema与标签体系 | R:code:.windsurf/skills/brand/SKILL.md | A:Directory Structure,Naming Convention,Metadata Schema,Tagging System,Search Patterns,Cleanup Workflow | S:非活动资产campaign字段用evergreen占位；深浅变体须拆独立文件；>100MB视频用外链
+brand-guideline-template.md[XE3S]: F:品牌规范文档模板：色彩/字体/Logo/语调/影像五节占位结构，附脚本可抽取字段清单 | R:code:.windsurf/skills/brand/SKILL.md,code:.windsurf/skills/brand/templates/brand-guidelines-starter.md | A:Quick Reference,Color Palette,Typography,Logo Usage,Voice & Tone,Extractable Fields | S:成品存docs/brand-guidelines.md供脚本抽取;占位符{X.Y}/{hex}
+color-palette-management.md[XU3S]: F:定义品牌色层级、Hex/RGB/HSL与CSS变量文档格式、WCAG对比度及合规校验 | R:code:.windsurf/skills/brand/SKILL.md | A:Color Hierarchy,CSS Variables,Contrast Ratios,extract-colors.cjs,Color Ratios,Palette Examples | S:正文禁纯黑#000用#111;三色占比60-70/20-30/5-10;AA对比度4.5:1
+consistency-checklist.md[XU2T]: F:品牌一致性审计清单，覆盖视觉、语调与网站/社交/邮件/物料渠道核对项 | R:code:.windsurf/skills/brand/SKILL.md | A:Visual Consistency,Voice Consistency,Channel Audit,Common Issues,Audit Frequency | S:审计频率分档:网站每月、社交/邮件/销售材料每季、全品牌每年
+logo-usage-rules.md[XU3S]: F:Logo变体选型、留白、最小尺寸、背景配色、禁用用法与审批流程规范 | R:code:.windsurf/skills/brand/SKILL.md | A:Logo Variants,Clear Space,Minimum Size,Color Rules,Incorrect Usage,File Formats | S:数字Logo宽≥120px印刷≥35mm;留白=图标高;禁拉伸/改色
+messaging-framework.md[XU2T]: F:品牌信息架构模板：使命愿景价值主张定位、支持消息、电梯演讲与受众消息表 | R:code:.windsurf/skills/brand/SKILL.md | A:Mission,Vision,Value Proposition,Positioning,Supporting Messages,Elevator Pitches | S:价值主张模板必含Unlike差异化句;支持消息限3-5条且各绑定不同受众需求与证据
+typography-specifications.md[XU3M]: F:品牌排版规范：字体栈加载、1.25字阶、字重行高字距、行长限制与无障碍下限 | R:code:.windsurf/skills/brand/SKILL.md | A:Font Stack,Type Scale,Font Weights,Line Height,Letter Spacing,Accessibility | S:正文≥16px小字≥14px;行宽65-75字符;小字禁<400字重
+update.md[XW3S]: F:brand:update命令参考：采集主题与三色Hex输入，五步同步品牌指南与design-tokens.json/css | R:code:.windsurf/skills/brand/SKILL.md | A:Gather Brand Input,Update Brand Guidelines,Sync to Design Tokens,Verify Sync,Color Presets,Files Modified | S:脚本路径写.claude/skills非.windsurf;三文件必须同改
+visual-identity.md[XU3T]: F:视觉识别基础：Logo三级变体、配色结构、字体用法表与正确/禁忌及快速检查清单 | R:code:.windsurf/skills/brand/SKILL.md | A:Logo,Color Palette,Typography,Visual Guidelines Template,Quick Checks | S:文本对比度≥4.5:1;Logo禁拉伸/改色/加效果
+voice-framework.md[XU3T]: F:品牌语调框架：区分Voice与Tone，四维频谱、三步定义流程、测试问题与指南模板 | R:code:.windsurf/skills/brand/SKILL.md | A:Voice vs. Tone,Voice Dimensions,Voice Development Process,Voice Testing,Voice Guide Template | S:Voice恒定Tone随场景变;特质只选3-5个
+
+===D:/kuaigeyun-pro/kuaigeyun/.windsurf/skills/brand/templates/===
+brand-guidelines-starter.md[XU3M]: F:品牌指南起始模板：色板/字体/Logo/语调/图像/组件六章，含AI出图提示词与Changelog | R:code:.windsurf/skills/brand/SKILL.md | A:Color Palette,Typography,Logo Usage,Voice & Tone,Prohibited Terms,AI Image Generation | S:含{DATE}等占位符需替换后再用
+
+===D:/kuaigeyun-pro/kuaigeyun/.windsurf/skills/design-system/===
+SKILL.md[XE4M]: F:design-system技能入口：三层Token架构、组件规范、脚本清单与BM25幻灯片决策生成系统 | R:code:.windsurf/skills/design-system/references/token-architecture.md | A:Token Architecture,Quick Start,Component Spec Pattern,Slide System,Decision System CSVs,Token Compliance | S:组件与幻灯片禁硬编码hex一律用var()token
+
+===D:/kuaigeyun-pro/kuaigeyun/.windsurf/skills/design-system/data/===
+slide-backgrounds.csv[XE3T]: F:按slide_type映射背景图类别、遮罩样式、文字位置与图库搜索关键词 | R:code:.windsurf/skills/design-system/SKILL.md | A:slide_type,image_category,overlay_style,text_placement,image_sources,search_keywords | S:图源仅pexels/unsplash；overlay须压暗背景保证文字可读
+slide-charts.csv[XE3T]: F:收录25种图表类型的适用场景、数据类型、CSS实现与无障碍要点 | R:code:.windsurf/skills/design-system/SKILL.md | A:chart_type,best_for,data_type,when_to_use,when_to_avoid,max_categories | S:类目数不得超max_categories；饼图禁3D且必须标注百分比
+slide-color-logic.csv[XE3T]: F:按叙事情绪给出背景、文字色、强调用途、全出血与渐变卡片样式 | R:code:.windsurf/skills/design-system/SKILL.md | A:emotion,background,text_color,accent_usage,use_full_bleed,gradient | S:仅use_full_bleed=true时用全出血；强调色只落在accent_usage指定部位
+slide-copy.csv[XE3T]: F:收录25种演示文案公式、场景与情绪触发，用于生成问题、方案及行动页 | R:code:.windsurf/skills/design-system/SKILL.md | A:formula_name,components,use_case,example_template,emotion_trigger,slide_type | S:Proof Stack中的统计值须标可核对的来源，不应把公式占位符当作真实案例
+slide-layout-logic.csv[XE3T]: F:按叙事目标与情绪映射布局模式、方向、视觉权重与背景图开关 | R:code:.windsurf/skills/design-system/SKILL.md | A:goal,emotion,layout_pattern,direction,visual_weight,use_bg_image | S:破节奏页勿连续堆叠;仅use_bg_image=true允许背景图
+slide-layouts.csv[XE2T]: F:定义25种演示版式的内容区、视觉比例、组件变体及动画 | R:code:.windsurf/skills/design-system/SKILL.md | A:id/layout_name,content_zones,visual_weight,recommended_for,avoid_for,animation_class | S:Quote Testimonial不用于没有真实引述的页；Chart Focus避免低质量数据
+slide-strategies.csv[XE2T]: F:定义15种演示叙事策略的页数结构、受众、情绪弧与节拍 | R:code:.windsurf/skills/design-system/SKILL.md | A:strategy_name,slide_count,structure,audience,emotion_arc,sparkline_beats | S:sparkline_beats与structure逐项一一对应
+slide-typography.csv[XE2T]: F:定义14种内容类型的三级字号、字重对比、字距与行高 | R:code:.windsurf/skills/design-system/SKILL.md | A:content_type,primary_size,weight_contrast,letter_spacing,line_height | S:行高与主字号反比：hero120px配1.0，body24px配1.6
+
+===D:/kuaigeyun-pro/kuaigeyun/.windsurf/skills/design-system/references/===
+component-specs.md[XE3M]: F:定义Button/Input/Card等核心组件的变体、尺寸、状态与解剖 | R:code:.windsurf/skills/design-system/SKILL.md | A:Button,Input,Card,Badge,Alert,Dialog/Table | S:Button默认高40px;Table行高compact40/default48
+component-tokens.md[XE3M]: F:定义核心组件CSS变量token并全部映射到语义层 | R:code:.windsurf/skills/design-system/SKILL.md | A:Button Tokens,Input Tokens,Card Tokens,Badge Tokens,Dialog Tokens,Table Tokens | S:token仅引用语义层var()；overlay与max-width可硬编码
+primitive-tokens.md[XE3M]: F:定义原始设计token:色板/4px间距/字体/圆角/阴影/时长/z-index | R:code:.windsurf/skills/design-system/SKILL.md | A:Color Scales,Spacing Scale,Typography Scale,Border Radius,Shadows,Z-Index Scale | S:本层亦含语义duration与z命名;info为blue-500别名
+semantic-tokens.md[XE3M]: F:定义语义层token别名(色/间距/字体/交互态)及暗色覆盖 | R:code:.windsurf/skills/design-system/SKILL.md | A:Color Semantics,Spacing Semantics,Typography Semantics,Interactive States,Dark Mode Overrides,Usage Patterns | S:组件只引用语义token;dark模式仅覆盖本层
+states-and-variants.md[XE3M]: F:定义交互状态优先级及focus/disabled/loading/error规范与变体模式 | R:code:.windsurf/skills/design-system/SKILL.md | A:State Definitions,State Priority,Focus Ring Spec,Loading States,Variant Patterns,ARIA States | S:优先级disabled>loading>active>focus>hover;文本对比度4.5:1
+tailwind-integration.md[XE3M]: F:把token接入Tailwind:HSL变量+config映射+btn组件类+shadcn对齐 | R:code:.windsurf/skills/design-system/SKILL.md | A:CSS Variables Setup,tailwind.config.ts,HSL Format Benefits,Button Example,Animation Tokens,shadcn/ui Alignment | S:HSL存通道值才能用/50透明度修饰;darkMode用class
+token-architecture.md[XE3M]: F:阐述primitive/semantic/component三层token体系、命名与迁移 | R:code:.windsurf/skills/design-system/SKILL.md | A:Layer Overview,Naming Convention,Categories,File Organization,Migration from Flat Tokens,W3C DTCG Alignment | S:每层只var()引用下一层;命名--category-item-state
+
+===D:/kuaigeyun-pro/kuaigeyun/.windsurf/skills/design-system/templates/===
+design-tokens-starter.json[FC3S]: F:primitive/semantic/component三层design token起始模板含dark覆盖 | R:code:.windsurf/skills/design-system/SKILL.md | A:primitive,semantic,component,dark,$schema | S:上层token用{}引用primitive路径;dark仅覆盖semantic.color
+
+===D:/kuaigeyun-pro/kuaigeyun/.windsurf/skills/slides/===
+SKILL.md[XW4T]: F:slides技能入口：按子命令路由加载references生成HTML演示 | R:- | A:When to Use,Subcommands,References,Routing | S:路由=首词→references/{sub}.md;仅create子命令
+
+===D:/kuaigeyun-pro/kuaigeyun/.windsurf/skills/slides/references/===
+copywriting-formulas.md[SU3T]: F:25个演示说服文案公式与页型映射及标题模式清单 | R:code:.windsurf/skills/slides/SKILL.md | A:PAS,AIDA,FAB,Cost of Inaction,Formula-to-Slide Mapping,Headline Patterns | S:按页型选公式;搜索脚本路径写.claude实为.windsurf
+create.md[SW2T]: F:create子命令存根，透传$ARGUMENTS调用slides技能 | R:code:.windsurf/skills/slides/SKILL.md | A:Task,$ARGUMENTS | S:仅占位转发无实现;实际逻辑在SKILL路由与其余references
+html-template.md[SU4M]: F:完整HTML幻灯片模板：16:9容器、导航、Chart.js集成、动画与CSS变量 | R:code:.windsurf/skills/slides/SKILL.md | A:Base Structure,Chart.js Integration,Animation Classes,Background Images,CSS Variables Reference | S:桌面锁16:9 letterbox;内容须包.slide-content防溢出
+layout-patterns.md[XE2S]: F:列25种幻灯片布局的CSS结构与动画类，含场景选型表 | R:code:.windsurf/skills/slides/SKILL.md | A:Layout Selection by Use Case,CSS Structures,Component Variants,Visual Treatments,Layout Decision Flow | S:脚本路径写.claude非.windsurf；768/480px逐档降列
+slide-strategies.md[XE2T]: F:列15种演示文稿结构策略、情绪弧线与场景匹配 | R:code:.windsurf/skills/slides/SKILL.md | A:Strategy Selection,Common Structures,Duarte Sparkline Pattern,Matching Strategy to Context | S:脚本路径写.claude非.windsurf；模式断点置于1/3与2/3处
+
+===D:/kuaigeyun-pro/kuaigeyun/.windsurf/skills/ui-styling/===
+LICENSE.txt[SZ1M]: F:Apache-2.0许可证全文，ui-styling技能随附授权条款 | R:code:.windsurf/skills/ui-styling/SKILL.md | A:Grant of Copyright License,Grant of Patent License,Redistribution,Disclaimer of Warranty,Limitation of Liability | S:SKILL.md声明MIT与本文件Apache-2.0不一致
+SKILL.md[XE4M]: F:shadcn/ui+Tailwind+Canvas视觉设计三层UI样式技能总入口 | R:- | A:Core Stack,Quick Start,Component Library Guide,Theme & Customization,Accessibility Patterns,Reference Navigation | S:组件复制入代码库非npm依赖；避免动态Tailwind类名
+
+===D:/kuaigeyun-pro/kuaigeyun/.windsurf/skills/ui-styling/references/===
+canvas-design-system.md[XE3M]: F:Canvas视觉设计哲学、设计运动范式与系统化构图执行规范 | R:code:.windsurf/skills/ui-styling/SKILL.md | A:Design Philosophy Approach,Core Principles,Design Movement Examples,Implementation Guidelines,Execution Checklist,Output Format | S:90%视觉至多10%文字；用oklch；元素不得越界或重叠
+shadcn-accessibility.md[XU2L]: F:shadcn/ui无障碍模式：ARIA、键盘导航、屏幕阅读器与表单可访问性 | R:code:.windsurf/skills/ui-styling/SKILL.md | A:Keyboard Navigation,Screen Reader Support,Form Accessibility,Component-Specific Patterns,Color Contrast,Testing Checklist | S:用focus-visible勿focus:outline-none；图标按钮须aria-label
+shadcn-components.md[XU3L]: F:shadcn/ui组件目录：安装命令与表单/布局/浮层/反馈/展示组件用法 | R:code:.windsurf/skills/ui-styling/SKILL.md | A:Installation,Form & Input Components,Layout & Navigation,Overlays & Dialogs,Feedback & Status,Display Components | S:组件经CLI装至components/ui可直接改；Form配RHF+zodResolver
+shadcn-theming.md[XU3M]: F:shadcn/ui主题定制：暗色模式、CSS变量体系、配色与组件变体 | R:code:.windsurf/skills/ui-styling/SKILL.md | A:Dark Mode Setup,CSS Variable System,Tailwind Configuration,Color Customization,Component Customization,Best Practices | S:色值HSL不带hsl()包以便透明度；每色须配foreground
+tailwind-customization.md[XU2L]: F:Tailwind定制：@theme令牌、自定义工具/变体、插件与完整配置示例 | R:code:.windsurf/skills/ui-styling/SKILL.md | A:@theme Directive,Custom Utilities,Custom Variants,Layer Organization,Plugins,Configuration Examples | S:@theme用oklch定义token；动态类须进safelist
+tailwind-responsive.md[XU2M]: F:Tailwind响应式：移动优先断点、容器查询与自适应布局模式 | R:code:.windsurf/skills/ui-styling/SKILL.md | A:Mobile-First Approach,Breakpoint System,Responsive Patterns,Max-Width Queries,Container Queries,Best Practices | S:移动优先勿桌面先写；断点为min-width；容器查询用@前缀
+tailwind-utilities.md[XU3L]: F:Tailwind布局、间距、排版、颜色、边框、阴影核心工具类速查含任意值语法 | R:code:.windsurf/skills/ui-styling/SKILL.md | A:Layout,Spacing,Typography,Colors,Borders,Shadows | S:自定义值必须用方括号语法如p-[17px];间距刻度非线性
+
+===D:/kuaigeyun-pro/kuaigeyun/.windsurf/skills/ui-ux-pro-max/===
+SKILL.md[XW4L]: F:ui-ux-pro-max技能主文档：设计系统生成、域检索、栈指南的查询契约与四步工作流 | R:- | A:--design-system,--domain,--stack,--persist,Design Dials,Query Contract | S:脚本需Python3且禁止代装;未验证检索结果不得持久化
+
+===D:/kuaigeyun-pro/kuaigeyun/.windsurf/skills/ui-ux-pro-max/data/===
+app-interface.csv[XU3T]: F:32条iOS/Android/React Native应用界面可用性规则含Do与Don't代码示例 | R:code:.windsurf/skills/ui-ux-pro-max/SKILL.md | A:Category,Issue,Platform,Do,Don't,Severity | S:仅适用原生/移动App;桌面Web模式勿套用触控与安全区规则
+catalog-summary.json[FC3T]: F:技能数据资产目录清单：各数据集计数、快照SHA256、字体晋升策略与待审候选 | R:code:.windsurf/skills/ui-ux-pro-max/SKILL.md | A:schemaVersion,counts,snapshots.sha256,promotionPolicy,pendingCandidates,verifiedAt | S:变更字体集需显式批准;无许可字体被排除
+charts.csv[XA3T]: F:25种图表选型表：数据类型映射、体量阈值、无障碍风险与降级方案和库推荐 | R:code:.windsurf/skills/ui-ux-pro-max/SKILL.md | A:Data Type,Best Chart Type,When NOT to Use,Accessibility Risk,A11y Fallback,Library Recommendation | S:Accessibility Grade已废弃改用Risk列;不得仅靠颜色编码
+colors.csv[XE3S]: F:为192类产品提供主辅色、强调色、背景、前景、卡片、边框等完整配色token | R:code:.windsurf/skills/ui-ux-pro-max/SKILL.md | A:Product Type,Primary,Accent,Background,Foreground,Notes | S:Notes标注人工调整的Accent原值；未承诺每对色均实测对比度
+data-provenance.json[XE2L]: F:登记技能数据实体的来源文件、状态、SLA、置信度与溯源引用 | R:code:.windsurf/skills/ui-ux-pro-max/SKILL.md | A:entityKind,entityId,sourceFile,sla,verifiedAt,confidence | S:needs-review记录90天、manual-verified 365天到期须复核
+google-font-licenses.json[XE2L]: F:google/fonts仓METADATA.pb快照，1934个字体家族的许可证与设计者 | R:code:.windsurf/skills/ui-ux-pro-max/SKILL.md | A:name,license,date_added,designer,status,verifiedAt | S:绑定固定上游revision非实时；许可证须按单族license字段核对勿默认OFL
+google-fonts.csv[XE3L]: F:1934个Google字体选型目录，含分类、字重、可变轴、字符子集与流行度 | R:code:.windsurf/skills/ui-ux-pro-max/SKILL.md | A:Family,Category,Styles,Variable Axes,Subsets,Popularity Rank | S:列内多值用竖线或空格分隔；Popularity Rank数值越小越流行
+icons.csv[XE3S]: F:105条Phosphor图标规范，含分类关键词、React导入、用法与语义无障碍上下文 | R:code:.windsurf/skills/ui-ux-pro-max/SKILL.md | A:Category,Icon Name,Import Code,Usage,Semantic Role,Allowed Contexts | S:Semantic Role仅为默认建议非强制；装饰须aria-hidden、图标按钮须可访问名
+landing.csv[XE3T]: F:34种落地页转化模式，含关键词、版块顺序、CTA位置、配色策略、动效与转化约束 | R:code:.windsurf/skills/ui-ux-pro-max/SKILL.md | A:Pattern Name,Keywords,Section Order,Primary CTA Placement,Color Strategy,Conversion Optimization | S:reduced motion须静态最终态;CTA文字对比≥4.5:1;媒体离屏暂停
+motion.csv[XE3T]: F:17条GSAP动效配方，按类别/强度给触发、时长、缓动、代码片段与性能无障碍注记 | R:code:.windsurf/skills/ui-ux-pro-max/SKILL.md | A:Category,Intensity Tier,Trigger,Duration,Easing,GSAP Snippet | S:reduced motion渲染最终态;repeat:-1须kill;离屏/隐藏暂停
+phosphor-icons-upstream.json[XE3L]: F:1512个Phosphor图标上游镜像，含组件名、码点、分类标签、双端导入与版本溯源 | R:code:.windsurf/skills/ui-ux-pro-max/SKILL.md | A:name,component,codepoint,categories,tags,clientImport | S:SSR须走/ssr子路径导入;codepoint为十进制
+products.csv[XE3S]: F:192类产品类型选型表，关键词映射主/次风格、落地页模式、仪表盘风格与配色 | R:code:.windsurf/skills/ui-ux-pro-max/SKILL.md | A:Product Type,Keywords,Primary Style Recommendation,Landing Page Pattern,Dashboard Style (if applicable),Color Palette Focus | S:Dashboard Style可为N/A;风格是推荐非强制;按Keywords匹配
+react-performance.csv[XE3T]: F:44条React/Next.js性能反模式与修复，好坏代码对照加严重级，覆盖瀑布/包体/渲染 | R:code:.windsurf/skills/ui-ux-pro-max/SKILL.md | A:Category,Issue,Platform,Code Example Good,Code Example Bad,Severity | S:&&渲染遇0会输出'0';Promise宜早启动晚await
+styles.csv[XU4T]: F:89种UI风格选型表：配色/效果/适用场景/明暗支持/无障碍风险与CSS实现词 | R:code:.windsurf/skills/ui-ux-pro-max/SKILL.md | A:Style Category,Best For,Do Not Use For,Accessibility,Status,Style ID | S:deprecated行须走Replacement ID替换;supplemental挂Parent Style ID
+typography.csv[XU4T]: F:74组Google字体配对表：标题/正文字体、情绪关键词、适用场景与导入配置 | R:code:.windsurf/skills/ui-ux-pro-max/SKILL.md | A:Font Pairing Name,Category,Heading Font,Body Font,Best For,Tailwind Config | S:Display/Script字体仅作标题勿当正文;RTL语种选Noto系
+ui-reasoning.csv[XA4S]: F:192类产品UI决策表：类别映射推荐模式/风格/配色/字体情绪与反模式禁忌 | R:code:.windsurf/skills/ui-ux-pro-max/SKILL.md | A:UI_Category,Recommended_Pattern,Style_Priority,Decision_Rules,Anti_Patterns,Severity | S:Decision_Rules为JSON字符串须解析;早期行Reasoning/Confidence空缺
+ux-guidelines.csv[XU3S]: F:跨平台UX规则表：导航/动画/布局/无障碍等正误对照、代码示例与严重级 | R:code:.windsurf/skills/ui-ux-pro-max/SKILL.md | A:Navigation,Animation,Layout,Interaction,Accessibility,WCAG2.2 | S:Platform限Web/Mobile/VisionOS;AAA增强项勿写成AA硬性要求
+
+===D:/kuaigeyun-pro/kuaigeyun/.windsurf/skills/ui-ux-pro-max/data/stacks/===
+angular.csv[XU3T]: F:Angular 22规范表：signals状态、standalone、路由懒加载、表单、zoneless与测试 | R:code:.windsurf/skills/ui-ux-pro-max/SKILL.md | A:Category,Guideline,Do,Don't,Severity,Applies To | S:适用angular 22.x;新代码禁NgModule与*ngIf
+astro.csv[XU3T]: F:Astro 7规范表：岛屿架构零JS、client指令、内容集合、视图过渡与SEO | R:code:.windsurf/skills/ui-ux-pro-max/SKILL.md | A:Category,Guideline,Do,Don't,Severity,Applies To | S:禁hybrid输出;ViewTransitions改用ClientRouter
+avalonia.csv[XU3T]: F:Avalonia 12桌面规范表：AXAML编译绑定、Selector样式、MVVM与跨平台 | R:code:.windsurf/skills/ui-ux-pro-max/SKILL.md | A:Category,Guideline,Do,Don't,Severity,Applies To | S:命名空间非WPF;ElementName改#name;Headless跑UI测试
+flutter.csv[XU3T]: F:Flutter 3.44规范表：Widget组合、Riverpod状态、布局列表、导航与无障碍 | R:code:.windsurf/skills/ui-ux-pro-max/SKILL.md | A:Category,Guideline,Do,Don't,Severity,Applies To | S:WillPopScope已废弃用PopScope;web检测用kIsWeb
+html-tailwind.csv[XU3T]: F:HTML+Tailwind 4.3规范表：布局排版、响应式、表单、无障碍与v4语法 | R:code:.windsurf/skills/ui-ux-pro-max/SKILL.md | A:Category,Guideline,Do,Don't,Severity,Status | S:bg-gradient-to-*已废弃用bg-linear-to-*;类名须完整可检测
+javafx.csv[XU3L]: F:JavaFX桌面UI规范表：FX线程/FXML/CSS/布局约束/控件/绑定/可访问性 | R:code:.windsurf/skills/ui-ux-pro-max/SKILL.md | A:Category,Guideline,Do,Don't,Severity,Applies To | S:已bind属性须先unbind再set;UI更新须在FX线程
+jetpack-compose.csv[XU3L]: F:Jetpack Compose规范：纯Composable/状态提升/副作用/单向数据流/性能 | R:code:.windsurf/skills/ui-ux-pro-max/SKILL.md | A:Category,Guideline,Do,Don't,Severity,Applies To | S:导航事件用Channel;StateFlow会重放致重复导航
+laravel.csv[XU3L]: F:Laravel 13 UI规范：Blade组件/Livewire/Inertia/Tailwind主题 | R:code:.windsurf/skills/ui-ux-pro-max/SKILL.md | A:Category,Guideline,Do,Don't,Severity,Applies To | S:动态输出用{{ }}转义;{!! !!}仅限可信内容
+nextjs.csv[XU3L]: F:Next.js 16规范：App Router/服务端组件/缓存/Server Actions/图片优化 | R:code:.windsurf/skills/ui-ux-pro-max/SKILL.md | A:Category,Guideline,Do,Don't,Severity,Applies To | S:v16需显式缓存指令;突变后用updateTag非refresh
+nuxt-ui.csv[XU3L]: F:Nuxt UI 4规范：UApp包裹/U前缀组件/语义色/表单校验/仪表盘 | R:code:.windsurf/skills/ui-ux-pro-max/SKILL.md | A:Category,Guideline,Do,Don't,Severity,Applies To | S:图标用i-前缀,lucide:x系v3旧式;overlay须create().open()
+nuxtjs.csv[XU3T]: F:Nuxt 4.5规范：文件路由/SSR渲染/数据获取/服务端API/状态/SEO/运行时配置 | R:code:.windsurf/skills/ui-ux-pro-max/SKILL.md | A:Category,Guideline,Do,Don't,Severity,Applies To | S:$fetch不转发请求上下文;NUXT_覆盖须先声明键;全局中间件须幂等
+react-native.csv[XU3T]: F:React Native 0.86规范：组件/StyleSheet/导航/FlatList/动画/无障碍/测试 | R:code:.windsurf/skills/ui-ux-pro-max/SKILL.md | A:Category,Guideline,Do,Don't,Severity,Applies To | S:Hermes随包默认启用;长列表用FlatList非ScrollView;触控用Pressable
+react.csv[XU3T]: F:React 19.2规范：Hooks规则/状态推导/效应清理/并发Actions/编译器记忆化/TS | R:code:.windsurf/skills/ui-ux-pro-max/SKILL.md | A:Category,Guideline,Do,Don't,Severity,Applies To | S:RSC须19.2.1+;新代码ref作prop非forwardRef;编译器优先手动memo
+shadcn.csv[XU3T]: F:shadcn CLI v4规范：OKLCH主题变量/复合组件/Field表单/弹层/三基座/注册表 | R:code:.windsurf/skills/ui-ux-pro-max/SKILL.md | A:Category,Guideline,Do,Don't,Severity,Applies To | S:asChild仅Radix,BaseUI用render;add前先--dry-run
+svelte.csv[XU3T]: F:Svelte 5规范：runes响应式/$props/bind绑定/存储/逻辑块/SvelteKit加载 | R:code:.windsurf/skills/ui-ux-pro-max/SKILL.md | A:Category,Guideline,Do,Don't,Severity,Applies To | S:新码用runes;$:/export let/on:仅遗留;$app/state非stores
+swiftui.csv[XU3T]: F:SwiftUI规范：struct视图/属性包装状态/@Observable/NavigationStack/MVVM | R:code:.windsurf/skills/ui-ux-pro-max/SKILL.md | A:Category,Guideline,Do,Don't,Severity,Applies To | S:iOS17+用@Observable;NavigationView已弃用
+threejs.csv[XU3T]: F:Three.js 0.185.1规范：渲染器/几何体/光照/射线拾取/GSAP/性能 | R:code:.windsurf/skills/ui-ux-pro-max/SKILL.md | A:Category,Guideline,Do,Don't,Severity,Applies To | S:页面仅一renderer;animate内禁new几何体
+uno.csv[XU3T]: F:Uno Platform规范：WinUI3 API/Skia渲染/条件编译/x:Bind/Uno.Sdk | R:code:.windsurf/skills/ui-ux-pro-max/SKILL.md | A:Category,Guideline,Do,Don't,Severity,Applies To | S:新项目用Uno.WinUI;桌面无Suspending用Window.Closed
+uwp.csv[XU3T]: F:UWP规范（已弃用）：x:Bind编译绑定/NavigationView/ThemeResource/MVVM | R:code:.windsurf/skills/ui-ux-pro-max/SKILL.md | A:Category,Guideline,Do,Don't,Severity,Applies To | S:新项目应迁WinUI3;x:Bind默认OneTime
+vue.csv[XU3T]: F:Vue 3.5规范：Composition API/script setup/Pinia/TS/SSR | R:code:.windsurf/skills/ui-ux-pro-max/SKILL.md | A:Category,Guideline,Do,Don't,Severity,Applies To | S:ref脚本须.value;v-if勿叠v-for
+winui.csv[XU3T]: F:WinUI3开发规范表：x:Bind/控件/导航/线程/无障碍等Do-Don't对照与代码示例 | R:code:.windsurf/skills/ui-ux-pro-max/SKILL.md | A:Category,Guideline,Do,Don't,Code Good,Severity | S:x:Bind默认OneTime须显式写Mode;禁混UWP与WinUI3 API
+wpf.csv[XU3T]: F:WPF开发规范表：绑定/命令/布局/样式/线程/无障碍的Do-Don't对照与代码示例 | R:code:.windsurf/skills/ui-ux-pro-max/SKILL.md | A:Category,Guideline,Do,Don't,Code Good,Severity | S:Fluent主题仅.NET9+;PerMonitorV2要app.manifest声明
+
+===D:/kuaigeyun-pro/kuaigeyun/docs/apps/kuaioa/===
+工资结算使用说明.md[SB2S]: F:工资结算开单、产线分摊、Excel导入补录到确认锁定的业务操作手册 | R:code:riveredge-backend/src/apps/kuaioa/api/payroll.py | A:推荐操作顺序,产线总产量与总工资,导入明细文件要求,明细列含义,确认与改数,权限说明 | S:产线两项仅对计薪方式=产线生效;填后必须点按考勤重建;导入仅姓名/金额两列
+
+===D:/kuaigeyun-pro/kuaigeyun/docs/apps/kuaivision/===
+ROADMAP.md[SQ3L]: F:快视觉P0-P3分阶段路线图:入站真源、方案复核、边缘Agent、样本模型治理 | R:code:riveredge-backend/src/apps/kuaivision | A:总原则与不做项,PC页面规范硬门禁,领域模型,P0-P3交付与验收,各阶段落地状态,技术栈与风险 | S:仅做视觉不含安灯防错;event_id租户内幂等;检测记录页禁开showCreateButton
+现场联调手册.md[SQ2T]: F:快视觉现场联调:相机光源、激光测厚标定、触发模式、边缘节点与样本模型 | R:code:riveredge-backend/src/apps/kuaivision/edge-agent/agent.py | A:相机与光源,激光测厚,触发模式,边缘节点,样本与模型,推荐IPC规格 | S:发布后须使配置生效或等拉取周期;断网SQLite缓冲batch续传;需模型未绑不可发布
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/mobile-static-preview/===
+index.html[XU1T]: F:移动端静态原型壳：状态栏导航屏体停靠对话框容器 | R:- | A:#phone手机壳,#screen内容区,#nav+#nav-title标题,#back/#home按钮,#dock底栏,#dialog弹层 | S:纯静态不请求后端；仅挂preview.css与preview.js
+preview.css[XU1L]: F:预览原型全套样式：手机壳导航卡片徽章底栏底部弹层 | R:- | A:--primary色变量,.phone外壳,.btn-*/.choice按钮,.card-btn/.cell卡片,.badge-*状态色,#dock/#dialog/.sheet | S:hidden属性须!important覆盖；480px以下壳满屏无圆角
+preview.js[XU2L]: F:静态原型全部逻辑：登录路由单据向导扫码的样例数据渲染 | R:- | A:WORKBENCH/lists/DOC样例数据,renderPage路由分发,renderWizard三步单据,renderInspect/renderSpot检验点检,onClick动作分发,readHash登录守卫 | S:data-act属性驱动交互；路由写location.hash；未登录强制回login
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/===
+.editorconfig[FC1T]: F:移动端工程编辑器约定UTF-8/LF/tab缩进4/去尾白/末行换行 | R:- | A:root=true,[*]全文件,indent_style=tab,indent_size=4,end_of_line=lf,trim_trailing_whitespace+insert_final_newline | S:tab缩进但indent_size=4；[*]对所有文件生效
+.gitignore[FC2T]: F:忽略构建产物、IDE目录与本地接口源覆盖文件 | R:- | A:unpackage/,.DS_Store,.hbuilderx/,origin.local.uts | S:origin.local.uts不入库;本地源改origin.uts
+App.uvue[EU5M]: F:应用入口：生命周期钩子、H5租户入口、双击退出与全局样式 | R:code:fast-deploy/launch.dev.sh | A:onLaunch,openMobileTenantEntry,onLastPageBackPress,page/card,btn-primary,badge色系 | S:双击退出限安卓鸿蒙;品牌紫#9730E3仅作强调
+README.md[SG4T]: F:移动端uni-app x蒸汽模式工程说明与Web部署要点 | R:code:fast-deploy/build.mobile.web.sh | A:HBuilderX打开,vapor:true,unpackage web产物,Caddy /mobile,origin.uts | S:目录不另建Git;接口地址勿提交
+RELEASE.md[SC4T]: F:发行版本门槛清单与H5 history路由配置说明 | R:code:fast-deploy/launch.dev.sh | A:Android 6.0+,iOS 15+,微信基库3.7.1,web.router,base /mobile/ | S:launch.dev.sh with-h5不编译uni-app x
+index.html[CA3T]: F:H5入口壳，动态注入viewport并修正Web端按钮/限宽样式 | R:- | A:coverSupport检测,document.write写viewport,uni-button flex修正,PC限宽480px,/main模块脚本 | S:样式仅Web端生效;title留空由运行时填;viewport-fit按需追加
+main.uts[LA3T]: F:应用引导入口，createSSRApp挂载App根组件 | R:code:kuaigeyun-client/riveredge-app-mobile/App.uvue | A:createApp | S:必须返回{app}对象供框架调用;勿在此加全局副作用
+manifest.json[FC6T]: F:uni-app-x应用清单：vapor字节码、web history基座/mobile/、vue3与平台版本门槛 | R:code:kuaigeyun-client/riveredge-app-mobile/main.uts | A:uni-app-x.vapor,vapor-render-target,web.router,mp-weixin,app-android.distribute,vueVersion | S:vapor需HBX5.21+；web基座固定/mobile/；版本门槛不拦业务页
+pages.json[FC7M]: F:注册shell与车间/仓储/质量/设备/模具全部页面路由，全局自定义导航栏 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/load.uts | A:pages,globalStyle,uniIdRouter,navigationStyle,navigationBarTitleText | S:pages首项即启动页(登录)；navigationStyle=custom需自绘导航
+platformConfig.json[FC3T]: F:uts编译目标白名单，仅产出APP-ANDROID平台 | R:- | A:targets | S:仅APP-ANDROID，其余平台不纳入编译
+uni.scss[CS2T]: F:uni-app 全局主题 SCSS 变量：品牌紫主色、文字/背景/边框/尺寸/间距 | R:- | A:$uni-color-*,$uni-text-*,$uni-bg-*,$uni-font-size-*,$uni-border-*,$uni-spacing-* | S:仅变量定义;主色#9730E3
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/apps/===
+README.md[SG2T]: F:好力GO应用占位目录说明，暂未启用 | R:- | A:好力GO占位 | S:不做页面;不进五个scope的registry
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/equipment/components/===
+master-picker.uvue[AH4S]: F:设备/方案选择弹层组件，关键字分页查询、扫码选中、加载绑定方案 | R:- | A:kind,equipmentId,choose,search,more,scanDevice | S:ticket防旧响应覆盖；设备须uuid非空才emit；equipmentId变即重置scheme
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/equipment/detail/===
+index.uvue[EH3T]: F:设备详情页，onLoad取uuid参数、onShow拉取设备概要一行展示 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/load.uts | A:readQueryUuid,loadDetail,onLoad,onShow | S:query无uuid即报错不请求；ticket防旧响应；onShow每次重拉
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/equipment/faults/===
+index.uvue[EH5L]: F:报修维修页，故障列表分页+详情+完工填写+新建故障一体 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/load.uts | A:loadList,openFault,findRepair,submitComplete,submitCreate,askLeave | S:仅进行中且已到场维修单可完工；未提交内容拦截离开;校验失败滚动定位
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/equipment/===
+index.uts[LH4T]: F:设备域featurePackage清单，10个页面entries注册+待办badge读取 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/load.uts | A:featurePackage,readBadge,makeEntry,countOf,EquipmentEntry,EquipmentBadge | S:平台固定h5/mp-weixin/app；badge缺字段回退0；detail与conduct不进工作台
+json-text.uts[LD3S]: F:文本工具库，字段拼接、必填int/ID列表解析、数组提取、日期校验、错误透传 | R:- | A:joinParts,parseRequiredInt,parseIdList,jsonObjectList,isValidDateText,readError | S:joinParts以·拼接跳空段；parseIdList单项无效整体null；日期含闰年校验
+pages.entries.json[FC4T]: F:设备域10个uvue页面路由与标题清单 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/load.uts | A:scan/index,spot-checks/index,line-rebinds/index,repairs/index,maintenance-reminders/index,detail/index | S:path不带扩展名;标题在navigationBarTitleText
+route-patrol-create.uts[LB4M]: F:路线巡检预览行建模、合格切换与提交组装校验 | R:code:kuaigeyun-client/riveredge-app-mobile/features/equipment/index.uts | A:PatrolLineForm,loadRoutePatrolPreview,submitRoutePatrol,togglePatrolPass,readLine,mapLine | S:captureMode空默认A;B模式强制有附件;errorText空即成功
+selection.uts[LD3T]: F:设备/方案/路线主数据选择器数据源查询 | R:code:kuaigeyun-client/riveredge-app-mobile/features/equipment/index.uts | A:searchChoices,loadBoundSchemes | S:kind仅三值其余落routes;非device带is_active
+spot-check-create.uts[LB4M]: F:点检单预览加载与提交，按采集模式A/B/C差异化校验与组包 | R:code:kuaigeyun-client/riveredge-app-mobile/features/equipment/index.uts | A:SpotLineForm,SpotCheckDraft,loadSpotCheckPreview,submitSpotCheck,toggleSpotPass,readLine | S:模式B跳过明细仅传整单照片;模式C必传行照片;checkDate须真实日期
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/equipment/line-rebinds/===
+index.uvue[AH4S]: F:设备换线绑定列表与新建提交 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/load.uts | A:loadList,submitCreate,onShow | S:产线ID必填;超时小时1-720默认4;ticket防旧响应
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/equipment/maintenance-executions/===
+index.uvue[AH3T]: F:保养执行记录只读列表页 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/load.uts | A:loadList,onShow | S:仅GET无任何写操作;ticket防旧响应覆盖
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/equipment/maintenance-reminders/===
+index.uvue[AH4S]: F:维护提醒列表与标记已处理 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/load.uts | A:loadList,selectRow,submitHandled,onShow | S:已处理行禁选;备注不保存;ticket防竞态
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/equipment/repairs/===
+index.uvue[AH4M]: F:维修台账列表与完工提交（结果/原因/内容） | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/load.uts | A:loadList,selectRow,chooseResult,submitComplete,onShow | S:仅进行中且已到场可完工;故障原因与内容必填
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/equipment/route-patrols/===
+index.uvue[EB4M]: F:路线巡检单列表与逐点录入新建页 | R:code:kuaigeyun-client/riveredge-app-mobile/features/equipment/pages.entries.json | A:loadList,loadPreview,advancePoint,onLinePhoto,submitCreate,pointBack | S:须loadedRouteId与所选一致才可提交;末点按钮即提交;ticket防竞态
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/equipment/scan/===
+index.uvue[EH3T]: F:扫码解析设备uuid并跳设备详情 | R:code:kuaigeyun-client/riveredge-app-mobile/features/equipment/pages.entries.json | A:onScan,scan,resolve-scan接口,openRegisteredRoute | S:ticket防竞态;uuid空报未解析;仅走已注册路由
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/equipment/spot-check-conduct/===
+index.uvue[EB4M]: F:设备点检执行页按uuid载设备选方案逐项录入提交 | R:code:kuaigeyun-client/riveredge-app-mobile/features/equipment/pages.entries.json | A:loadEquipment,loadPreview,onHeaderPhoto,onLinePhoto,submitCreate,onTogglePass | S:uuid取自onLoad;提交前须设备+方案与已加载一致;B模式要整单照
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/equipment/spot-checks/===
+index.uvue[EB4M]: F:设备点检列表+新建页，选设备/方案加载点检行、拍照并提交 | R:code:kuaigeyun-client/riveredge-app-mobile/features/equipment/index.uts | A:loadList,loadPreview,submitCreate,onTogglePass,onLinePhoto,clearPreview | S:ticket防列表竞态;提交须与已加载设备/方案一致;busy/loading互斥
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/mold/===
+http.uts[LN4S]: F:模具域API端点常量、请求收口与选项/明细行映射工具集 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/load.uts | A:apiGet,apiGetRows,apiPost,mapNamedOptions,readPreviewLines,toPcLines | S:apiGetRows兼容裸数组与items/data包装;putText只写非空值;端点勿散落硬编码
+index.uts[DD3T]: F:模具功能包注册表，声明六个工作台入口及路由与页面路径 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/load.uts | A:MoldEntry,entry,entries,featurePackage | S:platforms固定h5/mp-weixin/app;route与page_path须对应真实页面
+pages.entries.json[FB3T]: F:模具六页路由清单：扫码查模具/领用/归还/保养/维修/保养提醒 | R:code:kuaigeyun-client/riveredge-app-mobile/features/mold/index.uts | A:mold-scan,mold-borrows,mold-returns,mold-maintenances,mold-repairs,mold-reminders | S:path为完整页面路径非相对mold目录；仅声明导航标题
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/mold/mold-borrows/===
+index.uvue[EB3M]: F:模具领用页，搜索选模具、校验日期创建领用并刷新记录列表 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/load.uts | A:searchMolds,loadList,createBorrow,chooseMold,mapBorrow,syncLoading | S:双ticket防搜索/列表竞态;两日期须YYYY-MM-DD
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/mold/mold-maintenances/===
+index.uvue[EB4M]: F:模具保养单创建+方案明细勾选+保养记录查询 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/load.uts | A:searchMolds,loadSchemes,loadPreview,toggleExecuted,createMaintenance,loadList | S:多ticket竞态丢弃过期响应;不选方案用模具默认;日期须YYYY-MM-DD
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/mold/mold-reminders/===
+index.uvue[AB3S]: F:模具保养到期提醒只读列表页 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/load.uts | A:loadList,mapReminder,reminderLabel,triggerLabel | S:ticket竞态丢弃旧响应;剩余次数/距保养天数为null才不拼接
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/mold/mold-repairs/===
+index.uvue[EB4M]: F:模具维修单创建（故障描述/紧急度）+维修记录查询 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/load.uts | A:searchMolds,loadSchemes,loadPreview,toggleExecuted,createRepair,loadList | S:urgency限32字符;方案可空用模具默认;多ticket竞态防护
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/mold/mold-returns/===
+index.uvue[EB5L]: F:未归还领用选择+使用次数归还登记+归还记录分页 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/load.uts | A:chooseBorrow,loadOutstanding,parseCount,createReturn,askLeave,loadList | S:使用次数须纯数字≥1;离开守卫拦截未提交;skip分页锁关键词
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/mold/mold-scan/===
+index.uvue[EH4S]: F:扫码关键字查模具档案，命中直显/多选 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/load.uts | A:onScan,readScanCode,exactMatches,showMold,moldTitle,moldDetail | S:scan仅取string结果;唯一精确命中直开;多命中走候选列表
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/quality/components/===
+inspection-board.uvue[AQ5L]: F:通用检验执行板：检验单列表+三段式执行表单，含模板检验项/附件/自定义字段 | R:- | A:loadList,openConduct,submitConduct,buildSteps,buildStepResults,saveCustomFields | S:合格+不合格须=检验数量；上传中禁止提交/离开；oqc与standard提交体不同
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/quality/finished/===
+index.uvue[EQ3T]: F:成品检验页壳：配置listPath等props托管InspectionBoard并拦截返回键 | R:- | A:onConductState,onBackPress,finished-goods-inspections | S:执行中吞返回仅发backRequest由板内确认；kind=standard
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/quality/incoming/===
+index.uvue[EQ3T]: F:来料检验页壳：配置listPath等props托管InspectionBoard并拦截返回键 | R:- | A:onConductState,onBackPress,incoming-inspections | S:执行中吞返回仅发backRequest由板内确认；kind=standard
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/quality/===
+index.uts[DQ4T]: F:quality功能包清单：声明六个检验入口的key/路由/页面路径/平台 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/load.uts | A:featurePackage,quality-hub,process-scan,incoming,finished,oqc | S:平台固定h5/mp-weixin/app；六项均in_workbench
+pages.entries.json[FQ3T]: F:quality 特性六页路由与导航标题清单 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/load.uts | A:quality-hub,process-scan,incoming,finished,oqc,nonconforming | S:仅声明路径与导航标题；增页须同步 index.uts 的 entries
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/quality/nonconforming/===
+index.uvue[EQ4M]: F:不合格品台账列表与七种处置（退货/让步/隔离/返工/报废/降级/其他） | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/load.uts | A:loadLedger,submitDispose,canDispose,pickDispose,blockedPlaceText,onBackPress | S:让步/隔离/报废前端恒拦截；退货需来料检验id；降级需目标料仓齐备
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/quality/oqc/===
+index.uvue[EQ4T]: F:出库检验页壳，复用 InspectionBoard 接 oqc-inspections 列表 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/load.uts | A:InspectionBoard,onConductState,backRequest | S:conduct-kind=oqc;custom-table 故意留空；执行中拦截返回改发 backRequest
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/quality/process-scan/===
+index.uvue[EQ4T]: F:过程检验页壳，InspectionBoard 接 process-inspections 并绑自定义表 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/load.uts | A:InspectionBoard,onConductState,backRequest | S:conduct-kind=standard;custom-table 绑过程检验表；执行中拦截返回
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/quality/quality-hub/===
+index.uvue[EQ5S]: F:待检验中心，读检验汇总按 pending_* 计数跳各检验入口 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/load.uts | A:loadSummary,readPending,openRow,PendingRow,openRegisteredRoute,fieldToKey | S:字段与入口键按下标配对；count≤0 或无路由跳过；未安装 toast 提示
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/warehouse/===
+board.uvue[EB5L]: F:仓储单据通用看板,kind驱动列表分页/三步向导/差异确认与提交 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/load.uts | A:pageMode,loadList,loadDetail,locateLine,submitMain,askLeave | S:ticket丢弃过期响应;busy禁编辑与离开;返回守卫靠back-request包装页协议
+http.uts[LN4T]: F:仓储API端点映射,kind到资源URL及确认/发送/执行动作路径 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/load.uts | A:resource,listQuery,listPath,detailPath,confirmPath,stockExecutePath | S:inventory-query用current/page_size且detailPath为空;前缀/apps/kuaizhizao
+index.uts[LD3T]: F:仓储特性包清单,注册12个entry的key/route/page_path | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/load.uts | A:WarehouseEntry,WarehousePackage,featurePackage | S:platforms固定h5/mp-weixin/app;in_workbench恒true
+models.uts[DD3T]: F:仓储单据卡片与行/明细表单数据类定义 | R:code:kuaigeyun-client/riveredge-app-mobile/features/warehouse/board.uvue | A:DocCard,LineForm,DetailForm | S:数量与ID多为字符串Text字段;DetailForm.lines为LineForm数组
+pages.entries.json[FC3T]: F:仓储12个移动端页面的路由与导航标题清单 | R:code:kuaigeyun-client/riveredge-app-mobile/features/warehouse/index.uts | A:pickings,returns,fg-receipts,purchase-receipts,sales-deliveries,stocktaking | S:path须为features/warehouse/*/index；新增页须登记否则无入口
+payload.uts[LD4M]: F:构建仓储出入库/销售/盘点/预警请求体并校验过滤无效行 | R:code:kuaigeyun-client/riveredge-app-mobile/features/warehouse/http.uts | A:buildInboundBody,buildOutboundBody,buildSalesBody,buildStockBody,buildAlertBody,serialList | S:itemId≤0行被丢弃；items空返null；id类字段仅收正整数
+read.uts[LD3S]: F:仓储单据响应解析器，unwrap取data并按kind生成卡片与明细行 | R:code:kuaigeyun-client/riveredge-app-mobile/features/warehouse/board.uvue | A:unwrap,readTotal,readCards,readDetail,lineFrom,fillPerson | S:仅itemId>0行入明细；kind分派数量与人员字段；success真才取data
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/warehouse/delivery-notices/===
+index.uvue[EW3T]: F:发货通知页壳,挂board并转发返回守卫与重显刷新 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/load.uts | A:onGuardState,onBackPress,onShow | S:guarded时递增backRequest拦截返回;首次onShow不触发showRequest
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/warehouse/fg-receipts/===
+index.uvue[EW3T]: F:成品入库页壳,挂board并转发返回守卫与重显刷新 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/load.uts | A:onGuardState,onBackPress,onShow | S:guarded时递增backRequest拦截返回;首次onShow不触发showRequest
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/warehouse/inventory-alerts/===
+index.uvue[EW3T]: F:库存预警页壳,按kind委托WarehouseBoard并接管返回/显示守卫 | R:code:kuaigeyun-client/riveredge-app-mobile/features/warehouse/board.uvue | A:WarehouseBoard,onGuardState,onBackPress,onShow,backRequest,showRequest | S:仅壳无业务逻辑;guarded才拦截返回;二次onShow才发showRequest
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/warehouse/inventory-query/===
+index.uvue[EW3T]: F:库存查询页壳,按kind委托WarehouseBoard并接管返回/显示守卫 | R:code:kuaigeyun-client/riveredge-app-mobile/features/warehouse/board.uvue | A:WarehouseBoard,onGuardState,onBackPress,onShow,backRequest,showRequest | S:仅壳无业务逻辑;guarded才拦截返回;二次onShow才发showRequest
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/warehouse/inventory-transfer/===
+index.uvue[EW3T]: F:库存调拨页壳,按kind委托WarehouseBoard并接管返回/显示守卫 | R:code:kuaigeyun-client/riveredge-app-mobile/features/warehouse/board.uvue | A:WarehouseBoard,onGuardState,onBackPress,onShow,backRequest,showRequest | S:仅壳无业务逻辑;guarded才拦截返回;二次onShow才发showRequest
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/warehouse/other-inbound/===
+index.uvue[EW3T]: F:其他入库页壳,按kind委托WarehouseBoard并接管返回/显示守卫 | R:code:kuaigeyun-client/riveredge-app-mobile/features/warehouse/board.uvue | A:WarehouseBoard,onGuardState,onBackPress,onShow,backRequest,showRequest | S:仅壳无业务逻辑;guarded才拦截返回;二次onShow才发showRequest
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/warehouse/other-outbound/===
+index.uvue[EB3T]: F:其它出库页壳，复用WarehouseBoard并按守卫状态拦截返回 | R:code:kuaigeyun-client/riveredge-app-mobile/features/warehouse/board.uvue | A:onGuardState,onBackPress,onShow,backRequest,showRequest | S:guarded时拦截返回并发backRequest；首次onShow不发showRequest
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/warehouse/pickings/===
+index.uvue[EB3T]: F:生产领料页壳，复用WarehouseBoard并按守卫状态拦截返回 | R:code:kuaigeyun-client/riveredge-app-mobile/features/warehouse/board.uvue | A:onGuardState,onBackPress,onShow,backRequest,showRequest | S:kind=pickings定看板行为；guarded时才拦截返回请求
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/warehouse/purchase-receipts/===
+index.uvue[EB3T]: F:采购收货页壳，复用WarehouseBoard并按守卫状态拦截返回 | R:code:kuaigeyun-client/riveredge-app-mobile/features/warehouse/board.uvue | A:onGuardState,onBackPress,onShow,backRequest,showRequest | S:kind=purchase-receipts；首onShow不递增showRequest
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/warehouse/returns/===
+index.uvue[EB3T]: F:退货单页壳，挂WarehouseBoard并转发返回守卫与onShow刷新 | R:code:kuaigeyun-client/riveredge-app-mobile/features/warehouse/board.uvue | A:WarehouseBoard,onGuardState,onBackPress,onShow | S:guarded真才拦截返回并发backRequest；首次onShow不触发showRequest
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/warehouse/sales-deliveries/===
+index.uvue[EB3T]: F:销售发货单页壳，挂WarehouseBoard并转发返回守卫与onShow刷新 | R:code:kuaigeyun-client/riveredge-app-mobile/features/warehouse/board.uvue | A:WarehouseBoard,onGuardState,onBackPress,onShow | S:guarded真才拦截返回并发backRequest；首次onShow不触发showRequest
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/warehouse/stocktaking/===
+index.uvue[EB3T]: F:盘点单页壳，挂WarehouseBoard并转发返回守卫与onShow刷新 | R:code:kuaigeyun-client/riveredge-app-mobile/features/warehouse/board.uvue | A:WarehouseBoard,onGuardState,onBackPress,onShow | S:guarded真才拦截返回并发backRequest；首次onShow不触发showRequest
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/workshop/exception-report/===
+index.uvue[EB4M]: F:车间异常上报页，选工单后按缺料/交期/质量三类校验并POST提交 | R:- | A:loadOrders,searchMaterials,switchKind,submitReport,isNonNegativeIntText,pickMaterial | S:ticket防竞态；缺料须工单+物料且数量>0；延期天数仅非负整数；质量工单可空
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/workshop/exceptions/===
+index.uvue[EB3S]: F:异常追踪页,缺料/交期/质量三Tab只读列表 | R:code:kuaigeyun-client/riveredge-app-mobile/features/workshop/exception-report/index.uvue | A:switchKind,load,lineTitle,lineSub,onLoad | S:kind直接拼API路径段;ticket防串台;三类字段集互异
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/workshop/===
+index.uts[DC4T]: F:车间workbench功能包清单,登记10个入口路由 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/load.uts | A:WorkshopEntry,WorkshopPackage,entry,featurePackage | S:route与page_path成对登记;platforms固定三端;badge恒null
+json.uts[LD3T]: F:车间公共助手:工单列表解包/扫码取值/周期/toast | R:- | A:readWorkOrderRows,scanRaw,nowIso,currentPeriod,toast | S:先探work_orders再降级readRows;scanRaw兼容{result}对象
+pages.entries.json[FC6T]: F:车间模块10个uvue页面路由注册表（path+导航标题） | R:code:kuaigeyun-client/riveredge-app-mobile/features/workshop/index.uts | A:scan-report,work-order-assign,my-work-orders,work-orders,reporting-history,reporting-approve | S:新页面须在此登记path与标题才可路由
+session.uts[LS4T]: F:读user_info存储解析当前用户id与姓名，兼容嵌套user结构 | R:- | A:readCurrentUser,toJson,userName,USER_INFO_KEY,CurrentUser | S:嵌套user.id优先;id≤0或姓名空返回null;兼容JSON字符串与对象
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/workshop/my-work-orders/===
+index.uvue[EB4M]: F:我的工单页:关键词+状态筛选分页列表与详情,可跳扫码报工 | R:- | A:search,load,loadMore,openDetail,closeDetail,goReport | S:查询必带assigned_worker_id;ticket防串台;返回键先关详情
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/workshop/packing-binding/===
+index.uvue[EB5L]: F:装箱绑定页:绑定列表/详情+三步新建(选来源单/选品/填数量) | R:- | A:load,openBinding,chooseKind,pickSource,submitPack,onBackPress | S:product_id取material_id;POST挂来源单路径;box_no可空
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/workshop/performance/===
+index.uvue[EB4S]: F:我的绩效页，按绩效月份查个人汇总并分页加载 | R:- | A:load,refreshList,loadMore,retry,lineTitle,lineSub | S:ticket防竞态；需当前用户id；重试仍请求同一页
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/workshop/reporting-approve/===
+index.uvue[EW5S]: F:报工审核页，列待审记录弹确认后POST approve并剔除该行 | R:- | A:load,approve,submitApproval,reviewQuantities,lineTitle,lineSub | S:仅查pending；成功后本地剔除；取消须复位approving
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/workshop/reporting-history/===
+index.uvue[EB4S]: F:我的报工历史列表，按当前用户worker_id分页拉取 | R:- | A:load,refreshList,loadMore,retry,lineTitle,lineSub | S:worker_id取当前用户；追加失败重试仍同页；ticket防竞态
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/workshop/scan-report/===
+index.uvue[EB8L]: F:扫码报工页：扫码或手输解析工单、选工序、校验数量工时后可恢复式提交 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/load.uts | A:onScan,resolveCode,pickOrder,submitReport,applyOutcome,recoverPending | S:未提交离开弹确认拦截；结果未知仅可恢复勿重填；不合格≤报工
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/workshop/work-order-assign/===
+index.uvue[EW5M]: F:工单→工序→人员/小组三级点选，提交dispatch指派 | R:code:kuaigeyun-client/riveredge-app-mobile/features/workshop/exception-report/index.uvue | A:loadOrders,pickOrder,pickOperation,loadAssignees,toggleWorker,submitDispatch | S:ticket防旧响应覆盖;人员ids[0]兼作单人字段;小组与人员互斥
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/features/workshop/work-orders/===
+index.uvue[EB5S]: F:全部工单关键词+状态筛选分页列表，详情卡跳扫码报工 | R:code:kuaigeyun-client/riveredge-app-mobile/features/workshop/exception-report/index.uvue | A:search,load,loadMore,openDetail,closeDetail,goReport | S:ticket防竞态;加载更多concat追加;详情态拦截返回键并还原列表滚动
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/shared/api/===
+app-entry.uts[LS6M]: F:解析校验并持久化APP租户入口URL(/mobile/域名段)，同步租户会话 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/load.uts | A:parseAppEntryUrl,readSavedAppEntry,readAppEntryOrigin,saveAppEntry,isTenantDomainSegment,isHost | S:域名单段3-12字符小写开头禁保留词；tenantId须正整数
+fields.uts[DD6M]: F:领域无关JSON字段读取助手：类型归一、多键回退、列表解包、错误提取 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/load.uts | A:asJsonObject,fieldText,firstText,fieldNumberOrNull,readRows,errorText | S:readRows兼容items/data嵌套仅收对象行；errorText兜底'请求失败'
+http.uts[LI9M]: F:移动端统一HTTP客户端,封装基址/鉴权头/幂等键/响应解包与失败分类 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/load.uts | A:apiBase,isPublicPath,buildHeaders,unwrap,handleResponse,apiRequestWithOperationKey | S:超时断网及2xx空body按结果未知勿盲重发;非公开写带幂等键;401清token
+index.uts[LI7S]: F:业务页统一请求入口,归一化path/query/body后转调http.uts | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/load.uts | A:request,stripApiPrefix,readQuery,readBody,pushPair,pairsFromJsonText | S:自动去/api/v1前缀防重复拼接;query支持对象或key-value数组;空值及'null'剔除
+origin.example.uts[LC2T]: F:仅示例API_ORIGIN常量形状,运行值在origin.uts | R:- | A:API_ORIGIN | S:模板文件勿写真实运行地址
+origin.uts[LC5T]: F:API源地址常量,空串表示相对/api/v1,本机换源改此文件 | R:- | A:API_ORIGIN | S:地址勿提交;origin.local.uts不被导入改它无效
+pick-image.uts[LI4T]: F:选图(拍照/相册)后经uploadImage上传返回附件对象 | R:- | A:pickAndUploadImage,firstPath | S:取消或空路径resolve(null);上传失败才reject;count=1单选
+session.uts[LS8S]: F:移动会话本地存储：令牌、租户、用户信息与待进入路径读写 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/load.uts | A:getToken,setToken,clearToken,getTenantId,readSessionUserId,takePendingEntry | S:空值写入即删键;用户id兼容嵌套user.id;clearToken连带清user_info
+submission-recovery.uts[LW9M]: F:提交快照本地持久化与原键幂等重发，三态结果分类 | R:- | A:submitRecoverable,recoverSubmission,prepareSubmission,completeSubmission,listPendingSubmissions,listCorruptSubmissions | S:5xx与网络错误按未知保留快照;4xx仅401/409不清除;损坏记录只读不可删
+upload.uts[LA6S]: F:单图经files表单上传core/files并归一化为附件对象 | R:- | A:uploadImage,authHeader,firstRecord,toAttachment | S:401时clearToken;表单字段固定files;category走查询参数;响应须含uuid
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/shared/channel/app/===
+index.uts[LA3T]: F:App渠道适配桩：仅扫码拍照可用，浏览器与取码为空实现 | R:- | A:scan,openCamera,acquireLoginCode,loginRedirect,readBrowserQuery | S:浏览器查询/路径函数恒返空串;acquireLoginCode恒connected=false
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/shared/channel/h5/===
+index.uts[LI8L]: F:H5渠道：租户域名入口识别、企微OAuth跳转与JSAPI签名扫码 | R:code:kuaigeyun-client/riveredge-app-mobile/App.uvue | A:readMobileEntryDomain,openMobileTenantEntry,publishH5Route,loginRedirect,scan,dropBrowserQuery | S:域名段3-12位且避开保留词;发布路由剥/mobile前缀;扫码须登录且wx存在
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/shared/channel/===
+headers.uts[LC6T]: F:按条件编译输出渠道码/运行端/登录连通性与幂等键 | R:code:kuaigeyun-client/riveredge-app-mobile/shared/api/http.uts | A:clientChannel,runtimePlatform,loginConnected,readWebUuid,createIdempotencyKey | S:渠道码唯一赋值点；loginConnected仅H5真
+index.uts[LI7S]: F:跨端渠道能力门面：浏览器路由/登录取码/扫码/相机统一出口 | R:code:kuaigeyun-client/riveredge-app-mobile/shared/channel/h5/index.uts | A:acquireLoginCode,loginRedirect,scan,openCamera,readBrowserQuery,publishH5Route | S:scan空值即拒；取码仅H5接通；push为占位
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/shared/channel/mp-weixin/===
+index.uts[LI5T]: F:微信小程序渠道实现：uni扫码与拍照可用，取码与浏览器API为空桩 | R:code:kuaigeyun-client/riveredge-app-mobile/shared/channel/app/index.uts | A:scan,openCamera,acquireLoginCode,loginRedirect,readBrowserQuery,publishH5Route | S:路由与取码全空桩；拍照经chooseImage
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/shared/ui/===
+action-button.uvue[EA4T]: F:统一动作按钮：主次色调/紧凑/忙禁用态/ARIA标注 | R:- | A:label,tone,compact,busy,busyLabel,accessibilityLabel | S:busy或disabled不emit press；loading走原生
+action-card.uvue[EA4T]: F:可点卡片容器：card/row两变体承载插槽，禁用拦截点击 | R:- | A:variant,disabled,accessibilityLabel,activate,press | S:row变体去圆角边距仅留底边；disabled不emit
+choice-button.uvue[EA3T]: F:无障碍选择按钮，选中态前缀●，点击emit choose | R:- | A:label,selected,disabled,accessibilityLabel,choose,activate | S:disabled时不emit;accessibilityLabel空回退label
+date-field.uvue[EA4T]: F:日期picker字段，含必填/清除/错误提示，校验走date.uts | R:- | A:modelValue,label,disabled,required,update:modelValue,onChange | S:非法值回落今日picker;仅非必填显示清除
+date.uts[LA4T]: F:纯日期工具，校验YYYY-MM-DD含闰年合法性并生成今日串 | R:- | A:isDateText,todayDate | S:仅认10位分隔格式;todayDate取本地时区
+empty-state.uvue[EA3T]: F:空态占位组件，圆底图标+标题+可选hint，compact紧凑变体 | R:- | A:title,hint,icon,compact,iconPath | S:icon空回落默认inbox.svg;hint空不渲染
+home-link.uvue[EA5S]: F:页顶导航条，返回/首页按钮、状态栏内边距、自动取页标题 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/load.uts | A:title,holdHome,holdBack,home,back,syncBar | S:登录/工作台页隐藏按钮;hold系改发事件不自导航
+load-feedback.uvue[EA5T]: F:通用加载反馈组件,含骨架屏/转圈/阻塞遮罩与慢响应提示 | R:- | A:props.active,props.mode,props.label,defaultLabel,sync,clearTimers | S:激活160ms后才显示防闪烁;8秒未完提示慢;initial显骨架
+navigate.uts[LA4T]: F:uni.navigateTo薄封装,统一右滑入场动画 | R:- | A:PAGE_PUSH_ANIMATION,navigateToPage | S:动画固定slide-in-right;success/fail回调可空
+selection-row.uvue[EA4T]: F:可点选行按钮,含选中态/描述/禁用与aria无障碍标注 | R:- | A:props.label,props.selected,props.busy,props.accessibilityLabel,activate,emit.choose | S:disabled或busy均阻断choose;aria-pressed/busy已内置
+sheet-option.uts[DD4T]: F:选择器选项数据类及工厂函数 | R:- | A:SheetOption,sheetOption,id,label,description | S:id为number;description默认空串
+sheet-picker.uvue[EA6T]: F:底部弹出选择器,支持搜索/分页加载更多/已选回显 | R:- | A:props.options,props.selectedId,props.total,toggle,choose,onMore | S:数据状态全由父控;choose回传下标非id;仅展开时emit open
+status-badge.uvue[EA2T]: F:uni-badge-view封装,tone映射四档背景色 | R:- | A:value,tone,badgeStyle | S:tone仅四档默认warning;色值全部硬编码
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/shell/account/===
+bind.uts[LS4T]: F:企微账号绑定取授权地址并整页跳转 | R:code:kuaigeyun-client/riveredge-app-mobile/shared/api/http.uts | A:wecomBindOnThisClient,startWecomBind,pageAddress,assignPage | S:仅WEB/H5编译分支生效;失败返回文案不抛异常;与登录取码分离
+edit.uvue[ES5M]: F:个人资料编辑页,含头像上传清除与保存 | R:code:kuaigeyun-client/riveredge-app-mobile/shared/api/session.uts | A:loadForm,onSave,onPick,onClear,showAvatar,hasAvatar | S:无token即reLaunch登录;用户名必填≤50字;头像改动随保存才提交
+index.uvue[ES7L]: F:账号主页,资料卡/企微绑定解绑/退出登录 | R:code:kuaigeyun-client/riveredge-app-mobile/shared/api/session.uts | A:refresh,applyMe,onBind,doUnbind,doLogout,rebuildFacts | S:ticket序号防过期响应覆盖;授权code只消费一次;profile失败不连累me数据
+password.uvue[ES4T]: F:修改密码页,前端校验后调改密接口 | R:code:kuaigeyun-client/riveredge-app-mobile/shared/api/session.uts | A:onSave,leave,failText | S:新密码≥8位且两次一致;无token即跳登录;成功清空三输入框
+profile.uts[LS5S]: F:个人资料助手：企微标识/角色提取、头像预览URL拼装、资料/密码/绑定请求体 | R:code:kuaigeyun-client/riveredge-app-mobile/shared/api/http.uts | A:profileInitial,wecomUserIdOf,absolutePreview,loadAvatarSrc,profileUpdateBody,wecomBindBody | S:企微ID只认contact_info不推测;无token的preview_url不拼源站;avatar置null表删除
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/shell/apps/===
+index.uvue[AB7M]: F:应用宫格页：加载工作台分组与单元格、故障/保养徽标、点格经注册表路由打开 | R:code:kuaigeyun-client/riveredge-app-mobile/shared/api/session.uts | A:refresh,onShow,openScope,closeScope,onCell,onBackPress | S:无token时reLaunch回登录;ticket票号防旧刷新覆盖;返回键先关已开分组
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/shell/login/===
+flow.uts[LS9M]: F:登录流程核心：租户解析与域名锁定、企微code换token、密码登录、组织搜索选择 | R:code:kuaigeyun-client/riveredge-app-mobile/shared/api/session.uts | A:bootLogin,resolveTenant,lockTenantByDomain,exchangeCode,loginWithPassword,searchTenants | S:换域或租户失效即清token;租户ID须正整数;需选组织时不猜测直接报错
+index.uvue[AS8M]: F:登录页：账号密码与企微登录入口、组织搜索选择、初始化引导与错误提示 | R:code:kuaigeyun-client/riveredge-app-mobile/shared/api/session.uts | A:refresh,onLoad,onSearch,onChoose,onPasswordLogin,onWecom | S:登录/搜索/企微忙互斥禁用;仅APP且租户锁定才显示服务器地址设置
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/shell/registry/===
+index.uts[LA8M]: F:功能包注册表：聚合已装包入口、平台过滤与路由匹配、注册路由打开并记最近 | R:code:kuaigeyun-client/riveredge-app-mobile/shared/channel/index.uts | A:findEntryByRoute,routesMatch,openRegisteredRoute,publicRoute,stripMobilePrefix,entrySupportsPlatform | S:manifest声明的query键值须全等才匹配;仅tenant_id/code/state透传;解码失败回退原串
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/shell/tenant/===
+index.uvue[ES7S]: F:租户地址录入页:识别域名→确认组织→存入口,换租户清token重登 | R:code:kuaigeyun-client/riveredge-app-mobile/shared/api/app-entry.uts | A:onAddress,onIdentify,onConfirm,clearPending,onLoad识别settings模式,reLaunch分流 | S:仅APP端否则跳登录;改地址即作废待确认;租户变更清token
+probe.uts[LI6T]: F:租户探测:解析入口地址→请求check-domain→校验返回租户 | R:code:kuaigeyun-client/riveredge-app-mobile/shared/api/app-entry.uts | A:probeAppEntry,parseAppEntryUrl,apiGetFromOrigin,isPositiveInt,readString,fail | S:exists须true且tenant_id为正整数;异常统一归一为fail对象
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/shell/workbench/===
+icons.uts[LC3M]: F:工作台图标映射:icon语义名→SVG资源路径或单字兜底,按scope配色 | R:- | A:iconGlyph,iconMark,iconAsset,scopeIcon,tileClass,scopeTitle | S:仅DRAWN白名单出SVG;未知scope归一workshop;label空兜底'项'
+index.uvue[EB9L]: F:工作台首页:账号条/扫码报工/待办统计/常用四格/功能名检索 | R:code:kuaigeyun-client/riveredge-app-mobile/shared/api/session.uts | A:refresh,applyHome,measureHomeTodos,refreshHits,openCell,onShow | S:深链仅首次消费一次;刷新失败保留旧数据;无token回登录
+load.uts[DD7M]: F:装配工作台:按scope并发拉sections与badge,缓存随token租户失效 | R:code:kuaigeyun-client/riveredge-app-mobile/shared/api/session.uts | A:loadWorkbench,loadScope,loadBadge,readWorkbenchCache,readSections | S:空sections整块丢弃;scope去重;badge失败仅降级记note
+recent.uts[LD5T]: F:工作台最近访问路由本地缓存读写，按租户+用户分键，最多8条去重置顶 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/index.uvue | A:storageKey,readRecentRoutes,rememberRoute,uni.getStorageSync,uni.setStorageSync | S:键含租户+用户ID；上限8条去重；无键/异常静默返空
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/equipment/===
+audit.svg[CH3T]: F:审核/单据图标：圆角矩形表单内含三行横线且末行短，棕色描边 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox 0 0 24 24,rect,path | S:stroke=#B45309；fill=none；固定22×22
+bell.svg[CH3T]: F:铃铛图标：拱形铃身折线加底部半圆铃舌，棕色描边 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox 0 0 24 24,path×2 | S:stroke=#B45309；fill=none；固定22×22
+chart.svg[CH3T]: F:柱状图图标：底横轴上三根不等高竖柱，棕色描边 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox 0 0 24 24,path×2 | S:stroke=#B45309；fill=none；固定22×22
+check-circle.svg[CH3T]: F:圆圈对勾图标：圆环内折线勾，表完成/通过，棕色描边 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox 0 0 24 24,circle,path | S:stroke=#B45309；fill=none；固定22×22
+check.svg[CH3T]: F:单条对勾图标：两段折线勾，表确认/勾选，棕色描边 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox 0 0 24 24,path | S:stroke=#B45309；fill=none；固定22×22
+close-circle.svg[CH3T]: F:圆圈叉号图标：圆环内交叉X，表关闭/错误，棕色描边 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox 0 0 24 24,circle,path | S:stroke=#B45309；fill=none；固定22×22
+export.svg[CH3T]: F:导出图标：向上箭头自托盘盒中引出，棕色描边 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox 0 0 24 24,path×3 | S:stroke=#B45309；fill=none；固定22×22
+file.svg[CH1T]: F:折角文档图标：页形轮廓+右上折角+两行横线，语义「单」 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24;path页轮廓;path折角;path横线×2 | S:stroke#B45309,1.75,fill=none,22×22
+history.svg[CH1T]: F:圆形时钟图标：圆盘+两针指示时刻，语义「史」表履历历史 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24;circle r8;path时针分针 | S:stroke#B45309,1.75,fill=none,22×22
+import.svg[CH1T]: F:导入图标：向下箭头落入顶部开口的托盘框，语义「入」 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24;path竖轴;path箭头;path开口框 | S:stroke#B45309,1.75,fill=none,22×22
+inbox.svg[CH1T]: F:收件箱图标：斜面开口+带中央凹槽的托盘盒，语义「箱」 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24;path斜开口;path凹槽盒体 | S:stroke#B45309,1.75,fill=none,22×22
+link.svg[CH1T]: F:链条图标：两段相扣链环斜向交叠，语义「绑」表绑定关联 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24;path上链环;path下链环 | S:stroke#B45309,1.75,fill=none,22×22
+list.svg[CH1T]: F:清单图标：三行圆点符+右侧横线列表，语义「列」 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24;path横线×3;path圆点×3 | S:圆点为零长path靠round cap,stroke#B45309
+maintain.svg[CH1T]: F:扳手图标：单一闭合path勾勒斜置开口扳手，语义「养」 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24;path扳手一体 | S:stroke#B45309,1.75,fill=none,22×22
+minus-square.svg[CH4T]: F:圆角方框内一横线的减号图标，表示移除/减少操作 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:svg,rect(rx=2),path | S:22×22;stroke #B45309;sw1.75;fill:none
+plus-square.svg[CH5T]: F:圆角方框内十字加号图标，表示新增/添加操作 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:svg,rect(rx=2),path | S:22×22;stroke #B45309;sw1.75;fill:none
+rollback.svg[CH4T]: F:逆时针回转箭头图标，表示撤销/回退操作 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:svg,path(箭头),path(圆弧A7.5) | S:22×22;stroke #B45309;sw1.75;fill:none
+scan.svg[CH5T]: F:四角定位框加中心小方框的扫码图标 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:svg,path×4(角框),rect(8,8,8,8) | S:22×22;stroke #B45309;sw1.75;fill:none
+search.svg[CH5T]: F:圆镜片加斜柄的放大镜图标，表示搜索 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:svg,circle(r=6),path(柄) | S:22×22;stroke #B45309;sw1.75;fill:none
+shield.svg[CH3T]: F:对称盾牌轮廓图标，表示安全/防护 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:svg,path(单闭合盾形) | S:22×22;stroke #B45309;sw1.75;fill:none
+shopping.svg[CH4T]: F:带双轮斗形车身的购物车图标，表示采购/物料申领 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:svg,circle×2(轮),path(车身) | S:22×22;stroke #B45309;sw1.75;fill:none
+swap.svg[CH4T]: F:上下反向双箭头图标，表示交换/切换操作 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:svg,path×2(双箭头) | S:22×22;stroke #B45309;sw1.75;fill:none
+tool.svg[CH1T]: F:扳手工具图标，单path勾勒开口扳手轮廓，琥珀色描边 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox 0 0 24 24, path(扳手主体) | S:22×22, stroke#B45309, sw1.75, round
+truck.svg[CH1T]: F:货运卡车图标，车厢矩形+车头折线+双车轮，琥珀色描边 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox 0 0 24 24, path×2(车厢/车头), circle×2(车轮) | S:22×22, stroke#B45309, sw1.75, round
+user.svg[CH1T]: F:用户人像图标，圆头+弧形肩线，简洁琥珀色描边 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox 0 0 24 24, circle(头部), path(肩部弧线) | S:22×22, stroke#B45309, sw1.75, round
+warning.svg[CH1T]: F:警告三角图标，内含感叹号竖线与圆点，琥珀色描边 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox 0 0 24 24, path×3(三角/叹线/叹点) | S:22×22, stroke#B45309, sw1.75, round
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/mold/===
+audit.svg[CM1T]: F:审计单据图标，圆角矩形夹板内三行横线，青绿色描边 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox 0 0 24 24, rect(圆角夹板), path(三行文本) | S:22×22, stroke#0F766E, sw1.75, round
+bell.svg[CM1T]: F:铃铛提醒图标，钟体轮廓+底部铃舌弧线，青绿色描边 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox 0 0 24 24, path×2(钟体/铃舌) | S:22×22, stroke#0F766E, sw1.75, round
+chart.svg[CM1T]: F:柱状统计图图标，底轴+三根高低柱线，青绿色描边 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox 0 0 24 24, path×2(底轴/三柱线) | S:22×22, stroke#0F766E, sw1.75, round
+check-circle.svg[CM1T]: F:圆形确认图标，圆圈内一枚向右下倾斜对勾 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,circle,path | S:#0F766E/22×22/sw1.75/round
+check.svg[CM1T]: F:单条对勾确认图标，简洁斜挑笔画 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path | S:#0F766E/22×22/sw1.75/round
+close-circle.svg[CM1T]: F:圆形关闭图标，圆圈内交叉X双斜线 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,circle,path | S:#0F766E/22×22/sw1.75/round
+export.svg[CM1T]: F:导出图标，向上箭头离开底部开口托盘框 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path×3 | S:#0F766E/22×22/sw1.75/round
+file.svg[CM1T]: F:文档文件图标，右上折角内含两行横线正文 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path×3 | S:#0F766E/22×22/sw1.75/round
+history.svg[CM1T]: F:历史时钟图标，圆圈内两根指针指向时刻 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,circle,path | S:#0F766E/22×22/sw1.75/round
+import.svg[CM1T]: F:导入图标，向下箭头指向顶部开口容器框 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path×3 | S:#0F766E/22×22/sw1.75/round
+inbox.svg[CM1T]: F:收件箱托盘图标，正面带凹口梯形盒体 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path×2 | S:#0F766E/22×22/sw1.75/round
+link.svg[CM1T]: F:链接图标，两枚椭圆环斜向相扣成链 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path×2 | S:#0F766E/22×22/sw1.75/round
+list.svg[CM1T]: F:列表图标，左侧三圆点对应右侧三条横线 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path×2 | S:#0F766E/22×22/sw1.75/round
+maintain.svg[CM1T]: F:维修保养图标，单枚开口扳手斜置 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path | S:#0F766E/22×22/sw1.75/round
+minus-square.svg[CM1T]: F:减少图标，圆角方框内一条水平减号 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,rect,path | S:#0F766E/22×22/sw1.75/round
+plus-square.svg[CM1T]: F:新增图标，圆角方框内十字加号 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,rect,path | S:#0F766E/22×22/sw1.75/round
+rollback.svg[CM1T]: F:回退撤销图标，逆时针圆弧配左上箭头 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path×2 | S:#0F766E/22×22/sw1.75/round
+scan.svg[CM1T]: F:扫码图标，四角取景框包围中心小方块 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path×4,rect | S:#0F766E/22×22/sw1.75/round
+search.svg[CM1T]: F:放大镜，圆镜+右下斜柄，线性简约 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,circle,path | S:#0F766E/w1.75/22x22
+shield.svg[CM1T]: F:盾牌轮廓，顶部平边两侧收尖底，安全防护语义 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path | S:#0F766E/w1.75/22x22
+shopping.svg[CM1T]: F:购物车，提篮折线车身+两圆车轮，采购语义 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,circle,circle,path | S:#0F766E/w1.75/22x22
+swap.svg[CM1T]: F:上下反向双箭头横线，互换/转移语义 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path,path | S:#0F766E/w1.75/22x22
+tool.svg[CM1T]: F:单把扳手斜置，开口钳口朝右上，维修语义 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path | S:#0F766E/w1.75/22x22
+truck.svg[CM1T]: F:厢式货车侧视，车厢+车头折线+两圆车轮，物流 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path,path,circle,circle | S:#0F766E/w1.75/22x22
+user.svg[CM1T]: F:人像，圆形头部+下弧肩线，用户/负责人语义 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,circle,path | S:#0F766E/w1.75/22x22
+warning.svg[CM1T]: F:警示三角内含感叹号竖线与圆点，异常告警 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path,path,path | S:#0F766E/w1.75/22x22
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/quality/===
+audit.svg[CQ1T]: F:圆角矩形单据内三条横线，审核/检验单语义 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,rect,path | S:#15803D/w1.75/22x22
+bell.svg[CQ1T]: F:铃铛拱形钟身+底部铃舌半弧，通知提醒语义 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path,path | S:#15803D/w1.75/22x22
+chart.svg[CQ1T]: F:柱状统计图，水平基线上三根高低不同竖柱 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path,path | S:#15803D/w1.75/22x22
+check-circle.svg[CQ1T]: F:圆圈内嵌对勾，合格/通过确认语义 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,circle,path | S:#15803D/w1.75/22x22
+check.svg[CQ1T]: F:单条对勾折线，确认/勾选语义，最简线性 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path | S:#15803D/w1.75/22x22
+close-circle.svg[CQ1T]: F:圆圈内交叉叉号，不合格/关闭语义 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,circle,path | S:#15803D/w1.75/22x22
+export.svg[CQ1T]: F:向上箭头出自开口托盘框，数据导出语义 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path,path,path | S:#15803D/w1.75/22x22
+file.svg[CQ1T]: F:折角文档图标：页形轮廓+右上折角+两行横线 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path×3 | S:#15803D/w1.75/22x22
+history.svg[CQ1T]: F:圆形时钟图标，圆盘+两针指向时刻，履历历史语义 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,circle,path | S:#15803D/w1.75/22x22
+import.svg[CQ1T]: F:导入图标，向下箭头落入顶部开口托盘框 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path×3 | S:#15803D/w1.75/22x22
+inbox.svg[CQ1T]: F:收件箱图标，斜面开口+带中央凹槽的托盘盒 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path×2 | S:#15803D/w1.75/22x22
+link.svg[CQ1T]: F:链接图标，两枚椭圆环斜向相扣成链，绑定关联语义 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path×2 | S:#15803D/w1.75/22x22
+list.svg[CQ1T]: F:清单列表图标，左侧三圆点对应右侧三条横线 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path×2 | S:#15803D/w1.75/22x22;圆点零长path靠round cap
+maintain.svg[CQ1T]: F:维修保养图标，单枚开口扳手斜置 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path | S:#15803D/w1.75/22x22
+minus-square.svg[CQ1T]: F:减少图标，圆角方框内一条水平减号 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,rect,path | S:#15803D/w1.75/22x22
+plus-square.svg[CQ1T]: F:新增图标，圆角方框内十字加号 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,rect,path | S:#15803D/w1.75/22x22
+rollback.svg[CQ1T]: F:回退撤销图标，逆时针圆弧配左上箭头 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path×2 | S:#15803D/w1.75/22x22
+scan.svg[CQ1T]: F:扫码图标，四角取景框包围中心小方块 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path×4,rect | S:#15803D/w1.75/22x22
+search.svg[CQ1T]: F:放大镜图标，圆镜+右下斜柄，搜索语义 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,circle,path | S:#15803D/w1.75/22x22
+shield.svg[CQ1T]: F:盾牌轮廓图标，顶部平边两侧收尖底，安全防护语义 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path | S:#15803D/w1.75/22x22
+shopping.svg[CQ1T]: F:购物车图标，提篮折线车身+两圆车轮，采购语义 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,circle×2,path | S:#15803D/w1.75/22x22
+swap.svg[CQ1T]: F:上下反向双箭头图标，互换/转移语义 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path×2 | S:#15803D/w1.75/22x22
+tool.svg[CQ1T]: F:扳手工具图标，单path勾勒开口扳手轮廓 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path | S:#15803D/w1.75/22x22
+truck.svg[CQ1T]: F:厢式货车侧视，车厢+车头折线+两圆车轮 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path×2,circle×2 | S:#15803D/w1.75/22x22
+user.svg[CQ1T]: F:人像图标，圆形头部+下弧肩线 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,circle,path | S:#15803D/w1.75/22x22
+warning.svg[CQ1T]: F:警示三角图标，内含感叹号竖线与圆点 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path×3 | S:#15803D/w1.75/22x22
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/warehouse/===
+audit.svg[CW1T]: F:审核单据图标，圆角矩形夹板内三行横线 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,rect,path | S:#1D4ED8/w1.75/22x22
+bell.svg[CW1T]: F:铃铛提醒图标，钟体轮廓+底部铃舌弧线 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path×2 | S:#1D4ED8/w1.75/22x22
+chart.svg[CW1T]: F:柱状统计图，水平基线上三根高低竖柱 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path×2 | S:#1D4ED8/w1.75/22x22
+check-circle.svg[CW1T]: F:圆圈内嵌对勾，完成/通过确认语义 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,circle,path | S:#1D4ED8/w1.75/22x22
+check.svg[CW1T]: F:单条对勾折线，确认/勾选语义 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path | S:#1D4ED8/w1.75/22x22
+close-circle.svg[CW1T]: F:圆圈内交叉叉号，关闭/错误语义 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,circle,path | S:#1D4ED8/w1.75/22x22
+export.svg[CW1T]: F:导出图标，向上箭头出自开口托盘框 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path×3 | S:#1D4ED8/w1.75/22x22
+file.svg[CW1T]: F:折角文档图标：页形轮廓+右上折角+两行横线 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path×3 | S:#1D4ED8/w1.75/22x22
+history.svg[CW1T]: F:圆形时钟图标，圆盘+两针指向时刻 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,circle,path | S:#1D4ED8/w1.75/22x22
+import.svg[CW1T]: F:导入图标，向下箭头落入顶部开口托盘框 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path×3 | S:#1D4ED8/w1.75/22x22
+inbox.svg[CW1T]: F:收件箱图标，斜面开口+带中央凹槽的托盘盒 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path×2 | S:#1D4ED8/w1.75/22x22
+link.svg[CW1T]: F:链接图标，两枚椭圆环斜向相扣成链 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path×2 | S:#1D4ED8/w1.75/22x22
+list.svg[CW1T]: F:清单列表图标，左侧三圆点对应右侧三条横线 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path×2 | S:#1D4ED8/w1.75/22x22;零长path靠round cap
+maintain.svg[CW1T]: F:维修保养图标，单枚开口扳手斜置 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path | S:#1D4ED8/w1.75/22x22
+minus-square.svg[CW1T]: F:减少图标，圆角方框内一条水平减号 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,rect,path | S:#1D4ED8/w1.75/22x22
+plus-square.svg[CW1T]: F:新增图标，圆角方框内十字加号 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,rect,path | S:#1D4ED8/w1.75/22x22
+rollback.svg[CW1T]: F:回退撤销图标，逆时针圆弧配左上箭头 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path×2 | S:#1D4ED8/w1.75/22x22
+scan.svg[CW1T]: F:扫码图标，四角取景框包围中心小方块 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path×4,rect | S:#1D4ED8/w1.75/22x22
+search.svg[CW1T]: F:放大镜图标，圆镜+右下斜柄 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,circle,path | S:#1D4ED8/w1.75/22x22
+shield.svg[CW1T]: F:盾牌轮廓图标，顶部平边两侧收尖底 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path | S:#1D4ED8/w1.75/22x22
+shopping.svg[CW1T]: F:购物车图标，提篮折线车身+两圆车轮 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,circle×2,path | S:#1D4ED8/w1.75/22x22
+swap.svg[CW1T]: F:上下反向双箭头图标，互换/转移语义 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path×2 | S:#1D4ED8/w1.75/22x22
+tool.svg[CW1T]: F:扳手工具图标，单path勾勒开口扳手轮廓 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path | S:#1D4ED8/w1.75/22x22
+truck.svg[CW1T]: F:厢式货车侧视，车厢+车头折线+两圆车轮 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path×2,circle×2 | S:#1D4ED8/w1.75/22x22
+user.svg[CW1T]: F:人像图标，圆形头部+下弧肩线 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,circle,path | S:#1D4ED8/w1.75/22x22
+warning.svg[CW1T]: F:警示三角图标，内含感叹号竖线与圆点 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path×3 | S:#1D4ED8/w1.75/22x22
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/static/workbench-icons/workshop/===
+audit.svg[CP1T]: F:审核单据图标，圆角矩形夹板内三行横线 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,rect,path | S:#9730E3/w1.75/22x22
+bell.svg[CP1T]: F:铃铛提醒图标，钟体轮廓+底部铃舌弧线 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path×2 | S:#9730E3/w1.75/22x22
+chart.svg[CP1T]: F:柱状统计图，水平基线上三根高低竖柱 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path×2 | S:#9730E3/w1.75/22x22
+check-circle.svg[CP1T]: F:圆圈内嵌对勾，完成/通过确认语义 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,circle,path | S:#9730E3/w1.75/22x22
+check.svg[CP1T]: F:单条对勾折线，确认/勾选语义 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path | S:#9730E3/w1.75/22x22
+close-circle.svg[CP1T]: F:圆圈内交叉叉号，关闭/错误语义 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,circle,path | S:#9730E3/w1.75/22x22
+export.svg[CP1T]: F:导出图标，向上箭头出自开口托盘框 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path×3 | S:#9730E3/w1.75/22x22
+file.svg[CP1T]: F:折角文档图标：页形轮廓+右上折角+两行横线 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path×3 | S:#9730E3/w1.75/22x22
+history.svg[CP1T]: F:圆形时钟图标，圆盘+两针指向时刻 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,circle,path | S:#9730E3/w1.75/22x22
+import.svg[CP1T]: F:导入图标，向下箭头落入顶部开口托盘框 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path×3 | S:#9730E3/w1.75/22x22
+inbox.svg[CP1T]: F:收件箱图标，斜面开口+带中央凹槽的托盘盒 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path×2 | S:#9730E3/w1.75/22x22
+link.svg[CP1T]: F:链接图标，两枚椭圆环斜向相扣成链 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path×2 | S:#9730E3/w1.75/22x22
+list.svg[CP1T]: F:清单列表图标，左侧三圆点对应右侧三条横线 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path×2 | S:#9730E3/w1.75/22x22;零长path靠round cap
+maintain.svg[CP1T]: F:维修保养图标，单枚开口扳手斜置 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path | S:#9730E3/w1.75/22x22
+minus-square.svg[CP1T]: F:减少图标，圆角方框内一条水平减号 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,rect,path | S:#9730E3/w1.75/22x22
+plus-square.svg[CP1T]: F:新增图标，圆角方框内十字加号 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,rect,path | S:#9730E3/w1.75/22x22
+rollback.svg[CP1T]: F:回退撤销图标，逆时针圆弧配左上箭头 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path×2 | S:#9730E3/w1.75/22x22
+scan.svg[CP1T]: F:扫码图标，四角取景框包围中心小方块 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path×4,rect | S:#9730E3/w1.75/22x22
+search.svg[CP1T]: F:放大镜图标，圆镜+右下斜柄 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,circle,path | S:#9730E3/w1.75/22x22
+shield.svg[CP1T]: F:盾牌轮廓图标，顶部平边两侧收尖底 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path | S:#9730E3/w1.75/22x22
+shopping.svg[CP1T]: F:购物车图标，提篮折线车身+两圆车轮 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,circle×2,path | S:#9730E3/w1.75/22x22
+swap.svg[CP1T]: F:上下反向双箭头图标，互换/转移语义 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path×2 | S:#9730E3/w1.75/22x22
+tool.svg[CP1T]: F:扳手工具图标，单path勾勒开口扳手轮廓 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path | S:#9730E3/w1.75/22x22
+truck.svg[CP1T]: F:厢式货车侧视，车厢+车头折线+两圆车轮 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path×2,circle×2 | S:#9730E3/w1.75/22x22
+user.svg[CP1T]: F:人像图标，圆形头部+下弧肩线 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,circle,path | S:#9730E3/w1.75/22x22
+warning.svg[CP1T]: F:警示三角图标，内含感叹号竖线与圆点 | R:code:kuaigeyun-client/riveredge-app-mobile/shell/workbench/icons.uts | A:viewBox24,path×3 | S:#9730E3/w1.75/22x22
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-badge-view/===
+changelog.md[CO2T]: F:uni-badge-view 插件变更日志：1.0.0→1.0.2 三版本记录 | R:- | A:changelog,v1.0.0-v1.0.2 | S:MD 变更记录;插件市场组件
+package.json[CD2T]: F:uni-badge-view 插件清单 v1.0.2：uni_modules 组件元数据与平台声明 | R:- | A:uni-badge-view,isExt,uni_modules.platforms,engines | S:插件市场ID27844;uni-app-x全端
+readme.md[CO3T]: F:uni-badge-view 用法文档：独立/包裹模式、text 语义、badge-class/style 自定义 | R:code:kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-badge-view/components/uni-badge-view/uni-badge-view.uvue | A:text,badge-class,badge-style | S:text=0不包裹;红点8px
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-badge-view/components/uni-badge-view/===
+uni-badge-view.uvue[CC4M]: F:数字角标组件：包裹子内容右上角显示文字/红点 | R:- | A:text,badgeStyle,badgeClass,alwaysWrapWithContent,hasDefaultSlot | S:script setup;badge-wrap绝对定位;红底r(225,80,80)
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-collapse-x/===
+changelog.md[CO2T]: F:uni-collapse-x 变更日志：1.0.0 初版→1.0.1 增 content-wrap-class | R:- | A:v1.0.0,v1.0.1 | S:MD 变更记录
+package.json[CD2T]: F:uni-collapse-x 插件清单 v1.0.1：折叠面板组件元数据与平台声明 | R:- | A:uni-collapse-x,isExt,uni_modules.platforms,engines | S:插件市场ID27899;uni-app-x
+readme.md[CO3T]: F:uni-collapse-x 用法文档：父子组件、externalClass、插槽/事件/Expose | R:- | A:accordion,title,title-*-class,arrow-*-class,change,openCollapse | S:Android需HBX5.09+箭头修复
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-collapse-x/components/===
+common.ts[CC1T]: F:collapse 父子通信事件常量：注册/注销/子项切换三个 provide 键 | R:- | A:UNI_COLLAPSE_REGISTER_CHILD,UNI_COLLAPSE_UNREGISTER_CHILD,UNI_COLLAPSE_CHILD_TOGGLE | S:3行常量;与common.uts同内容
+common.uts[CC1T]: F:collapse 父子通信事件常量：注册/注销/子项切换三个 provide 键 | R:- | A:UNI_COLLAPSE_REGISTER_CHILD,UNI_COLLAPSE_UNREGISTER_CHILD,UNI_COLLAPSE_CHILD_TOGGLE | S:3行常量;与common.ts同内容
+type.ts[CC1T]: F:collapse 子项类型 ItemChildType：开合方法+is_open Ref+elId | R:- | A:ItemChildType | S:6行类型;与type.uts同内容
+type.uts[CC1T]: F:collapse 子项类型 ItemChildType：开合方法+is_open Ref+elId | R:- | A:ItemChildType | S:6行类型;与type.ts同内容
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-collapse-x/components/uni-collapse-item/===
+uni-collapse-item.uvue[CC4L]: F:折叠面板子项：标题点击开合、max-height/opacity 过渡动画 | R:- | A:title,open,disabled,titleClass,contentWrapClass,openCollapse | S:inject手风琴;Android箭头修复;739行
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-collapse-x/components/uni-collapse/===
+uni-collapse.uvue[CC4M]: F:折叠面板父容器：子项注册台账与手风琴互斥开合 | R:- | A:accordion,registerChild,unregisterChild,toggle | S:provide三键;childNodes遍历
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-drag-cell/===
+changelog.md[CO2T]: F:uni-drag-cell 变更日志：仅 1.0.0 初版记录 | R:- | A:v1.0.0 | S:MD 变更记录
+package.json[CD2T]: F:uni-drag-cell 插件清单 v1.0.0：拖拽排序组件元数据与平台声明 | R:- | A:uni-drag-cell,isExt,uni_modules.platforms,engines | S:插件市场ID27845;uni-app-x
+readme.md[CO4M]: F:uni-drag-cell 用法文档：拖拽两阶段设计、插槽/事件、六类场景示例 | R:- | A:v-model,column,show-close,handle-mode,append,handle | S:331行;预览不改数组松手才提交
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-drag-cell/components/uni-drag-cell/===
+uni-drag-cell.uvue[CC4L]: F:可拖拽排序组件：长按/手柄拖拽、预览排序、拖底删除条 | R:- | A:modelValue,column,showClose,showAppend,handleMode,change | S:触摸事件+布局测量;删除条i18n;750+行
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-fab-button/===
+changelog.md[CO2T]: F:uni-fab-button 变更日志：仅 1.0.0 初版记录 | R:- | A:v1.0.0 | S:MD 变更记录
+package.json[CD2T]: F:uni-fab-button插件清单v1.0.0，engines、平台矩阵与插件市场元数据 | R:- | A:uni_modules,dcloudext,engines,extUrl,isExt,platforms | S:uni-app-x组件插件声明，app/web/微信小程序支持
+readme.md[CO3T]: F:fab按钮使用说明：外观结构、plus-class外部样式类、鸿蒙按下不缩放注意事项 | R:- | A:plus-class | S:蓝圆阴影悬浮加号按钮的用法文档
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-fab-button/components/uni-fab-button/===
+uni-fab-button.uvue[CC4S]: F:悬浮加号圆形按钮组件，点击emit click，plusClass外部类定制加号样式 | R:- | A:defineProps,defineEmits,defineOptions,handleClick,plusClass,UniPointerEvent | S:44px蓝圆底阴影，双view十字加号，一个rotate90度
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-index-bar/===
+changelog.md[CO2T]: F:版本日志：1.0.0支持uni-index-bar组件，1.0.1更新文档 | R:- | A:- | S:两条版本记录均为2026-04-30
+package.json[CD2T]: F:uni-index-bar插件清单v1.0.1，engines ^5.08、平台矩阵含支付宝小程序 | R:- | A:uni_modules,dcloudext,engines,extUrl,platforms | S:索引栏组件插件声明，支持微信支付宝小程序
+readme.md[CO3S]: F:索引栏组件文档：select事件、indexs自定义索引、外部样式类、配合list-view与scroll-into-view示例 | R:- | A:select,indexs,indicator-view-class,indicator-text-class,scroll-into-view | S:竖排索引配合list-view滚动定位的用法与示例
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-index-bar/components/uni-index-bar/===
+uni-index-bar.uvue[CC4M]: F:右侧竖排字母索引栏，触摸滑动按Y坐标换算索引并emit select，显示水滴形指示气泡 | R:- | A:defineProps,withDefaults,defineEmits,onTouchStart,onTouchMove,createSelectorQuery | S:触摸缓存布局算itemHeight，指示器rotate225度跟随
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-link-x/===
+changelog.md[CO2T]: F:uni-link-x插件变更日志：1.0.0(2026-05-07)首发支持uni-link组件 | R:- | A:1.0.0 | S:单条版本记录
+package.json[CD2S]: F:uni-link-x插件清单：v1.0.0链接组件,声明uts-openSchema依赖与uni-app-x平台矩阵 | R:- | A:uni-link-x,uts-openSchema,dcloudext,uni_modules,platforms | S:依赖uts-openSchema;支持app/web/微信小程序
+readme.md[CO3T]: F:uni-link-x使用文档：target打开方式/blankFallback三档回退/常见失败原因与error事件说明 | R:- | A:href,target,blankFallback,error,uts-openSchema,pages_init.json | S:_self走内置webview;_blank外部打开;APP依赖uts-openSchema
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-link-x/components/uni-link/===
+uni-link.uvue[CC4M]: F:uni-link链接组件：下划线text点击按target打开href,_self走内置webview页,_blank分平台外部打开,失败发error事件 | R:- | A:UniLink,href,target,blankFallback,openURL,openSchema | S:_self内置webview;_blank分平台打开,失败按blankFallback回退
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-link-x/pages/===
+link-webview.uvue[CC4T]: F:uni-link内置浏览器页面：web-view加载query传入的url,加载失败弹Modal显示errMsg | R:- | A:currentUrl,onLoad,onWebViewError,decodeURIComponent | S:onLoad取query的url解码赋src;error弹errMsg
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-nav-bar-x/===
+changelog.md[CO2T]: F:uni-nav-bar-x插件变更日志：1.0.0首发组件,1.0.1纠正类名拼写错误 | R:- | A:1.0.0,1.0.1 | S:两条版本记录
+
+===D:/kuaigeyun-pro/kuaigeyun/kuaigeyun-client/riveredge-app-mobile/uni_modules/uni-nav-bar-x/components/uni-nav-bar/===
+uni-nav-bar.uvue[CC4M]: F:uni-app-x自定义导航栏：状态栏留白+左返回箭头/中标题/右插槽三段布局,前景色与externalClasses可配 | R:- | A:hideDefaultBack,title,navigationBarTextStyle,leftClass,back,navigateBack | S:旋转边框绘返回箭头;三段slot可覆盖;back走navigateBack
