@@ -133,7 +133,9 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | 运营看板、参观模式、visit_mode、手填指标 | `features/business-board-visit-mode.md` |
 | 价格本批量登记、bulk、partner-price-book | `features/partner-price-book-bulk-register.md` |
 | 简易/加强密码、password_mode、强制改密、站点登录密码策略 | `features/tenant-password-policy.md` |
-| 点检计划已拆除、DJJH、勿再实现计划层 | `features/equipment-spot-check-plan.md` |
+| 流程造数、sim_mode、场景段、BusinessClock、Kit 预检、操作用户、质检旁路、flow-generate job | `features/flow-data-generate-operator-modes.md` |
+| 设备点检造数、保养执行造数、点检单导入 | `features/equipment-ops-data-generate.md` |
+| 点检计划已拆除、DJJH、勿再实现计划层、造数改选点检单 | `features/equipment-spot-check-plan.md` |
 | 应用初始化缓慢、首次组织引导、消息模板预设、失败重试 | `features/tenant-bootstrap-initialization.md` |
 | 保养计划方案真源、设备绑定、维护类型周期 | `features/maintenance-plan-scheme-bind.md` |
 | 移动/工位点检跟绑定、保养执行带计划方案 | `features/equip-ops-scheme-bind-clients.md` |
@@ -195,7 +197,9 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | `features/kuaiai-insights-in-hub.md` | KU-AI 调用分析并入能力矩阵 | kuaiai | 已交付 |
 | `features/kuaiai-pulse-offline.md` | KU-AI 异常感知下线 | kuaiai | 已交付 |
 | `features/kuaiai-trust-offline.md` | KU-AI 信任中心下线 | kuaiai | 已交付 |
-| `features/equipment-spot-check-plan.md` | 点检计划整层拆除（迁移 887） | kuaizhizao-ops | 已拆除 |
+| `features/flow-data-generate-operator-modes.md` | 流程造数步骤操作用户模式 | kuaizhizao-ops | 已交付 |
+| `features/equipment-ops-data-generate.md` | 设备点检保养造数与点检单导入 | kuaizhizao-ops | 已交付 |
+| `features/equipment-spot-check-plan.md` | 点检计划整层拆除（迁移 887；造数改 spot_check_ids） | kuaizhizao-ops | 已拆除 |
 | `features/maintenance-plan-scheme-bind.md` | 保养计划绑定保养方案 | kuaizhizao-ops | 已交付 |
 | `features/equip-ops-scheme-bind-clients.md` | 移动/工位点检保养方案绑定对齐 | kuaizhizao-ops | 已交付 |
 | `features/permission-display-echo.md` | 权限回显 display 矩阵与鉴权 | rbac | 已交付 |
