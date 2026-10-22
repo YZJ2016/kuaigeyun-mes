@@ -44,6 +44,7 @@ standard: restore 前 _remap_import_plan_serial_ids / _remap_import_plan_global_
 - UUID 冲突曾扫全表，把目标租户即将 DELETE 的旧行当成冲突 → 同租户恢复误重排
 - 主键整体偏移若只改正式 FK，无 FK 的 `user_id` 等软引用会断；仅当列名在库内只指向一个 serial 父表时才跟随，歧义列（多表 `parent_id`）不猜
 - 多态 `subject_id` 仍不自动偏移（需按 `subject_type` 分行），不在本条范围
+- 备份 CSV 内多条 `deleted_at IS NULL` 同 `(tenant_id, code)` → `uidx_core_code_rules_tenant_code_live`；导入前走 `_dedupe_import_plan_unique_indexes_if_needed`（仅 `all` / 单纯 live 谓词，复杂谓词不猜）
 
 ## 关联
 

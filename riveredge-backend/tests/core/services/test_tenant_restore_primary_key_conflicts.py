@@ -50,6 +50,34 @@ def test_serial_id_pk_tables_includes_unique_id_without_pk():
     ) == ["core_apis"]
 
 
+def test_dedupe_csv_live_unique_keeps_last_and_soft_deleted():
+    csv_text = (
+        "id,tenant_id,code,deleted_at\n"
+        "1,1,SO_CODE,\n"
+        "2,1,SO_CODE,\n"
+        "3,1,SO_CODE,2026-01-01 00:00:00\n"
+        "4,1,OTHER,\n"
+    )
+    out, dropped = jobs._dedupe_csv_on_columns_keep_last(
+        csv_text, ["tenant_id", "code"], only_when_deleted_at_null=True
+    )
+    assert dropped == 1
+    rows = out.splitlines()
+    assert rows[0] == "id,tenant_id,code,deleted_at"
+    assert "1,1,SO_CODE," not in rows
+    assert "2,1,SO_CODE," in rows
+    assert "3,1,SO_CODE,2026-01-01 00:00:00" in rows
+    assert "4,1,OTHER," in rows
+
+
+def test_unique_index_pred_kind():
+    assert jobs._unique_index_pred_kind(None) == "all"
+    assert jobs._unique_index_pred_kind("(deleted_at IS NULL)") == "live"
+    assert jobs._unique_index_pred_kind(
+        "(deleted_at IS NULL) AND (employee_id IS NOT NULL)"
+    ) is None
+
+
 def test_fk_columns_to_serial_parents_maps_child_cols():
     plan = {
         "parents": (["id"], "id\n1\n"),
@@ -111,6 +139,38 @@ def test_fk_columns_to_serial_parents_skips_ambiguous_column_names():
         "dept": {"parent_id": "dept"},
         "cat": {"parent_id": "cat"},
     }
+
+
+async def test_dedupe_import_plan_unique_indexes_code_rules_live():
+    class Connection:
+        async def execute_query_dict(self, sql, args=None):
+            return [
+                {
+                    "table_name": "core_code_rules",
+                    "index_name": "uidx_core_code_rules_tenant_code_live",
+                    "pred": "(deleted_at IS NULL)",
+                    "column_name": "tenant_id",
+                    "ordinal": 1,
+                },
+                {
+                    "table_name": "core_code_rules",
+                    "index_name": "uidx_core_code_rules_tenant_code_live",
+                    "pred": "(deleted_at IS NULL)",
+                    "column_name": "code",
+                    "ordinal": 2,
+                },
+            ]
+
+    plan = {
+        "core_code_rules": (
+            ["id", "tenant_id", "code", "deleted_at"],
+            "id,tenant_id,code,deleted_at\n1,9,SO,\n2,9,SO,\n",
+        )
+    }
+    remapped = await jobs._dedupe_import_plan_unique_indexes_if_needed(
+        plan, conn=Connection()
+    )
+    assert jobs._extract_csv_column_values(remapped["core_code_rules"][1], "id") == ["2"]
 
 
 async def test_global_unique_uuid_collision_remaps_parent_and_fk():

@@ -385,8 +385,14 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             await PurchaseOrderTermsService().replace_order_milestones(
                 tenant_id, int(order.id), order_data.payment_milestones
             )
+            created_order_id = int(order.id)
 
-            return await self.get_purchase_order_by_id(tenant_id, order.id)
+        await self.try_auto_approve_purchase_order(
+            tenant_id=tenant_id,
+            order_id=created_order_id,
+            operator_id=created_by,
+        )
+        return await self.get_purchase_order_by_id(tenant_id, created_order_id)
 
     async def get_purchase_order_by_id(self, tenant_id: int, order_id: int) -> PurchaseOrderResponse:
         """
@@ -1410,7 +1416,9 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         tenant_id: int,
         order_id: int,
         approve_data: PurchaseOrderApprove,
-        approved_by: int
+        approved_by: int,
+        *,
+        is_auto_approve: bool = False,
     ) -> PurchaseOrderResponse:
         """
         审核采购订单（采购审批流程增强）
@@ -1422,6 +1430,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             order_id: 订单ID
             approve_data: 审核数据
             approved_by: 审核人ID
+            is_auto_approve: 业务自动化自动过审时跳过人工审批门禁
 
         Returns:
             PurchaseOrderResponse: 审核后的订单信息
@@ -1458,6 +1467,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 approval_gate,
                 doc_label="采购订单",
                 verb="审核" if approve_data.approved else "驳回",
+                is_auto_approve=is_auto_approve,
             )
 
         approver_name = await self.get_user_name(approved_by)
@@ -1466,7 +1476,8 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             approval_gate,
             approve=approve_data.approved,
         )
-        if sync_after_flow:
+        # 业务自动化自动过审：直接写单据态，不走人工审批实例
+        if is_auto_approve or sync_after_flow:
             update_dict = {
                 'reviewer_id': approved_by,
                 'reviewer_name': approver_name,
@@ -1486,6 +1497,11 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 await self._ensure_prepayment_payment_after_confirm(
                     tenant_id=tenant_id,
                     order=order,
+                    operator_id=approved_by,
+                )
+                await self.try_auto_push_receipt_notice(
+                    tenant_id=tenant_id,
+                    order_id=order_id,
                     operator_id=approved_by,
                 )
             return await self.get_purchase_order_by_id(tenant_id, order_id)
@@ -1585,8 +1601,196 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                     order_id,
                     exc,
                 )
+            await self.try_auto_push_receipt_notice(
+                tenant_id=tenant_id,
+                order_id=order_id,
+                operator_id=approved_by,
+            )
 
         return await self.get_purchase_order_by_id(tenant_id, order_id)
+
+    async def _append_purchase_order_automation_note(
+        self,
+        tenant_id: int,
+        order_id: int,
+        note: str,
+    ) -> None:
+        order = await PurchaseOrder.get_or_none(
+            tenant_id=tenant_id, id=order_id, deleted_at__isnull=True
+        )
+        if not order:
+            return
+        text = f"[业务自动化] {note}".strip()
+        prev = (order.notes or "").strip()
+        merged = f"{prev}\n{text}".strip() if prev else text
+        order.notes = merged[:2000]
+        await order.save(update_fields=["notes", "updated_at"])
+
+    async def try_auto_approve_purchase_order(
+        self,
+        *,
+        tenant_id: int,
+        order_id: int,
+        operator_id: int,
+    ) -> None:
+        """按配置自动提交/审核采购订单；失败写备注，不抛给调用方。"""
+        try:
+            cfg = BusinessConfigService()
+            if not await cfg.auto_approve_purchase_order_on_create(tenant_id):
+                # 仅开「审核后下推收货通知」时：单据已确认才尝试下推
+                await self.try_auto_push_receipt_notice(
+                    tenant_id=tenant_id,
+                    order_id=order_id,
+                    operator_id=operator_id,
+                )
+                return
+
+            order = await PurchaseOrder.get_or_none(
+                tenant_id=tenant_id, id=order_id, deleted_at__isnull=True
+            )
+            if not order:
+                return
+
+            status = str(order.status or "").strip()
+            if status in LEGACY_AUDITED_VALUES or status == DocumentStatus.CONFIRMED.value:
+                await self.try_auto_push_receipt_notice(
+                    tenant_id=tenant_id,
+                    order_id=order_id,
+                    operator_id=operator_id,
+                )
+                return
+
+            if is_draft_status(status):
+                if int(order.supplier_id or 0) <= 0:
+                    await self._append_purchase_order_automation_note(
+                        tenant_id,
+                        order_id,
+                        "自动审核跳过：草稿未指定供应商",
+                    )
+                    return
+                audit_required = await cfg.check_audit_required(
+                    tenant_id, "purchase_order"
+                )
+                if not audit_required:
+                    # 无审核：走提交直接确认（含预付等副作用）
+                    await self.submit_purchase_order(
+                        tenant_id=tenant_id,
+                        order_id=order_id,
+                        submitted_by=operator_id,
+                    )
+                    await self.try_auto_push_receipt_notice(
+                        tenant_id=tenant_id,
+                        order_id=order_id,
+                        operator_id=operator_id,
+                    )
+                    return
+                # 有审核：不启审批流（避免自动过审留下孤儿实例），置待审后 is_auto_approve
+                await order.update_from_dict(
+                    {
+                        "status": DocumentStatus.PENDING_REVIEW.value,
+                        "review_status": ReviewStatus.PENDING.value,
+                        "updated_by": operator_id,
+                    }
+                ).save()
+
+            order = await PurchaseOrder.get_or_none(
+                tenant_id=tenant_id, id=order_id, deleted_at__isnull=True
+            )
+            if not order:
+                return
+            status = str(order.status or "").strip()
+            if is_pending_review_status(status) or str(
+                order.review_status or ""
+            ).strip() == ReviewStatus.PENDING.value:
+                # confirm 下推可能已启审批流；自动过审前取消，避免孤儿实例
+                try:
+                    from core.services.approval.approval_instance_service import (
+                        ApprovalInstanceService,
+                    )
+
+                    await ApprovalInstanceService.cancel_approval(
+                        tenant_id=tenant_id,
+                        entity_type="purchase_order",
+                        entity_id=order_id,
+                        operator_id=operator_id,
+                    )
+                except Exception as cancel_exc:
+                    logger.debug(
+                        "采购订单自动审核取消审批流可忽略 order={}: {}",
+                        order_id,
+                        cancel_exc,
+                    )
+                await self.approve_purchase_order(
+                    tenant_id=tenant_id,
+                    order_id=order_id,
+                    approve_data=PurchaseOrderApprove(
+                        approved=True,
+                        review_remarks="业务自动化自动审核",
+                    ),
+                    approved_by=operator_id,
+                    is_auto_approve=True,
+                )
+        except Exception as exc:
+            logger.warning(
+                "采购订单自动审核失败 tenant={} order={}: {}",
+                tenant_id,
+                order_id,
+                exc,
+            )
+            try:
+                await self._append_purchase_order_automation_note(
+                    tenant_id,
+                    order_id,
+                    f"自动审核失败：{exc}",
+                )
+            except Exception:
+                pass
+
+    async def try_auto_push_receipt_notice(
+        self,
+        *,
+        tenant_id: int,
+        order_id: int,
+        operator_id: int,
+    ) -> None:
+        """按配置自动下推收货通知；失败写备注，不抛给调用方。"""
+        try:
+            if not await BusinessConfigService().auto_push_receipt_notice_on_approve(
+                tenant_id
+            ):
+                return
+            order = await PurchaseOrder.get_or_none(
+                tenant_id=tenant_id, id=order_id, deleted_at__isnull=True
+            )
+            if not order:
+                return
+            status = str(order.status or "").strip()
+            if not (
+                status in LEGACY_AUDITED_VALUES
+                or status == DocumentStatus.CONFIRMED.value
+                or status == DocumentStatus.IN_PROGRESS.value
+            ):
+                return
+            await self.push_to_receipt_notice(
+                tenant_id=tenant_id,
+                order_id=order_id,
+                created_by=operator_id,
+            )
+        except Exception as exc:
+            logger.warning(
+                "采购订单自动下推收货通知失败 tenant={} order={}: {}",
+                tenant_id,
+                order_id,
+                exc,
+            )
+            try:
+                await self._append_purchase_order_automation_note(
+                    tenant_id,
+                    order_id,
+                    f"自动下推收货通知失败：{exc}",
+                )
+            except Exception:
+                pass
 
     async def revoke_purchase_order_approval(
         self,

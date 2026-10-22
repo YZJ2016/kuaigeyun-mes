@@ -1105,8 +1105,50 @@ class DemandComputationService(AppBaseService):
                     if exc.message != "关联关系已存在":
                         raise
 
-            return await self._build_computation_response(computation, items)
-    
+            response = await self._build_computation_response(computation, items)
+
+        # 事务外投递自动执行/下推，避免阻塞创建路径
+        await self._maybe_enqueue_computation_automation(
+            tenant_id=tenant_id,
+            computation_id=int(response.id),
+            operator_id=created_by,
+        )
+        return response
+
+    async def _maybe_enqueue_computation_automation(
+        self,
+        *,
+        tenant_id: int,
+        computation_id: int,
+        operator_id: int,
+    ) -> None:
+        """按组织开关投递需求计算自动执行任务；失败只记日志。"""
+        try:
+            from infra.services.business_config_service import BusinessConfigService
+
+            cfg = BusinessConfigService()
+            if not (
+                await cfg.auto_execute_computation_on_create(tenant_id)
+                or await cfg.auto_push_purchase_on_computation_complete(tenant_id)
+            ):
+                return
+            from apps.kuaizhizao.workflows.functions.demand_computation_automation_workflow import (
+                enqueue_demand_computation_automation,
+            )
+
+            await enqueue_demand_computation_automation(
+                tenant_id=tenant_id,
+                computation_id=computation_id,
+                operator_id=operator_id,
+            )
+        except Exception as exc:
+            logger.warning(
+                "投递需求计算自动执行失败 tenant={} computation={}: {}",
+                tenant_id,
+                computation_id,
+                exc,
+            )
+
     async def _generate_computation_code(
         self,
         tenant_id: int,
@@ -4527,6 +4569,19 @@ class DemandComputationService(AppBaseService):
                 outsource_work_orders=outsource_work_orders,
                 purchase_orders=purchase_orders,
             )
+        if purchase_orders:
+            from apps.kuaizhizao.services.purchase_service import PurchaseService
+
+            po_svc = PurchaseService()
+            for po in purchase_orders:
+                po_id = int(po.get("id") or 0) if isinstance(po, dict) else 0
+                if po_id <= 0:
+                    continue
+                await po_svc.try_auto_approve_purchase_order(
+                    tenant_id=tenant_id,
+                    order_id=po_id,
+                    operator_id=created_by,
+                )
         return {
             "computation_id": computation_id,
             "computation_code": computation.computation_code,

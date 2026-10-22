@@ -28,6 +28,10 @@ from apps.kuaizhizao.workflows.functions.work_order_score_workflow import (
     work_order_score_recalc_one,
     work_order_score_recalc_worker,
 )
+from apps.kuaizhizao.workflows.functions.demand_computation_automation_workflow import (
+    demand_computation_auto_run_function,
+    enqueue_demand_computation_automation,
+)
 __all__ = [
     "run_exception_detection_scheduler",
     "exception_detection_worker_function",
@@ -43,5 +47,7 @@ __all__ = [
     "run_work_order_score_scheduler",
     "work_order_score_recalc_worker",
     "work_order_score_recalc_one",
+    "demand_computation_auto_run_function",
+    "enqueue_demand_computation_automation",
 ]
 

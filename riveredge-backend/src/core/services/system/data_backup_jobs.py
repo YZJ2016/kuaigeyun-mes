@@ -1546,40 +1546,205 @@ async def _load_single_col_unique_columns_async(conn, table_names: list[str]) ->
 
 def _dedupe_csv_on_column_keep_last(csv_text: str, column: str) -> tuple[str, int]:
     """按列去重保留最后一行（空值行保留）。返回 (新 CSV, 去掉的行数)。"""
+    return _dedupe_csv_on_columns_keep_last(csv_text, [column])
+
+
+def _csv_cell_blank(value: str) -> bool:
+    raw = (value or "").strip()
+    return not raw or raw.lower() == "null"
+
+
+def _dedupe_csv_on_columns_keep_last(
+    csv_text: str,
+    columns: list[str],
+    *,
+    only_when_deleted_at_null: bool = False,
+) -> tuple[str, int]:
+    """按多列唯一键去重，保留最后一行。
+
+    - 任一键列为空/null：不参与去重（对齐 PG UNIQUE 对 NULL 的语义）
+    - only_when_deleted_at_null：仅对 deleted_at 为空的行去重（部分唯一索引 live）
+    """
+    if not columns:
+        return csv_text, 0
     _ensure_csv_field_limit()
     lines = csv_text.splitlines()
     if len(lines) <= 1:
         return csv_text, 0
     reader = csv.reader(lines)
     header = next(reader, [])
-    if column not in header:
+    if any(col not in header for col in columns):
         return csv_text, 0
-    idx = header.index(column)
+    if only_when_deleted_at_null and "deleted_at" not in header:
+        # 无软删列则整表按键去重
+        only_when_deleted_at_null = False
+    key_idxs = [header.index(col) for col in columns]
+    deleted_idx = header.index("deleted_at") if "deleted_at" in header else -1
     rows = list(reader)
-    last_pos: dict[str, int] = {}
+    last_pos: dict[tuple[str, ...], int] = {}
     for pos, row in enumerate(rows):
         padded = row + [""] * max(0, len(header) - len(row))
-        cell = padded[idx].strip() if idx < len(padded) else ""
-        if cell:
-            last_pos[cell] = pos
-    keep = set(last_pos.values())
+        if only_when_deleted_at_null and deleted_idx >= 0:
+            if not _csv_cell_blank(padded[deleted_idx] if deleted_idx < len(padded) else ""):
+                continue
+        key_parts: list[str] = []
+        skip = False
+        for idx in key_idxs:
+            cell = padded[idx].strip() if idx < len(padded) else ""
+            if _csv_cell_blank(cell):
+                skip = True
+                break
+            key_parts.append(cell)
+        if skip:
+            continue
+        last_pos[tuple(key_parts)] = pos
+    if not last_pos:
+        return csv_text, 0
+    competing: set[int] = set()
+    seen_keys: dict[tuple[str, ...], list[int]] = defaultdict(list)
+    for pos, row in enumerate(rows):
+        padded = row + [""] * max(0, len(header) - len(row))
+        if only_when_deleted_at_null and deleted_idx >= 0:
+            if not _csv_cell_blank(padded[deleted_idx] if deleted_idx < len(padded) else ""):
+                continue
+        key_parts = []
+        skip = False
+        for idx in key_idxs:
+            cell = padded[idx].strip() if idx < len(padded) else ""
+            if _csv_cell_blank(cell):
+                skip = True
+                break
+            key_parts.append(cell)
+        if skip:
+            continue
+        key = tuple(key_parts)
+        seen_keys[key].append(pos)
+    for key, positions in seen_keys.items():
+        if len(positions) > 1:
+            keep_pos = last_pos[key]
+            for pos in positions:
+                if pos != keep_pos:
+                    competing.add(pos)
+    if not competing:
+        return csv_text, 0
     out_rows: list[list[str]] = [header]
     dropped = 0
     for pos, row in enumerate(rows):
         padded = (row + [""] * max(0, len(header) - len(row)))[: len(header)]
-        cell = padded[idx].strip()
-        if cell and pos not in keep:
+        if pos in competing:
             dropped += 1
             continue
         out_rows.append(padded)
-    if not dropped:
-        return csv_text, 0
     from io import StringIO
 
     buffer = StringIO()
     writer = csv.writer(buffer, lineterminator="\n")
     writer.writerows(out_rows)
     return buffer.getvalue(), dropped
+
+
+def _unique_index_pred_kind(pred: Optional[str]) -> Optional[str]:
+    """识别可自动去重的唯一索引谓词：all / live；复杂谓词返回 None。"""
+    if not pred or not str(pred).strip():
+        return "all"
+    normalized = " ".join(
+        str(pred).lower().replace("(", " ").replace(")", " ").split()
+    )
+    if normalized == "deleted_at is null":
+        return "live"
+    return None
+
+
+async def _load_multi_col_unique_indexes(
+    conn, table_names: list[str]
+) -> list[dict[str, Any]]:
+    """加载 ≥2 列的非主键唯一索引（含部分唯一）。"""
+    if not table_names:
+        return []
+    rows = await conn.execute_query_dict(
+        """
+        SELECT
+            t.relname AS table_name,
+            idx.relname AS index_name,
+            pg_get_expr(i.indpred, i.indrelid) AS pred,
+            a.attname AS column_name,
+            x.ord AS ordinal
+        FROM pg_index i
+        JOIN pg_class t ON t.oid = i.indrelid
+        JOIN pg_class idx ON idx.oid = i.indexrelid
+        JOIN pg_namespace n ON n.oid = t.relnamespace
+        JOIN LATERAL (
+            SELECT u.attnum, u.ord
+            FROM unnest(i.indkey::smallint[]) WITH ORDINALITY AS u(attnum, ord)
+            WHERE u.ord <= i.indnkeyatts AND u.attnum > 0
+        ) x ON true
+        JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = x.attnum
+        WHERE n.nspname = 'public'
+          AND i.indisunique
+          AND NOT i.indisprimary
+          AND i.indnkeyatts >= 2
+          AND t.relname = ANY($1::text[])
+        ORDER BY t.relname, idx.relname, x.ord
+        """,
+        [table_names],
+    )
+    grouped: dict[tuple[str, str], dict[str, Any]] = {}
+    for r in rows or []:
+        table = str(r.get("table_name") or "")
+        index_name = str(r.get("index_name") or "")
+        col = str(r.get("column_name") or "")
+        if not table or not index_name or not col:
+            continue
+        key = (table, index_name)
+        item = grouped.get(key)
+        if item is None:
+            item = {
+                "table": table,
+                "index_name": index_name,
+                "pred": r.get("pred"),
+                "columns": [],
+            }
+            grouped[key] = item
+        item["columns"].append(col)
+    return list(grouped.values())
+
+
+async def _dedupe_import_plan_unique_indexes_if_needed(
+    import_plan: dict[str, tuple[list[str], str]],
+    *,
+    conn,
+) -> dict[str, tuple[list[str], str]]:
+    """导入前按多列唯一索引去掉备份内重复行，避免 COPY 撞 uidx_*_live。"""
+    indexes = await _load_multi_col_unique_indexes(conn, sorted(import_plan.keys()))
+    if not indexes:
+        return import_plan
+    next_plan = dict(import_plan)
+    for item in indexes:
+        kind = _unique_index_pred_kind(item.get("pred"))
+        if kind is None:
+            continue
+        table = item["table"]
+        if table not in next_plan:
+            continue
+        columns, csv_text = next_plan[table]
+        key_cols = [c for c in item["columns"] if c in columns]
+        if len(key_cols) != len(item["columns"]):
+            continue
+        new_csv, dropped = _dedupe_csv_on_columns_keep_last(
+            csv_text,
+            key_cols,
+            only_when_deleted_at_null=(kind == "live"),
+        )
+        if dropped:
+            logger.warning(
+                "租户恢复唯一键去重: table={} index={} columns={} dropped={}",
+                table,
+                item.get("index_name"),
+                key_cols,
+                dropped,
+            )
+            next_plan[table] = (columns, new_csv)
+    return next_plan
 
 
 def _split_sequential_code(value: str) -> tuple[str, int, int] | None:
@@ -2560,6 +2725,10 @@ async def restore_tenant_backup_from_dump(
         target_tenant_id=int(target_tenant_id),
         table_column_map=dict(table_column_map),
         fk_rows=fk_rows_list,
+        conn=conn,
+    )
+    import_plan = await _dedupe_import_plan_unique_indexes_if_needed(
+        import_plan,
         conn=conn,
     )
 
