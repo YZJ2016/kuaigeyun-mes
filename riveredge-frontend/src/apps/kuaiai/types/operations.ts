@@ -29,6 +29,10 @@ export interface HubCapabilityOut {
   description: string | null;
   route: string | null;
   disabled_reason: string | null;
+  /** spec 191：场景卡绑定的实例 key（ask 卡与未绑定卡为 null） */
+  scene_key?: string | null;
+  /** 绑定实例的档案 ID；无使用权且无管理读权限时由后端脱敏为 null */
+  agent_profile_id?: number | null;
 }
 
 export interface HubOut {
@@ -204,15 +208,59 @@ export interface SettingsCapabilitiesOut {
   custom_system_prompt: string;
 }
 
+/** 能力绑定逐模板视图（spec 191）：override_* 为管理员覆盖，resolved 为解析结果 */
+export interface CapabilityBindingItemOut {
+  capability_key: string;
+  name: string;
+  override_present: boolean;
+  override_instance_key: string | null;
+  resolved_instance_key: string | null;
+}
+
+/** 能力绑定可选项：本租户未删除的场景实例（预置 + 复制） */
+export interface SceneInstanceOptionOut {
+  key: string;
+  name: string;
+  template_key: string;
+}
+
+/** 出厂场景模板开关项（spec 201）：设置页模板开关由后端驱动，按模板顺序 */
+export interface AgentTemplateOptionOut {
+  key: string;
+  name: string;
+}
+
+/** SOP 同步配置读视图（spec 200 S1-a） */
+export interface SettingsSopSyncOut {
+  enabled: boolean;
+  knowledge_id: number | null;
+}
+
+/** SOP 同步目标知识库可选项：本租户未删除启用库 */
+export interface SopSyncKnowledgeOptionOut {
+  id: number;
+  name: string;
+}
+
 export interface SettingsOut {
   chat_connection_uuid: string | null;
   vision_connection_uuid: string | null;
   chat_options: SettingsOptionOut[];
   vision_options: SettingsOptionOut[];
   ocr: SettingsOcrOut;
-  /** 六个出厂模板 key → 总开关（服务端闭集） */
+  /** 出厂模板开关项（spec 201）：后端驱动，按 SCENE_TEMPLATES 顺序 */
+  agent_templates: AgentTemplateOptionOut[];
+  /** 出厂模板 key → 总开关（服务端闭集） */
   agent_switches: Record<string, boolean>;
   capabilities: SettingsCapabilitiesOut;
+  /** 逐模板能力绑定视图（spec 191） */
+  capability_bindings: CapabilityBindingItemOut[];
+  /** 可绑定的场景实例列表（预置 + 复制） */
+  scene_instance_options: SceneInstanceOptionOut[];
+  /** SOP → 知识库同步配置（spec 200 S1-a） */
+  sop_sync: SettingsSopSyncOut;
+  /** SOP 同步可选目标知识库（本租户启用库） */
+  sop_sync_knowledge_options: SopSyncKnowledgeOptionOut[];
   /** 服务端派生的不透明版本，PUT 原样回传 */
   version: string;
 }
@@ -232,6 +280,10 @@ export interface SettingsUpdatePayload {
     stream_enabled: boolean;
     custom_system_prompt: string;
   };
+  /** 能力绑定覆盖 map：缺省=不修改；key ⊆ 模板 key，值=实例 key 或 null=解绑 */
+  capability_bindings?: Record<string, string | null>;
+  /** SOP 同步配置：缺省=不修改；enabled 时 knowledge_id 必填 */
+  sop_sync?: { enabled: boolean; knowledge_id: number | null };
 }
 
 // ============================================================ 知识语料（spec 183）

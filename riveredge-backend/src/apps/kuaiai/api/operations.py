@@ -113,7 +113,7 @@ async def api_get_agent_library(
     tenant_id: int = Depends(get_current_tenant),
     current_user=Depends(get_current_user),
 ):
-    """智能体库：六预置项 + 租户复制项 + provisioning 状态。"""
+    """智能体库：预置项 + 租户复制项 + provisioning 状态。"""
     return await agent_scene_service.list_agent_library(
         tenant_id, current_user
     )
@@ -244,9 +244,10 @@ async def api_get_pulse(
 )
 async def api_get_operations_settings(
     tenant_id: int = Depends(get_current_tenant),
+    current_user=Depends(get_current_user),
 ):
-    """模型与能力设置聚合：角色候选/OCR 脱敏/六开关/能力项/乐观版本。"""
-    return await settings_service.get_settings(tenant_id)
+    """模型与能力设置聚合：角色候选/OCR 脱敏/模板开关/能力项/能力绑定/乐观版本。"""
+    return await settings_service.get_settings(tenant_id, current_user)
 
 
 @router.put(

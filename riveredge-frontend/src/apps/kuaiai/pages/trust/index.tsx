@@ -340,11 +340,18 @@ const TrustPage: React.FC = () => {
         </Typography.Title>
         <div className="kuaiai-ops-trust-audit">{auditSection}</div>
 
+        {/* spec 194：HITL 卡文案随后端状态切换——仅 ready 时显示已接入，
+            not_ready / partial 不出现「已接入」字样 */}
         <Typography.Paragraph className="kuaiai-ops-trust-note" type="secondary">
-          {t('app.kuaiai.trust.actHint', {
-            defaultValue:
-              '写操作仍受业务单据原权限与服务校验约束；人工确认闸尚未接入，接入后本页同步更新状态。',
-          })}
+          {trustQuery.data?.cards?.find((c) => c.key === 'hitl')?.status === 'ready'
+            ? t('app.kuaiai.trust.actHintReady', {
+                defaultValue:
+                  '写操作仍受业务单据原权限与服务校验约束；人工确认闸已接入，写类操作执行前需人工确认，全程留痕。',
+              })
+            : t('app.kuaiai.trust.actHint', {
+                defaultValue:
+                  '写操作仍受业务单据原权限与服务校验约束；人工确认闸尚未接入，接入后本页同步更新状态。',
+              })}
         </Typography.Paragraph>
       </div>
     </div>

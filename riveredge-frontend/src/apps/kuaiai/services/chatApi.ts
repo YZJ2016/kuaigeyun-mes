@@ -8,15 +8,20 @@
  *   agent_id（string）为声明字段放顶层；选中档案时不传 model_id/knowledge_id。
  */
 
-import { apiRequest, API_BASE_URL } from '../../../services/api';
+import { apiRequest, API_BASE_URL, buildWriteAuthHeaders } from '../../../services/api';
 import {
   buildKuaiChatAuthHeaders,
   parseKuaiChatErrorResponse,
+  readKuaiInterrupt,
   stripAssistantThinkContent,
+  type KuaiInterrupt,
 } from '../../../services/deepseekChat';
+import { getAgent } from './agents';
+import { listToolCatalog } from './tools';
 
 const KUAI_AI_API = '/apps/kuaiai';
 const CHAT_COMPLETIONS_URL = `${API_BASE_URL}/core/ai/chat/completions`;
+const CHAT_RESUME_URL = `${API_BASE_URL}/core/ai/chat/resume`;
 
 // ============================================================ 类型
 
@@ -166,6 +171,8 @@ export interface LiveReasoningStep {
 export interface LiveAssistantView {
   answer: string;
   reasoning: LiveReasoningStep[];
+  /** spec 194：最近一次 `kuaiai_interrupt` 帧的待确认载荷（不拼进正文） */
+  pendingConfirmation?: KuaiInterrupt;
 }
 
 export interface SendChatMessageOptions {
@@ -191,6 +198,16 @@ type OpenAiChunk = {
     name?: string;
     args_summary?: string;
     result_summary?: string;
+  };
+  kuaiai_interrupt?: {
+    thread_token?: string;
+    expires_at?: string;
+    actions?: Array<{
+      tool?: string;
+      label?: string;
+      args_summary?: string;
+      business_object?: string;
+    }>;
   };
 };
 
@@ -230,8 +247,9 @@ function applyToolSegment(segments: StreamSegment[], raw: OpenAiChunk['kuaiai_to
 /** 把已累积的正文/工具帧拆成正式回答和其下的工具调用。 */
 export function buildLiveAssistantView(
   segments: StreamSegment[],
-  options?: { agent?: boolean; done?: boolean },
+  options?: { agent?: boolean; done?: boolean; pendingConfirmation?: KuaiInterrupt },
 ): LiveAssistantView {
+  const pendingConfirmation = options?.pendingConfirmation;
   let lastTool = -1;
   segments.forEach((seg, index) => {
     if (seg.kind === 'tool') lastTool = index;
@@ -239,7 +257,7 @@ export function buildLiveAssistantView(
   // 档案对话在第一次工具调用之前先不展示正文：这段可能是随后会被工具调用作废的中间说明。
   // 整段都没有工具时，流结束后再把正文作为正式回答。
   if (options?.agent && lastTool < 0 && !options.done) {
-    return { answer: '', reasoning: [] };
+    return { answer: '', reasoning: [], ...(pendingConfirmation ? { pendingConfirmation } : {}) };
   }
   const answerFrom = lastTool < 0 ? 0 : lastTool + 1;
   const answer = stripAssistantThinkContent(
@@ -249,7 +267,9 @@ export function buildLiveAssistantView(
       .map((seg) => seg.text)
       .join(''),
   );
-  if (lastTool < 0) return { answer, reasoning: [] };
+  if (lastTool < 0) {
+    return { answer, reasoning: [], ...(pendingConfirmation ? { pendingConfirmation } : {}) };
+  }
   const reasoning: LiveReasoningStep[] = [];
   segments.slice(0, lastTool + 1).forEach((seg) => {
     if (seg.kind !== 'tool') return;
@@ -261,7 +281,111 @@ export function buildLiveAssistantView(
       },
     });
   });
-  return { answer, reasoning };
+  return { answer, reasoning, ...(pendingConfirmation ? { pendingConfirmation } : {}) };
+}
+
+/** 逐行 SSE 帧 → 正文/工具/待确认累积器（发送与 resume 共用）。 */
+interface StreamAccumulator {
+  handleLine: (line: string) => void;
+  finish: () => LiveAssistantView;
+}
+
+function createStreamAccumulator(options: {
+  splitTools: boolean;
+  onDelta?: (view: LiveAssistantView) => void;
+}): StreamAccumulator {
+  const { splitTools, onDelta } = options;
+  const segments: StreamSegment[] = [];
+  let interrupt: KuaiInterrupt | undefined;
+
+  const publish = (done = false) => {
+    onDelta?.(
+      buildLiveAssistantView(splitTools ? segments : textOnly(segments), {
+        agent: splitTools,
+        done,
+        ...(interrupt ? { pendingConfirmation: interrupt } : {}),
+      }),
+    );
+  };
+
+  const handleLine = (line: string) => {
+    if (!line.startsWith('data:')) return;
+    const payload = line.slice(5).trim();
+    if (!payload || payload === '[DONE]') return;
+    let parsed: OpenAiChunk;
+    try {
+      parsed = JSON.parse(payload) as OpenAiChunk;
+    } catch {
+      return; // 忽略不完整/非 JSON 帧
+    }
+    if (parsed?.error?.message) {
+      throw new Error(String(parsed.error.message));
+    }
+    let changed = false;
+    if (splitTools && parsed.kuaiai_tool) {
+      applyToolSegment(segments, parsed.kuaiai_tool);
+      changed = true;
+    }
+    // spec 194：kuaiai_interrupt 是顶层扩展帧，不进正文/工具轨迹，单独透出
+    if (parsed.kuaiai_interrupt) {
+      const next = readKuaiInterrupt(parsed.kuaiai_interrupt);
+      if (next) {
+        interrupt = next;
+        changed = true;
+      }
+    }
+    const piece = chunkText(parsed);
+    if (piece) {
+      const last = segments[segments.length - 1];
+      if (last?.kind === 'text') last.text += piece;
+      else segments.push({ kind: 'text', text: piece });
+      changed = true;
+    }
+    if (changed) publish();
+  };
+
+  const finish = () => {
+    publish(true);
+    return buildLiveAssistantView(splitTools ? segments : textOnly(segments), {
+      agent: splitTools,
+      done: true,
+      ...(interrupt ? { pendingConfirmation: interrupt } : {}),
+    });
+  };
+
+  return { handleLine, finish };
+}
+
+/** 按行消费 SSE 响应体（手写 fetch 场景共用：发送与 resume）。 */
+async function consumeSseResponse(
+  response: Response,
+  handleLine: (line: string) => void,
+): Promise<void> {
+  const reader = response.body?.getReader();
+  if (!reader) return;
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let idx = buffer.indexOf('\n');
+      while (idx >= 0) {
+        const line = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 1);
+        handleLine(line.trim());
+        idx = buffer.indexOf('\n');
+      }
+    }
+    // 收尾：flush 解码器并处理残余缓冲（无尾换行的最后一行）
+    buffer += decoder.decode();
+    if (buffer.trim()) handleLine(buffer.trim());
+  } finally {
+    void reader.cancel().catch(() => {});
+    reader.releaseLock();
+  }
 }
 
 /**
@@ -309,81 +433,122 @@ export async function sendChatMessage(options: SendChatMessageOptions): Promise<
     if (data?.error?.message) {
       throw new Error(String(data.error.message));
     }
-    const text = stripAssistantThinkContent(chunkText(data ?? {}));
-    if (text) onDelta?.({ answer: text, reasoning: [] });
-    return text;
+    // 非 SSE JSON 回退同样解析 kuaiai_tool / kuaiai_interrupt 扩展字段
+    const segments: StreamSegment[] = [];
+    if (splitTools) applyToolSegment(segments, data?.kuaiai_tool);
+    const text = chunkText(data ?? {});
+    if (text) segments.push({ kind: 'text', text });
+    const interrupt = readKuaiInterrupt(data?.kuaiai_interrupt) ?? undefined;
+    const view = buildLiveAssistantView(splitTools ? segments : textOnly(segments), {
+      agent: splitTools,
+      done: true,
+      ...(interrupt ? { pendingConfirmation: interrupt } : {}),
+    });
+    if (view.answer || view.reasoning.length > 0 || view.pendingConfirmation) {
+      onDelta?.(view);
+    }
+    return view.answer;
   }
 
-  const reader = response.body?.getReader();
-  if (!reader) return '';
+  const acc = createStreamAccumulator({ splitTools, onDelta });
+  await consumeSseResponse(response, acc.handleLine);
+  return acc.finish().answer;
+}
 
-  const decoder = new TextDecoder();
-  let buffer = '';
-  const segments: StreamSegment[] = [];
+// ============================================================ HITL 确认闸（spec 194）
 
-  const publish = (done = false) => {
-    onDelta?.(
-      buildLiveAssistantView(splitTools ? segments : textOnly(segments), {
-        agent: splitTools,
-        done,
-      }),
-    );
-  };
+export type ChatResumeDecision = 'approve' | 'reject';
 
-  const handleLine = (line: string) => {
-    if (!line.startsWith('data:')) return;
-    const payload = line.slice(5).trim();
-    if (!payload || payload === '[DONE]') return;
-    let parsed: OpenAiChunk;
-    try {
-      parsed = JSON.parse(payload) as OpenAiChunk;
-    } catch {
-      return; // 忽略不完整/非 JSON 帧
-    }
-    if (parsed?.error?.message) {
-      throw new Error(String(parsed.error.message));
-    }
-    let changed = false;
-    if (splitTools && parsed.kuaiai_tool) {
-      applyToolSegment(segments, parsed.kuaiai_tool);
-      changed = true;
-    }
-    const piece = chunkText(parsed);
-    if (piece) {
-      const last = segments[segments.length - 1];
-      if (last?.kind === 'text') last.text += piece;
-      else segments.push({ kind: 'text', text: piece });
-      changed = true;
-    }
-    if (changed) publish();
-  };
+export interface ResumeChatOptions {
+  /** 中断帧下发的不透明 thread_token（前端不解析/拼接） */
+  threadToken: string;
+  /** H4=a：只接受 approve|reject */
+  decision: ChatResumeDecision;
+  /**
+   * 中断帧 `actions` 数：后端校验决策数与待确认动作数一致，
+   * 用户点一次 = 对全部 actions 下发同一决策（缺省按 1 条）。
+   */
+  actionCount?: number;
+  signal?: AbortSignal;
+  onDelta?: (view: LiveAssistantView) => void;
+}
 
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      let idx = buffer.indexOf('\n');
-      while (idx >= 0) {
-        const line = buffer.slice(0, idx);
-        buffer = buffer.slice(idx + 1);
-        handleLine(line.trim());
-        idx = buffer.indexOf('\n');
-      }
+/** resume 404（过期/已处理/越权）专用错误：调用方据此把确认卡置为终态。 */
+export class ChatResumeGoneError extends Error {}
+
+/**
+ * POST /api/v1/core/ai/chat/resume：确认/拒绝后续跑同一 thread。
+ * 响应与发送同一条 OpenAI chunk SSE 线（含 kuaiai_tool / kuaiai_interrupt
+ * 扩展帧），写防护头沿用 buildWriteAuthHeaders（X-Client-Channel +
+ * Idempotency-Key）。
+ */
+export async function resumeChat(options: ResumeChatOptions): Promise<LiveAssistantView> {
+  const { threadToken, decision, actionCount, signal, onDelta } = options;
+
+  const response = await fetch(CHAT_RESUME_URL, {
+    method: 'POST',
+    headers: {
+      ...buildWriteAuthHeaders(),
+      Accept: 'text/event-stream',
+    },
+    body: JSON.stringify({
+      thread_token: threadToken,
+      // 后端校验决策数与 pending actions 数一致：一次点击对全部动作同决策
+      decisions: Array.from({ length: Math.max(1, actionCount ?? 1) }, () => ({
+        type: decision,
+      })),
+      stream: true,
+    }),
+    signal,
+  });
+
+  if (!response.ok) {
+    const detail = await parseKuaiChatErrorResponse(response);
+    if (response.status === 404) {
+      throw new ChatResumeGoneError(detail);
     }
-    // 收尾：flush 解码器并处理残余缓冲（无尾换行的最后一行）
-    buffer += decoder.decode();
-    if (buffer.trim()) handleLine(buffer.trim());
-    publish(true);
-  } finally {
-    void reader.cancel().catch(() => {});
-    reader.releaseLock();
+    throw new Error(detail);
   }
 
-  return buildLiveAssistantView(splitTools ? segments : textOnly(segments), {
-    agent: splitTools,
-    done: true,
-  }).answer;
+  // 非 SSE 回退（同发送路径，同样解析 kuaiai_tool / kuaiai_interrupt）
+  const contentType = response.headers.get('content-type') || '';
+  if (!contentType.includes('text/event-stream')) {
+    const data = (await response.json().catch(() => null)) as OpenAiChunk | null;
+    if (data?.error?.message) {
+      throw new Error(String(data.error.message));
+    }
+    const segments: StreamSegment[] = [];
+    applyToolSegment(segments, data?.kuaiai_tool);
+    const text = chunkText(data ?? {});
+    if (text) segments.push({ kind: 'text', text });
+    const interrupt = readKuaiInterrupt(data?.kuaiai_interrupt) ?? undefined;
+    const view = buildLiveAssistantView(segments, {
+      agent: true,
+      done: true,
+      ...(interrupt ? { pendingConfirmation: interrupt } : {}),
+    });
+    if (view.answer || view.reasoning.length > 0 || view.pendingConfirmation) {
+      onDelta?.(view);
+    }
+    return view;
+  }
+
+  // resume 恒为档案路径（确认闸只挂档案写 Tool），按 splitTools 解析
+  const acc = createStreamAccumulator({ splitTools: true, onDelta });
+  await consumeSseResponse(response, acc.handleLine);
+  return acc.finish();
+}
+
+/**
+ * 抽屉 H1=a 前置判定：档案 enabled_tools ∩ 目录 kind=write 非空即写类档案。
+ * 判定失败由调用方按「无会话发送」处理（后端确认闸会明确拒绝）。
+ */
+export async function profileHasWriteTools(agentId: number): Promise<boolean> {
+  const [profile, catalog] = await Promise.all([getAgent(agentId), listToolCatalog()]);
+  const writeNames = new Set(
+    catalog.filter((tool) => tool.kind === 'write').map((tool) => tool.name),
+  );
+  return (profile.enabled_tools ?? []).some((name) => writeNames.has(name));
 }
 
 /** 无档案时忽略工具帧，全部正文都是正式回答。 */

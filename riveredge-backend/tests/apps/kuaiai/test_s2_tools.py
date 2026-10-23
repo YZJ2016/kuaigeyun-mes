@@ -5,7 +5,7 @@
 - build_tool_guard_middleware：无权限回 ToolMessage(status="error")
 - search_knowledge 闭包文案（无档案绑定不检索，S3 真实现见 test_s3_wiring）
 - page_context：白名单 screen / 未知 screen / 未知 resource / 无权限 / label 不进返回值
-- manifest ai_tools 五名与 ENABLED_TOOL_NAMES 一致、handler 可 import
+- manifest ai_tools 名称与 ENABLED_TOOL_NAMES 一致、handler 可 import
 """
 
 from __future__ import annotations
@@ -35,17 +35,35 @@ USER_ID = 5
 
 _EXPECTED_PERMISSIONS = {
     "search_knowledge": "kuaiai:act:execute",
-    "query_workorder": "kuaizhizao:work-order:read",
-    "list_workorder_tasks": "kuaizhizao:work-order:read",
+    "query_work_orders": "kuaizhizao:work-order:read",
     "submit_production_feedback": "kuaizhizao:production-execution-reporting:create",
     "update_workorder_status": "kuaizhizao:work-order:update",
-    # spec 181 六个只读场景 Tool
-    "query_inventory_balance": "kuaizhizao:inventory:read",
-    "query_delivery_risk": "kuaizhizao:work-order:read",
-    "query_purchase_followup": "kuaizhizao:purchase-order:read",
-    "query_published_schedule": "kuaizhizao:plan-management-rolling-scheduling:read",
-    "query_quality_anomalies": "kuaizhizao:quality-analysis:read",
-    "query_supplier_orders": "kuaizhizao:purchase-order:read",
+    # spec 181 只读场景 Tool（spec 190 改名后五值）
+    "query_inventory": "kuaizhizao:inventory:read",
+    "analyze_delivery_risk": "kuaizhizao:work-order:read",
+    "query_purchase_orders": "kuaizhizao:purchase-order:read",
+    "query_schedule": "kuaizhizao:plan-management-rolling-scheduling:read",
+    "analyze_quality": "kuaizhizao:quality-analysis:read",
+    # spec 195 销售订单与采购到货预警
+    "query_sales_orders": "kuaizhizao:sales-order:read",
+    "query_purchase_arrival_warnings": "kuaizhizao:purchase-arrival-warning:read",
+    # spec 196 库存预警/补货建议/呆滞料
+    "query_inventory_alerts": "kuaizhizao:warehouse-management-inventory-alert:read",
+    "query_replenishment_suggestions": "kuaizhizao:warehouse-management-replenishment-suggestions:read",
+    "query_slow_moving_inventory": "kuaizhizao:warehouse-management-reports-slow-moving-inventory:read",
+    # spec 197 齐套分析与生产异常
+    "analyze_kitting": "kuaizhizao:work-order:read",
+    "query_material_shortages": "kuaizhizao:production-execution-material-shortage-exceptions:read",
+    "query_delivery_delays": "kuaizhizao:production-execution-delivery-delay-exceptions:read",
+    "query_quality_exceptions": "kuaizhizao:production-execution-quality-exceptions:read",
+    # spec 198 一次合格率与缺陷帕累托
+    "analyze_first_pass_yield": "kuaizhizao:production-execution-reports-first-pass-yield:read",
+    "analyze_defect_pareto": "kuaizhizao:quality-management-reports-defect-pareto-analysis:read",
+    # spec 199 生产日报与异常信号
+    "query_production_daily": "kuaizhizao:production-daily:read",
+    "query_pulse_signals": "kuaiai:pulse:display",
+    # spec 200 工艺路线
+    "query_process_routes": "master-data:process:route:read",
 }
 
 
@@ -161,14 +179,14 @@ class TestManifestAiTools:
 
 class TestToolBridgeEndToEnd:
     @pytest.mark.asyncio
-    async def test_query_workorder_calls_service(self, ai_ctx):
+    async def test_query_work_orders_calls_service(self, ai_ctx):
         service = MagicMock()
         service.list_work_orders = AsyncMock(return_value=([_wo()], 1))
         with patch(
             "apps.kuaizhizao.services.work_order_service.WorkOrderService",
             return_value=service,
         ):
-            tools = registry_to_lc_tools(["query_workorder"])
+            tools = registry_to_lc_tools(["query_work_orders"])
             result = await tools[0].ainvoke({"keyword": "WO"})
         assert isinstance(result, str)
         assert "WO-2026-001" in result
@@ -179,7 +197,7 @@ class TestToolBridgeEndToEnd:
         assert service.list_work_orders.await_args.args[0] == TENANT
 
     @pytest.mark.asyncio
-    async def test_query_workorder_detail_by_id(self, ai_ctx):
+    async def test_query_work_orders_detail_by_id(self, ai_ctx):
         service = MagicMock()
         service.get_work_order_by_id = AsyncMock(return_value=_wo())
         with (
@@ -189,14 +207,14 @@ class TestToolBridgeEndToEnd:
             ),
             _patch_scope(),
         ):
-            tools = registry_to_lc_tools(["query_workorder"])
+            tools = registry_to_lc_tools(["query_work_orders"])
             result = await tools[0].ainvoke({"work_order_id": 11})
         assert "WO-2026-001" in result
         service.get_work_order_by_id.assert_awaited_once_with(TENANT, 11)
 
     @pytest.mark.asyncio
     async def test_no_context_returns_error_toolmessage(self):
-        tools = registry_to_lc_tools(["query_workorder"])
+        tools = registry_to_lc_tools(["query_work_orders"])
         result = await tools[0].ainvoke({"keyword": "WO"})
         assert isinstance(result, ToolMessage)
         assert result.status == "error"
@@ -210,14 +228,14 @@ class TestToolBridgeEndToEnd:
             "apps.kuaizhizao.services.work_order_service.WorkOrderService",
             return_value=service,
         ):
-            tools = registry_to_lc_tools(["query_workorder"])
+            tools = registry_to_lc_tools(["query_work_orders"])
             result = await tools[0].ainvoke({"keyword": "WO"})
         assert isinstance(result, str)
         assert "失败" in result
         assert "db down" not in result
 
     @pytest.mark.asyncio
-    async def test_list_workorder_tasks(self, ai_ctx):
+    async def test_query_work_orders_operations_view(self, ai_ctx):
         service = MagicMock()
         service.get_work_order_operations = AsyncMock(return_value=[_op()])
         with (
@@ -227,8 +245,10 @@ class TestToolBridgeEndToEnd:
             ),
             _patch_scope(),
         ):
-            tools = registry_to_lc_tools(["list_workorder_tasks"])
-            result = await tools[0].ainvoke({"work_order_id": 11})
+            tools = registry_to_lc_tools(["query_work_orders"])
+            result = await tools[0].ainvoke(
+                {"view": "operations", "work_order_id": 11}
+            )
         assert "CNC" in result
         assert "operation_id=88" in result
 
@@ -511,7 +531,7 @@ class TestWorkOrderDataScope:
             assert await chat_tools._work_order_in_scope(_ctx(), 11) is False
 
     @pytest.mark.asyncio
-    async def test_query_workorder_out_of_scope_not_found(self, ai_ctx):
+    async def test_query_work_orders_out_of_scope_not_found(self, ai_ctx):
         service = MagicMock()
         service.get_work_order_by_id = AsyncMock()
         with (
@@ -521,14 +541,14 @@ class TestWorkOrderDataScope:
             ),
             _patch_scope(visible=False),
         ):
-            result = await chat_tools.query_workorder(
+            result = await chat_tools.query_work_orders(
                 work_order_id=11, ctx=_ctx()
             )
         assert result == "工单不存在：11"
         service.get_work_order_by_id.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_list_workorder_tasks_out_of_scope_not_found(self, ai_ctx):
+    async def test_operations_view_out_of_scope_not_found(self, ai_ctx):
         service = MagicMock()
         service.get_work_order_operations = AsyncMock()
         with (
@@ -538,7 +558,9 @@ class TestWorkOrderDataScope:
             ),
             _patch_scope(visible=False),
         ):
-            result = await chat_tools.list_workorder_tasks(11, ctx=_ctx())
+            result = await chat_tools.query_work_orders(
+                view="operations", work_order_id=11, ctx=_ctx()
+            )
         assert result == "工单不存在：11"
         service.get_work_order_operations.assert_not_called()
 
@@ -602,7 +624,7 @@ class TestToolGuardMiddleware:
     async def test_allowed_permission_calls_handler(self, ai_ctx):
         guard = build_tool_guard_middleware()
         request = SimpleNamespace(
-            tool_call={"name": "query_workorder", "id": "call-2"}
+            tool_call={"name": "query_work_orders", "id": "call-2"}
         )
         handler = AsyncMock(return_value="ok")
         with patch(
@@ -617,7 +639,7 @@ class TestToolGuardMiddleware:
     async def test_no_context_error(self):
         guard = build_tool_guard_middleware()
         request = SimpleNamespace(
-            tool_call={"name": "query_workorder", "id": "call-3"}
+            tool_call={"name": "query_work_orders", "id": "call-3"}
         )
         handler = AsyncMock(return_value="ok")
         result = await guard.awrap_tool_call(request, handler)
@@ -648,6 +670,9 @@ class TestPageContextSummary:
                 "has_permission",
                 new=AsyncMock(return_value=True),
             ) as has_perm,
+            patch.object(
+                page_context, "_row_in_scope", AsyncMock(return_value=True)
+            ),
         ):
             result = await page_context.build_page_context_summary(
                 context, tenant_id=TENANT, user=_user()
@@ -729,6 +754,9 @@ class TestPageContextSummary:
                 page_context.UserPermissionService,
                 "has_permission",
                 new=AsyncMock(return_value=True),
+            ),
+            patch.object(
+                page_context, "_row_in_scope", AsyncMock(return_value=True)
             ),
         ):
             result = await page_context.build_page_context_summary(

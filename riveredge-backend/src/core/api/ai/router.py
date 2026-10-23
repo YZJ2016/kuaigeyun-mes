@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from core.ai.chat_handler import create_chat_completion
+from core.ai.chat_handler import create_chat_completion, resume_chat_completion
 from core.ai.deps import AiAuth, get_ai_auth, require_ai_capability
 from core.ai.draft_profiles import ensure_draft_profiles
 from core.ai.jobs import AiJobService
@@ -21,6 +21,7 @@ from core.ai.schemas.chat import (
     AiErrorResponse,
     ChatCompletionRequest,
     ChatCompletionResponse,
+    ChatResumeRequest,
 )
 from core.ai.schemas.draft import StructuredDraftRequest, StructuredDraftResult
 from core.ai.schemas.jobs import AiJobCreateRequest, AiJobStatusResponse
@@ -90,6 +91,44 @@ async def ai_chat_completions(
         return ChatCompletionResponse.model_validate(result)
     except ValidationError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.post(
+    "/chat/resume",
+    response_model=None,
+    # spec 193：确认闸续跑与发送同权限码（approve/reject 经 Command(resume)）
+    dependencies=[Depends(require_ai_capability("act"))],
+    responses={
+        200: {
+            "description": "HITL resume (JSON or SSE)",
+            "content": {
+                "application/json": {"schema": ChatCompletionResponse.model_json_schema()},
+                "text/event-stream": {"schema": {"type": "string"}},
+            },
+        },
+        400: {"model": AiErrorResponse},
+        404: {"model": AiErrorResponse},
+    },
+)
+async def ai_chat_resume(
+    body: ChatResumeRequest,
+    ai_auth: AiAuth = Depends(get_ai_auth),
+):
+    """HITL 人工确认续跑：decisions.type 仅 approve|reject（其余 422）。"""
+    try:
+        result = await resume_chat_completion(
+            ai_auth,
+            body.thread_token,
+            [d.model_dump() for d in body.decisions],
+            stream=body.stream,
+        )
+        if isinstance(result, StreamingResponse):
+            return result
+        return ChatCompletionResponse.model_validate(result)
+    except ValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except NotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
 @router.post(

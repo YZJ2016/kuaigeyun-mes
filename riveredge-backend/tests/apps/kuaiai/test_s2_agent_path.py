@@ -67,7 +67,7 @@ def _profile(**over):
         name="档案3",
         system_prompt="你是助手",
         default_model_id=42,
-        enabled_tools=["query_workorder"],
+        enabled_tools=["query_work_orders"],
         status="启用",
         grant_mode="USER",
     )
@@ -377,14 +377,14 @@ class TestAssemble:
 
     @pytest.mark.asyncio
     async def test_tools_intersect_closed_set(self):
-        """enabled_tools ∩ 五值闭集后交给 registry（脏名不进入装配）。"""
+        """enabled_tools ∩ 闭集后交给 registry（脏名不进入装配）。"""
         with (
             patch.object(
                 KuaiaiAgentProfile,
                 "get_or_none",
                 new=AsyncMock(
                     return_value=_profile(
-                        enabled_tools=["query_workorder", "drop_table"]
+                        enabled_tools=["query_work_orders", "drop_table"]
                     )
                 ),
             ),
@@ -413,7 +413,7 @@ class TestAssemble:
             await agent_assembler.assemble(
                 TENANT, _user(), False, False, AGENT_ID, agent_path=False
             )
-        assert mock_tools.call_args.args[0] == ["query_workorder"]
+        assert mock_tools.call_args.args[0] == ["query_work_orders"]
 
 
 # ------------------------------------------------- send 入口：授权与路径选择
@@ -627,6 +627,7 @@ class TestAgentRunPersistence:
             patch.object(cs, "_history_rows", new=AsyncMock(return_value=[])),
             patch.object(cs, "assemble", new=AsyncMock(return_value=_assembled(agent))),
             patch.object(cs, "_lock_session_row", new=AsyncMock(return_value=session)),
+            patch.object(cs, "_close_pending_thread", new=AsyncMock()),
             patch.object(cs, "_next_seq", new=_next),
             patch.object(KuaiaiChatMessage, "create", new=AsyncMock(side_effect=_create)),
             _patch_tx(),
@@ -725,6 +726,7 @@ class TestAgentRunPersistence:
             patch.object(cs, "_history_rows", new=AsyncMock(return_value=[])),
             patch.object(cs, "assemble", new=AsyncMock(return_value=_assembled(agent))),
             patch.object(cs, "_lock_session_row", new=AsyncMock(return_value=session)),
+            patch.object(cs, "_close_pending_thread", new=AsyncMock()),
             patch.object(cs, "_next_seq", new=_next),
             patch.object(KuaiaiChatMessage, "create", new=AsyncMock(side_effect=_create)),
             _patch_tx(),
@@ -756,6 +758,7 @@ class TestAgentRunPersistence:
             patch.object(cs, "_history_rows", new=AsyncMock(return_value=[])),
             patch.object(cs, "assemble", new=AsyncMock(return_value=_assembled(agent))),
             patch.object(cs, "_lock_session_row", new=AsyncMock(return_value=session)),
+            patch.object(cs, "_close_pending_thread", new=AsyncMock()),
             patch.object(cs, "_next_seq", new=_next),
             patch.object(KuaiaiChatMessage, "create", new=AsyncMock(side_effect=_create)),
             patch(

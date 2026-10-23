@@ -11,6 +11,7 @@ import React, { useRef, useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useDocumentHighlightDeepLink } from '../../../../../hooks/useDocumentHighlightDeepLink';
+import { useRegisterAiContext } from '../../../../../hooks/useRegisterAiContext';
 import { ActionType, ProColumns, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Typography } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
@@ -89,6 +90,16 @@ const MaterialShortageExceptionsPage: React.FC = () => {
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [currentRecord, setCurrentRecord] = useState<MaterialShortageException | null>(null);
+  useRegisterAiContext(
+    detailDrawerVisible && currentRecord
+      ? {
+          screenLabel: t(`${P}.materialShortage.pageTitle`),
+          resourceKey: 'kuaizhizao:material_shortage',
+          recordId: currentRecord.id,
+          recordLabel: currentRecord.work_order_code,
+        }
+      : { screenLabel: t(`${P}.materialShortage.pageTitle`) },
+  );
   const [handleModalVisible, setHandleModalVisible] = useState(false);
   const [currentAction, setCurrentAction] = useState<string>('');
   const handleFormRef = useRef<any>(null);

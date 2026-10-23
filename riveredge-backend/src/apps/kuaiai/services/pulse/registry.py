@@ -1,8 +1,8 @@
-"""Pulse detector registry 与聚合（spec 182 T2）。
+"""Pulse detector registry 与聚合（spec 182 T2；202/203 补齐五领域）。
 
-- 五领域固定注册：production/sales 已实现；inventory/quality/equipment 仅保留
-  注册位，查询时回 ``not_connected`` 局部错误（KO-04「尚未接入检测器」，不伪
-  造 0 正常、不计入 complete）；
+- 五领域全部注册：production/sales/inventory/quality/equipment 均已实现；
+  未注册领域（未来新增领域占位）查询时回 ``not_connected`` 局部错误
+  （KO-04「尚未接入检测器」，不伪造 0 正常、不计入 complete）；
 - 每 detector 独立超时（``asyncio.wait_for``，超时即取消，不留无界后台查询），
   ``gather(return_exceptions=True)`` 单点失败不拖垮其它领域；
 - errors[] 只放脱敏 code/message：permission_denied / timeout /
@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from datetime import datetime
 from typing import Dict, Iterable, List, Optional, Tuple
 
@@ -33,7 +34,10 @@ from apps.kuaiai.services.pulse.base import (
     PulseDetector,
     PulsePermissionDenied,
 )
+from apps.kuaiai.services.pulse.equipment import EquipmentFaultDetector
+from apps.kuaiai.services.pulse.inventory import InventoryAlertDetector
 from apps.kuaiai.services.pulse.production import ProductionDelayDetector
+from apps.kuaiai.services.pulse.quality import QualityExceptionDetector
 from apps.kuaiai.services.pulse.sales import SalesDeliveryRiskDetector
 from infra.models.user import User
 
@@ -64,7 +68,10 @@ _ERROR_CODE_BY_EXC = {
 
 DETECTORS: Dict[str, PulseDetector] = {
     "production": ProductionDelayDetector(),
+    "inventory": InventoryAlertDetector(),
     "sales": SalesDeliveryRiskDetector(),
+    "quality": QualityExceptionDetector(),
+    "equipment": EquipmentFaultDetector(),
 }
 IMPLEMENTED_DOMAINS = frozenset(DETECTORS.keys())
 
@@ -224,8 +231,52 @@ async def run_pulse(
     )
 
 
+# ------------------------------------------------------------------ hub 总数缓存
+# /operations/hub 每次调用都全跑五域 detector（各 ≤8s 分批扫表）；
+# 指标只作计数展示，加短 TTL 缓存按 (tenant, user) 维度隔离——
+# 键含租户与 caller，信号内容不跨租户/跨用户串（评审 perf）。
+_PULSE_COUNT_TTL_SECONDS = 60.0
+_PULSE_COUNT_CACHE_MAX = 1024
+_pulse_count_cache: Dict[Tuple[int, int], Tuple[float, Optional[int]]] = {}
+
+
+def _pulse_count_cache_get(tenant_id: int, user: Optional[User]) -> Tuple[bool, Optional[int]]:
+    key = (int(tenant_id), int(getattr(user, "id", None) or 0))
+    hit = _pulse_count_cache.get(key)
+    if hit is None:
+        return False, None
+    ts, value = hit
+    if time.monotonic() - ts >= _PULSE_COUNT_TTL_SECONDS:
+        _pulse_count_cache.pop(key, None)
+        return False, None
+    return True, value
+
+
+def _pulse_count_cache_set(
+    tenant_id: int, user: Optional[User], value: Optional[int]
+) -> None:
+    if len(_pulse_count_cache) >= _PULSE_COUNT_CACHE_MAX:
+        now = time.monotonic()
+        for k in [
+            k
+            for k, (ts, _v) in _pulse_count_cache.items()
+            if now - ts >= _PULSE_COUNT_TTL_SECONDS
+        ]:
+            _pulse_count_cache.pop(k, None)
+        if len(_pulse_count_cache) >= _PULSE_COUNT_CACHE_MAX:
+            _pulse_count_cache.clear()
+    key = (int(tenant_id), int(getattr(user, "id", None) or 0))
+    _pulse_count_cache[key] = (time.monotonic(), value)
+
+
 async def pulse_total_count(tenant_id: int, user: Optional[User]) -> Optional[int]:
-    """hub 指标用真实聚合：全部已实现 detector 失败 → None（不伪造 0）。"""
+    """hub 指标用真实聚合：全部已实现 detector 失败 → None（不伪造 0）。
+
+    结果按 (tenant_id, user_id) 60s 进程级缓存；到期自动重算。
+    """
+    found, cached_value = _pulse_count_cache_get(tenant_id, user)
+    if found:
+        return cached_value
     try:
         result = await run_pulse(tenant_id, user, page=1, page_size=1)
     except Exception as exc:
@@ -234,13 +285,15 @@ async def pulse_total_count(tenant_id: int, user: Optional[User]) -> Optional[in
             tenant_id,
             type(exc).__name__,
         )
-        return None
+        return None  # 聚合异常不缓存，下次调用即重试
     failed = {
         e.domain for e in result.errors if e.code != "not_connected"
     }
     if IMPLEMENTED_DOMAINS and IMPLEMENTED_DOMAINS <= failed:
-        return None
-    return int(result.summary.total)
+        return None  # 全领域失败不缓存（也不伪造 0）
+    value = int(result.summary.total)
+    _pulse_count_cache_set(tenant_id, user, value)
+    return value
 
 
 def parse_domains(raw: Optional[str]) -> Optional[List[str]]:

@@ -11,7 +11,7 @@ from loguru import logger
 
 from core.ai.deps import AiAuth
 from core.ai.runtime_config import AiRuntimeConfig
-from infra.exceptions.exceptions import ValidationError
+from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 
 def _normalize_user_chat_messages(messages: List[Dict[str, Any]]) -> List[Dict[str, str]]:
@@ -154,3 +154,31 @@ async def create_chat_completion(
             "total_tokens": usage_meta.get("total_tokens"),
         },
     }
+
+
+async def resume_chat_completion(
+    ai_auth: AiAuth,
+    thread_token: str,
+    decisions: List[Dict[str, Any]],
+    *,
+    stream: bool = True,
+) -> Union[Dict[str, Any], StreamingResponse]:
+    """HITL 确认闸续跑（spec 193）：委托 apps.kuaiai resume。
+
+    kuaiai 未装载时不可能存在挂起线程 → 404（不编造待确认任务）。
+    """
+    if _kuaiai_composed():
+        from apps.kuaiai.services.chat_service import (
+            resume_chat_completion as kuaiai_resume_completion,
+        )
+
+        return await kuaiai_resume_completion(
+            ai_auth.tenant_id,
+            thread_token=thread_token,
+            decisions=decisions,
+            stream=stream,
+            user=ai_auth.user,
+            is_infra_admin=ai_auth.auth.is_infra_admin,
+            is_tenant_admin=ai_auth.auth.is_tenant_admin,
+        )
+    raise NotFoundError("待确认任务", "")

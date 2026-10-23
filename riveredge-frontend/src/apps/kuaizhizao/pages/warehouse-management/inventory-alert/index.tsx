@@ -11,6 +11,7 @@ import React, { useCallback, useRef, useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useDocumentHighlightDeepLink } from '../../../../../hooks/useDocumentHighlightDeepLink';
+import { useRegisterAiContext } from '../../../../../hooks/useRegisterAiContext';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormText, ProFormDigit, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormDependency } from '@ant-design/pro-components';
 import { App, Button, Space, Popconfirm, Typography, Row, Col, Descriptions, Tooltip } from 'antd';
 import { CheckOutlined, WarningOutlined, ReloadOutlined, StopOutlined } from '@ant-design/icons';
@@ -150,6 +151,16 @@ const InventoryAlertPage: React.FC = () => {
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [currentAlert, setCurrentAlert] = useState<InventoryAlert | null>(null);
+  useRegisterAiContext(
+    detailDrawerVisible && currentAlert
+      ? {
+          screenLabel: t('app.kuaizhizao.menu.warehouse-management.inventory-alert'),
+          resourceKey: 'kuaizhizao:inventory_alert',
+          recordId: currentAlert.id,
+          recordLabel: currentAlert.material_code,
+        }
+      : { screenLabel: t('app.kuaizhizao.menu.warehouse-management.inventory-alert') },
+  );
 
   // 当前编辑的规则ID
   const [currentRuleId, setCurrentRuleId] = useState<number | null>(null);

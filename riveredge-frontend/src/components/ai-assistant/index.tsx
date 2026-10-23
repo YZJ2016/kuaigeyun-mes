@@ -26,13 +26,25 @@ import {
   parseKuaiChatErrorResponse,
   stripAssistantThinkContent,
   type ChatIntegrationStatus,
+  type KuaiInterrupt,
   type KuaiToolTrace,
 } from '../../services/deepseekChat'
 import { useChatIntegrationStatus } from '../../hooks/useChatIntegrationStatus'
 import { useCurrentUser } from '../../hooks/useCurrentUser'
 import { hasPermission } from '../../utils/permission'
-import { useAiContext, toAiContextApiPayload } from '../../contexts/AiContext'
+import { useAiContext, toAiContextApiPayload, type AiContextPayload } from '../../contexts/AiContext'
 import { executeAiAction } from '../../apps/kuaiai/services/catalog'
+import {
+  ChatResumeGoneError,
+  createChatSession,
+  profileHasWriteTools,
+  resumeChat,
+  type ChatResumeDecision,
+  type LiveReasoningStep,
+} from '../../apps/kuaiai/services/chatApi'
+import ToolConfirmCard, {
+  type ToolConfirmStatus,
+} from '../../apps/kuaiai/components/ToolConfirmCard'
 import welcomeAnimation from '../../../static/lottie/welcome.json'
 import { KuAiLottieMark } from './KuAiLottieMark'
 import AiAssistantMarkdown from './AiAssistantMarkdown'
@@ -78,6 +90,17 @@ type XChatMessage = {
   role: string
   content: string
   toolTraces?: KuaiToolTrace[]
+  /** spec 194：kuaiai_interrupt 帧载荷（HITL 待确认），不拼进正文 */
+  interrupt?: KuaiInterrupt
+}
+
+/** spec 194：确认卡渲染所需的 per-message 附加上下文 */
+type ConfirmExtra = {
+  messageId?: string | number
+  interrupt?: KuaiInterrupt
+  confirmStatus?: ToolConfirmStatus
+  confirmDeciding?: 'approve' | 'reject'
+  confirmError?: string
 }
 
 /** Bubble.List 单条 item 形状（与 Ant Design X 默认对话样式一致） */
@@ -86,7 +109,7 @@ type BubbleItem = {
   role: 'user' | 'ai'
   content: string
   status?: 'local' | 'loading' | 'updating' | 'success' | 'error' | 'abort'
-  extraInfo?: { lastUserMessage?: string; toolTraces?: KuaiToolTrace[] }
+  extraInfo?: { lastUserMessage?: string; toolTraces?: KuaiToolTrace[] } & ConfirmExtra
 }
 
 export interface AIAssistantProps {
@@ -255,6 +278,16 @@ function renderAiBubbleContent(content: unknown) {
   return <AiAssistantMarkdown content={text} />
 }
 
+/** spec 194：resume 流式 view 的工具步骤 → 抽屉 toolTraces 形态 */
+function stepToToolTrace(step: LiveReasoningStep): KuaiToolTrace {
+  return {
+    phase: step.tool.resultSummary ? 'end' : 'start',
+    name: step.tool.name,
+    ...(step.tool.argsSummary ? { argsSummary: step.tool.argsSummary } : {}),
+    ...(step.tool.resultSummary ? { resultSummary: step.tool.resultSummary } : {}),
+  }
+}
+
 function ToolTraceList({ traces }: { traces: KuaiToolTrace[] }) {
   if (!traces.length) return null
   return (
@@ -290,6 +323,12 @@ type AIAssistantDialogUIProps = {
   modelName?: string
   contextBadge?: string | null
   onConfirmAction?: (confirmToken: string) => void
+  /** spec 194：HITL 确认卡决策回调（messageId → approve|reject） */
+  onConfirmDecision?: (messageId: string | number, decision: 'approve' | 'reject') => void
+  /** spec 194：确认卡倒计时归零回调 */
+  onConfirmExpire?: (messageId: string | number) => void
+  /** spec 194：resume 提交中，确认卡按钮禁用 */
+  confirmBusy?: boolean
   embedded?: boolean
   embeddedSplit?: boolean
   canOpenAssistantTab?: boolean
@@ -309,6 +348,9 @@ const AIAssistantDialogUI: React.FC<AIAssistantDialogUIProps> = ({
   modelName,
   contextBadge,
   onConfirmAction,
+  onConfirmDecision,
+  onConfirmExpire,
+  confirmBusy = false,
   embedded = false,
   embeddedSplit = false,
   canOpenAssistantTab = false,
@@ -497,14 +539,41 @@ const AIAssistantDialogUI: React.FC<AIAssistantDialogUIProps> = ({
                       className="ai-qa-lottie-enhance ai-qa-bubble-avatar-mark"
                     />
                   ),
-                  footer: (content: unknown, info: { status?: string; extraInfo?: { lastUserMessage?: string; toolTraces?: KuaiToolTrace[] } }) => {
+                  footer: (content: unknown, info: { status?: string; extraInfo?: { lastUserMessage?: string; toolTraces?: KuaiToolTrace[] } & ConfirmExtra }) => {
                     if (info?.status === 'loading') return null
                     const lastUser = info?.extraInfo?.lastUserMessage ?? ''
                     const text = typeof content === 'string' ? content : ''
                     const traces = info?.extraInfo?.toolTraces ?? []
                     const confirmToken = extractConfirmToken(text)
+                    const interrupt = info?.extraInfo?.interrupt
+                    const interruptMsgId = info?.extraInfo?.messageId
                     return (
                       <div className="ai-qa-bubble-footer-wrap">
+                        {interrupt && interruptMsgId != null ? (
+                          <ToolConfirmCard
+                            model={{
+                              interrupt,
+                              status: info?.extraInfo?.confirmStatus ?? 'pending',
+                              ...(info?.extraInfo?.confirmDeciding
+                                ? { deciding: info.extraInfo.confirmDeciding }
+                                : {}),
+                              ...(info?.extraInfo?.confirmError
+                                ? { error: info.extraInfo.confirmError }
+                                : {}),
+                            }}
+                            busy={confirmBusy}
+                            onDecide={
+                              onConfirmDecision
+                                ? (decision) => onConfirmDecision(interruptMsgId, decision)
+                                : undefined
+                            }
+                            onExpire={
+                              onConfirmExpire
+                                ? () => onConfirmExpire(interruptMsgId)
+                                : undefined
+                            }
+                          />
+                        ) : null}
                         <ToolTraceList traces={traces} />
                       <div className="ai-qa-bubble-actions">
                         {confirmToken && onConfirmAction ? (
@@ -638,10 +707,31 @@ const AIAssistantLivePanel: React.FC<AIAssistantLivePanelProps> = ({
   const { context, contextBadge, pendingAssistant, setPendingAssistant } = useAiContext()
   // 发送走 canonical /core/ai/chat/completions，需 kuaiai:act:execute（与全宽对话页一致）
   const canSend = hasPermission(currentUser, 'kuaiai:act:execute')
+  // spec 194 H1=a：写类档案判定（kuaiai:agent:read）与建会话（kuaiai:session:create）
+  const canAgentRead = hasPermission(currentUser, 'kuaiai:agent:read')
+  const canCreateSession = hasPermission(currentUser, 'kuaiai:session:create')
   const provider = useMemo(() => getKuaiChatProvider(model), [model])
   const [messageMeta, setMessageMeta] = useState<Map<string, KuAiMessageMeta>>(() => new Map())
   const messageMetaRef = useRef(messageMeta)
   messageMetaRef.current = messageMeta
+
+  // spec 194：确认卡状态按 messageId 记（interrupt 对象复核：续跑中再挂起换上
+  // 新 interrupt 对象即视为新待确认，同 token 也不例外——后端 token 可能复用）
+  type ConfirmEntry = {
+    interrupt: KuaiInterrupt
+    status: ToolConfirmStatus
+    deciding?: 'approve' | 'reject'
+    error?: string
+  }
+  const [confirmStates, setConfirmStates] = useState<Record<string, ConfirmEntry>>({})
+  // resume 手动拉流期间：阻止新发送、Sender 显示 loading（防连点重复提交）
+  const [resuming, setResuming] = useState(false)
+  const resumingRef = useRef(false)
+  // H1=a：conversationKey+agentId → 已建 kuaiai session id（同对话内复用）
+  const hitlSessionRef = useRef(new Map<string, number>())
+  // conversationKey → 该抽屉会话最近一次发送实际携带的 kuaiai session id：
+  // 挂起卡归属判定用（换档案换会话时旧会话挂起不被新消息收口，本地也不能标已取消）
+  const hitlActiveSessionRef = useRef(new Map<string, number>())
 
   const conversationKey = conversationId
     ? `riveredge-kuaiai-${conversationId}`
@@ -734,6 +824,16 @@ const AIAssistantLivePanel: React.FC<AIAssistantLivePanelProps> = ({
             ? prevMsg.content
             : ''
           : ''
+      // spec 194：确认卡状态按 interrupt 对象标识复核（续跑中再挂起换上新
+      // interrupt 对象 → 视为新待确认；同 token 但 expiresAt/对象不同同样新挂起）
+      const interrupt = role === 'ai' ? msg?.interrupt : undefined
+      const stored = confirmStates[String(m.id)]
+      const confirmEntry: ConfirmEntry | undefined =
+        interrupt && stored && stored.interrupt === interrupt
+          ? stored
+          : interrupt
+            ? { interrupt, status: 'pending' as const }
+            : undefined
       return {
         key: m.id,
         role,
@@ -743,10 +843,19 @@ const AIAssistantLivePanel: React.FC<AIAssistantLivePanelProps> = ({
           ...((m.extraInfo as object) || {}),
           lastUserMessage,
           ...(role === 'ai' && msg?.toolTraces?.length ? { toolTraces: msg.toolTraces } : {}),
+          ...(interrupt && confirmEntry
+            ? {
+                messageId: m.id,
+                interrupt,
+                confirmStatus: confirmEntry.status,
+                ...(confirmEntry.deciding ? { confirmDeciding: confirmEntry.deciding } : {}),
+                ...(confirmEntry.error ? { confirmError: confirmEntry.error } : {}),
+              }
+            : {}),
         },
       }
     })
-  }, [chat.messages])
+  }, [chat.messages, confirmStates])
 
   const displayItems = useMemo(() => {
     if (!chat.isRequesting) return bubbleItems
@@ -777,17 +886,173 @@ const AIAssistantLivePanel: React.FC<AIAssistantLivePanelProps> = ({
     else if (typeof c.onClear === 'function') c.onClear()
   }
 
-  const handleSubmit = (question: string) => {
-    const q = question?.trim?.() || ''
-    if (!q || chat.isRequesting || !canSend) return
-    const apiContext = toAiContextApiPayload(context)
+  /**
+   * spec 194 H1=a：选用含写 Tool 的档案时先建 kuaiai 会话再发送；
+   * 判定/建会话失败照常发送（后端确认闸会返回明确错误，不静默降级）。
+   */
+  const ensureWriteToolSession = async (
+    ctx: AiContextPayload | null,
+  ): Promise<number | null> => {
+    if (!canAgentRead || !canCreateSession) return null
+    const agentId = Number(ctx?.agentId)
+    if (!agentId || !Number.isSafeInteger(agentId) || agentId <= 0) return null
+    const cacheKey = `${conversationKey}:${agentId}`
+    const cached = hitlSessionRef.current.get(cacheKey)
+    if (cached) return cached
+    try {
+      if (!(await profileHasWriteTools(agentId))) return null
+      const session = await createChatSession({ agent_id: agentId, model: null })
+      hitlSessionRef.current.set(cacheKey, session.id)
+      return session.id
+    } catch {
+      return null
+    }
+  }
+
+  const sendToChat = async (prompt: string, ctx: AiContextPayload | null) => {
+    const sessionId = await ensureWriteToolSession(ctx)
+    // H2=a（F-M2）：仅当本次发送落进与挂起卡相同的 kuaiai 会话时才收口为已取消；
+    // 换档案换会话/无会话发送后端不会写拒绝行，本地保持待确认
+    const prevSessionId = hitlActiveSessionRef.current.get(conversationKey) ?? null
+    if (sessionId != null) hitlActiveSessionRef.current.set(conversationKey, sessionId)
+    if (sessionId != null && sessionId === prevSessionId) {
+      cancelPendingConfirmations()
+    }
+    const base = toAiContextApiPayload(ctx)
+    const apiContext = sessionId
+      ? {
+          ...(base ?? {}),
+          extra: {
+            ...((base?.extra as Record<string, unknown> | undefined) ?? {}),
+            session_id: String(sessionId),
+          },
+        }
+      : base
     chat.onRequest(
       {
-        messages: [{ role: 'user', content: q }],
+        messages: [{ role: 'user', content: prompt }],
         ...(apiContext ? { context: apiContext } : {}),
       },
       { extraInfo: {} },
     )
+  }
+
+  /** spec 194 H2=a：挂起中的确认卡随新消息转「已取消」（后端同步补写拒绝行） */
+  const cancelPendingConfirmations = () => {
+    const list = chatMessagesStoreHelper.getMessages(conversationKey) ?? []
+    setConfirmStates((prev) => {
+      const next = { ...prev }
+      for (const item of list) {
+        const interrupt = (item.message as XChatMessage)?.interrupt
+        if (!interrupt) continue
+        const key = String(item.id)
+        const stored = next[key]
+        const effective =
+          stored && stored.interrupt === interrupt ? stored.status : 'pending'
+        if (effective === 'pending') {
+          next[key] = { interrupt, status: 'cancelled' }
+        }
+      }
+      return next
+    })
+  }
+
+  const setConfirmEntry = (messageId: string | number, entry: ConfirmEntry) => {
+    setConfirmStates((prev) => ({ ...prev, [String(messageId)]: entry }))
+  }
+
+  const handleConfirmExpire = (messageId: string | number) => {
+    const list = chatMessagesStoreHelper.getMessages(conversationKey) ?? []
+    const interrupt = (list.find((m) => String(m.id) === String(messageId))?.message as
+      | XChatMessage
+      | undefined)?.interrupt
+    if (!interrupt) return
+    setConfirmEntry(messageId, { interrupt, status: 'expired' })
+  }
+
+  /** spec 194：resume 手动拉流，续跑正文/工具轨迹写回同一条 assistant 消息 */
+  const handleConfirmDecision = (messageId: string | number, decision: ChatResumeDecision) => {
+    const list = chatMessagesStoreHelper.getMessages(conversationKey) ?? []
+    const msg = (list.find((m) => String(m.id) === String(messageId))?.message as
+      | XChatMessage
+      | undefined)
+    const interrupt = msg?.interrupt
+    if (!interrupt || resumingRef.current || chat.isRequesting) return
+    resumingRef.current = true
+    setResuming(true)
+    setConfirmEntry(messageId, {
+      interrupt,
+      status: 'deciding',
+      deciding: decision,
+    })
+    const baseContent = typeof msg?.content === 'string' ? msg.content : ''
+    const baseTraces = msg?.toolTraces ?? []
+    resumeChat({
+      threadToken: interrupt.threadToken,
+      decision,
+      // 后端校验决策数与 pending actions 数一致：一次点击对全部动作同决策
+      actionCount: interrupt.actions.length,
+      onDelta: (view) => {
+        chat.setMessage(messageId, (info) => {
+          const cur = info.message as XChatMessage
+          return {
+            ...info,
+            status: 'updating',
+            message: {
+              ...cur,
+              content: stripAssistantThinkContent(`${baseContent}${view.answer}`),
+              toolTraces: [...baseTraces, ...view.reasoning.map(stepToToolTrace)],
+              ...(view.pendingConfirmation
+                ? { interrupt: view.pendingConfirmation }
+                : {}),
+            },
+          }
+        })
+      },
+    })
+      .then((view) => {
+        // 续跑流中 pendingConfirmation 出现即视为新挂起（同/异 token 一致处理，
+        // interrupt 对象已在 onDelta 里换上新对象）→ 卡回到待确认
+        const nextInterrupt = view.pendingConfirmation ?? null
+        setConfirmEntry(
+          messageId,
+          nextInterrupt
+            ? { interrupt: nextInterrupt, status: 'pending' }
+            : {
+                interrupt,
+                status: decision === 'approve' ? 'approved' : 'rejected',
+              },
+        )
+      })
+      .catch((error: unknown) => {
+        if (error instanceof ChatResumeGoneError) {
+          setConfirmEntry(messageId, { interrupt, status: 'expired' })
+        } else {
+          // 网络/服务错误：保持待确认态 + 错误 + 重试（不改变终态）
+          setConfirmEntry(messageId, {
+            interrupt,
+            status: 'pending',
+            deciding: decision,
+            error:
+              error instanceof Error
+                ? error.message
+                : t('app.kuaiai.chat.confirm.submitFailed', { defaultValue: '确认提交失败' }),
+          })
+        }
+      })
+      .finally(() => {
+        chat.setMessage(messageId, { status: 'success' })
+        resumingRef.current = false
+        setResuming(false)
+      })
+  }
+
+  const handleSubmit = (question: string) => {
+    const q = question?.trim?.() || ''
+    // resumingRef 同步闸：state 有一帧窗口，连点可能穿透 resuming state
+    if (!q || chat.isRequesting || resumingRef.current || !canSend) return
+    // H2=a：同会话挂起卡的收口在 sendToChat 内按 sessionId 判定，不阻止发送
+    void sendToChat(q, context)
   }
 
   const handleConfirmAction = useCallback(
@@ -803,7 +1068,7 @@ const AIAssistantLivePanel: React.FC<AIAssistantLivePanelProps> = ({
   )
 
   useEffect(() => {
-    if (!open || !pendingAssistant?.prompt || chat.isRequesting) return
+    if (!open || !pendingAssistant?.prompt || chat.isRequesting || resuming) return
     const prompt = pendingAssistant.prompt.trim()
     const pendingContext = pendingAssistant.context ?? context
     setPendingAssistant(null)
@@ -816,15 +1081,10 @@ const AIAssistantLivePanel: React.FC<AIAssistantLivePanelProps> = ({
       )
       return
     }
-    const apiContext = toAiContextApiPayload(pendingContext)
-    chat.onRequest(
-      {
-        messages: [{ role: 'user', content: prompt }],
-        ...(apiContext ? { context: apiContext } : {}),
-      },
-      { extraInfo: {} },
-    )
-  }, [open, pendingAssistant, chat.isRequesting, context, setPendingAssistant, chat, canSend, t])
+    // H2=a：场景首问同样视为新消息；挂起卡收口在 sendToChat 内按 sessionId 判定
+    void sendToChat(prompt, pendingContext)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, pendingAssistant, chat.isRequesting, resuming, context, setPendingAssistant, chat, canSend, t])
 
   useEffect(() => {
     if (!conversationId || !onPersistConversation) return
@@ -845,7 +1105,7 @@ const AIAssistantLivePanel: React.FC<AIAssistantLivePanelProps> = ({
       open={open}
       onClose={onClose}
       displayItems={displayItems}
-      isLoading={chat.isRequesting}
+      isLoading={chat.isRequesting || resuming}
       onSubmit={handleSubmit}
       onNewChat={handleNewChat}
       senderDisabled={!canSend}
@@ -859,6 +1119,9 @@ const AIAssistantLivePanel: React.FC<AIAssistantLivePanelProps> = ({
       modelName={model}
       contextBadge={contextBadge}
       onConfirmAction={(token) => void handleConfirmAction(token)}
+      onConfirmDecision={handleConfirmDecision}
+      onConfirmExpire={handleConfirmExpire}
+      confirmBusy={resuming}
       embedded={embedded}
       embeddedSplit={embeddedSplit}
       canOpenAssistantTab={canOpenAssistantTab}

@@ -10,6 +10,7 @@
 import React, { useRef, useState, useMemo, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useDocumentHighlightDeepLink } from '../../../../../hooks/useDocumentHighlightDeepLink';
+import { useRegisterAiContext } from '../../../../../hooks/useRegisterAiContext';
 import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProFormTextArea, ProFormDatePicker } from '@ant-design/pro-components';
@@ -102,6 +103,16 @@ const QualityExceptionsPage: React.FC = () => {
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [currentRecord, setCurrentRecord] = useState<QualityException | null>(null);
+  useRegisterAiContext(
+    detailDrawerVisible && currentRecord
+      ? {
+          screenLabel: t(`${Q}.pageTitle`),
+          resourceKey: 'kuaizhizao:quality_exception',
+          recordId: currentRecord.id,
+          recordLabel: currentRecord.work_order_code,
+        }
+      : { screenLabel: t(`${Q}.pageTitle`) },
+  );
   const [handleModalVisible, setHandleModalVisible] = useState(false);
   const [currentAction, setCurrentAction] = useState<string>('');
   const { canCreate: canCreate8D } = useResourcePermissions(EIGHT_D_RESOURCE);

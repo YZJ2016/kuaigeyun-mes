@@ -36,15 +36,24 @@ from apps.kuaiai.constants import (
 )
 from apps.kuaiai.models.agent import KuaiaiAgentProfile
 from apps.kuaiai.services import grant_service
+from apps.kuaiai.services.checkpoint_saver import TortoiseCheckpointSaver
 from apps.kuaiai.services.mcp_client_service import (
     build_mcp_aware_tool_guard,
     load_agent_mcp_tools,
 )
+from apps.kuaiai.services.tool_catalog_service import manifest_write_tool_names
 from core.ai.runtime.agent_factory import build_agent
 from core.ai.runtime.model_factory import build_chat_model
 from core.ai.runtime.tool_bridge import registry_to_lc_tools
-from infra.exceptions.exceptions import AuthorizationError, NotFoundError
+from infra.exceptions.exceptions import (
+    AuthorizationError,
+    BusinessLogicError,
+    NotFoundError,
+)
 from infra.models.user import User
+
+# spec 193 H4：确认闸只受理 approve/reject
+HITL_ALLOWED_DECISIONS = ["approve", "reject"]
 
 
 @dataclass(frozen=True)
@@ -54,6 +63,8 @@ class AssembledAgent:
     profile: KuaiaiAgentProfile
     agent: Any
     model_name: str
+    # manifest kind=write ∩ 档案 tools 的名字闭集（spec 193 确认闸名单）
+    write_tools: frozenset = frozenset()
 
 
 async def _resolve_default_profile(
@@ -80,6 +91,7 @@ async def assemble(
     agent_id: Optional[int],
     *,
     agent_path: bool,
+    has_session: bool = False,
 ) -> Optional[AssembledAgent]:
     """档案装配：显式 ``agent_id`` 或 agent 路径默认档案 → AssembledAgent。
 
@@ -112,12 +124,21 @@ async def assemble(
     if not await grant_service.check_use_grant(tenant_id, profile, user):
         raise AuthorizationError("无该 Agent 档案使用权")
 
-    model = await build_chat_model(tenant_id, profile.default_model_id)
     tool_names = [
         name
         for name in (profile.enabled_tools or [])
         if name in ENABLED_TOOL_NAMES
     ]
+    # spec 193 H1：manifest kind=write ∩ 档案 tools → 确认闸名单；
+    # 无会话不装配写路径（先建会话再发送），防绕过 pending 闸。
+    # B-M1 失败关闭：manifest 不可读/ai_tools 非法/kind 越出闭集时
+    # manifest_write_tool_names 抛 ConfigurationError，装配整体拒绝——
+    # 绝不允许「写 Tool 照常进图却未挂 HITL 中断」的裸奔态。
+    write_names = manifest_write_tool_names() & frozenset(tool_names)
+    if write_names and not has_session:
+        raise BusinessLogicError("写操作需要会话")
+
+    model = await build_chat_model(tenant_id, profile.default_model_id)
     tools = registry_to_lc_tools(tool_names)
     # S4：档案勾选的 MCP 白名单建连装配（未解析 id 静默过滤、单 server
     # 失败跳过，均在 load_agent_mcp_tools 内）；外层异常（如行解析 DB
@@ -138,14 +159,37 @@ async def assemble(
                 getattr(profile, "id", None),
                 type(exc).__name__,
             )
+    middleware: list = [build_mcp_aware_tool_guard(mcp_names)]
+    checkpointer = None
+    if write_names:
+        # spec 193：kind=write → HumanInTheLoopMiddleware 经 interrupt 挂起；
+        # Tortoise saver（spec 192）持久化 pending 供 resume 续跑。
+        # guard 仍在外层：批准后真正执行时 RBAC/审计照旧。
+        from langchain.agents.middleware import HumanInTheLoopMiddleware
+
+        middleware.append(
+            HumanInTheLoopMiddleware(
+                interrupt_on={
+                    name: {"allowed_decisions": list(HITL_ALLOWED_DECISIONS)}
+                    for name in sorted(write_names)
+                }
+            )
+        )
+        checkpointer = TortoiseCheckpointSaver()
+
     agent = build_agent(
         model,
         tools,
         system_prompt=(profile.system_prompt or None),
-        middleware=[build_mcp_aware_tool_guard(mcp_names)],
-        checkpointer=None,
+        middleware=middleware,
+        checkpointer=checkpointer,
     )
     model_name = str(
         getattr(model, "model_name", None) or getattr(model, "model", "") or ""
     )
-    return AssembledAgent(profile=profile, agent=agent, model_name=model_name)
+    return AssembledAgent(
+        profile=profile,
+        agent=agent,
+        model_name=model_name,
+        write_tools=frozenset(write_names),
+    )

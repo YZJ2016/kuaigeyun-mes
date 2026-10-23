@@ -1,0 +1,1 @@
+import{j as t}from"./vendor-DIQ6yuEo.js";import{N as a}from"./clientRelease-B2WU44EF.js";const e=()=>t.jsx(a,{to:"/apps/kuaicaiwu/cost-management/cost-calculations?cat=trial&sub=production",replace:!0});export{e as default};

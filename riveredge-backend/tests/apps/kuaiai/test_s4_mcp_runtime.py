@@ -281,9 +281,9 @@ class TestLoadAgentMcpTools:
     async def test_registry_closed_set_name_dropped(self):
         """MCP 工具名撞 ENABLED_TOOL_NAMES 闭集名 → 丢弃（组合守卫按名
         放行会绕过 core RBAC；同名 tools + mcp_tools 后者覆盖前者）。"""
-        row = _server_row(allowed_tools="query_workorder,tool_a")
+        row = _server_row(allowed_tools="query_work_orders,tool_a")
         server_tools = [
-            _lc_tool("query_workorder"),  # 撞注册表闭集名
+            _lc_tool("query_work_orders"),  # 撞注册表闭集名
             _lc_tool("tool_a"),
         ]
         with (
@@ -593,7 +593,7 @@ class TestMcpAwareToolGuard:
         ):
             guard = mcs.build_mcp_aware_tool_guard({"mcp_tool"})
         handler = AsyncMock(return_value="x")
-        request = _mw_request("query_workorder")
+        request = _mw_request("query_work_orders")
         result = await guard.awrap_tool_call(request, handler)
         assert result == "core-result"
         core_guard.awrap_tool_call.assert_awaited_once_with(
@@ -623,7 +623,7 @@ def _profile(**over):
         name="档案3",
         system_prompt="你是助手",
         default_model_id=42,
-        enabled_tools=["query_workorder"],
+        enabled_tools=["query_work_orders"],
         mcp_server_ids=[],
         status="启用",
         grant_mode="USER",
@@ -637,7 +637,7 @@ def _assemble_patches(profile, mcp_return=None):
         get=AsyncMock(return_value=profile),
         grant=AsyncMock(return_value=True),
         model=AsyncMock(return_value=SimpleNamespace(model_name="m")),
-        reg=MagicMock(return_value=[_lc_tool("query_workorder")]),
+        reg=MagicMock(return_value=[_lc_tool("query_work_orders")]),
         mcp=AsyncMock(return_value=mcp_return or ([], set())),
         agent=MagicMock(return_value="agent-obj"),
     )
@@ -672,7 +672,7 @@ class TestAssembleMcp:
         mocks.mcp.assert_awaited_once_with(TENANT, [11, 22])
         tools_arg = mocks.agent.call_args.args[1]
         assert [t.name for t in tools_arg] == [
-            "query_workorder",
+            "query_work_orders",
             "mcp_weather",
         ]
         guard = mocks.agent.call_args.kwargs["middleware"][0]
@@ -691,7 +691,7 @@ class TestAssembleMcp:
             )
         mocks.mcp.assert_not_awaited()
         tools_arg = mocks.agent.call_args.args[1]
-        assert [t.name for t in tools_arg] == ["query_workorder"]
+        assert [t.name for t in tools_arg] == ["query_work_orders"]
 
     @pytest.mark.asyncio
     async def test_empty_mcp_result_keeps_registry_tools(self):
@@ -707,7 +707,7 @@ class TestAssembleMcp:
             )
         assert out is not None
         tools_arg = mocks.agent.call_args.args[1]
-        assert [t.name for t in tools_arg] == ["query_workorder"]
+        assert [t.name for t in tools_arg] == ["query_work_orders"]
 
     @pytest.mark.asyncio
     async def test_mcp_load_exception_degrades_to_no_mcp(self):
@@ -721,4 +721,4 @@ class TestAssembleMcp:
             )
         assert out is not None
         tools_arg = mocks.agent.call_args.args[1]
-        assert [t.name for t in tools_arg] == ["query_workorder"]
+        assert [t.name for t in tools_arg] == ["query_work_orders"]

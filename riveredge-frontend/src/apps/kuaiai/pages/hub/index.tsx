@@ -1,9 +1,10 @@
 /**
- * 星AI 能力矩阵页（/apps/kuaiai/hub，spec 181 T7；设计 §4）。
+ * 星AI 能力矩阵页（/apps/kuaiai/hub，spec 181 T7；spec 191 场景卡绑定）。
  *
- * - 数据：GET /apps/kuaiai/operations/hub?days=7（模型/四指标/八能力，局部降级）；
- * - 能力卡入口：ask/data_query/guide 打开既有 KU-Ask 抽屉并携带
- *   context.extra.capability_mode（ask|query|guide），其余按 API route 跳转；
+ * - 数据：GET /apps/kuaiai/operations/hub?days=7（模型/四指标/能力卡，局部降级）；
+ * - 能力卡入口：ask 卡打开既有 KU-Ask 抽屉（纯对话路径 A，capabilityMode=ask）；
+ *   场景卡（带 scene_key）打开抽屉并写入 agentKey + agentId +
+ *   capabilityMode=query（spec 191，服务端 guard_scene_agent_key 全量复核）；
  *   not_ready / 无路由 / 无目标权限一律禁用 + Tooltip，不跳 404；
  * - 指标卡点击进 /insights、/pulse、/corpus，缺 display 权限禁用；
  * - 指标为 null 显示「—」，绝不伪造 0；整页失败 Result + 重试，403 Result。
@@ -38,8 +39,6 @@ import '../../ops.less';
 /** 后端能力 key → KU-Ask 能力模式；命中即打开助手，未命中按 route 跳转 */
 const ASSISTANT_CAP_MODE: Record<string, AiCapabilityMode> = {
   ask: 'ask',
-  data_query: 'query',
-  guide: 'guide',
 };
 
 /** 已注册页内路由 → 页面 display 权限（其余后端下发路由直接跳转，由目标页自检权限） */
@@ -92,11 +91,16 @@ const HubPage: React.FC = () => {
   );
 
   const openKuAsk = useCallback(
-    (capabilityMode?: AiCapabilityMode) => {
+    (
+      capabilityMode?: AiCapabilityMode,
+      scene?: { agentKey: string; agentId?: string },
+    ) => {
       setContext({
         screen: '/apps/kuaiai/hub',
         screenLabel: t('app.kuaiai.hub.title', { defaultValue: '能力矩阵' }),
         ...(capabilityMode ? { capabilityMode } : {}),
+        ...(scene?.agentKey ? { agentKey: scene.agentKey } : {}),
+        ...(scene?.agentId ? { agentId: scene.agentId } : {}),
       });
       openAssistantDrawer();
     },
@@ -148,20 +152,33 @@ const HubPage: React.FC = () => {
 
   const renderCapabilityCard = (cap: HubCapabilityOut) => {
     const mode = ASSISTANT_CAP_MODE[cap.key];
+    // spec 191：场景卡携带 scene_key，点击走档案装配（agentKey + agentId + query）
+    const sceneKey = cap.scene_key ?? null;
+    const isSceneCard = !mode && sceneKey != null;
     const usable = cap.status !== 'not_ready';
     const go = () => {
-      if (mode) {
+      if (isSceneCard) {
+        openKuAsk('query', {
+          agentKey: sceneKey as string,
+          agentId:
+            cap.agent_profile_id != null
+              ? String(cap.agent_profile_id)
+              : undefined,
+        });
+      } else if (mode) {
         openKuAsk(mode);
       } else if (cap.route) {
         navigate(cap.route);
       }
     };
+    const opensAssistant = Boolean(mode) || isSceneCard;
     const disabled =
-      !usable || (mode ? !kuaiaiEntryAvailable : !canNavigateTo(cap.route));
+      !usable ||
+      (opensAssistant ? !kuaiaiEntryAvailable : !canNavigateTo(cap.route));
     const reason = !usable
       ? cap.disabled_reason || t('app.kuaiai.ops.notReady', { defaultValue: '暂未就绪' })
       : disabled
-        ? mode
+        ? opensAssistant
           ? t('app.kuaiai.ops.noAssistant', { defaultValue: 'AI 助手当前不可用' })
           : !cap.route
             ? cap.disabled_reason || noAccessTip

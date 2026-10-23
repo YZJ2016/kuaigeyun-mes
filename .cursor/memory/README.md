@@ -96,6 +96,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | KU-AI 能力矩阵、调用分析、insights 菜单、hub 加载慢 | `features/kuaiai-insights-in-hub.md` |
 | KU-AI 异常感知、Pulse 下线 | `features/kuaiai-pulse-offline.md` |
 | KU-AI 信任中心下线 | `features/kuaiai-trust-offline.md` |
+| KU-AI 只读 Tool、ai_tools 注册、SOP 知识同步、工艺路线 AI 查询 | `features/kuaiai-scene-tools-pattern.md` |
 | 构建推送、要不要编前端、只改后端怎么推、web/H5/工位选哪条 | `principles/code-push-routing.md` + 规则 `build-push-aoci.mdc` |
 | 构建推送前 AOCI、提交前先索引、要不要跑 AOCI、每次 push 是否 maintain | `principles/aoci-git-commit.md` |
 | riveredge-app 组装、mklink、工位/TV/小程序私仓 | `features/riveredge-app-client-junctions.md` |
@@ -197,6 +198,7 @@ Grep 建议：在 `.cursor/memory/` 搜任务里的组件名、权限码、`sour
 | `features/kuaiai-insights-in-hub.md` | KU-AI 调用分析并入能力矩阵 | kuaiai | 已交付 |
 | `features/kuaiai-pulse-offline.md` | KU-AI 异常感知下线 | kuaiai | 已交付 |
 | `features/kuaiai-trust-offline.md` | KU-AI 信任中心下线 | kuaiai | 已交付 |
+| `features/kuaiai-scene-tools-pattern.md` | KU-AI 业务只读 Tool 模式（spec 195–200） | kuaiai | 已交付 |
 | `features/flow-data-generate-operator-modes.md` | 流程造数步骤操作用户模式 | kuaizhizao-ops | 已交付 |
 | `features/equipment-ops-data-generate.md` | 设备点检保养造数与点检单导入 | kuaizhizao-ops | 已交付 |
 | `features/equipment-spot-check-plan.md` | 点检计划整层拆除（迁移 887；造数改 spot_check_ids） | kuaizhizao-ops | 已拆除 |

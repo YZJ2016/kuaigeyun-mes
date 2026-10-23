@@ -8020,13 +8020,17 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             "batching_order_code": order.code,
         }
 
-    async def get_work_order_kitting_analysis(
+    async def compute_work_order_kitting_analysis(
         self,
         tenant_id: int,
         work_order_id: int
     ) -> WorkOrderKittingAnalysisResponse:
         """
-        获取工单齐套性分析
+        工单齐套性分析（纯计算，不写库）。
+
+        K1-b（spec 197）：从 ``get_work_order_kitting_analysis`` 拆出；
+        不写 ``work_orders.readiness_rate`` 等缓存字段，供只读 Tool
+        与既有「计算 + 持久化」包装共用同一计算口径。
 
         逻辑：
         1. 展开 BOM 需求
@@ -8323,14 +8327,34 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             status=overall_status,
             items=analysis_items
         )
-        try:
-            from apps.kuaizhizao.services.work_order_readiness_service import (
-                persist_kitting_analysis_result,
-            )
+        return response
 
-            await persist_kitting_analysis_result(tenant_id, work_order_id, response)
-        except Exception as exc:
-            logger.warning(f"齐套分析结果持久化失败 wo={work_order_id}: {exc}")
+    async def get_work_order_kitting_analysis(
+        self,
+        tenant_id: int,
+        work_order_id: int
+    ) -> WorkOrderKittingAnalysisResponse:
+        """
+        获取工单齐套性分析（计算 + 持久化 readiness 缓存）。
+
+        K1-b（spec 197）：包装 ``compute_work_order_kitting_analysis``，
+        签名与返回不变；沿用原可达性——``no_bom`` 提前返回的分支
+        原本就不持久化，包装层保持同一口径。
+        """
+        response = await self.compute_work_order_kitting_analysis(
+            tenant_id, work_order_id
+        )
+        if response.status != "no_bom":
+            try:
+                from apps.kuaizhizao.services.work_order_readiness_service import (
+                    persist_kitting_analysis_result,
+                )
+
+                await persist_kitting_analysis_result(
+                    tenant_id, work_order_id, response
+                )
+            except Exception as exc:
+                logger.warning(f"齐套分析结果持久化失败 wo={work_order_id}: {exc}")
         return response
 
     async def merge_work_orders(

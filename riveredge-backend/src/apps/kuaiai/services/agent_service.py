@@ -4,7 +4,7 @@
 - grant_mode 仅 ROLE|USER 互斥；保存档案切换模式时同一事务清空对侧名单；
 - 启用（status=启用）档案当前模式名单不得为空 → 400；停用允许空；
 - 管理 list = 本租户全部档案；options 仅当前用户有使用权的启用档案；
-- enabled_tools 仅五值闭集子集，未知名 400；写 Tool 默认不勾（由前端/默认值保证）；
+- enabled_tools 仅 ENABLED_TOOL_NAMES 闭集子集，未知名 400；写 Tool 默认不勾（由前端/默认值保证）；
 - default_model_id 须指向本租户 model_type=chat 的启用行，跨租户/不存在 404，
   类型或状态不符 400；
 - knowledge_ids / mcp_server_ids 存 JSONB（形态归一）；发送时归属复核在

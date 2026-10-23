@@ -45,6 +45,23 @@ export type KuaiToolTrace = {
   resultSummary?: string;
 };
 
+/** spec 193/194：`kuaiai_interrupt` 帧里的一个待确认动作（写类 Tool） */
+export type KuaiInterruptAction = {
+  /** 后端 Tool 名 */
+  tool: string;
+  /** 目录中文显示名（后端下发，前端不翻译） */
+  label: string;
+  argsSummary?: string;
+  businessObject?: string;
+};
+
+/** spec 193/194：HITL 待确认（不透明 thread_token + 过期时间 + 动作列表） */
+export type KuaiInterrupt = {
+  threadToken: string;
+  expiresAt?: string;
+  actions: KuaiInterruptAction[];
+};
+
 type DeepSeekChunk = {
   choices?: DeepSeekChoice[];
   kuaiai_tool?: {
@@ -52,6 +69,16 @@ type DeepSeekChunk = {
     name?: string;
     args_summary?: string;
     result_summary?: string;
+  };
+  kuaiai_interrupt?: {
+    thread_token?: string;
+    expires_at?: string;
+    actions?: Array<{
+      tool?: string;
+      label?: string;
+      args_summary?: string;
+      business_object?: string;
+    }>;
   };
 };
 
@@ -63,6 +90,35 @@ function readToolTrace(raw: DeepSeekChunk['kuaiai_tool']): KuaiToolTrace | null 
   if (raw.args_summary) trace.argsSummary = raw.args_summary;
   if (raw.result_summary) trace.resultSummary = raw.result_summary;
   return trace;
+}
+
+/** `kuaiai_interrupt` 帧 → 待确认载荷；token 缺失视为无中断。 */
+export function readKuaiInterrupt(
+  raw: DeepSeekChunk['kuaiai_interrupt'],
+): KuaiInterrupt | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const threadToken = typeof raw.thread_token === 'string' ? raw.thread_token.trim() : '';
+  if (!threadToken) return null;
+  const actions = (Array.isArray(raw.actions) ? raw.actions : [])
+    .map((action): KuaiInterruptAction | null => {
+      const tool = typeof action?.tool === 'string' ? action.tool.trim() : '';
+      if (!tool) return null;
+      const label = typeof action?.label === 'string' && action.label.trim()
+        ? action.label.trim()
+        : tool;
+      return {
+        tool,
+        label,
+        ...(action?.args_summary ? { argsSummary: action.args_summary } : {}),
+        ...(action?.business_object ? { businessObject: action.business_object } : {}),
+      };
+    })
+    .filter((a): a is KuaiInterruptAction => a !== null);
+  return {
+    threadToken,
+    ...(typeof raw.expires_at === 'string' && raw.expires_at ? { expiresAt: raw.expires_at } : {}),
+    actions,
+  };
 }
 
 /** 结束帧合并到同名未结束的开始帧，避免抽屉里同一调用占两行。 */
@@ -82,12 +138,19 @@ export function mergeToolTrace(origin: KuaiToolTrace[] | undefined, next: KuaiTo
 
 /**
  * 不展示 reasoning_content / think 区块，仅保留回答正文。
+ * `kuaiai_interrupt` 帧不拼进正文，透传为 message.interrupt（确认卡渲染）。
  */
 export class KuaiDeepSeekChatProvider<
-  ChatMessage extends { role?: string; content?: string; toolTraces?: KuaiToolTrace[] } = {
+  ChatMessage extends {
     role?: string;
     content?: string;
     toolTraces?: KuaiToolTrace[];
+    interrupt?: KuaiInterrupt;
+  } = {
+    role?: string;
+    content?: string;
+    toolTraces?: KuaiToolTrace[];
+    interrupt?: KuaiInterrupt;
   },
   Input = Record<string, unknown>,
   Output = Record<string, unknown>,
@@ -97,6 +160,7 @@ export class KuaiDeepSeekChatProvider<
     let currentContent = '';
     let role = 'assistant';
     let toolTraces = originMessage?.toolTraces;
+    let interrupt = originMessage?.interrupt;
 
     try {
       let message: DeepSeekChunk | undefined;
@@ -110,6 +174,9 @@ export class KuaiDeepSeekChatProvider<
 
       const trace = readToolTrace(message?.kuaiai_tool);
       if (trace) toolTraces = mergeToolTrace(toolTraces, trace);
+
+      const nextInterrupt = readKuaiInterrupt(message?.kuaiai_interrupt);
+      if (nextInterrupt) interrupt = nextInterrupt;
 
       message?.choices?.forEach((choice) => {
         if (choice?.delta) {
@@ -132,6 +199,7 @@ export class KuaiDeepSeekChatProvider<
       content: stripAssistantThinkContent(`${originMessageContent}${currentContent}`),
       role: role || 'assistant',
       ...(toolTraces?.length ? { toolTraces } : {}),
+      ...(interrupt ? { interrupt } : {}),
     } as ChatMessage;
   }
 }

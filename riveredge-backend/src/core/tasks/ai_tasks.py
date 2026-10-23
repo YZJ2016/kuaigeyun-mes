@@ -41,6 +41,34 @@ async def run_ai_job(
         return {"job_id": job_id, "status": "failed", "error": str(exc)}
 
 
+@task()
+async def run_sop_knowledge_sync(
+    tenant_id: int, sop_id: int
+) -> Dict[str, Any]:
+    """SOP 发布/作废后同步知识文档（spec 200 SC-D11）。
+
+    KU-AI 未组装 → 跳过；任务失败不回滚 SOP 文控结果（解析失败已由
+    ``KnowledgeService.index_document`` 落到文档 status=failed）。
+    """
+    try:
+        from apps.kuaiai.services.sop_sync_service import sync_sop_document
+    except ImportError:
+        return {"skipped": True, "reason": "kuaiai_uninstalled"}
+
+    from infra.domain.tenant_context import with_tenant
+
+    try:
+        async with with_tenant(
+            tenant_id, reason="SOP 知识同步任务按任务组织执行"
+        ):
+            return await sync_sop_document(tenant_id, sop_id)
+    except Exception as exc:
+        logger.exception(
+            "SOP 知识同步任务失败 sop_id={} tenant_id={}", sop_id, tenant_id
+        )
+        return {"status": "failed", "error_type": type(exc).__name__}
+
+
 async def _run_ocr_extract(tenant_id: int, payload: Dict[str, Any]) -> Dict[str, Any]:
     schema_name = str(payload.get("schema_name") or "")
     source_text = payload.get("source_text")

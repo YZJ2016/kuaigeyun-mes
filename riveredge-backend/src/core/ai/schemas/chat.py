@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -55,3 +55,18 @@ class ChatCompletionResponse(BaseModel):
 class AiErrorResponse(BaseModel):
     detail: str
     code: Optional[str] = None
+
+
+class ChatResumeDecision(BaseModel):
+    """spec 193 H4：决策类型闭集 approve|reject（其余 422）。"""
+
+    type: Literal["approve", "reject"]
+    message: Optional[str] = Field(default=None, max_length=500)
+
+
+class ChatResumeRequest(BaseModel):
+    """HITL 续跑请求体：thread_token + decisions。"""
+
+    thread_token: str = Field(..., min_length=1, max_length=256)
+    decisions: List[ChatResumeDecision] = Field(..., min_length=1)
+    stream: bool = True

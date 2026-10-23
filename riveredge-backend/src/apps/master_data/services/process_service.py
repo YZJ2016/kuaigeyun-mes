@@ -1765,18 +1765,21 @@ class ProcessService:
     @staticmethod
     async def get_process_route_tree(
         tenant_id: int,
-        is_active: Optional[bool] = None
+        is_active: Optional[bool] = None,
+        route_ids: Optional[List[int]] = None,
     ) -> List["ProcessRouteTreeResponse"]:
         """
         获取工艺路线树形结构（工艺路线→工序）
-        
+
         返回完整的工艺路线层级结构，每个工艺路线包含其工序序列中的工序信息。
         用于级联选择等场景。
-        
+
         Args:
             tenant_id: 租户ID
             is_active: 是否只查询启用的数据（可选）
-            
+            route_ids: 只取指定路线 id（可选；提供时工序表也按引用到的
+                工序 id 收窄，避免全租户路线/工序扫描——KU-AI 评审 minor-7）
+
         Returns:
             List[ProcessRouteTreeResponse]: 工艺路线树形列表，每个工艺路线包含工序列表（按序列顺序）
         """
@@ -1785,7 +1788,10 @@ class ProcessService:
             ProcessRouteTreeResponse,
             OperationTreeResponse
         )
-        
+        from apps.master_data.services.validation_service import (
+            DataValidationService,
+        )
+
         # 查询所有工艺路线
         route_query = ProcessRoute.filter(
             tenant_id=tenant_id,
@@ -1793,17 +1799,32 @@ class ProcessService:
         )
         if is_active is not None:
             route_query = route_query.filter(is_active=is_active)
-        
+        if route_ids is not None:
+            route_query = route_query.filter(
+                id__in=[int(i) for i in route_ids]
+            )
+
         process_routes = await route_query.order_by("code").all()
-        
-        # 查询所有工序（用于构建映射）
+
+        # 查询所有工序（用于构建映射）；route_ids 收窄时只取被引用的工序
         operation_query = Operation.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True
         )
         if is_active is not None:
             operation_query = operation_query.filter(is_active=is_active)
-        
+        if route_ids is not None:
+            needed_op_ids: set = set()
+            for route in process_routes:
+                needed_op_ids.update(
+                    DataValidationService._extract_operation_ids_from_sequence(
+                        route.operation_sequence
+                    )
+                )
+            operation_query = operation_query.filter(
+                id__in=list(needed_op_ids)
+            )
+
         operations = await operation_query.all()
         
         # 构建工序映射（按ID）

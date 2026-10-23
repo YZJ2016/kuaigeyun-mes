@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 420" role="img">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7cb305"/>
+      <stop offset="1" stop-color="#5b8c00"/>
+    </linearGradient>
+    <linearGradient id="bar" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#f4ffb8"/>
+      <stop offset="1" stop-color="#d3f261"/>
+    </linearGradient>
+  </defs>
+  <rect width="280" height="420" fill="url(#bg)"/>
+  <circle cx="240" cy="52" r="88" fill="#ffffff" opacity="0.05"/>
+  <circle cx="30" cy="364" r="106" fill="#ffffff" opacity="0.05"/>
+  <!-- 作业指导书 -->
+  <g transform="translate(56 112)">
+    <rect x="0" y="0" width="168" height="196" rx="12" fill="#ffffff" opacity="0.12"/>
+    <rect x="16" y="18" width="80" height="12" rx="6" fill="#f4ffb8" opacity="0.9"/>
+    <!-- 步骤行 -->
+    <g>
+      <circle cx="22" cy="52" r="6" fill="#d3f261"/>
+      <rect x="38" y="48" width="110" height="8" rx="4" fill="url(#bar)"/>
+    </g>
+    <g>
+      <circle cx="22" cy="80" r="6" fill="#d3f261"/>
+      <rect x="38" y="76" width="92" height="8" rx="4" fill="url(#bar)" opacity="0.8"/>
+    </g>
+    <g>
+      <circle cx="22" cy="108" r="6" fill="#d3f261" opacity="0.75"/>
+      <rect x="38" y="104" width="100" height="8" rx="4" fill="url(#bar)" opacity="0.6"/>
+    </g>
+    <g>
+      <circle cx="22" cy="136" r="6" fill="#d3f261" opacity="0.55"/>
+      <rect x="38" y="132" width="84" height="8" rx="4" fill="url(#bar)" opacity="0.45"/>
+    </g>
+    <!-- 工序齿轮 -->
+    <g transform="translate(132 160)">
+      <g fill="#eaff8f">
+        <rect x="-4" y="-27" width="8" height="11" rx="2"/>
+        <rect x="-4" y="-27" width="8" height="11" rx="2" transform="rotate(45)"/>
+        <rect x="-4" y="-27" width="8" height="11" rx="2" transform="rotate(90)"/>
+        <rect x="-4" y="-27" width="8" height="11" rx="2" transform="rotate(135)"/>
+        <rect x="-4" y="-27" width="8" height="11" rx="2" transform="rotate(180)"/>
+        <rect x="-4" y="-27" width="8" height="11" rx="2" transform="rotate(225)"/>
+        <rect x="-4" y="-27" width="8" height="11" rx="2" transform="rotate(270)"/>
+        <rect x="-4" y="-27" width="8" height="11" rx="2" transform="rotate(315)"/>
+        <circle r="18"/>
+      </g>
+      <circle r="7" fill="#5b8c00"/>
+    </g>
+  </g>
+  <!-- 底部文字条 -->
+  <g transform="translate(56 348)">
+    <rect x="0" y="0" width="96" height="8" rx="4" fill="#f4ffb8" opacity="0.85"/>
+    <rect x="0" y="16" width="146" height="8" rx="4" fill="#f4ffb8" opacity="0.4"/>
+    <rect x="0" y="32" width="70" height="8" rx="4" fill="#d3f261" opacity="0.7"/>
+  </g>
+</svg>

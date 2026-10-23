@@ -7,4 +7,5 @@ ORM_MODEL_MODULES: list[str] = [
     "apps.kuaiai.models.agent_scene",
     "apps.kuaiai.models.knowledge",
     "apps.kuaiai.models.mcp",
+    "apps.kuaiai.models.checkpoint",
 ]

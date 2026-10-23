@@ -315,6 +315,7 @@ import { useNumericPrecision, getNumericAbsMax, buildNumericFormRules } from '..
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDeferAfterPaint } from '../../../../../hooks/useDeferAfterPaint';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
+import { useRegisterAiContext } from '../../../../../hooks/useRegisterAiContext';
 import { isManualAuditEnabled } from '../../../../../utils/auditMode';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
@@ -907,6 +908,16 @@ const SalesOrdersPage: React.FC = () => {
     permDeniedTitle,
   );
   const [trackingRefreshKey, setTrackingRefreshKey] = useState(0);
+  useRegisterAiContext(
+    drawerVisible && currentSalesOrder
+      ? {
+          screenLabel: t('app.kuaizhizao.salesOrder.title'),
+          resourceKey: 'kuaizhizao:sales_order',
+          recordId: currentSalesOrder.id,
+          recordLabel: currentSalesOrder.order_code,
+        }
+      : { screenLabel: t('app.kuaizhizao.salesOrder.title') },
+  );
 
   // 提醒弹窗状态
   const [reminderModalOpen, setReminderModalOpen] = useState(false);

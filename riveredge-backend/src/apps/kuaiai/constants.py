@@ -14,35 +14,51 @@ MODEL_TYPES = frozenset({"chat", "embed", "vision", "rerank"})
 MODEL_TYPE_CHAT = "chat"
 MODEL_TYPE_EMBED = "embed"
 
-# KR-D10 受控写 Tool 闭集五值：保存时校验，未知名 400；写 Tool 默认不勾
-# spec 181 扩展六个领域只读 Tool（无写权限映射，预置档案不勾选写 Tool）
+# KR-D10 受控写 Tool 闭集：保存时校验，未知名 400；写 Tool 默认不勾
+# spec 190：11 个存量 Tool 合并改名为 9 个（工单双视图并入
+# query_work_orders，两个采购查询并入 query_purchase_orders），
+# 不保留旧名运行时别名；存量档案 enabled_tools 由数据迁移改写
+# spec 195 起按单元追加场景只读 Tool（manifest ai_tools 与其一一对应）
 ENABLED_TOOL_NAMES = frozenset(
     {
         "search_knowledge",
-        "query_workorder",
-        "list_workorder_tasks",
+        "query_work_orders",
         "submit_production_feedback",
         "update_workorder_status",
-        "query_inventory_balance",
-        "query_delivery_risk",
-        "query_purchase_followup",
-        "query_published_schedule",
-        "query_quality_anomalies",
-        "query_supplier_orders",
+        "query_inventory",
+        "analyze_delivery_risk",
+        "query_purchase_orders",
+        "query_schedule",
+        "analyze_quality",
+        # spec 195 销售订单与采购到货预警
+        "query_sales_orders",
+        "query_purchase_arrival_warnings",
+        # spec 196 库存预警/补货建议/呆滞料
+        "query_inventory_alerts",
+        "query_replenishment_suggestions",
+        "query_slow_moving_inventory",
+        # spec 197 齐套分析与生产异常
+        "analyze_kitting",
+        "query_material_shortages",
+        "query_delivery_delays",
+        "query_quality_exceptions",
+        # spec 198 一次合格率与缺陷帕累托
+        "analyze_first_pass_yield",
+        "analyze_defect_pareto",
+        # spec 199 生产日报与异常信号
+        "query_production_daily",
+        "query_pulse_signals",
+        # spec 200 工艺路线
+        "query_process_routes",
     }
 )
 
-# spec 181 场景预置档案最小只读 Tool 子集（禁止包含写 Tool；
-# 该集合的补集内的写 Tool 不得进入任何预置档案 enabled_tools）
-SCENE_READONLY_TOOL_NAMES = frozenset(
-    {
-        "query_inventory_balance",
-        "query_delivery_risk",
-        "query_purchase_followup",
-        "query_published_schedule",
-        "query_quality_anomalies",
-        "query_supplier_orders",
-    }
+# 场景预置档案只读 Tool 闭集（禁止包含写 Tool；预置档案
+# enabled_tools 只能取这里面的值）。= ENABLED_TOOL_NAMES − 写 Tool
+# {submit_production_feedback, update_workorder_status}。
+# spec 190 改名后曾钉死五值；spec 201 起 P1 模板纳入全部只读 Tool。
+SCENE_READONLY_TOOL_NAMES = ENABLED_TOOL_NAMES - frozenset(
+    {"submit_production_feedback", "update_workorder_status"}
 )
 
 # KR-D9 授权模式（档案列，大写互斥）；grant 行 target_type 用小写 role|user
