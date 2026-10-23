@@ -91,7 +91,7 @@ def _profile(**kw):
         system_prompt="p",
         default_model_id=None,
         knowledge_ids=[],
-        enabled_tools=["query_inventory_balance"],
+        enabled_tools=["query_inventory"],
         mcp_server_ids=[],
         status="启用",
         grant_mode="ROLE",
@@ -857,7 +857,8 @@ class TestHub:
         caps = await operations_service._build_capabilities(
             TENANT, {"configured": False, "enabled": False}
         )
-        assert len(caps) <= 8
+        # ask 卡 + 每模板一张场景卡（spec 201 起 9 模板）
+        assert len(caps) == 1 + len(svc.SCENE_TEMPLATES)
         for c in caps:
             assert c["status"] in {"ready", "partial", "not_ready"}
         ask = next(c for c in caps if c["key"] == "ask")
@@ -873,49 +874,45 @@ class TestSceneTools:
         from apps.kuaiai.services import scene_tools
 
         for fn in (
-            scene_tools.query_inventory_balance,
-            scene_tools.query_delivery_risk,
-            scene_tools.query_purchase_followup,
-            scene_tools.query_quality_anomalies,
+            scene_tools.query_inventory,
+            scene_tools.analyze_delivery_risk,
+            scene_tools.query_purchase_orders,
+            scene_tools.analyze_quality,
         ):
             assert "上下文" in await fn(ctx=None)
-        assert "上下文" in await scene_tools.query_published_schedule(
+        assert "上下文" in await scene_tools.query_schedule(
             plan_date="2026-01-01", ctx=None
         )
-        assert "上下文" in await scene_tools.query_supplier_orders(
-            supplier_id=1, ctx=None
-        )
 
-    async def test_published_schedule_requires_date(self):
+    async def test_schedule_requires_date(self):
         from apps.kuaiai.services import scene_tools
 
         ctx = SimpleNamespace(tenant_id=TENANT, user=_user())
-        out = await scene_tools.query_published_schedule(
+        out = await scene_tools.query_schedule(
             plan_date="not-a-date", ctx=ctx
         )
         assert "YYYY-MM-DD" in out
 
-    async def test_quality_anomalies_type_closed_set(self):
+    async def test_quality_type_closed_set(self):
         from apps.kuaiai.services import scene_tools
 
         ctx = SimpleNamespace(tenant_id=TENANT, user=_user())
-        out = await scene_tools.query_quality_anomalies(
+        out = await scene_tools.analyze_quality(
             inspection_type="evil", ctx=ctx
         )
         assert "incoming" in out
 
-    async def test_supplier_orders_requires_valid_id(self):
+    async def test_purchase_orders_supplier_id_must_be_int(self):
+        """spec 190 合并后：supplier_id 非法值由 PurchaseService 参数层拒绝。"""
         from apps.kuaiai.services import scene_tools
 
         ctx = SimpleNamespace(tenant_id=TENANT, user=_user())
-        assert "无效" in await scene_tools.query_supplier_orders(
-            supplier_id=-1, ctx=ctx
-        )
-        assert "无效" in await scene_tools.query_supplier_orders(
+        out = await scene_tools.query_purchase_orders(
             supplier_id="abc", ctx=ctx
         )
+        assert "失败" in out or "无效" in out
 
-    async def test_published_schedule_unpublished_refused(self):
+    async def test_schedule_unpublished_refused(self):
         from apps.kuaiai.services import scene_tools
 
         ctx = SimpleNamespace(tenant_id=TENANT, user=_user())
@@ -925,7 +922,7 @@ class TestSceneTools:
             ".RollingScheduleService.get_plan_by_date",
             AsyncMock(return_value=plan),
         ):
-            out = await scene_tools.query_published_schedule(
+            out = await scene_tools.query_schedule(
                 plan_date="2026-01-05", ctx=ctx
             )
         assert "尚未发布" in out

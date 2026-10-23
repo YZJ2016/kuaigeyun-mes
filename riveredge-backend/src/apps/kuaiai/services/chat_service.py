@@ -26,6 +26,7 @@ from __future__ import annotations
 import inspect
 import json
 import time
+from datetime import timedelta
 from typing import Any, AsyncIterator, Dict, List, Optional, Union
 
 from fastapi.responses import StreamingResponse
@@ -37,6 +38,7 @@ from langchain_core.messages import (
     ToolMessage,
 )
 from langchain_openai import ChatOpenAI
+from langgraph.types import Command
 from loguru import logger
 from tortoise.transactions import in_transaction
 
@@ -47,8 +49,11 @@ from apps.kuaiai.constants import (
 )
 from apps.kuaiai.models.catalog import KuaiaiLlmModel
 from apps.kuaiai.models.chat import KuaiaiChatMessage, KuaiaiChatSession
+from apps.kuaiai.models.checkpoint import KuaiaiAgentCheckpoint
 from apps.kuaiai.models.knowledge import KuaiaiKnowledgeBase
+from apps.kuaiai.services import hitl_service
 from apps.kuaiai.services.agent_assembler import AssembledAgent, assemble
+from apps.kuaiai.services.checkpoint_saver import TortoiseCheckpointSaver
 from apps.kuaiai.services.retrieval import retrieve
 from apps.kuaiai.services.session_service import get_owned_session
 from core.ai.runtime.agent_factory import DEFAULT_RECURSION_LIMIT
@@ -86,6 +91,10 @@ from infra.models.user import User
 _HISTORY_LIMIT = 50
 
 _SSE_DONE = b"data: [DONE]\n\n"
+
+# spec 193：非流式不支持确认交互 → 失败关闭自动拒绝的固定文案/轮次上限
+_HITL_NONSTREAM_REJECT = "当前请求不支持人工确认，已取消"
+_HITL_NONSTREAM_MAX_ROUNDS = 10
 
 # 兼容别名：spec 134 移交项/既有测试钉住的模块内名称；canonical 实现在
 # core/ai/runtime/memory（S2 已收口，本地不再保留实现副本）。
@@ -561,6 +570,262 @@ async def _persist_agent_messages(
         await session.update_from_dict(update).save()
 
 
+async def _persist_pending_ai_row(
+    tenant_id: int,
+    session: KuaiaiChatSession,
+    user: Optional[User],
+    state_messages: List[BaseMessage],
+    calls: List[Dict[str, Any]],
+    *,
+    agent_id: Optional[int] = None,
+) -> None:
+    """中断流被客户端断开时 assistant(tool_calls) 行可能未落库。
+
+    按最后一条 assistant 行覆盖的 call id 判定缺口：缺失则先补
+    assistant(tool_calls) 行，否则后续 tool 行成孤儿、回放断裂
+    （消息表是回放/审计真源）。
+    """
+    ids = {str(c.get("id")) for c in calls if c.get("id")}
+    if not ids:
+        return
+    last_ai = await (
+        KuaiaiChatMessage.filter(
+            tenant_id=tenant_id,
+            session_id=session.id,
+            role="assistant",
+            deleted_at__isnull=True,
+        )
+        .order_by("-seq")
+        .first()
+    )
+    if ids <= _row_tool_call_ids(last_ai):
+        return
+    ai_msg = next(
+        (
+            m
+            for m in reversed(state_messages)
+            if isinstance(m, AIMessage)
+            and ids
+            & {str(tc.get("id")) for tc in (m.tool_calls or []) if tc.get("id")}
+        ),
+        None,
+    )
+    if ai_msg is None:
+        return
+    await _persist_agent_messages(
+        tenant_id, session, [ai_msg], user=user, agent_id=agent_id
+    )
+
+
+async def _persist_hitl_close_rows(
+    tenant_id: int,
+    session: KuaiaiChatSession,
+    user: Optional[User],
+    tpl: Any,
+    *,
+    content: str,
+    agent_id: Optional[int] = None,
+) -> List[Dict[str, Any]]:
+    """挂起收口写行（发送收口 / purge 过期清理共用）。
+
+    先补 assistant(tool_calls) 行缺口，再为全部未应答 tool_calls 写
+    ``role=tool`` 收口行（``content`` 如「用户未确认，已取消」/「操作确认
+    已过期，已取消」）——消息表回放不得残留悬空 tool_calls。返回被收口的
+    tool_calls（供调用方按 call 记审计）。
+    """
+    state_messages = hitl_service.checkpoint_messages(tpl)
+    calls = hitl_service.unanswered_tool_calls(state_messages)
+    if not calls:
+        return []
+    await _persist_pending_ai_row(
+        tenant_id, session, user, state_messages, calls, agent_id=agent_id
+    )
+    tool_rows = [
+        ToolMessage(
+            content=content,
+            tool_call_id=str(c.get("id") or ""),
+            name=str(c.get("name") or ""),
+        )
+        for c in calls
+    ]
+    await _persist_agent_messages(
+        tenant_id, session, tool_rows, user=user, agent_id=agent_id
+    )
+    return calls
+
+
+async def _close_pending_thread(
+    tenant_id: int,
+    session: KuaiaiChatSession,
+    user: User,
+) -> None:
+    """spec 193 H2/H3：同会话新消息先收口挂起确认闸，再处理新消息。
+
+    pending 唯一来源是 checkpoint 的 ``__interrupt__`` pending write：
+    - 无 pending → 返回（残留执行现场仅静默删除）；
+    - 有 pending → 补全 assistant/tool 收口行（H2=reject，过期=expire）→
+      按 call 记审计 → 整线程 ``adelete_thread``，先前写调用绝不执行。
+
+    整段在会话行锁事务内执行，与 ``resume_chat_completion`` 的认领互斥：
+    - checkpoint 读取失败 → ``BusinessLogicError`` 失败关闭，拒绝本次发送
+      （不静默放行残留 pending，不落 user 行）；
+    - 挂起已被 resume 认领且仍在 ``HITL_CLAIM_STALE_SECONDS`` 窗口内 →
+      拒发（不写「已取消」谎报，决策审计已在认领时记录）；
+    - 认领超窗口（续跑崩溃残留）→ 正常收口但不再重复决策审计。
+    """
+    saver = TortoiseCheckpointSaver()
+    prefix = hitl_service.session_thread_prefix(
+        tenant_id, int(user.id), int(session.id)
+    )
+    async with in_transaction():
+        await _lock_session_row(tenant_id, session.id)
+        try:
+            thread_ids = await (
+                KuaiaiAgentCheckpoint.filter(
+                    tenant_id=tenant_id, thread_id__startswith=prefix
+                )
+                .distinct()
+                .values_list("thread_id", flat=True)
+            )
+        except Exception as exc:
+            raise BusinessLogicError(
+                "挂起确认状态读取失败，请稍后重试"
+            ) from exc
+        for thread_id in list(thread_ids or []):
+            try:
+                tpl = await saver.aget_tuple(
+                    {
+                        "configurable": {
+                            "tenant_id": tenant_id,
+                            "thread_id": thread_id,
+                        }
+                    }
+                )
+            except Exception as exc:
+                raise BusinessLogicError(
+                    "挂起确认状态读取失败，请稍后重试"
+                ) from exc
+            if tpl is None:
+                continue
+            interrupts = hitl_service.pending_interrupt_values(tpl)
+            if not interrupts:
+                # 非挂起残留（崩溃/中断流现场），无确认语义，静默清理
+                try:
+                    await saver.adelete_thread(thread_id, tenant_id=tenant_id)
+                except Exception as exc:
+                    logger.warning(
+                        "KU-AI 残留 checkpoint 清理失败 thread_id={} error_type={}",
+                        thread_id,
+                        type(exc).__name__,
+                    )
+                continue
+
+            meta = tpl.metadata or {}
+            claimed_at = hitl_service.parse_expires_at(
+                meta.get(hitl_service.HITL_META_CLAIMED_AT)
+            )
+            if claimed_at is not None and now_utc() < claimed_at + timedelta(
+                seconds=hitl_service.HITL_CLAIM_STALE_SECONDS
+            ):
+                # in-flight resume 已认领该挂起：拒绝发送而非写「已取消」
+                # 谎报（审计与事实背离），客户端稍后重试即可
+                raise BusinessLogicError(
+                    "上一条待确认操作正在执行，请稍后重试"
+                )
+            expires_at = hitl_service.parse_expires_at(
+                meta.get(hitl_service.HITL_META_EXPIRES_AT)
+            )
+            expired = expires_at is not None and now_utc() >= expires_at
+            agent_id = meta.get(hitl_service.HITL_META_AGENT_ID)
+            # 认领超窗口的崩溃残留：决策审计已在认领事务记录，只收口不重复审计
+            action = (
+                None
+                if claimed_at is not None
+                else ("expire" if expired else "reject")
+            )
+            content = (
+                "操作确认已过期，已取消"
+                if (expired or claimed_at is not None)
+                else "用户未确认，已取消"
+            )
+            state_messages = hitl_service.checkpoint_messages(tpl)
+            calls = hitl_service.unanswered_tool_calls(state_messages)
+            try:
+                await _persist_hitl_close_rows(
+                    tenant_id,
+                    session,
+                    user,
+                    tpl,
+                    content=content,
+                    agent_id=agent_id,
+                )
+            except Exception:
+                logger.error(
+                    "KU-AI 挂起收口消息落库失败 tenant_id={} session_id={}",
+                    tenant_id,
+                    session.id,
+                )
+            if action is not None:
+                for call in calls:
+                    await hitl_service.audit_tool_confirm(
+                        tenant_id,
+                        int(user.id),
+                        str(call.get("name") or ""),
+                        action,
+                    )
+            try:
+                await saver.adelete_thread(thread_id, tenant_id=tenant_id)
+            except Exception as exc:
+                logger.warning(
+                    "KU-AI 挂起线程删除失败 thread_id={} error_type={}",
+                    thread_id,
+                    type(exc).__name__,
+                )
+
+
+async def _hitl_run_ctx(
+    tenant_id: int,
+    session: KuaiaiChatSession,
+    user: User,
+    assembled: AssembledAgent,
+) -> Dict[str, Any]:
+    """写类档案一轮运行的 HITL 上下文：TTL → thread_id/token/过期点。
+
+    TTL 配置读取失败在此抛出（spec 193 H3 失败关闭：不落 user 行、
+    不触达上游、不动业务数据）。
+    """
+    ttl = await hitl_service.pending_ttl_minutes(tenant_id)
+    thread_id = hitl_service.build_thread_id(
+        tenant_id, int(user.id), int(session.id)
+    )
+    thread_token = hitl_service.issue_thread_token(thread_id)
+    expires_at = now_utc() + timedelta(minutes=ttl)
+    labels = {
+        name: hitl_service.tool_label(name)
+        for name in sorted(assembled.write_tools)
+    }
+    parts = hitl_service.hitl_checkpoint_config(
+        tenant_id=tenant_id,
+        thread_id=thread_id,
+        thread_token=thread_token,
+        expires_at=expires_at,
+        agent_id=int(assembled.profile.id),
+        session_id=int(session.id),
+        user_id=int(user.id),
+    )
+    return {
+        "saver": TortoiseCheckpointSaver(),
+        "thread_id": thread_id,
+        "configurable": parts["configurable"],
+        "metadata": parts["metadata"],
+        "interrupt_ctx": {
+            "thread_token": thread_token,
+            "expires_at": expires_at.isoformat(),
+            "labels": labels,
+        },
+    }
+
+
 class _AgentRunTracer(AsyncCallbackHandler):
     """路径 B 运行收集器（经 ``config["callbacks"]`` 注入）。
 
@@ -695,59 +960,101 @@ async def _openai_sse_stream(
 
 async def _agent_sse_stream(
     assembled: AssembledAgent,
-    lc_messages: List[BaseMessage],
+    agent_input: Any,
     *,
     tenant_id: int,
     session: Optional[KuaiaiChatSession],
     user: Optional[User],
     rt_ctx: AiRuntimeContext,
+    hitl: Optional[Dict[str, Any]] = None,
+    persisted_upto: int = 0,
 ) -> AsyncIterator[bytes]:
     """路径 B 流式：``astream_events`` 真流式 → OpenAI chunk 线格式。
 
-    工具轨迹/终态经 config.callbacks 的 ``_AgentRunTracer`` 在同一次运行内
-    收集（不重跑 agent）；流结束后按发生序落 tool/assistant 行。
+    ``agent_input`` 为 ``{"messages": [...]}``（发送）或
+    ``Command(resume=...)``（spec 193 续跑）；``hitl`` 非空时注入
+    ``configurable/metadata`` 并经 ``interrupt_ctx`` 在流末下发
+    ``kuaiai_interrupt`` 帧。落库真源：HITL 路径从 checkpoint 终态切片
+    （含中断前的 tool_call assistant 行），否则沿用 ``_AgentRunTracer``。
     """
     tracer = _AgentRunTracer()
-    config = {
+    config: Dict[str, Any] = {
         "recursion_limit": DEFAULT_RECURSION_LIMIT,
         "callbacks": [tracer],
     }
+    if hitl is not None:
+        config["configurable"] = hitl["configurable"]
+        config["metadata"] = hitl["metadata"]
+    interrupt_ctx = hitl["interrupt_ctx"] if hitl is not None else None
     # contextvar 在流消费上下文内置/复位（KR-I6：不假设与请求同一 task）
     token = set_ai_context(rt_ctx)
     try:
         async for chunk in agent_to_openai_sse(
             assembled.agent,
-            lc_messages,
+            agent_input,
             model_name=assembled.model_name,
             config=config,
+            interrupt_ctx=interrupt_ctx,
         ):
             yield chunk
     finally:
         reset_ai_context(token)
 
-    if session is None:
-        return
-    new_messages = tracer.new_messages(len(lc_messages))
-    if not new_messages:
-        return
-    try:
-        usage = _sum_usage(new_messages)
-        await _persist_agent_messages(
-            tenant_id,
-            session,
-            new_messages,
-            user=user,
-            agent_id=assembled.profile.id,
-            prompt_tokens=usage["prompt_tokens"],
-            completion_tokens=usage["completion_tokens"],
-        )
-    except Exception:
-        # 同 _openai_sse_stream 取舍：流已收尾，落库失败只记日志
-        logger.error(
-            "KU-AI agent 消息落库失败 tenant_id={} session_id={}",
-            tenant_id,
-            session.id,
-        )
+    new_messages: List[BaseMessage] = []
+    still_pending = False
+    if hitl is not None:
+        saver: TortoiseCheckpointSaver = hitl["saver"]
+        try:
+            tpl = await saver.aget_tuple(config)
+        except Exception as exc:
+            tpl = None
+            logger.error(
+                "KU-AI checkpoint 读取失败 thread_id={} error_type={}",
+                hitl["thread_id"],
+                type(exc).__name__,
+            )
+        if tpl is not None:
+            state_messages = hitl_service.checkpoint_messages(tpl)
+            new_messages = list(state_messages[persisted_upto:])
+            still_pending = hitl_service.has_pending_interrupt(tpl)
+        else:
+            # 读失败按挂起保守处理：宁可残留待过期清理，不误删待确认现场
+            still_pending = True
+    else:
+        new_messages = tracer.new_messages(persisted_upto)
+
+    if session is not None and new_messages:
+        try:
+            usage = _sum_usage(new_messages)
+            await _persist_agent_messages(
+                tenant_id,
+                session,
+                new_messages,
+                user=user,
+                agent_id=assembled.profile.id,
+                prompt_tokens=usage["prompt_tokens"],
+                completion_tokens=usage["completion_tokens"],
+            )
+        except Exception:
+            # 同 _openai_sse_stream 取舍：流已收尾，落库失败只记日志
+            logger.error(
+                "KU-AI agent 消息落库失败 tenant_id={} session_id={}",
+                tenant_id,
+                session.id,
+            )
+
+    if hitl is not None and not still_pending:
+        # 完成运行：清线程（挂起运行留给 resume/收口/过期路径）
+        try:
+            await hitl["saver"].adelete_thread(
+                hitl["thread_id"], tenant_id=tenant_id
+            )
+        except Exception as exc:
+            logger.warning(
+                "KU-AI checkpoint 线程清理失败 thread_id={} error_type={}",
+                hitl["thread_id"],
+                type(exc).__name__,
+            )
 
 
 async def create_chat_completion(
@@ -815,6 +1122,7 @@ async def create_chat_completion(
     agent_path = agent_id is None and _is_agent_path(context)
     assembled: Optional[AssembledAgent] = None
     if agent_id is not None or agent_path:
+        # spec 193 H1：写类档案必须持会话发送（无会话装配直接拒绝）
         assembled = await assemble(
             tenant_id,
             user,
@@ -822,6 +1130,7 @@ async def create_chat_completion(
             is_tenant_admin,
             agent_id,
             agent_path=agent_path,
+            has_session=session is not None,
         )
 
     # S3 请求级 knowledge_id（路径 A 可选单库注入）：
@@ -887,6 +1196,20 @@ async def create_chat_completion(
             temperature=temperature if temperature is not None else 0.7
         )
 
+    # spec 193 H2/H3：同会话新消息先收口挂起确认闸（H2=reject，
+    # 过期=expire），先前挂起的写调用绝不在新消息下执行；
+    # 拒绝路径在落库之前
+    if session is not None and user is not None:
+        await _close_pending_thread(tenant_id, session, user)
+
+    # spec 193 H3：写类档案先读挂起 TTL（配置读失败→失败关闭，不猜默认值），
+    # 再生成服务端 thread_id/token；纯读档案不进此分支
+    hitl: Optional[Dict[str, Any]] = None
+    if assembled is not None and assembled.write_tools:
+        if session is None or user is None or getattr(user, "id", None) is None:
+            raise BusinessLogicError("写操作需要会话")
+        hitl = await _hitl_run_ctx(tenant_id, session, user, assembled)
+
     if session is not None:
         new_user_content = _last_user_content(messages)
         if new_user_content:
@@ -936,11 +1259,13 @@ async def create_chat_completion(
 
             stream_iter = _agent_sse_stream(
                 assembled,
-                lc_messages,
+                {"messages": lc_messages},
                 tenant_id=tenant_id,
                 session=session,
                 user=user,
                 rt_ctx=rt_ctx,
+                hitl=hitl,
+                persisted_upto=len(lc_messages),
             )
             wrapped = wrap_ai_sse_stream(
                 stream_iter,
@@ -950,11 +1275,15 @@ async def create_chat_completion(
             )
             return StreamingResponse(wrapped, media_type="text/event-stream")
 
+        config: Dict[str, Any] = {"recursion_limit": DEFAULT_RECURSION_LIMIT}
+        if hitl is not None:
+            config["configurable"] = hitl["configurable"]
+            config["metadata"] = hitl["metadata"]
         token = set_ai_context(rt_ctx)
         try:
             result = await assembled.agent.ainvoke(
                 {"messages": lc_messages},
-                config={"recursion_limit": DEFAULT_RECURSION_LIMIT},
+                config=config,
             )
         except Exception as exc:
             # KR-I5：仅记录异常类型，不落 base_url/key/堆栈细节
@@ -971,6 +1300,67 @@ async def create_chat_completion(
             ) from exc
         finally:
             reset_ai_context(token)
+
+        if hitl is not None:
+            # spec 193：非流式不支持确认交互 → 失败关闭自动拒绝
+            # （H4 闭集内 reject），图拿到拒绝结果续跑完仍产出答复；
+            # 多轮连续写调用同口径逐轮拒绝
+            for _round in range(_HITL_NONSTREAM_MAX_ROUNDS):
+                interrupts_now = (
+                    result.get("__interrupt__")
+                    if isinstance(result, dict)
+                    else None
+                )
+                if not interrupts_now:
+                    break
+                pending_actions = hitl_service.pending_action_requests(
+                    interrupts_now
+                )
+                for req in pending_actions:
+                    await hitl_service.audit_tool_confirm(
+                        tenant_id,
+                        getattr(user, "id", None),
+                        str(req.get("name") or ""),
+                        "reject",
+                    )
+                decisions = [
+                    {"type": "reject", "message": _HITL_NONSTREAM_REJECT}
+                    for _ in pending_actions
+                ] or [{"type": "reject", "message": _HITL_NONSTREAM_REJECT}]
+                try:
+                    result = await assembled.agent.ainvoke(
+                        Command(resume={"decisions": decisions}),
+                        config=config,
+                    )
+                except Exception as exc:
+                    logger.error(
+                        "KU-AI 非流式确认闸续跑失败 error_type={}",
+                        type(exc).__name__,
+                    )
+                    raise ExternalServiceError(
+                        "LLM", "AI 对话调用失败，请稍后重试"
+                    ) from exc
+            if isinstance(result, dict) and result.get("__interrupt__"):
+                # 超过轮次上限仍挂起：不猜用户意图，清线程报错
+                try:
+                    await hitl["saver"].adelete_thread(
+                        hitl["thread_id"], tenant_id=tenant_id
+                    )
+                except Exception:
+                    pass
+                raise ExternalServiceError(
+                    "LLM", "AI 对话调用失败，请稍后重试"
+                )
+            try:
+                await hitl["saver"].adelete_thread(
+                    hitl["thread_id"], tenant_id=tenant_id
+                )
+            except Exception as exc:
+                logger.warning(
+                    "KU-AI checkpoint 线程清理失败 thread_id={} error_type={}",
+                    hitl["thread_id"],
+                    type(exc).__name__,
+                )
 
         all_messages = result.get("messages") if isinstance(result, dict) else []
         new_messages = (
@@ -1087,5 +1477,346 @@ async def create_chat_completion(
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
             "total_tokens": total_tokens,
+        },
+    }
+
+
+async def resume_chat_completion(
+    tenant_id: int,
+    *,
+    thread_token: str,
+    decisions: List[Dict[str, Any]],
+    stream: bool = True,
+    user: Optional[User] = None,
+    is_infra_admin: bool = False,
+    is_tenant_admin: bool = False,
+) -> Union[Dict[str, Any], StreamingResponse]:
+    """HITL 续跑（spec 193）：``Command(resume={"decisions": [...]})`` 续同一 run。
+
+    校验序：thread_token HMAC+归属（不符 404 不泄露存在性）→ 会话行锁
+    事务内：checkpoint 挂起与 token 绑定 → 未认领判定 → 懒过期
+    （expire 审计+清线程+404）→ H4 决策闭集与数量 → claimed CAS 认领
+    + approve/reject 决策审计（同事务提交）→ 锁外重装配同档案续跑。
+    并发 resume 只有一个能认领成功（另一个 404）；审计为「决策记录」，
+    claim 失败不落任何审计与执行。完成后清线程并落库 tool/assistant
+    行；非流式不挂起（新中断自动拒绝，与发送同口径）。
+    """
+    if not tenant_id:
+        raise ValidationError("组织上下文缺失，无法续跑待确认任务")
+    if user is None or getattr(user, "id", None) is None:
+        raise ValidationError("续跑需要登录用户上下文")
+    parsed = hitl_service.parse_thread_token(thread_token)
+    if parsed is None:
+        raise NotFoundError("待确认任务", "")
+    token_tenant, token_user, session_id, thread_id = parsed
+    if token_tenant != int(tenant_id) or token_user != int(user.id):
+        raise NotFoundError("待确认任务", "")
+    session = await get_owned_session(tenant_id, session_id, user.id)
+
+    saver = TortoiseCheckpointSaver()
+    cfg = {"configurable": {"tenant_id": tenant_id, "thread_id": thread_id}}
+
+    # 原子认领：会话行锁内校验→claimed 标记 CAS→决策审计，同事务提交。
+    # 与 _close_pending_thread 同一把锁互斥；需要提交后抛错的路径
+    # （挂起已消失/懒过期）经 commit_error 延迟到事务提交后抛出。
+    tpl: Any = None
+    meta: Dict[str, Any] = {}
+    pending_actions: List[Dict[str, Any]] = []
+    normalized: List[Dict[str, Any]] = []
+    commit_error: Optional[Exception] = None
+    async with in_transaction():
+        await _lock_session_row(tenant_id, session.id)
+        try:
+            tpl = await saver.aget_tuple(cfg)
+        except Exception as exc:
+            # 读失败失败关闭（不落审计、不执行、不猜状态）
+            raise BusinessLogicError(
+                "待确认状态读取失败，请稍后重试"
+            ) from exc
+        if tpl is None:
+            raise NotFoundError("待确认任务", "")
+        meta = dict(tpl.metadata or {})
+        if str(meta.get(hitl_service.HITL_META_TOKEN) or "") != str(
+            thread_token
+        ):
+            # token 必须与挂起 run 绑定；不一致不落任何动作
+            raise NotFoundError("待确认任务", "")
+        interrupts = hitl_service.pending_interrupt_values(tpl)
+        if not interrupts:
+            try:
+                await saver.adelete_thread(thread_id, tenant_id=tenant_id)
+            except Exception:
+                pass
+            commit_error = NotFoundError("待确认任务", "")
+        elif meta.get(hitl_service.HITL_META_CLAIMED_AT):
+            # 已被另一次 resume 认领（在途或崩溃残留）：拒绝重放，
+            # 写 Tool 与决策审计绝不重复执行
+            raise NotFoundError("待确认任务", "")
+        else:
+            pending_actions = hitl_service.pending_action_requests(interrupts)
+            expires_at = hitl_service.parse_expires_at(
+                meta.get(hitl_service.HITL_META_EXPIRES_AT)
+            )
+            if expires_at is not None and now_utc() >= expires_at:
+                # 懒过期：expire 审计 + 清线程 + 404（不猜已过期意图）
+                for req in pending_actions:
+                    await hitl_service.audit_tool_confirm(
+                        tenant_id,
+                        int(user.id),
+                        str(req.get("name") or ""),
+                        "expire",
+                    )
+                try:
+                    await saver.adelete_thread(thread_id, tenant_id=tenant_id)
+                except Exception:
+                    pass
+                commit_error = NotFoundError("待确认任务", "")
+            else:
+                # H4：仅 approve/reject；数量须与挂起 action_requests 一致
+                # （先于认领：校验不过不消费 token、不落审计）
+                if not isinstance(decisions, list) or not decisions:
+                    raise ValidationError("decisions 不能为空")
+                for raw in decisions or []:
+                    if not isinstance(raw, dict):
+                        raise ValidationError("仅支持 approve/reject 决策")
+                    dtype = str(raw.get("type") or "").strip()
+                    if dtype not in hitl_service.HITL_DECISION_TYPES:
+                        raise ValidationError("仅支持 approve/reject 决策")
+                    item: Dict[str, Any] = {"type": dtype}
+                    if raw.get("message"):
+                        item["message"] = str(raw["message"])
+                    normalized.append(item)
+                if len(normalized) != len(pending_actions):
+                    raise ValidationError("决策数量与待确认操作不一致")
+                # 认领：claimed 标记 CAS 写回（并发/已删即失败 → 404，
+                # 同事务回滚不落审计）
+                if not await hitl_service.claim_pending_token(saver, tpl):
+                    raise NotFoundError("待确认任务", "")
+                # 确认/拒绝审计=决策记录（不落参数值）；与认领同事务提交
+                for req, decision in zip(pending_actions, normalized):
+                    await hitl_service.audit_tool_confirm(
+                        tenant_id,
+                        int(user.id),
+                        str(req.get("name") or ""),
+                        str(decision["type"]),
+                    )
+    if commit_error is not None:
+        raise commit_error
+
+    # 重装配同档案续跑（重启安全：状态在 checkpoint，不在进程内）；
+    # 使用权/启用判定与发送路径同一套，拒绝在此抛出
+    meta_agent_id = meta.get(hitl_service.HITL_META_AGENT_ID)
+    assembled = await assemble(
+        tenant_id,
+        user,
+        is_infra_admin,
+        is_tenant_admin,
+        int(meta_agent_id) if meta_agent_id is not None else None,
+        agent_path=False,
+        has_session=True,
+    )
+    if assembled is None:
+        raise NotFoundError("待确认任务", "")
+
+    # 续跑可能再次中断（新一轮写调用）：刷新挂起过期点；
+    # TTL 读取失败同 H3 失败关闭
+    ttl = await hitl_service.pending_ttl_minutes(tenant_id)
+    new_expires = now_utc() + timedelta(minutes=ttl)
+    labels = {
+        name: hitl_service.tool_label(name)
+        for name in sorted(assembled.write_tools)
+    }
+    hitl: Dict[str, Any] = {
+        "saver": saver,
+        "thread_id": thread_id,
+        "configurable": cfg["configurable"],
+        "metadata": {
+            hitl_service.HITL_META_TOKEN: thread_token,
+            hitl_service.HITL_META_EXPIRES_AT: new_expires.isoformat(),
+            hitl_service.HITL_META_AGENT_ID: meta_agent_id,
+            hitl_service.HITL_META_SESSION_ID: int(session.id),
+            hitl_service.HITL_META_USER_ID: int(user.id),
+        },
+        "interrupt_ctx": {
+            "thread_token": thread_token,
+            "expires_at": new_expires.isoformat(),
+            "labels": labels,
+        },
+    }
+    state_messages = hitl_service.checkpoint_messages(tpl)
+    persisted_upto = len(state_messages)
+
+    # 中断流被断开时 assistant(tool_calls) 行可能未落库：先补缺口再续跑
+    pending_calls = hitl_service.unanswered_tool_calls(state_messages)
+    try:
+        await _persist_pending_ai_row(
+            tenant_id,
+            session,
+            user,
+            state_messages,
+            pending_calls,
+            agent_id=assembled.profile.id,
+        )
+    except Exception:
+        logger.error(
+            "KU-AI 挂起 assistant 行补写失败 tenant_id={} session_id={}",
+            tenant_id,
+            session.id,
+        )
+
+    rt_ctx = AiRuntimeContext(
+        tenant_id=tenant_id,
+        user=user,
+        is_infra_admin=is_infra_admin,
+        is_tenant_admin=is_tenant_admin,
+        session_id=str(session.id),
+        agent_id=assembled.profile.id,
+    )
+
+    if stream:
+        from core.services.realtime.ai_stream_bridge import (
+            wrap_ai_sse_stream,
+        )
+
+        stream_iter = _agent_sse_stream(
+            assembled,
+            Command(resume={"decisions": normalized}),
+            tenant_id=tenant_id,
+            session=session,
+            user=user,
+            rt_ctx=rt_ctx,
+            hitl=hitl,
+            persisted_upto=persisted_upto,
+        )
+        wrapped = wrap_ai_sse_stream(
+            stream_iter,
+            tenant_id=tenant_id,
+            user_id=int(user.id),
+            session_id=str(session.id),
+        )
+        return StreamingResponse(wrapped, media_type="text/event-stream")
+
+    config: Dict[str, Any] = {
+        "recursion_limit": DEFAULT_RECURSION_LIMIT,
+        "configurable": hitl["configurable"],
+        "metadata": hitl["metadata"],
+    }
+    token = set_ai_context(rt_ctx)
+    try:
+        result = await assembled.agent.ainvoke(
+            Command(resume={"decisions": normalized}), config=config
+        )
+    except Exception as exc:
+        logger.error(
+            "KU-AI 确认闸续跑失败 thread_id={} error_type={}",
+            thread_id,
+            type(exc).__name__,
+        )
+        raise ExternalServiceError(
+            "LLM", "AI 对话调用失败，请稍后重试"
+        ) from exc
+    finally:
+        reset_ai_context(token)
+
+    # 续跑再遇中断（新写调用）：非流式不支持确认 → 同发送口径自动拒绝
+    for _round in range(_HITL_NONSTREAM_MAX_ROUNDS):
+        interrupts_now = (
+            result.get("__interrupt__") if isinstance(result, dict) else None
+        )
+        if not interrupts_now:
+            break
+        new_actions = hitl_service.pending_action_requests(interrupts_now)
+        for req in new_actions:
+            await hitl_service.audit_tool_confirm(
+                tenant_id,
+                int(user.id),
+                str(req.get("name") or ""),
+                "reject",
+            )
+        decisions_next = [
+            {"type": "reject", "message": _HITL_NONSTREAM_REJECT}
+            for _ in new_actions
+        ] or [{"type": "reject", "message": _HITL_NONSTREAM_REJECT}]
+        try:
+            result = await assembled.agent.ainvoke(
+                Command(resume={"decisions": decisions_next}), config=config
+            )
+        except Exception as exc:
+            logger.error(
+                "KU-AI 确认闸续跑失败 thread_id={} error_type={}",
+                thread_id,
+                type(exc).__name__,
+            )
+            raise ExternalServiceError(
+                "LLM", "AI 对话调用失败，请稍后重试"
+            ) from exc
+    if isinstance(result, dict) and result.get("__interrupt__"):
+        try:
+            await saver.adelete_thread(thread_id, tenant_id=tenant_id)
+        except Exception:
+            pass
+        raise ExternalServiceError("LLM", "AI 对话调用失败，请稍后重试")
+
+    try:
+        tpl2 = await saver.aget_tuple(cfg)
+    except Exception:
+        tpl2 = None
+    new_messages = (
+        list(hitl_service.checkpoint_messages(tpl2)[persisted_upto:])
+        if tpl2 is not None
+        else []
+    )
+    content = ""
+    for msg in reversed(new_messages):
+        if isinstance(msg, AIMessage):
+            content = message_text(msg)
+            if content:
+                break
+    if not content and new_messages:
+        content = message_text(new_messages[-1])
+    usage = _sum_usage(new_messages)
+
+    if new_messages:
+        try:
+            await _persist_agent_messages(
+                tenant_id,
+                session,
+                new_messages,
+                user=user,
+                agent_id=assembled.profile.id,
+                prompt_tokens=usage["prompt_tokens"],
+                completion_tokens=usage["completion_tokens"],
+            )
+        except Exception:
+            logger.error(
+                "KU-AI 续跑消息落库失败 tenant_id={} session_id={}",
+                tenant_id,
+                session.id,
+            )
+    try:
+        await saver.adelete_thread(thread_id, tenant_id=tenant_id)
+    except Exception as exc:
+        logger.warning(
+            "KU-AI checkpoint 线程清理失败 thread_id={} error_type={}",
+            thread_id,
+            type(exc).__name__,
+        )
+
+    return {
+        "id": "chatcmpl-kuaiai",
+        "object": "chat.completion",
+        "created": int(time.time()),
+        "model": assembled.model_name,
+        "choices": [
+            {
+                "index": 0,
+                "message": {"role": "assistant", "content": content},
+                "finish_reason": "stop",
+            }
+        ],
+        "usage": {
+            "prompt_tokens": usage["prompt_tokens"],
+            "completion_tokens": usage["completion_tokens"],
+            "total_tokens": usage["total_tokens"],
         },
     }

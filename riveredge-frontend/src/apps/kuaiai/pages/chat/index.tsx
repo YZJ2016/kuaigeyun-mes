@@ -41,18 +41,22 @@ import { useCurrentUser } from '../../../../hooks/useCurrentUser';
 import { hasPermission } from '../../../../utils/permission';
 import { getApiErrorMessage } from '../../../../utils/errorHandler';
 import {
+  ChatResumeGoneError,
   createChatSession,
   deleteChatSession,
   getChatSession,
   listChatMessages,
   listChatSessions,
+  resumeChat,
   sendChatMessage,
   updateChatSession,
+  type ChatResumeDecision,
   type ChatSessionOut,
   type ChatSessionUpdatePayload,
 } from '../../services/chatApi';
 import { listAgentOptions } from '../../services/agents';
 import { KUAI_AI_OPTION_KEYS } from '../../constants';
+import type { ToolConfirmCardModel } from '../../components/ToolConfirmCard';
 import ChatMessageList, { type PendingExchange } from './MessageList';
 import { parseSessionQueryId, sessionSelectionPayload } from './sessionSelection';
 import './index.less';
@@ -96,6 +100,8 @@ const KuaiaiChatPage: React.FC = () => {
   const [senderValue, setSenderValue] = useState('');
   const [sending, setSending] = useState(false);
   const [pending, setPending] = useState<PendingExchange | null>(null);
+  // spec 194：HITL 确认卡（独立于 pending 存在；流末落库后卡片替代 pending 驻留）
+  const [confirmCards, setConfirmCards] = useState<ToolConfirmCardModel[]>([]);
   const [renaming, setRenaming] = useState<{ id: number; title: string } | null>(null);
   const [sessions, setSessions] = useState<ChatSessionOut[]>([]);
   // 不在已加载列表里、但 ?session= 指向的会话（例如不在第 1 页）
@@ -108,6 +114,8 @@ const KuaiaiChatPage: React.FC = () => {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   // 同步发送闸：React state 异步，同帧内两次 onSubmit 都会看到 sending=false
   const sendingRef = useRef(false);
+  // resume 续跑在飞：发送的 AbortController 管不到 resume 流，停止按钮期间不动作
+  const resumingRef = useRef(false);
   // 首屏 invalidate 时递增，丢弃进行中的「加载更多」结果，避免追加到已重置列表
   const sessionsListGenRef = useRef(0);
   // 同一会话连续切换时只采纳最后一次 PATCH，避免慢响应把下拉写回去
@@ -418,6 +426,68 @@ const KuaiaiChatPage: React.FC = () => {
 
   // ---------------- 发送 ----------------
 
+  const updateConfirmCard = useCallback(
+    (threadToken: string, patch: Partial<ToolConfirmCardModel>) => {
+      setConfirmCards((prev) =>
+        prev.map((c) =>
+          c.interrupt.threadToken === threadToken ? { ...c, ...patch } : c,
+        ),
+      );
+    },
+    [],
+  );
+
+  /**
+   * H2=a：目标会话的待确认卡随新消息转「已取消」（后端只收口该会话并补写拒绝行）。
+   * 仅匹配同一 sessionId；新建会话（null）不取消任何卡。返回被收口的 token 供失败回滚。
+   */
+  const cancelPendingConfirmCards = useCallback(
+    (sessionId: number | null): string[] => {
+      const cancelled: string[] = [];
+      setConfirmCards((prev) =>
+        prev.map((c) => {
+          if (c.status === 'pending' && c.sessionId === sessionId) {
+            cancelled.push(c.interrupt.threadToken);
+            return { ...c, status: 'cancelled', deciding: undefined, error: undefined };
+          }
+          return c;
+        }),
+      );
+      return cancelled;
+    },
+    [],
+  );
+
+  /** 发送未落地（失败/手动停止）：本次收口的卡回滚待确认，后端挂起实际未收口 */
+  const restoreCancelledConfirmCards = useCallback((tokens: string[]) => {
+    if (!tokens.length) return;
+    const hit = new Set(tokens);
+    setConfirmCards((prev) =>
+      prev.map((c) =>
+        c.status === 'cancelled' && hit.has(c.interrupt.threadToken)
+          ? { ...c, status: 'pending' }
+          : c,
+      ),
+    );
+  }, []);
+
+  /** 重拉会话消息（发送 / resume 共用）；返回是否成功拉到服务端最新历史 */
+  const reloadSessionMessages = useCallback(
+    async (sessionId: number): Promise<boolean> => {
+      try {
+        await queryClient.fetchQuery({
+          queryKey: ['kuaiai', 'chat-messages', sessionId],
+          queryFn: () => listChatMessages(sessionId),
+          staleTime: 0,
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [queryClient],
+  );
+
   const handleSend = useCallback(
     async (raw: string) => {
       const content = (raw || '').trim();
@@ -434,6 +504,9 @@ const KuaiaiChatPage: React.FC = () => {
       }
       sendingRef.current = true;
       setSending(true);
+      // H2=a：目标会话挂起中的确认卡随新消息自动转已取消（仅同一 sessionId；
+      // 新建会话 selectedSessionId==null 时不取消任何卡），发送失败再回滚
+      const cancelledTokens = cancelPendingConfirmCards(selectedSessionId);
       setPending({ user: content, assistant: '', sessionId: selectedSessionId });
       let sessionId = selectedSessionId;
       let failed = false;
@@ -453,12 +526,51 @@ const KuaiaiChatPage: React.FC = () => {
           content,
           agentId,
           signal: abortRef.current.signal,
-          onDelta: (view) =>
+          onDelta: (view) => {
+            // spec 194：kuaiai_interrupt/pendingConfirmation 出现即视为新挂起——
+            // 同 token 也刷新 interrupt（新 actions/expiresAt）并回 pending；
+            // 有新挂起时覆盖驻留的 expired 终态卡
+            if (view.pendingConfirmation) {
+              const interrupt = view.pendingConfirmation;
+              setConfirmCards((prev) => {
+                const sameToken = prev.findIndex(
+                  (c) => c.interrupt.threadToken === interrupt.threadToken,
+                );
+                if (sameToken >= 0) {
+                  const next = prev.slice();
+                  next[sameToken] = {
+                    ...prev[sameToken],
+                    interrupt,
+                    status: 'pending',
+                    deciding: undefined,
+                    error: undefined,
+                  };
+                  return next;
+                }
+                const expired = prev.findIndex((c) => c.status === 'expired');
+                if (expired >= 0) {
+                  const next = prev.slice();
+                  next[expired] = {
+                    ...prev[expired],
+                    interrupt,
+                    status: 'pending',
+                    deciding: undefined,
+                    error: undefined,
+                    sessionId,
+                  };
+                  return next;
+                }
+                return [...prev, { interrupt, status: 'pending', sessionId }];
+              });
+            }
             setPending((p) =>
               p ? { ...p, assistant: view.answer, reasoning: view.reasoning } : p,
-            ),
+            );
+          },
         });
       } catch (error) {
+        // 发送未落地（失败/手动停止）：收口的确认卡回滚待确认，后端挂起仍在
+        restoreCancelledConfirmCards(cancelledTokens);
         if (!isAbortError(error)) {
           failed = true;
           const msg = getApiErrorMessage(
@@ -477,40 +589,158 @@ const KuaiaiChatPage: React.FC = () => {
         let reloaded = false;
         if (sessionId != null) {
           // 刚落库，忽略全局 staleTime，必须向服务器重拉 user/tool/assistant
-          try {
-            await queryClient.fetchQuery({
-              queryKey: ['kuaiai', 'chat-messages', sessionId],
-              queryFn: () => listChatMessages(sessionId as number),
-              staleTime: 0,
-            });
-            reloaded = true;
-          } catch {
-            // 重拉失败则保留 pending，避免对话框先空掉
-          }
+          reloaded = await reloadSessionMessages(sessionId);
           await invalidateSessions();
         }
         // 流失败或重拉失败都保留 pending（error 气泡 + 原始用户消息）
-        if (!failed && reloaded) setPending(null);
+        if (!failed && reloaded) {
+          setPending(null);
+          // 已被新消息收口的确认卡：后端拒绝行已进历史，卡片移除
+          setConfirmCards((prev) => prev.filter((c) => c.status !== 'cancelled'));
+        }
       }
     },
     [
       agentId,
       canAddSession,
       canSend,
+      cancelPendingConfirmCards,
       invalidateSessions,
       messageApi,
-      queryClient,
       prependCreatedSession,
+      reloadSessionMessages,
+      restoreCancelledConfirmCards,
       selectedSessionId,
       t,
     ],
   );
 
   const handleCancelSend = useCallback(() => {
+    // resume 续跑在飞：发送的 AbortController 管不到该流，停止按钮期间不动作（保留 pending）
+    if (resumingRef.current) return;
     abortRef.current?.abort();
     // 取消时立刻清掉 pending；finally 只在重拉成功后清
     setPending(null);
   }, []);
+
+  // ---------------- HITL 确认卡（spec 194） ----------------
+
+  const handleConfirmExpire = useCallback(
+    (card: ToolConfirmCardModel) => {
+      updateConfirmCard(card.interrupt.threadToken, {
+        status: 'expired',
+        deciding: undefined,
+        error: undefined,
+      });
+    },
+    [updateConfirmCard],
+  );
+
+  const handleConfirmDecide = useCallback(
+    async (card: ToolConfirmCardModel, decision: ChatResumeDecision) => {
+      // 与发送共用同步闸：resume 在飞期间禁止新发送/重复决策（连点只发一次）
+      if (sendingRef.current) return;
+      const token = card.interrupt.threadToken;
+      const cardSessionId = card.sessionId ?? null;
+      sendingRef.current = true;
+      resumingRef.current = true;
+      setSending(true);
+      updateConfirmCard(token, {
+        status: 'deciding',
+        deciding: decision,
+        error: undefined,
+      });
+      // 续跑正文接回同一条对话：占位 assistant 气泡流式累积（user 为空不渲染）
+      setPending({ user: '', assistant: '', sessionId: cardSessionId });
+      // 卡当前的 key：续跑中换上新 interrupt 后 token 会变，后续更新/收尾按最新 token 匹配
+      let cardToken = token;
+      let failed = false;
+      try {
+        const view = await resumeChat({
+          threadToken: token,
+          decision,
+          // 后端校验决策数与 pending actions 数一致：一次点击对全部动作同决策
+          actionCount: card.interrupt.actions.length,
+          onDelta: (v) => {
+            // 续跑流中出现 pendingConfirmation 即视为新挂起（同/异 token 一致处理）：
+            // 卡换上新 interrupt（新 actions/expiresAt）并回到待确认
+            if (v.pendingConfirmation) {
+              updateConfirmCard(cardToken, {
+                interrupt: v.pendingConfirmation,
+                status: 'pending',
+                deciding: undefined,
+                error: undefined,
+              });
+              cardToken = v.pendingConfirmation.threadToken;
+            }
+            setPending((p) =>
+              p ? { ...p, assistant: v.answer, reasoning: v.reasoning } : p,
+            );
+          },
+        });
+        // 流末仍带待确认载荷：确认卡回到 pending；否则按决策落终态
+        if (view.pendingConfirmation) {
+          updateConfirmCard(cardToken, {
+            interrupt: view.pendingConfirmation,
+            status: 'pending',
+            deciding: undefined,
+            error: undefined,
+          });
+          cardToken = view.pendingConfirmation.threadToken;
+        } else {
+          updateConfirmCard(cardToken, {
+            status: decision === 'approve' ? 'approved' : 'rejected',
+            deciding: undefined,
+          });
+        }
+      } catch (error) {
+        failed = true;
+        if (error instanceof ChatResumeGoneError) {
+          // 404：过期/已处理/越权 → 终态，不自动重试
+          updateConfirmCard(cardToken, {
+            status: 'expired',
+            deciding: undefined,
+            error: undefined,
+          });
+        } else if (!isAbortError(error)) {
+          // 网络/服务错误：卡片保持待确认态 + 错误 + 重试
+          updateConfirmCard(cardToken, {
+            status: 'pending',
+            deciding: decision,
+            error: getApiErrorMessage(
+              error,
+              t('app.kuaiai.chat.confirm.submitFailed', {
+                defaultValue: '确认提交失败',
+              }),
+            ),
+          });
+        }
+      } finally {
+        sendingRef.current = false;
+        resumingRef.current = false;
+        setSending(false);
+        let reloaded = false;
+        if (cardSessionId != null) {
+          reloaded = await reloadSessionMessages(cardSessionId);
+          await invalidateSessions();
+        }
+        if (!failed && reloaded) {
+          // 续跑结果已落库：终态卡随 pending 一起退场；
+          // 续跑中再次挂起的卡（回 pending，新/同 token）保留待确认
+          setPending(null);
+          setConfirmCards((prev) =>
+            prev.filter(
+              (c) => c.interrupt.threadToken !== cardToken || c.status === 'pending',
+            ),
+          );
+        } else if (failed) {
+          setPending(null);
+        }
+        // 成功但重拉失败：保留 pending（含续跑正文），卡片维持当前态
+      }
+    },
+    [invalidateSessions, reloadSessionMessages, updateConfirmCard, t],
+  );
 
   // ---------------- 渲染 ----------------
 
@@ -543,6 +773,11 @@ const KuaiaiChatPage: React.FC = () => {
   // pending 绑定会话：发送中切换会话不把进行中的气泡渲染到别的会话里
   const visiblePending =
     pending && pending.sessionId === selectedSessionId ? pending : null;
+
+  // 确认卡同样绑定会话（中断只可能发生在持会话的写类档案对话里）
+  const visibleConfirmCards = confirmCards.filter(
+    (c) => c.sessionId === selectedSessionId,
+  );
 
   const showEmpty =
     selectedSessionId == null && messages.length === 0 && !visiblePending;
@@ -695,7 +930,12 @@ const KuaiaiChatPage: React.FC = () => {
             <ChatMessageList
               messages={messages}
               pending={visiblePending}
-              loading={sending}
+              // spec 194：中断帧已下发待确认卡时不再显示「思考中」
+              loading={sending && !visibleConfirmCards.some((c) => c.status === 'pending')}
+              confirmCards={visibleConfirmCards}
+              confirmBusy={sending}
+              onConfirmDecide={handleConfirmDecide}
+              onConfirmExpire={handleConfirmExpire}
             />
           )}
         </div>

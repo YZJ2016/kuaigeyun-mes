@@ -35,8 +35,10 @@ class KuaiaiAgentProfile(BaseModel):
     )
     # 知识库 id 列表（库表属 S3，本期仅存 JSONB；调用时复核归属）
     knowledge_ids = fields.JSONField(default=list, description="知识库 ID 列表")
-    # Tool 五值闭集子集：search_knowledge / query_workorder / list_workorder_tasks /
-    # submit_production_feedback / update_workorder_status
+    # Tool 闭集子集（constants.ENABLED_TOOL_NAMES，spec 190 九值：
+    # search_knowledge / query_work_orders / submit_production_feedback /
+    # update_workorder_status / query_inventory / analyze_delivery_risk /
+    # query_purchase_orders / query_schedule / analyze_quality）
     enabled_tools = fields.JSONField(default=list, description="启用工具名列表（闭集子集）")
     # MCP 白名单 id 列表（表属 S4，本期仅存 JSONB）
     mcp_server_ids = fields.JSONField(default=list, description="MCP 白名单 ID 列表")

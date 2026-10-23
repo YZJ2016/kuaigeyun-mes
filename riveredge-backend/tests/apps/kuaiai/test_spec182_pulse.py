@@ -907,6 +907,8 @@ class TestRegistry:
             "IMPLEMENTED_DOMAINS",
             frozenset({"production", "sales"}),
         )
+        # hub 指标有 60s TTL 缓存；本用例逐阶段换 detector，需清缓存重算
+        pulse_registry._pulse_count_cache.clear()
         stub_detectors["production"] = _StubDetector(
             "production", items=[_item()]
         )
@@ -914,18 +916,25 @@ class TestRegistry:
         assert (
             await pulse_registry.pulse_total_count(TENANT, _user()) == 1
         )
+        # 同 (tenant, user) 命中缓存：换 detector 不重算
+        stub_detectors["sales"] = _StubDetector("sales", items=[_item()])
+        assert (
+            await pulse_registry.pulse_total_count(TENANT, _user()) == 1
+        )
+        pulse_registry._pulse_count_cache.clear()
         stub_detectors["sales"] = _StubDetector(
             "sales", exc=RuntimeError()
         )
         assert (
             await pulse_registry.pulse_total_count(TENANT, _user()) == 1
         )  # 部分失败仍给真实计数
+        pulse_registry._pulse_count_cache.clear()
         stub_detectors["production"] = _StubDetector(
             "production", exc=RuntimeError()
         )
         assert (
             await pulse_registry.pulse_total_count(TENANT, _user()) is None
-        )  # 全部失败 → 降级 null 而非伪造 0
+        )  # 全部失败 → 降级 null 而非伪造 0（失败结果不缓存）
 
 
 # ============================================================ 参数解析与路由

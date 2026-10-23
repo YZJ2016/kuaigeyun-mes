@@ -1,8 +1,9 @@
-"""KU-AI S2 受控写 Tool handler（KR-D10 五值闭集）+ manifest ``ai_tools`` 自注册。
+"""KU-AI S2 受控写 Tool handler（KR-D10 闭集）+ manifest ``ai_tools`` 自注册。
 
-Tool 名钉死五值：``search_knowledge`` / ``query_workorder`` /
-``list_workorder_tasks`` / ``submit_production_feedback`` /
-``update_workorder_status``。工单侧四个 Tool 一律调 kuaizhizao 既有 service
+chat 侧 Tool 名（spec 190 改名后）：``search_knowledge`` /
+``query_work_orders``（view=summary|operations，合并原 query_workorder /
+list_workorder_tasks）/ ``submit_production_feedback`` /
+``update_workorder_status``。工单侧 Tool 一律调 kuaizhizao 既有 service
 （带 ``ctx.tenant_id`` / ``ctx.user``），禁 SQL、禁裸 ORM 绕过权限；handler
 返回给模型读的短摘要文本，不塞整单 JSON。
 
@@ -51,6 +52,10 @@ _KNOWLEDGE_RESULT_MAX_CHARS = KNOWLEDGE_RESULT_MAX_CHARS
 _UPDATEABLE_WORK_ORDER_STATUSES = frozenset(
     {"in_progress", "paused", "cancelled"}
 )
+
+# query_work_orders 视图闭集（spec 190）：summary=摘要/列表；
+# operations=指定工单工序任务（须 work_order_id）
+_WORK_ORDER_VIEWS = frozenset({"summary", "operations"})
 
 # update_workorder_status 迁移白名单（当前态 → 允许目标态）：只放开
 # 「开工 / 暂停 / 恢复 / 取消」四个受控迁移。completed 走完工流程、
@@ -237,7 +242,8 @@ async def search_knowledge(
     return _format_knowledge_hits(hits)
 
 
-async def query_workorder(
+async def query_work_orders(
+    view: str = "summary",
     work_order_id: Optional[int] = None,
     code: Optional[str] = None,
     keyword: Optional[str] = None,
@@ -245,10 +251,36 @@ async def query_workorder(
     limit: int = 10,
     ctx: Optional[AiRuntimeContext] = None,
 ) -> str:
-    """按 id 查工单详情摘要，或按编码/关键词/状态列表查询。"""
+    """工单统一查询（spec 190 合并 query_workorder + list_workorder_tasks）。
+
+    ``view`` 闭集 ``summary|operations``：summary 按 id 查详情摘要或按
+    编码/关键词/状态列表查询；operations 列指定工单工序任务（须
+    ``work_order_id``）。两分支复用原两 Tool 函数体，不复制逻辑。
+    """
     ctx = _resolve_ctx(ctx)
     if not _ctx_ok(ctx):
         return _ERR_NO_CONTEXT
+    resolved_view = str(view or "summary").strip()
+    if resolved_view not in _WORK_ORDER_VIEWS:
+        return "view 仅支持 summary|operations"
+    if resolved_view == "operations":
+        if work_order_id is None:
+            return "view=operations 需提供 work_order_id"
+        return await _work_order_operations(ctx, work_order_id)
+    return await _work_order_summary(
+        ctx, work_order_id, code, keyword, status, limit
+    )
+
+
+async def _work_order_summary(
+    ctx: AiRuntimeContext,
+    work_order_id: Optional[int],
+    code: Optional[str],
+    keyword: Optional[str],
+    status: Optional[str],
+    limit: int,
+) -> str:
+    """view=summary：按 id 查工单详情摘要，或按编码/关键词/状态列表查询。"""
     try:
         from apps.kuaizhizao.services.work_order_service import WorkOrderService
 
@@ -278,19 +310,13 @@ async def query_workorder(
         return f"工单不存在：{work_order_id}"
     except Exception as exc:
         logger.warning(
-            "AI tool query_workorder 失败 error_type={}", type(exc).__name__
+            "AI tool query_work_orders 失败 error_type={}", type(exc).__name__
         )
         return "查询工单失败，请稍后重试"
 
 
-async def list_workorder_tasks(
-    work_order_id: int,
-    ctx: Optional[AiRuntimeContext] = None,
-) -> str:
-    """列出工单工序任务（报工前先看 operation_id 与状态）。"""
-    ctx = _resolve_ctx(ctx)
-    if not _ctx_ok(ctx):
-        return _ERR_NO_CONTEXT
+async def _work_order_operations(ctx: AiRuntimeContext, work_order_id: int) -> str:
+    """view=operations：列出工单工序任务（报工前先看 operation_id 与状态）。"""
     # by-ID 路径补行级数据范围：范围外按不存在回复，不泄露存在性
     if not await _work_order_in_scope(ctx, work_order_id):
         return f"工单不存在：{work_order_id}"
@@ -322,7 +348,8 @@ async def list_workorder_tasks(
         return f"工单不存在：{work_order_id}"
     except Exception as exc:
         logger.warning(
-            "AI tool list_workorder_tasks 失败 error_type={}", type(exc).__name__
+            "AI tool query_work_orders(operations) 失败 error_type={}",
+            type(exc).__name__,
         )
         return "查询工单工序失败，请稍后重试"
 
@@ -489,7 +516,8 @@ async def update_workorder_status(
         return "更新工单状态失败，请稍后重试"
 
 
-# 与 apps/kuaiai/manifest.json 的 ai_tools 保持同一份五值定义；
+# chat 侧 Tool 定义子集（与 manifest.json ai_tools 同名义；场景只读
+# Tool 由 scene_tools 经 manifest 注册，不在本兜底清单）；
 # ensure_defaults 兜底注册用（manifest 读取失败时无 handler，调用仍失败关闭）。
 CHAT_TOOL_DEFINITIONS: List[dict] = [
     {
@@ -509,31 +537,22 @@ CHAT_TOOL_DEFINITIONS: List[dict] = [
     {
         "type": "function",
         "function": {
-            "name": "query_workorder",
-            "description": "查询生产工单（按工单 id 查详情摘要，或按编码/关键词/状态列表查询）",
+            "name": "query_work_orders",
+            "description": "查询生产工单（view=summary 按 id/编码/关键词/状态查摘要列表；view=operations 查指定工单工序任务）",
             "parameters": {
                 "type": "object",
                 "properties": {
+                    "view": {
+                        "type": "string",
+                        "enum": ["summary", "operations"],
+                        "description": "查询视图：summary 摘要/列表（默认），operations 工序任务（须 work_order_id）",
+                    },
                     "work_order_id": {"type": "integer", "description": "工单 ID"},
                     "code": {"type": "string", "description": "工单编码（模糊）"},
                     "keyword": {"type": "string", "description": "关键词（编码/名称/产品）"},
                     "status": {"type": "string", "description": "工单状态过滤"},
                     "limit": {"type": "integer", "description": "返回条数上限（默认10）"},
                 },
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "list_workorder_tasks",
-            "description": "列出工单工序任务及各自状态/完成数量",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "work_order_id": {"type": "integer", "description": "工单 ID"},
-                },
-                "required": ["work_order_id"],
             },
         },
     },
@@ -548,7 +567,7 @@ CHAT_TOOL_DEFINITIONS: List[dict] = [
                     "work_order_id": {"type": "integer", "description": "工单 ID"},
                     "operation_id": {
                         "type": "integer",
-                        "description": "工序 ID（list_workorder_tasks 返回的 operation_id）",
+                        "description": "工序 ID（query_work_orders view=operations 返回的 operation_id）",
                     },
                     "reported_quantity": {"type": "number", "description": "报工数量"},
                     "qualified_quantity": {"type": "number", "description": "合格数量（缺省=报工-不合格）"},

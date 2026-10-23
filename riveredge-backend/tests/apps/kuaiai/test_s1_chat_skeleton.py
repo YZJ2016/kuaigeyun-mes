@@ -255,6 +255,7 @@ class TestHistoryReplay:
             patch.object(
                 cs, "get_owned_session", new=AsyncMock(return_value=session)
             ),
+            patch.object(cs, "_close_pending_thread", new=AsyncMock()),
             patch.object(cs, "_persist_user_message", new=_persist_user),
             patch.object(
                 cs, "_history_rows", new=AsyncMock(return_value=history_rows)
@@ -319,6 +320,7 @@ class TestSseWireFormat:
             patch.object(
                 cs, "get_owned_session", new=AsyncMock(return_value=session)
             ),
+            patch.object(cs, "_close_pending_thread", new=AsyncMock()),
             patch.object(cs, "_persist_user_message", new=AsyncMock()),
             patch.object(cs, "_history_rows", new=AsyncMock(return_value=[])),
             patch.object(
@@ -634,6 +636,7 @@ class TestCatalogDecoupledFromConnector:
             patch.object(
                 cs, "get_owned_session", new=AsyncMock(return_value=session)
             ),
+            patch.object(cs, "_close_pending_thread", new=AsyncMock()),
             patch.object(cs, "_persist_user_message", new=AsyncMock()),
             patch.object(cs, "_history_rows", new=AsyncMock(return_value=[])),
             patch.object(cs, "_persist_assistant_message", new=AsyncMock()),

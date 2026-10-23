@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 420" role="img">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#d4380d"/>
+      <stop offset="1" stop-color="#ad2102"/>
+    </linearGradient>
+    <linearGradient id="bar" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ffd8bf"/>
+      <stop offset="1" stop-color="#ff9c6e"/>
+    </linearGradient>
+  </defs>
+  <rect width="280" height="420" fill="url(#bg)"/>
+  <circle cx="240" cy="50" r="88" fill="#ffffff" opacity="0.05"/>
+  <circle cx="30" cy="366" r="106" fill="#ffffff" opacity="0.05"/>
+  <!-- 开班日出 -->
+  <g transform="translate(140 104)">
+    <circle r="28" fill="#ffd666" opacity="0.9"/>
+    <g stroke="#ffd666" stroke-width="4" stroke-linecap="round" opacity="0.7">
+      <line x1="0" y1="-40" x2="0" y2="-50"/>
+      <line x1="28" y1="-28" x2="35" y2="-35"/>
+      <line x1="-28" y1="-28" x2="-35" y2="-35"/>
+      <line x1="40" y1="0" x2="50" y2="0"/>
+      <line x1="-40" y1="0" x2="-50" y2="0"/>
+    </g>
+  </g>
+  <!-- 班组看板 -->
+  <g transform="translate(52 152)">
+    <rect x="0" y="0" width="176" height="170" rx="12" fill="#ffffff" opacity="0.1"/>
+    <rect x="14" y="16" width="120" height="14" rx="7" fill="#ffe7ba" opacity="0.85"/>
+    <!-- 勾选行 -->
+    <g>
+      <rect x="14" y="46" width="18" height="18" rx="4" fill="#fff2e8" opacity="0.9"/>
+      <path d="M18 55 l4 4 l8 -8" stroke="#ad2102" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      <rect x="42" y="50" width="120" height="10" rx="5" fill="url(#bar)"/>
+    </g>
+    <g>
+      <rect x="14" y="78" width="18" height="18" rx="4" fill="#fff2e8" opacity="0.9"/>
+      <path d="M18 87 l4 4 l8 -8" stroke="#ad2102" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      <rect x="42" y="82" width="96" height="10" rx="5" fill="url(#bar)" opacity="0.8"/>
+    </g>
+    <g>
+      <rect x="14" y="110" width="18" height="18" rx="4" fill="#fff2e8" opacity="0.55"/>
+      <rect x="42" y="114" width="108" height="10" rx="5" fill="url(#bar)" opacity="0.5"/>
+    </g>
+    <!-- 异常角标 -->
+    <g transform="translate(158 144)">
+      <circle r="16" fill="#ffd666"/>
+      <rect x="-1.6" y="-8" width="3.2" height="10" rx="1.6" fill="#ad2102"/>
+      <circle cy="7" r="1.9" fill="#ad2102"/>
+    </g>
+  </g>
+  <!-- 底部文字条 -->
+  <g transform="translate(52 348)">
+    <rect x="0" y="0" width="94" height="8" rx="4" fill="#ffe7ba" opacity="0.85"/>
+    <rect x="0" y="16" width="144" height="8" rx="4" fill="#ffe7ba" opacity="0.4"/>
+    <rect x="0" y="32" width="68" height="8" rx="4" fill="#ff9c6e" opacity="0.7"/>
+  </g>
+</svg>

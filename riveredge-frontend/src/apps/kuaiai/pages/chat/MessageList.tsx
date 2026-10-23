@@ -12,13 +12,20 @@
 import React, { useMemo } from 'react';
 import { Collapse, Typography } from 'antd';
 import { RobotOutlined, ToolOutlined, UserOutlined } from '@ant-design/icons';
+import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import AiAssistantMarkdown from '../../../../components/ai-assistant/AiAssistantMarkdown';
 import { stripAssistantThinkContent } from '../../../../services/deepseekChat';
+import { hasPermission } from '../../../../utils/permission';
+import { useCurrentUser } from '../../../../hooks/useCurrentUser';
+import { KUAI_AI_OPTION_KEYS } from '../../constants';
+import { listToolCatalog } from '../../services/tools';
 import type { ChatMessageOut, ChatToolCall, LiveReasoningStep } from '../../services/chatApi';
+import ToolConfirmCard, { type ToolConfirmCardModel } from '../../components/ToolConfirmCard';
 
 /** 本地发送中的一轮对话（流式累积态，流结束重拉服务端消息后移除） */
 export interface PendingExchange {
+  /** 用户消息原文；续跑（resume） continuation 时为空 → 不渲染用户气泡 */
   user: string;
   /** 正式回答。有工具时不含工具调用前的中间说明。 */
   assistant: string;
@@ -28,15 +35,6 @@ export interface PendingExchange {
   /** 归属会话；仅当与当前选中会话一致时才渲染（发送中切换会话不串场） */
   sessionId?: number | null;
 }
-
-/** 工具名 → 中文显示名（i18n defaultValue 兜底；与后端 Tool 闭集一致） */
-const TOOL_NAME_LABELS: Record<string, string> = {
-  search_knowledge: '检索知识库',
-  query_workorder: '查询工单',
-  list_workorder_tasks: '查询工序任务',
-  submit_production_feedback: '提交报工',
-  update_workorder_status: '更新工单状态',
-};
 
 const ARGS_SUMMARY_MAX = 160;
 
@@ -80,13 +78,16 @@ interface ToolCallCardProps {
   result?: ChatMessageOut;
   /** 流式阶段还没有落库结果时，用工具帧里的短摘要 */
   resultText?: string;
+  /** spec 189：工具名 → 中文 label（GET /apps/kuaiai/tools 下发） */
+  labels?: Map<string, string>;
 }
 
-const ToolCallCard: React.FC<ToolCallCardProps> = ({ call, result, resultText }) => {
+const ToolCallCard: React.FC<ToolCallCardProps> = ({ call, result, resultText, labels }) => {
   const { t } = useTranslation();
-  const label = t(`app.kuaiai.chat.tools.${call.name}`, {
-    defaultValue: TOOL_NAME_LABELS[call.name] || call.name || '工具调用',
-  });
+  const label =
+    labels?.get(call.name) ||
+    call.name ||
+    t('app.kuaiai.chat.toolCall', { defaultValue: '工具调用' });
   const body = result?.content || resultText || '';
   return (
     <div className="kuaiai-tool-call">
@@ -189,10 +190,38 @@ interface ChatMessageListProps {
   messages: ChatMessageOut[];
   pending?: PendingExchange | null;
   loading?: boolean;
+  /** spec 194：HITL 确认卡（渲染在历史之后、pending 之前；token 为 key） */
+  confirmCards?: ToolConfirmCardModel[];
+  confirmBusy?: boolean;
+  onConfirmDecide?: (card: ToolConfirmCardModel, decision: 'approve' | 'reject') => void;
+  onConfirmExpire?: (card: ToolConfirmCardModel) => void;
 }
 
-const ChatMessageList: React.FC<ChatMessageListProps> = ({ messages, pending, loading }) => {
+const ChatMessageList: React.FC<ChatMessageListProps> = ({
+  messages,
+  pending,
+  loading,
+  confirmCards,
+  confirmBusy,
+  onConfirmDecide,
+  onConfirmExpire,
+}) => {
   const { t } = useTranslation();
+  const currentUser = useCurrentUser();
+  /** spec 189：工具显示名来自后端目录 label；无权限/失败时回退原始 Tool 名 */
+  const { data: toolCatalog } = useQuery({
+    queryKey: KUAI_AI_OPTION_KEYS.tools,
+    queryFn: listToolCatalog,
+    enabled: hasPermission(currentUser, 'kuaiai:agent:read'),
+    staleTime: 60_000,
+  });
+  const toolLabels = useMemo(
+    () =>
+      new Map(
+        (toolCatalog ?? []).map((tool) => [tool.name, tool.label || tool.name]),
+      ),
+    [toolCatalog],
+  );
 
   /** tool_call_id → role=tool 行 */
   const toolResultMap = useMemo(() => {
@@ -218,6 +247,7 @@ const ChatMessageList: React.FC<ChatMessageListProps> = ({ messages, pending, lo
             key={call.id || idx}
             call={call}
             result={call.id ? toolResultMap.get(call.id) : undefined}
+            labels={toolLabels}
           />
         ))}
         {prose ? <div className="kuaiai-reasoning-text">{prose}</div> : null}
@@ -236,6 +266,7 @@ const ChatMessageList: React.FC<ChatMessageListProps> = ({ messages, pending, lo
               argsSummary: step.tool.argsSummary || '',
             }}
             resultText={step.tool.resultSummary}
+            labels={toolLabels}
           />
         </div>
       ))}
@@ -256,6 +287,19 @@ const ChatMessageList: React.FC<ChatMessageListProps> = ({ messages, pending, lo
         },
       ]}
     />
+  );
+
+  // spec 194：中断帧后卡片接管等待态，pending 的空 assistant 气泡不再渲染
+  // （仅当 pending 连正文/推理/错误都没有、且有待确认/确认中的卡时隐藏）
+  const hasActionableConfirmCard = (confirmCards ?? []).some(
+    (c) => c.status === 'pending' || c.status === 'deciding',
+  );
+  const hideEmptyPendingAssistant = Boolean(
+    pending &&
+      !pending.error &&
+      !pending.assistant &&
+      !(pending.reasoning && pending.reasoning.length > 0) &&
+      hasActionableConfirmCard,
   );
 
   const renderTool = (m: ChatMessageOut) => (
@@ -328,16 +372,43 @@ const ChatMessageList: React.FC<ChatMessageListProps> = ({ messages, pending, lo
         return renderTurn(block.turn);
       })}
 
+      {/* spec 194 确认卡：在历史（中断轮次已落库）之后、本轮 pending 之前 */}
+      {confirmCards?.map((card) => (
+        <div
+          key={card.interrupt.threadToken}
+          className="kuaiai-msg kuaiai-msg--assistant"
+        >
+          <div className="kuaiai-msg-avatar">
+            <RobotOutlined />
+          </div>
+          <div className="kuaiai-msg-body">
+            <ToolConfirmCard
+              model={card}
+              busy={confirmBusy}
+              onDecide={
+                onConfirmDecide ? (decision) => onConfirmDecide(card, decision) : undefined
+              }
+              onExpire={onConfirmExpire ? () => onConfirmExpire(card) : undefined}
+            />
+          </div>
+        </div>
+      ))}
+
       {pending ? (
         <>
-          <div className="kuaiai-msg kuaiai-msg--user">
-            <div className="kuaiai-msg-body">
-              <div className="kuaiai-msg-bubble kuaiai-msg-bubble--user">{pending.user}</div>
+          {pending.user ? (
+            <div className="kuaiai-msg kuaiai-msg--user">
+              <div className="kuaiai-msg-body">
+                <div className="kuaiai-msg-bubble kuaiai-msg-bubble--user">
+                  {pending.user}
+                </div>
+              </div>
+              <div className="kuaiai-msg-avatar">
+                <UserOutlined />
+              </div>
             </div>
-            <div className="kuaiai-msg-avatar">
-              <UserOutlined />
-            </div>
-          </div>
+          ) : null}
+          {hideEmptyPendingAssistant ? null : (
           <div className="kuaiai-msg kuaiai-msg--assistant">
             <div className="kuaiai-msg-avatar">
               <RobotOutlined />
@@ -373,6 +444,7 @@ const ChatMessageList: React.FC<ChatMessageListProps> = ({ messages, pending, lo
               ) : null}
             </div>
           </div>
+          )}
         </>
       ) : null}
     </div>

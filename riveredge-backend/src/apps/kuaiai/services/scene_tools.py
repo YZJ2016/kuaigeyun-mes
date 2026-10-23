@@ -1,8 +1,9 @@
-"""KU-AI 场景只读 Tool handler（spec 181 T5，六值闭集）。
+"""KU-AI 场景只读 Tool handler（spec 181 T5；spec 190 合并改名后五值）。
 
-Tool 名钉死六值：``query_inventory_balance`` / ``query_delivery_risk`` /
-``query_purchase_followup`` / ``query_published_schedule`` /
-``query_quality_anomalies`` / ``query_supplier_orders``。
+Tool 名：``query_inventory`` / ``analyze_delivery_risk`` /
+``query_purchase_orders``（合并原 query_purchase_followup +
+query_supplier_orders，supplier_id 过滤同一参数集）/
+``query_schedule`` / ``analyze_quality``。
 
 约束（设计 §5.3）：
 - 全部只读：仅调 kuaizhizao 既有读 service，禁 SQL、禁裸 ORM 直写；
@@ -38,7 +39,7 @@ def _ct():
 
     return chat_tools
 
-# query_quality_anomalies 检验类型闭集（与 FinishedGoodsInspectionService 契约一致）
+# analyze_quality 检验类型闭集（与 FinishedGoodsInspectionService 契约一致）
 _INSPECTION_TYPES = frozenset({"incoming", "process", "finished"})
 _INSPECTION_TYPE_ZH = {
     "incoming": "来料",
@@ -96,15 +97,31 @@ async def _scoped_row_ids(model, ctx: AiRuntimeContext, resource: str, ids: Set[
     return {int(x) for x in await qs.values_list("id", flat=True)}
 
 
-async def _inventory_visible_pairs(ctx: AiRuntimeContext) -> Set[Tuple[Optional[int], Optional[int]]]:
+async def _inventory_visible_pairs(
+    ctx: AiRuntimeContext,
+    needed: Optional[Set[Tuple[Optional[int], Optional[int]]]] = None,
+) -> Set[Tuple[Optional[int], Optional[int]]]:
     """库存余额行可见性：批次/线边两类存量源分别套 ``kuaizhizao:inventory``
     资源范围，取 (material_id, warehouse_id) 可见对，再与报表行做交集。
 
     无显式数据策略时平台语义为全部可见（pairs 覆盖所有报表行）；配置策略后
     按画像 created_by 收敛，越界仓/料不返回。
+
+    ``needed``：调用方已收窄的候选 (material_id, warehouse_id) 对（如按
+    keyword/warehouse 过滤后的报表行）——存量源先按候选物料/仓库 id 反查
+    再套范围，避免全量扫两类存量表；为空集直接返回空。
     """
     from apps.kuaizhizao.models.line_side_inventory import LineSideInventory
     from apps.master_data.models.material_batch import MaterialBatch
+
+    if needed is not None and not needed:
+        return set()
+    material_ids = warehouse_ids = None
+    if needed is not None:
+        material_ids = {m for m, _w in needed if m is not None}
+        warehouse_ids = {w for _m, w in needed if w is not None}
+        if not material_ids and not warehouse_ids:
+            return set()
 
     pairs: Set[Tuple[Optional[int], Optional[int]]] = set()
     for model in (MaterialBatch, LineSideInventory):
@@ -112,14 +129,20 @@ async def _inventory_visible_pairs(ctx: AiRuntimeContext) -> Set[Tuple[Optional[
             qs = model.filter(
                 tenant_id=ctx.tenant_id, deleted_at__isnull=True
             )
+            if material_ids:
+                qs = qs.filter(material_id__in=list(material_ids))
+            if warehouse_ids:
+                qs = qs.filter(warehouse_id__in=list(warehouse_ids))
             qs = await _apply_scope(qs, ctx.tenant_id, ctx, _SCOPE_INVENTORY)
             rows = await qs.values("material_id", "warehouse_id")
             for r in rows:
-                pairs.add((r.get("material_id"), r.get("warehouse_id")))
+                pair = (r.get("material_id"), r.get("warehouse_id"))
+                if needed is None or pair in needed:
+                    pairs.add(pair)
         except Exception as exc:
             # 单一存量源范围解析失败 → 失败关闭（宁缺勿滥）
             logger.warning(
-                "AI tool query_inventory_balance 数据范围失败 model={} error_type={}",
+                "AI tool query_inventory 数据范围失败 model={} error_type={}",
                 getattr(model, "__name__", model),
                 type(exc).__name__,
             )
@@ -127,7 +150,7 @@ async def _inventory_visible_pairs(ctx: AiRuntimeContext) -> Set[Tuple[Optional[
     return pairs
 
 
-async def query_inventory_balance(
+async def query_inventory(
     keyword: Optional[str] = None,
     warehouse_id: Optional[int] = None,
     limit: int = 10,
@@ -149,7 +172,7 @@ async def query_inventory_balance(
         rows = list((report or {}).get("data") or [])
     except Exception as exc:
         logger.warning(
-            "AI tool query_inventory_balance 失败 error_type={}",
+            "AI tool query_inventory 失败 error_type={}",
             type(exc).__name__,
         )
         return "查询库存余额失败，请稍后重试"
@@ -157,10 +180,14 @@ async def query_inventory_balance(
         return "未查询到符合条件的库存记录"
 
     try:
-        pairs = await _inventory_visible_pairs(ctx)
+        # 报表行已按 keyword/warehouse 收窄，只反查候选行的可见对
+        needed_pairs = {
+            (r.get("material_id"), r.get("warehouse_id")) for r in rows
+        }
+        pairs = await _inventory_visible_pairs(ctx, needed_pairs)
     except Exception as exc:
         logger.warning(
-            "AI tool query_inventory_balance 数据范围失败 error_type={}",
+            "AI tool query_inventory 数据范围失败 error_type={}",
             type(exc).__name__,
         )
         return "查询库存余额失败，请稍后重试"
@@ -188,7 +215,7 @@ async def query_inventory_balance(
     return "\n".join(lines)
 
 
-async def query_delivery_risk(
+async def analyze_delivery_risk(
     limit: int = 10,
     ctx: Optional[AiRuntimeContext] = None,
 ) -> str:
@@ -206,7 +233,7 @@ async def query_delivery_risk(
         )
     except Exception as exc:
         logger.warning(
-            "AI tool query_delivery_risk 失败 error_type={}",
+            "AI tool analyze_delivery_risk 失败 error_type={}",
             type(exc).__name__,
         )
         return "查询交期风险失败，请稍后重试"
@@ -226,7 +253,7 @@ async def query_delivery_risk(
         )
     except Exception as exc:
         logger.warning(
-            "AI tool query_delivery_risk 数据范围失败 error_type={}",
+            "AI tool analyze_delivery_risk 数据范围失败 error_type={}",
             type(exc).__name__,
         )
         return "查询交期风险失败，请稍后重试"
@@ -266,7 +293,7 @@ def _fmt_purchase_order_row(order: Any) -> str:
     )
 
 
-async def query_purchase_followup(
+async def query_purchase_orders(
     supplier_id: Optional[int] = None,
     buyer_id: Optional[int] = None,
     status: Optional[str] = None,
@@ -275,7 +302,9 @@ async def query_purchase_followup(
     limit: int = 10,
     ctx: Optional[AiRuntimeContext] = None,
 ) -> str:
-    """采购跟单摘要：PurchaseService 已按 current_user 套采购单数据范围。"""
+    """采购订单摘要（spec 190 合并 query_purchase_followup +
+    query_supplier_orders）：supplier_id 过滤同一参数集；
+    PurchaseService 已按 current_user 套采购单数据范围。"""
     ctx = _ct()._resolve_ctx(ctx)
     if not _ct()._ctx_ok(ctx):
         return _ERR_NO_CONTEXT
@@ -297,7 +326,7 @@ async def query_purchase_followup(
         )
     except Exception as exc:
         logger.warning(
-            "AI tool query_purchase_followup 失败 error_type={}",
+            "AI tool query_purchase_orders 失败 error_type={}",
             type(exc).__name__,
         )
         return "查询采购订单失败，请稍后重试"
@@ -310,7 +339,7 @@ async def query_purchase_followup(
     return "\n".join(lines)
 
 
-async def query_published_schedule(
+async def query_schedule(
     plan_date: str,
     ctx: Optional[AiRuntimeContext] = None,
 ) -> str:
@@ -331,7 +360,7 @@ async def query_published_schedule(
         )
     except Exception as exc:
         logger.warning(
-            "AI tool query_published_schedule 失败 error_type={}",
+            "AI tool query_schedule 失败 error_type={}",
             type(exc).__name__,
         )
         return "查询滚动排程失败，请稍后重试"
@@ -353,7 +382,7 @@ async def query_published_schedule(
         )
     except Exception as exc:
         logger.warning(
-            "AI tool query_published_schedule 数据范围失败 error_type={}",
+            "AI tool query_schedule 数据范围失败 error_type={}",
             type(exc).__name__,
         )
         return "查询滚动排程失败，请稍后重试"
@@ -383,7 +412,7 @@ async def query_published_schedule(
     return "\n".join(lines)
 
 
-async def query_quality_anomalies(
+async def analyze_quality(
     inspection_type: Optional[str] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
@@ -425,7 +454,7 @@ async def query_quality_anomalies(
         )
     except Exception as exc:
         logger.warning(
-            "AI tool query_quality_anomalies 失败 error_type={}",
+            "AI tool analyze_quality 失败 error_type={}",
             type(exc).__name__,
         )
         return "查询质量异常失败，请稍后重试"
@@ -462,7 +491,7 @@ async def query_quality_anomalies(
             visible |= {(t, i) for i in allowed}
     except Exception as exc:
         logger.warning(
-            "AI tool query_quality_anomalies 数据范围失败 error_type={}",
+            "AI tool analyze_quality 数据范围失败 error_type={}",
             type(exc).__name__,
         )
         return "查询质量异常失败，请稍后重试"
@@ -500,51 +529,4 @@ async def query_quality_anomalies(
             f"/检验 {_ct()._fmt_num(r.get('inspection_quantity'))}"
             f"{reason}，时间 {r.get('inspection_time') or '未知'}"
         )
-    return "\n".join(lines)
-
-
-async def query_supplier_orders(
-    supplier_id: int,
-    status: Optional[str] = None,
-    limit: int = 10,
-    ctx: Optional[AiRuntimeContext] = None,
-) -> str:
-    """指定供应商采购订单摘要：沿用采购单数据范围（不直调无范围的协同 service）。"""
-    ctx = _ct()._resolve_ctx(ctx)
-    if not _ct()._ctx_ok(ctx):
-        return _ERR_NO_CONTEXT
-    try:
-        sid = int(supplier_id)
-    except (TypeError, ValueError):
-        return "supplier_id 无效"
-    if sid <= 0:
-        return "supplier_id 无效"
-    try:
-        from apps.kuaizhizao.schemas.purchase import PurchaseOrderListParams
-        from apps.kuaizhizao.services.purchase_service import PurchaseService
-
-        params = PurchaseOrderListParams(
-            supplier_id=sid,
-            status=(str(status).strip() or None) if status else None,
-            skip=0,
-            limit=_ct()._clamp_limit(limit),
-        )
-        result = await PurchaseService().list_purchase_orders(
-            ctx.tenant_id, params, current_user=ctx.user
-        )
-    except Exception as exc:
-        logger.warning(
-            "AI tool query_supplier_orders 失败 error_type={}",
-            type(exc).__name__,
-        )
-        return "查询供应商采购订单失败，请稍后重试"
-    rows = list((result or {}).get("data") or [])
-    total = int((result or {}).get("total") or len(rows))
-    if not rows:
-        return f"供应商 {sid} 在当前用户数据范围内无符合条件的采购订单"
-    lines = [
-        f"供应商 {sid} 共 {total} 张采购订单（当前用户数据范围内），"
-        f"返回前 {len(rows)} 张："
-    ]
-    lines.extend(_fmt_purchase_order_row(o) for o in rows)
     return "\n".join(lines)

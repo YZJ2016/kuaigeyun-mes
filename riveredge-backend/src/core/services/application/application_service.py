@@ -853,7 +853,7 @@ class ApplicationService:
             await seed_system_reports_on_lifecycle(tenant_id)
 
         if app_code == "kuaiai":
-            # spec 181：安装 KU-AI 幂等预置六场景档案+实例（同事务；失败须向调用方失败，可重试）
+            # spec 181：安装 KU-AI 幂等预置场景档案+实例（同事务；失败须向调用方失败，可重试）
             from apps.kuaiai.services.agent_scene_service import (
                 seed_kuaiai_agent_scenes_on_lifecycle,
             )
@@ -1087,7 +1087,7 @@ class ApplicationService:
 
             await seed_system_reports_on_lifecycle(tenant_id)
         elif app_code == "kuaiai":
-            # spec 181：启用 KU-AI 幂等补齐六场景档案+实例（不写 grant、不启用档案）
+            # spec 181：启用 KU-AI 幂等补齐场景档案+实例（不写 grant、不启用档案）
             from apps.kuaiai.services.agent_scene_service import (
                 seed_kuaiai_agent_scenes_on_lifecycle,
             )

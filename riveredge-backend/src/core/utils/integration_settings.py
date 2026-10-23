@@ -938,7 +938,7 @@ def merge_integrations_update(
 
 
 # ============================================================ spec 185：设置聚合页
-# agent_switches 六模板总开关与能力字段白名单；写入只落 integrations.kuaiai
+# agent_switches 模板总开关与能力字段白名单；写入只落 integrations.kuaiai
 # 槽的白名单字段，保留同槽其他键，不触碰 IntegrationConfig.config。
 
 AGENT_SWITCHES_SETTING_KEY = "agent_switches"
@@ -997,6 +997,119 @@ def merge_kuaiai_capability_fields(
             changed.append(f"capabilities.{key}")
         kuaiai[key] = new_value
     return changed
+
+
+# ============================================================ spec 191：能力绑定
+# capability_bindings 只存管理员覆盖（{capability_key: instance_key|null}）：
+# 无条目 → 默认解析到同 key 预置实例；显式 null → 解绑；实例 key → 覆盖绑定。
+
+CAPABILITY_BINDINGS_SETTING_KEY = "capability_bindings"
+
+
+def read_capability_bindings(
+    kuaiai: Dict[str, Any], template_keys
+) -> Dict[str, Optional[str]]:
+    """覆盖读视图：只回 template_keys 闭集内的条目；值为 str 实例 key 或 None（解绑）。"""
+    raw = (
+        kuaiai.get(CAPABILITY_BINDINGS_SETTING_KEY)
+        if isinstance(kuaiai, dict)
+        else None
+    )
+    mapping = raw if isinstance(raw, dict) else {}
+    out: Dict[str, Optional[str]] = {}
+    for key in template_keys:
+        if key not in mapping:
+            continue
+        value = mapping.get(key)
+        if value is None:
+            out[key] = None
+        elif isinstance(value, str) and value.strip():
+            out[key] = value.strip()
+        # 其他非法类型（数字/bool 等）按无条目处理
+    return out
+
+
+def validate_capability_bindings_payload(
+    value: Any, template_keys
+) -> Dict[str, Optional[str]]:
+    """PUT 载荷校验：dict，键 ⊆ template_keys，值为非空 str 实例 key 或 null。"""
+    from infra.exceptions.exceptions import ValidationError
+
+    keys = set(template_keys)
+    if not isinstance(value, dict):
+        raise ValidationError("capability_bindings 必须为对象")
+    out: Dict[str, Optional[str]] = {}
+    for key, item in value.items():
+        if key not in keys:
+            raise ValidationError("capability_bindings 含未登记的能力 key")
+        if item is None:
+            out[key] = None
+        elif isinstance(item, str) and item.strip():
+            out[key] = item.strip()
+        else:
+            raise ValidationError(
+                "capability_bindings 的值必须为场景实例 key 或 null"
+            )
+    return out
+
+
+def resolve_capability_binding(
+    bindings: Dict[str, Optional[str]],
+    capability_key: str,
+    available_keys,
+) -> Optional[str]:
+    """默认绑定解析：有覆盖用覆盖（null=解绑、实例缺失=None）；无覆盖回退同 key 预置。"""
+    if capability_key in bindings:
+        value = bindings[capability_key]
+        if value is None:
+            return None
+        return value if value in available_keys else None
+    return capability_key if capability_key in available_keys else None
+
+
+# ============================================================ spec 200（S1-a）：SOP 同步配置
+# integrations.kuaiai.sop_sync = {enabled: bool, knowledge_id: int|null}；
+# 未配置或 enabled=false 时同步任务跳过并记录；启用时 knowledge_id 必须是
+# 本租户启用知识库（保存侧在 settings_service 事务内复核）。
+
+SOP_SYNC_SETTING_KEY = "sop_sync"
+
+
+def read_sop_sync(kuaiai: Dict[str, Any]) -> Dict[str, Any]:
+    """SOP 同步配置读视图：字段缺失/非法一律回落 {enabled: False, knowledge_id: None}。"""
+    raw = (
+        kuaiai.get(SOP_SYNC_SETTING_KEY)
+        if isinstance(kuaiai, dict)
+        else None
+    )
+    mapping = raw if isinstance(raw, dict) else {}
+    knowledge_id = mapping.get("knowledge_id")
+    if isinstance(knowledge_id, bool) or not isinstance(knowledge_id, int):
+        knowledge_id = None
+    return {
+        "enabled": mapping.get("enabled") is True,
+        "knowledge_id": knowledge_id,
+    }
+
+
+def validate_sop_sync_payload(value: Any) -> Dict[str, Any]:
+    """PUT 载荷校验：{enabled: bool, knowledge_id: int|null}；enabled 时 id 必填。"""
+    from infra.exceptions.exceptions import ValidationError
+
+    if not isinstance(value, dict):
+        raise ValidationError("sop_sync 必须为对象")
+    enabled = value.get("enabled")
+    if not isinstance(enabled, bool):
+        raise ValidationError("sop_sync.enabled 必须为布尔值")
+    knowledge_id = value.get("knowledge_id")
+    if knowledge_id is not None:
+        if isinstance(knowledge_id, bool) or not isinstance(knowledge_id, int):
+            raise ValidationError("sop_sync.knowledge_id 必须为知识库 ID 或 null")
+        if knowledge_id <= 0:
+            raise ValidationError("sop_sync.knowledge_id 必须为知识库 ID 或 null")
+    if enabled and knowledge_id is None:
+        raise ValidationError("启用 SOP 同步须选择目标知识库")
+    return {"enabled": enabled, "knowledge_id": knowledge_id}
 
 
 def validate_llm_role_candidate(connection: Any, role: str) -> None:

@@ -87,6 +87,13 @@ class KuaiaiKnowledgeDocument(BaseModel):
     )
     faq_question = fields.TextField(null=True, description="FAQ 问题（source_type=faq 时写入）")
     faq_answer = fields.TextField(null=True, description="FAQ 答案（source_type=faq 时写入）")
+    # spec 200（S3-a）：外部来源同步定位列（如 ("sop", sop.id)）；NULL=手工文档
+    source_ref_type = fields.CharField(
+        max_length=50, null=True, description="外部来源类型（如 sop）"
+    )
+    source_ref_id = fields.IntField(
+        null=True, description="外部来源行 ID（与 source_ref_type 配对）"
+    )
     status = fields.CharField(max_length=20, default="pending", description="解析状态（默认 pending）")
     chunk_count = fields.IntField(default=0, description="切块数")
     error_message = fields.TextField(null=True, description="解析失败文案")

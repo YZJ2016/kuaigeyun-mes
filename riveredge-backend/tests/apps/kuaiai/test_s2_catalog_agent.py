@@ -167,7 +167,7 @@ class TestToolClosedSet:
 
         payload = AgentProfileCreate(
             name="a1", grant_mode="USER",
-            enabled_tools=["query_workorder", "query_workorder", "search_knowledge"],
+            enabled_tools=["query_work_orders", "query_work_orders", "search_knowledge"],
         )
         with (
             patch.object(
@@ -176,7 +176,7 @@ class TestToolClosedSet:
             patch.object(KuaiaiAgentProfile, "create", new=AsyncMock(side_effect=_create)),
         ):
             await agent_service.create_profile(TENANT, _user(), payload)
-        assert created["enabled_tools"] == ["query_workorder", "search_knowledge"]
+        assert created["enabled_tools"] == ["query_work_orders", "search_knowledge"]
 
     @pytest.mark.asyncio
     async def test_update_unknown_tool_400(self):

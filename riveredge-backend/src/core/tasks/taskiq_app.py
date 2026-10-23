@@ -390,6 +390,17 @@ async def kuaivision_retention_tick() -> dict:
     return await run_kuaivision_retention_cleanup()
 
 
+@task(schedule=[{"cron": "*/10 * * * *"}])
+async def kuaiai_hitl_purge_tick() -> dict:
+    """每 10 分钟清理 KU-AI 过期 HITL 挂起线程（spec 193：expire 审计 + 删行）。"""
+    try:
+        from apps.kuaiai.services.hitl_service import purge_expired_pending
+    except ImportError:
+        return {"purged_threads": 0, "tenants_skipped": 0, "disabled": True}
+
+    return await purge_expired_pending()
+
+
 @task(schedule=[{"cron": "15 2 * * *"}])
 async def permission_governance_daily_tick() -> dict:
     """每天凌晨执行一次全租户权限治理兜底。"""

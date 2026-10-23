@@ -237,6 +237,21 @@ const PulsePage: React.FC = () => {
           defaultValue: '查看销售订单',
         });
       }
+      if (item.resource_type === 'inventory_alert') {
+        return t('app.kuaiai.pulse.viewInventoryAlert', {
+          defaultValue: '查看库存预警',
+        });
+      }
+      if (item.resource_type === 'quality_exception') {
+        return t('app.kuaiai.pulse.viewQualityException', {
+          defaultValue: '查看质量异常',
+        });
+      }
+      if (item.resource_type === 'equipment_fault') {
+        return t('app.kuaiai.pulse.viewEquipmentFault', {
+          defaultValue: '查看设备故障',
+        });
+      }
       return t('app.kuaiai.pulse.viewDetail', { defaultValue: '查看详情' });
     },
     [t],

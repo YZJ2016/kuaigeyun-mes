@@ -220,6 +220,7 @@ import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import type { SubStage } from '../../../../../components/uni-lifecycle/types';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { useDeferAfterPaint } from '../../../../../hooks/useDeferAfterPaint';
+import { useRegisterAiContext } from '../../../../../hooks/useRegisterAiContext';
 import { useNumericPrecision } from '../../../../../hooks/useNumericPrecision';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import {
@@ -677,6 +678,16 @@ const PurchaseOrdersPage: React.FC = () => {
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [orderDetail, setOrderDetail] = useState<PurchaseOrderDetail | null>(null);
   const [poTrackingRefreshKey, setPoTrackingRefreshKey] = useState(0);
+  useRegisterAiContext(
+    detailDrawerVisible && orderDetail
+      ? {
+          screenLabel: t('app.kuaizhizao.menu.purchase-management.purchase-orders'),
+          resourceKey: 'kuaizhizao:purchase_order',
+          recordId: orderDetail.id,
+          recordLabel: orderDetail.order_code,
+        }
+      : { screenLabel: t('app.kuaizhizao.menu.purchase-management.purchase-orders') },
+  );
 
   const lifecycleValueEnum = useMemo(
     () => buildPurchaseOrderLifecycleValueEnum(t, purchaseOrderAuditEnabled),

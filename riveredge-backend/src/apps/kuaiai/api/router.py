@@ -40,11 +40,13 @@ from apps.kuaiai.schemas.mcp import (
     McpServerOut,
     McpServerUpdate,
 )
+from apps.kuaiai.schemas.tool_catalog import ToolCatalogItem
 from apps.kuaiai.services import (
     agent_service,
     grant_service,
     knowledge_base_service,
     session_service,
+    tool_catalog_service,
 )
 from apps.kuaiai.services.knowledge_service import KnowledgeService
 from apps.kuaiai.services.mcp_service import McpService
@@ -316,6 +318,27 @@ async def api_put_agent_grants(
     return await grant_service.replace_grants(
         tenant_id, profile, payload.target_ids, current_user
     )
+
+
+@router.get(
+    "/tools",
+    response_model=list[ToolCatalogItem],
+    dependencies=[
+        Depends(
+            require_permission_codes("kuaiai:agent:read")
+        )
+    ],
+)
+async def api_list_tools(
+    tenant_id: int = Depends(get_current_tenant),
+    current_user=Depends(get_current_user),
+):
+    """Tool 目录（spec 189）：manifest ai_tools ∩ 注册表 ∩ ENABLED_TOOL_NAMES。
+
+    前端档案页勾选项与消息轨迹显示名的唯一真源；进程级注册信息，
+    不含租户数据。
+    """
+    return tool_catalog_service.list_tool_catalog()
 
 
 # ============================================================ S3 知识库

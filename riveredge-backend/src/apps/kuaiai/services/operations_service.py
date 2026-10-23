@@ -1,8 +1,9 @@
-"""KU-AI 运营层聚合服务（spec 181：hub 能力矩阵；spec 184：信任中心）。
+"""KU-AI 运营层聚合服务（spec 181：hub 能力矩阵；spec 184：信任中心；
+spec 191：能力矩阵按场景模板逐场景出卡并绑定场景实例）。
 
-只读聚合：模型连接公开状态 + 既有 AiStatsService 概览 + 站点能力开关 +
-启用知识库计数。任一数据源失败局部降级（对应指标为 null / 能力
-not_ready），不整页 500、不伪造就绪与零值。
+只读聚合：模型连接公开状态 + 既有 AiStatsService 概览 + 场景卡状态。
+任一数据源失败局部降级（对应指标为 null / 能力 not_ready），
+不整页 500、不伪造就绪与零值。
 """
 
 from __future__ import annotations
@@ -11,8 +12,6 @@ import inspect
 from typing import Any, Dict, List, Optional
 
 from loguru import logger
-
-from apps.kuaiai.constants import STATUS_ENABLED
 
 _CAPABILITY_STATUSES = frozenset({"ready", "partial", "not_ready"})
 
@@ -29,15 +28,6 @@ TRUST_PERMISSION_CODES: tuple[str, ...] = (
     "kuaiai:insights:display",
     "kuaiai:settings:display",
 )
-
-
-def _has_registered_scene_readonly_tool() -> bool:
-    """只认场景只读 Tool 显式闭集与当前注册表的交集。"""
-    from apps.kuaiai.constants import SCENE_READONLY_TOOL_NAMES
-    from core.ai.tool_registry import ToolRegistry
-
-    ToolRegistry.ensure_defaults()
-    return bool(SCENE_READONLY_TOOL_NAMES.intersection(ToolRegistry._tools))
 
 
 async def _model_public_status(tenant_id: int) -> Dict[str, Any]:
@@ -90,54 +80,6 @@ async def _pulse_total(tenant_id: int, user) -> Optional[int]:
     return await pulse_registry.pulse_total_count(tenant_id, user)
 
 
-async def _enabled_knowledge_base_count(tenant_id: int) -> Optional[int]:
-    try:
-        from apps.kuaiai.models.knowledge import KuaiaiKnowledgeBase
-
-        return await KuaiaiKnowledgeBase.filter(
-            tenant_id=tenant_id,
-            status=STATUS_ENABLED,
-            deleted_at__isnull=True,
-        ).count()
-    except Exception as exc:
-        logger.warning(
-            "hub 知识库计数失败 tenant_id={} error_type={}",
-            tenant_id,
-            type(exc).__name__,
-        )
-        return None
-
-
-async def _vision_configured(tenant_id: int) -> Optional[bool]:
-    """vision 连接是否已选用且可用；读取失败 → None（按未配置降级）。"""
-    try:
-        from core.services.system.site_setting_service import (
-            SiteSettingService,
-        )
-        from core.utils.integration_settings import (
-            _load_llm_connection,
-            get_kuaiai_integration,
-            role_connection_setting_key,
-        )
-
-        site = await SiteSettingService.get_settings(tenant_id)
-        kuaiai = get_kuaiai_integration(site.settings or {})
-        conn_uuid = str(
-            kuaiai.get(role_connection_setting_key("vision")) or ""
-        ).strip()
-        if not conn_uuid:
-            return False
-        connection = await _load_llm_connection(tenant_id, conn_uuid)
-        return connection is not None
-    except Exception as exc:
-        logger.warning(
-            "hub vision 连接检查失败 tenant_id={} error_type={}",
-            tenant_id,
-            type(exc).__name__,
-        )
-        return None
-
-
 def _cap(
     key: str,
     name: str,
@@ -158,33 +100,183 @@ def _cap(
     }
 
 
+def _scene_card(
+    template_key: str,
+    name: str,
+    description: Optional[str],
+    status: str,
+    disabled_reason: Optional[str],
+    scene_key: Optional[str] = None,
+    agent_profile_id: Optional[int] = None,
+) -> Dict[str, Any]:
+    card = _cap(
+        template_key, name, status, description,
+        route=None, disabled_reason=disabled_reason,
+    )
+    card["scene_key"] = scene_key
+    card["agent_profile_id"] = agent_profile_id
+    return card
+
+
+def _has_business_tool(
+    enabled_tools: Any, tool_kinds: Dict[str, str]
+) -> bool:
+    """档案 enabled_tools 是否含业务 Tool：任一 kind=read 且非 search_knowledge，
+    或任一 kind=write（写类档案不受业务查询 Tool 限制，AC3）。"""
+    tools = enabled_tools if isinstance(enabled_tools, list) else []
+    for name in tools:
+        kind = tool_kinds.get(name)
+        if kind == "write" or (kind == "read" and name != "search_knowledge"):
+            return True
+    return False
+
+
+async def _build_scene_capability_cards(
+    tenant_id: int,
+    user: Any,
+    kuaiai: Dict[str, Any],
+    chat_ready: bool,
+) -> List[Dict[str, Any]]:
+    """逐模板出场景卡（spec 191）：默认绑同 key 预置实例，capability_bindings
+    只存覆盖（null=解绑 / 实例 key=改绑）；状态复用 _build_item 级联，
+    ready 前追加「档案须含业务 Tool」判定。"""
+    from apps.kuaiai.models.agent import KuaiaiAgentProfile
+    from apps.kuaiai.models.agent_scene import KuaiaiAgentScene
+    from apps.kuaiai.services import agent_scene_service as scene_svc
+    from apps.kuaiai.services import tool_catalog_service
+    from core.utils.integration_settings import read_capability_bindings
+
+    bindings = read_capability_bindings(kuaiai, scene_svc.TEMPLATE_KEYS)
+    # 含软删行：区分「预置未落地」与「预置已删除（可改绑恢复）」
+    scenes = await KuaiaiAgentScene.filter(tenant_id=tenant_id).all()
+    live = {s.instance_key: s for s in scenes if s.deleted_at is None}
+    present_keys = {s.instance_key for s in scenes}
+
+    profile_ids = [
+        s.agent_profile_id for s in live.values() if s.agent_profile_id
+    ]
+    profiles_by_id: Dict[int, Any] = {}
+    if profile_ids:
+        rows = await KuaiaiAgentProfile.filter(
+            tenant_id=tenant_id,
+            id__in=profile_ids,
+            deleted_at__isnull=True,
+        ).all()
+        profiles_by_id = {p.id: p for p in rows}
+
+    # 卡片构建属放行判定路径：开关读取异常失败关闭（卡片 not_ready）
+    switches = await scene_svc.agent_switches(tenant_id, fail_closed=True)
+    usable = await scene_svc.grant_service.usable_profile_ids(
+        tenant_id, user
+    )
+    has_agent_read = await scene_svc._has_permission(
+        user, tenant_id, "kuaiai:agent:read"
+    )
+    route_grants = await scene_svc._route_permissions_for_user(
+        tenant_id, user
+    )
+    tool_kinds = {
+        item.name: item.kind
+        for item in tool_catalog_service.list_tool_catalog()
+    }
+    common = dict(
+        switches=switches,
+        usable_profile_ids=usable,
+        has_agent_read=has_agent_read,
+        chat_ready=chat_ready,
+        route_grants=route_grants,
+        profiles_by_id=profiles_by_id,
+    )
+
+    cards: List[Dict[str, Any]] = []
+    for template in scene_svc.SCENE_TEMPLATES:
+        if template.key in bindings:
+            bound_key = bindings[template.key]
+            if bound_key is None:
+                cards.append(
+                    _scene_card(
+                        template.key,
+                        template.name,
+                        template.description,
+                        "not_ready",
+                        "已解绑场景",
+                    )
+                )
+                continue
+            scene = live.get(bound_key)
+            if scene is None:
+                cards.append(
+                    _scene_card(
+                        template.key,
+                        template.name,
+                        template.description,
+                        "not_ready",
+                        "绑定的场景实例不存在或已删除",
+                    )
+                )
+                continue
+        else:
+            scene = live.get(template.key)
+            if scene is None:
+                reason = (
+                    "预置场景已删除"
+                    if template.key in present_keys
+                    else "场景预置未完成，请重新同步应用后重试"
+                )
+                cards.append(
+                    _scene_card(
+                        template.key,
+                        template.name,
+                        template.description,
+                        "not_ready",
+                        reason,
+                    )
+                )
+                continue
+
+        item = await scene_svc._build_item(
+            tenant_id, user, template, scene, **common
+        )
+        status = item["status"]
+        reason = item["disabled_reason"]
+        if status == "ready":
+            profile = profiles_by_id.get(scene.agent_profile_id)
+            if profile is None or not _has_business_tool(
+                getattr(profile, "enabled_tools", None), tool_kinds
+            ):
+                status = "not_ready"
+                reason = "绑定档案未勾选业务查询工具"
+        cards.append(
+            _scene_card(
+                template.key,
+                item["name"],
+                item["description"],
+                status,
+                reason,
+                scene_key=scene.instance_key,
+                agent_profile_id=item["agent_profile_id"],
+            )
+        )
+    return cards
+
+
 async def _build_capabilities(
     tenant_id: int,
     model_status: Dict[str, Any],
+    user: Any = None,
 ) -> List[Dict[str, Any]]:
     from apps.kuaiai.services.agent_scene_service import (
+        SCENE_TEMPLATES,
         _site_kuaiai_integration,
     )
 
     kuaiai = await _site_kuaiai_integration(tenant_id)
-    tools_enabled = kuaiai.get("tools_enabled", True) is not False
-    rag_enabled = kuaiai.get("rag_enabled", True) is not False
     chat_ready = bool(
         model_status.get("configured") and model_status.get("enabled")
     )
-    kb_count = await _enabled_knowledge_base_count(tenant_id)
-    vision = await _vision_configured(tenant_id)
-    try:
-        readonly_tool_ready = _has_registered_scene_readonly_tool()
-    except Exception as exc:
-        logger.warning(
-            "hub 只读 Tool 注册状态检查失败 tenant_id={} error_type={}",
-            tenant_id,
-            type(exc).__name__,
-        )
-        readonly_tool_ready = False
 
     caps: List[Dict[str, Any]] = []
+    # ask 卡保持纯对话路径 A（SC-D15），不绑定档案
     caps.append(
         _cap(
             "ask",
@@ -195,98 +287,29 @@ async def _build_capabilities(
             disabled_reason=None if chat_ready else "未配置可用的对话模型连接",
         )
     )
-    if not chat_ready:
-        query_status, query_reason = "not_ready", "未配置可用的对话模型连接"
-    elif not tools_enabled:
-        query_status, query_reason = "not_ready", "业务工具开关未启用"
-    elif not readonly_tool_ready:
-        query_status, query_reason = "not_ready", "尚未注册可用的只读业务工具"
-    else:
-        query_status, query_reason = "ready", None
-    caps.append(
-        _cap(
-            "data_query",
-            "智能数据查询",
-            query_status,
-            "经只读业务 Tool 查询已授权数据",
-            route="/apps/kuaiai/chat",
-            disabled_reason=query_reason,
+    try:
+        caps.extend(
+            await _build_scene_capability_cards(
+                tenant_id, user, kuaiai, chat_ready
+            )
         )
-    )
-    caps.append(
-        _cap(
-            "guide",
-            "智能实施",
-            "not_ready",
-            "按场景引导完成实施动作",
-            disabled_reason="实施向导尚未配置",
+    except Exception as exc:
+        logger.warning(
+            "hub 场景卡聚合失败 tenant_id={} error_type={}",
+            tenant_id,
+            type(exc).__name__,
         )
-    )
-    caps.append(
-        _cap(
-            "pulse",
-            "异常感知",
-            "ready",
-            "对生产/库存/质量等异常主动感知",
-            route="/apps/kuaiai/pulse",
-        )
-    )
-    if vision is True:
-        doc_status, doc_reason = "ready", None
-    elif vision is False:
-        doc_status, doc_reason = "not_ready", "未选用视觉（OCR）连接"
-    else:
-        doc_status, doc_reason = "not_ready", "视觉连接状态读取失败"
-    caps.append(
-        _cap(
-            "doc_entry",
-            "智能单据录入",
-            doc_status,
-            "经视觉连接识别单据内容",
-            disabled_reason=doc_reason,
-        )
-    )
-    caps.append(
-        _cap(
-            "recommend",
-            "智能推荐",
-            "not_ready",
-            "按业务上下文给出推荐建议",
-            disabled_reason="推荐场景尚未注册",
-        )
-    )
-    if not rag_enabled:
-        know_status, know_reason = "not_ready", "知识检索开关未启用"
-    elif kb_count is None:
-        know_status, know_reason = "not_ready", "知识库状态读取失败"
-    elif kb_count <= 0:
-        know_status, know_reason = "partial", "尚未创建启用的知识库"
-    else:
-        know_status, know_reason = "ready", None
-    caps.append(
-        _cap(
-            "knowledge",
-            "知识检索",
-            know_status,
-            "经 RAG 检索企业知识库",
-            route="/apps/kuaiai/corpus",
-            disabled_reason=know_reason,
-        )
-    )
-    caps.append(
-        _cap(
-            "trusted_exec",
-            "可信执行",
-            "partial" if tools_enabled else "not_ready",
-            "受控写工具 + 人审门控执行",
-            disabled_reason=(
-                "人审门控（HITL）尚未完整落地"
-                if tools_enabled
-                else "业务工具开关未启用"
-            ),
-        )
-    )
-    return caps[:8]
+        for template in SCENE_TEMPLATES:
+            caps.append(
+                _scene_card(
+                    template.key,
+                    template.name,
+                    template.description,
+                    "not_ready",
+                    "场景状态读取失败",
+                )
+            )
+    return caps
 
 
 async def get_hub(
@@ -297,7 +320,7 @@ async def get_hub(
     model_status = await _model_public_status(tenant_id)
     metrics = await _metrics(tenant_id, days)
     metrics["pulse_count"] = await _pulse_total(tenant_id, user)
-    capabilities = await _build_capabilities(tenant_id, model_status)
+    capabilities = await _build_capabilities(tenant_id, model_status, user)
     return {
         "days": days,
         "model": {
@@ -319,55 +342,86 @@ async def get_hub(
 
 
 def _hitl_feature_state() -> Dict[str, Any]:
-    """HITL 写门控显式状态（真实装配 + 端点检查，非代码存在推断）。"""
+    """HITL 写门控真实装配判定（spec 193：三条件全真才算就绪）。
+
+    ① 写类 Tool 存在中断配置（manifest ``kind=write`` ∩ 闭集 且装配
+      含 ``HumanInTheLoopMiddleware``）；
+    ② 装配使用 ``TortoiseCheckpointSaver``（spec 192 持久化 pending）；
+    ③ 网关已注册 resume 续跑端点。
+    任一缺失 → partial/not_ready，绝不按「代码里存在某函数」推断 ready。
+    """
     evidence: List[str] = []
 
-    checkpointer_wired = False
+    interrupt_wired = False
     try:
-        from core.ai.runtime.agent_factory import build_agent
-
-        param = inspect.signature(build_agent).parameters.get("checkpointer")
-        checkpointer_wired = (
-            param is not None and param.default is not None
+        from apps.kuaiai.constants import ENABLED_TOOL_NAMES
+        from apps.kuaiai.services.agent_assembler import assemble
+        from apps.kuaiai.services.tool_catalog_service import (
+            manifest_write_tool_names,
         )
+
+        write_tools = manifest_write_tool_names() & frozenset(
+            ENABLED_TOOL_NAMES
+        )
+        interrupt_wired = bool(write_tools) and (
+            "HumanInTheLoopMiddleware" in inspect.getsource(assemble)
+        )
+    except Exception as exc:
+        logger.warning(
+            "trust HITL 中断配置检查失败 error_type={}",
+            type(exc).__name__,
+        )
+    evidence.append(
+        "写类 Tool 已登记中断配置（kind=write → HumanInTheLoop）"
+        if interrupt_wired
+        else "写类 Tool 无中断配置"
+    )
+
+    saver_wired = False
+    try:
+        from apps.kuaiai.services.agent_assembler import assemble as _asm
+        from apps.kuaiai.services.checkpoint_saver import (  # noqa: F401
+            TortoiseCheckpointSaver,
+        )
+
+        saver_wired = "TortoiseCheckpointSaver" in inspect.getsource(_asm)
     except Exception as exc:
         logger.warning(
             "trust HITL checkpointer 检查失败 error_type={}",
             type(exc).__name__,
         )
     evidence.append(
-        "LangGraph checkpointer 已接线"
-        if checkpointer_wired
-        else "LangGraph checkpointer 未接线（agent 装配默认 None）"
+        "确认闸使用 TortoiseCheckpointSaver 持久化挂起"
+        if saver_wired
+        else "确认闸 checkpointer 未接线"
     )
 
-    gate_route_found = False
+    resume_route_found = False
     try:
         from core.api.ai.router import router as ai_router
 
         for route in getattr(ai_router, "routes", []):
             path = str(getattr(route, "path", "") or "").lower()
-            if any(
-                k in path for k in ("propose", "execute", "approve", "interrupt")
-            ):
-                gate_route_found = True
+            if "resume" in path:
+                resume_route_found = True
                 break
     except Exception as exc:
         logger.warning(
             "trust HITL 端点检查失败 error_type={}", type(exc).__name__
         )
     evidence.append(
-        "AI 网关已注册 propose/execute 门控端点"
-        if gate_route_found
-        else "AI 网关未注册 propose/execute 人审端点"
+        "AI 网关已注册 resume 续跑端点"
+        if resume_route_found
+        else "AI 网关未注册 resume 续跑端点"
     )
 
-    implemented = checkpointer_wired and gate_route_found
+    implemented = interrupt_wired and saver_wired and resume_route_found
     return {
         "implemented": implemented,
         "mode": "human_gate" if implemented else "not_implemented",
-        "checkpointer_wired": checkpointer_wired,
-        "gate_route_found": gate_route_found,
+        "interrupt_wired": interrupt_wired,
+        "saver_wired": saver_wired,
+        "resume_route_found": resume_route_found,
         "evidence": evidence,
     }
 
@@ -470,14 +524,24 @@ async def _current_user_permissions(tenant_id: int, user) -> List[Dict[str, Any]
 async def get_trust(tenant_id: int, user) -> Dict[str, Any]:
     """GET /operations/trust 聚合：三卡 + 当前用户权限码 + HITL 显式状态。"""
     hitl_state = _hitl_feature_state()
-    hitl_status = "ready" if hitl_state["implemented"] else "not_ready"
+    hitl_checks = [
+        hitl_state["interrupt_wired"],
+        hitl_state["saver_wired"],
+        hitl_state["resume_route_found"],
+    ]
+    hitl_status = (
+        "ready"
+        if hitl_state["implemented"]
+        else ("partial" if any(hitl_checks) else "not_ready")
+    )
     hitl_card = {
         "key": "hitl",
         "title": "HITL 写门控",
         "status": hitl_status,
-        # 未完成时态（设计 §8）：绝不声称 propose/execute 已完成
         "description": (
-            "当前写工具仍受业务权限与服务校验约束；人工确认闸尚未接入"
+            "写工具经人工确认闸执行，确认/拒绝/过期均留审计"
+            if hitl_state["implemented"]
+            else "人工确认闸未完全就绪：写工具仍受业务权限与服务校验约束"
         ),
         "evidence": hitl_state["evidence"],
     }

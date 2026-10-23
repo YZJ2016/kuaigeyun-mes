@@ -154,6 +154,8 @@
   "ai_tools": [
     {
       "name": "search_knowledge",
+      "label": "检索知识库",
+      "kind": "read",
       "description": "检索企业知识库（返回相关文档片段）",
       "permission": "kuaiai:act:execute",
       "handler": "apps.kuaiai.services.chat_tools:search_knowledge",
@@ -171,13 +173,23 @@
       }
     },
     {
-      "name": "query_workorder",
-      "description": "查询生产工单（按工单 id 查详情摘要，或按编码/关键词/状态列表查询）",
+      "name": "query_work_orders",
+      "label": "查询工单",
+      "kind": "read",
+      "description": "查询生产工单（view=summary 按 id/编码/关键词/状态查摘要列表；view=operations 查指定工单工序任务，须 work_order_id）",
       "permission": "kuaizhizao:work-order:read",
-      "handler": "apps.kuaiai.services.chat_tools:query_workorder",
+      "handler": "apps.kuaiai.services.chat_tools:query_work_orders",
       "parameters": {
         "type": "object",
         "properties": {
+          "view": {
+            "type": "string",
+            "enum": [
+              "summary",
+              "operations"
+            ],
+            "description": "查询视图：summary 摘要/列表（默认），operations 工序任务（须 work_order_id）"
+          },
           "work_order_id": {
             "type": "integer",
             "description": "工单 ID"
@@ -202,25 +214,9 @@
       }
     },
     {
-      "name": "list_workorder_tasks",
-      "description": "列出工单工序任务及各自状态/完成数量",
-      "permission": "kuaizhizao:work-order:read",
-      "handler": "apps.kuaiai.services.chat_tools:list_workorder_tasks",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "work_order_id": {
-            "type": "integer",
-            "description": "工单 ID"
-          }
-        },
-        "required": [
-          "work_order_id"
-        ]
-      }
-    },
-    {
       "name": "submit_production_feedback",
+      "label": "提交报工",
+      "kind": "write",
       "description": "为工单工序提交报工（本人自报；代报/小组报工走业务页面）",
       "permission": "kuaizhizao:production-execution-reporting:create",
       "handler": "apps.kuaiai.services.chat_tools:submit_production_feedback",
@@ -233,7 +229,7 @@
           },
           "operation_id": {
             "type": "integer",
-            "description": "工序 ID（list_workorder_tasks 返回的 operation_id）"
+            "description": "工序 ID（query_work_orders view=operations 返回的 operation_id）"
           },
           "reported_quantity": {
             "type": "number",
@@ -265,6 +261,8 @@
     },
     {
       "name": "update_workorder_status",
+      "label": "更新工单状态",
+      "kind": "write",
       "description": "更新工单状态（仅放行迁移：已下达→in_progress、in_progress→paused、paused→in_progress、in_progress→cancelled）",
       "permission": "kuaizhizao:work-order:update",
       "handler": "apps.kuaiai.services.chat_tools:update_workorder_status",
@@ -292,10 +290,12 @@
       }
     },
     {
-      "name": "query_inventory_balance",
+      "name": "query_inventory",
+      "label": "查询库存",
+      "kind": "read",
       "description": "查询即时库存余额（物料×仓库结存，支持关键词/仓库过滤）",
       "permission": "kuaizhizao:inventory:read",
-      "handler": "apps.kuaiai.services.scene_tools:query_inventory_balance",
+      "handler": "apps.kuaiai.services.scene_tools:query_inventory",
       "parameters": {
         "type": "object",
         "properties": {
@@ -315,10 +315,12 @@
       }
     },
     {
-      "name": "query_delivery_risk",
+      "name": "analyze_delivery_risk",
+      "label": "分析交期风险",
+      "kind": "read",
       "description": "查询工单交期风险（逾期/MTO连带），按当前用户工单数据范围过滤",
       "permission": "kuaizhizao:work-order:read",
-      "handler": "apps.kuaiai.services.scene_tools:query_delivery_risk",
+      "handler": "apps.kuaiai.services.scene_tools:analyze_delivery_risk",
       "parameters": {
         "type": "object",
         "properties": {
@@ -330,10 +332,12 @@
       }
     },
     {
-      "name": "query_purchase_followup",
-      "description": "查询采购订单跟单摘要（供应商/采购员/状态/到货日期过滤）",
+      "name": "query_purchase_orders",
+      "label": "查询采购订单",
+      "kind": "read",
+      "description": "查询采购订单摘要（供应商/采购员/状态/到货日期过滤，按当前用户采购数据范围过滤）",
       "permission": "kuaizhizao:purchase-order:read",
-      "handler": "apps.kuaiai.services.scene_tools:query_purchase_followup",
+      "handler": "apps.kuaiai.services.scene_tools:query_purchase_orders",
       "parameters": {
         "type": "object",
         "properties": {
@@ -365,10 +369,12 @@
       }
     },
     {
-      "name": "query_published_schedule",
+      "name": "query_schedule",
+      "label": "查询排程",
+      "kind": "read",
       "description": "查询某日已发布滚动排程摘要（仅 published/closed 计划可读）",
       "permission": "kuaizhizao:plan-management-rolling-scheduling:read",
-      "handler": "apps.kuaiai.services.scene_tools:query_published_schedule",
+      "handler": "apps.kuaiai.services.scene_tools:query_schedule",
       "parameters": {
         "type": "object",
         "properties": {
@@ -383,10 +389,12 @@
       }
     },
     {
-      "name": "query_quality_anomalies",
+      "name": "analyze_quality",
+      "label": "分析质量异常",
+      "kind": "read",
       "description": "查询质量异常记录摘要（不合格检验，按检验类型/日期/物料/供应商过滤）",
       "permission": "kuaizhizao:quality-analysis:read",
-      "handler": "apps.kuaiai.services.scene_tools:query_quality_anomalies",
+      "handler": "apps.kuaiai.services.scene_tools:analyze_quality",
       "parameters": {
         "type": "object",
         "properties": {
@@ -423,29 +431,450 @@
       }
     },
     {
-      "name": "query_supplier_orders",
-      "description": "查询指定供应商的采购订单摘要（按当前用户采购数据范围过滤）",
-      "permission": "kuaizhizao:purchase-order:read",
-      "handler": "apps.kuaiai.services.scene_tools:query_supplier_orders",
+      "name": "query_sales_orders",
+      "label": "查询销售订单",
+      "kind": "read",
+      "description": "查询销售订单交付进度（view=summary 表头摘要：单号/客户/状态/交期/交货进度；view=lines 明细行：物料/数量/已交/行交期，按当前用户数据范围过滤）",
+      "permission": "kuaizhizao:sales-order:read",
+      "handler": "apps.kuaiai.services.tools.sales_purchase:query_sales_orders",
       "parameters": {
         "type": "object",
         "properties": {
-          "supplier_id": {
-            "type": "integer",
-            "description": "供应商 ID"
+          "view": {
+            "type": "string",
+            "enum": [
+              "summary",
+              "lines"
+            ],
+            "description": "查询视图：summary 表头摘要（默认），lines 明细行"
+          },
+          "order_code": {
+            "type": "string",
+            "description": "订单编码（模糊）"
+          },
+          "customer_name": {
+            "type": "string",
+            "description": "客户名称（模糊）"
           },
           "status": {
             "type": "string",
-            "description": "订单状态"
+            "enum": [
+              "DRAFT",
+              "PENDING_REVIEW",
+              "AUDITED",
+              "REJECTED",
+              "CONFIRMED",
+              "CLOSED",
+              "CANCELLED",
+              "COMPLETED"
+            ],
+            "description": "订单状态（DemandStatus 枚举值）"
+          },
+          "start_date": {
+            "type": "string",
+            "description": "订单日期起（YYYY-MM-DD）"
+          },
+          "end_date": {
+            "type": "string",
+            "description": "订单日期止（YYYY-MM-DD）"
           },
           "limit": {
             "type": "integer",
             "description": "返回条数上限（默认10，最大20）"
           }
+        }
+      }
+    },
+    {
+      "name": "query_purchase_arrival_warnings",
+      "label": "查询采购到货预警",
+      "kind": "read",
+      "description": "查询采购到货预警行（临期/逾期与处理状态，与预警页同口径，按当前用户采购单数据范围过滤）",
+      "permission": "kuaizhizao:purchase-arrival-warning:read",
+      "handler": "apps.kuaiai.services.tools.sales_purchase:query_purchase_arrival_warnings",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "warning_level": {
+            "type": "string",
+            "enum": [
+              "normal",
+              "imminent",
+              "overdue"
+            ],
+            "description": "预警级别：normal 正常 / imminent 临期 / overdue 逾期"
+          },
+          "supplier_id": {
+            "type": "integer",
+            "description": "供应商 ID"
+          },
+          "order_code": {
+            "type": "string",
+            "description": "采购单编码（模糊）"
+          },
+          "processing_status": {
+            "type": "string",
+            "enum": [
+              "unprocessed",
+              "reported",
+              "pending_review",
+              "approved",
+              "change_pending",
+              "changed",
+              "rejected"
+            ],
+            "description": "处理状态"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "返回条数上限（默认10，最大20）"
+          }
+        }
+      }
+    },
+    {
+      "name": "query_inventory_alerts",
+      "label": "查询库存预警",
+      "kind": "read",
+      "description": "查询租户库存预警记录；摘要含物料、仓库、预警类型/级别、当前量/阈值与状态；仅返回当前用户数据范围内记录，不含金额类字段",
+      "permission": "kuaizhizao:warehouse-management-inventory-alert:read",
+      "handler": "apps.kuaiai.services.tools.inventory_alerts:query_inventory_alerts",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "alert_type": {
+            "type": "string",
+            "enum": [
+              "low_stock",
+              "high_stock",
+              "expired"
+            ],
+            "description": "预警类型（可选）"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "processing",
+              "resolved",
+              "ignored"
+            ],
+            "description": "预警状态（可选）"
+          },
+          "alert_level": {
+            "type": "string",
+            "enum": [
+              "info",
+              "warning",
+              "critical"
+            ],
+            "description": "预警级别（可选）"
+          },
+          "material_id": {
+            "type": "integer",
+            "description": "物料ID（可选）"
+          },
+          "warehouse_id": {
+            "type": "integer",
+            "description": "仓库ID（可选）"
+          },
+          "keyword": {
+            "type": "string",
+            "description": "关键词（编码/名称/消息，可选）"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "返回条数上限（默认10，最大20）"
+          }
+        }
+      }
+    },
+    {
+      "name": "query_replenishment_suggestions",
+      "label": "查询补货建议",
+      "kind": "read",
+      "description": "查询租户补货建议；摘要含物料、建议补货量、建议下单日期、优先级与状态；仅返回当前用户数据范围内记录，不含金额类字段",
+      "permission": "kuaizhizao:warehouse-management-replenishment-suggestions:read",
+      "handler": "apps.kuaiai.services.tools.inventory_alerts:query_replenishment_suggestions",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "processed",
+              "ignored"
+            ],
+            "description": "建议状态（可选）"
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ],
+            "description": "优先级（可选）"
+          },
+          "suggestion_type": {
+            "type": "string",
+            "enum": [
+              "low_stock",
+              "demand_based",
+              "seasonal"
+            ],
+            "description": "建议类型（可选）"
+          },
+          "material_id": {
+            "type": "integer",
+            "description": "物料ID（可选）"
+          },
+          "warehouse_id": {
+            "type": "integer",
+            "description": "仓库ID（可选）"
+          },
+          "keyword": {
+            "type": "string",
+            "description": "关键词（编码/名称/备注，可选）"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "返回条数上限（默认10，最大20）"
+          }
+        }
+      }
+    },
+    {
+      "name": "query_slow_moving_inventory",
+      "label": "查询呆滞料",
+      "kind": "read",
+      "description": "查询租户呆滞料（物料批结存超阈值天数无变动）；摘要含物料、仓库、结存量与库龄天数；仅返回当前用户数据范围内批次，不含金额类字段",
+      "permission": "kuaizhizao:warehouse-management-reports-slow-moving-inventory:read",
+      "handler": "apps.kuaiai.services.tools.inventory_alerts:query_slow_moving_inventory",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "warehouse_id": {
+            "type": "integer",
+            "description": "仓库ID（可选，按批次可见仓库过滤）"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "返回条数上限（默认10，最大20）"
+          }
+        }
+      }
+    },
+    {
+      "name": "analyze_kitting",
+      "label": "分析工单齐套",
+      "kind": "read",
+      "description": "分析单张工单齐套率与缺料明细（物料/需求/可用/缺口，按缺口降序前20）；纯计算不写库；仅当前用户数据范围内工单可分析",
+      "permission": "kuaizhizao:work-order:read",
+      "handler": "apps.kuaiai.services.tools.kitting_exceptions:analyze_kitting",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "work_order_id": {
+            "type": "integer",
+            "description": "工单ID（必填）"
+          }
         },
-        "required": [
-          "supplier_id"
-        ]
+        "required": ["work_order_id"]
+      }
+    },
+    {
+      "name": "query_material_shortages",
+      "label": "查询缺料异常",
+      "kind": "read",
+      "description": "查询缺料异常记录；摘要含工单、物料、需求/可用/缺口、预警级别与状态；仅返回当前用户工单数据范围内记录",
+      "permission": "kuaizhizao:production-execution-material-shortage-exceptions:read",
+      "handler": "apps.kuaiai.services.tools.kitting_exceptions:query_material_shortages",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "work_order_id": { "type": "integer", "description": "工单ID（可选）" },
+          "statuses": {
+            "type": "string",
+            "description": "处理状态，逗号分隔（pending/processing/resolved/cancelled，可选）"
+          },
+          "alert_level": {
+            "type": "string",
+            "enum": ["low", "medium", "high", "critical"],
+            "description": "预警级别（可选）"
+          },
+          "material_code": { "type": "string", "description": "物料编码（模糊，可选）" },
+          "limit": { "type": "integer", "description": "返回条数上限（默认10，最大20）" }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "query_delivery_delays",
+      "label": "查询延期异常",
+      "kind": "read",
+      "description": "查询交付延期异常记录；摘要含工单、计划完工、延期天数、原因、预警级别与状态；仅返回当前用户工单数据范围内记录",
+      "permission": "kuaizhizao:production-execution-delivery-delay-exceptions:read",
+      "handler": "apps.kuaiai.services.tools.kitting_exceptions:query_delivery_delays",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "work_order_id": { "type": "integer", "description": "工单ID（可选）" },
+          "statuses": {
+            "type": "string",
+            "description": "处理状态，逗号分隔（pending/processing/resolved/cancelled，可选）"
+          },
+          "alert_level": {
+            "type": "string",
+            "enum": ["low", "medium", "high", "critical"],
+            "description": "预警级别（可选）"
+          },
+          "limit": { "type": "integer", "description": "返回条数上限（默认10，最大20）" }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "query_quality_exceptions",
+      "label": "查询质量异常",
+      "kind": "read",
+      "description": "查询质量异常记录；摘要含异常类型、工单、物料、批号、严重程度与状态；仅返回当前用户工单数据范围内记录（无工单行保留）",
+      "permission": "kuaizhizao:production-execution-quality-exceptions:read",
+      "handler": "apps.kuaiai.services.tools.kitting_exceptions:query_quality_exceptions",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "exception_type": {
+            "type": "string",
+            "enum": ["inspection_failure", "process_deviation", "customer_complaint"],
+            "description": "异常类型（可选）"
+          },
+          "work_order_id": { "type": "integer", "description": "工单ID（可选）" },
+          "statuses": {
+            "type": "string",
+            "description": "处理状态，逗号分隔（pending/investigating/correcting/closed/cancelled，可选）"
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["minor", "major", "critical"],
+            "description": "严重程度（可选）"
+          },
+          "limit": { "type": "integer", "description": "返回条数上限（默认10，最大20）" }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "analyze_first_pass_yield",
+      "label": "分析一次合格率",
+      "kind": "read",
+      "description": "分析一次合格率（FPY）：summary 总览 / operations 按工序（最差在前）/ trend 近N天趋势；数值与生产报表页同口径",
+      "permission": "kuaizhizao:production-execution-reports-first-pass-yield:read",
+      "handler": "apps.kuaiai.services.tools.quality_analytics:analyze_first_pass_yield",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "view": {
+            "type": "string",
+            "enum": ["summary", "operations", "trend"],
+            "description": "视图（默认 summary）"
+          },
+          "date_start": { "type": "string", "description": "开始日期 YYYY-MM-DD（可选）" },
+          "date_end": { "type": "string", "description": "结束日期 YYYY-MM-DD（可选）" },
+          "days": { "type": "integer", "description": "trend 视图天数 1-31（默认7）" },
+          "limit": { "type": "integer", "description": "operations 视图返回条数上限（默认10，最大20）" }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "analyze_defect_pareto",
+      "label": "分析缺陷帕累托",
+      "kind": "read",
+      "description": "缺陷类型帕累托分析：基于最近缺陷记录按类型聚合数量、占比与累计占比；与质量报表页同口径",
+      "permission": "kuaizhizao:quality-management-reports-defect-pareto-analysis:read",
+      "handler": "apps.kuaiai.services.tools.quality_analytics:analyze_defect_pareto",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "material_id": { "type": "integer", "description": "物料ID（可选）" },
+          "date_start": { "type": "string", "description": "开始日期 YYYY-MM-DD（可选）" },
+          "date_end": { "type": "string", "description": "结束日期 YYYY-MM-DD（可选）" },
+          "limit": { "type": "integer", "description": "返回类型条数上限（默认10，最大20）" }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "query_production_daily",
+      "label": "查询生产日报",
+      "kind": "read",
+      "description": "查询生产日报：reports 列表（编号/日期/班组/模板/状态）或 summary 汇总（展开数值字段）；按日期倒序，与日报页同口径",
+      "permission": "kuaizhizao:production-daily:read",
+      "handler": "apps.kuaiai.services.tools.shift_brief:query_production_daily",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "view": {
+            "type": "string",
+            "enum": ["reports", "summary"],
+            "description": "视图（默认 reports）"
+          },
+          "team_name": { "type": "string", "description": "班组名称（模糊，可选）" },
+          "template_code": { "type": "string", "description": "日报模板编码（可选）" },
+          "date_start": { "type": "string", "description": "开始日期 YYYY-MM-DD（可选）" },
+          "date_end": { "type": "string", "description": "结束日期 YYYY-MM-DD（可选）" },
+          "limit": { "type": "integer", "description": "返回条数上限（默认10，最大20）" }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "query_pulse_signals",
+      "label": "查询异常信号",
+      "kind": "read",
+      "description": "查询 Pulse 异常信号（与 /operations/pulse 同口径）：按领域/严重度返回异常条目；检测失败或未接入领域如实列出",
+      "permission": "kuaiai:pulse:display",
+      "handler": "apps.kuaiai.services.tools.shift_brief:query_pulse_signals",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "domain": {
+            "type": "string",
+            "description": "领域，逗号分隔（production/inventory/sales/quality/equipment，空=全部）"
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["info", "warning", "error", "critical"],
+            "description": "严重度（可选）"
+          },
+          "limit": { "type": "integer", "description": "返回条数上限（默认10，最大20）" }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "query_process_routes",
+      "label": "查询工艺路线",
+      "kind": "read",
+      "description": "查询工艺路线：返回路线编码、名称、版本与工序序列（工序编码/名称），可按物料反查绑定路线；与工艺路线列表同口径",
+      "permission": "master-data:process:route:read",
+      "handler": "apps.kuaiai.services.tools.process_routes:query_process_routes",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "keyword": {
+            "type": "string",
+            "description": "路线编码/名称/描述模糊关键字（可选）"
+          },
+          "material_id": {
+            "type": "integer",
+            "description": "物料ID（按物料绑定路线反查，可选）"
+          },
+          "limit": { "type": "integer", "description": "返回条数上限（默认10，最大20）" }
+        },
+        "required": []
       }
     }
   ],

@@ -1,7 +1,8 @@
 """KU-AI 模型与能力设置聚合服务（spec 185 / 设计 §10、§11.6）。
 
 - GET：chat/vision 角色候选连接（本租户、启用、config.model_role 匹配）+
-  OCR 脱敏视图 + 六模板总开关 + 能力项 + 乐观版本；不返回任何密钥/cipher；
+  OCR 脱敏视图 + 模板总开关（agent_templates 驱动）+ 能力项 + 乐观版本；
+  不返回任何密钥/cipher；
 - PUT：候选连接复用 ``select_llm_connection_role`` 的校验语义（不走其立即
   保存分支）；事务内 ``select_for_update`` 锁定站点行、锁内重算版本比对
   （不一致 409），全部校验后把角色 UUID / agent_switches / 能力字段一次
@@ -20,10 +21,15 @@ from typing import Any, Dict, List, Optional
 from loguru import logger
 from tortoise.transactions import in_transaction
 
-from apps.kuaiai.services.agent_scene_service import SCENE_TEMPLATES
+from apps.kuaiai.services.agent_scene_service import (
+    SCENE_TEMPLATES,
+    list_agent_library,
+)
 from core.utils.integration_settings import (
     AGENT_SWITCHES_SETTING_KEY,
+    CAPABILITY_BINDINGS_SETTING_KEY,
     LLM_PROVIDER_SPECS,
+    SOP_SYNC_SETTING_KEY,
     _connection_config,
     _is_masked_api_key,
     get_kuaiai_integration,
@@ -31,13 +37,18 @@ from core.utils.integration_settings import (
     merge_kuaiai_capability_fields,
     normalize_rag_backend,
     read_agent_switches,
+    read_capability_bindings,
+    read_sop_sync,
+    resolve_capability_binding,
     role_connection_setting_key,
     validate_agent_switches_payload,
+    validate_capability_bindings_payload,
     validate_llm_role_candidate,
+    validate_sop_sync_payload,
 )
 from infra.exceptions.exceptions import ConflictError, NotFoundError
 
-# 六模板 key 按 SCENE_TEMPLATES 声明顺序输出
+# 模板 key 按 SCENE_TEMPLATES 声明顺序输出
 _ORDERED_TEMPLATE_KEYS: tuple = tuple(t.key for t in SCENE_TEMPLATES)
 
 
@@ -136,7 +147,7 @@ async def _load_connection_for_role(
     return connection
 
 
-async def get_settings(tenant_id: int) -> Dict[str, Any]:
+async def get_settings(tenant_id: int, user: Any = None) -> Dict[str, Any]:
     """GET /operations/settings 聚合（缺省值与运行时读取语义一致）。"""
     from core.services.system.site_setting_service import SiteSettingService
     from core.utils.integration_settings import _load_llm_connection
@@ -154,14 +165,77 @@ async def get_settings(tenant_id: int) -> Dict[str, Any]:
     vision_options = await _list_role_options(tenant_id, "vision", vision_uuid)
     vision_connection = await _load_llm_connection(tenant_id, vision_uuid)
 
+    # spec 191：能力绑定逐模板视图 + 可绑实例选项（复用智能体库实例行，不另查）
+    bindings = read_capability_bindings(kuaiai, _ORDERED_TEMPLATE_KEYS)
+    try:
+        library_items = (await list_agent_library(tenant_id, user)).get(
+            "items", []
+        )
+    except Exception as exc:
+        logger.warning(
+            "设置页智能体库实例列表读取失败 tenant_id={} error_type={}",
+            tenant_id,
+            type(exc).__name__,
+        )
+        library_items = []
+    live_keys = {item["key"] for item in library_items}
+    # spec 200（S1-a）：SOP 同步目标库可选项（本租户启用库，不记密钥无关）
+    try:
+        from apps.kuaiai.models.knowledge import KuaiaiKnowledgeBase
+        from apps.kuaiai.constants import STATUS_ENABLED as _KB_ENABLED
+
+        kb_rows = await KuaiaiKnowledgeBase.filter(
+            tenant_id=tenant_id,
+            status=_KB_ENABLED,
+            deleted_at__isnull=True,
+        ).order_by("id").values("id", "name")
+        sop_sync_knowledge_options = [
+            {"id": int(r["id"]), "name": str(r["name"] or "")}
+            for r in kb_rows
+        ]
+    except Exception as exc:
+        logger.warning(
+            "设置页知识库选项读取失败 tenant_id={} error_type={}",
+            tenant_id,
+            type(exc).__name__,
+        )
+        sop_sync_knowledge_options = []
+    capability_bindings = [
+        {
+            "capability_key": template.key,
+            "name": template.name,
+            "override_present": template.key in bindings,
+            "override_instance_key": bindings.get(template.key),
+            "resolved_instance_key": resolve_capability_binding(
+                bindings, template.key, live_keys
+            ),
+        }
+        for template in SCENE_TEMPLATES
+    ]
+
     return {
         "chat_connection_uuid": chat_uuid or None,
         "vision_connection_uuid": vision_uuid or None,
         "chat_options": chat_options,
         "vision_options": vision_options,
         "ocr": _ocr_view(vision_connection),
+        # spec 201：设置页模板开关由后端驱动（key/name 按 SCENE_TEMPLATES 顺序）
+        "agent_templates": [
+            {"key": t.key, "name": t.name} for t in SCENE_TEMPLATES
+        ],
         "agent_switches": read_agent_switches(kuaiai, _ORDERED_TEMPLATE_KEYS),
         "capabilities": _capabilities_view(kuaiai),
+        "capability_bindings": capability_bindings,
+        "scene_instance_options": [
+            {
+                "key": item["key"],
+                "name": item["name"],
+                "template_key": item["template_key"],
+            }
+            for item in library_items
+        ],
+        "sop_sync": read_sop_sync(kuaiai),
+        "sop_sync_knowledge_options": sop_sync_knowledge_options,
         "version": _version_of(site),
     }
 
@@ -178,6 +252,20 @@ async def update_settings(tenant_id: int, user: Any, payload: Any) -> Dict[str, 
 
     switches = validate_agent_switches_payload(
         payload.agent_switches, _ORDERED_TEMPLATE_KEYS
+    )
+    # spec 191：capability_bindings 缺省（None）= 不修改；显式传入时整 map 替换
+    bindings_patch = (
+        validate_capability_bindings_payload(
+            payload.capability_bindings, _ORDERED_TEMPLATE_KEYS
+        )
+        if payload.capability_bindings is not None
+        else None
+    )
+    # spec 200（S1-a）：sop_sync 缺省（None）= 不修改；显式传入时整体替换
+    sop_sync_patch = (
+        validate_sop_sync_payload(payload.sop_sync.model_dump())
+        if payload.sop_sync is not None
+        else None
     )
     vision_uuid = str(payload.vision_connection_uuid or "").strip()
 
@@ -218,6 +306,49 @@ async def update_settings(tenant_id: int, user: Any, payload: Any) -> Dict[str, 
             str(locked_connections[vision_uuid].uuid) if vision_uuid else ""
         )
 
+        # 覆盖绑定的实例 key 须属本租户且未软删（AC6），否则 422 不写库
+        if bindings_patch is not None:
+            from apps.kuaiai.models.agent_scene import KuaiaiAgentScene
+
+            bound_keys = sorted(
+                {v for v in bindings_patch.values() if v is not None}
+            )
+            if bound_keys:
+                found = set(
+                    await KuaiaiAgentScene.filter(
+                        tenant_id=tenant_id,
+                        instance_key__in=bound_keys,
+                        deleted_at__isnull=True,
+                    ).values_list("instance_key", flat=True)
+                )
+                missing = [k for k in bound_keys if k not in found]
+                if missing:
+                    from infra.exceptions.exceptions import ValidationError
+
+                    raise ValidationError(
+                        "绑定的场景实例不存在或已删除："
+                        + ", ".join(missing)
+                    )
+
+        # spec 200（S1-a）：启用 SOP 同步时目标库须为本租户启用知识库，
+        # 事务内复核（失败 422 不写库）
+        if sop_sync_patch is not None and sop_sync_patch["enabled"]:
+            from apps.kuaiai.models.knowledge import KuaiaiKnowledgeBase
+            from apps.kuaiai.constants import STATUS_ENABLED as _KB_ENABLED
+
+            kb = await KuaiaiKnowledgeBase.filter(
+                tenant_id=tenant_id,
+                id=int(sop_sync_patch["knowledge_id"]),
+                status=_KB_ENABLED,
+                deleted_at__isnull=True,
+            ).exists()
+            if not kb:
+                from infra.exceptions.exceptions import ValidationError
+
+                raise ValidationError(
+                    "SOP 同步目标知识库不存在或已停用"
+                )
+
         locked = await SiteSetting.filter(
             tenant_id=tenant_id, deleted_at__isnull=True
         ).order_by("id").select_for_update().first()
@@ -252,6 +383,17 @@ async def update_settings(tenant_id: int, user: Any, payload: Any) -> Dict[str, 
         if kuaiai.get(AGENT_SWITCHES_SETTING_KEY) != switches:
             changed_fields.append("agent_switches")
         kuaiai[AGENT_SWITCHES_SETTING_KEY] = switches
+        if bindings_patch is not None:
+            if (
+                kuaiai.get(CAPABILITY_BINDINGS_SETTING_KEY)
+                != bindings_patch
+            ):
+                changed_fields.append("capability_bindings")
+            kuaiai[CAPABILITY_BINDINGS_SETTING_KEY] = bindings_patch
+        if sop_sync_patch is not None:
+            if kuaiai.get(SOP_SYNC_SETTING_KEY) != sop_sync_patch:
+                changed_fields.append("sop_sync")
+            kuaiai[SOP_SYNC_SETTING_KEY] = sop_sync_patch
 
         changed_fields.extend(
             merge_kuaiai_capability_fields(
@@ -278,4 +420,4 @@ async def update_settings(tenant_id: int, user: Any, payload: Any) -> Dict[str, 
         ",".join(changed_fields) if changed_fields else "-",
     )
 
-    return await get_settings(tenant_id)
+    return await get_settings(tenant_id, user)

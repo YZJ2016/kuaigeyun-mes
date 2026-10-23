@@ -1,6 +1,6 @@
 """KU-AI 租户场景实例（spec 181）
 
-- KuaiaiAgentScene：六个出厂模板 → 本租户实例/档案映射。
+- KuaiaiAgentScene：出厂模板 → 本租户实例/档案映射。
   ``instance_key=template_key`` 为该租户的系统预置行（``origin=system_seed``），
   复制场景生成新唯一 instance_key、保留源 ``template_key``（``origin=copy``）。
 - ``overrides`` 仅存白名单覆盖字段（name/description/image_key/sample_prompt/

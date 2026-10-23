@@ -30,5 +30,7 @@ export function useRegisterAiContext(payload: AiContextPayload | null | undefine
     payload?.recordLabel,
     payload?.capabilityMode,
     payload?.agentId,
+    payload?.agentKey,
+    payload?.presetPrompt,
   ]);
 }

@@ -3,9 +3,9 @@
 代码事实表（真实代码依据）：
 - GET /operations/trust 双权限码经 require_permission_codes 闭包提取核对
   （同 test_spec183_corpus 的 _required_permissions 手法）；
-- HITL 事实：agent_factory.build_agent(checkpointer=None)（agent_factory.py:22）
-  + agent_assembler 固定传 checkpointer=None（agent_assembler.py:146），
-  core/api/ai/router.py 无 propose/execute/approve/interrupt 端点；
+- HITL 事实（spec 193 起已就绪）：manifest kind=write ∩ 闭集存在 +
+  agent_assembler 装配 HumanInTheLoopMiddleware + TortoiseCheckpointSaver，
+  core/api/ai/router.py 已注册 /chat/resume 续跑端点 → 三条件全真 ready；
 - 审计：AiAuditMiddleware 覆盖 /api/v1/core/ai/**（core/ai/middleware.py:15），
   审计表 core_ai_audit_logs（core/models/ai_audit_log.py）；
 - stats 缺陷修复：apps.kuaiai.services.suggestion_service 不存在（spec 182 以
@@ -15,8 +15,8 @@
   `include_pulse` 参数（默认 False → 响应回 0，不算 Pulse）。
 
 覆盖：三卡状态闭集与文案真实性、当前用户权限（无 user_id 入参）、
-HITL not_ready、审计不可用 partial、权限读取失败降级、错误脱敏、
-路由双权限、stats pulse/day 语义回归。
+HITL 真实装配判定（spec 193 后 ready）、审计不可用 partial、权限读取
+失败降级、错误脱敏、路由双权限、stats pulse/day 语义回归。
 """
 
 from __future__ import annotations
@@ -150,8 +150,8 @@ class TestGetTrust:
         # 审计：表可读 → ready
         assert cards["audit"]["status"] == "ready"
 
-    async def test_hitl_always_not_ready_with_real_evidence(self):
-        """checkpointer=None 且无门控端点 → HITL not_ready，文案未完成时态。"""
+    async def test_hitl_ready_with_real_evidence(self):
+        """spec 193：中断配置 + saver 装配 + resume 端点全真 → HITL ready。"""
         user = _user()
         with patch(
             "core.models.ai_audit_log.AiAuditLog.filter",
@@ -166,15 +166,15 @@ class TestGetTrust:
             out = await ops_svc.get_trust(TENANT, user)
 
         cards = _cards_by_key(out)
-        assert cards["hitl"]["status"] == "not_ready"
+        assert cards["hitl"]["status"] == "ready"
         assert out["hitl"] == {
-            "implemented": False,
-            "mode": "not_implemented",
+            "implemented": True,
+            "mode": "human_gate",
         }
         desc = cards["hitl"]["description"] or ""
-        assert "尚未接入" in desc
-        assert "已完成" not in desc
-        assert "propose" not in desc.lower() or "尚未" in desc
+        assert "尚未接入" not in desc
+        blob = " ".join(cards["hitl"]["evidence"])
+        assert "中断" in blob and "resume" in blob
 
     async def test_permissions_current_user_only(self):
         """permissions[] 只反映当前用户持有状态；不枚举角色关系。"""

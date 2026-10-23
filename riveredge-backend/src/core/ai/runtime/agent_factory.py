@@ -2,7 +2,9 @@
 
 每请求 ``create_agent``（图构造毫秒级）；``recursion_limit`` 由调用方经
 ``config={"recursion_limit": ...}`` 在 ainvoke/astream 时传入，默认上限 8
-（替代旧 ``MAX_TOOL_ROUNDS``）。checkpointer 本期默认 ``None``（KR-G3）。
+（替代旧 ``MAX_TOOL_ROUNDS``）。checkpointer 由调用方注入：KU-AI 写类
+工具档案挂 ``TortoiseCheckpointSaver``（spec 193 HITL 挂起持久化），
+纯读档案仍为 ``None``（KR-G3）。
 """
 
 from __future__ import annotations

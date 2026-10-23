@@ -100,14 +100,11 @@ export function toAiContextApiPayload(context: AiContextPayload | null): Record<
   if (!context) return undefined;
   const payload: Record<string, unknown> = {};
   if (context.screen) payload.screen = context.screen;
-  if (context.screenLabel) payload.screen_label = context.screenLabel;
   if (context.resourceKey) payload.resource_key = context.resourceKey;
   if (context.recordId != null && context.recordId !== '') payload.record_id = context.recordId;
-  if (context.recordLabel) payload.record_label = context.recordLabel;
   if (context.agentId) payload.agent_id = context.agentId;
   const extra: Record<string, unknown> = {};
   if (context.capabilityMode) extra.capability_mode = context.capabilityMode;
-  if (context.agentId) extra.agent_id = context.agentId;
   if (context.agentKey) extra.agent_key = context.agentKey;
   if (context.presetPrompt) extra.preset_prompt = context.presetPrompt;
   if (Object.keys(extra).length) payload.extra = extra;

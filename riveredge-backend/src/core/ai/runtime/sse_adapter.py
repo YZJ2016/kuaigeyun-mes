@@ -92,19 +92,93 @@ def _error_payload() -> bytes:
     return f"data: {json.dumps(err, ensure_ascii=False)}\n\n".encode("utf-8")
 
 
+def _is_scalar(value: Any) -> bool:
+    return value is None or isinstance(value, (str, int, float, bool))
+
+
+def _business_object_ref(args: Dict[str, Any]) -> str:
+    """待确认动作业务对象引用：取第一个 id/`*_id` 标量参数（同 ``_business_ref`` 口径）。"""
+    for key, value in args.items():
+        if key != "id" and not key.endswith("_id"):
+            continue
+        if value is None or not _is_scalar(value):
+            continue
+        return f"{key}={value}"
+    return ""
+
+
+def _interrupt_actions(
+    interrupts: Any, labels: Dict[str, str]
+) -> List[Dict[str, str]]:
+    """Interrupt ``action_requests`` → SSE 展示动作（Tool 名/label/参数摘要/业务对象）。
+
+    ``args_summary`` 只含标量参数且截断——不落参数全集、不落敏感字段。
+    """
+    actions: List[Dict[str, str]] = []
+    for interrupt in interrupts or []:
+        value = getattr(interrupt, "value", None)
+        if isinstance(interrupt, dict):
+            value = interrupt.get("value")
+        if not isinstance(value, dict):
+            continue
+        for req in value.get("action_requests") or []:
+            if not isinstance(req, dict):
+                continue
+            name = str(req.get("name") or "")
+            args = {
+                k: v
+                for k, v in (req.get("args") or {}).items()
+                if _is_scalar(v)
+            }
+            actions.append(
+                {
+                    "tool": name,
+                    "label": str(labels.get(name) or name),
+                    "args_summary": _short_text(args),
+                    "business_object": _business_object_ref(args),
+                }
+            )
+    return actions
+
+
+def _interrupt_payload(
+    model_name: str, ctx: Dict[str, Any], interrupts: Any
+) -> bytes:
+    """扩展帧：顶层 ``kuaiai_interrupt`` 下发待确认动作（spec 193）。"""
+    chunk = {
+        "id": "chatcmpl-kuaiai",
+        "object": "chat.completion.chunk",
+        "created": int(time.time()),
+        "model": model_name,
+        "kuaiai_interrupt": {
+            "thread_token": ctx.get("thread_token"),
+            "expires_at": ctx.get("expires_at"),
+            "actions": _interrupt_actions(
+                interrupts, ctx.get("labels") or {}
+            ),
+        },
+        "choices": [{"index": 0, "delta": {}}],
+    }
+    return f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n".encode("utf-8")
+
+
 # 工具执行类事件：一旦发生即视为「副作用可能已落」，禁止 ainvoke 整图重跑。
 _TOOL_EVENT_NAMES = frozenset({"on_tool_start", "on_tool_end"})
 
 
 async def _iter_agent_texts(
     agent: Any,
-    messages: List[Any],
+    agent_input: Any,
     config: Optional[Dict[str, Any]],
     tool_events: List[str],
 ) -> AsyncIterator[tuple]:
-    """产出 (\"text\", str) 或 (\"tool\", notice)。工具帧不计入已发出的正文。"""
+    """产出 (\"text\", str) 或 (\"tool\", notice)。工具帧不计入已发出的正文。
+
+    ``agent_input`` 为 ``{"messages": [...]}`` 或 ``Command(resume=...)``
+    （spec 193 续跑同一 run）。
+    """
     async for event in agent.astream_events(
-        {"messages": messages}, config=config, version="v2"
+        agent_input, config=config, version="v2"
     ):
         kind = event.get("event")
         if kind in _TOOL_EVENT_NAMES:
@@ -134,18 +208,26 @@ def _final_message_text(result: Any) -> str:
 
 async def agent_to_openai_sse(
     agent: Any,
-    messages: List[Any],
+    agent_input: Any,
     *,
     model_name: str,
     config: Dict[str, Any],
+    interrupt_ctx: Optional[Dict[str, Any]] = None,
 ) -> AsyncIterator[bytes]:
-    """agent ``astream_events`` 真流式 → OpenAI chunk 线格式。"""
+    """agent ``astream_events`` 真流式 → OpenAI chunk 线格式。
+
+    ``agent_input``：``{"messages": [...]}`` 或 ``Command(resume=...)``；
+    ``interrupt_ctx`` 非空时，流末若图处于挂起态则追加顶层
+    ``kuaiai_interrupt`` 帧（``thread_token`` / ``expires_at`` /
+    ``actions``），供抽屉渲染确认卡（spec 193）。
+    """
     emitted = False
     first = True
     tool_events: List[str] = []
     # 工具调用前的模型正文先攒着。出现工具事件就丢掉，不写入 delta.content。
     # 结束时还留着的，是没有被工具调用跟上的那轮，按原 chunk 顺序作为回答发出。
     pending: List[str] = []
+    interrupts: List[Any] = []
 
     def drain_pending() -> List[bytes]:
         nonlocal emitted, first
@@ -165,7 +247,7 @@ async def agent_to_openai_sse(
 
     try:
         async for kind, payload in _iter_agent_texts(
-            agent, messages, config, tool_events
+            agent, agent_input, config, tool_events
         ):
             if kind == "tool":
                 pending.clear()
@@ -174,6 +256,21 @@ async def agent_to_openai_sse(
             pending.append(payload)
         for frame in drain_pending():
             yield frame
+        if interrupt_ctx is not None:
+            # spec 193：中断时图正常收场 → 读 state.interrupts 下发确认帧。
+            # 读失败不得静默：确认帧缺失而服务端 pending 可能残留（由
+            # TTL/purge 兜底收口），记 error 供运维发现；不下发降级帧——
+            # 状态未知时发空 actions 帧会让正常完成的运行误弹确认卡。
+            try:
+                state = await agent.aget_state(config)
+                interrupts = list(getattr(state, "interrupts", None) or [])
+            except Exception as exc:
+                interrupts = []
+                logger.error(
+                    "AI agent 挂起状态读取失败，确认帧未下发 model={} error_type={}",
+                    model_name,
+                    type(exc).__name__,
+                )
     except Exception as exc:
         # KR-I5：仅记录异常类型，不落 base_url/key/参数
         logger.error(
@@ -193,8 +290,10 @@ async def agent_to_openai_sse(
         # KR-D14 兼容分支：仅「首个模型调用即失败、零工具执行」时
         # 回退非流式补全，再适配同一 OpenAI chunk 线格式
         try:
-            result = await agent.ainvoke({"messages": messages}, config=config)
+            result = await agent.ainvoke(agent_input, config=config)
             text = _final_message_text(result)
+            if interrupt_ctx is not None and isinstance(result, dict):
+                interrupts = list(result.get("__interrupt__") or [])
         except Exception:
             yield _error_payload()
             yield _SSE_DONE
@@ -203,6 +302,8 @@ async def agent_to_openai_sse(
             yield _chunk_payload(
                 model_name, {"role": "assistant", "content": text}
             )
+    if interrupt_ctx is not None and interrupts:
+        yield _interrupt_payload(model_name, interrupt_ctx, interrupts)
     yield _SSE_DONE
 
 

@@ -1,9 +1,9 @@
-"""KU-AI 租户场景实例服务（spec 181）
+"""KU-AI 租户场景实例服务（spec 181 / 201）
 
 职责：
-- 六个后端出厂场景模板（稳定 key / 卡片元数据 / 场景提示词 / 最小只读 Tool）；
+- 后端出厂场景模板（稳定 key / 卡片元数据 / 场景提示词 / 只读 Tool / 业务分类）；
 - ``seed_kuaiai_agent_scenes_on_lifecycle``：install/enable/扫描同步幂等预置
-  六份停用、空授权档案 + 六条绑定实例（同事务，失败全回滚，不写 grant）；
+  停用、空授权档案 + 绑定实例（缺几补几，同事务，失败全回滚，不写 grant）；
 - 智能体库聚合视图：模板元数据 + 实例覆盖字段合并、总/单项开关、档案/使用权/
   chat 就绪计算状态与 disabled_reason、档案 ID 脱敏、路由白名单可用性；
 - 实例定制/改绑/按需克隆（本租户校验 + 白名单 + 同事务原子提交）；
@@ -25,6 +25,7 @@ from tortoise.transactions import in_transaction
 
 from apps.kuaiai.constants import (
     GRANT_MODE_ROLE,
+    SCENE_READONLY_TOOL_NAMES,
     STATUS_DISABLED,
     STATUS_ENABLED,
 )
@@ -45,9 +46,26 @@ from infra.exceptions.exceptions import (
 from infra.models.user import User
 
 
+# 场景业务分类闭集（spec 222 Z1=a）：模板按业务域分组，与 capability_tags
+#（能力族标签 KU-Ask/KU-Pulse 等）不同轴；hub 分组渲染在 spec 222 落地。
+SCENE_CATEGORIES: frozenset = frozenset(
+    {
+        "plan",
+        "production",
+        "quality",
+        "inventory",
+        "purchase",
+        "equipment",
+        "engineering",
+        "management",
+        "general",
+    }
+)
+
+
 @dataclass(frozen=True)
 class SceneTemplate:
-    """后端出厂场景模板（不可变定义；首期六键稳定，实例可扩）。"""
+    """后端出厂场景模板（不可变定义；key 稳定，实例可扩）。"""
 
     key: str
     name: str
@@ -58,9 +76,20 @@ class SceneTemplate:
     scene_route: Optional[str]
     system_prompt: str
     readonly_tools: tuple
+    category: str = "general"
+
+    def __post_init__(self) -> None:
+        if self.category not in SCENE_CATEGORIES:
+            raise ValueError(f"场景模板 {self.key} 的 category 不在闭集内")
+        unknown = set(self.readonly_tools) - SCENE_READONLY_TOOL_NAMES
+        if unknown:
+            raise ValueError(
+                f"场景模板 {self.key} 的 readonly_tools 含非只读 Tool: "
+                f"{sorted(unknown)}"
+            )
 
 
-# ============================================================ 六个出厂模板
+# ============================================================ 出厂模板
 # 只读 Tool / 业务路由 / 权限锚点逐一对照设计 §5.3 与当前业务 manifest，
 # 路由不可用即 scene_available=false，不凭文案猜测。
 
@@ -74,11 +103,19 @@ SCENE_TEMPLATES: tuple = (
         sample_prompt="查询缺料相关的物料即时库存",
         scene_route="/apps/kuaizhizao/warehouse-management/inventory",
         system_prompt=(
-            "你是库存洞察助手，只回答与本租户即时库存相关的问题。"
-            "库存事实一律来自 query_inventory_balance 工具返回的真实数据；"
-            "查不到数据就如实说明，不要编造库存数量、仓位或批次信息。"
+            "你是库存洞察助手，回答本租户即时库存、库存预警、补货建议与呆滞库存相关问题。"
+            "库存事实一律来自 query_inventory、query_inventory_alerts、"
+            "query_replenishment_suggestions、query_slow_moving_inventory "
+            "工具返回的真实数据；查不到数据就如实说明，"
+            "不要编造库存数量、仓位、批次或补货建议信息。"
         ),
-        readonly_tools=("query_inventory_balance",),
+        readonly_tools=(
+            "query_inventory",
+            "query_inventory_alerts",
+            "query_replenishment_suggestions",
+            "query_slow_moving_inventory",
+        ),
+        category="inventory",
     ),
     SceneTemplate(
         key="planner-advisor",
@@ -90,14 +127,14 @@ SCENE_TEMPLATES: tuple = (
         scene_route="/apps/kuaizhizao/production-execution/work-orders",
         system_prompt=(
             "你是计划员顾问，解读工单交期风险与排产冲突，给出可执行的处理顺序建议。"
-            "工单与延期事实一律来自 query_workorder、list_workorder_tasks、"
-            "query_delivery_risk 工具返回的真实数据；查不到就如实说明，不要编造工单或日期。"
+            "工单与延期事实一律来自 query_work_orders、"
+            "analyze_delivery_risk 工具返回的真实数据；查不到就如实说明，不要编造工单或日期。"
         ),
         readonly_tools=(
-            "query_workorder",
-            "list_workorder_tasks",
-            "query_delivery_risk",
+            "query_work_orders",
+            "analyze_delivery_risk",
         ),
+        category="plan",
     ),
     SceneTemplate(
         key="purchase-followup",
@@ -108,11 +145,16 @@ SCENE_TEMPLATES: tuple = (
         sample_prompt="汇总近期采购交期风险",
         scene_route="/apps/kuaizhizao/purchase-management/purchase-orders",
         system_prompt=(
-            "你是采购跟单助手，汇总采购订单的交期与到货风险，辅助跟单说明。"
-            "采购事实一律来自 query_purchase_followup 工具返回的真实数据；"
+            "你是采购跟单助手，汇总采购订单的交期与到货预警风险，辅助跟单说明。"
+            "采购事实一律来自 query_purchase_orders、"
+            "query_purchase_arrival_warnings 工具返回的真实数据；"
             "查不到就如实说明，不要编造订单、供应商或交期。"
         ),
-        readonly_tools=("query_purchase_followup",),
+        readonly_tools=(
+            "query_purchase_orders",
+            "query_purchase_arrival_warnings",
+        ),
+        category="purchase",
     ),
     SceneTemplate(
         key="schedule-explainer",
@@ -124,10 +166,11 @@ SCENE_TEMPLATES: tuple = (
         scene_route="/apps/kuaizhizao/plan-management/rolling-scheduling",
         system_prompt=(
             "你是排程解读助手，解释已发布滚动排程的冲突与调整依据。"
-            "排程事实一律来自 query_published_schedule 工具返回的真实数据；"
+            "排程事实一律来自 query_schedule 工具返回的真实数据；"
             "查不到已发布计划就如实说明，不要编造排程结果或产能数据。"
         ),
-        readonly_tools=("query_published_schedule",),
+        readonly_tools=("query_schedule",),
+        category="plan",
     ),
     SceneTemplate(
         key="quality-analysis",
@@ -138,11 +181,19 @@ SCENE_TEMPLATES: tuple = (
         sample_prompt="汇总近期质量异常并分析可能原因",
         scene_route="/apps/kuaizhizao/production-execution/quality-exceptions",
         system_prompt=(
-            "你是质量异常分析助手，汇总近期不合格检验记录并分析可能原因。"
-            "质量异常事实一律来自 query_quality_anomalies 工具返回的真实数据；"
-            "查不到异常就如实说明，不要编造不合格原因或检验数据。"
+            "你是质量异常分析助手，汇总近期不合格检验记录与质量异常单，"
+            "分析缺陷分布与一次合格率。"
+            "质量事实一律来自 analyze_quality、query_quality_exceptions、"
+            "analyze_first_pass_yield、analyze_defect_pareto 工具返回的真实数据；"
+            "查不到异常就如实说明，不要编造不合格原因、检验数据或缺陷分布。"
         ),
-        readonly_tools=("query_quality_anomalies",),
+        readonly_tools=(
+            "analyze_quality",
+            "query_quality_exceptions",
+            "analyze_first_pass_yield",
+            "analyze_defect_pareto",
+        ),
+        category="quality",
     ),
     SceneTemplate(
         key="supplier-collaboration",
@@ -154,10 +205,79 @@ SCENE_TEMPLATES: tuple = (
         scene_route="/apps/kuaizhizao/purchase-management/reports/supplier-delivery-summary",
         system_prompt=(
             "你是供应商协同助手，汇总指定供应商的采购订单与待协同事项，辅助跟进说明。"
-            "供应商与订单事实一律来自 query_supplier_orders 工具返回的真实数据；"
+            "供应商与订单事实一律来自 query_purchase_orders 工具返回的真实数据；"
             "查不到就如实说明，不要编造供应商或订单信息。"
         ),
-        readonly_tools=("query_supplier_orders",),
+        readonly_tools=("query_purchase_orders",),
+        category="purchase",
+    ),
+    # ==================================================== spec 201 新增（P1）
+    SceneTemplate(
+        key="shift-lead",
+        name="班组长助手",
+        description="汇总开班生产日报、缺料异常与工单进度",
+        image_key="shift-lead",
+        capability_tags=("KU-Ask", "KU-Pulse"),
+        sample_prompt="汇总昨天的生产日报与当前缺料异常",
+        scene_route="/apps/kuaizhizao/production-execution/reports/production-daily",
+        system_prompt=(
+            "你是班组长助手，面向车间班组长汇总生产日报、工单进度与缺料等生产异常。"
+            "事实一律来自 query_work_orders、analyze_kitting、"
+            "query_material_shortages、query_production_daily、"
+            "query_pulse_signals 工具返回的真实数据；"
+            "查不到就如实说明，不要编造产量、工单状态或异常信息。"
+        ),
+        readonly_tools=(
+            "query_work_orders",
+            "analyze_kitting",
+            "query_material_shortages",
+            "query_production_daily",
+            "query_pulse_signals",
+        ),
+        category="production",
+    ),
+    SceneTemplate(
+        key="order-delivery",
+        name="订单交期助手",
+        description="答复销售订单交付进度，分析延期风险与齐套情况",
+        image_key="order-delivery",
+        capability_tags=("KU-Ask", "KU-Pulse"),
+        sample_prompt="分析近期销售订单的交期风险",
+        scene_route="/apps/kuaizhizao/sales-management/sales-orders",
+        system_prompt=(
+            "你是订单交期助手，答复销售订单的交付进度与延期风险。"
+            "事实一律来自 query_sales_orders、query_work_orders、"
+            "analyze_delivery_risk、analyze_kitting 工具返回的真实数据；"
+            "查不到就如实说明，不要编造订单、工单或交期。"
+        ),
+        readonly_tools=(
+            "query_sales_orders",
+            "query_work_orders",
+            "analyze_delivery_risk",
+            "analyze_kitting",
+        ),
+        category="plan",
+    ),
+    SceneTemplate(
+        key="work-instruction",
+        name="作业指导助手",
+        description="检索 SOP 与工艺路线，回答现场作业要求",
+        image_key="work-instruction",
+        capability_tags=("KU-Know",),
+        sample_prompt="查询这张工单当前工序的作业要求",
+        scene_route="/apps/master-data/process/sop",
+        system_prompt=(
+            "你是作业指导助手，回答现场作业的 SOP 与工艺要求问题。"
+            "事实一律来自 search_knowledge、query_process_routes、"
+            "query_work_orders 工具返回的真实数据；"
+            "查不到 SOP 或工艺内容就如实说明，不要编造作业步骤或参数。"
+        ),
+        readonly_tools=(
+            "search_knowledge",
+            "query_process_routes",
+            "query_work_orders",
+        ),
+        category="production",
     ),
 )
 
@@ -185,8 +305,24 @@ SCENE_ROUTE_PERMISSIONS: Dict[str, str] = {
     "/apps/kuaizhizao/production-execution/quality-exceptions": (
         "kuaizhizao:production-execution-quality-exceptions:read"
     ),
+    "/apps/kuaizhizao/warehouse-management/inventory-alert": (
+        "kuaizhizao:warehouse-management-inventory-alert:read"
+    ),
+    "/apps/kuaizhizao/equipment-management/equipment-faults": (
+        "kuaizhizao:equipment-fault:read"
+    ),
     "/apps/kuaizhizao/purchase-management/reports/supplier-delivery-summary": (
         "kuaizhizao:purchase-management-reports-supplier-delivery-summary:read"
+    ),
+    # spec 201 新增模板场景路由（路径/权限码取自 kuaizhizao、master_data manifest）
+    "/apps/kuaizhizao/production-execution/reports/production-daily": (
+        "kuaizhizao:production-execution-reports-production-daily:read"
+    ),
+    "/apps/kuaizhizao/sales-management/sales-orders": (
+        "kuaizhizao:sales-order:read"
+    ),
+    "/apps/master-data/process/sop": (
+        "master-data:process:sop:read"
     ),
 }
 
@@ -225,8 +361,16 @@ def _audit_update(user: Optional[User]) -> Dict[str, Any]:
     return {"updated_by": user.id, "updated_by_name": name}
 
 
-async def _site_kuaiai_integration(tenant_id: int) -> Dict[str, Any]:
-    """读取站点设置 integrations.kuaiai；失败一律返回空 dict（开关回落默认）。"""
+async def _site_kuaiai_integration(
+    tenant_id: int, *, fail_closed: bool = False
+) -> Dict[str, Any]:
+    """读取站点设置 integrations.kuaiai。
+
+    默认失败返回空 dict（展示类调用方按「未配置」回落）；
+    ``fail_closed=True``（开关守卫/卡片构建等放行判定路径）读取异常
+    原样抛出，由调用方失败关闭——区分「键不存在→默认启用」与
+    「读取异常→不得放行」（评审 minor-9）。
+    """
     try:
         from core.services.system.site_setting_service import SiteSettingService
         from core.utils.integration_settings import get_kuaiai_integration
@@ -239,14 +383,28 @@ async def _site_kuaiai_integration(tenant_id: int) -> Dict[str, Any]:
             tenant_id,
             type(exc).__name__,
         )
+        if fail_closed:
+            raise
         return {}
 
 
-async def agent_switches(tenant_id: int) -> Dict[str, bool]:
-    """模板总开关：``integrations.kuaiai.agent_switches``，缺键默认 True。"""
+async def agent_switches(
+    tenant_id: int, *, fail_closed: bool = False
+) -> Dict[str, bool]:
+    """模板总开关：``integrations.kuaiai.agent_switches``，缺键默认 True。
+
+    ``fail_closed=True`` 时集成设置读取异常 → 全部模板视为停用
+    （守卫拒绝/卡片 not_ready），与「键缺失默认启用」严格区分。
+    """
     from core.utils.integration_settings import read_agent_switches
 
-    kuaiai = await _site_kuaiai_integration(tenant_id)
+    try:
+        kuaiai = await _site_kuaiai_integration(
+            tenant_id, fail_closed=fail_closed
+        )
+    except Exception:
+        # 守卫路径失败关闭：读不出开关不得按默认放行
+        return {key: False for key in _TEMPLATE_MAP}
     return read_agent_switches(kuaiai, _TEMPLATE_MAP.keys())
 
 
@@ -357,7 +515,7 @@ async def seed_kuaiai_agent_scenes_on_lifecycle(tenant_id: int) -> Dict[str, Any
 
     - 只为 instance_key=template_key 完全缺失的模板建档+建行；已存在实例
       （含手动解绑/改绑/停用/定制）与已软删痕迹一律尊重，不重建不覆盖；
-    - 六组创建在同一 Tortoise 事务内提交，任一失败全部回滚，可安全重试；
+    - 缺失组创建在同一 Tortoise 事务内提交，任一失败全部回滚，可安全重试；
     - 不写任何 grant 行、不启用档案；返回 created/complete 供调用方与
       provisioning 判定。
     """
@@ -458,10 +616,39 @@ def _route_available(
 async def _route_permissions_for_user(
     tenant_id: int, user: Optional[User]
 ) -> Dict[str, bool]:
-    out: Dict[str, bool] = {}
-    for route, code in SCENE_ROUTE_PERMISSIONS.items():
-        out[code] = await _has_permission(user, tenant_id, code)
-    return out
+    """11 个路由权限一次取回本地交集（替代逐条 has_permission 往返）。
+
+    与 ``_has_permission`` 同一判定语义：管理员标志（DB 行复核）→ 全放行；
+    其余按 ``get_user_permissions`` 多角色并集 ∩ 规范化权限码；任一环节
+    异常失败关闭（全部 False）。
+    """
+    codes = list(dict.fromkeys(SCENE_ROUTE_PERMISSIONS.values()))
+    out: Dict[str, bool] = {code: False for code in codes}
+    uid = getattr(user, "id", None)
+    if not uid or not tenant_id:
+        return out
+    try:
+        from core.services.authorization.user_permission_service import (
+            UserPermissionService,
+        )
+
+        db_user = await User.get_or_none(id=int(uid))
+        if db_user is not None and (
+            db_user.is_tenant_admin or db_user.is_infra_admin
+        ):
+            return {code: True for code in codes}
+        granted = await UserPermissionService.get_user_permissions(
+            int(uid), tenant_id
+        )
+        normalize = UserPermissionService._normalize_permission_code
+        return {code: normalize(code) in granted for code in codes}
+    except Exception as exc:
+        logger.warning(
+            "路由权限批量判定失败 tenant_id={} error_type={}",
+            tenant_id,
+            type(exc).__name__,
+        )
+        return out
 
 
 async def _build_item(
@@ -544,7 +731,7 @@ async def _build_item(
 
 
 async def list_agent_library(tenant_id: int, user: Optional[User]) -> Dict[str, Any]:
-    """智能体库聚合：六预置项 + 租户复制项 + provisioning 状态。"""
+    """智能体库聚合：预置项 + 租户复制项 + provisioning 状态。"""
     scenes = await KuaiaiAgentScene.filter(
         tenant_id=tenant_id, deleted_at__isnull=True
     ).order_by("id").all()
@@ -560,7 +747,8 @@ async def list_agent_library(tenant_id: int, user: Optional[User]) -> Dict[str, 
         ).all()
         profiles_by_id = {p.id: p for p in rows}
 
-    switches = await agent_switches(tenant_id)
+    # 卡片构建属放行判定路径：开关读取异常失败关闭（全部 not_ready）
+    switches = await agent_switches(tenant_id, fail_closed=True)
     usable = await grant_service.usable_profile_ids(tenant_id, user)
     has_agent_read = await _has_permission(user, tenant_id, "kuaiai:agent:read")
     chat_ready = await is_chat_ready(tenant_id)
@@ -787,7 +975,7 @@ async def clone_instance(
     - 源档案跨租户/不存在 → 404；不复制 grants/密钥/租户身份；
     - 源档案 default_model_id 存在时按本租户启用 chat 目录行复核后在事务内
       写入；复核失败整个克隆回滚（不静默复制/丢弃）；
-    - 新实例 key 服务端生成，不触碰六个预置实例。
+    - 新实例 key 服务端生成，不触碰预置实例。
     """
     template = _TEMPLATE_MAP.get((template_key or "").strip())
     if template is None:
@@ -879,7 +1067,8 @@ async def guard_scene_agent_key(
     if scene is None:
         raise NotFoundError("场景", key)
 
-    switches = await agent_switches(tenant_id)
+    # 守卫路径失败关闭：开关读取异常视为停用，不放行
+    switches = await agent_switches(tenant_id, fail_closed=True)
     if not switches.get(scene.template_key, True):
         raise BusinessLogicError("该场景已被总开关停用")
     if not scene.enabled:

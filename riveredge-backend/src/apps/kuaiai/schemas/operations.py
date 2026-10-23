@@ -33,6 +33,9 @@ class HubCapabilityOut(BaseModel):
     description: Optional[str] = None
     route: Optional[str] = None
     disabled_reason: Optional[str] = None
+    # spec 191：场景卡下发绑定解析结果；ask 卡两项为 null
+    scene_key: Optional[str] = None
+    agent_profile_id: Optional[int] = None
 
 
 class HubOut(BaseModel):
@@ -173,14 +176,69 @@ class SettingsCapabilitiesOut(BaseModel):
     custom_system_prompt: str = ""
 
 
+class CapabilityBindingItemOut(BaseModel):
+    """能力绑定逐模板视图（spec 191）：override_* 为管理员覆盖，resolved 为解析结果。"""
+
+    capability_key: str
+    name: str
+    override_present: bool = False
+    override_instance_key: Optional[str] = None
+    resolved_instance_key: Optional[str] = None
+
+
+class SceneInstanceOptionOut(BaseModel):
+    """能力绑定可选项：本租户未删除的场景实例（预置 + 复制）。"""
+
+    key: str
+    name: str
+    template_key: str
+
+
+class AgentTemplateOptionOut(BaseModel):
+    """出厂场景模板开关项（spec 201）：设置页模板开关由后端驱动，按模板顺序。"""
+
+    key: str
+    name: str
+
+
+class SettingsSopSyncOut(BaseModel):
+    """SOP 同步读视图（spec 200 S1-a）：enabled 缺省 False。"""
+
+    enabled: bool = False
+    knowledge_id: Optional[int] = None
+
+
+class SopSyncKnowledgeOptionOut(BaseModel):
+    """SOP 同步目标知识库可选项：本租户未删除启用库。"""
+
+    id: int
+    name: str
+
+
 class SettingsOut(BaseModel):
     chat_connection_uuid: Optional[str] = None
     vision_connection_uuid: Optional[str] = None
     chat_options: List[SettingsOptionOut] = Field(default_factory=list)
     vision_options: List[SettingsOptionOut] = Field(default_factory=list)
     ocr: SettingsOcrOut
+    # spec 201：模板开关列表由后端驱动（前端不再硬编码模板 key）
+    agent_templates: List[AgentTemplateOptionOut] = Field(
+        default_factory=list
+    )
     agent_switches: Dict[str, bool] = Field(default_factory=dict)
     capabilities: SettingsCapabilitiesOut
+    capability_bindings: List[CapabilityBindingItemOut] = Field(
+        default_factory=list
+    )
+    scene_instance_options: List[SceneInstanceOptionOut] = Field(
+        default_factory=list
+    )
+    sop_sync: SettingsSopSyncOut = Field(
+        default_factory=SettingsSopSyncOut
+    )
+    sop_sync_knowledge_options: List[SopSyncKnowledgeOptionOut] = Field(
+        default_factory=list
+    )
     version: str
 
 
@@ -198,6 +256,15 @@ class SettingsCapabilitiesIn(BaseModel):
     custom_system_prompt: str
 
 
+class SettingsSopSyncIn(BaseModel):
+    """SOP 同步配置整体替换（spec 200 S1-a）；enabled 时 knowledge_id 必填。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: StrictBool
+    knowledge_id: Optional[int] = Field(default=None, ge=1)
+
+
 class SettingsUpdateIn(BaseModel):
     """PUT /operations/settings 请求体；version 为 GET 下发的不透明字符串。"""
 
@@ -208,3 +275,8 @@ class SettingsUpdateIn(BaseModel):
     vision_connection_uuid: Optional[str] = Field(default=None, max_length=64)
     agent_switches: Dict[str, StrictBool]
     capabilities: SettingsCapabilitiesIn
+    # spec 191：能力绑定覆盖 map（key ⊆ 模板 key，值=实例 key 或 null=解绑）；
+    # 缺省/null 视为不修改；整 map 替换语义（未出现的 key 回落默认绑定）。
+    capability_bindings: Optional[Dict[str, Optional[str]]] = None
+    # spec 200（S1-a）：SOP → 知识库同步配置；缺省/null 视为不修改
+    sop_sync: Optional["SettingsSopSyncIn"] = None

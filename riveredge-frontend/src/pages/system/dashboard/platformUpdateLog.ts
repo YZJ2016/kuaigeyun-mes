@@ -44,6 +44,14 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'kuaiai-p1-scene-templates-r01',
+    date: '2026-10-23',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiai-p1-scene-templates-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiai-p1-scene-templates-r01.description',
+  },
+  {
     id: 'kuaioa-attendance-line-roster-r01',
     date: '2026-10-21',
     type: 'fix',

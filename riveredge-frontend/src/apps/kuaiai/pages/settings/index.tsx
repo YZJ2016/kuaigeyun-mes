@@ -2,11 +2,11 @@
  * KU-Settings 模型与能力设置聚合页（/apps/kuaiai/settings，spec 185 T5；设计 §10）。
  *
  * - 数据：GET /apps/kuaiai/operations/settings（chat/vision 候选、OCR 脱敏、
- *   六模板总开关、能力项、不透明 version）；保存 PUT 携带 version，
- *   409 → 明确冲突提示，不覆盖他人更新；
+ *   agent_templates 模板总开关、能力项、不透明 version）；保存 PUT 携带
+ *   version，409 → 明确冲突提示，不覆盖他人更新；
  * - 四区块：对话模型（必填连接 Select + 打开应用连接器）、OCR 视觉识别
  *   （vision Select + Base URL/OCR 模型/API Key 三列只读脱敏，不产生第二份
- *   Key）、智能体开关（3×2 六模板总开关）、KU-AI 能力配置（三项开关 +
+ *   Key）、智能体开关（后端 agent_templates 驱动的模板总开关）、KU-AI 能力配置（三项开关 +
  *   RAG 条数 1..20 + 引擎固定原生 + 企业系统说明）；
  * - 页头右对齐：重置（恢复最近服务端快照，不写库）/ 保存（primary，
  *   pending 禁用）/ 刷新（dirty 时二次确认后重新加载）；
@@ -45,30 +45,16 @@ import type {
 } from '../../types/operations';
 import '../../ops.less';
 
-/** 服务端六出厂模板 key（agent_scene_service.SCENE_TEMPLATES，顺序稳定） */
-const AGENT_TEMPLATE_KEYS = [
-  'inventory-insight',
-  'planner-advisor',
-  'purchase-followup',
-  'schedule-explainer',
-  'quality-analysis',
-  'supplier-collaboration',
-] as const;
-
-/** 模板名中文兜底（后端 SCENE_TEMPLATES.name） */
-const AGENT_NAME_FALLBACK: Record<string, string> = {
-  'inventory-insight': '库存洞察助手',
-  'planner-advisor': '计划员顾问',
-  'purchase-followup': '采购跟单助手',
-  'schedule-explainer': '排程解读助手',
-  'quality-analysis': '质量异常分析',
-  'supplier-collaboration': '供应商协同 Agent',
-};
+/** 能力绑定表单项哨兵值（不得与实例 key 冲突；提交时转 null/省略） */
+const BINDING_PRESET = '__preset__';
+const BINDING_UNBOUND = '__unbound__';
 
 interface SettingsFormValues {
   chat_connection_uuid?: string;
   vision_connection_uuid?: string | null;
   agent_switches?: Record<string, boolean>;
+  capability_bindings?: Record<string, string>;
+  sop_sync?: { enabled?: boolean; knowledge_id?: number | null };
   capabilities?: {
     tools_enabled?: boolean;
     rag_enabled?: boolean;
@@ -89,13 +75,24 @@ function optionLabel(option: SettingsOptionOut): string {
 
 function toFormValues(data: SettingsOut): SettingsFormValues {
   const switches: Record<string, boolean> = {};
-  for (const key of AGENT_TEMPLATE_KEYS) {
-    switches[key] = data.agent_switches?.[key] !== false;
+  for (const tpl of data.agent_templates ?? []) {
+    switches[tpl.key] = data.agent_switches?.[tpl.key] !== false;
+  }
+  const bindings: Record<string, string> = {};
+  for (const row of data.capability_bindings ?? []) {
+    bindings[row.capability_key] = !row.override_present
+      ? BINDING_PRESET
+      : (row.override_instance_key ?? BINDING_UNBOUND);
   }
   return {
     chat_connection_uuid: data.chat_connection_uuid ?? undefined,
     vision_connection_uuid: data.vision_connection_uuid ?? null,
     agent_switches: switches,
+    capability_bindings: bindings,
+    sop_sync: {
+      enabled: data.sop_sync?.enabled === true,
+      knowledge_id: data.sop_sync?.knowledge_id ?? null,
+    },
     capabilities: { ...data.capabilities },
   };
 }
@@ -187,6 +184,43 @@ const SettingsPage: React.FC = () => {
     return items;
   }, [data?.vision_options, data?.vision_connection_uuid, t]);
 
+  /** 能力绑定（spec 191）：每模板一行，默认「随预置实例」，可改绑实例或解绑 */
+  const bindingRows = useMemo(() => {
+    const instances = data?.scene_instance_options ?? [];
+    return (data?.capability_bindings ?? []).map((row) => {
+      const options = [
+        {
+          value: BINDING_PRESET,
+          label: t('app.kuaiai.settings.bindingPreset', {
+            defaultValue: '随预置实例',
+          }),
+        },
+        {
+          value: BINDING_UNBOUND,
+          label: t('app.kuaiai.settings.bindingUnbound', {
+            defaultValue: '解绑（能力卡不可用）',
+          }),
+        },
+        ...instances.map((o) => ({
+          value: o.key,
+          label: `${o.name}（${o.key}）`,
+        })),
+      ];
+      // 覆盖值已失效（实例删除/跨租户）：保留占位项便于识别与重新选择
+      if (
+        row.override_present &&
+        row.override_instance_key &&
+        !options.some((o) => o.value === row.override_instance_key)
+      ) {
+        options.push({
+          value: row.override_instance_key,
+          label: `${row.override_instance_key}（${t('app.kuaiai.settings.optionUnavailable', { defaultValue: '不可用' })}）`,
+        });
+      }
+      return { ...row, options };
+    });
+  }, [data?.capability_bindings, data?.scene_instance_options, t]);
+
   /** OCR 三列只读展示：选中项 = 已保存选用时显示后端脱敏信息，换选后显示该候选模型 */
   const ocrDisplay = useMemo(() => {
     const selected = data?.vision_options.find((o) => o.uuid === visionUuid);
@@ -251,16 +285,28 @@ const SettingsPage: React.FC = () => {
       return; // 校验失败由 Form 标注，不弹 toast
     }
     const caps = values.capabilities ?? {};
+    const bindings: Record<string, string | null> = {};
+    for (const row of data?.capability_bindings ?? []) {
+      const selected = values.capability_bindings?.[row.capability_key];
+      if (!selected || selected === BINDING_PRESET) continue; // 随预置实例：不存覆盖
+      bindings[row.capability_key] =
+        selected === BINDING_UNBOUND ? null : selected;
+    }
     const payload: SettingsUpdatePayload = {
       version: versionRef.current,
       chat_connection_uuid: values.chat_connection_uuid as string,
       vision_connection_uuid: values.vision_connection_uuid || null,
       agent_switches: Object.fromEntries(
-        AGENT_TEMPLATE_KEYS.map((key) => [
-          key,
-          values.agent_switches?.[key] !== false,
+        (data?.agent_templates ?? []).map((tpl) => [
+          tpl.key,
+          values.agent_switches?.[tpl.key] !== false,
         ]),
       ),
+      capability_bindings: bindings,
+      sop_sync: {
+        enabled: values.sop_sync?.enabled === true,
+        knowledge_id: values.sop_sync?.knowledge_id ?? null,
+      },
       capabilities: {
         tools_enabled: caps.tools_enabled !== false,
         rag_enabled: caps.rag_enabled !== false,
@@ -295,7 +341,7 @@ const SettingsPage: React.FC = () => {
     } finally {
       setSaving(false);
     }
-  }, [applySnapshot, form, message, t]);
+  }, [applySnapshot, data?.capability_bindings, data?.agent_templates, form, message, t]);
 
   const header = (
     <OperationalPageHeader
@@ -515,7 +561,11 @@ const SettingsPage: React.FC = () => {
             </Form.Item>
             <div className="kuaiai-ops-settings-ocr-grid">
               <div className="kuaiai-ops-settings-field">
-                <div className="kuaiai-ops-settings-label">Base URL</div>
+                <div className="kuaiai-ops-settings-label">
+                  {t('app.kuaiai.settings.ocrBaseUrl', {
+                    defaultValue: 'OCR 服务地址',
+                  })}
+                </div>
                 <Input
                   value={ocrDisplay.baseUrl}
                   readOnly
@@ -541,7 +591,11 @@ const SettingsPage: React.FC = () => {
                 />
               </div>
               <div className="kuaiai-ops-settings-field">
-                <div className="kuaiai-ops-settings-label">API Key</div>
+                <div className="kuaiai-ops-settings-label">
+                  {t('app.kuaiai.settings.ocrApiKey', {
+                    defaultValue: 'OCR API 密钥',
+                  })}
+                </div>
                 <Input
                   value=""
                   readOnly
@@ -557,7 +611,7 @@ const SettingsPage: React.FC = () => {
             </div>
           </div>
 
-          {/* 3. 智能体开关：3×2 六模板总开关 */}
+          {/* 3. 智能体开关：模板总开关（后端 agent_templates 驱动） */}
           <div className="kuaiai-ops-settings-block">
             <div className="kuaiai-ops-settings-block-title">
               {t('app.kuaiai.settings.agentsTitle', {
@@ -571,22 +625,22 @@ const SettingsPage: React.FC = () => {
               })}
             </div>
             <div className="kuaiai-ops-settings-switches">
-              {AGENT_TEMPLATE_KEYS.map((key) => (
-                <div className="kuaiai-ops-settings-switch-item" key={key}>
+              {(data?.agent_templates ?? []).map((tpl) => (
+                <div className="kuaiai-ops-settings-switch-item" key={tpl.key}>
                   <Form.Item
-                    name={['agent_switches', key]}
+                    name={['agent_switches', tpl.key]}
                     valuePropName="checked"
                     noStyle
                   >
                     <Switch
-                      aria-label={t(`app.kuaiai.settings.agent.${key}`, {
-                        defaultValue: AGENT_NAME_FALLBACK[key],
+                      aria-label={t(`app.kuaiai.settings.agent.${tpl.key}`, {
+                        defaultValue: tpl.name,
                       })}
                     />
                   </Form.Item>
                   <span className="kuaiai-ops-settings-switch-name">
-                    {t(`app.kuaiai.settings.agent.${key}`, {
-                      defaultValue: AGENT_NAME_FALLBACK[key],
+                    {t(`app.kuaiai.settings.agent.${tpl.key}`, {
+                      defaultValue: tpl.name,
                     })}
                   </span>
                 </div>
@@ -594,7 +648,123 @@ const SettingsPage: React.FC = () => {
             </div>
           </div>
 
-          {/* 4. KU-AI 能力配置 */}
+          {/* 4. 能力绑定：逐模板选择绑定实例（spec 191） */}
+          <div className="kuaiai-ops-settings-block">
+            <div className="kuaiai-ops-settings-block-title">
+              {t('app.kuaiai.settings.bindingsTitle', {
+                defaultValue: '能力绑定',
+              })}
+            </div>
+            <div className="kuaiai-ops-settings-block-desc">
+              {t('app.kuaiai.settings.bindingsHint', {
+                defaultValue:
+                  '能力矩阵中每个场景卡默认绑定同名预置场景实例；可改绑其他实例，或解绑（解绑后该能力卡不可用）。',
+              })}
+            </div>
+            <div className="kuaiai-ops-settings-switches">
+              {bindingRows.map((row) => (
+                <div className="kuaiai-ops-settings-switch-item" key={row.capability_key}>
+                  <Form.Item
+                    name={['capability_bindings', row.capability_key]}
+                    noStyle
+                  >
+                    <Select
+                      style={{ minWidth: 320 }}
+                      options={row.options}
+                      showSearch
+                      optionFilterProp="label"
+                      aria-label={t(`app.kuaiai.settings.agent.${row.capability_key}`, {
+                        defaultValue: row.name,
+                      })}
+                    />
+                  </Form.Item>
+                  <span className="kuaiai-ops-settings-switch-name">
+                    {t(`app.kuaiai.settings.agent.${row.capability_key}`, {
+                      defaultValue: row.name,
+                    })}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 5. SOP 同步：发布后电子正文自动入库到目标知识库（spec 200） */}
+          <div className="kuaiai-ops-settings-block">
+            <div className="kuaiai-ops-settings-block-title">
+              {t('app.kuaiai.settings.sopSyncTitle', {
+                defaultValue: 'SOP 同步',
+              })}
+            </div>
+            <div className="kuaiai-ops-settings-block-desc">
+              {t('app.kuaiai.settings.sopSyncHint', {
+                defaultValue:
+                  '启用后，SOP 发布生效时其电子正文将自动同步到所选知识库供 AI 引用；作废后自动下架。仅同步正文，不含附件。',
+              })}
+            </div>
+            <div className="kuaiai-ops-settings-switches">
+              <div className="kuaiai-ops-settings-switch-item">
+                <Form.Item
+                  name={['sop_sync', 'enabled']}
+                  valuePropName="checked"
+                  noStyle
+                >
+                  <Switch
+                    aria-label={t('app.kuaiai.settings.sopSyncEnabled', {
+                      defaultValue: '启用 SOP 同步',
+                    })}
+                  />
+                </Form.Item>
+                <span className="kuaiai-ops-settings-switch-name">
+                  {t('app.kuaiai.settings.sopSyncEnabled', {
+                    defaultValue: '启用 SOP 同步',
+                  })}
+                </span>
+              </div>
+            </div>
+            <Form.Item
+              name={['sop_sync', 'knowledge_id']}
+              label={t('app.kuaiai.settings.sopSyncKnowledge', {
+                defaultValue: '目标知识库',
+              })}
+              dependencies={[['sop_sync', 'enabled']]}
+              rules={[
+                ({ getFieldValue }) => ({
+                  validator: (_, value) =>
+                    getFieldValue(['sop_sync', 'enabled']) === true &&
+                    (value === null || value === undefined)
+                      ? Promise.reject(
+                          new Error(
+                            t('app.kuaiai.settings.sopSyncKnowledgeRequired', {
+                              defaultValue: '启用 SOP 同步须选择目标知识库',
+                            }),
+                          ),
+                        )
+                      : Promise.resolve(),
+                }),
+              ]}
+              style={{ marginBottom: 0, marginTop: 12, maxWidth: 420 }}
+            >
+              <Select
+                allowClear
+                options={(data?.sop_sync_knowledge_options ?? []).map((o) => ({
+                  value: o.id,
+                  label: o.name,
+                }))}
+                placeholder={t(
+                  'app.kuaiai.settings.sopSyncKnowledgePlaceholder',
+                  { defaultValue: '选择目标知识库' },
+                )}
+                notFoundContent={t(
+                  'app.kuaiai.settings.sopSyncKnowledgeEmpty',
+                  { defaultValue: '暂无启用的知识库，请先到知识库页面新建' },
+                )}
+                showSearch
+                optionFilterProp="label"
+              />
+            </Form.Item>
+          </div>
+
+          {/* 6. KU-AI 能力配置 */}
           <div className="kuaiai-ops-settings-block">
             <div className="kuaiai-ops-settings-block-title">
               {t('app.kuaiai.settings.capabilitiesTitle', {

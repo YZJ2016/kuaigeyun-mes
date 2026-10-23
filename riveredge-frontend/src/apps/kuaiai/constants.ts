@@ -2,17 +2,6 @@
  * KU-AI 前端共享常量（与后端 apps/kuaiai/constants.py 同口径）。
  */
 
-/** 受控写 Tool 闭集五值（KR-D10）：与后端 ENABLED_TOOL_NAMES 一致 */
-export const KUAI_AI_TOOL_NAMES = [
-  'search_knowledge',
-  'query_workorder',
-  'list_workorder_tasks',
-  'submit_production_feedback',
-  'update_workorder_status',
-] as const;
-
-export type KuaiAiToolName = (typeof KUAI_AI_TOOL_NAMES)[number];
-
 /** 模型目录 model_type 闭集（KR-D5） */
 export const KUAI_AI_MODEL_TYPES = ['chat', 'embed', 'vision', 'rerank'] as const;
 
@@ -25,6 +14,7 @@ export const KUAI_AI_OPTION_KEYS = {
   embedModels: ['kuaiai', 'options', 'embed-models'],
   knowledgeBases: ['kuaiai', 'options', 'knowledge-bases'],
   mcpServers: ['kuaiai', 'options', 'mcp-servers'],
+  tools: ['kuaiai', 'options', 'tools'],
 } as const;
 
 /** options 失效前缀：管理页新增/编辑/删除后 invalidateQueries({queryKey: KUAI_AI_OPTIONS_PREFIX}) */

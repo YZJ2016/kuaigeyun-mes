@@ -11,6 +11,9 @@ import purchaseFollowup from './purchase-followup.svg';
 import scheduleExplainer from './schedule-explainer.svg';
 import qualityAnalysis from './quality-analysis.svg';
 import supplierCollaboration from './supplier-collaboration.svg';
+import shiftLead from './shift-lead.svg';
+import orderDelivery from './order-delivery.svg';
+import workInstruction from './work-instruction.svg';
 import defaultScene from './_default.svg';
 import brandVisual from './brand-visual.svg';
 
@@ -22,6 +25,9 @@ export const SCENE_IMAGE_URLS: Record<string, string> = {
   'schedule-explainer': scheduleExplainer,
   'quality-analysis': qualityAnalysis,
   'supplier-collaboration': supplierCollaboration,
+  'shift-lead': shiftLead,
+  'order-delivery': orderDelivery,
+  'work-instruction': workInstruction,
 };
 
 /** 管理表单可选插画 key（与服务端白名单同序） */

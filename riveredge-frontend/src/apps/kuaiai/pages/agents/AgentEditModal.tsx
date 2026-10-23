@@ -1,14 +1,15 @@
 /**
- * KU-AI Agent 档案新建/编辑弹窗（spec 138）。
+ * KU-AI Agent 档案新建/编辑弹窗（spec 138；spec 189 Tool 目录改读接口）。
  *
  * - 提交只发 schema 字段（AgentProfileCreate/Update），不带 tenantId。
- * - enabled_tools 为五值闭集 Checkbox.Group，默认全不勾。
+ * - enabled_tools 勾选项来自 GET /apps/kuaiai/tools（label 后端下发），
+ *   目录加载失败显示错误与重试、禁用保存按钮（避免 enabled_tools 原值静默回写）。
  * - grant_mode 可在编辑时切换；后端同事务清空对侧授权名单。
  * - 新建时默认「停用」：启用档案空授权名单会被后端 400，先停用建档再配名单。
  */
 
 import React, { useEffect, useState } from 'react';
-import { App, Checkbox, Form, Input, Modal, Radio, Select } from 'antd';
+import { Alert, App, Button, Checkbox, Form, Input, Modal, Radio, Select } from 'antd';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
@@ -18,28 +19,10 @@ import {
 } from '../../services/agents';
 import { listKnowledgeBaseOptions } from '../../services/knowledge';
 import { listMcpServerOptions } from '../../services/mcp';
-import {
-  KUAI_AI_OPTION_KEYS,
-  KUAI_AI_TOOL_NAMES,
-  type KuaiAiToolName,
-} from '../../constants';
+import { listToolCatalog } from '../../services/tools';
+import { KUAI_AI_OPTION_KEYS } from '../../constants';
 import { hasPermission } from '../../../../utils/permission';
 import { useCurrentUser } from '../../../../hooks/useCurrentUser';
-
-/** 展示文案：名称闭集单一来源 KUAI_AI_TOOL_NAMES，此处只映射 label（默认不勾） */
-const TOOL_LABELS: Record<KuaiAiToolName, { labelKey: string; fallback: string }> = {
-  search_knowledge: { labelKey: 'toolSearchKnowledge', fallback: '检索知识库' },
-  query_workorder: { labelKey: 'toolQueryWorkorder', fallback: '查询工单' },
-  list_workorder_tasks: { labelKey: 'toolListWorkorderTasks', fallback: '工序任务' },
-  submit_production_feedback: {
-    labelKey: 'toolSubmitProductionFeedback',
-    fallback: '提交报工',
-  },
-  update_workorder_status: {
-    labelKey: 'toolUpdateWorkorderStatus',
-    fallback: '更新工单状态',
-  },
-};
 
 interface AgentEditModalProps {
   open: boolean;
@@ -66,6 +49,16 @@ export function AgentEditModal({ open, agent, onCancel, onSaved }: AgentEditModa
     queryKey: KUAI_AI_OPTION_KEYS.mcpServers,
     queryFn: listMcpServerOptions,
     enabled: open && hasPermission(currentUser, 'kuaiai:mcp:read'),
+    staleTime: 60_000,
+  });
+  const {
+    data: toolCatalog,
+    isError: toolCatalogError,
+    refetch: refetchToolCatalog,
+  } = useQuery({
+    queryKey: KUAI_AI_OPTION_KEYS.tools,
+    queryFn: listToolCatalog,
+    enabled: open && hasPermission(currentUser, 'kuaiai:agent:read'),
     staleTime: 60_000,
   });
 
@@ -130,6 +123,7 @@ export function AgentEditModal({ open, agent, onCancel, onSaved }: AgentEditModa
       }
       width={640}
       confirmLoading={submitting}
+      okButtonProps={{ disabled: toolCatalogError }}
       onCancel={onCancel}
       onOk={() => void handleOk()}
       destroyOnHidden
@@ -191,17 +185,27 @@ export function AgentEditModal({ open, agent, onCancel, onSaved }: AgentEditModa
           name="enabled_tools"
           label={t('app.kuaiai.agents.fieldEnabledTools', { defaultValue: '启用工具' })}
         >
-          <Checkbox.Group
-            options={KUAI_AI_TOOL_NAMES.map((name) => {
-              const meta = TOOL_LABELS[name];
-              return {
-                value: name,
-                label: t(`app.kuaiai.agents.${meta.labelKey}`, {
-                  defaultValue: meta.fallback,
-                }),
-              };
-            })}
-          />
+          {toolCatalogError ? (
+            <Alert
+              type="error"
+              showIcon
+              message={t('app.kuaiai.agents.toolsLoadFailed', {
+                defaultValue: '工具目录加载失败，重试成功前不可保存',
+              })}
+              action={
+                <Button size="small" onClick={() => void refetchToolCatalog()}>
+                  {t('common.retry', { defaultValue: '重试' })}
+                </Button>
+              }
+            />
+          ) : (
+            <Checkbox.Group
+              options={(toolCatalog ?? []).map((tool) => ({
+                value: tool.name,
+                label: tool.label || tool.name,
+              }))}
+            />
+          )}
         </Form.Item>
         <Form.Item
           name="mcp_server_ids"

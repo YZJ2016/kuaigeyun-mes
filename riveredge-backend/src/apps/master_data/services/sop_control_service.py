@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
+from loguru import logger
+
 from apps.common.audit_actor import apply_update_audit
 from apps.master_data.models.process import SOP, SopControlledCopy, SopRevision
 from apps.master_data.schemas.process_schemas import (
@@ -29,6 +31,26 @@ SOP_CARRIERS = {"electronic", "paper", "hybrid"}
 SOP_CONTROL_STATUSES = {"draft", "in_review", "effective", "obsolete"}
 COPY_STATUSES = {"issued", "pending_retrieve", "retrieved", "lost"}
 COPY_LOCATION_TYPES = {"plant", "workshop", "station", "person"}
+
+
+async def _enqueue_sop_knowledge_sync(tenant_id: int, sop_id: int) -> None:
+    """spec 200（SC-D11）：publish/obsolete 成功后投递 SOP→知识库同步任务。
+
+    模块存在性探测——KU-AI 未组装则 import 失败直接返回；投递本身由
+    kuaiai 侧 ``enqueue_sop_sync`` 兜底告警，文控结果不受影响。
+    """
+    try:
+        from apps.kuaiai.services.sop_sync_service import enqueue_sop_sync
+    except ImportError:
+        return
+    try:
+        await enqueue_sop_sync(tenant_id, int(sop_id))
+    except Exception as exc:
+        logger.warning(
+            "SOP 知识同步投递异常 sop_id={} error_type={}",
+            sop_id,
+            type(exc).__name__,
+        )
 
 
 def _normalize_attachments(raw: Any) -> List[Dict[str, Any]]:
@@ -376,6 +398,7 @@ class SopControlService:
         sop.obsolete_at = None
         apply_update_audit(sop, current_user)
         await sop.save()
+        await _enqueue_sop_knowledge_sync(tenant_id, sop.id)
         return await enrich_sop_response(sop)
 
     @staticmethod
@@ -404,6 +427,7 @@ class SopControlService:
         sop.obsolete_at = now
         apply_update_audit(sop, current_user)
         await sop.save()
+        await _enqueue_sop_knowledge_sync(tenant_id, sop.id)
         return await enrich_sop_response(sop)
 
     @staticmethod
