@@ -34952,10 +34952,6 @@ export default {
     '导入预检改为读取在线表格',
   'pages.dashboard.updateLog.entries.uni-import-live-sheet-precheck-r01.description':
     '确认导入与预检改为读取 Univer 当前格子（含手工修改与下拉选择），不再只校验上传时的 Excel 缓存矩阵。',
-  'pages.dashboard.updateLog.entries.kuaioa-employee-batch-import-r01.title':
-    '人事档案支持批量导入',
-  'pages.dashboard.updateLog.entries.kuaioa-employee-batch-import-r01.description':
-    '轻办公人事档案列表开放 UniImport 批量导入：下载模板填写后可一次新建多条员工档案，员工编号仍由系统自动生成；角色需具备「导入」权限（同步权限后生效）。',
   'pages.dashboard.updateLog.entries.delivery-project-sales-order-item-filter-r01.title':
     '交付项目工作台销售订单明细过滤修复',
   'pages.dashboard.updateLog.entries.delivery-project-sales-order-item-filter-r01.description':
