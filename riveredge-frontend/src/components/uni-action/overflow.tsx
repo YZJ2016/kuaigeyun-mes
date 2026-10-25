@@ -20,6 +20,7 @@ import {
   resolveButtonToneFromNode,
   readExplicitActionKind,
   readActionVisualProfile,
+  ROW_ACTION_KIND_ATTR,
 } from './actionText'
 import { rowActionSortRank } from './actionCatalog'
 import { normalizeActionTree } from './normalize'
@@ -430,9 +431,16 @@ export function renderRowActionsOverflow(
    *
    * 自管 Dropdown 不占主行动作槽位（它本身就是溢出容器）；其余钉住项仍从槽位扣除。
    */
-  const isPinnedInlineAction = (node: React.ReactNode): boolean =>
-    isSelfManagedMenuDropdown(node) ||
-    (readExplicitActionKind(node) === 'skip' && !findInteractiveElement(node))
+  const isPinnedInlineAction = (node: React.ReactNode): boolean => {
+    if (isSelfManagedMenuDropdown(node)) return true
+    // 页面显式 skip 包裹的自管工作流（UniWorkflowActions）：即使子节点带 submit/approve，
+    // 仍钉在主行末尾，避免挤掉删除等更高优先级动作。
+    if (React.isValidElement(node)) {
+      const onSelf = (node.props as Record<string, unknown>)?.[ROW_ACTION_KIND_ATTR]
+      if (onSelf === 'skip') return true
+    }
+    return readExplicitActionKind(node) === 'skip' && !findInteractiveElement(node)
+  }
 
   const pinnedSlotConsumers = enabled.filter(
     (node) => isPinnedInlineAction(node) && !isSelfManagedMenuDropdown(node),

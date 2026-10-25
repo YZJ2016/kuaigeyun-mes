@@ -341,3 +341,9 @@ export function getMaintenanceReminderLifecycle(
     },
   );
 }
+
+/** 工装/模具维保与维修完修门禁（与 tool_ops_service.complete 一致） */
+export function isToolOpsCompletableStatus(status: string | null | undefined): boolean {
+  const s = String(status ?? '').trim();
+  return s === '进行中' || s === '已审核';
+}

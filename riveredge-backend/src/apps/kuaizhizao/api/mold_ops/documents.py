@@ -35,6 +35,7 @@ from apps.kuaizhizao.schemas.mold_ops import (
     MoldMaintenanceLineResponse,
     MoldMaintenancePreviewResponse,
     MoldMaintenanceReject,
+    MoldMaintenanceComplete,
     MoldRepairCreate,
     MoldRepairUpdate,
     MoldRepairResponse,
@@ -42,6 +43,7 @@ from apps.kuaizhizao.schemas.mold_ops import (
     MoldRepairLineResponse,
     MoldRepairPreviewResponse,
     MoldRepairReject,
+    MoldRepairComplete,
     MoldScrapApplicationCreate,
     MoldScrapApplicationUpdate,
     MoldScrapApplicationResponse,
@@ -720,10 +722,15 @@ async def reject_mold_maintenance(
     response_model=MoldMaintenanceResponse,
     dependencies=[Depends(require_permission_codes("kuaizhizao:mold-maintenance:complete"))],
 )
-async def complete_mold_maintenance(row_id: int, tenant_id: int = Depends(get_current_tenant)):
+async def complete_mold_maintenance(
+    row_id: int,
+    body: MoldMaintenanceComplete,
+    tenant_id: int = Depends(get_current_tenant),
+):
     try:
-        row = await svc.maintenance_service.complete(tenant_id, row_id)
-        return MoldMaintenanceResponse.model_validate(row)
+        row = await svc.maintenance_service.complete(tenant_id, row_id, body)
+        lines = await svc.maintenance_service._load_lines(tenant_id, row.id)
+        return _maintenance_response(row, lines)
     except (ValidationError, NotFoundError) as e:
         raise _http_from_exc(e)
 
@@ -927,10 +934,15 @@ async def reject_mold_repair(
     response_model=MoldRepairResponse,
     dependencies=[Depends(require_permission_codes("kuaizhizao:mold-repair:complete"))],
 )
-async def complete_mold_repair(row_id: int, tenant_id: int = Depends(get_current_tenant)):
+async def complete_mold_repair(
+    row_id: int,
+    body: MoldRepairComplete,
+    tenant_id: int = Depends(get_current_tenant),
+):
     try:
-        row = await svc.repair_service.complete(tenant_id, row_id)
-        return MoldRepairResponse.model_validate(row)
+        row = await svc.repair_service.complete(tenant_id, row_id, body)
+        lines = await svc.repair_service._load_lines(tenant_id, row.id)
+        return _repair_response(row, lines)
     except (ValidationError, NotFoundError) as e:
         raise _http_from_exc(e)
 

@@ -1,5 +1,14 @@
 import React from 'react'
 import { Button, Popconfirm, Tooltip } from 'antd'
+import { ActionConfirmPopconfirm } from '../action-confirm'
+
+function isActionConfirmPopconfirmType(type: unknown): boolean {
+  if (type === ActionConfirmPopconfirm) return true
+  if (typeof type === 'function' && (type as { displayName?: string }).displayName === 'ActionConfirmPopconfirm') {
+    return true
+  }
+  return false
+}
 import {
   HistoryOutlined,
   EyeOutlined,
@@ -399,7 +408,7 @@ export function normalizeActionTree(node: React.ReactNode, ctx: NormalizeActionC
 
   if (node.props?.children) {
     const inheritedExplicit =
-      elementType === Popconfirm || elementType === Tooltip
+      elementType === Popconfirm || elementType === Tooltip || isActionConfirmPopconfirmType(elementType)
         ? readExplicitActionKind(node) ?? ctx.inheritedExplicitKind ?? null
         : ctx.inheritedExplicitKind ?? null
     const childCtx: NormalizeActionContext = {

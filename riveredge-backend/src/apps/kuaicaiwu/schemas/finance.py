@@ -10,8 +10,9 @@ Date: 2025-12-30
 from datetime import datetime, date
 from decimal import Decimal
 from typing import Optional, List, Dict, Any
-from pydantic import Field
+from pydantic import Field, model_validator
 from core.schemas.base import BaseSchema
+from apps.kuaicaiwu.constants.finance_source_types import PAYABLE_SOURCE_PURCHASE_RETURN
 
 
 # === 应付单 ===
@@ -24,7 +25,7 @@ class PayableBase(BaseSchema):
     source_code: str = Field(..., max_length=50, description="来源单据编码")
     supplier_id: int = Field(..., description="供应商ID")
     supplier_name: str = Field(..., max_length=200, description="供应商名称")
-    total_amount: Decimal = Field(..., gt=0, description="应付总金额")
+    total_amount: Decimal = Field(..., description="应付总金额（采购退货红字为负）")
     paid_amount: Decimal = Field(Decimal("0"), ge=0, description="已付金额")
     remaining_amount: Decimal = Field(..., ge=0, description="剩余金额")
     due_date: date = Field(..., description="到期日期")
@@ -42,6 +43,17 @@ class PayableBase(BaseSchema):
     review_remarks: Optional[str] = Field(None, description="审核备注")
     notes: Optional[str] = Field(None, description="备注")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
+
+    @model_validator(mode="after")
+    def _validate_payable_total_amount_sign(self) -> "PayableBase":
+        src = str(self.source_type or "").strip()
+        amt = Decimal(str(self.total_amount or 0))
+        if src == PAYABLE_SOURCE_PURCHASE_RETURN:
+            if amt >= 0:
+                raise ValueError("采购退货红字应付金额须为负数")
+        elif amt <= 0:
+            raise ValueError("应付总金额须大于 0")
+        return self
 
 
 class PayableCreate(PayableBase):

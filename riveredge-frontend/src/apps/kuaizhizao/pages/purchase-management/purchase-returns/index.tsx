@@ -72,6 +72,7 @@ import {
   DetailDrawerTemplate,
   FormModalTemplate,
   DetailDrawerActions,
+  DetailDrawerSection,
   MODAL_CONFIG,
   DRAWER_CONFIG,
   useDetailDrawerDescriptionItems,
@@ -427,6 +428,7 @@ const PurchaseReturnsPage: React.FC = () => {
   const [poPullBatchWarehouseId, setPoPullBatchWarehouseId] = useState<number | undefined>();
   const purchaseReturnPerms = useResourcePermissions(PURCHASE_RETURN_RESOURCE);
   const paymentRefundPerms = useResourcePermissions(PAYMENT_REFUND_RESOURCE);
+  const payablePerms = useResourcePermissions('kuaicaiwu:payable');
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const queryClient = useQueryClient();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -1433,6 +1435,32 @@ const PurchaseReturnsPage: React.FC = () => {
     [messageApi, navigate, paymentRefundPerms.canCreate, t],
   );
 
+  const handleGenerateRedPayable = useCallback(
+    async (record: PurchaseReturn) => {
+      if (!payablePerms.canCreate) {
+        messageApi.warning(t('app.kuaizhizao.purchaseReturn.generateRedPayableNoPermission'));
+        return;
+      }
+      const returnId = Number(record.id);
+      if (!Number.isFinite(returnId) || returnId <= 0) return;
+      try {
+        const updated = (await warehouseApi.purchaseReturn.generateRedPayable(
+          String(returnId),
+        )) as PurchaseReturnDetail;
+        messageApi.success(t('app.kuaizhizao.purchaseReturn.generateRedPayableSuccess'));
+        if (returnDetail?.id === returnId) {
+          setReturnDetail(updated);
+        }
+        actionRef.current?.reload();
+      } catch (error) {
+        messageApi.error(
+          getApiErrorMessage(error, t('app.kuaizhizao.purchaseReturn.generateRedPayableFailed')),
+        );
+      }
+    },
+    [messageApi, payablePerms.canCreate, returnDetail?.id, t],
+  );
+
   const columns: ProColumns<PurchaseReturn>[] = useMemo(
     () => alignProColumns<PurchaseReturn>([
       {
@@ -1876,6 +1904,20 @@ const PurchaseReturnsPage: React.FC = () => {
             material_spec={record.material_spec}
           />
         ),
+      },
+      {
+        title: t('components.uniPullQuery.documentDateColumn'),
+        dataIndex: 'document_date',
+        width: 112,
+        sorter: (a: PurchaseReturnPullLine, b: PurchaseReturnPullLine) =>
+          String(a.document_date || a.order_date || '').localeCompare(
+            String(b.document_date || b.order_date || ''),
+          ),
+        defaultSortOrder: 'descend',
+        render: (_: unknown, record: PurchaseReturnPullLine) => {
+          const raw = record.document_date || record.order_date;
+          return raw ? formatBusinessDateOnly(String(raw)) : '-';
+        },
       },
       {
         title: t('app.kuaizhizao.purchaseReturn.pull.warehouseColumn'),
@@ -2819,6 +2861,152 @@ const PurchaseReturnsPage: React.FC = () => {
                 style={{ marginTop: 16 }}
                 items={timeconfigBasicItems1}
               />
+              {returnDetail.status === '已退货' && returnDetail.finance_outcome ? (
+                <DetailDrawerSection
+                  title={t('app.kuaizhizao.purchaseReturn.financeOutcome.sectionTitle')}
+                  style={{ marginTop: 16 }}
+                >
+                  {returnDetail.finance_outcome.no_blue_payable ? (
+                    <Alert
+                      type="warning"
+                      showIcon
+                      style={{ marginBottom: 12 }}
+                      title={t('app.kuaizhizao.purchaseReturn.financeOutcome.noBluePayableHint')}
+                    />
+                  ) : null}
+                  {returnDetail.finance_outcome.auto_payable_skipped &&
+                  !returnDetail.finance_outcome.red_payable_id ? (
+                    <Alert
+                      type="warning"
+                      showIcon
+                      style={{ marginBottom: 12 }}
+                      title={
+                        returnDetail.finance_outcome.auto_payable_skip_reason ||
+                        t('app.kuaizhizao.purchaseReturn.financeOutcome.autoPayableSkippedTitle')
+                      }
+                      action={
+                        payablePerms.canCreate ? (
+                          <Button
+                            size="small"
+                            type="primary"
+                            onClick={() => void handleGenerateRedPayable(returnDetail)}
+                          >
+                            {t('app.kuaizhizao.purchaseReturn.generateRedPayable')}
+                          </Button>
+                        ) : undefined
+                      }
+                    />
+                  ) : null}
+                  {returnDetail.finance_outcome.needs_payment_refund ? (
+                    <Alert
+                      type="info"
+                      showIcon
+                      style={{ marginBottom: 12 }}
+                      title={t('app.kuaizhizao.purchaseReturn.financeOutcome.refundAlertTitle')}
+                      description={t('app.kuaizhizao.purchaseReturn.financeOutcome.refundAlertDesc', {
+                        amount: returnDetail.finance_outcome.refund_remainder,
+                      })}
+                      action={
+                        paymentRefundPerms.canCreate ? (
+                          <Button
+                            {...rowActionCreateRefund('create')}
+                            size="small"
+                            type="primary"
+                            onClick={() => void handleCreateRefund(returnDetail)}
+                          />
+                        ) : undefined
+                      }
+                    />
+                  ) : null}
+                  <Descriptions
+                    column={1}
+                    size="small"
+                    items={[
+                      {
+                        key: 'return_amount',
+                        label: t('app.kuaizhizao.purchaseReturn.financeOutcome.returnAmount'),
+                        children: returnDetail.finance_outcome.return_amount,
+                      },
+                      {
+                        key: 'blue_offset',
+                        label: t('app.kuaizhizao.purchaseReturn.financeOutcome.blueOffsetTotal'),
+                        children: returnDetail.finance_outcome.blue_offset_total,
+                      },
+                      ...(returnDetail.finance_outcome.red_payable_amount != null
+                        ? [
+                            {
+                              key: 'red_payable_amount',
+                              label: t('app.kuaizhizao.purchaseReturn.financeOutcome.redPayableAmount'),
+                              children: returnDetail.finance_outcome.red_payable_amount,
+                            },
+                          ]
+                        : []),
+                      ...(returnDetail.finance_outcome.red_payable_code
+                        ? [
+                            {
+                              key: 'red_payable',
+                              label: t('app.kuaizhizao.purchaseReturn.financeOutcome.redPayable'),
+                              children: returnDetail.finance_outcome.red_payable_id ? (
+                                <Typography.Link
+                                  onClick={() =>
+                                    navigate(
+                                      `/apps/kuaicaiwu/finance-management/payables/${returnDetail.finance_outcome!.red_payable_id}`,
+                                    )
+                                  }
+                                >
+                                  {returnDetail.finance_outcome.red_payable_code}
+                                </Typography.Link>
+                              ) : (
+                                returnDetail.finance_outcome.red_payable_code
+                              ),
+                            },
+                          ]
+                        : []),
+                      ...(returnDetail.finance_outcome.settlement_codes?.length
+                        ? [
+                            {
+                              key: 'settlements',
+                              label: t('app.kuaizhizao.purchaseReturn.financeOutcome.settlements'),
+                              children: returnDetail.finance_outcome.settlement_codes.join('、'),
+                            },
+                          ]
+                        : []),
+                      ...(returnDetail.finance_outcome.blue_offsets?.length
+                        ? [
+                            {
+                              key: 'blue_lines',
+                              label: t('app.kuaizhizao.purchaseReturn.financeOutcome.bluePayables'),
+                              children: (
+                                <Space orientation="vertical" size={4}>
+                                  {returnDetail.finance_outcome.blue_offsets.map((line) => (
+                                    <span key={line.payable_id}>
+                                      <Typography.Link
+                                        onClick={() =>
+                                          navigate(
+                                            `/apps/kuaicaiwu/finance-management/payables/${line.payable_id}`,
+                                          )
+                                        }
+                                      >
+                                        {line.payable_code}
+                                      </Typography.Link>
+                                      {' '}
+                                      {t('app.kuaizhizao.purchaseReturn.financeOutcome.offsetAmountLabel', {
+                                        amount: line.offset_amount,
+                                      })}
+                                    </span>
+                                  ))}
+                                </Space>
+                              ),
+                            },
+                          ]
+                        : []),
+                    ]}
+                  />
+                  <Typography.Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0 }}>
+                    {t('app.kuaizhizao.purchaseReturn.financeOutcome.paymentDocNote')}
+                  </Typography.Paragraph>
+                </DetailDrawerSection>
+              ) : null}
             </>
           ) : null
         }

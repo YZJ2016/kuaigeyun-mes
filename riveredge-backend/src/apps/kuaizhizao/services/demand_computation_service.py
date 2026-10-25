@@ -5759,7 +5759,11 @@ class DemandComputationService(AppBaseService):
         if computation_id is not None:
             computation_query = computation_query.filter(id=int(computation_id))
         computations = await computation_query.only(
-            "id", "computation_code", "business_mode", "computation_status"
+            "id",
+            "computation_code",
+            "business_mode",
+            "computation_status",
+            "computation_end_time",
         )
         if not computations:
             return {"data": [], "total": 0}
@@ -5800,6 +5804,8 @@ class DemandComputationService(AppBaseService):
             computation = computation_by_id.get(cid)
             if not computation:
                 continue
+            end_time = getattr(computation, "computation_end_time", None)
+            document_date = str(end_time)[:10] if end_time else None
             exclusions = exclusions_by_computation.get(cid) or {
                 "po_pushed_qty_by_material_id": {},
                 "pr_committed_qty_by_material_id": {},
@@ -5843,6 +5849,7 @@ class DemandComputationService(AppBaseService):
                     "id": int(item.id),
                     "computation_id": cid,
                     "computation_code": computation.computation_code,
+                    "document_date": document_date,
                     "business_mode": computation.business_mode,
                     "material_id": mid,
                     "material_code": material_code or f"M{mid}",
@@ -5868,13 +5875,7 @@ class DemandComputationService(AppBaseService):
                         continue
                 lines.append(row)
 
-        lines.sort(
-            key=lambda r: (
-                str(r.get("computation_code") or ""),
-                str(r.get("material_code") or ""),
-                int(r.get("id") or 0),
-            )
-        )
+        lines.sort(key=lambda r: str(r.get("document_date") or ""), reverse=True)
         total = len(lines)
         page = lines[skip : skip + limit]
         return {"data": page, "total": total}

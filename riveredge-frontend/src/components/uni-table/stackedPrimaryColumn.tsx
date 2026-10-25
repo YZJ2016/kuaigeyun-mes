@@ -385,7 +385,6 @@ export function MaterialStackedCell({
   const name = String(material_name ?? '').trim() || '-';
   const code = String(material_code ?? '').trim();
   const spec = String(material_spec ?? '').trim();
-  const secondaryFull = formatMaterialCodeSpecLine(code, spec);
   const copyIconStyle: React.CSSProperties = { color: DOC_FOLDER_COPY_ICON_COLOR, fontSize: 11 };
   const primaryRowHeight = Math.round(token.fontSize * 1.25);
   const secondaryLineStyle: React.CSSProperties = {
@@ -447,18 +446,10 @@ export function MaterialStackedCell({
             {code}
           </span>
         ) : null}
-        {code && spec ? <span style={{ ...secondaryLineStyle, flexShrink: 0 }}>-</span> : null}
-        {spec ? (
-          <UniTableMiddleEllipsisText text={spec} style={secondaryLineStyle} />
-        ) : !code ? (
-          <Typography.Text type="secondary" style={secondaryLineStyle}>
-            -
-          </Typography.Text>
-        ) : null}
-        {secondaryCopyable && secondaryFull !== '-' ? (
+        {secondaryCopyable && code ? (
           <Typography.Text
             copyable={{
-              text: secondaryFull,
+              text: code,
               icon: [
                 <CopyOutlined key="copy" style={copyIconStyle} />,
                 <CopyOutlined key="copied" style={{ ...copyIconStyle, color: '#52c41a' }} />,
@@ -467,6 +458,14 @@ export function MaterialStackedCell({
             }}
             style={{ margin: 0, flexShrink: 0 }}
           />
+        ) : null}
+        {code && spec ? <span style={{ ...secondaryLineStyle, flexShrink: 0 }}>-</span> : null}
+        {spec ? (
+          <UniTableMiddleEllipsisText text={spec} style={secondaryLineStyle} />
+        ) : !code ? (
+          <Typography.Text type="secondary" style={secondaryLineStyle}>
+            -
+          </Typography.Text>
         ) : null}
       </div>
     </div>

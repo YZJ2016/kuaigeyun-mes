@@ -136,6 +136,11 @@ export type PurchaseRequisitionPullLine = {
   id: number;
   requisition_id: number;
   requisition_code?: string;
+  /** 单据日期（申请日期）YYYY-MM-DD */
+  document_date?: string | null;
+  /** 申请日期 YYYY-MM-DD */
+  requisition_date?: string | null;
+  applicant_name?: string | null;
   material_id?: number;
   material_code?: string;
   material_name?: string;

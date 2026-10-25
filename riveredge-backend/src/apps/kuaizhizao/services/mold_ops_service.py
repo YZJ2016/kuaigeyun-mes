@@ -1356,11 +1356,29 @@ class MoldMaintenanceService:
         await row.save()
         return row
 
-    async def complete(self, tenant_id: int, row_id: int) -> MoldMaintenance:
+    async def complete(
+        self,
+        tenant_id: int,
+        row_id: int,
+        data: Optional["MoldMaintenanceComplete"] = None,
+    ) -> MoldMaintenance:
+        from apps.kuaizhizao.schemas.mold_ops import MoldMaintenanceComplete
+        from apps.kuaizhizao.services.maintenance_workflow_complete import (
+            apply_maintenance_line_execution_on_complete,
+        )
+
         row = await self.get(tenant_id, row_id)
         if row.status not in ("进行中", "已审核"):
             raise ValidationError("仅进行中状态可完修")
+        payload = data or MoldMaintenanceComplete()
+        existing_lines = await self._load_lines(tenant_id, row_id)
         async with in_transaction():
+            await apply_maintenance_line_execution_on_complete(
+                existing_lines,
+                payload.lines,
+            )
+            if payload.maintenance_date:
+                row.maintenance_date = payload.maintenance_date
             row.status = "已完成"
             row.completed_at = resolve_business_datetime()
             if not row.maintenance_date:
@@ -1656,11 +1674,30 @@ class MoldRepairService:
         await row.save()
         return row
 
-    async def complete(self, tenant_id: int, row_id: int) -> MoldRepair:
+    async def complete(
+        self,
+        tenant_id: int,
+        row_id: int,
+        data: Optional["MoldRepairComplete"] = None,
+    ) -> MoldRepair:
+        from apps.kuaizhizao.schemas.mold_ops import MoldRepairComplete
+        from apps.kuaizhizao.services.maintenance_workflow_complete import (
+            apply_maintenance_line_execution_on_complete,
+        )
+
         row = await self.get(tenant_id, row_id)
         if row.status not in ("进行中", "已审核"):
             raise ValidationError("仅进行中状态可完修")
+        payload = data or MoldRepairComplete()
+        existing_lines = await self._load_lines(tenant_id, row_id)
         async with in_transaction():
+            await apply_maintenance_line_execution_on_complete(
+                existing_lines,
+                payload.lines,
+                detail_noun="维修",
+            )
+            if payload.repair_date:
+                row.repair_date = payload.repair_date
             row.status = "已完成"
             row.completed_at = resolve_business_datetime()
             if not row.repair_date:

@@ -14,7 +14,7 @@ import {
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
 import { purchaseOrderCapabilityReasonMessage } from '../../../../../hooks/useDocumentCapabilities';
-import { formatCurrencyAmount } from '../../../../../utils/format';
+import { formatBusinessDateOnly, formatCurrencyAmount } from '../../../../../utils/format';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import {
   buildKuaizhizaoPullCreateMenuItems,
@@ -36,6 +36,8 @@ import {
 type PullRow = {
   id: number;
   code: string;
+  /** 来源单据日期 YYYY-MM-DD */
+  documentDate?: string | null;
   partnerName?: string;
   amount?: number;
   status?: string;
@@ -98,6 +100,15 @@ export function usePaymentApplicationPullMenus({ onCreated, onOpenPayablePull }:
   const columns: ColumnsType<PullRow> = useMemo(
     () => [
       { title: t('common.code'), dataIndex: 'code', width: 160, ellipsis: true },
+      {
+        title: t('components.uniPullQuery.documentDateColumn'),
+        dataIndex: 'documentDate',
+        width: 112,
+        sorter: (a, b) =>
+          String(a.documentDate || '').localeCompare(String(b.documentDate || '')),
+        defaultSortOrder: 'descend',
+        render: (v?: string | null) => (v ? formatBusinessDateOnly(String(v)) : '-'),
+      },
       { title: t('app.kuaicaiwu.common.supplier'), dataIndex: 'partnerName', ellipsis: true },
       {
         title: t('app.kuaizhizao.paymentApplication.requestAmount'),
@@ -148,9 +159,11 @@ export function usePaymentApplicationPullMenus({ onCreated, onOpenPayablePull }:
           const cap = o.capabilities?.push_payment_application;
           const prepay = Number(o.prepayment_amount ?? 0);
           const reasonCode = cap?.reason ? String(cap.reason) : '';
+          const orderDate = o.order_date ? String(o.order_date).slice(0, 10) : null;
           return {
             id: Number(o.id),
             code: String(o.order_code ?? o.id),
+            documentDate: orderDate,
             partnerName: String(o.supplier_name ?? ''),
             // 仅展示预付额度，禁止用订单总额冒充可请款（否则「全部单据」上看似有金额却选不了）
             amount: prepay > 0 ? prepay : undefined,
@@ -242,9 +255,12 @@ export function usePaymentApplicationPullMenus({ onCreated, onOpenPayablePull }:
           } else if (pushCap?.reason) {
             disableReason = purchaseOrderCapabilityReasonMessage(String(pushCap.reason), t);
           }
+          const receiptTime = o.receipt_time ?? o.receiptTime;
+          const documentDate = receiptTime ? String(receiptTime).slice(0, 10) : null;
           return {
             id: Number(o.id),
             code: String(o.receipt_code ?? o.receiptCode ?? o.id),
+            documentDate,
             partnerName: String(o.supplier_name ?? o.supplierName ?? ''),
             amount: Number(o.total_amount ?? o.totalAmount ?? 0) || undefined,
             status,
@@ -298,9 +314,11 @@ export function usePaymentApplicationPullMenus({ onCreated, onOpenPayablePull }:
         const items = res.items || [];
         const rows: PullRow[] = items.map((s) => {
           const ok = s.status === 'Confirmed' || s.status === 'Sent';
+          const documentDate = s.end_date ? String(s.end_date).slice(0, 10) : null;
           return {
             id: s.id,
             code: s.statement_code,
+            documentDate,
             partnerName: s.partner_name,
             amount: Number(s.closing_balance ?? s.debit_total ?? 0) || undefined,
             status: s.status,
@@ -385,6 +403,7 @@ export function usePaymentApplicationPullMenus({ onCreated, onOpenPayablePull }:
           .map((e) => ({
             id: e.id,
             code: e.expense_code,
+            documentDate: e.business_date ? String(e.business_date).slice(0, 10) : null,
             partnerName: e.counterparty_name,
             amount: Number(e.total_amount || 0) || undefined,
             status: e.status,

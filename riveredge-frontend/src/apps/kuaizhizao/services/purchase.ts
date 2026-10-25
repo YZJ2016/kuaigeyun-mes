@@ -541,6 +541,9 @@ export type PurchaseOrderReceiptPullLine = {
   id: number;
   order_id: number;
   order_code?: string;
+  /** 采购订单单据日期 YYYY-MM-DD */
+  document_date?: string | null;
+  order_date?: string | null;
   supplier_id?: number;
   supplier_name?: string;
   material_id?: number;

@@ -1014,6 +1014,20 @@ const ReceiptNoticesPage: React.FC = () => {
         ),
       },
       {
+        title: t('components.uniPullQuery.documentDateColumn'),
+        dataIndex: 'document_date',
+        width: 112,
+        sorter: (a: PullPurchaseOrderCandidate, b: PullPurchaseOrderCandidate) =>
+          String(a.document_date || a.order_date || '').localeCompare(
+            String(b.document_date || b.order_date || ''),
+          ),
+        defaultSortOrder: 'descend' as const,
+        render: (_: unknown, record: PullPurchaseOrderCandidate) => {
+          const raw = record.document_date || record.order_date;
+          return raw ? formatBusinessDateOnly(String(raw)) : '-';
+        },
+      },
+      {
         title: t('common.quantity'),
         dataIndex: 'suggested_quantity',
         width: 100,

@@ -1,5 +1,14 @@
 import React from 'react'
 import { Popconfirm, Tooltip } from 'antd'
+import { ActionConfirmPopconfirm } from '../action-confirm'
+
+function isActionConfirmPopconfirmType(type: unknown): boolean {
+  if (type === ActionConfirmPopconfirm) return true
+  if (typeof type === 'function' && (type as { displayName?: string }).displayName === 'ActionConfirmPopconfirm') {
+    return true
+  }
+  return false
+}
 
 export function readNodeText(node: React.ReactNode): string {
   if (node == null || typeof node === 'boolean') return ''
@@ -618,7 +627,7 @@ export function readExplicitActionKind(node: React.ReactNode): RowActionPermissi
   if (onSelf && onSelf !== 'skip') return onSelf
 
   const t = node.type
-  if (t === Popconfirm || t === Tooltip) {
+  if (t === Popconfirm || t === Tooltip || isActionConfirmPopconfirmType(t)) {
     const fromChild = readExplicitActionKind(props.children as React.ReactNode)
     if (fromChild) return fromChild
     return onSelf ?? null

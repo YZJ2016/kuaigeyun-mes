@@ -58,7 +58,29 @@ export interface PurchaseReturn {
     enabled?: boolean;
     mode?: string;
   } | null;
+  finance_outcome?: PurchaseReturnFinanceOutcome | null;
   items?: PurchaseReturnItem[];
+}
+
+export interface PurchaseReturnFinanceBlueOffset {
+  payable_id: number;
+  payable_code: string;
+  offset_amount: number;
+}
+
+export interface PurchaseReturnFinanceOutcome {
+  return_amount: number;
+  blue_offset_total: number;
+  refund_remainder: number;
+  needs_payment_refund: boolean;
+  no_blue_payable: boolean;
+  red_payable_id?: number | null;
+  red_payable_code?: string | null;
+  red_payable_amount?: number | null;
+  auto_payable_skipped?: boolean;
+  auto_payable_skip_reason?: string | null;
+  settlement_codes: string[];
+  blue_offsets: PurchaseReturnFinanceBlueOffset[];
 }
 
 export interface PurchaseReturnDetail extends PurchaseReturn {

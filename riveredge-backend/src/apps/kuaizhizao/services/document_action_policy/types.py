@@ -614,7 +614,7 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "payment_application.pull_from_purchase_order.no_amount": "该采购订单预付请款额度已用尽",
     "payment.pull_from_payment_application.not_allowed": "付款申请单不可取单生成付款（须已批准且有余额）",
     "payment_application.update.not_allowed": "当前状态不可编辑付款申请",
-    "payment_application.delete.not_allowed": "仅草稿可删除付款申请",
+    "payment_application.delete.not_allowed": "仅草稿或已驳回可删除付款申请",
     "payment_application.submit.not_allowed": "当前状态不可提交",
     "payment_application.approve.not_allowed": "当前状态不可审核",
     "payment_application.withdraw.not_allowed": "当前状态不可撤回提交",

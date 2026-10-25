@@ -40,7 +40,8 @@ def derive_payment_application_capabilities(
         or is_pending_review_status(status or "")
         or is_rejected_status(status or "")
     )
-    delete_ok = is_draft_status(status or "")
+    # 草稿与已驳回可删（与提交门禁对齐；待审核不可删，须先撤回）
+    delete_ok = is_draft_status(status or "") or is_rejected_status(status or "")
 
     submit_ok = is_draft_status(status or "") or is_rejected_status(status or "")
     approve_ok = is_pending_review_status(status or "")

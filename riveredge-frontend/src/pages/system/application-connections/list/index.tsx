@@ -754,6 +754,11 @@ const ApplicationConnectionsListPage: React.FC = () => {
       case 'wecom':
         return (
           <>
+            <ProFormText name="corp_id" label={t('pages.system.applicationConnections.formCorpIdLabel')} rules={[{ required: true }]} colProps={{ span: 12 }} />
+            <ProFormText.Password name="corp_secret" label="Secret" rules={[{ required: true }]} colProps={{ span: 12 }} />
+            <ProFormText name="agent_id" label="Agent ID" colProps={{ span: 12 }} />
+            <ProFormText name="token" label="Token" colProps={{ span: 12 }} />
+            <ProFormText name="encoding_aes_key" label="EncodingAESKey" colProps={{ span: 12 }} />
             <ProFormDependency name={['corp_id', 'agent_id']}>
               {({ corp_id, agent_id }) => (
                 <WeComDeploymentGuideBlock
@@ -762,11 +767,6 @@ const ApplicationConnectionsListPage: React.FC = () => {
                 />
               )}
             </ProFormDependency>
-            <ProFormText name="corp_id" label={t('pages.system.applicationConnections.formCorpIdLabel')} rules={[{ required: true }]} colProps={{ span: 12 }} />
-            <ProFormText.Password name="corp_secret" label="Secret" rules={[{ required: true }]} colProps={{ span: 12 }} />
-            <ProFormText name="agent_id" label="Agent ID" colProps={{ span: 12 }} />
-            <ProFormText name="token" label="Token" colProps={{ span: 12 }} />
-            <ProFormText name="encoding_aes_key" label="EncodingAESKey" colProps={{ span: 12 }} />
           </>
         );
       case 'sap_s4hana':

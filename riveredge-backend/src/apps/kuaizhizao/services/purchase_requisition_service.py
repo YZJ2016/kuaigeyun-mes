@@ -108,10 +108,11 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                 applicant_name = user_info["name"]
             else:
                 applicant_name = (await self.get_user_info(applicant_id))["name"]
+            custom_name = (data.requisition_name or "").strip()
             req = await PurchaseRequisition.create(
                 tenant_id=tenant_id,
                 requisition_code=data.requisition_code,
-                requisition_name=_default_requisition_name(data.requisition_code),
+                requisition_name=custom_name or _default_requisition_name(data.requisition_code),
                 status="草稿",
                 requisition_date=req_date,
                 applicant_id=applicant_id,
@@ -795,7 +796,6 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         if update_data:
             from core.services.document_code_service import pop_and_apply_code_change_from_update_dict
 
-            update_data.pop("requisition_name", None)
             await pop_and_apply_code_change_from_update_dict(
                 tenant_id,
                 "kuaizhizao-purchase-requisition",
@@ -803,8 +803,14 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                 update_data,
                 "requisition_code",
             )
-            final_code = (update_data.get("requisition_code") or req.requisition_code or "").strip()
-            update_data["requisition_name"] = _default_requisition_name(final_code)
+            if "requisition_name" in update_data:
+                raw_name = update_data.get("requisition_name")
+                trimmed = (raw_name or "").strip() if raw_name is not None else ""
+                if trimmed:
+                    update_data["requisition_name"] = trimmed
+                else:
+                    final_code = (update_data.get("requisition_code") or req.requisition_code or "").strip()
+                    update_data["requisition_name"] = _default_requisition_name(final_code)
             user_info = await self.get_user_info(updated_by)
             if update_data:
                 await req.update_from_dict({
@@ -1718,6 +1724,9 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                     "id": int(item.id),
                     "requisition_id": int(item.requisition_id),
                     "requisition_code": req.requisition_code,
+                    "document_date": requisition_date,
+                    "requisition_date": requisition_date,
+                    "applicant_name": (str(req.applicant_name or "").strip() or None),
                     "material_id": item.material_id,
                     "material_code": material_code,
                     "material_name": material_name,
@@ -1731,10 +1740,11 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                 }
             )
 
+        # 单据日期倒序（最新在前），同日按申请/行 id 倒序
         lines.sort(
             key=lambda r: (
-                str(r.get("requisition_code") or ""),
-                str(r.get("material_code") or ""),
+                str(r.get("document_date") or ""),
+                int(r.get("requisition_id") or 0),
                 int(r.get("id") or 0),
             )
         )

@@ -41,7 +41,10 @@ import {
 } from '../../../../../components/uni-pull-query';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { getPayableLifecycle } from '../../../utils/financeLifecycle';
-import { isPurchaseReturnOffsetPayable } from '../../../utils/payableOffset';
+import {
+  isPurchaseReturnOffsetPayable,
+  payableDisplayTotalAmount,
+} from '../../../utils/payableOffset';
 import { buildPayableStatusEnum, buildReviewStatusEnum } from '../../../utils/financeSharedOptions';
 import { buildKuaicaiwuPullCreateMenuItems, getKuaicaiwuDocumentAction } from '../../../constants/documentActionRegistry';
 import { payableCapabilityReasonMessage } from '../../../utils/payableCapabilityMessages';
@@ -691,6 +694,17 @@ const PayableList: React.FC = () => {
             resizable: false,
             hideInSearch: true,
             sorter: true,
+            render: (_, record) => {
+                const amount = payableDisplayTotalAmount(record);
+                return (
+                    <span style={amount < 0 ? { color: '#cf1322' } : undefined}>
+                        {new Intl.NumberFormat('zh-CN', {
+                            style: 'currency',
+                            currency: 'CNY',
+                        }).format(amount)}
+                    </span>
+                );
+            },
         },
         {
             title: t(`${P}.col.paidAmount`),

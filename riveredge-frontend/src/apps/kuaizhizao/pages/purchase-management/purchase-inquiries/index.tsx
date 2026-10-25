@@ -1687,6 +1687,20 @@ const PurchaseInquiriesPage: React.FC = () => {
         ),
       },
       {
+        title: t('components.uniPullQuery.documentDateColumn'),
+        dataIndex: 'document_date',
+        width: 112,
+        sorter: (a: PullPurchaseRequisitionCandidate, b: PullPurchaseRequisitionCandidate) =>
+          String(a.document_date || a.requisition_date || '').localeCompare(
+            String(b.document_date || b.requisition_date || ''),
+          ),
+        defaultSortOrder: 'descend' as const,
+        render: (_: unknown, record: PullPurchaseRequisitionCandidate) => {
+          const raw = record.document_date || record.requisition_date;
+          return raw ? formatBusinessDateOnly(String(raw)) : '-';
+        },
+      },
+      {
         title: t('common.quantity'),
         dataIndex: 'suggested_quantity',
         width: 100,

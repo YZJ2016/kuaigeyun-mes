@@ -63,7 +63,7 @@ import {
   resolveOrderChangeListApiParams,
 } from '../../../utils/orderChangeLifecycle';
 import { formatOrderChangeCategory, ORDER_CHANGE_CATEGORY_LABELS } from '../../../utils/orderChangeCategory';
-import { formatAmount, formatDateTime, formatNumber } from '../../../../../utils/format';
+import { formatAmount, formatBusinessDateOnly, formatDateTime, formatNumber } from '../../../../../utils/format';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { formDateRangeFormItemProps } from '../../../../../utils/formDate';
 import {
@@ -300,10 +300,13 @@ const PurchaseOrderChangesPage: React.FC = () => {
         render: (value: string) => value || '-',
       },
       {
-        title: t('app.kuaizhizao.purchaseOrder.col.orderDate'),
+        title: t('components.uniPullQuery.documentDateColumn'),
         dataIndex: 'order_date',
-        width: 120,
-        render: (value: string) => (value ? formatDateTime(value, 'YYYY-MM-DD') : '-'),
+        width: 112,
+        sorter: (a: PullPurchaseOrderCandidate, b: PullPurchaseOrderCandidate) =>
+          String(a.order_date || '').localeCompare(String(b.order_date || '')),
+        defaultSortOrder: 'descend',
+        render: (value: string) => (value ? formatBusinessDateOnly(String(value)) : '-'),
       },
       {
         title: t('app.kuaizhizao.purchaseOrder.col.deliveryDate'),

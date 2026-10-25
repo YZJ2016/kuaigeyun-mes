@@ -25,6 +25,7 @@ from apps.master_data.api.partner_price_book import router as partner_price_book
 from apps.master_data.api.performance import router as performance_router
 from apps.master_data.api.product import router as product_router
 from apps.master_data.api.validation import router as validation_router
+from apps.master_data.api.management import router as management_router
 
 # 创建主路由
 router = APIRouter(tags=["App - Master Data - Overview"])
@@ -53,6 +54,7 @@ router.include_router(partner_price_book_router)
 router.include_router(performance_router)
 router.include_router(product_router)
 router.include_router(validation_router)
+router.include_router(management_router)
 
 @router.get("/health")
 async def health_check():

@@ -10,7 +10,7 @@ import {
 } from '@ant-design/pro-components';
 import { EquipmentPersonSelect, resolveUserUuidById } from '../../../components/EquipmentPersonSelect';
 import { EQUIPMENT_DATE_FIELD_PROPS } from '../../../utils/equipmentFormFieldProps';
-import { App, Button, Modal, Row, Col, Table, Input, Switch } from 'antd';
+import { App, Button, Modal, Row, Col, Table, Input, Switch, DatePicker } from 'antd';
 import dayjs from 'dayjs';
 import type { ColumnsType } from 'antd/es/table';
 import { renderDocumentStatusTag } from '../../../../../utils/documentLifecycleStatusTag';
@@ -31,6 +31,13 @@ import {
   normalizeEquipmentListResponse,
   resolveAssetWorkflowListParams,
 } from '../../../utils/equipmentListCore';
+import { isToolOpsCompletableStatus } from '../../../utils/equipmentLifecycle';
+import {
+  mapMaintenanceLinesFromApi,
+  toMaintenanceLinePayload,
+  type MaintenanceLineView,
+} from '../../../utils/maintenanceWorkflowLines';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import {
   buildDetailDrawerEditExtra,
   EquipmentMasterDetailDrawer,
@@ -42,16 +49,6 @@ import { ActionConfirmPopconfirm } from '../../../../../components/action-confir
 
 const P = 'app.kuaizhizao.moldOps.maintenance';
 const RESOURCE = 'kuaizhizao:mold-maintenance';
-
-interface MaintenanceLine {
-  line_no?: number;
-  item_id?: number;
-  item_code?: string;
-  item_name?: string;
-  requirement?: string;
-  executed?: boolean;
-  remark?: string;
-}
 
 interface MoldMaintenance {
   id?: number;
@@ -66,7 +63,7 @@ interface MoldMaintenance {
   status?: string;
   remark?: string;
   updated_at?: string;
-  lines?: MaintenanceLine[];
+  lines?: MaintenanceLineView[];
 }
 
 
@@ -80,12 +77,16 @@ const MoldMaintenancesPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [current, setCurrent] = useState<MoldMaintenance | null>(null);
-  const [previewLines, setPreviewLines] = useState<MaintenanceLine[]>([]);
+  const [previewLines, setPreviewLines] = useState<MaintenanceLineView[]>([]);
   const [moldOptions, setMoldOptions] = useState<{ label: string; value: number }[]>([]);
   const [schemeOptions, setSchemeOptions] = useState<{ label: string; value: number }[]>([]);
   const [rejectModalVisible, setRejectModalVisible] = useState(false);
   const [rejectTarget, setRejectTarget] = useState<MoldMaintenance | null>(null);
   const [rejectReason, setRejectReason] = useState('');
+  const [completeModalVisible, setCompleteModalVisible] = useState(false);
+  const [completeTarget, setCompleteTarget] = useState<MoldMaintenance | null>(null);
+  const [completeLines, setCompleteLines] = useState<MaintenanceLineView[]>([]);
+  const [completeMaintenanceDate, setCompleteMaintenanceDate] = useState<dayjs.Dayjs | null>(null);
   const { open: detailVisible, loading: detailLoading, detail, openDetail, closeDetail } =
     useEquipmentDetailDrawer<MoldMaintenance>();
 
@@ -120,7 +121,7 @@ const MoldMaintenancesPage: React.FC = () => {
     }
     try {
       const res = await maintenancesApi.previewLines({ mold_id: moldId, scheme_id: schemeId });
-      setPreviewLines(res.lines ?? []);
+      setPreviewLines(mapMaintenanceLinesFromApi(res.lines as unknown[] | undefined));
     } catch {
       messageApi.error(t(`${P}.previewFailed`));
       setPreviewLines([]);
@@ -143,7 +144,7 @@ const MoldMaintenancesPage: React.FC = () => {
     const detail = await maintenancesApi.get(record.id);
     setIsEdit(true);
     setCurrent(detail);
-    setPreviewLines(detail.lines ?? []);
+    setPreviewLines(mapMaintenanceLinesFromApi(detail.lines as unknown[] | undefined));
     setModalVisible(true);
     void loadOptions();
     const applicantUuid = await resolveUserUuidById(detail.applicant_id);
@@ -176,15 +177,7 @@ const MoldMaintenancesPage: React.FC = () => {
       applicant_id: values.applicant_id,
       applicant_name: values.applicant_name,
       remark: values.remark,
-      lines: previewLines.map((l) => ({
-        line_no: l.line_no,
-        item_id: l.item_id,
-        item_code: l.item_code,
-        item_name: l.item_name,
-        requirement: l.requirement,
-        executed: l.executed ?? false,
-        remark: l.remark,
-      })),
+      lines: previewLines.map((l) => toMaintenanceLinePayload({ ...l, is_done: false })),
     };
     if (isEdit && current?.id) {
       await maintenancesApi.update(current.id, payload);
@@ -221,28 +214,56 @@ const MoldMaintenancesPage: React.FC = () => {
     actionRef.current?.reload();
   };
 
-  const handleComplete = async (record: MoldMaintenance) => {
+  const openCompleteModal = async (record: MoldMaintenance) => {
     if (!record.id) return;
-    await maintenancesApi.complete(record.id);
-    messageApi.success(t(`${P}.completeSuccess`));
-    actionRef.current?.reload();
+    try {
+      const detail = (await maintenancesApi.get(record.id)) as MoldMaintenance;
+      setCompleteTarget(detail);
+      setCompleteLines(mapMaintenanceLinesFromApi(detail.lines as unknown[] | undefined));
+      setCompleteMaintenanceDate(
+        detail.maintenance_date ? dayjs(detail.maintenance_date) : dayjs(),
+      );
+      setCompleteModalVisible(true);
+    } catch (error) {
+      messageApi.error(getApiErrorMessage(error, t(`${P}.listFailed`)));
+    }
   };
 
-  const lineColumns = [
+  const handleCompleteConfirm = async () => {
+    if (!completeTarget?.id) return;
+    if (completeLines.length > 0 && completeLines.some((l) => !l.is_done)) {
+      messageApi.warning(t(`${P}.completeAllItemsRequired`));
+      return;
+    }
+    try {
+      await maintenancesApi.complete(completeTarget.id, {
+        maintenance_date: completeMaintenanceDate?.format('YYYY-MM-DD'),
+        lines: completeLines.map(toMaintenanceLinePayload),
+      });
+      messageApi.success(t(`${P}.completeSuccess`));
+      setCompleteModalVisible(false);
+      setCompleteTarget(null);
+      actionRef.current?.reload();
+    } catch (error) {
+      messageApi.error(getApiErrorMessage(error, t('common.operationFailed')));
+    }
+  };
+
+  const completeLineColumns = [
     { title: t(`${P}.line.item`), dataIndex: 'item_name', width: 140 },
     { title: t(`${P}.line.requirement`), dataIndex: 'requirement', ellipsis: true },
     {
       title: t(`${P}.line.executed`),
-      dataIndex: 'executed',
-      width: 80,
-      render: (_: unknown, row: MaintenanceLine, index: number) => (
+      dataIndex: 'is_done',
+      width: 88,
+      render: (_: unknown, row: MaintenanceLineView, index: number) => (
         <Switch
           size="small"
-          checked={row.executed ?? false}
+          checked={row.is_done ?? false}
           onChange={(checked) => {
-            const next = [...previewLines];
-            next[index] = { ...next[index], executed: checked };
-            setPreviewLines(next);
+            const next = [...completeLines];
+            next[index] = { ...next[index], is_done: checked };
+            setCompleteLines(next);
           }}
         />
       ),
@@ -251,7 +272,28 @@ const MoldMaintenancesPage: React.FC = () => {
       title: t('common.remark'),
       dataIndex: 'remark',
       width: 140,
-      render: (_: unknown, row: MaintenanceLine, index: number) => (
+      render: (_: unknown, row: MaintenanceLineView, index: number) => (
+        <Input
+          size="small"
+          value={row.remark}
+          onChange={(e) => {
+            const next = [...completeLines];
+            next[index] = { ...next[index], remark: e.target.value };
+            setCompleteLines(next);
+          }}
+        />
+      ),
+    },
+  ];
+
+  const lineColumns = [
+    { title: t(`${P}.line.item`), dataIndex: 'item_name', width: 140 },
+    { title: t(`${P}.line.requirement`), dataIndex: 'requirement', ellipsis: true },
+    {
+      title: t('common.remark'),
+      dataIndex: 'remark',
+      width: 140,
+      render: (_: unknown, row: MaintenanceLineView, index: number) => (
         <Input
           size="small"
           value={row.remark}
@@ -289,15 +331,15 @@ const MoldMaintenancesPage: React.FC = () => {
     [t],
   );
 
-  const detailLineColumns = useMemo<ColumnsType<MaintenanceLine>>(
+  const detailLineColumns = useMemo<ColumnsType<MaintenanceLineView>>(
     () => [
       { title: t(`${P}.line.item`), dataIndex: 'item_name', width: 140 },
       { title: t(`${P}.line.requirement`), dataIndex: 'requirement', ellipsis: true },
       {
         title: t(`${P}.line.executed`),
-        dataIndex: 'executed',
+        dataIndex: 'is_done',
         width: 80,
-        render: (_, row) => (row.executed ? t('common.yes') : t('common.no')),
+        render: (_, row) => (row.is_done ? t('common.yes') : t('common.no')),
       },
       { title: t('common.remark'), dataIndex: 'remark', width: 140 },
     ],
@@ -460,14 +502,14 @@ const MoldMaintenancesPage: React.FC = () => {
                 {t(`${P}.action.reject`)}
               </Button>
             )}
-            {perms.canAction?.('complete') && record.status === '已审核' && (
+            {perms.canAction?.('complete') && isToolOpsCompletableStatus(record.status) && (
               <Button
                 {...rowActionKind('complete')}
                 type="link"
                 size="small"
                 onClick={(e) => {
                   e.stopPropagation();
-                  void handleComplete(record);
+                  void openCompleteModal(record);
                 }}
               >
                 {t(`${P}.action.complete`)}
@@ -627,7 +669,7 @@ const MoldMaintenancesPage: React.FC = () => {
         )}
         lines={
           <MasterDataLinesTable
-            rows={detail?.lines ?? []}
+            rows={mapMaintenanceLinesFromApi(detail?.lines as unknown[] | undefined)}
             columns={detailLineColumns}
             rowKey={(row) => String(row.item_id ?? row.line_no ?? '')}
             emptyDescription={t('common.noData')}
@@ -646,6 +688,34 @@ const MoldMaintenancesPage: React.FC = () => {
           value={rejectReason}
           onChange={(e) => setRejectReason(e.target.value)}
           placeholder={t(`${P}.form.rejectReason`)}
+        />
+      </Modal>
+
+      <Modal
+        title={t(`${P}.completeModal`)}
+        open={completeModalVisible}
+        width={MODAL_CONFIG.LARGE_WIDTH}
+        onOk={() => void handleCompleteConfirm()}
+        onCancel={() => setCompleteModalVisible(false)}
+        destroyOnHidden
+      >
+        <p style={{ marginBottom: 12, color: 'rgba(0,0,0,0.65)' }}>
+          {t(`${P}.completeModalHint`)}
+        </p>
+        <div style={{ marginBottom: 12 }}>
+          <span style={{ marginRight: 8 }}>{t(`${P}.col.maintenanceDate`)}</span>
+          <DatePicker
+            value={completeMaintenanceDate}
+            onChange={(v) => setCompleteMaintenanceDate(v)}
+            {...EQUIPMENT_DATE_FIELD_PROPS}
+          />
+        </div>
+        <Table
+          size="small"
+          dataSource={completeLines}
+          rowKey={(r, i) => String(r.line_no ?? r.item_id ?? i)}
+          pagination={false}
+          columns={completeLineColumns}
         />
       </Modal>
     </>
