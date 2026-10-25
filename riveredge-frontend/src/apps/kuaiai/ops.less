@@ -209,6 +209,73 @@
   padding-top: 12px;
 }
 
+/* ---------------------------------------------------------- hub 分类分组（spec 222） */
+
+.kuaiai-ops-cap-groups {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.kuaiai-ops-cap-groups .kuaiai-ops-cap-grid {
+  flex: none;
+}
+
+.kuaiai-ops-cap-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: var(--ant-color-text, rgba(0, 0, 0, 0.88));
+}
+
+.kuaiai-ops-cap-group-arrow {
+  font-size: 12px;
+  color: var(--ant-color-text-secondary, rgba(0, 0, 0, 0.45));
+  transition: transform 0.2s ease;
+}
+
+.kuaiai-ops-cap-group-name {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 24px;
+}
+
+.kuaiai-ops-cap-group-count {
+  font-size: 13px;
+  color: var(--ant-color-text-secondary, rgba(0, 0, 0, 0.45));
+}
+
+.kuaiai-ops-cap-group-toggle {
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--ant-color-text-secondary, rgba(0, 0, 0, 0.45));
+}
+
+.kuaiai-ops-cap-group-head:hover .kuaiai-ops-cap-group-name,
+.kuaiai-ops-cap-group-head:hover .kuaiai-ops-cap-group-toggle {
+  color: var(--ant-color-primary, #1677ff);
+}
+
+.kuaiai-ops-cap-group .kuaiai-ops-cap-grid {
+  margin-top: 12px;
+}
+
+.kuaiai-ops-hub-search-empty {
+  display: flex;
+  justify-content: center;
+  padding: 48px 0;
+}
+
 /* ---------------------------------------------------------- 智能体库 */
 
 .kuaiai-ops-library-grid {
@@ -490,6 +557,22 @@
 .kuaiai-ops-pulse-card-foot {
   margin-top: auto;
   padding-top: 12px;
+}
+
+/* spec 220：无权限/不可用来源占位卡（虚线弱化，不含任何来源数据） */
+.kuaiai-ops-pulse-card-placeholder {
+  border-style: dashed;
+  justify-content: center;
+
+  .kuaiai-ops-pulse-card-title {
+    color: var(--ant-color-text-tertiary, rgba(0, 0, 0, 0.45));
+    font-weight: 500;
+  }
+
+  .kuaiai-ops-pulse-card-fact {
+    min-height: 0;
+    color: var(--ant-color-text-tertiary, rgba(0, 0, 0, 0.45));
+  }
 }
 
 .kuaiai-ops-pulse-pagination {

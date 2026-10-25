@@ -5,7 +5,7 @@
 spec 191 能力绑定的依赖字段，必须随目录下发。
 """
 
-from typing import Optional
+from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -19,4 +19,8 @@ class ToolCatalogItem(BaseModel):
     kind: str = Field(..., description="read|write")
     permission: Optional[str] = Field(
         default=None, description="业务权限码（一 Tool 一码，SC-D7）"
+    )
+    permissions_any: Optional[List[str]] = Field(
+        default=None,
+        description="任一命中即放行的多权限码（spec 207 X2=b，与 permission 二选一）",
     )

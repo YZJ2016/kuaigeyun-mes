@@ -35,7 +35,11 @@ def _taskiq_pool_kwargs() -> dict:
         "min_size": min_size,
         "max_size": max_size,
         "command_timeout": 60,
-        "server_settings": {"application_name": "riveredge_taskiq"},
+        "server_settings": {
+            "application_name": "riveredge_taskiq",
+            # 池空闲连接默认 300s 回收；服务端兜底清理经代理/NAT 断开后残留的僵尸会话（listen 长连接不设）
+            "idle_session_timeout": "600000",
+        },
     }
 
 

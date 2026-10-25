@@ -1054,6 +1054,21 @@ async def sync_application_manifest(
             skip_permission_sync=False,
         )
 
+        # kuaiai：同步清单后补场景模板种子（新增模板须能出预置实例，
+        # 否则场景卡 not_ready；种子本身幂等，只补缺失模板）
+        if app_code == "kuaiai":
+            try:
+                from apps.kuaiai.services.agent_scene_service import (
+                    seed_kuaiai_agent_scenes_on_lifecycle,
+                )
+
+                await seed_kuaiai_agent_scenes_on_lifecycle(tenant_id)
+            except Exception as exc:
+                # 种子失败不阻塞菜单同步结果（下次启用/扫描路径会再补）
+                logger.warning(
+                    f"kuaiai 场景模板种子补齐失败 error_type={type(exc).__name__}"
+                )
+
         logger.info(f"✅ 应用清单同步成功: {app_code} v{version}")
 
         return {

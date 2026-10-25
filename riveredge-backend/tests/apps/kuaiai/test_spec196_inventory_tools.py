@@ -21,6 +21,7 @@ import pytest
 
 from apps.kuaiai.services.tools import inventory_alerts as ia
 from core.ai.runtime.context import AiRuntimeContext
+from core.utils.timezone_utils import to_api_isoformat
 
 TENANT = 7
 USER_ID = 5
@@ -133,6 +134,34 @@ class TestQueryInventoryAlerts:
         assert "5" in out and "10" in out and "pending" in out
         # id=12 不可见，不出现第二条（两条行文本字段相同，用计数判断）
         assert out.count("id=11") == 1 and "id=12" not in out
+
+    @pytest.mark.asyncio
+    async def test_header_discloses_candidate_window(self):
+        """计数披露：总数是过采样候选窗内（≤100）范围收敛后的计数。"""
+        svc = SimpleNamespace(
+            get_alerts=AsyncMock(return_value=([_alert_row(id=11)], 1))
+        )
+        with patch(
+            "apps.kuaizhizao.services.inventory_alert_service"
+            ".InventoryAlertService",
+            return_value=svc,
+        ), _scope_patch({11}):
+            out = await ia.query_inventory_alerts(ctx=_ctx())
+        assert f"前 {ia._OVERSAMPLE_LIMIT} 条候选内计" in out
+
+    @pytest.mark.asyncio
+    async def test_triggered_at_uses_api_isoformat(self):
+        """triggered_at（DatetimeField）输出走 to_api_isoformat 站点时区口径。"""
+        svc = SimpleNamespace(
+            get_alerts=AsyncMock(return_value=([_alert_row(id=11)], 1))
+        )
+        with patch(
+            "apps.kuaizhizao.services.inventory_alert_service"
+            ".InventoryAlertService",
+            return_value=svc,
+        ), _scope_patch({11}):
+            out = await ia.query_inventory_alerts(ctx=_ctx())
+        assert f"触发 {to_api_isoformat(datetime(2026, 1, 10, 8, 0))}" in out
 
     @pytest.mark.asyncio
     async def test_all_out_of_scope_truthful_copy(self):

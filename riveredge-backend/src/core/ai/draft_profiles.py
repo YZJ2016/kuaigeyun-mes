@@ -54,6 +54,34 @@ def _po_meaningful(result: Any) -> bool:
     return False
 
 
+# spec 215 eight_d_draft：8D 单 D 段字段（camelCase 草稿键 ↔
+# Quality8DReport.d0_prepare…d8_team_congratulation / verification_result /
+# remarks）；「草稿待人工确认，AI 生成」固定标注由 draftNotice 携带。
+_EIGHT_D_STAGE_KEYS = (
+    "d0Prepare",
+    "d1Team",
+    "d2Problem",
+    "d3Containment",
+    "d4RootCause",
+    "d5CorrectiveAction",
+    "d6ImplementResult",
+    "d7PreventRecurrence",
+    "d8TeamCongratulation",
+)
+
+
+def _eight_d_meaningful(result: Any) -> bool:
+    data = (
+        result.model_dump()
+        if hasattr(result, "model_dump")
+        else (result if isinstance(result, dict) else {})
+    )
+    return any(
+        str(data.get(k) or "").strip()
+        for k in _EIGHT_D_STAGE_KEYS + ("title", "verificationResult", "remarks")
+    )
+
+
 def ensure_draft_profiles() -> None:
     global _PROFILES_REGISTERED
     if _PROFILES_REGISTERED:
@@ -136,5 +164,35 @@ def ensure_draft_profiles() -> None:
                 "请尽量还原每一处需检验的特性，不要返回空 candidates。"
             ),
             empty_ocr_message="未能从图纸中识别出尺寸/公差气泡，请换更清晰图片或改为手工点选放置",
+        )
+    )
+
+    # spec 215：8D 草稿辅助（StructuredDraft，不写库）。字段骨架从
+    # Quality8DReport 实际 D 段字段派生；draftNotice 固定标注草稿属性。
+    StructuredDraftService.register_profile(
+        DraftProfile(
+            schema_name="eight_d_draft",
+            system_prompt=(
+                "你是制造业 8D 问题解决报告起草助手。"
+                "根据用户提供的客诉/质量问题描述，起草 8D 报告 D0–D8 各阶段内容草稿。"
+                "每段给出可编辑的中文要点；事实依据不足的字段留 null，"
+                "并在 confidenceNotes 说明缺什么，不要编造数据或结论。"
+                "不得包含客户联系人、电话或商务条款等敏感信息。"
+                "仅输出一个 JSON 对象，不要 Markdown 代码块，不要额外说明。"
+            ),
+            json_spec=(
+                "输出 JSON（camelCase），字段："
+                "draftNotice（固定填「草稿待人工确认，AI 生成」），"
+                "title, severity（minor/major/critical，不确定填 null）, "
+                "d0Prepare, d1Team, d2Problem, d3Containment, d4RootCause, "
+                "d5CorrectiveAction, d6ImplementResult, d7PreventRecurrence, "
+                "d8TeamCongratulation, verificationResult, remarks, confidenceNotes。"
+                "各 d 字段为该阶段草稿文本（纯文本或 HTML 片段）；无依据的留 null。"
+            ),
+            validate_meaningful=_eight_d_meaningful,
+            empty_ocr_message=(
+                "未能从输入中识别出可起草 8D 的质量问题信息，"
+                "请补充客诉/不良描述后重试"
+            ),
         )
     )

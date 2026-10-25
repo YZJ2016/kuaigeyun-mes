@@ -95,6 +95,63 @@ def _is_overdue(wo: WorkOrder, now: datetime) -> bool:
     return cmp_end < cmp_now
 
 
+async def _load_board_work_orders(
+    tenant_id: int,
+    work_order_ids: Optional[List[int]],
+    plan_date: Optional[date],
+    work_center_id: Optional[int] = None,
+) -> List[WorkOrder]:
+    """看板候选工单（draft/released/in_progress，≤200 行）：纯查询。
+
+    spec 206：从 ``SchedulingAiService._load_work_orders`` 拆出的纯事实
+    函数，供 KU-AI ``query_scheduling_board`` 只读 Tool 复用同一口径；
+    ``work_center_id`` 为 Tool 侧新增的可选过滤，原调用方不传即行为不变。
+    """
+    query = WorkOrder.filter(
+        tenant_id=tenant_id,
+        status__in=["draft", "released", "in_progress"],
+        deleted_at__isnull=True,
+    )
+    if work_order_ids:
+        query = query.filter(id__in=work_order_ids)
+    if work_center_id:
+        query = query.filter(work_center_id=work_center_id)
+    if plan_date:
+        day_start, day_end = VisualSchedulingService._plan_day_bounds(plan_date)
+        query = query.filter(
+            planned_start_date__gte=day_start,
+            planned_start_date__lte=day_end,
+        )
+    rows = await query.order_by("-created_at").limit(200)
+    return list(rows)
+
+
+async def scan_scheduling_board_facts(
+    tenant_id: int,
+    *,
+    work_order_ids: Optional[List[int]] = None,
+    work_center_id: Optional[int] = None,
+    plan_date: Optional[date] = None,
+    horizon_days: int = 14,
+) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """board-scan 原始诊断 + 排产约束（纯查询，无模型调用、无写副作用）。
+
+    spec 206：从 ``SchedulingAiService._build_context_payload`` 拆出的确定性
+    事实段，返回 ``(scan_raw, constraints)``，AI 上下文组装与
+    ``query_scheduling_board`` Tool 共用。
+    """
+    scan_service = VisualSchedulingService()
+    scan_raw = await scan_service.scan_board(
+        tenant_id,
+        work_order_ids=work_order_ids,
+        work_center_id=work_center_id,
+        plan_date=plan_date,
+        horizon_days=horizon_days,
+    )
+    constraints = await scan_service._load_constraints(tenant_id)
+    return scan_raw, constraints
+
+
 class SchedulingAiService:
     def __init__(self) -> None:
         self._scan_service = VisualSchedulingService()
@@ -121,21 +178,7 @@ class SchedulingAiService:
         work_order_ids: Optional[List[int]],
         plan_date: Optional[date],
     ) -> List[WorkOrder]:
-        query = WorkOrder.filter(
-            tenant_id=tenant_id,
-            status__in=["draft", "released", "in_progress"],
-            deleted_at__isnull=True,
-        )
-        if work_order_ids:
-            query = query.filter(id__in=work_order_ids)
-        if plan_date:
-            day_start, day_end = VisualSchedulingService._plan_day_bounds(plan_date)
-            query = query.filter(
-                planned_start_date__gte=day_start,
-                planned_start_date__lte=day_end,
-            )
-        rows = await query.order_by("-created_at").limit(200)
-        return list(rows)
+        return await _load_board_work_orders(tenant_id, work_order_ids, plan_date)
 
     async def _build_context_payload(
         self,
@@ -185,13 +228,11 @@ class SchedulingAiService:
             {"stationId": s.id, "code": s.code, "name": s.name} for s in stations
         ]
 
-        scan_raw = await self._scan_service.scan_board(
+        scan_raw, constraints = await scan_scheduling_board_facts(
             tenant_id,
             work_order_ids=list(allowed_ids) if allowed_ids else work_order_ids,
             plan_date=plan_d,
-            horizon_days=14,
         )
-        constraints = await self._scan_service._load_constraints(tenant_id)
 
         scan_summary = {
             "conflictCount": scan_raw.get("conflict_count", 0),

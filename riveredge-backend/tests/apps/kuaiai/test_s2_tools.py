@@ -64,6 +64,51 @@ _EXPECTED_PERMISSIONS = {
     "query_pulse_signals": "kuaiai:pulse:display",
     # spec 200 工艺路线
     "query_process_routes": "master-data:process:route:read",
+    # spec 205-214 P2 场景 Tool（list 值 = permissions_any 多码任一命中）
+    "query_mrp_exceptions": "kuaizhizao:plan-management-demand-computation:read",
+    "query_scheduling_board": "kuaizhizao:plan-management-scheduling:read",
+    "trace_lineage": [
+        "kuaizhizao:quality-management-traceability:read",
+        "kuaizhizao:material-lifecycle-trace:read",
+    ],
+    "trace_document_chain": "kuaiai:entry:read",
+    "analyze_sales_order_change_impact": "kuaizhizao:sales-order-change:read",
+    "analyze_purchase_order_change_impact": "kuaizhizao:purchase-order-change:read",
+    "analyze_demand_change_impact": "kuaizhizao:plan-management-demand-change:read",
+    "query_incoming_inspections": "kuaizhizao:quality-management-incoming-inspection:read",
+    "query_process_inspections": "kuaizhizao:quality-management-process-inspection:read",
+    "query_finished_inspections": "kuaizhizao:quality-management-finished-goods-inspection:read",
+    "query_oqc_inspections": "kuaizhizao:quality-management-oqc-inspection:read",
+    "query_supplier_evaluations": "kuaizhizao:supplier-eval:read",
+    "query_equipment": "kuaizhizao:equipment-management-equipment:read",
+    "query_equipment_faults": "kuaizhizao:equipment-fault:read",
+    "query_maintenance_plans": "kuaizhizao:maintenance-plan:read",
+    "query_maintenance_reminders": "kuaizhizao:maintenance-reminder:read",
+    "query_calibration_alerts": [
+        "kuaizhizao:maintenance-reminder:read",
+        "kuaizhizao:measuring-instrument-calibration-reminder:read",
+    ],
+    "query_equipment_oee": "kuaizhizao:equipment-management-equipment:read",
+    "analyze_equipment_losses": "kuaizhizao:equipment-management-equipment:read",
+    "query_ecn": "kuaiplm:ecn:read",
+    "analyze_ecn_impact": "kuaiplm:ecn:read",
+    "query_material_where_used": "master-data:process:engineering-bom:read",
+    "query_drawing_where_used": "master-data:process:drawing-where-used:read",
+    "query_engineering_bom": "master-data:process:engineering-bom:read",
+    "create_material_shortage_exception": "kuaizhizao:production-execution-material-shortage-exceptions:create",
+    "create_delivery_delay_exception": "kuaizhizao:production-execution-delivery-delay-exceptions:create",
+    "create_quality_exception": "kuaizhizao:production-execution-quality-exceptions:create",
+    # spec 215-218 P3 场景 Tool
+    "query_complaints": "kuaizhizao:quality-complaint:read",
+    "query_8d_reports": "kuaizhizao:quality-management-eight-d-reports:read",
+    "query_molds": "kuaizhizao:equipment-management-molds:read",
+    "query_tooling": "kuaizhizao:equipment-management-tool-ledger:read",
+    "query_stocktakings": "kuaizhizao:warehouse-management-stocktaking:read",
+    "analyze_stocktaking_variance": [
+        "kuaizhizao:warehouse-management-stocktaking:read",
+        "kuaizhizao:warehouse-management-reports-stocktaking-history:read",
+    ],
+    "get_management_brief": "kuaiai:entry:read",
 }
 
 
@@ -166,7 +211,13 @@ class TestManifestAiTools:
             module_path, attr = item["handler"].rsplit(":", 1)
             handler = getattr(importlib.import_module(module_path), attr)
             assert callable(handler)
-            assert item["permission"] == _EXPECTED_PERMISSIONS[item["name"]]
+            expected = _EXPECTED_PERMISSIONS[item["name"]]
+            if isinstance(expected, list):
+                assert item.get("permissions_any") == expected
+                assert "permission" not in item
+            else:
+                assert item["permission"] == expected
+                assert "permissions_any" not in item
 
     def test_registry_has_handlers_and_permissions(self):
         ToolRegistry.ensure_defaults()
@@ -174,7 +225,10 @@ class TestManifestAiTools:
             registered = ToolRegistry._tools.get(name)
             assert registered is not None, name
             assert registered.handler is not None, name
-            assert registered.permission == perm, name
+            if isinstance(perm, list):
+                assert registered.permissions_any == perm, name
+            else:
+                assert registered.permission == perm, name
 
 
 class TestToolBridgeEndToEnd:

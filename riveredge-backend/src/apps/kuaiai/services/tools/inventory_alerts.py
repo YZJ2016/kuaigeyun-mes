@@ -22,6 +22,7 @@ Tool 名：``query_inventory_alerts`` / ``query_replenishment_suggestions`` /
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, List, Optional, Set, Tuple
 
 from loguru import logger
@@ -66,8 +67,40 @@ def _fetch_limit(limit: Any) -> int:
     return min(max(_ct()._clamp_limit(limit) * 5, 50), _OVERSAMPLE_LIMIT)
 
 
+def _positive_id(value: Any, name: str) -> tuple:
+    """→ (err, int_id)：可选正整数 id 校验（与 complaint_8d 同款）。"""
+    if value is None or str(value).strip() == "":
+        return None, None
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return f"{name} 须为正整数", None
+    if n <= 0:
+        return f"{name} 须为正整数", None
+    return None, n
+
+
 async def _scope_ids(model, ctx: AiRuntimeContext, ids: Set[int]) -> Set[int]:
     return await _st()._scoped_row_ids(model, ctx, _SCOPE_INVENTORY, ids)
+
+
+def _fmt_dt(value: Any) -> str:
+    """datetime/date 展示：datetime 经 API 同口径站点时区文本，date 取 ISO
+    日（缺省 ''，交由调用方补「未知/未定」）。"""
+    if value is None:
+        return ""
+    try:
+        from core.utils.timezone_utils import to_api_isoformat
+
+        out = to_api_isoformat(value)
+        if out:
+            return out
+    except Exception:
+        pass
+    if isinstance(value, datetime):
+        return value.strftime("%Y-%m-%d %H:%M")
+    s = str(value).strip()
+    return s[:16] if s else ""
 
 
 def _fmt_inventory_alert_row(r: Any) -> str:
@@ -81,7 +114,7 @@ def _fmt_inventory_alert_row(r: Any) -> str:
         f"当前 {_ct()._fmt_num(getattr(r, 'current_quantity', None))}"
         f"/阈值 {_ct()._fmt_num(getattr(r, 'threshold_value', None))}，"
         f"状态 {getattr(r, 'status', '') or '未知'}，"
-        f"触发 {getattr(r, 'triggered_at', '') or '未知'}"
+        f"触发 {_fmt_dt(getattr(r, 'triggered_at', None)) or '未知'}"
         f"（id={getattr(r, 'id', '')}）"
     )
 
@@ -109,6 +142,12 @@ async def query_inventory_alerts(
     a_level = (str(alert_level).strip() or None) if alert_level else None
     if a_level is not None and a_level not in _ALERT_LEVELS:
         return "alert_level 仅支持 info/warning/critical"
+    err, mid = _positive_id(material_id, "material_id")
+    if err:
+        return err
+    err, wid = _positive_id(warehouse_id, "warehouse_id")
+    if err:
+        return err
     try:
         from apps.kuaizhizao.services.inventory_alert_service import (
             InventoryAlertService,
@@ -121,8 +160,8 @@ async def query_inventory_alerts(
             alert_type=a_type,
             status=a_status,
             alert_level=a_level,
-            material_id=int(material_id) if material_id else None,
-            warehouse_id=int(warehouse_id) if warehouse_id else None,
+            material_id=mid,
+            warehouse_id=wid,
             keyword=(str(keyword).strip() or None) if keyword else None,
         )
     except Exception as exc:
@@ -155,7 +194,8 @@ async def query_inventory_alerts(
 
     top = rows[: _ct()._clamp_limit(limit)]
     lines = [
-        f"共 {len(rows)} 条库存预警（当前用户数据范围内），返回前 {len(top)} 条："
+        f"共 {len(rows)} 条库存预警（当前用户数据范围内，"
+        f"前 {_OVERSAMPLE_LIMIT} 条候选内计），返回前 {len(top)} 条："
     ]
     for r in top:
         lines.append(_fmt_inventory_alert_row(r))
@@ -185,6 +225,12 @@ async def query_replenishment_suggestions(
     s_type = (str(suggestion_type).strip() or None) if suggestion_type else None
     if s_type is not None and s_type not in _SUGGESTION_TYPES:
         return "suggestion_type 仅支持 low_stock/demand_based/seasonal"
+    err, mid = _positive_id(material_id, "material_id")
+    if err:
+        return err
+    err, wid = _positive_id(warehouse_id, "warehouse_id")
+    if err:
+        return err
     try:
         from apps.kuaizhizao.services.replenishment_suggestion_service import (
             ReplenishmentSuggestionService,
@@ -197,8 +243,8 @@ async def query_replenishment_suggestions(
             status=s_status,
             priority=s_priority,
             suggestion_type=s_type,
-            material_id=int(material_id) if material_id else None,
-            warehouse_id=int(warehouse_id) if warehouse_id else None,
+            material_id=mid,
+            warehouse_id=wid,
             keyword=(str(keyword).strip() or None) if keyword else None,
         )
     except Exception as exc:
@@ -233,10 +279,11 @@ async def query_replenishment_suggestions(
 
     top = rows[: _ct()._clamp_limit(limit)]
     lines = [
-        f"共 {len(rows)} 条补货建议（当前用户数据范围内），返回前 {len(top)} 条："
+        f"共 {len(rows)} 条补货建议（当前用户数据范围内，"
+        f"前 {_OVERSAMPLE_LIMIT} 条候选内计），返回前 {len(top)} 条："
     ]
     for r in top:
-        order_date = getattr(r, "suggested_order_date", None)
+        order_date = _fmt_dt(getattr(r, "suggested_order_date", None))
         lines.append(
             f"物料 {getattr(r, 'material_code', '') or ''}"
             f"（{getattr(r, 'material_name', '') or '未命名'}）"

@@ -62,6 +62,17 @@ SCENE_CATEGORIES: frozenset = frozenset(
     }
 )
 
+# spec 214 Y6=a：exception-report 场景模板破例允许的写 Tool 闭集
+#（异常上报场景的全部价值即写 Tool，确认闸保证逐人确认，spec 193；
+# 其余场景模板仍只能用 SCENE_READONLY_TOOL_NAMES）
+_EXCEPTION_REPORT_WRITE_TOOLS = frozenset(
+    {
+        "create_material_shortage_exception",
+        "create_delivery_delay_exception",
+        "create_quality_exception",
+    }
+)
+
 
 @dataclass(frozen=True)
 class SceneTemplate:
@@ -81,7 +92,11 @@ class SceneTemplate:
     def __post_init__(self) -> None:
         if self.category not in SCENE_CATEGORIES:
             raise ValueError(f"场景模板 {self.key} 的 category 不在闭集内")
-        unknown = set(self.readonly_tools) - SCENE_READONLY_TOOL_NAMES
+        allowed = SCENE_READONLY_TOOL_NAMES
+        if self.key == "exception-report":
+            # spec 214 Y6=a 破例：仅此模板 readonly_tools 允许含写 Tool
+            allowed = allowed | _EXCEPTION_REPORT_WRITE_TOOLS
+        unknown = set(self.readonly_tools) - allowed
         if unknown:
             raise ValueError(
                 f"场景模板 {self.key} 的 readonly_tools 含非只读 Tool: "
@@ -279,6 +294,300 @@ SCENE_TEMPLATES: tuple = (
         ),
         category="production",
     ),
+    # ==================================================== spec 205-214 新增（P2）
+    SceneTemplate(
+        key="mrp-exceptions",
+        name="MRP 例外助手",
+        description="解读 MRP 例外收件箱，给出错误级例外的分组与处理顺序建议",
+        image_key="mrp-exceptions",
+        capability_tags=("KU-Ask", "KU-Pulse"),
+        sample_prompt="最近一次 MRP 有哪些错误级例外，先处理哪些",
+        scene_route="/apps/kuaizhizao/plan-management/demand-computation",
+        system_prompt=(
+            "你是 MRP 例外助手，解读需求计算产生的 MRP 例外并给出处理顺序建议。"
+            "例外事实一律来自 query_mrp_exceptions 工具返回的真实数据；"
+            "查不到就如实说明，不要编造例外、物料或计算结果。"
+        ),
+        readonly_tools=("query_mrp_exceptions",),
+        category="plan",
+    ),
+    SceneTemplate(
+        key="scheduling-board",
+        name="排程看板解读助手",
+        description="解读可视排产看板的冲突、未排产与缺配置事实，辅助调整",
+        image_key="scheduling-board",
+        capability_tags=("KU-Suggest",),
+        sample_prompt="解释今天排程看板上的冲突与排不进来的工单",
+        scene_route="/apps/kuaizhizao/plan-management/scheduling",
+        system_prompt=(
+            "你是排程看板解读助手，解释可视排产看板上的冲突、未排产工单、"
+            "缺配置项与物料齐套问题，并给出可执行的调整方向。"
+            "排程事实一律来自 query_scheduling_board 工具返回的真实数据；"
+            "查不到就如实说明，不要编造工单、工位、冲突或产能数据；"
+            "只给调整建议，不承诺已改排程。"
+        ),
+        readonly_tools=("query_scheduling_board",),
+        category="plan",
+    ),
+    SceneTemplate(
+        key="trace-lineage",
+        name="批次追溯助手",
+        description="按序列号/批号/工单号做正反向追溯，辅助评估召回范围",
+        image_key="trace-lineage",
+        capability_tags=("KU-Ask",),
+        sample_prompt="批次 B2410-07 用在了哪些成品、发给了哪些客户",
+        scene_route="/apps/kuaizhizao/quality-management/traceability",
+        system_prompt=(
+            "你是批次追溯助手，按序列号/批号/工单号解读正反向追溯链路，"
+            "辅助质量工程师评估召回范围。"
+            "追溯事实一律来自 trace_lineage 工具返回的真实数据；"
+            "查不到就如实说明，不要编造批次、工单、客户或数量；"
+            "召回范围由用户判断，你只罗列链路，不做召回或冻结建议。"
+        ),
+        readonly_tools=("trace_lineage",),
+        category="quality",
+    ),
+    SceneTemplate(
+        key="change-impact",
+        name="变更影响助手",
+        description="追溯单据关联链，分析需求/订单变更的下游影响范围",
+        image_key="change-impact",
+        capability_tags=("KU-Ask", "KU-Pulse"),
+        sample_prompt="分析这张销售订单变更会影响哪些工单和采购单",
+        scene_route="/apps/kuaizhizao/plan-management/demand-change",
+        system_prompt=(
+            "你是变更影响助手，追溯单据上下游关联链，分析销售订单/采购订单/需求"
+            "变更对下游需求计算、工单、收货通知与入库单的影响。"
+            "事实一律来自 trace_document_chain、analyze_sales_order_change_impact、"
+            "analyze_purchase_order_change_impact、analyze_demand_change_impact "
+            "工具返回的真实数据；查不到就如实说明，"
+            "不要编造单据编号、关联关系或影响范围。"
+        ),
+        readonly_tools=(
+            "trace_document_chain",
+            "analyze_sales_order_change_impact",
+            "analyze_purchase_order_change_impact",
+            "analyze_demand_change_impact",
+        ),
+        category="plan",
+    ),
+    SceneTemplate(
+        key="inspection-supplier",
+        name="检验与供应商助手",
+        description="查询来料/过程/成品/出货检验单与供应商评价绩效",
+        image_key="inspection-supplier",
+        capability_tags=("KU-Ask",),
+        sample_prompt="供应商甲近一个月来料检验合格率怎样，不合格的是哪些批次",
+        scene_route="/apps/kuaizhizao/quality-management/incoming-inspection",
+        system_prompt=(
+            "你是检验与供应商助手，回答来料、过程、成品与出货检验单查询，"
+            "以及供应商评价得分与周期绩效问题。"
+            "检验与评价事实一律来自 query_incoming_inspections、"
+            "query_process_inspections、query_finished_inspections、"
+            "query_oqc_inspections、query_supplier_evaluations "
+            "工具返回的真实数据；查不到就如实说明，"
+            "不要编造检验数量、结论、得分或供应商绩效信息。"
+        ),
+        readonly_tools=(
+            "query_incoming_inspections",
+            "query_process_inspections",
+            "query_finished_inspections",
+            "query_oqc_inspections",
+            "query_supplier_evaluations",
+        ),
+        category="quality",
+    ),
+    SceneTemplate(
+        key="equipment-ops",
+        name="设备运维助手",
+        description="答复设备台账、故障维修、保养到期与 OEE 损失分析",
+        image_key="equipment-ops",
+        capability_tags=("KU-Ask", "KU-Pulse"),
+        sample_prompt="分析 3 号注塑机上月的 OEE 损失",
+        scene_route="/apps/kuaizhizao/equipment-management/equipment",
+        system_prompt=(
+            "你是设备运维助手，答复设备台账、故障维修、保养/校准到期与 OEE 损失分析。"
+            "事实一律来自 query_equipment、query_equipment_faults、"
+            "query_maintenance_plans、query_maintenance_reminders、"
+            "query_calibration_alerts、query_equipment_oee、"
+            "analyze_equipment_losses 工具返回的真实数据；"
+            "OEE 指标与损失工时以工具返回值为准，不要估算；"
+            "查不到就如实说明，不要编造设备、故障或指标数据；"
+            "故障原因推测须标注为推测并引用历史记录。"
+        ),
+        readonly_tools=(
+            "query_equipment",
+            "query_equipment_faults",
+            "query_maintenance_plans",
+            "query_maintenance_reminders",
+            "query_calibration_alerts",
+            "query_equipment_oee",
+            "analyze_equipment_losses",
+        ),
+        category="equipment",
+    ),
+    SceneTemplate(
+        key="ecn-impact",
+        name="工程变更助手",
+        description="查询 ECN 单及其对在制工单、库存批次、BOM/工艺引用的影响面",
+        image_key="ecn-impact",
+        capability_tags=("KU-Ask",),
+        sample_prompt="ECN-2024-058 影响哪些在制工单和库存物料",
+        scene_route="/apps/kuaiplm/change-management",
+        system_prompt=(
+            "你是工程变更助手，回答 ECN 变更单及其影响面相关问题。"
+            "ECN 与影响事实一律来自 query_ecn、analyze_ecn_impact、"
+            "query_material_where_used、query_drawing_where_used "
+            "工具返回的真实数据；PLM 未启用或查不到数据就如实说明，"
+            "不要编造变更内容、工单、批次或引用关系。"
+        ),
+        readonly_tools=(
+            "query_ecn",
+            "analyze_ecn_impact",
+            "query_material_where_used",
+            "query_drawing_where_used",
+        ),
+        category="engineering",
+    ),
+    SceneTemplate(
+        key="bom-process",
+        name="BOM 工艺助手",
+        description="查询工程 BOM 层级、替代料组与物料工序参数",
+        image_key="bom-process",
+        capability_tags=("KU-Ask",),
+        sample_prompt="产品 P-3301 的 BOM 有哪些层级和替代料",
+        scene_route="/apps/master-data/process/engineering-bom",
+        system_prompt=(
+            "你是 BOM 工艺助手，回答工程 BOM 结构与工艺参数相关问题。"
+            "BOM 结构、替代料与工序参数一律来自 query_engineering_bom、"
+            "query_material_where_used、query_process_routes "
+            "工具返回的真实数据；查不到物料或无替代关系就如实说明，"
+            "不要编造用量、损耗率、层级或工艺参数。"
+        ),
+        readonly_tools=(
+            "query_engineering_bom",
+            "query_material_where_used",
+            "query_process_routes",
+        ),
+        category="engineering",
+    ),
+    SceneTemplate(
+        key="exception-report",
+        name="异常上报助手",
+        description="对话收集关键字段，确认后创建缺料/延期/质量异常单",
+        image_key="exception-report",
+        capability_tags=("KU-Act",),
+        sample_prompt="WO-1023 缺料要停线了，帮我登记缺料异常",
+        scene_route="/apps/kuaizhizao/production-execution/exception-process",
+        system_prompt=(
+            "你是异常上报助手，帮用户登记生产异常单。"
+            "调用写 Tool 前先收齐关键字段：缺料异常须工单、物料与缺口数量；"
+            "延期异常须工单与延期原因；质量异常须问题描述。"
+            "severity/exception_type/alert_level 拿不准时追问用户，不要编造；"
+            "提交前说明确认后将创建异常单。"
+            "事实一律来自 create_material_shortage_exception、"
+            "create_delivery_delay_exception、create_quality_exception "
+            "工具返回的真实数据；工具报错或查不到数据就如实说明，不要编造单号或状态。"
+        ),
+        # Y6=a 破例：readonly_tools 字段填本单元三个写 Tool（__post_init__ 放行）；
+        # 档案仍停用 + 空授权（Y4=a）
+        readonly_tools=(
+            "create_material_shortage_exception",
+            "create_delivery_delay_exception",
+            "create_quality_exception",
+        ),
+        category="production",
+    ),
+    # spec 215-218 P3 新增模板
+    SceneTemplate(
+        key="complaint-8d",
+        name="客诉 8D 助手",
+        description="查询质量投诉与 8D 报告进度，辅助起草 D0–D8 各段草稿",
+        image_key="complaint-8d",
+        capability_tags=("KU-Ask", "KU-Draft"),
+        sample_prompt="投诉单 QC-2026-001 处理到哪步了，帮我起草 8D",
+        scene_route="/apps/kuaizhizao/quality-management/eight-d-reports",
+        system_prompt=(
+            "你是客诉 8D 助手，查询质量投诉单与 8D 报告进度，辅助起草 8D 各阶段内容。"
+            "事实一律来自 query_complaints、query_8d_reports 工具返回的真实数据；"
+            "查不到就如实说明，不要编造单号、状态或阶段内容；"
+            "起草的 8D 内容一律标注「草稿待人工确认，AI 生成」，只供复制到 8D 单，"
+            "不直接创建或修改单据。"
+        ),
+        readonly_tools=(
+            "query_complaints",
+            "query_8d_reports",
+        ),
+        category="quality",
+    ),
+    SceneTemplate(
+        key="mold-tooling",
+        name="模具工装助手",
+        description="答复模具寿命、模次与工装库位、领用状态",
+        image_key="mold-tooling",
+        capability_tags=("KU-Ask", "KU-Pulse"),
+        sample_prompt="模具 M-078 打了多少模次，还能用多久",
+        scene_route="/apps/kuaizhizao/equipment-management/molds",
+        system_prompt=(
+            "你是模具工装助手，答复模具寿命、模次、保养与工装库位、领用状态问题。"
+            "事实一律来自 query_molds、query_tooling 工具返回的真实数据；"
+            "寿命百分比与预警以工具返回值为准，不要估算；"
+            "查不到就如实说明，不要编造模具、工装或寿命数据。"
+        ),
+        readonly_tools=(
+            "query_molds",
+            "query_tooling",
+        ),
+        category="equipment",
+    ),
+    SceneTemplate(
+        key="stocktaking",
+        name="盘点分析助手",
+        description="解读盘点单差异构成与历史盘点差异趋势",
+        image_key="stocktaking",
+        capability_tags=("KU-Ask",),
+        sample_prompt="这次盘点差异主要是哪些物料",
+        scene_route="/apps/kuaizhizao/warehouse-management/stocktaking",
+        system_prompt=(
+            "你是盘点分析助手，解读盘点单差异构成与历史盘点趋势。"
+            "事实一律来自 query_stocktakings、analyze_stocktaking_variance "
+            "工具返回的真实数据；差异数值以工具返回为准，不要估算；"
+            "查不到就如实说明，不要编造盘点单、差异或库位数据。"
+        ),
+        readonly_tools=(
+            "query_stocktakings",
+            "analyze_stocktaking_variance",
+        ),
+        category="inventory",
+    ),
+    SceneTemplate(
+        key="management-brief",
+        name="管理层助手",
+        description="按日/周汇总生产、质量、设备、库存关键指标，输出分域简报",
+        image_key="management-brief",
+        capability_tags=("KU-Ask", "KU-Pulse"),
+        sample_prompt="汇总昨天生产、质量、设备、库存的日报",
+        scene_route="/apps/kuaizhizao/production-execution/reports/production-daily",
+        system_prompt=(
+            "你是管理层助手，为厂长/管理层汇总生产、质量、设备、库存关键指标，"
+            "输出日报周报式分域简报。事实一律来自 get_management_brief、"
+            "query_production_daily、analyze_first_pass_yield、"
+            "query_equipment_oee、query_inventory_alerts、query_pulse_signals "
+            "工具返回的真实数据；无权限、超时或查不到数据的小节如实说明数据不全，"
+            "不要编造产量、合格率、OEE、异常或库存数字；只解读与建议，不发明指标。"
+        ),
+        readonly_tools=(
+            "get_management_brief",
+            "query_production_daily",
+            "analyze_first_pass_yield",
+            "query_equipment",
+            "query_equipment_oee",
+            "query_inventory",
+            "query_inventory_alerts",
+            "query_pulse_signals",
+        ),
+        category="management",
+    ),
 )
 
 _TEMPLATE_MAP: Dict[str, SceneTemplate] = {t.key: t for t in SCENE_TEMPLATES}
@@ -324,6 +633,45 @@ SCENE_ROUTE_PERMISSIONS: Dict[str, str] = {
     "/apps/master-data/process/sop": (
         "master-data:process:sop:read"
     ),
+    # spec 205-214 新增模板场景路由（路径/权限码取自对应业务 manifest）
+    "/apps/kuaizhizao/plan-management/demand-computation": (
+        "kuaizhizao:plan-management-demand-computation:read"
+    ),
+    "/apps/kuaizhizao/plan-management/scheduling": (
+        "kuaizhizao:plan-management-scheduling:read"
+    ),
+    "/apps/kuaizhizao/quality-management/traceability": (
+        "kuaizhizao:quality-management-traceability:read"
+    ),
+    "/apps/kuaizhizao/plan-management/demand-change": (
+        "kuaizhizao:plan-management-demand-change:read"
+    ),
+    "/apps/kuaizhizao/quality-management/incoming-inspection": (
+        "kuaizhizao:quality-management-incoming-inspection:read"
+    ),
+    "/apps/kuaizhizao/equipment-management/equipment": (
+        "kuaizhizao:equipment-management-equipment:read"
+    ),
+    "/apps/kuaiplm/change-management": "kuaiplm:change:read",
+    "/apps/master-data/process/engineering-bom": (
+        "master-data:process:engineering-bom:read"
+    ),
+    "/apps/kuaizhizao/production-execution/exception-process": (
+        "kuaizhizao:production-execution-exception-process:read"
+    ),
+    # spec 215-218 新增模板场景路由（路径/权限码取自对应业务 manifest）
+    "/apps/kuaizhizao/quality-management/eight-d-reports": (
+        "kuaizhizao:quality-management-eight-d-reports:read"
+    ),
+    "/apps/kuaizhizao/equipment-management/molds": (
+        "kuaizhizao:equipment-management-molds:read"
+    ),
+    "/apps/kuaizhizao/equipment-management/tool-ledger": (
+        "kuaizhizao:equipment-management-tool-ledger:read"
+    ),
+    "/apps/kuaizhizao/warehouse-management/stocktaking": (
+        "kuaizhizao:warehouse-management-stocktaking:read"
+    ),
 }
 
 SCENE_IMAGE_KEYS: frozenset = frozenset(t.image_key for t in SCENE_TEMPLATES)
@@ -341,6 +689,7 @@ SCENE_OVERRIDE_KEYS: frozenset = frozenset(
         "sample_prompt",
         "capability_tags",
         "scene_route",
+        "category",
     }
 )
 
@@ -585,6 +934,7 @@ def _merged_fields(scene: Optional[KuaiaiAgentScene], template: SceneTemplate) -
         "sample_prompt": template.sample_prompt,
         "capability_tags": list(template.capability_tags),
         "scene_route": template.scene_route,
+        "category": template.category,
     }
     for key in SCENE_OVERRIDE_KEYS:
         value = overrides.get(key)
@@ -595,6 +945,11 @@ def _merged_fields(scene: Optional[KuaiaiAgentScene], template: SceneTemplate) -
                 str(v) in SCENE_CAPABILITY_TAGS for v in value
             ):
                 out[key] = [str(v) for v in value]
+            continue
+        if key == "category":
+            # spec 222：实例覆盖 category 也须落在闭集内，非法值回落模板值
+            if isinstance(value, str) and value.strip() in SCENE_CATEGORIES:
+                out[key] = value.strip()
             continue
         if isinstance(value, str) and value.strip():
             out[key] = value.strip()
@@ -616,7 +971,7 @@ def _route_available(
 async def _route_permissions_for_user(
     tenant_id: int, user: Optional[User]
 ) -> Dict[str, bool]:
-    """11 个路由权限一次取回本地交集（替代逐条 has_permission 往返）。
+    """白名单内全部路由权限一次取回本地交集（替代逐条 has_permission 往返）。
 
     与 ``_has_permission`` 同一判定语义：管理员标志（DB 行复核）→ 全放行；
     其余按 ``get_user_permissions`` 多角色并集 ∩ 规范化权限码；任一环节
@@ -684,6 +1039,7 @@ async def _build_item(
             "scene_route": route,
             "scene_available": scene_available,
             "disabled_reason": "场景预置未完成，请重新同步应用后重试",
+            "category": merged["category"],
         }
 
     profile = profiles_by_id.get(scene.agent_profile_id)
@@ -727,6 +1083,7 @@ async def _build_item(
         "scene_route": route,
         "scene_available": scene_available,
         "disabled_reason": reason,
+        "category": merged["category"],
     }
 
 
@@ -872,6 +1229,15 @@ def _validate_override_fields(data: Dict[str, Any]) -> Dict[str, Any]:
             out["scene_route"] = route
         else:
             out["scene_route"] = None
+    if "category" in data:
+        value = data["category"]
+        if value is not None:
+            cat = str(value).strip()
+            if cat not in SCENE_CATEGORIES:
+                raise BusinessLogicError("category 不在业务分类闭集")
+            out["category"] = cat
+        else:
+            out["category"] = None
     return out
 
 

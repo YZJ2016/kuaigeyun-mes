@@ -6654,6 +6654,19 @@ export default {
   'app.kuaiai.hub.tryIt': '去体验',
   'app.kuaiai.hub.capEntryAria': '进入能力入口：{{name}}',
   'app.kuaiai.hub.brandDesc': '面向制造场景的智能辅助能力矩阵',
+  'app.kuaiai.hub.searchPlaceholder': '搜索场景名称、描述或分类',
+  'app.kuaiai.hub.searchEmpty': '无匹配场景',
+  'app.kuaiai.hub.category.plan': '计划',
+  'app.kuaiai.hub.category.production': '生产',
+  'app.kuaiai.hub.category.quality': '质量',
+  'app.kuaiai.hub.category.inventory': '库存',
+  'app.kuaiai.hub.category.purchase': '采购',
+  'app.kuaiai.hub.category.equipment': '设备',
+  'app.kuaiai.hub.category.engineering': '工程',
+  'app.kuaiai.hub.category.management': '管理',
+  'app.kuaiai.hub.category.general': '通用',
+  'app.kuaiai.hub.category.expand': '展开',
+  'app.kuaiai.hub.category.groupAria': '{{name}}分类，{{count}} 个场景',
   'app.kuaiai.catalog.status.ready': '已就绪',
   'app.kuaiai.catalog.status.degraded': '降级可用',
   'app.kuaiai.catalog.status.blocked': '不可用',
@@ -6821,6 +6834,9 @@ export default {
   'app.kuaiai.pulse.viewInventoryAlert': '查看库存预警',
   'app.kuaiai.pulse.viewQualityException': '查看质量异常',
   'app.kuaiai.pulse.viewEquipmentFault': '查看设备故障',
+  'app.kuaiai.pulse.viewIotAlerts': '查看告警',
+  'app.kuaiai.pulse.sourceNoPermission': '无{{source}}权限',
+  'app.kuaiai.pulse.sourceUnavailable': '{{source}}暂不可用，请稍后重试',
   'app.kuaiai.suggest.patchApplied': '已填入表单字段，请确认后保存',
   'app.kuaiai.know.sopTitle': '相关 SOP',
   'app.kuaiai.know.sopEmpty': '暂无匹配知识条目',
@@ -32665,6 +32681,14 @@ export default {
     '图档发放保存需填写部门与使用人',
   'pages.dashboard.updateLog.entries.funide-oa-drawing-distribution-party-r01.description':
     '图纸下发的新建图档发放补回部门与使用人。这两项是发放单必填，缺了保存会被拒绝且之前没有提示。',
+  'pages.dashboard.updateLog.entries.kuaiai-p3-scene-tools-r01.title':
+    '智能体库新增客诉8D、模具工装、盘点、管理层 4 个场景',
+  'pages.dashboard.updateLog.entries.kuaiai-p3-scene-tools-r01.description':
+    '新增客诉 8D 助手（可查投诉与 8D 进度、辅助起草各段草稿）、模具工装助手（寿命预警与库位状态）、盘点分析助手（差异 TopN 与历史趋势）、管理层助手（生产/质量/设备/库存分域简报）；设备信号接入 IoT 未处理告警；SOP 附件内容同步进知识库。',
+  'pages.dashboard.updateLog.entries.kuaiai-p2-scene-tools-r01.title':
+    '智能体库新增 9 个出厂场景与 27 项业务工具',
+  'pages.dashboard.updateLog.entries.kuaiai-p2-scene-tools-r01.description':
+    '新增 MRP 例外、排程看板、批次追溯、变更影响、检验与供应商、设备运维、ECN 影响、BOM 工艺问答、异常上报 9 个出厂场景；智能体库支持按业务分类分组、收起记忆与关键字检索。异常上报场景首次提供「创建缺料/延期/质量异常单」写工具，执行前需人工确认。',
   'pages.dashboard.updateLog.entries.kuaiai-p1-scene-templates-r01.title':
     '智能体库新增班组长、订单交期、作业指导场景',
   'pages.dashboard.updateLog.entries.kuaiai-p1-scene-templates-r01.description':

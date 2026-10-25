@@ -128,6 +128,8 @@ async def get_dynamic_tortoise_config(
                         "tcp_user_timeout": "30000",  # TCP用户超时（毫秒）
                         # 防止客户端断开后连接池遗留 idle in transaction 锁死业务行
                         "idle_in_transaction_session_timeout": "60000",
+                        # 池内空闲连接 60s 即回收；服务端兜底清理经代理/NAT 断开后残留的僵尸会话
+                        "idle_session_timeout": "600000",
                     }
                 }
             },

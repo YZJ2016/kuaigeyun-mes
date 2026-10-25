@@ -14,6 +14,19 @@ import supplierCollaboration from './supplier-collaboration.svg';
 import shiftLead from './shift-lead.svg';
 import orderDelivery from './order-delivery.svg';
 import workInstruction from './work-instruction.svg';
+import mrpExceptions from './mrp-exceptions.svg';
+import schedulingBoard from './scheduling-board.svg';
+import traceLineage from './trace-lineage.svg';
+import changeImpact from './change-impact.svg';
+import inspectionSupplier from './inspection-supplier.svg';
+import equipmentOps from './equipment-ops.svg';
+import ecnImpact from './ecn-impact.svg';
+import bomProcess from './bom-process.svg';
+import exceptionReport from './exception-report.svg';
+import complaint8d from './complaint-8d.svg';
+import moldTooling from './mold-tooling.svg';
+import stocktaking from './stocktaking.svg';
+import managementBrief from './management-brief.svg';
 import defaultScene from './_default.svg';
 import brandVisual from './brand-visual.svg';
 
@@ -28,6 +41,19 @@ export const SCENE_IMAGE_URLS: Record<string, string> = {
   'shift-lead': shiftLead,
   'order-delivery': orderDelivery,
   'work-instruction': workInstruction,
+  'mrp-exceptions': mrpExceptions,
+  'scheduling-board': schedulingBoard,
+  'trace-lineage': traceLineage,
+  'change-impact': changeImpact,
+  'inspection-supplier': inspectionSupplier,
+  'equipment-ops': equipmentOps,
+  'ecn-impact': ecnImpact,
+  'bom-process': bomProcess,
+  'exception-report': exceptionReport,
+  'complaint-8d': complaint8d,
+  'mold-tooling': moldTooling,
+  'stocktaking': stocktaking,
+  'management-brief': managementBrief,
 };
 
 /** 管理表单可选插画 key（与服务端白名单同序） */

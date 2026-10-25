@@ -3,7 +3,8 @@
 下发口径：按 manifest 声明顺序稳定排序，仅返回同时满足「已注册
 （``ToolRegistry`` 内含 handler）」且在 ``ENABLED_TOOL_NAMES`` 闭集内
 的 Tool；未注册/闭集外的条目不返回。目录为进程级注册信息，不含租户
-数据；字段裁剪为 name/label/description/kind/permission，不回 handler
+数据；字段裁剪为 name/label/description/kind/permission/permissions_any
+（spec 207 X2=b），不回 handler
 路径与参数 schema。
 
 失败关闭约定（评审 B-M1）：manifest 不可读/``ai_tools`` 非法/``kind``
@@ -130,6 +131,9 @@ def list_tool_catalog() -> List[ToolCatalogItem]:
                 description=item.get("description") or None,
                 kind=m["kind"],
                 permission=item.get("permission") or registered.permission,
+                permissions_any=(
+                    item.get("permissions_any") or registered.permissions_any
+                ),
             )
         )
     return items

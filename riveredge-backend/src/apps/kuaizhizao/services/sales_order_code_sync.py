@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from loguru import logger
 
 from apps.kuaizhizao.constants import DemandStatus, normalize_status
+from apps.kuaizhizao.models.document_relation import DocumentRelation
 from apps.kuaizhizao.models.sales_order import SalesOrder
 from core.services.document_code_editability import (
     REASON_HAS_DOWNSTREAM,

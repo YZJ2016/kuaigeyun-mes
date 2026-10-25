@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 420" role="img">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#a8071a"/>
+      <stop offset="1" stop-color="#720418"/>
+    </linearGradient>
+  </defs>
+  <rect width="280" height="420" fill="url(#bg)"/>
+  <circle cx="248" cy="48" r="90" fill="#ffffff" opacity="0.05"/>
+  <circle cx="30" cy="372" r="102" fill="#ffffff" opacity="0.05"/>
+  <!-- 异常上报单 -->
+  <g transform="translate(64 108)">
+    <rect x="0" y="0" width="152" height="176" rx="12" fill="#ffffff" opacity="0.92"/>
+    <!-- 头部告警条 -->
+    <rect x="0" y="0" width="152" height="40" rx="12" fill="#ffa39e" opacity="0.9"/>
+    <path d="M22 14l8 14h-16z" fill="#a8071a"/>
+    <rect x="40" y="16" width="72" height="9" rx="4.5" fill="#a8071a" opacity="0.75"/>
+    <!-- 字段行 -->
+    <g>
+      <rect x="16" y="58" width="46" height="9" rx="4.5" fill="#a8071a" opacity="0.35"/>
+      <rect x="72" y="58" width="64" height="9" rx="4.5" fill="#a8071a" opacity="0.55"/>
+      <rect x="16" y="78" width="46" height="9" rx="4.5" fill="#a8071a" opacity="0.35"/>
+      <rect x="72" y="78" width="52" height="9" rx="4.5" fill="#a8071a" opacity="0.55"/>
+      <rect x="16" y="98" width="46" height="9" rx="4.5" fill="#a8071a" opacity="0.35"/>
+      <rect x="72" y="98" width="72" height="9" rx="4.5" fill="#a8071a" opacity="0.55"/>
+      <rect x="16" y="118" width="46" height="9" rx="4.5" fill="#a8071a" opacity="0.35"/>
+      <rect x="72" y="118" width="40" height="9" rx="4.5" fill="#a8071a" opacity="0.4"/>
+    </g>
+    <!-- 确认按钮 -->
+    <rect x="16" y="142" width="120" height="22" rx="11" fill="#a8071a"/>
+    <rect x="56" y="149" width="40" height="8" rx="4" fill="#ffffff" opacity="0.9"/>
+  </g>
+  <!-- 确认角标 -->
+  <g transform="translate(200 300)">
+    <circle cx="0" cy="0" r="26" fill="#ffffff" opacity="0.95"/>
+    <path d="M-11 0l7 8 15 -16" stroke="#a8071a" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <!-- 三个异常类型小签 -->
+  <g transform="translate(64 322)" fill="#ffffff" opacity="0.55">
+    <rect x="0" y="0" width="44" height="18" rx="9" opacity="0.5"/>
+    <rect x="52" y="0" width="44" height="18" rx="9" opacity="0.5"/>
+    <rect x="104" y="0" width="44" height="18" rx="9" opacity="0.5"/>
+  </g>
+</svg>

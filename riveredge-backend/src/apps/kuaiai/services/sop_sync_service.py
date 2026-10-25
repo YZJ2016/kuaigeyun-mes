@@ -13,12 +13,19 @@
     ``error_message``，可在 /knowledge 或 /corpus 重试）；
   * 非生效（作废/草稿/审核中）、纸质载体或正文为空 → 已入库文档软删下架
     （chunks 同事务软删，不再参与 search_knowledge 检索）；未入库则记录跳过；
-- 审计字段写系统身份（created_by=0, "系统"，spec 181 约定），日志不记正文。
+- spec 219（X7=a）：``attachments`` 中可解析附件逐一经 FileService 租户路径
+  拉取 bytes → 走 ``document_parsers.extract_text`` 同一管线 → 文本按
+  「【附件：文件名】」分段拼接进同一文档 raw_content；不支持类型/无文本层/
+  超限/拉取失败的附件跳过并记同步日志，不影响正文；附件增删由「按当前
+  attachments 全量重建同一文档」天然幂等覆盖；作废下架整篇（含附件段）。
+- 审计字段写系统身份（created_by=0, "系统"，spec 181 约定），日志不记正文
+  与附件明文。
 """
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+import re
+from typing import Any, Dict, List, Optional, Tuple
 
 from loguru import logger
 
@@ -28,6 +35,16 @@ from apps.kuaiai.models.knowledge import KuaiaiKnowledgeDocument
 SOURCE_REF_TYPE_SOP = "sop"
 _TITLE_MAX = 300
 _RAW_CONTENT_MAX = 200000
+# 附件上限沿用现有约束：SOP 附件上传字段 max=10
+# （前端 DocumentAttachmentsField 默认值）；大小上限沿用文件上传/解析管线
+# 的 FileService.MAX_FILE_SIZE，超限附件跳过并记录
+_ATTACHMENT_MAX_COUNT = 10
+_ATTACHMENT_NAME_MAX = 200
+# 可进 extract_text 的附件扩展名（与 document_parsers 路由保持一致；
+# doc/ppt 旧二进制与图片/视频等不在内 → 跳过记录，不做 OCR）
+_ATTACHMENT_TEXT_TYPES = frozenset(
+    {"pdf", "docx", "pptx", "xlsx", "xls", "md", "markdown", "txt", "text"}
+)
 _CARRIER_LABELS = {
     "electronic": "电子",
     "paper": "纸质",
@@ -120,10 +137,160 @@ async def _operation_label(tenant_id: int, sop) -> Optional[str]:
     return label or None
 
 
+def _iter_sop_attachments(sop) -> List[Any]:
+    """归一化 ``sop.attachments``：list 项 / ``{files: [...]}`` 形态统一拍平，
+    dict 项与裸 file_uuid 字符串均接受（与 master_data 侧
+    ``_normalize_attachments`` 及前端 ``mapSopAttachmentsToUploadList``
+    的双形态约定一致）。"""
+    raw = getattr(sop, "attachments", None)
+    if raw is None:
+        return []
+    items = raw
+    if isinstance(raw, dict):
+        files = raw.get("files")
+        items = files if isinstance(files, list) else [raw]
+    if not isinstance(items, list):
+        return []
+    return [x for x in items if isinstance(x, (dict, str))]
+
+
+def _attachment_ref(item: Any) -> Tuple[Optional[str], str]:
+    """(file_uuid, name)：uid/uuid/file_uuid 取文件标识；name/original_name/
+    file_name 取展示名；裸字符串项按 file_uuid 处理。"""
+    if isinstance(item, str):
+        uuid = item.strip()
+        return (uuid or None), ""
+    uuid = str(
+        item.get("uid") or item.get("uuid") or item.get("file_uuid") or ""
+    ).strip()
+    name = str(
+        item.get("name")
+        or item.get("original_name")
+        or item.get("file_name")
+        or ""
+    ).strip()
+    return (uuid or None), name
+
+
+def _attachment_ext(*candidates: str) -> str:
+    """取扩展名：优先含 ``.`` 的文件名后缀；否则接受裸扩展名 token。"""
+    for cand in candidates:
+        cand = (cand or "").strip().lower()
+        if "." in cand:
+            return cand.rsplit(".", 1)[-1].strip()
+    for cand in candidates:
+        cand = (cand or "").strip().lower()
+        # isalnum 对「点检表」等 CJK 展示名也返 True，须叠加 ASCII 约束，
+        # 否则无扩展名的展示名会劫持后续 ext/file_extension 候选
+        if cand and len(cand) <= 8 and cand.isascii() and cand.isalnum():
+            return cand
+    return ""
+
+
+def _clean_attachment_name(name: str, fallback: str) -> str:
+    name = re.sub(r"[\r\n]+", " ", name or "").strip()
+    return (name or fallback)[:_ATTACHMENT_NAME_MAX]
+
+
+async def _attachment_sections(
+    tenant_id: int, sop
+) -> Tuple[List[str], int]:
+    """逐附件拉取→解析→渲染「【附件：name】」分段；返回 (分段列表, 跳过数)。
+
+    失败关闭语义仅到附件级：类型不支持/无文本层/超限/文件缺失/解析异常
+    一律跳过并记同步日志（不记附件明文），不抛出、不影响正文同步。
+    """
+    items = _iter_sop_attachments(sop)
+    if not items:
+        return [], 0
+    sop_id = getattr(sop, "id", None)
+    skipped = 0
+    if len(items) > _ATTACHMENT_MAX_COUNT:
+        logger.warning(
+            "SOP 知识同步附件数量超限 sop_id={} count={} cap={}（仅处理前 {} 个）",
+            sop_id,
+            len(items),
+            _ATTACHMENT_MAX_COUNT,
+            _ATTACHMENT_MAX_COUNT,
+        )
+        # 截断丢弃项计入 skipped：返回统计口径=「未进入正文的附件数」
+        skipped += len(items) - _ATTACHMENT_MAX_COUNT
+        items = items[:_ATTACHMENT_MAX_COUNT]
+
+    from apps.kuaiai.services.document_parsers import extract_text
+    from core.services.file.file_service import FileService
+    from infra.exceptions.exceptions import NotFoundError, ValidationError
+
+    def _skip(name: str, reason: str) -> None:
+        logger.warning(
+            "SOP 附件未解析 sop_id={} attachment={} reason={}",
+            sop_id,
+            name,
+            reason,
+        )
+
+    sections: List[str] = []
+    seen: set = set()
+    for item in items:
+        file_uuid, name = _attachment_ref(item)
+        label = _clean_attachment_name(name, file_uuid or "未命名附件")
+        if not file_uuid:
+            skipped += 1
+            _skip(label, "缺少文件标识")
+            continue
+        if file_uuid in seen:
+            continue
+        seen.add(file_uuid)
+
+        try:
+            file = await FileService.get_file_by_uuid(tenant_id, file_uuid)
+        except NotFoundError:
+            skipped += 1
+            _skip(label, "文件不存在或已删除")
+            continue
+        except Exception as exc:
+            # 读取异常（DB/存储故障等）不冒名「不存在」，记类型不记明文
+            skipped += 1
+            _skip(label, f"读取失败（{type(exc).__name__}）")
+            continue
+        if not name:
+            name = str(getattr(file, "original_name", "") or "").strip()
+            label = _clean_attachment_name(name, file_uuid)
+        ext = _attachment_ext(
+            name,
+            str(item.get("ext") or "") if isinstance(item, dict) else "",
+            str(getattr(file, "file_extension", "") or ""),
+            str(getattr(file, "original_name", "") or ""),
+        )
+        if ext not in _ATTACHMENT_TEXT_TYPES:
+            skipped += 1
+            _skip(label, f"类型不支持（{ext or '无扩展名'}）")
+            continue
+        size = int(getattr(file, "file_size", 0) or 0)
+        if size > FileService.MAX_FILE_SIZE:
+            skipped += 1
+            _skip(label, "超过大小上限")
+            continue
+        try:
+            data = await FileService.get_file_content(tenant_id, file_uuid)
+            text = await extract_text(ext, data)
+        except ValidationError as exc:
+            skipped += 1
+            _skip(label, str(getattr(exc, "message", "") or exc)[:100])
+            continue
+        except Exception as exc:
+            skipped += 1
+            _skip(label, f"解析失败（{type(exc).__name__}）")
+            continue
+        sections.append(f"【附件：{label}】\n\n{text.strip()}")
+    return sections, skipped
+
+
 async def _build_document_payload(
     tenant_id: int, sop
-) -> tuple[str, str]:
-    """(title, raw_content)：标题=名称（编码）；正文=元信息头 + content。"""
+) -> Tuple[str, str, Dict[str, int]]:
+    """(title, raw_content, attachment_stats)：标题=名称（编码）；
+    正文=元信息头 + content + 各可解析附件「【附件：文件名】」分段。"""
     revision = (
         getattr(sop, "current_revision", None)
         or getattr(sop, "version", None)
@@ -142,6 +309,9 @@ async def _build_document_payload(
     if op_label:
         meta.append(f"- 关联工序：{op_label}")
     raw = f"# {sop.name}\n\n" + "\n".join(meta) + f"\n\n{content}"
+    sections, skipped = await _attachment_sections(tenant_id, sop)
+    if sections:
+        raw += "\n\n" + "\n\n".join(sections)
     if len(raw) > _RAW_CONTENT_MAX:
         logger.warning(
             "SOP 知识同步正文超长截断 sop_id={} length={}",
@@ -149,7 +319,7 @@ async def _build_document_payload(
             len(raw),
         )
         raw = raw[:_RAW_CONTENT_MAX]
-    return title, raw
+    return title, raw, {"parsed": len(sections), "skipped": skipped}
 
 
 async def _upsert_and_parse(
@@ -159,7 +329,7 @@ async def _upsert_and_parse(
     from apps.kuaiai.services.knowledge_service import KnowledgeService
     from tortoise.exceptions import IntegrityError
 
-    title, raw = await _build_document_payload(tenant_id, sop)
+    title, raw, attach_stats = await _build_document_payload(tenant_id, sop)
     doc = await _find_sop_document(tenant_id, sop.id)
     if doc is None:
         try:
@@ -208,6 +378,7 @@ async def _upsert_and_parse(
     return {
         "document_id": int(doc.id),
         "knowledge_id": int(knowledge_id),
+        "attachments": attach_stats,
     }
 
 
@@ -268,9 +439,12 @@ async def sync_sop_document(tenant_id: int, sop_id: int) -> Dict[str, Any]:
 
     result = await _upsert_and_parse(tenant_id, sop, int(cfg["knowledge_id"]))
     logger.info(
-        "SOP 知识同步完成 sop_id={} document_id={} knowledge_id={}",
+        "SOP 知识同步完成 sop_id={} document_id={} knowledge_id={} "
+        "attachments_parsed={} attachments_skipped={}",
         sop.id,
         result["document_id"],
         result["knowledge_id"],
+        result["attachments"]["parsed"],
+        result["attachments"]["skipped"],
     )
     return {"synced": True, **result}

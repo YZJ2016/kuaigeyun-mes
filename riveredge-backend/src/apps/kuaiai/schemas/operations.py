@@ -36,6 +36,8 @@ class HubCapabilityOut(BaseModel):
     # spec 191：场景卡下发绑定解析结果；ask 卡两项为 null
     scene_key: Optional[str] = None
     agent_profile_id: Optional[int] = None
+    # spec 222：场景卡业务分类（SCENE_CATEGORIES 闭集）；ask 卡为 null
+    category: Optional[str] = None
 
 
 class HubOut(BaseModel):
@@ -123,6 +125,7 @@ class SceneInstanceUpdate(BaseModel):
     sample_prompt: Optional[str] = Field(default=None, max_length=500)
     capability_tags: Optional[List[str]] = None
     scene_route: Optional[str] = None
+    category: Optional[str] = None
 
 
 class SceneCloneOverrides(BaseModel):
@@ -136,6 +139,7 @@ class SceneCloneOverrides(BaseModel):
     sample_prompt: Optional[str] = Field(default=None, max_length=500)
     capability_tags: Optional[List[str]] = None
     scene_route: Optional[str] = None
+    category: Optional[str] = None
 
 
 class SceneInstanceClone(BaseModel):

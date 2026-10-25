@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 420" role="img">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#237804"/>
+      <stop offset="1" stop-color="#135200"/>
+    </linearGradient>
+  </defs>
+  <rect width="280" height="420" fill="url(#bg)"/>
+  <circle cx="248" cy="48" r="90" fill="#ffffff" opacity="0.05"/>
+  <circle cx="30" cy="372" r="102" fill="#ffffff" opacity="0.05"/>
+  <!-- 检验板夹 -->
+  <g transform="translate(66 92)">
+    <rect x="54" y="-12" width="40" height="18" rx="6" fill="#d9f7be"/>
+    <rect x="0" y="0" width="148" height="212" rx="12" fill="#ffffff" opacity="0.92"/>
+    <rect x="14" y="18" width="80" height="10" rx="5" fill="#237804" opacity="0.75"/>
+    <!-- 检验行 -->
+    <g>
+      <circle cx="24" cy="52" r="8" fill="#b7eb8f"/>
+      <path d="M20 52l3 3 6 -7" stroke="#237804" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <rect x="42" y="48" width="86" height="8" rx="4" fill="#237804" opacity="0.35"/>
+      <circle cx="24" cy="84" r="8" fill="#b7eb8f"/>
+      <path d="M20 84l3 3 6 -7" stroke="#237804" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <rect x="42" y="80" width="70" height="8" rx="4" fill="#237804" opacity="0.35"/>
+      <circle cx="24" cy="116" r="8" fill="#ffa39e"/>
+      <path d="M20.5 112.5l7 7m0 -7l-7 7" stroke="#cf1322" stroke-width="2" stroke-linecap="round"/>
+      <rect x="42" y="112" width="92" height="8" rx="4" fill="#cf1322" opacity="0.3"/>
+      <circle cx="24" cy="148" r="8" fill="#b7eb8f" opacity="0.6"/>
+      <path d="M20 148l3 3 6 -7" stroke="#237804" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.6"/>
+      <rect x="42" y="144" width="62" height="8" rx="4" fill="#237804" opacity="0.25"/>
+      <circle cx="24" cy="180" r="8" fill="#b7eb8f" opacity="0.4"/>
+      <rect x="42" y="176" width="76" height="8" rx="4" fill="#237804" opacity="0.18"/>
+    </g>
+  </g>
+  <!-- 供应商标记 -->
+  <g transform="translate(196 306)">
+    <circle cx="0" cy="0" r="26" fill="#ffffff" opacity="0.92"/>
+    <path d="M-9 -2h18v12h-18z" fill="#237804" opacity="0.85"/>
+    <path d="M-12 -2l12 -8 12 8" fill="none" stroke="#237804" stroke-width="2.5" stroke-linecap="round"/>
+    <rect x="-3" y="4" width="6" height="6" fill="#ffffff"/>
+  </g>
+</svg>

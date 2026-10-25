@@ -1,5 +1,6 @@
 /**
- * 星AI 能力矩阵页（/apps/kuaiai/hub，spec 181 T7；spec 191 场景卡绑定）。
+ * 星AI 能力矩阵页（/apps/kuaiai/hub，spec 181 T7；spec 191 场景卡绑定；
+ * spec 222 分类分组 + 收起记忆 + 检索）。
  *
  * - 数据：GET /apps/kuaiai/operations/hub?days=7（模型/四指标/能力卡，局部降级）；
  * - 能力卡入口：ask 卡打开既有 KU-Ask 抽屉（纯对话路径 A，capabilityMode=ask）；
@@ -7,20 +8,26 @@
  *   capabilityMode=query（spec 191，服务端 guard_scene_agent_key 全量复核）；
  *   not_ready / 无路由 / 无目标权限一律禁用 + Tooltip，不跳 404；
  * - 指标卡点击进 /insights、/pulse、/corpus，缺 display 权限禁用；
- * - 指标为 null 显示「—」，绝不伪造 0；整页失败 Result + 重试，403 Result。
+ * - 指标为 null 显示「—」，绝不伪造 0；整页失败 Result + 重试，403 Result；
+ * - 场景卡按 category 分组（组头=分类名+卡数+收起/展开，收起集合存
+ *   localStorage 跨会话恢复，默认全展开）；ask 卡置顶不参与分组；
+ * - 页头检索框即时过滤卡名/描述/分类名（大小写不敏感），命中分类强制
+ *   展开，ask 卡始终显示，无命中显示「无匹配场景」空态而非加载失败。
  */
 
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Button,
+  Empty,
+  Input,
   Result,
   Skeleton,
   Tag,
   Tooltip,
   Typography,
 } from 'antd';
-import { ReloadOutlined } from '@ant-design/icons';
+import { ReloadOutlined, RightOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -63,6 +70,34 @@ const STATUS_TAG: Record<OperationalStatus, { color: string; key: string; fallba
 function statusTag(status: OperationalStatus, t: (k: string, o?: any) => string) {
   const conf = STATUS_TAG[status] ?? STATUS_TAG.not_ready;
   return <Tag color={conf.color}>{t(conf.key, { defaultValue: conf.fallback })}</Tag>;
+}
+
+/** spec 222：场景卡分类 key → 组头中文名（与后端 SCENE_CATEGORIES 闭集对齐） */
+const CATEGORY_LABELS: Record<string, { key: string; fallback: string }> = {
+  plan: { key: 'app.kuaiai.hub.category.plan', fallback: '计划' },
+  production: { key: 'app.kuaiai.hub.category.production', fallback: '生产' },
+  quality: { key: 'app.kuaiai.hub.category.quality', fallback: '质量' },
+  inventory: { key: 'app.kuaiai.hub.category.inventory', fallback: '库存' },
+  purchase: { key: 'app.kuaiai.hub.category.purchase', fallback: '采购' },
+  equipment: { key: 'app.kuaiai.hub.category.equipment', fallback: '设备' },
+  engineering: { key: 'app.kuaiai.hub.category.engineering', fallback: '工程' },
+  management: { key: 'app.kuaiai.hub.category.management', fallback: '管理' },
+  general: { key: 'app.kuaiai.hub.category.general', fallback: '通用' },
+};
+
+/** spec 222：已收起 category key 数组的 localStorage 键（默认全展开） */
+const COLLAPSED_CATEGORIES_KEY = 'kuaiai.hub.collapsed_categories';
+
+function readCollapsedCategories(): string[] {
+  try {
+    const raw = localStorage.getItem(COLLAPSED_CATEGORIES_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed)
+      ? parsed.filter((v): v is string => typeof v === 'string')
+      : [];
+  } catch {
+    return [];
+  }
 }
 
 const HubPage: React.FC = () => {
@@ -150,6 +185,66 @@ const HubPage: React.FC = () => {
     ? data.model.name
     : t('app.kuaiai.hub.modelUnknown', { defaultValue: '未配置' });
 
+  // spec 222：收起集合（localStorage 跨会话恢复）+ 页头检索
+  const [collapsedCategories, setCollapsedCategories] = useState<string[]>(
+    readCollapsedCategories,
+  );
+  const [keyword, setKeyword] = useState('');
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        COLLAPSED_CATEGORIES_KEY,
+        JSON.stringify(collapsedCategories),
+      );
+    } catch {
+      // localStorage 不可用时收起状态仅本次会话生效
+    }
+  }, [collapsedCategories]);
+
+  const toggleCategory = useCallback((cat: string) => {
+    setCollapsedCategories((prev) =>
+      prev.includes(cat) ? prev.filter((k) => k !== cat) : [...prev, cat],
+    );
+  }, []);
+
+  const categoryLabel = useCallback(
+    (cat: string): string => {
+      const conf = CATEGORY_LABELS[cat] ?? CATEGORY_LABELS.general;
+      return t(conf.key, { defaultValue: conf.fallback });
+    },
+    [t],
+  );
+
+  const normalizedKeyword = keyword.trim().toLowerCase();
+
+  // 分组渲染：ask 卡置顶不参与分组；分类组序/卡序均保持后端返回序
+  // （SCENE_TEMPLATES 顺序，首次出现次序）；检索只显示命中卡且分类强制展开
+  const hubGroups = useMemo(() => {
+    const caps = data?.capabilities ?? [];
+    const ask = caps.find((c) => c.key === 'ask') ?? null;
+    const searching = normalizedKeyword.length > 0;
+    const groups: { key: string; label: string; cards: HubCapabilityOut[] }[] = [];
+    const byKey = new Map<string, (typeof groups)[number]>();
+    for (const cap of caps) {
+      if (cap.key === 'ask') continue;
+      const cat = cap.category && cap.category.trim() ? cap.category.trim() : 'general';
+      if (searching) {
+        const haystack =
+          `${cap.name ?? ''}\n${cap.description ?? ''}\n${cat}\n${categoryLabel(cat)}`.toLowerCase();
+        if (!haystack.includes(normalizedKeyword)) continue;
+      }
+      let group = byKey.get(cat);
+      if (!group) {
+        group = { key: cat, label: categoryLabel(cat), cards: [] };
+        byKey.set(cat, group);
+        groups.push(group);
+      }
+      group.cards.push(cap);
+    }
+    return { ask, groups, searching };
+  }, [data?.capabilities, normalizedKeyword, categoryLabel]);
+
   const renderCapabilityCard = (cap: HubCapabilityOut) => {
     const mode = ASSISTANT_CAP_MODE[cap.key];
     // spec 191：场景卡携带 scene_key，点击走档案装配（agentKey + agentId + query）
@@ -221,6 +316,18 @@ const HubPage: React.FC = () => {
       })}
       extra={
         <>
+          <Input.Search
+            allowClear
+            style={{ width: 240 }}
+            placeholder={t('app.kuaiai.hub.searchPlaceholder', {
+              defaultValue: '搜索场景名称、描述或分类',
+            })}
+            value={keyword}
+            onChange={(e) => setKeyword(e.target.value)}
+            aria-label={t('app.kuaiai.hub.searchPlaceholder', {
+              defaultValue: '搜索场景名称、描述或分类',
+            })}
+          />
           <Tooltip
             title={
               kuaiaiEntryAvailable
@@ -275,12 +382,14 @@ const HubPage: React.FC = () => {
             <div className="kuaiai-ops-brand-card">
               <Skeleton.Image active style={{ width: 300, height: 300 }} />
             </div>
-            <div className="kuaiai-ops-cap-grid">
-              {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
-                <div className="kuaiai-ops-cap-card" key={i}>
-                  <Skeleton active paragraph={{ rows: 2 }} title={{ width: '40%' }} />
-                </div>
-              ))}
+            <div className="kuaiai-ops-cap-groups">
+              <div className="kuaiai-ops-cap-grid">
+                {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
+                  <div className="kuaiai-ops-cap-card" key={i}>
+                    <Skeleton active paragraph={{ rows: 2 }} title={{ width: '40%' }} />
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -402,8 +511,65 @@ const HubPage: React.FC = () => {
               </div>
             </div>
           </div>
-          <div className="kuaiai-ops-cap-grid">
-            {capabilities.map(renderCapabilityCard)}
+          <div className="kuaiai-ops-cap-groups">
+            {/* ask 卡置顶，不参与分组与检索 */}
+            {hubGroups.ask ? (
+              <div className="kuaiai-ops-cap-grid">
+                {renderCapabilityCard(hubGroups.ask)}
+              </div>
+            ) : null}
+            {hubGroups.searching && hubGroups.groups.length === 0 ? (
+              <div className="kuaiai-ops-hub-search-empty">
+                <Empty
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  description={t('app.kuaiai.hub.searchEmpty', {
+                    defaultValue: '无匹配场景',
+                  })}
+                />
+              </div>
+            ) : (
+              hubGroups.groups.map((group) => {
+                // 检索命中分类强制展开（不写入 localStorage）
+                const isCollapsed =
+                  !hubGroups.searching && collapsedCategories.includes(group.key);
+                return (
+                  <section className="kuaiai-ops-cap-group" key={group.key}>
+                    <button
+                      type="button"
+                      className="kuaiai-ops-cap-group-head"
+                      onClick={() => toggleCategory(group.key)}
+                      aria-expanded={!isCollapsed}
+                      aria-label={t('app.kuaiai.hub.category.groupAria', {
+                        defaultValue: '{{name}}分类，{{count}} 个场景',
+                        name: group.label,
+                        count: group.cards.length,
+                      })}
+                    >
+                      <RightOutlined
+                        className="kuaiai-ops-cap-group-arrow"
+                        rotate={isCollapsed ? 0 : 90}
+                      />
+                      <span className="kuaiai-ops-cap-group-name">{group.label}</span>
+                      <span className="kuaiai-ops-cap-group-count">
+                        {group.cards.length}
+                      </span>
+                      <span className="kuaiai-ops-cap-group-toggle">
+                        {isCollapsed
+                          ? t('app.kuaiai.hub.category.expand', {
+                              defaultValue: '展开',
+                            })
+                          : t('common.collapse', { defaultValue: '收起' })}
+                      </span>
+                    </button>
+                    {isCollapsed ? null : (
+                      <div className="kuaiai-ops-cap-grid">
+                        {group.cards.map(renderCapabilityCard)}
+                      </div>
+                    )}
+                  </section>
+                );
+              })
+            )}
           </div>
         </div>
       </div>

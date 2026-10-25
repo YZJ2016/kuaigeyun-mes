@@ -43,11 +43,28 @@ class PulseSummaryOut(BaseModel):
     domain_count: int = 0
 
 
+class PulseSourceOut(BaseModel):
+    """领域内来源级状态（spec 220 X8=a）。
+
+    status 闭集 ok|no_permission|unavailable；非 ok 来源由前端渲染
+    占位小节（无权/暂不可用），count 为该来源贡献的信号条数。
+    """
+
+    key: str
+    label: str
+    status: str = Field(description="ok|no_permission|unavailable")
+    count: int = 0
+
+
 class PulseGroupOut(BaseModel):
     domain: str
     label: str
     count: int = Field(description="该领域筛选后总条数（非本页条数）")
     items: List[PulseItemOut] = Field(default_factory=list)
+    sources: List[PulseSourceOut] = Field(
+        default_factory=list,
+        description="spec 220：来源级状态；旧前端忽略该字段仍可用",
+    )
 
 
 class PulseErrorOut(BaseModel):

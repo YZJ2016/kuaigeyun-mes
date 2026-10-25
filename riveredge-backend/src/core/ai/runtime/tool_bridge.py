@@ -6,7 +6,8 @@
   ``ai_tools`` 声明的 ``module:attr``）。handler 缺失/异常一律回
   ``ToolMessage(status="error")``，不抛穿——让模型改口而不是 500。
 - ``build_tool_guard_middleware``：``wrap_tool_call`` 中按
-  ``RegisteredTool.permission`` 对当前上下文用户做 RBAC，无权限回
+  ``RegisteredTool.permission``（单值）或 ``permissions_any``（多值
+  任一命中，spec 207 X2=b）对当前上下文用户做 RBAC，无权限回
   ``ToolMessage(status="error")``；计时并写 ``core_ai_audit_logs``
   （不落 Key/敏感参数，KR-I5）。
 
@@ -132,6 +133,14 @@ def _business_ref(tool_args: Any) -> Optional[str]:
         if value is None or isinstance(value, (dict, list)):
             continue
         return f"{name}={value}"
+    # spec 207：无 id 键时退取业务编码键（code/*_code，如追溯码）
+    for key, value in tool_args.items():
+        name = str(key)
+        if name != "code" and not name.endswith("_code"):
+            continue
+        if value is None or isinstance(value, (dict, list)):
+            continue
+        return f"{name}={value}"
     return None
 
 
@@ -187,7 +196,12 @@ def build_tool_guard_middleware():
 
         registered = _registered_tool(tool_name)
         permission = getattr(registered, "permission", None) if registered else None
-        if registered is None or not permission:
+        permissions_any = (
+            [c for c in (getattr(registered, "permissions_any", None) or []) if c]
+            if registered
+            else []
+        )
+        if registered is None or (not permission and not permissions_any):
             # 失败关闭：未注册或无权限码的工具一律拒绝，fail-open 即越权面
             await _audit_tool_call(
                 ctx=ctx,
@@ -203,11 +217,22 @@ def build_tool_guard_middleware():
 
         allowed = bool(ctx.is_infra_admin or ctx.is_tenant_admin)
         if not allowed:
-            allowed = await UserPermissionService.has_permission(
-                getattr(ctx.user, "id", 0),
-                ctx.tenant_id,
-                permission,
-            )
+            user_id = getattr(ctx.user, "id", 0)
+            if permissions_any:
+                # spec 207 X2=b：多码任一命中即放行（与路由
+                # require_permission_codes require_all=False 同语义）
+                for code in permissions_any:
+                    if await UserPermissionService.has_permission(
+                        user_id, ctx.tenant_id, code
+                    ):
+                        allowed = True
+                        break
+            else:
+                allowed = await UserPermissionService.has_permission(
+                    user_id,
+                    ctx.tenant_id,
+                    permission,
+                )
         if not allowed:
             await _audit_tool_call(
                 ctx=ctx,

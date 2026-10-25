@@ -390,9 +390,9 @@
     },
     {
       "name": "analyze_quality",
-      "label": "分析质量异常",
+      "label": "分析不合格检验记录",
       "kind": "read",
-      "description": "查询质量异常记录摘要（不合格检验，按检验类型/日期/物料/供应商过滤）",
+      "description": "查询不合格检验记录摘要（按检验类型/日期/物料/供应商过滤）；注意：查质量异常单请用 query_quality_exceptions",
       "permission": "kuaizhizao:quality-analysis:read",
       "handler": "apps.kuaiai.services.scene_tools:analyze_quality",
       "parameters": {
@@ -739,7 +739,7 @@
       "name": "query_quality_exceptions",
       "label": "查询质量异常",
       "kind": "read",
-      "description": "查询质量异常记录；摘要含异常类型、工单、物料、批号、严重程度与状态；仅返回当前用户工单数据范围内记录（无工单行保留）",
+      "description": "查询质量异常单（QualityException）；摘要含异常类型、工单、物料、批号、严重程度与状态；仅返回当前用户工单数据范围内记录（无工单行保留）；查客户投诉单请用 query_complaints",
       "permission": "kuaizhizao:production-execution-quality-exceptions:read",
       "handler": "apps.kuaiai.services.tools.kitting_exceptions:query_quality_exceptions",
       "parameters": {
@@ -858,21 +858,671 @@
       "name": "query_process_routes",
       "label": "查询工艺路线",
       "kind": "read",
-      "description": "查询工艺路线：返回路线编码、名称、版本与工序序列（工序编码/名称），可按物料反查绑定路线；与工艺路线列表同口径",
+      "description": "查询工艺路线：view=nodes 返回路线编码、名称、版本与工序序列（工序编码/名称），可按物料反查绑定路线，与工艺路线列表同口径；view=parameters 查物料级工序参数（须传 material_id）",
       "permission": "master-data:process:route:read",
       "handler": "apps.kuaiai.services.tools.process_routes:query_process_routes",
       "parameters": {
         "type": "object",
         "properties": {
+          "view": {
+            "type": "string",
+            "enum": ["nodes", "parameters"],
+            "description": "视图：nodes 路线+工序序列（默认），parameters 物料级工序参数（须传 material_id，含工时/准备/报工/委外/超报，不含计件单价）"
+          },
           "keyword": {
             "type": "string",
             "description": "路线编码/名称/描述模糊关键字（可选）"
           },
           "material_id": {
             "type": "integer",
-            "description": "物料ID（按物料绑定路线反查，可选）"
+            "description": "物料ID（按物料绑定路线反查；view=parameters 时必填，可选）"
           },
           "limit": { "type": "integer", "description": "返回条数上限（默认10，最大20）" }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "query_mrp_exceptions",
+      "label": "查询 MRP 例外",
+      "kind": "read",
+      "description": "查询 MRP 例外收件箱（与 /mrp-exception-inbox 同口径）：错误优先返回例外码、严重级、物料、数量、需求日期、关联单据与计算编号，含按例外码分布汇总",
+      "permission": "kuaizhizao:plan-management-demand-computation:read",
+      "handler": "apps.kuaiai.services.tools.mrp_exceptions:query_mrp_exceptions",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "computation_id": { "type": "integer", "description": "限定某次需求计算 ID（可选）" },
+          "code": { "type": "string", "description": "例外码精确筛选（可选）" },
+          "severity": { "type": "string", "enum": ["error", "warning", "info"], "description": "严重级（可选）" },
+          "limit": { "type": "integer", "description": "返回条数上限（默认10，最大20）" }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "query_scheduling_board",
+      "label": "查询排程看板",
+      "kind": "read",
+      "description": "查询可视排产看板事实：看板工单与计划起止、冻结/齐套/逾期标记、排程冲突、未排产、缺配置、物料齐套问题、超载工位与排产约束（纯事实，按当前用户排产数据范围过滤）",
+      "permission": "kuaizhizao:plan-management-scheduling:read",
+      "handler": "apps.kuaiai.services.tools.scheduling_board:query_scheduling_board",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "plan_date": { "type": "string", "description": "计划日期（YYYY-MM-DD，可选；缺省为近14天看板）" },
+          "work_center_id": { "type": "integer", "description": "工作中心 ID（可选）" },
+          "limit": { "type": "integer", "description": "各事实段返回条数上限（默认10，最大20）" }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "trace_lineage",
+      "label": "批次序列追溯",
+      "kind": "read",
+      "description": "按序列号/批号/工单号做正向/反向追溯，输出链路节点层级摘要，辅助评估召回范围",
+      "permissions_any": [
+        "kuaizhizao:quality-management-traceability:read",
+        "kuaizhizao:material-lifecycle-trace:read"
+      ],
+      "handler": "apps.kuaiai.services.tools.traceability:trace_lineage",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "code": { "type": "string", "description": "序列号/批号/工单号" },
+          "direction": { "type": "string", "enum": ["forward", "backward", "both"], "description": "追溯方向：forward 正向 / backward 反向 / both 双向（默认）" }
+        },
+        "required": ["code"]
+      }
+    },
+    {
+      "name": "trace_document_chain",
+      "label": "追溯单据关联链",
+      "kind": "read",
+      "description": "追溯单据上下游关联链（document_type 闭集；direction=upstream/downstream/both，max_depth≤10；链上节点按当前用户单据类型读权限过滤，无权节点只计数）",
+      "permission": "kuaiai:entry:read",
+      "handler": "apps.kuaiai.services.tools.document_chain:trace_document_chain",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "document_type": { "type": "string", "enum": ["demand", "sales_forecast", "sales_order", "quotation", "sales_contract", "delivery_project", "material_borrow", "material_return", "demand_computation", "work_order", "production_picking", "production_return", "reporting_record", "finished_goods_receipt", "semi_finished_goods_receipt", "sales_delivery", "delivery_notice", "purchase_order", "purchase_requisition", "purchase_receipt", "purchase_return", "payable", "receivable", "sales_invoice", "receipt", "payment", "purchase_invoice", "incoming_inspection", "process_inspection", "finished_goods_inspection", "outsource_order", "outsource_work_order", "packing_binding", "receipt_notice", "other_inbound", "stocktaking", "inventory_transfer", "freight_order", "after_sales_ticket", "install_execution", "service_asset", "repair_order", "service_dispatch", "spare_part_requisition", "service_settlement", "customer_return_visit", "sales_return", "shipment_notice", "equipment", "equipment_fault", "maintenance_plan", "maintenance_reminder", "mold", "tool", "performance_skill", "performance_holiday", "performance_summary"], "description": "单据类型（闭集）" },
+          "document_id": { "type": "integer", "description": "单据 ID（必填）" },
+          "direction": { "type": "string", "enum": ["upstream", "downstream", "both"], "description": "追溯方向（默认 both）" },
+          "max_depth": { "type": "integer", "description": "最大追溯深度（默认10，最大10）" }
+        },
+        "required": ["document_type", "document_id"]
+      }
+    },
+    {
+      "name": "analyze_sales_order_change_impact",
+      "label": "分析销售订单变更影响",
+      "kind": "read",
+      "description": "分析销售订单变更对下游需求/需求计算/生产计划/工单的影响（受影响条目按当前用户单据类型读权限过滤）",
+      "permission": "kuaizhizao:sales-order-change:read",
+      "handler": "apps.kuaiai.services.tools.document_chain:analyze_sales_order_change_impact",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "sales_order_id": { "type": "integer", "description": "销售订单 ID（必填）" }
+        },
+        "required": ["sales_order_id"]
+      }
+    },
+    {
+      "name": "analyze_purchase_order_change_impact",
+      "label": "分析采购订单变更影响",
+      "kind": "read",
+      "description": "分析采购订单变更对下游收货通知单/入库单的影响（受影响条目按当前用户单据类型读权限过滤）",
+      "permission": "kuaizhizao:purchase-order-change:read",
+      "handler": "apps.kuaiai.services.tools.document_chain:analyze_purchase_order_change_impact",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "purchase_order_id": { "type": "integer", "description": "采购订单 ID（必填）" }
+        },
+        "required": ["purchase_order_id"]
+      }
+    },
+    {
+      "name": "analyze_demand_change_impact",
+      "label": "分析需求变更影响",
+      "kind": "read",
+      "description": "分析需求变更对下游需求/需求计算/生产计划/工单的影响（受影响条目按当前用户单据类型读权限过滤）",
+      "permission": "kuaizhizao:plan-management-demand-change:read",
+      "handler": "apps.kuaiai.services.tools.document_chain:analyze_demand_change_impact",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "demand_id": { "type": "integer", "description": "需求 ID（必填）" }
+        },
+        "required": ["demand_id"]
+      }
+    },
+    {
+      "name": "query_incoming_inspections",
+      "label": "查询来料检验单",
+      "kind": "read",
+      "description": "查询来料检验单；摘要含检验单号、物料、供应商、检验数、合格/不合格数、结论、状态与检验时间；仅返回当前用户数据范围内记录，不含检验员联系方式与商务敏感字段",
+      "permission": "kuaizhizao:quality-management-incoming-inspection:read",
+      "handler": "apps.kuaiai.services.tools.inspection_supplier:query_incoming_inspections",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "keyword": { "type": "string", "description": "单号/物料/供应商/入库单号模糊关键字（可选）" },
+          "supplier_id": { "type": "integer", "description": "供应商ID（可选）" },
+          "material_id": { "type": "integer", "description": "物料ID（可选）" },
+          "status": { "type": "string", "enum": ["待检验", "已检验", "待审核", "已审核", "已驳回"], "description": "单据状态（可选）" },
+          "quality_status": { "type": "string", "enum": ["合格", "不合格", "待判定"], "description": "质量结论（可选）" },
+          "date_start": { "type": "string", "description": "检验开始日期 YYYY-MM-DD（可选）" },
+          "date_end": { "type": "string", "description": "检验结束日期 YYYY-MM-DD（可选）" },
+          "limit": { "type": "integer", "description": "返回条数上限（默认10，最大20）" }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "query_process_inspections",
+      "label": "查询过程检验单",
+      "kind": "read",
+      "description": "查询过程检验单；摘要含检验单号、物料、工单/工序、检验数、合格/不合格数、结论、状态与检验时间；仅返回当前用户数据范围内记录；与检验列表页同源，查询时会顺带对重复待检单做自愈去重",
+      "permission": "kuaizhizao:quality-management-process-inspection:read",
+      "handler": "apps.kuaiai.services.tools.inspection_supplier:query_process_inspections",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "keyword": { "type": "string", "description": "单号/工单号/工序/物料模糊关键字（可选）" },
+          "work_order_id": { "type": "integer", "description": "工单ID（可选）" },
+          "operation_id": { "type": "integer", "description": "工序ID（可选）" },
+          "status": { "type": "string", "enum": ["待检验", "已检验", "待审核", "已审核", "已驳回"], "description": "单据状态（可选）" },
+          "quality_status": { "type": "string", "enum": ["合格", "不合格", "待判定"], "description": "质量结论（可选）" },
+          "date_start": { "type": "string", "description": "检验开始日期 YYYY-MM-DD（可选）" },
+          "date_end": { "type": "string", "description": "检验结束日期 YYYY-MM-DD（可选）" },
+          "limit": { "type": "integer", "description": "返回条数上限（默认10，最大20）" }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "query_finished_inspections",
+      "label": "查询成品检验单",
+      "kind": "read",
+      "description": "查询成品检验单；摘要含检验单号、物料、工单、检验数、合格/不合格数、结论、状态与检验时间；仅返回当前用户数据范围内记录",
+      "permission": "kuaizhizao:quality-management-finished-goods-inspection:read",
+      "handler": "apps.kuaiai.services.tools.inspection_supplier:query_finished_inspections",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "keyword": { "type": "string", "description": "单号/工单号/物料模糊关键字（可选）" },
+          "work_order_id": { "type": "integer", "description": "工单ID（可选）" },
+          "status": { "type": "string", "enum": ["待检验", "已检验", "待审核", "已审核", "已驳回"], "description": "单据状态（可选）" },
+          "quality_status": { "type": "string", "enum": ["合格", "不合格", "待判定"], "description": "质量结论（可选）" },
+          "date_start": { "type": "string", "description": "检验开始日期 YYYY-MM-DD（可选）" },
+          "date_end": { "type": "string", "description": "检验结束日期 YYYY-MM-DD（可选）" },
+          "limit": { "type": "integer", "description": "返回条数上限（默认10，最大20）" }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "query_oqc_inspections",
+      "label": "查询出货检验单",
+      "kind": "read",
+      "description": "查询 OQC 出货检验单；摘要含检验单号、物料、客户、发货通知、检验数、合格/不合格数、结论、放行与检验时间；仅返回当前用户数据范围内记录",
+      "permission": "kuaizhizao:quality-management-oqc-inspection:read",
+      "handler": "apps.kuaiai.services.tools.inspection_supplier:query_oqc_inspections",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "enum": ["待检验", "已检验", "待审核", "已审核", "已驳回"], "description": "单据状态（可选）" },
+          "date_start": { "type": "string", "description": "检验开始日期 YYYY-MM-DD（可选）" },
+          "date_end": { "type": "string", "description": "检验结束日期 YYYY-MM-DD（可选）" },
+          "limit": { "type": "integer", "description": "返回条数上限（默认10，最大20）" }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "query_supplier_evaluations",
+      "label": "查询供应商评价",
+      "kind": "read",
+      "description": "查询供应商评价单；摘要含评价单号、供应商、评价周期（年/季）、得分、等级与状态；仅返回当前用户数据范围内记录，不含供应商联系人与价格字段",
+      "permission": "kuaizhizao:supplier-eval:read",
+      "handler": "apps.kuaiai.services.tools.inspection_supplier:query_supplier_evaluations",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "keyword": { "type": "string", "description": "评价单号/供应商编码或名称/等级/模板编码模糊关键字（可选）" },
+          "status": { "type": "string", "enum": ["draft", "pending", "approved", "rejected", "revoked"], "description": "评价状态（可选）" },
+          "period_type": { "type": "string", "enum": ["annual", "quarterly"], "description": "评价周期类型（可选）" },
+          "period_year": { "type": "integer", "description": "评价年度 2000-2100（可选）" },
+          "supplier_id": { "type": "integer", "description": "供应商ID（可选）" },
+          "limit": { "type": "integer", "description": "返回条数上限（默认10，最大20）" }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "query_equipment",
+      "label": "查询设备台账",
+      "kind": "read",
+      "description": "查询设备台账：返回设备编码、名称、状态、性质、车间/产线/工位，可按编码精确查询或关键字模糊检索",
+      "permission": "kuaizhizao:equipment-management-equipment:read",
+      "handler": "apps.kuaiai.services.tools.equipment_maintenance:query_equipment",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "keyword": { "type": "string", "description": "编码/名称/序列号/负责人模糊关键字（可选）" },
+          "equipment_code": { "type": "string", "description": "设备编码精确查询（可选，优先于列表过滤）" },
+          "status": { "type": "string", "description": "设备状态（可选）" },
+          "equipment_nature": { "type": "string", "description": "设备性质（可选）" },
+          "is_active": { "type": "boolean", "description": "是否启用（可选）" },
+          "limit": { "type": "integer", "description": "返回条数上限（默认10，最大20）" }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "query_equipment_faults",
+      "label": "查询设备故障维修",
+      "kind": "read",
+      "description": "查询设备故障与维修记录：view=faults 返回故障单（编号/设备/级别/类型/状态/发生时间/描述），view=repairs 返回维修台账（编号/设备/状态/维修时间/维修人/时长/结果）；可按设备、状态、日期过滤",
+      "permission": "kuaizhizao:equipment-fault:read",
+      "handler": "apps.kuaiai.services.tools.equipment_maintenance:query_equipment_faults",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "view": { "type": "string", "description": "视图：faults（故障单，默认）| repairs（维修记录）" },
+          "equipment_uuid": { "type": "string", "description": "设备UUID过滤（可选）" },
+          "equipment_code": { "type": "string", "description": "设备编码过滤（可选，与 equipment_uuid 二选一）" },
+          "status": { "type": "string", "description": "状态（可选）" },
+          "fault_level": { "type": "string", "description": "故障级别（可选，仅 faults）" },
+          "keyword": { "type": "string", "description": "单号/设备/描述模糊关键字（可选）" },
+          "date_start": { "type": "string", "description": "发生/维修日期起 YYYY-MM-DD（可选）" },
+          "date_end": { "type": "string", "description": "发生/维修日期止 YYYY-MM-DD（可选）" },
+          "limit": { "type": "integer", "description": "返回条数上限（默认10，最大20）" }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "query_maintenance_plans",
+      "label": "查询保养计划执行",
+      "kind": "read",
+      "description": "查询维护保养计划与执行记录：view=plans 返回计划（编号/设备范围/方案/类型/状态/计划开始），view=executions 返回执行记录（编号/设备/结果/执行时间/执行人）；可按设备、状态、日期过滤",
+      "permission": "kuaizhizao:maintenance-plan:read",
+      "handler": "apps.kuaiai.services.tools.equipment_maintenance:query_maintenance_plans",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "view": { "type": "string", "description": "视图：plans（保养计划，默认）| executions（执行记录）" },
+          "equipment_uuid": { "type": "string", "description": "设备UUID过滤（可选）" },
+          "equipment_code": { "type": "string", "description": "设备编码过滤（可选，与 equipment_uuid 二选一）" },
+          "status": { "type": "string", "description": "状态（可选）" },
+          "plan_type": { "type": "string", "description": "计划类型（可选，仅 plans）" },
+          "execution_result": { "type": "string", "description": "执行结果（可选，仅 executions）" },
+          "keyword": { "type": "string", "description": "计划编号/名称/执行编号/设备模糊关键字（可选）" },
+          "date_start": { "type": "string", "description": "计划开始/执行日期起 YYYY-MM-DD（可选）" },
+          "date_end": { "type": "string", "description": "计划开始/执行日期止 YYYY-MM-DD（可选）" },
+          "limit": { "type": "integer", "description": "返回条数上限（默认10，最大20）" }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "query_maintenance_reminders",
+      "label": "查询保养到期提醒",
+      "kind": "read",
+      "description": "查询设备保养到期提醒：返回设备、到期类型（due_soon/overdue）、计划维护日期、剩余/逾期天数与已读/处理状态",
+      "permission": "kuaizhizao:maintenance-reminder:read",
+      "handler": "apps.kuaiai.services.tools.equipment_maintenance:query_maintenance_reminders",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "reminder_type": { "type": "string", "description": "提醒类型（可选）：due_soon/overdue" },
+          "is_handled": { "type": "boolean", "description": "是否已处理（可选）" },
+          "is_read": { "type": "boolean", "description": "是否已读（可选）" },
+          "equipment_uuid": { "type": "string", "description": "设备UUID过滤（可选）" },
+          "equipment_code": { "type": "string", "description": "设备编码过滤（可选，与 equipment_uuid 二选一）" },
+          "keyword": { "type": "string", "description": "设备名称/计划编号模糊关键字（可选）" },
+          "date_start": { "type": "string", "description": "提醒日期起 YYYY-MM-DD（可选）" },
+          "date_end": { "type": "string", "description": "提醒日期止 YYYY-MM-DD（可选）" },
+          "limit": { "type": "integer", "description": "返回条数上限（默认10，最大20）" }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "query_calibration_alerts",
+      "label": "查询校准到期提醒",
+      "kind": "read",
+      "description": "查询设备校准（检定）到期提醒：返回设备、到期类型、校准到期日、剩余/逾期天数、上次校准与校准周期",
+      "permissions_any": [
+        "kuaizhizao:maintenance-reminder:read",
+        "kuaizhizao:measuring-instrument-calibration-reminder:read"
+      ],
+      "handler": "apps.kuaiai.services.tools.equipment_maintenance:query_calibration_alerts",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "due_type": { "type": "string", "description": "到期类型（可选）：due_soon/overdue" },
+          "equipment_nature": { "type": "string", "description": "设备性质（可选）" },
+          "equipment_keyword": { "type": "string", "description": "设备编码/名称模糊关键字（可选）" },
+          "limit": { "type": "integer", "description": "返回条数上限（默认10，最大20）" }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "query_equipment_oee",
+      "label": "查询设备OEE",
+      "kind": "read",
+      "description": "查询设备 OEE 统计：期间 OEE 与时间开动率/性能开动率/良品率三分量、计划/实际运行工时，与 OEE 列表同源；支持按设备或车间过滤",
+      "permission": "kuaizhizao:equipment-management-equipment:read",
+      "handler": "apps.kuaiai.services.tools.equipment_performance:query_equipment_oee",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "equipment_id": { "type": "integer", "description": "设备ID（可选）" },
+          "workshop_id": { "type": "integer", "description": "车间ID（可选，统计该车间启用设备）" },
+          "date_start": { "type": "string", "description": "开始日期 YYYY-MM-DD（可选，默认近30天）" },
+          "date_end": { "type": "string", "description": "结束日期 YYYY-MM-DD（可选）" },
+          "limit": { "type": "integer", "description": "返回条数上限（默认10，最大20）" }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "analyze_equipment_losses",
+      "label": "分析设备损失",
+      "kind": "read",
+      "description": "设备 OEE 损失分解：三分量 + 样本天数 + 按停机/故障状态聚合的损失工时 TopN（其余合并其他），数值均来自 OEE service 与确定性聚合",
+      "permission": "kuaizhizao:equipment-management-equipment:read",
+      "handler": "apps.kuaiai.services.tools.equipment_performance:analyze_equipment_losses",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "equipment_id": { "type": "integer", "description": "设备ID（必填）" },
+          "date_start": { "type": "string", "description": "开始日期 YYYY-MM-DD（可选，默认近30天）" },
+          "date_end": { "type": "string", "description": "结束日期 YYYY-MM-DD（可选）" }
+        },
+        "required": ["equipment_id"]
+      }
+    },
+    {
+      "name": "query_ecn",
+      "label": "查询工程变更单",
+      "kind": "read",
+      "description": "查询工程变更单（ECN）：返回单号、标题、状态、涉及物料数、创建/生效时间，可按单号/标题关键字、状态与创建日期过滤；PLM 未启用时返回固定提示",
+      "permission": "kuaiplm:ecn:read",
+      "handler": "apps.kuaiai.services.tools.ecn_impact:query_ecn",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "keyword": { "type": "string", "description": "ECN 单号或标题模糊关键字（可选）" },
+          "status": { "type": "string", "enum": ["draft", "pending", "approved", "erp_pending", "erp_failed", "closed"], "description": "状态过滤（可选）" },
+          "date_start": { "type": "string", "description": "创建日期起 YYYY-MM-DD（含界，可选）" },
+          "date_end": { "type": "string", "description": "创建日期止 YYYY-MM-DD（含界，可选）" },
+          "limit": { "type": "integer", "description": "返回条数上限（默认10，最大20）" }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "analyze_ecn_impact",
+      "label": "分析工程变更影响",
+      "kind": "read",
+      "description": "分析 ECN 影响面：变更物料行（编码/名称/处置）+ 受影响在制工单、库存批次、BOM 引用、工艺路线绑定（各计数+前N条）；无读权限分区只计数，无关联如实输出；PLM 未启用时返回固定提示",
+      "permission": "kuaiplm:ecn:read",
+      "handler": "apps.kuaiai.services.tools.ecn_impact:analyze_ecn_impact",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "ecn_id": { "type": "integer", "description": "工程变更单 ID（必填）" }
+        },
+        "required": ["ecn_id"]
+      }
+    },
+    {
+      "name": "query_material_where_used",
+      "label": "物料BOM反查",
+      "kind": "read",
+      "description": "查询物料被哪些父件/BOM 作为子件引用（仅 BOM 视图；recursive=true 展开多阶引用链路径）",
+      "permission": "master-data:process:engineering-bom:read",
+      "handler": "apps.kuaiai.services.tools.engineering_bom:query_material_where_used",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "material_id": { "type": "integer", "description": "物料 ID（必填）" },
+          "recursive": { "type": "boolean", "description": "是否展开多阶引用链（默认 false 仅直接父件）" },
+          "limit": { "type": "integer", "description": "返回条数上限（默认10，最大20）" }
+        },
+        "required": ["material_id"]
+      }
+    },
+    {
+      "name": "query_drawing_where_used",
+      "label": "图纸反查",
+      "kind": "read",
+      "description": "图纸反查：material_id 正向查引用图纸，或 drawing_uuid 反向查被引用对象（物料/BOM/工艺路线/工序/工单），二选一必填；图纸密级按当前用户收敛",
+      "permission": "master-data:process:drawing-where-used:read",
+      "handler": "apps.kuaiai.services.tools.engineering_bom:query_drawing_where_used",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "material_id": { "type": "integer", "description": "物料 ID（与 drawing_uuid 二选一）" },
+          "drawing_uuid": { "type": "string", "description": "图纸 UUID（与 material_id 二选一）" },
+          "limit": { "type": "integer", "description": "返回条数上限（默认10，最大20）" }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "query_engineering_bom",
+      "label": "查询工程BOM",
+      "kind": "read",
+      "description": "查询工程 BOM：material_id 或 bom_id 二选一必填；view=tree 层级缩进 / flat 平铺 / substitutes 替代料组；level 展开深度 1-5；输出子件编码/名称/用量/单位/损耗率，超 50 节点截断并注明总数",
+      "permission": "master-data:process:engineering-bom:read",
+      "handler": "apps.kuaiai.services.tools.engineering_bom:query_engineering_bom",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "material_id": { "type": "integer", "description": "物料 ID（与 bom_id 二选一）" },
+          "bom_id": { "type": "integer", "description": "BOM 行 ID（与 material_id 二选一，定位物料+版本）" },
+          "view": { "type": "string", "enum": ["tree", "flat", "substitutes"], "description": "视图：tree 缩进树（默认）、flat 平铺、substitutes 替代料组" },
+          "level": { "type": "integer", "description": "展开深度 1-5（默认5）" }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "create_material_shortage_exception",
+      "label": "创建缺料异常",
+      "kind": "write",
+      "description": "创建缺料异常单（经确认闸；单次单一物料，shortage_quantity 必填>0；同工单同物料有未处理单会被拒绝）",
+      "permission": "kuaizhizao:production-execution-material-shortage-exceptions:create",
+      "handler": "apps.kuaiai.services.tools.exception_report:create_material_shortage_exception",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "work_order_id": { "type": "integer", "description": "工单 ID（必填）" },
+          "material_id": { "type": "integer", "description": "缺料物料 ID（必填，单一物料）" },
+          "shortage_quantity": { "type": "number", "description": "缺料数量（必填，>0）" },
+          "required_quantity": { "type": "number", "description": "需求数量（可选，>0）" },
+          "available_quantity": { "type": "number", "description": "可用数量（可选，≥0）" },
+          "alert_level": { "type": "string", "enum": ["low", "medium", "high", "critical"], "description": "预警级别（可选，缺省按缺口率推算）" },
+          "remarks": { "type": "string", "description": "现场说明/备注（可选）" }
+        },
+        "required": ["work_order_id", "material_id", "shortage_quantity"]
+      }
+    },
+    {
+      "name": "create_delivery_delay_exception",
+      "label": "创建延期异常",
+      "kind": "write",
+      "description": "创建交期延期异常单（经确认闸；delay_reason 必填；同工单有未处理延期单会被拒绝）",
+      "permission": "kuaizhizao:production-execution-delivery-delay-exceptions:create",
+      "handler": "apps.kuaiai.services.tools.exception_report:create_delivery_delay_exception",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "work_order_id": { "type": "integer", "description": "工单 ID（必填）" },
+          "delay_reason": { "type": "string", "description": "延期原因（必填，≤500 字）" },
+          "delay_days": { "type": "integer", "description": "延期天数（可选，≥0；工单无计划完工日期时必填）" },
+          "alert_level": { "type": "string", "enum": ["low", "medium", "high", "critical"], "description": "预警级别（可选，缺省按延期天数推算）" },
+          "remarks": { "type": "string", "description": "现场说明/备注（可选）" }
+        },
+        "required": ["work_order_id", "delay_reason"]
+      }
+    },
+    {
+      "name": "create_quality_exception",
+      "label": "创建质量异常",
+      "kind": "write",
+      "description": "创建质量异常单（经确认闸；problem_description 必填；创建后触发站内通知）",
+      "permission": "kuaizhizao:production-execution-quality-exceptions:create",
+      "handler": "apps.kuaiai.services.tools.exception_report:create_quality_exception",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "problem_description": { "type": "string", "description": "问题描述（必填）" },
+          "work_order_id": { "type": "integer", "description": "关联工单 ID（可选）" },
+          "material_id": { "type": "integer", "description": "关联物料 ID（可选）" },
+          "severity": { "type": "string", "enum": ["minor", "major", "critical"], "description": "严重程度（可选，缺省 minor）" },
+          "exception_type": { "type": "string", "enum": ["inspection_failure", "process_deviation", "customer_complaint"], "description": "异常类型（可选，缺省 process_deviation）" },
+          "batch_no": { "type": "string", "description": "批次号（可选）" },
+          "remarks": { "type": "string", "description": "备注（可选）" }
+        },
+        "required": ["problem_description"]
+      }
+    },
+    {
+      "name": "query_complaints",
+      "label": "查询质量投诉",
+      "kind": "read",
+      "description": "查询质量投诉单（客户/物料/状态/创建日期过滤，输出单号/类型/客户或供应商/物料/状态/时效/关联8D）",
+      "permission": "kuaizhizao:quality-complaint:read",
+      "handler": "apps.kuaiai.services.tools.complaint_8d:query_complaints",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "customer_id": { "type": "integer", "description": "客户 ID" },
+          "material_id": { "type": "integer", "description": "物料 ID" },
+          "status": { "type": "string", "enum": ["draft","pending","approved","rejected","processing","closed","revoked"], "description": "投诉单状态" },
+          "date_start": { "type": "string", "description": "创建日期起（YYYY-MM-DD）" },
+          "date_end": { "type": "string", "description": "创建日期止（YYYY-MM-DD）" },
+          "limit": { "type": "integer", "description": "返回条数上限（默认10，最大20）" }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "query_8d_reports",
+      "label": "查询 8D 报告",
+      "kind": "read",
+      "description": "查询 8D 报告（关键词/阶段过滤；complaint_id 查指定客诉关联的 8D；输出编号/标题/阶段/严重程度/截止/未闭环行动项）",
+      "permission": "kuaizhizao:quality-management-eight-d-reports:read",
+      "handler": "apps.kuaiai.services.tools.complaint_8d:query_8d_reports",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "keyword": { "type": "string", "description": "关键词（报告编号/标题/负责人）" },
+          "status": { "type": "string", "enum": ["d0_prepare","d1_team","d2_problem","d3_containment","d4_root_cause","d5_corrective_action","d6_implement_result","d7_prevent_recurrence","d8_team_congratulation","closed"], "description": "8D 阶段" },
+          "complaint_id": { "type": "integer", "description": "客诉单 ID（查其关联的 8D 报告）" },
+          "limit": { "type": "integer", "description": "返回条数上限（默认10，最大20）" }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "query_molds",
+      "label": "查询模具台账寿命",
+      "kind": "read",
+      "description": "查询模具台账与寿命：返回模具编码、名称、累计模次、设计寿命上限、剩余寿命百分比、状态、最近保养时间；life_warning_only=true 时只列剩余寿命低于 20% 的模具；可按编码/名称关键字与状态过滤",
+      "permission": "kuaizhizao:equipment-management-molds:read",
+      "handler": "apps.kuaiai.services.tools.mold_tooling:query_molds",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "keyword": { "type": "string", "description": "模具编码/名称模糊关键字（可选）" },
+          "status": { "type": "string", "description": "模具状态（可选；待启用/待用/在用/试模中/保养中/维修中/校验中/报废/停用，历史值自动归一）" },
+          "life_warning_only": { "type": "boolean", "description": "仅列剩余寿命低于 20% 的模具（可选）" },
+          "limit": { "type": "integer", "description": "返回条数上限（默认10，最大20）" }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "query_tooling",
+      "label": "查询工装台账状态",
+      "kind": "read",
+      "description": "查询工装台账：返回工装编码、名称、存放库位、状态、当前领用人/领用时间与最近归还信息、保管人；可按编码/名称关键字、库位与状态过滤",
+      "permission": "kuaizhizao:equipment-management-tool-ledger:read",
+      "handler": "apps.kuaiai.services.tools.mold_tooling:query_tooling",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "keyword": { "type": "string", "description": "工装编码/名称/产品型号/保管人/供应商模糊关键字（可选）" },
+          "location": { "type": "string", "description": "存放库位模糊匹配（可选）" },
+          "status": { "type": "string", "description": "工装状态（可选；待启用/待用/在用/保养中/维修中/校验中/报废/停用，历史值自动归一）" },
+          "limit": { "type": "integer", "description": "返回条数上限（默认10，最大20）" }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "query_stocktakings",
+      "label": "查询盘点单",
+      "kind": "read",
+      "description": "查询盘点单（单号/状态/仓库/日期过滤，输出单号/仓库/盘点范围/状态/日期/差异计数）",
+      "permission": "kuaizhizao:warehouse-management-stocktaking:read",
+      "handler": "apps.kuaiai.services.tools.stocktaking:query_stocktakings",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "keyword": { "type": "string", "description": "盘点单号模糊关键字（可选）" },
+          "status": { "type": "string", "enum": ["draft","in_progress","completed","cancelled"], "description": "盘点单状态（可选）" },
+          "warehouse_id": { "type": "integer", "description": "仓库 ID（可选）" },
+          "date_start": { "type": "string", "description": "盘点日期起（YYYY-MM-DD）" },
+          "date_end": { "type": "string", "description": "盘点日期止（YYYY-MM-DD）" },
+          "limit": { "type": "integer", "description": "返回条数上限（默认10，最大20）" }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "analyze_stocktaking_variance",
+      "label": "分析盘点差异",
+      "kind": "read",
+      "description": "按盘点单输出差异 TopN 物料（账存/实盘/差异数量金额/差异率）与类别汇总；view=history 输出各盘点单差异率趋势与库位汇总",
+      "permissions_any": [
+        "kuaizhizao:warehouse-management-stocktaking:read",
+        "kuaizhizao:warehouse-management-reports-stocktaking-history:read"
+      ],
+      "handler": "apps.kuaiai.services.tools.stocktaking:analyze_stocktaking_variance",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "stocktaking_id": { "type": "integer", "description": "盘点单 ID（按单分析，与 view=history 互斥）" },
+          "view": { "type": "string", "enum": ["order","history"], "description": "视图：order 按单（需 stocktaking_id）/ history 历史趋势（可选日期）" },
+          "date_start": { "type": "string", "description": "历史视图日期起（YYYY-MM-DD）" },
+          "date_end": { "type": "string", "description": "历史视图日期止（YYYY-MM-DD）" }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "get_management_brief",
+      "label": "生成管理层简报",
+      "kind": "read",
+      "description": "按期间（today/yesterday/this_week/last_week）汇总生产/质量/设备/库存四域确定性指标小节；各域独立权限复核，无权限域显示占位不省略，单域超时不拖垮整体",
+      "permission": "kuaiai:entry:read",
+      "handler": "apps.kuaiai.services.tools.management_brief:get_management_brief",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "period": { "type": "string", "enum": ["today","yesterday","this_week","last_week"], "description": "统计期间（默认 today）：today 今日 / yesterday 昨日 / this_week 本周一至今 / last_week 上周一至周日" },
+          "focus": { "type": "string", "enum": ["production","quality","equipment","inventory","all"], "description": "聚焦域（可选，默认 all）" }
         },
         "required": []
       }
