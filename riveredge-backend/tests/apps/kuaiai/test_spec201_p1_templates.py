@@ -41,7 +41,33 @@ OLD_TEMPLATE_KEYS = {
     "quality-analysis",
     "supplier-collaboration",
 }
+# spec 205-214 P2 新增模板（exception-report 为唯一含写 Tool 的模板，Y6=a）
+P2_TEMPLATE_KEYS = {
+    "mrp-exceptions",
+    "scheduling-board",
+    "trace-lineage",
+    "change-impact",
+    "inspection-supplier",
+    "equipment-ops",
+    "ecn-impact",
+    "bom-process",
+    "exception-report",
+}
+# spec 215-218 P3 新增模板（全只读）
+P3_TEMPLATE_KEYS = {
+    "complaint-8d",
+    "mold-tooling",
+    "stocktaking",
+    "management-brief",
+}
 WRITE_TOOL_NAMES = {"submit_production_feedback", "update_workorder_status"}
+# spec 214 新增写 Tool；仅 exception-report 模板 Y6=a 破例可含
+P2_WRITE_TOOL_NAMES = {
+    "create_material_shortage_exception",
+    "create_delivery_delay_exception",
+    "create_quality_exception",
+}
+ALL_WRITE_TOOL_NAMES = WRITE_TOOL_NAMES | P2_WRITE_TOOL_NAMES
 
 _EXPECTED_NEW_TOOLS = {
     "shift-lead": (
@@ -225,9 +251,19 @@ def _payload_obj(**over):
 
 
 class TestTemplateDefinitions:
-    def test_nine_template_keys(self):
-        assert len(svc.SCENE_TEMPLATES) == 9
-        assert set(svc.TEMPLATE_KEYS) == OLD_TEMPLATE_KEYS | NEW_TEMPLATE_KEYS
+    def test_template_keys(self):
+        assert len(svc.SCENE_TEMPLATES) == (
+            len(OLD_TEMPLATE_KEYS)
+            + len(NEW_TEMPLATE_KEYS)
+            + len(P2_TEMPLATE_KEYS)
+            + len(P3_TEMPLATE_KEYS)
+        )
+        assert set(svc.TEMPLATE_KEYS) == (
+            OLD_TEMPLATE_KEYS
+            | NEW_TEMPLATE_KEYS
+            | P2_TEMPLATE_KEYS
+            | P3_TEMPLATE_KEYS
+        )
 
     def test_new_templates_exact_tools(self):
         for key, expected in _EXPECTED_NEW_TOOLS.items():
@@ -255,9 +291,13 @@ class TestTemplateDefinitions:
             assert set(template.readonly_tools) <= ENABLED_TOOL_NAMES, (
                 template.key
             )
-            assert not set(template.readonly_tools) & WRITE_TOOL_NAMES, (
-                template.key
-            )
+            if template.key == "exception-report":
+                # spec 214 Y6=a：仅此模板破例含写 Tool，且只允许这三个
+                assert set(template.readonly_tools) == P2_WRITE_TOOL_NAMES
+            else:
+                assert not set(template.readonly_tools) & ALL_WRITE_TOOL_NAMES, (
+                    template.key
+                )
 
     def test_category_closed_set(self):
         for template in svc.SCENE_TEMPLATES:
@@ -305,9 +345,9 @@ class TestTemplateDefinitions:
 @pytest.mark.asyncio
 class TestLifecycleSeedP1:
     async def test_existing_tenant_only_seeds_three_new(self):
-        """存量租户（6 预置实例已建）：只补 3 个新实例，既有实例/档案不动。"""
+        """存量租户（其余预置实例已建）：只补 3 个 spec 201 新实例。"""
         existing_keys = [k for k in svc.TEMPLATE_KEYS if k not in NEW_TEMPLATE_KEYS]
-        assert len(existing_keys) == 6
+        assert len(existing_keys) == len(svc.TEMPLATE_KEYS) - 3
         created_scenes = []
         created_templates = []
 
@@ -325,7 +365,9 @@ class TestLifecycleSeedP1:
         with patch.object(
             KuaiaiAgentScene,
             "filter",
-            MagicMock(return_value=_qs(existing_keys, count=9)),
+            MagicMock(
+                return_value=_qs(existing_keys, count=len(svc.TEMPLATE_KEYS))
+            ),
         ), patch.object(
             KuaiaiAgentScene, "get_or_none", AsyncMock(return_value=None)
         ), patch.object(
@@ -346,8 +388,8 @@ class TestLifecycleSeedP1:
         # 既有 6 模板未重建档案（只为缺失模板建档）
         assert not set(created_templates) & set(existing_keys)
 
-    async def test_new_tenant_nine_disabled_profiles(self):
-        """新租户：9 实例 + 9 份停用、空授权、只读 Tool 预置档案。"""
+    async def test_new_tenant_all_disabled_profiles(self):
+        """新租户：全部模板实例 + 停用、空授权档案（exception-report 含写 Tool）。"""
         profile_payloads = []
         created_scenes = []
 
@@ -360,7 +402,9 @@ class TestLifecycleSeedP1:
             return _scene(instance_key=kwargs["instance_key"])
 
         with patch.object(
-            KuaiaiAgentScene, "filter", MagicMock(return_value=_qs([], count=9))
+            KuaiaiAgentScene,
+            "filter",
+            MagicMock(return_value=_qs([], count=len(svc.TEMPLATE_KEYS))),
         ), patch.object(
             KuaiaiAgentScene, "get_or_none", AsyncMock(return_value=None)
         ), patch.object(
@@ -376,8 +420,8 @@ class TestLifecycleSeedP1:
         ):
             result = await svc.seed_kuaiai_agent_scenes_on_lifecycle(TENANT)
 
-        assert result["created"] == 9
-        assert len(created_scenes) == 9
+        assert result["created"] == len(svc.TEMPLATE_KEYS)
+        assert len(created_scenes) == len(svc.TEMPLATE_KEYS)
         assert {s["instance_key"] for s in created_scenes} == set(
             svc.TEMPLATE_KEYS
         )
@@ -391,7 +435,11 @@ class TestLifecycleSeedP1:
             assert payload.default_model_id is None
             assert payload.mcp_server_ids == []
             assert payload.enabled_tools == list(template.readonly_tools)
-            assert not set(payload.enabled_tools) & WRITE_TOOL_NAMES
+            if key == "exception-report":
+                # Y6=a 破例：预置档案携带三个写 Tool（确认闸逐人确认）
+                assert set(payload.enabled_tools) == P2_WRITE_TOOL_NAMES
+            else:
+                assert not set(payload.enabled_tools) & ALL_WRITE_TOOL_NAMES
 
 
 # ============================================================ 路由与可用性
@@ -447,16 +495,16 @@ class TestSettingsAgentTemplates:
         assert [t["key"] for t in templates] == [
             t.key for t in svc.SCENE_TEMPLATES
         ]
-        assert len(templates) == 9
+        assert len(templates) == len(svc.SCENE_TEMPLATES)
         assert all(set(t.keys()) == {"key", "name"} for t in templates)
         names = {t["key"]: t["name"] for t in templates}
         assert names["shift-lead"] == "班组长助手"
         assert names["order-delivery"] == "订单交期助手"
         assert names["work-instruction"] == "作业指导助手"
-        # 开关键集与模板一致（9 键）
+        # 开关键集与模板一致
         assert set(out["agent_switches"].keys()) == set(svc.TEMPLATE_KEYS)
 
-    async def test_nine_key_switches_save(self):
+    async def test_all_key_switches_save(self):
         kuaiai = {"active_chat_connection_uuid": "old-chat"}
         site = _site({"integrations": {"kuaiai": kuaiai}})
         chat = _conn(CHAT_UUID, "chat")
@@ -478,7 +526,7 @@ class TestSettingsAgentTemplates:
             await settings_service.update_settings(TENANT, _user(), payload)
         saved = site.settings["integrations"]["kuaiai"]["agent_switches"]
         assert set(saved.keys()) == set(svc.TEMPLATE_KEYS)
-        assert len(saved) == 9
+        assert len(saved) == len(svc.TEMPLATE_KEYS)
 
     async def test_missing_template_key_422(self):
         site = _site({})

@@ -27,12 +27,15 @@ from apps.kuaiai.schemas.pulse import (
     PulseGroupOut,
     PulseItemOut,
     PulseOut,
+    PulseSourceOut,
     PulseSummaryOut,
 )
 from apps.kuaiai.services.pulse.base import (
     PulseContext,
+    PulseDetectResult,
     PulseDetector,
     PulsePermissionDenied,
+    PulseSourceResult,
 )
 from apps.kuaiai.services.pulse.equipment import EquipmentFaultDetector
 from apps.kuaiai.services.pulse.inventory import InventoryAlertDetector
@@ -164,9 +167,12 @@ async def run_pulse(
 
     async def _guarded(
         detector: PulseDetector,
-    ) -> List[PulseItemOut]:
+    ):
+        # spec 220：实现 detect_sources 的 detector 返回 PulseDetectResult
+        # （含来源级状态）；其余 detector 仍返回 List[PulseItemOut]。
+        detect = getattr(detector, "detect_sources", None) or detector.detect
         return await asyncio.wait_for(
-            detector.detect(ctx), timeout=detector.timeout_seconds
+            detect(ctx), timeout=detector.timeout_seconds
         )
 
     results = await asyncio.gather(
@@ -176,11 +182,16 @@ async def run_pulse(
 
     items: List[PulseItemOut] = []
     errors: List[PulseErrorOut] = []
+    domain_source_results: Dict[str, List[PulseSourceResult]] = {}
     failed_domains = set()
     for domain, result in zip(concrete, results):
         if isinstance(result, BaseException):
             errors.append(_classify_error(domain, result))
             failed_domains.add(domain)
+        elif isinstance(result, PulseDetectResult):
+            for source in result.sources:
+                items.extend(source.signals)
+                domain_source_results.setdefault(domain, []).append(source)
         else:
             items.extend(result)
     for domain in pending:
@@ -196,6 +207,24 @@ async def run_pulse(
         items = [i for i in items if i.severity == severity]
     items = _dedup_sort(items)
 
+    # 来源 count 按该来源过滤/去重后实际贡献条数计（先于 severity 过滤
+    # 计数会让来源计数与分组可见条数口径不符）；占位来源 signals 恒空 → 0
+    domain_sources: Dict[str, List[PulseSourceOut]] = {}
+    for domain, sources in domain_source_results.items():
+        domain_sources[domain] = [
+            PulseSourceOut(
+                key=source.key,
+                label=source.label,
+                status=source.status,
+                count=sum(
+                    1
+                    for i in items
+                    if i.domain == domain and i.rule_code == source.key
+                ),
+            )
+            for source in sources
+        ]
+
     page = max(1, int(page or 1))
     page_size = max(1, min(int(page_size or 60), 100))
     domain_totals: Dict[str, int] = {}
@@ -208,7 +237,11 @@ async def run_pulse(
     groups: List[PulseGroupOut] = []
     for domain in PULSE_DOMAINS:
         domain_items = [i for i in page_items if i.domain == domain]
-        if not domain_items:
+        sources = domain_sources.get(domain, [])
+        # spec 220：领域无信号但存在无权/不可用来源时仍出分组，
+        # 供前端渲染占位小节（X8=a：信息不静默丢失）。
+        has_placeholder = any(s.status != "ok" for s in sources)
+        if not domain_items and not has_placeholder:
             continue
         groups.append(
             PulseGroupOut(
@@ -216,6 +249,7 @@ async def run_pulse(
                 label=DOMAIN_LABELS.get(domain, domain),
                 count=domain_totals.get(domain, len(domain_items)),
                 items=domain_items,
+                sources=sources,
             )
         )
 

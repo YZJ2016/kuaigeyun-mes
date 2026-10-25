@@ -19,6 +19,7 @@ Tool 名：``analyze_kitting`` / ``query_material_shortages`` /
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, List, Optional, Set
 
 from loguru import logger
@@ -162,11 +163,30 @@ def _fmt_material_shortage_row(r: Any) -> str:
     )
 
 
+def _fmt_dt(value: Any) -> str:
+    """datetime/date 展示：datetime 经 API 同口径站点时区文本，date 取 ISO
+    日（缺省 ''，交由调用方补「未定」）。"""
+    if value is None:
+        return ""
+    try:
+        from core.utils.timezone_utils import to_api_isoformat
+
+        out = to_api_isoformat(value)
+        if out:
+            return out
+    except Exception:
+        pass
+    if isinstance(value, datetime):
+        return value.strftime("%Y-%m-%d %H:%M")
+    s = str(value).strip()
+    return s[:16] if s else ""
+
+
 def _fmt_delivery_delay_row(r: Any) -> str:
     """延期异常行摘要。"""
     return (
         f"工单 {getattr(r, 'work_order_code', '') or '-'}："
-        f"计划完工 {getattr(r, 'planned_end_date', '') or '未定'}，"
+        f"计划完工 {_fmt_dt(getattr(r, 'planned_end_date', None)) or '未定'}，"
         f"延期 {getattr(r, 'delay_days', '') or 0} 天，"
         f"原因 {getattr(r, 'delay_reason', '') or '未填写'}，"
         f"级别 {getattr(r, 'alert_level', '') or '未知'}，"
@@ -306,7 +326,8 @@ async def query_material_shortages(
 
     top = rows[: _ct()._clamp_limit(limit)]
     lines = [
-        f"共 {len(rows)} 条缺料异常（当前用户数据范围内），返回前 {len(top)} 条："
+        f"共 {len(rows)} 条缺料异常（当前用户数据范围内，"
+        f"前 {_OVERSAMPLE_LIMIT} 条候选内计），返回前 {len(top)} 条："
     ]
     for r in top:
         lines.append(_fmt_material_shortage_row(r))
@@ -369,7 +390,8 @@ async def query_delivery_delays(
 
     top = rows[: _ct()._clamp_limit(limit)]
     lines = [
-        f"共 {len(rows)} 条延期异常（当前用户数据范围内），返回前 {len(top)} 条："
+        f"共 {len(rows)} 条延期异常（当前用户数据范围内，"
+        f"前 {_OVERSAMPLE_LIMIT} 条候选内计），返回前 {len(top)} 条："
     ]
     for r in top:
         lines.append(_fmt_delivery_delay_row(r))
@@ -435,7 +457,8 @@ async def query_quality_exceptions(
 
     top = rows[: _ct()._clamp_limit(limit)]
     lines = [
-        f"共 {len(rows)} 条质量异常（当前用户数据范围内），返回前 {len(top)} 条："
+        f"共 {len(rows)} 条质量异常（当前用户数据范围内，"
+        f"前 {_OVERSAMPLE_LIMIT} 条候选内计），返回前 {len(top)} 条："
     ]
     for r in top:
         lines.append(_fmt_quality_exception_row(r))

@@ -33,6 +33,8 @@ export interface HubCapabilityOut {
   scene_key?: string | null;
   /** 绑定实例的档案 ID；无使用权且无管理读权限时由后端脱敏为 null */
   agent_profile_id?: number | null;
+  /** spec 222：场景卡业务分类（SCENE_CATEGORIES 闭集）；ask 卡为 null */
+  category?: string | null;
 }
 
 export interface HubOut {
@@ -86,6 +88,7 @@ export interface SceneInstanceUpdatePayload {
   sample_prompt?: string | null;
   capability_tags?: string[] | null;
   scene_route?: string | null;
+  category?: string | null;
 }
 
 export interface SceneCloneOverrides {
@@ -95,6 +98,7 @@ export interface SceneCloneOverrides {
   sample_prompt?: string | null;
   capability_tags?: string[] | null;
   scene_route?: string | null;
+  category?: string | null;
 }
 
 export interface SceneInstanceClonePayload {
@@ -148,12 +152,24 @@ export interface PulseSummaryOut {
   domain_count: number;
 }
 
+export type PulseSourceStatus = 'ok' | 'no_permission' | 'unavailable';
+
+/** spec 220 X8=a：领域内来源级状态；非 ok 来源渲染占位小节 */
+export interface PulseSourceOut {
+  key: string;
+  label: string;
+  status: PulseSourceStatus | string;
+  count: number;
+}
+
 export interface PulseGroupOut {
   domain: string;
   label: string;
   /** 该领域筛选后总条数（非本页条数） */
   count: number;
   items: PulseItemOut[];
+  /** spec 220：来源级状态；旧响应无此字段按空数组处理 */
+  sources?: PulseSourceOut[];
 }
 
 export interface PulseErrorOut {

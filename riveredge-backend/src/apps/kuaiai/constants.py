@@ -50,15 +50,72 @@ ENABLED_TOOL_NAMES = frozenset(
         "query_pulse_signals",
         # spec 200 工艺路线
         "query_process_routes",
+        # spec 205 MRP 例外收件箱
+        "query_mrp_exceptions",
+        # spec 206 排程看板事实
+        "query_scheduling_board",
+        # spec 207 批次/序列追溯
+        "trace_lineage",
+        # spec 208 单据关联链与变更影响
+        "trace_document_chain",
+        "analyze_sales_order_change_impact",
+        "analyze_purchase_order_change_impact",
+        "analyze_demand_change_impact",
+        # spec 209 检验单与供应商绩效
+        "query_incoming_inspections",
+        "query_process_inspections",
+        "query_finished_inspections",
+        "query_oqc_inspections",
+        "query_supplier_evaluations",
+        # spec 210 设备台账/故障维修/保养校准到期
+        "query_equipment",
+        "query_equipment_faults",
+        "query_maintenance_plans",
+        "query_maintenance_reminders",
+        "query_calibration_alerts",
+        # spec 211 设备 OEE 与损失分析
+        "query_equipment_oee",
+        "analyze_equipment_losses",
+        # spec 212 ECN 影响分析（X4=a 拆 where-used 两个 Tool）
+        "query_ecn",
+        "analyze_ecn_impact",
+        "query_material_where_used",
+        "query_drawing_where_used",
+        # spec 213 工程 BOM（工艺路线复用 spec 200 Tool）
+        "query_engineering_bom",
+        # spec 214 异常上报写 Tool（HITL，kind=write）
+        "create_material_shortage_exception",
+        "create_delivery_delay_exception",
+        "create_quality_exception",
+        # spec 215 客诉/8D 辅助
+        "query_complaints",
+        "query_8d_reports",
+        # spec 216 模具寿命与工装状态
+        "query_molds",
+        "query_tooling",
+        # spec 217 盘点差异解读
+        "query_stocktakings",
+        "analyze_stocktaking_variance",
+        # spec 218 管理层日报/周报聚合简报
+        "get_management_brief",
     }
 )
 
 # 场景预置档案只读 Tool 闭集（禁止包含写 Tool；预置档案
 # enabled_tools 只能取这里面的值）。= ENABLED_TOOL_NAMES − 写 Tool
-# {submit_production_feedback, update_workorder_status}。
+# {submit_production_feedback, update_workorder_status} +
+# spec 214 三个 create_*_exception。
 # spec 190 改名后曾钉死五值；spec 201 起 P1 模板纳入全部只读 Tool。
+# spec 214 exception-report 模板 Y6=a 破例含写 Tool，由
+# agent_scene_service.SceneTemplate.__post_init__ 单独放行。
 SCENE_READONLY_TOOL_NAMES = ENABLED_TOOL_NAMES - frozenset(
-    {"submit_production_feedback", "update_workorder_status"}
+    {
+        "submit_production_feedback",
+        "update_workorder_status",
+        "create_material_shortage_exception",
+        "create_delivery_delay_exception",
+        "create_quality_exception",
+    }
 )
 
 # KR-D9 授权模式（档案列，大写互斥）；grant 行 target_type 用小写 role|user

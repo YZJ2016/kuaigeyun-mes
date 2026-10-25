@@ -108,6 +108,7 @@ def _scene_card(
     disabled_reason: Optional[str],
     scene_key: Optional[str] = None,
     agent_profile_id: Optional[int] = None,
+    category: Optional[str] = None,
 ) -> Dict[str, Any]:
     card = _cap(
         template_key, name, status, description,
@@ -115,7 +116,33 @@ def _scene_card(
     )
     card["scene_key"] = scene_key
     card["agent_profile_id"] = agent_profile_id
+    card["category"] = category
     return card
+
+
+def _resolve_category(
+    scene: Any,
+    template: Any,
+    item: Optional[Dict[str, Any]] = None,
+) -> str:
+    """场景卡业务分类（spec 222）：merged fields 已带（overrides 合并结果）
+    → 实例 overrides.category 合法闭集值 → 模板 category（模板侧默认 general）。
+
+    SCENE_OVERRIDE_KEYS 由集成阶段放行 category 后，overrides 写入路径才有
+    合法值；此解析与 ``_merged_fields`` 同闭集语义，未登记值回落模板分类。
+    """
+    from apps.kuaiai.services.agent_scene_service import SCENE_CATEGORIES
+
+    candidates: List[Any] = []
+    if item is not None:
+        candidates.append(item.get("category"))
+    overrides = getattr(scene, "overrides", None)
+    if isinstance(overrides, dict):
+        candidates.append(overrides.get("category"))
+    for value in candidates:
+        if isinstance(value, str) and value.strip() in SCENE_CATEGORIES:
+            return value.strip()
+    return template.category
 
 
 def _has_business_tool(
@@ -200,6 +227,7 @@ async def _build_scene_capability_cards(
                         template.description,
                         "not_ready",
                         "已解绑场景",
+                        category=template.category,
                     )
                 )
                 continue
@@ -212,6 +240,7 @@ async def _build_scene_capability_cards(
                         template.description,
                         "not_ready",
                         "绑定的场景实例不存在或已删除",
+                        category=template.category,
                     )
                 )
                 continue
@@ -230,6 +259,7 @@ async def _build_scene_capability_cards(
                         template.description,
                         "not_ready",
                         reason,
+                        category=template.category,
                     )
                 )
                 continue
@@ -255,6 +285,7 @@ async def _build_scene_capability_cards(
                 reason,
                 scene_key=scene.instance_key,
                 agent_profile_id=item["agent_profile_id"],
+                category=_resolve_category(scene, template, item),
             )
         )
     return cards
@@ -307,6 +338,7 @@ async def _build_capabilities(
                     template.description,
                     "not_ready",
                     "场景状态读取失败",
+                    category=template.category,
                 )
             )
     return caps

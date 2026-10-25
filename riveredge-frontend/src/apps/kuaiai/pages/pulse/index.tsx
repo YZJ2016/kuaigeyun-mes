@@ -252,6 +252,11 @@ const PulsePage: React.FC = () => {
           defaultValue: '查看设备故障',
         });
       }
+      if (item.resource_type === 'iot_device') {
+        return t('app.kuaiai.pulse.viewIotAlerts', {
+          defaultValue: '查看告警',
+        });
+      }
       return t('app.kuaiai.pulse.viewDetail', { defaultValue: '查看详情' });
     },
     [t],
@@ -330,7 +335,7 @@ const PulsePage: React.FC = () => {
               style={{ marginTop: 16 }}
               type="info"
               showIcon
-              message={t('app.kuaiai.pulse.stillComputing', {
+              title={t('app.kuaiai.pulse.stillComputing', {
                 defaultValue: '仍在计算，数据量较大时可取消后重试',
               })}
               action={
@@ -529,7 +534,7 @@ const PulsePage: React.FC = () => {
             style={{ marginTop: 16 }}
             type="warning"
             showIcon
-            message={t('app.kuaiai.ops.partialFailed', {
+            title={t('app.kuaiai.ops.partialFailed', {
               defaultValue: '部分数据刷新失败，已保留上次结果',
             })}
             action={
@@ -546,7 +551,7 @@ const PulsePage: React.FC = () => {
             style={{ marginTop: 16 }}
             type="warning"
             showIcon
-            message={t('app.kuaiai.pulse.partialData', {
+            title={t('app.kuaiai.pulse.partialData', {
               defaultValue: '部分数据',
             })}
             description={domainErrors
@@ -566,7 +571,7 @@ const PulsePage: React.FC = () => {
             style={{ marginTop: 12 }}
             type="info"
             showIcon
-            message={t('app.kuaiai.pulse.notConnected', {
+            title={t('app.kuaiai.pulse.notConnected', {
               defaultValue: '以下领域尚未接入检测器：{{domains}}',
               domains: notConnected
                 .map((e) => domainLabel(e.domain))
@@ -596,6 +601,32 @@ const PulsePage: React.FC = () => {
             </Typography.Title>
             <div className="kuaiai-ops-pulse-grid">
               {g.items.map(renderCard)}
+              {/* spec 220 X8=a：无权限/不可用来源渲染占位卡，不泄露数据 */}
+              {(g.sources ?? [])
+                .filter(
+                  (s) =>
+                    s.status === 'no_permission' ||
+                    s.status === 'unavailable',
+                )
+                .map((s) => (
+                  <div
+                    className="kuaiai-ops-pulse-card kuaiai-ops-pulse-card-placeholder"
+                    key={`${g.domain}:${s.key}`}
+                  >
+                    <div className="kuaiai-ops-pulse-card-title">{s.label}</div>
+                    <div className="kuaiai-ops-pulse-card-fact">
+                      {s.status === 'no_permission'
+                        ? t('app.kuaiai.pulse.sourceNoPermission', {
+                            source: s.label,
+                            defaultValue: '无{{source}}权限',
+                          })
+                        : t('app.kuaiai.pulse.sourceUnavailable', {
+                            source: s.label,
+                            defaultValue: '{{source}}暂不可用，请稍后重试',
+                          })}
+                    </div>
+                  </div>
+                ))}
             </div>
           </section>
         ))}

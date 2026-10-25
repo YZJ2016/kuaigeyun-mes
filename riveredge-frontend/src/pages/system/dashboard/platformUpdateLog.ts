@@ -44,6 +44,22 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'kuaiai-p3-scene-tools-r01',
+    date: '2026-10-24',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiai-p3-scene-tools-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiai-p3-scene-tools-r01.description',
+  },
+  {
+    id: 'kuaiai-p2-scene-tools-r01',
+    date: '2026-10-24',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaiai-p2-scene-tools-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaiai-p2-scene-tools-r01.description',
+  },
+  {
     id: 'kuaiai-p1-scene-templates-r01',
     date: '2026-10-23',
     type: 'feature',

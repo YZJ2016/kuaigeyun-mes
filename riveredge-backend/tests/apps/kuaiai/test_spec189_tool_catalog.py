@@ -2,7 +2,8 @@
 
 全部 mock，不需要真实数据库。覆盖：
 - manifest ai_tools 名称集合 == ENABLED_TOOL_NAMES；
-- 每项必有非空 label、kind ∈ {read,write}、permission 非空、handler 可 import；
+- 每项必有非空 label、kind ∈ {read,write}、permission 或 permissions_any
+  非空（spec 207 X2=b 二选一）、handler 可 import；
 - list_tool_catalog 按 manifest 声明序稳定输出、字段齐全；
 - 未注册（无 handler）/闭集外条目不返回；
 - /tools 路由已注册且挂 kuaiai:agent:read 权限依赖。
@@ -39,8 +40,15 @@ class TestManifestToolFields:
             name = item["name"]
             assert str(item.get("label") or "").strip(), f"{name} 缺 label"
             assert item.get("kind") in {"read", "write"}, f"{name} kind 非法"
-            assert str(item.get("permission") or "").strip(), (
-                f"{name} 缺 permission"
+            perm_single = str(item.get("permission") or "").strip()
+            perm_any = [
+                c for c in (item.get("permissions_any") or []) if str(c).strip()
+            ]
+            assert perm_single or perm_any, (
+                f"{name} 缺 permission/permissions_any"
+            )
+            assert not (perm_single and perm_any), (
+                f"{name} permission 与 permissions_any 须二选一"
             )
             module_path, attr = str(item["handler"]).rsplit(":", 1)
             handler = getattr(importlib.import_module(module_path), attr, None)
@@ -61,7 +69,7 @@ class TestListToolCatalog:
             assert isinstance(item, ToolCatalogItem)
             assert item.label
             assert item.kind in {"read", "write"}
-            assert item.permission
+            assert item.permission or item.permissions_any
 
     def test_unregistered_or_handlerless_tools_filtered(self):
         """注册表缺条目/无 handler 的 Tool 不下发（其余照常）。"""

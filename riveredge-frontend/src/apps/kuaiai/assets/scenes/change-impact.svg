@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 420" role="img">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ad4e00"/>
+      <stop offset="1" stop-color="#783500"/>
+    </linearGradient>
+  </defs>
+  <rect width="280" height="420" fill="url(#bg)"/>
+  <circle cx="248" cy="48" r="90" fill="#ffffff" opacity="0.05"/>
+  <circle cx="30" cy="372" r="102" fill="#ffffff" opacity="0.05"/>
+  <!-- 源单据 -->
+  <g transform="translate(96 104)">
+    <rect x="0" y="0" width="88" height="66" rx="10" fill="#ffffff" opacity="0.9"/>
+    <rect x="12" y="14" width="64" height="9" rx="4.5" fill="#ad4e00" opacity="0.8"/>
+    <rect x="12" y="30" width="44" height="8" rx="4" fill="#ad4e00" opacity="0.45"/>
+    <rect x="12" y="44" width="54" height="8" rx="4" fill="#ffbb96"/>
+    <!-- 变更角标 -->
+    <circle cx="78" cy="10" r="12" fill="#ffd666"/>
+    <path d="M73 10l4 4 7 -8" stroke="#ad4e00" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  </g>
+  <!-- 影响扩散 -->
+  <g transform="translate(140 206)" fill="none" stroke="#ffe7ba" stroke-width="2.5" opacity="0.8">
+    <path d="M0 0 C0 26 -60 30 -60 58"/>
+    <path d="M0 0 L0 58"/>
+    <path d="M0 0 C0 26 60 30 60 58"/>
+  </g>
+  <!-- 受影响单据 -->
+  <g transform="translate(46 274)">
+    <rect x="0" y="0" width="56" height="44" rx="8" fill="#ffffff" opacity="0.55"/>
+    <rect x="8" y="10" width="40" height="7" rx="3.5" fill="#ad4e00" opacity="0.55"/>
+    <rect x="8" y="24" width="28" height="6" rx="3" fill="#ffffff" opacity="0.7"/>
+  </g>
+  <g transform="translate(112 274)">
+    <rect x="0" y="0" width="56" height="44" rx="8" fill="#ffffff" opacity="0.75"/>
+    <rect x="8" y="10" width="40" height="7" rx="3.5" fill="#ad4e00" opacity="0.7"/>
+    <rect x="8" y="24" width="28" height="6" rx="3" fill="#ffffff" opacity="0.8"/>
+  </g>
+  <g transform="translate(178 274)">
+    <rect x="0" y="0" width="56" height="44" rx="8" fill="#ffffff" opacity="0.55"/>
+    <rect x="8" y="10" width="40" height="7" rx="3.5" fill="#ad4e00" opacity="0.55"/>
+    <rect x="8" y="24" width="28" height="6" rx="3" fill="#ffffff" opacity="0.7"/>
+  </g>
+  <!-- 涟漪 -->
+  <circle cx="140" cy="350" r="18" fill="none" stroke="#ffe7ba" stroke-width="2" opacity="0.5"/>
+  <circle cx="140" cy="350" r="30" fill="none" stroke="#ffe7ba" stroke-width="1.5" opacity="0.25"/>
+</svg>

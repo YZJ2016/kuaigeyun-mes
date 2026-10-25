@@ -1,4 +1,4 @@
-"""Pulse detector 基座（spec 182 T2）。
+"""Pulse detector 基座（spec 182 T2；spec 220 增加来源级结果）。
 
 约定：
 - ``PulseContext`` 由 registry 在扫描开始时生成一次，所有 detector 共享同一
@@ -6,13 +6,17 @@
   取时不一致；
 - detector 一律先调 :func:`ensure_permission` 校验领域读权限，无权限抛
   ``PulsePermissionDenied``——registry 转成脱敏 errors[]，不外泄数量/ID；
+- spec 220 X8=a 来源级权限：detector 可选实现 ``detect_sources`` 返回
+  ``PulseDetectResult``，领域内各数据源独立判权（status=
+  ok|no_permission|unavailable），无权来源 signals 必为空（不泄露数据）；
+  未实现 ``detect_sources`` 的 detector 仍只走 ``detect``，行为不变；
 - ``business_date`` 口径与 work_order_service._normalize_naive_local_datetime
   一致：aware 按站点时区取日，naive 视作站点墙钟（历史业务字段口径）。
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Any, List, Optional, Protocol
 
@@ -35,13 +39,39 @@ class PulseContext:
 
 
 class PulseDetector(Protocol):
-    """确定性 detector 接口：只读、显式 tenant_id、产出统一异常项。"""
+    """确定性 detector 接口：只读、显式 tenant_id、产出统一异常项。
+
+    可选 ``detect_sources``（spec 220）：返回 ``PulseDetectResult`` 携带
+    来源级状态；registry 优先调用它，缺省回退 ``detect``。
+    """
 
     domain: str
     timeout_seconds: float
 
     async def detect(self, ctx: PulseContext) -> List[PulseItemOut]:
         ...
+
+
+@dataclass
+class PulseSourceResult:
+    """领域内单一数据源结果（spec 220 X8=a）。
+
+    status 闭集：ok（正常出信号）/ no_permission（无来源读权限，signals
+    必须为空，不泄露数量与明细）/ unavailable（来源超时或读取失败）。
+    """
+
+    key: str
+    label: str
+    status: str
+    signals: List[PulseItemOut] = field(default_factory=list)
+
+
+@dataclass
+class PulseDetectResult:
+    """多来源 detector 返回结构：registry 展平 signals 为 items、
+    逐来源生成 ``PulseSourceOut`` 供前端渲染占位小节。"""
+
+    sources: List[PulseSourceResult] = field(default_factory=list)
 
 
 def business_date(value: Any) -> Optional[date]:

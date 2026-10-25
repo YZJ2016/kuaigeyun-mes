@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 420" role="img">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0958d9"/>
+      <stop offset="1" stop-color="#003a8c"/>
+    </linearGradient>
+  </defs>
+  <rect width="280" height="420" fill="url(#bg)"/>
+  <circle cx="248" cy="48" r="90" fill="#ffffff" opacity="0.05"/>
+  <circle cx="30" cy="372" r="102" fill="#ffffff" opacity="0.05"/>
+  <!-- BOM 树 -->
+  <g transform="translate(140 118)">
+    <!-- 根节点 -->
+    <rect x="-34" y="-14" width="68" height="28" rx="8" fill="#ffffff" opacity="0.92"/>
+    <rect x="-22" y="-4" width="44" height="8" rx="4" fill="#0958d9" opacity="0.8"/>
+    <!-- 连接线 -->
+    <g stroke="#91caff" stroke-width="2.5" opacity="0.75" fill="none">
+      <path d="M0 14 L-58 40"/>
+      <path d="M0 14 L0 40"/>
+      <path d="M0 14 L58 40"/>
+    </g>
+    <!-- 第二层 -->
+    <rect x="-84" y="40" width="52" height="24" rx="7" fill="#91caff"/>
+    <rect x="-26" y="40" width="52" height="24" rx="7" fill="#91caff" opacity="0.85"/>
+    <rect x="32" y="40" width="52" height="24" rx="7" fill="#91caff" opacity="0.7"/>
+    <rect x="-76" y="49" width="36" height="6" rx="3" fill="#0958d9" opacity="0.7"/>
+    <rect x="-18" y="49" width="36" height="6" rx="3" fill="#0958d9" opacity="0.7"/>
+    <rect x="40" y="49" width="36" height="6" rx="3" fill="#0958d9" opacity="0.6"/>
+    <!-- 第三层连接 -->
+    <g stroke="#91caff" stroke-width="2" opacity="0.6" fill="none">
+      <path d="M-58 64 L-78 88"/>
+      <path d="M-58 64 L-38 88"/>
+      <path d="M0 64 L-14 88"/>
+      <path d="M0 64 L14 88"/>
+    </g>
+    <!-- 叶子 -->
+    <circle cx="-78" cy="96" r="10" fill="#ffffff" opacity="0.65"/>
+    <circle cx="-38" cy="96" r="10" fill="#ffffff" opacity="0.5"/>
+    <circle cx="-14" cy="96" r="10" fill="#ffffff" opacity="0.55"/>
+    <circle cx="14" cy="96" r="10" fill="#ffffff" opacity="0.45"/>
+    <!-- 替代料标记 -->
+    <g transform="translate(58 84)">
+      <rect x="-22" y="-8" width="44" height="16" rx="8" fill="#ffd666" opacity="0.9"/>
+      <rect x="-14" y="-2.5" width="28" height="5" rx="2.5" fill="#ad6800" opacity="0.8"/>
+    </g>
+  </g>
+  <!-- 层级刻度 -->
+  <g transform="translate(52 118)" fill="#91caff" opacity="0.6">
+    <rect x="0" y="-8" width="3" height="16" rx="1.5"/>
+    <rect x="0" y="48" width="3" height="16" rx="1.5" opacity="0.8"/>
+    <rect x="0" y="96" width="3" height="16" rx="1.5" opacity="0.6"/>
+  </g>
+  <!-- 工序参数条 -->
+  <g transform="translate(70 288)">
+    <rect x="0" y="0" width="140" height="56" rx="10" fill="#ffffff" opacity="0.12"/>
+    <rect x="14" y="14" width="60" height="8" rx="4" fill="#91caff" opacity="0.9"/>
+    <rect x="86" y="14" width="40" height="8" rx="4" fill="#91caff" opacity="0.5"/>
+    <rect x="14" y="32" width="96" height="8" rx="4" fill="#ffffff" opacity="0.35"/>
+  </g>
+</svg>

@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 420" role="img">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#595959"/>
+      <stop offset="1" stop-color="#2f3a4a"/>
+    </linearGradient>
+  </defs>
+  <rect width="280" height="420" fill="url(#bg)"/>
+  <circle cx="248" cy="48" r="90" fill="#ffffff" opacity="0.05"/>
+  <circle cx="30" cy="372" r="102" fill="#ffffff" opacity="0.05"/>
+  <!-- 上下模示意 -->
+  <g transform="translate(70 110)">
+    <!-- 上模 -->
+    <rect x="10" y="0" width="120" height="34" rx="6" fill="#ffffff" opacity="0.9"/>
+    <rect x="34" y="34" width="28" height="18" fill="#ffffff" opacity="0.7"/>
+    <rect x="76" y="34" width="28" height="18" fill="#ffffff" opacity="0.7"/>
+    <!-- 模腔间隙 -->
+    <rect x="10" y="58" width="120" height="10" rx="5" fill="#ffd666" opacity="0.8"/>
+    <!-- 下模 -->
+    <rect x="10" y="74" width="120" height="34" rx="6" fill="#ffffff" opacity="0.9"/>
+    <rect x="34" y="56" width="28" height="18" fill="#ffffff" opacity="0.55"/>
+    <rect x="76" y="56" width="28" height="18" fill="#ffffff" opacity="0.55"/>
+  </g>
+  <!-- 寿命仪表 -->
+  <g transform="translate(70 268)">
+    <path d="M0 40 A70 40 0 0 1 140 40" fill="none" stroke="#ffffff" stroke-width="10" opacity="0.25" stroke-linecap="round"/>
+    <path d="M0 40 A70 40 0 0 1 92 6" fill="none" stroke="#ffd666" stroke-width="10" opacity="0.9" stroke-linecap="round"/>
+    <circle cx="70" cy="40" r="7" fill="#ffffff"/>
+    <path d="M70 40 L96 12" stroke="#ffffff" stroke-width="4" stroke-linecap="round"/>
+  </g>
+  <!-- 模次计数签 -->
+  <g transform="translate(70 336)" fill="#ffffff" opacity="0.55">
+    <rect x="0" y="0" width="64" height="18" rx="9" opacity="0.5"/>
+    <rect x="76" y="0" width="64" height="18" rx="9" opacity="0.5"/>
+  </g>
+</svg>

@@ -16,6 +16,8 @@ class RegisteredTool:
     name: str
     definition: Dict[str, Any]
     permission: Optional[str] = None
+    # spec 207 X2=b：任一命中即放行的多权限码，与 permission 二选一互斥
+    permissions_any: Optional[List[str]] = None
     handler: Optional[ToolHandler] = None
 
 
@@ -30,12 +32,14 @@ class ToolRegistry:
         definition: Dict[str, Any],
         *,
         permission: Optional[str] = None,
+        permissions_any: Optional[List[str]] = None,
         handler: Optional[ToolHandler] = None,
     ) -> None:
         cls._tools[name] = RegisteredTool(
             name=name,
             definition=definition,
             permission=permission,
+            permissions_any=permissions_any,
             handler=handler,
         )
 
@@ -92,6 +96,23 @@ class ToolRegistry:
             handler_path = str(item.get("handler") or "").strip()
             if not name or not handler_path:
                 continue
+            permission = str(item.get("permission") or "").strip() or None
+            raw_any = item.get("permissions_any")
+            permissions_any: Optional[List[str]] = None
+            if isinstance(raw_any, list):
+                permissions_any = [
+                    str(c).strip() for c in raw_any if str(c).strip()
+                ]
+            elif raw_any is not None:
+                permissions_any = []
+            # spec 207 X2=b：permission（单值）与 permissions_any（多值）
+            # 二选一互斥——两键同给（无论 permissions_any 是否合法）、
+            # 同缺或 permissions_any 非法（非列表/空列表）均跳过注册，
+            # 与 name/handler 缺失同一跳过语义
+            if permission is not None and raw_any is not None:
+                continue
+            if permission is None and not permissions_any:
+                continue
             try:
                 module_path, attr = handler_path.rsplit(":", 1)
                 module = importlib.import_module(module_path)
@@ -117,7 +138,8 @@ class ToolRegistry:
             cls.register(
                 name,
                 definition,
-                permission=item.get("permission"),
+                permission=permission,
+                permissions_any=permissions_any or None,
                 handler=handler,
             )
             logger.info("AI tool 已注册 app={} name={}", app_code, name)

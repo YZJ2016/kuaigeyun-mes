@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 420" role="img">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#263c69"/>
+      <stop offset="1" stop-color="#152442"/>
+    </linearGradient>
+  </defs>
+  <rect width="280" height="420" fill="url(#bg)"/>
+  <circle cx="248" cy="50" r="92" fill="#ffffff" opacity="0.05"/>
+  <circle cx="30" cy="372" r="102" fill="#ffffff" opacity="0.05"/>
+  <!-- 设备机身 -->
+  <g transform="translate(74 120)">
+    <rect x="0" y="0" width="132" height="150" rx="14" fill="#ffffff" opacity="0.1"/>
+    <rect x="14" y="16" width="104" height="58" rx="8" fill="#ffffff" opacity="0.14"/>
+    <!-- 仪表盘 -->
+    <g transform="translate(66 45)">
+      <path d="M-26 8 A28 28 0 0 1 26 8" fill="none" stroke="#91caff" stroke-width="5" stroke-linecap="round"/>
+      <path d="M-26 8 A28 28 0 0 1 8 -21" fill="none" stroke="#69b1ff" stroke-width="5" stroke-linecap="round"/>
+      <line x1="0" y1="6" x2="14" y2="-10" stroke="#bae0ff" stroke-width="3.5" stroke-linecap="round"/>
+      <circle cx="0" cy="6" r="4.5" fill="#bae0ff"/>
+    </g>
+    <!-- 状态灯 -->
+    <g>
+      <circle cx="30" cy="96" r="6" fill="#95de64"/>
+      <circle cx="52" cy="96" r="6" fill="#ffd666" opacity="0.85"/>
+      <circle cx="74" cy="96" r="6" fill="#ff7875" opacity="0.7"/>
+    </g>
+    <rect x="14" y="116" width="104" height="10" rx="5" fill="#91caff" opacity="0.45"/>
+    <rect x="14" y="132" width="72" height="10" rx="5" fill="#91caff" opacity="0.28"/>
+    <!-- 支脚 -->
+    <rect x="12" y="150" width="14" height="18" rx="4" fill="#ffffff" opacity="0.18"/>
+    <rect x="106" y="150" width="14" height="18" rx="4" fill="#ffffff" opacity="0.18"/>
+  </g>
+  <!-- 扳手角标 -->
+  <g transform="translate(202 314)">
+    <circle cx="0" cy="0" r="26" fill="#ffffff" opacity="0.92"/>
+    <path d="M-11 -11a10 10 0 0 1 13 13l9 9 -6 6 -9 -9a10 10 0 0 1 -13 -13l6 6 5 -5 -6 -6z" fill="#263c69"/>
+  </g>
+  <!-- 齿轮小件 -->
+  <g transform="translate(70 322)" fill="#91caff" opacity="0.7">
+    <circle cx="0" cy="0" r="9"/>
+    <g>
+      <rect x="-2" y="-14" width="4" height="6" rx="2"/>
+      <rect x="-2" y="8" width="4" height="6" rx="2"/>
+      <rect x="-14" y="-2" width="6" height="4" rx="2"/>
+      <rect x="8" y="-2" width="6" height="4" rx="2"/>
+    </g>
+    <circle cx="0" cy="0" r="3.5" fill="#263c69"/>
+  </g>
+</svg>

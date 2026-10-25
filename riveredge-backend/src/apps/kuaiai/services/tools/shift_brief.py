@@ -126,10 +126,11 @@ async def query_pulse_signals(
 
     lines: List[str] = []
     if summary and getattr(summary, "total", 0):
+        shown = sum(len(getattr(g, "items", None) or []) for g in groups)
         lines.append(
             f"异常信号共 {summary.total} 条"
             f"（高优先级 {summary.high_priority}、严重 {summary.critical}、"
-            f"预警/错误 {summary.warning_or_error}）："
+            f"预警/错误 {summary.warning_or_error}），返回前 {shown} 条："
         )
         for g in groups:
             for i in g.items:

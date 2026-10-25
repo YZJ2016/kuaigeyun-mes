@@ -41,7 +41,9 @@ _OLD_NAMES = {
     "query_quality_anomalies",
 }
 
-# spec 190 钉死 9 值；spec 195–200 按其单元追加场景只读 Tool（同步维护）
+# spec 190 钉死 9 值；spec 195–200 按其单元追加场景只读 Tool；
+# spec 205–214 追加 P2 场景 Tool（含 3 个写 Tool，同步维护）
+# spec 215–218 追加 P3 场景 Tool（同步维护）
 _EXPECTED_CLOSED_SET = {
     "search_knowledge",
     "query_work_orders",
@@ -72,13 +74,65 @@ _EXPECTED_CLOSED_SET = {
     "query_pulse_signals",
     # spec 200
     "query_process_routes",
+    # spec 205
+    "query_mrp_exceptions",
+    # spec 206
+    "query_scheduling_board",
+    # spec 207
+    "trace_lineage",
+    # spec 208
+    "trace_document_chain",
+    "analyze_sales_order_change_impact",
+    "analyze_purchase_order_change_impact",
+    "analyze_demand_change_impact",
+    # spec 209
+    "query_incoming_inspections",
+    "query_process_inspections",
+    "query_finished_inspections",
+    "query_oqc_inspections",
+    "query_supplier_evaluations",
+    # spec 210
+    "query_equipment",
+    "query_equipment_faults",
+    "query_maintenance_plans",
+    "query_maintenance_reminders",
+    "query_calibration_alerts",
+    # spec 211
+    "query_equipment_oee",
+    "analyze_equipment_losses",
+    # spec 212
+    "query_ecn",
+    "analyze_ecn_impact",
+    "query_material_where_used",
+    "query_drawing_where_used",
+    # spec 213
+    "query_engineering_bom",
+    # spec 214 写 Tool（HITL）
+    "create_material_shortage_exception",
+    "create_delivery_delay_exception",
+    "create_quality_exception",
+    # spec 215
+    "query_complaints",
+    "query_8d_reports",
+    # spec 216
+    "query_molds",
+    "query_tooling",
+    # spec 217
+    "query_stocktakings",
+    "analyze_stocktaking_variance",
+    # spec 218
+    "get_management_brief",
 }
 
 # spec 201：预置档案只读 Tool 闭集 = ENABLED − 写 Tool
-# {submit_production_feedback, update_workorder_status}
+# {submit_production_feedback, update_workorder_status} + spec 214 三个
+# create_*_exception（exception-report 模板 Y6=a 破例单独放行）
 _EXPECTED_SCENE_READONLY = _EXPECTED_CLOSED_SET - {
     "submit_production_feedback",
     "update_workorder_status",
+    "create_material_shortage_exception",
+    "create_delivery_delay_exception",
+    "create_quality_exception",
 }
 
 

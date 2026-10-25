@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 420" role="img">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#10239e"/>
+      <stop offset="1" stop-color="#061178"/>
+    </linearGradient>
+    <linearGradient id="bar" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#adc6ff"/>
+      <stop offset="1" stop-color="#85a5ff"/>
+    </linearGradient>
+  </defs>
+  <rect width="280" height="420" fill="url(#bg)"/>
+  <circle cx="246" cy="46" r="92" fill="#ffffff" opacity="0.05"/>
+  <circle cx="28" cy="374" r="104" fill="#ffffff" opacity="0.05"/>
+  <!-- 看板网格 -->
+  <g transform="translate(40 96)">
+    <rect x="0" y="0" width="200" height="212" rx="12" fill="#ffffff" opacity="0.08"/>
+    <rect x="0" y="0" width="200" height="34" rx="12" fill="#ffffff" opacity="0.12"/>
+    <circle cx="16" cy="17" r="4" fill="#d6e4ff"/>
+    <circle cx="30" cy="17" r="4" fill="#85a5ff" opacity="0.7"/>
+    <rect x="120" y="12" width="66" height="10" rx="5" fill="#d6e4ff" opacity="0.8"/>
+    <!-- 泳道与工单条 -->
+    <g>
+      <rect x="14" y="48" width="172" height="30" rx="6" fill="#ffffff" opacity="0.06"/>
+      <rect x="20" y="56" width="80" height="14" rx="7" fill="url(#bar)"/>
+      <rect x="14" y="84" width="172" height="30" rx="6" fill="#ffffff" opacity="0.06"/>
+      <rect x="48" y="92" width="110" height="14" rx="7" fill="url(#bar)" opacity="0.8"/>
+      <rect x="14" y="120" width="172" height="30" rx="6" fill="#ffffff" opacity="0.06"/>
+      <!-- 冲突条：两段重叠高亮 -->
+      <rect x="30" y="128" width="90" height="14" rx="7" fill="#f759ab" opacity="0.9"/>
+      <rect x="100" y="128" width="70" height="14" rx="7" fill="#ff85c0" opacity="0.85"/>
+      <rect x="14" y="156" width="172" height="30" rx="6" fill="#ffffff" opacity="0.06"/>
+      <rect x="22" y="164" width="120" height="14" rx="7" fill="url(#bar)" opacity="0.55"/>
+    </g>
+    <!-- 冲突标记 -->
+    <g transform="translate(96 112)">
+      <circle cx="0" cy="0" r="11" fill="#ff4d4f"/>
+      <rect x="-1.6" y="-6" width="3.2" height="8" rx="1.6" fill="#ffffff"/>
+      <circle cx="0" cy="5" r="1.8" fill="#ffffff"/>
+    </g>
+  </g>
+  <!-- 今日刻度线 -->
+  <g transform="translate(140 138)">
+    <rect x="-1" y="0" width="2" height="150" fill="#ffe58f" opacity="0.85"/>
+    <circle cx="0" cy="0" r="5" fill="#ffe58f"/>
+  </g>
+</svg>

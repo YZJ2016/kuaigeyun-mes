@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 420" role="img">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7a4199"/>
+      <stop offset="1" stop-color="#51286f"/>
+    </linearGradient>
+  </defs>
+  <rect width="280" height="420" fill="url(#bg)"/>
+  <circle cx="248" cy="48" r="90" fill="#ffffff" opacity="0.05"/>
+  <circle cx="30" cy="372" r="102" fill="#ffffff" opacity="0.05"/>
+  <!-- 8D 报告卡 -->
+  <g transform="translate(64 100)">
+    <rect x="0" y="0" width="152" height="190" rx="12" fill="#ffffff" opacity="0.92"/>
+    <!-- 标题条 -->
+    <rect x="16" y="16" width="80" height="11" rx="5.5" fill="#7a4199" opacity="0.8"/>
+    <rect x="104" y="14" width="32" height="15" rx="7.5" fill="#d3adf7" opacity="0.9"/>
+    <!-- D 段列表 -->
+    <g>
+      <circle cx="24" cy="52" r="8" fill="#7a4199" opacity="0.85"/>
+      <rect x="42" y="48" width="80" height="8" rx="4" fill="#7a4199" opacity="0.45"/>
+      <circle cx="24" cy="76" r="8" fill="#7a4199" opacity="0.85"/>
+      <rect x="42" y="72" width="66" height="8" rx="4" fill="#7a4199" opacity="0.45"/>
+      <circle cx="24" cy="100" r="8" fill="#7a4199" opacity="0.85"/>
+      <rect x="42" y="96" width="92" height="8" rx="4" fill="#7a4199" opacity="0.45"/>
+      <circle cx="24" cy="124" r="8" fill="#b37feb" opacity="0.8"/>
+      <rect x="42" y="120" width="72" height="8" rx="4" fill="#7a4199" opacity="0.3"/>
+      <circle cx="24" cy="148" r="8" fill="#b37feb" opacity="0.5"/>
+      <rect x="42" y="144" width="56" height="8" rx="4" fill="#7a4199" opacity="0.25"/>
+      <circle cx="24" cy="172" r="8" fill="#b37feb" opacity="0.35"/>
+      <rect x="42" y="168" width="44" height="8" rx="4" fill="#7a4199" opacity="0.2"/>
+    </g>
+  </g>
+  <!-- 客诉气泡 -->
+  <g transform="translate(196 296)">
+    <rect x="0" y="0" width="72" height="42" rx="12" fill="#ffffff" opacity="0.95"/>
+    <path d="M12 42l4 14 14 -14z" fill="#ffffff" opacity="0.95"/>
+    <rect x="10" y="10" width="52" height="8" rx="4" fill="#7a4199" opacity="0.55"/>
+    <rect x="10" y="24" width="36" height="8" rx="4" fill="#7a4199" opacity="0.4"/>
+  </g>
+</svg>

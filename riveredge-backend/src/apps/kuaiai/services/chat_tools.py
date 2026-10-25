@@ -12,9 +12,12 @@ handler 约定见 ``core/ai/runtime/tool_bridge.py``：``async def handler(**arg
 底层异常一律回错误文案（失败关闭，KR-I3），不抛穿、不落敏感信息到返回值。
 
 注册链路：``ToolRegistry.register_from_manifest`` 目前无 core 侧调用点；
-本模块被 ``ToolRegistry.ensure_defaults`` 导入时，读取同目录 manifest.json
-的 ``ai_tools`` 声明完成注册（handler + 真实业务权限码生效）；manifest 读取
-失败时由 ensure_defaults 兜底注册无 handler 的定义，调用时回错，仍失败关闭。
+本模块被 ``ToolRegistry.ensure_defaults`` 导入时执行
+``_register_manifest_tools``，读取同目录 manifest.json 的 ``ai_tools``
+声明完成注册（handler + 真实业务权限码生效），这是唯一有效注册路径；
+manifest 读取失败仅记 warning 不注册任何 Tool。``ensure_defaults`` 随后
+扫描本模块 ``CHAT_TOOL_DEFINITIONS``，但条目均未声明 ``permission``，
+按其 fail-closed 分支一律跳过——兜底清单实际永不注册。
 """
 
 from __future__ import annotations
@@ -517,8 +520,10 @@ async def update_workorder_status(
 
 
 # chat 侧 Tool 定义子集（与 manifest.json ai_tools 同名义；场景只读
-# Tool 由 scene_tools 经 manifest 注册，不在本兜底清单）；
-# ensure_defaults 兜底注册用（manifest 读取失败时无 handler，调用仍失败关闭）。
+# Tool 由 scene_tools 经 manifest 注册，不在本兜底清单）。条目均未声明
+# ``permission``，``ensure_defaults`` 按其 fail-closed 分支一律跳过，
+# 实际永不注册——仅作与 manifest 同名义的 schema 备查；有效注册仅
+# manifest 一条路径（manifest 读取失败即无任何 chat Tool 注册）。
 CHAT_TOOL_DEFINITIONS: List[dict] = [
     {
         "type": "function",
@@ -608,7 +613,8 @@ def _register_manifest_tools() -> None:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     except Exception as exc:
         logger.warning(
-            "kuaiai manifest 读取失败，AI tools 走兜底注册 error_type={}",
+            "kuaiai manifest 读取失败，chat 侧 AI tools 未注册"
+            "（兜底清单无 permission，ensure_defaults 将跳过） error_type={}",
             type(exc).__name__,
         )
         return
