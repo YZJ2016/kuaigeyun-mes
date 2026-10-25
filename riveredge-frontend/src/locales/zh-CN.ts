@@ -19338,36 +19338,6 @@ export default {
   // warehouse other inbound page
   // warehouse material return page
   'components.uniPull.loadFromDocument': '从单据加载',
-  'pages.dashboard.updateLog.entries.uni-pull-query-modal-width-r01.title': '取单弹窗加宽大档',
-  'pages.dashboard.updateLog.entries.uni-pull-query-modal-width-r01.description':
-    'UniPullQueryModal 默认宽度由 1200 调整为 1400（EXTRA_LARGE 档），减少宽表取单横向滚动。',
-  'pages.dashboard.updateLog.entries.pull-open-line-qty-col-order-r01.title': '取单数量列主副分组',
-  'pages.dashboard.updateLog.entries.pull-open-line-qty-col-order-r01.description':
-    '开口行取单数量列顺序改为主数量组（报价/已转/可取）在前、副数量组在后，便于对照主主副副阅读。',
-  'pages.dashboard.updateLog.entries.uni-pull-query-stacked-columns-r01.title': '取单弹窗来源与物料叠列',
-  'pages.dashboard.updateLog.entries.uni-pull-query-stacked-columns-r01.description':
-    '取单表将报价单号与客户、物料编码名称规格等并列列改为叠列展示，减少横向滚动；开口行取单统一走 buildPullQueryPartnerDocumentColumn 与 buildPullQueryMaterialIdentityColumn。',
-  'pages.dashboard.updateLog.entries.uni-pull-query-material-col-order-r01.title': '取单表物料列顺序统一',
-  'pages.dashboard.updateLog.entries.uni-pull-query-material-col-order-r01.description':
-    '开口行取单弹窗统一为物料编码、物料名称、规格相邻排列，当前库存插在规格之后；壳层自动插列与规格列工厂一并生效。',
-  'pages.dashboard.updateLog.entries.pull-open-line-pull-empty-dash-r01.title': '取单弹窗空值占位统一',
-  'pages.dashboard.updateLog.entries.pull-open-line-pull-empty-dash-r01.description':
-    '取单表规格、行备注、副数量等无值单元格统一为长横线占位，与全站 EMPTY_VALUE_PLACEHOLDER 一致，不再混用短横线。',
-  'pages.dashboard.updateLog.entries.pull-open-line-dual-qty-r03.title': '取单弹窗固定展示副数量列',
-  'pages.dashboard.updateLog.entries.pull-open-line-dual-qty-r03.description':
-    '开口行取单在报价数量、已转数量旁并列副单据数量、副已转数量等列，无副单位时显示占位符。',
-  'pages.dashboard.updateLog.entries.pull-open-line-dual-qty-r02.title': '取单弹窗副数量叠显修复',
-  'pages.dashboard.updateLog.entries.pull-open-line-dual-qty-r02.description':
-    '开口行取单在报价数量、已转数量等同列内叠显副单位数量；物料有辅助单位或行已录副数量时可见。',
-  'pages.dashboard.updateLog.entries.pull-open-line-dual-qty-r01.title': '取单开口行可看主副数量',
-  'pages.dashboard.updateLog.entries.pull-open-line-dual-qty-r01.description':
-    '数量开口行取单的「单据数量 / 已转 / 可取」支持主单位与副单位并列展示；可勾选仍按主数量剩余量判断。',
-  'components.uniPullQuery.openLineQty.suggested': '单据数量',
-  'components.uniPullQuery.openLineQty.pushed': '已转数量',
-  'components.uniPullQuery.openLineQty.remaining': '可取数量',
-  'components.uniPullQuery.openLineQty.auxSuggested': '副单据数量',
-  'components.uniPullQuery.openLineQty.auxPushed': '副已转数量',
-  'components.uniPullQuery.openLineQty.auxRemaining': '副可取数量',
   'components.uniPullQuery.documentDateColumn': '单据日期',
   'components.uniPullQuery.dateFromPlaceholder': '来源日期起',
   'components.uniPullQuery.dateToPlaceholder': '来源日期止',
@@ -25297,7 +25267,6 @@ export default {
   'app.kuaicaiwu.payable.detailNotFound': '未找到应付单',
   'app.kuaicaiwu.payable.offsetBannerTitle': '采购退货冲减台账',
   'app.kuaicaiwu.payable.offsetBannerDesc':
-    '本单由采购退货自动生成，用于客商往来借方冲减，不是向供应商付款的正向应付。请勿登记付款或从此单开蓝字采购发票；退款请走付款退款。',
   'app.kuaicaiwu.payable.offsetMarker': '红字应付',
   'app.kuaicaiwu.payable.col.offsetAmount': '冲减金额',
   'app.kuaicaiwu.payable.col.redPayableAmount': '红字应付金额',
@@ -36906,26 +36875,6 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
-  'pages.dashboard.updateLog.entries.purchase-inquiry-vendor-system-pdf-r01.title':
-    '采购询价发布时按供应商生成询价单附件',
-  'pages.dashboard.updateLog.entries.purchase-inquiry-vendor-system-pdf-r01.description':
-    '发布询价后，系统按受邀供应商份数自动生成固定版式询价单 PDF，进入附件中心，支持预览与下载；系统附件不可删除，仍可继续上传人工附件。',
-  'pages.dashboard.updateLog.entries.purchase-inquiry-attachment-upload-r01.title':
-    '采购询价附件上传入口补齐',
-  'pages.dashboard.updateLog.entries.purchase-inquiry-attachment-upload-r01.description':
-    '新建/编辑询价单底部增加独立「附件」区；草稿详情的附件中心可直接上传 PDF 等文件，并支持预览、下载与删除。',
-  'pages.dashboard.updateLog.entries.purchase-inquiry-attach-approval-tabs-r01.title':
-    '采购询价详情支持附件中心与审批记录',
-  'pages.dashboard.updateLog.entries.purchase-inquiry-attach-approval-tabs-r01.description':
-    '询价详情新增审批记录 Tab；附件中心支持预览、下载，草稿状态下可删除本单附件。新建询价单仍为草稿。',
-  'pages.dashboard.updateLog.entries.purchase-inquiry-demand-party-commercial-r01.title':
-    '采购询价补齐需方与商务条款',
-  'pages.dashboard.updateLog.entries.purchase-inquiry-demand-party-commercial-r01.description':
-    '新增询价需方维护；询价单支持需方、采购负责人、供应商联系/邮箱通知落库，以及币种、汇率、发票、税率、付款方式/条件、成交方式等字段。',
-  'pages.dashboard.updateLog.entries.customer-pool-claim-tenant-row-r01.title':
-    '修复客户领取和分配报编码重复',
-  'pages.dashboard.updateLog.entries.customer-pool-claim-tenant-row-r01.description':
-    '客户表同一数字编号在多个组织各有一行。领取、分配按编号更新时会改到其他组织，触发客户编码唯一约束。现只更新当前组织的这一行。',
   'pages.dashboard.updateLog.entries.trace-report-pdf-error-tail-r01.title':
     '导出追溯报告失败时显示可操作原因',
   'pages.dashboard.updateLog.entries.trace-report-pdf-error-tail-r01.description':
@@ -50852,7 +50801,6 @@ export default {
   'pages.system.applications.resetModOutsource': '委外管理',
   'pages.system.applications.resetModOutsourceHint': '委外订单、委外工单及发料收料退料',
   'pages.system.applications.resetModPlan': '计划管理',
-  'pages.system.applications.resetModPlanHint': '计划生产、需求运算、生产计划与滚动排程',
   'pages.system.applications.resetModProduction': '生产执行',
   'pages.system.applications.resetModProductionHint': '工单、报工、返工、装配拆解、生产领退料与入库',
   'pages.system.applications.resetModPurchase': '采购管理',
@@ -51335,4 +51283,166 @@ export default {
   'pages.dashboard.updateLog.entries.customer-pool-claim-tenant-row-r01.description':
     '客户表同一数字编号在多个组织各有一行。领取、分配按编号更新时会改到其他组织，触发客户编码唯一约束。现只更新当前组织的这一行。',
   'components.documentTrackingPanel.docType.purchase_inquiry': '采购询价',
+  'common.copy': '复制',
+  'app.kuaizhizao.purchaseRequisition.formFieldSettings.title': '字段设置',
+  'app.kuaizhizao.purchaseRequisition.formFieldSettings.action': '字段设置',
+  'components.uniPullQuery.documentDateColumn': '单据日期',
+  'app.kuaizhizao.moldOps.maintenance.completeModal': '完修保养单',
+  'app.kuaizhizao.moldOps.maintenance.completeModalHint':
+    '请勾选全部保养项为已执行，可填写行备注与实际保养日期，确认后关单。',
+  'app.kuaizhizao.moldOps.maintenance.completeAllItemsRequired': '请将全部保养项勾选为已执行后再完修',
+  'app.kuaizhizao.moldOps.repair.completeModal': '完修维修单',
+  'app.kuaizhizao.moldOps.repair.completeModalHint':
+    '请勾选全部维修项为已执行，可填写行备注与实际维修日期，确认后关单。',
+  'app.kuaizhizao.moldOps.repair.completeAllItemsRequired': '请将全部维修项勾选为已执行后再完修',
+  'app.kuaizhizao.toolOps.maintenance.completeModal': '完修保养单',
+  'app.kuaizhizao.toolOps.maintenance.completeModalHint':
+    '请勾选全部保养项为已执行，可填写行备注与实际保养日期，确认后关单。',
+  'app.kuaizhizao.toolOps.maintenance.completeAllItemsRequired': '请将全部保养项勾选为已执行后再完修',
+  'app.kuaizhizao.toolOps.repair.completeModal': '完修维修单',
+  'app.kuaizhizao.toolOps.repair.completeModalHint':
+    '请勾选全部维修项为已执行，可填写行备注与实际维修日期，确认后关单。',
+  'app.kuaizhizao.toolOps.repair.completeAllItemsRequired': '请将全部维修项勾选为已执行后再完修',
+  'app.kuaicaiwu.payable.offsetMarker': '红字应付',
+  'app.kuaicaiwu.payable.col.redPayableAmount': '红字应付金额',
+  'pages.dashboard.updateLog.entries.tool-mold-repair-complete-lines-r01.title':
+    '工装模具维修完修弹窗登记执行结果',
+  'pages.dashboard.updateLog.entries.tool-mold-repair-complete-lines-r01.description':
+    '与保养一致：进行中维修单在完修弹窗勾选明细已执行并写回后端；新建编辑不再误勾已执行，工装维修完修改用 complete 权限码。',
+  'pages.dashboard.updateLog.entries.tool-mold-maintenance-complete-lines-r01.title':
+    '工装模具保养完修弹窗登记执行结果',
+  'pages.dashboard.updateLog.entries.tool-mold-maintenance-complete-lines-r01.description':
+    '进行中保养单在完修弹窗勾选明细已执行并写回后端；新建编辑不再误用已执行开关，工装保养新增完修权限码。',
+  'pages.dashboard.updateLog.entries.tool-ops-in-progress-complete-r01.title':
+    '工装模具维保维修进行中可完修',
+  'pages.dashboard.updateLog.entries.tool-ops-in-progress-complete-r01.description':
+    '工装/模具保养单与维修单审核通过后状态为进行中，列表操作列现可显示完修按钮，与后端完修门禁一致。',
+  'pages.dashboard.updateLog.entries.purchase-return-red-payable-negative-r01.title':
+    '采购退货红字应付按负数入账',
+  'pages.dashboard.updateLog.entries.purchase-return-red-payable-negative-r01.description':
+    '确认退货生成的红字应付在应付列表以负数展示；手工立账策略可一键生成红字应付；确认时回退入库行可请款占用，付款申请取单排除退货应付。',
+  'pages.dashboard.updateLog.entries.payment-application-draft-delete-r01.title':
+    '付款申请草稿可删除',
+  'pages.dashboard.updateLog.entries.payment-application-draft-delete-r01.description':
+    '草稿与已驳回的付款申请在列表与详情中可删除；行内删除与提交并存时不再被挤出操作列。',
+  'pages.dashboard.updateLog.entries.purchase-mgmt-pull-document-date-r01.title':
+    '采购管理取单统一展示单据日期',
+  'pages.dashboard.updateLog.entries.purchase-mgmt-pull-document-date-r01.description':
+    '采购申请、询价、订单、收货通知、入库、退货、变更单与付款申请等取单窗口，凡有来源单据日期的均展示并可排序，默认新单在前。',
+  'pages.dashboard.updateLog.entries.material-stacked-copy-follow-code-r01.title':
+    '物料堆叠列复制图标紧跟物料编号',
+  'pages.dashboard.updateLog.entries.material-stacked-copy-follow-code-r01.description':
+    '取单与列表中带型号规格的物料次行，快速复制图标改在物料编号右侧，不再被规格顶到列尾。',
+  'pages.dashboard.updateLog.entries.app-center-reset-data-master-data-r01.title':
+    '主数据应用支持按模块重置数据',
+  'pages.dashboard.updateLog.entries.app-center-reset-data-master-data-r01.description':
+    '应用中心主数据卡片新增「重置数据」，可按工厂/仓库/物料/工艺/客户供应商及排班绩效勾选或全选，重置前自动备份并二次确认。',
+  'pages.dashboard.updateLog.entries.app-center-reset-data-modules-r01.title':
+    '应用中心重置数据支持按模块勾选',
+  'pages.dashboard.updateLog.entries.app-center-reset-data-modules-r01.description':
+    '快制造「重置数据」在业务/基础分组下可按销售、计划、采购、生产、仓储等模块勾选或全选，重置前仍自动备份并二次确认。',
+  'pages.dashboard.updateLog.entries.app-center-reset-data-scopes-r01.title':
+    '应用中心重置数据支持按范围勾选',
+  'pages.dashboard.updateLog.entries.app-center-reset-data-scopes-r01.description':
+    '快制造「重置数据」可勾选业务数据、基础数据或全选后再执行，重置前仍自动备份并二次确认。',
+  'pages.dashboard.updateLog.entries.pull-query-document-date-sort-r01.title':
+    '采购取单弹窗显示单据日期并可排序',
+  'pages.dashboard.updateLog.entries.pull-query-document-date-sort-r01.description':
+    '从采购订单创建采购入库、从采购入库创建采购退货的取单表增加单据日期列并支持排序；列表默认按日期新在前。',
+  'pages.dashboard.updateLog.entries.app-connector-wecom-guide-spacing-r01.title':
+    '企业微信连接器部署指引行距统一',
+  'pages.dashboard.updateLog.entries.app-connector-wecom-guide-spacing-r01.description':
+    '部署指引区块与上方凭证字段、下方备注的间距对齐表单项节奏，说明文字与地址列表行距一致，避免挤在备注上方。',
+  'pages.dashboard.updateLog.entries.app-connector-wecom-guide-order-r01.title':
+    '企业微信连接器部署指引移至备注前',
+  'pages.dashboard.updateLog.entries.app-connector-wecom-guide-order-r01.description':
+    '编辑企业微信应用连接器时，可信域名与回调地址等部署指引调整到企业 ID 等配置字段之后、备注之前，先填凭证再复制部署地址。',
+  'pages.dashboard.updateLog.entries.app-connector-wecom-copy-i18n-r01.title':
+    '应用连接器复制按钮中文补全',
+  'pages.dashboard.updateLog.entries.app-connector-wecom-copy-i18n-r01.description':
+    '企业微信等应用连接器部署指引中的复制按钮补全「复制」文案，不再显示 common.copy 键名。',
+  'pages.dashboard.updateLog.entries.document-relation-target-id-bigint-r01.title':
+    '外推关联支持苍穹雪花单据内码',
+  'pages.dashboard.updateLog.entries.document-relation-target-id-bigint-r01.description':
+    '单据关联目标 ID 改为 64 位整数，金蝶云苍穹等外推成功后可正常落关联；此前雪花内码超出 32 位会导致推送结果写入失败。',
+  'app.kuaizhizao.purchaseReturn.financeOutcome.redPayable': '红字应付单号',
+  'app.kuaizhizao.purchaseReturn.financeOutcome.redPayableAmount': '红字应付金额',
+  'app.kuaizhizao.purchaseReturn.financeOutcome.autoPayableSkippedTitle':
+    '确认退货时未自动生成红字应付，可手工生成后在应付列表查看负数金额',
+  'app.kuaizhizao.purchaseReturn.generateRedPayable': '生成红字应付',
+  'app.kuaizhizao.purchaseReturn.generateRedPayableSuccess': '已生成红字应付',
+  'app.kuaizhizao.purchaseReturn.generateRedPayableFailed': '生成红字应付失败',
+  'app.kuaizhizao.purchaseReturn.generateRedPayableNoPermission': '无应付单创建权限，无法生成红字应付',
+  'pages.dashboard.updateLog.entries.purchase-requisition-form-field-settings-r01.title':
+    '采购申请表单字段设置',
+  'pages.dashboard.updateLog.entries.purchase-requisition-form-field-settings-r01.description':
+    '新建与编辑页基本信息区可打开字段设置，按个人偏好显示或隐藏申请名称；隐藏时保存仍按编号生成默认名称。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-name-field-restore-r01.title':
+    '采购申请恢复填写申请名称',
+  'pages.dashboard.updateLog.entries.purchase-requisition-name-field-restore-r01.description':
+    '新建与编辑页基本信息区恢复申请名称；留空保存仍按申请编号生成默认名称，填写则按用户输入落库。',
+  'pages.system.applications.resetBackToScope': '返回修改重置范围',
+  'pages.system.applications.resetFailedFallback': '重置失败',
+  'pages.system.applications.resetModMdFactory': '工厂数据',
+  'pages.system.applications.resetModMdFactoryHint': '厂区、车间、产线、工作中心、工位与工作小组',
+  'pages.system.applications.resetModMdMaterials': '物料数据',
+  'pages.system.applications.resetModMdMaterialsHint': '物料、单位、分组、批号序列号台账与行情等',
+  'pages.system.applications.resetModMdMaterialsImpliesProcess':
+    '勾选物料数据时将同步清除工艺数据（BOM/路线等引用物料），以免外键阻挡删除。',
+  'pages.system.applications.resetModMdProcess': '工艺数据',
+  'pages.system.applications.resetModMdProcessHint': '工序、工艺路线、BOM、SOP、图纸及发放借阅等',
+  'pages.system.applications.resetModMdSupplyChain': '客户供应商',
+  'pages.system.applications.resetModMdSupplyChainHint': '客户、供应商与价格本',
+  'pages.system.applications.resetModMdWarehouse': '仓库数据',
+  'pages.system.applications.resetModMdWarehouseHint': '仓库、库区与库位',
+  'pages.system.applications.resetModMdWorkforce': '排班绩效',
+  'pages.system.applications.resetModMdWorkforceHint': '班次、排班、加班、技能与绩效相关数据',
+  'pages.system.applications.resetMasterDataCrossAppHint':
+    '若快制造等业务应用仍引用这些主数据，删除可能失败或留下孤儿引用；建议先重置相关业务数据。',
+  'pages.system.applications.resetWarn1MasterData':
+    '重置将按所选模块物理删除「主数据」应用数据，此操作不可撤销。请先按业务/基础分组勾选模块。',
+  'pages.system.applications.resetModEquipmentOps': '设备模具工装运维',
+  'pages.system.applications.resetModEquipmentOpsHint': '故障维修、点检保养执行、模具工装使用与校准等',
+  'pages.system.applications.resetModMasterEquipment': '设备台账与方案',
+  'pages.system.applications.resetModMasterEquipmentHint': '设备台账、点检维保方案与巡检路线',
+  'pages.system.applications.resetModMasterLogistics': '物流与服务台账',
+  'pages.system.applications.resetModMasterLogisticsHint': '承运商、车辆、司机、备件与服务资产等',
+  'pages.system.applications.resetModMasterMold': '模具台账与方案',
+  'pages.system.applications.resetModMasterMoldHint': '模具台账及维保/维修方案',
+  'pages.system.applications.resetModMasterPacking': '包装条码配置',
+  'pages.system.applications.resetModMasterPackingHint': '包装档案、条码映射、标签机与工位配置',
+  'pages.system.applications.resetModMasterQuality': '质检标准与方案',
+  'pages.system.applications.resetModMasterQualityHint': '检验计划、质量标准、体系条款与供应商评估模板',
+  'pages.system.applications.resetModMasterRules': '规则与排程配置',
+  'pages.system.applications.resetModMasterRulesHint': '客户池规则、排程配置、状态流转与库存预警规则',
+  'pages.system.applications.resetModMasterTemplates': '装配交付模板',
+  'pages.system.applications.resetModMasterTemplatesHint': '装配模板、交付流程模板、返修排位与日报模板',
+  'pages.system.applications.resetModMasterTool': '工装台账与方案',
+  'pages.system.applications.resetModMasterToolHint': '工装台账及维保/维修方案',
+  'pages.system.applications.resetModOutsource': '委外管理',
+  'pages.system.applications.resetModOutsourceHint': '委外订单、委外工单及发料收料退料',
+  'pages.system.applications.resetModPlan': '计划管理',
+  'pages.system.applications.resetModPlanHint': '需求计划、需求运算、生产计划与滚动排程',
+  'pages.system.applications.resetModProduction': '生产执行',
+  'pages.system.applications.resetModProductionHint': '工单、报工、返工、装配拆解、生产领退料与入库',
+  'pages.system.applications.resetModPurchase': '采购管理',
+  'pages.system.applications.resetModPurchaseHint': '请购、询价、采购订单、收料通知、采购入库与退货',
+  'pages.system.applications.resetModQuality': '质量管理',
+  'pages.system.applications.resetModQualityHint': '来料/过程/成品/出货检验、8D 与质量异常',
+  'pages.system.applications.resetModSales': '销售管理',
+  'pages.system.applications.resetModSalesHint': '报价、合同、销售订单、发货通知、销售出库与退货',
+  'pages.system.applications.resetModWarehouse': '仓储管理',
+  'pages.system.applications.resetModWarehouseHint': '其它出入库、调拨、盘点、借还料、波次与库存预警',
+  'pages.system.applications.resetScopeBusiness': '业务数据',
+  'pages.system.applications.resetScopeJoin': '、',
+  'pages.system.applications.resetScopeMaster': '基础数据',
+  'pages.system.applications.resetScopeMasterImpliesBusiness':
+    '勾选基础模块时将同步清除其依赖的业务模块数据，以免外键阻挡删除。',
+  'pages.system.applications.resetScopeSelectAll': '全选',
+  'pages.system.applications.resetScopeSelected': '本次将重置：{{scopes}}',
+  'pages.system.applications.resetScopeTitle': '按模块选择要重置的数据',
+  'pages.system.applications.resetStart': '启动物理重置（且自动备份）',
+  'pages.system.applications.resetSuccessFallback': '重置成功并已自动备份',
+  'pages.system.applications.resetTokenFailed': '获取二次确认令牌失败，请重试',
+    '重置将按所选模块物理删除「快制造」应用数据，此操作不可撤销。请先按业务/基础分组勾选模块。',
 };

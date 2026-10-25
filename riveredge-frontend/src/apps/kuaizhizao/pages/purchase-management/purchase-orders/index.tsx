@@ -2631,6 +2631,27 @@ const PurchaseOrdersPage: React.FC = () => {
         ),
       },
       {
+        title: t('components.uniPullQuery.documentDateColumn'),
+        dataIndex: 'document_date',
+        width: 112,
+        sorter: (a: PullPurchaseRequisitionCandidate, b: PullPurchaseRequisitionCandidate) =>
+          String(a.document_date || a.requisition_date || '').localeCompare(
+            String(b.document_date || b.requisition_date || ''),
+          ),
+        defaultSortOrder: 'descend' as const,
+        render: (_: unknown, record: PullPurchaseRequisitionCandidate) => {
+          const raw = record.document_date || record.requisition_date;
+          return raw ? formatBusinessDateOnly(String(raw)) : '-';
+        },
+      },
+      {
+        title: t('app.kuaizhizao.purchaseOrder.col.applicant'),
+        dataIndex: 'applicant_name',
+        width: 100,
+        ellipsis: true,
+        render: (v: string | null | undefined) => (v && String(v).trim() ? String(v) : '-'),
+      },
+      {
         title: t('common.quantity'),
         dataIndex: 'suggested_quantity',
         width: 100,
@@ -2692,6 +2713,20 @@ const PurchaseOrdersPage: React.FC = () => {
             material_spec={record.material_spec}
           />
         ),
+      },
+      {
+        title: t('components.uniPullQuery.documentDateColumn'),
+        dataIndex: 'document_date',
+        width: 112,
+        sorter: (a: PullPurchaseInquiryCandidate, b: PullPurchaseInquiryCandidate) =>
+          String(a.document_date || a.inquiry_date || '').localeCompare(
+            String(b.document_date || b.inquiry_date || ''),
+          ),
+        defaultSortOrder: 'descend' as const,
+        render: (_: unknown, record: PullPurchaseInquiryCandidate) => {
+          const raw = record.document_date || record.inquiry_date;
+          return raw ? formatBusinessDateOnly(String(raw)) : '-';
+        },
       },
       {
         title: t('common.quantity'),

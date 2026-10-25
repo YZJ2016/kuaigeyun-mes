@@ -36,7 +36,7 @@ class DocumentRelation(BaseModel):
     
     # 目标单据信息
     target_type = fields.CharField(max_length=50, description="目标单据类型（如：work_order、purchase_order等）")
-    target_id = fields.IntField(description="目标单据ID")
+    target_id = fields.BigIntField(description="目标单据ID（含外部系统雪花内码）")
     target_code = fields.CharField(max_length=50, null=True, description="目标单据编码")
     target_name = fields.CharField(max_length=200, null=True, description="目标单据名称")
     

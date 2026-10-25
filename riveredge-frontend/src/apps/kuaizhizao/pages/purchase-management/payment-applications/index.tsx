@@ -29,6 +29,7 @@ import {
 import { PlusOutlined, PrinterOutlined } from '@ant-design/icons';
 import type { TFunction } from 'i18next';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
+import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { useLinkedDocumentDetail } from '../../../../../components/linked-document-detail';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { usePaymentApplicationPullMenus } from './usePaymentApplicationPullMenus';
@@ -436,6 +437,22 @@ const PaymentApplicationsPage: React.FC = () => {
                   <Button key="edit" {...rowActionKind('update')} onClick={() => void openEdit(row)} />,
                 );
               }
+              if (perms.canDelete && row.capabilities?.delete?.allowed === true) {
+                nodes.push(
+                  <ActionConfirmPopconfirm
+                    key="del"
+                    {...rowActionKind('delete')}
+                    title={t('app.kuaizhizao.paymentApplication.deleteTitle')}
+                    description={t('app.kuaizhizao.paymentApplication.deleteContent', {
+                      code: row.applicationCode,
+                    })}
+                    okType="danger"
+                    onConfirm={() => executeDeleteOne(row)}
+                  >
+                    <Button {...rowActionKind('delete')} onClick={(e) => e.stopPropagation()} />
+                  </ActionConfirmPopconfirm>,
+                );
+              }
               nodes.push(
                 <span {...rowActionKind('skip')} key="wf">
                   <UniWorkflowActions
@@ -464,9 +481,11 @@ const PaymentApplicationsPage: React.FC = () => {
     [
       detail?.id,
       detailOpen,
+      executeDeleteOne,
       openDetail,
       openEdit,
       paymentApplicationWorkflowStatuses,
+      perms.canDelete,
       perms.canRead,
       perms.canUpdate,
       t,
@@ -506,6 +525,25 @@ const PaymentApplicationsPage: React.FC = () => {
     }
     actionRef.current?.reload();
   };
+
+  const executeDeleteOne = useCallback(
+    async (row: PaymentApplication) => {
+      try {
+        await deletePaymentApplication(row.id);
+        messageApi.success(t('app.kuaizhizao.paymentApplication.deleteSuccess'));
+        if (detail?.id === row.id) {
+          setDetail(null);
+          setDetailOpen(false);
+        }
+        actionRef.current?.reload();
+      } catch (error: unknown) {
+        messageApi.error(
+          getApiErrorMessage(error) || t('app.kuaizhizao.paymentApplication.deleteFailed'),
+        );
+      }
+    },
+    [detail?.id, messageApi, t],
+  );
 
   const handleSave = async (values: Record<string, unknown>) => {
     const supplier = supplierOptions.find((s) => s.id === values.supplierId);
@@ -680,6 +718,21 @@ const PaymentApplicationsPage: React.FC = () => {
         extra={
           detail ? (
             <Space>
+              {perms.canDelete && detail.capabilities?.delete?.allowed === true ? (
+                <ActionConfirmPopconfirm
+                  {...rowActionKind('delete')}
+                  title={t('app.kuaizhizao.paymentApplication.deleteTitle')}
+                  description={t('app.kuaizhizao.paymentApplication.deleteContent', {
+                    code: detail.applicationCode,
+                  })}
+                  okType="danger"
+                  onConfirm={() => executeDeleteOne(detail)}
+                >
+                  <Button {...rowActionKind('delete')} danger onClick={(e) => e.stopPropagation()}>
+                    {t('common.delete')}
+                  </Button>
+                </ActionConfirmPopconfirm>
+              ) : null}
               <UniWorkflowActions
                 record={detail}
                 entityType="payment_application"

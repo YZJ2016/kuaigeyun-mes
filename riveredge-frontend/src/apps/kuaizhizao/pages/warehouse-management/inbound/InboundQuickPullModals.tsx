@@ -12,7 +12,7 @@ import {
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
 import { MaterialStackedCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
-import { formatQuantity } from '../../../../../utils/format';
+import { formatBusinessDateOnly, formatQuantity } from '../../../../../utils/format';
 import {
   warehouseApi,
   type OutsourceInboundPullLine,
@@ -837,6 +837,20 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
       () => [
         { title: t('app.kuaizhizao.warehouseInbound.col.poCode'), dataIndex: 'order_code', width: 150, ellipsis: true },
         {
+          title: t('components.uniPullQuery.documentDateColumn'),
+          dataIndex: 'document_date',
+          width: 112,
+          sorter: (a: PullPurchaseOrderCandidate, b: PullPurchaseOrderCandidate) =>
+            String(a.document_date || a.order_date || '').localeCompare(
+              String(b.document_date || b.order_date || ''),
+            ),
+          defaultSortOrder: 'descend' as const,
+          render: (_: unknown, record: PullPurchaseOrderCandidate) => {
+            const raw = record.document_date || record.order_date;
+            return raw ? formatBusinessDateOnly(String(raw)) : '-';
+          },
+        },
+        {
           title: t('app.kuaizhizao.salesOrder.materialName'),
           dataIndex: 'material_name',
           ellipsis: true,
@@ -921,6 +935,20 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
               material_spec={record.material_spec}
             />
           ),
+        },
+        {
+          title: t('components.uniPullQuery.documentDateColumn'),
+          dataIndex: 'document_date',
+          width: 112,
+          sorter: (a: PullReceiptNoticeCandidate, b: PullReceiptNoticeCandidate) =>
+            String(a.document_date || a.planned_receipt_date || '').localeCompare(
+              String(b.document_date || b.planned_receipt_date || ''),
+            ),
+          defaultSortOrder: 'descend' as const,
+          render: (_: unknown, record: PullReceiptNoticeCandidate) => {
+            const raw = record.document_date || record.planned_receipt_date;
+            return raw ? formatBusinessDateOnly(String(raw)) : '-';
+          },
         },
         {
           title: t('common.quantity'),

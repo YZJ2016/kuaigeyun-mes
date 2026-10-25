@@ -258,9 +258,7 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
                 supplier_id=partner_id,
                 business_date__lt=before_date,
                 deleted_at__isnull=True,
-            ).exclude(review_status__in=_EXCLUDED_REVIEW).exclude(
-                source_type=PAYABLE_SOURCE_PURCHASE_RETURN
-            ).all()
+            ).exclude(review_status__in=_EXCLUDED_REVIEW).all()
             total += sum((p.total_amount for p in rows), Decimal("0"))
 
             payments = await Payment.filter(
@@ -314,14 +312,6 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
                 if not _is_refund_voucher(getattr(p, "settlement_type", None), amt):
                     total += _abs_money(amt)
 
-            return_rows = await Payable.filter(
-                tenant_id=tenant_id,
-                supplier_id=partner_id,
-                business_date__lt=before_date,
-                deleted_at__isnull=True,
-                source_type=PAYABLE_SOURCE_PURCHASE_RETURN,
-            ).exclude(review_status__in=_EXCLUDED_REVIEW).all()
-            total += sum((p.total_amount for p in return_rows), Decimal("0"))
         return _q_money(total)
 
     async def _calc_opening_balance(

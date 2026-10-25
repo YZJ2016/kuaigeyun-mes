@@ -3460,7 +3460,9 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         po_query = PurchaseOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if order_id is not None:
             po_query = po_query.filter(id=int(order_id))
-        orders = await po_query.only("id", "order_code", "status", "supplier_id", "supplier_name")
+        orders = await po_query.only(
+            "id", "order_code", "status", "supplier_id", "supplier_name", "order_date"
+        )
         order_by_id = {int(o.id): o for o in orders}
         if not order_by_id:
             return {"data": [], "total": 0}
@@ -3500,11 +3502,15 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 haystack = " ".join([material_code, material_name, material_spec]).lower()
                 if kw not in haystack:
                     continue
+            order_date = getattr(order, "order_date", None)
+            document_date = str(order_date)[:10] if order_date else None
             lines.append(
                 {
                     "id": int(item.id),
                     "order_id": int(item.order_id),
                     "order_code": order.order_code,
+                    "document_date": document_date,
+                    "order_date": document_date,
                     "supplier_id": order.supplier_id,
                     "supplier_name": order.supplier_name,
                     "material_id": item.material_id,
@@ -3518,13 +3524,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                     "required_date": str(item.required_date) if item.required_date else None,
                 }
             )
-        lines.sort(
-            key=lambda r: (
-                str(r.get("order_code") or ""),
-                str(r.get("material_code") or ""),
-                int(r.get("id") or 0),
-            )
-        )
+        lines.sort(key=lambda r: str(r.get("document_date") or ""), reverse=True)
         return {"data": lines[skip : skip + limit], "total": len(lines)}
 
     async def create_receipt_notices_from_po_items(

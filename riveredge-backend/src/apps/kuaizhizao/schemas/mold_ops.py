@@ -525,6 +525,13 @@ class MoldMaintenanceReject(BaseModel):
     reject_reason: str = Field(..., min_length=1)
 
 
+class MoldMaintenanceComplete(BaseModel):
+    """完修：写明细执行结果并关单。"""
+
+    maintenance_date: Optional[date] = None
+    lines: List[MoldMaintenanceLineInput] = Field(default_factory=list)
+
+
 # ---------- 维修单 preview / 行 ----------
 
 class MoldRepairPreviewLine(BaseModel):
@@ -629,6 +636,13 @@ class MoldRepairListResponse(BaseModel):
 
 class MoldRepairReject(BaseModel):
     reject_reason: str = Field(..., min_length=1)
+
+
+class MoldRepairComplete(BaseModel):
+    """完修：写明细执行结果并关单。"""
+
+    repair_date: Optional[date] = None
+    lines: List[MoldRepairLineInput] = Field(default_factory=list)
 
 
 # ---------- 报表 ----------

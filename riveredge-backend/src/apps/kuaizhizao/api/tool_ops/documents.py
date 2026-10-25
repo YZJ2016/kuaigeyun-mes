@@ -34,6 +34,7 @@ from apps.kuaizhizao.schemas.tool_ops import (
     ToolMaintenanceLineResponse,
     ToolMaintenancePreviewResponse,
     ToolMaintenanceReject,
+    ToolMaintenanceComplete,
     ToolRepairCreate,
     ToolRepairUpdate,
     ToolRepairResponse,
@@ -41,6 +42,7 @@ from apps.kuaizhizao.schemas.tool_ops import (
     ToolRepairLineResponse,
     ToolRepairPreviewResponse,
     ToolRepairReject,
+    ToolRepairComplete,
     ToolOpsCalibrationCreate,
     ToolOpsCalibrationUpdate,
     ToolOpsCalibrationResponse,
@@ -512,12 +514,17 @@ async def reject_tool_maintenance(
 @router.post(
     "/tool-maintenances/{row_id}/complete",
     response_model=ToolMaintenanceResponse,
-    dependencies=[Depends(require_permission_codes("kuaizhizao:tool-maintenance:update"))],
+    dependencies=[Depends(require_permission_codes("kuaizhizao:tool-maintenance:complete"))],
 )
-async def complete_tool_maintenance(row_id: int, tenant_id: int = Depends(get_current_tenant)):
+async def complete_tool_maintenance(
+    row_id: int,
+    body: ToolMaintenanceComplete,
+    tenant_id: int = Depends(get_current_tenant),
+):
     try:
-        row = await svc.maintenance_service.complete(tenant_id, row_id)
-        return ToolMaintenanceResponse.model_validate(row)
+        row = await svc.maintenance_service.complete(tenant_id, row_id, body)
+        lines = await svc.maintenance_service._load_lines(tenant_id, row.id)
+        return _maintenance_response(row, lines)
     except (ValidationError, NotFoundError) as e:
         raise _http_from_exc(e)
 
@@ -1031,12 +1038,17 @@ async def reject_tool_repair(
 @router.post(
     "/tool-repairs/{row_id}/complete",
     response_model=ToolRepairResponse,
-    dependencies=[Depends(require_permission_codes("kuaizhizao:tool-repair:update"))],
+    dependencies=[Depends(require_permission_codes("kuaizhizao:tool-repair:complete"))],
 )
-async def complete_tool_repair(row_id: int, tenant_id: int = Depends(get_current_tenant)):
+async def complete_tool_repair(
+    row_id: int,
+    body: ToolRepairComplete,
+    tenant_id: int = Depends(get_current_tenant),
+):
     try:
-        row = await svc.repair_service.complete(tenant_id, row_id)
-        return ToolRepairResponse.model_validate(row)
+        row = await svc.repair_service.complete(tenant_id, row_id, body)
+        lines = await svc.repair_service._load_lines(tenant_id, row.id)
+        return _repair_response(row, lines)
     except (ValidationError, NotFoundError) as e:
         raise _http_from_exc(e)
 

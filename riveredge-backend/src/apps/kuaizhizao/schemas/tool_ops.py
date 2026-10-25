@@ -457,6 +457,13 @@ class ToolMaintenanceReject(BaseModel):
     reject_reason: str = Field(..., min_length=1)
 
 
+class ToolMaintenanceComplete(BaseModel):
+    """完修：写明细执行结果并关单。"""
+
+    maintenance_date: Optional[date] = None
+    lines: List[ToolMaintenanceLineInput] = Field(default_factory=list)
+
+
 # ---------- 维修单 preview / 行 ----------
 
 class ToolRepairPreviewLine(BaseModel):
@@ -557,6 +564,12 @@ class ToolRepairListResponse(BaseModel):
 class ToolRepairReject(BaseModel):
     reject_reason: str = Field(..., min_length=1)
 
+
+class ToolRepairComplete(BaseModel):
+    """完修：写明细执行结果并关单。"""
+
+    repair_date: Optional[date] = None
+    lines: List[ToolRepairLineInput] = Field(default_factory=list)
 
 
 # ---------- 校验预警报表 ----------

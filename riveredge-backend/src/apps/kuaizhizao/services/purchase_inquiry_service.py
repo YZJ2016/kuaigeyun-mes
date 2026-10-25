@@ -1329,7 +1329,7 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
         inq_query = PurchaseInquiry.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if inquiry_id is not None:
             inq_query = inq_query.filter(id=int(inquiry_id))
-        inquiries = await inq_query.only("id", "inquiry_code", "status")
+        inquiries = await inq_query.only("id", "inquiry_code", "status", "inquiry_date")
         inq_by_id = {int(r.id): r for r in inquiries}
         if not inq_by_id:
             return {"data": [], "total": 0}
@@ -1366,11 +1366,15 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
                 haystack = " ".join([material_code, material_name, material_spec]).lower()
                 if kw not in haystack:
                     continue
+            inquiry_date = getattr(inquiry, "inquiry_date", None)
+            document_date = str(inquiry_date)[:10] if inquiry_date else None
             lines.append(
                 {
                     "id": int(item.id),
                     "inquiry_id": int(item.inquiry_id),
                     "inquiry_code": inquiry.inquiry_code,
+                    "document_date": document_date,
+                    "inquiry_date": document_date,
                     "material_id": item.material_id,
                     "material_code": material_code,
                     "material_name": material_name,
@@ -1384,13 +1388,7 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
                 }
             )
 
-        lines.sort(
-            key=lambda r: (
-                str(r.get("inquiry_code") or ""),
-                str(r.get("material_code") or ""),
-                int(r.get("id") or 0),
-            )
-        )
+        lines.sort(key=lambda r: str(r.get("document_date") or ""), reverse=True)
         total = len(lines)
         return {"data": lines[skip : skip + limit], "total": total}
 

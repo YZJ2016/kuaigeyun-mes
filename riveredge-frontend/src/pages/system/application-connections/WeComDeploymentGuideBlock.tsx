@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { App, Button, Descriptions, Spin, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { FormModalGridBlock } from '../../../components/layout-templates';
+import { FORM_LAYOUT } from '../../../components/layout-templates/constants';
 import { getWecomDeploymentGuide, type WeComDeploymentGuide } from '../../../services/applicationConnection';
 
 type WeComDeploymentGuideBlockProps = {
@@ -106,7 +107,10 @@ export const WeComDeploymentGuideBlock: React.FC<WeComDeploymentGuideBlockProps>
           </Descriptions.Item>
         ))}
       </Descriptions>
-      <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
+      <Typography.Paragraph
+        type="secondary"
+        style={{ marginTop: 12, marginBottom: FORM_LAYOUT.ITEM_MARGIN_BOTTOM }}
+      >
         {t('pages.system.applicationConnections.wecomGuide.nextSteps')}
       </Typography.Paragraph>
     </FormModalGridBlock>

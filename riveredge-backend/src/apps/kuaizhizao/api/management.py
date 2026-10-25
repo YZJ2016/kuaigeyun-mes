@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from loguru import logger
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from core.api.deps.access import AuthContext, get_auth_context, require_permission_codes
 from core.api.deps.deps import get_current_tenant
@@ -44,15 +44,64 @@ RESET_PERMISSION = "kuaizhizao:app-management:reset-data"
 FLOW_GENERATE_PERMISSION = "kuaizhizao:app-management:flow-generate"
 _TOKEN_TTL_SECONDS = 300
 
+_ALLOWED_INPUT = ResetDataService.allowed_module_codes() | {
+    ResetDataService.LEGACY_BUSINESS,
+    ResetDataService.LEGACY_MASTER,
+}
+
+
+class ResetDataPrepareRequest(BaseModel):
+    scopes: List[str] = Field(
+        ...,
+        min_length=1,
+        description="重置模块 code 列表（见 /reset-data/modules）；也可传 business/master 展开整组",
+    )
+
+    @field_validator("scopes")
+    @classmethod
+    def _scopes_valid(cls, value: List[str]) -> List[str]:
+        if not value:
+            raise ValueError("请至少选择一个要重置的模块")
+        seen: set[str] = set()
+        out: List[str] = []
+        for item in value:
+            code = str(item or "").strip().lower()
+            if not code:
+                continue
+            if code not in _ALLOWED_INPUT:
+                raise ValueError(f"未知重置模块: {code}")
+            if code not in seen:
+                seen.add(code)
+                out.append(code)
+        if not out:
+            raise ValueError("请至少选择一个要重置的模块")
+        return out
+
 
 class ResetDataRequest(BaseModel):
     confirmation_token: str = Field(..., min_length=16, description="二次确认 token（先调用 prepare）")
+    scopes: List[str] = Field(
+        ...,
+        min_length=1,
+        description="须与 prepare 时 scopes 一致（可为用户勾选的原始列表）",
+    )
+
+    @field_validator("scopes")
+    @classmethod
+    def _scopes_valid(cls, value: List[str]) -> List[str]:
+        return ResetDataPrepareRequest._scopes_valid(value)
 
 
 class ResetDataPrepareResponse(BaseModel):
     confirmation_token: str
     expires_in: int = _TOKEN_TTL_SECONDS
-    message: str = "请在有效期内携带 confirmation_token 再次确认重置"
+    scopes: List[str]
+    message: str = "请在有效期内携带 confirmation_token 与相同 scopes 再次确认重置"
+
+
+class ResetDataModuleItem(BaseModel):
+    code: str
+    group: str
 
 
 class IntervalBody(BaseModel):
@@ -150,7 +199,21 @@ def _assert_admin_gate(auth: AuthContext, *, action: str) -> None:
 
 
 def _assert_reset_gate(auth: AuthContext) -> None:
-    _assert_admin_gate(auth, action="重置快制造业务数据")
+    _assert_admin_gate(auth, action="重置快制造数据")
+
+
+@router.get(
+    "/reset-data/modules",
+    response_model=List[ResetDataModuleItem],
+    summary="List reset-data modules",
+    dependencies=[Depends(require_permission_codes(RESET_PERMISSION))],
+)
+async def list_reset_data_modules(
+    auth: AuthContext = Depends(get_auth_context),
+):
+    """返回可勾选的重置模块目录（与侧栏业务域对齐）。"""
+    _assert_reset_gate(auth)
+    return [ResetDataModuleItem(**m) for m in ResetDataService.list_module_catalog()]
 
 
 def _to_flow_request(body: FlowGenerateBody) -> FlowGenerateRequest:
@@ -224,18 +287,28 @@ def _to_flow_request(body: FlowGenerateBody) -> FlowGenerateRequest:
     dependencies=[Depends(require_permission_codes(RESET_PERMISSION))],
 )
 async def prepare_reset_app_data(
+    body: ResetDataPrepareRequest,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
     auth: AuthContext = Depends(get_auth_context),
 ):
-    """签发短时二次确认 token；真正删除须再调 /reset-data。"""
+    """签发短时二次确认 token（绑定规范化后的模块 scopes）；真正删除须再调 /reset-data。"""
     _assert_reset_gate(auth)
+    try:
+        normalized = ResetDataService.normalize_scopes(body.scopes)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     token = ResetDataService.issue_confirmation_token(
         tenant_id=tenant_id,
         operator_id=current_user.id,
+        scopes=normalized,
         ttl_seconds=_TOKEN_TTL_SECONDS,
     )
-    return ResetDataPrepareResponse(confirmation_token=token, expires_in=_TOKEN_TTL_SECONDS)
+    return ResetDataPrepareResponse(
+        confirmation_token=token,
+        expires_in=_TOKEN_TTL_SECONDS,
+        scopes=normalized,
+    )
 
 
 @router.post(
@@ -250,35 +323,38 @@ async def reset_app_data(
     auth: AuthContext = Depends(get_auth_context),
 ):
     """
-    重置快制造模块的所有业务数据。
+    按所选模块重置快制造数据。
 
     安全机制：
     1. 必须登录且属于对应租户。
     2. 权限码 kuaizhizao:app-management:reset-data + 组织/平台管理员门禁。
-    3. 二次确认 token（先调 /reset-data/prepare）。
+    3. 二次确认 token（先调 /reset-data/prepare，scopes 规范化结果须一致）。
     4. 自动触发一重全量备份。
-    5. 物理删除所有业务表，并写入操作日志。
+    5. 物理删除所选模块表，并写入操作日志。
     """
     _assert_reset_gate(auth)
     try:
-        ResetDataService.verify_confirmation_token(
+        normalized = ResetDataService.verify_confirmation_token(
             tenant_id=tenant_id,
             operator_id=current_user.id,
             token=body.confirmation_token,
+            scopes=body.scopes,
             ttl_seconds=_TOKEN_TTL_SECONDS,
         )
-        result = await ResetDataService.reset_kuaizhizao_data(tenant_id, current_user.id)
+        result = await ResetDataService.reset_kuaizhizao_data(
+            tenant_id, current_user.id, normalized
+        )
         try:
             await OperationLogService.create_operation_log(
                 tenant_id=tenant_id,
                 user_id=current_user.id,
                 operation_type="reset_data",
                 operation_module="kuaizhizao.app-management",
-                operation_object_type="tenant_business_data",
+                operation_object_type="tenant_app_data",
                 operation_object_id=tenant_id,
                 operation_content=(
-                    f"物理删除快制造业务数据: success={result.get('success')} "
-                    f"message={result.get('message')}"
+                    f"物理删除快制造数据 scopes={'+'.join(normalized)} "
+                    f"success={result.get('success')} message={result.get('message')}"
                 ),
                 request_method="POST",
                 request_path="/management/reset-data",

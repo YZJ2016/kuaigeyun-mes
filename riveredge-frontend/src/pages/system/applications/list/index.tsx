@@ -9,7 +9,7 @@ import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ActionType, ProColumns, ProFormInstance, ProFormText, ProFormTextArea, ProFormDigit, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Card, Dropdown, Modal, Popconfirm, Space, Switch, Tag, Typography, Alert, Divider, Menu, Breadcrumb, Tooltip, message, Row, Col, Tree, Select, Table } from 'antd';
+import { App, Button, Card, Checkbox, Dropdown, Modal, Popconfirm, Space, Switch, Tag, Typography, Alert, Divider, Menu, Breadcrumb, Tooltip, message, Row, Col, Tree, Select, Table } from 'antd';
 import { alignProColumns, GLOBAL_DOC_LIST_FIELD_RANK } from '../../../../apps/kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { renderSystemActiveTag, renderSystemTypeMarker, renderSystemYesNoTag } from '../../utils/systemListPresentation';
 import { UNI_TABLE_MARKER_BADGE_COLUMN_DEFAULTS } from '../../../../utils/uniTableLayoutColumns';
@@ -120,6 +120,106 @@ const APP_ACTION_ICON = {
   install: DownloadOutlined,
   uninstall: StopOutlined,
 } as const;
+
+/** 应用中心「重置数据」：按应用配置模块（与各 app ResetDataService.MODULE_CATALOG 对齐；shared 仅服务端附带） */
+type AppResetGroup = 'business' | 'master';
+type AppResetModule = {
+  code: string;
+  group: AppResetGroup;
+  labelKey: string;
+  hintKey: string;
+};
+type AppResetConfig = {
+  apiBase: string;
+  warn1Key: string;
+  crossAppHintKey?: string;
+  modules: AppResetModule[];
+  implies: Record<string, string[]>;
+};
+
+const KUAIZHIZAO_RESET_CONFIG: AppResetConfig = {
+  apiBase: '/apps/kuaizhizao/management',
+  warn1Key: 'pages.system.applications.resetWarn1',
+  modules: [
+    { code: 'sales', group: 'business', labelKey: 'pages.system.applications.resetModSales', hintKey: 'pages.system.applications.resetModSalesHint' },
+    { code: 'plan', group: 'business', labelKey: 'pages.system.applications.resetModPlan', hintKey: 'pages.system.applications.resetModPlanHint' },
+    { code: 'purchase', group: 'business', labelKey: 'pages.system.applications.resetModPurchase', hintKey: 'pages.system.applications.resetModPurchaseHint' },
+    { code: 'production', group: 'business', labelKey: 'pages.system.applications.resetModProduction', hintKey: 'pages.system.applications.resetModProductionHint' },
+    { code: 'outsource', group: 'business', labelKey: 'pages.system.applications.resetModOutsource', hintKey: 'pages.system.applications.resetModOutsourceHint' },
+    { code: 'warehouse', group: 'business', labelKey: 'pages.system.applications.resetModWarehouse', hintKey: 'pages.system.applications.resetModWarehouseHint' },
+    { code: 'quality', group: 'business', labelKey: 'pages.system.applications.resetModQuality', hintKey: 'pages.system.applications.resetModQualityHint' },
+    { code: 'equipment_ops', group: 'business', labelKey: 'pages.system.applications.resetModEquipmentOps', hintKey: 'pages.system.applications.resetModEquipmentOpsHint' },
+    { code: 'master_equipment', group: 'master', labelKey: 'pages.system.applications.resetModMasterEquipment', hintKey: 'pages.system.applications.resetModMasterEquipmentHint' },
+    { code: 'master_mold', group: 'master', labelKey: 'pages.system.applications.resetModMasterMold', hintKey: 'pages.system.applications.resetModMasterMoldHint' },
+    { code: 'master_tool', group: 'master', labelKey: 'pages.system.applications.resetModMasterTool', hintKey: 'pages.system.applications.resetModMasterToolHint' },
+    { code: 'master_quality', group: 'master', labelKey: 'pages.system.applications.resetModMasterQuality', hintKey: 'pages.system.applications.resetModMasterQualityHint' },
+    { code: 'master_templates', group: 'master', labelKey: 'pages.system.applications.resetModMasterTemplates', hintKey: 'pages.system.applications.resetModMasterTemplatesHint' },
+    { code: 'master_packing', group: 'master', labelKey: 'pages.system.applications.resetModMasterPacking', hintKey: 'pages.system.applications.resetModMasterPackingHint' },
+    { code: 'master_logistics', group: 'master', labelKey: 'pages.system.applications.resetModMasterLogistics', hintKey: 'pages.system.applications.resetModMasterLogisticsHint' },
+    { code: 'master_rules', group: 'master', labelKey: 'pages.system.applications.resetModMasterRules', hintKey: 'pages.system.applications.resetModMasterRulesHint' },
+  ],
+  implies: {
+    master_equipment: ['equipment_ops'],
+    master_mold: ['equipment_ops'],
+    master_tool: ['equipment_ops'],
+    master_quality: ['quality'],
+    master_templates: ['production'],
+    master_packing: ['production'],
+    master_logistics: ['warehouse'],
+    master_rules: [],
+  },
+};
+
+const MASTER_DATA_RESET_CONFIG: AppResetConfig = {
+  apiBase: '/apps/master-data/management',
+  warn1Key: 'pages.system.applications.resetWarn1MasterData',
+  crossAppHintKey: 'pages.system.applications.resetMasterDataCrossAppHint',
+  modules: [
+    { code: 'workforce', group: 'business', labelKey: 'pages.system.applications.resetModMdWorkforce', hintKey: 'pages.system.applications.resetModMdWorkforceHint' },
+    { code: 'factory', group: 'master', labelKey: 'pages.system.applications.resetModMdFactory', hintKey: 'pages.system.applications.resetModMdFactoryHint' },
+    { code: 'warehouse', group: 'master', labelKey: 'pages.system.applications.resetModMdWarehouse', hintKey: 'pages.system.applications.resetModMdWarehouseHint' },
+    { code: 'materials', group: 'master', labelKey: 'pages.system.applications.resetModMdMaterials', hintKey: 'pages.system.applications.resetModMdMaterialsHint' },
+    { code: 'process', group: 'master', labelKey: 'pages.system.applications.resetModMdProcess', hintKey: 'pages.system.applications.resetModMdProcessHint' },
+    { code: 'supply_chain', group: 'master', labelKey: 'pages.system.applications.resetModMdSupplyChain', hintKey: 'pages.system.applications.resetModMdSupplyChainHint' },
+  ],
+  implies: {
+    materials: ['process'],
+  },
+};
+
+const APP_RESET_CONFIGS: Record<string, AppResetConfig> = {
+  kuaizhizao: KUAIZHIZAO_RESET_CONFIG,
+  'master-data': MASTER_DATA_RESET_CONFIG,
+};
+
+function getAppResetConfig(appCode: string | undefined): AppResetConfig | null {
+  if (!appCode) return null;
+  return APP_RESET_CONFIGS[appCode] ?? null;
+}
+
+function normalizeAppResetScopes(config: AppResetConfig, scopes: readonly string[]): string[] {
+  const allCodes = config.modules.map((m) => m.code);
+  const businessCodes = config.modules.filter((m) => m.group === 'business').map((m) => m.code);
+  const masterCodes = config.modules.filter((m) => m.group === 'master').map((m) => m.code);
+  const allowed = new Set(allCodes);
+  const selected = new Set<string>();
+  for (const raw of scopes) {
+    const code = String(raw || '').trim().toLowerCase();
+    if (code === 'business') {
+      businessCodes.forEach((c) => selected.add(c));
+    } else if (code === 'master') {
+      masterCodes.forEach((c) => selected.add(c));
+    } else if (allowed.has(code)) {
+      selected.add(code);
+    }
+  }
+  for (const [src, implies] of Object.entries(config.implies)) {
+    if (selected.has(src)) {
+      implies.forEach((c) => selected.add(c));
+    }
+  }
+  return allCodes.filter((c) => selected.has(c));
+}
 
 /**
  * 应用中心分类顺序与真源：.cursor/skills/application-layer/SKILL.md
@@ -324,7 +424,68 @@ const ApplicationListPage: React.FC = () => {
   const [resetTargetApp, setResetTargetApp] = useState<Application | null>(null);
   const [resetConfirmText, setResetConfirmText] = useState('');
   const [resetStage, setResetStage] = useState(1); // 1, 2, 3
+  const [resetScopes, setResetScopes] = useState<string[]>([]);
   const resetConfirmPhrase = t('pages.system.applications.resetConfirmPhrase');
+  const resetConfig = useMemo(
+    () => getAppResetConfig(resetTargetApp?.code),
+    [resetTargetApp?.code],
+  );
+  const openAppResetModal = useCallback((app: Application) => {
+    const cfg = getAppResetConfig(app.code);
+    if (!cfg) return;
+    setResetTargetApp(app);
+    setResetStage(1);
+    setResetConfirmText('');
+    setResetScopes(cfg.modules.map((m) => m.code));
+    setResetModalVisible(true);
+  }, []);
+  const resetEffectiveScopes = useMemo(
+    () => (resetConfig ? normalizeAppResetScopes(resetConfig, resetScopes) : []),
+    [resetConfig, resetScopes],
+  );
+  const resetAllCodes = resetConfig?.modules.map((m) => m.code) ?? [];
+  const resetBusinessCodes = resetConfig?.modules.filter((m) => m.group === 'business').map((m) => m.code) ?? [];
+  const resetMasterCodes = resetConfig?.modules.filter((m) => m.group === 'master').map((m) => m.code) ?? [];
+  const resetScopeAllSelected = resetAllCodes.length > 0 && resetEffectiveScopes.length === resetAllCodes.length;
+  const resetScopeIndeterminate = resetEffectiveScopes.length > 0 && !resetScopeAllSelected;
+  const resetBusinessSelectedCount = resetBusinessCodes.filter((c) => resetEffectiveScopes.includes(c)).length;
+  const resetMasterSelectedCount = resetMasterCodes.filter((c) => resetEffectiveScopes.includes(c)).length;
+  const resetScopeSummary = useMemo(() => {
+    if (!resetConfig) return '';
+    const parts = resetEffectiveScopes.map((code) => {
+      const mod = resetConfig.modules.find((m) => m.code === code);
+      return mod ? t(mod.labelKey) : code;
+    });
+    return parts.join(t('pages.system.applications.resetScopeJoin'));
+  }, [resetConfig, resetEffectiveScopes, t]);
+  const toggleResetGroup = useCallback((group: AppResetGroup, checked: boolean) => {
+    if (!resetConfig) return;
+    const groupCodes = group === 'business' ? resetBusinessCodes : resetMasterCodes;
+    setResetScopes((prev) => {
+      const next = new Set(normalizeAppResetScopes(resetConfig, prev));
+      if (checked) {
+        groupCodes.forEach((c) => next.add(c));
+      } else {
+        groupCodes.forEach((c) => next.delete(c));
+        if (group === 'business') {
+          Object.entries(resetConfig.implies).forEach(([src, deps]) => {
+            if (!next.has(src)) return;
+            deps.forEach((dep) => next.delete(dep));
+          });
+        }
+      }
+      return normalizeAppResetScopes(resetConfig, [...next]);
+    });
+  }, [resetConfig, resetBusinessCodes, resetMasterCodes]);
+  const toggleResetModule = useCallback((code: string, checked: boolean) => {
+    if (!resetConfig) return;
+    setResetScopes((prev) => {
+      const next = new Set(normalizeAppResetScopes(resetConfig, prev));
+      if (checked) next.add(code);
+      else next.delete(code);
+      return normalizeAppResetScopes(resetConfig, [...next]);
+    });
+  }, [resetConfig]);
   const [dedicatedBindingModalOpen, setDedicatedBindingModalOpen] = useState(false);
   const [dedicatedBindingApp, setDedicatedBindingApp] = useState<Application | null>(null);
   const [dedicatedBindingRows, setDedicatedBindingRows] = useState<DedicatedBindingRow[]>([]);
@@ -1020,7 +1181,7 @@ const ApplicationListPage: React.FC = () => {
         }
 
         if (record.is_installed) {
-          if (record.code === "kuaizhizao") {
+          if (getAppResetConfig(record.code)) {
             actions.push(
               <Button
                 key="reset"
@@ -1029,12 +1190,7 @@ const ApplicationListPage: React.FC = () => {
                 {...rowActionToneDestructive()}
                 type="link"
                 size="small"
-                onClick={() => {
-                  setResetTargetApp(record);
-                  setResetStage(1);
-                  setResetConfirmText('');
-                  setResetModalVisible(true);
-                }}
+                onClick={() => openAppResetModal(record)}
               >
                 {t('pages.system.applications.resetData', { defaultValue: '重置数据' })}
               </Button>
@@ -1187,17 +1343,12 @@ const ApplicationListPage: React.FC = () => {
           ]
         : []),
 
-      application.code === "kuaizhizao" ? {
+      getAppResetConfig(application.code) ? {
         key: 'reset-data',
         label: t('pages.system.applications.resetData', { defaultValue: '重置数据' }),
         icon: <APP_ACTION_ICON.resetData />,
         danger: true,
-        onClick: () => {
-          setResetTargetApp(application);
-          setResetStage(1);
-          setResetConfirmText('');
-          setResetModalVisible(true);
-        },
+        onClick: () => openAppResetModal(application),
       } : null,
       {
         type: 'divider' as const,
@@ -1792,24 +1943,121 @@ const ApplicationListPage: React.FC = () => {
         open={resetModalVisible}
         onCancel={() => setResetModalVisible(false)}
         footer={null}
-        width={480}
+        width={560}
         destroyOnHidden
+        styles={{ body: { maxHeight: '70vh', overflowY: 'auto' } }}
       >
         <div style={{ padding: '8px 0' }}>
           {resetStage === 1 && (
-            <div style={{ textAlign: 'center' }}>
+            <div>
               <div style={{ marginBottom: 16, fontSize: 18, fontWeight: 500, color: '#ff4d4f', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                 <AlertTriangle size={20} strokeWidth={1.75} aria-hidden />
                 {t('pages.system.applications.resetWarnTitle', { defaultValue: '极大风险操作：数据重置' })}
               </div>
-              <p style={{ color: '#666', marginBottom: 24, padding: '0 20px', lineHeight: '1.6' }}>
-                {t('pages.system.applications.resetWarn1', { defaultValue: '重置操作将物理抹除“星制造”应用下所有的销售订单、生产工单、库存流水、需求计划等业务数据。此操作不可撤销！' })}
+              <p style={{ color: '#666', marginBottom: 16, padding: '0 8px', lineHeight: '1.6', textAlign: 'center' }}>
+                {t(resetConfig?.warn1Key || 'pages.system.applications.resetWarn1')}
               </p>
-              <Button 
-                type="primary" 
-                danger 
-                size="large" 
+              {resetConfig?.crossAppHintKey ? (
+                <Alert
+                  type="info"
+                  showIcon
+                  style={{ marginBottom: 12 }}
+                  title={t(resetConfig.crossAppHintKey)}
+                />
+              ) : null}
+              <div
+                style={{
+                  border: '1px solid rgba(0, 0, 0, 0.06)',
+                  borderRadius: 6,
+                  background: '#f7f8fa',
+                  padding: '12px 14px',
+                  marginBottom: 16,
+                  textAlign: 'left',
+                }}
+              >
+                <div style={{ marginBottom: 10, fontWeight: 500 }}>
+                  {t('pages.system.applications.resetScopeTitle')}
+                </div>
+                <Checkbox
+                  checked={resetScopeAllSelected}
+                  indeterminate={resetScopeIndeterminate}
+                  onChange={(e) => {
+                    setResetScopes(e.target.checked ? [...resetAllCodes] : []);
+                  }}
+                  style={{ marginBottom: 12 }}
+                >
+                  {t('pages.system.applications.resetScopeSelectAll')}
+                </Checkbox>
+
+                {([
+                  {
+                    group: 'business' as const,
+                    titleKey: 'pages.system.applications.resetScopeBusiness',
+                    selected: resetBusinessSelectedCount,
+                    total: resetBusinessCodes.length,
+                  },
+                  {
+                    group: 'master' as const,
+                    titleKey: 'pages.system.applications.resetScopeMaster',
+                    selected: resetMasterSelectedCount,
+                    total: resetMasterCodes.length,
+                  },
+                ])
+                  .filter((section) => section.total > 0)
+                  .map((section) => (
+                  <div key={section.group} style={{ marginBottom: 12 }}>
+                    <Checkbox
+                      checked={section.selected === section.total && section.total > 0}
+                      indeterminate={section.selected > 0 && section.selected < section.total}
+                      onChange={(e) => toggleResetGroup(section.group, e.target.checked)}
+                      style={{ marginBottom: 6 }}
+                    >
+                      <Text strong>{t(section.titleKey)}</Text>
+                    </Checkbox>
+                    <div style={{ paddingLeft: 22, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {(resetConfig?.modules || [])
+                        .filter((m) => m.group === section.group)
+                        .map((mod) => (
+                        <Checkbox
+                          key={mod.code}
+                          checked={resetEffectiveScopes.includes(mod.code)}
+                          onChange={(e) => toggleResetModule(mod.code, e.target.checked)}
+                        >
+                          <span>
+                            <Text>{t(mod.labelKey)}</Text>
+                            <Text type="secondary" style={{ display: 'block', fontSize: 12 }}>
+                              {t(mod.hintKey)}
+                            </Text>
+                          </span>
+                        </Checkbox>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+
+                {resetMasterSelectedCount > 0 && resetBusinessCodes.length > 0 ? (
+                  <Alert
+                    type="warning"
+                    showIcon
+                    style={{ marginTop: 4 }}
+                    title={t('pages.system.applications.resetScopeMasterImpliesBusiness')}
+                  />
+                ) : null}
+                {resetEffectiveScopes.includes('materials') ? (
+                  <Alert
+                    type="warning"
+                    showIcon
+                    style={{ marginTop: 4 }}
+                    title={t('pages.system.applications.resetModMdMaterialsImpliesProcess')}
+                  />
+                ) : null}
+              </div>
+              <Button
+                type="primary"
+                danger
+                size="large"
                 block
+                disabled={!resetConfig || resetEffectiveScopes.length === 0}
                 onClick={() => setResetStage(2)}
               >
                 {t('pages.system.applications.resetNext', { defaultValue: '我已了解风险，下一步' })}
@@ -1822,18 +2070,24 @@ const ApplicationListPage: React.FC = () => {
               <div style={{ marginBottom: 16, fontSize: 18, fontWeight: 600, color: '#f5222d' }}>
                 {t('pages.system.applications.resetWarnTitle2', { defaultValue: '再次确认：您确定要继续吗？' })}
               </div>
-              <p style={{ color: '#333', marginBottom: 24, fontWeight: 500 }}>
-                {t('pages.system.applications.resetWarn2', { defaultValue: '一旦点击下一步，数据将无法通过常规手段恢复。建议您确保当前没有正在进行的业务，并告知相关团队成员。' })}
+              <p style={{ color: '#333', marginBottom: 12, fontWeight: 500 }}>
+                {t('pages.system.applications.resetWarn2')}
+              </p>
+              <p style={{ color: '#666', marginBottom: 24 }}>
+                {t('pages.system.applications.resetScopeSelected', { scopes: resetScopeSummary })}
               </p>
               <Space orientation="vertical" style={{ width: '100%' }} size="medium">
-                <Button 
-                  type="primary" 
-                  danger 
-                  size="large" 
+                <Button
+                  type="primary"
+                  danger
+                  size="large"
                   block
                   onClick={() => setResetStage(3)}
                 >
                   {t('pages.system.applications.resetConfirmNext', { defaultValue: '我很确定，继续重置' })}
+                </Button>
+                <Button block onClick={() => setResetStage(1)}>
+                  {t('pages.system.applications.resetBackToScope')}
                 </Button>
                 <Button block onClick={() => setResetModalVisible(false)}>
                   {t('pages.system.applications.resetCancel', { defaultValue: '我再想想，取消重置' })}
@@ -1847,6 +2101,9 @@ const ApplicationListPage: React.FC = () => {
               <div style={{ marginBottom: 16, fontSize: 16, fontWeight: 500, color: '#262626' }}>
                 {t('pages.system.applications.resetFinalCheck', { defaultValue: '终极安全校验' })}
               </div>
+              <p style={{ color: '#666', marginBottom: 8 }}>
+                {t('pages.system.applications.resetScopeSelected', { scopes: resetScopeSummary })}
+              </p>
               <p style={{ color: '#666', marginBottom: 12 }}>
                 {t('pages.system.applications.resetTypeConfirm', { defaultValue: '请在下方准确输入以下内容以确认操作：' })}
               </p>
@@ -1861,50 +2118,60 @@ const ApplicationListPage: React.FC = () => {
                 }}
               />
               <div style={{ marginTop: 24 }}>
-                <Button 
-                  type="primary" 
-                  danger 
-                  size="large" 
+                <Button
+                  type="primary"
+                  danger
+                  size="large"
                   block
                   loading={submitting}
-                  disabled={resetConfirmText !== resetConfirmPhrase}
+                  disabled={
+                    !resetConfig
+                    || resetConfirmText !== resetConfirmPhrase
+                    || resetEffectiveScopes.length === 0
+                  }
                   onClick={async () => {
-                    if (resetConfirmText !== resetConfirmPhrase) return;
+                    if (!resetConfig || resetConfirmText !== resetConfirmPhrase || resetEffectiveScopes.length === 0) return;
                     try {
                       setSubmitting(true);
+                      const scopes = resetEffectiveScopes;
                       const prepared = await apiRequest<{
                         confirmation_token: string;
                         expires_in?: number;
-                      }>('/apps/kuaizhizao/management/reset-data/prepare', {
+                        scopes?: string[];
+                      }>(`${resetConfig.apiBase}/reset-data/prepare`, {
                         method: 'POST',
+                        data: { scopes },
                       });
                       const token = prepared?.confirmation_token;
                       if (!token) {
-                        messageApi.error('获取二次确认令牌失败，请重试');
+                        messageApi.error(t('pages.system.applications.resetTokenFailed'));
                         return;
                       }
+                      const effectiveScopes = prepared?.scopes?.length
+                        ? prepared.scopes
+                        : scopes;
                       const result = await apiRequest<{ success: boolean; message?: string }>(
-                        '/apps/kuaizhizao/management/reset-data',
+                        `${resetConfig.apiBase}/reset-data`,
                         {
                           method: 'POST',
-                          data: { confirmation_token: token },
+                          data: { confirmation_token: token, scopes: effectiveScopes },
                         },
                       );
                       if (result?.success) {
-                        messageApi.success(result.message || '重置成功并已自动备份');
+                        messageApi.success(result.message || t('pages.system.applications.resetSuccessFallback'));
                         setResetModalVisible(false);
-    actionRef.current?.reload();
+                        actionRef.current?.reload();
                       } else {
-                        messageApi.error(result?.message || '重置失败');
+                        messageApi.error(result?.message || t('pages.system.applications.resetFailedFallback'));
                       }
                     } catch (error: unknown) {
-                      messageApi.error((error as Error).message || '重置失败');
+                      messageApi.error((error as Error).message || t('pages.system.applications.resetFailedFallback'));
                     } finally {
                       setSubmitting(false);
                     }
                   }}
                 >
-                  {t('pages.system.applications.resetStart', { defaultValue: '启动全量物理重置（且自动备份）' })}
+                  {t('pages.system.applications.resetStart')}
                 </Button>
               </div>
             </div>

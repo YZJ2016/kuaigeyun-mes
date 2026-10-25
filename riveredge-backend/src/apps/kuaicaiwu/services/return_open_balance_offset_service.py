@@ -315,6 +315,109 @@ class ReturnOpenBalanceOffsetService:
                 )
         return reversed_total
 
+    async def create_purchase_return_red_payable(
+        self,
+        tenant_id: int,
+        purchase_return_id: int,
+        *,
+        operator_id: int,
+    ) -> int:
+        """为已确认采购退货创建红字应付（金额为负）；幂等返回已有应付 ID。"""
+        from apps.common.app_orm import require_finance_orm
+        from apps.kuaicaiwu.schemas.finance import PayableCreate
+        from apps.kuaicaiwu.services.finance_due_date import resolve_partner_due_date
+        from apps.kuaicaiwu.services.finance_service import PayableService
+        from core.utils.timezone_utils import to_site_date
+
+        require_finance_orm()
+
+        ret = await PurchaseReturn.get_or_none(
+            tenant_id=tenant_id, id=int(purchase_return_id), deleted_at__isnull=True
+        )
+        if not ret:
+            raise NotFoundError(f"采购退货单不存在: {purchase_return_id}")
+        status = str(ret.status or "").strip()
+        if status not in ("已退货", "completed", "已完成", "RETURNED"):
+            from infra.exceptions.exceptions import BusinessLogicError
+
+            raise BusinessLogicError("仅已退货的采购退货单可生成红字应付")
+
+        existing = await Payable.get_or_none(
+            tenant_id=tenant_id,
+            source_type=PAYABLE_SOURCE_PURCHASE_RETURN,
+            source_id=int(purchase_return_id),
+            deleted_at__isnull=True,
+        )
+        if existing:
+            return int(existing.id)
+
+        return_amount = await _resolve_purchase_return_amount(tenant_id, ret)
+        supplier_id = int(ret.supplier_id) if ret.supplier_id else None
+        if return_amount <= 0 or not supplier_id:
+            from infra.exceptions.exceptions import BusinessLogicError
+
+            raise BusinessLogicError("退货金额或供应商无效，无法生成红字应付")
+
+        payable_service = PayableService()
+        biz_date = to_site_date(resolve_business_datetime())
+        due_date = await resolve_partner_due_date(
+            tenant_id, "supplier", supplier_id, biz_date
+        )
+        red_total = -quantize_money(return_amount)
+        payable_data = PayableCreate(
+            source_type=PAYABLE_SOURCE_PURCHASE_RETURN,
+            source_id=int(purchase_return_id),
+            source_code=str(ret.return_code or purchase_return_id),
+            supplier_id=ret.supplier_id,
+            supplier_name=str(ret.supplier_name or ""),
+            total_amount=red_total,
+            paid_amount=Decimal("0"),
+            remaining_amount=Decimal("0"),
+            due_date=due_date,
+            business_date=biz_date,
+            status="已冲减",
+            notes=f"采购退货冲减-由采购退货单 {ret.return_code} 自动生成",
+        )
+        payable = await payable_service.create_payable(
+            tenant_id=tenant_id,
+            payable_data=payable_data,
+            created_by=operator_id,
+        )
+        try:
+            from apps.kuaicaiwu.services.finance_integration_hooks import (
+                link_finance_document_relation,
+                record_finance_accounting_event,
+            )
+
+            await link_finance_document_relation(
+                tenant_id=tenant_id,
+                source_type="purchase_return",
+                source_id=int(purchase_return_id),
+                source_code=str(ret.return_code or purchase_return_id),
+                target_type="payable",
+                target_id=payable.id,
+                target_code=getattr(payable, "payable_code", None),
+                relation_desc="采购退货确认自动生成红字应付单",
+                created_by=operator_id,
+            )
+            await record_finance_accounting_event(
+                tenant_id=tenant_id,
+                event_type="PURCHASE_RETURN_TO_PAYABLE",
+                business_type="payable",
+                source_doc_type="purchase_return",
+                source_doc_id=int(purchase_return_id),
+                source_doc_code=str(ret.return_code or purchase_return_id),
+                target_doc_type="Payable",
+                target_doc_id=payable.id,
+                target_doc_code=payable.payable_code,
+                amount=red_total,
+                operator_id=operator_id,
+                notes=f"采购退货单 {ret.return_code} 自动生成红字应付单",
+            )
+        except Exception as rel_e:
+            logger.warning("采购退货红字应付-关联/会计事件失败: %s", rel_e)
+        return int(payable.id)
+
     async def apply_purchase_return_offset(
         self,
         tenant_id: int,
@@ -470,6 +573,110 @@ class ReturnOpenBalanceOffsetService:
                     user_name=user_name,
                 )
         return reversed_total
+
+    async def build_purchase_return_finance_outcome(
+        self,
+        tenant_id: int,
+        purchase_return_id: int,
+    ) -> Optional[Dict[str, Any]]:
+        """已退货单的应付冲减结果，供详情/确认响应 finance_outcome。"""
+        ret = await PurchaseReturn.get_or_none(
+            tenant_id=tenant_id, id=int(purchase_return_id), deleted_at__isnull=True
+        )
+        if not ret:
+            return None
+        status = str(ret.status or "").strip()
+        if status not in ("已退货", "completed", "已完成", "RETURNED"):
+            return None
+
+        return_amount = await _resolve_purchase_return_amount(tenant_id, ret)
+        settlements = await SettlementRecord.filter(
+            tenant_id=tenant_id,
+            credit_doc_type=SETTLEMENT_CREDIT_PURCHASE_RETURN_OFFSET,
+            credit_doc_id=int(purchase_return_id),
+            is_active=True,
+            deleted_at__isnull=True,
+        ).all()
+        blue_offset_total = quantize_money(
+            sum((quantize_money(r.amount) for r in settlements), Decimal("0"))
+        )
+
+        offset_by_ap: Dict[int, Decimal] = {}
+        settlement_codes: List[str] = []
+        for row in settlements:
+            code = str(row.settlement_code or "").strip()
+            if code:
+                settlement_codes.append(code)
+            ap_id = int(row.debit_doc_id or 0)
+            if ap_id <= 0:
+                continue
+            offset_by_ap[ap_id] = quantize_money(
+                offset_by_ap.get(ap_id, Decimal("0")) + quantize_money(row.amount)
+            )
+
+        blue_offsets: List[Dict[str, Any]] = []
+        if offset_by_ap:
+            payables = await Payable.filter(
+                tenant_id=tenant_id,
+                id__in=list(offset_by_ap.keys()),
+                deleted_at__isnull=True,
+            ).all()
+            ap_by_id = {int(p.id): p for p in payables}
+            for ap_id, amt in sorted(offset_by_ap.items(), key=lambda x: x[0]):
+                ap = ap_by_id.get(ap_id)
+                blue_offsets.append(
+                    {
+                        "payable_id": ap_id,
+                        "payable_code": str(ap.payable_code or ap_id) if ap else str(ap_id),
+                        "offset_amount": float(amt),
+                    }
+                )
+
+        red = await Payable.get_or_none(
+            tenant_id=tenant_id,
+            source_type=PAYABLE_SOURCE_PURCHASE_RETURN,
+            source_id=int(purchase_return_id),
+            deleted_at__isnull=True,
+        )
+        if not red:
+            red = await Payable.get_or_none(
+                tenant_id=tenant_id,
+                source_type="采购退货",
+                source_id=int(purchase_return_id),
+                deleted_at__isnull=True,
+            )
+
+        blue_ids = await self._collect_blue_payable_ids(tenant_id, ret)
+        refund_remainder = quantize_money(
+            max(Decimal("0"), return_amount - blue_offset_total)
+        )
+
+        skip_reason = None
+        if not red:
+            from infra.services.business_config_service import BusinessConfigService
+
+            supplier_id = int(ret.supplier_id) if ret.supplier_id else None
+            strategy = await BusinessConfigService().resolve_payable_recognition(
+                tenant_id, supplier_id
+            )
+            if strategy == "manual":
+                skip_reason = "组织应付确认为手工立账，确认退货时未自动生成红字应付"
+        red_amount = float(red.total_amount) if red else None
+
+        return {
+            "return_amount": float(return_amount),
+            "blue_offset_total": float(blue_offset_total),
+            "refund_remainder": float(refund_remainder),
+            "needs_payment_refund": refund_remainder > 0,
+            "no_blue_payable": len(blue_ids) == 0,
+            "red_payable_id": int(red.id) if red else None,
+            "red_payable_code": str(red.payable_code) if red else None,
+            "red_payable_amount": red_amount,
+            "auto_payable_skipped": red is None and skip_reason is not None,
+            "auto_payable_skip_reason": skip_reason,
+            "settlement_codes": settlement_codes,
+            "blue_offsets": blue_offsets,
+        }
 
     async def _ensure_sales_return_red_receivable(
         self,

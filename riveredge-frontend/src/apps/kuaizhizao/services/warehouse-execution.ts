@@ -5,10 +5,38 @@
 import { apiRequest } from '../../../services/api';
 import type { SalesReturnListParams, SalesReturnListResult } from './sales-return';
 
+export type PurchaseReceiptReturnPullLine = {
+  id: number;
+  purchase_receipt_id: number;
+  receipt_code?: string;
+  purchase_order_id?: number;
+  purchase_order_code?: string;
+  supplier_id?: number;
+  supplier_name?: string;
+  material_id?: number;
+  material_code?: string;
+  material_name?: string;
+  material_spec?: string | null;
+  unit?: string;
+  suggested_quantity?: number;
+  pushed_quantity?: number;
+  remaining_quantity?: number;
+  /** 来源单据日期（入库日） */
+  document_date?: string | null;
+  required_date?: string | null;
+  warehouse_id?: number | null;
+  warehouse_name?: string | null;
+  requires_batch_number?: boolean;
+  suggested_batch_number?: string | null;
+};
+
 export type PurchaseReturnPullLine = {
   id: number;
   order_id: number;
   order_code?: string;
+  /** 单据日期（采购订单日）YYYY-MM-DD */
+  document_date?: string | null;
+  order_date?: string | null;
   supplier_id?: number;
   supplier_name?: string;
   material_id?: number;
@@ -62,6 +90,9 @@ export type PurchaseReceiptOrderPullLine = {
   suggested_quantity?: number;
   pushed_quantity?: number;
   remaining_quantity?: number;
+  /** 来源单据日期（采购订单日） */
+  document_date?: string | null;
+  order_date?: string | null;
   required_date?: string | null;
   warehouse_id?: number | null;
   warehouse_name?: string | null;
@@ -71,6 +102,9 @@ export type PurchaseReceiptNoticePullLine = {
   id: number;
   notice_id: number;
   notice_code?: string;
+  /** 单据日期（计划收货日）YYYY-MM-DD */
+  document_date?: string | null;
+  planned_receipt_date?: string | null;
   purchase_order_id?: number;
   purchase_order_code?: string;
   supplier_id?: number;
@@ -726,6 +760,8 @@ export const warehouseApi = {
     delete: async (id: string) => apiRequest(`/apps/kuaizhizao/purchase-returns/${id}`, { method: 'DELETE' }),
     get: async (id: string) => apiRequest(`/apps/kuaizhizao/purchase-returns/${id}`, { method: 'GET' }),
     confirm: async (id: string) => apiRequest(`/apps/kuaizhizao/purchase-returns/${id}/confirm`, { method: 'POST' }),
+    generateRedPayable: async (id: string) =>
+      apiRequest(`/apps/kuaizhizao/purchase-returns/${id}/generate-red-payable`, { method: 'POST' }),
     withdraw: async (id: string) => apiRequest(`/apps/kuaizhizao/purchase-returns/${id}/withdraw`, { method: 'POST' }),
     pullFromPurchaseOrder: async (data: {
       purchase_order_id: number;

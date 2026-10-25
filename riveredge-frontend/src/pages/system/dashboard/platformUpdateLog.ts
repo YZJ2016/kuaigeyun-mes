@@ -44,7 +44,157 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
-    id: 'purchase-inquiry-vendor-system-pdf-r01',
+    id: 'purchase-requisition-form-field-settings-r01',
+    date: '2026-10-25',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.purchase-requisition-form-field-settings-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-requisition-form-field-settings-r01.description',
+  },
+  {
+    id: 'purchase-requisition-name-field-restore-r01',
+    date: '2026-10-25',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.purchase-requisition-name-field-restore-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-requisition-name-field-restore-r01.description',
+  },
+  {
+    id: 'tool-mold-repair-complete-lines-r01',
+    date: '2026-10-25',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.tool-mold-repair-complete-lines-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.tool-mold-repair-complete-lines-r01.description',
+  },
+  {
+    id: 'tool-mold-maintenance-complete-lines-r01',
+    date: '2026-10-25',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.tool-mold-maintenance-complete-lines-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.tool-mold-maintenance-complete-lines-r01.description',
+  },
+  {
+    id: 'tool-ops-in-progress-complete-r01',
+    date: '2026-10-25',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.tool-ops-in-progress-complete-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.tool-ops-in-progress-complete-r01.description',
+  },
+  {
+    id: 'purchase-return-red-payable-negative-r01',
+    date: '2026-10-25',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.purchase-return-red-payable-negative-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-return-red-payable-negative-r01.description',
+  },
+  {
+    id: 'payment-application-draft-delete-r01',
+    date: '2026-10-25',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.payment-application-draft-delete-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.payment-application-draft-delete-r01.description',
+  },
+  {
+    id: 'purchase-mgmt-pull-document-date-r01',
+    date: '2026-10-25',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.purchase-mgmt-pull-document-date-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-mgmt-pull-document-date-r01.description',
+  },
+  {
+    id: 'material-stacked-copy-follow-code-r01',
+    date: '2026-10-25',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.material-stacked-copy-follow-code-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.material-stacked-copy-follow-code-r01.description',
+  },
+  {
+    id: 'app-center-reset-data-master-data-r01',
+    date: '2026-10-25',
+    type: 'feature',
+    titleKey:
+      'pages.dashboard.updateLog.entries.app-center-reset-data-master-data-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.app-center-reset-data-master-data-r01.description',
+  },
+  {
+    id: 'app-center-reset-data-modules-r01',
+    date: '2026-10-25',
+    type: 'feature',
+    titleKey:
+      'pages.dashboard.updateLog.entries.app-center-reset-data-modules-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.app-center-reset-data-modules-r01.description',
+  },
+  {
+    id: 'app-center-reset-data-scopes-r01',
+    date: '2026-10-25',
+    type: 'feature',
+    titleKey:
+      'pages.dashboard.updateLog.entries.app-center-reset-data-scopes-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.app-center-reset-data-scopes-r01.description',
+  },
+  {
+    id: 'pull-query-document-date-sort-r01',
+    date: '2026-10-25',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.pull-query-document-date-sort-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.pull-query-document-date-sort-r01.description',
+  },
+  {
+    id: 'app-connector-wecom-guide-spacing-r01',
+    date: '2026-10-25',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.app-connector-wecom-guide-spacing-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.app-connector-wecom-guide-spacing-r01.description',
+  },
+  {
+    id: 'app-connector-wecom-guide-order-r01',
+    date: '2026-10-25',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.app-connector-wecom-guide-order-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.app-connector-wecom-guide-order-r01.description',
+  },
+  {
+    id: 'app-connector-wecom-copy-i18n-r01',
+    date: '2026-10-25',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.app-connector-wecom-copy-i18n-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.app-connector-wecom-copy-i18n-r01.description',
+  },
+  {
+    id: 'document-relation-target-id-bigint-r01',
+    date: '2026-10-25',
+    type: 'fix',
+    titleKey:
+      'pages.dashboard.updateLog.entries.document-relation-target-id-bigint-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.document-relation-target-id-bigint-r01.description',
+  },
+  {
     date: '2026-10-20',
     type: 'feature',
     titleKey:

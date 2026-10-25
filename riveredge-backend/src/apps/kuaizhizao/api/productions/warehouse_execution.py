@@ -5588,6 +5588,29 @@ async def confirm_purchase_return(
     )
 
 
+@router.post(
+    "/purchase-returns/{return_id}/generate-red-payable",
+    response_model=PurchaseReturnResponse,
+    summary="Generate red payable for confirmed purchase return",
+    dependencies=[Depends(require_permission_codes("kuaicaiwu:payable:create"))],
+)
+async def generate_purchase_return_red_payable(
+    return_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> PurchaseReturnResponse:
+    await _assert_purchase_return_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        return_id=return_id,
+    )
+    return await PurchaseReturnService().generate_red_payable_for_return(
+        tenant_id=tenant_id,
+        return_id=return_id,
+        created_by=current_user.id,
+    )
+
+
 @router.post("/purchase-returns/{return_id}/withdraw", response_model=PurchaseReturnResponse, summary="Withdraw purchase return posting")
 async def withdraw_purchase_return(
     return_id: int,

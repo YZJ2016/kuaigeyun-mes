@@ -181,6 +181,9 @@ export type PurchaseInquiryPurchasePullLine = {
   id: number;
   inquiry_id: number;
   inquiry_code?: string;
+  /** 单据日期（询价日期）YYYY-MM-DD */
+  document_date?: string | null;
+  inquiry_date?: string | null;
   material_id?: number;
   material_code?: string;
   material_name?: string;

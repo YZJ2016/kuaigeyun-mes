@@ -28,6 +28,7 @@ from loguru import logger
 
 from core.utils.timezone_utils import (
     coerce_business_datetime_to_utc,
+    now_utc,
     resolve_business_datetime,
     to_site_date,
     today_site_str,
@@ -9806,7 +9807,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
         po_query = PurchaseOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if order_id is not None:
             po_query = po_query.filter(id=int(order_id))
-        orders = await po_query.only("id", "order_code", "status", "supplier_id", "supplier_name")
+        orders = await po_query.only("id", "order_code", "status", "supplier_id", "supplier_name", "order_date")
         order_by_id = {int(o.id): o for o in orders}
         if not order_by_id:
             return {"data": [], "total": 0}
@@ -9866,6 +9867,8 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                     continue
             mid = int(item.material_id) if item.material_id else 0
             line_wh_id, line_wh_name = default_wh_by_material.get(mid, (None, None))
+            order_date = getattr(order, "order_date", None)
+            document_date = str(order_date)[:10] if order_date else None
             lines.append(
                 {
                     "id": int(item.id),
@@ -9882,6 +9885,8 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                     "pushed_quantity": max(0.0, qty - remaining),
                     "remaining_quantity": remaining,
                     "required_date": str(item.required_date) if item.required_date else None,
+                    "document_date": document_date,
+                    "order_date": document_date,
                     "warehouse_id": line_wh_id,
                     "warehouse_name": line_wh_name,
                 }
@@ -9893,6 +9898,8 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 int(r.get("id") or 0),
             )
         )
+        # 稳定排序：同日内保持单号序，整体按单据日期倒序（新在前）
+        lines.sort(key=lambda r: str(r.get("document_date") or ""), reverse=True)
         return {"data": lines[skip : skip + limit], "total": len(lines)}
 
     async def create_purchase_receipts_from_po_items(
@@ -10113,6 +10120,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
         notices = await notice_query.only(
             "id", "notice_code", "status", "supplier_id", "supplier_name",
             "purchase_order_id", "purchase_order_code", "purchase_receipt_id",
+            "planned_receipt_date",
         )
         notice_by_id = {int(n.id): n for n in notices}
         if not notice_by_id:
@@ -10154,11 +10162,15 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 haystack = " ".join([material_code, material_name, material_spec]).lower()
                 if kw not in haystack:
                     continue
+            planned = getattr(notice, "planned_receipt_date", None)
+            document_date = str(planned)[:10] if planned else None
             lines.append(
                 {
                     "id": int(item.id),
                     "notice_id": int(item.notice_id),
                     "notice_code": notice.notice_code,
+                    "document_date": document_date,
+                    "planned_receipt_date": document_date,
                     "purchase_order_id": notice.purchase_order_id,
                     "purchase_order_code": notice.purchase_order_code,
                     "supplier_id": notice.supplier_id,
@@ -10173,13 +10185,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                     "remaining_quantity": remaining,
                 }
             )
-        lines.sort(
-            key=lambda r: (
-                str(r.get("notice_code") or ""),
-                str(r.get("material_code") or ""),
-                int(r.get("id") or 0),
-            )
-        )
+        lines.sort(key=lambda r: str(r.get("document_date") or ""), reverse=True)
         return {"data": lines[skip : skip + limit], "total": len(lines)}
 
     async def create_purchase_receipts_from_notice_items(
@@ -14103,11 +14109,29 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
             "total_quantity": total_quantity,
             "total_amount": total_amount,
         }
+        if str(return_obj.status or "").strip() == "已退货":
+            from apps.common.app_orm import finance_orm_ready
+            from apps.kuaizhizao.schemas.warehouse import PurchaseReturnFinanceOutcome
+
+            if finance_orm_ready():
+                from apps.kuaicaiwu.services.return_open_balance_offset_service import (
+                    ReturnOpenBalanceOffsetService,
+                )
+
+                finance_raw = await ReturnOpenBalanceOffsetService().build_purchase_return_finance_outcome(
+                    tenant_id, int(return_obj.id)
+                )
+                if finance_raw:
+                    updates["finance_outcome"] = PurchaseReturnFinanceOutcome.model_validate(
+                        finance_raw
+                    )
         if hasattr(enriched, "model_copy"):
             return enriched.model_copy(update=updates)
         enriched.items = item_responses
         enriched.total_quantity = total_quantity
         enriched.total_amount = total_amount
+        if updates.get("finance_outcome") is not None:
+            enriched.finance_outcome = updates["finance_outcome"]
         return enriched
 
     async def create_purchase_return(self, tenant_id: int, return_data: PurchaseReturnCreate, created_by: int) -> PurchaseReturnResponse:
@@ -14566,11 +14590,15 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
             suggested_batch = batch_options[0]["batch_number"] if batch_options else None
             mid = int(item.material_id) if item.material_id else 0
             line_wh_id, line_wh_name = default_wh_by_material.get(mid, (None, None))
+            order_date = getattr(order, "order_date", None)
+            document_date = str(order_date)[:10] if order_date else None
             lines.append(
                 {
                     "id": int(item.id),
                     "order_id": int(item.order_id),
                     "order_code": order.order_code,
+                    "document_date": document_date,
+                    "order_date": document_date,
                     "supplier_id": order.supplier_id,
                     "supplier_name": order.supplier_name,
                     "material_id": item.material_id,
@@ -14589,13 +14617,7 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                     "warehouse_name": line_wh_name,
                 }
             )
-        lines.sort(
-            key=lambda r: (
-                str(r.get("order_code") or ""),
-                str(r.get("material_code") or ""),
-                int(r.get("id") or 0),
-            )
-        )
+        lines.sort(key=lambda r: str(r.get("document_date") or ""), reverse=True)
         return {"data": lines[skip : skip + limit], "total": len(lines)}
 
     async def create_purchase_returns_from_po_items(
@@ -15434,6 +15456,7 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                     status="已冲减",
                     notes=f"采购退货冲减-由采购退货单 {ret_obj.return_code} 自动生成",
                 )
+
                 payable = await payable_service.create_payable(
                     tenant_id=tenant_id,
                     payable_data=payable_data,
@@ -15504,6 +15527,27 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                 ) from offset_e
 
         return updated_return
+
+    async def generate_red_payable_for_return(
+        self,
+        tenant_id: int,
+        return_id: int,
+        created_by: int,
+    ) -> PurchaseReturnResponse:
+        """已退货单手工生成红字应付（负金额）；幂等。"""
+        from apps.common.app_orm import require_finance_orm
+        from apps.kuaicaiwu.services.return_open_balance_offset_service import (
+            ReturnOpenBalanceOffsetService,
+        )
+
+        require_finance_orm()
+
+        await ReturnOpenBalanceOffsetService().create_purchase_return_red_payable(
+            tenant_id,
+            return_id,
+            operator_id=created_by,
+        )
+        return await self.get_purchase_return_by_id(tenant_id, return_id)
 
     async def update_purchase_return(
         self,
@@ -15642,6 +15686,23 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                 # spec 142：撤回对冲与库存回滚同一成败——事务内抛出即整单回滚
                 logger.error("采购退货撤回-回滚蓝字应付冲减失败: %s", offset_e)
                 raise
+
+            try:
+                from apps.common.app_orm import finance_orm_ready
+                from apps.kuaicaiwu.constants.finance_source_types import (
+                    PAYABLE_SOURCE_PURCHASE_RETURN,
+                )
+                from apps.kuaicaiwu.models.payable import Payable
+
+                if finance_orm_ready():
+                    await Payable.filter(
+                        tenant_id=tenant_id,
+                        source_type=PAYABLE_SOURCE_PURCHASE_RETURN,
+                        source_id=int(return_id),
+                        deleted_at__isnull=True,
+                    ).update(deleted_at=now_utc())
+            except Exception as fin_e:
+                logger.warning("采购退货撤回-红字应付回滚失败: %s", fin_e)
 
             from apps.kuaizhizao.services.inventory_service import InventoryService
             from tortoise.timezone import now as tz_now

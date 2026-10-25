@@ -298,6 +298,10 @@ class PaymentApplicationPullService:
         keyword: Optional[str] = None,
     ) -> Dict[str, Any]:
         approved_reviews = ("已审核", "APPROVED", "审核通过")
+        from apps.kuaicaiwu.constants.finance_source_types import (
+            PAYABLE_SOURCE_PURCHASE_RETURN,
+        )
+
         query = (
             Payable.filter(
                 tenant_id=tenant_id,
@@ -307,6 +311,7 @@ class PaymentApplicationPullService:
                 review_status__in=approved_reviews,
             )
             .exclude(status="已结清")
+            .exclude(source_type=PAYABLE_SOURCE_PURCHASE_RETURN)
         )
         kw = str(keyword or "").strip()
         if kw:

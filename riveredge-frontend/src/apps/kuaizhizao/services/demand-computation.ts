@@ -477,6 +477,8 @@ export type DemandComputationPurchasePullLine = {
   id: number;
   computation_id: number;
   computation_code?: string;
+  /** 单据日期（计算完成日）YYYY-MM-DD */
+  document_date?: string | null;
   business_mode?: string;
   material_id: number;
   material_code?: string;

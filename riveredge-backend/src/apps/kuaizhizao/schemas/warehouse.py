@@ -1190,6 +1190,40 @@ class PurchaseReturnUpdate(PurchaseReturnBase):
     items: Optional[List["PurchaseReturnItemCreate"]] = Field(None, description="退货明细列表")
 
 
+class PurchaseReturnFinanceBlueOffset(BaseSchema):
+    """采购退货冲减的蓝字应付行。"""
+
+    payable_id: int = Field(..., description="蓝字应付ID")
+    payable_code: str = Field(..., description="蓝字应付单号")
+    offset_amount: float = Field(..., ge=0, description="本次冲减金额")
+
+
+class PurchaseReturnFinanceOutcome(BaseSchema):
+    """采购退货确认后的应付冲减与付款退款提示。"""
+
+    return_amount: float = Field(0, ge=0, description="退货金额")
+    blue_offset_total: float = Field(0, ge=0, description="已冲减蓝字应付合计")
+    refund_remainder: float = Field(0, ge=0, description="超出未结、须走付款退款的金额")
+    needs_payment_refund: bool = Field(False, description="是否建议发起付款退款")
+    no_blue_payable: bool = Field(False, description="未关联到可冲减的蓝字应付")
+    red_payable_id: Optional[int] = Field(None, description="红字冲减应付ID")
+    red_payable_code: Optional[str] = Field(None, description="红字冲减应付单号")
+    red_payable_amount: Optional[float] = Field(
+        None, description="红字应付金额（负数为贷方冲减）"
+    )
+    auto_payable_skipped: bool = Field(
+        False, description="确认退货时是否因立账策略未自动生成红字应付"
+    )
+    auto_payable_skip_reason: Optional[str] = Field(
+        None, description="未自动立红字应付的原因说明"
+    )
+    settlement_codes: List[str] = Field(default_factory=list, description="抵减核销单号")
+    blue_offsets: List[PurchaseReturnFinanceBlueOffset] = Field(
+        default_factory=list,
+        description="按蓝字应付拆分的冲减明细",
+    )
+
+
 class PurchaseReturnResponse(PurchaseReturnBase):
     """采购退货单响应schema"""
     id: int = Field(..., description="退货单ID")
@@ -1209,6 +1243,10 @@ class PurchaseReturnResponse(PurchaseReturnBase):
         description="退货明细（详情接口始终返回；列表仅 include_items 时填充）",
     )
     lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供 UniLifecycle/Stepper 展示）")
+    finance_outcome: Optional[PurchaseReturnFinanceOutcome] = Field(
+        None,
+        description="已退货单的应付冲减结果（仅详情/确认后返回）",
+    )
 
     class Config:
         from_attributes = True

@@ -135,6 +135,8 @@ import {
   PurchaseRequisitionLineStockCell,
   PurchaseRequisitionLineStockProvider,
 } from './components/PurchaseRequisitionLineStock';
+import { PurchaseRequisitionFormFieldSettings } from './components/PurchaseRequisitionFormFieldSettings';
+import { resolvePurchaseRequisitionFormFieldVisibility } from './purchaseRequisitionFormFieldPrefs';
 import {
   KUAIZHIZAO_DOC_HOST,
   loadMaterialFormReferenceList,
@@ -150,7 +152,7 @@ import { SupplierSelectDropdown } from '../../../../master-data/components/Suppl
 import type { Supplier } from '../../../../master-data/types/supply-chain';
 import { ROUTES } from '../../../constants/routes';
 import { useTranslation } from 'react-i18next';
-import { useGlobalStore } from '../../../../../stores';
+import { useGlobalStore, useUserPreferenceStore } from '../../../../../stores';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { useNumericPrecision } from '../../../../../hooks/useNumericPrecision';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
@@ -231,6 +233,11 @@ const PurchaseRequisitionsPage: React.FC = () => {
   const pullFromDemandComputationAction = resolveKuaizhizaoDocumentAction(t, 'purchase_requisition.pull_from_demand_computation');
   const currentUser = useCurrentUser();
   const purchaseRequestAuditEnabled = useAuditRequired('purchase_request', false);
+  const userPreferences = useUserPreferenceStore((s) => s.preferences);
+  const showRequisitionNameField = useMemo(
+    () => resolvePurchaseRequisitionFormFieldVisibility(userPreferences).requisition_name,
+    [userPreferences],
+  );
   const purchaseRequisitionPerms = useResourcePermissions(PURCHASE_REQUISITION_RESOURCE);
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const navigate = useNavigate();
@@ -527,6 +534,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
         const applicantUuid = await resolveUserUuidById(detail.applicant_id);
         const baseValues = {
           requisition_code: detail.requisition_code ?? '',
+          requisition_name: detail.requisition_name ?? '',
           requisition_date: detail.requisition_date ? dayjs(detail.requisition_date) : dayjs(),
           applicant_uuid: applicantUuid,
           applicant_id: detail.applicant_id,
@@ -778,6 +786,16 @@ const PurchaseRequisitionsPage: React.FC = () => {
             material_spec={record.material_spec}
           />
         ),
+      },
+      {
+        title: t('components.uniPullQuery.documentDateColumn'),
+        dataIndex: 'document_date',
+        width: 112,
+        sorter: (a, b) =>
+          String(a.document_date || '').localeCompare(String(b.document_date || '')),
+        defaultSortOrder: 'descend',
+        render: (_, record) =>
+          record.document_date ? formatBusinessDateOnly(String(record.document_date)) : '-',
       },
       {
         title: t('app.kuaizhizao.purchaseRequisition.pull.businessMode'),
@@ -1103,7 +1121,13 @@ const PurchaseRequisitionsPage: React.FC = () => {
       let requisitionId: number | undefined;
 
       if (editingId != null) {
+        const editedCode = String(values.requisition_code ?? '').trim();
         await updatePurchaseRequisition(editingId, {
+          // 是否允许改号由后端 document_code 门禁判定，勿因前端 editable 竞态静默丢掉
+          ...(editedCode ? { requisition_code: editedCode } : {}),
+          ...(showRequisitionNameField
+            ? { requisition_name: String(values.requisition_name ?? '').trim() }
+            : {}),
           requisition_date: requisitionDate,
           required_date: requiredDate,
           applicant_id: values.applicant_id,
@@ -1130,6 +1154,9 @@ const PurchaseRequisitionsPage: React.FC = () => {
         }
         const created = await createPurchaseRequisition({
           requisition_code: requisitionCode || undefined,
+          ...(showRequisitionNameField
+            ? { requisition_name: String(values.requisition_name ?? '').trim() || undefined }
+            : {}),
           requisition_date: requisitionDate,
           required_date: requiredDate,
           applicant_id: values.applicant_id,
@@ -1957,74 +1984,129 @@ const PurchaseRequisitionsPage: React.FC = () => {
 
   const renderPurchaseRequisitionForm = () => (
     <>
-      <DetailDrawerSection titleAccent title={t('app.uniDetail.sectionBasic')}>
+      <DetailDrawerSection
+        titleAccent
+        title={t('app.uniDetail.sectionBasic')}
+        titleExtra={<PurchaseRequisitionFormFieldSettings />}
+      >
         <div className="document-form-untitled-groups">
           <div className="document-form-untitled-group">
-        <Row gutter={16}>
-          <Col span={12}>
-            <ProFormText
-              name="requisition_code"
-              label={t('app.kuaizhizao.purchaseRequisition.form.code')}
-              disabled={editingId != null && !prCodeEditability.editable}
-              extra={
-                editingId != null && prCodeEditability.lockedReason
-                  ? t(prCodeEditability.lockedReason)
-                  : undefined
-              }
-              placeholder={
-                editingId != null
-                  ? t('app.kuaizhizao.purchaseRequisition.form.codeAuto')
-                  : isAutoGenerateEnabled('kuaizhizao-purchase-requisition')
-                    ? t('app.kuaizhizao.purchaseRequisition.form.codeAuto')
-                    : t('app.kuaizhizao.purchaseRequisition.form.codeManual')
-              }
-              rules={[{ required: true, message: t('app.kuaizhizao.purchaseRequisition.form.codeManual') }]}
-            />
-          </Col>
-          <Col span={12}>
-            <EquipmentPersonSelect
-              uuidFieldName="applicant_uuid"
-              idFieldName="applicant_id"
-              nameFieldName="applicant_name"
-              label={t('app.kuaizhizao.purchaseRequisition.form.applicant')}
-              formRef={createFormRef}
-              required
-            />
-          </Col>
-        </Row>
+            <Row gutter={16}>
+              <Col span={12}>
+                <ProFormText
+                  name="requisition_code"
+                  label={t('app.kuaizhizao.purchaseRequisition.form.code')}
+                  disabled={editingId != null && !prCodeEditability.editable}
+                  extra={
+                    editingId != null && prCodeEditability.lockedReason
+                      ? t(prCodeEditability.lockedReason)
+                      : undefined
+                  }
+                  placeholder={
+                    editingId != null
+                      ? t('app.kuaizhizao.purchaseRequisition.form.codeAuto')
+                      : isAutoGenerateEnabled('kuaizhizao-purchase-requisition')
+                        ? t('app.kuaizhizao.purchaseRequisition.form.codeAuto')
+                        : t('app.kuaizhizao.purchaseRequisition.form.codeManual')
+                  }
+                  rules={[{ required: true, message: t('app.kuaizhizao.purchaseRequisition.form.codeManual') }]}
+                />
+              </Col>
+              {showRequisitionNameField ? (
+                <Col span={12}>
+                  <ProFormText
+                    name="requisition_name"
+                    label={t('app.kuaizhizao.purchaseRequisition.form.name')}
+                    placeholder={t('app.kuaizhizao.purchaseRequisition.form.namePlaceholder')}
+                  />
+                </Col>
+              ) : (
+                <Col span={12}>
+                  <EquipmentPersonSelect
+                    uuidFieldName="applicant_uuid"
+                    idFieldName="applicant_id"
+                    nameFieldName="applicant_name"
+                    label={t('app.kuaizhizao.purchaseRequisition.form.applicant')}
+                    formRef={createFormRef}
+                    required
+                  />
+                </Col>
+              )}
+            </Row>
           </div>
           <div className="document-form-untitled-group">
-        <Row gutter={16}>
-          <Col span={12}>
-            <ProFormDatePicker
-              name="requisition_date"
-              label={t('app.kuaizhizao.purchaseRequisition.form.date')}
-              fieldProps={{ style: { width: '100%' } }}
-            />
-          </Col>
-          <Col span={12}>
-            <ProFormDatePicker
-              name="required_date"
-              label={t('app.kuaizhizao.purchaseRequisition.form.requiredDate')}
-              fieldProps={buildFutureDateShortcutFieldProps({
-                getForm: () => createFormRef.current,
-                fieldName: 'required_date',
-                baseFieldName: 'requisition_date',
-                t,
-                onApply: (date) => {
-                  createFormRef.current?.setFieldValue?.('required_date', date);
-                  applyHeaderDeliveryToItemLines(date);
-                },
-                fieldProps: {
-                  onChange: (value: unknown) => {
-                    applyHeaderDeliveryToItemLines(value);
-                  },
-                },
-              })}
-            />
-          </Col>
-        </Row>
+            <Row gutter={16}>
+              {showRequisitionNameField ? (
+                <Col span={12}>
+                  <EquipmentPersonSelect
+                    uuidFieldName="applicant_uuid"
+                    idFieldName="applicant_id"
+                    nameFieldName="applicant_name"
+                    label={t('app.kuaizhizao.purchaseRequisition.form.applicant')}
+                    formRef={createFormRef}
+                    required
+                  />
+                </Col>
+              ) : null}
+              <Col span={12}>
+                <ProFormDatePicker
+                  name="requisition_date"
+                  label={t('app.kuaizhizao.purchaseRequisition.form.date')}
+                  fieldProps={{ style: { width: '100%' } }}
+                />
+              </Col>
+              {!showRequisitionNameField ? (
+                <Col span={12}>
+                  <ProFormDatePicker
+                    name="required_date"
+                    label={t('app.kuaizhizao.purchaseRequisition.form.requiredDate')}
+                    fieldProps={buildFutureDateShortcutFieldProps({
+                      getForm: () => createFormRef.current,
+                      fieldName: 'required_date',
+                      baseFieldName: 'requisition_date',
+                      t,
+                      onApply: (date) => {
+                        createFormRef.current?.setFieldValue?.('required_date', date);
+                        applyHeaderDeliveryToItemLines(date);
+                      },
+                      fieldProps: {
+                        onChange: (value: unknown) => {
+                          applyHeaderDeliveryToItemLines(value);
+                        },
+                      },
+                    })}
+                  />
+                </Col>
+              ) : null}
+            </Row>
           </div>
+          {showRequisitionNameField ? (
+            <div className="document-form-untitled-group">
+              <Row gutter={16}>
+                <Col span={12}>
+                  <ProFormDatePicker
+                    name="required_date"
+                    label={t('app.kuaizhizao.purchaseRequisition.form.requiredDate')}
+                    fieldProps={buildFutureDateShortcutFieldProps({
+                      getForm: () => createFormRef.current,
+                      fieldName: 'required_date',
+                      baseFieldName: 'requisition_date',
+                      t,
+                      onApply: (date) => {
+                        createFormRef.current?.setFieldValue?.('required_date', date);
+                        applyHeaderDeliveryToItemLines(date);
+                      },
+                      fieldProps: {
+                        onChange: (value: unknown) => {
+                          applyHeaderDeliveryToItemLines(value);
+                        },
+                      },
+                    })}
+                  />
+                </Col>
+              </Row>
+            </div>
+          ) : null}
         </div>
       </DetailDrawerSection>
 

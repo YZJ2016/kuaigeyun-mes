@@ -804,7 +804,8 @@
     "master-data:warehouse:warehouse:approve",
     "master-data:warehouse:warehouse:audit",
     "master-data:warehouse:warehouse:reject",
-    "master-data:warehouse:warehouse:print"
+    "master-data:warehouse:warehouse:print",
+    "master-data:app-management:reset-data"
   ],
   "dependencies": {
     "riveredge-backend": ">=1.0.0",

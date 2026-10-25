@@ -13,3 +13,10 @@ export function isPurchaseReturnOffsetPayable(record: {
   // 确认退货写路径固定备注前缀（与 warehouse 创建红字应付一致）
   return String(record?.notes || '').startsWith('采购退货冲减');
 }
+
+/** 应付列表/详情展示金额（红字应付库内为负，与金蝶一致） */
+export function payableDisplayTotalAmount(record: {
+  total_amount?: number | string | null;
+} | null | undefined): number {
+  return Number(record?.total_amount ?? 0);
+}

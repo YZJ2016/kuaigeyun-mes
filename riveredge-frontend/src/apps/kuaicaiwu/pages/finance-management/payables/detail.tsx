@@ -44,7 +44,10 @@ import {
 } from '../../../../../components/document-tracking-panel';
 
 import { getPayableLifecycle } from '../../../utils/payableLifecycle';
-import { isPurchaseReturnOffsetPayable } from '../../../utils/payableOffset';
+import {
+  isPurchaseReturnOffsetPayable,
+  payableDisplayTotalAmount,
+} from '../../../utils/payableOffset';
 import { FinanceArApInvoiceStatusDetail } from '../../../utils/financeInvoiceStatusUi';
 import { renderRefundExecutionMarker } from '../../../utils/financeUiLabels';
 import { MarkerTag } from '../../../../../constants/statusBadges';
@@ -388,10 +391,13 @@ const PayableDetail: React.FC = () => {
             <Col xs={24} sm={8}>
 
               <Statistic
-                title={isOffsetPayable ? t(`${P}.col.offsetAmount`) : t(`${P}.col.totalAmount`)}
-                value={data.total_amount}
+                title={isOffsetPayable ? t(`${P}.col.redPayableAmount`) : t(`${P}.col.totalAmount`)}
+                value={payableDisplayTotalAmount(data)}
                 precision={amountDecimals}
                 prefix="¥"
+                styles={{
+                  content: isOffsetPayable ? { color: '#cf1322' } : undefined,
+                }}
               />
 
             </Col>
