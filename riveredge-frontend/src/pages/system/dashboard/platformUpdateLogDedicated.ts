@@ -9,6 +9,325 @@ import type { PlatformUpdateLogEntry } from './platformUpdateLog';
 
 export const PLATFORM_UPDATE_LOG_DEDICATED: PlatformUpdateLogEntry[] = [
   {
+    id: 'haoligo-leave-destination-trip-only-r01',
+    date: '2026-10-28',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey:
+      'pages.dashboard.updateLog.entries.haoligo-leave-destination-trip-only-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-leave-destination-trip-only-r01.description',
+  },
+  {
+    id: 'haoligo-leave-deduct-amount-default-r01',
+    date: '2026-10-28',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey:
+      'pages.dashboard.updateLog.entries.haoligo-leave-deduct-amount-default-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-leave-deduct-amount-default-r01.description',
+  },
+  {
+    id: 'haoligo-leave-department-after-name-r01',
+    date: '2026-10-28',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey:
+      'pages.dashboard.updateLog.entries.haoligo-leave-department-after-name-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-leave-department-after-name-r01.description',
+  },
+  {
+    id: 'haoligo-employee-hire-introducer-r01',
+    date: '2026-10-28',
+    type: 'feature',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey:
+      'pages.dashboard.updateLog.entries.haoligo-employee-hire-introducer-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-employee-hire-introducer-r01.description',
+  },
+  {
+    id: 'haoligo-order-tracking-delivery-dict-shipped-at-r01',
+    date: '2026-10-28',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey:
+      'pages.dashboard.updateLog.entries.haoligo-order-tracking-delivery-dict-shipped-at-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-order-tracking-delivery-dict-shipped-at-r01.description',
+  },
+  {
+    id: 'haoligo-monthly-ledger-submit-perm-r01',
+    date: '2026-10-28',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey:
+      'pages.dashboard.updateLog.entries.haoligo-monthly-ledger-submit-perm-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-monthly-ledger-submit-perm-r01.description',
+  },
+  {
+    id: 'haoligo-annual-payroll-table-cols-template-r01',
+    date: '2026-10-28',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey:
+      'pages.dashboard.updateLog.entries.haoligo-annual-payroll-table-cols-template-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-annual-payroll-table-cols-template-r01.description',
+  },
+  {
+    id: 'haoligo-annual-payroll-wage-detail-template-r01',
+    date: '2026-10-28',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey:
+      'pages.dashboard.updateLog.entries.haoligo-annual-payroll-wage-detail-template-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-annual-payroll-wage-detail-template-r01.description',
+  },
+  {
+    id: 'haoligo-output-backfill-dept-throttle-r01',
+    date: '2026-10-27',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey:
+      'pages.dashboard.updateLog.entries.haoligo-output-backfill-dept-throttle-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-output-backfill-dept-throttle-r01.description',
+  },
+  {
+    id: 'haoligo-output-prod-dept-toolbar-filter-r01',
+    date: '2026-10-27',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey:
+      'pages.dashboard.updateLog.entries.haoligo-output-prod-dept-toolbar-filter-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-output-prod-dept-toolbar-filter-r01.description',
+  },
+  {
+    id: 'haoligo-output-backfill-prod-dept-sliced-r01',
+    date: '2026-10-27',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey:
+      'pages.dashboard.updateLog.entries.haoligo-output-backfill-prod-dept-sliced-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-output-backfill-prod-dept-sliced-r01.description',
+  },
+  {
+    id: 'haoligo-mobile-spot-check-photo-clarity-r01',
+    date: '2026-10-27',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey:
+      'pages.dashboard.updateLog.entries.haoligo-mobile-spot-check-photo-clarity-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-mobile-spot-check-photo-clarity-r01.description',
+  },
+  {
+    id: 'haoligo-horizontal-output-import-ghost-row-r01',
+    date: '2026-10-28',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey:
+      'pages.dashboard.updateLog.entries.haoligo-horizontal-output-import-ghost-row-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-horizontal-output-import-ghost-row-r01.description',
+  },
+  {
+    id: 'haoligo-horizontal-output-import-date-serial-r01',
+    date: '2026-10-27',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey:
+      'pages.dashboard.updateLog.entries.haoligo-horizontal-output-import-date-serial-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-horizontal-output-import-date-serial-r01.description',
+  },
+  {
+    id: 'haoligo-output-record-dept-filter-options-r01',
+    date: '2026-10-27',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey:
+      'pages.dashboard.updateLog.entries.haoligo-output-record-dept-filter-options-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-output-record-dept-filter-options-r01.description',
+  },
+  {
+    id: 'haoligo-output-record-backfill-prod-dept-r01',
+    date: '2026-10-27',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey:
+      'pages.dashboard.updateLog.entries.haoligo-output-record-backfill-prod-dept-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-output-record-backfill-prod-dept-r01.description',
+  },
+  {
+    id: 'haoligo-annual-payroll-import-living-insurance-r01',
+    date: '2026-10-27',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey:
+      'pages.dashboard.updateLog.entries.haoligo-annual-payroll-import-living-insurance-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-annual-payroll-import-living-insurance-r01.description',
+  },
+  {
+    id: 'haoligo-spot-check-line-photo-preview-r01',
+    date: '2026-10-26',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey:
+      'pages.dashboard.updateLog.entries.haoligo-spot-check-line-photo-preview-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-spot-check-line-photo-preview-r01.description',
+  },
+  {
+    id: 'haoligo-reward-performance-score-r01',
+    date: '2026-10-26',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey: 'pages.dashboard.updateLog.entries.haoligo-reward-performance-score-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-reward-performance-score-r01.description',
+  },
+  {
+    id: 'haoligo-equipment-output-production-dept-toolbar-r01',
+    date: '2026-10-26',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey:
+      'pages.dashboard.updateLog.entries.haoligo-equipment-output-production-dept-toolbar-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-equipment-output-production-dept-toolbar-r01.description',
+  },
+  {
+    id: 'haoligo-horizontal-injection-output-mold-select-r01',
+    date: '2026-10-26',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey:
+      'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-mold-select-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-mold-select-r01.description',
+  },
+  {
+    id: 'haoligo-horizontal-injection-output-audit-cols-r01',
+    date: '2026-10-26',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey:
+      'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-audit-cols-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-audit-cols-r01.description',
+  },
+  {
+    id: 'haoligo-attendance-line-roster-r01',
+    date: '2026-10-26',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey: 'pages.dashboard.updateLog.entries.haoligo-attendance-line-roster-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-attendance-line-roster-r01.description',
+  },
+  {
+    id: 'haoligo-horizontal-injection-output-r01',
+    date: '2026-10-26',
+    type: 'feature',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey: 'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-r01.description',
+  },
+  {
+    id: 'haoligo-common-doc-print-presets-r01',
+    date: '2026-10-24',
+    type: 'feature',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey: 'pages.dashboard.updateLog.entries.haoligo-common-doc-print-presets-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-common-doc-print-presets-r01.description',
+  },
+  {
+    id: 'haoligo-print-html-photo-inline-r01',
+    date: '2026-10-24',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey: 'pages.dashboard.updateLog.entries.haoligo-print-html-photo-inline-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-print-html-photo-inline-r01.description',
+  },
+  {
+    id: 'haoligo-attendance-leave-rest-night-sync-r01',
+    date: '2026-10-24',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey: 'pages.dashboard.updateLog.entries.haoligo-attendance-leave-rest-night-sync-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-attendance-leave-rest-night-sync-r01.description',
+  },
+  {
+    id: 'haoligo-molds-batch-select-r01',
+    date: '2026-10-24',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey: 'pages.dashboard.updateLog.entries.haoligo-molds-batch-select-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.haoligo-molds-batch-select-r01.description',
+  },
+  {
+    id: 'haoligo-hr-menu-isolation-r01',
+    date: '2026-10-24',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey: 'pages.dashboard.updateLog.entries.haoligo-hr-menu-isolation-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.haoligo-hr-menu-isolation-r01.description',
+  },
+  {
+    id: 'haoligo-attendance-day-register-copy-r01',
+    date: '2026-10-23',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey: 'pages.dashboard.updateLog.entries.haoligo-attendance-day-register-copy-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-attendance-day-register-copy-r01.description',
+  },
+  {
     id: 'haoligo-output-record-prod-dept-list-r01',
     date: '2026-10-21',
     type: 'improvement',

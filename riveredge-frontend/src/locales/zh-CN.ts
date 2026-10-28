@@ -6517,20 +6517,6 @@ export default {
   'app.kuaioa.payroll.registerButton': '工资登记',
   'app.kuaioa.payroll.code': '结算单号',
   'app.kuaioa.payroll.yearMonth': '年月',
-  'app.kuaioa.payroll.yearMonthRange': '月份范围',
-  'app.kuaioa.payroll.yearMonthRangeStart': '起始月份',
-  'app.kuaioa.payroll.yearMonthRangeEnd': '截止月份',
-  'app.kuaioa.payroll.yearMonthEndPresent': '至今',
-  'app.kuaioa.payroll.yearMonthRangeStartRequired': '请选择起始月份',
-  'app.kuaioa.payroll.yearMonthRangeEndRequired': '请选择截止月份或勾选至今',
-  'pages.dashboard.updateLog.entries.kuaioa-month-range-end-present-r01.title':
-    '轻办公月份范围截止可选至今',
-  'pages.dashboard.updateLog.entries.kuaioa-month-range-end-present-r01.description':
-    '列表年月筛选与工资基础架构新建月份范围支持勾选「至今」，截止月按站点当前自然月解析，批量录入会生成至当月。',
-  'pages.dashboard.updateLog.entries.kuaioa-month-field-range-r01.title':
-    '轻办公年月字段支持范围筛选与录入',
-  'pages.dashboard.updateLog.entries.kuaioa-month-field-range-r01.description':
-    '列表中带「年月」的轻办公页高级搜索改为月份范围；好力 GO 工资基础架构新建可选起止月，按自然月批量生成每人每月一行四列津贴。',
   'app.kuaioa.payroll.settlementMonth': '结算月份',
   'app.kuaioa.payroll.yearMonthInvalid': '请输入正确年月，格式 YYYY-MM',
   'app.kuaioa.payroll.otMultiplier': '加班倍率',
@@ -6547,47 +6533,6 @@ export default {
     '工资登记＝按车间+月份开结算单并录入明细（与「奖励登记」同级入口）。① 人事基础维护员工档案（车间、小时单价、生活费等）；② 填写同车间月度考勤并提交；③ 按需登记生活费预支、奖励、岗位补贴；④ 点「工资登记」选择年月与车间，保存后进入结算明细核对（可导入基本工资/计件或手改），确认后锁定。计件还需绩效汇总已确认且档案关联系统用户。',
   'app.kuaioa.payroll.help': '帮助',
   'app.kuaioa.payroll.helpNoIssue': '当前无额外提示，可按上方说明操作。',
-  'app.kuaioa.payroll.lineKeywordPlaceholder': '输入姓名或工号筛选',
-  'app.kuaioa.payroll.linePayMethodFilterPlaceholder': '计薪方式',
-  'app.kuaioa.payroll.lineFilteredHint': '已筛选，当前展示 {{count}} / 共 {{total}} 人',
-  'app.kuaioa.payroll.detailHint':
-    '计薪方式「月薪/计时」：应发小计为各列自动合计，加班工资按考勤与 21.75 公式计算。「计件/产线」：可导入或编辑应发小计，加班工资由小计减其余应发列反推（重建保留计件/产线已填小计）。点击虚线表头可看来源并跳转。确认后锁定。',
-  'app.kuaioa.payroll.columnSource.goto': '前往维护',
-  'app.kuaioa.payroll.columnSource.earningGroup':
-    '应发项合计前的各列，数据来自最低工资、奖励登记、工资基础架构、节日福利发放与已提交考勤。',
-  'app.kuaioa.payroll.columnSource.deductGroup':
-    '扣款项：员工档案标准、生活费预支、考勤请假扣款等；个税与赔款默认可手工维护。',
-  'app.kuaioa.payroll.columnSource.balanceGroup': '打卡金额与结余工资，结余由应发小计减扣款小计再减打卡得出。',
-  'app.kuaioa.payroll.columnSource.basicWage':
-    '最低工资配置：结算月落在执行区间内的金额，全车间各行相同；重建时写入，可手工改行。',
-  'app.kuaioa.payroll.columnSource.performanceBonus':
-    '奖励绩效登记：当月已确认记录，按员工汇总。',
-  'app.kuaioa.payroll.columnSource.postAllowance': '工资基础架构：当月该员工岗位津贴；按考勤重建时写入，可手工改行。',
-  'app.kuaioa.payroll.columnSource.heatSubsidy': '工资基础架构：当月该员工各项补贴。',
-  'app.kuaioa.payroll.columnSource.highTempSubsidy':
-    '手工维护，不关联工资基础架构；草稿下可逐行改，也可整列批量填写。重建明细时保留已填金额。',
-  'app.kuaioa.payroll.columnSource.seniorityBonus': '工资基础架构：当月该员工工龄奖。',
-  'app.kuaioa.payroll.columnSource.gradeAllowance': '工资基础架构：当月该员工等级津贴。',
-  'app.kuaioa.payroll.columnSource.holidayAllowance':
-    '节日福利发放：本车间、确认日所在月等于结算月的已确认发放单，按员工汇总。',
-  'app.kuaioa.payroll.columnSource.nightSubsidy':
-    '已提交考勤统计夜班次数，乘以工资基础架构「夜班单次补贴」（未填按 30 元/次）。',
-  'app.kuaioa.payroll.columnSource.pieceWage':
-    '计薪方式为计件或产线：应发小计减基本工资，再减岗位津贴、各项补贴、高温补贴、工龄奖、等级津贴之和；计件且已填小计时保存后写入计件字段。计时行本列显示为横线。月薪行展示绩效汇总等带入的计件金额。',
-  'app.kuaioa.payroll.columnSource.timeWage':
-    '月薪/计时：小时单价=基本工资÷21.75÷8，再按日常/周末×2/法定×3加班工时计算。产线：在已填应发小计时由小计减其余应发列反推。计件行本列显示为横线（应发在计件工资与小计列体现）。',
-  'app.kuaioa.payroll.columnSource.earningSubtotal':
-    '月薪/计时：各应发列自动合计。计件/产线：可 Excel 导入或手工维护小计，作为应发总额真源。',
-  'app.kuaioa.payroll.columnSource.livingDeduct':
-    '员工档案生活费标准 + 当月已确认生活费预支。',
-  'app.kuaioa.payroll.columnSource.rentUtilityDeduct': '员工档案房租电费标准；年度宽表导入可覆盖各月。',
-  'app.kuaioa.payroll.columnSource.insuranceDeduct': '员工档案社保金额与住房公积金之和。',
-  'app.kuaioa.payroll.columnSource.leaveDeduct': '已提交考勤各行请假/旷工扣款金额汇总。',
-  'app.kuaioa.payroll.columnSource.taxDeduct': '按考勤重建默认为 0；可手工改行或由年度薪酬宽表导入。',
-  'app.kuaioa.payroll.columnSource.compensation': '按考勤重建默认为 0；可手工改行录入赔款。',
-  'app.kuaioa.payroll.columnSource.deductSubtotal': '系统按左侧扣款各列自动合计。',
-  'app.kuaioa.payroll.columnSource.cardPay': '可手工维护；按考勤重建默认为 0。',
-  'app.kuaioa.payroll.columnSource.balance': '应发小计 − 扣款小计 − 打卡金额。',
   'app.kuaioa.payroll.emptyLinesTip':
     '明细为空：该车间当月没有可结算的员工档案，请先在员工档案填写所属车间。',
   'app.kuaioa.payroll.noAttendanceTip':
@@ -38321,82 +38266,6 @@ export default {
     '设备产出单可回填历史生产部门',
   'pages.dashboard.updateLog.entries.haoligo-output-record-backfill-prod-dept-r01.description':
     '配置数据集生产部门列后，列表可一键回填空部门历史单：优先用已存带出快照，否则按制令单重查数据集；已有部门不覆盖。带出列名匹配忽略大小写。',
-  'pages.dashboard.updateLog.entries.haoligo-payroll-high-temp-batch-apply-fix-r01.title':
-    '工资结算批量高温补贴点了无效果',
-  'pages.dashboard.updateLog.entries.haoligo-payroll-high-temp-batch-apply-fix-r01.description':
-    '修复批量高温补贴接口校验失败且前端未提示的问题；改为按结算行写入并显示成功或失败原因。',
-  'pages.dashboard.updateLog.entries.haoligo-payroll-high-temp-manual-col-r01.title':
-    '工资结算新增手工高温补贴列',
-  'pages.dashboard.updateLog.entries.haoligo-payroll-high-temp-manual-col-r01.description':
-    '各项补贴后增加「高温补贴」列：不关联工资基础架构，支持行内改与整列批量填写，计入应发小计；按考勤重建时保留已填金额。',
-  'pages.dashboard.updateLog.entries.haoligo-payroll-heat-subsidy-rename-r01.title':
-    '高温补贴更名为各项补贴',
-  'pages.dashboard.updateLog.entries.haoligo-payroll-heat-subsidy-rename-r01.description':
-    '工资基础架构与工资结算中原「高温补贴」列统一改称「各项补贴」；字段与联动逻辑不变。',
-  'pages.dashboard.updateLog.entries.haoligo-equipment-acceptance-history-trial-flow-date-r01.title':
-    '新设备验收单历史轮次显示试流日期',
-  'pages.dashboard.updateLog.entries.haoligo-equipment-acceptance-history-trial-flow-date-r01.description':
-    '历史轮次展示提交车间试产时的试流日期，便于对照各轮试产时间。',
-  'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-mold-invalid-badge-r01.title':
-    '卧式注塑机产出单校验模具台账',
-  'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-mold-invalid-badge-r01.description':
-    '列表模具号与模具台账比对，台账中查不到时在模具号旁显示「模具号有误」徽章。',
-  'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-fuzzy-search-r01.title':
-    '卧式注塑机产出单模糊搜索生效',
-  'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-fuzzy-search-r01.description':
-    '列表请求改为从 UniTable 搜索参数读取 keyword，修复模糊搜索未传到后端、结果不收缩的问题。',
-  'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-material-flex-v9.title':
-    '卧式注塑机产出单加宽物料名称列',
-  'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-material-flex-v9.description':
-    '收窄客户名称、制令单号、受订单号定宽，余量更多留给物料名称（唯一余量列），长物料名更易读全。',
-  'pages.dashboard.updateLog.entries.haoligo-payroll-settlement-hide-holiday-col-r01.title':
-    '工资结算隐藏节日福利列',
-  'pages.dashboard.updateLog.entries.haoligo-payroll-settlement-hide-holiday-col-r01.description':
-    '好力 GO 工资结算明细不再展示「节日福利」列；后台仍可保留该字段数据，不影响应发小计计算。',
-  'pages.dashboard.updateLog.entries.haoligo-payroll-settlement-post-allowance-col-r01.title':
-    '工资结算补齐岗位津贴列',
-  'pages.dashboard.updateLog.entries.haoligo-payroll-settlement-post-allowance-col-r01.description':
-    '工资结算应得部分增加「岗位津贴」列，与工资基础架构同字段联动：按考勤重建时从当月架构写入并计入应发小计，列头可跳转架构维护。',
-  'pages.dashboard.updateLog.entries.haoligo-payroll-piece-overtime-dash-r01.title':
-    '计件员工加班工资列显示横线',
-  'pages.dashboard.updateLog.entries.haoligo-payroll-piece-overtime-dash-r01.description':
-    '工资结算明细中计薪方式为计件的行，加班工资列不再显示 0，统一为横线；与计件工资列对计时行的展示方式一致。',
-  'pages.dashboard.updateLog.entries.haoligo-payroll-time-subtotal-recalc-r01.title':
-    '计时员工应发小计改由分项合计',
-  'pages.dashboard.updateLog.entries.haoligo-payroll-time-subtotal-recalc-r01.description':
-    '计时与月薪一致：加班按考勤 21.75 计算，小计为各应发列合计；不再保留导入小计反推加班。计件/产线仍可导入小计。',
-  'pages.dashboard.updateLog.entries.haoligo-payroll-line-pay-method-filter-r01.title':
-    '工资结算增加计薪方式筛选',
-  'pages.dashboard.updateLog.entries.haoligo-payroll-line-pay-method-filter-r01.description':
-    '结算明细工具栏可按计件、计时、产线、月薪筛选列表，并与姓名筛选、写入计件小计联动。',
-  'pages.dashboard.updateLog.entries.haoligo-payroll-quick-subtotal-piece-only-r01.title':
-    '批量小计仅写入计件员工',
-  'pages.dashboard.updateLog.entries.haoligo-payroll-quick-subtotal-piece-only-r01.description':
-    '汇总区「写入计件小计」只更新计薪方式为计件的行；计时与月薪小计不再被覆盖，仍由分项或考勤规则计算。',
-  'pages.dashboard.updateLog.entries.haoligo-payroll-detail-input-perf-r01.title':
-    '工资结算页录入不再卡顿',
-  'pages.dashboard.updateLog.entries.haoligo-payroll-detail-input-perf-r01.description':
-    '汇总小计与姓名筛选改为独立输入组件，明细大表 memo 且打印表按需挂载，避免每键重绘百行双表。',
-  'pages.dashboard.updateLog.entries.haoligo-payroll-quick-subtotal-batch-r01.title':
-    '批量写入应发小计加速',
-  'pages.dashboard.updateLog.entries.haoligo-payroll-quick-subtotal-batch-r01.description':
-    '「写入当前列表」改为一次导入请求批量更新，完成后用返回数据刷新表格，避免逐行保存极慢或不刷新。',
-  'pages.dashboard.updateLog.entries.haoligo-payroll-pay-method-from-profile-r01.title':
-    '工资结算计薪徽章读员工档案',
-  'pages.dashboard.updateLog.entries.haoligo-payroll-pay-method-from-profile-r01.description':
-    '结算明细姓名旁计薪方式改为按本车间员工档案刷新，避免接口缺字段时一律显示计时。',
-  'pages.dashboard.updateLog.entries.haoligo-payroll-piece-wage-time-dash-r01.title':
-    '计时员工计件工资列显示横线',
-  'pages.dashboard.updateLog.entries.haoligo-payroll-piece-wage-time-dash-r01.description':
-    '工资结算明细中计薪方式为计时的行，计件工资列不再展示推算金额，统一显示为横线，避免与加班工资重复。',
-  'pages.dashboard.updateLog.entries.haoligo-payroll-piece-wage-column-r01.title':
-    '工资结算增加计件工资列',
-  'pages.dashboard.updateLog.entries.haoligo-payroll-piece-wage-column-r01.description':
-    '夜班补贴与加班工资之间展示计件工资（小计减基本与岗位津贴、高温、工龄、等级之和）；计件计薪保存小计时同步写入计件字段。',
-  'pages.dashboard.updateLog.entries.haoligo-payroll-quick-earning-subtotal-r01.title':
-    '工资结算应发小计可录入',
-  'pages.dashboard.updateLog.entries.haoligo-payroll-quick-earning-subtotal-r01.description':
-    '结算详情汇总区增加应发小计录入与「写入当前列表」；表内小计列对计时、计件、产线显示输入框，保存后反推加班工资。',
   'pages.dashboard.updateLog.entries.haoligo-leave-destination-trip-only-r01.title':
     '请假出差目的地仅出差显示',
   'pages.dashboard.updateLog.entries.haoligo-leave-destination-trip-only-r01.description':
@@ -51445,4 +51314,62 @@ export default {
   'pages.system.applications.resetSuccessFallback': '重置成功并已自动备份',
   'pages.system.applications.resetTokenFailed': '获取二次确认令牌失败，请重试',
     '重置将按所选模块物理删除「快制造」应用数据，此操作不可撤销。请先按业务/基础分组勾选模块。',
+  'components.uniTable.exportList': '导出列表',
+  'components.uniTable.exportDetail': '导出明细',
+  'app.kuaioa.livingAdvance.status.confirmed': '已确认',
+  'app.kuaioa.livingAdvance.status.void': '已作废',
+  'app.kuaioa.reward.status.confirmed': '已确认',
+  'app.kuaioa.reward.status.void': '已作废',
+  'app.kuaioa.payroll.settlementMonth': '结算月份',
+  'app.kuaioa.payroll.help': '帮助',
+  'app.kuaioa.payroll.helpNoIssue': '当前无额外提示，可按上方说明操作。',
+    '基本工资=结算月落在执行期间内的最低工资；计时=已提交考勤工时×档案小时单价（加班×本单加班倍率）；计件=已确认绩效汇总（档案须关联用户）；生活费扣除=档案生活费+当月已确认预支；奖励进补助奖励；岗位补贴按项目写入夜班/高温/岗位津贴。个税、打卡金额等须手改或导入。改配置或产线总产量/总工资后请点「按考勤重建」。确认后锁定。',
+  'app.kuaioa.payroll.noMinimumWageTip':
+    '结算月 {{yearMonth}} 未命中最低工资执行期间，基本工资为 0。请在最低工资配置中调整执行开始/结束时间覆盖该月并勾选当前执行，再点「按考勤重建」。',
+  'app.kuaioa.minimumWage.endDate': '执行结束时间',
+  'app.kuaioa.minimumWage.isCurrent': '当前执行',
+  'pages.dashboard.updateLog.entries.quotation-export-list-detail-r01.title':
+    '报价单导出支持列表与明细',
+  'pages.dashboard.updateLog.entries.quotation-export-list-detail-r01.description':
+    '报价单工具栏导出拆为「导出列表」与「导出明细」：列表按单据头导出，明细按物料行展开导出，均可选选中、本页或全部。',
+  'pages.dashboard.updateLog.entries.po-requisition-handoff-materials-r01.title':
+    '采购申请下推采购订单保留物料明细',
+  'pages.dashboard.updateLog.entries.po-requisition-handoff-materials-r01.description':
+    '从采购申请、询价等下推到采购订单新建页时，物料行随草稿一并带入，不再出现空白行需重新选择；对齐报价转销售订单的灌入方式。',
+  'pages.dashboard.updateLog.entries.print-partner-material-fields-r01.title':
+    '打印模板可选客户料号与客户品名',
+  'pages.dashboard.updateLog.entries.print-partner-material-fields-r01.description':
+    '销售订单、销售合同、报价单打印变量增加行上客户料号、客户品名；可复制原模板后把明细列改绑这两项，原模板不变。',
+  'pages.dashboard.updateLog.entries.sales-order-code-rename-order-name-r01.title':
+    '无下游销售订单可正常改订单编号',
+  'pages.dashboard.updateLog.entries.sales-order-code-rename-order-name-r01.description':
+    '修改销售订单编号时不再误写不存在的订单名称字段导致保存失败；无下游单据时改号可正常保存。',
+  'pages.dashboard.updateLog.entries.cosmic-location-getlist-missing-data-r01.title':
+    '苍穹查询仓位缺少 data 报错已修复',
+  'pages.dashboard.updateLog.entries.cosmic-location-getlist-missing-data-r01.description':
+    '仓位 getList 出站强制带上 data（可为空对象）；修复测试升级参数顺序错误。生产接口体仅有分页字段时不再被苍穹拒绝。',
+  'pages.dashboard.updateLog.entries.kuaioa-payroll-help-button-r01.title':
+    '工资结算说明收入帮助按钮',
+  'pages.dashboard.updateLog.entries.kuaioa-payroll-help-button-r01.description':
+    '工资结算详情页将计算说明与状态提示收拢到工具栏「帮助」弹窗；有待处理提示时按钮显示红点。产线产量/总工资与合计仍留在页内。',
+  'pages.dashboard.updateLog.entries.kuaioa-min-wage-period-basic-wage-r01.title':
+    '最低工资增加执行期间与当前执行',
+  'pages.dashboard.updateLog.entries.kuaioa-min-wage-period-basic-wage-r01.description':
+    '最低工资配置增加执行结束时间与「当前执行」勾选；工资结算按考勤重建时，基本工资取结算月落在执行期间内的最低工资金额。',
+  'pages.dashboard.updateLog.entries.kuaioa-leave-revoke-approved-flow-r01.title':
+    '请假出差已通过单据可撤销审核',
+  'pages.dashboard.updateLog.entries.kuaioa-leave-revoke-approved-flow-r01.description':
+    '已审批通过的请假出差支持撤销审核：有流程时重开终审节点待再审，否则回草稿；并清回未提交考勤上的请假标记。修改审批流后历史已通过单也可反审。',
+  'pages.dashboard.updateLog.entries.haoligo-leave-destination-trip-only-r01.title':
+    '请假出差目的地仅出差显示',
+  'pages.dashboard.updateLog.entries.haoligo-leave-destination-trip-only-r01.description':
+    '请假出差表单「目的地」仅在类型为出差时显示；切换为其它类型时清空目的地。',
+  'pages.dashboard.updateLog.entries.haoligo-leave-deduct-amount-default-r01.title':
+    '请假出差去掉是否扣款开关',
+  'pages.dashboard.updateLog.entries.haoligo-leave-deduct-amount-default-r01.description':
+    '请假出差新建/编辑弹窗不再显示「是否扣款」开关；扣款金额默认 0，大于 0 时按扣款处理。',
+  'pages.dashboard.updateLog.entries.haoligo-leave-department-after-name-r01.title':
+    '请假出差表单部门紧随姓名',
+  'pages.dashboard.updateLog.entries.haoligo-leave-department-after-name-r01.description':
+    '好力 GO 请假出差新建/编辑弹窗将「部门」调整到「姓名」右侧，车间与产线顺延，便于先确认人员组织信息。',
 };

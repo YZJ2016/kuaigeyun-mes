@@ -157,8 +157,9 @@ def ensure_kingdee_v2_request_body(url: str, body: Dict[str, Any]) -> Dict[str, 
 
     即时库存、商品分类 getMalGoodsClass 等使用顶层字段（不是 data），不可强行包进 data。
     """
-    path = str(url or "").split("?", 1)[0].lower()
-    if "/kapi/v2/" not in path:
+    path = str(url or "").split("?", 1)[0].lower().replace("\\", "/")
+    # 相对路径常为 kapi/v2/...（无前导 /），须同样规范化
+    if "kapi/v2/" not in path:
         return body
     payload: Dict[str, Any] = dict(body) if isinstance(body, dict) else {}
     is_inventory = "getinventory" in path or "getinvacc" in path or "/imrealbal" in path
@@ -250,6 +251,102 @@ def _is_warehouse_path(path: str) -> bool:
     return "bd_warehouse" in _path_without_query(path).lower()
 
 
+def _is_location_path(path: str) -> bool:
+    return "bd_location" in _path_without_query(path).lower()
+
+
+def _is_material_batchquery_path(path: str) -> bool:
+    """集团创建、子公司管理：batchQuery 仅剥离 createorg 筛选，管理组织 org_number 可选手工填写。"""
+    lower = _path_without_query(path).lower().replace("\\", "/")
+    return "/bd_material/batchquery" in lower
+
+
+def _is_group_created_master_query_path(path: str) -> bool:
+    """集团创建、子公司管理：query 主档不得用 createorg_number 收窄（须 bd_*common 交集）。"""
+    lower = _path_without_query(path).lower().replace("\\", "/")
+    return (
+        lower.endswith("/bd_supplier/query")
+        or lower.endswith("/bd_customer/query")
+        or lower.endswith("/bd_customer/batchquery")
+        or lower.endswith("/bd_supplier/getsupplier")
+        or lower.endswith("/bd_customer/getcustomer")
+    )
+
+
+def _is_supplier_getsupplier_path(path: str) -> bool:
+    lower = _path_without_query(path).lower().replace("\\", "/")
+    return lower.endswith("/bd_supplier/getsupplier")
+
+
+def _is_customer_getcustomer_path(path: str) -> bool:
+    lower = _path_without_query(path).lower().replace("\\", "/")
+    return lower.endswith("/bd_customer/getcustomer")
+
+def _strip_org_filters_from_material_batchquery_body(body: Dict[str, Any]) -> Dict[str, Any]:
+    """物料 batchQuery：移除顶层与 data 内 createorg 筛选；管理组织 org_number 保留。"""
+    if not isinstance(body, dict):
+        return body
+    out = dict(body)
+    changed = False
+    for key in list(out.keys()):
+        if _is_createorg_filter_key(key):
+            out.pop(key, None)
+            changed = True
+    data = out.get("data")
+    if isinstance(data, dict) and data and any(_is_createorg_filter_key(k) for k in data):
+        out["data"] = {k: v for k, v in data.items() if not _is_createorg_filter_key(k)}
+        changed = True
+    return out if changed else body
+
+
+def _strip_createorg_from_group_master_query_payload(
+    params: Dict[str, Any],
+    body: Dict[str, Any],
+) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """供应商/客户 query：移除 createorg 筛选，避免误当管理组织范围。"""
+    params_out = dict(params)
+    params_out.pop("createorg_number", None)
+    params_out.pop("createorgnumber", None)
+    if not isinstance(body, dict):
+        return params_out, body
+    data = body.get("data")
+    if not isinstance(data, dict) or not data:
+        return params_out, body
+    if not any(_is_createorg_filter_key(k) for k in data):
+        return params_out, body
+    cleaned = {k: v for k, v in data.items() if not _is_createorg_filter_key(k)}
+    body_out = dict(body)
+    body_out["data"] = cleaned
+    return params_out, body_out
+
+
+def _rewrite_warehouse_list_url(url: str) -> str:
+    """仓库列表统一走 sbd/bd_warehouse/getList。basedata 路径网关 2530。"""
+    raw = _path_without_query(url)
+    lower = raw.lower().replace("\\", "/")
+    if not _is_warehouse_path(raw):
+        return url
+    if "/sbd/bd_warehouse/getlist" in lower:
+        return url
+    is_list = "batchquery" in lower or lower.rstrip("/").endswith("/query")
+    if not is_list:
+        return url
+    m = re.match(r"(?i)^(https?://[^/]+)", raw)
+    if m:
+        return f"{m.group(1).rstrip('/')}/{WAREHOUSE_LIST_ENDPOINT}"
+    return WAREHOUSE_LIST_ENDPOINT
+
+
+def _is_inventory_balance_query_path(url: str) -> bool:
+    """库存余额/即时库存：getInventoryAvbQty、getInventoryDetail、getInventorySum 等。"""
+    lower = _path_without_query(url).lower()
+    return (
+        "getinventory" in lower
+        or "getinvacc" in lower
+        or "/imrealbal" in lower
+    )
+
+
 def prepare_kingdee_cosmic_outbound(
     cfg: Optional[Dict[str, Any]],
     url: str,
@@ -287,8 +384,46 @@ def prepare_kingdee_cosmic_outbound(
         data = dict(data_obj)
         data["createorg_number"] = createorg
         body_out["data"] = data
-    elif _is_basedata_single_query(url_out) and createorg:
-        params_out["createorg_number"] = createorg
+
+    # 仓位 getList 契约必含 data（可为空对象）。生产库接口体常只有 pageNo/pageSize；
+    # 仓库因注入 createorg 会顺带补上 data，仓位无组织字段时须在此保证，且不依赖连接器组织。
+    if _is_location_path(url_out) and "getlist" in lower:
+        data = body_out.get("data") if isinstance(body_out.get("data"), dict) else {}
+        body_out["data"] = dict(data)
+        method_out = "POST"
+
+    if org:
+        params_out = apply_connector_org_to_payload(params_out, org)
+        body_out = apply_connector_org_to_payload(body_out, org)
+        # 仓库列表 / 库存查询即使 body 未写组织字段，也必须带上连接器组织
+        if _is_warehouse_path(url_out) and "getlist" in lower:
+            data = body_out.get("data") if isinstance(body_out.get("data"), dict) else {}
+            data = dict(data)
+            data["createorg_number"] = org
+            body_out["data"] = data
+            method_out = "POST"
+        elif _is_inventory_balance_query_path(url_out):
+            inv_params = body_out.get("params") if isinstance(body_out.get("params"), dict) else {}
+            inv_params = dict(inv_params)
+            inv_params["org"] = org
+            body_out["params"] = inv_params
+            method_out = "POST"
+        elif _is_supplier_getsupplier_path(url_out) and org.upper() != "BU-00000":
+            data = body_out.get("data") if isinstance(body_out.get("data"), dict) else {}
+            data = dict(data)
+            data["org_number"] = [org]
+            body_out["data"] = data
+            method_out = "POST"
+        elif _is_customer_getcustomer_path(url_out) and org.upper() != "BU-00000":
+            data = body_out.get("data") if isinstance(body_out.get("data"), dict) else {}
+            data = dict(data)
+            data["org_number"] = [org]
+            body_out["data"] = data
+            method_out = "POST"
+        elif _is_basedata_single_query(url_out) and not _is_group_created_master_query_path(
+            url_out
+        ):
+            params_out["createorg_number"] = org
 
     if "batchquery" in lower:
         method_out = "POST"

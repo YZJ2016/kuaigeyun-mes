@@ -964,7 +964,7 @@ async def update_sales_order(
     except BusinessLogicError as e:
         raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/{sales_order_id}", tenant_id)
     except Exception as e:
-        logger.error(f"更新销售订单失败: {e}")
+        logger.exception("更新销售订单失败: {}", e)
         raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "更新销售订单失败", "/sales-orders/{sales_order_id}", tenant_id)
 
 
