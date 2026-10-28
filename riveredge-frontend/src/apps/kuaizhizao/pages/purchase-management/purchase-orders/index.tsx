@@ -148,6 +148,17 @@ import {
   type PurchaseRequisitionPullLine,
 } from '../../../services/purchase-requisition';
 import {
+  buildDocumentCreateDraftKey,
+  clearDocumentFormDraft,
+  getDocumentFormDraft,
+} from '../../../../../utils/documentFormDraftCache';
+import {
+  continuePoHandoffQueueIfAny,
+  handoffInquiryToPurchaseOrderCreate,
+  handoffRequisitionToPurchaseOrderCreate,
+  hydrateDocumentFlowCreateFormValues,
+} from '../../../utils/documentFlowHandoff';
+import {
   listPurchaseInquiries,
   listPurchaseInquiryPurchaseOrderPullLines,
   pullPurchaseOrdersFromInquiryItems,
@@ -219,6 +230,7 @@ import {
 import { collectPurchaseOrderPushDocuments } from '../../sales-management/shared/pushProgress';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
 import { resolveSupplierDefaultTaxRatePercent } from '../shared/purchasePriceType';
+import { resolveOrgPayableDefaultFromBusinessConfig } from '../shared/applySupplierFormFields';
 import type { SubStage } from '../../../../../components/uni-lifecycle/types';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { useDeferAfterPaint } from '../../../../../hooks/useDeferAfterPaint';
@@ -432,6 +444,10 @@ const PurchaseOrdersPage: React.FC = () => {
   const requirePurchaseRequisition = Boolean(
     businessConfig?.parameters?.procurement?.require_purchase_requisition,
   );
+  const orgPayableRecognitionDefault = useMemo(
+    () => resolveOrgPayableDefaultFromBusinessConfig(businessConfig),
+    [businessConfig],
+  );
   const purchaseOrderChangePerms = useResourcePermissions('kuaizhizao:purchase-order-change');
   const { token } = theme.useToken();
   const purchaseOrderDetailDrawerZIndex = token.zIndexPopupBase;
@@ -443,6 +459,8 @@ const PurchaseOrdersPage: React.FC = () => {
   const isEditPage = editRouteId != null && Number.isFinite(editRouteId) && editRouteId > 0;
   const isFormPage = isCreatePage || isEditPage;
   const formPageInitializedRef = useRef(false);
+  const documentFlowSubmitExtrasRef = useRef<Record<string, unknown> | null>(null);
+  const purchaseOrderCreateDraftKeyRef = useRef<string | null>(null);
   const { message: messageApi } = App.useApp();
   const pullFromRequisitionAction = resolveKuaizhizaoDocumentAction(t, 'purchase_order.pull_from_requisition');
   const pullFromInquiryAction = resolveKuaizhizaoDocumentAction(t, 'purchase_order.pull_from_inquiry');
@@ -2537,21 +2555,118 @@ const PurchaseOrdersPage: React.FC = () => {
     }
   }
 
-  function initPurchaseOrderCreateForm() {
-    setIsEdit(false);
-    setCurrentOrder(null);
-    lastHeaderDeliveryRef.current = null;
-    resetPurchaseOrderFormFieldValues();
-    formRef.current?.resetFields();
-    window.setTimeout(() => {
-      const defaultBuyer = resolveDefaultPurchaseOrderBuyer();
-      formRef.current?.setFieldsValue({
-        items: [defaultOrderItem],
-        price_type: 'tax_exclusive',
-        ...defaultBuyer,
+  const createFormSeed = useMemo(() => {
+    if (!isCreatePage) return null;
+    const flowBodyFromState =
+      location.state &&
+      typeof location.state === 'object' &&
+      (location.state as { documentFlowCreate?: unknown }).documentFlowCreate &&
+      typeof (location.state as { documentFlowCreate?: unknown }).documentFlowCreate === 'object'
+        ? ((location.state as { documentFlowCreate: Record<string, unknown> }).documentFlowCreate)
+        : null;
+    const sp = new URLSearchParams(location.search || '');
+    sp.delete('_refresh');
+    const draftSearch = sp.toString() ? `?${sp.toString()}` : '';
+    const draftKey = buildDocumentCreateDraftKey(
+      'kuaizhizao:purchase-order',
+      location.pathname,
+      draftSearch,
+    );
+    const flowBodyFromDraft =
+      !flowBodyFromState ? getDocumentFormDraft<Record<string, unknown>>(draftKey) : null;
+    const flowBody = flowBodyFromState ?? flowBodyFromDraft;
+    if (flowBody) {
+      const {
+        _documentFlowMeta: _meta,
+        documentFlowSourceType: _documentFlowSourceType,
+        documentFlowRequisitionItemIds: _documentFlowRequisitionItemIds,
+        documentFlowInquiryItemIds: _documentFlowInquiryItemIds,
+        documentFlowDemandComputationItemIds: _documentFlowDemandComputationItemIds,
+        documentFlowDemandComputationIds: _documentFlowDemandComputationIds,
+        documentFlowReplenishmentSuggestionIds: _documentFlowReplenishmentSuggestionIds,
+        documentFlowSalesOrderId: _documentFlowSalesOrderId,
+        documentFlowItemQuantities: _documentFlowItemQuantities,
+        documentFlowItemUnitPrices: _documentFlowItemUnitPrices,
+        documentFlowItemSuppliers: _documentFlowItemSuppliers,
+        documentFlowPersistDefaultSupplier: _documentFlowPersistDefaultSupplier,
+        ...rawValues
+      } = flowBody;
+      const hydrated = hydrateDocumentFlowCreateFormValues(rawValues);
+      const items = normalizeFormListItems<any>(hydrated.items).map((item) => {
+        const midRaw = item.material_id ?? item.materialId;
+        const mid = midRaw != null ? Number(midRaw) : NaN;
+        return {
+          ...item,
+          material_id: Number.isFinite(mid) && mid > 0 ? mid : undefined,
+          material_code: item.material_code ?? item.materialCode ?? '',
+          material_name: item.material_name ?? item.materialName ?? '',
+          material_spec: item.material_spec ?? item.materialSpec ?? '',
+          material_model: item.material_model ?? item.materialModel ?? '',
+          partner_material_code:
+            item.partner_material_code ?? item.partnerMaterialCode ?? '',
+          partner_material_name:
+            item.partner_material_name ?? item.partnerMaterialName ?? '',
+          unit: item.unit || '件',
+          ordered_quantity: Number(item.ordered_quantity ?? item.orderedQuantity) || 0,
+          unit_price: Number(item.unit_price ?? item.unitPrice) || 0,
+          tax_rate:
+            item.tax_rate != null
+              ? Number(item.tax_rate)
+              : DEFAULT_PURCHASE_TAX_RATE_PERCENT,
+          required_date:
+            item.required_date != null
+              ? coerceFormDate(item.required_date) ?? undefined
+              : undefined,
+          source_type: item.source_type ?? item.sourceType ?? null,
+          source_id: item.source_id ?? item.sourceId ?? null,
+          demand_computation_item_id:
+            item.demand_computation_item_id ?? item.demandComputationItemId ?? null,
+          work_order_id: item.work_order_id ?? item.workOrderId ?? null,
+          work_order_code: item.work_order_code ?? item.workOrderCode ?? null,
+          notes: item.notes ?? '',
+        };
       });
-    }, 0);
-  }
+      const supplierIdRaw = hydrated.supplier_id ?? hydrated.supplierId;
+      const supplierIdNum =
+        supplierIdRaw != null && Number.isFinite(Number(supplierIdRaw))
+          ? Number(supplierIdRaw)
+          : undefined;
+      return {
+        ...hydrated,
+        price_type:
+          (hydrated.price_type as string | undefined) ?? DEFAULT_PURCHASE_PRICE_TYPE,
+        payable_recognition:
+          (hydrated.payable_recognition as string | undefined) ??
+          (hydrated.payableRecognition as string | undefined) ??
+          orgPayableRecognitionDefault,
+        items:
+          items.length > 0
+            ? items
+            : [{ ...defaultOrderItem, tax_rate: DEFAULT_PURCHASE_TAX_RATE_PERCENT }],
+        supplier_id: supplierIdNum != null && supplierIdNum > 0 ? supplierIdNum : undefined,
+        order_date: coerceFormDate(hydrated.order_date) ?? dayjs(),
+        delivery_date: coerceFormDate(hydrated.delivery_date) ?? undefined,
+        ...((hydrated.buyer_id == null || hydrated.buyer_id === '') &&
+        (hydrated.buyerId == null || hydrated.buyerId === '')
+          ? resolveDefaultPurchaseOrderBuyer()
+          : {}),
+      };
+    }
+    if (sp.get('flow')) return null;
+    return {
+      items: [{ ...defaultOrderItem, tax_rate: DEFAULT_PURCHASE_TAX_RATE_PERCENT }],
+      price_type: DEFAULT_PURCHASE_PRICE_TYPE,
+      payable_recognition: orgPayableRecognitionDefault,
+      order_date: dayjs(),
+      ...resolveDefaultPurchaseOrderBuyer(),
+    };
+  }, [
+    isCreatePage,
+    location.pathname,
+    location.search,
+    location.state,
+    orgPayableRecognitionDefault,
+  ]);
 
   const handleEdit = (record: PurchaseOrder) => {
     if (!record.id) return;
@@ -2600,12 +2715,72 @@ const PurchaseOrdersPage: React.FC = () => {
     };
   }, [isFormPage, isCreatePage, location.pathname, location.search, t]);
 
+  // 新建：对齐销售订单 createFormSeed —— 只挂 documentFlow 回写 extras，不靠 setTimeout 灌表
+  useEffect(() => {
+    if (!isCreatePage) {
+      documentFlowSubmitExtrasRef.current = null;
+      purchaseOrderCreateDraftKeyRef.current = null;
+      return;
+    }
+    if (!createFormSeed) {
+      documentFlowSubmitExtrasRef.current = null;
+      purchaseOrderCreateDraftKeyRef.current = null;
+      return;
+    }
+    setIsEdit(false);
+    setCurrentOrder(null);
+    resetPurchaseOrderFormFieldValues();
+    lastHeaderDeliveryRef.current = coerceFormDate(createFormSeed.delivery_date);
+
+    const flowBodyFromState =
+      location.state &&
+      typeof location.state === 'object'
+        ? (location.state as { documentFlowCreate?: Record<string, unknown> }).documentFlowCreate
+        : undefined;
+    const sp = new URLSearchParams(location.search || '');
+    sp.delete('_refresh');
+    const draftSearch = sp.toString() ? `?${sp.toString()}` : '';
+    const draftKey = buildDocumentCreateDraftKey(
+      'kuaizhizao:purchase-order',
+      location.pathname,
+      draftSearch,
+    );
+    purchaseOrderCreateDraftKeyRef.current = draftKey;
+    const flowBody =
+      flowBodyFromState ?? getDocumentFormDraft<Record<string, unknown>>(draftKey) ?? null;
+    if (!flowBody || !sp.get('flow')) {
+      documentFlowSubmitExtrasRef.current = null;
+      if (!sp.get('flow')) {
+        purchaseOrderCreateDraftKeyRef.current = null;
+      }
+      return;
+    }
+    documentFlowSubmitExtrasRef.current = {
+      documentFlowSourceType: flowBody.documentFlowSourceType,
+      documentFlowRequisitionItemIds: flowBody.documentFlowRequisitionItemIds,
+      documentFlowInquiryItemIds: flowBody.documentFlowInquiryItemIds,
+      documentFlowDemandComputationItemIds: flowBody.documentFlowDemandComputationItemIds,
+      documentFlowDemandComputationIds: flowBody.documentFlowDemandComputationIds,
+      documentFlowReplenishmentSuggestionIds: flowBody.documentFlowReplenishmentSuggestionIds,
+      documentFlowSalesOrderId: flowBody.documentFlowSalesOrderId,
+      documentFlowItemQuantities: flowBody.documentFlowItemQuantities,
+      documentFlowItemUnitPrices: flowBody.documentFlowItemUnitPrices,
+      documentFlowItemSuppliers: flowBody.documentFlowItemSuppliers,
+      documentFlowPersistDefaultSupplier: flowBody.documentFlowPersistDefaultSupplier,
+    };
+  }, [
+    createFormSeed,
+    isCreatePage,
+    location.pathname,
+    location.search,
+    location.state,
+  ]);
+
   useEffect(() => {
     if (!isFormPage || formPageInitializedRef.current) return;
+    if (isCreatePage) return;
     formPageInitializedRef.current = true;
-    if (isCreatePage) {
-      initPurchaseOrderCreateForm();
-    } else if (editRouteId) {
+    if (editRouteId) {
       void initPurchaseOrderEditForm(editRouteId);
     }
   }, [isFormPage, isCreatePage, editRouteId]);
@@ -3100,6 +3275,13 @@ const PurchaseOrdersPage: React.FC = () => {
       } else {
         const created = await createPurchaseOrder({ ...data, items: itemsPayload });
         orderId = (created as any)?.id;
+        if (hadFlowHandoff) {
+          documentFlowSubmitExtrasRef.current = null;
+        }
+        if (purchaseOrderCreateDraftKeyRef.current) {
+          clearDocumentFormDraft(purchaseOrderCreateDraftKeyRef.current);
+          purchaseOrderCreateDraftKeyRef.current = null;
+        }
         if (!submitAfterSaveRef.current) {
           messageApi.success(t('app.kuaizhizao.purchaseOrder.createSuccess'));
         }
@@ -3972,7 +4154,19 @@ const PurchaseOrdersPage: React.FC = () => {
           }
         >
           <div className="form-modal-content-inner">
+              {isCreatePage && !createFormSeed ? (
+                <Alert
+                  type="error"
+                  showIcon
+                  title={t('app.kuaizhizao.documentFlow.draftMissing')}
+                />
+              ) : (
               <ProForm
+                key={
+                  isCreatePage
+                    ? `purchase-order-create:${location.search}`
+                    : `purchase-order-edit:${editRouteId ?? ''}`
+                }
                 formRef={formRef}
                 layout="vertical"
                 submitter={false}
@@ -3983,18 +4177,11 @@ const PurchaseOrdersPage: React.FC = () => {
                   const errText = first?.errors?.filter(Boolean)[0];
                   messageApi.error(errText || t('components.layoutTemplates.formModal.checkFormHint'));
                 }}
-                initialValues={
-                  isCreatePage
-                    ? {
-                        items: [defaultOrderItem],
-                        price_type: 'tax_exclusive',
-                        ...resolveDefaultPurchaseOrderBuyer(),
-                      }
-                    : undefined
-                }
+                initialValues={isCreatePage ? createFormSeed ?? undefined : undefined}
               >
                 {purchaseOrderFormItemContent}
               </ProForm>
+              )}
             </div>
         </DocumentFormPageLayout>
         {purchaseOrderFormAuxModals}

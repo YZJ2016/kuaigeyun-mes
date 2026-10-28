@@ -3301,9 +3301,8 @@ class SalesOrderService:
                         new_order_code,
                         allow_manual_edit=allow_manual,
                     )
+                    # order_name 仅为响应层虚拟字段（见 _SALES_ORDER_PERSIST_EXCLUDE），ORM 无此列
                     upd["order_code"] = new_order_code
-                    if not (getattr(order, "order_name", None) or "").strip() or order.order_name == old_code:
-                        upd["order_name"] = new_order_code
                     code_changed = True
 
             if upd:

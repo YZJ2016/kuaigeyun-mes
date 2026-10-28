@@ -384,9 +384,9 @@ def _lazy_delivery_project_model():
 
 
 def _lazy_oqc_inspection_model():
-    from apps.kuaizhizao.models.oqc_inspection import OqcInspection
+    from apps.kuaizhizao.models.oqc_inspection import OQCInspection
 
-    return OqcInspection
+    return OQCInspection
 
 
 def _lazy_finished_goods_receipt_model():
@@ -408,9 +408,10 @@ def _lazy_after_sales_ticket_model():
 
 
 def _lazy_after_sales_service_model():
-    from apps.kuaizhizao.models.after_sales_service import AfterSalesService
+    # 售后服务资产台账持有销售订单快照；无 AfterSalesService 聚合模型
+    from apps.kuaizhizao.models.after_sales_service import ServiceAsset
 
-    return AfterSalesService
+    return ServiceAsset
 
 
 def _lazy_quotation_model():

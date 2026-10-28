@@ -44,6 +44,70 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'kuaioa-payroll-help-button-r01',
+    date: '2026-10-28',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-payroll-help-button-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-payroll-help-button-r01.description',
+  },
+  {
+    id: 'kuaioa-min-wage-period-basic-wage-r01',
+    date: '2026-10-28',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-min-wage-period-basic-wage-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-min-wage-period-basic-wage-r01.description',
+  },
+  {
+    id: 'kuaioa-leave-revoke-approved-flow-r01',
+    date: '2026-10-28',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kuaioa-leave-revoke-approved-flow-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kuaioa-leave-revoke-approved-flow-r01.description',
+  },
+  {
+    id: 'quotation-export-list-detail-r01',
+    date: '2026-10-28',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.quotation-export-list-detail-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.quotation-export-list-detail-r01.description',
+  },
+  {
+    id: 'po-requisition-handoff-materials-r01',
+    date: '2026-10-28',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.po-requisition-handoff-materials-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.po-requisition-handoff-materials-r01.description',
+  },
+  {
+    id: 'print-partner-material-fields-r01',
+    date: '2026-10-28',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.print-partner-material-fields-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.print-partner-material-fields-r01.description',
+  },
+  {
+    id: 'sales-order-code-rename-order-name-r01',
+    date: '2026-10-28',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-order-code-rename-order-name-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-order-code-rename-order-name-r01.description',
+  },
+  {
+    id: 'cosmic-location-getlist-missing-data-r01',
+    date: '2026-10-28',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.cosmic-location-getlist-missing-data-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.cosmic-location-getlist-missing-data-r01.description',
+  },
+  {
     id: 'purchase-requisition-form-field-settings-r01',
     date: '2026-10-25',
     type: 'improvement',

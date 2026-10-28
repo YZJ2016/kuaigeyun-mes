@@ -5,4 +5,9 @@
  */
 
 export { UniExport as default, UniExport, UniExportMenuButton } from './index.tsx';
-export type { UniExportProps, UniExportMenuButtonProps, UniExportScope } from './index.tsx';
+export type {
+  UniExportProps,
+  UniExportDataset,
+  UniExportMenuButtonProps,
+  UniExportScope,
+} from './index.tsx';

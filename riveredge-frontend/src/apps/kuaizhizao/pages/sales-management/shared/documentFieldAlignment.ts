@@ -133,6 +133,11 @@ export const GLOBAL_DOC_LIST_FIELD_RANK = {
   record_code: 10,
   /** 轻办公：休息/夜班登记单号 */
   register_code: 10,
+  /** 轻办公：生活费预支 / 岗位补贴 / 奖励登记 / 福利发放单号 */
+  advance_code: 10,
+  subsidy_code: 10,
+  reward_code: 10,
+  batch_code: 10,
   /** 轻办公考勤：车间 / 产线 / 人员摘要 / 写入格数 */
   workshop_name: 15.2,
   production_line_name: 15.25,

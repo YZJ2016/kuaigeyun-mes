@@ -2129,6 +2129,8 @@ class DocumentPrintService:
                 model_number = str(mat.model).strip()
             if not model_number:
                 model_number = (i.material_spec or "").strip()
+            partner_material_code = (getattr(i, "partner_material_code", None) or "").strip()
+            partner_material_name = (getattr(i, "partner_material_name", None) or "").strip()
             image_url = ""
             if mat:
                 image_url = await _material_image_data_url_for_pdfme(order.tenant_id, mat.images)
@@ -2151,6 +2153,9 @@ class DocumentPrintService:
                     # 与报价单 / 销售合同模板列键兼容的别名字段
                     "chinese_short_name": chinese_short_name,
                     "model_number": model_number,
+                    # 行上客户料号/品名快照（供模板列绑定，非新打印能力）
+                    "partner_material_code": partner_material_code,
+                    "partner_material_name": partner_material_name,
                     "image_url": image_url,
                     "quote_quantity": str(i.order_quantity),
                     "required_quantity": str(i.order_quantity),
@@ -2469,6 +2474,8 @@ class DocumentPrintService:
                     "material_name": i.material_name,
                     "material_spec": i.material_spec,
                     "material_unit": i.material_unit,
+                    "partner_material_code": (getattr(i, "partner_material_code", None) or "").strip(),
+                    "partner_material_name": (getattr(i, "partner_material_name", None) or "").strip(),
                     "quote_quantity": str(i.quote_quantity),
                     "unit_price": str(i.unit_price),
                     "tax_rate": str(getattr(i, "tax_rate", None) or 0),
@@ -2548,6 +2555,8 @@ class DocumentPrintService:
                     "material_name": i.material_name,
                     "material_spec": i.material_spec,
                     "material_unit": i.material_unit,
+                    "partner_material_code": (getattr(i, "partner_material_code", None) or "").strip(),
+                    "partner_material_name": (getattr(i, "partner_material_name", None) or "").strip(),
                     "contract_quantity": str(i.contract_quantity),
                     "released_quantity": str(i.released_quantity or 0),
                     "unit_price": str(i.unit_price),

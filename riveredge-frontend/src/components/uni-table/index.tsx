@@ -773,12 +773,18 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    * @param type - 导出类型：'selected' 导出选中、'currentPage' 导出本页、'all' 导出全部
    * @param selectedRowKeys - 选中的行键数组（仅当 type 为 'selected' 时有效）
    * @param currentPageData - 当前页数据（仅当 type 为 'currentPage' 时有效）
+   * @param dataset - 导出来源数据集（传了 exportDatasets 时有值，如 list / detail）
    */
   onExport?: (
     type: 'selected' | 'currentPage' | 'all',
     selectedRowKeys?: React.Key[],
-    currentPageData?: T[]
+    currentPageData?: T[],
+    dataset?: string,
   ) => void
+  /**
+   * 导出数据集（如「导出列表」「导出明细」）。有值时导出菜单为二级。
+   */
+  exportDatasets?: Array<{ key: string; label: React.ReactNode }>
   /**
    * 导出按钮主文案（默认：i18n 的 components.uniTable.export）
    */
@@ -1207,6 +1213,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   autoGenerateImportConfig = false,
   showExportButton = true,
   onExport,
+  exportDatasets,
   exportButtonText,
   rightToolBarActionsBeforeExport = [],
   showSyncButton = false,
@@ -2834,6 +2841,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           size={toolBarButtonSize}
           iconOnly={iconOnly}
           buttonText={exportButtonText}
+          datasets={exportDatasets}
           onExport={onExport}
           selectedRowKeys={selectedRowKeys}
           tableData={tableData}

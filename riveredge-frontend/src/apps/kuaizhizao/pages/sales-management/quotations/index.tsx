@@ -240,7 +240,13 @@ const QUOTATION_CREATE_PATH = `${QUOTATION_LIST_PATH}/new`;
 const quotationEditPath = (id: number) => `${QUOTATION_LIST_PATH}/${id}/edit`;
 import { KUAIZHIZAO_QUOTATION_FIELD_RESOURCE as QUOTATION_FIELD_RESOURCE } from '../../../../../constants/fieldPermissionResources';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
-import { exportQuotationsXlsx } from './quotationListExport';
+import {
+  exportQuotationItemsXlsx,
+  exportQuotationsXlsx,
+  filterQuotationItemExportRowsByKeys,
+  flattenQuotationsForItemExport,
+  isQuotationDetailExportRow,
+} from './quotationListExport';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
 const LazyUniImport = lazy(() =>
   import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport }))
@@ -4281,8 +4287,57 @@ const QuotationsPage: React.FC = () => {
           importColumnOptions={quotationImportTemplate.importColumnOptions}
           importFieldMap={quotationImportTemplate.importHeaderMap}
           showExportButton
-          onExport={async (type, keys, pageData) => {
+          exportDatasets={[
+            { key: 'list', label: t('components.uniTable.exportList') },
+            { key: 'detail', label: t('components.uniTable.exportDetail') },
+          ]}
+          onExport={async (type, keys, pageData, dataset = 'list') => {
             try {
+              const exportCtx = {
+                t,
+                quotationAuditRequired,
+                dictionaryLabels: {
+                  CURRENCY: quotationImportDict.packs.CURRENCY?.labelByCode,
+                  PAYMENT_TERMS: quotationImportDict.packs.PAYMENT_TERMS?.labelByCode,
+                  SHIPPING_METHOD: quotationImportDict.packs.SHIPPING_METHOD?.labelByCode,
+                },
+              };
+              if (dataset === 'detail') {
+                let flatRows: Array<Record<string, unknown>>;
+                if (type === 'currentPage' && pageData?.length) {
+                  const first = pageData[0] as Record<string, unknown>;
+                  flatRows = isQuotationDetailExportRow(first)
+                    ? (pageData as Array<Record<string, unknown>>)
+                    : flattenQuotationsForItemExport(
+                        flattenQuotationTableRows(pageData as QuotationTableRow[]),
+                      );
+                } else {
+                  const quotations = await fetchAllListItems((p) =>
+                    listQuotations({
+                      ...p,
+                      list_scope: listScopeFilter,
+                      include_items: true,
+                    }),
+                  );
+                  flatRows = flattenQuotationsForItemExport(quotations);
+                }
+                const toExport =
+                  type === 'selected' && keys?.length
+                    ? filterQuotationItemExportRowsByKeys(flatRows, keys)
+                    : flatRows;
+                if (toExport.length === 0) {
+                  messageApi.warning(t('common.exportNoData'));
+                  return;
+                }
+                await exportQuotationItemsXlsx(
+                  toExport,
+                  `quotations-items-${todaySiteDateString()}.xlsx`,
+                  exportCtx,
+                );
+                messageApi.success(t('common.exportSuccess', { count: toExport.length }));
+                return;
+              }
+
               let items =
                 type === 'currentPage' && pageData?.length
                   ? flattenQuotationTableRows(pageData as QuotationTableRow[])
@@ -4298,16 +4353,8 @@ const QuotationsPage: React.FC = () => {
               }
               await exportQuotationsXlsx(
                 items,
-                `quotations-${todaySiteDateString()}.xlsx`,
-                {
-                  t,
-                  quotationAuditRequired,
-                  dictionaryLabels: {
-                    CURRENCY: quotationImportDict.packs.CURRENCY?.labelByCode,
-                    PAYMENT_TERMS: quotationImportDict.packs.PAYMENT_TERMS?.labelByCode,
-                    SHIPPING_METHOD: quotationImportDict.packs.SHIPPING_METHOD?.labelByCode,
-                  },
-                },
+                `quotations-list-${todaySiteDateString()}.xlsx`,
+                exportCtx,
               );
               messageApi.success(t('common.exportSuccess', { count: items.length }));
             } catch (error: any) {

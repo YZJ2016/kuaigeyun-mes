@@ -200,3 +200,172 @@ export async function exportQuotationsXlsx(
     sheetName: ctx.t('app.kuaizhizao.menu.sales-management.quotations'),
   });
 }
+
+export function buildQuotationItemExportColumns(ctx: QuotationExportContext): ExportXlsxColumn[] {
+  const { t, quotationAuditRequired } = ctx;
+  const columns: ExportXlsxColumn[] = [
+    { key: 'quotation_code', title: t('app.kuaizhizao.quotation.colQuotationCode') },
+    { key: 'version_no', title: t('app.kuaizhizao.quotation.colVersion') },
+    { key: 'lifecycle', title: t('app.kuaizhizao.quotation.colLifecycle') },
+    { key: 'customer_name', title: t('app.kuaizhizao.customerFollowUp.colCustomer') },
+    { key: 'quotation_date', title: t('app.kuaizhizao.quotation.colQuotationDate') },
+    { key: 'salesman_name', title: t('app.kuaizhizao.quotation.colSalesPersonnel') },
+    { key: 'price_type', title: t('app.kuaizhizao.salesOrder.priceType') },
+    { key: 'currency_code', title: t('app.kuaizhizao.quotation.form.currency') },
+    { key: 'material_code', title: t('app.kuaizhizao.quotation.import.materialCode') },
+    { key: 'material_name', title: t('app.kuaizhizao.quotation.import.materialName') },
+    { key: 'material_spec', title: t('app.kuaizhizao.salesOrder.materialSpec') },
+    { key: 'material_model', title: t('app.master-data.materials.model') },
+    {
+      key: 'partner_material_code',
+      title: t('app.master-data.priceBook.customerMaterialCode'),
+    },
+    {
+      key: 'partner_material_name',
+      title: t('app.master-data.priceBook.customerMaterialName'),
+    },
+    { key: 'material_unit', title: t('common.unit') },
+    { key: 'quote_quantity', title: t('common.quantity') },
+    { key: 'unit_price', title: t('app.kuaizhizao.quotation.import.unitPrice') },
+    { key: 'tax_rate', title: t('app.kuaizhizao.salesOrder.taxRate') },
+    { key: 'total_amount', title: t('app.kuaizhizao.quotation.colTotalAmount') },
+    { key: 'is_gift', title: t('app.kuaizhizao.sales.isGift') },
+    { key: 'delivery_date', title: t('app.kuaizhizao.quotation.import.deliveryDate') },
+    { key: 'line_notes', title: t('common.remark') },
+    { key: 'order_notes', title: t('common.remark') },
+  ];
+  if (quotationAuditRequired) {
+    columns.splice(3, 0, {
+      key: 'audit_phase',
+      title: t('components.uniAudit.colAuditStatus', { defaultValue: '审核状态' }),
+    });
+  }
+  return columns;
+}
+
+function formatBool(value: unknown, t: TFunction): string {
+  if (value === true || value === 'true' || value === 1 || value === '1') return t('common.yes');
+  if (value === false || value === 'false' || value === 0 || value === '0') return t('common.no');
+  return '';
+}
+
+export function isQuotationDetailExportRow(record: Record<string, unknown>): boolean {
+  return typeof record._rowKey === 'string' && String(record._rowKey).startsWith('qt-');
+}
+
+export function flattenQuotationsForItemExport(
+  quotations: Quotation[],
+): Array<Record<string, unknown>> {
+  const flatRows: Array<Record<string, unknown>> = [];
+  for (const quotation of quotations) {
+    const versionNo = Number(pickField(quotation, 'version_no', 'versionNo') || 1);
+    const header = {
+      quotation_id: quotation.id,
+      quotation_code: pickField(quotation, 'quotation_code', 'quotationCode'),
+      version_no: versionNo,
+      customer_name: pickField(quotation, 'customer_name', 'customerName'),
+      quotation_date: pickField(quotation, 'quotation_date', 'quotationDate'),
+      salesman_name: pickField(quotation, 'salesman_name', 'salesmanName'),
+      price_type: pickField(quotation, 'price_type', 'priceType'),
+      currency_code: pickField(quotation, 'currency_code', 'currencyCode') || 'CNY',
+      status: quotation.status,
+      review_status: quotation.review_status,
+      lifecycle: quotation.lifecycle,
+      order_notes: pickField(quotation, 'notes'),
+    };
+    const items = quotation.items ?? [];
+    if (items.length === 0) {
+      flatRows.push({
+        ...header,
+        _rowKey: `qt-${quotation.id ?? 'x'}-empty`,
+        material_code: '-',
+        material_name: '-',
+        material_spec: '',
+        material_model: '',
+        partner_material_code: '',
+        partner_material_name: '',
+        material_unit: '',
+        quote_quantity: 0,
+        unit_price: 0,
+        tax_rate: '',
+        total_amount: 0,
+        is_gift: false,
+        delivery_date: '',
+        line_notes: '',
+      });
+      continue;
+    }
+    items.forEach((item, idx) => {
+      flatRows.push({
+        ...header,
+        ...item,
+        _rowKey: item.id
+          ? `qt-${quotation.id}-item-${item.id}`
+          : `qt-${quotation.id}-idx-${idx}`,
+        line_notes: item.notes ?? '',
+      });
+    });
+  }
+  return flatRows;
+}
+
+export function filterQuotationItemExportRowsByKeys(
+  flatRows: Array<Record<string, unknown>>,
+  keys: Array<string | number> | undefined,
+): Array<Record<string, unknown>> {
+  if (!keys?.length) return flatRows;
+  const keySet = new Set(keys.map(String));
+  return flatRows.filter((row) => {
+    const rowKey = String(row._rowKey ?? '');
+    if (keySet.has(rowKey)) return true;
+    const quotationId = row.quotation_id;
+    return quotationId != null && keySet.has(String(quotationId));
+  });
+}
+
+export function mapQuotationItemToExportRow(
+  row: Record<string, unknown>,
+  ctx: QuotationExportContext,
+): Record<string, unknown> {
+  const { t, dictionaryLabels } = ctx;
+  const versionNo = Number(row.version_no || 1);
+  return {
+    quotation_code: String(row.quotation_code ?? ''),
+    version_no: t('app.kuaizhizao.quotation.versionDisplay', { n: versionNo }),
+    lifecycle: formatLifecycleLabel(row as Quotation, ctx),
+    audit_phase: formatAuditPhaseLabel(row as Quotation, t),
+    customer_name: String(row.customer_name ?? ''),
+    quotation_date: formatDateOnly(row.quotation_date),
+    salesman_name: String(row.salesman_name ?? ''),
+    price_type: formatPriceType(row.price_type, t),
+    currency_code: dictLabel(dictionaryLabels.CURRENCY, row.currency_code || 'CNY'),
+    material_code: String(row.material_code ?? ''),
+    material_name: String(row.material_name ?? ''),
+    material_spec: String(row.material_spec ?? ''),
+    material_model: String(row.material_model ?? ''),
+    partner_material_code: String(row.partner_material_code ?? ''),
+    partner_material_name: String(row.partner_material_name ?? ''),
+    material_unit: String(row.material_unit ?? ''),
+    quote_quantity: formatQuantity(row.quote_quantity),
+    unit_price: formatAmount(row.unit_price),
+    tax_rate: row.tax_rate != null && row.tax_rate !== '' ? String(row.tax_rate) : '',
+    total_amount: formatAmount(row.total_amount),
+    is_gift: formatBool(row.is_gift, t),
+    delivery_date: formatDateOnly(row.delivery_date),
+    line_notes: String(row.line_notes ?? row.notes ?? ''),
+    order_notes: String(row.order_notes ?? ''),
+  };
+}
+
+export async function exportQuotationItemsXlsx(
+  flatRows: Array<Record<string, unknown>>,
+  fileName: string,
+  ctx: QuotationExportContext,
+): Promise<void> {
+  const columns = buildQuotationItemExportColumns(ctx);
+  const rows = flatRows.map((row) => mapQuotationItemToExportRow(row, ctx));
+  await downloadRecordsAsXlsx(rows, fileName, {
+    columns,
+    sheetName: ctx.t('app.kuaizhizao.menu.sales-management.quotations'),
+  });
+}
