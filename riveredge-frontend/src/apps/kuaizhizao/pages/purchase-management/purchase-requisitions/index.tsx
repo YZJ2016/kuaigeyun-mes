@@ -552,7 +552,14 @@ const PurchaseRequisitionsPage: React.FC = () => {
         prFormHydratingRef.current = false;
       }
     },
-    [messageApi, ensureSupplierList, leavePurchaseRequisitionFormPage, t, prFormDraftKey, applyHeaderDeliveryToItemLines],
+    [
+      applyHeaderDeliveryToItemLines,
+      ensureSupplierList,
+      leavePurchaseRequisitionFormPage,
+      messageApi,
+      prFormDraftKey,
+      t,
+    ],
   );
 
   const handleEdit = useCallback(
