@@ -51372,4 +51372,16 @@ export default {
     '请假出差表单部门紧随姓名',
   'pages.dashboard.updateLog.entries.haoligo-leave-department-after-name-r01.description':
     '好力 GO 请假出差新建/编辑弹窗将「部门」调整到「姓名」右侧，车间与产线顺延，便于先确认人员组织信息。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-push-po-direct-create-r01.title':
+    '采购申请下推采购订单改为直接建单',
+  'pages.dashboard.updateLog.entries.purchase-requisition-push-po-direct-create-r01.description':
+    '采购申请确认下推采购订单时不再跳转新建页，按所选明细与供应商直接生成采购订单并回写转单状态。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-unit-inline-push-auto-r01.title':
+    '采购申请单位并入数量列，下推无审自动确认',
+  'pages.dashboard.updateLog.entries.purchase-requisition-unit-inline-push-auto-r01.description':
+    '采购申请明细不再单独展示单位列，单位跟在数量旁；需求计算下推生成的采购申请在未开启审核门禁时自动提交确认。',
+  'pages.dashboard.updateLog.entries.demand-push-pr-po-direct-create-r01.title':
+    '需求计算下推采购申请/采购单改为直接建单',
+  'pages.dashboard.updateLog.entries.demand-push-pr-po-direct-create-r01.description':
+    '在需求计算勾选明细确认下推采购申请或采购订单时，不再跳转新建页；确认后直接生成单据并回写关联，与工单一并下推时行为一致。',
 };

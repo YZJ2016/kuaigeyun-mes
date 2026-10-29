@@ -23,7 +23,6 @@ import {
   buildMaterialModelSpecColumns,
   buildPartnerMaterialLineColumns,
 } from '../../../sales-management/shared/materialLineColumns';
-import { MaterialUnitSelect } from '../../../../../../components/material-unit-select';
 import { SourceDocumentCode } from '../../../../../../components/linked-document-code/SourceDocumentCode';
 import { WarehouseTraceBriefPrimaryActions } from '../../../warehouse-management/WarehouseTraceBriefFooter';
 import { getPurchaseRequisitionLifecycle } from '../../../../utils/purchaseRequisitionLifecycle';
@@ -306,25 +305,10 @@ export const PurchaseRequisitionDetailDrawer: React.FC<PurchaseRequisitionDetail
                 {
                   title: t('common.quantity'),
                   dataIndex: 'quantity',
-                  width: 120,
+                  width: 140,
                   align: 'right',
                   render: (val: number, row: PurchaseRequisitionItem) => (
                     <QuantityWithUnitDisplay quantity={val} unit={row.unit} />
-                  ),
-                },
-                {
-                  title: t('common.unit'),
-                  dataIndex: 'unit',
-                  width: 100,
-                  ellipsis: true,
-                  render: (_: unknown, record: PurchaseRequisitionItem) => (
-                    <MaterialUnitSelect
-                      materialId={record.material_id}
-                      value={record.unit}
-                      disabled
-                      size="small"
-                      noStyle
-                    />
                   ),
                 },
                 {

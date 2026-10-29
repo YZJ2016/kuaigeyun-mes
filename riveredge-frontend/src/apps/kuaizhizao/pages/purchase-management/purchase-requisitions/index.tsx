@@ -1393,7 +1393,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
     }
     setPushPoPreviewConfirming(true);
     try {
-      const res = await convertToPurchaseOrder(pushPoTarget.id, {
+      const result = await convertToPurchaseOrder(pushPoTarget.id, {
         item_ids: selectedIds,
         supplier_id: supplierId || undefined,
         supplier_name: supplierName || undefined,
@@ -1402,14 +1402,14 @@ const PurchaseRequisitionsPage: React.FC = () => {
         item_suppliers: Object.fromEntries(selectedIds.map((id) => [id, itemSuppliers[id]])),
         persist_default_supplier_to_material: persistDefaultSupplier,
       });
-      const pos = res.purchase_orders?.length
-        ? res.purchase_orders
-        : [{ purchase_order_id: res.purchase_order_id, purchase_order_code: res.purchase_order_code, supplier_id: supplierId }];
+      const pos = result.purchase_orders?.length
+        ? result.purchase_orders
+        : [{ purchase_order_id: result.purchase_order_id, purchase_order_code: result.purchase_order_code, supplier_id: supplierId }];
       const codes = pos.map((p) => p.purchase_order_code).filter(Boolean).join('、');
       messageApi.success(
         codes
-          ? `${res.message || t('app.kuaizhizao.purchaseRequisition.pushSuccess')}：${codes}`
-          : (res.message || t('app.kuaizhizao.purchaseRequisition.pushSuccess')),
+          ? `${result.message || t('app.kuaizhizao.purchaseRequisition.pushSuccess')}：${codes}`
+          : (result.message || t('app.kuaizhizao.purchaseRequisition.pushSuccess')),
         6,
       );
       invalidateMenuBadgeCounts();
@@ -2246,37 +2246,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
                     ),
                   },
                   ...buildDocumentDetailSpecModelFormColumns(t, { width: 120, inputSize: 'small' }),
-                  {
-                    title: t('common.unit'),
-                    dataIndex: 'unit',
-                    width: 100,
-                    render: (_: any, __: any, index: number) => (
-                      <AntForm.Item
-                        noStyle
-                        shouldUpdate={(prev: any, curr: any) =>
-                          prev?.items?.[index]?.material_id !== curr?.items?.[index]?.material_id
-                        }
-                      >
-                        {({ getFieldValue }) => {
-                          const materialId = getFieldValue(['items', index, 'material_id']);
-                          if (!createFormRef.current) return null;
-                          return (
-                            <AntForm.Item name={[index, 'unit']} style={{ margin: 0 }}>
-                              <DocumentLineUnitSelect
-                                form={createFormRef.current}
-                                listName="items"
-                                rowIndex={index}
-                                fields={{ quantity: 'quantity', unit: 'unit' }}
-                                materialId={materialId}
-                                size="small"
-                                noStyle
-                              />
-                            </AntForm.Item>
-                          );
-                        }}
-                      </AntForm.Item>
-                    ),
-                  },
                   {
                     title: t('common.quantity'),
                     dataIndex: 'quantity',

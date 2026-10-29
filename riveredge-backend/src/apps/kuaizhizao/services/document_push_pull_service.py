@@ -541,6 +541,8 @@ class DocumentPushPullService:
             attachments=carried_attachments,
         )
 
+        from apps.kuaizhizao.services.purchase_requisition_service import PurchaseRequisitionService
+
         pr_service = PurchaseRequisitionService()
         req = await pr_service.create_requisition(
             tenant_id=tenant_id,
@@ -571,6 +573,17 @@ class DocumentPushPullService:
                 tenant_id=tenant_id,
                 relation_data=relation_data,
                 created_by=created_by
+            )
+
+        # 未开审核门禁：下推生成后自动提交确认（与采购订单 try_auto_approve 无审分支一致）
+        audit_required = await pr_service.business_config_service.check_audit_required(
+            tenant_id, "purchase_request"
+        )
+        if not audit_required:
+            req = await pr_service.submit_requisition(
+                tenant_id=tenant_id,
+                requisition_id=int(req.id),
+                submitted_by=created_by,
             )
 
         return {
