@@ -77,8 +77,18 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError, Business
 from infra.services.business_config_service import BusinessConfigService
 
 
-# 写入 ORM 时排除：明细单独处理；order_name/audit 为响应层虚拟字段（BaseSchema）
-_SALES_ORDER_PERSIST_EXCLUDE = frozenset({"items", "order_name", "audit", "payment_milestones"})
+# 写入 ORM 时排除：明细单独处理；order_name/audit/submit_time 为 schema/响应虚拟字段（SalesOrder 表无对应列）
+_SALES_ORDER_PERSIST_EXCLUDE = frozenset({
+    "items",
+    "order_name",
+    "audit",
+    "submit_time",
+    "payment_milestones",
+    "document_flow_source_type",
+    "document_flow_source_id",
+    "document_flow_source_item_ids",
+    "document_flow_release_lines",
+})
 
 
 class SalesOrderService:
@@ -1999,7 +2009,12 @@ class SalesOrderService:
             partner_settlement_method = None
             if order_dict.get("customer_id"):
                 from apps.master_data.models.customer import Customer
-                customer = await Customer.get_or_none(id=order_dict["customer_id"], deleted_at__isnull=True)
+                # 客户 id 跨租户可复用，必须带 tenant_id，否则 get_or_none 会 MultipleObjectsReturned
+                customer = await Customer.get_or_none(
+                    id=order_dict["customer_id"],
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True,
+                )
                 if customer:
                     partner_settlement_method = customer.settlement_method_code
                     if not order_dict.get("salesman_id") and customer.salesman_id:

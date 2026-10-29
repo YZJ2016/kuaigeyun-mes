@@ -44,6 +44,29 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'purchase-requisition-push-po-direct-create-r01',
+    date: '2026-10-29',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-requisition-push-po-direct-create-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-requisition-push-po-direct-create-r01.description',
+  },
+  {
+    id: 'purchase-requisition-unit-inline-push-auto-r01',
+    date: '2026-10-29',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-requisition-unit-inline-push-auto-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-requisition-unit-inline-push-auto-r01.description',
+  },
+  {
+    id: 'demand-push-pr-po-direct-create-r01',
+    date: '2026-10-29',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.demand-push-pr-po-direct-create-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.demand-push-pr-po-direct-create-r01.description',
+  },
+  {
     id: 'kuaioa-payroll-help-button-r01',
     date: '2026-10-28',
     type: 'improvement',
