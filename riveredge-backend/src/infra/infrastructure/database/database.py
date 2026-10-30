@@ -54,12 +54,19 @@ def _int_env(name: str, default: int) -> int:
 # 应用运行态连接池（运行期 & aerich 迁移期分别读 ENV，缺省值与旧行为一致）
 # - RIVEREDGE_DB_POOL_MIN / RIVEREDGE_DB_POOL_MAX：普通进程
 # - RIVEREDGE_DB_POOL_MIN_AERICH / RIVEREDGE_DB_POOL_MAX_AERICH：aerich migrate
+# 命令/语句超时：运行态默认低于网关 ~30s，避免单 worker 上等满 300s 整站 504
+# - RIVEREDGE_DB_COMMAND_TIMEOUT（秒）/ RIVEREDGE_DB_STATEMENT_TIMEOUT_MS
+# - aerich：RIVEREDGE_DB_COMMAND_TIMEOUT_AERICH；语句超时默认不设（0=省略）
 if _is_aerich:
     _pool_min = _int_env("RIVEREDGE_DB_POOL_MIN_AERICH", 1)
     _pool_max = _int_env("RIVEREDGE_DB_POOL_MAX_AERICH", 2)
+    _command_timeout = _int_env("RIVEREDGE_DB_COMMAND_TIMEOUT_AERICH", 300)
+    _statement_timeout_ms = _int_env("RIVEREDGE_DB_STATEMENT_TIMEOUT_MS_AERICH", 0)
 else:
     _pool_min = _int_env("RIVEREDGE_DB_POOL_MIN", 2)
     _pool_max = _int_env("RIVEREDGE_DB_POOL_MAX", 10)
+    _command_timeout = _int_env("RIVEREDGE_DB_COMMAND_TIMEOUT", 25)
+    _statement_timeout_ms = _int_env("RIVEREDGE_DB_STATEMENT_TIMEOUT_MS", 25000)
 
 
 # Tortoise ORM 配置
@@ -120,7 +127,7 @@ async def get_dynamic_tortoise_config(
                     "max_size": _pool_max,
                     "max_queries": 50000,  # 每个连接最大查询次数
                     "max_inactive_connection_lifetime": 60.0,  # 非活跃连接最大生存时间（秒，防止空闲连接由于远程防火墙断开而失效）
-                    "command_timeout": 300,  # 命令超时（秒），增加以处理可能的慢查询
+                    "command_timeout": _command_timeout,
                     "server_settings": {
                         "application_name": "riveredge_asyncpg",
                         "timezone": dynamic_config.get("timezone", "UTC"),
@@ -130,6 +137,11 @@ async def get_dynamic_tortoise_config(
                         "idle_in_transaction_session_timeout": "60000",
                         # 池内空闲连接 60s 即回收；服务端兜底清理经代理/NAT 断开后残留的僵尸会话
                         "idle_session_timeout": "600000",
+                        **(
+                            {"statement_timeout": str(_statement_timeout_ms)}
+                            if _statement_timeout_ms > 0
+                            else {}
+                        ),
                     }
                 }
             },

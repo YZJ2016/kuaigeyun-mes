@@ -4821,8 +4821,12 @@ start_backend_prod() {
         export PYTHONPATH="$BACKEND_DIR/src"
         playwright_export_env
         export_production_malloc_tuning
+        backend_workers="${BACKEND_UVICORN_WORKERS:-1}"
+        case "$backend_workers" in
+            ''|*[!0-9]*|0) backend_workers=1 ;;
+        esac
         nohup "$(resolve_uv)" run $(backend_uv_extra_args) uvicorn server.main:app \
-            --host 127.0.0.1 --port "$BACKEND_PORT" --workers 1 \
+            --host 127.0.0.1 --port "$BACKEND_PORT" --workers "$backend_workers" \
             > "$LOGS_DIR/backend.log" 2>&1 &
         echo $! > "$LOGS_DIR/backend.pid"
     )

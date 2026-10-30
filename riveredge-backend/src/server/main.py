@@ -701,6 +701,10 @@ app.add_middleware(AiAuditMiddleware)
 from core.middleware.docs_asset_cache_middleware import DocsAssetCacheMiddleware
 app.add_middleware(DocsAssetCacheMiddleware)
 
+# API 墙钟超时（最外层）：低于网关 header 超时，避免单 worker 无限挂起
+from core.middleware.request_timeout_middleware import RequestTimeoutMiddleware
+app.add_middleware(RequestTimeoutMiddleware)
+
 # 动态加载插件路由
 # 使用新的插件管理器进行动态插件加载
 def load_plugin_routes():

@@ -309,8 +309,12 @@ bg_start_backend_slot() {
     else
         sync_backend_deps
         host="127.0.0.1"
-        server_entry=(uvicorn server.main:app --host "$host" --port "$port" --workers 1)
-        log_info "启动 backend-${slot} (prod, :${port})..."
+        backend_workers="${BACKEND_UVICORN_WORKERS:-1}"
+        case "$backend_workers" in
+            ''|*[!0-9]*|0) backend_workers=1 ;;
+        esac
+        server_entry=(uvicorn server.main:app --host "$host" --port "$port" --workers "$backend_workers")
+        log_info "启动 backend-${slot} (prod, :${port}, workers=${backend_workers})..."
     fi
     (
         cd "$BACKEND_DIR"

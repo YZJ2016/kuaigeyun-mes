@@ -21,5 +21,9 @@ export SETUPTOOLS_EGG_INFO_DIR="$LOGS_DIR"
 export PYTHONPATH="$BACKEND_DIR/src"
 playwright_export_env
 cd "$BACKEND_DIR"
+BACKEND_UVICORN_WORKERS="${BACKEND_UVICORN_WORKERS:-1}"
+case "$BACKEND_UVICORN_WORKERS" in
+    ''|*[!0-9]*|0) BACKEND_UVICORN_WORKERS=1 ;;
+esac
 exec "$(resolve_uv)" run $(backend_uv_extra_args) uvicorn server.main:app \
-    --host 127.0.0.1 --port "$BACKEND_PORT" --workers 1
+    --host 127.0.0.1 --port "$BACKEND_PORT" --workers "$BACKEND_UVICORN_WORKERS"

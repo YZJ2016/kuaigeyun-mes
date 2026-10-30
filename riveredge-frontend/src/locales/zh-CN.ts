@@ -16,6 +16,13 @@ import helpPagesRichZhReportCommon from './help-pages/rich/zh-CN/report-common';
 import helpPagesRichZhModuleCenters from './help-pages/rich/zh-CN/module-centers';
 
 export default {
+  'errors.operationTimeout.title': '操作超时',
+  'errors.operationTimeout.content': '处理已超过时限并已中断。页面已填写内容仍然保留，请重新提交。',
+  'errors.operationTimeout.ok': '确定',
+  'errors.serviceUnreachable.title': '请求未能完成',
+  'errors.serviceUnreachable.content': '当前服务暂不可用，本次操作未能成功。请稍后重试。',
+  'errors.serviceUnreachable.ok': '确定',
+
   // 菜单翻译
   'menu.dashboard': '仪表板',
   'menu.dashboard.short': '首页',
@@ -185,7 +192,7 @@ export default {
   'menu.system.roles': '角色管理',
   'menu.system.permissions': '权限管理',
   'menu.system.departments': '部门管理',
-  'menu.system.positions': '职位管理',
+  'menu.system.positions': '岗位管理',
   'menu.system.users': '账户管理',
   'menu.system.applications': '应用中心',
   'menu.system.menus': '菜单管理',
@@ -242,7 +249,7 @@ export default {
   'pages.infra.openApi.pageHintTitle': '对接鉴权说明',
   'pages.infra.openApi.pageHintButton': '鉴权说明',
   'pages.infra.openApi.pageHintDesc':
-    '官方 PC 与 App 仍使用登录 Token。外部对接与脚本须使用账套 ID 与应用秘钥换票，请求头携带 X-Client-Channel: integration。授权可按 GET、POST 等动作细粒度勾选。',
+    '本页面向外部系统调用本平台开放 API（integration 渠道换票）。官方 PC 与 App 仍用登录 Token。外部对接与脚本须使用账套 ID 与应用秘钥，请求头携带 X-Client-Channel: integration；授权可按 GET、POST 等动作细粒度勾选。从金蝶等 ERP 拉主数据或外推单据请用应用连接器与接口管理，不属于本页。',
   'pages.infra.openApi.createApp': '新建应用',
   'pages.infra.openApi.rotateAcctId': '重置账套 ID',
   'pages.infra.openApi.rotateAcctConfirmTitle': '重置账套 ID 后，对接方须同步更新，确认继续？',
@@ -292,17 +299,17 @@ export default {
   'menu.infra.sensitive-word-blacklist': '黑名单管理',
   'menu.group.user-management': '用户管理',
   'menu.group.core-config': '核心配置',
-  'menu.group.data-center': '数据中心', // 数据接入、抽取与对外接口
+  'menu.group.data-center': '连接管理', // 四字分组；四页能力由专业应用 kuaiconnect（快连接）提供
   'menu.group.process-management': '协同配置',
   'menu.group.monitoring-ops': '监控运维',
   /** 历史/同步落库的英文分组 slug（与上列分组同义，菜单管理展示用） */
   'menu.group.settings': '核心配置',
   'menu.group.organization': '用户管理',
-  'menu.group.integration': '数据中心',
+  'menu.group.integration': '连接管理',
   'menu.group.workflow-and-message': '协同配置',
   'menu.group.security-and-logs': '监控运维',
   'menu.system.roles-permissions': '角色权限',
-  'menu.system.data-center': '数据中心',
+  'menu.system.data-center': '连接管理',
   'menu.system.process-management': '协同配置',
   'menu.system.appMenu': '应用',
   'menu.system.systemMenu': '系统',
@@ -320,13 +327,30 @@ export default {
   'ui.systemSettingsPanel.versionLabel': '版本',
   'ui.systemSettingsPanel.expiresLabel': '到期时间',
   'ui.systemSettingsPanel.neverExpires': '永久',
+  'ui.systemSettingsPanel.kuaiconnectRequiredTitle': '快连接 专业版能力',
+  'ui.systemSettingsPanel.kuaiconnectRequiredIntro':
+    '连接管理包含在专业版套餐中。升级后可安装启用快连接，统一对接外部系统、开放接口与数据资产。',
+  'ui.systemSettingsPanel.kuaiconnectSingleIntro':
+    '「{{name}}」属于快连接专业版能力。请由管理员在应用中心安装并启用快连接后使用。',
+  'ui.systemSettingsPanel.kuaiconnectRequiredDesc':
+    '应用连接器、接口管理、数据源与数据集由专业应用「快连接」提供。请先在应用中心安装并启用快连接（如需 License Key 请先激活）。',
+  'ui.systemSettingsPanel.kuaiconnectRequiredFoot':
+    '尚未开通请联系管理员购买专业版并激活 License；已具备权限可在应用中心扫描注册后安装。',
+  'ui.systemSettingsPanel.kuaiconnectFeat.connectors':
+    '对接 ERP、MES、IoT 等外部应用，统一管理鉴权、映射与同步任务。',
+  'ui.systemSettingsPanel.kuaiconnectFeat.apis':
+    '注册与治理开放 API，配置鉴权、限流与调用监控，支撑系统集成。',
+  'ui.systemSettingsPanel.kuaiconnectFeat.dataSources':
+    '连接数据库与第三方数据源，为报表、大屏与数据集提供稳定取数。',
+  'ui.systemSettingsPanel.kuaiconnectFeat.datasets':
+    '定义指标与页面数据集，复用到快报表与大屏，减少重复建模。',
+  'ui.systemSettingsPanel.kuaiconnectGoAppCenter': '前往应用中心',
   'ui.message.notification': '消息通知',
   'ui.aiAssistant.tooltip': '按 F1 可快速唤起我',
-  'ui.aiAssistant.title': '星AI',
+  'ui.aiAssistant.title': 'KU-AI',
   'ui.aiAssistant.beta': '测试版',
   'ui.aiAssistant.newChat': '新对话',
   'ui.aiAssistant.openAssistantTab': '在新标签页打开',
-  'ui.aiAssistant.openFullChat': '打开全宽对话',
   'ui.aiAssistant.tabTitle': 'KU-AI 对话',
   'ui.aiAssistant.newConversationTitle': '新对话',
   'ui.aiAssistant.historySidebar': '对话记录',
@@ -339,7 +363,7 @@ export default {
   'ui.aiAssistant.deleteConversationConfirm': '确定删除这条对话记录？',
   'ui.aiAssistant.ariaLabel': 'AI 助手',
   'ui.aiAssistant.welcomeHi': '你好',
-  'ui.aiAssistant.welcomeTitle': '我是 星AI 助手',
+  'ui.aiAssistant.welcomeTitle': '我是 KU-AI 助手',
   'ui.aiAssistant.welcomeDesc': '我能帮你更高效地获取信息并提供支持，你可以随时向我提问。',
   'ui.aiAssistant.senderPlaceholder': '请输入你的问题，按 Enter 发送',
   'ui.aiAssistant.disclaimer': '内容由 AI 生成，仅供参考',
@@ -375,6 +399,11 @@ export default {
   'ui.message.autoSelectedTenant': '已自动选择组织: {{name}}',
   'ui.message.tenantOptionsLoadFailed': '组织列表加载失败，请重试',
   'ui.message.tenantNameUnavailable': '组织名称不可用',
+  'ui.message.setDefaultTenantSuccess': '已设为默认进入组织',
+  'ui.message.clearDefaultTenantSuccess': '已改为登录时选择组织',
+  'ui.message.setDefaultTenantFailed': '设置默认组织失败',
+  'ui.action.setDefaultTenant': '设为默认',
+  'ui.action.setDefaultTenantEntry': '设置默认组织',
   'ui.message.notSupportFavorite': '该页面不支持收藏到快捷入口',
   'ui.message.alreadyInFavorite': '已在快捷入口中',
   'ui.message.favoriteSuccess': '已收藏到快捷入口',
@@ -919,6 +948,15 @@ export default {
   'pages.personal.im.send': '发送',
   'pages.personal.im.sendFailed': '发送失败',
   'pages.personal.im.createFailed': '创建会话失败',
+  'components.uniWhDropdown.selectWarehouse': '请选择仓库',
+  'components.uniWhDropdown.selectWarehouseNeedMaterial': '请先选择物料后再选仓（将显示库存）',
+  'components.uniWhDropdown.selectLocation': '选择库位',
+  'components.uniWhDropdown.selectWarehouseFirst': '请先选择仓库',
+  'components.uniWhDropdown.warehouseWithStock': '{{warehouse}}（库存 {{qty}}）',
+  'components.uniWhDropdown.warehouseWithStockEmpty': '{{warehouse}}（无库存）',
+  'components.uniWhDropdown.locationWithStock': '{{location}}（库存 {{qty}}）',
+  'components.uniWhDropdown.locationWithStockEmpty': '{{location}}（无库存）',
+  'components.uniWhDropdown.loadWarehouseFailed': '加载仓库列表失败，请稍后重试',
   'components.uniIm.title': '在线消息',
   'components.uniIm.tooltip': '在线消息',
   'components.uniIm.navLabel': '消息分类',
@@ -953,6 +991,12 @@ export default {
   'components.uniIm.groupCreateFailed': '创建群聊失败',
   'components.uniIm.groupUpdated': '群聊已更新',
   'components.uniIm.groupUpdateFailed': '更新群聊失败',
+  'components.uniIm.dissolveGroup': '解散群聊',
+  'components.uniIm.dissolveGroupConfirmTitle': '确认解散群聊？',
+  'components.uniIm.dissolveGroupConfirmContent':
+    '解散后，所有成员将无法再进入该群，聊天记录不再对成员可见。此操作不可撤销。',
+  'components.uniIm.groupDissolved': '群聊已解散',
+  'components.uniIm.groupDissolveFailed': '解散群聊失败',
   'components.uniIm.groupSettings': '群聊设置',
   'components.uniIm.groupName': '群聊名称',
   'components.uniIm.groupNameRequired': '请输入群聊名称',
@@ -1033,8 +1077,6 @@ export default {
   'pages.personal.messages.categoryProcess': '流程',
   'pages.personal.messages.categorySystem': '系统',
   'pages.personal.messages.openRelated': '打开相关单据',
-  'pages.personal.messages.downloadAttachment': '下载 {{name}}',
-  'pages.personal.messages.downloadFailed': '下载附件失败',
   'pages.personal.messages.selectToView': '请从左侧选择一条消息查看详情',
   'pages.personal.messages.filterAll': '全部',
   'pages.personal.messages.filterUnread': '未读',
@@ -1394,9 +1436,11 @@ export default {
   'pages.system.businessConfig.param.reporting.auto_approve.name': '自动审核',
   'pages.system.businessConfig.param.reporting.auto_approve.description': '开启后，提交的报工记录将自动通过审核，无需人工确认。',
   'pages.system.businessConfig.param.warehouse.batch_management.name': '批号管理',
-  'pages.system.businessConfig.param.warehouse.batch_management.description': '是否启用批号管理',
+  'pages.system.businessConfig.param.warehouse.batch_management.description':
+    '开启后启用批号能力，且新建物料默认打开批号管理，避免漏点；关闭后全站不强制批号，新建物料也不再默认打开。单物料仍可在主数据改。',
   'pages.system.businessConfig.param.warehouse.serial_management.name': '序列号管理',
-  'pages.system.businessConfig.param.warehouse.serial_management.description': '是否启用序列号管理',
+  'pages.system.businessConfig.param.warehouse.serial_management.description':
+    '开启后启用序列号能力，且新建物料默认打开序列号管理，避免漏点；关闭后全站不强制序列号，新建物料也不再默认打开。单物料仍可在主数据改。',
   'pages.system.businessConfig.param.warehouse.multi_unit.name': '多单位管理',
   'pages.system.businessConfig.param.warehouse.multi_unit.description': '是否启用多单位管理',
   'pages.system.businessConfig.param.warehouse.fifo.name': '先进先出（FIFO）',
@@ -1429,7 +1473,7 @@ export default {
   'pages.system.businessConfig.param.purchase.auto_approval.name': '采购自动审批',
   'pages.system.businessConfig.param.purchase.auto_approval.description': '是否自动审批采购订单',
   'pages.system.businessConfig.param.warehouse.location_management.name': '库位管理',
-  'pages.system.businessConfig.param.warehouse.location_management.description': '启用库位主数据与业务选填库位，不强制每笔入库必须填写',
+  'pages.system.businessConfig.param.warehouse.location_management.description': '启用库位主数据与出入库选库位；未选手选库位时系统默认仓库首库位或整仓，不因空库位拦截单据流转',
   'pages.system.businessConfig.param.warehouse.auto_outbound.name': '自动出库',
   'pages.system.businessConfig.param.warehouse.auto_outbound.description': '是否支持自动出库',
   'pages.system.businessConfig.param.quality.require_incoming_inspection_for_receipt.name': '收货需来料检验',
@@ -1584,7 +1628,7 @@ export default {
   'permission.action.reject': '审核',
   'permission.action.revoke': '撤销',
   'permission.action.edit': '编辑',
-  'permission.action.display': '展示',
+  'permission.action.display': '回显',
   'permission.action.publish': '发布',
   'permission.action.obsolete': '作废',
   'permission.action.submit': '提交',
@@ -1644,6 +1688,8 @@ export default {
   'permission.fieldName.unit_price': '单价',
   'permission.fieldName.price': '价格',
   'permission.fieldName.customer_name': '客户名称',
+  'permission.fieldName.default_supplier_id': '默认供应商',
+  'permission.fieldName.default_supplier_name': '默认供应商名称',
 
   // 路径翻译（用于面包屑和标签栏的后备方案）
   'path.apps': '',
@@ -1651,7 +1697,7 @@ export default {
   'path.timeconfig': '详情抽屉时间显示',
   'path.kuaicaiwu': '轻管理会计',
   'path.plan-management': '计划管理',
-  'path.demand-management': '需求计划',
+  'path.demand-management': '计划生产',
   'path.scheduling': '可视排产 (APS)',
   'path.production-execution': '生产执行',
   'path.work-orders': '工单管理',
@@ -1791,7 +1837,7 @@ export default {
   'path.code-rules': '编号规则',
   'path.custom-fields': '自定义字段',
   'path.departments': '部门管理',
-  'path.positions': '职位管理',
+  'path.positions': '岗位管理',
   'path.roles': '角色权限',
   'path.users': '用户管理',
   'path.files': '文件管理',
@@ -1829,6 +1875,7 @@ export default {
   'operationStatus.in_progress': '进行中',
   'operationStatus.completed': '已完成',
   'operationStatus.cancelled': '已取消',
+  'reviewStatus.draft': '草稿',
   'reviewStatus.pending': '待审核',
   'reviewStatus.approved': '已审核',
   'reviewStatus.rejected': '已驳回',
@@ -1846,9 +1893,10 @@ export default {
   'lifecycle.stage.pushed': '已下推计算',
   'lifecycle.stage.from_forecast': '从预测同步（自动）',
   'lifecycle.stage.from_order': '从订单同步（自动）',
-  'lifecycle.stage.manual_plan': '手工需求计划',
+  'lifecycle.stage.manual_plan': '手工计划生产',
   'lifecycle.stage.sales_invoice': '销售发票',
   'lifecycle.stage.receivable_collection': '账款收款',
+  'lifecycle.stage.payable_payment': '付款核销',
   'lifecycle.stage.production_plan': '生产计划',
   'lifecycle.stage.work_order_released': '工单下达',
   'lifecycle.stage.shipment_waiting': '待出库',
@@ -1977,11 +2025,11 @@ export default {
   'common.weekdays.thursday': '周四',
   'common.weekdays.friday': '周五',
   'common.weekdays.saturday': '周六',
-  'common.confirmBatchDelete': '确定要批量删除选中的记录吗？',
+  'common.confirmBatchDelete': '确定要删除选中的记录吗？',
   'common.confirmBatchDeleteContent': '将删除 {{count}} 条记录，删除后无法恢复，请谨慎操作。',
   'common.batchDeleteSuccess': '成功删除 {{count}} 条记录',
   'common.batchDeletePartial': '删除失败 {{count}} 条记录{{errors}}',
-  'common.batchDeleteFailed': '批量删除失败',
+  'common.batchDeleteFailed': '删除失败',
   'common.enterField': '请输入{{field}}',
   'common.selectField': '请选择{{field}}',
   'common.noSubject': '(无主题)',
@@ -2022,7 +2070,7 @@ export default {
   'core.extensionHost.supplierAuditPlan.monthTracking': '月份跟踪行',
   'core.extensionHost.supplierAuditPlan.months': '月份',
   'common.remark': '备注',
-  'common.batchDelete': '批量删除',
+  'common.batchDelete': '删除',
   'common.row': '行',
   'common.exportNoData': '暂无数据可导出',
   'common.exportSuccess': '已导出 {{count}} 条记录',
@@ -2031,11 +2079,13 @@ export default {
   'common.copySuccess': '已复制到剪贴板',
   'common.copyFailed': '复制失败',
   'common.refresh': '刷新',
+  'common.refreshSuccess': '数据已刷新',
   'common.close': '关闭',
   'common.shortcutHelpTitle': '键盘快捷键',
   'common.shortcutHelpIntro': '使用以下快捷键减少鼠标操作，提高效率。',
   'common.shortcutSearch': '聚焦顶部搜索',
   'common.shortcutNew': '新建（当前页有新建按钮时）',
+  'common.shortcutNewHover': '按 Alt+N 即可新建',
   'common.shortcutSubmit': '提交当前弹窗',
   'common.shortcutHelp': '显示本帮助',
   'common.shortcutHelpHint': '按 ? 或 Esc 关闭',
@@ -2043,11 +2093,13 @@ export default {
   'common.edit': '编辑',
   'common.detail': '详情',
   'common.view': '查看',
+  'common.preview': '预览',
   'common.delete': '删除',
   'common.remove': '移除',
   'common.add': '添加',
   'common.sort': '排序',
   'common.fetchDetailFailed': '获取详情失败',
+  'common.material': '物料',
   'common.selectMaterial': '选择物料',
   'common.addDetail': '添加明细',
   'common.itemsRequired': '请至少添加一行明细',
@@ -2078,6 +2130,14 @@ export default {
   'common.select': '选择',
   'common.import': '导入',
   'common.submit': '提交',
+  'common.submitDocumentCommitOnly': '仅提交',
+  'common.submitDocumentAndSubmitReview': '保存并审核',
+  'common.submitDocumentAndSubmitReviewNotAllowed': '所选单据不可保存并审核（须为可提交的草稿或已驳回）',
+  'common.submitDocumentAndSubmitReviewSuccess': '已保存并审核 {{count}} 条',
+  'common.submitDocumentAndSubmitReviewPartial': '操作完成：成功 {{success}} 条，失败 {{failed}} 条',
+  'common.submitDocumentAndSubmitReviewPartialWithReason':
+    '操作完成：成功 {{success}} 条，失败 {{failed}} 条（{{reason}}）',
+  'common.audit': '审核',
   'common.submitted': '已提交',
   'common.approve': '通过',
   'common.reject': '驳回',
@@ -2088,7 +2148,11 @@ export default {
   'common.created': '已创建',
   'common.deleted': '已删除',
   'common.quantity': '数量',
+  'common.primaryQuantity': '主数量',
+  'common.auxQuantity': '副数量',
   'common.unit': '单位',
+  'common.materialUnitRole.primary': '主',
+  'common.materialUnitRole.aux': '副',
   'common.name': '名称',
   'common.code': '编码',
 
@@ -2103,6 +2167,16 @@ export default {
   'components.uniAction.viewLabReport': '查看报告',
   'components.uniAction.downloadLabReport': '下载报告',
   'components.uniAction.downloadFirmware': '下载',
+  'components.uniAction.drawingWhereUsed': '反查',
+  'components.uniAction.drawingDistribute': '发放',
+  'components.uniAction.drawingLoan': '借阅',
+  'components.uniAction.drawingEngineeringChange': '工程变更',
+  'components.uniAction.drawingNewRevision': '升版',
+  'components.uniAction.drawingCheckout': '签出',
+  'components.uniAction.drawingCheckin': '签入',
+  'components.uniAction.drawingUndoCheckout': '撤销签出',
+  'components.uniAction.drawingImportStepBom': '导入BOM',
+  'components.uniAction.packingBinding': '装箱绑定',
   'components.uniAction.display': '展示',
   'components.uniAction.create': '新建',
   'components.uniAction.update': '编辑',
@@ -2186,7 +2260,11 @@ export default {
 
   'components.proUpgradePrompt.title': '{{name}} 为 PRO 应用',
   'components.proUpgradePrompt.description': '升级至专业版或企业版套餐即可解锁使用。',
+  'components.proUpgradePrompt.activateHint':
+    '若已购买授权：打开应用中心 → 该应用「更多操作」→「输入 License Key」（已启用也可激活）。',
+  'components.proUpgradePrompt.goAppCenter': '前往应用中心激活',
   'components.proUpgradePrompt.upgradeButton': '升级套餐',
+  'pages.system.applications.enterLicenseKey': '输入 License Key',
 
   // UniTable 组件
   'components.uniTable.fuzzySearch': '模糊搜索',
@@ -2332,6 +2410,8 @@ export default {
   'components.uniTable.exportSelected': '导出选中',
   'components.uniTable.exportCurrentPage': '导出本页',
   'components.uniTable.exportAll': '导出全部',
+  'components.uniTable.exportList': '导出列表',
+  'components.uniTable.exportDetail': '导出明细',
   'components.uniTable.datasetConfig': '数据集',
   'components.uniTable.sync': '同步',
   'components.uniBatch.batchActions': '批量操作',
@@ -2343,6 +2423,19 @@ export default {
   'components.uniBatch.audit.withdrawNotAllowed': '当前选中单据不可批量撤回提交。',
   'components.uniBatch.audit.approveNotAllowed': '当前选中单据不可批量审核。',
   'components.uniBatch.audit.revokeNotAllowed': '当前选中单据不可批量撤销审核。',
+  'components.uniBatch.audit.approveSelectOne': '请先勾选一张可审核单据，再打开审核弹窗',
+  'components.uniBatch.audit.detail': '审核详情',
+  'components.uniBatch.audit.detailSelectOne': '请先勾选一张单据，再查看审核详情',
+  'components.uniBatch.audit.detailUnavailable': '审核详情未就绪，请刷新页面后重试',
+  'components.uniBatch.audit.approveModalMisconfigured': '审核弹窗未配置单据类型，请联系管理员',
+  'components.uniBatch.audit.approveMustUseModal': '审核须打开审核弹窗，请使用工具栏审核菜单（禁止直调审核接口）',
+  'components.uniBatch.audit.hubActionSuccess': '{{action}}成功',
+  'components.uniBatch.auditHub.approve': '审核',
+  'components.uniBatch.auditHub.reject': '驳回',
+  'components.uniBatch.auditHub.withdraw': '撤回提交',
+  'components.uniBatch.auditHub.recall_own': '撤销审核',
+  'components.uniBatch.auditHub.revoke': '反审核',
+  'components.uniBatch.auditHub.urge': '催办',
   'components.uniBatch.audit.success': '{{action}}成功：{{count}} 条',
   'components.uniBatch.audit.partial': '{{action}}完成：成功 {{success}} 条，失败 {{failed}} 条',
   'components.uniBatch.audit.partialWithReason': '{{action}}完成：成功 {{success}} 条，失败 {{failed}} 条（{{reason}}）',
@@ -2358,6 +2451,8 @@ export default {
   'components.uniPush.toolbarSelectedNotInList': '所选记录不在当前列表，请刷新后重新选择',
   'components.uniPush.alreadyPushed': '已下推',
   'components.uniPush.openPushedDetail': '打开已下推单据详情',
+  'components.uniPush.goToPushedDocument': '转到',
+  'components.uniPush.goToPushedDocumentHint': '转到业务列表并按单号筛选',
   'components.uniPush.pushedDocDeleted': '已删除',
   'components.uniPush.pushedDocDeletedHint': '下游单据已删除，无法打开详情',
   'components.uniPush.doPush': '执行下推',
@@ -2378,6 +2473,7 @@ export default {
   'components.uniTable.chartDeveloping': '图表功能暂未开放',
   'components.uniTable.ganttViewHint': '请配置 ganttViewConfig.renderGantt 来自定义甘特图渲染',
   'components.uniTable.helpTitle': '使用帮助',
+  'components.uniTable.helpHint': '可通过顶部搜索栏筛选数据，支持导入导出。如需页面专属帮助，可配置 helpViewConfig.content。',
   'components.uniTable.touchViewTitle': '触屏视图',
   'components.uniTable.touchViewHint': '请配置 touchViewConfig.renderCard 来启用触屏视图',
   'components.uniTable.exampleValue': '示例值',
@@ -2392,7 +2488,10 @@ export default {
   // 布局模板（ListPage / FormModal / Dashboard / Wizard 等平台级 UI）
   'components.layoutTemplates.formModal.submitUpdate': '更新',
   'components.twoColumnLayout.resizeLeftPanel': '拖拽调整左侧面板宽度',
-  'components.layoutTemplates.documentFormPage.saveDraft': '保存为草稿',
+  'components.layoutTemplates.documentFormPage.saveDraft': '保存草稿',
+  'components.layoutTemplates.documentFormPage.saveAndAudit': '保存并审核',
+  'components.layoutTemplates.documentFormPage.saveAndAuditSuccess': '已保存并送审',
+  'components.layoutTemplates.documentFormPage.saveAndAuditFailed': '保存并审核失败',
   'components.layoutTemplates.documentFormPage.saveAndSubmit': '保存并提交',
   'components.layoutTemplates.formModal.checkFormHint': '请检查表单填写是否完整',
   'components.layoutTemplates.formModal.checkFormHintWithCount':
@@ -2468,9 +2567,12 @@ export default {
   'components.syncFromDataset.noDataToSync': '暂无数据可同步',
 
   // SyncFromSourceModal
+  'components.syncFromSource.tabSync': '同步配置',
   'components.syncFromSource.addSource': '添加来源',
   'components.syncFromSource.activeSource': '当前来源',
   'components.syncFromSource.sourcesTableTitle': '同步来源',
+  'components.syncFromSource.sourcesTableHintUnbind':
+    '删除全部来源后点「保存绑定」可取消同步引用，随后可在接口管理中删除该接口。',
   'components.syncFromSource.sourcesTableHint':
     '映射字段来自本页「来源设置」里保存的目标字段↔接口返回列（记住同步配置后写入本页绑定，不会改接口管理模板）。点数字或「设置」可查看并修改。',
   'components.syncFromSource.sourcesEmpty': '暂无同步来源，请点「添加来源」',
@@ -2497,8 +2599,15 @@ export default {
   'components.syncFromSource.selectDatasetFirst': '请先选择数据集',
   'components.syncFromSource.queryFailed': '拉取预览数据失败',
   'components.syncFromSource.previewOk': '已获取 {{count}} 条预览数据',
+  'components.syncFromSource.previewEmptyRows':
+    '预览无业务数据行（可能接口未返回 rows）。请检查筛选条件或接口配置后再拉取',
   'components.syncFromSource.previewFetch': '拉取预览',
   'components.syncFromSource.confirmSync': '确认同步',
+  'components.syncFromSource.saveBindingOnly': '保存绑定',
+  'components.syncFromSource.saveBindingSuccess': '同步绑定已保存',
+  'components.syncFromSource.saveBindingCleared': '已取消同步绑定，可在接口管理中删除该接口',
+  'components.syncFromSource.saveBindingFailed': '保存同步绑定失败',
+  'components.syncFromSource.saveBindingUnsupported': '当前业务未配置绑定保存接口',
   'components.syncFromSource.savedMappingReady':
     '已加载上次保存的字段映射，可直接确认同步；若要调整映射请先拉取预览',
   'components.syncFromSource.inactiveSourceHint':
@@ -2518,19 +2627,98 @@ export default {
   'components.syncFromSource.stepFetched': '拉取 {{count}} 条',
   'components.syncFromSource.stepIncrementalEmpty': '水位内无变更',
   'components.syncFromSource.completeEmpty':
-    '同步结束但未写入数据（拉取 {{fetched}} 条，跳过 {{skipped}}）。请检查物料主数据、字段映射与接口调用参数。',
+    '同步结束但未写入数据（拉取 {{fetched}} 条，跳过 {{skipped}}）。请检查同步来源接口、字段映射与接口调用参数。',
+  'components.syncFromSource.completeEmptySource':
+    '同步未写入：源端未返回任何行（拉取 0 条）。请检查同步绑定的接口、连接器与请求筛选。',
+  'components.syncFromSource.completeEmptyFiltered':
+    '同步未写入：源端拉取 {{fetched}} 条，经「仅有效」或组织过滤后为 0 条。可关闭仅有效或检查连接器组织后重试。',
+  'components.syncFromSource.completeEmptyMapping':
+    '同步未写入：过滤后仍有行，但字段映射后为 0 条。请检查同步字段映射是否与接口返回列一致。',
   'components.syncFromSource.syncMode': '同步方式',
-  'components.syncFromSource.syncMode.manualFull': '仅手动全量',
+  'components.syncFromSource.syncMode.manualFull': '手动全量重拉',
+  'components.syncFromSource.syncMode.manualForce': '手动全量（强制）',
+  'components.syncFromSource.syncMode.manualIncremental': '手动增量（仅变更）',
+  'components.syncFromSource.syncMode.manualForceHint':
+    '全量拉取；本地已有物料一律按本次源端映射覆盖写入，不因「字段未变」跳过（适合补批号、改映射后整表刷新）',
   'components.syncFromSource.syncMode.scheduledIncremental': '定时增量',
   'components.syncFromSource.syncMode.scheduledFull': '定时全量',
+  'components.syncFromSource.syncMode.manualIncrementalHint':
+    '只拉金蝶上变更时间晚于上次成功的行；金蝶未改动的物料不会再次写入（补批号、改映射后请改选「手动全量重拉」）',
   'components.syncFromSource.syncMode.incrementalHint':
     '确认同步时按上次成功时间增量拉取；后台定时任务同样增量',
   'components.syncFromSource.syncMode.fullHint':
-    '确认同步将全量拉取；适合首次或需要整体对齐时',
+    '重新拉取源端全部行并写回本地，适合首次同步、字段映射修复后补批号/序列号等；耗时比增量长',
   'components.syncPushHub.button': '同步',
   'components.syncPushHub.title': '数据互通',
   'components.syncPushHub.tabSync': '入站方向',
   'components.syncPushHub.tabPush': '出站方向',
+  'components.syncPushHub.tabReconcile': '同步对比',
+  'components.syncPushHub.tabHistory': '同步记录',
+  'components.syncPushHub.reconcileHint':
+    '对比当前页或勾选的本地单据与金蝶外推单（按关联单号查询）：状态与数量不一致会标出差异。',
+  'components.syncPushHub.reconcileHintNamed':
+    '对比当前页或勾选的本地{{name}}与金蝶外推单（按关联单号查询）：状态与数量不一致会标出差异。',
+  'components.syncPushHub.reconcileRun': '开始对比',
+  'components.syncPushHub.reconcileNeedIds': '当前页没有可对比的单据，请先加载列表或勾选单据',
+  'components.syncPushHub.reconcileLoadFailed': '同步对比失败',
+  'components.syncPushHub.reconcileIdCount': '本次 {{n}} 张',
+  'components.syncPushHub.reconcileColLocalCode': '本地单号',
+  'components.syncPushHub.reconcileColLocalStatus': '本地状态',
+  'components.syncPushHub.reconcileColLocalQty': '本地数量',
+  'components.syncPushHub.reconcileColRemoteBillno': '金蝶单号',
+  'components.syncPushHub.reconcileColRemoteStatus': '金蝶状态',
+  'components.syncPushHub.reconcileColRemoteQty': '金蝶数量',
+  'components.syncPushHub.reconcileColResult': '对比结果',
+  'components.syncPushHub.reconcileResult.matched': '一致',
+  'components.syncPushHub.reconcileResult.mismatch': '不一致',
+  'components.syncPushHub.reconcileResult.not_pushed': '未外推',
+  'components.syncPushHub.reconcileResult.remote_missing': '金蝶无单',
+  'components.syncPushHub.reconcileResult.local_missing': '本地无单',
+  'components.syncPushHub.reconcileResult.error': '查询失败',
+  'components.syncPushHub.reconcileSummaryMatched': '一致 {{n}}',
+  'components.syncPushHub.reconcileSummaryMismatch': '不一致 {{n}}',
+  'components.syncPushHub.reconcileSummaryNotPushed': '未外推 {{n}}',
+  'components.syncPushHub.reconcileSummaryRemoteMissing': '金蝶无单 {{n}}',
+  'components.syncPushHub.reconcileSummaryError': '失败 {{n}}',
+  'components.syncPushHub.autoPushPause': '暂停',
+  'components.syncPushHub.autoPushResume': '恢复',
+  'components.syncPushHub.autoPushPauseHint':
+    '暂停后确认入库/出库不再自动外推，金蝶接口不通也不会撤回本地单据；出站方向里仍可手动推送',
+  'components.syncPushHub.autoPushResumeHint': '恢复后，绑定为自动推送的目标会在确认时再次无感外推',
+  'components.syncPushHub.autoPushPaused': '已暂停自动外推，本地单据确认不再被金蝶失败阻断',
+  'components.syncPushHub.autoPushResumed': '已恢复自动外推',
+  'components.syncPushHub.autoPushPauseNeedTargets': '请先在出站方向添加并确认推送目标后再暂停',
+  'components.syncPushHub.autoPushPauseFailed': '切换自动外推暂停失败',
+  'components.syncPushHub.historyLoadFailed': '加载同步记录失败',
+  'components.syncPushHub.historyColStartedAt': '开始时间',
+  'components.syncPushHub.historyColMode': '模式',
+  'components.syncPushHub.historyColTriggerKind': '触发方式',
+  'components.syncPushHub.historyTriggerManual': '手动',
+  'components.syncPushHub.historyTriggerChain': '触发',
+  'components.syncPushHub.historyTriggerScheduled': '定时',
+  'components.syncPushHub.historyColAction': '触发动作',
+  'components.syncPushHub.historyAction.push': '外推保存',
+  'components.syncPushHub.historyAction.submit_audit': '补提交审核',
+  'components.syncPushHub.historyAction.withdraw': '反审核',
+  'components.syncPushHub.historyAction.unsubmit': '撤销提交',
+  'components.syncPushHub.historyAction.delete': '删除',
+  'components.syncPushHub.historyModePush': '推送',
+  'components.syncPushHub.historyModeIncremental': '增量',
+  'components.syncPushHub.historyModeFull': '全量',
+  'components.syncPushHub.historyColStatus': '状态',
+  'components.syncPushHub.historyStatusSuccess': '成功',
+  'components.syncPushHub.historyStatusPartial': '部分成功',
+  'components.syncPushHub.historyStatusFailed': '失败',
+  'components.syncPushHub.historyColProfile': '目标',
+  'components.syncPushHub.historyColDuration': '耗时',
+  'components.syncPushHub.historyColSummary': '摘要',
+  'components.syncPushHub.historyStatsFetched': '拉取 {{n}} 条',
+  'components.syncPushHub.historyStatsCreated': '新增 {{n}}',
+  'components.syncPushHub.historyStatsUpdated': '更新 {{n}}',
+  'components.syncPushHub.historyStatsSkipped': '跳过 {{n}}',
+  'components.syncPushHub.historyStatsFailed': '失败 {{n}}',
+  'components.syncPushHub.historyStatsTruncated': '源端翻页未取完',
+  'components.syncPushHub.historyTotal': '共 {{total}} 条',
   'components.syncPushHub.pushNotReady': '推送未就绪：暂无可用目标，或缺少应用连接/接口配置',
   'components.syncPushHub.goConfigureConnection': '去配置',
   'components.syncPushHub.configLayerTitle': '配置 / 连接',
@@ -2552,6 +2740,9 @@ export default {
   'components.syncPushHub.category.ai': 'AI',
   'components.syncPushHub.category.other': '其他',
   'components.syncFromSource.scheduleInterval': '间隔',
+  'components.syncFromSource.scheduleWindow': '允许同步时段',
+  'components.syncFromSource.scheduleWindowHint':
+    '按站点时区；未设置表示全天。允许时段外仅跳过定时任务，手动确认同步不受影响。',
   'components.syncFromSource.intervalMinutes': '{{n}} 分钟',
   'components.syncFromSource.addConversionRow': '添加转换行',
   'components.syncFromSource.srcCode': '来源编码',
@@ -2597,18 +2788,50 @@ export default {
     '共 {{count}} 个编码；所选参数当前展示第 1 批 {{shown}} 个。正式同步共 {{batches}} 批（pageSize={{pageSize}}）',
   'components.syncFromSource.materialCodeFilter': '筛选编码后删除',
   'components.syncFromSource.removeFilteredCodes': '删除当前筛选',
+  'components.syncFromSource.warehouseNumberRequiredForPreview':
+    '苍穹仓库仓位关系接口要求 data.warehouse_number：请编辑参数填入仓库编码，或启用下方批量填入并加载本系统仓库编码',
+  'components.syncFromSource.warehouseFillTitle': '用本系统仓库编码分批调用',
+  'components.syncFromSource.warehouseFillEnable': '启用仓库编码分批',
+  'components.syncFromSource.warehouseFillEnableHint':
+    '开启后按本地仓库编码逐个填入 data.warehouse_number 拉取关系；预览与正式同步均需要。仓位关系接口不要用物料编码填充。',
+  'components.syncFromSource.warehouseFillHint':
+    '苍穹按单仓查询；加载本系统仓库编码后，将逐个填入 data.warehouse_number 拉取关系。',
+  'components.syncFromSource.warehouseFillPathPlaceholder':
+    '选择要填入的参数，如 data.warehouse_number',
+  'components.syncFromSource.warehouseCodeFilter': '筛选仓库编码后删除',
+  'components.syncFromSource.loadWarehouseCodes': '查询本系统仓库编码',
+  'components.syncFromSource.warehouseCodesEmpty': '本系统暂无可用仓库编码，请先同步仓库',
+  'components.syncFromSource.warehouseCodesLoadFailed': '查询仓库编码失败',
+  'components.syncFromSource.warehouseCodesLoaded':
+    '已加载 {{count}} 个仓库编码，将分 {{batches}} 批调用（每批 {{pageSize}} 个仓库）',
+  'components.syncFromSource.warehouseCodesSummary':
+    '共 {{count}} 个仓库；请求体展示当前第 1 仓。正式同步共 {{batches}} 批',
   'components.syncFromSource.saveBinding': '记住同步配置',
   'components.syncFromSource.activeOnly': '仅同步有效/未完成',
   'components.syncFromSource.activeOnlyOn': '开',
   'components.syncFromSource.activeOnlyOff': '关',
   'components.syncFromSource.activeOnlyHintOn':
-    '主数据只拉已审核且未禁用；单据只拉已审核且未关闭，避免无效与历史全量',
+    '主数据只拉已审核且未禁用；单据只拉已审核且未关闭。物料同步仅更新命中行，未命中的本地物料不改启用状态',
   'components.syncFromSource.activeOnlyHintOff':
-    '关闭后将去掉有效/未完成限制，可能拉入禁用、草稿、已关闭等数据，量会明显变大',
+    '关闭后将去掉有效/未完成限制，可能拉入禁用、草稿、已关闭等数据，量会明显变大；物料仍只更新命中行，未命中本地料不改启用状态',
   'components.syncFromSource.apiRealtimeHintDefault': '数据接口：确认同步时将实时调用接口并写入本地',
   'components.syncFromSource.datasetBatchHintDefault': '数据集：确认同步时由服务端分页拉取并 upsert',
   'components.syncFromSource.fetching': '正在拉取数据…',
   'components.syncFromSource.fieldMapping': '字段映射',
+  'components.syncFromSource.autoMatch': '自动匹配',
+  'components.syncFromSource.autoMatchNeedPreview': '请先拉取预览，获取来源字段后再自动匹配',
+  'components.syncFromSource.autoMatchDone': '自动匹配完成，匹配到 {{count}} 个字段；请核对后保存',
+  'components.syncFromSource.autoMatchSparsePreview':
+    '自动匹配几乎未命中：预览未拿到业务数据行（常见于筛选过严导致 rows 为空）。请放宽日期/组织等条件后重新「拉取预览」，确认预览表有单据字段再点自动匹配',
+  'components.syncFromSource.autoMatchAliasMiss':
+    '自动匹配几乎未命中：已有 {{columns}} 个来源列，但与目标字段对不上。请核对接口是否为销售订单查询，或改为手动映射',
+  'components.syncFromSource.mappingImport': '导入映射',
+  'components.syncFromSource.mappingExport': '导出映射',
+  'components.syncFromSource.mappingExportEmpty': '当前没有可导出的字段映射',
+  'components.syncFromSource.mappingExportSuccess': '字段映射已导出',
+  'components.syncFromSource.mappingImportSuccess': '已导入 {{count}} 个字段映射，请核对后保存',
+  'components.syncFromSource.mappingImportFailed':
+    '映射文件无效；请使用本页「导出映射」的 JSON，或先拉取预览再导入',
   'components.syncFromSource.addMappingField': '添加更多字段',
   'components.syncFromSource.addMappingFieldPlaceholder': '选择要追加的系统字段或自定义字段',
   'components.syncFromSource.removeMappingField': '移除此映射行',
@@ -2620,6 +2843,8 @@ export default {
   'components.syncFromSource.previewData': '预览数据（{{count}} 条）',
   'components.syncFromSource.mappingRequired': '请映射必填字段：{{field}}',
   'components.syncFromSource.customerMappingRequired': '请映射客户（customer_id、customer_code 或 customer_name 至少一项）',
+  'components.syncFromSource.customerCodeMappingRequired':
+    '请映射客户编码（customer_code）；入站按客户编码比对，勿只映射对方客户 ID',
   'components.syncFromSource.itemMappingRequired': '请映射明细字段 material_code 与 required_quantity',
   'components.syncFromSource.purchaseOrderItemMappingRequired': '请映射明细字段 material_code 与 ordered_quantity',
 
@@ -2876,9 +3101,9 @@ export default {
   'tabs.exitFullscreen': '退出全屏',
 
   // 应用名称翻译（统一规范）
-  'app.kuaizhizao.name': '星制造',
+  'app.kuaizhizao.name': '快制造',
   'app.kuaizhizao.short': '制造',
-  'app.kuaiqms.name': '星质量',
+  'app.kuaiqms.name': '快质量',
   'app.kuaiqms.short': '质量',
   'app.kuaiqms.homeHint': '请从左侧菜单进入质检、改善与体系业务（页面仍由快制造承载）',
   'app.kuaiqms.menu.group.workbench': '质检中心',
@@ -2887,10 +3112,47 @@ export default {
   'app.kuaiqms.menu.group.improvement': '质量改善',
   'app.kuaiqms.menu.group.qms-system': '质量体系',
   'app.kuaiqms.menu.group.reports': '质量报表',
-  'app.kuaiems.name': '星设备',
+  'app.kuaiems.name': '快设备',
   'app.kuaiems.short': '设备',
   'app.kuaiems.homeHint': '请从左侧菜单进入设备、模具与工装业务（页面仍由快制造承载）',
   'app.kuaiems.menu.workbench': '运维看板',
+  'app.kuaiems.menu.equipmentBusinessBoard': '设备看板',
+  'app.kuaiems.equipmentBusinessBoard.siteTitle': '{{siteName}}设备看板',
+  'app.kuaiems.equipmentBusinessBoard.section.opsOverview': '运维概览',
+  'app.kuaiems.equipmentBusinessBoard.overview.totalAssets': '在册设备',
+  'app.kuaiems.equipmentBusinessBoard.overview.alertCount': '异常条目',
+  'app.kuaiems.equipmentBusinessBoard.overview.health': '健康指数',
+  'app.kuaiems.equipmentBusinessBoard.section.spotCheck': '点检态势',
+  'app.kuaiems.equipmentBusinessBoard.section.faultMaintenance': '故障维修',
+  'app.kuaiems.equipmentBusinessBoard.section.alerts': '异常滚动监控',
+  'app.kuaiems.equipmentBusinessBoard.section.statusBreakdown': '运行状态分布',
+  'app.kuaiems.equipmentBusinessBoard.section.faultTrend': '故障趋势',
+  'app.kuaiems.equipmentBusinessBoard.faultTrend.total': '合计 {{count}} 单',
+  'app.kuaiems.equipmentBusinessBoard.section.runtimeLoad': '设备运行负荷',
+  'app.kuaiems.equipmentBusinessBoard.runtimeLoad.avg': '平均 {{hours}} 小时',
+  'app.kuaiems.equipmentBusinessBoard.runtimeLoad.topN': 'TOP {{count}}',
+  'app.kuaiems.equipmentBusinessBoard.runtimeLoad.hours': '{{hours}}h',
+  'app.kuaiems.equipmentBusinessBoard.spot.due': '今日应点检',
+  'app.kuaiems.equipmentBusinessBoard.spot.done': '已完成点检',
+  'app.kuaiems.equipmentBusinessBoard.spot.pending': '待做点检',
+  'app.kuaiems.equipmentBusinessBoard.spot.rate': '点检完成率',
+  'app.kuaiems.equipmentBusinessBoard.fault.open': '未关闭故障',
+  'app.kuaiems.equipmentBusinessBoard.fault.faultyAssets': '带病设备',
+  'app.kuaiems.equipmentBusinessBoard.fault.failureRate': '故障率',
+  'app.kuaiems.equipmentBusinessBoard.fault.reviewPending': '点检待复核',
+  'app.kuaiems.equipmentBusinessBoard.alerts.total': '共 {{count}} 条',
+  'app.kuaiems.equipmentBusinessBoard.hero.todaySpotDone': '今日点检完成',
+  'app.kuaiems.equipmentBusinessBoard.hero.spotCheckRate': '点检完成率',
+  'app.kuaiems.equipmentBusinessBoard.hero.openFaults': '未关闭故障',
+  'app.kuaiems.equipmentBusinessBoard.hero.spotPending': '待做点检',
+  'app.kuaiems.equipmentBusinessBoard.hero.totalAssets': '在册设备',
+  'app.kuaiems.equipmentBusinessBoard.hero.healthIndex': '健康指数',
+  'app.kuaiems.equipmentBusinessBoard.hero.spotReviewPending': '点检待复核',
+  'app.kuaiems.equipmentBusinessBoard.hero.faultyAssets': '带病设备',
+  'app.kuaiems.equipmentBusinessBoard.hero.unitAssets': '台',
+  'app.kuaiems.equipmentBusinessBoard.section.statusScroll': '设备状态滚动',
+  'app.kuaiems.equipmentBusinessBoard.statusScroll.total': '共 {{count}} 台',
+  'app.kuaiems.equipmentBusinessBoard.status.online': '在线',
   'app.kuaiems.menu.group.workbench': '设备运维',
   'app.kuaiems.menu.group.equipment': '设备管理',
   'app.kuaiems.menu.group.mold': '模具管理',
@@ -2920,11 +3182,10 @@ export default {
   'app.kuaizhizao.menu.measuring-instruments.calibration-reminders': '校准到期提醒',
   'app.kuaizhizao.menu.reports.measuring-instrument-calibration-alerts': '校准到期预警',
   'app.kuaizhizao.menu.reports.measuring-instrument-calibration-detail': '校准记录明细',
-  'app.kuaipd.name': '星交付',
+  'app.kuaipd.name': '快交付',
   'app.kuaipd.short': '交付',
   'app.kuaipd.homeHint': '请从左侧菜单进入交付项目、物流与售后（页面仍由快制造承载）',
-  'app.kuaiiot.name': '星数采',
-  'app.kuaivision.name': '星视觉',
+  'app.kuaivision.name': '快视觉',
   'app.kuaivision.menu.group.monitorOps': '检测运维',
   'app.kuaivision.menu.group.visionSetup': '视觉配置',
   'app.kuaivision.menu.dashboard': '视觉中心',
@@ -3069,6 +3330,7 @@ export default {
   'app.kuaivision.modal.editAgent': '编辑边缘节点',
   'app.kuaivision.message.tokenRotated': 'Token 已轮换',
   'app.kuaivision.hint.ingestUrl': '入站地址：POST /api/v1/apps/kuaivision/ingest/{{token}}',
+  'app.kuaiiot.name': '快数采',
   'app.kuaiiot.menu.group.monitorOps': '监控运维',
   'app.kuaiiot.menu.group.modelAccess': '模型接入',
   'app.kuaiiot.menu.dashboard': '数采中心',
@@ -3090,6 +3352,7 @@ export default {
   'app.kuaiiot.field.type': '类型',
   'app.kuaiiot.field.health': '健康状态',
   'app.kuaiiot.field.externalId': '外部设备 ID',
+  'app.kuaiiot.field.commandDeviceId': '指令设备 ID',
   'app.kuaiiot.field.mqttDevicePick': 'MQTT 现场设备',
   'app.kuaiiot.placeholder.mqttDevicePick': '选择「名称 / device_id」，自动回填外部设备 ID',
   'app.kuaiiot.message.mqttDevicePickHint':
@@ -3103,7 +3366,11 @@ export default {
   'app.kuaiiot.hint.product': '点位模板：这台设备有哪些采集点（如三易产线 PLC）。先在「产品模型」加载/新建。',
     'app.kuaiiot.hint.externalId':
       'MQTT 现场设备名录：名称 / device_id。来自该连接已收到的产线报文（不含点位值）。选 MES 后会按名称自动带出。',
+  'app.kuaiiot.hint.commandDeviceId':
+    '指令下发（含产线清零）报文里的 device_id。默认与外部设备 ID 相同，可单独修改。',
   'app.kuaiiot.placeholder.externalId': '从消息体选择，或搜索设备名称 / device_id',
+  'app.kuaiiot.placeholder.commandDeviceId': '默认等于外部设备 ID，可改',
+  'app.kuaiiot.action.syncCommandDeviceId': '同外部 ID',
   'app.kuaiiot.hint.equipment': '绑定「设备台账」里的 MES 设备；绑定后点位可写回该设备状态。',
   'app.kuaiiot.hint.group': '可选，仅用于列表分组，不影响 MQTT 匹配。',
   'app.kuaiiot.message.optionsLoadEmpty.connection': '没有接入配置。请先到「接入配置」新建并启用一条 MQTT。',
@@ -3158,18 +3425,52 @@ export default {
   'app.kuaiiot.field.brokerHost': 'Broker 地址',
   'app.kuaiiot.field.brokerPort': 'Broker 端口',
   'app.kuaiiot.field.topicFilter': 'Topic 订阅',
+  'app.kuaiiot.field.publishTopic': '发送主题',
+  'app.kuaiiot.field.publishConnection': '发送 MQTT',
+  'app.kuaiiot.field.commandCode': '指令码',
+  'app.kuaiiot.tab.directionAll': '全部',
+  'app.kuaiiot.option.direction.ingest': '接入',
+  'app.kuaiiot.option.direction.publish': '发送',
+  'app.kuaiiot.option.direction.callback': '回调',
+  'app.kuaiiot.field.callbackTopic': '回调订阅主题',
+  'app.kuaiiot.field.callbackData': '回调原文',
+  'app.kuaiiot.field.callbackConnection': '回调 MQTT',
+  'app.kuaiiot.field.callbackDeviceId': '回调设备ID',
+  'app.kuaiiot.field.callbackCommandCode': '回调指令码',
+  'app.kuaiiot.field.callbackSuccess': '回调结果',
+  'app.kuaiiot.placeholder.callbackConnection': '请选择回调型 MQTT 连接',
+  'app.kuaiiot.hint.callbackConnection':
+    '选择接入配置中方向为「回调」的连接；回执按 device_id 匹配后写入本表字段',
+  'app.kuaiiot.hint.callbackTopic': '上位机/PLC 回执 publish 到此主题；系统订阅后写入指令下发记录',
+  'app.kuaiiot.hint.callbackTopicRequired': '请填写回调订阅主题',
+  'app.kuaiiot.message.noCallbackConnection': '暂无回调连接，请先在接入配置新建「回调」MQTT',
+  'app.kuaiiot.status.callbackWaiting': '等待回调',
+  'app.kuaiiot.status.callbackOk': '成功',
+  'app.kuaiiot.status.callbackFail': '失败',
+  'app.kuaiiot.hint.direction':
+    '接入=订阅收产量；发送=下发清零；回调=订阅指令回执，展示在设备「指令下发」记录中',
+  'app.kuaiiot.hint.publishTopic': '完整 MQTT Topic，报文将 publish 到此主题',
+  'app.kuaiiot.hint.publishTopicRequired': '请填写完整发送主题',
+  'app.kuaiiot.hint.publishConnectionUsesTopic': '主题使用所选发送 MQTT 连接中已配置的发送主题，无需在此再填',
+  'app.kuaiiot.message.commandsEmpty': '暂无下发记录；点击「下发清零」后会在此显示',
+  'app.kuaiiot.placeholder.publishTopic': '例如 factory/line1/command',
+  'app.kuaiiot.placeholder.publishConnection': '请选择发送型 MQTT 连接',
+  'app.kuaiiot.section.lineClear': '产线清零',
+  'app.kuaiiot.section.productFunction': '产品功能指令',
+  'app.kuaiiot.hint.lineClear':
+    '手动下发 JSON：timestamp + device_id（{{deviceId}}）+ command_code + value:true。发送/回调 MQTT 在接入配置中维护；自动报工开启清零后走同一套连接。',
+  'app.kuaiiot.field.dispatchType': '下发类型',
+  'app.kuaiiot.option.dispatchType.manual': '手动',
+  'app.kuaiiot.option.dispatchType.auto': '自动',
+  'app.kuaiiot.option.lineClear.t0': '时间清零 (t0)',
+  'app.kuaiiot.option.lineClear.c0': '产量清零 (c0)',
+  'app.kuaiiot.option.lineClear.z0': '总产量清零 (z0)',
+  'app.kuaiiot.action.dispatchLineClear': '下发清零',
+  'app.kuaiiot.message.lineClearDispatched': '清零指令已发送',
   'app.kuaiiot.field.qos': 'QoS',
   'app.kuaiiot.field.useTls': '启用 TLS',
   'app.kuaiiot.field.payloadFormat': '报文格式',
   'app.kuaiiot.field.clientId': '客户端标识',
-  'app.kuaiiot.field.integration': '公共连接',
-  'app.kuaiiot.field.deviceTokenPath': '设备凭据路径',
-  'app.kuaiiot.field.tagsPath': '点位数据路径',
-  'app.kuaiiot.field.eventsPath': '事件路径',
-  'app.kuaiiot.field.timestampPath': '时间戳路径',
-  'app.kuaiiot.field.idempotencyKeyPath': '幂等键路径',
-  'app.kuaiiot.hint.mqttConnector': 'Broker 地址与凭据在系统配置「应用连接器」中维护',
-  'app.kuaiiot.placeholder.mqttConnector': '选择 MQTT Broker 公共连接',
   'app.kuaiiot.placeholder.clientId': '勿与三易 MES 相同；留空则自动生成 kuaiiot-{编码}-{id}',
   'app.kuaiiot.field.tagTemplate': '点位模板',
   'app.kuaiiot.tab.recentMessages': '最近消息',
@@ -3310,7 +3611,7 @@ export default {
   'app.kuaiiot.option.dispatchChannel.thingsboard': 'ThingsBoard',
   'app.kuaiiot.option.dispatchChannel.jetlinks': 'JetLinks',
   'app.kuaiiot.option.dispatchChannel.http': 'HTTP（未实现下发）',
-  'app.kuaiiot.option.dispatchChannel.mqtt': 'MQTT（未实现下发）',
+  'app.kuaiiot.option.dispatchChannel.mqtt': 'MQTT',
   'app.kuaiiot.option.messageDirection.up': '上行',
   'app.kuaiiot.option.messageDirection.down': '下行',
   'app.kuaiiot.option.messageDirection.inbound': '入站',
@@ -3343,79 +3644,6 @@ export default {
   'app.kuaiiot.deviceGroup.collapseAll': '收起全部',
   'app.kuaiiot.deviceGroup.expandPanel': '展开分组面板',
   'app.kuaiiot.deviceGroup.collapsePanel': '收起分组面板',
-  'app.kuaiiot.message.batchDeleteStopped': '已删除 {{success}} 条，「{{name}}」删除失败（{{reason}}），其余未执行',
-  'app.kuaiiot.products.listFailed': '产品列表加载失败',
-  'app.kuaiiot.products.detailLoadFailed': '产品详情加载失败',
-  'app.kuaiiot.products.detailTitle': '产品详情',
-  'app.kuaiiot.products.editTitle': '编辑产品',
-  'app.kuaiiot.products.deleteConfirm': '确认删除产品「{{name}}」？',
-  'app.kuaiiot.products.colDescription': '描述',
-  'app.kuaiiot.products.colTags': '点位',
-  'app.kuaiiot.products.colEvents': '事件',
-  'app.kuaiiot.products.colFunctions': '指令',
-  'app.kuaiiot.products.colParams': '参数',
-  'app.kuaiiot.products.modelSection': '物模型定义',
-  'app.kuaiiot.products.sectionTags': '点位定义',
-  'app.kuaiiot.products.fieldUnit': '单位',
-  'app.kuaiiot.products.fieldParamsJson': '参数 JSON（数组，选填）',
-  'app.kuaiiot.products.fieldEdgeActionJson': '边缘动作 JSON（选填）',
-  'app.kuaiiot.products.tagFieldsRequired': '每个点位需填写点位 Key、名称与写回目标',
-  'app.kuaiiot.products.tagKeyDup': '点位 Key 不能重复',
-  'app.kuaiiot.products.eventFieldsRequired': '每个事件需填写事件 Key 与名称',
-  'app.kuaiiot.products.eventKeyDup': '事件 Key 不能重复',
-  'app.kuaiiot.products.functionFieldsRequired': '每个指令需填写指令 Key 与名称',
-  'app.kuaiiot.products.functionKeyDup': '指令 Key 不能重复',
-  'app.kuaiiot.products.colTagCount': '点位数',
-  'app.kuaiiot.products.colTagKeys': '点位 Key',
-  'app.kuaiiot.products.exportFileName': '产品模型-{{date}}',
-  'app.kuaiiot.edgeConfigs.listFailed': '边缘配置列表加载失败',
-  'app.kuaiiot.edgeConfigs.detailLoadFailed': '边缘配置详情加载失败',
-  'app.kuaiiot.edgeConfigs.detailTitle': '边缘配置详情',
-  'app.kuaiiot.edgeConfigs.editTitle': '编辑边缘配置',
-  'app.kuaiiot.edgeConfigs.deleteConfirm': '确认删除边缘配置「{{name}}」？',
-  'app.kuaiiot.edgeConfigs.trial': '现场试读',
-  'app.kuaiiot.edgeConfigs.trialSubmitted': '试读请求已提交，等待 Agent 心跳回传后刷新结果',
-  'app.kuaiiot.edgeConfigs.trialFailed': '试读请求失败',
-  'app.kuaiiot.edgeConfigs.trialDisabled': '仅已启用的 Modbus TCP 配置支持现场试读',
-  'app.kuaiiot.edgeConfigs.trialResult': '试读结果',
-  'app.kuaiiot.edgeConfigs.trialPending': '试读请求已提交，等待 Agent 回传结果',
-  'app.kuaiiot.edgeConfigs.trialNone': '尚未试读',
-  'app.kuaiiot.edgeConfigs.trialTag': '点位',
-  'app.kuaiiot.edgeConfigs.trialRaw': '原始寄存器',
-  'app.kuaiiot.edgeConfigs.trialValue': '换算结果',
-  'app.kuaiiot.edgeConfigs.trialQuality': '质量',
-  'app.kuaiiot.edgeConfigs.trialMeta': '试读版本 v{{version}}，回传时间 {{time}}',
-  'app.kuaiiot.edgeConfigs.publishMode': '上报方式',
-  'app.kuaiiot.edgeConfigs.agentSection': 'Agent 运行状态',
-  'app.kuaiiot.edgeConfigs.agentVersion': 'Agent 版本',
-  'app.kuaiiot.edgeConfigs.agentConfigVersion': 'Agent 已应用版本',
-  'app.kuaiiot.edgeConfigs.agentStatus.online': '在线',
-  'app.kuaiiot.edgeConfigs.agentStatus.offline': '离线',
-  'app.kuaiiot.edgeConfigs.agentStatus.error': '异常',
-  'app.kuaiiot.edgeConfigs.agentStatus.unknown': '未知',
-  'app.kuaiiot.edgeConfigs.colVersion': '配置/Agent 版本',
-  'app.kuaiiot.edgeConfigs.configSection': '采集配置',
-  'app.kuaiiot.edgeConfigs.configMaskedHint': '已隐藏凭据与现场地址',
-  'app.kuaiiot.edgeConfigs.configJsonMasked': '采集配置（脱敏）',
-  'app.kuaiiot.edgeConfigs.exportFileName': '边缘配置-{{date}}',
-  'app.kuaiiot.edgeConfigs.hostRequired': '请填写设备地址',
-  'app.kuaiiot.edgeConfigs.modbusInvalid': '端口需为 1-65535 整数，从站地址需为非负整数',
-  'app.kuaiiot.edgeConfigs.registersRequired': 'Modbus 配置至少需要一个采集点位',
-  'app.kuaiiot.edgeConfigs.registerKeyDup': '点位 Key 不能重复',
-  'app.kuaiiot.edgeConfigs.opcInvalid': '请填写 endpoint 且 nodes 为非空 JSON 数组',
-  'app.kuaiiot.edgeConfigs.s7Invalid': '请填写 host、rack、slot 且 db_blocks 为非空 JSON 数组',
-  'app.kuaiiot.edgeConfigs.fieldHost': '设备地址',
-  'app.kuaiiot.edgeConfigs.fieldPort': '端口',
-  'app.kuaiiot.edgeConfigs.fieldUnitId': '从站地址',
-  'app.kuaiiot.edgeConfigs.fieldEndpoint': 'Endpoint',
-  'app.kuaiiot.edgeConfigs.fieldRack': 'Rack',
-  'app.kuaiiot.edgeConfigs.fieldSlot': 'Slot',
-  'app.kuaiiot.edgeConfigs.fieldNodesJson': 'nodes（JSON 数组）',
-  'app.kuaiiot.edgeConfigs.fieldDbBlocksJson': 'db_blocks（JSON 数组）',
-  'app.kuaiiot.edgeConfigs.fieldAddress': '寄存器地址',
-  'app.kuaiiot.edgeConfigs.fieldDataType': '数据类型',
-  'app.kuaiiot.edgeConfigs.fieldScale': '换算倍率',
-  'app.kuaiiot.edgeConfigs.sectionRegisters': '采集点位',
   /** 含物料明细的单据：与销售订单一致的多选物料面板 */
   'app.kuaizhizao.common.materialBatchSelect': '多选物料',
   'app.kuaizhizao.common.materialBatchAdded': '已添加 {{count}} 条明细',
@@ -3424,6 +3652,7 @@ export default {
   'app.kuaizhizao.common.materialBatchSourcePlaceholder': '来源类型',
   /** 单据列表「明细」列（物料名预览） */
   'app.kuaizhizao.common.colLineMaterials': '明细',
+  'app.kuaizhizao.common.colLineMaterialSpecs': '规格型号',
   'app.kuaizhizao.common.linesAndMore': '等共{{count}}条',
   'app.uniDetail.sectionBasic': '基本信息',
   'app.uniDetail.sectionCollaboration': '生命周期',
@@ -3431,12 +3660,24 @@ export default {
   'app.uniDetail.sectionAttachments': '附件',
   'app.uniDetail.tabAttachmentCenter': '附件中心',
   'app.uniDetail.attachmentCenter.empty': '暂无附件',
+  'app.uniDetail.attachmentCenter.emptyHintUpload': '本单尚无附件，可在上方上传后保存。',
+  'app.uniDetail.attachmentCenter.emptyUploadHint': '暂无附件，可上传 PDF 等文件',
+  'app.uniDetail.attachmentCenter.upload': '上传附件',
+  'app.uniDetail.attachmentCenter.uploadFailed': '上传附件失败',
   'app.uniDetail.attachmentCenter.selfBadge': '本单',
+  'app.uniDetail.attachmentCenter.systemBadge': '系统附件',
+  'app.uniDetail.attachmentCenter.systemDeleteForbidden': '系统生成的附件不可删除',
   'app.uniDetail.attachmentCenter.fileCount': '{{count}} 个文件',
   'app.uniDetail.attachmentCenter.preview': '预览',
+  'app.uniDetail.attachmentCenter.download': '下载',
+  'app.uniDetail.attachmentCenter.downloadFailed': '下载附件失败',
+  'app.uniDetail.attachmentCenter.confirmDelete': '确定删除该附件吗？',
   'app.uniDetail.attachmentCenter.groupEmpty': '该单据暂无附件',
   'app.uniDetail.attachmentCenter.loadFailed': '加载附件中心失败',
   'app.uniDetail.attachmentCenter.previewMissingUuid': '附件缺少文件标识，无法预览',
+  'app.uniDetail.attachmentCenter.hostUploadTitle': '本单附件',
+  'app.uniDetail.attachmentCenter.saveAttachments': '保存附件',
+  'app.uniDetail.attachmentCenter.attachmentsSaved': '附件已保存',
   'app.uniDetail.sectionTimeline': '操作记录',
   'app.uniDetail.tabHistory': '历史记录',
   'app.uniDetail.sectionFullChain': '全链路跟踪',
@@ -3795,6 +4036,19 @@ export default {
   'app.ind-relay.autoReport.openProcessMaster': '打开工序档案',
   'app.ind-relay.autoReport.processOpCode': '工序编码',
   'app.ind-relay.autoReport.processOpName': '工序名称',
+  'app.ind-relay.autoReport.autoClear': '自动清零',
+  'app.ind-relay.autoReport.autoClearTip':
+    '开启后，自动报工成功且工单已结束时，才按设备连接里的发送/回调 MQTT 自动下发清零；手动清零不受影响',
+  'app.ind-relay.autoReport.dispatchType': '下发类型',
+  'app.ind-relay.autoReport.dispatchTypeAuto': '自动',
+  'app.ind-relay.autoReport.dispatchTypeManual': '手动',
+  'app.ind-relay.autoReport.clearCode.t0': '时间清零 (t0)',
+  'app.ind-relay.autoReport.clearCode.c0': '产量清零 (c0)',
+  'app.ind-relay.autoReport.clearCode.z0': '总产量清零 (z0)',
+  'app.ind-relay.autoReport.eventName.command': '指令下发',
+  'app.ind-relay.autoReport.eventName.auto_clear': '自动清零',
+  'app.ind-relay.autoReport.eventName.auto_clear_skip': '清零跳过',
+  'app.ind-relay.autoReport.eventName.auto_clear_error': '清零失败',
   'app.spoke-wheel.desc': '铝合金辐条轮毂 5 部件 + 总装调试业务模块(同心度 ≤ 0.8mm)',
   'app.spoke-wheel.menu.assembly-debug': '总装调试',
   'app.kuaioa.menu.group.approval': '审批协同',
@@ -3873,10 +4127,17 @@ export default {
   'app.kuaizhizao.menu.quality-management.iso-clauses': '条款管理',
   'app.kuaizhizao.menu.quality-management.clause-management': '条款管理',
   'app.kuaizhizao.menu.quality-management.system-documents': '体系文件',
-  'app.kuaizhizao.menu.quality-management.qc-sop': 'QC 材料 SOP',
-  'app.kuaizhizao.qcSop.createTitle': '新建 QC 材料 SOP',
+  'app.kuaizhizao.menu.quality-management.qc-sop': '检验作业指导书',
+  'app.kuaizhizao.qcSop.createTitle': '新建检验作业指导书',
+  'app.kuaizhizao.qcSop.editTitle': '编辑检验作业指导书',
+  'app.kuaizhizao.menu.quality-management.internal-audit-annual-plans': '年度审核计划',
   'app.kuaizhizao.menu.quality-management.internal-audits': '内部审核',
+  'app.kuaizhizao.menu.quality-management.nonconformity-reports': '不符合报告',
+  'app.kuaizhizao.menu.quality-management.corrective-actions': '纠正预防',
   'app.kuaizhizao.menu.quality-management.management-reviews': '管理评审',
+  'app.kuaizhizao.menu.quality-management.quality-objectives': '质量目标',
+  'app.kuaizhizao.menu.quality-management.legal-regulations': '法律法规',
+  'app.kuaizhizao.menu.quality-management.external-audits': '外审与证书',
   'app.kuaizhizao.menu.reports.fifo-exception-audit': 'FIFO异常稽核',
   'app.master-data.menu.materials.market-prices': '原料行情',
   'app.kuaioa.menu.group.hr': '人事管理',
@@ -3933,6 +4194,1949 @@ export default {
   'app.kuaioa.attendanceAnalysis.result.other': '其他',
   'app.kuaioa.attendanceAnalysis.exportFileName': '考勤分析报表',
   'app.kuaioa.menu.group.payroll': '薪酬管理',
+  'app.kuaioa.menu.group.payroll-reports': '薪酬报表',
+  'app.kuaizhizao.documentDetail.totalStock': '总库存',
+  'app.kuaizhizao.documentDetail.stockLoading': '加载库存…',
+  'app.kuaizhizao.documentDetail.stockEmpty': '无在库',
+  'app.kuaizhizao.documentDetail.warehouseStock': '各仓在库',
+  'pages.dashboard.updateLog.entries.work-order-jump-single-source-r01.title':
+    '工序跳转收口为工单唯一开关',
+  'pages.dashboard.updateLog.entries.work-order-jump-single-source-r01.description':
+    '开工与报工只认工单「允许工序跳转」；默认按产品工艺、分组产品工艺、工艺路线优先级带入，开单后可改。不再要求逐行「节点工序」才能跳过前序。',
+  'pages.dashboard.updateLog.entries.kuaizhizao-router-bom-preview-access-r01.title':
+    '快制造接口整包404修复',
+  'pages.dashboard.updateLog.entries.kuaizhizao-router-bom-preview-access-r01.description':
+    '工单 BOM 预览接口误传权限依赖参数，导致快制造路由加载失败，工单、角标等接口全部 404。已去掉错误依赖，路由恢复挂载。',
+  'pages.dashboard.updateLog.entries.finished-goods-inbound-limit-wo-load-r01.title':
+    '成品入库限额、工单取单确认与空白多工单加载',
+  'pages.dashboard.updateLog.entries.finished-goods-inbound-limit-wo-load-r01.description':
+    '配置中心可切换成品入库上限为工单量或领料套数；工单取单生成待入库后打开详情抽屉二次确认并展示序列号；空白成品入库支持多选工单加载明细并校验行级额度。',
+  'pages.dashboard.updateLog.entries.production-picking-wo-load-detail-confirm-r01.title':
+    '生产领料支持工单加载与详情二次确认',
+  'pages.dashboard.updateLog.entries.production-picking-wo-load-detail-confirm-r01.description':
+    '新建领料单可从工单加载明细并展示应发、已发，默认待领数量；工单取单保留全部物料行，未完单可追加；确认后打开出库详情抽屉复核；保存时校验仓库可用库存。',
+  'pages.dashboard.updateLog.entries.bom-form-approval-readonly-r01.title':
+    'BOM表单审核状态改为只读',
+  'pages.dashboard.updateLog.entries.bom-form-approval-readonly-r01.description':
+    '新建与编辑 BOM 弹窗不再手选审核状态，保存默认草稿；审核与撤销须在列表批量操作中办理。',
+  'pages.dashboard.updateLog.entries.material-batch-picker-group-tree-r01.title': '多选物料左侧分组树筛选',
+  'pages.dashboard.updateLog.entries.material-batch-picker-group-tree-r01.description':
+    '统一多选物料弹窗左侧增加物料分组树；点选分组筛右侧列表（含子分组），与物料管理页交互一致，各单据明细多选物料入口一并生效。',
+  'pages.dashboard.updateLog.entries.material-batch-picker-group-tree-r02.title': '多选物料分组树展示与宽度',
+  'pages.dashboard.updateLog.entries.material-batch-picker-group-tree-r02.description':
+    '分组树加宽以容纳编码与名称；树节点展示与物料管理一致为「编码 - 名称」，完整编号代号名称仅悬停提示，避免出现三段短杠。',
+  'pages.dashboard.updateLog.entries.material-batch-picker-layout-balance-r01.title': '多选物料左右栏高度对齐',
+  'pages.dashboard.updateLog.entries.material-batch-picker-layout-balance-r01.description':
+    '撤回 Spin 撑高方案；左侧分组树视口高度与右侧已选条加表格滚动区对齐，分组在固定高度内滚动，底部不再出现大块空白。',
+  'pages.dashboard.updateLog.entries.document-form-page-ghost-scroll-r01.title': '独立录入页底部幽灵滚动修复',
+  'pages.dashboard.updateLog.entries.document-form-page-ghost-scroll-r01.description':
+    '去掉内容区卡片底边距叠加，并将备注 showCount 收入框内，避免表单未铺满视口时主内容区仍可多余下滑。',
+  'pages.dashboard.updateLog.entries.uni-tabs-switch-after-save-r01.title': '单据保存后切换页签无反应',
+  'pages.dashboard.updateLog.entries.sales-order-ledger-help-collapse-r01.title': '销售订单立账策略说明改为标题问号',
+  'pages.dashboard.updateLog.entries.sales-order-ledger-help-collapse-r01.description':
+    '新建与编辑销售订单的立账策略说明改为与付款周期相同的标题后问号提示，不再占用表头下方 extra 区域。',
+  'pages.dashboard.updateLog.entries.uni-pull-query-selected-tag-primary-r01.title': '取单已选标签改为主题色',
+  'pages.dashboard.updateLog.entries.uni-pull-query-selected-tag-primary-r01.description':
+    '取单与选产品弹窗「已选」预览标签统一为主题色 filled，替代原先灰底，选中更醒目。',
+  'pages.dashboard.updateLog.entries.bom-groups-material-fields-r01.title': 'BOM分组摘要一次带回物料编码名称',
+  'pages.dashboard.updateLog.entries.bom-groups-material-fields-r01.description':
+    '工程BOM分组列表接口在查询时 JOIN 主物料，直接返回物料编码与名称；复制其他BOM取单翻页不再二次拉物料主数据，减轻卡顿。',
+  'pages.dashboard.updateLog.entries.bom-copy-source-pull-query-r01.title': '复制其他BOM改为取单选择',
+  'pages.dashboard.updateLog.entries.bom-copy-source-pull-query-r01.description':
+    '新建与编辑工程BOM的「复制其他BOM物料」改为取单弹窗，展示BOM编号、物料编码名称、版本、行数与审核状态，并可按编码名称搜索，避免下拉仅显示物料ID难以区分。',
+  'pages.dashboard.updateLog.entries.bom-detail-control-size-width-r01.title': 'BOM子件明细输入框高度与列宽统一',
+  'pages.dashboard.updateLog.entries.bom-detail-control-size-width-r01.description':
+    '新建与编辑工程BOM的子物料明细表，行内输入框与下拉统一为单据明细标准尺寸，并按列设定宽度，避免高低不一与单元格溢出。',
+  'pages.dashboard.updateLog.entries.process-outsource-issue-ledger-receipt-statement-r01.title': '工序委外发料立账与分批收货对账',
+  'pages.dashboard.updateLog.entries.process-outsource-issue-ledger-receipt-statement-r01.description':
+    '工序委外取单补齐品号与上道报工数量；下达后工序发料扣库存并开工；新建支持立账策略；登记收货支持分批且不合格自动计算；对账单增加外协页签；工单委外工序隐藏派工报工。',
+  'pages.dashboard.updateLog.entries.reporting-default-work-time-from-operation-r01.title': '报工默认带出工序开始与当前结束时间',
+  'pages.dashboard.updateLog.entries.reporting-default-work-time-from-operation-r01.description':
+    '新建报工与工单快速报工时，开始时间默认取工序实际开始，结束时间默认取当前时刻并自动推算工时；开始、结束与工时均可手工修改。',
+  'pages.dashboard.updateLog.entries.work-order-require-operation-dispatch-r01.title': '配置中心支持每道工序必须派工',
+  'pages.dashboard.updateLog.entries.work-order-require-operation-dispatch-r01.description':
+    '系统业务配置中心工单区新增「每道工序必须派工」；开启时未派人员或班组不可报工，关闭后可不派工直接报工。默认开启，与原有行为一致。',
+  'pages.dashboard.updateLog.entries.work-order-ops-meta-header-left-r01.title': '工序超报改到表头左侧',
+  'pages.dashboard.updateLog.entries.work-order-ops-meta-header-left-r01.description':
+    '工单默认超报、超报数值、允许跳转工序在工序表左上角横向排列，宽度随内容自适应，添加工序仍在表头右侧。',
+  'pages.dashboard.updateLog.entries.work-order-line-table-drag-r01.title': '工单明细表对齐物料清单并支持工序拖动',
+  'pages.dashboard.updateLog.entries.work-order-line-table-drag-r01.description':
+    '工单工序明细和子件明细改为与物料清单相同的明细表。添加工序在表头右侧。工序序号列可拖动调整顺序。',
+  'pages.dashboard.updateLog.entries.work-order-basic-field-group-r01.title': '工单基本信息按相关字段排列',
+  'pages.dashboard.updateLog.entries.work-order-basic-field-group-r01.description':
+    '新建与编辑工单时，产品与BOM版本、计划日期与工艺路线、仓库与生产部门、客户与客户订单号各自排在一起。仓库、生产部门、客户和BOM版本改为下拉选择。',
+  'pages.dashboard.updateLog.entries.work-order-ops-meta-remark-gap-r01.title': '工序超报与备注间距对齐表单',
+  'pages.dashboard.updateLog.entries.work-order-ops-meta-remark-gap-r01.description':
+    '工序明细里工单默认超报、超报数值、允许跳转工序与下方备注的间距，改为与其它表单项相同的 16 像素。',
+  'pages.dashboard.updateLog.entries.work-order-ops-meta-row-r01.title': '工序超报与跳转排成一行',
+  'pages.dashboard.updateLog.entries.work-order-ops-meta-row-r01.description':
+    '工单默认超报、超报数值、允许跳转工序排在添加工序按钮下面同一行，每项占五分之一宽并从左排列。工序表与添加工序按钮紧挨在一起。',
+  'pages.dashboard.updateLog.entries.work-order-op-jump-under-table-r01.title': '允许跳转工序改到工序表下方',
+  'pages.dashboard.updateLog.entries.work-order-op-jump-under-table-r01.description':
+    '允许跳转工序从表头移到工序明细页签，与工单默认超报、超报数值排在同一行，仍按整单生效。',
+  'pages.dashboard.updateLog.entries.work-order-over-report-on-ops-tab-r01.title': '工单超报改到工序明细页签',
+  'pages.dashboard.updateLog.entries.work-order-over-report-on-ops-tab-r01.description':
+    '工序明细排在子件明细之前。工单默认超报与超报数值从表头移到工序明细页签上方，仍按整单生效，不做到工序行上。',
+  'pages.dashboard.updateLog.entries.work-order-line-tabs-r01.title': '工单明细拆成子件与工序两个页签',
+  'pages.dashboard.updateLog.entries.work-order-line-tabs-r01.description':
+    '新建与编辑工单的明细信息改为子件明细、工序明细两个页签，分组方式与 BOM 明细一致。',
+  'pages.dashboard.updateLog.entries.work-order-hide-name-field-r01.title': '新建工单不再填写工单名称',
+  'pages.dashboard.updateLog.entries.work-order-hide-name-field-r01.description':
+    '工单新建与编辑表单隐藏工单名称，基本信息从工单编号直接接到产品。',
+  'pages.dashboard.updateLog.entries.work-order-product-scope-title-r01.title': '工单产品标题后切换自制件范围',
+  'pages.dashboard.updateLog.entries.work-order-product-scope-title-r01.description':
+    '新建工单时，自制件与全部的切换放到产品标题后面，不再单独占一列。',
+  'pages.dashboard.updateLog.entries.pull-current-stock-hover-r01.title': '取单当前库存可查看分仓明细',
+  'pages.dashboard.updateLog.entries.pull-current-stock-hover-r01.description':
+    '开口行取单与工单子件的当前库存改为与采购申请相同的总库存展示，悬停可查看各仓库存结存。',
+  'pages.dashboard.updateLog.entries.work-order-forecast-pull-modal-r01.title': '从销售预测创建工单改用取单窗口',
+  'pages.dashboard.updateLog.entries.work-order-forecast-pull-modal-r01.description':
+    '工单列表「从销售预测创建工单」改为与需求计算、销售订单、计划生产相同的取单窗口，可选范围、搜索并勾选预测明细后创建工单。',
+  'pages.dashboard.updateLog.entries.work-order-forecast-pull-menu-r01.title': '工单新建菜单增加从销售预测创建工单',
+  'pages.dashboard.updateLog.entries.work-order-forecast-pull-menu-r01.description':
+    '新建工单页签去掉表头上的三处取单按钮。从销售预测创建工单改到工单列表新建菜单，选中预测明细后进入新建页并带出产品与数量。',
+  'pages.dashboard.updateLog.entries.work-order-form-unitab-r01.title': '工单新建编辑改为独立页签',
+  'pages.dashboard.updateLog.entries.work-order-form-unitab-r01.description':
+    '普通工单新建与编辑迁入 UniTab 表单页，表头补仓库、生产部门、客户、需求日与 BOM 版本，子件与工序可在保存前调整；领料与齐套优先读已保存子件行。',
+  'pages.dashboard.updateLog.entries.work-order-pull-so-unpack-r01.title': '销售订单开口行取工单失败',
+  'pages.dashboard.updateLog.entries.work-order-pull-so-unpack-r01.description':
+    '修正销售订单剩余可转量计算时把采购占用字典误拆成两个变量，导致从销售订单创建工单整单加载失败。',
+  'pages.dashboard.updateLog.entries.work-order-pull-so-mrp-r01.title': '工单从销售订单与需求计算取单',
+  'pages.dashboard.updateLog.entries.work-order-pull-so-mrp-r01.description':
+    '销售订单开口行放宽工单权限并修复取数；需求计算取单改专用接口并纳入委外可转工单判定。',
+  'pages.dashboard.updateLog.entries.work-order-pull-lines-enrich-r01.title': '工单开口行取单加载失败',
+  'pages.dashboard.updateLog.entries.work-order-pull-lines-enrich-r01.description':
+    '修正计划生产与销售订单工单开口行在补充 BOM 与默认仓时触发整单失败；需求计算取单放宽已完成状态识别。',
+  'pages.dashboard.updateLog.entries.work-order-pull-so-transferred-qty-r01.title': '工单从销售订单取单已转单量修复',
+  'pages.dashboard.updateLog.entries.work-order-pull-so-transferred-qty-r01.description':
+    '修正已转单数量未计入销售订单直推采购：采购占用除订单头外还认明细来源与单据关联，手工落采购单时补齐销售订单来源头；重启后端后生效。',
+  'pages.dashboard.updateLog.entries.work-order-pull-so-no-bom-r01.title': '销售订单下推工单支持无 BOM',
+  'pages.dashboard.updateLog.entries.work-order-pull-so-no-bom-r01.description':
+    '预览不再因缺 BOM 整单禁用下推；无 BOM 可勾选是否维护子件，有 BOM 默认按 BOM 展开并带入工单子件。工单列表从销售订单创建工单入口同步，需重启后端并更新 Web 端后生效。',
+  'pages.dashboard.updateLog.entries.sales-order-list-failed-i18n-r01.title': '销售订单取单误提示保养项',
+  'pages.dashboard.updateLog.entries.sales-order-list-failed-i18n-r01.description':
+    '修正销售订单列表加载失败文案被误写成「加载保养项失败」；工单从销售订单创建时改展示真实接口错误。',
+  'pages.dashboard.updateLog.entries.work-order-demand-plan-pull-lines-perm-r01.title': '工单从计划生产取单列表加载失败',
+  'pages.dashboard.updateLog.entries.work-order-demand-plan-pull-lines-perm-r01.description':
+    '修复从计划生产创建工单取单失败：纠正开口行 API 路由顺序与鉴权，并修复开口行 enrich 中 BOM 模块导入与 material_id 查询字段错误导致的 500。',
+  'pages.dashboard.updateLog.entries.mrp-push-open-downstream-form-r01.title': '需求计算下推打开单据录入页',
+  'pages.dashboard.updateLog.entries.mrp-push-open-downstream-form-r01.description':
+    'MRP 完成后下推工单、采购申请或采购订单时不再在计算页一键落库，改为打开下游录入页或工单下推预览，核对后保存或确认生成。',
+  'pages.dashboard.updateLog.entries.mrp-readiness-and-push-dates-r01.title': 'MRP 补齐项与下推日期规则',
+  'pages.dashboard.updateLog.entries.mrp-readiness-and-push-dates-r01.description':
+    '执行需求计算不再强制补齐工艺路线及未维护的提前期、批量、安全库存等主数据；下推工单开工取当前日、完工取需求日，下推采购申请预交日取当前日。',
+  'pages.dashboard.updateLog.entries.mrp-work-order-open-line-pull-r01.title': 'MRP 与工单开口明细取单',
+  'pages.dashboard.updateLog.entries.mrp-work-order-open-line-pull-r01.description':
+    '需求计算支持按计划生产或销售订单开口行多选合并创建 MRP，展示已分析数量含转采购与工单占用；工单支持计划生产与销售订单开口行单选取单，默认数量为剩余可转量。',
+  'pages.dashboard.updateLog.entries.demand-plan-rename-planned-production-r01.title': '计划生产命名与工单取单',
+  'pages.dashboard.updateLog.entries.demand-plan-rename-planned-production-r01.description':
+    '计划模块原「需求计划」菜单与页面统一改名为「计划生产」；工单新建支持下拉「从计划生产创建工单」，表单内同样可从计划生产明细带入产品与数量。',
+  'pages.dashboard.updateLog.entries.uni-tabs-switch-after-save-r01.description':
+    '修复独立新建页保存回列表后，关页标志未清除导致点击其它页签被拦截的问题；关非当前页签时也不再误置该标志。',
+  'pages.dashboard.updateLog.entries.bom-form-header-layout-r01.title': 'BOM新建页表头一行五列与附件位置',
+  'pages.dashboard.updateLog.entries.bom-form-header-layout-r01.description':
+    '工程BOM新建与编辑表单对齐销售订单式分组（基本信息、明细信息），表头两行各五格，主物料与同排部门及效期并列；附件在备注与启用之后。',
+  'pages.dashboard.updateLog.entries.bom-form-hide-approval-status-r01.title': '新建编辑BOM不再显示审核状态',
+  'pages.dashboard.updateLog.entries.bom-form-hide-approval-status-r01.description':
+    '工程BOM新建页与编辑弹窗移除表头「审核状态」下拉；保存仍为草稿，审核仅在列表功能区操作。',
+  'pages.dashboard.updateLog.entries.bom-warehouse-outsource-header-r01.title': 'BOM增加仓库委外与版本附件',
+  'pages.dashboard.updateLog.entries.bom-warehouse-outsource-header-r01.description':
+    '工程BOM主件可选仓库、制造部门与附件；子件明细增加仓库与是否委外，仓库默认取物料主数据默认仓库可改，委外件默认委外、自制件可选、其他来源不可委外。',
+  'pages.dashboard.updateLog.entries.bom-install-position-r01.title': 'BOM子件支持位置区分重复行',
+  'pages.dashboard.updateLog.entries.bom-install-position-r01.description':
+    '工程BOM新建与编辑的子件明细增加可手工填写的「位置」列；同一子物料多行时须用不同位置区分，保存后写入版本明细。',
+  'pages.dashboard.updateLog.entries.bom-create-unitab-r01.title': '新建BOM改为独立标签页',
+  'pages.dashboard.updateLog.entries.bom-create-unitab-r01.description':
+    '列表点「新建BOM」进入独立 UniTab 全页表单，与采购订单等单据一致；编辑仍在弹窗办理。',
+  'pages.dashboard.updateLog.entries.bom-form-hide-approval-field-r01.title':
+    '新建编辑BOM弹窗不再展示审核状态',
+  'pages.dashboard.updateLog.entries.bom-form-hide-approval-field-r01.description':
+    '与采购订单等主流单据一致：表单内不展示审核状态，保存即草稿，在列表与详情查看状态并办理审核。',
+  'pages.dashboard.updateLog.entries.bom-form-main-material-r01.title':
+    '新建BOM主物料与编号区布局调整',
+  'pages.dashboard.updateLog.entries.bom-form-main-material-r01.description':
+    '新建BOM弹窗将主物料与版本号置于表头上行、BOM编号名称下移；主物料仅可选自制件与委外件，移除「全部物料」切换。',
+  'pages.dashboard.updateLog.entries.operation-pick-modal-table-r01.title':
+    '选择工序弹窗加宽并列表格展示',
+  'pages.dashboard.updateLog.entries.operation-pick-modal-table-r01.description':
+    '工艺路线等「选择工序」弹窗加宽，列表改为表格展示编号、名称、报工类型与说明，便于辨认工序。',
+  'pages.dashboard.updateLog.entries.process-route-operation-pick-perf-r01.title':
+    '工艺路线选择工序加载提速',
+  'pages.dashboard.updateLog.entries.process-route-operation-pick-perf-r01.description':
+    '工序列表接口改为批量预取关联数据，路线编辑与工序选择复用同一次工序主数据请求，选择弹窗已有缓存时不再整块「加载中」。',
+  'pages.dashboard.updateLog.entries.process-route-standard-time-ui-r01.title':
+    '工艺路线标准工时录入与产品工艺对齐',
+  'pages.dashboard.updateLog.entries.process-route-standard-time-ui-r01.description':
+    '工艺路线工序序列「标准工时」改为工时+单位、件数基准与产品工艺一致；保存后路线 JSON 写入秒与件数，旧路线仍按小时兼容读取。',
+  'pages.dashboard.updateLog.entries.product-process-standard-time-col-r01.title':
+    '产品工艺标准工时列加宽',
+  'pages.dashboard.updateLog.entries.product-process-standard-time-col-r01.description':
+    '产品工艺工序明细表「标准工时」列加宽，避免工时+单位+件数基准控件挤在一起溢出。',
+  'pages.dashboard.updateLog.entries.product-process-group-binding-r01.title':
+    '产品工艺支持按物料分组维护',
+  'pages.dashboard.updateLog.entries.product-process-group-binding-r01.description':
+    '产品工艺页可切换「按物料」「按物料分组」分别维护；分组配置独立存储，运行时物料配置优先于分组。需执行数据库迁移并更新 Web 端后生效。',
+  'pages.dashboard.updateLog.entries.process-route-labor-hours-price-r01.title':
+    '工艺路线支持工序工时与工价',
+  'pages.dashboard.updateLog.entries.process-route-labor-hours-price-r01.description':
+    '工艺路线每道工序可维护工时、工价；产品工艺获取或重载路线时默认带入，可再改；产品工艺已填的工时工价优先于路线模板。更新 Web 端后生效。',
+  'pages.dashboard.updateLog.entries.receipt-counterparty-payer-r01.title':
+    '收款单可记录对方付款账户',
+  'pages.dashboard.updateLog.entries.receipt-counterparty-payer-r01.description':
+    '收款单新建、编辑与从应收取单支持选择客户资料中的付款账户（账户名、银行、账号），落库后详情可见；不可手工改三要素。需执行数据库迁移并更新 Web 端后生效。',
+  'pages.dashboard.updateLog.entries.partner-payee-account-single-field-r01.title':
+    '往来收款账户改为单栏主数据选择',
+  'pages.dashboard.updateLog.entries.partner-payee-account-single-field-r01.description':
+    '对方收款账户（付款单、付款申请、其他费用、销项发票等）合并为「账户名、银行、账号」一栏，仅从客户或供应商资料带入选择，不可手改；收付款及购销订单预收/预付等我方入账账户下拉同步按「账户名、银行、账号」展示。更新 Web 端后生效。',
+  'pages.dashboard.updateLog.entries.partner-statement-invoice-pull-r01.title':
+    '对账单按立账方式生成购销发票',
+  'pages.dashboard.updateLog.entries.partner-statement-invoice-pull-r01.description':
+    '采购发票与销售发票从往来对账单加载时按对账单立账方式过滤明细：根据发票立账取销售出库或采购入库，立即立账取应收单或应付单；对账单详情下推与列表取单规则一致。需重启后端并更新 Web 端后生效。',
+  'pages.dashboard.updateLog.entries.other-inbound-line-warehouse-r01.title':
+    '其他入库单明细行可选仓库',
+  'pages.dashboard.updateLog.entries.other-inbound-line-warehouse-r01.description':
+    '其他入库新建与编辑与其它出库一致：表头不再选仓库，明细行各自选择入库仓库与库位（库位联动行仓）；列表表头仓库为首行汇总。需执行数据库迁移并更新 Web 端后生效。',
+  'pages.dashboard.updateLog.entries.so-revenue-recognition-align-r01.title':
+    '销售订单立账策略与自动应收时点对齐',
+  'pages.dashboard.updateLog.entries.so-revenue-recognition-align-r01.description':
+    '以单据头立账策略为准：出库确认仅在「以出库确认（发货）为准」时自动应收；销项发票在审核通过后按「以销售发票为准」自动应收（读源订单或出库策略）；对账单立账仅处理「以按月结对账单为准」的销售出库行。需重启后端后生效。',
+    'pages.dashboard.updateLog.entries.so-delivery-pull-fix-r01.title':
+    '出库 Hub 销售订单/发货通知取单创建行为修正',
+  'pages.dashboard.updateLog.entries.so-delivery-pull-fix-r01.description':
+    '从销售订单或发货通知创建销售出库：底栏仅取消与创建（默认草稿）；同客户同价类合并一张单（行仓可分）；带入源单立账策略与行备注。跨客户或价类在前端拦截。需重启后端并更新 Web 端后生效。',
+'pages.dashboard.updateLog.entries.document-line-total-stock-r01.title':
+    '单据明细与取单展示当前总库存',
+  'pages.dashboard.updateLog.entries.document-line-total-stock-r01.description':
+    '新建编辑单据明细在物料后展示总库存（悬停可看各仓结存）；开口行取单统一返回并展示 current_stock。明细库存接口需库存查看权限。需重启后端并更新 Web 端后生效。',
+  'pages.dashboard.updateLog.entries.document-line-spec-from-material-r01.title':
+    '单据明细规格统一从物料资料带入',
+  'pages.dashboard.updateLog.entries.document-line-spec-from-material-r01.description':
+    '销售/采购/仓储等单据明细的规格、型号只读展示，保存时以后端物料资料为准覆盖，不可在明细行手改。需重启后端并更新 Web 端后生效。',
+  'pages.dashboard.updateLog.entries.pull-fields-7-2-7-10-r01.title':
+    '取单字段补齐与对账单开票入口',
+  'pages.dashboard.updateLog.entries.pull-fields-7-2-7-10-r01.description':
+    '采购入库/报价转销售订单/销售出库/销售订单转工单等开口行取单拆列物料并补采购员、有效期至、当前库存与行备注；采购与销售发票取单分列可开票与已收票/已开票；新建从往来对账单创建采购/销售发票取单。需重启后端并更新 Web 端后生效。',
+  'pages.dashboard.updateLog.entries.purchase-order-pull-requisition-fields-r01.title':
+    '从采购申请创建采购订单取单字段补齐',
+  'pages.dashboard.updateLog.entries.purchase-order-pull-requisition-fields-r01.description':
+    '取单明细展示单据日期、申请单号、物料编码/名称/规格、申请数量、当前库存、已转单数量、要求到货日期、行备注、申请人与申请部门。需重启后端并更新 Web 端后生效。',
+  'pages.dashboard.updateLog.entries.pull-query-checkbox-chains-r01.title':
+    '取单链路全面改为多选勾选',
+  'pages.dashboard.updateLog.entries.pull-query-checkbox-chains-r01.description':
+    '变更单、销售发票、应收应付、质检、工单、委外、售后等「从 XXX 创建」取单改为多选；报工选工序仍为单选。',
+  'pages.dashboard.updateLog.entries.pull-query-open-lines-r01.title':
+    '取单弹窗统一为明细多选并保留跨筛勾选',
+  'pages.dashboard.updateLog.entries.pull-query-open-lines-r01.description':
+    '销售订单从报价/合同/评审、采购订单从销售订单等取单改为开口行多选；换物料搜索或来源单筛选时已选保留，多选默认跨页。',
+  'pages.dashboard.updateLog.entries.common-allow-print-unaudited-r01.title':
+    '未审核单据打印统一由系统参数控制',
+  'pages.dashboard.updateLog.entries.common-allow-print-unaudited-r01.description':
+    '配置中心通用参数「未审核单据是否打印」默认允许；关闭后全单据列表与打印接口与 capabilities 一致，仅审核通过后可打印。',
+  'pages.dashboard.updateLog.entries.document-form-save-and-audit-r01.title':
+    '单据表单保存并审核',
+  'pages.dashboard.updateLog.entries.document-form-save-and-audit-r01.description':
+    '已迁移单据的独立表单顶栏改为「保存草稿」与「保存并审核」（先提交再送审）；列表提交下拉以「保存并审核」为主项，免审送审不再二次确认。',
+  'pages.dashboard.updateLog.entries.price-book-tax-inclusive-no-double-r01.title':
+    '价格本含税标准价带入单据不再二次加税',
+  'pages.dashboard.updateLog.entries.price-book-tax-inclusive-no-double-r01.description':
+    '含税价本须填写税率；取价统一按未税口径，含税单据再还原。修复价本未填税率、最近成交含税价与物料默认售价被再次乘税率导致金额上浮的问题。',
+  'pages.dashboard.updateLog.entries.material-create-permission-gate-r01.title':
+    '修复物料管理关闭新建后仍可新建',
+  'pages.dashboard.updateLog.entries.material-create-permission-gate-r01.description':
+    '物料管理列表「新建物料」、新建分组与 Alt+N，以及单据物料下拉「快速新增」此前未按物料新建权限隐藏，关闭角色矩阵「新建」后仍可进新建页。现已与 master-data:material:create 对齐；无权限时按钮不显示，直链新建页提示无权限。',
+  'pages.dashboard.updateLog.entries.purchase-order-detail-excl-unit-price-r01.title':
+    '采购订单详情：明细增加不含税单价',
+  'pages.dashboard.updateLog.entries.purchase-order-detail-excl-unit-price-r01.description':
+    '详情抽屉物料明细在含税单价前增加「不含税单价」列，与库内未税单价一致，便于对照税率与金额。',
+  'pages.dashboard.updateLog.entries.purchase-order-sync-price-fields-r01.title':
+    '采购订单同步：未税单价与含税单价分列映射',
+  'pages.dashboard.updateLog.entries.purchase-order-sync-price-fields-r01.description':
+    '主表保留建单与价税必要字段（含未税/含税单价分列）；采购员、价类、表头税率、规格单位等改到「追加字段」按需添加。金蝶 FPrice / FTaxPrice 可自动建议映射。',
+  'pages.dashboard.updateLog.entries.purchase-order-sync-price-tax-validate-r01.title':
+    '采购订单同步：单价税率映射后可正常落库',
+  'pages.dashboard.updateLog.entries.purchase-order-sync-price-tax-validate-r01.description':
+    '修复明细 total_price 必填校验导致整单失败；头表税率 13 与 0.13 均规范为小数比率，行税率规范为百分比。含税请映 FTaxPrice → 明细含税单价（display_unit_price），未税映 FPrice → 明细未税单价（unit_price）。',
+  'pages.dashboard.updateLog.entries.purchase-order-sync-display-price-r01.title':
+    '采购订单同步：含税单价写入后详情可见',
+  'pages.dashboard.updateLog.entries.purchase-order-sync-display-price-r01.description':
+    '金蝶 FTaxPrice 映到明细含税单价（display_unit_price）、FPrice 映到未税单价（unit_price）；仅映一侧时按对应价类落库且不把未税冒充含税展示。兼容摊平后的 FEntityFPrice / FEntityFTaxPrice。',
+  'pages.dashboard.updateLog.entries.purchase-order-sync-prefetch-r01.title':
+    '采购订单同步：预加载后批量写入，避免超时',
+  'pages.dashboard.updateLog.entries.purchase-order-sync-prefetch-r01.description':
+    '对齐销售订单同步：一次性预加载供应商/物料/已有订单，轻量建单与明细 bulk_create，并推送写入进度，解决大批量同步超时。',
+  'pages.dashboard.updateLog.entries.inbound-sync-mapped-field-update-r01.title':
+    '主数据同步：映射字段有变更即更新',
+  'pages.dashboard.updateLog.entries.inbound-sync-mapped-field-update-r01.description':
+    '供应商、客户、仓库、物料、工程BOM、库位等入站同步统一：仅比对已映射字段，有差异则写库；未映射字段不误清空。强制全量模式仍覆盖写入。',
+  'pages.dashboard.updateLog.entries.supplier-sync-pbdfl-active-filter-r01.title':
+    '修复苍穹供应商定制 pbdfl 同步被「仅有效」滤空',
+  'pages.dashboard.updateLog.entries.supplier-sync-pbdfl-active-filter-r01.description':
+    '定制 bd_supplier/pbdfl/query 返回 enable 与 group_*、无 status；同步不再套用标品 status=C 过滤，避免拉取后全部跳过、分类等字段无法回写。字段别名优先匹配 group_number/group_name。',
+  'pages.dashboard.updateLog.entries.kingdee-api-mgmt-query-contract-r01.title':
+    '修复苍穹接口管理同类查询契约（客户分类/地址/项目/空串筛选）',
+  'pages.dashboard.updateLog.entries.kingdee-api-mgmt-query-contract-r01.description':
+    '客户分类、地址 query、项目 getList 缺必填筛选时测试自动补 *；查询类请求体中的空串 id 等筛选字段出站前剥离，避免 400 NumberFormatException；仓库/仓位路径改为按路径段匹配，避免子串误伤。',
+  'pages.dashboard.updateLog.entries.kingdee-suppliergroup-query-star-r01.title':
+    '修复苍穹供应商分类查询缺 number/name 报 603',
+  'pages.dashboard.updateLog.entries.kingdee-suppliergroup-query-star-r01.description':
+    '本环境 bd_suppliergroup/query 强制要求 data.number、data.name；列表全量时默认传 *。空请求体测试会自动补齐，不再报参数【number】必填。',
+  'pages.dashboard.updateLog.entries.kingdee-supplier-path-substring-fix-r01.title':
+    '修复苍穹供应商分类等接口测试被改写成供应商查询',
+  'pages.dashboard.updateLog.entries.kingdee-supplier-path-substring-fix-r01.description':
+    '接口管理测试时不再用路径子串 bd_supplier 误匹配供应商分类、供应商组织公共信息、以及自定义 pbdfl 等接口；这些接口不再被强制改写为 bd_supplier/query，避免与「苍穹查询供应商」返回相同数据。',
+  'pages.dashboard.updateLog.entries.approval-skip-same-prior-approver-r01.title':
+    '同人连任两级审批时自动跳过下一级',
+  'pages.dashboard.updateLog.entries.approval-skip-same-prior-approver-r01.description':
+    '当直接上级与二级上级解析为同一人（如本级与上级部门负责人相同）时，一级通过后自动跳过二级，避免同人批两次；若二级之后有须选边的条件节点，改由一级审核时选择分支。',
+  'pages.dashboard.updateLog.entries.audit-phase-submitted-not-in-review-r01.title':
+    '修复已提交单据误显示为审核中',
+  'pages.dashboard.updateLog.entries.audit-phase-submitted-not-in-review-r01.description':
+    '开启人工审核时，仅「提交」尚未「提交审核」的单据审核状态会误显示成审核中，且详情看不到审批流。现已改回显示已提交；需点提交菜单中的提交审核才会进入审批并生成审批流。',
+  'pages.dashboard.updateLog.entries.batch-inventory-primary-qty-display-r01.title':
+    '修复批次库存数量全显示为0',
+  'pages.dashboard.updateLog.entries.batch-inventory-primary-qty-display-r01.description':
+    '批次库存查询改为读取台账主数量 primary_quantity（与即时库存一致）；此前仍读已下线的 quantity 字段，导致有库存行在界面上全显示为0。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-warehouse-service-nameerror-r01.title':
+    '修复采购入库确认报 WarehouseService 未定义',
+  'pages.dashboard.updateLog.entries.purchase-receipt-warehouse-service-nameerror-r01.description':
+    '采购入库确认及同类出入库写行金额时误引用不存在的 WarehouseService，已改为统一金额工具函数，确认入库可正常过账。',
+  'pages.dashboard.updateLog.entries.material-quick-create-config-r01.title':
+    '单据快速新增物料可配置开关',
+  'pages.dashboard.updateLog.entries.material-quick-create-config-r01.description':
+    '配置中心基础数据新增「允许单据内快速新增物料」；关闭后销售订单等物料下拉不再显示快速新增入口，需在物料管理建档。默认开启。',
+  'pages.dashboard.updateLog.entries.sync-push-hub-reconcile-component-r01.title':
+    '同步对比改为组件级自动出现',
+  'pages.dashboard.updateLog.entries.sync-push-hub-reconcile-component-r01.description':
+    '数据互通只要外推源属于仓储金蝶 IM（采购入库/成品入库/销售出库/其他出入库/生产领料），即自动显示「同步对比」页签，不再依赖各页单独传开关。',
+  'pages.dashboard.updateLog.entries.sync-push-hub-reconcile-r01.title':
+    '数据互通增加同步对比',
+  'pages.dashboard.updateLog.entries.sync-push-hub-reconcile-r01.description':
+    '数据互通弹窗新增「同步对比」页签，可按当前页或勾选单据对比本地与金蝶外推单的状态与数量，标出未外推、金蝶无单或不一致。',
+  'pages.dashboard.updateLog.entries.other-outbound-list-total-qty-sync-r01.title':
+    '修复其他出库列表总数量与明细不一致',
+  'pages.dashboard.updateLog.entries.other-outbound-list-total-qty-sync-r01.description':
+    '确认出库若改了明细数量或多批拆行，会按明细重算头表总数量/金额，避免列表总数量仍显示旧值而详情已变。',
+  'pages.dashboard.updateLog.entries.production-inbound-push-finished-goods-r01.title':
+    '修复生产入库数据互通误绑采购入库',
+  'pages.dashboard.updateLog.entries.production-inbound-push-finished-goods-r01.description':
+    '生产入库菜单打开数据互通时不再回落采购入库推送面板；改为成品入库外推（苍穹其他入库/生产完工入库），避免出现采购入库单接口目标。',
+  'pages.dashboard.updateLog.entries.tax-rate-percent-suffix-input-r01.title':
+    '税率录入统一为百分比整数加%后缀',
+  'pages.dashboard.updateLog.entries.tax-rate-percent-suffix-input-r01.description':
+    '销售出库等明细税率改为「税率%」表头与右侧%后缀输入，只填13这类整数，避免误填0.13；采购发票空白建单与合并开票同控件。',
+  'pages.dashboard.updateLog.entries.material-default-tax-rate-1pct-r01.title':
+    '物料默认税率增加 1% 档位',
+  'pages.dashboard.updateLog.entries.material-default-tax-rate-1pct-r01.description':
+    '物料默认值设置与批量改默认税率下拉补齐 1%（小规模纳税人优惠征收率等），与财务税率目录一致。',
+  'pages.dashboard.updateLog.entries.purchase-invoice-doc-relation-deleted-at-r01.title':
+    '修复采购发票登记报关联过滤错误',
+  'pages.dashboard.updateLog.entries.purchase-invoice-doc-relation-deleted-at-r01.description':
+    '登记采购发票解析立账策略时，对无软删字段的单据关联表误用 deleted_at__isnull 导致 Unknown filter；改为按入库→发票关联查询，并不再传该过滤。',
+  'pages.dashboard.updateLog.entries.material-sync-keep-miss-active-r01.title':
+    '物料同步不再停用未命中的本地物料',
+  'pages.dashboard.updateLog.entries.material-sync-keep-miss-active-r01.description':
+    '从源同步物料时只更新本次命中的编码；库内原有但未被本次拉取命中的物料不再自动改为禁用，也不再因此软删除。',
+  'pages.dashboard.updateLog.entries.inbound-detail-warehouse-edit-btn-r01.title':
+    '入库详情明细仓库回落表头并修复编辑按钮',
+  'pages.dashboard.updateLog.entries.inbound-detail-warehouse-edit-btn-r01.description':
+    '成品/半成品等行仓未存明细时，详情抽屉仓库列回落单据表头仓库不再显示横杠；抽屉右上角编辑改为 prepareRowActionButton，图标与文案正常显示。',
+  'pages.dashboard.updateLog.entries.inbound-confirm-auto-location-r01.title':
+    '确认入库库位改为后端解析不再前端猜选',
+  'pages.dashboard.updateLog.entries.inbound-confirm-auto-location-r01.description':
+    '入库管理确认与成品入库保存时，库位可空；未选手选库位不再前端取仓内最小 id，改由后端 `_require_line_location` / ensure 整仓按金蝶默认与仓规则解析，避免与写路径不一致。',
+  'pages.dashboard.updateLog.entries.inbound-hub-confirm-receiver-default-r01.title':
+    '确认入库无入库人时默认当前登录用户',
+  'pages.dashboard.updateLog.entries.inbound-hub-confirm-receiver-default-r01.description':
+    '入库管理点确认入库时，若单据未指定入库人，自动写入当前登录用户后再过账；已有入库人仍按单据保留。',
+  'pages.dashboard.updateLog.entries.finished-goods-receipt-receiver-default-r01.title':
+    '成品入库单入库人默认当前登录用户',
+  'pages.dashboard.updateLog.entries.finished-goods-receipt-receiver-default-r01.description':
+    '新建或编辑成品/半成品入库单时，仅当入库人编号与姓名皆空才回填当前登录用户；单据已有姓名或编号则整组保留，避免 id 与姓名错配。',
+  'pages.dashboard.updateLog.entries.sales-order-list-item-scope-r01.title':
+    '修复销售订单列表加载失败',
+  'pages.dashboard.updateLog.entries.sales-order-list-item-scope-r01.description':
+    '列表接口因 keyword 分支内局部 import 遮蔽 SalesOrderItem，无搜索词时明细加载闭包报 free variable；改为使用模块级模型，并按 sales_order_id 反查明细物料关键字。',
+  'pages.dashboard.updateLog.entries.document-line-tax-unified-r01.title':
+    '有价税明细统一走 documentLineAmounts',
+  'pages.dashboard.updateLog.entries.document-line-tax-unified-r01.description':
+    '采购入库、销售出库等含税单价与价税拆分与采购/销售订单同源（前端 resolveDocumentFormLineAmounts、后端 calc_document_line_amounts）；汇总区缺省价类与采购默认含税对齐。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-line-tax-calc-r01.title':
+    '采购入库含税单价金额拆分修正',
+  'pages.dashboard.updateLog.entries.purchase-receipt-line-tax-calc-r01.description':
+    '采购入库明细在含税价类下的未税金额、税额与价税合计与采购订单共用同一套 documentLineAmounts 计算，不再把含税单价误当未税金额推算。',
+  'pages.dashboard.updateLog.entries.warehouse-doc-line-price-type-switch-r01.title':
+    '仓储价税明细表补齐含税开关',
+  'pages.dashboard.updateLog.entries.warehouse-doc-line-price-type-switch-r01.description':
+    '采购入库与销售出库新建/编辑明细表增加含税/不含税开关，列展示与金额换算对齐采购/销售订单；由采购订单带入入库时价类随订单锁定。',
+  'pages.dashboard.updateLog.entries.supply-chain-doc-form-unitab-m4-r01.title':
+    '销售与采购退货改为独立 Tab 表单页',
+  'pages.dashboard.updateLog.entries.supply-chain-doc-form-unitab-m4-r01.description':
+    '销售退货单、采购退货单的新建与编辑改为 UniTab 独立路由页（含保存与提交）；采购退货出库 Hub 编辑直达编辑页，列表侧取单与确认退货等交互保持不变。',
+  'pages.dashboard.updateLog.entries.supply-chain-doc-form-unitab-m3-r01.title':
+    '收货与发货通知改为独立 Tab 表单页',
+  'pages.dashboard.updateLog.entries.supply-chain-doc-form-unitab-m3-r01.description':
+    '收货通知单、发货通知单的新建与编辑改为 UniTab 独立路由页（含保存与提交）；列表侧「通知仓库」预览确认仍用弹窗，订单下推、明细导入与批量选料等交互保持不变。',
+  'pages.dashboard.updateLog.entries.supply-chain-doc-form-unitab-m2-r01.title':
+    '采购询价与付款申请改为独立 Tab 表单页',
+  'pages.dashboard.updateLog.entries.supply-chain-doc-form-unitab-m2-r01.description':
+    '采购询价单、付款申请单的新建与编辑改为 UniTab 独立路由页（含保存与提交）；采购申请下推询价直达新建页，取单/复制等仍走既有交互，明细拉单弹窗保留。',
+  'pages.dashboard.updateLog.entries.supply-chain-doc-form-unitab-m1-r01.title':
+    '销售与采购订单变更改为独立 Tab 表单页',
+  'pages.dashboard.updateLog.entries.supply-chain-doc-form-unitab-m1-r01.description':
+    '销售订单变更、采购订单变更新建与编辑不再使用弹窗，改为 UniTab 独立路由页（含保存与提交）；采购变更仍从采购订单取单创建后进入编辑页。',
+  'pages.dashboard.updateLog.entries.quality-inspection-conduct-numeric-criteria-r01.title':
+    '检验执行页恢复显示尺寸合格限',
+  'pages.dashboard.updateLog.entries.quality-inspection-conduct-numeric-criteria-r01.description':
+    '来料、过程、成品与出库检验执行页在检验方法与抽检说明之外，再次展示方案中数值项的合格标准（上下限、目标公差等）及补充说明，与检验方案列表一致。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-withdraw-payable-unwind-r01.title':
+    '采购入库撤回可自动清理已审核应付',
+  'pages.dashboard.updateLog.entries.purchase-receipt-withdraw-payable-unwind-r01.description':
+    '入库过账自动生成的应付单处于已审核/待审核时，撤回入库前系统自动撤销审核并删除应付（仍无付款、无发票时），不再提示「仅草稿或已驳回的应付单可删除」。',
+  'pages.dashboard.updateLog.entries.warehouse-inout-list-export-r01.title':
+    '仓储出入库列表导出统一为明细行 Excel',
+  'pages.dashboard.updateLog.entries.warehouse-inout-list-export-r01.description':
+    '入库出库 Hub、其它入出库、还料、借料、送货通知、客供料登记等列表恢复导出按钮；导出为中文表头并按单据头加明细行展开，含数量金额批号库位等字段。',
+  'pages.dashboard.updateLog.entries.document-amount-shipment-push-r13.title':
+    '销售订单下推发货通知金额对齐',
+  'pages.dashboard.updateLog.entries.document-amount-shipment-push-r13.description':
+    '销售订单整单与批量下推发货通知行合计改走 ShipmentNoticeService 与订单价类税率同源计算；金额契约扫描补强 amt=qty* 模式。',
+  'pages.dashboard.updateLog.entries.document-amount-wh-notice-r12.title':
+    '发货通知下推出库与其它入库金额对齐',
+  'pages.dashboard.updateLog.entries.document-amount-wh-notice-r12.description':
+    '发货通知批量下推销售出库行金额改走订单价类与 stored_sales_line_amount；其它入库新建与编辑行合计统一 _qty_price_line_total。',
+  'pages.dashboard.updateLog.entries.document-amount-so-wh-r11.title':
+    '销售整单分摊与仓储退货金额对齐',
+  'pages.dashboard.updateLog.entries.document-amount-so-wh-r11.description':
+    '销售订单整单金额覆盖改走 allocate_amount_by_weights；采购入库确认行合计、应付落账与销采退货头明细同步比较统一 amount_places 真源。',
+  'pages.dashboard.updateLog.entries.document-amount-contract-r10.title':
+    '销售合同释放与委外扣款金额对齐',
+  'pages.dashboard.updateLog.entries.document-amount-contract-r10.description':
+    '销售合同按数量释放、优惠分摊与头表价税净额统一 quantize_business_amount；委外红字结算、超耗扣款预览与应付差额走 document_amount_write 真源。',
+  'pages.dashboard.updateLog.entries.document-amount-po-tiera-r09.title':
+    '采购订单建单行未税合计对齐价税拆分',
+  'pages.dashboard.updateLog.entries.document-amount-po-tiera-r09.description':
+    '采购订单新建与编辑明细未税 total_price 改走 calc_document_line_amounts；采购落地杂费分摊与标准采购价核算统一 amount_places 与尾差分摊真源。',
+  'pages.dashboard.updateLog.entries.document-amount-change-mrp-r08.title':
+    '订单变更与需求计算金额对齐',
+  'pages.dashboard.updateLog.entries.document-amount-change-mrp-r08.description':
+    '销售采购订单变更共享 line_amount、变更明细差额预览与需求计算下推委外工单合计统一 amount_places；委外结算预览汇总去除硬编码 0.01。',
+  'pages.dashboard.updateLog.entries.document-amount-outsource-r07.title':
+    '委外工单与结算行金额写入统一',
+  'pages.dashboard.updateLog.entries.document-amount-outsource-r07.description':
+    '委外单与委外工单创建编辑、委外结算加工行与扣款校验、委外工单弹窗提交合计统一走 document_amount_write 与前端 computeSimpleDocumentLineTotal；金额契约扫描补强下推散落乘法。',
+  'pages.dashboard.updateLog.entries.document-amount-po-push-r06.title':
+    '采购下推与其它出库行金额统一',
+  'pages.dashboard.updateLog.entries.document-amount-po-push-r06.description':
+    '采购订单下推收货单收货通知与来料检验下推入库行合计走 amount_places 真源；其它出库创建与委外收货金额写入对齐 document_amount_write，付款申请分摊与前端一致。',
+  'pages.dashboard.updateLog.entries.document-amount-delivery-note-r05.title':
+    '送货单行金额与出库价类对齐',
+  'pages.dashboard.updateLog.entries.document-amount-delivery-note-r05.description':
+    '送货单创建关联销售出库行时按出库价类与行税率落金额；送货单弹窗增加明细金额汇总与站点精度行合计提交。',
+  'pages.dashboard.updateLog.entries.document-amount-notice-wave-r04.title':
+    '收发通知与下推出入库金额对齐',
+  'pages.dashboard.updateLog.entries.document-amount-notice-wave-r04.description':
+    '发货通知创建及通知仓库下推销售出库按订单价类与行税率落金额；收货通知与通知入库行金额统一 amount_places，收货弹窗增加明细金额汇总。',
+  'pages.dashboard.updateLog.entries.document-amount-tierb-r03.title':
+    '付款分摊询价与财务取单金额精度',
+  'pages.dashboard.updateLog.entries.document-amount-tierb-r03.description':
+    '付款申请与付款单多行请款按站点小数位尾差分摊；采购询价定标与报价汇总改走 document_amount_write；仓储与退货前端行金额恢复 computeSimpleDocumentLineTotal。',
+  'pages.dashboard.updateLog.entries.document-amount-warehouse-req-r02.title':
+    '仓储下推与采购申请金额写入收口',
+  'pages.dashboard.updateLog.entries.document-amount-warehouse-req-r02.description':
+    '销售出库导入按订单价类与税率落行金额；仓储下推/退货与其余无价税行改走 document_amount_write；采购申请列表与批量含税询价比价跟站点金额精度。',
+  'pages.dashboard.updateLog.entries.document-amount-unified-scan-r01.title':
+    '快制造单据价税统一扫描与退货金额口径',
+  'pages.dashboard.updateLog.entries.document-amount-unified-scan-r01.description':
+    '新增价税契约扫描脚本，销售/采购退货、其它入库及入库确认行金额改走 documentLineAmounts 站点精度；仓储退货行写入收口到 document_amount_write，避免硬编码二位小数。',
+  'pages.dashboard.updateLog.entries.equipment-spot-check-lines-display-r02.title':
+    '点检单点检内容与方案预选修复',
+  'pages.dashboard.updateLog.entries.equipment-spot-check-lines-display-r02.description':
+    '老设备点检新建会排除 ESD 方案并正确预选设备点检方案；详情缺行时按方案补展示点检项，B 采集方式展示头表点检照片。',
+  'pages.dashboard.updateLog.entries.equipment-spot-check-detail-equipment-code-r01.title':
+    '点检单详情展示设备编号',
+  'pages.dashboard.updateLog.entries.equipment-spot-check-detail-equipment-code-r01.description':
+    '设备点检列表在设备名称下展示编号，详情基本信息增加设备编号字段，便于区分同名多台设备。',
+  'pages.dashboard.updateLog.entries.partner-price-source-exclusive-r01.title':
+    '销售与采购取价在历史价与价格本间二选一',
+  'pages.dashboard.updateLog.entries.partner-price-source-exclusive-r01.description':
+    '配置中心销售、采购模块各增加取价来源：历史成交价或价格本（含阶梯）；报价单、销售订单、采购订单选料与改数量重算统一走该策略，未命中时再落物料默认价。原主数据六项取价顺序已下线。',
+  'pages.dashboard.updateLog.entries.material-select-partner-code-search-r01.title':
+    '物料选择框支持按客户料号快速定位',
+  'pages.dashboard.updateLog.entries.material-select-partner-code-search-r01.description':
+    '单据明细选料时除物料编号、名称与拼音首字母外，可按当前表单客户的客户料号或客户品名检索；采购单按供应商料号同理。限仓出库场景与伙伴编号映射检索结果取交集。',
+  'pages.dashboard.updateLog.entries.sales-doc-partner-material-snapshot-r01.title':
+    '销售单据明细客户料号品名可正确带出',
+  'pages.dashboard.updateLog.entries.sales-doc-partner-material-snapshot-r01.description':
+    '修复报价单、销售订单与销售出库在选客户、选料或改客户后客户料号与客户品名不刷新问题；取价走最近价或物料默认价时仍返回客户编号映射，销售出库明细表补齐客户料号品名列。',
+  'pages.dashboard.updateLog.entries.sales-doc-customer-contact-address-r01.title':
+    '销售单据选客户自动带出联系人与收货地址',
+  'pages.dashboard.updateLog.entries.sales-doc-customer-contact-address-r01.description':
+    '报价单、销售订单与空白销售出库单选择客户后，按客户资料联系人明细与地址明细回填联系人与收货地址；引用下拉也同步客户主数据快照。',
+  'pages.dashboard.updateLog.entries.master-partner-multi-address-r01.title':
+    '客户与供应商支持多地址维护',
+  'pages.dashboard.updateLog.entries.master-partner-multi-address-r01.description':
+    '客户/供应商资料基本信息中，在联系人下方可维护多条地址（登记、收货、开票等），保存后同步至列表与单据沿用的地址快照；详情抽屉可查看地址明细。',
+  'pages.dashboard.updateLog.entries.sales-order-line-drag-sort-r01.title':
+    '销售订单明细支持拖拽排序',
+  'pages.dashboard.updateLog.entries.sales-order-line-drag-sort-r01.description':
+    '新建与编辑销售订单时，明细表左侧序号列可拖拽调整行顺序，排序结果随保存一并提交。',
+  'pages.dashboard.updateLog.entries.quotation-line-drag-sort-r01.title':
+    '报价单明细支持拖拽排序',
+  'pages.dashboard.updateLog.entries.quotation-line-drag-sort-r01.description':
+    '新建与编辑报价单时，明细表左侧序号列可拖拽调整行顺序，排序结果随保存一并提交。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-detail-dual-qty-r01.title':
+    '采购申请详情展示主副数量',
+  'pages.dashboard.updateLog.entries.purchase-requisition-detail-dual-qty-r01.description':
+    '采购申请详情明细表与新建编辑一致，分别展示主数量与副数量列；双单位物料可看到副数量及副单位，无副单位时副数量列为横线占位。',
+  'pages.dashboard.updateLog.entries.material-default-supplier-defaults-fallback-r01.title':
+    '下推采购认物料默认值首选供应商',
+  'pages.dashboard.updateLog.entries.material-default-supplier-defaults-fallback-r01.description':
+    '仅在采购默认值维护了默认供应商、来源区未填时，下推销售订单、需求计算与询价推荐会按 defaults.defaultSuppliers 第一项带出；保存物料时同步写回 source_config 优先供应商。',
+  'pages.dashboard.updateLog.entries.mobile-approval-tier-a-document-r01.title':
+    '手机高频审批抬头与明细对齐',
+  'pages.dashboard.updateLog.entries.mobile-approval-tier-a-document-r01.description':
+    '采购申请与付款申请审批详情合并抬头补申请人、收款账户与付款事由；付款申请优先后端明细、缺来源或金额时再拉业务单；费用申请行统一摘要列序；后端审批 compose 补充收付款来源类型等黄金用例。',
+  'pages.dashboard.updateLog.entries.mobile-other-expense-approval-payee-r01.title':
+    '手机审批其他费用支出展示收款账户',
+  'pages.dashboard.updateLog.entries.mobile-other-expense-approval-payee-r01.description':
+    '其他费用支出审批详情抬头补收款户名、开户行与账号；有后端抬头时也合并业务接口账户快照，支出单头空则从来源申请继承。',
+  'pages.dashboard.updateLog.entries.production-picking-create-line-stock-r01.title':
+    '生产领料建单明细展示当前库存',
+  'pages.dashboard.updateLog.entries.production-picking-create-line-stock-r01.description':
+    '新建与编辑生产领料单明细在出库仓库列后展示当前库存；按所选物料与仓库汇总可出库数量（自购在库），未选仓时按物料全仓汇总，领用数量大于库存时标红提示。',
+  'pages.dashboard.updateLog.entries.po-print-exclusive-amount-r01.title':
+    '采购订单打印明细增加不含税金额',
+  'pages.dashboard.updateLog.entries.po-print-exclusive-amount-r01.description':
+    '明细列在含税金额前展示行不含税金额，计算与订单列表同源；存量模板打印采购订单时自动补列。',
+  'pages.dashboard.updateLog.entries.payment-application-print-department-r01.title':
+    '付款申请打印增加申请部门',
+  'pages.dashboard.updateLog.entries.payment-application-print-department-r01.description':
+    '付款申请打印基本信息展示申请部门；打印数据带出 department_name，存量模板自动补字段。',
+  'pages.dashboard.updateLog.entries.other-expense-print-counterparty-bank-r01.title':
+    '其他费用支出打印补往来收款信息',
+  'pages.dashboard.updateLog.entries.other-expense-print-counterparty-bank-r01.description':
+    '基本信息增加收款户名、开户行、收款账号与金额；打印数据带出单据往来银行快照，存量模板打印时自动升级版式。',
+  'pages.dashboard.updateLog.entries.other-expense-print-created-by-r01.title':
+    '其他费用支出打印带出制单人',
+  'pages.dashboard.updateLog.entries.other-expense-print-created-by-r01.description':
+    '打印签核栏「制单人」绑定 created_by_name，与其它单据打印一致。',
+  'pages.dashboard.updateLog.entries.other-expense-approval-summary-attachments-r01.title':
+    '其他费用支出审批展示摘要与附件',
+  'pages.dashboard.updateLog.entries.other-expense-approval-summary-attachments-r01.description':
+    '审批详情与企微手机端明细行单独展示「摘要」并规范附件 uid；来自申请的支出单会继承申请单现场照片。',
+  'pages.dashboard.updateLog.entries.other-expense-print-detail-column-r01.title':
+    '其他费用支出打印摘要在金额前',
+  'pages.dashboard.updateLog.entries.other-expense-print-detail-column-r01.description':
+    '预置打印模板明细列顺序调整为行号、费用类别、摘要、金额、领款人；存量租户打印时自动升级旧版列序。',
+  'pages.dashboard.updateLog.entries.print-reviewer-last-approver-r01.title':
+    '单据打印审核人按终审最后通过人展示',
+  'pages.dashboard.updateLog.entries.print-reviewer-last-approver-r01.description':
+    '各类单据打印签核栏「审核人」不再沿用单据头第一位审核人快照，统一按审批流终审节点时间序最后通过人解析姓名；无审批记录时仍回退单据头字段。',
+  'pages.dashboard.updateLog.entries.unitable-flow-status-badge-width-r01.title':
+    '列表审核执行付款状态列宽统一为 80',
+  'pages.dashboard.updateLog.entries.unitable-flow-status-badge-width-r01.description':
+    'UniTable 将审核状态、执行状态与付款状态列统一为 SystemFixed 80px，与启用等窄徽章列一致；宽度假行引擎注入，页面列设置不会漂移。',
+  'pages.dashboard.updateLog.entries.purchase-order-list-payment-settlement-r01.title':
+    '采购订单列表增加付款状态',
+  'pages.dashboard.updateLog.entries.purchase-order-list-payment-settlement-r01.description':
+    '采购订单列表在审核状态右侧展示未付款、部分付款、已付款；预付付款单已确认即计入已付，预付款订单未入库也可看到已付款或部分付款。',
+  'pages.dashboard.updateLog.entries.audit-phase-column-in-review-audited-r01.title':
+    '审核状态列统一展示审核中与已审核',
+  'pages.dashboard.updateLog.entries.audit-phase-column-in-review-audited-r01.description':
+    '全站列表「审核状态」列（AuditPhaseBadge）在流程进行中显示「审核中」，终审通过后显示「已审核」；保留「待我审核」「您已审核」多级待办提示，具体节点仍在审核详情查看。',
+  'pages.dashboard.updateLog.entries.payment-application-pin-settlement-tabs-r01.title':
+    '付款申请预置付款状态快捷筛选',
+  'pages.dashboard.updateLog.entries.payment-application-pin-settlement-tabs-r01.description':
+    '列表搜索行钉住条件同时支持审批阶段与付款状态（未付款、部分付款、已付款），可与审批阶段钉住项组合使用。',
+  'pages.dashboard.updateLog.entries.payment-application-hide-approval-col-r01.title':
+    '付款申请列表隐藏审批状态列',
+  'pages.dashboard.updateLog.entries.payment-application-hide-approval-col-r01.description':
+    '列表仅保留审核状态与付款状态列，审批进度仍可在筛选条件中按阶段过滤，避免与「已通过」重复展示。',
+  'pages.dashboard.updateLog.entries.payment-application-approval-settlement-filter-r01.title':
+    '付款申请区分审批与付款状态',
+  'pages.dashboard.updateLog.entries.payment-application-approval-settlement-filter-r01.description':
+    '列表拆分审批状态与付款状态列，已批准与已付款徽章分色；筛选项可单独按审批进度与付款进度过滤；新建编辑须选择申请部门，下推继承来源单据部门。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-list-line-material-search-r01.title':
+    '采购入库单支持按明细物料搜索',
+  'pages.dashboard.updateLog.entries.purchase-receipt-list-line-material-search-r01.description':
+    '列表模糊搜索匹配入库明细行的物料编码、名称与规格；修复 Hub 客户端二次筛选未含明细预览导致搜物料名无结果的问题。',
+  'pages.dashboard.updateLog.entries.sales-invoice-pull-flow-align-r01.title':
+    '销售发票取单与采购发票体验对齐',
+  'pages.dashboard.updateLog.entries.sales-invoice-pull-flow-align-r01.description':
+    '从销售订单、出库或应收取单创建销售发票：预览成功后再关取单窗，失败弹窗提示；勾选解析与可加载门控收紧，避免像按钮无反应。',
+  'pages.dashboard.updateLog.entries.purchase-invoice-pull-partner-key-import-r05.title':
+    '修复采购发票取单确认报错',
+  'pages.dashboard.updateLog.entries.purchase-invoice-pull-partner-key-import-r05.description':
+    '补全采购发票取单多选时供应商校验所需的 resolvePullQueryPartnerKey 引用，取单点确认不再因未定义函数中断。',
+  'pages.dashboard.updateLog.entries.purchase-invoice-list-t-init-r04.title':
+    '修复采购发票列表页无法打开',
+  'pages.dashboard.updateLog.entries.purchase-invoice-list-t-init-r04.description':
+    '修正采购发票列表取单提示在文案函数初始化前引用导致的页面报错，列表与取单可正常进入。',
+  'pages.dashboard.updateLog.entries.purchase-invoice-po-pull-notice-modal-r03.title':
+    '采购发票取单失败改用弹窗提示',
+  'pages.dashboard.updateLog.entries.purchase-invoice-po-pull-notice-modal-r03.description':
+    '从采购订单等创建采购发票时，预览阻塞、无可开票额或接口失败会弹出明确提示框，避免取单窗内仅有消息条不明显；采购订单可加载候选与预览门控对齐。',
+  'pages.dashboard.updateLog.entries.purchase-invoice-po-pull-defer-close-r02.title':
+    '采购订单取单创建采购发票失败有明确提示',
+  'pages.dashboard.updateLog.entries.purchase-invoice-po-pull-defer-close-r02.description':
+    '从采购订单创建采购发票点采购发票时，取单窗在预览成功后再关闭；预览失败或无可开票金额时留在取单窗并提示原因，避免像按钮无任何反应。',
+  'pages.dashboard.updateLog.entries.finance-pull-preview-direct-form-r04.title':
+    '财务取单减少汇总预览直达填写',
+  'pages.dashboard.updateLog.entries.finance-pull-preview-direct-form-r04.description':
+    '销售发票、应收/应付/收付款及退款取单后去掉汇总预览表，加载完可转金额后直接进入填写弹窗；应付从入库取单仍保留明细行勾选。订单评审下推销售订单、需求下推需求计算去掉纯汇总确认窗。',
+  'pages.dashboard.updateLog.entries.purchase-invoice-pull-direct-form-r03.title':
+    '采购发票取单后直接进入填写弹窗',
+  'pages.dashboard.updateLog.entries.purchase-invoice-pull-direct-form-r03.description':
+    '从采购订单/入库/应付创建采购发票时，确认取单后不再弹出汇总预览表，加载完可开票金额后直接打开「填写采购发票信息」弹窗；入库/应付明细默认全选参与开票。',
+  'pages.dashboard.updateLog.entries.purchase-invoice-pull-next-visible-r02.title':
+    '采购发票取单点下一步可进入填写预览',
+  'pages.dashboard.updateLog.entries.purchase-invoice-pull-next-visible-r02.description':
+    '从采购订单/入库/应付创建采购发票时，点下一步先关闭取单窗并抬高预览弹窗层级，同时提示加载中；预览失败会提示错误并重新打开取单窗，避免看起来像无反应。',
+  'pages.dashboard.updateLog.entries.finance-allow-negative-balance-r01.title':
+    '业务配置支持允许账户负余额',
+  'pages.dashboard.updateLog.entries.finance-allow-negative-balance-r01.description':
+    '配置中心「参数设置 → 财务」新增「允许账户负余额」（默认关）。开启后付款、资金调拨、其他费用等出款可将账户账面余额扣为负数并记流水；关闭时仍按余额硬拦截。不改变流水金额须大于 0 的规则。',
+  'pages.dashboard.updateLog.entries.outbound-inventory-unit-batch-r01.title':
+    '其他出库单位与批号管理出库确认',
+  'pages.dashboard.updateLog.entries.outbound-inventory-unit-batch-r01.description':
+    '其他出库选料默认带出库存单位，避免与即时库存主单位不一致；销售出库确认时同仓同库位仅有一档在库批号则自动带出，减少批号为空无法过账。',
+  'pages.dashboard.updateLog.entries.payment-application-print-visual-po-r01.title':
+    '付款申请打印对齐标准版式并展示采购订单明细',
+  'pages.dashboard.updateLog.entries.payment-application-print-visual-po-r01.description':
+    '付款申请默认打印模板改为与其他单据一致的可视化样式（含站点名与品牌色表头）；打印数据增加采购订单物料明细，来源为采购订单或采购入库关联订单。',
+  'pages.dashboard.updateLog.entries.document-status-converted-badge-color-r01.title':
+    '转单结案与审核通过徽章颜色区分',
+  'pages.dashboard.updateLog.entries.document-status-converted-badge-color-r01.description':
+    '全局状态色板：「全部转单」「已转单」等下推结案语义改为进行中蓝（processing），与审核列「已通过」绿色（success）区分；仍沿用统一六档色板，无额外花色。',
+  'pages.dashboard.updateLog.entries.purchase-list-material-keyword-r01.title':
+    '采购入库单等支持按物料搜索',
+  'pages.dashboard.updateLog.entries.purchase-list-material-keyword-r01.description':
+    '采购入库单列表关键字可匹配明细物料编码、名称与规格（如液氮）；采购变更单同步支持按变更行物料检索。采购订单、申请、询价、收货通知、退货单此前已支持同类搜索。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-code-conflict-retry-r01.title':
+    '采购申请保存编号冲突自动重占号',
+  'pages.dashboard.updateLog.entries.purchase-requisition-code-conflict-retry-r01.description':
+    '新建采购申请时若预览编号与他人重复或重复提交，服务端将自动重新占号并重试，不再暴露数据库唯一约束报错；占号失败时前端不再用预览号硬提交。',
+  'pages.dashboard.updateLog.entries.eight-d-collab-admin-transition-r01.title':
+    '8D 协同模式质量管理员可编辑并推进阶段',
+  'pages.dashboard.updateLog.entries.eight-d-collab-admin-transition-r01.description':
+    '已授予 8D 更新权限或管理员旁路的账号不再提示无权编辑阶段；牵头人保存当前阶段内容后可直接按序推进至 D1 及后续，无需先走阶段确认。',
+  'pages.dashboard.updateLog.entries.approval-wecom-card-recall-fix-r01.title':
+    '修复企微审批待办卡片被误撤回',
+  'pages.dashboard.updateLog.entries.approval-wecom-card-recall-fix-r01.description':
+    '重推待办时无 response_code 的模板卡不再调用撤回接口，避免聊天里只显示「撤回了一条消息」；配好接收消息 URL 后仍可用动态更新替代撤回。',
+  'pages.dashboard.updateLog.entries.drawing-upload-default-200mb-r01.title':
+    '图纸批量上传默认上限调整为 200 MB',
+  'pages.dashboard.updateLog.entries.drawing-upload-default-200mb-r01.description':
+    '业务配置「图纸主文件上传大小」默认由 100 MB 调整为 200 MB，与平台文件服务硬上限一致；新建、编辑与批量上传前后端同步校验。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-settlement-unified-r01.title':
+    '采购入库详情编辑价税与采购订单一致',
+  'pages.dashboard.updateLog.entries.purchase-receipt-settlement-unified-r01.description':
+    '采购入库单详情、编辑页与列表取单统一按采购订单行价税比例分摊重算未税、税额与价税合计；打开详情会同步校正行金额，避免与采购订单差 0.01。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-pull-amount-po-rollup-r01.title':
+    '采购入库取单金额与采购订单价税一致',
+  'pages.dashboard.updateLog.entries.purchase-receipt-pull-amount-po-rollup-r01.description':
+    '从采购入库创建采购发票等取单列表的金额，改为按采购订单行价税合计比例分摊汇总，与采购订单列表订单金额一致，避免多行累加产生 0.01 尾差。',
+  'pages.dashboard.updateLog.entries.purchase-invoice-pull-preview-defer-close-r01.title':
+    '采购发票取单预览失败不再像无反应',
+  'pages.dashboard.updateLog.entries.purchase-invoice-pull-preview-defer-close-r01.description':
+    '从采购入库等创建采购发票点下一步时，取单弹窗在预览加载成功后再关闭；预览超时或失败时保留取单窗并提示错误，避免界面无任何反馈。',
+  'pages.dashboard.updateLog.entries.idle-gateway-poll-modal-r01.title':
+    '修复空闲时误弹操作超时',
+  'pages.dashboard.updateLog.entries.idle-gateway-poll-modal-r01.description':
+    '顶栏消息与菜单徽章等后台只读轮询若遇网关 504 不再弹出「操作超时」；仅用户主动提交等写请求仍提示重新提交。',
+  'pages.dashboard.updateLog.entries.print-header-title-unify-r01.title':
+    '打印表头站点名与单据标题统一版式',
+  'pages.dashboard.updateLog.entries.print-header-title-unify-r01.description':
+    '公司名与单据名称左对齐紧贴展示、字体样式一致；付款申请再次打印时自动从黑白 HTML 切换为与其它单据相同的可视化蓝阶版式。',
+  'pages.dashboard.updateLog.entries.print-preset-import-fix-r01.title':
+    '修复快制造业务接口不可用',
+  'pages.dashboard.updateLog.entries.print-preset-import-fix-r01.description':
+    '打印模板预设加载参数错误会导致快制造应用路由注册失败、列表与单据接口返回 404；已修正预设字段样式参数，重启后端服务后恢复。',
+  'pages.dashboard.updateLog.entries.print-header-site-name-r01.title':
+    '打印单据表头展示站点名',
+  'pages.dashboard.updateLog.entries.print-header-site-name-r01.description':
+    '各业务单据打印预览在标题上方居中显示当前站点名称（取自站点设置）；已有可视化模板在下次打印时自动补齐版式。',
+  'pages.dashboard.updateLog.entries.payment-application-detail-line-materials-r01.title':
+    '付款申请详情明细列对齐列表物料预览',
+  'pages.dashboard.updateLog.entries.payment-application-detail-line-materials-r01.description':
+    '详情申请明细合并为「明细」列：前两条品名徽章与等共 N 条；来源采购订单无行快照时按订单明细展示，悬停可看品名品号规格。',
+  'pages.dashboard.updateLog.entries.payment-application-detail-print-min-r01.title':
+    '付款申请详情与打印信息补全',
+  'pages.dashboard.updateLog.entries.payment-application-detail-print-min-r01.description':
+    '详情展示来源采购订单明细；发票情况改为表头必填；打印带出申请人、终审审核人与已确认付款单付款人。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-line-notes-display-r01.title':
+    '采购申请详情与明细列表可查看行备注',
+  'pages.dashboard.updateLog.entries.purchase-requisition-line-notes-display-r01.description':
+    '采购申请详情抽屉与列表明细视图补充行备注列，服务采购等已保存的明细备注可在只读界面直接查看，与采购订单一致。',
+  'pages.dashboard.updateLog.entries.mobile-approval-finance-header-r01.title':
+    '手机审批可展示财务单据收款账户与关键抬头',
+  'pages.dashboard.updateLog.entries.mobile-approval-finance-header-r01.description':
+    '其他费用、付款申请、收付款单等对账单据的审批详情补齐往来对象、收付方式、户名开户行账号、业务日期与单号；并支持更多财务单据加载审批信息。',
+  'pages.dashboard.updateLog.entries.mobile-payment-application-approval-lines-r01.title':
+    '手机审批付款申请明细可看清来源与金额',
+  'pages.dashboard.updateLog.entries.mobile-payment-application-approval-lines-r01.description':
+    '付款申请审批详情明细不再只显示「明细 1」占位；按行带出来源单号、应付单号、请款类型、申请金额与备注。',
+  'pages.dashboard.updateLog.entries.mobile-payment-application-approval-purchase-lines-r02.title':
+    '手机审批付款申请展示采购物料明细',
+  'pages.dashboard.updateLog.entries.mobile-payment-application-approval-purchase-lines-r02.description':
+    '付款申请待办详情在请款明细下方补全关联采购订单物料（编码、规格、数量、单价与行金额）；从采购入库取款的单据会反查订单明细，便于财务副总审批时核对。',
+  'pages.dashboard.updateLog.entries.wecom-approval-tenant-header-jwt-r01.title':
+    '修复企微审批偶发租户上下文不匹配',
+  'pages.dashboard.updateLog.entries.wecom-approval-tenant-header-jwt-r01.description':
+    '手机端业务请求的组织头改为以登录令牌中的组织为准，避免企微入口缓存抢写后与会话不一致，点同意或驳回时报「租户上下文不匹配」。',
+  'pages.dashboard.updateLog.entries.other-expense-application-entry-offline-r01.title':
+    '其他费用支出申请入口下线',
+  'pages.dashboard.updateLog.entries.other-expense-application-entry-offline-r01.description':
+    '电脑端付款菜单与手机端「其他常用」暂不展示其他费用支出申请；页面与接口保留，可直接新建其他费用支出。恢复时加回菜单与工作台入口即可。',
+  'pages.dashboard.updateLog.entries.other-expense-toolbar-push-r01.title':
+    '其他费用支出下推改到功能区',
+  'pages.dashboard.updateLog.entries.other-expense-toolbar-push-r01.description':
+    '其他费用支出列表「下推付款单」从行操作迁入功能区下推按钮，与付款申请等单据一致；勾选单条后下推。其他费用收入与支出申请同步对齐。',
+  'pages.dashboard.updateLog.entries.po-print-last-approver-r01.title':
+    '采购订单打印审核人为终审最后通过人',
+  'pages.dashboard.updateLog.entries.po-print-last-approver-r01.description':
+    '采购订单打印签核栏「审核人」取审批流终审节点时间序最后通过人员姓名；中间节点通过不再覆盖单据审核人字段。',
+  'pages.dashboard.updateLog.entries.other-expense-po-print-fields-r01.title':
+    '其他费用支出可打印，采购订单打印补结算信息',
+  'pages.dashboard.updateLog.entries.other-expense-po-print-fields-r01.description':
+    '其他费用支出新增打印模板与列表/详情打印入口。采购订单打印基本信息增加申请部门、供应商结算方式、付款周期；存量模板在加载预设或打印时自动补齐。',
+  'pages.dashboard.updateLog.entries.print-price-amount-decimals-r01.title':
+    '打印单价四位、总价税额两位小数',
+  'pages.dashboard.updateLog.entries.print-price-amount-decimals-r01.description':
+    '打印数据禁止再裸输出库表小数；单价按配置中心（默认 4 位）、总价/金额按金额小数位（默认 2 位）格式化。可视化模板明细列自动对齐精度，存量模板在加载预设或打印时升级。',
+  'pages.dashboard.updateLog.entries.uni-table-row-more-single-inline-r01.title':
+    '列表操作列仅一项溢出时不再显示更多',
+  'pages.dashboard.updateLog.entries.uni-table-row-more-single-inline-r01.description':
+    '行操作折进「更多」时若只剩 1 个动作，改为与详情、编辑等并排直出；仅当溢出多于 1 项时才展示「更多」菜单。',
+  'pages.dashboard.updateLog.entries.user-multi-dept-approval-r01.title':
+    '员工可多部门任职，审批发起可选部门',
+  'pages.dashboard.updateLog.entries.user-multi-dept-approval-r01.description':
+    '用户支持主部门与兼职部门；数据范围「本部门」按全部任职部门可见。流程含部门负责人时，制单人任职多于一个部门须在提交审核时选择审批部门，再按该部门定位负责人。',
+  'pages.dashboard.updateLog.entries.inventory-alert-check-timeout-r01.title':
+    '库存预警定时检查不再因扫描超时失败',
+  'pages.dashboard.updateLog.entries.inventory-alert-check-timeout-r01.description':
+    '定时任务「库存预警检查」原先复用整份库存报表取数（含批号修复与逐行归仓），大库存租户会语句超时。现改为按物料×仓库聚合余额并预取未结案预警与当日已通知记录，检查与站内信提醒可按时跑完。',
+  'pages.dashboard.updateLog.entries.inspection-simple-switch-plan-r01.title':
+    '简易质检检验弹窗可切换为方案质检',
+  'pages.dashboard.updateLog.entries.inspection-simple-switch-plan-r01.description':
+    '来料/过程等检验单为简易质检时，打开「检验」弹窗会显示切换方案入口；选方案并确认后按方案分项检验，不再因无方案步骤而整块隐藏。',
+'pages.dashboard.updateLog.entries.process-inspection-push-reuse-r01.title':
+    '过程检验下推不再静默复用已检验单',
+  'pages.dashboard.updateLog.entries.process-inspection-push-reuse-r01.description':
+    '从工单下推过程检验时，若该工序已有待检验或已检验单，预览不再显示可下推；确认时明确提示并禁止冒充新建。新建或打开已有待检单后自动打开详情，便于在列表中定位。',
+'pages.dashboard.updateLog.entries.tax-rate-one-percent-normalize-r01.title':
+    '税率 1% 不再被算成 100%',
+  'pages.dashboard.updateLog.entries.tax-rate-one-percent-normalize-r01.description':
+    '采购订单、采购入库等把行税率（百分比）误当成小数再乘 100，导致 1% 税额按全额计算。已改为仅小于 1 的值按小数换算，销售订单等本就按百分比拆税的路径不受影响。',
+'pages.dashboard.updateLog.entries.sales-delivery-batch-col-tenant-gate-r01.title':
+    '仓储批号总闸关闭时销售出库不再露出空批号列',
+  'pages.dashboard.updateLog.entries.sales-delivery-batch-col-tenant-gate-r01.description':
+    '组织未开启「批号管理」时，销售出库明细曾仍显示批号列且单元格为「—」。现与总闸一致隐藏该列；要选批号须先打开业务配置里的仓储批号管理。',
+'pages.dashboard.updateLog.entries.kingdee-purin-skip-dirty-aux-unit-r01.title':
+    '采购入库外推忽略未启用辅助单位的脏数据',
+  'pages.dashboard.updateLog.entries.kingdee-purin-skip-dirty-aux-unit-r01.description':
+    '物料主数据未配置辅助单位时，即使单据行残留副单位「件」也不再推送金蝶 unit2nd，避免「未启用辅助单位」拒收并撤回本地入库。',
+'pages.dashboard.updateLog.entries.purchase-receipt-red-voucher-cell-wrap-v8.title':
+    '采购入库红框打印单元格可换行不溢出',
+  'pages.dashboard.updateLog.entries.purchase-receipt-red-voucher-cell-wrap-v8.description':
+    '红框凭证明细列宽合计已收至 100%；金额、物料编码等过长内容在格内自动换行，不再溢出到相邻列。',
+'pages.dashboard.updateLog.entries.po-pull-sales-order-import-fix-r01.title':
+    '采购订单从销售订单取单可正常列出',
+  'pages.dashboard.updateLog.entries.po-pull-sales-order-import-fix-r01.description':
+    '「从销售订单创建采购订单」打开取单时报列出失败：明细模型导入路径写错。已改为正确导入，并去掉不存在的订单名称过滤字段。',
+'pages.dashboard.updateLog.entries.quotation-line-amount-qty-resync-r01.title':
+    '报价改数量后价税合计按主数量重算',
+  'pages.dashboard.updateLog.entries.quotation-line-amount-qty-resync-r01.description':
+    '报价/销售订单等明细改主数量后，价税合计偶发仍等于含税单价：双单位数量写入不触发表单金额重算。现改数量与选料重价后同步按数量×单价刷新行金额。',
+'pages.dashboard.updateLog.entries.sync-push-hub-auto-push-pause-r01.title':
+    '同步支持暂停自动外推',
+  'pages.dashboard.updateLog.entries.sync-push-hub-auto-push-pause-r01.description':
+    '工具栏同步旁增加暂停/恢复：暂停后确认入库出库不再无感外推，金蝶不通也不会撤回本地单据；出站方向仍可手动推送。',
+'pages.dashboard.updateLog.entries.kingdee-push-billno-org-prefix-r01.title':
+    '金蝶外推单号统一加组织前缀',
+  'pages.dashboard.updateLog.entries.kingdee-push-billno-org-prefix-r01.description':
+    '多租户共用同一金蝶连接时本地单号可撞候选键；采购入库、其他出入库、销售出库、生产领料、成品入库、盘盈盘亏、销售/采购/生产订单等外推 billno、trdbillno、FBillNo 统一为「组织-本地单号」。',
+'pages.dashboard.updateLog.entries.kingdee-otherout-billno-org-prefix-r01.title':
+    '其他出库推送金蝶单号加组织前缀',
+  'pages.dashboard.updateLog.entries.kingdee-otherout-billno-org-prefix-r01.description':
+    '多租户共用同一金蝶连接时，本地其他出库单号可同日撞车；推送 billno 改为「库存组织-本地单号」，避免报候选键已存在不能新增。',
+'pages.dashboard.updateLog.entries.kingdee-purin-trdbillno-org-prefix-r01.title':
+    '采购入库推送金蝶第三方单号加组织前缀',
+  'pages.dashboard.updateLog.entries.kingdee-purin-trdbillno-org-prefix-r01.description':
+    '多租户共用同一金蝶连接时，本地采购入库单号可同日撞车；推送第三方单据业务编码改为「库存组织-本地单号」，避免报业务编码重复并撤回本地入库。',
+'pages.dashboard.updateLog.entries.uni-pull-query-checkbox-key-normalize-r01.title':
+    '取单弹窗已选行勾选框正确回显',
+  'pages.dashboard.updateLog.entries.uni-pull-query-checkbox-key-normalize-r01.description':
+    '取单已选预览有标签但表格勾选不亮：选中键曾规范成字符串，而行 id 仍是数字，antd 比对对不上。现表格 rowKey 与 selectedRowKeys 统一为字符串。',
+'pages.dashboard.updateLog.entries.kingdee-outbound-invtype-gift-fallback-r01.title':
+    '出库推送金蝶按仓位可用库存类型出库',
+  'pages.dashboard.updateLog.entries.kingdee-outbound-invtype-gift-fallback-r01.description':
+    '本地即时库存把普通与赠品累加，推送却默认写普通库存类型；仓位上仅有赠品可用时金蝶会报可用短缺。其他出库与生产领料推送前按金蝶仓位分类型可用量选择库存类型（普通不足则改赠品）。',
+'pages.dashboard.updateLog.entries.inventory-ledger-other-outbound-withdraw-r01.title':
+    '收发存明细其他出库撤回不再算成出库',
+  'pages.dashboard.updateLog.entries.inventory-ledger-other-outbound-withdraw-r01.description':
+    '其他出库撤回回补曾误记为其他出库移动类型，收发存明细把正数回补也当成出库，结存越滚越负。现按撤回计为入库回补并展示「其他出库撤回」，结存含期初滚动。',
+'pages.dashboard.updateLog.entries.outbound-confirm-location-scoped-deduct-r01.title':
+    '出库已选库位按库位扣减并原路回补',
+  'pages.dashboard.updateLog.entries.outbound-confirm-location-scoped-deduct-r01.description':
+    '其他出库/销售出库确认时若明细已选库位，库存只从该库位台账扣减；推送金蝶失败撤回时也按同一库位回补。避免未指定库位的跨库位 FIFO 误扣后，撤回把量补回整仓导致「当前库存够、所选库位不够」。',
+'pages.dashboard.updateLog.entries.kingdee-avb-precheck-composite-location-r01.title':
+    '出库确认金蝶可用预检按库位名称匹配',
+  'pages.dashboard.updateLog.entries.kingdee-avb-precheck-composite-location-r01.description':
+    '本地库位编码常为「仓库_仓位」复合码，与金蝶仓位不一致；预检改为读取库位名称（如 0600、无货架）对金蝶 location 汇总可用量，禁止解析编码字符串。',
+'pages.dashboard.updateLog.entries.sales-delivery-edit-serial-picker-r01.title':
+    '销售出库编辑序列号改为从在库选择',
+  'pages.dashboard.updateLog.entries.sales-delivery-edit-serial-picker-r01.description':
+    '序列号管控物料更新时须按数量选齐在库序列号；修正错误文案 key，序列号列对齐出库 Hub 从库存勾选，不再用导入框导致无法更新且只显示英文 key。',
+'pages.dashboard.updateLog.entries.other-outbound-edit-keep-line-id-r01.title':
+    '其他出库编辑改库位不再误报新增明细',
+  'pages.dashboard.updateLog.entries.other-outbound-edit-keep-line-id-r01.description':
+    '编辑其他出库单时明细行 id 未注册进表单，改库位保存会丢失行 id，被当成增行拦截。现对齐销售出库：隐藏注册 id 并保留灌数快照，只改库位可正常保存。',
+'pages.dashboard.updateLog.entries.warelocareference-no-material-fill-r01.title':
+    '仓库仓位关系同步改为仓库编码分批',
+  'pages.dashboard.updateLog.entries.warelocareference-no-material-fill-r01.description':
+    '来源设置识别苍穹仓库仓位关系接口后，展示「仓库编码分批」而非物料编码填充；按 data.warehouse_number 拉取关系。',
+'pages.dashboard.updateLog.entries.inventory-sync-location-invtype-sum-r01.title':
+    '即时库存同步按库位落账并合并库存类型',
+  'pages.dashboard.updateLog.entries.inventory-sync-location-invtype-sum-r01.description':
+    '金蝶同行常按仓位与库存类型（普通/赠品）拆行；同步须映射库位，且同物料同仓同位多行数量累加，避免后写 0 覆盖赠品可用量导致本系统即时库存为空。',
+'pages.dashboard.updateLog.entries.mobile-purchase-requisition-submit-review-r01.title':
+    '手机采购申请分拆提交与提交审核',
+  'pages.dashboard.updateLog.entries.mobile-purchase-requisition-submit-review-r01.description':
+    '企微新建页增加「提交」「提交审核」，与 PC 单据流一致；已提交单在详情可继续点提交审核进入待审核，无需回电脑端操作。',
+'pages.dashboard.updateLog.entries.warehouse-kingdee-outbound-avb-precheck-r01.title':
+    '出库确认前预检金蝶可用量',
+  'pages.dashboard.updateLog.entries.warehouse-kingdee-outbound-avb-precheck-r01.description':
+    '销售出库、其它出库、生产领料在确认且会外推金蝶时，先调用 getInventoryAvbQty 比对金蝶可用量；不足则中止确认，并分别提示本系统可用与金蝶可用。须在即时库存来源配置余额查询接口。',
+'pages.dashboard.updateLog.entries.warehouse-kingdee-confirm-push-rollback-r01.title':
+    '仓储确认外推金蝶失败将撤回本地过账',
+  'pages.dashboard.updateLog.entries.warehouse-kingdee-confirm-push-rollback-r01.description':
+    '销售出库、采购入库、成品入库、生产领料在确认时若外推金蝶失败，与其它出入库一致自动撤回本地过账并报错；销售与采购在金蝶外推成功后再生成应收或应付，避免账面分叉。',
+'pages.dashboard.updateLog.entries.po-print-totals-no-excl-amount-r01.title':
+    '采购订单打印合计不再显示未税总金额',
+  'pages.dashboard.updateLog.entries.po-print-totals-no-excl-amount-r01.description':
+    '合计行只保留总数量与含税金额，去掉未税「总金额」，避免与价税合计并列造成误解。',
+'pages.dashboard.updateLog.entries.po-print-no-header-buyer-font-r01.title':
+    '采购订单打印去掉表头采购员并平衡字号',
+  'pages.dashboard.updateLog.entries.po-print-no-header-buyer-font-r01.description':
+    '基本信息不再重复采购员（签核栏仍带出）；标题、正文、明细、签核字号统一到可读层级，避免标题过大、表体过小。',
+'pages.dashboard.updateLog.entries.po-print-qty-incl-unit-amount-r01.title':
+    '采购订单打印改为数量、含税单价、含税金额',
+  'pages.dashboard.updateLog.entries.po-print-qty-incl-unit-amount-r01.description':
+    '采购订单打印明细默认展示数量、含税单价、含税金额；含税单价按录入价/价税规则带出，不再把未税单价当打印主列。首次打印会升级存量模板。',
+'pages.dashboard.updateLog.entries.print-sign-purchaser-auditor-r01.title':
+    '已审核单据打印自动带出采购人与审核人',
+  'pages.dashboard.updateLog.entries.print-sign-purchaser-auditor-r01.description':
+    '采购订单等打印模板签核栏不再只留空白下划线；已审核单据打印时自动带出采购员/采购人与审核人姓名。首次打印或加载打印预设时会升级存量模板。',
+'pages.dashboard.updateLog.entries.print-pdf-chromium-cli-r01.title':
+    '保存为 PDF 改为 Chromium 命令行出稿，修复线上长期 Target crashed',
+  'pages.dashboard.updateLog.entries.print-pdf-chromium-cli-r01.description':
+    '生产机自 10 月底起 Playwright CDP printToPDF 对空白页也会失败；同二进制 --print-to-pdf 稳定。打印改为命令行出稿，子进程 TMP 固定 /tmp，避免被 Playwright 临时目录改写后共享内存挂死。纸张仍跟模板 @page。',
+'pages.dashboard.updateLog.entries.defect-rework-qty-from-inspection-r01.title':
+    '过程检验登记不合格返工不再误报可返工为0',
+  'pages.dashboard.updateLog.entries.defect-rework-qty-from-inspection-r01.description':
+    '从过程或成品检验创建不合格品并选返工时，可返工数量按该检验单不合格扣减已挂返工占用，与登记额度一致。不再用简易质检下常为0的工序报工不合格去拦截。',
+'pages.dashboard.updateLog.entries.inspection-criteria-supplement-display-r02.title':
+    '检验方案项按检验方法与补充说明两行展示',
+  'pages.dashboard.updateLog.entries.inspection-criteria-supplement-display-r02.description':
+    '来料检验等执行页方案项改为两行：检验方法、合格标准补充说明，字色加深且不加粗，避免补充要求埋在浅灰小字里。',
+'pages.dashboard.updateLog.entries.inspection-criteria-supplement-display-r01.title':
+    '来料检验等执行页显示合格标准补充说明',
+  'pages.dashboard.updateLog.entries.inspection-criteria-supplement-display-r01.description':
+    '检验步骤展示合格标准时，会拼接方案中填写的合格标准补充说明。来料检验等执行页与方案步骤列表都能看到补充文字，不再只显示自动生成的规格文案。',
+'pages.dashboard.updateLog.entries.quality-exception-responsible-person-id-r01.title':
+    '质量异常纠正保存责任人不再报整数校验错误',
+  'pages.dashboard.updateLog.entries.quality-exception-responsible-person-id-r01.description':
+    '处理质量异常选择责任人时，表单改为用用户 UUID 绑定下拉，并同步写入数字用户 id 再提交。不再把 UUID 当作 responsible_person_id 导致无法保存。',
+'pages.dashboard.updateLog.entries.batch-query-location-fields-outbound-stock-r01.title':
+    '出库编辑库位下拉与即时库存库位一致',
+  'pages.dashboard.updateLog.entries.batch-query-location-fields-outbound-stock-r01.description':
+    '批次库存查询接口补回库位 id 与编码。出库编辑选库位时，能按即时库存同一库位显示有货数量，不再把有库位库存误标成无库存。',
+'pages.dashboard.updateLog.entries.outbound-same-batch-multi-location-deduct-r01.title':
+    '同批号多库位库存可正确分摊出库',
+  'pages.dashboard.updateLog.entries.outbound-same-batch-multi-location-deduct-r01.description':
+    '销售出库等确认过账时，同一批号拆在多个库位的台账会按先进先出合并扣减。不再只扣其中一行导致合计够却提示库存不足。',
+'pages.dashboard.updateLog.entries.purchase-invoice-pull-next-step-r01.title':
+    '采购发票取单点下一步可进入填写',
+  'pages.dashboard.updateLog.entries.purchase-invoice-pull-next-step-r01.description':
+    '修复从采购入库、采购订单或应付单创建采购发票时，勾选后点下一步无反应的问题。取单选中键统一按字符串匹配，确认时能正确带上已选单据。',
+'pages.dashboard.updateLog.entries.warehouse-kingdee-strong-sync-r01.title':
+    '仓储出入库与金蝶撤回删除编辑强一致',
+  'pages.dashboard.updateLog.entries.warehouse-kingdee-strong-sync-r01.description':
+    '其他出库等单据撤回或删除时，按金蝶单据状态反审、撤销提交并删除远程单，同时清除关联。确认出库推送金蝶失败会撤回本地过账。有金蝶关联时编辑本地单会先清掉远程单，再次确认时重新推送。其他入库、成品入库在已有关联时改为补提交审核，不再空跳过。',
+'pages.dashboard.updateLog.entries.material-aux-batch-schedule-r01.title':
+    '物料多单位和批号管理纳入外部主数据定时同步',
+  'pages.dashboard.updateLog.entries.material-aux-batch-schedule-r01.description':
+    '外部主数据定时任务在物料同步之后，按各自绑定的模式和间隔同步多单位、批号管理。绑定为定时增量或定时全量且到达间隔才会执行。',
+'pages.dashboard.updateLog.entries.kingdee-submit-already-submitted-r01.title':
+    '金蝶单据已提交时补审核不再被提交接口拦住',
+  'pages.dashboard.updateLog.entries.kingdee-submit-already-submitted-r01.description':
+    '销售出库等单据在金蝶已是已提交时，再点推送会先调提交。金蝶返回只有暂存才能提交时，继续调用审核，不再把整单补审判失败。',
+  'pages.dashboard.updateLog.entries.warehouse-kingdee-alignment-gate-r01.title':
+    '仓储单据与金蝶不一致时不再覆盖即时库存',
+  'pages.dashboard.updateLog.entries.warehouse-kingdee-alignment-gate-r01.description':
+    '有金蝶关联的出入库撤回，金蝶反审或撤销失败时默认阻断本地冲账。绑定了不存在的撤回接口会直接失败。出库确认后若金蝶推送失败，会另外提示失败原因。已过账但未关联金蝶、或本地已撤回而金蝶撤回失败时，禁止用即时库存同步覆盖本地批次，并每小时检查一次对齐情况。',
+  'pages.dashboard.updateLog.entries.kuaioa-annual-stats-table-height-r01.title':
+    '年度工资统计表体限高可横滑',
+  'pages.dashboard.updateLog.entries.kuaioa-annual-stats-table-height-r01.description':
+    '年度工资统计表体按页高限高，表头固定，纵向滚动时底部横滚条仍可见，方便左右查看各月工资。',
+  'pages.dashboard.updateLog.entries.kuaioa-annual-stats-subtotal-source-r01.title':
+    '年度工资统计按结算小计汇总',
+  'pages.dashboard.updateLog.entries.kuaioa-annual-stats-subtotal-source-r01.description':
+    '非导入的已确认工资结算，年度统计各月工资取明细「小计」；总表导入仍按表内月工资写入应发小计，与结算小计口径一致。',
+  'pages.dashboard.updateLog.entries.kuaioa-annual-stats-batch-delete-r01.title':
+    '年度工资统计支持勾选删除',
+  'pages.dashboard.updateLog.entries.kuaioa-annual-stats-batch-delete-r01.description':
+    '年度工资统计可勾选人员删除当年各月结算明细，便于清掉错误导入后再重新导入。',
+  'pages.dashboard.updateLog.entries.kuaioa-annual-stats-import-wage-no-stack-r01.title':
+    '年度工资统计导入金额不再叠加岗位工资',
+  'pages.dashboard.updateLog.entries.kuaioa-annual-stats-import-wage-no-stack-r01.description':
+    '从工资明细总表导入月工资时，按表内金额作为应发小计写入，不再叠加工资档案岗位工资等分项，避免导入后每月多出约一千元。',
+  'pages.dashboard.updateLog.entries.kuaioa-annual-stats-unit-filter-r01.title':
+    '年度工资统计按列表单位筛选',
+  'pages.dashboard.updateLog.entries.kuaioa-annual-stats-unit-filter-r01.description':
+    '年度工资统计的单位下拉改为当年已汇总列表中的单位去重，不再使用系统车间主数据，避免导入单位（如电机车间）与编码车间对不上筛不到人。',
+  'pages.dashboard.updateLog.entries.kuaioa-leave-register-attendance-prune-r01.title':
+    '离职登记后月度考勤自动收口',
+  'pages.dashboard.updateLog.entries.kuaioa-leave-register-attendance-prune-r01.description':
+    '办理离职登记后，草稿月度考勤会删除离职次日及以后日格；填报名单显示离职日，并禁止再改不可填日期。打开或刷新草稿考勤时也会按档案离职日同步。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-convert-progress-r01.title':
+    '采购申请取单后会更新下推进度',
+  'pages.dashboard.updateLog.entries.purchase-requisition-convert-progress-r01.description':
+    '从采购申请创建采购订单并保存后，申请行会占用并回写转单状态。已全部转单的申请不再出现在可创建取单列表，下推进度按转单结果显示。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-code-and-price-r01.title':
+    '新建采购申请会重新带出编号',
+  'pages.dashboard.updateLog.entries.purchase-requisition-code-and-price-r01.description':
+    '新建采购申请时，单号按编号规则自动生成。建议单价和主数量按数字显示，不再出现对象字样。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-line-quantity-number-r01.title':
+    '采购申请主数量按数字显示',
+  'pages.dashboard.updateLog.entries.purchase-requisition-line-quantity-number-r01.description':
+    '新建采购申请时，明细主数量保持默认数量 1。选物料后不再把数量写成对象，输入框不再出现对象字样。',
+  'pages.dashboard.updateLog.entries.purchase-service-receipt-confirm-without-warehouse-r01.title':
+    '服务采购不填仓库也可以确认入库并立账',
+  'pages.dashboard.updateLog.entries.purchase-service-receipt-confirm-without-warehouse-r01.description':
+    '采购类型为服务采购时，确认入库不再要求仓库、库位和批号。确认后回写订单已收并按立账策略生成应付，不写入库存。',
+  'pages.dashboard.updateLog.entries.purchase-service-receipt-warehouse-optional-r01.title':
+    '服务采购入库可以不填仓库',
+  'pages.dashboard.updateLog.entries.purchase-service-receipt-warehouse-optional-r01.description':
+    '采购类型为服务采购时，入库单的仓库和库位可以留空后保存。确认后只回写订单已收并生成应付，不写入库存。标准采购和资产采购仍须选择仓库。',
+  'pages.dashboard.updateLog.entries.requisition-push-inclusive-price-r01.title':
+  '采购申请下推订单保留含税单价',
+'pages.dashboard.updateLog.entries.requisition-push-inclusive-price-r01.description':
+  '申请上的建议单价按含税带入采购订单。未税金额仍按税率拆出，含税单价不再被再除一次税率。',
+'pages.dashboard.updateLog.entries.pending-my-approval-task-filter-r01.title':
+  '待我审核列表不再因审批任务查询失败',
+'pages.dashboard.updateLog.entries.pending-my-approval-task-filter-r01.description':
+  '采购申请、采购订单筛选待我审核时，不再对没有删除时间的审批任务使用删除条件。',
+'pages.dashboard.updateLog.entries.purchase-service-material-filter-r01.title':
+  '服务采购只选择来源为服务的物料',
+'pages.dashboard.updateLog.entries.purchase-service-material-filter-r01.description':
+  '采购申请、采购订单、采购入库的采购类型为服务采购时，明细物料和批量选择只显示来源类型为服务的物料。',
+'pages.dashboard.updateLog.entries.purchase-service-empty-category-r01.title':
+  '服务采购可保存来源为服务的物料',
+'pages.dashboard.updateLog.entries.purchase-service-empty-category-r01.description':
+  '未填存货类别、来源类型为服务的物料可以进入服务采购。已填写原材料或资产类别的物料仍会拒绝。',
+'pages.dashboard.updateLog.entries.material-unit-quick-create-zindex-r01.title':
+  '新建物料时快速新增单位不再被挡住',
+'pages.dashboard.updateLog.entries.material-unit-quick-create-zindex-r01.description':
+  '基础单位的快速新增窗口改到物料弹窗和下拉列表之上，可以正常填写单位名称。',
+'pages.dashboard.updateLog.entries.purchase-service-type-r01.title':
+  '采购支持服务采购类型',
+'pages.dashboard.updateLog.entries.purchase-service-type-r01.description':
+  '采购申请、采购订单、采购入库新增服务采购；服务类确认后生成应付且不过库存，金蝶外推与同步候选自动跳过。',
+'pages.dashboard.updateLog.entries.approval-branch-target-r01.title':
+  '审批分支标明实际流向',
+'pages.dashboard.updateLog.entries.approval-branch-target-r01.description':
+  '条件分支按出边顺序对应下一节点，改分支名称不会改流向。设计器写明每条分支流向哪个节点，审核时也能看到下一节点。选第二条「否」不再被当成第一条，避免误入总经理特批。',
+'pages.dashboard.updateLog.entries.kingdee-im-unsubmit-path-case-r01.title':
+  '金蝶撤销提交改用已发布接口',
+'pages.dashboard.updateLog.entries.kingdee-im-unsubmit-path-case-r01.description':
+  '采购入库、销售出库、其他入库、其他出库的撤销提交改为开放平台已发布的 batchUnSubmit。原先写成 batchUnsubmit，网关按未注册返回，撤回时这一步到不了金蝶。',
+'pages.dashboard.updateLog.entries.purchase-audit-queue-filter-r01.title':
+  '采购列表可筛待审核和待我审核',
+'pages.dashboard.updateLog.entries.purchase-audit-queue-filter-r01.description':
+  '采购订单和采购申请的列表筛选增加待审核、待我审核。待审核是全部待审单据，待我审核只保留当前登录人需要审批的单据。',
+'pages.dashboard.updateLog.entries.purchase-receipt-line-summary-r01.title':
+  '采购入库明细显示合计',
+'pages.dashboard.updateLog.entries.purchase-receipt-line-summary-r01.description':
+  '新建和编辑采购入库时，明细表下方单独显示总数量、未税总额、税额与价税合计，备注仍单独占一行。',
+'pages.dashboard.updateLog.entries.quotation-print-valid-until-r01.title':
+  '报价单打印增加报价有效期',
+'pages.dashboard.updateLog.entries.quotation-print-valid-until-r01.description':
+  '报价单打印基本信息在报价日期后显示报价有效期，取单据有效期至。已有报价单打印模板在下次打印时自动补上。',
+'pages.dashboard.updateLog.entries.purchase-order-print-tax-inclusive-amount-r01.title':
+  '采购订单打印增加含税金额',
+'pages.dashboard.updateLog.entries.purchase-order-print-tax-inclusive-amount-r01.description':
+  '采购订单打印明细在金额后增加含税金额，合计区同步显示。含税金额按录入单价正向计算；没有录入价的旧行留空，不用未税单价倒推。',
+'pages.dashboard.updateLog.entries.purchase-requisition-print-line-no-r01.title':
+  '采购申请打印明细增加行号',
+'pages.dashboard.updateLog.entries.purchase-requisition-print-line-no-r01.description':
+  '采购申请打印明细第一列为行号，按明细顺序从 1 编号。已有采购申请打印模板在下次打印时自动补上该列。',
+'pages.dashboard.updateLog.entries.purchase-receipt-kingdee-tax-r01.title':
+  '采购入库推金蝶按行税率',
+'pages.dashboard.updateLog.entries.purchase-receipt-kingdee-tax-r01.description':
+  '外推金蝶采购入库时明细税率取自入库行，行无则取头表税率；0% 单据不再被配置或默认 13% 抬高价税合计。',
+'pages.dashboard.updateLog.entries.sales-delivery-tax-align-r01.title':
+  '销售出库带上订单税率',
+'pages.dashboard.updateLog.entries.sales-delivery-tax-align-r01.description':
+  '销售出库单记录价类和行税率，下推、新建和编辑按销售订单同一套价税算法写金额。取单和详情可看单价、税率与金额。推送金蝶时使用出库行税率，不再套用配置里的 13%。',
+'pages.dashboard.updateLog.entries.purchase-order-price-settlement-self-r01.title':
+  '从采购申请创建采购订单不再因定价状态方法报错',
+'pages.dashboard.updateLog.entries.purchase-order-price-settlement-self-r01.description':
+  '采购订单明细写入前的定价状态推导改为实例方法，与创建、改单调用方式一致，避免从采购申请转单时参数个数不匹配。',
+'pages.dashboard.updateLog.entries.drawing-detail-header-actions-overflow-r02.title':
+  '图纸详情标题栏操作改为少量直出加更多',
+'pages.dashboard.updateLog.entries.drawing-detail-header-actions-overflow-r02.description':
+  '详情抽屉标题栏生命周期操作与列表操作列同一套溢出：主行只直出少量按钮，其余进「更多」；跨模块 skip 按钮不再钉死占满，避免标题被挤成竖排和空白框。',
+'pages.dashboard.updateLog.entries.drawing-detail-lifecycle-actions-normalize-r01.title':
+  '图纸详情操作按钮不再显示空白框',
+'pages.dashboard.updateLog.entries.drawing-detail-lifecycle-actions-normalize-r01.description':
+  '详情抽屉标题栏生命周期操作改为走 uni-action 规范化注入图标与文案，避免只剩空边框；并去掉重复的下载入口。',
+'pages.dashboard.updateLog.entries.customer-select-snapshot-echo-r01.title':
+  '客户下拉无 id 时也能回显名称快照',
+'pages.dashboard.updateLog.entries.customer-select-snapshot-echo-r01.description':
+  '仅持久化客户名称/编码的单据（如项目建议）编辑时，客户下拉不再空白；有名称快照即可回显，避免误清空。',
+'pages.dashboard.updateLog.entries.audit-hub-preview-node-key-r01.title':
+  '审核弹窗草稿预览按业务类型显示对应审批流',
+'pages.dashboard.updateLog.entries.audit-hub-preview-node-key-r01.description':
+  '同一单据实体下按业务类型拆分的审核（如轻办公评审单/样品检验），草稿打开审核时不再一律显示默认「自定义申请审核」名称，改为按实际 node_key 预览对应流程。',
+'pages.dashboard.updateLog.entries.kuaioa-form-template-ref-delete-guard-r01.title':
+  '已被通用申请单引用的表单模板禁止删除',
+'pages.dashboard.updateLog.entries.kuaioa-form-template-ref-delete-guard-r01.description':
+  '表单设计中删除模板时，若仍有未删除的通用申请单引用该模板，将直接提示并拦截，避免历史申请失去模板依据。',
+'pages.dashboard.updateLog.entries.kuaioa-form-request-bt-audit-detail-r01.title':
+  '轻办公自定义申请按业务类型对齐字段与审核',
+'pages.dashboard.updateLog.entries.kuaioa-form-request-bt-audit-detail-r01.description':
+  '评审单/确认书/领料单可套用约定字段并点名缺失项；配置中心按业务类型拆分审核流；详情改为申请内容分区，人员部门回显名称，业务类型显示中文。',
+'pages.dashboard.updateLog.entries.kuaiplm-rd-project-workbench-actions-r01.title':
+  '优化研发项目工作台链接跳转与操作列',
+'pages.dashboard.updateLog.entries.kuaiplm-rd-project-workbench-actions-r01.description':
+  '工程链接详情改为应用内跳转避免整页刷新；关卡交付物操作收入「更多」防越界；体系归档已验收后隐藏验收/驳回；补齐设计评审等链接类型中文。',
+'pages.dashboard.updateLog.entries.kuaiplm-engineering-link-type-i18n-r01.title':
+  '修复研发项目工作台工程资料链接类型文案',
+'pages.dashboard.updateLog.entries.kuaiplm-engineering-link-type-i18n-r01.description':
+  '补齐需求、工单、其他等工程链接类型中文，列表不再显示原始 key 或英文 other。',
+'pages.dashboard.updateLog.entries.kuaioa-form-request-entity-name-r01.title':
+  '修复轻办公通用申请单提交弹窗显示原始文案 key',
+'pages.dashboard.updateLog.entries.kuaioa-form-request-entity-name-r01.description':
+  '补齐 app.kuaioa.formRequest.entityName，提交/审核确认不再显示「app.kuaioa.formRequest.entityName」。',
+'pages.dashboard.updateLog.entries.tenant-restore-config-heal-r01.title':
+  '租户备份恢复后自动修复审核设置与消息提醒',
+'pages.dashboard.updateLog.entries.tenant-restore-config-heal-r01.description':
+  '租户级备份不含组织 settings，恢复会替换消息模板却留下旧 template_uuid；COPY 显式 id 后若序列未对齐，新建审批流程会撞主键并误报「代码已存在」。恢复完成后对齐序列、按模板编码重绑提醒规则，并补齐审核绑定与流程。',
+'pages.dashboard.updateLog.entries.tenant-not-found-message-format-r01.title':
+  '修正「组织不存在: 1不存在」错误文案',
+'pages.dashboard.updateLog.entries.tenant-not-found-message-format-r01.description':
+  '业务配置抛组织缺失时改为标准 tenant_not_found，不再把「组织不存在: ID」再拼一次「不存在」。',
+'pages.dashboard.updateLog.entries.audit-bindings-soft-delete-revive-r01.title':
+  '修复配置中心审核设置整页空白',
+'pages.dashboard.updateLog.entries.audit-bindings-soft-delete-revive-r01.description':
+  '补齐审核流程时若遇同代码软删残留，改为复活该流程，不再因「代码已存在」导致审核设置列表全部无法加载。',
+'pages.dashboard.updateLog.entries.manual-create-auto-submit-r01.title':
+  '手动建单可自动提交（有审批流则待审）',
+'pages.dashboard.updateLog.entries.manual-create-auto-submit-r01.description':
+  '配置中心「业务自动化」新增全局与各单据「手动创建后自动提交」：页面手工新建保存后自动提交；启用审批流时进入待审核、不会自动过审。下推仍由「下推默认生成方式」控制。',
+'pages.dashboard.updateLog.entries.material-inspection-plan-required-r01.title':
+  '方案质检时必须选择默认质检方案',
+'pages.dashboard.updateLog.entries.material-inspection-plan-required-r01.description':
+  '编辑物料或物料分组质检选项时，某场景选「方案质检」后默认质检方案为必填，未选择无法保存；后端同步校验，避免空方案落库。',
+'pages.dashboard.updateLog.entries.material-inspection-stages-save-r01.title':
+  '编辑物料时可正确保存质检模式绑定',
+'pages.dashboard.updateLog.entries.material-inspection-stages-save-r01.description':
+  '物料表单提交时会带上分场景质检选项（含委外检验），保存后再次打开仍能回显已绑定的质检模式与方案，不再被清空为无质检。',
+'pages.dashboard.updateLog.entries.inspection-plan-step-modal-nested-zindex-r01.title':
+  '物料质检快速新建方案时可正常添加检验步骤',
+'pages.dashboard.updateLog.entries.inspection-plan-step-modal-nested-zindex-r01.description':
+  '从 BOM 设计等入口打开物料弹窗后，在质检选项里快速新增质检方案再添加检验步骤时，步骤弹窗会正确叠在上层，不再被物料弹窗挡住。',
+'pages.dashboard.updateLog.entries.kuaiplm-rd-project-workbench-usage-guide-r01.title':
+  '研发项目工作台右侧增加使用指引',
+'pages.dashboard.updateLog.entries.kuaiplm-rd-project-workbench-usage-guide-r01.description':
+  '在关联知识下方增加使用指引说明，说明协同事项、工程资料链接、阶段门过门与体系归档的常用操作路径。',
+'pages.dashboard.updateLog.entries.kuaiplm-system-archive-link-targets-harden-r01.title':
+  '体系归档关联目标归属与轮次校验收紧',
+'pages.dashboard.updateLog.entries.kuaiplm-system-archive-link-targets-harden-r01.description':
+  '去掉与手板/T1/T2/T3 重复的「样机制作书」总项；制作项关联强制对应轮次；设计评审优先关联 Phase2 设计评审；审批表单须在表单数据绑定本项目；体系资料不再声明不可校验的体系文件类型。',
+'pages.dashboard.updateLog.entries.kuaiplm-gate-pass-system-archive-r01.title':
+  '研发阶段门通过须完成本阶段体系归档',
+'pages.dashboard.updateLog.entries.kuaiplm-gate-pass-system-archive-r01.description':
+  '工作台过门时按阶段校验体系归档项：须已上传、已关联或已标缺，否则拒绝并通过错误提示列出未完成项；体系预置交付物不再误用「交付物批准」门禁。',
+'pages.dashboard.updateLog.entries.kuaiplm-sample-process-form-contract-r01.title':
+  '样品加工新建编辑表单对齐栅格契约',
+'pages.dashboard.updateLog.entries.kuaiplm-sample-process-form-contract-r01.description':
+  '样品加工弹窗改为手写两列布局（与试流一致），附件与用途在表头区，备注通栏置底；标题改为「新建/编辑样品加工」。',
+'pages.dashboard.updateLog.entries.kuaiplm-project-proposal-form-contract-r01.title':
+  '项目建议新建编辑表单对齐栅格契约',
+'pages.dashboard.updateLog.entries.kuaiplm-project-proposal-form-contract-r01.description':
+  '项目建议弹窗改为手写两列布局，客户继续走主数据可搜索下拉；备注通栏置底；从工作台带项目进入时新建会写入关联项目。',
+'pages.dashboard.updateLog.entries.kuaiplm-lab-request-project-workbench-r01.title':
+  '研发工作台可直达本项目实验委托',
+'pages.dashboard.updateLog.entries.kuaiplm-lab-request-project-workbench-r01.description':
+  '工作台协同区新增实验委托磁贴与计数；列表承接 project_id 筛选，新建默认带入研发项目（委托类型默认研发），与试流、工程变更深链一致。',
+'pages.dashboard.updateLog.entries.rd-archive-link-select-search-r01.title':
+  '研发工作台体系归档关联改为可选可搜',
+'pages.dashboard.updateLog.entries.rd-archive-link-select-search-r01.description':
+  '图纸设计等体系归档项关联业务单据时，改为下拉选择并可模糊搜索（交付物、审批表单、建议书、试产、BOM 协同等），回写编码与名称，无需手填目标 ID。',
+'pages.dashboard.updateLog.entries.rd-workbench-ecn-project-filter-r01.title':
+  '研发项目工作台工程变更按项目筛选并可软刷新',
+'pages.dashboard.updateLog.entries.rd-workbench-ecn-project-filter-r01.description':
+  '工作台「工程变更」快捷入口带上项目与页签；变更工作台承接 project_id 筛选列表并默认带入新建 ECN 项目；工作台支持标签栏软刷新重拉关卡与协同计数。',
+'pages.dashboard.updateLog.entries.project-proposal-customer-select-search-r01.title':
+  '项目建议客户改为可搜索主数据下拉',
+'pages.dashboard.updateLog.entries.project-proposal-customer-select-search-r01.description':
+  '新建或编辑项目建议时，客户字段改为客户主数据下拉，支持关键词模糊搜索逐步缩小范围，并回写客户名称与编码快照。',
+'pages.dashboard.updateLog.entries.project-proposal-expected-date-only-r01.title':
+  '项目建议期望日期按日历日提交，避免新建报错',
+'pages.dashboard.updateLog.entries.project-proposal-expected-date-only-r01.description':
+  '新建或编辑项目建议时，期望日期改为提交 YYYY-MM-DD 纯日期，不再带时区时间，避免后端 date 校验失败。',
+'pages.dashboard.updateLog.entries.automation-push-default-draft-r01.title':
+  '下推默认改为草稿，避免与自动审核混淆',
+'pages.dashboard.updateLog.entries.automation-push-default-draft-r01.description':
+  '业务自动化「下推默认生成方式」默认改为草稿；正式单据才会下推后自动提交待审。「创建后自动审核」只负责审核通过，二者分工已在配置说明中写清。',
+'pages.dashboard.updateLog.entries.uni-im-dissolve-group-tx-realtime-r01.title':
+  '解散群聊改为事务提交并实时通知成员',
+'pages.dashboard.updateLog.entries.uni-im-dissolve-group-tx-realtime-r01.description':
+  '解散自定义群聊时会话、成员与模块绑定同事务软删，避免半状态；成功后向成员推送实时事件刷新列表。群主判定与创建人对齐，正在打开的群会自动退出。',
+'pages.dashboard.updateLog.entries.uni-im-dissolve-group-r01.title':
+  '在线消息支持解散群聊',
+'pages.dashboard.updateLog.entries.uni-im-dissolve-group-r01.description':
+  '自定义群聊设置中，群主可解散群聊；公共群不可解散。解散后会话与成员关系软删除，列表中不再显示。',
+'pages.dashboard.updateLog.entries.custom-field-associated-grid-col-r01.title':
+  '关联自定义字段恢复半宽栅格与取值',
+'pages.dashboard.updateLog.entries.custom-field-associated-grid-col-r01.description':
+  '工程BOM等带栅格的表单里，关联对象只读字段不再被 Dependency 打断列宽；改为 Form.useWatch 监听源字段，半宽与同排字段对齐，主物料变更后库存单位等 lookup 可正常回显。',
+'pages.dashboard.updateLog.entries.custom-field-associated-readonly-input-r01.title':
+  '关联对象只读展示与表单同高同宽',
+'pages.dashboard.updateLog.entries.custom-field-associated-readonly-input-r01.description':
+  '关联对象只读 lookup 结果改为只读输入框展示，高度与宽度与同区可编辑字段一致，空值显示占位横线。',
+'pages.dashboard.updateLog.entries.infra-operation-chart-label-g2-r01.title':
+  '平台看板图表标签不再报错',
+'pages.dashboard.updateLog.entries.infra-operation-chart-label-g2-r01.description':
+  '状态分布与套餐分布图表标签改用当前 AntV Charts 写法，刷新看板时控制台不再出现标签位置与变量未定义错误。',
+'pages.dashboard.updateLog.entries.unitable-toolbar-reload-feedback-r01.title':
+  '刷新成功统一提示数据已刷新',
+'pages.dashboard.updateLog.entries.unitable-toolbar-reload-feedback-r01.description':
+  '列表工具栏刷新、页签右键刷新与标准刷新按钮成功后统一提示「数据已刷新」，与平台看板一致。',
+'pages.dashboard.updateLog.entries.purchase-order-list-detail-api-perf-r01.title':
+  '采购订单列表与详情加载更快',
+'pages.dashboard.updateLog.entries.purchase-order-list-detail-api-perf-r01.description':
+  '采购订单详情不再于打开时回写头金额与到货数，列表与能力门禁改为并行取数，进页与打开详情更顺畅。',
+'pages.dashboard.updateLog.entries.purchase-receipt-detail-line-finance-r01.title':
+  '采购入库详情明细价税列',
+'pages.dashboard.updateLog.entries.purchase-receipt-detail-line-finance-r01.description':
+  '采购入库详情抽屉明细表展示入库数量、含税单价、税率、未税金额、税额与价税合计，与头表汇总口径一致，不依赖列表「显示金额」开关。',
+'pages.dashboard.updateLog.entries.inventory-floating-aux-ledger-r01.title':
+  '无固定换算副数量纳入即时库存累计',
+'pages.dashboard.updateLog.entries.inventory-floating-aux-ledger-r01.description':
+  '物料为无固定换算辅助单位时，入库手填件数写入批号 aux 并随出入库增减；即时库存展示副单位与累计件数，主单位 kg 仍为库存过账真源。',
+'pages.dashboard.updateLog.entries.inventory-floating-aux-unit-label-r01.title':
+  '即时库存展示无固定换算副单位',
+'pages.dashboard.updateLog.entries.inventory-floating-aux-unit-label-r01.description':
+  '物料辅助单位为无固定换算时，即时库存列表仍显示副单位名称；未录入副数量时副数量留空，有录入则展示。',
+'pages.dashboard.updateLog.entries.inbound-po-pull-display-perm-r01.title':
+  '采购入库取采购订单支持仅回显权限',
+'pages.dashboard.updateLog.entries.inbound-po-pull-display-perm-r01.description':
+  '角色仅授予采购订单回显、未开通查看时，可在采购入库从采购订单取单与生成入库明细，不再误报权限不足。',
+'pages.dashboard.updateLog.entries.inventory-hide-secondary-unit-cols-r01.title':
+  '即时库存单计量隐藏副单位列',
+'pages.dashboard.updateLog.entries.inventory-hide-secondary-unit-cols-r01.description':
+  '物料未配置固定辅助单位时，即时库存该行副单位与副数量显示为空；双计量物料仍正常展示副列数值。',
+'pages.dashboard.updateLog.entries.inventory-single-unit-aux-reconcile-r01.title':
+  '即时库存单计量副数量与主数量对齐',
+'pages.dashboard.updateLog.entries.inventory-single-unit-aux-reconcile-r01.description':
+  '无固定辅助单位时批号 quantity、base_quantity、aux_quantity 写库与查询前强制一致；金蝶库存同步同时更新三量；即时库存取数自动校正历史脏数据。',
+'pages.dashboard.updateLog.entries.sales-doc-header-totals-sync-r01.title':
+  '销售报价合同订单头表合计锁定明细',
+'pages.dashboard.updateLog.entries.sales-doc-header-totals-sync-r01.description':
+  '报价单、框架合同（录入明细模式）与销售订单头表数量、金额不再接受整单直写，保存与读详情时按明细汇总校正，与采购价税策略同一类根因。',
+'pages.dashboard.updateLog.entries.purchase-tax-header-sync-po-pr-r01.title':
+  '采购订单与入库头表价税锁定明细',
+'pages.dashboard.updateLog.entries.purchase-tax-header-sync-po-pr-r01.description':
+  '采购订单与采购入库头表未税、税额、价税仅由明细汇总写入；保存、读详情与确认时自动校正，历史数据可脚本回填。',
+'pages.dashboard.updateLog.entries.warehouse-doc-amount-no-read-recompute-r01.title':
+  '出入库价税只读禁止反算',
+'pages.dashboard.updateLog.entries.warehouse-doc-amount-no-read-recompute-r01.description':
+  '采购入库行单价/税额/价税与头价税合计只读库内录入价与 rollup 写回字段；其余出入库单价金额直读库字段。打开详情或保存时服务端校正，前端不再税率反推。',
+'pages.dashboard.updateLog.entries.purchase-receipt-detail-amount-single-source-r01.title':
+  '采购入库详情头表与行价税同一套算法',
+'pages.dashboard.updateLog.entries.purchase-receipt-detail-amount-single-source-r01.description':
+  '入库详情打开时按采购订单行比例校正行未税并汇总头表；头价税合计用 settlement_gross，行展示与财务 rollup 同源，避免头表与明细各算一套。',
+'pages.dashboard.updateLog.entries.purchase-receipt-header-amount-sync-r01.title':
+  '采购入库价税与明细严格对齐',
+'pages.dashboard.updateLog.entries.purchase-receipt-header-amount-sync-r01.description':
+  '采购入库单头表未税、税额、价税合计仅由明细汇总写入，保存、详情、确认入库时自动校正，避免头表与行价税差分。',
+'pages.dashboard.updateLog.entries.mobile-list-chrome-tier-bg-r01.title':
+  '移动端列表页四段式背景',
+'pages.dashboard.updateLog.entries.mobile-list-chrome-tier-bg-r01.description':
+  '业务列表顶栏、Tab、搜索与正文四段底色按白顶灰底主流阶梯收细，避免块状灰蓝带。',
+'pages.dashboard.updateLog.entries.mobile-mp-branded-stack-header-r01.title':
+  '小程序内 H5 业务顶栏品牌色',
+'pages.dashboard.updateLog.entries.mobile-mp-branded-stack-header-r01.description':
+  '微信小程序 web-view 双顶栏时 H5 标题栏改主题蓝白字，与壳白顶区分；独立 H5 与 App 仍为白顶。',
+'pages.dashboard.updateLog.entries.mobile-mes-rework-list-r01.title':
+  '移动端补全我的返工列表页',
+'pages.dashboard.updateLog.entries.mobile-mes-rework-list-r01.description':
+  '修复工作台「我的返工」跳转 Unmatched Route；按指派人员加载返工单列表并可下钻原工单。',
+'pages.dashboard.updateLog.entries.mobile-profile-tab-no-header-r01.title':
+  '移动端我的 Tab 去掉顶栏标题',
+'pages.dashboard.updateLog.entries.mobile-profile-tab-no-header-r01.description':
+  '个人中心与消息、审批一致不再叠 H5 顶栏及页内「我的」大字，仅保留渐变头图与资料卡。',
+'pages.dashboard.updateLog.entries.mobile-stack-header-surface-r01.title':
+  '移动端业务页顶栏白底分隔',
+'pages.dashboard.updateLog.entries.mobile-stack-header-surface-r01.description':
+  '工单指派等带返回的业务页顶栏改为白底并加底部分割线，与灰底列表区层次更清晰。',
+'pages.dashboard.updateLog.entries.mobile-approval-tab-header-compact-r01.title':
+  '移动端审批 Tab 去掉顶栏并压低业务顶栏',
+'pages.dashboard.updateLog.entries.mobile-approval-tab-header-compact-r01.description':
+  '待我审批列表与消息中心一致不再叠 H5 顶栏；小程序与普通 H5 业务页顶栏高度收至约 44px，与壳内观感一致。',
+'pages.dashboard.updateLog.entries.sync-run-history-stats-summary-r01.title':
+  '入站同步记录展示拉取与写入统计',
+'pages.dashboard.updateLog.entries.sync-run-history-stats-summary-r01.description':
+  '数据互通同步记录摘要列展示拉取、新增、更新、跳过条数，便于区分真增量与全量拉取。',
+'pages.dashboard.updateLog.entries.sync-inbound-schedule-window-r01.title':
+  '入站同步支持允许时段',
+'pages.dashboard.updateLog.entries.sync-inbound-schedule-window-r01.description':
+  '数据互通入站方向在定时增量与定时全量下可设置允许同步时段，按站点时区在窗外跳过定时任务，手动确认同步不受影响。',
+  'pages.dashboard.updateLog.entries.custom-field-associated-id-text-r01.title':
+    '修复关联对象下拉把字符串 id 误存文本',
+  'pages.dashboard.updateLog.entries.custom-field-associated-id-text-r01.description':
+    '关联对象 select/radio 提交的字符串 id 统一写入数值列；只读展示文案仍进文本列。导入按码查物料失败会打出告警，关联只读 lookup 失败不再未处理拒绝。',
+  'pages.dashboard.updateLog.entries.document-import-export-material-text-r01.title':
+    '单据导入导出统一保全物料编码与文本',
+  'pages.dashboard.updateLog.entries.document-import-export-material-text-r01.description':
+    '销售/采购/退货/工单等导入统一按主编码、物料编码与部门别名解析物料，不再用页面缓存短路；导出对编码名称等列强制文本格式；导入仅对千分位数字去逗号，避免名称中的逗号被吞。',
+  'pages.dashboard.updateLog.entries.sales-order-import-material-resolve-r01.title':
+    '销售订单导入按编码可靠匹配物料',
+  'pages.dashboard.updateLog.entries.sales-order-import-material-resolve-r01.description':
+    '导入不再只靠页面缓存前几十条物料；缺码按主编码/物料编码/部门别名精确查询并回绑导入编码，避免系统内已有编码仍提示「未找到产品」。',
+  'pages.dashboard.updateLog.entries.custom-field-associated-display-nonpersist-r01.title':
+    '关联对象只读展示按非持久化派生字段约束',
+  'pages.dashboard.updateLog.entries.custom-field-associated-display-nonpersist-r01.description':
+    '有源字段且展示方式为「只读展示」时，强制关闭必填/搜索/排序；字段值接口不再返回该字段；改为只读展示时清理历史值；表单始终按源字段实时带出，不回填遗留存储。',
+  'pages.dashboard.updateLog.entries.custom-field-associated-display-ephemeral-r01.title':
+    '关联对象只读展示不再落库',
+  'pages.dashboard.updateLog.entries.custom-field-associated-display-ephemeral-r01.description':
+    '展示方式为「展示」的关联对象字段仅在新建/编辑表单按源字段实时带出（如主物料单位），不写入自定义字段值表，避免误校验与无效存储。',
+  'pages.dashboard.updateLog.entries.custom-field-associated-display-text-r01.title':
+    '关联对象只读展示可保存文案',
+  'pages.dashboard.updateLog.entries.custom-field-associated-display-text-r01.description':
+    '关联对象 XLOOKUP 只读展示（如主物料单位「2.8kg/个」）按文本落库，不再误按数值校验导致 BOM 等单据创建失败；仅展示方式为数值时仍按数字存储。',
+  'pages.dashboard.updateLog.entries.custom-field-associated-config-validate-r01.title':
+    '关联自定义字段配置校验收紧',
+  'pages.dashboard.updateLog.entries.custom-field-associated-config-validate-r01.description':
+    '创建或更新「关联对象 / 关联属性」时，服务端校验关联表、源字段 XLOOKUP（匹配/返回字段与展示方式）或下拉选记录（关联显示字段）必填项；不完整配置返回 422，避免静默落库后运行时报错。',
+  'pages.dashboard.updateLog.entries.bom-advanced-search-fields-r01.title':
+    '工程BOM高级搜索补齐筛选字段',
+  'pages.dashboard.updateLog.entries.bom-advanced-search-fields-r01.description':
+    '工程BOM列表高级搜索现可按主物料、BOM编号、BOM名称、版本与审核状态筛选；关键词同步支持匹配BOM名称与版本号。',
+'pages.dashboard.updateLog.entries.mobile-pr-dual-unit-units-map-r01.title':
+    '手机采购申请可选主副数量',
+  'pages.dashboard.updateLog.entries.mobile-pr-dual-unit-units-map-r01.description':
+    'H5 新建采购申请选料时带回物料多单位配置，有采购副单位的物料会显示主数量与副数量并可提交；此前选料漏掉单位配置导致始终只能录单数量。',
+'pages.dashboard.updateLog.entries.approval-hierarchy-document-owner-r01.title':
+    '撤回代提后仍按制单人部门领导审核',
+  'pages.dashboard.updateLog.entries.approval-hierarchy-document-owner-r01.description':
+    '直接上级、多级上级、制单人部门类审批节点改为按单据制单人解析组织关系。他人撤回后重新提交审核时，不再误按点击提交人的直属领导走流程。',
+'pages.dashboard.updateLog.entries.uni-wh-location-whole-stock-r01.title':
+    '整仓库位下拉不再误显示无库存',
+  'pages.dashboard.updateLog.entries.uni-wh-location-whole-stock-r01.description':
+    '仓内存货未带库位维度时，库位下拉把这部分可出库量归到「整仓」或仓下唯一库位，与当前库存列一致，避免整仓显示无库存。',
+'pages.dashboard.updateLog.entries.other-outbound-location-stock-dropdown-r01.title':
+    '其他出库库位下拉显示库存数',
+  'pages.dashboard.updateLog.entries.other-outbound-location-stock-dropdown-r01.description':
+    '新建其他出库明细选库位时，与仓库下拉一致展示各库位可出库库存（有货优先排序），不再只显示库位名称。',
+'pages.dashboard.updateLog.entries.other-inout-optional-price-no-autofill-r01.title':
+    '其他出入库单价选填且不再自动带价',
+  'pages.dashboard.updateLog.entries.other-inout-optional-price-no-autofill-r01.description':
+    '其他出库确认不再按库存成本回写明细单价与金额；详情与编辑不再突出金额列。其他出库/其他入库新建编辑仍保留单价字段，可不填，选料时不自动带采购价或成本。',
+'pages.dashboard.updateLog.entries.document-push-sync-run-log-all-actions-r01.title':
+    '同步记录覆盖确认出库撤回等全部外推动作',
+  'pages.dashboard.updateLog.entries.document-push-sync-run-log-all-actions-r01.description':
+    '数据互通同步记录原先只记完整外推保存。确认出库触发的补提交审核、撤回出库的反审核/撤销提交/删除，以及采购入库同类动作，现都会写入同步记录，摘要带 action。开放平台未发布 batchUnsubmit 导致的 HTTP 404（撤回链本就跳过）不写入同步记录，避免每次撤回必红。',
+  'pages.dashboard.updateLog.entries.document-push-outbound-bind-confirm-label-r01.title':
+    '出库外推绑定行为不再误显示确认入库',
+  'pages.dashboard.updateLog.entries.document-push-outbound-bind-confirm-label-r01.description':
+    '数据互通出站列表在多接口行模式下，销售出库/其他出库/领料的 confirm 绑定行为按单据方向显示确认出库或确认领料，不再回落通用「确认入库」文案。',
+  'pages.dashboard.updateLog.entries.other-outbound-item-no-deleted-at-filter-r01.title':
+    '无软删除的明细查询去掉错误 deleted_at 条件',
+  'pages.dashboard.updateLog.entries.other-outbound-item-no-deleted-at-filter-r01.description':
+    '其他出库明细、借料明细等表无 deleted_at 字段，编辑汇总或金蝶撤回配置加载时误用 deleted_at__isnull 会报 Unknown filter param。已排查同步/外推相关路径，去掉错误过滤。',
+  'pages.dashboard.updateLog.entries.kingdee-sales-delivery-amount-2dp-r01.title':
+    '销售出库外推金蝶金额按两位小数',
+  'pages.dashboard.updateLog.entries.kingdee-sales-delivery-amount-2dp-r01.description':
+    '销售出库推送苍穹时，单价/金额/含税单价/价税合计统一保留两位小数，避免金蝶校验「价税合计小数不能大于2位」导致外推失败。',
+  'pages.dashboard.updateLog.entries.kingdee-warehouse-unit-catalog-r01.title':
+    '修复其他出入库/销售出库外推金蝶单位编码',
+  'pages.dashboard.updateLog.entries.kingdee-warehouse-unit-catalog-r01.description':
+    '其他出库、其他入库、销售出库外推改为与采购入库一致，按物料单位目录解析库存单位（如 kg/pcs），避免内置别名误写成 004/006 导致金蝶拒收。',
+
+'pages.dashboard.updateLog.entries.purchase-flow-price-dual-unit-carry-r01.title':
+    '采购下推价格与双单位确认修复',
+  'pages.dashboard.updateLog.entries.purchase-flow-price-dual-unit-carry-r01.description':
+    '采购入库确认时带上行副数量，台账双单位物料不再误报缺副数量；从采购订单取单的入库行锁定订单单价，避免改数量自动取价冲成 0。',
+
+  'pages.dashboard.updateLog.entries.master-data-authguard-remount-r01.title':
+    '修复主数据页打开侧栏刷新与页签要点两次',
+  'pages.dashboard.updateLog.entries.master-data-authguard-remount-r01.description':
+    'AuthGuard 不再对主数据路径换另一套渲染树；进出厂区/车间/不良品类型等页时侧栏与页签不再整树重挂，一次即可打开和关闭。',
+  'pages.dashboard.updateLog.entries.master-data-kuaiplm-tab-close-sider-r01.title':
+    '修复主数据与快研发页签需关两次及侧栏闪动',
+  'pages.dashboard.updateLog.entries.master-data-kuaiplm-tab-close-sider-r01.description':
+    '页签关闭改为自管关闭钮，彻底避开 antd 点叉先切邻页；短标题如「不良品类型」也可一次关掉。侧栏菜单数据引用稳定，不再因 query 改写整树刷新。',
+  'pages.dashboard.updateLog.entries.kuaioa-form-designer-overrides-crash-r01.title':
+    '修复协同审批表单设计改名崩溃',
+  'pages.dashboard.updateLog.entries.kuaioa-form-designer-overrides-crash-r01.description':
+    '表单设计器标题键入与保存状态不再重建 Puck 顶栏配置，与看板设计器同一套稳定顶栏，避免意外整页崩溃。',
+  'pages.dashboard.updateLog.entries.finance-center-redirect-double-tab-r01.title':
+    '修复财务中心点击打开两个页签',
+  'pages.dashboard.updateLog.entries.finance-center-redirect-double-tab-r01.description':
+    '财务中心菜单改为直达快制造落地页；轻财务旧路径仅作重定向不再占页签，避免同时出现「财务管理」与「财务中心」。',
+  'pages.dashboard.updateLog.entries.unitab-close-once-and-sider-openkeys-r01.title':
+    '修复页签要点两次关闭与侧栏跳顶',
+  'pages.dashboard.updateLog.entries.unitab-close-once-and-sider-openkeys-r01.description':
+    '产品工艺等会改 query 的页：页签 key 保持 pathname 稳定，点叉时先发的切页改为关闭当前页；路由切换只补齐侧栏展开项，不再整表折叠其它分组。',
+  'pages.dashboard.updateLog.entries.unitab-close-query-identity-r01.title':
+    '修复产品工艺等页签因 query 差关不掉',
+  'pages.dashboard.updateLog.entries.unitab-close-query-identity-r01.description':
+    '页签关闭统一按路径身份处理（忽略 materialUuid 等 query）：先移除再跳转，栏上 activeKey 与 items key 对齐，避免只跳走不关闭。',
+  'pages.dashboard.updateLog.entries.equipment-board-hero-texture-r01.title':
+    '修复设备看板中心贴图加载失败拖垮云制造',
+  'pages.dashboard.updateLog.entries.equipment-board-hero-texture-r01.description':
+    '设备看板中心图改为构建打包资源，不再依赖线上空的 /img/dashboard.png；贴图失败时仅降级点阵，不再触发「应用加载错误」整页崩溃。',
+  'pages.dashboard.updateLog.entries.process-route-allow-jump-update-r01.title':
+    '修复工艺路线「允许工序跳转」更新不保存',
+  'pages.dashboard.updateLog.entries.process-route-allow-jump-update-r01.description':
+    '更新接口现可识别 snake_case 的 allow_operation_jump，开关开启后再编辑可正确回显。',
+  'pages.dashboard.updateLog.entries.wo-fg-inbound-defaults-r01.title':
+    '从工单开成品入库单默认入库日期、数量与入库人',
+  'pages.dashboard.updateLog.entries.wo-fg-inbound-defaults-r01.description':
+    '入库日期默认当天，本次入库默认待入库数量，入库人默认当前登录用户；草稿仅在有正数时覆盖数量。',
+  'pages.dashboard.updateLog.entries.packing-binding-lines-audit-cols-r01.title':
+    '修复装箱绑定打开详情报 updated_by 不存在',
+  'pages.dashboard.updateLog.entries.packing-binding-lines-audit-cols-r01.description':
+    '装箱明细与箱规表补齐创建人/更新人审计列，详情查询明细行不再因缺列失败。',
+  'pages.dashboard.updateLog.entries.bom-create-decimal-empty-r01.title':
+    '修复新建 BOM 确认时报 ConversionSyntax',
+  'pages.dashboard.updateLog.entries.bom-create-decimal-empty-r01.description':
+    '用量/基准数量/损耗率及数值类自定义字段空串不再交给 Decimal；空白按未填处理，非法值给出可读提示，与编码规则无关。',
+  'pages.dashboard.updateLog.entries.material-batch-set-active-r01.title':
+    '物料管理支持批量修改启用状态',
+  'pages.dashboard.updateLog.entries.material-batch-set-active-r01.description':
+    '物料列表批量操作新增「批量启用状态」弹窗；并修复更新接口未识别 isActive 导致启用状态改不动的问题。',
+  'pages.dashboard.updateLog.entries.master-partners-pk-seq-r01.title':
+    '修复采购申请转采购订单报 Multiple objects returned',
+  'pages.dashboard.updateLog.entries.master-partners-pk-seq-r01.description':
+    '供应商/客户表曾无主键且编号序列落后，同 id 多行导致按供应商取数失败。已消重撞号、补主键并对齐序列。',
+  'pages.dashboard.updateLog.entries.outsource-print-template-r01.title': '工序委外与工单委外支持打印',
+  'pages.dashboard.updateLog.entries.outsource-print-template-r01.description':
+    '打印模板新建时可关联工序委外、工单委外；两张单据列表与详情均可按模板打印。',
+  'pages.dashboard.updateLog.entries.pro-custom-fields-catalog-trim-r01.title': '专业包自定义字段清单收窄',
+  'pages.dashboard.updateLog.entries.pro-custom-fields-catalog-trim-r01.description':
+    '配置中心仅保留有标准新建/编辑表单的业务单据与主数据；模板设计器、属期台账、折旧批处理、薄配置与规则页已从可配置清单移除，避免无录入入口的页干扰实施。',
+  'pages.dashboard.updateLog.entries.pro-custom-fields-manifest-merge-r01.title': '专业包业务页接通自定义字段',
+  'pages.dashboard.updateLog.entries.pro-custom-fields-manifest-merge-r01.description':
+    '轻办公、快研发、轻财务与快交付（含交付项目、物流、售后）已按应用 manifest 登记并接通自定义字段：列表、表单保存与详情回显与配置中心一致；未启用对应专业应用时配置中心不出现该页。',
+  'pages.dashboard.updateLog.entries.custom-fields-module-rollout-r01.title': '自定义字段覆盖更多业务板块',
+  'pages.dashboard.updateLog.entries.custom-fields-module-rollout-r01.description':
+    '销售、采购、仓储、质量与工装台账等已注册页面接通自定义字段：列表展示、新建编辑保存与详情回显与配置中心一致。',
+  'pages.dashboard.updateLog.entries.partner-price-tier-enable-switch-r01.title': '价格本阶梯价启用开关',
+  'pages.dashboard.updateLog.entries.partner-price-tier-enable-switch-r01.description':
+    '客户/供应商价格本可开关是否维护数量阶梯价，关闭时不保存阶梯并仅走标准价。',
+  'pages.dashboard.updateLog.entries.partner-price-tier-table-ui-r01.title': '数量阶梯价表格式编辑',
+  'pages.dashboard.updateLog.entries.partner-price-tier-table-ui-r01.description':
+    '客户/供应商价格本与物料默认值中的数量阶梯价改为表格式录入，列对齐更清晰。',
+  'pages.dashboard.updateLog.entries.partner-price-tier-wrap-r01.title': '阶梯取价计划扫尾',
+  'pages.dashboard.updateLog.entries.partner-price-tier-wrap-r01.description':
+    '采购退货换供应商或改日期会重算未锁定行；销售变更编辑新增行取价对齐源订单日期；补充 resolver 单测与价本手测清单。',
+  'pages.dashboard.updateLog.entries.partner-price-tier-import-returns-r01.title': '价本导入与销售退货阶梯取价',
+  'pages.dashboard.updateLog.entries.partner-price-tier-import-returns-r01.description':
+    '客户/供应商价格本支持 Excel 导入标准价与数量阶梯；销售退货手工行随客户、日期与数量重算单价，关联出库批次的行保持原价。空白出入库改供应商或业务日期时未锁定行同步重算。',
+  'pages.dashboard.updateLog.entries.partner-price-tier-order-change-r01.title': '订单变更与销售合同阶梯取价',
+  'pages.dashboard.updateLog.entries.partner-price-tier-order-change-r01.description':
+    '销售/采购变更单新增行支持按数量阶梯取价，源订单行改数量仍保持原价；销售合同与空白销售出库换客户或改日期时未锁定行会重算单价。',
+  'pages.dashboard.updateLog.entries.partner-price-tier-purchase-r01.title': '采购阶梯价与客商取价顺序',
+  'pages.dashboard.updateLog.entries.partner-price-tier-purchase-r01.description':
+    '供应商价格本与物料默认采购价支持数量阶梯；配置中心可调整最近成交价、价本标准价、价本阶梯价的尝试顺序；采购申请、采购订单与空白采购入库在未锁定来源行上改数量可跳档取价。',
+  'pages.dashboard.updateLog.entries.partner-price-tier-sales-r01.title': '销售阶梯价与报价取价',
+  'pages.dashboard.updateLog.entries.partner-price-tier-sales-r01.description':
+    '客户价格本与物料默认销售价支持阶梯售价（与行情定价并存）；销售报价、销售订单在未锁定来源行上改数量可随阶梯重算单价。',
+  'pages.dashboard.updateLog.entries.finance-pull-receipt-line-allocate-r01.title':
+    '分批进项发票与应付按行分摊修复',
+  'pages.dashboard.updateLog.entries.finance-pull-receipt-line-allocate-r01.description':
+    '从应付单或入库单创建进项发票、分批填写价税合计时，系统按表头金额自动分摊到所选入库行，不再因行合计与表头不一致而拦截；并补全采购发票取单相关中文提示。',
+  'pages.dashboard.updateLog.entries.so-purchase-fulfill-link-r01.title':
+    '销售订单采产下推与采购取单完善',
+  'pages.dashboard.updateLog.entries.so-purchase-fulfill-link-r01.description':
+    '多来源物料含外购时可直推采购；工单与采购共用订单余量（已下推一侧会占用另一侧可下推量）；采购订单新建菜单增加从销售订单创建。仅外购或仅自制单源场景行为与改前一致。',
+  'pages.dashboard.updateLog.entries.payment-voucher-response-total-ge0-r01.title':
+    '付款单列表金额为零时报错',
+  'pages.dashboard.updateLog.entries.payment-voucher-response-total-ge0-r01.description':
+    '应付剩余对齐后草稿付款总额可为 0；列表/详情响应改为允许大于等于 0，新建编辑仍须大于 0。收款单同步。',
+  'pages.dashboard.updateLog.entries.mobile-tenant-header-sync-r01.title': '移动端登录与消息组织上下文修复',
+  'pages.dashboard.updateLog.entries.mobile-tenant-header-sync-r01.description':
+    '避免本地缓存的组织 ID 与登录会话不一致导致组织不存在或消息中心 403；App 账密登录不再误带过期组织。',
+  'pages.dashboard.updateLog.entries.sales-order-push-delivery-capability-r01.title': '销售订单直接下推出库修复',
+  'pages.dashboard.updateLog.entries.sales-order-push-delivery-capability-r01.description':
+    '修复下推销售出库时门禁校验误引用未赋值变量导致报错的问题。',
+  'pages.dashboard.updateLog.entries.sales-order-push-shipment-notice-date-r01.title': '销售订单下推发货通知修复',
+  'pages.dashboard.updateLog.entries.sales-order-push-shipment-notice-date-r01.description':
+    '修复订单交期为日历日时通知仓库生成出库单失败的问题，下推失败时接口会返回具体原因便于排查。',
+  'pages.dashboard.updateLog.entries.uni-table-row-more-action-label-r01.title': '列表更多菜单动作文案修正',
+  'pages.dashboard.updateLog.entries.uni-table-row-more-action-label-r01.description':
+    '仅图标行操作收入更多时，按动作目录显示驳回、提交等文案，不再误显示为操作。',
+  'pages.dashboard.updateLog.entries.qms-system-document-circulation-tabs-r01.title': '体系文件受控副本分 Tab 登记',
+  'pages.dashboard.updateLog.entries.qms-system-document-circulation-tabs-r01.description':
+    '发放、回收与宣贯改为独立页签，弹窗标题改为受控副本，未回收份数仅在发放与回收页展示。',
+  'pages.dashboard.updateLog.entries.funide-oa-bom-collab-workbench-edit-r01.title':
+    'BOM协同编辑改走分区工作台',
+  'pages.dashboard.updateLog.entries.funide-oa-bom-collab-workbench-edit-r01.description':
+    '已建 BOM 协同不再用同一弹窗揉编辑电子与结构明细；列表工作台入口与新建完成后进入左右分区工作台填报。',
+  'pages.dashboard.updateLog.entries.funide-oa-rework-dept-workbench-restore-r01.title':
+    '返工单恢复按部门拆分工作台',
+  'pages.dashboard.updateLog.entries.funide-oa-rework-dept-workbench-restore-r01.description':
+    '多部门会签返工单的编辑/详情改开部门工作台，不再把物流采购、制造工艺、质量、计划等揉进同一弹窗；新建仅保留发起人区块，其余分区在工作台按节点填报保存。',
+  'pages.dashboard.updateLog.entries.funide-oa-rework-signoff-view-done-r01.title':
+    '返工办理台可查看已办部门内容',
+  'pages.dashboard.updateLog.entries.funide-oa-rework-signoff-view-done-r01.description':
+    '交给下一部门后，左侧点已办节点可只读查看该部门填写内容，方便协作；仅当前节点可保存与下推。',
+  'pages.dashboard.updateLog.entries.funide-oa-rework-signoff-list-path-r01.title':
+    '返工单列表正确显示 A-A / A-B 路径',
+  'pages.dashboard.updateLog.entries.funide-oa-rework-signoff-list-path-r01.description':
+    '列表接口返回返工路径字段，A-B 改型单不再一律显示为 A-A。',
+  'pages.dashboard.updateLog.entries.funide-oa-rework-signoff-post-approve-fill-r01.title':
+    '返工单领导通过后各部门可继续填报',
+  'pages.dashboard.updateLog.entries.funide-oa-rework-signoff-post-approve-fill-r01.description':
+    '会签链未关闭前，计划、仓库、生产入库等节点在领导审批通过后仍可保存本节点字段并交给下一部门，不再误报不可修改。',
+  'pages.dashboard.updateLog.entries.funide-oa-rework-signoff-seq-badge-r01.title':
+    '返工办理台审批顺序改用徽章',
+  'pages.dashboard.updateLog.entries.funide-oa-rework-signoff-seq-badge-r01.description':
+    '会签返工办理台左侧审批顺序的已办、当前、待办改为 filled 徽章，部门与状态左右分开显示。',
+  'pages.dashboard.updateLog.entries.funide-oa-rework-signoff-unique-soft-delete-r01.title':
+    '返工单提交不再因会签行唯一约束失败',
+  'pages.dashboard.updateLog.entries.funide-oa-rework-signoff-unique-soft-delete-r01.description':
+    '发起部门链时改为重建会签节点，并仅对未删除行保持部门唯一，避免提交时报服务器内部错误。',
+  'pages.dashboard.updateLog.entries.funide-oa-rework-signoff-restart-chain-r01.title':
+    '已提交但未建部门链的返工单可以继续提交',
+  'pages.dashboard.updateLog.entries.funide-oa-rework-signoff-restart-chain-r01.description':
+    '会签返工单若审核态已是已提交、部门链还没生成，列表不再把它显示成草稿。再次提交会从销售进入下一部门。',
+  'pages.dashboard.updateLog.entries.funide-oa-rework-signoff-submit-toolbar-r01.title':
+    '返工单列表补上提交',
+  'pages.dashboard.updateLog.entries.funide-oa-rework-signoff-submit-toolbar-r01.description':
+    '草稿返工单在新建旁边增加提交按钮，行操作也改为提交。勾选草稿后提交，单据进入下一部门。',
+  'pages.dashboard.updateLog.entries.funide-oa-rework-signoff-rewrite-r01.title':
+    '会签返工单按部门链重做',
+  'pages.dashboard.updateLog.entries.funide-oa-rework-signoff-rewrite-r01.description':
+    '福尼特返工单改为按客户顺序办理：A-A 与 A-B 分链，提交后进入下一部门，本节点保存后提交或退回，并可指定办理人。列表展示当前节点，不再使用下达报工那套执行状态。',
+  'pages.dashboard.updateLog.entries.funide-oa-rework-signoff-next-stage-r01.title':
+    '会签返工已提交后可进工作台并提交审核',
+  'pages.dashboard.updateLog.entries.funide-oa-rework-signoff-next-stage-r01.description':
+    '销售提交后列表出现工作台入口；各部门在工作台填报后可用提交审核进入领导审批。会签填报期允许保存子表，列表 capabilities 与重复提交按钮已对齐。',
+  'pages.dashboard.updateLog.entries.funide-oa-rework-signoff-lifecycle-r01.title':
+    '会签返工单提交后执行状态显示已提交',
+  'pages.dashboard.updateLog.entries.funide-oa-rework-signoff-lifecycle-r01.description':
+    '多部门会签型提交后业务态仍为草稿，列表执行状态改为按审核提交态展示已提交，并依 capabilities 隐藏重复提交按钮。',
+  'pages.dashboard.updateLog.entries.purchase-order-change-unapply-r01.title':
+    '采购变更单支持撤销生效后再反审核',
+  'pages.dashboard.updateLog.entries.purchase-order-change-unapply-r01.description':
+    '已生效的采购变更单可先「撤销生效」回滚原采购订单并回到已审核，再执行反审核；未撤销生效时反审核会提示先撤销生效。',
+  'pages.dashboard.updateLog.entries.purchase-order-change-apply-pricing-r01.title':
+    '采购变更生效后订单金额同步更新',
+  'pages.dashboard.updateLog.entries.purchase-order-change-apply-pricing-r01.description':
+    '变更单生效写入采购订单时同步含税单价与订单金额，避免改价后订单金额仍为 0 或未刷新。',
+  'pages.dashboard.updateLog.entries.rework-order-code-fr-line-year-r01.title':
+    '返工单号改为 FR 产品线加年流水',
+  'pages.dashboard.updateLog.entries.rework-order-code-fr-line-year-r01.description':
+    '返工单编码按 FR、产品线码、两位年份与三位流水生成，例如产品线 1 在 2026 年为 FR126001。会签与从工单创建均须填写产品线。',
+  'pages.dashboard.updateLog.entries.sales-order-list-document-relation-filter-r01.title':
+    '销售订单列表加载修复',
+  'pages.dashboard.updateLog.entries.sales-order-list-document-relation-filter-r01.description':
+    '列表汇总已下推采购时不再对单据关联表误用 deleted_at 过滤，修复「获取销售订单列表失败 Unknown filter param deleted_at__isnull」导致列表为空。需重启后端后生效。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-amount-single-entry-r01.title':
+    '采购入库行价税单一计算入口',
+  'pages.dashboard.updateLog.entries.purchase-receipt-amount-single-entry-r01.description':
+    '采购入库明细未税/税额/价税合计统一经 computePurchaseReceiptLineSettlementAmounts，与后端 settlement 同源；Web 构建默认跑 scan_purchase_amount_contract，禁止把未税 total_price 当含税 item_amount。关联订单行仅为同比例分摊 PO 行价税。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-inclusive-gross-r01.title':
+    '采购入库含税价税合计修复',
+  'pages.dashboard.updateLog.entries.purchase-receipt-inclusive-gross-r01.description':
+    '关联含税采购订单入库时，行价税合计按录入含税单价与数量推导，不再把订单行未税 total_price 误当价税合计，避免税额为 0、合计等于未税金额。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-dual-qty-no-aux-r01.title':
+    '无副单位物料入库保存误拦',
+  'pages.dashboard.updateLog.entries.purchase-receipt-dual-qty-no-aux-r01.description':
+    '仅主单位入库的物料不再因主数据里存在其它辅助单位配置而提示须填副数量；仍对在界面开启双单位且无固定换算的物料做双录校验。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-dual-qty-submit-r01.title':
+    '采购入库双单位保存修复',
+  'pages.dashboard.updateLog.entries.purchase-receipt-dual-qty-submit-r01.description':
+    '编辑采购入库保存时从表单实例读取明细主副数量，避免界面已填副数量仍被判定缺失；无固定换算且主单位为主单位数量时也会校验副数量；报错会带上物料名称便于定位行。',
+  'pages.dashboard.updateLog.entries.purchase-order-supplier-contact-pick-r01.title':
+    '采购单据供应商联系人可选',
+  'pages.dashboard.updateLog.entries.purchase-order-supplier-contact-pick-r01.description':
+    '采购订单、收货通知的供应商联系人，以及采购询价邀请供应商表中的联系人，均按主数据联系人明细支持下拉选择，选中后自动带出电话；无明细时仍可手工填写。采购申请申请人、询价采购员仍为人员选择器。需更新 Web 端后生效。',
+  'pages.dashboard.updateLog.entries.sales-delivery-line-pricing-r01.title': '销售出库价税与订单行单价对齐',
+  'pages.dashboard.updateLog.entries.sales-delivery-line-pricing-r01.description':
+    '销售出库编辑不再调用价目表重算冲掉订单下推行单价；行金额仍按表头价类与 documentLineAmounts / stored_sales_line_amount 写入。表头联系人、电话可保存并支持多联系人地址选择，下推从订单/发货通知带出。允许负库存时在无在库批号下可手工录入批号并保存。已错成 799.99 等单请按订单行单价改回或重新下推。需更新 Web 端并重启后端。',
+  'pages.dashboard.updateLog.entries.other-inbound-serial-numbers-r01.title': '其他入库序列号保存与确认入库',
+  'pages.dashboard.updateLog.entries.other-inbound-serial-numbers-r01.description':
+    '其他入库单编辑时录入或导入的序列号会写入明细并随详情返回；列表确认入库时按明细序列号校验，不再出现已录 9 个仍提示 0 个。需重启后端并更新 Web 端；已保存但未落库的单据请打开编辑再保存一次。',
+  'pages.dashboard.updateLog.entries.purchase-partner-material-snapshot-r01.title':
+    '采购单供应商料号回填修复',
+  'pages.dashboard.updateLog.entries.purchase-partner-material-snapshot-r01.description':
+    '采购订单等选料时，未命中供应商价本但存在物料编号映射时，与销售单一致回填供应商料号/品名；切换供应商后改数量重算也会刷新伙伴料号。需更新 Web 端后生效。',
+  'pages.dashboard.updateLog.entries.sales-doc-contact-address-pick-r01.title':
+    '销售单据多联系人多地址可选',
+  'pages.dashboard.updateLog.entries.sales-doc-contact-address-pick-r01.description':
+    '客户资料有多条联系人或地址时，销售订单与报价单的客户联系人、收货地址改为下拉选择；选中联系人会同步带出电话。客户下拉引用回显携带联系人地址明细。需重启后端并更新 Web 端后生效。',
+  'pages.dashboard.updateLog.entries.purchase-invoice-receipt-partner-statement-gate-r01.title':
+    '月结入库单不再直连采购发票取单',
+  'pages.dashboard.updateLog.entries.purchase-invoice-receipt-partner-statement-gate-r01.description':
+    '立账策略为以按月结对账单为准的采购入库、销售出库不再出现在入库出库直转发票的可加载列表；须先往来对账再从对账单加载发票。销售侧对称处理。需重启后端并更新 Web 端后生效。',
+  'pages.dashboard.updateLog.entries.payment-voucher-typography-import-r01.title':
+    '付款单页 Typography 引用修复',
+  'pages.dashboard.updateLog.entries.payment-voucher-typography-import-r01.description':
+    '付款单列表新建或打开弹窗时不再因缺少 Typography 组件导入而整页报错；需更新 Web 端后生效。',
+  'pages.dashboard.updateLog.entries.partner-statement-preview-sort-date-r01.title':
+    '往来对账单预览修复',
+  'pages.dashboard.updateLog.entries.partner-statement-preview-sort-date-r01.description':
+    '供应商或客户立账策略为「按月结对账单为准」时，预览对账单不再因明细缺少 sort_date 报错；未立账入库出库行与收付款合并排序改用业务日期回退。需重启后端后生效。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-default-warehouse-r01.title':
+    '采购入库带出物料默认仓库',
+  'pages.dashboard.updateLog.entries.purchase-receipt-default-warehouse-r01.description':
+    '从采购订单下推编辑入库单时，行入库仓按订单行、物料默认仓与表头仓解析；列表预取缺 defaults 时补拉物料档案，避免第二行等未自动带出默认仓库。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-po-pull-same-supplier-r01.title':
+    '采购入库可取单同供应商多订单合并',
+  'pages.dashboard.updateLog.entries.purchase-receipt-po-pull-same-supplier-r01.description':
+    '从采购订单创建入库单时，可勾选同一供应商多张订单的明细合并进入编辑页；仅不同供应商混选时拦截。',
+  'pages.dashboard.updateLog.entries.doc-partner-ledger-recognition-prefill-r01.title':
+    '销售采购订单立账策略跟随客商',
+  'pages.dashboard.updateLog.entries.doc-partner-ledger-recognition-prefill-r01.description':
+    '修复引用展示未带出客商立账策略导致选供应商/客户后仍只显示组织默认；下推预填客商时也会按主数据与参数中心规则回填应付/应收确认时点。',
+  'pages.dashboard.updateLog.entries.purchase-pull-aux-split-r01.title':
+    '采购申请取单拆行后副数量可对账',
+  'pages.dashboard.updateLog.entries.purchase-pull-aux-split-r01.description':
+    '部分转采购订单拆行后，开口取单按同申请同物料汇总已转副数量（与 PO 实存一致），第二次取单可看到副可取 4 等正确剩余；采购订单与询价从申请取单补齐主副六列。',
+  'pages.dashboard.updateLog.entries.purchase-pull-open-line-remaining-r01.title':
+    '采购取单按剩余数量开口',
+  'pages.dashboard.updateLog.entries.purchase-pull-open-line-remaining-r01.description':
+    '采购申请/询价转采购订单、收货通知、采购入库与退货等取单，可加载行以剩余数量为准；已建草稿下游即占用数量，下游审核或执行状态不再单独决定能否取单。',
+  'pages.dashboard.updateLog.entries.purchase-order-price-settlement-staticmethod-r01.title':
+    '采购订单保存恢复定价落库',
+  'pages.dashboard.updateLog.entries.purchase-order-price-settlement-staticmethod-r01.description':
+    '补回明细定价状态推导方法的 staticmethod，修复保存时报「takes 1 positional argument but 2 … were given」。',
+  'pages.dashboard.updateLog.entries.web-array-tosorted-polyfill-r02.title':
+    '旧版 Chrome 打开工作台甘特不再报 toSorted',
+  'pages.dashboard.updateLog.entries.web-array-tosorted-polyfill-r02.description':
+    '在首页 HTML 最先同步补齐 Array.toSorted（兼容 Win7 上 Chrome 109 及更早），避免福尼特等工作台甘特图加载失败；与主脚本 polyfill 双保险。',
+  'pages.dashboard.updateLog.entries.web-array-tosorted-polyfill-r01.title':
+    '兼容旧浏览器缺少 Array.toSorted',
+  'pages.dashboard.updateLog.entries.web-array-tosorted-polyfill-r01.description':
+    '入口补齐 Array.prototype.toSorted，避免甘特等第三方在旧 Chromium 上报「toSorted is not a function」导致应用加载失败。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-kingdee-dual-unit-amount-r01.title':
+    '采购入库推金蝶双单位金额守恒',
+  'pages.dashboard.updateLog.entries.purchase-receipt-kingdee-dual-unit-amount-r01.description':
+    '外推换算到库存单位后按入库行未税/价税合计反推单价，避免桶换公斤后金额被单价小数位抹掉；本地撤回入库会同步金蝶反审、撤销提交并删除远程单，改单重确认可重新外推。',
+  'pages.dashboard.updateLog.entries.purchase-order-non-gift-price-required-r01.title':
+    '采购订单非赠品单价必填',
+  'pages.dashboard.updateLog.entries.purchase-order-non-gift-price-required-r01.description':
+    '保存或提交采购订单时，非赠品明细的采购单价（含税录入时为含税单价）必须大于 0；单价为 0 会在表单与服务端一并拦截。',
+  'pages.dashboard.updateLog.entries.uni-audit-entity-business-type-resolve-r01.title':
+    '统一审核按业务类型解析审核登记',
+  'pages.dashboard.updateLog.entries.uni-audit-entity-business-type-resolve-r01.description':
+    '返工单、质量投诉等仅在 manifest 按 business_type 声明审核时，提交与审核动作会读取单据业务类型再匹配登记，避免误报未声明可审核。',
+  'pages.dashboard.updateLog.entries.funide-oa-rework-workbench-commit-api-r01.title':
+    '返工单工作台提交走单据提交接口',
+  'pages.dashboard.updateLog.entries.funide-oa-rework-workbench-commit-api-r01.description':
+    '工作台与列表草稿行的提交改为调用统一审核提交，不再误点业务一键提交审核，避免销售发起时仍提示须填写返工排位策划。',
+  'pages.dashboard.updateLog.entries.funide-oa-rework-commit-gate-r01.title':
+    '返工单发起人提交不再卡制造排位',
+  'pages.dashboard.updateLog.entries.funide-oa-rework-commit-gate-r01.description':
+    '多部门会签在销售等工作台点提交时不再要求排位策划与报废；制造排位、报废与采购到位时间在提交审核前按节点校验。',
+  'pages.dashboard.updateLog.entries.funide-oa-rework-release-gate-r01.title':
+    '返工单会签型不再显示下达',
+  'pages.dashboard.updateLog.entries.funide-oa-rework-release-gate-r01.description':
+    '多部门会签单隐藏工序路线下达，改走工作台与会签；简化执行无原工单工序线时亦不再误开下达按钮。',
+  'pages.dashboard.updateLog.entries.funide-oa-rework-create-modal-compact-r01.title':
+    '返工单新建弹窗排版收敛',
+  'pages.dashboard.updateLog.entries.funide-oa-rework-create-modal-compact-r01.description':
+    '行业会签新建去掉分段小标题与计划完工数量区，发起人字段并入连续两列栅格；产品线码与返工路径同一行，单号保存后由系统按 FR 规则生成。',
+  'pages.dashboard.updateLog.entries.funide-oa-rework-l06-align-r02.title':
+    '返工单对齐专项设计全流程',
+  'pages.dashboard.updateLog.entries.funide-oa-rework-l06-align-r02.description':
+    '新建默认多部门会签且仅填发起人字段，单号按 FR 产品线年流水生成；工作台可维护物料到位、排位策划与报废，列表支持申请人料号数量是否入库筛选与导出。',
+  'pages.dashboard.updateLog.entries.funide-oa-uni-material-select-r01.title':
+    '福尼特OA物料选择统一为标准物料选择器',
+  'pages.dashboard.updateLog.entries.funide-oa-uni-material-select-r01.description':
+    '物料评审、工程链接、批号/序列号、SOP 与返工单物料需求/报废行等选料入口改为 UniMaterialSelect；返工单保留空白新建、会签与库存验证等定制，不回退成宿主取单壳。',
+  'pages.dashboard.updateLog.entries.funide-oa-plm-api-self-mount-client-copy-r01.title':
+    '福尼特OA与通用应用前端隔离',
+  'pages.dashboard.updateLog.entries.funide-oa-plm-api-self-mount-client-copy-r01.description':
+    '研发/办公/主数据接口自挂到 /apps/funide-oa，并复制快研发、轻办公、主数据、快制造前端模块；页面不再 import 通用应用。快制造 API 仍走原前缀以避免与研发工作台路径冲突。',
+  'pages.dashboard.updateLog.entries.funide-oa-deliverables-menu-rename-r01.title':
+    '电子/结构菜单改为图纸文档',
+  'pages.dashboard.updateLog.entries.funide-oa-deliverables-menu-rename-r01.description':
+    '研发电子下「电子交付物」、研发结构下「结构交付物」分别更名为「电子图纸文档」「结构图纸文档」；路径与页面能力不变。',
+  'pages.dashboard.updateLog.entries.funide-oa-qms-circulation-tabs-r01.title': '体系文件受控副本分 Tab 登记',
+  'pages.dashboard.updateLog.entries.funide-oa-qms-circulation-tabs-r01.description':
+    '与快制造一致，发放、回收与宣贯分开展示，便于按业务登记与查阅。',
+  'pages.dashboard.updateLog.entries.qms-system-documents-nav-layout-r01.title': '体系文件左栏目录排版优化',
+  'pages.dashboard.updateLog.entries.qms-system-documents-nav-layout-r01.description':
+    '体系维度标准改为编码加名称双行展示并带图标，侧栏树对齐文件管理样式，体系下可筛选标准。',
+  'pages.dashboard.updateLog.entries.qms-system-documents-nav-r01.title': '体系文件支持多维目录浏览',
+  'pages.dashboard.updateLog.entries.qms-system-documents-nav-r01.description':
+    '质量体系体系文件改为左栏目录加右栏台账，可按适用标准、文件功能与生命周期切换查看，并支持浏览已作废文件。',
+  'pages.dashboard.updateLog.entries.qms-internal-audit-annual-plans-menu-r01.title':
+    '质量体系增加年度审核计划菜单',
+  'pages.dashboard.updateLog.entries.qms-internal-audit-annual-plans-menu-r01.description':
+    '快质量「质量体系」新增独立「年度审核计划」入口；内部审核页改为只管单次审核，无计划时会引导到年度计划页。',
+  'pages.dashboard.updateLog.entries.qms-preset-ansiesd-s2020-r01.title':
+    '体系条款预置增加防静电管理体系',
+  'pages.dashboard.updateLog.entries.qms-preset-ansiesd-s2020-r01.description':
+    '条款管理预置标准新增 ANSI/ESD S20.20:2021 防静电管理体系及公开目录条款树；打开标准目录或点预置即可自动写入。',
+  'pages.dashboard.updateLog.entries.kuaiqms-inspection-plans-to-basic-data-r01.title':
+    '质检方案改挂到基础资料',
+  'pages.dashboard.updateLog.entries.kuaiqms-inspection-plans-to-basic-data-r01.description':
+    '快质量侧栏将质检方案从检验业务挪到「基础资料」，并排在检验作业指导书之前；检验业务只保留检验单据。',
+  'pages.dashboard.updateLog.entries.kuaiqms-qc-sop-menu-rename-r01.title':
+    '检验作业指导书菜单改名',
+  'pages.dashboard.updateLog.entries.kuaiqms-qc-sop-menu-rename-r01.description':
+    '快质量「基础资料」下原「QC 材料 SOP」改为「检验作业指导书」，新建/编辑弹窗同步中文名称，避免英文缩写难懂。',
+  'pages.dashboard.updateLog.entries.kuaiqms-qc-sop-to-basic-data-r01.title':
+    'QC 材料 SOP 改挂到基础资料',
+  'pages.dashboard.updateLog.entries.kuaiqms-qc-sop-to-basic-data-r01.description':
+    '快质量侧栏新增「基础资料」分组，QC 材料 SOP 从检验业务挪入该组；它与主数据工艺 SOP 同属资料维护，不是检验单据。',
+  'pages.dashboard.updateLog.entries.sop-material-remote-search-no-limit-2000-r01.title':
+    'SOP 物料选择改为按关键字搜索',
+  'pages.dashboard.updateLog.entries.sop-material-remote-search-no-limit-2000-r01.description':
+    'PE/QC 的 SOP 列表与批量创建不再进页就拉全量物料（此前 limit=2000 易超时并弹出「服务器暂时不可用」）；改为打开下拉时按关键字搜索，已绑定物料按编号精确回填。',
+  'pages.dashboard.updateLog.entries.kuaiqms-qc-sop-to-inspection-docs-r01.title':
+    'QC 材料 SOP 改挂到检验业务',
+  'pages.dashboard.updateLog.entries.kuaiqms-qc-sop-to-inspection-docs-r01.description':
+    '快质量侧栏将 QC 材料 SOP 从质量体系移到检验业务，与检验方案等同属检验作业配置，不再和条款、内审、管理评审混在一组。',
+  'pages.dashboard.updateLog.entries.qms-objectives-legal-external-r01.title':
+    '质量体系新增质量目标、法律法规与外审证书',
+  'pages.dashboard.updateLog.entries.qms-objectives-legal-external-r01.description':
+    '可维护年度质量目标（实际值手工填、是否达到按数值计算），法律法规评价（需整改须关联纠正预防），以及同一页分段管理的外审与证书；已发布未达到的目标会带入管理评审输入。',
+  'pages.dashboard.updateLog.entries.payment-document-relation-no-deleted-at-r01.title':
+    '付款单确认报错 Unknown filter param 修复',
+  'pages.dashboard.updateLog.entries.payment-document-relation-no-deleted-at-r01.description':
+    '付款/收款确认前对齐草稿金额时，不再对单据关联表使用不存在的 deleted_at 过滤，避免报 Unknown filter param。',
+  'pages.dashboard.updateLog.entries.qms-management-review-resolutions-r01.title':
+    '管理评审可带入本周期单据并维护决议行',
+  'pages.dashboard.updateLog.entries.qms-management-review-resolutions-r01.description':
+    '带入输入会生成可编辑摘要并列出内审、不符合报告、纠正预防、投诉、供方评价及上次未关闭决议；输出改为决议行，勾选后可生成纠正预防，有未关闭决议时不能关闭评审。',
+  'pages.dashboard.updateLog.entries.qms-corrective-actions-r01.title':
+    '质量体系新增纠正预防并接通来源单',
+  'pages.dashboard.updateLog.entries.qms-corrective-actions-r01.description':
+    '新增纠正预防台账，可从不符合报告、质量投诉、管理评审生成。需要 8D 时只填已有 8D 单号。严重与一般不符合须关联并关闭纠正预防后才能关闭。',
+  'pages.dashboard.updateLog.entries.qms-internal-audit-checklist-nc-r01.title':
+    '内审检查表成行并新增不符合报告',
+  'pages.dashboard.updateLog.entries.qms-internal-audit-checklist-nc-r01.description':
+    '内审须先建年度计划；检查表按行填写结论，判不符合时生成不符合报告。有未关闭报告时不能关闭内审。本阶段纠正措施先写在报告上。',
+  'pages.dashboard.updateLog.entries.qms-system-document-circulation-r01.title':
+    '体系文件可登记发放、回收和宣贯',
+  'pages.dashboard.updateLog.entries.qms-system-document-circulation-r01.description':
+    '生效的体系文件可登记发放、回收和宣贯，列表可筛选待复审。未到复审日不会改文件状态，作废后仍可查看发放记录和未回收份数。',
+  'pages.dashboard.updateLog.entries.customer-private-sea-admin-assign-r01.title':
+    '新建客户进私海权限修复',
+  'pages.dashboard.updateLog.entries.customer-private-sea-admin-assign-r01.description':
+    '组织管理员或系统管理员角色新建客户并指定归属业务员时，不再误报「无权分配客户归属」；业务员认领自己为负责人时按客户池认领权限校验。',
+  'pages.dashboard.updateLog.entries.sync-run-history-trigger-kind-r01.title':
+    '同步记录展示触发方式',
+  'pages.dashboard.updateLog.entries.sync-run-history-trigger-kind-r01.description':
+    '数据互通「同步记录」在模式与状态之间增加触发方式列：手动、链式前置触发的触发、后台定时任务的定时。',
+  'pages.dashboard.updateLog.entries.master-warehouse-list-code-asc-r01.title':
+    '仓库列表默认按编码升序',
+  'pages.dashboard.updateLog.entries.master-warehouse-list-code-asc-r01.description':
+    '基础资料仓库列表默认按仓库编码从小到大排列（如 1001、1003）；未点列头排序时与下拉选仓等接口一致。',
+  'pages.dashboard.updateLog.entries.galaxy-material-group-bd-material-fieldkey-r01.title':
+    '星空物料分组改为 BD_MATERIAL 与 FMaterialGroup',
+  'pages.dashboard.updateLog.entries.galaxy-material-group-bd-material-fieldkey-r01.description':
+    'QueryGroupInfo 官方样例是 FormId=BD_MATERIAL、GroupFieldKey=FMaterialGroup。此前误用 UN_MaterialGroupStockGroup 时接口虽成功，但 NeedReturnData 常为 null。加载常用接口或接口测试会自动升级；响应仍取 Result.NeedReturnData。',
+  'pages.dashboard.updateLog.entries.api-tenant-code-unique-personalize-r01.title':
+    '接口按组织隔离保存，避免同代码撞唯一键',
+  'pages.dashboard.updateLog.entries.api-tenant-code-unique-personalize-r01.description':
+    '接口唯一约束本就是「组织 + 代码」。保存/加载常用接口时若同组织已有同代码，改为明确提示或跳过创建，不再冒出 duplicate key；物料分组预置升级只修错误结构，不再因 FormId 与默认值不同而覆盖租户个性化配置。',
+  'pages.dashboard.updateLog.entries.galaxy-material-group-querygroupinfo-single-param-r01.title':
+    '星空物料分组查询修正为单参 JSON',
+  'pages.dashboard.updateLog.entries.galaxy-material-group-querygroupinfo-single-param-r01.description':
+    'QueryGroupInfo 官方 parameters 只有一个 JSON 字符串（FormId 写在 JSON 内）。此前误发 [UN_MaterialGroupStockGroup, data] 两参，生产环境报「data格式错误…Unexpected character U」。加载常用接口或接口测试会自动升级；同步/调试共用同一预置。',
+  'pages.dashboard.updateLog.entries.material-group-infer-parent-by-code-r01.title':
+    '物料分组同步支持按编码智能归类',
+  'pages.dashboard.updateLog.entries.material-group-infer-parent-by-code-r01.description':
+    '同步物料分组弹窗可开启「按编码智能归类」：06.01、06.02 自动挂到 06，多级段同理；缺省祖先先占位再挂下级。默认关闭，不影响仅按映射父编码同步。',
+  'pages.dashboard.updateLog.entries.api-test-needreturndata-table-r01.title':
+    '接口测试响应表格支持分组信息查询',
+  'pages.dashboard.updateLog.entries.api-test-needreturndata-table-r01.description':
+    '星空 QueryGroupInfo（如物料分组）成功体在 Result.NeedReturnData。接口测试原先只解 data/items 等键，响应只剩 JSON。现已与同步解析对齐，可切「表格」展示分组行。',
+  'pages.dashboard.updateLog.entries.galaxy-material-group-querygroupinfo-r01.title':
+    '星空物料分组改用分组信息查询',
+  'pages.dashboard.updateLog.entries.galaxy-material-group-querygroupinfo-r01.description':
+    '金蝶查询物料分组预置改为 WebAPI「分组信息查询」QueryGroupInfo（UN_MaterialGroupStockGroup），不再走 ExecuteBillQuery / BD_MATERIALGROUP。加载常用接口或接口测试会自动升级路径与请求体；同步解析 Result.NeedReturnData，字段映射 FNUMBER/FNAME/FPARENTID。',
+  'pages.dashboard.updateLog.entries.connector-api-hard-delete-r01.title':
+    '应用连接器与接口管理改为硬删除',
+  'pages.dashboard.updateLog.entries.connector-api-hard-delete-r01.description':
+    '删除应用连接器或接口时不再软删占位。软删残留曾导致同 code 幽灵行、同步绑定仍指向已删 UUID（例如物料同步 yunxingkong_query_material 调试正常但同步失败）。现为硬删除；删除接口前若仍被同步绑定引用会明确拦截；新建同 code 会先清软删残留。',
+  'pages.dashboard.updateLog.entries.sync-api-test-parity-upgrade-order-r01.title':
+    '同步与接口调试出站对齐：先合并再升级预置',
+  'pages.dashboard.updateLog.entries.sync-api-test-parity-upgrade-order-r01.description':
+    '主数据/单据同步与接口管理共用 test_api。此前先升级预置再被同步脏请求体覆盖，造成接口调试正常、同步异常。现改为先合并同步参数再升级，并补齐物料/单位出站升级；星空嵌套错误与摊平行也会直接抛出原文。',
+  'pages.dashboard.updateLog.entries.material-group-sync-kingdee-error-unwrap-r01.title':
+    '物料分组同步不再把星空错误当成分组行',
+  'pages.dashboard.updateLog.entries.material-group-sync-kingdee-error-unwrap-r01.description':
+    '星空 ExecuteBillQuery 失败时常返回嵌套 Result 错误体。接口调试能看到真实原因，同步却曾摊成空编码行并提示缺少分组编码。现已剥开嵌套错误并直接抛出金蝶原文，避免物料管理与接口调试表现不一致。',
+  'pages.dashboard.updateLog.entries.master-sync-galaxy-cosmic-audit-r01.title':
+    '主数据同步星空/苍穹错绑与物料分组空拉修复',
+  'pages.dashboard.updateLog.entries.master-sync-galaxy-cosmic-audit-r01.description':
+    '排查其它主数据同步后：供应商存在与物料同类的星空错绑（已改绑苍穹并改用 number/name 映射）；物料分类 batchQuery 出站同样剥离 createorg 与空筛选项；物料分组空拉提示按星空/苍穹接口类型分别说明，避免再套错文案。',
+  'pages.dashboard.updateLog.entries.material-sync-zero-fetch-source-hint-r01.title':
+    '物料同步空拉提示按接口类型区分',
+  'pages.dashboard.updateLog.entries.material-sync-zero-fetch-source-hint-r01.description':
+    '全量同步返回 0 行时，不再一律提示苍穹 createorg_number。绑的是星空 ExecuteBillQuery 会明确说明应改选「苍穹查询物料」；苍穹 batchQuery 还会清理勾选未填的空筛选项，避免误筛成 0 条。',
+  'pages.dashboard.updateLog.entries.resource-category-uuid-doc-key-leak-r01.title':
+    '修复审批等分类筛选 UUID 报错',
+  'pages.dashboard.updateLog.entries.resource-category-uuid-doc-key-leak-r01.description':
+    '审批流程、消息模板、打印模板、数据集左栏选分类时不再误用接口库「关联单据」复合键；列表筛选与新建预填只传纯分类 UUID，消除 category_uuid 校验失败。',
+  'pages.dashboard.updateLog.entries.collab-function-category-presets-r01.title':
+    '协同配置支持按功能域预置分类',
+  'pages.dashboard.updateLog.entries.collab-function-category-presets-r01.description':
+    '审批、消息与打印模板左栏可一键预置销售、采购、制造等功能分类，并自动把已有预设模板挂到对应分类；新建与加载预设时也会按规则归类。',
+  'pages.dashboard.updateLog.entries.collab-config-resource-categories-r01.title':
+    '审批流程、消息模板与打印模板支持分类管理',
+  'pages.dashboard.updateLog.entries.collab-config-resource-categories-r01.description':
+    '协同配置三页左侧可维护分类，右侧列表按分类筛选；新建时可挂当前分类，与接口、数据集分类体验一致。',
+  'pages.dashboard.updateLog.entries.header-user-trigger-no-warp-r01.title':
+    '顶栏用户下拉菜单打开时不再形变',
+  'pages.dashboard.updateLog.entries.header-user-trigger-no-warp-r01.description':
+    '右上角用户菜单关闭滑入缩放动画，下拉面板按最终尺寸直接出现，不再在展开瞬间轻微拉扯变形。',
+  'pages.dashboard.updateLog.entries.kuaizhizao-system-documents-nav-single-align-r01.title':
+    '体系文件左栏单行目录图标与文字对齐',
+  'pages.dashboard.updateLog.entries.kuaizhizao-system-documents-nav-single-align-r01.description':
+    '左栏「全部」、文件功能、生命周期等单行项图标与文字垂直居中；双行标准名称仍顶对齐主标题。',
+  'pages.dashboard.updateLog.entries.kuaizhizao-system-documents-detail-r01.title':
+    '体系文件列表增加详情查看',
+  'pages.dashboard.updateLog.entries.kuaizhizao-system-documents-detail-r01.description':
+    '操作列增加「详情」，打开详情抽屉可查看基本信息与附件，附件支持在线预览，便于查阅体系文件正文材料。',
+  'pages.dashboard.updateLog.entries.kuaizhizao-system-documents-nav-filter-keep-r01.title':
+    '体系文件左栏切换维度仍保留筛选框',
+  'pages.dashboard.updateLog.entries.kuaizhizao-system-documents-nav-filter-keep-r01.description':
+    '体系、文件功能、生命周期三个维度标签下均显示筛选框，可按当前维度过滤左侧目录项；切换维度时清空关键字并换对应占位文案。',
+  'pages.dashboard.updateLog.entries.kuaizhizao-system-documents-three-bucket-r01.title':
+    '体系文件列表对齐三桶列宽',
+  'pages.dashboard.updateLog.entries.kuaizhizao-system-documents-three-bucket-r01.description':
+    '质量体系文件列表按三桶定宽：编号/版本/类型/体系/条款/复审/未回收 KeepWidth，标题吃余量；文件类型改 MarkerTag；状态右固定；行操作改为发放/履历/升版等双字目录文案。',
+  'pages.dashboard.updateLog.entries.menu-sync-prompt-relax-r01.title':
+    '菜单更新提示不再频繁打扰',
+  'pages.dashboard.updateLog.entries.menu-sync-prompt-relax-r01.description':
+    '仅当侧栏缺路由、多出旧菜单或菜单挂错层级时才提示同步；清单 JSON 与库内不一致但侧栏已对齐时不再弹窗。同一会话只自动提醒一次，切换窗口也不会反复拉取。',
+  'pages.dashboard.updateLog.entries.menu-sync-prompt-close-after-sync-r01.title':
+    '菜单同步完成后右下角提醒会关掉',
+  'pages.dashboard.updateLog.entries.menu-sync-prompt-close-after-sync-r01.description':
+    '应用菜单已经和当前清单一致时，右下角「应用菜单结构已更新」会关掉。此前一键同步成功后这条提醒仍一直挂着。',
+  'pages.dashboard.updateLog.entries.receipt-draft-shrink-after-receivable-settle-r01.title':
+    '先开的收款草稿会随应收核销下调',
+  'pages.dashboard.updateLog.entries.receipt-draft-shrink-after-receivable-settle-r01.description':
+    '应收被其他收款或预收核销后，仍挂在该应收上的草稿收款单会按剩余金额下调总额和待核销。先开满额草稿、后确认预收时，原单可按剩余金额继续审核。',
+  'pages.dashboard.updateLog.entries.payment-draft-shrink-after-payable-settle-r01.title':
+    '先开的付款草稿会随应付核销下调',
+  'pages.dashboard.updateLog.entries.payment-draft-shrink-after-payable-settle-r01.description':
+    '应付被其他付款核销后，仍挂在该应付上的草稿付款单会按剩余金额下调总额和待核销。先开满额草稿、后确认预付时，原单可按剩余金额继续审核，不再报核销金额超过单据剩余。',
+  'pages.dashboard.updateLog.entries.audit-hub-withdraw-revoke-mixup-r01.title':
+    '终审撤销审核不再误走撤回提交',
+  'pages.dashboard.updateLog.entries.audit-hub-withdraw-revoke-mixup-r01.description':
+    '审核弹窗在流程已通过后仍可能留下「撤回提交」，终审人一点就报没有可撤回流程。现已区分撤回提交与撤销审核：已通过实例页脚改为撤销审核，待审仅发起人可见撤回提交，误审本级仍走撤销审核。',
+  'pages.dashboard.updateLog.entries.partner-price-resolve-permission-arg-r01.title':
+    '销售采购改数量取价报权限参数错误',
+  'pages.dashboard.updateLog.entries.partner-price-resolve-permission-arg-r01.description':
+    '销售订单等单据改数量调用统一取价时，权限校验少传 Request 导致接口 500。已补齐参数，并允许价本读权限或对应销售/采购单据读权限任一即可取价。',
+  'pages.dashboard.updateLog.entries.price-book-effective-open-ended-r01.title':
+    '价格本生效起止不填表示一直生效',
+  'pages.dashboard.updateLog.entries.price-book-effective-open-ended-r01.description':
+    '客户/供应商价格本未填生效起始或截止时，列表与详情显示「一直生效」；表单提示不填即长期有效。取价逻辑本就按空日期为不限处理，清空日期保存时会写回空值。',
+  'pages.dashboard.updateLog.entries.partner-price-tier-doc-resolve-r01.title':
+    '销售采购单据按数量接入价本阶梯价',
+  'pages.dashboard.updateLog.entries.partner-price-tier-doc-resolve-r01.description':
+    '报价、销售订单、采购订单等未锁定行取价时，有订购数量且价本启用阶梯价，优先按数量命中阶梯单价，不再被同本标准价短路；关闭阶梯价保存时会清空库内阶梯档。',
+  'pages.dashboard.updateLog.entries.price-book-partner-code-optional-r01.title':
+    '价格本客户料号改为非必填',
+  'pages.dashboard.updateLog.entries.price-book-partner-code-optional-r01.description':
+    '新建或编辑客户/供应商价格本时，客户料号（供应商料号）不再因开启「同步到物料编号映射」而强制必填；未填料号时仅保存价格，不同步编号映射。',
+  'pages.dashboard.updateLog.entries.payment-app-approval-completion-writeback-r01.title':
+    '付款申请流程结束后状态未变为已批准',
+  'pages.dashboard.updateLog.entries.payment-app-approval-completion-writeback-r01.description':
+    '多级审批全部通过后，流程实例已结束，但付款申请单据未回写为「已批准」。根因是审批完成回调未注册付款申请写回；现已补齐。已卡住的单据可再点一次「审核」补写状态，或等发版后由运维补齐。',
+  'pages.dashboard.updateLog.entries.common-list-audit-phase-pending-mine-r01.title':
+    '常用单据列表待我审核补齐',
+  'pages.dashboard.updateLog.entries.common-list-audit-phase-pending-mine-r01.description':
+    '采购订单/变更/退货/询价、销售出库、生产领料、工单、报工、需求计划，以及来料/过程/成品/出货/委外检验与质量巡检等列表，补传当前用户身份后，轮到自己审核时显示「待我审核」，本级已过显示「您已审核」。',
+  'pages.dashboard.updateLog.entries.sales-list-audit-phase-pending-mine-r01.title':
+    '销售单据列表待我审核可点亮',
+  'pages.dashboard.updateLog.entries.sales-list-audit-phase-pending-mine-r01.description':
+    '报价单、销售合同、订单变更、发货通知、销售退货、销售预测列表原先只有审核状态列，列表接口未带当前用户身份，轮到自己时仍显示「待审核」。现已与销售订单对齐，可显示「待我审核」「您已审核」。',
+  'pages.dashboard.updateLog.entries.doc-list-audit-phase-pending-mine-r01.title':
+    '付款申请等单据列表补齐待我审核状态',
+  'pages.dashboard.updateLog.entries.doc-list-audit-phase-pending-mine-r01.description':
+    '付款申请、应收应付、进项发票、往来对账、其他费用收支/申请等列表接入与采购申请同一套审核状态列；流程轮到当前登录人时显示「待我审核」，已审本级显示「您已审核」。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-pay-mode-align-po-r01.title':
+    '采购入库付款方式与采购订单对齐',
+  'pages.dashboard.updateLog.entries.purchase-receipt-pay-mode-align-po-r01.description':
+    '入库单付款方式改用与采购订单相同的客商码表（现金、银行转账等）；下推时继承订单付款方式；不再默认「赊购」。外推金蝶时仍映射为 CREDIT/CASH。',
+  'pages.dashboard.updateLog.entries.po-detail-incl-amount-r01.title':
+    '采购订单详情改为展示含税金额',
+  'pages.dashboard.updateLog.entries.po-detail-incl-amount-r01.description':
+    '详情抽屉订单金额、含税单价、价税合计与扣预付后预计应付按含税口径展示，与财务应付立账一致；库内未税字段不变。',
+  'pages.dashboard.updateLog.entries.warehouse-push-comment-mes-r01.title':
+    '其他出入库与销售出库外推备注改为从MES系统',
+  'pages.dashboard.updateLog.entries.warehouse-push-comment-mes-r01.description':
+    '推送到金蝶的其他出库、其他入库、生产领料、成品入库、销售出库备注不再写产品名，改为「从MES系统」加单据类型和本单号。',
+  'pages.dashboard.updateLog.entries.purinbill-comment-mes-r01.title':
+    '采购入库外推备注改为从MES系统',
+  'pages.dashboard.updateLog.entries.purinbill-comment-mes-r01.description':
+    '推送到金蝶的采购入库备注不再写产品名，改为「从MES系统采购入库」加本单号。',
+  'pages.dashboard.updateLog.entries.purinbill-preset-keep-sample-r01.title':
+    '加载采购入库预设不再覆盖已填编码',
+  'pages.dashboard.updateLog.entries.purinbill-preset-keep-sample-r01.description':
+    '采购入库自定义新增接口补名称或路径时，已填写的单据类型、业务类型、库存事务等编码会保留。外推缺这些编码时会标明当前绑定的 Save 接口，样例中的 REPLACE_ 占位须改成该账套真实编码。',
+  'pages.dashboard.updateLog.entries.material-sync-enablelot-r01.title':
+    '物料同步带上批号与序列号开关',
+  'pages.dashboard.updateLog.entries.material-sync-enablelot-r01.description':
+    '从金蝶同步物料时一并读取启用批号、启用序列号，写入本地批号管理与序列号管理。重新同步物料后，已启用批号的物料才能在入库单填写批号。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-edit-uses-create-modal-r01.title':
+    '编辑采购入库单与新建同一表单',
+  'pages.dashboard.updateLog.entries.purchase-receipt-edit-uses-create-modal-r01.description':
+    '采购入库编辑改为打开新建采购入库单那套表单，可改供应商、仓库、库位、批号、价税和人员，不再只有数量和立账策略。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-confirm-push-error-r01.title':
+    '确认入库推送失败会提示',
+  'pages.dashboard.updateLog.entries.purchase-receipt-confirm-push-error-r01.description':
+    '采购入库确认后若金蝶拒收，页面会提示金蝶返回的原因，不再只记后台日志。',
+  'pages.dashboard.updateLog.entries.warehouse-location-dropdown-local-filter-r01.title':
+    '库位下拉只查当前仓库',
+  'pages.dashboard.updateLog.entries.warehouse-location-dropdown-local-filter-r01.description':
+    '入库明细选库位改为只读本地主数据中当前仓库的库位，同一仓库不重复请求，不再每次拉全量库位。',
+  'pages.dashboard.updateLog.entries.partner-line-price-resolve-permission-r01.title':
+    '选明细取价权限校验修复',
+  'pages.dashboard.updateLog.entries.partner-line-price-resolve-permission-r01.description':
+    '采购入库等单据选择明细物料时取价接口补上请求对象，不再报缺少 permission_codes。',
+  'pages.dashboard.updateLog.entries.kingdee-purchase-receipt-audit-after-save-r01.title':
+    '采购入库推送金蝶后自动审核',
+  'pages.dashboard.updateLog.entries.kingdee-purchase-receipt-audit-after-save-r01.description':
+    '采购入库外推金蝶在保存成功后继续提交并审核，单据状态为已审核。此前保存后停在暂存，是因为推送配置未打开提交和审核。',
+  'pages.dashboard.updateLog.entries.kingdee-push-location-source-code-r01.title':
+    '金蝶下推仓位号按苍穹编码',
+  'pages.dashboard.updateLog.entries.kingdee-push-location-source-code-r01.description':
+    '同一苍穹库位挂多仓时本地编码形如仓库_库位；下推金蝶与库存余额入站同步均按库位档案苍穹仓位号解析并落本地编码，避免把复合编码当作金蝶仓位导致导入或挂账失败。',
+  'pages.dashboard.updateLog.entries.inbound-purchase-edit-direct-r01.title':
+    '采购入库列表编辑直达弹窗',
+  'pages.dashboard.updateLog.entries.inbound-purchase-edit-direct-r01.description':
+    '采购管理采购入库与仓储入库 Hub 列表点编辑不再先闪详情抽屉，直接进入编辑弹窗；进行中详情请求会被取消；URL 可带 action=edit 深链打开编辑。',
+  'pages.dashboard.updateLog.entries.document-line-attachments-inline-r02.title':
+    '行附件紧凑展示与物料附件加载修复',
+  'pages.dashboard.updateLog.entries.document-line-attachments-inline-r02.description':
+    '明细表行附件改为上传与计数文字链，不再占用大块上传框；修复物料附件弹窗加载失败时误显示为空，并校正工程图纸读权限码。',
+  'pages.dashboard.updateLog.entries.document-line-material-attachments-r01.title':
+    '六类单据明细行附件与物料附件快捷',
+  'pages.dashboard.updateLog.entries.document-line-material-attachments-r01.description':
+    '请购、采购订单、采购入库、报价、销售订单、销售出库明细可上传行附件，并从物料图片与工程图纸勾选复制到行；详情与相关行级报表可预览。选物料不会自动带入附件，下推默认不带行附件。',
+  'pages.dashboard.updateLog.entries.material-tracking-create-default-r01.title':
+    '仓储配置驱动新建物料批号/序列号默认',
+  'pages.dashboard.updateLog.entries.material-tracking-create-default-r01.description':
+    '配置中心开启批号或序列号管理后，新建物料默认打开对应开关，减少漏点；关闭配置则新建不再默认打开。已有物料与暂存草稿不受影响，单物料仍可手改。',
+  'pages.dashboard.updateLog.entries.material-shortage-processing-resolve-r01.title':
+    '缺料异常处理中可结案',
+  'pages.dashboard.updateLog.entries.material-shortage-processing-resolve-r01.description':
+    '点「采购」进入处理中后仍可点「已解决」或取消；此前操作按钮只在待处理显示，导致采购后关不掉异常。',
+  'pages.dashboard.updateLog.entries.inventory-transfer-serial-numbers-r01.title':
+    '库存调拨支持序列号',
+  'pages.dashboard.updateLog.entries.inventory-transfer-serial-numbers-r01.description':
+    '调拨明细可选择在库序列号；启用序列号管理的物料在保存与执行调拨时须数量与序列号一致，过账同步序列号台账。',
+  'pages.dashboard.updateLog.entries.finance-center-default-connection-r01.title':
+    '财务中心 KPI 连接错误修复',
+  'pages.dashboard.updateLog.entries.finance-center-default-connection-r01.description':
+    '财务中心摘要与账龄改走快制造财务管理 API；轻财务侧应收/收款等模型改为再导出宿主类，消除 default_connection cannot be None。',
+  'pages.dashboard.updateLog.entries.kuaioa-attendance-line-col-width-r01.title':
+    '月度考勤列表产线列加宽',
+  'pages.dashboard.updateLog.entries.kuaioa-attendance-line-col-width-r01.description':
+    '考勤填报列表产线列固定宽度加大，编码加名称类产线不再被截断。',
+  'pages.dashboard.updateLog.entries.kuaioa-attendance-list-line-scope-r01.title':
+    '月度考勤列表按产线负责人收窄',
+  'pages.dashboard.updateLog.entries.kuaioa-attendance-list-line-scope-r01.description':
+    '员工档案已关联登录用户并填写产线时，考勤填报列表与单据操作仅展示本产线考勤单，车间级整单不再出现在产线负责人列表中。',
+  'pages.dashboard.updateLog.entries.kuaioa-payroll-hide-sign-col-screen-r01.title':
+    '工资结算屏上隐藏签字列',
+  'pages.dashboard.updateLog.entries.kuaioa-payroll-hide-sign-col-screen-r01.description':
+    '好力 GO 结算明细屏上表格不含签字列，打印专用表含签字栏，避免表头留空列。',
+  'pages.dashboard.updateLog.entries.kuaioa-payroll-import-template-r01.title':
+    '工资结算导入去掉基本工资并预置模板',
+  'pages.dashboard.updateLog.entries.kuaioa-payroll-import-template-r01.description':
+    '好力 GO 结算导入仅保留应发小计与计件工资，可下载对应 Excel 模板（姓名+金额列）再上传写入明细。',
+  'pages.dashboard.updateLog.entries.kuaioa-payroll-line-pay-method-label-r01.title':
+    '工资结算明细姓名旁显示计薪方式',
+  'pages.dashboard.updateLog.entries.kuaioa-payroll-line-pay-method-label-r01.description':
+    '好力 GO 结算表姓名后以 filled 徽章区分计件、计时、产线或月薪，便于核对加班与小计规则。',
+  'pages.dashboard.updateLog.entries.kuaioa-payroll-pay-method-rules-r01.title':
+    '好力 GO 工资结算按计薪方式分规则',
+  'pages.dashboard.updateLog.entries.kuaioa-payroll-pay-method-rules-r01.description':
+    '员工档案计薪方式为月薪时按考勤计算加班并合计小计；计件/计时/产线可导入应发小计并由小计反推加班工资，重建保留已填小计。',
+  'pages.dashboard.updateLog.entries.kuaioa-payroll-column-source-tooltip-r01.title':
+    '工资结算列标题悬停显示来源',
+  'pages.dashboard.updateLog.entries.kuaioa-payroll-column-source-tooltip-r01.description':
+    '好力 GO 结算明细表头改为 Popover：点击可查看列数据来源，有读权限时提供最低工资、基础架构、考勤、福利等维护页跳转。',
+  'pages.dashboard.updateLog.entries.kuaioa-payroll-detail-header-groups-r01.title':
+    '工资结算明细双层表头分组',
+  'pages.dashboard.updateLog.entries.kuaioa-payroll-detail-header-groups-r01.description':
+    '好力 GO 结算明细表头第一行分为应得部分、扣除部分、结余部分，第二行展示各金额列，贴近纸质工资表结构。',
+  'pages.dashboard.updateLog.entries.kuaioa-payroll-holiday-from-welfare-r01.title':
+    '工资结算节日福利取自节日福利发放',
+  'pages.dashboard.updateLog.entries.kuaioa-payroll-holiday-from-welfare-r01.description':
+    '好力 GO 结算明细「节日福利」列汇总当月已确认的节日福利发放单金额，不再从工资基础架构录入；重建结算时自动带入。',
+  'pages.dashboard.updateLog.entries.kuaioa-payroll-haoligo-earning-columns-r01.title':
+    '好力 GO 工资结算应发列与计薪规则',
+  'pages.dashboard.updateLog.entries.kuaioa-payroll-haoligo-earning-columns-r01.description':
+    '结算明细按基本工资、绩效、基础架构补贴、加班（21.75 口径）、夜班次数×单次补贴排列；重建时自动计算加班与夜班。',
+  'pages.dashboard.updateLog.entries.kuaioa-payroll-hide-post-wage-col-r01.title':
+    '工资结算明细去掉岗位工资列',
+  'pages.dashboard.updateLog.entries.kuaioa-payroll-hide-post-wage-col-r01.description':
+    '好力 GO 岗位类补贴已在工资基础架构拆为岗位津贴、高温、工龄、等级；结算表不再展示易混淆的岗位工资列。',
+  'pages.dashboard.updateLog.entries.kuaioa-payroll-detail-table-scroll-r01.title':
+    '工资结算明细表体限高滚动',
+  'pages.dashboard.updateLog.entries.kuaioa-payroll-detail-table-scroll-r01.description':
+    '结算明细与月度考勤一致：汇总与提示固定在上部，表体在可视区内纵向滚动。',
+  'pages.dashboard.updateLog.entries.kuaioa-payroll-detail-line-search-r01.title':
+    '工资结算明细支持姓名工号筛选',
+  'pages.dashboard.updateLog.entries.kuaioa-payroll-detail-line-search-r01.description':
+    '结算详情工具栏增加关键字搜索，仅过滤表内人员，便于在大车间单中定位员工。',
+  'pages.dashboard.updateLog.entries.kuaioa-payroll-hide-line-totals-r01.title':
+    '工资结算页隐藏产线总产量与总工资',
+  'pages.dashboard.updateLog.entries.kuaioa-payroll-hide-line-totals-r01.description':
+    '结算详情暂不提供产线总产量、产线总工资输入，避免与计时计件流程混淆；后端分摊能力保留，后续需要可再加回界面。',
+  'pages.dashboard.updateLog.entries.kuaioa-payroll-detail-seq-col-r01.title':
+    '工资结算明细去掉重复序号列',
+  'pages.dashboard.updateLog.entries.kuaioa-payroll-detail-seq-col-r01.description':
+    '结算明细表仅保留一列序号，移除与序号重复的「分线序号」列。',
+  'pages.dashboard.updateLog.entries.kuaioa-attendance-fill-scroll-load-r01.title':
+    '月度考勤填报名单改为下滑加载',
+  'pages.dashboard.updateLog.entries.kuaioa-attendance-fill-scroll-load-r01.description':
+    '取消底部分页，先展示少量人员，表内滚到底部自动追加加载，减轻首屏卡顿。',
+  'pages.dashboard.updateLog.entries.kuaioa-attendance-fill-keyword-filter-r01.title':
+    '月度考勤填报改为关键字筛选人员',
+  'pages.dashboard.updateLog.entries.kuaioa-attendance-fill-keyword-filter-r01.description':
+    '去掉表内人员下拉多选，统一用工具栏关键字输入筛选；批量休息/夜班在有关键字时仅作用于当前筛选结果。',
+  'pages.dashboard.updateLog.entries.kuaioa-attendance-fill-perf-r01.title':
+    '月度考勤填报性能与人员搜索优化',
+  'pages.dashboard.updateLog.entries.kuaioa-attendance-fill-perf-r01.description':
+    '考勤填报改为默认分页展示（约 10 人/页），定位搜索后只渲染匹配行；日格组件 memo 化；批量人员下拉按需加载，避免一次挂载百余人乘整月日格导致严重卡顿。',
+  'pages.dashboard.updateLog.entries.kuaioa-attendance-fill-roster-search-r01.title':
+    '月度考勤填报可按姓名工号定位',
+  'pages.dashboard.updateLog.entries.kuaioa-attendance-fill-roster-search-r01.description':
+    '填报页工具栏增加「定位姓名或工号」筛表内人员；批量人员多选改为自管姓名工号过滤，并区分文案避免误当成表内定位。',
+  'pages.dashboard.updateLog.entries.kuaioa-payroll-attendance-linkage-r01.title':
+    '轻办公薪酬考勤联动补强',
+  'pages.dashboard.updateLog.entries.kuaioa-payroll-attendance-linkage-r01.description':
+    '出差审批回写月度考勤为出勤满标准工时；提交考勤前自动同步休息/夜班/请假；工资重建纳入当月确认的节日福利；好力 GO 工资基础架构增加夜班补贴列并写入结算。',
+  'pages.dashboard.updateLog.entries.kuaioa-attendance-menu-order-r01.title':
+    '人事基础考勤菜单按登记到汇总排序',
+  'pages.dashboard.updateLog.entries.kuaioa-attendance-menu-order-r01.description':
+    '请假出差、休息登记、夜班登记排在月度考勤之前，月度考勤作为汇总入口放在夜班登记之后。',
+  'pages.dashboard.updateLog.entries.kuaioa-payroll-reports-menu-group-r01.title':
+    '薪酬管理报表收拢为子菜单',
+  'pages.dashboard.updateLog.entries.kuaioa-payroll-reports-menu-group-r01.description':
+    '生活费发放表、个人工资明细、年度工资统计归入「薪酬报表」分组，业务登记与工资结算仍平铺在薪酬管理下。',
   'app.kuaioa.menu.living-advances': '生活费预支',
   'app.kuaioa.menu.rewards': '奖励登记',
   'app.kuaioa.menu.payroll-wage-register': '工资登记',
@@ -3942,6 +6146,7 @@ export default {
   'app.kuaioa.menu.annual-payroll-stats': '年度工资统计',
   'app.kuaioa.menu.personal-payroll': '个人工资明细',
   'app.kuaioa.menu.post-subsidies': '岗位补贴',
+  'app.kuaioa.menu.salary-base-structure': '工资基础架构',
   'app.kuaioa.menu.minimum-wage': '最低工资配置',
   'app.kuaioa.menu.employee-movements': '入离职明细',
   'app.kuaioa.menu.skills': '技能管理',
@@ -4004,6 +6209,7 @@ export default {
   'app.kuaioa.formTemplate.category': '分类',
   'app.kuaioa.formTemplate.category.general': '通用',
   'app.kuaioa.formTemplate.createButton': '新建表单模板',
+  'app.kuaioa.formRequest.entityName': '通用申请单',
   'app.kuaioa.formRequest.code': '申请单号',
   'app.kuaioa.formRequest.title': '标题',
   'app.kuaioa.formRequest.createButton': '新建通用申请单',
@@ -4033,6 +6239,7 @@ export default {
   'app.kuaioa.leave.entityName': '请假出差',
   'app.kuaioa.leave.code': '申请单号',
   'app.kuaioa.leave.type': '类型',
+  'app.kuaioa.leave.pendingApprovers': '当前审批人',
   'app.kuaioa.leave.title': '申请摘要',
   'app.kuaioa.leave.startAt': '开始时间',
   'app.kuaioa.leave.endAt': '结束时间',
@@ -4067,6 +6274,9 @@ export default {
   'app.kuaioa.postSubsidy.exportFileName': '岗位补贴',
   'app.kuaioa.postSubsidy.importTitle': '导入岗位补贴',
   'app.kuaioa.postSubsidy.importSuccess': '成功导入 {{count}} 条岗位补贴',
+  'app.kuaioa.salaryBaseStructure.exportFileName': '工资基础架构',
+  'app.kuaioa.salaryBaseStructure.importTitle': '导入工资基础架构',
+  'app.kuaioa.salaryBaseStructure.importSuccess': '成功导入 {{count}} 条工资基础架构',
   'app.kuaioa.minimumWage.exportFileName': '最低工资配置',
   'app.kuaioa.minimumWage.importTitle': '导入最低工资配置',
   'app.kuaioa.minimumWage.importSuccess': '成功导入 {{count}} 条最低工资配置',
@@ -4125,6 +6335,8 @@ export default {
   'app.kuaioa.employee.payMethod.month': '月薪',
   'app.kuaioa.employee.hourlyRate': '计时单价',
   'app.kuaioa.employee.hireDate': '入职时间',
+  'app.kuaioa.employee.hireIntroducer': '入职介绍人',
+  'app.kuaioa.employee.hireIntroducerPlaceholder': '请输入介绍人姓名',
   'app.kuaioa.employee.leaveDate': '离职时间',
   'app.kuaioa.employee.bankAccount': '工资卡号',
   'app.kuaioa.employee.bankName': '银行名称',
@@ -4146,16 +6358,6 @@ export default {
   'app.kuaioa.employee.disabilityCert': '残疾证',
   'app.kuaioa.employee.status.active': '在职',
   'app.kuaioa.employee.status.left': '离职',
-  'app.kuaioa.employee.boundAccount': '登录账号',
-  'app.kuaioa.employee.accountQuickCreate': '没有账号？一键创建',
-  'app.kuaioa.employee.accountQuickCreateTitle': '一键创建登录账号',
-  'app.kuaioa.employee.accountUsername': '登录账号',
-  'app.kuaioa.employee.accountUsernamePlaceholder': '留空按姓名拼音自动生成',
-  'app.kuaioa.employee.accountUsernameTip': '创建后用于登录 PC Web，2-50 位字母/数字/下划线',
-  'app.kuaioa.employee.accountPassword': '初始密码',
-  'app.kuaioa.employee.accountNameRequired': '姓名不能为空',
-  'app.kuaioa.employee.accountCreated': '账号创建成功',
-  'app.kuaioa.employee.accountCredentialHint': '初始密码仅此一次展示，请复制交付员工，并提醒其登录后修改密码。',
   'app.kuaioa.employee.importTitle': '导入员工档案',
   'app.kuaioa.employee.importSuccess': '成功导入 {{count}} 条员工档案',
   'app.kuaioa.employee.importEmpty': '导入数据为空',
@@ -4196,11 +6398,41 @@ export default {
   'app.kuaioa.attendance.fill': '填报',
   'app.kuaioa.attendance.fillTitle': '考勤填报',
   'app.kuaioa.attendance.fillHint':
-    '工作日默认正班已填，请填日常加班。周六标准工时计入周末加班；周日与法定节假日须手工填写加班小时。状态可选正常/请假/休息；夜班模板可勾选☆。提交后锁定。',
+    '每个日期格左侧有标签：正班=当天出勤小时（默认已按标准日工时预填）；加班=额外加班（勿把缺勤写这里）；状态=正常/请假/休息。只上半天：改正班小时，或录请假自动扣正班。周末/法定日无正班，只填加班。请假、休息、夜班登记会自动回写；「刷新名单」再同步。已关联请假的正班不可手改。提交后锁定。',
+  'app.kuaioa.attendance.fillLegend':
+    '日格：正班 / 加班 / 状态 / 夜班(模板开启时) / 登记人。半天请假通过后日格显示「请假扣Nh」且正班变少；左侧「请假天」仅计整天请假。周末法定只填加班。多人维护时请看各格登记人，避免改错他人填的日格。',
+  'app.kuaioa.attendance.registrar': '登记人',
+  'app.kuaioa.attendance.registrarUnknown': '未记录',
+  'app.kuaioa.attendance.regularTotal': '正班合计',
+  'app.kuaioa.attendance.leaveDaysTotal': '请假天',
+  'app.kuaioa.attendance.restDaysTotal': '休息天',
+  'app.kuaioa.attendance.batchDateRange': '批量日期',
+  'app.kuaioa.attendance.batchEmployees': '批量人员',
+  'app.kuaioa.attendance.rosterKeywordPlaceholder': '输入姓名或工号筛选',
+  'app.kuaioa.attendance.rosterPageTotal': '共 {{total}} 人',
+  'app.kuaioa.attendance.rosterScrollLoadHint':
+    '本表共 {{total}} 人，先展示 {{shown}} 人；表内下滑到底自动每次加载 {{chunk}} 人。工具栏输入姓名或工号可只看待查人员。',
+  'app.kuaioa.attendance.rosterFilteredHint': '已筛选，当前展示 {{count}} 人',
+  'app.kuaioa.attendance.rosterLeftHint': '离职 {{date}}',
+  'app.kuaioa.attendance.batchMarkSuccess': '已更新 {{count}} 个日格',
+  'app.kuaioa.attendance.refreshRosterConfirmTitle': '确认刷新名单？',
+  'app.kuaioa.attendance.refreshRosterHint':
+    '将补齐本月新入职人员日格，并按休息/夜班登记与已通过请假重写联动格；不会清空未联动日的手工加班。',
+  'app.kuaioa.attendance.regularHoursShort': '正班',
+  'app.kuaioa.attendance.otHoursShort': '加班',
+  'app.kuaioa.attendance.markLabel': '状态',
+  'app.kuaioa.attendance.nightShort': '夜班',
+  'app.kuaioa.attendance.regularHoursEditTitle': '正班小时（不足一个标准班可改小；已关联请假时不可改）',
+  'app.kuaioa.attendance.otHoursEditTitle': '加班小时（仅填真正加班，勿把缺勤写在这里）',
   'app.kuaioa.attendance.submit': '提交考勤',
   'app.kuaioa.attendance.reopen': '重新打开',
   'app.kuaioa.attendance.refreshRoster': '刷新名单',
-  'app.kuaioa.attendance.rosterRefreshed': '已按员工档案补齐考勤格',
+  'app.kuaioa.attendance.rosterRefreshed': '已刷新名单并同步联动登记',
+  'app.kuaioa.attendance.rosterRefreshedDetail':
+    '已刷新名单：请假回写 {{leave}} 格，休息 {{rest}} 格，夜班 {{night}} 格',
+  'app.kuaioa.attendance.rosterSyncFailed':
+    '联动同步未成功，考勤格可能仍是旧数据：{{detail}}',
+  'app.kuaioa.attendance.mark.leaveLinked': '请假(已联动)',
   'app.kuaioa.attendance.batchRest': '当日全员休息',
   'app.kuaioa.attendance.batchNight': '当日全员夜班',
   'app.kuaioa.attendance.otTotal': '加班合计',
@@ -4227,7 +6459,7 @@ export default {
   'app.kuaioa.attendance.registerDeleteHint':
     '将回滚对应月度考勤草稿中的休息/夜班标记；若相关考勤单已提交则无法删除。',
   'app.kuaioa.attendance.nightRegisterHint':
-    '新建时选择车间与夜班日期区间，写入夜班模板考勤草稿（标记☆）。可不选人员表示区间内全员。',
+    '新建时选择车间与夜班日期区间，写入夜班模板考勤草稿（标记夜班）。可不选人员表示区间内全员。',
   'app.kuaioa.attendance.workshopRequired': '请填写车间',
   'app.kuaioa.attendance.workDateRequired': '请选择日期',
   'app.kuaioa.attendance.workDateRangeRequired': '请选择日期区间',
@@ -4276,14 +6508,35 @@ export default {
   'app.kuaioa.livingAdvance.baseLiving': '原生活费金额',
   'app.kuaioa.livingAdvance.reason': '原因',
   'app.kuaioa.livingAdvance.registrar': '登记人',
+  'app.kuaioa.livingAdvance.status.confirmed': '已确认',
+  'app.kuaioa.livingAdvance.status.void': '已作废',
   'app.kuaioa.reward.createButton': '新建奖励登记',
   'app.kuaioa.reward.code': '奖励单号',
   'app.kuaioa.reward.amount': '奖励金额',
   'app.kuaioa.reward.reason': '奖励原因',
+  'app.kuaioa.reward.performanceScore': '绩效得分',
+  'app.kuaioa.reward.performanceScoreInvalid': '绩效得分须为非负数',
+  'app.kuaioa.reward.status.confirmed': '已确认',
+  'app.kuaioa.reward.status.void': '已作废',
   'app.kuaioa.payroll.createButton': '新建工资结算',
   'app.kuaioa.payroll.registerButton': '工资登记',
   'app.kuaioa.payroll.code': '结算单号',
   'app.kuaioa.payroll.yearMonth': '年月',
+  'app.kuaioa.payroll.yearMonthRange': '月份范围',
+  'app.kuaioa.payroll.yearMonthRangeStart': '起始月份',
+  'app.kuaioa.payroll.yearMonthRangeEnd': '截止月份',
+  'app.kuaioa.payroll.yearMonthEndPresent': '至今',
+  'app.kuaioa.payroll.yearMonthRangeStartRequired': '请选择起始月份',
+  'app.kuaioa.payroll.yearMonthRangeEndRequired': '请选择截止月份或勾选至今',
+  'pages.dashboard.updateLog.entries.kuaioa-month-range-end-present-r01.title':
+    '轻办公月份范围截止可选至今',
+  'pages.dashboard.updateLog.entries.kuaioa-month-range-end-present-r01.description':
+    '列表年月筛选与工资基础架构新建月份范围支持勾选「至今」，截止月按站点当前自然月解析，批量录入会生成至当月。',
+  'pages.dashboard.updateLog.entries.kuaioa-month-field-range-r01.title':
+    '轻办公年月字段支持范围筛选与录入',
+  'pages.dashboard.updateLog.entries.kuaioa-month-field-range-r01.description':
+    '列表中带「年月」的轻办公页高级搜索改为月份范围；好力 GO 工资基础架构新建可选起止月，按自然月批量生成每人每月一行四列津贴。',
+  'app.kuaioa.payroll.settlementMonth': '结算月份',
   'app.kuaioa.payroll.yearMonthInvalid': '请输入正确年月，格式 YYYY-MM',
   'app.kuaioa.payroll.otMultiplier': '加班倍率',
   'app.kuaioa.payroll.status.draft': '草稿',
@@ -4297,17 +6550,88 @@ export default {
   'app.kuaioa.payroll.listGuideTitle': '工资登记与结算怎么用',
   'app.kuaioa.payroll.listGuideBody':
     '工资登记＝按车间+月份开结算单并录入明细（与「奖励登记」同级入口）。① 人事基础维护员工档案（车间、小时单价、生活费等）；② 填写同车间月度考勤并提交；③ 按需登记生活费预支、奖励、岗位补贴；④ 点「工资登记」选择年月与车间，保存后进入结算明细核对（可导入基本工资/计件或手改），确认后锁定。计件还需绩效汇总已确认且档案关联系统用户。',
+  'app.kuaioa.payroll.help': '帮助',
+  'app.kuaioa.payroll.helpNoIssue': '当前无额外提示，可按上方说明操作。',
+  'app.kuaioa.payroll.lineKeywordPlaceholder': '输入姓名或工号筛选',
+  'app.kuaioa.payroll.linePayMethodFilterPlaceholder': '计薪方式',
+  'app.kuaioa.payroll.lineFilteredHint': '已筛选，当前展示 {{count}} / 共 {{total}} 人',
   'app.kuaioa.payroll.detailHint':
-    '计时=已提交考勤工时×档案小时单价（加班×本单加班倍率）；计件=已确认绩效汇总（档案须关联用户）；生活费扣除=档案生活费+当月已确认预支；奖励进补助奖励；岗位补贴按项目写入夜班/高温/岗位津贴。基本工资、个税、打卡金额等须手改或导入。改产线总产量/总工资后请点「按考勤重建」。确认后锁定。',
+    '计薪方式「月薪/计时」：应发小计为各列自动合计，加班工资按考勤与 21.75 公式计算。「计件/产线」：可导入或编辑应发小计，加班工资由小计减其余应发列反推（重建保留计件/产线已填小计）。点击虚线表头可看来源并跳转。确认后锁定。',
+  'app.kuaioa.payroll.columnSource.goto': '前往维护',
+  'app.kuaioa.payroll.columnSource.earningGroup':
+    '应发项合计前的各列，数据来自最低工资、奖励登记、工资基础架构、节日福利发放与已提交考勤。',
+  'app.kuaioa.payroll.columnSource.deductGroup':
+    '扣款项：员工档案标准、生活费预支、考勤请假扣款等；个税与赔款默认可手工维护。',
+  'app.kuaioa.payroll.columnSource.balanceGroup': '打卡金额与结余工资，结余由应发小计减扣款小计再减打卡得出。',
+  'app.kuaioa.payroll.columnSource.basicWage':
+    '最低工资配置：结算月落在执行区间内的金额，全车间各行相同；重建时写入，可手工改行。',
+  'app.kuaioa.payroll.columnSource.performanceBonus':
+    '奖励绩效登记：当月已确认记录，按员工汇总。',
+  'app.kuaioa.payroll.columnSource.postAllowance': '工资基础架构：当月该员工岗位津贴；按考勤重建时写入，可手工改行。',
+  'app.kuaioa.payroll.columnSource.heatSubsidy': '工资基础架构：当月该员工各项补贴。',
+  'app.kuaioa.payroll.columnSource.highTempSubsidy':
+    '手工维护，不关联工资基础架构；草稿下可逐行改，也可整列批量填写。重建明细时保留已填金额。',
+  'app.kuaioa.payroll.columnSource.seniorityBonus': '工资基础架构：当月该员工工龄奖。',
+  'app.kuaioa.payroll.columnSource.gradeAllowance': '工资基础架构：当月该员工等级津贴。',
+  'app.kuaioa.payroll.columnSource.holidayAllowance':
+    '节日福利发放：本车间、确认日所在月等于结算月的已确认发放单，按员工汇总。',
+  'app.kuaioa.payroll.columnSource.nightSubsidy':
+    '已提交考勤统计夜班次数，乘以工资基础架构「夜班单次补贴」（未填按 30 元/次）。',
+  'app.kuaioa.payroll.columnSource.pieceWage':
+    '计薪方式为计件或产线：应发小计减基本工资，再减岗位津贴、各项补贴、高温补贴、工龄奖、等级津贴之和；计件且已填小计时保存后写入计件字段。计时行本列显示为横线。月薪行展示绩效汇总等带入的计件金额。',
+  'app.kuaioa.payroll.columnSource.timeWage':
+    '月薪/计时：小时单价=基本工资÷21.75÷8，再按日常/周末×2/法定×3加班工时计算。产线：在已填应发小计时由小计减其余应发列反推。计件行本列显示为横线（应发在计件工资与小计列体现）。',
+  'app.kuaioa.payroll.columnSource.earningSubtotal':
+    '月薪/计时：各应发列自动合计。计件/产线：可 Excel 导入或手工维护小计，作为应发总额真源。',
+  'app.kuaioa.payroll.columnSource.livingDeduct':
+    '员工档案生活费标准 + 当月已确认生活费预支。',
+  'app.kuaioa.payroll.columnSource.rentUtilityDeduct': '员工档案房租电费标准；年度宽表导入可覆盖各月。',
+  'app.kuaioa.payroll.columnSource.insuranceDeduct': '员工档案社保金额与住房公积金之和。',
+  'app.kuaioa.payroll.columnSource.leaveDeduct': '已提交考勤各行请假/旷工扣款金额汇总。',
+  'app.kuaioa.payroll.columnSource.taxDeduct': '按考勤重建默认为 0；可手工改行或由年度薪酬宽表导入。',
+  'app.kuaioa.payroll.columnSource.compensation': '按考勤重建默认为 0；可手工改行录入赔款。',
+  'app.kuaioa.payroll.columnSource.deductSubtotal': '系统按左侧扣款各列自动合计。',
+  'app.kuaioa.payroll.columnSource.cardPay': '可手工维护；按考勤重建默认为 0。',
+  'app.kuaioa.payroll.columnSource.balance': '应发小计 − 扣款小计 − 打卡金额。',
   'app.kuaioa.payroll.emptyLinesTip':
     '明细为空：该车间当月没有可结算的员工档案，请先在员工档案填写所属车间。',
   'app.kuaioa.payroll.noAttendanceTip':
     '未找到同车间同月已提交的考勤单，计时工资会为 0。请先在月度考勤填报并提交，再点「按考勤重建」。',
+  'app.kuaioa.payroll.noMinimumWageTip':
+    '结算月 {{yearMonth}} 未命中最低工资执行期间，基本工资为 0。请在最低工资配置中调整执行开始/结束时间覆盖该月并勾选当前执行，再点「按考勤重建」。',
   'app.kuaioa.payroll.zeroTimeWageTip':
     '已有考勤但计时仍为 0：请检查员工档案是否维护了小时单价，或考勤日格是否记了正常/加班工时，改完后点「按考勤重建」。',
   'app.kuaioa.payroll.lineShareHint':
     '计薪方式为产线的员工：填产线总产量与产线总工资后须点「按考勤重建」才按工时分摊。',
   'app.kuaioa.payroll.timeWage': '计时工资',
+  'app.kuaioa.payroll.overtimeWage': '加班工资',
+  'app.kuaioa.payroll.otDetail.button': '明细',
+  'app.kuaioa.payroll.otDetail.mgmtFormula':
+    '加班工资 = 小时单价 × 日常加班 + 小时单价 × 周末加班×2 + 小时单价 × 法定加班×3（小时单价 = 基本工资÷21.75÷8）',
+  'app.kuaioa.payroll.otDetail.mgmtUnit':
+    '小时单价 = {{basic}} ÷ {{days}} ÷ {{dayHours}} = {{unit}}',
+  'app.kuaioa.payroll.otDetail.mgmtDaily':
+    '日常：{{hours}} × {{unit}} × 1 = {{part}}',
+  'app.kuaioa.payroll.otDetail.mgmtWeekend':
+    '周末：{{hours}} × {{unit}} × 2 = {{part}}',
+  'app.kuaioa.payroll.otDetail.mgmtLegal':
+    '法定：{{hours}} × {{unit}} × 3 = {{part}}',
+  'app.kuaioa.payroll.otDetail.mgmtSum':
+    '合计 {{result}}（本行加班工资 {{actual}}）',
+  'app.kuaioa.payroll.otDetail.frontlineFormula':
+    '加班工资 = 应发小计 − 基本工资 − 岗位工资 − 高温补贴 − 夜班补贴',
+  'app.kuaioa.payroll.otDetail.frontlineExpand':
+    '{{sub}} − {{basic}} − {{post}} − {{high}} − {{night}} = {{result}}',
+  'app.kuaioa.payroll.otDetail.hourlyFormula':
+    '计时工资 =（正班 + 日常加班 + 周末加班 + 法定加班）× 计时单价',
+  'app.kuaioa.payroll.otDetail.hourlyExpand':
+    '（{{regular}} + {{daily}} + {{weekend}} + {{legal}}）= {{total}} × {{rate}} = {{result}}',
+  'app.kuaioa.payroll.otDetail.rebuildHint':
+    '分项加班工时未带到本页：请先重启后端服务并刷新页面；仍无分项时再点「按考勤重建」。',
+  'app.kuaioa.payroll.performanceBonus': '绩效奖金',
+  'app.kuaioa.payroll.holidayAllowance': '节日福利',
+  'app.kuaioa.payroll.nightSubsidyCalculated': '夜班补贴',
+  'app.kuaioa.salaryBaseStructure.nightRate': '夜班单次补贴',
   'app.kuaioa.payroll.pieceWage': '计件工资',
   'app.kuaioa.payroll.nightSubsidy': '夜班补贴',
   'app.kuaioa.payroll.allowance': '补助奖励',
@@ -4329,6 +6653,11 @@ export default {
   'app.kuaioa.payroll.earningTotal': '应发合计',
   'app.kuaioa.payroll.deductTotal': '扣除合计',
   'app.kuaioa.payroll.balanceTotal': '结余合计',
+  'app.kuaioa.payroll.quickSubtotalPlaceholder': '计件应发小计',
+  'app.kuaioa.payroll.quickSubtotalApply': '写入计件小计',
+  'app.kuaioa.payroll.quickSubtotalNoTargets':
+    '当前列表无计件员工；计时与月薪小计由系统计算，不在此批量写入',
+  'app.kuaioa.payroll.quickSubtotalApplied': '已写入 {{count}} 名计件员工应发小计',
   'app.kuaioa.payroll.exportPdf': '导出PDF',
   'app.kuaioa.payroll.print': '打印',
   'app.kuaioa.livingPayout.title': '生活费发放登记表',
@@ -4371,33 +6700,40 @@ export default {
   'app.kuaioa.welfare.lineCount': '人数',
   'app.kuaioa.welfare.amountTotal': '金额合计',
   'app.kuaioa.annualStats.title': '年度工资统计',
+  'app.kuaioa.annualStats.deleteConfirm': '确认删除选中人员的年度工资数据？',
+  'app.kuaioa.annualStats.deleteConfirmContent':
+    '将删除 {{year}} 年选中的 {{count}} 人对应各月结算明细，删除后可重新导入。',
+  'app.kuaioa.annualStats.deleteSuccess': '已删除 {{employees}} 人共 {{lines}} 条结算明细',
   'app.kuaioa.annualStats.hint':
-    '按当年已确认工资结算汇总。先选车间可联动人员下拉；也可批量导入 1～12 月应发工资（写入对应月结算单并确认）。月工资为应发小计。',
+    '按当年已确认工资结算汇总。非导入数据：各月工资取工资结算明细「小计」（基本工资、高温补贴等应发合计）。Excel 总表导入：各月工资按表内金额写入应发小计。单位筛选项取自本表已有单位（非系统车间主数据）；可先选单位联动人员。合计与年度剩余工资列为表内公式，导入时忽略。',
   'app.kuaioa.annualStats.namePlaceholder': '姓名或工号',
   'app.kuaioa.annualStats.employeePlaceholder': '选择人员（随车间联动）',
   'app.kuaioa.annualStats.emptyYear':
-    '该年没有已确认的工资结算。请先完成工资结算并确认，或使用导入写入月度工资，或选择人员查询。',
+    '该年没有已确认的工资结算。请先完成工资结算并确认，或使用导入写入月度工资/生活费/社保，或选择人员查询。',
   'app.kuaioa.annualStats.emptyName':
     '没有匹配的员工，请核对档案或调整车间筛选后重试。',
   'app.kuaioa.annualStats.yearInvalid': '请输入有效年份',
   'app.kuaioa.annualStats.unit': '单位',
   'app.kuaioa.annualStats.seq': '序号',
+  'app.kuaioa.annualStats.employeeName': '员工姓名',
   'app.kuaioa.annualStats.monthWage': '{{month}}月份工资',
   'app.kuaioa.annualStats.monthLiving': '{{month}}月份生活费',
   'app.kuaioa.annualStats.monthInsurance': '{{month}}月份社保',
-  'app.kuaioa.annualStats.rentUtility': '房租、电费',
+  'app.kuaioa.annualStats.rentUtility': '杂项（包含房租、水电等）',
   'app.kuaioa.annualStats.livingTotal': '1-12月生活费合计',
-  'app.kuaioa.annualStats.insuranceTotal': '1-12月份社保合计',
-  'app.kuaioa.annualStats.annualWage': '1-12月工资统计',
-  'app.kuaioa.annualStats.balanceTotal': '结余总工资',
+  'app.kuaioa.annualStats.insuranceTotal': '1-12月社保合计',
+  'app.kuaioa.annualStats.annualWage': '1-12月工资合计',
+  'app.kuaioa.annualStats.balanceTotal': '年度剩余工资',
   'app.kuaioa.annualStats.exportFileName': '工资统计表',
-  'app.kuaioa.annualStats.importTemplateName': '年度工资明细导入',
+  'app.kuaioa.annualStats.importTemplateName': '工资明细总表导入',
+  'app.kuaioa.annualStats.importTaxDeduct': '个税扣除',
+  'app.kuaioa.annualStats.importRentMisc': '杂项（包含房租、水电等）',
   'app.kuaioa.annualStats.importWorkshopRequired': '缺少车间（请填行内车间、筛选车间或档案车间）',
   'app.kuaioa.annualStats.importAmountInvalid': '月份金额格式无效',
   'app.kuaioa.annualStats.importAmountNegative': '月份金额不能为负',
-  'app.kuaioa.annualStats.importNoMonth': '请至少填写一列月份工资',
+  'app.kuaioa.annualStats.importNoMonth': '请至少填写一列月份金额（工资/生活费/社保）',
   'app.kuaioa.annualStats.importSuccess':
-    '已导入 {{lines}} 条月度工资，涉及 {{settlements}} 张结算单并已确认',
+    '已导入 {{lines}} 条月度明细，涉及 {{settlements}} 张结算单并已确认',
   'app.kuaioa.personalPayroll.title': '个人工资明细',
   'app.kuaioa.personalPayroll.hint': '按已确认结算汇总每月工资金额、支出金额与结余金额。',
   'app.kuaioa.personalPayroll.needEmployee': '请选择员工与年份',
@@ -4431,16 +6767,38 @@ export default {
   'app.kuaioa.postSubsidy.code': '补贴单号',
   'app.kuaioa.postSubsidy.itemName': '补贴项目',
   'app.kuaioa.postSubsidy.amount': '金额',
+  'app.kuaioa.salaryBaseStructure.createButton': '新建个人基础工资架构',
+  'app.kuaioa.salaryBaseStructure.code': '架构单号',
+  'app.kuaioa.salaryBaseStructure.seniorityBonus': '工龄奖',
+  'app.kuaioa.salaryBaseStructure.gradeAllowance': '等级津贴',
   'app.kuaioa.minimumWage.createButton': '新建最低工资',
   'app.kuaioa.minimumWage.amount': '最新金额',
   'app.kuaioa.minimumWage.effectiveDate': '执行开始时间',
+  'app.kuaioa.minimumWage.endDate': '执行结束时间',
+  'app.kuaioa.minimumWage.isCurrent': '当前执行',
   'app.kuaioa.payroll.basicWage': '基本工资',
-  'app.kuaioa.payroll.heatSubsidy': '高温补贴',
+  'app.kuaioa.payroll.heatSubsidy': '各项补贴',
+  'app.kuaioa.payroll.highTempSubsidy': '高温补贴',
+  'app.kuaioa.payroll.quickHighTempPlaceholder': '整列金额',
+  'app.kuaioa.payroll.quickHighTempBatch': '批量',
+  'app.kuaioa.payroll.quickHighTempBatchButton': '批量高温补贴',
+  'app.kuaioa.payroll.quickHighTempHint': '按当前筛选结果，整列写入同一高温补贴金额。',
+  'app.kuaioa.payroll.quickHighTempApply': '批量',
+  'app.kuaioa.payroll.quickHighTempApplied': '已为 {{count}} 人填写高温补贴',
+  'app.kuaioa.payroll.quickHighTempNoTargets': '当前筛选下没有可填写的结算行',
+  'app.kuaioa.payroll.quickHighTempNeedDraft': '请先「重新打开」结算单后再批量填写',
+  'app.kuaioa.payroll.quickHighTempNeedPermission': '当前账号无工资结算修改权限',
   'app.kuaioa.payroll.postAllowance': '岗位津贴',
   'app.kuaioa.payroll.compensation': '赔款',
   'app.kuaioa.payroll.exportFileName': '工资结算列表',
   'app.kuaioa.payroll.import': '导入明细',
   'app.kuaioa.payroll.importHint': 'Excel 须含列「姓名」「金额」，导入后写入所选工资项。',
+  'app.kuaioa.payroll.importHintEarningSubtotal':
+    '一线计薪常用：下载模板，保留表头与示例行，从第 3 行填「姓名」「应发小计」。导入后系统按计薪方式反推加班工资。',
+  'app.kuaioa.payroll.importHintPieceWage':
+    '计件员工：下载模板，保留表头与示例行，从第 3 行填「姓名」「计件工资」。',
+  'app.kuaioa.payroll.importTemplateEarningSubtotal': '工资结算导入应发小计',
+  'app.kuaioa.payroll.importTemplatePieceWage': '工资结算导入计件工资',
   'app.kuaioa.payroll.importSelect': '选择 Excel 文件',
   'app.kuaioa.payroll.importEmpty': '未解析到有效行',
   'app.kuaioa.payroll.importSuccess': '已导入结算明细',
@@ -4455,6 +6813,14 @@ export default {
   'app.kuaioa.welfare.departmentLabel': '部门：{{name}}',
   'app.kuaioa.welfare.seq': '序号',
   'app.kuaioa.welfare.sign': '领取签字',
+  'app.kuaioa.attendance.fillSheetTitle': '{{month}} {{workshop}} {{code}}',
+  'app.kuaioa.attendance.hintLeaveOtherMonth':
+    '本考勤单是 {{month}}。下列已通过请假不在本月，不会出现在这张表：{{detail}}。请打开对应年月的考勤单。',
+  'app.kuaioa.attendance.hintRosterEmpty':
+    '车间「{{workshop}}」{{productionLine}}本月没有可填报员工，休息登记和夜班登记无法写入日格。请核对员工档案的车间与产线是否与考勤单一致，再点「刷新名单」。',
+  'app.kuaioa.attendance.hintRosterEmptyLinePrefix': '产线「{{line}}」',
+  'app.kuaioa.attendance.hintNightTemplateOff':
+    '夜班登记 {{detail}} 未写入：本考勤单未开启夜班模板。请编辑考勤单勾选夜班模板后刷新名单。',
   'app.kuaioa.attendance.hintNewHires': '本月新入职：{{names}}',
   'app.kuaioa.attendance.hintLeftBlocked': '已离职员工离职次日起不可填：{{names}}',
   'app.kuaioa.deptTrainingApplication.code': '申请单号',
@@ -4602,6 +6968,7 @@ export default {
   'app.kuaicaiwu.menu.finance-management.receipt-refunds': '收款退款',
   'app.kuaicaiwu.menu.finance-management.payments': '付款单',
   'app.kuaicaiwu.menu.finance-management.other-incomes': '其他费用收入',
+  'app.kuaicaiwu.menu.finance-management.other-expense-applications': '其他费用支出申请',
   'app.kuaicaiwu.menu.finance-management.other-expenses': '其他费用支出',
   'app.kuaicaiwu.menu.finance-management.finance-misc-categories': '收支类别设置',
   'app.kuaicaiwu.menu.finance-management.payment-refunds': '付款退款',
@@ -4612,7 +6979,65 @@ export default {
   'app.kuaicaiwu.menu.finance-management.aging-analysis': '账龄分析',
   'app.kuaicaiwu.menu.finance-management.document-reconciliation': '业财单据对账',
   'app.kuaicaiwu.menu.finance-management.bank-accounts': '银行账户',
+  'app.kuaicaiwu.menu.finance-management.fund-transfers': '资金调拨',
+  'app.kuaicaiwu.menu.finance-management.exchange-rates': '汇率设置',
+  'app.kuaicaiwu.fundTransfer.pageTitle': '资金调拨',
+  'app.kuaicaiwu.fundTransfer.entityName': '资金调拨单',
+  'app.kuaicaiwu.fundTransfer.createTitle': '新建资金调拨',
+  'app.kuaicaiwu.fundTransfer.copySelectedCreate': '复制选中单据新建',
+  'app.kuaicaiwu.fundTransfer.selectToCopy': '请选中一张资金调拨单',
+  'app.kuaicaiwu.fundTransfer.editTitle': '编辑资金调拨',
+  'app.kuaicaiwu.fundTransfer.detailTitle': '资金调拨详情',
+  'app.kuaicaiwu.fundTransfer.toolbar.withdrawSubmit': '撤销提交',
+  'app.kuaicaiwu.fundTransfer.toolbar.submitReview': '提交审核',
+  'app.kuaicaiwu.fundTransfer.toolbar.submitReviewNotAllowed': '请先提交，再提交审核',
+  'app.kuaicaiwu.fundTransfer.toolbar.withdrawReview': '撤回审核',
+  'app.kuaicaiwu.fundTransfer.toolbar.revoke': '反审核',
+  'app.kuaicaiwu.fundTransfer.col.code': '调拨单号',
+  'app.kuaicaiwu.fundTransfer.col.date': '调拨日期',
+  'app.kuaicaiwu.fundTransfer.col.transferType': '调拨类型',
+  'app.kuaicaiwu.fundTransfer.col.fromAccount': '调出账户',
+  'app.kuaicaiwu.fundTransfer.col.toAccount': '调入账户',
+  'app.kuaicaiwu.fundTransfer.col.amount': '金额',
+  'app.kuaicaiwu.fundTransfer.field.date': '调拨日期',
+  'app.kuaicaiwu.fundTransfer.field.transferType': '调拨类型',
+  'app.kuaicaiwu.fundTransfer.field.amount': '调拨金额',
+  'app.kuaicaiwu.fundTransfer.field.fromAccount': '调出账户',
+  'app.kuaicaiwu.fundTransfer.field.toAccount': '调入账户',
+  'app.kuaicaiwu.fundTransfer.field.externalAccountName': '外部户名',
+  'app.kuaicaiwu.fundTransfer.field.externalBankName': '外部开户行',
+  'app.kuaicaiwu.fundTransfer.field.externalAccountNumber': '外部账号',
+  'app.kuaicaiwu.fundTransfer.field.notes': '备注',
+  'app.kuaicaiwu.fundTransfer.transferType.internal': '内部互转',
+  'app.kuaicaiwu.fundTransfer.transferType.external_out': '调出至外部',
+  'app.kuaicaiwu.fundTransfer.transferType.external_in': '自外部调入',
+  'app.kuaicaiwu.fundTransfer.confirmTitle': '确认调拨',
+  'app.kuaicaiwu.fundTransfer.confirmContent': '确认过账调拨单 {{code}}？确认后将写入银行流水。',
+  'app.kuaicaiwu.fundTransfer.confirmSuccess': '调拨已确认',
+  'app.kuaicaiwu.fundTransfer.unconfirm': '撤回确认',
+  'app.kuaicaiwu.fundTransfer.unconfirmTitle': '撤回确认',
+  'app.kuaicaiwu.fundTransfer.unconfirmContent': '撤回后冲回银行流水，调拨单 {{code}} 恢复为草稿。',
+  'app.kuaicaiwu.fundTransfer.unconfirmSuccess': '已撤回确认',
+  'app.kuaicaiwu.fundTransfer.voidTitle': '作废调拨',
+  'app.kuaicaiwu.fundTransfer.voidContent': '作废调拨单 {{code}}？',
+  'app.kuaicaiwu.fundTransfer.voidSuccess': '调拨已作废',
+  'app.kuaicaiwu.fundTransfer.deleteTitle': '删除调拨',
+  'app.kuaicaiwu.fundTransfer.deleteContent': '删除调拨单 {{code}}？',
+  'app.kuaicaiwu.fundTransfer.batchConfirmTitle': '批量确认 {{count}} 条调拨',
+  'app.kuaicaiwu.fundTransfer.batchConfirmDesc': '确认后将逐条过账并写入银行流水。',
+  'app.kuaicaiwu.fundTransfer.batchVoidTitle': '批量作废 {{count}} 条调拨',
+  'app.kuaicaiwu.fundTransfer.batchVoidDesc': '草稿直接作废，已确认会先冲回流水。',
+  'app.kuaicaiwu.fundTransfer.batchConfirmed': '已确认 {{count}} 条调拨',
+  'app.kuaicaiwu.fundTransfer.batchVoided': '已作废 {{count}} 条调拨',
+  'app.kuaicaiwu.fundTransfer.batchDeleted': '已删除 {{count}} 条调拨',
+  'app.kuaicaiwu.fundTransfer.batchDeleteConfirm': '确定删除选中的 {{count}} 条调拨单？',
   'app.kuaicaiwu.otherIncome.createButton': '新建其他费用收入',
+  'app.kuaicaiwu.otherIncome.toolbar.withdrawSubmit': '撤销提交',
+  'app.kuaicaiwu.otherIncome.toolbar.submitReview': '提交审核',
+  'app.kuaicaiwu.otherIncome.toolbar.submitReviewNotAllowed': '请先提交，再提交审核',
+  'app.kuaicaiwu.otherIncome.toolbar.withdrawReview': '撤回审核',
+  'app.kuaicaiwu.otherIncome.toolbar.revoke': '反审核',
+  'app.kuaicaiwu.otherIncome.toolbar.pushNotAllowed': '须已审核且具备下推条件才可下推收款单',
   'app.kuaicaiwu.otherIncome.createTitle': '新建其他费用收入',
   'app.kuaicaiwu.otherIncome.editTitle': '编辑其他费用收入',
   'app.kuaicaiwu.otherIncome.col.code': '单号',
@@ -4625,6 +7050,9 @@ export default {
   'app.kuaicaiwu.otherIncome.field.counterpartyKind': '往来类型',
   'app.kuaicaiwu.otherIncome.field.counterpartyName': '往来对象',
   'app.kuaicaiwu.otherIncome.field.notes': '备注',
+  'app.kuaicaiwu.otherIncome.field.department': '部门',
+  'app.kuaicaiwu.otherIncome.field.attachments': '附件',
+  'app.kuaicaiwu.otherIncome.amountTotal': '金额合计',
   'app.kuaicaiwu.otherIncome.counterparty.none': '无',
   'app.kuaicaiwu.otherIncome.counterparty.customer': '客户',
   'app.kuaicaiwu.otherIncome.counterparty.supplier': '供应商',
@@ -4646,6 +7074,7 @@ export default {
   'app.kuaicaiwu.otherIncome.quickAddCategoryFailed': '保存类别失败',
   'app.kuaicaiwu.otherIncome.line.amount': '金额',
   'app.kuaicaiwu.otherIncome.line.description': '摘要',
+  'app.kuaicaiwu.otherIncome.line.payee': '领款人',
   'app.kuaicaiwu.otherIncome.linesRequired': '请至少填写一行有效明细',
   'app.kuaicaiwu.otherIncome.loadFailed': '加载单据失败',
   'app.kuaicaiwu.otherIncome.submit': '提交',
@@ -4673,12 +7102,19 @@ export default {
   'app.kuaicaiwu.otherIncome.voidDesc': '确定作废单号 {{code}} 吗？',
   'app.kuaicaiwu.otherIncome.deleteTitle': '删除其他费用收入',
   'app.kuaicaiwu.otherIncome.deleteDesc': '确定删除单号 {{code}} 吗？此操作不可恢复。',
+  'app.kuaicaiwu.otherExpense.toolbar.withdrawSubmit': '撤销提交',
+  'app.kuaicaiwu.otherExpense.toolbar.submitReview': '提交审核',
+  'app.kuaicaiwu.otherExpense.toolbar.submitReviewNotAllowed': '请先提交，再提交审核',
+  'app.kuaicaiwu.otherExpense.toolbar.withdrawReview': '撤回审核',
+  'app.kuaicaiwu.otherExpense.toolbar.revoke': '反审核',
+  'app.kuaicaiwu.otherExpense.toolbar.pushNotAllowed': '须已审核、有应付且已选出账账户才可下推付款单',
   'app.kuaicaiwu.otherExpense.createButton': '新建其他费用支出',
   'app.kuaicaiwu.otherExpense.createTitle': '新建其他费用支出',
   'app.kuaicaiwu.otherExpense.editTitle': '编辑其他费用支出',
   'app.kuaicaiwu.otherExpense.col.code': '单号',
   'app.kuaicaiwu.otherExpense.col.businessDate': '业务日期',
   'app.kuaicaiwu.otherExpense.col.amount': '金额',
+  'app.kuaicaiwu.otherExpense.col.remainingAmount': '剩余金额',
   'app.kuaicaiwu.otherExpense.col.counterparty': '往来对象',
   'app.kuaicaiwu.otherExpense.field.businessDate': '业务日期',
   'app.kuaicaiwu.otherExpense.field.paymentMethod': '收付方式',
@@ -4686,6 +7122,23 @@ export default {
   'app.kuaicaiwu.otherExpense.field.counterpartyKind': '往来类型',
   'app.kuaicaiwu.otherExpense.field.counterpartyName': '往来对象',
   'app.kuaicaiwu.otherExpense.field.notes': '备注',
+  'app.kuaicaiwu.otherExpense.field.department': '部门',
+  'app.kuaicaiwu.otherExpense.field.employeeAdvance': '员工垫付',
+  'app.kuaicaiwu.otherExpense.field.attachments': '附件',
+  'app.kuaicaiwu.otherExpense.amountTotal': '金额合计',
+  'app.kuaicaiwu.otherExpense.relatedPurchaseReceipts': '关联采购入库',
+  'app.kuaicaiwu.otherExpense.linkPurchaseReceipt': '选择采购入库单',
+  'app.kuaicaiwu.otherExpense.linkPurchaseReceiptTitle': '选择采购入库单',
+  'app.kuaicaiwu.otherExpense.selectSupplierFirst': '请先选择供应商',
+  'app.kuaicaiwu.otherExpense.selectPurchaseReceiptRequired': '请至少选择一张采购入库单',
+  'app.kuaicaiwu.otherExpense.loadPurchaseReceiptFailed': '加载采购入库单失败',
+  'app.kuaicaiwu.otherExpense.pull.searchPlaceholder': '搜索入库单号/供应商',
+  'app.kuaicaiwu.otherExpense.pullApplication.searchPlaceholder': '搜索申请单号或往来对象',
+  'app.kuaicaiwu.otherExpense.pull.col.receiptCode': '入库单号',
+  'app.kuaicaiwu.otherExpense.pull.col.supplier': '供应商',
+  'app.kuaicaiwu.otherExpense.pull.col.status': '状态',
+  'app.kuaicaiwu.otherExpense.pull.col.date': '业务日期',
+  'app.kuaicaiwu.otherExpense.pull.col.amount': '金额',
   'app.kuaicaiwu.otherExpense.counterparty.none': '无',
   'app.kuaicaiwu.otherExpense.counterparty.customer': '客户',
   'app.kuaicaiwu.otherExpense.counterparty.supplier': '供应商',
@@ -4696,6 +7149,8 @@ export default {
   'app.kuaicaiwu.otherExpense.field.counterpartyEmployee': '职员',
   'app.kuaicaiwu.otherExpense.counterpartyPickRequired': '请选择往来对象',
   'app.kuaicaiwu.otherExpense.counterpartyNameRequired': '请填写往来对象',
+  'app.kuaicaiwu.otherExpense.counterpartyOtherLedgerHint':
+    '非供应商往来按手工立账，可正常提交与审核；若要在系统内确认付款并生成应付，请改用供应商并选择主数据。',
   'app.kuaicaiwu.otherExpense.linesTitle': '收支明细',
   'app.kuaicaiwu.otherExpense.line.category': '类别',
   'app.kuaicaiwu.otherExpense.line.categoryPlaceholder': '请选择收支类别',
@@ -4707,6 +7162,9 @@ export default {
   'app.kuaicaiwu.otherExpense.quickAddCategoryFailed': '保存类别失败',
   'app.kuaicaiwu.otherExpense.line.amount': '金额',
   'app.kuaicaiwu.otherExpense.line.description': '摘要',
+  'app.kuaicaiwu.otherExpense.line.payee': '领款人',
+  'app.kuaicaiwu.otherExpense.line.payeePlaceholder': '请选择领款人',
+  'app.kuaicaiwu.otherExpense.line.payeeRequired': '员工垫付须选择领款人',
   'app.kuaicaiwu.otherExpense.linesRequired': '请至少填写一行有效明细',
   'app.kuaicaiwu.otherExpense.loadFailed': '加载单据失败',
   'app.kuaicaiwu.otherExpense.submit': '提交',
@@ -4734,6 +7192,37 @@ export default {
   'app.kuaicaiwu.otherExpense.voidDesc': '确定作废单号 {{code}} 吗？',
   'app.kuaicaiwu.otherExpense.deleteTitle': '删除其他费用支出',
   'app.kuaicaiwu.otherExpense.deleteDesc': '确定删除单号 {{code}} 吗？此操作不可恢复。',
+  'app.kuaicaiwu.otherExpense.loadPullFailed': '加载申请单失败',
+  'app.kuaicaiwu.otherExpense.selectPullSource': '请选择{{label}}',
+  'app.kuaicaiwu.otherExpense.pullBlocked': '当前申请单不可取单',
+  'app.kuaicaiwu.otherExpenseApplication.copySelectedCreate': '复制选中单据新建',
+  'app.kuaicaiwu.otherExpenseApplication.selectToCopy': '请选中一条申请后再复制新建',
+  'app.kuaicaiwu.otherExpenseApplication.createButton': '新建其他费用支出申请',
+  'app.kuaicaiwu.otherExpenseApplication.createTitle': '新建其他费用支出申请',
+  'app.kuaicaiwu.otherExpenseApplication.editTitle': '编辑其他费用支出申请',
+  'app.kuaicaiwu.otherExpenseApplication.col.code': '申请单号',
+  'app.kuaicaiwu.otherExpenseApplication.col.businessDate': '业务日期',
+  'app.kuaicaiwu.otherExpenseApplication.col.amount': '申请金额',
+  'app.kuaicaiwu.otherExpenseApplication.col.remainingAmount': '待下推金额',
+  'app.kuaicaiwu.otherExpenseApplication.col.counterparty': '往来对象',
+  'app.kuaicaiwu.otherExpenseApplication.field.businessDate': '业务日期',
+  'app.kuaicaiwu.otherExpenseApplication.field.paymentMethod': '收付方式',
+  'app.kuaicaiwu.otherExpenseApplication.field.bankAccount': '银行账户',
+  'app.kuaicaiwu.otherExpenseApplication.field.counterpartyKind': '往来类型',
+  'app.kuaicaiwu.otherExpenseApplication.field.counterpartyName': '往来对象',
+  'app.kuaicaiwu.otherExpenseApplication.field.notes': '备注',
+  'app.kuaicaiwu.otherExpenseApplication.field.department': '部门',
+  'app.kuaicaiwu.otherExpenseApplication.field.attachments': '附件',
+  'app.kuaicaiwu.otherExpenseApplication.field.payableRecognition': '立账策略',
+  'app.kuaicaiwu.otherExpenseApplication.line.estimatedAmount': '预估金额',
+  'app.kuaicaiwu.otherExpenseApplication.linesRequired': '请至少填写一行明细',
+  'app.kuaicaiwu.otherExpenseApplication.loadFailed': '加载申请单失败',
+  'app.kuaicaiwu.otherExpenseApplication.confirmBatchDelete': '确定删除选中的 {{count}} 条申请吗？',
+  'app.kuaicaiwu.otherExpenseApplication.pushOtherExpense': '下推支出单',
+  'app.kuaicaiwu.otherExpenseApplication.toolbar.pushNotAllowed': '须已审核且有可下推余额才可下推支出单',
+  'app.kuaicaiwu.otherExpenseApplication.pushSuccess': '已下推支出单 {{code}}',
+  'app.kuaicaiwu.otherExpenseApplication.pushFailed': '下推支出单失败',
+  'app.kuaicaiwu.otherExpenseApplication.pull.searchPlaceholder': '搜索申请单号或往来',
   'app.kuaicaiwu.miscCategory.tab.income': '其他收入类别',
   'app.kuaicaiwu.miscCategory.tab.expense': '其他支出类别',
   'app.kuaicaiwu.miscCategory.createButton': '新建收支类别',
@@ -4908,8 +7397,12 @@ export default {
   'app.kuaicaiwu.fixedAssets.disposals.type.scrap': '报废',
   'app.kuaicaiwu.fixedAssets.disposals.type.donate': '捐赠',
   'app.kuaicaiwu.fixedAssets.deprRuns.createButton': '新建折旧试算',
+  'app.kuaicaiwu.fixedAssets.deprRuns.createButton': '新建折旧试算',
   'app.kuaicaiwu.fixedAssets.deprRuns.previewButton': '试算折旧',
   'app.kuaicaiwu.fixedAssets.deprRuns.previewTitle': '折旧试算',
+  'app.kuaicaiwu.fixedAssets.deprRuns.batchConfirm': '批量确认计提',
+  'app.kuaicaiwu.fixedAssets.deprRuns.batchConfirmSuccess': '已确认 {{count}} 条折旧计提',
+  'app.kuaicaiwu.fixedAssets.deprRuns.exportFileName': '折旧计提批次',
   'app.kuaicaiwu.fixedAssets.deprRuns.batchConfirm': '批量确认计提',
   'app.kuaicaiwu.fixedAssets.deprRuns.batchConfirmSuccess': '已确认 {{count}} 条折旧计提',
   'app.kuaicaiwu.fixedAssets.deprRuns.exportFileName': '折旧计提批次',
@@ -5013,7 +7506,7 @@ export default {
   'app.kuaicaiwu.menu.gl-management': '总账管理',
   'app.kuaicaiwu.menu.gl-management.chart-of-accounts': '会计科目',
   'app.kuaicaiwu.menu.gl-management.vouchers': '会计凭证',
-  'app.kuaiplm.name': '星研发',
+  'app.kuaiplm.name': '快研发',
   'app.kuaiplm.menu.dashboard': '研发看板',
   'app.kuaiplm.menu.group.project-center': '研发项目',
   'app.kuaiplm.menu.group.project-docs': '项目单据',
@@ -5466,6 +7959,11 @@ export default {
   'app.kuaiplm.common.engineeringLink.route': '工艺路线',
   'app.kuaiplm.common.engineeringLink.sop': 'SOP',
   'app.kuaiplm.common.engineeringLink.material': '物料',
+  'app.kuaiplm.common.engineeringLink.workOrder': '工单',
+  'app.kuaiplm.common.engineeringLink.requirement': '需求',
+  'app.kuaiplm.common.engineeringLink.designReview': '设计评审',
+  'app.kuaiplm.common.engineeringLink.fmea': 'FMEA',
+  'app.kuaiplm.common.engineeringLink.other': '其他',
   'app.kuaiplm.common.columns.projectCode': '项目编号',
   'app.kuaiplm.common.columns.projectType': '项目类型',
   'app.kuaiplm.common.columns.projectName': '项目名称',
@@ -5473,6 +7971,7 @@ export default {
   'app.kuaiplm.common.columns.owner': '负责人',
   'app.kuaiplm.common.columns.currentGate': '阶段门',
   'app.kuaiplm.common.columns.currentNode': '当前阶段',
+  'app.kuaiplm.common.columns.progress': '进度',
   'app.kuaiplm.common.columns.nodeProgress': '阶段进度',
   'app.kuaiplm.common.gate.concept': '概念阶段',
   'app.kuaiplm.common.gate.design': '设计阶段',
@@ -5620,6 +8119,7 @@ export default {
   'app.kuaiplm.productionFile.messages.noExportData': '暂无可导出的生产文件',
   'app.kuaiplm.sampleProcess.title': '样品加工',
   'app.kuaiplm.sampleProcess.createButton': '新建样品加工',
+  'app.kuaiplm.sampleProcess.editTitle': '编辑样品加工',
   'app.kuaiplm.sampleProcess.fields.code': '申请单号',
   'app.kuaiplm.sampleProcess.fields.project': '研发项目',
   'app.kuaiplm.sampleProcess.fields.projectPlaceholder': '可选，选择项目或手填项目代号',
@@ -5729,8 +8229,22 @@ export default {
   'app.kuaiplm.bomCollab.status.entered': '已录入',
   'app.kuaiplm.bomCollab.status.rejected': '已驳回',
   'app.kuaiplm.bomCollab.actions.enter': '文员录入',
+  'app.kuaiplm.bomCollab.actions.saveSection': '保存本分区',
+  'app.kuaiplm.bomCollab.actions.addLine': '新增行',
+  'app.kuaiplm.bomCollab.section.electronics': '电子',
+  'app.kuaiplm.bomCollab.section.structure': '结构',
+  'app.kuaiplm.bomCollab.workbench.backToList': '全部 BOM 协同',
+  'app.kuaiplm.bomCollab.workbench.sectionNav': '分区导航',
+  'app.kuaiplm.bomCollab.workbench.headerInfo': '协同概览',
+  'app.kuaiplm.bomCollab.workbench.openAction': '工作台',
+  'app.kuaiplm.bomCollab.fields.masterBomPlaceholder': '录入后主数据 BOM 编码',
   'app.kuaiplm.bomCollab.actions.downloadTemplate': '下载填写模板',
   'app.kuaiplm.bomCollab.actions.importExcel': 'Excel导入',
+  'app.kuaiplm.bomCollab.actions.importKingdeeBom': '导入ERP多级BOM',
+  'app.kuaiplm.bomCollab.hints.kingdeeMultilevelImport':
+    '识别「BOM多级展开」工作表，按位号与线路板子树拆分到电子/结构分区',
+  'app.kuaiplm.bomCollab.messages.kingdeeFullImported':
+    '已导入 ERP 多级 BOM：电子 {{electronics}} 行，结构 {{structure}} 行',
   'app.kuaiplm.bomCollab.messages.submitSuccess': '已提交审核',
   'app.kuaiplm.bomCollab.messages.approveSuccess': '审核通过',
   'app.kuaiplm.bomCollab.messages.rejectSuccess': '已驳回',
@@ -5744,6 +8258,7 @@ export default {
     '存在无效行（编码：{{code}}）：物料编码与物料名称须同时填写，请检查后重新导入',
   'app.kuaiplm.projectProposal.title': '项目建议',
   'app.kuaiplm.projectProposal.createButton': '新建项目建议',
+  'app.kuaiplm.projectProposal.editTitle': '编辑项目建议',
   'app.kuaiplm.projectProposal.fields.code': '建议单号',
   'app.kuaiplm.projectProposal.fields.project': '研发项目',
   'app.kuaiplm.projectProposal.fields.projectCode': '项目代号',
@@ -5852,8 +8367,70 @@ export default {
   'app.kuaiplm.trialFlow.conclusion.fail': '不通过',
   'app.kuaiplm.trialFlow.conclusion.conditional': '有条件通过',
   'app.kuaiplm.trialFlow.actions.fillStep': '填报',
+  'app.kuaiplm.trialFlow.actions.submit': '提交审核',
+  'app.kuaiplm.trialFlow.actions.approve': '审核通过',
+  'app.kuaiplm.trialFlow.actions.reject': '驳回',
   'app.kuaiplm.trialFlow.actions.conclude': '填写结论',
   'app.kuaiplm.trialFlow.actions.close': '关闭',
+  'app.kuaiplm.trialFlow.backToList': '返回试流列表',
+  'app.kuaiplm.trialFlow.workbench.stepNav': '工序步进',
+  'app.kuaiplm.trialFlow.workbench.stepProgress': '{{done}}/{{total}}',
+  'app.kuaiplm.trialFlow.workbench.structureStepMismatchTitle': '结构试流工序数与 L51 验收不一致',
+  'app.kuaiplm.trialFlow.workbench.structureStepMismatchBody':
+    '结构试流应为 {{expected}} 道工序；当前行业 profile {{profileCount}} 道、本单已生成 {{docCount}} 道。请核对 ind-electronics 试流 form-profile 与提交后工序链。',
+  'app.kuaiplm.trialFlow.workbench.currentStepFill': '当前工序填报',
+  'app.kuaiplm.trialFlow.workbench.initiateInfo': '研发发起信息',
+  'app.kuaiplm.trialFlow.workbench.noStepFields': '本工序无可填字段',
+  'app.kuaiplm.trialFlow.workbench.stepDone': '已完成',
+  'app.kuaiplm.trialFlow.workbench.stepCurrent': '当前',
+  'app.kuaiplm.trialFlow.deptCode.iqc': '来料检验',
+  'app.kuaiplm.trialFlow.deptCode.rd': '研发',
+  'app.kuaiplm.trialFlow.deptCode.rd_manager': '研发管理',
+  'app.kuaiplm.trialFlow.deptCode.pe': '工艺工程',
+  'app.kuaiplm.trialFlow.deptCode.qa': '质量',
+  'app.kuaiplm.trialFlow.deptCode.plan': '计划',
+  'app.kuaiplm.trialFlow.deptCode.prod': '生产',
+  'app.kuaiplm.trialFlow.deptCode.pqc': '过程检验',
+  'app.kuaiplm.trialFlow.deptCode.oqc': '出货检验',
+  'app.kuaiplm.trialFlow.deptCode.purchasing': '采购',
+  'app.kuaiplm.trialFlow.deptCode.production_trial': '生产试流',
+  'app.kuaiplm.trialFlow.deptCode.production_feedback': '生产反馈',
+  'app.kuaiplm.trialFlow.deptCode.conclusion_rd': '研发结论',
+  'app.kuaiplm.trialFlow.deptCode.conclusion_pe': '工艺结论',
+  'app.kuaiplm.trialFlow.deptCode.conclusion_qa': '质量结论',
+  'app.kuaiplm.trialFlow.deptCode.conclusion_plan': '计划结论',
+  'app.kuaiplm.trialFlow.deptCode.conclusion_prod': '生产结论',
+  'app.kuaiplm.trialFlow.deptCode.wh': '仓库',
+  'app.kuaiplm.trialFlow.deptCode.warehouse': '仓库',
+  'app.kuaiplm.trialFlow.deptCode.wms': '仓储',
+  'app.kuaiplm.prototypeBuildSheet.workbench.sectionNav': '协同分区',
+  'app.kuaiplm.prototypeBuildSheet.workbench.sectionProject': '项目区',
+  'app.kuaiplm.prototypeBuildSheet.workbench.sectionElectronics': '电子区',
+  'app.kuaiplm.prototypeBuildSheet.workbench.sectionStructure': '结构区',
+  'app.kuaiplm.prototypeBuildSheet.workbench.sectionSignoff': '制造质量会签',
+  'app.kuaiplm.prototypeBuildSheet.workbench.headerInfo': '制作书概览',
+  'app.kuaiplm.prototypeBuildSheet.workbench.backToList': '全部样机制作书',
+  'app.kuaiplm.ecn.workbench.deptNav': '会签部门',
+  'app.kuaiplm.ecn.workbench.headerInfo': '变更概览',
+  'app.kuaiplm.ecn.workbench.signoffFill': '本部门会签',
+  'app.kuaiplm.ecn.workbench.backToList': '返回变更管理',
+  'app.kuaiplm.ecn.workbench.dcrPhaseHint':
+    '当前为设计更改申请阶段：四部门发起与审批；下发研发后将进入 ECN 八部门会签链。',
+  'app.kuaiplm.ecn.workbench.signoffReadonly': '该部门会签已完成或当前不可编辑',
+  'app.kuaizhizao.reworkOrder.workbench.nodeNav': '会签节点',
+  'app.kuaizhizao.reworkOrder.workbench.sectionNav': '部门分区',
+  'app.kuaizhizao.reworkOrder.workbench.headerInfo': '返工单概览',
+  'app.kuaizhizao.reworkOrder.workbench.nodeDetail': '节点与子表',
+  'app.kuaizhizao.reworkOrder.workbench.sectionFill': '本部门填报',
+  'app.kuaizhizao.reworkOrder.workbench.saveSection': '保存本分区',
+  'app.kuaizhizao.reworkOrder.workbench.noSectionFields': '本节点暂无扩展字段',
+  'app.kuaizhizao.reworkOrder.workbench.openAction': '工作台',
+  'app.kuaizhizao.reworkOrder.workbench.backToList': '全部返工单',
+  'app.kuaizhizao.reworkOrder.workbench.multiSignoffOnly': '仅多部门会签类型返工单可使用本工作台',
+  'app.kuaizhizao.reworkOrder.workbench.editOnList': '返回列表编辑子表',
+  'app.kuaizhizao.reworkOrder.workbench.approvalHint':
+    '审批中的会签节点请在个人中心待办或列表行内审核操作处理；本页展示当前节点与子表快照。',
+  'app.kuaiplm.trialFlow.messages.resultRequired': '请填写判定结果',
   'app.kuaiplm.trialFlow.messages.submitSuccess': '已提交审核',
   'app.kuaiplm.trialFlow.messages.approveSuccess': '审核通过，进入工序填报',
   'app.kuaiplm.trialFlow.messages.rejectSuccess': '已驳回，退回草稿',
@@ -5898,6 +8475,7 @@ export default {
   'app.kuaiplm.prototypeBuildSheet.actions.signoff': '制造质量会签',
   'app.kuaiplm.prototypeBuildSheet.messages.issued': '已下发制造样机组',
   'app.kuaiplm.prototypeBuildSheet.messages.submitSuccess': '样机制作书已提交',
+  'app.kuaiplm.prototypeBuildSheet.messages.closeSuccess': '样机制作书已关闭归档',
   'app.kuaiplm.prototypeBuildSheet.messages.deleteOnlyDraft': '仅草稿或已驳回可删除，请重新勾选',
   'app.kuaiplm.prototypeBuildSheet.messages.noExportData': '没有可导出的样机制作书',
   'app.kuaiplm.prototypeBuildSheet.status.draft': '草稿',
@@ -6036,6 +8614,33 @@ export default {
   'app.kuaiplm.rdProjects.systemArchive.fillStatus.uploaded': '已上传',
   'app.kuaiplm.rdProjects.systemArchive.fillStatus.linked': '已关联',
   'app.kuaiplm.rdProjects.systemArchive.fillStatus.missing_marked': '待补',
+  'app.kuaiplm.rdProjects.systemArchive.compositeStatus.linkedAccepted': '已关联 已验收',
+  'app.kuaiplm.rdProjects.systemArchive.compositeStatus.uploadedAccepted': '已上传 已验收',
+  'app.kuaiplm.rdProjects.systemArchive.compositeStatus.linkedPending': '已关联 待验收',
+  'app.kuaiplm.rdProjects.systemArchive.compositeStatus.uploadedPending': '已上传 待验收',
+  'app.kuaiplm.rdProjects.systemArchive.compositeStatus.linkedRejected': '已关联 已驳回',
+  'app.kuaiplm.rdProjects.systemArchive.compositeStatus.uploadedRejected': '已上传 已驳回',
+  'app.kuaiplm.rdProjects.systemArchive.withdrawAcceptance': '撤回修改',
+  'app.kuaiplm.rdProjects.systemArchive.withdrawAcceptanceConfirm': '撤回验收后将恢复为待验收，可重新关联或修改内容，是否继续？',
+  'app.kuaiplm.rdProjects.systemArchive.withdrawAcceptanceSuccess': '已撤回验收，可继续修改',
+  'app.kuaiplm.rdProjects.systemArchive.viewLinked': '查看关联',
+  'app.kuaiplm.rdProjects.systemArchive.viewUploaded': '查看文件',
+  'app.kuaiplm.rdProjects.systemArchive.relink': '改关联',
+  'app.kuaiplm.rdProjects.systemArchive.reupload': '重新上传',
+  'app.kuaiplm.rdProjects.systemArchive.viewLinkedTitle': '查看关联单据',
+  'app.kuaiplm.rdProjects.systemArchive.viewLinkedTargetType': '关联类型',
+  'app.kuaiplm.rdProjects.systemArchive.viewLinkedOpenList': '打开单据列表',
+  'app.kuaiplm.rdProjects.systemArchive.viewLinkedOpenFailed': '暂无法打开该类型单据列表',
+  'app.kuaiplm.rdProjects.systemArchive.linkTargetTypes.project_proposal': '项目建议书',
+  'app.kuaiplm.rdProjects.systemArchive.linkTargetTypes.rd_deliverable': '研发交付物',
+  'app.kuaiplm.rdProjects.systemArchive.linkTargetTypes.prototype_build_sheet': '样机制作书',
+  'app.kuaiplm.rdProjects.systemArchive.linkTargetTypes.lab_request': '实验委托',
+  'app.kuaiplm.rdProjects.systemArchive.linkTargetTypes.bom_collaboration': 'BOM 协同',
+  'app.kuaiplm.rdProjects.systemArchive.linkTargetTypes.trial_flow': '试产流程',
+  'app.kuaiplm.rdProjects.systemArchive.linkTargetTypes.mold_sample_order': '模具打样单',
+  'app.kuaiplm.rdProjects.systemArchive.linkTargetTypes.kuaioa_form_request': '审批表单',
+  'app.kuaiplm.rdProjects.systemArchive.linkTargetTypes.design_review': '设计评审',
+  'app.kuaiplm.rdProjects.systemArchive.linkTargetTypes.qms_system_document': '体系文件',
   'app.kuaiplm.rdProjects.systemArchive.acceptanceStatus.none': '未验收',
   'app.kuaiplm.rdProjects.systemArchive.acceptanceStatus.pending': '待验收',
   'app.kuaiplm.rdProjects.systemArchive.acceptanceStatus.accepted': '已验收',
@@ -6163,6 +8768,15 @@ export default {
   'app.kuaiplm.rdProjects.detail.section.collaboration': '协同事项',
   'app.kuaiplm.rdProjects.detail.section.engineeringLinks': '工程资料链接',
   'app.kuaiplm.rdProjects.detail.section.relatedKnowledge': '关联知识',
+  'app.kuaiplm.rdProjects.detail.section.usageGuide': '使用指引',
+  'app.kuaiplm.rdProjects.detail.usageGuide.collaboration':
+    '1. 协同事项：点击磁贴进入对应业务列表，已按本项目筛选；计数为本项目关联单据数量。',
+  'app.kuaiplm.rdProjects.detail.usageGuide.engineeringLinks':
+    '2. 工程资料链接：可挂接本项目相关的 BOM、图纸、文件等资料，便于从工作台一键打开。',
+  'app.kuaiplm.rdProjects.detail.usageGuide.gates':
+    '3. 阶段门：按左侧阶段推进任务与交付物；过门前须完成本阶段体系归档（上传、关联或标缺）。',
+  'app.kuaiplm.rdProjects.detail.usageGuide.systemArchive':
+    '4. 体系归档：按清单补齐资料；样机制作须关联对应轮次制作书，设计评审优先关联设计评审单。',
   'app.kuaiplm.rdProjects.detail.label.product': '产品',
   'app.kuaiplm.rdProjects.detail.label.plannedPeriod': '计划周期',
   'app.kuaiplm.rdProjects.detail.label.plannedDate': '计划日期',
@@ -6183,6 +8797,7 @@ export default {
   'app.kuaiplm.rdProjects.detail.link.materialId': '物料 ID（BOM/物料）',
   'app.kuaiplm.rdProjects.detail.link.addSuccess': '链接已添加',
   'app.kuaiplm.rdProjects.detail.link.deleteConfirm': '删除此工程链接？',
+  'app.kuaiplm.rdProjects.detail.link.openUnavailable': '该链接暂无可打开的目标',
   'app.kuaiplm.rdProjects.detail.task.createTitle': '新建任务',
   'app.kuaiplm.rdProjects.detail.task.editTitle': '编辑任务',
   'app.kuaiplm.rdProjects.detail.task.gateRequired': '请选择所属阶段门',
@@ -6194,6 +8809,13 @@ export default {
   'app.kuaiplm.rdProjects.detail.task.updateSuccess': '任务已更新',
   'app.kuaiplm.rdProjects.detail.task.deleteConfirm': '删除任务？',
   'app.kuaiplm.rdProjects.detail.deliverable.createTitle': '新建交付物',
+  'app.kuaiplm.rdProjects.detail.deliverable.linkDocument': '关联单据',
+  'app.kuaiplm.rdProjects.detail.deliverable.linkDocumentTitle': '关联单据',
+  'app.kuaiplm.rdProjects.detail.deliverable.linkDocumentDeliverable': '交付物',
+  'app.kuaiplm.rdProjects.detail.deliverable.linkDocumentDeliverableRequired': '请选择要关联的交付物',
+  'app.kuaiplm.rdProjects.detail.deliverable.linkDocumentTarget': '业务单据',
+  'app.kuaiplm.rdProjects.detail.deliverable.linkDocumentTargetRequired': '请选择要关联的业务单据',
+  'app.kuaiplm.rdProjects.detail.deliverable.linkDocumentEmpty': '当前阶段没有支持关联单据的体系交付物',
   'app.kuaiplm.rdProjects.detail.deliverable.editTitle': '编辑交付物',
   'app.kuaiplm.rdProjects.detail.deliverable.name': '交付物名称',
   'app.kuaiplm.rdProjects.detail.deliverable.typePlaceholder': '如：材料部品规格书',
@@ -6339,6 +8961,7 @@ export default {
   'app.kuaiplm.rdProjects.detail.shortcut.projectProposal': '项目建议',
   'app.kuaiplm.rdProjects.detail.shortcut.moldSample': '开模打样',
   'app.kuaiplm.rdProjects.detail.shortcut.trialFlow': '试流管理',
+  'app.kuaiplm.rdProjects.detail.shortcut.labRequest': '实验委托',
   'app.kuaiplm.rdProjects.detail.shortcut.engineeringChange': '工程变更',
   'app.kuaiplm.pendingInbox.title': '跨项目待办',
   'app.kuaiplm.pendingInbox.boardEmptyColumn': '该类暂无待办',
@@ -6368,6 +8991,11 @@ export default {
   'app.kuaiplm.rdProjects.gateStepper.failedHint': '当前阶段评审未通过，请完善交付物后重新评审',
   'app.kuaiplm.change.pageTitle': '工程变更',
   'app.kuaiplm.change.entityName': '工程变更',
+  'app.kuaiplm.change.createMenu.trigger': '新建变更',
+  'app.kuaiplm.change.createMenu.bom': '新建 BOM 变更',
+  'app.kuaiplm.change.createMenu.route': '新建工艺变更',
+  'app.kuaiplm.change.createMenu.drawing': '新建图纸变更',
+  'app.kuaiplm.change.createMenu.ecn': '新建工程变更',
   'app.kuaiplm.change.createBomButton': '在主数据新建 BOM 变更',
   'app.kuaiplm.change.createRouteButton': '在主数据新建工艺变更',
   'app.kuaiplm.change.tab.all': '全部变更',
@@ -6421,140 +9049,16 @@ export default {
   'app.kuaiplm.knowledgeBase.empty.selectDocument': '请选择或创建文档',
   'app.master-data.name': '主数据',
   'app.system.name': '系统配置',
-  'app.kuaiai.name': '星AI',
+  'app.kuaiai.name': 'KU-AI',
   'app.kuaiai.noMenuHint': '本应用无侧栏菜单。请使用顶栏右侧 AI 助手图标，或按 F1 打开对话。',
   'app.kuaiai.menu.pulse': '异常感知',
   'app.kuaiai.menu.ai-operations': '智能运营',
   'app.kuaiai.menu.ai-governance': '智能治理',
   'app.kuaiai.menu.hub': '能力矩阵',
-  'app.kuaiai.menu.agent-library': '智能体库',
-  'app.kuaiai.menu.corpus': '知识语料',
-  'app.kuaiai.menu.agents': 'Agent 档案',
-  'app.kuaiai.menu.chat': 'AI 对话',
-  'app.kuaiai.menu.mcp': 'MCP 白名单',
+  'app.kuaiai.menu.agents': '智能体库',
   'app.kuaiai.menu.insights': '调用分析',
   'app.kuaiai.menu.trust': '信任中心',
   'app.kuaiai.menu.settings': '模型设置',
-  'app.kuaiai.ops.noPageAccess': '暂无该页面访问权限',
-  'app.kuaiai.ops.noAssistant': 'AI 助手当前不可用',
-  'app.kuaiai.ops.notReady': '暂未就绪',
-  'app.kuaiai.ops.forbidden': '缺少功能权限',
-  'app.kuaiai.ops.forbiddenHint': '当前账号缺少对应页面权限，请联系管理员授权',
-  'app.kuaiai.ops.partialFailed': '部分数据刷新失败，已保留上次结果',
-  'app.kuaiai.chat.confirm.title': '待确认操作',
-  'app.kuaiai.chat.confirm.expiresIn': '剩余 {{time}}',
-  'app.kuaiai.chat.confirm.approve': '确认',
-  'app.kuaiai.chat.confirm.reject': '拒绝',
-  'app.kuaiai.chat.confirm.retry': '重试',
-  'app.kuaiai.chat.confirm.statusApproving': '已确认，执行中',
-  'app.kuaiai.chat.confirm.statusRejecting': '正在拒绝…',
-  'app.kuaiai.chat.confirm.statusApproved': '已确认',
-  'app.kuaiai.chat.confirm.statusRejected': '已拒绝',
-  'app.kuaiai.chat.confirm.statusCancelled': '已取消（未确认）',
-  'app.kuaiai.chat.confirm.statusExpired': '已过期或已处理',
-  'app.kuaiai.chat.confirm.argsLabel': '参数',
-  'app.kuaiai.chat.confirm.businessObject': '业务对象',
-  'app.kuaiai.chat.confirm.waitHint': '确认前不会执行写操作',
-  'app.kuaiai.chat.confirm.submitFailed': '确认提交失败',
-  'app.kuaiai.corpus.searchPlaceholder': '按标题搜索',
-  'app.kuaiai.corpus.advancedSearch': '高级搜索',
-  'app.kuaiai.corpus.filterKnowledge': '所属知识库',
-  'app.kuaiai.corpus.filterType': '类型',
-  'app.kuaiai.corpus.helpTip': '跨知识库查看语料；文件与文本在知识库管理页添加',
-  'app.kuaiai.corpus.status.pending': '待索引',
-  'app.kuaiai.corpus.status.parsing': '索引中',
-  'app.kuaiai.corpus.status.ready': '已索引',
-  'app.kuaiai.corpus.status.failed': '索引失败',
-  'app.kuaiai.corpus.type.faq': 'FAQ',
-  'app.kuaiai.corpus.type.text': '文本',
-  'app.kuaiai.corpus.type.file': '文件',
-  'app.kuaiai.corpus.inactiveHint': '已停用，不参与检索',
-  'app.kuaiai.corpus.colTitle': '标题',
-  'app.kuaiai.corpus.colKnowledge': '所属知识库',
-  'app.kuaiai.corpus.colType': '类型',
-  'app.kuaiai.corpus.colChunks': '分块数',
-  'app.kuaiai.corpus.colStatus': '索引状态',
-  'app.kuaiai.corpus.detail': '详情',
-  'app.kuaiai.corpus.noKnowledgePerm': '缺少知识库管理权限',
-  'app.kuaiai.corpus.noCreatePerm': '缺少语料创建权限',
-  'app.kuaiai.corpus.noUpdatePerm': '缺少语料更新权限',
-  'app.kuaiai.corpus.noDeletePerm': '缺少语料删除权限',
-  'app.kuaiai.corpus.noExportPerm': '缺少语料导出权限',
-  'app.kuaiai.corpus.help': '帮助',
-  'app.kuaiai.corpus.deleteConfirm': '确认删除该语料？',
-  'app.kuaiai.corpus.seedFaqs': '加载出厂 FAQ',
-  'app.kuaiai.corpus.addFaq': '添加 FAQ',
-  'app.kuaiai.corpus.gotoKnowledge': '前往知识库添加文档',
-  'app.kuaiai.corpus.exportJsonl': '导出训练 JSONL',
-  'app.kuaiai.corpus.exportStarted': '导出已开始下载',
-  'app.kuaiai.corpus.exportFailed': '导出失败',
-  'app.kuaiai.corpus.batchDelete': '批量删除',
-  'app.kuaiai.corpus.batchOps': '批量操作',
-  'app.kuaiai.corpus.batchIndex': '索引',
-  'app.kuaiai.corpus.batchDeleteConfirm': '确认删除选中的 {{count}} 条语料？',
-  'app.kuaiai.corpus.batchDeleteConfirmHint': '删除后不可恢复，关联切块将一并移除',
-  'app.kuaiai.corpus.batchIndexDone': '已提交 {{count}} 条索引任务',
-  'app.kuaiai.corpus.batchDeleteDone': '已删除 {{count}} 条记录',
-  'app.kuaiai.corpus.batchIndexPartial': '部分索引提交失败',
-  'app.kuaiai.corpus.batchDeletePartial': '部分删除失败',
-  'app.kuaiai.corpus.batchResultSummary': '成功 {{ok}} 条，失败 {{fail}} 条',
-  'app.kuaiai.corpus.batchIndexFailed': '批量索引失败',
-  'app.kuaiai.corpus.columnSettings': '列设置',
-  'app.kuaiai.corpus.loadFailed': '加载语料列表失败',
-  'app.kuaiai.corpus.empty': '暂无语料记录',
-  'app.kuaiai.corpus.footerTotal': '共 {{total}} 条记录，显示 {{start}}-{{end}} 条',
-  'app.kuaiai.corpus.seedModalTitle': '加载出厂 FAQ',
-  'app.kuaiai.corpus.seedModalHint': '为选中的启用知识库写入内置 FAQ；同题已存在（含人工 FAQ）自动跳过，不会覆盖。',
-  'app.kuaiai.corpus.seedDone': '已写入 {{created}} 条出厂 FAQ，跳过 {{skipped}} 条',
-  'app.kuaiai.corpus.seedFailed': '加载出厂 FAQ 失败',
-  'app.kuaiai.corpus.faqModalTitle': '添加 FAQ',
-  'app.kuaiai.corpus.form.knowledge': '知识库',
-  'app.kuaiai.corpus.form.knowledgeRequired': '请选择知识库',
-  'app.kuaiai.corpus.form.knowledgePlaceholder': '请选择启用的知识库',
-  'app.kuaiai.corpus.noEnabledKb': '暂无启用的知识库',
-  'app.kuaiai.corpus.form.question': '问题',
-  'app.kuaiai.corpus.form.questionRequired': '请输入问题',
-  'app.kuaiai.corpus.form.questionPlaceholder': '问题将作为语料标题（300 字以内）',
-  'app.kuaiai.corpus.form.answer': '答案',
-  'app.kuaiai.corpus.form.answerRequired': '请输入答案',
-  'app.kuaiai.corpus.form.answerPlaceholder': '请输入标准答复内容',
-  'app.kuaiai.corpus.form.isActive': '是否启用',
-  'app.kuaiai.corpus.form.isActiveTip': '停用的 FAQ 不参与检索',
-  'app.kuaiai.library.title': '智能体库',
-  'app.kuaiai.library.loadFailed': '加载智能体库失败',
-  'app.kuaiai.library.empty': '暂无可展示的智能体场景',
-  'app.kuaiai.library.emptyHintManage': '请重新同步应用完成场景预置',
-  'app.kuaiai.library.provisioningIncomplete': '场景预置未完成，部分智能体暂不可用',
-  'app.kuaiai.library.provisioningHintManage': '可重试补齐缺失的预置场景实例',
-  'app.kuaiai.library.provisioningHintView': '请联系管理员重新同步应用后再试',
-  'app.kuaiai.library.provisionRetryFailed': '补齐预置失败',
-  'app.kuaiai.library.openAndSend': '打开并发送',
-  'app.kuaiai.library.openAndSendAria': '打开助手并发送示例提问：{{name}}',
-  'app.kuaiai.library.sceneUnavailable': '场景路由不可用或无页面权限',
-  'app.kuaiai.library.viewSceneAria': '查看场景：{{name}}',
-  'app.kuaiai.library.manage': '管理',
-  'app.kuaiai.library.manageAria': '管理场景实例：{{name}}',
-  'app.kuaiai.library.manageEdit': '编辑场景实例',
-  'app.kuaiai.library.manageClone': '复制场景副本',
-  'app.kuaiai.library.editModalTitle': '编辑场景实例',
-  'app.kuaiai.library.editSaved': '场景已更新',
-  'app.kuaiai.library.editFailed': '场景更新失败',
-  'app.kuaiai.library.cloneModalTitle': '复制场景副本',
-  'app.kuaiai.library.cloneHint': '将从所选本租户 Agent 档案克隆出停用副本档案，并创建一个新的场景实例',
-  'app.kuaiai.library.cloneCreated': '已创建场景副本',
-  'app.kuaiai.library.cloneFailed': '克隆失败',
-  'app.kuaiai.library.field.name': '名称',
-  'app.kuaiai.library.field.description': '描述',
-  'app.kuaiai.library.field.image': '插画',
-  'app.kuaiai.library.field.imagePlaceholder': '默认按模板插画',
-  'app.kuaiai.library.field.tags': '能力标签',
-  'app.kuaiai.library.field.sceneRoute': '场景路由',
-  'app.kuaiai.library.field.bindProfile': '绑定 Agent 档案',
-  'app.kuaiai.library.field.enabled': '启用',
-  'app.kuaiai.library.field.sourceProfile': '源 Agent 档案',
-  'app.kuaiai.library.bindNoPermission': '需要 Agent 档案读权限',
-  'app.kuaiai.library.bindPlaceholder': '选择本租户 Agent 档案，清空即解绑',
-  'app.kuaiai.library.sourcePlaceholder': '选择要克隆的本租户 Agent 档案',
   'app.kuaiai.settings.title': '模型设置',
   'app.kuaiai.settings.subtitle': '选用对话模型连接，并配置 KU-AI 能力',
   'app.kuaiai.settings.providerCardTitle': '对话模型',
@@ -6568,60 +9072,6 @@ export default {
   'app.kuaiai.settings.providerStatus.noKey': '未配置 Key',
   'app.kuaiai.settings.providerStatus.disabled': '未启用',
   'app.kuaiai.settings.providerStatus.ready': '可用',
-  'app.kuaiai.settings.optionUnavailable': '不可用',
-  'app.kuaiai.settings.ocrTitle': 'OCR 视觉识别',
-  'app.kuaiai.settings.ocrHint':
-    '视觉（OCR）连接用于单据图像识别；连接与密钥在应用连接器中维护，本页仅显示脱敏信息，留空密钥不会被修改。',
-  'app.kuaiai.settings.visionConnection': '视觉连接',
-  'app.kuaiai.settings.visionPlaceholder': '不选用视觉连接',
-  'app.kuaiai.settings.visionEmpty': '暂无视觉角色连接，请先到应用连接器新建',
-  'app.kuaiai.settings.ocrModel': 'OCR 模型',
-  'app.kuaiai.settings.ocrKeyPlaceholder': '已配置，留空则不修改',
-  'app.kuaiai.settings.ocrBaseUrl': 'OCR 服务地址',
-  'app.kuaiai.settings.ocrApiKey': 'OCR API 密钥',
-  'app.kuaiai.settings.agent.inventory-insight': '库存洞察助手',
-  'app.kuaiai.settings.agent.planner-advisor': '计划员顾问',
-  'app.kuaiai.settings.agent.purchase-followup': '采购跟单助手',
-  'app.kuaiai.settings.agent.schedule-explainer': '排程解读助手',
-  'app.kuaiai.settings.agent.quality-analysis': '质量异常分析',
-  'app.kuaiai.settings.agent.supplier-collaboration': '供应商协同 Agent',
-  'app.kuaiai.settings.agent.shift-lead': '班组长助手',
-  'app.kuaiai.settings.agent.order-delivery': '订单交期助手',
-  'app.kuaiai.settings.agent.work-instruction': '作业指导助手',
-  'app.kuaiai.settings.bindingsTitle': '能力绑定',
-  'app.kuaiai.settings.bindingsHint':
-    '能力矩阵中每个场景卡默认绑定同名预置场景实例；可改绑其他实例，或解绑（解绑后该能力卡不可用）。',
-  'app.kuaiai.settings.bindingPreset': '随预置实例',
-  'app.kuaiai.settings.bindingUnbound': '解绑（能力卡不可用）',
-  'app.kuaiai.settings.capabilitiesTitle': 'KU-AI 能力配置',
-  'app.kuaiai.settings.capTools': '业务单据工具',
-  'app.kuaiai.settings.capRag': '知识语料 RAG',
-  'app.kuaiai.settings.capEmbedding': '向量检索',
-  'app.kuaiai.settings.ragTopK': 'RAG 条数',
-  'app.kuaiai.settings.ragTopKRequired': '请填写 RAG 条数（1-20）',
-  'app.kuaiai.settings.ragBackend': '引擎',
-  'app.kuaiai.settings.ragBackendNative': '原生',
-  'app.kuaiai.settings.customPrompt': '企业系统说明',
-  'app.kuaiai.settings.customPromptPlaceholder':
-    '可选：描述企业系统背景，将附加到 KU-AI 系统提示词',
-  'app.kuaiai.settings.saveSuccess': '设置已保存',
-  'app.kuaiai.settings.saveFailed': '保存失败',
-  'app.kuaiai.settings.saveConflict': '设置已被他人修改，请刷新后重试',
-  'app.kuaiai.settings.loadFailed': '加载设置失败',
-  'app.kuaiai.settings.refreshConfirmTitle': '放弃未保存修改？',
-  'app.kuaiai.settings.refreshConfirmContent':
-    '刷新将丢弃当前未保存的修改并重新加载最新配置。',
-  'app.kuaiai.settings.serverChanged': '服务端配置已更新',
-  'app.kuaiai.settings.discardAndReload': '放弃修改并重载',
-  'app.kuaiai.settings.noUpdatePerm': '缺少设置修改权限',
-  'app.kuaiai.settings.sopSyncTitle': 'SOP 同步',
-  'app.kuaiai.settings.sopSyncHint':
-    '启用后，SOP 发布生效时其电子正文将自动同步到所选知识库供 AI 引用；作废后自动下架。仅同步正文，不含附件。',
-  'app.kuaiai.settings.sopSyncEnabled': '启用 SOP 同步',
-  'app.kuaiai.settings.sopSyncKnowledge': '目标知识库',
-  'app.kuaiai.settings.sopSyncKnowledgeRequired': '启用 SOP 同步须选择目标知识库',
-  'app.kuaiai.settings.sopSyncKnowledgePlaceholder': '选择目标知识库',
-  'app.kuaiai.settings.sopSyncKnowledgeEmpty': '暂无启用的知识库，请先到知识库页面新建',
   'app.kuaiai.showcase.openAssistant': '打开 KU-Ask',
   'app.kuaiai.hub.title': '能力矩阵',
   'app.kuaiai.hub.subtitle': '制造场景 AI 能力总览，当前模型 {{model}}',
@@ -6652,21 +9102,6 @@ export default {
   'app.kuaiai.hub.cap.bridgeDesc': '实验室外部 Agent 只读访问生产数据',
   'app.kuaiai.hub.labBadge': '实验室',
   'app.kuaiai.hub.tryIt': '去体验',
-  'app.kuaiai.hub.capEntryAria': '进入能力入口：{{name}}',
-  'app.kuaiai.hub.brandDesc': '面向制造场景的智能辅助能力矩阵',
-  'app.kuaiai.hub.searchPlaceholder': '搜索场景名称、描述或分类',
-  'app.kuaiai.hub.searchEmpty': '无匹配场景',
-  'app.kuaiai.hub.category.plan': '计划',
-  'app.kuaiai.hub.category.production': '生产',
-  'app.kuaiai.hub.category.quality': '质量',
-  'app.kuaiai.hub.category.inventory': '库存',
-  'app.kuaiai.hub.category.purchase': '采购',
-  'app.kuaiai.hub.category.equipment': '设备',
-  'app.kuaiai.hub.category.engineering': '工程',
-  'app.kuaiai.hub.category.management': '管理',
-  'app.kuaiai.hub.category.general': '通用',
-  'app.kuaiai.hub.category.expand': '展开',
-  'app.kuaiai.hub.category.groupAria': '{{name}}分类，{{count}} 个场景',
   'app.kuaiai.catalog.status.ready': '已就绪',
   'app.kuaiai.catalog.status.degraded': '降级可用',
   'app.kuaiai.catalog.status.blocked': '不可用',
@@ -6764,7 +9199,7 @@ export default {
   'app.kuaiai.insights.pulseHits': 'Pulse 建议数',
   'app.kuaiai.insights.knowledgeDocs': '知识语料文档',
   'app.kuaiai.insights.empty': '启用 KU-AI 后将自动统计调用数据',
-  'app.kuaiai.insights.unknownCap': '未分类',
+  'app.kuaiai.insights.unknownCap': '其他',
   'app.kuaiai.insights.chartCallsByDay': '每日调用趋势',
   'app.kuaiai.insights.chartCallsByCapability': '能力调用分布',
   'app.kuaiai.insights.recentActivity': '最近动态',
@@ -6775,7 +9210,7 @@ export default {
   'app.kuaiai.trust.principle.rbac': 'RBAC 读权限',
   'app.kuaiai.trust.principle.rbacDesc': '工具与查询仅在已授予权限范围内执行',
   'app.kuaiai.trust.principle.hitl': 'HITL 写门控',
-  'app.kuaiai.trust.principle.hitlDesc': '人工确认闸尚未接入；当前写工具仍受业务权限与服务校验约束',
+  'app.kuaiai.trust.principle.hitlDesc': '写操作需二次确认，禁止静默过审',
   'app.kuaiai.trust.principle.audit': '全链路审计',
   'app.kuaiai.trust.principle.auditDesc': '记录租户、用户、路由与耗时',
   'app.kuaiai.trust.permissionsTitle': '相关权限码',
@@ -6785,16 +9220,8 @@ export default {
   'app.kuaiai.trust.col.capability': '能力',
   'app.kuaiai.trust.col.route': '路由',
   'app.kuaiai.trust.col.latency': '耗时',
-  'app.kuaiai.trust.col.status': '状态',
-  'app.kuaiai.trust.auditForbidden': '当前账号缺少 kuaiai:entry:read，无法读取审计日志',
-  'app.kuaiai.trust.auditTotal': '共 {{total}} 条',
-  'app.kuaiai.trust.permGranted': '拥有',
-  'app.kuaiai.trust.permMissing': '未拥有',
-  'app.kuaiai.trust.actHint': '写操作仍受业务单据原权限与服务校验约束；KU-Act propose/execute 人工确认闸尚未接入，接入后本页同步更新状态。',
-  'app.kuaiai.trust.actHintReady': '写操作仍受业务单据原权限与服务校验约束；人工确认闸已接入，写类操作执行前需人工确认，全程留痕。',
-  'app.kuaiai.insights.trendSummary': '近 {{days}} 天共 {{total}} 次调用，峰值 {{peakDay}} 当日 {{peak}} 次',
-  'app.kuaiai.insights.trendSparse': '有效数据点不足，仅展示现有记录',
-  'app.kuaiai.menu.knowledge': '知识库',
+  'app.kuaiai.trust.actHint': '人审执行通过 KU-Act propose 与 execute 完成，写操作仍受业务单据原权限约束。',
+  'app.kuaiai.menu.knowledge': '知识语料',
   'app.kuaiai.pulse.title': '异常感知',
   'app.kuaiai.pulse.subtitle': '全局捕捉生产、库存、销售、质量与设备异常，分卡片展示',
   'app.kuaiai.pulse.empty': '暂无异常，系统运行正常',
@@ -6821,22 +9248,6 @@ export default {
   'app.kuaiai.pulse.category.quality': '质量',
   'app.kuaiai.pulse.category.equipment': '设备',
   'app.kuaiai.pulse.category.general': '综合',
-  'app.kuaiai.pulse.type.critical': '紧急',
-  'app.kuaiai.pulse.filter.domain': '领域（默认全部）',
-  'app.kuaiai.pulse.filter.severity': '严重度（默认全部）',
-  'app.kuaiai.pulse.partialData': '部分数据',
-  'app.kuaiai.pulse.stillComputing': '仍在计算，数据量较大时可取消后重试',
-  'app.kuaiai.pulse.cancelLoad': '取消加载',
-  'app.kuaiai.pulse.cancelled': '已取消加载',
-  'app.kuaiai.pulse.notConnected': '以下领域尚未接入检测器：{{domains}}',
-  'app.kuaiai.pulse.viewWorkOrder': '查看工单',
-  'app.kuaiai.pulse.viewSalesOrder': '查看销售订单',
-  'app.kuaiai.pulse.viewInventoryAlert': '查看库存预警',
-  'app.kuaiai.pulse.viewQualityException': '查看质量异常',
-  'app.kuaiai.pulse.viewEquipmentFault': '查看设备故障',
-  'app.kuaiai.pulse.viewIotAlerts': '查看告警',
-  'app.kuaiai.pulse.sourceNoPermission': '无{{source}}权限',
-  'app.kuaiai.pulse.sourceUnavailable': '{{source}}暂不可用，请稍后重试',
   'app.kuaiai.suggest.patchApplied': '已填入表单字段，请确认后保存',
   'app.kuaiai.know.sopTitle': '相关 SOP',
   'app.kuaiai.know.sopEmpty': '暂无匹配知识条目',
@@ -6899,7 +9310,9 @@ export default {
   // 福尼特 OA（funide-oa）专用定制应用
   'app.funide-oa.name': '福尼特OA',
   'app.funide-oa.menu.workbench': '工作台',
-  'app.funide-oa.menu.dept.rdElectronics': '研发电子/结构',
+  'app.funide-oa.menu.dept.rdManagement': '研发管理',
+  'app.funide-oa.menu.dept.rdElectronics': '研发电子',
+  'app.funide-oa.menu.dept.rdStructure': '研发结构',
   'app.funide-oa.menu.dept.rdProject': '研发项目',
   'app.funide-oa.menu.dept.laboratory': '实验部门',
   'app.funide-oa.menu.dept.quality': '质量管理',
@@ -6917,10 +9330,15 @@ export default {
   'app.funide-oa.menu.projectDocs': '项目单据',
   'app.funide-oa.menu.sampleBuild': '样品打样',
   'app.funide-oa.menu.lab': '实验管理',
-  'app.funide-oa.menu.qualityLoop': '质量闭环',
+  'app.funide-oa.menu.qualityLoop': '质量改善',
   'app.funide-oa.menu.signoff': '会签审批',
   'app.funide-oa.menu.signoff.formTemplates': '会签模板',
   'app.funide-oa.menu.signoff.formRequests': '会签申请',
+  'app.funide-oa.menu.signoff.fiveMChange': '5M变更报告',
+  'app.funide-oa.menu.signoff.techWorkContact': '技术工作联系单',
+  'app.funide-oa.menu.signoff.confirmation': '确认书',
+  'app.funide-oa.menu.signoff.reviewSheet': '评审单',
+  'app.funide-oa.menu.signoff.materialIssue': '领料单',
   'app.funide-oa.menu.production': '生产作业',
   'app.funide-oa.menu.production.dailySummary': '日报汇总',
   'app.funide-oa.menu.equipment': '设备工装',
@@ -6959,11 +9377,22 @@ export default {
   'app.funide-oa.menu.r01.structureMoldDfm': '模具图及DFM',
   'app.funide-oa.menu.r01.drawingDistributions': '图纸下发',
   'app.funide-oa.menu.r01.drawingLoans': '图纸借用',
-  'app.funide-oa.menu.r01.peSop': '工艺 SOP',
-  'app.funide-oa.menu.r01.qcSop': 'QC SOP',
+  'app.funide-oa.menu.r01.peSop': '工艺指导书',
+  'app.funide-oa.menu.r01.qcSop': '检验指导书',
+  'app.funide-oa.menu.r01.clauseManagement': '条款管理',
   'app.funide-oa.menu.r01.systemDocuments': '体系文件',
+  'app.funide-oa.menu.r01.internalAuditAnnualPlans': '年度审核计划',
+  'app.funide-oa.menu.r01.internalAudits': '内部审核',
+  'app.funide-oa.menu.r01.nonconformityReports': '不符合报告',
+  'app.funide-oa.menu.r01.correctiveActions': '纠正预防',
+  'app.funide-oa.menu.r01.managementReviews': '管理评审',
+  'app.funide-oa.menu.r01.qualityObjectives': '质量目标',
+  'app.funide-oa.menu.r01.legalRegulations': '法律法规',
+  'app.funide-oa.menu.r01.externalAudits': '外审与证书',
   'app.funide-oa.menu.r01.knowledgeBase': '知识库',
   'app.funide-oa.menu.r02.labRequests': '实验委托',
+  'app.funide-oa.menu.r02.labRequestsProcess': '处理实验委托',
+  'app.funide-oa.menu.r02.initiateLabRequests': '发起实验委托',
   'app.funide-oa.menu.r02.trialLabRequests': '试验委托',
   'app.funide-oa.menu.r02.labBoard': '委托看板',
   'app.funide-oa.menu.r02.labJudgmentRules': '判定规则',
@@ -6974,7 +9403,7 @@ export default {
   'app.funide-oa.menu.r04.sampleProcess': '样品加工',
   'app.funide-oa.menu.r05.complaints': '质量投诉',
   'app.funide-oa.menu.r05.complaintAnalysis': '投诉月度分析',
-  'app.funide-oa.menu.r06.deliverables': '交付物',
+  'app.funide-oa.menu.r06.deliverables': '电子图纸文档',
   'app.funide-oa.menu.r06.productFirmwares': '产品固件',
   'app.funide-oa.productFirmware.fields.softwareItemCode': '软件12位编码',
   'app.funide-oa.productFirmware.fields.softwareItemCodePlaceholder': '请输入软件12位编码',
@@ -6983,7 +9412,7 @@ export default {
   'app.funide-oa.productFirmware.messages.softwareItemCodeMaxLength': '软件12位编码不能超过50个字符',
   'app.funide-oa.productFirmware.messages.softwareDescriptionMaxLength': '软件描述不能超过200个字符',
   'app.funide-oa.menu.r06.productionFiles': '生产软件',
-  'app.funide-oa.menu.docControl.deliverables': '交付物',
+  'app.funide-oa.menu.docControl.deliverables': '结构图纸文档',
   'app.funide-oa.menu.r07.annualLabPlans': '年度例试计划',
   'app.funide-oa.menu.r08.trialFlows': '试流单',
   'app.funide-oa.menu.r08.prototypeBuild': '样机制作书',
@@ -7047,7 +9476,13 @@ export default {
   'app.funide-oa.projectProposal.validation.projectCodeRequired': '请填写项目代号',
   'app.funide-oa.projectProposal.validation.projectNameRequired': '请填写项目名称',
   'app.funide-oa.projectProposal.placeholders.titleOptional': '选填；不填则使用项目名称',
+  'app.funide-oa.projectProposal.fields.rdProject': '研发项目',
   'app.funide-oa.projectProposal.fields.title': '标题',
+  'app.funide-oa.projectProposal.actions.pushRdProject': '下推研发项目',
+  'app.funide-oa.projectProposal.messages.pushRdSuccess': '已下推研发项目并建立关联',
+  'app.funide-oa.rdProjects.form.sourceProposal': '关联项目建议书',
+  'app.funide-oa.rdProjects.form.sourceProposalPlaceholder': '选择已审核的项目建议书',
+  'app.funide-oa.rdProjects.detail.sourceProposal': '项目建议书',
   'app.funide-oa.projectProposal.fields.summary': '摘要',
   'app.funide-oa.projectProposal.fields.devRequirementsSummary': '开发要求概述',
   'app.funide-oa.projectProposal.fields.customer': '客户',
@@ -7127,7 +9562,7 @@ export default {
   'app.funide-oa.workbench.hint.sampleBuild': '样机制作、试流、样品加工、物料评审与打样订单。',
   'app.funide-oa.workbench.hint.projectDocs': '生产软件、产品固件。',
   'app.funide-oa.workbench.hint.lab': '实验委托、看板、判定规则与年度例试。',
-  'app.funide-oa.workbench.hint.qualityLoop': '返工、返工策划、投诉、8D、供方评价与让步放行。',
+  'app.funide-oa.workbench.hint.qualityLoop': '质量改善：返工、返工策划、投诉、8D、供方评价与让步放行。',
   'app.funide-oa.workbench.hint.signoff': '会签模板与会签申请。',
   'app.funide-oa.workbench.hint.production': '生产日报、标签工位、装箱与 OEM 签样。',
   'app.funide-oa.workbench.hint.equipment': '台账验收、点检保养、计量外校与 ESD。',
@@ -7144,7 +9579,35 @@ export default {
   'app.haoligo.menu.productDirectory': '产品名录',
   'app.haoligo.menu.hr': '人事管理',
   'app.haoligo.menu.rewards': '奖励绩效登记',
+  'app.haoligo.menu.payroll-settlements-mgmt': '管理层',
+  'app.haoligo.menu.payroll-settlements-frontline': '一线员工',
+  'app.haoligo.menu.payroll-settlements-labor': '劳务工',
+  'app.haoligo.menu.payroll-settlements-temp': '临时工',
+  'app.haoligo.payroll.createMgmt': '新建管理层工资结算',
+  'app.haoligo.payroll.createFrontline': '新建一线员工工资结算',
+  'app.haoligo.payroll.createLabor': '新建劳务工工资结算',
+  'app.haoligo.payroll.createTemp': '新建临时工工资结算',
   'app.haoligo.reward.createButton': '新建奖励绩效登记',
+  'pages.dashboard.updateLog.entries.haoligo-payroll-settlements-menu-group-r01.title':
+    '工资结算收拢为菜单组',
+  'pages.dashboard.updateLog.entries.haoligo-payroll-settlements-menu-group-r01.description':
+    '薪酬管理下「工资结算」为分组，子菜单直接显示管理层、一线员工、劳务工、临时工，不再重复「工资结算」前缀。',
+  'pages.dashboard.updateLog.entries.haoligo-payroll-ot-detail-button-r01.title':
+    '加班工资旁可查看计算明细',
+  'pages.dashboard.updateLog.entries.haoligo-finance-payment-invoice-exclusive-r01.title':
+    '登记付款不再列出已关联发票',
+  'pages.dashboard.updateLog.entries.haoligo-finance-payment-invoice-exclusive-r01.description':
+    '关联发票下拉排除已挂到其他付款单的发票；保存时若重复关联会明确报错。编辑本单时仍可看到并保留本单已选发票。',
+  'pages.dashboard.updateLog.entries.haoligo-payroll-ot-hourly-div8-r01.title':
+    '管理层加班小时单价改为基本÷21.75÷8',
+  'pages.dashboard.updateLog.entries.haoligo-payroll-ot-hourly-div8-r01.description':
+    '管理层与月薪加班工资的小时单价在月平均计薪天数21.75之外再除以标准日工时8；明细弹层与按考勤重建同步按新口径计算。',
+  'pages.dashboard.updateLog.entries.haoligo-payroll-ot-detail-button-r01.description':
+    '工资结算明细「加班工资」列增加明细按钮；管理层展示基本÷21.75÷8小时单价与日常/周末/法定加班分项，一线展示小计反推，劳务/临时展示总工时×计时单价。',
+  'pages.dashboard.updateLog.entries.haoligo-payroll-settlement-scope-split-r01.title':
+    '工资结算拆为管理层一线劳务临时四入口',
+  'pages.dashboard.updateLog.entries.haoligo-payroll-settlement-scope-split-r01.description':
+    '薪酬管理下按顺序提供四类工资结算；同车间同月可各建一张。劳务/临时按总工时×计时单价；一线保留档案岗位工资并由导入小计反推加班；管理层仍按基本工资÷月平均工作日21.75计算加班。',
   'app.haoligo.reward.exportFileName': '奖励绩效登记',
   'app.haoligo.reward.importTitle': '导入奖励绩效登记',
   'app.haoligo.reward.importSuccess': '成功导入 {{count}} 条奖励绩效登记',
@@ -7542,6 +10005,52 @@ export default {
   'app.haoligo.menu.equipment.injection.documents.upkeep-sheet': '注塑机维保单',
   'app.haoligo.menu.equipment.injection.documents.upkeep-complete': '注塑机维保完成单',
   'app.haoligo.menu.equipment.injection.documents.output-record': '注塑机产出单',
+  'app.haoligo.menu.equipment.injection.documents.horizontal-output': '卧式注塑机产出单',
+  'app.haoligo.horizontalInjectionOutput.title': '卧式注塑机产出单',
+  'app.haoligo.horizontalInjectionOutput.create': '新建卧式注塑机产出单',
+  'app.haoligo.horizontalInjectionOutput.createTitle': '新建卧式注塑机产出单',
+  'app.haoligo.horizontalInjectionOutput.editTitle': '编辑卧式注塑机产出单',
+  'app.haoligo.horizontalInjectionOutput.viewTitle': '卧式注塑机产出单详情',
+  'app.haoligo.horizontalInjectionOutput.importTemplateName': '卧式注塑机产出导入模板',
+  'app.haoligo.horizontalInjectionOutput.importNoRows': '未识别到可导入的数据行，请使用 D 列至 AI 列表头',
+  'app.haoligo.horizontalInjectionOutput.importPartial': '导入完成：成功 {{created}} 行，失败 {{failed}} 行。{{sample}}',
+  'app.haoligo.horizontalInjectionOutput.productionDate': '生产日期',
+  'app.haoligo.horizontalInjectionOutput.customerName': '客户名称',
+  'app.haoligo.horizontalInjectionOutput.materialName': '物料名称',
+  'app.haoligo.horizontalInjectionOutput.materialCode': '物料号',
+  'app.haoligo.horizontalInjectionOutput.workOrderNo': '制令单号',
+  'app.haoligo.horizontalInjectionOutput.salesOrderNo': '受订单号',
+  'app.haoligo.horizontalInjectionOutput.cavityNo': '模号',
+  'app.haoligo.horizontalInjectionOutput.employeeCode': '员工代码',
+  'app.haoligo.horizontalInjectionOutput.shift': '班次',
+  'app.haoligo.horizontalInjectionOutput.machineNo': '机台号',
+  'app.haoligo.horizontalInjectionOutput.moldCode': '模具号',
+  'app.haoligo.horizontalInjectionOutput.moldCodeSelectPh': '请搜索并选择模具台账中的模具',
+  'app.haoligo.horizontalInjectionOutput.moldCodeRequired': '请选择模具号',
+  'app.haoligo.horizontalInjectionOutput.moldCodeInvalid': '模具号有误',
+  'app.haoligo.horizontalInjectionOutput.moldLedgerReadRequired': '无模具台账查看权限，无法选择模具',
+  'app.haoligo.horizontalInjectionOutput.printSheetCount': '打印张数',
+  'app.haoligo.horizontalInjectionOutput.inputQty': '本批投入总数',
+  'app.haoligo.horizontalInjectionOutput.okQty': '本批合格总数',
+  'app.haoligo.horizontalInjectionOutput.firstPassOkQty': '本批一次合格数',
+  'app.haoligo.horizontalInjectionOutput.reworkOkQty': '不良品返工后为良品总数',
+  'app.haoligo.horizontalInjectionOutput.yieldRate': '本批总合格率',
+  'app.haoligo.horizontalInjectionOutput.rtyRate': '本批一次合格率',
+  'app.haoligo.horizontalInjectionOutput.defectRate': '本批总不良率',
+  'app.haoligo.horizontalInjectionOutput.defectTotal': '不良数',
+  'app.haoligo.horizontalInjectionOutput.sheetNo': '单号',
+  'app.haoligo.horizontalInjectionOutput.defectSection': '注塑成品不良品特征',
+  'app.haoligo.horizontalInjectionOutput.defectShortage': '缺料',
+  'app.haoligo.horizontalInjectionOutput.defectColor': '色差',
+  'app.haoligo.horizontalInjectionOutput.defectBump': '碰伤',
+  'app.haoligo.horizontalInjectionOutput.defectScratch': '拉伤',
+  'app.haoligo.horizontalInjectionOutput.defectBurn': '烧焦',
+  'app.haoligo.horizontalInjectionOutput.defectBurr': '毛刺',
+  'app.haoligo.horizontalInjectionOutput.defectFlash': '飞边',
+  'app.haoligo.horizontalInjectionOutput.defectStain': '污渍',
+  'app.haoligo.horizontalInjectionOutput.defectDimension': '尺寸不合格',
+  'app.haoligo.horizontalInjectionOutput.defectGate': '浇口穿孔',
+  'app.haoligo.horizontalInjectionOutput.defectDeform': '变形',
   'app.haoligo.menu.equipment.injection.documents.status-adjustment': '注塑机状态调整单',
   'app.haoligo.menu.equipment.injection.documents.acceptance': '注塑机验收单',
   'app.haoligo.menu.equipment.injection.dashboard.status': '注塑机状态看板',
@@ -7578,6 +10087,7 @@ export default {
   'app.haoligo.equipment.documents.acceptance.colCapacityPerHour': '设备产能（个/小时）',
   'app.haoligo.equipment.documents.acceptance.colContractCapacity': '合同约定产能（个/小时）',
   'app.haoligo.equipment.documents.acceptance.colTrialResult': '试产结果',
+  'app.haoligo.equipment.documents.acceptance.colTrialFlowDate': '试流日期',
   'app.haoligo.equipment.documents.acceptance.colAssetCode': '资产编号',
   'app.haoligo.equipment.documents.acceptance.colLinkedEquipment': '已有设备',
   'app.haoligo.equipment.documents.acceptance.sectionCommissioning': '第 {{round}} 轮 - 调试',
@@ -7683,6 +10193,8 @@ export default {
   'app.haoligo.equipment.documents.statusAdjModalView': '设备状态调整单详情',
   'app.haoligo.print.modalTitle': '打印维保完成报告',
   'app.haoligo.print.equipmentSpotCheckTitle': '设备点检报告',
+  'app.haoligo.print.equipmentUpkeepSheetTitle': '设备维保单',
+  'app.haoligo.print.equipmentRoutePatrolTitle': '设备巡检报告',
   'app.haoligo.print.equipmentUpkeepCompleteTitle': '设备维保完成报告',
   'app.haoligo.print.templateLabel': '打印模板',
   'app.haoligo.print.templatePlaceholder': '选择打印模板',
@@ -7837,7 +10349,7 @@ export default {
   'app.haoligo.equipment.documents.colPlannedQty': '计划数量',
   'app.haoligo.equipment.documents.colProductionDepartment': '生产部门',
   'app.haoligo.equipment.documents.searchByProductionDepartment': '按照生产部门查询',
-  'app.haoligo.equipment.documents.searchByProductionDepartmentPh': '输入生产部门',
+  'app.haoligo.equipment.documents.searchByProductionDepartmentPh': '请选择生产部门',
   'app.haoligo.equipment.documents.colCompletedQty': '完成数量',
   'app.haoligo.equipment.documents.formStartupAt': '开机时间',
   'app.haoligo.equipment.documents.formCompletedAt': '完工时间',
@@ -7857,6 +10369,20 @@ export default {
   'app.haoligo.equipment.documents.outputDatasetParamRequired': '请选择或填写与 SQL 占位符一致的参数名',
   'app.haoligo.equipment.documents.outputDatasetParamPh': '下拉选择参数名，或直接输入',
   'app.haoligo.equipment.documents.outputDatasetParamSaved': '已保存',
+  'app.haoligo.equipment.documents.outputBackfillDeptBtn': '回填生产部门',
+  'app.haoligo.equipment.documents.outputBackfillDeptNeedColumn':
+    '请先在「数据集」中选择「生产部门列」并保存，再回填历史单据',
+  'app.haoligo.equipment.documents.outputBackfillDeptConfirmTitle': '回填历史生产部门？',
+  'app.haoligo.equipment.documents.outputBackfillDeptConfirmDesc':
+    '仅处理生产部门为空且已填制令单号的单据。先用本行快照与库内同制令单已有部门回填（不外查）；仍缺的再按数据集限流外查（每批最多 2 次）。已有部门不会被覆盖。数量大时请保持页面打开直至完成。',
+  'app.haoligo.equipment.documents.outputBackfillDeptProgress':
+    '正在分批回填生产部门（第 {{batch}} 批）：已更新 {{updated}} / 已扫描 {{scanned}}…',
+  'app.haoligo.equipment.documents.outputBackfillDeptProgressLocal':
+    '回填中（本地快照/同单号，第 {{batch}} 批）：已更新 {{updated}} / 已扫描 {{scanned}}…',
+  'app.haoligo.equipment.documents.outputBackfillDeptProgressRemote':
+    '回填中（限流外查数据集，第 {{batch}} 批）：已更新 {{updated}} / 已扫描 {{scanned}}…',
+  'app.haoligo.equipment.documents.outputBackfillDeptOk':
+    '回填完成（{{batches}} 批）：更新 {{updated}} / 扫描 {{scanned}}，跳过 {{skipped}}，制令单查询失败 {{queryFailed}}',
   'app.haoligo.equipment.documents.outputWorkOrderRequired': '请先填写制令单号',
   'app.haoligo.equipment.documents.outputWorkOrderPh': '选填；不填写时可只选设备并录入产量',
   'app.haoligo.equipment.documents.outputWorkOrderTooltip':
@@ -7960,6 +10486,9 @@ export default {
   'app.haoligo.molds.upkeepParamSets.detailTitle': '保养方案详情',
   'app.haoligo.molds.ledger.upkeepParamSet': '保养方案',
   'app.haoligo.menu.molds.outsource-vendors': '委外厂商',
+  'app.haoligo.molds.batchDeleteTitle': '确定要批量删除选中记录吗？',
+  'app.haoligo.molds.batchDeleteDescription': '将删除 {{count}} 条记录，删除后无法恢复，请谨慎操作。',
+  'app.haoligo.molds.batchDeletePartial': '删除完成：成功 {{done}} 条，失败 {{fail}} 条',
   'app.haoligo.molds.warehouse.title': '模具仓库',
   'app.haoligo.molds.warehouse.colCode': '仓库编码',
   'app.haoligo.molds.warehouse.colName': '仓库名称',
@@ -8276,6 +10805,8 @@ export default {
   'app.kuaizhizao.deliveryProject.addTemplateTask': '添加预置任务',
   'app.kuaizhizao.deliveryProject.templateTaskOwnerOptional': '可选，留空则在项目工作台指定',
   'app.kuaizhizao.deliveryProject.templateTaskMembersOptional': '可选，留空则在项目工作台指定',
+  'app.kuaizhizao.deliveryProject.templateTaskOwnerOptional': '可选，留空则在项目工作台指定',
+  'app.kuaizhizao.deliveryProject.templateTaskMembersOptional': '可选，留空则在项目工作台指定',
   'app.kuaizhizao.deliveryProject.newTemplateTask': '新任务',
   'app.kuaizhizao.deliveryProject.startProject': '启动项目',
   'app.kuaizhizao.deliveryProject.pauseProject': '暂停项目',
@@ -8411,13 +10942,15 @@ export default {
   'app.kuaizhizao.deliveryProject.fields.reviewerName': '审核人',
   'app.kuaizhizao.deliveryProject.fields.reviewNotes': '审核意见',
   'app.kuaizhizao.deliveryProject.fields.resolution': '处理结果',
+  'app.kuaizhizao.salesOrder.capability.sales_order.update_attachments.cancelled':
+    '已取消的销售订单不可补充附件',
   'app.kuaizhizao.salesOrder.capability.sales_order.delete.has_downstream':
     '该销售订单已有下游单据，不能删除',
   'app.kuaizhizao.salesOrder.capability.sales_order.push_delivery_project.not_allowed': '当前状态不可下推交付项目',
   'app.kuaizhizao.salesOrder.capability.sales_order.push_delivery_project.already_pushed': '该销售订单已下推交付项目',
   'app.kuaizhizao.salesOrder.capability.sales_order.push_delivery_project.no_items': '销售订单无明细，无法下推交付项目',
   'app.kuaizhizao.menu.plan-management': '计划管理',
-  'app.kuaizhizao.menu.plan-management.demand-management': '需求计划',
+  'app.kuaizhizao.menu.plan-management.demand-management': '计划生产',
   'app.kuaizhizao.menu.plan-management.demand-computation': '需求计算 (MRP)',
   'app.kuaizhizao.menu.plan-management.demand-change': '需求变更',
   'app.kuaizhizao.menu.plan-management.control-tower': '计划中心',
@@ -8432,6 +10965,8 @@ export default {
   'app.kuaizhizao.menu.production-execution': '生产执行',
   'app.kuaizhizao.menu.production-execution.dashboard': '制造中心',
   'app.kuaizhizao.menu.production-execution.work-orders': '工单管理',
+  'app.kuaizhizao.menu.production-execution.work-orders.new': '新建工单',
+  'app.kuaizhizao.menu.production-execution.work-orders.edit': '编辑工单',
   'app.kuaizhizao.menu.production-execution.reporting': '报工管理',
   'app.kuaizhizao.menu.production-execution.production-daily-reports': '生产日报',
   'app.kuaizhizao.menu.production-execution.production-daily-templates': '日报模板',
@@ -8485,10 +11020,14 @@ export default {
   'app.kuaizhizao.workReporting.createSuccess': '报工成功',
   'app.kuaizhizao.workReporting.createFailed': '报工失败',
   'app.kuaizhizao.workReporting.noUnqualifiedForScrap': '该报工记录没有不合格数量，无法创建报废记录',
+  'app.kuaizhizao.workReporting.noUnqualifiedRemainingForScrap':
+    '该报工不合格数量已全部登记处置（如返修/报废），无可再开报废的剩余数量',
   'app.kuaizhizao.workReporting.recordNotFound': '报工记录信息不存在',
   'app.kuaizhizao.workReporting.scrapCreateSuccess': '报废记录创建成功',
   'app.kuaizhizao.workReporting.scrapCreateFailed': '创建报废记录失败',
   'app.kuaizhizao.workReporting.noUnqualifiedForDefect': '该报工记录没有不合格数量，无法创建不良品记录',
+  'app.kuaizhizao.workReporting.noUnqualifiedRemainingForDefect':
+    '该报工不合格数量已全部登记处置（如返修/报废），无可再登记不良的剩余数量',
   'app.kuaizhizao.workReporting.defectCreateSuccess': '不良品记录创建成功',
   'app.kuaizhizao.workReporting.defectCreateFailed': '创建不良品记录失败',
   'app.kuaizhizao.workReporting.loadDetailFailed': '获取报工记录详情失败',
@@ -8562,22 +11101,76 @@ export default {
   'app.kuaizhizao.documentPush.batch.modeAuto': '自动推送',
   'app.kuaizhizao.documentPush.batch.modeScheduled': '定时推送',
   'app.kuaizhizao.documentPush.batch.modeLabel': '推送方式',
+  'app.kuaizhizao.documentPush.batch.pushEnabled': '是否推送',
+  'app.kuaizhizao.documentPush.batch.pushEnabledOn': '开启',
+  'app.kuaizhizao.documentPush.batch.pushEnabledOff': '关闭',
+  'app.kuaizhizao.documentPush.batch.pushEnabledOnHint':
+    '开启后：确认入库可自动外推，列表显示推送按钮，详情展示外推记录',
+  'app.kuaizhizao.documentPush.batch.pushEnabledOffHint':
+    '关闭后：确认入库不自动外推，列表推送按钮与详情外推记录均隐藏',
   'app.kuaizhizao.documentPush.batch.targetsHint':
     '在列表中点「设置」选择数据接口或数据集，确认时按列表中的目标写出',
+  'app.kuaizhizao.documentPush.batch.targetsHintPerAction':
+    '金蝶目标通常只需一条；点「设置」或「配置按钮接口」，勾选确认入库、撤回、删除并为每个按钮选择对应苍穹接口',
+  'app.kuaizhizao.documentPush.batch.targetsHintMultiApiRows':
+    '每条记录对应一个苍穹数据接口，可多次添加；点「设置」选择接口用途与具体接口',
+  'app.kuaizhizao.documentPush.batch.apiBindingSlot': '接口用途',
+  'app.kuaizhizao.documentPush.batch.bindBehaviorCol': '绑定行为',
+  'app.kuaizhizao.documentPush.batch.bindBehavior.confirm': '确认入库',
+  'app.kuaizhizao.documentPush.batch.bindBehavior.update': '更新',
+  'app.kuaizhizao.documentPush.batch.bindBehavior.withdraw': '反审核',
+  'app.kuaizhizao.documentPush.batch.bindBehavior.unsubmit': '撤销提交',
+  'app.kuaizhizao.documentPush.batch.bindBehavior.delete': '删除',
+  'app.kuaizhizao.documentPush.batch.noMoreTargetsUseSettings':
+    '推送目标已添加，请点列表「设置」为各按钮分别选择接口，无需再点添加目标',
+  'app.kuaizhizao.documentPush.batch.configureActionApis': '配置按钮接口',
   'app.kuaizhizao.documentPush.batch.targetsEmpty': '暂无推送目标，请点「添加目标」',
   'app.kuaizhizao.documentPush.batch.addTarget': '添加目标',
   'app.kuaizhizao.documentPush.batch.targetRemoved': '已删除推送目标',
   'app.kuaizhizao.documentPush.batch.targetRemoveFailed': '删除推送目标失败，请重试',
   'app.kuaizhizao.documentPush.batch.targetSettingTitle': '目标设置',
   'app.kuaizhizao.documentPush.batch.noMoreTargets': '可用推送目标都已添加',
+  'app.kuaizhizao.documentPush.apiDefaults.edit': '编辑',
+  'app.kuaizhizao.documentPush.apiDefaults.title': '编辑推送默认值',
+  'app.kuaizhizao.documentPush.apiDefaults.hint':
+    '配置后写入绑定接口的出站默认值；勾选「记住推送配置」后，之后推送都用这里的默认值（建单不再填这几项）',
+  'app.kuaizhizao.documentPush.apiDefaults.orgNumber': '库存组织编码',
+  'app.kuaizhizao.documentPush.apiDefaults.orgNumberPlaceholder': '对方库存组织编码（必填）',
+  'app.kuaizhizao.documentPush.apiDefaults.orgNumberRequired': '请填写库存组织编码',
+  'app.kuaizhizao.documentPush.apiDefaults.bizOrgNumber': '采购组织编码',
+  'app.kuaizhizao.documentPush.apiDefaults.bizOrgNumberPlaceholder': '空则跟库存组织编码',
+  'app.kuaizhizao.documentPush.apiDefaults.bizType': '业务类型',
+  'app.kuaizhizao.documentPush.apiDefaults.bizTypeRequired': '请填写业务类型编码',
+  'app.kuaizhizao.documentPush.apiDefaults.invScheme': '库存事务',
+  'app.kuaizhizao.documentPush.apiDefaults.invSchemeRequired': '请填写库存事务编码',
+  'app.kuaizhizao.documentPush.apiDefaults.saveSuccess': '推送默认值已保存',
+  'app.kuaizhizao.documentPush.apiDefaults.needApiFirst': '请先在「设置」里选择数据接口',
   'app.kuaizhizao.documentPush.batch.rememberBinding': '记住推送配置',
+  'app.kuaizhizao.documentPush.batch.autoPushPausedBanner':
+    '自动外推已暂停：确认入库/出库不会因金蝶失败撤回本地单据；需要时请点「恢复」或在下方手动推送',
+  'app.kuaizhizao.documentPush.batch.autoPushPausedLocalOnly':
+    '已标记暂停，请点确认写入账套后生效',
+  'app.kuaizhizao.documentPush.batch.autoPushResumedLocalOnly':
+    '已标记恢复，请点确认写入账套后生效',
   'app.kuaizhizao.documentPush.batch.targetKind': '推送目标',
   'app.kuaizhizao.documentPush.batch.modeManualHint': '在下方勾选单据后手动推送',
   'app.kuaizhizao.documentPush.batch.modeAutoHint':
-    '勾选要绑定的按钮，对应操作成功后自动推送，此处不选择单据',
+    '勾选要绑定的按钮并为每个按钮选择对应接口，操作成功后自动同步苍穹',
   'app.kuaizhizao.documentPush.batch.bindActions': '绑定按钮',
+  'app.kuaizhizao.documentPush.batch.bindActionsPerApiHint':
+    '不同按钮可绑定不同数据接口，例如确认入库用新增、撤回用反审核与撤销提交',
+  'app.kuaizhizao.documentPush.batch.needActionApi': '请为已勾选的绑定按钮选择全部对应接口',
+  'app.kuaizhizao.documentPush.batch.actionApi.confirm': '确认入库接口',
+  'app.kuaizhizao.documentPush.batch.actionApi.update': '更新接口',
+  'app.kuaizhizao.documentPush.batch.actionApi.withdraw': '反审核接口',
+  'app.kuaizhizao.documentPush.batch.actionApi.unsubmit': '撤销提交接口',
+  'app.kuaizhizao.documentPush.batch.actionApi.delete': '删除接口',
+  'app.kuaizhizao.documentPush.batch.bindAction.update': '更新',
   'app.kuaizhizao.documentPush.batch.confirmAuto': '确认',
   'app.kuaizhizao.documentPush.batch.autoSaved': '已记住自动推送配置',
+  'app.kuaizhizao.documentPush.batch.autoSaveFailed': '保存推送配置失败',
+  'app.kuaizhizao.documentPush.batch.needRememberBinding':
+    '请勾选「记住推送配置」后再点确认，否则不会写入账套',
   'app.kuaizhizao.documentPush.batch.autoNeedBinding': '当前单据尚未接入自动推送保存',
   'app.kuaizhizao.documentPush.batch.intervalLabel': '推送间隔',
   'app.kuaizhizao.documentPush.batch.interval': '每 {{n}} 分钟',
@@ -8688,9 +11281,17 @@ export default {
   'app.kuaizhizao.workReporting.colReviewStatus': '审核状态',
   'app.kuaizhizao.workReporting.lifecycleRecorded': '已报工',
   'app.kuaizhizao.workReporting.statusPending': '待审核',
+  'app.kuaizhizao.workReporting.statusDraft': '草稿',
   'app.kuaizhizao.workReporting.statusApproved': '已审核',
   'app.kuaizhizao.workReporting.statusRejected': '已驳回',
+  'app.kuaizhizao.workReporting.copySelectedCreate': '复制选中单据新建',
+  'app.kuaizhizao.workReporting.toolbar.withdrawSubmit': '撤销提交',
+  'app.kuaizhizao.workReporting.toolbar.submitReview': '提交审核',
+  'app.kuaizhizao.workReporting.toolbar.submitReviewNotAllowed': '请先提交报工记录，再提交审核',
+  'app.kuaizhizao.workReporting.toolbar.withdrawReview': '撤回审核',
+  'app.kuaizhizao.workReporting.toolbar.revoke': '反审核',
   'app.kuaizhizao.workReporting.colApprovedAt': '审核时间',
+
   'app.kuaizhizao.workReporting.colApprovedBy': '审核人',
   'app.kuaizhizao.workReporting.colRejectionReason': '驳回原因',
   'app.kuaizhizao.workReporting.formWorkOrder': '工单',
@@ -8716,6 +11317,7 @@ export default {
   'app.kuaizhizao.workReporting.formReportedQtyRequired': '请输入报工数量',
   'app.kuaizhizao.workReporting.formReportedQtyAuto': '报工数量（自动合计）：',
   'app.kuaizhizao.workReporting.formQualifiedQtyRequired': '请输入合格数量',
+  'app.kuaizhizao.workReporting.defectCreateAfterReportFailed': '报工成功，但不良品记录创建失败',
   'app.kuaizhizao.workReporting.defectBindOperationFailed': '不良品项已创建，但回写工序绑定失败，请在工序主数据中手动绑定',
   'app.kuaizhizao.workReporting.formWorkHoursPlaceholder': '选填，默认按 0',
   'app.kuaizhizao.workReporting.formRemarksPlaceholder': '请输入备注信息',
@@ -8951,7 +11553,15 @@ export default {
   'app.kuaizhizao.supplierEval.summaryNoGrade': '暂无等级数据',
   'app.kuaizhizao.reworkOrder.title': '返工单',
   'app.kuaizhizao.reworkOrder.createButton': '新建返工工单',
+  'app.kuaizhizao.reworkOrder.copySelectedCreate': '复制选中单据新建',
+  'app.kuaizhizao.reworkOrder.copyNeedsWorkOrder': '选中返工单未关联原工单，无法复制新建',
+  'app.kuaizhizao.reworkOrder.toolbar.withdrawSubmit': '撤销提交',
+  'app.kuaizhizao.reworkOrder.toolbar.submitReview': '提交审核',
+  'app.kuaizhizao.reworkOrder.toolbar.submitReviewNotAllowed': '请先提交返工单，再提交审核',
+  'app.kuaizhizao.reworkOrder.toolbar.withdrawReview': '撤回审核',
+  'app.kuaizhizao.reworkOrder.toolbar.revoke': '反审核',
   'app.kuaizhizao.reworkOrder.createModalTitle': '新建返工单',
+
   'app.kuaizhizao.reworkOrder.editModalTitle': '编辑返工单',
   'app.kuaizhizao.reworkOrder.detailTitle': '返工单详情',
   'app.kuaizhizao.reworkOrder.reportModalTitle': '返工报工',
@@ -8973,8 +11583,12 @@ export default {
   'app.kuaizhizao.reworkOrder.report': '报工',
   'app.kuaizhizao.reworkOrder.colCode': '返工单编号',
   'app.kuaizhizao.reworkOrder.colOriginalWorkOrderId': '原工单号',
+  'app.kuaizhizao.reworkOrder.colProduct': '产品',
   'app.kuaizhizao.reworkOrder.colProductName': '产品名称',
+  'app.kuaizhizao.reworkOrder.colReworkReason': '返工原因',
   'app.kuaizhizao.reworkOrder.colQuantity': '返工数量',
+  'app.kuaizhizao.reworkOrder.colQuantityMin': '数量起',
+  'app.kuaizhizao.reworkOrder.colQuantityMax': '数量止',
   'app.kuaizhizao.reworkOrder.colReworkType': '返工类型',
   'app.kuaizhizao.reworkOrder.colStartOperation': '返工起始工序',
   'app.kuaizhizao.reworkOrder.colWorkshop': '车间',
@@ -8999,6 +11613,12 @@ export default {
   'app.kuaizhizao.reworkOrder.lifecycleCompleted': '已完成',
   'app.kuaizhizao.reworkOrder.lifecycleCancelled': '已取消',
   'app.kuaizhizao.reworkOrder.lifecycleOnHold': '已暂停',
+  'app.kuaizhizao.reworkOrder.colAssignees': '指派人员',
+  'app.kuaizhizao.reworkOrder.formAssignees': '指派人员',
+  'app.kuaizhizao.reworkOrder.actionAssign': '指派',
+  'app.kuaizhizao.reworkOrder.assignModalTitle': '指派返工人员',
+  'app.kuaizhizao.reworkOrder.assignWorkersRequired': '请至少选择一名指派人员',
+  'app.kuaizhizao.reworkOrder.assignSuccess': '指派成功',
   'app.kuaizhizao.reworkOrder.actionRelease': '下达',
   'app.kuaizhizao.reworkOrder.actionSubmit': '提交审核',
   'app.kuaizhizao.reworkOrder.submitSuccess': '已提交审核',
@@ -9227,6 +11847,10 @@ export default {
   'app.kuaizhizao.outsourceManagement.settlement.linesRequired': '请至少添加一条结算明细',
   'app.kuaizhizao.outsourceManagement.settlement.selectReceipt': '选择委外收货单',
   'app.kuaizhizao.outsourceManagement.settlement.settleableQty': '可结 {{qty}}',
+  'app.kuaizhizao.outsourceManagement.settlement.confirmBatchDelete': '确定删除选中的 {{count}} 张委外结算单吗？',
+  'app.kuaizhizao.outsourceManagement.settlement.batchDeleteNoneDeletable': '所选结算单均不可删除，仅草稿可删',
+  'app.kuaizhizao.outsourceManagement.settlement.batchDeletePartial': '已跳过不可删除的结算单，仅删除草稿',
+  'app.kuaizhizao.outsourceManagement.settlement.batchDeleteSuccess': '已删除 {{count}} 张委外结算单',
   'app.kuaizhizao.outsourceManagement.settlement.submitSuccess': '已提交审核',
   'app.kuaizhizao.outsourceManagement.settlement.auditSuccess': '审核通过',
   'app.kuaizhizao.outsourceManagement.settlement.rejectTitle': '驳回委外结算单',
@@ -9518,9 +12142,22 @@ export default {
   'app.kuaizhizao.menu.purchase-management.purchase-orders.edit': '编辑采购订单',
   'app.kuaizhizao.menu.purchase-management.payment-applications': '付款申请',
   'app.kuaizhizao.paymentApplication.entityName': '付款申请',
+  'app.kuaizhizao.paymentApplication.committed': '已提交',
+  'app.kuaizhizao.paymentApplication.copySelectedCreate': '复制选中单据新建',
+  'app.kuaizhizao.paymentApplication.selectToCopy': '请选中一张付款申请',
+  'app.kuaizhizao.paymentApplication.toolbar.withdrawSubmit': '撤销提交',
+  'app.kuaizhizao.paymentApplication.toolbar.submitReview': '提交审核',
+  'app.kuaizhizao.paymentApplication.toolbar.submitReviewNotAllowed': '仅已提交的付款申请可提交审核',
+  'app.kuaizhizao.paymentApplication.toolbar.withdrawReview': '撤回审核',
+  'app.kuaizhizao.paymentApplication.toolbar.revoke': '反审核',
+  'app.kuaizhizao.paymentApplication.toolbar.pushNotAllowed': '须已批准且有余额才可下推付款单',
   'app.kuaizhizao.paymentApplication.create': '新建付款申请',
   'app.kuaizhizao.paymentApplication.editTitle': '编辑付款申请',
   'app.kuaizhizao.paymentApplication.confirmBatchDelete': '确定要删除选中的 {{count}} 条付款申请吗？',
+  'app.kuaizhizao.paymentApplication.deleteTitle': '删除付款申请',
+  'app.kuaizhizao.paymentApplication.deleteContent': '确定删除付款申请 {{code}} 吗？删除后不可恢复。',
+  'app.kuaizhizao.paymentApplication.deleteSuccess': '付款申请已删除',
+  'app.kuaizhizao.paymentApplication.deleteFailed': '删除付款申请失败',
   'app.kuaizhizao.paymentApplication.batchDeleteSuccess': '已删除 {{count}} 条付款申请',
   'app.kuaizhizao.paymentApplication.batchDeletePartial': '部分记录不可删除（仅草稿可删），已跳过',
   'app.kuaizhizao.paymentApplication.batchDeleteNoneDeletable': '所选记录均不可删除（仅草稿可删）',
@@ -9528,12 +12165,30 @@ export default {
   'app.kuaizhizao.paymentApplication.applicationCode': '申请单号',
   'app.kuaizhizao.paymentApplication.supplierName': '供应商',
   'app.kuaizhizao.paymentApplication.totalRequestAmount': '申请金额',
+  'app.kuaizhizao.paymentApplication.linesGrandTotal': '订单金额合计',
+  'app.kuaizhizao.paymentApplication.orderOriginalAmount': '订单金额',
   'app.kuaizhizao.paymentApplication.remainingAmount': '待付金额',
   'app.kuaizhizao.paymentApplication.status': '状态',
+  'app.kuaizhizao.paymentApplication.col.approvalStatus': '审批状态',
+  'app.kuaizhizao.paymentApplication.col.paymentSettlement': '付款状态',
+  'app.kuaizhizao.paymentApplication.approvalPhase.draft': '草稿',
+  'app.kuaizhizao.paymentApplication.approvalPhase.submitted': '已提交',
+  'app.kuaizhizao.paymentApplication.approvalPhase.pendingReview': '待审核',
+  'app.kuaizhizao.paymentApplication.approvalPhase.approved': '已批准',
+  'app.kuaizhizao.paymentApplication.approvalPhase.rejected': '已驳回',
+  'app.kuaizhizao.paymentApplication.settlement.unpaid': '未付款',
+  'app.kuaizhizao.paymentApplication.settlement.partial': '部分付款',
+  'app.kuaizhizao.paymentApplication.settlement.paid': '已付款',
   'app.kuaizhizao.paymentApplication.applicationDate': '申请日期',
   'app.kuaizhizao.paymentApplication.expectedPaymentDate': '期望付款日',
   'app.kuaizhizao.paymentApplication.paymentReason': '付款事由',
   'app.kuaizhizao.paymentApplication.paymentMethod': '付款方式',
+  'app.kuaizhizao.paymentApplication.applicationKind': '结算类型',
+  'app.kuaizhizao.paymentApplication.applicationKind.goods': '普通付款',
+  'app.kuaizhizao.paymentApplication.applicationKind.prepayment': '预付款',
+  'app.kuaizhizao.paymentApplication.applicantName': '申请人',
+  'app.kuaizhizao.paymentApplication.reviewerName': '审核人',
+  'app.kuaizhizao.paymentApplication.sourcePurchaseOrders': '来源采购订单',
   'app.kuaizhizao.paymentApplication.invoiceStatus': '发票情况',
   'app.kuaizhizao.paymentApplication.invoiceStatus.hasInvoice': '有发票',
   'app.kuaizhizao.paymentApplication.invoiceStatus.noInvoice': '无发票',
@@ -9547,7 +12202,16 @@ export default {
   'app.kuaizhizao.paymentApplication.requirePaymentVoucher': '是否需要上传付款凭证',
   'app.kuaizhizao.paymentApplication.requirePaymentVoucherHint':
     '开启后，由该申请生成的付款单在确认前必须上传付款凭证',
+  'app.kuaizhizao.paymentApplication.settlementTypeClearedLines':
+    '结算类型与现有明细不一致，已清空申请明细，请重新添加。',
+  'app.kuaizhizao.paymentApplication.formPullNoNewLines': '没有可合并的新明细，请检查是否已添加或不可选。',
+  'app.kuaizhizao.paymentApplication.formPullMerged': '已合并 {{count}} 条明细',
+  'app.kuaizhizao.paymentApplication.formPullPoAllSkipped': '所选采购订单均不可请款或已添加，未合并明细。',
+  'app.kuaizhizao.paymentApplication.formPullPoPartialSkip': '有 {{count}} 张采购订单未合并（不可请款或已添加）',
   'app.kuaizhizao.paymentApplication.lines': '申请明细',
+  'app.kuaizhizao.paymentApplication.materialName': '品名',
+  'app.kuaizhizao.paymentApplication.materialSpec': '规格',
+  'app.kuaizhizao.paymentApplication.quantity': '数量',
   'app.kuaizhizao.paymentApplication.payableCode': '应付单号',
   'app.kuaizhizao.paymentApplication.sourceType': '来源类型',
   'app.kuaizhizao.paymentApplication.sourceCode': '来源单号',
@@ -9558,6 +12222,7 @@ export default {
   'app.kuaizhizao.paymentApplication.sourceType.document_reconciliation': '往来对账',
   'app.kuaizhizao.paymentApplication.selectSupplierFirst': '请先选择供应商',
   'app.kuaizhizao.paymentApplication.selectPayable': '请选择应付单',
+  'app.kuaizhizao.paymentApplication.payableOptionalPrepayment': '预付无需应付单',
   'app.kuaizhizao.paymentApplication.noPayablesForSupplier':
     '该供应商暂无已审核且可请款的应付单（须有余额且未被付款/申请占满）',
   'app.kuaizhizao.paymentApplication.requestAmount': '申请金额',
@@ -9576,11 +12241,11 @@ export default {
   'app.kuaizhizao.paymentApplication.createFromReceiptSuccess': '已生成付款申请 {{code}}',
   'app.kuaizhizao.paymentApplication.createFromSourceSuccess': '已从{{source}}生成付款申请 {{code}}',
   'app.kuaizhizao.paymentApplication.createFailed': '生成付款申请失败',
-  'app.kuaizhizao.paymentApplication.noPrepayAmount': '采购订单无可预付请款额度',
-  'app.kuaizhizao.paymentApplication.pullFromPoNeedPrepay':
-    '请先在采购订单填写预付款金额，且订单须已审核或已确认',
+  'app.kuaizhizao.paymentApplication.noPrepayAmount': '采购订单无可请款额度',
+  'app.kuaizhizao.paymentApplication.pullFromPoNotSelectable':
+    '该采购订单当前不可创建付款申请，请确认已审核或已确认且仍有可请款额度',
   'app.kuaizhizao.paymentApplication.pullFromPoHint':
-    '仅「可加载」且已填预付款的已审核/已确认采购订单可选；点灰色行可查看原因',
+    '已审核或已确认的采购订单可直接关联；有预付计划时按预付额度，否则按订单总额减已请款。可多选同一供应商多张订单合并为一张付款申请',
   'app.kuaizhizao.paymentApplication.pullSourceNotSelectable': '该来源单据当前不可创建付款申请',
   'app.kuaizhizao.paymentApplication.pullStatementNotConfirmed': '仅已确认或已发送的供应商对账单可创建付款申请',
   'app.kuaizhizao.paymentApplication.otherExpenseNoPayable': '该其他费用支出尚未生成应付单，请先审核',
@@ -9591,12 +12256,16 @@ export default {
   'app.kuaizhizao.purchaseOrder.capability.purchase_order.push_payment_application.not_audited':
     '只有已审核或已确认的采购单才能下推付款申请',
   'app.kuaizhizao.purchaseOrder.capability.purchase_order.push_payment_application.no_amount':
-    '采购单未填写预付款金额或预付请款额度已用尽',
+    '采购单无可请款额度或额度已用尽',
   'app.kuaicaiwu.documentReconciliation.createPaymentApplication': '生成付款申请',
   'app.kuaicaiwu.documentReconciliation.paymentApplicationSupplierOnly': '请在对账条件中选择供应商后再生成付款申请',
   'app.kuaicaiwu.documentReconciliation.paymentApplicationSelectPayable': '请勾选可付的应付缺口行',
   'app.kuaicaiwu.documentReconciliation.paymentApplicationCreated': '已生成付款申请 {{code}}',
   'app.kuaicaiwu.documentReconciliation.paymentApplicationCreateFailed': '生成付款申请失败',
+  'pages.system.configCenter.param.finance_auto_apply_supplier_prepayment_to_payable':
+    '采购应付开立自动冲预付',
+  'pages.system.configCenter.param.finance_auto_apply_supplier_prepayment_to_payable_desc':
+    '开启后，采购入库或订单里程碑生成应付时，按 FIFO 用同采购订单未核销预付付款单冲减应付待付（对标销售出库自动冲预收）；默认关闭，须自动冲销时再打开',
   'pages.system.configCenter.param.finance_require_payment_application': '预付款须走付款申请',
   'pages.system.configCenter.param.finance_require_payment_application_desc':
     '开启后采购订单不可直达预付付款单，须先下推付款申请并由财务审核后再付款',
@@ -9606,8 +12275,10 @@ export default {
   'app.kuaizhizao.menu.purchase-management.purchase-requisitions.new': '新建采购申请',
   'app.kuaizhizao.menu.purchase-management.purchase-requisitions.edit': '编辑采购申请',
   'app.kuaizhizao.menu.purchase-management.purchase-inquiries': '采购询价',
+  'app.kuaizhizao.menu.purchase-management.purchase-demand-parties': '询价需方',
   'app.kuaizhizao.menu.purchase-management.receipt-notices': '收货通知单',
   'app.kuaizhizao.menu.purchase-management.purchase-returns': '采购退货单',
+  'app.kuaizhizao.menu.purchase-management.outbound': '采购退货出库',
   'app.kuaizhizao.menu.purchase-management.inbound': '采购入库单',
   'app.kuaizhizao.menu.sales-management': '销售管理',
   'app.kuaizhizao.menu.sales-management.short': '销售',
@@ -9619,6 +12290,7 @@ export default {
   'app.kuaizhizao.menu.warehouse-management.short': '仓储',
   'app.kuaizhizao.menu.performance-management.short': '排班',
   'app.kuaizhizao.menu.sales-management.dashboard': '销售中心',
+  'app.kuaizhizao.menu.sales-management.customer-relations': '客户关系',
   'app.kuaizhizao.menu.sales-management.sales-forecasts': '销售预测',
   'app.kuaizhizao.menu.sales-management.sales-orders': '销售订单',
   'app.kuaizhizao.menu.sales-management.after-sales-tickets': '售后服务',
@@ -9689,6 +12361,25 @@ export default {
   'app.kuaizhizao.customerPool.selectCustomersToDelete': '请先选择需要删除的客户',
   'app.kuaizhizao.customerPool.batchDeleteSuccess': '已删除 {{count}} 个客户',
   'app.kuaizhizao.customerPool.batchDeletePartialFailed': '{{count}} 个客户删除失败',
+  'app.kuaizhizao.customerPool.batchDeleting': '删除中',
+  'app.kuaizhizao.customerPool.batchDeletePreparing': '准备删除 {{count}} 个客户…',
+  'app.kuaizhizao.customerPool.batchDeleteProgress': '正在删除第 {{current}} / {{total}} 个客户…',
+  'app.kuaizhizao.customerPool.batchDeleteComplete': '删除完成：已删除 {{count}} 个客户',
+  'app.kuaizhizao.customerPool.batchDeleteCompletePartial': '删除完成（部分失败）',
+  'app.kuaizhizao.customerPool.batchDeleteResultSummary':
+    '成功删除 {{success}} 个，失败 {{failed}} 个',
+  'app.kuaizhizao.customerPool.batchDeleteErrorItem': '{{name}}：{{reason}}',
+  'app.kuaizhizao.customerPool.batchDeleteGotIt': '知道了',
+  'app.kuaizhizao.customerPool.batchDeleteCascadeOk': '删除关联销售订单并删除客户',
+  'app.kuaizhizao.customerPool.batchDeleteCascadeHint':
+    '若失败原因仅为关联销售订单，可先删除这些客户下的销售订单，再删除客户。已审核等不可删的订单会导致本操作失败。',
+  'app.kuaizhizao.customerPool.batchDeletingCascade': '删除关联订单并删除客户',
+  'app.kuaizhizao.customerPool.batchDeleteCascadePreparing':
+    '准备处理 {{count}} 个客户（先删销售订单再删客户）…',
+  'app.kuaizhizao.customerPool.batchDeleteCascadeProgress':
+    '正在处理第 {{current}} / {{total}} 个客户…',
+  'app.kuaizhizao.customerPool.batchDeleteCascadeOrdersFailed':
+    '关联销售订单删除失败 {{failed}} 个：{{reason}}',
   'app.kuaizhizao.customerPool.confirmBatchDeleteCustomers': '确认删除选中的 {{count}} 个客户？',
   'app.kuaizhizao.customerPool.publicPoolClaimOnly': '仅公共客户池客户支持领取',
   'app.kuaizhizao.customerPool.publicPoolAssignOnly': '仅公共客户池客户支持分配',
@@ -9739,6 +12430,8 @@ export default {
   'app.kuaizhizao.salesOrderChange.lifecycleNextResubmit': '修改后重新提交',
   'app.kuaizhizao.salesOrderChange.createModalTitle': '从销售订单创建变更单',
   'app.kuaizhizao.salesOrderChange.selectSalesOrder': '请选择销售订单',
+  'app.kuaizhizao.salesOrderChange.pull.multiSelectedFirstOnly':
+    '已按所选第一张销售订单打开变更单；其余订单请再次取单创建',
   'app.kuaizhizao.salesOrderChange.salesOrderLabel': '销售订单',
   'app.kuaizhizao.salesOrderChange.selectSalesOrderPlaceholder': '请点击右侧选择销售订单',
   'app.kuaizhizao.salesOrderChange.editTitle': '编辑销售变更单',
@@ -9746,6 +12439,16 @@ export default {
   'app.kuaizhizao.salesOrderChange.entityName': '销售变更单',
   'app.kuaizhizao.salesOrderChange.created': '已创建变更单 {{code}}',
   'app.kuaizhizao.salesOrderChange.impactPreviewFailed': '影响预览失败',
+  'app.kuaizhizao.salesOrderChange.create': '新建销售变更单',
+  'app.kuaizhizao.salesOrderChange.committed': '已提交',
+  'app.kuaizhizao.salesOrderChange.copySelectedCreate': '复制选中单据新建',
+  'app.kuaizhizao.salesOrderChange.selectToCopy': '请先选中一条销售变更单再复制新建',
+  'app.kuaizhizao.salesOrderChange.copyFailed': '复制新建失败',
+  'app.kuaizhizao.salesOrderChange.toolbar.withdrawSubmit': '撤销提交',
+  'app.kuaizhizao.salesOrderChange.toolbar.submitReview': '提交审核',
+  'app.kuaizhizao.salesOrderChange.toolbar.submitReviewNotAllowed': '仅已提交的销售变更单可提交审核',
+  'app.kuaizhizao.salesOrderChange.toolbar.withdrawReview': '撤回审核',
+  'app.kuaizhizao.salesOrderChange.toolbar.revoke': '反审核',
   'app.kuaizhizao.salesOrderChange.submitSuccess': '提交成功',
   'app.kuaizhizao.salesOrderChange.savedAndApplied': '变更单已保存并自动生效',
   'app.kuaizhizao.salesOrderChange.confirmDelete': '确认删除？',
@@ -9791,6 +12494,16 @@ export default {
   'app.kuaizhizao.purchaseOrderChange.editTitle': '编辑采购变更单',
   'app.kuaizhizao.purchaseOrderChange.detailTitle': '采购变更单 - {{code}}',
   'app.kuaizhizao.purchaseOrderChange.entityName': '采购变更单',
+  'app.kuaizhizao.purchaseOrderChange.create': '新建采购变更单',
+  'app.kuaizhizao.purchaseOrderChange.committed': '已提交',
+  'app.kuaizhizao.purchaseOrderChange.copySelectedCreate': '复制选中单据新建',
+  'app.kuaizhizao.purchaseOrderChange.selectToCopy': '请选中一张采购变更单',
+  'app.kuaizhizao.purchaseOrderChange.toolbar.withdrawSubmit': '撤销提交',
+  'app.kuaizhizao.purchaseOrderChange.toolbar.submitReview': '提交审核',
+  'app.kuaizhizao.purchaseOrderChange.toolbar.submitReviewNotAllowed': '仅已提交的采购变更单可提交审核',
+  'app.kuaizhizao.purchaseOrderChange.toolbar.withdrawReview': '撤回审核',
+  'app.kuaizhizao.purchaseOrderChange.toolbar.withdrawApply': '撤销生效',
+  'app.kuaizhizao.purchaseOrderChange.toolbar.revoke': '反审核',
   'app.kuaizhizao.purchaseOrderChange.created': '已创建变更单 {{code}}',
   'app.kuaizhizao.purchaseOrderChange.impactPreviewFailed': '影响预览失败',
   'app.kuaizhizao.purchaseOrderChange.submitSuccess': '提交成功',
@@ -9827,10 +12540,12 @@ export default {
   'app.kuaizhizao.purchaseOrderChange.capability.purchase_order_change.withdraw_submit.not_pending': '仅待审核状态可撤回',
   'app.kuaizhizao.purchaseOrderChange.capability.purchase_order_change.approve.not_pending': '仅待审核状态可审批',
   'app.kuaizhizao.purchaseOrderChange.capability.purchase_order_change.revoke_approval.not_allowed': '当前状态不可撤销审核',
-  'app.kuaizhizao.purchaseOrderChange.capability.purchase_order_change.revoke_approval.applied': '已生效的采购变更单不可撤销审核',
+  'app.kuaizhizao.purchaseOrderChange.capability.purchase_order_change.revoke_approval.applied': '请先撤销生效后再反审核',
   'app.kuaizhizao.purchaseOrderChange.capability.purchase_order_change.apply.not_audited': '变更单未审核通过，无法生效',
+  'app.kuaizhizao.purchaseOrderChange.capability.purchase_order_change.withdraw_apply.not_applied': '仅已生效的采购变更单可撤销生效',
   'app.kuaizhizao.purchaseOrderChange.capability.purchase_order_change.reopen.not_supported': '采购变更单不支持重新编辑',
   'app.kuaizhizao.purchaseOrderChange.applySuccess': '变更已生效',
+  'app.kuaizhizao.purchaseOrderChange.unapplySuccess': '已撤销生效，可再反审核',
   'app.kuaizhizao.purchaseOrderChange.applyConfirm': '变更确认',
   'app.kuaizhizao.purchaseArrival.delayReason.other': '其他',
   'app.kuaizhizao.purchaseArrival.delayReason.paymentDelay': '付款延误',
@@ -9858,7 +12573,14 @@ export default {
   'app.kuaizhizao.purchaseArrival.processing.changePending': '待变更确认',
   'app.kuaizhizao.purchaseArrival.processing.approved': '已通过',
   'app.kuaizhizao.purchaseArrival.processing.pendingReview': '审核中',
+  'app.kuaizhizao.purchaseArrival.processing.submitted': '已提交',
   'app.kuaizhizao.purchaseArrival.processing.reported': '已填报',
+  'app.kuaizhizao.purchaseArrival.delaySaved': '延期填报已保存',
+  'app.kuaizhizao.purchaseArrival.toolbar.withdrawSubmit': '撤销提交',
+  'app.kuaizhizao.purchaseArrival.toolbar.submitReview': '提交审核',
+  'app.kuaizhizao.purchaseArrival.toolbar.submitReviewNotAllowed': '请先提交延期填报，再提交审核',
+  'app.kuaizhizao.purchaseArrival.toolbar.withdrawReview': '撤回审核',
+  'app.kuaizhizao.purchaseArrival.toolbar.revoke': '反审核',
   'app.kuaizhizao.purchaseArrival.processing.unprocessed': '未处理',
   'app.kuaizhizao.purchaseArrival.level.overdue': '逾期',
   'app.kuaizhizao.purchaseArrival.level.imminent': '临期',
@@ -9929,11 +12651,47 @@ export default {
   'app.kuaizhizao.purchaseInquiry.inquiryName': '询价名称',
   'app.kuaizhizao.purchaseInquiry.inquiryDate': '询价日期',
   'app.kuaizhizao.purchaseInquiry.quoteDeadline': '报价截止日期',
+  'app.kuaizhizao.purchaseInquiry.demandPartyName': '需方名称',
+  'app.kuaizhizao.purchaseInquiry.demandPartyRequired': '请选择需方名称',
+  'app.kuaizhizao.purchaseInquiry.buyer': '采购负责人',
+  'app.kuaizhizao.purchaseInquiry.buyerPlaceholder': '请选择采购负责人',
+  'app.kuaizhizao.purchaseInquiry.buyerPhone': '手机',
+  'app.kuaizhizao.purchaseInquiry.vendorContact': '联系人',
+  'app.kuaizhizao.purchaseInquiry.vendorPhone': '电话',
+  'app.kuaizhizao.purchaseInquiry.vendorEmail': '邮箱',
+  'app.kuaizhizao.purchaseInquiry.emailNotify': '邮件通知',
+  'app.kuaizhizao.purchaseInquiry.emailNotifyHint': '发布进入询价中时，经消息渠道邮件配置发送（需填写邮箱）',
+  'app.kuaizhizao.purchaseInquiry.paymentMethod': '付款方式',
+  'app.kuaizhizao.purchaseInquiry.paymentTerms': '付款条件',
+  'app.kuaizhizao.purchaseInquiry.tradeMode': '成交方式',
+  'app.kuaizhizao.purchaseInquiry.currency': '交易币种',
+  'app.kuaizhizao.purchaseInquiry.exchangeRate': '汇率',
+  'app.kuaizhizao.purchaseInquiry.invoiceType': '发票类型',
+  'app.kuaizhizao.purchaseInquiry.taxRate': '税率%',
+  'app.kuaizhizao.purchaseInquiry.approvalRecords': '审批记录',
+  'app.kuaizhizao.purchaseInquiry.emptyApprovalRecords': '暂无审批记录',
+  'app.kuaizhizao.purchaseInquiry.approvalLoadFailed': '加载审批记录失败',
+  'app.kuaizhizao.purchaseInquiry.approvalSubmitter': '发起人：{{name}}',
   'app.kuaizhizao.purchaseInquiry.editTitle': '编辑询价单',
   'app.kuaizhizao.purchaseInquiry.invitedVendors': '受邀供应商',
   'app.kuaizhizao.purchaseInquiry.addVendor': '新增供应商',
   'app.kuaizhizao.purchaseInquiry.supplier': '供应商',
   'app.kuaizhizao.purchaseInquiry.emptyInvitedVendors': '暂无受邀供应商，点击下方按钮添加',
+  'app.kuaizhizao.purchaseDemandParty.createButton': '新建需方',
+  'app.kuaizhizao.purchaseDemandParty.createTitle': '新建需方',
+  'app.kuaizhizao.purchaseDemandParty.editTitle': '编辑需方',
+  'app.kuaizhizao.purchaseDemandParty.col.code': '编码',
+  'app.kuaizhizao.purchaseDemandParty.col.name': '需方名称',
+  'app.kuaizhizao.purchaseDemandParty.col.contactName': '联系人',
+  'app.kuaizhizao.purchaseDemandParty.col.contactPhone': '电话',
+  'app.kuaizhizao.purchaseDemandParty.col.contactEmail': '邮箱',
+  'app.kuaizhizao.purchaseDemandParty.col.address': '地址',
+  'app.kuaizhizao.purchaseDemandParty.col.taxNo': '税号',
+  'app.kuaizhizao.purchaseDemandParty.col.active': '启用',
+  'app.kuaizhizao.purchaseDemandParty.codeAutoPlaceholder': '留空则自动生成',
+  'app.kuaizhizao.purchaseDemandParty.confirmDelete': '确定删除该需方吗？',
+  'app.kuaizhizao.purchaseDemandParty.batchDeleteConfirm': '确定删除选中的 {{count}} 条需方吗？',
+  'app.kuaizhizao.purchaseDemandParty.batchDeleted': '已删除 {{count}} 条需方',
   'app.kuaizhizao.purchaseInquiry.inquiryItems': '询价明细',
   'app.kuaizhizao.purchaseInquiry.addLine': '添加行',
   'app.kuaizhizao.purchaseInquiry.material': '物料',
@@ -9948,6 +12706,14 @@ export default {
   'app.kuaizhizao.purchaseInquiry.vendorsAdded': '已添加 {{count}} 家供应商',
   'app.kuaizhizao.purchaseInquiry.detailTitle': '采购询价单 - {{code}}',
   'app.kuaizhizao.purchaseInquiry.entityName': '采购询价单',
+  'app.kuaizhizao.purchaseInquiry.committed': '已提交',
+  'app.kuaizhizao.purchaseInquiry.copySelectedCreate': '复制选中单据新建',
+  'app.kuaizhizao.purchaseInquiry.selectToCopy': '请选中一张采购询价单',
+  'app.kuaizhizao.purchaseInquiry.toolbar.withdrawSubmit': '撤销提交',
+  'app.kuaizhizao.purchaseInquiry.toolbar.submitReview': '提交审核',
+  'app.kuaizhizao.purchaseInquiry.toolbar.submitReviewNotAllowed': '当前选中单据不可提交审核。',
+  'app.kuaizhizao.purchaseInquiry.toolbar.withdrawReview': '撤回审核',
+  'app.kuaizhizao.purchaseInquiry.toolbar.revoke': '反审核',
   'app.kuaizhizao.purchaseInquiry.submitSuccess': '已提交',
   'app.kuaizhizao.purchaseInquiry.publishInquiry': '发布询价',
   'app.kuaizhizao.purchaseInquiry.publishSuccess': '已发布询价',
@@ -10087,6 +12853,16 @@ export default {
   'app.kuaizhizao.quotation.revokePush': '撤回下推',
   'app.kuaizhizao.quotation.lifecycleDownstreamDeleted': '下推单据已删除',
   'app.kuaizhizao.quotation.createButton': '新建报价单',
+  'app.kuaizhizao.quotation.copySelectedCreate': '复制选中单据新建',
+  'app.kuaizhizao.quotation.selectOneToCopy': '请先选中一条报价单再复制新建',
+  'app.kuaizhizao.quotation.loadQuotationFailed': '加载报价单失败',
+  'app.kuaizhizao.quotation.committed': '报价单已提交',
+  'app.kuaizhizao.quotation.commitFailed': '提交报价单失败',
+  'app.kuaizhizao.quotation.toolbar.withdrawSubmit': '撤销提交',
+  'app.kuaizhizao.quotation.toolbar.submitReview': '提交审核',
+  'app.kuaizhizao.quotation.toolbar.submitReviewNotAllowed': '请先提交报价单，再提交审核',
+  'app.kuaizhizao.quotation.toolbar.withdrawReview': '撤回审核',
+  'app.kuaizhizao.quotation.toolbar.revoke': '反审核',
   'app.kuaizhizao.quotation.confirmBatchDelete': '确定要删除选中的 {{count}} 条报价单吗？',
   'app.kuaizhizao.menu.sales-management.quotations': '报价单',
   'app.kuaizhizao.menu.sales-management.quotations.new': '新建报价单',
@@ -10281,6 +13057,8 @@ export default {
   'app.kuaizhizao.salesContract.paymentPlanOptional': '收款计划',
   'app.kuaizhizao.salesContract.milestoneName': '节点名称',
   'app.kuaizhizao.salesContract.milestoneNamePlaceholder': '如：预付款',
+  'app.kuaizhizao.salesContract.milestoneNameRequired': '请填写节点名称',
+  'app.kuaizhizao.salesContract.plannedDateRequired': '请选择计划日期',
   'app.kuaizhizao.salesContract.plannedDate': '计划日期',
   'app.kuaizhizao.salesContract.plannedAmount': '计划金额',
   'app.kuaizhizao.salesContract.ratioPercent': '比例(%)',
@@ -10329,11 +13107,20 @@ export default {
   'app.kuaizhizao.salesContract.importHeaders.deliveryDate': '交货日期',
   'app.kuaizhizao.salesContract.defaultUnit': '件',
   'app.kuaizhizao.salesContract.noOperationRecords': '暂无操作记录',
-  'app.kuaizhizao.salesContract.materialSelectPlaceholder': '请选择产品（支持名称/编号搜索）',
+  'app.kuaizhizao.salesContract.materialSelectPlaceholder': '请选择产品（支持名称、编号、拼音首字母）',
   'app.kuaizhizao.salesContract.exclTotal': '未税总额',
   'app.kuaizhizao.salesContract.inclTotalWithTax': '价税合计(含税)',
   'app.kuaizhizao.salesContract.statusDraft': '草稿',
+  'app.kuaizhizao.salesContract.statusSubmitted': '已提交',
   'app.kuaizhizao.salesContract.statusPending': '待审核',
+  'app.kuaizhizao.salesContract.committed': '已提交',
+  'app.kuaizhizao.salesContract.commitFailed': '提交失败',
+  'app.kuaizhizao.salesContract.copySelectedCreate': '复制选中单据新建',
+  'app.kuaizhizao.salesContract.toolbar.withdrawSubmit': '撤销提交',
+  'app.kuaizhizao.salesContract.toolbar.submitReview': '提交审核',
+  'app.kuaizhizao.salesContract.toolbar.submitReviewNotAllowed': '当前选中单据不可提交审核。',
+  'app.kuaizhizao.salesContract.toolbar.withdrawReview': '撤回审核',
+  'app.kuaizhizao.salesContract.toolbar.revoke': '反审核',
   'app.kuaizhizao.salesContract.statusActive': '已生效',
   'app.kuaizhizao.salesContract.statusExecuting': '执行中',
   'app.kuaizhizao.salesContract.statusCompleted': '已完成',
@@ -10450,7 +13237,7 @@ export default {
   'app.kuaizhizao.quotation.form.codeAutoGenerate': '编号将根据编号规则自动生成，可修改',
   'app.kuaizhizao.quotation.form.codeRequired': '请输入报价单编号',
   'app.kuaizhizao.quotation.form.selectCustomer': '请选择客户',
-  'app.kuaizhizao.quotation.form.selectMaterial': '请选择产品（支持名称/编号搜索）',
+  'app.kuaizhizao.quotation.form.selectMaterial': '请选择产品（支持名称、编号、拼音首字母）',
   'app.kuaizhizao.quotation.form.validUntil': '有效期至',
   'app.kuaizhizao.quotation.form.expectedDeliveryDate': '预计交货日期',
   'app.kuaizhizao.quotation.form.selectShippingMethod': '请选择发货方式',
@@ -10618,6 +13405,7 @@ export default {
   'app.kuaizhizao.afterSalesTicket.loadSalesOrdersFailed': '加载销售订单失败',
   'app.kuaizhizao.afterSalesTicket.loadSalesDeliveriesFailed': '加载销售出库单失败',
   'app.kuaizhizao.afterSalesTicket.actionPushSalesReturn': '下推销售退货单',
+  'app.kuaizhizao.afterSalesTicket.actionPushRepairOrder': '下推维修单',
   'app.kuaizhizao.afterSalesTicket.actionPushReturnVisit': '下推客户回访',
   'app.kuaizhizao.afterSalesTicket.pushPreviewTitle': '下推销售退货单',
   'app.kuaizhizao.afterSalesTicket.pushSuccess': '已生成销售退货单',
@@ -10950,6 +13738,8 @@ export default {
   'app.kuaizhizao.menu.equipment-management.maintenance-items': '保养项',
   'app.kuaizhizao.menu.equipment-management.maintenance-schemes': '保养方案',
   'app.kuaizhizao.menu.equipment-management.spot-checks': '设备点检',
+  'app.kuaizhizao.menu.equipment-management.spot-check-plans': '点检计划',
+  'app.kuaizhizao.menu.equipment-management.spot-check-plan-calendar': '点检计划日历',
   'app.kuaizhizao.menu.equipment-management.route-patrols': '路线巡检',
   'app.kuaizhizao.menu.equipment-management.spare-parts': '备品备件',
   'app.kuaizhizao.menu.equipment-management.spare-part-requisitions': '备件领用单',
@@ -11001,6 +13791,7 @@ export default {
   'app.kuaizhizao.menu.tooling-management.maintenance': '工装维保',
   'app.kuaizhizao.menu.tooling-management.calibration': '工装校准',
   'app.kuaizhizao.menu.finance-management': '财务管理',
+  'app.kuaizhizao.menu.finance-management.dashboard': '财务中心',
   'app.kuaizhizao.menu.finance-management.receivables-management': '应收管理',
   'app.kuaizhizao.menu.finance-management.receivables': '应收账款',
   'app.kuaizhizao.menu.finance-management.sales-invoices': '销售发票',
@@ -11118,7 +13909,7 @@ export default {
   'app.kuaizhizao.flowDataGenerate.scenario.ship': '发货出库',
   'app.kuaizhizao.flowDataGenerate.flowEndAt': '流程结束时间（可选）',
   'app.kuaizhizao.flowDataGenerate.flowEndAtHint':
-    '仅填数模式：与时间锚点组成时间窗，预览会推算并回填各步骤间隔。',
+    '仅填数模式：与时间锚点组成时间窗；点「预览」会推算并回填各步骤间隔，改分批或工作时段后再次预览可看新的完成时刻。',
   'app.kuaizhizao.flowDataGenerate.flowEndAtRealHint':
     '真实模式不使用结束时间压缩；流程结束时刻由标准工时自然推完。',
   'app.kuaizhizao.flowDataGenerate.flowEndAtDisabled': '真实模式已禁用（请改用填数模式）',
@@ -11152,9 +13943,9 @@ export default {
   'app.kuaizhizao.flowDataGenerate.executePartial': '造数未通过，请按提示修改后重试',
   'app.kuaizhizao.flowDataGenerate.executePartialOk':
     '造数已完成，其中 {{skipped}} 条未通过已跳过，其余已写入，请查看结果列表',
+  'app.kuaizhizao.flowDataGenerate.executeFail': '造数未通过，请修改后重试',
   'app.kuaizhizao.flowDataGenerate.executeProgress': '执行进度',
   'app.kuaizhizao.flowDataGenerate.executeProgressWaiting': '任务已提交，正在排队…',
-  'app.kuaizhizao.flowDataGenerate.executeFail': '造数未通过，请修改后重试',
   'app.kuaizhizao.flowDataGenerate.confirmTitle': '确认生成全流程数据？',
   'app.kuaizhizao.flowDataGenerate.confirmContent':
     '将按真实业务服务创建/审核/过账单据。业务流转任一步失败即整轮失败（不再跳过）；需求计算/下推失败时撤销本轮。请先预检并确认 BOM、工艺与仓库配置正确。',
@@ -11164,15 +13955,15 @@ export default {
   'app.kuaizhizao.flowDataGenerate.previewSummary': '订单 {{order}} 仓库 {{warehouse}}',
   'app.kuaizhizao.flowDataGenerate.previewMaterial': '工艺物料 {{code}}',
   'app.kuaizhizao.flowDataGenerate.resultOk': '执行成功',
-  'app.kuaizhizao.flowDataGenerate.resultPartial': '执行结束（有错误）',
+  'app.kuaizhizao.flowDataGenerate.resultPartial': '执行结束（部分跳过）',
   'app.kuaizhizao.flowDataGenerate.emptyOrders': '暂无符合条件的已审核销售订单',
   'app.kuaizhizao.flowDataGenerate.colLabel': '步骤',
   'app.kuaizhizao.flowDataGenerate.colDocType': '单据类型',
   'app.kuaizhizao.flowDataGenerate.colDocCode': '单据号',
   'app.kuaizhizao.flowDataGenerate.colIssuedAt': '业务时间',
+  'app.kuaizhizao.flowDataGenerate.colFlowMode': '流转',
   'app.kuaizhizao.flowDataGenerate.colLogId': '操作日志',
   'app.kuaizhizao.flowDataGenerate.colStatus': '状态',
-  'app.kuaizhizao.flowDataGenerate.colFlowMode': '流转',
   'app.kuaizhizao.flowDataGenerate.colNote': '备注',
   'app.kuaizhizao.flowDataGenerate.step.demand_computation': '需求计算/工单',
   'app.kuaizhizao.flowDataGenerate.step.purchase': '采购订单',
@@ -11190,7 +13981,7 @@ export default {
     '默认按该步骤预设角色随机取激活用户；也可指定人员、按部门随机、按工作小组随机、按工序派工/默认人员，或统一用当前登录用户。随机类池空时预检与执行硬失败（不再回退当前用户）。工序报工在随机类模式下会按批次轮换操作人池；「按工序指定人员」则按各工单工序派工解析。',
   'app.kuaizhizao.flowDataGenerate.reportingBatchCard': '工序报工分批',
   'app.kuaizhizao.flowDataGenerate.reportingBatchHint':
-    '每道工序将数量拆成多批报工：每批独立业务时间，操作人从报工角色池轮换（多角色更真实）。批次数在最小～最大之间随机，且不超过工单数量。',
+    '每道工序将数量拆成多批报工：同工序批次用步骤间隔；跨工序按「须完上道/可跳转」与标准工时推进时刻。操作人从报工角色池轮换。批次数在最小～最大之间随机，且不超过工单数量。',
   'app.kuaizhizao.flowDataGenerate.reportingBatchesMin': '报工最少批次数',
   'app.kuaizhizao.flowDataGenerate.reportingBatchesMax': '报工最多批次数',
   'app.kuaizhizao.flowDataGenerate.operatorMode.random_role': '按角色随机',
@@ -11506,13 +14297,15 @@ export default {
   'app.kuaizhizao.menu.reports.sales-trend-analysis': '销售趋势表',
   'app.kuaizhizao.menu.reports.sales-return-analysis': '销售退货分析',
   'app.kuaizhizao.menu.reports.salesperson-performance': '销售人员业绩',
-  'app.kuaizhizao.menu.reports.demand-plan-detail': '需求计划明细',
+  'app.kuaizhizao.menu.reports.demand-plan-detail': '计划生产明细',
   'app.kuaizhizao.menu.reports.production-plan-comparison': '生产计划对比',
   'app.kuaizhizao.menu.reports.purchase-plan-comparison': '采购计划对比',
   'app.kuaizhizao.menu.reports.capacity-load-analysis': '产能负荷分析',
   'app.kuaizhizao.menu.reports.material-shortage-alert': '物料短缺预警',
   'app.kuaizhizao.menu.reports.purchase-requisition-tracking': '采购申请跟踪',
   'app.kuaizhizao.menu.reports.purchase-order-query': '采购订单查询',
+  'app.kuaizhizao.menu.reports.purchase-receipt-detail': '采购入库明细表',
+  'app.kuaizhizao.menu.reports.material-purchase-summary': '存货采购汇总',
   'app.kuaizhizao.menu.reports.purchase-order-progress': '采购执行进度',
   'app.kuaizhizao.menu.reports.supplier-delivery-summary': '供应商交货统计',
   'app.kuaizhizao.menu.reports.supplier-price-comparison': '供应商比价',
@@ -12100,7 +14893,11 @@ export default {
   'app.kuaizhizao.salesOrder.prepaymentNameDefault': '预收',
   'app.kuaizhizao.orderMilestone.autoGenerateReceivable': '是否生成应收',
   'app.kuaizhizao.orderMilestone.autoGeneratePayable': '是否生成应付',
+  'app.kuaizhizao.orderMilestone.autoGeneratePayableHint':
+    '开启后于采购订单确认（非建档）时按里程碑生成应付；与整单入库立账、进项发票立账不同路径。',
   'app.kuaizhizao.orderMilestone.financeDoc': '财务单据',
+  'app.kuaizhizao.orderMilestone.ratioNeedsOrderTotal':
+    '请先维护订单明细金额后再换算比例与计划金额',
   'app.kuaizhizao.salesOrder.terms.selectGroup': '合同条款',
   'app.kuaizhizao.salesOrder.terms.selectGroupPlaceholder': '请选择合同条款（可选）',
   'app.kuaizhizao.salesOrder.terms.addTerms': '添加合同条款',
@@ -12121,6 +14918,24 @@ export default {
   'app.kuaizhizao.salesOrder.deletePartial': '删除完成：成功 {{success}} 个，失败 {{failed}} 个',
   'app.kuaizhizao.salesOrder.deletePartialWithReason':
     '删除完成：成功 {{success}} 个，失败 {{failed}} 个（{{reason}}）',
+  'app.kuaizhizao.salesOrder.orderFallback': '该销售订单',
+  'app.kuaizhizao.salesOrder.batchDeleting': '删除中',
+  'app.kuaizhizao.salesOrder.batchDeletePreparing': '准备删除 {{count}} 个销售订单…',
+  'app.kuaizhizao.salesOrder.batchDeleteProgress': '正在删除第 {{current}} / {{total}} 个销售订单…',
+  'app.kuaizhizao.salesOrder.batchDeleteComplete': '删除完成：已删除 {{count}} 个销售订单',
+  'app.kuaizhizao.salesOrder.batchDeleteCompletePartial': '删除完成（部分失败）',
+  'app.kuaizhizao.salesOrder.batchDeleteResultSummary':
+    '成功删除 {{success}} 个，失败 {{failed}} 个',
+  'app.kuaizhizao.salesOrder.batchDeleteErrorItem': '{{name}}：{{reason}}',
+  'app.kuaizhizao.salesOrder.batchDeleteGotIt': '知道了',
+  'app.kuaizhizao.salesOrder.batchDeleteCascadeOk': '级联删除关联数据并删除销售订单',
+  'app.kuaizhizao.salesOrder.batchDeleteCascadeHint':
+    '可尝试级联删除未执行的下游单据，并在需要时先反审核后再删除销售订单。已出库/退货/发票等已产生业务的单据仍须手工处理。',
+  'app.kuaizhizao.salesOrder.batchDeletingCascade': '级联删除关联数据',
+  'app.kuaizhizao.salesOrder.batchDeleteCascadePreparing':
+    '准备级联删除 {{count}} 个销售订单的关联数据…',
+  'app.kuaizhizao.salesOrder.batchDeleteCascadeProgress':
+    '正在级联处理第 {{current}} / {{total}} 个销售订单…',
   'app.kuaizhizao.salesOrder.syncSuccess': '已同步 {{count}} 条销售订单',
   'app.kuaizhizao.salesOrder.syncFromSource': '同步销售订单',
   'app.kuaizhizao.salesOrder.syncMasterDataFirstHint':
@@ -12135,7 +14950,7 @@ export default {
   'app.kuaizhizao.salesOrder.syncField.orderCode': '订单编码',
   'app.kuaizhizao.salesOrder.syncField.orderDate': '订单日期',
   'app.kuaizhizao.salesOrder.syncField.deliveryDate': '交货日期',
-  'app.kuaizhizao.salesOrder.syncField.customerId': '客户 ID',
+  'app.kuaizhizao.salesOrder.syncField.status': '审核状态',
   'app.kuaizhizao.salesOrder.syncField.customerCode': '客户编码',
   'app.kuaizhizao.salesOrder.syncField.customerName': '客户名称',
   'app.kuaizhizao.salesOrder.syncField.customerContact': '客户联系人',
@@ -12145,7 +14960,10 @@ export default {
   'app.kuaizhizao.salesOrder.syncField.salesmanName': '销售人员',
   'app.kuaizhizao.salesOrder.syncField.notes': '备注',
   'app.kuaizhizao.salesOrder.syncField.shippingAddress': '收货地址',
-  'app.kuaizhizao.salesOrder.syncField.paymentTerms': '付款条件',
+  'app.kuaizhizao.salesOrder.syncField.paymentMethod': '付款方式',
+  'app.kuaizhizao.salesOrder.syncField.settlementTerms': '结算方式',
+  'app.kuaizhizao.salesOrder.syncField.paymentCycle': '付款周期',
+  'app.kuaizhizao.salesOrder.syncField.paymentTerms': '付款周期',
   'app.kuaizhizao.salesOrder.syncField.itemMaterialCode': '明细 物料编码',
   'app.kuaizhizao.salesOrder.syncField.itemMaterialName': '明细 物料名称',
   'app.kuaizhizao.salesOrder.syncField.itemMaterialSpec': '明细 规格',
@@ -12160,6 +14978,15 @@ export default {
   'app.kuaizhizao.salesOrder.itemsRequired': '请至少添加一条订单明细',
   'app.kuaizhizao.salesOrder.saveDraft': '保存为草稿',
   'app.kuaizhizao.salesOrder.savedDraft': '订单已保存为草稿',
+  'app.kuaizhizao.salesOrder.committed': '销售订单已提交',
+  'app.kuaizhizao.salesOrder.copySelectedCreate': '复制选中单据新建',
+  'app.kuaizhizao.salesOrder.selectOneToCopy': '请先选中一条销售订单再复制新建',
+  'app.kuaizhizao.salesOrder.loadOrderFailed': '加载销售订单失败',
+  'app.kuaizhizao.salesOrder.toolbar.withdrawSubmit': '撤销提交',
+  'app.kuaizhizao.salesOrder.toolbar.submitReview': '提交审核',
+  'app.kuaizhizao.salesOrder.toolbar.submitReviewNotAllowed': '请先提交销售订单，再提交审核',
+  'app.kuaizhizao.salesOrder.toolbar.withdrawReview': '撤回审核',
+  'app.kuaizhizao.salesOrder.toolbar.revoke': '反审核',
   'app.kuaizhizao.salesOrder.updated': '销售订单已更新。',
   'app.kuaizhizao.salesOrder.pushTitle': '从销售订单创建需求计算',
   'app.kuaizhizao.salesOrder.pushConfirm': '确定要从该销售订单创建需求计算吗？',
@@ -12198,6 +15025,8 @@ export default {
   'app.kuaizhizao.salesOrder.exclAmount': '未税金额({{currency}})',
   'app.kuaizhizao.salesOrder.taxRate': '税率%',
   'app.kuaizhizao.salesOrder.taxRateBatch': '请输入税率（%），将应用到所有明细：',
+  'app.kuaizhizao.salesOrder.taxRateBatchTitle': '批量设置税率',
+  'app.kuaizhizao.salesOrder.taxRateBatchHint': '输入后将应用到当前所有明细行',
   'app.kuaizhizao.salesOrder.batch': '批量',
   'app.kuaizhizao.salesOrder.taxAmount': '税额({{currency}})',
   'app.kuaizhizao.salesOrder.inclAmount': '价税合计({{currency}})',
@@ -12215,11 +15044,17 @@ export default {
   'app.kuaizhizao.salesOrder.materialPickerSelectedCount': '已选 {{count}} 项',
   'app.kuaizhizao.salesOrder.materialPickerPageTotal': '约 {{total}} 条',
   'app.kuaizhizao.salesOrder.materialPickerMaterial': '品名/品号',
+  'app.kuaizhizao.salesOrder.materialPickerSpecModel': '规格/型号',
   'app.kuaizhizao.salesOrder.materialPickerHasBom': '是否有BOM',
   'app.kuaizhizao.salesOrder.materialPickerHasBomYes': '有',
   'app.kuaizhizao.salesOrder.materialPickerHasBomNo': '无',
   'app.kuaizhizao.salesOrder.materialPickerHasBomConfigured': '已配置BOM',
   'app.kuaizhizao.salesOrder.materialPickerHasBomNone': '未配置BOM',
+  'app.kuaizhizao.salesOrder.colBomExpandChildren': '子件',
+  'app.kuaizhizao.salesOrder.colBomExpandChildrenTip':
+    '有 BOM 时默认按 BOM 展开半成品工单并带入工单子件；无 BOM 时可勾选，生成工单后在子件明细页手工维护',
+  'app.kuaizhizao.salesOrder.colBomExpandFromBom': '按 BOM',
+  'app.kuaizhizao.salesOrder.colBomExpandManual': '手工',
   'app.kuaizhizao.salesOrder.materialPickerAvailableInventory': '可用库存量',
   'app.kuaizhizao.salesOrder.materialPickerSourceType': '来源',
   'app.kuaizhizao.salesOrder.materialPickerLoadGroupFailed': '加载产品分类失败',
@@ -12265,14 +15100,19 @@ export default {
   'app.kuaizhizao.salesOrder.salesman': '销售人员',
   'app.kuaizhizao.salesOrder.shippingAddress': '收货地址',
   'app.kuaizhizao.salesOrder.shippingMethod': '发货方式',
-  'app.kuaizhizao.salesOrder.paymentTerms': '付款条件',
+  'app.kuaizhizao.salesOrder.paymentMethod': '付款方式',
+  'app.kuaizhizao.salesOrder.settlementTerms': '结算方式',
+  'app.kuaizhizao.salesOrder.revenueRecognitionHelp':
+    '以出库确认（发货）为准：出库确认后自动应收。以销售发票为准：发票审核通过后自动应收。以按月结对账单为准：对账单审核立账生成应收。手工立账：不自动生成，须在应收单手工立账。',
+  'app.kuaizhizao.salesOrder.paymentCycle': '付款周期',
+  'app.kuaizhizao.salesOrder.paymentTerms': '付款周期',
   'app.kuaizhizao.salesOrder.exchangeRate': '汇率',
   'app.kuaizhizao.salesOrder.exchangeRateHint': '相对总账本位币，1 单位外币折合的本位币金额；本币订单固定为 1',
   'app.kuaizhizao.salesOrder.exchangeRateRequired': '外币订单须填写大于 0 的汇率',
   'app.kuaizhizao.salesOrder.prepaymentAmount': '预收金额',
   'app.kuaizhizao.salesOrder.prepaymentAmountPlaceholder': '请输入预收金额',
   'app.kuaizhizao.salesOrder.prepaymentBankAccount': '预收银行账户',
-  'app.kuaizhizao.salesOrder.prepaymentBankAccountPlaceholder': '请选择预收银行账户',
+  'app.kuaizhizao.salesOrder.prepaymentBankAccountPlaceholder': '请选择预收银行账户（账户名 银行 账号）',
   'app.kuaizhizao.salesOrder.loadBankAccountsFailed': '加载银行账户失败，请确认已在财务管理维护启用账户',
   'app.kuaizhizao.salesOrder.reviewStatus': '审核状态',
   'app.kuaizhizao.salesOrder.lifecycle': '执行状态',
@@ -12306,6 +15146,11 @@ export default {
   'app.kuaizhizao.salesOrder.withdrawFailed': '撤回失败',
   'app.kuaizhizao.salesOrder.importDataEmpty': '导入数据为空',
   'app.kuaizhizao.salesOrder.noValidRows': '没有有效的数据行',
+  'app.kuaizhizao.salesOrder.listImport.importing': '正在导入销售订单...',
+  'app.kuaizhizao.salesOrder.listImport.missingRequiredColumns':
+    '缺少必填列：客户、订单日期、产品编号、数量',
+  'app.kuaizhizao.salesOrder.listImport.orderDateRequired': '订单日期不能为空',
+  'app.kuaizhizao.salesOrder.listImport.customerNotFound': '未找到客户：{{name}}',
   'app.kuaizhizao.salesOrder.importErrorDetail': '导入错误详情',
   'app.kuaizhizao.salesOrder.batchImportFailed': '批量导入失败',
   'app.kuaizhizao.salesOrder.noValidData': '未检测到有效数据（请确保产品编号不为空）',
@@ -12410,7 +15255,7 @@ export default {
   'app.kuaizhizao.purchaseOrder.import.deliveryDate': '交货日期',
   'app.kuaizhizao.purchaseOrder.import.supplierContact': '供应商联系人',
   'app.kuaizhizao.purchaseOrder.import.supplierPhone': '供应商电话',
-  'app.kuaizhizao.purchaseOrder.import.orderType': '订单类型',
+  'app.kuaizhizao.purchaseOrder.import.orderType': '采购类型',
   'app.kuaizhizao.purchaseOrder.import.buyer': '采购员',
   'app.kuaizhizao.purchaseOrder.importExample.code': 'PO001',
   'app.kuaizhizao.purchaseOrder.importExample.supplierName': '供应商A',
@@ -12420,6 +15265,7 @@ export default {
   'app.kuaizhizao.purchaseOrder.importExample.unitPrice': '100',
   'app.kuaizhizao.purchaseOrder.importExample.deliveryDate': '2025-04-01',
   'app.kuaizhizao.purchaseRequisition.entityName': '采购申请',
+  'app.kuaizhizao.purchaseRequisition.generateCodeFailed': '生成采购申请编号失败',
   'app.kuaizhizao.purchaseRequisition.createFromComputation': '从需求计算创建采购申请单',
   'app.kuaizhizao.purchaseRequisition.col.requiredDateRange': '要求到货',
   'app.kuaizhizao.purchaseRequisition.col.nameAndCode': '申请名称 / 编号',
@@ -12429,12 +15275,28 @@ export default {
   'app.kuaizhizao.purchaseRequisition.col.sourceType': '来源类型',
   'app.kuaizhizao.purchaseRequisition.col.sourceTypeActiveRequest': '主动申请',
   'app.kuaizhizao.purchaseRequisition.col.requiredDate': '要求到货日期',
+  'app.kuaizhizao.purchaseRequisition.col.applicant': '申请人',
+  'app.kuaizhizao.purchaseRequisition.col.department': '申请部门',
   'app.kuaizhizao.purchaseRequisition.col.itemCount': '明细数',
   'app.kuaizhizao.purchaseRequisition.col.lifecycle': '执行状态',
+  'app.kuaizhizao.documentLineAttachments.columnTitle': '行附件',
+  'app.kuaizhizao.documentLineAttachments.materialShort': '物料附件',
+  'app.kuaizhizao.documentLineAttachments.materialPickerTitle': '行附件（上传与物料复制）',
+  'app.kuaizhizao.documentLineAttachments.lineUploadSection': '上传行附件',
+  'app.kuaizhizao.documentLineAttachments.materialSourcesSection': '从物料复制',
+  'app.kuaizhizao.documentLineAttachments.copyToLine': '复制到行（{{count}}）',
+  'app.kuaizhizao.documentLineAttachments.selectMaterialFirst': '请先选择物料',
+  'app.kuaizhizao.documentLineAttachments.materialSourcesEmpty': '该物料暂无图片或已发布工程图纸',
+  'app.kuaizhizao.documentLineAttachments.materialSourcesLoadFailed': '加载物料附件失败',
+  'app.kuaizhizao.documentLineAttachments.colName': '名称',
+  'app.kuaizhizao.documentLineAttachments.colSource': '来源',
+  'app.kuaizhizao.documentLineAttachments.sourceDrawing': '工程图纸',
+  'app.kuaizhizao.documentLineAttachments.sourceMaterialImage': '物料图片',
+  'app.kuaizhizao.documentLineAttachments.lineCountHint': '已挂行附件',
   'app.kuaizhizao.purchaseRequisition.col.materialCode': '物料编码',
   'app.kuaizhizao.purchaseRequisition.col.materialName': '物料名称',
   'app.kuaizhizao.purchaseRequisition.col.spec': '规格',
-  'app.kuaizhizao.purchaseRequisition.col.suggestedPrice': '建议单价',
+  'app.kuaizhizao.purchaseRequisition.col.suggestedPrice': '建议单价（含税）',
   'app.kuaizhizao.purchaseRequisition.col.converted': '已转单',
   'app.kuaizhizao.purchaseRequisition.workflowRevokeConfirm': '撤回后状态将变为待审核，可重新提交审核。',
   'app.kuaizhizao.purchaseRequisition.submitTitle': '提交采购申请',
@@ -12444,7 +15306,15 @@ export default {
   'app.kuaizhizao.purchaseRequisition.confirmDeleteContent': '确定要删除采购申请 {{code}} 吗？',
   'app.kuaizhizao.purchaseRequisition.confirmBatchDelete': '确定要删除选中的 {{count}} 条采购申请吗？',
   'app.kuaizhizao.purchaseRequisition.importNoValidData': '未检测到有效数据（请确保物料编码不为空）',
-  'app.kuaizhizao.purchaseRequisition.onlyDraftEditable': '仅草稿状态的采购申请可编辑',
+  'app.kuaizhizao.purchaseRequisition.onlyDraftEditable': '当前状态不可编辑采购申请',
+  'app.kuaizhizao.purchaseRequisition.committed': '已提交',
+  'app.kuaizhizao.purchaseRequisition.copySelectedCreate': '复制选中单据新建',
+  'app.kuaizhizao.purchaseRequisition.selectToCopy': '请选中一张采购申请',
+  'app.kuaizhizao.purchaseRequisition.toolbar.withdrawSubmit': '撤销提交',
+  'app.kuaizhizao.purchaseRequisition.toolbar.submitReview': '提交审核',
+  'app.kuaizhizao.purchaseRequisition.toolbar.submitReviewNotAllowed': '当前选中单据不可提交审核。',
+  'app.kuaizhizao.purchaseRequisition.toolbar.withdrawReview': '撤回审核',
+  'app.kuaizhizao.purchaseRequisition.toolbar.revoke': '反审核',
   'app.kuaizhizao.purchaseRequisition.loadFailed': '加载采购申请失败',
   'app.kuaizhizao.purchaseRequisition.detailFailed': '获取详情失败',
   'app.kuaizhizao.purchaseRequisition.openFailed': '打开采购申请失败',
@@ -12485,12 +15355,17 @@ export default {
   'app.kuaizhizao.purchaseRequisition.form.codeRequired': '请输入采购申请编号',
   'app.kuaizhizao.purchaseRequisition.form.name': '申请名称',
   'app.kuaizhizao.purchaseRequisition.form.namePlaceholder': '请输入申请名称',
+  'app.kuaizhizao.purchaseRequisition.formFieldSettings.title': '字段设置',
+  'app.kuaizhizao.purchaseRequisition.formFieldSettings.action': '字段设置',
   'app.kuaizhizao.purchaseRequisition.form.date': '申请日期',
   'app.kuaizhizao.purchaseRequisition.form.requiredDate': '要求到货日期',
+  'app.kuaizhizao.purchaseRequisition.form.requiredDateRequired': '请选择要求到货日期',
+  'app.kuaizhizao.purchaseRequisition.form.quantityMustBePositive': '申请数量必须大于0，不允许保存',
   'app.kuaizhizao.purchaseRequisition.form.lineDeliveryRequired': '请选择行到货日',
   'app.kuaizhizao.purchaseRequisition.lineRequiredDateMissing': '第 {{row}} 行：请选择行到货日',
   'app.kuaizhizao.purchaseRequisition.form.applicant': '申请人',
   'app.kuaizhizao.purchaseRequisition.form.applicantHint': '保存后写入为当前登录用户',
+  'app.kuaizhizao.purchase.field.department': '部门',
   'app.kuaizhizao.purchaseRequisition.form.itemsTitle': '申请明细',
   'app.kuaizhizao.purchaseRequisition.form.itemsRequired': '请至少添加一条申请明细',
   'app.kuaizhizao.purchaseRequisition.form.importItems': '导入明细',
@@ -12563,7 +15438,7 @@ export default {
   'app.kuaizhizao.purchaseRequisition.convert.col.moq': '最小起订量',
   'app.kuaizhizao.purchaseRequisition.convert.col.thisPushQty': '本次下推数量',
   'app.kuaizhizao.purchaseRequisition.convert.col.material': '物料',
-  'app.kuaizhizao.purchaseRequisition.convert.col.unitPrice': '单价',
+  'app.kuaizhizao.purchaseRequisition.convert.col.unitPrice': '含税单价',
   'app.kuaizhizao.purchaseRequisition.convert.col.lineAmount': '行金额',
   'app.kuaizhizao.purchaseRequisition.convert.selectSupplier': '选择供应商',
   'app.kuaizhizao.purchaseRequisition.convert.invalidUnitPrice': '请为所选行填写有效单价',
@@ -12597,6 +15472,7 @@ export default {
   'app.kuaizhizao.purchaseOrder.col.lifecycle': '执行状态',
   'app.kuaizhizao.purchaseOrder.lifecycleDraft': '草稿',
   'app.kuaizhizao.purchaseOrder.lifecyclePendingReview': '待审核',
+  'app.kuaizhizao.purchaseOrder.lifecyclePendingMine': '待我审核',
   'app.kuaizhizao.purchaseOrder.lifecycleAudited': '已审核',
   'app.kuaizhizao.purchaseOrder.lifecycleConfirmed': '已确认',
   'app.kuaizhizao.purchaseOrder.lifecycleExecuting': '执行中',
@@ -12612,15 +15488,16 @@ export default {
   'app.kuaizhizao.purchaseOrder.lifecycleNextResubmitAfterReject': '修改后重新提交审核',
   'app.kuaizhizao.purchaseOrder.lifecycleNextResubmit': '修改后重新提交',
   'app.kuaizhizao.purchaseOrder.col.reviewStatus': '审核状态',
-  'app.kuaizhizao.purchaseOrder.col.taxRate': '税率',
+  'app.kuaizhizao.purchaseOrder.col.taxRate': '税率%',
   'app.kuaizhizao.purchaseOrder.col.taxAmount': '税额',
   'app.kuaizhizao.purchaseOrder.col.inclAmount': '含税金额',
-  'app.kuaizhizao.purchaseOrder.col.orderType': '订单类型',
+  'app.kuaizhizao.purchaseOrder.col.orderType': '采购类型',
   'app.kuaizhizao.purchaseOrder.col.materialCode': '物料编码',
   'app.kuaizhizao.purchaseOrder.col.materialName': '物料名称',
   'app.kuaizhizao.purchaseOrder.col.spec': '规格',
   'app.kuaizhizao.purchaseOrder.col.unitPrice': '单价',
   'app.kuaizhizao.purchaseOrder.priceProvisional': '待月结定价',
+  'app.kuaizhizao.purchaseOrder.col.exclUnitPrice': '不含税单价',
   'app.kuaizhizao.purchaseOrder.col.taxUnitPrice': '含税单价',
   'app.kuaizhizao.purchaseOrder.col.exclAmount': '不含税金额',
   'app.kuaizhizao.purchaseOrder.col.inclTotal': '价税合计',
@@ -12628,6 +15505,7 @@ export default {
   'app.kuaizhizao.purchaseOrder.col.requiredDelivery': '要求到货',
   'app.kuaizhizao.purchaseOrder.col.requisitionCode': '申请单号',
   'app.kuaizhizao.purchaseOrder.col.requisitionName': '申请名称',
+  'app.kuaizhizao.purchaseOrder.col.requisitionDate': '申请日期',
   'app.kuaizhizao.purchaseOrder.col.demandDate': '需求日期',
   'app.kuaizhizao.purchaseOrder.col.applicant': '申请人',
   'app.kuaizhizao.purchaseOrder.col.convertStatus': '转单状态',
@@ -12641,7 +15519,7 @@ export default {
   'app.kuaizhizao.purchaseOrder.helpDetailTableView': '：以每行采购明细为展示维度，可查看物料名称/编码、数量与到货进度，纯查看用途。',
   'app.kuaizhizao.purchaseOrder.loadRequisitionListFailed': '加载采购申请列表失败',
   'app.kuaizhizao.purchaseOrder.allReceived': '采购单已全部入库，无可下推明细',
-  'app.kuaizhizao.purchaseOrder.pushReceiptSuccess': '成功生成采购入库单：{{code}}，仓库将在看板中处理入库',
+  'app.kuaizhizao.purchaseOrder.pushReceiptSuccess': '已生成采购入库草稿：{{code}}，请完善后保存',
   'app.kuaizhizao.purchaseOrder.pushReceiptFailed': '下推采购入库失败',
   'app.kuaizhizao.purchaseOrder.pushNoticeSuccess': '成功生成收货通知单：{{code}}',
   'app.kuaizhizao.purchaseOrder.pushNoticeFailed': '下推收货通知失败',
@@ -12710,13 +15588,26 @@ export default {
   'app.kuaizhizao.purchaseOrder.syncField.deliveryDate': '交货日期',
   'app.kuaizhizao.purchaseOrder.syncField.supplierCode': '供应商编码',
   'app.kuaizhizao.purchaseOrder.syncField.supplierName': '供应商名称',
+  'app.kuaizhizao.purchaseOrder.syncField.supplierContact': '供应商联系人',
+  'app.kuaizhizao.purchaseOrder.syncField.supplierPhone': '供应商电话',
+  'app.kuaizhizao.purchaseOrder.syncField.buyerName': '采购员',
+  'app.kuaizhizao.purchaseOrder.syncField.priceType': '价类（含税/未税）',
+  'app.kuaizhizao.purchaseOrder.syncField.taxRate': '表头税率',
+  'app.kuaizhizao.purchaseOrder.syncField.paymentMethod': '付款方式',
+  'app.kuaizhizao.purchaseOrder.syncField.settlementTerms': '结算方式',
+  'app.kuaizhizao.purchaseOrder.syncField.paymentCycle': '付款周期',
   'app.kuaizhizao.purchaseOrder.syncField.notes': '备注',
   'app.kuaizhizao.purchaseOrder.syncField.itemMaterialCode': '明细 物料编码',
   'app.kuaizhizao.purchaseOrder.syncField.itemMaterialName': '明细 物料名称',
+  'app.kuaizhizao.purchaseOrder.syncField.itemMaterialSpec': '明细 规格',
+  'app.kuaizhizao.purchaseOrder.syncField.itemMaterialUnit': '明细 单位',
   'app.kuaizhizao.purchaseOrder.syncField.itemOrderedQuantity': '明细 采购数量',
   'app.kuaizhizao.purchaseOrder.syncField.itemUnitPrice': '明细 单价',
+  'app.kuaizhizao.purchaseOrder.syncField.itemUnitPriceExcl': '明细 未税单价',
+  'app.kuaizhizao.purchaseOrder.syncField.itemUnitPriceIncl': '明细 含税单价',
   'app.kuaizhizao.purchaseOrder.syncField.itemTaxRate': '明细 税率',
   'app.kuaizhizao.purchaseOrder.syncField.itemDeliveryDate': '明细 交货日期',
+  'app.kuaizhizao.purchaseOrder.syncField.itemNotes': '明细 备注',
   'app.kuaizhizao.purchaseOrder.importEmpty': '导入数据为空或格式不正确',
   'app.kuaizhizao.purchaseOrder.importNoRows': '没有可导入的数据行（请从第3行开始填写）',
   'app.kuaizhizao.purchaseOrder.importMissingColumns': '缺少必需列：供应商名称、订单日期、物料编码、数量',
@@ -12742,11 +15633,19 @@ export default {
   'app.kuaizhizao.purchaseOrder.lineRequiredDateMissing': '第 {{row}} 行：请选择要求到货日期',
   'app.kuaizhizao.purchaseOrder.updateSuccess': '采购订单更新成功',
   'app.kuaizhizao.purchaseOrder.createSuccess': '采购订单创建成功',
+  'app.kuaizhizao.purchaseOrder.commitSubmitted': '采购订单已提交',
+  'app.kuaizhizao.purchaseOrder.copySelectedCreate': '复制选中单据新建',
+  'app.kuaizhizao.purchaseOrder.toolbar.withdrawSubmit': '撤销提交',
+  'app.kuaizhizao.purchaseOrder.toolbar.submitReview': '提交审核',
+  'app.kuaizhizao.purchaseOrder.toolbar.submitReviewNotAllowed': '当前选中单据不可提交审核。',
+  'app.kuaizhizao.purchaseOrder.toolbar.withdrawReview': '撤回审核',
+  'app.kuaizhizao.purchaseOrder.toolbar.revoke': '反审核',
   'app.kuaizhizao.purchaseOrder.saveSubmitAutoApproved': '采购订单已保存并提交，已自动审核通过',
   'app.kuaizhizao.purchaseOrder.saveSubmitPending': '采购订单已保存并提交审核',
   'app.kuaizhizao.purchaseOrder.createSubmitAutoApproved': '采购订单已创建并提交，已自动审核通过',
   'app.kuaizhizao.purchaseOrder.createSubmitPending': '采购订单已创建并提交审核',
-  'app.kuaizhizao.purchaseOrder.saveSubmitFailed': '保存成功，但提交失败：{{message}}。您可在列表中点击「提交审核」重试。',
+  'app.kuaizhizao.purchaseOrder.saveSubmitFailed': '保存成功，但提交失败：{{message}}。您可在列表中点击「提交」重试。',
+  'app.kuaizhizao.purchaseOrder.submitNotDraft': '只能提交草稿状态的订单',
   'app.kuaizhizao.purchaseOrder.saveDraft': '保存为草稿',
   'app.kuaizhizao.purchaseOrder.createAndSubmit': '创建并提交',
   'app.kuaizhizao.purchaseOrder.saveAndSubmit': '保存并提交',
@@ -12764,13 +15663,30 @@ export default {
   'app.kuaizhizao.purchaseOrder.form.contactPlaceholder': '请输入联系人',
   'app.kuaizhizao.purchaseOrder.form.phone': '联系电话',
   'app.kuaizhizao.purchaseOrder.form.phonePlaceholder': '请输入联系电话',
-  'app.kuaizhizao.purchaseOrder.form.orderType': '订单类型',
-  'app.kuaizhizao.purchaseOrder.form.orderTypePlaceholder': '请选择订单类型',
+  'app.kuaizhizao.purchaseOrder.form.orderType': '采购类型',
+  'app.kuaizhizao.purchaseOrder.form.orderTypePlaceholder': '请选择采购类型',
   'app.kuaizhizao.purchaseOrder.form.buyer': '采购员',
   'app.kuaizhizao.purchaseOrder.form.buyerPlaceholder': '请选择采购员',
   'app.kuaizhizao.purchaseOrder.form.currency': '币种',
   'app.kuaizhizao.purchaseOrder.form.currencyPlaceholder': '请选择币种',
+  'app.kuaizhizao.purchaseOrder.form.lineNotes': '行备注',
+  'app.kuaizhizao.purchaseOrder.form.exchangeRate': '汇率',
+  'app.kuaizhizao.purchaseOrder.form.exchangeRateHint': '相对本位币，1 单位外币折合的本位币金额；本币订单固定为 1',
+  'app.kuaizhizao.purchaseOrder.form.exchangeRateRequired': '外币订单须填写大于 0 的汇率',
+  'app.kuaizhizao.purchaseOrder.paymentMethod': '付款方式',
+  'app.kuaizhizao.purchaseOrder.settlementTerms': '结算方式',
+  'app.kuaizhizao.purchaseOrder.paymentCycle': '付款周期',
+  'app.kuaizhizao.purchaseOrder.selectPaymentMethod': '请选择付款方式',
+  'app.kuaizhizao.purchaseOrder.selectSettlementTerms': '请选择结算方式',
+  'app.kuaizhizao.purchaseOrder.paymentCycleDaysPlaceholder': '如月结 30 天填 30，可选',
+  'app.kuaizhizao.purchaseOrder.paymentCycleDaysHint':
+    '与供应商资料「付款账期（天）」一致；选供应商时自动带入，可改',
+  'app.kuaizhizao.purchaseOrder.paymentCycleDaysValue': '{{days}}天',
   'app.kuaizhizao.purchaseOrder.paymentPlan': '付款计划',
+  'app.kuaizhizao.purchaseOrder.paymentPlanRowIncomplete':
+    '付款计划每一行须填写节点名称与计划日期，否则无法保存',
+  'app.kuaizhizao.salesOrder.paymentPlanRowIncomplete':
+    '收款计划每一行须填写节点名称与计划日期，否则无法保存',
   'app.kuaizhizao.purchaseOrder.addPaymentMilestone': '添加付款节点',
   'app.kuaizhizao.purchaseOrder.addPrepaymentMilestone': '添加预付节点',
   'app.kuaizhizao.purchaseOrder.milestoneTypePlan': '计划付款',
@@ -12780,9 +15696,7 @@ export default {
   'app.kuaizhizao.purchaseOrder.form.prepaymentAmount': '预付金额',
   'app.kuaizhizao.purchaseOrder.form.prepaymentAmountPlaceholder': '请输入预付金额',
   'app.kuaizhizao.purchaseOrder.form.prepaymentBankAccount': '预付银行账户',
-  'app.kuaizhizao.purchaseOrder.form.prepaymentBankAccountPlaceholder': '请选择预付银行账户',
-  'app.kuaizhizao.purchaseOrder.prepaymentBackfillMissing': '未补齐',
-  'app.kuaizhizao.purchaseOrder.prepaymentBackfillDone': '已补齐',
+  'app.kuaizhizao.purchaseOrder.form.prepaymentBankAccountPlaceholder': '请选择预付银行账户（账户名 银行 账号）',
   'app.kuaizhizao.purchaseOrder.loadBankAccountsFailed': '加载银行账户失败，请确认已在财务管理维护启用账户',
   'app.kuaizhizao.purchaseOrder.form.itemsTitle': '采购明细',
   'app.kuaizhizao.purchaseOrder.form.itemsRequired': '请至少添加一条采购明细',
@@ -12792,12 +15706,16 @@ export default {
   'app.kuaizhizao.purchaseOrder.form.addLine': '添加明细',
   'app.kuaizhizao.purchaseOrder.form.material': '物料',
   'app.kuaizhizao.purchaseOrder.form.spec': '规格',
-  'app.kuaizhizao.purchaseOrder.form.taxRatePercent': '税率(%)',
+  'app.kuaizhizao.purchaseOrder.form.taxRatePercent': '税率%',
   'app.kuaizhizao.purchaseOrder.form.batchTaxRate': '批量',
   'app.kuaizhizao.purchaseOrder.form.batchTaxRatePrompt': '批量设置税率',
   'app.kuaizhizao.purchaseOrder.form.attachments': '附件',
   'app.kuaizhizao.purchaseOrder.form.notesPlaceholder': '请输入备注信息',
   'app.kuaizhizao.purchaseOrder.form.gteZero': '≥0',
+  'app.kuaizhizao.purchaseOrder.form.nonGiftUnitPriceRequired':
+    '非赠品明细须填写大于 0 的采购单价',
+  'app.kuaizhizao.purchaseOrder.lineNonGiftUnitPriceRequired':
+    '第 {{row}} 行非赠品须填写大于 0 的采购单价',
   'app.kuaizhizao.purchaseOrder.importItemsTitle': '导入采购明细',
   'app.kuaizhizao.purchaseOrder.importItems.materialCode': '物料编码',
   'app.kuaizhizao.purchaseOrder.importItems.spec': '规格',
@@ -12807,7 +15725,228 @@ export default {
   'app.kuaizhizao.purchaseOrder.importNoValidData': '未检测到有效数据（请确保物料编码不为空）',
   'app.kuaizhizao.purchaseOrder.orderTypeFallback': '订单类型数据字典未配置，已使用内置选项',
   'app.kuaizhizao.purchaseOrder.orderTypeStandard': '标准采购',
-  'app.kuaizhizao.purchaseOrder.orderTypeFramework': '框架协议',
+  'app.kuaizhizao.purchaseOrder.orderTypeAsset': '资产采购',
+  'app.kuaizhizao.purchaseOrder.orderTypeService': '服务采购',
+  'app.kuaizhizao.purchaseRequisition.form.orderType': '采购类型',
+  'app.kuaizhizao.purchaseReceipt.field.orderType': '采购类型',
+  'app.kuaizhizao.purchaseReceipt.orderTypeStandard': '标准采购入库单',
+  'app.kuaizhizao.purchaseReceipt.orderTypeAsset': '资产采购入库单',
+  'app.kuaizhizao.purchaseReceipt.orderTypeRequired': '请选择采购入库类型',
+  'pages.dashboard.updateLog.entries.dual-inventory-unit-ledger-r01.title':
+    '库存台账支持库存单位与基本单位双计量',
+  'pages.dashboard.updateLog.entries.dual-inventory-unit-ledger-r01.description':
+    '物料可单独指定库存单位；批次与即时库存同时展示库存数量与基本数量；金蝶库存同步分别写入 qty 与 baseqty。',
+  'pages.dashboard.updateLog.entries.warehouse-dedicated-list-edit-r01.title':
+    '仓储专用列表待确认前可编辑',
+  'pages.dashboard.updateLog.entries.warehouse-dedicated-list-edit-r01.description':
+    '其他出入库、借料、还料专用页与入库 Hub 还料单在过账前补「编辑」，复用出入库 Hub 弹窗或还料更新接口。',
+  'pages.dashboard.updateLog.entries.print-pdf-online-load-timeout-r05.title':
+    '线上保存 PDF 不再卡在 load',
+  'pages.dashboard.updateLog.entries.print-pdf-online-load-timeout-r05.description':
+    '打印子进程改用 domcontentloaded、阻断未内联外链，无相对路径时不注入 base href，避免线上等 BASE_URL 资源挂起。',
+  'pages.dashboard.updateLog.entries.print-pdf-emulate-media-regression-r04.title':
+    '保存为 PDF 回退错误引擎改动',
+  'pages.dashboard.updateLog.entries.print-pdf-emulate-media-regression-r04.description':
+    '撤销打印子进程拦截外链与 emulate_media 步骤（该步骤在部分环境会直接 Target crashed）；恢复与原先一致的 load 等待，仅对过大内嵌图缩略。',
+  'pages.dashboard.updateLog.entries.print-pdf-chromium-root-cause-r03.title':
+    '保存为 PDF 修复 Chromium 真因路径',
+  'pages.dashboard.updateLog.entries.print-pdf-chromium-root-cause-r03.description':
+    '压图覆盖 CSS 背景公章、禁止打印时拉外链图；修正明细表分页 CSS 避免多行 printToPDF 崩溃；失败提示带 HTML 诊断而非仅归因图片 KB。',
+  'pages.dashboard.updateLog.entries.print-pdf-target-crashed-r02.title':
+    '保存为 PDF 压图与重试增强',
+  'pages.dashboard.updateLog.entries.print-pdf-target-crashed-r02.description':
+    '打印前对内联 Logo/公章与模板内 data URL 统一强制缩略；识别 printToPDF 协议失败并多档重试，降低销售合同等复杂模板 Chromium 崩溃概率。',
+  'pages.dashboard.updateLog.entries.print-pdf-target-crashed-r01.title':
+    '保存为 PDF 不再因公章崩溃',
+  'pages.dashboard.updateLog.entries.print-pdf-target-crashed-r01.description':
+    '销售订单等单据「保存为 PDF」报 Playwright Target crashed：打印前缩略过大公章/Logo，去掉易崩的 fonts.ready 注入；崩溃时再强缩略重试一次并给出明确提示。',
+  'pages.dashboard.updateLog.entries.wecom-h5-keep-page-r03.title':
+    '企微再进同一应用不再整页刷新',
+  'pages.dashboard.updateLog.entries.wecom-h5-keep-page-r03.description':
+    '关掉再打开同一应用会连着整页刷新：已进入的工作台保持不动；只有还停在入口转圈时，才丢掉这一次等待并重新登录自举。',
+  'pages.dashboard.updateLog.entries.wecom-h5-same-app-reopen-r01.title':
+    '企微同一应用关掉再开不再转圈',
+  'pages.dashboard.updateLog.entries.wecom-h5-same-app-reopen-r01.description':
+    '工作台多个 MES 应用时，A 切 B 正常、关掉 A 再开 A 一直转圈：企微复用冻结 WebView 导致自举 Promise 挂死；恢复可见时清运行时锁并在入口页整页重载。',
+  'pages.dashboard.updateLog.entries.wecom-h5-reentry-spinner-r01.title':
+    '企微 H5 退出再进不再一直转圈',
+  'pages.dashboard.updateLog.entries.wecom-h5-reentry-spinner-r01.description':
+    '企业微信内第一次登录正常、退出后再打开一直转圈：本地过期令牌不再冒充已登录；静默续期增加超时；会话失效时重新静默授权，不再卡在空工作台。',
+  'pages.dashboard.updateLog.entries.mobile-auth-restore-1031-r01.title':
+    '移动端登录鉴权回退到 10-31',
+  'pages.dashboard.updateLog.entries.mobile-auth-restore-1031-r01.description':
+    '撤销 11-02「组织头对齐」对登录、401 提示与企微入口的改动，H5 鉴权恢复为 10-31 已验证可用状态；后续改组织头须单独增量，禁止覆盖已修好的公开认证保护。',
+  'pages.dashboard.updateLog.entries.mobile-login-401-detail-r01.title':
+    '移动端登录失败提示修复',
+  'pages.dashboard.updateLog.entries.mobile-login-401-detail-r01.description':
+    '修复移动端账密/企微登录失败时只显示英文 Request failed with status code 401、并把登录失败误当成会话过期踢出的问题；现展示后端真实原因（如用户名或密码错误），公开登录接口不再附带旧令牌。',
+  'pages.dashboard.updateLog.entries.po-receipt-payable-recognition-alias-r01.title':
+    '采购入库继承立账策略',
+  'pages.dashboard.updateLog.entries.po-receipt-payable-recognition-alias-r01.description':
+    '修复采购订单立账策略因接口字段别名无法落库/回显，导致下推采购入库始终显示组织默认「以采购入库确认为准」；下推时显式带入订单立账策略。已生成的错误单据请改订单后重新下推或手工更正入库单。',
+  'pages.dashboard.updateLog.entries.role-functional-domain-save-r01.title':
+    '角色职能域编辑保存修复',
+  'pages.dashboard.updateLog.entries.role-functional-domain-save-r01.description':
+    '编辑角色时会正确回填已保存的职能域；保存时始终提交职能域字段（含清空为未设置），避免选仓库等职能后更新无效。',
+  'pages.dashboard.updateLog.entries.gl-tax-settings-orm-bridge-r01.title':
+    '税务管理进项认证 ORM 修复',
+  'pages.dashboard.updateLog.entries.gl-tax-settings-orm-bridge-r01.description':
+    '修复税务设置 GlTaxSettings 未绑定数据库连接导致进项认证、税务设置页报错；轻财务 API 路由改走快制造宿主税务接口，与 FINANCE_MANAGEMENT ORM 清单一致。',
+  'pages.dashboard.updateLog.entries.gl-coa-aux-off-profit-loss-transfer-r01.title':
+    '科目可关闭辅助核算与结转损益凭证',
+  'pages.dashboard.updateLog.entries.gl-coa-aux-off-profit-loss-transfer-r01.description':
+    '科目已有发生额或余额时仍可在会计科目中取消客户等辅助核算（不可反向新启用或改编码/类型）；期末结转损益与自定义转账生成的凭证不再强制填写客户等辅助项，与汇总结转口径一致。',
+  'pages.dashboard.updateLog.entries.kuaioa-attendance-export-blob-r01.title':
+    '月度考勤导出下载修复',
+  'pages.dashboard.updateLog.entries.kuaioa-attendance-export-blob-r01.description':
+    '月度考勤导出改为正确接收 Excel 二进制并解析 Content-Disposition 文件名（含中文车间名）；后端同步修复响应头编码并一次性返回文件体，避免导出失败后服务异常。',
+  'pages.dashboard.updateLog.entries.other-outbound-line-spec-column-r01.title':
+    '其他出库明细规格独立列',
+  'pages.dashboard.updateLog.entries.other-outbound-line-spec-column-r01.description':
+    '新建其他出库单明细表与生产领料等一致：物料选择器只显示编码与名称，规格、型号单独成列并在选料后自动回填；详情抽屉同步展示规格。',
+  'pages.dashboard.updateLog.entries.inbound-confirm-external-push-warn-r01.title':
+    '入库确认外推失败可见提示',
+  'pages.dashboard.updateLog.entries.inbound-confirm-external-push-warn-r01.description':
+    '入库 Hub 确认成功后若金蝶无感外推失败，会额外弹出警告展示后端返回的外推错误，避免只看到入库成功却以为未触发同步。',
+  'pages.dashboard.updateLog.entries.finished-goods-receipt-silent-push-trigger-r01.title':
+    '成品入库自动推送未触发修复',
+  'pages.dashboard.updateLog.entries.finished-goods-receipt-silent-push-trigger-r01.description':
+    '自动推送默认勾选「确认入库」绑定按钮；未勾选时确认入库也会外推。确认失败时返回外推错误提示。',
+  'pages.dashboard.updateLog.entries.finished-goods-receipt-push-binding-route-r01.title':
+    '成品入库数据互通保存路由冲突修复',
+  'pages.dashboard.updateLog.entries.finished-goods-receipt-push-binding-route-r01.description':
+    '成品入库 push-binding 接口不再被误匹配为入库单详情；选好写入接口点确认后，下次打开数据互通仍能回显推送目标。',
+  'pages.dashboard.updateLog.entries.finished-goods-receipt-line-wh-location-r01.title':
+    '成品入库库位归属误报修复',
+  'pages.dashboard.updateLog.entries.finished-goods-receipt-line-wh-location-r01.description':
+    '空白新建成品入库时明细行仓库可写入并参与库位归属校验，缺省回落表头仓库；修复「无货架」等库位误报不属于所选入库仓库。',
+  'pages.dashboard.updateLog.entries.finished-goods-receipt-uni-wh-dropdown-r01.title':
+    '成品入库明细仓库改用 uni-wh-dropdown',
+  'pages.dashboard.updateLog.entries.finished-goods-receipt-uni-wh-dropdown-r01.description':
+    '空白新建成品/半成品入库明细的入库仓库对齐采购入库：UniWhDropdown 按物料显示库存、修正占位文案误显 common.selectWarehouse。',
+  'pages.dashboard.updateLog.entries.other-outbound-modal-detail-align-pp-r01.title':
+    '其他出库新建弹窗对齐领料单',
+  'pages.dashboard.updateLog.entries.other-outbound-modal-detail-align-pp-r01.description':
+    '新建其他出库单 Modal 改为超大宽度，明细表改用与生产领料一致的 UniTableDetail 与单据明细列宽规范。',
+  'pages.dashboard.updateLog.entries.other-outbound-form-picker-order-r01.title':
+    '其他出库新建表头精简',
+  'pages.dashboard.updateLog.entries.other-outbound-form-picker-order-r01.description':
+    '新建其他出库去掉原因说明与领用人工号；领用人在领用部门之前；外推领用人工号暂走业务配置固定值（与生产领料一致）。',
+  'pages.dashboard.updateLog.entries.other-outbound-line-warehouse-r01.title':
+    '其他出库仓库改到明细行',
+  'pages.dashboard.updateLog.entries.other-outbound-line-warehouse-r01.description':
+    '新建其他出库单时仓库、库位按明细行选择（对齐销售出库/生产领料）；表头仓库仅作列表汇总，确认出库与金蝶外推按行仓库扣库、写分录。',
+  'pages.dashboard.updateLog.entries.other-outbound-kingdee-std-add3-r01.title':
+    '其他出库对接金蝶标准其他出库单',
+  'pages.dashboard.updateLog.entries.other-outbound-kingdee-std-add3-r01.description':
+    '已出库的其他出库单可外推金蝶标准其他出库（单据类型 STD）；连枝横可绑自定义 add3 写入领用人工号后自动提交、审核，已推送暂存单可再推补审。',
+  'pages.dashboard.updateLog.entries.production-picking-kingdee-add3-bizuser-r01.title':
+    '生产领料支持金蝶自定义 add3 写入领用人',
+  'pages.dashboard.updateLog.entries.production-picking-kingdee-add3-bizuser-r01.description':
+    '连枝横标品 batchAdd 落不了领用人时，可绑自定义 add3（bizuser_number=人员工号，如 ID-000081）保存后自动提交审核；登录名或中文姓名不是工号。',
+  'pages.dashboard.updateLog.entries.document-push-persist-relation-before-submit-fail-r01.title':
+    '外推保存成功后即使提交失败也会记下金蝶单号',
+  'pages.dashboard.updateLog.entries.document-push-persist-relation-before-submit-fail-r01.description':
+    '金蝶 batchAdd 已保存但提交/审核失败时仍写入单据关联；在金蝶补全领用人等必填后再推，会走补提交/审核，而不是重复新建。',
+  'pages.dashboard.updateLog.entries.production-picking-submit-audit-after-save-r01.title':
+    '生产领料外推后自动提交审核',
+  'pages.dashboard.updateLog.entries.production-picking-submit-audit-after-save-r01.description':
+    '生产领料推送金蝶对齐销售出库：保存后自动 batchSubmit / billbatchAudit；已推送仍为暂存可再推补审。若金蝶报请填写领用人，属开放平台 batchAdd 未发布 pickeroperator_operatornumber（MES 已选领用人也会被静默丢弃），需金蝶侧发布写参或在金蝶暂存单手工补领用人后再补审。',
+  'pages.dashboard.updateLog.entries.production-picking-reject-std-billtype-r01.title':
+    '生产领料不再误推标准其他出库单据类型',
+  'pages.dashboard.updateLog.entries.production-picking-reject-std-billtype-r01.description':
+    '生产领料/成品入库外推会剔除业务配置中误填的标准其他出/入库单据类型；须使用本账套「生产领料」或「生产完工入库」编码。若仍配置为 STD 类型将明确报错，避免金蝶落成标准其他出库单。',
+  'pages.dashboard.updateLog.entries.document-push-target-api-name-r01.title':
+    '外推目标名称显示所选数据接口',
+  'pages.dashboard.updateLog.entries.document-push-target-api-name-r01.description':
+    '数据互通推送目标列表的名称列改为显示已选写入接口（如生产领料其他出库批量新增），不再只显示金蝶单据 profile 固定文案；并按目标记住 save_api_uuid，避免设置保存后看起来仍像旧接口。',
+  'pages.dashboard.updateLog.entries.finished-goods-kingdee-billtype-api-r01.title':
+    '成品入库外推专用金蝶接口',
+  'pages.dashboard.updateLog.entries.finished-goods-kingdee-billtype-api-r01.description':
+    '新增「苍穹成品入库其他入库批量新增」预置接口（关联单据=成品入库）；成品入库外推优先绑定该接口，单据类型须为本账套「生产完工入库」，不再从标准其他入库 Save 样例继承 STD 单据类型。加载预置后请把样例 REPLACE_* 改为真实编码并重新绑定推送目标。',
+  'pages.dashboard.updateLog.entries.production-picking-kingdee-billtype-api-r01.title':
+    '生产领料外推专用金蝶接口',
+  'pages.dashboard.updateLog.entries.production-picking-kingdee-billtype-api-r01.description':
+    '新增「苍穹生产领料其他出库批量新增」预置接口（关联单据=生产领料）；领料外推优先绑定该接口，单据类型须为本账套「生产领料」，不再从标准其他出库 Save 样例继承 STD 单据类型。加载预置后请把样例 REPLACE_* 改为真实编码并重新绑定推送目标。',
+  'pages.dashboard.updateLog.entries.production-picking-blank-header-fields-r01.title':
+    '空白生产领料补齐单据编号与领用信息',
+  'pages.dashboard.updateLog.entries.production-picking-blank-header-fields-r01.description':
+    '新建生产领料单表头增加单据编号（编码规则自动生成）、领用人、领用部门；制单日期默认当天，并默认当前用户为领用人。',
+  'pages.dashboard.updateLog.entries.production-picking-uni-wh-dropdown-r01.title':
+    '生产领料仓库改为统一仓位下拉',
+  'pages.dashboard.updateLog.entries.production-picking-uni-wh-dropdown-r01.description':
+    '空白新建生产领料、工单取单领料与领料编辑明细的出库仓库统一为 uni-wh-dropdown；有物料时按仓显示可出库库存并优先排有货仓库，修正占位文案显示成 common.selectWarehouse 的问题。',
+  'pages.dashboard.updateLog.entries.warelocareference-active-filter-fix-r01.title':
+    '库位关系同步不再被有效过滤清空',
+  'pages.dashboard.updateLog.entries.warelocareference-active-filter-fix-r01.description':
+    '修正 bd_warelocareference/query 被误当作主数据 getList：开启「仅同步有效」时请求注入 status/enable 且拉取后按 status=C 过滤，关系行无该字段导致 1017 等仓的仓位全部被丢弃却仍显示同步成功。现关系接口不再套用该过滤，请重新执行库位关系同步。',
+  'pages.dashboard.updateLog.entries.sales-delivery-manual-confirm-default-r01.title':
+    '销售出库默认须手动确认',
+  'pages.dashboard.updateLog.entries.sales-delivery-manual-confirm-default-r01.description':
+    '新建销售出库单不再随仓储「自动出库」直接过账；默认待出库，须在出库执行中心手动确认。若需建单即过账，可在配置中心流程设置开启「销售出库单自动确认出库」。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-push-warehouse-doc-first-r01.title':
+    '采购入库推送金蝶以单据仓库为准',
+  'pages.dashboard.updateLog.entries.purchase-receipt-push-warehouse-doc-first-r01.description':
+    '修正外推采购入库时业务配置固定 warehouse_number 覆盖入库单/明细仓库的问题；有选仓时推送编码与 MES 一致，配置仅作未选仓缺省。',
+  'pages.dashboard.updateLog.entries.batch-inventory-query-batch-no-ellipsis-r01.title':
+    '批次库存查询批号列不再叠字',
+  'pages.dashboard.updateLog.entries.batch-inventory-query-batch-no-ellipsis-r01.description':
+    '批次库存查询批号列加宽并启用省略号与悬停全文，长批号不再压到生产日期等邻列。',
+  'pages.dashboard.updateLog.entries.material-sync-getmatinfo-fallback-r01.title':
+    '物料批号同步支持自建 getmatinfo',
+  'pages.dashboard.updateLog.entries.material-sync-getmatinfo-fallback-r01.description':
+    '标品 batchQuery 返回 612 时，物料从源同步会自动改调 fd81/sbd/bd_materialinventoryinfo/getmatinfo（须开放平台发布且代理用户具备 bd_materialinventoryinfo 查询功能权限）。',
+  'pages.dashboard.updateLog.entries.material-sync-inventory-info-sbd-path-r01.title':
+    '物料批号同步改走 sbd 库存信息接口',
+  'pages.dashboard.updateLog.entries.material-sync-inventory-info-sbd-path-r01.description':
+    '物料库存信息 batchQuery 在供应链 sbd 路径（非 basedata）；同步按 enablelot 覆盖主档。若报 612 须在金蝶开放服务云为集成用户授权 bd_materialinventoryinfo 查询后全量重拉。',
+  'pages.dashboard.updateLog.entries.sync-mode-manual-force-r01.title':
+    '入站同步增加手动全量（强制）',
+  'pages.dashboard.updateLog.entries.sync-mode-manual-force-r01.description':
+    '来源设置同步方式可选「手动全量（强制）」：全量拉取且已存在记录不因无变更跳过，按源端覆盖写入（物料批号补数等场景）。',
+  'pages.dashboard.updateLog.entries.material-sync-inventory-info-enablelot-r01.title':
+    '物料同步批号改读库存信息页签',
+  'pages.dashboard.updateLog.entries.material-sync-inventory-info-enablelot-r01.description':
+    '金蝶界面启用批号在库存信息页签，同步时会按连接器管理组织拉 sbd/bd_materialinventoryinfo 的 enablelot 覆盖主档后再写本地批号管理；请手动全量重拉物料。',
+  'pages.dashboard.updateLog.entries.sync-mode-label-full-repull-r01.title':
+    '入站同步方式文案区分重拉与增量',
+  'pages.dashboard.updateLog.entries.sync-mode-label-full-repull-r01.description':
+    '「手动全量重拉」用于补批号等全量写回；「手动增量（仅变更）」只拉金蝶有变更的行，避免与重拉混淆。',
+  'pages.dashboard.updateLog.entries.material-sync-batch-managed-write-r01.title':
+    '物料同步写入批号管理开关',
+  'pages.dashboard.updateLog.entries.material-sync-batch-managed-write-r01.description':
+    '修正金蝶 enablelot 与批号管理映射被绑错列挡住的问题，并补星空 FIsBatchManage 字段；请对物料做一次全量同步后，列表「批号管理=是」筛选才会与金蝶一致。',
+  'pages.dashboard.updateLog.entries.material-list-batch-managed-search-r01.title':
+    '物料列表恢复批号管理筛选',
+  'pages.dashboard.updateLog.entries.material-list-batch-managed-search-r01.description':
+    '物料管理搜索条件中可再次按是否启用批号管理筛选，列表请求会带上 batchManaged 参数并在服务端过滤。',
+  'pages.dashboard.updateLog.entries.warehouse-location-ref-sync-stream-r01.title':
+    '库位关系同步改为流式进度并并发拉取',
+  'pages.dashboard.updateLog.entries.warehouse-location-ref-sync-stream-r01.description':
+    '仓库仓位关系须按仓分批调金蝶，已改 NDJSON 进度流避开 25 秒 API 硬超时，金蝶请求最多 5 路并发，本地库位 bulk 写入；后续步骤与主同步方式一致不再误开增量。',
+  'pages.dashboard.updateLog.entries.warehouse-sync-bulk-stream-r01.title':
+    '仓库入站同步改为批量写入与进度流',
+  'pages.dashboard.updateLog.entries.warehouse-sync-bulk-stream-r01.description':
+    '仓库同步与物料一致：预加载本地档案后 bulk 写入，并通过 NDJSON 推送拉取/写入进度，避免逐条走完整 CRUD 导致超时或进程吃满。',
+  'pages.dashboard.updateLog.entries.warehouse-sync-audited-active-only-r01.title':
+    '仓库入站同步排除暂存与未启用',
+  'pages.dashboard.updateLog.entries.warehouse-sync-audited-active-only-r01.description':
+    '苍穹查询仓库同步以数据状态已审核为准，并须使用状态可用；暂存或未启用行不再写入仓库档案（与物料/供应商口径一致）。',
+  'pages.dashboard.updateLog.entries.sync-preview-cosmic-pagesize-cap-r01.title':
+    '主数据同步预览限制苍穹分页条数',
+  'pages.dashboard.updateLog.entries.sync-preview-cosmic-pagesize-cap-r01.description':
+    '仓库等来源设置的「拉取预览」会将苍穹 pageSize 压至 50 条样例，不再按接口预设一次请求上千条，缩短金蝶往返与解析时间。',
+  'pages.dashboard.updateLog.entries.kingdee-inventory-balance-preset-off-r01.title':
+    '接口库下线苍穹查询库存余额预置',
+  'pages.dashboard.updateLog.entries.kingdee-inventory-balance-preset-off-r01.description':
+    '即时库存入站同步以「苍穹查询即时库存明细」为准（含批号）；库存余额汇总接口不再从接口库预置安装。已安装的余额查询接口可在接口管理中删除。',
+  'pages.dashboard.updateLog.entries.purchase-order-inbound-query-api-off-r01.title':
+    '下线苍穹查询采购订单预置接口',
+  'pages.dashboard.updateLog.entries.purchase-order-inbound-query-api-off-r01.description':
+    '接口库不再提供金蝶采购订单入站查询预置；采购订单列表暂关闭入站同步入口。已安装的同名接口可在接口管理中手动删除。外推金蝶采购订单不受影响。',
+  'pages.dashboard.updateLog.entries.purchase-standard-asset-type-r01.title': '采购区分标准采购与资产采购',
+  'pages.dashboard.updateLog.entries.purchase-standard-asset-type-r01.description':
+    '采购订单与采购入库单增加标准采购、资产采购类型，下推入库与金蝶外推按类型选用单据配置；行物料须与类型一致，混推固定资产与其它类别须拆单。',
   'app.kuaizhizao.purchaseOrder.currencyCny': '人民币(CNY)',
   'app.kuaizhizao.purchaseOrder.currencyUsd': '美元(USD)',
   'app.kuaizhizao.purchaseOrder.currencyEur': '欧元(EUR)',
@@ -12815,11 +15954,26 @@ export default {
   'app.kuaizhizao.purchaseOrder.amountOurCost': '我方成本',
   'app.kuaizhizao.purchaseOrder.amountEstimatedPayable': '预计应付',
   'app.kuaizhizao.purchaseOrder.amountEstimatedPayableHint': '价税合计 + 对方费用',
+  'app.kuaizhizao.purchaseOrder.amountPrepaymentUnsettled': '预付未核销',
+  'app.kuaizhizao.purchaseOrder.amountPrepaymentUnsettledHint': '已确认预付付款单尚未冲应付的余额',
+  'app.kuaizhizao.purchaseOrder.amountEstimatedPayableAfterPrepayment': '预计待付（扣预付）',
+  'app.kuaizhizao.purchaseOrder.amountEstimatedPayableAfterPrepaymentHint':
+    '按订单金额扣减未核销预付后的参考待付',
   'app.kuaizhizao.purchaseOrder.amountEstimatedTotalCost': '预计总成本',
   'app.kuaizhizao.purchaseOrder.amountEstimatedTotalCostHint': '价税合计 + 我方成本',
   'app.kuaizhizao.purchaseOrder.pull.title': '从采购申请创建采购订单',
   'app.kuaizhizao.purchaseOrder.pull.ok': '创建采购订单',
-  'app.kuaizhizao.purchaseOrder.pull.searchPlaceholder': '搜索采购申请明细（申请单号/申请名称）',
+  'app.kuaizhizao.purchaseOrder.pull.col.requisitionCode': '采购申请单号',
+  'app.kuaizhizao.purchaseOrder.pull.col.materialCode': '物料编码',
+  'app.kuaizhizao.purchaseOrder.pull.col.materialName': '物料名称',
+  'app.kuaizhizao.purchaseOrder.pull.col.materialSpec': '规格',
+  'app.kuaizhizao.purchaseOrder.pull.col.requestQty': '申请数量',
+  'app.kuaizhizao.purchaseOrder.pull.col.currentStock': '当前库存',
+  'app.kuaizhizao.purchaseOrder.pull.col.convertedQty': '已转单数量',
+  'app.kuaizhizao.purchaseOrder.pull.col.lineDueDate': '要求到货日期',
+  'app.kuaizhizao.purchaseOrder.pull.col.lineNotes': '行备注',
+  'app.kuaizhizao.purchaseOrder.pull.searchPlaceholder': '搜索申请单号/物料编码/名称/规格/申请人',
+  'app.kuaizhizao.purchaseOrder.pull.searchSalesOrderPlaceholder': '按销售订单号/客户搜索',
   'app.kuaizhizao.purchaseOrder.pull.empty': '暂无可选采购申请明细',
   'app.kuaizhizao.purchaseOrder.pull.emptySearch': '未找到匹配采购申请明细',
   'app.kuaizhizao.purchaseOrder.pull.selectedSummary': '已选择 {{count}} 条明细，将按采购申请与供应商自动拆分创建采购订单草稿。',
@@ -12992,7 +16146,7 @@ export default {
   'app.kuaizhizao.purchaseOrder.pushReceiptBatchWarehousePlaceholder': '选择后填充全部明细行',
   'app.kuaizhizao.purchaseOrder.pushReceiptSelectWarehouse': '请选择入库仓库',
   'app.kuaizhizao.purchaseOrder.pushReceiptSelectLineWarehouse': '请为物料 {{material}} 选择入库仓库',
-  'app.kuaizhizao.purchaseOrder.pushReceiptSelectLocation': '请选择库位（选填）',
+  'app.kuaizhizao.purchaseOrder.pushReceiptSelectLocation': '请选择库位',
   'app.kuaizhizao.purchaseOrder.pushReceiptSelectWarehouseFirst': '请先选择入库仓库',
   'app.kuaizhizao.purchaseOrder.pushReceiptNoWarehouse': '未配置可用仓库，请先在主数据维护仓库',
   'app.kuaizhizao.purchaseOrder.pushReceiptQtyRequired': '请至少填写一行入库数量',
@@ -13457,6 +16611,19 @@ export default {
   'app.kuaizhizao.outsourceOrder.statDraft': '草稿',
   'app.kuaizhizao.outsourceOrder.statInProgress': '执行中',
   'app.kuaizhizao.outsourceOrder.colCode': '工序委外单编号',
+  'app.kuaizhizao.outsourceOrder.pullColMaterialCode': '品号',
+  'app.kuaizhizao.outsourceOrder.pullColMaterialName': '品名',
+  'app.kuaizhizao.outsourceOrder.pullColSpecification': '规格',
+  'app.kuaizhizao.outsourceOrder.pullColPrevOpReportedQty': '上道工序报工数量',
+  'app.kuaizhizao.outsourceOrder.pullColAlreadyOutsourcedQty': '已外协数量',
+  'app.kuaizhizao.outsourceOrder.actionProcessIssue': '工序发料',
+  'app.kuaizhizao.outsourceOrder.processIssueSuccess': '工序发料成功，工序委外与工单工序已进入执行',
+  'app.kuaizhizao.outsourceOrder.processIssueFailed': '工序发料失败',
+  'app.kuaizhizao.outsourceOrder.fieldBatchCompletedQty': '本批完成数量',
+  'app.kuaizhizao.outsourceOrder.payableOnReceiptOrReport': '以报工或收货',
+  'app.kuaizhizao.outsourceOrder.payableOnInvoice': '以收票记账',
+  'app.kuaizhizao.outsourceOrder.payableOnMonthlyStatement': '以月结',
+  'app.kuaicaiwu.partnerStatement.tabOutsource': '外协对账单',
   'app.kuaizhizao.outsourceOrder.colWorkOrderCode': '工单编号',
   'app.kuaizhizao.outsourceOrder.colOperationName': '工序名称',
   'app.kuaizhizao.outsourceOrder.colSupplierName': '供应商名称',
@@ -13498,6 +16665,29 @@ export default {
   'app.kuaizhizao.outsourceOrder.formSourceLocked': '委外源由加载选定，不可手工更改',
   'app.kuaizhizao.outsourceOrder.createModalTitle': '新建工序委外单',
   'app.kuaizhizao.outsourceOrder.createSuccess': '工序委外创建成功',
+  'app.kuaizhizao.outsourceOrder.actionInbound': '去仓储入库',
+  'app.kuaizhizao.outsourceOrder.actionOpenInboundDoc': '打开关联入库单',
+  'app.kuaizhizao.outsourceOrder.actionSettlement': '委外结算',
+  'app.kuaizhizao.outsourceOrder.actionRevokeRelease': '撤回下达',
+  'app.kuaizhizao.outsourceOrder.revokeReleaseSuccess': '已撤回下达，单据回到草稿',
+  'app.kuaizhizao.outsourceOrder.revokeReleaseFailed': '撤回下达失败',
+  'app.kuaizhizao.outsourceOrder.revokeReleaseConfirmTitle': '确认撤回下达',
+  'app.kuaizhizao.outsourceOrder.revokeReleaseConfirmContent': '确认将 {{code}} 从已下达撤回为草稿？须未入库、未收货、未开始执行。',
+  'app.kuaizhizao.outsourceOrder.actionRelease': '下达',
+  'app.kuaizhizao.outsourceOrder.actionStart': '开始执行',
+  'app.kuaizhizao.outsourceOrder.actionRegisterReceipt': '登记收货',
+  'app.kuaizhizao.outsourceOrder.actionComplete': '完成',
+  'app.kuaizhizao.outsourceOrder.releaseSuccess': '工序委外已下达',
+  'app.kuaizhizao.outsourceOrder.releaseFailed': '下达失败',
+  'app.kuaizhizao.outsourceOrder.startSuccess': '工序委外已开始执行',
+  'app.kuaizhizao.outsourceOrder.startFailed': '开始执行失败',
+  'app.kuaizhizao.outsourceOrder.registerReceiptTitle': '登记委外收货',
+  'app.kuaizhizao.outsourceOrder.registerReceiptSuccess': '收货数量已登记',
+  'app.kuaizhizao.outsourceOrder.registerReceiptFailed': '登记收货失败',
+  'app.kuaizhizao.outsourceOrder.completeSuccess': '工序委外已完成',
+  'app.kuaizhizao.outsourceOrder.completeFailed': '完成失败',
+  'app.kuaizhizao.outsourceOrder.completeConfirmTitle': '确认完成工序委外',
+  'app.kuaizhizao.outsourceOrder.completeConfirmContent': '确认将 {{code}} 标记为已完成？需已收数量达到委外数量。',
   'app.kuaizhizao.outsourceOrder.createFailed': '创建工序委外失败',
   'app.kuaizhizao.outsourceOrder.updateSuccess': '工序委外单更新成功',
   'app.kuaizhizao.outsourceOrder.fieldCode': '工序委外单编号',
@@ -13622,6 +16812,18 @@ export default {
   'app.kuaizhizao.packingBinding.taskPoolColSource': '来源类型',
   'app.kuaizhizao.packingBinding.taskPoolFetchFailed': '获取待装箱任务池失败',
   'app.kuaizhizao.packingBinding.actionGoBind': '去绑定',
+  'app.kuaizhizao.packingBinding.actionScanSession': '扫码装箱',
+  'app.kuaizhizao.packingBinding.sessionTitle': '扫码装箱会话',
+  'app.kuaizhizao.packingBinding.sessionOpenBox': '开箱取号',
+  'app.kuaizhizao.packingBinding.sessionOpenSuccess': '已开箱，箱号 {{box}}',
+  'app.kuaizhizao.packingBinding.sessionOpenFailed': '开箱失败',
+  'app.kuaizhizao.packingBinding.sessionBoxNo': '当前箱号',
+  'app.kuaizhizao.packingBinding.sessionScanPlaceholder': '扫描或输入序列号后回车',
+  'app.kuaizhizao.packingBinding.sessionScan': '扫入',
+  'app.kuaizhizao.packingBinding.sessionSeal': '封箱',
+  'app.kuaizhizao.packingBinding.sessionSealed': '本箱已封箱',
+  'app.kuaizhizao.packingBinding.sealSuccess': '封箱成功',
+  'app.kuaizhizao.packingBinding.colSerialNo': '序列号',
   'app.kuaizhizao.packingBinding.fieldSourceItem': '来源明细',
   'app.kuaizhizao.packingBinding.placeholderSourceItem': '请选择来源明细',
   'app.kuaizhizao.packingBinding.ruleSelectSourceItem': '请选择来源明细',
@@ -13698,10 +16900,14 @@ export default {
   'app.kuaizhizao.workOrder.pull.cannotConvertWorkOrder': '当前不可直接转工单',
   'app.kuaizhizao.workOrder.pull.computationUnavailable': '该需求运算单当前不可用于创建工单',
   'app.kuaizhizao.workOrder.pull.selectComputation': '请选择{{source}}',
+  'app.kuaizhizao.workOrder.pull.demandPlanLinesLoadFailed': '加载计划生产开口行失败',
+  'app.kuaizhizao.workOrder.pull.salesOrderLinesLoadFailed': '加载销售订单开口行失败',
+  'app.kuaizhizao.workOrder.pull.salesForecastLinesLoadFailed': '加载销售预测明细失败',
+  'app.kuaizhizao.workOrder.pull.computationListLoadFailed': '加载需求计算取单列表失败',
   'app.kuaizhizao.workOrder.push.selectSplitChild': '已拆分主工单不可下推，请勾选拆分子工单',
   'app.kuaizhizao.workOrder.push.outboundStatusBlocked': '仅「已下达 / 执行中」工单可下推领料出库',
-  'app.kuaizhizao.workOrder.push.inboundStatusBlocked': '仅「已完成」工单可下推成品入库',
-  'app.kuaizhizao.workOrder.push.productionReturnStatusBlocked': '仅「已完成」工单可下推生产退料',
+  'app.kuaizhizao.workOrder.push.inboundStatusBlocked': '仅「执行中 / 已完成」工单可下推成品入库',
+  'app.kuaizhizao.workOrder.push.productionReturnStatusBlocked': '仅「执行中 / 已完成」工单可下推生产退料',
   'app.kuaizhizao.workOrder.push.finishedGoodsInspection': '从工单创建成品检验单',
   'app.kuaizhizao.workOrder.push.fqcStatusBlocked': '仅「已下达 / 执行中 / 已完成」工单可下推成品检验',
   'app.kuaizhizao.workOrder.push.fqcNoPermission': '无成品检验单创建权限',
@@ -13891,6 +17097,8 @@ export default {
   'app.kuaizhizao.timeconfig.field.maintenance_plan.created_at': '创建时间',
   'app.kuaizhizao.timeconfig.field.maintenance_execution.created_at': '创建时间',
   'app.kuaizhizao.timeconfig.field.equipment_repair.created_at': '创建时间',
+  'app.kuaizhizao.timeconfig.field.equipment_repair.started_at': '维修开始时间',
+  'app.kuaizhizao.timeconfig.field.equipment_repair.completed_at': '完修时间',
   'app.kuaizhizao.timeconfig.field.spare_part_requisition.created_at': '创建时间',
   'app.kuaizhizao.timeconfig.field.bom.approved_at': '审核时间',
   'app.kuaizhizao.timeconfig.field.bom.created_at': '创建时间',
@@ -13997,9 +17205,10 @@ export default {
   'app.kuaizhizao.workOrder.batchPicking.action': '批量下推领料',
   'app.kuaizhizao.workOrder.batchPicking.title': '批量下推生产领料',
   'app.kuaizhizao.workOrder.batchPicking.summary':
-    '已选 {{count}} 张工单，将合并生成一张生产领料单，明细按工单分段；须指定同一出库仓库。',
+    '已选 {{count}} 张工单，将合并生成一张生产领料单，明细按工单分段；出库仓库可在领料单中按行维护。',
   'app.kuaizhizao.workOrder.batchPicking.confirm': '下推领料',
   'app.kuaizhizao.workOrder.batchPicking.selectWorkOrdersFirst': '请至少选择一张生产工单',
+  'app.kuaizhizao.workOrder.batchPicking.submitting': '正在合并下推 {{count}} 张工单的生产领料…',
   'app.kuaizhizao.workOrder.batchPicking.warehouseRequired': '请选择出库仓库',
   'app.kuaizhizao.workOrder.batchPicking.noneCreated': '未能创建领料单，请检查工单状态与 BOM',
   'app.kuaizhizao.workOrder.batchPicking.partialSuccess':
@@ -14220,7 +17429,7 @@ export default {
   'app.kuaizhizao.workOrder.formDefaultMaterialRule': '默认使用物料规则',
   'app.kuaizhizao.workOrder.formEnterQualifiedQty': '请输入合格数量',
   'app.kuaizhizao.workOrder.formAllowOpJumpExtra':
-    '默认随所选工艺路线；可再修改。关闭时须按序报工且下道数量不超过上道；开启时路线中的节点工序仍不可跳过。',
+    '默认按优先级读取：物料产品工艺 > 物料分组产品工艺 > 工艺路线；开单后可再改。开启后可跳过前序直接开工/报工；关闭时须按序，前道须有可转下道合格数量。',
   'app.kuaizhizao.workOrder.formAttributes': '属性',
   'app.kuaizhizao.workOrder.formAttributesJsonFormatInvalid': '请输入有效的 JSON 格式',
   'app.kuaizhizao.workOrder.formAttributesJsonInvalid': '请输入有效的 JSON 对象，如 {"color":"red","size":"M"}',
@@ -14234,7 +17443,7 @@ export default {
   'app.kuaizhizao.workOrder.formExpandOpCards': '点击展开工序卡',
   'app.kuaizhizao.workOrder.formGroupName': '工单组名称',
   'app.kuaizhizao.workOrder.formGroupNamePlaceholder': '可选；未填则使用默认名称',
-  'app.kuaizhizao.workOrder.formLoadFromDemand': '从需求管理加载',
+  'app.kuaizhizao.workOrder.formLoadFromDemand': '从计划生产创建工单',
   'app.kuaizhizao.workOrder.formLoadFromSalesForecast': '从销售预测加载',
   'app.kuaizhizao.workOrder.formLoadFromSalesOrder': '从销售订单加载',
   'app.kuaizhizao.workOrder.formPlannedEndRequired': '请选择计划结束时间',
@@ -14268,6 +17477,24 @@ export default {
   'app.kuaizhizao.workOrder.formSerialQtyTooltip': '数量须与计划数量一致；留空则下达时按规则生成',
   'app.kuaizhizao.workOrder.formSerialRule': '序列号规则',
   'app.kuaizhizao.workOrder.formSerialTagsPlaceholder': '输入或预览生成，每件一个序列号',
+  'app.kuaizhizao.workOrder.formSerialEntryMode': '序列号录入方式',
+  'app.kuaizhizao.workOrder.formSerialEntryByRule': '按规则',
+  'app.kuaizhizao.workOrder.formSerialEntryManual': '手工输入',
+  'app.kuaizhizao.workOrder.formSerialManualPlaceholder': '逐件输入序列号，可用逗号或空格分隔',
+  'app.kuaizhizao.workOrder.formSerialRulePreviewPlaceholder': '可选：点预览生成填入，留空则下达时按规则占号',
+  'app.kuaizhizao.workOrder.formSerialRulePreviewHint': '预览仅用于查看规则结果；不填序列号时保存后可在下达时自动生成',
+  'app.kuaizhizao.workOrder.formTrackingPreviewGenerate': '预览生成',
+  'app.kuaizhizao.workOrder.msgSerialManualRequired': '手工录入须填写全部投产序列号',
+  'app.kuaizhizao.workOrder.msgSerialManualCountMismatch': '已录入 {{count}} 个序列号，须与计划数量 {{qty}} 一致',
+  'app.kuaizhizao.workOrder.msgSerialManualDuplicate': '投产序列号不能重复',
+  'app.kuaizhizao.workOrder.formSplitBySerial': '按投产序列号',
+  'app.kuaizhizao.workOrder.formSplitSerialNosLabel': '投产序列号（每件一张子工单）',
+  'app.kuaizhizao.workOrder.formSplitSerialNosPlaceholder': '输入本次要拆出的序列号，可用逗号或空格分隔',
+  'app.kuaizhizao.workOrder.formSplitSerialNosHint': '已选 {{selected}} 个，可拆 {{budget}} 件；每个序列号生成一张数量为 1 的子工单',
+  'app.kuaizhizao.workOrder.formSplitSerialIntegerOnly': '可拆数量须为整数，请改用按投产序列号拆分',
+  'app.kuaizhizao.workOrder.formSplitSerialAllocated': '已占用序列号：{{list}}',
+  'app.kuaizhizao.workOrder.msgSplitSerialRequired': '请至少填写一个投产序列号',
+  'app.kuaizhizao.workOrder.msgSplitSerialOverBudget': '序列号数量（{{count}}）不能大于可拆件数（{{budget}}）',
   'app.kuaizhizao.workOrder.formSourceOrderPlaceholder': '销售订单编号，如 XS202605280002',
   'app.kuaizhizao.workOrder.formCustomerNamePlaceholder': '按客户名称筛选',
   'app.kuaizhizao.workOrder.formTrackingBatch': '批号',
@@ -14440,9 +17667,37 @@ export default {
   'app.kuaizhizao.workOrder.modalAddOperation': '添加工序',
   'app.kuaizhizao.workOrder.modalBarcodePrintOperationLevel': '工序级',
   'app.kuaizhizao.workOrder.modalCreate': '新建工单',
+  'app.kuaizhizao.workOrder.formBomLinesSection': '子件明细',
+  'app.kuaizhizao.workOrder.formOperationsSection': '工序明细',
+  'app.kuaizhizao.workOrder.bomLineMaterialCode': '品号',
+  'app.kuaizhizao.workOrder.bomLineMaterialName': '品名',
+  'app.kuaizhizao.workOrder.bomLineSpec': '规格',
+  'app.kuaizhizao.workOrder.bomLineWarehouse': '仓库',
+  'app.kuaizhizao.workOrder.bomLineRequiredQty': '应发量',
+  'app.kuaizhizao.workOrder.bomLineIssuedQty': '已发量',
+  'app.kuaizhizao.workOrder.bomLineCurrentStock': '现有库存',
+  'app.kuaizhizao.workOrder.bomLineBatchNo': '批号',
+  'app.kuaizhizao.workOrder.bomLineBomVersion': '版本号',
+  'app.kuaizhizao.workOrder.bomLineRemarks': '行备注',
+  'app.kuaizhizao.workOrder.opColSequence': '序号',
+  'app.kuaizhizao.workOrder.opColOperation': '工序',
+  'app.kuaizhizao.workOrder.opColWorkshop': '车间',
+  'app.kuaizhizao.workOrder.opColEquipment': '设备',
+  'app.kuaizhizao.workOrder.opColWorkers': '作业人员',
+  'app.kuaizhizao.workOrder.opColStandardTime': '标准工时',
+  'app.kuaizhizao.workOrder.opColPieceRate': '工价',
+  'app.kuaizhizao.workOrder.opColWorkRequirement': '作业要求',
+  'app.kuaizhizao.workOrder.formWarehouse': '仓库',
+  'app.kuaizhizao.workOrder.formManufacturingDepartment': '生产部门',
+  'app.kuaizhizao.workOrder.formCustomer': '客户',
+  'app.kuaizhizao.workOrder.formCustomerOrderNo': '客户订单号',
+  'app.kuaizhizao.workOrder.formRequiredDate': '需求日',
+  'app.kuaizhizao.workOrder.formProductBomVersion': 'BOM版本',
+  'app.kuaizhizao.workOrder.formProductBomVersionLoadFailed': '成品BOM版本加载失败',
+  'app.kuaizhizao.workOrder.formDepartmentLoadFailed': '生产部门加载失败',
   'app.kuaizhizao.workOrder.modalEdit': '编辑工单',
   'app.kuaizhizao.workOrder.modalEditOperation': '编辑工序',
-  'app.kuaizhizao.workOrder.modalSelectProductSourceDemand': '选择需求 - 产品明细',
+  'app.kuaizhizao.workOrder.modalSelectProductSourceDemand': '选择计划生产 - 产品明细',
   'app.kuaizhizao.workOrder.modalSelectProductSourceGeneric': '选择 - 产品明细',
   'app.kuaizhizao.workOrder.modalSelectProductSourceSalesForecast': '选择销售预测 - 产品明细',
   'app.kuaizhizao.workOrder.modalSelectProductSourceSalesOrder': '选择销售订单 - 产品明细',
@@ -14537,7 +17792,7 @@ export default {
   'app.kuaizhizao.workOrder.msgWorkOrderIdMissingPreview': '工单ID缺失，无法预览',
   'app.kuaizhizao.workOrder.msgWorkOrderIdMissingPrint': '工单ID缺失，无法打印',
   'app.kuaizhizao.workOrder.searchOperationPlaceholder': '搜索工序编号/名称',
-  'app.kuaizhizao.workOrder.searchProductSourceDemand': '搜索需求编号/需求名称/产品/型号',
+  'app.kuaizhizao.workOrder.searchProductSourceDemand': '搜索计划编号/计划名称/产品/型号',
   'app.kuaizhizao.workOrder.searchProductSourceForecast': '搜索预测编号/预测名称/产品/型号',
   'app.kuaizhizao.workOrder.searchProductSourceGeneric': '请输入关键词搜索',
   'app.kuaizhizao.workOrder.searchProductSourceSalesOrder': '搜索订单号/客户/产品/型号',
@@ -14594,6 +17849,14 @@ export default {
   'app.kuaizhizao.workOrder.syncField.closeStatus': '结案状态',
   'app.kuaizhizao.workOrder.detailTitle': '工单详情 - {{code}}',
   'app.kuaizhizao.workOrder.entityName': '工单',
+  'app.kuaizhizao.workOrder.committed': '已提交',
+  'app.kuaizhizao.workOrder.copySelectedCreate': '复制选中单据新建',
+  'app.kuaizhizao.workOrder.selectToCopy': '请选中一张工单',
+  'app.kuaizhizao.workOrder.toolbar.withdrawSubmit': '撤销提交',
+  'app.kuaizhizao.workOrder.toolbar.submitReview': '提交审核',
+  'app.kuaizhizao.workOrder.toolbar.submitReviewNotAllowed': '仅已提交的工单可提交审核',
+  'app.kuaizhizao.workOrder.toolbar.withdrawReview': '撤回审核',
+  'app.kuaizhizao.workOrder.toolbar.revoke': '反审核',
   'app.kuaizhizao.workOrder.qrTitle': '工单二维码',
   'app.kuaizhizao.workOrder.priorityHigh': '高',
   'app.kuaizhizao.workOrder.priorityLow': '低',
@@ -14965,7 +18228,7 @@ export default {
   'app.kuaizhizao.demandComputation.createComputation': '创建需求运算',
   'app.kuaizhizao.demandComputation.pushDocuments': '从需求计算创建工单 / 采购单',
   'app.kuaizhizao.demandComputation.replanDashboard': '需求重算看板',
-  'app.kuaizhizao.demandComputation.confirmPush': '确认创建',
+  'app.kuaizhizao.demandComputation.confirmPush': '打开录入页',
   'app.kuaizhizao.demandComputation.pushPreviewFailed': '加载下推预览失败',
   'app.kuaizhizao.demandComputation.sourcePullPreviewFailed': '加载预览失败',
   'app.kuaizhizao.demandComputation.sourcePullPreviewSelectAtLeastOne': '请至少选择一条可加载明细',
@@ -15073,6 +18336,8 @@ export default {
   'app.kuaizhizao.demandComputation.pushProgressTooltip': '{{percent}}%（按建议下推数量）',
   'app.kuaizhizao.demandComputation.pushProgressNoNeedTooltip':
     '{{percent}}%（无需下推：净需求已被库存/在途冲抵或无建议数量）',
+  'app.kuaizhizao.demandComputation.pushNoProductionItems': '计算结果无生产/委外需求',
+  'app.kuaizhizao.demandComputation.pushNoPurchaseItems': '计算结果无采购需求',
   'app.kuaizhizao.demandComputation.capability.demand_computation.push.covered_by_supply':
     '净需求已被库存/在途冲抵，无需下推工单或采购；也不会展开 BOM 子件',
   'app.kuaizhizao.demandComputation.capability.demand_computation.push.no_suggested_qty':
@@ -15148,7 +18413,7 @@ export default {
   'app.kuaizhizao.demandComputation.netRequirementHow': '净需求如何算出',
   'app.kuaizhizao.demandComputation.sourceNoteFromSalesOrder': '从销售订单 {{code}} 创建',
   'app.kuaizhizao.demandComputation.sourceNoteFromSalesForecast': '从销售预测 {{code}} 创建',
-  'app.kuaizhizao.demandComputation.sourceNoteFromDemandPlan': '从需求计划 {{code}} 创建',
+  'app.kuaizhizao.demandComputation.sourceNoteFromDemandPlan': '从计划生产 {{code}} 创建',
   'app.kuaizhizao.demandComputation.copied': '已复制',
   'app.kuaizhizao.demandComputation.sourceLinkUnavailable': '无法打开来源单据详情',
   'app.kuaizhizao.demandComputation.sourceAndMore': '等{{count}}个',
@@ -15162,7 +18427,7 @@ export default {
   'app.kuaizhizao.demandComputation.fetchRecalcHistoryFailed': '获取重算历史失败',
   'app.kuaizhizao.demandComputation.fetchSnapshotFailed': '获取重算前快照失败',
   'app.kuaizhizao.demandComputation.loadPushConfigFailed': '加载下推配置失败',
-  'app.kuaizhizao.demandComputation.noAuditedDemands': '暂无已审核通过的需求，请先在需求管理中提交并审核需求',
+  'app.kuaizhizao.demandComputation.noAuditedDemands': '暂无已审核通过的计划，请先在计划生产中提交并审核',
   'app.kuaizhizao.demandComputation.loadDemandListFailed': '加载需求列表失败',
   'app.kuaizhizao.demandComputation.selectSource': '请选择{{source}}',
   'app.kuaizhizao.demandComputation.alreadyPushed': '该{{source}}已创建过{{target}}，请勿重复创建',
@@ -15174,8 +18439,10 @@ export default {
   'app.kuaizhizao.demandComputation.executeSuccess': '计算执行成功',
   'app.kuaizhizao.demandComputation.executeFailed': '计算执行失败',
   'app.kuaizhizao.demandComputation.readinessTitle': '补齐基础资料',
-  'app.kuaizhizao.demandComputation.readinessHint': '发现 {{count}} 项计算所需基础资料未维护，可在此补齐并回写物料主数据后继续。',
-  'app.kuaizhizao.demandComputation.readinessBlockingHint': '部分缺失项（如 BOM、工艺路线）必须在物料主数据或 BOM 设计中维护，不可跳过继续执行。',
+  'app.kuaizhizao.demandComputation.readinessHint':
+    '发现 {{count}} 项须先处理的结构性缺失，可在物料主数据或 BOM 设计中维护后继续；未填写的提前期、批量等参数无需在此补齐。',
+  'app.kuaizhizao.demandComputation.readinessBlockingHint':
+    '部分缺失项（如 BOM）须在物料主数据或 BOM 设计中维护，不可跳过继续执行；工艺路线及未填写的提前期、批量、库存参数不再强制补齐。',
   'app.kuaizhizao.demandComputation.analysisTitle': '计算结果分析 - {{code}}',
   'app.kuaizhizao.demandComputation.analysisTabResults': '计算结果 ({{count}})',
   'app.kuaizhizao.demandComputation.analysisTabMasterData': '基础资料 ({{count}})',
@@ -15230,6 +18497,10 @@ export default {
   'app.kuaizhizao.demandComputation.workOrderPushSuccess': '下推成功，已创建工单',
   'app.kuaizhizao.demandComputation.requisitionPushSuccess': '下推成功，已创建采购申请',
   'app.kuaizhizao.demandComputation.purchaseOrderPushSuccess': '下推成功，已创建采购订单',
+  'app.kuaizhizao.demandComputation.pushHandoffOneTargetAtATime':
+    '请分别下推生产与采购，以便打开对应单据录入页核对后保存',
+  'app.kuaizhizao.demandComputation.pushHandoffWorkOrderOpened':
+    '已打开{{target}}下推预览，请核对行项目后确认生成工单',
   'app.kuaizhizao.demandComputation.pushSelectAtLeastOne': '请至少选择一项下推内容',
   'app.kuaizhizao.demandComputation.pushFailed': '下推失败',
   'app.kuaizhizao.demandComputation.selectOneFirst': '请先选择一条需求计算',
@@ -15944,6 +19215,8 @@ export default {
   'app.kuaizhizao.equipmentDashboard.shortcut.spareParts': '备品备件',
   'app.kuaizhizao.equipmentDashboard.chart.statusNormal': '正常',
   'app.kuaizhizao.equipmentDashboard.chart.statusFault': '故障/维修',
+  'app.kuaizhizao.equipmentDashboard.todayTasksTitle': '今日待完成任务',
+  'app.kuaizhizao.equipmentDashboard.noTodayTasks': '今日暂无待完成项',
   'app.kuaizhizao.equipmentDashboard.todosTitle': '设备待办',
   'app.kuaizhizao.equipmentDashboard.spotChecksTitle': '待执行点检',
   'app.kuaizhizao.equipmentDashboard.spareLowStockTitle': '备件低库存',
@@ -16059,7 +19332,7 @@ export default {
   'app.kuaizhizao.warehouseReports.colOrderCode': '单号',
   'app.kuaizhizao.warehouseReports.colType': '类型',
   'app.kuaizhizao.warehouseReports.colBalanceQty': '结存数量',
-  'app.kuaizhizao.warehouseReports.balanceQtyTip': '结存数量按「物料+仓库」在查询期内滚动累计，非跨物料合计',
+  'app.kuaizhizao.warehouseReports.balanceQtyTip': '结存数量按「物料+仓库」含期初后在查询期内滚动累计，非跨物料合计；其他出库撤回计为入库回补',
   'app.kuaizhizao.warehouseReports.keyword': '关键词',
   'app.kuaizhizao.warehouseReports.keywordPlaceholder': '物料编码/名称、单号、仓库',
   'app.kuaizhizao.quality.reports.keywordPlaceholder': '检验单号、物料编码或名称',
@@ -16069,6 +19342,8 @@ export default {
   'app.kuaizhizao.warehouseReports.colStockQty': '库存数量',
   'app.kuaizhizao.warehouseReports.colLastMoveDate': '最后变动日',
   'app.kuaizhizao.warehouseReports.colAgeDays': '库龄(天)',
+  'app.kuaizhizao.warehouseReports.staleDaysOption': '≥{{days}}天',
+  'app.kuaizhizao.warehouseReports.staleDaysLabel': '库龄筛选',
   'app.kuaizhizao.warehouseReports.colTransferCode': '调拨单号',
   'app.kuaizhizao.warehouseReports.colFromWarehouse': '调出仓库',
   'app.kuaizhizao.warehouseReports.colToWarehouse': '调入仓库',
@@ -16084,6 +19359,39 @@ export default {
   // warehouse other inbound page
   // warehouse material return page
   'components.uniPull.loadFromDocument': '从单据加载',
+  'pages.dashboard.updateLog.entries.uni-pull-query-modal-width-r01.title': '取单弹窗加宽大档',
+  'pages.dashboard.updateLog.entries.uni-pull-query-modal-width-r01.description':
+    'UniPullQueryModal 默认宽度由 1200 调整为 1400（EXTRA_LARGE 档），减少宽表取单横向滚动。',
+  'pages.dashboard.updateLog.entries.pull-open-line-qty-col-order-r01.title': '取单数量列主副分组',
+  'pages.dashboard.updateLog.entries.pull-open-line-qty-col-order-r01.description':
+    '开口行取单数量列顺序改为主数量组（报价/已转/可取）在前、副数量组在后，便于对照主主副副阅读。',
+  'pages.dashboard.updateLog.entries.uni-pull-query-stacked-columns-r01.title': '取单弹窗来源与物料叠列',
+  'pages.dashboard.updateLog.entries.uni-pull-query-stacked-columns-r01.description':
+    '取单表将报价单号与客户、物料编码名称规格等并列列改为叠列展示，减少横向滚动；开口行取单统一走 buildPullQueryPartnerDocumentColumn 与 buildPullQueryMaterialIdentityColumn。',
+  'pages.dashboard.updateLog.entries.uni-pull-query-material-col-order-r01.title': '取单表物料列顺序统一',
+  'pages.dashboard.updateLog.entries.uni-pull-query-material-col-order-r01.description':
+    '开口行取单弹窗统一为物料编码、物料名称、规格相邻排列，当前库存插在规格之后；壳层自动插列与规格列工厂一并生效。',
+  'pages.dashboard.updateLog.entries.pull-open-line-pull-empty-dash-r01.title': '取单弹窗空值占位统一',
+  'pages.dashboard.updateLog.entries.pull-open-line-pull-empty-dash-r01.description':
+    '取单表规格、行备注、副数量等无值单元格统一为长横线占位，与全站 EMPTY_VALUE_PLACEHOLDER 一致，不再混用短横线。',
+  'pages.dashboard.updateLog.entries.pull-open-line-dual-qty-r03.title': '取单弹窗固定展示副数量列',
+  'pages.dashboard.updateLog.entries.pull-open-line-dual-qty-r03.description':
+    '开口行取单在报价数量、已转数量旁并列副单据数量、副已转数量等列，无副单位时显示占位符。',
+  'pages.dashboard.updateLog.entries.pull-open-line-dual-qty-r02.title': '取单弹窗副数量叠显修复',
+  'pages.dashboard.updateLog.entries.pull-open-line-dual-qty-r02.description':
+    '开口行取单在报价数量、已转数量等同列内叠显副单位数量；物料有辅助单位或行已录副数量时可见。',
+  'pages.dashboard.updateLog.entries.pull-open-line-dual-qty-r01.title': '取单开口行可看主副数量',
+  'pages.dashboard.updateLog.entries.pull-open-line-dual-qty-r01.description':
+    '数量开口行取单的「单据数量 / 已转 / 可取」支持主单位与副单位并列展示；可勾选仍按主数量剩余量判断。',
+  'components.uniPullQuery.openLineQty.suggested': '单据数量',
+  'components.uniPullQuery.openLineQty.pushed': '已转数量',
+  'components.uniPullQuery.openLineQty.remaining': '可取数量',
+  'components.uniPullQuery.openLineQty.auxSuggested': '副单据数量',
+  'components.uniPullQuery.openLineQty.auxPushed': '副已转数量',
+  'components.uniPullQuery.openLineQty.auxRemaining': '副可取数量',
+  'components.uniPullQuery.documentDateColumn': '单据日期',
+  'components.uniPullQuery.dateFromPlaceholder': '来源日期起',
+  'components.uniPullQuery.dateToPlaceholder': '来源日期止',
   'components.uniPullQuery.searchPlaceholder': '搜索单据编号、名称等',
   'components.uniPullQuery.empty': '暂无可选单据',
   'components.uniPullQuery.emptySearch': '未找到匹配单据',
@@ -16094,10 +19402,14 @@ export default {
   'components.uniPullQuery.crossPageLabel': '跨页选择',
   'components.uniPullQuery.crossPageOff': '仅本页',
   'components.uniPullQuery.crossPageOn': '跨页',
+  'components.collapsibleFormExtra.expand': '展开说明',
+  'components.collapsibleFormExtra.collapse': '收起',
   'components.uniPullQuery.selectedPreview': '已选',
   'components.uniPullQuery.selectedEmpty': '未选择',
   'components.uniPullQuery.clearSelection': '清除选择',
   'components.uniPullQuery.selectedUnlabeled': '未命名',
+  'components.uniPullQuery.multiSelectedFirstOnly':
+    '已按所选第一张来源打开；其余请再次取单',
   'app.kuaizhizao.purchaseRequisition.pull.selectLinesFirst': '请至少选择一条可下推采购件明细',
   'app.kuaizhizao.purchaseRequisition.pull.sourceDocPlaceholder': '按需求计算单筛选',
   'app.kuaizhizao.purchaseRequisition.pull.loadSourceFailed': '加载需求计算单失败',
@@ -16133,6 +19445,22 @@ export default {
   'app.kuaizhizao.purchaseReturn.pull.ok': '创建采购退货单',
   'app.kuaizhizao.purchaseReturn.pull.searchPlaceholder': '按物料编码/名称搜索',
   'app.kuaizhizao.purchaseReturn.pull.sourceDocPlaceholder': '按来源单据筛选',
+  'app.kuaizhizao.purchaseReturn.pull.receiptSourceDocPlaceholder': '按采购入库单筛选',
+  'app.kuaizhizao.purchaseReturn.pull.receiptDateColumn': '入库日期',
+  'app.kuaizhizao.warehouseInbound.action.pushPurchaseReturn': '下推采购退货',
+  'app.kuaizhizao.warehouseInbound.push.noActions': '当前采购入库单无可下推操作',
+  'app.kuaizhizao.warehouseInbound.push.returnNoPermission': '无采购退货新建权限',
+  'app.kuaizhizao.warehouseInbound.push.paymentApplicationNoPermission': '无付款申请新建权限',
+  'app.kuaizhizao.warehouseInbound.capability.purchase_receipt.push_purchase_return.not_posted':
+    '仅已入库的采购入库单可下推采购退货',
+  'app.kuaizhizao.warehouseInbound.capability.purchase_receipt.push_purchase_return.no_lines':
+    '采购入库单无可退货明细',
+  'app.kuaizhizao.warehouseInbound.capability.purchase_receipt.push_purchase_return.no_returnable':
+    '该入库单可退数量已全部占用',
+  'app.kuaizhizao.warehouseInbound.capability.purchase_receipt.push_payment_application.not_posted':
+    '仅已过账的采购入库可下推付款申请',
+  'app.kuaizhizao.warehouseInbound.capability.purchase_receipt.push_payment_application.no_open_amount':
+    '该入库应付无可请款余额',
   'app.kuaizhizao.receiptNotice.pull.loadSourceFailed': '加载采购订单失败',
   'app.kuaizhizao.receiptNotice.pull.ok': '创建收货通知单',
   'app.kuaizhizao.receiptNotice.pull.searchPlaceholder': '按物料编码/名称搜索',
@@ -16152,6 +19480,9 @@ export default {
   'app.kuaizhizao.warehouseInbound.pull.canCreate': '可创建',
   'app.kuaizhizao.warehouseInbound.pull.gateStatus': '可取单状态',
   'app.kuaizhizao.warehouseInbound.pull.po.ok': '创建采购入库单',
+  'app.kuaizhizao.warehouseInbound.pull.po.continueToEdit': '下一步',
+  'app.kuaizhizao.warehouseInbound.pull.po.composeHint':
+    '确认后将打开入库单编辑窗口，请在编辑窗口选择入库仓库、库位等信息后再保存创建。',
   'app.kuaizhizao.warehouseInbound.pull.po.sourceDocPlaceholder': '按采购订单筛选',
   'app.kuaizhizao.warehouseInbound.pull.po.loadSourceFailed': '加载采购订单失败',
   'app.kuaizhizao.warehouseInbound.pull.receiptNotice.ok': '创建采购入库单',
@@ -16184,6 +19515,15 @@ export default {
   'app.kuaizhizao.warehouseOutbound.pull.sn.ok': '创建销售出库单',
   'app.kuaizhizao.warehouseOutbound.pull.sn.sourceDocPlaceholder': '按发货通知单筛选',
   'app.kuaizhizao.warehouseOutbound.pull.snSelectLinesFirst': '请至少选择一条可出库明细',
+  'app.kuaizhizao.warehouseOutbound.pull.loadWarehouseFailed': '加载仓库列表失败',
+  'app.kuaizhizao.warehouseOutbound.pull.batchWarehousePlaceholder': '批量设出库仓',
+  'app.kuaizhizao.warehouseOutbound.pull.batchWarehouseNoLines': '请先勾选明细或加载可出库行后再批量设仓',
+  'app.kuaizhizao.warehouseOutbound.pull.batchWarehouseApplied': '已将 {{count}} 行出库仓库设置为同一仓库',
+  'app.kuaizhizao.warehouseOutbound.pull.warehouseHint': '创建前请为每行选择出库仓库；也可上方批量设仓',
+  'app.kuaizhizao.warehouseOutbound.pull.warehouseLocationHint':
+    '创建前请为每行选择出库仓库；有库位时请选库位，未划分库位的仓库将自动使用整仓',
+  'app.kuaizhizao.warehouseOutbound.pull.wholeLocationAuto': '整仓（自动）',
+  'app.kuaizhizao.warehouseOutbound.pull.selectWarehouseForMaterial': '请为物料 {{material}} 选择出库仓库',
   'app.kuaizhizao.warehouseOutbound.pull.os.ok': '创建委外发料单',
   'app.kuaizhizao.warehouseOutbound.pull.os.searchPlaceholder': '按物料编码/名称搜索',
   'app.kuaizhizao.warehouseOutbound.pull.os.selectLinesFirst': '请至少选择一条可发料明细',
@@ -16219,10 +19559,19 @@ export default {
   'app.kuaizhizao.documentAction.purchase_invoice.pull_from_purchase_order.label': '从采购订单创建采购发票',
   'app.kuaizhizao.documentAction.purchase_invoice.pull_from_purchase_order.source': '采购订单',
   'app.kuaizhizao.documentAction.purchase_invoice.pull_from_purchase_order.target': '采购发票',
+  'app.kuaizhizao.documentAction.purchase_invoice.pull_from_purchase_receipt.label': '从采购入库创建采购发票',
+  'app.kuaizhizao.documentAction.purchase_invoice.pull_from_purchase_receipt.source': '采购入库',
+  'app.kuaizhizao.documentAction.purchase_invoice.pull_from_purchase_receipt.target': '采购发票',
+  'app.kuaizhizao.documentAction.purchase_invoice.pull_from_payable.label': '从应付单创建采购发票',
+  'app.kuaizhizao.documentAction.purchase_invoice.pull_from_payable.source': '应付单',
+  'app.kuaizhizao.documentAction.purchase_invoice.pull_from_payable.target': '采购发票',
+  'app.kuaizhizao.documentAction.purchase_invoice.pull_from_partner_statement.label': '从往来对账单创建采购发票',
+  'app.kuaizhizao.documentAction.purchase_invoice.pull_from_partner_statement.source': '往来对账单',
+  'app.kuaizhizao.documentAction.purchase_invoice.pull_from_partner_statement.target': '采购发票',
   'app.kuaizhizao.documentAction.payment_application.pull_from_payable.label': '从应付单创建付款申请单',
   'app.kuaizhizao.documentAction.payment_application.pull_from_payable.source': '应付单',
   'app.kuaizhizao.documentAction.payment_application.pull_from_payable.target': '付款申请单',
-  'app.kuaizhizao.documentAction.payment_application.pull_from_purchase_order.label': '从采购订单预付创建付款申请单',
+  'app.kuaizhizao.documentAction.payment_application.pull_from_purchase_order.label': '从采购订单创建付款申请单',
   'app.kuaizhizao.documentAction.payment_application.pull_from_purchase_order.source': '采购订单',
   'app.kuaizhizao.documentAction.payment_application.pull_from_purchase_order.target': '付款申请单',
   'app.kuaizhizao.documentAction.payment_application.pull_from_purchase_receipt.label': '从采购入库单创建付款申请单',
@@ -16243,6 +19592,9 @@ export default {
   'app.kuaizhizao.documentAction.purchase_return.pull_from_purchase_order.label': '从采购订单创建采购退货单',
   'app.kuaizhizao.documentAction.purchase_return.pull_from_purchase_order.source': '采购订单',
   'app.kuaizhizao.documentAction.purchase_return.pull_from_purchase_order.target': '采购退货单',
+  'app.kuaizhizao.documentAction.purchase_return.pull_from_purchase_receipt.label': '从采购入库单创建采购退货单',
+  'app.kuaizhizao.documentAction.purchase_return.pull_from_purchase_receipt.source': '采购入库单',
+  'app.kuaizhizao.documentAction.purchase_return.pull_from_purchase_receipt.target': '采购退货单',
   'app.kuaizhizao.documentAction.purchase_order.pull_from_requisition.label': '从采购申请创建采购订单',
   'app.kuaizhizao.documentAction.purchase_order.pull_from_requisition.source': '采购申请',
   'app.kuaizhizao.documentAction.purchase_order.pull_from_requisition.target': '采购订单',
@@ -16264,6 +19616,15 @@ export default {
   'app.kuaizhizao.documentAction.sales_invoice.pull_from_sales_order.label': '从销售订单创建销售发票',
   'app.kuaizhizao.documentAction.sales_invoice.pull_from_sales_order.source': '销售订单',
   'app.kuaizhizao.documentAction.sales_invoice.pull_from_sales_order.target': '销售发票',
+  'app.kuaizhizao.documentAction.sales_invoice.pull_from_sales_delivery.label': '从销售出库创建销售发票',
+  'app.kuaizhizao.documentAction.sales_invoice.pull_from_sales_delivery.source': '销售出库',
+  'app.kuaizhizao.documentAction.sales_invoice.pull_from_sales_delivery.target': '销售发票',
+  'app.kuaizhizao.documentAction.sales_invoice.pull_from_receivable.label': '从应收单创建销售发票',
+  'app.kuaizhizao.documentAction.sales_invoice.pull_from_receivable.source': '应收单',
+  'app.kuaizhizao.documentAction.sales_invoice.pull_from_receivable.target': '销售发票',
+  'app.kuaizhizao.documentAction.sales_invoice.pull_from_partner_statement.label': '从往来对账单创建销售发票',
+  'app.kuaizhizao.documentAction.sales_invoice.pull_from_partner_statement.source': '往来对账单',
+  'app.kuaizhizao.documentAction.sales_invoice.pull_from_partner_statement.target': '销售发票',
   'app.kuaizhizao.documentAction.sales_delivery.pull_from_sales_order.label': '从销售订单创建销售出库单',
   'app.kuaizhizao.documentAction.sales_delivery.pull_from_sales_order.source': '销售订单',
   'app.kuaizhizao.documentAction.sales_delivery.pull_from_sales_order.target': '销售出库单',
@@ -16300,9 +19661,6 @@ export default {
   'app.kuaizhizao.documentAction.incoming_inspection.pull_from_customer_material_registration.label': '从客户来料登记创建来料检验单',
   'app.kuaizhizao.documentAction.incoming_inspection.pull_from_customer_material_registration.source': '客户来料登记',
   'app.kuaizhizao.documentAction.incoming_inspection.pull_from_customer_material_registration.target': '来料检验单',
-  'app.kuaizhizao.documentAction.incoming_inspection.pull_from_outsource_material_receipt.label': '从委外收货创建来料检验单',
-  'app.kuaizhizao.documentAction.incoming_inspection.pull_from_outsource_material_receipt.source': '委外收货',
-  'app.kuaizhizao.documentAction.incoming_inspection.pull_from_outsource_material_receipt.target': '来料检验单',
   'app.kuaizhizao.documentAction.process_inspection.pull_from_work_order.label': '从工单创建过程检验单',
   'app.kuaizhizao.documentAction.process_inspection.pull_from_work_order.source': '工单',
   'app.kuaizhizao.documentAction.process_inspection.pull_from_work_order.target': '过程检验单',
@@ -16333,15 +19691,23 @@ export default {
   'app.kuaizhizao.documentAction.demand_computation.pull_from_sales_forecast.label': '从销售预测创建需求计算',
   'app.kuaizhizao.documentAction.demand_computation.pull_from_sales_forecast.source': '销售预测',
   'app.kuaizhizao.documentAction.demand_computation.pull_from_sales_forecast.target': '需求计算',
-  'app.kuaizhizao.documentAction.demand_computation.pull_from_demand.label': '从需求创建需求计算',
-  'app.kuaizhizao.documentAction.demand_computation.pull_from_demand.source': '需求',
+  'app.kuaizhizao.documentAction.demand_computation.pull_from_demand.label': '从计划生产中创建需求计算',
+  'app.kuaizhizao.documentAction.demand_computation.pull_from_demand.source': '计划生产',
   'app.kuaizhizao.documentAction.demand_computation.pull_from_demand.target': '需求计算',
+  'app.kuaizhizao.demandComputation.pull.colPlanDate': '计划日期',
+  'app.kuaizhizao.demandComputation.pull.colBomVersion': '配方号',
+  'app.kuaizhizao.demandComputation.pull.colWarehouse': '仓库',
+  'app.kuaizhizao.demandComputation.pull.colAnalyzedQty': '已分析数量',
+  'app.kuaizhizao.demandComputation.pull.colTransferredQty': '已转单数量',
   'app.kuaizhizao.documentAction.demand_computation.pull_from_sales_order.label': '从销售订单创建需求计算',
   'app.kuaizhizao.documentAction.demand_computation.pull_from_sales_order.source': '销售订单',
   'app.kuaizhizao.documentAction.demand_computation.pull_from_sales_order.target': '需求计算',
   'app.kuaizhizao.documentAction.work_order.pull_from_demand_computation.label': '从需求计算创建工单',
   'app.kuaizhizao.documentAction.work_order.pull_from_demand_computation.source': '需求计算',
   'app.kuaizhizao.documentAction.work_order.pull_from_demand_computation.target': '工单',
+  'app.kuaizhizao.documentAction.work_order.pull_from_demand_plan.label': '从计划生产创建工单',
+  'app.kuaizhizao.documentAction.work_order.pull_from_demand_plan.source': '计划生产',
+  'app.kuaizhizao.documentAction.work_order.pull_from_demand_plan.target': '工单',
   'app.kuaizhizao.documentAction.purchase_order.pull_from_demand_computation.label': '从需求计算创建采购单',
   'app.kuaizhizao.documentAction.purchase_order.pull_from_demand_computation.source': '需求计算',
   'app.kuaizhizao.documentAction.purchase_order.pull_from_demand_computation.target': '采购单',
@@ -16351,6 +19717,9 @@ export default {
   'app.kuaizhizao.documentAction.work_order.pull_from_sales_order.label': '从销售订单创建工单',
   'app.kuaizhizao.documentAction.work_order.pull_from_sales_order.source': '销售订单',
   'app.kuaizhizao.documentAction.work_order.pull_from_sales_order.target': '工单',
+  'app.kuaizhizao.documentAction.work_order.pull_from_sales_forecast.label': '从销售预测创建工单',
+  'app.kuaizhizao.documentAction.work_order.pull_from_sales_forecast.source': '销售预测',
+  'app.kuaizhizao.documentAction.work_order.pull_from_sales_forecast.target': '工单',
   'app.kuaizhizao.documentAction.work_order.pull_from_sales_contract.label': '从框架合同创建工单',
   'app.kuaizhizao.documentAction.work_order.pull_from_sales_contract.source': '框架合同',
   'app.kuaizhizao.documentAction.work_order.pull_from_sales_contract.target': '工单',
@@ -16388,6 +19757,80 @@ export default {
   'app.kuaizhizao.documentAction.inbound.pull_from_work_order_for_production_return.source': '工单',
   'app.kuaizhizao.documentAction.inbound.pull_from_work_order_for_production_return.target': '生产退料单',
   'app.kuaizhizao.warehouseInbound.title': '入库管理',
+  'app.kuaizhizao.warehouseInbound.createPurchaseReceipt': '新建采购入库单',
+  'app.kuaizhizao.warehouseInbound.createPurchaseReceiptModal': '新建采购入库单',
+  'app.kuaizhizao.warehouseInbound.purchaseReceiptEntity': '采购入库单',
+  'app.kuaizhizao.warehouseInbound.committed': '已提交',
+  'app.kuaizhizao.warehouseInbound.copySelectedCreate': '复制选中单据新建',
+  'app.kuaizhizao.warehouseInbound.selectToCopy': '请选择一条采购入库单',
+  'app.kuaizhizao.warehouseInbound.toolbar.withdrawSubmit': '撤销提交',
+  'app.kuaizhizao.warehouseInbound.toolbar.submitReview': '提交审核',
+  'app.kuaizhizao.warehouseInbound.toolbar.submitReviewNotAllowed': '所选采购入库单不能提交审核',
+  'app.kuaizhizao.warehouseInbound.toolbar.withdrawReview': '撤回审核',
+  'app.kuaizhizao.warehouseInbound.toolbar.revoke': '反审核',
+  'app.kuaizhizao.warehouseOutbound.toolbar.withdrawSubmit': '撤销提交',
+  'app.kuaizhizao.warehouseOutbound.toolbar.submitReview': '提交审核',
+  'app.kuaizhizao.warehouseOutbound.toolbar.submitReviewNotAllowed': '所选销售出库单不能提交审核',
+  'app.kuaizhizao.warehouseOutbound.toolbar.withdrawReview': '撤回审核',
+  'app.kuaizhizao.warehouseOutbound.toolbar.revoke': '反审核',
+  'app.kuaizhizao.warehouseInbound.capability.purchase_receipt.confirm.not_audited': '采购入库单须审核通过后才能确认入库',
+  'app.kuaizhizao.warehouseInbound.capability.purchase_receipt.submit.not_draft': '仅草稿或已驳回可提交',
+  'app.kuaizhizao.warehouseInbound.capability.purchase_receipt.submit.no_items': '采购入库单无明细，无法提交',
+  'app.kuaizhizao.warehouseInbound.capability.purchase_receipt.submit_review.not_allowed':
+    '请先提交采购入库单，再提交审核',
+  'app.kuaizhizao.warehouseInbound.capability.purchase_receipt.update.submitted': '已提交的采购入库单不可编辑，请先撤销提交',
+  'app.kuaizhizao.warehouseInbound.capability.purchase_receipt.update.not_draft': '当前审核状态不可编辑',
+  'app.kuaizhizao.warehouseInbound.capability.purchase_receipt.delete.submitted': '已提交的采购入库单不可删除，请先撤销提交',
+  'app.kuaizhizao.warehouseInbound.createFinishedGoodsReceipt': '新建成品入库单',
+  'app.kuaizhizao.warehouseInbound.createFinishedGoodsReceiptModal': '新建成品入库单',
+  'app.kuaizhizao.warehouseInbound.editFinishedGoodsReceiptModal': '编辑成品入库单',
+  'app.kuaizhizao.warehouseInbound.createSemiFinishedGoodsReceipt': '新建半成品入库单',
+  'app.kuaizhizao.warehouseInbound.createSemiFinishedGoodsReceiptModal': '新建半成品入库单',
+  'app.kuaizhizao.warehouseInbound.editSemiFinishedGoodsReceiptModal': '编辑半成品入库单',
+  'app.kuaizhizao.warehouseInbound.msg.needValidFinishedGoodsLine': '请至少填写一行有效入库明细（物料与数量）',
+  'app.kuaizhizao.warehouseInbound.msg.finishedGoodsBlankCreated': '成品入库单已创建',
+  'app.kuaizhizao.warehouseInbound.msg.semiFinishedGoodsBlankCreated': '半成品入库单已创建',
+  'app.kuaizhizao.warehouseInbound.editPurchaseReceiptModal': '编辑采购入库单',
+  'app.kuaizhizao.warehouseInbound.composePurchaseReceiptModal': '编辑采购入库单',
+  'app.kuaizhizao.warehouseInbound.action.continueToEditPurchaseReceipt': '下一步：编辑入库单',
+  'app.kuaizhizao.warehouseInbound.poCompose.defaultNotes': '从采购订单 {{code}} 下推生成',
+  'app.kuaizhizao.warehouseInbound.createLinesTitle': '入库明细',
+  'app.kuaizhizao.warehouseInbound.selectSupplier': '请选择供应商',
+  'app.kuaizhizao.warehouseInbound.selectSupplierOptional': '可选，请选择供应商',
+  'app.kuaizhizao.warehouseInbound.selectSupplierRequired': '请选择供应商',
+  'app.kuaizhizao.warehouseInbound.field.buyer': '采购员',
+  'app.kuaizhizao.warehouseInbound.field.buyerPlaceholder': '请选择采购员',
+  'app.kuaizhizao.warehouseInbound.field.buyerOperatorNumber': '采购员工号',
+  'app.kuaizhizao.warehouseInbound.field.buyerOperatorNumberPlaceholder': '如 ID-000081',
+  'app.kuaizhizao.warehouseInbound.field.buyerOperatorNumberExtra':
+    '金蝶供应链业务员编码；外推优先用此工号，未填则用业务配置缺省',
+  'app.kuaizhizao.warehouseInbound.field.acceptor': '验收人',
+  'app.kuaizhizao.warehouseInbound.field.acceptorPlaceholder': '请选择验收人',
+  'app.kuaizhizao.warehouseInbound.field.payMode': '付款方式',
+  'app.kuaizhizao.warehouseInbound.field.payModeRequired': '请选择付款方式',
+  'app.kuaizhizao.warehouseInbound.field.billType': '单据类型',
+  'app.kuaizhizao.warehouseInbound.field.billTypePlaceholder': '选择或新增单据类型',
+  'app.kuaizhizao.warehouseInbound.field.bizType': '业务类型',
+  'app.kuaizhizao.warehouseInbound.field.bizTypePlaceholder': '默认 110（物料类采购）',
+  'app.kuaizhizao.warehouseInbound.field.bizTypeTip': '对方业务类型编码，默认物料类采购 110；可在单据或接口管理默认值中改',
+  'app.kuaizhizao.warehouseInbound.field.invScheme': '库存事务',
+  'app.kuaizhizao.warehouseInbound.field.invSchemePlaceholder': '默认 110（普通采购入库）',
+  'app.kuaizhizao.warehouseInbound.field.invSchemeTip': '对方库存事务编码，默认普通采购入库 110；可在单据或接口管理默认值中改',
+  'app.kuaizhizao.warehouseInbound.field.orgNumber': '库存组织编码',
+  'app.kuaizhizao.warehouseInbound.field.orgNumberPlaceholder': '对方库存组织编码',
+  'app.kuaizhizao.warehouseInbound.field.orgNumberTip':
+    '空则用接口管理默认值或连接器组织编码；推送时单据填写优先',
+  'app.kuaizhizao.warehouseInbound.field.bizOrgNumber': '采购组织编码',
+  'app.kuaizhizao.warehouseInbound.field.bizOrgNumberPlaceholder': '对方采购组织编码',
+  'app.kuaizhizao.warehouseInbound.field.bizOrgNumberTip':
+    '空则跟库存组织或接口管理默认值；推送时单据填写优先',
+  'app.kuaizhizao.warehouseInbound.field.taxRate': '税率%',
+  'app.kuaizhizao.warehouseInbound.field.taxRateRequired': '请填写税率',
+  'app.kuaizhizao.warehouseInbound.field.currency': '币别',
+  'app.kuaizhizao.warehouseInbound.field.currencyRequired': '请填写币别',
+  'app.kuaizhizao.warehouseInbound.payMode.credit': '赊购',
+  'app.kuaizhizao.warehouseInbound.payMode.cash': '现金',
+  'app.kuaizhizao.warehouseInbound.selectWarehouse': '请选择入库仓库',
   'app.kuaizhizao.warehouseInbound.fallbackDoc': '入库单',
   'app.kuaizhizao.warehouseInbound.fallbackProductionReturnDoc': '生产退料单',
   'app.kuaizhizao.warehouseInbound.receiptType.purchase': '采购入库',
@@ -16472,6 +19915,8 @@ export default {
   'app.kuaizhizao.warehouseInbound.col.batchNumber': '批次号',
   'app.kuaizhizao.warehouseInbound.col.serialNo': '序列号',
   'app.kuaizhizao.warehouseInbound.col.unitPrice': '单价',
+  'app.kuaizhizao.warehouseInbound.col.lineInclUnitPrice': '价税合计',
+  'app.kuaizhizao.warehouseInbound.col.lineAmountTotal': '金额合计',
   'app.kuaizhizao.warehouseInbound.col.amount': '金额',
   'app.kuaizhizao.warehouseInbound.col.returnQty': '退料数量',
   'app.kuaizhizao.warehouseInbound.col.warehouseName': '仓库',
@@ -16517,6 +19962,7 @@ export default {
   'app.kuaizhizao.warehouseInbound.col.linkedReceipt': '关联入库单',
   'app.kuaizhizao.warehouseInbound.col.convertStatus': '转单状态',
   'app.kuaizhizao.warehouseInbound.col.workOrderCode': '工单号',
+  'app.kuaizhizao.warehouseInbound.col.workOrderQty': '工单数量',
   'app.kuaizhizao.warehouseInbound.col.product': '产品',
   'app.kuaizhizao.warehouseInbound.col.sourceSalesOrder': '源销售订单',
   'app.kuaizhizao.warehouseInbound.col.workOrderStatus': '工单状态',
@@ -16532,6 +19978,7 @@ export default {
   'app.kuaizhizao.warehouseInbound.col.issuedQty': '已发料',
   'app.kuaizhizao.warehouseInbound.col.pendingOutsourceReceipt': '待收货',
   'app.kuaizhizao.warehouseInbound.action.confirmInbound': '确认入库',
+  'app.kuaizhizao.warehouseInbound.action.pushExternal': '推送',
   'app.kuaizhizao.warehouseInbound.action.confirmReturn': '确认退料',
   'app.kuaizhizao.warehouseInbound.action.withdrawInbound': '撤回入库',
   'app.kuaizhizao.warehouseInbound.action.withdrawReturn': '撤回退料',
@@ -16542,9 +19989,11 @@ export default {
   'app.kuaizhizao.warehouseInbound.action.inbound': '入库',
   'app.kuaizhizao.warehouseInbound.action.openReceipt': '开入库单',
   'app.kuaizhizao.warehouseInbound.action.generateDraft': '生成草稿',
+  'app.kuaizhizao.warehouseInbound.action.generateBatchNo': '按物料批号规则生成',
   'app.kuaizhizao.warehouseInbound.action.uploadAttachments': '上传附件',
   'app.kuaizhizao.warehouseInbound.action.batch': '批量',
   'app.kuaizhizao.warehouseInbound.action.applyToAllLines': '应用到全部明细',
+  'app.kuaizhizao.warehouseInbound.action.loadLinesFromWorkOrder': '从工单加载明细',
   'app.kuaizhizao.warehouseInbound.section.basicInfo': '基本信息',
   'app.kuaizhizao.warehouseInbound.section.lifecycle': '生命周期',
   'app.kuaizhizao.warehouseInbound.section.iqc': '来料检验 (IQC)',
@@ -16573,6 +20022,7 @@ export default {
   'app.kuaizhizao.warehouseInbound.field.orderStatus': '订单状态',
   'app.kuaizhizao.warehouseInbound.field.currency': '币种',
   'app.kuaizhizao.warehouseInbound.field.receiptDate': '入库日期',
+  'app.kuaizhizao.warehouseInbound.field.receiptDateRequired': '请选择入库日期',
   'app.kuaizhizao.warehouseInbound.field.documentDate': '制单日期',
   'app.kuaizhizao.warehouseInbound.field.receiver': '入库人',
   'app.kuaizhizao.warehouseInbound.field.defaultWarehouse': '默认入库仓库',
@@ -16617,6 +20067,7 @@ export default {
   'app.kuaizhizao.warehouseInbound.field.selectPicking': '请选择领料单',
   'app.kuaizhizao.warehouseInbound.field.selectReceiver': '请选择{{label}}',
   'app.kuaizhizao.warehouseInbound.field.selectWarehouseFirst': '先选仓库',
+  'app.kuaizhizao.warehouseInbound.field.selectLocation': '请选择库位',
   'app.kuaizhizao.warehouseInbound.field.applyToAllLines': '请选择，将应用到全部明细',
   'app.kuaizhizao.warehouseInbound.field.loading': '加载中…',
   'app.kuaizhizao.warehouseInbound.detail.title': '入库单详情',
@@ -16626,12 +20077,21 @@ export default {
   'app.kuaizhizao.warehouseInbound.detail.noAttachments': '暂无附件',
   'app.kuaizhizao.warehouseInbound.detail.attachmentFallback': '附件',
   'app.kuaizhizao.warehouseInbound.detail.serialCount': '{{count}} 个',
+  'app.kuaizhizao.warehouseInbound.detail.externalPushStatus': '外推状态',
+  'app.kuaizhizao.warehouseInbound.detail.externalPushNotYet':
+    '尚未外推到金蝶。确认入库后若已绑定自动推送会自动外推；也可在列表功能区用「同步」手动推送。',
+  'app.kuaizhizao.warehouseInbound.detail.externalPushStatusHint':
+    '已有外推记录时，可在列表功能区「同步」中勾选单据再次推送（会在金蝶新建单据并记录二次推送）。失败原因会出现在确认入库后的提示或下方操作记录中。',
   'app.kuaizhizao.warehouseInbound.confirmPreview.titleInbound': '确认入库预览',
   'app.kuaizhizao.warehouseInbound.confirmPreview.titleReturn': '确认退料预览',
   'app.kuaizhizao.warehouseInbound.confirmPreview.description': '请逐行核对入库仓库、库位（可选）、批号与序列号（如物料启用管理）及明细数量后再确认；确认后将按行更新库存。',
   'app.kuaizhizao.warehouseInbound.simpleConfirmPreview.description': '请核对明细数量与仓库信息后再确认。',
   'app.kuaizhizao.warehouseInbound.capability.inbound_hub.confirm.not_pending': '当前状态不可确认入库',
   'app.kuaizhizao.warehouseInbound.capability.inbound_hub.confirm.use_single_preview': '委外退料/退货请使用单行确认预览',
+  'app.kuaizhizao.warehouseInbound.capability.inbound_hub.confirm.outsource_already_posted':
+    '委外退料/退货已在取单建单时过账，无需在入库 Hub 再次确认',
+  'app.kuaizhizao.warehouseInbound.capability.inbound_hub.confirm.outsource_use_pull_entry':
+    '委外退料/退货请在委外取单页保存并确认，Hub 不支持二次确认',
   'app.kuaizhizao.warehouseInbound.capability.customer_material.confirm.not_pending': '只有待入库状态的代工来料单才能确认入库',
   'app.kuaizhizao.warehouseInbound.confirm.customerMaterial.title': '确认代工来料入库',
   'app.kuaizhizao.warehouseInbound.confirm.customerMaterial.content': '确定确认入库单据「{{code}}」吗？',
@@ -16668,17 +20128,32 @@ export default {
   'app.kuaizhizao.warehouseInbound.msg.unsupportedReceiptType': '不支持的单据类型',
   'app.kuaizhizao.warehouseInbound.msg.noInboundLines': '暂无可入库明细',
   'app.kuaizhizao.warehouseInbound.msg.selectWarehouseForMaterial': '请为物料 {{material}} 选择入库仓库',
+  'app.kuaizhizao.warehouseInbound.msg.selectLocationForMaterial': '请为物料 {{material}} 选择库位',
   'app.kuaizhizao.warehouseInbound.msg.checkLines': '请检查明细',
   'app.kuaizhizao.warehouseInbound.msg.lineCountMismatch': '保存后明细行数不一致，请关闭预览后重试',
   'app.kuaizhizao.warehouseInbound.msg.lineIdAbnormal': '保存后明细 id 异常，请关闭预览后重试',
   'app.kuaizhizao.warehouseInbound.msg.returnConfirmSuccess': '退料确认成功，库存已更新',
   'app.kuaizhizao.warehouseInbound.msg.inboundConfirmSuccess': '入库确认成功，库存已更新',
+  'app.kuaizhizao.warehouseInbound.msg.externalPushFailedTitle': '外推失败',
+  'app.kuaizhizao.warehouseInbound.msg.externalPushSuccess': '推送成功',
+  'app.kuaizhizao.warehouseInbound.msg.externalPushSkipped': '已跳过推送：{{reason}}',
+  'app.kuaizhizao.warehouseInbound.msg.externalPushRepushTitle': '重新推送确认',
+  'app.kuaizhizao.warehouseInbound.msg.externalPushRepushConfirm':
+    '{{reason}}。确认后将在金蝶新建采购入库单，并在本单操作记录中标记「二次推送」。',
+  'app.kuaizhizao.warehouseInbound.msg.externalPushRepushSuccess': '重新推送成功（已记录二次推送）',
+  'app.kuaizhizao.warehouseInbound.action.repush': '重新推送',
+  'app.kuaizhizao.warehouseInbound.msg.externalPushNeedTarget':
+    '请先在「数据互通」添加推送目标（连接器 + 采购入库单新增接口）',
+  'app.kuaizhizao.warehouseInbound.msg.externalPushNeedConfirmFirst': '请先确认入库后再推送',
+  'app.kuaizhizao.warehouseInbound.msg.externalPushFailed': '推送失败：{{reason}}',
   'app.kuaizhizao.warehouseInbound.msg.confirmFailed': '确认失败',
   'app.kuaizhizao.warehouseInbound.msg.customerMaterialConfirmed': '代工来料已确认入库',
   'app.kuaizhizao.warehouseInbound.msg.salesReturnConfirmed': '销售退货已确认入库',
   'app.kuaizhizao.warehouseInbound.msg.otherInboundConfirmed': '其他入库已确认',
   'app.kuaizhizao.warehouseInbound.msg.materialReturnConfirmed': '还料单已确认入库',
   'app.kuaizhizao.warehouseInbound.msg.outsourceReceiptConfirmed': '委外收货已确认入库',
+  'app.kuaizhizao.warehouseInbound.msg.outsourceMaterialReturnConfirmed': '委外退料已入库（{{count}} 张）',
+  'app.kuaizhizao.warehouseInbound.msg.outsourceProductReturnConfirmed': '委外退货已处理（{{count}} 张）',
   'app.kuaizhizao.warehouseInbound.msg.useConfirmPreviewForOutsource': '委外退料/退货请使用确认入库预览',
   'app.kuaizhizao.warehouseInbound.iqc.ensureBlocked.title': '需先完成来料检验',
   'app.kuaizhizao.warehouseInbound.iqc.ensureBlocked.content':
@@ -16696,12 +20171,16 @@ export default {
   'app.kuaizhizao.warehouseInbound.msg.withdrawInboundSuccess': '已撤回入库，库存已冲减',
   'app.kuaizhizao.warehouseInbound.msg.withdrawUnsupportedType': '当前单据类型「{{type}}」暂不支持撤回入库',
   'app.kuaizhizao.warehouseInbound.msg.withdrawFailed': '撤回失败',
+  'app.kuaizhizao.warehouseInbound.msg.needValidPurchaseLine': '请至少添加一行有效明细（物料与入库数量）',
   'app.kuaizhizao.warehouseInbound.msg.loadListFailed': '获取入库单列表失败',
   'app.kuaizhizao.warehouseInbound.msg.loadListPartialFailed': '部分入库单来源加载失败，列表可能不完整',
   'app.kuaizhizao.warehouseInbound.msg.batchDeleteSuccess': '成功删除 {{count}} 条记录',
   'app.kuaizhizao.warehouseInbound.msg.loadUsersFailed': '加载人员列表失败，请稍后重试',
   'app.kuaizhizao.warehouseInbound.msg.selectReceiverRequired': '请选择入库人',
   'app.kuaizhizao.warehouseInbound.msg.selectDocumentDateRequired': '请选择制单日期',
+  'app.kuaizhizao.warehouseInbound.msg.selectWorkOrderFirst': '请先选择工单',
+  'app.kuaizhizao.warehouseInbound.msg.workOrderLinesLoaded': '已从工单加载入库明细',
+  'app.kuaizhizao.warehouseInbound.msg.workOrderLinesLoadEmpty': '所选工单无可入库明细',
   'app.kuaizhizao.warehouseInbound.msg.noLinesToSetWarehouse': '没有可设置的明细行',
   'app.kuaizhizao.warehouseInbound.msg.batchWarehouseApplied': '已将 {{count}} 行入库仓库设置为同一仓库',
   'app.kuaizhizao.warehouseInbound.batchConfirm.loadDetailFailed': '加载单据详情失败',
@@ -16724,6 +20203,7 @@ export default {
   'app.kuaizhizao.warehouseInbound.pull.po.selectAtLeastOne': '请选择至少一个采购订单',
   'app.kuaizhizao.warehouseInbound.pull.po.allCompleted': '所选采购订单均已入库完成，无可取单数量',
   'app.kuaizhizao.warehouseInbound.pull.po.selectOnlyOne': '入库请仅选择一个采购订单',
+  'app.kuaizhizao.warehouseInbound.pull.po.sameSupplierRequired': '合并入库须为同一供应商',
   'app.kuaizhizao.warehouseInbound.pull.po.loadFailed': '加载采购订单失败',
   'app.kuaizhizao.warehouseInbound.pull.po.previewFailed': '加载入库预览失败',
   'app.kuaizhizao.warehouseInbound.pull.po.previewNoLines': '无可入库明细',
@@ -16821,6 +20301,7 @@ export default {
   'app.kuaizhizao.warehouseInbound.entry.productionReturn.loadPickingLinesFailed': '加载领料明细失败',
   'app.kuaizhizao.warehouseInbound.entry.productionReturn.selectPicking': '请选择领料单',
   'app.kuaizhizao.warehouseInbound.entry.productionReturn.selectWarehouse': '请选择退料仓库',
+  'app.kuaizhizao.warehouseInbound.entry.productionReturn.batchWarehouseTitle': '批量设置退料仓库',
   'app.kuaizhizao.warehouseInbound.entry.productionReturn.fillReturnQty': '请至少填写一行退料数量',
   'app.kuaizhizao.warehouseInbound.entry.productionReturn.qtyExceedsPicked': '物料 {{material}} 的退料数量不能超过已领数量 {{max}}',
   'app.kuaizhizao.warehouseInbound.entry.productionReturn.noReturnId': '创建成功但未返回退料单 ID',
@@ -16872,6 +20353,7 @@ export default {
   'app.kuaizhizao.warehouseOtherInbound.reason.transfer': '调拨',
   'app.kuaizhizao.warehouseOtherInbound.reason.sample': '样品',
   'app.kuaizhizao.warehouseOtherInbound.reason.scrap': '报废',
+  'app.kuaizhizao.warehouseOtherInbound.reason.productionFinished': '生产完工入库',
   'app.kuaizhizao.warehouseOtherInbound.reason.downgrade': '降级回用',
   'app.kuaizhizao.warehouseOtherInbound.reason.other': '其他',
   'app.kuaizhizao.warehouseOtherInbound.status.pending': '待入库',
@@ -16881,7 +20363,8 @@ export default {
   'app.kuaizhizao.warehouseOtherOutbound.status.posted': '已出库',
   'app.kuaizhizao.warehouseOtherOutbound.status.cancelled': '已取消',
   'app.kuaizhizao.warehouseOtherInbound.action.confirmInbound': '确认入库',
-  'app.kuaizhizao.warehouseOtherInbound.action.withdraw': '撤销',
+  'app.kuaizhizao.warehouseOtherInbound.action.withdrawInbound': '撤回入库',
+  'app.kuaizhizao.warehouseOtherInbound.action.withdraw': '撤回入库',
   'app.kuaizhizao.warehouseOtherInbound.action.addLine': '添加明细',
   'app.kuaizhizao.warehouseOtherInbound.action.saveDraft': '保存草稿',
   'app.kuaizhizao.warehouseOtherInbound.field.inboundCode': '入库单编号',
@@ -16901,7 +20384,12 @@ export default {
   'app.kuaizhizao.warehouseOtherInbound.field.quantityMin': '>0',
   'app.kuaizhizao.warehouseOtherInbound.field.dictManage': '数据字典管理',
   'app.kuaizhizao.warehouseOtherInbound.confirm.title': '确认入库',
+  'app.kuaizhizao.warehouseOtherInbound.confirm.previewTitle': '确认入库 {{code}}',
+  'app.kuaizhizao.warehouseOtherInbound.confirm.previewHint':
+    '请核对明细并补全批号、序列号（若物料已启用）；确认后将过账并可用于外推金蝶。',
   'app.kuaizhizao.warehouseOtherInbound.confirm.content': '确定要确认入库单 "{{code}}" 吗？确认后将更新库存。',
+  'app.kuaizhizao.warehouseOtherInbound.msg.batchRequiredForConfirm':
+    '物料 {{material}} 已启用批号管理，请填写批号',
   'app.kuaizhizao.warehouseOtherInbound.confirm.deleteTitle': '删除入库单',
   'app.kuaizhizao.warehouseOtherInbound.confirm.deleteContent': '确定要删除入库单 "{{code}}" 吗？',
   'app.kuaizhizao.warehouseOtherInbound.confirm.withdrawTitle': '确认撤销入库',
@@ -16924,6 +20412,8 @@ export default {
   'app.kuaizhizao.warehouseMaterialReturn.title': '还料单',
   'app.kuaizhizao.warehouseMaterialReturn.create': '新建还料单',
   'app.kuaizhizao.warehouseMaterialReturn.createModal': '新建还料单',
+  'app.kuaizhizao.warehouseMaterialReturn.editModal': '编辑还料单',
+  'app.kuaizhizao.warehouseMaterialReturn.msg.editPendingOnly': '仅待归还状态的还料单可编辑',
   'app.kuaizhizao.warehouseMaterialReturn.detailTitle': '还料单详情',
   'app.kuaizhizao.warehouseMaterialReturn.col.returnCode': '还料单号',
   'app.kuaizhizao.warehouseMaterialReturn.col.borrowCode': '借料单号',
@@ -17186,7 +20676,11 @@ export default {
   'app.kuaizhizao.batchingCenter.pickingWarehouse': '拣选仓库',
   'app.kuaizhizao.batchingCenter.selectPickingWarehouse': '请选择拣选源仓库',
   'app.kuaizhizao.batchingCenter.targetLineSideWarehouse': '目标线边仓（可选）',
+  'app.kuaizhizao.batchingCenter.targetLineSideWarehouseRequired': '目标线边仓',
   'app.kuaizhizao.batchingCenter.selectTargetLineSideWarehouse': '请选择目标线边仓',
+  'app.kuaizhizao.batchingCenter.syncShortageManualOnly': '手工备料单无关联工单，无需同步缺料',
+  'app.kuaizhizao.batchingCenter.confirmDeleteDraftTitle': '删除草稿备料单',
+  'app.kuaizhizao.batchingCenter.confirmDeleteDraft': '确定删除该草稿线边备料单？删除后不可恢复。',
   'app.kuaizhizao.batchingCenter.lineSideWarehousePickModalTitle': '选择目标线边仓',
   'app.kuaizhizao.batchingCenter.lineSideWarehousePickModalHint':
     '系统未找到默认线边仓，请手动选择备料目标仓库后继续创建。',
@@ -17474,6 +20968,57 @@ export default {
     '流程：选择推送目标 →（金蝶）连接器与数据接口 → 预览报文 → 推送选中。标准与工单/报工一致。',
   'app.kuaizhizao.warehouseInventory.documentPush.searchPlaceholder': '按物料编码/批号/仓库搜索',
   'app.kuaizhizao.warehouseInventory.documentPush.needSelect': '请先勾选要推送的物料批次',
+  'app.kuaizhizao.warehouseInbound.documentPush.title': '推送外部系统',
+  'app.kuaizhizao.warehouseInbound.documentPush.hint': '按已添加的推送目标写出已入库的采购入库单',
+  'app.kuaizhizao.warehouseInbound.documentPush.pipelineDesc':
+    '流程：选择推送目标 →（苍穹）连接器与数据接口 → 预览报文 → 推送选中。标准与工单/报工一致。',
+  'app.kuaizhizao.warehouseInbound.documentPush.searchPlaceholder': '按入库单号/供应商搜索',
+  'app.kuaizhizao.warehouseInbound.documentPush.needSelect': '请先勾选要推送的采购入库单',
+  'app.kuaizhizao.finishedGoods.documentPush.title': '推送外部系统',
+  'app.kuaizhizao.finishedGoods.documentPush.hint':
+    '按已添加的推送目标写出已入库的成品入库单；金蝶写入接口请选「苍穹成品入库其他入库批量新增」（单据类型须为生产完工入库）',
+  'app.kuaizhizao.finishedGoods.documentPush.pipelineDesc':
+    '成品入库确认后可手工推送，或在绑定中开启确认入库后无感外推。外推写入苍穹其他入库单，单据类型为生产完工入库，勿绑标准其他入库接口。',
+  'app.kuaizhizao.finishedGoods.documentPush.searchPlaceholder': '按入库单号或工单号搜索',
+  'app.kuaizhizao.finishedGoods.documentPush.needSelect': '请先勾选要推送的成品入库单',
+  'app.kuaizhizao.productionPicking.documentPush.title': '推送外部系统',
+  'app.kuaizhizao.productionPicking.documentPush.hint':
+    '按已添加的推送目标写出已领料的生产领料单；金蝶写入接口请选「苍穹生产领料其他出库批量新增」（单据类型须为生产领料）',
+  'app.kuaizhizao.productionPicking.documentPush.pipelineDesc':
+    '生产领料确认后可手工推送，或在绑定中开启确认领料后无感外推。外推写入苍穹其他出库单，单据类型为生产领料，勿绑标准其他出库接口。',
+  'app.kuaizhizao.productionPicking.documentPush.searchPlaceholder': '按领料单号或工单号搜索',
+  'app.kuaizhizao.productionPicking.documentPush.needSelect': '请先勾选要推送的生产领料单',
+  'app.kuaizhizao.documentPush.profile.kingdee_im_purinbill': '金蝶苍穹采购入库单',
+  'app.kuaizhizao.documentPush.profile.kingdee_im_saloutbill': '金蝶苍穹销售出库单',
+  'app.kuaizhizao.documentPush.profile.kingdee_im_otheroutbill': '金蝶苍穹其他出库单',
+  'app.kuaizhizao.documentPush.profile.kingdee_im_otherinbill': '金蝶苍穹其他入库单',
+  'app.kuaizhizao.documentPush.profile.kingdee_im_surplusbill': '金蝶苍穹盘盈单',
+  'app.kuaizhizao.documentPush.profile.kingdee_im_deficitbill': '金蝶苍穹盘亏单',
+  'app.kuaizhizao.otherOutbound.documentPush.title': '推送外部系统',
+  'app.kuaizhizao.otherOutbound.documentPush.hint': '按已添加的推送目标写出已出库的其他出库单',
+  'app.kuaizhizao.otherOutbound.documentPush.pipelineDesc':
+    '勾选已出库其他出库单，选择苍穹连接器与其他出库写入接口后推送。',
+  'app.kuaizhizao.otherOutbound.documentPush.searchPlaceholder': '按出库单号搜索',
+  'app.kuaizhizao.otherOutbound.documentPush.needSelect': '请先勾选要推送的其他出库单',
+  'app.kuaizhizao.warehouseOtherInbound.documentPush.title': '推送外部系统',
+  'app.kuaizhizao.warehouseOtherInbound.documentPush.hint': '按已添加的推送目标写出已入库的其他入库单',
+  'app.kuaizhizao.warehouseOtherInbound.documentPush.pipelineDesc':
+    '勾选已入库其他入库单，选择苍穹连接器与其他入库写入接口后推送。',
+  'app.kuaizhizao.warehouseOtherInbound.documentPush.searchPlaceholder': '按入库单号搜索',
+  'app.kuaizhizao.warehouseOtherInbound.documentPush.needSelect': '请先勾选要推送的其他入库单',
+  'app.kuaizhizao.stocktaking.documentPush.title': '推送外部系统',
+  'app.kuaizhizao.stocktaking.documentPush.hint': '按已添加的推送目标写出已完成盘点单中的盘盈/盘亏行',
+  'app.kuaizhizao.stocktaking.documentPush.pipelineDesc':
+    '勾选已完成盘点单，添加盘盈/盘亏目标后推送；盘盈仅写差异大于 0 的行，盘亏仅写差异小于 0 的行，无对应行则跳过。',
+  'app.kuaizhizao.stocktaking.documentPush.searchPlaceholder': '按盘点单号搜索',
+  'app.kuaizhizao.stocktaking.documentPush.needSelect': '请先勾选要推送的盘点单',
+  'app.kuaizhizao.stocktaking.documentPush.colCode': '盘点单号',
+  'app.kuaizhizao.warehouseOutbound.documentPush.title': '推送外部系统',
+  'app.kuaizhizao.warehouseOutbound.documentPush.hint': '按已添加的推送目标写出已出库的销售出库单',
+  'app.kuaizhizao.warehouseOutbound.documentPush.pipelineDesc':
+    '勾选已出库销售出库单，选择苍穹连接器与销售出库写入接口后推送；保存成功后自动提交并审核（与采购入库一致）。',
+  'app.kuaizhizao.warehouseOutbound.documentPush.searchPlaceholder': '按出库单号/客户搜索',
+  'app.kuaizhizao.warehouseOutbound.documentPush.needSelect': '请先勾选要推送的销售出库单',
   'app.kuaizhizao.warehouseInventory.loadWarehousesFailed': '加载仓库列表失败',
   'app.kuaizhizao.warehouseInventory.clearAll': '全部删除',
   'app.kuaizhizao.warehouseInventory.clearAllConfirmTitle': '清空当前租户即时库存？',
@@ -17485,7 +21030,7 @@ export default {
   'app.kuaizhizao.warehouseInventory.syncBtn': '同步物料数据',
   'app.kuaizhizao.warehouseInventory.syncFromSource': '从来源同步库存',
   'app.kuaizhizao.warehouseInventory.syncHint':
-    '配置数据源，将外部库存同步到本地（物料+仓库+批次号；无批号写成 DEFAULT）。仓库编码映射 warehouse.number，仓库名称映射 warehouse.name；苍穹的 warehouse 是对方内码，不是本系统仓库ID。库存数量映射 avbqty（没有再用 qty）。批号映射 lotnum。金蝶即时库存汇总默认分组不含批号，要按批入库请在分组参数里带上 lotnum。',
+    '配置数据源，将外部库存同步到本地（物料+仓库+库位+批次号；无批号写成空串）。仓库编码映射 warehouse.number，仓库名称映射 warehouse.name；库位编码映射 location.number，库位名称映射 location.name（必填其一，否则同仓多行会压成默认库位）。苍穹的 warehouse 是对方内码，不是本系统仓库ID。库存数量映射 avbqty（没有再用 qty）。批号映射 lotnum。金蝶即时库存汇总默认分组不含批号，要按批入库请在分组参数里带上 lotnum。',
   'app.kuaizhizao.warehouseInventory.syncApiHint': '实时接口数据，适合与业务系统对接。',
   'app.kuaizhizao.warehouseInventory.syncDatasetHint': '数据集批量数据，适合定时导入。',
   'app.kuaizhizao.warehouseInventory.syncStep.inventory': '同步即时库存',
@@ -17500,10 +21045,617 @@ export default {
   'app.kuaizhizao.warehouseInventory.syncField.warehouseId': '本系统仓库ID（勿映射苍穹 warehouse）',
   'app.kuaizhizao.warehouseInventory.syncField.warehouseCode': '仓库编码（warehouse.number）',
   'app.kuaizhizao.warehouseInventory.syncField.warehouseName': '仓库名称（warehouse.name）',
-  'app.kuaizhizao.warehouseInventory.syncField.quantity': '库存数量（avbqty / qty）',
+  'app.kuaizhizao.warehouseInventory.syncField.locationCode': '库位编码（location.number）',
+  'app.kuaizhizao.warehouseInventory.syncField.locationName': '库位名称（location.name）',
+  'app.kuaizhizao.warehouseInventory.syncField.quantity': '库存数量（avbqty / qty，库存单位）',
+  'app.kuaizhizao.warehouseInventory.syncField.baseQuantity': '基本数量（baseqty / FBaseQty，写入基本量）',
+  'app.kuaizhizao.warehouseInventory.syncField.auxQuantity':
+    '辅助数量（苍穹 avbqty2nd/qty2nd；写入副数量；无固定辅助单位时若同时有辅助单位字段会按本行数量比写入物料换算）',
+  'app.kuaizhizao.warehouseInventory.syncField.auxUnit':
+    '辅助单位（苍穹 unit2nd.number；写入物料固定辅助单位，台账副单位据此展示）',
+  'app.kuaizhizao.warehouseInventory.colInventoryUnit': '库存单位',
+  'app.kuaizhizao.warehouseInventory.colBaseUnit': '基本单位',
+  'app.kuaizhizao.warehouseInventory.colBaseQuantity': '基本数量',
+  'app.kuaizhizao.warehouseInventory.colPrimaryUnit': '主单位',
+  'app.kuaizhizao.warehouseInventory.colSecondaryUnit': '副单位',
+  'app.kuaizhizao.warehouseInventory.colPrimaryQuantity': '主数量',
+  'app.kuaizhizao.warehouseInventory.colSecondaryQuantity': '副数量',
+  'pages.dashboard.updateLog.entries.report-export-zh-headers-filename-r01.title':
+    '报表导出标题与文件名改为中文',
+  'pages.dashboard.updateLog.entries.report-export-zh-headers-filename-r01.description':
+    '采购等系统报表「导出全部」CSV 表头与下载文件名改为与列表一致的中文；不再出现英文字段名或 purchases-po_query 一类文件名，也不导出内部 id。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-pull-open-edit-r01.title':
+    '采购入库取单/下推后直接进入编辑',
+  'pages.dashboard.updateLog.entries.purchase-receipt-pull-open-edit-r01.description':
+    '从采购订单或收货通知取单生成采购入库草稿后，立即打开入库编辑弹窗完善明细；采购订单下推入库同样跳转到编辑界面，无需再回列表点编辑。',
+  'pages.dashboard.updateLog.entries.purchase-report-export-domain-r01.title':
+    '采购报表导出失败修复',
+  'pages.dashboard.updateLog.entries.purchase-report-export-domain-r01.description':
+    '修复采购订单查询等报表「导出全部」因域名 purchase/purchases 不一致导致失败；失败提示改为展示后端真实原因，不再叠多层「导出失败」。',
+  'pages.dashboard.updateLog.entries.material-attachment-preview-r01.title':
+    '物料附件详情与做单可预览原图',
+  'pages.dashboard.updateLog.entries.material-attachment-preview-r01.description':
+    '物料详情展示附件缩略图并可点击预览原图；单据行物料附件弹窗补齐预览文案，名称与操作均可打开预览。',
+  'pages.dashboard.updateLog.entries.supplier-select-remote-search-r01.title':
+    '供应商下拉支持输入远端模糊搜索',
+  'pages.dashboard.updateLog.entries.supplier-select-remote-search-r01.description':
+    '采购订单等单据选供应商时，下拉输入关键词即可远端搜索全库，无需再依赖高级搜索才能找到首页以外的供应商；与客户下拉体验对齐。',
+  'pages.dashboard.updateLog.entries.approval-wecom-updatable-card-r01.title':
+    '审批企微待办改为可更新卡片',
+  'pages.dashboard.updateLog.entries.approval-wecom-updatable-card-r01.description':
+    '待审推送优先发企微模板卡并落库更新码；撤回/驳回/通过后将旧卡更新为已失效或撤回，避免同一单据重复待审消息。需在企微后台配置接收消息 URL 与 Token。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-required-date-qty-r01.title':
+    '采购申请预交日与数量校验',
+  'pages.dashboard.updateLog.entries.purchase-requisition-required-date-qty-r01.description':
+    '新建/编辑采购申请时要求到货日期必填；申请数量为 0 时弹出提醒并禁止保存。',
+  'pages.dashboard.updateLog.entries.inbound-po-entry-receipt-date-default-r01.title':
+    '采购取单录入入库日期不再显示1970',
+  'pages.dashboard.updateLog.entries.inbound-po-entry-receipt-date-default-r01.description':
+    '从采购订单取单录入页默认按站点当天作为入库日期；本次入库数量不再因草稿误恢复为日期而显示1970。',
+  'pages.dashboard.updateLog.entries.inbound-po-entry-batch-no-standard-r01.title':
+    '采购取单录入批号列对齐入库规范',
+  'pages.dashboard.updateLog.entries.inbound-po-entry-batch-no-standard-r01.description':
+    '从采购订单取单录入页的批号列与采购入库新建一致，加宽输入框并支持一键按规则生成批号。',
+  'pages.dashboard.updateLog.entries.purchase-order-receipt-entry-skip-preview-r01.title':
+    '采购订单下推入库改为取单录入页',
+  'pages.dashboard.updateLog.entries.purchase-order-receipt-entry-skip-preview-r01.description':
+    '从采购订单创建采购入库单不再弹出列表预览，直接进入与仓储入库一致的采购订单取单录入页，填完再保存或确认。',
+  'pages.dashboard.updateLog.entries.purchase-order-prepayment-form-layout-r02.title':
+    '采购预付下推表单布局优化',
+  'pages.dashboard.updateLog.entries.purchase-order-prepayment-form-layout-r02.description':
+    '从采购订单创建预付付款单时，顶部展示订单价税合计供参考，结算类型置于付款金额之前。',
+  'pages.dashboard.updateLog.entries.purchase-order-prepayment-no-suggest-amount-r01.title':
+    '采购预付下推不再预填建议金额',
+  'pages.dashboard.updateLog.entries.purchase-order-prepayment-no-suggest-amount-r01.description':
+    '从采购订单创建预付付款单时，预览不再展示或自动填入系统建议金额，须自行填写本次预付金额后再确认。',
+  'pages.dashboard.updateLog.entries.purchase-order-prepayment-payment-form-r01.title':
+    '采购订单下推预付付款单对齐付款单表单',
+  'pages.dashboard.updateLog.entries.purchase-order-prepayment-payment-form-r01.description':
+    '从采购订单创建预付付款单的预览改为与付款单取单一致的字段布局，可填写付款日期、方式、付款账户与备注，并带出订单预付款账户。',
+  'pages.dashboard.updateLog.entries.fast-deploy-windows-install-scripts-r01.title':
+    'Windows 部署依赖安装脚本修复',
+  'pages.dashboard.updateLog.entries.fast-deploy-windows-install-scripts-r01.description':
+    '修复 PowerShell 5.1 下 install-component.ps1 因 UTF-8 无 BOM 无法解析的问题，并更新 Python/uv/PostgreSQL 国内下载源与版本回退，LibreOffice 走同一 winget 备用源安装。',
+  'pages.dashboard.updateLog.entries.payment-application-pull-multi-supplier-r01.title':
+    '付款申请取单支持同供应商多选',
+  'pages.dashboard.updateLog.entries.payment-application-pull-multi-supplier-r01.description':
+    '从采购订单或采购入库创建付款申请时，可多选同一供应商多张来源单，合并生成一张付款申请；不同供应商混选会提示须同一供应商。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-confirm-skip-iqc-r01.title':
+    '采购入库无需检验时不再弹来料检验确认',
+  'pages.dashboard.updateLog.entries.purchase-receipt-confirm-skip-iqc-r01.description':
+    '确认入库时若明细物料均不需要来料检验，直接进入确认流程，不再弹出「来料检验确认」窗口；仅存在需检验物料时才展示该窗口。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-po-pull-compose-r01.title':
+    '采购订单取单开入库单先编辑后创建',
+  'pages.dashboard.updateLog.entries.purchase-receipt-po-pull-compose-r01.description':
+    '从采购订单加载入库明细时不再在取单表选择仓库，也不再先下推草稿再弹窗；确认后进入编辑窗口，保存时再创建入库单。',
+  'pages.dashboard.updateLog.entries.purchase-invoice-pull-create-nested-tx-r01.title':
+    '从入库创建采购发票不再请求超时',
+  'pages.dashboard.updateLog.entries.purchase-invoice-pull-create-nested-tx-r01.description':
+    '修复从采购入库加载创建采购发票时外层事务与创建逻辑二次开启事务导致的死锁，网关 25 秒超时或「服务器暂时不可用」。',
+  'pages.dashboard.updateLog.entries.po-receipt-compose-payable-r01.title':
+    '采购订单取单开入库单继承立账策略',
+  'pages.dashboard.updateLog.entries.po-receipt-compose-payable-r01.description':
+    '从采购订单取单生成采购入库草稿时，表单会回填订单上的立账策略与付款方式，保存时不再用组织默认覆盖后端已继承的值。',
+  'pages.dashboard.updateLog.entries.payment-form-pull-line-labels-r01.title':
+    '付款单弹窗内取单按钮文案修正',
+  'pages.dashboard.updateLog.entries.payment-form-pull-line-labels-r01.description':
+    '新建编辑付款单时，付款明细区改为「加载明细/选择待抵扣应付」等表述，不再误用「从应付单创建付款单」类列表下推文案。',
+  'pages.dashboard.updateLog.entries.payment-prepayment-offset-contract-r01.title':
+    '付款单预付抵扣与普通付款取单对齐',
+  'pages.dashboard.updateLog.entries.payment-prepayment-offset-contract-r01.description':
+    '选用预付抵扣时固定普通付款，仅可从应付或货款申请取明细；确认后按采购订单预付余额冲应付且不记银行出账，预付款结算不可选预付抵扣。',
+  'pages.dashboard.updateLog.entries.payment-prepayment-po-pull-lines-r01.title':
+    '预付款付款单可从采购订单取明细',
+  'pages.dashboard.updateLog.entries.payment-prepayment-po-pull-lines-r01.description':
+    '新建付款单且结算类型为预付款时，付款明细支持从采购订单按行加载预付款（与付款申请取单一致），预付类付款申请列表与货款分开筛选。',
+  'pages.dashboard.updateLog.entries.purchase-order-save-submit-race-r01.title':
+    '采购订单保存并提交防重复与状态复核',
+  'pages.dashboard.updateLog.entries.purchase-order-save-submit-race-r01.description':
+    '保存并提交时加互锁，提交前拉取最新状态；若订单已被提交或重复点击导致二次提交，不再误报「只能提交草稿」。',
+  'pages.dashboard.updateLog.entries.uni-input-number-relaxed-precision-r01.title':
+    '数字输入聚焦时不强制小数位',
+  'pages.dashboard.updateLog.entries.uni-input-number-relaxed-precision-r01.description':
+    '全站 InputNumber 在输入过程中不再即时格式化为固定小数位，避免闪动与误读；失焦后仍按字段 precision 量化。',
+  'pages.dashboard.updateLog.entries.purchase-invoice-pull-receipt-line-gross-r01.title':
+    '从采购入库开票行可开金额与价税合计一致',
+  'pages.dashboard.updateLog.entries.purchase-invoice-pull-receipt-line-gross-r01.description':
+    '取单预览中入库明细的「可开票」「本次开票」改为价税合计，与表头单据金额及提交校验一致；明细列仍展示未税金额与税额。',
+  'pages.dashboard.updateLog.entries.sales-invoice-wording-unify-r01.title':
+    '销售发票文案统一为「销售发票」',
+  'pages.dashboard.updateLog.entries.sales-invoice-wording-unify-r01.description':
+    '财务管理中登记、取单、下推、审核与全链路单据类型展示不再混用「销项发票」，与菜单「销售发票」一致；销项金额、销项税额与红字销项等税务用语不变。',
+  'pages.dashboard.updateLog.entries.purchase-invoice-wording-unify-r01.title':
+    '采购发票文案统一为「采购发票」',
+  'pages.dashboard.updateLog.entries.purchase-invoice-wording-unify-r01.description':
+    '财务管理中登记、取单、下推、审核与全链路单据类型展示不再混用「进项发票」，与菜单「采购发票」一致；进项认证、进项税额等税务用语不变。',
+  'pages.dashboard.updateLog.entries.purchase-invoice-pull-receipt-gross-amount-r01.title':
+    '从采购入库创建采购发票列表金额为价税合计',
+  'pages.dashboard.updateLog.entries.purchase-invoice-pull-receipt-gross-amount-r01.description':
+    '取单弹窗中采购入库行的金额改为与预览、开票上限一致的价税合计，不再展示未税金额。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-po-compose-before-post-r01.title':
+    '采购订单下推入库先编辑再保存',
+  'pages.dashboard.updateLog.entries.purchase-receipt-po-compose-before-post-r01.description':
+    '从采购订单创建采购入库时，取单页不再先下推或过账；确认数量与仓库后打开编辑弹窗，点击保存才生成草稿入库单，确认入库仍在列表执行。',
+  'pages.dashboard.updateLog.entries.sales-outbound-edit-deliverer-revert-r01.title':
+    '编辑销售出库时可正常改选出库人',
+  'pages.dashboard.updateLog.entries.sales-outbound-edit-deliverer-revert-r01.description':
+    '修复编辑弹窗里改选出库人后会被自动改回原值的问题；领料人/借用人等同字段一并稳定。',
+  'pages.dashboard.updateLog.entries.init-steps-skip-menu-sync-when-done-r01.title':
+    '登录后不再因初始化检查全量同步菜单而提示服务器不可用',
+  'pages.dashboard.updateLog.entries.init-steps-skip-menu-sync-when-done-r01.description':
+    '组织已完成初始化时，登录后的初始化步骤检查不再全量同步全部应用菜单；此前在定制应用等大菜单租户上易超过请求时限并弹出「服务器暂时不可用」。后台检查失败也不再误弹该窗；短时内多个 502/504 只提示一次。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-save-draft-button-r01.title':
+    '采购申请新建页可保存为草稿',
+  'pages.dashboard.updateLog.entries.purchase-requisition-save-draft-button-r01.description':
+    '新建/编辑采购申请表单增加「保存为草稿」，仅落库不提交审核；「保存并提交」与 Ctrl+S 仍为保存后提交。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-review-draft-align-r01.title':
+    '采购申请保存提交与审核列对齐',
+  'pages.dashboard.updateLog.entries.purchase-requisition-review-draft-align-r01.description':
+    '新建采购申请不再预置「待审」审核字段；列表提交/审核按钮与「保存并提交」结果一致；新建页主按钮文案改为「保存并提交」。历史草稿若仍显示待审可点「提交」或重新保存并提交。',
+  'pages.dashboard.updateLog.entries.finance-auto-apply-supplier-prepay-default-off-r01.title':
+    '采购应付自动冲预付默认改为关闭',
+  'pages.dashboard.updateLog.entries.finance-auto-apply-supplier-prepay-default-off-r01.description':
+    '配置中心「采购应付开立自动冲预付」新租户与未单独保存过该项的账套默认关闭；已在库内保存为开启的不变，需自动冲销时请手动打开。',
+  'pages.dashboard.updateLog.entries.payment-create-pull-payable-multi-r01.title':
+    '新建付款单取应付支持多选',
+  'pages.dashboard.updateLog.entries.payment-create-pull-payable-multi-r01.description':
+    '新建付款单弹窗内「从应付单创建」取单窗口支持勾选多张应付（须同一供应商），确认后合并写入付款明细；付款申请仍单选一张。',
+  'pages.dashboard.updateLog.entries.po-receipt-entry-confirm-nav-purchase-r01.title':
+    '采购订单取单确认入库跳转采购入库单',
+  'pages.dashboard.updateLog.entries.po-receipt-entry-confirm-nav-purchase-r01.description':
+    '从采购订单创建采购入库单页点确认入库后，跳转到采购管理「采购入库单」列表并打开该单详情完成过账，不再落在仓储入库总览或编辑弹窗。',
+  'pages.dashboard.updateLog.entries.payable-list-row-actions-overflow-r01.title':
+    '应付单列表操作列收起到更多',
+  'pages.dashboard.updateLog.entries.payable-list-row-actions-overflow-r01.description':
+    '应付单列表行内仅保留详情与审核相关按钮，付款、开票、编辑、删除等收入「更多」，避免操作列过宽。',
+  'pages.dashboard.updateLog.entries.kuaioa-annual-wage-import-timeout-r01.title':
+    '年度工资明细导入不再超时不可用',
+  'pages.dashboard.updateLog.entries.kuaioa-annual-wage-import-timeout-r01.description':
+    '按工资明细总表批量导入各月应发时改为批量匹配员工与结算单，确认/重开只改头表；避免几十人多月导入超过请求时限并弹出「服务器暂时不可用」。单位列填「元」时按货币忽略，回落筛选或档案车间。',
+  'pages.dashboard.updateLog.entries.uni-import-year-preamble-sheet-r01.title':
+    '导入识别年份导语行不再误报无数据',
+  'pages.dashboard.updateLog.entries.uni-import-year-preamble-sheet-r01.description':
+    '上传首行为「年份」的工资明细总表等模板后，确认导入会按第 2 行表头映射数据行，不再把年份行当表头导致「没有可导入的数据行」。',
+  'pages.dashboard.updateLog.entries.purchase-order-prepayment-push-modal-r01.title':
+    '采购订单预付付款预览窗收窄',
+  'pages.dashboard.updateLog.entries.purchase-order-prepayment-push-modal-r01.description':
+    '从采购订单创建预付付款单或付款申请时，预览弹窗改为紧凑宽度，并去掉无明细时的空白占位。',
+  'pages.dashboard.updateLog.entries.purchase-order-lifecycle-finance-link-r01.title':
+    '采购订单账款发票生命周期与全链路关联',
+  'pages.dashboard.updateLog.entries.purchase-order-lifecycle-finance-link-r01.description':
+    '采购订单详情按进项发票与入库应付付款进度推进「账款发票/已完成」；从订单开进项发票后自动关联入库应付，全链路可串联至付款单。',
+  'pages.dashboard.updateLog.entries.purchase-invoice-pull-form-grid-r01.title':
+    '加载进项发票表单两列栅格对齐',
+  'pages.dashboard.updateLog.entries.purchase-invoice-pull-form-grid-r01.description':
+    '从采购订单/入库/应付加载进项发票时，票面字段与金额录入分段器按统一两列布局对齐，与付款单取单表单一致。',
+  'pages.dashboard.updateLog.entries.purchase-invoice-pull-form-dedupe-source-r01.title':
+    '加载进项发票窗去掉重复源单信息',
+  'pages.dashboard.updateLog.entries.purchase-invoice-pull-form-dedupe-source-r01.description':
+    '从采购订单/入库/应付加载进项发票时，源单号与供应商仅在预览区展示一次，表单区直接填写票面信息。',
+  'pages.dashboard.updateLog.entries.purchase-invoice-pull-po-detail-lines-r01.title':
+    '从采购订单开进项发票展示订单明细',
+  'pages.dashboard.updateLog.entries.purchase-invoice-pull-po-detail-lines-r01.description':
+    '从采购订单/入库/应付加载进项发票时，开票明细按标准发票列展示未税单价、未税金额、税率与税额，并与表头可开票价税合计一致。',
+  'pages.dashboard.updateLog.entries.payment-repair-settle-app-paid-fallback-r01.title':
+    '付款申请已付未核销应付可补核销',
+  'pages.dashboard.updateLog.entries.payment-repair-settle-app-paid-fallback-r01.description':
+    '从付款申请生成的已确认付款单在申请行已记已付但应付未核销时，补核销按本单待核销与应付剩余直接核销，不再因分摊为 0 失败。',
+  'pages.dashboard.updateLog.entries.payment-repair-settle-no-match-modal-r01.title':
+    '付款补核销不再误弹匹配窗',
+  'pages.dashboard.updateLog.entries.payment-repair-settle-no-match-modal-r01.description':
+    '从付款申请生成的已确认付款单可一键按申请关联应付补核销；仅无清账来源时才打开补救窗，且不再使用「匹配」按钮。',
+  'pages.dashboard.updateLog.entries.purchase-order-qty-reprice-keep-unit-price-r01.title':
+    '采购订单改数量不再清空单价',
+  'pages.dashboard.updateLog.entries.purchase-order-qty-reprice-keep-unit-price-r01.description':
+    '编辑采购订单改数量时，仅当物料或供应商价本已启用数量阶梯价才重算单价；固定价场景行上单价保持不变。',
+  'pages.dashboard.updateLog.entries.overflow-menu-popconfirm-modal-r01.title':
+    '列表「更多」内确认操作可弹出',
+  'pages.dashboard.updateLog.entries.overflow-menu-popconfirm-modal-r01.description':
+    '操作列折叠到「更多」里的核销、审核等二次确认改为对话框，避免下拉菜单抢先关闭导致点击无反应。',
+  'pages.dashboard.updateLog.entries.payment-repair-settle-from-pull-r01.title':
+    '付款单补核销按已加载明细执行',
+  'pages.dashboard.updateLog.entries.payment-repair-settle-from-pull-r01.description':
+    '已确认仍待核销的付款单点「核销」将直接按创建时的应付/付款申请明细写入，不再要求二次匹配；仅无加载记录时才选手工核销。',
+  'pages.dashboard.updateLog.entries.voucher-remediation-settle-modal-r01.title':
+    '收付款列表补救核销弹窗',
+  'pages.dashboard.updateLog.entries.voucher-remediation-settle-modal-r01.description':
+    '已确认仍待核销的收付款单在列表点「匹配」于本页弹窗选对应应收/应付并完成核销，不再跳转往来核销页。',
+  'pages.dashboard.updateLog.entries.payment-voucher-settlement-gate-r01.title':
+    '货款收付款确认须指定清账来源',
+  'pages.dashboard.updateLog.entries.payment-voucher-settlement-gate-r01.description':
+    '货款类付款单须加载应付或付款申请后再确认并自动核销；收款单须关联应收。往来核销默认仅展示历史，补救匹配需从待核销单据进入。',
+  'pages.dashboard.updateLog.entries.payment-confirm-settle-from-application-r01.title':
+    '从付款申请确认的付款单自动核销应付',
+  'pages.dashboard.updateLog.entries.payment-confirm-settle-from-application-r01.description':
+    '付款单仅从付款申请加载明细时，确认过账会按申请行关联的应付写入已付与已核销，应付列表「已付金额」与付款单「已核销金额」同步更新。',
+  'pages.dashboard.updateLog.entries.payment-list-audit-overflow-popconfirm-r01.title':
+    '付款单列表「更多」审核可弹出确认',
+  'pages.dashboard.updateLog.entries.payment-list-audit-overflow-popconfirm-r01.description':
+    '操作列折叠到「更多」里的审核/删除等二次确认挂到 document.body，并避免菜单抢先关闭导致点击无反应。',
+  'pages.dashboard.updateLog.entries.payment-voucher-out-account-form-grid-r01.title':
+    '付款单出账账户表单栅格对齐',
+  'pages.dashboard.updateLog.entries.payment-voucher-out-account-form-grid-r01.description':
+    '出账账户与出款账号备注与对方户名三列栅格对齐，并去掉下拉下方重复的维护提示 extra。',
+  'pages.dashboard.updateLog.entries.payable-purchase-receipt-settlement-gross-r01.title':
+    '采购入库应付价税合计尾差修正',
+  'pages.dashboard.updateLog.entries.payable-purchase-receipt-settlement-gross-r01.description':
+    '入库立应付、应付加载与列表展示统一按采购订单行 total_price 比例重算价税合计；未付款且总额等于剩余的应付会在列表/详情读取时自动对齐真源金额。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-settlement-gross-r01.title':
+    '采购入库价税合计尾差修正',
+  'pages.dashboard.updateLog.entries.purchase-receipt-settlement-gross-r01.description':
+    '列表与详情按来源采购订单行 total_price 比例重算价税合计；新建保存行未税与 PO 分摊一致，避免 1000 件×10 元出现 10000.05。',
+  'pages.dashboard.updateLog.entries.purchase-order-net-amount-rounding-r01.title':
+    '采购订单价税合计舍入修正',
+  'pages.dashboard.updateLog.entries.purchase-order-net-amount-rounding-r01.description':
+    '保存与列表展示统一按分位量化计算价税合计，行合计优先于单价乘数量回算，避免 1000 件×10 元出现 10000.05 等毛刺。',
+  'pages.dashboard.updateLog.entries.purchase-finance-chain-e2e-r01.title':
+    '采购财务金路径 API 联调用例',
+  'pages.dashboard.updateLog.entries.purchase-finance-chain-e2e-r01.description':
+    '新增 Playwright API 链覆盖入库立应付、预付冲应付、多应付合并付款核销与单据对账抽查；本机卓越组织可配置 E2E 环境变量后一键回归。',
+  'pages.dashboard.updateLog.entries.payment-form-pull-supplier-filter-r01.title':
+    '新建付款单取单按已选供应商筛选',
+  'pages.dashboard.updateLog.entries.payment-form-pull-supplier-filter-r01.description':
+    '在新建或编辑付款单中已选供应商后，从应付或付款申请取单时列表仅展示该供应商单据（含可加载与全部单据分段）。',
+  'pages.dashboard.updateLog.entries.payment-payable-pull-columns-r01.title':
+    '从应付创建付款单取单窗口列更完整',
+  'pages.dashboard.updateLog.entries.payment-payable-pull-columns-r01.description':
+    '新建付款单与列表取应付弹窗统一展示应付单号、供应商、单据/审核状态、到期日、单据金额与剩余应付，便于核对再勾选。',
+  'pages.dashboard.updateLog.entries.payment-voucher-pull-lines-r01.title':
+    '付款单支持明细取应付与付款申请',
+  'pages.dashboard.updateLog.entries.payment-voucher-pull-lines-r01.description':
+    '新建与编辑付款单可在明细区取应付（可多选）或取付款申请，头表金额与明细合计联动；确认过账按明细行核销应付。明细可选，仍支持无来源的手工付款。',
+  'pages.dashboard.updateLog.entries.payment-voucher-modal-align-r01.title':
+    '付款单新建编辑界面对齐付款申请',
+  'pages.dashboard.updateLog.entries.payment-voucher-modal-align-r01.description':
+    '付款单新建、编辑及从应付/申请取单预览采用与付款申请一致的三列表头、结算类型分段控件与扁平账户区；预付抵扣不再展示对方收款账户。',
+  'pages.dashboard.updateLog.entries.purchase-finance-gross-amount-r01.title':
+    '采购财务上限对齐价税合计',
+  'pages.dashboard.updateLog.entries.purchase-finance-gross-amount-r01.description':
+    '预付请款、下推预付付款单、采购订单下推开票与从订单/入库拉应付的上限，统一按价税合计计算（含头表税额、纠正表头预付误存未税金额）；付款申请取单展示与列表订单金额一致。',
+  'pages.dashboard.updateLog.entries.payment-application-form-line-pull-r01.title':
+    '付款申请按结算类型取单添加明细',
+  'pages.dashboard.updateLog.entries.payment-application-form-line-pull-r01.description':
+    '新建与编辑付款申请时，「添加明细」按结算类型打开取单：普通付款从应付单多选合并，预付款从采购订单多选合并（与列表取单门禁一致）；切换结算类型不兼容时清空明细。',
+  'pages.dashboard.updateLog.entries.payment-method-prepayment-offset-r01.title':
+    '付款方式增加预付抵扣',
+  'pages.dashboard.updateLog.entries.payment-method-prepayment-offset-r01.description':
+    '收付款方式码表新增「预付抵扣」，付款申请等单据可选；选用后不填供应商收款账户，表示用预付余额抵扣应付。',
+  'pages.dashboard.updateLog.entries.payment-application-settlement-type-segmented-r01.title':
+    '付款申请增加结算类型',
+  'pages.dashboard.updateLog.entries.payment-application-settlement-type-segmented-r01.description':
+    '新建与编辑付款申请时，发票情况前增加结算类型分段选择（普通付款/预付款），与申请头 applicationKind 及明细请款类型联动；详情同步展示。',
+  'pages.dashboard.updateLog.entries.payment-application-payee-fields-after-lines-r01.title':
+    '付款申请收款账户字段排布',
+  'pages.dashboard.updateLog.entries.payment-application-payee-fields-after-lines-r01.description':
+    '新建与编辑付款申请时，收款户名、收款开户行、收款账号改为一行三列，并移到申请明细表之后、备注之前。',
+  'pages.dashboard.updateLog.entries.payment-application-form-trim-reason-terms-r01.title':
+    '付款申请单表单精简',
+  'pages.dashboard.updateLog.entries.payment-application-form-trim-reason-terms-r01.description':
+    '新建与编辑付款申请时不再填写付款条件、付款事由；详情抽屉同步隐藏，说明可写在备注。',
+  'pages.dashboard.updateLog.entries.purchase-order-prepayment-manual-only-r01.title':
+    '采购订单预付改为人为下推出单',
+  'pages.dashboard.updateLog.entries.purchase-order-prepayment-manual-only-r01.description':
+    '付款计划中的预付金额仅作计划与取数；审核确认采购订单不再自动生成预付款单，须从订单下推预付或经付款申请再下推付款。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-red-voucher-location-r01.title':
+    '采购入库红框打印补库位列',
+  'pages.dashboard.updateLog.entries.purchase-receipt-red-voucher-location-r01.description':
+    '采购入库红框凭证打印模板明细在收货仓库后增加库位列；打印数据输出库位名称（无则编码），加载快制造打印预设时自动升级已有模板。',
+  'pages.dashboard.updateLog.entries.mobile-workbench-purchase-requisition-badge-r01.title':
+    '手机工作台采购申请角标不再误报已审单据',
+  'pages.dashboard.updateLog.entries.mobile-workbench-purchase-requisition-badge-r01.description':
+    '采购申请入口角标仅计待审核；已审核待转单不再显示红点。审批通过后会刷新菜单徽章缓存，下拉工作台可立即跳过缓存。',
+  'pages.dashboard.updateLog.entries.finished-goods-serial-submit-r01.title':
+    '修复成品入库录入序列号后无法更新',
+  'pages.dashboard.updateLog.entries.finished-goods-serial-submit-r01.description':
+    '成品/半成品入库编辑弹窗为序列号字段补上表单挂载，提交时不再丢失已录入序列号；校验文案改为可读提示。',
+  'pages.dashboard.updateLog.entries.outbound-confirm-auto-batch-fifo-r01.title':
+    '确认出库未填批号时按先进先出自动分摊',
+  'pages.dashboard.updateLog.entries.outbound-confirm-auto-batch-fifo-r01.description':
+    '销售出库等已审核单据不可再编辑时，确认出库若明细未填批号，将按在库可选批号先进先出自动分摊后过账，避免「详情无入口又不能保存」卡死。',
+  'pages.dashboard.updateLog.entries.print-pdf-target-crashed-r06.title':
+    '修复保存为 PDF 时 Chromium Target crashed',
+  'pages.dashboard.updateLog.entries.print-pdf-target-crashed-r06.description':
+    '有 @page 尺寸时首轮改用显式纸张宽高；公章等内嵌图强缩为白底 JPEG，失败或末次降级用占位图；去掉 @page 边距盒页码，并统一禁用 GPU，降低 printToPDF 崩溃。',
+  'pages.dashboard.updateLog.entries.push-qty-default-without-over-issue-r01.title':
+    '下推/领料默认数量不再灌满超发上限',
+  'pages.dashboard.updateLog.entries.push-qty-default-without-over-issue-r01.description':
+    '销售订单下推发货通知或销售出库时，本次数量默认按订单可发量；工单领料选仓后本次发料默认按 BOM 待领。可发/可领上限仍含超发容差，需要时再手调提高。',
+  'pages.dashboard.updateLog.entries.sales-delivery-push-draft-or-submit-r01.title':
+    '下推销售出库可选保存草稿或提交审核',
+  'pages.dashboard.updateLog.entries.sales-delivery-push-draft-or-submit-r01.description':
+    '发货通知「通知仓库」、以及从发货通知/销售订单取单生成销售出库时，底部提供「保存为草稿」「提交审核」：默认可只落草稿；提交审核才送审（未开审核则直接已通过）。不再下推后一律自动审核通过。',
+  'pages.dashboard.updateLog.entries.wh-single-location-autofill-r01.title':
+    '仓下仅一个库位时自动带入',
+  'pages.dashboard.updateLog.entries.wh-single-location-autofill-r01.description':
+    '出入库明细选库位时，若该出库/入库仓库下只有一个库位（含整仓），打开单据或选仓后自动带入，批量领料等多行场景无需逐行点选；有多个库位时仍须手工选择。',
+  'pages.dashboard.updateLog.entries.wo-batch-push-picking-skip-warehouse-r01.title':
+    '工单批量下推领料无需先选仓库',
+  'pages.dashboard.updateLog.entries.wo-batch-push-picking-skip-warehouse-r01.description':
+    '工单管理「批量下推领料」直接合并生成生产领料单，不再弹出统一出库仓库；可在领料单明细中按物料分别维护出库仓库，确认出库时仍会校验。',
+  'pages.dashboard.updateLog.entries.po-push-receipt-notice-qty-unit-r01.title':
+    '采购订单下推收货通知显示数量单位',
+  'pages.dashboard.updateLog.entries.po-push-receipt-notice-qty-unit-r01.description':
+    '从采购订单创建收货通知单时，「本次下推数量」输入框右侧同步显示物料单位，避免只见数字不知计量单位。',
+  'pages.dashboard.updateLog.entries.mrp-push-pr-honor-draft-mode-r01.title':
+    'MRP下推采购申请支持草稿下推',
+  'pages.dashboard.updateLog.entries.mrp-push-pr-honor-draft-mode-r01.description':
+    '需求计算下推采购申请时「草稿下推 / 正式下推」生效：草稿仅落库不自动提交；正式下推才提交审核或在未开审核时直接通过。采购申请本身可不填供应商，供应商在后续采购订单环节指定。',
+  'pages.dashboard.updateLog.entries.mrp-push-wo-default-individual-r01.title':
+    '需求计算下推默认独立工单',
+  'pages.dashboard.updateLog.entries.mrp-push-wo-default-individual-r01.description':
+    '创建下游单据时工单下推方式默认「独立工单」；需要组工单时再手动切换，不再因存在 BOM 生产树自动回到组工单。',
+  'pages.dashboard.updateLog.entries.quotation-push-so-keep-price-r01.title':
+    '报价下推销售订单保留单价税率',
+  'pages.dashboard.updateLog.entries.quotation-push-so-keep-price-r01.description':
+    '报价单下推打开销售订单新建页时，锁定来源行单价与税率；副数量自动换算不再触发重价，避免单价、税率被冲成 0。',
+  'pages.dashboard.updateLog.entries.maintenance-plan-equipment-optional-r01.title':
+    '维护计划可先不选设备',
+  'pages.dashboard.updateLog.entries.maintenance-plan-equipment-optional-r01.description':
+    '新建或编辑维护计划时不再强制至少选一台设备，可先保存计划；之后在设备台账绑定保养方案，再于计划中勾选设备。未选设备时不生成保养提醒。',
+  'pages.dashboard.updateLog.entries.sales-line-qty-keep-spec-r01.title':
+    '改明细数量不再清空产品规格',
+  'pages.dashboard.updateLog.entries.sales-line-qty-keep-spec-r01.description':
+    '报价单、销售订单等销售明细修改主数量时，只按数量重算价税，保留已选产品的规格、型号与客户料号，不再被重价逻辑冲成空白。',
+  'pages.dashboard.updateLog.entries.other-outbound-pick-date-r01.title':
+    '其他出库单增加领用日期',
+  'pages.dashboard.updateLog.entries.other-outbound-pick-date-r01.description':
+    '新建和编辑其他出库单可填写领用日期，默认当天，列表和详情同步展示。',
+  'pages.dashboard.updateLog.entries.document-line-tax-single-logic-r01.title':
+    '采购、销售、报价、发票价税共用一套计算',
+  'pages.dashboard.updateLog.entries.document-line-tax-single-logic-r01.description':
+    '销售订单保存、报价行金额、发票税额改为与采购订单相同的行价税拆分，不再单独把单价先收成两位再乘数量。',
+  'pages.dashboard.updateLog.entries.purchase-order-display-unit-price-r01.title':
+    '采购订单含税单价按录入值保存并回填',
+  'pages.dashboard.updateLog.entries.purchase-order-display-unit-price-r01.description':
+    '含税单价另存录入价，编辑、详情和下推入库直接读取，不再由未税单价乘税率。保存后的 600 再打开仍是 600。尚未保存过录入价的旧单，编辑时含税单价为空，重录一次后固定。',
+  'pages.dashboard.updateLog.entries.purchase-order-header-rollup-backend-r01.title':
+    '采购订单保存后头表价税与明细一致',
+  'pages.dashboard.updateLog.entries.purchase-order-header-rollup-backend-r01.description':
+    '后端 sync 汇总改为数量×未税单价行价税累加，不再对行未税合计二次拆税，避免保存后 net_amount 从 800 被写回 799.99。',
+  'pages.dashboard.updateLog.entries.purchase-order-amount-unified-r01.title':
+    '单据金额统一走 documentLineAmounts 契约',
+  'pages.dashboard.updateLog.entries.purchase-order-amount-unified-r01.description':
+    '全站行价税、头表汇总、采购保存与列表详情展示对齐 documentLineAmounts（与 DocumentAmountSummary 同源）；采购禁止保存后再对已存未税二次拆税，列表读 net_amount。',
+  'pages.dashboard.updateLog.entries.purchase-order-tax-incl-unit-600-r01.title':
+    '单据明细金额失焦反算单价全站修复',
+  'pages.dashboard.updateLog.entries.purchase-order-tax-incl-unit-600-r01.description':
+    '采购/销售订单、报价、销售合同明细：金额列失焦仅在实际改值时反算单价；采购含税回填与价税整数录入不再漂成 600.0001 类尾差。',
+  'pages.dashboard.updateLog.entries.playwright-printtopdf-chromium-crash-r01.title':
+    '修复部分单据 Playwright 打印 PDF 崩溃',
+  'pages.dashboard.updateLog.entries.playwright-printtopdf-chromium-crash-r01.description':
+    'HTML 片段补齐文档壳，避免 prefer_css_page_size 与显式纸张尺寸同时传入；崩溃时自动换显式尺寸重试；红框采购入库 @page 边距改为 voucher 内边距，降低 headless Chromium printToPDF 失败率。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-red-voucher-dynamic-rows-v6.title':
+    '采购入库红框按实有明细行打印',
+  'pages.dashboard.updateLog.entries.purchase-receipt-red-voucher-dynamic-rows-v6.description':
+    '红框采购入库单不再补空白占位行，有几条明细就打印几行，签字区紧跟合计行，少页单不再被空行撑到第二页。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-red-voucher-single-page-r01.title':
+    '采购入库红框打印减空行防换页',
+  'pages.dashboard.updateLog.entries.purchase-receipt-red-voucher-single-page-r01.description':
+    '红框采购入库 A5 横版将明细空行由 8 行改为 5 行并收紧表体与签字区间距，长编码/仓库列限高，减少签字区落到第二页；加载打印预设升级可刷到 v5 版式。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-red-voucher-sample-layout-v4.title':
+    '采购入库红框打印对齐纸质样例',
+  'pages.dashboard.updateLog.entries.purchase-receipt-red-voucher-sample-layout-v4.description':
+    '表头四栏顺序为采购方式与编号、供应商与日期；明细列为行号至物资类型，金额在收料仓库与仓位之前；打印输出物资存货类别。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-red-voucher-amount-location-r02.title':
+    '采购入库红框金额与库位列对齐',
+  'pages.dashboard.updateLog.entries.purchase-receipt-red-voucher-amount-location-r02.description':
+    '修正仅有库位表头、明细未输出库位时金额顶到库位列的问题；列序为收货仓库、金额、库位、备注。',
+  'pages.dashboard.updateLog.entries.kuaizhizao-red-voucher-title-short-r01.title':
+    '仓储红框凭证标题展示组织简称',
+  'pages.dashboard.updateLog.entries.kuaizhizao-red-voucher-title-short-r01.description':
+    '采购入库、其他出库、生产领料红框打印模板主标题追加组织简称（连枝横），与送货单红框模板区分；新建租户加载预设时同步写入。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-red-voucher-location-html-r01.title':
+    '采购入库红框 HTML 模板补库位列',
+  'pages.dashboard.updateLog.entries.purchase-receipt-red-voucher-location-html-r01.description':
+    '已落地红框凭证为整块 HTML 时，升级脚本在金额与备注之间插入库位列，并修正列序；数量按两位小数打印。',
+  'pages.dashboard.updateLog.entries.approval-advance-node-notify-r01.title':
+    '审批进入下一节点后补发待办与企微通知',
+  'pages.dashboard.updateLog.entries.approval-advance-node-notify-r01.description':
+    '任务制审批在上一节点通过后推进到下一审批节点时，会向新待办人发送站内待审批通知，并在已配置企微推送时同步推送到企业微信。首节点仍仅在提交时通知，避免重复打扰。',
+  'pages.dashboard.updateLog.entries.mobile-purchase-requisition-submit-review-r01.title':
+    '手机采购申请支持提交审核',
+  'pages.dashboard.updateLog.entries.mobile-purchase-requisition-submit-review-r01.description':
+    '移动端采购申请改为与电脑端相同的统一审核入口，保存后可一步进入待审核；详情与列表展示申请部门；已停留在已提交的单据可补点提交审核。',
+  'pages.dashboard.updateLog.entries.inventory-duplicate-default-batch-r01.title':
+    '即时库存重复行合并修复',
+  'pages.dashboard.updateLog.entries.inventory-duplicate-default-batch-r01.description':
+    '金蝶同步空批号与采购入库 DEFAULT 批号统一过账口径并自动合并重复批次；即时库存按物料+仓库+库位汇总，避免同仓两行相同数量。',
+  'pages.dashboard.updateLog.entries.inbound-detail-report-outbound-leak-r01.title':
+    '入库明细表混入出库行修复',
+  'pages.dashboard.updateLog.entries.inbound-detail-report-outbound-leak-r01.description':
+    '收发存流水按移动类型判定入出库方向；入库/出库明细表共用单侧数量筛选，避免串表；收发存汇总与收发明细同步受益；类型列统一中文展示。',
+  'pages.dashboard.updateLog.entries.purchase-order-detail-incl-unit-r01.title':
+    '采购订单详情含税单价尾差修复',
+  'pages.dashboard.updateLog.entries.purchase-order-detail-incl-unit-r01.description':
+    '详情抽屉明细含税单价改为与编辑表单相同的行级价税拆分反推，禁止用价税合计除以数量，避免 2.0001、14.9996 等展示尾差。',
+  'pages.dashboard.updateLog.entries.purchase-order-tax-inclusive-unit-roundtrip-r01.title':
+    '采购订单含税单价编辑后价差修复',
+  'pages.dashboard.updateLog.entries.purchase-order-tax-inclusive-unit-roundtrip-r01.description':
+    '含税价类下保存与回填改为按行数量做价税拆分再反算单价，避免数量较大时含税单价被抬成 100.01、价税合计多出 1 元等尾差。',
+  'pages.dashboard.updateLog.entries.purchase-order-payment-plan-save-r01.title':
+    '采购/销售订单付款计划保存落库修复',
+  'pages.dashboard.updateLog.entries.purchase-order-payment-plan-save-r01.description':
+    '修复嵌套付款/收款计划在保存时未进入提交数据导致编辑页空白的问题；节点须填名称与计划日期，缺项会明确提示而非静默丢弃。',
+  'pages.dashboard.updateLog.entries.purchase-order-push-prepayment-without-plan-r01.title':
+    '采购订单无付款计划也可下推预付付款单',
+  'pages.dashboard.updateLog.entries.purchase-order-push-prepayment-without-plan-r01.description':
+    '已审核采购订单在未维护付款计划、未填预付节点时，仍可从下推菜单创建预付付款单；确认弹窗填写金额，默认可参考订单价税合计（与付款申请取数口径一致）。',
+  'pages.dashboard.updateLog.entries.payable-recognition-ledger-closure-r01.title':
+    '采购立账策略与对账单审核立账闭环',
+  'pages.dashboard.updateLog.entries.payable-recognition-ledger-closure-r01.description':
+    '进项发票自动应付改认订单/入库单据策略；往来对账单支持未立账源单预览与审核立账（立即/按发票）；参数中心补齐对账立账选项；应付详情可区分里程碑与入库来源。',
+  'pages.dashboard.updateLog.entries.purchase-order-list-incl-amount-r01.title':
+    '采购订单列表订单金额按价税合计展示',
+  'pages.dashboard.updateLog.entries.purchase-order-list-incl-amount-r01.description':
+    '含税做单保存后列表「订单金额」改为展示价税合计（net_amount），不再显示未税合计；编辑回填时未税单价还原为含税单价，避免再次保存被二次除税。',
+  'pages.dashboard.updateLog.entries.order-payment-plan-amount-ratio-sync-r01.title':
+    '购销订单付款计划金额与比例互算',
+  'pages.dashboard.updateLog.entries.order-payment-plan-amount-ratio-sync-r01.description':
+    '采购/销售订单付款（收款）计划中，改计划金额按订单合计反算比例，改比例按合计反算金额；基数与金额汇总的预计应付/预计应收一致。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-hide-buyer-operator-number-r01.title':
+    '采购入库不再单独填采购员工号',
+  'pages.dashboard.updateLog.entries.purchase-receipt-hide-buyer-operator-number-r01.description':
+    '新建/编辑采购入库单去掉「采购员工号」输入框；选择采购员时自动带出人员档案工号并随单保存外推，详情也不再单独展示工号。',
+  'pages.dashboard.updateLog.entries.kingdee-im-batch-update-binding-r01.title':
+    '出入库外推支持金蝶批量更新接口',
+  'pages.dashboard.updateLog.entries.kingdee-im-batch-update-binding-r01.description':
+    '采购入库、销售出库、其他出库/入库、生产领料与成品入库补齐苍穹 batchUpdate 预置；出站绑定可增加「更新」接口用途。金蝶已存在同单号时绑更新接口，勿再走新增。',
+  'pages.dashboard.updateLog.entries.partner-statement-t-tdz-r01.title':
+    '修复往来对账页应用加载错误',
+  'pages.dashboard.updateLog.entries.partner-statement-t-tdz-r01.description':
+    '审核状态列在翻译函数初始化前引用了 t，打开往来对账时报 Cannot access t before initialization；已调整声明顺序。',
+  'pages.dashboard.updateLog.entries.work-order-pick-decimal-pending-r01.title':
+    '工单领料可领取小数尾差',
+  'pages.dashboard.updateLog.entries.work-order-pick-decimal-pending-r01.description':
+    '从工单创建生产领料时，待领上限以行上待领数量为准，不再被草稿里的 0 盖掉；本次发料输入跟随数量小数位配置，可领完 0.53 一类尾数。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-buyer-resubmit-r01.title':
+    '采购入库缺采购员暂存可再次推送补审',
+  'pages.dashboard.updateLog.entries.purchase-receipt-buyer-resubmit-r01.description':
+    '已保存未提交的金蝶采购入库可再次推送补提交/审核；若仍报请填写采购员，会按配置指定工号删除暂存后重推，不再卡在已推送。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-buyer-group-pair-r01.title':
+    '采购入库外推恢复为配置指定采购员',
+  'pages.dashboard.updateLog.entries.purchase-receipt-buyer-group-pair-r01.description':
+    '外推采购员只用业务配置指定工号，不写采购组、不用单据实际采购员，避免苍穹报缺采购员或无可用采购组。',
+  'pages.dashboard.updateLog.entries.uni-batch-menu-confirm-r01.title':
+    '修复批量操作下拉确认点了没反应',
+  'pages.dashboard.updateLog.entries.uni-batch-menu-confirm-r01.description':
+    '「批量操作」菜单内嵌确认气泡会随下拉关闭被卸载；确认改为挂在触发按钮上，部门/账户等批量启停可正常弹出并执行。',
+  'pages.dashboard.updateLog.entries.department-batch-status-r01.title':
+    '部门管理支持批量启用与停用',
+  'pages.dashboard.updateLog.entries.department-batch-status-r01.description':
+    '勾选部门后可在批量操作中启用或停用，交互与结果提示对齐账户管理。',
+  'pages.dashboard.updateLog.entries.department-name-editable-r01.title':
+    '编辑部门时可修改部门名称',
+  'pages.dashboard.updateLog.entries.department-name-editable-r01.description':
+    '预设部门（如采购部）编辑时名称不再只读；名称以库内值为准，保存后列表与下拉同步显示修改结果。',
+  'pages.dashboard.updateLog.entries.work-order-inbound-fqc-hint-r01.title':
+    '工单下推入库缺成品检验时提示纠正',
+  'pages.dashboard.updateLog.entries.work-order-inbound-fqc-hint-r01.description':
+    '物料启用成品检验方案时，若尚未产生 FQC 合格数量，下推入库不再误报「可入库数量已用尽」，改为明确提示须先完成成品检验。',
+  'pages.dashboard.updateLog.entries.kingdee-warehouse-operator-employee-number-r01.title':
+    '仓储外推领用人员改用账户工号',
+  'pages.dashboard.updateLog.entries.kingdee-warehouse-operator-employee-number-r01.description':
+    '其他出库、生产领料、采购入库等单据选人后写入工号字段；外推优先单据工号与用户 employee_number，已选领用人时不再回落业务配置固定工号；领用部门仍走部门编码。',
+  'pages.dashboard.updateLog.entries.system-menu-edit-parent-r01.title': '菜单管理编辑时可调整父级',
+  'pages.dashboard.updateLog.entries.system-menu-edit-parent-r01.description':
+    '应用同步菜单在编辑弹窗中可重新选择父菜单，保存后按租户覆盖保留；应用根菜单仍不可改父级。',
+  'pages.dashboard.updateLog.entries.kingdee-org-person-manual-import-r01.title':
+    '组织账户适配金蝶部门岗位与工号手工导入',
+  'pages.dashboard.updateLog.entries.kingdee-org-person-manual-import-r01.description':
+    '账户支持工号、岗位、角色（金蝶职位）、兼职与直接上级；用户与岗位可按金蝶导出列批量导入；仓储外推与采购员选择优先使用工号，金蝶职位请在角色中维护。',
+  'pages.dashboard.updateLog.entries.im-warehouse-withdraw-kingdee-align-r01.title':
+    '销售出库等 IM 出入库撤回与采购入库对齐',
+  'pages.dashboard.updateLog.entries.im-warehouse-withdraw-kingdee-align-r01.description':
+    '销售出库、其他出/入库、生产领料、成品入库撤回会先调苍穹反审核与撤销提交；失败时默认不阻断 MES 冲账，页面以警告展示 external_withdraw_message。数据互通可分别绑定确认、撤回、删除接口。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-withdraw-kingdee-nonblocking-r01.title':
+    '采购入库撤回默认不因金蝶失败阻断本地',
+  'pages.dashboard.updateLog.entries.purchase-receipt-withdraw-kingdee-nonblocking-r01.description':
+    '撤回入库仍会尽力调苍穹反审核与撤销提交；失败时默认继续冲减 MES 库存并改回待入库，响应字段 external_withdraw_message 提示金蝶侧未完全同步。业务配置 remote_withdraw_blocks_local 为 true 时可恢复阻断。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-unsubmit-404-skip-r01.title':
+    '采购入库撤回：batchUnsubmit 未发布时不挡本地',
+  'pages.dashboard.updateLog.entries.purchase-receipt-unsubmit-404-skip-r01.description':
+    '撤回入库反审核成功后，若苍穹 batchUnsubmit 网关 HTTP 404（未发布或未授权），不再阻断 MES 冲库存与改回待入库；未在数据互通绑定撤销提交接口时也不再误调默认路径。建议在开放平台发布 batchUnsubmit 以保持金蝶单为暂存。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-withdraw-local-after-kingdee-r01.title':
+    '采购入库撤回：苍穹已成功时本地可继续',
+  'pages.dashboard.updateLog.entries.purchase-receipt-withdraw-local-after-kingdee-r01.description':
+    '修复金蝶 batchUnaudit 已成功但 successCount 为空或第二步撤销提交报「未提交/暂存」时仍阻断本地撤回的问题；分步报错区分反审核与撤销提交，重复操作时按幂等继续冲减库存。金蝶已为非审核态时重试「单据非审核态，不能反审核」亦视为反审核已完成并继续本地撤回。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-kingdee-unaudit-404-r01.title':
+    '采购入库撤回苍穹反审核 404 排查与误绑拦截',
+  'pages.dashboard.updateLog.entries.purchase-receipt-kingdee-unaudit-404-r01.description':
+    '撤回已外推采购入库时若误绑 add/add2 新增接口或苍穹未发布 batchUnaudit，网关会 HTTP 404。现按接口用途过滤可选 API、保存前校验 operate 路径，并在报错中提示接口名与路径及开放平台发布授权。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-withdraw-config-fix-r01.title':
+    '采购入库撤回苍穹配置解析修复',
+  'pages.dashboard.updateLog.entries.purchase-receipt-withdraw-config-fix-r01.description':
+    '修复已外推金蝶单撤回入库时报 resolve_purchase_receipt_push_config 缺少 warehouse 参数的问题，撤回与删除会按该入库单正确加载外推配置后再调苍穹反审核与撤销提交。',
+  'pages.dashboard.updateLog.entries.document-push-bind-behavior-col-r01.title':
+    '数据互通列表增加绑定行为列',
+  'pages.dashboard.updateLog.entries.document-push-bind-behavior-col-r01.description':
+    '出站推送目标表格在推送方式后展示绑定行为（确认入库、反审核、撤销提交、删除等），名称列仅显示接口名称。',
+  'pages.dashboard.updateLog.entries.document-push-multi-api-rows-r01.title':
+    '采购入库数据互通可多行绑接口',
+  'pages.dashboard.updateLog.entries.document-push-multi-api-rows-r01.description':
+    '恢复列表一行一条数据接口的交互，可多次添加；每行在设置里选择接口用途（确认入库、反审核、撤销提交、删除）与对应苍穹 API，保存后仍合并为按按钮触发的 action_apis。',
+  'pages.dashboard.updateLog.entries.kingdee-im-operate-presets-warehouse-r01.title':
+    '仓储外推苍穹反审核撤销删除接口补齐',
+  'pages.dashboard.updateLog.entries.kingdee-im-operate-presets-warehouse-r01.description':
+    '金蝶苍穹接口库新增销售出库、其他出/入库、生产领料、成品入库的批量反审核、撤销提交与删除预设，形态与采购入库一致；业务配置默认路径已对齐，便于数据互通按按钮绑定。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-kingdee-revoke-bind-r01.title':
+    '采购入库撤回与删除同步苍穹',
+  'pages.dashboard.updateLog.entries.purchase-receipt-kingdee-revoke-bind-r01.description':
+    '已外推金蝶的采购入库单，本地撤回入库会尽力反审核并撤销提交，删除会同步苍穹删单；数据互通可为确认入库、撤回、删除分别绑定接口。撤回默认不因苍穹失败阻断本地冲库存，删除仍可在远程失败时阻断。',
+  'pages.dashboard.updateLog.entries.finished-goods-receipt-date-confirm-r01.title':
+    '成品入库确认不再缺入库日期',
+  'pages.dashboard.updateLog.entries.finished-goods-receipt-date-confirm-r01.description':
+    '成品/半成品入库确认时，若单据未填入库日期则按确认时刻写入批号台账；编辑弹窗字段文案改为入库日期，与采购入库一致。',
+  'pages.dashboard.updateLog.entries.finished-goods-receipt-edit-pending-r01.title':
+    '成品入库待入库可编辑',
+  'pages.dashboard.updateLog.entries.finished-goods-receipt-edit-pending-r01.description':
+    '成品入库单在确认入库前可编辑表头与明细（含副数量/副单位），列表与详情提供编辑入口，对齐采购入库交互。',
+  'pages.dashboard.updateLog.entries.warehouse-docs-dual-qty-align-r01.title':
+    '销售出库领料成品入库其他出库多单位对齐',
+  'pages.dashboard.updateLog.entries.warehouse-docs-dual-qty-align-r01.description':
+    '销售出库、生产领料、成品入库、其他出库明细的副数量/副单位/行换算率保存与回显对齐采购入库；外推金蝶苍穹分录统一写入 unit2nd_number 与 qtyunit2nd。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-kingdee-aux-qty2nd-r01.title':
+    '采购入库外推金蝶辅助数量纠正',
+  'pages.dashboard.updateLog.entries.purchase-receipt-kingdee-aux-qty2nd-r01.description':
+    '采购入库推送金蝶苍穹时，明细写入辅助单位 unit2nd_number 与辅助数量 qtyunit2nd（单据分录真源字段，不是即时库存的 qty2nd），避免辅助数量被默认成与库存数量相同。',
+  'pages.dashboard.updateLog.entries.doc-line-aux-quantity-persist-r01.title':
+    '采购销售出入库副单位可保存',
+  'pages.dashboard.updateLog.entries.doc-line-aux-quantity-persist-r01.description':
+    '采购入库、销售出库及采购/销售退货明细的副数量、副单位、行换算率会随保存写入并在编辑时回显；明细表单不再因 Form.List 漏注册字段而丢副单位。',
+  'pages.dashboard.updateLog.entries.inbound-withdraw-mid-batch-enable-r01.title':
+    '中途启用批号后可撤回原入库',
+  'pages.dashboard.updateLog.entries.inbound-withdraw-mid-batch-enable-r01.description':
+    '物料入库时未启用批号、确认后再打开批号管理时，撤回采购入库等单据会按原无批号台账冲减，不再误报「出库必须指定批号」。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-kingdee-inventory-unit-r01.title':
+    '采购入库外推金蝶库存单位编码纠正',
+  'pages.dashboard.updateLog.entries.purchase-receipt-kingdee-inventory-unit-r01.description':
+    '采购入库推送金蝶苍穹时，明细库存单位改为取物料库存单位与单位目录编码，数量换算到库存单位；不再把 kg 等展示名硬映射成错误编码 004。',
+  'pages.dashboard.updateLog.entries.other-io-ledger-dual-align-r01.title':
+    '其他出入库主副单位与库存对齐',
+  'pages.dashboard.updateLog.entries.other-io-ledger-dual-align-r01.description':
+    '其他出入库详情与确认接口的主单位/主数量、副单位/副数量与即时库存同口径（库存单位与固定辅助单位）；确认过账按确认体主副数量写入台账。',
+  'pages.dashboard.updateLog.entries.inventory-cosmic-unit2nd-r01.title':
+    '苍穹即时库存辅助单位字段对齐',
+  'pages.dashboard.updateLog.entries.inventory-cosmic-unit2nd-r01.description':
+    '苍穹 getInventoryDetail 的辅助单位/辅助量字段为 unit2nd、qty2nd/avbqty2nd；同步已按此写入台账副单位与副数量，并把浮动辅助单位按本行数量比落成固定换算。',
+  'pages.dashboard.updateLog.entries.inventory-aux-unit-sync-r01.title':
+    '即时库存同步补齐金蝶辅助单位',
+  'pages.dashboard.updateLog.entries.inventory-aux-unit-sync-r01.description':
+    '金蝶即时库存的辅助单位与辅助量会写入台账副单位/副数量；若物料尚无固定辅助单位，同步按本行数量比补写换算，避免副单位回落成主单位。',
+  'pages.dashboard.updateLog.entries.material-batch-sync-decouple-r01.title':
+    '主物料同步不再写批号管理',
+  'pages.dashboard.updateLog.entries.material-batch-sync-decouple-r01.description':
+    '物料主档同步不再合并或映射批号管理开关；启用批号管理请用「其他同步 → 批号管理同步」拉取金蝶物料库存信息批量查询的 enablelot。',
+  'pages.dashboard.updateLog.entries.material-other-sync-batch-manage-r01.title':
+    '物料其他同步与批号管理同步',
+  'pages.dashboard.updateLog.entries.material-other-sync-batch-manage-r01.description':
+    '物料管理将「同步多单位」改为「其他同步」下拉，含多单位同步与批号管理同步；批号管理开关取自金蝶物料库存信息的启用批号管理。',
+  'pages.dashboard.updateLog.entries.material-tools-dropdown-r01.title':
+    '物料管理工具收入下拉',
+  'pages.dashboard.updateLog.entries.material-tools-dropdown-r01.description':
+    '物料管理列表将重写物料编码、防重助手、物料健康助手等工具类入口收拢到「工具」下拉按钮，减少工具栏占位。',
+  'pages.dashboard.updateLog.entries.ledger-secondary-aux-unit-fix-r01.title':
+    '即时库存副单位纠正为辅助单位',
+  'pages.dashboard.updateLog.entries.ledger-secondary-aux-unit-fix-r01.description':
+    '台账 API 的副单位/副数量对应金蝶辅助单位（物料第一个固定辅助单位），不再误用基本单位；批次新增辅助量字段，金蝶同步 baseqty 仍写基本量；有固定辅助单位的库存建议全量重同步。',
+  'pages.dashboard.updateLog.entries.inventory-qty-columns-layout-r01.title':
+    '即时库存主副单位数量列布局调整',
+  'pages.dashboard.updateLog.entries.inventory-qty-columns-layout-r01.description':
+    '主单位、主数量、副单位、副数量四列右对齐，并紧挨在途数量列之前展示（规格型号等品牌列之后）。',
+  'pages.dashboard.updateLog.entries.inventory-material-balance-keyword-r01.title':
+    '即时库存查询模糊搜索恢复生效',
+  'pages.dashboard.updateLog.entries.inventory-material-balance-keyword-r01.description':
+    '即时库存与批次库存查询的关键词会在分组前按物料编码、名称、规格等字段过滤，顶栏与高级搜索物料条件均会传给后端。',
+  'pages.dashboard.updateLog.entries.ledger-dual-unit-warehouse-r01.title':
+    '即时库存与仓储确认支持台账主副单位',
+  'pages.dashboard.updateLog.entries.ledger-dual-unit-warehouse-r01.description':
+    '即时库存与批次查询 API 统一返回主单位、副单位、主数量、副数量；金蝶同步分别写入库存量与基本量；副单位语义后续纠正为辅助单位（见 ledger-secondary-aux-unit-fix-r01）。',
   'app.kuaizhizao.warehouseInventory.syncField.unit': '单位',
   'app.kuaizhizao.warehouseInventory.syncWarehouseRequired':
     '请映射仓库编码或仓库名称（至少一项）',
+  'app.kuaizhizao.warehouseInventory.syncLocationRequired':
+    '请映射库位编码或库位名称（至少一项；缺库位会把金蝶同仓多行压在一起）',
   'app.kuaizhizao.warehouseInventory.colBrand': '品牌',
   'app.kuaizhizao.warehouseInventory.colTexture': '材质',
   'app.kuaizhizao.warehouseInventory.colLocation': '库位',
@@ -17517,7 +21669,8 @@ export default {
   'app.kuaizhizao.batchInventoryQuery.headerTitle': '批次库存查询',
   'app.kuaizhizao.batchInventoryQuery.colBatchNo': '批号',
   'app.kuaizhizao.batchInventoryQuery.colProductionDate': '生产日期',
-  'app.kuaizhizao.batchInventoryQuery.colExpiryDate': '有效期',
+  'app.kuaizhizao.batchInventoryQuery.colShelfLifeDays': '有效期',
+  'app.kuaizhizao.batchInventoryQuery.colExpiryDate': '有效期至',
   'app.kuaizhizao.batchInventoryQuery.colSupplierBatchNo': '供应商批号',
   'app.kuaizhizao.batchInventoryQuery.showExpiredBatches': '显示过期批次',
   'app.kuaizhizao.batchInventoryQuery.hideExpiredBatches': '隐藏过期批次',
@@ -17615,7 +21768,7 @@ export default {
   'app.kuaizhizao.inventoryAlert.inheritPreviewSafetyStock': '物料最低库存',
   'app.kuaizhizao.inventoryAlert.inheritPreviewMaxStock': '物料最高库存',
   'app.kuaizhizao.inventoryAlert.inheritPreviewMaterialEmpty': '该物料未配置最低/最高库存，请先在物料主数据维护',
-  'app.kuaizhizao.inventoryAlert.formMaterialMultiPlaceholder': '请选择物料（可多选，支持名称/编号搜索）',
+  'app.kuaizhizao.inventoryAlert.formMaterialMultiPlaceholder': '请选择物料（可多选，支持名称、编号、拼音首字母）',
   'app.kuaizhizao.inventoryAlert.inheritPreviewByMaterials': '已选 {{count}} 个物料，将分别继承各自最低/最高库存',
   'app.kuaizhizao.inventoryAlert.inheritPreviewByGroup': '未选具体物料时，按组内各物料各自的最低/最高库存生效',
   'app.kuaizhizao.inventoryAlert.runCheckButton': '立即检查',
@@ -17716,6 +21869,11 @@ export default {
   'app.kuaizhizao.inventoryTransfer.formBatchNoRequired': '请选择批号',
   'app.kuaizhizao.inventoryTransfer.formBatchNoSelectPlaceholder': '请选择在库批号',
   'app.kuaizhizao.inventoryTransfer.msgBatchRequired': '物料 {{material}} 须选择在库批号',
+  'app.kuaizhizao.inventoryTransfer.msgSerialRequired':
+    '物料 {{material}} 启用了序列号管理，须选择 {{expected}} 个序列号（当前 {{actual}} 个）',
+  'app.kuaizhizao.inventoryTransfer.msgSerialSingleBatch':
+    '物料 {{material}} 启用了序列号管理，同一明细只能选择一个批号',
+  'app.kuaizhizao.inventoryTransfer.serialCount': '已选 {{count}} 个',
   'app.kuaizhizao.inventoryTransfer.msgNoBatchInWarehouse': '该仓库暂无可用批号',
   'app.kuaizhizao.inventoryTransfer.msgEditDraftOnly': '仅草稿状态调拨单可编辑',
   'app.kuaizhizao.inventoryTransfer.msgUpdateSuccess': '调拨单更新成功',
@@ -17860,9 +22018,42 @@ export default {
   'app.kuaizhizao.documentAction.purchase_order.pull_from_replenishment_suggestion.target': '采购订单',
   // warehouse outbound (hub + sub-pages)
   'app.kuaizhizao.warehouseOutbound.title': '出库管理',
+  'app.kuaizhizao.warehouseOutbound.createSalesDelivery': '新建销售出库单',
+  'app.kuaizhizao.warehouseOutbound.createSalesDeliveryModal': '新建销售出库单',
+  'app.kuaizhizao.warehouseOutbound.createProductionPicking': '新建生产领料单',
+  'app.kuaizhizao.warehouseOutbound.createProductionPickingModal': '新建生产领料单',
+  'app.kuaizhizao.warehouseOutbound.msg.needValidProductionPickingLine':
+    '请至少填写一行有效领料明细（物料与数量）',
+  'app.kuaizhizao.warehouseOutbound.msg.productionPickingBlankCreated': '生产领料单已创建',
+  'app.kuaizhizao.warehouseOutbound.msg.selectWorkOrderFirst': '请先选择工单',
+  'app.kuaizhizao.warehouseOutbound.msg.workOrderLinesLoaded': '已从工单加载领料明细',
+  'app.kuaizhizao.warehouseOutbound.msg.saveStockInsufficient':
+    '物料 {{material}} 领料数量 {{qty}} 超过当前仓库可用库存 {{stock}}',
+  'app.kuaizhizao.warehouseOutbound.action.loadLinesFromWorkOrder': '从工单加载明细',
+  'app.kuaizhizao.warehouseOutbound.entry.pendingPickingHintTitle': '存在未完的生产领料单',
+  'app.kuaizhizao.warehouseOutbound.entry.pendingPickingHintWithCode':
+    '未完单号 {{code}}：{{hint}} 本次录入可继续领其余物料。',
+  'app.kuaizhizao.warehouseOutbound.createLinesTitle': '出库明细',
+  'app.kuaizhizao.warehouseOutbound.field.customer': '客户',
+  'app.kuaizhizao.warehouseOutbound.selectCustomerRequired': '请选择客户',
+  'app.kuaizhizao.warehouseOutbound.msg.needValidSalesDeliveryLine':
+    '请至少添加一行有效明细（物料与出库数量）',
   'app.kuaizhizao.warehouseOutbound.capability.outbound_hub.confirm.not_pending': '当前状态不可确认出库',
   'app.kuaizhizao.warehouseOutbound.capability.outbound_hub.confirm.pending_audit': '单据待审核，通过后方可确认出库',
   'app.kuaizhizao.warehouseOutbound.capability.outbound_hub.confirm.outsource_issue': '委外发料不支持在此确认',
+  'app.kuaizhizao.warehouseOutbound.capability.sales_delivery.confirm.not_audited':
+    '销售出库单须先提交并审核通过后才能确认出库（执行状态「待出库」不等于已审核）',
+  'app.kuaizhizao.warehouseOutbound.capability.sales_delivery.delete.submitted':
+    '已提交的销售出库单不可删除，请先撤销提交',
+  'app.kuaizhizao.warehouseOutbound.capability.sales_delivery.update.submitted':
+    '已提交的销售出库单不可编辑，请先撤销提交',
+  'app.kuaizhizao.warehouseOutbound.capability.sales_delivery.submit.no_items': '请先维护出库明细后再提交',
+  'app.kuaizhizao.warehouseOutbound.capability.sales_delivery.submit.not_draft': '当前审核状态不可提交',
+  'app.kuaizhizao.warehouseOutbound.capability.sales_delivery.submit_review.not_allowed':
+    '请先提交单据后再提交审核',
+  'app.kuaizhizao.warehouseOutbound.capability.sales_delivery.withdraw_submit.not_pending':
+    '当前状态不可撤销提交或撤回审核',
+  'app.kuaizhizao.warehouseOutbound.capability.sales_delivery.approve.not_pending': '仅待审核单据可审核',
   'app.kuaizhizao.warehouseOutbound.capability.outbound_hub.withdraw.not_posted': '当前状态不可撤回出库',
   'app.kuaizhizao.warehouseOutbound.capability.outbound_hub.withdraw.outsource_issue': '委外发料不支持撤回',
   'app.kuaizhizao.warehouseOutbound.capability.outbound_hub.delete.not_allowed': '当前状态不可删除出库单',
@@ -17916,7 +22107,9 @@ export default {
   'app.kuaizhizao.warehouseOutbound.type.purchaseReturn': '采购退货',
   'app.kuaizhizao.warehouseOutbound.action.confirmOutbound': '确认出库',
   'app.kuaizhizao.warehouseOutbound.action.confirmPicking': '确认领料',
-  'app.kuaizhizao.warehouseOutbound.action.withdraw': '撤回',
+  'app.kuaizhizao.warehouseOutbound.action.withdraw': '撤回出库',
+  'app.kuaizhizao.warehouseOutbound.action.withdrawOutbound': '撤回出库',
+  'app.kuaizhizao.warehouseOutbound.action.withdrawPicking': '撤回领料',
   'app.kuaizhizao.warehouseOutbound.action.savePickingEdit': '保存修改',
   'app.kuaizhizao.warehouseOutbound.action.batchOutbound': '批量出库',
   'app.kuaizhizao.warehouseOutbound.action.generateWave': '生成波次拣货单',
@@ -17952,7 +22145,13 @@ export default {
   'app.kuaizhizao.warehouseOutbound.field.warehouse': '出库仓库',
   'app.kuaizhizao.warehouseOutbound.field.operator': '出库人',
   'app.kuaizhizao.warehouseOutbound.field.picker': '领料人',
+  'app.kuaizhizao.warehouseOutbound.field.requester': '领用人',
+  'app.kuaizhizao.warehouseOutbound.field.requesterPlaceholder': '请选择领用人',
+  'app.kuaizhizao.warehouseOutbound.field.pickDepartment': '领用部门',
+  'app.kuaizhizao.warehouseOutbound.field.pickDepartmentPlaceholder': '请选择领用部门',
+  'app.kuaizhizao.warehouseOutbound.field.documentNumber': '单据编号',
   'app.kuaizhizao.warehouseOutbound.field.documentDate': '制单日期',
+  'app.kuaizhizao.warehouseOutbound.field.documentDateRequired': '请选择制单日期',
   'app.kuaizhizao.warehouseOutbound.field.remarks': '出库备注',
   'app.kuaizhizao.warehouseOutbound.field.remarksPlaceholder': '出库单备注',
   'app.kuaizhizao.warehouseOutbound.field.optional': '可选',
@@ -17979,11 +22178,32 @@ export default {
   'app.kuaizhizao.warehouseOutbound.msg.noEditableLines': '没有可编辑的明细行',
   'app.kuaizhizao.warehouseOutbound.msg.requiredQtyMustBePositive': '物料 {{material}} 应领数量须大于 0',
   'app.kuaizhizao.warehouseOutbound.msg.selectLineWarehouse': '请为物料 {{material}} 选择出库仓库',
+  'app.kuaizhizao.warehouseOutbound.splitByWarehouse.actionCol': '拆行',
+  'app.kuaizhizao.warehouseOutbound.splitByWarehouse.action': '按仓拆行',
+  'app.kuaizhizao.warehouseOutbound.splitByWarehouse.disabledHint':
+    '请先选择物料并填写出库数量',
+  'app.kuaizhizao.warehouseOutbound.splitByWarehouse.title': '按仓拆行',
+  'app.kuaizhizao.warehouseOutbound.splitByWarehouse.hint':
+    '物料 {{material}} 本行出库数量 {{target}}，请在各仓填写分摊数量，合计须等于本行数量。',
+  'app.kuaizhizao.warehouseOutbound.splitByWarehouse.sumLabel':
+    '已分摊 {{actual}} / 本行 {{target}}',
+  'app.kuaizhizao.warehouseOutbound.splitByWarehouse.colQty': '出库数量',
+  'app.kuaizhizao.warehouseOutbound.splitByWarehouse.confirm': '确认拆行',
+  'app.kuaizhizao.warehouseOutbound.splitByWarehouse.sumMismatch':
+    '各仓数量合计须等于本行数量 {{target}}，当前合计 {{actual}}',
+  'app.kuaizhizao.warehouseOutbound.splitByWarehouse.exceedsStock':
+    '仓库 {{warehouse}} 出库数量不能超过可用库存 {{stock}}',
+  'app.kuaizhizao.warehouseOutbound.splitByWarehouse.needTwoWarehouses':
+    '至少选择两个仓库并填写数量才能拆行',
+  'app.kuaizhizao.warehouseOutbound.splitByWarehouse.loadFailed': '加载仓库库存失败',
+  'app.kuaizhizao.warehouseOutbound.splitByWarehouse.done': '已按仓库拆成多行明细',
   'app.kuaizhizao.warehouseOutbound.msg.pickingEditSaved': '领料单已保存',
   'app.kuaizhizao.warehouseOutbound.msg.pickingEditFailed': '保存领料单失败',
   'app.kuaizhizao.warehouseOutbound.msg.selectSalesOrders': '请选择至少一个销售订单',
   'app.kuaizhizao.warehouseOutbound.msg.selectWorkOrders': '请选择至少一个工单',
   'app.kuaizhizao.warehouseOutbound.msg.selectWarehouse': '请选择出库仓库',
+  'app.kuaizhizao.warehouseOutbound.msg.selectLocation': '请选择库位',
+  'app.kuaizhizao.warehouseOutbound.msg.selectLocationForMaterial': '请为物料 {{material}} 选择库位',
   'app.kuaizhizao.warehouseOutbound.msg.salesOrderPullFailed': '销售订单 {{id}} 加载失败：{{message}}',
   'app.kuaizhizao.warehouseOutbound.msg.batchSalesSuccess': '批量销售出库成功，共创建 {{count}} 张销售出库单',
   'app.kuaizhizao.warehouseOutbound.msg.batchPickingSuccess': '批量生产领料成功，共创建 {{count}} 张领料单',
@@ -18033,11 +22253,13 @@ export default {
   'app.kuaizhizao.warehouseOutbound.confirm.hintPickingMultiBatch':
     '请核对库位、批号与序列号。批号管理物料可勾选多个在库批号并分摊数量（合计须等于本行出库量），系统按批拆行扣库存，无需再另建领料单。',
   'app.kuaizhizao.warehouseOutbound.confirm.hintMultiBatch':
-    '请核对库位、批号与序列号。批号管理物料可勾选多个在库批号并分摊数量（合计须等于本行出库量），系统按批拆行扣库存，无需分多次出库。',
+    '请核对库位、批号与序列号。未填批号时，确认将按在库批号先进先出自动分摊并扣库存；库存不足时仍会提示，请先补库存或调整数量。',
   'app.kuaizhizao.warehouseOutbound.confirm.fifoHint': '先进先出/后进先出等策略见',
   'app.kuaizhizao.warehouseOutbound.confirm.fifoLink': '配置中心 → 仓储参数',
   'app.kuaizhizao.warehouseOutbound.confirm.loadingBatches': '加载批次…',
   'app.kuaizhizao.warehouseOutbound.confirm.noBatchAvailable': '无可用批次',
+  'app.kuaizhizao.warehouseOutbound.confirm.batchPicker.manualWithoutStockHint':
+    '当前仓库无在库批号；组织已允许负库存出库，请手工录入本次出库批号。',
   'app.kuaizhizao.warehouseOutbound.confirm.loadingSerials': '加载序列号…',
   'app.kuaizhizao.warehouseOutbound.confirm.noSerialAvailable': '无在库序列号',
   'app.kuaizhizao.warehouseOutbound.confirm.serialPicker.title': '选择序列号',
@@ -18051,6 +22273,7 @@ export default {
   'app.kuaizhizao.warehouseOutbound.confirm.batchAvailable': '{{batch}}（可用 {{qty}}）',
   'app.kuaizhizao.warehouseOutbound.confirm.batchAvailableWithWh': '{{batch}}（可用 {{qty}} - {{warehouse}}）',
   'app.kuaizhizao.warehouseOutbound.option.warehouseWithStock': '{{warehouse}}（库存 {{qty}}）',
+  'app.kuaizhizao.warehouseOutbound.option.warehouseWithStockEmpty': '{{warehouse}}（无库存）',
   'app.kuaizhizao.warehouseOutbound.confirm.batchAllocationRequired':
     '物料 {{material}} 请按批号分摊本次发料数量 {{qty}}（可选批号：{{batches}}）',
   'app.kuaizhizao.warehouseOutbound.confirm.batchSerialMultiNotSupported':
@@ -18112,6 +22335,8 @@ export default {
   'app.kuaizhizao.warehouseOutbound.pull.loadSalesOrdersFailed': '加载销售订单列表失败',
   'app.kuaizhizao.warehouseOutbound.pull.soPreviewFailed': '加载出库预览失败',
   'app.kuaizhizao.warehouseOutbound.pull.soPreviewNoLines': '无可出库明细',
+  'app.kuaizhizao.warehouseOutbound.pull.soSameCustomerPriceTypeRequired':
+    '请勾选同一客户且同一价类的明细后再创建销售出库单',
   'app.kuaizhizao.warehouseOutbound.pull.soSelectLinesFirst': '请至少选择一条可出库明细',
   'app.kuaizhizao.warehouseOutbound.pull.woPreviewFailed': '加载生产领料预览失败',
   'app.kuaizhizao.warehouseOutbound.pull.woPreviewNoLines': '无可领料明细',
@@ -18179,6 +22404,8 @@ export default {
   'app.kuaizhizao.warehouseOutbound.entry.pendingIssueQty': '待发数量',
   'app.kuaizhizao.warehouseOutbound.entry.thisIssue': '本次发料',
   'app.kuaizhizao.warehouseOutbound.entry.qtyExceedsPending': '物料 {{material}} 出库数量不能超过待交 {{max}}',
+  'app.kuaizhizao.warehouseOutbound.entry.qtyExceedsPickable':
+    '物料 {{material}} 出库数量不能超过待领 {{max}}',
   'app.kuaizhizao.warehouseOutbound.entry.fillOutboundQty': '请至少填写一行出库数量',
   'app.kuaizhizao.warehouseOutbound.entry.fillIssueQty': '请至少填写一行本次发料数量',
   'app.kuaizhizao.warehouseOutbound.entry.batchSetLineWarehouse': '批量设置出库仓库',
@@ -18192,6 +22419,9 @@ export default {
   'app.kuaizhizao.otherOutbound.title': '其他出库',
   'app.kuaizhizao.otherOutbound.create': '新建其他出库单',
   'app.kuaizhizao.otherOutbound.createModal': '新建其他出库单',
+  'app.kuaizhizao.otherOutbound.editModal': '编辑其他出库单',
+  'app.kuaizhizao.otherOutbound.msg.editKeepExistingLinesOnly':
+    '编辑时请勿新增明细行；需增行请新建其他出库单',
   'app.kuaizhizao.otherOutbound.detailTitle': '其他出库单详情',
   'app.kuaizhizao.otherOutbound.col.outboundCode': '出库单编号',
   'app.kuaizhizao.otherOutbound.col.reasonType': '原因类型',
@@ -18199,6 +22429,19 @@ export default {
   'app.kuaizhizao.otherOutbound.col.deliveryTime': '出库时间',
   'app.kuaizhizao.otherOutbound.field.reasonType': '原因类型',
   'app.kuaizhizao.otherOutbound.field.reasonDesc': '原因说明',
+  'app.kuaizhizao.otherOutbound.field.pickDepartment': '领用部门',
+  'app.kuaizhizao.otherOutbound.field.pickDepartmentPlaceholder': '请选择领用部门',
+  'app.kuaizhizao.otherOutbound.field.pickDate': '领用日期',
+  'app.kuaizhizao.otherOutbound.field.pickDateRequired': '请选择领用日期',
+  'app.kuaizhizao.otherOutbound.field.picker': '领用人',
+  'app.kuaizhizao.otherOutbound.field.pickerPlaceholder': '请选择领用人',
+  'app.kuaizhizao.otherOutbound.field.pickerOperatorNumber': '领用人工号',
+  'app.kuaizhizao.otherOutbound.field.pickerOperatorNumberPlaceholder': '金蝶供应链业务员工号',
+  'app.kuaizhizao.otherOutbound.field.pickerOperatorNumberExtra':
+    '与金蝶职员编码一致，外推时写入 pickeroperator_number',
+  'app.kuaizhizao.otherOutbound.field.customer': '客户',
+  'app.kuaizhizao.otherOutbound.field.customerPlaceholder': '客户领用时选择，与领用部门二选一',
+  'app.kuaizhizao.otherOutbound.msg.pickDeptOrCustomerRequired': '请选择领用部门或客户',
   'app.kuaizhizao.otherOutbound.field.selectReasonType': '请选择原因类型',
   'app.kuaizhizao.otherOutbound.reason.loss': '盘亏',
   'app.kuaizhizao.otherOutbound.reason.sample': '样品',
@@ -18452,6 +22695,7 @@ export default {
   'app.kuaizhizao.equipmentFault.form.repairStatus': '维修状态',
   'app.kuaizhizao.equipmentFault.form.selectRepairStatus': '请选择维修状态',
   'app.kuaizhizao.equipmentFault.action.createRepair': '创建维修',
+  'app.kuaizhizao.equipmentFault.action.assignRepair': '指派维修',
   'app.kuaizhizao.equipmentFault.action.createMaintenance': '转保养',
   'app.kuaizhizao.equipmentFault.maintenanceModal': '转保养执行',
   'app.kuaizhizao.equipmentFault.maintenanceCreated': '保养执行已创建',
@@ -18459,6 +22703,8 @@ export default {
   'app.kuaizhizao.equipmentFault.source.routePatrol': '来自巡检',
   'app.kuaizhizao.equipmentFault.source.viewSource': '查看来源单据',
   'app.kuaizhizao.equipmentFault.section.basicInfo': '基本信息',
+  'app.kuaizhizao.equipmentFault.section.repairTimes': '维修任务时点',
+  'app.kuaizhizao.equipmentFault.repairTimesEmpty': '暂无关联维修单',
   'app.kuaizhizao.equipmentFault.section.lifecycle': '生命周期',
   'app.kuaizhizao.equipmentFault.section.detailInfo': '明细信息',
   'app.kuaizhizao.equipmentFault.section.operationHistory': '操作记录',
@@ -18475,6 +22721,9 @@ export default {
   'app.kuaizhizao.equipmentFault.createSuccess': '故障记录创建成功',
   'app.kuaizhizao.equipmentFault.updateSuccess': '故障记录更新成功',
   'app.kuaizhizao.equipmentFault.repairCreated': '维修记录已创建',
+  'app.kuaizhizao.equipmentFault.repairAssigned': '已指派维修',
+  'app.kuaizhizao.equipmentFault.form.repairer': '主维修人',
+  'app.kuaizhizao.equipmentFault.form.selectRepairer': '请选择主维修人',
   'app.kuaizhizao.equipmentFault.repairDescriptionTemplate': '维修故障：{{faultNo}} - {{description}}',
   'app.kuaizhizao.equipmentFault.lifecycle.pending': '待处理',
   'app.kuaizhizao.equipmentFault.lifecycle.processing': '处理中',
@@ -18482,6 +22731,59 @@ export default {
   'app.kuaizhizao.equipmentFault.lifecycle.closed': '已关闭',
   'app.kuaizhizao.equipmentFault.lifecycle.suggestionDispatch': '派工处理',
   'app.kuaizhizao.equipmentFault.lifecycle.suggestionCompleteRepair': '完成修复',
+  'app.kuaizhizao.spotCheckPlan.title': '点检计划',
+  'app.kuaizhizao.spotCheckPlan.create': '新建点检计划',
+  'app.kuaizhizao.spotCheckPlan.createModal': '新建点检计划',
+  'app.kuaizhizao.spotCheckPlan.editModal': '编辑点检计划',
+  'app.kuaizhizao.spotCheckPlan.detailTitle': '点检计划详情',
+  'app.kuaizhizao.spotCheckPlan.col.planNo': '计划编号',
+  'app.kuaizhizao.spotCheckPlan.col.planName': '计划名称',
+  'app.kuaizhizao.spotCheckPlan.col.scheme': '点检方案',
+  'app.kuaizhizao.spotCheckPlan.col.equipment': '关联设备',
+  'app.kuaizhizao.spotCheckPlan.col.boundEquipment': '计划设备',
+  'app.kuaizhizao.spotCheckPlan.col.boundEquipmentCount': '{{count}} 台',
+  'app.kuaizhizao.spotCheckPlan.col.cycleType': '点检周期',
+  'app.kuaizhizao.spotCheckPlan.col.plannedStartDate': '计划开始',
+  'app.kuaizhizao.spotCheckPlan.col.plannedEndDate': '计划结束',
+  'app.kuaizhizao.spotCheckPlan.col.responsible': '负责人',
+  'app.kuaizhizao.spotCheckPlan.status.draft': '草稿',
+  'app.kuaizhizao.spotCheckPlan.status.published': '已发布',
+  'app.kuaizhizao.spotCheckPlan.status.running': '执行中',
+  'app.kuaizhizao.spotCheckPlan.status.completed': '已完成',
+  'app.kuaizhizao.spotCheckPlan.status.cancelled': '已取消',
+  'app.kuaizhizao.spotCheckPlan.cycle.shift': '每班',
+  'app.kuaizhizao.spotCheckPlan.cycle.day': '每天',
+  'app.kuaizhizao.spotCheckPlan.cycle.week': '每周',
+  'app.kuaizhizao.spotCheckPlan.cycle.month': '每月',
+  'app.kuaizhizao.spotCheckPlan.cycle.quarter': '每季度',
+  'app.kuaizhizao.spotCheckPlan.cycleUnit.day': '天',
+  'app.kuaizhizao.spotCheckPlan.cycleUnit.week': '周',
+  'app.kuaizhizao.spotCheckPlan.cycleUnit.month': '月',
+  'app.kuaizhizao.spotCheckPlan.cycleUnit.hour': '小时',
+  'app.kuaizhizao.spotCheckPlan.cycleUnit.count': '次',
+  'app.kuaizhizao.spotCheckPlan.form.planName': '计划名称',
+  'app.kuaizhizao.spotCheckPlan.form.planNameRequired': '请输入计划名称',
+  'app.kuaizhizao.spotCheckPlan.form.scheme': '点检方案',
+  'app.kuaizhizao.spotCheckPlan.form.schemeRequired': '请选择点检方案',
+  'app.kuaizhizao.spotCheckPlan.form.cycleFromScheme': '周期取自方案：{{cycle}}',
+  'app.kuaizhizao.spotCheckPlan.form.cycleFromSchemeHint': '请选择点检方案',
+  'app.kuaizhizao.spotCheckPlan.form.statusRequired': '请选择状态',
+  'app.kuaizhizao.spotCheckPlan.generate': '生成待执行任务',
+  'app.kuaizhizao.spotCheckPlan.generateConfirm': '确认按已发布计划生成待执行任务？',
+  'app.kuaizhizao.spotCheckPlan.generateSuccess': '新增 {{count}} 个待执行任务',
+  'app.kuaizhizao.spotCheckPlan.generateFailed': '生成点检任务失败',
+  'app.kuaizhizao.spotCheckPlan.createSuccess': '创建成功',
+  'app.kuaizhizao.spotCheckPlan.updateSuccess': '更新成功',
+  'app.kuaizhizao.spotCheckPlan.saveFailed': '保存失败',
+  'app.kuaizhizao.spotCheckPlan.deleteSuccess': '删除成功',
+  'app.kuaizhizao.spotCheckPlan.deleteFailed': '删除失败',
+  'app.kuaizhizao.spotCheckPlan.deleteConfirm': '确认删除该点检计划？',
+  'app.kuaizhizao.spotCheckPlan.batchDeleteTitle': '批量删除点检计划',
+  'app.kuaizhizao.spotCheckPlan.batchDeleteContent': '确认删除选中的 {{count}} 条点检计划？',
+  'app.kuaizhizao.spotCheckPlan.listFailed': '加载点检计划列表失败',
+  'app.kuaizhizao.spotCheckPlan.loadFailed': '加载点检计划失败',
+  'app.kuaizhizao.spotCheckPlanCalendar.selectedDate': '计划日 {{date}}',
+  'app.kuaizhizao.spotCheckPlanCalendar.noPlans': '当日无点检计划',
   'app.kuaizhizao.maintenancePlan.title': '维护保养计划管理',
   'app.kuaizhizao.maintenancePlan.create': '新建保养计划',
   'app.kuaizhizao.maintenancePlan.createModal': '新建维护计划',
@@ -18561,9 +22863,9 @@ export default {
   'app.kuaizhizao.maintenancePlan.form.paramsFromSchemeHint': '维护类型与周期取自保养方案；设备从方案绑定预载，可在下方取消勾选',
   'app.kuaizhizao.maintenancePlan.form.planEquipmentScope': '本计划设备范围',
   'app.kuaizhizao.maintenancePlan.form.planEquipmentScopeHint':
-    '选择保养方案后自动列出该方案在设备台账已绑定的设备，默认全选；取消勾选仅影响本计划，不会解绑方案。',
+    '选择保养方案后自动列出该方案在设备台账已绑定的设备，默认全选；也可先不选，需要时再绑。取消勾选仅影响本计划，不会解绑方案。',
   'app.kuaizhizao.maintenancePlan.form.planEquipmentEmpty':
-    '该方案暂无绑定设备，请先在设备台账详情绑定保养方案后再建计划。',
+    '该方案暂无绑定设备。可先保存计划；之后在设备台账绑定保养方案，再于本计划勾选设备。',
   'app.kuaizhizao.maintenancePlan.form.reloadEquipmentFromScheme': '按方案重新载入',
   'app.kuaizhizao.maintenancePlan.form.planEquipmentSelectedCount': '已选 {{count}} 台',
   'app.kuaizhizao.maintenancePlan.form.equipmentRequired': '请至少选择一台设备',
@@ -18621,8 +22923,22 @@ export default {
   'app.kuaizhizao.equipmentRepair.col.repairDescription': '维修描述',
   'app.kuaizhizao.equipmentRepair.col.faultCause': '故障原因',
   'app.kuaizhizao.equipmentRepair.col.repairContent': '维修内容',
+  'app.kuaizhizao.equipmentRepair.col.taskCreatedAt': '任务创建时间',
   'app.kuaizhizao.equipmentRepair.col.arrivalAt': '到场时间',
+  'app.kuaizhizao.equipmentRepair.col.startedAt': '维修开始时间',
+  'app.kuaizhizao.equipmentRepair.col.completedAt': '完修时间',
   'app.kuaizhizao.equipmentRepair.col.arrivalBy': '到场人',
+  'app.kuaizhizao.equipmentRepair.col.participants': '参与人',
+  'app.kuaizhizao.equipmentRepair.col.joinedAt': '介入时间',
+  'app.kuaizhizao.equipmentRepair.col.leftAt': '结束时间',
+  'app.kuaizhizao.equipmentRepair.col.participantRole': '角色',
+  'app.kuaizhizao.equipmentRepair.col.participantStatus': '参与状态',
+  'app.kuaizhizao.equipmentRepair.role.primary': '主责',
+  'app.kuaizhizao.equipmentRepair.role.collaborator': '协作',
+  'app.kuaizhizao.equipmentRepair.partStatus.active': '进行中',
+  'app.kuaizhizao.equipmentRepair.partStatus.reassigned': '已转派',
+  'app.kuaizhizao.equipmentRepair.partStatus.done': '已完成',
+  'app.kuaizhizao.equipmentRepair.partStatus.left': '已退出',
   'app.kuaizhizao.equipmentRepair.faultCauseRequired': '请填写故障原因',
   'app.kuaizhizao.equipmentRepair.repairContentRequired': '请填写维修内容',
   'app.kuaizhizao.equipmentRepair.arriveRequiredFirst': '请先到场签到后再完修',
@@ -18630,6 +22946,17 @@ export default {
   'app.kuaizhizao.equipmentRepair.status.completed': '已完成',
   'app.kuaizhizao.equipmentRepair.status.cancelled': '已取消',
   'app.kuaizhizao.equipmentRepair.action.complete': '完修',
+  'app.kuaizhizao.equipmentRepair.action.addCollaborator': '添加协作人',
+  'app.kuaizhizao.equipmentRepair.action.reassign': '临时转派',
+  'app.kuaizhizao.equipmentRepair.collaboratorModal': '添加协作人',
+  'app.kuaizhizao.equipmentRepair.reassignModal': '临时转派主责',
+  'app.kuaizhizao.equipmentRepair.form.selectCollaborator': '请选择协作人',
+  'app.kuaizhizao.equipmentRepair.form.selectReassignTo': '请选择转派对象',
+  'app.kuaizhizao.equipmentRepair.form.remark': '备注',
+  'app.kuaizhizao.equipmentRepair.collaboratorSuccess': '已添加协作人',
+  'app.kuaizhizao.equipmentRepair.reassignSuccess': '已转派，原主责记为已转派',
+  'app.kuaizhizao.equipmentRepair.section.participants': '维修参与人',
+  'app.kuaizhizao.equipmentRepair.participantsEmpty': '暂无参与人记录',
   'app.kuaizhizao.equipmentRepair.completeModal': '完修确认',
   'app.kuaizhizao.equipmentRepair.completeSuccess': '故障已同步修复，设备状态已更新',
   'app.kuaizhizao.equipmentRepair.col.linkedFault': '关联故障',
@@ -18731,6 +23058,7 @@ export default {
   'app.kuaizhizao.equipmentStatus.stat.running': '运行中',
   'app.kuaizhizao.equipmentStatus.stat.maintenance': '维修中',
   'app.kuaizhizao.equipmentStatus.stat.fault': '故障设备',
+  'app.kuaizhizao.equipmentStatus.stat.scrapped': '报废设备',
   'app.kuaizhizao.equipmentStatus.filter.status': '状态：',
   'app.kuaizhizao.equipmentStatus.filter.onlineStatus': '在线状态：',
   'app.kuaizhizao.equipmentStatus.filter.all': '全部',
@@ -18743,6 +23071,8 @@ export default {
   'app.kuaizhizao.equipmentStatus.status.maintenance': '维修中',
   'app.kuaizhizao.equipmentStatus.status.fault': '故障',
   'app.kuaizhizao.equipmentStatus.status.disabled': '停用',
+  'app.kuaizhizao.equipmentStatus.status.calibrating': '校验中',
+  'app.kuaizhizao.equipmentStatus.status.scrapped': '报废',
   'app.kuaizhizao.equipmentStatus.online': '在线',
   'app.kuaizhizao.equipmentStatus.offline': '离线',
   'app.kuaizhizao.equipmentStatus.runtimeHours': '运行时长: {{value}}',
@@ -18872,8 +23202,10 @@ export default {
   'app.kuaizhizao.equipmentOps.maintenanceItem.editModal': '编辑保养项',
   'app.kuaizhizao.equipmentOps.maintenanceItem.detailTitle': '保养项详情',
   'app.kuaizhizao.equipmentOps.maintenanceItem.listFailed': '加载保养项失败',
+  'app.kuaizhizao.equipmentOps.maintenanceItem.quickCreate': '快速新建保养项',
+  'app.kuaizhizao.equipmentOps.maintenanceItem.quickCreateTitle': '快速新建保养项',
   'app.kuaizhizao.equipmentOps.maintenanceItem.col.standardHours': '标准工时',
-  'app.kuaizhizao.equipmentOps.maintenanceItem.col.requirement': '要求',
+  'app.kuaizhizao.equipmentOps.maintenanceItem.col.requirement': '方法',
   'app.kuaizhizao.equipmentOps.maintenanceItem.importEmpty': '导入数据为空或格式不正确',
   'app.kuaizhizao.equipmentOps.maintenanceItem.importNoRows': '没有可导入的有效数据（请从第3行填写，编码与名称必填）',
   'app.kuaizhizao.equipmentOps.maintenanceItem.importHeaderMissingName': '导入表头需包含名称列',
@@ -18881,6 +23213,7 @@ export default {
   'app.kuaizhizao.equipmentOps.maintenanceItem.exportFileName': '保养项',
   'app.kuaizhizao.equipmentOps.maintenanceItem.importExample.name': '月度润滑',
   'app.kuaizhizao.equipmentOps.maintenanceItem.importExample.requirement': '清洁并润滑',
+  'app.kuaizhizao.equipmentOps.maintenanceItem.importExample.remark': '注意安全',
   'app.kuaizhizao.equipmentOps.inspectionScheme.title': '点检方案',
   'app.kuaizhizao.equipmentOps.inspectionScheme.create': '新建点检方案',
   'app.kuaizhizao.equipmentOps.inspectionScheme.createModal': '新建点检方案',
@@ -18933,10 +23266,16 @@ export default {
   'app.kuaizhizao.equipmentOps.maintenanceScheme.form.maintenanceTypeRequired': '请选择维护类型',
   'app.kuaizhizao.equipmentOps.maintenanceScheme.form.cycleTypeRequired': '请选择周期类型',
   'app.kuaizhizao.equipmentOps.maintenanceScheme.form.cycleValue': '周期值',
+  'app.kuaizhizao.equipmentOps.maintenanceScheme.form.cycleValueRuntime': '运行时长阈值',
+  'app.kuaizhizao.equipmentOps.maintenanceScheme.form.cycleValueCount': '使用次数阈值',
   'app.kuaizhizao.equipmentOps.maintenanceScheme.form.cycleValueRequired': '请输入周期值',
   'app.kuaizhizao.equipmentOps.maintenanceScheme.form.cycleUnit': '周期单位',
   'app.kuaizhizao.equipmentOps.maintenanceScheme.form.cycleUnitRequired': '请选择周期单位',
   'app.kuaizhizao.equipmentOps.maintenanceScheme.maintenanceType.daily': '日常保养',
+  'app.kuaizhizao.equipmentOps.maintenanceScheme.maintenanceType.monthly': '月度',
+  'app.kuaizhizao.equipmentOps.maintenanceScheme.maintenanceType.quarterly': '季度',
+  'app.kuaizhizao.equipmentOps.maintenanceScheme.maintenanceType.semiAnnual': '半年度',
+  'app.kuaizhizao.equipmentOps.maintenanceScheme.maintenanceType.annual': '年度',
   'app.kuaizhizao.equipmentOps.maintenanceScheme.maintenanceType.minor': '小修',
   'app.kuaizhizao.equipmentOps.maintenanceScheme.maintenanceType.medium': '中修',
   'app.kuaizhizao.equipmentOps.maintenanceScheme.maintenanceType.overhaul': '大修',
@@ -18974,6 +23313,7 @@ export default {
   'app.kuaizhizao.equipmentOps.spotCheck.headerPhotosRequired': '采集方式 B 须至少上传一张点检照片',
   'app.kuaizhizao.equipmentOps.spotCheck.linePhotoRequired': '点检项「{{name}}」须上传照片',
   'app.kuaizhizao.equipmentOps.spotCheck.col.documentNo': '单据号',
+  'app.kuaizhizao.equipmentOps.spotCheck.col.equipmentCode': '设备编号',
   'app.kuaizhizao.equipmentOps.spotCheck.col.equipment': '设备',
   'app.kuaizhizao.equipmentOps.spotCheck.col.captureMode': '采集方式',
   'app.kuaizhizao.equipmentOps.spotCheck.col.checkDate': '点检日期',
@@ -19227,6 +23567,10 @@ export default {
   'app.kuaizhizao.moldOps.maintenance.approveSuccess': '审批通过',
   'app.kuaizhizao.moldOps.maintenance.rejectSuccess': '已驳回',
   'app.kuaizhizao.moldOps.maintenance.completeSuccess': '完修成功',
+  'app.kuaizhizao.moldOps.maintenance.completeModal': '完修保养单',
+  'app.kuaizhizao.moldOps.maintenance.completeModalHint':
+    '请勾选全部保养项为已执行，可填写行备注与实际保养日期，确认后关单。',
+  'app.kuaizhizao.moldOps.maintenance.completeAllItemsRequired': '请将全部保养项勾选为已执行后再完修',
   'app.kuaizhizao.moldOps.maintenance.rejectModal': '驳回保养单',
   'app.kuaizhizao.moldOps.maintenance.col.documentNo': '单据号',
   'app.kuaizhizao.moldOps.maintenance.col.mold': '模具',
@@ -19252,7 +23596,10 @@ export default {
   'app.kuaizhizao.moldOps.repair.rejectSuccess': '已驳回',
   'app.kuaizhizao.moldOps.repair.completeSuccess': '完修成功',
   'app.kuaizhizao.moldOps.repair.rejectModal': '驳回维修单',
-  'app.kuaizhizao.moldOps.repair.completeModal': '完修确认',
+  'app.kuaizhizao.moldOps.repair.completeModal': '完修维修单',
+  'app.kuaizhizao.moldOps.repair.completeModalHint':
+    '请勾选全部维修项为已执行，可填写行备注与实际维修日期，确认后关单。',
+  'app.kuaizhizao.moldOps.repair.completeAllItemsRequired': '请将全部维修项勾选为已执行后再完修',
   'app.kuaizhizao.moldOps.repair.col.documentNo': '单据号',
   'app.kuaizhizao.moldOps.repair.col.mold': '模具',
   'app.kuaizhizao.moldOps.repair.col.repairDate': '维修日期',
@@ -19301,6 +23648,8 @@ export default {
   'app.kuaizhizao.toolOps.opsLinks.title': '运营单据',
   'app.kuaizhizao.toolOps.maintenanceItem.title': '工装保养项',
   'app.kuaizhizao.toolOps.maintenanceItem.create': '新建保养项',
+  'app.kuaizhizao.toolOps.maintenanceItem.quickCreate': '快速新建保养项',
+  'app.kuaizhizao.toolOps.maintenanceItem.quickCreateTitle': '快速新建保养项',
   'app.kuaizhizao.toolOps.maintenanceItem.createModal': '新建保养项',
   'app.kuaizhizao.toolOps.maintenanceItem.editModal': '编辑保养项',
   'app.kuaizhizao.toolOps.maintenanceItem.detailTitle': '保养项详情',
@@ -19308,8 +23657,6 @@ export default {
   'app.kuaizhizao.toolOps.maintenanceItem.col.standardHours': '标准工时',
   'app.kuaizhizao.toolOps.maintenanceItem.col.valueType': '值类型',
   'app.kuaizhizao.toolOps.maintenanceItem.col.requirement': '要求',
-  'app.kuaizhizao.toolOps.maintenanceItem.quickCreate': '快速新建保养项',
-  'app.kuaizhizao.toolOps.maintenanceItem.quickCreateTitle': '新建保养项',
   'app.kuaizhizao.toolOps.maintenanceItem.valueType.boolean': '是/否',
   'app.kuaizhizao.toolOps.maintenanceItem.valueType.numeric': '数值',
   'app.kuaizhizao.toolOps.maintenanceItem.valueType.text': '文本',
@@ -19335,14 +23682,14 @@ export default {
   'app.kuaizhizao.toolOps.maintenanceScheme.form.sortOrder': '排序',
   'app.kuaizhizao.toolOps.repairItem.title': '工装维修项',
   'app.kuaizhizao.toolOps.repairItem.create': '新建维修项',
+  'app.kuaizhizao.toolOps.repairItem.quickCreate': '快速新建维修项',
+  'app.kuaizhizao.toolOps.repairItem.quickCreateTitle': '快速新建维修项',
   'app.kuaizhizao.toolOps.repairItem.createModal': '新建维修项',
   'app.kuaizhizao.toolOps.repairItem.editModal': '编辑维修项',
   'app.kuaizhizao.toolOps.repairItem.detailTitle': '维修项详情',
   'app.kuaizhizao.toolOps.repairItem.listFailed': '加载维修项失败',
   'app.kuaizhizao.toolOps.repairItem.col.faultCategory': '故障类别',
   'app.kuaizhizao.toolOps.repairItem.col.requirement': '要求',
-  'app.kuaizhizao.toolOps.repairItem.quickCreate': '快速新建维修项',
-  'app.kuaizhizao.toolOps.repairItem.quickCreateTitle': '新建维修项',
   'app.kuaizhizao.toolOps.repairScheme.title': '工装维修方案',
   'app.kuaizhizao.toolOps.repairScheme.create': '新建维修方案',
   'app.kuaizhizao.toolOps.repairScheme.createModal': '新建维修方案',
@@ -19383,6 +23730,7 @@ export default {
   'app.kuaizhizao.toolOps.borrow.col.borrowDate': '领用日期',
   'app.kuaizhizao.toolOps.borrow.col.plannedQty': '计划数量',
   'app.kuaizhizao.toolOps.borrow.form.tool': '工装',
+  'app.kuaizhizao.toolOps.borrow.action.pushReturn': '下推归还',
   'app.kuaizhizao.toolOps.return.title': '工装归还',
   'app.kuaizhizao.toolOps.return.create': '新建归还单',
   'app.kuaizhizao.toolOps.return.createModal': '新建归还单',
@@ -19406,6 +23754,10 @@ export default {
   'app.kuaizhizao.toolOps.maintenance.approveSuccess': '审批通过',
   'app.kuaizhizao.toolOps.maintenance.rejectSuccess': '已驳回',
   'app.kuaizhizao.toolOps.maintenance.completeSuccess': '完修成功',
+  'app.kuaizhizao.toolOps.maintenance.completeModal': '完修保养单',
+  'app.kuaizhizao.toolOps.maintenance.completeModalHint':
+    '请勾选全部保养项为已执行，可填写行备注与实际保养日期，确认后关单。',
+  'app.kuaizhizao.toolOps.maintenance.completeAllItemsRequired': '请将全部保养项勾选为已执行后再完修',
   'app.kuaizhizao.toolOps.maintenance.rejectModal': '驳回保养单',
   'app.kuaizhizao.toolOps.maintenance.col.documentNo': '单据号',
   'app.kuaizhizao.toolOps.maintenance.col.tool': '工装',
@@ -19432,7 +23784,10 @@ export default {
   'app.kuaizhizao.toolOps.repair.rejectSuccess': '已驳回',
   'app.kuaizhizao.toolOps.repair.completeSuccess': '完修成功',
   'app.kuaizhizao.toolOps.repair.rejectModal': '驳回维修单',
-  'app.kuaizhizao.toolOps.repair.completeModal': '完修确认',
+  'app.kuaizhizao.toolOps.repair.completeModal': '完修维修单',
+  'app.kuaizhizao.toolOps.repair.completeModalHint':
+    '请勾选全部维修项为已执行，可填写行备注与实际维修日期，确认后关单。',
+  'app.kuaizhizao.toolOps.repair.completeAllItemsRequired': '请将全部维修项勾选为已执行后再完修',
   'app.kuaizhizao.toolOps.repair.col.documentNo': '单据号',
   'app.kuaizhizao.toolOps.repair.col.tool': '工装',
   'app.kuaizhizao.toolOps.repair.col.repairDate': '维修日期',
@@ -19707,6 +24062,9 @@ export default {
   'app.kuaizhizao.measuringInstrument.detailTabInfo': '器具信息',
   'app.kuaizhizao.measuringInstrument.detailTabCalibrations': '校准记录（{{count}}）',
   'app.kuaizhizao.measuringInstrument.detailTabCalibrationsTitle': '校准记录',
+  'app.kuaizhizao.measuringInstrument.spotCheckBindingHint':
+    '与设备台账共用同一编号、履历与设备卡二维码。需要日常点检时在此绑定点检方案，再去点检单开单或企微扫码；校准记录仍在本页维护。',
+  'app.kuaizhizao.measuringInstrument.goCreateSpotCheck': '新建点检',
   'app.kuaizhizao.measuringInstrument.addCalibration': '新建校准记录',
   'app.kuaizhizao.measuringInstrument.colCalibrationDate': '校准日期',
   'app.kuaizhizao.measuringInstrument.colCalibrationResult': '校准结果',
@@ -19818,6 +24176,7 @@ export default {
   'app.kuaizhizao.equipment.colNameCode': '设备名称/编码',
   'app.kuaizhizao.equipment.fieldPhoto': '设备照片',
   'app.kuaizhizao.equipment.colPhoto': '设备图片',
+  'app.kuaizhizao.equipment.colPlant': '厂区',
   'app.kuaizhizao.equipment.fieldPhotoHint': '建议上传设备外观照片，支持 jpg/png/webp，单张不超过 20MB',
   'app.kuaizhizao.equipment.photoSizeLimit': '设备照片不能超过 20MB',
   'app.kuaizhizao.equipment.noPhoto': '暂无设备照片',
@@ -20179,6 +24538,7 @@ export default {
   'app.kuaizhizao.toolLedger.colPurchaseDate': '采购日期',
   'app.kuaizhizao.toolLedger.colInboundDate': '入库日期',
   'app.kuaizhizao.toolLedger.colQuantity': '数量',
+  'app.kuaizhizao.toolLedger.colBorrowedQuantity': '领用数量',
   'app.kuaizhizao.toolLedger.colCustodian': '保管人',
   'app.kuaizhizao.toolLedger.colProductModel': '产品型号',
   'app.kuaizhizao.toolLedger.colCurrentBorrower': '当前领用人',
@@ -20235,8 +24595,11 @@ export default {
   'app.kuaizhizao.toolLedger.importSuccess': '成功导入 {{count}} 条工装',
   'app.kuaizhizao.toolLedger.importPartialFail': '部分失败 {{count}} 条',
   'app.kuaizhizao.toolLedger.noTimeline': '暂无操作记录',
+  'app.kuaizhizao.toolLedger.statusPendingActivation': '待启用',
   'app.kuaizhizao.toolLedger.statusNormal': '正常',
+  'app.kuaizhizao.toolLedger.statusInUse': '在用',
   'app.kuaizhizao.toolLedger.statusCheckedOut': '领用中',
+  'app.kuaizhizao.toolLedger.statusMaintaining': '保养中',
   'app.kuaizhizao.toolLedger.statusRepairing': '维修中',
   'app.kuaizhizao.toolLedger.statusCalibrating': '校验中',
   'app.kuaizhizao.toolLedger.statusDisabled': '停用',
@@ -20349,6 +24712,7 @@ export default {
   'app.kuaizhizao.moldMaintenanceReminder.statusOverdue': '已过期',
   'app.kuaizhizao.moldMaintenanceReminder.colLifecycle': '执行状态',
   'app.kuaizhizao.moldMaintenanceReminder.overdueUsages': '已过期 {{count}} 次',
+  'app.kuaizhizao.moldMaintenanceReminder.action.goExecute': '去执行',
   'app.kuaizhizao.toolUsage.title': '工装领用归还',
   'app.kuaizhizao.toolUsage.createCheckout': '新建工装领用',
   'app.kuaizhizao.toolUsage.checkoutModalTitle': '工装领用',
@@ -20455,6 +24819,7 @@ export default {
   'app.kuaizhizao.toolMaintenanceReminder.overdueUsages': '已过期 {{count}} 次',
   'app.kuaizhizao.toolMaintenanceReminder.createMaintenance': '新建保养单',
   'app.kuaizhizao.toolMaintenanceReminder.createCalibration': '新建校准单',
+  'app.kuaizhizao.toolMaintenanceReminder.action.goExecute': '去执行',
   'app.kuaizhizao.equipmentTrace.traceBriefDismiss': '收起简览',
   'app.kuaizhizao.equipmentTrace.traceBriefOpenPurchaseOrder': '前往采购订单',
   'app.kuaizhizao.equipmentTrace.traceBriefOpenSalesOrder': '打开销售订单详情',
@@ -20523,6 +24888,7 @@ export default {
   'app.kuaizhizao.shipmentNotice.notifyFailed': '通知失败',
   'app.kuaizhizao.shipmentNotice.notifyPreviewFailed': '加载通知预览失败',
   'app.kuaizhizao.shipmentNotice.notifyPreviewBlocked': '当前发货通知单不可通知仓库',
+  'app.kuaizhizao.shipmentNotice.notifyInventoryBlocked': '库存不足或超发，无法通知仓库',
   'app.kuaizhizao.shipmentNotice.notifyPreviewNoLines': '暂无可通知明细',
   'app.kuaizhizao.shipmentNotice.pullPreviewFailed': '加载预览失败',
   'app.kuaizhizao.shipmentNotice.pullPreviewNoLines': '暂无可下推明细',
@@ -20572,6 +24938,16 @@ export default {
   'app.kuaizhizao.receiptNotice.title': '收货通知单',
   'app.kuaizhizao.receiptNotice.entityName': '收货通知单',
   'app.kuaizhizao.receiptNotice.create': '新建收货通知单',
+  'app.kuaizhizao.receiptNotice.entityName': '收货通知单',
+  'app.kuaizhizao.receiptNotice.committed': '已提交',
+  'app.kuaizhizao.receiptNotice.copySelectedCreate': '复制选中单据新建',
+  'app.kuaizhizao.receiptNotice.selectToCopy': '请选择一条收货通知单',
+  'app.kuaizhizao.receiptNotice.toolbar.withdrawSubmit': '撤销提交',
+  'app.kuaizhizao.receiptNotice.toolbar.submitReview': '提交审核',
+  'app.kuaizhizao.receiptNotice.toolbar.submitReviewNotAllowed': '所选收货通知单不能提交审核',
+  'app.kuaizhizao.receiptNotice.toolbar.withdrawReview': '撤回审核',
+  'app.kuaizhizao.receiptNotice.toolbar.revoke': '反审核',
+  'app.kuaizhizao.receiptNotice.capability.notify.not_audited': '收货通知单须审核通过后才能通知仓库',
   'app.kuaizhizao.receiptNotice.edit': '编辑收货通知单',
   'app.kuaizhizao.receiptNotice.detailTitle': '收货通知单详情{{suffix}}',
   'app.kuaizhizao.receiptNotice.colSupplierNotice': '供应商 / 通知单号',
@@ -20731,6 +25107,7 @@ export default {
   'app.kuaicaiwu.financeLifecycle.redFlushed': '已红冲',
   'app.kuaicaiwu.financeLifecycle.notReviewed': '未审核',
   'app.kuaicaiwu.financeLifecycle.voucherDraft': '草稿',
+  'app.kuaicaiwu.financeLifecycle.voucherAwaitingConfirm': '待确认',
   'app.kuaicaiwu.financeLifecycle.voucherConfirmed': '已确认',
   'app.kuaicaiwu.financeLifecycle.verified': '已认证',
   'app.kuaicaiwu.financeStatus.receivable.unpaid': '未收款',
@@ -20756,7 +25133,22 @@ export default {
   'app.kuaicaiwu.financeUi.paymentMethod.note': '票据',
   'app.kuaicaiwu.financeUi.paymentMethod.online': '在线支付',
   'app.kuaicaiwu.financeUi.paymentMethod.other': '其他',
+  'app.kuaicaiwu.financeUi.paymentMethod.prepaymentOffset': '预付抵扣',
+  'app.kuaicaiwu.financeUi.paymentMethod.employeeAdvance': '员工垫付',
   'app.kuaicaiwu.receivable.pageTitle': '应收账款',
+  'app.kuaicaiwu.receivable.copySelectedCreate': '复制选中单据新建',
+  'app.kuaicaiwu.receivable.toolbar.withdrawSubmit': '撤销提交',
+  'app.kuaicaiwu.receivable.toolbar.submitReview': '提交审核',
+  'app.kuaicaiwu.receivable.toolbar.submitReviewNotAllowed': '请先提交，再提交审核',
+  'app.kuaicaiwu.receivable.toolbar.withdrawReview': '撤回审核',
+  'app.kuaicaiwu.receivable.toolbar.revoke': '反审核',
+  'app.kuaicaiwu.receivable.toolbar.submitted': '应收单已提交',
+  'app.kuaicaiwu.payable.toolbar.withdrawSubmit': '撤销提交',
+  'app.kuaicaiwu.payable.toolbar.submitReview': '提交审核',
+  'app.kuaicaiwu.payable.toolbar.submitReviewNotAllowed': '请先提交，再提交审核',
+  'app.kuaicaiwu.payable.toolbar.withdrawReview': '撤回审核',
+  'app.kuaicaiwu.payable.toolbar.revoke': '反审核',
+  'app.kuaicaiwu.payable.toolbar.submitted': '应付单已提交',
   'app.kuaicaiwu.receivable.entityName': '应收单',
   'app.kuaicaiwu.receivable.createTitle': '新建应收单',
   'app.kuaicaiwu.receivable.editTitle': '编辑应收单',
@@ -20785,7 +25177,7 @@ export default {
   'app.kuaicaiwu.receivable.detailNotFound': '未找到应收单',
   'app.kuaicaiwu.receivable.offsetBannerTitle': '销售退货冲减台账',
   'app.kuaicaiwu.receivable.offsetBannerDesc':
-    '本单由销售退货自动生成，用于客商往来贷方冲减，不是向客户收款的正向应收。请勿登记收款或从此单开蓝字销项发票；退款请走收款退款。',
+    '本单由销售退货自动生成，用于客商往来贷方冲减，不是向客户收款的正向应收。请勿登记收款或从此单开蓝字销售发票；退款请走收款退款。',
   'app.kuaicaiwu.receivable.offsetMarker': '退货冲减',
   'app.kuaicaiwu.receivable.col.offsetAmount': '冲减金额',
   'app.kuaicaiwu.receivable.col.nature': '单据性质',
@@ -20818,16 +25210,21 @@ export default {
   'app.kuaicaiwu.receivable.selectSource': '请选择{{label}}',
   'app.kuaicaiwu.receivable.amountRequired': '请输入应收金额',
   'app.kuaicaiwu.receivable.pullFormValidationFailed': '请完善应收金额、到期日等必填项后再提交',
-  'app.kuaicaiwu.receivable.pullPreviewIncomplete': '预览数据未就绪，请关闭弹窗后重试',
+  'app.kuaicaiwu.receivable.pullFormTitle': '填写应收单信息',
+  'app.kuaicaiwu.receivable.pullPreviewLoading': '正在加载应收信息…',
+  'app.kuaicaiwu.receivable.pullPreviewIncomplete': '应收数据未就绪，请关闭弹窗后重试',
   'app.kuaicaiwu.receivable.pullPreviewBlocked': '当前源单不可创建应收单',
+  'app.kuaicaiwu.receivable.pull.sameCustomerRequired': '多选出库单须为同一客户',
+  'app.kuaicaiwu.receivable.pull.multiSelectedFirstOnly':
+    '已按所选第一张销售订单打开预览；其余订单请再次取单',
   'app.kuaicaiwu.receivable.pullNoReceivableAmount': '源单无可应收金额',
   'app.kuaicaiwu.receivable.pullExceedMax': '应收金额不能超过可应收金额 ¥{{max}}',
   'app.kuaicaiwu.receivable.pullCreateSuccess': '已成功创建{{target}}',
-  'app.kuaicaiwu.receivable.createInvoice': '开具销项发票',
+  'app.kuaicaiwu.receivable.createInvoice': '开具销售发票',
   'app.kuaicaiwu.financePush.pushPayment': '下推付款单',
-  'app.kuaicaiwu.financePush.pushPurchaseInvoice': '下推进项发票',
+  'app.kuaicaiwu.financePush.pushPurchaseInvoice': '下推采购发票',
   'app.kuaicaiwu.financePush.pushReceipt': '下推收款单',
-  'app.kuaicaiwu.financePush.pushSalesInvoice': '下推销项发票',
+  'app.kuaicaiwu.financePush.pushSalesInvoice': '下推销售发票',
   'app.kuaicaiwu.financePush.pushReceiptRefund': '下推收款退款',
   'app.kuaicaiwu.financePush.pushPaymentRefund': '下推付款退款',
   'app.kuaicaiwu.financePush.noCreatePermission': '无{{target}}新建权限',
@@ -20839,13 +25236,13 @@ export default {
   'app.kuaicaiwu.mergeFinance.mergePayment': '合并付款',
   'app.kuaicaiwu.mergeFinance.mergePurchaseInvoice': '合并开票',
   'app.kuaicaiwu.mergeFinance.mergeReceiptTitle': '合并收款',
-  'app.kuaicaiwu.mergeFinance.mergeSalesInvoiceTitle': '合并开票（销项）',
+  'app.kuaicaiwu.mergeFinance.mergeSalesInvoiceTitle': '合并开销售发票',
   'app.kuaicaiwu.mergeFinance.mergePaymentTitle': '合并付款',
-  'app.kuaicaiwu.mergeFinance.mergePurchaseInvoiceTitle': '合并开票（进项）',
+  'app.kuaicaiwu.mergeFinance.mergePurchaseInvoiceTitle': '合并开采购发票',
   'app.kuaicaiwu.mergeFinance.mergeReceiptSuccess': '已创建收款单 {{code}}，合计 ¥{{amount}}',
-  'app.kuaicaiwu.mergeFinance.mergeSalesInvoiceSuccess': '已创建销项发票 {{code}}，合计 ¥{{amount}}',
+  'app.kuaicaiwu.mergeFinance.mergeSalesInvoiceSuccess': '已创建销售发票 {{code}}，合计 ¥{{amount}}',
   'app.kuaicaiwu.mergeFinance.mergePaymentSuccess': '已创建付款单 {{code}}，合计 ¥{{amount}}',
-  'app.kuaicaiwu.mergeFinance.mergePurchaseInvoiceSuccess': '已创建进项发票 {{code}}，合计 ¥{{amount}}',
+  'app.kuaicaiwu.mergeFinance.mergePurchaseInvoiceSuccess': '已创建采购发票 {{code}}，合计 ¥{{amount}}',
   'app.kuaicaiwu.mergeFinance.needSelection': '请先勾选单据',
   'app.kuaicaiwu.mergeFinance.sameCustomerRequired': '合并操作仅支持同一客户的应收单',
   'app.kuaicaiwu.mergeFinance.sameSupplierRequired': '合并操作仅支持同一供应商的应付单',
@@ -20863,7 +25260,7 @@ export default {
   'app.kuaicaiwu.mergeFinance.invoiceNumber': '发票号码',
   'app.kuaicaiwu.mergeFinance.invoiceNumberRequired': '请填写发票号码',
   'app.kuaicaiwu.mergeFinance.invoiceType': '发票类型',
-  'app.kuaicaiwu.mergeFinance.taxRate': '税率',
+  'app.kuaicaiwu.mergeFinance.taxRate': '税率%',
   'app.kuaicaiwu.receivable.pull.searchPlaceholder': '搜索订单号/出库单号/客户',
   'app.kuaicaiwu.receivable.pullCol.sourceCode': '源单号',
   'app.kuaicaiwu.receivable.pullCol.sourceStatus': '源单状态',
@@ -20886,14 +25283,22 @@ export default {
   'app.kuaicaiwu.receivable.capability.receipt.pull_from_receivable.sales_return_offset':
     '销售退货冲减应收不可加载正向收款',
   'app.kuaicaiwu.receivable.capability.sales_invoice.pull_from_receivable.sales_return_offset':
-    '销售退货冲减应收不可开蓝字销项发票',
+    '销售退货冲减应收不可开蓝字销售发票',
   'app.kuaicaiwu.payable.pageTitle': '应付账款',
   'app.kuaicaiwu.payable.entityName': '应付单',
   'app.kuaicaiwu.payable.createTitle': '新建应付单',
+  'app.kuaicaiwu.payable.copySelectedCreate': '复制选中单据新建',
   'app.kuaicaiwu.payable.editTitle': '编辑应付单',
   'app.kuaicaiwu.payable.deleteTitle': '删除应付单',
   'app.kuaicaiwu.payable.deleteContent': '确定删除应付单 {{code}}？仅无付款、无退款记录的应付单可删除。',
   'app.kuaicaiwu.payable.col.supplierName': '供应商名称',
+  'app.kuaicaiwu.payable.sourceDiagnosis.label': '立账来源说明',
+  'app.kuaicaiwu.payable.sourceDiagnosis.orderMilestone':
+    '本应付来自采购订单付款计划里程碑（订单确认后按节点生成），不是采购订单建档时的整单应付。',
+  'app.kuaicaiwu.payable.sourceDiagnosis.purchaseReceipt':
+    '本应付来自采购入库确认，请核对入库单确认时间而非订单创建时间。',
+  'app.kuaicaiwu.payable.sourceDiagnosis.purchaseInvoice':
+    '本应付来自采购发票自动立账路径，请核对发票创建/审核节点。',
   'app.kuaicaiwu.payable.col.sourceCode': '源单号',
   'app.kuaicaiwu.payable.col.paymentTerms': '付款条件',
   'app.kuaicaiwu.payable.col.invoiceStatus': '收票状态',
@@ -20916,9 +25321,10 @@ export default {
   'app.kuaicaiwu.payable.detailNotFound': '未找到应付单',
   'app.kuaicaiwu.payable.offsetBannerTitle': '采购退货冲减台账',
   'app.kuaicaiwu.payable.offsetBannerDesc':
-    '本单由采购退货自动生成，用于客商往来借方冲减，不是向供应商付款的正向应付。请勿登记付款或从此单开蓝字进项发票；退款请走付款退款。',
-  'app.kuaicaiwu.payable.offsetMarker': '退货冲减',
+    '本单由采购退货自动生成，用于客商往来借方冲减，不是向供应商付款的正向应付。请勿登记付款或从此单开蓝字采购发票；退款请走付款退款。',
+  'app.kuaicaiwu.payable.offsetMarker': '红字应付',
   'app.kuaicaiwu.payable.col.offsetAmount': '冲减金额',
+  'app.kuaicaiwu.payable.col.redPayableAmount': '红字应付金额',
   'app.kuaicaiwu.payable.col.nature': '单据性质',
   'app.kuaicaiwu.payable.nature.offset': '采购退货冲减',
   'app.kuaicaiwu.payable.nature.normal': '正向应付',
@@ -20948,12 +25354,16 @@ export default {
   'app.kuaicaiwu.payable.selectSource': '请选择{{label}}',
   'app.kuaicaiwu.payable.amountRequired': '请输入应付金额',
   'app.kuaicaiwu.payable.pullFormValidationFailed': '请完善应付金额、到期日等必填项后再提交',
-  'app.kuaicaiwu.payable.pullPreviewIncomplete': '预览数据未就绪，请关闭弹窗后重试',
+  'app.kuaicaiwu.payable.pullFormTitle': '填写应付单信息',
+  'app.kuaicaiwu.payable.pullPreviewLoading': '正在加载应付信息…',
+  'app.kuaicaiwu.payable.pullPreviewIncomplete': '应付数据未就绪，请关闭弹窗后重试',
   'app.kuaicaiwu.payable.pullPreviewBlocked': '当前源单不可创建应付单',
   'app.kuaicaiwu.payable.pullNoPayableAmount': '源单无可应付金额',
   'app.kuaicaiwu.payable.pullExceedMax': '应付金额不能超过可应付金额 ¥{{max}}',
   'app.kuaicaiwu.payable.pullCreateSuccess': '已成功创建{{target}}',
-  'app.kuaicaiwu.payable.createInvoice': '开具进项发票',
+  'app.kuaicaiwu.payable.createInvoice': '开具采购发票',
+  'app.kuaicaiwu.payable.pull.multiSelectedFirstOnly':
+    '已按所选第一张采购订单打开预览；其余订单请再次取单',
   'app.kuaicaiwu.payable.pull.searchPlaceholder': '搜索订单号/入库单号/供应商',
   'app.kuaicaiwu.payable.pullCol.sourceCode': '源单号',
   'app.kuaicaiwu.payable.pullCol.sourceStatus': '源单状态',
@@ -20963,6 +25373,17 @@ export default {
   'app.kuaicaiwu.payable.pull.col.docAmount': '单据金额',
   'app.kuaicaiwu.payable.pull.col.payableAmount': '已应付',
   'app.kuaicaiwu.payable.pull.col.payableableAmount': '可应付',
+  'app.kuaicaiwu.payable.pull.detailTitle': '入库明细',
+  'app.kuaicaiwu.payable.pull.detailEmpty': '入库单暂无物料明细',
+  'app.kuaicaiwu.payable.pull.col.lineNo': '行号',
+  'app.kuaicaiwu.payable.pull.col.materialCode': '物料编码',
+  'app.kuaicaiwu.payable.pull.col.materialName': '物料名称',
+  'app.kuaicaiwu.payable.pull.col.lineAmount': '行金额',
+  'app.kuaicaiwu.payable.pull.col.occupiedAmount': '已占用',
+  'app.kuaicaiwu.payable.pull.col.thisPayableAmount': '本次应付',
+  'app.kuaicaiwu.payable.pull.selectAtLeastOneLine': '请至少勾选一行入库明细',
+  'app.kuaicaiwu.payable.pull.lineAmountMismatch': '应付金额须与所选入库行合计一致',
+  'app.kuaicaiwu.payable.pull.lineExceedMax': '某行本次应付超过该行可应付上限',
   'app.kuaicaiwu.payable.capability.payable.pull_from_purchase_order.not_allowed': '当前状态的采购订单不可加载应付单',
   'app.kuaicaiwu.payable.capability.payable.pull_from_purchase_order.no_lines': '采购订单无可应付金额',
   'app.kuaicaiwu.payable.capability.payable.pull_from_purchase_order.already_pulled': '采购订单可应付金额已全部占用，删除未审核应付单后可再次加载',
@@ -20997,6 +25418,24 @@ export default {
   'app.kuaicaiwu.receipt.batchRefundSameCustomer': '多笔一起退款须为同一客户',
   'app.kuaicaiwu.receipt.batchRefundIneligible': '所选收款单存在不可退款的记录（须已确认且仍有可退余额）',
   'app.kuaicaiwu.receipt.batchVoided': '已作废 {{count}} 条收款单',
+  'app.kuaicaiwu.receipt.remediationSettleHint':
+    '异常补救：常规请在收款单从应收加载并确认时自动核销',
+  'app.kuaicaiwu.receipt.repairSettleHint': '按创建时已关联的应收写入核销',
+  'app.kuaicaiwu.receipt.repairSettleTitle': '补核销收款单',
+  'app.kuaicaiwu.receipt.repairSettleContent':
+    '将按收款单 {{code}} 创建时已关联的应收写入核销，无需再选应收。是否继续？',
+  'app.kuaicaiwu.receipt.repairSettleSuccess': '已按关联应收完成核销',
+  'app.kuaicaiwu.receipt.repairSettleManualFallback': '该单未关联应收，请手工选择应收',
+  'app.kuaicaiwu.receipt.remediationSettleModalTitle': '选手工核销（未关联应收）',
+  'app.kuaicaiwu.receipt.confirmAction': '确认收款',
+  'app.kuaicaiwu.receipt.voidAction': '作废',
+  'app.kuaicaiwu.receipt.copySelectedCreate': '复制选中单据新建',
+  'app.kuaicaiwu.receipt.toolbar.withdrawSubmit': '撤销提交',
+  'app.kuaicaiwu.receipt.toolbar.submitReview': '提交审核',
+  'app.kuaicaiwu.receipt.toolbar.submitReviewNotAllowed': '请先提交，再提交审核',
+  'app.kuaicaiwu.receipt.toolbar.withdrawReview': '撤回审核',
+  'app.kuaicaiwu.receipt.toolbar.revoke': '反审核',
+  'app.kuaicaiwu.receipt.toolbar.submitted': '收款单已提交',
   'app.kuaicaiwu.receipt.confirmTitle': '确认收款单',
   'app.kuaicaiwu.receipt.confirmContent': '确定要确认收款单 {{code}} 吗？确认后将记入资金流水；普通收款将核销关联应收，预收款记入客户预收余额。',
   'app.kuaicaiwu.receipt.voidTitle': '作废收款单',
@@ -21016,10 +25455,52 @@ export default {
   'app.kuaicaiwu.receipt.batchVoidDesc': '已有退款的收款单不能作废；已确认单据会冲回过账，不满足条件的记录会由后端拒绝。',
   'app.kuaicaiwu.receipt.pullSearchPlaceholder': '按应收单号/客户搜索',
   'app.kuaicaiwu.receipt.selectSource': '请选择{{label}}',
+  'app.kuaicaiwu.receipt.sameCustomerRequired': '多笔一起收款须为同一客户',
   'app.kuaicaiwu.receipt.pullExceedMax': '收款金额不能超过可收款金额 {{max}}',
   'app.kuaicaiwu.receipt.amountRequired': '收款金额必须大于 0',
   'app.kuaicaiwu.receipt.pullCreateSuccess': '已创建{{target}}（草稿），请确认后正式入账',
+  'app.kuaicaiwu.receipt.pullFormTitle': '填写收款单信息',
+  'app.kuaicaiwu.receipt.pullPreviewLoading': '正在加载收款信息…',
+  'app.kuaicaiwu.receipt.pullPreviewBlocked': '当前源单不可创建收款单',
+  'app.kuaicaiwu.receipt.pullNoReceivableAmount': '源单无可收款金额',
   'app.kuaicaiwu.receipt.loadSourceFailed': '加载来源单失败',
+  'pages.dashboard.updateLog.entries.receipt-payment-pull-lines-align-r01.title': '收款单新建对齐付款单加载明细',
+  'pages.dashboard.updateLog.entries.receipt-payment-pull-lines-align-r01.description':
+    '普通收款可从应收单加载明细，预收款可从销售订单加载明细；预付付款预加载按钮统一为从采购订单加载明细。',
+  'app.kuaicaiwu.receipt.pullLines.sectionTitle': '收款明细',
+  'app.kuaicaiwu.receipt.pullLines.col.sourceType': '来源类型',
+  'app.kuaicaiwu.receipt.pullLines.col.sourceCode': '来源单号',
+  'app.kuaicaiwu.receipt.pullLines.col.maxAmount': '可收上限',
+  'app.kuaicaiwu.receipt.pullLines.col.material': '物料',
+  'app.kuaicaiwu.receipt.pullLines.sourceReceivable': '应收账款',
+  'app.kuaicaiwu.receipt.pullLines.sourceSalesOrder': '销售订单预收款',
+  'app.kuaicaiwu.receipt.pullLines.selectCustomerFirst': '请先选择客户再取单',
+  'app.kuaicaiwu.receipt.pullLines.mixedSourceForbidden': '同一收款单不可混选不同来源类型',
+  'app.kuaicaiwu.receipt.pullLines.soNotSelectable': '该销售订单当前不可选择预收款',
+  'app.kuaicaiwu.receipt.pullLines.soAllSkipped': '所选销售订单均不可加载预收明细',
+  'app.kuaicaiwu.receipt.pullLines.soPartialSkip': '部分销售订单已跳过（{{count}} 张）',
+  'app.kuaicaiwu.receipt.pullLines.soPullHint': '将按销售订单行项目拆分预收明细，与付款单采购订单取单规则一致',
+  'app.kuaicaiwu.receipt.pullLines.loadFromReceivable': '从应收单加载明细',
+  'app.kuaicaiwu.receipt.pullLines.loadFromSalesOrder': '从销售订单加载明细',
+  'app.kuaicaiwu.receipt.pullLines.prepaymentNoReceivable': '预收款不可从应收单加载明细',
+  'app.kuaicaiwu.receipt.pullLines.requiredForNormalSettlement': '普通收款须从应收单加载明细',
+  'app.kuaicaiwu.receipt.pullLines.totalMustMatchLines': '收款总额须与明细合计一致',
+  'app.kuaicaiwu.receipt.pullLines.exceedsMax': '本次收款不能超过该行可收上限',
+  'app.kuaicaiwu.receipt.pullLines.noNewLines': '没有可新增的明细行',
+  'app.kuaicaiwu.receipt.pullLines.merged': '已合并 {{count}} 条明细',
+  'app.kuaicaiwu.receipt.pullLines.modalSelectReceivable': '选择应收单',
+  'app.kuaicaiwu.receipt.pullLines.modalSelectSalesOrder': '选择销售订单',
+  'app.kuaicaiwu.receiptRefund.confirmAction': '确认退款',
+  'app.kuaicaiwu.receiptRefund.voidAction': '作废',
+  'app.kuaicaiwu.receiptRefund.copySelectedCreate': '复制选中单据新建',
+  'app.kuaicaiwu.receiptRefund.toolbar.withdrawSubmit': '撤销提交',
+  'app.kuaicaiwu.receiptRefund.toolbar.submitReview': '提交审核',
+  'app.kuaicaiwu.receiptRefund.toolbar.submitReviewNotAllowed': '请先提交，再提交审核',
+  'app.kuaicaiwu.receiptRefund.toolbar.withdrawReview': '撤回审核',
+  'app.kuaicaiwu.receiptRefund.toolbar.revoke': '反审核',
+  'app.kuaicaiwu.receiptRefund.toolbar.submitted': '收款退款已提交',
+  'app.kuaicaiwu.receiptRefund.confirmRequiresApproved': '请先提交审核并通过后，再确认退款',
+  'app.kuaicaiwu.receiptRefund.createTitle': '新建收款退款',
   'app.kuaicaiwu.receiptRefund.col.code': '退款单号',
   'app.kuaicaiwu.receiptRefund.col.amount': '退款金额',
   'app.kuaicaiwu.receiptRefund.col.date': '退款日期',
@@ -21029,6 +25510,9 @@ export default {
   'app.kuaicaiwu.receiptRefund.pullSearchPlaceholder': '按收款单号/客户搜索',
   'app.kuaicaiwu.receiptRefund.pullModalTitle': '选择源收款单',
   'app.kuaicaiwu.receiptRefund.pullPreviewTitle': '创建收款退款',
+  'app.kuaicaiwu.receiptRefund.pullPreviewLoading': '正在加载退款信息…',
+  'app.kuaicaiwu.receiptRefund.pullPreviewBlocked': '当前源单不可创建收款退款',
+  'app.kuaicaiwu.receiptRefund.pullNoRefundableAmount': '源单无可退金额',
   'app.kuaicaiwu.receiptRefund.pullCreateSubmit': '创建退款',
   'app.kuaicaiwu.receiptRefund.pullCol.sourceCode': '源收款单号',
   'app.kuaicaiwu.receiptRefund.pullCol.docAmount': '收款金额',
@@ -21094,6 +25578,10 @@ export default {
   'app.kuaicaiwu.receipt.bankAccountNotePlaceholder': '未选入账账户时可手工填写',
   'app.kuaicaiwu.receipt.bankAccountEmptyHint': '暂无可用账户，请先在银行账户中维护',
   'app.kuaicaiwu.receipt.bankAccountCashEmptyHint': '暂无库存现金账户，请先新建账户类型为「库存现金」的账户',
+  'app.kuaicaiwu.receipt.counterpartyAccountPick': '对方付款账户',
+  'app.kuaicaiwu.receipt.counterpartyAccountPickPlaceholder': '选择客户付款账户',
+  'app.kuaicaiwu.receipt.counterpartyAccountEmpty': '该客户未维护收款账户',
+  'app.kuaicaiwu.receipt.counterpartyAccountNeedCustomer': '请先选择客户',
   'app.kuaicaiwu.receipt.detailTitle': '收款单详情',
   'app.kuaicaiwu.receipt.detailDrawerTitle': '收款单 - {{code}}',
   'app.kuaicaiwu.receipt.detail.code': '单号',
@@ -21106,8 +25594,84 @@ export default {
   'app.kuaicaiwu.payment.pageTitle': '付款单管理',
   'app.kuaicaiwu.payment.entityName': '付款单',
   'app.kuaicaiwu.payment.createTitle': '新建付款单',
+  'app.kuaicaiwu.payment.copySelectedCreate': '复制选中单据新建',
+  'app.kuaicaiwu.payment.pullLines.sectionTitle': '付款明细',
+  'app.kuaicaiwu.payment.pullLines.col.sourceType': '来源类型',
+  'app.kuaicaiwu.payment.pullLines.col.sourceCode': '来源单号',
+  'app.kuaicaiwu.payment.pullLines.col.maxAmount': '可付上限',
+  'app.kuaicaiwu.payment.pullLines.col.paymentAmount': '本次付款',
+  'app.kuaicaiwu.payment.pullLines.sourcePayable': '应付账款',
+  'app.kuaicaiwu.payment.pullLines.sourcePaymentApplication': '付款申请',
+  'app.kuaicaiwu.payment.pullLines.sourcePurchaseOrder': '采购订单预付款',
+  'app.kuaicaiwu.payment.pullLines.col.material': '物料',
+  'app.kuaicaiwu.payment.pullLines.selectSupplierFirst': '请先选择供应商再取单',
+  'app.kuaicaiwu.payment.pullLines.mixedSourceForbidden': '同一付款单不可混选不同来源类型',
+  'app.kuaicaiwu.payment.pullLines.poNotSelectable': '该采购订单当前不可选择预付款',
+  'app.kuaicaiwu.payment.pullLines.poAllSkipped': '所选采购订单均不可加载预付款明细',
+  'app.kuaicaiwu.payment.pullLines.poPartialSkip': '部分采购订单已跳过（{{count}} 张）',
+  'app.kuaicaiwu.payment.pullLines.poPullHint': '将按采购订单行项目拆分预付款明细，与付款申请取单规则一致',
+  'app.kuaicaiwu.payment.pullLines.loadFromPayable': '从应付单加载明细',
+  'app.kuaicaiwu.payment.pullLines.loadFromApplication': '从付款申请加载明细',
+  'app.kuaicaiwu.payment.pullLines.loadFromPurchaseOrder': '从采购订单加载明细',
+  'app.kuaicaiwu.payment.pullLines.prepaymentApplicationKindOnly':
+    '预付款付款单仅可选择预付款类付款申请',
+  'app.kuaicaiwu.payment.pullLines.offsetLoadFromPayable': '选择待抵扣应付',
+  'app.kuaicaiwu.payment.pullLines.offsetLoadFromApplication': '从货款付款申请加载',
+  'app.kuaicaiwu.payment.pullLines.modalSelectPayable': '选择应付单',
+  'app.kuaicaiwu.payment.pullLines.modalSelectApplication': '选择付款申请',
+  'app.kuaicaiwu.payment.col.prepaymentOffsetTotal': '本次抵扣金额',
+  'app.kuaicaiwu.payment.pullLines.prepaymentOffsetHint':
+    '表头「本次抵扣金额」与预付款明细抵扣合计一致，可手工修改表头并分摊至预付款行；保存前须与待抵扣应付明细合计一致。确认后从预付款单余额冲减应付，不产生银行出账。',
+  'app.kuaicaiwu.payment.pullLines.requiredForPrepaymentOffset': '预付抵扣须先加载待抵扣应付明细',
+  'app.kuaicaiwu.payment.pullLines.requiredOffsetPrepayment': '预付抵扣须选择预付款明细',
+  'app.kuaicaiwu.payment.pullLines.offsetAmountRequired': '请填写本次抵扣金额',
+  'app.kuaicaiwu.payment.pullLines.offsetSumMustMatchTotal': '预付款抵扣合计须与付款总额一致',
+  'app.kuaicaiwu.payment.pullLines.offsetPayableOnly': '预付抵扣仅可加载应付明细',
+  'app.kuaicaiwu.payment.pullLines.offsetPayableSectionTitle': '待抵扣应付明细',
+  'app.kuaicaiwu.payment.pullLines.offsetPrepaymentSectionTitle': '预付款明细',
+  'app.kuaicaiwu.payment.pullLines.selectPrepaymentPayment': '选择预付款单',
+  'app.kuaicaiwu.payment.pullLines.modalSelectPrepaymentPayment': '选择预付款付款单',
+  'app.kuaicaiwu.payment.pullLines.col.prepaymentCode': '预付款单号',
+  'app.kuaicaiwu.payment.pullLines.col.unsettledBalance': '未核销余额',
+  'app.kuaicaiwu.payment.pullLines.col.offsetAmount': '本次抵扣金额',
+  'app.kuaicaiwu.payment.pullLines.offsetPrepaymentMerged': '已合并 {{count}} 行预付款明细',
+  'app.kuaicaiwu.payment.pullLines.offsetPrepaymentNoPo':
+    '该预付款单未关联采购订单，只能抵扣未关联采购订单的应付',
+  'app.kuaicaiwu.payment.pullLines.offsetPrepaymentEmptyPullable':
+    '当前供应商下没有可抵扣的预付款单。须为已确认、结算类型为预付款且待核销大于 0。已关联采购订单的预付款仍只抵扣同一订单的应付；未关联采购订单的应付可用同供应商预付余额抵扣。',
+  'app.kuaicaiwu.payment.writeoffAndConfirm': '核销',
+  'app.kuaicaiwu.payment.confirmAction': '确认付款',
+  'app.kuaicaiwu.payment.confirmRequiresApproved': '请先提交审核并通过后，再确认付款',
+  'app.kuaicaiwu.payment.toolbar.withdrawSubmit': '撤销提交',
+  'app.kuaicaiwu.payment.toolbar.submitReview': '提交审核',
+  'app.kuaicaiwu.payment.toolbar.submitReviewNotAllowed': '请先提交，再提交审核',
+  'app.kuaicaiwu.payment.toolbar.withdrawReview': '撤回审核',
+  'app.kuaicaiwu.payment.toolbar.revoke': '反审核',
+  'app.kuaicaiwu.payment.toolbar.submitted': '付款单已提交',
+  'app.kuaicaiwu.payment.writeoffConfirmSuccess': '已保存并完成核销确认',
+  'app.kuaicaiwu.payment.writeoffConfirmFailed': '核销确认失败',
+  'app.kuaicaiwu.payment.pullLines.singleApplicationOnly': '付款申请须单独加载，请先删除已有明细',
+  'app.kuaicaiwu.payment.pullLines.prepaymentNoPayable': '预付款类型请从采购订单或付款申请取单',
+  'app.kuaicaiwu.payment.pullLines.noNewLines': '没有可合并的新明细',
+  'app.kuaicaiwu.payment.pullLines.merged': '已合并 {{count}} 行明细',
+  'app.kuaicaiwu.payment.pullLines.applicationMerged': '已加载付款申请明细',
+  'app.kuaicaiwu.payment.pullLines.requiredForNormalSettlement':
+    '货款付款须加载应付或付款申请明细，明细合计须与付款总额一致后再保存或确认',
+  'app.kuaicaiwu.payment.remediationSettleHint':
+    '异常补救：常规请在付款单加载明细并确认时自动核销',
+  'app.kuaicaiwu.payment.repairSettleHint': '按创建时已加载的应付/付款申请写入核销',
+  'app.kuaicaiwu.payment.repairSettleTitle': '补核销付款单',
+  'app.kuaicaiwu.payment.repairSettleContent':
+    '将按付款单 {{code}} 创建时已指定的应付或付款申请明细写入核销，无需再选应付。是否继续？',
+  'app.kuaicaiwu.payment.repairSettleSuccess': '已按加载明细完成核销',
+  'app.kuaicaiwu.payment.repairSettleManualFallback': '该单未关联应付或付款申请，请选择待核销应付',
+  'app.kuaicaiwu.payment.remediationSettleModalTitle': '补救核销（无清账来源）',
+  'app.kuaicaiwu.payment.pullLines.totalMustMatchLines': '付款总额须与明细合计一致',
+  'app.kuaicaiwu.payment.pullLines.exceedsMax': '明细付款金额不能超过可付上限',
   'app.kuaicaiwu.payment.col.code': '付款单号',
   'app.kuaicaiwu.payment.col.totalAmount': '付款总额',
+  'app.kuaicaiwu.payment.col.linkedPayableTotal': '关联应付总额',
+  'app.kuaicaiwu.payment.col.linkedPayableRemainingLine': '应付剩余 {{amount}}',
   'app.kuaicaiwu.payment.col.settledAmount': '已核销金额',
   'app.kuaicaiwu.payment.col.unsettledAmount': '待核销金额',
   'app.kuaicaiwu.payment.col.paymentDate': '付款日期',
@@ -21142,15 +25706,27 @@ export default {
   'app.kuaicaiwu.payment.unconfirmContent': '确定撤回付款单 {{code}} 的确认吗？将冲回核销与银行流水并回到草稿，修改后可重新确认。',
   'app.kuaicaiwu.payment.unconfirmSuccess': '已撤回确认',
   'app.kuaicaiwu.payment.viewRefunds': '查看退款',
+  'app.kuaicaiwu.payment.batchUnconfirmTitle': '确认批量撤回 {{count}} 条付款单',
+  'app.kuaicaiwu.payment.batchUnconfirmDesc': '仅已确认且可冲回的付款单会撤回确认，不满足条件的记录会跳过。',
+  'app.kuaicaiwu.payment.batchUnconfirmed': '已撤回确认 {{count}} 条付款单',
+  'app.kuaicaiwu.payment.batchUnconfirmNoneEligible': '所选付款单均不可撤回确认',
+  'app.kuaicaiwu.payment.batchUnconfirmFailed': '批量撤回确认失败',
   'app.kuaicaiwu.payment.batchConfirmTitle': '确认批量确认 {{count}} 条付款单',
   'app.kuaicaiwu.payment.batchConfirmDesc': '仅草稿付款单可确认，不满足条件的记录会由后端拒绝。',
   'app.kuaicaiwu.payment.batchVoidTitle': '确认批量作废 {{count}} 条付款单',
   'app.kuaicaiwu.payment.batchVoidDesc': '已有退款的付款单不能作废；已确认单据会冲回过账，不满足条件的记录会由后端拒绝。',
   'app.kuaicaiwu.payment.pullSearchPlaceholder': '按应付单号/供应商搜索',
   'app.kuaicaiwu.payment.selectSource': '请选择{{label}}',
+  'app.kuaicaiwu.payment.sameSupplierRequired': '多笔一起付款须为同一供应商',
   'app.kuaicaiwu.payment.pullExceedMax': '付款金额不能超过可付款金额 {{max}}',
   'app.kuaicaiwu.payment.pullCreateSuccess': '已创建{{target}}（草稿），请确认后正式入账',
+  'app.kuaicaiwu.payment.pullFormTitle': '填写付款单信息',
+  'app.kuaicaiwu.payment.pullPreviewLoading': '正在加载付款信息…',
+  'app.kuaicaiwu.payment.pullPreviewBlocked': '当前源单不可创建付款单',
+  'app.kuaicaiwu.payment.pullNoPayableAmount': '源单无可付款金额',
   'app.kuaicaiwu.payment.loadSourceFailed': '加载来源单失败',
+  'app.kuaicaiwu.paymentRefund.createTitle': '新建付款退款',
+  'app.kuaicaiwu.paymentRefund.pageTitle': '付款退款',
   'app.kuaicaiwu.paymentRefund.col.code': '退款单号',
   'app.kuaicaiwu.paymentRefund.col.amount': '退款金额',
   'app.kuaicaiwu.paymentRefund.col.date': '退款日期',
@@ -21160,6 +25736,9 @@ export default {
   'app.kuaicaiwu.paymentRefund.pullSearchPlaceholder': '按付款单号/供应商搜索',
   'app.kuaicaiwu.paymentRefund.pullModalTitle': '选择源付款单',
   'app.kuaicaiwu.paymentRefund.pullPreviewTitle': '创建付款退款',
+  'app.kuaicaiwu.paymentRefund.pullPreviewLoading': '正在加载退款信息…',
+  'app.kuaicaiwu.paymentRefund.pullPreviewBlocked': '当前源单不可创建付款退款',
+  'app.kuaicaiwu.paymentRefund.pullNoRefundableAmount': '源单无可退金额',
   'app.kuaicaiwu.paymentRefund.pullCreateSubmit': '创建退款',
   'app.kuaicaiwu.paymentRefund.pullCol.sourceCode': '源付款单号',
   'app.kuaicaiwu.paymentRefund.pullCol.docAmount': '付款金额',
@@ -21174,8 +25753,17 @@ export default {
   'app.kuaicaiwu.paymentRefund.loadDetailFailed': '加载详情失败',
   'app.kuaicaiwu.paymentRefund.confirmTitle': '确认付款退款',
   'app.kuaicaiwu.paymentRefund.confirmContent': '确认后将冲回应付核销并记银行流入。单号：{{code}}',
+  'app.kuaicaiwu.paymentRefund.confirmAction': '确认退款',
+  'app.kuaicaiwu.paymentRefund.confirmRequiresApproved': '请先提交审核并通过后，再确认退款',
   'app.kuaicaiwu.paymentRefund.confirmSuccess': '付款退款已确认',
   'app.kuaicaiwu.paymentRefund.confirmFailed': '确认失败',
+  'app.kuaicaiwu.paymentRefund.toolbar.withdrawSubmit': '撤销提交',
+  'app.kuaicaiwu.paymentRefund.toolbar.submitReview': '提交审核',
+  'app.kuaicaiwu.paymentRefund.toolbar.submitReviewNotAllowed': '请先提交，再提交审核',
+  'app.kuaicaiwu.paymentRefund.toolbar.withdrawReview': '撤回审核',
+  'app.kuaicaiwu.paymentRefund.toolbar.revoke': '反审核',
+  'app.kuaicaiwu.paymentRefund.toolbar.submitted': '付款退款已提交',
+  'app.kuaicaiwu.paymentRefund.voidAction': '作废',
   'app.kuaicaiwu.paymentRefund.unconfirm': '撤回确认',
   'app.kuaicaiwu.paymentRefund.unconfirmTitle': '撤回确认付款退款',
   'app.kuaicaiwu.paymentRefund.unconfirmContent':
@@ -21217,6 +25805,20 @@ export default {
   'app.kuaicaiwu.payment.pullCol.docStatus': '单据状态',
   'app.kuaicaiwu.payment.fillInfoTitle': '填写付款单信息',
   'app.kuaicaiwu.payment.sourcePayable': '来源应付单',
+  'app.kuaicaiwu.payment.advancePayee': '领款人',
+  'app.kuaicaiwu.payment.advancePayeeRequired': '员工垫付须选择领款人',
+  'app.kuaicaiwu.payment.advancePayeeAccountRequired': '员工垫付须选择出账账户',
+  'app.kuaicaiwu.payment.counterpartyAccountName': '对方户名',
+  'app.kuaicaiwu.payment.counterpartyBankName': '对方开户行',
+  'app.kuaicaiwu.payment.counterpartyBankAccount': '对方账号',
+  'app.kuaicaiwu.payment.outAccountSectionTitle': '出款账户',
+  'app.kuaicaiwu.payment.counterpartySectionTitle': '对方账户',
+  'app.kuaicaiwu.payment.counterpartyAccountPick': '收款账户',
+  'app.kuaicaiwu.payment.counterpartyAccountPickPlaceholder': '选择供应商收款账户',
+  'app.kuaicaiwu.payment.counterpartyAccountEmpty': '该供应商未维护收款账户',
+  'app.kuaicaiwu.payment.counterpartyAccountNeedSupplier': '请先选择供应商',
+  'app.kuaicaiwu.payment.counterpartyAccountNeedEmployee': '请先选择职员',
+  'app.kuaicaiwu.payment.counterpartyAccountDefaultMark': '默认',
   'app.kuaicaiwu.payment.outBankAccount': '出账账户',
   'app.kuaicaiwu.payment.bankAccountEmptyHint': '暂无可用账户，请先在银行账户中维护',
   'app.kuaicaiwu.payment.bankAccountCashEmptyHint': '暂无库存现金账户，请先新建账户类型为「库存现金」的账户',
@@ -21285,7 +25887,13 @@ export default {
   'app.kuaicaiwu.salesInvoice.entityName': '销售发票',
   'app.kuaicaiwu.salesInvoice.createTitle': '开具销售发票',
   'app.kuaicaiwu.salesInvoice.createSuccess': '销售发票创建成功',
-  'app.kuaicaiwu.salesInvoice.pullFormTitle': '填写销项发票信息',
+  'app.kuaicaiwu.salesInvoice.copySelectedCreate': '复制选中单据新建',
+  'app.kuaicaiwu.salesInvoice.toolbar.withdrawSubmit': '撤销提交',
+  'app.kuaicaiwu.salesInvoice.toolbar.submitReview': '提交审核',
+  'app.kuaicaiwu.salesInvoice.toolbar.submitReviewNotAllowed': '请先提交，再提交审核',
+  'app.kuaicaiwu.salesInvoice.toolbar.withdrawReview': '撤回审核',
+  'app.kuaicaiwu.salesInvoice.toolbar.revoke': '反审核',
+  'app.kuaicaiwu.salesInvoice.pullFormTitle': '填写销售发票信息',
   'app.kuaicaiwu.salesInvoice.editNumberTitle': '填写发票号码',
   'app.kuaicaiwu.salesInvoice.editNumberSuccess': '发票号码已保存',
   'app.kuaicaiwu.salesInvoice.fillNumber': '填写号码',
@@ -21309,8 +25917,9 @@ export default {
   'app.kuaicaiwu.salesInvoice.form.amountModeIncl': '含税金额',
   'app.kuaicaiwu.salesInvoice.form.amountHintExcl': '折合不含税 ¥{{amount}}',
   'app.kuaicaiwu.salesInvoice.form.amountHintIncl': '折合含税 ¥{{amount}}',
-  'app.kuaicaiwu.salesInvoice.pullPreviewIncomplete': '预览数据未就绪，请关闭弹窗后重试',
-  'app.kuaicaiwu.salesInvoice.pullPreviewBlocked': '当前源单不可创建销项发票',
+  'app.kuaicaiwu.salesInvoice.pullPreviewLoading': '正在加载发票信息…',
+  'app.kuaicaiwu.salesInvoice.pullPreviewIncomplete': '发票数据未就绪，请关闭弹窗后重试',
+  'app.kuaicaiwu.salesInvoice.pullPreviewBlocked': '当前源单不可创建销售发票',
   'app.kuaicaiwu.salesInvoice.pullNoInvoiceableAmount': '源单无可开票金额',
   'app.kuaicaiwu.salesInvoice.pullCreateSuccess': '已创建{{target}}',
   'app.kuaicaiwu.salesInvoice.pullCreateWithReceiptSuccess': '已创建{{target}}并登记收款',
@@ -21322,27 +25931,41 @@ export default {
   'app.kuaicaiwu.salesInvoice.concurrentReceiptAccountRequired': '请选择入账账户',
   'app.kuaicaiwu.salesInvoice.concurrentReceiptNotes': '收款备注',
   'app.kuaicaiwu.salesInvoice.pullExceedMax': '价税合计不能超过可开票金额 {{max}}',
-  'app.kuaicaiwu.salesInvoice.capability.sales_invoice.pull_from_sales_order.not_allowed': '当前状态的销售订单不可加载销项发票',
+  'app.kuaicaiwu.salesInvoice.capability.sales_invoice.pull_from_sales_order.not_allowed': '当前状态的销售订单不可加载销售发票',
   'app.kuaicaiwu.salesInvoice.capability.sales_invoice.pull_from_sales_order.no_lines': '销售订单无可开票金额',
   'app.kuaicaiwu.salesInvoice.capability.sales_invoice.pull_from_sales_order.already_pulled': '销售订单可开票金额已全部开票，删除未审核发票后可再次加载',
-  'app.kuaicaiwu.salesInvoice.capability.sales_invoice.pull_from_sales_delivery.not_allowed': '当前状态的销售出库单不可加载销项发票',
+  'app.kuaicaiwu.salesInvoice.capability.sales_invoice.pull_from_sales_delivery.not_allowed': '当前状态的销售出库单不可加载销售发票',
   'app.kuaicaiwu.salesInvoice.capability.sales_invoice.pull_from_sales_delivery.no_lines': '销售出库单无可开票金额',
   'app.kuaicaiwu.salesInvoice.capability.sales_invoice.pull_from_sales_delivery.already_pulled': '销售出库单可开票金额已全部开票，删除未审核发票后可再次加载',
-  'app.kuaicaiwu.salesInvoice.capability.sales_invoice.pull_from_receivable.not_allowed': '当前状态的应收单不可加载销项发票',
+  'app.kuaicaiwu.salesInvoice.capability.sales_invoice.pull_from_sales_delivery.partner_statement_ledger':
+    '立账策略为以按月结对账单为准，须先完成往来对账单后再从对账单加载销售发票',
+  'app.kuaicaiwu.salesInvoice.capability.sales_invoice.pull_from_receivable.not_allowed': '当前状态的应收单不可加载销售发票',
   'app.kuaicaiwu.salesInvoice.capability.sales_invoice.pull_from_receivable.no_lines': '应收单无可开票金额',
   'app.kuaicaiwu.salesInvoice.capability.sales_invoice.pull_from_receivable.already_pulled': '应收单可开票金额已全部开票，删除未审核发票后可再次加载',
+  'app.kuaicaiwu.salesInvoice.capability.sales_invoice.pull_from_partner_statement.no_lines':
+    '往来对账单中无可用的开票明细行（根据发票立账取销售出库，立即立账取应收单）',
+  'app.kuaicaiwu.salesInvoice.capability.sales_invoice.pull_from_partner_statement.already_pulled': '往来对账单可开票金额已全部开票，删除未审核发票后可再次加载',
   'app.kuaicaiwu.salesInvoice.pullNotes': '从{{source}} {{code}} 创建',
   'app.kuaicaiwu.salesInvoice.col.invoiceType': '发票类型',
   'app.kuaicaiwu.salesInvoice.col.internalCode': '系统编号',
   'app.kuaicaiwu.salesInvoice.col.partnerTaxNo': '纳税人识别号',
   'app.kuaicaiwu.salesInvoice.col.partnerBankInfo': '开户行及账号',
   'app.kuaicaiwu.salesInvoice.col.partnerAddressPhone': '地址及电话',
-  'app.kuaicaiwu.salesInvoice.col.taxRate': '税率(%)',
+  'app.kuaicaiwu.salesInvoice.col.taxRate': '税率%',
   'app.kuaicaiwu.salesInvoice.col.exclTax': '不含税金额',
   'app.kuaicaiwu.salesInvoice.col.taxAmount': '税额',
   'app.kuaicaiwu.salesInvoice.col.linkedReceivable': '关联应收',
+  'app.kuaicaiwu.salesInvoice.pull.sameCustomerRequired': '多笔一起开票须为同一客户',
+  'app.kuaicaiwu.salesInvoice.pull.partnerStatementSameLedgerModeRequired':
+    '多选对账单时须为同一立账方式',
+  'app.kuaicaiwu.salesInvoice.partnerBankInfoPlaceholder': '请选择客户收款账户',
+  'app.kuaicaiwu.salesInvoice.partnerBankInfoEmpty': '该客户未维护收款账户',
+  'app.kuaicaiwu.salesInvoice.partnerBankInfoNeedCustomer': '请先选择客户',
   'app.kuaicaiwu.salesInvoice.pull.searchPlaceholder': '按单号/客户搜索',
   'app.kuaicaiwu.salesInvoice.pull.col.sourceCode': '源单号',
+  'app.kuaicaiwu.salesInvoice.pull.col.deliveryDate': '出库日期',
+  'app.kuaicaiwu.salesInvoice.pull.col.deliveryCode': '销售出库单号',
+  'app.kuaicaiwu.salesInvoice.pull.col.receivableCode': '应收单号',
   'app.kuaicaiwu.salesInvoice.pull.col.docStatus': '单据状态',
   'app.kuaicaiwu.salesInvoice.pull.col.docAmount': '单据金额',
   'app.kuaicaiwu.salesInvoice.pull.col.invoicedAmount': '已开票',
@@ -21378,7 +26001,7 @@ export default {
   'app.kuaicaiwu.salesInvoice.voidReasonMissing': '请填写作废原因',
   'app.kuaicaiwu.salesInvoice.voided': '已作废',
   'app.kuaicaiwu.salesInvoice.redLetterTitle': '申请红字发票',
-  'app.kuaicaiwu.salesInvoice.redLetterHint': '系统将生成一张金额为负数的销项发票草稿，用于账务冲销；请在税控系统完成红字信息表及开票后，回填票面号码。',
+  'app.kuaicaiwu.salesInvoice.redLetterHint': '系统将生成一张金额为负数的销售发票草稿，用于账务冲销；请在税控系统完成红字信息表及开票后，回填票面号码。',
   'app.kuaicaiwu.salesInvoice.redLetterReasonRequired': '红冲原因（必填）',
   'app.kuaicaiwu.salesInvoice.redLetterReasonMissing': '请填写红冲原因',
   'app.kuaicaiwu.salesInvoice.redLetterDraftCreated': '已生成红字发票草稿',
@@ -21389,7 +26012,7 @@ export default {
   'app.kuaicaiwu.salesInvoice.reasonPlaceholder': '请填写原因，留存审计痕迹',
   'app.kuaicaiwu.salesInvoice.form.invoiceNumberFace': '取得税控票面号码后填写',
   'app.kuaicaiwu.salesInvoice.form.sourceCode': '来源单号',
-  'app.kuaicaiwu.salesInvoice.form.taxRate': '税率',
+  'app.kuaicaiwu.salesInvoice.form.taxRate': '税率%',
   'app.kuaicaiwu.salesInvoice.form.selectInvoiceType': '请选择发票类型',
   'app.kuaicaiwu.salesInvoice.form.selectInvoiceDate': '请选择开票日期',
   'app.kuaicaiwu.salesInvoice.form.selectTaxRate': '请选择税率',
@@ -21400,6 +26023,11 @@ export default {
   'app.kuaicaiwu.salesInvoice.invoiceType.receipt': '收据',
   'app.kuaicaiwu.purchaseInvoice.pageTitle': '采购发票',
   'app.kuaicaiwu.purchaseInvoice.entityName': '采购发票',
+  'app.kuaicaiwu.purchaseInvoice.toolbar.withdrawSubmit': '撤销提交',
+  'app.kuaicaiwu.purchaseInvoice.toolbar.submitReview': '提交审核',
+  'app.kuaicaiwu.purchaseInvoice.toolbar.submitReviewNotAllowed': '请先提交，再提交审核',
+  'app.kuaicaiwu.purchaseInvoice.toolbar.withdrawReview': '撤回审核',
+  'app.kuaicaiwu.purchaseInvoice.toolbar.revoke': '反审核',
   'app.kuaicaiwu.purchaseInvoice.createTitle': '手动登记采购发票',
   'app.kuaicaiwu.purchaseInvoice.editNumberTitle': '填写发票号码',
   'app.kuaicaiwu.purchaseInvoice.editNumberTitleWithCode': '填写发票号码（{{code}}）',
@@ -21415,12 +26043,15 @@ export default {
   'app.kuaicaiwu.purchaseInvoice.batchDeleteSuccess': '已删除 {{count}} 张采购发票',
   'app.kuaicaiwu.purchaseInvoice.batchDeleteConfirm': '确定删除选中的 {{count}} 张采购发票吗？已审核的发票不能删除。',
   'app.kuaicaiwu.purchaseInvoice.createButton': '登记采购发票',
-  'app.kuaicaiwu.purchaseInvoice.createHint': '提示：如果是从采购订单转发票，请在采购订单页面点击“下推发票”。此操作用于直接登记收到的进项发票。',
+  'app.kuaicaiwu.purchaseInvoice.createHint': '提示：如果是从采购订单转发票，请在采购订单页面点击“下推发票”。此操作用于直接登记收到的采购发票。',
   'app.kuaicaiwu.purchaseInvoice.col.code': '发票编号',
   'app.kuaicaiwu.purchaseInvoice.col.purchaseOrder': '采购订单',
   'app.kuaicaiwu.purchaseInvoice.col.invoiceAmount': '发票金额',
   'app.kuaicaiwu.purchaseInvoice.col.linkedPayable': '应付单',
   'app.kuaicaiwu.purchaseInvoice.pull.searchPlaceholder': '按单号/供应商搜索',
+  'app.kuaicaiwu.purchaseInvoice.pull.sameSupplierRequired': '多笔一起开票须为同一供应商',
+  'app.kuaicaiwu.purchaseInvoice.pull.partnerStatementSameLedgerModeRequired':
+    '多选对账单时须为同一立账方式',
   'app.kuaicaiwu.purchaseInvoice.detailNotFound': '未找到采购发票',
   'app.kuaicaiwu.purchaseInvoice.lifecycleHint': '采购发票未接入单据跟踪中心；与应付单、采购订单的关联以编号跳转业务系统为准。',
   'app.kuaicaiwu.purchaseInvoice.noLines': '暂无票面明细行（单头登记模式）',
@@ -21437,7 +26068,8 @@ export default {
   'app.kuaicaiwu.purchaseInvoice.form.amountModeIncl': '含税金额',
   'app.kuaicaiwu.purchaseInvoice.form.amountHintExcl': '折合不含税 ¥{{amount}}',
   'app.kuaicaiwu.purchaseInvoice.form.amountHintIncl': '折合含税 ¥{{amount}}',
-  'app.kuaicaiwu.purchaseInvoice.pullPreviewIncomplete': '预览数据未就绪，请关闭弹窗后重试',
+  'app.kuaicaiwu.purchaseInvoice.pullPreviewLoading': '正在加载发票信息…',
+  'app.kuaicaiwu.purchaseInvoice.pullPreviewIncomplete': '发票数据未就绪，请关闭弹窗后重试',
   'app.kuaicaiwu.purchaseInvoice.pullPreviewBlocked': '当前源单不可创建采购发票',
   'app.kuaicaiwu.purchaseInvoice.pullNoInvoiceableAmount': '源单无可开票金额',
   'app.kuaicaiwu.purchaseInvoice.pullCreateSuccess': '已创建{{target}}',
@@ -21451,34 +26083,42 @@ export default {
   'app.kuaicaiwu.purchaseInvoice.concurrentPaymentNotes': '付款备注',
   'app.kuaicaiwu.purchaseInvoice.concurrentPaymentNoPermission': '无付款单创建权限，无法同时付款',
   'app.kuaicaiwu.purchaseInvoice.pullExceedMax': '价税合计不能超过可开票金额 {{max}}',
-  'app.kuaicaiwu.purchaseInvoice.capability.purchase_invoice.pull_from_purchase_order.not_allowed': '当前状态的采购订单不可加载进项发票',
+  'app.kuaicaiwu.purchaseInvoice.capability.purchase_invoice.pull_from_purchase_order.not_allowed': '当前状态的采购订单不可加载采购发票',
   'app.kuaicaiwu.purchaseInvoice.capability.purchase_invoice.pull_from_purchase_order.no_lines': '采购订单无可开票金额',
   'app.kuaicaiwu.purchaseInvoice.capability.purchase_invoice.pull_from_purchase_order.already_pulled': '采购订单可开票金额已全部开票，删除未审核发票后可再次加载',
-  'app.kuaicaiwu.purchaseInvoice.capability.purchase_invoice.pull_from_purchase_receipt.not_allowed': '当前状态的采购入库单不可加载进项发票',
+  'app.kuaicaiwu.purchaseInvoice.capability.purchase_invoice.pull_from_purchase_receipt.not_allowed': '当前状态的采购入库单不可加载采购发票',
   'app.kuaicaiwu.purchaseInvoice.capability.purchase_invoice.pull_from_purchase_receipt.no_lines': '采购入库单无可开票金额',
   'app.kuaicaiwu.purchaseInvoice.capability.purchase_invoice.pull_from_purchase_receipt.already_pulled': '采购入库单可开票金额已全部开票，删除未审核发票后可再次加载',
-  'app.kuaicaiwu.purchaseInvoice.capability.purchase_invoice.pull_from_payable.not_allowed': '当前状态的应付单不可加载进项发票',
+  'app.kuaicaiwu.purchaseInvoice.capability.purchase_invoice.pull_from_purchase_receipt.partner_statement_ledger':
+    '立账策略为以按月结对账单为准，须先完成往来对账单后再从对账单加载采购发票',
+  'app.kuaicaiwu.purchaseInvoice.capability.purchase_invoice.pull_from_payable.not_allowed': '当前状态的应付单不可加载采购发票',
   'app.kuaicaiwu.purchaseInvoice.capability.purchase_invoice.pull_from_payable.purchase_return_offset':
-    '采购退货冲减应付不可开蓝字进项发票',
+    '采购退货冲减应付不可开蓝字采购发票',
   'app.kuaicaiwu.purchaseInvoice.capability.purchase_invoice.pull_from_payable.no_lines': '应付单无可开票金额',
   'app.kuaicaiwu.purchaseInvoice.capability.purchase_invoice.pull_from_payable.already_pulled': '应付单可开票金额已全部开票，删除未审核发票后可再次加载',
-  'app.kuaicaiwu.payable.capability.purchase_invoice.pull_from_payable.not_allowed': '当前状态的应付单不可加载进项发票',
+  'app.kuaicaiwu.purchaseInvoice.capability.purchase_invoice.pull_from_partner_statement.no_lines':
+    '往来对账单中无可用的收票明细行（根据发票立账取采购入库，立即立账取应付单）',
+  'app.kuaicaiwu.purchaseInvoice.capability.purchase_invoice.pull_from_partner_statement.already_pulled': '往来对账单可开票金额已全部收票，删除未审核发票后可再次加载',
+  'app.kuaicaiwu.payable.capability.purchase_invoice.pull_from_payable.not_allowed': '当前状态的应付单不可加载采购发票',
   'app.kuaicaiwu.payable.capability.purchase_invoice.pull_from_payable.purchase_return_offset':
-    '采购退货冲减应付不可开蓝字进项发票',
+    '采购退货冲减应付不可开蓝字采购发票',
   'app.kuaicaiwu.payable.capability.purchase_invoice.pull_from_payable.no_lines': '应付单无可开票金额',
   'app.kuaicaiwu.payable.capability.purchase_invoice.pull_from_payable.already_pulled': '应付单可开票金额已全部开票，删除未审核发票后可再次加载',
   'app.kuaicaiwu.purchaseInvoice.selectSource': '请选择{{label}}',
   'app.kuaicaiwu.purchaseInvoice.col.invoiceNumber': '发票号码',
   'app.kuaicaiwu.purchaseInvoice.col.totalAmount': '价税合计',
   'app.kuaicaiwu.purchaseInvoice.col.invoiceType': '发票类型',
-  'app.kuaicaiwu.purchaseInvoice.col.taxRate': '税率(%)',
+  'app.kuaicaiwu.purchaseInvoice.col.taxRate': '税率%',
   'app.kuaicaiwu.purchaseInvoice.col.exclTax': '不含税金额',
   'app.kuaicaiwu.purchaseInvoice.col.taxAmount': '税额',
   'app.kuaicaiwu.purchaseInvoice.col.amount': '金额',
   'app.kuaicaiwu.purchaseInvoice.pull.col.sourceCode': '源单号',
+  'app.kuaicaiwu.purchaseInvoice.pull.col.receiptDate': '入库日期',
+  'app.kuaicaiwu.purchaseInvoice.pull.col.receiptCode': '采购入库单号',
+  'app.kuaicaiwu.purchaseInvoice.pull.col.payableCode': '应付单号',
   'app.kuaicaiwu.purchaseInvoice.pull.col.docStatus': '单据状态',
   'app.kuaicaiwu.purchaseInvoice.pull.col.docAmount': '单据金额',
-  'app.kuaicaiwu.purchaseInvoice.pull.col.invoicedAmount': '已开票',
+  'app.kuaicaiwu.purchaseInvoice.pull.col.invoicedAmount': '已收票',
   'app.kuaicaiwu.purchaseInvoice.pull.col.invoiceableAmount': '可开票',
   'app.kuaicaiwu.purchaseInvoice.pull.col.convertStatus': '转单状态',
   'app.kuaicaiwu.purchaseInvoice.pull.detailTitle': '开票明细',
@@ -21489,8 +26129,14 @@ export default {
   'app.kuaicaiwu.purchaseInvoice.pull.col.materialSpec': '规格',
   'app.kuaicaiwu.purchaseInvoice.pull.col.unitPrice': '单价',
   'app.kuaicaiwu.purchaseInvoice.pull.col.lineAmount': '金额',
+  'app.kuaicaiwu.purchaseInvoice.pull.col.occupiedAmount': '已占用',
+  'app.kuaicaiwu.purchaseInvoice.pull.col.thisInvoiceAmount': '本次开票',
   'app.kuaicaiwu.purchaseInvoice.pull.converted': '已创建',
   'app.kuaicaiwu.purchaseInvoice.pull.convertible': '可创建',
+  'app.kuaicaiwu.purchaseInvoice.pull.selectAtLeastOneLine': '请至少勾选一行入库明细',
+  'app.kuaicaiwu.purchaseInvoice.pull.lineAmountMismatch':
+    '价税合计超过所选入库行可分摊上限，请减少开票金额或调整勾选行',
+  'app.kuaicaiwu.purchaseInvoice.pull.lineExceedMax': '某行本次开票超过该行可开票上限',
   'app.kuaicaiwu.purchaseInvoice.form.invoiceNumberRequired': '请输入发票号码',
   'app.kuaicaiwu.purchaseInvoice.form.invoiceNumberPlaceholder': '请输入票面号码',
   'app.kuaicaiwu.purchaseInvoice.form.invoiceTypeRequired': '请选择发票类型',
@@ -21600,6 +26246,13 @@ export default {
   'app.kuaicaiwu.settlement.capability.settlement.payable.no_balance': '应付待付与付款余额均为零，无可核销金额',
   'app.kuaicaiwu.settlement.capability.settlement.amount_invalid': '请输入正确的核销金额',
   'app.kuaicaiwu.settlement.tabHistory': '核销历史',
+  'app.kuaicaiwu.settlement.tabReceivableRemediation': '补救核销（应收）',
+  'app.kuaicaiwu.settlement.tabPayableRemediation': '补救核销（应付）',
+  'app.kuaicaiwu.settlement.remediationModeAlert':
+    '补救入口：日常请在收付款单加载来源并确认时自动核销；此处仅处理历史漏核销等异常。',
+  'app.kuaicaiwu.settlement.remediationReselectCounter': '重选单据',
+  'app.kuaicaiwu.settlement.remediationVoucherSummary':
+    '当前{{voucherLabel}} {{code}}（{{partner}}），待核销 {{unsettled}}',
   'app.kuaicaiwu.settlement.history.title': '核销记录',
   'app.kuaicaiwu.settlement.history.alert': '展示已完成的应收/应付核销记录，可按业务类型与日期筛选。',
   'app.kuaicaiwu.settlement.history.col.settlementCode': '核销单号',
@@ -21629,8 +26282,14 @@ export default {
   'app.kuaicaiwu.partnerStatement.deleteTitle': '删除对账单',
   'app.kuaicaiwu.partnerStatement.deleteDesc': '仅草稿可删除',
   'app.kuaicaiwu.partnerStatement.detailNotFound': '未找到对账单',
+  'app.kuaicaiwu.partnerStatement.entityName': '往来对账单',
   'app.kuaicaiwu.partnerStatement.pageTitle': '往来对账单',
   'app.kuaicaiwu.partnerStatement.createButton': '新建对账单',
+  'app.kuaicaiwu.partnerStatement.toolbar.withdrawSubmit': '撤销提交',
+  'app.kuaicaiwu.partnerStatement.toolbar.submitReview': '提交审核',
+  'app.kuaicaiwu.partnerStatement.toolbar.submitReviewNotAllowed': '请先提交，再提交审核',
+  'app.kuaicaiwu.partnerStatement.toolbar.withdrawReview': '撤回审核',
+  'app.kuaicaiwu.partnerStatement.toolbar.revoke': '反审核',
   'app.kuaicaiwu.partnerStatement.col.customerName': '客户名称',
   'app.kuaicaiwu.partnerStatement.col.supplierName': '供应商名称',
   'app.kuaicaiwu.partnerStatement.batchDeleteCustomerConfirm': '确定删除选中的 {{count}} 条客户对账单吗？仅草稿可删除。',
@@ -21690,6 +26349,8 @@ export default {
   'app.kuaicaiwu.partnerStatement.detail.pushSupplierOnly': '仅供应商对账单可下推付款申请与采购收票',
   'app.kuaicaiwu.partnerStatement.detail.pushNeedConfirmed': '请先确认对账单后再下推',
   'app.kuaicaiwu.partnerStatement.detail.pushSelectPayable': '对账单中无可用的应付单行',
+  'app.kuaicaiwu.partnerStatement.detail.pushSelectPurchaseReceipt': '对账单中无可用的采购入库行',
+  'app.kuaicaiwu.partnerStatement.detail.pushSelectReceivable': '对账单中无可用的应收单行',
   'app.kuaicaiwu.partnerStatement.detail.paymentApplicationCreated': '已生成付款申请 {{code}}',
   'app.kuaicaiwu.partnerStatement.detail.paymentApplicationFailed': '生成付款申请失败',
   'app.kuaicaiwu.partnerStatement.detail.purchaseInvoiceNoEligible': '所选应付单当前不可收票',
@@ -21713,6 +26374,24 @@ export default {
   'app.kuaicaiwu.partnerStatement.status.confirmed': '已确认',
   'app.kuaicaiwu.partnerStatement.status.sent': '已发送',
   'app.kuaicaiwu.partnerStatement.status.disputed': '有异议',
+  'app.kuaicaiwu.partnerStatement.status.ledgerPosted': '已立账',
+  'app.kuaicaiwu.partnerStatement.ledgerPostingMode': '立账方式',
+  'app.kuaicaiwu.partnerStatement.ledgerPostingMode.immediate': '立即立账',
+  'app.kuaicaiwu.partnerStatement.ledgerPostingMode.byInvoice': '根据发票立账',
+  'app.kuaicaiwu.partnerStatement.ledgerPostingModeHint':
+    '按对账单立账客商必选：立即立账在审核立账时按对账金额生成应收应付；根据发票立账仅对已审核发票对应行入账，其余行待开票后可再次审核立账。',
+  'app.kuaicaiwu.partnerStatement.detail.postLedger': '审核立账',
+  'app.kuaicaiwu.partnerStatement.detail.postLedgerTitle': '审核立账',
+  'app.kuaicaiwu.partnerStatement.detail.postLedgerContent':
+    '将按「{{mode}}」为本对账单生成立账应收/应付，确认继续？',
+  'app.kuaicaiwu.partnerStatement.detail.postLedgerSuccess': '审核立账已完成',
+  'app.kuaicaiwu.partnerStatement.detail.postLedgerFailed': '审核立账失败',
+  'app.kuaicaiwu.partnerStatement.detail.ledgerPostedAt': '立账时间',
+  'app.kuaicaiwu.partnerStatement.detail.pushSalesInvoice': '下推销售发票',
+  'app.kuaicaiwu.partnerStatement.detail.pushSelectDelivery': '请在对账明细中选择销售出库行',
+  'app.kuaicaiwu.partnerStatement.detail.salesInvoiceNoEligible': '所选行暂无可下推销售发票的源单',
+  'app.kuaicaiwu.partnerStatement.dataSourceNotePartnerStatement':
+    '当前往来单位为「按对账单立账」：预览含未立账出库/入库与已确认收付款，审核立账后再生成应收应付。',
   'app.kuaicaiwu.partnerStatement.partnerType.customer': '客户',
   'app.kuaicaiwu.partnerStatement.partnerType.supplier': '供应商',
   'app.kuaicaiwu.partnerStatement.sentChannel.wechatManual': '导出后微信/邮件发送',
@@ -22744,8 +27423,10 @@ export default {
   'app.master-data.menu.process.operations': '工序管理',
   'app.master-data.menu.process.routes': '工艺路线',
   'app.master-data.menu.process.product-process': '产品工艺',
+  'app.master-data.menu.process.drawings-hub': '图纸管理',
   'app.master-data.menu.process.drawings': '图纸管理',
   'app.master-data.menu.process.engineering-bom': '物料清单 (BOM)',
+  'app.master-data.menu.process.engineering-bom.new': '新建BOM',
   'app.master-data.menu.process.engineering-bom.designer': 'BOM设计',
   'app.master-data.menu.process.sop': '标准操作 (SOP)',
   'app.master-data.menu.process.sop.designer': 'SOP设计',
@@ -22855,6 +27536,21 @@ export default {
   'app.master-data.drawings.viewCurrent': '现行有效版',
   'app.master-data.drawings.viewAllRevisions': '全部修订版',
   'app.master-data.drawings.revisionHistory': '修订历史',
+  'app.master-data.drawings.detailRecords': '图纸记录',
+  'app.master-data.drawings.detailTabDistributions': '发放记录',
+  'app.master-data.drawings.detailTabLoans': '借阅记录',
+  'app.master-data.drawings.actionWhereUsed': '反查',
+  'app.master-data.drawings.actionDistribute': '发放',
+  'app.master-data.drawings.actionLoan': '借阅',
+  'app.master-data.drawings.actionGroup.edit': '编辑维护',
+  'app.master-data.drawings.actionGroup.workflow': '流程审核',
+  'app.master-data.drawings.actionGroup.version': '版本变更',
+  'app.master-data.drawings.actionGroup.collaborate': '查询协作',
+  'app.master-data.drawings.actionGroup.file': '文件输出',
+  'app.master-data.drawings.whereUsedEmpty': '暂无引用记录',
+  'app.master-data.drawings.downloadNoFile': '当前图纸没有可下载文件',
+  'app.master-data.drawings.downloadFailed': '图纸下载失败',
+  'app.master-data.drawings.downloadSuccess': '图纸已开始下载',
   'app.master-data.drawings.noRevisionHistory': '暂无修订记录',
   'app.master-data.drawings.lastStepBomImportAt': '最近 STP 导入',
   'app.master-data.drawings.stepBomWizard.stepParse': '解析装配',
@@ -22897,8 +27593,26 @@ export default {
   'app.master-data.menu.supply-chain.customer-price-books': '客户价格本',
   'app.master-data.menu.supply-chain.supplier-price-books': '供应商价格本',
   'app.master-data.priceBook.effectiveFrom': '生效起始',
+  'app.master-data.priceBook.effectiveOpenEnded': '一直生效',
+  'app.master-data.priceBook.effectiveOpenEndedHelp': '不填表示一直生效',
   'app.master-data.priceBook.createCustomer': '新建客户价格本',
   'app.master-data.priceBook.createSupplier': '新建供应商价格本',
+  'app.master-data.priceBook.import.partnerCode': '伙伴编号',
+  'app.master-data.priceBook.import.partnerName': '伙伴名称',
+  'app.master-data.priceBook.import.materialCode': '物料主编号',
+  'app.master-data.priceBook.import.tierMinQty': '阶梯起订量',
+  'app.master-data.priceBook.import.tierMaxQty': '阶梯上限量',
+  'app.master-data.priceBook.import.tierUnitPrice': '阶梯单价',
+  'app.master-data.priceBook.import.examplePartnerName': '示例伙伴',
+  'app.master-data.priceBook.import.rowPartnerRequired': '第 {{row}} 行：请填写伙伴编号或名称',
+  'app.master-data.priceBook.import.rowMaterialRequired': '第 {{row}} 行：请填写物料主编号',
+  'app.master-data.priceBook.import.rowPartnerNotFound': '第 {{row}} 行：未找到伙伴 {{code}}',
+  'app.master-data.priceBook.import.rowMaterialNotFound': '第 {{row}} 行：未找到物料 {{code}}',
+  'app.master-data.priceBook.import.rowPriceRequired': '第 {{row}} 行起：须填写标准价或阶梯起订量与阶梯单价',
+  'app.master-data.priceBook.import.bulkFailed': '伙伴 {{partnerId}} 批量写入失败',
+  'app.master-data.priceBook.import.resultSummary':
+    '导入完成：新建 {{created}} 条，覆盖 {{updated}} 条，跳过 {{skipped}} 条',
+  'app.master-data.priceBook.import.moreErrors': '另有 {{count}} 条错误未展示',
   'app.master-data.priceBook.bulkRegister': '批量登记',
   'app.master-data.priceBook.bulkRegisterCustomer': '批量登记客户价格本',
   'app.master-data.priceBook.bulkRegisterSupplier': '批量登记供应商价格本',
@@ -22911,6 +27625,7 @@ export default {
   'app.master-data.priceBook.bulkLinesRequired': '请至少添加一行物料并填写标准价',
   'app.master-data.priceBook.bulkDuplicateMaterial': '物料明细中不能重复选择同一物料',
   'app.master-data.priceBook.unitPriceMin': '标准价须大于 0',
+  'app.master-data.priceBook.taxRateRequiredWhenInclusive': '含税标准价必须填写大于 0 的默认税率',
   'app.master-data.priceBook.bulkResultSummary':
     '批量登记完成：新建 {{created}} 条，跳过 {{skipped}} 条，覆盖 {{overwritten}} 条',
   'app.master-data.priceBook.bulkConflictTitle': '发现重叠的价格本记录',
@@ -22936,6 +27651,44 @@ export default {
   'app.master-data.priceBook.standardUnitPrice': '标准价',
   'app.master-data.priceBook.standardUnitPriceHint': '统一价；未匹配到属性 SKU 时使用',
   'app.master-data.priceBook.standardUnitPriceTypeHint': '标准价与下方 SKU 单价共用价类；切换时按税率换算',
+  'app.master-data.priceBook.tierPricesSection': '数量阶梯价',
+  'app.master-data.priceBook.tierMinQty': '起订量',
+  'app.master-data.priceBook.tierMinQtyRequired': '请填写起订量',
+  'app.master-data.priceBook.tierMaxQty': '截止量',
+  'app.master-data.priceBook.tierUnitPrice': '阶梯单价',
+  'app.master-data.priceBook.tierUnitPriceRequired': '请填写阶梯单价',
+  'app.master-data.priceBook.tierAddLine': '添加阶梯档',
+  'app.master-data.priceBook.tierTableEmpty': '暂无阶梯，点击下方添加',
+  'app.master-data.priceBook.tierPricesEnable': '启用阶梯价',
+  'app.master-data.priceBook.tierPricesDisabledHint': '未启用阶梯价，仅使用上方标准价；开启后可维护数量阶梯。',
+  'app.master-data.defaults.salePriceMethodTier': '阶梯售价',
+  'app.master-data.defaults.saleTierPricesHint': '按订购数量维护销售阶梯价；未命中阶梯时不使用本表（仍走固定价或价本）',
+  'app.master-data.defaults.saleTierPricesRequired': '请至少维护一档销售阶梯价',
+  'app.master-data.defaults.purchasePriceMethod': '采购定价方式',
+  'app.master-data.defaults.purchasePriceMethodHint': '固定价或按数量阶梯；采购侧不提供行情定价',
+  'app.master-data.defaults.purchasePriceMethodFixed': '固定采购价',
+  'app.master-data.defaults.purchasePriceMethodTier': '阶梯采购价',
+  'app.master-data.defaults.purchaseTierPricesHint': '按订购数量维护采购阶梯价',
+  'app.master-data.defaults.purchaseTierPricesRequired': '请至少维护一档采购阶梯价',
+  'pages.system.configCenter.param.sales_partner_price_source': '销售取价来源',
+  'pages.system.configCenter.param.sales_partner_price_source_desc':
+    '报价单、销售订单等选料取价时，仅使用其中一种：与该客户最近成交单价，或客户价格本（含数量阶梯）；均未命中时再取物料默认销售价。',
+  'pages.system.configCenter.param.sales_partner_price_source_opt_recent': '历史成交价',
+  'pages.system.configCenter.param.sales_partner_price_source_opt_price_book': '客户价格本',
+  'pages.system.configCenter.param.purchase_partner_price_source': '采购取价来源',
+  'pages.system.configCenter.param.purchase_partner_price_source_desc':
+    '采购订单等选料取价时，仅使用其中一种：与该供应商最近成交单价，或供应商价格本（含数量阶梯）；均未命中时再取物料默认采购价。',
+  'pages.system.configCenter.param.purchase_partner_price_source_opt_recent': '历史成交价',
+  'pages.system.configCenter.param.purchase_partner_price_source_opt_price_book': '供应商价格本',
+  'pages.system.configCenter.param.supply_chain_partner_price_resolution_order': '客商取价顺序',
+  'pages.system.configCenter.param.supply_chain_partner_price_resolution_order_desc':
+    '未锁定来源的单据行取价时，依次尝试最近成交价与价本；价本有订购数量时优先命中阶梯价，未命中再用标准价（同本标准/阶梯不互相短路）',
+  'pages.system.configCenter.param.supply_chain_partner_price_resolution_order_opt_rsb': '最近价 然后 标准价 然后 阶梯价',
+  'pages.system.configCenter.param.supply_chain_partner_price_resolution_order_opt_rbs': '最近价 然后 阶梯价 然后 标准价',
+  'pages.system.configCenter.param.supply_chain_partner_price_resolution_order_opt_sbr': '标准价 然后 阶梯价 然后 最近价',
+  'pages.system.configCenter.param.supply_chain_partner_price_resolution_order_opt_srb': '标准价 然后 最近价 然后 阶梯价',
+  'pages.system.configCenter.param.supply_chain_partner_price_resolution_order_opt_bsr': '阶梯价 然后 标准价 然后 最近价',
+  'pages.system.configCenter.param.supply_chain_partner_price_resolution_order_opt_brs': '阶梯价 然后 最近价 然后 标准价',
   'app.master-data.priceBook.variantPricesInclHint': 'SKU 单价与标准价同为含税价',
   'app.master-data.priceBook.variantPricesExclHint': 'SKU 单价与标准价同为不含税价',
   'app.master-data.priceBook.variantPricesSection': '属性 SKU 单价',
@@ -23013,7 +27766,29 @@ export default {
   'app.master-data.workstations.importSuccess': '成功导入 {{count}} 条工位数据',
   'app.master-data.warehouses.getListFailed': '获取仓库列表失败',
   'app.master-data.warehouses.syncFromSource': '同步仓库',
-  'app.master-data.warehouses.syncHint': '从外部系统同步仓库到仓库管理',
+  'app.master-data.warehouses.syncHint':
+    '确认同步后将依次同步仓库、仓库库位关系（按关系建立/更新库位）、再同步 bd_location 库位明细（须在「库位同步」与库位页配置来源）',
+  'app.master-data.warehouses.syncStep.warehouse': '同步仓库',
+  'app.master-data.warehouses.syncStep.location': '同步库位',
+  'app.master-data.warehouses.syncStep.locationRef': '同步库位所属仓库',
+  'app.master-data.warehouses.locationSync': '库位同步',
+  'app.master-data.warehouses.locationRefSyncMapping': '库位关系映射',
+  'app.master-data.warehouses.locationRefSyncFromSource': '库位关系同步',
+  'app.master-data.warehouses.locationRefSyncHint':
+    '苍穹 query 要求 data.warehouse_number：来源设置中编辑参数，开启批量填入并加载本系统仓库编码；正式同步未配置时也会按本地仓库自动分批',
+  'app.master-data.warehouses.locationRefSyncApiHint':
+    '按仓库编码分批拉取关系；本地无库位则按关系新建并挂所属仓库，不新建仓库',
+  'app.master-data.warehouses.locationRefSyncDatasetHint':
+    '按关系写入库位：不存在则新建（编码、名称、所属仓库），已存在则更新归属与名称',
+  'app.master-data.warehouses.locationRefSyncComplete':
+    '关系同步完成：新建 {{created}}，更新 {{updated}}，跳过 {{skipped}}',
+  'app.master-data.warehouses.locationRefSyncPartial':
+    '关系同步完成：新建 {{created}}，更新 {{updated}}，跳过 {{skipped}}，失败 {{failed}}',
+  'app.master-data.warehouses.locationRefSyncField.locationName': '库位名称',
+  'app.master-data.warehouses.locationRefSyncFailed': '库位关系同步失败',
+  'app.master-data.warehouses.locationRefSyncField.locationCode': '库位编码',
+  'app.master-data.warehouses.locationRefSyncField.warehouseCode': '仓库编码',
+  'app.master-data.warehouses.locationRefSyncField.isDefaultLoc': '默认仓位',
   'app.master-data.warehouses.syncApiHint': '确认同步后将按字段映射写入仓库档案',
   'app.master-data.warehouses.syncDatasetHint': '确认同步后将按字段映射写入仓库档案',
   'app.master-data.warehouses.syncComplete': '同步完成：新建 {{created}}，更新 {{updated}}，跳过 {{skipped}}',
@@ -23026,12 +27801,30 @@ export default {
   'app.master-data.warehouses.syncField.warehouseType': '仓库类型',
   'app.master-data.warehouses.syncField.isActive': '是否启用',
   'app.master-data.storageAreas.getListFailed': '获取库区列表失败',
+  'app.master-data.storageLocations.syncFromSource': '同步库位',
+  'app.master-data.storageLocations.syncHint':
+    '从外部系统同步库位；金蝶苍穹请选用「苍穹查询仓位」接口（bd_location/getList），可不挂所属库区',
+  'app.master-data.storageLocations.syncApiHint': '确认同步后将按字段映射写入库位档案',
+  'app.master-data.storageLocations.syncDatasetHint': '确认同步后将按字段映射写入库位档案',
+  'app.master-data.storageLocations.syncComplete':
+    '同步完成：新建 {{created}}，更新 {{updated}}，跳过 {{skipped}}',
+  'app.master-data.storageLocations.syncPartial':
+    '同步完成：新建 {{created}}，更新 {{updated}}，跳过 {{skipped}}，失败 {{failed}}',
+  'app.master-data.storageLocations.syncFailed': '库位同步失败',
+  'app.master-data.storageLocations.syncField.code': '库位编码',
+  'app.master-data.storageLocations.syncField.name': '库位名称',
+  'app.master-data.storageLocations.syncField.enable': '启用（苍穹 enable）',
+  'app.master-data.storageLocations.syncField.forbidStatus': '禁用状态',
+  'app.master-data.storageLocations.syncField.description': '描述',
+  'app.master-data.storageLocations.syncField.isActive': '是否启用',
   'app.master-data.storageLocations.getListFailed': '获取库位列表失败',
   'app.master-data.workstations.getDetailFailed': '获取工位详情失败',
   'app.master-data.workCenters.getDetailFailed': '获取工作中心详情失败',
   'app.master-data.warehouses.getDetailFailed': '获取仓库详情失败',
   'app.master-data.storageAreas.getDetailFailed': '获取库区详情失败',
   'app.master-data.storageLocations.getDetailFailed': '获取库位详情失败',
+  'app.master-data.warehouses.storageAreaCount': '库区数量',
+  'app.master-data.warehouses.storageLocationCount': '库位数量',
   'app.master-data.warehouses.code': '仓库编码',
   'app.master-data.warehouses.name': '仓库名称',
   'app.master-data.warehouses.detailTitle': '仓库详情',
@@ -23076,6 +27869,7 @@ export default {
   'app.master-data.storageAreas.importTip': '提示：所属仓库列仅支持填写仓库编号（如：{{code}}）',
   'app.master-data.storageLocations.code': '库位编码',
   'app.master-data.storageLocations.name': '库位名称',
+  'app.master-data.storageLocations.warehouse': '所属仓库',
   'app.master-data.storageLocations.storageArea': '所属库区',
   'app.master-data.storageLocations.detailTitle': '库位详情',
   'app.master-data.storageLocations.deleteConfirm': '确定要删除这个库位吗？',
@@ -23120,6 +27914,8 @@ export default {
   'app.master-data.customers.syncField.phone': '电话',
   'app.master-data.customers.syncField.email': '邮箱',
   'app.master-data.customers.syncField.address': '地址',
+  'app.master-data.customers.syncField.partnerType': '伙伴类型',
+  'app.master-data.customers.syncField.bizFunction': '业务职能',
   'app.master-data.customers.syncField.category': '客户分类',
   'app.master-data.customers.syncField.contactTitle': '联系人职位',
   'app.master-data.customers.syncField.industryCode': '所属行业',
@@ -23135,7 +27931,8 @@ export default {
   'app.master-data.customers.syncField.invoiceBankAccount': '开票银行账号',
   'app.master-data.customers.syncField.legalRepresentative': '法定代表人',
   'app.master-data.customers.syncField.paymentTermsDays': '付款账期',
-  'app.master-data.customers.syncField.settlementMethodCode': '结算方式',
+  'app.master-data.customers.syncField.defaultPaymentMethodCode': '默认付款方式',
+  'app.master-data.customers.syncField.settlementTermsCode': '结算方式',
   'app.master-data.customers.syncField.financeContactName': '财务联系人',
   'app.master-data.customers.syncField.financeContactPhone': '财务联系电话',
   'app.master-data.customers.syncField.deliveryContactName': '收货联系人',
@@ -23175,7 +27972,8 @@ export default {
   'app.master-data.suppliers.syncField.paymentBankAccount': '付款账号',
   'app.master-data.suppliers.syncField.legalRepresentative': '法定代表人',
   'app.master-data.suppliers.syncField.paymentTermsDays': '付款账期',
-  'app.master-data.suppliers.syncField.settlementMethodCode': '结算方式',
+  'app.master-data.suppliers.syncField.defaultPaymentMethodCode': '默认付款方式',
+  'app.master-data.suppliers.syncField.settlementTermsCode': '结算方式',
   'app.master-data.suppliers.syncField.buyerName': '采购员',
   'app.master-data.suppliers.syncField.isActive': '是否启用',
   'app.master-data.suppliers.detailTitle': '供应商详情',
@@ -23552,7 +28350,7 @@ export default {
   'app.master-data.operations.syncField.isActive': '是否启用',
   'app.master-data.operations.syncField.reportingType': '报工类型',
   'app.master-data.operations.documentPush.title': '推送工序',
-  'app.master-data.operations.documentPush.hint': '选择工序推送到外部系统',
+  'app.master-data.operations.documentPush.hint': '按已添加的推送目标写出工序',
   'app.master-data.operations.documentPush.pipelineDesc': '工序 → 金蝶 ENG_Process',
   'app.master-data.operations.documentPush.searchPlaceholder': '搜索工序编码/名称',
   'app.master-data.operations.documentPush.needSelect': '请先勾选工序',
@@ -23788,7 +28586,7 @@ export default {
   'app.master-data.bom.syncField.bomName': 'BOM名称',
   'app.master-data.bom.syncField.isRequired': '是否必选',
   'app.master-data.bom.documentPush.title': '推送工程BOM',
-  'app.master-data.bom.documentPush.hint': '选择已审核 BOM 推送到外部系统',
+  'app.master-data.bom.documentPush.hint': '按已添加的推送目标写出已审核 BOM',
   'app.master-data.bom.documentPush.pipelineDesc': '工程BOM → 金蝶 ENG_BOM',
   'app.master-data.bom.documentPush.searchPlaceholder': '搜索BOM编码/物料',
   'app.master-data.bom.documentPush.needSelect': '请先勾选BOM',
@@ -23812,8 +28610,49 @@ export default {
   'app.master-data.materials.syncComplete': '同步完成：新建 {{created}}，更新 {{updated}}，跳过 {{skipped}}',
   'app.master-data.materials.syncPartial': '同步完成：新建 {{created}}，更新 {{updated}}，跳过 {{skipped}}，失败 {{failed}}',
   'app.master-data.materials.syncFailed': '物料同步失败',
+  'app.master-data.materials.otherSyncMenu': '其他同步',
+  'app.master-data.materials.multiUnitSync': '同步多单位',
+  'app.master-data.materials.multiUnitSyncMenu': '多单位同步',
+  'app.master-data.materials.multiUnitSyncFromSource': '同步物料多单位',
+  'app.master-data.materials.multiUnitSyncHint':
+    '从苍穹多计量单位接口拉取换算行，写入已存在物料的辅单位列表（不新建物料，不覆盖场景单位）',
+  'app.master-data.materials.multiUnitSyncApiHint':
+    '请选用「苍穹查询物料多计量单位」接口并映射物料编码与辅单位编码',
+  'app.master-data.materials.multiUnitSyncDatasetHint': '确认同步后将按字段映射更新物料辅单位换算',
+  'app.master-data.materials.multiUnitSyncComplete':
+    '多单位同步完成：更新 {{updated}} 个物料，跳过 {{skipped}}',
+  'app.master-data.materials.multiUnitSyncPartial':
+    '多单位同步完成：更新 {{updated}}，跳过 {{skipped}}，失败 {{failed}}',
+  'app.master-data.materials.multiUnitSyncFailed': '物料多单位同步失败',
+  'app.master-data.materials.multiUnitSyncField.materialCode': '物料编码',
+  'app.master-data.materials.multiUnitSyncField.unitCode': '辅单位编码',
+  'app.master-data.materials.multiUnitSyncField.unitName': '辅单位名称',
+  'app.master-data.materials.multiUnitSyncField.numerator': '换算分子',
+  'app.master-data.materials.multiUnitSyncField.denominator': '换算分母',
+  'app.master-data.materials.multiUnitSyncField.conversionType': '换算类型',
+  'app.master-data.materials.batchManageSyncMenu': '批号管理同步',
+  'app.master-data.materials.batchManageSyncFromSource': '同步物料批号管理',
+  'app.master-data.materials.batchManageSyncHint':
+    '从金蝶「物料库存信息批量查询」全量拉取启用批号管理；物料编码仅作对账匹配键（不是按编码去查），与多单位一样选好接口即可，无需手填必填映射',
+  'app.master-data.materials.batchManageSyncApiHint':
+    '请选用「苍穹查询物料库存信息」（batchQuery）。默认：物料编码←masterid_number，批号管理←enablelot；不必按物料编码筛选查询',
+  'app.master-data.materials.batchManageSyncDatasetHint': '确认同步后按库存信息行更新本地物料批号管理开关',
+  'app.master-data.materials.batchManageSyncComplete':
+    '批号管理同步完成：更新 {{updated}} 个物料，跳过 {{skipped}}',
+  'app.master-data.materials.batchManageSyncPartial':
+    '批号管理同步完成：更新 {{updated}}，跳过 {{skipped}}，失败 {{failed}}',
+  'app.master-data.materials.batchManageSyncFailed': '物料批号管理同步失败',
+  'app.master-data.materials.batchManageSyncField.materialCode': '物料编码',
+  'app.master-data.materials.batchManageSyncField.batchManaged': '批号管理',
   'app.master-data.materials.groupSyncFromSource': '同步物料分组',
   'app.master-data.materials.groupSyncHint': '从外部系统同步物料分组',
+  'app.master-data.materials.groupSyncInferParentByCode': '按编码智能归类',
+  'app.master-data.materials.groupSyncInferParentByCodeOn': '开启',
+  'app.master-data.materials.groupSyncInferParentByCodeOff': '关闭',
+  'app.master-data.materials.groupSyncInferParentByCodeHintOn':
+    '按编码段自动挂父级（如 06.01、06.02 归入 06）；缺省祖先会先占位创建，再挂下级。',
+  'app.master-data.materials.groupSyncInferParentByCodeHintOff':
+    '关闭时仅按字段映射的父分组编码挂接，不会按编码段自动推断。',
   'app.master-data.materials.groupSyncApiHint': '确认同步后将按字段映射写入物料分组',
   'app.master-data.materials.groupSyncDatasetHint': '确认同步后将按字段映射写入物料分组',
   'app.master-data.materials.groupSyncComplete': '同步完成：新建 {{created}}，更新 {{updated}}，跳过 {{skipped}}',
@@ -23854,7 +28693,7 @@ export default {
   'app.master-data.materials.syncField.overReportValue': '超报值',
   'app.master-data.materials.syncField.inspectionMode': '质检模式',
   'app.master-data.materials.documentPush.title': '推送物料',
-  'app.master-data.materials.documentPush.hint': '选择物料推送到外部系统（金蝶物料主数据）',
+  'app.master-data.materials.documentPush.hint': '按已添加的推送目标写出物料',
   'app.master-data.materials.documentPush.pipelineDesc': '物料 → 金蝶 BD_MATERIAL',
   'app.master-data.materials.documentPush.searchPlaceholder': '搜索物料编码/名称',
   'app.master-data.materials.documentPush.needSelect': '请先勾选物料',
@@ -23885,6 +28724,12 @@ export default {
   'app.master-data.materials.batchTrackingSuccess': '已更新 {{count}} 条物料',
   'app.master-data.materials.batchTrackingNoop': '没有可更新的物料',
   'app.master-data.materials.batchDeleteConfirm': '确定要删除选中的 {{count}} 个物料吗？',
+  'app.master-data.materials.batchActiveToolbar': '批量启用状态',
+  'app.master-data.materials.batchActiveTitle': '批量修改启用状态',
+  'app.master-data.materials.batchActiveHint': '将选中的 {{count}} 条物料统一设为启用或停用',
+  'app.master-data.materials.batchActiveMode': '启用状态',
+  'app.master-data.materials.batchActiveEnable': '启用',
+  'app.master-data.materials.batchActiveDisable': '停用',
   'app.master-data.materials.batchMoveGroup': '批量移动分组',
   'app.master-data.materials.batchMoveGroupTitle': '批量移动分组',
   'app.master-data.materials.batchMoveGroupHint': '将选中的 {{count}} 条物料移动到目标分组',
@@ -23953,9 +28798,15 @@ export default {
   'app.master-data.materials.colMaterialPrimary': '物料名称 / 编号',
   'app.master-data.materials.colProcessRouteSource': '来源 / 工艺路线',
   'app.master-data.materials.specification': '规格',
+  'app.master-data.materials.selectCodeName': '编码：{{code}} - 品名：{{name}}',
+  'app.master-data.materials.selectChosen': '{{name}} - {{code}}',
+  'app.master-data.materials.selectCodeOnly': '编码：{{code}}',
+  'app.master-data.materials.selectNameOnly': '品名：{{name}}',
   'app.master-data.materials.productImage': '附件',
   'app.master-data.materials.image': '附件',
   'app.master-data.materials.openAttachment': '打开附件',
+  'app.master-data.materials.attachmentsSection': '物料附件',
+  'app.master-data.materials.noAttachments': '暂无附件',
   'app.master-data.materials.materialGroup': '物料分组',
   'app.master-data.materials.processRoute': '工艺路线',
   'app.master-data.materials.materialType': '物料类型',
@@ -24001,6 +28852,7 @@ export default {
   'app.master-data.materials.linkedDrawings': '关联图纸',
   'app.master-data.materials.noLinkedDrawings': '暂无已发布关联图纸',
   'app.master-data.materials.loadStandardPreset': '加载标准件预设',
+  'app.master-data.materials.toolsMenu': '工具',
   'app.master-data.materials.rewriteMainCodes': '重写物料编码',
   'app.master-data.materials.rewriteMainCodesTitle': '重写物料编码',
   'app.master-data.materials.rewriteMainCodesHintSelected':
@@ -24167,7 +29019,10 @@ export default {
   'app.master-data.bom.copyOtherBomItems': '复制其他BOM物料',
   'app.master-data.bom.copyOtherBomItemsTitle': '复制其他BOM物料',
   'app.master-data.bom.copyOtherBomItemsPlaceholder': '请选择要复制的BOM版本',
+  'app.master-data.bom.copyOtherBomItemsSearchPlaceholder': '搜索物料编码、名称或BOM编号',
   'app.master-data.bom.copyOtherBomItemsSelectRequired': '请选择要复制的BOM版本',
+  'app.master-data.bom.colMaterialCode': '物料编码',
+  'app.master-data.bom.colMaterialName': '物料名称',
   'app.master-data.bom.loadBomFailed': '加载BOM数据失败',
   'app.master-data.bom.saveAsNewVersionFailed': '另存为新版本失败',
   'app.master-data.bom.getMaterialDetailFailed': '获取物料详情失败',
@@ -24248,13 +29103,16 @@ export default {
   'app.master-data.fabricationWizard.selectExistingRequired': '请选择采购件作为加工原料',
   'app.master-data.fabricationWizard.quantity': '单件用量',
   'app.master-data.fabricationWizard.summaryTitle': '即将创建草稿 BOM',
-  'app.master-data.fabricationWizard.draftBomHint': 'BOM 将以草稿保存，可在 BOM 设计器中审核发布；原料信息可随时修改。',
+  'app.master-data.fabricationWizard.draftBomHint': 'BOM 将以草稿保存；请到 BOM 设计器「保存并生效」或审核通过后，生产领料才会展开原料。',
   'app.master-data.fabricationWizard.skipLater': '稍后再说',
   'app.master-data.fabricationWizard.confirmCreate': '完成配置',
-  'app.master-data.fabricationWizard.success': '加工原料 BOM 已创建（草稿）',
+  'app.master-data.fabricationWizard.success': '加工原料 BOM 已创建（草稿），请保存并生效后再领料',
   'app.master-data.fabricationWizard.failed': '配置失败，请重试',
   'app.master-data.fabricationWizard.configureRawMaterial': '配置加工原料',
   'app.master-data.fabricationWizard.promptAfterCreate': '检测到工艺型物料，是否现在配置加工原料？',
+  'app.master-data.fabricationWizard.rawMaterialLinkedTitle': '已关联加工原料',
+  'app.master-data.fabricationWizard.rawMaterialLinkedDraftHint':
+    '下级采购件已写入本 BOM。当前版本仍为草稿时，生产领料不会展开这些物料；请使用「保存并生效」或完成审核后再领料。',
   'app.master-data.bom.deleteNode': '删除节点',
   'app.master-data.bom.mainMaterial': '主物料：',
   'app.master-data.bom.version': '版本：',
@@ -24375,6 +29233,9 @@ export default {
   'app.master-data.bom.mainMaterialLabel': '主物料',
   'app.master-data.bom.mainMaterialScopeMake': '自制件',
   'app.master-data.bom.mainMaterialScopeAll': '全部物料',
+  'app.master-data.bom.mainMaterialMakeOutsourceHint': '仅可选来源类型为自制件或委外件的物料',
+  'app.master-data.bom.approvalStatusFormHint':
+    '保存后为草稿，不可在此修改。请在 BOM 列表勾选单据后使用批量操作中的审核、撤销审核。',
   'app.master-data.bom.mainMaterialPlaceholder': '请选择主物料',
   'app.master-data.bom.mainMaterialRequired': '请选择主物料',
   'app.master-data.bom.versionLabel': '版本号',
@@ -24388,6 +29249,20 @@ export default {
   'app.master-data.bom.childMaterialListWithCount': '子物料列表（{{count}}项）',
   'app.master-data.bom.childMaterialListRequired': '请至少添加一个子物料',
   'app.master-data.bom.childMaterialTitleCol': '子物料',
+  'app.master-data.bom.installPositionCol': '位置',
+  'app.master-data.bom.installPositionPlaceholder': '如 A1、主板',
+  'app.master-data.bom.installPositionMax': '位置不超过100字符',
+  'app.master-data.bom.installPositionRequiredForDuplicate': '重复子物料须填写位置以区分',
+  'app.master-data.bom.installPositionDuplicate': '相同子物料与位置不能重复',
+  'app.master-data.bom.materialWarehouse': '主件仓库',
+  'app.master-data.bom.materialWarehousePlaceholder': '请选择主件默认发料仓库',
+  'app.master-data.bom.manufacturingDepartment': '制造部门',
+  'app.master-data.bom.manufacturingDepartmentPlaceholder': '请选择制造部门',
+  'app.master-data.bom.attachmentsLabel': '附件',
+  'app.master-data.bom.lineWarehouse': '仓库',
+  'app.master-data.bom.lineWarehousePlaceholder': '请选择子件仓库',
+  'app.master-data.bom.isOutsourceCol': '委外',
+  'app.master-data.bom.isOutsourceNotAllowed': '该来源类型不允许委外',
   'app.master-data.bom.materialImage': '物料图片',
   'app.master-data.bom.childMaterialRequired': '请选择子物料',
   'app.master-data.bom.childMaterialPlaceholder': '请选择子物料',
@@ -24441,6 +29316,9 @@ export default {
   'app.master-data.bom.bomCode': 'BOM编号',
   'app.master-data.bom.bomName': 'BOM名称',
   'app.master-data.bom.bomNamePlaceholder': '可留空',
+  'app.master-data.bom.bomCodeSearchPlaceholder': '请输入BOM编号',
+  'app.master-data.bom.bomNameSearchPlaceholder': '请输入BOM名称',
+  'app.master-data.bom.approvalStatusPlaceholder': '请选择审核状态',
   'app.master-data.bom.bomNameExtra': '默认：主件名称 + BOM编号',
   'app.master-data.bom.setDefaultVersionContent': '确定将 {{bomCode}} (版本 {{version}}) 设为该物料的默认 BOM 版本吗？需求计算在「不允许多版本」时将使用此版本。',
   'app.master-data.bom.reviseConfirmTitle': 'BOM 升版确认',
@@ -24536,6 +29414,9 @@ export default {
   'app.master-data.materialForm.inspectionModePlan': '方案质检（与质检模块联动）',
   'app.master-data.materialForm.inspectionModeSimpleHint': '简易质检仅记录合格数量，无需额外配置。',
   'app.master-data.materialForm.defaultInspectionPlan': '默认质检方案',
+  'app.master-data.materialForm.defaultInspectionPlanRequiredPlaceholder': '请选择默认质检方案',
+  'app.master-data.materialForm.inspectionPlanRequiredWhenPlanMode':
+    '{{stage}} 为方案质检时须选择默认质检方案',
   'app.master-data.materialForm.gotoInspectionPlans': '前往新建质检方案',
   'app.master-data.materialForm.defaults': '默认值设置',
   'app.master-data.materialForm.mainCode': '物料主编号',
@@ -24575,6 +29456,18 @@ export default {
   'app.master-data.materialForm.texture': '材质',
   'app.master-data.materialForm.texturePlaceholder': '请输入材质（如：钢、塑料、铝合金等）',
   'app.master-data.materialForm.textureMax': '材质不能超过100个字符',
+  'app.master-data.materialForm.inventoryCategory.label': '存货类别',
+  'app.master-data.materialForm.inventoryCategory.placeholder': '请选择存货类别',
+  'app.master-data.materialForm.inventoryCategory.raw': '原材料',
+  'app.master-data.materialForm.inventoryCategory.auxiliary': '辅料',
+  'app.master-data.materialForm.inventoryCategory.selfSemi': '自制半成品',
+  'app.master-data.materialForm.inventoryCategory.outsourceSemi': '委外半成品',
+  'app.master-data.materialForm.inventoryCategory.finished': '产成品',
+  'app.master-data.materialForm.inventoryCategory.tradingGoods': '商品',
+  'app.master-data.materialForm.inventoryCategory.service': '服务',
+  'app.master-data.materialForm.inventoryCategory.asset': '资产',
+  'app.master-data.materialForm.inventoryCategory.expense': '费用',
+  'app.master-data.materialForm.inventoryCategory.labor': '劳务',
   'app.master-data.materialForm.weight': '重量 (kg)',
   'app.master-data.materialForm.weightPlaceholder': '请输入重量',
   'app.master-data.materialForm.volume': '体积 (m³)',
@@ -24630,6 +29523,11 @@ export default {
   'app.master-data.materialForm.manufacturingAssemblyHint': '原材料组装→成品/半成品',
   'app.master-data.materialForm.unitName': '单位名称',
   'app.master-data.materialForm.unitPlaceholder': '请选择单位',
+  'app.master-data.materialForm.conversionType': '换算类型',
+  'app.master-data.materialForm.conversionTypeFixed': '固定换算',
+  'app.master-data.materialForm.conversionTypeFloating': '无固定换算',
+  'app.master-data.materialForm.conversionFloatingHint': '单据中手工填写主数量与副数量',
+  'app.master-data.materialForm.primaryUnitColon': '主单位：',
   'app.master-data.materialForm.conversionRelation': '换算关系',
   'app.master-data.materialForm.numerator': '分子',
   'app.master-data.materialForm.denominator': '分母',
@@ -24665,13 +29563,17 @@ export default {
   'app.master-data.materialForm.selectProductionUnit': '选择生产单位',
   'app.master-data.materialForm.baseUnitLabel': '基础单位',
   'app.master-data.materialForm.baseUnitColon': '基础单位：',
-  'app.master-data.materialForm.addAuxiliaryUnit': '添加辅助单位',
+  'app.master-data.materialForm.addAuxiliaryUnit': '添加副单位',
+  'app.master-data.materials.importUnits.conversionType': '换算类型',
+  'app.master-data.materials.importUnits.conversionTypeFixed': '固定换算',
+  'app.master-data.materials.importUnits.conversionTypeFloating': '无固定换算',
   'app.master-data.materialForm.scenarioUnitMappingOptional': '场景单位映射（可选）',
   'app.master-data.materialForm.scenarioUnitMappingHint': '为不同业务场景指定默认使用的单位，如果不指定，则使用基础单位',
   'app.master-data.materialForm.purchaseUnit': '采购单位',
   'app.master-data.materialForm.saleUnit': '销售单位',
   'app.master-data.materialForm.productionUnit': '生产单位',
   'app.master-data.materialForm.inventoryUnit': '库存单位',
+  'app.master-data.materialForm.baseUnitField': '基本单位',
   'app.master-data.materialForm.images': '附件',
   'app.master-data.materialForm.loadVariantDefFailed': '加载属性定义失败',
   'app.master-data.materialForm.loading': '加载中...',
@@ -24734,6 +29636,7 @@ export default {
   'app.master-data.defaults.defaultTaxRate': '默认税率（%）',
   'app.master-data.defaults.defaultTaxRatePlaceholder': '请选择默认税率',
   'app.master-data.defaults.taxRate0': '0%（零税率/出口等）',
+  'app.master-data.defaults.taxRate1': '1%（小规模纳税人优惠征收率等）',
   'app.master-data.defaults.taxRate3': '3%（征收率/小规模纳税人等）',
   'app.master-data.defaults.taxRate6': '6%（服务业、无形资产等）',
   'app.master-data.defaults.taxRate9': '9%（交通运输、建筑、不动产等）',
@@ -24804,9 +29707,12 @@ export default {
   'app.master-data.manufacturing.sectionLabor': '工时绩效',
   'app.master-data.manufacturing.sectionLaborDesc': '部门/职位工时单价在绩效管理维护；下表为工序明细中已配置操作员关联的员工绩效配置（只读）。计件单价请在上方工序明细表维护。',
   'app.master-data.manufacturing.standardTime': '标准工时',
+  'app.master-data.manufacturing.laborHours': '工时',
+  'app.master-data.manufacturing.laborPrice': '工价',
   'app.master-data.manufacturing.setupTime': '准备时间',
   'app.master-data.manufacturing.minuteUnit': '分钟',
   'app.master-data.manufacturing.minutePerPieceUnit': '分钟/件',
+  'app.master-data.manufacturing.yuanPerPieceUnit': '元/件',
   'app.master-data.manufacturing.timeUnitHour': '时',
   'app.master-data.manufacturing.timeUnitMinute': '分',
   'app.master-data.manufacturing.timeUnitSecond': '秒',
@@ -24837,8 +29743,19 @@ export default {
   'app.master-data.productProcess.materialListTitle': '自制件列表',
   'app.master-data.productProcess.searchMaterial': '搜索物料编码或名称',
   'app.master-data.productProcess.filterAll': '全部',
-  'app.master-data.productProcess.filterAssigned': '已指派路线',
-  'app.master-data.productProcess.filterUnassigned': '未指派路线',
+  'app.master-data.productProcess.filterAssigned': '已指派',
+  'app.master-data.productProcess.filterUnassigned': '未指派',
+  'app.master-data.productProcess.scopeMaterial': '按物料',
+  'app.master-data.productProcess.scopeGroup': '按物料分组',
+  'app.master-data.productProcess.searchGroup': '搜索分组编码或名称',
+  'app.master-data.productProcess.noGroups': '暂无物料分组',
+  'app.master-data.productProcess.selectGroupHint': '请从左侧选择物料分组',
+  'app.master-data.productProcess.groupPanelHint':
+    '为分组维护产品工艺后，组内未单独配置的自制件将继承该配置；物料已有独立产品工艺时优先使用物料配置。',
+  'app.master-data.productProcess.inheritGroupTitle': '当前继承分组产品工艺：{{group}}',
+  'app.master-data.productProcess.inheritGroupDesc':
+    '保存将为本物料建立独立产品工艺配置，之后可单独修改且优先于分组。',
+  'app.master-data.productProcess.saveAsMaterialOverride': '另存为物料配置',
   'app.master-data.productProcess.selectMaterialHint': '请从左侧选择自制件',
   'app.master-data.productProcess.loadingMaterials': '加载自制件列表…',
   'app.master-data.productProcess.routeNotFound': '物料指派的工艺路线不存在或已删除，请重新选择并保存指派',
@@ -24941,6 +29858,7 @@ export default {
   'app.master-data.operationSequence.noData': '暂无数据',
   'app.master-data.operationSequence.addOperation': '新增工序',
   'app.master-data.operationSequence.selectOperation': '选择工序',
+  'app.master-data.operationSequence.pickColDescription': '说明',
   'app.master-data.operationSequence.replaceOperation': '替换工序',
   'app.master-data.operationSequence.selectOperationPlaceholder': '搜索并选择工序（可多选）...',
   'app.master-data.operationSequence.pickSearchPlaceholder': '搜索工序代码或名称',
@@ -25021,6 +29939,7 @@ export default {
   'field.customer.nameCode': '客户名称/编号',
   'field.customer.shortName': '简称',
   'field.customer.contacts': '联系人',
+  'field.customer.addresses': '地址',
   'field.customer.contactPerson': '联系人',
   'field.customer.phone': '电话',
   'field.customer.email': '邮箱',
@@ -25063,9 +29982,22 @@ export default {
   'field.customer.estimatedAnnualPurchasePlaceholder': '金额（本币）',
   'field.customer.creditLimit': '信用额度',
   'field.customer.creditLimitPlaceholder': '授信额度（本币）',
+  'field.customer.partnerType': '伙伴类型',
+  'field.customer.partnerType.legalEntity': '法人企业',
+  'field.customer.partnerType.nonLegalEntity': '非法人企业',
+  'field.customer.partnerType.nonEnterprise': '非企业单位',
+  'field.customer.partnerType.individual': '个人',
+  'field.customer.partnerType.soleTrader': '个体户',
+  'field.customer.bizFunction': '业务职能',
+  'field.customer.bizFunction.sales': '销售',
+  'field.customer.bizFunction.settlement': '结算',
+  'field.customer.bizFunction.payment': '付款',
+  'field.customer.bizFunction.receiving': '收货',
+  'field.document.ledgerRecognition': '立账策略',
+  'field.document.ledgerRecognitionRequired': '请选择立账策略',
   'field.customer.revenueRecognitionOverride': '应收确认策略',
   'field.customer.revenueRecognitionOverrideDesc':
-    '覆盖本组织默认的收入确认时点；不选则与「系统设置 → 参数中心 → 财务」一致。可选出库、销项发票或手工立账（不自动生成应收）。',
+    '覆盖本组织默认的收入确认时点；不选则与「系统设置 → 参数中心 → 财务」一致。可选出库、销售发票或手工立账（不自动生成应收）。',
   'field.customer.salesman': '归属业务员',
   'field.customer.salesmanPlaceholder': '请选择业务员',
   'field.customer.collaborators': '协作人',
@@ -25100,7 +30032,18 @@ export default {
   'field.partner.settlementBankAccountPlaceholder': '请输入银行账号',
   'field.partner.settlementBankAccountMaxLength': '银行账号不能超过64个字符',
   'field.partner.settlementAccountDefault': '默认',
-  'field.supplier.paymentAccounts': '付款账户',
+  'field.partner.addressTypeLabel': '地址类型',
+  'field.partner.addressTypeRequired': '请选择地址类型',
+  'field.partner.addressType.registered': '登记地址',
+  'field.partner.addressType.delivery': '收货地址',
+  'field.partner.addressType.invoice': '开票地址',
+  'field.partner.addressType.other': '其他',
+  'field.partner.addressLine': '详细地址',
+  'field.partner.addressLinePlaceholder': '请输入详细地址',
+  'field.partner.addressLineRequired': '请输入详细地址',
+  'field.partner.addressLineMaxLength': '详细地址不能超过500个字符',
+  'field.partner.addressDefault': '默认',
+  'field.supplier.paymentAccounts': '收款账户',
   'field.supplier.paymentAccountName': '付款户名',
   'field.supplier.paymentBankName': '付款开户银行',
   'field.supplier.paymentBankAccount': '付款账号',
@@ -25151,14 +30094,39 @@ export default {
   'field.partner.enterpriseType.other': '其他',
   'field.partner.paymentTermsDays': '付款账期（天）',
   'field.partner.paymentTermsDaysPlaceholder': '如月结 30 天填 30，可选',
+  'field.partner.defaultPaymentMethod': '默认付款方式',
+  'field.partner.defaultPaymentMethodPlaceholder': '请选择常用收付方式',
+  'field.partner.settlementTerms': '结算方式',
+  'field.partner.settlementTermsPlaceholder': '请选择',
+  'field.partner.settlementTermsDesc':
+    '选「账期结算」时在「付款账期（天）」填 30、60、90 等即可表达月结/双月结/季结。现金、转账、承兑等在「默认付款方式」',
+  'field.partner.defaultCurrency': '默认币种',
+  'field.partner.defaultCurrencyPlaceholder': '请选择',
+  'field.partner.defaultCurrencyDesc': '新建采购/销售订单时自动带出；未维护则单据用本币默认值',
+  'field.partner.defaultExchangeRate': '默认汇率',
+  'field.partner.defaultExchangeRatePlaceholder': '如 1 或外币对本币汇率',
+  'field.partner.defaultExchangeRateDesc': '新建单据时带出；本币一般填 1，外币按约定汇率',
+  'field.partner.currency.cny': '人民币 CNY',
+  'field.partner.currency.usd': '美元 USD',
+  'field.partner.currency.eur': '欧元 EUR',
+  'field.partner.settlementMethodLegacy': '结算方式（旧列，导入兼容）',
   'field.partner.settlementMethod': '结算方式',
   'field.partner.settlementMethodPlaceholder': '请选择',
   'field.partner.settlementMethod.cash': '现金',
   'field.partner.settlementMethod.bankTransfer': '银行转账',
   'field.partner.settlementMethod.bankAcceptance': '银行承兑',
   'field.partner.settlementMethod.commercialAcceptance': '商业承兑',
-  'field.partner.settlementMethod.monthly': '月结',
   'field.partner.settlementMethod.prepaid': '预付款',
+  'field.partner.settlementMethod.payBeforeShip': '款到发货',
+  'field.partner.settlementMethod.spot': '现款现货',
+  'field.partner.settlementMethod.cod': '货到付款',
+  'field.partner.settlementMethod.monthly': '月结',
+  'field.partner.settlementMethod.bimonthly': '双月结',
+  'field.partner.settlementMethod.quarterly': '季结',
+  'field.partner.settlementMethod.netTerms': '账期结算',
+  'field.partner.settlementMethod.payOnInvoice': '票到付款',
+  'field.partner.settlementMethod.installment': '分期付款',
+  'field.partner.settlementMethod.progress': '进度款',
   'field.partner.settlementMethod.other': '其他',
   'field.partner.financeContactName': '财务联系人',
   'field.partner.financeContactNamePlaceholder': '对账、开票联系人',
@@ -25182,6 +30150,7 @@ export default {
   'field.supplier.name': '供应商名称',
   'field.supplier.shortName': '简称',
   'field.supplier.contacts': '联系人',
+  'field.supplier.addresses': '地址',
   'field.supplier.contactPerson': '联系人',
   'field.supplier.phone': '电话',
   'field.supplier.email': '邮箱',
@@ -25219,9 +30188,9 @@ export default {
   'field.supplier.estimatedAnnualPurchasePlaceholder': '本企业向该供应商年采购额（本币）',
   'field.supplier.creditLimit': '授信额度',
   'field.supplier.creditLimitPlaceholder': '授信额度（本币）',
-  'field.supplier.payableRecognitionOverride': '应付确认策略',
+  'field.supplier.payableRecognitionOverride': '立账策略',
   'field.supplier.payableRecognitionOverrideDesc':
-    '覆盖本组织默认的应付确认时点；不选则与「系统设置 → 参数中心 → 财务」一致。可选入库、进项发票或手工立账（不自动生成应付）。',
+    '与采购订单「立账策略」一致；覆盖本组织默认应付确认时点，空则跟随「系统设置 → 参数中心 → 财务」。可选入库确认、采购发票、月结对账或手工立账。',
   'field.supplier.buyer': '归属采购员',
   'field.supplier.buyerPlaceholder': '请选择采购员',
   'field.supplier.createTitle': '新建供应商',
@@ -25292,6 +30261,11 @@ export default {
   'field.workGroup.memberEmployeeRequired': '请选择员工',
   'field.workGroup.performanceWeight': '绩效权重',
   'field.workGroup.performanceWeightPlaceholder': '请输入权重（如 0.4 表示 40%）',
+  'field.workGroup.performanceWeightHint':
+    '绩效权重合计上限为 {{limit}}；添加或删除成员时自动平均分配；手动调整某人权重后，其余成员自动均分剩余额度；单人与合计均不得超过上限。',
+  'field.workGroup.performanceWeightOverLimit': '单人绩效权重不得超过 {{limit}}',
+  'field.workGroup.performanceWeightSumExceeded':
+    '成员绩效权重合计为 {{sum}}，不得超过上限 {{limit}}',
   'field.workGroup.codePlaceholder': '请输入工作小组编号',
   'field.workGroup.codeAutoGenerated': '请输入{{label}}',
   'field.workGroup.codeRequired': '请输入工作小组编号',
@@ -25330,6 +30304,7 @@ export default {
   'warehouse.type.defect': '不良品仓',
   'warehouse.type.scrap': '报废品仓',
   'warehouse.type.quarantine': '待检仓',
+  'warehouse.type.gift': '赠品仓库',
   'field.storageArea.code': '库区编码',
   'field.storageArea.name': '库区名称',
   'field.storageArea.warehouseId': '所属仓库',
@@ -25344,11 +30319,13 @@ export default {
   'field.storageArea.quickAddWarehouse': '快速新增仓库',
   'field.storageLocation.code': '库位编码',
   'field.storageLocation.name': '库位名称',
+  'field.storageLocation.warehouseId': '所属仓库',
   'field.storageLocation.storageAreaId': '所属库区',
   'field.storageLocation.codePlaceholder': '请输入库位编号',
   'field.storageLocation.codeRequired': '请输入库位编号',
   'field.storageLocation.nameRequired': '请输入库位名称',
-  'field.storageLocation.storageAreaIdPlaceholder': '请选择库区',
+  'field.storageLocation.warehouseIdPlaceholder': '请选择仓库（可直挂，不选库区）',
+  'field.storageLocation.storageAreaIdPlaceholder': '请选择库区（可选）',
   'field.storageLocation.storageAreaIdRequired': '请选择库区',
   'field.storageLocation.codeAutoGenerated': '请输入{{label}}',
   'field.storageLocation.createTitle': '新建库位',
@@ -25404,7 +30381,8 @@ export default {
   'field.operation.reportingType': '报工类型',
   'field.operation.allowJump': '是否允许跳转',
   'field.operation.isNodeOperation': '节点工序',
-  'field.operation.isNodeOperationExtra': '节点工序：在工单或工序允许跳转时，仍不可跳过此前序节点（须先有产出或完成）',
+  'field.operation.isNodeOperationExtra':
+    '打开：本道允许跳转（后道可不吃本道转入）。关闭：关闸，后道报工/开工须校验本道合格转入',
   'field.operation.overReportMode': '超报方式',
   'field.operation.overReportModeNone': '不允许',
   'field.operation.overReportModeFixed': '按数量',
@@ -25417,7 +30395,7 @@ export default {
   'field.route.overReportValueExtra': '工序行未单独配置时继承；序列中可逐行覆盖。',
   'field.route.allowOperationJump': '允许工序跳转',
   'field.route.allowOperationJumpExtra':
-    '整条路线统一为「允许」或「不允许」。允许时可在工序序列中标记节点工序；不允许时工单须按序报工。',
+    '整条路线统一开关。开单默认写入工单头（可再改）；产品工艺可覆盖路线默认。开启后可跳过前序；关闭时须按序报工。',
   'field.operation.inspectionMode': '质检模式',
   'field.operation.inspectionModePlaceholder': '请选择质检模式',
   'field.operation.inspectionModeNone': '无质检',
@@ -25459,7 +30437,8 @@ export default {
   'field.operation.reportingTypeQuantity': '按数量报工',
   'field.operation.reportingTypeStatus': '按状态报工',
   'field.operation.reportingTypeExtra': '按数量报工：需要输入完成数量、合格数量（如：注塑、组装、包装）。按状态报工：只有完成/未完成状态，无数量概念（如：检验、测试、审批）',
-  'field.operation.allowJumpExtra': '允许跳转：可以并行进行，不依赖上道工序完成。不允许跳转：必须完成上道工序才能开始下道工序（默认）',
+  'field.operation.allowJumpExtra':
+    '允许跳转：后道可跳过本道、不强制吃本道转入。不允许跳转（关闸）：后道报工/开工必须校验本道合格流转数量',
   'field.operation.codeAutoGenerated': '请输入{{label}}',
   'field.operation.createTitle': '新建工序',
   'field.operation.loadPreset': '加载预设',
@@ -25566,6 +30545,14 @@ export default {
   'field.department.batchDeleteBlocked': '批量删除受阻',
   'field.department.batchDeleteBlockedList': '以下部门不满足删除条件：',
   'field.department.batchDeleteBlockedHint': '请处理后再试。',
+  'field.department.batchEnable': '批量启用',
+  'field.department.batchDisable': '批量停用',
+  'field.department.batchEnableConfirmTitle': '确定要批量启用选中的部门吗？',
+  'field.department.batchEnableConfirmDescription': '将启用 {{count}} 个部门。',
+  'field.department.batchDisableConfirmTitle': '确定要批量停用选中的部门吗？',
+  'field.department.batchDisableConfirmDescription': '将停用 {{count}} 个部门，停用后相关业务引用需自行确认影响。',
+  'field.department.batchUpdateSuccess': '成功更新 {{count}} 个部门',
+  'field.department.batchUpdatePartial': '更新完成：成功 {{success}} 条，失败 {{fail}} 条',
   'field.department.checkHasChildren': '该部门包含子部门，请先删除或移动子部门',
   'field.department.checkHasPositions': '该部门包含关联职位，请先处理关联职位',
   'field.department.checkHasUsers': '该部门包含关联人员，请先移除人员',
@@ -25605,26 +30592,30 @@ export default {
   'field.department.syncNeedBinding': '请先在「数据集」中选择数据集，并填写部门名称列映射后保存',
   'field.department.syncComplete': '同步完成：新增 {{created}} 条，更新 {{updated}} 条，跳过 {{skipped}} 行（无部门名称）',
   'field.department.bindingColumnsLoaded': '已加载 {{count}} 个列，可从下拉选择映射',
-  'field.position.name': '职位名称',
-  'field.position.code': '职位代码',
+  'field.position.name': '岗位名称',
+  'field.position.code': '岗位代码',
   'field.position.departmentUuid': '所属部门',
   'field.position.remarkPlaceholder': '请输入备注',
   'field.position.sortOrder': '排序',
-  'field.position.namePlaceholder': '请输入职位名称',
-  'field.position.codeRequired': '请输入职位代码',
-  'field.position.nameRequired': '请输入职位名称',
-  'field.position.codePlaceholder': '请输入职位代码',
+  'field.position.namePlaceholder': '请输入岗位名称',
+  'field.position.codeRequired': '请输入岗位代码',
+  'field.position.nameRequired': '请输入岗位名称',
+  'field.position.codePlaceholder': '请输入岗位代码',
   'field.position.departmentUuidPlaceholder': '请选择所属部门（可选）',
   'field.position.descriptionPlaceholder': '请输入备注',
-  'field.position.createTitle': '新建职位',
+  'field.position.createTitle': '新建岗位',
   'field.position.loadPreset': '加载预设',
-  'field.position.editTitle': '编辑职位',
-  'field.position.detailTitle': '职位详情',
+  'field.position.editTitle': '编辑岗位',
+  'field.position.detailTitle': '岗位详情',
   'field.position.userCount': '用户数',
-  'field.position.deleteConfirm': '确定要删除这个职位吗？',
+  'field.position.deleteConfirm': '确定要删除这个岗位吗？',
   'field.position.batchDeleteConfirm': '确定要删除选中的 {{count}} 条记录吗？此操作不可恢复。',
-  'field.position.batchDeleteTitle': '确定要批量删除选中的职位吗？',
-  'field.position.batchDeleteDescription': '将删除 {{count}} 个职位，删除后无法恢复，请谨慎操作。',
+  'field.position.batchDeleteTitle': '确定要批量删除选中的岗位吗？',
+  'field.position.batchDeleteDescription': '将删除 {{count}} 个岗位，删除后无法恢复，请谨慎操作。',
+  'field.position.importing': '正在导入岗位',
+  'field.position.importSuccess': '成功导入 {{count}} 条岗位',
+  'field.position.importPartialFail': '部分岗位导入失败',
+  'field.position.importFail': '岗位导入失败',
 
   // 平台级字段
   'field.tenant.name': '组织名称',
@@ -26011,6 +31002,12 @@ export default {
   'pages.system.applications.exportSuccessCount': '已导出 {{count}} 条记录',
   'pages.system.applications.loadListFailed': '获取应用列表失败',
   'pages.system.applications.scanApplications': '扫描应用',
+  'pages.system.applications.proPendingScanTag': '待扫描注册',
+  'pages.system.applications.scanAndRegister': '扫描并注册',
+  'pages.system.applications.proPlaceholderHelpTitle': '专业应用尚未注册',
+  'pages.system.applications.proPlaceholderHelpDesc':
+    '「{{name}}」尚未写入应用清单。请确认 workspace 已 compose 该专业包，再点击页面上方「扫描应用」，然后在更多操作中选择安装。启用时如需 License Key 会另行提示。',
+  'pages.system.applications.proPlaceholderHelpOk': '知道了',
   'pages.system.applications.scanSuccess': '已扫描并注册 {{count}} 个应用',
   'pages.system.applications.scanMenuHint': '扫描仅更新应用注册信息。若侧边栏菜单未更新，请点击「一键同步菜单」。',
   'pages.system.applications.scanFailed': '扫描应用失败',
@@ -26018,7 +31015,9 @@ export default {
   'pages.system.applications.syncAllNoApps': '暂无已安装的应用',
   'pages.system.applications.syncAllLoading': '正在同步菜单（全量约需 3–6 分钟），请勿重复点击…',
   'pages.system.applications.syncAllSuccess':
-    '已完成 {{count}} 个应用的菜单同步，导航菜单已更新。',
+    '已写入 {{count}} 条菜单，导航菜单已更新。',
+  'pages.system.applications.syncAllSkippedPro':
+    '以下应用未 assemble 到本节点，已跳过清单同步：{{codes}}',
   'pages.system.applications.syncAllPartial':
     '菜单同步部分完成（{{success}}/{{total}}）。\n{{errors}}',
   'pages.system.applications.syncAllErrManifest': '应用「{{code}}」：{{detail}}',
@@ -26033,26 +31032,28 @@ export default {
   'pages.system.applications.restoreSuccess': '已恢复默认设置',
   'pages.system.applications.restoreFailed': '恢复失败',
   'pages.system.applications.nameLabel': '应用名称',
-  'sys.app.kuaizhizao.name': '星制造',
+  'sys.app.kuaizhizao.name': '快制造',
   'sys.app.kuaizhizao.desc': '制造业全流程一体化管控与协同平台',
-  'sys.app.kuaiplm.name': '星研发',
+  'sys.app.kuaiplm.name': '快研发',
   'sys.app.kuaiplm.desc': '研发项目 / NPI 阶段门、设计变更与知识中心协同平台',
-  'sys.app.kuaiqms.name': '星质量',
+  'sys.app.kuaiqms.name': '快质量',
   'sys.app.kuaiqms.desc': '质检、改善、体系与质量报表（业务能力由快制造提供）',
-  'sys.app.kuaiems.name': '星设备',
+  'sys.app.kuaiems.name': '快设备',
   'sys.app.kuaiems.desc': '设备、模具、工装台账与运维单据（业务能力由快制造提供）',
-  'sys.app.kuaipd.name': '星交付',
+  'sys.app.kuaiconnect.name': '快连接',
+  'sys.app.kuaiconnect.desc': '应用连接器、接口管理、数据源与数据集（专业插件）',
+  'sys.app.kuaipd.name': '快交付',
   'sys.app.kuaipd.desc': '交付项目、物流与售后履约（业务能力由快制造提供）',
   'sys.app.kuaicaiwu.name': '轻财务',
   'sys.app.kuaioa.name': '轻办公',
   'sys.app.kuaicaiwu.desc': '聚焦管理会计与经营分析协同平台（不含总账）',
-  'sys.app.kuaireport.name': '星报表',
+  'sys.app.kuaireport.name': '快报表',
   'sys.app.kuaireport.desc': '多源数据聚合与经营分析决策中心',
   'sys.app.master-data.name': '主数据',
   'sys.app.master-data.desc': '系统的唯一数据源',
-  'sys.app.kuaiiot.name': '星数采',
+  'sys.app.kuaiiot.name': '快数采',
   'sys.app.kuaiiot.desc': '工业物联网设备数采与集成平台，支持 MQTT/ThingsBoard/JetLinks 接入与 MES 设备态写回',
-  'sys.app.kuaivision.name': '星视觉',
+  'sys.app.kuaivision.name': '快视觉',
   'sys.app.kuaivision.desc': '工业视觉检测：方案、入站结果、原图留痕与复核',
   'sys.app.kuaiai.name': 'KU-AI',
   'sys.app.kuaiai.desc': '嵌入业务场景的 AI 智能辅助引擎，提供对话助手与业务智能建议',
@@ -26443,10 +31444,13 @@ export default {
     '为下方各单据配置人工审核及审批流程。开关关闭时提交后自动通过，开启时提交后进入审批，须选择对应审批流程。',
   'pages.system.configCenter.auditSwitch.sectionDesc': '',
   'pages.system.configCenter.auditSwitch.empty': '暂无审核配置项',
+  'pages.system.configCenter.auditSwitch.loadFailed': '审核配置加载失败，请刷新重试',
   'pages.system.configCenter.auditSwitch.updateSuccess': '审核开关已更新',
   'pages.system.configCenter.auditSwitch.updateFailed': '审核开关更新失败',
   'pages.system.configCenter.notification.title': '消息提醒',
   'pages.system.configCenter.notification.desc': '当单据发生可配置动作时，通过可配置渠道通知指定人员。已开通应用的相关单据类型将一并显示。',
+  'pages.system.configCenter.notification.loadFailed':
+    '消息提醒配置加载失败。若刚做完跨组织恢复，请确认当前切换的是真实存在的组织，不要停留在已删除的幽灵组织上。',
   'pages.system.configCenter.scheduledTasks.title': '定时任务',
   'pages.system.configCenter.scheduledTasks.description':
     '管理系统内置的后台定时任务。Cron 按站点时区墙钟解释；需同时运行 taskiq worker 与 scheduler。可调整执行周期与启用状态，并按组织独立执行。',
@@ -26759,9 +31763,12 @@ export default {
   'pages.system.configCenter.auditSection.finance_ar_ap': '应收应付',
   'pages.system.configCenter.auditSection.finance_ar_ap_desc':
     '应收单与应付单。',
-  'pages.system.configCenter.auditSection.finance_invoice': '进项发票',
+  'pages.system.configCenter.auditSection.finance_invoice': '采购发票',
   'pages.system.configCenter.auditSection.finance_invoice_desc':
-    '进项发票审核。',
+    '采购发票审核。',
+  'pages.system.configCenter.param.common_allow_print_unaudited': '未审核单据是否打印',
+  'pages.system.configCenter.param.common_allow_print_unaudited_desc':
+    '选「是」时，保存并进入审核后待审状态仍可打印；选「否」时，须审核通过后才可打印（免审单据保存并审核后视同通过）',
   'pages.system.configCenter.param.common_trial_run_mode': '试运营模式',
   'pages.system.configCenter.param.common_trial_run_mode_desc':
     '开启后进入试运营阶段，部分业务校验与修改限制将更为宽松；具体规则将随各模块逐步接入。关闭后恢复常规严格校验。',
@@ -26821,7 +31828,7 @@ export default {
     '数量录入与展示小数位数。默认 2 位，范围 0–6。',
   'pages.system.configCenter.param.common_price_decimal_places': '单价小数位',
   'pages.system.configCenter.param.common_price_decimal_places_desc':
-    '单价录入与展示小数位数。默认 2 位，范围 0–6。修改后采购订单/申请等单价输入立即按该精度生效。',
+    '单价录入与展示小数位数。默认 4 位，范围 0–6。修改后采购订单/申请等单价输入与打印单价列立即按该精度生效。',
   'pages.system.configCenter.param.common_amount_decimal_places': '金额小数位',
   'pages.system.configCenter.param.common_amount_decimal_places_desc':
     '金额（行金额、单据合计）展示与舍入小数位数。默认 2 位，范围 0–6。',
@@ -26866,9 +31873,13 @@ export default {
   'pages.system.configCenter.param.kuaiplm_lab_request_test_dept_uuids': '实验委托可选检测部门',
   'pages.system.configCenter.param.kuaiplm_lab_request_test_dept_uuids_desc':
     '部门 UUID 白名单；空表示不限制。建议在实验委托列表「部门设置」中维护。',
+  'pages.system.configCenter.param.master_data_allow_material_quick_create':
+    '允许单据内快速新增物料',
+  'pages.system.configCenter.param.master_data_allow_material_quick_create_desc':
+    '开启后，销售订单等单据的物料下拉底部显示「快速新增物料」。关闭后仅能在物料管理中建档，避免业务人员随意建料。默认开启。',
   'pages.system.configCenter.param.master_data_drawing_max_upload_size_mb': '图纸主文件上传大小',
   'pages.system.configCenter.param.master_data_drawing_max_upload_size_mb_desc':
-    '新建、编辑与批量上传图纸时，主文件与附加页单文件大小上限（MB）；不超过平台文件服务硬上限 100 MB。',
+    '新建、编辑与批量上传图纸时，主文件与附加页单文件大小上限（MB）；默认 200 MB，不超过平台文件服务硬上限 200 MB。',
   'pages.system.configCenter.tenantInit.alertTitle': '系统初始项加载',
   'pages.system.configCenter.tenantInit.alertDesc':
     '新建组织时由平台完成应用安装/启用；租户侧可在此补全语言、字典、参数、编码规则、审批/消息/打印模板，并同步已安装应用的菜单。可重复执行，已存在的数据会同步更新。',
@@ -26903,6 +31914,9 @@ export default {
   'components.tenantBootstrap.stepFailed': '初始化步骤失败',
   'components.tenantBootstrap.completeFailed': '完成初始化失败',
   'components.tenantBootstrap.partialSuccess': '部分步骤未成功，可稍后在系统设置中补全',
+  'components.tenantBootstrap.ghostTenant':
+    '当前所选组织已不存在（{{detail}}）。请关闭本窗，在右上角切换到真实组织后再试；若刚切换过数据库，请确认后端连的是正确库。',
+  'components.tenantBootstrap.closeAndSwitchTenant': '关闭并去切换组织',
   'components.tenantBootstrap.step.application': '应用注册与启用',
   'pages.system.configCenter.tenantInit.item.data_dictionary': '数据字典',
   'pages.system.configCenter.tenantInit.item.language': '系统语言',
@@ -26957,9 +31971,40 @@ export default {
   'pages.system.configCenter.param.work_order_auto_generate': '自动生成工单',
   'pages.system.configCenter.param.work_order_auto_generate_desc': '是否自动根据需求生成工单',
   'pages.system.configCenter.param.automation_push_default_mode': '下推默认生成方式',
-  'pages.system.configCenter.param.automation_push_default_mode_desc': '控制下推生成下游单据时默认是正式单据还是草稿单据',
-  'pages.system.configCenter.param.automation_push_default_mode_opt_confirm': '正式单据',
+  'pages.system.configCenter.param.automation_push_default_mode_desc':
+    '控制下推下游单据后是否自动提交：草稿=保持草稿；正式=自动提交（有审核→待审核，无审核→已确认）。与「创建后自动审核」无关，默认草稿。',
+  'pages.system.configCenter.param.automation_push_default_mode_opt_confirm': '正式单据（自动提交）',
   'pages.system.configCenter.param.automation_push_default_mode_opt_draft': '草稿单据',
+  'pages.system.configCenter.param.automation_manual_create_auto_submit': '手动创建后自动提交',
+  'pages.system.configCenter.param.automation_manual_create_auto_submit_desc':
+    '全局开关：页面手工新建单据保存后自动提交（有审批流→待审核，无审批流→已确认）。不下推单据；默认关闭。开启审批流时不会自动过审。',
+  'pages.system.configCenter.paramSection.automation_manual_create_docs': '按单据：手动创建后自动提交',
+  'pages.system.configCenter.paramSection.automation_manual_create_docs_desc':
+    '全局关闭时，可按单据单独开启。全局开启时全部生效，无需再开单项。仅页面手工新建生效；下推仍由「下推默认生成方式」控制。有审批流则提交为待审核，不会自动过审。',
+  'pages.system.configCenter.param.automation_manual_create_doc_sales_order': '销售订单',
+  'pages.system.configCenter.param.automation_manual_create_doc_sales_forecast': '销售预测',
+  'pages.system.configCenter.param.automation_manual_create_doc_sales_contract': '框架合同',
+  'pages.system.configCenter.param.automation_manual_create_doc_quotation': '报价单',
+  'pages.system.configCenter.param.automation_manual_create_doc_shipment_notice': '发货通知单',
+  'pages.system.configCenter.param.automation_manual_create_doc_sales_delivery': '销售出库',
+  'pages.system.configCenter.param.automation_manual_create_doc_sales_return': '销售退货单',
+  'pages.system.configCenter.param.automation_manual_create_doc_demand': '计划生产',
+  'pages.system.configCenter.param.automation_manual_create_doc_purchase_order': '采购订单',
+  'pages.system.configCenter.param.automation_manual_create_doc_purchase_request': '采购申请',
+  'pages.system.configCenter.param.automation_manual_create_doc_payment_application': '付款申请',
+  'pages.system.configCenter.param.automation_manual_create_doc_purchase_inquiry': '采购询价',
+  'pages.system.configCenter.param.automation_manual_create_doc_purchase_return': '采购退货',
+  'pages.system.configCenter.param.automation_manual_create_doc_receipt_notice': '收货通知',
+  'pages.system.configCenter.param.automation_manual_create_doc_purchase_receipt': '采购入库',
+  'pages.system.configCenter.param.automation_manual_create_doc_work_order': '生产工单',
+  'pages.system.configCenter.param.automation_manual_create_doc_rework_order': '返工单',
+  'pages.system.configCenter.param.automation_manual_create_doc_reporting_record': '报工记录',
+  'pages.system.configCenter.param.automation_manual_create_doc_production_picking': '生产领料',
+  'pages.system.configCenter.param.automation_manual_create_doc_freight_bill': '运费单',
+  'pages.system.configCenter.param.automation_manual_create_doc_other_income': '其他费用收入',
+  'pages.system.configCenter.param.automation_manual_create_doc_other_expense': '其他费用支出',
+  'pages.system.configCenter.param.automation_manual_create_doc_other_expense_application':
+    '其他费用支出申请',
   'pages.system.configCenter.param.work_order_priority': '工单优先级',
   'pages.system.configCenter.param.work_order_priority_desc': '是否启用工单优先级管理',
   'pages.system.configCenter.param.work_order_score_enabled': '工单综合打分',
@@ -27063,12 +32108,17 @@ export default {
   'pages.system.configCenter.param.work_order_require_confirmed_picking_before_operation_start_desc': '开启后，须先确认该工单的生产领料单（正式发料）才允许开工。线边备料/补料到线边不算正式领料。',
   'pages.system.configCenter.param.work_order_require_confirmed_picking_before_reporting': '报工前必须确认领料',
   'pages.system.configCenter.param.work_order_require_confirmed_picking_before_reporting_desc': '开启后，须先确认该工单的生产领料单（正式发料）才允许报工。线边备料/补料到线边不算正式领料。',
+  'pages.system.configCenter.param.work_order_require_operation_dispatch': '每道工序必须派工',
+  'pages.system.configCenter.param.work_order_require_operation_dispatch_desc':
+    '开启后，工序须先派工（人员或班组）才允许报工；关闭后可不派工直接报工。默认开启。',
   'pages.system.configCenter.param.work_order_picking_issue_strategy': '下达后自动生成领料单',
   'pages.system.configCenter.param.work_order_picking_issue_strategy_desc': '开启后，工单下达时自动生成领料申请/领料单；关闭则需手动创建。',
   'pages.system.configCenter.param.warehouse_batch_management': '批号管理',
-  'pages.system.configCenter.param.warehouse_batch_management_desc': '是否启用批号管理',
+  'pages.system.configCenter.param.warehouse_batch_management_desc':
+    '开启后启用批号能力，且新建物料默认打开批号管理，避免漏点；关闭后全站不强制批号，新建物料也不再默认打开。单物料仍可在主数据改。',
   'pages.system.configCenter.param.warehouse_serial_management': '序列号管理',
-  'pages.system.configCenter.param.warehouse_serial_management_desc': '是否启用序列号管理',
+  'pages.system.configCenter.param.warehouse_serial_management_desc':
+    '开启后启用序列号能力，且新建物料默认打开序列号管理，避免漏点；关闭后全站不强制序列号，新建物料也不再默认打开。单物料仍可在主数据改。',
   'pages.system.configCenter.param.warehouse_multi_unit': '多单位管理',
   'pages.system.configCenter.param.warehouse_multi_unit_desc': '是否启用多单位管理',
   'pages.system.configCenter.param.warehouse_fifo': '先进先出（FIFO）',
@@ -27079,6 +32129,13 @@ export default {
   'pages.system.configCenter.param.warehouse_allow_non_bom_production_issue': '生产领料允许 BOM 外物料',
   'pages.system.configCenter.param.warehouse_allow_non_bom_production_issue_desc':
     '开启后，从工单取单开生产领料时可手工添加不在 BOM 内的主数据物料，确认时不按 BOM 配方与补料额度拦截（仍受库存与负库存规则约束）。倒冲/不发料物料仍不可通过领料单发放。',
+  'pages.system.configCenter.param.warehouse_finished_goods_inbound_limit_mode': '成品入库限制方式',
+  'pages.system.configCenter.param.warehouse_finished_goods_inbound_limit_mode_desc':
+    '按工单计划量与超收容差限制可缴库数量，或按 BOM 齐套物料已确认领料量折算的可装配套数限制。',
+  'pages.system.configCenter.param.warehouse_finished_goods_inbound_limit_mode_opt_work_order_quantity':
+    '根据工单量',
+  'pages.system.configCenter.param.warehouse_finished_goods_inbound_limit_mode_opt_picking_kit_sets':
+    '根据领料套数',
   'pages.system.configCenter.param.warehouse_fifo_mode': '先进先出判定方式',
   'pages.system.configCenter.param.warehouse_fifo_mode_desc': '出库扣减库存时，按何种规则确定优先出库批次',
   'pages.system.configCenter.param.warehouse_fifo_mode_opt_batch_id': '按批号入库顺序',
@@ -27087,9 +32144,10 @@ export default {
   'pages.system.configCenter.param.warehouse_lifo': '后进先出（LIFO）',
   'pages.system.configCenter.param.warehouse_lifo_desc': '是否启用后进先出规则',
   'pages.system.configCenter.param.warehouse_location_management': '库位管理',
-  'pages.system.configCenter.param.warehouse_location_management_desc': '启用库位主数据与业务选填库位，不强制每笔入库必须填写',
-  'pages.system.configCenter.param.warehouse_auto_outbound': '自动出库',
-  'pages.system.configCenter.param.warehouse_auto_outbound_desc': '是否支持自动出库',
+  'pages.system.configCenter.param.warehouse_location_management_desc': '启用库位主数据与出入库选库位；未选手选库位时系统默认仓库首库位或整仓，不因空库位拦截单据流转',
+  'pages.system.configCenter.param.warehouse_auto_outbound': '借料自动确认借出',
+  'pages.system.configCenter.param.warehouse_auto_outbound_desc':
+    '借料单创建后是否自动确认借出过账。销售出库见流程设置中的「销售出库单自动确认出库」。',
   'pages.system.configCenter.param.warehouse_allow_negative_inventory': '允许负库存出库',
   'pages.system.configCenter.param.warehouse_allow_negative_inventory_desc':
     '开启后出库过账可将账面库存扣为负数；关闭时可用库存不足不可过账。默认关闭。不解除生产领料超 BOM、发货预占等其它业务限制。',
@@ -27097,26 +32155,31 @@ export default {
   'pages.system.configCenter.param.finance_auto_write_off_precision_limit_desc': '核销时允许的尾差自动平衡限额（本位币），超过此值需人工干预。',
   'pages.system.configCenter.param.finance_revenue_recognition': '收入确认时点（应收）',
   'pages.system.configCenter.param.finance_revenue_recognition_desc':
-    '决定何时自动生成应收：出库确认、销项发票，或手工立账（出入库与开票均不自动生成，由财务从源单拉取）。与下方「开票自动生成」开关配合使用。',
+    '决定何时自动生成应收：出库确认、销售发票、按月结对账单审核立账，或手工立账。选「按对账单立账」时出库与自动开票均不生应收，须在往来对账单审核立账。',
   'pages.system.configCenter.param.finance_revenue_recognition_opt_on_shipment': '以出库确认（发货）为准',
-  'pages.system.configCenter.param.finance_revenue_recognition_opt_on_invoice': '以销项发票为准',
+  'pages.system.configCenter.param.finance_revenue_recognition_opt_on_invoice': '以销售发票为准',
   'pages.system.configCenter.param.finance_revenue_recognition_opt_manual': '手工立账（不自动生成）',
   'pages.system.configCenter.param.finance_revenue_recognition_opt_on_milestone': '以合同里程碑为准',
   'pages.system.configCenter.param.finance_revenue_recognition_opt_mixed': '混合（有里程碑按节点，否则按发货）',
+  'pages.system.configCenter.param.finance_revenue_recognition_opt_on_partner_statement': '以按月结对账单为准',
   'pages.system.configCenter.param.finance_payable_recognition': '应付确认时点（应付）',
   'pages.system.configCenter.param.finance_payable_recognition_desc':
-    '决定何时自动生成应付：采购入库确认、进项发票，或手工立账（入库与开票均不自动生成，由财务从源单拉取）。',
+    '决定何时自动生成应付：采购入库确认、采购发票、按月结对账单审核立账，或手工立账。选「按对账单立账」时入库与自动开票均不生应付，须在往来对账单审核立账。',
   'pages.system.configCenter.param.finance_payable_recognition_opt_on_receipt': '以采购入库确认为准',
-  'pages.system.configCenter.param.finance_payable_recognition_opt_on_purchase_invoice': '以进项发票为准',
+  'pages.system.configCenter.param.finance_payable_recognition_opt_on_purchase_invoice': '以采购发票为准',
   'pages.system.configCenter.param.finance_payable_recognition_opt_manual': '手工立账（不自动生成）',
+  'pages.system.configCenter.param.finance_payable_recognition_opt_on_partner_statement': '以按月结对账单为准',
   'pages.system.configCenter.param.finance_auto_generate_receivable_from_sales_invoice': '销售开票自动生成应收',
   'pages.system.configCenter.param.finance_auto_generate_receivable_from_sales_invoice_desc':
-    '仅在「收入确认=销项发票」时生效：创建销售发票时自动生成应收；关闭则需手工建应收。若选「以出库为准」或「手工立账」，本开关不可用（出库路径/手工路径另有规则）。',
+    '仅在「收入确认=销售发票」时生效：创建销售发票时自动生成应收；关闭则需手工建应收。若选「以出库为准」或「手工立账」，本开关不可用（出库路径/手工路径另有规则）。',
   'pages.system.configCenter.param.finance_auto_generate_payable_from_purchase_invoice': '采购开票自动生成应付',
   'pages.system.configCenter.param.finance_auto_generate_payable_from_purchase_invoice_desc':
-    '仅在「应付确认=进项发票」时生效：创建采购发票时自动生成应付；关闭则需手工建应付。若选「以入库为准」或「手工立账」，本开关不可用。',
+    '仅在「应付确认=采购发票」时生效：创建采购发票时自动生成应付；关闭则需手工建应付或从入库/订单加载采购发票。若选「以入库为准」或「手工立账」，本开关不可用。选采购发票立账时建议开启，否则确认入库后应付台账不会出现该笔。',
   'pages.system.configCenter.param.finance_credit_limit_enabled': '启用客户信用额度管控',
   'pages.system.configCenter.param.finance_credit_limit_enabled_desc': '开启后，销售订单审核与出库确认将校验客户信用额度（主数据维护额度）。',
+  'pages.system.configCenter.param.finance_allow_negative_balance': '允许账户负余额',
+  'pages.system.configCenter.param.finance_allow_negative_balance_desc':
+    '开启后付款、资金调拨、其他费用等出款过账可将付款账户账面余额扣为负数；关闭时余额不足不可确认。默认关闭。不改变流水金额必须大于 0 的规则。',
   'pages.system.configCenter.param.sales_low_margin_threshold_percent': '低毛利预警阈值 (%)',
   'pages.system.configCenter.param.sales_low_margin_threshold_percent_desc': '销售订单毛利率低于此值时触发预警或审批；填 0 表示关闭该约束。',
   'pages.system.configCenter.param.sales_price_deviation_approval_threshold_percent': '价格偏差触发审批阈值 (%)',
@@ -27131,15 +32194,27 @@ export default {
   'pages.system.configCenter.param.planning_auto_push_purchase_on_computation_complete': '计算完成后自动下推采购',
   'pages.system.configCenter.param.planning_auto_push_purchase_on_computation_complete_desc':
     '需求计算执行成功后，自动下推采购件：未开「必须采购申请」时下推采购订单，已开则下推采购申请（默认关闭）。',
+  'pages.system.configCenter.param.planning_auto_push_work_order_on_computation_complete': '计算完成后自动生成工单',
+  'pages.system.configCenter.param.planning_auto_push_work_order_on_computation_complete_desc':
+    '需求计算执行成功后，自动下推自制/委外工单（默认关闭；仍须满足允许从需求计算生成工单等门禁）。',
   'pages.system.configCenter.param.procurement_auto_approve_purchase_order_on_create': '创建后自动审核采购订单',
   'pages.system.configCenter.param.procurement_auto_approve_purchase_order_on_create_desc':
-    '采购订单创建后自动提交并审核通过；草稿且无供应商时跳过并记备注（默认关闭）。',
+    '采购订单创建后自动审核通过（有审核时跳过人工审；无审核则直接确认）。不负责「仅提交待审」——下推是否自动提交请看「下推默认生成方式」。草稿且无供应商时跳过并记备注（默认关闭）。',
   'pages.system.configCenter.param.procurement_auto_push_receipt_notice_on_approve': '审核通过自动下推收货通知',
   'pages.system.configCenter.param.procurement_auto_push_receipt_notice_on_approve_desc':
     '采购订单审核通过（或无需审核直接确认）后，自动下推收货通知单（默认关闭）。',
+  'pages.system.configCenter.param.procurement_auto_notify_warehouse_on_receipt_notice': '收货通知后自动通知仓库',
+  'pages.system.configCenter.param.procurement_auto_notify_warehouse_on_receipt_notice_desc':
+    '收货通知单创建后，自动通知仓库并生成采购入库草稿（默认关闭）。',
+  'pages.system.configCenter.param.procurement_auto_confirm_purchase_receipt': '采购入库单自动确认入库',
+  'pages.system.configCenter.param.procurement_auto_confirm_purchase_receipt_desc':
+    '采购入库草稿生成后，自动确认入库过账（默认关闭；需仓库/库位等满足过账条件）。',
   'pages.system.configCenter.param.sales_require_shipment_notice_before_delivery': '出库前须发货通知',
   'pages.system.configCenter.param.sales_require_shipment_notice_before_delivery_desc':
     '开启后禁止销售订单直连出库；须先下推发货通知，再从发货通知生成销售出库单。',
+  'pages.system.configCenter.param.sales_auto_confirm_sales_delivery': '销售出库单自动确认出库',
+  'pages.system.configCenter.param.sales_auto_confirm_sales_delivery_desc':
+    '销售出库草稿生成后，自动确认出库过账（默认关闭；须批号序列号等在创建时已齐备）。',
   'pages.system.configCenter.param.sales_require_audit_before_print': '报价单/销售订单打印须审核',
   'pages.system.configCenter.param.sales_require_audit_before_print_desc':
     '默认关闭。开启后，未审核通过的报价单与销售订单不可打印，打印按钮会提示原因。',
@@ -27173,6 +32248,10 @@ export default {
   'pages.system.configCenter.param.quality_stage_oqc_enabled_desc': '组织是否启用出货检验环节；关闭后出库/通知仓库不会触发 OQC 门禁。',
   'pages.system.configCenter.param.quality_auto_create_iqc_on_purchase_receipt': '采购入库自动创建 IQC',
   'pages.system.configCenter.param.quality_auto_create_iqc_on_purchase_receipt_desc': '采购入库单保存（待入库）时，按物料质检模式自动创建来料检验待检单。',
+  'pages.system.configCenter.param.quality_auto_push_purchase_receipt_after_iqc_pass':
+    '来料检验合格后自动下推采购入库',
+  'pages.system.configCenter.param.quality_auto_push_purchase_receipt_after_iqc_pass_desc':
+    '采购订单来源的来料检验在检验完成且审核通过（未开审核时检验合格即通过）后，按可下推合格数量自动生成待入库的采购入库单；失败仅记日志，不回滚检验。',
   'pages.system.configCenter.param.quality_auto_create_ipqc_on_reporting': '报工自动创建 IPQC',
   'pages.system.configCenter.param.quality_auto_create_ipqc_on_reporting_desc': '报工生效（含自动审核）时，按工序/物料质检模式自动创建过程检验待检单。',
   'pages.system.configCenter.param.quality_auto_create_fqc_on_last_reporting': '末道报工自动创建 FQC（已停用）',
@@ -27232,7 +32311,7 @@ export default {
   'app.kuaizhizao.quality.common.qualityStatus.pending': '待判定',
   'app.kuaizhizao.quality.common.type.incoming': '来料检验 (IQC)',
   'app.kuaizhizao.quality.common.type.outsource': '委外检验 (OSQC)',
-  'app.kuaizhizao.quality.common.type.process': '过程检验 (IPQC)',
+  'app.kuaizhizao.quality.common.type.process': '过程检验/首检 (IPQC)',
   'app.kuaizhizao.quality.common.type.finished': '成品检验 (FQC)',
   'app.kuaizhizao.quality.common.type.outbound': '出货检验 (OQC)',
   'app.kuaizhizao.quality.common.type.patrol': '质量巡检',
@@ -27354,6 +32433,9 @@ export default {
   'app.kuaizhizao.quality.common.form.acceptWarehouse': '入库仓库',
   'app.kuaizhizao.quality.common.form.acceptWarehouseFinished': '成品入库仓库',
   'app.kuaizhizao.quality.common.form.acceptWarehouseIncoming': '采购入库仓库',
+  'app.kuaizhizao.quality.common.form.dispositionLocation': '库位',
+  'app.kuaizhizao.quality.common.placeholder.dispositionLocation': '请选择库区/库位',
+  'app.kuaizhizao.quality.common.placeholder.selectWarehouseFirst': '请先选择仓库',
   'app.kuaizhizao.quality.common.placeholder.quarantineWarehouse': '请选择隔离仓库',
   'app.kuaizhizao.quality.common.placeholder.scrapWarehouse': '请选择报废入库仓库',
   'app.kuaizhizao.quality.common.placeholder.acceptWarehouse': '请选择让步接收后入库的仓库',
@@ -27378,7 +32460,8 @@ export default {
   'app.kuaizhizao.quality.common.messages.inspectionPlanUnchanged': '当前已是所选检验方案',
   'app.kuaizhizao.quality.common.messages.applyInspectionPlanSuccess': '检验方案已切换',
   'app.kuaizhizao.quality.common.actions.saveAttachments': '保存附件',
-  'app.kuaizhizao.quality.common.actions.switchInspectionPlan': '切换方案',
+    'app.kuaizhizao.quality.common.quickPlan.modalTitle': '快速创建{{type}}方案',
+'app.kuaizhizao.quality.common.actions.switchInspectionPlan': '切换方案',
   'app.kuaizhizao.quality.common.confirm.applyInspectionPlanTitle': '确认切换检验方案',
   'app.kuaizhizao.quality.common.confirm.applyInspectionPlanDescription':
     '将按新方案重建检验项目清单，待检验单据尚未录入检验结果。',
@@ -27431,6 +32514,9 @@ export default {
   'app.kuaizhizao.quality.incoming.quickPlan.create': '快速创建检验方案',
   'app.kuaizhizao.quality.incoming.quickPlan.modalTitle': '快速创建来料检验方案',
   'app.kuaizhizao.quality.incoming.quickPlan.defaultStepItem': '外观检验',
+  'app.kuaizhizao.quality.incoming.batchPushInboundSuccess': '已成功下推 {{count}} 张来料检验单至采购入库',
+  'app.kuaizhizao.quality.incoming.batchPushReturnSuccess': '已成功下推 {{count}} 张来料检验单至采购退货',
+  'app.kuaizhizao.quality.incoming.batchPushPartialFailed': '部分下推失败（{{count}} 张），请查看提示后重试',
   'app.kuaizhizao.quality.incoming.messages.createFromPostedReceiptSuccess': '已从已入库单创建来料检验单',
   'app.kuaizhizao.quality.incoming.messages.loadInspectionPlanFailed': '加载检验方案失败',
   'app.kuaizhizao.quality.incoming.messages.noInspectionPlan': '暂无可用的来料检验方案，请先在检验方案中维护',
@@ -27492,7 +32578,8 @@ export default {
   'app.kuaizhizao.quality.process.capability.process_inspection.pull_from_work_order.no_product': '工单未关联产品物料，无法加载过程检验',
   'app.kuaizhizao.quality.process.capability.process_inspection.pull_from_work_order.no_inspection_required': '工单工序均未配置过程检验，无需加载',
   'app.kuaizhizao.quality.process.capability.process_inspection.pull_from_work_order.no_lines': '工单无工序明细，无法加载过程检验',
-  'app.kuaizhizao.quality.process.capability.process_inspection.pull_from_work_order.already_pulled': '相关工序均已存在待检验的过程检验单，删除后可再次加载',
+  'app.kuaizhizao.quality.process.capability.process_inspection.pull_from_work_order.already_pulled':
+    '该工序已有过程检验单（待检验或已检验），请在列表按工单号查找；仅待检验单删除后方可再次下推',
   'app.kuaizhizao.quality.finished.pageTitle': '成品检验 (FQC)',
   'app.kuaizhizao.quality.finished.createFromWorkOrder': '从工单创建',
   'app.kuaizhizao.quality.finished.form.selectWorkOrder': '选择工单',
@@ -27557,7 +32644,7 @@ export default {
   'app.kuaizhizao.quality.oqc.permission.noReadAccess': '暂无出货检验查看权限',
   'app.kuaizhizao.quality.nc.pageTitle': '不良处理',
   'app.kuaizhizao.quality.nc.columns.ledgerCode': '台账编号',
-  'app.kuaizhizao.quality.nc.columns.sourceInspection': '源检验单',
+  'app.kuaizhizao.quality.nc.columns.sourceInspection': '来源单据',
   'app.kuaizhizao.quality.nc.columns.operationWorkOrder': '工序 / 工单',
   'app.kuaizhizao.quality.nc.columns.defectType': '缺陷类型',
   'app.kuaizhizao.quality.nc.columns.defectReason': '原因',
@@ -27640,7 +32727,7 @@ export default {
   'app.kuaizhizao.quality.plans.form.planCode': '方案编号',
   'app.kuaizhizao.quality.plans.form.planName': '方案名称',
   'app.kuaizhizao.quality.plans.form.planType': '方案类型',
-  'app.kuaizhizao.quality.plans.form.planTypeHint': '已绑定工序或物料时不能更改类型，须先解除绑定',
+  'app.kuaizhizao.quality.plans.form.planTypeHint': '首检与过程检验共用「过程检验/首检 (IPQC)」类型；已绑定工序或物料时不能更改类型，须先解除绑定',
   'app.kuaizhizao.quality.plans.form.materialCode': '物料编码',
   'app.kuaizhizao.quality.plans.form.materialName': '物料名称',
   'app.kuaizhizao.quality.plans.form.version': '版本号',
@@ -27672,6 +32759,7 @@ export default {
   'app.kuaizhizao.quality.plans.stepEditor.editSuccess': '已更新检验步骤',
   'app.kuaizhizao.quality.plans.stepEditor.modalEditTitle': '编辑检验步骤',
   'app.kuaizhizao.quality.plans.stepEditor.placeholder.acceptanceCriteriaAuto': '留空则根据类型规格自动生成',
+  'app.kuaizhizao.quality.plans.stepEditor.placeholder.criteriaSupplement': '如外观无划伤、包装完整等补充要求',
   'app.kuaizhizao.quality.plans.stepSpec.valueType': '值类型',
   'app.kuaizhizao.quality.plans.stepSpec.specSection': '类型规格',
   'app.kuaizhizao.quality.plans.stepSpec.typeBoolean': '是否',
@@ -27710,6 +32798,25 @@ export default {
   'app.kuaizhizao.quality.plans.stepSpec.acceptNum': '接收数 Ac',
   'app.kuaizhizao.quality.plans.stepSpec.rejectNum': '拒收数 Re',
   'app.kuaizhizao.quality.plans.stepSpec.samplingCriteria': '抽检 n={{n}}，Ac={{ac}}，Re={{re}}',
+  'app.kuaizhizao.quality.plans.stepSpec.samplingCriteriaLotRatio':
+    '抽检 批量 {{ratio}}%{{lotHint}}，Ac={{ac}}，Re={{re}}',
+  'app.kuaizhizao.quality.plans.stepSpec.samplingMode': '抽检方式',
+  'app.kuaizhizao.quality.plans.stepSpec.samplingModeFixed': '固定样本量',
+  'app.kuaizhizao.quality.plans.stepSpec.samplingModeLotRatio': '按报检批量比例',
+  'app.kuaizhizao.quality.plans.stepSpec.samplingModeGb2828': 'GB/T 2828.1 一次抽样',
+  'app.kuaizhizao.quality.plans.stepSpec.gb2828Level': '检验水平',
+  'app.kuaizhizao.quality.plans.stepSpec.gb2828Aql': 'AQL',
+  'app.kuaizhizao.quality.plans.stepSpec.gb2828Strictness': '严格度',
+  'app.kuaizhizao.quality.plans.stepSpec.gb2828Strictness.normal': '正常',
+  'app.kuaizhizao.quality.plans.stepSpec.gb2828Strictness.tightened': '加严',
+  'app.kuaizhizao.quality.plans.stepSpec.gb2828Strictness.reduced': '放宽',
+  'app.kuaizhizao.quality.plans.stepSpec.gb2828Transfer': '启用跨批转移',
+  'app.kuaizhizao.quality.plans.stepSpec.samplingCriteriaGb2828Pending':
+    'GB/T 2828.1 水平 {{level}}，{{strictness}}，AQL {{aql}}（报检批量查表）',
+  'app.kuaizhizao.quality.plans.stepSpec.lotSampleRatio': '抽检比例',
+  'app.kuaizhizao.quality.plans.stepSpec.criteriaSupplement': '合格标准补充说明',
+  'app.kuaizhizao.quality.plans.stepSpec.criteriaSupplementExtra':
+    '数值与选项判定仍由上方规格自动生成；此处仅追加说明文字，保存时会拼入合格标准展示。',
   'app.kuaizhizao.quality.plans.stepSpec.derived': '派生项',
   'app.kuaizhizao.quality.plans.stepSpec.requirePhoto': '须拍照',
   'app.kuaizhizao.quality.plans.stepSpec.formula': '计算公式',
@@ -27818,6 +32925,8 @@ export default {
   'app.kuaizhizao.quality.template.planItemsTitleWithName': '检验方案项（{{planName}}）',
   'app.kuaizhizao.quality.template.planModeHint': '方案模式下须逐项填写检验结果后方可提交。',
   'app.kuaizhizao.quality.template.planModeHintTyped': '按步骤类型填写检验值；除文本项外系统将自动判定合格与否。',
+  'app.kuaizhizao.quality.template.simpleSwitchPlanHint':
+    '当前为简易质检。可在右侧选择检验方案并点「切换方案」，改为按方案分项检验。',
   'app.kuaizhizao.quality.template.inspectionItemFallback': '检验项 {{index}}',
   'app.kuaizhizao.quality.template.judgment': '判定',
   'app.kuaizhizao.quality.template.judgmentRequired': '请填写「{{label}}」的判定结果',
@@ -27854,6 +32963,7 @@ export default {
   'app.kuaizhizao.quality.inspectionCenter.kpi.pendingSubtitle': '当前所有待检单据/工序',
   'app.kuaizhizao.quality.inspectionCenter.kpi.incomingProcess': '来料/过程',
   'app.kuaizhizao.quality.inspectionCenter.kpi.finishedOqc': '成品/OQC',
+  'app.kuaizhizao.quality.inspectionCenter.kpi.outsourcePatrol': '委外/巡检',
   'app.kuaizhizao.quality.inspectionCenter.kpi.todayQualified': '今日质量达标',
   'app.kuaizhizao.quality.inspectionCenter.kpi.todaySubtitle': '今日已检验 {{count}} 批次',
   'app.kuaizhizao.quality.inspectionCenter.kpi.todayReported': '今日报检',
@@ -27973,8 +33083,8 @@ export default {
   'components.codeField.required': '请输入{{label}}',
   'components.codeField.ruleNotConfigured': '未配置编号规则',
   'components.codeField.generateFailed': '生成编号失败',
-  'document_code.has_downstream': '已有下游单据，编号已锁定',
-  'document_code.manual_edit_disabled': '编号规则不允许手工修改',
+  'document_code.has_downstream': '本单已生成下游单据，订单编号已锁定，不可修改',
+  'document_code.manual_edit_disabled': '当前编号规则不允许手工修改编号',
   'document_code.required': '编号不能为空',
   'document_code.duplicate': '编号已存在',
   'components.codeField.generate': '生成',
@@ -28499,7 +33609,6 @@ export default {
   'pages.system.datasets.copyFailed': '复制数据集失败',
   'pages.system.datasets.executeSuccess': '查询执行成功',
   'pages.system.datasets.executeFailed': '查询执行失败',
-  'pages.system.datasets.sqlRequired': 'SQL 语句不能为空',
   'pages.system.datasets.createSuccess': '创建成功，即将打开设计器',
   'pages.system.datasets.columnName': '数据集名称',
   'pages.system.datasets.columnCode': '数据集代码',
@@ -28937,8 +34046,8 @@ export default {
   'pages.system.files.category.receipt_attachments': '收款单附件',
   'pages.system.files.category.payable_attachments': '应付单附件',
   'pages.system.files.category.payment_attachments': '付款单附件',
-  'pages.system.files.category.sales_invoice_attachments': '销项发票附件',
-  'pages.system.files.category.purchase_invoice_attachments': '进项发票附件',
+  'pages.system.files.category.sales_invoice_attachments': '销售发票附件',
+  'pages.system.files.category.purchase_invoice_attachments': '采购发票附件',
   'pages.system.files.category.partner_statement_attachments': '往来对账单附件',
   'pages.system.files.category.bank_account_attachments': '银行账户附件',
   'pages.system.files.category.company-seal': '公司印章',
@@ -29144,6 +34253,11 @@ export default {
   'pages.system.applicationConnections.getListFailed': '获取列表失败',
   'pages.system.applicationConnections.marketTitle': '选择应用连接器',
   'pages.system.applicationConnections.marketConfigured': '已配置',
+  'pages.system.applicationConnections.marketPlannedBadge': '规划中',
+  'pages.system.applicationConnections.marketPlannedTitle': '该连接器尚在规划中',
+  'pages.system.applicationConnections.marketPlannedContent':
+    '当前产品尚未提供与该厂商的同步或深对接能力，可先创建占位连接器配置凭证；入站同步与单据外推请优先选用金蝶苍穹/星空等已对接类型。',
+  'pages.system.applicationConnections.marketPlannedContinue': '仍要创建',
   'pages.system.applicationConnections.searchPlaceholder': '搜索连接器名称、类型...',
   'pages.system.applicationConnections.noMatch': '暂无匹配的连接器',
   'pages.system.applicationConnections.categoryAll': '全部',
@@ -29328,14 +34442,22 @@ export default {
   'pages.system.applicationConnections.formAesKeyLabel': '加密 aes_key',
   'pages.system.applicationConnections.formTokenLabel': '签名 token',
   'pages.system.applicationConnections.formCorpIdLabel': '企业 ID',
+  'pages.system.applicationConnections.formSecretKeepPlaceholder': '••••••••（已配置，留空则保持不变）',
+  'pages.system.applicationConnections.formWecomBaseUrlLabel': '公网访问地址',
+  'pages.system.applicationConnections.formWecomBaseUrlHint':
+    '手机打开企微审批卡片、部署说明中的工作台主页均用此地址。填写手机可访问的 HTTPS 根地址（勿填内网 IP）；留空则回落服务器环境变量 BASE_URL。',
+  'pages.system.applicationConnections.formWecomBaseUrlInvalid': '请填写以 http:// 或 https:// 开头的完整地址',
   'pages.system.applicationConnections.wecomGuide.intro':
-    '将下列地址配置到企业微信管理后台（可信域名、网页授权回调、自建应用主页）。同一站点多组织时，每个组织应使用独立 AgentId。',
+    '将下列地址配置到企业微信管理后台（可信域名、网页授权回调、自建应用主页、接收消息）。同一站点多组织或多自建应用时，每个应用须使用独立 AgentId，应用主页推荐路径型地址（勿配裸 /mobile/）。',
   'pages.system.applicationConnections.wecomGuide.trustedDomain': '可信域名',
   'pages.system.applicationConnections.wecomGuide.oauthCallback': 'OAuth 回调（PC 登录）',
-  'pages.system.applicationConnections.wecomGuide.workbenchHome': '推荐工作台主页',
+  'pages.system.applicationConnections.wecomGuide.workbenchHome': '应用主页（手机 H5）',
+  'pages.system.applicationConnections.wecomGuide.receiveMessage': '接收消息 URL（可更新审批卡）',
+  'pages.system.applicationConnections.wecomGuide.mobileOauthRedirect': '手机 H5 OAuth 回跳',
+  'pages.system.applicationConnections.wecomGuide.pcTenantEntry': 'PC 组织入口（对照）',
   'pages.system.applicationConnections.wecomGuide.loginWithAgent': '带 Agent 的登录入口（可选）',
   'pages.system.applicationConnections.wecomGuide.nextSteps':
-    '下一步：在「消息配置」新建推送渠道（企业微信），并在「业务配置 / 消息提醒」规则中勾选该渠道。',
+    '下一步：将「应用主页」完整粘贴到企微自建应用配置并保存（推荐 /mobile/wecom/CorpId/AgentId，勿用裸 /mobile/）；将「接收消息 URL」与连接器中的 Token、EncodingAESKey 一并填到企微后台（审批待办可更新卡依赖此项）。保存后完全关闭应用再从工作台打开。然后在「消息配置」新建推送渠道（企业微信）并勾选同步推送审批通知。',
   'pages.system.applicationConnections.wecomGuide.copyEmpty': '暂无可复制内容',
   'pages.system.applicationConnections.wecomGuide.copied': '已复制{{label}}',
   'pages.system.applicationConnections.wecomGuide.copyFailed': '复制失败，请手动选择复制',
@@ -29743,8 +34865,8 @@ export default {
   'pages.system.onboardingWizard.system.sub.processProductProcess.desc': '为产品绑定默认工艺与工序，便于工单与报工',
   'pages.system.onboardingWizard.system.sub.loopSalesOrder.name': '1 销售订单',
   'pages.system.onboardingWizard.system.sub.loopSalesOrder.desc': '创建并审核一笔试跑销售订单',
-  'pages.system.onboardingWizard.system.sub.loopDemand.name': '2 需求计划',
-  'pages.system.onboardingWizard.system.sub.loopDemand.desc': '由订单生成或维护需求计划，确认可下推生产',
+  'pages.system.onboardingWizard.system.sub.loopDemand.name': '2 计划生产',
+  'pages.system.onboardingWizard.system.sub.loopDemand.desc': '由订单生成或维护计划生产，确认可下推生产',
   'pages.system.onboardingWizard.system.sub.loopWorkOrder.name': '3 生产工单',
   'pages.system.onboardingWizard.system.sub.loopWorkOrder.desc': '下达工单并释放至车间执行',
   'pages.system.onboardingWizard.system.sub.loopReporting.name': '4 生产报工',
@@ -29826,7 +34948,7 @@ export default {
   'pages.system.onboardingWizard.guide.process_routes.standard': '完成产品工艺路线配置，且工序间的逻辑关系（串行/并行）与车间实操一致。',
   'pages.system.onboardingWizard.guide.process_routes.tip': '工时数据的精度直接影响排产（APS）的有效性，初期可使用经验值，后期通过报工数据优化。',
   'pages.system.onboardingWizard.guide.process_routes.dependency': '需预先定义【工作中心】与【资源组】。',
-  'pages.system.onboardingWizard.guide.first_order_run.mission': '制造业务全链路闭环验证：销售订单 → 需求计划 → 生产工单 → 报工 → 生产入库 → 发货通知 → 库存核对。',
+  'pages.system.onboardingWizard.guide.first_order_run.mission': '制造业务全链路闭环验证：销售订单 → 计划生产 → 生产工单 → 报工 → 生产入库 → 发货通知 → 库存核对。',
   'pages.system.onboardingWizard.guide.first_order_run.standard': '完成至少一笔端到端业务循环，销售、计划、车间、仓储各环节单据与库存台账一致。',
   'pages.system.onboardingWizard.guide.first_order_run.tip': '建议邀请销售、计划、车间、仓储各岗位骨干联调，逐步勾选闭环子项，确认数据连通无误后再切正式账期。',
   'pages.system.onboardingWizard.guide.first_order_run.dependency': '需完成主数据建模、工艺路线与期初库存核对等前置项，并已为相关岗位分配权限。',
@@ -29917,7 +35039,7 @@ export default {
   'pages.system.onboardingWizard.role.planner.empowermentValue': '系统智能排程推算交期，平衡产能负荷，最大化车间产出。',
   'pages.system.onboardingWizard.role.planner.task.plan_wc.name': '维护工作中心产能',
   'pages.system.onboardingWizard.role.planner.task.plan_wc.desc': '定义工作中心（机台或产线组）的基础产能信息',
-  'pages.system.onboardingWizard.role.planner.task.plan_demand.name': '维护需求计划',
+  'pages.system.onboardingWizard.role.planner.task.plan_demand.name': '维护计划生产',
   'pages.system.onboardingWizard.role.planner.task.plan_demand.desc': '汇总订单需求并确认可释放生产',
   'pages.system.onboardingWizard.role.planner.task.plan_mrp.name': '运行需求计算',
   'pages.system.onboardingWizard.role.planner.task.plan_mrp.desc': '推算缺料与建议，支撑采购与工单',
@@ -30788,6 +35910,10 @@ export default {
   'pages.system.resourceCategory.updateSuccess': '分类更新成功',
   'pages.system.resourceCategory.deleteSuccess': '分类删除成功',
   'pages.system.resourceCategory.deleteConfirm': '确定删除该分类吗？分类下的资源将变为未分类',
+  'pages.system.resourceCategory.loadFunctionPresetsButton': '预置功能分类',
+  'pages.system.resourceCategory.loadFunctionPresetsSuccess':
+    '已预置功能分类（新建 {{categories}} 个），回填 {{items}} 条未分类记录',
+  'pages.system.resourceCategory.loadFunctionPresetsFailed': '预置功能分类失败',
 
   // 接口管理
   'pages.system.apis.getDetailFailed': '获取接口详情失败',
@@ -30811,6 +35937,34 @@ export default {
   'pages.system.apis.columnCode': '接口代码',
   'pages.system.apis.columnMethod': '请求方法',
   'pages.system.apis.columnSyncDirection': '同步方向',
+  'pages.system.apis.columnRelatedDocument': '关联单据',
+  'pages.system.apis.columnApiInterfaceType': '接口类型',
+  'pages.system.apis.labelRelatedDocument': '关联单据',
+  'pages.system.apis.relatedDocumentPlaceholder': '可选，便于外推匹配提交/审核接口',
+  'pages.system.apis.relatedDocumentNone': '未关联单据',
+  'pages.system.apis.labelApiInterfaceType': '接口类型',
+  'pages.system.apis.apiInterfaceTypeRequired': '请选择接口类型',
+  'pages.system.apis.apiInterfaceTypePlaceholder': '标准API 或 自定义API',
+  'pages.system.apis.apiInterfaceType.standard': '标准API',
+  'pages.system.apis.apiInterfaceType.custom': '自定义API',
+  'pages.system.apis.relatedDocument.customer': '客户',
+  'pages.system.apis.relatedDocument.supplier': '供应商',
+  'pages.system.apis.relatedDocument.warehouse': '仓库',
+  'pages.system.apis.relatedDocument.sales_order': '销售订单',
+  'pages.system.apis.relatedDocument.purchase_order': '采购订单',
+  'pages.system.apis.relatedDocument.purchase_receipt': '采购入库',
+  'pages.system.apis.relatedDocument.sales_delivery': '销售出库',
+  'pages.system.apis.relatedDocument.other_outbound': '其他出库',
+  'pages.system.apis.relatedDocument.other_inbound': '其他入库',
+  'pages.system.apis.relatedDocument.finished_goods_receipt': '成品入库',
+  'pages.system.apis.relatedDocument.production_picking': '生产领料',
+  'pages.system.apis.relatedDocument.stocktaking': '盘点单',
+  'pages.system.apis.relatedDocument.work_order': '生产工单',
+  'pages.system.apis.relatedDocument.reporting_record': '报工记录',
+  'pages.system.apis.relatedDocument.material': '物料',
+  'pages.system.apis.relatedDocument.material_batch': '即时库存',
+  'pages.system.apis.relatedDocument.engineering_bom': '工程 BOM',
+  'pages.system.apis.relatedDocument.process_operation': '工序',
   'pages.system.apis.columnPath': '接口路径',
   'pages.system.apis.columnActive': '启用状态',
   'pages.system.apis.columnSystem': '系统接口',
@@ -30821,8 +35975,37 @@ export default {
   'pages.system.apis.loadListFailed': '获取接口列表失败',
   'pages.system.apis.fillImportData': '请填写导入数据',
   'pages.system.apis.importSuccessCount': '成功导入 {{count}} 条',
+  'pages.system.apis.importBackupResult':
+    '导入完成：新建 {{created}} 条，更新 {{updated}} 条，失败 {{failed}} 条',
+  'pages.system.apis.importProgressTitle': '正在导入接口',
+  'pages.system.apis.importProgressPreparing': '正在准备导入…',
+  'pages.system.apis.importProgressLine': '已处理 {{done}} / {{total}} 条…',
+  'pages.system.apis.importProgressCounts':
+    '新建 {{created}} · 更新 {{updated}} · 失败 {{failed}}',
+  'pages.system.apis.importResultTitle': '接口导入结果',
+  'pages.system.apis.importFailed': '导入失败',
   'pages.system.apis.exportSuccess': '导出成功',
+  'pages.system.apis.exportSuccessCount': '已导出 {{count}} 条接口（含请求体等完整配置，可直接再导入）',
+  'pages.system.apis.exportFailed': '导出失败',
+  'pages.system.apis.exportColumnConnectionUuid': '连接器UUID',
+  'pages.system.apis.exportColumnConnectionCode': '连接器代码',
+  'pages.system.apis.exportColumnCategoryUuid': '分类UUID',
+  'pages.system.apis.exportColumnCategoryName': '分类名称',
+  'pages.system.apis.exportColumnSourceTypeConversionMap': '来源类型编码转换',
   'pages.system.apis.createButton': '新建接口',
+  'pages.system.apis.dedupeButton': '清理重复',
+  'pages.system.apis.dedupeNoDuplicates': '没有重复数据',
+  'pages.system.apis.dedupeOnlySystemLeft':
+    '有 {{count}} 条重复属于系统内置数据，不能删除',
+  'pages.system.apis.dedupeConfirmTitle': '清理重复数据？',
+  'pages.system.apis.dedupeConfirmContent':
+    '发现 {{groups}} 组重复，将删除 {{remove}} 条，每组保留最早的一条；系统内置跳过 {{skipped}} 条。删除后无法恢复。',
+  'pages.system.apis.dedupeConfirmOk': '开始清理',
+  'pages.system.apis.dedupeRunning': '正在清理重复数据…',
+  'pages.system.apis.dedupeDone': '已清理 {{deleted}} 条重复数据（{{groups}} 组）',
+  'pages.system.apis.dedupeDonePartial':
+    '清理完成：成功 {{deleted}} 条，失败 {{failed}} 条（共 {{groups}} 组）',
+  'pages.system.apis.dedupeFailed': '清理失败',
   'pages.system.apis.libraryButton': '接口库',
   'pages.system.apis.libraryTitle': '接口库',
   'pages.system.apis.libraryHint': '从系统预置接口包一键加载到本组织，已存在的接口将自动跳过。',
@@ -30963,6 +36146,40 @@ export default {
   'pages.system.apis.targetTypeHint': '多个值用逗号分隔，如：Buy,Make,Outsource',
   'pages.system.apis.sourceFieldLabel': '来源字段名',
   'pages.system.apis.sourceFieldPlaceholder': '如 FErpClsID',
+  'pages.system.apis.outboundFieldMappingLabel': '出站字段映射',
+  'pages.system.apis.outboundFieldMappingHint':
+    '选出站同步后配置：本地字段 → 对方字段；本地为空时用默认值。单据头填 header，明细填 entry。采购入库可点下方「加载采购入库默认映射」。',
+  'pages.system.apis.outboundFieldMappingHintTableFirst':
+    '顶部先选一次本地单据（如采购入库单），每行再选层级与字段，映射到对方字段；本地字段可留空只用默认值。可点「加载采购入库默认映射」。',
+  'pages.system.apis.addOutboundMappingRow': '添加映射行',
+  'pages.system.apis.outboundMappingEnabled': '启用',
+  'pages.system.apis.outboundMappingLevel': '层级',
+  'pages.system.apis.outboundMappingLevelHeader': '单据头',
+  'pages.system.apis.outboundMappingLevelEntry': '明细',
+  'pages.system.apis.outboundSourceDoc': '本地单据 / 实体表',
+  'pages.system.apis.outboundSourceDocPlaceholder': '搜索并选择系统表或实体（如采购入库、销售订单）',
+  'pages.system.apis.outboundSourceDocRequired': '请选择本地单据或实体表',
+  'pages.system.apis.outboundSourceDocHint': '可下拉选系统全部注册表；只选一次，表头/明细由下方「层级」决定',
+  'pages.system.apis.outboundSourceTable': '本地表',
+  'pages.system.apis.outboundSourceTablePlaceholder': '先选表',
+  'pages.system.apis.outboundLocalField': '本地字段',
+  'pages.system.apis.outboundLocalFieldPlaceholder': '如 receipt_code / material_code',
+  'pages.system.apis.outboundLocalFieldSelectPlaceholder': '选择字段',
+  'pages.system.apis.outboundLocalFieldNeedTable': '请先选表',
+  'pages.system.apis.outboundLocalFieldNeedDoc': '请先选择本地单据',
+  'pages.system.apis.outboundRemoteField': '对方字段',
+  'pages.system.apis.outboundRemoteFieldPlaceholder': '如 trdbillno / material_number',
+  'pages.system.apis.outboundRemoteFieldRequired': '请填写对方字段',
+  'pages.system.apis.outboundDefaultValue': '默认值',
+  'pages.system.apis.outboundDefaultValuePlaceholder': '固定值，如 110 / bos_org',
+  'pages.system.apis.loadPurchaseReceiptMappingPreset': '加载采购入库默认映射',
+  'pages.system.apis.fillRemoteFromBody': '从请求体填充对方字段',
+  'pages.system.apis.fillRemoteFromBodyHint':
+    '先配好下方请求体 JSON，点此把键名写入映射「对方字段」（已有对方字段的行不改）',
+  'pages.system.apis.fillRemoteFromBodyDone': '已从请求体新增 {{count}} 个对方字段，请再选本地字段',
+  'pages.system.apis.fillRemoteFromBodyNone': '请求体没有可新增的对方字段（可能已全部在映射中）',
+  'pages.system.apis.bodyJsonPlaceholderPush':
+    '出站样例 JSON，如 {"data":{...}}；默认编码可写在样例或映射默认值里',
   'pages.system.apis.labelResponseFormat': '响应格式',
   'pages.system.apis.addFormatField': '添加字段',
   'pages.system.apis.formatKeyPlaceholder': '键（如 code、message）',
@@ -31209,6 +36426,9 @@ export default {
   'pages.system.messageConfig.wecomUseTextcard': '企业微信卡片消息',
   'pages.system.messageConfig.wecomUseTextcardHint':
     '开启后且模板变量含 document_url 时发送卡片；业务提醒会自动写入组织入口跳转链接（已映射的单据类型）',
+  'pages.system.messageConfig.syncApprovalNotifications': '同步推送审批通知',
+  'pages.system.messageConfig.syncApprovalNotificationsHint':
+    '开启后，审批待办以企微可更新模板卡推送（通过后卡片标题显示「已通过」等状态）；须在企微连接器配置 Token 与 EncodingAESKey，并在企微后台填写接收消息 URL（路径含 /api/v1/integrations/wecom/receive/组织ID）。收件人须绑定企微 userid。关闭则审批仅站内信。',
   'pages.system.messageConfig.testTargetPlaceholderEmail': 'your-email@example.com',
   'pages.system.messageConfig.testTargetPlaceholderPhone': '接收者手机号',
   'pages.system.messageConfig.testInputRequired': '请输入测试目标地址',
@@ -31376,6 +36596,9 @@ export default {
   'pages.system.menus.parentMenuPlaceholder': '请选择父菜单',
   'pages.system.menus.parentMenuManifestLockedHint':
     '应用 manifest 同步菜单的层级由同步维护，此处不可改；仅可调整启用状态或展示名。',
+  'pages.system.menus.parentMenuManifestOverrideHint':
+    '可调整挂载父级；保存后写入租户覆盖，后续应用 manifest 同步不会改回默认层级。不可选自身或其子菜单。',
+  'pages.system.menus.parentMenuAppRootLockedHint': '应用根菜单不可变更父级。',
   'pages.system.menus.relatedApp': '关联应用',
   'pages.system.menus.relatedAppPlaceholder': '请选择应用',
   'pages.system.menus.permissionCode': '权限代码',
@@ -31479,11 +36702,16 @@ export default {
   'pages.system.roles.pickAppPlaceholder': '选择应用（一级）',
   'pages.system.roles.pickModulePlaceholder': '选择模块（二级）',
   'pages.system.roles.selectAllVisible': '全选',
+  'pages.system.roles.nodeSelectAll': '全选',
+  'pages.system.roles.nodeClearSelectAll': '取消全选',
   'pages.system.roles.clearAllVisible': '全不选',
   'pages.system.roles.invertVisible': '反选',
   'pages.system.roles.templateViewer': '查看者',
   'pages.system.roles.templateEditor': '编辑者',
   'pages.system.roles.templateManager': '管理者',
+  'pages.system.roles.grantAllDisplayVisible': '一键回显',
+  'pages.system.roles.noDisplayInVisibleScope': '当前可见范围没有回显权限',
+  'pages.system.roles.displayGrantedToVisible': '已勾选当前范围内全部回显（{{count}} 项）',
   'pages.system.roles.selectScopeFirst': '请先选择筛选范围',
   'pages.system.roles.templateAppliedToVisible': '已对当前范围应用「{{name}}」模板',
   'pages.system.roles.dataGrantHint':
@@ -31702,6 +36930,1369 @@ export default {
   'pages.dashboard.updateLogTab.all': '全部',
   'pages.dashboard.updateLogTab.dedicated': '定制',
   'pages.dashboard.updateLog.badge.dedicated': '定制',
+  'pages.dashboard.updateLog.entries.warehouse-list-area-location-count-r01.title':
+    '仓库列表展示库区与库位数量',
+  'pages.dashboard.updateLog.entries.warehouse-list-area-location-count-r01.description':
+    '仓库管理列表增加库区数量、库位数量两列，便于确认各仓是否已维护库区或库位',
+  'pages.dashboard.updateLog.entries.sales-delivery-auto-outbound-atomic-r01.title':
+    '销售出库自动过账失败不再残留单据',
+  'pages.dashboard.updateLog.entries.sales-delivery-auto-outbound-atomic-r01.description':
+    '开启自动出库时，建单与确认出库同一事务：库存不足等确认失败会整单回滚，避免提示保存失败却仍产生待出库单。',
+  'pages.dashboard.updateLog.entries.other-outbound-current-stock-display-r01.title':
+    '其他出库明细当前库存与物料查询对齐',
+  'pages.dashboard.updateLog.entries.other-outbound-current-stock-display-r01.description':
+    '新建其他出库单时，未选仓库也会按多选物料同口径展示可用库存；选仓后改为该仓可出库库存，避免查询有数而明细显示为空。',
+  'pages.dashboard.updateLog.entries.inspection-plan-code-type-short-r01.title':
+    '质检方案编号按方案类型短码正确生成',
+  'pages.dashboard.updateLog.entries.inspection-plan-code-type-short-r01.description':
+    '新建质检方案须先选方案类型；短码就绪后才按编号规则生成（如 ZJFAOSQC…），与 BOM 依赖主物料后再出号同一路径，避免空类型写出字段占位。',
+  'pages.dashboard.updateLog.entries.sales-delivery-pull-location-r01.title':
+    '从销售订单创建销售出库单支持整仓库位',
+  'pages.dashboard.updateLog.entries.sales-delivery-pull-location-r01.description':
+    '取单有库位时按行选择；仓库未划分库位时自动建立并使用「整仓」，无需先手工建库位。',
+  'pages.dashboard.updateLog.entries.finance-payment-account-group-dark-r01.title':
+    '付款单账户分组适配深色模式',
+  'pages.dashboard.updateLog.entries.finance-payment-account-group-dark-r01.description':
+    '从付款申请单创建付款单等弹窗中「出款账户」「对方账户」分组背景与标题随主题切换，深色模式下不再出现白底。',
+  'pages.dashboard.updateLog.entries.warehouse-whole-location-auto-r01.title':
+    '无货架仓出入库自动整仓库位',
+  'pages.dashboard.updateLog.entries.warehouse-whole-location-auto-r01.description':
+    '仓库下未维护库位时，采购入库、销售出库及其他出入库等页面库位列显示「整仓（自动）」，提交后由系统写入整仓库位并过账；已有库位时仍须手选。',
+  'pages.dashboard.updateLog.entries.purchase-push-settlement-gross-r01.title':
+    '采购下推与应付按价税合计立账',
+  'pages.dashboard.updateLog.entries.purchase-push-settlement-gross-r01.description':
+    '采购订单下推入库继承税率并汇总价税合计；确认入库自动应付、采购收票可开上限按含税金额计算。采购入库编辑与详情可查看/修改立账策略；进项立账时确认入库会提示未自动生成应付。',
+  'pages.dashboard.updateLog.entries.other-expense-supplier-clear-no-receipt-modal-r01.title':
+    '其他费用支出取消供应商不再弹入库单',
+  'pages.dashboard.updateLog.entries.other-expense-supplier-clear-no-receipt-modal-r01.description':
+    '新建其他费用支出或申请时，清空供应商或切换往来类型不再自动打开采购入库单选择窗；关联入库请点「选择采购入库单」。',
+  'pages.dashboard.updateLog.entries.other-expense-employee-advance-toggle-r01.title':
+    '其他费用支出改为员工垫付开关',
+  'pages.dashboard.updateLog.entries.other-expense-employee-advance-toggle-r01.description':
+    '新建其他费用支出不再填写收付方式与银行账户；打开「员工垫付」后选择垫付人，保存时写入各明细领款人。未开启时默认银行转账且不填账户。',
+  'pages.dashboard.updateLog.entries.other-expense-application-auto-submit-r01.title':
+    '其他费用支出申请关审核时保存即生效',
+  'pages.dashboard.updateLog.entries.other-expense-application-auto-submit-r01.description':
+    '未开启「其他费用支出申请」审核流程时，新建或编辑保存后自动提交并审核通过，无需再点提交；开启审核时仍走待审与人工审核。',
+  'pages.dashboard.updateLog.entries.other-expense-application-form-slim-r01.title':
+    '其他费用支出申请表单精简与关联入库',
+  'pages.dashboard.updateLog.entries.other-expense-application-form-slim-r01.description':
+    '新建申请不再填写收付方式、银行账户与立账策略；明细金额为预估金额且无领款人列。修复选择采购入库单无响应，关联入库可保存并在下推支出单时带入。',
+  'pages.dashboard.updateLog.entries.mobile-wecom-auto-login-hint-r01.title':
+    '修复企微内打开移动工作台不自动静默登录',
+  'pages.dashboard.updateLog.entries.mobile-wecom-auto-login-hint-r01.description':
+    '无法解析组织时不再静默落到仅账密页；会提示检查应用主页 URL，登录页始终可重试企微登录。应用连接部署说明的应用主页优先生成带 CorpId 与 AgentId 的地址，多自建应用同站时按应用区分组织。',
+  'pages.dashboard.updateLog.entries.dark-header-site-name-white-r01.title':
+    '修复暗黑模式顶栏站点名称颜色',
+  'pages.dashboard.updateLog.entries.dark-header-site-name-white-r01.description':
+    '深色顶栏下站点名称与面包屑一致使用白色，不再误用主题色或 colorText 导致发蓝难读。',
+  'pages.dashboard.updateLog.entries.work-order-split-by-serial-r01.title':
+    '序列号投产物料支持按投产序列号拆分工单',
+  'pages.dashboard.updateLog.entries.work-order-split-by-serial-r01.description':
+    '启用序列号或批号+序列号追踪的工单，拆分弹窗增加「按投产序列号」：每个序列号生成一张数量为 1 的子工单并写入计划序列号，可部分拆分剩余件数。',
+  'pages.dashboard.updateLog.entries.work-order-list-sn-badge-r01.title':
+    '工单列表序列号物料显示 SN 徽章',
+  'pages.dashboard.updateLog.entries.work-order-list-sn-badge-r01.description':
+    '追踪模式为序列号或批号+序列号的工单，产品名称后展示 SN 徽章并在旁显示投产序列号；仅有追踪无号时只显示 SN；子行不再重复「序 xxx」副行。',
+  'pages.dashboard.updateLog.entries.work-order-serial-manual-entry-r01.title':
+    '工单投产序列号支持手工录入',
+  'pages.dashboard.updateLog.entries.work-order-serial-manual-entry-r01.description':
+    '新建工单开启序列号投产后，可在「按规则」与「手工输入」间切换：规则模式选规则并预览或下达占号；手工模式逐件录入序列号并校验数量与计划数量一致。',
+  'pages.dashboard.updateLog.entries.work-order-manual-no-roster-r01.title':
+    '修复无排班时手工创建工单失败',
+  'pages.dashboard.updateLog.entries.work-order-manual-no-roster-r01.description':
+    '租户尚未发布排班时，工序计划时刻回退日历固定上下班；序列号拆分子工单复制主单工序计划时间，手工指定计划窗口时不再重复按班次 snap，避免「未找到工作时段」阻断建单。',
+  'pages.dashboard.updateLog.entries.material-source-card-dark-r01.title':
+    '修复物料来源区域深色模式背景',
+  'pages.dashboard.updateLog.entries.material-source-card-dark-r01.description':
+    '物料新建/编辑中「物料来源类型」卡片改用主题色填充，深色模式下不再出现浅色块。',
+  'pages.dashboard.updateLog.entries.shipment-notify-defer-location-r01.title':
+    '发货通知仓库不再要求提前选库位',
+  'pages.dashboard.updateLog.entries.shipment-notify-defer-location-r01.description':
+    '通知仓库生成待出库销售出库单时与批号策略一致，库位改在仓库确认出库前填写；避免销售侧通知时被「须选择库位」拦截。',
+  'pages.dashboard.updateLog.entries.slow-moving-stale-days-filter-r01.title':
+    '呆滞物料统计支持库龄天数筛选',
+  'pages.dashboard.updateLog.entries.slow-moving-stale-days-filter-r01.description':
+    '仓储呆滞物料统计工具栏增加 ≥7/14/30/60/90 天分段筛选，按批次最后变动日判定呆滞；默认 ≥7 天便于近期有库存时也能出数。',
+  'pages.dashboard.updateLog.entries.master-sync-partner-active-flag-r01.title':
+    '客商同步写入金蝶启用状态',
+  'pages.dashboard.updateLog.entries.master-sync-partner-active-flag-r01.description':
+    '供应商/客户全量同步（含不启用）时按金蝶 enable/status 写入启用停用，不再一律标为启用；停用客商也会落入正邦，数量可与金蝶完全一致。',
+  'pages.dashboard.updateLog.entries.master-sync-org-scope-exact-r01.title':
+    '主数据同步与金蝶组织范围完全一致',
+  'pages.dashboard.updateLog.entries.master-sync-org-scope-exact-r01.description':
+    '物料/供应商/客户全量同步后，清除不在本次组织范围内的历史同步行（仅有效时停用，含不启用时软删），避免子公司残留集团全量；请各组织按同一「含不启用」选项重跑全量同步。',
+  'pages.dashboard.updateLog.entries.kingdee-material-usable-alloc-r01.title':
+    '金蝶物料「仅启用」同步对齐列表可用口径',
+  'pages.dashboard.updateLog.entries.kingdee-material-usable-alloc-r01.description':
+    '组织范围启用集合增加已分配（xkallocationtype）判断，与苍穹物料列表「使用状态=可用」一致，避免把未分配行算进启用数。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-push-po-direct-create-r01.title':
+    '采购申请下推采购订单改为直接建单',
+  'pages.dashboard.updateLog.entries.purchase-requisition-push-po-direct-create-r01.description':
+    '采购申请确认下推采购订单时不再跳转新建页，按所选明细与供应商直接生成采购订单并回写转单状态。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-unit-inline-push-auto-r01.title':
+    '采购申请单位并入数量列，下推无审自动确认',
+  'pages.dashboard.updateLog.entries.purchase-requisition-unit-inline-push-auto-r01.description':
+    '采购申请明细不再单独展示单位列，单位跟在数量旁；需求计算下推生成的采购申请在未开启审核门禁时自动提交确认。',
+  'pages.dashboard.updateLog.entries.demand-push-pr-po-direct-create-r01.title':
+    '需求计算下推采购申请/采购单改为直接建单',
+  'pages.dashboard.updateLog.entries.demand-push-pr-po-direct-create-r01.description':
+    '在需求计算勾选明细确认下推采购申请或采购订单时，不再跳转新建页；确认后直接生成单据并回写关联，与工单一并下推时行为一致。',
+  'pages.dashboard.updateLog.entries.oqc-pull-preview-summarize-r01.title': '修复出库检验从发货通知取单报错',
+  'pages.dashboard.updateLog.entries.oqc-pull-preview-summarize-r01.description':
+    '补全 OQC 取单候选列表对检验辅助函数的引用，从发货通知单创建出货检验单时不再出现未定义错误。',
+  'pages.dashboard.updateLog.entries.drawing-form-material-remote-search-r01.title':
+    '图纸关联物料改为与物料管理同源搜索',
+  'pages.dashboard.updateLog.entries.drawing-form-material-remote-search-r01.description':
+    '新建/编辑图纸时关联物料不再一次性截取前几百条本地过滤；改为按编码/名称远程搜索启用中的主物料，与物料管理、SOP 选料一致，避免下拉与物料台账对不上。',
+  'pages.dashboard.updateLog.entries.drawing-mgmt-flow-station-align-r01.title':
+    '图纸管理流转与工位图纸对齐修复',
+  'pages.dashboard.updateLog.entries.drawing-mgmt-flow-station-align-r01.description':
+    '未开审核节点时提交即发布；发布接口与审核同路径不可旁路；工位端图纸/ESOP 可用性改走工序文档聚合 API，并完整展示 PDF 等工程图纸，与移动端一致。',
+  'pages.dashboard.updateLog.entries.station-docs-drawing-by-operation-r01.title':
+    '修复仅关联工序的图纸在移动端显示暂无',
+  'pages.dashboard.updateLog.entries.station-docs-drawing-by-operation-r01.description':
+    '工位/移动端工序图纸改为按物料、工艺路线、工序任一关联命中后合并展示（已发布图纸）；不再只按工单物料查找，导致只挂工序的工程图纸一直显示暂无。',
+  'pages.dashboard.updateLog.entries.material-base-unit-sync-writes-name-r01.title':
+    '修复物料基础单位显示成编码',
+  'pages.dashboard.updateLog.entries.material-base-unit-sync-writes-name-r01.description':
+    '物料同步写入基础单位时改为落单位名称（如编码 004 对应名称），并回填已误存为编码的存量；列表直出名称，不再出现 004 等类工序码。',
+  'pages.dashboard.updateLog.entries.saas-erp-connector-call-isolation-r01.title':
+    '强化 SaaS 多租户 ERP 调用隔离',
+  'pages.dashboard.updateLog.entries.saas-erp-connector-call-isolation-r01.description':
+    '接口/连接器配置本就按租户分库；出站 HTTP 不再把金蝶会话 Cookie 写入进程共享 jar，苍穹 Token 缓存按租户与连接器分键，避免多 ERP 租户互相串会话或互清令牌。',
+  'pages.dashboard.updateLog.entries.unit-sync-galaxy-bd-unit-collapse-r01.title':
+    '修复星空计量单位同步写入 0 条',
+  'pages.dashboard.updateLog.entries.unit-sync-galaxy-bd-unit-collapse-r01.description':
+    '绑定「金蝶查询计量单位」(BD_UNIT) 时，不再按物料基础单位列误去重成空；独立单位行原样映射写入，并正确回传拉取条数。',
+  'pages.dashboard.updateLog.entries.reporting-unqualified-budget-gate-r01.title':
+    '报工不合格已流转后不可重复报废',
+  'pages.dashboard.updateLog.entries.reporting-unqualified-budget-gate-r01.description':
+    '同一笔报工不合格与不良台账、直开报废共用额度：已登记返修等处置后剩余为 0，行上隐藏不良/报废入口，提交也会被拦截，避免同一数量二次流转。',
+  'pages.dashboard.updateLog.entries.nc-ledger-reporting-source-hint-r01.title':
+    '不良处理展示报工来源',
+  'pages.dashboard.updateLog.entries.nc-ledger-reporting-source-hint-r01.description':
+    '报工登记转入的不良台账不再把「来源单据」显示为空白：标明「报工登记」并带出关联工单；列名改为来源单据，覆盖检验单与报工两类来源。',
+  'pages.dashboard.updateLog.entries.reporting-defect-other-inbound-confirm-none-items-r01.title':
+    '报工登记不良品自动入库报错已修复',
+  'pages.dashboard.updateLog.entries.reporting-defect-other-inbound-confirm-none-items-r01.description':
+    '报工管理记录不良品并触发降级/让步等自动其他入库确认时，因确认数据为空误读明细导致失败；已按无确认明细安全过账，登记可正常完成。',
+  'pages.dashboard.updateLog.entries.nc-disposition-location-select-r01.title':
+    '不合格品处置可选库区库位',
+  'pages.dashboard.updateLog.entries.nc-disposition-location-select-r01.description':
+    '检验登记不合格与台账更新处置：隔离/报废/让步/降级在仓库旁增加库位选择（含库区库位树）；仓下无库位显示整仓自动。所选库位写入对应入库与库存。',
+  'pages.dashboard.updateLog.entries.warehouse-location-optional-default-r01.title':
+    '出入库未选库位不再硬拦',
+  'pages.dashboard.updateLog.entries.warehouse-location-optional-default-r01.description':
+    '不合格品自动入库及其他出入库写路径：未选手选库位时默认仓库首个可用库位，仓下无库位则自动整仓；不再因「须选择库位」阻断与金蝶一致的非必填库位流转。手选库位仍校验归属。',
+  'pages.dashboard.updateLog.entries.other-expense-application-field-photo-r01.title':
+    '费用申请支持现场拍照开单',
+  'pages.dashboard.updateLog.entries.other-expense-application-field-photo-r01.description':
+    '手机其他费用支出申请按现场取证场景精简：先拍照、填事由与金额即可提交，附件随单上传并在详情可见。',
+  'pages.dashboard.updateLog.entries.other-expense-application-mobile-h5-r01.title':
+    '手机端其他费用支出申请',
+  'pages.dashboard.updateLog.entries.other-expense-application-mobile-h5-r01.description':
+    '制造运营移动端「其他常用」新增其他费用支出申请，支持列表、新建、提交与审核，交互对齐采购申请。',
+  'pages.dashboard.updateLog.entries.purchase-return-outbound-create-toolbar-r01.title':
+    '采购退货出库补齐新建入口',
+  'pages.dashboard.updateLog.entries.purchase-return-outbound-create-toolbar-r01.description':
+    '采购退货出库功能区增加新建采购退货单，并可从采购入库或采购订单取单创建。',
+  'pages.dashboard.updateLog.entries.sales-order-change-custom-fields-ref-r01.title':
+    '销售变更单自定义字段报错修复',
+  'pages.dashboard.updateLog.entries.sales-order-change-custom-fields-ref-r01.description':
+    '销售变更单表单与详情里的自定义字段改回正确变量名，打开页面不再报 salesOrderChangeFormCustomFields is not defined。',
+  'pages.dashboard.updateLog.entries.purchase-return-outbound-menu-r01.title':
+    '采购管理增加采购退货出库',
+  'pages.dashboard.updateLog.entries.purchase-return-outbound-menu-r01.description':
+    '采购管理菜单增加采购退货出库，与销售管理的销售退货入库对称，打开固定为采购退货类型的出库列表。',
+  'pages.dashboard.updateLog.entries.purchase-inquiry-toolbar-delete-demand-party-order-r01.title':
+    '采购询价功能区删除文案与按钮顺序',
+  'pages.dashboard.updateLog.entries.purchase-inquiry-toolbar-delete-demand-party-order-r01.description':
+    '功能区批量删除改为删除，询价需方排在删除按钮之后。',
+  'pages.dashboard.updateLog.entries.purchase-inquiry-demand-party-toolbar-r01.title':
+    '询价需方收进采购询价功能区',
+  'pages.dashboard.updateLog.entries.purchase-inquiry-demand-party-toolbar-r01.description':
+    '采购询价列表功能区增加询价需方按钮，在弹窗里维护需方。侧栏不再单独列出这一项。',
+  'pages.dashboard.updateLog.entries.primary-qty-addon-unit-r01.title':
+    '主数量单位贴在输入框右侧',
+  'pages.dashboard.updateLog.entries.primary-qty-addon-unit-r01.description':
+    '没有副单位时，主数量的单位也贴在数字框右侧，和有主副单位时的主数量同一格式。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-stock-incremental-r01.title':
+    '采购申请加行只查新物料库存',
+  'pages.dashboard.updateLog.entries.purchase-requisition-stock-incremental-r01.description':
+    '明细增加一行时，总库存只查询新出现的物料。已查出的行保持原结果。',
+  'pages.dashboard.updateLog.entries.input-number-edit-hide-precision-padding-r01.title':
+    '编辑数量时不显示精度补零',
+  'pages.dashboard.updateLog.entries.input-number-edit-hide-precision-padding-r01.description':
+    '数量、单价等输入框在编辑时只显示有效数字，0.0000 显示为 0。列表和详情仍按精度显示完整小数。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-line-date-width-r01.title':
+    '采购申请行到货日显示完整日期',
+  'pages.dashboard.updateLog.entries.purchase-requisition-line-date-width-r01.description':
+    '明细行到货日列加宽到与采购订单相同，日期选择框能完整显示年月日。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-list-three-bucket-r01.title':
+    '采购申请列表列宽对齐三桶布局',
+  'pages.dashboard.updateLog.entries.purchase-requisition-list-three-bucket-r01.description':
+    '订单视图明细预览走余量伸缩；明细视图物料叠列为余量列、名称单号定宽，数量日期等为内容定宽。',
+  'pages.dashboard.updateLog.entries.packing-binding-row-action-box-icon-r01.title':
+    '装箱绑定行操作改用盒子图标',
+  'pages.dashboard.updateLog.entries.packing-binding-row-action-box-icon-r01.description':
+    '销售出库与成品入库列表「装箱绑定」不再用播放图标，改为盒子图标，与装箱语义一致。',
+  'pages.dashboard.updateLog.entries.kingdee-warehouse-revoke-module-restore-r01.title':
+    '修复销售出库等撤回金蝶同步报错',
+  'pages.dashboard.updateLog.entries.kingdee-warehouse-revoke-module-restore-r01.description':
+    '恢复误删的仓储/采购入库苍穹撤回服务模块；销售出库、生产领料、其他出入库与采购入库的撤回或删除可再次同步反审核、撤销提交与删除。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-form-sections-attach-r01.title':
+    '采购入库表单增加分组与附件',
+  'pages.dashboard.updateLog.entries.purchase-receipt-form-sections-attach-r01.description':
+    '采购入库新建/编辑对齐采购订单：基本信息、明细信息、附件分区标题；明细区备注后可上传单据附件并随保存读写。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-header-five-col-r01.title':
+    '采购入库表头改为一行五格',
+  'pages.dashboard.updateLog.entries.purchase-receipt-header-five-col-r01.description':
+    '采购入库新建/编辑表头对齐采购订单：一行五个字段均分；上排类型、供应商、采购员、入库日期、送货单号，下排立账策略、付款方式、币种、部门、验收人。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-hide-kingdee-billtype-r01.title':
+    '采购入库表单去掉金蝶单据类型',
+  'pages.dashboard.updateLog.entries.purchase-receipt-hide-kingdee-billtype-r01.description':
+    '新建/编辑采购入库只保留业务「类型」（标准采购/资产采购）；金蝶单据类型编码改由仓储外推配置与接口样例提供，外推不受影响。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-line-tax-rate-r01.title':
+    '采购入库税率改到明细行',
+  'pages.dashboard.updateLog.entries.purchase-receipt-line-tax-rate-r01.description':
+    '采购入库与采购订单对齐：税率、不含税金额、税额在明细行维护并可批量改税率；表头不再录税率，保存后按首行回写头表供外推。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-form-unitab-r01.title':
+    '新建采购入库改为独立页签',
+  'pages.dashboard.updateLog.entries.purchase-receipt-form-unitab-r01.description':
+    '采购入库新建、编辑、复制与取单预填改为 UniTab 独立表单页（与采购订单一致），不再使用弹窗；保存或取消后关闭当前页签回到列表。',
+  'pages.dashboard.updateLog.entries.document-material-detail-align-po-r01.title':
+    '物料明细表对齐采购订单标准',
+  'pages.dashboard.updateLog.entries.document-material-detail-align-po-r01.description':
+    '销售订单/报价单等含价税的物料明细，列序与外观按采购订单统一为税率→不含税金额→税额→价税合计；数量贴单位；赠品、已交未交等单据特有列按业务保留。',
+  'pages.dashboard.updateLog.entries.material-batch-picker-spec-model-r01.title':
+    '选择产品弹窗展示规格与型号',
+  'pages.dashboard.updateLog.entries.material-batch-picker-spec-model-r01.description':
+    '批量选产品列表列改为「规格/型号」，同时显示物料规格与型号，便于区分同名物料。',
+  'pages.dashboard.updateLog.entries.document-dual-quantity-inline-unit-r01.title':
+    '单据明细主副数量统一单位贴主数量',
+  'pages.dashboard.updateLog.entries.document-dual-quantity-inline-unit-r01.description':
+    '采购订单等明细与采购申请一致：去掉独立单位列，主数量右侧显示单位；双数量列默认同一样式。',
+  'pages.dashboard.updateLog.entries.document-tax-rate-batch-popconfirm-r01.title':
+    '单据明细批量税率改为气泡确认输入',
+  'pages.dashboard.updateLog.entries.document-tax-rate-batch-popconfirm-r01.description':
+    '采购订单、销售订单、报价单、销售合同明细表头「批量」税率不再调用浏览器输入框，改为 Popconfirm 内数字输入。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-detail-rank-align-r01.title':
+    '采购申请明细视图列序对齐表格视图',
+  'pages.dashboard.updateLog.entries.purchase-requisition-detail-rank-align-r01.description':
+    '补登记建议单价与行金额段位；明细下推进度改与表格视图同列契约，排在更新时间之前，不再右固定挤到执行状态旁。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-detail-table-parity-r01.title':
+    '采购申请明细表格与表格视图行为对齐',
+  'pages.dashboard.updateLog.entries.purchase-requisition-detail-table-parity-r01.description':
+    '明细表格按一行一物料展示，勾选、下推、提交审核、删除、打印等与表格视图一致，批量操作按申请单去重。',
+  'pages.dashboard.updateLog.entries.list-progress-before-updated-at-r01.title':
+    '列表进度列统一排在更新时间前',
+  'pages.dashboard.updateLog.entries.list-progress-before-updated-at-r01.description':
+    '全局列序将下推/进度类列调整到紧靠「更新时间」之前，避免夹在数量、日期等业务列中间。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-list-applicant-dept-r01.title':
+    '采购申请列表显示申请人与申请部门',
+  'pages.dashboard.updateLog.entries.purchase-requisition-list-applicant-dept-r01.description':
+    '列表增加申请人、申请部门列，便于按申请责任人与部门查阅。',
+  'pages.dashboard.updateLog.entries.purchase-order-line-tax-rate-migration-r01.title':
+    '修复采购申请保存报税率为空列',
+  'pages.dashboard.updateLog.entries.purchase-order-line-tax-rate-migration-r01.description':
+    '采购订单明细税率字段因迁移号冲突未落库，新建采购申请读关联订单行时报 column tax_rate does not exist；已补迁移并升级。',
+  'pages.dashboard.updateLog.entries.error-recovery-copy-formal-r01.title':
+    '服务不可用与超时提示改为正式表述',
+  'pages.dashboard.updateLog.entries.error-recovery-copy-formal-r01.description':
+    '请求失败、操作超时弹窗标题与正文改为书面用语，确认按钮由「知道了」改为「确定」。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-header-layout-r01.title':
+    '采购申请表头一行五字段',
+  'pages.dashboard.updateLog.entries.purchase-requisition-header-layout-r01.description':
+    '基本信息默认一行：编号、申请人、部门、申请日期、要求到货日期；申请名称默认隐藏，需在字段设置中勾选后显示。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-dept-from-applicant-r01.title':
+    '采购申请部门默认带出申请人部门',
+  'pages.dashboard.updateLog.entries.purchase-requisition-dept-from-applicant-r01.description':
+    '新建或更换申请人时，表头部门自动带出该用户所属部门，仍可手工改选。',
+  'pages.dashboard.updateLog.entries.sales-order-change-save-submit-audit-r01.title':
+    '销售变更单保存提交审核拆分',
+  'pages.dashboard.updateLog.entries.sales-order-change-save-submit-audit-r01.description':
+    '销售变更单保存仍是草稿，提交写成已提交，提交审核才进入待审核或免审已审核并生效。影响预览仍在提交前确认。',
+  'pages.dashboard.updateLog.entries.sales-order-save-submit-audit-r01.title':
+    '销售订单保存提交审核拆分',
+  'pages.dashboard.updateLog.entries.sales-order-save-submit-audit-r01.description':
+    '销售订单保存仍是草稿，提交写成已提交，提交审核才进入待审核或免审已确认。信用、毛利、预收与自动下推需求计算仍在提交审核或审核通过路径。',
+  'pages.dashboard.updateLog.entries.sales-forecast-save-submit-audit-r01.title':
+    '销售预测保存提交审核拆分',
+  'pages.dashboard.updateLog.entries.sales-forecast-save-submit-audit-r01.description':
+    '销售预测保存仍是草稿，提交写成已提交，提交审核才进入待审核或免审已确认。下推需求计算不变，须审核通过后才能下推。',
+  'pages.dashboard.updateLog.entries.quotation-save-submit-audit-r01.title':
+    '报价单保存提交审核拆分',
+  'pages.dashboard.updateLog.entries.quotation-save-submit-audit-r01.description':
+    '报价单保存仍是草稿，提交写成已提交，提交审核才进入待审核已发送或免审已发送。客户确认、修订、下推不变，须审核通过后才能客户确认与下推。',
+  'pages.dashboard.updateLog.entries.reporting-rework-save-submit-audit-r01.title':
+    '报工与返工保存提交审核分开',
+  'pages.dashboard.updateLog.entries.reporting-rework-save-submit-audit-r01.description':
+    '报工与返工按采购订单式三态：保存落草稿，提交写已提交，提交审核才进待审核或免审通过；功能区为新建、提交、审核、删除，支持撤销提交、撤回审核、反审核与复制选中新建。会签型返工审核通过后仍保持草稿业务态，下达不变。',
+  'pages.dashboard.updateLog.entries.other-expense-non-supplier-audit-r01.title':
+    '其他费用非供应商可提交审核',
+  'pages.dashboard.updateLog.entries.other-expense-non-supplier-audit-r01.description':
+    '往来为其他或职员时自动按手工立账保存，提交审核不再强制供应商；对公付款并确认过账仍须选供应商。',
+  'pages.dashboard.updateLog.entries.other-expense-application-copy-selected-r01.title':
+    '其他费用支出申请支持复制新建',
+  'pages.dashboard.updateLog.entries.other-expense-application-copy-selected-r01.description':
+    '新建按钮下拉增加复制选中单据新建：勾选一条申请后带出往来、部门、明细与备注，业务日期为当天，单号保存时重新生成。',
+  'pages.dashboard.updateLog.entries.misc-voucher-expense-department-dup-r01.title':
+    '其他费用支出表单去掉重复部门',
+  'pages.dashboard.updateLog.entries.misc-voucher-expense-department-dup-r01.description':
+    '新建或编辑其他费用支出时，部门只保留往来行右侧一处，不再与立账策略并排重复显示。',
+  'pages.dashboard.updateLog.entries.print-qty-precision-config-r01.title': '打印数量精度跟随系统设置',
+'pages.dashboard.updateLog.entries.print-qty-precision-config-r01.description': '销售出库、采购入库、其他出库、生产领料等打印模板的数量、单价、金额小数位读取配置中心 common.quantity/price/amount_decimal_places，与列表展示一致。',
+  'pages.dashboard.updateLog.entries.low-spec-pool-uvicorn-opt-r01.title':
+    '低配连接池与单进程 API 生效，减轻超时中断',
+  'pages.dashboard.updateLog.entries.low-spec-pool-uvicorn-opt-r01.description':
+    '修复低配写入的数据库连接池未进入 API 进程的问题；低配模式固定单 worker，避免双进程虚高常驻内存导致网关超时与操作中断。',
+  'pages.dashboard.updateLog.entries.sales-delivery-note-print-r01.title':
+    '销售出库单新增送货单打印模板',
+  'pages.dashboard.updateLog.entries.sales-delivery-note-print-r01.description':
+    '按纸质送货单样例增加 A5 横板销售出库打印：公司抬头与经营范围、现金/含税勾选框、客户与送货单号，明细含品名/处理方式/规格/计价方式/含税单价金额，底部说明与金额大写及制单/审核/送货/收货。',
+  'pages.dashboard.updateLog.entries.production-picking-red-voucher-print-r01.title':
+    '生产领料单新增红框凭证打印模板',
+  'pages.dashboard.updateLog.entries.production-picking-red-voucher-print-r01.description':
+    '按纸质样例增加 A5 横板红框生产领料单打印：编号、单据类型、日期、领料部门，明细含规格与发料仓库及数量合计，底部审核/记账/领料/发料/制单。',
+  'pages.dashboard.updateLog.entries.other-outbound-red-voucher-a5-align-r01.title':
+    '其他出库单红框打印对齐纸质样例',
+  'pages.dashboard.updateLog.entries.other-outbound-red-voucher-a5-align-r01.description':
+    '其他出库单红框凭证改为 A5 横板：标题双下划线，左领料部门、右编号日期，明细含行号/实收数量/收料仓库，底部审核/记账/发货/领料/制单，去掉单据类型与合计行。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-red-voucher-print-r01.title':
+    '采购入库单新增红框凭证打印模板',
+  'pages.dashboard.updateLog.entries.purchase-receipt-red-voucher-print-r01.description':
+    '按纸质凭证版式增加 A5 横版红框采购入库单打印：编号、单据类型、日期、供应商，明细含规格与收货仓库，底部审核/记账/收货/采购/制单。打印数据补齐单据类型与行仓库、采购员审核人。',
+  'pages.dashboard.updateLog.entries.other-outbound-red-voucher-print-r01.title':
+    '其他出库单新增红框凭证打印模板',
+  'pages.dashboard.updateLog.entries.other-outbound-red-voucher-print-r01.description':
+    '按纸质凭证版式增加横版红框其他出库单打印：编号、单据类型、日期、领料部门，明细含规格与发料仓库，底部审核/记账/领料/发料/制单。打印数据补齐规格、行仓库与领用部门人员。',
+  'pages.dashboard.updateLog.entries.document-push-force-kwarg-r01.title':
+    '修复采购入库强制重推报 force 参数错误',
+  'pages.dashboard.updateLog.entries.document-push-force-kwarg-r01.description':
+    '接口已支持 force 重推，但 DocumentPushService.push 未接收该参数，二次推送报 unexpected keyword argument。现贯通 force 到采购入库适配，允许人工重推并记录二次关联。',
+  'pages.dashboard.updateLog.entries.document-push-multi-api-manual-profile-r01.title':
+    '修复采购入库手动推送误报未选目标',
+  'pages.dashboard.updateLog.entries.document-push-multi-api-manual-profile-r01.description':
+    '按接口用途分行的出站目标，设置弹窗里的行 key 与 profile 不是同一串。勾选单据后推送仍按 profile 白名单校验，误报「请至少选择一个推送目标」。现先把绑定行映射到真实 profile 再推送与预览。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-unit-no-builtin-004-r01.title':
+    '修复采购入库外推库存单位被改成 004',
+  'pages.dashboard.updateLog.entries.purchase-receipt-unit-no-builtin-004-r01.description':
+    '推送金蝶时曾把 KG/kg 硬编成编码 004，账套无此单位时报「库存单位编码=004 导入不成功」。现按物料库存单位与单位目录解析，禁止再套内置 004 别名。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-draft-delete-gate-r01.title':
+    '修复采购入库草稿无法删除',
+  'pages.dashboard.updateLog.entries.purchase-receipt-draft-delete-gate-r01.description':
+    '列表删除误绑「可确认入库」门禁，未审核的草稿反而不能删。现与后端一致：草稿/驳回可删，已提交或已审核须先撤回审核。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-buyer-operator-resync-r01.title':
+    '修复采购入库改采购员后外推仍用旧工号',
+  'pages.dashboard.updateLog.entries.purchase-receipt-buyer-operator-resync-r01.description':
+    '编辑采购员时隐藏工号可能残留上一任，外推苍穹仍带旧采购员导致「无可用采购组」。现以所选用户工号为准重算并在推送前校正，换人无工号则清空。',
+  'pages.dashboard.updateLog.entries.measuring-instrument-qr-equipment-card-r01.title':
+    '计量器具详情与列表补齐设备二维码与打印设备卡',
+  'pages.dashboard.updateLog.entries.measuring-instrument-qr-equipment-card-r01.description':
+    '计量器具与设备台账共用同一设备行，此前仅补了点检方案绑定、详情未展示二维码也无法打印设备卡，企微无法贴卡扫码点检。现详情展示 EQ/绑定码，列表与详情可打印设备卡，编辑可填二维码绑定码。',
+  'pages.dashboard.updateLog.entries.equipment-hud-runtime-load-panel-r01.title': '设备看板中部改为运行负荷',
+  'pages.dashboard.updateLog.entries.equipment-hud-runtime-load-panel-r01.description':
+    '中部下方由稀疏故障折线改为设备运行负荷 TOP 排行，展示编码、状态与运行小时条形，更适合日常监视。',
+  'pages.dashboard.updateLog.entries.equipment-fault-trend-line-series-r01.title': '设备看板故障趋势改折线',
+  'pages.dashboard.updateLog.entries.equipment-fault-trend-line-series-r01.description':
+    '故障趋势按所选区间逐日展开为时间序列折线，避免仅有故障日时整图只显示一根粗柱。',
+  'pages.dashboard.updateLog.entries.equipment-fault-trend-fault-date-r01.title': '设备看板故障趋势按故障日统计',
+  'pages.dashboard.updateLog.entries.equipment-fault-trend-fault-date-r01.description':
+    '故障趋势改为按站点日历与 fault_date 聚合，查询区间逐日补零；看板柱图有故障日显示数量标注。',
+  'pages.dashboard.updateLog.entries.kuaiems-equipment-hud-layout-r01.title': '设备看板布局紧凑化',
+  'pages.dashboard.updateLog.entries.kuaiems-equipment-hud-layout-r01.description':
+    '设备看板合并左侧点检与故障为运维概览并补进度条，设备状态滚动移至左栏填满高度；右侧强化状态分布与按日补齐的故障趋势，状态列表在后端未升级时回退实时监控接口。',
+  'pages.dashboard.updateLog.entries.kuaiems-equipment-hud-board-rich-r01.title': '设备看板数据与状态滚动',
+  'pages.dashboard.updateLog.entries.kuaiems-equipment-hud-board-rich-r01.description':
+    '设备看板增加设备状态滚动列表，异常区支持连续滚动；故障趋势随当天本周本月切换，并修复中央在册设备单位与趋势图展示。',
+  'pages.dashboard.updateLog.entries.kuaiems-equipment-hud-board-r01.title': '快设备新增设备看板大屏',
+  'pages.dashboard.updateLog.entries.kuaiems-equipment-hud-board-r01.description':
+    '设备运维下新增设备看板，HUD 视觉与系统运营看板一致，汇总点检、故障、状态分布与异常滚动，数据来自设备看板接口。',
+  'pages.dashboard.updateLog.entries.equipment-status-stat-cards-single-row-r01.title':
+    '设备状态监控指标卡宽屏单行展示',
+  'pages.dashboard.updateLog.entries.equipment-status-stat-cards-single-row-r01.description':
+    '设备状态监控顶部 7 项指标在宽屏下改为一行栅格排布，标签不换行，避免「报废设备」单独掉到下一行。',
+  'pages.dashboard.updateLog.entries.tenant-switch-abort-inflight-502-r01.title':
+    '修复切换组织易出现 502',
+  'pages.dashboard.updateLog.entries.tenant-switch-abort-inflight-502-r01.description':
+    '切换组织前真正中断在途 API 请求（不仅取消 React Query），并停止对 502/503/504 的自动重试，避免旧请求与新组织壳层重拉叠满数据库连接池。',
+  'pages.dashboard.updateLog.entries.cosmic-material-org-scope-row-filter-r01.title':
+    '苍穹物料组织范围按行过滤',
+  'pages.dashboard.updateLog.entries.cosmic-material-org-scope-row-filter-r01.description':
+    '物料组织公共信息 batchQuery 的请求体 org_number 在部分环境不生效，同步会把各组织已分配物料并成并集，子公司数量会多于金蝶业务组织列表。现按响应行组织编码再筛；能以信等组织重同步后与界面一致。',
+  'pages.dashboard.updateLog.entries.material-batch-manage-sync-restore-r01.title':
+    '恢复物料批号管理同步',
+  'pages.dashboard.updateLog.entries.material-batch-manage-sync-restore-r01.description':
+    '快连接入站同步误删批号管理服务文件后，会误报「未安装 kuaiconnect」。已恢复服务模块；子模块缺失时改为提示具体加载失败，不再说未安装专业包。',
+  'pages.dashboard.updateLog.entries.production-return-line-warehouse-r01.title':
+    '工单退料明细可选仓库',
+  'pages.dashboard.updateLog.entries.production-return-line-warehouse-r01.description':
+    '从工单创建生产退料时，退料仓库改到明细行（默认带回领料原仓），支持退回不同仓库；表头不再统一强制一仓。',
+  'pages.dashboard.updateLog.entries.sales-delivery-deliverer-pick-r01.title':
+    '销售出库出库人可选',
+  'pages.dashboard.updateLog.entries.sales-delivery-deliverer-pick-r01.description':
+    '销售出库新建/编辑时，登录用户对象引用抖动不再反复重置表单或冲掉已选出库人；默认仅在字段为空时带出当前登录人。',
+  'pages.dashboard.updateLog.entries.gl-balance-sheet-opening-net-r01.title':
+    '科目余额表期初父级轧差',
+  'pages.dashboard.updateLog.entries.gl-balance-sheet-opening-net-r01.description':
+    '科目余额表合并辅助核算与上下级轧卷后，期初与期末统一按净额单边显示；本期/本年发生额仍保持借贷毛额，避免应交税费等父级期初双边虚增、与期末口径不一致。',
+  'pages.dashboard.updateLog.entries.cosmic-measureunits-paging-r01.title':
+    '苍穹单位同步翻页不全',
+  'pages.dashboard.updateLog.entries.cosmic-measureunits-paging-r01.description':
+    '「从物料基础单位」同步不再被物料预置把页码打回第 1 页；末页按苍穹 lastPage/实际 pageSize 判断，可抽全部分页物料上的基础单位。',
+  'pages.dashboard.updateLog.entries.outbound-hub-cf-exec-config-perm-r01.title':
+    '出库页自定义字段与领料策略权限',
+  'pages.dashboard.updateLog.entries.outbound-hub-cf-exec-config-perm-r01.description':
+    '出库 Hub 读取销售发货/生产领料自定义字段时按 outbound/inbound 宿主鉴权；工单执行配置对仓储只读角色开放，避免仅有出库权限时误弹权限不足。',
+  'pages.dashboard.updateLog.entries.reset-data-shortage-delay-exceptions-r01.title':
+    '重置数据清掉缺料延期待办',
+  'pages.dashboard.updateLog.entries.reset-data-shortage-delay-exceptions-r01.description':
+    '应用中心重置「生产执行」时同步物理删除缺料异常、延期异常表；此前只清工单会留下工作台待办事项。',
+  'pages.dashboard.updateLog.entries.cosmic-im-operate-presets-complete-r01.title':
+    '苍穹出入库接口库操作套齐套',
+  'pages.dashboard.updateLog.entries.cosmic-im-operate-presets-complete-r01.description':
+    '采购入库补齐批量提交与审核预置；盘盈/盘亏补齐更新、提交、审核、反审核、撤销提交与删除，形态与销售出库一致。重新加载金蝶AI苍穹常用接口即可安装。',
+  'pages.dashboard.updateLog.entries.outbound-hub-submit-rowkey-r01.title':
+    '销售出库提交识别复合行键',
+  'pages.dashboard.updateLog.entries.outbound-hub-submit-rowkey-r01.description':
+    '出库 Hub 行键为类型加单号，提交/审核批量循环已按真实单据 id 解析，不再误报「当前选中单据不可执行该操作」。',
+  'pages.dashboard.updateLog.entries.audit-branch-not-triggered-r01.title':
+    '条件未走分支显示未触发',
+  'pages.dashboard.updateLog.entries.audit-branch-not-triggered-r01.description':
+    '审批条件选边后，未进入的旁路节点标「未触发」，与尚未轮到的「待到达」、空审批人「已跳过」区分。',
+  'pages.dashboard.updateLog.entries.audit-exec-history-keep-r01.title': '审核执行记录跨轮保留',
+  'pages.dashboard.updateLog.entries.audit-exec-history-keep-r01.description':
+    '撤回提交后重提、反审核重开后，节点执行记录保留历次提交/通过/撤回/撤销等履历；节点状态仍只认当前流程轮次。',
+  'pages.dashboard.updateLog.entries.audit-toolbar-detail-r01.title': '工具栏审核可查看流程详情',
+  'pages.dashboard.updateLog.entries.audit-toolbar-detail-r01.description':
+    '单据列表「审核」下拉新增「审核详情」，勾选一张单据即可打开审核弹窗查看整体流程进度，无需当前轮到自己审核。',
+  'pages.dashboard.updateLog.entries.approval-designer-publish-flush-r01.title':
+    '审批流一次发布即生效',
+  'pages.dashboard.updateLog.entries.approval-designer-publish-flush-r01.description':
+    '设计器「发布流程」会先保存当前画布与节点配置再发布，无需再逐节点保存后单独发布。',
+  'pages.dashboard.updateLog.entries.approval-edit-fields-optional-r01.title':
+    '审核弹窗可填字段改为可选',
+  'pages.dashboard.updateLog.entries.approval-edit-fields-optional-r01.description':
+    '「审核中允许修改单据」表示可直接编辑单据；「审核时可填字段」仅控制审核弹窗内填写，可不选。未选字段时不再强制全开或至少选一项。',
+  'pages.dashboard.updateLog.entries.approval-edit-during-default-on-r01.title':
+    '审批节点默认允许审核中改单',
+  'pages.dashboard.updateLog.entries.approval-edit-during-default-on-r01.description':
+    '审批流设计器新建审批节点默认开启「审核中允许修改单据」；弹窗可填字段默认不勾，可按需选择。',
+  'pages.dashboard.updateLog.entries.toolbar-audit-modal-component-r01.title':
+    '工具栏审核统一打开审核弹窗',
+  'pages.dashboard.updateLog.entries.toolbar-audit-modal-component-r01.description':
+    '列表工具栏「审核」须经统一审核组件打开审核弹窗，禁止直调审核接口跳过弹窗；未接弹窗的调用会明确报错。',
+  'pages.dashboard.updateLog.entries.purchase-invoice-order-multi-select-r01.title':
+    '从采购订单创建采购发票支持同供应商多选',
+  'pages.dashboard.updateLog.entries.purchase-invoice-order-multi-select-r01.description':
+    '取单改为多选勾选，选中一家供应商后其它供应商行不可再选；可一次合并多张同供应商采购订单开票，按订单顺序占用可开票余量。',
+  'pages.dashboard.updateLog.entries.purchase-invoice-receipt-multi-select-r01.title':
+    '从采购入库创建采购发票支持同供应商多选',
+  'pages.dashboard.updateLog.entries.purchase-invoice-receipt-multi-select-r01.description':
+    '取单改为多选勾选，选中一家供应商后其它供应商行不可再选；可一次合并多张同供应商入库单开票。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-partial-convert-remain-r01.title':
+    '采购申请分批转单剩余行可再次取单',
+  'pages.dashboard.updateLog.entries.purchase-requisition-partial-convert-remain-r01.description':
+    '从采购申请创建采购订单时，按本单实际明细与订购数量回写申请行，避免表单删行或改量后误占未转出明细；取单搜索支持申请单号，采购入库取单搜索支持订单号与供应商。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-line-stock-primary-qty-r01.title':
+    '采购申请明细总库存恢复显示',
+  'pages.dashboard.updateLog.entries.purchase-requisition-line-stock-primary-qty-r01.description':
+    '修复双计量改造后采购申请编辑页总库存误显示「各仓无在库结存」：分仓结存改为读取即时库存的主数量字段。',
+  'pages.dashboard.updateLog.entries.kuaizhizao-list-delete-norm-sweep-r01.title':
+    '快制造列表删除规范扫尾',
+  'pages.dashboard.updateLog.entries.kuaizhizao-list-delete-norm-sweep-r01.description':
+    '售后、质量、设备、交付项目及工序委外等列表行删除收口到功能区，删除按钮文案统一为「删除」；详情抽屉与明细视图删除保留；出入库 Hub 仍隐藏行内执行删除。',
+  'pages.dashboard.updateLog.entries.kuaioa-approval-list-batch-enrich-r01.title':
+    '轻办公审批单据列表加载加速',
+  'pages.dashboard.updateLog.entries.kuaioa-approval-list-batch-enrich-r01.description':
+    '请假出差、用章、费用等审批类列表改为一次批量拉取审批实例与待办人，不再对每行调用完整审批状态接口或列表内写回；详情打开仍保留状态补齐与完整审批信息。',
+  'pages.dashboard.updateLog.entries.kuaioa-leave-approval-writeback-repair-r01.title':
+    '请假出差审批状态写回修复',
+  'pages.dashboard.updateLog.entries.kuaioa-leave-approval-writeback-repair-r01.description':
+    '修复审批通过时审核中改扣款留痕失败导致流程已结束、单据仍显示待审的问题；打开详情或再次通过可写回；状态筛选钉明确绑定 status 字段。',
+  'pages.dashboard.updateLog.entries.approval-audit-inline-editable-fields-r01.title':
+    '审批节点可指定审核时填写字段',
+  'pages.dashboard.updateLog.entries.approval-audit-inline-editable-fields-r01.description':
+    '审批流程设计器在开启「审核中允许修改单据」时可勾选节点白名单字段；当前审批人在审核弹窗内填写后点通过，一并写入单据并留痕。请假出差表单仍保留扣款金额，审核节点也可配置审批人填写或调整。',
+  'pages.dashboard.updateLog.entries.holiday-cn-cdn-fastly-r01.title':
+    '法定节假日导入改用可达 CDN',
+  'pages.dashboard.updateLog.entries.holiday-cn-cdn-fastly-r01.description':
+    '导入中国法定节假日优先走 fastly.jsDelivr 拉取 holiday-cn 数据，避免原 jsDelivr/GitHub 地址在国内被重置导致无法获取 2026 年数据。',
+  'pages.dashboard.updateLog.entries.warehouse-management-page-norm-sweep-r01.title':
+    '仓储管理列表规范扫尾',
+  'pages.dashboard.updateLog.entries.warehouse-management-page-norm-sweep-r01.description':
+    '物料中心草稿备料、归还/来料登记、借料、送货单、组装拆装与模板、条码规则、库存预警规则等删除收口到功能区，删除文案统一为「删除」；确认入库/借出/执行等动作仍在操作列；入库出库 Hub 与其它出入库此前已对齐。',
+  'pages.dashboard.updateLog.entries.outsource-management-page-norm-sweep-r01.title':
+    '委外管理列表规范扫尾',
+  'pages.dashboard.updateLog.entries.outsource-management-page-norm-sweep-r01.description':
+    '工单委外、工序委外与委外结算删除收口到功能区，删除按钮文案统一为「删除」；工序委外操作列保留进度与打印，结算保留提交；发料/收货/退料/退货仍复用仓储 Hub。',
+  'pages.dashboard.updateLog.entries.production-execution-page-norm-sweep-r01.title':
+    '生产执行列表规范扫尾',
+  'pages.dashboard.updateLog.entries.production-execution-page-norm-sweep-r01.description':
+    '报工行上审核与删除收口到功能区，保留修正/不良/报废；返工与装箱绑定删除收口到功能区，封箱等执行动作仍在操作列；删除按钮文案统一为「删除」。',
+  'pages.dashboard.updateLog.entries.plan-management-page-norm-sweep-r01.title':
+    '计划管理列表规范扫尾',
+  'pages.dashboard.updateLog.entries.plan-management-page-norm-sweep-r01.description':
+    '需求计划操作列只留详情与编辑，新建下拉补齐复制选中单据新建，删除文案统一；需求计算删除收口到功能区，执行计算仍在操作列。',
+  'pages.dashboard.updateLog.entries.sales-purchase-finance-page-norm-sweep-r01.title':
+    '销售采购财务列表规范扫尾',
+  'pages.dashboard.updateLog.entries.sales-purchase-finance-page-norm-sweep-r01.description':
+    '采购退货确认/撤回收口到功能区；销售订单变更操作列只留详情与编辑；销售退货、应付、付款、资金调拨补齐复制选中单据新建；删除按钮文案统一为「删除」。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-remove-row-external-push-r01.title':
+    '采购入库去掉行内强制推送',
+  'pages.dashboard.updateLog.entries.purchase-receipt-remove-row-external-push-r01.description':
+    '列表与详情不再提供行内「推送/强制重推」；外推统一走功能区同步入口（手动推送目标设置），避免与 SyncPushHub 重复。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-toolbar-push-r01.title':
+    '采购入库下推进功能区',
+  'pages.dashboard.updateLog.entries.purchase-receipt-toolbar-push-r01.description':
+    '采购入库单列表将「下推采购退货」「下推付款申请」从行操作收拢到功能区下推按钮，勾选一张已入库单后使用。',
+  'pages.dashboard.updateLog.entries.payment-application-list-settlement-type-r01.title':
+    '付款申请列表展示结算类型',
+  'pages.dashboard.updateLog.entries.payment-application-list-settlement-type-r01.description':
+    '付款申请列表在申请金额前列出结算类型（普通付款/预付款），与表单、详情口径一致。',
+  'pages.dashboard.updateLog.entries.approval-condition-default-branch-switch-r01.title':
+    '条件分支默认分支开关可正常开启',
+  'pages.dashboard.updateLog.entries.approval-condition-default-branch-switch-r01.description':
+    '修复审批流程设计器条件节点「默认分支」拨不动：改为按列表相对字段注册，开启后可预选且同节点仅一条默认。',
+  'pages.dashboard.updateLog.entries.submit-document-and-review-menu-r01.title':
+    '提交下拉可直接提交审核',
+  'pages.dashboard.updateLog.entries.submit-document-and-review-menu-r01.description':
+    '保存提交拆分页的「提交」下拉统一增加「直接提交审核」：先提交再送审合为一步；合一项由 uni-batch 真源生成，各单据列表只接 commit 与 submitReview。',
+  'pages.dashboard.updateLog.entries.payment-toolbar-confirm-unconfirm-r01.title':
+    '付款单功能区确认与撤回确认',
+  'pages.dashboard.updateLog.entries.payment-toolbar-confirm-unconfirm-r01.description':
+    '付款单列表将「确认付款」「撤回确认」提到功能区成对展示，交互对齐出入库确认/撤回，不必再进批量操作菜单。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-receipt-time-save-r01.title':
+    '采购入库单入库日期可正确保存',
+  'pages.dashboard.updateLog.entries.purchase-receipt-receipt-time-save-r01.description':
+    '修复表单已填入库日期却未落库，导致批号物料确认入库报缺入库日期；确认过账在单据无日期时回落确认时刻。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-submit-rowkey-r01.title':
+    '采购入库列表可正常提交与提交审核',
+  'pages.dashboard.updateLog.entries.purchase-receipt-submit-rowkey-r01.description':
+    '修复勾选后点提交提示「当前选中单据不可执行该操作」：工具区按复合行键解析单据 id；补齐提交审核能力门禁。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-po-aux-qty-push-r01.title':
+    '采购入库下推带入副数量',
+  'pages.dashboard.updateLog.entries.purchase-receipt-po-aux-qty-push-r01.description':
+    '从采购订单创建或下推生成采购入库单时，明细副数量、副单位与行换算率随订单行带入；部分入库按主数量比例缩放副数量。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-po-pull-order-code-desc-r01.title':
+    '从采购订单入库选单按日期与单号倒序',
+  'pages.dashboard.updateLog.entries.purchase-receipt-po-pull-order-code-desc-r01.description':
+    '「从采购订单创建采购入库单」取单默认先按单据日期倒序，同日再按采购订单号倒序，新单在前。',
+  'pages.dashboard.updateLog.entries.finance-voucher-awaiting-confirm-lifecycle-r01.title':
+    '收付款单审核通过后执行状态显示待确认',
+  'pages.dashboard.updateLog.entries.finance-voucher-awaiting-confirm-lifecycle-r01.description':
+    '审核已通过、尚未确认过账时，执行状态由「草稿」改为「待确认」，与工作台待办用语一致；待核销仍指确认后的金额核销。',
+  'pages.dashboard.updateLog.entries.payment-list-audit-phase-column-r01.title':
+    '付款单列表展示审核状态',
+  'pages.dashboard.updateLog.entries.payment-list-audit-phase-column-r01.description':
+    '提交只改审核态、执行状态仍为草稿；列表补「审核状态」列，提交后可见已提交，再提交审核或确认付款。',
+  'pages.dashboard.updateLog.entries.payment-manifest-audit-declare-r01.title':
+    '付款单可提交审核',
+  'pages.dashboard.updateLog.entries.payment-manifest-audit-declare-r01.description':
+    '轻财务 manifest.audit 补登付款单与付款退款实体，统一审核入口不再报「未声明为可审核」。',
+  'pages.dashboard.updateLog.entries.payment-list-row-actions-to-toolbar-r01.title':
+    '付款单列表删除与撤回改走功能区',
+  'pages.dashboard.updateLog.entries.payment-list-row-actions-to-toolbar-r01.description':
+    '操作列不再放确认、撤回确认、作废、删除；勾选后用提交/审核/删除与批量操作处理，行上保留详情、编辑及核销、退款入口。',
+  'pages.dashboard.updateLog.entries.payment-application-status-submitted-i18n-r01.title':
+    '付款申请状态「已提交」不再显示英文',
+  'pages.dashboard.updateLog.entries.payment-application-status-submitted-i18n-r01.description':
+    '列表与详情的状态徽章对 SUBMITTED 等英文码走单据状态标签映射，显示为「已提交」，与已批准、已付款等中文态一致。',
+  'pages.dashboard.updateLog.entries.purchase-order-default-currency-cny-r01.title':
+    '采购订单币种恢复默认人民币',
+  'pages.dashboard.updateLog.entries.purchase-order-default-currency-cny-r01.description':
+    '新建与取单灌表时币种、汇率按站点默认货币（缺省 CNY）写入；供应商未维护默认币种时不再清空为请选择。',
+  'pages.dashboard.updateLog.entries.purchase-tax-rate-default-13-r01.title':
+    '采购行未设税率时默认 13%',
+  'pages.dashboard.updateLog.entries.purchase-tax-rate-default-13-r01.description':
+    '采购订单选料、取单灌表时，价本与物料均无税率（含税率写为 0）会回落为 13%，不再出现税率为空的 0。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-aux-quantity-persist-r01.title':
+    '采购申请副数量可保存',
+  'pages.dashboard.updateLog.entries.purchase-requisition-aux-quantity-persist-r01.description':
+    '新建与编辑采购申请时明细副数量、副单位与行换算率会正确落库，再次打开编辑也会回显。',
+  'pages.dashboard.updateLog.entries.pr-to-po-aux-quantity-handoff-r01.title':
+    '采购申请转订单带入副数量',
+  'pages.dashboard.updateLog.entries.pr-to-po-aux-quantity-handoff-r01.description':
+    '从采购申请创建采购订单时，申请行的副数量、副单位与行换算率会写入订单明细；采购订单保存也会提交副数量，避免表单有值却落库丢失。',
+  'pages.dashboard.updateLog.entries.outbound-batch-auto-allocate-fifo-r01.title':
+    '批号按可用量分摊生效',
+  'pages.dashboard.updateLog.entries.outbound-batch-auto-allocate-fifo-r01.description':
+    '批号选择弹窗点击「按可用量分摊」会按 FIFO 自动勾选足够批号并填入本次发料数量，不再仅在已勾选批号间重算导致无变化。',
+  'pages.dashboard.updateLog.entries.warehouse-batch-allocation-picker-unify-r01.title':
+    '出库批号选择统一为分摊选择器',
+  'pages.dashboard.updateLog.entries.warehouse-batch-allocation-picker-unify-r01.description':
+    '其它出库、借料、销售出库取单、外协发料、组装拆卸、线边备料确认、采购退货取单等批号选择，统一改为与确认出库相同的批号分摊选择器，可多批勾选并按批填写数量。',
+  'pages.dashboard.updateLog.entries.outbound-create-batch-allocation-picker-r01.title':
+    '出库新建批次号改为分摊选择',
+  'pages.dashboard.updateLog.entries.outbound-create-batch-allocation-picker-r01.description':
+    '销售出库、生产领料新建与编辑明细的批次号，与确认出库一致改为批号分摊选择器，可多批勾选并按批填写数量。',
+  'pages.dashboard.updateLog.entries.outbound-edit-reuse-create-modal-r01.title':
+    '出库单编辑与新建同一表单',
+  'pages.dashboard.updateLog.entries.outbound-edit-reuse-create-modal-r01.description':
+    '销售出库、生产领料编辑改为复用新建弹窗，字段与明细交互一致，避免原先精简编辑页与新建割裂；其它出库、借料仍用原编辑弹窗。',
+  'pages.dashboard.updateLog.entries.warehouse-inout-toolbar-confirm-withdraw-r01.title':
+    '出入库确认撤回统一进功能区',
+  'pages.dashboard.updateLog.entries.warehouse-inout-toolbar-confirm-withdraw-r01.description':
+    '出入库列表统一：确认出库/撤回出库、确认入库/撤回入库成对文案，由功能区集中操作；操作列只留详情、编辑及装箱绑定等专属入口。其它出入库同样对齐。',
+  'pages.dashboard.updateLog.entries.sales-delivery-row-withdraw-to-toolbar-r01.title':
+    '销售出库撤回改由功能区操作',
+  'pages.dashboard.updateLog.entries.sales-delivery-row-withdraw-to-toolbar-r01.description':
+    '销售出库专页操作列不再放确认出库、撤回、删除；与采购退货出库一样改由功能区集中操作，操作列只留详情、编辑和装箱绑定。',
+  'pages.dashboard.updateLog.entries.purchase-return-outbound-save-submit-audit-r01.title':
+    '采购退货出库补齐提交审核',
+  'pages.dashboard.updateLog.entries.purchase-return-outbound-save-submit-audit-r01.description':
+    '采购退货出库功能区按销售出库固定页标准补齐提交、审核与删除，详情抽屉可走审核流，确认退货仍须审核通过。',
+  'pages.dashboard.updateLog.entries.list-toolbar-delete-label-r01.title':
+    '列表删除按钮统一为删除',
+  'pages.dashboard.updateLog.entries.list-toolbar-delete-label-r01.description':
+    '列表功能区删除按钮统一显示「删除」，与行操作一致，不再使用「批量删除」。',
+  'pages.dashboard.updateLog.entries.demand-save-submit-audit-r01.title':
+    '需求计划保存提交审核拆分',
+  'pages.dashboard.updateLog.entries.demand-save-submit-audit-r01.description':
+    '需求计划保存仍是草稿，提交写成已提交，提交审核才进入待审核或免审已确认。下推需求计算不改名，须审核通过后才能下推。',
+  'pages.dashboard.updateLog.entries.sales-return-save-submit-audit-r01.title':
+    '销售退货保存提交审核拆分',
+  'pages.dashboard.updateLog.entries.sales-return-save-submit-audit-r01.description':
+    '销售退货保存仍是待退货草稿，提交写成已提交，提交审核才进入待审核或免审已通过。确认退货、撤回已退货不改名，须审核通过后才能确认退货。',
+  'pages.dashboard.updateLog.entries.sales-delivery-save-submit-audit-r01.title':
+    '销售出库保存提交审核拆分',
+  'pages.dashboard.updateLog.entries.sales-delivery-save-submit-audit-r01.description':
+    '销售出库保存仍是待出库草稿，提交写成已提交，提交审核才进入待审核或免审已通过。确认出库不改名，须审核通过后才能确认出库。出库 Hub 其它类型不加这套按钮。',
+  'pages.dashboard.updateLog.entries.shipment-notice-save-submit-audit-r01.title':
+    '发货通知保存提交审核拆分',
+  'pages.dashboard.updateLog.entries.shipment-notice-save-submit-audit-r01.description':
+    '发货通知保存仍是待发货草稿，提交写成已提交，提交审核才进入待审核或免审已审核。通知仓库、撤回通知不改名，须审核通过后才能通知仓库。',
+  'pages.dashboard.updateLog.entries.fund-transfer-save-submit-audit-r01.title':
+    '资金调拨保存提交审核拆分',
+  'pages.dashboard.updateLog.entries.fund-transfer-save-submit-audit-r01.description':
+    '资金调拨保存仍是草稿，提交写成已提交，提交审核才进入待审核或免审已审核。确认调拨、撤回确认、作废不变，须审核通过后才能确认调拨。',
+  'pages.dashboard.updateLog.entries.partner-statement-save-submit-audit-r01.title':
+    '往来对账保存提交审核拆分',
+  'pages.dashboard.updateLog.entries.partner-statement-save-submit-audit-r01.description':
+    '往来对账单保存仍是草稿，提交写成已提交，提交审核才进入待审核或免审已审核。审核通过仍内部确认为 Confirmed，审核立账、发送、异议不变。',
+  'pages.dashboard.updateLog.entries.payment-refund-save-submit-audit-r01.title':
+    '付款退款保存提交审核拆分',
+  'pages.dashboard.updateLog.entries.payment-refund-save-submit-audit-r01.description':
+    '付款退款保存仍是草稿，提交写成已提交，提交审核才进入待审核或免审已审核。确认退款、撤回确认、作废不变，须审核通过后才能确认退款。',
+  'pages.dashboard.updateLog.entries.payment-save-submit-audit-r01.title':
+    '付款单保存提交审核拆分',
+  'pages.dashboard.updateLog.entries.payment-save-submit-audit-r01.description':
+    '付款单保存仍是草稿，提交写成已提交，提交审核才进入待审核或免审已审核。确认付款、撤回确认、核销、退款、作废不变，须审核通过后才能确认付款。',
+  'pages.dashboard.updateLog.entries.notes-payable-save-submit-audit-r01.title':
+    '应付票据保存提交审核拆分',
+  'pages.dashboard.updateLog.entries.notes-payable-save-submit-audit-r01.description':
+    '应付票据保存仍是草稿，提交写成已提交，提交审核才进入待审核或免审已审核。兑付、拒付须审核通过。',
+  'pages.dashboard.updateLog.entries.uni-audit-withdraw-submitted-no-instance-r01.title':
+    '已提交未送审可正常撤销提交',
+  'pages.dashboard.updateLog.entries.uni-audit-withdraw-submitted-no-instance-r01.description':
+    '单据已提交但尚未提交审核时，撤销提交不再误报没有审批流程，可直接回到草稿。',
+  'pages.dashboard.updateLog.entries.other-expense-save-submit-audit-r01.title':
+    '其他费用支出保存提交审核拆分',
+  'pages.dashboard.updateLog.entries.other-expense-save-submit-audit-r01.description':
+    '其他费用支出保存仍是草稿，提交写成已提交，提交审核才进入待审核或免审已审核。确认过账、反确认、作废不变。',
+  'pages.dashboard.updateLog.entries.other-expense-application-save-submit-audit-r01.title':
+    '其他费用支出申请保存提交审核拆分',
+  'pages.dashboard.updateLog.entries.other-expense-application-save-submit-audit-r01.description':
+    '其他费用支出申请保存仍是草稿，提交写成已提交，提交审核才进入待审核或免审已审核。下推其他费用支出不变。',
+  'pages.dashboard.updateLog.entries.purchase-invoice-save-submit-audit-r01.title':
+    '采购发票保存提交审核拆分',
+  'pages.dashboard.updateLog.entries.purchase-invoice-save-submit-audit-r01.description':
+    '采购发票登记仍是草稿，提交写成已提交，提交审核才进入待审核或免审已审核。补发票号、作废、红冲不变。',
+  'pages.dashboard.updateLog.entries.equipment-repair-assign-r01.title':
+    '设备维修支持指派主维修人',
+  'pages.dashboard.updateLog.entries.equipment-repair-assign-r01.description':
+    '报修维修可指派维修并必选主维修人；手机维修台账增加「指派给我」；同一故障已有进行中维修单时须转派勿重复指派。',
+  'pages.dashboard.updateLog.entries.mobile-maintenance-executed-items-r01.title':
+    '手机端保养执行可勾选保养项',
+  'pages.dashboard.updateLog.entries.mobile-maintenance-executed-items-r01.description':
+    '从保养计划或设备进入手机端保养执行时，按所选保养方案加载保养项清单，可勾选完成并可选拍项照片后提交，与电脑端执行一致。',
+  'pages.dashboard.updateLog.entries.equipment-maintenance-cycle-type-first-r01.title':
+    '保养方案先选周期类型并区分设置',
+  'pages.dashboard.updateLog.entries.equipment-maintenance-cycle-type-first-r01.description':
+    '新建编辑保养方案时周期类型排在维护类型之前；按时间仍选日常/月度等日历档，按运行时长与按使用次数分别用小时阈值、次数阈值，不再套用日历维护类型。',
+  'pages.dashboard.updateLog.entries.equipment-maintenance-item-method-remark-r01.title':
+    '保养项支持快速新建并增加备注',
+  'pages.dashboard.updateLog.entries.equipment-maintenance-item-method-remark-r01.description':
+    '保养方案明细可快速新建保养项；保养项「要求」改为「方法」，新增文本备注，方案行与详情同步展示备注。',
+  'pages.dashboard.updateLog.entries.equipment-maintenance-type-period-r01.title':
+    '设备保养方案维护类型改为周期档',
+  'pages.dashboard.updateLog.entries.equipment-maintenance-type-period-r01.description':
+    '保养方案维护类型改为日常保养、月度、季度、半年度、年度；原小修/中修/大修已回填为月度/季度/年度。保养计划快照同步更新。',
+  'pages.dashboard.updateLog.entries.measuring-instrument-spot-check-bind-r01.title':
+    '计量器具支持绑定点检方案',
+  'pages.dashboard.updateLog.entries.measuring-instrument-spot-check-bind-r01.description':
+    '计量器具详情可绑定点检方案并跳转新建点检单；与设备台账共用同一编号，无需在设备管理重复建档。点检下拉中计量器具会标注「计量器具」。',
+  'pages.dashboard.updateLog.entries.mobile-doc-line-detail-fields-r01.title':
+    '手机端单据明细展示更完整',
+  'pages.dashboard.updateLog.entries.mobile-doc-line-detail-fields-r01.description':
+    '审批与采购申请、费用申请等详情的明细行改为分字段展示编码、规格、数量、交期、单价或金额、备注等必要信息，不再只显示名称与一行摘要。',
+  'pages.dashboard.updateLog.entries.payable-save-submit-audit-r01.title':
+    '应付单保存提交审核拆分',
+  'pages.dashboard.updateLog.entries.payable-save-submit-audit-r01.description':
+    '应付单列表按采购订单拆开保存、提交、提交审核；付款状态与合并付款、合并开票不变。采购退货冲减应付不走本套提交。',
+  'pages.dashboard.updateLog.entries.notes-receivable-save-submit-audit-r01.title':
+    '应收票据保存提交审核拆分',
+  'pages.dashboard.updateLog.entries.notes-receivable-save-submit-audit-r01.description':
+    '应收票据列表按采购订单拆开保存、提交、提交审核；背书、贴现、托收须审核通过后执行。应付票据未改。',
+  'pages.dashboard.updateLog.entries.other-income-save-submit-audit-r01.title':
+    '其他费用收入保存、提交与审核分开',
+  'pages.dashboard.updateLog.entries.other-income-save-submit-audit-r01.description':
+    '其他费用收入保存只落草稿，提交写成已提交，提交审核才进入待审核或免审已审核。确认过账仍须审核通过后才收款，反确认、作废不变。',
+  'pages.dashboard.updateLog.entries.sales-invoice-save-submit-audit-r01.title':
+    '销售发票保存、提交与审核分开',
+  'pages.dashboard.updateLog.entries.sales-invoice-save-submit-audit-r01.description':
+    '销售发票开具仍是草稿，提交写成已提交，提交审核才进入待审核或免审已审核。补发票号、作废、红冲不变。',
+  'pages.dashboard.updateLog.entries.receipt-refund-save-submit-audit-r01.title':
+    '收款退款保存、提交与审核分开',
+  'pages.dashboard.updateLog.entries.receipt-refund-save-submit-audit-r01.description':
+    '收款退款创建仍是草稿，提交写成已提交，提交审核才进入待审核或免审已审核。确认退款仍须审核通过后才过账，撤回确认、作废不变。付款退款未改。',
+  'pages.dashboard.updateLog.entries.receipt-save-submit-audit-r01.title':
+    '收款单保存、提交与审核分开',
+  'pages.dashboard.updateLog.entries.receipt-save-submit-audit-r01.description':
+    '收款单保存只落草稿，提交写成已提交，提交审核才进入待审核或免审已审核。确认收款仍须审核通过后才过账，撤回确认、核销、退款不变。',
+  'pages.dashboard.updateLog.entries.receivable-save-submit-audit-r01.title':
+    '应收账款保存、提交与审核分开',
+  'pages.dashboard.updateLog.entries.receivable-save-submit-audit-r01.description':
+    '应收账款保存只落草稿，提交写成已提交，提交审核才进入待审核或免审已审核。收款状态仍按未收款、部分收款、已结清。',
+  'pages.dashboard.updateLog.entries.empty-value-placeholder-dash-r01.title':
+    '空值占位统一为长横线',
+  'pages.dashboard.updateLog.entries.empty-value-placeholder-dash-r01.description':
+    '数量、金额、日期、单位、明细输入框和详情空值都使用同一种长横线。',
+  'pages.dashboard.updateLog.entries.material-select-chosen-name-code-r01.title':
+    '选中物料显示品名和编码',
+  'pages.dashboard.updateLog.entries.material-select-chosen-name-code-r01.description':
+    '物料下拉展开时显示编码和品名前缀。选定后输入框显示品名 - 编码。',
+  'pages.dashboard.updateLog.entries.document-line-attachment-nowrap-r01.title':
+    '行附件上传与物料附件同一行',
+  'pages.dashboard.updateLog.entries.document-line-attachment-nowrap-r01.description':
+    '明细行附件列略加宽，上传和物料附件保持同一行，不再折成两行。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-stock-col-width-r01.title':
+    '采购申请总库存列少折行',
+  'pages.dashboard.updateLog.entries.purchase-requisition-stock-col-width-r01.description':
+    '采购申请明细的总库存列略加宽，各仓无在库结存尽量保持一行。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-empty-dash-r01.title':
+    '采购申请明细空值横线统一',
+  'pages.dashboard.updateLog.entries.purchase-requisition-empty-dash-r01.description':
+    '采购申请明细未填时，总库存与规格、型号使用同一种长横线占位。',
+  'pages.dashboard.updateLog.entries.document-line-attachment-upload-on-row-r01.title':
+    '明细行上保留上传附件',
+  'pages.dashboard.updateLog.entries.document-line-attachment-upload-on-row-r01.description':
+    '请购、采购订单、采购入库、报价、销售订单、销售出库的明细行附件列保留上传按钮，旁边仍可打开物料附件。',
+  'pages.dashboard.updateLog.entries.list-toolbar-switch-align-r01.title':
+    '列表工具栏开关样式统一',
+  'pages.dashboard.updateLog.entries.list-toolbar-switch-align-r01.description':
+    '采购订单、销售订单、工单的高亮逾期，以及入库出库的显示金额，统一为开关在左、文案在右，尺寸和间距一致。',
+  'pages.dashboard.updateLog.entries.material-select-code-name-label-r01.title':
+    '物料下拉显示编码和品名',
+  'pages.dashboard.updateLog.entries.material-select-code-name-label-r01.description':
+    '选物料时，下拉选项和选中结果按「编码：编号 - 品名：名称」完整显示。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-line-control-size-r01.title':
+    '采购申请明细控件统一为标准高度',
+  'pages.dashboard.updateLog.entries.purchase-requisition-line-control-size-r01.description':
+    '新建和编辑采购申请的明细行，物料、规格、型号、单价、供应商、到货日和备注与数量列使用同一标准控件高度，不再混用小尺寸。',
+  'pages.dashboard.updateLog.entries.arrival-warning-no-list-audit-r01.title':
+    '到货预警列表去掉提交和审核',
+  'pages.dashboard.updateLog.entries.arrival-warning-no-list-audit-r01.description':
+    '到货预警是预警列表，功能区只保留未关闭、逾期、临期汇总。延期仍从行上的填报延期进入。',
+  'pages.dashboard.updateLog.entries.demand-party-delete-label-r01.title':
+    '询价需方删除按钮改为删除',
+  'pages.dashboard.updateLog.entries.demand-party-delete-label-r01.description':
+    '询价需方列表功能区的删除按钮文案由批量删除改为删除。',
+  'pages.dashboard.updateLog.entries.arrival-delay-save-submit-audit-r01.title':
+    '到货延期在填报弹窗里保存或送审',
+  'pages.dashboard.updateLog.entries.arrival-delay-save-submit-audit-r01.description':
+    '填报延期弹窗保存仍是草稿，弹窗提交才送审。审核通过后仍生成采购变更单。到货预警列表不放提交和审核。',
+  'pages.dashboard.updateLog.entries.supplier-receipt-accounts-payment-pick-r01.title':
+    '供应商收款账户可多条，付款单可带出',
+  'pages.dashboard.updateLog.entries.supplier-receipt-accounts-payment-pick-r01.description':
+    '供应商基本信息可维护多条收款账户并指定一条默认。付款单选择供应商后，对方账户可从这些账户中选择并带出户名、开户行和账号。已保存的对方账户不会被覆盖。',
+  'pages.dashboard.updateLog.entries.approval-condition-default-branch-mobile-r01.title':
+    '手机审批同步预选默认分支',
+  'pages.dashboard.updateLog.entries.approval-condition-default-branch-mobile-r01.description':
+    '手机审批详情在条件分支配置了默认项时自动选中该分支，选项标为默认，仍可改选后再同意。',
+  'pages.dashboard.updateLog.entries.approval-condition-default-branch-r01.title':
+    '审批条件分支可设默认项',
+  'pages.dashboard.updateLog.entries.approval-condition-default-branch-r01.description':
+    '条件节点的上一节点人员或流程发起人分支可开启一条默认分支。流程走到该节点时自动选中默认项，仍可改选。未开启时不会默认走第一条。',
+  'pages.dashboard.updateLog.entries.payment-application-detail-line-width-r01.title':
+    '付款申请详情明细列宽拉开',
+  'pages.dashboard.updateLog.entries.payment-application-detail-line-width-r01.description':
+    '付款申请详情的来源单号、品名、规格、数量和金额按内容给足列宽，来源单号完整显示。列总宽超出抽屉时明细区横向滚动。',
+  'pages.dashboard.updateLog.entries.server-unavailable-copy-r01.title':
+    '服务不可用提示改为说明这次请求未完成',
+  'pages.dashboard.updateLog.entries.server-unavailable-copy-r01.description':
+    '接口返回暂时不可用时，提示改为「这次请求没有完成」，不再写成服务没有响应，也不再声称页面上已填写的内容还在。',
+  'pages.dashboard.updateLog.entries.document-line-dual-quantity-two-columns-r01.title':
+    '单据明细主数量与副数量分两列',
+  'pages.dashboard.updateLog.entries.document-line-dual-quantity-two-columns-r01.description':
+    '采购、销售、仓储等单据明细的主数量和副数量改为左右两列。没有副单位的物料也显示副数量列，该列不可录入。',
+  'pages.dashboard.updateLog.entries.receipt-notice-save-submit-audit-r01.title':
+    '收货通知单保存、提交与审核分开',
+  'pages.dashboard.updateLog.entries.receipt-notice-save-submit-audit-r01.description':
+    '收货通知单保存仍是待收货，提交写成已提交，提交审核才进入待审核或免审通过。通知仓库仍须审核通过。列表功能区按新建、下推、提交、审核、删除排列，新建下拉可复制选中单据。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-save-submit-audit-r01.title':
+    '采购入库单保存、提交与审核分开',
+  'pages.dashboard.updateLog.entries.purchase-receipt-save-submit-audit-r01.description':
+    '采购入库单保存仍是待入库，提交写成已提交，提交审核才进入待审核或免审通过。确认入库仍须审核通过。列表功能区按新建、提交、审核、删除排列，新建下拉可复制选中单据。',
+  'pages.dashboard.updateLog.entries.dropdown-pinyin-initial-search-r01.title':
+    '下拉搜索支持拼音首字母',
+  'pages.dashboard.updateLog.entries.dropdown-pinyin-initial-search-r01.description':
+    '物料、客户、供应商、仓库、部门、人员等远程下拉可按汉语拼音首字母搜索。例如输入 xb 可找到名称首字母为 xb 的物料，规格和型号同样参与匹配。编码和中文原文搜索保持可用。',
+  'pages.dashboard.updateLog.entries.work-order-save-submit-audit-r01.title':
+    '工单保存、提交与审核分开',
+  'pages.dashboard.updateLog.entries.work-order-save-submit-audit-r01.description':
+    '工单保存仍是草稿，提交写成已提交，提交审核才进入待审核或免审通过。下达仍须审核通过。列表功能区按新建、下推、提交、审核、删除排列，新建下拉可复制选中单据。',
+  'pages.dashboard.updateLog.entries.purchase-return-save-submit-audit-r01.title':
+    '采购退货单保存、提交与审核分开',
+  'pages.dashboard.updateLog.entries.purchase-return-save-submit-audit-r01.description':
+    '采购退货单保存仍是待退货，提交写成已提交，提交审核才进入待审核或免审通过。确认退货仍须审核通过。列表功能区按新建、提交、审核、删除排列，新建下拉可复制选中单据。',
+  'pages.dashboard.updateLog.entries.purchase-order-change-save-submit-audit-r01.title':
+    '采购变更单保存、提交与审核分开',
+  'pages.dashboard.updateLog.entries.purchase-order-change-save-submit-audit-r01.description':
+    '采购变更单保存只落草稿，提交写成已提交，提交审核才进入待审核或免审通过。生效仍按原规则。列表功能区按新建、提交、审核、删除排列，新建下拉可复制选中单据。',
+  'pages.dashboard.updateLog.entries.payment-application-save-submit-audit-r01.title':
+    '付款申请保存、提交与审核分开',
+  'pages.dashboard.updateLog.entries.payment-application-save-submit-audit-r01.description':
+    '付款申请保存只落草稿，提交写成已提交，提交审核才进入待审核或免审通过。下推付款仍须已批准且有余额。列表功能区按新建、下推、提交、审核、删除排列，新建下拉可复制选中单据。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-delete-label-r01.title':
+    '采购申请功能区删除按钮改称删除',
+  'pages.dashboard.updateLog.entries.purchase-requisition-delete-label-r01.description':
+    '采购申请列表功能区的删除按钮由批量删除改为删除。',
+  'pages.dashboard.updateLog.entries.purchase-inquiry-save-submit-audit-r01.title':
+    '采购询价保存、提交与审核分开',
+  'pages.dashboard.updateLog.entries.purchase-inquiry-save-submit-audit-r01.description':
+    '采购询价保存只落草稿，提交写成已提交，提交审核才进入待审核或免审通过。发布、截止和比价仍按原规则。列表功能区按新建、下推、提交、审核、删除排列，新建下拉可复制选中单据。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-save-submit-audit-r01.title':
+    '采购申请保存、提交与审核分开',
+  'pages.dashboard.updateLog.entries.purchase-requisition-save-submit-audit-r01.description':
+    '采购申请保存只落草稿，提交写成已提交，提交审核才进入待审核或免审通过。列表功能区按新建、下推、提交、审核、删除排列，新建下拉可复制选中单据。',
+  'pages.dashboard.updateLog.entries.sales-contract-save-submit-audit-r01.title':
+    '销售合同保存、提交与审核分开',
+  'pages.dashboard.updateLog.entries.sales-contract-save-submit-audit-r01.description':
+    '销售合同保存只落草稿，提交写成已提交，提交审核才进入待审核或免审生效。列表功能区按新建、下推、提交、审核、删除排列，新建下拉可复制选中单据。',
+  'pages.dashboard.updateLog.entries.purchase-order-copy-selected-create-r01.title':
+    '采购订单可复制选中单据新建',
+  'pages.dashboard.updateLog.entries.purchase-order-copy-selected-create-r01.description':
+    '新建下拉底部固定提供复制选中单据新建。选中一张采购订单后，按该单内容打开新草稿，单号重新生成，不带原单的执行进度和来源关联。',
+  'pages.dashboard.updateLog.entries.unitable-false-horizontal-scroll-r01.title':
+    '列表列宽够用时不再出现横向滚动条',
+  'pages.dashboard.updateLog.entries.unitable-false-horizontal-scroll-r01.description':
+    '纵向滚动条按表格实际占位计算。列宽已经放得下时，不再因少算几像素而多出一条横向滚动条。',
+  'pages.dashboard.updateLog.entries.purchase-order-push-beside-create-r01.title':
+    '采购订单下推紧挨新建',
+  'pages.dashboard.updateLog.entries.purchase-order-push-beside-create-r01.description':
+    '采购订单列表功能区把下推放到新建右侧。提交、审核、删除仍跟在后面。',
+  'pages.dashboard.updateLog.entries.purchase-order-new-shortcut-hover-r01.title':
+    '新建按钮的 Alt+N 改为悬停显示',
+  'pages.dashboard.updateLog.entries.purchase-order-new-shortcut-hover-r01.description':
+    '带下拉的新建按钮不再把 Alt+N 写在按钮文字上，鼠标悬停时提示「按 Alt+N 即可新建」。',
+  'pages.dashboard.updateLog.entries.purchase-order-toolbar-audit-r01.title':
+    '采购订单提交审核删除下推改到功能区',
+  'pages.dashboard.updateLog.entries.purchase-order-toolbar-audit-r01.description':
+    '采购订单列表功能区按选中行提供新建、提交、审核、删除、下推。提交含撤销提交和提交审核，审核含撤回审核和反审核。订单视图操作列只保留详情和编辑。',
+  'pages.dashboard.updateLog.entries.purchase-order-save-submit-split-r01.title':
+    '采购订单保存与提交分开',
+  'pages.dashboard.updateLog.entries.purchase-order-save-submit-split-r01.description':
+    '采购订单新建页：保存（Ctrl+S）只写草稿，提交写成已提交且不进入审核。列表与详情在已提交后显示提交审核；撤销提交回到草稿，撤回审核回到已提交，反审核回到草稿。其它单据仍按原流程。',
+  'pages.dashboard.updateLog.entries.warehouse-doc-line-bulk-edit-push-r01.title':
+    '仓储单据编辑与下推改为整批写明细',
+  'pages.dashboard.updateLog.entries.warehouse-doc-line-bulk-edit-push-r01.description':
+    '采购入库、其他入库、销售退货、采购退货、还料、半成品入库的编辑重建，以及工单领料、补料下推、快速领料、批量领料，改为一次读取物料、单位和仓库后再整批写入。确认时拆出的单行，以及成品、半成品快速入库，仍按一行写入。',
+  'pages.dashboard.updateLog.entries.warehouse-doc-line-bulk-save-r01.title':
+    '仓储单据保存改为整批写入明细',
+  'pages.dashboard.updateLog.entries.warehouse-doc-line-bulk-save-r01.description':
+    '采购入库、其他入出库、成品入库、半成品入库、生产领料、生产退料、销售退货、采购退货、借料还料的新建明细改为一次读取物料和单位，再整批写入。行数变多时不再逐行查库。',
+  'pages.dashboard.updateLog.entries.sales-delivery-create-bulk-lines-r01.title':
+    '新建销售出库保存不再逐行查库',
+  'pages.dashboard.updateLog.entries.sales-delivery-create-bulk-lines-r01.description':
+    '新建销售出库单改为一次读取物料和仓储参数，明细整批写入。行数变多时不再把保存拖过处理时限。',
+  'pages.dashboard.updateLog.entries.approval-node-overview-edge-order-r01.title':
+    '审核节点执行记录按设计连线排序',
+  'pages.dashboard.updateLog.entries.approval-node-overview-edge-order-r01.description':
+    '节点执行记录改为沿审批流连线自上而下排列。后插入到前面的节点（如财务副总在采购副总之前）不再因为数组插入顺序排到后面。',
+  'pages.dashboard.updateLog.entries.purchase-order-type-two-options-r01.title':
+    '采购订单类型只保留两项',
+  'pages.dashboard.updateLog.entries.purchase-order-type-two-options-r01.description':
+    '采购订单的订单类型只显示标准采购和资产采购。已停用的框架协议，以及重复的资产采购，不再出现在下拉里。',
+  'pages.dashboard.updateLog.entries.other-expense-application-submit-audit-r01.title':
+    '其他费用支出申请可以提交审核',
+  'pages.dashboard.updateLog.entries.other-expense-application-submit-audit-r01.description':
+    '提交其他费用支出申请时改为启动已配置的审批流程。流程全部通过后申请单变为已审核，驳回则变为已驳回。',
+  'pages.dashboard.updateLog.entries.payment-offset-unlinked-payable-r01.title':
+    '无订单应付可用预付抵扣',
+  'pages.dashboard.updateLog.entries.payment-offset-unlinked-payable-r01.description':
+    '新建付款单选择预付抵扣时，应付单没有采购订单也可以用同一供应商的预付款抵扣。应付和预付都能对应到采购订单时，仍须是同一张订单；没有订单的预付款不能抵扣已挂订单的应付。',
+  'pages.dashboard.updateLog.entries.reporting-notify-after-commit-r01.title':
+    '报工通知不再占着工单锁',
+  'pages.dashboard.updateLog.entries.reporting-notify-after-commit-r01.description':
+    '报工、审核在保存完成前就发站内信、同步群消息或回写交付节点，会把工单行锁和数据库连接一直占到通知结束。现改为单据提交并放开连接后再发送，提交失败则不发。',
+  'pages.dashboard.updateLog.entries.code-sequence-apart-from-business-tx-r01.title':
+    '建单发号不再堵住其它提交',
+  'pages.dashboard.updateLog.entries.code-sequence-apart-from-business-tx-r01.description':
+    '工单、领料、出入库、检验等在大事务里取号时，序号行锁会留到整单结束，同规则的其它提交一起等待并占满连接。现取号在单独连接上提交后立即放锁，建单失败时序号可能留下空号。',
+  'pages.dashboard.updateLog.entries.operation-timeout-nested-tx-r01.title':
+    '提交超时不再清掉页面',
+  'pages.dashboard.updateLog.entries.operation-timeout-nested-tx-r01.description':
+    '单据提交时若内部再次开启事务，不再卡在数据库连接锁上，避免一次提交把连接占满后整站超时。操作超时或服务没有响应时，提示再提交一次，页面保持打开，已填内容还在。',
+  'pages.dashboard.updateLog.entries.payment-pull-lines-validate-fix-r01.title':
+    '修复付款单保存误报混选来源',
+  'pages.dashboard.updateLog.entries.payment-pull-lines-validate-fix-r01.description':
+    '保存或核销付款单时，加载明细校验兼容字典形态明细并忽略空行，避免仅一条应付明细却提示不可混选不同来源类型。',
+  'pages.dashboard.updateLog.entries.payment-draft-writeoff-all-methods-r01.title':
+    '付款单草稿均可核销确认',
+  'pages.dashboard.updateLog.entries.payment-draft-writeoff-all-methods-r01.description':
+    '新建与编辑付款单时，银行转账等付款方式与预付抵扣相同，底栏提供核销按钮，可保存并确认过账。',
+  'pages.dashboard.updateLog.entries.payment-list-linked-payable-total-r01.title':
+    '付款单列表展示关联应付总额',
+  'pages.dashboard.updateLog.entries.payment-list-linked-payable-total-r01.description':
+    '从应付加载或预付抵扣的付款单，列表在付款总额旁增加关联应付总额，副行展示当前应付剩余，便于对照本单金额与源应付关系。',
+  'pages.dashboard.updateLog.entries.payment-prepayment-offset-header-editable-r01.title':
+    '预付抵扣表头金额与明细联动可改',
+  'pages.dashboard.updateLog.entries.payment-prepayment-offset-header-editable-r01.description':
+    '付款方式为预付抵扣时，表头本次抵扣金额随预付款明细抵扣合计更新，也可手工修改并分摊至预付款行；保存前仍须与待抵扣应付合计一致。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-acceptor-default-r01.title':
+    '采购入库验收人默认当前登录用户',
+  'pages.dashboard.updateLog.entries.purchase-receipt-acceptor-default-r01.description':
+    '新建或从采购订单带入编辑采购入库单时，验收人字段默认填入当前登录账户；未填写验收人的历史草稿打开编辑时同样默认当前用户。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-po-pull-sort-r01.title':
+    '采购入库取单默认按采购订单号降序',
+  'pages.dashboard.updateLog.entries.purchase-receipt-po-pull-sort-r01.description':
+    '从采购订单创建采购入库单时，取单列表默认按采购订单号从新到旧排列，同一订单内仍按物料编码排序。',
+  'pages.dashboard.updateLog.entries.payment-po-prepull-block-prepay-app-r01.title':
+    '已有预付申请的采购订单不再直拉预付款',
+  'pages.dashboard.updateLog.entries.payment-po-prepull-block-prepay-app-r01.description':
+    '采购订单已存在预付类付款申请（含草稿）时，付款单「从采购订单选择预付款」列表不可再选该订单，须从付款申请加载。',
+  'pages.dashboard.updateLog.entries.payment-unconfirm-prepayment-offset-r01.title':
+    '付款单撤回冲回预付抵扣核销',
+  'pages.dashboard.updateLog.entries.payment-unconfirm-prepayment-offset-r01.description':
+    '撤回预付抵扣付款单或预付款单确认时，会冲回对应应付核销并恢复预付款待核销余额；新产生的核销记录可追溯到抵扣单。',
+  'pages.dashboard.updateLog.entries.payable-list-payment-terms-r01.title':
+    '应付列表展示付款条件',
+  'pages.dashboard.updateLog.entries.payable-list-payment-terms-r01.description':
+    '采购入库等自动立账的应付单会带出采购订单或供应商的结算方式与账期天数；历史空值在列表与详情中按来源解析展示。',
+  'pages.dashboard.updateLog.entries.payment-prepayment-offset-total-display-r01.title':
+    '预付抵扣付款总额与列表一致',
+  'pages.dashboard.updateLog.entries.payment-prepayment-offset-total-display-r01.description':
+    '预付抵扣时表头改为「本次抵扣金额」并随应付明细自动汇总；确认后付款单总额与已核销金额对齐，避免与预付款单 3000 混淆。',
+  'pages.dashboard.updateLog.entries.payment-prepayment-offset-payable-po-r01.title':
+    '预付抵扣可识别采购入库应付',
+  'pages.dashboard.updateLog.entries.payment-prepayment-offset-payable-po-r01.description':
+    '由采购入库、订单里程碑等来源生成的应付单，保存预付抵扣付款单时可正确关联采购订单，不再误报未关联采购订单。',
+  'pages.dashboard.updateLog.entries.payment-prepayment-offset-dual-lines-r01.title':
+    '付款单预付抵扣双明细与核销按钮',
+  'pages.dashboard.updateLog.entries.payment-prepayment-offset-dual-lines-r01.description':
+    '付款方式为预付抵扣时，须分别选择待抵扣应付与预付款单并填写抵扣金额；弹窗底栏增加核销按钮，可保存并确认过账。',
+  'pages.dashboard.updateLog.entries.document-line-attachments-modal-upload-r01.title':
+    '行附件入口收进物料附件弹窗',
+  'pages.dashboard.updateLog.entries.document-line-attachments-modal-upload-r01.description':
+    '各单据明细「行附件」列仅保留物料附件入口；上传与已挂附件预览改在弹窗内完成，并可从物料复制图片与工程图纸到行。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-edit-line-incl-amount-r01.title':
+    '采购入库明细价税与金额合计',
+  'pages.dashboard.updateLog.entries.purchase-receipt-edit-line-incl-amount-r01.description':
+    '新建与编辑采购入库单时，明细价税列按含税单价展示为价税合计，并增加随数量联动的金额合计列，保存仍落库未税单价与未税行金额。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-po-pull-supplier-column-r01.title':
+    '采购入库取单供应商列前置',
+  'pages.dashboard.updateLog.entries.purchase-receipt-po-pull-supplier-column-r01.description':
+    '从采购订单创建采购入库单取单窗口中，供应商列紧跟采购订单号并加宽展示，便于核对往来单位。',
+  'pages.dashboard.updateLog.entries.payment-voucher-list-drop-bank-column-r01.title':
+    '付款单列表去掉银行账户列',
+  'pages.dashboard.updateLog.entries.payment-voucher-list-drop-bank-column-r01.description':
+    '付款单管理列表不再展示银行账户参考号列，仅保留一列结算类型徽章，避免与筛选字段重名造成误解。',
+  'pages.dashboard.updateLog.entries.payment-voucher-list-settlement-type-r01.title':
+    '付款单列表展示结算类型',
+  'pages.dashboard.updateLog.entries.payment-voucher-list-settlement-type-r01.description':
+    '付款单管理列表增加结算类型列，以徽章区分普通付款与预付款等类型，高级筛选仍可按结算类型过滤。',
+  'pages.dashboard.updateLog.entries.payment-voucher-prepayment-pull-filters-r01.title':
+    '预付款付款单取单范围更准确',
+  'pages.dashboard.updateLog.entries.payment-voucher-prepayment-pull-filters-r01.description':
+    '结算类型为预付款时，从付款申请加载明细仅展示预付款类申请；从采购订单选择预付款仅展示尚未关联预付付款单的订单，预览与保存校验与列表一致。',
+  'pages.dashboard.updateLog.entries.payment-voucher-header-only-line-amount-r01.title':
+    '付款单明细不再录入金额',
+  'pages.dashboard.updateLog.entries.payment-voucher-header-only-line-amount-r01.description':
+    '新建与编辑付款单时，本次付款金额仅在表头付款金额填写，明细表保留可付上限等参考列，保存前按表头分摊写入明细。',
+  'pages.dashboard.updateLog.entries.payment-voucher-prepayment-pull-application-r01.title':
+    '预付款付款单可取付款申请',
+  'pages.dashboard.updateLog.entries.payment-voucher-prepayment-pull-application-r01.description':
+    '新建付款单结算类型为预付款时，付款明细区提供从付款申请单取单，列表仅展示预付类申请并与表头供应商一致。',
+  'pages.dashboard.updateLog.entries.payment-voucher-header-total-amount-r01.title':
+    '付款单表头付款金额布局',
+  'pages.dashboard.updateLog.entries.payment-voucher-header-total-amount-r01.description':
+    '新建与编辑付款单时，付款金额与付款方式、结算类型同排表头展示，并与明细付款金额联动汇总与分摊。',
+  'pages.dashboard.updateLog.entries.payment-application-prepayment-order-amount-column-r01.title':
+    '预付款明细展示订单金额',
+  'pages.dashboard.updateLog.entries.payment-application-prepayment-order-amount-column-r01.description':
+    '预付款且来源为采购订单时，表头填写本次申请金额，明细列只读展示订单原金额；表底合计为各行本次申请之和。',
+  'pages.dashboard.updateLog.entries.payment-application-prepayment-per-po-r01.title':
+    '预付款申请按采购订单整单',
+  'pages.dashboard.updateLog.entries.payment-application-prepayment-per-po-r01.description':
+    '自采购订单取预付类付款申请时，明细改为每张订单一行、金额为整单可请款额，不再按物料行分摊，与合同预付口径一致。',
+  'pages.dashboard.updateLog.entries.payment-application-form-header-amount-r01.title':
+    '付款申请表头增加申请金额',
+  'pages.dashboard.updateLog.entries.payment-application-form-header-amount-r01.description':
+    '新建与编辑付款申请时，付款方式行增加申请金额输入，明细变更自动汇总；结算类型分段选择独占下一行，布局更清晰。',
+  'pages.dashboard.updateLog.entries.inventory-withdraw-aux-quantity-r01.title':
+    '撤回入库同步冲减库存副数量',
+  'pages.dashboard.updateLog.entries.inventory-withdraw-aux-quantity-r01.description':
+    '修复入库撤回、出库扣减只减主数量与基本量、未减 aux_quantity 导致即时库存主副数量不一致的问题。',
+  'pages.dashboard.updateLog.entries.operation-node-switch-means-allow-jump-r01.title':
+    '节点工序开关打开即允许跳转',
+  'pages.dashboard.updateLog.entries.operation-node-switch-means-allow-jump-r01.description':
+    '工艺路线/产品工艺/开单落库纠正：行上「节点工序」打开写入允许跳转，关闭为关闸；与报工按 allow_jump 找最近关闸道一致。',
+  'pages.dashboard.updateLog.entries.operation-jump-gate-by-allow-jump-r01.title':
+    '工序跳转按关闸道校验流转',
+  'pages.dashboard.updateLog.entries.operation-jump-gate-by-allow-jump-r01.description':
+    '报工/开工不再用工单开关一刀切放宽：按前序「是否允许跳转」找最近关闸道。前序全开跳转可直接报后续道；中间某道未开跳转则后道必须卡该道合格转入；委外收货与报工同一套关闸转入。',
+  'pages.dashboard.updateLog.entries.outsource-op-flow-incoming-gate-r01.title':
+    '工序委外对齐上道转入门禁',
+  'pages.dashboard.updateLog.entries.outsource-op-flow-incoming-gate-r01.description':
+    '可执行委外量与厂内报工同一套工艺流转：下达/开始/收货不可超过上道转入；收货回写工序完成量供下道转入；草稿仍可按计划预建以保留提前期。',
+  'pages.dashboard.updateLog.entries.outsource-qty-flow-gate-r01.title':
+    '修复委外数量流转门禁异常',
+  'pages.dashboard.updateLog.entries.outsource-qty-flow-gate-r01.description':
+    '满收后退货可重开再收；发料按净量（发减退）卡待发上限；收货仅合格入库并校验数量合计；退料退货加行锁；协作完工申请不再覆盖已收累计。',
+  'pages.dashboard.updateLog.entries.fqc-push-inbound-location-r01.title':
+    '成品检验下推入库可选库位',
+  'pages.dashboard.updateLog.entries.fqc-push-inbound-location-r01.description':
+    '成品检验确认下推入库时须选择仓库与库位（仓下已有库位时），与采购入库下推一致，避免提交后提示「请选择入库库位」。',
+  'pages.dashboard.updateLog.entries.business-unit-name-write-path-r01.title':
+    '质检入库等单据单位改存名称',
+  'pages.dashboard.updateLog.entries.business-unit-name-write-path-r01.description':
+    '质检、成品/半成品入库、采购入库、生产领料、其他出库、不良品处置、采购申请/下推、需求运算等写路径落单位目录名称，不再把物料基础单位编码抄进单据；并回填质检/入出库/销采等历史仍存编码的明细。列表直接展示名称，不做编码对照翻译。',
+  'pages.dashboard.updateLog.entries.wo-push-finished-goods-fqc-create-r01.title':
+    '工单下推成品入库未生成修复',
+  'pages.dashboard.updateLog.entries.wo-push-finished-goods-fqc-create-r01.description':
+    '启用成品检验时，工单下推/末道报工自动入库不再因尚无 FQC 合格数把可创建额度夹成 0；可先生成待入库单，确认入库仍须检验合格。工单工具栏下推成品入库状态与后端对齐为执行中或已完成。',
+  'pages.dashboard.updateLog.entries.sync-run-outcome-unify-r01.title':
+    '同步结果语义全入口统一',
+  'pages.dashboard.updateLog.entries.sync-run-outcome-unify-r01.description':
+    '仓库、库位、单位、分组、库存、工单、销采订单等入站同步与物料/客商一致：返回 fetched、过滤后行数与空结果原因，全量无写入时按源空/全过滤/映射空给出明确提示，增量无变更仍视为成功。',
+  'pages.dashboard.updateLog.entries.connector-market-planned-depth-r01.title':
+    '连接器市场标出规划中类型',
+  'pages.dashboard.updateLog.entries.connector-market-planned-depth-r01.description':
+    '未深对接的 ERP 等类型显示「规划中」，创建前确认说明；金蝶苍穹/星空等已对接类型可直接配置。同步有效行过滤收敛到金蝶 Adapter。',
+  'pages.dashboard.updateLog.entries.api-open-direction-hint-r01.title':
+    '开放平台与 ERP 对接入口说明',
+  'pages.dashboard.updateLog.entries.api-open-direction-hint-r01.description':
+    '开放平台鉴权说明改为外部调本平台；从金蝶等 ERP 拉数或外推请用应用连接器与接口管理，避免选错入口。',
+  'pages.dashboard.updateLog.entries.sync-stale-api-uuid-error-r01.title':
+    '同步绑定已删接口时提示更明确',
+  'pages.dashboard.updateLog.entries.sync-stale-api-uuid-error-r01.description':
+    '来源接口已硬删或 UUID 失效时，拉数统一报「请在来源设置中重新选择接口」，不再只显示笼统「接口不存在」。',
+  'pages.dashboard.updateLog.entries.sync-save-binding-unbind-r01.title':
+    '同步配置可单独保存或取消绑定',
+  'pages.dashboard.updateLog.entries.sync-save-binding-unbind-r01.description':
+    '同步弹窗增加「保存绑定」：可清空来源后落库解绑，再在接口管理硬删；删除拦截提示同步说明保存订单等单据绑定。',
+  'pages.dashboard.updateLog.entries.po-push-receipt-whole-wh-location-r01.title':
+    '采购订单下推入库整仓可提交',
+  'pages.dashboard.updateLog.entries.po-push-receipt-whole-wh-location-r01.description':
+    '仓库无库位时库位列显示「整仓（自动）」，下推采购入库不再误拦「请选择库位」，与入库确认校验及后端自动建整仓一致。',
+  'pages.dashboard.updateLog.entries.purchase-order-inbound-sync-tab-r01.title':
+    '恢复采购订单同步入站入口',
+  'pages.dashboard.updateLog.entries.purchase-order-inbound-sync-tab-r01.description':
+    '采购订单工具栏同步中心误关入站 Tab；已按角色「显示同步」权限重新打开，与销售订单一致。',
+  'pages.dashboard.updateLog.entries.finished-goods-receipt-edit-put-r01.title':
+    '修复成品入库单编辑 Method Not Allowed',
+  'pages.dashboard.updateLog.entries.finished-goods-receipt-edit-put-r01.description':
+    '补齐成品/半成品入库单 PUT 更新接口与编辑弹窗；草稿或待入库可改表头与明细，不再因缺少更新路由返回 405。',
+  'pages.dashboard.updateLog.entries.supplier-customer-sync-galaxy-active-filter-r01.title':
+    '修复星空供应商/客户同步成功但不写入',
+  'pages.dashboard.updateLog.entries.supplier-customer-sync-galaxy-active-filter-r01.description':
+    '供应商、客户同步绑定金蝶星空 ExecuteBillQuery 时，不再误用苍穹 status/enable 把有效行滤空；按 FDocumentStatus/FForbidStatus 判定启用态并写入 is_active。',
+  'pages.dashboard.updateLog.entries.material-sync-galaxy-active-filter-r01.title':
+    '修复星空物料同步「仅有效」拉成 0 行',
+  'pages.dashboard.updateLog.entries.material-sync-galaxy-active-filter-r01.description':
+    '绑定金蝶星空 ExecuteBillQuery 时，不再误用苍穹 status/enable 过滤；按 FDocumentStatus/FForbidStatus 判定有效，避免开启「仅有效」后源端有数却显示 fetched=0。',
+  'pages.dashboard.updateLog.entries.equipment-ops-master-code-rules-r01.title':
+    '补齐设备维保主数据编码规则',
+  'pages.dashboard.updateLog.entries.equipment-ops-master-code-rules-r01.description':
+    '计量器具、点检/保养项与方案、巡检路线及模具工装保养维修方案与项目已登记编码规则页并接入自动编号；缺种子规则已补种，新建时可正确预览与生成编码。',
+  'pages.dashboard.updateLog.entries.equipment-inspection-scheme-code-rule-r01.title':
+    '修复点检方案编码规则无法加载',
+  'pages.dashboard.updateLog.entries.equipment-inspection-scheme-code-rule-r01.description':
+    '点检方案已登记编码规则页与默认规则（DJFA+4位流水）；新建弹窗接入自动编号，系统编码规则配置可正确加载与预览。',
+  'pages.dashboard.updateLog.entries.sales-order-push-fulfillable-map-r01.title':
+    '修复销售订单下推与撤销审核报生产可下推变量未赋值',
+  'pages.dashboard.updateLog.entries.sales-order-push-fulfillable-map-r01.description':
+    '下推/撤销审核门禁中误在异步加载生产可下推映射之前读取该变量，导致 UnboundLocalError；已删除无效提前读取，能力判断仍按加载结果执行。',
+  'pages.dashboard.updateLog.entries.sales-order-create-gl-book-settings-r01.title':
+    '修复未启用轻财务时创建销售订单失败',
+  'pages.dashboard.updateLog.entries.sales-order-create-gl-book-settings-r01.description':
+    '创建订单解析本位币时不再误判轻财务 ORM 已就绪去查未注册的账套参数表；无总账连接时按默认汇率 1 继续建单。',
+  'pages.dashboard.updateLog.entries.process-route-step-over-report-create-wo-r01.title':
+    '修复工艺路线节点超报在新建工单时不生效',
+  'pages.dashboard.updateLog.entries.process-route-step-over-report-create-wo-r01.description':
+    '选工艺路线开单时，各工序节点单独配置的超报比例会写入对应工序行；工单头未设默认超报时由后端合并路线默认与节点配置，不再在提交时清空或用档案冒充行显式。若开单时填写了工单默认超报，仍以工单头为准统一各行。',
+  'pages.dashboard.updateLog.entries.work-order-edit-over-report-unreported-r01.title':
+    '修复未报工时变更工单超报比例不生效',
+  'pages.dashboard.updateLog.entries.work-order-edit-over-report-unreported-r01.description':
+    '工单更新接口此前只认 camelCase，表单提交的 over_report_mode 被静默丢弃；已同时接收 snake/camel。未报工工序行会同步为新的默认超报；报工可报上限按当前超报现场重算，并刷新工序展开缓存，避免仍显示旧可报数量。',
+  'pages.dashboard.updateLog.entries.work-order-create-default-over-report-r01.title':
+    '修复创建工单时设置的默认超报比例不生效',
+  'pages.dashboard.updateLog.entries.work-order-create-default-over-report-r01.description':
+    '开单表单「工单默认超报」写入工序行快照；不再把工序档案超报当成行显式配置盖掉头上比例；报工可报上限优先认后端计算并回落工单头。',
+  'pages.dashboard.updateLog.entries.operation-archive-over-report-create-wo-r01.title':
+    '修复工序档案超报在新建工单后不生效',
+  'pages.dashboard.updateLog.entries.operation-archive-over-report-create-wo-r01.description':
+    '从产品工艺/手工添加工序时继承工序档案超报，不再默认写成不超报；报工在行与工单头均为空时回落工序档案；已回填 GX0011 相关工单工序快照。',
+  'pages.dashboard.updateLog.entries.work-order-header-over-report-inherit-r01.title':
+    '修复工单头超报比例在报工时不生效',
+  'pages.dashboard.updateLog.entries.work-order-header-over-report-inherit-r01.description':
+    '工序行为默认「不超报」时回落工单头超报配置；前端回写默认 none 不再覆盖头上的比例/固定超报；已对问题工单回填工序快照。',
+  'pages.dashboard.updateLog.entries.batching-manual-draft-delete-r01.title':
+    '物料中心草稿线边备料单可删除，并校正手工建单确认逻辑',
+  'pages.dashboard.updateLog.entries.batching-manual-draft-delete-r01.description':
+    '草稿备料单支持删除；手工建单须指定目标线边仓，确认拣选不再误调工单缺料同步，无工单时隐藏刷新缺料。',
+  'pages.dashboard.updateLog.entries.batching-manual-create-list-r01.title':
+    '修复物料中心手工创建线边备料单后列表不显示',
+  'pages.dashboard.updateLog.entries.batching-manual-create-list-r01.description':
+    '手工建单无关联工单时，任务队列不再被「仅开放工单」条件滤掉；创建时写入目标线边仓，成功后立即刷新备料单列表。',
+  'pages.dashboard.updateLog.entries.equipment-repair-collab-reassign-r01.title':
+    '设备维修支持协作人与临时转派并记录起止时间',
+  'pages.dashboard.updateLog.entries.equipment-repair-collab-reassign-r01.description':
+    '同一设备未闭环报修不可重复开单；接取/到场记录维修开始时间；维修中可添加协作人或临时转派，参与人台账记录介入与结束时间，转派后原主责记为已转派；完修收口全部进行中参与人。PC 维修台账与手机维修详情均可操作。',
+  'pages.dashboard.updateLog.entries.rework-assign-and-exec-r01.title':
+    '返工单支持指派人员并可在工位与手机端执行',
+  'pages.dashboard.updateLog.entries.rework-assign-and-exec-r01.description':
+    '返工工序可指派多人/班组，报工须在指派范围内；PC 可指派与执行，工位可建单并报工，手机端可查看指派给我的返工并报工。不合格处置建返工同步校验可返工数量。',
+  'pages.dashboard.updateLog.entries.status-report-prev-transfer-gate-r01.title':
+    '按状态报工同样校验上道合格转入量',
+  'pages.dashboard.updateLog.entries.status-report-prev-transfer-gate-r01.description':
+    '不允许工序跳转时，按状态报完成与按数量报工一致，累计完成不得超过紧邻上道合格产出，避免仅凭上道状态完成而超量报工。',
+  'pages.dashboard.updateLog.entries.backflush-report-deduct-idempotent-r01.title':
+    '修复报工倒冲可能重复扣减与静默跳过',
+  'pages.dashboard.updateLog.entries.backflush-report-deduct-idempotent-r01.description':
+    '倒冲幂等按已完成状态跳过已扣物料，展开用量对齐工单 BOM 版本；无线边仓时写入失败记录待补偿，不再只打日志跳过。',
+  'pages.dashboard.updateLog.entries.wo-push-picking-backflush-reason-r01.title':
+    '工单下推领料区分倒冲与无 BOM',
+  'pages.dashboard.updateLog.entries.wo-push-picking-backflush-reason-r01.description':
+    'BOM 子件均为倒冲或不发料时，明确提示无需下推生产领料（报工扣减），不再笼统报「无可领料明细」。',
+  'pages.dashboard.updateLog.entries.bom-fabrication-manual-raw-linked-r01.title':
+    '修复工艺型物料已加下级仍提示配置加工原料',
+  'pages.dashboard.updateLog.entries.bom-fabrication-manual-raw-linked-r01.description':
+    'BOM 设计中自制工艺件已手动添加下级采购件后不再提示配置加工原料；草稿版本提示需「保存并生效」后生产领料才能识别；向导默认发料方式改为领料。',
+  'pages.dashboard.updateLog.entries.mrp-numeric-overflow-20-6-r01.title':
+    '修复需求计算执行时数量字段溢出报错',
+  'pages.dashboard.updateLog.entries.mrp-numeric-overflow-20-6-r01.description':
+    '将需求计算明细等遗留 NUMERIC(14,6) 数量列对齐为平台标准 DECIMAL(20,6)，落库前校验数量上限，避免可用库存较大时执行计算报 numeric field overflow。',
+  'pages.dashboard.updateLog.entries.demand-computation-push-wo-auto-r01.title':
+    '修复需求计算下推工单连弹窗口',
+  'pages.dashboard.updateLog.entries.demand-computation-push-wo-auto-r01.description':
+    '仅下推工单时改为与采购一致，确认后直接自动建单，不再跳转工单列表打开预览弹窗。',
+  'pages.dashboard.updateLog.entries.api-request-db-timeout-worker-hang-r01.title':
+    '修复 API 单 worker 卡死导致网关 504',
+  'pages.dashboard.updateLog.entries.api-request-db-timeout-worker-hang-r01.description':
+    '数据库命令/语句超时与网关对齐（默认 25s），增加 API 请求硬截止；平台设置热路径加短时缓存，避免一次挂起拖垮整站。',
+  'pages.dashboard.updateLog.entries.kingdee-warehouse-push-api-sample-data-dict-r01.title':
+    '修复仓储推送金蝶未读取接口库单据头样例',
+  'pages.dashboard.updateLog.entries.kingdee-warehouse-push-api-sample-data-dict-r01.description':
+    '采购入库等 Save 接口样例为 data 对象时，推送会从接口库补齐单据类型、业务类型、库存事务等编码；此前只认数组导致仍报缺少配置。请在接口库样例中填写本环境真实编码（勿留 REPLACE_*），并绑定 save_api_uuid。',
+  'pages.dashboard.updateLog.entries.mobile-approval-branch-decision-r01.title':
+    '手机审批支持选择是否总经理特批等分支',
+  'pages.dashboard.updateLog.entries.mobile-approval-branch-decision-r01.description':
+    '与 PC 审核弹窗一致：当前节点需选边时，详情底栏上方展示选项按钮，选定后再可同意并通过 instance_data_patch 写入。',
+  'pages.dashboard.updateLog.entries.user-list-oauth-bind-icons-r01.title':
+    '账户列表用户名旁显示企微钉钉飞书绑定图标',
+  'pages.dashboard.updateLog.entries.user-list-oauth-bind-icons-r01.description':
+    '已扫码绑定企业微信、钉钉或飞书的用户，在用户名右侧显示对应小图标，悬停可查看绑定说明。',
+  'pages.dashboard.updateLog.entries.approval-or-sign-notify-all-pending-r01.title':
+    '修复或签多人待办只推送给其中一人',
+  'pages.dashboard.updateLog.entries.approval-or-sign-notify-all-pending-r01.description':
+    '提交审批后按当前节点全部待办任务通知站内信与企微，不再只推 current_approver_id；或签指定多人时每位待办人均可收到。',
+  'pages.dashboard.updateLog.entries.sync-cosmic-incremental-source-filter-r01.title':
+    '修复苍穹增量同步仍全量翻页拖垮源站',
+  'pages.dashboard.updateLog.entries.sync-cosmic-incremental-source-filter-r01.description':
+    '手动更新/定时增量在苍穹 batchQuery 空 data 时改为写入顶层与 Query 的 modifytime 水位，源端只拉变更；单据前置的单位/分组不再强制全量（单位常走物料查询）。请选用「手动更新」或「定时增量」，首次仍全量并写入成功时间戳。',
+  'pages.dashboard.updateLog.entries.wecom-same-corp-discover-bind-r01.title': '企微同企业多应用可按绑定自动进组织',
+  'pages.dashboard.updateLog.entries.wecom-same-corp-discover-bind-r01.description':
+    '工作台打开未带组织参数时，若多个组织共用同一 CorpId，先静默授权再按企微账号绑定反查唯一组织；已登录会话不再被多组织误清。',
+  'pages.dashboard.updateLog.entries.wecom-workbench-path-entry-r01.title': '修复企微工作台打开手机端报多个组织',
+  'pages.dashboard.updateLog.entries.wecom-workbench-path-entry-r01.description':
+    '应用主页改为路径型 /mobile/wecom/CorpId/AgentId，避免企微丢掉 query 导致无法静默登录；部署说明同步推荐该地址。',
+  'pages.dashboard.updateLog.entries.sales-delivery-spec-date-filter-r01.title': '销售出库单增加规格型号列与日期筛选',
+  'pages.dashboard.updateLog.entries.sales-delivery-spec-date-filter-r01.description':
+    '列表在明细后展示规格型号（列设置可勾选），高级筛选支持按制单日期、更新时间筛选。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-edit-unidropdown-import-r01.title': '修复仓储入库页应用加载失败',
+  'pages.dashboard.updateLog.entries.purchase-receipt-edit-unidropdown-import-r01.description':
+    '采购入库编辑弹窗误用 UniDropdown 默认导入导致模块加载报错，已改为命名导入。',
+  'pages.dashboard.updateLog.entries.outsource-order-revoke-release-r03.title': '工序委外下达后仅可撤回不可改删',
+  'pages.dashboard.updateLog.entries.outsource-order-revoke-release-r03.description':
+    '已下达未执行时可撤回下达回草稿；非草稿禁止编辑删除，状态仅通过流程按钮变更。',
+  'pages.dashboard.updateLog.entries.outsource-order-progress-row-actions-r02.title': '工序委外后续操作直出操作列',
+  'pages.dashboard.updateLog.entries.outsource-order-progress-row-actions-r02.description':
+    '登记收货、下达、完成等后续动作拆成操作列独立链接并放宽直出槽位，执行中不必进详情或「更多」。',
+  'pages.dashboard.updateLog.entries.outsource-order-progress-actions-r01.title': '工序委外执行中可登记收货与完成',
+  'pages.dashboard.updateLog.entries.outsource-order-progress-actions-r01.description':
+    '详情与行操作增加下达、开始执行、去仓储入库、登记收货、完成与委外结算入口，与生命周期下一步一致。',
+  'pages.dashboard.updateLog.entries.outsource-order-list-no-row-drawer-r01.title': '工序委外列表勾选不再弹出详情',
+  'pages.dashboard.updateLog.entries.outsource-order-list-no-row-drawer-r01.description':
+    '取消行点击打开详情抽屉；勾选或点行选中仅用于批量操作，查看详情请用操作列「详情」。',
+  'pages.dashboard.updateLog.entries.outsource-order-lifecycle-next-r01.title': '修复工序委外完成后无后续指引',
+  'pages.dashboard.updateLog.entries.outsource-order-lifecycle-next-r01.description':
+    '工序委外生命周期不再误用工单报工逻辑；已下达与执行中会提示委外入库与登记收货，详情可跳转仓储入库或委外结算。',
+  'pages.dashboard.updateLog.entries.quality-auto-push-pr-after-iqc-r01.title': '来料检验合格后可配置自动下推采购入库',
+  'pages.dashboard.updateLog.entries.quality-auto-push-pr-after-iqc-r01.description':
+    '业务配置新增开关：采购订单来源 IQC 在审核通过（或关审下检验合格）且可下推时，自动生成待入库采购入库单；与手工下推共用同一门禁与数量规则。',
+  'pages.dashboard.updateLog.entries.inbound-pull-iqc-scope-r01.title': '修复入库从来料检验取单报错',
+  'pages.dashboard.updateLog.entries.inbound-pull-iqc-scope-r01.description':
+    '「从来料检验创建采购入库单」取单弹窗加载列表时未从查询参数读取 scope，导致 scope is not defined；已与其它取单入口对齐。',
+  'pages.dashboard.updateLog.entries.mobile-wecom-multi-app-tenant-r02.title': '恢复企微多应用静默登录并按应用进对应组织',
+  'pages.dashboard.updateLog.entries.mobile-wecom-multi-app-tenant-r02.description':
+    '自举时从验签入口 URL 读取 tenant_id 或 CorpId+AgentId，避免路由清 query 后无法 OAuth；切换应用时清除错误熔断与旧 JWT，禁止仅用 switchTenant 顶替企微登录。',
+  'pages.dashboard.updateLog.entries.mobile-wecom-multi-app-tenant-r01.title': '修复企微多个 MES 应用进同一租户',
+  'pages.dashboard.updateLog.entries.mobile-wecom-multi-app-tenant-r01.description':
+    '从工作台不同自建应用进入时，按 URL 或 CorpId+AgentId 解析组织；与 JWT 实际组织不一致时清除会话并重新企微登录，避免 URL tenant_id 被提前写入存储导致误判。',
+  'pages.dashboard.updateLog.entries.mobile-wecom-oauth-redirect-r01.title': '修复企微 H5 已绑定仍提示登录未完成',
+  'pages.dashboard.updateLog.entries.mobile-wecom-oauth-redirect-r01.description':
+    '手机端 OAuth 回跳固定为 /mobile/，与企微应用主页一致；授权中断时提示改为未收到凭证，登录页可重试企微登录。',
+  'pages.dashboard.updateLog.entries.uni-wh-location-name-only-r01.title': '库位下拉仅展示库位名称',
+  'pages.dashboard.updateLog.entries.uni-wh-location-name-only-r01.description':
+    'uni-wh 库位选择与各入库出库库位列表的选项文案改为只显示名称，不再拼接库位编码；提交仍带 location_code。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-batch-generate-r01.title': '新建采购入库支持按规则生成批号',
+  'pages.dashboard.updateLog.entries.purchase-receipt-batch-generate-r01.description':
+    '空白建单明细批号旁增加生成按钮，按物料默认批号规则取号并填入，仍可手工修改；与其他入库一致。',
+  'pages.dashboard.updateLog.entries.warehouse-batch-in-out-ux-r01.title': '入库录入批号出库选择批号',
+  'pages.dashboard.updateLog.entries.warehouse-batch-in-out-ux-r01.description':
+    '新建采购入库在物料启用批号管理时明细可手工录入批号；其他出库建单改为从仓库库存选择批号，不再使用入库式生成批号。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-line-wh-dropdown-r02.title':
+    '采购入库各入口明细行统一仓库库位控件',
+  'pages.dashboard.updateLog.entries.purchase-receipt-line-wh-dropdown-r02.description':
+    '入库 Hub 确认预览、采购订单取单开入库、订单下推入库预览等入口的明细仓库与库位改为 uni-wh-dropdown；下推入库支持行库位与批号并提交后端。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-line-wh-dropdown-r01.title':
+    '采购入库空白建单仓库库位批号进明细',
+  'pages.dashboard.updateLog.entries.purchase-receipt-line-wh-dropdown-r01.description':
+    '新建采购入库单时仓库、库位、批号改在明细行填写，复用 uni-wh-dropdown 与库位下拉；表头不再选整单仓库。',
+  'pages.dashboard.updateLog.entries.material-multi-unit-sync-r01.title': '物料管理支持同步多单位',
+  'pages.dashboard.updateLog.entries.material-multi-unit-sync-r01.description':
+    '物料列表新增「同步多单位」，可从苍穹多计量单位接口拉取换算并写入已存在物料的辅单位；场景单位映射后续开放。',
+  'pages.dashboard.updateLog.entries.batch-inventory-status-alert-fixed-r01.title':
+    '批次库存状态与预警列右固定并居中',
+  'pages.dashboard.updateLog.entries.batch-inventory-status-alert-fixed-r01.description':
+    '批次库存查询将「状态」「库存预警」固定在表格右侧，均按状态列用实心 StatusTag 居中展示，横滚时仍可对照查看。',
+  'pages.dashboard.updateLog.entries.batch-inventory-shelf-life-column-r01.title':
+    '批次库存增加有效期列并重命名有效期至',
+  'pages.dashboard.updateLog.entries.batch-inventory-shelf-life-column-r01.description':
+    '批次库存查询新增物料保质期天数列（有效期），原日期列改为有效期至；有效期至与生产日期同行垂直对齐，过期/临期标识不再把日期行挤偏。',
+  'pages.dashboard.updateLog.entries.batch-inventory-shelf-life-expiry-r01.title':
+    '批次库存有效期关联物料保质期',
+  'pages.dashboard.updateLog.entries.batch-inventory-shelf-life-expiry-r01.description':
+    '批次库存查询与批号台账展示时，若批号已有生产日期且物料启用保质期管理，有效期按「生产日期 + 保质期天数」展示并回填空值；保存物料保质期设置时会同步更新该物料历史批号。',
+  'pages.dashboard.updateLog.entries.kingdee-push-source-location-code-r01.title':
+    '金蝶回写库位号与本地编码分离',
+  'pages.dashboard.updateLog.entries.kingdee-push-source-location-code-r01.description':
+    '推送出入库等单据时，分录 location_number 优先用苍穹仓位号（source_location_code），本地 W1004_0101 等拆分编码仍可用于仓内业务；关系或库位同步后会回填该字段',
+  'pages.dashboard.updateLog.entries.warelocareference-multi-wh-location-r01.title':
+    '多仓共用库位编码按仓拆分',
+  'pages.dashboard.updateLog.entries.warelocareference-multi-wh-location-r01.description':
+    '如同一「无货架」挂多个仓库，关系同步会为每个仓库生成独立库位（编码 仓库_库位）并写入所属仓库',
+  'pages.dashboard.updateLog.entries.warelocareference-upsert-location-r01.title':
+    '库位关系同步改为按关系建立库位',
+  'pages.dashboard.updateLog.entries.warelocareference-upsert-location-r01.description':
+    '仓库仓位关系同步会以 location_number/location_name 新建或更新本地库位及所属仓库；一键同步顺序为先关系后 bd_location 补全',
+  'pages.dashboard.updateLog.entries.warelocareference-warehouse-number-batch-r01.title':
+    '库位关系同步支持按仓库编码分批查询',
+  'pages.dashboard.updateLog.entries.warelocareference-warehouse-number-batch-r01.description':
+    '苍穹仓库仓位关系 query 要求 data.warehouse_number；来源设置可加载本系统仓库编码预览，正式同步也会按本地仓库自动分批拉取',
+  'pages.dashboard.updateLog.entries.warehouse-orchestrated-sync-r01.title':
+    '仓库页一键同步仓库库位与所属关系',
+  'pages.dashboard.updateLog.entries.warehouse-orchestrated-sync-r01.description':
+    '仓库列表「同步仓库」将依次同步仓库、库位并写入库位所属仓库；库位关系可在「库位关系映射」中配置苍穹 query_warelocareference 接口',
+  'pages.dashboard.updateLog.entries.cosmic-warelocareference-query-preset-r01.title':
+    '接口库新增苍穹仓库仓位关系查询',
+  'pages.dashboard.updateLog.entries.cosmic-warelocareference-query-preset-r01.description':
+    '金蝶AI苍穹常用接口包增加「苍穹查询仓库仓位关系」（bd_warelocareference/query），可拉取仓库与仓位对应及默认仓位；重新加载常用接口后即可测试。',
+  'pages.dashboard.updateLog.entries.storage-location-direct-warehouse-r01.title':
+    '库位可挂库区也可直接归属仓库',
+  'pages.dashboard.updateLog.entries.storage-location-direct-warehouse-r01.description':
+    '库位新增可选所属仓库：可只选仓库直挂，或再选该仓库下库区；出入库下拉含直挂库位，金蝶未挂归属的独立仓位仍可用。',
+  'pages.dashboard.updateLog.entries.cosmic-location-omit-empty-data-r01.title':
+    '仓位同步不再误删空 data 导致苍穹报错',
+  'pages.dashboard.updateLog.entries.cosmic-location-omit-empty-data-r01.description':
+    '出站解析动态占位符时误删空对象，仓位/仓库 getList 的 data:{} 被剥掉后苍穹报「请求参数没有 data 数据」；现与前端一致保留空对象。',
+  'pages.dashboard.updateLog.entries.master-data-drawing-menu-fileimage-r01.title':
+    '工程图纸菜单图标不再报未登记',
+  'pages.dashboard.updateLog.entries.master-data-drawing-menu-fileimage-r01.description':
+    '主数据「工程图纸」manifest 使用 fileImage，已在 ManufacturingIcons 登记对应 Lucide 图标；侧栏与快捷入口不再警告未登记或空显。',
+  'pages.dashboard.updateLog.entries.kingdee-warehouse-push-submit-flag-r01.title':
+    '仓储外推可配置仅保存、不自动提交审核',
+  'pages.dashboard.updateLog.entries.kingdee-warehouse-push-submit-flag-r01.description':
+    '其他出库、销售出库、成品入库、生产领料外推改为读取业务配置 submit_after_save / audit_after_save，联调可先推送到暂存再处理审核。',
+  'pages.dashboard.updateLog.entries.kingdee-otherout-picker-operatornumber-r01.title':
+    '其他出库外推领用人按苍穹业务员写键对齐',
+  'pages.dashboard.updateLog.entries.kingdee-otherout-picker-operatornumber-r01.description':
+    '领用部门写入 bizdept_number；领用人同步写入 pickeroperator_operatornumber（与采购入库业务员写键一致），避免仅写 *_number 被开放平台忽略。',
+  'pages.dashboard.updateLog.entries.kingdee-otherout-submit-audit-r01.title':
+    '其他出库外推可自动提交审核到已审核',
+  'pages.dashboard.updateLog.entries.kingdee-otherout-submit-audit-r01.description':
+    '修复苍穹 batchAdd 请求体 data 数组被误清空导致保存失败；其他出库保存成功后按配置自动 batchSubmit/batchAudit。领用部门须写入金蝶行政组织真实编码（与 bizdept 同源），否则单据会停在暂存。',
+  'pages.dashboard.updateLog.entries.cosmic-location-getlist-data-r01.title':
+    '修复库位同步拉取预览报缺少 data',
+  'pages.dashboard.updateLog.entries.cosmic-location-getlist-data-r01.description':
+    '苍穹仓位 getList 请求体须含 data；发送前不再误删空对象，出站对 bd_location/getList 自动补齐，避免生产环境「请求参数没有 data 数据」。',
+  'pages.dashboard.updateLog.entries.kingdee-warehouse-push-mfg-r01.title':
+    '仓储出入库外推金蝶能力扩展',
+  'pages.dashboard.updateLog.entries.kingdee-warehouse-push-mfg-r01.description':
+    '采购入库支持按固定资产物料切换资产 variant；其他出库支持辅料与资产 variant；成品入库与生产领料支持 SyncPushHub 手工推送及确认后无感外推。',
+  'pages.dashboard.updateLog.entries.other-expense-pull-i18n-r01.title':
+    '补齐其他费用支出取申请单文案',
+  'pages.dashboard.updateLog.entries.other-expense-pull-i18n-r01.description':
+    '取单弹窗「剩余金额」列与搜索框不再显示未翻译 key 或采购入库占位文案。',
+  'pages.dashboard.updateLog.entries.other-expense-pull-toolbar-fix-r01.title':
+    '修复其他费用支出列表白屏',
+  'pages.dashboard.updateLog.entries.other-expense-pull-toolbar-fix-r01.description':
+    '取单工具栏误用组件导致页面无法打开，已改为标准「从单据加载」按钮。',
+  'pages.dashboard.updateLog.entries.other-expense-application-r01.title':
+    '其他费用支出申请与下推取单',
+  'pages.dashboard.updateLog.entries.other-expense-application-r01.description':
+    '付款菜单新增其他费用支出申请，审核后可下推或在其他费用支出中取单，按金额占用支持分次生成支出草稿。',
+  'pages.dashboard.updateLog.entries.payment-voucher-batch-print-r01.title':
+    '付款单支持批量打印',
+  'pages.dashboard.updateLog.entries.payment-voucher-batch-print-r01.description':
+    '付款单列表勾选多条后可点打印；预览中按单据分别成页展示，保存 PDF 时也按单分别下载。',
+  'pages.dashboard.updateLog.entries.supplier-po-header-defaults-r01.title':
+    '供应商资料维护采购订单表头默认值',
+  'pages.dashboard.updateLog.entries.supplier-po-header-defaults-r01.description':
+    '供应商可维护立账策略、结算/付款方式、付款账期、默认币种与汇率；新建采购订单选供应商时自动带出（客户主数据同步支持默认币种汇率）。',
+  'pages.dashboard.updateLog.entries.warehouse-io-location-required-r01.title':
+    '出入库单据仓库与库位必填',
+  'pages.dashboard.updateLog.entries.warehouse-io-location-required-r01.description':
+    '所有出入库单据须选择仓库与库位；仓库/库位下拉无货时显示「无库存」，对齐金蝶按库位管库存习惯。',
+  'pages.dashboard.updateLog.entries.payment-application-source-material-lines-r01.title':
+    '付款申请带出源单品名规格数量',
+  'pages.dashboard.updateLog.entries.payment-application-source-material-lines-r01.description':
+    '从采购入库、采购订单、应付（入库来源）或往来对账生成付款申请时，申请明细按源单行展开并带出品名、规格、数量；金额按行金额比例分摊。',
+  'pages.dashboard.updateLog.entries.purchase-invoice-default-tax-inclusive-r01.title':
+    '采购收票默认按含税金额录入',
+  'pages.dashboard.updateLog.entries.purchase-invoice-default-tax-inclusive-r01.description':
+    '从采购入库、应付单、采购订单下推进项发票时，金额录入默认选中含税金额，并带出可开票价税合计；仍可切换为不含税。',
+  'pages.dashboard.updateLog.entries.partner-statement-uniaudit-r01.title':
+    '往来对账单接入审核流程',
+  'pages.dashboard.updateLog.entries.partner-statement-uniaudit-r01.description':
+    '往来对账单支持提交、通过、驳回、撤回与撤销审核；审核通过即内部确认，标记发送与审核立账仍按原业务步骤。可在配置中心开启人工审批。',
+  'pages.dashboard.updateLog.entries.purchase-docs-header-department-r01.title':
+    '采购单据表头支持部门并下推带入',
+  'pages.dashboard.updateLog.entries.purchase-docs-header-department-r01.description':
+    '采购申请、询价、采购订单、收货通知、采购入库、采购退货等表头可选择部门；申请转订单、订单转通知/入库/退货等下推时同步带入部门。',
+  'pages.dashboard.updateLog.entries.tenant-selector-default-hover-divider-r01.title':
+    '设置默认组织悬停不再盖住分割线',
+  'pages.dashboard.updateLog.entries.tenant-selector-default-hover-divider-r01.description':
+    '顶栏组织下拉里，「设置默认组织」与上方组织列表之间的分割线改为独立行，悬停高亮只作用在该入口上。',
+  'pages.dashboard.updateLog.entries.quotation-export-list-detail-r01.title':
+    '报价单导出支持列表与明细',
+  'pages.dashboard.updateLog.entries.quotation-export-list-detail-r01.description':
+    '报价单工具栏导出拆为「导出列表」与「导出明细」：列表按单据头导出，明细按物料行展开导出，均可选选中、本页或全部。',
+  'pages.dashboard.updateLog.entries.po-requisition-handoff-materials-r01.title':
+    '采购申请下推采购订单保留物料明细',
+  'pages.dashboard.updateLog.entries.po-requisition-handoff-materials-r01.description':
+    '从采购申请、询价等下推到采购订单新建页时，物料行随草稿一并带入，不再出现空白行需重新选择；对齐报价转销售订单的灌入方式。',
+  'pages.dashboard.updateLog.entries.print-partner-material-fields-r01.title':
+    '打印模板可选客户料号与客户品名',
+  'pages.dashboard.updateLog.entries.print-partner-material-fields-r01.description':
+    '销售订单、销售合同、报价单打印变量增加行上客户料号、客户品名；可复制原模板后把明细列改绑这两项，原模板不变。',
+  'pages.dashboard.updateLog.entries.sales-order-code-rename-order-name-r01.title':
+    '无下游销售订单可正常改订单编号',
+  'pages.dashboard.updateLog.entries.sales-order-code-rename-order-name-r01.description':
+    '修改销售订单编号时不再误写不存在的订单名称字段导致保存失败；无下游单据时改号可正常保存。',
   'pages.dashboard.updateLog.entries.material-sync-org-scope-page-active-r01.title':
     '物料同步数量与苍穹「可用」对齐',
   'pages.dashboard.updateLog.entries.material-sync-org-scope-page-active-r01.description':
@@ -31758,6 +38349,74 @@ export default {
     '修复付款申请「需上传付款凭证」下推后无效',
   'pages.dashboard.updateLog.entries.payment-require-voucher-persist-r01.description':
     '付款申请开启「是否需要上传付款凭证」后，下推或取单生成的付款单会正确带上该要求；确认过账时未上传凭证将被拦截，并回填历史已关联申请的付款单标志。',
+  'pages.dashboard.updateLog.entries.api-library-related-document-tree-r01.title':
+    '接口库左栏按关联单据二级分组',
+  'pages.dashboard.updateLog.entries.api-library-related-document-tree-r01.description':
+    '接口管理分类下展开关联单据分组（如采购订单、仓库、销售出库），点选后列表按分类与单据联合筛选。',
+  'pages.dashboard.updateLog.entries.api-library-related-document-type-r01.title':
+    '接口库增加关联单据与接口类型',
+  'pages.dashboard.updateLog.entries.api-library-related-document-type-r01.description':
+    '编辑接口可选关联 MES 单据（如销售出库）与接口类型（标准API/自定义API）；苍穹预置加载自动回填；外推匹配提交/审核接口时优先同关联单据。',
+  'pages.dashboard.updateLog.entries.kingdee-salout-operate-connection-retry-r01.title':
+    '销售出库金蝶补提交与换票连接器',
+  'pages.dashboard.updateLog.entries.kingdee-salout-operate-connection-retry-r01.description':
+    'Save 走接口库时提交/审核与 Save 同一连接器换票；已推送关联的单据再次外推将补 batchSubmit/batchAudit，外推结果文案标明是否已提交/已审核。',
+  'pages.dashboard.updateLog.entries.kingdee-salout-batchsubmit-failcount-r01.title':
+    '金蝶 batchSubmit 失败数识别与出库提交预置',
+  'pages.dashboard.updateLog.entries.kingdee-salout-batchsubmit-failcount-r01.description':
+    '销售出库 batchSubmit 返回 data.failCount 或 successCount 为 0 时不再误判成功；接口库常用预置增加销售出库 batchSubmit 与 batchAudit 样例（data 含 id、ids、billno）。',
+  'pages.dashboard.updateLog.entries.kingdee-salout-submit-audit-like-purin-r01.title':
+    '销售出库推金蝶对齐采购入库提交审核',
+  'pages.dashboard.updateLog.entries.kingdee-salout-submit-audit-like-purin-r01.description':
+    '与采购入库相同：batchAdd 保存后自动 batchSubmit、batchAudit；Save 走接口库时在同连接器解析提交/审核接口并用同一换票通道调用，避免只落暂存。',
+  'pages.dashboard.updateLog.entries.kingdee-salout-submit-audit-default-r01.title':
+    '销售出库推金蝶默认可提交审核',
+  'pages.dashboard.updateLog.entries.kingdee-salout-submit-audit-default-r01.description':
+    'batchAdd 仅落暂存时，外推编排与配置补齐默认在保存后调用 batchSubmit、batchAudit；若业务配置显式关闭 submit_after_save / audit_after_save 则仍为暂存并在推送结果提示。',
+  'pages.dashboard.updateLog.entries.sales-delivery-sync-binding-migration-r01.title':
+    '销售出库确认与外推绑定表',
+  'pages.dashboard.updateLog.entries.sales-delivery-sync-binding-migration-r01.description':
+    '补齐销售出库出站绑定表迁移；确认出库后无感外推异常不再误报为应收失败，并在响应中提示外推问题。',
+  'pages.dashboard.updateLog.entries.sales-delivery-confirm-receivable-tx-r01.title':
+    '销售出库确认自动生成应收与预收核销',
+  'pages.dashboard.updateLog.entries.sales-delivery-confirm-receivable-tx-r01.description':
+    '出库过账后创建应收不再嵌套外层事务，并登记出库与应收的加载关联，避免确认成功却提示自动生成应收或核销预收失败。',
+  'pages.dashboard.updateLog.entries.sales-delivery-create-fifo-batch-r01.title':
+    '新建销售出库默认选中 FIFO 建议批号',
+  'pages.dashboard.updateLog.entries.sales-delivery-create-fifo-batch-r01.description':
+    '选仓加载在库批号后按先入先出规则自动带出应优先批次，下拉标注建议 FIFO，减少防呆拦截。',
+  'pages.dashboard.updateLog.entries.sales-delivery-create-batch-select-r01.title':
+    '新建销售出库可选批次号',
+  'pages.dashboard.updateLog.entries.sales-delivery-create-batch-select-r01.description':
+    '空白建销售出库单与确认出库一致：租户启用批号管理时展示批次下拉并按仓加载在库批号，不再因物料未勾选批号管理而只显示横线。',
+  'pages.dashboard.updateLog.entries.material-list-search-batch-no-r01.title':
+    '物料管理支持按批号筛选',
+  'pages.dashboard.updateLog.entries.material-list-search-batch-no-r01.description':
+    '物料列表搜索条件增加批号字段，按批号台账模糊匹配并列出对应物料。',
+  'pages.dashboard.updateLog.entries.other-inbound-reason-production-finished-r01.title':
+    '其他入库新增原因类型生产完工入库',
+  'pages.dashboard.updateLog.entries.other-inbound-reason-production-finished-r01.description':
+    '系统字典 INBOUND_REASON_TYPE 预置「生产完工入库」；打开新建其他入库单时会自动同步到租户字典。',
+  'pages.dashboard.updateLog.entries.kingdee-other-inbound-outinv-fallback-r01.title':
+    '金蝶其他入库推送补齐出库库存类型状态',
+  'pages.dashboard.updateLog.entries.kingdee-other-inbound-outinv-fallback-r01.description':
+    '其他入库外推 im_otherinbill 时明细 outinvtype/outinvstatus 未配置则与 invtype/invstatus 一致，并在 Save 前校验，避免苍穹报明细出库库存类型或状态为空。',
+  'pages.dashboard.updateLog.entries.other-inbound-confirm-batch-input-r01.title':
+    '其他入库确认始终可填批号',
+  'pages.dashboard.updateLog.entries.other-inbound-confirm-batch-input-r01.description':
+    '确认入库预览在租户启用批号管理时一律展示批号录入框，不再因物料未勾选批号管理而只显示横线，便于外推金蝶前补录。',
+  'pages.dashboard.updateLog.entries.other-inbound-confirm-preview-loop-r01.title':
+    '修复其他入库确认弹窗卡死',
+  'pages.dashboard.updateLog.entries.other-inbound-confirm-preview-loop-r01.description':
+    '确认入库预览不再因 effect 依赖变化反复拉详情与批号预取，避免页面卡死与 failed to fetch。',
+  'pages.dashboard.updateLog.entries.other-inbound-confirm-batch-r01.title':
+    '其他入库确认可补录批号与序列号',
+  'pages.dashboard.updateLog.entries.other-inbound-confirm-batch-r01.description':
+    '其他入库单确认入库改为预览弹窗，按物料批号/序列号管理展示录入列并提交过账，便于外推金蝶带批号。',
+  'pages.dashboard.updateLog.entries.other-inbound-push-binding-route-r01.title':
+    '修复其他入库外推保存绑定失败',
+  'pages.dashboard.updateLog.entries.other-inbound-push-binding-route-r01.description':
+    '出站绑定接口路由注册顺序已修正，保存金蝶目标与列表推送不再误命中「更新其他入库单」校验。',
   'pages.dashboard.updateLog.entries.other-inbound-kingdee-push-bind-r01.title':
     '其他入库外推与采购入库对齐',
   'pages.dashboard.updateLog.entries.other-inbound-kingdee-push-bind-r01.description':
@@ -31766,6 +38425,50 @@ export default {
     '其他出库新建可填领用部门与领用人',
   'pages.dashboard.updateLog.entries.other-outbound-kingdee-header-fields-r01.description':
     '新建其他出库单表头增加领用部门、领用人、金蝶工号与客户，外推金蝶时优先使用单据字段，与采购入库采购员字段同一思路。',
+  'pages.dashboard.updateLog.entries.other-expense-application-reference-load-r01.title':
+    '其他费用支出申请可选往来对象',
+  'pages.dashboard.updateLog.entries.other-expense-application-reference-load-r01.description':
+    '修复表单加载时部门接口失败会连带清空客户、供应商、职员下拉的问题；申请页改用正确宿主引用键，部门走引用回显；缺目标查看或回显权限时会提示而非静默暂无数据。',
+  'pages.dashboard.updateLog.entries.config-partner-price-order-string-r01.title':
+    '参数设置客商取价顺序可保存',
+  'pages.dashboard.updateLog.entries.config-partner-price-order-string-r01.description':
+    '修复配置中心保存时将客商取价顺序写成数组导致校验「须为字符串」失败；与后端契约一致，以逗号分隔字符串存储，取价逻辑仍按三步顺序解析。',
+  'pages.dashboard.updateLog.entries.sales-delivery-confirm-batch-line-r01.title':
+    '销售出库确认可选批号分摊',
+  'pages.dashboard.updateLog.entries.sales-delivery-confirm-batch-line-r01.description':
+    '仓储出库确认预览中，销售出库在租户开启批号管理时展示批号分摊列，按行仓库加载在库批号；有批号库存时须分摊至出库数量后再确认过账。',
+  'pages.dashboard.updateLog.entries.kingdee-other-io-batch-submit-presets-r01.title':
+    '金蝶其他出入库批量提交接口预置',
+  'pages.dashboard.updateLog.entries.kingdee-other-io-batch-submit-presets-r01.description':
+    '常用接口包增加其他入库/其他出库 batchSubmit 预置，与外推 submit_path 一致；提交后审核仍走 billbatchAudit。',
+  'pages.dashboard.updateLog.entries.kingdee-otherout-billbatch-audit-r01.title':
+    '其他出库外推金蝶审核路径修正',
+  'pages.dashboard.updateLog.entries.kingdee-otherout-billbatch-audit-r01.description':
+    '生产领料与其他出库推送保存后自动审核改为调用开放平台 billbatchAudit（im_otheroutbill/billbatchAudit），不再误用 batchAudit 导致 HTTP 404。',
+  'pages.dashboard.updateLog.entries.kingdee-otherin-billbatch-audit-r01.title':
+    '其他入库外推金蝶审核路径修正',
+  'pages.dashboard.updateLog.entries.kingdee-otherin-billbatch-audit-r01.description':
+    '成品入库与其他入库推送保存后自动审核改为调用开放平台 billbatchAudit（im_otherinbill/billbatchAudit），不再误用 batchAudit 导致 HTTP 404、单据停在已提交。',
+  'pages.dashboard.updateLog.entries.kingdee-pp-otherout-picker-save-r02.title':
+    '生产领料外推金蝶补全领用人',
+  'pages.dashboard.updateLog.entries.kingdee-pp-otherout-picker-save-r02.description':
+    '生产领料与其他出库推送其他出库单时，保存报文显式写入 pickeroperator_operatornumber 领用人写键，并与业务配置、采购入库业务员编码同源；保存后仍按配置自动提交审核。',
+  'pages.dashboard.updateLog.entries.kingdee-other-inbound-push-fields-r01.title':
+    '金蝶其他入库外推组包对齐开放平台',
+  'pages.dashboard.updateLog.entries.kingdee-other-inbound-push-fields-r01.description':
+    '其他入库与成品入库推送 im_otherinbill 时，明细补齐入库与出库库存类型状态及货主保管者字段，头表同步库管员 operator 写键，与生产领料其他出库对称；Save 接口样例与业务配置 schema 同步。',
+  'pages.dashboard.updateLog.entries.kingdee-push-submit-audit-null-r01.title':
+    '仓储外推金蝶默认可提交并审核',
+  'pages.dashboard.updateLog.entries.kingdee-push-submit-audit-null-r01.description':
+    '修复业务配置里提交/审核开关为 null 时被当成关闭、单据只保存为暂存的问题；其他入库外推补齐提交与审核路径；保存后仍按 batchSubmit 与 batchAudit 推到已审核。',
+  'pages.dashboard.updateLog.entries.sales-order-push-binding-r01.title':
+    '销售订单外推绑定与采购订单一致',
+  'pages.dashboard.updateLog.entries.sales-order-push-binding-r01.description':
+    '销售订单推送 Hub 可保存出站目标与触发动作（提交/审核），与采购订单相同；审核通过后按绑定自动外推金蝶销售订单。',
+  'pages.dashboard.updateLog.entries.sales-delivery-push-bind-confirm-r01.title':
+    '销售出库外推绑定按钮与采购入库对齐',
+  'pages.dashboard.updateLog.entries.sales-delivery-push-bind-confirm-r01.description':
+    '外推目标设置中绑定按钮改为「确认出库」，可保存出站配置；自动推送在确认出库成功后触发，与采购入库确认入库一致。',
   'pages.dashboard.updateLog.entries.other-outbound-push-bind-confirm-r01.title':
     '其他出库外推绑定按钮与采购入库对齐',
   'pages.dashboard.updateLog.entries.other-outbound-push-bind-confirm-r01.description':
@@ -31824,10 +38527,74 @@ export default {
     '自定义 getsupplier 在接口测试/同步拉数时会误走标品 supplier 升级逻辑，把路径改回 bd_supplier/query。已排除 getsupplier，并在 test_api 时自动写回 fd81/bd_supplier/getsupplier。',
   'app.kuaizhizao.documentFlow.openedDownstreamCreate': '已打开{{target}}新建页，请确认后保存',
   'app.kuaizhizao.documentFlow.draftMissing': '下游新建草稿不存在，请从源单据重新下推',
+  'pages.dashboard.updateLog.entries.cosmic-location-getlist-missing-data-r01.title':
+    '苍穹查询仓位缺少 data 报错已修复',
+  'pages.dashboard.updateLog.entries.cosmic-location-getlist-missing-data-r01.description':
+    '仓位 getList 出站强制带上 data（可为空对象）；修复测试升级参数顺序错误。生产接口体仅有分页字段时不再被苍穹拒绝。',
+  'pages.dashboard.updateLog.entries.work-group-performance-weight-avg-r01.title':
+    '工作小组绩效权重自动均分',
+  'pages.dashboard.updateLog.entries.work-group-performance-weight-avg-r01.description':
+    '新建或编辑工作小组时，添加或删除成员会按合计上限 1 自动平均分配绩效权重；单人与合计均不得超过该上限。',
+  'pages.dashboard.updateLog.entries.cosmic-customer-getcustomer-test-import-r01.title':
+    '苍穹按组织获取客户测试接口报错已修复',
+  'pages.dashboard.updateLog.entries.cosmic-customer-getcustomer-test-import-r01.description':
+    '修复测试 getcustomer 接口时漏导入判定函数导致 NameError；并按供应商同款只升级本次调用副本、客户同步按连接器组织过滤返回行。',
+  'pages.dashboard.updateLog.entries.shipment-notice-item-deleted-at-filter-r01.title':
+    '发货通知通知仓库报错已修复',
+  'pages.dashboard.updateLog.entries.shipment-notice-item-deleted-at-filter-r01.description':
+    '修复库存校验误对发货通知明细使用 deleted_at 过滤导致 Unknown filter param，通知仓库可正常校验与提交。',
+  'pages.dashboard.updateLog.entries.sidebar-menu-morphicons-hover-r01.title':
+    '左侧菜单图标悬停形变',
+  'pages.dashboard.updateLog.entries.sidebar-menu-morphicons-hover-r01.description':
+    '侧栏悬停时同尺寸从通用圆形 Morphicons 形变到当前菜单图标；静止与离开后始终显示当前图标。',
+  'pages.dashboard.updateLog.entries.shipment-notify-inventory-detail-r01.title':
+    '通知仓库库存不足提示更清晰',
+  'pages.dashboard.updateLog.entries.shipment-notify-inventory-detail-r01.description':
+    '发货通知「通知仓库」库存不足时展示在库、其它已通知预占单号与数量、可用量；无预占时不再笼统写「已扣减预占」。',
+  'pages.dashboard.updateLog.entries.outbound-confirm-stock-follow-line-wh-r01.title':
+    '确认出库更换仓库后库存未更新',
+  'pages.dashboard.updateLog.entries.outbound-confirm-stock-follow-line-wh-r01.description':
+    '销售出库确认弹窗更换行仓库后，库存数量与批号选项按新仓库重新加载，不再始终显示列表表头仓库的库存。',
+  'pages.dashboard.updateLog.entries.uni-push-go-to-list-r01.title':
+    '下推已下推单据支持转到列表',
+  'pages.dashboard.updateLog.entries.uni-push-go-to-list-r01.description':
+    '列表「下推」菜单「已下推」编号旁增加「转到」：跳转对应业务单据列表并按单号筛选；点击编号仍可打开详情。',
+  'pages.dashboard.updateLog.entries.sales-order-push-show-shipment-r01.title':
+    '销售订单下推可查看已推发货通知',
+  'pages.dashboard.updateLog.entries.sales-order-push-show-shipment-r01.description':
+    '销售订单关联下游补齐发货通知单与销售退货单；列表下推菜单悬停可像工单一样展开「已下推」单号并打开详情。',
+  'pages.dashboard.updateLog.entries.sales-customer-relations-menu-r01.title':
+    '销售管理轻量 CRM 归入客户关系',
+  'pages.dashboard.updateLog.entries.sales-customer-relations-menu-r01.description':
+    '销售管理下将客户池、报价单、客户跟进、订单评审、框架合同收进「客户关系」分组；页面路径与权限码不变。',
+  'pages.dashboard.updateLog.entries.sales-order-review-status-draft-r01.title':
+    '销售订单列表无法打开草稿单',
+  'pages.dashboard.updateLog.entries.sales-order-review-status-draft-r01.description':
+    '未提交草稿的审核状态为 DRAFT，响应校验未收录该枚举导致列表报错；已将审核状态枚举补齐草稿，与未提交审核约定一致。',
+  'pages.dashboard.updateLog.entries.tenant-login-ask-each-r01.title':
+    '默认进入组织可改为登录时选择',
+  'pages.dashboard.updateLog.entries.tenant-login-ask-each-r01.description':
+    '顶栏「设置默认进入组织」列表底部增加「登录时选择」；选中并保存后清除默认标记，下次登录再弹出组织列表。',
+  'pages.dashboard.updateLog.entries.tenant-selector-login-default-r01.title':
+    '顶栏组织选择器支持默认进入组织',
+  'pages.dashboard.updateLog.entries.tenant-selector-login-default-r01.description':
+    '多账户可在顶栏设置下次登录默认组织；已设默认后登录不再弹选组织，直接进入该账套。未设过仍弹出选择。',
   'pages.dashboard.updateLog.entries.purchase-requisition-page-tdz-r01.title':
     '采购申请页无法打开',
   'pages.dashboard.updateLog.entries.purchase-requisition-page-tdz-r01.description':
     '修复采购申请列表加载时报 Cannot access before initialization、整页显示应用加载错误；原因是编辑表单回调依赖数组引用了尚未声明的函数。',
+  'pages.dashboard.updateLog.entries.kuaioa-payroll-help-button-r01.title':
+    '工资结算说明收入帮助按钮',
+  'pages.dashboard.updateLog.entries.kuaioa-payroll-help-button-r01.description':
+    '工资结算详情页将计算说明与状态提示收拢到工具栏「帮助」弹窗；有待处理提示时按钮显示红点。产线产量/总工资与合计仍留在页内。',
+  'pages.dashboard.updateLog.entries.kuaioa-min-wage-period-basic-wage-r01.title':
+    '最低工资增加执行期间与当前执行',
+  'pages.dashboard.updateLog.entries.kuaioa-min-wage-period-basic-wage-r01.description':
+    '最低工资配置增加执行结束时间与「当前执行」勾选；工资结算按考勤重建时，基本工资取结算月落在执行期间内的最低工资金额。',
+  'pages.dashboard.updateLog.entries.kuaioa-leave-revoke-approved-flow-r01.title':
+    '请假出差已通过单据可撤销审核',
+  'pages.dashboard.updateLog.entries.kuaioa-leave-revoke-approved-flow-r01.description':
+    '已审批通过的请假出差支持撤销审核：有流程时重开终审节点待再审，否则回草稿；并清回未提交考勤上的请假标记。修改审批流后历史已通过单也可反审。',
   'pages.dashboard.updateLog.entries.uni-import-skip-ghost-sparse-rows-r01.title':
     '导入预检忽略单格残值幽灵行',
   'pages.dashboard.updateLog.entries.uni-import-skip-ghost-sparse-rows-r01.description':
@@ -32236,6 +39003,14 @@ export default {
     '物料默认供应商纳入字段权限',
   'pages.dashboard.updateLog.entries.material-default-supplier-field-perm-r01.description':
     '角色权限「字段权限」可为 master-data:material 配置默认供应商为隐藏或脱敏；物料基本信息与默认值页不再展示，接口读写的 source_config 与 defaults 同步收敛。',
+  'pages.dashboard.updateLog.entries.equipment-today-tasks-and-maint-notify-r01.title':
+    '设备今日待完成与定期保养消息提醒',
+  'pages.dashboard.updateLog.entries.equipment-today-tasks-and-maint-notify-r01.description':
+    '设备中心与手机「今日待完成」聚合点检、保养计划/提醒、指派维修与未关故障；保养提醒任务在到期前/当日推送站内信，负责人与业务配置通知人可接收。',
+  'pages.dashboard.updateLog.entries.equipment-repair-start-end-times-r01.title':
+    '设备维修开始与结束时间全端展示',
+  'pages.dashboard.updateLog.entries.equipment-repair-start-end-times-r01.description':
+    '维修台账列表补列维修开始时间；手机维修详情与列表卡片展示开始维修、结束维修时间，与指派及完修落库字段一致。',
   'pages.dashboard.updateLog.entries.equipment-repair-three-timestamps-r01.title':
     '设备维修记录建单到场完修三时点',
   'pages.dashboard.updateLog.entries.equipment-repair-three-timestamps-r01.description':
@@ -32436,6 +39211,114 @@ export default {
     '付款申请可直接关联采购订单',
   'pages.dashboard.updateLog.entries.payment-application-po-without-milestone-r01.description':
     '从采购订单创建付款申请时，不再强制先在订单填写预付付款节点；已审核订单可按预付计划或订单总额减已请款作为可请款上限。',
+  'pages.dashboard.updateLog.entries.warehouse-outbound-pull-edit-r01.title':
+    '销售取单出库与其他出库 Hub 编辑跟踪',
+  'pages.dashboard.updateLog.entries.warehouse-outbound-pull-edit-r01.description':
+    '从销售订单取单开销售出库支持行级库位、在库批号与序列号；出库 Hub 可编辑其他出库与借料单的库位/批号；后端支持其他出库与借料单明细更新。',
+  'pages.dashboard.updateLog.entries.warehouse-customer-material-create-tracking-r01.title':
+    '代工来料登记保存校验批号序列号',
+  'pages.dashboard.updateLog.entries.warehouse-customer-material-create-tracking-r01.description':
+    '代工来料登记（明细或扫码）保存与开生产前，对批号管控与序列号管控物料校验批号及序列号条数与数量一致。',
+  'pages.dashboard.updateLog.entries.warehouse-other-in-out-create-tracking-r01.title':
+    '其他入出库新建校验位批序',
+  'pages.dashboard.updateLog.entries.warehouse-other-in-out-create-tracking-r01.description':
+    '其他入库与其他出库新建保存时，在库位校验基础上增加批号管控物料批号必填；其他入库另校验序列号条数与入库数量一致。',
+  'pages.dashboard.updateLog.entries.warehouse-purchase-receipt-modal-batch-r01.title':
+    '采购入库编辑保存校验批号',
+  'pages.dashboard.updateLog.entries.warehouse-purchase-receipt-modal-batch-r01.description':
+    'Hub 新建或编辑采购入库单保存时，对批号管控物料校验行批号，与取单确认及 Hub 入库确认一致。',
+  'pages.dashboard.updateLog.entries.warehouse-po-pull-tracking-confirm-r01.title':
+    '采购订单取单确认前校验批号序列号',
+  'pages.dashboard.updateLog.entries.warehouse-po-pull-tracking-confirm-r01.description':
+    '从采购订单取单直接确认入库前，与库位一并校验批号管控与序列号数量；生产入库 Hub 取单菜单可新建半成品入库单。',
+  'pages.dashboard.updateLog.entries.warehouse-outsource-product-return-tracking-r01.title':
+    '委外退货取单展示收货位批并校验',
+  'pages.dashboard.updateLog.entries.warehouse-outsource-product-return-tracking-r01.description':
+    '委外退货取单按关联收货单展示仓库、库位与批号，保存前校验与扣减库存一致；采购退货手工保存时对批号管控物料校验批号。',
+  'pages.dashboard.updateLog.entries.warehouse-semi-finished-blank-create-r01.title':
+    '半成品入库支持空白建单',
+  'pages.dashboard.updateLog.entries.warehouse-semi-finished-blank-create-r01.description':
+    '在半成品入库 Hub 可像成品一样无来源工单新建单据，明细行支持库位、批号与序列号，保存后走 FQC 与确认入库流程。',
+  'pages.dashboard.updateLog.entries.warehouse-inbound-outsource-hub-confirm-r01.title':
+    '入库 Hub 委外退料退货确认说明',
+  'pages.dashboard.updateLog.entries.warehouse-inbound-outsource-hub-confirm-r01.description':
+    '委外退料与委外退货在取单建单时即过账，Hub 确认按钮会提示无需二次确认或请回到委外取单页；采购退货从入库单取单时展示建议库位列。',
+  'pages.dashboard.updateLog.entries.warehouse-purchase-return-pull-location-r01.title':
+    '采购退货取单继承原入库库位',
+  'pages.dashboard.updateLog.entries.warehouse-purchase-return-pull-location-r01.description':
+    '从采购订单或入库单取单建退货时写入原入库库位与批号；取单与手工保存前校验库位，确认仍走出库 Hub 明细校验。',
+  'pages.dashboard.updateLog.entries.warehouse-receipt-notice-edit-r01.title':
+    '收货通知下推采购入库先补位批',
+  'pages.dashboard.updateLog.entries.warehouse-receipt-notice-edit-r01.description':
+    '从收货通知生成采购入库草稿后跳转入库 Hub 并打开编辑，补全库位与批号后再走检验与确认，不再跳过明细直接过账。',
+  'pages.dashboard.updateLog.entries.warehouse-purchase-return-confirm-r01.title':
+    '采购退货确认与出库 Hub 校验对齐',
+  'pages.dashboard.updateLog.entries.warehouse-purchase-return-confirm-r01.description':
+    '采购退货单列表与批量确认在过账前按出库 Hub 规则校验行库位与批号，与出库中心行为一致。',
+  'pages.dashboard.updateLog.entries.warehouse-material-return-tracking-r01.title':
+    '还料单归还位批与确认校验',
+  'pages.dashboard.updateLog.entries.warehouse-material-return-tracking-r01.description':
+    '还料新建继承借料行库位与批号并可调整上架库位；列表确认与入库 Hub 共用明细校验后再过账。',
+  'pages.dashboard.updateLog.entries.warehouse-material-borrow-batch-r01.title':
+    '借料单新建与确认批号跟踪',
+  'pages.dashboard.updateLog.entries.warehouse-material-borrow-batch-r01.description':
+    '借料单新建明细支持按物料选择在库批号并写入创建接口；确认借出与出库 Hub 共用明细校验后再过账。',
+  'pages.dashboard.updateLog.entries.warehouse-hub-outbound-edit-r01.title':
+    '出库 Hub 编辑入口补齐',
+  'pages.dashboard.updateLog.entries.warehouse-hub-outbound-edit-r01.description':
+    '出库 Hub 列表与详情抽屉支持编辑其他出库、借料单；采购退货跳转采购退货单页编辑库位与批号后再回 Hub 确认出库。',
+  'pages.dashboard.updateLog.entries.warehouse-hub-outbound-confirm-detail-r01.title':
+    '出库 Hub 过账前明细跟踪校验',
+  'pages.dashboard.updateLog.entries.warehouse-hub-outbound-confirm-detail-r01.description':
+    '出库 Hub 确认出库改按详情明细校验库位、批号与序列号并回填单头仓库；采购退货确认前同样校验；移除已废弃的大确认预览弹窗。',
+  'pages.dashboard.updateLog.entries.warehouse-pull-tracking-batch-r03.title':
+    '委外取单出入库跟踪与过账路径对齐',
+  'pages.dashboard.updateLog.entries.warehouse-pull-tracking-batch-r03.description':
+    '委外工单取单开委外发料支持行级库位与在库批号并写入批量创建接口；委外收货与委外退料取单支持库位与批号校验；委外退料/退货确认入库不再误走进 Hub 不支持确认流程。',
+  'pages.dashboard.updateLog.entries.warehouse-pull-tracking-batch-r02.title':
+    '销售退货与工单取单入库跟踪补齐',
+  'pages.dashboard.updateLog.entries.warehouse-pull-tracking-batch-r02.description':
+    '从销售订单取单开销售退货支持行级库位、批号与序列号并在草稿中保存；从工单取单开成品/半成品入库支持批号与序列号；销售退货 Hub 过账校验补齐单头仓库回填。',
+  'pages.dashboard.updateLog.entries.warehouse-pull-tracking-batch-r01.title':
+    '生产退料取单与其他出库过账跟踪补齐',
+  'pages.dashboard.updateLog.entries.warehouse-pull-tracking-batch-r01.description':
+    '生产退料取单支持行级库位与批号；成品空白建单支持批号/序列号；其他出库列表确认改为直过账（须先在单据中保存批序）。',
+  'pages.dashboard.updateLog.entries.warehouse-hub-confirm-minimal-popconfirm-r01.title':
+    '出入库 Hub 过账改为确认后直过账',
+  'pages.dashboard.updateLog.entries.warehouse-hub-confirm-minimal-popconfirm-r01.description':
+    '入库与出库 Hub、其他入库列表确认入库时不再弹出预览层；质检门禁保留，过账前须在编辑或建单中保存仓/位/批/序。',
+  'pages.dashboard.updateLog.entries.warehouse-tracking-detail-edit-r01.title':
+    '出入库明细跟踪展示与编辑补齐',
+  'pages.dashboard.updateLog.entries.warehouse-tracking-detail-edit-r01.description':
+    '详情抽屉与 Hub 明细统一展示仓库/库位/批号/序列号；其他入库 Hub 编辑与其他入库列表确认对齐；销售出库空白建单支持序列号录入。',
+  'pages.dashboard.updateLog.entries.production-picking-blank-batch-serial-r01.title':
+    '新建生产领料单支持批号与序列号',
+  'pages.dashboard.updateLog.entries.production-picking-blank-batch-serial-r01.description':
+    '空白建单明细表头文案已补齐；租户开启批号/序列号管理且物料启用追踪时，可录入批号与序列号并随建单保存。',
+  'pages.dashboard.updateLog.entries.production-picking-push-binding-route-r01.title':
+    '生产领料数据互通保存路由冲突修复',
+  'pages.dashboard.updateLog.entries.production-picking-push-binding-route-r01.description':
+    '生产领料 push-binding 接口不再被误匹配为领料单详情，保存出站配置时不再报 picking_id 须为整数。',
+  'pages.dashboard.updateLog.entries.document-push-confirm-feedback-r01.title':
+    '数据互通确认保存不再无反馈',
+  'pages.dashboard.updateLog.entries.document-push-confirm-feedback-r01.description':
+    '其他出库、生产领料等出站配置未完成或保存失败时会弹出明确提示；保存成功会提示并关闭弹窗，不再出现点确认无反应。',
+  'pages.dashboard.updateLog.entries.production-picking-blank-create-r01.title':
+    '生产领料支持独立新建领料单',
+  'pages.dashboard.updateLog.entries.production-picking-blank-create-r01.description':
+    '制造生产领料页与采购入库、销售出库一致，工具栏提供新建入口，可直接录入仓库与明细建单，无需先从工单加载。',
+  'pages.dashboard.updateLog.entries.production-inbound-blank-create-r01.title':
+    '生产入库支持独立新建成品入库单',
+  'pages.dashboard.updateLog.entries.production-inbound-blank-create-r01.description':
+    '制造生产入库页与采购入库、销售出库一致，工具栏提供新建入口，可直接录入仓库与明细建单，无需先从工单或检验加载。',
+  'pages.dashboard.updateLog.entries.work-order-finished-inbound-location-r01.title':
+    '从工单创建成品入库可选库位',
+  'pages.dashboard.updateLog.entries.work-order-finished-inbound-location-r01.description':
+    '工单下推成品/半成品入库录入页入库明细增加库位选择，保存与确认前校验库位，避免确认入库时报须选择库位。',
+  'pages.dashboard.updateLog.entries.wo-fqc-batch-pull-from-work-order-r01.title':
+    '工单可分批下推成品检验',
+  'pages.dashboard.updateLog.entries.wo-fqc-batch-pull-from-work-order-r01.description':
+    '从工单加载成品检验时，已加载数量按工单下未取消检验单合计；预览可编辑本次数量，同一工单可多次创建直至计划量用尽。',
   'pages.dashboard.updateLog.entries.work-order-inbound-batch-pushable-qty-r01.title':
     '工单分批成品入库可下推数量按已入库扣减',
   'pages.dashboard.updateLog.entries.work-order-inbound-batch-pushable-qty-r01.description':
@@ -32581,6 +39464,46 @@ export default {
     '主数据工艺菜单同步会刷新快研发侧栏',
   'pages.dashboard.updateLog.entries.kuaiplm-process-menu-peer-sync-r01.description':
     '工艺数据由快研发接管时，同步主数据或一键同步菜单会按磁盘 manifest 重写快研发 core_menus，并识别库内多余的旧图纸子菜单路径，避免 manifest 已扁平但侧栏仍显示反查发放借阅。',
+  'pages.dashboard.updateLog.entries.partner-settlement-pay-on-invoice-r01.title':
+    '客商档案结算方式增加票到付款',
+  'pages.dashboard.updateLog.entries.partner-settlement-pay-on-invoice-r01.description':
+    '供应商与客户资料的「结算方式」下拉与导入别名新增「票到付款」（编码 pay_on_invoice）；采购订单等引用同一码表。更新 Web 端后可见。',
+  'pages.dashboard.updateLog.entries.approval-wecom-dynamic-card-r01.title':
+    '企微审批待办卡片审批后自动标注状态',
+  'pages.dashboard.updateLog.entries.approval-wecom-dynamic-card-r01.description':
+    '手机/任务式审批通过或驳回后，同步更新企微聊天里的待办模板卡为「已通过」「已驳回」「已处理」等；待办卡来源显示「待审批」。须开启消息配置「同步推送审批通知」并配置企微接收消息回调。重启后端后生效。',
+  'pages.dashboard.updateLog.entries.other-outbound-list-tdz-r01.title':
+    '修复其他出库列表白屏',
+  'pages.dashboard.updateLog.entries.other-outbound-list-tdz-r01.description':
+    '列表列在初始化前引用编辑回调导致页面报错；已调整回调声明顺序。',
+  'pages.dashboard.updateLog.entries.kingdee-im-warehouse-edit-batch-update-r01.title':
+    '仓储六类单据编辑统一走金蝶 batchUpdate',
+  'pages.dashboard.updateLog.entries.kingdee-im-warehouse-edit-batch-update-r01.description':
+    '其他入出库、销售出库、生产领料、成品入库、采购入库在待出/待入等可编辑态且已关联苍穹单时，保存改走出站绑定「更新」batchUpdate，不再删金蝶单重建；外推已关联且同态亦走更新。须在对应出站绑定配置 batchUpdate。',
+  'pages.dashboard.updateLog.entries.other-outbound-kingdee-batch-update-r01.title':
+    '其他出库编辑改走金蝶 batchUpdate',
+  'pages.dashboard.updateLog.entries.other-outbound-kingdee-batch-update-r01.description':
+    '待出库等可编辑态且已关联苍穹单时，保存不再删金蝶单；按出站绑定「更新」接口 batchUpdate 同步头表与明细（分录带金蝶 id）。须在出站绑定配置 batchUpdate。',
+  'pages.dashboard.updateLog.entries.other-outbound-full-edit-modal-r01.title':
+    '其他出库编辑改回完整表单',
+  'pages.dashboard.updateLog.entries.other-outbound-full-edit-modal-r01.description':
+    '列表与详情「编辑」打开与新建相同的完整其他出库弹窗（原因类型、部门客户、明细表仓库/库位/批号等），不再使用出库 Hub 简易编辑。',
+  'pages.dashboard.updateLog.entries.inventory-sync-bulk-sql-params-r01.title':
+    '修复即时库存全量入站批量更新 SQL 占位符',
+  'pages.dashboard.updateLog.entries.inventory-sync-bulk-sql-params-r01.description':
+    '全量灌库存时批量 UPDATE 绑定参数序号与占位符不一致导致入站失败；已对齐 $10–$14。生产需重启后端；develop 合并后请在各环境 deploy。',
+  'pages.dashboard.updateLog.entries.kingdee-consistency-orchestrate-r01.title':
+    '金蝶强一致审计与 sync-from-source 编排',
+  'pages.dashboard.updateLog.entries.kingdee-consistency-orchestrate-r01.description':
+    '仓储报表新增金蝶强一致审计与主数据/即时库存编排接口，红灯单据给出外推与撤回系统路径；定时入站补充仓库仓位关系同步。运维脚本改为只读审计与调同一套服务，不再硬改批次仓位。需重启后端后生效。',
+  'pages.dashboard.updateLog.entries.kingdee-avb-location-align-r01.title':
+    '出库金蝶可用预检与即时库存按仓位对齐',
+  'pages.dashboard.updateLog.entries.kingdee-avb-location-align-r01.description':
+    '预检本系统可用量按出库明细仓位汇总，与金蝶 getInventoryAvbQty 同口径；金蝶空仓位即时库存同步归默认无货架；未选手选库位时默认取金蝶无货架而非按 id 首个库位。连枝横等场景需重拉即时库存或调拨至无货架后再确认出库。重启后端后生效。',
+  'pages.dashboard.updateLog.entries.purchase-order-pull-requisition-approved-only-r01.title':
+    '修复从采购申请取单可勾选未审核与草稿',
+  'pages.dashboard.updateLog.entries.purchase-order-pull-requisition-approved-only-r01.description':
+    '采购订单与询价从采购申请取单时，默认与「全部」分段均按申请审核通过且剩余可转量门禁；来源申请下拉不再出现草稿、待审核单。需重启后端并更新 Web 端后生效。',
   'pages.dashboard.updateLog.entries.purchase-order-pull-requisition-date-applicant-r01.title':
     '从采购申请创建采购订单取单展示优化',
   'pages.dashboard.updateLog.entries.purchase-order-pull-requisition-date-applicant-r01.description':
@@ -33029,10 +39952,10 @@ export default {
     '业务自动化：需求计算执行与采购下推',
   'pages.dashboard.updateLog.entries.planning-procurement-automation-r01.description':
     '配置中心「业务自动化」新增需求计算创建后自动执行、完成后自动下推采购，以及采购管理自动审核与下推收货通知；默认关闭，须先采购申请时改推采购申请。',
-  'pages.dashboard.updateLog.entries.flow-generate-preview-precheck-timeout-r01.title':
-    '修复流程造数预检与时间线预览无结果',
-  'pages.dashboard.updateLog.entries.flow-generate-preview-precheck-timeout-r01.description':
-    '大 BOM 订单展开下级自制件时预检/预览会超时空白；现改为浅层优先截断、批量解析工艺，下级缺工艺改为软告警，前端超时放宽到 3 分钟。',
+  'pages.dashboard.updateLog.entries.data-backup-restore-soft-fk-prefix-r01.title':
+    '修复跨租户恢复撞门模板阶段唯一键',
+  'pages.dashboard.updateLog.entries.data-backup-restore-soft-fk-prefix-r01.description':
+    '跨租户恢复时阶段门模板 stages 的 template_id 无正式外键，主键避让后未跟随偏移，会与其它租户的 (template_id, gate_key) 全局唯一约束冲突；现按子表名前缀推断软引用并同步偏移。',
   'pages.dashboard.updateLog.entries.data-backup-restore-unique-dedupe-r01.title':
     '修复数据备份恢复撞编码规则唯一约束',
   'pages.dashboard.updateLog.entries.data-backup-restore-unique-dedupe-r01.description':
@@ -33082,27 +40005,27 @@ export default {
   'pages.dashboard.updateLog.entries.app-center-self-service-lifecycle-r01.description':
     '开启分类自主启停后，组织管理员与具备应用更新权限的账号可按分类启停；修正能力接口与分类判定，并明确专业版首次启用仍须 License Key。',
   'pages.dashboard.updateLog.entries.kuaivision-menu-group-detection-ops-r01.title':
-    '星视觉菜单组与快数采区分命名',
+    '快视觉菜单组与快数采区分命名',
   'pages.dashboard.updateLog.entries.kuaivision-menu-group-detection-ops-r01.description':
     '侧栏「监控运维」改为「检测运维」，避免与快数采同名菜单组不易分辨。',
   'pages.dashboard.updateLog.entries.kuaivision-list-norm-r01.title':
-    '星视觉列表补齐删除确认与批量启停',
+    '快视觉列表补齐删除确认与批量启停',
   'pages.dashboard.updateLog.entries.kuaivision-list-norm-r01.description':
     '相机、方案、样本、模型、边缘节点列表：删除前二次确认；支持批量启用/停用；边缘节点补齐多选、批量删除与行删除。',
   'pages.dashboard.updateLog.entries.kuaivision-p3-r01.title':
-    '星视觉：样本库、模型制品与运维保留',
+    '快视觉：样本库、模型制品与运维保留',
   'pages.dashboard.updateLog.entries.kuaivision-p3-r01.description':
     '支持检测记录入库为样本并导出训练包；模型制品可绑定方案版本；可配原图/事件保留与节点缓冲磁盘告警；附现场联调手册。',
   'pages.dashboard.updateLog.entries.kuaivision-p2-r01.title':
-    '星视觉：Edge Agent 与厚度/步骤实验室 POC',
+    '快视觉：Edge Agent 与厚度/步骤实验室 POC',
   'pages.dashboard.updateLog.entries.kuaivision-p2-r01.description':
     '边缘节点支持心跳在线判定、配置热更与断网续传；方案可绑默认相机与触发方式；检测记录展示节点与耗时；附带实验室 Edge Agent。',
   'pages.dashboard.updateLog.entries.kuaivision-p1-r01.title':
-    '星视觉支持相机方案与人工复核',
+    '快视觉支持相机方案与人工复核',
   'pages.dashboard.updateLog.entries.kuaivision-p1-r01.description':
     '新增相机与工位、视觉方案版本发布、低置信度/未知结果自动进复核队列；视觉中心展示待复核与节点心跳。',
   'pages.dashboard.updateLog.entries.kuaivision-p0-r01.title':
-    '专业版新增星视觉应用',
+    '专业版新增快视觉应用',
   'pages.dashboard.updateLog.entries.kuaivision-p0-r01.description':
     '工业视觉检测 P0：边缘节点 Token 入站、检测记录与测量/原图留痕、视觉中心指标；可按节点上报 OK/NG 结果。',
   'pages.dashboard.updateLog.entries.kuaioa-expense-reimbursement-r01.title':
@@ -33193,10 +40116,14 @@ export default {
     '修复补料下推领料出库后仍显示备料中',
   'pages.dashboard.updateLog.entries.material-call-picking-sync-r01.description':
     '生产领料确认出库后回写关联补料申请的已送达数量与状态（已完成/部分送达）；撤回领料确认时同步回滚。',
-  'pages.dashboard.updateLog.entries.data-backup-restore-unique-remap-r01.title':
-    '备份恢复加固：解压防护与唯一列冲突避让',
-  'pages.dashboard.updateLog.entries.data-backup-restore-unique-remap-r01.description':
-    '恢复备份 zip 改为逐条校验解压，拦截越界路径与超大解压包；跨组织恢复时全局唯一的 uuid 仅重写真正冲突的值，KG000001 类前缀编码按目标库最大序号自动续排，租户归属列不再误报冲突。',
+  'pages.dashboard.updateLog.entries.quality-inspection-export-route-r01.title':
+    '修复检验业务列表导出全部报错',
+  'pages.dashboard.updateLog.entries.quality-inspection-export-route-r01.description':
+    '来料/过程/成品检验导出接口路由注册顺序已调整，不再把 export 误当成检验单 ID，导出全部可正常下载 Excel。',
+  'pages.dashboard.updateLog.entries.kuaiiot-device-trend-chart-r01.title':
+    '修复接入设备查看数据趋势图选点位后空白',
+  'pages.dashboard.updateLog.entries.kuaiiot-device-trend-chart-r01.description':
+    '趋势图 Tab 改为可见时再挂载图表并固定容器高度；数值字段兼容字符串小数；无数据时给出明确空态提示。',
   'pages.dashboard.updateLog.entries.data-backup-restore-serial-remap-r01.title':
     '修复跨组织恢复因主键冲突失败',
   'pages.dashboard.updateLog.entries.data-backup-restore-serial-remap-r01.description':
@@ -33205,6 +40132,18 @@ export default {
     '修复本机备份恢复误报「备份文件不存在」',
   'pages.dashboard.updateLog.entries.data-backup-local-restore-host-r01.description':
     '本机上传的备份 zip 只在当前 API 主机可读；共享任务队列上其它主机抢到恢复任务会误报文件不存在。本机存储备份改为在已校验文件的进程内执行恢复，并修正 Worker 路径与 psql 报错可读性。',
+  'pages.dashboard.updateLog.entries.sales-order-list-line-materials-r01.title':
+    '修复销售订单列表明细列不显示物料',
+  'pages.dashboard.updateLog.entries.sales-order-list-line-materials-r01.description':
+    '订单视图「明细」预览列依赖行项目数据，列表请求已始终带上 include_items，与报价单、采购订单一致，不再整列显示为「-」。',
+  'pages.dashboard.updateLog.entries.frontend-perf-wo-outbound-quote-r02.title':
+    '加快工单开单、出库与报价列表打开',
+  'pages.dashboard.updateLog.entries.frontend-perf-wo-outbound-quote-r02.description':
+    '工单新建编辑弹窗不再打开时全量预拉物料，改为选料与来源单据按需解析；销售出库列表详情抽屉与报价详情时间线改为按需加载，减轻列表首屏体积。',
+  'pages.dashboard.updateLog.entries.misc-voucher-submit-initiator-select-r01.title':
+    '其他收支提交会弹出发起人自选审批人',
+  'pages.dashboard.updateLog.entries.misc-voucher-submit-initiator-select-r01.description':
+    '列表行无 audit 快照时，工作流按钮改按单据 entityType 识别是否启用人工审核，避免误跳过发起人自选弹窗导致「缺少人员快照」无法提交。',
   'pages.dashboard.updateLog.entries.pull-source-display-echo-r01.title':
     '取单通用：来源单据回显即可，不必开查看',
   'pages.dashboard.updateLog.entries.pull-source-display-echo-r01.description':
@@ -33217,26 +40156,6 @@ export default {
     '修复应用中心一键同步菜单误报专业版权限',
   'pages.dashboard.updateLog.entries.application-center-sync-menu-permission-r01.description':
     '菜单同步改用应用更新或菜单更新权限，与安装/激活专业版解耦；本节点未 compose 的专业应用跳过，不影响基础与定制应用同步。',
-  'pages.dashboard.updateLog.entries.misc-voucher-submit-initiator-select-r01.title':
-    '其他收支提交会弹出发起人自选审批人',
-  'pages.dashboard.updateLog.entries.misc-voucher-submit-initiator-select-r01.description':
-    '列表行无 audit 快照时，工作流按钮改按单据 entityType 识别是否启用人工审核，避免误跳过发起人自选弹窗导致「缺少人员快照」无法提交。',
-  'pages.dashboard.updateLog.entries.quality-inspection-export-route-r01.title':
-    '修复检验业务列表导出全部报错',
-  'pages.dashboard.updateLog.entries.quality-inspection-export-route-r01.description':
-    '来料/过程/成品检验导出接口路由注册顺序已调整，不再把 export 误当成检验单 ID，导出全部可正常下载 Excel。',
-  'pages.dashboard.updateLog.entries.other-expense-submit-approver-snapshot-r01.title':
-    '修复其他费用收支提交审核须选审批人',
-  'pages.dashboard.updateLog.entries.other-expense-submit-approver-snapshot-r01.description':
-    '审批流配置为发起时勾选审批人时，其他费用支出/收入提交会弹出选人并写入人员快照，不再报缺少快照而无法提交。',
-  'pages.dashboard.updateLog.entries.sales-order-list-line-materials-r01.title':
-    '修复销售订单列表明细列不显示物料',
-  'pages.dashboard.updateLog.entries.sales-order-list-line-materials-r01.description':
-    '订单视图「明细」预览列依赖行项目数据，列表请求已始终带上 include_items，与报价单、采购订单一致，不再整列显示为「-」。',
-  'pages.dashboard.updateLog.entries.frontend-perf-wo-outbound-quote-r02.title':
-    '加快工单开单、出库与报价列表打开',
-  'pages.dashboard.updateLog.entries.frontend-perf-wo-outbound-quote-r02.description':
-    '工单新建编辑弹窗不再打开时全量预拉物料，改为选料与来源单据按需解析；销售出库列表详情抽屉与报价详情时间线改为按需加载，减轻列表首屏体积。',
   'pages.dashboard.updateLog.entries.remove-equipment-spot-check-plan-r01.title':
     '拆除设备点检计划，点检仍走点检单与方案绑定',
   'pages.dashboard.updateLog.entries.remove-equipment-spot-check-plan-r01.description':
@@ -33257,6 +40176,53 @@ export default {
     '点检保养计划设备与周期统一取自方案',
   'pages.dashboard.updateLog.entries.equip-ops-plan-scheme-params-r01.description':
     '保养方案补充维护类型与周期；点检计划与保养计划均不再单独关联设备、维护类型与周期，改由方案参数与设备方案绑定展开，列表展示绑定台数。',
+  'pages.dashboard.updateLog.entries.equip-ops-scheme-bind-clients-r01.title':
+    '移动与工位点检保养跟方案绑定',
+  'pages.dashboard.updateLog.entries.equip-ops-scheme-bind-clients-r01.description':
+    '移动端新建点检仅可选设备已绑定方案；保养执行携带计划方案或设备保养方案绑定。工位终端设备区可直接点检与保养，规则与 PC 一致。',
+  'pages.dashboard.updateLog.entries.plan-scheme-bind-r01.title':
+    '点检计划以方案为真源，保养计划可绑保养方案',
+  'pages.dashboard.updateLog.entries.plan-scheme-bind-r01.description':
+    '点检计划只选点检方案，周期取自方案，生成点检单按设备台账方案绑定展开；保养计划新增必绑保养方案，设备与周期仍在计划上维护。',
+  'pages.dashboard.updateLog.entries.equipment-spot-check-plan-r01.title': '设备点检计划',
+  'pages.dashboard.updateLog.entries.equipment-spot-check-plan-r01.description':
+    '设备管理新增点检计划与计划日历：按设备与点检方案排程，可一键生成点检单，与保养计划交互对齐。',
+  'pages.dashboard.updateLog.entries.customer-pool-hide-create-r01.title':
+    '客户池不再显示新建客户',
+  'pages.dashboard.updateLog.entries.customer-pool-hide-create-r01.description':
+    '客户池权限不含新建；新建客户只在客户管理中操作。客户池保留领取、分配、释放与协同。',
+  'pages.dashboard.updateLog.entries.notify-warehouse-nested-tx-deadlock-r01.title':
+    '收货/发货通知仓库不再拖死后端',
+  'pages.dashboard.updateLog.entries.notify-warehouse-nested-tx-deadlock-r01.description':
+    '通知仓库生成采购入库或销售出库时，编码取号与单据关联改为复用外层事务，并缩短入库建单持锁；避免 Tortoise 嵌套事务死锁导致整站长时间无响应并弹出「服务器暂时不可用」。',
+  'pages.dashboard.updateLog.entries.sales-return-customer-name-string-r01.title':
+    '销售退货单新建客户名称必填校验修复',
+  'pages.dashboard.updateLog.entries.sales-return-customer-name-string-r01.description':
+    '销售退货单客户选择改用与销售订单一致的客户下拉，选中时正确回填客户名称字符串，避免提交时报 customer_name 类型错误。',
+  'pages.dashboard.updateLog.entries.unit-material-sync-decouple-r01.title':
+    '单位同步与物料同步配置拆开',
+  'pages.dashboard.updateLog.entries.unit-material-sync-decouple-r01.description':
+    '单位管理与物料管理同步按钮各自使用独立字段别名与优先接口；单位正式同步在写入前按基础单位去重，不再把物料编码误写成单位编码；接口测试仅对单位预置接口做单位去重。',
+  'pages.dashboard.updateLog.entries.drawing-balloon-sheet-pro-r01.title':
+    '图纸气泡标注独立为 PRO 单据',
+  'pages.dashboard.updateLog.entries.drawing-balloon-sheet-pro-r01.description':
+    '质量模块新增「图纸气泡标注」菜单（专业套餐），含独立列表与 OCR 编辑器；首件检验保留 FAIR 流程，可从已确认标注单导入特性。',
+  'pages.dashboard.updateLog.entries.quality-osqc-display-label-r01.title':
+    '委外检验菜单与方案类型统一显示 OSQC',
+  'pages.dashboard.updateLog.entries.quality-osqc-display-label-r01.description':
+    '侧栏、面包屑、质检方案类型、物料分场景与配置中心环节开关等文案与来料/过程等同级单据一致，统一为「委外检验 (OSQC)」。',
+  'pages.dashboard.updateLog.entries.quality-patrol-form-list-r01.title':
+    '质量巡检建单与列表能力完善',
+  'pages.dashboard.updateLog.entries.quality-patrol-form-list-r01.description':
+    '新建弹窗改为双栏布局并支持质检方案、车间产线工位、工序与工单关联；列表对齐委外检验的批量删除、撤回检验与审核操作，并补充方案与产线工位列。',
+  'pages.dashboard.updateLog.entries.quality-outsource-list-align-r01.title':
+    '委外检验列表对齐同级检验单据',
+  'pages.dashboard.updateLog.entries.quality-outsource-list-align-r01.description':
+    '去掉高级搜索上方页标题；工具栏补齐批量删除、撤回检验与审核批量操作，交互与来料/出货检验一致。',
+  'pages.dashboard.updateLog.entries.quality-plan-types-osqc-patrol-r01.title':
+    '质检方案扩展委外与巡检类型并上线委外检验与质量巡检',
+  'pages.dashboard.updateLog.entries.quality-plan-types-osqc-patrol-r01.description':
+    '检验业务菜单按来料、委外、过程、成品、出货、首件、巡检重排；质检方案新增委外检验与质量巡检类型；新增委外检验（委外收货取单）与质量巡检（无强制来源任意抽检）单据。',
   'pages.dashboard.updateLog.entries.finance-other-voucher-line-audit-columns-r01.title':
     '其他费用单保存明细行不再缺列',
   'pages.dashboard.updateLog.entries.finance-other-voucher-line-audit-columns-r01.description':
@@ -33265,6 +40231,30 @@ export default {
     '其他费用单保存不再提示编码规则缺失',
   'pages.dashboard.updateLog.entries.finance-other-income-code-rule-seed-r01.description':
     '升级迁移会为各组织补建并启用 OTHER_INCOME_CODE、OTHER_EXPENSE_CODE（QS/QZ 加日期流水）；保存时若仍缺规则会尝试加载预设而非直接占号失败。',
+  'pages.dashboard.updateLog.entries.influxdb-live-connection-test-r01.title':
+    'InfluxDB 数据源支持真实连接测试',
+  'pages.dashboard.updateLog.entries.influxdb-live-connection-test-r01.description':
+    '测试连接会对目标 InfluxDB 发起 ping，并用 Token 校验 Org 与 Bucket 是否可用；通过后标记为已连通，不再只做表单必填检查。',
+  'pages.dashboard.updateLog.entries.frontend-perf-list-form-r01.title':
+    '加快工单采购列表与报价合同新建打开',
+  'pages.dashboard.updateLog.entries.frontend-perf-list-form-r01.description':
+    '工单与采购订单列表指标卡延后到首屏绘制后再请求；报价单与销售合同新建编辑页不再进页全量预拉物料，改为选料缓存与导入时按需加载。',
+  'pages.dashboard.updateLog.entries.work-purchase-order-detail-perf-r01.title':
+    '加快工单与采购订单详情响应',
+  'pages.dashboard.updateLog.entries.work-purchase-order-detail-perf-r01.description':
+    '详情并行取齐关联事实后拼装生命周期；流程阶段按领料/检验/入库或到货通知/检验/收货/发票等业务事实判定，不再串行拉里程碑；全链路与附件中心仍按 Tab 懒挂载。',
+  'pages.dashboard.updateLog.entries.document-trace-attach-perf-r01.title':
+    '加快全链路追踪与附件中心加载',
+  'pages.dashboard.updateLog.entries.document-trace-attach-perf-r01.description':
+    '追溯同趟复用关联查询并并行展开兄弟节点；删除标记按类型批量解析；销售订单/工单下游推导与附件中心按类型并行取附件，缩短详情抽屉切 Tab 等待。',
+  'pages.dashboard.updateLog.entries.sales-order-detail-api-perf-r01.title':
+    '加快销售订单详情接口响应',
+  'pages.dashboard.updateLog.entries.sales-order-detail-api-perf-r01.description':
+    '详情取数改为并行查询账款、可发货、下推与配置；下游与改号门禁改走列表同款轻量检测，不再重复拉追溯链；执行中子阶段按需求/工单/发货通知/交货进度判定。',
+  'pages.dashboard.updateLog.entries.kuaiiot-command-device-id-migration-r01.title':
+    '修复快数采看板因缺 command_device_id 列报错',
+  'pages.dashboard.updateLog.entries.kuaiiot-command-device-id-migration-r01.description':
+    '补齐 apps_kuaiiot_devices.command_device_id 迁移；部署执行 aerich upgrade 后，设备看板汇总接口恢复正常。',
   'pages.dashboard.updateLog.entries.payment-application-uni-audit-r01.title': '付款申请统一审核',
   'pages.dashboard.updateLog.entries.payment-application-uni-audit-r01.description':
     '付款申请接入 manifest 统一审核与 simple 模板：提交/审核/驳回走 /core/uni-audit，不依赖业务配置审核开关与绑定审批流程。',
@@ -33356,6 +40346,10 @@ export default {
     '苍穹物料同步可自动带上规格与分组列',
   'pages.dashboard.updateLog.entries.cosmic-material-select-nested-project-r01.description':
     '裁剪 select 时正确展开 baseunit/group 嵌套字段为 baseunit_number、group_number 等，预览后规格型号与物料分组编码/名称可自动映射。',
+  'pages.dashboard.updateLog.entries.cosmic-material-test-not-unit-collapse-r01.title':
+    '苍穹查询物料测试不再误显示成单位',
+  'pages.dashboard.updateLog.entries.cosmic-material-test-not-unit-collapse-r01.description':
+    '接口测试表格预览曾因 select 含 baseunit 就把物料行去重成 kg/KG。现仅「单位同步」测试才会折叠；查询物料会展示真实物料编码与名称。',
   'pages.dashboard.updateLog.entries.cosmic-token-expired-auto-refresh-r01.title':
     '苍穹 AccessToken 过期后自动换票重试',
   'pages.dashboard.updateLog.entries.cosmic-token-expired-auto-refresh-r01.description':
@@ -33372,6 +40366,10 @@ export default {
     '苍穹单位同步改为从物料基础单位抽取',
   'pages.dashboard.updateLog.entries.cosmic-unit-sync-multimeasureunit-r01.description':
     '部分苍穹环境网关未挂通独立计量单位与多计量单位接口（路由未找到）。单位同步预置改为物料 batchQuery，并带 select 只拉 number/name/基础单位；预览也只显示映射相关列。再次加载可自动升级旧路径。',
+  'pages.dashboard.updateLog.entries.oss-order-list-without-kuaicaiwu-r01.title':
+    '开源环境销售/采购订单列表可无轻财务运行',
+  'pages.dashboard.updateLog.entries.oss-order-list-without-kuaicaiwu-r01.description':
+    '销售订单、采购订单列表不再硬依赖轻财务包；无专业包时跳过开票余额与预收预付增强，下推财务单据仍需安装轻财务。',
   'pages.dashboard.updateLog.entries.user-preference-atomic-jsonb-merge-r01.title':
     '个性化主题保存不再被标签同步冲掉',
   'pages.dashboard.updateLog.entries.user-preference-atomic-jsonb-merge-r01.description':
@@ -33380,50 +40378,14 @@ export default {
     '修复业务角色数据字典与系统回显为空',
   'pages.dashboard.updateLog.entries.core-system-display-grant-backfill-r01.description':
     '回显权限改为显式勾选后，部分角色缺少「数据字典/用户/部门」等系统回显，客户分类等下拉会显示暂无数据。已为缺权角色补齐系统回显，并完善同步对零授权回显码的默认授予。',
-  'pages.dashboard.updateLog.entries.equip-ops-scheme-bind-clients-r01.title':
-    '移动与工位点检保养跟方案绑定',
-  'pages.dashboard.updateLog.entries.equip-ops-scheme-bind-clients-r01.description':
-    '移动端新建点检仅可选设备已绑定方案；保养执行携带计划方案或设备保养方案绑定。工位终端设备区可直接点检与保养，规则与 PC 一致。',
-  'pages.dashboard.updateLog.entries.plan-scheme-bind-r01.title':
-    '点检计划以方案为真源，保养计划可绑保养方案',
-  'pages.dashboard.updateLog.entries.plan-scheme-bind-r01.description':
-    '点检计划只选点检方案，周期取自方案，生成点检单按设备台账方案绑定展开；保养计划新增必绑保养方案，设备与周期仍在计划上维护。',
-  'pages.dashboard.updateLog.entries.customer-pool-hide-create-r01.title':
-    '客户池不再显示新建客户',
-  'pages.dashboard.updateLog.entries.customer-pool-hide-create-r01.description':
-    '客户池权限不含新建；新建客户只在客户管理中操作。客户池保留领取、分配、释放与协同。',
-  'pages.dashboard.updateLog.entries.notify-warehouse-nested-tx-deadlock-r01.title':
-    '收货/发货通知仓库不再拖死后端',
-  'pages.dashboard.updateLog.entries.notify-warehouse-nested-tx-deadlock-r01.description':
-    '通知仓库生成采购入库或销售出库时，编码取号与单据关联改为复用外层事务，并缩短入库建单持锁；避免 Tortoise 嵌套事务死锁导致整站长时间无响应并弹出「服务器暂时不可用」。',
-  'pages.dashboard.updateLog.entries.sales-return-customer-name-string-r01.title':
-    '销售退货单新建客户名称必填校验修复',
-  'pages.dashboard.updateLog.entries.sales-return-customer-name-string-r01.description':
-    '销售退货单客户选择改用与销售订单一致的客户下拉，选中时正确回填客户名称字符串，避免提交时报 customer_name 类型错误。',
-  'pages.dashboard.updateLog.entries.unit-material-sync-decouple-r01.title':
-    '单位同步与物料同步配置拆开',
-  'pages.dashboard.updateLog.entries.unit-material-sync-decouple-r01.description':
-    '单位管理与物料管理同步按钮各自使用独立字段别名与优先接口；单位正式同步在写入前按基础单位去重，不再把物料编码误写成单位编码；接口测试仅对单位预置接口做单位去重。',
-  'pages.dashboard.updateLog.entries.drawing-balloon-sheet-pro-r01.title':
-    '图纸气泡标注独立为 PRO 单据',
-  'pages.dashboard.updateLog.entries.drawing-balloon-sheet-pro-r01.description':
-    '质量模块新增「图纸气泡标注」菜单（专业套餐），含独立列表与 OCR 编辑器；首件检验保留 FAIR 流程，可从已确认标注单导入特性。',
-  'pages.dashboard.updateLog.entries.quality-osqc-display-label-r01.title':
-    '委外检验菜单与方案类型统一显示 OSQC',
-  'pages.dashboard.updateLog.entries.quality-osqc-display-label-r01.description':
-    '侧栏、面包屑、质检方案类型、物料分场景与配置中心环节开关等文案与来料/过程等同级单据一致，统一为「委外检验 (OSQC)」。',
-  'pages.dashboard.updateLog.entries.quality-patrol-form-list-r01.title':
-    '质量巡检建单与列表能力完善',
-  'pages.dashboard.updateLog.entries.quality-patrol-form-list-r01.description':
-    '新建弹窗改为双栏布局并支持质检方案、车间产线工位、工序与工单关联；列表对齐委外检验的批量删除、撤回检验与审核操作，并补充方案与产线工位列。',
-  'pages.dashboard.updateLog.entries.quality-outsource-list-align-r01.title':
-    '委外检验列表对齐同级检验单据',
-  'pages.dashboard.updateLog.entries.quality-outsource-list-align-r01.description':
-    '去掉高级搜索上方页标题；工具栏补齐批量删除、撤回检验与审核批量操作，交互与来料/出货检验一致。',
-  'pages.dashboard.updateLog.entries.quality-plan-types-osqc-patrol-r01.title':
-    '质检方案扩展委外与巡检类型并上线委外检验与质量巡检',
-  'pages.dashboard.updateLog.entries.quality-plan-types-osqc-patrol-r01.description':
-    '检验业务菜单按来料、委外、过程、成品、出货、首件、巡检重排；质检方案新增委外检验与质量巡检类型；新增委外检验（委外收货取单）与质量巡检（无强制来源任意抽检）单据。',
+  'pages.dashboard.updateLog.entries.oss-pro-decouple-startup-r01.title':
+    '开源版可不装专业包独立启动',
+  'pages.dashboard.updateLog.entries.oss-pro-decouple-startup-r01.description':
+    '未安装轻财务/快研发等专业包时，快制造与主数据路由可正常注册；迁移不再因缺少许可证表失败；上线向导「业务蓝图」跳转至配置中心审核设置。',
+  'pages.dashboard.updateLog.entries.dashboard-todo-rbac-filter-r01.title':
+    '工作台待办仅展示有权限的单据',
+  'pages.dashboard.updateLog.entries.dashboard-todo-rbac-filter-r01.description':
+    '系统工作台「待办事项」按登录用户对各单据模块的查看权限过滤列表与分类计数；无权限的工单、检验、出入库等不再出现。指派给本人的审批待办仍可见。',
   'pages.dashboard.updateLog.entries.kuaioa-asset-registry-redirect-fa-r01.title':
     '行政办公资产台账改走轻财务资产清单',
   'pages.dashboard.updateLog.entries.kuaioa-asset-registry-redirect-fa-r01.description':
@@ -33568,14 +40530,10 @@ export default {
     '实验委托可设置委托部门与检测部门可选范围',
   'pages.dashboard.updateLog.entries.lab-request-dept-scope-settings-r01.description':
     '列表「部门设置」可分别指定委托部门、检测部门白名单；留空不限制。新建编辑下拉仅显示范围内部门，编辑时仍保留已选部门。',
-  'pages.dashboard.updateLog.entries.wecom-mobile-oauth-refresh-loop-r01.title':
-    '企微工作台打开手机端不再循环刷新登录页',
-  'pages.dashboard.updateLog.entries.wecom-mobile-oauth-refresh-loop-r01.description':
-    '企业微信内打开手机端时，若静默授权失败或未完成，不再反复跳转授权页导致登录页整页刷新；会停在账密登录并提示原因，账密登录成功后可恢复下次静默登录。',
-  'pages.dashboard.updateLog.entries.customer-follow-up-create-data-scope-r02.title':
-    '客户跟进支持未归属客户',
-  'pages.dashboard.updateLog.entries.customer-follow-up-create-data-scope-r02.description':
-    '新建跟进可选择本人负责、协作或未归属（公海）客户，下拉与保存同一范围；他人已归属客户不可跟进，不再误报笼统权限不足。',
+  'pages.dashboard.updateLog.entries.login-log-location-zhou-suffix-r01.title':
+    '登录地点广州等城市不再截成单字',
+  'pages.dashboard.updateLog.entries.login-log-location-zhou-suffix-r01.description':
+    'IP 解析去行政区后缀时误把「州」当成尾缀，导致「广州」显示成「广」。现已保留两字市名，并优先识别「自治州」等完整后缀。',
   'pages.dashboard.updateLog.entries.material-sync-ferpclsid-source-type-r01.title':
     '物料同步来源类型转换需拉取 FErpClsID',
   'pages.dashboard.updateLog.entries.material-sync-ferpclsid-source-type-r01.description':
@@ -33584,6 +40542,14 @@ export default {
     '下推单据须先反审再删，禁止跳级冲销上游',
   'pages.dashboard.updateLog.entries.reporting-block-revoke-after-sales-outbound-r01.description':
     '销售订单下推生产工单/采购订单后，须先反审核并删除这些下游，才能反审或删除销售订单。报工若已有已审核/已入库的生产入库单，须先反审删除入库再反审报工；销售已出库亦不可冲报工；出库撤回须先处理送货单/退货。需求计算撤回仍对未执行（含草稿）下游级联删除。',
+  'pages.dashboard.updateLog.entries.wecom-mobile-oauth-refresh-loop-r01.title':
+    '企微工作台打开手机端不再循环刷新登录页',
+  'pages.dashboard.updateLog.entries.wecom-mobile-oauth-refresh-loop-r01.description':
+    '企业微信内打开手机端时，若静默授权失败或未完成，不再反复跳转授权页导致登录页整页刷新；会停在账密登录并提示原因，账密登录成功后可恢复下次静默登录。',
+  'pages.dashboard.updateLog.entries.customer-follow-up-create-data-scope-r02.title':
+    '客户跟进支持未归属客户',
+  'pages.dashboard.updateLog.entries.customer-follow-up-create-data-scope-r02.description':
+    '新建跟进可选择本人负责、协作或未归属（公海）客户，下拉与保存同一范围；他人已归属客户不可跟进，不再误报笼统权限不足。',
   'pages.dashboard.updateLog.entries.pc-audit-unreview-empty-pending-r01.title':
     '审核反审核不再出现空壳待审与审计静默',
   'pages.dashboard.updateLog.entries.pc-audit-unreview-empty-pending-r01.description':
@@ -33672,14 +40638,38 @@ export default {
     '样品加工研发项目支持手填代号',
   'pages.dashboard.updateLog.entries.kuaiplm-sample-process-manual-project-r01.description':
     '新建样品加工申请时，研发项目可从系统项目选择，也可直接输入项目代号，不再因项目主数据未建档而无法保存。',
+  'pages.dashboard.updateLog.entries.finance-misc-categories-kuaizhizao-api-r01.title':
+    '其他费用收支类别接口改挂快制造主仓',
+  'pages.dashboard.updateLog.entries.finance-misc-categories-kuaizhizao-api-r01.description':
+    '收支类别与其他费用收入/支出 API 迁入快制造主仓路由，新建类别不再报接口不存在；过账挂账仍衔接轻财务应收应付。',
   'pages.dashboard.updateLog.entries.payment-require-voucher-r01.title':
     '付款申请可要求上传付款凭证',
   'pages.dashboard.updateLog.entries.payment-require-voucher-r01.description':
     '新建付款申请时可勾选「是否需要上传付款凭证」；开启后，由该申请生成的付款单在确认过账前必须上传付款凭证，未开启则仍可自行决定是否上传。',
+  'pages.dashboard.updateLog.entries.other-expense-submit-approver-snapshot-r01.title':
+    '修复其他费用收支提交审核须选审批人',
+  'pages.dashboard.updateLog.entries.other-expense-submit-approver-snapshot-r01.description':
+    '审批流配置为发起时勾选审批人时，其他费用支出/收入提交会弹出选人并写入人员快照，不再报缺少快照而无法提交。',
+  'pages.dashboard.updateLog.entries.other-expense-edit-lines-amount-r01.title':
+    '修复编辑其他费用收支保存报错',
+  'pages.dashboard.updateLog.entries.other-expense-edit-lines-amount-r01.description':
+    '编辑其他费用支出/收入并保存明细时，不再因明细被转成字典后误读金额字段而报错，可正常保存。',
   'pages.dashboard.updateLog.entries.funide-oa-rd-archive-merge-module-r01.title':
     '定制 OA 研发项目列表可正常打开',
   'pages.dashboard.updateLog.entries.funide-oa-rd-archive-merge-module-r01.description':
     '补全研发项目体系清单合并判断模块，修复「研发项目」列表加载时报缺少 Python 模块的问题。',
+  'pages.dashboard.updateLog.entries.ind-foreign-trade-unified-crm-r01.title':
+    '外贸销售插件内统一内外贸客户跟进',
+  'pages.dashboard.updateLog.entries.ind-foreign-trade-unified-crm-r01.description':
+    '销售客户菜单支持全部/外贸/国内视图，内贸可手工新建与统一筛选导出；跟进与工作台统计覆盖内外贸，无需再进快制造客户池。',
+  'pages.dashboard.updateLog.entries.ind-foreign-trade-crm-gapfill-r01.title':
+    '外贸销售补齐询盘归属与跟进管理',
+  'pages.dashboard.updateLog.entries.ind-foreign-trade-crm-gapfill-r01.description':
+    '询盘导入与新建外贸客户自动归属当前销售；客户跟进支持待跟进筛选、下次跟进与导出；工作台可按业务员钻取跟进；客户列表展示项目描述与 D/已成交级别。',
+  'pages.dashboard.updateLog.entries.ind-foreign-trade-unitable-3bucket-r01.title':
+    '外贸客户与客户跟进列表列宽对齐三桶规范',
+  'pages.dashboard.updateLog.entries.ind-foreign-trade-unitable-3bucket-r01.description':
+    '外贸客户、客户跟进列表按 KeepWidth / RemainderFlex 定宽，「所需生产能力」等表头完整显示；工作台与询盘导入非列表页保持原交互。',
   'pages.dashboard.updateLog.entries.industry-pack-menu-bind-wipe-r01.title':
     '启用行业应用后侧栏能显示行业菜单',
   'pages.dashboard.updateLog.entries.industry-pack-menu-bind-wipe-r01.description':
@@ -33772,6 +40762,114 @@ export default {
     '表单保存失败会提示原因',
   'pages.dashboard.updateLog.entries.form-modal-save-error-visible-r01.description':
     '新建编辑弹窗保存时，接口校验失败会弹出具体原因，不再出现点了保存却没有任何提示。',
+  'pages.dashboard.updateLog.entries.funide-oa-drawing-row-actions-more-r01.title':
+    '福尼特 OA 工程图纸操作列收拢为更多',
+  'pages.dashboard.updateLog.entries.funide-oa-drawing-row-actions-more-r01.description':
+    '工程图纸列表操作列仅保留详情与「更多」下拉，反查、下发、借阅、升版、作废、打印等按分组收入菜单，与主数据工程图纸一致，避免一行挤满八个按钮。',
+  'pages.dashboard.updateLog.entries.funide-oa-drawing-dist-loan-in-drawings-r01.title':
+    '福尼特 OA 图纸下发借用并入工程图纸',
+  'pages.dashboard.updateLog.entries.funide-oa-drawing-dist-loan-in-drawings-r01.description':
+    '文控资料移除「图纸下发」「图纸借用」独立菜单；已发布图纸在工程图纸操作列可下发、借用，详情抽屉「记录」页签可查看下发与借用历史。请同步 funide-oa manifest 0.2.27。',
+  'pages.dashboard.updateLog.entries.funide-oa-change-desk-create-menu-r01.title':
+    '福尼特 OA 工程变更新建入口简化',
+  'pages.dashboard.updateLog.entries.funide-oa-change-desk-create-menu-r01.description':
+    '变更工作台「全部」仅保留一个「新建变更」下拉；切换到 BOM、工艺、图纸或工程变更页签时，只显示对应一种新建按钮，不再并排四个入口。',
+  'pages.dashboard.updateLog.entries.funide-oa-rework-workbench-layout-r01.title':
+    '福尼特 OA 返工单工作台顶栏排版优化',
+  'pages.dashboard.updateLog.entries.funide-oa-rework-workbench-layout-r01.description':
+    '生命周期步进从标题行挪到独立一行；标题行仅保留单据状态与返工类型徽章；补全概览区产品、返工原因中文标签。',
+  'pages.dashboard.updateLog.entries.funide-oa-rework-workbench-type-render-r01.title':
+    '福尼特 OA 返工单工作台加载修复',
+  'pages.dashboard.updateLog.entries.funide-oa-rework-workbench-type-render-r01.description':
+    '修复返工单会签工作台将返工类型对象直接渲染导致的白屏；返工类型现与列表一致以徽章展示。',
+  'pages.dashboard.updateLog.entries.funide-oa-doc-control-sop-menu-label-r01.title':
+    '福尼特 OA 文控 SOP 菜单改为指导书',
+  'pages.dashboard.updateLog.entries.funide-oa-doc-control-sop-menu-label-r01.description':
+    '文控资料下「工艺 SOP」「QC SOP」分别改为「工艺指导书」「检验指导书」，与现场用语一致；路径与权限不变，刷新页面即可。',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-menu-structure-fix-r01.title':
+    '福尼特 OA 研发管理菜单结构修正',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-menu-structure-fix-r01.description':
+    '研发管理下拆出「研发结构」（发起实验委托、结构交付物）；「研发电子」恢复试流单、样品加工、物料评审快捷入口（带 entry 独立路径，不与样品试流冲突）；文控仅保留 ECN 与工程图纸发放。请同步 funide-oa manifest 0.2.26 后刷新。',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-electronics-group-rename-r01.title':
+    '福尼特 OA 研发电子菜单组改名',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-electronics-group-rename-r01.description':
+    '「研发电子/结构」改为「研发电子」；结构类 PLM 交付物请从文控资料进入「结构交付物」。请同步 funide-oa manifest 0.2.25。',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-menu-dedupe-r01.title':
+    '福尼特 OA 研发管理菜单去重与交付物改名',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-menu-dedupe-r01.description':
+    '研发项目保留全量「交付物」并理顺与跨项目待办顺序；研发电子仅保留发起试验、电子交付物、固件与生产软件；文控为 ECN 唯一入口，结构类快捷改为「结构交付物」。试流、样品加工、物料评审请从「样品试流」进入。请同步 funide-oa manifest 0.2.24。',
+  'pages.dashboard.updateLog.entries.funide-oa-lab-menu-initiate-vs-process-r01.title':
+    '福尼特 OA 实验委托菜单区分发起与处理',
+  'pages.dashboard.updateLog.entries.funide-oa-lab-menu-initiate-vs-process-r01.description':
+    '实验部门「委托看板」置顶；实验部门入口改为「处理实验委托」，研发电子等发起部门改为「发起实验委托」。',
+  'pages.dashboard.updateLog.entries.funide-oa-doc-control-trim-drawing-shortcuts-r01.title':
+    '福尼特 OA 文控资料精简图纸快捷入口',
+  'pages.dashboard.updateLog.entries.funide-oa-doc-control-trim-drawing-shortcuts-r01.description':
+    '文控资料下移除 2D图、3D图、模具图及 DFM 三个交付物快捷菜单，后续由电子文档与结构文档管理统一入口。',
+  'pages.dashboard.updateLog.entries.funide-oa-doc-control-under-rd-r01.title':
+    '福尼特 OA 文控资料归入研发管理',
+  'pages.dashboard.updateLog.entries.funide-oa-doc-control-under-rd-r01.description':
+    '侧栏取消独立一级「文控资料」，改为「研发管理」下第三个分组，子菜单路径与权限不变。',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-management-menu-r01.title':
+    '福尼特 OA 研发管理菜单归组',
+  'pages.dashboard.updateLog.entries.funide-oa-rd-management-menu-r01.description':
+    '侧栏新增一级「研发管理」，其下挂「研发项目」与「研发电子/结构」两个分组，原两项一级菜单不再并列展示。',
+  'pages.dashboard.updateLog.entries.funide-oa-quality-improvement-group-label-r01.title':
+    '福尼特 OA 质量改善分组命名对齐通用',
+  'pages.dashboard.updateLog.entries.funide-oa-quality-improvement-group-label-r01.description':
+    '质量管理下原「质量闭环」分组改为与快质量一致的「质量改善」菜单标题。',
+  'pages.dashboard.updateLog.entries.funide-oa-quality-menu-merge-r01.title':
+    '福尼特 OA 质量管理菜单合并',
+  'pages.dashboard.updateLog.entries.funide-oa-quality-menu-merge-r01.description':
+    '取消侧栏独立「质量体系」一级菜单，并入「质量管理」下「质量闭环」与「质量体系」两个分组，避免与质量业务菜单重复并列。',
+  'pages.dashboard.updateLog.entries.funide-oa-qms-system-full-copy-r01.title':
+    '福尼特 OA 质量体系菜单对齐快质量',
+  'pages.dashboard.updateLog.entries.funide-oa-qms-system-full-copy-r01.description':
+    '福尼特 OA「质量体系」同步条款、体系文件多维浏览、年度审核计划、内审、不符合、纠正预防、管理评审、质量目标、法规与外审证书等独立页面与路由，菜单 path 均为 funide-oa。',
+  'pages.dashboard.updateLog.entries.funide-oa-qms-system-documents-parity-r01.title':
+    '福尼特 OA 体系文件页对齐通用优化',
+  'pages.dashboard.updateLog.entries.funide-oa-qms-system-documents-parity-r01.description':
+    'funide-oa 质量体系文件副本同步通用版：左侧三维度均可筛选、列表列序与列宽优化、查看详情抽屉与附件在线预览、行操作图标与图纸类动作一致。',
+  'pages.dashboard.updateLog.entries.funide-oa-step3-mounted-forms-r01.title':
+    '福尼特 OA Step3 预置会签菜单与挂载页',
+  'pages.dashboard.updateLog.entries.funide-oa-step3-mounted-forms-r01.description':
+    'funide-oa 新增 forms 路由复用轻办公挂载会签页；会签审批下可直接进入 5M变更、技术工作联系单、确认书、评审单、领料单预置模板，列表含上传下发与会签能力列。',
+  'pages.dashboard.updateLog.entries.funide-oa-trial-workbench-l51-r01.title':
+    '福尼特 OA 试流工作台 L51 步进提示',
+  'pages.dashboard.updateLog.entries.funide-oa-trial-workbench-l51-r01.description':
+    '结构/整机试流详情工作台展示工序完成进度；结构试流工序数偏离 13 步时告警；草稿态可在工作台直接编辑头表与物料行。',
+  'pages.dashboard.updateLog.entries.funide-oa-l59-bom-collab-workbench-r01.title':
+    '福尼特 OA BOM 协同双分区工作台',
+  'pages.dashboard.updateLog.entries.funide-oa-l59-bom-collab-workbench-r01.description':
+    'BOM 协同从列表进入独立工作台，电子与结构分区并行维护行项目，顶栏支持提交审核与文员录入。',
+  'pages.dashboard.updateLog.entries.funide-oa-workbench-step3-flow-r02.title':
+    '福尼特 OA 跨部门单据工作台 Step3 流程补齐',
+  'pages.dashboard.updateLog.entries.funide-oa-workbench-step3-flow-r02.description':
+    '样机制作书支持分区附件与顶栏提交审下发关闭；ECN 支持编辑头表物料、下发研发与 ERP 稽核；返工会签工作台可回列表维护子表并提交审核。',
+  'pages.dashboard.updateLog.entries.funide-oa-cross-dept-workbenches-r01.title':
+    '福尼特 OA 样机制作书 ECN 与返工协同工作台',
+  'pages.dashboard.updateLog.entries.funide-oa-cross-dept-workbenches-r01.description':
+    '样机制作书三分区协同、变更 ECN 八部门会签、返工多部门会签链从列表进入独立工作台，与试流工序步进壳一致。',
+  'pages.dashboard.updateLog.entries.funide-oa-trial-flow-workbench-step-nav-r01.title':
+    '试流工序步进样式与部门文案',
+  'pages.dashboard.updateLog.entries.funide-oa-trial-flow-workbench-step-nav-r01.description':
+    '福尼特试流工作台左侧工序列表改用选中/当前态统一配色，责任部门码改为中文展示，不再裸露英文 dept_code。',
+  'pages.dashboard.updateLog.entries.funide-oa-trial-flow-workbench-layout-r01.title':
+    '试流工作台视口内布局',
+  'pages.dashboard.updateLog.entries.funide-oa-trial-flow-workbench-layout-r01.description':
+    '福尼特试流详情工作台改为项目工作台顶栏与左右分栏，页签外层不再出现整页竖向滚动；发起信息仅展示已填字段，元件类工序默认可填判定结果。',
+  'pages.dashboard.updateLog.entries.funide-oa-trial-flow-dedicated-client-r01.title':
+    '试流前端迁入福尼特定制仓',
+  'pages.dashboard.updateLog.entries.funide-oa-trial-flow-dedicated-client-r01.description':
+    '福尼特OA试流列表、工作台与发起弹窗的 API client、项目选择与进度徽章改为 funide-oa 内副本，不再 import 通用 kuaiplm 前端模块。',
+  'pages.dashboard.updateLog.entries.funide-oa-trial-flow-workbench-collab-r01.title':
+    '试流多部门协同工作台',
+  'pages.dashboard.updateLog.entries.funide-oa-trial-flow-workbench-collab-r01.description':
+    '福尼特OA试流单改为研发精简发起，详情进入工序步进工作台按部门顺序填报；采购型号与订单号在采购工序填写，经理审核仍走试流审核节点。',
+  'pages.dashboard.updateLog.entries.funide-oa-qms-system-quality-pages-copy-r01.title':
+    '质量体系四页独立副本',
+  'pages.dashboard.updateLog.entries.funide-oa-qms-system-quality-pages-copy-r01.description':
+    '福尼特OA「质量体系」下条款管理、体系文件、内部审核、管理评审改为应用内独立页面副本，与快制造前端模块隔离，菜单仍走定制路径。',
   'pages.dashboard.updateLog.entries.funide-oa-rd-dashboard-structure-drawings-r01.title':
     '研发看板增加 2D/3D/模具图入口',
   'pages.dashboard.updateLog.entries.funide-oa-rd-dashboard-structure-drawings-r01.description':
@@ -33800,18 +40898,114 @@ export default {
     '图档发放保存需填写部门与使用人',
   'pages.dashboard.updateLog.entries.funide-oa-drawing-distribution-party-r01.description':
     '图纸下发的新建图档发放补回部门与使用人。这两项是发放单必填，缺了保存会被拒绝且之前没有提示。',
-  'pages.dashboard.updateLog.entries.kuaiai-p3-scene-tools-r01.title':
-    '智能体库新增客诉8D、模具工装、盘点、管理层 4 个场景',
-  'pages.dashboard.updateLog.entries.kuaiai-p3-scene-tools-r01.description':
-    '新增客诉 8D 助手（可查投诉与 8D 进度、辅助起草各段草稿）、模具工装助手（寿命预警与库位状态）、盘点分析助手（差异 TopN 与历史趋势）、管理层助手（生产/质量/设备/库存分域简报）；设备信号接入 IoT 未处理告警；SOP 附件内容同步进知识库。',
-  'pages.dashboard.updateLog.entries.kuaiai-p2-scene-tools-r01.title':
-    '智能体库新增 9 个出厂场景与 27 项业务工具',
-  'pages.dashboard.updateLog.entries.kuaiai-p2-scene-tools-r01.description':
-    '新增 MRP 例外、排程看板、批次追溯、变更影响、检验与供应商、设备运维、ECN 影响、BOM 工艺问答、异常上报 9 个出厂场景；智能体库支持按业务分类分组、收起记忆与关键字检索。异常上报场景首次提供「创建缺料/延期/质量异常单」写工具，执行前需人工确认。',
-  'pages.dashboard.updateLog.entries.kuaiai-p1-scene-templates-r01.title':
-    '智能体库新增班组长、订单交期、作业指导场景',
-  'pages.dashboard.updateLog.entries.kuaiai-p1-scene-templates-r01.description':
-    '智能体库与能力矩阵新增 3 个出厂场景（班组长助手、订单交期助手、作业指导助手），库存洞察、采购跟单、质量异常分析场景补充新查询工具；已有租户可在 Agent 档案页自行追加新工具。',
+  'pages.dashboard.updateLog.entries.order-line-variant-attrs-display-r01.title':
+    '销售等单据可选属性组合',
+  'pages.dashboard.updateLog.entries.order-line-variant-attrs-display-r01.description':
+    '修复启用属性管理的物料在订单明细中属性组合只显示横线的问题：物料引用回显补齐属性管理标识，行上可设置属性组合或选择 SKU。',
+  'pages.dashboard.updateLog.entries.sales-order-milestones-terms-in-lines-r01.title':
+    '销售订单收款计划与合同条款并入明细',
+  'pages.dashboard.updateLog.entries.sales-order-milestones-terms-in-lines-r01.description':
+    '新建编辑销售订单时，收款计划、合同条款不再单独板块，并入明细信息，标签与虚线添加按钮样式与费用明细一致，备注仍在其后。',
+  'pages.dashboard.updateLog.entries.drawing-upload-size-cap-200mb-r01.title':
+    '图纸主文件上传上限可调至 200 MB',
+  'pages.dashboard.updateLog.entries.drawing-upload-size-cap-200mb-r01.description':
+    '配置中心「图纸主文件上传大小」可配置上限由 100 MB 调整为 200 MB；平台文件服务硬上限同步为 200 MB，默认仍为 100 MB。',
+  'pages.dashboard.updateLog.entries.warehouse-type-gift-qty-only-r01.title':
+    '仓库类型新增赠品仓库',
+  'pages.dashboard.updateLog.entries.warehouse-type-gift-qty-only-r01.description':
+    '仓库类型增加「赠品仓库」：该仓出入库只记数量，不更新移动加权成本、出库成本记 0，库存金额统计排除赠品仓数量。',
+  'pages.dashboard.updateLog.entries.purchase-order-milestones-in-lines-r01.title':
+    '采购订单付款计划并入明细',
+  'pages.dashboard.updateLog.entries.purchase-order-milestones-in-lines-r01.description':
+    '新建编辑采购订单时，付款计划不再单独板块，并入明细信息（费用汇总之后、备注之前），标签与虚线添加按钮样式与销售订单收款计划一致。',
+  'pages.dashboard.updateLog.entries.purchase-order-settlement-fields-r01.title':
+    '采购订单对齐销售订单结算与表头布局',
+  'pages.dashboard.updateLog.entries.purchase-order-settlement-fields-r01.description':
+    '采购订单头增加付款方式、结算方式与付款周期（天数，对齐供应商付款账期）；选供应商自动带入；基本信息改为三行五列，并补齐汇率。',
+  'pages.dashboard.updateLog.entries.sales-order-payment-cycle-from-customer-days-r01.title':
+    '销售订单付款周期改为客户账期天数',
+  'pages.dashboard.updateLog.entries.sales-order-payment-cycle-from-customer-days-r01.description':
+    '付款周期不再使用「月结30天」等预置字典下拉，改为数字天数（与客户「付款账期（天）」一致）；选客户时自动带入，可手工修改。',
+  'pages.dashboard.updateLog.entries.document-form-page-no-outer-card-r01.title':
+    '独立单据新建编辑页去掉外层白卡片',
+  'pages.dashboard.updateLog.entries.document-form-page-no-outer-card-r01.description':
+    '销售订单等独立新建/编辑页统一去掉内容区外层带边框白底容器，表单直接铺在滚动区，各单据页一并生效。',
+  'pages.dashboard.updateLog.entries.sales-order-form-row3-grid-r01.title':
+    '销售订单表单第三行栅格对齐',
+  'pages.dashboard.updateLog.entries.sales-order-form-row3-grid-r01.description':
+    '新建/编辑销售订单基本信息第三行与上行同为五列槽位，收货地址仍占两格，发货方式、联系人、电话竖线与上行对齐。',
+  'pages.dashboard.updateLog.entries.gl-opening-balance-hierarchy-r01.title':
+    '总账期初余额展示一级科目并拦截非末级残留',
+  'pages.dashboard.updateLog.entries.gl-opening-balance-hierarchy-r01.description':
+    '期初录入页按科目树展示非末级汇总行（如应交税费），仅末级可改；父科目仍有余额时禁止直接加下级，并可清零本月非末级残留期初，避免科目余额表有数、期初页看不见。',
+  'pages.dashboard.updateLog.entries.sales-order-header-five-col-r01.title':
+    '销售订单基本信息改为三行五列布局',
+  'pages.dashboard.updateLog.entries.sales-order-header-five-col-r01.description':
+    '新建编辑销售订单表头按一行五格排布：订单号至交货日、结算与立账付款及币种汇率、发货与联系人电话及通栏收货地址；币种与汇率合占一格。',
+  'pages.dashboard.updateLog.entries.sales-order-settlement-terms-carry-r01.title':
+    '销售订单增加结算方式并选客户带入',
+  'pages.dashboard.updateLog.entries.sales-order-settlement-terms-carry-r01.description':
+    '销售订单头在付款方式、付款周期旁增加「结算方式」（与客商结算方式同码表）；选客户时一并带入默认付款方式、结算方式与付款周期。',
+  'pages.dashboard.updateLog.entries.sales-order-payment-method-cycle-r01.title':
+    '销售订单付款条件拆为付款方式与付款周期',
+  'pages.dashboard.updateLog.entries.sales-order-payment-method-cycle-r01.description':
+    '销售订单基本信息原「付款条件」改为「付款方式」（现金、转账、承兑等，与客商默认付款方式同码表）与「付款周期」（数据字典付款条件）；选客户时分别带入默认付款方式与账期。',
+  'pages.dashboard.updateLog.entries.partner-settlement-net-terms-only-r01.title':
+    '客商账期结算与付款账期合并表达',
+  'pages.dashboard.updateLog.entries.partner-settlement-net-terms-only-r01.description':
+    '结算方式去掉月结/双月结/季结选项，统一为「账期结算」并由「付款账期（天）」填写 30、60、90 等；历史数据已归并为账期结算。',
+  'pages.dashboard.updateLog.entries.partner-settlement-terms-manufacturing-r01.title':
+    '客商结算方式补全制造业常用项',
+  'pages.dashboard.updateLog.entries.partner-settlement-terms-manufacturing-r01.description':
+    '结算方式增加货到付款、款到发货、现款现货、双月结、季结、账期结算、分期付款、进度款等；导入支持中文别名，选客户时可识别货到付款与预付类付款条件。',
+  'pages.dashboard.updateLog.entries.partner-settlement-terms-label-r01.title':
+    '客商档案结算方式字段文案调整',
+  'pages.dashboard.updateLog.entries.partner-settlement-terms-label-r01.description':
+    '原「结算条款」改回「结算方式」（月结、预付款）；现金、转账、承兑等仍在「默认付款方式」，字段说明中已区分。',
+  'pages.dashboard.updateLog.entries.partner-settlement-fields-split-r01.title':
+    '客户供应商拆分默认付款方式与结算条款',
+  'pages.dashboard.updateLog.entries.partner-settlement-fields-split-r01.description':
+    '客商档案原「结算方式」拆为「默认付款方式」（现金、转账、票据等）与「结算条款」（月结、预付款）；历史数据已迁移，导入模板支持新列并兼容旧单列。',
+  'pages.dashboard.updateLog.entries.document-ledger-recognition-r01.title':
+    '销售采购等单据头可设立账策略',
+  'pages.dashboard.updateLog.entries.document-ledger-recognition-r01.description':
+    '销售订单、采购订单、出入库、退换货、其他费用收支与委外加工等单据头增加「立账策略」：默认按客商覆盖或组织财务参数带入，可手工修改；自动应收应付以单据上策略为准，下游单据优先复制上源单。',
+  'pages.dashboard.updateLog.entries.finance-partner-statement-ledger-r01.title':
+    '应收应付支持按对账单立账',
+  'pages.dashboard.updateLog.entries.finance-partner-statement-ledger-r01.description':
+    '组织参数与客商可设「以按月结对账单为准」；出库入库与自动开票不再生成应收应付。往来对账单预览未立账源单，内部确认后可「审核立账」（立即立账或根据发票立账），客户对账单可下推销项发票。',
+  'pages.dashboard.updateLog.entries.document-dual-qty-quotation-sales-r01.title':
+    '报价与更多销售单据接入多单位数量',
+  'pages.dashboard.updateLog.entries.document-dual-qty-quotation-sales-r01.description':
+    '报价、合同、请购、退换货、收发货通知、其它出入库、借还料、调拨、需求计划等单据明细统一支持主副数量；库表已扩展副数量字段。',
+  'pages.dashboard.updateLog.entries.material-fixed-dual-qty-sync-r01.title':
+    '固定换算副数量自动联动',
+  'pages.dashboard.updateLog.entries.material-fixed-dual-qty-sync-r01.description':
+    '物料为固定换算时，单据明细主数量与副数量均可录入，改一侧会自动换算另一侧。',
+  'pages.dashboard.updateLog.entries.material-unit-role-badge-r01.title':
+    '多单位主副数量徽章展示',
+  'pages.dashboard.updateLog.entries.material-unit-role-badge-r01.description':
+    '单据明细与物料多单位中，主单位与副单位以徽章区分，数量行更易辨认。',
+  'pages.dashboard.updateLog.entries.material-dual-unit-floating-conversion-r01.title':
+    '物料多单位支持无固定换算',
+  'pages.dashboard.updateLog.entries.material-dual-unit-floating-conversion-r01.description':
+    '物料多单位可设固定换算或无固定换算；采购/销售/入库等单据可录主数量与副数量，浮动换算按本行实际比率过账，库存仍只记主单位。',
+  'pages.dashboard.updateLog.entries.material-inventory-category-field-r01.title':
+    '物料新增存货类别字段',
+  'pages.dashboard.updateLog.entries.material-inventory-category-field-r01.description':
+    '物料基本信息增加存货类别，材质移至「查看更多」；外推物料时可带出存货类别。',
+  'pages.dashboard.updateLog.entries.material-list-attachment-file-preview-r01.title':
+    '物料列表附件在线预览',
+  'pages.dashboard.updateLog.entries.material-list-attachment-file-preview-r01.description':
+    '物料列表附件列点击后统一打开文件管理预览，PDF、DWG/DXF 等不再跳转下载；图片缩略图也可点开预览。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-blank-supplier-optional-r01.title':
+    '独立采购入库可不填供应商',
+  'pages.dashboard.updateLog.entries.purchase-receipt-blank-supplier-optional-r01.description':
+    '空白新建采购入库单时供应商为选填，可不关联供应商直接保存；取单建单仍带出订单供应商。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-blank-create-r01.title':
+    '采购入库可独立建单',
+  'pages.dashboard.updateLog.entries.purchase-receipt-blank-create-r01.description':
+    '采购入库单列表新增「新建采购入库单」，可不选采购订单/收货通知/来料检验，直接录入供应商、仓库与明细；从单据加载仍保留。',
   'pages.dashboard.updateLog.entries.kuaioa-attendance-line-roster-r01.title':
     '月度考勤按产线拉人空白',
   'pages.dashboard.updateLog.entries.kuaioa-attendance-line-roster-r01.description':
@@ -33888,6 +41082,10 @@ export default {
     '审批条件分支支持三种触发方式',
   'pages.dashboard.updateLog.entries.approval-condition-route-mode-r01.description':
     '条件节点可配置上一节点人员、流程发起人或字段公式选边；审核与提交弹窗按模式必选分支，禁止无选择默认跳转。',
+  'pages.dashboard.updateLog.entries.other-expense-submit-status-match-r01.title':
+    '其他费用支出提交不再误报状态不允许',
+  'pages.dashboard.updateLog.entries.other-expense-submit-status-match-r01.description':
+    '提交门禁与前端状态判定对齐，兼容草稿中英文与大小写；误报 other_expense.submit.not_allowed 已修复，错误提示改为中文说明。',
   'pages.dashboard.updateLog.entries.purchase-invoice-pull-detail-lines-r01.title':
     '采购收票预览展示源单物料明细',
   'pages.dashboard.updateLog.entries.purchase-invoice-pull-detail-lines-r01.description':
@@ -34176,6 +41374,234 @@ export default {
     '订单跟踪顶栏模糊搜索不生效',
   'pages.dashboard.updateLog.entries.haoligo-order-tracking-fuzzy-search-r01.description':
     '列表请求误从 params 取 keyword，而 UniTable 模糊词在 searchFormValues；已改为 pickListSearchKeyword，搜订单号等可正确过滤。',
+  'pages.dashboard.updateLog.entries.haoligo-equipment-output-production-dept-toolbar-r01.title':
+    '设备产出单按生产部门筛选更显眼',
+  'pages.dashboard.updateLog.entries.haoligo-equipment-output-production-dept-toolbar-r01.description':
+    '注塑机产出单与其它设备产出单列表在「新建」左侧增加按生产部门下拉筛选（选项来自本页已使用的生产部门去重），并保留列表生产部门列。',
+  'pages.dashboard.updateLog.entries.haoligo-output-backfill-dept-throttle-r01.title':
+    '设备产出单回填生产部门限流防拖垮',
+  'pages.dashboard.updateLog.entries.haoligo-output-backfill-dept-throttle-r01.description':
+    '回填改为先本地快照与同制令单已有部门互填，再对数据集外查每批最多 2 次；避免分片仍连续打满外查把服务打挂。',
+  'pages.dashboard.updateLog.entries.haoligo-output-prod-dept-toolbar-filter-r01.title':
+    '设备产出单按生产部门查询真正生效',
+  'pages.dashboard.updateLog.entries.haoligo-output-prod-dept-toolbar-filter-r01.description':
+    '工具栏「按照生产部门查询」写入列表筛选真源并随请求带上，选中总装车间等部门后不再出现未筛选的空部门行。',
+  'pages.dashboard.updateLog.entries.haoligo-output-backfill-prod-dept-sliced-r01.title':
+    '设备产出单回填生产部门支持分批',
+  'pages.dashboard.updateLog.entries.haoligo-output-backfill-prod-dept-sliced-r01.description':
+    '历史单据较多时，「回填生产部门」按每批约 40 条切片续跑，避免一次扫全表导致请求超时或服务中断；界面显示分批进度。',
+  'pages.dashboard.updateLog.entries.haoligo-mobile-spot-check-photo-clarity-r01.title':
+    '手机端点检照片全屏预览改走原图',
+  'pages.dashboard.updateLog.entries.haoligo-mobile-spot-check-photo-clarity-r01.description':
+    '点检现场照片点开后不再用 128 像素缩略图拉满屏；全屏加载原图。上传压缩长边提高到 2560、JPEG 质量 0.92，便于看清表计与铭牌。',
+  'pages.dashboard.updateLog.entries.haoligo-horizontal-output-import-ghost-row-r01.title':
+    '卧式注塑机产出导入不再带入空残值行',
+  'pages.dashboard.updateLog.entries.haoligo-horizontal-output-import-ghost-row-r01.description':
+    '导入预检与落库均跳过无生产日期的残值行，避免表中看似空白却因单格残留出现「多出一行」。',
+  'pages.dashboard.updateLog.entries.haoligo-horizontal-output-import-date-serial-r01.title':
+    '卧式注塑机产出导入识别 Excel 日期序列号',
+  'pages.dashboard.updateLog.entries.haoligo-horizontal-output-import-date-serial-r01.description':
+    '从 Excel 粘贴或上传时，生产日期不再被误写成 46320 一类序列号；后端同步识别序列号。合格数缺列时按 0 导入，避免整批 Field required。',
+  'pages.dashboard.updateLog.entries.haoligo-output-record-dept-filter-options-r01.title':
+    '设备产出单按生产部门筛选可列出选项',
+  'pages.dashboard.updateLog.entries.haoligo-output-record-dept-filter-options-r01.description':
+    '工具栏「按照生产部门查询」除已落库部门外，还会从带出快照按数据集「生产部门列」解析去重，历史单部门字段为空时也不再整表「暂无数据」。',
+  'pages.dashboard.updateLog.entries.haoligo-output-record-backfill-prod-dept-r01.title':
+    '设备产出单可回填历史生产部门',
+  'pages.dashboard.updateLog.entries.haoligo-output-record-backfill-prod-dept-r01.description':
+    '配置数据集生产部门列后，列表可一键回填空部门历史单：优先用已存带出快照，否则按制令单重查数据集；已有部门不覆盖。带出列名匹配忽略大小写。',
+  'pages.dashboard.updateLog.entries.haoligo-payroll-high-temp-batch-apply-fix-r01.title':
+    '工资结算批量高温补贴点了无效果',
+  'pages.dashboard.updateLog.entries.haoligo-payroll-high-temp-batch-apply-fix-r01.description':
+    '修复批量高温补贴接口校验失败且前端未提示的问题；改为按结算行写入并显示成功或失败原因。',
+  'pages.dashboard.updateLog.entries.haoligo-payroll-high-temp-manual-col-r01.title':
+    '工资结算新增手工高温补贴列',
+  'pages.dashboard.updateLog.entries.haoligo-payroll-high-temp-manual-col-r01.description':
+    '各项补贴后增加「高温补贴」列：不关联工资基础架构，支持行内改与整列批量填写，计入应发小计；按考勤重建时保留已填金额。',
+  'pages.dashboard.updateLog.entries.haoligo-payroll-heat-subsidy-rename-r01.title':
+    '高温补贴更名为各项补贴',
+  'pages.dashboard.updateLog.entries.haoligo-payroll-heat-subsidy-rename-r01.description':
+    '工资基础架构与工资结算中原「高温补贴」列统一改称「各项补贴」；字段与联动逻辑不变。',
+  'pages.dashboard.updateLog.entries.haoligo-equipment-acceptance-history-trial-flow-date-r01.title':
+    '新设备验收单历史轮次显示试流日期',
+  'pages.dashboard.updateLog.entries.haoligo-equipment-acceptance-history-trial-flow-date-r01.description':
+    '历史轮次展示提交车间试产时的试流日期，便于对照各轮试产时间。',
+  'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-mold-invalid-badge-r01.title':
+    '卧式注塑机产出单校验模具台账',
+  'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-mold-invalid-badge-r01.description':
+    '列表模具号与模具台账比对，台账中查不到时在模具号旁显示「模具号有误」徽章。',
+  'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-fuzzy-search-r01.title':
+    '卧式注塑机产出单模糊搜索生效',
+  'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-fuzzy-search-r01.description':
+    '列表请求改为从 UniTable 搜索参数读取 keyword，修复模糊搜索未传到后端、结果不收缩的问题。',
+  'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-material-flex-v9.title':
+    '卧式注塑机产出单加宽物料名称列',
+  'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-material-flex-v9.description':
+    '收窄客户名称、制令单号、受订单号定宽，余量更多留给物料名称（唯一余量列），长物料名更易读全。',
+  'pages.dashboard.updateLog.entries.haoligo-payroll-settlement-hide-holiday-col-r01.title':
+    '工资结算隐藏节日福利列',
+  'pages.dashboard.updateLog.entries.haoligo-payroll-settlement-hide-holiday-col-r01.description':
+    '好力 GO 工资结算明细不再展示「节日福利」列；后台仍可保留该字段数据，不影响应发小计计算。',
+  'pages.dashboard.updateLog.entries.haoligo-payroll-settlement-post-allowance-col-r01.title':
+    '工资结算补齐岗位津贴列',
+  'pages.dashboard.updateLog.entries.haoligo-payroll-settlement-post-allowance-col-r01.description':
+    '工资结算应得部分增加「岗位津贴」列，与工资基础架构同字段联动：按考勤重建时从当月架构写入并计入应发小计，列头可跳转架构维护。',
+  'pages.dashboard.updateLog.entries.haoligo-payroll-piece-overtime-dash-r01.title':
+    '计件员工加班工资列显示横线',
+  'pages.dashboard.updateLog.entries.haoligo-payroll-piece-overtime-dash-r01.description':
+    '工资结算明细中计薪方式为计件的行，加班工资列不再显示 0，统一为横线；与计件工资列对计时行的展示方式一致。',
+  'pages.dashboard.updateLog.entries.haoligo-payroll-time-subtotal-recalc-r01.title':
+    '计时员工应发小计改由分项合计',
+  'pages.dashboard.updateLog.entries.haoligo-payroll-time-subtotal-recalc-r01.description':
+    '计时与月薪一致：加班按考勤 21.75 计算，小计为各应发列合计；不再保留导入小计反推加班。计件/产线仍可导入小计。',
+  'pages.dashboard.updateLog.entries.haoligo-payroll-line-pay-method-filter-r01.title':
+    '工资结算增加计薪方式筛选',
+  'pages.dashboard.updateLog.entries.haoligo-payroll-line-pay-method-filter-r01.description':
+    '结算明细工具栏可按计件、计时、产线、月薪筛选列表，并与姓名筛选、写入计件小计联动。',
+  'pages.dashboard.updateLog.entries.haoligo-payroll-quick-subtotal-piece-only-r01.title':
+    '批量小计仅写入计件员工',
+  'pages.dashboard.updateLog.entries.haoligo-payroll-quick-subtotal-piece-only-r01.description':
+    '汇总区「写入计件小计」只更新计薪方式为计件的行；计时与月薪小计不再被覆盖，仍由分项或考勤规则计算。',
+  'pages.dashboard.updateLog.entries.haoligo-payroll-detail-input-perf-r01.title':
+    '工资结算页录入不再卡顿',
+  'pages.dashboard.updateLog.entries.haoligo-payroll-detail-input-perf-r01.description':
+    '汇总小计与姓名筛选改为独立输入组件，明细大表 memo 且打印表按需挂载，避免每键重绘百行双表。',
+  'pages.dashboard.updateLog.entries.haoligo-payroll-quick-subtotal-batch-r01.title':
+    '批量写入应发小计加速',
+  'pages.dashboard.updateLog.entries.haoligo-payroll-quick-subtotal-batch-r01.description':
+    '「写入当前列表」改为一次导入请求批量更新，完成后用返回数据刷新表格，避免逐行保存极慢或不刷新。',
+  'pages.dashboard.updateLog.entries.haoligo-payroll-pay-method-from-profile-r01.title':
+    '工资结算计薪徽章读员工档案',
+  'pages.dashboard.updateLog.entries.haoligo-payroll-pay-method-from-profile-r01.description':
+    '结算明细姓名旁计薪方式改为按本车间员工档案刷新，避免接口缺字段时一律显示计时。',
+  'pages.dashboard.updateLog.entries.haoligo-payroll-piece-wage-time-dash-r01.title':
+    '计时员工计件工资列显示横线',
+  'pages.dashboard.updateLog.entries.haoligo-payroll-piece-wage-time-dash-r01.description':
+    '工资结算明细中计薪方式为计时的行，计件工资列不再展示推算金额，统一显示为横线，避免与加班工资重复。',
+  'pages.dashboard.updateLog.entries.haoligo-payroll-piece-wage-column-r01.title':
+    '工资结算增加计件工资列',
+  'pages.dashboard.updateLog.entries.haoligo-payroll-piece-wage-column-r01.description':
+    '夜班补贴与加班工资之间展示计件工资（小计减基本与岗位津贴、高温、工龄、等级之和）；计件计薪保存小计时同步写入计件字段。',
+  'pages.dashboard.updateLog.entries.haoligo-payroll-quick-earning-subtotal-r01.title':
+    '工资结算应发小计可录入',
+  'pages.dashboard.updateLog.entries.haoligo-payroll-quick-earning-subtotal-r01.description':
+    '结算详情汇总区增加应发小计录入与「写入当前列表」；表内小计列对计时、计件、产线显示输入框，保存后反推加班工资。',
+  'pages.dashboard.updateLog.entries.haoligo-leave-destination-trip-only-r01.title':
+    '请假出差目的地仅出差显示',
+  'pages.dashboard.updateLog.entries.haoligo-leave-destination-trip-only-r01.description':
+    '请假出差表单「目的地」仅在类型为出差时显示；切换为其它类型时清空目的地。',
+  'pages.dashboard.updateLog.entries.haoligo-leave-deduct-amount-default-r01.title':
+    '请假出差去掉是否扣款开关',
+  'pages.dashboard.updateLog.entries.haoligo-leave-deduct-amount-default-r01.description':
+    '请假出差新建/编辑弹窗不再显示「是否扣款」开关；扣款金额默认 0，大于 0 时按扣款处理。',
+  'pages.dashboard.updateLog.entries.haoligo-leave-department-after-name-r01.title':
+    '请假出差表单部门紧随姓名',
+  'pages.dashboard.updateLog.entries.haoligo-leave-department-after-name-r01.description':
+    '好力 GO 请假出差新建/编辑弹窗将「部门」调整到「姓名」右侧，车间与产线顺延，便于先确认人员组织信息。',
+  'pages.dashboard.updateLog.entries.haoligo-employee-hire-introducer-r01.title':
+    '入职登记增加入职介绍人',
+  'pages.dashboard.updateLog.entries.haoligo-employee-hire-introducer-r01.description':
+    '入职登记与新建员工档案增加「入职介绍人」手填字段，不关联系统用户；保存在员工档案中可回显。',
+  'pages.dashboard.updateLog.entries.haoligo-order-tracking-delivery-dict-shipped-at-r01.title':
+    '订单跟踪发货信息保存报错修复',
+  'pages.dashboard.updateLog.entries.haoligo-order-tracking-delivery-dict-shipped-at-r01.description':
+    '发货信息跟踪保存时，后端误把发货明细当成字典再取 shipped_at，导致 dict 无属性报错；已改为使用类型化明细写入。',
+  'pages.dashboard.updateLog.entries.haoligo-monthly-ledger-submit-perm-r01.title':
+    '月度工厂台账增加提交权限',
+  'pages.dashboard.updateLog.entries.haoligo-monthly-ledger-submit-perm-r01.description':
+    '销售跟踪「月度工厂台账」角色矩阵新增提交权限；「提交财务」按钮与接口改为按该权限控制，不再与编辑权限混用。',
+  'pages.dashboard.updateLog.entries.haoligo-annual-payroll-table-cols-template-r01.title':
+    '年度工资统计列表列序对齐总表模板',
+  'pages.dashboard.updateLog.entries.haoligo-annual-payroll-table-cols-template-r01.description':
+    '好力 GO 年度工资统计表列改为与工资明细总表一致：月工资及合计、月生活费及合计、月社保及合计，其后为个税扣除、杂项与年度剩余工资。',
+  'pages.dashboard.updateLog.entries.haoligo-annual-payroll-wage-detail-template-r01.title':
+    '年度工资导入对齐工资明细总表模板',
+  'pages.dashboard.updateLog.entries.haoligo-annual-payroll-wage-detail-template-r01.description':
+    '好力 GO 年度工资统计下载模板改为客户工资明细总表版式（年份行、换行表头、月工资/生活费/社保及合计公式、个税与杂项）；映射导入自动识别年份行并忽略合计列，个税/杂项写入对应月结算。',
+  'pages.dashboard.updateLog.entries.haoligo-annual-payroll-import-living-insurance-r01.title':
+    '年度工资明细导入支持生活费与社保',
+  'pages.dashboard.updateLog.entries.haoligo-annual-payroll-import-living-insurance-r01.description':
+    '好力 GO 年度工资统计导入模板在员工编号/姓名/车间与各月工资之外，增加 1～12 月生活费、社保列；写入对应月结算行并确认后纳入年度汇总。',
+  'pages.dashboard.updateLog.entries.haoligo-spot-check-line-photo-preview-r01.title':
+    '设备点检现场照片缩略图加载修复',
+  'pages.dashboard.updateLog.entries.haoligo-spot-check-line-photo-preview-r01.description':
+    '手机浏览器填写点检明细时，现场照片上传后立即补带鉴权预览地址，picture-card 不再显示加载失败。',
+  'pages.dashboard.updateLog.entries.haoligo-reward-performance-score-r01.title':
+    'HaoliGO 奖励登记恢复绩效得分',
+  'pages.dashboard.updateLog.entries.haoligo-reward-performance-score-r01.description':
+    '定制应用奖励绩效登记页（/apps/haoligo/hr/rewards）新建编辑表单、列表、导入导出补回绩效得分字段。',
+  'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-list-hide-sheet-no-r01.title':
+    '卧式注塑机产出单列表隐藏单号列',
+  'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-list-hide-sheet-no-r01.description':
+    '列表不再展示产出单号列，导出与编辑弹窗仍可查看单号；列宽缓存已更新。',
+  'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-list-three-bucket-r02.title':
+    '卧式注塑机产出单列表恢复三桶布局',
+  'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-list-three-bucket-r02.description':
+    '在保持与导出一致的列顺序前提下，业务列定宽、物料名称单独吃余量，长表头列加宽，审计与操作列仍由引擎固定。',
+  'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-list-export-order-r01.title':
+    '卧式注塑机产出单列表对齐导出列序',
+  'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-list-export-order-r01.description':
+    '列表列顺序与导出及品质日报 D 至 AI 一致，取消单号前置与模具叠列，合格率与不良率位置与模板相同。',
+  'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-list-rates-r01.title':
+    '卧式注塑机产出单列表显示合格率',
+  'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-list-rates-r01.description':
+    '列表在数量列后展示本批总合格率、本批一次合格率与本批总不良率，与导出及后端按投入数计算一致。',
+  'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-batch-delete-r01.title':
+    '卧式注塑机产出单批量删除',
+  'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-batch-delete-r01.description':
+    '列表勾选后工具栏提供批量删除，与新建按钮并列，按删除权限门控并二次确认。',
+  'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-list-full-cols-r01.title':
+    '卧式注塑机产出单列表补全列',
+  'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-list-full-cols-r01.description':
+    '列表展示单号、客户、受订单、模号、打印张数、一次合格、返工良品、不良数及十一项不良特征与备注；数量列按整数显示不再带 .0000。',
+  'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-import-defect-r01.title':
+    '卧式注塑机产出导入不良品特征',
+  'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-import-defect-r01.description':
+    '修复导入时列宽截断导致缺料至变形等不良项未写入；上传导出表或品质日报宽表时按表头名映射列，并兼容无示例行的 Excel。',
+  'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-list-layout-r01.title':
+    '卧式注塑机产出单列表列宽三桶',
+  'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-list-layout-r01.description':
+    '列表按 UniTable 三桶布局：单号与数量定宽、模具叠列、物料名称吃余量，更新时间叠列与操作列由引擎固定，减少截断与假横滚。',
+  'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-mold-select-r01.title':
+    '卧式注塑机产出单模具号关联台账',
+  'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-mold-select-r01.description':
+    '新建与编辑时模具号改为从模具台账搜索选择，需具备模具台账查看权限；保存仍校验台账存在并累加总制造数量。',
+  'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-audit-cols-r01.title':
+    '卧式注塑机产出单列表可打开',
+  'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-audit-cols-r01.description':
+    '补齐卧式注塑机产出单表审计列，修复列表报错 column updated_by_name does not exist。',
+  'pages.dashboard.updateLog.entries.haoligo-attendance-line-roster-r01.title':
+    '分产线月度考勤名单匹配',
+  'pages.dashboard.updateLog.entries.haoligo-attendance-line-roster-r01.description':
+    '考勤单指定产线时，按主数据产线编码与名称及员工档案产线字段求交拉人；产线不一致的休息/夜班登记不再误挂；改表头产线后自动补缺失日格。',
+  'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-r01.title':
+    '好力 GO 新增卧式注塑机产出单',
+  'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-r01.description':
+    '注塑机单据区另建卧式产出单，字段对齐品质日报 D 至 AI，支持按班导入导出；本批合格总数按模具号累加模具台账总制造数量，与原注塑机产出单并存。',
+  'pages.dashboard.updateLog.entries.haoligo-common-doc-print-presets-r01.title':
+    '设备维保单与巡检单可打印参观报告',
+  'pages.dashboard.updateLog.entries.haoligo-common-doc-print-presets-r01.description':
+    '好力 GO 常用单据补齐打印：设备维保单、设备巡检报告沿用原打印预览与预设模板；点检/完修仍可用。打开打印时自动加载缺失预设；注塑机与设备台账打印权限互通。请重启后端，角色勾选对应「打印」后刷新页面。',
+  'pages.dashboard.updateLog.entries.haoligo-print-html-photo-inline-r01.title':
+    '维保完成报告打印可显示影像照片',
+  'pages.dashboard.updateLog.entries.haoligo-print-html-photo-inline-r01.description':
+    '设备/模具维保完成报告等 HTML 打印预览将附件照片内联进报告，不再因文件下载鉴权导致「维保后」等图片裂开。请重启后端后重开打印预览。',
+  'pages.dashboard.updateLog.entries.haoligo-attendance-leave-rest-night-sync-r01.title':
+    '月度考勤与请假休息夜班自动联动',
+  'pages.dashboard.updateLog.entries.haoligo-attendance-leave-rest-night-sync-r01.description':
+    '打开草稿考勤或点「刷新名单」时，自动回写已通过请假、休息登记与夜班登记到日格；由请假单回写的请假格不可手改，须先撤销请假。',
+  'pages.dashboard.updateLog.entries.haoligo-molds-batch-select-r01.title':
+    '模具管理列表支持多选与批量删除',
+  'pages.dashboard.updateLog.entries.haoligo-molds-batch-select-r01.description':
+    '模具台账、保养项、保养方案、模具仓库及单据中心各列表开启行多选与批量删除；台账仍保留批量修改。',
+  'pages.dashboard.updateLog.entries.haoligo-hr-menu-isolation-r01.title':
+    '人事考勤工资菜单收回好力 GO 定制页',
+  'pages.dashboard.updateLog.entries.haoligo-hr-menu-isolation-r01.description':
+    '员工档案、异动、请假、考勤与填报、岗位补贴、最低工资、生活费预支、奖惩、工资结算、福利批次、生活费发放、个人工资与年度统计等整页复制到好力 GO，菜单统一改挂 /apps/haoligo/hr；不再直链轻办公通用页。',
+  'pages.dashboard.updateLog.entries.haoligo-attendance-day-register-copy-r01.title':
+    '休息与夜班登记收回好力 GO 定制页',
+  'pages.dashboard.updateLog.entries.haoligo-attendance-day-register-copy-r01.description':
+    '休息/夜班登记整页复制到好力 GO（含操作列、多选与批量删除），菜单改挂 /apps/haoligo；不再直链轻办公通用页。',
   'pages.dashboard.updateLog.entries.haoligo-output-record-prod-dept-list-r01.title':
     '产出单列表生产部门列与筛选',
   'pages.dashboard.updateLog.entries.haoligo-output-record-prod-dept-list-r01.description':
@@ -34308,10 +41734,14 @@ export default {
     '版权声明技术栈与当前产品依赖对齐',
   'pages.dashboard.updateLog.entries.tech-stack-copyright-align-r01.description':
     '按现行 pyproject 与 package.json 更新版本与清单：默认 PostgreSQL + Taskiq、无需 Redis；补充 Caddy、Electron、ECharts、CAD 图纸预览与实时通道，并标明 LibreDWG 的 GPL copyleft。',
-  'pages.dashboard.updateLog.entries.approval-countersign-my-pending-task-r01.title':
-    '修复会签时审批中心不显示同意/拒绝按钮',
-  'pages.dashboard.updateLog.entries.approval-countersign-my-pending-task-r01.description':
-    '实例列表按当前用户是否有待办任务判断操作按钮；会签成员不再因仅记录首位审批人而看不到同意/拒绝/转交。',
+  'pages.dashboard.updateLog.entries.gitee-oauth-email-scope-bind-r01.title':
+    'Gitee 快捷登录可读取邮箱并支持个人资料绑定',
+  'pages.dashboard.updateLog.entries.gitee-oauth-email-scope-bind-r01.description':
+    '授权范围增加 emails，并在公开邮箱为空时从邮箱列表取主邮箱以自动匹配系统用户；个人资料补充 Gitee 授权绑定与解绑入口。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-inquiry-display-r01.title':
+    '采购申请与询价单支持回显权限',
+  'pages.dashboard.updateLog.entries.purchase-requisition-inquiry-display-r01.description':
+    '将采购申请、询价单登记为可引用资源，角色矩阵出现「回显」勾选，供下游取单/关联时按回显权限加载。',
   'pages.dashboard.updateLog.entries.data-backup-broker-type-r01.title':
     '修复定时备份投递失败与备份类型展示',
   'pages.dashboard.updateLog.entries.data-backup-broker-type-r01.description':
@@ -34328,6 +41758,10 @@ export default {
     '销售订单默认归属业务员与菜单角标口径',
   'pages.dashboard.updateLog.entries.sales-order-default-salesman-badge-r01.description':
     '新建销售订单未填写归属业务员时默认带出当前登录账号；左侧菜单销售订单角标只统计归属业务员为当前用户的待办数量。',
+  'pages.dashboard.updateLog.entries.kuaiconnect-settings-lock-flash-r01.title':
+    '已启用快连接时系统配置不再闪锁定',
+  'pages.dashboard.updateLog.entries.kuaiconnect-settings-lock-flash-r01.description':
+    '连接管理四入口改用布局已加载的启用应用列表判定：未开通仍显示锁定；已开通不再因浮层二次请求短暂闪锁定；分组 PRO 徽标保持常显。',
   'pages.dashboard.updateLog.entries.sales-order-save-perf-r01.title':
     '加快销售订单保存速度',
   'pages.dashboard.updateLog.entries.sales-order-save-perf-r01.description':
@@ -34364,6 +41798,98 @@ export default {
     '平台恢复租户备份须指定目标组织',
   'pages.dashboard.updateLog.entries.data-backup-restore-target-tenant-r01.description':
     '平台管理员恢复组织级备份时可选择写入的目标组织，并随请求传 target_tenant_id，避免未绑定组织时报「缺少目标 tenant_id」。',
+  'pages.dashboard.updateLog.entries.reference-display-single-source-r01.title':
+    '引用回显统一由登记资源控制',
+  'pages.dashboard.updateLog.entries.reference-display-single-source-r01.description':
+    '矩阵「回显」与引用下拉放行均以 reference_resources 登记为准；取消回显后不再依赖宿主建单权限或 module_references 隐式放行，无权限时提示授予目标查看或回显。',
+  'pages.dashboard.updateLog.entries.kuaizhizao-reference-resources-peer-gap-r01.title':
+    '快制造同组单据补齐回显权限',
+  'pages.dashboard.updateLog.entries.kuaizhizao-reference-resources-peer-gap-r01.description':
+    '按菜单同组对照补登记销售预测、到货通知、需求与需求计算、借还料、送货单等 reference_resources，角色矩阵可勾选对应回显。',
+  'pages.dashboard.updateLog.entries.role-matrix-node-clear-select-all-r01.title':
+    '角色权限节点全选可取消',
+  'pages.dashboard.updateLog.entries.role-matrix-node-clear-select-all-r01.description':
+    '功能权限树节点在子权限已全部勾选时，节点旁按钮变为实心「取消全选」，再次点击可清空该节点下全部勾选。',
+  'pages.dashboard.updateLog.entries.role-matrix-node-select-all-r01.title':
+    '角色权限树节点旁可全选',
+  'pages.dashboard.updateLog.entries.role-matrix-node-select-all-r01.description':
+    '功能权限树每个菜单节点标题后增加「全选」，一键勾选该节点及其下级全部可配置操作。',
+  'pages.dashboard.updateLog.entries.role-matrix-one-click-display-r01.title':
+    '角色功能权限一键回显',
+  'pages.dashboard.updateLog.entries.role-matrix-one-click-display-r01.description':
+    '功能权限工具栏在「管理者」旁增加「一键回显」，对当前可见范围勾选全部回显权限，不影响其它已勾选操作。',
+  'pages.dashboard.updateLog.entries.kuaiconnect-system-routes-gate-r01.title':
+    '快连接启用后连接管理可进入业务页',
+  'pages.dashboard.updateLog.entries.kuaiconnect-system-routes-gate-r01.description':
+    '应用连接器、接口、数据源、数据集等系统路由不再写死升级占位页；快连接已安装启用且授权通过后直接打开业务页面。',
+  'pages.dashboard.updateLog.entries.pro-app-license-key-menu-r01.title':
+    '专业应用可随时输入 License Key',
+  'pages.dashboard.updateLog.entries.pro-app-license-key-menu-r01.description':
+    '应用中心「更多操作」增加「输入 License Key」；已启用但未授权时不必先关掉开关。升级提示页也可跳转应用中心激活。',
+  'pages.dashboard.updateLog.entries.kuaiconnect-pro-activation-rename-r01.title':
+    '快连接改名后 PRO 激活仍识别',
+  'pages.dashboard.updateLog.entries.kuaiconnect-pro-activation-rename-r01.description':
+    '应用编码由 pro-data-center 迁为 kuaiconnect 后，历史 License 激活登记自动映射到新编码；已启用快连接但误提示升级套餐的问题已修复。',
+  'pages.dashboard.updateLog.entries.permission-display-echo-matrix-r01.title':
+    '权限矩阵回显与引用鉴权收紧',
+  'pages.dashboard.updateLog.entries.permission-display-echo-matrix-r01.description':
+    '功能权限中的 display 展示为「回显」并可勾选；引用下拉仅认目标查看或回显权限，取消回显后不再因宿主建单权限隐式放行。新建角色与权限同步会默认授予非敏感回显，取消后不会被同步强制恢复。',
+  'pages.dashboard.updateLog.entries.sidebar-pro-badge-kuaipd-host-r01.title':
+    '快交付等专业应用侧栏 PRO 徽标',
+  'pages.dashboard.updateLog.entries.sidebar-pro-badge-kuaipd-host-r01.description':
+    '侧栏应用 code 优先读应用根路径，快交付等托管在快制造路由下的 PRO 应用与行业包应用根菜单均显示 PRO 徽标。',
+  'pages.dashboard.updateLog.entries.master-data-process-drawings-menu-r01.title':
+    '主数据工艺数据图纸菜单分组',
+  'pages.dashboard.updateLog.entries.master-data-process-drawings-menu-r01.description':
+    '图纸管理、图纸反查、图纸发放与图纸借阅收拢为「图纸管理」子菜单，整组排在标准操作 (SOP) 之后。',
+  'pages.dashboard.updateLog.entries.user-mgmt-list-audit-datetime-r01.title':
+    '用户管理列表补全创建与更新时间',
+  'pages.dashboard.updateLog.entries.user-mgmt-list-audit-datetime-r01.description':
+    '部门树、职位列表、用户列表与角色列表接口返回 created_at/updated_at，部门树此前未带审计时间导致列表显示为横线。',
+  'pages.dashboard.updateLog.entries.system-users-list-roles-preview-r01.title':
+    '账户管理角色列单行预览',
+  'pages.dashboard.updateLog.entries.system-users-list-roles-preview-r01.description':
+    '用户列表角色列占表格剩余宽度，最多展示两枚角色徽章，超出显示等共 N 项；悬停摘要可看其余角色。',
+  'pages.dashboard.updateLog.entries.kuaiplm-off-master-data-process-menu-r01.title':
+    '快研发关闭后主数据恢复工艺菜单',
+  'pages.dashboard.updateLog.entries.kuaiplm-off-master-data-process-menu-r01.description':
+    '快研发禁用或未部署到当前节点时，自动交还主数据「工艺数据」菜单；侧栏拉取导航树前对齐菜单接管状态，避免工艺入口长期不可见。',
+  'pages.dashboard.updateLog.entries.kuaiconnect-popover-no-upgrade-btn-r01.title':
+    '连接管理 Popover 不再跳转组织管理',
+  'pages.dashboard.updateLog.entries.kuaiconnect-popover-no-upgrade-btn-r01.description':
+    '快连接未启用时的说明弹层去掉「升级套餐」入口，文案改为联系管理员开通；保留前往应用中心。',
+  'pages.dashboard.updateLog.entries.kuaiconnect-popover-pro-features-r01.title':
+    '连接管理未开通时展示能力说明与升级引导',
+  'pages.dashboard.updateLog.entries.kuaiconnect-popover-pro-features-r01.description':
+    '系统配置浮层内快连接入口布局不变；点击各图标 Popover 分别说明该项专业版能力，并支持升级套餐或前往应用中心安装。',
+  'pages.dashboard.updateLog.entries.menu-group-kuaiconnect-rename-r01.title':
+    '系统菜单分组更名为连接管理',
+  'pages.dashboard.updateLog.entries.menu-group-kuaiconnect-rename-r01.description':
+    '系统配置浮层与系统菜单原「数据中心」分组改为四字「连接管理」，对应快连接专业应用；金蝶等对接文案中的「数据中心 ID」不变。',
+  'pages.dashboard.updateLog.entries.data-center-popover-kuaiconnect-r01.title':
+    '系统设置数据中心入口未启用时 Popover 提示',
+  'pages.dashboard.updateLog.entries.data-center-popover-kuaiconnect-r01.description':
+    '快连接未安装或未启用时，系统配置浮层内四个数据中心入口点击弹出说明，不再直接进入升级占位页；可一键跳转应用中心。',
+  'pages.dashboard.updateLog.entries.pro-app-placeholder-scan-install-r01.title':
+    '专业应用占位卡支持扫描并注册',
+  'pages.dashboard.updateLog.entries.pro-app-placeholder-scan-install-r01.description':
+    '未入库的专业应用（如快连接）不再误显示为需升级专业版；更多操作提供扫描并注册，compose 后扫描即可出现安装入口。',
+  'pages.dashboard.updateLog.entries.dedicated-host-disable-separation-r01.title':
+    '定制应用不再阻止停用通用宿主应用',
+  'pages.dashboard.updateLog.entries.dedicated-host-disable-separation-r01.description':
+    '应用中心停用轻办公等专业/基础应用时，已启用的定制壳（如好力 GO）不再拦截；定制仍通过 requires_apps 在运行时加载宿主 API，侧栏按 hide_required_app_menus 与定制菜单展示。',
+  'pages.dashboard.updateLog.entries.pro-app-center-order-kuailianjie-r01.title':
+    '应用中心专业应用排序与快连接命名',
+  'pages.dashboard.updateLog.entries.pro-app-center-order-kuailianjie-r01.description':
+    '专业 Tab 展示顺序调整为快研发、快交付、轻办公、轻财务、快数采、快报表、快连接、KU-AI；快连接应用编码为 kuaiconnect（原 pro-data-center）。',
+  'pages.dashboard.updateLog.entries.sidebar-navigation-tree-pro-compose-r01.title':
+    '修复未 compose 专业应用时侧栏 APP 菜单空白',
+  'pages.dashboard.updateLog.entries.sidebar-navigation-tree-pro-compose-r01.description':
+    '侧栏导航只纳入本节点已部署 manifest 的应用；未 compose 的专业包不得启用/安装，避免整棵菜单树因缺 manifest 排序而失败。',
+  'pages.dashboard.updateLog.entries.app-pro-migration-wave1-r01.title':
+    '专业应用与行业包迁私仓、财务管理托管快制造',
+  'pages.dashboard.updateLog.entries.app-pro-migration-wave1-r01.description':
+    '快交付/快研发/轻财务/轻办公与行业插件改 PRO compose；开源主仓保留应用中心占位与数据中心升级提示；应收应付菜单归属快制造，轻财务启用时侧栏接管。',
   'pages.dashboard.updateLog.entries.purchase-order-batch-push-in-menu-r01.title':
     '采购订单批量下推收进批量操作',
   'pages.dashboard.updateLog.entries.purchase-order-batch-push-in-menu-r01.description':
@@ -34434,6 +41960,46 @@ export default {
     '修复工作台加载完成后再闪一下',
   'pages.dashboard.updateLog.entries.workplace-weather-15s-flash-r01.description':
     '天气在站点位置就绪前就请求，Open-Meteo 失败后还会再查地理编码和 wttr.in，三段超时约 15 秒才返回，日历天空背景随之重绘。现等位置配置完成且只请求 Open-Meteo，已有天气时不再换成加载中。',
+  'pages.dashboard.updateLog.entries.kuaiiot-command-device-id-r01.title':
+    '设备连接支持单独配置指令下发 device_id',
+  'pages.dashboard.updateLog.entries.kuaiiot-command-device-id-r01.description':
+    '新建/编辑设备连接时可填「指令设备 ID」，默认与外部设备 ID 相同且可改；产线清零等指令报文中的 device_id 使用该字段。',
+  'pages.dashboard.updateLog.entries.kuaiiot-device-status-realtime-r01.title':
+    '设备状态 MQTT 无感刷新：设备连接与台账联动',
+  'pages.dashboard.updateLog.entries.kuaiiot-device-status-realtime-r01.description':
+    '快数采入站后实时推送：设备连接「最后上报/在线」与设备台账「设备状态」无需手动刷新即可更新。绑定仍在设备连接新建/编辑中选择外部设备 ID（可改）并关联台账。',
+  'pages.dashboard.updateLog.entries.iot-auto-clear-after-work-order-end-r01.title':
+    '自动报工清零改为工单结束后才下发',
+  'pages.dashboard.updateLog.entries.iot-auto-clear-after-work-order-end-r01.description':
+    '开启自动清零后，须报工成功且对应工单状态为已完成才会下发 MQTT 清零；工单未结束会记「清零跳过」。设备页手动清零不受影响。',
+  'pages.dashboard.updateLog.entries.iot-connection-direction-advanced-search-r01.title':
+    '接入配置方向筛选改到高级搜索',
+  'pages.dashboard.updateLog.entries.iot-connection-direction-advanced-search-r01.description':
+    '接入配置列表顶部「接入/发送/回调」页签已去掉；可在高级搜索用下拉选择方向与类型快速筛选，列表仍显示方向列。',
+  'pages.dashboard.updateLog.entries.iot-device-connection-option-direction-r01.title':
+    '设备连接新建时接入配置显示方向并优先接入',
+  'pages.dashboard.updateLog.entries.iot-device-connection-option-direction-r01.description':
+    '设备连接新建/批量新建的接入配置下拉展示「接入/发送/回调」与协议类型，接入型排在最前，新建默认优先选接入 MQTT。',
+  'pages.dashboard.updateLog.entries.iot-view-data-commands-table-scroll-r01.title':
+    '设备查看数据指令表支持滚动',
+  'pages.dashboard.updateLog.entries.iot-view-data-commands-table-scroll-r01.description':
+    '「查看数据」指令下发表增加固定高度与横向滚动，避免记录过多时把抽屉撑得过长；回调设备 ID 悬停可看全文。',
+  'pages.dashboard.updateLog.entries.iot-auto-clear-use-device-connection-r01.title':
+    '自动报工清零改为使用设备连接配置',
+  'pages.dashboard.updateLog.entries.iot-auto-clear-use-device-connection-r01.description':
+    '自动报工页不再单独配置 MQTT 主题；报工成功后按设备连接的发送/回调 MQTT 自动下发清零。指令区分手动/自动，运行日志展示指令下发记录。',
+  'pages.dashboard.updateLog.entries.iot-line-clear-command-list-empty-r01.title':
+    '修复产线清零下发成功后指令记录表仍为空',
+  'pages.dashboard.updateLog.entries.iot-line-clear-command-list-empty-r01.description':
+    '查看数据刷新时点位列表 page_size 超过接口上限导致整次加载失败，指令与回调记录无法展示；已按上限拉取并隔离各接口失败。',
+  'pages.dashboard.updateLog.entries.iot-line-clear-mqtt-r01.title':
+    '产线 MQTT 清零：接入/发送、手动与报工后自动清零',
+  'pages.dashboard.updateLog.entries.iot-line-clear-mqtt-r01.description':
+    '快数采接入配置区分接入与发送；设备指令下发可选手动清零（t0/c0/z0）；继电器自动报工支持按设备开关与预配置，报工成功后下发清零 MQTT。',
+  'pages.dashboard.updateLog.entries.approval-countersign-my-pending-task-r01.title':
+    '修复会签时审批中心不显示同意/拒绝按钮',
+  'pages.dashboard.updateLog.entries.approval-countersign-my-pending-task-r01.description':
+    '实例列表按当前用户是否有待办任务判断操作按钮；会签成员不再因仅记录首位审批人而看不到同意/拒绝/转交。',
   'pages.dashboard.updateLog.entries.gitee-oauth-drop-projects-scope-r01.title':
     '修复生产环境 Gitee 授权提示请求范围无效',
   'pages.dashboard.updateLog.entries.gitee-oauth-drop-projects-scope-r01.description':
@@ -34666,6 +42232,76 @@ export default {
     '手机消息与审批边界',
   'pages.dashboard.updateLog.entries.mobile-message-approval-audit-scope-r01.description':
     '消息中心仅承载聊天、系统通知与非快制造待办；快制造审核待办统一由 manifest audit 注册表判定并写入审批实例 app，待我审批列表与角标同口径，移除标题与路径猜测过滤。',
+  'pages.dashboard.updateLog.entries.sales-delivery-edit-line-id-r02.title': '销售出库编辑明细行 id 回填',
+  'pages.dashboard.updateLog.entries.sales-delivery-edit-line-id-r02.description': '编辑销售出库时明细 id 独立注册并在提交按灌数快照回填，修复仍提示没有可编辑的明细行。',
+  'pages.dashboard.updateLog.entries.payment-application-supplier-payee-r01.title':
+    '付款申请可选供应商默认收款账户',
+  'pages.dashboard.updateLog.entries.payment-application-supplier-payee-r01.description':
+    '付款申请、付款单及其他费用支出/支出申请在选供应商或职员后自动带出默认收款账户；主数据维护多条收款账户时出现收款账户下拉可切换，与付款单对方账户口径一致。',
+  'pages.dashboard.updateLog.entries.kuaioa-leave-revoke-gate-kwargs-r01.title':
+    '请假出差撤销审核偶发失败修复',
+  'pages.dashboard.updateLog.entries.kuaioa-leave-revoke-gate-kwargs-r01.description':
+    '撤销审核落回待审时，补齐写回误用位置参数调用审批门控，会报 takes 0 positional arguments；已改为关键字参数，撤销可正常完成。',
+  'pages.dashboard.updateLog.entries.kuaioa-leave-list-perf-r01.title':
+    '请假出差列表加载加速',
+  'pages.dashboard.updateLog.entries.kuaioa-leave-list-perf-r01.description':
+    '请假出差列表改为按页取数，审批待办人只查本页单据对应的审批实例，不再扫全租户审批表或一次拉回全部请假单。',
+  'pages.dashboard.updateLog.entries.outbound-list-line-spec-hover-r01.title':
+    '单据列表明细列悬停看品名品号规格',
+  'pages.dashboard.updateLog.entries.outbound-list-line-spec-hover-r01.description':
+    '出库 Hub 去掉「规格型号」列；「明细」列悬停弹出 Popover 查看该单全部行，按「品名 - 品号 规格 型号」逐条展示，单元格仍只显示前两个品名与等共 N 条。',
+  'pages.dashboard.updateLog.entries.shipment-notice-notify-without-audit-r01.title':
+    '关闭发货通知审核后可直通知仓库',
+  'pages.dashboard.updateLog.entries.shipment-notice-notify-without-audit-r01.description':
+    '配置中心未开启发货通知审核时，销售订单下推生成通知单后会先走免审提交再通知仓库，不再因单据仍为草稿而提示须审核通过；开启审核时仍须审过才可通知。',
+  'pages.dashboard.updateLog.entries.mobile-purchase-requisition-material-search-r01.title':
+    '企微采购申请可检索物料',
+  'pages.dashboard.updateLog.entries.mobile-purchase-requisition-material-search-r01.description':
+    '新建采购申请选料不再要求单独开通物料主数据读权限；移动端按宿主单据走引用展示检索，接口侧对单据行选料开放宿主单据读或物料展示二选一鉴权。',
+  'pages.dashboard.updateLog.entries.work-order-batch-picking-kitting-r01.title':
+    '批量领料后各工单齐套与领料展示一致',
+  'pages.dashboard.updateLog.entries.work-order-batch-picking-kitting-r01.description':
+    '合并一张生产领料单时，齐套分析与工单生命周期按明细行挂接的工单统计已确认领料，不再只认领料单头表工单，避免部分工单齐套偏低且看不到领料完成。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-push-tax-inclusive-r01.title':
+    '采购申请下推订单按含税建议价换算',
+  'pages.dashboard.updateLog.entries.purchase-requisition-push-tax-inclusive-r01.description':
+    '采购申请仍不维护税率；下推采购订单时建议单价与转单改价按含税价换算未税落库，税率跟价本、物料默认或 13%，订单价税合计与直接建单一致，避免加税后金额上浮。',
+  'pages.dashboard.updateLog.entries.sales-delivery-edit-line-id-r01.title':
+    '销售出库编辑可保存',
+  'pages.dashboard.updateLog.entries.sales-delivery-edit-line-id-r01.description':
+    '编辑销售出库（含销售订单反审核后可改行）时明细表保留行 id，更新不再误报「没有可编辑的明细行」。',
+  'pages.dashboard.updateLog.entries.sales-order-push-work-order-preview-r01.title':
+    '销售订单直推工单预览',
+  'pages.dashboard.updateLog.entries.sales-order-push-work-order-preview-r01.description':
+    '直推工单改为在本页打开下推预览弹窗；明细主数据告警不再误报「下推失败」，可草稿下推或查看具体阻塞项。',
+  'pages.dashboard.updateLog.entries.bom-create-main-material-grid-r01.title':
+    '新建BOM主物料栅格对齐',
+  'pages.dashboard.updateLog.entries.bom-create-main-material-grid-r01.description':
+    '新建 BOM 弹窗主物料 ProFormField 两栏栅格；物料下拉在前、自制件/全部物料分段在后且与下拉同高，标签与版本号对齐。',
+  'pages.dashboard.updateLog.entries.production-picking-edit-line-id-r01.title':
+    '生产领料编辑可保存',
+  'pages.dashboard.updateLog.entries.production-picking-edit-line-id-r01.description':
+    '编辑生产领料（含批量领料落库后改仓库/批号）时表单保留明细行 id，不再误报「没有可编辑的明细行」。',
+  'pages.dashboard.updateLog.entries.warehouse-hub-audit-status-column-r01.title':
+    '仓储列表审核状态列',
+  'pages.dashboard.updateLog.entries.warehouse-hub-audit-status-column-r01.description':
+    '出入库 Hub、其他出入库列表固定展示「审核状态」列（紧挨执行状态）；列表接口补齐 audit 相位，下推后草稿/待审/已通过一目了然。',
+  'pages.dashboard.updateLog.entries.sales-delivery-push-auto-submit-r01.title':
+    '销售下推出库可确认',
+  'pages.dashboard.updateLog.entries.sales-delivery-push-auto-submit-r01.description':
+    '从销售订单或发货通知下推的销售出库单建单后自动送审；未开启审核时直接进入已通过，出库管理可确认出库。下推前已建的草稿单仍须手动提交与审核。',
+  'pages.dashboard.updateLog.entries.outbound-hub-confirm-default-location-r01.title':
+    '出库确认默认库位',
+  'pages.dashboard.updateLog.entries.outbound-hub-confirm-default-location-r01.description':
+    '出库管理列表直接确认过账时，明细未保存库位将按出库仓库自动取首库位，与后端过账口径一致，避免误报「请为物料选择库位」。',
+  'pages.dashboard.updateLog.entries.document-push-bind-slot-label-r01.title':
+    '仓储外推绑定行为文案',
+  'pages.dashboard.updateLog.entries.document-push-bind-slot-label-r01.description':
+    '其他出库、销售出库等外推 Hub 的绑定行为列与接口用途下拉改读各单据 bindActionOptions，不再误显示为「确认入库」。',
+  'pages.dashboard.updateLog.entries.mobile-wecom-approval-detail-entry-r01.title':
+    '企微审批深链稳定性',
+  'pages.dashboard.updateLog.entries.mobile-wecom-approval-detail-entry-r01.description':
+    '企微卡片打开审批详情时优先对齐链接中的组织并在失效时引导进入待我审批列表，减少「审批实例不存在」空白页。',
   'pages.dashboard.updateLog.entries.mobile-pending-approvals-api-r01.title':
     '手机待我审批专用接口',
   'pages.dashboard.updateLog.entries.mobile-pending-approvals-api-r01.description':
@@ -35386,6 +43022,10 @@ export default {
     '实验委托列表搜索与钉住条件生效',
   'pages.dashboard.updateLog.entries.kuaiplm-lab-request-list-search-r01.description':
     '列表 request 改为读取 UniTable 的 searchFormValues（模糊 keyword、状态/类型等钉住与高级搜索），并纳入「全部/我的」范围进缓存键，避免搜了不筛选或切换范围仍显示旧数据。',
+  'pages.dashboard.updateLog.entries.kuaioa-employee-batch-import-r01.title':
+    '员工档案导入恢复分片批量接口',
+  'pages.dashboard.updateLog.entries.kuaioa-employee-batch-import-r01.description':
+    '新增员工 batch-create：每批最多 200 条一次提交，不再逐条 POST，大批量导入更快且不易触发写限流；你已自编员工编号时片内顺序建档即可。',
   'pages.dashboard.updateLog.entries.chunked-import-write-rate-limit-r01.title':
     '大批量逐条导入不再触发写限流',
   'pages.dashboard.updateLog.entries.chunked-import-write-rate-limit-r01.description':
@@ -35514,6 +43154,10 @@ export default {
     '工序派工设备卡片化选择',
   'pages.dashboard.updateLog.entries.work-order-equipment-dispatch-cards-r02.description':
     '工单工序派工改为卡片列表选设备，打开弹窗即可看到台账状态、实时状态、在制派工、故障与保养点检摘要；点击卡片选中，可进一步打开详情弹窗查看完整追溯。',
+  'pages.dashboard.updateLog.entries.work-order-equipment-dispatch-preview-r01.title':
+    '工序派工可查看设备状态',
+  'pages.dashboard.updateLog.entries.work-order-equipment-dispatch-preview-r01.description':
+    '工单工序派工在分配设备旁增加设备状态入口，选中设备后可查看台账与实时状态、保养点检及该设备在制派工工单，支持日期区间筛选，不离开派工弹窗。',
   'pages.dashboard.updateLog.entries.packing-binding-qrcode-preview-r01.title':
     '装箱绑定批量二维码可预览下载',
   'pages.dashboard.updateLog.entries.packing-binding-qrcode-preview-r01.description':
@@ -38977,14 +46621,6 @@ export default {
     '修复入库管理出库管理列表制单日期显示为空',
   'pages.dashboard.updateLog.entries.warehouse-hub-document-date-display-r01.description':
     '成品入库、采购入库等 Hub 列表「制单日期」改为正确读取业务入库/出库时刻（兼容空串与驼峰字段），并按业务日历日展示；确认写入逻辑不变。',
-  'pages.dashboard.updateLog.entries.audit-writeback-finance-docs-r01.title':
-    '财务单据审批写回闭环',
-  'pages.dashboard.updateLog.entries.audit-writeback-finance-docs-r01.description':
-    '付款申请与其他收入/支出单从审批中心或单据页审核后单据状态即刻一致，不再停留待审核；撤回重提不再产生重复审批流程；付款确认按实际下推行与付款金额回写已付。',
-  'pages.dashboard.updateLog.entries.fa-depr-syd-uop-calc-r01.title':
-    '固定资产折旧支持年数总和法与工作量法',
-  'pages.dashboard.updateLog.entries.fa-depr-syd-uop-calc-r01.description':
-    '固定资产折旧计提在直线法之外补齐年数总和法与工作量法两种口径，资产卡片可按折旧方法正确计算每期折旧额。',
   'pages.dashboard.updateLog.entries.balance-sheet-child-accounts-r01.title':
     '修复资产负债表漏计明细科目余额',
   'pages.dashboard.updateLog.entries.balance-sheet-child-accounts-r01.description':
@@ -39839,6 +47475,10 @@ export default {
     '仓储库存管理增加批号与序列号查询入口',
   'pages.dashboard.updateLog.entries.warehouse-batch-serial-ledger-menu-r01.description':
     '库存管理菜单新增「批号查询」「序列号查询」，分别跳转主数据批号台账与序列号台账；批次库存查询仍查仓储现存量，批号/序列号规则与台账维护仍在主数据物料下。',
+  'pages.dashboard.updateLog.entries.warehouse-serial-inventory-menu-r01.title':
+    '仓储库存管理增加序列号查询入口',
+  'pages.dashboard.updateLog.entries.warehouse-serial-inventory-menu-r01.description':
+    '库存管理菜单新增「序列号查询」，跳转主数据序列号台账查看入库生成与手工维护的全部序列号；序列号规则与台账维护仍保留在主数据物料下，与批号规则/批号记录分工一致。',
   'pages.dashboard.updateLog.entries.traceability-serial-resolve-work-order-r01.title':
     '修复追溯管理按序列号查不到工单已占号记录',
   'pages.dashboard.updateLog.entries.traceability-serial-resolve-work-order-r01.description':
@@ -40691,26 +48331,6 @@ export default {
     '修复销项发票切换含税金额分币价差',
   'pages.dashboard.updateLog.entries.sales-invoice-tax-amount-cents-math.description':
     '开票金额互算改为分位整数（与后端价税拆分一致），避免 JS 浮点把 1769911.50×1.13 算成 1999999.99；切换含税后与可开票合计对齐，含税录入仍以价税合计为真源。',
-  'pages.dashboard.updateLog.entries.influxdb-live-connection-test-r01.title':
-    'InfluxDB 数据源支持真实连接测试',
-  'pages.dashboard.updateLog.entries.influxdb-live-connection-test-r01.description':
-    '测试连接会对目标 InfluxDB 发起 ping，并用 Token 校验 Org 与 Bucket 是否可用；通过后标记为已连通，不再只做表单必填检查。',
-  'pages.dashboard.updateLog.entries.frontend-perf-list-form-r01.title':
-    '加快工单采购列表与报价合同新建打开',
-  'pages.dashboard.updateLog.entries.frontend-perf-list-form-r01.description':
-    '工单与采购订单列表指标卡延后到首屏绘制后再请求；报价单与销售合同新建编辑页不再进页全量预拉物料，改为选料缓存与导入时按需加载。',
-  'pages.dashboard.updateLog.entries.work-purchase-order-detail-perf-r01.title':
-    '加快工单与采购订单详情响应',
-  'pages.dashboard.updateLog.entries.work-purchase-order-detail-perf-r01.description':
-    '详情并行取齐关联事实后拼装生命周期；流程阶段按领料/检验/入库或到货通知/检验/收货/发票等业务事实判定，不再串行拉里程碑；全链路与附件中心仍按 Tab 懒挂载。',
-  'pages.dashboard.updateLog.entries.document-trace-attach-perf-r01.title':
-    '加快全链路追踪与附件中心加载',
-  'pages.dashboard.updateLog.entries.document-trace-attach-perf-r01.description':
-    '追溯同趟复用关联查询并并行展开兄弟节点；删除标记按类型批量解析；销售订单/工单下游推导与附件中心按类型并行取附件，缩短详情抽屉切 Tab 等待。',
-  'pages.dashboard.updateLog.entries.sales-order-detail-api-perf-r01.title':
-    '加快销售订单详情接口响应',
-  'pages.dashboard.updateLog.entries.sales-order-detail-api-perf-r01.description':
-    '详情取数改为并行查询账款、可发货、下推与配置；下游与改号门禁改走列表同款轻量检测，不再重复拉追溯链；执行中子阶段按需求/工单/发货通知/交货进度判定。',
   'pages.dashboard.updateLog.entries.sales-contract-form-hooks-order-r01.title':
     '销售合同列表与新建页切换不再闪 React 错误',
   'pages.dashboard.updateLog.entries.sales-contract-form-hooks-order-r01.description':
@@ -40811,6 +48431,10 @@ export default {
     '销售订单审核后不再发送拆分交付计划提醒',
   'pages.dashboard.updateLog.entries.sales-order-drop-split-delivery-notify-r01.description':
     '审核通过仍保留订单审核消息；「请拆分交付计划」站内提醒已停发，业务员可自行在销售订单下推交付项目。',
+  'pages.dashboard.updateLog.entries.kuaiai-settings-remove-ocr-workbuddy-r02.title':
+    '模型设置再次去掉 OCR 与 WorkBuddy 配置块',
+  'pages.dashboard.updateLog.entries.kuaiai-settings-remove-ocr-workbuddy-r02.description':
+    'OCR 视觉识别与外部 Agent / WorkBuddy 已迁至应用连接器；模型设置仅保留对话模型选用、智能体开关与 KU-AI 能力，保存时不再覆盖连接器侧配置。',
   'pages.dashboard.updateLog.entries.purchase-requisition-stock-total-popover-r01.title':
     '采购申请明细改为总库存悬停看分仓',
   'pages.dashboard.updateLog.entries.purchase-requisition-stock-total-popover-r01.description':
@@ -40839,6 +48463,10 @@ export default {
     '修复采购申请审核误报权限不足',
   'pages.dashboard.updateLog.entries.purchase-requisition-uni-audit-resource-fix-r01.description':
     'manifest.audit 中采购申请 resource 与模块权限 kuaizhizao:purchase-requisition 对齐，uni-audit 不再校验错误的 purchase-request 前缀导致 403。',
+  'pages.dashboard.updateLog.entries.kuaioa-route-permission-import-fix.title':
+    '修复轻办公接口整包未注册',
+  'pages.dashboard.updateLog.entries.kuaioa-route-permission-import-fix.description':
+    '轻办公表单权限服务导入了已移除的 core.services.permission 路径，导致应用路由加载失败；已改为 authorization 真源并恢复注册。',
   'pages.dashboard.updateLog.entries.approval-status-viewer-import-fix-r01.title':
     '修复打开审核弹窗审批状态 500',
   'pages.dashboard.updateLog.entries.approval-status-viewer-import-fix-r01.description':
@@ -41529,7 +49157,10 @@ export default {
   'field.customField.displayModeDisplay': '只读展示',
   'field.customField.displayModeInput': '可编辑文本',
   'field.customField.displayModeNumber': '数字输入',
-  'field.customField.displayModeAssociatedObjectExtra': '无源字段：单选下拉 / 单选按钮 / 多选；有源字段（XLOOKUP）：只读 / 可编辑 / 数字',
+  'field.customField.displayModeAssociatedObjectExtra':
+    '无源字段：单选下拉 / 单选按钮 / 多选；有源字段（XLOOKUP）：只读展示（不落库，仅表单实时带出）/ 可编辑 / 数字',
+  'field.customField.nonPersistedFlagsHint':
+    '只读展示为派生字段，不落库，不可设为必填、可搜索或可排序',
   'field.customField.displayModeAssociatedAttributeExtra': '关联属性：单选下拉 / 单选按钮 / 多选',
   'field.customField.optionId': 'ID (id)',
   'field.customField.optionName': '名称 (name)',
@@ -41642,12 +49273,44 @@ export default {
 
   // 用户/账户管理
   'field.user.username': '用户名',
+  'field.user.oauthBoundWecom': '已绑定企业微信',
+  'field.user.oauthBoundDingtalk': '已绑定钉钉',
+  'field.user.oauthBoundFeishu': '已绑定飞书',
   'field.user.avatar': '头像',
   'field.user.fullName': '姓名',
   'field.user.email': '邮箱',
   'field.user.phone': '手机号',
+  'field.user.employeeNumber': '工号',
+  'field.user.employeeNumberPlaceholder': '请输入工号',
+  'field.user.employeeNumberExtra': '对接外部系统时业务操作员以工号为准，请勿用登录名代替',
+  'field.user.employeeNumberMax': '工号最多 64 个字符',
+  'field.user.gender': '性别',
+  'field.user.genderPlaceholder': '请选择性别',
+  'field.user.genderMale': '男',
+  'field.user.genderFemale': '女',
+  'field.user.genderOther': '保密',
+  'field.user.supervisor': '直接上级',
+  'field.user.supervisorPlaceholder': '请选择直接上级（可按姓名或工号搜索）',
+  'field.user.secondaryDepartments': '兼职部门',
+  'field.user.secondaryDepartmentsPlaceholder': '请选择兼职部门，可多选',
+  'field.user.hasSecondaryDepartments': '是否兼职',
+  'field.user.secondaryDepartmentsRequired': '开启兼职后须至少选择一个兼职部门',
+  'field.user.primaryDepartment': '主部门',
+  'pages.approval.hierarchyDepartment': '审批部门',
+  'pages.approval.hierarchyDepartmentRequired': '请选择本次审批所属的部门',
+  'pages.approval.hierarchyDepartmentPlaceholder': '请选择制单人任职部门',
+  'field.user.personCategory': '人员类型',
+  'field.user.personCategoryPlaceholder': '请选择人员类型',
+  'field.user.personCategoryFormal': '正式员工',
+  'field.user.employmentStatus': '人员使用状态',
+  'field.user.employmentStatusPlaceholder': '请选择人员使用状态',
+  'field.user.employmentStatusActive': '在职',
+  'field.user.userDisabledImport': '用户禁用',
+  'field.user.rolesKingdee': '职位',
+  'field.user.rolesKingdeeExtra': '在本系统中维护为角色与权限，与职位档案对应',
+  'field.user.positionKingdeeExtra': '在岗位管理中维护，与组织岗位档案一致',
   'field.user.department': '部门',
-  'field.user.position': '职位',
+  'field.user.position': '岗位',
   'field.user.roles': '角色',
   'field.user.rolesAndMore': '等共{{count}}项',
   'field.user.isTenantAdmin': '组织管理员',
@@ -41665,12 +49328,12 @@ export default {
   'field.user.batchDeleteSuccess': '成功删除 {{count}} 条记录',
   'field.user.batchDeletePartial': '删除完成：成功 {{success}} 条，失败 {{fail}} 条',
   'field.user.batchSetDepartment': '批量设置部门',
-  'field.user.batchSetPosition': '批量设置职位',
+  'field.user.batchSetPosition': '批量设置岗位',
   'field.user.batchSetRoles': '批量设置角色',
   'field.user.batchEnable': '批量启用',
   'field.user.batchDisable': '批量停用',
   'field.user.batchSetDepartmentRequired': '请选择要设置的部门',
-  'field.user.batchSetPositionRequired': '请选择要设置的职位',
+  'field.user.batchSetPositionRequired': '请选择要设置的岗位',
   'field.user.batchSetRolesRequired': '请至少选择一个角色',
   'field.user.batchSetSelectedHint': '将应用于已选的 {{count}} 个用户',
   'field.user.batchEnableConfirmTitle': '确定要批量启用选中的用户吗？',
@@ -41705,7 +49368,6 @@ export default {
   'field.user.errorDepartmentInvalid': '选择的部门不存在或不属于当前组织，请重新选择',
   'field.user.errorPositionInvalid': '选择的职位不存在或不属于当前组织，请重新选择',
   'field.user.errorRoleInvalid': '选择的角色不存在或无效，请重新选择',
-  'field.user.errorRoleTypeStationMixed': '触屏专用（工位）角色不能与内部/外部角色同时绑定，请分开保存',
   'field.user.errorPhoneInvalid': '手机号格式不正确或已被使用，请检查后重新输入',
   'field.user.errorEmailInvalid': '邮箱格式不正确或已被使用，请检查后重新输入',
   'field.user.errorNoPermission': '您没有权限执行此操作，请联系管理员',
@@ -42131,6 +49793,8 @@ export default {
   'pages.infra.tenant.formMaxStorageLabel': '最大存储空间（MB）',
   'pages.infra.tenant.formSensitiveWordEnabled': '是否开启敏感词控制',
   'pages.infra.tenant.formSensitiveWordEnabledExtra': '默认关闭，关闭后不拦截敏感词',
+  'pages.infra.tenant.formShowProBadge': '高级应用是否显示PRO徽章',
+  'pages.infra.tenant.formShowProBadgeExtra': '默认开启，关闭后侧栏菜单不显示PRO标',
   'pages.infra.tenant.sensitiveWordEnabledOn': '已开启',
   'pages.infra.tenant.sensitiveWordEnabledOff': '已关闭',
   'pages.infra.tenant.basicInfoTitle': '基本信息',
@@ -42290,7 +49954,7 @@ export default {
   'pages.infra.platform.loginClientAndroidEnabledTooltip': '关闭后，登录页不再显示移动端 PDA Android 安装包入口',
 
   // 报表与看板应用
-  'app.kuaireport.name': '星报表',
+  'app.kuaireport.name': '快报表',
   'app.kuaireport.menu.selfMadeReports': '自制报表',
   'app.kuaireport.menu.board-design': '看板设计',
   'app.kuaireport.menu.reports': '报表中心',
@@ -42622,6 +50286,7 @@ export default {
   'pages.approval.submitInitiatorPlaceholder': '选择{{entity}}审批人',
   'pages.approval.submitInitiatorBranchRequired': '请为「{{label}}」选择分支',
   'pages.approval.submitInitiatorBranchPlaceholder': '选择后续分支',
+  'pages.approval.branchDefaultMark': '默认',
   'pages.approval.designer.routeMode': '分支触发方式',
   'pages.approval.designer.routeModeRequired': '请选择分支触发方式',
   'pages.approval.designer.routeModePreviousApprover': '上一节点人员',
@@ -42629,6 +50294,8 @@ export default {
   'pages.approval.designer.routeModeFormula': '按字段公式',
   'pages.approval.designer.branchList': '分支名称',
   'pages.approval.designer.branchNameRequired': '请填写分支名称',
+  'pages.approval.designer.branchDefault': '默认分支',
+  'pages.approval.designer.branchDefaultHint': '开启后，流程走到此节点时自动选中该分支，仍可改选',
   'pages.approval.designer.conditionElseBranch': '其余分支（未命中时走此出边）',
   'pages.approval.designer.fieldRequired': '请选择比较字段',
   'pages.approval.designer.valueRequired': '请填写比较数值',
@@ -42677,6 +50344,11 @@ export default {
   'pages.approval.designer.edgeDeleted': '连线已删除',
   'pages.approval.designer.cannotDeleteStartEnd': '开始节点和结束节点不可删除',
   'pages.approval.designer.allowEditDuringApproval': '审核中允许修改单据',
+  'pages.approval.designer.editableFieldsUseAll': '全部默认可编辑字段',
+  'pages.approval.designer.editableFields': '审核时可填字段',
+  'pages.approval.designer.editableFieldsRequired': '请至少选择一项可填字段，或勾选全部',
+  'pages.approval.designer.editableFieldsModalTip':
+    '仅控制审核弹窗内可填字段，可不选；未选时审批人仍可按「允许修改单据」直接编辑单据',
   'pages.approval.designer.refreshContextOnEdit': '改单后刷新条件上下文',
   'pages.approval.designer.allowTransfer': '允许转交',
   'pages.approval.designer.allowAddSign': '允许加签',
@@ -42699,8 +50371,9 @@ export default {
   'pages.approval.designer.ccTargetType': '抄送对象类型',
   'pages.approval.designer.addConditionRule': '添加条件',
   'pages.approval.designer.branchName': '分支名称',
+  'pages.approval.designer.branchTarget': '流向',
   'pages.approval.designer.publishDraft': '发布流程',
-  'pages.approval.designer.publishSuccess': '流程已发布',
+  'pages.approval.designer.publishSuccess': '流程已保存并发布',
   'pages.approval.designer.publishFailed': '发布失败',
 
   // 系统参数配置翻译
@@ -42814,6 +50487,10 @@ export default {
   'components.tenantSelection.statusSuspended': '已暂停',
   'components.tenantSelection.default': '默认',
   'components.tenantSelection.domainLabel': '域名',
+  'components.tenantSelection.setDefaultTitle': '设置默认进入组织',
+  'components.tenantSelection.setDefaultHint': '只改下次登录行为，不切换当前会话。',
+  'components.tenantSelection.askEachLogin': '登录时选择',
+  'components.tenantSelection.askEachLoginHint': '每次登录弹出组织列表，由你当场选择',
 
   // 天气组件
   'components.weather.loading': '加载天气...',
@@ -42864,7 +50541,7 @@ export default {
   'components.documentTrackingPanel.traceBriefLoadFailed': '加载单据简览失败',
   'components.documentTrackingPanel.traceBriefOpenSalesOrder': '打开销售订单详情',
   'components.documentTrackingPanel.traceBriefOpenQuotation': '打开报价单详情',
-  'components.documentTrackingPanel.traceBriefOpenSalesInvoice': '打开销项发票详情',
+  'components.documentTrackingPanel.traceBriefOpenSalesInvoice': '打开销售发票详情',
   'components.documentTrackingPanel.traceBriefOpenReceivable': '打开应收单详情',
   'components.documentTrackingPanel.traceBriefOpenReceipt': '打开收款单列表',
   'components.documentTrackingPanel.traceBriefOpenPayment': '打开付款单列表',
@@ -42909,6 +50586,7 @@ export default {
   'components.documentTrackingPanel.typeStateTransition': '状态变更',
   'components.documentTrackingPanel.autoApprove': '自动审核',
   'components.documentTrackingPanel.autoGenerated': '自动',
+  'components.documentTrackingPanel.repush': '二次推送',
   'components.documentTrackingPanel.typeApprove': '审核',
   'components.documentTrackingPanel.typePush': '下推',
   'components.documentTrackingPanel.typePull': '加载',
@@ -42925,6 +50603,7 @@ export default {
   'components.documentTrackingPanel.docType.sales_forecast': '销售预测',
   'components.documentTrackingPanel.docType.production_plan': '生产计划',
   'components.documentTrackingPanel.docType.purchase_requisition': '采购申请',
+  'components.documentTrackingPanel.docType.purchase_inquiry': '采购询价',
   'components.documentTrackingPanel.docType.quotation': '报价单',
   'components.documentTrackingPanel.docType.sales_contract': '框架合同',
   'components.documentTrackingPanel.docType.rework_order': '返工单',
@@ -42956,10 +50635,10 @@ export default {
   'components.documentTrackingPanel.docType.sales_return': '销售退货单',
   'components.documentTrackingPanel.docType.receivable': '应收单',
   'components.documentTrackingPanel.docType.payable': '应付单',
-  'components.documentTrackingPanel.docType.sales_invoice': '销项发票',
+  'components.documentTrackingPanel.docType.sales_invoice': '销售发票',
   'components.documentTrackingPanel.docType.receipt': '收款单',
   'components.documentTrackingPanel.docType.payment': '付款单',
-  'components.documentTrackingPanel.docType.purchase_invoice': '进项发票',
+  'components.documentTrackingPanel.docType.purchase_invoice': '采购发票',
   'components.documentTrackingPanel.docType.delivery_notice': '送货单',
   'components.documentTrackingPanel.docType.material_return': '还料单',
   'components.documentTrackingPanel.docType.sales_review': '订单评审',
@@ -43115,6 +50794,16 @@ export default {
   'app.kuaizhizao.salesForecast.enterForecastCode': '请输入预测编号',
   'app.kuaizhizao.salesForecast.enterForecastName': '请输入预测名称',
   'app.kuaizhizao.salesForecast.create': '新建销售预测',
+  'app.kuaizhizao.salesForecast.copySelectedCreate': '复制选中单据新建',
+  'app.kuaizhizao.salesForecast.selectOneToCopy': '请先选中一条销售预测再复制新建',
+  'app.kuaizhizao.salesForecast.loadForecastFailed': '加载销售预测失败',
+  'app.kuaizhizao.salesForecast.committed': '销售预测已提交',
+  'app.kuaizhizao.salesForecast.commitFailed': '提交销售预测失败',
+  'app.kuaizhizao.salesForecast.toolbar.withdrawSubmit': '撤销提交',
+  'app.kuaizhizao.salesForecast.toolbar.submitReview': '提交审核',
+  'app.kuaizhizao.salesForecast.toolbar.submitReviewNotAllowed': '请先提交销售预测，再提交审核',
+  'app.kuaizhizao.salesForecast.toolbar.withdrawReview': '撤回审核',
+  'app.kuaizhizao.salesForecast.toolbar.revoke': '反审核',
   'app.kuaizhizao.salesForecast.draftSaved': '草稿已保存',
   'app.kuaizhizao.salesForecast.syncTip': '已自动触发关联需求刷新',
   'app.kuaizhizao.salesForecast.statTodayNew': '今日新增',
@@ -43218,14 +50907,16 @@ export default {
   'app.kuaizhizao.salesForecast.totalQuantity': '总数量',
 
   // Demand Management
-  'app.kuaizhizao.demandManagement.title': '需求管理',
-  'app.kuaizhizao.demandManagement.createPlan': '新建需求计划',
+  'app.kuaizhizao.demandManagement.title': '计划生产',
+  'app.kuaizhizao.demandManagement.createPlan': '新建计划生产',
+  'app.kuaizhizao.demandManagement.copySelectedCreate': '复制选中单据新建',
+  'app.kuaizhizao.demandManagement.selectToCopy': '请选中一张计划生产',
   'app.kuaizhizao.demandManagement.entityName': '需求',
   'app.kuaizhizao.demandManagement.colDemandPrimary': '需求名称 / 编号',
   'app.kuaizhizao.demandManagement.demandCode': '需求编号',
   'app.kuaizhizao.demandManagement.demandName': '需求名称',
   'app.kuaizhizao.demandManagement.demandType': '需求类型',
-  'app.kuaizhizao.demandManagement.demandTypePlan': '需求计划',
+  'app.kuaizhizao.demandManagement.demandTypePlan': '计划生产',
   'app.kuaizhizao.demandManagement.businessMode': '业务模式',
   'app.kuaizhizao.demandManagement.businessModeTooltip':
     '下推「需求计算」时计算类型统一为 MRP；MTS / MTO / ATO 写入计算头；ATO 下推工单时与 MTO 同为按单驱动（工单生产模式为 MTO）。',
@@ -43242,7 +50933,7 @@ export default {
   'app.kuaizhizao.demandManagement.priorityLow': '低 (10)',
   'app.kuaizhizao.demandManagement.statActive': '活动需求',
   'app.kuaizhizao.demandManagement.statPushed': '已下推计算',
-  'app.kuaizhizao.demandManagement.createPlanTitle': '新建需求计划',
+  'app.kuaizhizao.demandManagement.createPlanTitle': '新建计划生产',
   'app.kuaizhizao.demandManagement.editDemand': '编辑需求',
   'app.kuaizhizao.demandManagement.modifyDemand': '修改需求',
   'app.kuaizhizao.demandManagement.update': '更新',
@@ -43261,14 +50952,19 @@ export default {
   'app.kuaizhizao.demandManagement.startDateRequired': '请选择开始日期',
   'app.kuaizhizao.demandManagement.planCreated': '计划创建成功',
   'app.kuaizhizao.demandManagement.submitFailed': '提交失败',
+  'app.kuaizhizao.demandManagement.toolbar.withdrawSubmit': '撤销提交',
+  'app.kuaizhizao.demandManagement.toolbar.submitReview': '提交审核',
+  'app.kuaizhizao.demandManagement.toolbar.submitReviewNotAllowed': '所选计划生产不能提交审核',
+  'app.kuaizhizao.demandManagement.toolbar.withdrawReview': '撤回审核',
+  'app.kuaizhizao.demandManagement.toolbar.revoke': '反审核',
   'app.kuaizhizao.demandManagement.detailFailed': '获取需求详情失败',
   'app.kuaizhizao.demandManagement.updated': '需求更新成功',
   'app.kuaizhizao.demandManagement.recalcHistoryFailed': '获取重算历史失败',
   'app.kuaizhizao.demandManagement.snapshotsFailed': '获取快照列表失败',
   'app.kuaizhizao.demandManagement.selectToDelete': '请选择要删除的需求',
   'app.kuaizhizao.demandManagement.deleteSkipped':
-    '已跳过 {{skipped}} 条（非手工需求计划或状态不可删）。仅「需求计划」且草稿/待审核可在此删除。',
-  'app.kuaizhizao.demandManagement.noDeletablePlans': '没有符合删除条件的手工需求计划',
+    '已跳过 {{skipped}} 条（非手工计划生产或状态不可删）。仅「计划生产」且草稿/待审核可在此删除。',
+  'app.kuaizhizao.demandManagement.noDeletablePlans': '没有符合删除条件的手工计划生产',
   'app.kuaizhizao.demandManagement.deleteSuccess': '成功删除 {{count}} 个需求',
   'app.kuaizhizao.demandManagement.errorsAndMore': '等 {{count}} 条',
   'app.kuaizhizao.demandManagement.mergeSelectFirst': '请先选择要合并计算的需求',
@@ -43285,13 +50981,15 @@ export default {
     '确定要从该需求创建需求计算吗？创建后将生成需求计算任务。',
   'app.kuaizhizao.demandManagement.pushSuccess': '已创建需求计算',
   'app.kuaizhizao.demandManagement.pushToMrp': '从需求创建需求计算',
+  'app.kuaizhizao.demandManagement.pushPreviewLoading': '正在校验可下推明细…',
+  'app.kuaizhizao.demandManagement.pushPreviewBlocked': '当前需求不可下推需求计算',
   'app.kuaizhizao.demandManagement.pushPreviewFailed': '加载下推预览失败',
   'app.kuaizhizao.demandManagement.pushPreviewSelectAtLeastOne': '请至少选择一条可下推明细',
   'app.kuaizhizao.demandManagement.pushPreviewRequiresAllLines': '需求须整单下推，请确认全部可下推明细',
   'app.kuaizhizao.demandManagement.pushPreviewNoLines': '暂无可下推明细',
   'app.kuaizhizao.demandManagement.pushBlockedStatus': '当前需求不可下推需求计算',
   'app.kuaizhizao.demandManagement.capability.demand.delete.not_allowed':
-    '只能删除草稿或待审核状态的需求计划',
+    '只能删除草稿或待审核状态的计划生产',
   'app.kuaizhizao.demandManagement.capability.demand.delete.synced_upstream':
     '由销售预测或销售订单同步的需求不可删除，请在对应上游单据中处理',
   'app.kuaizhizao.demandManagement.capability.demand.push_computation.not_audited': '只能下推已审核或已确认的需求',
@@ -43338,6 +51036,8 @@ export default {
   'app.kuaizhizao.salesReturn.totalAmount': '总金额',
   'app.kuaizhizao.salesReturn.title': '销售退货',
   'app.kuaizhizao.salesReturn.create': '新建销售退货单',
+  'app.kuaizhizao.salesReturn.copySelectedCreate': '复制选中单据新建',
+  'app.kuaizhizao.salesReturn.selectToCopy': '请选中一张销售退货单',
   'app.kuaizhizao.salesReturn.colCustomerReturnCode': '客户 / 退货单号',
   'app.kuaizhizao.salesReturn.colReturnCode': '退货单编号',
   'app.kuaizhizao.salesReturn.colSalesDeliveryCode': '销售出库单编号',
@@ -43346,6 +51046,7 @@ export default {
   'app.kuaizhizao.salesReturn.colWarehouse': '仓库',
   'app.kuaizhizao.salesReturn.colLifecycle': '执行状态',
   'app.kuaizhizao.salesReturn.confirmReturn': '确认退货',
+  'app.kuaizhizao.salesReturn.withdrawReturn': '撤回退货',
   'app.kuaizhizao.salesReturn.withdrawConfirm': '撤回确认',
   'app.kuaizhizao.salesReturn.batchConfirm': '批量确认退货',
   'app.kuaizhizao.salesReturn.batchWithdraw': '批量撤回确认',
@@ -43369,6 +51070,12 @@ export default {
   'app.kuaizhizao.salesReturn.entityName': '销售退货单',
   'app.kuaizhizao.salesReturn.submitConfirmAudit': '确定要提交此销售退货单吗？提交后将进入审核流程。',
   'app.kuaizhizao.salesReturn.submitConfirmAuto': '确定要提交此销售退货单吗？提交后将自动通过审核。',
+  'app.kuaizhizao.salesReturn.toolbar.withdrawSubmit': '撤销提交',
+  'app.kuaizhizao.salesReturn.toolbar.submitReview': '提交审核',
+  'app.kuaizhizao.salesReturn.toolbar.submitReviewNotAllowed': '所选销售退货单不能提交审核',
+  'app.kuaizhizao.salesReturn.toolbar.withdrawReview': '撤回审核',
+  'app.kuaizhizao.salesReturn.toolbar.revoke': '反审核',
+  'app.kuaizhizao.salesReturn.committed': '已提交',
   'app.kuaizhizao.salesReturn.basicInfo': '基本信息',
   'app.kuaizhizao.salesReturn.itemsInfo': '明细信息',
   'app.kuaizhizao.salesReturn.operationHistory': '操作记录',
@@ -43479,10 +51186,18 @@ export default {
   'app.kuaizhizao.salesReturn.totalQuantity': '总数量',
   'app.kuaizhizao.purchaseReturn.title': '采购退货单',
   'app.kuaizhizao.purchaseReturn.entityName': '采购退货单',
+  'app.kuaizhizao.purchaseReturn.committed': '已提交',
+  'app.kuaizhizao.purchaseReturn.copySelectedCreate': '复制选中单据新建',
+  'app.kuaizhizao.purchaseReturn.selectToCopy': '请选中一张采购退货单',
+  'app.kuaizhizao.purchaseReturn.toolbar.withdrawSubmit': '撤销提交',
+  'app.kuaizhizao.purchaseReturn.toolbar.submitReview': '提交审核',
+  'app.kuaizhizao.purchaseReturn.toolbar.submitReviewNotAllowed': '仅已提交的采购退货单可提交审核',
+  'app.kuaizhizao.purchaseReturn.toolbar.withdrawReview': '撤回审核',
+  'app.kuaizhizao.purchaseReturn.toolbar.revoke': '反审核',
   'app.kuaizhizao.purchaseReturn.submitConfirmAudit': '确定要提交此采购退货单吗？提交后将进入审核流程。',
   'app.kuaizhizao.purchaseReturn.submitConfirmAuto': '确定要提交此采购退货单吗？提交后将自动通过审核。',
   'app.kuaizhizao.purchaseReturn.create': '新建采购退货单',
-  'app.kuaizhizao.purchaseReturn.createTitle': '新增采购退货单',
+  'app.kuaizhizao.purchaseReturn.createTitle': '新建采购退货单',
   'app.kuaizhizao.purchaseReturn.editTitle': '编辑采购退货单',
   'app.kuaizhizao.purchaseReturn.detailTitle': '采购退货单详情{{suffix}}',
   'app.kuaizhizao.purchaseReturn.colSupplierReturnCode': '供应商 / 退货单号',
@@ -43508,11 +51223,13 @@ export default {
   'app.kuaizhizao.purchaseReturn.totalQuantity': '总数量',
   'app.kuaizhizao.purchaseReturn.totalAmount': '总金额',
   'app.kuaizhizao.purchaseReturn.confirmReturn': '确认退货',
+  'app.kuaizhizao.purchaseReturn.withdrawReturn': '撤回退货',
   'app.kuaizhizao.purchaseReturn.withdrawConfirm': '撤回确认',
   'app.kuaizhizao.purchaseReturn.batchConfirm': '批量确认退货',
   'app.kuaizhizao.purchaseReturn.batchWithdraw': '批量撤回确认',
   'app.kuaizhizao.purchaseReturn.itemsTitle': '退货明细',
   'app.kuaizhizao.purchaseReturn.itemsRequired': '请添加至少一项明细',
+  'app.kuaizhizao.purchaseReturn.returnQuantityRequired': '请填写大于 0 的退货数量',
   'app.kuaizhizao.purchaseReturn.importTitle': '导入采购退货明细',
   'app.kuaizhizao.purchaseReturn.batchNumber': '批号',
   'app.kuaizhizao.purchaseReturn.batchNumberPlaceholder': '请输入批号',
@@ -43528,6 +51245,8 @@ export default {
   'app.kuaizhizao.purchaseReturn.pull.previewFailed': '加载预览失败',
   'app.kuaizhizao.purchaseReturn.pull.previewNoLines': '无可退货明细',
   'app.kuaizhizao.purchaseReturn.pull.selectLinesFirst': '请至少选择一条可退货明细',
+  'app.kuaizhizao.purchaseReturn.pull.returnQtyInvalid': '请为物料 {{material}} 填写有效退货数量',
+  'app.kuaizhizao.purchaseReturn.pull.returnQtyExceeds': '物料 {{material}} 的退货数量不能超过可退数量',
   'app.kuaizhizao.purchaseReturn.capability.purchase_return.update.not_pending': '只有待退货状态的采购退货单可编辑',
   'app.kuaizhizao.purchaseReturn.capability.purchase_return.delete.not_pending': '只有待退货状态的采购退货单才能删除',
   'app.kuaizhizao.purchaseReturn.capability.purchase_return.confirm.not_pending': '只有待退货状态的采购退货单才能确认退货',
@@ -43574,6 +51293,33 @@ export default {
   'app.kuaizhizao.purchaseReturn.refundNotCompleted': '仅已完成的采购退货单可发起退款',
   'app.kuaizhizao.purchaseReturn.refundNoPayment': '未找到可退款的关联付款单',
   'app.kuaizhizao.purchaseReturn.refundResolveFailed': '定位关联付款单失败',
+  'app.kuaizhizao.purchaseReturn.financeOutcome.sectionTitle': '应付冲减结果',
+  'app.kuaizhizao.purchaseReturn.financeOutcome.returnAmount': '退货金额',
+  'app.kuaizhizao.purchaseReturn.financeOutcome.blueOffsetTotal': '已冲减蓝字应付',
+  'app.kuaizhizao.purchaseReturn.financeOutcome.redPayable': '红字应付单号',
+  'app.kuaizhizao.purchaseReturn.financeOutcome.redPayableAmount': '红字应付金额',
+  'app.kuaizhizao.purchaseReturn.financeOutcome.autoPayableSkippedTitle':
+    '确认退货时未自动生成红字应付，可手工生成后在应付列表查看负数金额',
+  'app.kuaizhizao.purchaseReturn.generateRedPayable': '生成红字应付',
+  'app.kuaizhizao.purchaseReturn.generateRedPayableSuccess': '已生成红字应付',
+  'app.kuaizhizao.purchaseReturn.generateRedPayableFailed': '生成红字应付失败',
+  'app.kuaizhizao.purchaseReturn.generateRedPayableNoPermission': '无应付单创建权限，无法生成红字应付',
+  'app.kuaizhizao.purchaseReturn.financeOutcome.settlements': '抵减核销单',
+  'app.kuaizhizao.purchaseReturn.financeOutcome.bluePayables': '冲减对象（蓝字应付）',
+  'app.kuaizhizao.purchaseReturn.financeOutcome.offsetAmountLabel': '冲减 {amount} 元',
+  'app.kuaizhizao.purchaseReturn.financeOutcome.paymentDocNote':
+    '退货冲减不会出现在付款单明细中，未结应付减少体现在蓝字应付与核销记录；若此前已付款，超出未结部分请发起付款退款。',
+  'app.kuaizhizao.purchaseReturn.financeOutcome.noBluePayableHint':
+    '未关联到可冲减的蓝字应付，请核对入库立账或手工应付后再处理。',
+  'app.kuaizhizao.purchaseReturn.financeOutcome.refundAlertTitle': '尚有金额需走付款退款',
+  'app.kuaizhizao.purchaseReturn.financeOutcome.refundAlertDesc':
+    '退货金额中有 {amount} 元此前已付，无法再通过冲减应付扣减，请发起付款退款收回。',
+  'app.kuaizhizao.purchaseReturn.financeOutcome.confirmRefundHint':
+    '退货已确认，另有 {amount} 元须通过付款退款处理（详见详情「应付冲减结果」）。',
+  'app.kuaizhizao.purchaseReturn.replenish': '是否补货',
+  'app.kuaizhizao.purchaseReturn.replenishHint':
+    '选「是」并保存后，原采购订单可再次下推采购入库（补回退货数量）；选「否」则按退货扣减订单未到货量。',
+  'app.kuaizhizao.purchaseReturn.replenishRequired': '请选择是否补货',
   'app.kuaizhizao.purchaseReturn.confirmBatchDelete': '确定要删除选中的 {{count}} 条采购退货单吗？',
   'app.kuaizhizao.purchaseReturn.statusPending': '待退货',
   'app.kuaizhizao.purchaseReturn.statusReturned': '已退货',
@@ -43633,7 +51379,7 @@ export default {
   'app.kuaizhizao.salesOrder.defaultPayment.net30': '月结30天',
   'app.kuaizhizao.salesOrder.defaultPayment.net60': '月结60天',
   'app.kuaizhizao.salesOrder.shippingMethodDictFallback': '发货方式数据字典未加载，已使用内置常用选项',
-  'app.kuaizhizao.salesOrder.paymentTermsDictFallback': '付款条件数据字典未加载，已使用内置常用选项',
+  'app.kuaizhizao.salesOrder.paymentTermsDictFallback': '付款周期数据字典未加载，已使用内置常用选项',
   'app.kuaizhizao.salesOrder.draftRestored': '已恢复暂存内容',
   'app.kuaizhizao.salesOrder.nodeCreateDisabled': '销售订单节点未启用，无法新建',
   'app.kuaizhizao.salesOrder.batchSubmit': '批量提交',
@@ -43713,7 +51459,13 @@ export default {
   'app.kuaizhizao.salesOrder.selectSalesman': '请选择销售人员',
   'app.kuaizhizao.salesOrder.shippingAddressPlaceholder': '请输入收货地址',
   'app.kuaizhizao.salesOrder.selectShippingMethod': '请选择发货方式',
-  'app.kuaizhizao.salesOrder.selectPaymentTerms': '请选择付款条件',
+  'app.kuaizhizao.salesOrder.selectPaymentMethod': '请选择付款方式',
+  'app.kuaizhizao.salesOrder.selectSettlementTerms': '请选择结算方式',
+  'app.kuaizhizao.salesOrder.paymentCycleDaysPlaceholder': '如月结 30 天填 30，可选',
+  'app.kuaizhizao.salesOrder.paymentCycleDaysHint': '与客户资料「付款账期（天）」一致；选客户时自动带入，可改',
+  'app.kuaizhizao.salesOrder.paymentCycleDaysValue': '{{days}}天',
+  'app.kuaizhizao.salesOrder.selectPaymentCycle': '请输入付款周期天数',
+  'app.kuaizhizao.salesOrder.selectPaymentTerms': '请输入付款周期天数',
   'app.kuaizhizao.salesOrder.selectMaterial': '请选择产品',
   'app.kuaizhizao.salesOrder.quantityMinHint': '>0',
   'app.kuaizhizao.salesOrder.quantityOrPriceTooLarge': '数量或单价过大，请缩小后再保存',
@@ -43838,6 +51590,7 @@ export default {
   'app.kuaicaiwu.gl.books.tab.voucherSummary': '凭证汇总',
   'app.kuaicaiwu.gl.books.trialBalanced': '试算平衡',
   'app.kuaicaiwu.gl.books.trialTotals': '期末借 {{d}} / 贷 {{c}}',
+  'app.kuaicaiwu.gl.books.trialLeafTotalsHint': '合计按末级科目，表中上级行为汇总展示',
   'app.kuaicaiwu.gl.books.trialUnbalanced': '试算不平衡',
   'app.kuaicaiwu.gl.books.voucherDetail': '凭证详情',
   'app.kuaicaiwu.gl.books.year': '年',
@@ -43952,6 +51705,12 @@ export default {
   'app.kuaicaiwu.gl.openingBalances.col.supplier': '供应商',
   'app.kuaicaiwu.gl.openingBalances.month': '月',
   'app.kuaicaiwu.gl.openingBalances.noAuxAccount': '请先在科目中启用辅助核算',
+  'app.kuaicaiwu.gl.openingBalances.nonLeafHint': '（汇总，不可录入）',
+  'app.kuaicaiwu.gl.openingBalances.residualClear': '清零本月残留期初',
+  'app.kuaicaiwu.gl.openingBalances.residualCleared': '已清零 {{count}} 个非末级残留期初',
+  'app.kuaicaiwu.gl.openingBalances.residualDetail':
+    '以下科目已有下级，自身余额行仍有期初，科目余额表会轧卷显示但不可在此录入。请将金额迁到末级科目后清零残留：{{list}}',
+  'app.kuaicaiwu.gl.openingBalances.residualTitle': '存在非末级科目残留期初',
   'app.kuaicaiwu.gl.openingBalances.save': '保存期初',
   'app.kuaicaiwu.gl.openingBalances.tab.account': '科目期初',
   'app.kuaicaiwu.gl.openingBalances.tab.aux': '辅助期初',
@@ -44242,6 +52001,15 @@ export default {
   'app.kuaicaiwu.notes.batchDeleteConfirm':
     '确定删除选中的 {{count}} 张票据吗？仅持有/已开出且未被后续业务占用的票据可删除，不满足条件的记录会由后端拒绝。',
   'app.kuaicaiwu.notes.create': '新建票据',
+  'app.kuaicaiwu.notes.createReceivable': '新建应收票据',
+  'app.kuaicaiwu.notes.createPayable': '新建应付票据',
+  'app.kuaicaiwu.notes.col.bizStatus': '票据状态',
+  'app.kuaicaiwu.notes.toolbar.withdrawSubmit': '撤销提交',
+  'app.kuaicaiwu.notes.toolbar.submitReview': '提交审核',
+  'app.kuaicaiwu.notes.toolbar.submitReviewNotAllowed': '请先提交，再提交审核',
+  'app.kuaicaiwu.notes.toolbar.withdrawReview': '撤回审核',
+  'app.kuaicaiwu.notes.toolbar.revoke': '反审核',
+  'app.kuaicaiwu.notes.batchDeleteNoneDeletable': '所选票据均不可删除（仅草稿或已驳回可删）',
   'app.kuaicaiwu.notes.edit': '编辑票据',
   'app.kuaicaiwu.notes.field.acceptingBank': '承兑行',
   'app.kuaicaiwu.notes.field.acceptor': '承兑人',
@@ -44310,8 +52078,8 @@ export default {
   'app.kuaicaiwu.tax.vatLedger.col.tax': '税额',
   'app.kuaicaiwu.tax.vatLedger.confirmSurchargeVoucher': '确认生成附加税计提凭证？',
   'app.kuaicaiwu.tax.vatLedger.confirmVatVoucher': '确认生成增值税结转凭证？',
-  'app.kuaicaiwu.tax.vatLedger.drillTitle.input': '进项发票明细',
-  'app.kuaicaiwu.tax.vatLedger.drillTitle.output': '销项发票明细',
+  'app.kuaicaiwu.tax.vatLedger.drillTitle.input': '采购发票明细',
+  'app.kuaicaiwu.tax.vatLedger.drillTitle.output': '销售发票明细',
   'app.kuaicaiwu.tax.vatLedger.drillTitle.transfer_out': '进项转出明细',
   'app.kuaicaiwu.tax.vatLedger.general': '一般纳税人',
   'app.kuaicaiwu.tax.vatLedger.inputTax': '进项税额',
@@ -44360,6 +52128,7 @@ export default {
   'app.kuaioa.common.uploadFile': '上传文件（txt/md/csv/json）',
   'app.kuaioa.common.viewAttachment': '查看附件',
   'app.kuaioa.formRequest.formData': '表单数据',
+  'app.kuaioa.formRequest.applicationContent': '申请内容',
   'app.kuaioa.formRequest.template': '表单模板',
   'app.kuaioa.formRequest.templatePlaceholder': '请选择表单模板',
   'app.kuaioa.formSchema.comp.date': '日期',
@@ -44397,6 +52166,11 @@ export default {
   'app.kuaioa.formTemplate.businessType': '业务类型',
   'app.kuaioa.formTemplate.businessTypeHint': '绑定通用会签场景；空表示普通自定义申请。让步放行请使用协同模块',
   'app.kuaioa.formTemplate.businessTypePlaceholder': '普通自定义（不绑定会签类型）',
+  'app.kuaioa.formTemplate.presetFieldsHint':
+    '该业务类型提交时会校验约定字段名；新建/保存模板会自动补齐缺失字段，也可在设计器中点「套用约定字段」。',
+  'app.kuaioa.formTemplate.applyPresetFields': '套用约定字段',
+  'app.kuaioa.formTemplate.applyPresetFieldsHint': '仅追加缺失的约定字段，不覆盖已有同名字段',
+  'app.kuaioa.formTemplate.applyPresetFieldsSuccess': '已补齐约定字段',
   'app.kuaioa.formBusinessType.five_m_change': '5M 变更报告',
   'app.kuaioa.formBusinessType.material_request': '物料申请',
   'app.kuaioa.formBusinessType.sample_inspection': '样品检验',
@@ -44795,7 +52569,7 @@ export default {
   'app.kuaizhizao.quality.fai.messages.candidatesSaved': '候选气泡已保存',
   'app.kuaizhizao.quality.fai.messages.importFailed': '从检验计划导入失败',
   'app.kuaizhizao.quality.fai.messages.importSuccess': '已从检验计划导入特性',
-  'app.kuaizhizao.quality.fai.messages.needPlanId': '请填写检验计划 ID',
+  'app.kuaizhizao.quality.fai.messages.needPlanId': '请选择检验方案',
   'app.kuaizhizao.quality.fai.messages.rejectSuccess': '已驳回',
   'app.kuaizhizao.quality.fai.messages.submitSuccess': '已提交',
   'app.kuaizhizao.quality.fai.batch.reject': '批量驳回',
@@ -44876,19 +52650,241 @@ export default {
   'app.kuaizhizao.quality.nc.messages.detailMissing': '详情缺失',
   'app.kuaizhizao.quality.nc.messages.loadDetailFailed': '加载模板详情失败',
   'app.kuaizhizao.quality.nc.modal.batchStart8dContent': '确认批量启动 8D？',
-  'app.kuaizhizao.quality.nc.sourceInspection.empty': '暂无数据',
+  'app.kuaizhizao.quality.nc.sourceInspection.empty': '无检验/报工来源',
   'app.kuaizhizao.quality.nc.sourceInspection.type.finished': '成品检验',
   'app.kuaizhizao.quality.nc.sourceInspection.type.incoming': '来料检验',
   'app.kuaizhizao.quality.nc.sourceInspection.type.process': '过程检验',
+  'app.kuaizhizao.quality.nc.sourceInspection.type.reporting': '报工登记',
   'app.kuaizhizao.quality.qms.actions.obsolete': '作废',
   'app.kuaizhizao.quality.qms.actions.publish': '发布',
   'app.kuaizhizao.quality.qms.actions.submit': '提交审核',
   'app.kuaizhizao.quality.qms.actions.reject': '驳回',
   'app.kuaizhizao.quality.qms.actions.revise': '升版',
   'app.kuaizhizao.quality.qms.actions.versionHistory': '版本履历',
+  'app.kuaizhizao.quality.qms.nav.filterStandards': '筛选标准',
+  'app.kuaizhizao.quality.qms.nav.filterDocTypes': '筛选文件功能',
+  'app.kuaizhizao.quality.qms.nav.filterLifecycle': '筛选生命周期',
+  'app.kuaizhizao.quality.qms.nav.all': '全部',
+  'app.kuaizhizao.quality.qms.nav.unlinkedStandard': '未关联标准',
+  'app.kuaizhizao.quality.qms.nav.dimension.standard': '体系',
+  'app.kuaizhizao.quality.qms.nav.dimension.docType': '文件功能',
+  'app.kuaizhizao.quality.qms.nav.dimension.lifecycle': '生命周期',
+  'app.kuaizhizao.quality.qms.nav.pendingAudit': '待审',
+  'app.kuaizhizao.quality.qms.nav.draftRejected': '草稿与驳回',
+  'app.kuaizhizao.quality.qms.nav.obsolete': '已作废',
   'app.kuaizhizao.quality.qms.zone.formal': '正式目录',
   'app.kuaizhizao.quality.qms.zone.pending': '待审区',
-  'app.kuaizhizao.quality.qms.versionHistoryTitle': '版本履历 · {{code}}',
+  'app.kuaizhizao.quality.qms.zone.reviewDue': '待复审',
+  'app.kuaizhizao.quality.qms.zone.audits': '单次审核',
+  'app.kuaizhizao.quality.qms.zone.annualPlans': '年度审核计划',
+  'app.kuaizhizao.quality.qms.annualPlan.label': '年度审核计划',
+  'app.kuaizhizao.quality.qms.annualPlan.year': '年度',
+  'app.kuaizhizao.quality.qms.annualPlan.months': '计划月份',
+  'app.kuaizhizao.quality.qms.annualPlan.monthN': '{{n}}月',
+  'app.kuaizhizao.quality.qms.annualPlan.coveredProcesses': '覆盖过程',
+  'app.kuaizhizao.quality.qms.annualPlan.create': '新建年度审核计划',
+  'app.kuaizhizao.quality.qms.annualPlan.edit': '编辑年度审核计划',
+  'app.kuaizhizao.quality.qms.annualPlan.createTitle': '新建年度审核计划',
+  'app.kuaizhizao.quality.qms.annualPlan.editTitle': '编辑年度审核计划',
+  'app.kuaizhizao.quality.qms.annualPlan.required': '请选择年度审核计划',
+  'app.kuaizhizao.quality.qms.annualPlan.requiredFirst':
+    '请先在「年度审核计划」中新建计划，再建单次内部审核',
+  'app.kuaizhizao.quality.qms.checklist.rows': '检查表行',
+  'app.kuaizhizao.quality.qms.checklist.checkpoint': '审核要点',
+  'app.kuaizhizao.quality.qms.checklist.conclusion': '结论',
+  'app.kuaizhizao.quality.qms.checklist.evidence': '证据',
+  'app.kuaizhizao.quality.qms.checklist.addRow': '添加行',
+  'app.kuaizhizao.quality.qms.checklist.clauseRequired': '请选择条款',
+  'app.kuaizhizao.quality.qms.checklist.deleteConfirm': '删除这行检查表？',
+  'app.kuaizhizao.quality.qms.checklist.legacyReadonly': '历史整段检查表与不符合仅可查看，新内容请用检查表行',
+  'app.kuaizhizao.quality.qms.checklist.saveFirst': '先保存内审单，再填写检查表行',
+  'app.kuaizhizao.quality.qms.checklistConclusion.pending': '待判',
+  'app.kuaizhizao.quality.qms.checklistConclusion.conform': '符合',
+  'app.kuaizhizao.quality.qms.checklistConclusion.nonconform': '不符合',
+  'app.kuaizhizao.quality.qms.checklistConclusion.observation': '观察',
+  'app.kuaizhizao.quality.qms.openNcCount': '未关报告',
+  'app.kuaizhizao.quality.qms.createNcReport': '新建不符合报告',
+  'app.kuaizhizao.quality.qms.editNcReport': '编辑不符合报告',
+  'app.kuaizhizao.quality.qms.ncReportCode': '报告编号',
+  'app.kuaizhizao.quality.qms.ncFact': '不符合事实',
+  'app.kuaizhizao.quality.qms.ncSource.label': '来源',
+  'app.kuaizhizao.quality.qms.ncSource.code': '来源单号',
+  'app.kuaizhizao.quality.qms.ncSource.internalAudit': '内部审核',
+  'app.kuaizhizao.quality.qms.ncSource.externalAudit': '外审',
+  'app.kuaizhizao.quality.qms.ncSeverity.label': '类型',
+  'app.kuaizhizao.quality.qms.ncSeverity.severe': '严重',
+  'app.kuaizhizao.quality.qms.ncSeverity.general': '一般',
+  'app.kuaizhizao.quality.qms.ncSeverity.observation': '观察项',
+  'app.kuaizhizao.quality.qms.ncStatus.open': '开出',
+  'app.kuaizhizao.quality.qms.ncStatus.rectifying': '整改中',
+  'app.kuaizhizao.quality.qms.ncStatus.pendingVerify': '待验证',
+  'app.kuaizhizao.quality.qms.ncStatus.closed': '已关闭',
+  'app.kuaizhizao.quality.qms.ncResponsibleDept': '责任部门',
+  'app.kuaizhizao.quality.qms.ncDueOn': '要求完成日',
+  'app.kuaizhizao.quality.qms.ncCause': '原因',
+  'app.kuaizhizao.quality.qms.ncCorrection': '纠正',
+  'app.kuaizhizao.quality.qms.ncCorrectiveAction': '纠正措施',
+  'app.kuaizhizao.quality.qms.ncVerifier': '验证人',
+  'app.kuaizhizao.quality.qms.ncVerifiedOn': '验证日',
+  'app.kuaizhizao.quality.qms.ncVerificationConclusion': '验证结论',
+  'app.kuaizhizao.quality.qms.ncCapaCode': '纠正预防单号',
+  'app.kuaizhizao.quality.qms.actions.closeNc': '关闭',
+  'app.kuaizhizao.quality.qms.actions.closeCa': '关闭',
+  'app.kuaizhizao.quality.qms.actions.generateCa': '生成纠正预防',
+  'app.kuaizhizao.quality.qms.createCorrectiveAction': '新建纠正预防',
+  'app.kuaizhizao.quality.qms.editCorrectiveAction': '编辑纠正预防',
+  'app.kuaizhizao.quality.qms.caActionCode': '纠正预防编号',
+  'app.kuaizhizao.quality.qms.caProblemSummary': '问题摘要',
+  'app.kuaizhizao.quality.qms.caSource.label': '来源',
+  'app.kuaizhizao.quality.qms.caSource.code': '来源单号',
+  'app.kuaizhizao.quality.qms.caSource.id': '来源单据ID',
+  'app.kuaizhizao.quality.qms.caSource.nonconformityReport': '不符合报告',
+  'app.kuaizhizao.quality.qms.caSource.qualityComplaint': '质量投诉',
+  'app.kuaizhizao.quality.qms.caSource.managementReviewResolution': '管理评审决议',
+  'app.kuaizhizao.quality.qms.caStatus.registered': '登记',
+  'app.kuaizhizao.quality.qms.caStatus.inProgress': '措施中',
+  'app.kuaizhizao.quality.qms.caStatus.pendingVerify': '待验证',
+  'app.kuaizhizao.quality.qms.caStatus.closed': '已关闭',
+  'app.kuaizhizao.quality.qms.caResponsiblePerson': '责任人',
+  'app.kuaizhizao.quality.qms.caDueOn': '要求完成日',
+  'app.kuaizhizao.quality.qms.caCause': '原因',
+  'app.kuaizhizao.quality.qms.caCorrection': '纠正',
+  'app.kuaizhizao.quality.qms.caPrevention': '预防',
+  'app.kuaizhizao.quality.qms.caNeedEightD': '需要 8D',
+  'app.kuaizhizao.quality.qms.caEightDCode': '8D 单号',
+  'app.kuaizhizao.quality.qms.caVerifier': '验证人',
+  'app.kuaizhizao.quality.qms.caVerifiedOn': '验证日',
+  'app.kuaizhizao.quality.qms.caVerificationConclusion': '验证结论',
+  'app.kuaizhizao.quality.qms.messages.auditCloseBlocked': '仍有 {{count}} 份未关闭不符合报告，不能关闭内审',
+  'app.kuaizhizao.quality.qms.messages.ncCloseNeedVerify': '请先填写验证结论再关闭',
+  'app.kuaizhizao.quality.qms.messages.ncCloseNeedCa': '严重或一般不符合须先生成并关闭纠正预防',
+  'app.kuaizhizao.quality.qms.messages.ncClosed': '不符合报告已关闭',
+  'app.kuaizhizao.quality.qms.messages.caCloseNeedVerify': '请先填写验证结论再关闭',
+  'app.kuaizhizao.quality.qms.messages.caClosed': '纠正预防已关闭',
+  'app.kuaizhizao.quality.qms.messages.caCreatedFromSource': '已生成纠正预防',
+  'app.kuaizhizao.quality.qms.messages.caNeedReviewResolution': '请先填写评审输出或主题后再生成纠正预防',
+
+  'app.kuaizhizao.quality.qms.resolutionsTitle': '决议行',
+  'app.kuaizhizao.quality.qms.addResolution': '添加决议',
+  'app.kuaizhizao.quality.qms.resolutionContent': '决议内容',
+  'app.kuaizhizao.quality.qms.resolutionOwner': '责任人',
+  'app.kuaizhizao.quality.qms.resolutionDueOn': '要求完成日',
+  'app.kuaizhizao.quality.qms.resolutionConvertCa': '转为纠正预防',
+  'app.kuaizhizao.quality.qms.resolutionStatus.open': '未关闭',
+  'app.kuaizhizao.quality.qms.resolutionStatus.done': '已关闭',
+  'app.kuaizhizao.quality.qms.resolutionSaveHint': '先保存管理评审，再维护决议行',
+  'app.kuaizhizao.quality.qms.outputsSummaryOptional': '输出摘要（可选）',
+  'app.kuaizhizao.quality.qms.broughtDocType': '类型',
+  'app.kuaizhizao.quality.qms.broughtDocCode': '单号',
+  'app.kuaizhizao.quality.qms.broughtDocName': '摘要',
+  'app.kuaizhizao.quality.qms.broughtType.qms_internal_audit': '内部审核',
+  'app.kuaizhizao.quality.qms.broughtType.qms_nonconformity_report': '不符合报告',
+  'app.kuaizhizao.quality.qms.broughtType.qms_corrective_action': '纠正预防',
+  'app.kuaizhizao.quality.qms.broughtType.quality_complaint': '质量投诉',
+  'app.kuaizhizao.quality.qms.broughtType.supplier_evaluation': '供方评价',
+  'app.kuaizhizao.quality.qms.broughtType.qms_review_resolution': '上次决议',
+  'app.kuaizhizao.quality.qms.broughtType.qms_quality_objective_line': '质量目标未达到',
+  'app.kuaizhizao.quality.qms.createQualityObjective': '新建质量目标',
+  'app.kuaizhizao.quality.qms.editQualityObjective': '编辑质量目标',
+  'app.kuaizhizao.quality.qms.objectiveCode': '目标编号',
+  'app.kuaizhizao.quality.qms.objectivePlanYear': '年度',
+  'app.kuaizhizao.quality.qms.objectiveStandard': '标准',
+  'app.kuaizhizao.quality.qms.objectiveStandardId': '标准 ID',
+  'app.kuaizhizao.quality.qms.objectiveLineCount': '目标行数',
+  'app.kuaizhizao.quality.qms.objectiveLines': '目标行',
+  'app.kuaizhizao.quality.qms.objectiveLinesRequired': '请至少添加一行目标',
+  'app.kuaizhizao.quality.qms.objectiveLineName': '目标名称',
+  'app.kuaizhizao.quality.qms.objectiveMetricScope': '统计口径',
+  'app.kuaizhizao.quality.qms.objectiveTargetValue': '目标值',
+  'app.kuaizhizao.quality.qms.objectiveActualValue': '实际值',
+  'app.kuaizhizao.quality.qms.objectiveResponsibleDept': '责任部门',
+  'app.kuaizhizao.quality.qms.objectivePeriod.label': '周期',
+  'app.kuaizhizao.quality.qms.objectivePeriod.month': '月',
+  'app.kuaizhizao.quality.qms.objectivePeriod.quarter': '季',
+  'app.kuaizhizao.quality.qms.objectiveAchieved': '是否达到',
+  'app.kuaizhizao.quality.qms.objectiveAchievedYes': '达到',
+  'app.kuaizhizao.quality.qms.objectiveAchievedNo': '未达到',
+  'app.kuaizhizao.quality.qms.objectiveStatus.draft': '草案',
+  'app.kuaizhizao.quality.qms.objectiveStatus.published': '已发布',
+  'app.kuaizhizao.quality.qms.objectiveStatus.ended': '已结束',
+  'app.kuaizhizao.quality.qms.createLegalRegulation': '新建法律法规',
+  'app.kuaizhizao.quality.qms.editLegalRegulation': '编辑法律法规',
+  'app.kuaizhizao.quality.qms.legalName': '名称',
+  'app.kuaizhizao.quality.qms.legalDocNo': '文号',
+  'app.kuaizhizao.quality.qms.legalIssuingAuthority': '发布机关',
+  'app.kuaizhizao.quality.qms.legalEffectiveOn': '实施日',
+  'app.kuaizhizao.quality.qms.legalApplicableScope': '适用范围',
+  'app.kuaizhizao.quality.qms.legalConclusion.label': '评价结论',
+  'app.kuaizhizao.quality.qms.legalConclusion.conform': '符合',
+  'app.kuaizhizao.quality.qms.legalConclusion.needRectify': '需整改',
+  'app.kuaizhizao.quality.qms.legalEvaluatedOn': '评价日',
+  'app.kuaizhizao.quality.qms.legalNextEvaluationOn': '下次评价日',
+  'app.kuaizhizao.quality.qms.legalCapaCode': '纠正预防单号',
+  'app.kuaizhizao.quality.qms.legalEvalCompleted': '评价完成',
+  'app.kuaizhizao.quality.qms.legalEvalCompletedYes': '是',
+  'app.kuaizhizao.quality.qms.legalEvalCompletedNo': '否',
+  'app.kuaizhizao.quality.qms.legalDueOnly': '已到评价日',
+  'app.kuaizhizao.quality.qms.createExternalAudit': '新建外审',
+  'app.kuaizhizao.quality.qms.editExternalAudit': '编辑外审',
+  'app.kuaizhizao.quality.qms.externalAuditCode': '外审编号',
+  'app.kuaizhizao.quality.qms.externalBodyName': '审核机构',
+  'app.kuaizhizao.quality.qms.externalAuditType.label': '外审类型',
+  'app.kuaizhizao.quality.qms.externalAuditType.initial': '初次',
+  'app.kuaizhizao.quality.qms.externalAuditType.surveillance': '监督',
+  'app.kuaizhizao.quality.qms.externalAuditType.recertification': '再认证',
+  'app.kuaizhizao.quality.qms.externalPlannedOn': '计划日',
+  'app.kuaizhizao.quality.qms.externalActualOn': '实际日',
+  'app.kuaizhizao.quality.qms.externalAuditScope': '审核范围',
+  'app.kuaizhizao.quality.qms.externalOpenNcCount': '未关闭不符合',
+  'app.kuaizhizao.quality.qms.externalSegment.audits': '外审',
+  'app.kuaizhizao.quality.qms.externalSegment.certificates': '证书',
+  'app.kuaizhizao.quality.qms.createCertificate': '新建证书',
+  'app.kuaizhizao.quality.qms.editCertificate': '编辑证书',
+  'app.kuaizhizao.quality.qms.certificateName': '证书名称',
+  'app.kuaizhizao.quality.qms.certificateNo': '证书号',
+  'app.kuaizhizao.quality.qms.certificateStandard': '标准',
+  'app.kuaizhizao.quality.qms.certificateIssuer': '发证机构',
+  'app.kuaizhizao.quality.qms.certificateEffectiveOn': '生效日',
+  'app.kuaizhizao.quality.qms.certificateExpireOn': '到期日',
+  'app.kuaizhizao.quality.qms.certificateStatus.valid': '有效',
+  'app.kuaizhizao.quality.qms.certificateStatus.expiring': '临期',
+  'app.kuaizhizao.quality.qms.certificateStatus.expired': '过期',
+  'app.kuaizhizao.quality.qms.actions.createExternalNc': '开不符合',
+  'app.kuaizhizao.quality.qms.createExternalNcTitle': '外审开不符合 {{code}}',
+  'app.kuaizhizao.quality.qms.messages.externalNcCreated': '已开出不符合报告',
+  'app.kuaizhizao.quality.qms.actions.markResolutionDone': '标为已关闭',
+  'app.kuaizhizao.quality.qms.messages.resolutionContentRequired': '请填写决议内容',
+  'app.kuaizhizao.quality.qms.messages.resolutionDone': '决议已关闭',
+  'app.kuaizhizao.quality.qms.messages.resolutionSaveFirst': '请先保存决议再生成纠正预防',
+  'app.kuaizhizao.quality.qms.circulation.action': '受控副本',
+  'app.kuaizhizao.quality.qms.circulation.title': '受控副本 {{code}}',
+  'app.kuaizhizao.quality.qms.circulation.outstanding': '未回收份数 {{count}}',
+  'app.kuaizhizao.quality.qms.circulation.outstandingColumn': '未回收',
+  'app.kuaizhizao.quality.qms.circulation.effectiveOnly': '仅生效文件可登记发放、回收和宣贯。作废或升版后仍可查看已有记录。',
+  'app.kuaizhizao.quality.qms.circulation.issue': '发放',
+  'app.kuaizhizao.quality.qms.circulation.recall': '回收',
+  'app.kuaizhizao.quality.qms.circulation.briefing': '宣贯',
+  'app.kuaizhizao.quality.qms.circulation.party': '部门或人员',
+  'app.kuaizhizao.quality.qms.circulation.copies': '份数',
+  'app.kuaizhizao.quality.qms.circulation.issueDate': '发放日',
+  'app.kuaizhizao.quality.qms.circulation.signer': '签收人',
+  'app.kuaizhizao.quality.qms.circulation.signedOn': '签收日',
+  'app.kuaizhizao.quality.qms.circulation.recaller': '回收人',
+  'app.kuaizhizao.quality.qms.circulation.recallDate': '回收日',
+  'app.kuaizhizao.quality.qms.circulation.destroyed': '是否销毁',
+  'app.kuaizhizao.quality.qms.circulation.audience': '宣贯对象',
+  'app.kuaizhizao.quality.qms.circulation.briefingDate': '宣贯日期',
+  'app.kuaizhizao.quality.qms.circulation.completed': '是否完成',
+  'app.kuaizhizao.quality.qms.circulation.trainingRef': '培训记录单号',
+  'app.kuaizhizao.quality.qms.circulation.register': '登记',
+  'app.kuaizhizao.quality.qms.circulation.saved': '已登记',
+  'app.kuaizhizao.quality.qms.circulation.deleteConfirm': '删除这条记录？',
+  'app.kuaizhizao.quality.qms.circulation.partyRequired': '请填写部门或人员',
+  'app.kuaizhizao.quality.qms.circulation.recallerRequired': '请填写回收人',
+  'app.kuaizhizao.quality.qms.circulation.audienceRequired': '请填写宣贯对象',
+  'app.kuaizhizao.quality.qms.circulation.copiesRequired': '请填写份数',
+  'app.kuaizhizao.quality.qms.circulation.dateRequired': '请选择日期',
+  'app.kuaizhizao.quality.qms.versionHistoryTitle': '版本履历 {{code}}',
   'app.kuaizhizao.quality.qms.versionHistoryGlobalHint': '您持有全局档案总查看权限，可浏览完整版本链（不含驳回）。',
   'app.kuaizhizao.quality.qms.versionHistoryConsumerHint': '按 INF-05 可见性策略展示（受众：{{audience}}）；使用方仅见现行有效版。',
   'app.kuaizhizao.quality.qms.changeSummary': '升版说明',
@@ -44969,7 +52965,7 @@ export default {
   'app.kuaizhizao.quality.qms.plannedDate': '计划日期',
   'app.kuaizhizao.quality.qms.reviewCode': '评审编号',
   'app.kuaizhizao.quality.qms.reviewDate': '评审日期',
-  'app.kuaizhizao.quality.qms.reviewDueBanner': '有 {{count}} 份体系文件即将到评审期',
+  'app.kuaizhizao.quality.qms.reviewDueBanner': '有 {{count}} 份体系文件待复审',
   'app.kuaizhizao.quality.qms.reviewStatus.closed': '已关闭',
   'app.kuaizhizao.quality.qms.reviewStatus.completed': '已完成',
   'app.kuaizhizao.quality.qms.reviewStatus.draft': '草稿',
@@ -45020,6 +53016,15 @@ export default {
   'app.kuaizhizao.reports.customerCount': '客户数量',
   'app.kuaizhizao.reports.deliverer': '送货人',
   'app.kuaizhizao.reports.deliveryCount': '交货次数',
+  'app.kuaizhizao.reports.receiptCode': '入库单号',
+  'app.kuaizhizao.reports.receiptDate': '入库日期',
+  'app.kuaizhizao.reports.receiptLineCount': '入库行数',
+  'app.kuaizhizao.reports.payableQuantity': '已立应付数量',
+  'app.kuaizhizao.reports.payableAmount': '已立应付金额',
+  'app.kuaizhizao.reports.invoicedQuantity': '已收票数量',
+  'app.kuaizhizao.reports.invoicedAmount': '已收票金额',
+  'app.kuaizhizao.reports.paidQuantity': '已付款数量',
+  'app.kuaizhizao.reports.paidAmount': '已付款金额',
   'app.kuaizhizao.reports.demandCode': '需求编码',
   'app.kuaizhizao.reports.demandType': '需求类型',
   'app.kuaizhizao.reports.demandType.sales_forecast': '销售预测',
@@ -45048,7 +53053,7 @@ export default {
   'app.kuaizhizao.salesDashboard.overdueShipmentsTitle': '逾期发运',
   'app.kuaizhizao.salesForecast.listLoadFailed': '列表加载失败',
   'app.kuaizhizao.salesOrder.col.deliveryProgressTip': '交货进度提示',
-  'app.kuaizhizao.salesOrder.listFailed': '加载保养项失败',
+  'app.kuaizhizao.salesOrder.listFailed': '加载销售订单列表失败',
   'app.kuaizhizao.salesOrder.pullSalesReviewNotAllowed': '当前订单评审不可创建销售订单',
   'app.kuaizhizao.salesOrder.selectSalesReviewFirst': '请先选择订单评审',
   'app.kuaizhizao.salesOrder.variantAttrsEmpty': '请至少选择一条 SKU',
@@ -45329,6 +53334,7 @@ export default {
   'app.master-data.drawingWhereUsed.kind.operation': '工序',
   'app.master-data.drawingWhereUsed.kind.process_route': '工艺路线',
   'app.master-data.drawingWhereUsed.kind.work_order': '工单',
+  'app.master-data.drawingWhereUsed.kind.bom': '物料清单',
   'app.master-data.drawingWhereUsed.optionsFailed': '加载可选对象失败',
   'app.master-data.drawingWhereUsed.queryFailed': '图纸反查失败',
   'app.master-data.drawingWhereUsed.reverse': '按对象查',
@@ -45563,11 +53569,13 @@ export default {
   'components.themeEditor.tabBg.title': '页签背景',
   'components.uniAudit.colAuditStatus': '审核状态',
   'components.uniAudit.phaseDraft': '草稿',
+  'components.uniAudit.phaseSubmitted': '已提交',
   'components.uniAudit.phasePending': '待审核',
+  'components.uniAudit.phaseInReview': '审核中',
   'components.uniAudit.phasePendingMine': '待我审核',
   'components.uniAudit.youAudited': '您已审核',
   'components.uniAudit.youAuditedWaiting': '您已完成本级审核，等待后续节点',
-  'components.uniAudit.phaseApproved': '已通过',
+  'components.uniAudit.phaseApproved': '已审核',
   'components.uniAudit.phaseRejected': '已驳回',
   'components.uniAudit.phaseNone': '—',
   'components.uniAudit.noPermission': '您没有该操作权限',
@@ -45580,9 +53588,11 @@ export default {
   'components.uniAudit.notNodeAssigneeWithNames':
     '当前节点待办人为：{{names}}，您无权在此节点审核或驳回',
   'components.uniAudit.branchDecisionHint': '请先选择后续走向，再点击审核',
+  'components.uniAudit.branchDecisionDefaultHint': '已按默认分支选中，可改选后再审核',
   'components.uniAudit.branchDecisionRequired': '请先选择「{{label}}」后再审核',
   'components.uniAudit.branchDecisionYes': '是：{{name}}',
   'components.uniAudit.branchDecisionNo': '否：{{name}}',
+  'components.uniAudit.inlineEditableTitle': '审核时填写',
   'components.uniAudit.approveAction': '审核',
   'components.uniAudit.rejectAction': '驳回',
   'components.uniAudit.rejectTargetHint': '请选择驳回落点',
@@ -45596,6 +53606,8 @@ export default {
   'components.uniAudit.delegate': '委托',
   'components.uniAudit.urge': '催办',
   'components.uniAudit.recallOwnAction': '撤销审核',
+  'components.uniAudit.revokeAction': '撤销审核',
+  'components.uniAudit.withdrawSubmitAction': '撤回提交',
   'components.uniAudit.submitterAwaitingOthers': '您为发起人，请等待当前节点审批人处理',
   'pages.dashboard.updateLog.entries.kuaiplm-design-docs-optional-project-title-first-r01.title':
     '快研发设计类单据统一标题优先与可选项目',
@@ -45621,14 +53633,132 @@ export default {
     '销售订单直推工单可选 BOM 版本',
   'pages.dashboard.updateLog.entries.sales-direct-push-bom-r01.description':
     '销售订单直推工单预览在启用多版本 BOM 时可按订单行产品指定 BOM 版本，下推后写入工单快照，与需求计算下推一致用于齐套与领料展开。',
+  'pages.dashboard.updateLog.entries.mobile-equipment-photo-preview-r01.title':
+    '移动端设备作业照片预览修复',
+  'pages.dashboard.updateLog.entries.mobile-equipment-photo-preview-r01.description':
+    '工位 App 点检保养等拍照上传后，预览链补充鉴权参数并在缩略图失败时自动重取预览地址，避免附件区长期显示加载失败。',
+  'pages.dashboard.updateLog.entries.inventory-cost-resolve-costing-warehouses-r01.title':
+    '修复运营看板库存金额报错',
+  'pages.dashboard.updateLog.entries.inventory-cost-resolve-costing-warehouses-r01.description':
+    '库存成本服务补回按仓核算方法，排除赠品仓等只计数量仓库后再汇总库存金额，运营看板与仓储汇总不再因缺方法报错。',
+  'pages.dashboard.updateLog.entries.material-form-hide-default-supplier-prop-r01.title':
+    '修复新建物料选采购件报错',
+  'pages.dashboard.updateLog.entries.material-form-hide-default-supplier-prop-r01.description':
+    '物料来源/默认值子页未接收默认供应商字段掩码参数，选择采购件时抛出 hideDefaultSupplierField is not defined；已向下传入该标志。',
+  'pages.dashboard.updateLog.entries.sales-contract-create-staticmethod-r01.title':
+    '修复新建销售合同失败',
+  'pages.dashboard.updateLog.entries.sales-contract-create-staticmethod-r01.description':
+    '框架合同创建时服务层静态方法签名错误导致 500，已纠正明细汇总与落库方法，新建数量框架与金额总框可正常提交。',
+  'pages.dashboard.updateLog.entries.material-unit-select-no-limit-2000-r01.title':
+    '物料单位下拉不再一次拉两千物料',
+  'pages.dashboard.updateLog.entries.material-unit-select-no-limit-2000-r01.description':
+    '采购订单等页的单位选择在只有数字物料 ID 时改为按 ids 精确查询，不再请求 materials?limit=2000，避免网关 504 并弹出服务器暂时不可用。',
+  'pages.dashboard.updateLog.entries.cosmic-warehouse-getlist-org-priority-r01.title':
+    '苍穹接口组织编码改取连接器',
+  'pages.dashboard.updateLog.entries.cosmic-warehouse-getlist-org-priority-r01.description':
+    '仓库列表、库存查询及出站单据中的组织字段统一取连接器 org_number，预设不再写死 BU-00000；历史硬编码在调用时会被连接器组织覆盖。',
+  'pages.dashboard.updateLog.entries.cosmic-warehouse-basedata-query-r01.title':
+    '苍穹仓库列表维持 getList',
+  'pages.dashboard.updateLog.entries.cosmic-warehouse-basedata-query-r01.description':
+    '实测测试账套：/v2/basedata/bd_warehouse/query 与 batchQuery 返回 2530 路由未找到；已注册的仓库列表是 /v2/sbd/bd_warehouse/getList。调用会改写回 getList，并带上 data.createorg_number。',
+  'pages.dashboard.updateLog.entries.cosmic-warehouse-612-preview-r01.title':
+    '苍穹仓库查询 612 不再误显示为预览行',
+  'pages.dashboard.updateLog.entries.cosmic-warehouse-612-preview-r01.description':
+    '开放平台返回失败码且无 status=false 时，同步预览改为明确报错，不再把 errorCode/message 外壳显示成一行仓库数据。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-external-push-gate-r01.title':
+    '采购入库外推预览报不支持源类型',
+  'pages.dashboard.updateLog.entries.purchase-receipt-external-push-gate-r01.description':
+    '外推权限映射补登 purchase_receipt→kuaizhizao:inbound:push，数据互通 dry-run/手动推送不再误报未配置。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-kingdee-doc-fields-r01.title':
+    '采购入库单补齐金蝶外推单据字段',
+  'pages.dashboard.updateLog.entries.purchase-receipt-kingdee-doc-fields-r01.description':
+    '空白新建可填供应商、采购员与工号、验收人、付款方式、税率、币别；外推优先读单据字段（工号/付款方式/税率/验收人），组织与单据类型等仍在业务配置。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-blank-create-po-fk-r01.title':
+    '空白新建采购入库单保存外键报错',
+  'pages.dashboard.updateLog.entries.purchase-receipt-blank-create-po-fk-r01.description':
+    '无采购订单来源的入库单不再写入 purchase_order_id=0（违反外键）；改为可空 NULL，写路径将 0/缺省规范为空。',
+  'pages.dashboard.updateLog.entries.purchase-center-overdue-count-504-r01.title':
+    '采购管理页超时「正在维护」排查修复',
+  'pages.dashboard.updateLog.entries.purchase-center-overdue-count-504-r01.description':
+    '采购中心汇总与菜单角标逾期计数曾按「百万条预警列表」全量装配（含行影响溯源），叠加订单列表读侧回写已到货数量，易触发网关 504。现改为库内条件计数、预警等级下推过滤、本页再解析影响，并去掉列表读侧 sync。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-auto-push-binding-r01.title':
+    '采购入库单接入自动推送',
+  'pages.dashboard.updateLog.entries.purchase-receipt-auto-push-binding-r01.description':
+    '入库管理「数据互通」可记住出站目标与「确认入库」触发动作；确认入库成功后按绑定配置无感外推金蝶云苍穹采购入库单（默认优先【自定义】add2 含验收人接口）。',
+  'pages.dashboard.updateLog.entries.cosmic-purinbill-add2-acceptor-r01.title':
+    '苍穹采购入库自定义接口（含验收人）',
+  'pages.dashboard.updateLog.entries.cosmic-purinbill-add2-acceptor-r01.description':
+    '接口库保留标品「采购入库单新增」，并新增带【自定义】标识的「采购入库单新增(含验收人)」（add2，字段 fd81_yanshou）。需验收人时请加载该自定义接口，并将推送配置的 save_path / save_api_uuid 与 acceptor_field 指向它。',
+  'pages.dashboard.updateLog.entries.cosmic-outbound-api-sync-direction-r01.title':
+    '苍穹单据新增接口标为出站同步',
+  'pages.dashboard.updateLog.entries.cosmic-outbound-api-sync-direction-r01.description':
+    '采购入库、销售出库、其他出库、盘盈、盘亏等新增/批量新增接口在接口管理中正确显示为出站同步；重新加载金蝶AI苍穹常用接口即可纠正已有条目。',
+  'pages.dashboard.updateLog.entries.cosmic-inventory-balance-inbound-r01.title':
+    '金蝶苍穹库存余额入站接口',
+  'pages.dashboard.updateLog.entries.cosmic-inventory-balance-inbound-r01.description':
+    '接口库「金蝶AI苍穹」新增库存余额（getInventoryAvbQty）与即时库存明细（getInventoryDetail）查询预设，可对接即时库存从数据接口同步；请将请求体中的库存组织编码改为本环境组织，或在连接器填写组织编码。',
+  'pages.dashboard.updateLog.entries.finance-sales-delivery-confirm-r01.title':
+    '销售出库确认失败修复',
+  'pages.dashboard.updateLog.entries.finance-sales-delivery-confirm-r01.description':
+    '修复销售出库确认时因事务工具重复导入导致无法过账的问题，出库后可正常自动生成应收并按订单预收自动冲减。',
+  'pages.dashboard.updateLog.entries.finance-prepay-receivable-settlement-r01.title':
+    '采购预付与销售预收标准核销',
+  'pages.dashboard.updateLog.entries.finance-prepay-receivable-settlement-r01.description':
+    '应付/应收按业务全额立账，入库出库或收付款确认时同事务自动冲减未核销预付/预收；开关开启时核销失败将阻断确认，避免新单已立账却显示已核销为 0。',
+  'pages.dashboard.updateLog.entries.config-center-notification-advanced-search-r01.title':
+    '配置中心消息提醒支持高级搜索',
+  'pages.dashboard.updateLog.entries.config-center-notification-advanced-search-r01.description':
+    '消息提醒列表与系统消息配置页一致，提供标准模糊搜索与高级搜索，可按场景、单据类型、触发动作、渠道、通知对象与启用状态组合筛选。',
+  'pages.dashboard.updateLog.entries.approval-wecom-sync-config-r01.title':
+    '审批通知企微推送改为消息渠道开关',
+  'pages.dashboard.updateLog.entries.approval-wecom-sync-config-r01.description':
+    '消息配置中企微推送渠道可勾选「同步推送审批通知」；开启后审批站内信发出时同步推企微，关闭则仅站内信。须绑定企微账号。',
   'pages.dashboard.updateLog.entries.approval-pending-wecom-push-r01.title':
     '审批待办同步推送企业微信',
   'pages.dashboard.updateLog.entries.approval-pending-wecom-push-r01.description':
-    '单据提交进入审批、驳回、转交等审批类站内信发出后，若已配置启用的企微推送渠道，审批人会额外收到企业微信应用消息（含待办跳转链接）；须绑定企微账号且 Taskiq 正常处理推送任务。',
+    '单据提交进入审批、驳回、转交等审批类站内信发出后，若已配置启用的企微推送渠道，审批人会额外收到企业微信应用消息（含待办跳转链接）；须绑定企微账号。',
   'pages.dashboard.updateLog.entries.purchase-requisition-save-submit-branch-r01.title':
     '采购申请保存并提交可选审批分支',
   'pages.dashboard.updateLog.entries.purchase-requisition-save-submit-branch-r01.description':
     '新建页点保存并提交时，与列表提交审核一致，先选择「是否总经理特批」等发起人分支再提交，不再出现保存成功但提交失败的黄色提示。',
+  'pages.dashboard.updateLog.entries.payment-employee-advance-r01.title': '付款单员工垫付与领款人',
+  'pages.dashboard.updateLog.entries.payment-employee-advance-r01.description':
+    '付款方式新增员工垫付；须指定领款人并由公司出账账户打款补垫，同时核销供应商应付。付款申请可预选垫付方式与领款人，出纳取单自动带入。',
+  'pages.dashboard.updateLog.entries.tenant-show-pro-badge-r01.title':
+    '组织可关闭侧栏PRO徽章',
+  'pages.dashboard.updateLog.entries.tenant-show-pro-badge-r01.description':
+    '平台组织管理新增「高级应用是否显示PRO徽章」开关，默认开启；关闭后该组织侧栏与系统配置浮层不再显示PRO标。',
+  'pages.dashboard.updateLog.entries.finance-refund-list-batch-r01.title': '收付款退款列表对齐单据规范',
+  'pages.dashboard.updateLog.entries.finance-refund-list-batch-r01.description':
+    '付款退款与收款退款列表支持多选、批量确认与批量作废，新建按钮改为「新建收/付款退款」并支持 Alt+N 打开取单；付款申请列表同步注册 Alt+N。',
+  'pages.dashboard.updateLog.entries.po-prepayment-auto-apply-payable-r01.title':
+    '采购应付开立自动冲预付',
+  'pages.dashboard.updateLog.entries.po-prepayment-auto-apply-payable-r01.description':
+    '采购入库或订单里程碑生成应付后，默认可按 FIFO 用同订单未核销预付冲减应付；采购订单详情与表单汇总展示预付未核销与预计待付（扣预付）；可在组织参数关闭自动冲减。',
+  'pages.dashboard.updateLog.entries.payable-red-amount-schema-r01.title': '修复应付列表红字金额校验失败',
+  'pages.dashboard.updateLog.entries.payable-red-amount-schema-r01.description':
+    '采购退货、委外红字、采购调价等负金额应付单可正常列表与详情序列化，不再误报 total_amount 须大于 0。',
+  'pages.dashboard.updateLog.entries.payment-application-linked-payment-r01.title':
+    '修复付款申请幽灵付款单链接',
+  'pages.dashboard.updateLog.entries.payment-application-linked-payment-r01.description':
+    '付款单删除后同步清理与付款申请的关联；详情「已下推付款单」仅展示仍存在的付款单，避免点开提示不存在。',
+  'pages.dashboard.updateLog.entries.payment-print-api-r01.title': '修复付款单打印 404',
+  'pages.dashboard.updateLog.entries.payment-print-api-r01.description':
+    '补注册付款单打印接口，打印预览与 PDF 可正常加载默认模板；宿主财务管理环境不再误依赖轻财务专业包 ORM。',
+  'pages.dashboard.updateLog.entries.payment-form-account-sections-r01.title': '付款单账户信息分组',
+  'pages.dashboard.updateLog.entries.payment-form-account-sections-r01.description':
+    '新建、编辑与取单创建付款单时，出款账户与对方账户分别置于独立区块，便于对照填写与核对。',
+  'pages.dashboard.updateLog.entries.payment-counterparty-account-r01.title': '付款单对方收款账户',
+  'pages.dashboard.updateLog.entries.payment-counterparty-account-r01.description':
+    '新建与编辑付款单可填写对方户名、开户行与账号；从付款申请取单创建时自动带入申请单上的收款账户信息。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-form-field-settings-r01.title':
+    '采购申请表单字段设置',
+  'pages.dashboard.updateLog.entries.purchase-requisition-form-field-settings-r01.description':
+    '新建与编辑页基本信息区可打开字段设置，按个人偏好显示或隐藏申请名称；隐藏时保存仍按编号生成默认名称。',
+  'pages.dashboard.updateLog.entries.purchase-requisition-name-field-restore-r01.title':
+    '采购申请恢复填写申请名称',
+  'pages.dashboard.updateLog.entries.purchase-requisition-name-field-restore-r01.description':
+    '新建与编辑页基本信息区恢复申请名称；留空保存仍按申请编号生成默认名称，填写则按用户输入落库。',
   'pages.dashboard.updateLog.entries.purchase-requisition-auto-name-r01.title':
     '采购申请名称改为自动生成',
   'pages.dashboard.updateLog.entries.purchase-requisition-auto-name-r01.description':
@@ -45893,18 +54023,80 @@ export default {
   'pages.system.applications.proKeyMinLength': 'License Key 长度至少 8 位',
   'pages.system.applications.proKeyModalTitle': '输入 License Key（许可证密钥）',
   'pages.system.applications.proKeyPlaceholder': '请输入 License Key',
+  'pages.system.applications.resetBackToScope': '返回修改重置范围',
   'pages.system.applications.resetCancel': '我再想想，取消重置',
   'pages.system.applications.resetConfirmNext': '我很确定，继续重置',
   'pages.system.applications.resetData': '重置数据',
+  'pages.system.applications.resetFailedFallback': '重置失败',
   'pages.system.applications.resetFinalCheck': '终极安全校验',
   'pages.system.applications.resetHighRiskWarning':
     '高危操作警告：「重置数据」将清空或初始化该应用的核心业务数据，请在执行前务必确认或联系技术支持。',
   'pages.system.applications.resetInputPlaceholder': '请输入确认文本',
   'pages.system.applications.resetNext': '我已了解风险，下一步',
-  'pages.system.applications.resetStart': '启动全量物理重置（且自动备份）',
+  'pages.system.applications.resetModMdFactory': '工厂数据',
+  'pages.system.applications.resetModMdFactoryHint': '厂区、车间、产线、工作中心、工位与工作小组',
+  'pages.system.applications.resetModMdMaterials': '物料数据',
+  'pages.system.applications.resetModMdMaterialsHint': '物料、单位、分组、批号序列号台账与行情等',
+  'pages.system.applications.resetModMdMaterialsImpliesProcess':
+    '勾选物料数据时将同步清除工艺数据（BOM/路线等引用物料），以免外键阻挡删除。',
+  'pages.system.applications.resetModMdProcess': '工艺数据',
+  'pages.system.applications.resetModMdProcessHint': '工序、工艺路线、BOM、SOP、图纸及发放借阅等',
+  'pages.system.applications.resetModMdSupplyChain': '客户供应商',
+  'pages.system.applications.resetModMdSupplyChainHint': '客户、供应商与价格本',
+  'pages.system.applications.resetModMdWarehouse': '仓库数据',
+  'pages.system.applications.resetModMdWarehouseHint': '仓库、库区与库位',
+  'pages.system.applications.resetModMdWorkforce': '排班绩效',
+  'pages.system.applications.resetModMdWorkforceHint': '班次、排班、加班、技能与绩效相关数据',
+  'pages.system.applications.resetMasterDataCrossAppHint':
+    '若快制造等业务应用仍引用这些主数据，删除可能失败或留下孤儿引用；建议先重置相关业务数据。',
+  'pages.system.applications.resetWarn1MasterData':
+    '重置将按所选模块物理删除「主数据」应用数据，此操作不可撤销。请先按业务/基础分组勾选模块。',
+  'pages.system.applications.resetModEquipmentOps': '设备模具工装运维',
+  'pages.system.applications.resetModEquipmentOpsHint': '故障维修、点检保养执行、模具工装使用与校准等',
+  'pages.system.applications.resetModMasterEquipment': '设备台账与方案',
+  'pages.system.applications.resetModMasterEquipmentHint': '设备台账、点检维保方案与巡检路线',
+  'pages.system.applications.resetModMasterLogistics': '物流与服务台账',
+  'pages.system.applications.resetModMasterLogisticsHint': '承运商、车辆、司机、备件与服务资产等',
+  'pages.system.applications.resetModMasterMold': '模具台账与方案',
+  'pages.system.applications.resetModMasterMoldHint': '模具台账及维保/维修方案',
+  'pages.system.applications.resetModMasterPacking': '包装条码配置',
+  'pages.system.applications.resetModMasterPackingHint': '包装档案、条码映射、标签机与工位配置',
+  'pages.system.applications.resetModMasterQuality': '质检标准与方案',
+  'pages.system.applications.resetModMasterQualityHint': '检验计划、质量标准、体系条款与供应商评估模板',
+  'pages.system.applications.resetModMasterRules': '规则与排程配置',
+  'pages.system.applications.resetModMasterRulesHint': '客户池规则、排程配置、状态流转与库存预警规则',
+  'pages.system.applications.resetModMasterTemplates': '装配交付模板',
+  'pages.system.applications.resetModMasterTemplatesHint': '装配模板、交付流程模板、返修排位与日报模板',
+  'pages.system.applications.resetModMasterTool': '工装台账与方案',
+  'pages.system.applications.resetModMasterToolHint': '工装台账及维保/维修方案',
+  'pages.system.applications.resetModOutsource': '委外管理',
+  'pages.system.applications.resetModOutsourceHint': '委外订单、委外工单及发料收料退料',
+  'pages.system.applications.resetModPlan': '计划管理',
+  'pages.system.applications.resetModPlanHint': '计划生产、需求运算、生产计划与滚动排程',
+  'pages.system.applications.resetModProduction': '生产执行',
+  'pages.system.applications.resetModProductionHint': '工单、报工、返工、装配拆解、生产领退料与入库',
+  'pages.system.applications.resetModPurchase': '采购管理',
+  'pages.system.applications.resetModPurchaseHint': '请购、询价、采购订单、收料通知、采购入库与退货',
+  'pages.system.applications.resetModQuality': '质量管理',
+  'pages.system.applications.resetModQualityHint': '来料/过程/成品/出货检验、8D 与质量异常',
+  'pages.system.applications.resetModSales': '销售管理',
+  'pages.system.applications.resetModSalesHint': '报价、合同、销售订单、发货通知、销售出库与退货',
+  'pages.system.applications.resetModWarehouse': '仓储管理',
+  'pages.system.applications.resetModWarehouseHint': '其它出入库、调拨、盘点、借还料、波次与库存预警',
+  'pages.system.applications.resetScopeBusiness': '业务数据',
+  'pages.system.applications.resetScopeJoin': '、',
+  'pages.system.applications.resetScopeMaster': '基础数据',
+  'pages.system.applications.resetScopeMasterImpliesBusiness':
+    '勾选基础模块时将同步清除其依赖的业务模块数据，以免外键阻挡删除。',
+  'pages.system.applications.resetScopeSelectAll': '全选',
+  'pages.system.applications.resetScopeSelected': '本次将重置：{{scopes}}',
+  'pages.system.applications.resetScopeTitle': '按模块选择要重置的数据',
+  'pages.system.applications.resetStart': '启动物理重置（且自动备份）',
+  'pages.system.applications.resetSuccessFallback': '重置成功并已自动备份',
+  'pages.system.applications.resetTokenFailed': '获取二次确认令牌失败，请重试',
   'pages.system.applications.resetTypeConfirm': '请在下方准确输入以下内容以确认操作：',
   'pages.system.applications.resetWarn1':
-    '重置操作将物理抹除「快制造」应用下所有的销售订单、生产工单、库存流水、需求计划等业务数据。此操作不可撤销！',
+    '重置将按所选模块物理删除「快制造」应用数据，此操作不可撤销。请先按业务/基础分组勾选模块。',
   'pages.system.applications.resetWarn2':
     '一旦点击下一步，数据将无法通过常规手段恢复。建议您确保当前没有正在进行的业务，并告知相关团队成员。',
   'pages.system.applications.resetWarnTitle': '极大风险操作：数据重置',
@@ -45934,4 +54126,356 @@ export default {
   ...helpPagesRichZhListPages,
   ...helpPagesRichZhReportCommon,
   ...helpPagesRichZhModuleCenters,
+  'ui.aiAssistant.openFullChat': '打开全宽对话',
+  'pages.personal.messages.downloadAttachment': '下载 {{name}}',
+  'pages.personal.messages.downloadFailed': '下载附件失败',
+  'app.kuaiiot.field.integration': '公共连接',
+  'app.kuaiiot.field.deviceTokenPath': '设备凭据路径',
+  'app.kuaiiot.field.tagsPath': '点位数据路径',
+  'app.kuaiiot.field.eventsPath': '事件路径',
+  'app.kuaiiot.field.timestampPath': '时间戳路径',
+  'app.kuaiiot.field.idempotencyKeyPath': '幂等键路径',
+  'app.kuaiiot.hint.mqttConnector': 'Broker 地址与凭据在系统配置「应用连接器」中维护',
+  'app.kuaiiot.placeholder.mqttConnector': '选择 MQTT Broker 公共连接',
+  'app.kuaiiot.message.batchDeleteStopped': '已删除 {{success}} 条，「{{name}}」删除失败（{{reason}}），其余未执行',
+  'app.kuaiiot.products.listFailed': '产品列表加载失败',
+  'app.kuaiiot.products.detailLoadFailed': '产品详情加载失败',
+  'app.kuaiiot.products.detailTitle': '产品详情',
+  'app.kuaiiot.products.editTitle': '编辑产品',
+  'app.kuaiiot.products.deleteConfirm': '确认删除产品「{{name}}」？',
+  'app.kuaiiot.products.colDescription': '描述',
+  'app.kuaiiot.products.colTags': '点位',
+  'app.kuaiiot.products.colEvents': '事件',
+  'app.kuaiiot.products.colFunctions': '指令',
+  'app.kuaiiot.products.colParams': '参数',
+  'app.kuaiiot.products.modelSection': '物模型定义',
+  'app.kuaiiot.products.sectionTags': '点位定义',
+  'app.kuaiiot.products.fieldUnit': '单位',
+  'app.kuaiiot.products.fieldParamsJson': '参数 JSON（数组，选填）',
+  'app.kuaiiot.products.fieldEdgeActionJson': '边缘动作 JSON（选填）',
+  'app.kuaiiot.products.tagFieldsRequired': '每个点位需填写点位 Key、名称与写回目标',
+  'app.kuaiiot.products.tagKeyDup': '点位 Key 不能重复',
+  'app.kuaiiot.products.eventFieldsRequired': '每个事件需填写事件 Key 与名称',
+  'app.kuaiiot.products.eventKeyDup': '事件 Key 不能重复',
+  'app.kuaiiot.products.functionFieldsRequired': '每个指令需填写指令 Key 与名称',
+  'app.kuaiiot.products.functionKeyDup': '指令 Key 不能重复',
+  'app.kuaiiot.products.colTagCount': '点位数',
+  'app.kuaiiot.products.colTagKeys': '点位 Key',
+  'app.kuaiiot.products.exportFileName': '产品模型-{{date}}',
+  'app.kuaiiot.edgeConfigs.listFailed': '边缘配置列表加载失败',
+  'app.kuaiiot.edgeConfigs.detailLoadFailed': '边缘配置详情加载失败',
+  'app.kuaiiot.edgeConfigs.detailTitle': '边缘配置详情',
+  'app.kuaiiot.edgeConfigs.editTitle': '编辑边缘配置',
+  'app.kuaiiot.edgeConfigs.deleteConfirm': '确认删除边缘配置「{{name}}」？',
+  'app.kuaiiot.edgeConfigs.trial': '现场试读',
+  'app.kuaiiot.edgeConfigs.trialSubmitted': '试读请求已提交，等待 Agent 心跳回传后刷新结果',
+  'app.kuaiiot.edgeConfigs.trialFailed': '试读请求失败',
+  'app.kuaiiot.edgeConfigs.trialDisabled': '仅已启用的 Modbus TCP 配置支持现场试读',
+  'app.kuaiiot.edgeConfigs.trialResult': '试读结果',
+  'app.kuaiiot.edgeConfigs.trialPending': '试读请求已提交，等待 Agent 回传结果',
+  'app.kuaiiot.edgeConfigs.trialNone': '尚未试读',
+  'app.kuaiiot.edgeConfigs.trialTag': '点位',
+  'app.kuaiiot.edgeConfigs.trialRaw': '原始寄存器',
+  'app.kuaiiot.edgeConfigs.trialValue': '换算结果',
+  'app.kuaiiot.edgeConfigs.trialQuality': '质量',
+  'app.kuaiiot.edgeConfigs.trialMeta': '试读版本 v{{version}}，回传时间 {{time}}',
+  'app.kuaiiot.edgeConfigs.publishMode': '上报方式',
+  'app.kuaiiot.edgeConfigs.agentSection': 'Agent 运行状态',
+  'app.kuaiiot.edgeConfigs.agentVersion': 'Agent 版本',
+  'app.kuaiiot.edgeConfigs.agentConfigVersion': 'Agent 已应用版本',
+  'app.kuaiiot.edgeConfigs.agentStatus.online': '在线',
+  'app.kuaiiot.edgeConfigs.agentStatus.offline': '离线',
+  'app.kuaiiot.edgeConfigs.agentStatus.error': '异常',
+  'app.kuaiiot.edgeConfigs.agentStatus.unknown': '未知',
+  'app.kuaiiot.edgeConfigs.colVersion': '配置/Agent 版本',
+  'app.kuaiiot.edgeConfigs.configSection': '采集配置',
+  'app.kuaiiot.edgeConfigs.configMaskedHint': '已隐藏凭据与现场地址',
+  'app.kuaiiot.edgeConfigs.configJsonMasked': '采集配置（脱敏）',
+  'app.kuaiiot.edgeConfigs.exportFileName': '边缘配置-{{date}}',
+  'app.kuaiiot.edgeConfigs.hostRequired': '请填写设备地址',
+  'app.kuaiiot.edgeConfigs.modbusInvalid': '端口需为 1-65535 整数，从站地址需为非负整数',
+  'app.kuaiiot.edgeConfigs.registersRequired': 'Modbus 配置至少需要一个采集点位',
+  'app.kuaiiot.edgeConfigs.registerKeyDup': '点位 Key 不能重复',
+  'app.kuaiiot.edgeConfigs.opcInvalid': '请填写 endpoint 且 nodes 为非空 JSON 数组',
+  'app.kuaiiot.edgeConfigs.s7Invalid': '请填写 host、rack、slot 且 db_blocks 为非空 JSON 数组',
+  'app.kuaiiot.edgeConfigs.fieldHost': '设备地址',
+  'app.kuaiiot.edgeConfigs.fieldPort': '端口',
+  'app.kuaiiot.edgeConfigs.fieldUnitId': '从站地址',
+  'app.kuaiiot.edgeConfigs.fieldEndpoint': 'Endpoint',
+  'app.kuaiiot.edgeConfigs.fieldRack': 'Rack',
+  'app.kuaiiot.edgeConfigs.fieldSlot': 'Slot',
+  'app.kuaiiot.edgeConfigs.fieldNodesJson': 'nodes（JSON 数组）',
+  'app.kuaiiot.edgeConfigs.fieldDbBlocksJson': 'db_blocks（JSON 数组）',
+  'app.kuaiiot.edgeConfigs.fieldAddress': '寄存器地址',
+  'app.kuaiiot.edgeConfigs.fieldDataType': '数据类型',
+  'app.kuaiiot.edgeConfigs.fieldScale': '换算倍率',
+  'app.kuaiiot.edgeConfigs.sectionRegisters': '采集点位',
+  'app.kuaioa.employee.boundAccount': '登录账号',
+  'app.kuaioa.employee.accountQuickCreate': '没有账号？一键创建',
+  'app.kuaioa.employee.accountQuickCreateTitle': '一键创建登录账号',
+  'app.kuaioa.employee.accountUsername': '登录账号',
+  'app.kuaioa.employee.accountUsernamePlaceholder': '留空按姓名拼音自动生成',
+  'app.kuaioa.employee.accountUsernameTip': '创建后用于登录 PC Web，2-50 位字母/数字/下划线',
+  'app.kuaioa.employee.accountPassword': '初始密码',
+  'app.kuaioa.employee.accountNameRequired': '姓名不能为空',
+  'app.kuaioa.employee.accountCreated': '账号创建成功',
+  'app.kuaioa.employee.accountCredentialHint': '初始密码仅此一次展示，请复制交付员工，并提醒其登录后修改密码。',
+  'app.kuaiai.menu.agent-library': '智能体库',
+  'app.kuaiai.menu.corpus': '知识语料',
+  'app.kuaiai.menu.chat': 'AI 对话',
+  'app.kuaiai.menu.mcp': 'MCP 白名单',
+  'app.kuaiai.ops.noPageAccess': '暂无该页面访问权限',
+  'app.kuaiai.ops.noAssistant': 'AI 助手当前不可用',
+  'app.kuaiai.ops.notReady': '暂未就绪',
+  'app.kuaiai.ops.forbidden': '缺少功能权限',
+  'app.kuaiai.ops.forbiddenHint': '当前账号缺少对应页面权限，请联系管理员授权',
+  'app.kuaiai.ops.partialFailed': '部分数据刷新失败，已保留上次结果',
+  'app.kuaiai.chat.confirm.title': '待确认操作',
+  'app.kuaiai.chat.confirm.expiresIn': '剩余 {{time}}',
+  'app.kuaiai.chat.confirm.approve': '确认',
+  'app.kuaiai.chat.confirm.reject': '拒绝',
+  'app.kuaiai.chat.confirm.retry': '重试',
+  'app.kuaiai.chat.confirm.statusApproving': '已确认，执行中',
+  'app.kuaiai.chat.confirm.statusRejecting': '正在拒绝…',
+  'app.kuaiai.chat.confirm.statusApproved': '已确认',
+  'app.kuaiai.chat.confirm.statusRejected': '已拒绝',
+  'app.kuaiai.chat.confirm.statusCancelled': '已取消（未确认）',
+  'app.kuaiai.chat.confirm.statusExpired': '已过期或已处理',
+  'app.kuaiai.chat.confirm.argsLabel': '参数',
+  'app.kuaiai.chat.confirm.businessObject': '业务对象',
+  'app.kuaiai.chat.confirm.waitHint': '确认前不会执行写操作',
+  'app.kuaiai.chat.confirm.submitFailed': '确认提交失败',
+  'app.kuaiai.corpus.searchPlaceholder': '按标题搜索',
+  'app.kuaiai.corpus.advancedSearch': '高级搜索',
+  'app.kuaiai.corpus.filterKnowledge': '所属知识库',
+  'app.kuaiai.corpus.filterType': '类型',
+  'app.kuaiai.corpus.helpTip': '跨知识库查看语料；文件与文本在知识库管理页添加',
+  'app.kuaiai.corpus.status.pending': '待索引',
+  'app.kuaiai.corpus.status.parsing': '索引中',
+  'app.kuaiai.corpus.status.ready': '已索引',
+  'app.kuaiai.corpus.status.failed': '索引失败',
+  'app.kuaiai.corpus.type.faq': 'FAQ',
+  'app.kuaiai.corpus.type.text': '文本',
+  'app.kuaiai.corpus.type.file': '文件',
+  'app.kuaiai.corpus.inactiveHint': '已停用，不参与检索',
+  'app.kuaiai.corpus.colTitle': '标题',
+  'app.kuaiai.corpus.colKnowledge': '所属知识库',
+  'app.kuaiai.corpus.colType': '类型',
+  'app.kuaiai.corpus.colChunks': '分块数',
+  'app.kuaiai.corpus.colStatus': '索引状态',
+  'app.kuaiai.corpus.detail': '详情',
+  'app.kuaiai.corpus.noKnowledgePerm': '缺少知识库管理权限',
+  'app.kuaiai.corpus.noCreatePerm': '缺少语料创建权限',
+  'app.kuaiai.corpus.noUpdatePerm': '缺少语料更新权限',
+  'app.kuaiai.corpus.noDeletePerm': '缺少语料删除权限',
+  'app.kuaiai.corpus.noExportPerm': '缺少语料导出权限',
+  'app.kuaiai.corpus.help': '帮助',
+  'app.kuaiai.corpus.deleteConfirm': '确认删除该语料？',
+  'app.kuaiai.corpus.seedFaqs': '加载出厂 FAQ',
+  'app.kuaiai.corpus.addFaq': '添加 FAQ',
+  'app.kuaiai.corpus.gotoKnowledge': '前往知识库添加文档',
+  'app.kuaiai.corpus.exportJsonl': '导出训练 JSONL',
+  'app.kuaiai.corpus.exportStarted': '导出已开始下载',
+  'app.kuaiai.corpus.exportFailed': '导出失败',
+  'app.kuaiai.corpus.batchDelete': '批量删除',
+  'app.kuaiai.corpus.batchOps': '批量操作',
+  'app.kuaiai.corpus.batchIndex': '索引',
+  'app.kuaiai.corpus.batchDeleteConfirm': '确认删除选中的 {{count}} 条语料？',
+  'app.kuaiai.corpus.batchDeleteConfirmHint': '删除后不可恢复，关联切块将一并移除',
+  'app.kuaiai.corpus.batchIndexDone': '已提交 {{count}} 条索引任务',
+  'app.kuaiai.corpus.batchDeleteDone': '已删除 {{count}} 条记录',
+  'app.kuaiai.corpus.batchIndexPartial': '部分索引提交失败',
+  'app.kuaiai.corpus.batchDeletePartial': '部分删除失败',
+  'app.kuaiai.corpus.batchResultSummary': '成功 {{ok}} 条，失败 {{fail}} 条',
+  'app.kuaiai.corpus.batchIndexFailed': '批量索引失败',
+  'app.kuaiai.corpus.columnSettings': '列设置',
+  'app.kuaiai.corpus.loadFailed': '加载语料列表失败',
+  'app.kuaiai.corpus.empty': '暂无语料记录',
+  'app.kuaiai.corpus.footerTotal': '共 {{total}} 条记录，显示 {{start}}-{{end}} 条',
+  'app.kuaiai.corpus.seedModalTitle': '加载出厂 FAQ',
+  'app.kuaiai.corpus.seedModalHint': '为选中的启用知识库写入内置 FAQ；同题已存在（含人工 FAQ）自动跳过，不会覆盖。',
+  'app.kuaiai.corpus.seedDone': '已写入 {{created}} 条出厂 FAQ，跳过 {{skipped}} 条',
+  'app.kuaiai.corpus.seedFailed': '加载出厂 FAQ 失败',
+  'app.kuaiai.corpus.faqModalTitle': '添加 FAQ',
+  'app.kuaiai.corpus.form.knowledge': '知识库',
+  'app.kuaiai.corpus.form.knowledgeRequired': '请选择知识库',
+  'app.kuaiai.corpus.form.knowledgePlaceholder': '请选择启用的知识库',
+  'app.kuaiai.corpus.noEnabledKb': '暂无启用的知识库',
+  'app.kuaiai.corpus.form.question': '问题',
+  'app.kuaiai.corpus.form.questionRequired': '请输入问题',
+  'app.kuaiai.corpus.form.questionPlaceholder': '问题将作为语料标题（300 字以内）',
+  'app.kuaiai.corpus.form.answer': '答案',
+  'app.kuaiai.corpus.form.answerRequired': '请输入答案',
+  'app.kuaiai.corpus.form.answerPlaceholder': '请输入标准答复内容',
+  'app.kuaiai.corpus.form.isActive': '是否启用',
+  'app.kuaiai.corpus.form.isActiveTip': '停用的 FAQ 不参与检索',
+  'app.kuaiai.library.title': '智能体库',
+  'app.kuaiai.library.loadFailed': '加载智能体库失败',
+  'app.kuaiai.library.empty': '暂无可展示的智能体场景',
+  'app.kuaiai.library.emptyHintManage': '请重新同步应用完成场景预置',
+  'app.kuaiai.library.provisioningIncomplete': '场景预置未完成，部分智能体暂不可用',
+  'app.kuaiai.library.provisioningHintManage': '可重试补齐缺失的预置场景实例',
+  'app.kuaiai.library.provisioningHintView': '请联系管理员重新同步应用后再试',
+  'app.kuaiai.library.provisionRetryFailed': '补齐预置失败',
+  'app.kuaiai.library.openAndSend': '打开并发送',
+  'app.kuaiai.library.openAndSendAria': '打开助手并发送示例提问：{{name}}',
+  'app.kuaiai.library.sceneUnavailable': '场景路由不可用或无页面权限',
+  'app.kuaiai.library.viewSceneAria': '查看场景：{{name}}',
+  'app.kuaiai.library.manage': '管理',
+  'app.kuaiai.library.manageAria': '管理场景实例：{{name}}',
+  'app.kuaiai.library.manageEdit': '编辑场景实例',
+  'app.kuaiai.library.manageClone': '复制场景副本',
+  'app.kuaiai.library.editModalTitle': '编辑场景实例',
+  'app.kuaiai.library.editSaved': '场景已更新',
+  'app.kuaiai.library.editFailed': '场景更新失败',
+  'app.kuaiai.library.cloneModalTitle': '复制场景副本',
+  'app.kuaiai.library.cloneHint': '将从所选本租户 Agent 档案克隆出停用副本档案，并创建一个新的场景实例',
+  'app.kuaiai.library.cloneCreated': '已创建场景副本',
+  'app.kuaiai.library.cloneFailed': '克隆失败',
+  'app.kuaiai.library.field.name': '名称',
+  'app.kuaiai.library.field.description': '描述',
+  'app.kuaiai.library.field.image': '插画',
+  'app.kuaiai.library.field.imagePlaceholder': '默认按模板插画',
+  'app.kuaiai.library.field.tags': '能力标签',
+  'app.kuaiai.library.field.sceneRoute': '场景路由',
+  'app.kuaiai.library.field.bindProfile': '绑定 Agent 档案',
+  'app.kuaiai.library.field.enabled': '启用',
+  'app.kuaiai.library.field.sourceProfile': '源 Agent 档案',
+  'app.kuaiai.library.bindNoPermission': '需要 Agent 档案读权限',
+  'app.kuaiai.library.bindPlaceholder': '选择本租户 Agent 档案，清空即解绑',
+  'app.kuaiai.library.sourcePlaceholder': '选择要克隆的本租户 Agent 档案',
+  'app.kuaiai.settings.optionUnavailable': '不可用',
+  'app.kuaiai.settings.ocrTitle': 'OCR 视觉识别',
+  'app.kuaiai.settings.ocrHint':
+    '视觉（OCR）连接用于单据图像识别；连接与密钥在应用连接器中维护，本页仅显示脱敏信息，留空密钥不会被修改。',
+  'app.kuaiai.settings.visionConnection': '视觉连接',
+  'app.kuaiai.settings.visionPlaceholder': '不选用视觉连接',
+  'app.kuaiai.settings.visionEmpty': '暂无视觉角色连接，请先到应用连接器新建',
+  'app.kuaiai.settings.ocrModel': 'OCR 模型',
+  'app.kuaiai.settings.ocrKeyPlaceholder': '已配置，留空则不修改',
+  'app.kuaiai.settings.ocrBaseUrl': 'OCR 服务地址',
+  'app.kuaiai.settings.ocrApiKey': 'OCR API 密钥',
+  'app.kuaiai.settings.agent.inventory-insight': '库存洞察助手',
+  'app.kuaiai.settings.agent.planner-advisor': '计划员顾问',
+  'app.kuaiai.settings.agent.purchase-followup': '采购跟单助手',
+  'app.kuaiai.settings.agent.schedule-explainer': '排程解读助手',
+  'app.kuaiai.settings.agent.quality-analysis': '质量异常分析',
+  'app.kuaiai.settings.agent.supplier-collaboration': '供应商协同 Agent',
+  'app.kuaiai.settings.agent.shift-lead': '班组长助手',
+  'app.kuaiai.settings.agent.order-delivery': '订单交期助手',
+  'app.kuaiai.settings.agent.work-instruction': '作业指导助手',
+  'app.kuaiai.settings.bindingsTitle': '能力绑定',
+  'app.kuaiai.settings.bindingsHint':
+    '能力矩阵中每个场景卡默认绑定同名预置场景实例；可改绑其他实例，或解绑（解绑后该能力卡不可用）。',
+  'app.kuaiai.settings.bindingPreset': '随预置实例',
+  'app.kuaiai.settings.bindingUnbound': '解绑（能力卡不可用）',
+  'app.kuaiai.settings.capabilitiesTitle': 'KU-AI 能力配置',
+  'app.kuaiai.settings.capTools': '业务单据工具',
+  'app.kuaiai.settings.capRag': '知识语料 RAG',
+  'app.kuaiai.settings.capEmbedding': '向量检索',
+  'app.kuaiai.settings.ragTopK': 'RAG 条数',
+  'app.kuaiai.settings.ragTopKRequired': '请填写 RAG 条数（1-20）',
+  'app.kuaiai.settings.ragBackend': '引擎',
+  'app.kuaiai.settings.ragBackendNative': '原生',
+  'app.kuaiai.settings.customPrompt': '企业系统说明',
+  'app.kuaiai.settings.customPromptPlaceholder':
+    '可选：描述企业系统背景，将附加到 KU-AI 系统提示词',
+  'app.kuaiai.settings.saveSuccess': '设置已保存',
+  'app.kuaiai.settings.saveFailed': '保存失败',
+  'app.kuaiai.settings.saveConflict': '设置已被他人修改，请刷新后重试',
+  'app.kuaiai.settings.loadFailed': '加载设置失败',
+  'app.kuaiai.settings.refreshConfirmTitle': '放弃未保存修改？',
+  'app.kuaiai.settings.refreshConfirmContent':
+    '刷新将丢弃当前未保存的修改并重新加载最新配置。',
+  'app.kuaiai.settings.serverChanged': '服务端配置已更新',
+  'app.kuaiai.settings.discardAndReload': '放弃修改并重载',
+  'app.kuaiai.settings.noUpdatePerm': '缺少设置修改权限',
+  'app.kuaiai.settings.sopSyncTitle': 'SOP 同步',
+  'app.kuaiai.settings.sopSyncHint':
+    '启用后，SOP 发布生效时其电子正文将自动同步到所选知识库供 AI 引用；作废后自动下架。仅同步正文，不含附件。',
+  'app.kuaiai.settings.sopSyncEnabled': '启用 SOP 同步',
+  'app.kuaiai.settings.sopSyncKnowledge': '目标知识库',
+  'app.kuaiai.settings.sopSyncKnowledgeRequired': '启用 SOP 同步须选择目标知识库',
+  'app.kuaiai.settings.sopSyncKnowledgePlaceholder': '选择目标知识库',
+  'app.kuaiai.settings.sopSyncKnowledgeEmpty': '暂无启用的知识库，请先到知识库页面新建',
+  'app.kuaiai.hub.capEntryAria': '进入能力入口：{{name}}',
+  'app.kuaiai.hub.brandDesc': '面向制造场景的智能辅助能力矩阵',
+  'app.kuaiai.hub.searchPlaceholder': '搜索场景名称、描述或分类',
+  'app.kuaiai.hub.searchEmpty': '无匹配场景',
+  'app.kuaiai.hub.category.plan': '计划',
+  'app.kuaiai.hub.category.production': '生产',
+  'app.kuaiai.hub.category.quality': '质量',
+  'app.kuaiai.hub.category.inventory': '库存',
+  'app.kuaiai.hub.category.purchase': '采购',
+  'app.kuaiai.hub.category.equipment': '设备',
+  'app.kuaiai.hub.category.engineering': '工程',
+  'app.kuaiai.hub.category.management': '管理',
+  'app.kuaiai.hub.category.general': '通用',
+  'app.kuaiai.hub.category.expand': '展开',
+  'app.kuaiai.hub.category.groupAria': '{{name}}分类，{{count}} 个场景',
+  'app.kuaiai.trust.col.status': '状态',
+  'app.kuaiai.trust.auditForbidden': '当前账号缺少 kuaiai:entry:read，无法读取审计日志',
+  'app.kuaiai.trust.auditTotal': '共 {{total}} 条',
+  'app.kuaiai.trust.permGranted': '拥有',
+  'app.kuaiai.trust.permMissing': '未拥有',
+  'app.kuaiai.trust.actHintReady': '写操作仍受业务单据原权限与服务校验约束；人工确认闸已接入，写类操作执行前需人工确认，全程留痕。',
+  'app.kuaiai.insights.trendSummary': '近 {{days}} 天共 {{total}} 次调用，峰值 {{peakDay}} 当日 {{peak}} 次',
+  'app.kuaiai.insights.trendSparse': '有效数据点不足，仅展示现有记录',
+  'app.kuaiai.pulse.type.critical': '紧急',
+  'app.kuaiai.pulse.filter.domain': '领域（默认全部）',
+  'app.kuaiai.pulse.filter.severity': '严重度（默认全部）',
+  'app.kuaiai.pulse.partialData': '部分数据',
+  'app.kuaiai.pulse.stillComputing': '仍在计算，数据量较大时可取消后重试',
+  'app.kuaiai.pulse.cancelLoad': '取消加载',
+  'app.kuaiai.pulse.cancelled': '已取消加载',
+  'app.kuaiai.pulse.notConnected': '以下领域尚未接入检测器：{{domains}}',
+  'app.kuaiai.pulse.viewWorkOrder': '查看工单',
+  'app.kuaiai.pulse.viewSalesOrder': '查看销售订单',
+  'app.kuaiai.pulse.viewInventoryAlert': '查看库存预警',
+  'app.kuaiai.pulse.viewQualityException': '查看质量异常',
+  'app.kuaiai.pulse.viewEquipmentFault': '查看设备故障',
+  'app.kuaiai.pulse.viewIotAlerts': '查看告警',
+  'app.kuaiai.pulse.sourceNoPermission': '无{{source}}权限',
+  'app.kuaiai.pulse.sourceUnavailable': '{{source}}暂不可用，请稍后重试',
+  'app.kuaizhizao.paymentApplication.pullFromPoNeedPrepay':
+    '请先在采购订单填写预付款金额，且订单须已审核或已确认',
+  'app.kuaizhizao.salesOrder.syncField.customerId': '客户 ID',
+  'app.kuaizhizao.purchaseOrder.prepaymentBackfillMissing': '未补齐',
+  'app.kuaizhizao.purchaseOrder.prepaymentBackfillDone': '已补齐',
+  'app.kuaizhizao.purchaseOrder.orderTypeFramework': '框架协议',
+  'app.kuaizhizao.documentAction.incoming_inspection.pull_from_outsource_material_receipt.label': '从委外收货创建来料检验单',
+  'app.kuaizhizao.documentAction.incoming_inspection.pull_from_outsource_material_receipt.source': '委外收货',
+  'app.kuaizhizao.documentAction.incoming_inspection.pull_from_outsource_material_receipt.target': '来料检验单',
+  'app.master-data.customers.syncField.settlementMethodCode': '结算方式',
+  'app.master-data.suppliers.syncField.settlementMethodCode': '结算方式',
+  'pages.system.datasets.sqlRequired': 'SQL 语句不能为空',
+  'pages.dashboard.updateLog.entries.flow-generate-preview-precheck-timeout-r01.title':
+    '修复流程造数预检与时间线预览无结果',
+  'pages.dashboard.updateLog.entries.flow-generate-preview-precheck-timeout-r01.description':
+    '大 BOM 订单展开下级自制件时预检/预览会超时空白；现改为浅层优先截断、批量解析工艺，下级缺工艺改为软告警，前端超时放宽到 3 分钟。',
+  'pages.dashboard.updateLog.entries.data-backup-restore-unique-remap-r01.title':
+    '备份恢复加固：解压防护与唯一列冲突避让',
+  'pages.dashboard.updateLog.entries.data-backup-restore-unique-remap-r01.description':
+    '恢复备份 zip 改为逐条校验解压，拦截越界路径与超大解压包；跨组织恢复时全局唯一的 uuid 仅重写真正冲突的值，KG000001 类前缀编码按目标库最大序号自动续排，租户归属列不再误报冲突。',
+  'pages.dashboard.updateLog.entries.kuaiai-p3-scene-tools-r01.title':
+    '智能体库新增客诉8D、模具工装、盘点、管理层 4 个场景',
+  'pages.dashboard.updateLog.entries.kuaiai-p3-scene-tools-r01.description':
+    '新增客诉 8D 助手（可查投诉与 8D 进度、辅助起草各段草稿）、模具工装助手（寿命预警与库位状态）、盘点分析助手（差异 TopN 与历史趋势）、管理层助手（生产/质量/设备/库存分域简报）；设备信号接入 IoT 未处理告警；SOP 附件内容同步进知识库。',
+  'pages.dashboard.updateLog.entries.kuaiai-p2-scene-tools-r01.title':
+    '智能体库新增 9 个出厂场景与 27 项业务工具',
+  'pages.dashboard.updateLog.entries.kuaiai-p2-scene-tools-r01.description':
+    '新增 MRP 例外、排程看板、批次追溯、变更影响、检验与供应商、设备运维、ECN 影响、BOM 工艺问答、异常上报 9 个出厂场景；智能体库支持按业务分类分组、收起记忆与关键字检索。异常上报场景首次提供「创建缺料/延期/质量异常单」写工具，执行前需人工确认。',
+  'pages.dashboard.updateLog.entries.kuaiai-p1-scene-templates-r01.title':
+    '智能体库新增班组长、订单交期、作业指导场景',
+  'pages.dashboard.updateLog.entries.kuaiai-p1-scene-templates-r01.description':
+    '智能体库与能力矩阵新增 3 个出厂场景（班组长助手、订单交期助手、作业指导助手），库存洞察、采购跟单、质量异常分析场景补充新查询工具；已有租户可在 Agent 档案页自行追加新工具。',
+  'pages.dashboard.updateLog.entries.audit-writeback-finance-docs-r01.title':
+    '财务单据审批写回闭环',
+  'pages.dashboard.updateLog.entries.audit-writeback-finance-docs-r01.description':
+    '付款申请与其他收入/支出单从审批中心或单据页审核后单据状态即刻一致，不再停留待审核；撤回重提不再产生重复审批流程；付款确认按实际下推行与付款金额回写已付。',
+  'pages.dashboard.updateLog.entries.fa-depr-syd-uop-calc-r01.title':
+    '固定资产折旧支持年数总和法与工作量法',
+  'pages.dashboard.updateLog.entries.fa-depr-syd-uop-calc-r01.description':
+    '固定资产折旧计提在直线法之外补齐年数总和法与工作量法两种口径，资产卡片可按折旧方法正确计算每期折旧额。',
+  'field.user.errorRoleTypeStationMixed': '触屏专用（工位）角色不能与内部/外部角色同时绑定，请分开保存',
 };

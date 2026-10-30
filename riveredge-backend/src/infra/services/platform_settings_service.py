@@ -10,6 +10,7 @@ Date: 2026-01-06
 from typing import Optional
 
 from core.utils.timezone_utils import now_utc
+from core.security.ttl_lru_cache import TtlLruCache
 from infra.models.platform_settings import PlatformSettings
 from infra.models.tenant import Tenant, TenantStatus
 from infra.schemas.platform_settings import (
@@ -19,6 +20,13 @@ from infra.schemas.platform_settings import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from core.utils.login_quick_providers import normalize_login_quick_providers
+
+# 热路径缓存：登录页 / public / auth 频繁读取；写路径显式失效
+_PLATFORM_SETTINGS_CACHE_KEY = "default"
+_platform_settings_cache: TtlLruCache[PlatformSettingsResponse] = TtlLruCache(
+    max_size=4,
+    default_ttl_seconds=30.0,
+)
 
 
 class PlatformSettingsService:
@@ -37,6 +45,15 @@ class PlatformSettingsService:
             (settings.gitee_oauth_client_secret or "").strip()
         )
         return PlatformSettingsResponse.model_validate(payload)
+
+    @staticmethod
+    def _invalidate_cache() -> None:
+        _platform_settings_cache.delete(_PLATFORM_SETTINGS_CACHE_KEY)
+
+    @staticmethod
+    def _store_cache(response: PlatformSettingsResponse) -> PlatformSettingsResponse:
+        _platform_settings_cache.set(_PLATFORM_SETTINGS_CACHE_KEY, response)
+        return response
     
     async def get_settings(self) -> Optional[PlatformSettingsResponse]:
         """
@@ -47,10 +64,13 @@ class PlatformSettingsService:
         Returns:
             Optional[PlatformSettingsResponse]: 平台设置信息，如果不存在则返回None
         """
+        cached = _platform_settings_cache.get(_PLATFORM_SETTINGS_CACHE_KEY)
+        if cached is not None:
+            return cached
         settings = await PlatformSettings.first()
         if not settings:
             return None
-        return self._to_response(settings)
+        return self._store_cache(self._to_response(settings))
     
     async def get_or_create_default_settings(self) -> PlatformSettingsResponse:
         """
@@ -61,13 +81,17 @@ class PlatformSettingsService:
         Returns:
             PlatformSettingsResponse: 平台设置信息
         """
+        cached = _platform_settings_cache.get(_PLATFORM_SETTINGS_CACHE_KEY)
+        if cached is not None:
+            return cached
         settings = await PlatformSettings.first()
         if not settings:
             # 创建默认设置
             settings = await PlatformSettings.create(
                 platform_name="星技谷"
             )
-        return self._to_response(settings)
+            self._invalidate_cache()
+        return self._store_cache(self._to_response(settings))
     
     async def _validate_default_tenant_id(self, default_tenant_id: Optional[int]) -> None:
         """校验默认登录租户存在且为激活状态；None 表示清除。"""
@@ -107,7 +131,8 @@ class PlatformSettingsService:
         create_payload = data.model_dump()
         create_payload.pop("gitee_oauth_client_secret_configured", None)
         settings = await PlatformSettings.create(**create_payload)
-        return self._to_response(settings)
+        self._invalidate_cache()
+        return self._store_cache(self._to_response(settings))
     
     async def update_settings(
         self,
@@ -230,8 +255,9 @@ class PlatformSettingsService:
                 setattr(settings, key, value)
             settings.updated_at = now_utc()
             await settings.save()
-        
-        return self._to_response(settings)
+
+        self._invalidate_cache()
+        return self._store_cache(self._to_response(settings))
     
     async def delete_settings(self) -> bool:
         """
@@ -243,6 +269,7 @@ class PlatformSettingsService:
         settings = await PlatformSettings.first()
         if settings:
             await settings.delete()
+            self._invalidate_cache()
             return True
         return False
 
