@@ -548,10 +548,11 @@ async def _resolve_site_image_setting_for_print(tenant_id: int, setting_key: str
     """
     解析站点图片类配置（site_logo / company_seal 等）为可打印值：
     - 优先返回 data URL（UUID 文件）
-    - 其次返回 http(s)/data URL 原值
+    - 其次返回 http(s)/data URL 原值（data URL 过大则缩略，避免 Playwright Target crashed）
     - 其他格式返回空串
     """
     try:
+        from core.services.pdf.playwright_engine import shrink_data_image_url
         from core.services.system.site_setting_service import SiteSettingService
         from infra.config.infra_config import infra_settings as settings
 
@@ -560,7 +561,8 @@ async def _resolve_site_image_setting_for_print(tenant_id: int, setting_key: str
         if not raw:
             return ""
         if raw.startswith("data:image/"):
-            return raw
+            # 公章常存高清 PNG；原样进 Chromium 易在 evaluate/pdf 阶段崩溃
+            return shrink_data_image_url(raw, max_side=512)
         if raw.startswith("http://") or raw.startswith("https://"):
             return raw
         if raw.startswith("/"):
@@ -571,7 +573,9 @@ async def _resolve_site_image_setting_for_print(tenant_id: int, setting_key: str
             return f"{base_url}{raw}"
         if _is_uuid_like(raw):
             data_url = await _material_image_data_url_for_pdfme(tenant_id, raw)
-            return data_url or ""
+            if not data_url:
+                return ""
+            return shrink_data_image_url(data_url, max_side=512)
         return ""
     except Exception as e:
         logger.warning("解析打印图片配置失败 tenant_id={} key={}: {}", tenant_id, setting_key, e)

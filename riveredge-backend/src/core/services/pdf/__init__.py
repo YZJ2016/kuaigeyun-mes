@@ -5,6 +5,8 @@ from core.services.pdf.playwright_engine import (
     inject_base_href_for_playwright,
     parse_css_page_size,
     run_playwright_with_dedicated_loop,
+    shrink_data_image_url,
+    shrink_oversized_data_images_in_html,
 )
 
 __all__ = [
@@ -12,4 +14,6 @@ __all__ = [
     "inject_base_href_for_playwright",
     "parse_css_page_size",
     "run_playwright_with_dedicated_loop",
+    "shrink_data_image_url",
+    "shrink_oversized_data_images_in_html",
 ]
