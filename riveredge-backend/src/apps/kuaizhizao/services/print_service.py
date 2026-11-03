@@ -562,8 +562,16 @@ async def _resolve_site_image_setting_for_print(tenant_id: int, setting_key: str
             return ""
         if raw.startswith("data:image/"):
             # 公章常存高清 PNG；原样进 Chromium 易在 evaluate/pdf 阶段崩溃
-            return shrink_data_image_url(raw, max_side=512)
+            return shrink_data_image_url(raw, max_side=384, max_b64_chars=120_000)
         if raw.startswith("http://") or raw.startswith("https://"):
+            file_uuid, size = _parse_local_file_download_src(raw)
+            if file_uuid:
+                data_url = await _build_image_data_url_for_local_file(
+                    tenant_id, file_uuid, size
+                )
+                return shrink_data_image_url(
+                    data_url, max_side=384, max_b64_chars=120_000
+                )
             return raw
         if raw.startswith("/"):
             base_url = settings.BASE_URL
@@ -573,9 +581,7 @@ async def _resolve_site_image_setting_for_print(tenant_id: int, setting_key: str
             return f"{base_url}{raw}"
         if _is_uuid_like(raw):
             data_url = await _material_image_data_url_for_pdfme(tenant_id, raw)
-            if not data_url:
-                return ""
-            return shrink_data_image_url(data_url, max_side=512)
+            return data_url or ""
         return ""
     except Exception as e:
         logger.warning("解析打印图片配置失败 tenant_id={} key={}: {}", tenant_id, setting_key, e)
