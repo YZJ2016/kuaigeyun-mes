@@ -11,6 +11,13 @@ from apps.kuaizhizao.services.html_to_pdf_engine import (
     inject_base_href_for_playwright,
     parse_css_page_size,
 )
+from core.services.pdf.playwright_engine import (
+    _is_playwright_set_content_timeout,
+    _is_playwright_target_crashed,
+    describe_print_html_for_error,
+    should_inject_base_href_for_pdf,
+    strip_chromium_risky_print_margin_boxes,
+)
 from apps.kuaizhizao.services.print_service import (
     _MAX_PRINT_HTML_BYTES,
     _MAX_PRINT_INLINE_IMAGES,
@@ -20,6 +27,36 @@ from apps.kuaizhizao.services.print_service import (
     _run_html_to_pdf_subprocess,
 )
 from infra.exceptions.exceptions import BusinessLogicError, ValidationError
+
+
+def test_should_inject_base_href_for_pdf():
+    assert should_inject_base_href_for_pdf('<img src="/api/v1/x">') is True
+    assert (
+        should_inject_base_href_for_pdf(
+            '<img src="data:image/png;base64,abc"><style>.x{background:url(data:image/png;base64,x)}</style>'
+        )
+        is False
+    )
+
+
+def test_is_playwright_set_content_timeout():
+    err = Exception('Page.set_content: Timeout 30000ms exceeded. - setting frame content, waiting until "load"')
+    assert _is_playwright_set_content_timeout(err) is True
+
+
+def test_is_playwright_target_crashed_printtopdf_protocol():
+    err = Exception("Page.pdf: Protocol error (Page.printToPDF): Printing failed")
+    assert _is_playwright_target_crashed(err) is True
+
+
+def test_strip_chromium_risky_print_margin_boxes():
+    html = "<style>@page { @bottom-center { content: counter(page); } }</style>"
+    assert "@bottom-center" not in strip_chromium_risky_print_margin_boxes(html)
+
+
+def test_describe_print_html_for_error():
+    diag = describe_print_html_for_error("<table><tr><tr><img><img></table>")
+    assert "字节" in diag
 
 
 def test_inject_base_href_into_head():
