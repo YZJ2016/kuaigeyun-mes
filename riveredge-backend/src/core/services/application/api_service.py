@@ -1062,28 +1062,25 @@ class APIService:
         """
         # 获取接口
         api = await self.get_api_by_uuid(tenant_id, api_uuid)
-        
-        # 如果更新了代码，检查是否重复
-        if api_data.code and api_data.code != api.code:
-            existing_api = await API.filter(
-                tenant_id=tenant_id,
-                code=api_data.code,
-                deleted_at__isnull=True,
-            ).exclude(uuid=api_uuid).first()
-            
-            if existing_api:
-                raise ValidationError(f"接口代码 '{api_data.code}' 已存在")
-        
+
+
         # 记录变更前的状态（用于通知数据集管理）
-        old_code = api.code
+        old_code = str(api.code or "").strip()
         old_path = api.path
         old_method = api.method
         old_is_active = api.is_active
-        
-        # 更新接口
-        update_data = api_data.model_dump(exclude_unset=True, exclude={"connection_uuid", "category_uuid"})
+
+        # 更新字段（先落到实例，再按主键 UPDATE，禁止 save() 误走 INSERT 撞同 code）
+        update_data = api_data.model_dump(
+            exclude_unset=True, exclude={"connection_uuid", "category_uuid"}
+        )
+        changed_fields: List[str] = []
         for key, value in update_data.items():
+            if key in {"id", "uuid", "tenant_id", "created_at"}:
+                continue
             setattr(api, key, value)
+            if key not in changed_fields:
+                changed_fields.append(key)
 
         if "connection_uuid" in api_data.model_fields_set:
             if api_data.connection_uuid is None:
@@ -1094,6 +1091,8 @@ class APIService:
                     api_data.connection_uuid,
                 )
                 api.integration_config_id = integration_config.id
+            if "integration_config_id" not in changed_fields:
+                changed_fields.append("integration_config_id")
 
         if "category_uuid" in api_data.model_fields_set:
             if api_data.category_uuid is None:
@@ -1104,17 +1103,48 @@ class APIService:
                     RESOURCE_TYPE_API,
                     api_data.category_uuid,
                 )
-        
-        await api.save()
-        
+            if "category_id" not in changed_fields:
+                changed_fields.append("category_id")
+
+        final_code = str(api.code or "").strip()
+        if "code" in changed_fields:
+            api.code = final_code
+
+        # 仅当真正改 code 时查重；排除自身用主键 id，避免 uuid 比较踩坑
+        if final_code and final_code != old_code:
+            existing_api = await API.filter(
+                tenant_id=tenant_id,
+                code=final_code,
+                deleted_at__isnull=True,
+            ).exclude(id=api.id).first()
+            if existing_api:
+                raise ValidationError(
+                    f"接口代码 '{final_code}' 在本组织已存在，请更换代码。"
+                    "各组织接口相互独立，修改只影响当前组织。"
+                )
+
+        # 清同 code 软删幽灵，避免部分唯一索引下残留行干扰
+        if final_code:
+            await API.filter(
+                tenant_id=tenant_id,
+                code=final_code,
+                deleted_at__isnull=False,
+            ).delete()
+
+        if changed_fields:
+            patch = {field: getattr(api, field) for field in changed_fields}
+            patch["updated_at"] = resolve_business_datetime()
+            await API.filter(id=api.id, tenant_id=tenant_id).update(**patch)
+            await api.refresh_from_db()
+
         await api.fetch_related("integration_config", "category")
-        
+
         # 如果接口代码、路径、方法或状态变更，通知数据集管理（异步，不阻塞主流程）
-        code_changed = old_code != api.code
+        code_changed = old_code != str(api.code or "").strip()
         path_changed = old_path != api.path
         method_changed = old_method != api.method
         status_changed = old_is_active != api.is_active
-        
+
         if code_changed or path_changed or method_changed or status_changed:
             import asyncio
             # 异步通知数据集管理接口变更
@@ -1128,7 +1158,7 @@ class APIService:
                     method_changed=method_changed
                 )
             )
-        
+
         return api
     
     async def delete_api(
