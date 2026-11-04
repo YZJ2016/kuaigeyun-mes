@@ -59,6 +59,10 @@ class DocumentPushTargetItem(BaseSchema):
     dataset_uuid: Optional[str] = None
     """仅用户在出站点过确认后写入。缺省或 false 的历史行不得再展示。"""
     user_saved: bool = False
+    """按业务按钮绑定的接口 UUID，如 confirm / withdraw / unsubmit / delete。"""
+    action_apis: Optional[Dict[str, str]] = None
+    """是否推送：关闭后确认入库不自动外推，列表推送按钮与详情外推记录隐藏。缺省 true。"""
+    push_enabled: bool = True
 
     @field_validator("destination_kind", mode="before")
     @classmethod
