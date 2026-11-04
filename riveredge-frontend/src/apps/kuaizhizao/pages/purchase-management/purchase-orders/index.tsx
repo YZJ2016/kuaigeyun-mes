@@ -74,6 +74,31 @@ import { SyncFreshnessBadge } from '../../../../../components/sync-from-source-m
 import { SyncPushHubButton } from '../../../../../components/sync-push-hub';
 import { useToolbarSyncPushFlags, TOOLBAR_SYNC_PUSH_FLAGS_QUERY_KEY } from '../../../../../hooks/useToolbarSyncPushFlags';
 import { getBusinessConfig } from '../../../../../services/businessConfig';
+import { buildPayableLedgerRecognitionOptions } from '../../../../../utils/documentLedgerRecognition';
+import {
+  applySupplierFormFields,
+  resolveOrgPayableDefaultFromBusinessConfig,
+} from '../shared/applySupplierFormFields';
+import {
+  DEFAULT_PURCHASE_PRICE_TYPE,
+  DEFAULT_PURCHASE_TAX_RATE_PERCENT,
+  purchaseFormPriceType,
+  resolveSupplierDefaultTaxRatePercent,
+} from '../shared/purchasePriceType';
+import {
+  purchaseOrderStoredUnitPriceToForm,
+  purchaseOrderTaxRateToDecimal,
+  purchaseOrderTaxRateToPercent,
+  resolvePurchaseOrderDisplayAmount,
+} from '../shared/purchaseOrderAmounts';
+import {
+  partnerPaymentMethodSelectOptions,
+  partnerSettlementTermsSelectOptions,
+  parsePartnerDefaultPaymentMethodImport,
+  parsePartnerSettlementTermsImport,
+  buildPartnerDefaultPaymentMethodImportOptions,
+  buildPartnerSettlementTermsImportOptions,
+} from '../../../../master-data/utils/partner-static-labels';
 import { renderExternalSyncPrimaryExtra } from '../../../../../components/external-sync-source/ExternalSyncSourceIcon';
 import PurchaseOrderSyncFromSourceModal from './PurchaseOrderSyncFromSourceModal';
 import PurchaseOrderDocumentPushPanel from './PurchaseOrderDocumentPushPanel';
@@ -355,6 +380,9 @@ type PurchaseOrderItemRow = PurchaseOrderItem & {
   delivery_date?: string;
   total_quantity?: number;
   total_amount?: number;
+  net_amount?: number;
+  tax_amount?: number;
+  tax_rate?: number;
   status?: string;
   review_status?: string;
   receipt_progress?: number;
@@ -413,19 +441,6 @@ function resolveDefaultPurchaseOrderBuyer(): {
     u?.full_name || u?.fullName || u?.username || u?.name,
   );
   return { buyer_id: id, buyer_name: name };
-}
-
-/** 采购订单头表 tax_rate 存小数（0.13），表单与详情展示用百分比 */
-function purchaseOrderTaxRateToPercent(raw: unknown): number {
-  const n = Number(raw);
-  if (!Number.isFinite(n) || n <= 0) return 0;
-  return n <= 1 ? n * 100 : n;
-}
-
-function purchaseOrderTaxRateToDecimal(percent: unknown): number {
-  const n = Number(percent);
-  if (!Number.isFinite(n) || n <= 0) return 0;
-  return n / 100;
 }
 
 const ORDER_TYPE_FALLBACK_ITEMS: Pick<DictionaryItem, 'value' | 'label' | 'is_system_managed' | 'sort_order'>[] = [
@@ -1157,7 +1172,8 @@ const PurchaseOrdersPage: React.FC = () => {
       align: 'right',
       sorter: true,
       hideInSearch: true,
-      render: (text: any) => formatCurrencyAmount(text),
+      render: (_: unknown, record: PurchaseOrder) =>
+        formatCurrencyAmount(resolvePurchaseOrderDisplayAmount(record)),
     },
     {
       title: t('app.kuaizhizao.purchaseOrder.col.totalQuantity'),
@@ -2528,7 +2544,11 @@ const PurchaseOrdersPage: React.FC = () => {
         material_spec: it.material_spec || '',
         unit: it.unit || '件',
         ordered_quantity: Number(it.ordered_quantity ?? it.orderedQuantity) || 0,
-        unit_price: Number(it.unit_price ?? it.unitPrice) || 0,
+        unit_price: purchaseOrderStoredUnitPriceToForm(
+          Number(it.unit_price ?? it.unitPrice) || 0,
+          headerTaxRatePercent,
+          priceType,
+        ),
         tax_rate: headerTaxRatePercent,
         required_date: it.required_date || it.requiredDate ? dayjs(it.required_date || it.requiredDate) : undefined,
         source_type: it.source_type ?? it.sourceType ?? null,
@@ -4811,6 +4831,9 @@ const PurchaseOrdersPage: React.FC = () => {
                       delivery_date: order.delivery_date,
                       total_quantity: order.total_quantity,
                       total_amount: order.total_amount,
+                      net_amount: order.net_amount,
+                      tax_amount: order.tax_amount,
+                      tax_rate: order.tax_rate,
                       status: order.status,
                       review_status: order.review_status,
                       receipt_progress: order.receipt_progress,
@@ -4838,6 +4861,9 @@ const PurchaseOrdersPage: React.FC = () => {
                         delivery_date: order.delivery_date,
                         total_quantity: order.total_quantity,
                         total_amount: order.total_amount,
+                        net_amount: order.net_amount,
+                        tax_amount: order.tax_amount,
+                        tax_rate: order.tax_rate,
                         status: order.status,
                         review_status: order.review_status,
                         receipt_progress: order.receipt_progress,

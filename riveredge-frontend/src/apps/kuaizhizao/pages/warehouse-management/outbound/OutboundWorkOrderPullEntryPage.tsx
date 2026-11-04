@@ -97,6 +97,10 @@ import {
 } from '../shared/warehouseTrackingFlags';
 import { getBusinessConfig } from '../../../../../services/businessConfig';
 import { TOOLBAR_SYNC_PUSH_FLAGS_QUERY_KEY } from '../../../../../hooks/useToolbarSyncPushFlags';
+import {
+  buildNumericInputNumberProps,
+  useNumericPrecisionPlaces,
+} from '../../../../../hooks/useNumericPrecision';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { resolveMaterialScenarioUnit } from '../../../../../utils/materialScenarioUnit';
 
@@ -118,8 +122,19 @@ function lineBatchKey(materialId: number, warehouseId?: number): string {
   return `${materialId}_${warehouseId ?? 0}`;
 }
 
+/** 数量比较：按配置小数位允许半个步长误差，避免 0.53 被草稿里的 max=0 误杀。 */
+function issueQtyExceedsPending(issueQty: number, pendingQty: number, decimalPlaces: number): boolean {
+  const places = Math.max(0, Math.min(4, Math.floor(decimalPlaces)));
+  const step = places > 0 ? 10 ** -places : 1;
+  const issue = Number(issueQty);
+  const pending = Number(pendingQty);
+  if (!Number.isFinite(issue) || !Number.isFinite(pending)) return true;
+  return issue - pending > step / 2;
+}
+
 const OutboundWorkOrderPullEntryPage: React.FC = () => {
   const { t } = useTranslation();
+  const quantityDecimals = useNumericPrecisionPlaces('quantity');
   const trackingFlags = useWarehouseTrackingFlags();
   const pullFromWorkOrderAction = resolveKuaizhizaoDocumentAction(t, 'outbound.pull_from_work_order');
   const { woId: woIdParam } = useParams<{ woId: string }>();
@@ -614,18 +629,23 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
         width: 140,
         render: (_: unknown, line: PickLine) => (
           <InputNumber
-            min={0}
-            max={line.isNonBomExtra ? undefined : line.pendingQuantity}
-            value={line.issueQuantity}
-            onChange={(v) => {
-              const qty = Number(v ?? 0);
-              setPickLines((prev) =>
-                prev.map((row) =>
-                  row.key === line.key ? { ...row, issueQuantity: qty } : row,
-                ),
-              );
-            }}
-            style={{ width: '100%' }}
+            {...buildNumericInputNumberProps('quantity', quantityDecimals, {
+              max: line.isNonBomExtra ? undefined : line.pendingQuantity,
+              value: line.issueQuantity,
+              onChange: (v) => {
+                let qty = Number(v ?? 0);
+                if (!Number.isFinite(qty) || qty < 0) qty = 0;
+                if (!line.isNonBomExtra) {
+                  const pending = Number(line.pendingQuantity);
+                  if (Number.isFinite(pending) && qty > pending) qty = pending;
+                }
+                setPickLines((prev) =>
+                  prev.map((row) =>
+                    row.key === line.key ? { ...row, issueQuantity: qty } : row,
+                  ),
+                );
+              },
+            })}
           />
         ),
       },
@@ -680,6 +700,7 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
       batchOptionsLoading,
       lineWh,
       materialMeta,
+      quantityDecimals,
       serialOptionsByUuid,
       serialOptionsLoading,
       serials,
@@ -708,7 +729,7 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
       receiverUuid: operatorHook.receiverUuid,
       receiverName: operatorHook.receiverName,
       issueQuantities: Object.fromEntries(pickLines.map((line) => [line.materialId, line.issueQuantity])),
-      maxQuantities,
+      // 可领上限以预览接口 pending 为准，不把 maxQuantities 写入草稿（避免 0 覆盖小数待领）
     }));
     persistNow();
   }, [
@@ -718,7 +739,6 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
     notes,
     pickingTime,
     pickLines,
-    maxQuantities,
     operatorHook.receiverUuid,
     operatorHook.receiverName,
     bindSnapshot,
@@ -806,9 +826,7 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
             const parsed = draftDayjs(draft.pickingTime);
             setPickingTime(parsed?.isValid() ? parsed.startOf('day') : null);
           }
-          if (draft.maxQuantities) {
-            setMaxQuantities((prev) => mergeRecordMaps(prev, draft.maxQuantities as Record<number, number>));
-          }
+          // 不恢复 draft.maxQuantities：可领上限始终以本次预览 pendingQuantity 为准
           if (draft.lineWh) {
             setLineWh(mergeRecordMaps({}, draft.lineWh as Record<number, number>));
           } else if (legacyHeaderWhId != null) {
@@ -839,7 +857,17 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
           );
           if (draft.issueQuantities) {
             setPickLines((prev) =>
-              mergeMaterialIssueQuantities(prev, draft.issueQuantities as Record<number, number>),
+              mergeMaterialIssueQuantities(prev, draft.issueQuantities as Record<number, number>).map(
+                (row) => {
+                  if (row.isNonBomExtra) return row;
+                  const pending = Number(row.pendingQuantity);
+                  const issue = Number(row.issueQuantity);
+                  if (Number.isFinite(pending) && Number.isFinite(issue) && issue > pending) {
+                    return { ...row, issueQuantity: pending };
+                  }
+                  return row;
+                },
+              ),
             );
           }
         });
@@ -860,12 +888,13 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
     }
     for (const line of activeLines) {
       if (!line.isNonBomExtra) {
-        const max = Number(maxQuantities[line.materialId] ?? line.pendingQuantity ?? 0);
-        if (line.issueQuantity > max) {
+        // 真源：行上待领数量（与表列一致）。禁止用 maxQuantities?? 因草稿/历史 0 会挡住小数尾差。
+        const max = Number(line.pendingQuantity);
+        if (issueQtyExceedsPending(line.issueQuantity, max, quantityDecimals)) {
           messageApi.error(
-            t('app.kuaizhizao.warehouseOutbound.entry.qtyExceedsPending', {
+            t('app.kuaizhizao.warehouseOutbound.entry.qtyExceedsPickable', {
               material: line.materialCode || line.materialName,
-              max,
+              max: formatQuantity(max),
             }),
           );
           return;

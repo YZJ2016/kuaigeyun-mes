@@ -1,6 +1,7 @@
 /**
  * 采购入库空白建单（无来源采购订单/通知/检验）。
- * 表头补齐金蝶外推常用字段：供应商、采购员/工号、验收人、付款方式、税率、币别。
+ * 表头补齐金蝶外推常用字段：供应商、采购员、验收人、付款方式、税率、币别。
+ * 采购员工号由选人自动写入 buyer_operator_number（隐藏字段），不再单独填写。
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -12,7 +13,7 @@ import {
   ProFormTextArea,
   type ProFormInstance,
 } from '@ant-design/pro-components';
-import { PlusOutlined, QuestionCircleOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { PlusOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 import { FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
@@ -899,32 +900,12 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
             userList={users}
             loading={usersLoading}
           />
+          <ProFormText name="buyer_operator_number" hidden />
         </Col>
         <Col span={6}>
           <PurchaseDepartmentFormField
             options={departmentOptions}
             loading={departmentOptionsLoading}
-          />
-        </Col>
-        <Col span={6}>
-          <ProFormText
-            name="buyer_operator_number"
-            label={
-              <Space size={6} align="center">
-                <span>{t('app.kuaizhizao.warehouseInbound.field.buyerOperatorNumber')}</span>
-                <Tooltip title={t('app.kuaizhizao.warehouseInbound.field.buyerOperatorNumberExtra')}>
-                  <Button
-                    type="text"
-                    size="small"
-                    icon={<QuestionCircleOutlined />}
-                    aria-label={t('app.kuaizhizao.warehouseInbound.field.buyerOperatorNumberExtra')}
-                    style={{ padding: 0, height: 'auto', color: 'var(--ant-color-text-tertiary)' }}
-                  />
-                </Tooltip>
-              </Space>
-            }
-            placeholder={t('app.kuaizhizao.warehouseInbound.field.buyerOperatorNumberPlaceholder')}
-            fieldProps={{ style: { width: '100%' } }}
           />
         </Col>
         <Col span={6}>

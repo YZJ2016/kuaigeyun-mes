@@ -44,6 +44,54 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'purchase-order-list-incl-amount-r01',
+    date: '2026-11-04',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-order-list-incl-amount-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-order-list-incl-amount-r01.description',
+  },
+  {
+    id: 'order-payment-plan-amount-ratio-sync-r01',
+    date: '2026-11-04',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.order-payment-plan-amount-ratio-sync-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.order-payment-plan-amount-ratio-sync-r01.description',
+  },
+  {
+    id: 'purchase-receipt-hide-buyer-operator-number-r01',
+    date: '2026-11-04',
+    type: 'improvement',
+    titleKey:
+      'pages.dashboard.updateLog.entries.purchase-receipt-hide-buyer-operator-number-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-receipt-hide-buyer-operator-number-r01.description',
+  },
+  {
+    id: 'kingdee-im-batch-update-binding-r01',
+    date: '2026-11-04',
+    type: 'feature',
+    titleKey: 'pages.dashboard.updateLog.entries.kingdee-im-batch-update-binding-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.kingdee-im-batch-update-binding-r01.description',
+  },
+  {
+    id: 'partner-statement-t-tdz-r01',
+    date: '2026-11-04',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.partner-statement-t-tdz-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.partner-statement-t-tdz-r01.description',
+  },
+  {
+    id: 'work-order-pick-decimal-pending-r01',
+    date: '2026-11-04',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.work-order-pick-decimal-pending-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.work-order-pick-decimal-pending-r01.description',
+  },
+  {
     id: 'document-line-material-attachments-r01',
     date: '2026-11-01',
     type: 'feature',

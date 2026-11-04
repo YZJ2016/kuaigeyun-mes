@@ -49,10 +49,31 @@ import { useKuaizhizaoPrintModal } from '../../../../hooks/useKuaizhizaoPrintMod
 import { DocumentStatus, ReviewStatusEnum } from '../../../../constants/documentStatus';
 import type { CustomField } from '../../../../../../services/customField';
 import type { AuditPhaseRecord } from '../../../../../../components/uni-audit/AuditPhaseBadge';
+import { calcDocumentLineAmounts } from '../../../../utils/documentLineAmounts';
+import {
+  purchaseOrderTaxRateToPercent,
+  resolvePurchaseOrderDisplayAmount,
+} from '../../shared/purchaseOrderAmounts';
 
 const PURCHASE_ORDER_RESOURCE = 'kuaizhizao:purchase-order';
 const PLACEHOLDER: PurchaseOrder = { id: 0 };
 const DETAIL_ITEMS_MIN_WIDTH = 1200;
+
+function resolvePurchaseOrderLineInclAmounts(
+  item: Pick<PurchaseOrderItem, 'ordered_quantity' | 'unit_price' | 'total_price'>,
+  taxRatePercent: number,
+): { unitIncl: number; totalIncl: number } {
+  const qty = Number(item.ordered_quantity) || 0;
+  const unitExcl = Number(item.unit_price) || 0;
+  const line = calcDocumentLineAmounts(qty, unitExcl, taxRatePercent, 'tax_exclusive');
+  const storedTotal = Number(item.total_price);
+  const totalIncl =
+    Number.isFinite(storedTotal) && taxRatePercent > 0
+      ? calcDocumentLineAmounts(1, storedTotal, taxRatePercent, 'tax_exclusive').incl
+      : line.incl;
+  const unitIncl = qty > 0 ? totalIncl / qty : calcDocumentLineAmounts(1, unitExcl, taxRatePercent, 'tax_exclusive').incl;
+  return { unitIncl, totalIncl };
+}
 
 export const PURCHASE_ORDER_WORKFLOW_PROPS = {
   entityType: 'purchase_order' as const,
@@ -255,13 +276,35 @@ export const PurchaseOrderDetailDrawer: React.FC<PurchaseOrderDetailDrawerProps>
           { title: t('app.kuaizhizao.purchaseOrder.form.currency'), dataIndex: 'currency', key: 'currency_code' },
           {
             title: t('app.kuaizhizao.purchaseOrder.col.orderAmount'),
-            dataIndex: 'total_amount',
-            render: (text) => formatCurrencyAmount(text),
+            dataIndex: 'net_amount',
+            render: (_, entity) => formatCurrencyAmount(resolvePurchaseOrderDisplayAmount(entity)),
           },
           {
             title: t('app.kuaizhizao.purchaseOrder.totalFeeAmount'),
             dataIndex: 'total_fee_amount',
             render: (text) => (text != null && Number(text) > 0 ? formatCurrencyAmount(text) : '-'),
+          },
+          {
+            title: t('app.kuaizhizao.purchaseOrder.amountPrepaymentUnsettled'),
+            dataIndex: 'prepayment_unsettled_balance',
+            render: (_, entity) => {
+              const v = (entity as { prepayment_unsettled_balance?: number | null })
+                .prepayment_unsettled_balance;
+              return v != null && Number(v) > 0 ? formatCurrencyAmount(v) : '-';
+            },
+          },
+          {
+            title: t('app.kuaizhizao.purchaseOrder.amountEstimatedPayableAfterPrepayment'),
+            dataIndex: 'estimated_payable_after_prepayment',
+            render: (_, entity) => {
+              const unsettled = Number(
+                (entity as { prepayment_unsettled_balance?: number | null })
+                  .prepayment_unsettled_balance,
+              );
+              if (!Number.isFinite(unsettled) || unsettled <= 0) return '-';
+              // 与财务应付一致：按价税合计扣未结预付（勿用未税 total_amount 快照）
+              return formatCurrencyAmount(resolvePurchaseOrderDisplayAmount(entity) - unsettled);
+            },
           },
         ] as ProDescriptionsItemProps<PurchaseOrder>[],
         GLOBAL_DOC_DETAIL_BASIC_FIELD_RANK,
