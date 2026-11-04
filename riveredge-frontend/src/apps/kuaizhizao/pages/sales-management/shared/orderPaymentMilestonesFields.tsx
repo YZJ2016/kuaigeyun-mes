@@ -9,12 +9,62 @@ import {
   ProFormDatePicker,
   ProFormDigit,
 } from '@ant-design/pro-components';
-import { App, Button, Dropdown, Form as AntForm, Table, Typography, Select, Switch } from 'antd';
+import {
+  App,
+  Button,
+  Dropdown,
+  Form as AntForm,
+  Table,
+  Typography,
+  Select,
+  Switch,
+  type FormInstance,
+} from 'antd';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import type { TFunction } from 'i18next';
 import { buildFutureDateShortcutFieldProps } from '../../../../../utils/futureDatePickerShortcuts';
 import { DOCUMENT_SUBLINE_TABLE_PROPS, DOCUMENT_SUBLINE_ADD_BUTTON_CLASS } from '../../../../../components/document-subline-table';
 import { formatDateBySiteSetting } from '../../../../../utils/format';
+import {
+  computePurchaseDocumentTotals,
+  computeSalesDocumentTotals,
+} from '../../../utils/documentLineAmounts';
+
+/** 比例展示小数位（百分数，非 0～1） */
+const PAYMENT_PLAN_RATIO_DECIMALS = 4;
+
+function roundToPlaces(value: number, places: number): number {
+  const scale = 10 ** places;
+  return Math.round(value * scale) / scale;
+}
+
+/**
+ * 付款/收款计划换算基数：与金额汇总「预计应付/预计应收」一致。
+ * 含税：含税货值（销售含折让）+ 对方费用；不含税：未税货值 + 对方费用（销售含折让路径走 estimatedReceivable）。
+ */
+function resolvePaymentPlanBaseAmount(
+  form: FormInstance,
+  variant: OrderPaymentMilestoneVariant,
+): number {
+  const items = form.getFieldValue('items');
+  const feeDetails = form.getFieldValue('fee_details');
+  const priceType = (form.getFieldValue('price_type') as string | undefined) ?? 'tax_exclusive';
+  const isInclusive = priceType === 'tax_inclusive';
+
+  if (variant === 'purchase') {
+    const totals = computePurchaseDocumentTotals(items, feeDetails, priceType, 'ordered_quantity');
+    return isInclusive ? totals.estimatedPayable : totals.goodsExcl + totals.otherSideFees;
+  }
+
+  const totals = computeSalesDocumentTotals(
+    items,
+    feeDetails,
+    priceType,
+    'required_quantity',
+    form.getFieldValue('discount_amount'),
+  );
+  return totals.estimatedReceivable;
+}
 
 export type OrderPaymentMilestoneVariant = 'sales' | 'purchase';
 
@@ -221,7 +271,30 @@ export function OrderPaymentMilestonesFields({
               <ProFormDigit
                 name={[index, 'planned_amount']}
                 min={0}
-                fieldProps={{ precision: amountDecimals, style: { width: '100%' } }}
+                fieldProps={{
+                  precision: amountDecimals,
+                  style: { width: '100%' },
+                  onChange: (val: number | null) => {
+                    const base = resolvePaymentPlanBaseAmount(form, variant);
+                    if (!(base > 0)) {
+                      if (val != null && Number(val) > 0) {
+                        message.warning(t('app.kuaizhizao.orderMilestone.ratioNeedsOrderTotal'));
+                      }
+                      return;
+                    }
+                    if (val == null) {
+                      form.setFieldValue(['payment_milestones', index, 'planned_ratio'], undefined);
+                      return;
+                    }
+                    const amount = Number(val);
+                    if (!Number.isFinite(amount) || amount < 0) return;
+                    const ratio = roundToPlaces((amount / base) * 100, PAYMENT_PLAN_RATIO_DECIMALS);
+                    form.setFieldValue(
+                      ['payment_milestones', index, 'planned_ratio'],
+                      Math.min(100, Math.max(0, ratio)),
+                    );
+                  },
+                }}
                 formItemProps={{ style: { margin: 0 } }}
               />
             ),
@@ -234,7 +307,30 @@ export function OrderPaymentMilestonesFields({
                 name={[index, 'planned_ratio']}
                 min={0}
                 max={100}
-                fieldProps={{ style: { width: '100%' } }}
+                fieldProps={{
+                  precision: PAYMENT_PLAN_RATIO_DECIMALS,
+                  style: { width: '100%' },
+                  onChange: (val: number | null) => {
+                    const base = resolvePaymentPlanBaseAmount(form, variant);
+                    if (!(base > 0)) {
+                      if (val != null && Number(val) > 0) {
+                        message.warning(t('app.kuaizhizao.orderMilestone.ratioNeedsOrderTotal'));
+                      }
+                      return;
+                    }
+                    if (val == null) {
+                      form.setFieldValue(['payment_milestones', index, 'planned_amount'], undefined);
+                      return;
+                    }
+                    const ratio = Number(val);
+                    if (!Number.isFinite(ratio) || ratio < 0) return;
+                    const amount = roundToPlaces((base * ratio) / 100, amountDecimals);
+                    form.setFieldValue(
+                      ['payment_milestones', index, 'planned_amount'],
+                      Math.max(0, amount),
+                    );
+                  },
+                }}
                 formItemProps={{ style: { margin: 0 } }}
               />
             ),

@@ -35,16 +35,6 @@ const ENTERPRISE_TYPE_KEYS: Record<string, string> = {
   other: 'field.partner.enterpriseType.other',
 };
 
-const SETTLEMENT_KEYS: Record<string, string> = {
-  cash: 'field.partner.settlementMethod.cash',
-  bank_transfer: 'field.partner.settlementMethod.bankTransfer',
-  bank_acceptance: 'field.partner.settlementMethod.bankAcceptance',
-  commercial_acceptance: 'field.partner.settlementMethod.commercialAcceptance',
-  monthly: 'field.partner.settlementMethod.monthly',
-  prepaid: 'field.partner.settlementMethod.prepaid',
-  other: 'field.partner.settlementMethod.other',
-};
-
 const PAYMENT_METHOD_KEYS: Record<string, string> = {
   cash: 'field.partner.settlementMethod.cash',
   bank_transfer: 'field.partner.settlementMethod.bankTransfer',
@@ -90,6 +80,12 @@ const SETTLEMENT_TERMS_CN_ALIASES: Record<string, string> = {
   票到付: 'pay_on_invoice',
 };
 
+/** @deprecated 拆分前合并码表，仅用于旧 Excel 导入列「结算方式」解析 */
+const LEGACY_SETTLEMENT_KEYS: Record<string, string> = {
+  ...PAYMENT_METHOD_KEYS,
+  ...SETTLEMENT_TERMS_KEYS,
+};
+
 function mapLabel(t: TFunction, map: Record<string, string>, code?: string | null): string {
   if (code == null || code === '') return '—';
   const key = map[code];
@@ -127,8 +123,8 @@ export const PARTNER_TAXPAYER_TYPE_IMPORT_OPTIONS = Object.keys(TAXPAYER_TYPE_KE
 /** @deprecated 请用 buildPartnerEnterpriseTypeImportOptions(t) */
 export const PARTNER_ENTERPRISE_TYPE_IMPORT_OPTIONS = Object.keys(ENTERPRISE_TYPE_KEYS);
 
-/** @deprecated 请用 buildPartnerSettlementMethodImportOptions(t) */
-export const PARTNER_SETTLEMENT_METHOD_IMPORT_OPTIONS = Object.keys(SETTLEMENT_KEYS);
+/** @deprecated 请用 buildPartnerDefaultPaymentMethodImportOptions(t) */
+export const PARTNER_SETTLEMENT_METHOD_IMPORT_OPTIONS = Object.keys(LEGACY_SETTLEMENT_KEYS);
 
 export function buildPartnerInvoiceTypeImportOptions(t: TFunction): string[] {
   return buildImportOptions(t, INVOICE_TYPE_KEYS);
@@ -142,16 +138,17 @@ export function buildPartnerEnterpriseTypeImportOptions(t: TFunction): string[] 
   return buildImportOptions(t, ENTERPRISE_TYPE_KEYS);
 }
 
-export function buildPartnerSettlementMethodImportOptions(t: TFunction): string[] {
-  return buildImportOptions(t, SETTLEMENT_KEYS);
-}
-
 export function buildPartnerDefaultPaymentMethodImportOptions(t: TFunction): string[] {
   return buildImportOptions(t, PAYMENT_METHOD_KEYS);
 }
 
 export function buildPartnerSettlementTermsImportOptions(t: TFunction): string[] {
   return buildImportOptions(t, SETTLEMENT_TERMS_KEYS);
+}
+
+/** @deprecated 旧模板单列「结算方式」 */
+export function buildPartnerSettlementMethodImportOptions(t: TFunction): string[] {
+  return buildImportOptions(t, LEGACY_SETTLEMENT_KEYS);
 }
 
 export function parsePartnerInvoiceTypeImport(raw?: string | null, t?: TFunction): string | undefined {
@@ -178,14 +175,6 @@ export function parsePartnerEnterpriseTypeImport(raw?: string | null, t?: TFunct
   return parseStaticImport(raw, t, ENTERPRISE_TYPE_KEYS);
 }
 
-export function parsePartnerSettlementMethodImport(raw?: string | null, t?: TFunction): string | undefined {
-  if (!t) {
-    const v = String(raw ?? '').trim();
-    return v || undefined;
-  }
-  return parseStaticImport(raw, t, SETTLEMENT_KEYS);
-}
-
 export function parsePartnerDefaultPaymentMethodImport(raw?: string | null, t?: TFunction): string | undefined {
   if (!t) {
     const v = String(raw ?? '').trim();
@@ -205,6 +194,31 @@ export function parsePartnerSettlementTermsImport(raw?: string | null, t?: TFunc
   return parseStaticImport(raw, t, SETTLEMENT_TERMS_KEYS);
 }
 
+/** 旧导入列：解析为 { defaultPaymentMethodCode?, settlementTermsCode? } */
+export function splitLegacyPartnerSettlementMethodImport(
+  raw?: string | null,
+  t?: TFunction,
+): { defaultPaymentMethodCode?: string; settlementTermsCode?: string } {
+  const code = parsePartnerSettlementMethodImport(raw, t);
+  if (!code) return {};
+  if (code in SETTLEMENT_TERMS_KEYS) {
+    return { settlementTermsCode: code };
+  }
+  if (code in PAYMENT_METHOD_KEYS) {
+    return { defaultPaymentMethodCode: code };
+  }
+  return {};
+}
+
+/** @deprecated 旧单列解析，优先匹配付款方式再匹配结算条款 */
+export function parsePartnerSettlementMethodImport(raw?: string | null, t?: TFunction): string | undefined {
+  if (!t) {
+    const v = String(raw ?? '').trim();
+    return v || undefined;
+  }
+  return parseStaticImport(raw, t, LEGACY_SETTLEMENT_KEYS);
+}
+
 export function partnerInvoiceTypeLabel(t: TFunction, code?: string | null): string {
   return mapLabel(t, INVOICE_TYPE_KEYS, code);
 }
@@ -217,8 +231,86 @@ export function partnerEnterpriseTypeLabel(t: TFunction, code?: string | null): 
   return mapLabel(t, ENTERPRISE_TYPE_KEYS, code);
 }
 
+/** 苍穹客户 type：伙伴类型 1–5（与 enterpriseTypeCode「企业类型」不同） */
+const CUSTOMER_PARTNER_TYPE_KEYS: Record<string, string> = {
+  '1': 'field.customer.partnerType.legalEntity',
+  '2': 'field.customer.partnerType.nonLegalEntity',
+  '3': 'field.customer.partnerType.nonEnterprise',
+  '4': 'field.customer.partnerType.individual',
+  '5': 'field.customer.partnerType.soleTrader',
+};
+
+/** 苍穹客户 bizfunction：业务职能 1–4 */
+const CUSTOMER_BIZ_FUNCTION_KEYS: Record<string, string> = {
+  '1': 'field.customer.bizFunction.sales',
+  '2': 'field.customer.bizFunction.settlement',
+  '3': 'field.customer.bizFunction.payment',
+  '4': 'field.customer.bizFunction.receiving',
+};
+
+export function customerPartnerTypeLabel(t: TFunction, code?: string | null): string {
+  if (code == null || String(code).trim() === '') return '—';
+  return mapLabel(t, CUSTOMER_PARTNER_TYPE_KEYS, String(code).trim());
+}
+
+/** bizfunction 可能为单码或组合串（如 12、1234）；按出现的 1–4 数字展示标签 */
+export function customerBizFunctionLabel(t: TFunction, raw?: string | null): string {
+  if (raw == null || String(raw).trim() === '') return '—';
+  const text = String(raw).trim();
+  const seen = new Set<string>();
+  const labels: string[] = [];
+  for (const ch of text) {
+    if (!CUSTOMER_BIZ_FUNCTION_KEYS[ch] || seen.has(ch)) continue;
+    seen.add(ch);
+    labels.push(mapLabel(t, CUSTOMER_BIZ_FUNCTION_KEYS, ch));
+  }
+  if (labels.length > 0) return labels.join('、');
+  return text;
+}
+
+export function partnerDefaultPaymentMethodLabel(t: TFunction, code?: string | null): string {
+  return mapLabel(t, PAYMENT_METHOD_KEYS, code);
+}
+
+/** 单据头付款方式下拉（与客商默认付款方式同码表） */
+export function partnerPaymentMethodSelectOptions(
+  t: TFunction,
+): Array<{ label: string; value: string }> {
+  return Object.keys(PAYMENT_METHOD_KEYS).map((value) => ({
+    value,
+    label: mapLabel(t, PAYMENT_METHOD_KEYS, value),
+  }));
+}
+
+/** 单据头结算方式下拉（与客商结算方式同码表；不含历史 monthly 等） */
+export function partnerSettlementTermsSelectOptions(
+  t: TFunction,
+): Array<{ label: string; value: string }> {
+  const current = [
+    'prepaid',
+    'pay_before_ship',
+    'spot',
+    'cod',
+    'net_terms',
+    'installment',
+    'progress',
+    'pay_on_invoice',
+  ];
+  return current.map((value) => ({
+    value,
+    label: mapLabel(t, SETTLEMENT_TERMS_KEYS, value),
+  }));
+}
+
+export function partnerSettlementTermsLabel(t: TFunction, code?: string | null): string {
+  return mapLabel(t, SETTLEMENT_TERMS_KEYS, code);
+}
+
+/** @deprecated 使用 partnerDefaultPaymentMethodLabel / partnerSettlementTermsLabel */
 export function partnerSettlementMethodLabel(t: TFunction, code?: string | null): string {
-  return mapLabel(t, SETTLEMENT_KEYS, code);
+  if (code == null || code === '') return '—';
+  if (code in SETTLEMENT_TERMS_KEYS) return partnerSettlementTermsLabel(t, code);
+  return partnerDefaultPaymentMethodLabel(t, code);
 }
 
 /** 客户主数据 — 应收确认覆盖（空=跟随组织） */
@@ -227,6 +319,13 @@ export function partnerRevenueRecognitionOverrideLabel(t: TFunction, code?: stri
   if (code === 'on_shipment') return t('pages.system.configCenter.param.finance_revenue_recognition_opt_on_shipment');
   if (code === 'on_invoice') return t('pages.system.configCenter.param.finance_revenue_recognition_opt_on_invoice');
   if (code === 'manual') return t('pages.system.configCenter.param.finance_revenue_recognition_opt_manual');
+  if (code === 'on_partner_statement') {
+    return t('pages.system.configCenter.param.finance_revenue_recognition_opt_on_partner_statement');
+  }
+  if (code === 'on_milestone') {
+    return t('pages.system.configCenter.param.finance_revenue_recognition_opt_on_milestone');
+  }
+  if (code === 'mixed') return t('pages.system.configCenter.param.finance_revenue_recognition_opt_mixed');
   return code;
 }
 
@@ -238,5 +337,8 @@ export function partnerPayableRecognitionOverrideLabel(t: TFunction, code?: stri
     return t('pages.system.configCenter.param.finance_payable_recognition_opt_on_purchase_invoice');
   }
   if (code === 'manual') return t('pages.system.configCenter.param.finance_payable_recognition_opt_manual');
+  if (code === 'on_partner_statement') {
+    return t('pages.system.configCenter.param.finance_payable_recognition_opt_on_partner_statement');
+  }
   return code;
 }

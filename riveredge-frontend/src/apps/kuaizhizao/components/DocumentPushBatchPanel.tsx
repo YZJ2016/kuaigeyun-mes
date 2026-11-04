@@ -109,6 +109,62 @@ function defaultPreferSaveApi(items: API[]): string | undefined {
 
 const EMPTY_STRING_ARRAY: string[] = [];
 
+function createBindingRowKey(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `bind-row-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+}
+
+function triggerActionsForBindingSlot(slot: string): string[] {
+  const key = String(slot || '').trim();
+  if (key === 'confirm') return ['confirm'];
+  if (key === 'update') return ['update'];
+  if (key === 'delete') return ['delete'];
+  if (key === 'withdraw' || key === 'unsubmit') return ['withdraw'];
+  return [];
+}
+
+function expandBindingTargetsToRowDrafts(targets: DocumentPushTargetBinding[]): Array<{
+  rowKey: string;
+  profile: string;
+  apiSlot: string;
+  target: DocumentPushTargetBinding;
+}> {
+  const out: Array<{
+    rowKey: string;
+    profile: string;
+    apiSlot: string;
+    target: DocumentPushTargetBinding;
+  }> = [];
+  for (const target of targets) {
+    const profile = String(target.target_profile || '').trim();
+    if (!profile) continue;
+    const actionApis = target.action_apis;
+    if (actionApis && Object.keys(actionApis).length > 0) {
+      for (const [slot, uuid] of Object.entries(actionApis)) {
+        const apiSlot = String(slot || '').trim();
+        const apiUuid = String(uuid || '').trim();
+        if (!apiSlot || !apiUuid) continue;
+        out.push({
+          rowKey: createBindingRowKey(),
+          profile,
+          apiSlot,
+          target: { ...target, save_api_uuid: apiUuid },
+        });
+      }
+    } else if (target.save_api_uuid) {
+      out.push({
+        rowKey: createBindingRowKey(),
+        profile,
+        apiSlot: 'confirm',
+        target,
+      });
+    }
+  }
+  return out;
+}
+
 export function DocumentPushBatchPanel<T extends { id: number }>({
   open,
   onClose,
@@ -140,6 +196,34 @@ export function DocumentPushBatchPanel<T extends { id: number }>({
   // （embedded Hub 在 push Tab 未激活时由上层不挂载本组件）
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const resolvedBindActionOptions = useMemo(
+    () =>
+      bindActionOptions?.length
+        ? bindActionOptions
+        : [
+            { label: t('permission.action.submit'), value: 'submit' },
+            { label: t('permission.action.approve'), value: 'approve' },
+          ],
+    [bindActionOptions, t],
+  );
+  /** 自动推送默认勾选全部绑定按钮（如确认入库），避免空 trigger_actions 导致无感外推永不触发 */
+  const defaultAutoBindActions = useMemo(
+    () => resolvedBindActionOptions.map((option) => String(option.value)).filter(Boolean),
+    [resolvedBindActionOptions],
+  );
+  const resolvedApiBindingSlotOptions = useMemo(
+    () =>
+      apiBindingSlotOptions?.length
+        ? apiBindingSlotOptions
+        : [
+            { label: t('app.kuaizhizao.documentPush.batch.actionApi.confirm'), value: 'confirm' },
+            { label: t('app.kuaizhizao.documentPush.batch.actionApi.update'), value: 'update' },
+            { label: t('app.kuaizhizao.documentPush.batch.actionApi.withdraw'), value: 'withdraw' },
+            { label: t('app.kuaizhizao.documentPush.batch.actionApi.unsubmit'), value: 'unsubmit' },
+            { label: t('app.kuaizhizao.documentPush.batch.actionApi.delete'), value: 'delete' },
+          ],
+    [apiBindingSlotOptions, t],
+  );
   const [connectors, setConnectors] = useState<ApplicationConnection[]>([]);
   const [connectionCode, setConnectionCode] = useState<string | undefined>();
   const [saveApis, setSaveApis] = useState<API[]>([]);

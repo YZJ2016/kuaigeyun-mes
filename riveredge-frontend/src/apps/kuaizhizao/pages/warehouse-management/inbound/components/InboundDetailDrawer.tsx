@@ -27,6 +27,7 @@ import {
   buildDocumentLineAttachmentsDrawerColumn,
   DOCUMENT_LINE_ATTACHMENT_UPLOAD_CATEGORY,
 } from '../../../../components/documentLineAttachmentsColumns';
+import { partnerDefaultPaymentMethodLabel } from '../../../../../master-data/utils/partner-static-labels';
 import { payableLedgerRecognitionLabel } from '../../../../../../utils/documentLedgerRecognition';
 import { getInboundLifecycle } from '../../../../utils/inboundLifecycle';
 import { renderInboundReceiptTypeMarkerTag } from '../../shared/warehouseMarkerTags';
@@ -213,6 +214,105 @@ export const InboundDetailDrawer: React.FC<InboundDetailDrawerProps> = ({
           dataIndex: 'operator_name',
           render: (_, record) => resolveInboundHubOperator(record) || '-',
         },
+        ...(effective.receipt_type === 'purchase'
+          ? [
+              {
+                title: t('app.kuaizhizao.purchaseReceipt.field.orderType'),
+                key: 'purchase_receipt_order_type',
+                render: (_: unknown, record: InboundDetailRecord) => {
+                  const raw = String(
+                    (record as { order_type?: string }).order_type ?? '标准采购',
+                  ).trim();
+                  if (raw === '资产采购') {
+                    return t('app.kuaizhizao.purchaseReceipt.orderTypeAsset');
+                  }
+                  return t('app.kuaizhizao.purchaseReceipt.orderTypeStandard');
+                },
+              },
+              {
+                title: t('field.document.ledgerRecognition'),
+                key: 'payable_recognition',
+                render: (_: unknown, record: InboundDetailRecord) =>
+                  payableLedgerRecognitionLabel(
+                    t,
+                    (record as { payable_recognition?: string; payableRecognition?: string })
+                      .payable_recognition ??
+                      (record as { payableRecognition?: string }).payableRecognition,
+                  ),
+              },
+              {
+                title: t('app.kuaizhizao.purchaseOrder.col.exclAmount'),
+                key: 'purchase_receipt_excl',
+                render: (_: unknown, record: InboundDetailRecord) =>
+                  formatCurrencyAmount(
+                    (record as { total_amount?: number }).total_amount ?? 0,
+                  ),
+              },
+              {
+                title: t('app.kuaizhizao.purchaseOrder.col.inclTotal'),
+                key: 'purchase_receipt_incl',
+                render: (_: unknown, record: InboundDetailRecord) =>
+                  formatCurrencyAmount(
+                    (record as { net_amount?: number; total_amount?: number }).net_amount ??
+                      (record as { total_amount?: number }).total_amount ??
+                      0,
+                  ),
+              },
+            ]
+          : []),
+        ...(effective.receipt_type === 'purchase' && effective.buyer_name
+          ? [
+              {
+                title: t('app.kuaizhizao.warehouseInbound.field.buyer'),
+                dataIndex: 'buyer_name' as const,
+              },
+            ]
+          : []),
+        ...(effective.receipt_type === 'purchase' && effective.receiver_name
+          ? [
+              {
+                title: t('app.kuaizhizao.warehouseInbound.field.acceptor'),
+                dataIndex: 'receiver_name' as const,
+              },
+            ]
+          : []),
+        ...(effective.receipt_type === 'purchase' && effective.pay_mode
+          ? [
+              {
+                title: t('app.kuaizhizao.warehouseInbound.field.payMode'),
+                dataIndex: 'pay_mode' as const,
+                render: (_: unknown, record: InboundDetailRecord) => {
+                  const raw = String(record.pay_mode || '').trim();
+                  if (!raw) return '-';
+                  const upper = raw.toUpperCase();
+                  // 历史金蝶值：仅展示，新建已改为客商付款方式码
+                  if (upper === 'CREDIT') return t('app.kuaizhizao.warehouseInbound.payMode.credit');
+                  if (upper === 'CASH') {
+                    return partnerDefaultPaymentMethodLabel(t, 'cash');
+                  }
+                  return partnerDefaultPaymentMethodLabel(t, raw);
+                },
+              },
+            ]
+          : []),
+        ...(effective.receipt_type === 'purchase' && effective.tax_rate != null
+          ? [
+              {
+                title: t('app.kuaizhizao.warehouseInbound.field.taxRate'),
+                dataIndex: 'tax_rate' as const,
+                render: (_: unknown, record: InboundDetailRecord) =>
+                  record.tax_rate != null ? `${record.tax_rate}%` : '-',
+              },
+            ]
+          : []),
+        ...(effective.receipt_type === 'purchase' && effective.currency
+          ? [
+              {
+                title: t('app.kuaizhizao.warehouseInbound.field.currency'),
+                dataIndex: 'currency' as const,
+              },
+            ]
+          : []),
         ...(effective.notes
           ? [
               {
@@ -223,7 +323,23 @@ export const InboundDetailDrawer: React.FC<InboundDetailDrawerProps> = ({
             ]
           : []),
       ] as ProDescriptionsItemProps<InboundDetailRecord>[]),
-    [effective.customer_name, effective.notes, effective.outsource_work_order_code, effective.picking_code, effective.purchase_order_code, effective.receipt_type, effective.supplier_name, effective.work_order_code, effective.workshop_name, t],
+    [
+      effective.buyer_name,
+      effective.currency,
+      effective.customer_name,
+      effective.notes,
+      effective.outsource_work_order_code,
+      effective.pay_mode,
+      effective.picking_code,
+      effective.purchase_order_code,
+      effective.receipt_type,
+      effective.receiver_name,
+      effective.supplier_name,
+      effective.tax_rate,
+      effective.work_order_code,
+      effective.workshop_name,
+      t,
+    ],
   );
 
   const defaultLinesTitle =
