@@ -40,6 +40,7 @@ riveredge-frontend/static/cad-workers/
 riveredge-frontend/.vite/
 *.log
 .logs/
+.tmp/
 .playwright-browsers/
 .caddy-data/
 .caddy-config/
