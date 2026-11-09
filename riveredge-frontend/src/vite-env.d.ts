@@ -5,6 +5,11 @@ declare module '*.svg' {
   export default src;
 }
 
+declare module '*.png' {
+  const src: string;
+  export default src;
+}
+
 declare const __BUILD_TIME__: string;
 declare const __MODE__: string;
 declare const __IS_MONOLITHIC__: boolean;

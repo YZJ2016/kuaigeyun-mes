@@ -17,7 +17,7 @@ export interface BusinessBoardVisitMetrics {
 
 export interface BusinessBoardTitlePayload {
   title: string | null;
-  /** 中间配图文件 UUID，空表示使用系统默认 /img/dashboard.png */
+  /** 中间配图文件 UUID，空表示使用系统默认打包贴图 */
   hero_image_uuid: string | null;
   visit_mode: boolean;
   visit_metrics: BusinessBoardVisitMetrics;

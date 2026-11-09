@@ -1,4 +1,14 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'react';
+import React, {
+  Component,
+  useState,
+  useEffect,
+  useRef,
+  useMemo,
+  useCallback,
+  Suspense,
+  type ErrorInfo,
+  type ReactNode,
+} from 'react';
 import { Typography, Button, Modal, Input, InputNumber, Switch, Tooltip, Progress, theme, message, Empty, Radio, Upload } from 'antd';
 import type { UploadProps } from 'antd';
 import { Canvas, useFrame } from '@react-three/fiber';
@@ -52,11 +62,13 @@ import {
   type ActiveWorkOrderItem,
 } from '../../../../services/dashboard';
 import { formatDateTime, formatQuantity } from '../../../../utils/format';
+/** 打包进 assets，避免依赖线上 /img/dashboard.png（现网曾出现 0 字节空文件导致整应用崩溃） */
+import defaultHeroTextureUrl from '../../../../assets/board/dashboard.png';
 
 const { Title } = Typography;
 
 /** 中心 HUD 默认配图（未上传自定义图时使用） */
-const DEFAULT_HERO_TEXTURE = '/img/dashboard.png';
+const DEFAULT_HERO_TEXTURE = defaultHeroTextureUrl;
 
 const BusinessBoardHudContext = React.createContext<BusinessBoardHud>(businessBoardVividHud);
 
@@ -421,14 +433,53 @@ const TechBadge: React.FC<TechBadgeProps & { delay?: number }> = ({
   );
 };
 
+/** 贴图加载失败时仅保留点阵，避免抛到 AppErrorBoundary 拖垮整应用 */
+const HudPowerCoreFallback: React.FC = () => {
+  const pointsRef = useRef<THREE.Points>(null);
+  useFrame((state) => {
+    if (pointsRef.current) {
+      pointsRef.current.rotation.y = state.clock.getElapsedTime() * 0.15;
+    }
+  });
+  return (
+    <points ref={pointsRef}>
+      <sphereGeometry args={[2.2, 64, 64]} />
+      <pointsMaterial size={0.02} color={getBoardHud().cyan} transparent opacity={0.2} />
+    </points>
+  );
+};
+
+type HudTextureErrorBoundaryProps = { children: ReactNode; fallback: ReactNode };
+type HudTextureErrorBoundaryState = { hasError: boolean };
+
+class HudTextureErrorBoundary extends Component<
+  HudTextureErrorBoundaryProps,
+  HudTextureErrorBoundaryState
+> {
+  state: HudTextureErrorBoundaryState = { hasError: false };
+
+  static getDerivedStateFromError(): HudTextureErrorBoundaryState {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error('HudTextureErrorBoundary: center texture failed', error, info.componentStack);
+  }
+
+  render() {
+    if (this.state.hasError) return this.props.fallback;
+    return this.props.children;
+  }
+}
+
 /** ===== 3D 模型：高精细复合动力堆 (High-Detail Power Core) ===== */
 const HudPowerCore: React.FC<{ textureUrl: string }> = ({ textureUrl }) => {
   const meshRef = useRef<THREE.Group>(null);
   const pointsRef = useRef<THREE.Points>(null);
-  
+
   // 1. 加载高清静态大图资源（支持租户自定义 URL）
   const texture = useTexture(textureUrl);
-  
+
   // 2. 优化图片纹理质量 (静默处理)
   useEffect(() => {
     if (texture) {
@@ -455,13 +506,13 @@ const HudPowerCore: React.FC<{ textureUrl: string }> = ({ textureUrl }) => {
       <Billboard position={[0, 0, 0]}>
         <mesh>
           <planeGeometry args={[4.2, 3.6]} />
-          <meshBasicMaterial 
-            map={texture} 
-            transparent 
+          <meshBasicMaterial
+            map={texture}
+            transparent
             depthTest={true}
             depthWrite={false}
             toneMapped={false}
-            side={THREE.DoubleSide} 
+            side={THREE.DoubleSide}
           />
         </mesh>
       </Billboard>
@@ -470,7 +521,7 @@ const HudPowerCore: React.FC<{ textureUrl: string }> = ({ textureUrl }) => {
 };
 
 interface HudHeroProps {
-  /** 中心 Billboard 贴图（默认 /img/dashboard.png 或文件预览 URL） */
+  /** 中心 Billboard 贴图（默认打包贴图或文件预览 URL） */
   centerTextureUrl: string;
   todayOutput: number;
   qualifiedRate: number;
@@ -529,7 +580,12 @@ const HudHero: React.FC<HudHeroProps> = ({
         <pointLight position={[10, 10, 10]} intensity={1.5} color={getBoardHud().cyan} />
         <pointLight position={[-10, -10, -10]} intensity={1} color={getBoardHud().platformBlue} />
         <Suspense fallback={null}>
-          <HudPowerCore key={centerTextureUrl} textureUrl={centerTextureUrl} />
+          <HudTextureErrorBoundary
+            key={centerTextureUrl}
+            fallback={<HudPowerCoreFallback />}
+          >
+            <HudPowerCore textureUrl={centerTextureUrl} />
+          </HudTextureErrorBoundary>
         </Suspense>
       </Canvas>
       
