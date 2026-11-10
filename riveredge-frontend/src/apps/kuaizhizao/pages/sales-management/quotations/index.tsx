@@ -176,6 +176,12 @@ import {
   KUAIZHIZAO_DOC_HOST,
   loadMaterialFormReferenceList,
 } from '../../../../../utils/documentFormReferenceLoad';
+import {
+  collectImportMaterialCodes,
+  findMaterialByImportCode,
+  normalizeImportMaterialCode,
+  resolveMaterialsByCodesForImport,
+} from '../../../../master-data/utils/materialImportResolve';
 import { CustomerFollowUpFormModal, type CustomerFollowUpPreset } from '../../../components/CustomerFollowUpFormModal';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import {
@@ -1693,19 +1699,17 @@ const QuotationsPage: React.FC = () => {
 
   const handleItemImport = async (data: any[][]) => {
     const priceTypeForm = salesFormPriceType(formRef.current?.getFieldValue('price_type'));
-    // 明细 Excel 按编码匹配：仅在导入时按需拉引用清单，不在进页预拉
-    let materialsForImport = materialListRef.current;
-    if (materialsForImport.length < 50) {
-      const rows = await loadMaterialFormReferenceList(KUAIZHIZAO_DOC_HOST.quotation);
-      if (rows.length) {
-        mergeMaterialsCache(rows);
-        materialsForImport = rows;
-      }
-    }
     const rows = data.slice(2);
+    const loaded = await loadMaterialFormReferenceList(KUAIZHIZAO_DOC_HOST.quotation);
+    if (loaded.length) mergeMaterialsCache(loaded);
+    const materialsForImport = await resolveMaterialsByCodesForImport(
+      collectImportMaterialCodes(rows, 0),
+      loaded.length ? loaded : materialListRef.current,
+    );
+    if (materialsForImport.length) mergeMaterialsCache(materialsForImport);
     const newItems = rows
       .map((row) => {
-        const materialCode = String(row[0] || '').trim();
+        const materialCode = normalizeImportMaterialCode(row[0]);
         const spec = String(row[1] || '').trim();
         const unitRaw = String(row[2] || '').trim();
         const unit = materialUnitImport.parse(unitRaw) || unitRaw;
@@ -1715,7 +1719,7 @@ const QuotationsPage: React.FC = () => {
 
         if (!materialCode) return null;
 
-        const material = materialsForImport.find((m: any) => (m.main_code ?? m.mainCode ?? m.code) === materialCode);
+        const material = findMaterialByImportCode(materialsForImport, materialCode);
         const taxR = material ? getMaterialDefaultTaxRate(material) : 0;
         let unitPrice = price || Number(material?.defaults?.defaultSalePrice ?? material?.default_sale_price) || 0;
         if (priceTypeForm === 'tax_inclusive' && unitPrice > 0) {
@@ -1936,6 +1940,14 @@ const QuotationsPage: React.FC = () => {
       return;
     }
 
+    const loaded = await loadMaterialFormReferenceList(KUAIZHIZAO_DOC_HOST.quotation);
+    if (loaded.length) mergeMaterialsCache(loaded);
+    const materialsForListImport = await resolveMaterialsByCodesForImport(
+      collectImportMaterialCodes(rows, idx.material),
+      loaded.length ? loaded : materialListRef.current,
+    );
+    if (materialsForListImport.length) mergeMaterialsCache(materialsForListImport);
+
     const errors: Array<{ row: number; message: string }> = [];
     const groupMap = new Map<
       string,
@@ -1961,7 +1973,7 @@ const QuotationsPage: React.FC = () => {
       const rowNum = i + 3;
       const customerName = cell(row, idx.customer);
       const dateVal = cell(row, idx.date);
-      const materialCode = cell(row, idx.material);
+      const materialCode = normalizeImportMaterialCode(cell(row, idx.material));
       const qtyVal = row[idx.qty];
       const qty = Number(qtyVal);
       if (!customerName) {
@@ -1981,7 +1993,7 @@ const QuotationsPage: React.FC = () => {
         return;
       }
 
-      const mat = materialList.find((m: any) => (m.mainCode || m.code || '').toUpperCase() === materialCode.toUpperCase());
+      const mat = findMaterialByImportCode(materialsForListImport, materialCode);
       if (!mat) {
         errors.push({ row: rowNum, message: t('app.kuaizhizao.quotation.validation.materialNotFound', { code: materialCode }) });
         return;

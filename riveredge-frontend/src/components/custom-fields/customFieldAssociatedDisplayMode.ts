@@ -83,3 +83,19 @@ export function getAssociatedDisplayModeDefault(
 ): AssociatedDisplayMode {
   return getAssociatedDisplayModeOptions(fieldType, hasSourceField)[0];
 }
+
+/**
+ * 关联对象「只读展示 / 非持久化派生字段」：
+ * 有源字段 + displayMode=display → 表单实时 XLOOKUP；不提取、不落库、详情/列表不展示。
+ * （与后端 is_associated_object_non_persisted 对齐；须同时具备 sourceField，避免无源时误判）
+ */
+export function isAssociatedObjectDisplayOnly(field: {
+  field_type?: string;
+  config?: Record<string, unknown> | null;
+}): boolean {
+  if (field.field_type !== 'associated_object') return false;
+  const config = field.config || undefined;
+  const source = config?.sourceField;
+  if (source == null || String(source).trim() === '') return false;
+  return resolveAssociatedDisplayMode('associated_object', config) === 'display';
+}

@@ -413,20 +413,33 @@ class MaterialCodeService:
         Returns:
             Optional[Material]: 物料对象，如果不存在则返回None
         """
-        # 首先尝试通过主编码查询
+        raw = (code or "").strip()
+        if not raw:
+            return None
+
+        # 主编码精确匹配（大小写不敏感，避免导入表与库内大小写不一致漏匹配）
         material = await Material.filter(
             tenant_id=tenant_id,
-            main_code=code,
+            main_code__iexact=raw,
             deleted_at__isnull=True
         ).first()
         
+        if material:
+            return material
+
+        # 物料 code 精确匹配（属性 SKU 等 code≠main_code 场景）
+        material = await Material.filter(
+            tenant_id=tenant_id,
+            code__iexact=raw,
+            deleted_at__isnull=True
+        ).first()
         if material:
             return material
         
         # 如果未找到，尝试通过部门编码查询
         query = MaterialCodeAlias.filter(
             tenant_id=tenant_id,
-            code=code,
+            code__iexact=raw,
             deleted_at__isnull=True
         )
         

@@ -93,6 +93,10 @@ import { UniMaterialSelect } from '../../../../../components/uni-material-select
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import type { Material } from '../../../../master-data/types/material';
+import {
+  collectImportMaterialCodes,
+  resolveMaterialsByCodesForImport,
+} from '../../../../master-data/utils/materialImportResolve';
 import { getMaterialDefaultPurchasePrice } from '../../../../master-data/utils/resolve-partner-material-price';
 import { SimpleSparkline } from '../../../../../components';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
@@ -1110,7 +1114,17 @@ const PurchaseReturnsPage: React.FC = () => {
         loadMaterialFormReferenceList(KUAIZHIZAO_DOC_HOST.purchaseReturn),
         masterWarehouseApi.list({ limit: 1000, is_active: true }),
       ]);
-      const materials = materialsRes ?? [];
+      const { resolveFactoryImportHeaderIndexMap } = await import(
+        '../../../../../utils/spreadsheetImportTemplate'
+      );
+      const headers = (data[0] || []).map((h: unknown) => String(h || '').trim());
+      const matColIdx =
+        resolveFactoryImportHeaderIndexMap(headers, purchaseReturnListImportTemplate.importHeaderMap)
+          .material ?? -1;
+      const materials = await resolveMaterialsByCodesForImport(
+        collectImportMaterialCodes(rows, matColIdx),
+        materialsRes ?? [],
+      );
       const warehouses = (warehousesRes as any)?.items ?? (Array.isArray(warehousesRes) ? warehousesRes : []);
 
       const { errors, items: toImport } = parseDocumentReturnListImport(data, {

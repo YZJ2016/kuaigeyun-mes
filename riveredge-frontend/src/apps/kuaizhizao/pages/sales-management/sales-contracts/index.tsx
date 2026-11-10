@@ -191,6 +191,12 @@ import {
 } from '../../../../../components/document-tracking-panel';
 
 import type { Material } from '../../../../master-data/types/material';
+import {
+  collectImportMaterialCodes,
+  findMaterialByImportCode,
+  normalizeImportMaterialCode,
+  resolveMaterialsByCodesForImport,
+} from '../../../../master-data/utils/materialImportResolve';
 
 import {
   KUAIZHIZAO_DOC_HOST,
@@ -762,19 +768,17 @@ const SalesContractsPage: React.FC = () => {
   const handleItemImport = useCallback(
     async (data: any[][]) => {
       const priceTypeForm = salesFormPriceType(formRef.current?.getFieldValue('price_type'));
-      // 明细 Excel 按编码匹配：仅在导入时按需拉引用清单，不在进页预拉
-      let materialsForImport = materialListRef.current;
-      if (materialsForImport.length < 50) {
-        const loaded = await loadMaterialFormReferenceList(KUAIZHIZAO_DOC_HOST.salesContract);
-        if (loaded.length) {
-          mergeMaterialsCache(loaded);
-          materialsForImport = loaded;
-        }
-      }
       const rows = data.slice(2);
+      const loaded = await loadMaterialFormReferenceList(KUAIZHIZAO_DOC_HOST.salesContract);
+      if (loaded.length) mergeMaterialsCache(loaded);
+      const materialsForImport = await resolveMaterialsByCodesForImport(
+        collectImportMaterialCodes(rows, 0),
+        loaded.length ? loaded : materialListRef.current,
+      );
+      if (materialsForImport.length) mergeMaterialsCache(materialsForImport);
       const newItems = rows
         .map((row) => {
-          const materialCode = String(row[0] || '').trim();
+          const materialCode = normalizeImportMaterialCode(row[0]);
           const spec = String(row[1] || '').trim();
           const unit = String(row[2] || '').trim();
           const quantity = parseFloat(row[3]) || 0;
@@ -784,9 +788,7 @@ const SalesContractsPage: React.FC = () => {
 
           if (!materialCode) return null;
 
-          const material = materialsForImport.find(
-            (m) => (m.mainCode ?? (m as any).code) === materialCode,
-          );
+          const material = findMaterialByImportCode(materialsForImport, materialCode);
           const taxR =
             Number((material as any)?.defaults?.defaultTaxRate ?? (material as any)?.defaults?.default_tax_rate) || 0;
           let unitPrice =
@@ -840,14 +842,20 @@ const SalesContractsPage: React.FC = () => {
       return;
     }
 
-    let materialsForImport = materialListRef.current;
-    if (materialsForImport.length < 50) {
-      const loaded = await loadMaterialFormReferenceList(KUAIZHIZAO_DOC_HOST.salesContract);
-      if (loaded.length) {
-        mergeMaterialsCache(loaded);
-        materialsForImport = loaded;
-      }
-    }
+    const { resolveFactoryImportHeaderIndexMap } = await import(
+      '../../../../../utils/spreadsheetImportTemplate'
+    );
+    const headers = (data[0] || []).map((h: unknown) => String(h || '').trim());
+    const matColIdx =
+      resolveFactoryImportHeaderIndexMap(headers, contractListImportTemplate.importHeaderMap)
+        .material ?? -1;
+    const loaded = await loadMaterialFormReferenceList(KUAIZHIZAO_DOC_HOST.salesContract);
+    if (loaded.length) mergeMaterialsCache(loaded);
+    const materialsForImport = await resolveMaterialsByCodesForImport(
+      collectImportMaterialCodes(rows, matColIdx),
+      loaded.length ? loaded : materialListRef.current,
+    );
+    if (materialsForImport.length) mergeMaterialsCache(materialsForImport);
 
     const { errors, items: toImport } = parseContractListImport(data, {
       t,

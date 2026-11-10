@@ -1,12 +1,14 @@
 /**
  * 表格单元格 → 纯文本。
- * 字符串原样保留；数值仅在无字符串原文时用 toString（禁止 toPrecision / 格式化 w）。
+ * 字符串默认原样保留（含编码/名称中的逗号）；仅千分位数字去逗号。
  */
+
+import { spreadsheetNumericCompareText, spreadsheetPlainCellText } from './spreadsheetPreserveText';
 
 export function spreadsheetNumberToPlainString(value: unknown): string {
   if (value === null || value === undefined) return '';
   if (typeof value === 'string') {
-    return value.trim().replace(/,/g, '');
+    return spreadsheetPlainCellText(value);
   }
   if (typeof value === 'number') {
     if (!Number.isFinite(value)) return '';
@@ -19,7 +21,7 @@ export function spreadsheetNumberToPlainString(value: unknown): string {
   if (typeof value === 'bigint') {
     return value.toString();
   }
-  return String(value).trim().replace(/,/g, '');
+  return spreadsheetPlainCellText(value);
 }
 
 /** 解析 Univer / xlsx 单元格对象：字符串 v 优先于数值 */
@@ -27,15 +29,15 @@ export function spreadsheetCellToPlainString(cell: unknown): string {
   if (cell === null || cell === undefined) return '';
   if (typeof cell === 'object') {
     const obj = cell as { v?: unknown; m?: unknown; value?: unknown; t?: unknown };
-    // FORCE_STRING / 文本：v 为字符串时原样返回，禁止再 Number()
+    // FORCE_STRING / 文本：v 为字符串时原样保全，禁止再 Number()
     if (typeof obj.v === 'string') {
-      return obj.v.trim().replace(/,/g, '');
+      return spreadsheetPlainCellText(obj.v);
     }
     if (obj.v !== undefined && obj.v !== null && obj.v !== '') {
       return spreadsheetNumberToPlainString(obj.v);
     }
     if (typeof obj.m === 'string' && obj.m.trim() !== '') {
-      return obj.m.trim().replace(/,/g, '');
+      return spreadsheetPlainCellText(obj.m);
     }
     if (obj.value !== undefined && obj.value !== null && obj.value !== '') {
       return spreadsheetNumberToPlainString(obj.value);
@@ -58,7 +60,7 @@ export function xlsxCellToPlainString(cell: { t?: string; v?: unknown; w?: strin
     return spreadsheetNumberToPlainString(cell.v);
   }
   if (cell.w != null && String(cell.w).trim() !== '') {
-    return String(cell.w).trim().replace(/,/g, '');
+    return spreadsheetPlainCellText(cell.w);
   }
   return '';
 }
@@ -69,7 +71,8 @@ export function resolveXlsxNumericPlainString(
   rawXmlValue?: string | null,
 ): string {
   if (rawXmlValue != null && String(rawXmlValue).trim() !== '') {
-    return String(rawXmlValue).trim().replace(/,/g, '');
+    // 数值 XML 原文可能带千分位；编码列不应走到此分支
+    return spreadsheetNumericCompareText(rawXmlValue);
   }
   return xlsxCellToPlainString(cell);
 }

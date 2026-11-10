@@ -27,10 +27,13 @@ import { CustomFieldFormulaConfigEditor } from '../../../../components/custom-fi
 import { normalizeJsonFieldValue, canEditAsJsonTree } from '../../../../components/custom-fields/customFieldJsonUtils';
 import {
   buildSourceFieldKeyFromConfig,
+  encodeSourceFieldKey,
+  normalizeManualSourceFieldOption,
   parseSourceFieldKey,
+  resolveSourceMatchFieldDefault,
 } from '../../../../components/custom-fields/customFieldSourceFieldUtils';
 import {
-  buildSourceFieldSelectOptions,
+  buildLinkFieldSelectOptions,
   createSourceFieldSelectRenderers,
 } from '../../../../components/custom-fields/CustomFieldSourceFieldOption';
 import { AssociatedTableModelFieldSelect } from '../../../../components/custom-fields/AssociatedTableModelFieldSelect';
@@ -51,6 +54,7 @@ import {
   getCustomFieldPages,
   getCustomFieldsByTable,
   getSystemSourceFields,
+  getSystemLinkFields,
   CustomField,
   type CustomFieldSystemSourceField,
   CreateCustomFieldData,
@@ -110,6 +114,9 @@ const CustomFieldListPage: React.FC = () => {
   const [jsonEditorMode, setJsonEditorMode] = useState<CustomFieldJsonEditorMode>('kv');
   const [sameTableFields, setSameTableFields] = useState<CustomField[]>([]);
   const [systemSourceFields, setSystemSourceFields] = useState<CustomFieldSystemSourceField[]>([]);
+  const [systemLinkFields, setSystemLinkFields] = useState<CustomFieldSystemSourceField[]>([]);
+  /** 源字段下拉搜索词：用于追加「不在清单内」的外键/表单字段名 */
+  const [sourceFieldSearch, setSourceFieldSearch] = useState('');
   const editingFieldConfigRef = useRef<Record<string, unknown> | null>(null);
 
 
@@ -218,12 +225,16 @@ const CustomFieldListPage: React.FC = () => {
   useEffect(() => {
     if (!modalVisible) {
       setSameTableFields([]);
+      setSystemSourceFields([]);
+      setSystemLinkFields([]);
+      setSourceFieldSearch('');
       return;
     }
     const tableName = displayPageConfigs.find((page) => page.pageCode === selectedPageCode)?.tableName;
     if (!tableName) {
       setSameTableFields([]);
       setSystemSourceFields([]);
+      setSystemLinkFields([]);
       editingFieldConfigRef.current = null;
       return;
     }
@@ -233,6 +244,9 @@ const CustomFieldListPage: React.FC = () => {
     getSystemSourceFields(tableName)
       .then(setSystemSourceFields)
       .catch(() => setSystemSourceFields([]));
+    getSystemLinkFields(tableName)
+      .then(setSystemLinkFields)
+      .catch(() => setSystemLinkFields([]));
   }, [modalVisible, selectedPageCode, displayPageConfigs, currentFieldUuid]);
 
   /**
@@ -508,6 +522,17 @@ const CustomFieldListPage: React.FC = () => {
         ...fieldData
       } = values;
 
+      // 只读展示 = 非持久化派生字段：强制关闭必填/检索/排序（与后端 apply_non_persisted_field_flags 对齐）
+      const isNonPersistedDisplay =
+        fieldType === 'associated_object' &&
+        Boolean(source_field) &&
+        display_mode === 'display';
+      if (isNonPersistedDisplay) {
+        fieldData.is_required = false;
+        fieldData.is_searchable = false;
+        fieldData.is_sortable = false;
+      }
+
       if (isEdit && currentFieldUuid) {
         await updateCustomField(currentFieldUuid, {
           ...fieldData,
@@ -538,17 +563,62 @@ const CustomFieldListPage: React.FC = () => {
    */
   const sourceFieldOptions = useMemo(
     () =>
-      buildSourceFieldSelectOptions(
+      buildLinkFieldSelectOptions(
         systemSourceFields,
-        sameTableFields.filter((field) => field.field_type === 'text' || field.field_type === 'number'),
+        systemLinkFields,
+        sameTableFields.filter(
+          (field) =>
+            field.field_type === 'text' ||
+            field.field_type === 'number' ||
+            field.field_type === 'associated_object',
+        ),
       ),
-    [sameTableFields, systemSourceFields],
+    [sameTableFields, systemLinkFields, systemSourceFields],
   );
 
-  const sourceFieldSelectRenderers = useMemo(
-    () => createSourceFieldSelectRenderers(sourceFieldOptions),
-    [sourceFieldOptions],
+  const systemLinkFieldKeys = useMemo(
+    () => new Set(systemLinkFields.map((field) => encodeSourceFieldKey('system', field.name))),
+    [systemLinkFields],
   );
+
+  const systemScalarFieldKeys = useMemo(
+    () => new Set(systemSourceFields.map((field) => encodeSourceFieldKey('system', field.name))),
+    [systemSourceFields],
+  );
+
+  /** 清单外：搜索输入或已保存值，按系统表单字段名追加为可选外键/源字段 */
+  const sourceFieldSelectOptions = useMemo(() => {
+    const options = [...sourceFieldOptions];
+    const seen = new Set(options.map((item) => item.value));
+    const prefix = t('field.customField.sourceFieldCustomFkLabel');
+
+    const appendManual = (raw: string) => {
+      const option = normalizeManualSourceFieldOption(raw, prefix);
+      if (!option || seen.has(option.value)) return;
+      seen.add(option.value);
+      options.push(option);
+    };
+
+    const current = formRef.current?.getFieldValue('source_field');
+    if (typeof current === 'string') {
+      appendManual(current);
+    }
+    if (sourceFieldSearch.trim()) {
+      appendManual(sourceFieldSearch);
+    }
+    return options;
+  }, [sourceFieldOptions, sourceFieldSearch, t]);
+
+  const sourceFieldSelectRenderers = useMemo(
+    () => createSourceFieldSelectRenderers(sourceFieldSelectOptions),
+    [sourceFieldSelectOptions],
+  );
+
+  const matchFieldDefaultFor = (sourceKey?: string) =>
+    resolveSourceMatchFieldDefault(sourceKey, {
+      linkFieldKeys: systemLinkFieldKeys,
+      scalarFieldKeys: systemScalarFieldKeys,
+    });
 
   const renderDisplayModeSegmented = (
     fieldKind: 'associated_object' | 'associated_attribute',
@@ -564,6 +634,17 @@ const CustomFieldListPage: React.FC = () => {
             ? t('field.customField.displayModeAssociatedObjectExtra')
             : t('field.customField.displayModeAssociatedAttributeExtra')
         }
+        getValueFromEvent={(mode: AssociatedDisplayMode) => {
+          // 切到只读展示时立刻关掉无效门禁开关（提交与后端仍会再强制一次）
+          if (fieldKind === 'associated_object' && hasSourceField && mode === 'display') {
+            formRef.current?.setFieldsValue({
+              is_required: false,
+              is_searchable: false,
+              is_sortable: false,
+            });
+          }
+          return mode;
+        }}
       >
         <AssociatedDisplayModeSegmented fieldKind={fieldKind} hasSourceField={hasSourceField} />
       </ProFormItem>
@@ -780,16 +861,23 @@ const CustomFieldListPage: React.FC = () => {
               <SafeProFormSelect
                 name="source_field"
                 label={t('field.customField.sourceField')}
-                options={sourceFieldOptions}
+                options={sourceFieldSelectOptions}
                 placeholder={t('field.customField.sourceFieldPlaceholder')}
                 extra={t('field.customField.sourceFieldExtra')}
                 fieldProps={{
                   allowClear: true,
+                  showSearch: true,
+                  filterOption: false,
+                  onSearch: (value: string) => setSourceFieldSearch(value),
+                  onBlur: () => setSourceFieldSearch(''),
                   optionRender: sourceFieldSelectRenderers.optionRender,
                   labelRender: sourceFieldSelectRenderers.labelRender,
-                  onChange: () => {
+                  onChange: (value?: string) => {
+                    setSourceFieldSearch('');
                     formRef.current?.setFieldsValue({
-                      match_field: 'code',
+                      match_field: matchFieldDefaultFor(
+                        value != null ? String(value) : undefined,
+                      ),
                       return_field: 'id',
                     });
                   },
@@ -806,9 +894,12 @@ const CustomFieldListPage: React.FC = () => {
                 extra={t('field.customField.associatedTableExtra')}
                 fieldProps={{
                   onChange: () => {
+                    const sourceKey = formRef.current?.getFieldValue('source_field');
                     formRef.current?.setFieldsValue({
                       associated_field: undefined,
-                      match_field: 'code',
+                      match_field: matchFieldDefaultFor(
+                        sourceKey != null ? String(sourceKey) : undefined,
+                      ),
                       attribute_field: 'name',
                     });
                   },
@@ -941,7 +1032,7 @@ const CustomFieldListPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns = useMemo<ProColumns<CustomField>[]>(() => alignProColumns<CustomField>([
+  const columns = useMemo<ProColumns<CustomField>[]>(() => alignProColumns([
     {
       title: t('field.customField.name'),
       dataIndex: 'name',
@@ -1554,21 +1645,39 @@ const CustomFieldListPage: React.FC = () => {
               </div>
             </Col>
           </Row>
-          <ProFormSwitch
-            name="is_required"
-            label={t('field.customField.isRequired')}
-            colProps={{ span: 6 }}
-          />
-          <ProFormSwitch
-            name="is_searchable"
-            label={t('field.customField.isSearchable')}
-            colProps={{ span: 6 }}
-          />
-          <ProFormSwitch
-            name="is_sortable"
-            label={t('field.customField.isSortable')}
-            colProps={{ span: 6 }}
-          />
+          <ProFormDependency name={['field_type', 'display_mode', 'source_field']}>
+            {({ field_type: ft, display_mode: dm, source_field: sf }) => {
+              const nonPersisted =
+                ft === 'associated_object' && Boolean(sf) && dm === 'display';
+              return (
+                <>
+                  <ProFormSwitch
+                    name="is_required"
+                    label={t('field.customField.isRequired')}
+                    colProps={{ span: 6 }}
+                    disabled={nonPersisted}
+                    extra={
+                      nonPersisted
+                        ? t('field.customField.nonPersistedFlagsHint')
+                        : undefined
+                    }
+                  />
+                  <ProFormSwitch
+                    name="is_searchable"
+                    label={t('field.customField.isSearchable')}
+                    colProps={{ span: 6 }}
+                    disabled={nonPersisted}
+                  />
+                  <ProFormSwitch
+                    name="is_sortable"
+                    label={t('field.customField.isSortable')}
+                    colProps={{ span: 6 }}
+                    disabled={nonPersisted}
+                  />
+                </>
+              );
+            }}
+          </ProFormDependency>
           <ProFormSwitch
             name="is_active"
             label={t('common.enabled')}

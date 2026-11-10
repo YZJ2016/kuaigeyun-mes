@@ -6,7 +6,8 @@ import { DEFAULT_MATERIAL_BASE_UNIT } from '../../../../../master-data/constants
 import { materialApi } from '../../../../../master-data/services/material';
 import { customerApi } from '../../../../../master-data/services/supply-chain';
 import type { CustomerCreate } from '../../../../../master-data/types/supply-chain';
-import type { MaterialCreate } from '../../../../../master-data/types/material';
+import type { Material, MaterialCreate } from '../../../../../master-data/types/material';
+import { findMaterialByImportCode } from '../../../../../master-data/utils/materialImportResolve';
 import { generateCode } from '../../../../../../services/codeRule';
 import { getPageRuleCode, isAutoGenerateEnabled } from '../../../../../../utils/codeRulePage';
 import type { SalesOrderOcrResult } from '../../../../services/sales-order-ocr';
@@ -66,7 +67,8 @@ export function findOcrMaterial(
   const codeNorm = normOcrText(code);
   const nameNorm = normOcrText(name);
   if (codeNorm) {
-    const byCode = materials.find((m) => normOcrText(materialCodeOf(m)) === codeNorm);
+    // 与单据导入同一套：主编码 / code / 导入别名（大小写不敏感）
+    const byCode = findMaterialByImportCode(materials as Material[], code ?? '');
     if (byCode) return byCode;
   }
   if (nameNorm) {

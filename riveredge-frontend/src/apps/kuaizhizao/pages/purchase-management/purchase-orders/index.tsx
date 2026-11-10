@@ -174,6 +174,7 @@ import {
 import {
   KUAIZHIZAO_DOC_HOST,
   loadBankAccountFormOptions,
+  loadMaterialFormReferenceList,
 } from '../../../../../utils/documentFormReferenceLoad';
 
 const LazyUniImport = lazy(() =>
@@ -230,7 +231,12 @@ import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal'
 import { importInChunksViaPerItemCreate } from '../../../../../utils/chunkedBulkImport';
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { warehouseApi as masterWarehouseApi } from '../../../../master-data/services/warehouse';
-import { materialApi } from '../../../../master-data/services/material';
+import {
+  collectImportMaterialCodes,
+  findMaterialByImportCode,
+  normalizeImportMaterialCode,
+  resolveMaterialsByCodesForImport,
+} from '../../../../master-data/utils/materialImportResolve';
 import { normalizeFormListItems } from '../../../../../utils/formListItems';
 import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
@@ -864,14 +870,24 @@ const PurchaseOrdersPage: React.FC = () => {
   );
 
   const handleItemImport = useCallback(
-    (data: any[][]) => {
+    async (data: any[][]) => {
       const rows = data.slice(2);
       const mainDelivery = formRef.current?.getFieldValue('delivery_date');
       const defaultDate =
         mainDelivery != null ? (dayjs.isDayjs(mainDelivery) ? mainDelivery : dayjs(mainDelivery)) : dayjs();
+      const loaded = await loadMaterialFormReferenceList(KUAIZHIZAO_DOC_HOST.purchaseOrder);
+      const materials = await resolveMaterialsByCodesForImport(
+        collectImportMaterialCodes(rows, 0),
+        loaded,
+      );
+      const taxRate = resolveSupplierDefaultTaxRatePercent(
+        (supplierList.find(
+          (x) => Number(x.id) === Number(formRef.current?.getFieldValue('supplier_id')),
+        ) as Record<string, unknown> | undefined) ?? null,
+      );
       const newItems = rows
         .map((row) => {
-          const materialCode = String(row[0] || '').trim();
+          const materialCode = normalizeImportMaterialCode(row[0]);
           const spec = String(row[1] || '').trim();
           const unitRaw = String(row[2] || '').trim();
           const unit = materialUnitImport.parse(unitRaw) || unitRaw;
@@ -880,15 +896,17 @@ const PurchaseOrdersPage: React.FC = () => {
           const requiredDate = row[5];
 
           if (!materialCode) return null;
+          const mat = findMaterialByImportCode(materials, materialCode);
 
           return {
-            material_code: materialCode,
-            material_name: '',
-            material_spec: spec,
-            unit: unit || '件',
+            material_id: mat?.id,
+            material_code: mat?.mainCode || mat?.code || materialCode,
+            material_name: mat?.name || '',
+            material_spec: mat?.specification || spec,
+            unit: mat?.baseUnit || unit || '件',
             ordered_quantity: quantity || 1,
             unit_price: price,
-            tax_rate: 0,
+            tax_rate: taxRate,
             required_date: requiredDate
               ? dayjs(requiredDate).isValid()
                 ? dayjs(requiredDate)
@@ -2314,8 +2332,9 @@ const PurchaseOrdersPage: React.FC = () => {
       return;
     }
 
-    const matList = await fetchAllListItems((p) =>
-      materialApi.list({ ...p, isActive: true }),
+    const matList = await resolveMaterialsByCodesForImport(
+      collectImportMaterialCodes(rows, idx.material),
+      [],
     );
 
     const errors: Array<{ row: number; message: string }> = [];
@@ -2325,7 +2344,7 @@ const PurchaseOrdersPage: React.FC = () => {
       const rowNum = i + 3;
       const supplierName = (row[idx.supplier] ?? '').toString().trim();
       const dateVal = (row[idx.date] ?? '').toString().trim();
-      const materialCode = (row[idx.material] ?? '').toString().trim();
+      const materialCode = normalizeImportMaterialCode(row[idx.material]);
       const qtyVal = row[idx.qty];
       const qty = Number(qtyVal);
       if (!supplierName) {
@@ -2345,7 +2364,7 @@ const PurchaseOrdersPage: React.FC = () => {
         return;
       }
 
-      const mat = (Array.isArray(matList) ? matList : []).find((m: any) => (m.mainCode || m.code || '').toUpperCase() === materialCode.toUpperCase());
+      const mat = findMaterialByImportCode(matList, materialCode);
       if (!mat) {
         errors.push({ row: rowNum, message: t('app.kuaizhizao.purchaseOrder.importRowMaterialNotFound', { code: materialCode }) });
         return;

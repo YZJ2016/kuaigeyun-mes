@@ -7,6 +7,7 @@
 
 import { normalizeImportSpreadsheetDate } from '../../utils/importSpreadsheetDate';
 import { spreadsheetCellToPlainString } from '../../utils/spreadsheetCellPlainString';
+import { spreadsheetPlainCellText } from '../../utils/spreadsheetPreserveText';
 
 type RangeLike = {
   getDisplayValues?: () => string[][] | null;
@@ -53,7 +54,7 @@ function cellToString(value: unknown): string {
     const obj = value as { v?: unknown; m?: unknown };
     const display = typeof obj.m === 'string' ? obj.m.trim() : '';
     if (display && typeof obj.v === 'number' && !NUMERIC_PLAIN_RE.test(display)) {
-      return display.replace(/,/g, '');
+      return spreadsheetPlainCellText(display);
     }
   }
   return spreadsheetCellToPlainString(value);

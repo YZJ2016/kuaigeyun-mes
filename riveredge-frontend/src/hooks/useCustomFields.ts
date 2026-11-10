@@ -14,6 +14,7 @@ import {
   uploadFileListToCustomFieldValue,
 } from '../components/custom-fields/customFieldFileUtils';
 import { normalizeJsonFieldValue } from '../components/custom-fields/customFieldJsonUtils';
+import { isAssociatedObjectDisplayOnly } from '../components/custom-fields/customFieldAssociatedDisplayMode';
 import { coerceFormDate, toApiDateString, toApiDateTimeString } from '../utils/formDate';
 
 const CUSTOM_PREFIX = 'custom_';
@@ -129,6 +130,9 @@ export function useCustomFields({
       const knownCodes = new Set(customFields.map((field) => field.code));
 
       for (const field of customFields) {
+        if (isAssociatedObjectDisplayOnly(field)) {
+          continue;
+        }
         const key = `${CUSTOM_PREFIX}${field.code}`;
         if (form) {
           const fromForm = form.getFieldValue(key);
@@ -147,6 +151,10 @@ export function useCustomFields({
       Object.keys(formValues).forEach((key) => {
         if (key.startsWith(CUSTOM_PREFIX)) {
           const code = key.slice(CUSTOM_PREFIX.length);
+          const field = customFields.find((item) => item.code === code);
+          if (field && isAssociatedObjectDisplayOnly(field)) {
+            return;
+          }
           if (!knownCodes.has(code)) {
             customData[code] = formValues[key];
           }
@@ -185,6 +193,10 @@ export function useCustomFields({
         const field = fields.find((f) => f.code === fieldCode);
         if (!field) {
           throw new Error(`自定义字段未匹配到定义: ${fieldCode}`);
+        }
+        // 只读 XLOOKUP 展示：表单即时回填即可，不写入字段值表
+        if (isAssociatedObjectDisplayOnly(field)) {
+          continue;
         }
         let value = customData[fieldCode];
         if (field.field_type === 'image' || field.field_type === 'file') {

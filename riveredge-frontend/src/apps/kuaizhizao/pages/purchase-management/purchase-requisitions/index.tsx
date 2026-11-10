@@ -137,8 +137,15 @@ import {
 } from './components/PurchaseRequisitionLineStock';
 import {
   KUAIZHIZAO_DOC_HOST,
+  loadMaterialFormReferenceList,
   loadSupplierFormReferenceList,
 } from '../../../../../utils/documentFormReferenceLoad';
+import {
+  collectImportMaterialCodes,
+  findMaterialByImportCode,
+  normalizeImportMaterialCode,
+  resolveMaterialsByCodesForImport,
+} from '../../../../master-data/utils/materialImportResolve';
 import { SupplierSelectDropdown } from '../../../../master-data/components/SupplierSelectDropdown';
 import type { Supplier } from '../../../../master-data/types/supply-chain';
 import { ROUTES } from '../../../constants/routes';
@@ -445,12 +452,17 @@ const PurchaseRequisitionsPage: React.FC = () => {
   );
 
   const handleItemImport = useCallback(
-    (data: any[][]) => {
+    async (data: any[][]) => {
       const rows = data.slice(2);
       const defaultDate = resolveHeaderRequiredDateDefault();
+      const loaded = await loadMaterialFormReferenceList(KUAIZHIZAO_DOC_HOST.purchaseRequisition);
+      const materials = await resolveMaterialsByCodesForImport(
+        collectImportMaterialCodes(rows, 0),
+        loaded,
+      );
       const newItems = rows
         .map((row) => {
-          const materialCode = String(row[0] || '').trim();
+          const materialCode = normalizeImportMaterialCode(row[0]);
           const spec = String(row[1] || '').trim();
           const unitRaw = String(row[2] || '').trim();
           const unit = materialUnitImport.parse(unitRaw) || unitRaw;
@@ -460,12 +472,15 @@ const PurchaseRequisitionsPage: React.FC = () => {
           const notes = String(row[6] || '').trim();
 
           if (!materialCode) return null;
+          const mat = findMaterialByImportCode(materials, materialCode);
 
           return {
             ...INITIAL_PR_FORM_ITEM_ROW,
-            material_code: materialCode,
-            material_spec: spec,
-            unit: unit || '件',
+            material_id: mat?.id,
+            material_code: mat?.mainCode || mat?.code || materialCode,
+            material_name: mat?.name || '',
+            material_spec: mat?.specification || spec,
+            unit: mat?.baseUnit || unit || '件',
             quantity: quantity || 1,
             suggested_unit_price: suggestedPrice,
             required_date:

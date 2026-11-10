@@ -6,10 +6,28 @@
 
 from typing import Optional, Any
 from datetime import date, datetime, timezone
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from tortoise import fields
 from .base import BaseModel
 from core.utils.timezone_utils import to_site_date
+
+
+def _to_custom_field_decimal(value: Any) -> Decimal:
+    """数值类自定义字段：空白视为未填；非法串给出可读错误（禁止裸 ConversionSyntax）。"""
+    if isinstance(value, Decimal):
+        return value
+    if isinstance(value, bool):
+        raise ValueError(f"自定义数值字段值无效: {value!r}")
+    if isinstance(value, (int, float)):
+        return Decimal(str(value))
+    text = str(value).strip().replace(",", "")
+    if not text:
+        raise ValueError("自定义数值字段值不能为空")
+    try:
+        return Decimal(text)
+    except (InvalidOperation, ValueError) as exc:
+        raise ValueError(f"自定义数值字段值无效: {value!r}") from exc
+
 
 
 def _parse_custom_field_date(value: Any) -> date:
@@ -142,6 +160,20 @@ class CustomFieldValue(BaseModel):
         
         if value is None:
             return
+        # 空白串视为清空（数值类原先 Decimal('') → ConversionSyntax 裸异常）
+        if isinstance(value, str) and not value.strip():
+            if field_type in (
+                "number",
+                "associated_object",
+                "formula",
+                "associated_attribute",
+                "date",
+                "time",
+                "datetime",
+                "image",
+                "file",
+            ):
+                return
 
         config = field_config or {}
         display_mode = config.get("displayMode")
@@ -163,14 +195,30 @@ class CustomFieldValue(BaseModel):
                 self.value_json = [item for item in value if item is not None and str(item).strip() != ""]
             else:
                 self.value_json = [value]
-        elif field_type in ("number", "associated_object", "formula"):
-            # associated_object 存储 VLOOKUP 结果（多为 id）；formula 存储计算结果
-            self.value_number = Decimal(str(value))
+        elif field_type == "number" or field_type == "formula":
+            self.value_number = _to_custom_field_decimal(value)
+        elif field_type == "associated_object":
+            # select/radio：关联记录 id 一律 value_number（含字符串 "42"）。
+            # display/input：文案进 value_text；可解析纯数字仍进 number。
+            # displayMode=number：强制数值。
+            if display_mode == "number":
+                self.value_number = _to_custom_field_decimal(value)
+            elif display_mode in ("display", "input"):
+                if isinstance(value, bool):
+                    raise ValueError(f"自定义数值字段值无效: {value!r}")
+                if isinstance(value, (int, float, Decimal)):
+                    self.value_number = _to_custom_field_decimal(value)
+                else:
+                    text = str(value).strip()
+                    try:
+                        self.value_number = _to_custom_field_decimal(text)
+                    except ValueError:
+                        self.value_text = str(value)
+            else:
+                self.value_number = _to_custom_field_decimal(value)
         elif field_type == "associated_attribute":
-            if value is None:
-                return
-            if isinstance(value, (int, float, Decimal)):
-                self.value_number = Decimal(str(value))
+            if isinstance(value, (int, float, Decimal)) and not isinstance(value, bool):
+                self.value_number = _to_custom_field_decimal(value)
             else:
                 self.value_text = str(value)
         elif field_type == "date":

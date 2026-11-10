@@ -3,6 +3,7 @@
  * 下载：ExcelJS（可写数据有效性下拉）；解析优先走 OOXML 原文（cfb），禁止 SheetJS 浮点截断。
  */
 
+import { spreadsheetPlainCellText } from '../../utils/spreadsheetPreserveText';
 import { readXlsxWorksheetStringMatrix } from './xlsx-raw-cell-values';
 
 /** 模板数据区行数（含示例行），与 UniSheet 预留量同量级，便于线下填表 */
@@ -171,10 +172,10 @@ export async function parseImportXlsxFile(file: File): Promise<string[][]> {
         continue;
       }
       if (cell.v != null && cell.v !== '') {
-        row.push(String(cell.v).trim().replace(/,/g, ''));
+        row.push(spreadsheetPlainCellText(cell.v));
         continue;
       }
-      row.push(cell.w != null ? String(cell.w).trim().replace(/,/g, '') : '');
+      row.push(cell.w != null ? spreadsheetPlainCellText(cell.w) : '');
     }
     rows.push(row);
   }

@@ -12,6 +12,11 @@ from core.models.custom_field import CustomField
 from core.models.custom_field_value import CustomFieldValue
 from core.models.data_dictionary import DataDictionary
 from core.models.dictionary_item import DictionaryItem
+from core.config.custom_field_config_validate import (
+    apply_non_persisted_field_flags,
+    is_associated_object_non_persisted,
+    validate_custom_field_config,
+)
 from core.schemas.custom_field import CustomFieldCreate, CustomFieldUpdate
 from core.services.data.data_dictionary_service import DataDictionaryService
 from core.services.system.installed_feature_scope import custom_field_table_visibility_q
@@ -47,6 +52,11 @@ class CustomFieldService:
         # 如果字段类型为 select 且配置中包含 dictionary_code，验证数据字典并自动填充选项
         field_data = data.model_dump()
         config = field_data.get("config", {}) or {}
+
+        try:
+            validate_custom_field_config(data.field_type, config)
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
         
         if data.field_type in ("select", "multiselect") and config.get("dictionary_code"):
             dictionary_code = config["dictionary_code"]
@@ -78,6 +88,8 @@ class CustomFieldService:
             ]
             config["options"] = options
             field_data["config"] = config
+
+        apply_non_persisted_field_flags(field_data)
         
         try:
             field = CustomField(
@@ -219,6 +231,11 @@ class CustomFieldService:
         if "field_type" in update_data or "config" in update_data:
             field_type = update_data.get("field_type", field.field_type)
             config = update_data.get("config", field.get_config()) or {}
+
+            try:
+                validate_custom_field_config(field_type, config)
+            except ValueError as exc:
+                raise ValidationError(str(exc)) from exc
             
             if field_type in ("select", "multiselect") and config.get("dictionary_code"):
                 dictionary_code = config["dictionary_code"]
@@ -253,9 +270,43 @@ class CustomFieldService:
         
         for key, value in update_data.items():
             setattr(field, key, value)
+
+        # 最终字段态强制非持久化 flags（避免只改 config 未带 flags 时漏关）
+        flag_payload = {
+            "field_type": field.field_type,
+            "config": field.get_config(),
+            "is_required": field.is_required,
+            "is_searchable": field.is_searchable,
+            "is_sortable": field.is_sortable,
+        }
+        apply_non_persisted_field_flags(flag_payload)
+        field.is_required = flag_payload["is_required"]
+        field.is_searchable = flag_payload["is_searchable"]
+        field.is_sortable = flag_payload["is_sortable"]
         
         await field.save()
+
+        # 非持久化：清历史孤儿值（含旧配置遗留；每次保存幂等软删）
+        if is_associated_object_non_persisted(field.field_type, field.get_config()):
+            await CustomFieldService._soft_delete_field_values(tenant_id, field.id)
+
         return field
+
+    @staticmethod
+    async def _soft_delete_field_values(tenant_id: int, custom_field_id: int) -> int:
+        """将字段全部有效值软删除（切到非持久化展示时清孤儿行）。"""
+        rows = await CustomFieldValue.filter(
+            custom_field_id=custom_field_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        )
+        if not rows:
+            return 0
+        now = resolve_business_datetime()
+        for row in rows:
+            row.deleted_at = now
+            await row.save()
+        return len(rows)
     
     @staticmethod
     async def delete_field(
@@ -304,6 +355,27 @@ class CustomFieldService:
             NotFoundError: 当字段不存在时抛出
         """
         field = await CustomFieldService.get_field_by_uuid(tenant_id, field_uuid)
+        config = field.get_config() or {}
+
+        # 非持久化派生字段：拒绝写入；若仍有历史行则软删除
+        if is_associated_object_non_persisted(field.field_type, config):
+            existing = await CustomFieldValue.get_or_none(
+                custom_field_id=field.id,
+                tenant_id=tenant_id,
+                record_table=record_table,
+                record_id=record_id,
+                deleted_at__isnull=True,
+            )
+            if existing:
+                existing.deleted_at = resolve_business_datetime()
+                await existing.save()
+                return existing
+            return CustomFieldValue(
+                custom_field_id=field.id,
+                tenant_id=tenant_id,
+                record_table=record_table,
+                record_id=record_id,
+            )
         
         # 获取或创建字段值
         field_value = await CustomFieldValue.get_or_none(
@@ -347,6 +419,12 @@ class CustomFieldService:
         fields = await CustomFieldService.get_fields_by_table(
             tenant_id, record_table, is_active=True
         )
+        # 非持久化字段不参与值 API（无库内真源；避免回填 null/孤儿）
+        fields = [
+            f
+            for f in fields
+            if not is_associated_object_non_persisted(f.field_type, f.get_config())
+        ]
         
         if not fields:
             return {}
@@ -386,6 +464,11 @@ class CustomFieldService:
         fields = await CustomFieldService.get_fields_by_table(
             tenant_id, record_table, is_active=True
         )
+        fields = [
+            f
+            for f in fields
+            if not is_associated_object_non_persisted(f.field_type, f.get_config())
+        ]
         if not fields:
             return {str(rid): {} for rid in ids}
 

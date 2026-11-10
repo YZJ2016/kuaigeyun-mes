@@ -12,7 +12,11 @@ import type { CustomField } from '../../services/customField';
 import { CustomFieldFileDetail } from './CustomFieldFileDetail';
 import { normalizeCustomFieldFileUuids } from './customFieldFileUtils';
 import { formatJsonText, isEmptyJsonValue } from './customFieldJsonUtils';
-import { formatAssociatedDetailValue } from './customFieldAssociatedDisplayMode';
+import {
+  formatAssociatedDetailValue,
+  isAssociatedObjectDisplayOnly,
+} from './customFieldAssociatedDisplayMode';
+import { EMPTY_VALUE_PLACEHOLDER } from '../../utils/format';
 
 function formatMultiselectDetailValue(value: unknown, options?: { label: string; value: string }[]): string {
   const arr = Array.isArray(value) ? value : value != null && value !== '' ? [value] : [];
@@ -21,6 +25,13 @@ function formatMultiselectDetailValue(value: unknown, options?: { label: string;
   return arr
     .map((v) => opts.find((o) => o.value === v || String(o.value) === String(v))?.label ?? String(v))
     .join('、');
+}
+
+/** 详情/列表是否渲染该自定义字段（只读 XLOOKUP 展示不落库，详情不展示） */
+export function shouldShowCustomFieldInDetail(field: CustomField): boolean {
+  if (!field.is_active) return false;
+  if (isAssociatedObjectDisplayOnly(field)) return false;
+  return true;
 }
 
 export interface CustomFieldsDetailSectionProps {
@@ -35,7 +46,7 @@ export function hasCustomFieldsDetailContent(
 ): boolean {
   if (customFields.length === 0 || Object.keys(customFieldValues).length === 0) return false;
   return customFields.some((f) => {
-    if (!f.is_active || customFieldValues[f.code] === undefined) return false;
+    if (!shouldShowCustomFieldInDetail(f) || customFieldValues[f.code] === undefined) return false;
     if (f.field_type === 'image' || f.field_type === 'file') {
       return normalizeCustomFieldFileUuids(customFieldValues[f.code]).length > 0;
     }
@@ -46,7 +57,8 @@ export function hasCustomFieldsDetailContent(
       const v = customFieldValues[f.code];
       return Array.isArray(v) ? v.length > 0 : v != null && v !== '';
     }
-    return true;
+    const v = customFieldValues[f.code];
+    return v != null && v !== '';
   });
 }
 
@@ -58,7 +70,7 @@ export const CustomFieldsDetailSection: React.FC<CustomFieldsDetailSectionProps>
 
   const columns = customFields
     .filter((f) => {
-      if (!f.is_active || customFieldValues[f.code] === undefined) return false;
+      if (!shouldShowCustomFieldInDetail(f) || customFieldValues[f.code] === undefined) return false;
       if (f.field_type === 'image' || f.field_type === 'file') {
         return normalizeCustomFieldFileUuids(customFieldValues[f.code]).length > 0;
       }
@@ -69,7 +81,8 @@ export const CustomFieldsDetailSection: React.FC<CustomFieldsDetailSectionProps>
         const v = customFieldValues[f.code];
         return Array.isArray(v) ? v.length > 0 : v != null && v !== '';
       }
-      return true;
+      const v = customFieldValues[f.code];
+      return v != null && v !== '';
     })
     .sort((a, b) => a.sort_order - b.sort_order)
     .map((field) => ({
@@ -84,7 +97,7 @@ export const CustomFieldsDetailSection: React.FC<CustomFieldsDetailSectionProps>
         }
         if (field.field_type === 'json') {
           if (isEmptyJsonValue(value)) {
-            return <Typography.Text type="secondary">-</Typography.Text>;
+            return <Typography.Text type="secondary">{EMPTY_VALUE_PLACEHOLDER}</Typography.Text>;
           }
           return (
             <Typography.Paragraph
@@ -103,18 +116,18 @@ export const CustomFieldsDetailSection: React.FC<CustomFieldsDetailSectionProps>
         }
         if (field.field_type === 'multiselect') {
           const text = formatMultiselectDetailValue(value, field.config?.options);
-          return text ? text : <Typography.Text type="secondary">-</Typography.Text>;
+          return text ? text : <Typography.Text type="secondary">{EMPTY_VALUE_PLACEHOLDER}</Typography.Text>;
         }
         if (value === null || value === undefined || value === '') {
-          return <Typography.Text type="secondary">-</Typography.Text>;
+          return <Typography.Text type="secondary">{EMPTY_VALUE_PLACEHOLDER}</Typography.Text>;
         }
         if (field.field_type === 'associated_object' || field.field_type === 'associated_attribute') {
           const text = formatAssociatedDetailValue(value);
-          return text ? text : <Typography.Text type="secondary">-</Typography.Text>;
+          return text ? text : <Typography.Text type="secondary">{EMPTY_VALUE_PLACEHOLDER}</Typography.Text>;
         }
         if (typeof value === 'object') {
           const display = value.label ?? value.name ?? value.title ?? value.code ?? (value.id != null ? String(value.id) : null);
-          return display != null ? String(display) : <Typography.Text type="secondary">-</Typography.Text>;
+          return display != null ? String(display) : <Typography.Text type="secondary">{EMPTY_VALUE_PLACEHOLDER}</Typography.Text>;
         }
         return String(value);
       },

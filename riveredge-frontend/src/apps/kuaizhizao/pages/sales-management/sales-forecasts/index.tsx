@@ -44,6 +44,16 @@ import { buildDocumentListHelpViewConfig, DOCUMENT_LIST_HELP_KEYS } from '../../
 import { buildFactoryImportTemplate } from '../../../../../utils/spreadsheetImportTemplate'
 import { useImportMaterialUnitOptions } from '../../../../master-data/hooks/useImportMaterialUnitOptions'
 import {
+  collectImportMaterialCodes,
+  findMaterialByImportCode,
+  normalizeImportMaterialCode,
+  resolveMaterialsByCodesForImport,
+} from '../../../../master-data/utils/materialImportResolve'
+import {
+  KUAIZHIZAO_DOC_HOST,
+  loadMaterialFormReferenceList,
+} from '../../../../../utils/documentFormReferenceLoad'
+import {
   buildDocumentDetailPartnerMaterialFormColumns,
   buildDocumentDetailSpecModelFormColumns,
   withMaterialLineFillMapping,
@@ -437,11 +447,16 @@ export default function SalesForecastsPage() {
   )
 
   const handleItemImport = useCallback(
-    (data: any[][]) => {
+    async (data: any[][]) => {
       const rows = data.slice(2);
+      const loaded = await loadMaterialFormReferenceList(KUAIZHIZAO_DOC_HOST.salesForecast);
+      const materials = await resolveMaterialsByCodesForImport(
+        collectImportMaterialCodes(rows, 0),
+        loaded,
+      );
       const newItems = rows
         .map((row) => {
-          const materialCode = String(row[0] || '').trim();
+          const materialCode = normalizeImportMaterialCode(row[0]);
           const spec = String(row[1] || '').trim();
           const unitRaw = String(row[2] || '').trim();
           const unit = materialUnitImport.parse(unitRaw) || unitRaw;
@@ -450,12 +465,15 @@ export default function SalesForecastsPage() {
           const notes = String(row[5] || '').trim();
 
           if (!materialCode) return null;
+          const mat = findMaterialByImportCode(materials, materialCode);
 
           return {
             ...defaultForecastItem,
-            material_code: materialCode,
-            material_spec: spec,
-            material_unit: unit || defaultUnit,
+            material_id: mat?.id,
+            material_code: mat?.mainCode || mat?.code || materialCode,
+            material_name: mat?.name || '',
+            material_spec: mat?.specification || spec,
+            material_unit: mat?.baseUnit || unit || defaultUnit,
             forecast_quantity: quantity || 1,
             forecast_date: forecastDate && dayjs(forecastDate).isValid() ? dayjs(forecastDate) : dayjs(),
             notes: notes || undefined,

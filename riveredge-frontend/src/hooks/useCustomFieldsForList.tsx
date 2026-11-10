@@ -17,6 +17,7 @@ import {
   batchGetFieldValues,
 } from '../services/customField';
 import type { CustomField } from '../services/customField';
+import { isAssociatedObjectDisplayOnly } from '../components/custom-fields/customFieldAssociatedDisplayMode';
 import { renderCustomFieldListCell } from '../components/custom-fields/customFieldListDisplay';
 
 export interface UseCustomFieldsForListOptions {
@@ -106,7 +107,7 @@ export function useCustomFieldsForList<T extends Record<string, any>>({
 
   const generateCustomFieldColumns = useCallback((): ProColumns<T>[] => {
     const activeFields = customFields
-      .filter((f) => f.is_active)
+      .filter((f) => f.is_active && !isAssociatedObjectDisplayOnly(f))
       .sort((a, b) => a.sort_order - b.sort_order || a.id - b.id)
     const seenLabels = new Set<string>()
     return activeFields

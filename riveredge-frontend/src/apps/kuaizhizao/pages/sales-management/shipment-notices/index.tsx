@@ -96,7 +96,14 @@ import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/Wa
 import {
   KUAIZHIZAO_DOC_HOST,
   loadCustomerFormReferenceList,
+  loadMaterialFormReferenceList,
 } from '../../../../../utils/documentFormReferenceLoad';
+import {
+  collectImportMaterialCodes,
+  findMaterialByImportCode,
+  normalizeImportMaterialCode,
+  resolveMaterialsByCodesForImport,
+} from '../../../../master-data/utils/materialImportResolve';
 import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { useTranslation } from 'react-i18next';
@@ -1327,21 +1334,30 @@ const ShipmentNoticesPage: React.FC = () => {
   ]);
 
   /** 将 Excel 行写入当前表单「通知明细」（新建弹窗内导入或列表工具栏导入共用） */
-  const applyExcelRowsToNoticeForm = (data: any[][]) => {
+  const applyExcelRowsToNoticeForm = async (data: any[][]) => {
     if (data.length <= 1) return;
-    const items = data.slice(1).filter((row) => row[0]).map((row) => {
+    const rows = data.slice(1).filter((row) => row[0]);
+    const loaded = await loadMaterialFormReferenceList(KUAIZHIZAO_DOC_HOST.shipmentNotice);
+    const materials = await resolveMaterialsByCodesForImport(
+      collectImportMaterialCodes(rows, 0),
+      loaded,
+    );
+    const items = rows.map((row) => {
+      const materialCode = normalizeImportMaterialCode(row[0]);
+      const mat = findMaterialByImportCode(materials, materialCode);
       const unitRaw = String(row[5] || '').trim();
-      const material_unit = unitRaw
-        ? materialUnitImport.parse(unitRaw) ?? unitRaw
-        : defaultUnit;
+      const material_unit = mat?.baseUnit
+        || (unitRaw ? materialUnitImport.parse(unitRaw) ?? unitRaw : defaultUnit);
       return {
-      material_code: String(row[0] || ''),
-      notice_quantity: Number(row[1]) || 1,
-      unit_price: Number(row[2]) || 0,
-      material_name: String(row[3] || ''),
-      material_spec: String(row[4] || ''),
-      material_unit,
-    };});
+        material_id: mat?.id,
+        material_code: mat?.mainCode || mat?.code || materialCode,
+        notice_quantity: Number(row[1]) || 1,
+        unit_price: Number(row[2]) || 0,
+        material_name: mat?.name || String(row[3] || ''),
+        material_spec: mat?.specification || String(row[4] || ''),
+        material_unit,
+      };
+    });
 
     if (items.length === 0) {
       messageApi.warning(t('app.kuaizhizao.shipmentNotice.importNoValidData'));
@@ -1357,7 +1373,7 @@ const ShipmentNoticesPage: React.FC = () => {
   };
 
   const handleFormLineImport = (data: any[][]) => {
-    applyExcelRowsToNoticeForm(data);
+    void applyExcelRowsToNoticeForm(data);
   };
 
   /** 列表工具栏导入：打开新建弹窗并写入明细（与 UniTable 内置导入弹窗配合） */
@@ -1367,7 +1383,9 @@ const ShipmentNoticesPage: React.FC = () => {
       return;
     }
     setCreateModalVisible(true);
-    setTimeout(() => applyExcelRowsToNoticeForm(data), 150);
+    window.setTimeout(() => {
+      void applyExcelRowsToNoticeForm(data);
+    }, 150);
   };
 
   const renderCreateForm = () => (

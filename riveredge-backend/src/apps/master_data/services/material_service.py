@@ -4607,6 +4607,8 @@ class MaterialService:
             extra.append(
                 f''' AND (
                     COALESCE(b.bom_code, '') ILIKE ${kw_idx}
+                    OR COALESCE(b.bom_name, '') ILIKE ${kw_idx}
+                    OR COALESCE(b.version, '') ILIKE ${kw_idx}
                     OR CAST(b.material_id AS TEXT) ILIKE ${kw_idx}
                     OR EXISTS (
                         SELECT 1 FROM "{mat_table}" m

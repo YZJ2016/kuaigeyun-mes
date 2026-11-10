@@ -5,8 +5,8 @@
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Form } from 'antd';
-import { ProFormDependency, ProFormDigit, ProFormRadio, ProFormSelect, ProFormText } from '@ant-design/pro-components';
+import { Form, Typography } from 'antd';
+import { ProFormDependency, ProFormDigit, ProFormItem, ProFormRadio, ProFormSelect, ProFormText } from '@ant-design/pro-components';
 import { getAssociatedTableOptions, lookupAssociatedValue } from '../../services/customField';
 import type { CustomField } from '../../services/customField';
 import { resolveSourceFormFieldName } from './customFieldSourceFieldUtils';
@@ -166,8 +166,28 @@ function AssociatedObjectLookupControl({
   const useNumberInput = displayMode === 'number' || returnField === 'id' || returnField === 'number';
 
   useEffect(() => {
+    // 只读展示：始终按源字段实时 XLOOKUP，忽略遗留 initialValue（非持久化无库内真源）
+    if (readOnly) {
+      if (!tableName || sourceValue == null || String(sourceValue).trim() === '') {
+        setResolvedValue(null);
+        return;
+      }
+      let cancelled = false;
+      lookupAssociatedValue({
+        table: tableName,
+        matchField,
+        matchValue: sourceValue as string | number,
+        returnField,
+      }).then((res) => {
+        if (!cancelled) setResolvedValue(res.value ?? null);
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
+
     if (!tableName || sourceValue == null || String(sourceValue).trim() === '') {
-      // 源字段尚未就绪时勿清空表单（编辑回填可能已写入）；源从有值变为空时才显式清空
+      // 可编辑：源字段尚未就绪时勿清空表单（编辑回填可能已写入）；源从有值变为空时才显式清空
       if (lastSourceSnapshotRef.current !== null && lastSourceSnapshotRef.current !== sourceSnapshot) {
         lastSourceSnapshotRef.current = sourceSnapshot;
         setResolvedValue(null);
@@ -203,32 +223,31 @@ function AssociatedObjectLookupControl({
       isManualOverrideRef.current = false;
       return fetchValue();
     }
-  }, [initialValue, matchField, returnField, sourceSnapshot, sourceValue, tableName]);
+  }, [
+    initialValue,
+    matchField,
+    readOnly,
+    returnField,
+    sourceSnapshot,
+    sourceValue,
+    tableName,
+  ]);
 
   if (readOnly) {
-    const displayControl = useNumberInput ? (
-      <ProFormDigit
-        name={name}
-        label={label}
-        initialValue={initialValue ?? undefined}
-        fieldProps={{ readOnly: true, ...customFieldFieldProps() }}
-        {...customFieldControlLayout(colProps)}
-      />
-    ) : (
-      <ProFormText
-        name={name}
-        label={label}
-        initialValue={initialValue ?? undefined}
-        fieldProps={{ readOnly: true, ...customFieldFieldProps() }}
-        {...customFieldControlLayout(colProps)}
-      />
-    );
-
+    // 只读展示：不挂 form name，不进提交/落库；仅展示本次 lookup 结果
+    const shown = resolvedValue;
+    const text =
+      shown == null || shown === ''
+        ? '—'
+        : Array.isArray(shown)
+          ? shown.map(String).join('、')
+          : String(shown);
     return (
-      <>
-        <LookupValueSync name={name} value={resolvedValue} />
-        {displayControl}
-      </>
+      <ProFormItem label={label} {...customFieldControlLayout(colProps)}>
+        <Typography.Text type={shown == null || shown === '' ? 'secondary' : undefined}>
+          {text}
+        </Typography.Text>
+      </ProFormItem>
     );
   }
 

@@ -26,6 +26,46 @@ export function parseSourceFieldKey(
   return { scope, name };
 }
 
+/**
+ * 关联对象源字段变更后，匹配字段默认值：
+ * - 已知外键 / 名称以 Id 结尾 / 清单外系统字段 → id
+ * - 已知标量系统字段 → code
+ * - 其余（含自定义文本源）→ code
+ */
+export function resolveSourceMatchFieldDefault(
+  sourceKey: string | undefined,
+  options: {
+    linkFieldKeys: ReadonlySet<string>;
+    scalarFieldKeys: ReadonlySet<string>;
+  },
+): 'id' | 'code' {
+  if (!sourceKey) return 'code';
+  if (options.linkFieldKeys.has(sourceKey)) return 'id';
+  if (options.scalarFieldKeys.has(sourceKey)) return 'code';
+  const parsed = parseSourceFieldKey(sourceKey);
+  if (parsed?.scope === 'system' && /Id$/i.test(parsed.name)) return 'id';
+  if (parsed?.scope === 'system' && !options.scalarFieldKeys.has(sourceKey)) return 'id';
+  return 'code';
+}
+
+/** 将搜索词或已保存值规范为可追加的源字段选项（默认按系统表单字段） */
+export function normalizeManualSourceFieldOption(
+  raw: string,
+  customLabelPrefix: string,
+): { value: string; label: string; scope: CustomFieldSourceScope } | null {
+  const text = raw.trim();
+  if (!text) return null;
+  const parsed = parseSourceFieldKey(text.includes(':') ? text : null);
+  const name = (parsed?.name || text.replace(/^(system|custom):/i, '')).trim();
+  if (!name) return null;
+  const scope: CustomFieldSourceScope = parsed?.scope === 'custom' ? 'custom' : 'system';
+  return {
+    value: encodeSourceFieldKey(scope, name),
+    label: `${customLabelPrefix} (${name})`,
+    scope,
+  };
+}
+
 export function resolveSourceFormFieldName(
   sourceField?: string,
   sourceFieldType?: CustomFieldSourceScope,

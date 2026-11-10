@@ -64,6 +64,10 @@ import { UniMaterialSelect } from '../../../../../components/uni-material-select
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import type { Material } from '../../../../master-data/types/material';
+import {
+  collectImportMaterialCodes,
+  resolveMaterialsByCodesForImport,
+} from '../../../../master-data/utils/materialImportResolve';
 import { warehouseApi } from '../../../services/production';
 import type { SalesReturn, SalesReturnItem, SalesReturnListParams } from '../../../services/sales-return';
 import {
@@ -1399,7 +1403,17 @@ const SalesReturnsPage: React.FC = () => {
         loadMaterialFormReferenceList(KUAIZHIZAO_DOC_HOST.salesReturn),
         masterWarehouseApi.list({ limit: 1000, is_active: true }),
       ]);
-      const materials = materialsRes ?? [];
+      const { resolveFactoryImportHeaderIndexMap } = await import(
+        '../../../../../utils/spreadsheetImportTemplate'
+      );
+      const headers = (data[0] || []).map((h: unknown) => String(h || '').trim());
+      const matColIdx =
+        resolveFactoryImportHeaderIndexMap(headers, salesReturnListImportTemplate.importHeaderMap)
+          .material ?? -1;
+      const materials = await resolveMaterialsByCodesForImport(
+        collectImportMaterialCodes(rows, matColIdx),
+        materialsRes ?? [],
+      );
       const warehouses = (warehousesRes as any)?.items ?? (Array.isArray(warehousesRes) ? warehousesRes : []);
 
       const { errors, items: toImport } = parseDocumentReturnListImport(data, {

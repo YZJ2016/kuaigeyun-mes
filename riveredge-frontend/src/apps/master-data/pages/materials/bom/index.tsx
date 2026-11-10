@@ -4,10 +4,9 @@
  * 提供物料清单BOM的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
  */
 
-import React, { useRef, useState, useEffect, useMemo } from 'react';
+import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormDigit, ProFormInstance, ProDescriptionsItemProps, ProFormList, ProFormDateTimePicker, ProFormSelect, ProForm } from '@ant-design/pro-components';
-import SafeProFormSelect from '../../../../../components/safe-pro-form-select';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormDigit, ProFormInstance, ProDescriptionsItemProps, ProFormList, ProFormDateTimePicker, ProFormSelect, ProForm, ProFormField } from '@ant-design/pro-components';
 import CodeField from '../../../../../components/code-field';
 import { App, Button, Tag, Space, Modal, Input, Tree, Spin, Table, Form as AntForm, Select, Switch, InputNumber, Dropdown, Checkbox, Descriptions, theme, Progress } from 'antd';
 import type { MenuProps } from 'antd';
@@ -57,7 +56,7 @@ import { useGlobalStore, useUserPreferenceStore } from '../../../../../stores';
 import { displayItemsToUsers } from '../../../../../utils/userDisplay';
 import {
   extractProTableSort,
-  pickListSearchKeyword,
+  pickListSearchKeywordOrFields,
   pickSearchString,
   pickSearchTriStateBoolean,
 } from '../../../../../utils/tableQueryKey';
@@ -80,6 +79,7 @@ import { useCustomFields } from '../../../../../hooks/useCustomFields';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import {
   CustomFieldsFormSection,
+  isAssociatedObjectDisplayOnly,
 } from '../../../../../components/custom-fields';
 import { masterCrudCreatedUpdatedColumns } from '../../../utils/materialListCore';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
@@ -90,7 +90,6 @@ import {
   MASTER_DATA_DETAIL_BASIC_FIELD_RANK,
 } from '../../../../kuaizhizao/pages/sales-management/shared/documentFieldAlignment';
 import { ProcessMasterDetailDrawer } from '../../process/shared/processMasterDetailDrawer';
-import { isVariantSkuMaterial } from '../../../components/MaterialVariantCombinationsTable';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
 import { flattenBomGroupsForExport, resolveBomExportGroup, loadBomExportNestedItems, collectBomExportMaterialIds, type BomExportGroupSummary } from './utils';
@@ -98,7 +97,7 @@ import { getAntdModal } from '../../../../../utils/antdAppApis';
 import { buildListPageHelpViewConfig } from '../../../../../components/page-help-wiki';
 const BOM_CUSTOM_FIELD_TABLE = 'master_data_boms';
 const BOM_RESOURCE = 'master-data:process:engineering-bom';
-const BOM_LIST_COLUMN_PERSISTENCE_ID = 'apps.master-data.pages.materials.bom.layout-v8';
+const BOM_LIST_COLUMN_PERSISTENCE_ID = 'apps.master-data.pages.materials.bom.layout-v9';
 const BOM_LIST_VIEW_TYPES = ['productBom', 'semiProductBom', 'allBom'] as const;
 type BomListViewType = (typeof BOM_LIST_VIEW_TYPES)[number];
 
@@ -243,7 +242,14 @@ interface MaterialBOMRow extends BOMGroupRow {
 }
 
 function normalizeBomKeyword(searchFormValues: Record<string, unknown> | undefined): string {
-  return pickListSearchKeyword(searchFormValues) ?? '';
+  return (
+    pickListSearchKeywordOrFields(
+      searchFormValues,
+      'bomCode',
+      'bomName',
+      'version',
+    ) ?? ''
+  );
 }
 
 function materialBomRowMatchesKeyword(row: MaterialBOMRow, kw: string, materials: Material[]): boolean {
@@ -254,11 +260,18 @@ function materialBomRowMatchesKeyword(row: MaterialBOMRow, kw: string, materials
   const code = String((mat as any)?.mainCode ?? mat?.code ?? '').toLowerCase();
   const name = String(mat?.name ?? '').toLowerCase();
   const bomCode = String(row.bomCode ?? '').toLowerCase();
+  const bomName = String(
+    (row as { bomName?: string }).bomName
+      ?? row.selectedVersion?.firstItem?.bomName
+      ?? row.firstItem?.bomName
+      ?? '',
+  ).toLowerCase();
   const ver = String(row.selectedVersion?.version ?? row.version ?? '').toLowerCase();
   return (
     code.includes(lower) ||
     name.includes(lower) ||
     bomCode.includes(lower) ||
+    bomName.includes(lower) ||
     ver.includes(lower) ||
     String(mid).includes(lower)
   );
@@ -598,30 +611,16 @@ const BOMPage: React.FC = () => {
   const [parentQuantity, setParentQuantity] = useState<number>(1.0);
   const quantityFormRef = useRef<ProFormInstance>();
   
-  // 物料列表（表单下拉 + 列表展示名称；列表展示按 BOM 引用 ID 补齐，不依赖前 1000 条）
+  // 物料缓存（列表展示名、子件来源等按 ID 补齐；选料 UI 一律 UniMaterialSelect 远程关键字搜）
   const [materials, setMaterials] = useState<Material[]>([]);
   const materialsRef = useRef<Material[]>([]);
   materialsRef.current = materials;
-  const [materialsLoading, setMaterialsLoading] = useState(false);
   const materialsById = useMemo(() => {
     const map = new Map<number, Material>();
     materials.forEach((m) => map.set(m.id, m));
     return map;
   }, [materials]);
   const [mainMaterialScope, setMainMaterialScope] = useState<'make' | 'all'>('make');
-  const mainMaterialOptions = useMemo(
-    () =>
-      materials
-        .filter((m) => {
-          // BOM 挂在主物料上；变体 SKU 行不作为主物料候选
-          if (isVariantSkuMaterial(m)) return false;
-          if (mainMaterialScope === 'all') return true;
-          const sourceType = String((m as any).sourceType ?? (m as any).source_type ?? '');
-          return sourceType === 'Make';
-        })
-        .map((m) => ({ label: formatMaterialLabel(m), value: m.id })),
-    [materials, mainMaterialScope],
-  );
   
   const sourceTypeOptions = useMemo(() => buildMaterialSourceTypeOptions(t), [t]);
 
@@ -775,45 +774,6 @@ const BOMPage: React.FC = () => {
     void loadUsers();
   }, [currentUser]);
 
-  /**
-   * 加载物料列表（仅创建/编辑弹窗下拉初始范围）。
-   * 自制件范围必须服务端按 sourceType=Make 过滤：全量前 1000 条往往全是 Buy，
-   * 本地再筛 Make 会得到空列表（Make 物料排序位常在 5000+）。
-   * 必须与列表页 ensureMaterialsByIds 合并，禁止整表覆盖，否则会冲掉已按 ID 补齐的主数据。
-   */
-  useEffect(() => {
-    if (!modalVisible) return;
-    const loadMaterials = async () => {
-      try {
-        setMaterialsLoading(true);
-        const result = await materialApi.list({
-          limit: 1000,
-          isActive: true,
-          mastersOnly: true,
-          ...(mainMaterialScope === 'make' ? { sourceType: 'Make' } : {}),
-        });
-        const incoming = result.items ?? [];
-        setMaterials((prev) => {
-          const merged = [...incoming];
-          const seen = new Set(merged.map((m) => m.id));
-          prev.forEach((m) => {
-            if (!seen.has(m.id)) {
-              merged.push(m);
-              seen.add(m.id);
-            }
-          });
-          materialsRef.current = merged;
-          return merged;
-        });
-      } catch (error: any) {
-        console.error('加载物料列表失败:', error);
-      } finally {
-        setMaterialsLoading(false);
-      }
-    };
-    loadMaterials();
-  }, [modalVisible, mainMaterialScope]);
-
   const ensureMaterialsByIds = async (ids: Iterable<number>): Promise<Material[]> => {
     const uniqueIds = Array.from(
       new Set(
@@ -873,33 +833,79 @@ const BOMPage: React.FC = () => {
     return Array.from(ids);
   };
 
+  /** 切到「自制件」时：已选非 Make 才清空；勿因选项未含已搜到的编码而误清 */
   useEffect(() => {
     if (!(modalVisible && !isEdit)) return;
+    if (mainMaterialScope !== 'make') return;
     const currentId = Number(formRef.current?.getFieldValue('materialId'));
     if (!currentId) return;
-    const existsInScope = mainMaterialOptions.some((opt) => Number(opt.value) === currentId);
-    if (!existsInScope) {
-      formRef.current?.setFieldValue('materialId', undefined);
-    }
-  }, [mainMaterialOptions, modalVisible, isEdit]);
+    let cancelled = false;
+    const ensureSelectedIsMake = async () => {
+      let mat = materialsRef.current.find((m) => m.id === currentId);
+      if (!mat) {
+        const resolved = await ensureMaterialsByIds([currentId]);
+        mat = resolved.find((m) => m.id === currentId);
+      }
+      if (cancelled || !mat) return;
+      const sourceType = String((mat as any).sourceType ?? (mat as any).source_type ?? '');
+      if (sourceType !== 'Make') {
+        formRef.current?.setFieldValue('materialId', undefined);
+      }
+    };
+    void ensureSelectedIsMake();
+    return () => {
+      cancelled = true;
+    };
+    // ensureMaterialsByIds 稳定于 materialsRef；仅随范围切换触发
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mainMaterialScope, modalVisible, isEdit]);
 
   /**
-   * 重新生成BOM编号（根据当前表单值）
+   * 重新生成BOM编号（根据当前表单值 / 刚选中的主物料）
+   *
+   * 注意：UniMaterialSelect embed 模式下业务 onChange 早于 proFormFieldOnChange，
+   * 且远程搜到的物料未必已在 materials state；必须用 override / materialsRef / 按 id 补拉，
+   * 否则会静默跳过，表现为「选了主物料但编号名称不回显」。
    */
-  const regenerateBOMCode = async () => {
+  const regenerateBOMCode = async (materialOverride?: Material | null) => {
     if (isEdit) {
       return;
     }
 
-    // 默认规则为 BOM-物料编码-版本：未选主物料时不应预览，否则会空跑并误报「规则未启用」
     const formValues = formRef.current?.getFieldsValue();
-    const materialId = formValues?.materialId;
-    if (!materialId) {
+    const materialId = Number(materialOverride?.id ?? formValues?.materialId);
+    if (!Number.isFinite(materialId) || materialId <= 0) {
       return;
     }
-    const selectedMaterial = materials.find((m) => m.id === materialId);
-    const materialCode = selectedMaterial?.mainCode || selectedMaterial?.code;
+
+    // embed 回调时表单 materialId 可能尚未写入
+    if (Number(formValues?.materialId) !== materialId) {
+      formRef.current?.setFieldsValue({ materialId });
+    }
+
+    let selectedMaterial =
+      materialOverride && Number(materialOverride.id) === materialId
+        ? materialOverride
+        : materialsRef.current.find((m) => Number(m.id) === materialId);
+
+    const hasCode = Boolean(
+      (selectedMaterial?.mainCode || selectedMaterial?.code || '').toString().trim(),
+    );
+    if (!hasCode) {
+      const resolved = await ensureMaterialsByIds([materialId]);
+      selectedMaterial =
+        resolved.find((m) => Number(m.id) === materialId) ?? selectedMaterial;
+    }
+
+    const materialCode = (
+      selectedMaterial?.mainCode ||
+      selectedMaterial?.code ||
+      ''
+    )
+      .toString()
+      .trim();
     if (!materialCode) {
+      console.warn('BOM编号生成跳过：主物料无编码', materialId);
       return;
     }
 
@@ -929,7 +935,7 @@ const BOMPage: React.FC = () => {
         formRef.current?.setFieldsValue({
           bomCode: codeResponse.code,
         });
-        regenerateBomName(codeResponse.code);
+        regenerateBomName(codeResponse.code, selectedMaterial);
       }
     } catch (error: any) {
       console.error('获取编号规则配置或生成编号失败:', error?.message || error);
@@ -937,12 +943,20 @@ const BOMPage: React.FC = () => {
     }
   };
 
-  const regenerateBomName = (bomCodeOverride?: string) => {
+  const regenerateBomName = (
+    bomCodeOverride?: string,
+    materialOverride?: Material | null,
+  ) => {
     if (bomNameTouchedRef.current || isEdit) return;
     const formValues = formRef.current?.getFieldsValue();
-    const materialId = formValues?.materialId;
+    const materialId = Number(materialOverride?.id ?? formValues?.materialId);
     const bomCode = bomCodeOverride ?? formValues?.bomCode;
-    const selectedMaterial = materialId ? materials.find((m) => m.id === materialId) : undefined;
+    const selectedMaterial =
+      materialOverride && Number(materialOverride.id) === materialId
+        ? materialOverride
+        : Number.isFinite(materialId) && materialId > 0
+          ? materialsRef.current.find((m) => Number(m.id) === materialId)
+          : undefined;
     const nextName = buildDefaultBomName(selectedMaterial, bomCode);
     formRef.current?.setFieldsValue({ bomName: nextName || undefined });
   };
@@ -1549,20 +1563,29 @@ const BOMPage: React.FC = () => {
       await detectBomItemCycles(standardValues.materialId, standardValues.items);
 
       const buildBatch = () => {
+        const toPositiveNumber = (raw: unknown, fallback?: number): number | undefined => {
+          if (raw == null || raw === '') return fallback;
+          const n = typeof raw === 'number' ? raw : Number(String(raw).trim().replace(/,/g, ''));
+          return Number.isFinite(n) ? n : fallback;
+        };
         return {
           material_id: standardValues.materialId,
           items: standardValues.items.map((item: any) => {
             if (!item.componentId) throw new Error(t('app.master-data.bom.selectChildMaterial'));
-            if (!item.quantity || item.quantity <= 0) throw new Error(t('app.master-data.bom.quantityMustBePositive'));
+            const quantity = toPositiveNumber(item.quantity);
+            if (quantity == null || quantity <= 0) {
+              throw new Error(t('app.master-data.bom.quantityMustBePositive'));
+            }
+            const wasteRate = toPositiveNumber(item.wasteRate, 0) ?? 0;
             const unitValue = (item.unit && item.unit.trim()) ? item.unit.trim() : null;
             const materialSource = getComponentMaterialSourceType(item.componentId);
             const formSource = normalizeMaterialSourceType(item.sourceType);
             const sourceTypeForApi = materialSource ? null : (formSource || null);
             return {
               component_id: item.componentId,
-              quantity: item.quantity,
+              quantity,
               unit: unitValue,
-              waste_rate: item.wasteRate ?? 0,
+              waste_rate: wasteRate,
               is_required: item.isRequired !== false,
               issue_method: item.issueMethod ?? 'pick',
               is_alternative: item.isAlternative || false,
@@ -1574,7 +1597,7 @@ const BOMPage: React.FC = () => {
             };
           }),
           version: standardValues.version || '1.0',
-          base_quantity: standardValues.baseQuantity ?? 1,
+          base_quantity: toPositiveNumber(standardValues.baseQuantity, 1) ?? 1,
           bom_name: standardValues.bomName != null ? String(standardValues.bomName).trim() : undefined,
           bom_code: standardValues.bomCode,
           effective_date: standardValues.effectiveDate,
@@ -2746,8 +2769,27 @@ const BOMPage: React.FC = () => {
       uniTablePrimaryFlex: false,
       resizable: false,
       ellipsis: false,
-      hideInSearch: true,
+      order: 10,
       sorter: true,
+      renderFormItem: (_schema, _config, form) => (
+        <UniMaterialSelect
+          name="_bom_search_material_id"
+          label=""
+          placeholder={t('app.master-data.bom.mainMaterialPlaceholder')}
+          showQuickCreate={false}
+          showAdvancedSearch={false}
+          fillMapping={{}}
+          formItemProps={{ style: { marginBottom: 0 } }}
+          hostResource={BOM_RESOURCE}
+          onChange={(id) => {
+            const next = Array.isArray(id) ? id[0] : id;
+            form?.setFieldValue(
+              'materialId',
+              next != null && Number.isFinite(Number(next)) ? Number(next) : undefined,
+            );
+          }}
+        />
+      ),
       render: (_, r: any) => {
         if (isRootRow(r)) {
           const parts = getMaterialParts(r.materialId);
@@ -2787,7 +2829,10 @@ const BOMPage: React.FC = () => {
       minWidth: 140,
       uniTableKeepWidth: true,
       resizable: false,
-      hideInSearch: true,
+      order: 7,
+      fieldProps: {
+        placeholder: t('app.master-data.bom.versionPlaceholder'),
+      },
       sorter: true,
       render: (_, r: any) => {
         if (isRootRow(r)) {
@@ -2854,7 +2899,10 @@ const BOMPage: React.FC = () => {
       uniTablePrimaryFlex: true,
       resizable: false,
       ellipsis: false,
-      hideInSearch: true,
+      order: 8,
+      fieldProps: {
+        placeholder: t('app.master-data.bom.bomNameSearchPlaceholder'),
+      },
       sorter: true,
       render: (_, r: any) => {
         if (isRootRow(r)) {
@@ -2883,7 +2931,10 @@ const BOMPage: React.FC = () => {
       title: t('app.master-data.bom.bomCode'),
       dataIndex: 'bomCode',
       hideInTable: true,
-      hideInSearch: true,
+      order: 9,
+      fieldProps: {
+        placeholder: t('app.master-data.bom.bomCodeSearchPlaceholder'),
+      },
       sorter: true,
     },
     {
@@ -2967,6 +3018,7 @@ const BOMPage: React.FC = () => {
       dataIndex: 'includeObsolete',
       valueType: 'switch',
       hideInTable: true,
+      order: 5,
       initialValue: false,
       search: { transform: (v: boolean) => (v ? true : undefined) },
       fieldProps: { checkedChildren: '', unCheckedChildren: '' },
@@ -2978,7 +3030,7 @@ const BOMPage: React.FC = () => {
       key: 'lifecycle',
       dataIndex: 'approvalStatus',
       fixed: 'right' as const,
-      hideInSearch: true,
+      order: 6,
       valueType: 'select',
       sorter: false,
       valueEnum: {
@@ -2986,6 +3038,10 @@ const BOMPage: React.FC = () => {
         pending: { text: t('app.master-data.bom.statusPending') },
         approved: { text: t('app.master-data.bom.statusApproved') },
         rejected: { text: t('app.master-data.bom.statusRejected') },
+      },
+      fieldProps: {
+        placeholder: t('app.master-data.bom.approvalStatusPlaceholder'),
+        allowClear: true,
       },
       render: (_, r: any) => {
         if (isRootRow(r)) return getApprovalStatusTag(r.approvalStatus);
@@ -3697,6 +3753,8 @@ const BOMPage: React.FC = () => {
                 <SyncPushHubButton
                   syncEnabled={toolbarSyncPush.syncEnabled}
                   pushEnabled={toolbarSyncPush.pushEnabled}
+                  historySourceType="engineering_bom"
+                  historyTargetProfiles={['kingdee_eng_bom']}
                   size="middle"
                   wrapButton={(hubButton) => (
                     <SyncFreshnessBadge
@@ -3966,7 +4024,7 @@ const BOMPage: React.FC = () => {
               { key: 'processRouteCode', title: t('app.master-data.bom.importHeaderProcessRouteCode') },
               { key: 'processRouteName', title: t('app.master-data.bom.importHeaderProcessRouteName') },
               ...[...bomListCustomFields]
-                .filter((f) => f?.is_active !== false && f?.code)
+                .filter((f) => f?.is_active !== false && f?.code && !isAssociatedObjectDisplayOnly(f))
                 .sort((a, b) => Number(a?.sort_order ?? 0) - Number(b?.sort_order ?? 0))
                 .map((f) => ({
                   key: `custom_${f.code}`,
@@ -4157,14 +4215,30 @@ const BOMPage: React.FC = () => {
             align-items: center;
             justify-content: center;
           }
+          .bom-form-modal .bom-main-material-control {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+            flex-wrap: nowrap;
+          }
+          .bom-form-modal .bom-main-material-control .form-field-segmented {
+            flex-shrink: 0;
+          }
+          .bom-form-modal .bom-main-material-select {
+            flex: 1;
+            min-width: 0;
+          }
         `}</style>
         <ProForm.Item noStyle shouldUpdate={(prevValues, currentValues) => prevValues.materialId !== currentValues.materialId || prevValues.version !== currentValues.version}>
           {({ getFieldValue }) => {
-            const materialId = getFieldValue('materialId');
+            const materialId = Number(getFieldValue('materialId'));
             const version = getFieldValue('version') || '1.0';
             const context: Record<string, any> = { version };
-            if (materialId) {
-              const selectedMaterial = materials.find(m => m.id === materialId);
+            if (Number.isFinite(materialId) && materialId > 0) {
+              const selectedMaterial =
+                materialsById.get(materialId) ??
+                materialsRef.current.find((m) => Number(m.id) === materialId);
               if (selectedMaterial) {
                 context.material_code = selectedMaterial.mainCode || selectedMaterial.code;
                 context.material_name = selectedMaterial.name;
@@ -4179,6 +4253,7 @@ const BOMPage: React.FC = () => {
                 // 规则依赖主物料编码：未选物料时禁止自动预览，避免一打开弹窗就误报
                 autoGenerateOnCreate={false}
                 showGenerateButton={false}
+                formRef={formRef}
                 documentId={isEdit ? editFormHeaderId ?? undefined : undefined}
                 context={context}
                 fieldProps={{
@@ -4201,13 +4276,63 @@ const BOMPage: React.FC = () => {
           }}
           extra={t('app.master-data.bom.bomNameExtra')}
         />
-        <SafeProFormSelect
+        <ProFormField
+          key={`bom-main-material-field-${mainMaterialScope}`}
           name="materialId"
-          label={(
-            <Space size={10} align="center">
-              <span>{t('app.master-data.bom.mainMaterialLabel')}</span>
+          colProps={{ span: 12 }}
+          formItemProps={{ className: 'bom-main-material-field' }}
+          label={t('app.master-data.bom.mainMaterialLabel')}
+          rules={[{ required: true, message: t('app.master-data.bom.mainMaterialRequired') }]}
+          renderFormItem={(_, { onChange: notifyProForm }) => (
+            <div className="bom-main-material-control">
+              <div className="bom-main-material-select">
+                <UniMaterialSelect
+                  key={`bom-main-material-${mainMaterialScope}`}
+                  embedInProFormField
+                  proFormFieldOnChange={notifyProForm as (value: number | number[] | undefined) => void}
+                  name="materialId"
+                  placeholder={t('app.master-data.bom.mainMaterialPlaceholder')}
+                  disabled={isEdit}
+                  mastersOnly
+                  sourceType={mainMaterialScope === 'make' ? 'Make' : undefined}
+                  hostResource={BOM_RESOURCE}
+                  showQuickCreate={!isEdit}
+                  showAdvancedSearch={!isEdit}
+                  fillMapping={{}}
+                  fallbackOption={(() => {
+                    const mid = Number(
+                      (isEdit && editFormInitialValues
+                        ? editFormInitialValues.materialId
+                        : formRef.current?.getFieldValue('materialId')) ?? 0,
+                    );
+                    if (!Number.isFinite(mid) || mid <= 0) return undefined;
+                    const material = materialsById.get(mid);
+                    return material
+                      ? { value: material.id, label: formatMaterialLabel(material) }
+                      : { value: mid, label: String(mid) };
+                  })()}
+                  onChange={(_val, material) => {
+                    const mat =
+                      material && !Array.isArray(material)
+                        ? (material as Material)
+                        : undefined;
+                    if (mat) {
+                      const next = upsertMaterialsById(materialsRef.current, [mat]);
+                      materialsRef.current = next;
+                      setMaterials(next);
+                    }
+                    if (!isEdit) {
+                      // 传入刚选中的物料，避免依赖尚未 flush 的 materials state / 表单值
+                      void regenerateBOMCode(mat);
+                      regenerateBomName(undefined, mat);
+                    }
+                  }}
+                />
+              </div>
               <ThemedSegmented
-                size="small"
+                className="form-field-segmented"
+                size="medium"
+                style={{ width: 'fit-content' }}
                 value={mainMaterialScope}
                 onChange={(v) => setMainMaterialScope(v as 'make' | 'all')}
                 disabled={isEdit}
@@ -4216,19 +4341,8 @@ const BOMPage: React.FC = () => {
                   { label: t('app.master-data.bom.mainMaterialScopeAll'), value: 'all' },
                 ]}
               />
-            </Space>
+            </div>
           )}
-          placeholder={t('app.master-data.bom.mainMaterialPlaceholder')}
-          colProps={{ span: 12 }}
-          options={mainMaterialOptions}
-          rules={[{ required: true, message: t('app.master-data.bom.mainMaterialRequired') }]}
-          fieldProps={{
-            disabled: isEdit,
-            loading: materialsLoading,
-            showSearch: true,
-            filterOption: (input, option) => (option?.label as string || '').toLowerCase().includes(input.toLowerCase()),
-            onChange: () => { if (!isEdit) { setTimeout(() => regenerateBOMCode(), 300); setTimeout(() => regenerateBomName(), 350); } },
-          }}
         />
         <ProFormText
           name="version"

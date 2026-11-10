@@ -4,6 +4,7 @@
 import type { TFunction } from 'i18next';
 
 import type { Material } from '../../../master-data/types/material';
+import { findMaterialByImportCode } from '../../../master-data/utils/materialImportResolve';
 import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
@@ -344,9 +345,7 @@ export function parseDocumentReturnListImport(
       return;
     }
 
-    const mat = materials.find(
-      (m: any) => (m.mainCode || m.code || '').toUpperCase() === materialCode.toUpperCase(),
-    );
+    const mat = findMaterialByImportCode(materials, materialCode);
     if (!mat) {
       errors.push({
         row: rowNum,

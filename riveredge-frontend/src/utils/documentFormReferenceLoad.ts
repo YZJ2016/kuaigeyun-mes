@@ -21,6 +21,7 @@ export const KUAIZHIZAO_DOC_HOST = {
   salesOrderChange: 'kuaizhizao:sales-order-change',
   salesContract: 'kuaizhizao:sales-contract',
   quotation: 'kuaizhizao:quotation',
+  salesForecast: 'kuaizhizao:sales-forecast',
   shipmentNotice: 'kuaizhizao:shipment-notice',
   salesReturn: 'kuaizhizao:sales-return',
   customerFollowUp: 'kuaizhizao:customer-follow-up',

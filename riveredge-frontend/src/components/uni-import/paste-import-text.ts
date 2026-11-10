@@ -1,23 +1,56 @@
 /**
  * Excel → Univer 粘贴：优先从 text/html 的 x:num / ss:Type=Number 取完整数值原文，
  * text/plain 常为显示截断值，不能单独依赖。
+ *
+ * 日期例外：Excel HTML 常为「显示 2026-10-25 + x:num=46320」。若按数值精度逻辑会误取序列号，
+ * 须保留日历文案（或把序列号归一成 YYYY-MM-DD）。
  */
+
+import { normalizeImportSpreadsheetDate } from '../../utils/importSpreadsheetDate';
+import {
+  spreadsheetNumericCompareText,
+  spreadsheetPlainCellText,
+} from '../../utils/spreadsheetPreserveText';
 
 /** Univer CellValueType.FORCE_STRING */
 export const CELL_FORCE_STRING = 4;
 
 const NUMERIC_RE = /^\d+(\.\d+)?([eE][+-]?\d+)?$/;
+/** 剪贴板/显示里常见的日历日期文案 */
+const DATE_DISPLAY_RE =
+  /^(\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.]\d{1,2}[-/.]\d{4}|\d{8})([ T].*)?$/;
 
 function fractionalDigits(value: string): number {
-  const cleaned = value.trim().replace(/,/g, '');
+  const cleaned = spreadsheetNumericCompareText(value);
   const dot = cleaned.indexOf('.');
   if (dot < 0) return 0;
   return cleaned.length - dot - 1;
 }
 
+function looksLikeDateDisplay(raw: string): boolean {
+  return DATE_DISPLAY_RE.test(raw.trim());
+}
+
+/** Excel 日期序列常见区间（约 1954～2173 年）；仅与日期显示对照时使用，勿单独把数量当成日期 */
+function looksLikeExcelDateSerial(raw: string): boolean {
+  const s = spreadsheetNumericCompareText(raw);
+  if (!NUMERIC_RE.test(s)) return false;
+  const n = Number(s);
+  return Number.isFinite(n) && n >= 20000 && n <= 100000;
+}
+
 function pickRicherText(a: string, b: string): string {
-  const na = a.trim().replace(/,/g, '');
-  const nb = b.trim().replace(/,/g, '');
+  const na = spreadsheetNumericCompareText(a);
+  const nb = spreadsheetNumericCompareText(b);
+
+  // 显示为日期、属性为序列号 → 保留日期（勿取 46320）。勿把两侧都是数字的数量格误判成日期。
+  if (looksLikeDateDisplay(na) && looksLikeExcelDateSerial(nb)) {
+    return normalizeImportSpreadsheetDate(na) ?? na;
+  }
+  if (looksLikeDateDisplay(nb) && looksLikeExcelDateSerial(na)) {
+    return normalizeImportSpreadsheetDate(nb) ?? nb;
+  }
+
   const aNum = NUMERIC_RE.test(na);
   const bNum = NUMERIC_RE.test(nb);
   if (aNum && bNum) {
@@ -28,8 +61,8 @@ function pickRicherText(a: string, b: string): string {
     return nb.length > na.length ? nb : na;
   }
   if (bNum && !aNum) return nb;
-  if (a.trim() !== '') return a.trim().replace(/,/g, '');
-  return b.trim().replace(/,/g, '');
+  if (a.trim() !== '') return spreadsheetPlainCellText(a);
+  return spreadsheetPlainCellText(b);
 }
 
 function decodeHtmlEntities(text: string): string {
@@ -91,7 +124,7 @@ export function parseClipboardHtmlTable(html: string): string[][] | null {
         value = pickRicherText(display, String(ssNum));
       }
 
-      cells.push(value.replace(/,/g, ''));
+      cells.push(spreadsheetPlainCellText(value));
     }
     if (cells.length) rows.push(cells);
   }
@@ -103,7 +136,7 @@ export function parseClipboardTsv(text: string): string[][] {
   const normalized = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   if (!normalized) return [];
   const lines = normalized.replace(/\n+$/, '').split('\n');
-  return lines.map((line) => line.split('\t').map((cell) => cell.replace(/,/g, '')));
+  return lines.map((line) => line.split('\t').map((cell) => spreadsheetPlainCellText(cell)));
 }
 
 /** HTML 与 plain 逐格取小数位更长者 */

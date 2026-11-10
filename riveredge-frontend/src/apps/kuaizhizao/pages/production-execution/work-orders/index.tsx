@@ -228,6 +228,12 @@ import {
   resolveMaterialFormReference,
   searchMaterialFormReferenceOptions,
 } from '../../../../../utils/documentFormReferenceLoad'
+import {
+  collectImportMaterialCodes,
+  findMaterialByImportCode,
+  normalizeImportMaterialCode,
+  resolveMaterialsByCodesForImport,
+} from '../../../../master-data/utils/materialImportResolve'
 import { OperationPickPanel } from '../../../../master-data/components/OperationSequenceEditor'
 import { useNavigate, useLocation } from 'react-router-dom'
 import {
@@ -5010,8 +5016,12 @@ const WorkOrdersPage: React.FC = () => {
       return
     }
 
+    const seedMaterials = await loadMaterialFormReferenceList(KUAIZHIZAO_DOC_HOST.workOrder)
     const [materials, workshopsRes] = await Promise.all([
-      loadMaterialFormReferenceList(KUAIZHIZAO_DOC_HOST.workOrder),
+      resolveMaterialsByCodesForImport(
+        collectImportMaterialCodes(rows, idx.product ?? -1),
+        seedMaterials,
+      ),
       workshopApi.list({ limit: 1000 }),
     ])
     const workshops: Workshop[] = factoryListItems(workshopsRes as any)
@@ -5021,7 +5031,7 @@ const WorkOrdersPage: React.FC = () => {
 
     rows.forEach((row: any[], i: number) => {
       const rowNum = i + 3
-      const productCode = (row[idx.product] ?? '').toString().trim()
+      const productCode = normalizeImportMaterialCode(row[idx.product])
       const qtyVal = Number(row[idx.qty])
       if (!productCode) {
         errors.push({ row: rowNum, message: '产品编号不能为空' })
@@ -5032,9 +5042,12 @@ const WorkOrdersPage: React.FC = () => {
         return
       }
 
-      const mat = materials.find((m: any) => (m.mainCode || m.code || '').toUpperCase() === productCode.toUpperCase())
+      const mat = findMaterialByImportCode(materials, productCode)
       if (!mat) {
-        errors.push({ row: rowNum, message: `未找到产品：${productCode}` })
+        errors.push({
+          row: rowNum,
+          message: t('app.kuaizhizao.quotation.validation.materialNotFound', { code: productCode }),
+        })
         return
       }
 

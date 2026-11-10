@@ -306,6 +306,11 @@ import {
   loadMaterialFormReferenceList,
   resolveMaterialFormReference,
 } from '../../../../../utils/documentFormReferenceLoad';
+import {
+  findMaterialByImportCode,
+  normalizeImportMaterialCode,
+  resolveMaterialsByCodesForImport,
+} from '../../../../master-data/utils/materialImportResolve';
 import { useConfigStore } from '../../../../../stores/configStore';
 import { getDictionaryItemsCached } from '../../../../../services/dataDictionaryCache';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
@@ -3397,20 +3402,25 @@ const SalesOrdersPage: React.FC = () => {
 
   const handleItemImport = async (data: any[][]) => {
     const priceTypeForm = salesFormPriceType(formRef.current?.getFieldValue('price_type'));
-    // 明细 Excel 按编码匹配：仅在导入时按需拉引用清单，不在进页预拉
-    let materialList = materialsRef.current;
-    if (materialList.length < 50) {
-      const rows = await loadMaterialFormReferenceList('kuaizhizao:sales-order');
-      if (rows.length) {
-        mergeMaterialsCache(rows);
-        materialList = rows;
-      }
-    }
     // 假设数据从第3行开始（0:表头, 1:示例）
     const rows = data.slice(2);
+    const importCodes = rows
+      .map((row) => normalizeImportMaterialCode(row[0]))
+      .filter(Boolean);
+    const loaded = await loadMaterialFormReferenceList(KUAIZHIZAO_DOC_HOST.salesOrder);
+    if (loaded.length) {
+      mergeMaterialsCache(loaded);
+    }
+    const materialList = await resolveMaterialsByCodesForImport(
+      importCodes,
+      loaded.length ? loaded : materialsRef.current,
+    );
+    if (materialList.length) {
+      mergeMaterialsCache(materialList);
+    }
     const newItems = rows
       .map((row) => {
-        const materialCode = String(row[0] || '').trim();
+        const materialCode = normalizeImportMaterialCode(row[0]);
         const spec = String(row[1] || '').trim();
         const unitRaw = String(row[2] || '').trim();
         const unit = materialUnitImport.parse(unitRaw) || unitRaw;
@@ -3420,7 +3430,7 @@ const SalesOrdersPage: React.FC = () => {
 
         if (!materialCode) return null;
 
-        const material = materialList.find(m => m.mainCode === materialCode || m.code === materialCode);
+        const material = findMaterialByImportCode(materialList, materialCode);
         const taxR = Number((material as any)?.defaults?.defaultTaxRate ?? (material as any)?.defaults?.default_tax_rate) || 0;
         let unitPrice =
           price ||

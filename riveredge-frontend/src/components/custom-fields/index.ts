@@ -9,5 +9,7 @@ export {
 export {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
+  shouldShowCustomFieldInDetail,
 } from './CustomFieldsDetailSection';
+export { isAssociatedObjectDisplayOnly } from './customFieldAssociatedDisplayMode';
 export { AssociatedObjectSelect } from './AssociatedObjectSelect';

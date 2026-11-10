@@ -99,6 +99,21 @@ function normalizeMaterialRow(item: Material): Material {
   if (row.externalSyncAt === undefined && row.external_sync_at !== undefined) {
     row.externalSyncAt = row.external_sync_at
   }
+  if (row.batchManaged === undefined && row.batch_managed !== undefined) {
+    row.batchManaged = row.batch_managed
+  }
+  if (row.serialManaged === undefined && row.serial_managed !== undefined) {
+    row.serialManaged = row.serial_managed
+  }
+  if (row.mainCode === undefined && row.main_code !== undefined) {
+    row.mainCode = row.main_code
+  }
+  if (row.isActive === undefined && row.is_active !== undefined) {
+    row.isActive = row.is_active
+  }
+  if (row.baseUnit === undefined && row.base_unit !== undefined) {
+    row.baseUnit = row.base_unit
+  }
   return row as Material
 }
 

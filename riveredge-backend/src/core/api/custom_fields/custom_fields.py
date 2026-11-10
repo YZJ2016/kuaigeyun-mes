@@ -384,6 +384,11 @@ async def update_field(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
         )
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e)
+        )
 
 
 @router.delete("/{uuid}", status_code=status.HTTP_204_NO_CONTENT)

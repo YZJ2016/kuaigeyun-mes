@@ -493,6 +493,7 @@ class FaAssetService:
 
     async def export_excel(self, tenant_id: int) -> BytesIO:
         from apps.kuaicaiwu.services.fa_asset_import_template import FA_ASSET_IMPORT_HEADERS
+        from core.utils.excel_text_cell import write_excel_text_cell
 
         result = await self.list_assets(tenant_id, skip=0, limit=10000)
         wb = Workbook()
@@ -512,35 +513,39 @@ class FaAssetService:
             "units_of_production",
             "none",
         )}
+        # 身份/文案列下标（0-based，对应 FA_ASSET_IMPORT_HEADERS）强制文本，避免编码被 Excel 变数字
+        text_col_indexes = {0, 1, 2, 3, 5, 7, 8, 9, 10, 13, 14, 15, 21, 22, 23}
         for item in result["items"]:
-            ws.append(
-                [
-                    item.get("asset_code"),
-                    item.get("asset_name"),
-                    item.get("category_name"),
-                    item.get("change_method"),
-                    item.get("quantity"),
-                    item.get("unit"),
-                    item.get("useful_life_months"),
-                    item.get("department_name"),
-                    item.get("user_name"),
-                    status_labels.get(str(item.get("status") or ""), item.get("status")),
-                    item.get("location"),
-                    item.get("start_use_date"),
-                    item.get("entry_date"),
-                    item.get("specification"),
-                    item.get("notes"),
-                    depr_labels.get(str(item.get("depreciation_method") or ""), item.get("depreciation_method")),
-                    item.get("original_value"),
-                    item.get("impairment_value"),
-                    item.get("depreciated_periods"),
-                    item.get("accumulated_depreciation"),
-                    item.get("residual_rate"),
-                    item.get("accumulated_depreciation_account_code"),
-                    item.get("expense_account_code"),
-                    item.get("asset_account_code"),
-                ]
-            )
+            row_values = [
+                item.get("asset_code"),
+                item.get("asset_name"),
+                item.get("category_name"),
+                item.get("change_method"),
+                item.get("quantity"),
+                item.get("unit"),
+                item.get("useful_life_months"),
+                item.get("department_name"),
+                item.get("user_name"),
+                status_labels.get(str(item.get("status") or ""), item.get("status")),
+                item.get("location"),
+                item.get("start_use_date"),
+                item.get("entry_date"),
+                item.get("specification"),
+                item.get("notes"),
+                depr_labels.get(str(item.get("depreciation_method") or ""), item.get("depreciation_method")),
+                item.get("original_value"),
+                item.get("impairment_value"),
+                item.get("depreciated_periods"),
+                item.get("accumulated_depreciation"),
+                item.get("residual_rate"),
+                item.get("accumulated_depreciation_account_code"),
+                item.get("expense_account_code"),
+                item.get("asset_account_code"),
+            ]
+            ws.append(row_values)
+            excel_row = ws.max_row
+            for col_idx in text_col_indexes:
+                write_excel_text_cell(ws.cell(row=excel_row, column=col_idx + 1), row_values[col_idx])
         stream = BytesIO()
         wb.save(stream)
         stream.seek(0)
