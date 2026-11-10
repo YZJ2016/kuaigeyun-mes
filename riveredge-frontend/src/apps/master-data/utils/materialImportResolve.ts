@@ -120,8 +120,9 @@ export async function resolveMaterialsByCodesForImport(
             // 别名精确命中时返回行编码可能与导入码不同；list?code= 精确路径通常只一条
             ((items ?? []).length === 1 ? items![0] : undefined);
           if (hit) remember(hit, [code]);
-        } catch {
-          /* 单码失败不阻断整批 */
+        } catch (error) {
+          // 单码失败不阻断整批，但必须可观测，避免静默成「未找到产品」
+          console.warn('[materialImportResolve] list by code failed', code, error);
         }
       }),
     );

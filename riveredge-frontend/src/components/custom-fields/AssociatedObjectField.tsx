@@ -178,9 +178,16 @@ function AssociatedObjectLookupControl({
         matchField,
         matchValue: sourceValue as string | number,
         returnField,
-      }).then((res) => {
-        if (!cancelled) setResolvedValue(res.value ?? null);
-      });
+      })
+        .then((res) => {
+          if (!cancelled) setResolvedValue(res.value ?? null);
+        })
+        .catch((error) => {
+          if (!cancelled) {
+            console.warn('[AssociatedObjectField] lookup failed (display)', error);
+            setResolvedValue(null);
+          }
+        });
       return () => {
         cancelled = true;
       };
@@ -202,9 +209,16 @@ function AssociatedObjectLookupControl({
         matchField,
         matchValue: sourceValue as string | number,
         returnField,
-      }).then((res) => {
-        if (!cancelled) setResolvedValue(res.value ?? null);
-      });
+      })
+        .then((res) => {
+          if (!cancelled) setResolvedValue(res.value ?? null);
+        })
+        .catch((error) => {
+          if (!cancelled) {
+            console.warn('[AssociatedObjectField] lookup failed', error);
+            setResolvedValue(null);
+          }
+        });
       return () => {
         cancelled = true;
       };

@@ -30,6 +30,14 @@ def test_associated_object_numeric_id_stores_value_number():
     assert row.value_text is None
 
 
+def test_associated_object_string_id_stores_value_number():
+    """Select 控件常提交字符串 id，须落 value_number，禁止进 value_text。"""
+    row = _value()
+    row.set_value("42", "associated_object", {"displayMode": "select"})
+    assert row.value_number == Decimal("42")
+    assert row.value_text is None
+
+
 def test_associated_object_display_mode_number_rejects_unit_text():
     row = _value()
     with pytest.raises(ValueError, match="自定义数值字段值无效"):
