@@ -124,6 +124,10 @@ export async function getCustomFieldsByTable(
   isActive?: boolean,
   hostResource?: string,
 ): Promise<CustomField[]> {
+  const trimmed = (tableName || '').trim();
+  if (!trimmed) {
+    return [];
+  }
   const params: Record<string, unknown> = {};
   if (isActive !== undefined) {
     params.is_active = isActive;
@@ -131,7 +135,7 @@ export async function getCustomFieldsByTable(
   if (hostResource) {
     params.host_resource = hostResource;
   }
-  return apiRequest<CustomField[]>(`/core/custom-fields/by-table/${tableName}`, {
+  return apiRequest<CustomField[]>(`/core/custom-fields/by-table/${encodeURIComponent(trimmed)}`, {
     params,
   });
 }

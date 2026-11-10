@@ -9,9 +9,10 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Tabs, Button, Dropdown, MenuProps, theme, Tooltip, message, Popover, Menu } from 'antd';
 import type { ItemType } from 'antd/es/menu/interface';
-import { CaretLeftFilled, CaretRightFilled, ReloadOutlined, FullscreenOutlined, FullscreenExitOutlined, PushpinFilled, StarFilled, MenuOutlined } from '@ant-design/icons';
+import { CaretLeftFilled, CaretRightFilled, CloseOutlined, ReloadOutlined, FullscreenOutlined, FullscreenExitOutlined, PushpinFilled, StarFilled, MenuOutlined } from '@ant-design/icons';
 import type { MenuDataItem } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
+import { notifyDataRefreshed } from '../../utils/notifyDataRefreshed';
 import { findMenuTitleWithTranslation } from '../../utils/menuTranslation';
 import { subscribeResizeBus } from '../../hooks/useResizeBus';
 import { removeCustomPageTitle, resolveCustomPageTitle, setCustomPageTitle } from '../../utils/customPageTitle';
@@ -272,6 +273,24 @@ function tabPathname(tabKey: string): string {
   return (tabKey.split('?')[0] || '/').replace(/\/$/, '') || '/';
 }
 
+/**
+ * 同一业务页签身份：完整 key 相等，或仅 query 不同（产品工艺 materialUuid 等）。
+ * addTab 已按 pathname 去重；关闭/激活/右键菜单必须同一口径。
+ */
+function isSameTabIdentity(a: string, b: string): boolean {
+  if (a === b) return true;
+  return tabPathname(a) === tabPathname(b);
+}
+
+/** 在标签列表中按身份解析真实 tab（关闭/激活的唯一入口） */
+function findTabByIdentity(tabList: TabItem[], key: string): TabItem | undefined {
+  return tabList.find((tab) => isSameTabIdentity(tab.key, key));
+}
+
+function findTabIndexByIdentity(tabList: TabItem[], key: string): number {
+  return tabList.findIndex((tab) => isSameTabIdentity(tab.key, key));
+}
+
 /** 当前路由对应的标签 key（activeKey 唯一真源） */
 function resolveRouteTabKey(pathname: string, search: string): string {
   const searchParams = new URLSearchParams(search || '');
@@ -286,8 +305,11 @@ function resolveRouteTabKey(pathname: string, search: string): string {
  */
 const REDIRECT_ONLY_TAB_PATH_PATTERNS: RegExp[] = [
   /^\/apps\/kuaiplm\/knowledge-base\/detail\/[^/]+$/,
+  // 轻财务旧链：finance-management/* → 快制造财务中心（勿占「财务管理/财务中心」双页签）
+  /^\/apps\/kuaicaiwu\/finance-management(?:\/.*)?$/,
   /^\/apps\/kuaicaiwu\/cost-management\/dashboard$/,
   /^\/apps\/kuaicaiwu\/management-dashboard$/,
+  /^\/apps\/kuaicaiwu\/management-analysis\/margin-report$/,
   /^\/apps\/kuaizhizao\/cost-management\/dashboard$/,
   /^\/apps\/kuaizhizao\/performance\/dashboard$/,
   /^\/apps\/kuaizhizao\/after-sales-service\/dashboard$/,
@@ -296,6 +318,19 @@ const REDIRECT_ONLY_TAB_PATH_PATTERNS: RegExp[] = [
 function shouldSkipTabPath(pathOrKey: string): boolean {
   const pathname = tabPathname(pathOrKey);
   return REDIRECT_ONLY_TAB_PATH_PATTERNS.some((re) => re.test(pathname));
+}
+
+/** 同 key 只保留一条（持久化/合并异常时避免 React Tabs 关错标签） */
+function dedupeTabsByKey(tabList: TabItem[]): TabItem[] {
+  const seen = new Set<string>();
+  const result: TabItem[] = [];
+  for (const tab of tabList) {
+    const key = String(tab.key ?? '');
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    result.push(tab);
+  }
+  return result;
 }
 
 /** 持久化/历史数据：同 pathname 只保留一条（优先保留带 query 的 key） */
@@ -334,7 +369,7 @@ function mergeTabLists(current: TabItem[], restored: TabItem[]): TabItem[] {
       pathnameSeen.add(pathname);
     }
   }
-  return dedupeTabsByPathname(merged);
+  return dedupeTabsByKey(dedupeTabsByPathname(merged));
 }
 
 function loadPersistedTabs(
@@ -359,7 +394,7 @@ function loadPersistedTabs(
     const homeReady = options?.homeReady === true && !!tenantHomePath;
     const contentTabs = retainOpenHomeTabs(validTabs, tenantHomePath, homeReady);
     if (contentTabs.length === 0) return null;
-    const deduped = dedupeTabsByPathname(contentTabs);
+    const deduped = dedupeTabsByKey(dedupeTabsByPathname(contentTabs));
     if (!homeReady) {
       return deduped;
     }
@@ -465,6 +500,10 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   const pendingDefaultHomeCloseRef = useRef<string | null>(null);
   /** 用户关掉工作台/有效首页后，同一会话不再自动插回 */
   const dismissedHomePathRef = useRef<string | null>(null);
+  /** 正在关闭的标签 key：路由尚未切走时禁止「路由同步」把该页再加回（表现为点叉闪一下仍在） */
+  const closingTabKeyRef = useRef<string | null>(null);
+  /** 点在页签关闭叉上：随后 antd 可能先发 onChange；用该标记走关闭而非切页 */
+  const removeIntentRef = useRef(false);
 
   const tenantIdStrForTabs = getTenantId()?.toString() ?? null;
 
@@ -566,8 +605,8 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
       }
 
       setTabs((prevTabs) => {
-        // 检查标签是否已存在
-        const existingTab = prevTabs.find((tab) => tab.key === path);
+        // 检查标签是否已存在（key 或 path 精确命中）
+        const existingTab = prevTabs.find((tab) => tab.key === path || tab.path === path);
         if (existingTab) {
           return prevTabs;
         }
@@ -575,17 +614,31 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         const pathname = tabPathname(path);
         const existingSamePathname = prevTabs.find((tab) => tabPathname(tab.key) === pathname);
         if (existingSamePathname) {
-          // 同一路由仅 query 变化（如知识库 articleId）：更新已有标签，不新开
+          // 同一路由仅 query 变化（产品工艺 materialUuid 等）：只更新 path/标题；
+          // 列表页若历史 key 仍带 query，收成 pathname，避免与 activeKey 错位。
+          const nextKey =
+            !isCreateTabKey(path) && existingSamePathname.key.includes('?')
+              ? pathname
+              : existingSamePathname.key;
+          const nextLabel = getTabTitle(path);
+          if (
+            existingSamePathname.key === nextKey &&
+            existingSamePathname.path === path &&
+            existingSamePathname.label === nextLabel
+          ) {
+            return prevTabs;
+          }
           return prevTabs.map((tab) =>
             tab.key === existingSamePathname.key
-              ? { ...tab, key: path, path, label: getTabTitle(path) }
+              ? { ...tab, key: nextKey, path, label: nextLabel }
               : tab,
           );
         }
 
-        // 添加新标签（有效首页为工作台时不可关闭）
+        // 列表页 key 用 pathname，query 只进 path；建单页保留完整 key 供 keep-alive
+        const storeKey = isCreateTabKey(path) ? path : pathname;
         const newTab: TabItem = {
-          key: path,
+          key: storeKey,
           path,
           label: getTabTitle(path),
           closable: resolveTabClosable(path, tenantHomePath),
@@ -708,8 +761,10 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
       if (homePathChanged && prev) {
         working = working.filter((t) => t.key !== prev);
       }
-      let normalized = normalizeTabsForTenantHome(working, tenantHomePath, getTabTitle);
-      if (!mustKeepHome) {
+        let normalized = dedupeTabsByKey(
+          normalizeTabsForTenantHome(working, tenantHomePath, getTabTitle),
+        );
+        if (!mustKeepHome) {
         const homeDismissed = dismissedHomePathRef.current === tenantHomePath;
         const hadHome = prevTabs.some((tab) => tab.key === tenantHomePath);
         if (homeDismissed || (!hadHome && prevTabs.length > 0)) {
@@ -742,17 +797,15 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
    * 移除标签
    */
   const removeTab = useCallback((targetKey: string) => {
-    const targetPathname = tabPathname(targetKey);
-    removeCustomPageTitle(targetKey);
-    removeCustomPageTitle(targetPathname);
+    const matchKey = String(targetKey);
+    removeCustomPageTitle(matchKey);
+    removeCustomPageTitle(tabPathname(matchKey));
     setTabs((prevTabs) => {
-      const matchKey =
-        prevTabs.find((tab) => tab.key === targetKey)?.key ??
-        prevTabs.find((tab) => tabPathname(tab.key) === targetPathname)?.key;
-      if (!matchKey) return prevTabs;
-      removeCustomPageTitle(matchKey);
-      removeCustomPageTitle(tabPathname(matchKey));
-      return prevTabs.filter((tab) => tab.key !== matchKey);
+      if (!prevTabs.some((tab) => isSameTabIdentity(tab.key, matchKey))) {
+        return prevTabs;
+      }
+      // 与 addTab 的 pathname 去重一致：关掉带/不带 query 的同一页
+      return prevTabs.filter((tab) => !isSameTabIdentity(tab.key, matchKey));
     });
   }, []);
 
@@ -819,7 +872,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     queueMicrotask(() => {
       if (routeKey && routeKey !== '/login') {
         addTabRef.current(routeKey);
-        setActiveKey(routeKey);
+        setActiveKey(isCreateTabKey(routeKey) ? routeKey : tabPathname(routeKey));
       }
     });
   }, [getCurrentRouteTabKey]);
@@ -842,7 +895,11 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
 
     const sessionTabs = getSessionTabs(tenantId);
     if (sessionTabs?.length) {
-      setTabs(dedupeTabsByPathname(retainOpenHomeTabs(sessionTabs, tenantHomePath, homePathReady)));
+      setTabs(
+        dedupeTabsByKey(
+          dedupeTabsByPathname(retainOpenHomeTabs(sessionTabs, tenantHomePath, homePathReady)),
+        ),
+      );
       setActiveKey(getCurrentRouteTabKey());
       didRestoreFromSyncRef.current = true;
       return;
@@ -1039,14 +1096,28 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   useEffect(() => {
     if (!location.pathname) return;
     const tabKey = getCurrentRouteTabKey();
-    if (dismissedHomePathRef.current === tabKey) {
+    const closingKey = closingTabKeyRef.current;
+    if (closingKey) {
+      // 关闭中：location 仍可能带着即将离开页的 query，不能因 key 不完全相等就清标志并加回
+      if (isSameTabIdentity(closingKey, tabKey)) {
+        return;
+      }
+      closingTabKeyRef.current = null;
+    }
+    if (
+      dismissedHomePathRef.current &&
+      isSameTabIdentity(dismissedHomePathRef.current, tabKey)
+    ) {
       dismissedHomePathRef.current = null;
     }
     if (shouldSkipPlaceholderHomeTab(tabKey, tenantHomePath, homePathReady)) {
       return;
     }
     addTabRef.current(tabKey);
-    setActiveKey((prev) => (prev === tabKey ? prev : tabKey));
+    // 列表页 activeKey 固定为 pathname，与 items[].key 一致；建单页保留完整 key。
+    // 若写入带 query 的 routeKey，antd Tabs 会对不齐 key，点叉先 onChange 切到邻页。
+    const stableActiveKey = isCreateTabKey(tabKey) ? tabKey : tabPathname(tabKey);
+    setActiveKey((prev) => (isSameTabIdentity(prev, stableActiveKey) ? prev : stableActiveKey));
   }, [location.pathname, location.search, getCurrentRouteTabKey, tenantHomePath, homePathReady]);
 
   /**
@@ -1119,6 +1190,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     const state = location.state as ({ closeTab?: string } & Record<string, unknown>) | null;
     if (!state?.closeTab) return;
     const { closeTab, ...rest } = state;
+    closingTabKeyRef.current = closeTab;
     removeTab(closeTab);
     const search = location.search ? location.search : '';
     navigate(location.pathname + search, {
@@ -1142,11 +1214,34 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   }, [location.search, location.pathname, navigate]);
 
   /**
-   * 处理标签切换
+   * 处理标签切换。关闭过程中勿再响应，避免与 handleTabClose 抢导航。
+   * 导航用 tab.path（可含最新 query），activeKey 用稳定的 tab.key。
+   * 点叉时 antd 常先发 onChange：此时关当前页，而不是切到邻页。
    */
   const handleTabChange = (key: string) => {
-    setActiveKey(key);
-    navigate(key);
+    const closingKey = closingTabKeyRef.current;
+    if (closingKey) {
+      const routeKey = resolveRouteTabKey(location.pathname, location.search);
+      // 仍停在被关页时等 closeTab/关页导航；已落到其它页则清标志，避免保存后点页签无反应
+      if (isSameTabIdentity(closingKey, routeKey)) {
+        return;
+      }
+      closingTabKeyRef.current = null;
+    }
+    if (removeIntentRef.current) {
+      removeIntentRef.current = false;
+      const routeKey = resolveRouteTabKey(location.pathname, location.search);
+      const toClose =
+        findTabByIdentity(tabs, activeKey)?.key ||
+        findTabByIdentity(tabs, routeKey)?.key ||
+        activeKey;
+      handleTabClose(toClose);
+      return;
+    }
+    const tab = findTabByIdentity(tabs, key);
+    const dest = tab?.path || key;
+    setActiveKey(tab?.key ?? key);
+    navigate(dest);
   };
 
   /**
@@ -1163,64 +1258,98 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   );
 
   /**
-   * 处理标签关闭
+   * 标准页签关闭（唯一入口逻辑）：
+   * 1) 按 pathname 身份解析到列表中的真实 key（忽略 query 差）
+   * 2) 先 removeTab，再导航（避免跳走后标签仍被路由同步加回）
+   * 3) 关闭当前页时切到右侧优先，否则左侧
    */
-  const handleTabClose = (targetKey: string) => {
+  const handleTabClose = (rawTargetKey: string) => {
+    const matched = findTabByIdentity(tabs, rawTargetKey);
+    // 已关掉（onChange/onEdit 各来一次）则幂等返回，避免二次导航
+    if (!matched) {
+      return;
+    }
+    const targetKey = matched.key;
     if (isUnclosableHomeTab(targetKey, tenantHomePath)) {
       return;
     }
-    if (targetKey === tenantHomePath) {
-      dismissedHomePathRef.current = targetKey;
-    }
-    const targetIndex = tabs.findIndex((tab) => tab.key === targetKey);
-    const newTabs = tabs.filter((tab) => tab.key !== targetKey);
-
-    // 如果关闭的是当前激活的标签，切换到相邻标签
-    if (targetKey === activeKey) {
-      const homeAfterClose = resolveHomeAfterClose(targetKey);
-      if (homeAfterClose === 'pending') {
-        pendingDefaultHomeCloseRef.current = targetKey;
-        removeTab(targetKey);
-        return;
-      }
-      if (typeof homeAfterClose === 'string') {
-        setActiveKey(homeAfterClose);
-        navigate(homeAfterClose);
-      } else if (newTabs.length > 0) {
-        // 优先切换到右侧标签，如果没有则切换到左侧
-        const nextTab = newTabs[targetIndex] || newTabs[targetIndex - 1] || newTabs[0];
-        if (nextTab) {
-          setActiveKey(nextTab.key);
-          navigate(nextTab.key);
-        }
-      } else if (homePathReady) {
-        navigate(tenantHomePath);
-      } else {
-        pendingDefaultHomeCloseRef.current = targetKey;
-      }
+    if (matched.pinned || matched.closable === false) {
+      return;
     }
 
+    if (isSameTabIdentity(targetKey, tenantHomePath)) {
+      dismissedHomePathRef.current = tabPathname(targetKey);
+    }
+
+    const targetIndex = findTabIndexByIdentity(tabs, targetKey);
+    const remainTabs = tabs.filter((tab) => !isSameTabIdentity(tab.key, targetKey));
+    const routeKey = resolveRouteTabKey(location.pathname, location.search);
+    const closingActive =
+      isSameTabIdentity(targetKey, activeKey) || isSameTabIdentity(targetKey, routeKey);
+
+    // 先从栏上移除，再决定落点
     removeTab(targetKey);
+
+    if (!closingActive) {
+      return;
+    }
+
+    closingTabKeyRef.current = targetKey;
+
+    const homeAfterClose = resolveHomeAfterClose(targetKey);
+    if (homeAfterClose === 'pending') {
+      pendingDefaultHomeCloseRef.current = targetKey;
+      return;
+    }
+    if (typeof homeAfterClose === 'string') {
+      setActiveKey(homeAfterClose);
+      navigate(homeAfterClose);
+      return;
+    }
+    if (remainTabs.length > 0) {
+      const nextTab =
+        (targetIndex >= 0 ? remainTabs[targetIndex] : undefined) ||
+        (targetIndex > 0 ? remainTabs[targetIndex - 1] : undefined) ||
+        remainTabs[0];
+      if (nextTab) {
+        setActiveKey(nextTab.key);
+        navigate(nextTab.path || nextTab.key);
+      }
+      return;
+    }
+    if (homePathReady) {
+      setActiveKey(tenantHomePath);
+      navigate(tenantHomePath);
+      return;
+    }
+    pendingDefaultHomeCloseRef.current = targetKey;
   };
 
   /**
    * 关闭右侧标签
    */
-  const handleCloseRight = (targetKey: string) => {
-    const targetIndex = tabs.findIndex((tab) => tab.key === targetKey);
+  const handleCloseRight = (rawTargetKey: string) => {
+    const targetIndex = findTabIndexByIdentity(tabs, rawTargetKey);
     if (targetIndex === -1) return;
+    const targetKey = tabs[targetIndex]?.key ?? rawTargetKey;
 
     // 保留目标标签及其左侧的所有标签，以及所有固定标签
     const leftTabs = tabs.slice(0, targetIndex + 1);
     const rightTabs = tabs.slice(targetIndex + 1);
     // 保留右侧的固定标签
-    const rightPinnedTabs = rightTabs.filter((tab) => tab.pinned || tab.key === tenantHomePath);
+    const rightPinnedTabs = rightTabs.filter(
+      (tab) => tab.pinned || isSameTabIdentity(tab.key, tenantHomePath),
+    );
     const newTabs = [...leftTabs, ...rightPinnedTabs];
 
     // 重新排序：工作台 -> 固定标签 -> 其他标签
-    const workplaceTab = newTabs.find((tab) => tab.key === tenantHomePath);
-    const pinnedTabs = newTabs.filter((tab) => tab.pinned && tab.key !== tenantHomePath);
-    const unpinnedTabs = newTabs.filter((tab) => !tab.pinned && tab.key !== tenantHomePath);
+    const workplaceTab = newTabs.find((tab) => isSameTabIdentity(tab.key, tenantHomePath));
+    const pinnedTabs = newTabs.filter(
+      (tab) => tab.pinned && !isSameTabIdentity(tab.key, tenantHomePath),
+    );
+    const unpinnedTabs = newTabs.filter(
+      (tab) => !tab.pinned && !isSameTabIdentity(tab.key, tenantHomePath),
+    );
     const sortedTabs: TabItem[] = [];
     if (workplaceTab) {
       sortedTabs.push(workplaceTab);
@@ -1230,25 +1359,32 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
 
     setTabs(sortedTabs);
 
-    // 如果当前激活的标签被关闭，切换到目标标签
-    if (!sortedTabs.find((tab) => tab.key === activeKey)) {
-      setActiveKey(targetKey);
-      navigate(targetKey);
+    // 如果当前激活的标签被关闭，切换到目标标签（导航用 path，保留最新 query）
+    if (!findTabByIdentity(sortedTabs, activeKey)) {
+      const stay = findTabByIdentity(sortedTabs, targetKey) || tabs[targetIndex];
+      setActiveKey(stay?.key ?? targetKey);
+      navigate(stay?.path || stay?.key || targetKey);
     }
   };
 
   /**
    * 关闭其他标签
    */
-  const handleCloseOthers = (targetKey: string) => {
+  const handleCloseOthers = (rawTargetKey: string) => {
+    const targetTab = findTabByIdentity(tabs, rawTargetKey);
+    const targetKey = targetTab?.key ?? rawTargetKey;
     // 保留目标标签、工作台标签和所有固定标签
-    const workplaceTab = tabs.find((tab) => tab.key === tenantHomePath);
-    const targetTab = tabs.find((tab) => tab.key === targetKey);
-    const pinnedTabs = tabs.filter((tab) => tab.pinned && tab.key !== tenantHomePath && tab.key !== targetKey);
+    const workplaceTab = findTabByIdentity(tabs, tenantHomePath);
+    const pinnedTabs = tabs.filter(
+      (tab) =>
+        tab.pinned &&
+        !isSameTabIdentity(tab.key, tenantHomePath) &&
+        !isSameTabIdentity(tab.key, targetKey),
+    );
     const newTabs: TabItem[] = [];
 
     // 先添加工作台标签（如果存在且不是目标标签）
-    if (workplaceTab && workplaceTab.key !== targetKey) {
+    if (workplaceTab && !isSameTabIdentity(workplaceTab.key, targetKey)) {
       newTabs.push(workplaceTab);
     }
 
@@ -1262,7 +1398,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
 
     setTabs(newTabs);
     setActiveKey(targetKey);
-    navigate(targetKey);
+    navigate(targetTab?.path || targetKey);
   };
 
   /**
@@ -1272,8 +1408,10 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     // 使用 setTimeout 确保在当前事件循环结束后执行，避免竞态条件
     setTimeout(() => {
       // 保留工作台标签和所有固定标签
-      const workplaceTab = tabs.find((tab) => tab.key === tenantHomePath);
-      const pinnedTabs = tabs.filter((tab) => tab.pinned && tab.key !== tenantHomePath);
+      const workplaceTab = findTabByIdentity(tabs, tenantHomePath);
+      const pinnedTabs = tabs.filter(
+        (tab) => tab.pinned && !isSameTabIdentity(tab.key, tenantHomePath),
+      );
       const newTabs: TabItem[] = [];
 
       // 先添加工作台标签（如果存在）
@@ -1288,8 +1426,9 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
       if (newTabs.length > 0) {
         setTabs(newTabs);
         setActiveKey(newTabs[0].key);
-        // 延迟导航，确保状态更新完成
-        setTimeout(() => navigate(newTabs[0].key), 0);
+        // 延迟导航，确保状态更新完成；用 path 保留 query
+        const dest = newTabs[0].path || newTabs[0].key;
+        setTimeout(() => navigate(dest), 0);
       } else {
         setTabs([]);
         setActiveKey(tenantHomePath);
@@ -1312,11 +1451,14 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     if (currentTabKey !== targetTabKey) {
       const separator = tabKey.includes('?') ? '&' : '?';
       navigate(`${tabKey}${separator}_refresh=${Date.now()}`, { replace: true });
+      // 对齐平台看板：页签刷新成功后统一「数据已刷新」
+      notifyDataRefreshed();
       return;
     }
 
     dispatchRouteSoftRefresh(targetTabKey);
     setRefreshKey((prev) => prev + 1);
+    notifyDataRefreshed();
   }, [navigate, location.pathname, location.search]);
 
   /** 从 menuConfig 中按 path 查找菜单元数据 */
@@ -1377,9 +1519,9 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
    * 获取标签右键菜单
    */
   const getTabContextMenu = (tabKey: string): MenuProps => {
-    const targetIndex = tabs.findIndex((tab) => tab.key === tabKey);
-    const targetTab = tabs.find((tab) => tab.key === tabKey);
-    const isEffectiveHome = tabKey === tenantHomePath;
+    const targetIndex = findTabIndexByIdentity(tabs, tabKey);
+    const targetTab = findTabByIdentity(tabs, tabKey);
+    const isEffectiveHome = isSameTabIdentity(tabKey, tenantHomePath);
     const homeUnclosable = isUnclosableHomeTab(tabKey, tenantHomePath);
     const hasRightTabs = targetIndex < tabs.length - 1;
     const hasOtherTabs = tabs.length > 1;
@@ -1606,15 +1748,27 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     return 'var(--ant-colorText)';
   }, [storeTabsBgColor, storeIsDark]);
 
+  /**
+   * Ant Design Tabs 的 activeKey 必须落在 items[].key 上。
+   * 产品工艺等会改 query：state.activeKey 与 tab.key 可能一个带 materialUuid、一个不带，
+   * 若不对齐，点叉会先被当成切页，表现为要关两次。
+   */
+  const tabsActiveKey = useMemo(() => {
+    const hit =
+      findTabByIdentity(tabs, activeKey) ||
+      findTabByIdentity(tabs, resolveRouteTabKey(location.pathname, location.search));
+    return hit?.key ?? activeKey;
+  }, [tabs, activeKey, location.pathname, location.search]);
+
   /** 当前是否为 HMI/生产终端类页面（需使用专用内容容器：左右 16px padding + 系统圆角） */
   const isHMIPage = useMemo(() => {
-    const key = activeKey || '';
+    const key = tabsActiveKey || activeKey || '';
     return (
       key.includes('production-execution/terminal') ||
       key.includes('/kiosk') ||
       isStationEntryPath(location.pathname)
     );
-  }, [activeKey, location.pathname]);
+  }, [tabsActiveKey, activeKey, location.pathname]);
 
   /** 标签顶角 / 底内凹圆角：保底 4px，高于 4px 时跟随系统 borderRadius */
   const tabRadius = useMemo(() => readUniTabsBorderRadius(token.borderRadius, 8), [token.borderRadius]);
@@ -1639,7 +1793,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
   const renderRouteContent = (content: React.ReactNode) =>
     createTabKeys.length > 0 ? (
       <TabRouteCache
-        activeKey={activeKey}
+        activeKey={tabsActiveKey}
         createTabKeys={createTabKeys}
         refreshToken={refreshKey}
       >
@@ -1788,6 +1942,8 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           font-size: 12px !important;
           transform: none !important;
           transition: color 0.15s ease !important;
+          position: relative !important;
+          z-index: 4 !important;
         }
         .uni-tabs-container .ant-tabs-tab-remove:hover,
         .uni-tabs-container .ant-tabs-tab-remove:active,
@@ -1799,10 +1955,37 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           transform: none !important;
         }
         .uni-tabs-container .ant-tabs-tab-remove .anticon,
-        .uni-tabs-container .ant-tabs-tab-remove .anticon svg {
+        .uni-tabs-container .ant-tabs-tab-remove .anticon svg,
+        .uni-tabs-container .uni-tabs-tab-close .anticon,
+        .uni-tabs-container .uni-tabs-tab-close .anticon svg {
           width: 12px !important;
           height: 12px !important;
           font-size: 12px !important;
+        }
+        /* 自管关闭钮：挂在 label 内，避免 antd editable remove 与 onChange 抢事件 */
+        .uni-tabs-container .uni-tabs-tab-close {
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          width: 16px !important;
+          min-width: 16px !important;
+          height: 22px !important;
+          margin: 0 0 0 8px !important;
+          padding: 0 !important;
+          flex: none !important;
+          line-height: 22px !important;
+          font-size: 12px !important;
+          color: inherit;
+          cursor: pointer;
+          position: relative !important;
+          z-index: 4 !important;
+          opacity: 0.65;
+        }
+        .uni-tabs-container .uni-tabs-tab-close:hover {
+          opacity: 1;
+        }
+        .uni-tabs-container .ant-tabs-tab-remove {
+          display: none !important;
         }
         /* 未激活标签：使用竖线分隔 */
         .uni-tabs-container .ant-tabs-tab:not(.ant-tabs-tab-active) {
@@ -2640,60 +2823,105 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
                 />
               </div>
             )}
-            <Tabs
-              activeKey={activeKey}
-              onChange={handleTabChange}
-              type="editable-card"
-              hideAdd
-              onEdit={(targetKey, action) => {
-                if (action === 'remove') {
-                  handleTabClose(targetKey as string);
-                }
-              }}
-              items={tabs.map((tab) => ({
-                key: tab.key,
-                label: (
-                  <>
-                    <i className="uni-tab-outer-corner uni-tab-outer-corner--left" aria-hidden="true">
-                      <i className="uni-tab-outer-corner-arc" aria-hidden="true" />
-                    </i>
-                    <Dropdown
-                      menu={getTabContextMenu(tab.key)}
-                      trigger={['contextMenu']}
-                    >
-                      <span
-                        onDoubleClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          if (!tab.pinned && tab.closable !== false) {
-                            handleTabClose(tab.key);
-                          }
-                        }}
-                        style={{ userSelect: 'none', display: 'flex', alignItems: 'center', gap: 4 }}
+            <div className="uni-tabs-editable-host">
+              <Tabs
+                activeKey={tabsActiveKey}
+                onChange={handleTabChange}
+                type="editable-card"
+                hideAdd
+                // 关闭完全自管：不用 antd tab-remove（点叉会先 onChange 切邻页，短标题如「不良品类型」尤甚）
+                onEdit={() => undefined}
+                items={tabs.map((tab) => {
+                  const canClose = Boolean(tab.closable && !tab.pinned);
+                  return {
+                  key: tab.key,
+                  closable: false,
+                  label: (
+                    <>
+                      <i className="uni-tab-outer-corner uni-tab-outer-corner--left" aria-hidden="true">
+                        <i className="uni-tab-outer-corner-arc" aria-hidden="true" />
+                      </i>
+                      <Dropdown
+                        menu={getTabContextMenu(tab.key)}
+                        trigger={['contextMenu']}
                       >
-                        {tab.label}
-                        {tab.pinned && (
-                          <PushpinFilled
-                            style={{
-                              fontSize: 12,
-                              color: '#3b82f6',
-                              transform: 'rotate(-45deg)',
-                              flexShrink: 0,
-                            }}
-                          />
-                        )}
-                      </span>
-                    </Dropdown>
-                    <i className="uni-tab-outer-corner uni-tab-outer-corner--right" aria-hidden="true">
-                      <i className="uni-tab-outer-corner-arc" aria-hidden="true" />
-                    </i>
-                  </>
-                ),
-                closable: tab.closable && !tab.pinned, // 固定标签不可关闭
-              }))}
-              size="small"
-              className="uni-tabs-container"
-            />
+                        <span
+                          onDoubleClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (canClose) {
+                              handleTabClose(tab.key);
+                            }
+                          }}
+                          style={{ userSelect: 'none', display: 'flex', alignItems: 'center', gap: 4 }}
+                        >
+                          {tab.label}
+                          {tab.pinned && (
+                            <PushpinFilled
+                              style={{
+                                fontSize: 12,
+                                color: '#3b82f6',
+                                transform: 'rotate(-45deg)',
+                                flexShrink: 0,
+                              }}
+                            />
+                          )}
+                        </span>
+                      </Dropdown>
+                      {canClose ? (
+                        <span
+                          className="uni-tabs-tab-close"
+                          role="button"
+                          aria-label="close"
+                          onPointerDown={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            removeIntentRef.current = true;
+                            try {
+                              e.currentTarget.setPointerCapture(e.pointerId);
+                            } catch {
+                              // 部分环境不支持 capture，不影响关闭主路径
+                            }
+                          }}
+                          onPointerUp={() => {
+                            // 等本轮 click / 可能的 onChange 消费 intent 后再清，避免拖走后误关
+                            window.setTimeout(() => {
+                              removeIntentRef.current = false;
+                            }, 0);
+                          }}
+                          onPointerCancel={() => {
+                            removeIntentRef.current = false;
+                          }}
+                          onLostPointerCapture={() => {
+                            window.setTimeout(() => {
+                              removeIntentRef.current = false;
+                            }, 0);
+                          }}
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                          }}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            removeIntentRef.current = false;
+                            handleTabClose(tab.key);
+                          }}
+                        >
+                          <CloseOutlined />
+                        </span>
+                      ) : null}
+                      <i className="uni-tab-outer-corner uni-tab-outer-corner--right" aria-hidden="true">
+                        <i className="uni-tab-outer-corner-arc" aria-hidden="true" />
+                      </i>
+                    </>
+                  ),
+                };
+                })}
+                size="small"
+                className="uni-tabs-container"
+              />
+            </div>
             {/* 右侧滚动箭头 - 仅在需要时显示 */}
             {canScrollRight && (
               <div className="uni-tabs-scroll-button-wrapper">

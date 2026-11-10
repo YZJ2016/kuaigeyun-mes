@@ -63,9 +63,14 @@ export function useCustomFields({
 
   useEffect(() => {
     if (loadWhenOpen && !open) return;
+    const trimmed = (tableName || '').trim();
+    if (!trimmed) {
+      setCustomFields([]);
+      return;
+    }
     const load = async () => {
       try {
-        const fields = await getCustomFieldsByTable(tableName, true, hostResource).catch((err) => {
+        const fields = await getCustomFieldsByTable(trimmed, true, hostResource).catch((err) => {
           if (err?.response?.status === 401) return [];
           throw err;
         });

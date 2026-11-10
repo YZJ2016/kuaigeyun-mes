@@ -21,7 +21,7 @@
         "children": [
           {
             "title": "app.kuaicaiwu.menu.finance-management.dashboard",
-            "path": "/apps/kuaicaiwu/finance-management/dashboard",
+            "path": "/apps/kuaizhizao/finance-management/dashboard",
             "permission": "kuaicaiwu:finance-dashboard:read",
             "sort_order": 0
           },

@@ -41,9 +41,9 @@ const SectionTitle: React.FC<{ children: React.ReactNode }> = ({ children }) => 
 const FieldsTitle: React.FC<{ pageLabel: string }> = ({ pageLabel }) => {
   const selectedItem = useChromePuck((s) => s.selectedItem);
   const selectedLabel = useChromePuck((s) => {
-    if (!s.selectedItem) return '';
-    const type = String(s.selectedItem.type);
-    const label = s.config.components[type]?.label;
+    if (!s?.selectedItem) return '';
+    const type = String(s.selectedItem.type ?? '');
+    const label = s.config?.components?.[type]?.label;
     return typeof label === 'string' && label.trim() ? label : type;
   });
   return (

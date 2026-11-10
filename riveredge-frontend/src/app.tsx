@@ -89,10 +89,6 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
   const setCurrentUser = useGlobalStore((s) => s.setCurrentUser);
   const setLoading = useGlobalStore((s) => s.setLoading);
 
-  // ⚠️ 关键修复：将所有路径检查移到 Hook 调用之前，避免 Hook 顺序问题
-  const isMasterDataPath = location.pathname.startsWith('/apps/master-data');
-  const isDebugPath = location.pathname.startsWith('/debug/');
-
   // 使用 useRef 跟踪是否已经初始化，避免重复执行
   const initializedRef = React.useRef(false);
 
@@ -629,7 +625,6 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
     return <>{children}</>;
   }
 
-  const shouldBypassAuth = isMasterDataPath || isDebugPath;
   const hasAuthenticatedUser = currentUser || buildRestoredUserFromStorage();
   const shouldShowLoading =
     hasToken && !isPublicPath && !hasAuthenticatedUser && (loading || isLoading);
@@ -637,9 +632,8 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
   const shouldWaitSiteTimezone =
     hasToken && !isPublicPath && !siteTimezoneName && !siteTimezoneReady;
 
-  if (shouldBypassAuth) {
-    return <>{children}</>;
-  }
+  // 禁止按路径切换「裸 children / Suspense」两套返回树：进出 /apps/master-data
+  // 会整树重挂 BasicLayout（侧栏闪动、页签要点两次）。主数据与其它应用同一套壳。
 
   if (shouldRedirect) {
     return <Navigate to={redirectTarget} replace />;

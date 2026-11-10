@@ -60,10 +60,15 @@ export function useCustomFieldsForList<T extends Record<string, any>>({
   const fieldsKeyRef = useRef<string>('');
 
   const ensureCustomFields = useCallback((): Promise<CustomField[]> => {
-    const key = `${tableName}:${hostResource ?? ''}`;
+    const trimmed = (tableName || '').trim();
+    // 模板设计器等未登记表：禁止打 /by-table/（空 path 会变成错误请求）
+    if (!trimmed) {
+      return Promise.resolve([]);
+    }
+    const key = `${trimmed}:${hostResource ?? ''}`;
     if (!fieldsPromiseRef.current || fieldsKeyRef.current !== key) {
       fieldsKeyRef.current = key;
-      fieldsPromiseRef.current = getCustomFieldsByTable(tableName, true, hostResource).catch((err) => {
+      fieldsPromiseRef.current = getCustomFieldsByTable(trimmed, true, hostResource).catch((err) => {
         if (err?.response?.status === 401) return [] as CustomField[];
         console.error('加载自定义字段失败:', err);
         return [] as CustomField[];

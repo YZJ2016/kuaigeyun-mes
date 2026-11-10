@@ -1269,6 +1269,18 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     }) as MenuDataItem);
   }, [showAppMenuSkeleton]);
 
+  /** ProLayout menuDataRender 须返回稳定引用；主数据/快研发页常改 search，若每次 filter 新数组会整树重挂侧栏 */
+  const siderMenuDataForRender = useMemo(() => {
+    const data = filteredMenuData.filter((item) => item.path !== '/system');
+    if (!appMenuSkeletonItems.length) return data;
+    const insertAt = data.length > 0 ? 1 : 0;
+    return [
+      ...data.slice(0, insertAt),
+      ...appMenuSkeletonItems,
+      ...data.slice(insertAt),
+    ];
+  }, [filteredMenuData, appMenuSkeletonItems]);
+
   const systemMenuEntry = useMemo(
     () => filteredMenuData.find((item) => item.path === '/system'),
     [filteredMenuData]
@@ -2309,9 +2321,14 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const menuDataForSelection = useSplitSidebarMenu ? breadcrumbMenuData : filteredMenuData;
 
   // 计算应该选中的菜单 key（只选中精确匹配的路径；含 query 的菜单项须对齐 search）
-  const selectedKeys = useMemo(() => {
-    return calculateSelectedKeys(menuDataForSelection, location.pathname, location.search);
+  // 主数据页常改 search：以 key 串作依赖，内容不变时保持同一数组引用，避免侧栏选中闪动
+  const selectedKeysSignature = useMemo(() => {
+    return calculateSelectedKeys(menuDataForSelection, location.pathname, location.search).join('\0');
   }, [menuDataForSelection, location.pathname, location.search, calculateSelectedKeys]);
+  const selectedKeys = useMemo(
+    () => (selectedKeysSignature ? selectedKeysSignature.split('\0') : []),
+    [selectedKeysSignature],
+  );
 
   const [sidebarOpenKeys, setSidebarOpenKeys] = useState<string[]>(() =>
     computeMenuOpenKeysForPath(filteredMenuData, location.pathname, location.search),
@@ -2334,22 +2351,28 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     });
   }, []);
 
+  /**
+   * 路由变化只「补齐」当前页祖先 openKeys，不整表替换。
+   * 整表替换会折叠其它已展开分组，侧栏高度骤变导致滚到顶/位移；
+   * 销售管理内切换看起来正常，是因为祖先 key 不变。其它模块须同一标准。
+   * 主数据/快研发页常改 query：openKeys 只跟 pathname 与菜单树，勿跟 search 重算。
+   */
   useEffect(() => {
-    if (useSplitSidebarMenu) {
-      setSidebarOpenKeys(
-        computeSplitSecondaryOpenKeys(
+    const required = useSplitSidebarMenu
+      ? computeSplitSecondaryOpenKeys(
           splitMenuRoots,
           location.pathname,
           computeMenuOpenKeysForPath,
-          location.search,
-        ),
-      );
-      return;
-    }
-    setSidebarOpenKeys(
-      computeMenuOpenKeysForPath(filteredMenuData, location.pathname, location.search),
-    );
-  }, [location.pathname, location.search, filteredMenuData, useSplitSidebarMenu, splitMenuRoots]);
+          '',
+        )
+      : computeMenuOpenKeysForPath(filteredMenuData, location.pathname, '');
+
+    setSidebarOpenKeys((prev) => {
+      const missing = required.filter((k) => !prev.includes(k));
+      if (missing.length === 0) return prev;
+      return [...prev, ...missing];
+    });
+  }, [location.pathname, filteredMenuData, useSplitSidebarMenu, splitMenuRoots]);
 
   useLayoutEffect(() => {
     const footerEl = siderFooterRef.current;
@@ -3034,20 +3057,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
           return <Space size={8} align="center" style={{ flexShrink: 0 }}>{actions}</Space>;
         }}
-        menuDataRender={() => {
-          // 过滤系统设置项并插入加载骨架（收起态仅显示原生图标，无简称文字）。
-          const data = filteredMenuData.filter((item) => item.path !== '/system');
-          if (appMenuSkeletonItems.length) {
-            // APP 菜单插入在系统首项之后（与 useUnifiedMenuData 的 splice(1, ...) 一致）
-            const insertAt = data.length > 0 ? 1 : 0;
-            return [
-              ...data.slice(0, insertAt),
-              ...appMenuSkeletonItems,
-              ...data.slice(insertAt),
-            ];
-          }
-          return data;
-        }}
+        menuDataRender={() => siderMenuDataForRender}
         menuTextRender={(item: any, defaultText: React.ReactNode) => {
           // 应用分组标题：全部套主色样式；PRO 徽标仅对 PRO 应用
           if (!isSidebarAppGroupTitleItem(item)) {
