@@ -26,7 +26,7 @@ sys.path.insert(0, str(_backend / "src"))
 
 async def _init_db() -> None:
     from tortoise import Tortoise
-    from infra.database.tortoise_config import TORTOISE_ORM
+    from infra.infrastructure.database.database import TORTOISE_ORM
 
     await Tortoise.init(config=TORTOISE_ORM)
 
