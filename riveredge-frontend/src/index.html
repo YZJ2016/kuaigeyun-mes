@@ -9,6 +9,24 @@
 
     <meta name="theme-color" content="#141414" />
 
+    <!--
+      Win7 / Chrome≤109 无 Array.prototype.toSorted（Chrome 110+ 才有）。
+      须在任何 type=module 之前同步补齐，否则 @svar-ui 甘特图一加载就炸。
+      与 main.tsx → polyfills.ts 双保险；此处不依赖模块执行顺序。
+    -->
+    <script>
+      (function () {
+        if (typeof Array === 'undefined' || typeof Array.prototype.toSorted === 'function') return;
+        Object.defineProperty(Array.prototype, 'toSorted', {
+          configurable: true,
+          writable: true,
+          value: function (compareFn) {
+            return this.slice().sort(compareFn);
+          }
+        });
+      })();
+    </script>
+
     <!-- SVAR 甘特图图标字体改为按需加载（utils/loadGanttIconsCss.ts），
          仅在用户打开甘特图组件时注入，减少默认首屏/登录页的外链资源与握手成本。 -->
 </head>
