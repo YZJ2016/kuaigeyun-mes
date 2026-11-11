@@ -7,19 +7,29 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Form } from 'antd';
-import { ProFormDependency, ProFormDigit, ProFormRadio, ProFormSelect, ProFormText } from '@ant-design/pro-components';
+import { ProFormDigit, ProFormRadio, ProFormSelect, ProFormText } from '@ant-design/pro-components';
 import {
   getAssociatedAttributeOptions,
   getAssociatedAttributeValue,
   lookupAssociatedValue,
 } from '../../services/customField';
 import type { CustomField } from '../../services/customField';
+import { EMPTY_VALUE_PLACEHOLDER } from '../../utils/format';
 import { resolveLinkFormFieldName } from './customFieldSourceFieldUtils';
 import {
   normalizeAssociatedMultiselectValue,
   resolveAssociatedDisplayMode,
 } from './customFieldAssociatedDisplayMode';
 import { customFieldControlLayout, customFieldFieldProps } from './customFieldFormLayout';
+
+/** 遗留 linkField：Form.useWatch，避免 ProFormDependency 打断 grid Col */
+function AssociatedAttributeLegacyLinkFromWatch(
+  props: AssociatedAttributeFieldProps & { dependencyName: string },
+) {
+  const { dependencyName, ...fieldProps } = props;
+  const linkRecordId = Form.useWatch(dependencyName);
+  return <AssociatedAttributeLegacyLink {...fieldProps} linkRecordId={linkRecordId} />;
+}
 
 function AttributeValueSync({
   name,
@@ -281,7 +291,7 @@ export const AssociatedAttributeField: React.FC<AssociatedAttributeFieldProps> =
         name={props.name}
         label={props.label}
         initialValue={props.initialValue ?? undefined}
-        fieldProps={{ disabled: true, ...customFieldFieldProps(), placeholder: '-' }}
+        fieldProps={{ disabled: true, ...customFieldFieldProps(), placeholder: EMPTY_VALUE_PLACEHOLDER }}
         {...customFieldControlLayout(props.colProps)}
       />
     );
@@ -289,14 +299,10 @@ export const AssociatedAttributeField: React.FC<AssociatedAttributeFieldProps> =
 
   if (linkField && dependencyName) {
     return (
-      <ProFormDependency name={[dependencyName]}>
-        {(deps) => (
-          <AssociatedAttributeLegacyLink
-            {...props}
-            linkRecordId={deps[dependencyName]}
-          />
-        )}
-      </ProFormDependency>
+      <AssociatedAttributeLegacyLinkFromWatch
+        {...props}
+        dependencyName={dependencyName}
+      />
     );
   }
 

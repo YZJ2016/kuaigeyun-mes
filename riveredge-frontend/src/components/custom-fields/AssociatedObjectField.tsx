@@ -6,7 +6,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Form, Input } from 'antd';
-import { ProFormDependency, ProFormDigit, ProFormItem, ProFormRadio, ProFormSelect, ProFormText } from '@ant-design/pro-components';
+import { ProFormDigit, ProFormField, ProFormRadio, ProFormSelect, ProFormText } from '@ant-design/pro-components';
 import { getAssociatedTableOptions, lookupAssociatedValue } from '../../services/customField';
 import type { CustomField } from '../../services/customField';
 import { resolveSourceFormFieldName } from './customFieldSourceFieldUtils';
@@ -15,6 +15,27 @@ import {
   resolveAssociatedDisplayMode,
 } from './customFieldAssociatedDisplayMode';
 import { customFieldControlLayout, customFieldFieldProps } from './customFieldFormLayout';
+
+/**
+ * 源字段监听：须用 Form.useWatch，勿用 ProFormDependency 包带 colProps 的字段
+ *（Dependency 会打断 ProForm grid 的 Col，导致半宽字段缩成窄条、标签挤在一起）。
+ */
+function AssociatedObjectLookupFromWatch(
+  props: AssociatedObjectFieldProps & {
+    dependencyName: string;
+    displayMode: ReturnType<typeof resolveAssociatedDisplayMode>;
+  },
+) {
+  const { dependencyName, displayMode, ...fieldProps } = props;
+  const sourceValue = Form.useWatch(dependencyName);
+  return (
+    <AssociatedObjectLookupControl
+      {...fieldProps}
+      sourceValue={sourceValue}
+      displayMode={displayMode}
+    />
+  );
+}
 
 function LookupValueSync({
   name,
@@ -248,7 +269,7 @@ function AssociatedObjectLookupControl({
   ]);
 
   if (readOnly) {
-    // 只读展示：不挂 form name（非持久化）；控件用只读 Input，与上方 ProForm 字段同高同宽
+    // 只读展示：不挂 form name（非持久化）；ProFormField 承接 colProps 进栅格 Col
     const shown = resolvedValue;
     const text =
       shown == null || shown === ''
@@ -257,14 +278,18 @@ function AssociatedObjectLookupControl({
           ? shown.map(String).join('、')
           : String(shown);
     return (
-      <ProFormItem label={label} {...customFieldControlLayout(colProps)}>
-        <Input
-          readOnly
-          value={text}
-          placeholder="—"
-          {...customFieldFieldProps()}
-        />
-      </ProFormItem>
+      <ProFormField
+        label={label}
+        {...customFieldControlLayout(colProps)}
+        renderFormItem={() => (
+          <Input
+            readOnly
+            value={text}
+            placeholder="—"
+            {...customFieldFieldProps()}
+          />
+        )}
+      />
     );
   }
 
@@ -328,14 +353,10 @@ export const AssociatedObjectField: React.FC<AssociatedObjectFieldProps> = (prop
   }
 
   return (
-    <ProFormDependency name={[dependencyName]}>
-      {(deps) => (
-        <AssociatedObjectLookupControl
-          {...props}
-          sourceValue={deps[dependencyName]}
-          displayMode={displayMode}
-        />
-      )}
-    </ProFormDependency>
+    <AssociatedObjectLookupFromWatch
+      {...props}
+      dependencyName={dependencyName}
+      displayMode={displayMode}
+    />
   );
 };
