@@ -5,7 +5,7 @@
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Form, Typography } from 'antd';
+import { Form, Input } from 'antd';
 import { ProFormDependency, ProFormDigit, ProFormItem, ProFormRadio, ProFormSelect, ProFormText } from '@ant-design/pro-components';
 import { getAssociatedTableOptions, lookupAssociatedValue } from '../../services/customField';
 import type { CustomField } from '../../services/customField';
@@ -248,19 +248,22 @@ function AssociatedObjectLookupControl({
   ]);
 
   if (readOnly) {
-    // 只读展示：不挂 form name，不进提交/落库；仅展示本次 lookup 结果
+    // 只读展示：不挂 form name（非持久化）；控件用只读 Input，与上方 ProForm 字段同高同宽
     const shown = resolvedValue;
     const text =
       shown == null || shown === ''
-        ? '—'
+        ? ''
         : Array.isArray(shown)
           ? shown.map(String).join('、')
           : String(shown);
     return (
       <ProFormItem label={label} {...customFieldControlLayout(colProps)}>
-        <Typography.Text type={shown == null || shown === '' ? 'secondary' : undefined}>
-          {text}
-        </Typography.Text>
+        <Input
+          readOnly
+          value={text}
+          placeholder="—"
+          {...customFieldFieldProps()}
+        />
       </ProFormItem>
     );
   }
