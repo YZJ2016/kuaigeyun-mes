@@ -2580,11 +2580,24 @@ class SalesOrderService:
             query = query.filter(salesman_id=int(salesman_id))
         if keyword and str(keyword).strip():
             kw = keyword.strip()
-            query = query.filter(
-                Q(order_code__icontains=kw)
-                | Q(customer_name__icontains=kw)
-                | Q(salesman_name__icontains=kw)
-                | Q(contract_code__icontains=kw)
+            from apps.kuaizhizao.utils.list_item_material_keyword import (
+                apply_query_header_or_line_material_keyword,
+            )
+
+            # 使用模块级 SalesOrderItem；禁止在本函数内再 import，否则会遮蔽为局部
+            # 变量，无 keyword 时闭包 _load_list_items 报 free variable 未关联。
+            query = await apply_query_header_or_line_material_keyword(
+                query,
+                tenant_id=tenant_id,
+                kw=kw,
+                keyword_fields=(
+                    "order_code",
+                    "customer_name",
+                    "salesman_name",
+                    "contract_code",
+                ),
+                item_model=SalesOrderItem,
+                item_header_fk_field="sales_order_id",
             )
         if column_filters:
             from apps.kuaizhizao.utils.column_filters import (
