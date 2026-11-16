@@ -15,6 +15,9 @@ const DATETIME_NO_TZ_PATTERN =
   /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,6})?)?$/;
 const TZ_SUFFIX_PATTERN = /(Z|[+-]\d{2}:?\d{2})$/i;
 
+/** 空值展示占位（全站统一长横线） */
+export const EMPTY_VALUE_PLACEHOLDER = '—';
+
 /** 从 configStore 获取日期格式 */
 function getDateFormatFromSiteSetting(): string {
   return useConfigStore.getState().getConfig('date_format', 'YYYY-MM-DD');
