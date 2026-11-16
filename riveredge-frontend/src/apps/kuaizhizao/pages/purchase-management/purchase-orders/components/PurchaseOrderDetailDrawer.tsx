@@ -59,16 +59,28 @@ const PURCHASE_ORDER_RESOURCE = 'kuaizhizao:purchase-order';
 const PLACEHOLDER: PurchaseOrder = { id: 0 };
 const DETAIL_ITEMS_MIN_WIDTH = 1200;
 
+function resolvePurchaseOrderLineTaxPercent(
+  item: Pick<PurchaseOrderItem, 'tax_rate'>,
+  headerTaxRate: unknown,
+): number {
+  const lineRaw = Number(item.tax_rate);
+  if (Number.isFinite(lineRaw) && lineRaw > 0) {
+    return purchaseOrderTaxRateToPercent(lineRaw);
+  }
+  return purchaseOrderTaxRateToPercent(headerTaxRate);
+}
+
 function resolvePurchaseOrderLineInclAmounts(
-  item: Pick<PurchaseOrderItem, 'ordered_quantity' | 'unit_price' | 'total_price'>,
-  taxRatePercent: number,
+  item: Pick<PurchaseOrderItem, 'ordered_quantity' | 'unit_price' | 'total_price' | 'tax_rate'>,
+  headerTaxRate: unknown,
 ): { unitIncl: number; totalIncl: number } {
+  const taxRatePercent = resolvePurchaseOrderLineTaxPercent(item, headerTaxRate);
   const qty = Number(item.ordered_quantity) || 0;
   const unitExcl = Number(item.unit_price) || 0;
   const line = calcDocumentLineAmounts(qty, unitExcl, taxRatePercent, 'tax_exclusive');
   const storedTotal = Number(item.total_price);
   const totalIncl =
-    Number.isFinite(storedTotal) && taxRatePercent > 0
+    Number.isFinite(storedTotal) && (taxRatePercent > 0 || storedTotal > 0)
       ? calcDocumentLineAmounts(1, storedTotal, taxRatePercent, 'tax_exclusive').incl
       : line.incl;
   const unitIncl = qty > 0 ? totalIncl / qty : calcDocumentLineAmounts(1, unitExcl, taxRatePercent, 'tax_exclusive').incl;
@@ -531,22 +543,28 @@ export const PurchaseOrderDetailDrawer: React.FC<PurchaseOrderDetailDrawerProps>
                   dataIndex: 'unit_price',
                   width: 100,
                   align: 'right',
-                  render: (text: number, row: PurchaseOrderItem) => (
-                    <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
-                      {formatCurrencyPrice(text)}
-                      {(row as PurchaseOrderItem & { price_settlement_status?: string }).price_settlement_status ===
-                      'PROVISIONAL' ? (
-                        <MarkerTag color="warning">{t('app.kuaizhizao.purchaseOrder.priceProvisional')}</MarkerTag>
-                      ) : null}
-                    </span>
-                  ),
+                  render: (_text: number, row: PurchaseOrderItem) => {
+                    const { unitIncl } = resolvePurchaseOrderLineInclAmounts(row, effective.tax_rate);
+                    return (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
+                        {formatCurrencyPrice(unitIncl)}
+                        {(row as PurchaseOrderItem & { price_settlement_status?: string }).price_settlement_status ===
+                        'PROVISIONAL' ? (
+                          <MarkerTag color="warning">{t('app.kuaizhizao.purchaseOrder.priceProvisional')}</MarkerTag>
+                        ) : null}
+                      </span>
+                    );
+                  },
                 },
                 {
                   title: t('app.kuaizhizao.purchaseOrder.col.totalPrice'),
                   dataIndex: 'total_price',
                   width: 120,
                   align: 'right',
-                  render: (text: number) => formatCurrencyAmount(text),
+                  render: (_text: number, row: PurchaseOrderItem) => {
+                    const { totalIncl } = resolvePurchaseOrderLineInclAmounts(row, effective.tax_rate);
+                    return formatCurrencyAmount(totalIncl);
+                  },
                 },
                 {
                   title: t('app.kuaizhizao.purchaseOrder.col.receivedQty'),

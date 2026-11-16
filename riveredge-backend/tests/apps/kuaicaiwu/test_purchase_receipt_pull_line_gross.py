@@ -11,6 +11,17 @@ from apps.kuaicaiwu.services.purchase_receipt_finance_pull_lines import (
 )
 
 
+class _AwaitableList:
+    def __init__(self, rows):
+        self._rows = rows
+
+    def __await__(self):
+        async def _get():
+            return self._rows
+
+        return _get().__await__()
+
+
 @pytest.mark.asyncio
 async def test_receipt_detail_lines_max_push_is_line_gross():
     receipt = SimpleNamespace(id=1, tax_rate=Decimal("13"))
@@ -39,7 +50,10 @@ async def test_receipt_detail_lines_max_push_is_line_gross():
         ),
     ), patch(
         "apps.kuaicaiwu.services.purchase_receipt_finance_pull_lines.PurchaseReceiptLineFinanceOccupancyService"
-    ) as mock_svc_cls:
+    ) as mock_svc_cls, patch(
+        "apps.kuaizhizao.models.purchase_order.PurchaseOrderItem.filter",
+        return_value=_AwaitableList([poi]),
+    ):
         mock_svc_cls.return_value._sum_occupied_by_item = AsyncMock(return_value={})
 
         lines = await build_purchase_receipt_finance_detail_lines(1, 1, "invoice")

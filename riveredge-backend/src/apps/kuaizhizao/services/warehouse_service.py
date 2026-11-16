@@ -9882,7 +9882,33 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 total_quantity += receipt_quantity
                 total_amount += item_dict['total_amount']
             
-            # 更新入库单总数量和总金额
+            from apps.kuaicaiwu.services.purchase_settlement import (
+                rollup_purchase_receipt_amounts_from_lines,
+                rollup_purchase_receipt_header_tax,
+                normalize_po_tax_rate_to_percent,
+            )
+            from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem as _POI
+            from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem as _PRI
+
+            created_items = await _PRI.filter(
+                tenant_id=tenant_id, receipt_id=receipt.id, deleted_at__isnull=True
+            ).all()
+            poi_ids = {
+                int(i.purchase_order_item_id or 0)
+                for i in created_items
+                if int(i.purchase_order_item_id or 0) > 0
+            }
+            poi_by_id = {}
+            if poi_ids:
+                for poi in await _POI.filter(tenant_id=tenant_id, id__in=list(poi_ids)):
+                    poi_by_id[int(poi.id)] = poi
+            if created_items:
+                excl, tax_amt, net_amt = rollup_purchase_receipt_amounts_from_lines(
+                    receipt, created_items, poi_by_id
+                )
+            else:
+                tax_pct = normalize_po_tax_rate_to_percent(receipt.tax_rate)
+                excl, tax_amt, net_amt = rollup_purchase_receipt_header_tax(total_amount, tax_pct)
             await PurchaseReceipt.filter(id=receipt.id).update(
                 total_quantity=total_quantity,
                 total_amount=total_amount
@@ -10728,6 +10754,36 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                     total_quantity += qty
                     total_amount += line_amount
 
+                refreshed = await PurchaseReceipt.get(tenant_id=tenant_id, id=receipt_id)
+                from apps.kuaicaiwu.services.purchase_settlement import (
+                    normalize_po_tax_rate_to_percent,
+                    rollup_purchase_receipt_amounts_from_lines,
+                    rollup_purchase_receipt_header_tax,
+                )
+                from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem as _POI
+                from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem as _PRI
+
+                refreshed_items = await _PRI.filter(
+                    tenant_id=tenant_id, receipt_id=receipt_id, deleted_at__isnull=True
+                ).all()
+                poi_ids = {
+                    int(i.purchase_order_item_id or 0)
+                    for i in refreshed_items
+                    if int(i.purchase_order_item_id or 0) > 0
+                }
+                poi_by_id = {}
+                if poi_ids:
+                    for poi in await _POI.filter(tenant_id=tenant_id, id__in=list(poi_ids)):
+                        poi_by_id[int(poi.id)] = poi
+                if refreshed_items:
+                    excl, tax_amt, net_amt = rollup_purchase_receipt_amounts_from_lines(
+                        refreshed, refreshed_items, poi_by_id
+                    )
+                else:
+                    tax_pct = normalize_po_tax_rate_to_percent(refreshed.tax_rate)
+                    excl, tax_amt, net_amt = rollup_purchase_receipt_header_tax(
+                        total_amount, tax_pct
+                    )
                 await PurchaseReceipt.filter(tenant_id=tenant_id, id=receipt_id).update(
                     total_quantity=total_quantity,
                     total_amount=total_amount,

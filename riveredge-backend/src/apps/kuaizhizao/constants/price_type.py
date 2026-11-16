@@ -1,6 +1,7 @@
-"""销售价类常量（含税/不含税）。"""
+"""单据价类常量（含税/不含税）。销售/采购共用。"""
 
 DEFAULT_SALES_PRICE_TYPE = "tax_inclusive"
+DEFAULT_PURCHASE_PRICE_TYPE = "tax_inclusive"
 
 VALID_PRICE_TYPES = frozenset({"tax_inclusive", "tax_exclusive"})
 

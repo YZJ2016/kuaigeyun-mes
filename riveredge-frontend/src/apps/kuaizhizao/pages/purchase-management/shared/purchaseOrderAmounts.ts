@@ -17,6 +17,38 @@ export function purchaseOrderTaxRateToDecimal(percent: unknown): number {
   return n / 100;
 }
 
+/** 采购入库单列表/取单金额：与后端 settlement_gross / purchase_receipt_settlement_gross 同源 */
+export function resolvePurchaseReceiptDisplayAmount(receipt: {
+  settlement_gross?: number | null;
+  settlementGross?: number | null;
+  net_amount?: number | null;
+  netAmount?: number | null;
+  total_amount?: number | null;
+  totalAmount?: number | null;
+  tax_amount?: number | null;
+  taxAmount?: number | null;
+  tax_rate?: number | null;
+  taxRate?: number | null;
+}): number {
+  const settlement = Number(receipt.settlement_gross ?? receipt.settlementGross);
+  if (Number.isFinite(settlement) && settlement > 0) return settlement;
+
+  const net = Number(receipt.net_amount ?? receipt.netAmount);
+  if (Number.isFinite(net) && net > 0) return net;
+
+  const excl = Number(receipt.total_amount ?? receipt.totalAmount) || 0;
+  const tax = Number(receipt.tax_amount ?? receipt.taxAmount);
+  if (Number.isFinite(tax) && tax >= 0 && (excl > 0 || tax > 0)) {
+    return excl + tax;
+  }
+  const pct = purchaseOrderTaxRateToPercent(receipt.tax_rate ?? receipt.taxRate);
+  if (excl > 0 || pct > 0) {
+    return calcDocumentLineAmountsFromExclTotal(excl, pct).incl;
+  }
+  return calcDocumentLineAmounts(1, excl, pct, 'tax_exclusive').incl;
+}
+
+/** 列表/详情订单金额：优先头表税额汇总（支持行级多税率），再回退单税率重算 */
 /** 列表/详情订单金额：优先 net_amount（价税合计） */
 export function resolvePurchaseOrderDisplayAmount(order: {
   net_amount?: number | null;
@@ -24,12 +56,17 @@ export function resolvePurchaseOrderDisplayAmount(order: {
   tax_amount?: number | null;
   tax_rate?: number | null;
 }): number {
-  const net = Number(order.net_amount);
-  if (Number.isFinite(net) && net > 0) return net;
   const excl = Number(order.total_amount) || 0;
   const tax = Number(order.tax_amount);
-  if (Number.isFinite(tax) && tax >= 0 && (excl > 0 || tax > 0)) return excl + tax;
+  if (Number.isFinite(tax) && tax >= 0 && (excl > 0 || tax > 0)) {
+    return excl + tax;
+  }
+  const net = Number(order.net_amount);
+  if (Number.isFinite(net) && net > 0) return net;
   const pct = purchaseOrderTaxRateToPercent(order.tax_rate);
+  if (excl > 0 || pct > 0) {
+    return calcDocumentLineAmountsFromExclTotal(excl, pct).incl;
+  }
   return calcDocumentLineAmounts(1, excl, pct, 'tax_exclusive').incl;
 }
 
