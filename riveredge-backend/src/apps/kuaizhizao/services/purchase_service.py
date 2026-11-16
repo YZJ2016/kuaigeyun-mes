@@ -281,7 +281,20 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             if require_purchase_requisition:
                 source_type = (order_data.source_type or "").strip()
                 source_id = order_data.source_id
+                flow_source = (getattr(order_data, "document_flow_source_type", None) or "").strip()
                 if _is_purchase_requisition_source_type(source_type) and source_id:
+                    pass
+                elif source_type in ("demand_computation", "DemandComputation") and source_id:
+                    pass
+                elif flow_source == "demand_computation_items":
+                    pass
+                elif source_type in ("ReplenishmentSuggestion", "replenishment_suggestion") and source_id:
+                    pass
+                elif flow_source == "replenishment_suggestion_items":
+                    pass
+                elif source_type in ("sales_order", "SalesOrder", "salesorder") and source_id:
+                    pass
+                elif flow_source == "sales_order_buy_push":
                     pass
                 else:
                     # 兼容按明细挂接采购申请的场景
@@ -293,8 +306,27 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                     if not all_items_have_source:
                         raise BusinessLogicError("当前组织要求先采购申请后下单，请先关联采购申请单")
 
-            # 创建订单头
-            order_dict = order_data.model_dump(exclude={'items', 'payment_milestones'})
+            # 创建订单头（排除仅响应字段，避免写入 ORM / 被里程碑同步误伤）
+            order_dict = order_data.model_dump(
+                exclude={
+                    "items",
+                    "payment_milestones",
+                    "audit",
+                    "prepayment_unsettled_balance",
+                    "estimated_payable_after_prepayment",
+                    "document_flow_source_type",
+                    "document_flow_requisition_item_ids",
+                    "document_flow_item_quantities",
+                    "document_flow_item_unit_prices",
+                    "document_flow_item_suppliers",
+                    "document_flow_persist_default_supplier",
+                    "document_flow_inquiry_item_ids",
+                    "document_flow_demand_computation_item_ids",
+                    "document_flow_demand_computation_ids",
+                    "document_flow_replenishment_suggestion_ids",
+                    "document_flow_sales_order_id",
+                }
+            )
             user_info = await self.get_user_info(created_by)
             order_dict.update({
                 'tenant_id': tenant_id,
@@ -406,7 +438,105 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             order_id=created_order_id,
             operator_id=created_by,
         )
+        created = await self.get_purchase_order_by_id(tenant_id, created_order_id)
+        await self._finalize_document_flow_after_create(
+            tenant_id=tenant_id,
+            order_data=order_data,
+            purchase_order=created,
+            created_by=created_by,
+        )
         return await self.get_purchase_order_by_id(tenant_id, created_order_id)
+
+    async def _finalize_document_flow_after_create(
+        self,
+        tenant_id: int,
+        order_data: PurchaseOrderCreate,
+        purchase_order: PurchaseOrderResponse,
+        created_by: int,
+    ) -> None:
+        source_type = (getattr(order_data, "document_flow_source_type", None) or "").strip()
+        po_items = await PurchaseOrderItem.filter(
+            tenant_id=tenant_id, order_id=int(purchase_order.id)
+        ).all()
+        if source_type == "purchase_requisition_items":
+            item_ids = getattr(order_data, "document_flow_requisition_item_ids", None) or []
+            if not item_ids:
+                return
+            from apps.kuaizhizao.services.purchase_requisition_service import PurchaseRequisitionService
+
+            convert_data = PurchaseRequisitionService()._convert_data_from_document_flow(order_data)
+            await PurchaseRequisitionService().finalize_requisition_items_after_purchase_order_created(
+                tenant_id=tenant_id,
+                purchase_order_id=int(purchase_order.id),
+                purchase_order_code=purchase_order.order_code,
+                po_items=po_items,
+                created_by=created_by,
+                requisition_item_ids=[int(v) for v in item_ids],
+                convert_data=convert_data,
+            )
+            return
+        if source_type == "purchase_inquiry_items":
+            item_ids = getattr(order_data, "document_flow_inquiry_item_ids", None) or []
+            if not item_ids:
+                return
+            from apps.kuaizhizao.services.purchase_inquiry_service import PurchaseInquiryService
+
+            await PurchaseInquiryService().finalize_inquiry_items_after_purchase_order_created(
+                tenant_id=tenant_id,
+                purchase_order_id=int(purchase_order.id),
+                purchase_order_code=purchase_order.order_code,
+                po_items=po_items,
+                inquiry_item_ids=[int(v) for v in item_ids],
+                created_by=created_by,
+            )
+            return
+        if source_type == "demand_computation_items":
+            computation_ids = getattr(order_data, "document_flow_demand_computation_ids", None) or []
+            if not computation_ids:
+                return
+            from apps.kuaizhizao.services.document_push_pull_service import DocumentPushPullService
+
+            await DocumentPushPullService().finalize_demand_computation_after_purchase_order_created(
+                tenant_id=tenant_id,
+                computation_ids=[int(v) for v in computation_ids],
+                purchase_order_id=int(purchase_order.id),
+                purchase_order_code=purchase_order.order_code,
+                created_by=created_by,
+            )
+            return
+        if source_type == "replenishment_suggestion_items":
+            suggestion_ids = (
+                getattr(order_data, "document_flow_replenishment_suggestion_ids", None) or []
+            )
+            if not suggestion_ids:
+                return
+            from apps.kuaizhizao.services.replenishment_suggestion_service import (
+                ReplenishmentSuggestionService,
+            )
+
+            await ReplenishmentSuggestionService().finalize_replenishment_after_purchase_order_created(
+                tenant_id=tenant_id,
+                suggestion_ids=[int(v) for v in suggestion_ids],
+                purchase_order_id=int(purchase_order.id),
+                purchase_order_code=purchase_order.order_code,
+                created_by=created_by,
+            )
+            return
+        if source_type == "sales_order_buy_push":
+            sales_order_id = getattr(order_data, "document_flow_sales_order_id", None)
+            if not sales_order_id:
+                return
+            from apps.kuaizhizao.services.sales_order_purchase_push import (
+                finalize_sales_order_after_purchase_order_created,
+            )
+
+            await finalize_sales_order_after_purchase_order_created(
+                tenant_id=tenant_id,
+                sales_order_id=int(sales_order_id),
+                purchase_order_id=int(purchase_order.id),
+                purchase_order_code=purchase_order.order_code,
+                created_by=created_by,
+            )
 
     async def get_purchase_order_by_id(self, tenant_id: int, order_id: int) -> PurchaseOrderResponse:
         """
@@ -2011,7 +2141,19 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         from apps.kuaizhizao.services.document_action_policy.enricher import purchase_order_has_downstream
 
         has_downstream = await purchase_order_has_downstream(tenant_id, order_id)
-        assert_purchase_order_capability(order, "delete", has_downstream=has_downstream)
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            resolve_review_submitted_for_document,
+        )
+
+        review_submitted = await resolve_review_submitted_for_document(
+            tenant_id, "purchase_order", order
+        )
+        assert_purchase_order_capability(
+            order,
+            "delete",
+            has_downstream=has_downstream,
+            review_submitted=review_submitted,
+        )
 
         po_code = getattr(order, "order_code", str(order_id))
 

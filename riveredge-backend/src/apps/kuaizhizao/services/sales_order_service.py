@@ -56,6 +56,7 @@ from apps.kuaizhizao.schemas.sales_order import (
     SalesOrderItemCreate, SalesOrderItemResponse,
 )
 from apps.kuaizhizao.services.document_action_policy.enricher import (
+    batch_review_submitted_for_documents,
     enrich_sales_order_capabilities_on_response,
 )
 from apps.kuaizhizao.utils.gift_line_helper import validate_gift_line_rules
@@ -1034,6 +1035,7 @@ class SalesOrderService:
         audit_enabled: bool = False,
         lifecycle_items: Optional[List[Any]] = None,
         has_shipment_notice: bool = False,
+        review_submitted: Optional[bool] = None,
     ) -> SalesOrderResponse:
         """将 SalesOrder 转为 SalesOrderResponse"""
         from apps.kuaizhizao.services.document_lifecycle_service import get_sales_order_lifecycle
@@ -1052,11 +1054,12 @@ class SalesOrderService:
             milestones=milestones,
         )
         raw_review_status = getattr(order, "review_status", None)
-        normalized_review_status = (
-            raw_review_status
-            if str(raw_review_status or "").strip()
-            else ReviewStatus.PENDING
-        )
+        if str(raw_review_status or "").strip():
+            normalized_review_status = raw_review_status
+        elif self._is_draft(order.status):
+            normalized_review_status = DocumentStatus.DRAFT.value
+        else:
+            normalized_review_status = ReviewStatus.PENDING
         base = {
             "id": order.id,
             "uuid": str(order.uuid),
@@ -1162,6 +1165,7 @@ class SalesOrderService:
             order.status,
             getattr(order, "review_status", None),
             enabled=audit_enabled,
+            review_submitted=review_submitted,
         )
         fallback = material_code_fallback or {}
         mat_fallback = material_fallback or {}
@@ -1321,9 +1325,16 @@ class SalesOrderService:
         action: str,
         items: Optional[List[SalesOrderItem]] = None,
     ) -> None:
-        # 更新门禁只看状态/锁定，禁止拉下推/发票/采购等整包上下文（保存路径会明显变慢）
-        if action == "update":
-            assert_sales_order_capability(order, "update")
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            resolve_review_submitted_for_document,
+        )
+
+        review_submitted = await resolve_review_submitted_for_document(
+            tenant_id, "sales_order", order
+        )
+        # 更新/补附件门禁只看状态，禁止拉下推/发票/采购等整包上下文（保存路径会明显变慢）
+        if action in ("update", "update_attachments"):
+            assert_sales_order_capability(order, action, review_submitted=review_submitted)
             return
 
         demand = await self._get_linked_demand(tenant_id, order.id)
@@ -1406,6 +1417,7 @@ class SalesOrderService:
                     order,
                     action,
                     require_audit_before_print=require_audit_before_print,
+                    review_submitted=review_submitted,
                     **ctx,
                 )
             except BusinessLogicError:
@@ -1426,6 +1438,7 @@ class SalesOrderService:
             order,
             action,
             require_audit_before_print=require_audit_before_print,
+            review_submitted=review_submitted,
             **ctx,
         )
 
@@ -1936,11 +1949,18 @@ class SalesOrderService:
                     tenant_id, sales_order_data.order_date
                 )
             try:
-                return await self._create_sales_order_in_tx(
+                created = await self._create_sales_order_in_tx(
                     tenant_id=tenant_id,
                     sales_order_data=sales_order_data,
                     created_by=created_by,
                 )
+                await self._finalize_document_flow_after_create(
+                    tenant_id=tenant_id,
+                    sales_order_data=sales_order_data,
+                    sales_order_id=int(created.id),
+                    created_by=created_by,
+                )
+                return created
             except IntegrityError as e:
                 last_error = e
                 logger.warning(
@@ -1951,6 +1971,66 @@ class SalesOrderService:
                 )
                 sales_order_data.order_code = None
         raise ValidationError("销售订单编码已存在，请关闭弹窗后重新新建") from last_error
+
+    async def _finalize_document_flow_after_create(
+        self,
+        tenant_id: int,
+        sales_order_data: SalesOrderCreate,
+        sales_order_id: int,
+        created_by: int,
+    ) -> None:
+        source_type = (getattr(sales_order_data, "document_flow_source_type", None) or "").strip()
+        source_id = getattr(sales_order_data, "document_flow_source_id", None)
+        if not source_type or not source_id:
+            return
+        if source_type == "quotation":
+            item_ids = getattr(sales_order_data, "document_flow_source_item_ids", None)
+            from apps.kuaizhizao.services.quotation_service import QuotationService
+
+            await QuotationService().finalize_quotation_after_sales_order_created(
+                tenant_id=tenant_id,
+                quotation_id=int(source_id),
+                sales_order_id=sales_order_id,
+                created_by=created_by,
+                selected_item_ids=item_ids,
+            )
+            await self.apply_push_default_mode_after_create(
+                tenant_id=tenant_id,
+                sales_order_id=sales_order_id,
+                created_by=created_by,
+            )
+            return
+        if source_type == "sales_contract":
+            release_lines = getattr(sales_order_data, "document_flow_release_lines", None)
+            from apps.kuaizhizao.services.sales_contract_service import SalesContractService
+
+            await SalesContractService().finalize_sales_contract_after_sales_order_created(
+                tenant_id=tenant_id,
+                contract_id=int(source_id),
+                sales_order_id=sales_order_id,
+                created_by=created_by,
+                release_lines=release_lines,
+            )
+            return
+        if source_type == "sales_review":
+            from apps.kuaizhizao.services.sales_review_service import SalesReviewService
+            from infra.models.user import User
+
+            actor = await User.get_or_none(id=created_by)
+            if not actor:
+                raise NotFoundError(f"用户不存在: {created_by}")
+            order = await self.get_sales_order_by_id(
+                tenant_id=tenant_id,
+                sales_order_id=sales_order_id,
+                include_items=False,
+            )
+            await SalesReviewService().finalize_sales_review_after_sales_order_created(
+                tenant_id=tenant_id,
+                review_id=int(source_id),
+                sales_order_id=sales_order_id,
+                sales_order_code=order.order_code,
+                actor=actor,
+            )
 
     async def _create_sales_order_in_tx(
         self,
@@ -1989,6 +2069,8 @@ class SalesOrderService:
             order_dict["contract_terms"] = contract_terms
             order_dict["status"] = sales_order_data.status
             order_dict["review_status"] = sales_order_data.review_status
+            if self._is_draft(str(order_dict.get("status") or "")):
+                order_dict["review_status"] = DocumentStatus.DRAFT.value
             order_dict["created_by"] = created_by
             order_dict["created_by_name"] = operator_name
             order_dict["updated_by"] = created_by
@@ -2947,6 +3029,7 @@ class SalesOrderService:
             require_pr,
             require_sn_before_sd,
             prepay_by_order,
+            review_submitted_by_id,
         ) = await asyncio.gather(
             Demand.filter(
                 tenant_id=tenant_id,
@@ -2974,6 +3057,7 @@ class SalesOrderService:
                 source_type="sales_order",
                 target_type="receipt",
             ),
+            batch_review_submitted_for_documents(tenant_id, "sales_order", orders),
         )
         demand_by_order: Dict[int, Demand] = {d.source_id: d for d in demands}
 
@@ -3070,6 +3154,8 @@ class SalesOrderService:
             else:
                 push_ratio = 0.0
 
+            oid = int(order.id)
+            row_review_submitted = review_submitted_by_id.get(oid)
             sales_orders.append(
                 enrich_sales_order_capabilities_on_response(
                     order,
@@ -3090,7 +3176,9 @@ class SalesOrderService:
                         shippable_hint=shippable_map.get(order.id),
                         audit_enabled=audit_enabled,
                         lifecycle_items=items,
+                        review_submitted=row_review_submitted,
                     ),
+                    review_submitted=row_review_submitted,
                     require_audit_before_print=require_audit_before_print,
                     has_downstream_documents=downstream_by_order.get(order.id, False),
                     **self._sales_order_capability_context(
@@ -5131,6 +5219,80 @@ class SalesOrderService:
             selected_item_ids=selected_item_ids,
             selected_quantities=qty_map,
         )
+
+    async def draft_push_sales_order_to_purchase_requisition(
+        self,
+        tenant_id: int,
+        sales_order_id: int,
+        selected_item_ids: Optional[List[int]] = None,
+        selected_quantities: Optional[Dict[int, Any]] = None,
+    ) -> Dict[str, Any]:
+        order, items = await self._load_sales_order_push_context(tenant_id, sales_order_id)
+        await self._assert_sales_order_capability_for_order(
+            tenant_id, order, "push_purchase_requisition", items=items
+        )
+        qty_map = self._parse_selected_quantities_map(selected_quantities)
+        from apps.kuaizhizao.services.sales_order_purchase_push import (
+            draft_purchase_requisition_from_sales_order,
+        )
+
+        return await draft_purchase_requisition_from_sales_order(
+            tenant_id=tenant_id,
+            order=order,
+            items=items,
+            selected_item_ids=selected_item_ids,
+            selected_quantities=qty_map,
+        )
+
+    async def draft_push_sales_order_to_purchase_order(
+        self,
+        tenant_id: int,
+        sales_order_id: int,
+        selected_item_ids: Optional[List[int]] = None,
+        selected_quantities: Optional[Dict[int, Any]] = None,
+    ) -> Dict[str, Any]:
+        order, items = await self._load_sales_order_push_context(tenant_id, sales_order_id)
+        await self._assert_sales_order_capability_for_order(
+            tenant_id, order, "push_purchase_order", items=items
+        )
+        qty_map = self._parse_selected_quantities_map(selected_quantities)
+        from apps.kuaizhizao.services.sales_order_purchase_push import (
+            draft_purchase_orders_from_sales_order,
+        )
+
+        return await draft_purchase_orders_from_sales_order(
+            tenant_id=tenant_id,
+            order=order,
+            items=items,
+            selected_item_ids=selected_item_ids,
+            selected_quantities=qty_map,
+        )
+
+    def _parse_selected_quantities_map(
+        self, selected_quantities: Optional[Dict[int, Any]]
+    ) -> Optional[Dict[int, Decimal]]:
+        if not isinstance(selected_quantities, dict):
+            return None
+        qty_map: Dict[int, Decimal] = {}
+        for k, v in selected_quantities.items():
+            try:
+                qty_map[int(k)] = Decimal(str(v))
+            except Exception:
+                continue
+        return qty_map or None
+
+    async def _load_sales_order_push_context(
+        self, tenant_id: int, sales_order_id: int
+    ) -> tuple:
+        order = await SalesOrder.get_or_none(
+            tenant_id=tenant_id, id=sales_order_id, deleted_at__isnull=True
+        )
+        if not order:
+            raise NotFoundError(f"销售订单不存在: {sales_order_id}")
+        items = await SalesOrderItem.filter(
+            tenant_id=tenant_id, sales_order_id=sales_order_id
+        ).order_by("id")
+        return order, items
 
     async def preview_push_sales_order_to_purchase_order(
         self, tenant_id: int, sales_order_id: int

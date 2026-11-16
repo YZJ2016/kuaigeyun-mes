@@ -117,6 +117,32 @@ export async function createPurchaseRequisition(data: Partial<PurchaseRequisitio
   return apiRequest('/apps/kuaizhizao/purchase-requisitions', { method: 'POST', data });
 }
 
+export type DemandComputationToPurchaseRequisitionDraftResponse = {
+  target_type: 'purchase_requisition';
+  source_type: 'demand_computation';
+  create_payload: Record<string, unknown>;
+  document_flow: Record<string, unknown>;
+};
+
+export async function draftPurchaseRequisitionFromDemandComputationItems(
+  selectedItemIds: number[],
+  itemRequiredDates?: Array<{ item_id: number; required_date: string }>,
+  options?: { includeSalesOrderAttachments?: boolean },
+): Promise<DemandComputationToPurchaseRequisitionDraftResponse> {
+  return apiRequest('/apps/kuaizhizao/purchase-requisitions/draft-from-demand-computation-items', {
+    method: 'POST',
+    data: {
+      selected_item_ids: selectedItemIds,
+      ...(itemRequiredDates?.length
+        ? { item_required_dates: itemRequiredDates }
+        : {}),
+      ...(options?.includeSalesOrderAttachments
+        ? { include_sales_order_attachments: true }
+        : {}),
+    },
+  });
+}
+
 export async function pullPurchaseRequisitionFromDemandComputationItems(
   selectedItemIds: number[],
   itemRequiredDates?: Array<{ item_id: number; required_date: string }>,
@@ -176,6 +202,38 @@ export async function listPurchaseRequisitionPurchaseInquiryPullLines(params: {
   return apiRequest('/apps/kuaizhizao/purchase-requisitions/purchase-inquiry-pull-lines', {
     method: 'GET',
     params,
+  });
+}
+
+export type RequisitionToPurchaseOrderDraftEntry = {
+  create_payload: Record<string, unknown>;
+  document_flow: Record<string, unknown>;
+  supplier_id?: number;
+  requisition_ids?: number[];
+};
+
+export type RequisitionToPurchaseOrderDraftResponse = {
+  target_type: 'purchase_order';
+  source_type: 'purchase_requisition';
+  drafts: RequisitionToPurchaseOrderDraftEntry[];
+};
+
+export type RequisitionConvertToPurchaseOrderPayload = {
+  item_ids: number[];
+  supplier_id?: number;
+  supplier_name?: string;
+  item_quantities?: Record<number, number>;
+  item_unit_prices?: Record<number, number>;
+  item_suppliers?: Record<number, number>;
+  persist_default_supplier_to_material?: boolean;
+};
+
+export async function draftPurchaseOrdersFromRequisitionItems(
+  data: RequisitionConvertToPurchaseOrderPayload | { selected_item_ids: number[] },
+): Promise<RequisitionToPurchaseOrderDraftResponse> {
+  return apiRequest('/apps/kuaizhizao/purchase-orders/draft-from-requisition-items', {
+    method: 'POST',
+    data,
   });
 }
 

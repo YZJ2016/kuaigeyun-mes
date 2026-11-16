@@ -173,6 +173,7 @@ def _apply_audit(
     enabled: bool,
     status_field: str,
     review_status_field: str,
+    review_submitted: Optional[bool] = None,
 ) -> RecordLike:
     status, review_status = _read_status(item, status_field, review_status_field)
     audit = derive_audit_phase(
@@ -180,6 +181,7 @@ def _apply_audit(
         status,
         review_status,
         enabled=enabled,
+        review_submitted=review_submitted,
     )
     # capabilities 先于 audit 写入时须再裁剪，避免按钮门禁被冲掉
     caps = _read_capabilities(item)
@@ -218,8 +220,34 @@ async def enrich_items(
         if audit_enabled is not None
         else await audit_enabled_for(tenant_id, entity_type)
     )
+    from apps.kuaizhizao.services.document_action_policy.review_submission_gate import (
+        looks_pending_submission,
+    )
+
+    pending_ids: list[int] = []
+    for item in items:
+        status, review_status = _read_status(item, status_field, review_status_field)
+        if not looks_pending_submission(status, review_status):
+            continue
+        rid = _read_record_id(item)
+        if rid is not None:
+            pending_ids.append(int(rid))
+    review_submitted_by_id: dict[int, bool] = {}
+    if pending_ids:
+        from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+        review_submitted_by_id = await ApprovalInstanceService.batch_entity_has_approval_flow(
+            tenant_id,
+            entity_type,
+            pending_ids,
+        )
     out: List[RecordLike] = []
     for item in items:
+        review_submitted: Optional[bool] = None
+        status, review_status = _read_status(item, status_field, review_status_field)
+        if looks_pending_submission(status, review_status):
+            rid = _read_record_id(item)
+            review_submitted = bool(review_submitted_by_id.get(int(rid or 0), False))
         out.append(
             _apply_audit(
                 item,
@@ -227,6 +255,7 @@ async def enrich_items(
                 enabled=enabled,
                 status_field=status_field,
                 review_status_field=review_status_field,
+                review_submitted=review_submitted,
             )
         )
     if viewer_id is not None:

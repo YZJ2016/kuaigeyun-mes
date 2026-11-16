@@ -16,6 +16,7 @@ from pydantic import Field, field_validator, model_validator
 from core.schemas.base import BaseSchema
 from apps.kuaizhizao.constants import DemandStatus, ReviewStatus
 from apps.kuaizhizao.constants.price_type import DEFAULT_SALES_PRICE_TYPE
+from apps.kuaizhizao.schemas.sales_contract import SalesContractReleaseLine
 from apps.kuaizhizao.schemas.sales_contract_term import SalesContractTermSnapshot
 from apps.kuaizhizao.services.document_action_policy.types import SalesOrderCapabilities
 
@@ -200,7 +201,28 @@ class SalesOrderCreate(SalesOrderBase):
     payment_milestones: List[SalesOrderMilestoneCreate] = Field(
         default_factory=list, description="收款里程碑"
     )
-    
+    document_flow_source_type: Optional[str] = Field(
+        None,
+        max_length=64,
+        description="手工建单完成后需回写来源的单据类型（如 quotation）",
+        alias="documentFlowSourceType",
+    )
+    document_flow_source_id: Optional[int] = Field(
+        None,
+        description="来源单据 ID",
+        alias="documentFlowSourceId",
+    )
+    document_flow_source_item_ids: Optional[List[int]] = Field(
+        None,
+        description="来源明细 ID 列表（报价整单下推时为全部明细）",
+        alias="documentFlowSourceItemIds",
+    )
+    document_flow_release_lines: Optional[List[SalesContractReleaseLine]] = Field(
+        None,
+        description="框架合同释放行（合同下推销售订单时回写占用）",
+        alias="documentFlowReleaseLines",
+    )
+
     @model_validator(mode='after')
     def validate_items(self):
         """验证订单明细"""

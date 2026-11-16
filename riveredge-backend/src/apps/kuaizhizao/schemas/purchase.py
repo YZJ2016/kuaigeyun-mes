@@ -8,7 +8,7 @@ Date: 2025-12-30
 """
 
 from datetime import date, datetime
-from typing import List, Optional
+from typing import Dict, List, Optional
 from decimal import Decimal
 
 from pydantic import BaseModel, Field, ConfigDict, field_validator
@@ -91,6 +91,62 @@ class PurchaseOrderCreate(PurchaseOrderBase):
     items: List["PurchaseOrderItemCreate"] = Field(..., description="订单明细")
     payment_milestones: List[PurchaseOrderMilestoneCreate] = Field(
         default_factory=list, description="付款计划"
+    )
+    document_flow_source_type: Optional[str] = Field(
+        None,
+        max_length=64,
+        description="手工建单完成后需回写的来源类型（如 purchase_requisition_items）",
+        alias="documentFlowSourceType",
+    )
+    document_flow_requisition_item_ids: Optional[List[int]] = Field(
+        None,
+        description="本张采购单对应的采购申请行 ID",
+        alias="documentFlowRequisitionItemIds",
+    )
+    document_flow_item_quantities: Optional[Dict[int, float]] = Field(
+        None,
+        description="按申请行覆盖的下推数量（finalize 时拆行）",
+        alias="documentFlowItemQuantities",
+    )
+    document_flow_item_unit_prices: Optional[Dict[int, float]] = Field(
+        None,
+        description="按申请行覆盖的单价",
+        alias="documentFlowItemUnitPrices",
+    )
+    document_flow_item_suppliers: Optional[Dict[int, int]] = Field(
+        None,
+        description="按申请行指定的供应商（整单分组已在 draft 中完成）",
+        alias="documentFlowItemSuppliers",
+    )
+    document_flow_persist_default_supplier: bool = Field(
+        False,
+        description="回写物料默认供应商",
+        alias="documentFlowPersistDefaultSupplier",
+    )
+    document_flow_inquiry_item_ids: Optional[List[int]] = Field(
+        None,
+        description="本张采购单对应的询价明细 ID",
+        alias="documentFlowInquiryItemIds",
+    )
+    document_flow_demand_computation_item_ids: Optional[List[int]] = Field(
+        None,
+        description="本张采购单对应的需求计算明细 ID",
+        alias="documentFlowDemandComputationItemIds",
+    )
+    document_flow_demand_computation_ids: Optional[List[int]] = Field(
+        None,
+        description="handoff 保存后写需求计算关联",
+        alias="documentFlowDemandComputationIds",
+    )
+    document_flow_replenishment_suggestion_ids: Optional[List[int]] = Field(
+        None,
+        description="handoff 保存后写补货建议关联并标记已处理",
+        alias="documentFlowReplenishmentSuggestionIds",
+    )
+    document_flow_sales_order_id: Optional[int] = Field(
+        None,
+        description="handoff 保存后写销售订单关联",
+        alias="documentFlowSalesOrderId",
     )
 
 

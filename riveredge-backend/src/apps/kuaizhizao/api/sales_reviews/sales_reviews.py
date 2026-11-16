@@ -243,6 +243,26 @@ async def reject_sales_review(
 
 
 @router.get(
+    "/{review_id:int}/push-to-sales-order/draft",
+    summary="Draft sales order create payload from sales review",
+)
+async def draft_sales_order_from_sales_review(
+    review_id: int = Path(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await _service.draft_sales_order_create_from_sales_review(
+            tenant_id=tenant_id,
+            review_id=review_id,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get(
     "/{review_id:int}/push-to-sales-order/preview",
     response_model=SalesReviewPushPreview,
     summary="Preview push to sales order",

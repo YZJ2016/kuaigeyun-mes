@@ -157,12 +157,18 @@ def derive_purchase_order_capabilities(
     has_prepayment_payment: bool = False,
     require_payment_application: bool = False,
     prepayment_application_remaining: Optional[Decimal] = None,
+    review_submitted: Optional[bool] = None,
 ) -> PurchaseOrderCapabilities:
     del has_receipt_notice  # 历史参数：通知单是否存在不再阻断分批下推
     status = getattr(order, "status", None)
     review_status = getattr(order, "review_status", None)
 
     from apps.kuaizhizao.constants import is_rejected_status
+    from apps.kuaizhizao.services.document_action_policy.review_submission_gate import (
+        allows_delete_unsubmitted,
+        allows_submit_unsubmitted,
+        allows_approve_submitted_pending,
+    )
 
     update_allowed = (
         is_draft_status(status or "")
@@ -174,7 +180,9 @@ def derive_purchase_order_capabilities(
         "purchase_order.update.not_allowed" if not update_allowed else None,
     )
 
-    delete_status_ok = is_draft_status(status or "") or is_pending_review_status(status or "")
+    delete_status_ok = allows_delete_unsubmitted(
+        status, review_status, review_submitted=review_submitted
+    )
     delete_allowed = delete_status_ok and not has_downstream
     delete_reason = None
     if has_downstream:
@@ -183,28 +191,28 @@ def derive_purchase_order_capabilities(
         delete_reason = "purchase_order.delete.not_allowed"
     delete_cap = _cap(delete_allowed, delete_reason)
 
-    submit_allowed = is_draft_status(status or "") or is_rejected_status(status or "")
+    submit_allowed = allows_submit_unsubmitted(
+        status, review_status, review_submitted=review_submitted
+    )
     submit_cap = _cap(
         submit_allowed,
         "purchase_order.submit.not_draft" if not submit_allowed else None,
     )
 
+    withdraw_ok = allows_approve_submitted_pending(
+        status, review_status, review_submitted=review_submitted
+    )
     withdraw_cap = _cap(
-        is_pending_review_status(status or ""),
-        "purchase_order.withdraw_submit.not_pending"
-        if not is_pending_review_status(status or "")
-        else None,
+        withdraw_ok,
+        "purchase_order.withdraw_submit.not_pending" if not withdraw_ok else None,
     )
 
+    approve_ok = allows_approve_submitted_pending(
+        status, review_status, review_submitted=review_submitted
+    )
     approve_cap = _cap(
-        is_pending_review_status(status or "")
-        or _normalize_review_status(review_status) == ReviewStatus.PENDING.value,
-        "purchase_order.approve.not_pending"
-        if not (
-            is_pending_review_status(status or "")
-            or _normalize_review_status(review_status) == ReviewStatus.PENDING.value
-        )
-        else None,
+        approve_ok,
+        "purchase_order.approve.not_pending" if not approve_ok else None,
     )
 
     push_receipt_notice_cap = _require_supplier_for_push(
@@ -356,9 +364,11 @@ def assert_purchase_order_capability(
     has_prepayment_payment: bool = False,
     require_payment_application: bool = False,
     prepayment_application_remaining: Optional[Decimal] = None,
+    review_submitted: Optional[bool] = None,
 ) -> None:
     caps = derive_purchase_order_capabilities(
         order,
+        review_submitted=review_submitted,
         has_items=has_items,
         has_outstanding=has_outstanding,
         has_pushable_receipt_outstanding=has_pushable_receipt_outstanding,

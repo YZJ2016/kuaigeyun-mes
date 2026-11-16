@@ -121,6 +121,8 @@ class UpsertSupplierQuoteRequest(BaseModel):
 
 
 class PurchaseInquiryCreate(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     inquiry_code: Optional[str] = None
     inquiry_name: Optional[str] = None
     inquiry_date: Optional[date] = None
@@ -144,6 +146,15 @@ class PurchaseInquiryCreate(BaseModel):
     attachments: Optional[list] = None
     items: List[PurchaseInquiryItemCreate] = Field(default_factory=list)
     vendors: List[PurchaseInquiryVendorCreate] = Field(default_factory=list)
+    document_flow_source_type: Optional[str] = Field(
+        None,
+        alias="documentFlowSourceType",
+        description="handoff 保存后回写来源（purchase_requisition_items）",
+    )
+    document_flow_requisition_item_ids: Optional[List[int]] = Field(
+        None,
+        alias="documentFlowRequisitionItemIds",
+    )
 
 
 class PurchaseInquiryUpdate(BaseModel):

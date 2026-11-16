@@ -340,16 +340,15 @@ class DocumentPushPullService:
             ),
         )
 
-    async def create_purchase_requisition_from_computation_items(
+    async def build_purchase_requisition_create_from_computation_items(
         self,
         tenant_id: int,
         selected_item_ids: Optional[List[int]],
-        created_by: int,
         computation_id: Optional[int] = None,
         item_required_dates: Optional[Dict[int, Any]] = None,
         include_sales_order_attachments: bool = False,
-    ) -> Dict[str, Any]:
-        """按计算明细 id 建一张采购申请，可跨多张已完成需求计算。"""
+    ) -> tuple:
+        """校验并组装采购申请 create 载荷（不写库）。"""
         from apps.kuaizhizao.models.demand_computation_item import DemandComputationItem
         from apps.kuaizhizao.services.purchase_requisition_service import PurchaseRequisitionService
         from apps.kuaizhizao.schemas.purchase_requisition import PurchaseRequisitionCreate, PurchaseRequisitionItemCreate
@@ -540,6 +539,182 @@ class DocumentPushPullService:
             items=req_items,
             attachments=carried_attachments,
         )
+        selected_for_flow = sorted(selected_ids) if selected_ids is not None else []
+        return req_data, sorted(used_computation_ids), selected_for_flow
+
+    async def draft_purchase_requisition_from_demand_computation_items(
+        self,
+        tenant_id: int,
+        selected_item_ids: List[int],
+        item_required_dates: Optional[Dict[int, Any]] = None,
+        include_sales_order_attachments: bool = False,
+    ) -> Dict[str, Any]:
+        req_data, used_computation_ids, selected_for_flow = (
+            await self.build_purchase_requisition_create_from_computation_items(
+                tenant_id=tenant_id,
+                selected_item_ids=selected_item_ids,
+                item_required_dates=item_required_dates,
+                include_sales_order_attachments=include_sales_order_attachments,
+            )
+        )
+        return {
+            "target_type": "purchase_requisition",
+            "source_type": "demand_computation",
+            "create_payload": req_data.model_dump(by_alias=True, mode="json"),
+            "document_flow": {
+                "documentFlowSourceType": "demand_computation_items",
+                "documentFlowDemandComputationItemIds": selected_for_flow,
+                "documentFlowDemandComputationIds": used_computation_ids,
+            },
+        }
+
+    async def finalize_demand_computation_after_requisition_created(
+        self,
+        tenant_id: int,
+        computation_ids: List[int],
+        requisition_id: int,
+        requisition_code: str,
+        requisition_name: Optional[str],
+        created_by: int,
+    ) -> None:
+        if not computation_ids:
+            return
+        from apps.kuaizhizao.models.demand_computation import DemandComputation
+        from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+
+        computations = await DemandComputation.filter(
+            tenant_id=tenant_id,
+            id__in=computation_ids,
+        ).all()
+        computation_by_id = {int(c.id): c for c in computations}
+        last_relation = None
+        for cid in sorted(computation_ids):
+            computation = computation_by_id.get(int(cid))
+            if not computation:
+                continue
+            relation_data = DocumentRelationCreate(
+                source_type="demand_computation",
+                source_id=int(cid),
+                source_code=computation.computation_code,
+                source_name=None,
+                target_type="purchase_requisition",
+                target_id=requisition_id,
+                target_code=requisition_code,
+                target_name=requisition_name,
+                relation_type="source",
+                relation_mode="push",
+                relation_desc="从需求计算下推到采购申请",
+                business_mode=computation.business_mode,
+                demand_id=computation.demand_id,
+            )
+            try:
+                last_relation = await self.relation_service.create_relation(
+                    tenant_id=tenant_id,
+                    relation_data=relation_data,
+                    created_by=created_by,
+                )
+            except Exception as e:
+                logger.warning("创建需求计算→采购申请 单据关联失败: %s", e)
+        return last_relation
+
+    async def finalize_demand_computation_after_purchase_order_created(
+        self,
+        tenant_id: int,
+        computation_ids: List[int],
+        purchase_order_id: int,
+        purchase_order_code: str,
+        created_by: int,
+    ) -> None:
+        if not computation_ids:
+            return
+        from apps.kuaizhizao.models.demand_computation import DemandComputation
+        from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+
+        computations = await DemandComputation.filter(
+            tenant_id=tenant_id,
+            id__in=computation_ids,
+        ).all()
+        computation_by_id = {int(c.id): c for c in computations}
+        for cid in sorted(computation_ids):
+            computation = computation_by_id.get(int(cid))
+            if not computation:
+                continue
+            relation_data = DocumentRelationCreate(
+                source_type="demand_computation",
+                source_id=int(cid),
+                source_code=computation.computation_code,
+                source_name=None,
+                target_type="purchase_order",
+                target_id=purchase_order_id,
+                target_code=purchase_order_code,
+                target_name=None,
+                relation_type="source",
+                relation_mode="push",
+                relation_desc="从需求计算下推到采购订单",
+                business_mode=computation.business_mode,
+                demand_id=computation.demand_id,
+            )
+            try:
+                await self.relation_service.create_relation(
+                    tenant_id=tenant_id,
+                    relation_data=relation_data,
+                    created_by=created_by,
+                )
+            except Exception as e:
+                logger.warning("创建需求计算→采购订单 单据关联失败: %s", e)
+
+    async def draft_purchase_orders_from_demand_computation_items(
+        self,
+        tenant_id: int,
+        selected_item_ids: List[int],
+        created_by: int,
+        include_sales_order_attachments: bool = False,
+    ) -> Dict[str, Any]:
+        plans = await self.computation_service.plan_purchase_orders_from_computation_item_ids(
+            tenant_id=tenant_id,
+            selected_item_ids=selected_item_ids,
+            created_by=created_by,
+            include_sales_order_attachments=include_sales_order_attachments,
+        )
+        drafts: List[Dict[str, Any]] = []
+        for plan in plans:
+            drafts.append(
+                {
+                    "create_payload": plan.po_create.model_dump(by_alias=True, mode="json"),
+                    "document_flow": {
+                        "documentFlowSourceType": "demand_computation_items",
+                        "documentFlowDemandComputationItemIds": plan.demand_computation_item_ids,
+                        "documentFlowDemandComputationIds": plan.computation_ids,
+                    },
+                    "supplier_id": plan.supplier_id,
+                    "computation_ids": plan.computation_ids,
+                }
+            )
+        return {
+            "target_type": "purchase_order",
+            "source_type": "demand_computation",
+            "drafts": drafts,
+        }
+
+    async def create_purchase_requisition_from_computation_items(
+        self,
+        tenant_id: int,
+        selected_item_ids: Optional[List[int]],
+        created_by: int,
+        computation_id: Optional[int] = None,
+        item_required_dates: Optional[Dict[int, Any]] = None,
+        include_sales_order_attachments: bool = False,
+    ) -> Dict[str, Any]:
+        """按计算明细 id 建一张采购申请，可跨多张已完成需求计算。"""
+        req_data, used_computation_ids, _selected_for_flow = (
+            await self.build_purchase_requisition_create_from_computation_items(
+                tenant_id=tenant_id,
+                selected_item_ids=selected_item_ids,
+                computation_id=computation_id,
+                item_required_dates=item_required_dates,
+                include_sales_order_attachments=include_sales_order_attachments,
+            )
+        )
 
         from apps.kuaizhizao.services.purchase_requisition_service import PurchaseRequisitionService
 
@@ -550,30 +725,14 @@ class DocumentPushPullService:
             created_by=created_by,
         )
 
-        from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
-        last_relation = None
-        for cid in sorted(used_computation_ids):
-            computation = computation_by_id[cid]
-            relation_data = DocumentRelationCreate(
-                source_type="demand_computation",
-                source_id=cid,
-                source_code=computation.computation_code,
-                source_name=None,
-                target_type="purchase_requisition",
-                target_id=req.id,
-                target_code=req.requisition_code,
-                target_name=req.requisition_name,
-                relation_type="source",
-                relation_mode="push",
-                relation_desc="从需求计算下推到采购申请",
-                business_mode=computation.business_mode,
-                demand_id=computation.demand_id,
-            )
-            last_relation = await self.relation_service.create_relation(
-                tenant_id=tenant_id,
-                relation_data=relation_data,
-                created_by=created_by
-            )
+        await self.finalize_demand_computation_after_requisition_created(
+            tenant_id=tenant_id,
+            computation_ids=used_computation_ids,
+            requisition_id=int(req.id),
+            requisition_code=req.requisition_code,
+            requisition_name=req.requisition_name,
+            created_by=created_by,
+        )
 
         # 未开审核门禁：下推生成后自动提交确认（与采购订单 try_auto_approve 无审分支一致）
         audit_required = await pr_service.business_config_service.check_audit_required(
@@ -590,7 +749,6 @@ class DocumentPushPullService:
             "success": True,
             "message": "下推成功，已生成采购申请",
             "target_document": {"type": "purchase_requisition", "id": req.id, "code": req.requisition_code},
-            "relation": last_relation.model_dump() if last_relation and hasattr(last_relation, "model_dump") else last_relation,
         }
 
     async def _push_purchase_receipt_to_incoming_inspection(

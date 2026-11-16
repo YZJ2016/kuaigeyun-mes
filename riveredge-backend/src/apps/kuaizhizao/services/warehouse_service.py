@@ -494,6 +494,8 @@ def _build_sales_delivery_item_response(item: Any) -> SalesDeliveryItemResponse:
         "total_amount": float(getattr(item, "total_amount", 0) or 0),
         "is_gift": bool(getattr(item, "is_gift", False)),
         "gift_ref_unit_price": getattr(item, "gift_ref_unit_price", None),
+        "warehouse_id": getattr(item, "warehouse_id", None),
+        "warehouse_name": getattr(item, "warehouse_name", None),
         "location_id": getattr(item, "location_id", None),
         "location_code": getattr(item, "location_code", None),
         "batch_number": getattr(item, "batch_number", None),
@@ -626,7 +628,7 @@ async def _validate_purchase_line_warehouse_location_match(
     location_id: Optional[int],
     material_label: str,
 ) -> None:
-    """行上同时填写仓库与库位时，校验库位属于该仓库。"""
+    """行上同时填写仓库与库位时：仅当库位挂了库区才校验归属；独立仓位可与任意仓库联用。"""
     if not location_id or not warehouse_id:
         return
     from apps.master_data.models.warehouse import StorageArea, StorageLocation
@@ -634,6 +636,8 @@ async def _validate_purchase_line_warehouse_location_match(
     loc = await StorageLocation.get_or_none(id=int(location_id), tenant_id=tenant_id, deleted_at__isnull=True)
     if not loc:
         raise ValidationError(f"采购入库失败：物料 {material_label} 的库位不存在")
+    if not loc.storage_area_id:
+        return
     area = await StorageArea.get_or_none(id=loc.storage_area_id, tenant_id=tenant_id, deleted_at__isnull=True)
     if not area:
         raise ValidationError(f"采购入库失败：物料 {material_label} 的库位所属库区不存在")
@@ -655,8 +659,10 @@ async def _resolve_purchase_receipt_line_warehouse_id_for_stock(
         from apps.master_data.models.warehouse import StorageArea, StorageLocation
 
         loc = await StorageLocation.get_or_none(id=int(lid), tenant_id=tenant_id, deleted_at__isnull=True)
-        if loc:
-            area = await StorageArea.get_or_none(id=loc.storage_area_id, tenant_id=tenant_id, deleted_at__isnull=True)
+        if loc and loc.storage_area_id:
+            area = await StorageArea.get_or_none(
+                id=loc.storage_area_id, tenant_id=tenant_id, deleted_at__isnull=True
+            )
             if area and getattr(area, "warehouse_id", None):
                 return int(area.warehouse_id)
     rid = getattr(receipt, "warehouse_id", None)
@@ -6636,9 +6642,11 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                         tenant_id=tenant_id,
                         id=item_data.material_id
                     )
+                    if not material:
+                        raise ValidationError(f"物料不存在: {item_data.material_id}")
                     batch_number = getattr(item_data, 'batch_number', None)
                     serial_numbers = getattr(item_data, 'serial_numbers', None)
-                    if material and require_batch_serial_on_create:
+                    if require_batch_serial_on_create:
                         await _validate_batch_serial_policy(
                             tenant_id=tenant_id,
                             material=material,
@@ -6647,12 +6655,19 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                             quantity=getattr(item_data, "delivery_quantity", None),
                             scene="销售出库",
                         )
+                    material_code, material_name, material_unit, material_spec = (
+                        _resolve_material_snapshot_fields(material, item_data)
+                    )
+                    if not material_code or not material_name:
+                        raise ValidationError(
+                            f"物料 {item_data.material_id} 缺少编码或名称，无法创建销售出库明细"
+                        )
                     _validate_location_if_required(
                         location_required=location_required,
                         location_id=getattr(item_data, 'location_id', None),
                         location_code=getattr(item_data, 'location_code', None),
                         scene="销售出库",
-                        material_label=getattr(item_data, "material_name", None) or getattr(item_data, "material_code", "未知物料"),
+                        material_label=material_name or material_code,
                     )
                     
                     # 序列号信息（批号和序列号选择功能增强）
@@ -6689,20 +6704,36 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                         )
                         if so_it:
                             line_snap = partner_snapshot_fields_from_source_line(so_it)
+                    line_wh_id = getattr(item_data, "warehouse_id", None)
+                    if line_wh_id is None or int(line_wh_id or 0) <= 0:
+                        line_wh_id = delivery_data.warehouse_id
+                    line_wh_name = (
+                        str(getattr(item_data, "warehouse_name", None) or "").strip()
+                        or str(delivery_data.warehouse_name or "").strip()
+                        or None
+                    )
+                    if line_wh_id and not line_wh_name:
+                        line_wh_name = await _resolve_warehouse_name_by_id(
+                            tenant_id, int(line_wh_id), None
+                        )
                     await SalesDeliveryItem.create(
                         tenant_id=tenant_id,
                         delivery_id=delivery.id,
                         sales_order_item_id=int(so_line_id) if so_line_id else None,
                         shipment_notice_item_id=int(sn_line_id) if sn_line_id else None,
                         material_id=item_data.material_id,
-                        material_code=item_data.material_code,
-                        material_name=item_data.material_name,
-                        material_spec=getattr(item_data, 'material_spec', None),
-                        material_unit=item_data.material_unit,
+                        material_code=material_code,
+                        material_name=material_name,
+                        material_spec=material_spec
+                        if material_spec is not None
+                        else getattr(item_data, "material_spec", None),
+                        material_unit=material_unit,
                         **line_snap,
                         delivery_quantity=item_data.delivery_quantity,
                         unit_price=item_data.unit_price,
                         total_amount=item_data.total_amount,
+                        warehouse_id=int(line_wh_id) if line_wh_id else None,
+                        warehouse_name=line_wh_name,
                         location_id=getattr(item_data, 'location_id', None),
                         location_code=getattr(item_data, 'location_code', None),
                         batch_number=getattr(item_data, 'batch_number', None),
@@ -6840,7 +6871,12 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         delivery = await SalesDelivery.get_or_none(tenant_id=tenant_id, id=delivery_id)
         if not delivery:
             raise NotFoundError(f"销售出库单不存在: {delivery_id}")
-        items = await SalesDeliveryItem.filter(tenant_id=tenant_id, delivery_id=delivery_id).all()
+        items = await SalesDeliveryItem.filter(
+            tenant_id=tenant_id, delivery_id=delivery_id, deleted_at__isnull=True
+        ).order_by("id").all()
+        # 历史单据可能缺编码/名称快照；与其它出库详情一致，读时 hydrate 并写回
+        if items:
+            await _hydrate_item_material_snapshot(tenant_id, items)
         resp = SalesDeliveryWithItemsResponse.model_validate(delivery)
         resp.lifecycle = get_sales_delivery_lifecycle(delivery)
         resp.items = [_build_sales_delivery_item_response(i) for i in items]
@@ -7073,6 +7109,34 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                         item_updates["delivery_quantity"] = qty
                         unit_price = Decimal(str(item.unit_price or 0))
                         item_updates["total_amount"] = qty * unit_price
+                    line_fields = getattr(line, "model_fields_set", set()) or set()
+                    if "warehouse_id" in line_fields:
+                        wid = int(line.warehouse_id or 0)
+                        if wid <= 0:
+                            raise ValidationError(
+                                f"物料 {item.material_code} 须选择出库仓库"
+                            )
+                        item_updates["warehouse_id"] = wid
+                        item_updates["warehouse_name"] = await _resolve_warehouse_name_by_id(
+                            tenant_id,
+                            wid,
+                            line.warehouse_name,
+                        )
+                    if "location_id" in line_fields:
+                        if line.location_id is None or int(line.location_id) <= 0:
+                            item_updates["location_id"] = None
+                            item_updates["location_code"] = None
+                        else:
+                            item_updates["location_id"] = int(line.location_id)
+                            item_updates["location_code"] = (
+                                str(line.location_code or "").strip()
+                                or f"库位{line.location_id}"
+                            )
+                    elif "location_code" in line_fields:
+                        code = str(line.location_code or "").strip()
+                        item_updates["location_code"] = code or None
+                        if not code:
+                            item_updates["location_id"] = None
                     if line.serial_numbers is not None:
                         serials = _parse_serial_numbers(line.serial_numbers)
                         item_updates["serial_numbers"] = (
@@ -7143,11 +7207,33 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                     (Decimal(str(it.total_amount or 0)) for it in all_items),
                     Decimal("0"),
                 )
+                header_updates: dict = {
+                    "total_quantity": total_quantity,
+                    "total_amount": total_amount,
+                    "updated_by": updated_by,
+                    "updated_by_name": user_info.get("name", ""),
+                }
+                # 表头仓库跟分录：全部同行仓则同步；多仓时取首行供列表展示
+                line_whs = [
+                    (int(it.warehouse_id), str(it.warehouse_name or "").strip())
+                    for it in all_items
+                    if getattr(it, "warehouse_id", None) and int(it.warehouse_id) > 0
+                ]
+                if line_whs:
+                    unique_ids = {w[0] for w in line_whs}
+                    if len(unique_ids) == 1:
+                        wid, wname = line_whs[0]
+                    else:
+                        wid, wname = line_whs[0]
+                    header_updates["warehouse_id"] = wid
+                    if wname:
+                        header_updates["warehouse_name"] = wname
+                    elif wid:
+                        header_updates["warehouse_name"] = await _resolve_warehouse_name_by_id(
+                            tenant_id, wid, None
+                        )
                 await SalesDelivery.filter(tenant_id=tenant_id, id=delivery_id).update(
-                    total_quantity=total_quantity,
-                    total_amount=total_amount,
-                    updated_by=updated_by,
-                    updated_by_name=user_info.get("name", ""),
+                    **header_updates
                 )
 
             return await self.get_sales_delivery_by_id(tenant_id, delivery_id)
@@ -7919,11 +8005,13 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         item_ids: List[int],
         created_by: int,
         delivery_quantities: Optional[Dict[int, float]] = None,
+        line_warehouses: Optional[Dict[int, int]] = None,
     ) -> Dict[str, Any]:
-        """按销售订单行 id 建销售出库单，可跨多张订单；同客户同默认仓合并一张。
+        """按销售订单行 id 建销售出库单，可跨多张订单；同客户同仓合并一张。
 
         delivery_quantities: 可选 {item_id: qty}，与单头下推 pull_from_sales_order 同契约；
         未传则按可下推剩余全量出库。
+        line_warehouses: 必填 {sales_order_item_id: warehouse_id}，由前端取单时选定。
         """
         from apps.kuaizhizao.models.sales_order import SalesOrder
         from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
@@ -7931,13 +8019,23 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
         from apps.kuaizhizao.services.sales_order_service import SalesOrderService
         from apps.kuaizhizao.utils.sales_order_push_qty import batch_pushable_qty_by_order_item
-        from apps.master_data.services.material_service import (
-            resolve_primary_default_warehouse_from_material,
-        )
 
         selected_ids = [int(v) for v in item_ids if v is not None]
         if not selected_ids:
             raise BusinessLogicError("请至少选择一条可出库销售订单明细")
+        if not line_warehouses:
+            raise ValidationError("请为所选明细指定出库仓库")
+        wh_by_item: Dict[int, int] = {}
+        for k, v in line_warehouses.items():
+            try:
+                item_id = int(k)
+                wh_id = int(v)
+            except (TypeError, ValueError):
+                continue
+            if item_id > 0 and wh_id > 0:
+                wh_by_item[item_id] = wh_id
+        if not wh_by_item:
+            raise ValidationError("请为所选明细指定出库仓库")
         items = await SalesOrderItem.filter(tenant_id=tenant_id, id__in=selected_ids).all()
         if not items:
             raise BusinessLogicError("没有可出库的销售订单行")
@@ -7983,16 +8081,17 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                 continue
             if not item.material_id:
                 raise ValidationError("销售订单存在缺失物料ID的明细，无法下推销售出库")
-            material_wh = await resolve_primary_default_warehouse_from_material(
-                tenant_id, material_id=int(item.material_id)
-            )
-            if not material_wh or not material_wh[0]:
+            line_wh_id = wh_by_item.get(int(item.id))
+            if line_wh_id is None or line_wh_id <= 0:
                 raise ValidationError(
-                    f"请为物料 {item.material_code or item.material_name or item.id} 维护默认仓库"
+                    f"请为物料 {item.material_code or item.material_name or item.id} 选择出库仓库"
                 )
-            line_wh_id = int(material_wh[0])
-            line_wh_name = material_wh[1] or await _resolve_warehouse_name_by_id(tenant_id, line_wh_id)
-            prepared.append((item, qty, line_wh_id, line_wh_name))
+            line_wh_name = await _resolve_warehouse_name_by_id(tenant_id, line_wh_id)
+            if not line_wh_name:
+                raise ValidationError(
+                    f"出库仓库无效：物料 {item.material_code or item.material_name or item.id}"
+                )
+            prepared.append((item, qty, line_wh_id, str(line_wh_name)))
 
         groups: Dict[tuple[int, int], List[tuple[SalesOrderItem, Decimal, int, str]]] = {}
         for row in prepared:
@@ -8052,6 +8151,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                     customer_name=primary.customer_name,
                     warehouse_id=header_wh_id,
                     warehouse_name=header_wh_name,
+                    delivery_time=resolve_business_datetime(),
                     status="待出库",
                     total_quantity=float(total_quantity),
                     total_amount=float(total_amount),
@@ -8126,8 +8226,16 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         if notice_id is not None:
             notice_query = notice_query.filter(id=int(notice_id))
         notices = await notice_query.only(
-            "id", "notice_code", "status", "customer_id", "customer_name",
-            "sales_order_id", "sales_order_code", "sales_delivery_id",
+            "id",
+            "notice_code",
+            "status",
+            "customer_id",
+            "customer_name",
+            "sales_order_id",
+            "sales_order_code",
+            "sales_delivery_id",
+            "warehouse_id",
+            "warehouse_name",
         )
         notice_by_id = {int(n.id): n for n in notices}
         if not notice_by_id:
@@ -8169,6 +8277,11 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                 haystack = " ".join([material_code, material_name, material_spec]).lower()
                 if kw not in haystack:
                     continue
+            line_wh_id = int(item.warehouse_id) if getattr(item, "warehouse_id", None) else None
+            line_wh_name = getattr(item, "warehouse_name", None)
+            if line_wh_id is None and getattr(notice, "warehouse_id", None):
+                line_wh_id = int(notice.warehouse_id)
+                line_wh_name = notice.warehouse_name
             lines.append(
                 {
                     "id": int(item.id),
@@ -8183,6 +8296,8 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                     "material_name": material_name,
                     "material_spec": material_spec or None,
                     "unit": item.material_unit or "件",
+                    "warehouse_id": line_wh_id,
+                    "warehouse_name": line_wh_name,
                     "suggested_quantity": qty,
                     "pushed_quantity": occupied,
                     "remaining_quantity": remaining,
@@ -8202,8 +8317,12 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         tenant_id: int,
         item_ids: List[int],
         created_by: int,
+        line_warehouses: Optional[Dict[int, int]] = None,
     ) -> Dict[str, Any]:
-        """按发货通知行 id 建销售出库单，可跨多张通知；同客户同仓合并一张。"""
+        """按发货通知行 id 建销售出库单，可跨多张通知；同客户同仓合并一张。
+
+        line_warehouses: 必填 {notice_item_id: warehouse_id}，由前端取单时选定。
+        """
         from apps.kuaizhizao.models.shipment_notice import ShipmentNotice
         from apps.kuaizhizao.models.shipment_notice_item import ShipmentNoticeItem
         from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
@@ -8211,13 +8330,23 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             assert_shipment_notice_capability,
         )
         from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
-        from apps.master_data.services.material_service import (
-            resolve_primary_default_warehouse_from_material,
-        )
 
         selected_ids = [int(v) for v in item_ids if v is not None]
         if not selected_ids:
             raise BusinessLogicError("请至少选择一条可出库发货通知明细")
+        if not line_warehouses:
+            raise ValidationError("请为所选明细指定出库仓库")
+        wh_by_item: Dict[int, int] = {}
+        for k, v in line_warehouses.items():
+            try:
+                item_id = int(k)
+                wh_id = int(v)
+            except (TypeError, ValueError):
+                continue
+            if item_id > 0 and wh_id > 0:
+                wh_by_item[item_id] = wh_id
+        if not wh_by_item:
+            raise ValidationError("请为所选明细指定出库仓库")
         items = await ShipmentNoticeItem.filter(tenant_id=tenant_id, id__in=selected_ids).all()
         if not items:
             raise BusinessLogicError("没有可出库的发货通知行")
@@ -8253,25 +8382,17 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                 continue
             if not item.material_id:
                 raise ValidationError("发货通知存在缺失物料ID的明细，无法下推销售出库")
-            line_wh_id = int(item.warehouse_id) if getattr(item, "warehouse_id", None) else None
-            line_wh_name = getattr(item, "warehouse_name", None)
-            if line_wh_id is None:
-                notice = notice_by_id[int(item.notice_id)]
-                if getattr(notice, "warehouse_id", None):
-                    line_wh_id = int(notice.warehouse_id)
-                    line_wh_name = notice.warehouse_name
-            if line_wh_id is None:
-                material_wh = await resolve_primary_default_warehouse_from_material(
-                    tenant_id, material_id=int(item.material_id)
+            line_wh_id = wh_by_item.get(int(item.id))
+            if line_wh_id is None or line_wh_id <= 0:
+                raise ValidationError(
+                    f"请为物料 {item.material_code or item.material_name or item.id} 选择出库仓库"
                 )
-                if not material_wh or not material_wh[0]:
-                    raise ValidationError(
-                        f"请为物料 {item.material_code or item.material_name or item.id} 维护默认仓库"
-                    )
-                line_wh_id, line_wh_name = int(material_wh[0]), material_wh[1]
+            line_wh_name = await _resolve_warehouse_name_by_id(tenant_id, line_wh_id)
             if not line_wh_name:
-                line_wh_name = await _resolve_warehouse_name_by_id(tenant_id, line_wh_id)
-            prepared.append((item, qty, line_wh_id, str(line_wh_name or "")))
+                raise ValidationError(
+                    f"出库仓库无效：物料 {item.material_code or item.material_name or item.id}"
+                )
+            prepared.append((item, qty, line_wh_id, str(line_wh_name)))
 
         groups: Dict[tuple[int, int], List[tuple[ShipmentNoticeItem, Decimal, int, str]]] = {}
         for row in prepared:
@@ -8334,6 +8455,7 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                     customer_name=primary.customer_name,
                     warehouse_id=header_wh_id,
                     warehouse_name=header_wh_name,
+                    delivery_time=resolve_business_datetime(),
                     status="待出库",
                     total_quantity=float(total_quantity),
                     total_amount=float(total_amount),
@@ -8807,6 +8929,8 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                 total_amount=qty * unit_price,
                 is_gift=item.is_gift,
                 gift_ref_unit_price=item.gift_ref_unit_price,
+                warehouse_id=getattr(item, "warehouse_id", None),
+                warehouse_name=getattr(item, "warehouse_name", None),
                 location_id=item.location_id,
                 location_code=item.location_code,
                 batch_number=batch_no,
@@ -8833,9 +8957,22 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                 raise NotFoundError(f"出库明细不存在: {item_data.item_id}")
 
             item_update: Dict[str, Any] = {}
+            if item_data.warehouse_id:
+                wid = int(item_data.warehouse_id)
+                item_update["warehouse_id"] = wid
+                item_update["warehouse_name"] = await _resolve_warehouse_name_by_id(
+                    tenant_id,
+                    wid,
+                    item_data.warehouse_name,
+                )
             if item_data.location_id:
                 item_update["location_id"] = item_data.location_id
                 item_update["location_code"] = item_data.location_code or f"库位{item_data.location_id}"
+            elif item_data.location_code is not None:
+                code = str(item_data.location_code or "").strip()
+                item_update["location_code"] = code or None
+                if not code:
+                    item_update["location_id"] = None
             if item_data.serial_numbers is not None:
                 item_update["serial_numbers"] = json.dumps(item_data.serial_numbers)
 
@@ -9074,11 +9211,17 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                     .get("warehouse", {})
                     .get("fifo", False)
                 )
-                wh_id = delivery.warehouse_id if delivery.warehouse_id else None
+                header_wh_id = delivery.warehouse_id if delivery.warehouse_id else None
                 for item in items:
                     qty = item.delivery_quantity or Decimal(0)
                     if qty <= 0:
                         continue
+                    line_wh = getattr(item, "warehouse_id", None)
+                    wh_id = int(line_wh) if line_wh and int(line_wh) > 0 else header_wh_id
+                    if not wh_id:
+                        raise BusinessLogicError(
+                            f"物料 {item.material_code} 缺少出库仓库，无法确认出库"
+                        )
                     base_qty = _convert_line_quantity_to_base(
                         quantity=Decimal(str(qty)),
                         material_unit=getattr(item, "material_unit", None),
@@ -10980,7 +11123,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                         item.batch_number = batch_no
                         await item.save()
 
-        # 质检合格才入库：按行物料 IQC 策略 + 组织门禁
+            # 质检合格才入库：按行物料 IQC 策略 + 组织门禁
             items_for_iqc = await PurchaseReceiptItem.filter(
                 tenant_id=tenant_id, receipt_id=receipt_id
             ).all()
@@ -11747,11 +11890,22 @@ class SalesReturnService(AppBaseService[SalesReturn]):
             await _hydrate_item_material_snapshot(tenant_id, items)
         item_responses = [_build_sales_return_item_response(i) for i in items]
         item_count = len(item_responses)
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            resolve_review_submitted_for_entity,
+        )
+
+        review_submitted = await resolve_review_submitted_for_entity(
+            tenant_id,
+            "sales_return",
+            int(return_obj.id),
+            return_obj.review_status,
+        )
         enriched = enrich_sales_return_capabilities_on_response(
             return_obj,
             response,
             has_items=item_count > 0,
             audit_required=audit_required,
+            review_submitted=review_submitted,
         )
         if hasattr(enriched, "model_copy"):
             return enriched.model_copy(
@@ -13435,6 +13589,21 @@ class SalesReturnService(AppBaseService[SalesReturn]):
         audited = await enrich_items(
             tenant_id, "sales_return", list_responses, audit_enabled=audit_required
         )
+        from core.services.approval.approval_instance_service import ApprovalInstanceService
+        from core.services.approval.review_submission_state import is_review_label_pending
+
+        pending_return_ids = [
+            int(r.id)
+            for r in returns
+            if is_review_label_pending(getattr(r, "review_status", None))
+        ]
+        review_submitted_by_id = (
+            await ApprovalInstanceService.batch_entity_has_approval_flow(
+                tenant_id, "sales_return", pending_return_ids
+            )
+            if pending_return_ids
+            else {}
+        )
         gated: List[SalesReturnResponse] = []
         for return_obj, resp in zip(returns, audited):
             rid = int(return_obj.id)
@@ -13450,6 +13619,7 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                     with_items,
                     has_items=has_items_by_id.get(rid, True),
                     audit_required=audit_required,
+                    review_submitted=review_submitted_by_id.get(rid),
                 )
             )
         return {
@@ -13905,8 +14075,23 @@ class SalesReturnService(AppBaseService[SalesReturn]):
         if not return_obj:
             raise NotFoundError(f"销售退货单不存在: {return_id}")
         from apps.kuaizhizao.services.document_action_policy.sales_return import assert_sales_return_capability
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            resolve_review_submitted_for_entity,
+        )
 
-        assert_sales_return_capability(return_obj, "delete")
+        audit_required = await BusinessConfigService().check_audit_required(tenant_id, "sales_return")
+        review_submitted = await resolve_review_submitted_for_entity(
+            tenant_id,
+            "sales_return",
+            return_id,
+            return_obj.review_status,
+        )
+        assert_sales_return_capability(
+            return_obj,
+            "delete",
+            audit_required=audit_required,
+            review_submitted=review_submitted,
+        )
         await SalesReturn.filter(tenant_id=tenant_id, id=return_id).update(
             deleted_at=resolve_business_datetime()
         )
@@ -14082,6 +14267,7 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
         from apps.kuaizhizao.schemas.warehouse import PurchaseReturnItemResponse
         from apps.kuaizhizao.services.document_action_policy.enricher import (
             enrich_purchase_return_capabilities_on_response,
+            resolve_review_submitted_for_entity,
         )
 
         total_quantity, total_amount = await self._sync_purchase_return_header_totals(
@@ -14098,11 +14284,18 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
         if items:
             await _hydrate_item_material_snapshot(tenant_id, items)
         item_responses = [PurchaseReturnItemResponse.model_validate(i) for i in items]
+        review_submitted = await resolve_review_submitted_for_entity(
+            tenant_id,
+            "purchase_return",
+            int(return_obj.id),
+            return_obj.review_status,
+        )
         enriched = enrich_purchase_return_capabilities_on_response(
             return_obj,
             response,
             has_items=len(item_responses) > 0,
             audit_required=audit_required,
+            review_submitted=review_submitted,
         )
         updates: Dict[str, Any] = {
             "items": item_responses,
@@ -15300,6 +15493,21 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
         audited = await enrich_items(
             tenant_id, "purchase_return", list_responses, audit_enabled=audit_required
         )
+        from core.services.approval.approval_instance_service import ApprovalInstanceService
+        from core.services.approval.review_submission_state import is_review_label_pending
+
+        pending_pr_ids = [
+            int(r.id)
+            for r in return_list
+            if is_review_label_pending(getattr(r, "review_status", None))
+        ]
+        pr_review_submitted_by_id = (
+            await ApprovalInstanceService.batch_entity_has_approval_flow(
+                tenant_id, "purchase_return", pending_pr_ids
+            )
+            if pending_pr_ids
+            else {}
+        )
         gated: List[PurchaseReturnResponse] = []
         for return_obj, resp in zip(return_list, audited):
             rid = int(return_obj.id)
@@ -15309,6 +15517,7 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                     resp,
                     has_items=has_items_by_id.get(rid, True),
                     audit_required=audit_required,
+                    review_submitted=pr_review_submitted_by_id.get(rid),
                 )
             )
         return {
@@ -15760,7 +15969,22 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
         audit_required = await BusinessConfigService().check_audit_required(
             tenant_id, "purchase_return"
         )
-        assert_purchase_return_capability(return_obj, "delete", audit_required=audit_required)
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            resolve_review_submitted_for_entity,
+        )
+
+        review_submitted = await resolve_review_submitted_for_entity(
+            tenant_id,
+            "purchase_return",
+            return_id,
+            return_obj.review_status,
+        )
+        assert_purchase_return_capability(
+            return_obj,
+            "delete",
+            audit_required=audit_required,
+            review_submitted=review_submitted,
+        )
         await PurchaseReturn.filter(tenant_id=tenant_id, id=return_id).update(
             deleted_at=resolve_business_datetime()
         )

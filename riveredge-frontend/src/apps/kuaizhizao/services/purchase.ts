@@ -345,6 +345,32 @@ export async function createPurchaseOrder(data: Partial<PurchaseOrder>): Promise
   });
 }
 
+export type DemandComputationToPurchaseOrderDraftEntry = {
+  create_payload: Record<string, unknown>;
+  document_flow: Record<string, unknown>;
+  supplier_id?: number;
+  computation_ids?: number[];
+};
+
+export type DemandComputationToPurchaseOrderDraftResponse = {
+  target_type: 'purchase_order';
+  source_type: 'demand_computation';
+  drafts: DemandComputationToPurchaseOrderDraftEntry[];
+};
+
+export async function draftPurchaseOrdersFromDemandComputationItems(
+  selectedItemIds: number[],
+  options?: { includeSalesOrderAttachments?: boolean },
+): Promise<DemandComputationToPurchaseOrderDraftResponse> {
+  return apiRequest('/apps/kuaizhizao/purchase-orders/draft-from-demand-computation-items', {
+    method: 'POST',
+    data: {
+      selected_item_ids: selectedItemIds,
+      include_sales_order_attachments: Boolean(options?.includeSalesOrderAttachments),
+    },
+  });
+}
+
 /**
  * 更新采购订单
  */

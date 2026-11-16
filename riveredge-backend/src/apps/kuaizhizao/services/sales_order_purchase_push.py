@@ -331,22 +331,18 @@ async def preview_push_to_purchase_requisition(
     }
 
 
-async def push_to_purchase_requisition(
+async def build_purchase_requisition_create_from_sales_order(
     *,
     tenant_id: int,
     order: Any,
     items: List[Any],
-    created_by: int,
     selected_item_ids: Optional[List[int]] = None,
     selected_quantities: Optional[Dict[int, Decimal]] = None,
-) -> Dict[str, Any]:
-    from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+):
     from apps.kuaizhizao.schemas.purchase_requisition import (
         PurchaseRequisitionCreate,
         PurchaseRequisitionItemCreate,
     )
-    from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
-    from apps.kuaizhizao.services.purchase_requisition_service import PurchaseRequisitionService
 
     lines, _ = await collect_sales_order_buy_push_lines(
         tenant_id,
@@ -379,22 +375,65 @@ async def push_to_purchase_requisition(
             )
         )
 
-    req = await PurchaseRequisitionService().create_requisition(
-        tenant_id=tenant_id,
-        data=PurchaseRequisitionCreate(
-            requisition_code="",
-            requisition_name=f"销售订单{order.order_code}请购",
-            requisition_date=today,
-            required_date=min(required_dates) if required_dates else today,
-            source_type="sales_order",
-            source_id=int(order.id),
-            source_code=order.order_code,
-            notes=f"由销售订单 {order.order_code} 直推生成（按单外购，未做库存抵扣）",
-            items=req_items,
-        ),
-        created_by=created_by,
+    return PurchaseRequisitionCreate(
+        requisition_code="",
+        requisition_name=f"销售订单{order.order_code}请购",
+        requisition_date=today,
+        required_date=min(required_dates) if required_dates else today,
+        source_type="sales_order",
+        source_id=int(order.id),
+        source_code=order.order_code,
+        notes=f"由销售订单 {order.order_code} 直推生成（按单外购，未做库存抵扣）",
+        items=req_items,
     )
 
+
+async def draft_purchase_requisition_from_sales_order(
+    *,
+    tenant_id: int,
+    order: Any,
+    items: List[Any],
+    selected_item_ids: Optional[List[int]] = None,
+    selected_quantities: Optional[Dict[int, Decimal]] = None,
+) -> Dict[str, Any]:
+    req_data = await build_purchase_requisition_create_from_sales_order(
+        tenant_id=tenant_id,
+        order=order,
+        items=items,
+        selected_item_ids=selected_item_ids,
+        selected_quantities=selected_quantities,
+    )
+    return {
+        "target_type": "purchase_requisition",
+        "source_type": "sales_order",
+        "source_id": int(order.id),
+        "source_code": order.order_code,
+        "create_payload": req_data.model_dump(by_alias=True, mode="json"),
+        "document_flow": {
+            "documentFlowSourceType": "sales_order_buy_push",
+            "documentFlowSalesOrderId": int(order.id),
+        },
+    }
+
+
+async def finalize_sales_order_after_requisition_created(
+    *,
+    tenant_id: int,
+    sales_order_id: int,
+    requisition_id: int,
+    requisition_code: str,
+    requisition_name: Optional[str],
+    created_by: int,
+) -> None:
+    from apps.kuaizhizao.models.sales_order import SalesOrder
+    from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+    from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+
+    order = await SalesOrder.get_or_none(
+        tenant_id=tenant_id, id=sales_order_id, deleted_at__isnull=True
+    )
+    if not order:
+        return
     try:
         await DocumentRelationNewService().create_relation(
             tenant_id=tenant_id,
@@ -404,9 +443,9 @@ async def push_to_purchase_requisition(
                 source_code=order.order_code,
                 source_name=getattr(order, "order_name", None) or order.order_code,
                 target_type="purchase_requisition",
-                target_id=req.id,
-                target_code=req.requisition_code,
-                target_name=req.requisition_name,
+                target_id=requisition_id,
+                target_code=requisition_code,
+                target_name=requisition_name,
                 relation_type="source",
                 relation_mode="push",
                 relation_desc="销售订单直推采购申请",
@@ -415,6 +454,41 @@ async def push_to_purchase_requisition(
         )
     except Exception as exc:
         logger.warning("建立销售订单→采购申请关联失败: %s", exc)
+
+
+async def push_to_purchase_requisition(
+    *,
+    tenant_id: int,
+    order: Any,
+    items: List[Any],
+    created_by: int,
+    selected_item_ids: Optional[List[int]] = None,
+    selected_quantities: Optional[Dict[int, Decimal]] = None,
+) -> Dict[str, Any]:
+    from apps.kuaizhizao.services.purchase_requisition_service import PurchaseRequisitionService
+
+    req_data = await build_purchase_requisition_create_from_sales_order(
+        tenant_id=tenant_id,
+        order=order,
+        items=items,
+        selected_item_ids=selected_item_ids,
+        selected_quantities=selected_quantities,
+    )
+
+    req = await PurchaseRequisitionService().create_requisition(
+        tenant_id=tenant_id,
+        data=req_data,
+        created_by=created_by,
+    )
+
+    await finalize_sales_order_after_requisition_created(
+        tenant_id=tenant_id,
+        sales_order_id=int(order.id),
+        requisition_id=int(req.id),
+        requisition_code=req.requisition_code,
+        requisition_name=req.requisition_name,
+        created_by=created_by,
+    )
 
     return {
         "success": True,
@@ -491,19 +565,16 @@ async def preview_push_to_purchase_order(
     }
 
 
-async def push_to_purchase_order(
+async def plan_purchase_orders_from_sales_order(
     *,
     tenant_id: int,
     order: Any,
     items: List[Any],
-    created_by: int,
     selected_item_ids: Optional[List[int]] = None,
     selected_quantities: Optional[Dict[int, Decimal]] = None,
-) -> Dict[str, Any]:
-    from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+) -> List[Any]:
+    from apps.kuaizhizao.constants import DocumentStatus
     from apps.kuaizhizao.schemas.purchase import PurchaseOrderCreate, PurchaseOrderItemCreate
-    from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
-    from apps.kuaizhizao.services.purchase_service import PurchaseService
     from apps.kuaizhizao.utils.sales_order_currency_carry import currency_fields_for_purchase_doc
     from apps.master_data.models.supplier import Supplier
 
@@ -528,10 +599,7 @@ async def push_to_purchase_order(
         sid = int(row["supplier_id"] or 0)
         by_supplier.setdefault(sid, []).append(row)
 
-    purchase_service = PurchaseService()
-    relation_service = DocumentRelationNewService()
-    target_documents: List[Dict[str, Any]] = []
-
+    plans: List[PurchaseOrderCreate] = []
     for supplier_id, group in by_supplier.items():
         supplier_name = "待定供应商"
         if supplier_id > 0:
@@ -569,46 +637,138 @@ async def push_to_purchase_order(
                 )
             )
 
-        po = await purchase_service.create_purchase_order(
-            tenant_id=tenant_id,
-            order_data=PurchaseOrderCreate(
+        plans.append(
+            PurchaseOrderCreate(
                 supplier_id=supplier_id if supplier_id > 0 else 0,
                 supplier_name=supplier_name,
                 order_date=today,
                 delivery_date=min(required_dates) if required_dates else today,
                 order_type="标准采购",
+                status=DocumentStatus.DRAFT.value,
                 currency=so_currency["currency"],
                 exchange_rate=so_currency["exchange_rate"],
                 source_type="sales_order",
                 source_id=int(order.id),
                 notes=f"由销售订单 {order.order_code} 直推生成（按单外购，未做库存抵扣）",
                 items=po_items,
+            )
+        )
+    return plans
+
+
+async def draft_purchase_orders_from_sales_order(
+    *,
+    tenant_id: int,
+    order: Any,
+    items: List[Any],
+    selected_item_ids: Optional[List[int]] = None,
+    selected_quantities: Optional[Dict[int, Decimal]] = None,
+) -> Dict[str, Any]:
+    plans = await plan_purchase_orders_from_sales_order(
+        tenant_id=tenant_id,
+        order=order,
+        items=items,
+        selected_item_ids=selected_item_ids,
+        selected_quantities=selected_quantities,
+    )
+    drafts = []
+    for po_create in plans:
+        drafts.append(
+            {
+                "create_payload": po_create.model_dump(by_alias=True, mode="json"),
+                "document_flow": {
+                    "documentFlowSourceType": "sales_order_buy_push",
+                    "documentFlowSalesOrderId": int(order.id),
+                },
+                "supplier_id": int(po_create.supplier_id or 0),
+            }
+        )
+    return {
+        "target_type": "purchase_order",
+        "source_type": "sales_order",
+        "source_id": int(order.id),
+        "source_code": order.order_code,
+        "drafts": drafts,
+    }
+
+
+async def finalize_sales_order_after_purchase_order_created(
+    *,
+    tenant_id: int,
+    sales_order_id: int,
+    purchase_order_id: int,
+    purchase_order_code: str,
+    created_by: int,
+) -> None:
+    from apps.kuaizhizao.models.sales_order import SalesOrder
+    from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+    from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+
+    order = await SalesOrder.get_or_none(
+        tenant_id=tenant_id, id=sales_order_id, deleted_at__isnull=True
+    )
+    if not order:
+        return
+    try:
+        await DocumentRelationNewService().create_relation(
+            tenant_id=tenant_id,
+            relation_data=DocumentRelationCreate(
+                source_type="sales_order",
+                source_id=int(order.id),
+                source_code=order.order_code,
+                source_name=getattr(order, "order_name", None) or order.order_code,
+                target_type="purchase_order",
+                target_id=purchase_order_id,
+                target_code=purchase_order_code,
+                target_name=purchase_order_code,
+                relation_type="source",
+                relation_mode="push",
+                relation_desc="销售订单直推采购订单",
             ),
+            created_by=created_by,
+        )
+    except Exception as exc:
+        logger.warning("建立销售订单→采购订单关联失败: %s", exc)
+
+
+async def push_to_purchase_order(
+    *,
+    tenant_id: int,
+    order: Any,
+    items: List[Any],
+    created_by: int,
+    selected_item_ids: Optional[List[int]] = None,
+    selected_quantities: Optional[Dict[int, Decimal]] = None,
+) -> Dict[str, Any]:
+    from apps.kuaizhizao.services.purchase_service import PurchaseService
+
+    plans = await plan_purchase_orders_from_sales_order(
+        tenant_id=tenant_id,
+        order=order,
+        items=items,
+        selected_item_ids=selected_item_ids,
+        selected_quantities=selected_quantities,
+    )
+
+    purchase_service = PurchaseService()
+    target_documents: List[Dict[str, Any]] = []
+
+    for po_create in plans:
+        po = await purchase_service.create_purchase_order(
+            tenant_id=tenant_id,
+            order_data=po_create,
             created_by=created_by,
         )
         target_documents.append(
             {"type": "purchase_order", "id": po.id, "code": po.order_code}
         )
-        try:
-            await relation_service.create_relation(
-                tenant_id=tenant_id,
-                relation_data=DocumentRelationCreate(
-                    source_type="sales_order",
-                    source_id=int(order.id),
-                    source_code=order.order_code,
-                    source_name=getattr(order, "order_name", None) or order.order_code,
-                    target_type="purchase_order",
-                    target_id=po.id,
-                    target_code=po.order_code,
-                    target_name=po.order_code,
-                    relation_type="source",
-                    relation_mode="push",
-                    relation_desc="销售订单直推采购订单",
-                ),
-                created_by=created_by,
-            )
-        except Exception as exc:
-            logger.warning("建立销售订单→采购订单关联失败: %s", exc)
+        await finalize_sales_order_after_purchase_order_created(
+            tenant_id=tenant_id,
+            sales_order_id=int(order.id),
+            purchase_order_id=int(po.id),
+            purchase_order_code=po.order_code,
+            created_by=created_by,
+        )
 
     return {
         "success": True,

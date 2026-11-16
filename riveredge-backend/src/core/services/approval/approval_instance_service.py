@@ -1370,6 +1370,33 @@ class ApprovalInstanceService:
         return out
 
     @staticmethod
+    async def batch_entity_has_approval_flow(
+        tenant_id: int,
+        entity_type: str,
+        entity_ids: list[int],
+    ) -> dict[int, bool]:
+        """实体是否曾进入审批流（有实例即视为已提交审核）。"""
+        id_set = {int(x) for x in entity_ids if x is not None}
+        if not id_set:
+            return {}
+        instances = await ApprovalInstance.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).all()
+        out: dict[int, bool] = {}
+        for inst in instances:
+            data = inst.data or {}
+            if data.get("entity_type") != entity_type:
+                continue
+            try:
+                eid = int(data.get("entity_id"))
+            except (TypeError, ValueError):
+                continue
+            if eid in id_set:
+                out[eid] = True
+        return out
+
+    @staticmethod
     async def batch_flow_withdraw_revoke_flags_for_entities(
         tenant_id: int,
         entity_type: str,

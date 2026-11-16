@@ -715,6 +715,10 @@ class SalesDeliveryItemEditLine(BaseSchema):
     """销售出库单明细编辑行（确认出库前）"""
     id: int = Field(..., description="明细ID")
     delivery_quantity: Optional[float] = Field(None, gt=0, description="出库数量")
+    warehouse_id: Optional[int] = Field(None, description="行出库仓库ID（对齐金蝶分录）")
+    warehouse_name: Optional[str] = Field(None, max_length=100, description="行出库仓库名称")
+    location_id: Optional[int] = Field(None, description="库位ID")
+    location_code: Optional[str] = Field(None, max_length=50, description="库位编码")
     batch_number: Optional[str] = Field(None, max_length=50, description="批次号（单批时使用；多批请用 batch_allocations）")
     batch_allocations: Optional[List[OutboundConfirmationBatchAllocation]] = Field(
         None,
@@ -790,6 +794,8 @@ class SalesDeliveryItemBase(BaseSchema):
     total_amount: float = Field(..., ge=0, description="金额")
     is_gift: bool = Field(False, description="是否赠品")
     gift_ref_unit_price: Optional[float] = Field(None, ge=0, description="赠品参考单价")
+    warehouse_id: Optional[int] = Field(None, description="行出库仓库ID（可与表头不同；对齐金蝶分录）")
+    warehouse_name: Optional[str] = Field(None, max_length=100, description="行出库仓库名称")
     location_id: Optional[int] = Field(None, description="库位ID")
     location_code: Optional[str] = Field(None, max_length=50, description="库位编码")
     

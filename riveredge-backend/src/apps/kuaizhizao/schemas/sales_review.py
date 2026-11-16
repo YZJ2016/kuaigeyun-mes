@@ -123,6 +123,22 @@ class SalesReviewCreate(SalesReviewBase):
         default_factory=list,
         description="评审部门与指定评审人；下达前必填至少一项",
     )
+    document_flow_source_type: Optional[str] = Field(
+        None,
+        max_length=64,
+        description="手工建单完成后需回写来源的单据类型（如 quotation）",
+        alias="documentFlowSourceType",
+    )
+    document_flow_source_id: Optional[int] = Field(
+        None,
+        description="来源单据 ID",
+        alias="documentFlowSourceId",
+    )
+    document_flow_source_item_ids: Optional[List[int]] = Field(
+        None,
+        description="来源明细 ID 列表（报价整单下推时为全部明细）",
+        alias="documentFlowSourceItemIds",
+    )
 
     @model_validator(mode="after")
     def _require_items(self):

@@ -93,6 +93,10 @@ class PullFromDemandComputationItemsRequest(BaseModel):
         None,
         description="按明细覆盖要求到货日期；缺日期的行必须传入",
     )
+    include_sales_order_attachments: bool = Field(
+        False,
+        description="下推时携带关联销售订单附件（需求计算下推采购申请）",
+    )
 
 
 class PullFromRequisitionItemsRequest(BaseModel):
@@ -102,6 +106,8 @@ class PullFromRequisitionItemsRequest(BaseModel):
 
 class PurchaseRequisitionCreate(BaseModel):
     """采购申请创建"""
+    model_config = ConfigDict(populate_by_name=True)
+
     requisition_code: Optional[str] = None
     requisition_name: Optional[str] = None
     requisition_date: Optional[date] = Field(None, description="申请日期，未传则默认当天")
@@ -114,6 +120,27 @@ class PurchaseRequisitionCreate(BaseModel):
     notes: Optional[str] = None
     attachments: Optional[list] = None
     items: List[PurchaseRequisitionItemCreate] = Field(..., description="申请明细")
+    document_flow_source_type: Optional[str] = Field(
+        None,
+        alias="documentFlowSourceType",
+        description="handoff 保存后回写来源（demand_computation_items）",
+    )
+    document_flow_demand_computation_item_ids: Optional[List[int]] = Field(
+        None,
+        alias="documentFlowDemandComputationItemIds",
+    )
+    document_flow_demand_computation_ids: Optional[List[int]] = Field(
+        None,
+        alias="documentFlowDemandComputationIds",
+    )
+    document_flow_replenishment_suggestion_ids: Optional[List[int]] = Field(
+        None,
+        alias="documentFlowReplenishmentSuggestionIds",
+    )
+    document_flow_sales_order_id: Optional[int] = Field(
+        None,
+        alias="documentFlowSalesOrderId",
+    )
 
 
 class PurchaseRequisitionUpdate(BaseModel):

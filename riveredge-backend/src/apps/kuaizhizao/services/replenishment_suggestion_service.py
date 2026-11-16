@@ -760,13 +760,11 @@ class ReplenishmentSuggestionService(AppBaseService[ReplenishmentSuggestion]):
             suggestion.updated_by_name = user_info["name"]
             await suggestion.save()
 
-    async def push_to_purchase_requisition(
+    async def build_purchase_requisition_create_from_suggestions(
         self,
         tenant_id: int,
         suggestion_ids: List[int],
-        created_by: int,
-    ) -> Dict[str, Any]:
-        from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+    ) -> tuple:
         from apps.kuaizhizao.schemas.purchase_requisition import (
             PurchaseRequisitionCreate,
             PurchaseRequisitionItemCreate,
@@ -774,9 +772,6 @@ class ReplenishmentSuggestionService(AppBaseService[ReplenishmentSuggestion]):
         from apps.kuaizhizao.services.document_action_policy.replenishment_suggestion import (
             assert_replenishment_suggestion_capability,
         )
-        from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
-        from apps.kuaizhizao.services.purchase_requisition_service import PurchaseRequisitionService
-
         from apps.master_data.models.material import Material
 
         suggestions = await self._load_pending_suggestions(tenant_id, suggestion_ids)
@@ -813,20 +808,52 @@ class ReplenishmentSuggestionService(AppBaseService[ReplenishmentSuggestion]):
         if len(suggestions) > 1:
             source_code = f"RS-{suggestions[0].id}+{len(suggestions) - 1}"
 
-        # 禁止外层 in_transaction：create_requisition / create_relation 内部已有事务，
-        # Tortoise NestedTransactionPooledContext 三层嵌套会死锁，前端表现为 504「服务器暂时不可用」。
-        req = await PurchaseRequisitionService().create_requisition(
-            tenant_id=tenant_id,
-            data=PurchaseRequisitionCreate(
-                required_date=min(required_dates) if required_dates else None,
-                source_type="ReplenishmentSuggestion",
-                source_id=int(suggestions[0].id),
-                source_code=source_code,
-                notes="由补货建议下推生成",
-                items=req_items,
-            ),
-            created_by=created_by,
+        req_data = PurchaseRequisitionCreate(
+            required_date=min(required_dates) if required_dates else None,
+            source_type="ReplenishmentSuggestion",
+            source_id=int(suggestions[0].id),
+            source_code=source_code,
+            notes="由补货建议下推生成",
+            items=req_items,
         )
+        return req_data, [int(s.id) for s in suggestions]
+
+    async def draft_purchase_requisition_from_replenishment_suggestions(
+        self,
+        tenant_id: int,
+        suggestion_ids: List[int],
+    ) -> Dict[str, Any]:
+        req_data, ids = await self.build_purchase_requisition_create_from_suggestions(
+            tenant_id, suggestion_ids
+        )
+        return {
+            "target_type": "purchase_requisition",
+            "source_type": "replenishment_suggestion",
+            "create_payload": req_data.model_dump(by_alias=True, mode="json"),
+            "document_flow": {
+                "documentFlowSourceType": "replenishment_suggestion_items",
+                "documentFlowReplenishmentSuggestionIds": ids,
+            },
+        }
+
+    async def finalize_replenishment_after_requisition_created(
+        self,
+        tenant_id: int,
+        suggestion_ids: List[int],
+        requisition_id: int,
+        requisition_code: str,
+        requisition_name: Optional[str],
+        created_by: int,
+    ) -> None:
+        from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+        from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+
+        suggestions = await ReplenishmentSuggestion.filter(
+            tenant_id=tenant_id,
+            id__in=[int(v) for v in suggestion_ids],
+        ).all()
+        if not suggestions:
+            return
         relation_service = DocumentRelationNewService()
         for s in suggestions:
             await relation_service.create_relation(
@@ -837,9 +864,9 @@ class ReplenishmentSuggestionService(AppBaseService[ReplenishmentSuggestion]):
                     source_code=str(s.id),
                     source_name=s.material_name,
                     target_type="purchase_requisition",
-                    target_id=req.id,
-                    target_code=req.requisition_code,
-                    target_name=req.requisition_name,
+                    target_id=requisition_id,
+                    target_code=requisition_code,
+                    target_name=requisition_name,
                     relation_type="source",
                     relation_mode="push",
                     relation_desc="从补货建议下推到采购申请",
@@ -849,7 +876,35 @@ class ReplenishmentSuggestionService(AppBaseService[ReplenishmentSuggestion]):
         await self._mark_suggestions_processed(
             suggestions,
             created_by,
-            f"已下推采购申请 {req.requisition_code}",
+            f"已下推采购申请 {requisition_code}",
+        )
+
+    async def push_to_purchase_requisition(
+        self,
+        tenant_id: int,
+        suggestion_ids: List[int],
+        created_by: int,
+    ) -> Dict[str, Any]:
+        from apps.kuaizhizao.services.purchase_requisition_service import PurchaseRequisitionService
+
+        req_data, ids = await self.build_purchase_requisition_create_from_suggestions(
+            tenant_id, suggestion_ids
+        )
+
+        # 禁止外层 in_transaction：create_requisition / create_relation 内部已有事务，
+        # Tortoise NestedTransactionPooledContext 三层嵌套会死锁，前端表现为 504「服务器暂时不可用」。
+        req = await PurchaseRequisitionService().create_requisition(
+            tenant_id=tenant_id,
+            data=req_data,
+            created_by=created_by,
+        )
+        await self.finalize_replenishment_after_requisition_created(
+            tenant_id=tenant_id,
+            suggestion_ids=ids,
+            requisition_id=int(req.id),
+            requisition_code=req.requisition_code,
+            requisition_name=req.requisition_name,
+            created_by=created_by,
         )
 
         return {
@@ -862,26 +917,22 @@ class ReplenishmentSuggestionService(AppBaseService[ReplenishmentSuggestion]):
             },
         }
 
-    async def push_to_purchase_order(
+    async def plan_purchase_orders_from_replenishment_suggestions(
         self,
         tenant_id: int,
         suggestion_ids: List[int],
-        created_by: int,
-    ) -> Dict[str, Any]:
-        from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+    ) -> List[Dict[str, Any]]:
+        from apps.kuaizhizao.constants import DocumentStatus
         from apps.kuaizhizao.schemas.purchase import PurchaseOrderCreate, PurchaseOrderItemCreate
         from apps.kuaizhizao.services.document_action_policy.replenishment_suggestion import (
             assert_replenishment_suggestion_capability,
         )
-        from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
-        from apps.kuaizhizao.services.purchase_service import PurchaseService
+        from apps.master_data.models.material import Material
         from apps.master_data.models.supplier import Supplier
 
         require_pr = await self._require_purchase_requisition(tenant_id)
         if require_pr:
             raise BusinessLogicError("当前组织要求先采购申请后下单，请下推采购申请")
-
-        from apps.master_data.models.material import Material
 
         suggestions = await self._load_pending_suggestions(tenant_id, suggestion_ids)
         for s in suggestions:
@@ -901,13 +952,9 @@ class ReplenishmentSuggestionService(AppBaseService[ReplenishmentSuggestion]):
         for s in suggestions:
             by_supplier.setdefault(int(s.supplier_id), []).append(s)
 
-        purchase_service = PurchaseService()
-        relation_service = DocumentRelationNewService()
-        target_documents = []
         order_date = to_site_date(resolve_business_datetime())
+        plans: List[Dict[str, Any]] = []
 
-        # 禁止外层 in_transaction：create_purchase_order / create_relation 内部已有事务，
-        # 三层嵌套会死锁（与售后下推/需求计算下推同因）。
         for supplier_id, group in by_supplier.items():
             supplier = await Supplier.get_or_none(tenant_id=tenant_id, id=supplier_id)
             supplier_name = (
@@ -916,6 +963,7 @@ class ReplenishmentSuggestionService(AppBaseService[ReplenishmentSuggestion]):
                 else (group[0].supplier_name or f"供应商({supplier_id})")
             )
             po_items = []
+            line_suggestion_ids: List[int] = []
             for s in group:
                 _, _, _, price = await self._resolve_supplier_and_lead(
                     tenant_id, int(s.material_id)
@@ -932,52 +980,138 @@ class ReplenishmentSuggestionService(AppBaseService[ReplenishmentSuggestion]):
                         unit=unit_by_material.get(int(s.material_id)) or "件",
                         unit_price=unit_price,
                         total_price=qty * unit_price,
+                        received_quantity=Decimal(0),
+                        outstanding_quantity=qty,
                         required_date=required,
                         source_type="replenishment_suggestion",
                         source_id=int(s.id),
                         notes=f"补货建议#{s.id}",
                     )
                 )
+                line_suggestion_ids.append(int(s.id))
             delivery_date = min(self._required_date_for_suggestion(s) for s in group)
+            po_create = PurchaseOrderCreate(
+                supplier_id=supplier_id,
+                supplier_name=supplier_name,
+                order_date=order_date,
+                delivery_date=delivery_date,
+                order_type="标准采购",
+                status=DocumentStatus.DRAFT.value,
+                source_type="ReplenishmentSuggestion",
+                source_id=int(group[0].id),
+                notes="由补货建议下推生成",
+                items=po_items,
+            )
+            plans.append(
+                {
+                    "po_create": po_create,
+                    "supplier_id": supplier_id,
+                    "suggestion_ids": line_suggestion_ids,
+                }
+            )
+        if not plans:
+            raise BusinessLogicError("所选补货建议无法生成采购订单")
+        return plans
+
+    async def draft_purchase_orders_from_replenishment_suggestions(
+        self,
+        tenant_id: int,
+        suggestion_ids: List[int],
+    ) -> Dict[str, Any]:
+        plans = await self.plan_purchase_orders_from_replenishment_suggestions(
+            tenant_id, suggestion_ids
+        )
+        drafts: List[Dict[str, Any]] = []
+        for plan in plans:
+            drafts.append(
+                {
+                    "create_payload": plan["po_create"].model_dump(by_alias=True, mode="json"),
+                    "document_flow": {
+                        "documentFlowSourceType": "replenishment_suggestion_items",
+                        "documentFlowReplenishmentSuggestionIds": plan["suggestion_ids"],
+                    },
+                    "supplier_id": plan["supplier_id"],
+                }
+            )
+        return {
+            "target_type": "purchase_order",
+            "source_type": "replenishment_suggestion",
+            "drafts": drafts,
+        }
+
+    async def finalize_replenishment_after_purchase_order_created(
+        self,
+        tenant_id: int,
+        suggestion_ids: List[int],
+        purchase_order_id: int,
+        purchase_order_code: str,
+        created_by: int,
+    ) -> None:
+        from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+        from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+
+        suggestions = await ReplenishmentSuggestion.filter(
+            tenant_id=tenant_id,
+            id__in=[int(v) for v in suggestion_ids],
+        ).all()
+        if not suggestions:
+            return
+        relation_service = DocumentRelationNewService()
+        for s in suggestions:
+            await relation_service.create_relation(
+                tenant_id=tenant_id,
+                relation_data=DocumentRelationCreate(
+                    source_type="replenishment_suggestion",
+                    source_id=int(s.id),
+                    source_code=str(s.id),
+                    source_name=s.material_name,
+                    target_type="purchase_order",
+                    target_id=purchase_order_id,
+                    target_code=purchase_order_code,
+                    target_name=purchase_order_code,
+                    relation_type="source",
+                    relation_mode="push",
+                    relation_desc="从补货建议下推到采购订单",
+                ),
+                created_by=created_by,
+            )
+        await self._mark_suggestions_processed(
+            suggestions,
+            created_by,
+            f"已下推采购订单 {purchase_order_code}",
+        )
+
+    async def push_to_purchase_order(
+        self,
+        tenant_id: int,
+        suggestion_ids: List[int],
+        created_by: int,
+    ) -> Dict[str, Any]:
+        from apps.kuaizhizao.services.purchase_service import PurchaseService
+
+        plans = await self.plan_purchase_orders_from_replenishment_suggestions(
+            tenant_id, suggestion_ids
+        )
+        purchase_service = PurchaseService()
+        target_documents = []
+
+        # 禁止外层 in_transaction：create_purchase_order / create_relation 内部已有事务，
+        # 三层嵌套会死锁（与售后下推/需求计算下推同因）。
+        for plan in plans:
             po = await purchase_service.create_purchase_order(
                 tenant_id=tenant_id,
-                order_data=PurchaseOrderCreate(
-                    supplier_id=supplier_id,
-                    supplier_name=supplier_name,
-                    order_date=order_date,
-                    delivery_date=delivery_date,
-                    source_type="ReplenishmentSuggestion",
-                    source_id=int(group[0].id),
-                    notes="由补货建议下推生成",
-                    items=po_items,
-                ),
+                order_data=plan["po_create"],
                 created_by=created_by,
             )
             target_documents.append(
                 {"type": "purchase_order", "id": po.id, "code": po.order_code}
             )
-            for s in group:
-                await relation_service.create_relation(
-                    tenant_id=tenant_id,
-                    relation_data=DocumentRelationCreate(
-                        source_type="replenishment_suggestion",
-                        source_id=int(s.id),
-                        source_code=str(s.id),
-                        source_name=s.material_name,
-                        target_type="purchase_order",
-                        target_id=po.id,
-                        target_code=po.order_code,
-                        target_name=po.order_code,
-                        relation_type="source",
-                        relation_mode="push",
-                        relation_desc="从补货建议下推到采购订单",
-                    ),
-                    created_by=created_by,
-                )
-            await self._mark_suggestions_processed(
-                group,
-                created_by,
-                f"已下推采购订单 {po.order_code}",
+            await self.finalize_replenishment_after_purchase_order_created(
+                tenant_id=tenant_id,
+                suggestion_ids=plan["suggestion_ids"],
+                purchase_order_id=int(po.id),
+                purchase_order_code=po.order_code,
+                created_by=created_by,
             )
 
         return {

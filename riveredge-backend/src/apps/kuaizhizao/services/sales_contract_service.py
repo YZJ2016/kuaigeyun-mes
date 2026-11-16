@@ -1794,19 +1794,24 @@ class SalesContractService(AppBaseService[SalesContract]):
     ) -> SalesContractResponse:
         raise BusinessLogicError("报价单不再下推销售合同，请直接下推销售订单")
 
-    async def convert_to_sales_order(
+    async def build_sales_order_create_from_sales_contract(
         self,
         tenant_id: int,
         contract_id: int,
-        created_by: int,
         selected_item_ids: Optional[List[int]] = None,
         release_lines: Optional[List[SalesContractReleaseLine]] = None,
         current_user: Optional[User] = None,
     ):
+        """
+        从销售合同构建 SalesOrderCreate（不写库、不占用释放量）。
+        返回 (contract, 全部明细, SalesOrderCreate)。
+        """
         contract = await self._get_contract_checked(
             tenant_id, contract_id, current_user=current_user
         )
-        all_items = await SalesContractItem.filter(tenant_id=tenant_id, contract_id=contract_id).order_by("id")
+        all_items = await SalesContractItem.filter(
+            tenant_id=tenant_id, contract_id=contract_id
+        ).order_by("id")
         ctx = self._contract_capability_context(contract, all_items)
         assert_sales_contract_capability(
             contract,
@@ -1821,11 +1826,11 @@ class SalesContractService(AppBaseService[SalesContract]):
             )
         if not all_items:
             raise BusinessLogicError("合同无明细")
-        plan, item_qty_map, order_qty, order_amt = self._resolve_release_plan(
+        plan, _item_qty_map, order_qty, order_amt = self._resolve_release_plan(
             all_items, selected_item_ids=selected_item_ids, release_lines=release_lines
         )
         await self._validate_release_capacity(
-            contract, order_qty, order_amt, item_qty_map, all_items=all_items
+            contract, order_qty, order_amt, _item_qty_map, all_items=all_items
         )
 
         valid_dates = [it.delivery_date for it, _ in plan if it.delivery_date]
@@ -1874,28 +1879,54 @@ class SalesContractService(AppBaseService[SalesContract]):
             contract_terms=contract.contract_terms,
             items=so_items,
         )
-        from apps.kuaizhizao.services.sales_order_service import SalesOrderService
+        return contract, all_items, so_create
 
-        sales_order_service = SalesOrderService()
-        sales_order = await sales_order_service.create_sales_order(
-            tenant_id=tenant_id,
-            sales_order_data=so_create,
-            created_by=created_by,
+    async def finalize_sales_contract_after_sales_order_created(
+        self,
+        tenant_id: int,
+        contract_id: int,
+        sales_order_id: int,
+        created_by: int,
+        release_lines: Optional[List[SalesContractReleaseLine]] = None,
+        selected_item_ids: Optional[List[int]] = None,
+        current_user: Optional[User] = None,
+    ) -> None:
+        """用户保存销售订单后回写合同释放、里程碑与关联。"""
+        contract = await self._get_contract_checked(
+            tenant_id, contract_id, current_user=current_user
         )
+        all_items = await SalesContractItem.filter(
+            tenant_id=tenant_id, contract_id=contract_id
+        ).order_by("id")
+        _plan, item_qty_map, order_qty, order_amt = self._resolve_release_plan(
+            all_items,
+            selected_item_ids=selected_item_ids,
+            release_lines=release_lines,
+        )
+        from apps.kuaizhizao.services.sales_order_service import SalesOrderService
         from apps.kuaizhizao.services.sales_order_terms_service import SalesOrderTermsService
 
         await SalesOrderTermsService.copy_milestones_from_contract(
-            tenant_id, int(sales_order.id), contract_id, skip_invoiced=True
+            tenant_id, int(sales_order_id), contract_id, skip_invoiced=True
         )
         await self._apply_release_to_contract(
             contract, order_qty, order_amt, item_qty_map, all_items=all_items
         )
-        sales_order = await sales_order_service.apply_push_default_mode_after_create(
+        sales_order_service = SalesOrderService()
+        await sales_order_service.apply_push_default_mode_after_create(
             tenant_id=tenant_id,
-            sales_order_id=int(sales_order.id),
+            sales_order_id=int(sales_order_id),
             created_by=created_by,
         )
-        from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+        sales_order = await sales_order_service.get_sales_order_by_id(
+            tenant_id=tenant_id,
+            sales_order_id=int(sales_order_id),
+            include_items=False,
+            current_user=current_user,
+        )
+        from apps.kuaizhizao.services.document_relation_new_service import (
+            DocumentRelationNewService,
+        )
         from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
 
         await DocumentRelationNewService().create_relation(
@@ -1914,6 +1945,83 @@ class SalesContractService(AppBaseService[SalesContract]):
                 relation_desc="销售合同下推销售订单",
             ),
             created_by=created_by,
+        )
+
+    async def draft_sales_order_create_from_sales_contract(
+        self,
+        tenant_id: int,
+        contract_id: int,
+        selected_item_ids: Optional[List[int]] = None,
+        release_lines: Optional[List[SalesContractReleaseLine]] = None,
+        current_user: Optional[User] = None,
+    ) -> Dict[str, Any]:
+        """供前端打开销售订单新建页：返回 create 载荷与 document_flow 元数据。"""
+        contract, _all_items, so_create = await self.build_sales_order_create_from_sales_contract(
+            tenant_id,
+            contract_id,
+            selected_item_ids=selected_item_ids,
+            release_lines=release_lines,
+            current_user=current_user,
+        )
+        payload = so_create.model_dump(by_alias=True, mode="json")
+        document_flow: Dict[str, Any] = {
+            "documentFlowSourceType": "sales_contract",
+            "documentFlowSourceId": contract_id,
+        }
+        if release_lines:
+            document_flow["documentFlowReleaseLines"] = [
+                {
+                    "item_id": int(line.item_id),
+                    "release_quantity": float(line.release_quantity),
+                }
+                for line in release_lines
+            ]
+        return {
+            "target_type": "sales_order",
+            "source_type": "sales_contract",
+            "source_id": contract_id,
+            "source_code": contract.contract_code,
+            "document_flow": document_flow,
+            "create_payload": payload,
+        }
+
+    async def convert_to_sales_order(
+        self,
+        tenant_id: int,
+        contract_id: int,
+        created_by: int,
+        selected_item_ids: Optional[List[int]] = None,
+        release_lines: Optional[List[SalesContractReleaseLine]] = None,
+        current_user: Optional[User] = None,
+    ):
+        """
+        从销售合同释放销售订单（兼容自动化/旧 API：直接落库）。
+
+        手工 UI 应走 draft + 销售订单新建页保存（document_flow 回写）。
+        """
+        _contract, _all_items, so_create = await self.build_sales_order_create_from_sales_contract(
+            tenant_id,
+            contract_id,
+            selected_item_ids=selected_item_ids,
+            release_lines=release_lines,
+            current_user=current_user,
+        )
+        from apps.kuaizhizao.services.sales_order_service import SalesOrderService
+
+        sales_order_service = SalesOrderService()
+        sales_order = await sales_order_service.create_sales_order(
+            tenant_id=tenant_id,
+            sales_order_data=so_create,
+            created_by=created_by,
+        )
+        await self.finalize_sales_contract_after_sales_order_created(
+            tenant_id=tenant_id,
+            contract_id=contract_id,
+            sales_order_id=int(sales_order.id),
+            created_by=created_by,
+            release_lines=release_lines,
+            selected_item_ids=selected_item_ids,
+            current_user=current_user,
         )
         return sales_order, await self.get_contract_by_id(
             tenant_id, contract_id, current_user=current_user

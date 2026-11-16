@@ -906,6 +906,23 @@ export async function pushSalesOrderToPurchaseRequisition(
   );
 }
 
+export async function draftSalesOrderToPurchaseRequisition(
+  salesOrderId: number,
+  data?: PushSalesOrderToPurchaseRequest,
+): Promise<{
+  target_type: 'purchase_requisition';
+  source_type: 'sales_order';
+  source_id: number;
+  source_code: string;
+  create_payload: Record<string, unknown>;
+  document_flow: Record<string, unknown>;
+}> {
+  return apiRequest(
+    `/apps/kuaizhizao/sales-orders/${salesOrderId}/push-to-purchase-requisition/draft`,
+    { method: 'POST', data },
+  );
+}
+
 export async function previewPushSalesOrderToPurchaseOrder(
   salesOrderId: number,
 ): Promise<PushPreviewResponse> {
@@ -921,6 +938,22 @@ export async function pushSalesOrderToPurchaseOrder(
 ): Promise<PushSalesOrderToPurchaseResponse> {
   return apiRequest<PushSalesOrderToPurchaseResponse>(
     `/apps/kuaizhizao/sales-orders/${salesOrderId}/push-to-purchase-order`,
+    { method: 'POST', data },
+  );
+}
+
+export async function draftSalesOrderToPurchaseOrders(
+  salesOrderId: number,
+  data?: PushSalesOrderToPurchaseRequest,
+): Promise<{
+  target_type: 'purchase_order';
+  source_type: 'sales_order';
+  source_id: number;
+  source_code: string;
+  drafts: Array<{ create_payload: Record<string, unknown>; document_flow: Record<string, unknown> }>;
+}> {
+  return apiRequest(
+    `/apps/kuaizhizao/sales-orders/${salesOrderId}/push-to-purchase-order/draft`,
     { method: 'POST', data },
   );
 }

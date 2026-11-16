@@ -8,7 +8,7 @@ Date: 2026-05-28
 import asyncio
 from datetime import date, datetime, time
 from decimal import Decimal
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Tuple
 
 from tortoise.expressions import Q
 from tortoise.functions import Count
@@ -526,7 +526,19 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
                     status=PurchaseInquiryVendorStatus.INVITED.value,
                     notes=vendor.notes,
                 )
-            return await self.get_inquiry_by_id(tenant_id, inquiry.id)
+            created_inquiry_id = int(inquiry.id)
+
+        await self._sync_vendor_system_attachments(
+            tenant_id, created_inquiry_id, created_by, require_vendors=False
+        )
+        response = await self.get_inquiry_by_id(tenant_id, created_inquiry_id)
+        await self._finalize_document_flow_after_create(
+            tenant_id=tenant_id,
+            inquiry_data=data,
+            inquiry=response,
+            created_by=created_by,
+        )
+        return response
 
     async def update_inquiry(
         self,
@@ -717,98 +729,17 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
                 logger.debug("询价推荐供应商失败: %s", e)
         return ids[:5]
 
-    async def create_from_requisition(
-        self,
-        tenant_id: int,
-        requisition_id: int,
-        data: CreateFromRequisitionRequest,
-        created_by: int,
-    ) -> PurchaseInquiryResponse:
-        await self._ensure_module_enabled(tenant_id)
-        req = await PurchaseRequisition.get_or_none(
-            tenant_id=tenant_id, id=requisition_id, deleted_at__isnull=True
-        )
-        if not req:
-            raise NotFoundError(f"采购申请不存在: {requisition_id}")
-        assert_purchase_requisition_capability(req, "push_inquiry")
-
-        pr_items = await PurchaseRequisitionItem.filter(
-            tenant_id=tenant_id,
-            requisition_id=requisition_id,
-            id__in=data.item_ids,
-            purchase_order_id__isnull=True,
-        ).all()
-        if not pr_items:
-            raise BusinessLogicError("没有可询价的申请行")
-
-        await self._assert_requisition_items_not_in_active_inquiry(tenant_id, [i.id for i in pr_items])
-
-        supplier_ids = data.supplier_ids or []
-        if not supplier_ids:
-            supplier_ids = await self._recommend_supplier_ids(
-                tenant_id, [i.material_id for i in pr_items]
-            )
-        suppliers = await Supplier.filter(tenant_id=tenant_id, id__in=supplier_ids).all() if supplier_ids else []
-        vendor_payload = [{"supplier_id": s.id, "supplier_name": s.name} for s in suppliers]
-
-        from apps.kuaizhizao.schemas.purchase_inquiry import PurchaseInquiryItemCreate, PurchaseInquiryVendorCreate
-
-        create_data = PurchaseInquiryCreate(
-            inquiry_name=data.inquiry_name or f"询价-{req.requisition_code}",
-            quote_deadline=data.quote_deadline,
-            source_type="PurchaseRequisition",
-            source_id=requisition_id,
-            source_code=req.requisition_code,
-            notes=data.notes,
-            items=[
-                PurchaseInquiryItemCreate(
-                    material_id=i.material_id,
-                    material_code=i.material_code,
-                    material_name=i.material_name,
-                    material_spec=i.material_spec,
-                    unit=i.unit or "件",
-                    quantity=i.quantity,
-                    required_date=i.required_date,
-                    source_requisition_item_id=i.id,
-                    notes=i.notes,
-                )
-                for i in pr_items
-            ],
-            vendors=[PurchaseInquiryVendorCreate(**v) for v in vendor_payload],
-        )
-        inquiry = await self.create_inquiry(tenant_id, create_data, created_by)
-        try:
-            from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
-            from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
-
-            await DocumentRelationNewService().create_relation(
-                tenant_id=tenant_id,
-                relation_data=DocumentRelationCreate(
-                    source_type="purchase_requisition",
-                    source_id=requisition_id,
-                    source_code=req.requisition_code,
-                    source_name=req.requisition_name or req.requisition_code,
-                    target_type="purchase_inquiry",
-                    target_id=inquiry.id,
-                    target_code=inquiry.inquiry_code,
-                    target_name=inquiry.inquiry_name or inquiry.inquiry_code,
-                    relation_type="source",
-                    relation_mode="push",
-                    relation_desc="采购申请下推询价单",
-                ),
-                created_by=created_by,
-            )
-        except Exception as e:
-            logger.warning("创建采购申请→询价单 单据关联失败: %s", e)
-        return inquiry
-
-    async def create_from_requisition_items(
+    async def build_inquiry_create_from_requisition_items(
         self,
         tenant_id: int,
         item_ids: List[int],
-        created_by: int,
-    ) -> PurchaseInquiryResponse:
-        """按申请行 id 建一张询价单，可跨多张采购申请。"""
+        *,
+        inquiry_name: Optional[str] = None,
+        quote_deadline: Optional[date] = None,
+        notes: Optional[str] = None,
+        supplier_ids: Optional[List[int]] = None,
+    ) -> PurchaseInquiryCreate:
+        """校验并组装询价单 create 载荷（不写库）。"""
         await self._ensure_module_enabled(tenant_id)
         selected_ids = [int(v) for v in item_ids if v is not None]
         if not selected_ids:
@@ -835,23 +766,31 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
             assert_purchase_requisition_capability(req, "push_inquiry")
 
         await self._assert_requisition_items_not_in_active_inquiry(
-            tenant_id, [i.id for i in pr_items]
+            tenant_id, [i.id for i in pr_items if i.id is not None]
         )
 
-        supplier_ids = await self._recommend_supplier_ids(
-            tenant_id, [i.material_id for i in pr_items]
+        resolved_supplier_ids = list(supplier_ids or [])
+        if not resolved_supplier_ids:
+            resolved_supplier_ids = await self._recommend_supplier_ids(
+                tenant_id, [i.material_id for i in pr_items]
+            )
+        suppliers = (
+            await Supplier.filter(tenant_id=tenant_id, id__in=resolved_supplier_ids).all()
+            if resolved_supplier_ids
+            else []
         )
-        suppliers = await Supplier.filter(tenant_id=tenant_id, id__in=supplier_ids).all() if supplier_ids else []
         vendor_payload = [{"supplier_id": s.id, "supplier_name": s.name} for s in suppliers]
 
         from apps.kuaizhizao.schemas.purchase_inquiry import PurchaseInquiryItemCreate, PurchaseInquiryVendorCreate
 
         primary = req_by_id[requisition_ids[0]]
-        create_data = PurchaseInquiryCreate(
-            inquiry_name=f"询价-{primary.requisition_code}",
+        return PurchaseInquiryCreate(
+            inquiry_name=inquiry_name or f"询价-{primary.requisition_code}",
+            quote_deadline=quote_deadline,
             source_type="PurchaseRequisition",
             source_id=primary.id,
             source_code=primary.requisition_code,
+            notes=notes,
             items=[
                 PurchaseInquiryItemCreate(
                     material_id=i.material_id,
@@ -868,29 +807,172 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
             ],
             vendors=[PurchaseInquiryVendorCreate(**v) for v in vendor_payload],
         )
-        inquiry = await self.create_inquiry(tenant_id, create_data, created_by)
+
+    async def draft_inquiry_from_requisition_items(
+        self,
+        tenant_id: int,
+        item_ids: List[int],
+        *,
+        inquiry_name: Optional[str] = None,
+        quote_deadline: Optional[date] = None,
+        notes: Optional[str] = None,
+        supplier_ids: Optional[List[int]] = None,
+    ) -> Dict[str, Any]:
+        selected_ids = [int(v) for v in item_ids if v is not None]
+        create_data = await self.build_inquiry_create_from_requisition_items(
+            tenant_id,
+            selected_ids,
+            inquiry_name=inquiry_name,
+            quote_deadline=quote_deadline,
+            notes=notes,
+            supplier_ids=supplier_ids,
+        )
+        return {
+            "target_type": "purchase_inquiry",
+            "source_type": "purchase_requisition",
+            "create_payload": create_data.model_dump(by_alias=True, mode="json"),
+            "document_flow": {
+                "documentFlowSourceType": "purchase_requisition_items",
+                "documentFlowRequisitionItemIds": selected_ids,
+            },
+        }
+
+    async def _link_purchase_requisitions_to_inquiry(
+        self,
+        tenant_id: int,
+        inquiry_id: int,
+        inquiry_code: str,
+        inquiry_name: Optional[str],
+        requisition_ids: List[int],
+        req_by_id: Dict[int, PurchaseRequisition],
+        created_by: int,
+    ) -> None:
         from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
         from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
 
         for rid in requisition_ids:
-            req = req_by_id[rid]
-            await DocumentRelationNewService().create_relation(
-                tenant_id=tenant_id,
-                relation_data=DocumentRelationCreate(
-                    source_type="purchase_requisition",
-                    source_id=rid,
-                    source_code=req.requisition_code,
-                    source_name=req.requisition_name or req.requisition_code,
-                    target_type="purchase_inquiry",
-                    target_id=inquiry.id,
-                    target_code=inquiry.inquiry_code,
-                    target_name=inquiry.inquiry_name or inquiry.inquiry_code,
-                    relation_type="source",
-                    relation_mode="push",
-                    relation_desc="采购申请下推询价单",
-                ),
-                created_by=created_by,
-            )
+            req = req_by_id.get(rid)
+            if not req:
+                continue
+            try:
+                await DocumentRelationNewService().create_relation(
+                    tenant_id=tenant_id,
+                    relation_data=DocumentRelationCreate(
+                        source_type="purchase_requisition",
+                        source_id=rid,
+                        source_code=req.requisition_code,
+                        source_name=req.requisition_name or req.requisition_code,
+                        target_type="purchase_inquiry",
+                        target_id=inquiry_id,
+                        target_code=inquiry_code,
+                        target_name=inquiry_name or inquiry_code,
+                        relation_type="source",
+                        relation_mode="push",
+                        relation_desc="采购申请下推询价单",
+                    ),
+                    created_by=created_by,
+                )
+            except Exception as e:
+                logger.warning("创建采购申请→询价单 单据关联失败: %s", e)
+
+    async def _finalize_document_flow_after_create(
+        self,
+        tenant_id: int,
+        inquiry_data: PurchaseInquiryCreate,
+        inquiry: PurchaseInquiryResponse,
+        created_by: int,
+    ) -> None:
+        source_type = (getattr(inquiry_data, "document_flow_source_type", None) or "").strip()
+        if source_type != "purchase_requisition_items":
+            return
+        item_ids = getattr(inquiry_data, "document_flow_requisition_item_ids", None) or []
+        if not item_ids:
+            return
+        pr_items = await PurchaseRequisitionItem.filter(
+            tenant_id=tenant_id, id__in=[int(v) for v in item_ids]
+        ).all()
+        if not pr_items:
+            return
+        requisition_ids = sorted({int(i.requisition_id) for i in pr_items})
+        requisitions = await PurchaseRequisition.filter(
+            tenant_id=tenant_id,
+            id__in=requisition_ids,
+            deleted_at__isnull=True,
+        ).all()
+        req_by_id = {int(r.id): r for r in requisitions}
+        await self._link_purchase_requisitions_to_inquiry(
+            tenant_id=tenant_id,
+            inquiry_id=int(inquiry.id),
+            inquiry_code=inquiry.inquiry_code,
+            inquiry_name=inquiry.inquiry_name,
+            requisition_ids=requisition_ids,
+            req_by_id=req_by_id,
+            created_by=created_by,
+        )
+
+    async def create_from_requisition(
+        self,
+        tenant_id: int,
+        requisition_id: int,
+        data: CreateFromRequisitionRequest,
+        created_by: int,
+    ) -> PurchaseInquiryResponse:
+        await self._ensure_module_enabled(tenant_id)
+        req = await PurchaseRequisition.get_or_none(
+            tenant_id=tenant_id, id=requisition_id, deleted_at__isnull=True
+        )
+        if not req:
+            raise NotFoundError(f"采购申请不存在: {requisition_id}")
+
+        create_data = await self.build_inquiry_create_from_requisition_items(
+            tenant_id,
+            data.item_ids,
+            inquiry_name=data.inquiry_name or f"询价-{req.requisition_code}",
+            quote_deadline=data.quote_deadline,
+            notes=data.notes,
+            supplier_ids=data.supplier_ids,
+        )
+        inquiry = await self.create_inquiry(tenant_id, create_data, created_by)
+        req_by_id = {int(req.id): req}
+        await self._link_purchase_requisitions_to_inquiry(
+            tenant_id=tenant_id,
+            inquiry_id=int(inquiry.id),
+            inquiry_code=inquiry.inquiry_code,
+            inquiry_name=inquiry.inquiry_name,
+            requisition_ids=[int(requisition_id)],
+            req_by_id=req_by_id,
+            created_by=created_by,
+        )
+        return inquiry
+
+    async def create_from_requisition_items(
+        self,
+        tenant_id: int,
+        item_ids: List[int],
+        created_by: int,
+    ) -> PurchaseInquiryResponse:
+        """按申请行 id 建一张询价单，可跨多张采购申请。"""
+        create_data = await self.build_inquiry_create_from_requisition_items(tenant_id, item_ids)
+        inquiry = await self.create_inquiry(tenant_id, create_data, created_by)
+        pr_items = await PurchaseRequisitionItem.filter(
+            tenant_id=tenant_id, id__in=[int(v) for v in item_ids if v is not None]
+        ).all()
+        requisition_ids = sorted({int(i.requisition_id) for i in pr_items})
+        requisitions = await PurchaseRequisition.filter(
+            tenant_id=tenant_id,
+            id__in=requisition_ids,
+            deleted_at__isnull=True,
+        ).all()
+        req_by_id = {int(r.id): r for r in requisitions}
+        await self._link_purchase_requisitions_to_inquiry(
+            tenant_id=tenant_id,
+            inquiry_id=int(inquiry.id),
+            inquiry_code=inquiry.inquiry_code,
+            inquiry_name=inquiry.inquiry_name,
+            requisition_ids=requisition_ids,
+            req_by_id=req_by_id,
+            created_by=created_by,
+        )
         return inquiry
 
     @staticmethod
@@ -1392,184 +1474,17 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
         total = len(lines)
         return {"data": lines[skip : skip + limit], "total": total}
 
-    async def convert_to_purchase_order(
-        self,
-        tenant_id: int,
-        inquiry_id: int,
-        data: ConvertInquiryToPORequest,
-        created_by: int,
-    ) -> Dict[str, Any]:
-        inquiry = await PurchaseInquiry.get_or_none(
-            tenant_id=tenant_id, id=inquiry_id, deleted_at__isnull=True
-        )
-        if not inquiry:
-            raise NotFoundError(f"询价单不存在: {inquiry_id}")
-        assert_purchase_inquiry_capability(inquiry, "push_purchase_order")
+    class _InquiryPoPlan(NamedTuple):
+        po_create: PurchaseOrderCreate
+        supplier_id: int
+        inquiry_item_ids: List[int]
+        inquiry_ids: List[int]
 
-        qs = PurchaseInquiryItem.filter(
-            tenant_id=tenant_id,
-            inquiry_id=inquiry_id,
-            purchase_order_id__isnull=True,
-            awarded_supplier_id__not_isnull=True,
-        )
-        if data.item_ids:
-            qs = qs.filter(id__in=data.item_ids)
-        items = await qs.all()
-        if not items:
-            raise BusinessLogicError("没有可转单的已定标询价行")
-
-        groups: Dict[int, List[PurchaseInquiryItem]] = {}
-        for item in items:
-            groups.setdefault(item.awarded_supplier_id, []).append(item)
-
-        supplier_rows = await Supplier.filter(
-            tenant_id=tenant_id, id__in=list(groups.keys())
-        ).all()
-        supplier_by_id = {s.id: s for s in supplier_rows}
-        today = date.today()
-        purchase_orders_out: List[Dict[str, Any]] = []
-        push_mode = await BusinessConfigService().get_push_default_mode(tenant_id)
-        push_as_confirm = push_mode == "confirm"
-
-        try:
-            from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
-            from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
-
-            rel_svc = DocumentRelationNewService()
-        except Exception:
-            rel_svc = None
-
-        for supplier_id, group_items in groups.items():
-            sup = supplier_by_id.get(supplier_id)
-            if not sup:
-                raise NotFoundError(f"供应商不存在: {supplier_id}")
-            max_required = max((i.required_date or today for i in group_items), default=today)
-            po_items: List[PurchaseOrderItemCreate] = []
-            items_converted: List[Tuple[PurchaseInquiryItem, PurchaseSupplierQuoteItem]] = []
-
-            for item in group_items:
-                quote_item = await PurchaseSupplierQuoteItem.get_or_none(
-                    tenant_id=tenant_id, id=item.awarded_quote_item_id
-                )
-                unit_price = quote_item.unit_price if quote_item else Decimal(0)
-                qty = quote_item.quoted_quantity if quote_item and quote_item.quoted_quantity else item.quantity
-                delivery = quote_item.delivery_date if quote_item else item.required_date
-                total_price = qty * unit_price
-                po_items.append(
-                    PurchaseOrderItemCreate(
-                        material_id=item.material_id,
-                        material_code=item.material_code,
-                        material_name=item.material_name,
-                        material_spec=item.material_spec,
-                        ordered_quantity=qty,
-                        unit=item.unit or "件",
-                        unit_price=unit_price,
-                        total_price=total_price,
-                        received_quantity=Decimal(0),
-                        outstanding_quantity=qty,
-                        required_date=delivery or max_required,
-                        source_type="PurchaseInquiry",
-                        source_id=item.id,
-                        notes=item.notes,
-                    )
-                )
-                items_converted.append((item, quote_item))
-
-            po_data = PurchaseOrderCreate(
-                supplier_id=supplier_id,
-                supplier_name=sup.name,
-                order_date=today,
-                delivery_date=max_required,
-                order_type="标准采购",
-                status=DocumentStatus.DRAFT.value,
-                source_type="PurchaseInquiry",
-                source_id=inquiry_id,
-                notes=f"由询价单{inquiry.inquiry_code}转单生成",
-                items=po_items,
-            )
-            po = await self.purchase_service.create_purchase_order(
-                tenant_id=tenant_id, order_data=po_data, created_by=created_by
-            )
-            # 与业务自动化「下推默认生成方式」一致：confirm 才自动提交，draft 保持草稿
-            if push_as_confirm:
-                try:
-                    po = await self.purchase_service.submit_purchase_order(
-                        tenant_id=tenant_id, order_id=po.id, submitted_by=created_by
-                    )
-                except Exception as e:
-                    logger.warning(
-                        "询价转单后自动提交采购订单失败: inquiry_id={} po_id={} err={}",
-                        inquiry_id,
-                        po.id,
-                        e,
-                    )
-
-            for i, (item, _) in enumerate(items_converted):
-                po_item = po.items[i] if i < len(po.items) else None
-                po_item_id = getattr(po_item, "id", None) if po_item else None
-                await item.update_from_dict({
-                    "purchase_order_id": po.id,
-                    "purchase_order_item_id": po_item_id,
-                }).save()
-                if item.source_requisition_item_id:
-                    pr_item = await PurchaseRequisitionItem.get_or_none(
-                        tenant_id=tenant_id, id=item.source_requisition_item_id
-                    )
-                    if pr_item and not pr_item.purchase_order_id:
-                        await pr_item.update_from_dict({
-                            "purchase_order_id": po.id,
-                            "purchase_order_item_id": po_item_id,
-                            "supplier_id": supplier_id,
-                        }).save()
-
-            po_code = getattr(po, "order_code", str(po.id))
-            purchase_orders_out.append({
-                "purchase_order_id": po.id,
-                "purchase_order_code": po_code,
-                "supplier_id": supplier_id,
-            })
-            if rel_svc:
-                try:
-                    await rel_svc.create_relation(
-                        tenant_id=tenant_id,
-                        relation_data=DocumentRelationCreate(
-                            source_type="purchase_inquiry",
-                            source_id=inquiry_id,
-                            source_code=inquiry.inquiry_code,
-                            source_name=inquiry.inquiry_name or inquiry.inquiry_code,
-                            target_type="purchase_order",
-                            target_id=po.id,
-                            target_code=po_code,
-                            target_name=po_code,
-                            relation_type="source",
-                            relation_mode="push",
-                            relation_desc="询价单转采购订单",
-                        ),
-                        created_by=created_by,
-                    )
-                except Exception as e:
-                    logger.warning("创建询价单→采购订单 单据关联失败: %s", e)
-
-        remaining = await PurchaseInquiryItem.filter(
-            tenant_id=tenant_id, inquiry_id=inquiry_id, purchase_order_id__isnull=True
-        ).count()
-        new_status = PurchaseInquiryStatus.CONVERTED.value if remaining == 0 else PurchaseInquiryStatus.AWARDED.value
-        user_info = await self.get_user_info(created_by)
-        await inquiry.update_from_dict({
-            "status": new_status,
-            "updated_by": created_by,
-            "updated_by_name": user_info["name"],
-        }).save()
-
-        return {"purchase_orders": purchase_orders_out, "inquiry_id": inquiry_id}
-
-    async def convert_selected_items_to_purchase_orders(
+    async def plan_purchase_orders_from_inquiry_items(
         self,
         tenant_id: int,
         item_ids: List[int],
-        created_by: int,
-    ) -> Dict[str, Any]:
-        """按询价行 id 转采购订单，可跨多张询价单；同定标供应商合并一张订单。"""
+    ) -> List["_InquiryPoPlan"]:
         selected_ids = [int(v) for v in item_ids if v is not None]
         if not selected_ids:
             raise BusinessLogicError("请至少选择一条可下推询价明细")
@@ -1604,14 +1519,7 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
         ).all()
         supplier_by_id = {s.id: s for s in supplier_rows}
         today = to_site_date(resolve_business_datetime())
-        purchase_orders_out: List[Dict[str, Any]] = []
-        push_mode = await BusinessConfigService().get_push_default_mode(tenant_id)
-        push_as_confirm = push_mode == "confirm"
-
-        from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
-        from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
-
-        rel_svc = DocumentRelationNewService()
+        plans: List[PurchaseInquiryService._InquiryPoPlan] = []
 
         for supplier_id, group_items in groups.items():
             sup = supplier_by_id.get(supplier_id)
@@ -1622,14 +1530,18 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
             primary = inq_by_id[source_inq_ids[0]]
             source_codes = " ".join(inq_by_id[iid].inquiry_code for iid in source_inq_ids)
             po_items: List[PurchaseOrderItemCreate] = []
-            items_converted: List[Tuple[PurchaseInquiryItem, Optional[PurchaseSupplierQuoteItem]]] = []
+            line_inquiry_item_ids: List[int] = []
 
             for item in group_items:
                 quote_item = await PurchaseSupplierQuoteItem.get_or_none(
                     tenant_id=tenant_id, id=item.awarded_quote_item_id
                 )
                 unit_price = quote_item.unit_price if quote_item else Decimal(0)
-                qty = quote_item.quoted_quantity if quote_item and quote_item.quoted_quantity else item.quantity
+                qty = (
+                    quote_item.quoted_quantity
+                    if quote_item and quote_item.quoted_quantity
+                    else item.quantity
+                )
                 delivery = quote_item.delivery_date if quote_item else item.required_date
                 total_price = qty * unit_price
                 po_items.append(
@@ -1650,9 +1562,13 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
                         notes=item.notes,
                     )
                 )
-                items_converted.append((item, quote_item))
+                if item.id is not None:
+                    line_inquiry_item_ids.append(int(item.id))
 
-            po_data = PurchaseOrderCreate(
+            if not po_items:
+                continue
+
+            po_create = PurchaseOrderCreate(
                 supplier_id=supplier_id,
                 supplier_name=sup.name,
                 order_date=today,
@@ -1664,8 +1580,174 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
                 notes=f"由询价单{source_codes}转单生成",
                 items=po_items,
             )
+            plans.append(
+                self._InquiryPoPlan(
+                    po_create=po_create,
+                    supplier_id=supplier_id,
+                    inquiry_item_ids=line_inquiry_item_ids,
+                    inquiry_ids=source_inq_ids,
+                )
+            )
+
+        if not plans:
+            raise BusinessLogicError("所选明细无法生成采购订单")
+        return plans
+
+    async def draft_purchase_orders_from_inquiry_convert(
+        self,
+        tenant_id: int,
+        item_ids: List[int],
+    ) -> Dict[str, Any]:
+        plans = await self.plan_purchase_orders_from_inquiry_items(tenant_id, item_ids)
+        drafts: List[Dict[str, Any]] = []
+        for plan in plans:
+            drafts.append(
+                {
+                    "create_payload": plan.po_create.model_dump(by_alias=True, mode="json"),
+                    "document_flow": {
+                        "documentFlowSourceType": "purchase_inquiry_items",
+                        "documentFlowInquiryItemIds": plan.inquiry_item_ids,
+                    },
+                    "supplier_id": plan.supplier_id,
+                    "inquiry_ids": plan.inquiry_ids,
+                }
+            )
+        return {
+            "target_type": "purchase_order",
+            "source_type": "purchase_inquiry",
+            "drafts": drafts,
+        }
+
+    async def _refresh_inquiry_statuses_after_po_links(
+        self,
+        tenant_id: int,
+        inquiry_ids: List[int],
+        inq_by_id: Dict[int, PurchaseInquiry],
+        created_by: int,
+    ) -> None:
+        if not inquiry_ids:
+            return
+        user_info = await self.get_user_info(created_by)
+        for iid in inquiry_ids:
+            inquiry = inq_by_id.get(iid)
+            if not inquiry:
+                continue
+            remaining = await PurchaseInquiryItem.filter(
+                tenant_id=tenant_id, inquiry_id=iid, purchase_order_id__isnull=True
+            ).count()
+            new_status = (
+                PurchaseInquiryStatus.CONVERTED.value
+                if remaining == 0
+                else PurchaseInquiryStatus.AWARDED.value
+            )
+            await inquiry.update_from_dict({
+                "status": new_status,
+                "updated_by": created_by,
+                "updated_by_name": user_info["name"],
+            }).save()
+
+    async def finalize_inquiry_items_after_purchase_order_created(
+        self,
+        tenant_id: int,
+        purchase_order_id: int,
+        purchase_order_code: str,
+        po_items: Sequence[Any],
+        inquiry_item_ids: List[int],
+        created_by: int,
+    ) -> None:
+        if not inquiry_item_ids:
+            return
+        inquiry_items = await PurchaseInquiryItem.filter(
+            tenant_id=tenant_id, id__in=[int(v) for v in inquiry_item_ids]
+        ).all()
+        if not inquiry_items:
+            return
+
+        po_by_inquiry_item_id: Dict[int, Any] = {}
+        for po_item in po_items:
+            src_type = getattr(po_item, "source_type", None) or ""
+            src_id = getattr(po_item, "source_id", None)
+            if src_type == "PurchaseInquiry" and src_id is not None:
+                po_by_inquiry_item_id[int(src_id)] = po_item
+
+        inquiry_ids = sorted({int(i.inquiry_id) for i in inquiry_items})
+        inquiries = await PurchaseInquiry.filter(
+            tenant_id=tenant_id,
+            id__in=inquiry_ids,
+            deleted_at__isnull=True,
+        ).all()
+        inq_by_id = {int(r.id): r for r in inquiries}
+
+        from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+        from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+
+        rel_svc = DocumentRelationNewService()
+        relations_created: set[int] = set()
+
+        for item in inquiry_items:
+            if item.id is None:
+                continue
+            po_item = po_by_inquiry_item_id.get(int(item.id))
+            po_item_id = getattr(po_item, "id", None) if po_item else None
+            await item.update_from_dict({
+                "purchase_order_id": purchase_order_id,
+                "purchase_order_item_id": po_item_id,
+            }).save()
+            if item.source_requisition_item_id:
+                pr_item = await PurchaseRequisitionItem.get_or_none(
+                    tenant_id=tenant_id, id=item.source_requisition_item_id
+                )
+                if pr_item and not pr_item.purchase_order_id:
+                    await pr_item.update_from_dict({
+                        "purchase_order_id": purchase_order_id,
+                        "purchase_order_item_id": po_item_id,
+                        "supplier_id": item.awarded_supplier_id,
+                    }).save()
+            iid = int(item.inquiry_id)
+            if iid in relations_created:
+                continue
+            inquiry = inq_by_id.get(iid)
+            if not inquiry:
+                continue
+            try:
+                await rel_svc.create_relation(
+                    tenant_id=tenant_id,
+                    relation_data=DocumentRelationCreate(
+                        source_type="purchase_inquiry",
+                        source_id=iid,
+                        source_code=inquiry.inquiry_code,
+                        source_name=inquiry.inquiry_name or inquiry.inquiry_code,
+                        target_type="purchase_order",
+                        target_id=purchase_order_id,
+                        target_code=purchase_order_code,
+                        target_name=purchase_order_code,
+                        relation_type="source",
+                        relation_mode="push",
+                        relation_desc="询价单转采购订单",
+                    ),
+                    created_by=created_by,
+                )
+                relations_created.add(iid)
+            except Exception as e:
+                logger.warning("创建询价单→采购订单 单据关联失败: %s", e)
+
+        await self._refresh_inquiry_statuses_after_po_links(
+            tenant_id, inquiry_ids, inq_by_id, created_by
+        )
+
+    async def _execute_inquiry_po_plans(
+        self,
+        tenant_id: int,
+        plans: List["_InquiryPoPlan"],
+        created_by: int,
+    ) -> List[Dict[str, Any]]:
+        push_mode = await BusinessConfigService().get_push_default_mode(tenant_id)
+        push_as_confirm = push_mode == "confirm"
+        purchase_orders_out: List[Dict[str, Any]] = []
+
+        for plan in plans:
             po = await self.purchase_service.create_purchase_order(
-                tenant_id=tenant_id, order_data=po_data, created_by=created_by
+                tenant_id=tenant_id, order_data=plan.po_create, created_by=created_by
             )
             if push_as_confirm:
                 try:
@@ -1678,70 +1760,75 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
                         po.id,
                         e,
                     )
+            from apps.kuaizhizao.models import PurchaseOrderItem
 
-            for i, (item, _) in enumerate(items_converted):
-                po_item = po.items[i] if i < len(po.items) else None
-                po_item_id = getattr(po_item, "id", None) if po_item else None
-                await item.update_from_dict({
-                    "purchase_order_id": po.id,
-                    "purchase_order_item_id": po_item_id,
-                }).save()
-                if item.source_requisition_item_id:
-                    pr_item = await PurchaseRequisitionItem.get_or_none(
-                        tenant_id=tenant_id, id=item.source_requisition_item_id
-                    )
-                    if pr_item and not pr_item.purchase_order_id:
-                        await pr_item.update_from_dict({
-                            "purchase_order_id": po.id,
-                            "purchase_order_item_id": po_item_id,
-                            "supplier_id": supplier_id,
-                        }).save()
-
-            po_code = getattr(po, "order_code", str(po.id))
+            po_items = await PurchaseOrderItem.filter(
+                tenant_id=tenant_id, order_id=int(po.id)
+            ).all()
+            await self.finalize_inquiry_items_after_purchase_order_created(
+                tenant_id=tenant_id,
+                purchase_order_id=int(po.id),
+                purchase_order_code=getattr(po, "order_code", str(po.id)),
+                po_items=po_items,
+                inquiry_item_ids=plan.inquiry_item_ids,
+                created_by=created_by,
+            )
             purchase_orders_out.append({
                 "purchase_order_id": po.id,
-                "purchase_order_code": po_code,
-                "supplier_id": supplier_id,
+                "purchase_order_code": getattr(po, "order_code", str(po.id)),
+                "supplier_id": plan.supplier_id,
             })
-            for iid in source_inq_ids:
-                inquiry = inq_by_id[iid]
-                await rel_svc.create_relation(
-                    tenant_id=tenant_id,
-                    relation_data=DocumentRelationCreate(
-                        source_type="purchase_inquiry",
-                        source_id=iid,
-                        source_code=inquiry.inquiry_code,
-                        source_name=inquiry.inquiry_name or inquiry.inquiry_code,
-                        target_type="purchase_order",
-                        target_id=po.id,
-                        target_code=po_code,
-                        target_name=po_code,
-                        relation_type="source",
-                        relation_mode="push",
-                        relation_desc="询价单转采购订单",
-                    ),
-                    created_by=created_by,
-                )
 
-        if not purchase_orders_out:
-            raise BusinessLogicError("所选明细无法生成采购订单")
+        return purchase_orders_out
 
-        user_info = await self.get_user_info(created_by)
-        for iid in inquiry_ids:
-            remaining = await PurchaseInquiryItem.filter(
-                tenant_id=tenant_id, inquiry_id=iid, purchase_order_id__isnull=True
-            ).count()
-            inquiry = inq_by_id[iid]
-            new_status = (
-                PurchaseInquiryStatus.CONVERTED.value
-                if remaining == 0
-                else PurchaseInquiryStatus.AWARDED.value
-            )
-            await inquiry.update_from_dict({
-                "status": new_status,
-                "updated_by": created_by,
-                "updated_by_name": user_info["name"],
-            }).save()
+    async def convert_to_purchase_order(
+        self,
+        tenant_id: int,
+        inquiry_id: int,
+        data: ConvertInquiryToPORequest,
+        created_by: int,
+    ) -> Dict[str, Any]:
+        inquiry = await PurchaseInquiry.get_or_none(
+            tenant_id=tenant_id, id=inquiry_id, deleted_at__isnull=True
+        )
+        if not inquiry:
+            raise NotFoundError(f"询价单不存在: {inquiry_id}")
+        assert_purchase_inquiry_capability(inquiry, "push_purchase_order")
+
+        qs = PurchaseInquiryItem.filter(
+            tenant_id=tenant_id,
+            inquiry_id=inquiry_id,
+            purchase_order_id__isnull=True,
+            awarded_supplier_id__not_isnull=True,
+        )
+        if data.item_ids:
+            qs = qs.filter(id__in=data.item_ids)
+        items = await qs.all()
+        if not items:
+            raise BusinessLogicError("没有可转单的已定标询价行")
+
+        selected_ids = [int(i.id) for i in items if i.id is not None]
+        plans = await self.plan_purchase_orders_from_inquiry_items(tenant_id, selected_ids)
+        purchase_orders_out = await self._execute_inquiry_po_plans(
+            tenant_id, plans, created_by
+        )
+        return {"purchase_orders": purchase_orders_out, "inquiry_id": inquiry_id}
+
+    async def convert_selected_items_to_purchase_orders(
+        self,
+        tenant_id: int,
+        item_ids: List[int],
+        created_by: int,
+    ) -> Dict[str, Any]:
+        """按询价行 id 转采购订单，可跨多张询价单；同定标供应商合并一张订单。"""
+        selected_ids = [int(v) for v in item_ids if v is not None]
+        if not selected_ids:
+            raise BusinessLogicError("请至少选择一条可下推询价明细")
+
+        plans = await self.plan_purchase_orders_from_inquiry_items(tenant_id, selected_ids)
+        purchase_orders_out = await self._execute_inquiry_po_plans(
+            tenant_id, plans, created_by
+        )
 
         first = purchase_orders_out[0]
         msg = (
