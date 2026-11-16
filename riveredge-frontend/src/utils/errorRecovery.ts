@@ -239,6 +239,11 @@ export function handleNetworkError(error: any): void {
   }
 }
 
+/** 并发 502/503/504（登录后多接口、本地后端重启）只弹一次，避免叠窗 */
+let serverUnavailableModalOpen = false;
+let serverUnavailableModalCooldownUntil = 0;
+const SERVER_UNAVAILABLE_MODAL_COOLDOWN_MS = 8000;
+
 /**
  * 服务器错误恢复
  * 
@@ -251,6 +256,11 @@ export function handleServerError(error: any): void {
   const status = error?.response?.status;
   
   if (status === 502 || status === 503 || status === 504) {
+    const now = Date.now();
+    if (serverUnavailableModalOpen || now < serverUnavailableModalCooldownUntil) {
+      return;
+    }
+    serverUnavailableModalOpen = true;
     getAntdModal().warning({
       title: '服务器暂时不可用',
       content: '服务器正在维护或暂时不可用，请稍后重试。',
@@ -258,6 +268,10 @@ export function handleServerError(error: any): void {
       ...stationConfirmModalProps(),
       onOk: () => {
         window.location.reload();
+      },
+      afterClose: () => {
+        serverUnavailableModalOpen = false;
+        serverUnavailableModalCooldownUntil = Date.now() + SERVER_UNAVAILABLE_MODAL_COOLDOWN_MS;
       },
     });
   } else {

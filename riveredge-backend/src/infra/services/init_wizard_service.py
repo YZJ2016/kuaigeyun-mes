@@ -75,19 +75,20 @@ class InitWizardService:
                 detail="组织不存在"
             )
 
-        # 首次进入初始化向导时，同步已安装应用的菜单到数据库
-        # 用于解决注册后菜单未自动同步的问题（注册时可能因时序等原因未完成）
-        try:
-            from core.services.system.menu_service import MenuService
-            await MenuService.sync_all_menus_from_applications(tenant_id)
-        except Exception as e:
-            logger.warning(f"初始化向导加载时菜单同步失败（不中断流程）: {e}")
-        
         # 构建步骤响应列表，根据 tenant.settings 细粒度判断各步骤完成状态
         settings = tenant.settings or {}
         init_completed = bool(settings.get("init_completed"))
 
+        # 仅未完成初始化时同步菜单 / 补默认设置。
+        # 登录后会调本接口做状态检查：已完成组织若每次全量 sync（含 funide-oa 等大菜单树）
+        # 易超过 RequestTimeoutMiddleware 25s → 504 → 前端「服务器暂时不可用」。
+        # 菜单真源仍在应用启用 / 完成向导时同步，禁止在已完成租户的 GET 状态检查里再 sync。
         if not init_completed:
+            try:
+                from core.services.system.menu_service import MenuService
+                await MenuService.sync_all_menus_from_applications(tenant_id)
+            except Exception as e:
+                logger.warning(f"初始化向导加载时菜单同步失败（不中断流程）: {e}")
             try:
                 await self.apply_default_init_settings(tenant_id)
                 tenant = await Tenant.get_or_none(id=tenant_id)

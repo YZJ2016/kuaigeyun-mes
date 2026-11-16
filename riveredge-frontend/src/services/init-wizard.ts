@@ -114,9 +114,13 @@ export interface InitWizardResponse {
  * @param tenantId - 组织ID
  * @returns 初始化步骤列表响应
  */
-export async function getInitSteps(tenantId: number): Promise<InitStepsResponse> {
+export async function getInitSteps(
+  tenantId: number,
+  options?: { suppressErrorToast?: boolean },
+): Promise<InitStepsResponse> {
   return apiRequest<InitStepsResponse>(`/infra/init/steps?tenant_id=${tenantId}`, {
     method: 'GET',
+    suppressErrorToast: options?.suppressErrorToast,
   });
 }
 

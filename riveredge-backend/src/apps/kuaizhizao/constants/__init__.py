@@ -13,7 +13,8 @@ class DemandStatus(str, Enum):
     COMPLETED = "COMPLETED"
 
 class ReviewStatus(str, Enum):
-    """审核状态"""
+    """审核状态（含未提交的草稿；与单据主状态 status 的 DRAFT 分工）"""
+    DRAFT = "DRAFT"
     PENDING = "PENDING"
     APPROVED = "APPROVED"
     REJECTED = "REJECTED"

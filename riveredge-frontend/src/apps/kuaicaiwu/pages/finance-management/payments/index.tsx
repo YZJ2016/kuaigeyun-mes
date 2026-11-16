@@ -19,6 +19,10 @@ import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { DetailDrawerActions, ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { FinanceVoucherDetailDrawer } from '../shared/FinanceVoucherDetailDrawer';
+import {
+  mapFormPullLinesToApi,
+  validatePaymentPullLinesBeforeSubmit,
+} from '../shared/usePaymentVoucherFormLinePull';
 import { useKuaizhizaoPrintModal } from '../../../../kuaizhizao/hooks/useKuaizhizaoPrintModal';
 import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
 import { downloadRecordsAsXlsx } from '../../../../../utils/exportRecordsXlsx';
@@ -56,6 +60,7 @@ import {
   formatBankAccountOptionLabel,
   BANK_TRANSFER_PAYMENT_METHOD,
   isNotePaymentMethod,
+  isPrepaymentOffsetPaymentMethod,
 } from '../../../utils/financeSharedOptions';
 import {
   LedgerAccountFormFields,
@@ -208,26 +213,41 @@ const PaymentsPage: React.FC = () => {
   };
 
   const handleCreate = async (values: any) => {
-    try {
-      assertBankAccountForPaymentMethod(values.payment_method, values.bank_account_id, t);
-    } catch (e: unknown) {
-      messageApi.warning((e as Error).message);
+    const prepayOffset = isPrepaymentOffsetPaymentMethod(values.payment_method);
+    if (!prepayOffset) {
+      try {
+        assertBankAccountForPaymentMethod(values.payment_method, values.bank_account_id, t);
+      } catch (e: unknown) {
+        messageApi.warning((e as Error).message);
+        return false;
+      }
+    }
+    const pullLineError = validatePaymentPullLinesBeforeSubmit(
+      values.pull_lines,
+      values.total_amount,
+      t,
+    );
+    if (pullLineError) {
+      messageApi.warning(pullLineError);
       return false;
     }
+    const pull_lines = mapFormPullLinesToApi(values.pull_lines);
     const data = {
       supplier_id: values.supplier_id,
       supplier_name: supplierOptions.find(o => o.value === values.supplier_id)?.label || '',
       total_amount: values.total_amount,
       payment_date: formatDateTime(values.payment_date || dayjs(), 'YYYY-MM-DD'),
       payment_method: values.payment_method,
-      bank_account_id: values.bank_account_id,
-      bank_account: resolveFinanceVoucherReferenceNote(
-        bankAccounts,
-        values.payment_method,
-        values.bank_account_id,
-        values.bank_account,
-      ),
-      settlement_type: values.settlement_type || 'normal',
+      bank_account_id: prepayOffset ? undefined : values.bank_account_id,
+      bank_account: prepayOffset
+        ? undefined
+        : resolveFinanceVoucherReferenceNote(
+            bankAccounts,
+            values.payment_method,
+            values.bank_account_id,
+            values.bank_account,
+          ),
+      settlement_type: prepayOffset ? 'normal' : values.settlement_type || 'normal',
       notes: values.notes,
       attachments: normalizeDocumentAttachments(values.attachments),
     };
@@ -483,6 +503,24 @@ const PaymentsPage: React.FC = () => {
       return;
     }
     try {
+      let pullLines = record.pull_lines;
+      if (!pullLines || pullLines.length === 0) {
+        const detail = await paymentService.getPayment(record.id);
+        pullLines = detail.pull_lines;
+      }
+      const pullGateError = validatePaymentPullLinesBeforeSubmit(
+        pullLines?.map((line) => ({
+          sourceType: line.source_type,
+          paymentAmount: line.amount,
+          maxAmount: line.max_amount,
+        })),
+        Number(record.total_amount ?? 0),
+        t,
+      );
+      if (pullGateError) {
+        messageApi.warning(pullGateError);
+        return;
+      }
       await paymentService.confirmPayment(record.id);
       messageApi.success(t(`${P}.confirmSuccess`));
       actionRef.current?.reload();
@@ -546,11 +584,24 @@ const PaymentsPage: React.FC = () => {
 
   const handleUpdate = async (values: any) => {
     if (!editingRecord) return false;
-    try {
-      assertBankAccountForPaymentMethod(values.payment_method, values.bank_account_id, t);
-    } catch (e: unknown) {
-      messageApi.warning((e as Error).message);
+    const prepayOffset = isPrepaymentOffsetPaymentMethod(values.payment_method);
+    if (!prepayOffset) {
+      try {
+        assertBankAccountForPaymentMethod(values.payment_method, values.bank_account_id, t);
+      } catch (e: unknown) {
+        messageApi.warning((e as Error).message);
+        return false;
+      }
+    }
+    const pullLineError = validatePaymentPullLinesBeforeSubmit(
+      values.pull_lines,
+      values.total_amount,
+      t,
+    );
+    if (pullLineError) {
+      messageApi.warning(pullLineError);
       return false;
+      }
     }
     try {
       await paymentService.updatePayment(editingRecord.id, {
@@ -559,14 +610,16 @@ const PaymentsPage: React.FC = () => {
         total_amount: values.total_amount,
         payment_date: formatDateTime(values.payment_date || dayjs(), 'YYYY-MM-DD'),
         payment_method: values.payment_method,
-        bank_account_id: values.bank_account_id,
-        bank_account: resolveFinanceVoucherReferenceNote(
-          bankAccounts,
-          values.payment_method,
-          values.bank_account_id,
-          values.bank_account,
-        ),
-        settlement_type: values.settlement_type || 'normal',
+        bank_account_id: prepayOffset ? undefined : values.bank_account_id,
+        bank_account: prepayOffset
+          ? undefined
+          : resolveFinanceVoucherReferenceNote(
+              bankAccounts,
+              values.payment_method,
+              values.bank_account_id,
+              values.bank_account,
+            ),
+        settlement_type: prepayOffset ? 'normal' : values.settlement_type || 'normal',
         notes: values.notes,
         attachments: normalizeDocumentAttachments(values.attachments),
       });

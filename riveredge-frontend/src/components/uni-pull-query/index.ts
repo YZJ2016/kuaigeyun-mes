@@ -27,6 +27,13 @@ export {
   pagePullCandidates,
   paginatePullRows,
 } from './pullScope';
+export {
+  composePullRowDisabled,
+  isPullRowBlockedByPartnerLock,
+  resolvePullQueryAnchorPartnerKey,
+  resolvePullQueryPartnerKey,
+} from './pullQuerySameSupplierLock';
+export type { PullQueryPartnerRow } from './pullQuerySameSupplierLock';
 export type {
   UniPullQueryLoadParams,
   UniPullQueryLoadResult,

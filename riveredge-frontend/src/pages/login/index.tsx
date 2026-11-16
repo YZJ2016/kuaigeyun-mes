@@ -296,7 +296,8 @@ export default function LoginPage() {
       void (async () => {
         try {
           const { getInitSteps } = await import('../../services/init-wizard');
-          const stepsRes = await getInitSteps(tenantId);
+          // 后台状态检查：失败不弹「服务器暂时不可用」（apiRequest 在 throw 前会 toast）
+          const stepsRes = await getInitSteps(tenantId, { suppressErrorToast: true });
           if (stepsRes.init_completed === false) {
             navigate('/init/wizard', { replace: true });
           }

@@ -417,7 +417,7 @@ async def create_sales_invoice(
                         bank_account=concurrent.bank_account,
                         receipt_date=concurrent.voucher_date,
                         notes=concurrent.notes
-                        or f"销项发票 {invoice.invoice_code} 开票同时收款",
+                        or f"销售发票 {invoice.invoice_code} 开票同时收款",
                         current_user=current_user,
                     )
             elif not (pull_preview and str(data.source_type or "").strip() == "receivable"):

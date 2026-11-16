@@ -44,6 +44,142 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'payment-application-pull-multi-supplier-r01',
+    date: '2026-11-05',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.payment-application-pull-multi-supplier-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.payment-application-pull-multi-supplier-r01.description',
+  },
+  {
+    id: 'purchase-receipt-confirm-skip-iqc-r01',
+    date: '2026-11-05',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-receipt-confirm-skip-iqc-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-receipt-confirm-skip-iqc-r01.description',
+  },
+  {
+    id: 'purchase-receipt-po-pull-compose-r01',
+    date: '2026-11-05',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-receipt-po-pull-compose-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-receipt-po-pull-compose-r01.description',
+  },
+  {
+    id: 'purchase-invoice-pull-create-nested-tx-r01',
+    date: '2026-11-05',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-invoice-pull-create-nested-tx-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-invoice-pull-create-nested-tx-r01.description',
+  },
+  {
+    id: 'po-receipt-compose-payable-r01',
+    date: '2026-11-05',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.po-receipt-compose-payable-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.po-receipt-compose-payable-r01.description',
+  },
+  {
+    id: 'payment-form-pull-line-labels-r01',
+    date: '2026-11-05',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.payment-form-pull-line-labels-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.payment-form-pull-line-labels-r01.description',
+  },
+  {
+    id: 'payment-prepayment-offset-contract-r01',
+    date: '2026-11-05',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.payment-prepayment-offset-contract-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.payment-prepayment-offset-contract-r01.description',
+  },
+  {
+    id: 'payment-prepayment-po-pull-lines-r01',
+    date: '2026-11-05',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.payment-prepayment-po-pull-lines-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.payment-prepayment-po-pull-lines-r01.description',
+  },
+  {
+    id: 'purchase-order-save-submit-race-r01',
+    date: '2026-11-05',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-order-save-submit-race-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-order-save-submit-race-r01.description',
+  },
+  {
+    id: 'uni-input-number-relaxed-precision-r01',
+    date: '2026-11-05',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.uni-input-number-relaxed-precision-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.uni-input-number-relaxed-precision-r01.description',
+  },
+  {
+    id: 'purchase-invoice-pull-receipt-line-gross-r01',
+    date: '2026-11-05',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-invoice-pull-receipt-line-gross-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-invoice-pull-receipt-line-gross-r01.description',
+  },
+  {
+    id: 'sales-invoice-wording-unify-r01',
+    date: '2026-11-05',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-invoice-wording-unify-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-invoice-wording-unify-r01.description',
+  },
+  {
+    id: 'purchase-invoice-wording-unify-r01',
+    date: '2026-11-05',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-invoice-wording-unify-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-invoice-wording-unify-r01.description',
+  },
+  {
+    id: 'purchase-invoice-pull-receipt-gross-amount-r01',
+    date: '2026-11-05',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-invoice-pull-receipt-gross-amount-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-invoice-pull-receipt-gross-amount-r01.description',
+  },
+  {
+    id: 'purchase-receipt-po-compose-before-post-r01',
+    date: '2026-11-05',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-receipt-po-compose-before-post-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-receipt-po-compose-before-post-r01.description',
+  },
+  {
+    id: 'sales-outbound-edit-deliverer-revert-r01',
+    date: '2026-11-05',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-outbound-edit-deliverer-revert-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.sales-outbound-edit-deliverer-revert-r01.description',
+  },
+  {
+    id: 'init-steps-skip-menu-sync-when-done-r01',
+    date: '2026-11-05',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.init-steps-skip-menu-sync-when-done-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.init-steps-skip-menu-sync-when-done-r01.description',
+  },
+  {
     id: 'purchase-requisition-save-draft-button-r01',
     date: '2026-11-05',
     type: 'improvement',

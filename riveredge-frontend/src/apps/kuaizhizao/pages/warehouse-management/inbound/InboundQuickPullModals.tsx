@@ -1,4 +1,4 @@
-import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import React, { forwardRef, useCallback, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { App, Select } from 'antd';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
@@ -7,7 +7,6 @@ import {
   PULL_SOURCE_REFERENCE,
   isPullableScope,
   loadPullSourceReferenceOptions,
-  loadPullWarehouseReferenceOptions,
   renderPullCapabilityTag,
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
@@ -24,16 +23,15 @@ import {
 } from '../../../services/warehouse-execution';
 import { qualityApi } from '../../../services/quality-execution';
 import { type InboundOutsourcePullType } from './inboundCreateConfig';
+import type { PurchaseReceiptPoComposePayload } from './inboundPullEntryTypes';
 import { resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { qualityInspectionCapabilityReasonMessage } from '../../../../../hooks/useDocumentCapabilities';
 
 const INBOUND_HOST_RESOURCE = 'kuaizhizao:inbound';
 
-export type {
-  InboundPullDirectConfirmTarget,
-  PurchaseReceiptEntryHandoff,
-} from './inboundPullEntryTypes';
+export type { InboundPullDirectConfirmTarget, PurchaseReceiptEntryHandoff } from './inboundPullEntryTypes';
+export type { PurchaseReceiptPoComposePayload } from './inboundPullEntryTypes';
 
 export type InboundQuickPullKey =
   | 'purchase_order'
@@ -48,6 +46,24 @@ export type InboundQuickPullKey =
 export type InboundQuickPullModalsRef = {
   open: (key: InboundQuickPullKey) => void;
 };
+
+export type InboundQuickPullSuccess = {
+  /** 取单已建草稿后直接打开采购入库编辑弹窗（收货通知等仍走此路径） */
+  editPurchaseReceiptId?: number;
+  /** 采购订单取单：先打开编辑弹窗，保存时再建单 */
+  purchaseReceiptPoCompose?: PurchaseReceiptPoComposePayload;
+};
+
+function firstPulledPurchaseReceiptId(res: {
+  receipt_id?: number;
+  receipts?: Array<{ receipt_id?: number }>;
+}): number | undefined {
+  const fromHead = Number(res.receipt_id);
+  if (Number.isFinite(fromHead) && fromHead > 0) return fromHead;
+  const fromList = Number(res.receipts?.[0]?.receipt_id);
+  if (Number.isFinite(fromList) && fromList > 0) return fromList;
+  return undefined;
+}
 
 type PullReceiptNoticeCandidate = PurchaseReceiptNoticePullLine;
 type PullSalesOrderCandidate = SalesReturnOrderPullLine;
@@ -114,10 +130,6 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
     );
 
     const [outsourcePullType, setOutsourcePullType] = useState<InboundOutsourcePullType>('outsource_receipt');
-    const [poPullWarehouseOptions, setPoPullWarehouseOptions] = useState<Array<{ label: string; value: number }>>([]);
-    const [poPullLineWh, setPoPullLineWh] = useState<Record<number, number>>({});
-    const [poPullBatchWarehouseId, setPoPullBatchWarehouseId] = useState<number | undefined>();
-
     const outsourcePullTypeRef = useRef<InboundOutsourcePullType>('outsource_receipt');
     const pullSourceOrderIdRef = useRef<number | undefined>(undefined);
     const pullSourceNoticeIdRef = useRef<number | undefined>(undefined);
@@ -159,8 +171,6 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
       onOpen: () => {
         pullSourceOrderIdRef.current = undefined;
         setPullSourceOrderId(undefined);
-        setPoPullLineWh({});
-        setPoPullBatchWarehouseId(undefined);
         void loadPullSourceReferenceOptions({
           resource: PULL_SOURCE_REFERENCE.purchaseOrder,
           hostResource: INBOUND_HOST_RESOURCE,
@@ -169,12 +179,6 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
           .catch((error: unknown) => {
             messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.warehouseInbound.pull.po.loadSourceFailed')));
             setPullSourceOrderOptions([]);
-          });
-        void loadPullWarehouseReferenceOptions(INBOUND_HOST_RESOURCE)
-          .then(setPoPullWarehouseOptions)
-          .catch((error: unknown) => {
-            messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.warehouseInbound.pull.po.loadWarehouseFailed')));
-            setPoPullWarehouseOptions([]);
           });
       },
       loadData: async ({ keyword, page, pageSize, scope }) => {
@@ -195,101 +199,43 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
       isRowDisabled: (record) => !isPullLineSelectable(record),
       onConfirm: async (_keys, rows) => {
         const selectedRows = rows.filter((row) => isPullLineSelectable(row));
-        const selectedIds = selectedRows.map((row) => Number(row.id)).filter((id) => id > 0);
-        if (!selectedIds.length) {
+        if (!selectedRows.length) {
           messageApi.warning(t('app.kuaizhizao.warehouseInbound.pull.po.selectLinesFirst'));
           return;
         }
-        const lineWarehouses: Record<number, number> = {};
-        for (const row of selectedRows) {
-          const id = Number(row.id);
-          const wh = poPullLineWh[id] ?? (row.warehouse_id != null && Number(row.warehouse_id) > 0
-            ? Number(row.warehouse_id)
-            : undefined);
-          if (wh == null || !(wh > 0)) {
-            messageApi.error(
-              t('app.kuaizhizao.warehouseInbound.msg.selectWarehouseForMaterial', {
-                material: row.material_code || row.material_name || '-',
-              }),
-            );
-            return;
-          }
-          lineWarehouses[id] = wh;
-        }
-        try {
-          const res = await warehouseApi.purchaseReceipt.pullFromPurchaseOrderItems(selectedIds, {
-            lineWarehouses,
-          });
-          messageApi.success(
-            res.message ||
-              t('app.kuaizhizao.shipmentNotice.createFromSourceSuccess', {
-                source: pullFromPurchaseOrderAction.sourceLabel,
-                target: pullFromPurchaseOrderAction.targetLabel,
-              }),
-          );
-          pullFromPurchaseOrderQuery.closeModal();
-          onSuccess();
-        } catch (error: unknown) {
-          messageApi.error(
-            getApiErrorMessage(
-              error,
-              t('app.kuaizhizao.shipmentNotice.createFromSourceFailed', {
-                source: pullFromPurchaseOrderAction.sourceLabel,
-                target: pullFromPurchaseOrderAction.targetLabel,
-              }),
-            ),
-          );
-        }
-      },
-    });
-
-    useEffect(() => {
-      if (!pullFromPurchaseOrderQuery.open) return;
-      const rows = pullFromPurchaseOrderQuery.dataSource;
-      if (!rows.length) return;
-      setPoPullLineWh((prev) => {
-        let changed = false;
-        const next = { ...prev };
-        for (const row of rows) {
-          const id = Number(row.id);
-          if (!(id > 0) || next[id] != null) continue;
-          const suggested = Number(row.warehouse_id);
-          if (Number.isFinite(suggested) && suggested > 0) {
-            next[id] = suggested;
-            changed = true;
-          }
-        }
-        return changed ? next : prev;
-      });
-    }, [pullFromPurchaseOrderQuery.open, pullFromPurchaseOrderQuery.dataSource]);
-
-    const applyPoPullBatchWarehouse = useCallback(
-      (warehouseId: number) => {
-        setPoPullBatchWarehouseId(warehouseId);
-        const targetIds =
-          pullFromPurchaseOrderQuery.selectedRowKeys.length > 0
-            ? pullFromPurchaseOrderQuery.selectedRowKeys.map((k) => Number(k)).filter((id) => id > 0)
-            : pullFromPurchaseOrderQuery.dataSource.map((row) => Number(row.id)).filter((id) => id > 0);
-        if (!targetIds.length) {
-          messageApi.warning(t('app.kuaizhizao.warehouseInbound.pull.po.batchWarehouseNoLines'));
+        const orderIds = new Set(
+          selectedRows.map((row) => Number(row.order_id)).filter((id) => id > 0),
+        );
+        if (orderIds.size !== 1) {
+          messageApi.warning(t('app.kuaizhizao.warehouseInbound.pull.po.selectOnlyOne'));
           return;
         }
-        setPoPullLineWh((prev) => {
-          const next = { ...prev };
-          for (const id of targetIds) next[id] = warehouseId;
-          return next;
+        const purchaseOrderId = Number(selectedRows[0].order_id);
+        const quantities: Record<number, number> = {};
+        for (const row of selectedRows) {
+          const lineId = Number(row.id);
+          if (!(lineId > 0)) continue;
+          const qty = Number(row.remaining_quantity ?? row.suggested_quantity ?? 0);
+          if (qty > 0) quantities[lineId] = qty;
+        }
+        if (!Object.keys(quantities).length) {
+          messageApi.warning(t('app.kuaizhizao.warehouseInbound.pull.po.selectLinesFirst'));
+          return;
+        }
+        pullFromPurchaseOrderQuery.closeModal();
+        onSuccess({
+          purchaseReceiptPoCompose: {
+            purchaseOrderId,
+            quantities,
+            batchNumbers: {},
+            lineWh: {},
+            lineLoc: {},
+            lineLocCode: {},
+            lineSerials: {},
+          },
         });
-        messageApi.success(
-          t('app.kuaizhizao.warehouseInbound.msg.batchWarehouseApplied', { count: targetIds.length }),
-        );
       },
-      [
-        messageApi,
-        pullFromPurchaseOrderQuery.dataSource,
-        pullFromPurchaseOrderQuery.selectedRowKeys,
-        t,
-      ],
-    );
+    });
 
     const pullFromReceiptNoticeQuery = useUniPullQuery<PullReceiptNoticeCandidate>({
       rowKey: 'id',
@@ -863,27 +809,6 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
           ),
         },
         {
-          title: t('app.kuaizhizao.warehouseInbound.col.warehouse'),
-          key: 'warehouse',
-          width: 150,
-          render: (_: unknown, record: PullPurchaseOrderCandidate) => (
-            <Select
-              style={{ width: '100%', minWidth: 118 }}
-              size="small"
-              showSearch
-              optionFilterProp="label"
-              placeholder={t('app.kuaizhizao.warehouseInbound.field.select')}
-              value={poPullLineWh[record.id]}
-              options={poPullWarehouseOptions}
-              onChange={(value) => {
-                const nextId = Number(value);
-                if (!(Number.isFinite(nextId) && nextId > 0)) return;
-                setPoPullLineWh((prev) => ({ ...prev, [record.id]: nextId }));
-              }}
-            />
-          ),
-        },
-        {
           title: t('common.quantity'),
           dataIndex: 'suggested_quantity',
           width: 88,
@@ -918,7 +843,7 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
             ),
         },
       ],
-      [poPullLineWh, poPullWarehouseOptions, t],
+      [t],
     );
 
     const receiptNoticePullColumns = useMemo(
@@ -1337,44 +1262,23 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
           appliedKeyword={pullFromPurchaseOrderQuery.appliedKeyword}
           searchPlaceholder={t('app.kuaizhizao.warehouseInbound.pull.po.searchPlaceholder')}
           filterExtra={(
-            <>
-              <Select
-                allowClear
-                showSearch
-                optionFilterProp="label"
-                placeholder={t('app.kuaizhizao.warehouseInbound.pull.po.sourceDocPlaceholder')}
-                style={{ width: 200, flexShrink: 0 }}
-                value={pullSourceOrderId}
-                options={pullSourceOrderOptions}
-                onChange={(value) => {
-                  const nextId = Number(value);
-                  const next = Number.isFinite(nextId) && nextId > 0 ? nextId : undefined;
-                  pullSourceOrderIdRef.current = next;
-                  setPullSourceOrderId(next);
-                  pullFromPurchaseOrderQuery.handleSelectedRowKeysChange([], []);
-                  pullFromPurchaseOrderQuery.handleSearchApply(pullFromPurchaseOrderQuery.appliedKeyword);
-                }}
-              />
-              <Select
-                allowClear
-                showSearch
-                optionFilterProp="label"
-                placeholder={t('app.kuaizhizao.warehouseInbound.pull.po.batchWarehousePlaceholder')}
-                style={{ width: 180, flexShrink: 0 }}
-                value={poPullBatchWarehouseId}
-                options={poPullWarehouseOptions}
-                onChange={(value) => {
-                  if (value == null) {
-                    setPoPullBatchWarehouseId(undefined);
-                    return;
-                  }
-                  const nextId = Number(value);
-                  if (Number.isFinite(nextId) && nextId > 0) {
-                    applyPoPullBatchWarehouse(nextId);
-                  }
-                }}
-              />
-            </>
+            <Select
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              placeholder={t('app.kuaizhizao.warehouseInbound.pull.po.sourceDocPlaceholder')}
+              style={{ width: 200, flexShrink: 0 }}
+              value={pullSourceOrderId}
+              options={pullSourceOrderOptions}
+              onChange={(value) => {
+                const nextId = Number(value);
+                const next = Number.isFinite(nextId) && nextId > 0 ? nextId : undefined;
+                pullSourceOrderIdRef.current = next;
+                setPullSourceOrderId(next);
+                pullFromPurchaseOrderQuery.handleSelectedRowKeysChange([], []);
+                pullFromPurchaseOrderQuery.handleSearchApply(pullFromPurchaseOrderQuery.appliedKeyword);
+              }}
+            />
           )}
           getRowLabel={(row) => [row.order_code, row.material_code].filter(Boolean).join(' ')}
           page={pullFromPurchaseOrderQuery.page}
@@ -1384,8 +1288,8 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
           scopeOptions={pullFromPurchaseOrderQuery.scopeOptions}
           scope={pullFromPurchaseOrderQuery.scope}
           onScopeChange={pullFromPurchaseOrderQuery.handleScopeChange}
-          okText={t('app.kuaizhizao.warehouseInbound.pull.po.ok')}
-          footerHint={t('app.kuaizhizao.warehouseInbound.pull.po.warehouseHint')}
+          okText={t('app.kuaizhizao.warehouseInbound.pull.po.continueToEdit')}
+          footerHint={t('app.kuaizhizao.warehouseInbound.pull.po.composeHint')}
         />
 
 

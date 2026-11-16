@@ -37,3 +37,14 @@ def is_outsource_return_offset_payable(source_type: str | None) -> bool:
 def is_outsource_settlement_credit_payable(source_type: str | None) -> bool:
     """委外结算审核生成的红字差额应付。"""
     return str(source_type or "").strip() == PAYABLE_SOURCE_OUTSOURCE_SETTLEMENT_CREDIT
+
+
+def is_payable_red_total_source(source_type: str | None) -> bool:
+    """应付总额允许为负的来源（红字/冲减/降价调价）。"""
+    st = str(source_type or "").strip()
+    return (
+        is_purchase_return_offset_payable(st)
+        or is_outsource_return_offset_payable(st)
+        or is_outsource_settlement_credit_payable(st)
+        or st == PAYABLE_SOURCE_PRICE_SETTLEMENT
+    )

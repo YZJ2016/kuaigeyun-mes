@@ -258,7 +258,7 @@ export function useInboundReceiverSelect() {
       }
       if (typeof optsOrUuid === 'string') {
         const fromToken = parseUidToken(optsOrUuid);
-        const name = nameArg !== undefined ? nameArg : receiverName;
+        const name = nameArg !== undefined ? nameArg : '';
         if (fromToken != null) {
           applyUser(fromToken, name || String(fromToken), optsOrUuid);
           return;
@@ -274,18 +274,21 @@ export function useInboundReceiverSelect() {
         applyCurrentUserAsReceiver();
         return;
       }
-      const id =
-        hasId
-          ? Number(optsOrUuid.id)
-          : parseUidToken(optsOrUuid.uuid) ?? receiverId;
-      const name = hasName ? String(optsOrUuid.name ?? '').trim() : receiverName;
+      const id = hasId
+        ? Number(optsOrUuid.id)
+        : parseUidToken(optsOrUuid.uuid) ?? undefined;
+      const name = hasName
+        ? String(optsOrUuid.name ?? '').trim()
+        : nameArg !== undefined
+          ? String(nameArg).trim()
+          : '';
       applyUser(
         id != null && id > 0 ? id : undefined,
         name,
         optsOrUuid.uuid || (id != null && id > 0 ? `__uid:${id}` : undefined),
       );
     },
-    [applyCurrentUserAsReceiver, applyUser, receiverId, receiverName],
+    [applyCurrentUserAsReceiver, applyUser],
   );
 
   return {

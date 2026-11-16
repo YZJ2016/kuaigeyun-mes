@@ -241,6 +241,9 @@ import {
   ReviewStatusEnum,
   isDraftStatus,
   isAuditedStatus,
+  isPendingReviewStatus,
+  isRejectedStatus,
+  isConfirmedStatus,
 } from '../../../constants/documentStatus';
 import { getPurchaseOrderLifecycle, buildPurchaseOrderLifecycleValueEnum, resolvePurchaseOrderListApiParams, isPurchaseOrderDeliveryOverdue } from '../../../utils/purchaseOrderLifecycle';
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
@@ -727,6 +730,8 @@ const PurchaseOrdersPage: React.FC = () => {
   } = useCustomFieldsForList<PurchaseOrder>({ tableName: PURCHASE_ORDER_CUSTOM_FIELD_TABLE });
   /** 标记是否在保存后自动提交（草稿转正式） */
   const submitAfterSaveRef = useRef(false);
+  const purchaseOrderFormSubmitLockRef = useRef(false);
+  const [purchaseOrderFormSubmitting, setPurchaseOrderFormSubmitting] = useState(false);
 
   // Drawer 相关状态
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
@@ -3235,7 +3240,98 @@ const PurchaseOrdersPage: React.FC = () => {
   });
 
   // 处理表单提交（创建/更新）
+  const purchaseOrderStatusAlreadySubmitted = (status: string | undefined) =>
+    isPendingReviewStatus(status) || isAuditedStatus(status) || isConfirmedStatus(status);
+
+  const runPurchaseOrderSubmitAfterSave = async (orderId: number, isEditMode: boolean) => {
+    const fresh = await getPurchaseOrder(orderId);
+    const canSubmitNow =
+      isDraftStatus(fresh.status) || isRejectedStatus(fresh.status);
+    if (!canSubmitNow) {
+      if (purchaseOrderStatusAlreadySubmitted(fresh.status)) {
+        const st = fresh.status;
+        if (isAuditedStatus(st) || isConfirmedStatus(st)) {
+          messageApi.success(
+            isEditMode
+              ? t('app.kuaizhizao.purchaseOrder.saveSubmitAutoApproved')
+              : t('app.kuaizhizao.purchaseOrder.createSubmitAutoApproved'),
+          );
+        } else {
+          messageApi.success(
+            isEditMode
+              ? t('app.kuaizhizao.purchaseOrder.saveSubmitPending')
+              : t('app.kuaizhizao.purchaseOrder.createSubmitPending'),
+          );
+        }
+        setCurrentOrder(fresh);
+        return;
+      }
+      messageApi.warning(
+        t('app.kuaizhizao.purchaseOrder.saveSubmitFailed', {
+          message: t('app.kuaizhizao.purchaseOrder.submitNotDraft'),
+        }),
+      );
+      setCurrentOrder(fresh);
+      return;
+    }
+    try {
+      const afterSubmit = await submitPurchaseOrder(orderId);
+      const st = (afterSubmit as PurchaseOrder | undefined)?.status;
+      setCurrentOrder(afterSubmit as PurchaseOrder);
+      if (isAuditedStatus(st)) {
+        messageApi.success(
+          isEditMode
+            ? t('app.kuaizhizao.purchaseOrder.saveSubmitAutoApproved')
+            : t('app.kuaizhizao.purchaseOrder.createSubmitAutoApproved'),
+        );
+      } else {
+        messageApi.success(
+          isEditMode
+            ? t('app.kuaizhizao.purchaseOrder.saveSubmitPending')
+            : t('app.kuaizhizao.purchaseOrder.createSubmitPending'),
+        );
+      }
+    } catch (submitErr: unknown) {
+      const submitMessage =
+        submitErr instanceof Error
+          ? submitErr.message
+          : String((submitErr as { message?: string })?.message || '');
+      const retryFresh = await getPurchaseOrder(orderId);
+      setCurrentOrder(retryFresh);
+      if (
+        submitMessage.includes(t('app.kuaizhizao.purchaseOrder.submitNotDraft'))
+        && purchaseOrderStatusAlreadySubmitted(retryFresh.status)
+      ) {
+        const st = retryFresh.status;
+        if (isAuditedStatus(st) || isConfirmedStatus(st)) {
+          messageApi.success(
+            isEditMode
+              ? t('app.kuaizhizao.purchaseOrder.saveSubmitAutoApproved')
+              : t('app.kuaizhizao.purchaseOrder.createSubmitAutoApproved'),
+          );
+        } else {
+          messageApi.success(
+            isEditMode
+              ? t('app.kuaizhizao.purchaseOrder.saveSubmitPending')
+              : t('app.kuaizhizao.purchaseOrder.createSubmitPending'),
+          );
+        }
+        return;
+      }
+      messageApi.warning(
+        t('app.kuaizhizao.purchaseOrder.saveSubmitFailed', {
+          message: submitMessage || t('common.operationFailed'),
+        }),
+      );
+    }
+  };
+
   const handleFormSubmit = async (values: any): Promise<void> => {
+    if (purchaseOrderFormSubmitLockRef.current) {
+      return;
+    }
+    purchaseOrderFormSubmitLockRef.current = true;
+    setPurchaseOrderFormSubmitting(true);
     try {
       const { customData, standardValues } = extractPurchaseOrderFormValues(values);
       Object.keys(values).forEach((key) => {
@@ -3430,17 +3526,7 @@ const PurchaseOrdersPage: React.FC = () => {
       }
 
       if (submitAfterSaveRef.current && orderId) {
-        try {
-          const afterSubmit = await submitPurchaseOrder(orderId);
-          const st = (afterSubmit as PurchaseOrder | undefined)?.status;
-          if (isAuditedStatus(st)) {
-            messageApi.success(isEdit ? t('app.kuaizhizao.purchaseOrder.saveSubmitAutoApproved') : t('app.kuaizhizao.purchaseOrder.createSubmitAutoApproved'));
-          } else {
-            messageApi.success(isEdit ? t('app.kuaizhizao.purchaseOrder.saveSubmitPending') : t('app.kuaizhizao.purchaseOrder.createSubmitPending'));
-          }
-        } catch (submitErr: any) {
-          messageApi.warning(t('app.kuaizhizao.purchaseOrder.saveSubmitFailed', { message: submitErr?.message || t('common.operationFailed') }));
-        }
+        await runPurchaseOrderSubmitAfterSave(orderId, isEdit);
         submitAfterSaveRef.current = false;
       }
 
@@ -3459,6 +3545,9 @@ const PurchaseOrdersPage: React.FC = () => {
         messageApi.error(error.message || t('common.operationFailed'));
       }
       throw error;
+    } finally {
+      purchaseOrderFormSubmitLockRef.current = false;
+      setPurchaseOrderFormSubmitting(false);
     }
   };
 
@@ -3578,6 +3667,9 @@ const PurchaseOrdersPage: React.FC = () => {
       ];
 
   const triggerPurchaseOrderPrimarySubmit = useCallback(async () => {
+    if (purchaseOrderFormSubmitLockRef.current) {
+      return;
+    }
     try {
       await formRef.current?.validateFields();
       submitAfterSaveRef.current = !!(
@@ -3592,6 +3684,9 @@ const PurchaseOrdersPage: React.FC = () => {
   }, [currentOrder?.status, isCreatePage, isEditPage, messageApi, t]);
 
   const handleSaveDraft = useCallback(async () => {
+    if (purchaseOrderFormSubmitLockRef.current) {
+      return;
+    }
     try {
       await formRef.current?.validateFields();
       submitAfterSaveRef.current = false;
@@ -4482,6 +4577,8 @@ const PurchaseOrdersPage: React.FC = () => {
                 isCreatePage={isCreatePage}
                 canSubmitAfterSave={canSubmitAfterSave}
                 showSaveDraft={canSubmitAfterSave}
+                primaryLoading={purchaseOrderFormSubmitting}
+                saveDraftLoading={purchaseOrderFormSubmitting}
               />
               {isCreatePage && kuaiaiAvailable ? (
                 <PurchaseOrderAiCreateTrigger formRef={formRef} />

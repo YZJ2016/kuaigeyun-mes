@@ -502,14 +502,14 @@ class SalesInvoiceService(AppBaseService[Invoice]):
             "source_id": order_id,
             "source_code": code,
             "summary": (
-                f"将从销售订单 {code} 创建销项发票（可开票 ¥{pushable:,.2f}）"
+                f"将从销售订单 {code} 创建销售发票（可开票 ¥{pushable:,.2f}）"
                 if preview_items and allowed
-                else f"销售订单 {code} 当前不可加载销项发票"
+                else f"销售订单 {code} 当前不可加载销售发票"
             ),
             "items": preview_items,
             "has_blocking_issues": not allowed,
             "blocking_reason": reason,
-            "tip": "价税合计不可超过可开票金额；删除未审核销项发票后，可开票金额自动回退。",
+            "tip": "价税合计不可超过可开票金额；删除未审核销售发票后，可开票金额自动回退。",
             "customer_id": order.customer_id,
             "customer_name": order.customer_name,
             "sales_order_id": order.id,
@@ -561,14 +561,14 @@ class SalesInvoiceService(AppBaseService[Invoice]):
             "source_id": delivery_id,
             "source_code": code,
             "summary": (
-                f"将从销售出库单 {code} 创建销项发票（可开票 ¥{pushable:,.2f}）"
+                f"将从销售出库单 {code} 创建销售发票（可开票 ¥{pushable:,.2f}）"
                 if preview_items and allowed
-                else f"销售出库单 {code} 当前不可加载销项发票"
+                else f"销售出库单 {code} 当前不可加载销售发票"
             ),
             "items": preview_items,
             "has_blocking_issues": not allowed,
             "blocking_reason": reason,
-            "tip": "价税合计不可超过可开票金额；删除未审核销项发票后，可开票金额自动回退。",
+            "tip": "价税合计不可超过可开票金额；删除未审核销售发票后，可开票金额自动回退。",
             "customer_id": delivery.customer_id,
             "customer_name": delivery.customer_name,
             "sales_order_id": getattr(delivery, "sales_order_id", None),
@@ -605,9 +605,9 @@ class SalesInvoiceService(AppBaseService[Invoice]):
             "source_id": receivable_id,
             "source_code": code,
             "summary": (
-                f"将从应收单 {code} 创建销项发票（可开票 ¥{pushable:,.2f}）"
+                f"将从应收单 {code} 创建销售发票（可开票 ¥{pushable:,.2f}）"
                 if preview_items and allowed
-                else f"应收单 {code} 当前不可加载销项发票"
+                else f"应收单 {code} 当前不可加载销售发票"
             ),
             "items": preview_items,
             "has_blocking_issues": not allowed,
@@ -615,7 +615,7 @@ class SalesInvoiceService(AppBaseService[Invoice]):
             "tip": (
                 "销售退货冲减应收不可从应收开票；请对原蓝字业务开票或申请红字发票。"
                 if reason == "sales_invoice.pull_from_receivable.sales_return_offset"
-                else "价税合计不可超过可开票金额；删除未审核销项发票后，可开票金额自动回退。"
+                else "价税合计不可超过可开票金额；删除未审核销售发票后，可开票金额自动回退。"
             ),
             "customer_id": receivable.customer_id,
             "customer_name": receivable.customer_name,
@@ -845,7 +845,7 @@ class SalesInvoiceService(AppBaseService[Invoice]):
         else:
             raise BusinessLogicError(f"不支持的加载源单类型: {source_type}")
         if preview.get("has_blocking_issues"):
-            reason = preview.get("blocking_reason") or "当前不可加载销项发票"
+            reason = preview.get("blocking_reason") or "当前不可加载销售发票"
             raise BusinessLogicError(reason)
         items = preview.get("items") or []
         if not items:
@@ -890,7 +890,7 @@ class SalesInvoiceService(AppBaseService[Invoice]):
                 target_name=None,
                 relation_type="source",
                 relation_mode="pull",
-                relation_desc="加载创建销项发票",
+                relation_desc="加载创建销售发票",
                 notes=notes,
             ),
             created_by=created_by,

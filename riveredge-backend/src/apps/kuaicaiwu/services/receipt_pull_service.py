@@ -13,7 +13,7 @@ from apps.common.base_service import AppBaseService
 from apps.kuaicaiwu.models.receipt import Receipt
 from apps.kuaicaiwu.models.receivable import Receivable
 from apps.kuaizhizao.models.document_relation import DocumentRelation
-from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
+from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 
 
 class ReceiptPullService(AppBaseService[Receipt]):
@@ -369,6 +369,69 @@ class ReceiptPullService(AppBaseService[Receipt]):
             amount=Decimal(amount),
             operator_id=operator_id,
         )
+
+    @staticmethod
+    def normal_receipt_requires_settlement_source_before_confirm(receipt: Receipt) -> bool:
+        kind = str(getattr(receipt, "settlement_type", "normal") or "normal")
+        if kind in ("prepayment", "refund"):
+            return False
+        unsettled = Decimal(str(getattr(receipt, "unsettled_amount", 0) or 0))
+        settled = Decimal(str(getattr(receipt, "settled_amount", 0) or 0))
+        if unsettled <= 0 and settled > 0:
+            return False
+        return True
+
+    async def assert_normal_receipt_has_settlement_source(
+        self,
+        tenant_id: int,
+        receipt_id: int,
+        *,
+        receipt: Optional[Receipt] = None,
+    ) -> None:
+        row = receipt
+        if row is None:
+            row = await Receipt.get_or_none(
+                tenant_id=tenant_id, id=receipt_id, deleted_at__isnull=True
+            )
+        if not row:
+            raise NotFoundError(f"收款单不存在: {receipt_id}")
+        if not self.normal_receipt_requires_settlement_source_before_confirm(row):
+            return
+
+        has_rel = await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            source_type="receivable",
+            target_type="receipt",
+            target_id=receipt_id,
+        ).exists()
+        if has_rel:
+            return
+
+        raise ValidationError(
+            "货款收款单须从应收单加载创建并关联应收后再确认"
+        )
+
+    async def assert_normal_receipt_fully_settled_after_confirm(
+        self,
+        tenant_id: int,
+        receipt_id: int,
+        *,
+        receipt: Optional[Receipt] = None,
+    ) -> None:
+        row = receipt
+        if row is None:
+            row = await Receipt.get_or_none(
+                tenant_id=tenant_id, id=receipt_id, deleted_at__isnull=True
+            )
+        if not row:
+            raise NotFoundError(f"收款单不存在: {receipt_id}")
+        if not self.normal_receipt_requires_settlement_source_before_confirm(row):
+            return
+        unsettled = Decimal(str(getattr(row, "unsettled_amount", 0) or 0))
+        if unsettled > 0:
+            raise ValidationError(
+                "确认后仍有待核销金额，请检查收款单是否已从应收加载且金额与应收剩余一致"
+            )
 
     async def settle_draft_receipt_if_linked(
         self,

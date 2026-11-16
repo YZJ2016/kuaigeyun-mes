@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 from apps.kuaicaiwu.models.payable import Payable
 from apps.kuaizhizao.models.purchase_order import PurchaseOrder
@@ -29,6 +29,20 @@ class PaymentApplicationPullService:
     def __init__(self) -> None:
         self._apps = PaymentApplicationService()
         self._open = PayableOpenAmountService()
+
+    @staticmethod
+    def _normalize_source_ids(source_ids: Sequence[int]) -> List[int]:
+        seen: set[int] = set()
+        ordered: List[int] = []
+        for raw in source_ids:
+            sid = int(raw)
+            if sid <= 0 or sid in seen:
+                continue
+            seen.add(sid)
+            ordered.append(sid)
+        if not ordered:
+            raise ValidationError("请至少选择一张源单")
+        return ordered
 
     _PREPAY_APP_RESERVE_STATUSES = frozenset(
         {"已批准", "部分付款", "待审核", "已付款", "APPROVED", "AUDITED", "PENDING", "已通过"}
@@ -155,6 +169,71 @@ class PaymentApplicationPullService:
         )
         return await self._apps.create_application(tenant_id, create, created_by)
 
+    async def create_from_purchase_orders(
+        self,
+        tenant_id: int,
+        purchase_order_ids: Sequence[int],
+        created_by: int,
+    ):
+        ids = self._normalize_source_ids(purchase_order_ids)
+        if len(ids) == 1:
+            preview = await self.preview_from_purchase_order(tenant_id, ids[0])
+            if preview.get("has_blocking_issues"):
+                raise BusinessLogicError(preview.get("blocking_reason") or "不可下推付款申请")
+            max_push = Decimal(str(preview.get("max_push_quantity") or 0))
+            return await self.create_from_purchase_order(
+                tenant_id, ids[0], max_push, created_by
+            )
+
+        from apps.kuaizhizao.services.payment_application_line_materials import (
+            lines_from_purchase_order_items,
+        )
+
+        supplier_id: Optional[int] = None
+        supplier_name: Optional[str] = None
+        merged_items: List[PaymentApplicationLineCreate] = []
+
+        for oid in ids:
+            preview = await self.preview_from_purchase_order(tenant_id, oid)
+            if preview.get("has_blocking_issues"):
+                code = str(preview.get("source_code") or oid)
+                reason = preview.get("blocking_reason") or "不可下推付款申请"
+                raise BusinessLogicError(f"采购订单 {code}: {reason}")
+            sid = int(preview.get("supplier_id") or 0)
+            if not sid:
+                raise BusinessLogicError("采购订单未指定供应商")
+            if supplier_id is None:
+                supplier_id = sid
+                supplier_name = str(preview.get("supplier_name") or "")
+            elif sid != supplier_id:
+                raise BusinessLogicError("多笔一起加载须为同一供应商")
+
+            max_push = Decimal(str(preview.get("max_push_quantity") or 0))
+            if max_push <= 0:
+                code = str(preview.get("source_code") or oid)
+                raise BusinessLogicError(f"采购订单 {code} 无可请款额度")
+
+            order = await PurchaseOrder.get(id=oid)
+            merged_items.extend(
+                await lines_from_purchase_order_items(
+                    tenant_id=tenant_id,
+                    order=order,
+                    request_amount=max_push,
+                    line_kind="prepayment",
+                )
+            )
+
+        if not merged_items:
+            raise BusinessLogicError("所选采购订单无可合并的请款明细")
+
+        create = PaymentApplicationCreate(
+            supplier_id=int(supplier_id),
+            supplier_name=str(supplier_name or ""),
+            application_kind="prepayment",
+            items=merged_items,
+        )
+        return await self._apps.create_application(tenant_id, create, created_by)
+
     async def push_payment_application_open_by_receipt_ids(
         self, tenant_id: int, receipt_ids: List[int]
     ) -> Dict[int, bool]:
@@ -205,6 +284,86 @@ class PaymentApplicationPullService:
             raise NotFoundError("应付单不存在")
         return payable
 
+    async def preview_from_purchase_receipt(
+        self,
+        tenant_id: int,
+        purchase_receipt_id: int,
+        amount: Optional[Decimal] = None,
+    ) -> Dict[str, Any]:
+        from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+
+        receipt = await PurchaseReceipt.get_or_none(
+            tenant_id=tenant_id, id=purchase_receipt_id, deleted_at__isnull=True
+        )
+        if not receipt:
+            raise NotFoundError(f"采购入库单不存在: {purchase_receipt_id}")
+
+        code = str(receipt.receipt_code or purchase_receipt_id)
+        try:
+            payable = await self._payable_for_receipt(tenant_id, purchase_receipt_id)
+        except (BusinessLogicError, NotFoundError) as e:
+            return {
+                "target_type": "payment_application",
+                "source_type": "purchase_receipt",
+                "source_id": purchase_receipt_id,
+                "source_code": code,
+                "has_blocking_issues": True,
+                "blocking_reason": str(e),
+                "supplier_id": getattr(receipt, "supplier_id", None),
+                "supplier_name": getattr(receipt, "supplier_name", None),
+                "max_push_quantity": 0.0,
+                "items": [],
+            }
+
+        max_req = await self._open.max_request_for_payable(tenant_id, payable)
+        allowed = max_req > 0
+        req_amount = Decimal(str(amount)) if amount is not None else max_req
+        if req_amount > max_req:
+            raise ValidationError(f"申请金额超过可请款 {max_req}")
+        if req_amount <= 0:
+            allowed = False
+
+        preview_items: List[Dict[str, Any]] = []
+        if allowed:
+            from apps.kuaizhizao.services.payment_application_line_materials import (
+                lines_from_purchase_receipt_items,
+            )
+
+            line_models = await lines_from_purchase_receipt_items(
+                tenant_id=tenant_id,
+                receipt_id=purchase_receipt_id,
+                receipt_code=code,
+                payable=payable,
+                request_amount=req_amount,
+                line_kind="goods",
+                source_type="purchase_receipt",
+            )
+            preview_items = [
+                ln.model_dump(by_alias=True, mode="json") for ln in line_models
+            ]
+
+        return {
+            "target_type": "payment_application",
+            "source_type": "purchase_receipt",
+            "source_id": purchase_receipt_id,
+            "source_code": code,
+            "max_push_quantity": float(max_req),
+            "summary": (
+                f"将按采购入库单 {code} 生成货款类付款申请（可请款 {max_req}）"
+                if allowed
+                else "该入库单当前不可创建付款申请"
+            ),
+            "items": preview_items,
+            "has_blocking_issues": not allowed,
+            "blocking_reason": (
+                "purchase_receipt.push_payment_application.no_open_amount"
+                if max_req <= 0
+                else None
+            ),
+            "supplier_id": payable.supplier_id,
+            "supplier_name": payable.supplier_name,
+        }
+
     async def create_from_purchase_receipt(
         self,
         tenant_id: int,
@@ -212,17 +371,16 @@ class PaymentApplicationPullService:
         amount: Optional[Decimal],
         created_by: int,
     ):
+        preview = await self.preview_from_purchase_receipt(
+            tenant_id, purchase_receipt_id, amount=amount
+        )
+        if preview.get("has_blocking_issues"):
+            raise BusinessLogicError(preview.get("blocking_reason") or "不可下推付款申请")
         payable = await self._payable_for_receipt(tenant_id, purchase_receipt_id)
-        max_req = await self._open.max_request_for_payable(tenant_id, payable)
-        if max_req <= 0:
-            raise BusinessLogicError("该应付单无可请款余额")
-        req_amount = amount if amount is not None else max_req
-        if req_amount > max_req:
-            raise ValidationError(f"申请金额超过可请款 {max_req}")
-        from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
-
-        receipt = await PurchaseReceipt.get_or_none(tenant_id=tenant_id, id=purchase_receipt_id)
-        code = receipt.receipt_code if receipt else str(purchase_receipt_id)
+        items_raw = preview.get("items") or []
+        if not items_raw:
+            raise BusinessLogicError("该入库单无可请款明细")
+        items = [PaymentApplicationLineCreate.model_validate(row) for row in items_raw]
         create = PaymentApplicationCreate(
             supplier_id=int(payable.supplier_id),
             supplier_name=str(payable.supplier_name or ""),
@@ -238,6 +396,51 @@ class PaymentApplicationPullService:
                     request_amount=req_amount,
                 )
             ],
+        )
+        return await self._apps.create_application(tenant_id, create, created_by)
+
+    async def create_from_purchase_receipts(
+        self,
+        tenant_id: int,
+        purchase_receipt_ids: Sequence[int],
+        created_by: int,
+    ):
+        ids = self._normalize_source_ids(purchase_receipt_ids)
+        if len(ids) == 1:
+            return await self.create_from_purchase_receipt(
+                tenant_id, ids[0], None, created_by
+            )
+
+        supplier_id: Optional[int] = None
+        supplier_name: Optional[str] = None
+        merged_items: List[PaymentApplicationLineCreate] = []
+
+        for rid in ids:
+            preview = await self.preview_from_purchase_receipt(tenant_id, rid)
+            if preview.get("has_blocking_issues"):
+                code = str(preview.get("source_code") or rid)
+                reason = preview.get("blocking_reason") or "不可下推付款申请"
+                raise BusinessLogicError(f"采购入库单 {code}: {reason}")
+            sid = int(preview.get("supplier_id") or 0)
+            if not sid:
+                raise BusinessLogicError("入库单未指定供应商")
+            if supplier_id is None:
+                supplier_id = sid
+                supplier_name = str(preview.get("supplier_name") or "")
+            elif sid != supplier_id:
+                raise BusinessLogicError("多笔一起加载须为同一供应商")
+
+            for row in preview.get("items") or []:
+                merged_items.append(PaymentApplicationLineCreate.model_validate(row))
+
+        if not merged_items:
+            raise BusinessLogicError("所选入库单无可合并的请款明细")
+
+        create = PaymentApplicationCreate(
+            supplier_id=int(supplier_id),
+            supplier_name=str(supplier_name or ""),
+            application_kind="goods",
+            items=merged_items,
         )
         return await self._apps.create_application(tenant_id, create, created_by)
 
@@ -342,6 +545,7 @@ class PaymentApplicationPullService:
         limit: int = 20,
         keyword: Optional[str] = None,
         supplier_id: Optional[int] = None,
+        application_kind: Optional[str] = None,
     ) -> Dict[str, Any]:
         from apps.kuaizhizao.models.payment_application import PaymentApplication
 
@@ -353,6 +557,9 @@ class PaymentApplicationPullService:
         )
         if supplier_id:
             query = query.filter(supplier_id=supplier_id)
+        kind = str(application_kind or "").strip()
+        if kind:
+            query = query.filter(application_kind=kind)
         kw = str(keyword or "").strip()
         if kw:
             from tortoise.expressions import Q

@@ -468,6 +468,23 @@ export default defineConfig({
         find: /^@\/(.*)$/,
         replacement: `${srcRootPosix}/$1`,
       },
+      /** 聚焦时不强制 precision，失焦再量化，全站 InputNumber / ProFormDigit 生效 */
+      {
+        find: '@antd-input-number-internal',
+        replacement: resolvePkg('antd/es/input-number/index.js'),
+      },
+      {
+        find: /^antd\/es\/input-number(\/index\.js)?$/,
+        replacement: normalizePath(
+          resolve(__dirname, 'src/components/uni-input-number/patchedAntdInputNumber.tsx'),
+        ),
+      },
+      {
+        find: /^antd\/lib\/input-number$/,
+        replacement: normalizePath(
+          resolve(__dirname, 'src/components/uni-input-number/patchedAntdInputNumber.tsx'),
+        ),
+      },
       { find: 'react/jsx-runtime', replacement: resolvePkg('react/jsx-runtime.js') },
       { find: 'react-dom', replacement: resolvePkg('react-dom') },
       { find: 'react', replacement: resolvePkg('react') },

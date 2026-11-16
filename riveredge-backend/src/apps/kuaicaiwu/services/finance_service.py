@@ -175,7 +175,7 @@ class PayableService(AppBaseService[Payable]):
                 code = await self.generate_code(
                     tenant_id, "PAYABLE_CODE", prefix=f"PY{today_site_str()}"
                 )
-                async with in_transaction():
+                async with reuse_or_begin_transaction():
                     payable = await Payable.create(
                         tenant_id=tenant_id,
                         payable_code=code,
@@ -656,7 +656,7 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
                 tenant_id, "PURCHASE_INVOICE_CODE", prefix=f"PI{today_site_str()}"
             )
         )
-        async with in_transaction():
+        async with reuse_or_begin_transaction():
             from apps.kuaicaiwu.services.finance_tax import resolve_invoice_amounts_for_create
 
             payload = invoice_data.model_dump(

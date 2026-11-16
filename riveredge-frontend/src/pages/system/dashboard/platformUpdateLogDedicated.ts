@@ -9,6 +9,567 @@ import type { PlatformUpdateLogEntry } from './platformUpdateLog';
 
 export const PLATFORM_UPDATE_LOG_DEDICATED: PlatformUpdateLogEntry[] = [
   {
+    id: 'funide-oa-deliverables-menu-rename-r01',
+    date: '2026-11-05',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-deliverables-menu-rename-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-deliverables-menu-rename-r01.description',
+  },
+  {
+    id: 'haoligo-payroll-high-temp-batch-apply-fix-r01',
+    date: '2026-11-05',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey:
+      'pages.dashboard.updateLog.entries.haoligo-payroll-high-temp-batch-apply-fix-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-payroll-high-temp-batch-apply-fix-r01.description',
+  },
+  {
+    id: 'haoligo-payroll-high-temp-manual-col-r01',
+    date: '2026-11-05',
+    type: 'feature',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey: 'pages.dashboard.updateLog.entries.haoligo-payroll-high-temp-manual-col-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-payroll-high-temp-manual-col-r01.description',
+  },
+  {
+    id: 'haoligo-payroll-heat-subsidy-rename-r01',
+    date: '2026-11-05',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey: 'pages.dashboard.updateLog.entries.haoligo-payroll-heat-subsidy-rename-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-payroll-heat-subsidy-rename-r01.description',
+  },
+  {
+    id: 'haoligo-horizontal-injection-output-material-flex-v9',
+    date: '2026-11-05',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey:
+      'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-material-flex-v9.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-material-flex-v9.description',
+  },
+  {
+    id: 'haoligo-payroll-settlement-hide-holiday-col-r01',
+    date: '2026-11-05',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey:
+      'pages.dashboard.updateLog.entries.haoligo-payroll-settlement-hide-holiday-col-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-payroll-settlement-hide-holiday-col-r01.description',
+  },
+  {
+    id: 'haoligo-payroll-settlement-post-allowance-col-r01',
+    date: '2026-11-05',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey:
+      'pages.dashboard.updateLog.entries.haoligo-payroll-settlement-post-allowance-col-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-payroll-settlement-post-allowance-col-r01.description',
+  },
+  {
+    id: 'funide-oa-qms-circulation-tabs-r01',
+    date: '2026-11-02',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-qms-circulation-tabs-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-qms-circulation-tabs-r01.description',
+  },
+  {
+    id: 'funide-oa-qms-system-documents-parity-r01',
+    date: '2026-11-02',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-qms-system-documents-parity-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-qms-system-documents-parity-r01.description',
+  },
+  {
+    id: 'funide-oa-drawing-row-actions-more-r01',
+    date: '2026-11-02',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-drawing-row-actions-more-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-drawing-row-actions-more-r01.description',
+  },
+  {
+    id: 'funide-oa-drawing-dist-loan-in-drawings-r01',
+    date: '2026-11-02',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-drawing-dist-loan-in-drawings-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-drawing-dist-loan-in-drawings-r01.description',
+  },
+  {
+    id: 'funide-oa-change-desk-create-menu-r01',
+    date: '2026-11-02',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-change-desk-create-menu-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-change-desk-create-menu-r01.description',
+  },
+  {
+    id: 'funide-oa-rework-workbench-layout-r01',
+    date: '2026-11-02',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-rework-workbench-layout-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-rework-workbench-layout-r01.description',
+  },
+  {
+    id: 'funide-oa-rework-workbench-type-render-r01',
+    date: '2026-11-02',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-rework-workbench-type-render-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-rework-workbench-type-render-r01.description',
+  },
+  {
+    id: 'funide-oa-doc-control-sop-menu-label-r01',
+    date: '2026-11-02',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-doc-control-sop-menu-label-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-doc-control-sop-menu-label-r01.description',
+  },
+  {
+    id: 'funide-oa-rd-menu-structure-fix-r01',
+    date: '2026-11-02',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-rd-menu-structure-fix-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-rd-menu-structure-fix-r01.description',
+  },
+  {
+    id: 'funide-oa-rd-electronics-group-rename-r01',
+    date: '2026-11-02',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-rd-electronics-group-rename-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-rd-electronics-group-rename-r01.description',
+  },
+  {
+    id: 'funide-oa-rd-menu-dedupe-r01',
+    date: '2026-11-02',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-rd-menu-dedupe-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.funide-oa-rd-menu-dedupe-r01.description',
+  },
+  {
+    id: 'funide-oa-lab-menu-initiate-vs-process-r01',
+    date: '2026-11-02',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-lab-menu-initiate-vs-process-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-lab-menu-initiate-vs-process-r01.description',
+  },
+  {
+    id: 'funide-oa-doc-control-trim-drawing-shortcuts-r01',
+    date: '2026-11-02',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-doc-control-trim-drawing-shortcuts-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-doc-control-trim-drawing-shortcuts-r01.description',
+  },
+  {
+    id: 'funide-oa-doc-control-under-rd-r01',
+    date: '2026-11-02',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-doc-control-under-rd-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.funide-oa-doc-control-under-rd-r01.description',
+  },
+  {
+    id: 'funide-oa-rd-management-menu-r01',
+    date: '2026-11-02',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-rd-management-menu-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.funide-oa-rd-management-menu-r01.description',
+  },
+  {
+    id: 'funide-oa-quality-improvement-group-label-r01',
+    date: '2026-11-02',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-quality-improvement-group-label-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-quality-improvement-group-label-r01.description',
+  },
+  {
+    id: 'funide-oa-quality-menu-merge-r01',
+    date: '2026-11-02',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-quality-menu-merge-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-quality-menu-merge-r01.description',
+  },
+  {
+    id: 'funide-oa-qms-system-full-copy-r01',
+    date: '2026-11-02',
+    type: 'feature',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-qms-system-full-copy-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-qms-system-full-copy-r01.description',
+  },
+  {
+    id: 'funide-oa-step3-mounted-forms-r01',
+    date: '2026-11-01',
+    type: 'feature',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-step3-mounted-forms-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-step3-mounted-forms-r01.description',
+  },
+  {
+    id: 'funide-oa-trial-workbench-l51-r01',
+    date: '2026-11-01',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-trial-workbench-l51-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-trial-workbench-l51-r01.description',
+  },
+  {
+    id: 'funide-oa-l59-bom-collab-workbench-r01',
+    date: '2026-11-01',
+    type: 'feature',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-l59-bom-collab-workbench-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-l59-bom-collab-workbench-r01.description',
+  },
+  {
+    id: 'funide-oa-workbench-step3-flow-r02',
+    date: '2026-11-01',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-workbench-step3-flow-r02.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-workbench-step3-flow-r02.description',
+  },
+  {
+    id: 'funide-oa-cross-dept-workbenches-r01',
+    date: '2026-11-01',
+    type: 'feature',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey: 'pages.dashboard.updateLog.entries.funide-oa-cross-dept-workbenches-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-cross-dept-workbenches-r01.description',
+  },
+  {
+    id: 'funide-oa-trial-flow-workbench-step-nav-r01',
+    date: '2026-11-01',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey:
+      'pages.dashboard.updateLog.entries.funide-oa-trial-flow-workbench-step-nav-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-trial-flow-workbench-step-nav-r01.description',
+  },
+  {
+    id: 'funide-oa-trial-flow-workbench-layout-r01',
+    date: '2026-11-01',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey:
+      'pages.dashboard.updateLog.entries.funide-oa-trial-flow-workbench-layout-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-trial-flow-workbench-layout-r01.description',
+  },
+  {
+    id: 'funide-oa-trial-flow-dedicated-client-r01',
+    date: '2026-11-01',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey:
+      'pages.dashboard.updateLog.entries.funide-oa-trial-flow-dedicated-client-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-trial-flow-dedicated-client-r01.description',
+  },
+  {
+    id: 'funide-oa-trial-flow-workbench-collab-r01',
+    date: '2026-11-01',
+    type: 'feature',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey:
+      'pages.dashboard.updateLog.entries.funide-oa-trial-flow-workbench-collab-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-trial-flow-workbench-collab-r01.description',
+  },
+  {
+    id: 'funide-oa-remove-structure-drawing-quick-links-r01',
+    date: '2026-11-01',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey:
+      'pages.dashboard.updateLog.entries.funide-oa-remove-structure-drawing-quick-links-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-remove-structure-drawing-quick-links-r01.description',
+  },
+  {
+    id: 'funide-oa-qms-system-quality-pages-copy-r01',
+    date: '2026-11-01',
+    type: 'feature',
+    scope: 'dedicated',
+    dedicatedAppCode: 'funide-oa',
+    titleKey:
+      'pages.dashboard.updateLog.entries.funide-oa-qms-system-quality-pages-copy-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.funide-oa-qms-system-quality-pages-copy-r01.description',
+  },
+  {
+    id: 'haoligo-horizontal-injection-output-list-hide-sheet-no-r01',
+    date: '2026-11-01',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey:
+      'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-list-hide-sheet-no-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-list-hide-sheet-no-r01.description',
+  },
+  {
+    id: 'haoligo-horizontal-injection-output-list-three-bucket-r02',
+    date: '2026-11-01',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey:
+      'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-list-three-bucket-r02.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-list-three-bucket-r02.description',
+  },
+  {
+    id: 'haoligo-horizontal-injection-output-list-export-order-r01',
+    date: '2026-11-01',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey:
+      'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-list-export-order-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-list-export-order-r01.description',
+  },
+  {
+    id: 'haoligo-horizontal-injection-output-list-rates-r01',
+    date: '2026-11-01',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey:
+      'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-list-rates-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-list-rates-r01.description',
+  },
+  {
+    id: 'haoligo-horizontal-injection-output-batch-delete-r01',
+    date: '2026-11-01',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey:
+      'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-batch-delete-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-batch-delete-r01.description',
+  },
+  {
+    id: 'haoligo-horizontal-injection-output-list-full-cols-r01',
+    date: '2026-11-01',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey:
+      'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-list-full-cols-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-list-full-cols-r01.description',
+  },
+  {
+    id: 'haoligo-horizontal-injection-output-import-defect-r01',
+    date: '2026-11-01',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey:
+      'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-import-defect-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-import-defect-r01.description',
+  },
+  {
+    id: 'haoligo-horizontal-injection-output-list-layout-r01',
+    date: '2026-11-01',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey:
+      'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-list-layout-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-horizontal-injection-output-list-layout-r01.description',
+  },
+  {
+    id: 'haoligo-payroll-piece-overtime-dash-r01',
+    date: '2026-10-31',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey: 'pages.dashboard.updateLog.entries.haoligo-payroll-piece-overtime-dash-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-payroll-piece-overtime-dash-r01.description',
+  },
+  {
+    id: 'haoligo-payroll-time-subtotal-recalc-r01',
+    date: '2026-10-31',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey: 'pages.dashboard.updateLog.entries.haoligo-payroll-time-subtotal-recalc-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-payroll-time-subtotal-recalc-r01.description',
+  },
+  {
+    id: 'haoligo-payroll-line-pay-method-filter-r01',
+    date: '2026-10-31',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey:
+      'pages.dashboard.updateLog.entries.haoligo-payroll-line-pay-method-filter-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-payroll-line-pay-method-filter-r01.description',
+  },
+  {
+    id: 'haoligo-payroll-quick-subtotal-piece-only-r01',
+    date: '2026-10-31',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey:
+      'pages.dashboard.updateLog.entries.haoligo-payroll-quick-subtotal-piece-only-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-payroll-quick-subtotal-piece-only-r01.description',
+  },
+  {
+    id: 'haoligo-payroll-detail-input-perf-r01',
+    date: '2026-10-31',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey: 'pages.dashboard.updateLog.entries.haoligo-payroll-detail-input-perf-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-payroll-detail-input-perf-r01.description',
+  },
+  {
+    id: 'haoligo-payroll-quick-subtotal-batch-r01',
+    date: '2026-10-31',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey:
+      'pages.dashboard.updateLog.entries.haoligo-payroll-quick-subtotal-batch-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-payroll-quick-subtotal-batch-r01.description',
+  },
+  {
+    id: 'haoligo-payroll-pay-method-from-profile-r01',
+    date: '2026-10-31',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey:
+      'pages.dashboard.updateLog.entries.haoligo-payroll-pay-method-from-profile-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-payroll-pay-method-from-profile-r01.description',
+  },
+  {
+    id: 'haoligo-payroll-piece-wage-time-dash-r01',
+    date: '2026-10-31',
+    type: 'fix',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey:
+      'pages.dashboard.updateLog.entries.haoligo-payroll-piece-wage-time-dash-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-payroll-piece-wage-time-dash-r01.description',
+  },
+  {
+    id: 'haoligo-payroll-piece-wage-column-r01',
+    date: '2026-10-31',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey: 'pages.dashboard.updateLog.entries.haoligo-payroll-piece-wage-column-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-payroll-piece-wage-column-r01.description',
+  },
+  {
+    id: 'haoligo-payroll-quick-earning-subtotal-r01',
+    date: '2026-10-31',
+    type: 'improvement',
+    scope: 'dedicated',
+    dedicatedAppCode: 'haoligo',
+    titleKey:
+      'pages.dashboard.updateLog.entries.haoligo-payroll-quick-earning-subtotal-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.haoligo-payroll-quick-earning-subtotal-r01.description',
+  },
+  {
     id: 'haoligo-leave-destination-trip-only-r01',
     date: '2026-10-28',
     type: 'improvement',
