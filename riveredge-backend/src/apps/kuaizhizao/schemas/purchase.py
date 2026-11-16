@@ -15,6 +15,10 @@ from pydantic import BaseModel, Field, ConfigDict, field_validator
 from apps.kuaizhizao.services.document_action_policy.types import PurchaseOrderCapabilities
 
 from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus
+from apps.kuaizhizao.constants.price_type import (
+    DEFAULT_PURCHASE_PRICE_TYPE,
+    normalize_price_type,
+)
 
 # 导入BaseSchema用于兼容性
 from core.schemas.base import BaseSchema
@@ -66,11 +70,28 @@ class PurchaseOrderBase(BaseSchema):
     order_type: str = Field("标准采购", max_length=20, description="订单类型")
     total_quantity: Decimal = Field(default=Decimal(0), ge=0, description="总数量")
     total_amount: Decimal = Field(default=Decimal(0), ge=0, description="订单总金额")
+    price_type: str = Field(
+        default=DEFAULT_PURCHASE_PRICE_TYPE,
+        max_length=20,
+        description="价格类型：含税(tax_inclusive)/不含税(tax_exclusive)",
+    )
     tax_rate: Decimal = Field(default=Decimal(0), ge=0, le=1, description="税率")
     tax_amount: Decimal = Field(default=Decimal(0), ge=0, description="税额")
     net_amount: Decimal = Field(default=Decimal(0), ge=0, description="净金额")
     currency: str = Field("CNY", max_length=10, description="币种")
     exchange_rate: Decimal = Field(default=Decimal(1), gt=0, description="汇率")
+    payment_method_code: Optional[str] = Field(
+        None, max_length=50, description="付款方式（现金/转账/承兑等）"
+    )
+    settlement_terms_code: Optional[str] = Field(
+        None, max_length=50, description="结算方式（预付/账期/货到付款等）"
+    )
+    payment_terms_days: Optional[int] = Field(None, ge=0, description="付款周期（天）")
+    payable_recognition: Optional[str] = Field(
+        None,
+        max_length=32,
+        description="立账策略（应付确认时点）",
+    )
     status: str = Field(default=DocumentStatus.DRAFT.value, max_length=20, description="订单状态")
     source_type: Optional[str] = Field(None, max_length=50, description="来源类型")
     source_id: Optional[int] = Field(None, description="来源ID")
@@ -83,6 +104,41 @@ class PurchaseOrderBase(BaseSchema):
 
     prepayment_amount: Optional[Decimal] = Field(None, ge=0, description="预付款金额")
     prepayment_bank_account_id: Optional[int] = Field(None, description="预付款银行账户ID")
+    prepayment_unsettled_balance: Optional[Decimal] = Field(
+        None, ge=0, description="关联预付付款单未核销余额（详情）"
+    )
+    estimated_payable_after_prepayment: Optional[Decimal] = Field(
+        None, ge=0, description="按订单金额扣未核销预付后的预计待付（详情）"
+    )
+
+    @field_validator("price_type", mode="before")
+    @classmethod
+    def validate_price_type(cls, v):
+        return normalize_price_type(v, fallback=DEFAULT_PURCHASE_PRICE_TYPE)
+
+    @field_validator("payment_method_code", mode="before")
+    @classmethod
+    def validate_payment_method_code(cls, v):
+        from apps.master_data.config.partner_settlement_codes import coerce_partner_payment_method_code
+
+        if v is None or (isinstance(v, str) and not str(v).strip()):
+            return None
+        coerced = coerce_partner_payment_method_code(v)
+        if coerced is None:
+            raise ValueError("无效的付款方式")
+        return coerced
+
+    @field_validator("settlement_terms_code", mode="before")
+    @classmethod
+    def validate_settlement_terms_code(cls, v):
+        from apps.master_data.config.partner_settlement_codes import coerce_partner_settlement_terms_code
+
+        if v is None or (isinstance(v, str) and not str(v).strip()):
+            return None
+        coerced = coerce_partner_settlement_terms_code(v)
+        if coerced is None:
+            raise ValueError("无效的结算方式")
+        return coerced
 
 
 class PurchaseOrderCreate(PurchaseOrderBase):
@@ -232,6 +288,12 @@ class PurchaseOrderItemBase(BaseSchema):
     unit: str = Field(..., max_length=20, description="单位")
     unit_price: Decimal = Field(..., ge=0, description="单价")
     total_price: Decimal = Field(..., ge=0, description="总价")
+    tax_rate: Decimal = Field(
+        default=Decimal(0),
+        ge=0,
+        le=100,
+        description="税率（%，行级；与销售订单行一致）",
+    )
     price_settlement_status: Optional[str] = Field(None, max_length=20, description="定价状态")
     provisional_unit_price: Optional[Decimal] = Field(None, ge=0, description="暂估参考单价")
     received_quantity: Decimal = Field(default=Decimal(0), ge=0, description="已到货数量")

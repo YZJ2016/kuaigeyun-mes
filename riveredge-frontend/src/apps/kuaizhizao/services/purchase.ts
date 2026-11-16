@@ -141,6 +141,8 @@ export interface PurchaseOrder {
   order_type?: string;
   total_quantity?: number;
   total_amount?: number;
+  /** 价格类型：tax_inclusive / tax_exclusive */
+  price_type?: string;
   tax_rate?: number;
   tax_amount?: number;
   net_amount?: number;
@@ -192,6 +194,8 @@ export interface PurchaseOrderItem {
   unit?: string;
   unit_price?: number;
   total_price?: number;
+  /** 行税率（百分比，与销售订单行一致） */
+  tax_rate?: number;
   received_quantity?: number;
   outstanding_quantity?: number;
   /** 容差后剩余可收（物料覆盖组织默认） */

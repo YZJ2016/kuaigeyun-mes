@@ -2541,8 +2541,24 @@ const PurchaseOrdersPage: React.FC = () => {
       setIsEdit(true);
       setCurrentOrder(detail);
       const headerTaxRatePercent = purchaseOrderTaxRateToPercent(detail.tax_rate);
-      const priceType: PriceTypeValue = headerTaxRatePercent > 0 ? 'tax_inclusive' : 'tax_exclusive';
-      const items = (detail.items || []).map((it: any) => ({
+      const storedPriceType = String(
+        (detail as { price_type?: string; priceType?: string }).price_type ??
+          (detail as { priceType?: string }).priceType ??
+          '',
+      ).trim();
+      const priceType: PriceTypeValue =
+        storedPriceType === 'tax_inclusive' || storedPriceType === 'tax_exclusive'
+          ? storedPriceType
+          : headerTaxRatePercent > 0
+            ? 'tax_inclusive'
+            : 'tax_exclusive';
+      const items = (detail.items || []).map((it: any) => {
+        const lineTaxPercent =
+          it.tax_rate != null && Number(it.tax_rate) > 0
+            ? purchaseOrderTaxRateToPercent(it.tax_rate)
+            : headerTaxRatePercent;
+        return {
+        id: it.id ?? it.itemId,
         material_id: it.material_id ?? it.materialId,
         material_code: it.material_code || it.materialCode || '',
         material_name: it.material_name || it.materialName || '',
@@ -2551,10 +2567,10 @@ const PurchaseOrdersPage: React.FC = () => {
         ordered_quantity: Number(it.ordered_quantity ?? it.orderedQuantity) || 0,
         unit_price: purchaseOrderStoredUnitPriceToForm(
           Number(it.unit_price ?? it.unitPrice) || 0,
-          headerTaxRatePercent,
+          lineTaxPercent,
           priceType,
         ),
-        tax_rate: headerTaxRatePercent,
+        tax_rate: lineTaxPercent,
         required_date: it.required_date || it.requiredDate ? dayjs(it.required_date || it.requiredDate) : undefined,
         source_type: it.source_type ?? it.sourceType ?? null,
         source_id: it.source_id ?? it.sourceId ?? null,
@@ -2565,7 +2581,8 @@ const PurchaseOrdersPage: React.FC = () => {
         received_quantity: Number(it.received_quantity ?? it.receivedQuantity) || 0,
         notes: it.notes ?? '',
         attachments: mapAttachmentsToUploadList(it.attachments),
-      }));
+      };
+      });
       window.setTimeout(() => {
         const deliveryDate = detail.delivery_date ? dayjs(detail.delivery_date) : undefined;
         formRef.current?.setFieldsValue({
@@ -3429,8 +3446,9 @@ const PurchaseOrdersPage: React.FC = () => {
           unit: it.unit || '件',
           unit_price: price,
           total_price: totalPrice,
-          received_quantity: 0,
-          outstanding_quantity: qty,
+          tax_rate: taxRate,
+          received_quantity: receivedQty,
+          outstanding_quantity: Math.max(0, qty - receivedQty),
           required_date: dateStr,
           inspection_required: true,
           notes: it.notes || null,
@@ -3439,11 +3457,23 @@ const PurchaseOrdersPage: React.FC = () => {
       });
 
       const totalAmount = itemsPayload.reduce((s: number, it: any) => s + Number(it.total_price), 0);
-      const lineTaxPercent = validItems[0] ? Number(validItems[0].tax_rate) || 0 : 0;
-      const taxRateDecimal = purchaseOrderTaxRateToDecimal(lineTaxPercent);
-      data.tax_rate = taxRateDecimal;
-      data.tax_amount = totalAmount * taxRateDecimal;
-      data.net_amount = totalAmount + data.tax_amount;
+      let taxAmount = 0;
+      let netAmount = 0;
+      itemsPayload.forEach((it: any, idx: number) => {
+        const lineTax = Number(validItems[idx]?.tax_rate) || 0;
+        const lineAmounts = calcDocumentLineAmountsFromExclTotal(
+          Number(it.total_price) || 0,
+          lineTax,
+        );
+        taxAmount += lineAmounts.tax;
+        netAmount += lineAmounts.incl;
+      });
+      const firstLineTaxPercent = validItems[0] ? Number(validItems[0].tax_rate) || 0 : 0;
+      data.tax_rate = purchaseOrderTaxRateToDecimal(firstLineTaxPercent);
+      data.price_type = priceType;
+      data.total_amount = totalAmount;
+      data.tax_amount = taxAmount;
+      data.net_amount = netAmount;
 
       // 计算费用总额
       const feeDetails = normalizeFormListItems<any>(values.fee_details);

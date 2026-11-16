@@ -347,6 +347,30 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
 
             await self._resolve_buyer_fields(order_dict)
 
+            _provided_pay_rec = str(order_dict.get("payable_recognition") or "").strip()
+            if _provided_pay_rec in ("on_receipt", "on_purchase_invoice", "manual"):
+                order_dict["payable_recognition"] = _provided_pay_rec
+            else:
+                order_dict["payable_recognition"] = await BusinessConfigService().resolve_payable_recognition(
+                    tenant_id, order_dict.get("supplier_id")
+                )
+
+            from apps.kuaizhizao.constants.purchase_order_type import (
+                load_and_assert_purchase_order_type_materials,
+                normalize_purchase_order_type,
+            )
+
+            order_dict["order_type"] = normalize_purchase_order_type(order_dict.get("order_type"))
+            from apps.kuaizhizao.constants.price_type import (
+                DEFAULT_PURCHASE_PRICE_TYPE,
+                normalize_price_type,
+            )
+
+            order_dict["price_type"] = normalize_price_type(
+                order_dict.get("price_type"),
+                fallback=DEFAULT_PURCHASE_PRICE_TYPE,
+            )
+
             order = await PurchaseOrder.create(**order_dict)
 
             # 创建订单明细
@@ -360,6 +384,15 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 partner_id=int(order_dict.get("supplier_id") or 0) or None,
                 material_ids=[it.material_id for it in order_data.items if it.material_id],
             )
+            from apps.kuaicaiwu.services.finance_tax import (
+                compute_purchase_order_header_amounts_from_lines,
+                quantize_money,
+            )
+            from apps.kuaicaiwu.services.purchase_settlement import (
+                normalize_po_tax_rate_to_percent,
+            )
+
+            line_excl_and_tax: list[tuple] = []
             for item_data in order_data.items:
                 # 验证物料
                 material = await Material.get_or_none(tenant_id=tenant_id, id=item_data.material_id)
@@ -377,10 +410,16 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 )
                 total_price = ordered_qty * item_data.unit_price
                 outstanding_quantity = ordered_qty
+                line_tax_pct = normalize_po_tax_rate_to_percent(
+                    getattr(item_data, "tax_rate", None)
+                )
+                if line_tax_pct <= 0:
+                    line_tax_pct = normalize_po_tax_rate_to_percent(order_data.tax_rate)
 
                 item_dict = item_data.model_dump()
                 item_dict["ordered_quantity"] = ordered_qty
                 item_dict["outstanding_quantity"] = outstanding_quantity
+                item_dict["tax_rate"] = line_tax_pct
                 if not str(item_dict.get("material_name") or "").strip():
                     item_dict["material_name"] = str(material.name or "")[:200]
                 if not str(item_dict.get("material_code") or "").strip():
@@ -412,14 +451,23 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
 
                 total_quantity += ordered_qty
                 total_amount += total_price
+                line_excl_and_tax.append((total_price, line_tax_pct))
 
-            # 更新订单头金额信息
-            tax_amount = total_amount * order_data.tax_rate
-            net_amount = total_amount + tax_amount
+            await load_and_assert_purchase_order_type_materials(
+                tenant_id,
+                order_dict["order_type"],
+                [item.material_id for item in order_data.items],
+                document_label="采购订单",
+            )
+
+            total_amount, tax_amount, net_amount, header_tax_rate = (
+                compute_purchase_order_header_amounts_from_lines(line_excl_and_tax)
+            )
 
             await order.update_from_dict({
                 'total_quantity': total_quantity,
                 'total_amount': total_amount,
+                'tax_rate': header_tax_rate,
                 'tax_amount': tax_amount,
                 'net_amount': net_amount,
                 'updated_by': created_by,
@@ -1310,6 +1358,20 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
 
                 await assert_supplier_purchasable_for_tenant(tenant_id, supplier)
 
+            from apps.kuaizhizao.constants.purchase_order_type import normalize_purchase_order_type
+            from apps.kuaizhizao.constants.price_type import (
+                DEFAULT_PURCHASE_PRICE_TYPE,
+                normalize_price_type,
+            )
+
+            if "order_type" in update_dict:
+                update_dict["order_type"] = normalize_purchase_order_type(update_dict.get("order_type"))
+            if "price_type" in update_dict:
+                update_dict["price_type"] = normalize_price_type(
+                    update_dict.get("price_type"),
+                    fallback=DEFAULT_PURCHASE_PRICE_TYPE,
+                )
+
             await order.update_from_dict(update_dict).save()
 
             # 如果有明细更新，重新计算金额
@@ -1334,6 +1396,17 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 # 重新创建明细
                 total_quantity = Decimal(0)
                 total_amount = Decimal(0)
+                remount_req_item_ids: List[int] = []
+                from apps.kuaicaiwu.services.finance_tax import (
+                    compute_purchase_order_header_amounts_from_lines,
+                    quantize_money,
+                )
+                from apps.kuaicaiwu.services.purchase_settlement import (
+                    normalize_po_tax_rate_to_percent,
+                )
+
+                line_excl_and_tax: list[tuple] = []
+                header_tax_fallback = order_data.tax_rate if order_data.tax_rate is not None else order.tax_rate
 
                 line_snapshots = await resolve_line_material_snapshots(
                     tenant_id,
@@ -1358,10 +1431,16 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                     )
                     total_price = ordered_qty * item_data.unit_price
                     outstanding_quantity = ordered_qty
+                    line_tax_pct = normalize_po_tax_rate_to_percent(
+                        getattr(item_data, "tax_rate", None)
+                    )
+                    if line_tax_pct <= 0:
+                        line_tax_pct = normalize_po_tax_rate_to_percent(header_tax_fallback)
 
                     item_dict = item_data.model_dump()
                     item_dict["ordered_quantity"] = ordered_qty
                     item_dict["outstanding_quantity"] = outstanding_quantity
+                    item_dict["tax_rate"] = line_tax_pct
                     if not str(item_dict.get("material_name") or "").strip():
                         item_dict["material_name"] = str(material.name or "")[:200]
                     if not str(item_dict.get("material_code") or "").strip():
@@ -1404,14 +1483,16 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
 
                     total_quantity += ordered_qty
                     total_amount += total_price
+                    line_excl_and_tax.append((total_price, line_tax_pct))
 
-                # 更新订单头金额
-                tax_amount = total_amount * (order_data.tax_rate or order.tax_rate)
-                net_amount = total_amount + tax_amount
+                total_amount, tax_amount, net_amount, header_tax_rate = (
+                    compute_purchase_order_header_amounts_from_lines(line_excl_and_tax)
+                )
 
                 await order.update_from_dict({
                     'total_quantity': total_quantity,
                     'total_amount': total_amount,
+                    'tax_rate': header_tax_rate,
                     'tax_amount': tax_amount,
                     'net_amount': net_amount,
                     'updated_by': updated_by

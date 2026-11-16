@@ -10,6 +10,7 @@ Date: 2025-12-30
 from tortoise import fields
 from core.models.base import BaseModel
 from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus
+from apps.kuaizhizao.constants.price_type import DEFAULT_PURCHASE_PRICE_TYPE
 from apps.kuaizhizao.models.mixins.document_line_partner_material import (
     DocumentLinePartnerMaterialSnapshotMixin,
 )
@@ -66,6 +67,11 @@ class PurchaseOrder(BaseModel):
     # 金额信息
     total_quantity = fields.DecimalField(max_digits=12, decimal_places=4, default=0, description="总数量")
     total_amount = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="订单总金额")
+    price_type = fields.CharField(
+        max_length=20,
+        default=DEFAULT_PURCHASE_PRICE_TYPE,
+        description="价格类型：含税(tax_inclusive)/不含税(tax_exclusive)",
+    )
     tax_rate = fields.DecimalField(max_digits=5, decimal_places=2, default=0, description="税率")
     tax_amount = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="税额")
     net_amount = fields.DecimalField(max_digits=14, decimal_places=4, default=0, description="净金额")
@@ -77,6 +83,18 @@ class PurchaseOrder(BaseModel):
     # 币种和汇率
     currency = fields.CharField(max_length=10, default="CNY", description="币种")
     exchange_rate = fields.DecimalField(max_digits=8, decimal_places=4, default=1, description="汇率")
+    payment_method_code = fields.CharField(
+        max_length=50, null=True, description="付款方式（现金/转账/承兑等）"
+    )
+    settlement_terms_code = fields.CharField(
+        max_length=50, null=True, description="结算方式（预付/账期/货到付款等）"
+    )
+    payment_terms_days = fields.IntField(null=True, description="付款周期（天），对齐供应商付款账期")
+    payable_recognition = fields.CharField(
+        max_length=32,
+        default="on_receipt",
+        description="立账策略（应付确认时点，单据真源）",
+    )
 
     # 订单状态
     status = fields.CharField(max_length=20, default=DocumentStatus.DRAFT.value, description="订单状态")
@@ -147,6 +165,12 @@ class PurchaseOrderItem(DocumentLinePartnerMaterialSnapshotMixin, BaseModel):
     unit = fields.CharField(max_length=20, description="单位")
     unit_price = fields.DecimalField(max_digits=10, decimal_places=4, description="单价")
     total_price = fields.DecimalField(max_digits=14, decimal_places=4, description="总价")
+    tax_rate = fields.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        default=0,
+        description="税率（%，与销售订单行一致）",
+    )
     price_settlement_status = fields.CharField(max_length=20, default="SETTLED", description="定价状态 PROVISIONAL|SETTLED")
     provisional_unit_price = fields.DecimalField(max_digits=10, decimal_places=4, null=True, description="暂估参考单价")
     price_settled_at = fields.DatetimeField(null=True, description="定价时间")
