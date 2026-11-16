@@ -76,6 +76,7 @@ import { CustomerSelectDropdown } from '../../../../master-data/components/Custo
 import {
   applySalesDocumentLineMaterialPricing,
   getMaterialDefaultTaxRate,
+  repriceUnlockedSalesDocumentLineIfNeeded,
   resolveMaterialForPricing,
   resolveOrderLineSalePrice,
   resolveSalesDocumentMaterialLinesPricing,
@@ -190,6 +191,11 @@ import {
   hasDocumentAttachments,
 } from '../../../components/DocumentAttachmentsReadonly';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
+import {
+  buildDocumentLineAttachmentsFormColumn,
+  buildDocumentLineAttachmentsDrawerColumn,
+  DOCUMENT_LINE_ATTACHMENT_UPLOAD_CATEGORY,
+} from '../../../components/documentLineAttachmentsColumns';
 import {
   applyGiftToggleToLine,
   isValidSalesLineForSubmit,
@@ -694,6 +700,7 @@ function mapQuotationSubmitItem(
     variant_attributes: parseVariantAttributesValue(it.variant_attributes) ?? it.variant_attributes,
     delivery_date: toApiDateString(it.delivery_date) ?? mainDeliveryStr,
     notes: it.notes,
+    attachments: normalizeDocumentAttachments(it.attachments),
   };
 }
 
@@ -1089,6 +1096,12 @@ const QuotationsPage: React.FC = () => {
         customerList,
         includeCustomerId: true,
         paymentTermsOptions,
+      });
+      const items = normalizeFormListItems<Record<string, unknown>>(formRef.current?.getFieldValue('items'));
+      items.forEach((_, idx) => {
+        void repriceUnlockedSalesDocumentLineIfNeeded(formRef.current, idx, {
+          asOfField: 'quotation_date',
+        });
       });
     },
     [userList, customerList, paymentTermsOptions],
@@ -2780,6 +2793,7 @@ const QuotationsPage: React.FC = () => {
           variant_attributes: parseVariantAttributesValue((it as any).variant_attributes) ?? (it as any).variant_attributes,
           delivery_date: it.delivery_date ? dayjs(it.delivery_date) : undefined,
           notes: it.notes,
+          attachments: mapAttachmentsToUploadList(it.attachments),
         };
         }),
       };
@@ -3369,7 +3383,19 @@ const QuotationsPage: React.FC = () => {
                 label={t('app.kuaizhizao.quotation.colQuotationDate')}
                 rules={[{ required: true }]}
                 formItemProps={formDateFormItemProps}
-                fieldProps={{ style: { width: '100%' } }}
+                fieldProps={{
+                  style: { width: '100%' },
+                  onChange: () => {
+                    const items = normalizeFormListItems<Record<string, unknown>>(
+                      formRef.current?.getFieldValue('items'),
+                    );
+                    items.forEach((_, idx) => {
+                      void repriceUnlockedSalesDocumentLineIfNeeded(formRef.current, idx, {
+                        asOfField: 'quotation_date',
+                      });
+                    });
+                  },
+                }}
               />
             </Col>
             <Col span={8}>
@@ -3554,13 +3580,27 @@ const QuotationsPage: React.FC = () => {
                             rules={[{ required: true, message: t('common.required') }]}
                             style={{ margin: 0 }}
                           >
-                            <InputNumber
-                              placeholder={t('common.quantity')}
-                              min={0.01}
-                              precision={quantityDecimals}
-                              style={{ width: '100%' }}
-                              size={DOCUMENT_DETAIL_CONTROL_SIZE}
-                            />
+                            {({ getFieldValue: gf }) => {
+                              const materialId = gf(['items', index, 'material_id']);
+                              if (!formRef.current) return null;
+                              return (
+                                <DocumentLineDualQuantityFormCell
+                                  form={formRef.current}
+                                  listName="items"
+                                  rowIndex={index}
+                                  quantityField="quote_quantity"
+                                  unitField="material_unit"
+                                  scenario="sale"
+                                  quantityPrecision={quantityDecimals}
+                                  materialId={materialId}
+                                  onAfterQuantityChange={() => {
+                                    void repriceUnlockedSalesDocumentLineIfNeeded(formRef.current, index, {
+                                      asOfField: 'quotation_date',
+                                    });
+                                  }}
+                                />
+                              );
+                            }}
                           </Form.Item>
                         ),
                       },
@@ -3881,6 +3921,10 @@ const QuotationsPage: React.FC = () => {
                         ),
                       },
                       ...buildDocumentDetailPartnerMaterialFormColumns(t, 'customer'),
+                      buildDocumentLineAttachmentsFormColumn(
+                        t,
+                        DOCUMENT_LINE_ATTACHMENT_UPLOAD_CATEGORY.quotation,
+                      ),
                       {
                         title: t('common.remark'),
                         dataIndex: 'notes',
@@ -4756,6 +4800,10 @@ const QuotationsPage: React.FC = () => {
                           ...QUOTATION_DETAIL_TEXT_COL,
                         })),
                         { title: t('common.remark'), dataIndex: 'notes', width: 160, ellipsis: true, ...QUOTATION_DETAIL_TEXT_COL },
+                        buildDocumentLineAttachmentsDrawerColumn(
+                          t,
+                          DOCUMENT_LINE_ATTACHMENT_UPLOAD_CATEGORY.quotation,
+                        ),
                       ];
                     })()}
                     dataSource={quotationDetail.items}

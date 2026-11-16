@@ -39,6 +39,11 @@ import type { Material } from '../../../types/material';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { convertUnitPriceByPriceType } from '../../../utils/resolve-partner-material-price';
 import { useMaterialUnitOptions } from '../../../hooks/useMaterialUnitOptions';
+import {
+  normalizeTierPricesForSubmit,
+  PartnerPriceTierLinesEditor,
+} from '../../../components/PartnerPriceTierLinesEditor';
+import type { PartnerPriceTierLine } from '../../../types/partner-price-book';
 
 export interface PartnerPriceBookBatchRegisterModalProps {
   partnerType: PartnerPriceBookType;
@@ -54,6 +59,7 @@ type BulkLineForm = {
   materialName?: string;
   unit?: string;
   unitPrice?: number;
+  tierPrices?: PartnerPriceTierLine[];
   partnerMaterialCode?: string;
   partnerMaterialName?: string;
 };
@@ -107,6 +113,7 @@ export const PartnerPriceBookBatchRegisterModal: React.FC<PartnerPriceBookBatchR
   const [conflictOpen, setConflictOpen] = useState(false);
   const [conflicts, setConflicts] = useState<PartnerPriceBookBulkConflictItem[]>([]);
   const [applyToAllConflicts, setApplyToAllConflicts] = useState(true);
+  const [tierEditIndex, setTierEditIndex] = useState<number | null>(null);
   const pendingPayloadRef = useRef<Omit<PartnerPriceBookBulkCreate, 'conflictPolicy'> | null>(null);
   const { options: unitOptions, isLoading: unitOptionsLoading } = useMaterialUnitOptions();
 
@@ -132,14 +139,24 @@ export const PartnerPriceBookBatchRegisterModal: React.FC<PartnerPriceBookBatchR
     };
     const partnerIds = (values.partnerIds ?? []).filter((id) => id != null);
     const lines = (values.lines ?? [])
-      .map((row) => ({
-        materialId: Number(row.materialId),
-        unitPrice: Number(row.unitPrice),
-        unit: row.unit?.trim() || undefined,
-        partnerMaterialCode: row.partnerMaterialCode?.trim() || undefined,
-        partnerMaterialName: row.partnerMaterialName?.trim() || undefined,
-      }))
-      .filter((row) => row.materialId > 0 && Number.isFinite(row.unitPrice) && row.unitPrice > 0);
+      .map((row) => {
+        const tierPrices = normalizeTierPricesForSubmit(row.tierPrices);
+        const unitPrice = Number(row.unitPrice);
+        return {
+          materialId: Number(row.materialId),
+          unitPrice: Number.isFinite(unitPrice) && unitPrice > 0 ? unitPrice : undefined,
+          tierPrices: tierPrices ?? undefined,
+          unit: row.unit?.trim() || undefined,
+          partnerMaterialCode: row.partnerMaterialCode?.trim() || undefined,
+          partnerMaterialName: row.partnerMaterialName?.trim() || undefined,
+        };
+      })
+      .filter(
+        (row) =>
+          row.materialId > 0 &&
+          ((row.unitPrice != null && row.unitPrice > 0) ||
+            (row.tierPrices != null && row.tierPrices.length > 0)),
+      );
 
     if (partnerIds.length === 0) {
       messageApi.error(t('app.master-data.priceBook.bulkPartnerRequired'));
@@ -325,13 +342,22 @@ export const PartnerPriceBookBatchRegisterModal: React.FC<PartnerPriceBookBatchR
           <Form.Item
             name={[index, 'unitPrice']}
             rules={[
-              { required: true, message: t('common.required') },
               { type: 'number', min: 0.0001, message: t('app.master-data.priceBook.unitPriceMin') },
             ]}
             style={{ margin: 0 }}
           >
             <InputNumber min={0.0001} precision={4} style={{ width: '100%' }} size="small" />
           </Form.Item>
+        ),
+      },
+      {
+        title: t('app.master-data.priceBook.tierPricesSection'),
+        dataIndex: 'tierPrices',
+        width: 88,
+        render: (_: unknown, __: unknown, index: number) => (
+          <Button type="link" size="small" onClick={() => setTierEditIndex(index)}>
+            {t('common.edit')}
+          </Button>
         ),
       },
       {
@@ -537,6 +563,19 @@ export const PartnerPriceBookBatchRegisterModal: React.FC<PartnerPriceBookBatchR
         onCancel={() => setMaterialPickerOpen(false)}
         onConfirm={appendMaterials}
       />
+
+      <Modal
+        title={t('app.master-data.priceBook.tierPricesSection')}
+        open={tierEditIndex != null}
+        onCancel={() => setTierEditIndex(null)}
+        onOk={() => setTierEditIndex(null)}
+        destroyOnHidden
+        width={640}
+      >
+        {tierEditIndex != null ? (
+          <PartnerPriceTierLinesEditor name={['lines', tierEditIndex, 'tierPrices']} />
+        ) : null}
+      </Modal>
 
       <Modal
         title={t('app.master-data.priceBook.bulkConflictTitle')}

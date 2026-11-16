@@ -25,6 +25,10 @@ import {
   buildDocumentMaterialLineExtensionColumns,
   buildPartnerMaterialLineColumns,
 } from '../../../sales-management/shared/materialLineColumns';
+import {
+  buildDocumentLineAttachmentsDrawerColumn,
+  DOCUMENT_LINE_ATTACHMENT_UPLOAD_CATEGORY,
+} from '../../../../components/documentLineAttachmentsColumns';
 import { CustomFieldsDetailSection, hasCustomFieldsDetailContent } from '../../../../../../components/custom-fields';
 import { WarehouseTraceBriefPrimaryActions } from '../../../warehouse-management/WarehouseTraceBriefFooter';
 import { getPurchaseOrderLifecycle } from '../../../../utils/purchaseOrderLifecycle';
@@ -523,7 +527,11 @@ export const PurchaseOrderDetailDrawer: React.FC<PurchaseOrderDetailDrawerProps>
                   width: col.width,
                   ellipsis: true,
                 })),
-                { title: t('common.remark'), dataIndex: 'notes', width: 120, ellipsis: true },
+                { title: t('app.kuaizhizao.purchaseOrder.form.lineNotes'), dataIndex: 'notes', width: 120, ellipsis: true },
+                buildDocumentLineAttachmentsDrawerColumn(
+                  t,
+                  DOCUMENT_LINE_ATTACHMENT_UPLOAD_CATEGORY.purchaseOrder,
+                ),
                 {
                   title: t('app.kuaizhizao.purchaseOrder.col.inspectionRequired'),
                   dataIndex: 'inspection_required',

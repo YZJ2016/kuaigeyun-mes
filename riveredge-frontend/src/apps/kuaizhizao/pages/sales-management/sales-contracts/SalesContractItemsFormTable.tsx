@@ -44,6 +44,7 @@ import {
   ContractMaterialSelectCell,
   defaultContractItem,
 } from './contract-line-items-shared';
+import { repriceUnlockedSalesDocumentLineIfNeeded } from '../../../../master-data/utils/resolve-partner-material-price';
 import { normalizeFormListItems } from '../../../../../utils/formListItems';
 import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
 import {
@@ -140,51 +141,24 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                         ) : null,
                     },
                     ...buildDocumentDetailSpecModelFormColumns(t),
-                    ...buildDocumentDetailPartnerMaterialFormColumns(t, 'customer'),
-                    {
-                      title: t('common.unit'),
-                      dataIndex: 'material_unit',
-                      width: DOCUMENT_DETAIL_COL_WIDTH.unit,
-                      ...DOCUMENT_DETAIL_TEXT_COL,
-                      render: (_: unknown, __: unknown, index: number) => (
-                        <Form.Item
-                          noStyle
-                          shouldUpdate={(prev: any, curr: any) =>
-                            prev?.items?.[index]?.material_id !== curr?.items?.[index]?.material_id
-                          }
-                        >
-                          {({ getFieldValue: gf }) => {
-                            const materialId = gf(['items', index, 'material_id']);
-                            return (
-                              <Form.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
-                                <MaterialUnitSelect materialId={materialId} size={DOCUMENT_DETAIL_CONTROL_SIZE} noStyle />
-                              </Form.Item>
-                            );
-                          }}
-                        </Form.Item>
-                      ),
-                    },
-                    {
-                      title: t('common.quantity'),
-                      dataIndex: 'contract_quantity',
-                      width: DOCUMENT_DETAIL_COL_WIDTH.quantity,
-                      ...DOCUMENT_DETAIL_NUM_COL,
-                      render: (_: unknown, __: unknown, index: number) => (
-                        <Form.Item
-                          name={[index, 'contract_quantity']}
-                          rules={[{ required: true, message: t('common.required') }]}
-                          style={{ margin: 0 }}
-                        >
-                          <InputNumber
-                            placeholder={t('common.quantity')}
-                            min={0.01}
-                            precision={quantityDecimals}
-                            style={{ width: '100%' }}
-                            size={DOCUMENT_DETAIL_CONTROL_SIZE}
-                          />
-                        </Form.Item>
-                      ),
-                    },
+                    ...buildDocumentLineDualQuantityFormColumns({
+                      t,
+                      getForm: () => formRef.current,
+                      quantityField: 'contract_quantity',
+                      unitField: 'material_unit',
+                      scenario: 'sale',
+                      quantityDecimals,
+                      unitWidth: DOCUMENT_DETAIL_COL_WIDTH.unit,
+                      quantityWidth: DOCUMENT_DETAIL_COL_WIDTH.quantity + 80,
+                      controlSize: DOCUMENT_DETAIL_CONTROL_SIZE,
+                      unitColumnSpread: DOCUMENT_DETAIL_TEXT_COL,
+                      quantityColumnSpread: DOCUMENT_DETAIL_NUM_COL,
+                      onAfterQuantityChange: (rowIndex) => {
+                        void repriceUnlockedSalesDocumentLineIfNeeded(formRef.current, rowIndex, {
+                          asOfField: 'contract_date',
+                        });
+                      },
+                    }),
                     {
                       title:
                         priceType === 'tax_inclusive'

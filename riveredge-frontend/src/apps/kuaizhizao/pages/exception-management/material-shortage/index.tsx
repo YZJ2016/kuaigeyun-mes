@@ -230,15 +230,17 @@ const MaterialShortageExceptionPage: React.FC = () => {
               >
                 替代
               </Button>
-              <Button
-                type="link"
-                size="small"
-                icon={<CheckCircleOutlined />}
-                onClick={() => handleException(record, 'resolve')}
-              >
-                解决
-              </Button>
             </>
+          )}
+          {(record.status === 'pending' || record.status === 'processing') && (
+            <Button
+              type="link"
+              size="small"
+              icon={<CheckCircleOutlined />}
+              onClick={() => handleException(record, 'resolve')}
+            >
+              解决
+            </Button>
           )}
         </Space>
       ),

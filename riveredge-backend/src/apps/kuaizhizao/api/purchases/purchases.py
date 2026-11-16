@@ -417,6 +417,40 @@ async def get_purchase_order_price_trend(
 
 
 @router.get(
+    "/purchase-orders/sales-order-pull-orders",
+    summary="Sales orders for purchase order pull (direct buy push)",
+    dependencies=[Depends(require_read_or_display("kuaizhizao:purchase-order"))],
+)
+async def list_purchase_order_sales_order_pull_orders(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None, description="订单号/客户/名称"),
+    pullable_only: bool = Query(True, description="仅仍有外购可下推余量的销售订单"),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    from apps.kuaizhizao.services.sales_order_purchase_push import (
+        list_sales_orders_for_purchase_order_pull,
+    )
+
+    try:
+        return await list_sales_orders_for_purchase_order_pull(
+            tenant_id,
+            skip=skip,
+            limit=limit,
+            keyword=keyword,
+            pullable_only=pullable_only,
+        )
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception:
+        logger.exception("列出采购订单取单销售订单失败")
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="列出采购订单取单销售订单失败",
+        )
+
+
+@router.get(
     "/purchase-orders/receipt-notice-pull-lines",
     summary="Open purchase order lines for receipt notice pull",
     dependencies=[Depends(require_read_or_display("kuaizhizao:purchase-order"))],

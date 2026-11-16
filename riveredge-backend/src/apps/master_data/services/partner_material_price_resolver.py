@@ -1,0 +1,143 @@
+"""客商 + 物料取价唯一算法（价本 / 最近价 / 物料默认）。"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import date
+from decimal import Decimal
+from typing import Any, Dict, Literal, Optional
+
+from apps.master_data.models.material import Material
+from apps.master_data.schemas.partner_price_book_schemas import PartnerPriceResolveRequest
+from apps.master_data.services.partner_price_book_service import PartnerPriceBookService
+from apps.master_data.services.partner_price_resolution_config import get_partner_price_resolution_order
+from apps.master_data.services.partner_material_price_defaults import (
+    material_default_tax_rate,
+    resolve_material_default_unit_price,
+)
+from apps.kuaizhizao.services.partner_material_price_trend_service import PartnerMaterialPriceTrendService
+
+Side = Literal["purchase", "sales"]
+
+
+@dataclass
+class PartnerMaterialPriceResult:
+    found: bool
+    unit_price: Decimal
+    tax_rate: Optional[Decimal] = None
+    price_source: Optional[str] = None
+    currency_code: Optional[str] = None
+    partner_material_code: Optional[str] = None
+    partner_material_name: Optional[str] = None
+
+
+class PartnerMaterialPriceResolver:
+    _trend = PartnerMaterialPriceTrendService()
+
+    @classmethod
+    async def resolve(
+        cls,
+        tenant_id: int,
+        side: Side,
+        partner_id: int,
+        material_id: int,
+        *,
+        quantity: Optional[Decimal] = None,
+        as_of: Optional[date] = None,
+        variant_attributes: Optional[Dict[str, Any]] = None,
+    ) -> PartnerMaterialPriceResult:
+        partner_type = "customer" if side == "sales" else "supplier"
+        order = await get_partner_price_resolution_order(tenant_id)
+        as_of = as_of or date.today()
+        qty = Decimal(str(quantity)) if quantity is not None else None
+
+        for step in order:
+            if step == "recent":
+                recent = await cls._resolve_recent(
+                    tenant_id, side, partner_id, material_id
+                )
+                if recent is not None and recent > 0:
+                    return PartnerMaterialPriceResult(
+                        found=True,
+                        unit_price=recent,
+                        price_source="recent",
+                    )
+            elif step == "book_standard":
+                book = await PartnerPriceBookService.resolve(
+                    tenant_id,
+                    partner_type,
+                    PartnerPriceResolveRequest(
+                        partner_id=partner_id,
+                        material_id=material_id,
+                        variant_attributes=variant_attributes,
+                        as_of=as_of,
+                        quantity=qty,
+                        resolve_mode="standard_only",
+                    ),
+                )
+                if book.found and book.unit_price is not None and book.unit_price > 0:
+                    return PartnerMaterialPriceResult(
+                        found=True,
+                        unit_price=book.unit_price,
+                        tax_rate=book.tax_rate,
+                        price_source=book.price_source or "book_standard",
+                        currency_code=book.currency_code,
+                        partner_material_code=book.partner_material_code,
+                        partner_material_name=book.partner_material_name,
+                    )
+            elif step == "book_tier":
+                if qty is None or qty <= 0:
+                    continue
+                book = await PartnerPriceBookService.resolve(
+                    tenant_id,
+                    partner_type,
+                    PartnerPriceResolveRequest(
+                        partner_id=partner_id,
+                        material_id=material_id,
+                        variant_attributes=variant_attributes,
+                        as_of=as_of,
+                        quantity=qty,
+                        resolve_mode="tier_only",
+                    ),
+                )
+                if book.found and book.unit_price is not None and book.unit_price > 0:
+                    return PartnerMaterialPriceResult(
+                        found=True,
+                        unit_price=book.unit_price,
+                        tax_rate=book.tax_rate,
+                        price_source=book.price_source or "book_tier",
+                        currency_code=book.currency_code,
+                        partner_material_code=book.partner_material_code,
+                        partner_material_name=book.partner_material_name,
+                    )
+
+        material = await Material.filter(
+            tenant_id=tenant_id, id=material_id, deleted_at__isnull=True
+        ).first()
+        if material:
+            mat_price = resolve_material_default_unit_price(material.defaults, side, qty)
+            if mat_price is not None and mat_price > 0:
+                return PartnerMaterialPriceResult(
+                    found=True,
+                    unit_price=mat_price,
+                    tax_rate=material_default_tax_rate(material.defaults or {}),
+                    price_source="material_default",
+                )
+
+        return PartnerMaterialPriceResult(found=False, unit_price=Decimal("0"))
+
+    @classmethod
+    async def _resolve_recent(
+        cls,
+        tenant_id: int,
+        side: Side,
+        partner_id: int,
+        material_id: int,
+    ) -> Optional[Decimal]:
+        if side == "sales":
+            return await cls._trend.get_latest_sales_unit_price(
+                tenant_id, material_id, partner_id
+            )
+        return await cls._trend.get_latest_purchase_unit_price(
+            tenant_id, material_id, partner_id
+        )

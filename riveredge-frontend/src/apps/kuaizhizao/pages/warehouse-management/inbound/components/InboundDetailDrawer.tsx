@@ -17,7 +17,17 @@ import {
 import { UniLifecycleStepper } from '../../../../../../components/uni-lifecycle';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../../components/document-tracking-panel';
 import { alignDescriptionColumns } from '../../../sales-management/shared/documentFieldAlignment';
-import { formatDateBySiteSetting, formatDateTimeBySiteSetting, formatQuantity } from '../../../../../../utils/format';
+import {
+  formatCurrencyAmount,
+  formatDateBySiteSetting,
+  formatDateTimeBySiteSetting,
+  formatQuantity,
+} from '../../../../../../utils/format';
+import {
+  buildDocumentLineAttachmentsDrawerColumn,
+  DOCUMENT_LINE_ATTACHMENT_UPLOAD_CATEGORY,
+} from '../../../../components/documentLineAttachmentsColumns';
+import { payableLedgerRecognitionLabel } from '../../../../../../utils/documentLedgerRecognition';
 import { getInboundLifecycle } from '../../../../utils/inboundLifecycle';
 import { renderInboundReceiptTypeMarkerTag } from '../../shared/warehouseMarkerTags';
 import {
@@ -281,6 +291,14 @@ export const InboundDetailDrawer: React.FC<InboundDetailDrawerProps> = ({
               width: 100,
               render: (v) => (v != null && String(v).trim() ? String(v) : '—'),
             },
+            ...(effective.receipt_type === 'purchase'
+              ? [
+                  buildDocumentLineAttachmentsDrawerColumn(
+                    t,
+                    DOCUMENT_LINE_ATTACHMENT_UPLOAD_CATEGORY.purchaseReceipt,
+                  ),
+                ]
+              : []),
           ]}
         />
       ) : (

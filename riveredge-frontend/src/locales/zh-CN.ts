@@ -27575,6 +27575,7 @@ export default {
   'pages.system.configCenter.param.supply_chain_partner_price_resolution_order': '客商取价顺序',
   'pages.system.configCenter.param.supply_chain_partner_price_resolution_order_desc':
     '未锁定来源的单据行取价时，依次尝试最近成交价与价本；价本有订购数量时优先命中阶梯价，未命中再用标准价（同本标准/阶梯不互相短路）',
+    '未锁定来源的单据行取价时，依次尝试最近成交价、价本标准价、价本阶梯价',
   'pages.system.configCenter.param.supply_chain_partner_price_resolution_order_opt_rsb': '最近价 然后 标准价 然后 阶梯价',
   'pages.system.configCenter.param.supply_chain_partner_price_resolution_order_opt_rbs': '最近价 然后 阶梯价 然后 标准价',
   'pages.system.configCenter.param.supply_chain_partner_price_resolution_order_opt_sbr': '标准价 然后 阶梯价 然后 最近价',

@@ -28,6 +28,10 @@ class PurchaseRequisitionItemBase(BaseModel):
     required_date: Optional[date] = Field(None, description="要求到货日期")
     supplier_id: Optional[int] = Field(None, description="供应商ID")
     notes: Optional[str] = Field(None, description="备注")
+    aux_quantity: Optional[Decimal] = Field(None, ge=0, description="副数量")
+    aux_unit: Optional[str] = Field(None, max_length=20, description="副单位")
+    unit_conversion_rate: Optional[Decimal] = Field(None, gt=0, description="行换算率")
+    attachments: Optional[List[dict]] = Field(None, description="行附件列表")
 
 
 class PurchaseRequisitionItemCreate(PurchaseRequisitionItemBase):

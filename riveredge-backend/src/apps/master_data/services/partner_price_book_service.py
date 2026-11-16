@@ -28,6 +28,10 @@ from apps.master_data.schemas.partner_price_book_schemas import (
     PartnerPriceResolveResponse,
 )
 from apps.master_data.services.material_code_service import MaterialCodeService
+from apps.master_data.services.partner_price_tier_utils import (
+    match_tier_unit_price,
+    normalize_tier_prices_for_storage,
+)
 from apps.master_data.services.master_data_list_core import (
     apply_master_crud_created_date_range,
     apply_master_crud_updated_date_range,
@@ -144,39 +148,105 @@ class PartnerPriceBookService:
         return (price / factor).quantize(Decimal("0.0001"))
 
     @classmethod
+    def _deserialize_tier_prices(cls, raw: Any) -> Optional[List[Dict[str, Any]]]:
+        if not raw:
+            return None
+        if isinstance(raw, str):
+            raw = json.loads(raw)
+        if not isinstance(raw, list):
+            return None
+        return raw
+
+    @classmethod
+    def _serialize_tier_prices_for_storage(cls, tier_prices: Optional[Any]) -> Optional[List[Dict[str, Any]]]:
+        if not tier_prices:
+            return None
+        if isinstance(tier_prices, list) and tier_prices and isinstance(tier_prices[0], dict):
+            if "minQuantity" in tier_prices[0] or "min_quantity" in tier_prices[0]:
+                return normalize_tier_prices_for_storage(tier_prices)
+        normalized_input: List[Any] = []
+        for line in tier_prices:
+            if hasattr(line, "model_dump"):
+                normalized_input.append(line.model_dump(by_alias=True))
+            else:
+                normalized_input.append(line)
+        return normalize_tier_prices_for_storage(normalized_input)
+
+    @classmethod
     def _resolve_price_from_row(
         cls,
         row: PartnerPriceBook,
         variant_attributes: Optional[Dict[str, Any]] = None,
-    ) -> Tuple[Optional[Decimal], bool]:
-        """返回 (单价, 是否属性 SKU 价)。"""
+        quantity: Optional[Decimal] = None,
+        resolve_mode: str = "auto",
+    ) -> Tuple[Optional[Decimal], bool, bool]:
+        """返回 (不含税单价, 是否属性 SKU 价, 是否阶梯价)。"""
+        mode = (resolve_mode or "auto").strip()
         query_attrs = cls._normalize_variant_attributes(variant_attributes)
         variant_lines = cls._deserialize_variant_prices(row.variant_prices) or []
         if query_attrs and variant_lines:
             best_price: Optional[Decimal] = None
             best_score = -1
             for line in variant_lines:
-                line_attrs = line.get("variantAttributes") or {}
+                line_attrs = line.get("variantAttributes") or line.get("variant_attributes") or {}
                 if cls._variant_attributes_match(line_attrs, query_attrs):
                     score = len(cls._normalize_variant_attributes(line_attrs))
                     if score > best_score:
                         best_score = score
-                        best_price = line.get("unitPrice")
+                        best_price = line.get("unitPrice") or line.get("unit_price")
             if best_price is not None:
                 return (
                     cls._normalize_stored_unit_price_to_exclusive(
                         best_price, row.tax_rate, row.price_type
                     ),
                     True,
+                    False,
                 )
+
+        tier_lines = cls._deserialize_tier_prices(row.tier_prices)
+        qty_dec = Decimal(str(quantity)) if quantity is not None else None
+
+        def tier_hit() -> Optional[Decimal]:
+            raw = match_tier_unit_price(tier_lines, qty_dec)
+            if raw is None:
+                return None
+            return cls._normalize_stored_unit_price_to_exclusive(raw, row.tax_rate, row.price_type)
+
+        if mode == "tier_only":
+            tier_price = tier_hit()
+            if tier_price is not None:
+                return tier_price, False, True
+            return None, False, False
+
+        if mode == "standard_only":
+            if row.unit_price is not None:
+                return (
+                    cls._normalize_stored_unit_price_to_exclusive(
+                        row.unit_price, row.tax_rate, row.price_type
+                    ),
+                    False,
+                    False,
+                )
+            return None, False, False
+
+        # auto：有数量且命中阶梯则用阶梯，否则标准价（与未升级前一致：无 quantity 不走阶梯）
+        if qty_dec is not None and tier_lines:
+            tier_price = tier_hit()
+            if tier_price is not None:
+                return tier_price, False, True
         if row.unit_price is not None:
             return (
                 cls._normalize_stored_unit_price_to_exclusive(
                     row.unit_price, row.tax_rate, row.price_type
                 ),
                 False,
+                False,
             )
-        return None, False
+        if qty_dec is not None and tier_lines:
+            tier_price = tier_hit()
+            if tier_price is not None:
+                return tier_price, False, True
+        return None, False, False
 
     @staticmethod
     def _split_alias_sync_fields(payload: dict, *, default_sync: bool) -> tuple[dict, Optional[str], Optional[str], bool]:
@@ -423,6 +493,7 @@ class PartnerPriceBookService:
             "unit_price": row.unit_price,
             "price_type": row.price_type or "tax_inclusive",
             "variant_prices": cls._deserialize_variant_prices(row.variant_prices),
+            "tier_prices": cls._deserialize_tier_prices(row.tier_prices),
             "currency_code": row.currency_code,
             "tax_rate": row.tax_rate,
             "unit": row.unit,
@@ -470,6 +541,7 @@ class PartnerPriceBookService:
         if not payload.get("unit") and material.base_unit:
             payload["unit"] = material.base_unit
         payload["variant_prices"] = cls._serialize_variant_prices_for_storage(payload.get("variant_prices"))
+        payload["tier_prices"] = cls._serialize_tier_prices_for_storage(payload.get("tier_prices"))
         apply_create_audit(payload, current_user)
 
         async with in_transaction():
@@ -576,7 +648,12 @@ class PartnerPriceBookService:
                         continue
                     material = material_cache[line.material_id]
                     unit = (line.unit or "").strip() or material.base_unit
-                    overlap.unit_price = line.unit_price
+                    if line.unit_price is not None and line.unit_price > 0:
+                        overlap.unit_price = line.unit_price
+                    if line.tier_prices is not None:
+                        overlap.tier_prices = cls._serialize_tier_prices_for_storage(
+                            [t.model_dump(by_alias=True) for t in line.tier_prices]
+                        )
                     overlap.price_type = price_type
                     overlap.tax_rate = data.tax_rate
                     overlap.unit = unit
@@ -600,10 +677,11 @@ class PartnerPriceBookService:
 
                 material = material_cache[line.material_id]
                 unit = (line.unit or "").strip() or material.base_unit
+                unit_price = line.unit_price if line.unit_price is not None and line.unit_price > 0 else Decimal("0")
                 payload: Dict[str, Any] = {
                     "partner_id": partner_id,
                     "material_id": line.material_id,
-                    "unit_price": line.unit_price,
+                    "unit_price": unit_price,
                     "price_type": price_type,
                     "tax_rate": data.tax_rate,
                     "unit": unit,
@@ -612,6 +690,11 @@ class PartnerPriceBookService:
                     "remark": data.remark,
                     "is_active": is_active,
                     "variant_prices": None,
+                    "tier_prices": cls._serialize_tier_prices_for_storage(
+                        [t.model_dump(by_alias=True) for t in line.tier_prices]
+                        if line.tier_prices
+                        else None
+                    ),
                 }
                 apply_create_audit(payload, current_user)
                 await PartnerPriceBook.create(
@@ -843,6 +926,8 @@ class PartnerPriceBookService:
         async with in_transaction():
             if "variant_prices" in payload:
                 payload["variant_prices"] = cls._serialize_variant_prices_for_storage(payload.get("variant_prices"))
+            if "tier_prices" in payload:
+                payload["tier_prices"] = cls._serialize_tier_prices_for_storage(payload.get("tier_prices"))
             for key, value in payload.items():
                 setattr(row, key, value)
             apply_update_audit(row, current_user)
@@ -934,7 +1019,12 @@ class PartnerPriceBookService:
                 partner_material_code=alias.code if alias else None,
                 partner_material_name=alias.name if alias else None,
             )
-        unit_price, is_variant = cls._resolve_price_from_row(row, effective_attrs)
+        unit_price, is_variant, is_tier = cls._resolve_price_from_row(
+            row,
+            effective_attrs,
+            quantity=data.quantity,
+            resolve_mode=data.resolve_mode or "auto",
+        )
         if unit_price is None:
             return PartnerPriceResolveResponse(
                 found=False,
@@ -942,10 +1032,18 @@ class PartnerPriceBookService:
                 partner_material_code=alias.code if alias else None,
                 partner_material_name=alias.name if alias else None,
             )
+        if is_variant:
+            price_source = "book_variant"
+        elif is_tier:
+            price_source = "book_tier"
+        else:
+            price_source = "book_standard"
         return PartnerPriceResolveResponse(
             found=True,
             unit_price=unit_price,
             is_variant_price=is_variant,
+            is_tier_price=is_tier,
+            price_source=price_source,
             currency_code=row.currency_code,
             tax_rate=row.tax_rate,
             unit=row.unit,
@@ -971,6 +1069,22 @@ class PartnerPriceBookService:
         elif data.material_ids:
             for material_id in data.material_ids:
                 lines.append((material_id, None))
+        batch_items = data.items or []
+        if batch_items:
+            for batch_line in batch_items:
+                item = await cls.resolve(
+                    tenant_id,
+                    partner_type,
+                    PartnerPriceResolveRequest(
+                        partner_id=data.partner_id,
+                        material_id=batch_line.material_id,
+                        variant_attributes=batch_line.variant_attributes,
+                        quantity=batch_line.quantity,
+                        as_of=as_of,
+                    ),
+                )
+                results.append(item)
+            return results
         for material_id, variant_attributes in lines:
             item = await cls.resolve(
                 tenant_id,

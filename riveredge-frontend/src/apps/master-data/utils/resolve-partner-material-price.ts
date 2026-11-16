@@ -9,6 +9,7 @@ import { customerPriceBookApi, supplierPriceBookApi } from '../services/partner-
 import type { PartnerPriceResolveResult } from '../types/partner-price-book';
 import { parseVariantAttributesValue } from '../components/VariantAttributeFields';
 import { normalizeFormListItems } from '../../../utils/formListItems';
+import { isDocumentLineUnitPriceLocked } from '../../kuaizhizao/utils/documentLinePriceLock';
 
 type FormWithLineItems = {
   getFieldValue: (name: string | (string | number)[]) => unknown;
@@ -135,10 +136,12 @@ export function getMaterialDefaultPurchasePrice(material: Material | Record<stri
 
 export function getMaterialSalePriceMethod(
   material: Material | Record<string, unknown>,
-): 'fixed' | 'market' {
+): 'fixed' | 'market' | 'tier' {
   const defaults = (material as any).defaults ?? {};
   const raw = defaults.salePriceMethod ?? defaults.sale_price_method;
-  return raw === 'market' ? 'market' : 'fixed';
+  if (raw === 'market') return 'market';
+  if (raw === 'tier') return 'tier';
+  return 'fixed';
 }
 
 export async function resolveMaterialMarketSalePrice(
@@ -418,6 +421,7 @@ export async function resolveOrderLineSalePrice(
   variantAttributes: unknown,
   material: Material | Record<string, unknown> | undefined,
   asOf?: string | dayjs.Dayjs,
+  quantity?: number,
 ): Promise<{
   unitPrice: number;
   taxRate: number;
@@ -442,16 +446,32 @@ export async function resolveOrderLineSalePrice(
     return { ...fb, resolved: undefined };
   }
   try {
-    const resolved = await resolveCustomerSalePrice(customerId, materialId, asOf, attrs);
-    const taxRate = pickResolvedTaxRate(resolved) ?? taxR;
-    if (resolved?.found) {
-      const unitPrice = pickSaleUnitPrice(material ?? {}, resolved);
-      return { unitPrice, taxRate, resolved, snapshot: null };
+    const { resolvePartnerMaterialLinePrice } = await import('../services/partner-price-book');
+    const unified = await resolvePartnerMaterialLinePrice({
+      side: 'sales',
+      partnerId: customerId,
+      materialId,
+      quantity: quantity != null && Number.isFinite(Number(quantity)) ? Number(quantity) : undefined,
+      asOf: formatAsOf(asOf),
+      variantAttributes: attrs,
+    });
+    if (unified.found && unified.unitPrice != null && unified.unitPrice > 0) {
+      const taxRate = unified.taxRate != null ? Number(unified.taxRate) : taxR;
+      return {
+        unitPrice: Number(unified.unitPrice),
+        taxRate,
+        resolved: {
+          found: true,
+          unitPrice: unified.unitPrice,
+          taxRate: unified.taxRate,
+          partnerMaterialCode: unified.partnerMaterialCode,
+          partnerMaterialName: unified.partnerMaterialName,
+        } as PartnerPriceResolveResult,
+        snapshot: null,
+      };
     }
-    const fb = await fallbackMarket();
-    return { unitPrice: fb.unitPrice, taxRate: fb.taxRate, resolved, snapshot: fb.snapshot };
   } catch {
-    /* 无价目表则走物料取价 */
+    /* 统一解析失败则走物料/行情回落 */
   }
   const fb = await fallbackMarket();
   return { ...fb, resolved: undefined };
@@ -532,12 +552,24 @@ export async function applySalesDocumentLineMaterialPricing(
   let snapshot: Record<string, unknown> | null = null;
   let partnerSnapshot = { partner_material_code: '', partner_material_name: '' };
   try {
+    const itemsForQty = normalizeFormListItems<Record<string, unknown>>(form.getFieldValue('items'));
+    const qtyRaw =
+      itemsForQty[index]?.required_quantity ??
+      itemsForQty[index]?.requiredQuantity ??
+      itemsForQty[index]?.quote_quantity ??
+      itemsForQty[index]?.contract_quantity ??
+      itemsForQty[index]?.delivery_quantity ??
+      itemsForQty[index]?.return_quantity ??
+      itemsForQty[index]?.ordered_quantity ??
+      itemsForQty[index]?.receipt_quantity;
+    const lineQty = Number(qtyRaw);
     const resolved = await resolveOrderLineSalePrice(
       customerId ? Number(customerId) : undefined,
       Number.isFinite(materialId) ? materialId : undefined,
       undefined,
       full,
       asOf,
+      Number.isFinite(lineQty) && lineQty > 0 ? lineQty : undefined,
     );
     unitPrice = resolved.unitPrice;
     taxRate = resolved.taxRate;
@@ -585,6 +617,7 @@ export async function resolveOrderLinePurchasePrice(
   variantAttributes: unknown,
   material: Material | Record<string, unknown> | undefined,
   asOf?: string | dayjs.Dayjs,
+  quantity?: number,
 ): Promise<{ unitPrice: number; taxRate: number; resolved?: PartnerPriceResolveResult }> {
   const attrs = parseVariantAttributesValue(variantAttributes);
   const taxR = material != null ? getMaterialDefaultTaxRate(material) : 0;
@@ -596,17 +629,37 @@ export async function resolveOrderLinePurchasePrice(
     };
   }
   try {
-    const resolved = await resolveSupplierPurchasePrice(supplierId, materialId, asOf, attrs);
-    const taxRate = pickResolvedTaxRate(resolved) ?? taxR;
-    const unitPrice = pickPurchaseUnitPrice(material ?? {}, resolved);
-    return { unitPrice, taxRate, resolved };
+    const { resolvePartnerMaterialLinePrice } = await import('../services/partner-price-book');
+    const unified = await resolvePartnerMaterialLinePrice({
+      side: 'purchase',
+      partnerId: supplierId,
+      materialId,
+      quantity: quantity != null && Number.isFinite(Number(quantity)) ? Number(quantity) : undefined,
+      asOf: formatAsOf(asOf),
+      variantAttributes: attrs,
+    });
+    if (unified.found && unified.unitPrice != null && unified.unitPrice > 0) {
+      const taxRate = unified.taxRate != null ? Number(unified.taxRate) : taxR;
+      return {
+        unitPrice: Number(unified.unitPrice),
+        taxRate,
+        resolved: {
+          found: true,
+          unitPrice: unified.unitPrice,
+          taxRate: unified.taxRate,
+          partnerMaterialCode: unified.partnerMaterialCode,
+          partnerMaterialName: unified.partnerMaterialName,
+        } as PartnerPriceResolveResult,
+      };
+    }
   } catch {
-    return {
-      unitPrice: material ? getMaterialDefaultPurchasePrice(material) : 0,
-      taxRate: taxR,
-      resolved: undefined,
-    };
+    /* 回落物料默认采购价 */
   }
+  return {
+    unitPrice: material ? getMaterialDefaultPurchasePrice(material) : 0,
+    taxRate: taxR,
+    resolved: undefined,
+  };
 }
 
 /** 批量选料：供应商价本 + 物料默认采购价（与单行 applyPurchaseDocumentLineMaterialPricing 一致） */
@@ -727,12 +780,23 @@ export async function applyPurchaseDocumentLineMaterialPricing(
           ? headerSupplier
           : undefined;
   const materialId = Number((full as Material).id ?? (material as Record<string, unknown>).id);
-  const { unitPrice, taxRate, resolved } = await resolveOrderLinePurchasePrice(
+  const qtyRaw =
+    items[index]?.ordered_quantity ??
+    items[index]?.orderedQuantity ??
+    items[index]?.quantity ??
+    items[index]?.return_quantity ??
+    items[index]?.receipt_quantity ??
+    items[index]?.delivery_quantity ??
+    items[index]?.required_quantity ??
+    items[index]?.requiredQuantity;
+  const lineQty = Number(qtyRaw);
+  const { unitPrice, taxRate: resolvedTax, resolved } = await resolveOrderLinePurchasePrice(
     supplierId,
     Number.isFinite(materialId) ? materialId : undefined,
     undefined,
     full,
     asOf,
+    Number.isFinite(lineQty) && lineQty > 0 ? lineQty : undefined,
   );
   const partnerSnapshot = pickPartnerMaterialSnapshotFields(resolved);
   let up = unitPrice;
@@ -760,4 +824,76 @@ export async function applyPurchaseDocumentLineMaterialPricing(
   if (includeTaxRate) {
     form.setFieldValue?.(['items', index, 'tax_rate'], taxRate);
   }
+}
+
+export type PurchaseLineRepriceTrigger = 'material' | 'quantity' | 'partner' | 'asOf';
+
+/** 未锁定来源行：按当前数量重算采购单价 */
+export async function repriceUnlockedPurchaseDocumentLineIfNeeded(
+  form: FormWithLineItems | null | undefined,
+  index: number,
+  options?: {
+    materialList?: Array<Material | Record<string, unknown>>;
+    asOfField?: string;
+    unitPriceField?: 'unit_price' | 'suggested_unit_price';
+    supplierId?: number;
+    fallbackTaxRate?: number;
+    /** material 触发时必传 */
+    material?: Material | Record<string, unknown>;
+  },
+): Promise<void> {
+  if (!form) return;
+  const items = normalizeFormListItems<Record<string, unknown>>(form.getFieldValue('items'));
+  const line = items[index];
+  if (!line || isDocumentLineUnitPriceLocked(line)) return;
+
+  const materialId = Number(line.material_id ?? line.materialId);
+  if (!Number.isFinite(materialId) || materialId <= 0) return;
+
+  const stub = options?.material ?? {
+    id: materialId,
+    uuid: line.material_uuid ?? line.materialUuid,
+  };
+  const material = await resolveMaterialForPricing(stub, options?.materialList);
+
+  await applyPurchaseDocumentLineMaterialPricing(form, index, material, {
+    materialList: options?.materialList,
+    asOfField: options?.asOfField,
+    unitPriceField: options?.unitPriceField,
+    supplierId: options?.supplierId,
+    fallbackTaxRate: options?.fallbackTaxRate,
+  });
+}
+
+/** 未锁定来源行：按 required_quantity 重算销售单价 */
+export async function repriceUnlockedSalesDocumentLineIfNeeded(
+  form: FormWithLineItems | null | undefined,
+  index: number,
+  options?: {
+    materialList?: Array<Material | Record<string, unknown>>;
+    asOfField?: string;
+    customerId?: number;
+    material?: Material | Record<string, unknown>;
+  },
+): Promise<void> {
+  if (!form) return;
+  const items = normalizeFormListItems<Record<string, unknown>>(form.getFieldValue('items'));
+  const line = items[index];
+  if (!line || isDocumentLineUnitPriceLocked(line)) return;
+  if (line.pricing_snapshot != null) return;
+
+  const materialId = Number(line.material_id ?? line.materialId);
+  if (!Number.isFinite(materialId) || materialId <= 0) return;
+
+  const stub = options?.material ?? {
+    id: materialId,
+    uuid: line.material_uuid ?? line.materialUuid,
+  };
+  const material = await resolveMaterialForPricing(stub, options?.materialList);
+
+  await applySalesDocumentLineMaterialPricing(form, index, material, {
+    materialList: options?.materialList,
+    asOfField: options?.asOfField,
+    customerId: options?.customerId,
+  });
 }

@@ -278,6 +278,7 @@ import type { Customer } from '../../../../master-data/types/supply-chain';
 import {
   applySalesDocumentLineMaterialPricing,
   getMaterialDefaultTaxRate,
+  repriceUnlockedSalesDocumentLineIfNeeded,
   resolveMaterialForPricing,
   resolveOrderLineSalePrice,
   resolveSalesDocumentMaterialLinesPricing,
@@ -292,6 +293,14 @@ import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import CodeField from '../../../../../components/code-field';
 import { getFileDownloadUrl } from '../../../../../services/file';
+import {
+  mapAttachmentsToUploadList,
+  normalizeDocumentAttachments,
+} from '../../../utils/documentAttachments';
+import {
+  buildDocumentLineAttachmentsFormColumn,
+  DOCUMENT_LINE_ATTACHMENT_UPLOAD_CATEGORY,
+} from '../../../components/documentLineAttachmentsColumns';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 /** 用户列表：对接系统管理-用户管理-帐户管理（/core/users） */
 import { searchUserDisplay, type User } from '../../../../../services/user';
@@ -1434,6 +1443,7 @@ const SalesOrdersPage: React.FC = () => {
             const va = (item as any).variant_attributes;
             return parseVariantAttributesValue(va) ?? (va == null ? undefined : va);
           })(),
+          attachments: mapAttachmentsToUploadList((item as any).attachments),
         };
         return base;
       });
@@ -1799,6 +1809,7 @@ const SalesOrdersPage: React.FC = () => {
           is_gift: giftFields.is_gift,
           gift_ref_unit_price: giftFields.gift_ref_unit_price,
           notes: (it as any).notes,
+          attachments: normalizeDocumentAttachments((it as any).attachments),
         };
       });
 
@@ -3491,12 +3502,14 @@ const SalesOrdersPage: React.FC = () => {
       const full = material
         ? await resolveMaterialForPricing(material, materialsRef.current)
         : undefined;
+      const qty = Number(formRef.current?.getFieldValue(['items', index, 'required_quantity'])) || 0;
       const { unitPrice, taxRate } = await resolveOrderLineSalePrice(
         customerId ? Number(customerId) : undefined,
         materialId ? Number(materialId) : undefined,
         attrs,
         full,
         asOf,
+        qty > 0 ? qty : undefined,
       );
       let up = unitPrice;
       if (pt === 'tax_inclusive' && up > 0) {
@@ -4787,6 +4800,14 @@ const SalesOrdersPage: React.FC = () => {
                   customerList: customers as unknown as Array<Record<string, unknown>>,
                   paymentTermsOptions,
                 });
+                const items = normalizeFormListItems<Record<string, unknown>>(
+                  formRef.current?.getFieldValue('items'),
+                );
+                items.forEach((_, idx) => {
+                  void repriceUnlockedSalesDocumentLineIfNeeded(formRef.current, idx, {
+                    asOfField: 'order_date',
+                  });
+                });
               }}
             />
           </ProForm.Item>
@@ -4810,6 +4831,14 @@ const SalesOrdersPage: React.FC = () => {
                 }
                 formRef.current?.validateFields?.(['delivery_date']).catch(() => undefined);
                 void applyExchangeRateFromTable();
+                const items = normalizeFormListItems<Record<string, unknown>>(
+                  formRef.current?.getFieldValue('items'),
+                );
+                items.forEach((_, idx) => {
+                  void repriceUnlockedSalesDocumentLineIfNeeded(formRef.current, idx, {
+                    asOfField: 'order_date',
+                  });
+                });
               },
             }}
           />
@@ -5104,14 +5133,27 @@ const SalesOrdersPage: React.FC = () => {
                           })}
                           style={{ margin: 0 }}
                         >
-                          <InputNumber
-                            placeholder={t('common.quantity')}
-                            min={0}
-                            max={salesOrderQtyMax}
-                            precision={quantityDecimals}
-                            style={{ width: '100%' }}
-                            size={DOCUMENT_DETAIL_CONTROL_SIZE}
-                          />
+                          {({ getFieldValue }) => {
+                            const materialId = getFieldValue(['items', index, 'material_id']);
+                            if (!formRef.current) return null;
+                            return (
+                              <DocumentLineDualQuantityFormCell
+                                form={formRef.current}
+                                listName="items"
+                                rowIndex={index}
+                                quantityField="required_quantity"
+                                unitField="material_unit"
+                                scenario="sale"
+                                quantityPrecision={quantityDecimals}
+                                materialId={materialId}
+                                onAfterQuantityChange={() => {
+                                  void repriceUnlockedSalesDocumentLineIfNeeded(formRef.current, index, {
+                                    asOfField: 'order_date',
+                                  });
+                                }}
+                              />
+                            );
+                          }}
                         </AntForm.Item>
                       ),
                     },
@@ -5468,6 +5510,10 @@ const SalesOrdersPage: React.FC = () => {
                       ),
                     },
                     ...buildDocumentDetailPartnerMaterialFormColumns(t, 'customer'),
+                    buildDocumentLineAttachmentsFormColumn(
+                      t,
+                      DOCUMENT_LINE_ATTACHMENT_UPLOAD_CATEGORY.salesOrder,
+                    ),
                     {
                       title: t('common.remark'),
                       dataIndex: 'notes',

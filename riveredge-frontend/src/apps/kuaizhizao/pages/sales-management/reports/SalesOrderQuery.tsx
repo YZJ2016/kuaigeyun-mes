@@ -6,6 +6,10 @@ import { ProColumns } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 import KuaizhizaoReport from '../../../components/KuaizhizaoReport';
 import {
+  buildDocumentLineAttachmentsReportColumn,
+  DOCUMENT_LINE_ATTACHMENT_UPLOAD_CATEGORY,
+} from '../../../components/documentLineAttachmentsColumns';
+import {
   reportDocumentStatusText,
   reportReviewStatusText,
   salesOrderStatusEnum,
@@ -122,6 +126,10 @@ const SalesOrderQuery: React.FC = () => {
         ellipsis: true,
         hideInSearch: true,
       },
+      buildDocumentLineAttachmentsReportColumn(
+        t,
+        DOCUMENT_LINE_ATTACHMENT_UPLOAD_CATEGORY.salesOrder,
+      ),
     ],
     [t],
   );
@@ -130,7 +138,7 @@ const SalesOrderQuery: React.FC = () => {
     <KuaizhizaoReport
       title={t('app.kuaizhizao.menu.reports.sales-order-query')}
       reportType="summary"
-      columnPersistenceId="apps.kuaizhizao.pages.sales-management.reports.SalesOrderQuery-v3"
+      columnPersistenceId="apps.kuaizhizao.pages.sales-management.reports.SalesOrderQuery-v4"
       rowKey="id"
       summaryFields={['quantity', 'amount']}
       columns={columns}

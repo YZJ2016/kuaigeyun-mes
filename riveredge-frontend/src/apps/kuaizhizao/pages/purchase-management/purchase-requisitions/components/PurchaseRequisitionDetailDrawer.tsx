@@ -23,6 +23,10 @@ import {
   buildMaterialModelSpecColumns,
   buildPartnerMaterialLineColumns,
 } from '../../../sales-management/shared/materialLineColumns';
+import {
+  buildDocumentLineAttachmentsDrawerColumn,
+  DOCUMENT_LINE_ATTACHMENT_UPLOAD_CATEGORY,
+} from '../../../../components/documentLineAttachmentsColumns';
 import { SourceDocumentCode } from '../../../../../../components/linked-document-code/SourceDocumentCode';
 import { WarehouseTraceBriefPrimaryActions } from '../../../warehouse-management/WarehouseTraceBriefFooter';
 import { getPurchaseRequisitionLifecycle } from '../../../../utils/purchaseRequisitionLifecycle';
@@ -336,6 +340,10 @@ export const PurchaseRequisitionDetailDrawer: React.FC<PurchaseRequisitionDetail
                       <Tag>{t('common.no')}</Tag>
                     ),
                 },
+                buildDocumentLineAttachmentsDrawerColumn(
+                  t,
+                  DOCUMENT_LINE_ATTACHMENT_UPLOAD_CATEGORY.purchaseRequisition,
+                ),
               ]}
             />
           ) : (

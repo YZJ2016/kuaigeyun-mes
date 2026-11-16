@@ -813,6 +813,7 @@ class SalesDeliveryItemBase(BaseSchema):
     status: str = Field("待出库", max_length=20, description="出库状态")
     delivery_time: Optional[datetime] = Field(None, description="实际出库时间")
     notes: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="行附件列表")
 
 
 class SalesDeliveryItemCreate(SalesDeliveryItemBase):
@@ -922,6 +923,7 @@ class PurchaseReceiptItemBase(BaseSchema):
     status: str = Field("待入库", max_length=20, description="入库状态")
     receipt_time: Optional[datetime] = Field(None, description="实际入库时间")
     notes: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="行附件列表")
 
 
 class PurchaseReceiptItemCreate(PurchaseReceiptItemBase):

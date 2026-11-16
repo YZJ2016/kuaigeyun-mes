@@ -1,9 +1,10 @@
-import React, { useMemo } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { Button, DatePicker, InputNumber, Space, Table, Typography } from 'antd';
 import { DeleteOutlined, PlusOutlined, RollbackOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { UniMaterialSelect } from '../../../../components/uni-material-select';
+import { fetchMaterialForUnitSelectCache } from '../../../../components/material-unit-select';
 import type { Material } from '../../../master-data/types/material';
 import type { OrderChangeItem } from '../../services/sales-order-change';
 import { formatDateTime } from '../../../../utils/format';
@@ -12,11 +13,22 @@ import {
   translateOrderChangeLineType,
 } from '../../utils/orderChangeType';
 import { renderInlineMarkerTagGroup } from '../../../../components/inline-marker-tag-preview';
+import {
+  isOrderChangeLineUnitPriceLocked,
+  resolveOrderChangeLineAfterUnitPrice,
+} from '../../utils/orderChangeLinePricing';
+
+export type OrderChangeItemsTablePricing = {
+  side: 'sales' | 'purchase';
+  partnerId?: number;
+  asOf?: string | dayjs.Dayjs;
+};
 
 interface OrderChangeItemsTableProps {
   items: OrderChangeItem[];
   editable?: boolean;
   onChange?: (items: OrderChangeItem[]) => void;
+  pricing?: OrderChangeItemsTablePricing;
 }
 
 function resolveRowKey(row: OrderChangeItem): string {
@@ -62,7 +74,12 @@ function inferLineChangeTypeForSave(row: OrderChangeItem): string {
   return 'QUANTITY';
 }
 
-export const OrderChangeItemsTable: React.FC<OrderChangeItemsTableProps> = ({ items, editable, onChange }) => {
+export const OrderChangeItemsTable: React.FC<OrderChangeItemsTableProps> = ({
+  items,
+  editable,
+  onChange,
+  pricing,
+}) => {
   const { t } = useTranslation();
 
   const updateItem = (index: number, patch: Partial<OrderChangeItem>) => {
@@ -126,8 +143,38 @@ export const OrderChangeItemsTable: React.FC<OrderChangeItemsTableProps> = ({ it
     ]);
   };
 
+  const repriceLineIfAllowed = useCallback(
+    async (index: number, material: Material, quantity: number) => {
+      if (!pricing || !onChange) return;
+      const row = items[index];
+      if (!row || isOrderChangeLineUnitPriceLocked(row)) return;
+      if (row.change_type !== 'LINE_ADD') return;
+      const partnerId =
+        pricing.partnerId != null && Number.isFinite(Number(pricing.partnerId))
+          ? Number(pricing.partnerId)
+          : undefined;
+      try {
+        const unitPrice = await resolveOrderChangeLineAfterUnitPrice(
+          pricing.side,
+          partnerId,
+          material,
+          quantity,
+          pricing.asOf,
+        );
+        if (unitPrice > 0) {
+          updateItem(index, { after_unit_price: unitPrice });
+        }
+      } catch {
+        /* 取价失败保持手工价 */
+      }
+    },
+    [items, onChange, pricing],
+  );
+
   const onMaterialPick = (index: number, material: Material | null) => {
     if (!material) return;
+    const row = items[index];
+    const qty = Number(row?.after_quantity ?? 1) || 1;
     updateItem(index, {
       material_id: material.id,
       material_code: material.code,
@@ -135,6 +182,7 @@ export const OrderChangeItemsTable: React.FC<OrderChangeItemsTableProps> = ({ it
       material_spec: material.spec,
       material_unit: material.unit,
     });
+    void repriceLineIfAllowed(index, material, qty);
   };
 
   const columns = useMemo(() => {
@@ -196,7 +244,20 @@ export const OrderChangeItemsTable: React.FC<OrderChangeItemsTableProps> = ({ it
               min={0}
               value={v}
               style={{ width: '100%' }}
-              onChange={(val) => updateItem(index, { after_quantity: val ?? undefined })}
+              onChange={(val) => {
+                updateItem(index, { after_quantity: val ?? undefined });
+                const row = items[index];
+                if (
+                  row?.change_type === 'LINE_ADD' &&
+                  row.material_id &&
+                  val != null &&
+                  Number(val) > 0
+                ) {
+                  void fetchMaterialForUnitSelectCache(row.material_id).then((mat) => {
+                    if (mat) void repriceLineIfAllowed(index, mat, Number(val));
+                  });
+                }
+              }}
             />
           );
         },
@@ -275,7 +336,7 @@ export const OrderChangeItemsTable: React.FC<OrderChangeItemsTableProps> = ({ it
     }
 
     return cols;
-  }, [editable, items, t]);
+  }, [editable, items, pricing, repriceLineIfAllowed, t]);
 
   return (
     <div style={{ marginBottom: 24 }}>

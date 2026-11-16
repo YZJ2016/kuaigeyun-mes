@@ -93,6 +93,46 @@ export function mapAttachmentsToUploadList(attachments?: DocumentAttachmentFile[
 }
 
 /** 提交前：Upload fileList → 后端 attachments JSON */
+export type MaterialLineAttachmentSource = {
+  key: string;
+  source: 'material_image' | 'engineering_drawing';
+  fileUuid: string;
+  name: string;
+  contentType?: string | null;
+  drawingCode?: string | null;
+  drawingRevision?: string | null;
+};
+
+export function materialLineSourceToDocumentAttachment(
+  item: MaterialLineAttachmentSource,
+): DocumentAttachmentFile {
+  return {
+    uid: item.fileUuid,
+    uuid: item.fileUuid,
+    name: item.name,
+    status: 'done',
+    source: item.source,
+  };
+}
+
+/** 从物料附件弹窗勾选合并进行附件（按 UUID 去重，不改主数据） */
+export function mergeMaterialSourcesIntoLineAttachments(
+  current: DocumentAttachmentFile[] | null | undefined,
+  picked: MaterialLineAttachmentSource[],
+): DocumentAttachmentFile[] {
+  const next = normalizeDocumentAttachments(current);
+  const seen = new Set(
+    next.map((f) => resolveDocumentAttachmentFileUuid(f)).filter(Boolean) as string[],
+  );
+  for (const item of picked) {
+    const uuid = String(item.fileUuid || '').trim();
+    if (!uuid || seen.has(uuid)) continue;
+    seen.add(uuid);
+    next.push(materialLineSourceToDocumentAttachment(item));
+  }
+  return next;
+}
+
 export function normalizeDocumentAttachments(list?: DocumentAttachmentFile[] | null) {
   return (list ?? []).map((file) => {
     const meta: Pick<DocumentAttachmentFile, 'kind' | 'source' | 'supplier_id'> = {};

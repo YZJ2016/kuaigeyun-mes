@@ -61,6 +61,7 @@ class InventoryTransferItemInput(BaseModel):
     to_location_id: Optional[int] = Field(None, description="调入库位ID")
     to_location_code: Optional[str] = Field(None, description="调入库位编码")
     batch_no: Optional[str] = Field(None, description="批次号（可选）")
+    serial_numbers: Optional[List[str]] = Field(None, description="序列号列表")
     quantity: Decimal = Field(..., gt=0, description="调拨数量")
     unit_price: Decimal = Field(default=0, description="单价")
     remarks: Optional[str] = Field(None, description="备注")
@@ -153,6 +154,7 @@ class InventoryTransferItemBase(BaseModel):
     to_location_id: Optional[int] = Field(None, description="调入库位ID（可选）")
     to_location_code: Optional[str] = Field(None, description="调入库位编码（可选）")
     batch_no: Optional[str] = Field(None, description="批次号（可选）")
+    serial_numbers: Optional[List[str]] = Field(None, description="序列号列表")
     quantity: Decimal = Field(..., description="调拨数量")
     unit_price: Decimal = Field(default=0, description="单价")
     remarks: Optional[str] = Field(None, description="备注")
@@ -192,6 +194,7 @@ class InventoryTransferItemUpdate(BaseModel):
     to_location_id: Optional[int] = Field(None, description="调入库位ID")
     to_location_code: Optional[str] = Field(None, description="调入库位编码")
     batch_no: Optional[str] = Field(None, description="批次号")
+    serial_numbers: Optional[List[str]] = Field(None, description="序列号列表")
     remarks: Optional[str] = Field(None, description="备注")
 
 

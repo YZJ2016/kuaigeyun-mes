@@ -18,6 +18,10 @@ import { UniLifecycleStepper } from '../../../../../../components/uni-lifecycle'
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../../components/document-tracking-panel';
 import { alignDescriptionColumns } from '../../../sales-management/shared/documentFieldAlignment';
 import { formatDateTimeBySiteSetting } from '../../../../../../utils/format';
+import {
+  buildDocumentLineAttachmentsDrawerColumn,
+  DOCUMENT_LINE_ATTACHMENT_UPLOAD_CATEGORY,
+} from '../../../../components/documentLineAttachmentsColumns';
 import { getOutboundLifecycle } from '../../../../utils/outboundLifecycle';
 import { renderOutboundIssueTypeMarkerTag } from '../../shared/warehouseMarkerTags';
 import {
@@ -256,6 +260,14 @@ export const OutboundDetailDrawer: React.FC<OutboundDetailDrawerProps> = ({
               width: 100,
             },
             { title: t('common.remark'), dataIndex: 'notes' },
+            ...(effective.outbound_type === 'sales_delivery'
+              ? [
+                  buildDocumentLineAttachmentsDrawerColumn(
+                    t,
+                    DOCUMENT_LINE_ATTACHMENT_UPLOAD_CATEGORY.salesDelivery,
+                  ),
+                ]
+              : []),
           ]}
         />
       ) : (

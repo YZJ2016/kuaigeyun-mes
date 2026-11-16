@@ -71,6 +71,10 @@ import { useResourcePermissions } from '../../../hooks/useResourcePermissions';
 import PriceTypeSwitch, { type PriceTypeValue } from '../../../components/price-type-switch/PriceTypeSwitch';
 import { convertUnitPriceByPriceType } from '../utils/resolve-partner-material-price';
 import {
+  normalizeTierPricesForSubmit,
+  PartnerPriceTierLinesEditor,
+} from './PartnerPriceTierLinesEditor';
+import {
   DEFAULT_MARKET_FLOAT_FORMULA,
   bakeQtyFactorIntoFormula,
   evaluateMarketFloatFormula,
@@ -78,6 +82,10 @@ import {
 import { buildImageUploadFileUrls, getFileByUuid, uploadMultipleFiles } from '../../../services/file';
 import { batchRuleApi, serialRuleApi } from '../services/batchSerialRules';
 import { BatchSerialRuleFormModal } from './BatchSerialRuleFormModal';
+import {
+  resolveWarehouseTrackingFlags,
+  useWarehouseTrackingFlagsQuery,
+} from '../../kuaizhizao/pages/warehouse-management/shared/warehouseTrackingFlags';
 import {
   MATERIAL_SOURCE_TYPE_VALUES,
   buildMaterialSourceTypeOptions,
@@ -222,7 +230,14 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
   const formModalZIndex = useStackedOverlayZIndex();
   const nestedQuickCreateZIndex = formModalZIndex + MODAL_NESTED_ABOVE_PARENT_OFFSET;
   const formRef = useRef<ProFormInstance>();
-  const [localMaterialGroups, setLocalMaterialGroups] = useState<Array<Pick<MaterialGroup, 'id' | 'code' | 'name' | 'alias'>>>(materialGroups);
+  /** 仓储批号/序列号总闸：开启时新建物料默认打开对应开关 */
+  const warehouseTrackingQuery = useWarehouseTrackingFlagsQuery();
+  const warehouseTrackingFlags = useMemo(
+    () => resolveWarehouseTrackingFlags(warehouseTrackingQuery.data),
+    [warehouseTrackingQuery.data],
+  );
+  const warehouseTrackingFetched = warehouseTrackingQuery.isFetched;
+  const [localMaterialGroups, setLocalMaterialGroups] = useState<MaterialGroup[]>(materialGroups);
   const [groupFormModalOpen, setGroupFormModalOpen] = useState(false);
   const [routeFormModalOpen, setRouteFormModalOpen] = useState(false);
   const [supplierFormModalOpen, setSupplierFormModalOpen] = useState(false);
@@ -719,6 +734,33 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
           if (!formDefaults.salePriceMethod) {
             formDefaults.salePriceMethod = 'fixed';
           }
+          if (!formDefaults.purchasePriceMethod) {
+            const purchaseBlock = materialDefaults.purchase;
+            const hasPurchaseTier =
+              purchaseBlock &&
+              typeof purchaseBlock === 'object' &&
+              (Array.isArray((purchaseBlock as { tier_prices?: unknown }).tier_prices) ||
+                Array.isArray((purchaseBlock as { tierPrices?: unknown }).tierPrices));
+            formDefaults.purchasePriceMethod = hasPurchaseTier ? 'tier' : 'fixed';
+          }
+          const salesBlock = materialDefaults.sales;
+          if (salesBlock && typeof salesBlock === 'object') {
+            const rawSaleTiers =
+              (salesBlock as { tier_prices?: unknown }).tier_prices ??
+              (salesBlock as { tierPrices?: unknown }).tierPrices;
+            if (Array.isArray(rawSaleTiers) && rawSaleTiers.length > 0) {
+              formDefaults.saleTierPrices = rawSaleTiers;
+            }
+          }
+          const purchaseBlock = materialDefaults.purchase;
+          if (purchaseBlock && typeof purchaseBlock === 'object') {
+            const rawPurchaseTiers =
+              (purchaseBlock as { tier_prices?: unknown }).tier_prices ??
+              (purchaseBlock as { tierPrices?: unknown }).tierPrices;
+            if (Array.isArray(rawPurchaseTiers) && rawPurchaseTiers.length > 0) {
+              formDefaults.purchaseTierPrices = rawPurchaseTiers;
+            }
+          }
           if (formDefaults.marketFixedSalePrice == null && formDefaults.marketProcessFee != null) {
             formDefaults.marketFixedSalePrice = formDefaults.marketProcessFee;
           }
@@ -1052,8 +1094,59 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         ...(values['defaults.defaultProcessRouteUuid'] !== undefined && { defaultProcessRouteUuid: values['defaults.defaultProcessRouteUuid'] }),
       };
       const processedDefaults: any = { ...existingDefaults, ...formDefaults };
-      const saleMethod = processedDefaults.salePriceMethod === 'market' ? 'market' : 'fixed';
+      const rawSaleMethod = processedDefaults.salePriceMethod;
+      const saleMethod =
+        rawSaleMethod === 'market' ? 'market' : rawSaleMethod === 'tier' ? 'tier' : 'fixed';
       processedDefaults.salePriceMethod = saleMethod;
+      if (saleMethod === 'tier') {
+        const saleTiers = normalizeTierPricesForSubmit(
+          processedDefaults.saleTierPrices ??
+            processedDefaults.sales?.tierPrices ??
+            processedDefaults.sales?.tier_prices,
+        );
+        if (!saleTiers?.length) {
+          messageApi.error(t('app.master-data.defaults.saleTierPricesRequired'));
+          setActiveTab('defaults');
+          throw new Error(t('app.master-data.defaults.saleTierPricesRequired'));
+        }
+        processedDefaults.sales = {
+          ...(typeof processedDefaults.sales === 'object' ? processedDefaults.sales : {}),
+          tier_prices: saleTiers,
+        };
+        delete processedDefaults.saleTierPrices;
+      } else if (saleMethod === 'fixed') {
+        if (processedDefaults.sales && typeof processedDefaults.sales === 'object') {
+          delete processedDefaults.sales.tier_prices;
+          delete processedDefaults.sales.tierPrices;
+        }
+        delete processedDefaults.saleTierPrices;
+      }
+      const rawPurchaseMethod = processedDefaults.purchasePriceMethod ?? 'fixed';
+      const purchaseMethod = rawPurchaseMethod === 'tier' ? 'tier' : 'fixed';
+      processedDefaults.purchasePriceMethod = purchaseMethod;
+      if (purchaseMethod === 'tier') {
+        const purchaseTiers = normalizeTierPricesForSubmit(
+          processedDefaults.purchaseTierPrices ??
+            processedDefaults.purchase?.tierPrices ??
+            processedDefaults.purchase?.tier_prices,
+        );
+        if (!purchaseTiers?.length) {
+          messageApi.error(t('app.master-data.defaults.purchaseTierPricesRequired'));
+          setActiveTab('defaults');
+          throw new Error(t('app.master-data.defaults.purchaseTierPricesRequired'));
+        }
+        processedDefaults.purchase = {
+          ...(typeof processedDefaults.purchase === 'object' ? processedDefaults.purchase : {}),
+          tier_prices: purchaseTiers,
+        };
+        delete processedDefaults.purchaseTierPrices;
+      } else if (purchaseMethod === 'fixed') {
+        if (processedDefaults.purchase && typeof processedDefaults.purchase === 'object') {
+          delete processedDefaults.purchase.tier_prices;
+          delete processedDefaults.purchase.tierPrices;
+        }
+        delete processedDefaults.purchaseTierPrices;
+      }
       if (saleMethod === 'market') {
         const fixed = Number(processedDefaults.marketFixedSalePrice ?? processedDefaults.marketProcessFee ?? 0);
         if (!processedDefaults.marketBaseQuoteCode) {
@@ -1194,14 +1287,14 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
           }
           return { units: aux, scenarios };
         })(),
-        batch_managed: restValues.batchManaged,
-        default_batch_rule_id: restValues.batchManaged
+        batch_managed: restValues.batchManaged === true,
+        default_batch_rule_id: restValues.batchManaged === true
           ? (restValues.defaultBatchRuleId === SYSTEM_DEFAULT_RULE_VALUE || restValues.defaultBatchRuleId == null
             ? null
             : restValues.defaultBatchRuleId)
           : null,
-        serial_managed: restValues.serialManaged,
-        default_serial_rule_id: restValues.serialManaged
+        serial_managed: restValues.serialManaged === true,
+        default_serial_rule_id: restValues.serialManaged === true
           ? (restValues.defaultSerialRuleId === SYSTEM_DEFAULT_RULE_VALUE || restValues.defaultSerialRuleId == null
             ? null
             : restValues.defaultSerialRuleId)
@@ -1382,7 +1475,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
 
   useSubmitShortcut(() => triggerFormSubmit(), Boolean(asPage && open));
 
-  const formInitialValues = (() => {
+  const formInitialValues = useMemo(() => {
     let vals = !isEdit && !(initialValues?.baseUnit != null && initialValues?.baseUnit !== '')
       ? { ...initialValues, baseUnit: DEFAULT_MATERIAL_BASE_UNIT }
       : initialValues;
@@ -1404,8 +1497,56 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         defaults: { ...vals?.defaults, defaultTaxRate: primarySourceType === 'Service' ? 6 : 13 },
       };
     }
+    // 新建：仓储配置开启批号/序列号时默认打开物料开关；暂存恢复若已带布尔值则尊重用户选择
+    if (!isEdit) {
+      const v = vals as {
+        batchManaged?: boolean;
+        serialManaged?: boolean;
+        batch_managed?: boolean;
+        serial_managed?: boolean;
+        defaultBatchRuleId?: unknown;
+        defaultSerialRuleId?: unknown;
+      } | undefined;
+      const explicitBatch = v?.batchManaged ?? v?.batch_managed;
+      const explicitSerial = v?.serialManaged ?? v?.serial_managed;
+      const batchManaged =
+        typeof explicitBatch === 'boolean'
+          ? explicitBatch
+          : warehouseTrackingFetched
+            ? warehouseTrackingFlags.batchManagement
+            : false;
+      const serialManaged =
+        typeof explicitSerial === 'boolean'
+          ? explicitSerial
+          : warehouseTrackingFetched
+            ? warehouseTrackingFlags.serialManagement
+            : false;
+      vals = {
+        ...(vals as object),
+        batchManaged,
+        serialManaged,
+        ...(batchManaged && (v?.defaultBatchRuleId == null || v?.defaultBatchRuleId === '')
+          ? { defaultBatchRuleId: SYSTEM_DEFAULT_RULE_VALUE }
+          : {}),
+        ...(serialManaged && (v?.defaultSerialRuleId == null || v?.defaultSerialRuleId === '')
+          ? { defaultSerialRuleId: SYSTEM_DEFAULT_RULE_VALUE }
+          : {}),
+      } as typeof vals;
+    }
     return vals;
-  })();
+  }, [
+    isEdit,
+    initialValues,
+    warehouseTrackingFetched,
+    warehouseTrackingFlags.batchManagement,
+    warehouseTrackingFlags.serialManagement,
+  ]);
+  const createFormKey =
+    !isEdit && warehouseTrackingFetched
+      ? `create-trk-${warehouseTrackingFlags.batchManagement ? 1 : 0}-${warehouseTrackingFlags.serialManagement ? 1 : 0}`
+      : !isEdit
+        ? 'create-trk-pending'
+        : 'edit';
 
   const handleFormValuesChange = (changedValues: Record<string, unknown>, allValues: Record<string, any>) => {
     if (!isEdit && isAutoGenerateEnabled('master-data-material')) {
@@ -1742,6 +1883,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         >
           <div className="form-modal-content-inner material-form-modal">
             <ProForm
+              key={createFormKey}
               formRef={formRef}
               layout="vertical"
               submitter={false}
@@ -1761,6 +1903,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         </DocumentFormPageLayout>
       ) : (
         <FormModalTemplate
+          key={createFormKey}
           className="material-form-modal"
           title={formTitle}
           open={open}
@@ -3391,6 +3534,7 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
                 options={[
                   { label: t('app.master-data.defaults.salePriceMethodFixed'), value: 'fixed' },
                   { label: t('app.master-data.defaults.salePriceMethodMarket'), value: 'market' },
+                  { label: t('app.master-data.defaults.salePriceMethodTier'), value: 'tier' },
                 ]}
               />
             </Col>
@@ -3492,6 +3636,18 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
                   </Row>
                 </Form.Item>
               );
+              if (method === 'tier') {
+                return (
+                  <Row gutter={16}>
+                    <Col span={24}>
+                      <Typography.Text type="secondary">
+                        {t('app.master-data.defaults.saleTierPricesHint')}
+                      </Typography.Text>
+                      <PartnerPriceTierLinesEditor name={['defaults', 'saleTierPrices']} />
+                    </Col>
+                  </Row>
+                );
+              }
               if (method !== 'market') {
                 return <Row gutter={16}><Col span={12}>{salePriceField}</Col></Row>;
               }
@@ -3598,6 +3754,41 @@ const DefaultsTab: React.FC<DefaultsTabProps> = ({
 
         <DetailDrawerSection title={t('app.master-data.defaults.purchase')}>
           <ProFormText name="defaults.defaultPurchasePriceType" hidden initialValue="tax_inclusive" />
+          <Row gutter={16}>
+            <Col span={12}>
+              <ProFormSelect
+                name="defaults.purchasePriceMethod"
+                label={t('app.master-data.defaults.purchasePriceMethod')}
+                tooltip={t('app.master-data.defaults.purchasePriceMethodHint')}
+                initialValue="fixed"
+                options={[
+                  { label: t('app.master-data.defaults.purchasePriceMethodFixed'), value: 'fixed' },
+                  { label: t('app.master-data.defaults.purchasePriceMethodTier'), value: 'tier' },
+                ]}
+              />
+            </Col>
+          </Row>
+          <ProFormDependency name={['defaults.purchasePriceMethod']}>
+            {() => {
+              const purchaseMethod =
+                defaultsForm.getFieldValue(['defaults', 'purchasePriceMethod']) ??
+                defaultsForm.getFieldValue('defaults.purchasePriceMethod') ??
+                'fixed';
+              if (purchaseMethod === 'tier') {
+                return (
+                  <Row gutter={16}>
+                    <Col span={24}>
+                      <Typography.Text type="secondary">
+                        {t('app.master-data.defaults.purchaseTierPricesHint')}
+                      </Typography.Text>
+                      <PartnerPriceTierLinesEditor name={['defaults', 'purchaseTierPrices']} />
+                    </Col>
+                  </Row>
+                );
+              }
+              return null;
+            }}
+          </ProFormDependency>
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item

@@ -17,6 +17,7 @@ from tortoise.transactions import in_transaction
 from tortoise.expressions import F
 
 from apps.kuaizhizao.models.inventory_transfer import InventoryTransfer, InventoryTransferItem
+from apps.kuaizhizao.services.warehouse_service import _parse_serial_numbers
 from apps.kuaizhizao.utils.material_unit_utils import convert_to_base_quantity
 from apps.kuaizhizao.utils.stock_posting import (
     reuse_or_begin_transaction,
@@ -40,6 +41,11 @@ from apps.common.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from infra.services.business_config_service import BusinessConfigService
 from core.utils.timezone_utils import resolve_business_datetime, today_site_str, to_site_date
+
+
+def _normalize_item_serial_numbers(raw) -> Optional[list[str]]:
+    serials = _parse_serial_numbers(raw)
+    return serials or None
 
 
 class InventoryTransferService(AppBaseService[InventoryTransfer]):
@@ -82,6 +88,12 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
         resp = InventoryTransferResponse.model_validate(transfer)
         resp.transfer_mode = self._infer_transfer_mode(transfer)
         resp.lifecycle = get_inventory_transfer_lifecycle(transfer, milestones=[])
+        return resp
+
+    @staticmethod
+    def _to_item_response(item: InventoryTransferItem) -> InventoryTransferItemResponse:
+        resp = InventoryTransferItemResponse.model_validate(item)
+        resp.serial_numbers = _normalize_item_serial_numbers(getattr(item, "serial_numbers", None))
         return resp
 
     @staticmethod
@@ -162,6 +174,9 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
             to_location_id=getattr(item_data, "to_location_id", None),
             to_location_code=getattr(item_data, "to_location_code", None),
             batch_no=getattr(item_data, "batch_no", None),
+            serial_numbers=_normalize_item_serial_numbers(
+                getattr(item_data, "serial_numbers", None)
+            ),
             quantity=item_data.quantity,
             unit_price=item_data.unit_price,
             amount=amount,
@@ -292,7 +307,7 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
 
         response = InventoryTransferWithItemsResponse.model_validate(transfer)
         response.transfer_mode = self._infer_transfer_mode(transfer)
-        response.items = [InventoryTransferItemResponse.model_validate(item) for item in items]
+        response.items = [self._to_item_response(item) for item in items]
         response.lifecycle = get_inventory_transfer_lifecycle(transfer, milestones=milestones)
 
         return response
@@ -533,7 +548,7 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
 
             await self._update_transfer_statistics(tenant_id, transfer_id)
 
-            return InventoryTransferItemResponse.model_validate(item)
+            return self._to_item_response(item)
 
     async def update_inventory_transfer_item(
         self,
@@ -650,6 +665,8 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
                 item.to_location_code = item_data.to_location_code
             if item_data.batch_no is not None:
                 item.batch_no = item_data.batch_no or None
+            if item_data.serial_numbers is not None:
+                item.serial_numbers = _normalize_item_serial_numbers(item_data.serial_numbers)
             if item_data.remarks is not None:
                 item.remarks = item_data.remarks
 
@@ -672,7 +689,7 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
             # 更新调拨单统计信息
             await self._update_transfer_statistics(tenant_id, item.transfer_id)
 
-            return InventoryTransferItemResponse.model_validate(item)
+            return self._to_item_response(item)
 
     async def delete_inventory_transfer_item(
         self,
@@ -781,20 +798,42 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
 
             from apps.kuaizhizao.services.inventory_service import InventoryService
 
-            batch_management_enabled, _ = await InventoryService._get_warehouse_management_flags(tenant_id)
+            batch_management_enabled, serial_management_enabled = (
+                await InventoryService._get_warehouse_management_flags(tenant_id)
+            )
 
             for item in items:
                 material = material_by_id.get(int(item.material_id))
+                material_code = (
+                    (getattr(material, "main_code", None) or getattr(material, "code", ""))
+                    if material
+                    else getattr(item, "material_code", "")
+                )
                 if (
                     batch_management_enabled
                     and material
                     and getattr(material, "batch_managed", False)
                     and not str(getattr(item, "batch_no", "") or "").strip()
                 ):
-                    material_code = getattr(material, "main_code", None) or getattr(material, "code", "")
                     raise ValidationError(
                         f"物料 {material.name}（{material_code}）启用了批号管理，调拨须指定批号"
                     )
+                item_serials = _parse_serial_numbers(getattr(item, "serial_numbers", None))
+                if (
+                    serial_management_enabled
+                    and material
+                    and getattr(material, "serial_managed", False)
+                ):
+                    if not item_serials:
+                        raise ValidationError(
+                            f"物料 {material.name}（{material_code}）启用了序列号管理，调拨须提供序列号"
+                        )
+                    qty_check = Decimal(str(item.quantity or 0))
+                    if abs(qty_check - Decimal(len(item_serials))) > Decimal("0.001"):
+                        raise ValidationError(
+                            f"物料 {material.name}（{material_code}）调拨数量（{qty_check}）"
+                            f"与序列号数量（{len(item_serials)}）不一致"
+                        )
 
             transfer_ledger_date = (
                 to_site_date(transfer.transfer_date) if transfer.transfer_date else None
@@ -810,6 +849,7 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
                     from_unit=getattr(item, "material_unit", None),
                 )
                 item_batch_no = getattr(item, "batch_no", None)
+                item_serials = _parse_serial_numbers(getattr(item, "serial_numbers", None)) or None
                 ledger_production_date = await InventoryService._resolve_ledger_production_date(
                     tenant_id=tenant_id,
                     material_id=int(item.material_id),
@@ -824,6 +864,7 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
                     quantity=base_qty,
                     warehouse_id=item.from_warehouse_id,
                     batch_no=getattr(item, "batch_no", None),
+                    serial_nos=item_serials,
                     source_type="inventory_transfer",
                     source_doc_id=transfer_id,
                     source_doc_code=transfer.code,
@@ -840,6 +881,7 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
                     quantity=base_qty,
                     warehouse_id=item.to_warehouse_id,
                     batch_no=item_batch_no,
+                    serial_nos=item_serials,
                     source_type="inventory_transfer",
                     source_doc_id=transfer_id,
                     source_doc_code=transfer.code,

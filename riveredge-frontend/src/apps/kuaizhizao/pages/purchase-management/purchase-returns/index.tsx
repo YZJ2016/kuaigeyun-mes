@@ -98,7 +98,12 @@ import {
   collectImportMaterialCodes,
   resolveMaterialsByCodesForImport,
 } from '../../../../master-data/utils/materialImportResolve';
-import { getMaterialDefaultPurchasePrice } from '../../../../master-data/utils/resolve-partner-material-price';
+import {
+  applyPurchaseDocumentLineMaterialPricing,
+  getMaterialDefaultPurchasePrice,
+  repriceUnlockedPurchaseDocumentLineIfNeeded,
+} from '../../../../master-data/utils/resolve-partner-material-price';
+import { normalizeFormListItems } from '../../../../../utils/formListItems';
 import { SimpleSparkline } from '../../../../../components';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
@@ -1790,12 +1795,42 @@ const PurchaseReturnsPage: React.FC = () => {
             listFieldName="items"
             fillMapping={withMaterialLineFillMapping({ material_unit: 'baseUnit' })}
             showAdvancedSearch
-          skipFuzzyPinyinClientFilter
+            skipFuzzyPinyinClientFilter
+            onChange={(_v, material) => {
+              if (!material || !formRef.current) return;
+              const supplierId = Number(formRef.current.getFieldValue('supplier_id'));
+              void applyPurchaseDocumentLineMaterialPricing(formRef.current, index, material, {
+                asOfField: 'return_time',
+                unitPriceField: 'unit_price',
+                supplierId: Number.isFinite(supplierId) && supplierId > 0 ? supplierId : undefined,
+              });
+            }}
           />
         ),
       },
       ...buildDocumentDetailSpecModelFormColumns(t),
       ...buildDocumentDetailPartnerMaterialFormColumns(t, 'supplier'),
+      ...buildDocumentLineDualQuantityFormColumns({
+        t,
+        getForm: () => formRef.current,
+        quantityField: 'return_quantity',
+        unitField: 'material_unit',
+        scenario: 'purchase',
+        quantityDecimals,
+        unitWidth: DOCUMENT_DETAIL_COL_WIDTH.unit,
+        quantityWidth: DOCUMENT_DETAIL_COL_WIDTH.quantity + 80,
+        controlSize: DOCUMENT_DETAIL_CONTROL_SIZE,
+        unitColumnSpread: DOCUMENT_DETAIL_TEXT_COL,
+        quantityColumnSpread: DOCUMENT_DETAIL_NUM_COL,
+        onAfterQuantityChange: (rowIndex) => {
+          const supplierId = Number(formRef.current?.getFieldValue('supplier_id'));
+          void repriceUnlockedPurchaseDocumentLineIfNeeded(formRef.current, rowIndex, {
+            asOfField: 'return_time',
+            unitPriceField: 'unit_price',
+            supplierId: Number.isFinite(supplierId) && supplierId > 0 ? supplierId : undefined,
+          });
+        },
+      }),
       {
         title: t('app.kuaizhizao.purchaseReturn.batchNumber'),
         dataIndex: 'batch_number',
@@ -2482,8 +2517,19 @@ const PurchaseReturnsPage: React.FC = () => {
               fieldProps={{
                 showSearch: true,
                 optionFilterProp: 'label',
-                onChange: (_, option) => {
+                onChange: (value, option) => {
                   formRef.current?.setFieldsValue({ supplier_name: (option as any)?.label ?? '' });
+                  const supplierId = Number(value);
+                  const lineItems = normalizeFormListItems<Record<string, unknown>>(
+                    formRef.current?.getFieldValue('items'),
+                  );
+                  lineItems.forEach((_, idx) => {
+                    void repriceUnlockedPurchaseDocumentLineIfNeeded(formRef.current, idx, {
+                      asOfField: 'return_time',
+                      unitPriceField: 'unit_price',
+                      supplierId: Number.isFinite(supplierId) && supplierId > 0 ? supplierId : undefined,
+                    });
+                  });
                 },
               }}
               rules={[{ required: true, message: t('app.kuaizhizao.purchaseReturn.selectSupplier') }]}
@@ -2509,7 +2555,22 @@ const PurchaseReturnsPage: React.FC = () => {
               name="return_time"
               label={t('app.kuaizhizao.purchaseReturn.returnDate')}
               required
-              fieldProps={{ style: { width: '100%' } }}
+              fieldProps={{
+                style: { width: '100%' },
+                onChange: () => {
+                  const supplierId = Number(formRef.current?.getFieldValue('supplier_id'));
+                  const lineItems = normalizeFormListItems<Record<string, unknown>>(
+                    formRef.current?.getFieldValue('items'),
+                  );
+                  lineItems.forEach((_, idx) => {
+                    void repriceUnlockedPurchaseDocumentLineIfNeeded(formRef.current, idx, {
+                      asOfField: 'return_time',
+                      unitPriceField: 'unit_price',
+                      supplierId: Number.isFinite(supplierId) && supplierId > 0 ? supplierId : undefined,
+                    });
+                  });
+                },
+              }}
               initialValue={dayjs()}
             />
           </Col>

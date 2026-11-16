@@ -101,6 +101,40 @@ const MASTER_DATA_PARAMETER_CATEGORY: ConfigCategory = {
       min: 1,
       max: 100,
     },
+    {
+      key: 'supply_chain.partner_price_resolution_order',
+      nameKey: 'pages.system.configCenter.param.supply_chain_partner_price_resolution_order',
+      descriptionKey: 'pages.system.configCenter.param.supply_chain_partner_price_resolution_order_desc',
+      source: 'business_config',
+      sourcePath: 'parameters.supply_chain.partner_price_resolution_order',
+      type: 'select',
+      selectOptions: [
+        {
+          value: 'recent,book_standard,book_tier',
+          labelKey: 'pages.system.configCenter.param.supply_chain_partner_price_resolution_order_opt_rsb',
+        },
+        {
+          value: 'recent,book_tier,book_standard',
+          labelKey: 'pages.system.configCenter.param.supply_chain_partner_price_resolution_order_opt_rbs',
+        },
+        {
+          value: 'book_standard,book_tier,recent',
+          labelKey: 'pages.system.configCenter.param.supply_chain_partner_price_resolution_order_opt_sbr',
+        },
+        {
+          value: 'book_standard,recent,book_tier',
+          labelKey: 'pages.system.configCenter.param.supply_chain_partner_price_resolution_order_opt_srb',
+        },
+        {
+          value: 'book_tier,book_standard,recent',
+          labelKey: 'pages.system.configCenter.param.supply_chain_partner_price_resolution_order_opt_bsr',
+        },
+        {
+          value: 'book_tier,recent,book_standard',
+          labelKey: 'pages.system.configCenter.param.supply_chain_partner_price_resolution_order_opt_brs',
+        },
+      ],
+    },
   ],
 };
 

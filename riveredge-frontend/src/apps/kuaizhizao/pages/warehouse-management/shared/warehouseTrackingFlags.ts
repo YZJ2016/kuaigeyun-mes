@@ -2,7 +2,9 @@
  * 仓储参数：批号/序列号管理总闸（parameters.warehouse.*）
  *
  * 与后端 InventoryService / _validate_batch_serial_policy 一致：
- * 租户关总闸后不强制、制单 UI 不展示录入列；物料 batch_managed / serial_managed 仅为细则。
+ * 租户关总闸后不强制、制单 UI 不展示录入列。
+ * 另：MaterialForm 新建时用同一总闸作为物料 batch_managed / serial_managed 的默认值
+ *（开则默认开，免漏点；单物料仍可手改）。
  */
 
 import { useMemo } from 'react';

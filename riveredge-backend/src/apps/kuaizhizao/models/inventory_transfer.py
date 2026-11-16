@@ -174,6 +174,9 @@ class InventoryTransferItem(BaseModel):
     # 批次信息
     batch_no = fields.CharField(max_length=100, null=True, description="批次号（可选）")
 
+    # 序列号（启用序列号管理的物料调拨时必填；数量须与序列号个数一致）
+    serial_numbers = fields.JSONField(null=True, description="序列号列表（JSON格式，存储多个序列号）")
+
     # 数量信息（与 decimal_limits / 库存 DECIMAL(18,4) 对齐）
     quantity = fields.DecimalField(max_digits=18, decimal_places=4, description="调拨数量")
 

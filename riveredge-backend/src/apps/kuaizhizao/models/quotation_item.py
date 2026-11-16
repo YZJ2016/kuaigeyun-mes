@@ -47,6 +47,7 @@ class QuotationItem(DocumentLinePartnerMaterialSnapshotMixin, BaseModel):
     delivery_date = fields.DateField(null=True, description="预计交货日期")
 
     notes = fields.TextField(null=True, description="备注")
+    attachments = fields.JSONField(null=True, description="行附件列表")
 
     class Meta:
         table = "apps_kuaizhizao_quotation_items"

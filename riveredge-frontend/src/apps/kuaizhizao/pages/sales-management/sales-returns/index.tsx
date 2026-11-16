@@ -144,6 +144,11 @@ import {
 } from '../../../../../utils/referenceDisplay';
 import { CustomerSelectDropdown } from '../../../../master-data/components/CustomerSelectDropdown';
 import { getAntdModal } from '../../../../../utils/antdAppApis';
+import {
+  applySalesDocumentLineMaterialPricing,
+  repriceUnlockedSalesDocumentLineIfNeeded,
+} from '../../../../master-data/utils/resolve-partner-material-price';
+import { normalizeFormListItems } from '../../../../../utils/formListItems';
 
 function resolveSalesReturnSnapshotName(raw: unknown): string {
   if (typeof raw === 'string') return raw.trim();
@@ -1370,7 +1375,8 @@ const SalesReturnsPage: React.FC = () => {
   // 产品选择器追加明细
   const appendItemsFromMaterials = (materials: Material[]) => {
     const currentItems = formRef.current?.getFieldValue('items') || [];
-    const newItems = materials.map(m => ({
+    const startIndex = currentItems.length;
+    const newItems = materials.map((m) => ({
       material_id: m.id,
       material_code: m.mainCode,
       material_name: m.name,
@@ -1380,7 +1386,16 @@ const SalesReturnsPage: React.FC = () => {
       unit_price: m.defaults?.defaultSalePrice ?? 0,
     }));
     formRef.current?.setFieldsValue({
-      items: [...currentItems, ...newItems]
+      items: [...currentItems, ...newItems],
+    });
+    newItems.forEach((_, offset) => {
+      const idx = startIndex + offset;
+      const mat = materials[offset];
+      if (mat) {
+        void applySalesDocumentLineMaterialPricing(formRef.current, idx, mat, {
+          asOfField: 'return_time',
+        });
+      }
     });
     setMaterialPickerOpen(false);
   };
@@ -2143,6 +2158,14 @@ const SalesReturnsPage: React.FC = () => {
                       )
                     : '';
                   formRef.current?.setFieldsValue({ customer_name: name });
+                  const items = normalizeFormListItems<Record<string, unknown>>(
+                    formRef.current?.getFieldValue('items'),
+                  );
+                  items.forEach((_, idx) => {
+                    void repriceUnlockedSalesDocumentLineIfNeeded(formRef.current, idx, {
+                      asOfField: 'return_time',
+                    });
+                  });
                 }}
               />
             </ProForm.Item>
@@ -2167,7 +2190,19 @@ const SalesReturnsPage: React.FC = () => {
               name="return_time"
               label={t('app.kuaizhizao.salesReturn.returnDate')}
               required
-              fieldProps={{ style: { width: '100%' } }}
+              fieldProps={{
+                style: { width: '100%' },
+                onChange: () => {
+                  const items = normalizeFormListItems<Record<string, unknown>>(
+                    formRef.current?.getFieldValue('items'),
+                  );
+                  items.forEach((_, idx) => {
+                    void repriceUnlockedSalesDocumentLineIfNeeded(formRef.current, idx, {
+                      asOfField: 'return_time',
+                    });
+                  });
+                },
+              }}
               initialValue={dayjs()}
             />
           </Col>
@@ -2265,12 +2300,36 @@ const SalesReturnsPage: React.FC = () => {
                           fillMapping={withMaterialLineFillMapping({ material_unit: 'baseUnit' })}
                           sourceType={materialSourceType}
                           showAdvancedSearch
-                        skipFuzzyPinyinClientFilter
+                          skipFuzzyPinyinClientFilter
+                          onChange={(_v, material) => {
+                            if (!material || !formRef.current) return;
+                            void applySalesDocumentLineMaterialPricing(formRef.current, index, material, {
+                              asOfField: 'return_time',
+                            });
+                          }}
                         />
                       ),
                     },
                     ...buildDocumentDetailSpecModelFormColumns(t),
                     ...buildDocumentDetailPartnerMaterialFormColumns(t, 'customer'),
+                    ...buildDocumentLineDualQuantityFormColumns({
+                      t,
+                      getForm: () => formRef.current,
+                      quantityField: 'return_quantity',
+                      unitField: 'material_unit',
+                      scenario: 'sale',
+                      quantityDecimals,
+                      unitWidth: DOCUMENT_DETAIL_COL_WIDTH.unit,
+                      quantityWidth: DOCUMENT_DETAIL_COL_WIDTH.quantity + 80,
+                      controlSize: DOCUMENT_DETAIL_CONTROL_SIZE,
+                      unitColumnSpread: DOCUMENT_DETAIL_TEXT_COL,
+                      quantityColumnSpread: DOCUMENT_DETAIL_NUM_COL,
+                      onAfterQuantityChange: (rowIndex) => {
+                        void repriceUnlockedSalesDocumentLineIfNeeded(formRef.current, rowIndex, {
+                          asOfField: 'return_time',
+                        });
+                      },
+                    }),
                     {
                       title: t('app.kuaizhizao.salesReturn.batchNumber'),
                       dataIndex: 'batch_number',

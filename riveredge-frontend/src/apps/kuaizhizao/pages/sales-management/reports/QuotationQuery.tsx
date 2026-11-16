@@ -5,6 +5,10 @@ import React, { useMemo } from 'react';
 import { ProColumns } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 import KuaizhizaoReport from '../../../components/KuaizhizaoReport';
+import {
+  buildDocumentLineAttachmentsReportColumn,
+  DOCUMENT_LINE_ATTACHMENT_UPLOAD_CATEGORY,
+} from '../../../components/documentLineAttachmentsColumns';
 import { quotationStatusEnum, reportQuotationStatusText } from '../../../utils/reportPresentation';
 
 const QuotationQuery: React.FC = () => {
@@ -116,13 +120,17 @@ const QuotationQuery: React.FC = () => {
         ellipsis: true,
         hideInSearch: true,
       },
+      buildDocumentLineAttachmentsReportColumn(
+        t,
+        DOCUMENT_LINE_ATTACHMENT_UPLOAD_CATEGORY.quotation,
+      ),
     ],
     [t],
   );
 
   return (
     <KuaizhizaoReport
-      columnPersistenceId="apps.kuaizhizao.pages.sales-management.reports.QuotationQuery-v3"
+      columnPersistenceId="apps.kuaizhizao.pages.sales-management.reports.QuotationQuery-v4"
       title={t('app.kuaizhizao.menu.reports.quotation-query')}
       reportType="quotation"
       rowKey="id"

@@ -327,6 +327,7 @@ class SalesOrderService:
             "variant_attributes": getattr(item_data, "variant_attributes", None),
             "configurable_selections": getattr(item_data, "configurable_selections", None),
             "notes": item_data.notes,
+            "attachments": getattr(item_data, "attachments", None),
             "is_gift": is_gift,
             "gift_ref_unit_price": gift_ref,
             "price_settlement_status": settlement_status,
@@ -1350,15 +1351,7 @@ class SalesOrderService:
         has_existing_delivery_project = await self._order_has_delivery_project(
             tenant_id, order.id
         )
-        pushed_wo = await self._pushed_work_orders_by_sales_order(tenant_id, [order.id])
-        pushed_wo_qty = Decimal(str((pushed_wo.get(order.id) or {}).get("qty") or 0))
-        order_total = Decimal(str(order.total_quantity or 0))
-        if order_total <= 0 and items:
-            order_total = sum(
-                (Decimal(str(getattr(it, "order_quantity", 0) or 0)) for it in items),
-                Decimal("0"),
-            )
-        remaining_wo = order_total - pushed_wo_qty
+        remaining_wo = production_fulfillable_map.get(int(order.id), False)
         invoice_remainder = Decimal("0")
         if finance_orm_ready():
             from apps.kuaicaiwu.services.sales_invoice_service import SalesInvoiceService
@@ -1368,12 +1361,14 @@ class SalesOrderService:
             )
         from apps.kuaizhizao.services.sales_order_purchase_push import (
             batch_has_purchasable_remaining,
+            batch_has_production_fulfillable_remaining,
             require_purchase_requisition_for_tenant,
         )
         from infra.services.business_config_service import BusinessConfigService
 
-        purchasable_map = await batch_has_purchasable_remaining(
-            tenant_id, {int(order.id): items}
+        purchasable_map, production_fulfillable_map = await asyncio.gather(
+            batch_has_purchasable_remaining(tenant_id, {int(order.id): items}),
+            batch_has_production_fulfillable_remaining(tenant_id, {int(order.id): items}),
         )
         from apps.kuaizhizao.services.document_action_policy.enricher import (
             _order_prepayment_linked_by_ids,
@@ -1388,7 +1383,9 @@ class SalesOrderService:
         ctx = self._sales_order_capability_context(
             order, items, demand, pushable_by_item=pushable_by_item,
             has_existing_delivery_project=has_existing_delivery_project,
-            has_remaining_work_order_qty=remaining_wo > 0,
+            has_remaining_work_order_qty=production_fulfillable_map.get(
+                int(order.id), False
+            ),
             has_remaining_invoice_amount=invoice_remainder > Decimal("0"),
             has_purchasable_remaining=purchasable_map.get(int(order.id), False),
             require_purchase_requisition=await require_purchase_requisition_for_tenant(
@@ -2188,6 +2185,7 @@ class SalesOrderService:
                         variant_attributes=row["variant_attributes"],
                         configurable_selections=row["configurable_selections"],
                         notes=row["notes"],
+                        attachments=row.get("attachments"),
                         is_gift=row["is_gift"],
                         gift_ref_unit_price=row["gift_ref_unit_price"],
                         price_settlement_status=row["price_settlement_status"],
@@ -2359,6 +2357,7 @@ class SalesOrderService:
         from apps.kuaicaiwu.services.sales_invoice_service import SalesInvoiceService
         from apps.kuaizhizao.services.sales_order_purchase_push import (
             batch_has_purchasable_remaining,
+            batch_has_production_fulfillable_remaining,
             require_purchase_requisition_for_tenant,
         )
         from infra.services.business_config_service import BusinessConfigService
@@ -2402,6 +2401,7 @@ class SalesOrderService:
             downstream_map,
             invoice_remainder,
             purchasable_map,
+            production_fulfillable_map,
             prepay_map,
             require_purchase_requisition,
             require_shipment_notice_before_delivery,
@@ -2420,6 +2420,9 @@ class SalesOrderService:
             sales_order_downstream_by_ids(tenant_id, [sales_order_id]),
             _load_invoice_remainder_one(),
             batch_has_purchasable_remaining(tenant_id, {int(order.id): capability_items}),
+            batch_has_production_fulfillable_remaining(
+                tenant_id, {int(order.id): capability_items}
+            ),
             _order_prepayment_linked_by_ids(
                 tenant_id,
                 [int(order.id)],
@@ -2453,7 +2456,12 @@ class SalesOrderService:
                 (Decimal(str(getattr(it, "order_quantity", 0) or 0)) for it in capability_items),
                 Decimal("0"),
             )
-        remaining_wo = order_total - pushed_wo_qty
+        remaining_wo_qty = order_total - pushed_wo_qty
+        if remaining_wo_qty < 0:
+            remaining_wo_qty = Decimal("0")
+        has_production_fulfillable = bool(
+            (production_fulfillable_map or {}).get(int(order.id), False)
+        )
         has_downstream_documents = bool(downstream_map.get(sales_order_id, False))
 
         resp = enrich_sales_order_capabilities_on_response(
@@ -2470,6 +2478,8 @@ class SalesOrderService:
                 invoice_progress=finance.get("invoice_progress", 0.0),
                 invoice_amount_progress=finance.get("invoice_amount_progress", 0.0),
                 collection_progress=finance.get("collection_progress", 0.0),
+                pushed_work_order_quantity=pushed_wo_qty,
+                remaining_push_quantity=remaining_wo_qty,
                 shippable_hint=shippable_map.get(sales_order_id),
                 audit_enabled=audit_enabled,
                 lifecycle_items=capability_items,
@@ -2480,7 +2490,7 @@ class SalesOrderService:
             **self._sales_order_capability_context(
                 order, capability_items, demand, pushable_by_item=pushable_by_item,
                 has_existing_delivery_project=has_existing_delivery_project,
-                has_remaining_work_order_qty=remaining_wo > 0,
+                has_remaining_work_order_qty=has_production_fulfillable,
                 has_remaining_invoice_amount=invoice_remainder > Decimal("0"),
                 has_purchasable_remaining=purchasable_map.get(int(order.id), False),
                 require_purchase_requisition=require_purchase_requisition,
@@ -2946,6 +2956,7 @@ class SalesOrderService:
         from apps.kuaizhizao.services.sales_order_code_sync import sales_order_downstream_by_ids
         from apps.kuaizhizao.services.sales_order_purchase_push import (
             batch_has_purchasable_remaining,
+            batch_has_production_fulfillable_remaining,
             require_purchase_requisition_for_tenant,
         )
         from apps.kuaizhizao.services.document_action_policy.enricher import (
@@ -3115,10 +3126,11 @@ class SalesOrderService:
                 eligible_ship_check_ids.append(order.id)
 
         all_list_items = [it for items in items_by_order.values() for it in items]
-        shippable_map, pushable_by_order, purchasable_by_order = await asyncio.gather(
+        shippable_map, pushable_by_order, purchasable_by_order, production_fulfillable_by_order = await asyncio.gather(
             self._batch_shippable_by_order(tenant_id, eligible_ship_check_ids),
             batch_pushable_qty_by_order_item(tenant_id, all_list_items),
             batch_has_purchasable_remaining(tenant_id, items_by_order),
+            batch_has_production_fulfillable_remaining(tenant_id, items_by_order),
         )
 
         # 6. 组装响应
@@ -3189,7 +3201,9 @@ class SalesOrderService:
                         has_existing_delivery_project=delivery_project_by_order.get(
                             order.id, False
                         ),
-                        has_remaining_work_order_qty=remaining_qty > 0,
+                        has_remaining_work_order_qty=production_fulfillable_by_order.get(
+                            int(order.id), False
+                        ),
                         has_remaining_invoice_amount=invoice_remainder_by_order.get(
                             int(order.id), Decimal("0")
                         )
@@ -3504,6 +3518,7 @@ class SalesOrderService:
                             variant_attributes=row["variant_attributes"],
                             configurable_selections=row["configurable_selections"],
                             notes=row["notes"],
+                            attachments=row.get("attachments"),
                             is_gift=row["is_gift"],
                             gift_ref_unit_price=row["gift_ref_unit_price"],
                             price_settlement_status=row.get("price_settlement_status"),
@@ -4368,21 +4383,37 @@ class SalesOrderService:
             only_active=True,
         )
 
+        from apps.kuaizhizao.services.sales_order_purchase_push import (
+            batch_remaining_fulfillable_qty_by_material,
+        )
+
+        fulfill_map = await batch_remaining_fulfillable_qty_by_material(
+            tenant_id, {sales_order_id: items}
+        )
+        fulfill_by_material = fulfill_map.get(sales_order_id) or {}
+        remaining_cursor = dict(fulfill_by_material)
+
         preview_items = []
         for it in items:
-            qty = float(it.order_quantity or 0)
+            qty = Decimal(str(it.order_quantity or 0))
             if qty <= 0:
                 continue
+            item_id = int(it.id)
+            mid = int(it.material_id) if getattr(it, "material_id", None) else 0
+            remain = remaining_cursor.get(mid, Decimal("0"))
+            max_qty = min(qty, remain) if remain > 0 else Decimal("0")
+            if mid > 0 and max_qty > 0:
+                remaining_cursor[mid] = remain - max_qty
             material_code, material_name = self._resolve_item_material_display(it, material_fallback)
-            material_id = int(it.material_id) if getattr(it, "material_id", None) else None
+            material_id = mid if mid > 0 else None
             preview_items.append({
-                "item_id": int(it.id),
+                "item_id": item_id,
                 "material_id": material_id,
                 "material_code": material_code,
                 "material_name": material_name,
                 "quantity": float(qty),
-                "pushed_quantity": float(qty) if pushed_to_computation else 0.0,
-                "max_push_quantity": 0.0 if pushed_to_computation else float(qty),
+                "pushed_quantity": float(qty - max_qty) if not pushed_to_computation else float(qty),
+                "max_push_quantity": 0.0 if pushed_to_computation else float(max_qty),
                 "delivery_date": str(it.delivery_date) if it.delivery_date else None,
                 "has_bom": bom_map.get(material_id, False) if material_id else False,
             })
@@ -4438,6 +4469,15 @@ class SalesOrderService:
                 except Exception:
                     continue
 
+        from apps.kuaizhizao.services.sales_order_purchase_push import (
+            batch_remaining_fulfillable_qty_by_material,
+        )
+
+        fulfill_map = await batch_remaining_fulfillable_qty_by_material(
+            tenant_id, {sales_order_id: items}
+        )
+        remaining_cursor = dict(fulfill_map.get(sales_order_id) or {})
+
         total_qty = Decimal("0")
         total_amt = Decimal("0")
         demand_items = []
@@ -4445,15 +4485,20 @@ class SalesOrderService:
         for it in items:
             item_id = int(getattr(it, "id", 0) or 0)
             order_qty = Decimal(str(it.order_quantity or 0))
-            qty = qty_override.get(item_id, order_qty)
+            mid = int(getattr(it, "material_id", 0) or 0)
+            remain = remaining_cursor.get(mid, Decimal("0"))
+            allowed = min(order_qty, remain) if remain > 0 else Decimal("0")
+            qty = qty_override.get(item_id, allowed)
             qty = max(Decimal("0"), Decimal(str(qty)))
             if qty <= 0:
                 continue
-            if qty > order_qty:
+            if qty > allowed:
                 raise BusinessLogicError(
                     f"物料 {it.material_code or it.material_name or item_id} 下推数量 {qty} "
-                    f"不能超过订单数量 {order_qty}"
+                    f"不能超过可下推数量 {allowed}"
                 )
+            if mid > 0:
+                remaining_cursor[mid] = remain - qty
             unit_price = Decimal(str(it.unit_price or 0))
             item_amount = (qty * unit_price).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
             total_qty += qty
@@ -4715,18 +4760,14 @@ class SalesOrderService:
             sales_order_id=sales_order_id,
             material_ids=material_ids,
         )
-        order_total_by_material: Dict[int, Decimal] = {}
-        for it in items:
-            mid = int(getattr(it, "material_id", 0) or 0)
-            if mid <= 0:
-                continue
-            order_total_by_material[mid] = order_total_by_material.get(mid, Decimal("0")) + Decimal(
-                str(it.order_quantity or 0)
-            )
-        remaining_by_material: Dict[int, Decimal] = {}
-        for mid, total_qty in order_total_by_material.items():
-            remaining = total_qty - pushed_by_material.get(mid, Decimal("0"))
-            remaining_by_material[mid] = remaining if remaining > 0 else Decimal("0")
+        from apps.kuaizhizao.services.sales_order_purchase_push import (
+            batch_remaining_fulfillable_qty_by_material,
+        )
+
+        fulfill_map = await batch_remaining_fulfillable_qty_by_material(
+            tenant_id, {sales_order_id: items}
+        )
+        remaining_by_material = fulfill_map.get(sales_order_id) or {}
         remaining_cursor = dict(remaining_by_material)
         max_by_item: Dict[int, Decimal] = {}
         for it in items:
@@ -5396,18 +5437,16 @@ class SalesOrderService:
             sales_order_id=sales_order_id,
             material_ids=material_ids,
         )
-        order_total_by_material: Dict[int, Decimal] = {}
-        for it in items:
-            mid = int(getattr(it, "material_id", 0) or 0)
-            if mid <= 0:
-                continue
-            order_total_by_material[mid] = order_total_by_material.get(mid, Decimal("0")) + Decimal(
-                str(it.order_quantity or 0)
-            )
-        remaining_cursor: Dict[int, Decimal] = {}
-        for mid, total_qty in order_total_by_material.items():
-            remaining = total_qty - pushed_by_material.get(mid, Decimal("0"))
-            remaining_cursor[mid] = remaining if remaining > 0 else Decimal("0")
+        from apps.kuaizhizao.services.sales_order_purchase_push import (
+            batch_remaining_fulfillable_qty_by_material,
+        )
+
+        fulfill_map = await batch_remaining_fulfillable_qty_by_material(
+            tenant_id, {sales_order_id: items}
+        )
+        remaining_cursor: Dict[int, Decimal] = dict(
+            fulfill_map.get(sales_order_id) or {}
+        )
         for it in items:
             qty = Decimal(str(it.order_quantity or 0))
             if qty <= 0:

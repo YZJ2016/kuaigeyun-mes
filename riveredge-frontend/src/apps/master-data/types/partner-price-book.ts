@@ -7,6 +7,12 @@ export interface PartnerPriceVariantLine {
   unitPrice: number;
 }
 
+export interface PartnerPriceTierLine {
+  minQuantity: number;
+  maxQuantity?: number | null;
+  unitPrice: number;
+}
+
 export interface PartnerPriceBook {
   id: number;
   uuid: string;
@@ -23,6 +29,7 @@ export interface PartnerPriceBook {
   unitPrice?: number;
   priceType?: 'tax_inclusive' | 'tax_exclusive';
   variantPrices?: PartnerPriceVariantLine[];
+  tierPrices?: PartnerPriceTierLine[];
   currencyCode?: string;
   taxRate?: number;
   unit?: string;
@@ -40,6 +47,7 @@ export interface PartnerPriceBookCreate {
   unitPrice?: number;
   priceType?: 'tax_inclusive' | 'tax_exclusive';
   variantPrices?: PartnerPriceVariantLine[];
+  tierPrices?: PartnerPriceTierLine[];
   currencyCode?: string;
   taxRate?: number;
   unit?: string;
@@ -81,6 +89,8 @@ export interface PartnerPriceResolveResult {
   found: boolean;
   unitPrice?: number;
   isVariantPrice?: boolean;
+  isTierPrice?: boolean;
+  priceSource?: string;
   currencyCode?: string;
   taxRate?: number;
   unit?: string;
@@ -93,6 +103,7 @@ export interface PartnerPriceResolveResult {
 export interface PartnerPriceResolveBatchLineRequest {
   materialId: number;
   variantAttributes?: Record<string, unknown>;
+  quantity?: number;
 }
 
 export interface PartnerPriceResolveBatchRequest {
@@ -108,7 +119,8 @@ export interface PartnerPriceResolveBatchResponse {
 
 export interface PartnerPriceBookBulkLine {
   materialId: number;
-  unitPrice: number;
+  unitPrice?: number;
+  tierPrices?: PartnerPriceTierLine[];
   unit?: string;
   partnerMaterialCode?: string;
   partnerMaterialName?: string;

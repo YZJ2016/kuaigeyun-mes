@@ -281,6 +281,8 @@ def derive_sales_order_capabilities(
             push_computation_reason = "sales_order.push_computation.already_pushed"
         elif has_line_work_orders:
             push_computation_reason = "sales_order.push_computation.line_work_orders"
+        elif not has_remaining_work_order_qty:
+            push_computation_reason = "sales_order.push_work_order.no_remaining"
         else:
             push_computation_allowed = True
     push_computation_cap = _cap(
