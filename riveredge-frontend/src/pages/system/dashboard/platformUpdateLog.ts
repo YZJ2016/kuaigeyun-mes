@@ -11568,6 +11568,8 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
       'pages.dashboard.updateLog.entries.inventory-sync-binding-sync-direction-r01.title',
     descriptionKey:
       'pages.dashboard.updateLog.entries.inventory-sync-binding-sync-direction-r01.description',
+  },
+  {
     id: 'customer-pool-batch-delete-cascade-so-r01',
     date: '2026-10-22',
     type: 'feature',
