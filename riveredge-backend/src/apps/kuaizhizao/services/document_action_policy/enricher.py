@@ -1001,11 +1001,14 @@ async def _purchase_order_invoice_by_ids(tenant_id: int, order_ids: List[int]) -
     """True = 可开票余额已用尽（阻断再下推发票）；与进项加载剩余口径一致。"""
     from decimal import Decimal
 
+    from apps.common.app_orm import finance_orm_ready
     from apps.kuaicaiwu.services.purchase_invoice_pull_service import PurchaseInvoicePullService
     from apps.kuaizhizao.models.purchase_order import PurchaseOrder
 
     if not order_ids:
         return {}
+    if not finance_orm_ready():
+        return {oid: True for oid in order_ids}
     result: dict[int, bool] = {oid: True for oid in order_ids}
     rows = await PurchaseOrder.filter(tenant_id=tenant_id, id__in=order_ids).values(
         "id", "order_code", "total_amount"

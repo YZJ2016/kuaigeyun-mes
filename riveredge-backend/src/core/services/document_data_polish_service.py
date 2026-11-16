@@ -520,7 +520,10 @@ class DocumentDataPolishService:
         seed: int | None = None,
     ) -> dict[str, Any]:
         """修正采购单价并同步入库 + 应付（PO + 入库 + 应付）。"""
+        from apps.common.app_orm import require_finance_orm
         from apps.kuaicaiwu.models.payable import Payable
+
+        require_finance_orm()
         from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem
         from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
         from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem

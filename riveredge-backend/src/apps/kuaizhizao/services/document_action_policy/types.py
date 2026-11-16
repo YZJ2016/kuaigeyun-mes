@@ -618,6 +618,8 @@ CAPABILITY_REASON_MESSAGES: dict[str, str] = {
     "payment_application.submit.not_allowed": "当前状态不可提交",
     "payment_application.approve.not_allowed": "当前状态不可审核",
     "payment_application.withdraw.not_allowed": "当前状态不可撤回提交",
+    "payment_application.revoke_approval.not_allowed": "当前状态不可撤销审核",
+    "payment_application.revoke_approval.has_payment": "已有付款单或已付款，无法撤销审核",
     "payment_application.push_payment.not_allowed": "须已批准且有余额才可下推付款单",
     "other_expense.update.not_allowed": "仅草稿或已驳回的其他费用支出可编辑",
     "other_expense.delete.not_allowed": "仅草稿状态的其他费用支出可删除",

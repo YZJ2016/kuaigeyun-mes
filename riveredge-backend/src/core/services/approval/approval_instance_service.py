@@ -1649,8 +1649,11 @@ class ApprovalInstanceService:
                 tenant_id, et, entity_id
             )
         if et == "payable":
+            from apps.common.app_orm import finance_orm_ready
             from apps.kuaicaiwu.models.payable import Payable
 
+            if not finance_orm_ready():
+                return None
             row = await Payable.get_or_none(
                 tenant_id=tenant_id, id=entity_id, deleted_at__isnull=True
             )
@@ -1663,8 +1666,11 @@ class ApprovalInstanceService:
                 return "rejected"
             return None
         if et == "receivable":
+            from apps.common.app_orm import finance_orm_ready
             from apps.kuaicaiwu.models.receivable import Receivable
 
+            if not finance_orm_ready():
+                return None
             row = await Receivable.get_or_none(
                 tenant_id=tenant_id, id=entity_id, deleted_at__isnull=True
             )
@@ -5019,8 +5025,10 @@ class ApprovalInstanceService:
                 logger.info(f"生产领料 {entity_id} 审批回调完成: {approval_instance.status}")
 
             async def _handle_payable() -> None:
+                from apps.common.app_orm import require_finance_orm
                 from apps.kuaicaiwu.services.finance_service import PayableService
 
+                require_finance_orm()
                 service = PayableService()
                 if approval_instance.status == "approved":
                     await service.approve_payable(
@@ -5037,8 +5045,10 @@ class ApprovalInstanceService:
                 logger.info(f"应付单 {entity_id} 审批回调完成: {approval_instance.status}")
 
             async def _handle_receivable() -> None:
+                from apps.common.app_orm import require_finance_orm
                 from apps.kuaicaiwu.services.finance_service import ReceivableService
 
+                require_finance_orm()
                 service = ReceivableService()
                 if approval_instance.status == "approved":
                     await service.approve_receivable(

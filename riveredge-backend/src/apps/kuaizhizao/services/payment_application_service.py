@@ -100,7 +100,6 @@ class PaymentApplicationService(AppBaseService[PaymentApplication]):
         lines = await PaymentApplicationLine.filter(
             tenant_id=app.tenant_id, application_id=app.id
         ).order_by("line_no")
-        caps = derive_payment_application_capabilities(app)
         from apps.kuaizhizao.models.document_relation import DocumentRelation
 
         payment_rels = await DocumentRelation.filter(
@@ -109,6 +108,9 @@ class PaymentApplicationService(AppBaseService[PaymentApplication]):
             source_id=int(app.id),
             target_type="payment",
         ).all()
+        caps = derive_payment_application_capabilities(
+            app, has_linked_payment=bool(payment_rels)
+        )
         linked_payments = [
             {"id": int(r.target_id), "code": str(r.target_code or "")}
             for r in payment_rels
@@ -515,6 +517,71 @@ class PaymentApplicationService(AppBaseService[PaymentApplication]):
                 flow_reject=lambda _reason: _do_decide(),
             )
         return result if result is not None else await self.get_by_id(tenant_id, application_id)
+
+    async def revoke_application_approval(
+        self,
+        tenant_id: int,
+        application_id: int,
+        operator_id: int,
+    ) -> PaymentApplicationResponse:
+        """撤销审核：有流程则按流程策略重开；否则回草稿或待审核。"""
+        from apps.kuaizhizao.constants import ReviewStatus
+        from apps.kuaizhizao.models.document_relation import DocumentRelation
+        from core.services.approval.audit_transition import resolve_revoke_to_draft_landing_phase
+        from core.services.approval.uni_audit_service import UniAuditService
+
+        app = await PaymentApplication.get_or_none(
+            tenant_id=tenant_id, id=application_id, deleted_at__isnull=True
+        )
+        if not app:
+            raise NotFoundError(f"付款申请单不存在: {application_id}")
+        has_payment = await DocumentRelation.filter(
+            tenant_id=tenant_id,
+            source_type="payment_application",
+            source_id=int(application_id),
+            target_type="payment",
+        ).exists()
+        assert_payment_application_capability(
+            app, "revoke_approval", has_linked_payment=has_payment
+        )
+
+        audit_required = await self.business_config_service.check_audit_required(
+            tenant_id, "payment_application"
+        )
+        op_id = int(operator_id)
+
+        async def _do_revoke(*, reopened: bool = False) -> PaymentApplicationResponse:
+            landing = resolve_revoke_to_draft_landing_phase(
+                manual_audit_enabled=audit_required,
+                flow_reopened=reopened,
+            )
+            row = await PaymentApplication.get_or_none(
+                tenant_id=tenant_id, id=application_id, deleted_at__isnull=True
+            )
+            if not row:
+                raise NotFoundError(f"付款申请单不存在: {application_id}")
+            if landing == "pending":
+                row.status = "待审核"
+            else:
+                row.status = "草稿"
+            row.review_status = ReviewStatus.PENDING.value
+            row.reviewer_id = None
+            row.reviewer_name = None
+            row.review_time = None
+            row.review_remarks = None
+            user = await self.get_user_info(op_id)
+            row.updated_by = op_id
+            row.updated_by_name = user["name"]
+            await row.save()
+            return await self.get_by_id(tenant_id, application_id)
+
+        return await UniAuditService.revoke_with_flow_fallback(
+            tenant_id=tenant_id,
+            entity_type="payment_application",
+            entity_id=application_id,
+            operator_id=op_id,
+            flow_revoke=_do_revoke,
+        )
 
     async def record_line_paid(
         self,

@@ -275,6 +275,20 @@ async def _section_oqc(tenant_id: int) -> BadgeFragment:
 
 
 async def _section_finance_menus(tenant_id: int, now_date) -> BadgeFragment:
+    empty = {
+        "finance_receivable": {"overdue": 0, "pending": 0, "in_progress": 0},
+        "finance_payable": {"overdue": 0, "pending": 0, "in_progress": 0},
+        "finance_receipt": {"overdue": 0, "pending": 0, "in_progress": 0},
+        "finance_payment": {"overdue": 0, "pending": 0, "in_progress": 0},
+        "sales_invoice": {"overdue": 0, "pending": 0, "in_progress": 0},
+        "purchase_invoice": {"overdue": 0, "pending": 0, "in_progress": 0},
+        "prepayment": {"overdue": 0, "pending": 0, "in_progress": 0},
+    }
+    from apps.common.app_orm import finance_orm_ready
+
+    if not finance_orm_ready():
+        return empty
+
     from apps.kuaicaiwu.models.invoice import Invoice
     from apps.kuaicaiwu.models.payable import Payable
     from apps.kuaicaiwu.models.payment import Payment

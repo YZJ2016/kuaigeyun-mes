@@ -706,18 +706,27 @@ async def _load_oqc_inspection(tenant_id: int, entity_id: int) -> Any:
 
 
 async def _load_receivable(tenant_id: int, entity_id: int) -> Any:
+    from apps.common.app_orm import require_finance_orm
+
+    require_finance_orm()
     from apps.kuaicaiwu.services.finance_service import ReceivableService
 
     return await ReceivableService().get_receivable_by_id(tenant_id, entity_id)
 
 
 async def _load_payable(tenant_id: int, entity_id: int) -> Any:
+    from apps.common.app_orm import require_finance_orm
+
+    require_finance_orm()
     from apps.kuaicaiwu.services.finance_service import PayableService
 
     return await PayableService().get_payable_by_id(tenant_id, entity_id)
 
 
 async def _load_purchase_invoice(tenant_id: int, entity_id: int) -> Any:
+    from apps.common.app_orm import require_finance_orm
+
+    require_finance_orm()
     from apps.kuaicaiwu.services.finance_service import PurchaseInvoiceService
 
     return await PurchaseInvoiceService().get_purchase_invoice_by_id(tenant_id, entity_id)
@@ -742,6 +751,9 @@ async def _load_drawing_change(tenant_id: int, entity_id: int) -> Any:
 
 
 async def _load_product_firmware(tenant_id: int, entity_id: int) -> Any:
+    from apps.common.app_orm import require_app_orm
+
+    require_app_orm("kuaiplm", "星研发")
     from apps.kuaiplm.models.product_firmware import ProductFirmware
     from apps.kuaiplm.schemas.product_firmware import ProductFirmwareResponse
 
@@ -752,12 +764,18 @@ async def _load_product_firmware(tenant_id: int, entity_id: int) -> Any:
 
 
 async def _load_lab_request(tenant_id: int, entity_id: int) -> Any:
+    from apps.common.app_orm import require_app_orm
+
+    require_app_orm("kuaiplm", "星研发")
     from apps.kuaiplm.services.lab_request_service import LabRequestService
 
     return await LabRequestService().get(tenant_id, entity_id)
 
 
 async def _load_production_file(tenant_id: int, entity_id: int) -> Any:
+    from apps.common.app_orm import require_app_orm
+
+    require_app_orm("kuaiplm", "星研发")
     from apps.kuaiplm.services.production_file_service import ProductionFileService
 
     return await ProductionFileService().get(tenant_id, entity_id)
@@ -773,6 +791,9 @@ async def _load_engineering_drawing(tenant_id: int, entity_id: int) -> Any:
 
 
 async def _load_trial_flow(tenant_id: int, entity_id: int) -> Any:
+    from apps.common.app_orm import require_app_orm
+
+    require_app_orm("kuaiplm", "星研发")
     from apps.kuaiplm.services.trial_flow_service import TrialFlowService
 
     return await TrialFlowService().get(tenant_id, entity_id)
@@ -797,18 +818,27 @@ async def _load_supplier_evaluation(tenant_id: int, entity_id: int) -> Any:
 
 
 async def _load_engineering_change(tenant_id: int, entity_id: int) -> Any:
+    from apps.common.app_orm import require_app_orm
+
+    require_app_orm("kuaiplm", "星研发")
     from apps.kuaiplm.services.engineering_change_service import EngineeringChangeService
 
     return await EngineeringChangeService().get(tenant_id, entity_id)
 
 
 async def _load_sample_process(tenant_id: int, entity_id: int) -> Any:
+    from apps.common.app_orm import require_app_orm
+
+    require_app_orm("kuaiplm", "星研发")
     from apps.kuaiplm.services.sample_process_service import SampleProcessService
 
     return await SampleProcessService().get(tenant_id, entity_id)
 
 
 async def _load_prototype_build_sheet(tenant_id: int, entity_id: int) -> Any:
+    from apps.common.app_orm import require_app_orm
+
+    require_app_orm("kuaiplm", "星研发")
     from apps.kuaiplm.services.prototype_build_sheet_service import PrototypeBuildSheetService
 
     return await PrototypeBuildSheetService().get(tenant_id, entity_id)
@@ -821,6 +851,9 @@ async def _load_qms_system_document(tenant_id: int, entity_id: int) -> Any:
 
 
 async def _load_rd_deliverable(tenant_id: int, entity_id: int) -> Any:
+    from apps.common.app_orm import require_app_orm
+
+    require_app_orm("kuaiplm", "星研发")
     from apps.kuaiplm.models.rd_project import RdProjectDeliverable
     from apps.kuaiplm.schemas.rd_project import RdProjectDeliverableResponse
 
@@ -831,24 +864,36 @@ async def _load_rd_deliverable(tenant_id: int, entity_id: int) -> Any:
 
 
 async def _load_material_review(tenant_id: int, entity_id: int) -> Any:
+    from apps.common.app_orm import require_app_orm
+
+    require_app_orm("kuaiplm", "星研发")
     from apps.kuaiplm.services.material_review_service import MaterialReviewService
 
     return await MaterialReviewService().get(tenant_id, entity_id)
 
 
 async def _load_bom_collaboration(tenant_id: int, entity_id: int) -> Any:
+    from apps.common.app_orm import require_app_orm
+
+    require_app_orm("kuaiplm", "星研发")
     from apps.kuaiplm.services.bom_collaboration_service import BomCollaborationService
 
     return await BomCollaborationService().get(tenant_id, entity_id)
 
 
 async def _load_project_proposal(tenant_id: int, entity_id: int) -> Any:
+    from apps.common.app_orm import require_app_orm
+
+    require_app_orm("kuaiplm", "星研发")
     from apps.kuaiplm.services.project_proposal_service import ProjectProposalService
 
     return await ProjectProposalService().get(tenant_id, entity_id)
 
 
 async def _load_mold_sample(tenant_id: int, entity_id: int) -> Any:
+    from apps.common.app_orm import require_app_orm
+
+    require_app_orm("kuaiplm", "星研发")
     from apps.kuaiplm.services.mold_sample_order_service import MoldSampleOrderService
 
     return await MoldSampleOrderService().get(tenant_id, entity_id)
@@ -873,60 +918,90 @@ async def _load_other_expense(tenant_id: int, entity_id: int) -> Any:
 
 
 async def _load_kuaioa_form_request(tenant_id: int, entity_id: int) -> Any:
+    from apps.common.app_orm import require_app_orm
+
+    require_app_orm("kuaioa", "轻办公")
     from apps.kuaioa.services.form_service import FormRequestService
 
     return await FormRequestService().get_request(tenant_id, entity_id)
 
 
 async def _load_kuaioa_asset_purchase(tenant_id: int, entity_id: int) -> Any:
+    from apps.common.app_orm import require_app_orm
+
+    require_app_orm("kuaioa", "轻办公")
     from apps.kuaioa.services.asset_service import AssetPurchaseService
 
     return await AssetPurchaseService().get_purchase(tenant_id, entity_id)
 
 
 async def _load_kuaioa_leave(tenant_id: int, entity_id: int) -> Any:
+    from apps.common.app_orm import require_app_orm
+
+    require_app_orm("kuaioa", "轻办公")
     from apps.kuaioa.services.leave_service import LeaveRequestService
 
     return await LeaveRequestService().get_request(tenant_id, entity_id)
 
 
 async def _load_kuaioa_seal(tenant_id: int, entity_id: int) -> Any:
+    from apps.common.app_orm import require_app_orm
+
+    require_app_orm("kuaioa", "轻办公")
     from apps.kuaioa.services.seal_service import SealRequestService
 
     return await SealRequestService().get_request(tenant_id, entity_id)
 
 
 async def _load_kuaioa_special_price(tenant_id: int, entity_id: int) -> Any:
+    from apps.common.app_orm import require_app_orm
+
+    require_app_orm("kuaioa", "轻办公")
     from apps.kuaioa.services.collaboration_service import SpecialPriceRequestService
 
     return await SpecialPriceRequestService().get_request(tenant_id, entity_id)
 
 
 async def _load_kuaioa_concession(tenant_id: int, entity_id: int) -> Any:
+    from apps.common.app_orm import require_app_orm
+
+    require_app_orm("kuaioa", "轻办公")
     from apps.kuaioa.services.collaboration_service import ConcessionRequestService
 
     return await ConcessionRequestService().get_request(tenant_id, entity_id)
 
 
 async def _load_kuaioa_process_deviation(tenant_id: int, entity_id: int) -> Any:
+    from apps.common.app_orm import require_app_orm
+
+    require_app_orm("kuaioa", "轻办公")
     from apps.kuaioa.services.collaboration_service import ProcessDeviationService
 
     return await ProcessDeviationService().get_request(tenant_id, entity_id)
 
 
 async def _load_kuaioa_dept_training_application(tenant_id: int, entity_id: int) -> Any:
+    from apps.common.app_orm import require_app_orm
+
+    require_app_orm("kuaioa", "轻办公")
     from apps.kuaioa.services.training_workflow_service import DeptTrainingApplicationService
 
     return await DeptTrainingApplicationService().get_request(tenant_id, entity_id)
 
 
 async def _load_kuaioa_special_work_qualification(tenant_id: int, entity_id: int) -> Any:
+    from apps.common.app_orm import require_app_orm
+
+    require_app_orm("kuaioa", "轻办公")
     from apps.kuaioa.services.training_workflow_service import SpecialWorkQualificationService
 
     return await SpecialWorkQualificationService().get_request(tenant_id, entity_id)
 
 
 async def _load_kuaioa_training_plan(tenant_id: int, entity_id: int) -> Any:
+    from apps.common.app_orm import require_app_orm
+
+    require_app_orm("kuaioa", "轻办公")
     from apps.kuaioa.services.training_workflow_service import AnnualTrainingPlanService
 
     return await AnnualTrainingPlanService().get_plan(tenant_id, entity_id)

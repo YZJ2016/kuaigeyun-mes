@@ -1509,9 +1509,12 @@ class MenuService:
         ))
 
         if overlay_manifest_sort and cache_key_suffix == NAV_TREE_CACHE_SUFFIX:
-            from apps.kuaioa.services.form_template_menu_extension import append_mounted_form_template_menus
+            from apps.common.app_orm import app_orm_ready
 
-            await append_mounted_form_template_menus(tenant_id, root_menus)
+            if app_orm_ready("kuaioa"):
+                from apps.kuaioa.services.form_template_menu_extension import append_mounted_form_template_menus
+
+                await append_mounted_form_template_menus(tenant_id, root_menus)
 
         if is_active is not None:
             if cache_key_suffix == NAV_TREE_CACHE_SUFFIX:

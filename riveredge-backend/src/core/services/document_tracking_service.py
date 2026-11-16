@@ -58,7 +58,7 @@ def _get_model_registry() -> Dict[str, tuple]:
     from apps.kuaizhizao.models.tool import Tool
     from apps.master_data.models.performance import Holiday, Skill
     from apps.master_data.models.employee_performance import PerformanceSummary
-    return {
+    registry = {
         "demand": (Demand, "demand_code"),
         "sales_order": (SalesOrder, "order_code"),
         "work_order": (WorkOrder, "code"),
@@ -89,12 +89,6 @@ def _get_model_registry() -> Dict[str, tuple]:
         "packing_binding": (PackingBinding, "uuid"),
         "receipt_notice": (ReceiptNotice, "notice_code"),
         "sales_return": (SalesReturn, "return_code"),
-        "receivable": (Receivable, "receivable_code"),
-        "payable": (Payable, "payable_code"),
-        "sales_invoice": (Invoice, "invoice_code"),
-        "receipt": (Receipt, "receipt_code"),
-        "payment": (Payment, "payment_code"),
-        "purchase_invoice": (PurchaseInvoice, "invoice_code"),
         "equipment": (Equipment, "code"),
         "equipment_fault": (EquipmentFault, "fault_no"),
         "maintenance_plan": (MaintenancePlan, "plan_no"),
@@ -105,6 +99,20 @@ def _get_model_registry() -> Dict[str, tuple]:
         "performance_holiday": (Holiday, "name"),
         "performance_summary": (PerformanceSummary, "period"),
     }
+    from apps.common.app_orm import finance_orm_ready
+
+    if finance_orm_ready():
+        registry.update(
+            {
+                "receivable": (Receivable, "receivable_code"),
+                "payable": (Payable, "payable_code"),
+                "sales_invoice": (Invoice, "invoice_code"),
+                "receipt": (Receipt, "receipt_code"),
+                "payment": (Payment, "payment_code"),
+                "purchase_invoice": (PurchaseInvoice, "invoice_code"),
+            }
+        )
+    return registry
 
 DOCUMENT_MODEL_REGISTRY = _get_model_registry
 

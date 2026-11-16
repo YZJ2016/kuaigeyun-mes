@@ -4166,7 +4166,8 @@
     "riveredge-frontend": ">=1.0.0"
   },
   "requires_apps": [
-    "master-data"
+    "master-data",
+    "kuaicaiwu"
   ],
   "code_rule_pages": [
     {

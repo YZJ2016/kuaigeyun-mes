@@ -208,6 +208,8 @@ const PaymentApplicationsPage: React.FC = () => {
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const formRef = useRef<ProFormInstance>();
   const pushPaymentFormRef = useRef<ProFormInstance>();
+  /** 编辑打开前缓存初值，等 Modal 挂载后再写入（禁止在 setEditOpen 前 setFieldsValue） */
+  const pendingEditValuesRef = useRef<Record<string, unknown> | null>(null);
   const [supplierOptions, setSupplierOptions] = useState<Array<{ id: number; name: string }>>([]);
   const [payableOptions, setPayableOptions] = useState<
     Array<{ payableId: number; payableCode: string; maxRequestAmount: number }>
@@ -228,7 +230,7 @@ const PaymentApplicationsPage: React.FC = () => {
   }, [detail]);
 
   const onSupplierChange = useCallback(
-    async (supplierId: number) => {
+    async (supplierId: number, opts?: { silentEmpty?: boolean }) => {
       if (!Number.isFinite(supplierId) || supplierId <= 0) {
         setPayableSupplierId(null);
         setPayableOptions([]);
@@ -244,7 +246,8 @@ const PaymentApplicationsPage: React.FC = () => {
           maxRequestAmount: Number(row.max_request_amount ?? 0),
         }));
         setPayableOptions(options.filter((o) => o.payableId > 0 && o.maxRequestAmount > 0));
-        if (options.length === 0) {
+        // 编辑打开时静默：已有明细不代表还能再拉新应付；仅用户改供应商时提示
+        if (options.length === 0 && !opts?.silentEmpty) {
           messageApi.info(t('app.kuaizhizao.paymentApplication.noPayablesForSupplier'));
         }
       } catch (err: unknown) {
@@ -274,9 +277,7 @@ const PaymentApplicationsPage: React.FC = () => {
       const suppliers = await loadSupplierFormReferenceList(KUAIZHIZAO_DOC_HOST.paymentApplication);
       setSupplierOptions(suppliers.map((s) => ({ id: s.id, name: s.name })));
       setEditId(full.id);
-      await onSupplierChange(full.supplierId);
-      formRef.current?.resetFields();
-      formRef.current?.setFieldsValue({
+      pendingEditValuesRef.current = {
         supplierId: full.supplierId,
         applicationDate: coerceFormDate(full.applicationDate) ?? dayjs(),
         expectedPaymentDate: coerceFormDate(full.expectedPaymentDate),
@@ -301,8 +302,9 @@ const PaymentApplicationsPage: React.FC = () => {
           payableCode: line.payableCode,
           requestAmount: line.requestAmount,
         })),
-      });
+      };
       setEditOpen(true);
+      await onSupplierChange(Number(full.supplierId), { silentEmpty: true });
     },
     [messageApi, onSupplierChange, t],
   );
@@ -883,8 +885,14 @@ const PaymentApplicationsPage: React.FC = () => {
         afterOpenChange={(open) => {
           if (!open) {
             formRef.current?.resetFields();
+            pendingEditValuesRef.current = null;
             setPayableSupplierId(null);
             setPayableOptions([]);
+            return;
+          }
+          if (pendingEditValuesRef.current) {
+            formRef.current?.setFieldsValue(pendingEditValuesRef.current);
+            pendingEditValuesRef.current = null;
             return;
           }
           if (editId == null) {

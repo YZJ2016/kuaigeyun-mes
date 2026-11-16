@@ -39383,6 +39383,10 @@ export default {
     '修复付款申请撤销审核报错',
   'pages.dashboard.updateLog.entries.payment-application-revoke-audit-2026-10-23.description':
     '付款申请已接入审批流撤销审核（revoke），与采购申请等行为一致；已有付款单或已付款时不允许撤审。',
+  'pages.dashboard.updateLog.entries.finance-orm-readiness-gate-r01.title':
+    '轻财务未启用时审批与关联查询不再报错',
+  'pages.dashboard.updateLog.entries.finance-orm-readiness-gate-r01.description':
+    '付款申请、单据关联追踪、菜单角标、销售订单开票与收款进度等读取路径增加轻财务 ORM 就绪判断；轻财务未启用时安全跳过，期初应收应付导入等写路径明确提示先启用轻财务。',
   'pages.dashboard.updateLog.entries.kuaiplm-rd-no-funide-hard-import-2026-10-23.title':
     '修复未装定制应用时研发项目列表报错',
   'pages.dashboard.updateLog.entries.kuaiplm-rd-no-funide-hard-import-2026-10-23.description':

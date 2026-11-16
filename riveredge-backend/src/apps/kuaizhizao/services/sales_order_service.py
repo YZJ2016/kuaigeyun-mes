@@ -47,6 +47,7 @@ from apps.kuaicaiwu.constants.finance_source_types import (
     RECEIVABLE_SOURCE_SALES_DELIVERY,
     RECEIVABLE_SOURCE_SALES_INVOICE,
 )
+from apps.common.app_orm import finance_orm_ready
 from apps.kuaizhizao.models.shipment_notice import ShipmentNotice
 from apps.kuaizhizao.models.shipment_notice_item import ShipmentNoticeItem
 from apps.kuaizhizao.models.state_transition import StateTransitionLog
@@ -646,7 +647,7 @@ class SalesOrderService:
         invoiced_by_order: Dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
         received_by_order: Dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
 
-        if code_to_order_id:
+        if code_to_order_id and finance_orm_ready():
             invoice_rows = await Invoice.filter(
                 tenant_id=tenant_id,
                 category="OUT",
@@ -1338,11 +1339,12 @@ class SalesOrderService:
             )
         remaining_wo = order_total - pushed_wo_qty
         invoice_remainder = Decimal("0")
-        from apps.kuaicaiwu.services.sales_invoice_service import SalesInvoiceService
+        if finance_orm_ready():
+            from apps.kuaicaiwu.services.sales_invoice_service import SalesInvoiceService
 
-        invoice_remainder = await SalesInvoiceService().resolve_sales_order_invoice_remainder(
-            tenant_id, order
-        )
+            invoice_remainder = await SalesInvoiceService().resolve_sales_order_invoice_remainder(
+                tenant_id, order
+            )
         from apps.kuaizhizao.services.sales_order_purchase_push import (
             batch_has_purchasable_remaining,
             require_purchase_requisition_for_tenant,
@@ -1627,6 +1629,8 @@ class SalesOrderService:
         customer_name: Optional[str],
         order_total_amount: Decimal,
     ) -> None:
+        if not finance_orm_ready():
+            return
         from apps.kuaicaiwu.services.credit_limit_service import CreditLimitService
 
         await CreditLimitService().validate_customer_exposure(
@@ -2281,6 +2285,13 @@ class SalesOrderService:
             )
             return finance_map.get(sales_order_id, {})
 
+        async def _load_invoice_remainder_one() -> Decimal:
+            if not finance_orm_ready():
+                return Decimal("0")
+            return await SalesInvoiceService().resolve_sales_order_invoice_remainder(
+                tenant_id, order
+            )
+
         (
             demand,
             shipped_by,
@@ -2310,7 +2321,7 @@ class SalesOrderService:
             self._pushed_work_orders_by_sales_order(tenant_id, [sales_order_id]),
             SalesOrderTermsService.load_payment_milestones(tenant_id, sales_order_id),
             sales_order_downstream_by_ids(tenant_id, [sales_order_id]),
-            SalesInvoiceService().resolve_sales_order_invoice_remainder(tenant_id, order),
+            _load_invoice_remainder_one(),
             batch_has_purchasable_remaining(tenant_id, {int(order.id): capability_items}),
             _order_prepayment_linked_by_ids(
                 tenant_id,
@@ -2899,6 +2910,8 @@ class SalesOrderService:
             )
 
         async def _load_invoice_remainder() -> Dict[int, Decimal]:
+            if not finance_orm_ready():
+                return {}
             from apps.kuaicaiwu.services.sales_invoice_service import SalesInvoiceService
 
             return await SalesInvoiceService().batch_sales_order_invoice_remainder(
@@ -3629,20 +3642,21 @@ class SalesOrderService:
                 tenant_id, sales_order_id, submitted_by
             )
             order_row = await SalesOrder.get(tenant_id=tenant_id, id=sales_order_id)
-            from apps.kuaicaiwu.services.finance_integration_hooks import (
-                ensure_prepayment_receipt_for_sales_order,
-            )
+            if finance_orm_ready():
+                from apps.kuaicaiwu.services.finance_integration_hooks import (
+                    ensure_prepayment_receipt_for_sales_order,
+                )
 
-            await ensure_prepayment_receipt_for_sales_order(
-                tenant_id=tenant_id,
-                order_id=sales_order_id,
-                order_code=order_row.order_code,
-                customer_id=order_row.customer_id,
-                customer_name=order_row.customer_name,
-                prepayment_amount=order_row.prepayment_amount,
-                prepayment_bank_account_id=order_row.prepayment_bank_account_id,
-                operator_id=submitted_by,
-            )
+                await ensure_prepayment_receipt_for_sales_order(
+                    tenant_id=tenant_id,
+                    order_id=sales_order_id,
+                    order_code=order_row.order_code,
+                    customer_id=order_row.customer_id,
+                    customer_name=order_row.customer_name,
+                    prepayment_amount=order_row.prepayment_amount,
+                    prepayment_bank_account_id=order_row.prepayment_bank_account_id,
+                    operator_id=submitted_by,
+                )
             from apps.kuaizhizao.services.contract_milestone_billing_service import (
                 ContractMilestoneBillingService,
             )
@@ -3797,23 +3811,24 @@ class SalesOrderService:
                     side_effect_errors.append(msg)
                     return None
 
-            from apps.kuaicaiwu.services.finance_integration_hooks import (
-                ensure_prepayment_receipt_for_sales_order,
-            )
+            if finance_orm_ready():
+                from apps.kuaicaiwu.services.finance_integration_hooks import (
+                    ensure_prepayment_receipt_for_sales_order,
+                )
 
-            await _run_side(
-                "ensure_prepayment_receipt",
-                ensure_prepayment_receipt_for_sales_order(
-                    tenant_id=tenant_id,
-                    order_id=sales_order_id,
-                    order_code=order_row.order_code,
-                    customer_id=order_row.customer_id,
-                    customer_name=order_row.customer_name,
-                    prepayment_amount=order_row.prepayment_amount,
-                    prepayment_bank_account_id=order_row.prepayment_bank_account_id,
-                    operator_id=approved_by,
-                ),
-            )
+                await _run_side(
+                    "ensure_prepayment_receipt",
+                    ensure_prepayment_receipt_for_sales_order(
+                        tenant_id=tenant_id,
+                        order_id=sales_order_id,
+                        order_code=order_row.order_code,
+                        customer_id=order_row.customer_id,
+                        customer_name=order_row.customer_name,
+                        prepayment_amount=order_row.prepayment_amount,
+                        prepayment_bank_account_id=order_row.prepayment_bank_account_id,
+                        operator_id=approved_by,
+                    ),
+                )
             from apps.kuaizhizao.services.contract_milestone_billing_service import (
                 ContractMilestoneBillingService,
             )

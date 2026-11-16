@@ -706,16 +706,21 @@ class InitialDataService:
             data: 二维数组数据（从 uni_import 组件传递）
             snapshot_time: 快照时间点（可选，用于标记期初数据的时间点）
             created_by: 创建人ID
-            
+
         Returns:
             dict: 导入结果（成功数、失败数、错误列表）
         """
+        from apps.common.app_orm import finance_orm_ready, require_finance_orm
+
+        if not finance_orm_ready():
+            require_finance_orm()
+
         if not data or len(data) < 2:
             raise ValidationError("导入数据格式错误：至少需要表头和示例数据行")
-        
+
         # 解析表头（第一行，索引0）
         headers = [str(cell).strip() if cell is not None else '' for cell in data[0]]
-        
+
         # 表头字段映射（支持中英文）
         header_map = {
             '类型': 'type', '*类型': 'type', 'type': 'type',

@@ -470,6 +470,8 @@ async def _dispatch_payment_application(
         )
     if action == "withdraw":
         return await svc.withdraw_application(tenant_id, entity_id, user_id)
+    if action == "revoke":
+        return await svc.revoke_application_approval(tenant_id, entity_id, user_id)
     _unsupported("payment_application", action)
 
 
@@ -727,6 +729,9 @@ async def _dispatch_receivable(
     user_id: int,
     reason: Optional[str],
 ) -> Any:
+    from apps.common.app_orm import require_finance_orm
+
+    require_finance_orm()
     from apps.kuaicaiwu.services.finance_service import ReceivableService
 
     svc = ReceivableService()
@@ -753,6 +758,9 @@ async def _dispatch_payable(
     user_id: int,
     reason: Optional[str],
 ) -> Any:
+    from apps.common.app_orm import require_finance_orm
+
+    require_finance_orm()
     from apps.kuaicaiwu.services.finance_service import PayableService
 
     svc = PayableService()
@@ -779,6 +787,9 @@ async def _dispatch_purchase_invoice(
     user_id: int,
     reason: Optional[str],
 ) -> Any:
+    from apps.common.app_orm import require_finance_orm
+
+    require_finance_orm()
     from apps.kuaicaiwu.services.finance_service import PurchaseInvoiceService
 
     svc = PurchaseInvoiceService()

@@ -10709,6 +10709,30 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
       'pages.dashboard.updateLog.entries.platform-admin-cross-tenant-audit-actor-r01.description',
   },
   {
+    id: 'payment-application-edit-form-empty-r01',
+    date: '2026-10-23',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.payment-application-edit-form-empty-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.payment-application-edit-form-empty-r01.description',
+  },
+  {
+    id: 'payment-application-revoke-audit-2026-10-23',
+    date: '2026-10-23',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.payment-application-revoke-audit-2026-10-23.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.payment-application-revoke-audit-2026-10-23.description',
+  },
+  {
+    id: 'finance-orm-readiness-gate-r01',
+    date: '2026-10-23',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.finance-orm-readiness-gate-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.finance-orm-readiness-gate-r01.description',
+  },
+  {
     id: 'drawings-list-file-probe-hang-r03',
     date: '2026-10-23',
     type: 'fix',

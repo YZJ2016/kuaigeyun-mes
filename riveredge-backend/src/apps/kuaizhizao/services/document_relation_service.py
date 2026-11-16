@@ -45,6 +45,13 @@ from apps.kuaicaiwu.constants import (
     PAYABLE_SOURCE_PURCHASE_INVOICE,
     RECEIVABLE_SOURCE_SALES_INVOICE,
 )
+
+
+def _finance_orm_ok() -> bool:
+    """kuaicaiwu 财务 ORM 已绑定连接；未就绪时跳过财务关联分支。"""
+    from apps.common.app_orm import finance_orm_ready
+
+    return finance_orm_ready()
 from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
 from apps.kuaizhizao.models.process_inspection import ProcessInspection
 from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
@@ -1144,6 +1151,8 @@ class DocumentRelationService:
         payable_id: int
     ) -> List[Dict[str, Any]]:
         """获取应付单的上游单据（采购入库单 / 采购发票）"""
+        if not _finance_orm_ok():
+            return []
         payable = await Payable.get_or_none(tenant_id=tenant_id, id=payable_id)
         if not payable:
             return []
@@ -1219,6 +1228,8 @@ class DocumentRelationService:
         payable_id: int,
     ) -> List[Dict[str, Any]]:
         """应付单下游：核销记录中的付款单"""
+        if not _finance_orm_ok():
+            return []
         payable = await Payable.get_or_none(tenant_id=tenant_id, id=payable_id)
         if not payable:
             return []
@@ -1578,6 +1589,8 @@ class DocumentRelationService:
         delivery_id: int
     ) -> List[Dict[str, Any]]:
         """获取销售出库单的下游单据（应收单、送货单）"""
+        if not _finance_orm_ok():
+            return []
         downstream = []
 
         # 查找关联的送货单
@@ -1641,6 +1654,8 @@ class DocumentRelationService:
         receivable_id: int
     ) -> List[Dict[str, Any]]:
         """获取应收单的上游单据（销售出库单 / 销项发票→销售订单等）"""
+        if not _finance_orm_ok():
+            return []
         receivable = await Receivable.get_or_none(tenant_id=tenant_id, id=receivable_id)
         if not receivable:
             return []
@@ -1709,6 +1724,8 @@ class DocumentRelationService:
         receivable_id: int,
     ) -> List[Dict[str, Any]]:
         """应收单下游：关联销项发票、核销产生的收款单"""
+        if not _finance_orm_ok():
+            return []
         receivable = await Receivable.get_or_none(tenant_id=tenant_id, id=receivable_id)
         if not receivable:
             return []
@@ -1797,6 +1814,8 @@ class DocumentRelationService:
         invoice_id: int,
     ) -> List[Dict[str, Any]]:
         """销项发票上游：蓝字原票、关联表、来源销售订单号"""
+        if not _finance_orm_ok():
+            return []
         inv = await Invoice.get_or_none(
             tenant_id=tenant_id, id=invoice_id, category="OUT"
         )
@@ -1857,6 +1876,8 @@ class DocumentRelationService:
         invoice_id: int,
     ) -> List[Dict[str, Any]]:
         """销项发票下游：应收单、红字发票、关联表下推目标"""
+        if not _finance_orm_ok():
+            return []
         inv = await Invoice.get_or_none(
             tenant_id=tenant_id, id=invoice_id, category="OUT"
         )
@@ -1929,6 +1950,8 @@ class DocumentRelationService:
         receipt_id: int,
     ) -> List[Dict[str, Any]]:
         """收款单上游：核销记录中的应收单等借方单据"""
+        if not _finance_orm_ok():
+            return []
         rc = await Receipt.get_or_none(
             tenant_id=tenant_id, id=receipt_id, deleted_at__isnull=True
         )
@@ -1968,6 +1991,8 @@ class DocumentRelationService:
         payment_id: int,
     ) -> List[Dict[str, Any]]:
         """付款单上游：核销记录中的应付单"""
+        if not _finance_orm_ok():
+            return []
         pv = await Payment.get_or_none(
             tenant_id=tenant_id, id=payment_id, deleted_at__isnull=True
         )
@@ -2007,6 +2032,8 @@ class DocumentRelationService:
         invoice_id: int,
     ) -> List[Dict[str, Any]]:
         """采购发票上游：采购订单、关联表来源单据"""
+        if not _finance_orm_ok():
+            return []
         pinv = await PurchaseInvoice.get_or_none(
             tenant_id=tenant_id, id=invoice_id, deleted_at__isnull=True
         )
@@ -2050,6 +2077,8 @@ class DocumentRelationService:
         invoice_id: int,
     ) -> List[Dict[str, Any]]:
         """采购发票下游：应付单、关联表目标单据"""
+        if not _finance_orm_ok():
+            return []
         pinv = await PurchaseInvoice.get_or_none(
             tenant_id=tenant_id, id=invoice_id, deleted_at__isnull=True
         )
@@ -2311,6 +2340,8 @@ class DocumentRelationService:
             } for delivery in deliveries]
 
         async def _invoices() -> List[Dict[str, Any]]:
+            if not _finance_orm_ok():
+                return []
             so = await SalesOrder.get_or_none(
                 tenant_id=tenant_id, id=order_id, deleted_at__isnull=True
             )
@@ -3581,20 +3612,21 @@ class DocumentRelationService:
                 "created_at": to_api_isoformat(receipt.created_at) if receipt.created_at else None
             })
 
-        pinvs = await PurchaseInvoice.filter(
-            tenant_id=tenant_id,
-            purchase_order_id=order_id,
-            deleted_at__isnull=True,
-        ).limit(20)
-        for inv in pinvs:
-            downstream.append({
-                "document_type": "purchase_invoice",
-                "document_id": inv.id,
-                "document_code": inv.invoice_code,
-                "document_name": inv.invoice_number,
-                "status": inv.status,
-                "created_at": to_api_isoformat(inv.created_at) if inv.created_at else None,
-            })
+        if _finance_orm_ok():
+            pinvs = await PurchaseInvoice.filter(
+                tenant_id=tenant_id,
+                purchase_order_id=order_id,
+                deleted_at__isnull=True,
+            ).limit(20)
+            for inv in pinvs:
+                downstream.append({
+                    "document_type": "purchase_invoice",
+                    "document_id": inv.id,
+                    "document_code": inv.invoice_code,
+                    "document_name": inv.invoice_number,
+                    "status": inv.status,
+                    "created_at": to_api_isoformat(inv.created_at) if inv.created_at else None,
+                })
 
         return _dedupe_relation_documents(downstream)
 
@@ -3607,20 +3639,21 @@ class DocumentRelationService:
         downstream = []
 
         # 通过source_type和source_id查找应付单
-        payables = await Payable.filter(
-            tenant_id=tenant_id,
-            source_type="采购入库",
-            source_id=receipt_id
-        ).limit(10)
-        for payable in payables:
-            downstream.append({
-                "document_type": "payable",
-                "document_id": payable.id,
-                "document_code": payable.payable_code,
-                "document_name": None,
-                "status": payable.status,
-                "created_at": to_api_isoformat(payable.created_at) if payable.created_at else None
-            })
+        if _finance_orm_ok():
+            payables = await Payable.filter(
+                tenant_id=tenant_id,
+                source_type="采购入库",
+                source_id=receipt_id
+            ).limit(10)
+            for payable in payables:
+                downstream.append({
+                    "document_type": "payable",
+                    "document_id": payable.id,
+                    "document_code": payable.payable_code,
+                    "document_name": None,
+                    "status": payable.status,
+                    "created_at": to_api_isoformat(payable.created_at) if payable.created_at else None
+                })
 
         # 采购退货单
         purchase_returns = await PurchaseReturn.filter(

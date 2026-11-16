@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any, Optional
 
 from infra.exceptions.exceptions import BusinessLogicError
@@ -23,9 +24,14 @@ def _is_approved(status: Any) -> bool:
     return s in ("已批准", "部分付款", "已通过", "APPROVED", "AUDITED")
 
 
-def derive_payment_application_capabilities(app: Any) -> dict[str, ActionCapability]:
+def derive_payment_application_capabilities(
+    app: Any,
+    *,
+    has_linked_payment: bool = False,
+) -> dict[str, ActionCapability]:
     status = getattr(app, "status", None)
     remaining = getattr(app, "remaining_amount", 0) or 0
+    paid = Decimal(str(getattr(app, "paid_amount", 0) or 0))
 
     from apps.kuaizhizao.constants import is_rejected_status
 
@@ -42,6 +48,15 @@ def derive_payment_application_capabilities(app: Any) -> dict[str, ActionCapabil
     approved = _is_approved(status)
     push_ok = approved and float(remaining) > 0
 
+    revoke_ok = _norm(status) == "已批准" and paid <= 0 and not has_linked_payment
+    revoke_reason = None
+    if has_linked_payment:
+        revoke_reason = "payment_application.revoke_approval.has_payment"
+    elif paid > 0 or _norm(status) == "部分付款":
+        revoke_reason = "payment_application.revoke_approval.has_payment"
+    elif _norm(status) != "已批准":
+        revoke_reason = "payment_application.revoke_approval.not_allowed"
+
     return {
         "update": _cap(update_ok, "payment_application.update.not_allowed" if not update_ok else None),
         "delete": _cap(delete_ok, "payment_application.delete.not_allowed" if not delete_ok else None),
@@ -49,6 +64,7 @@ def derive_payment_application_capabilities(app: Any) -> dict[str, ActionCapabil
         "approve": _cap(approve_ok, "payment_application.approve.not_allowed" if not approve_ok else None),
         "reject": _cap(approve_ok, "payment_application.approve.not_allowed" if not approve_ok else None),
         "withdraw_submit": _cap(approve_ok, "payment_application.withdraw.not_allowed" if not approve_ok else None),
+        "revoke_approval": _cap(revoke_ok, revoke_reason),
         "push_payment": _cap(
             push_ok,
             "payment_application.push_payment.not_allowed"
@@ -59,8 +75,15 @@ def derive_payment_application_capabilities(app: Any) -> dict[str, ActionCapabil
     }
 
 
-def assert_payment_application_capability(app: Any, action: str) -> None:
-    caps = derive_payment_application_capabilities(app)
+def assert_payment_application_capability(
+    app: Any,
+    action: str,
+    *,
+    has_linked_payment: bool = False,
+) -> None:
+    caps = derive_payment_application_capabilities(
+        app, has_linked_payment=has_linked_payment
+    )
     cap = caps.get(action)
     if not cap or not cap.allowed:
         reason = cap.reason if cap else "payment_application.action.not_allowed"

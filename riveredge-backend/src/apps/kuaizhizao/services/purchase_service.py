@@ -455,17 +455,15 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             return response.buyer_name
 
         async def _invoice_exists() -> bool:
-            try:
-                from apps.kuaicaiwu.models.invoice import Invoice
-            except Exception:
+            from apps.common.app_orm import finance_orm_ready
+            from apps.kuaicaiwu.models.purchase_invoice import PurchaseInvoice
+
+            if not finance_orm_ready():
                 return False
-            code = (order.order_code or "").strip()
-            if not code:
-                return False
-            return await Invoice.filter(
+            return await PurchaseInvoice.filter(
                 tenant_id=tenant_id,
-                category="IN",
-                source_document_code=code,
+                purchase_order_id=order_id,
+                deleted_at__isnull=True,
             ).exists()
 
         (

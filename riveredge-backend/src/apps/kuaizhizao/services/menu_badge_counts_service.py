@@ -759,6 +759,13 @@ async def _section_misc_ops(ctx: BadgeScopeCtx, now: datetime, now_date) -> Badg
 
 
 async def _section_finance(ctx: BadgeScopeCtx, now_date) -> BadgeFragment:
+    from apps.common.app_orm import finance_orm_ready
+
+    if not finance_orm_ready():
+        return {
+            "finance_settlement": {"overdue": 0, "pending": 0, "in_progress": 0},
+        }
+
     from apps.kuaicaiwu.models.receivable import Receivable
     from apps.kuaicaiwu.models.payable import Payable
     from apps.kuaicaiwu.models.receipt import Receipt
