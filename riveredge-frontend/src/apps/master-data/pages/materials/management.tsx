@@ -623,8 +623,7 @@ function buildMaterialCreateFormValues(groupId?: number | null): Record<string, 
   return {
     groupId: groupId || undefined,
     isActive: true,
-    batchManaged: false,
-    serialManaged: false,
+    // 批号/序列号默认由 MaterialForm 按仓储业务配置总闸回填，此处不写死 false
     variantManaged: false,
     sourceType: undefined,
     baseUnit: DEFAULT_MATERIAL_BASE_UNIT,

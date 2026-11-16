@@ -12,15 +12,18 @@ import { useTranslation } from 'react-i18next';
 import {
   filterWarehouseTrackingColumns,
   isMaterialBatchEntryEnabled,
+  isMaterialSerialEntryEnabled,
   useWarehouseTrackingFlags,
 } from '../shared/warehouseTrackingFlags';
 import { materialApi } from '../../../../master-data/services/material';
 import type { Material } from '../../../../master-data/types/material';
 import {
   loadBatchOptionsByMaterialId,
+  loadInStockSerialOptions,
   type InventoryPickOption,
 } from '../outbound/outboundConfirmInventoryOptions';
 import OutboundBatchAllocationField from '../outbound/OutboundBatchAllocationField';
+import OutboundSerialPickerField from '../outbound/OutboundSerialPickerField';
 import {
   coerceBatchAllocationsDraft,
   isValidOutboundBatchAllocations,
@@ -113,11 +116,35 @@ interface InventoryTransferItem {
   to_location_id?: number;
   to_location_code?: string;
   batch_no?: string;
+  serial_numbers?: string[];
   quantity?: number;
   unit_price?: number;
   amount?: number;
   status?: string;
   remarks?: string;
+}
+
+function parseTransferLineSerialNumbers(raw: unknown): string[] {
+  if (Array.isArray(raw)) {
+    return raw.map((x) => String(x ?? '').trim()).filter(Boolean);
+  }
+  if (typeof raw === 'string') {
+    const text = raw.trim();
+    if (!text) return [];
+    try {
+      const parsed = JSON.parse(text);
+      if (Array.isArray(parsed)) {
+        return parsed.map((x) => String(x ?? '').trim()).filter(Boolean);
+      }
+    } catch {
+      // fall through
+    }
+    return text
+      .split(/[,，;\s]+/)
+      .map((x) => x.trim())
+      .filter(Boolean);
+  }
+  return [];
 }
 
 const defaultTransferItem = {
@@ -133,7 +160,9 @@ const defaultTransferItem = {
   to_storage_area_id: undefined as number | undefined,
   to_location_id: undefined as number | undefined,
   batch_no: undefined as string | undefined,
+  serial_numbers: [] as string[],
   batch_managed: false,
+  serial_managed: false,
 };
 
 const INVENTORY_TRANSFER_RESOURCE = 'kuaizhizao:warehouse-management-inventory-transfer';
@@ -171,9 +200,19 @@ const InventoryTransferPage: React.FC = () => {
   const [rowBatchAllocs, setRowBatchAllocs] = useState<Record<number, OutboundBatchAllocation[]>>({});
   const [itemModalBatchAllocs, setItemModalBatchAllocs] = useState<OutboundBatchAllocation[]>([]);
   const [rowBatchManaged, setRowBatchManaged] = useState<Record<number, boolean>>({});
+  const [rowSerialManaged, setRowSerialManaged] = useState<Record<number, boolean>>({});
+  const [rowSerialOptions, setRowSerialOptions] = useState<Record<number, InventoryPickOption[]>>({});
+  const [rowSerials, setRowSerials] = useState<Record<number, string[]>>({});
+  const [rowMaterialUuid, setRowMaterialUuid] = useState<Record<number, string>>({});
+  const [rowSerialOptionsLoading, setRowSerialOptionsLoading] = useState<Record<number, boolean>>({});
   const [itemModalBatchOptions, setItemModalBatchOptions] = useState<InventoryPickOption[]>([]);
   const [itemModalBatchManaged, setItemModalBatchManaged] = useState(false);
   const [itemModalBatchLoading, setItemModalBatchLoading] = useState(false);
+  const [itemModalSerialManaged, setItemModalSerialManaged] = useState(false);
+  const [itemModalSerialOptions, setItemModalSerialOptions] = useState<InventoryPickOption[]>([]);
+  const [itemModalSerials, setItemModalSerials] = useState<string[]>([]);
+  const [itemModalMaterialUuid, setItemModalMaterialUuid] = useState<string | undefined>();
+  const [itemModalSerialLoading, setItemModalSerialLoading] = useState(false);
   const [itemModalFromWarehouseId, setItemModalFromWarehouseId] = useState<number | undefined>();
 
   // Drawer 相关状态
@@ -199,22 +238,65 @@ const InventoryTransferPage: React.FC = () => {
     return { id: locationId, code: loc?.code as string | undefined };
   };
 
-  const resolveMaterialBatchManaged = async (
+  const resolveMaterialTracking = async (
     material?: Material | null,
     materialId?: number,
-  ): Promise<boolean> => {
-    let managed = !!(material?.batchManaged ?? (material as { batch_managed?: boolean } | null | undefined)?.batch_managed);
+  ): Promise<{ batchManaged: boolean; serialManaged: boolean; materialUuid?: string }> => {
+    let batchManaged = !!(
+      material?.batchManaged ?? (material as { batch_managed?: boolean } | null | undefined)?.batch_managed
+    );
+    let serialManaged = !!(
+      material?.serialManaged ?? (material as { serial_managed?: boolean } | null | undefined)?.serial_managed
+    );
+    let materialUuid = String(material?.uuid ?? '').trim() || undefined;
     const id = Number(materialId ?? material?.id ?? 0);
     if (id > 0) {
       try {
         const res = await materialApi.list({ ids: [id], limit: 1 });
         const row = res.items?.[0];
-        if (row) managed = !!row.batchManaged;
+        if (row) {
+          batchManaged = !!row.batchManaged;
+          serialManaged = !!row.serialManaged;
+          materialUuid = String(row.uuid ?? '').trim() || materialUuid;
+        }
       } catch {
-        // keep prior flag
+        // keep prior flags
       }
     }
-    return isMaterialBatchEntryEnabled(trackingFlags, managed);
+    return {
+      batchManaged: isMaterialBatchEntryEnabled(trackingFlags, batchManaged),
+      serialManaged: isMaterialSerialEntryEnabled(trackingFlags, serialManaged),
+      materialUuid,
+    };
+  };
+
+  const syncRowSerialOptions = async (
+    rowIndex: number,
+    materialUuid?: string,
+    preferSerials?: string[],
+  ) => {
+    const uuid = String(materialUuid ?? rowMaterialUuid[rowIndex] ?? '').trim();
+    const selected = preferSerials ?? rowSerials[rowIndex] ?? [];
+    if (!uuid) {
+      setRowSerialOptions((prev) => ({ ...prev, [rowIndex]: selected.map((sn) => ({ value: sn, label: sn })) }));
+      return;
+    }
+    setRowSerialOptionsLoading((prev) => ({ ...prev, [rowIndex]: true }));
+    try {
+      const opts = await loadInStockSerialOptions(uuid);
+      const merged = [...opts];
+      for (const sn of selected) {
+        if (!merged.some((o) => o.value === sn)) merged.push({ value: sn, label: sn });
+      }
+      setRowSerialOptions((prev) => ({ ...prev, [rowIndex]: merged }));
+    } catch {
+      setRowSerialOptions((prev) => ({
+        ...prev,
+        [rowIndex]: selected.map((sn) => ({ value: sn, label: sn })),
+      }));
+    } finally {
+      setRowSerialOptionsLoading((prev) => ({ ...prev, [rowIndex]: false }));
+    }
   };
 
   const syncRowBatchOptions = async (
@@ -222,11 +304,16 @@ const InventoryTransferPage: React.FC = () => {
     materialId?: number,
     warehouseId?: number,
     preferBatch?: string,
+    preferSerials?: string[],
   ) => {
-    const managed = await resolveMaterialBatchManaged(undefined, materialId);
-    setRowBatchManaged((prev) => ({ ...prev, [rowIndex]: managed }));
-    formRef.current?.setFieldValue(['items', rowIndex, 'batch_managed'], managed);
-    if (!managed || !materialId || !warehouseId) {
+    const tracking = await resolveMaterialTracking(undefined, materialId);
+    setRowBatchManaged((prev) => ({ ...prev, [rowIndex]: tracking.batchManaged }));
+    setRowSerialManaged((prev) => ({ ...prev, [rowIndex]: tracking.serialManaged }));
+    setRowMaterialUuid((prev) => ({ ...prev, [rowIndex]: tracking.materialUuid ?? '' }));
+    formRef.current?.setFieldValue(['items', rowIndex, 'batch_managed'], tracking.batchManaged);
+    formRef.current?.setFieldValue(['items', rowIndex, 'serial_managed'], tracking.serialManaged);
+
+    if (!tracking.batchManaged || !materialId || !warehouseId) {
       setRowBatchOptions((prev) => ({ ...prev, [rowIndex]: [] }));
       setRowBatchAllocs((prev) => {
         const next = { ...prev };
@@ -234,20 +321,39 @@ const InventoryTransferPage: React.FC = () => {
         return next;
       });
       formRef.current?.setFieldValue(['items', rowIndex, 'batch_no'], undefined);
+    } else {
+      const map = await loadBatchOptionsByMaterialId([materialId], warehouseId);
+      const options = map[materialId] ?? [];
+      setRowBatchOptions((prev) => ({ ...prev, [rowIndex]: options }));
+      const qty = Number(formRef.current?.getFieldValue(['items', rowIndex, 'quantity']) ?? 0);
+      const preferred = String(
+        preferBatch ?? formRef.current?.getFieldValue(['items', rowIndex, 'batch_no']) ?? '',
+      ).trim();
+      const seeded = coerceBatchAllocationsDraft(preferred, qty);
+      if (seeded?.length && isValidOutboundBatchAllocations(seeded, options, qty)) {
+        setRowBatchAllocs((prev) => ({ ...prev, [rowIndex]: seeded }));
+        formRef.current?.setFieldValue(['items', rowIndex, 'batch_no'], seeded[0]?.batchNo);
+      } else {
+        setRowBatchAllocs((prev) => ({ ...prev, [rowIndex]: prev[rowIndex] ?? [] }));
+      }
+    }
+
+    if (!tracking.serialManaged) {
+      setRowSerials((prev) => {
+        const next = { ...prev };
+        delete next[rowIndex];
+        return next;
+      });
+      setRowSerialOptions((prev) => ({ ...prev, [rowIndex]: [] }));
+      formRef.current?.setFieldValue(['items', rowIndex, 'serial_numbers'], undefined);
       return;
     }
-    const map = await loadBatchOptionsByMaterialId([materialId], warehouseId);
-    const options = map[materialId] ?? [];
-    setRowBatchOptions((prev) => ({ ...prev, [rowIndex]: options }));
-    const qty = Number(formRef.current?.getFieldValue(['items', rowIndex, 'quantity']) ?? 0);
-    const preferred = String(preferBatch ?? formRef.current?.getFieldValue(['items', rowIndex, 'batch_no']) ?? '').trim();
-    const seeded = coerceBatchAllocationsDraft(preferred, qty);
-    if (seeded?.length && isValidOutboundBatchAllocations(seeded, options, qty)) {
-      setRowBatchAllocs((prev) => ({ ...prev, [rowIndex]: seeded }));
-      formRef.current?.setFieldValue(['items', rowIndex, 'batch_no'], seeded[0]?.batchNo);
-    } else {
-      setRowBatchAllocs((prev) => ({ ...prev, [rowIndex]: prev[rowIndex] ?? [] }));
-    }
+    const serials =
+      preferSerials ??
+      parseTransferLineSerialNumbers(formRef.current?.getFieldValue(['items', rowIndex, 'serial_numbers']));
+    setRowSerials((prev) => ({ ...prev, [rowIndex]: serials }));
+    formRef.current?.setFieldValue(['items', rowIndex, 'serial_numbers'], serials);
+    await syncRowSerialOptions(rowIndex, tracking.materialUuid, serials);
   };
 
   const syncItemModalBatchOptions = async (
@@ -255,31 +361,62 @@ const InventoryTransferPage: React.FC = () => {
     materialId?: number,
     warehouseId?: number,
     preferBatch?: string,
+    preferSerials?: string[],
   ) => {
-    const managed = await resolveMaterialBatchManaged(material, materialId);
-    setItemModalBatchManaged(managed);
-    if (!managed || !materialId || !warehouseId) {
+    const tracking = await resolveMaterialTracking(material, materialId);
+    setItemModalBatchManaged(tracking.batchManaged);
+    setItemModalSerialManaged(tracking.serialManaged);
+    setItemModalMaterialUuid(tracking.materialUuid);
+
+    if (!tracking.batchManaged || !materialId || !warehouseId) {
       setItemModalBatchOptions([]);
       setItemModalBatchAllocs([]);
       itemFormRef.current?.setFieldsValue({ batch_no: undefined });
+    } else {
+      setItemModalBatchLoading(true);
+      try {
+        const map = await loadBatchOptionsByMaterialId([materialId], warehouseId);
+        const options = map[materialId] ?? [];
+        setItemModalBatchOptions(options);
+        const qty = Number(itemFormRef.current?.getFieldValue('quantity') ?? 0);
+        const preferred = String(preferBatch ?? itemFormRef.current?.getFieldValue('batch_no') ?? '').trim();
+        const seeded = coerceBatchAllocationsDraft(preferred, qty);
+        if (seeded?.length && isValidOutboundBatchAllocations(seeded, options, qty)) {
+          setItemModalBatchAllocs(seeded);
+          itemFormRef.current?.setFieldsValue({ batch_no: seeded[0]?.batchNo });
+        } else {
+          setItemModalBatchAllocs([]);
+        }
+      } finally {
+        setItemModalBatchLoading(false);
+      }
+    }
+
+    if (!tracking.serialManaged) {
+      setItemModalSerials([]);
+      setItemModalSerialOptions([]);
+      itemFormRef.current?.setFieldsValue({ serial_numbers: undefined });
       return;
     }
-    setItemModalBatchLoading(true);
+    const serials = preferSerials ?? parseTransferLineSerialNumbers(itemFormRef.current?.getFieldValue('serial_numbers'));
+    setItemModalSerials(serials);
+    itemFormRef.current?.setFieldsValue({ serial_numbers: serials });
+    if (!tracking.materialUuid) {
+      setItemModalSerialOptions(serials.map((sn) => ({ value: sn, label: sn })));
+      return;
+    }
+    setItemModalSerialLoading(true);
     try {
-      const map = await loadBatchOptionsByMaterialId([materialId], warehouseId);
-      const options = map[materialId] ?? [];
-      setItemModalBatchOptions(options);
-      const qty = Number(itemFormRef.current?.getFieldValue('quantity') ?? 0);
-      const preferred = String(preferBatch ?? itemFormRef.current?.getFieldValue('batch_no') ?? '').trim();
-      const seeded = coerceBatchAllocationsDraft(preferred, qty);
-      if (seeded?.length && isValidOutboundBatchAllocations(seeded, options, qty)) {
-        setItemModalBatchAllocs(seeded);
-        itemFormRef.current?.setFieldsValue({ batch_no: seeded[0]?.batchNo });
-      } else {
-        setItemModalBatchAllocs([]);
+      const opts = await loadInStockSerialOptions(tracking.materialUuid);
+      const merged = [...opts];
+      for (const sn of serials) {
+        if (!merged.some((o) => o.value === sn)) merged.push({ value: sn, label: sn });
       }
+      setItemModalSerialOptions(merged);
+    } catch {
+      setItemModalSerialOptions(serials.map((sn) => ({ value: sn, label: sn })));
     } finally {
-      setItemModalBatchLoading(false);
+      setItemModalSerialLoading(false);
     }
   };
 
@@ -298,6 +435,11 @@ const InventoryTransferPage: React.FC = () => {
     setRowBatchOptions({});
     setRowBatchAllocs({});
     setRowBatchManaged({});
+    setRowSerialManaged({});
+    setRowSerialOptions({});
+    setRowSerials({});
+    setRowMaterialUuid({});
+    setRowSerialOptionsLoading({});
   };
 
   const resetCreateModalState = () => {
@@ -312,6 +454,11 @@ const InventoryTransferPage: React.FC = () => {
     setRowBatchOptions({});
     setRowBatchAllocs({});
     setRowBatchManaged({});
+    setRowSerialManaged({});
+    setRowSerialOptions({});
+    setRowSerials({});
+    setRowMaterialUuid({});
+    setRowSerialOptionsLoading({});
     formRef.current?.resetFields();
   };
 
@@ -322,6 +469,11 @@ const InventoryTransferPage: React.FC = () => {
     setRowBatchOptions({});
     setRowBatchAllocs({});
     setRowBatchManaged({});
+    setRowSerialManaged({});
+    setRowSerialOptions({});
+    setRowSerials({});
+    setRowMaterialUuid({});
+    setRowSerialOptionsLoading({});
 
     if (payload.kind === 'create') {
       createFromWarehouseRef.current = undefined;
@@ -368,12 +520,20 @@ const InventoryTransferPage: React.FC = () => {
         to_storage_area_id: it.to_storage_area_id,
         to_location_id: it.to_location_id,
         batch_no: it.batch_no,
+        serial_numbers: parseTransferLineSerialNumbers(it.serial_numbers),
         batch_managed: false,
+        serial_managed: false,
       })),
     });
     for (let i = 0; i < detailItems.length; i += 1) {
       const it = detailItems[i];
-      await syncRowBatchOptions(i, it.material_id, detail.from_warehouse_id, it.batch_no);
+      await syncRowBatchOptions(
+        i,
+        it.material_id,
+        detail.from_warehouse_id,
+        it.batch_no,
+        parseTransferLineSerialNumbers(it.serial_numbers),
+      );
     }
     suppressWarehouseItemClearRef.current = false;
   };
@@ -410,6 +570,11 @@ const InventoryTransferPage: React.FC = () => {
       to_location_id: toLoc.id,
       to_location_code: toLoc.code,
       batch_no: it.batch_no || undefined,
+      serial_numbers: (() => {
+        const serials = parseTransferLineSerialNumbers(it.serial_numbers);
+        return serials.length ? serials : undefined;
+      })(),
+      ...pickDocumentLineDualQuantityFields(it as Record<string, unknown>),
       quantity: Number(it.quantity) || 0,
       unit_price: Number(it.unit_price) || 0,
       remarks: it.remarks,
@@ -444,6 +609,8 @@ const InventoryTransferPage: React.FC = () => {
     batchManagedByRow: Record<number, boolean>,
     batchOptionsByRow: Record<number, InventoryPickOption[]>,
     batchAllocsByRow: Record<number, OutboundBatchAllocation[]>,
+    serialManagedByRow: Record<number, boolean>,
+    serialsByRow: Record<number, string[]>,
   ) => {
     const valid = items.filter((it) => it.material_id && (Number(it.quantity) || 0) > 0);
     if (!valid.length) {
@@ -453,15 +620,39 @@ const InventoryTransferPage: React.FC = () => {
     for (let index = 0; index < items.length; index += 1) {
       const it = items[index];
       if (!it.material_id || !(Number(it.quantity) || 0) > 0) continue;
+      const label = String(it.material_code || it.material_name || '').trim() || `#${index + 1}`;
       const managed = batchManagedByRow[index] ?? !!it.batch_managed;
       if (managed) {
         const qty = Number(it.quantity ?? 0);
         const options = batchOptionsByRow[index] ?? [];
         const allocs = batchAllocsByRow[index] ?? [];
         if (!isValidOutboundBatchAllocations(allocs, options, qty)) {
-          const label = String(it.material_code || it.material_name || '').trim() || `#${index + 1}`;
           messageApi.error(t('app.kuaizhizao.inventoryTransfer.msgBatchRequired', { material: label }));
           throw new Error('batch required');
+        }
+      }
+      const serialManaged = serialManagedByRow[index] ?? !!it.serial_managed;
+      if (serialManaged) {
+        if (managed) {
+          const allocs = (batchAllocsByRow[index] ?? []).filter(
+            (a) => String(a.batchNo).trim() && Number(a.quantity) > 0,
+          );
+          if (allocs.length > 1) {
+            messageApi.error(t('app.kuaizhizao.inventoryTransfer.msgSerialSingleBatch', { material: label }));
+            throw new Error('serial required');
+          }
+        }
+        const qty = Math.max(0, Math.round(Number(it.quantity ?? 0)));
+        const serials = parseTransferLineSerialNumbers(serialsByRow[index] ?? it.serial_numbers);
+        if (!serials.length || (qty > 0 && serials.length !== qty)) {
+          messageApi.error(
+            t('app.kuaizhizao.inventoryTransfer.msgSerialRequired', {
+              material: label,
+              expected: qty,
+              actual: serials.length,
+            }),
+          );
+          throw new Error('serial required');
         }
       }
     }
@@ -545,15 +736,21 @@ const InventoryTransferPage: React.FC = () => {
         throw new Error('库内移位时，调出仓库和调入仓库必须相同');
       }
 
+      const itemsWithSerials = ((values.items || []) as Record<string, unknown>[]).map((it, index) => ({
+        ...it,
+        serial_numbers: rowSerials[index] ?? parseTransferLineSerialNumbers(it.serial_numbers),
+      }));
       validateTransferItems(
-        values.items || [],
+        itemsWithSerials,
         mode,
         rowBatchManaged,
         rowBatchOptions,
         rowBatchAllocs,
+        rowSerialManaged,
+        rowSerials,
       );
       const validItems = expandTransferItemsWithBatchAllocs(
-        (values.items || []).filter((it: Record<string, unknown>) => it.material_id && (Number(it.quantity) || 0) > 0),
+        itemsWithSerials.filter((it) => it.material_id && (Number(it.quantity) || 0) > 0),
         rowBatchManaged,
         rowBatchAllocs,
       );
@@ -645,7 +842,8 @@ const InventoryTransferPage: React.FC = () => {
         error.message !== 'no items' &&
         error.message !== 'bin_relocation areas required' &&
         error.message !== 'same location' &&
-        error.message !== 'batch required'
+        error.message !== 'batch required' &&
+        error.message !== 'serial required'
       ) {
         messageApi.error(
           error.message ||
@@ -743,6 +941,10 @@ const InventoryTransferPage: React.FC = () => {
     setItemModalBatchOptions([]);
     setItemModalBatchAllocs([]);
     setItemModalBatchManaged(false);
+    setItemModalSerialManaged(false);
+    setItemModalSerialOptions([]);
+    setItemModalSerials([]);
+    setItemModalMaterialUuid(undefined);
     itemFormRef.current?.resetFields();
     itemFormRef.current?.setFieldsValue({
       from_warehouse_id: record.from_warehouse_id,
@@ -786,6 +988,22 @@ const InventoryTransferPage: React.FC = () => {
         messageApi.error(t('app.kuaizhizao.inventoryTransfer.msgBatchRequired', { material: materialCode || materialName }));
         return;
       }
+      const serials = itemModalSerials.length
+        ? itemModalSerials
+        : parseTransferLineSerialNumbers(values.serial_numbers);
+      if (itemModalSerialManaged) {
+        const expected = Math.max(0, Math.round(itemQty));
+        if (!serials.length || (expected > 0 && serials.length !== expected)) {
+          messageApi.error(
+            t('app.kuaizhizao.inventoryTransfer.msgSerialRequired', {
+              material: materialCode || materialName,
+              expected,
+              actual: serials.length,
+            }),
+          );
+          return;
+        }
+      }
 
       const fromArea = resolveAreaMeta(values.from_storage_area_id);
       const toArea = resolveAreaMeta(values.to_storage_area_id);
@@ -796,6 +1014,14 @@ const InventoryTransferPage: React.FC = () => {
         itemModalBatchManaged && itemModalBatchAllocs.length
           ? itemModalBatchAllocs.filter((a) => String(a.batchNo).trim() && Number(a.quantity) > 0)
           : [{ batchNo: String(values.batch_no ?? ''), quantity: itemQty }];
+      if (itemModalSerialManaged && batchLines.length > 1) {
+        messageApi.error(
+          t('app.kuaizhizao.inventoryTransfer.msgSerialSingleBatch', {
+            material: materialCode || materialName,
+          }),
+        );
+        return;
+      }
       for (const line of batchLines) {
         await inventoryTransferApi.createItem(currentTransferId.toString(), {
           transfer_id: currentTransferId,
@@ -813,6 +1039,7 @@ const InventoryTransferPage: React.FC = () => {
           to_location_id: toLocation.id,
           to_location_code: toLocation.code,
           batch_no: line.batchNo || undefined,
+          serial_numbers: serials.length ? serials : undefined,
           quantity: line.quantity,
           unit_price: values.unit_price || 0,
           remarks: values.remarks,
@@ -1067,61 +1294,81 @@ const InventoryTransferPage: React.FC = () => {
   );
 
   const transferDetailItemColumns = useMemo(
-    () => [
-      { title: t('app.kuaizhizao.warehouseCommon.colMaterialCode'), dataIndex: 'material_code', width: 120 },
-      { title: t('app.kuaizhizao.warehouseReports.colMaterialName'), dataIndex: 'material_name', width: 150 },
-      { title: t('common.unit'), dataIndex: 'material_unit', width: 72 },
-      {
-        title: t('app.kuaizhizao.inventoryTransfer.formTransferQty'),
-        dataIndex: 'quantity',
-        width: 120,
-        align: 'right' as const,
-        render: (value: number, row: InventoryTransferItem) => (
-          <QuantityWithUnitDisplay quantity={value} unit={row.material_unit} />
-        ),
-      },
-      {
-        title: t('app.kuaizhizao.inventoryTransfer.colFromAreaLocation'),
-        width: 160,
-        render: (_: unknown, row: InventoryTransferItem) =>
-          [row.from_storage_area_code, row.from_location_code].filter(Boolean).join(' / ') || '-',
-      },
-      {
-        title: t('app.kuaizhizao.inventoryTransfer.colToAreaLocation'),
-        width: 160,
-        render: (_: unknown, row: InventoryTransferItem) =>
-          [row.to_storage_area_code, row.to_location_code].filter(Boolean).join(' / ') || '-',
-      },
-      {
-        title: t('app.kuaizhizao.warehouseCommon.colUnitPrice'),
-        dataIndex: 'unit_price',
-        width: 100,
-        align: 'right' as const,
-        render: (value: number | string) => formatCurrencyPrice(value),
-      },
-      {
-        title: t('app.kuaizhizao.warehouseCommon.colAmount'),
-        dataIndex: 'amount',
-        width: 100,
-        align: 'right' as const,
-        render: (value: number | string) => formatCurrencyAmount(value),
-      },
-      { title: t('app.kuaizhizao.warehouseReports.colBatchNo'), dataIndex: 'batch_no', width: 100 },
-      {
-        title: t('common.status'),
-        dataIndex: 'status',
-        width: 100,
-        render: (status: string) => {
-          const statusMap: Record<string, { text: string; color: string }> = {
-            pending: { text: t('app.kuaizhizao.inventoryTransfer.statusItemPending'), color: 'default' },
-            transferred: { text: t('app.kuaizhizao.inventoryTransfer.statusItemTransferred'), color: 'success' },
-          };
-          const statusInfo = statusMap[status] || { text: status, color: 'default' };
-          return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
-        },
-      },
-    ],
-    [t],
+    () =>
+      filterWarehouseTrackingColumns(
+        [
+          { title: t('app.kuaizhizao.warehouseCommon.colMaterialCode'), dataIndex: 'material_code', width: 120 },
+          { title: t('app.kuaizhizao.warehouseReports.colMaterialName'), dataIndex: 'material_name', width: 150 },
+          { title: t('common.unit'), dataIndex: 'material_unit', width: 72 },
+          {
+            title: t('app.kuaizhizao.inventoryTransfer.formTransferQty'),
+            dataIndex: 'quantity',
+            width: 120,
+            align: 'right' as const,
+            render: (value: number, row: InventoryTransferItem) => (
+              <QuantityWithUnitDisplay quantity={value} unit={row.material_unit} />
+            ),
+          },
+          {
+            title: t('app.kuaizhizao.inventoryTransfer.colFromAreaLocation'),
+            width: 160,
+            render: (_: unknown, row: InventoryTransferItem) =>
+              [row.from_storage_area_code, row.from_location_code].filter(Boolean).join(' / ') || '-',
+          },
+          {
+            title: t('app.kuaizhizao.inventoryTransfer.colToAreaLocation'),
+            width: 160,
+            render: (_: unknown, row: InventoryTransferItem) =>
+              [row.to_storage_area_code, row.to_location_code].filter(Boolean).join(' / ') || '-',
+          },
+          {
+            title: t('app.kuaizhizao.warehouseCommon.colUnitPrice'),
+            dataIndex: 'unit_price',
+            width: 100,
+            align: 'right' as const,
+            render: (value: number | string) => formatCurrencyPrice(value),
+          },
+          {
+            title: t('app.kuaizhizao.warehouseCommon.colAmount'),
+            dataIndex: 'amount',
+            width: 100,
+            align: 'right' as const,
+            render: (value: number | string) => formatCurrencyAmount(value),
+          },
+          { title: t('app.kuaizhizao.warehouseReports.colBatchNo'), dataIndex: 'batch_no', width: 100 },
+          {
+            title: t('app.kuaizhizao.warehouseInbound.col.serialNo'),
+            dataIndex: 'serial_numbers',
+            key: 'serial_numbers',
+            width: 140,
+            render: (value: unknown) => {
+              const serials = parseTransferLineSerialNumbers(value);
+              if (!serials.length) return '-';
+              return serials.length <= 2
+                ? serials.join(', ')
+                : t('app.kuaizhizao.inventoryTransfer.serialCount', { count: serials.length });
+            },
+          },
+          {
+            title: t('common.status'),
+            dataIndex: 'status',
+            width: 100,
+            render: (status: string) => {
+              const statusMap: Record<string, { text: string; color: string }> = {
+                pending: { text: t('app.kuaizhizao.inventoryTransfer.statusItemPending'), color: 'default' },
+                transferred: {
+                  text: t('app.kuaizhizao.inventoryTransfer.statusItemTransferred'),
+                  color: 'success',
+                },
+              };
+              const statusInfo = statusMap[status] || { text: status, color: 'default' };
+              return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
+            },
+          },
+        ],
+        trackingFlags,
+      ),
+    [t, trackingFlags],
   );
 
   const detailCollaboration = useMemo(() => {
@@ -1551,6 +1798,52 @@ const InventoryTransferPage: React.FC = () => {
                     ),
                   },
                   {
+                    title: t('app.kuaizhizao.warehouseInbound.col.serialNo'),
+                    dataIndex: 'serial_numbers',
+                    key: 'serial_numbers',
+                    width: 170,
+                    render: (_: unknown, __: unknown, index: number) => (
+                      <AntForm.Item noStyle shouldUpdate>
+                        {() => {
+                          const managed = rowSerialManaged[index];
+                          const serials = rowSerials[index] ?? [];
+                          const qty = Math.max(
+                            0,
+                            Math.round(Number(formRef.current?.getFieldValue(['items', index, 'quantity']) ?? 0)),
+                          );
+                          if (!managed && !serials.length) {
+                            return <Typography.Text type="secondary">—</Typography.Text>;
+                          }
+                          return (
+                            <>
+                              <AntForm.Item name={[index, 'serial_numbers']} hidden>
+                                <Input />
+                              </AntForm.Item>
+                              <OutboundSerialPickerField
+                                value={serials}
+                                onChange={(next) => {
+                                  setRowSerials((prev) => ({ ...prev, [index]: next }));
+                                  formRef.current?.setFieldValue(['items', index, 'serial_numbers'], next);
+                                }}
+                                options={rowSerialOptions[index] ?? []}
+                                maxCount={qty > 0 ? qty : undefined}
+                                loading={!!rowSerialOptionsLoading[index]}
+                                onOpenPicker={() =>
+                                  void syncRowSerialOptions(index, rowMaterialUuid[index], rowSerials[index])
+                                }
+                                materialLabel={String(
+                                  formRef.current?.getFieldValue(['items', index, 'material_code']) ||
+                                    formRef.current?.getFieldValue(['items', index, 'material_name']) ||
+                                    '',
+                                )}
+                              />
+                            </>
+                          );
+                        }}
+                      </AntForm.Item>
+                    ),
+                  },
+                  {
                     title: t('common.actions'),
                     width: 60,
                     render: (_: unknown, __: unknown, index: number) => (
@@ -1565,6 +1858,11 @@ const InventoryTransferPage: React.FC = () => {
                             setRowBatchOptions({});
                             setRowBatchAllocs({});
                             setRowBatchManaged({});
+                            setRowSerialManaged({});
+                            setRowSerialOptions({});
+                            setRowSerials({});
+                            setRowMaterialUuid({});
+                            setRowSerialOptionsLoading({});
                             const items = formRef.current?.getFieldValue('items') || [];
                             items.forEach((row: Record<string, unknown>, rowIndex: number) => {
                               const materialId = Number(row.material_id);
@@ -1574,6 +1872,7 @@ const InventoryTransferPage: React.FC = () => {
                                   materialId,
                                   selectedCreateWarehouseId,
                                   String(row.batch_no ?? ''),
+                                  parseTransferLineSerialNumbers(row.serial_numbers),
                                 );
                               }
                             });
@@ -1642,6 +1941,10 @@ const InventoryTransferPage: React.FC = () => {
           setItemModalFromWarehouseId(undefined);
           setItemModalBatchOptions([]);
           setItemModalBatchManaged(false);
+          setItemModalSerialManaged(false);
+          setItemModalSerialOptions([]);
+          setItemModalSerials([]);
+          setItemModalMaterialUuid(undefined);
           itemFormRef.current?.resetFields();
         }}
         onFinish={handleAddItemSubmit}
@@ -1801,6 +2104,47 @@ const InventoryTransferPage: React.FC = () => {
             disabled
           />
         )}
+        {itemModalSerialManaged || itemModalSerials.length > 0 ? (
+          <>
+            <AntForm.Item
+              label={t('app.kuaizhizao.warehouseInbound.col.serialNo')}
+              required={itemModalSerialManaged}
+            >
+              <OutboundSerialPickerField
+                value={itemModalSerials}
+                onChange={(next) => {
+                  setItemModalSerials(next);
+                  itemFormRef.current?.setFieldsValue({ serial_numbers: next });
+                }}
+                options={itemModalSerialOptions}
+                maxCount={Math.max(0, Math.round(Number(itemFormRef.current?.getFieldValue('quantity') ?? 0))) || undefined}
+                loading={itemModalSerialLoading}
+                onOpenPicker={() => {
+                  if (!itemModalMaterialUuid) return;
+                  void (async () => {
+                    setItemModalSerialLoading(true);
+                    try {
+                      const opts = await loadInStockSerialOptions(itemModalMaterialUuid);
+                      const merged = [...opts];
+                      for (const sn of itemModalSerials) {
+                        if (!merged.some((o) => o.value === sn)) merged.push({ value: sn, label: sn });
+                      }
+                      setItemModalSerialOptions(merged);
+                    } finally {
+                      setItemModalSerialLoading(false);
+                    }
+                  })();
+                }}
+                materialLabel={String(
+                  itemFormRef.current?.getFieldValue('material_code') ||
+                    itemFormRef.current?.getFieldValue('material_name') ||
+                    '',
+                )}
+              />
+            </AntForm.Item>
+            <ProFormText name="serial_numbers" hidden />
+          </>
+        ) : null}
         <ProFormTextArea
           name="remarks"
           label={t('common.remark')}

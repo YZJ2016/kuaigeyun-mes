@@ -356,6 +356,7 @@ class QuotationService:
             "pricing_snapshot": getattr(item_data, "pricing_snapshot", None),
             "delivery_date": item_data.delivery_date,
             "notes": item_data.notes,
+            "attachments": getattr(item_data, "attachments", None),
             "is_gift": is_gift,
             "gift_ref_unit_price": gift_ref,
         }
@@ -782,6 +783,7 @@ class QuotationService:
                     pricing_snapshot=row.get("pricing_snapshot"),
                     delivery_date=row["delivery_date"],
                     notes=row["notes"],
+                    attachments=row.get("attachments"),
                     is_gift=row["is_gift"],
                     gift_ref_unit_price=row["gift_ref_unit_price"],
                 )
@@ -1884,6 +1886,7 @@ class QuotationService:
                         pricing_snapshot=row.get("pricing_snapshot"),
                         delivery_date=row["delivery_date"],
                         notes=row["notes"],
+                        attachments=row.get("attachments"),
                         is_gift=row["is_gift"],
                         gift_ref_unit_price=row["gift_ref_unit_price"],
                     )
@@ -2092,6 +2095,7 @@ class QuotationService:
                     pricing_snapshot=getattr(item_data, "pricing_snapshot", None),
                     delivery_date=ddate,
                     notes=nit,
+                    attachments=getattr(item_data, "attachments", None),
                     is_gift=is_gift,
                     gift_ref_unit_price=gift_ref,
                 )

@@ -40,6 +40,10 @@ import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { PartnerPriceVariantPricesEditor } from '../../../components/PartnerPriceVariantPricesEditor';
 import { PartnerPriceVariantPricesTable } from '../../../components/PartnerPriceVariantPricesTable';
+import {
+  normalizeTierPricesForSubmit,
+  PartnerPriceTierLinesEditor,
+} from '../../../components/PartnerPriceTierLinesEditor';
 import { createPartnerPriceBookApi } from '../../../services/partner-price-book';
 import { materialApi } from '../../../services/material';
 import { customerApi, supplierApi, unwrapSupplyPagedList } from '../../../services/supply-chain';
@@ -70,6 +74,12 @@ import {
   resolvePartnerPriceBookListParams,
 } from '../../../utils/supplyChainListCore';
 import { PartnerPriceBookBatchRegisterModal } from './PartnerPriceBookBatchRegisterModal';
+import { fetchAllListItems } from '../../../../../utils/fetchAllListPages';
+import {
+  buildPartnerPriceBookImportTemplate,
+  commitPartnerPriceBookImport,
+} from '../../../utils/partnerPriceBookImport';
+import type { UniImportCommitContext } from '../../../../../components/uni-import';
 
 function getMaterialAllowedUnits(material?: Material | null): string[] {
   if (!material) return [];
@@ -247,10 +257,67 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
     ? t('app.master-data.menu.supply-chain.customer-price-books', '客户价格本')
     : t('app.master-data.menu.supply-chain.supplier-price-books', '供应商价格本');
 
+  const priceBookImportTemplate = useMemo(
+    () => buildPartnerPriceBookImportTemplate(t, partnerType),
+    [t, partnerType],
+  );
+
+  const handleImport = useCallback(
+    async (data: unknown[][], context?: UniImportCommitContext) => {
+      try {
+        const [partners, materials] = await Promise.all([
+          fetchAllListItems((p) =>
+            isCustomer
+              ? customerApi.list({ ...p, limit: 500, isActive: true })
+              : supplierApi.list({ ...p, limit: 500, isActive: true }),
+          ),
+          fetchAllListItems((p) => materialApi.list({ ...p, limit: 500, mastersOnly: true })),
+        ]);
+        const res = await commitPartnerPriceBookImport(partnerType, data, {
+          t,
+          importHeaderMap: priceBookImportTemplate.importHeaderMap,
+          partners,
+          materials,
+          context,
+        });
+        if (res.errors.length > 0) {
+          messageApi.error(res.errors.slice(0, 5).join('\n'));
+          if (res.errors.length > 5) {
+            messageApi.warning(
+              t('app.master-data.priceBook.import.moreErrors', { count: res.errors.length - 5 }),
+            );
+          }
+          if (res.created + res.updated + res.skipped === 0) return;
+        }
+        if (res.created + res.updated + res.skipped > 0) {
+          messageApi.success(
+            t('app.master-data.priceBook.import.resultSummary', {
+              created: res.created,
+              updated: res.updated,
+              skipped: res.skipped,
+            }),
+          );
+          await reloadListAfterMutation();
+        }
+      } catch (error: unknown) {
+        messageApi.error(getApiErrorMessage(error, t('common.operationFailed')));
+      }
+    },
+    [isCustomer, messageApi, partnerType, priceBookImportTemplate.importHeaderMap, reloadListAfterMutation, t],
+  );
+
   const handleCreate = () => {
     setEditUuid(null);
     form.resetFields();
-    form.setFieldsValue({ isActive: true, syncPartnerAlias: true, variantPrices: [], priceType: 'tax_inclusive', _masterMaterialUuid: undefined });
+    form.setFieldsValue({
+      isActive: true,
+      syncPartnerAlias: true,
+      variantPrices: [],
+      tierPrices: [],
+      tierPricesEnabled: false,
+      priceType: 'tax_inclusive',
+      _masterMaterialUuid: undefined,
+    });
     setAliasPreview({});
     setAliasLocked(false);
     setMaterialAllowedUnits([]);
@@ -271,6 +338,12 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
         variantAttributes: { ...line.variantAttributes },
         _rowMode: 'sku' as const,
       })),
+      tierPrices: (record.tierPrices ?? []).map((line) => ({
+        minQuantity: Number(line.minQuantity),
+        maxQuantity: line.maxQuantity != null ? Number(line.maxQuantity) : undefined,
+        unitPrice: Number(line.unitPrice),
+      })),
+      tierPricesEnabled: (record.tierPrices?.length ?? 0) > 0,
       taxRate: record.taxRate != null ? Number(record.taxRate) : undefined,
       unit: record.unit,
       currencyCode: record.currencyCode,
@@ -339,7 +412,9 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
       const values = await form.validateFields();
       setSubmitting(true);
       const variantPrices = normalizeVariantPricesForSubmit(values.variantPrices);
-      if ((!values.unitPrice || values.unitPrice <= 0) && !variantPrices?.length) {
+      const tierPricesEnabled = values.tierPricesEnabled === true;
+      const tierPrices = tierPricesEnabled ? normalizeTierPricesForSubmit(values.tierPrices) : undefined;
+      if ((!values.unitPrice || values.unitPrice <= 0) && !variantPrices?.length && !tierPrices?.length) {
         messageApi.warning(t('app.master-data.priceBook.priceRequired'));
         return;
       }
@@ -349,6 +424,7 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
         unitPrice: values.unitPrice > 0 ? values.unitPrice : undefined,
         priceType: values.priceType === 'tax_exclusive' ? 'tax_exclusive' : 'tax_inclusive',
         variantPrices,
+        tierPrices,
         taxRate: values.taxRate,
         unit: values.unit,
         currencyCode: values.currencyCode,
@@ -744,6 +820,12 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
           showCreateButton
           createButtonText={createButtonLabel}
           onCreate={handleCreate}
+          showImportButton={canCreate}
+          onImport={handleImport}
+          importHeaders={priceBookImportTemplate.importHeaders}
+          importExampleRow={priceBookImportTemplate.importExampleRow}
+          importColumnOptions={priceBookImportTemplate.importColumnOptions}
+          importFieldMap={priceBookImportTemplate.importHeaderMap}
           toolBarActionsAfterCreate={
             canCreate
               ? [
@@ -1040,6 +1122,14 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
           </div>
           <div style={{ marginBottom: 24 }}>
             <PartnerPriceVariantPricesEditor />
+          </div>
+          <div style={{ marginBottom: 24 }}>
+            <PartnerPriceTierLinesEditor
+              name="tierPrices"
+              showEnableSwitch
+              enabledName="tierPricesEnabled"
+              sectionTitle={t('app.master-data.priceBook.tierPricesSection')}
+            />
           </div>
           <Row gutter={16}>
             <Col xs={24} sm={12}>

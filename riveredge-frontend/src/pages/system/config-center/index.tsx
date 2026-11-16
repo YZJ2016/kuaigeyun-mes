@@ -462,6 +462,10 @@ const ConfigCenterPage: React.FC = () => {
 
   useEffect(() => {
     const initialValues = flattenBusinessParams(bizRes?.parameters || {});
+    const priceOrder = initialValues['supply_chain.partner_price_resolution_order'];
+    if (Array.isArray(priceOrder)) {
+      initialValues['supply_chain.partner_price_resolution_order'] = priceOrder.join(',');
+    }
     form.setFieldsValue(initialValues);
     void qualityApi.stageToggles.get().then((toggles) => {
       form.setFieldsValue({
@@ -489,6 +493,14 @@ const ConfigCenterPage: React.FC = () => {
       }
 
       const bizParams = toBusinessParams(values, bizKeys);
+      const rawOrder = bizParams.supply_chain?.partner_price_resolution_order;
+      if (typeof rawOrder === 'string' && rawOrder.trim()) {
+        if (!bizParams.supply_chain) bizParams.supply_chain = {};
+        bizParams.supply_chain.partner_price_resolution_order = rawOrder
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
+      }
       if (Object.keys(bizParams).length > 0) {
         await batchUpdateProcessParameters({ parameters: bizParams });
       }

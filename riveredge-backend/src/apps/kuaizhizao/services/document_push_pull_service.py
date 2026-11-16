@@ -355,7 +355,7 @@ class DocumentPushPullService:
         from apps.kuaizhizao.utils.material_source_helper import (
             SOURCE_TYPE_BUY,
             resolve_computation_item_source_config,
-            resolve_material_purchase_line_unit_price,
+            resolve_material_purchase_line_unit_price_async,
         )
         from decimal import Decimal
         from apps.master_data.models.material import Material
@@ -501,8 +501,11 @@ class DocumentPushPullService:
                         f"物料 {material_code or mid} 缺少要求到货日期，请确认后再创建"
                     )
 
-                suggested_unit_price = resolve_material_purchase_line_unit_price(
+                suggested_unit_price = await resolve_material_purchase_line_unit_price_async(
+                    tenant_id=tenant_id,
                     material=material,
+                    supplier_id=int(supplier_id) if supplier_id is not None else None,
+                    quantity=Decimal(str(remaining)),
                     source_config=sc,
                 )
 

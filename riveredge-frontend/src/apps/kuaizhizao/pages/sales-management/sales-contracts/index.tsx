@@ -153,6 +153,7 @@ import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../comp
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 
 import {
+  repriceUnlockedSalesDocumentLineIfNeeded,
   resolveMaterialForPricing,
   resolveOrderLineSalePrice,
   resolveSalesDocumentMaterialLinesPricing,
@@ -1381,6 +1382,14 @@ const SalesContractsPage: React.FC = () => {
                         customerList,
                         users,
                       });
+                      const items = normalizeFormListItems<Record<string, unknown>>(
+                        formRef.current?.getFieldValue('items'),
+                      );
+                      items.forEach((_, idx) => {
+                        void repriceUnlockedSalesDocumentLineIfNeeded(formRef.current, idx, {
+                          asOfField: 'contract_date',
+                        });
+                      });
                     }}
                   />
                 </ProForm.Item>
@@ -1401,7 +1410,19 @@ const SalesContractsPage: React.FC = () => {
                   name="contract_date"
                   label={t('app.kuaizhizao.salesContract.contractDate')}
                   rules={[{ required: true, message: t('app.kuaizhizao.salesContract.contractDateRequired') }]}
-                  fieldProps={{ style: { width: '100%' } }}
+                  fieldProps={{
+                    style: { width: '100%' },
+                    onChange: () => {
+                      const items = normalizeFormListItems<Record<string, unknown>>(
+                        formRef.current?.getFieldValue('items'),
+                      );
+                      items.forEach((_, idx) => {
+                        void repriceUnlockedSalesDocumentLineIfNeeded(formRef.current, idx, {
+                          asOfField: 'contract_date',
+                        });
+                      });
+                    },
+                  }}
                 />
               </Col>
               <Col span={8}>

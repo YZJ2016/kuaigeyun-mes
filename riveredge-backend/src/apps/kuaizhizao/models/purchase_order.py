@@ -179,6 +179,7 @@ class PurchaseOrderItem(DocumentLinePartnerMaterialSnapshotMixin, BaseModel):
     additional_fees_details = fields.JSONField(null=True, description="杂费分摊明细 (JSON)")
 
     deleted_at = fields.DatetimeField(null=True, description="删除时间")
+    attachments = fields.JSONField(null=True, description="行附件列表")
 
     class Meta:
         table = "apps_kuaizhizao_purchase_order_items"

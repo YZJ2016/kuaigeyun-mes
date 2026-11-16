@@ -6,6 +6,7 @@ source_type=sales_order 的采购申请与直推采购订单，避免与需求�
 
 from __future__ import annotations
 
+import asyncio
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -13,7 +14,9 @@ from loguru import logger
 
 from apps.kuaizhizao.utils.material_source_helper import (
     SOURCE_TYPE_BUY,
-    resolve_material_purchase_line_unit_price,
+    SOURCE_TYPE_MAKE,
+    SOURCE_TYPE_OUTSOURCE,
+    material_source_types_set,
 )
 from core.utils.timezone_utils import resolve_business_datetime, to_site_date
 from infra.exceptions.exceptions import BusinessLogicError
@@ -117,45 +120,145 @@ async def batch_pushed_purchase_qty_by_material(
     return result
 
 
-async def batch_has_purchasable_remaining(
+def material_is_buy_eligible(material: Any) -> bool:
+    return SOURCE_TYPE_BUY in material_source_types_set(material)
+
+
+def material_is_production_eligible(material: Any) -> bool:
+    types = material_source_types_set(material)
+    return SOURCE_TYPE_MAKE in types or SOURCE_TYPE_OUTSOURCE in types
+
+
+def _order_qty_by_material(items: List[Any]) -> Dict[int, Decimal]:
+    totals: Dict[int, Decimal] = {}
+    for it in items or []:
+        mid = int(getattr(it, "material_id", 0) or 0)
+        if mid <= 0:
+            continue
+        totals[mid] = totals.get(mid, Decimal("0")) + Decimal(
+            str(getattr(it, "order_quantity", 0) or 0)
+        )
+    return totals
+
+
+async def batch_pushed_work_order_qty_by_material(
     tenant_id: int,
     items_by_order: Dict[int, List[Any]],
-) -> Dict[int, bool]:
-    from apps.master_data.models.material import Material
+) -> Dict[int, Dict[int, Decimal]]:
+    """order_id → material_id → 已下推工单数量（排除已取消）。"""
+    order_ids = [int(oid) for oid in items_by_order.keys() if oid]
+    result: Dict[int, Dict[int, Decimal]] = {oid: {} for oid in order_ids}
+    if not order_ids:
+        return result
 
+    from apps.kuaizhizao.models.work_order import WorkOrder
+
+    rows = await WorkOrder.filter(
+        tenant_id=tenant_id,
+        sales_order_id__in=order_ids,
+        deleted_at__isnull=True,
+    ).exclude(status__in=["cancelled", "CANCELLED", "已取消"]).values_list(
+        "sales_order_id", "product_id", "quantity"
+    )
+    for so_id, product_id, qty in rows:
+        oid = int(so_id or 0)
+        mid = int(product_id or 0)
+        if oid not in result or mid <= 0:
+            continue
+        bucket = result.setdefault(oid, {})
+        bucket[mid] = bucket.get(mid, Decimal("0")) + Decimal(str(qty or 0))
+    return result
+
+
+async def batch_remaining_fulfillable_qty_by_material(
+    tenant_id: int,
+    items_by_order: Dict[int, List[Any]],
+) -> Dict[int, Dict[int, Decimal]]:
+    """order_id → material_id → 共享余量 max(0, 订单量 - 已下推工单 - 已下推采购)。"""
     if not items_by_order:
         return {}
+
+    pushed_purchase, pushed_wo = await asyncio.gather(
+        batch_pushed_purchase_qty_by_material(tenant_id, list(items_by_order.keys())),
+        batch_pushed_work_order_qty_by_material(tenant_id, items_by_order),
+    )
+    out: Dict[int, Dict[int, Decimal]] = {}
+    for oid, items in items_by_order.items():
+        order_id = int(oid)
+        totals = _order_qty_by_material(items)
+        wo_for = pushed_wo.get(order_id) or {}
+        pr_for = pushed_purchase.get(order_id) or {}
+        bucket: Dict[int, Decimal] = {}
+        for mid, total_qty in totals.items():
+            remaining = total_qty - wo_for.get(mid, Decimal("0")) - pr_for.get(mid, Decimal("0"))
+            if remaining > 0:
+                bucket[mid] = remaining
+        out[order_id] = bucket
+    return out
+
+
+async def _load_materials_for_items(
+    tenant_id: int,
+    items_by_order: Dict[int, List[Any]],
+) -> Dict[int, Any]:
+    from apps.master_data.models.material import Material
+
     all_mids: set[int] = set()
     for items in items_by_order.values():
         for it in items or []:
             mid = int(getattr(it, "material_id", 0) or 0)
             if mid > 0:
                 all_mids.add(mid)
-    buy_ids: set[int] = set()
-    if all_mids:
-        mats = await Material.filter(
-            tenant_id=tenant_id, id__in=list(all_mids), deleted_at__isnull=True
-        ).only("id", "source_type")
-        buy_ids = {
-            int(m.id) for m in mats if str(m.source_type or "").strip() == SOURCE_TYPE_BUY
-        }
+    if not all_mids:
+        return {}
+    mats = await Material.filter(
+        tenant_id=tenant_id, id__in=list(all_mids), deleted_at__isnull=True
+    ).all()
+    return {int(m.id): m for m in mats}
 
-    pushed = await batch_pushed_purchase_qty_by_material(
-        tenant_id, list(items_by_order.keys())
+
+async def batch_has_purchasable_remaining(
+    tenant_id: int,
+    items_by_order: Dict[int, List[Any]],
+) -> Dict[int, bool]:
+    if not items_by_order:
+        return {}
+    material_by_id, fulfill_by_order = await asyncio.gather(
+        _load_materials_for_items(tenant_id, items_by_order),
+        batch_remaining_fulfillable_qty_by_material(tenant_id, items_by_order),
     )
+    buy_ids = {
+        mid for mid, m in material_by_id.items() if material_is_buy_eligible(m)
+    }
     out: Dict[int, bool] = {}
-    for oid, items in items_by_order.items():
-        totals: Dict[int, Decimal] = {}
-        for it in items or []:
-            mid = int(getattr(it, "material_id", 0) or 0)
-            if mid not in buy_ids:
-                continue
-            totals[mid] = totals.get(mid, Decimal("0")) + Decimal(
-                str(getattr(it, "order_quantity", 0) or 0)
-            )
-        pushed_for = pushed.get(oid) or {}
-        out[oid] = any(
-            (totals[mid] - pushed_for.get(mid, Decimal("0"))) > 0 for mid in totals
+    for oid in items_by_order.keys():
+        order_id = int(oid)
+        fulfill = fulfill_by_order.get(order_id) or {}
+        out[order_id] = any(
+            mid in buy_ids and qty > 0 for mid, qty in fulfill.items()
+        )
+    return out
+
+
+async def batch_has_production_fulfillable_remaining(
+    tenant_id: int,
+    items_by_order: Dict[int, List[Any]],
+) -> Dict[int, bool]:
+    if not items_by_order:
+        return {}
+    material_by_id, fulfill_by_order = await asyncio.gather(
+        _load_materials_for_items(tenant_id, items_by_order),
+        batch_remaining_fulfillable_qty_by_material(tenant_id, items_by_order),
+    )
+    prod_ids = {
+        mid for mid, m in material_by_id.items() if material_is_production_eligible(m)
+    }
+    out: Dict[int, bool] = {}
+    for oid in items_by_order.keys():
+        order_id = int(oid)
+        fulfill = fulfill_by_order.get(order_id) or {}
+        out[order_id] = any(
+            mid in prod_ids and qty > 0 for mid, qty in fulfill.items()
         )
     return out
 
@@ -191,27 +294,19 @@ async def collect_sales_order_buy_push_lines(
     )
     material_by_id = {int(m.id): m for m in materials}
     buy_ids = {
-        mid
-        for mid, m in material_by_id.items()
-        if str(m.source_type or "").strip() == SOURCE_TYPE_BUY
+        mid for mid, m in material_by_id.items() if material_is_buy_eligible(m)
     }
 
+    fulfill_map = await batch_remaining_fulfillable_qty_by_material(
+        tenant_id, {sales_order_id: items}
+    )
+    fulfill_by_material = fulfill_map.get(sales_order_id) or {}
     pushed_map = await batch_pushed_purchase_qty_by_material(tenant_id, [sales_order_id])
     pushed_by_material = pushed_map.get(sales_order_id) or {}
 
-    order_total_by_material: Dict[int, Decimal] = {}
-    for it in items:
-        mid = int(getattr(it, "material_id", 0) or 0)
-        if mid not in buy_ids:
-            continue
-        order_total_by_material[mid] = order_total_by_material.get(mid, Decimal("0")) + Decimal(
-            str(getattr(it, "order_quantity", 0) or 0)
-        )
-
-    remaining_cursor: Dict[int, Decimal] = {}
-    for mid, total_qty in order_total_by_material.items():
-        remaining = total_qty - pushed_by_material.get(mid, Decimal("0"))
-        remaining_cursor[mid] = remaining if remaining > 0 else Decimal("0")
+    remaining_cursor: Dict[int, Decimal] = {
+        mid: qty for mid, qty in fulfill_by_material.items() if mid in buy_ids
+    }
 
     lines: List[Dict[str, Any]] = []
     for it in items:
@@ -247,11 +342,27 @@ async def collect_sales_order_buy_push_lines(
         supplier_name = (
             (inner.get("default_supplier_name") or "") if isinstance(inner, dict) else ""
         )
-        unit_price = (
-            resolve_material_purchase_line_unit_price(material=material)
-            if material
-            else Decimal("0")
-        )
+        unit_price = Decimal("0")
+        if material and supplier_id:
+            from apps.master_data.services.partner_material_price_resolver import (
+                PartnerMaterialPriceResolver,
+            )
+
+            resolved = await PartnerMaterialPriceResolver.resolve(
+                tenant_id,
+                "purchase",
+                int(supplier_id),
+                mid,
+                quantity=max_qty,
+            )
+            if resolved.found and resolved.unit_price > 0:
+                unit_price = resolved.unit_price
+        elif material:
+            from apps.kuaizhizao.utils.material_source_helper import (
+                resolve_material_purchase_line_unit_price,
+            )
+
+            unit_price = resolve_material_purchase_line_unit_price(material=material)
         lines.append(
             {
                 "item_id": item_id,
@@ -775,3 +886,69 @@ async def push_to_purchase_order(
         "message": f"下推成功，共生成 {len(target_documents)} 张采购订单",
         "target_documents": target_documents,
     }
+
+
+async def list_sales_orders_for_purchase_order_pull(
+    tenant_id: int,
+    *,
+    skip: int = 0,
+    limit: int = 20,
+    keyword: Optional[str] = None,
+    pullable_only: bool = True,
+) -> Dict[str, Any]:
+    """供采购订单「从销售订单创建」取单：已审核且仍有外购共享余量的销售订单头。"""
+    from apps.kuaizhizao.constants import LEGACY_AUDITED_VALUES, DemandStatus, normalize_status
+    from apps.kuaizhizao.models.sales_order import SalesOrder, SalesOrderItem
+
+    if await require_purchase_requisition_for_tenant(tenant_id):
+        return {"data": [], "total": 0, "success": True}
+
+    from tortoise.expressions import Q
+
+    q = SalesOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+    if keyword and str(keyword).strip():
+        kw = str(keyword).strip()
+        q = q.filter(
+            Q(order_code__icontains=kw)
+            | Q(customer_name__icontains=kw)
+            | Q(order_name__icontains=kw)
+        )
+    orders = await q.order_by("-id").limit(500).all()
+    if not orders:
+        return {"data": [], "total": 0, "success": True}
+
+    audited: List[Any] = []
+    for order in orders:
+        raw = str(getattr(order, "status", "") or "").strip()
+        normalized = normalize_status(raw)
+        if normalized in (DemandStatus.AUDITED.value, DemandStatus.CONFIRMED.value) or raw in LEGACY_AUDITED_VALUES:
+            audited.append(order)
+    if not audited:
+        return {"data": [], "total": 0, "success": True}
+
+    order_ids = [int(o.id) for o in audited]
+    items = await SalesOrderItem.filter(
+        tenant_id=tenant_id, sales_order_id__in=order_ids
+    ).all()
+    items_by_order: Dict[int, List[Any]] = {}
+    for it in items:
+        items_by_order.setdefault(int(it.sales_order_id), []).append(it)
+
+    purchasable_map = await batch_has_purchasable_remaining(tenant_id, items_by_order)
+    rows = []
+    for order in audited:
+        oid = int(order.id)
+        if pullable_only and not purchasable_map.get(oid, False):
+            continue
+        rows.append(
+            {
+                "id": oid,
+                "order_code": order.order_code,
+                "customer_name": getattr(order, "customer_name", None),
+                "order_date": str(order.order_date) if order.order_date else None,
+                "total_quantity": float(order.total_quantity or 0),
+            }
+        )
+    total = len(rows)
+    page_rows = rows[skip : skip + limit] if skip < len(rows) else []
+    return {"data": page_rows, "total": total, "success": True}

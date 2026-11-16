@@ -1266,6 +1266,7 @@ class ReportService:
         rows = await item_q.order_by("-sales_order_id", "id").values(
             "id",
             "sales_order_id",
+            "material_id",
             "material_code",
             "material_name",
             "material_spec",
@@ -1275,6 +1276,7 @@ class ReportService:
             "total_amount",
             "delivery_date",
             "notes",
+            "attachments",
         )
         page_order_ids = list({int(r["sales_order_id"]) for r in rows})
         orders_map: Dict[int, Dict[str, Any]] = {}
@@ -1310,10 +1312,12 @@ class ReportService:
                     "order_date": head.get("order_date"),
                     "customer_code": code_map.get(int(cid), "") if cid is not None else "",
                     "customer_name": head.get("customer_name"),
+                    "material_id": r.get("material_id"),
                     "material_code": r.get("material_code"),
                     "material_name": r.get("material_name"),
                     "material_spec": r.get("material_spec"),
                     "material_unit": r.get("material_unit"),
+                    "attachments": r.get("attachments"),
                     "quantity": float(r.get("order_quantity") or 0),
                     "unit_price": float(r.get("unit_price") or 0),
                     "amount": float(r.get("total_amount") or 0),
@@ -1797,6 +1801,7 @@ class ReportService:
         rows = await item_q.order_by("-id").values(
             "id",
             "delivery_id",
+            "material_id",
             "material_code",
             "material_name",
             "material_spec",
@@ -1805,6 +1810,7 @@ class ReportService:
             "unit_price",
             "total_amount",
             "batch_number",
+            "attachments",
         )
         dids = list({r["delivery_id"] for r in rows})
         dmap = {}
@@ -1832,10 +1838,12 @@ class ReportService:
             items.append({
                 "id": r["id"],
                 "delivery_id": r["delivery_id"],
+                "material_id": r.get("material_id"),
                 "material_code": r.get("material_code"),
                 "material_name": r.get("material_name"),
                 "material_spec": r.get("material_spec"),
                 "material_unit": r.get("material_unit"),
+                "attachments": r.get("attachments"),
                 "batch_number": r.get("batch_number"),
                 "delivery_code": head.get("delivery_code"),
                 "customer_code": code_map.get(int(cid), "") if cid is not None else "",
@@ -2057,6 +2065,217 @@ class ReportService:
             },
         }
 
+    _PURCHASE_RECEIPT_REPORT_STATUSES = frozenset(
+        {"已入库", "已完成", "completed", "COMPLETED"},
+    )
+
+    async def _get_purchase_receipt_detail(
+        self,
+        tenant_id: int,
+        date_start: Optional[datetime] = None,
+        date_end: Optional[datetime] = None,
+        supplier_id: Optional[int] = None,
+        *,
+        skip: int = 0,
+        limit: int = 100,
+        supplier_keyword: Optional[str] = None,
+        current_user: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """采购入库单明细表（行级，仅已过账入库）"""
+        from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+        from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
+
+        rq = await self._scoped_purchase_receipt_query(tenant_id=tenant_id, current_user=current_user)
+        rq = rq.filter(status__in=list(self._PURCHASE_RECEIPT_REPORT_STATUSES))
+        if date_start:
+            rq = rq.filter(receipt_time__gte=date_start)
+        if date_end:
+            rq = rq.filter(receipt_time__lte=date_end)
+        if supplier_id:
+            rq = rq.filter(supplier_id=supplier_id)
+        supplier_kw = str(supplier_keyword or "").strip()
+        if supplier_kw:
+            rq = rq.filter(supplier_name__icontains=supplier_kw)
+
+        receipt_ids = await rq.values_list("id", flat=True)
+        if not receipt_ids:
+            return {"data": [], "total": 0, "success": True, "summary": {"total_quantity": 0, "total_amount": 0}}
+
+        item_q = PurchaseReceiptItem.filter(
+            tenant_id=tenant_id,
+            receipt_id__in=list(receipt_ids),
+            deleted_at__isnull=True,
+        )
+        total = await item_q.count()
+        rows = await item_q.order_by("-id").values(
+            "id",
+            "receipt_id",
+            "material_id",
+            "material_code",
+            "material_name",
+            "material_spec",
+            "material_unit",
+            "receipt_quantity",
+            "unit_price",
+            "total_amount",
+            "batch_number",
+            "warehouse_name",
+            "attachments",
+        )
+        rids = list({r["receipt_id"] for r in rows})
+        rmap: Dict[Any, Dict[str, Any]] = {}
+        if rids:
+            for h in await PurchaseReceipt.filter(id__in=rids).values(
+                "id",
+                "receipt_code",
+                "supplier_id",
+                "supplier_name",
+                "warehouse_name",
+                "receipt_time",
+                "purchase_order_code",
+                "status",
+                "receiver_name",
+            ):
+                rmap[h["id"]] = h
+        code_map = await self._supplier_code_map(
+            tenant_id, [h.get("supplier_id") for h in rmap.values()]
+        )
+        item_ids = [int(r["id"]) for r in rows]
+        items = []
+        for r in rows:
+            head = rmap.get(r["receipt_id"], {})
+            receipt_time = head.get("receipt_time")
+            sid = head.get("supplier_id")
+            line_wh = (r.get("warehouse_name") or "").strip()
+            head_wh = (head.get("warehouse_name") or "").strip()
+            items.append({
+                "id": r["id"],
+                "receipt_id": r["receipt_id"],
+                "material_id": r.get("material_id"),
+                "material_code": r.get("material_code"),
+                "material_name": r.get("material_name"),
+                "material_spec": r.get("material_spec"),
+                "material_unit": r.get("material_unit"),
+                "attachments": r.get("attachments"),
+                "batch_number": r.get("batch_number"),
+                "receipt_code": head.get("receipt_code"),
+                "supplier_code": code_map.get(int(sid), "") if sid is not None else "",
+                "supplier_name": head.get("supplier_name"),
+                "warehouse_name": line_wh or head_wh,
+                "receipt_date": to_api_isoformat(receipt_time.date()) if receipt_time else None,
+                "purchase_order_code": head.get("purchase_order_code"),
+                "status": head.get("status") or "",
+                "receiver_name": head.get("receiver_name") or "",
+                "quantity": float(r.get("receipt_quantity") or 0),
+                "unit_price": float(r.get("unit_price") or 0),
+                "amount": float(r.get("total_amount") or 0),
+            })
+        agg = await self._aggregate_sums(
+            item_q,
+            {"total_qty": "receipt_quantity", "total_amt": "total_amount"},
+        )
+        return self._wrap_report_payload({
+            "data": items,
+            "total": total,
+            "success": True,
+            "summary": {
+                "total_quantity": float(agg.get("total_qty") or 0),
+                "total_amount": float(agg.get("total_amt") or 0),
+                "line_count": total,
+            },
+        })
+
+    async def _get_material_purchase_summary(
+        self,
+        tenant_id: int,
+        date_start: Optional[datetime] = None,
+        date_end: Optional[datetime] = None,
+        supplier_id: Optional[int] = None,
+        *,
+        skip: int = 0,
+        limit: int = 100,
+        supplier_keyword: Optional[str] = None,
+        current_user: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """存货采购汇总表（按物料汇总已入库数量与金额）"""
+        from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+        from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
+        from tortoise.functions import Count, Sum
+
+        rq = await self._scoped_purchase_receipt_query(tenant_id=tenant_id, current_user=current_user)
+        rq = rq.filter(status__in=list(self._PURCHASE_RECEIPT_REPORT_STATUSES))
+        if date_start:
+            rq = rq.filter(receipt_time__gte=date_start)
+        if date_end:
+            rq = rq.filter(receipt_time__lte=date_end)
+        if supplier_id:
+            rq = rq.filter(supplier_id=supplier_id)
+        supplier_kw = str(supplier_keyword or "").strip()
+        if supplier_kw:
+            rq = rq.filter(supplier_name__icontains=supplier_kw)
+
+        receipt_ids = await rq.values_list("id", flat=True)
+        if not receipt_ids:
+            return {"data": [], "total": 0, "success": True, "summary": {"total_quantity": 0, "total_amount": 0}}
+
+        item_q = PurchaseReceiptItem.filter(
+            tenant_id=tenant_id,
+            receipt_id__in=list(receipt_ids),
+            deleted_at__isnull=True,
+        )
+        grouped = item_q.annotate(
+            total_qty=Sum("receipt_quantity"),
+            total_amt=Sum("total_amount"),
+            receipt_count=Count("id"),
+        ).group_by("material_id", "material_code", "material_name", "material_spec", "material_unit")
+
+        group_keys = await grouped.values("material_id")
+        total_groups = len(group_keys)
+        rows_raw = await grouped.values(
+            "material_id",
+            "material_code",
+            "material_name",
+            "material_spec",
+            "material_unit",
+            "total_qty",
+            "total_amt",
+            "receipt_count",
+        )
+        rows = sorted(
+            rows_raw,
+            key=lambda r: float(r.get("total_amt") or 0),
+            reverse=True,
+        )
+        all_agg = await self._aggregate_sums(
+            item_q,
+            {"grand_qty": "receipt_quantity", "grand_amt": "total_amount"},
+        )
+        grand_amt = float(all_agg.get("grand_amt") or 0)
+        items = [
+            {
+                "material_code": r["material_code"],
+                "material_name": r["material_name"],
+                "material_spec": r["material_spec"],
+                "unit": r["material_unit"],
+                "total_quantity": float(r["total_qty"] or 0),
+                "total_amount": float(r["total_amt"] or 0),
+                "receipt_count": int(r.get("receipt_count") or 0),
+                "amount_share": self._amount_share(float(r["total_amt"] or 0), grand_amt),
+                "avg_price": float(r["total_amt"] or 0) / float(r["total_qty"]) if r["total_qty"] else 0,
+            }
+            for r in rows
+        ]
+        return self._wrap_report_payload({
+            "data": items,
+            "total": total_groups,
+            "success": True,
+            "summary": {
+                "material_count": total_groups,
+                "total_quantity": float(all_agg.get("grand_qty") or 0),
+                "total_amount": grand_amt,
+            },
+        })
+
     async def _get_sales_forecast_vs_actual(
         self,
         tenant_id: int,
@@ -2126,6 +2345,7 @@ class ReportService:
         rows = await item_q.order_by("-quotation_id", "id").values(
             "id",
             "quotation_id",
+            "material_id",
             "material_code",
             "material_name",
             "material_spec",
@@ -2135,6 +2355,7 @@ class ReportService:
             "total_amount",
             "delivery_date",
             "notes",
+            "attachments",
         )
         page_qids = list({int(r["quotation_id"]) for r in rows})
         qmap: Dict[int, Dict[str, Any]] = {}
@@ -2171,10 +2392,12 @@ class ReportService:
                     "valid_until": head.get("valid_until"),
                     "customer_code": code_map.get(int(cid), "") if cid is not None else "",
                     "customer_name": head.get("customer_name"),
+                    "material_id": r.get("material_id"),
                     "material_code": r.get("material_code"),
                     "material_name": r.get("material_name"),
                     "material_spec": r.get("material_spec"),
                     "material_unit": r.get("material_unit"),
+                    "attachments": r.get("attachments"),
                     "quantity": float(r.get("quote_quantity") or 0),
                     "unit_price": float(r.get("unit_price") or 0),
                     "amount": float(r.get("total_amount") or 0),
@@ -3588,6 +3811,7 @@ class ReportService:
             items = await item_q.order_by("-id").values(
                 "id",
                 "requisition_id",
+                "material_id",
                 "material_code",
                 "material_name",
                 "material_spec",
@@ -3596,6 +3820,7 @@ class ReportService:
                 "required_date",
                 "purchase_order_id",
                 "notes",
+                "attachments",
             )
             heads = await PurchaseRequisition.filter(id__in=[it["requisition_id"] for it in items]).values(
                 "id", "requisition_code", "requisition_date", "applicant_name", "status", "notes",
@@ -3670,6 +3895,7 @@ class ReportService:
             items = await item_q.order_by("-id").values(
                 "id",
                 "order_id",
+                "material_id",
                 "material_code",
                 "material_name",
                 "material_spec",
@@ -3679,6 +3905,7 @@ class ReportService:
                 "total_price",
                 "required_date",
                 "notes",
+                "attachments",
             )
             heads = await po_q.filter(
                 id__in=[it["order_id"] for it in items]

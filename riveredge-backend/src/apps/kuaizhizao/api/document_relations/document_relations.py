@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Dict, Any
 
 from core.api.deps import get_current_user, get_current_tenant
+from core.api.deps.access import require_permission_codes
 from infra.models.user import User
 from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
 from apps.kuaizhizao.services.document_attachment_center_service import DocumentAttachmentCenterService
@@ -19,9 +20,47 @@ from apps.kuaizhizao.schemas.document_relation import (
     DocumentRelationListResponse,
     DocumentTraceResponse,
 )
+from apps.kuaizhizao.schemas.document_line_material_attachments import (
+    DocumentLineMaterialAttachmentSourcesResponse,
+)
+from apps.kuaizhizao.services.document_line_material_attachment_source_service import (
+    DocumentLineMaterialAttachmentSourceService,
+)
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 router = APIRouter(prefix="/document-relations", tags=["App - Kuaige Zhizao - Document Relations"])
+
+_DOCUMENT_LINE_MATERIAL_ATTACHMENT_READ = require_permission_codes(
+    "kuaizhizao:purchase-requisition:read",
+    "kuaizhizao:purchase-order:read",
+    "kuaizhizao:inbound:read",
+    "kuaizhizao:quotation:read",
+    "kuaizhizao:sales-order:read",
+    "kuaizhizao:outbound:read",
+    "master-data:material:read",
+    "master-data:material:display",
+    "master-data:process:engineering-drawing:read",
+    require_all=False,
+)
+
+
+@router.get(
+    "/material-line-attachment-sources",
+    response_model=DocumentLineMaterialAttachmentSourcesResponse,
+    summary="List material images and engineering drawings for document line picker",
+    dependencies=[Depends(_DOCUMENT_LINE_MATERIAL_ATTACHMENT_READ)],
+)
+async def list_material_line_attachment_sources(
+    material_id: int = Query(..., ge=1, description="物料 ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> DocumentLineMaterialAttachmentSourcesResponse:
+    service = DocumentLineMaterialAttachmentSourceService()
+    return await service.list_sources_for_material(
+        tenant_id,
+        material_id,
+        current_user=current_user,
+    )
 
 
 @router.get("/{document_type}/{document_id}", response_model=DocumentRelationListResponse, summary="List document relations")

@@ -70,6 +70,7 @@ import {
 import type { Material } from '../../../../master-data/types/material';
 import {
   applyPurchaseDocumentLineMaterialPricing,
+  repriceUnlockedPurchaseDocumentLineIfNeeded,
   resolvePurchaseDocumentMaterialLinesPricing,
 } from '../../../../master-data/utils/resolve-partner-material-price';
 import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
@@ -160,6 +161,10 @@ import { useResourcePermissions } from '../../../../../hooks/useResourcePermissi
 import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
+import {
+  buildDocumentLineAttachmentsFormColumn,
+  DOCUMENT_LINE_ATTACHMENT_UPLOAD_CATEGORY,
+} from '../../../components/documentLineAttachmentsColumns';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { formatBusinessDateOnly, formatDateTime, formatNumber, formatQuantity, todaySiteDateString, formatCurrencyAmount, formatCurrencyPrice } from '../../../../../utils/format';
 import { QuantityWithUnitDisplay } from '../../../../../components/quantity-with-unit';
@@ -557,6 +562,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
                   demand_computation_item_id: it.demand_computation_item_id,
                   supplier_id: it.supplier_id,
                   notes: it.notes,
+                  attachments: mapAttachmentsToUploadList(it.attachments),
                 }))
               : [{ ...INITIAL_PR_FORM_ITEM_ROW }],
         };
@@ -986,6 +992,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
       demand_computation_item_id?: number;
       supplier_id?: number;
       notes?: string;
+      attachments?: unknown;
     }>,
     headerRequiredDateStr?: string,
   ) =>
@@ -1010,6 +1017,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
         demand_computation_item_id: i.demand_computation_item_id,
         supplier_id: i.supplier_id ?? undefined,
         notes: typeof i.notes === 'string' && i.notes.trim() ? i.notes.trim() : undefined,
+        attachments: normalizeDocumentAttachments(i.attachments as any),
       };
     });
 
@@ -2051,7 +2059,20 @@ const PurchaseRequisitionsPage: React.FC = () => {
                 <ProFormDatePicker
                   name="requisition_date"
                   label={t('app.kuaizhizao.purchaseRequisition.form.date')}
-                  fieldProps={{ style: { width: '100%' } }}
+                  fieldProps={{
+                    style: { width: '100%' },
+                    onChange: () => {
+                      const items = normalizeFormListItems<Record<string, unknown>>(
+                        createFormRef.current?.getFieldValue('items'),
+                      );
+                      items.forEach((_, idx) => {
+                        void repriceUnlockedPurchaseDocumentLineIfNeeded(createFormRef.current, idx, {
+                          asOfField: 'requisition_date',
+                          unitPriceField: 'suggested_unit_price',
+                        });
+                      });
+                    },
+                  }}
                 />
               </Col>
               {!showRequisitionNameField ? (
@@ -2259,7 +2280,38 @@ const PurchaseRequisitionsPage: React.FC = () => {
                         ]}
                         style={{ margin: 0 }}
                       >
-                        <InputNumber placeholder={t('common.quantity')} min={0} precision={quantityDecimals} style={{ width: '100%' }} size="small" />
+                        {({ getFieldValue }) => {
+                          const materialId = getFieldValue(['items', index, 'material_id']);
+                          if (!createFormRef.current) return null;
+                          return (
+                            <>
+                              <AntForm.Item name={[index, 'unit']} hidden preserve>
+                                <Input type="hidden" />
+                              </AntForm.Item>
+                              <DocumentLineDualQuantityFormCell
+                                form={createFormRef.current}
+                                listName="items"
+                                rowIndex={index}
+                                quantityField="quantity"
+                                unitField="unit"
+                                scenario="purchase"
+                                quantityPrecision={quantityDecimals}
+                                materialId={materialId}
+                                inlineUnitWithQuantity
+                                onAfterQuantityChange={() => {
+                                  void repriceUnlockedPurchaseDocumentLineIfNeeded(
+                                    createFormRef.current,
+                                    index,
+                                    {
+                                      asOfField: 'requisition_date',
+                                      unitPriceField: 'suggested_unit_price',
+                                    },
+                                  );
+                                }}
+                              />
+                            </>
+                          );
+                        }}
                       </AntForm.Item>
                     ),
                   },
@@ -2298,6 +2350,14 @@ const PurchaseRequisitionsPage: React.FC = () => {
                           placeholder={t('app.kuaizhizao.purchaseRequisition.form.optional')}
                           size="small"
                           style={{ width: '100%' }}
+                          onSupplierPick={(s) => {
+                            if (!s) return;
+                            void repriceUnlockedPurchaseDocumentLineIfNeeded(createFormRef.current, index, {
+                              asOfField: 'requisition_date',
+                              unitPriceField: 'suggested_unit_price',
+                              supplierId: Number(s.id),
+                            });
+                          }}
                         />
                       </AntForm.Item>
                     ),
@@ -2332,6 +2392,10 @@ const PurchaseRequisitionsPage: React.FC = () => {
                     width: 120,
                     inputSize: 'small',
                   }),
+                  buildDocumentLineAttachmentsFormColumn(
+                    t,
+                    DOCUMENT_LINE_ATTACHMENT_UPLOAD_CATEGORY.purchaseRequisition,
+                  ),
                   {
                     title: t('app.kuaizhizao.purchaseRequisition.form.lineNotes'),
                     dataIndex: 'notes',

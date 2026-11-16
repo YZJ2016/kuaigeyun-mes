@@ -10,6 +10,8 @@ from fastapi import APIRouter, Depends, Query, status
 from loguru import logger
 
 from apps.master_data.schemas.partner_price_book_schemas import (
+    PartnerMaterialLinePriceResolveRequest,
+    PartnerMaterialLinePriceResolveResponse,
     PartnerPriceBookBulkCreate,
     PartnerPriceBookBulkResponse,
     PartnerPriceBookCreate,
@@ -22,9 +24,13 @@ from apps.master_data.schemas.partner_price_book_schemas import (
     PartnerPriceResolveRequest,
     PartnerPriceResolveResponse,
 )
+from apps.master_data.services.partner_material_price_resolver import PartnerMaterialPriceResolver
 from apps.master_data.services.partner_price_book_service import PartnerPriceBookService
 from apps.master_data.api._master_data_route_access import require_master_data_module_access
+from core.api.deps.access import ensure_permission_codes, get_auth_context
 from core.api.deps.deps import get_current_tenant, get_current_user
+from core.config.permission_contract import build_permission_code
+from core.api.deps.access import AuthContext
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
 
@@ -243,3 +249,43 @@ def _register_price_book_routes(partner_type: str, resource: str) -> None:
 
 _register_price_book_routes("customer", "customer-price-books")
 _register_price_book_routes("supplier", "supplier-price-books")
+
+
+@router.post(
+    "/resolve-partner-material-line-price",
+    response_model=PartnerMaterialLinePriceResolveResponse,
+)
+async def resolve_partner_material_line_price(
+    data: PartnerMaterialLinePriceResolveRequest,
+    auth: Annotated[AuthContext, Depends(get_auth_context)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    module = (
+        "supply-chain:customer-price-book"
+        if data.side == "sales"
+        else "supply-chain:supplier-price-book"
+    )
+    await ensure_permission_codes(
+        auth,
+        tenant_id,
+        [build_permission_code("master-data", module, "read")],
+        check_abac=False,
+    )
+    result = await PartnerMaterialPriceResolver.resolve(
+        tenant_id,
+        data.side,
+        data.partner_id,
+        data.material_id,
+        quantity=data.quantity,
+        as_of=data.as_of,
+        variant_attributes=data.variant_attributes,
+    )
+    return PartnerMaterialLinePriceResolveResponse(
+        found=result.found,
+        unit_price=result.unit_price if result.found else None,
+        tax_rate=result.tax_rate,
+        price_source=result.price_source,
+        currency_code=result.currency_code,
+        partner_material_code=result.partner_material_code,
+        partner_material_name=result.partner_material_name,
+    )

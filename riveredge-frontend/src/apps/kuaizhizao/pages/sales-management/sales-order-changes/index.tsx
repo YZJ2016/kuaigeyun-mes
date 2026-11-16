@@ -63,7 +63,10 @@ import {
   resolveOrderChangeListApiParams,
 } from '../../../utils/orderChangeLifecycle';
 import { formatOrderChangeCategory, ORDER_CHANGE_CATEGORY_LABELS } from '../../../utils/orderChangeCategory';
-import { OrderChangeItemsTable } from '../../../components/order-change/OrderChangeItemsTable';
+import {
+  OrderChangeItemsTable,
+  type OrderChangeItemsTablePricing,
+} from '../../../components/order-change/OrderChangeItemsTable';
 import { OrderChangeImpactModal } from '../../../components/order-change/OrderChangeImpactModal';
 import { isSourceOrderEligibleForChange } from '../../../utils/orderChangeSourceOrder';
 import { ListUniLifecycleCell } from '../shared/ListUniLifecycleCell';
@@ -145,6 +148,7 @@ const SalesOrderChangesPage: React.FC = () => {
   const [editItems, setEditItems] = useState<SalesOrderChange['items']>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [creatingSourceOrderId, setCreatingSourceOrderId] = useState<number | null>(null);
+  const [changePricing, setChangePricing] = useState<OrderChangeItemsTablePricing | undefined>();
   const [impactOpen, setImpactOpen] = useState(false);
   const [impactLoading, setImpactLoading] = useState(false);
   const [impactData, setImpactData] = useState<Awaited<ReturnType<typeof previewSalesOrderChangeImpact>> | null>(null);
@@ -192,6 +196,25 @@ const SalesOrderChangesPage: React.FC = () => {
     const full = await getSalesOrderChange(record.id!);
     setEditingId(full.id!);
     setCreatingSourceOrderId(null);
+    let pricingAsOf = full.created_at ? dayjs(full.created_at) : dayjs();
+    if (full.source_order_id != null && Number(full.source_order_id) > 0) {
+      try {
+        const sourceOrder = await getSalesOrder(full.source_order_id, true, false, { view: 'options' });
+        if (sourceOrder.order_date) {
+          pricingAsOf = dayjs(sourceOrder.order_date);
+        }
+      } catch {
+        /* 保留变更单创建时间 */
+      }
+    }
+    setChangePricing({
+      side: 'sales',
+      partnerId:
+        full.customer_id != null && Number.isFinite(Number(full.customer_id))
+          ? Number(full.customer_id)
+          : undefined,
+      asOf: pricingAsOf,
+    });
     setEditItems(full.items ?? []);
     setPendingEditFormValues({
       change_reason: full.change_reason,
@@ -274,6 +297,14 @@ const SalesOrderChangesPage: React.FC = () => {
     const order = await getSalesOrder(orderId, true, false, { view: 'options' });
     setEditingId(null);
     setCreatingSourceOrderId(orderId);
+    setChangePricing({
+      side: 'sales',
+      partnerId:
+        order.customer_id != null && Number.isFinite(Number(order.customer_id))
+          ? Number(order.customer_id)
+          : undefined,
+      asOf: order.order_date ? dayjs(order.order_date) : dayjs(),
+    });
     setEditItems(
       (order.items ?? []).map((item, idx) => ({
         line_no: idx + 1,
@@ -946,7 +977,12 @@ const SalesOrderChangesPage: React.FC = () => {
         form={editForm}
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
       >
-        <OrderChangeItemsTable items={editItems ?? []} editable onChange={setEditItems} />
+        <OrderChangeItemsTable
+          items={editItems ?? []}
+          editable
+          onChange={setEditItems}
+          pricing={changePricing}
+        />
         <ProFormTextArea name="change_reason" label={t('app.kuaizhizao.salesOrderChange.colChangeReason')} rules={[{ required: true }]} />
         <ProFormTextArea name="notes" label={t('common.remark')} />
         <DocumentAttachmentsField category="sales_order_change_attachments" />

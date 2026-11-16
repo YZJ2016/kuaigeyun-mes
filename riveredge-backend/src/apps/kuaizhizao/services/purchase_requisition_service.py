@@ -146,6 +146,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                     work_order_code=item_data.work_order_code,
                     supplier_id=item_data.supplier_id,
                     notes=item_data.notes,
+                    attachments=item_data.attachments,
                 )
             req_id = req.id
 
@@ -920,6 +921,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                     work_order_code=item_data.work_order_code,
                     supplier_id=item_data.supplier_id,
                     notes=item_data.notes,
+                    attachments=item_data.attachments,
                 )
 
         return await self.get_requisition_by_id(tenant_id, requisition_id)
@@ -1226,6 +1228,32 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         return resolve_material_purchase_line_unit_price(material=material)
 
     @staticmethod
+    async def _resolve_purchase_order_unit_price_async(
+        tenant_id: int,
+        item: PurchaseRequisitionItem,
+        material_by_id: Dict[int, Material],
+        supplier_id: Optional[int],
+        price_override: Optional[Decimal] = None,
+    ) -> Decimal:
+        if price_override is not None:
+            return price_override
+        unit_price = item.suggested_unit_price or Decimal(0)
+        if unit_price > 0:
+            return unit_price
+        mid = int(item.material_id) if item.material_id is not None else None
+        material = material_by_id.get(mid) if mid is not None else None
+        from apps.kuaizhizao.utils.material_source_helper import (
+            resolve_material_purchase_line_unit_price_async,
+        )
+
+        return await resolve_material_purchase_line_unit_price_async(
+            tenant_id=tenant_id,
+            material=material,
+            supplier_id=int(supplier_id) if supplier_id and int(supplier_id) > 0 else None,
+            quantity=item.quantity,
+        )
+
+    @staticmethod
     def _resolve_requisition_item_required_date(
         item: PurchaseRequisitionItem,
         requisition_header_required: Optional[date],
@@ -1499,8 +1527,12 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                     price_override = data.item_unit_prices.get(item.id) or data.item_unit_prices.get(str(item.id))
                     if price_override is not None:
                         price_override = Decimal(str(price_override))
-                unit_price = self._resolve_purchase_order_unit_price(
-                    item, material_by_id, price_override=price_override
+                unit_price = await self._resolve_purchase_order_unit_price_async(
+                    tenant_id,
+                    item,
+                    material_by_id,
+                    supplier_id,
+                    price_override=price_override,
                 )
                 full_qty = item.quantity
                 qty = full_qty
@@ -1941,8 +1973,13 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                     )
                     if price_override is not None:
                         price_override = Decimal(str(price_override))
-                unit_price = self._resolve_purchase_order_unit_price(
-                    item, material_by_id, price_override=price_override
+                line_supplier_id = self._resolve_line_supplier_id(item, data)
+                unit_price = await self._resolve_purchase_order_unit_price_async(
+                    tenant_id,
+                    item,
+                    material_by_id,
+                    line_supplier_id,
+                    price_override=price_override,
                 )
                 conversions.append((item, qty))
                 total_price = qty * unit_price

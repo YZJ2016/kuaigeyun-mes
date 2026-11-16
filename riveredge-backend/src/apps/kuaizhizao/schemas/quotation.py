@@ -41,6 +41,7 @@ class QuotationItemBase(BaseSchema):
     pricing_snapshot: Optional[Dict[str, Any]] = Field(None, description="行情定价取价快照")
     delivery_date: Optional[date] = Field(None, description="预计交货日期")
     notes: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="行附件列表")
 
 
 class QuotationItemCreate(QuotationItemBase):
@@ -65,6 +66,7 @@ class QuotationItemUpdate(BaseSchema):
     pricing_snapshot: Optional[Dict[str, Any]] = None
     delivery_date: Optional[date] = None
     notes: Optional[str] = None
+    attachments: Optional[List[dict]] = None
 
 
 class QuotationItemResponse(QuotationItemBase):

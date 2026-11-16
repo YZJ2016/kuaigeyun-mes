@@ -41,6 +41,14 @@ import { PlusOutlined, EditOutlined, DeleteOutlined, DownOutlined, FileTextOutli
 import { getDataDictionaryByCode, getDictionaryItemList, type DictionaryItem } from '../../../../../services/dataDictionary';
 import { mapSystemDictionaryItemOptions, resolveSystemDictionaryItemLabel } from '../../../../../utils/systemDictionaryI18n';
 import { getFileDownloadUrl } from '../../../../../services/file';
+import {
+  mapAttachmentsToUploadList,
+  normalizeDocumentAttachments,
+} from '../../../utils/documentAttachments';
+import {
+  buildDocumentLineAttachmentsFormColumn,
+  DOCUMENT_LINE_ATTACHMENT_UPLOAD_CATEGORY,
+} from '../../../components/documentLineAttachmentsColumns';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { LineUnitPriceWithTrendTrigger } from '../../../components/partner-material-price-trend';
 import { UniTable, readPersistedUniTableViewType, type UniTableRequestMeta} from '../../../../../components/uni-table';
@@ -139,7 +147,10 @@ import {
   previewPushToPaymentApplication, pushPurchaseOrderToPaymentApplication, previewPushToPurchaseReturn,
   type DocumentPushPreview,
   type PurchaseInvoicePushMode,
-  PurchaseOrder, PurchaseOrderItem
+  PurchaseOrder,
+  PurchaseOrderItem,
+  listPurchaseOrderSalesOrderPullOrders,
+  type PurchaseOrderSalesOrderPullCandidate,
 } from '../../../services/purchase';
 import {
   listPurchaseRequisitions,
@@ -153,6 +164,10 @@ import {
   getDocumentFormDraft,
 } from '../../../../../utils/documentFormDraftCache';
 import {
+  continuePoHandoffQueueIfAny,
+  handoffInquiryToPurchaseOrderCreate,
+  handoffRequisitionToPurchaseOrderCreate,
+  handoffSalesOrderToPurchaseOrderCreate,
   hydrateDocumentFlowCreateFormValues,
 } from '../../../utils/documentFlowHandoff';
 import {
@@ -170,6 +185,7 @@ import LandingCostAllocationModal from './LandingCostAllocationModal';
 import { formatApiErrorDetail } from '../../../../../services/api';
 import {
   applyPurchaseDocumentLineMaterialPricing,
+  repriceUnlockedPurchaseDocumentLineIfNeeded,
   resolvePurchaseDocumentMaterialLinesPricing,
 } from '../../../../master-data/utils/resolve-partner-material-price';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
@@ -461,6 +477,7 @@ const PurchaseOrdersPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const pullFromRequisitionAction = resolveKuaizhizaoDocumentAction(t, 'purchase_order.pull_from_requisition');
   const pullFromInquiryAction = resolveKuaizhizaoDocumentAction(t, 'purchase_order.pull_from_inquiry');
+  const pullFromSalesOrderAction = resolveKuaizhizaoDocumentAction(t, 'purchase_order.pull_from_sales_order');
   const pushToReceiptNoticeAction = resolveKuaizhizaoDocumentAction(t, 'receipt_notice.pull_from_purchase_order');
   const pushToReceiptAction = resolveKuaizhizaoDocumentAction(t, 'purchase_receipt.pull_from_purchase_order');
   const pushToInvoiceAction = resolveKuaizhizaoDocumentAction(t, 'purchase_invoice.pull_from_purchase_order');
@@ -2514,6 +2531,15 @@ const PurchaseOrdersPage: React.FC = () => {
         unit_price: Number(it.unit_price ?? it.unitPrice) || 0,
         tax_rate: headerTaxRatePercent,
         required_date: it.required_date || it.requiredDate ? dayjs(it.required_date || it.requiredDate) : undefined,
+        source_type: it.source_type ?? it.sourceType ?? null,
+        source_id: it.source_id ?? it.sourceId ?? null,
+        demand_computation_item_id:
+          it.demand_computation_item_id ?? it.demandComputationItemId ?? null,
+        work_order_id: it.work_order_id ?? it.workOrderId ?? null,
+        work_order_code: it.work_order_code ?? it.workOrderCode ?? null,
+        received_quantity: Number(it.received_quantity ?? it.receivedQuantity) || 0,
+        notes: it.notes ?? '',
+        attachments: mapAttachmentsToUploadList(it.attachments),
       }));
       window.setTimeout(() => {
         const deliveryDate = detail.delivery_date ? dayjs(detail.delivery_date) : undefined;
@@ -2943,6 +2969,37 @@ const PurchaseOrdersPage: React.FC = () => {
     [t],
   );
 
+  const pullSalesOrderColumns = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.salesOrder.orderCode'),
+        dataIndex: 'order_code',
+        width: 168,
+        ellipsis: true,
+      },
+      {
+        title: t('app.kuaizhizao.salesOrder.customerName'),
+        dataIndex: 'customer_name',
+        ellipsis: true,
+        render: (v: string | null | undefined) => (v && String(v).trim() ? String(v) : '-'),
+      },
+      {
+        title: t('components.uniPullQuery.documentDateColumn'),
+        dataIndex: 'order_date',
+        width: 112,
+        render: (v: string | null | undefined) => (v ? formatBusinessDateOnly(String(v)) : '-'),
+      },
+      {
+        title: t('common.quantity'),
+        dataIndex: 'total_quantity',
+        width: 100,
+        align: 'right' as const,
+        render: (v: number) => formatQuantity(v),
+      },
+    ],
+    [t],
+  );
+
   const isPullLineSelectable = useCallback(
     (record: { remaining_quantity?: number }) => Number(record.remaining_quantity ?? 0) > 0,
     [],
@@ -3110,6 +3167,53 @@ const PurchaseOrdersPage: React.FC = () => {
     },
   });
 
+  const pullFromSalesOrderQuery = useUniPullQuery<PurchaseOrderSalesOrderPullCandidate>({
+    rowKey: 'id',
+    selectionType: 'radio',
+    scopeOptions: pullDocumentScopeOptions,
+    defaultScope: 'pullable',
+    loadData: async ({ keyword, page, pageSize, scope }) => {
+      try {
+        const listRes = await listPurchaseOrderSalesOrderPullOrders({
+          skip: (page - 1) * pageSize,
+          limit: pageSize,
+          keyword: keyword.trim() || undefined,
+          pullable_only: isPullableScope(scope),
+        });
+        return { data: listRes?.data ?? [], total: listRes?.total ?? 0 };
+      } catch (error: unknown) {
+        messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.purchaseOrder.pull.loadSourceFailed')));
+        return { data: [], total: 0 };
+      }
+    },
+    onConfirm: async (_keys, rows) => {
+      const orderId = Number(rows[0]?.id);
+      if (!orderId) {
+        messageApi.warning(t('app.kuaizhizao.purchaseOrder.pull.selectLinesFirst'));
+        return;
+      }
+      try {
+        await handoffSalesOrderToPurchaseOrderCreate(navigate, orderId, {});
+        messageApi.success(
+          t('app.kuaizhizao.documentFlow.openedDownstreamCreate', {
+            target: pullFromSalesOrderAction.targetLabel,
+          }),
+        );
+        pullFromSalesOrderQuery.closeModal();
+      } catch (error: unknown) {
+        messageApi.error(
+          getApiErrorMessage(
+            error,
+            t('app.kuaizhizao.purchaseOrder.createFromRequisitionFailed', {
+              source: pullFromSalesOrderAction.sourceLabel,
+              target: pullFromSalesOrderAction.targetLabel,
+            }),
+          ),
+        );
+      }
+    },
+  });
+
   // 处理表单提交（创建/更新）
   const handleFormSubmit = async (values: any): Promise<void> => {
     try {
@@ -3214,6 +3318,7 @@ const PurchaseOrdersPage: React.FC = () => {
           required_date: dateStr,
           inspection_required: true,
           notes: it.notes || null,
+          attachments: normalizeDocumentAttachments(it.attachments),
         };
       });
 
@@ -3485,17 +3590,181 @@ const PurchaseOrdersPage: React.FC = () => {
       <DetailDrawerSection titleAccent title={t('app.uniDetail.sectionBasic')}>
         <div className="document-form-untitled-groups">
           <div className="document-form-untitled-group">
-            <Row gutter={16}>
-              <Col span={6}>
-                <CodeField
-                  pageCode="kuaizhizao-purchase-order"
-                  name="order_code"
-                  label={t('app.kuaizhizao.purchaseOrder.form.orderCode')}
-                  required={true}
-                  autoGenerateOnCreate={!isEdit}
-                  showGenerateButton={false}
-                  documentId={isEdit ? currentOrder?.id : undefined}
-                  context={{}}
+      {/* 一行 5 格：对齐销售订单；币种/汇率合占 1 格 */}
+      <Row gutter={16} wrap={false}>
+        <Col flex="1 1 0" style={{ minWidth: 0 }}>
+          <CodeField
+            pageCode="kuaizhizao-purchase-order"
+            name="order_code"
+            label={t('app.kuaizhizao.purchaseOrder.form.orderCode')}
+            required={true}
+            autoGenerateOnCreate={!isEdit}
+            showGenerateButton={false}
+            documentId={isEdit ? currentOrder?.id : undefined}
+            context={{}}
+          />
+        </Col>
+        <Col flex="1 1 0" style={{ minWidth: 0 }}>
+          <ProForm.Item
+            name="supplier_id"
+            label={t('app.kuaizhizao.purchaseOrder.form.supplier')}
+            rules={[{ required: true, message: t('app.kuaizhizao.purchaseOrder.form.supplierRequired') }]}
+          >
+            <SupplierSelectDropdown
+              hostResource={KUAIZHIZAO_DOC_HOST.purchaseOrder}
+              placeholder={t('app.kuaizhizao.purchaseOrder.form.supplierRequired')}
+              style={{ width: '100%' }}
+              onSuppliersChange={setSupplierList}
+              onSupplierPick={(s) => {
+                applySupplierFormFields(formRef, s as Record<string, unknown> | null, {
+                  users,
+                  supplierList: supplierList as unknown as Array<Record<string, unknown>>,
+                  orgPayableDefault: resolveOrgPayableDefaultFromBusinessConfig(businessConfig),
+                });
+                const taxRate = resolveSupplierDefaultTaxRatePercent(
+                  s as Record<string, unknown> | null,
+                );
+                const items = normalizeFormListItems<any>(formRef.current?.getFieldValue('items'));
+                const nextItems = items.map((it) => {
+                  const current = Number(it?.tax_rate);
+                  // 未填或仍为 0 时跟供应商默认；已手改的特殊税率保留
+                  if (Number.isFinite(current) && current > 0) return it;
+                  return { ...it, tax_rate: taxRate };
+                });
+                formRef.current?.setFieldsValue({
+                  price_type: DEFAULT_PURCHASE_PRICE_TYPE,
+                  items: nextItems.length > 0 ? nextItems : [{ ...defaultOrderItem, tax_rate: taxRate }],
+                });
+                const sid = Number((s as { id?: number })?.id);
+                const lineItems = normalizeFormListItems<any>(formRef.current?.getFieldValue('items'));
+                lineItems.forEach((_, idx) => {
+                  void repriceUnlockedPurchaseDocumentLineIfNeeded(formRef.current, idx, {
+                    asOfField: 'order_date',
+                    supplierId: Number.isFinite(sid) && sid > 0 ? sid : undefined,
+                    fallbackTaxRate: taxRate,
+                  });
+                });
+              }}
+            />
+          </ProForm.Item>
+        </Col>
+        <Col flex="1 1 0" style={{ minWidth: 0 }}>
+          <PurchaseOrderBuyerField userList={users} loading={usersLoading} />
+        </Col>
+        <Col flex="1 1 0" style={{ minWidth: 0 }}>
+          <ProFormDatePicker
+            name="order_date"
+            label={t('app.kuaizhizao.purchaseOrder.form.orderDate')}
+            placeholder={t('app.kuaizhizao.purchaseOrder.form.orderDateRequired')}
+            rules={[{ required: true, message: t('app.kuaizhizao.purchaseOrder.form.orderDateRequired') }]}
+            fieldProps={{
+              style: { width: '100%' },
+              onChange: () => {
+                const items = normalizeFormListItems<any>(formRef.current?.getFieldValue('items'));
+                const taxRate = resolveSupplierDefaultTaxRatePercent(
+                  (supplierList.find(
+                    (x) => Number(x.id) === Number(formRef.current?.getFieldValue('supplier_id')),
+                  ) as Record<string, unknown> | undefined) ?? null,
+                );
+                items.forEach((_, idx) => {
+                  void repriceUnlockedPurchaseDocumentLineIfNeeded(formRef.current, idx, {
+                    asOfField: 'order_date',
+                    fallbackTaxRate: taxRate,
+                  });
+                });
+              },
+            }}
+          />
+        </Col>
+        <Col flex="1 1 0" style={{ minWidth: 0 }}>
+          <ProFormDatePicker
+            name="delivery_date"
+            label={t('app.kuaizhizao.purchaseOrder.form.requiredDate')}
+            placeholder={t('app.kuaizhizao.purchaseOrder.form.requiredDateRequired')}
+            rules={[{ required: true, message: t('app.kuaizhizao.purchaseOrder.form.requiredDateRequired') }]}
+            fieldProps={buildFutureDateShortcutFieldProps({
+              getForm: () => formRef.current,
+              fieldName: 'delivery_date',
+              baseFieldName: 'order_date',
+              t,
+              onApply: (date) => {
+                formRef.current?.setFieldValue?.('delivery_date', date);
+                applyHeaderDeliveryToItemLines(date);
+              },
+              fieldProps: {
+                onChange: (value: unknown) => {
+                  applyHeaderDeliveryToItemLines(value);
+                },
+              },
+            })}
+          />
+        </Col>
+      </Row>
+      <Row gutter={16} wrap={false} style={{ marginTop: 0 }}>
+        <Col flex="1 1 0" style={{ minWidth: 0 }}>
+          <ProForm.Item
+            name="payable_recognition"
+            label={t('field.document.ledgerRecognition')}
+            initialValue={orgPayableRecognitionDefault}
+            rules={[{ required: true, message: t('field.document.ledgerRecognitionRequired') }]}
+          >
+            <UniDropdown options={payableLedgerRecognitionOptions} style={{ width: '100%' }} />
+          </ProForm.Item>
+        </Col>
+        <Col flex="1 1 0" style={{ minWidth: 0 }}>
+          <ProForm.Item
+            name="settlement_terms_code"
+            label={t('app.kuaizhizao.purchaseOrder.settlementTerms')}
+          >
+            <UniDropdown
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              options={purchaseOrderSettlementTermsOptions}
+              placeholder={t('app.kuaizhizao.purchaseOrder.selectSettlementTerms')}
+              style={{ width: '100%' }}
+            />
+          </ProForm.Item>
+        </Col>
+        <Col flex="1 1 0" style={{ minWidth: 0 }}>
+          <ProFormDigit
+            name="payment_terms_days"
+            label={t('app.kuaizhizao.purchaseOrder.paymentCycle')}
+            placeholder={t('app.kuaizhizao.purchaseOrder.paymentCycleDaysPlaceholder')}
+            min={0}
+            fieldProps={{ precision: 0, style: { width: '100%' } }}
+            tooltip={t('app.kuaizhizao.purchaseOrder.paymentCycleDaysHint')}
+          />
+        </Col>
+        <Col flex="1 1 0" style={{ minWidth: 0 }}>
+          <ProForm.Item
+            name="payment_method_code"
+            label={t('app.kuaizhizao.purchaseOrder.paymentMethod')}
+          >
+            <UniDropdown
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              options={purchaseOrderPaymentMethodOptions}
+              placeholder={t('app.kuaizhizao.purchaseOrder.selectPaymentMethod')}
+              style={{ width: '100%' }}
+            />
+          </ProForm.Item>
+        </Col>
+        <Col flex="1 1 0" style={{ minWidth: 0 }}>
+          <Row gutter={8} wrap={false}>
+            <Col flex="1 1 0" style={{ minWidth: 0 }}>
+              <ProForm.Item name="currency" label={t('app.kuaizhizao.purchaseOrder.form.currency')} initialValue="CNY">
+                <UniDropdown
+                  placeholder={t('app.kuaizhizao.purchaseOrder.form.currencyPlaceholder')}
+                  options={currencyOptions}
+                  loading={currencyLoading}
+                  onChange={(value) => {
+                    const code = String(value ?? 'CNY').trim().toUpperCase();
+                    if (code === 'CNY') {
+                      formRef.current?.setFieldValue('exchange_rate', 1);
+                    }
+                  }}
                 />
               </Col>
               <Col span={6}>
@@ -3790,8 +4059,40 @@ const PurchaseOrdersPage: React.FC = () => {
                     width: DOCUMENT_DETAIL_COL_WIDTH.quantity,
                     ...DOCUMENT_DETAIL_NUM_COL,
                     render: (_: any, __: any, index: number) => (
-                      <AntForm.Item name={[index, 'ordered_quantity']} rules={[{ required: true, message: t('common.required') }, { type: 'number', min: 0.01, message: t('app.kuaizhizao.salesOrder.quantityMinHint') }]} style={{ margin: 0 }}>
-                        <InputNumber placeholder={t('common.quantity')} min={0} precision={quantityDecimals} style={{ width: '100%' }} size={DOCUMENT_DETAIL_CONTROL_SIZE} />
+                      <AntForm.Item
+                        noStyle
+                        shouldUpdate={(prev, curr) =>
+                          prev?.items?.[index]?.material_id !== curr?.items?.[index]?.material_id
+                        }
+                      >
+                        {({ getFieldValue }) => {
+                          const materialId = getFieldValue(['items', index, 'material_id']);
+                          if (!formRef.current) return null;
+                          return (
+                            <DocumentLineDualQuantityFormCell
+                              form={formRef.current}
+                              listName="items"
+                              rowIndex={index}
+                              quantityField="ordered_quantity"
+                              unitField="unit"
+                              scenario="purchase"
+                              quantityPrecision={quantityDecimals}
+                              materialId={materialId}
+                              onAfterQuantityChange={() => {
+                                void repriceUnlockedPurchaseDocumentLineIfNeeded(formRef.current, index, {
+                                  asOfField: 'order_date',
+                                  fallbackTaxRate: resolveSupplierDefaultTaxRatePercent(
+                                    (supplierList.find(
+                                      (x) =>
+                                        Number(x.id) ===
+                                        Number(formRef.current?.getFieldValue('supplier_id')),
+                                    ) as Record<string, unknown> | undefined) ?? null,
+                                  ),
+                                });
+                              }}
+                            />
+                          );
+                        }}
                       </AntForm.Item>
                     ),
                   },
@@ -4039,6 +4340,25 @@ const PurchaseOrdersPage: React.FC = () => {
                       </AntForm.Item>
                     ),
                   },
+                  ...buildDocumentDetailPartnerMaterialFormColumns(t, 'supplier'),
+                  buildDocumentLineAttachmentsFormColumn(
+                    t,
+                    DOCUMENT_LINE_ATTACHMENT_UPLOAD_CATEGORY.purchaseOrder,
+                  ),
+                  {
+                    title: t('app.kuaizhizao.purchaseOrder.form.lineNotes'),
+                    dataIndex: 'notes',
+                    width: DOCUMENT_DETAIL_COL_WIDTH.notes,
+                    ...DOCUMENT_DETAIL_TEXT_COL,
+                    render: (_: any, __: any, index: number) => (
+                      <AntForm.Item name={[index, 'notes']} style={{ margin: 0 }}>
+                        <Input
+                          placeholder={t('app.kuaizhizao.purchaseOrder.form.lineNotes')}
+                          size={DOCUMENT_DETAIL_CONTROL_SIZE}
+                        />
+                      </AntForm.Item>
+                    ),
+                  },
                 ]}
                 disabledAdd
                 minRows={1}
@@ -4268,6 +4588,11 @@ const PurchaseOrdersPage: React.FC = () => {
                         key: 'pull-from-inquiry',
                         actionKey: 'purchase_order.pull_from_inquiry',
                         onClick: pullFromInquiryQuery.openModal,
+                      },
+                      {
+                        key: 'pull-from-sales-order',
+                        actionKey: 'purchase_order.pull_from_sales_order',
+                        onClick: pullFromSalesOrderQuery.openModal,
                       },
                     ],
               )}
@@ -4655,6 +4980,37 @@ const PurchaseOrdersPage: React.FC = () => {
         scopeOptions={pullFromInquiryQuery.scopeOptions}
         scope={pullFromInquiryQuery.scope}
         onScopeChange={pullFromInquiryQuery.handleScopeChange}
+        okText={t('app.kuaizhizao.purchaseOrder.pull.ok')}
+      />
+
+      <UniPullQueryModal<PurchaseOrderSalesOrderPullCandidate>
+        open={pullFromSalesOrderQuery.open}
+        title={pullFromSalesOrderAction.label}
+        onCancel={pullFromSalesOrderQuery.closeModal}
+        onOk={pullFromSalesOrderQuery.handleConfirm}
+        rowKey="id"
+        columns={pullSalesOrderColumns}
+        dataSource={pullFromSalesOrderQuery.dataSource}
+        loading={pullFromSalesOrderQuery.loading}
+        confirmLoading={pullFromSalesOrderQuery.confirmLoading}
+        selectionType={pullFromSalesOrderQuery.selectionType}
+        selectedRowKeys={pullFromSalesOrderQuery.selectedRowKeys}
+        selectedRows={pullFromSalesOrderQuery.selectedRows}
+        onSelectedRowKeysChange={pullFromSalesOrderQuery.handleSelectedRowKeysChange}
+        searchDraft={pullFromSalesOrderQuery.searchDraft}
+        onSearchDraftChange={pullFromSalesOrderQuery.setSearchDraft}
+        onSearchApply={pullFromSalesOrderQuery.handleSearchApply}
+        onSearchClear={pullFromSalesOrderQuery.handleSearchClear}
+        appliedKeyword={pullFromSalesOrderQuery.appliedKeyword}
+        searchPlaceholder={t('app.kuaizhizao.purchaseOrder.pull.searchPlaceholder')}
+        getRowLabel={(row) => String(row.order_code || row.id)}
+        page={pullFromSalesOrderQuery.page}
+        pageSize={pullFromSalesOrderQuery.pageSize}
+        total={pullFromSalesOrderQuery.total}
+        onPageChange={pullFromSalesOrderQuery.handlePageChange}
+        scopeOptions={pullFromSalesOrderQuery.scopeOptions}
+        scope={pullFromSalesOrderQuery.scope}
+        onScopeChange={pullFromSalesOrderQuery.handleScopeChange}
         okText={t('app.kuaizhizao.purchaseOrder.pull.ok')}
       />
 

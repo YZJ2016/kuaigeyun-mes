@@ -64,6 +64,7 @@ class PurchaseReceiptItem(DocumentLinePartnerMaterialSnapshotMixin, BaseModel):
     receipt_time = fields.DatetimeField(null=True, description="实际入库时间")
 
     notes = fields.TextField(null=True, description="备注")
+    attachments = fields.JSONField(null=True, description="行附件列表")
     deleted_at = fields.DatetimeField(null=True, description="删除时间")
 
     class Meta:

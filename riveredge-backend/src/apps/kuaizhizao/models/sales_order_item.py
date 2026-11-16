@@ -64,6 +64,7 @@ class SalesOrderItem(DocumentLinePartnerMaterialSnapshotMixin, BaseModel):
     configurable_selections = fields.JSONField(null=True, description="配置位选择（用户在下单时选择的配置位物料）")
 
     notes = fields.TextField(null=True, description="备注")
+    attachments = fields.JSONField(null=True, description="行附件列表")
     deleted_at = fields.DatetimeField(null=True, description="删除时间")
 
     class Meta:

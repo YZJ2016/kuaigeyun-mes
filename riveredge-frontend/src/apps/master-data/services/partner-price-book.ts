@@ -34,14 +34,22 @@ export function createPartnerPriceBookApi(partnerType: PartnerPriceBookType) {
       partnerMaterialCode?: string;
       variantAttributes?: Record<string, unknown>;
       asOf?: string;
+      quantity?: number;
+      resolveMode?: 'auto' | 'standard_only' | 'tier_only';
     }): Promise<PartnerPriceResolveResult> => {
-      if (params.variantAttributes && Object.keys(params.variantAttributes).length > 0) {
+      const needsPost =
+        (params.variantAttributes && Object.keys(params.variantAttributes).length > 0) ||
+        params.quantity != null ||
+        params.resolveMode != null;
+      if (needsPost) {
         return api.post(`${base}/resolve`, {
           partnerId: params.partnerId,
           materialId: params.materialId,
           partnerMaterialCode: params.partnerMaterialCode,
           variantAttributes: params.variantAttributes,
           asOf: params.asOf,
+          quantity: params.quantity,
+          resolveMode: params.resolveMode,
         });
       }
       return api.get(`${base}/resolve`, { params });
@@ -58,3 +66,28 @@ export function createPartnerPriceBookApi(partnerType: PartnerPriceBookType) {
 
 export const customerPriceBookApi = createPartnerPriceBookApi('customer');
 export const supplierPriceBookApi = createPartnerPriceBookApi('supplier');
+
+export type PartnerMaterialLinePriceResolveParams = {
+  side: 'purchase' | 'sales';
+  partnerId: number;
+  materialId: number;
+  quantity?: number;
+  asOf?: string;
+  variantAttributes?: Record<string, unknown>;
+};
+
+export type PartnerMaterialLinePriceResolveResult = {
+  found: boolean;
+  unitPrice?: number;
+  taxRate?: number;
+  priceSource?: string;
+  currencyCode?: string;
+  partnerMaterialCode?: string;
+  partnerMaterialName?: string;
+};
+
+export function resolvePartnerMaterialLinePrice(
+  params: PartnerMaterialLinePriceResolveParams,
+): Promise<PartnerMaterialLinePriceResolveResult> {
+  return api.post('/apps/master-data/supply-chain/resolve-partner-material-line-price', params);
+}

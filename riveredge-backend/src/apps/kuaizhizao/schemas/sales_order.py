@@ -75,6 +75,7 @@ class SalesOrderItemBase(BaseSchema):
     variant_attributes: Optional[dict] = Field(None, description="属性（配置件专用，如 {\"color\":\"red\",\"size\":\"M\"}）")
     configurable_selections: Optional[dict] = Field(None, description="配置位选择（BOM配置位，格式 {\"parentMaterialId_configurableGroupId\": componentId}）")
     notes: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="行附件列表")
 
 
 class SalesOrderItemCreate(SalesOrderItemBase):
@@ -102,6 +103,7 @@ class SalesOrderItemUpdate(BaseSchema):
     variant_attributes: Optional[dict] = None
     configurable_selections: Optional[dict] = None
     notes: Optional[str] = None
+    attachments: Optional[List[dict]] = None
 
 
 class SalesOrderItemResponse(SalesOrderItemBase):

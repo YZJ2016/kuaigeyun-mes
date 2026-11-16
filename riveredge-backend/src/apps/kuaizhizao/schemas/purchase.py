@@ -252,6 +252,7 @@ class PurchaseOrderItemBase(BaseSchema):
     work_order_id: Optional[int] = Field(None, description="关联工单ID")
     work_order_code: Optional[str] = Field(None, max_length=50, description="关联工单编码")
     notes: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="行附件列表")
 
 
 class PurchaseOrderItemCreate(PurchaseOrderItemBase):

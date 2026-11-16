@@ -43,6 +43,10 @@ class PartnerPriceBook(BaseModel):
         null=True,
         description='属性 SKU 单价列表 JSON：[{"variant_attributes": {...}, "unit_price": 9.5}]',
     )
+    tier_prices = fields.JSONField(
+        null=True,
+        description='数量阶梯单价 JSON：[{"minQuantity": 1, "maxQuantity": 99, "unitPrice": "10.5"}]',
+    )
     currency_code = fields.CharField(max_length=10, null=True, description="币种")
     tax_rate = fields.DecimalField(max_digits=8, decimal_places=4, null=True, description="税率（百分比）")
     unit = fields.CharField(max_length=20, null=True, description="计价单位")

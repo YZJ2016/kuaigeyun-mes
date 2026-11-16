@@ -36,26 +36,33 @@ export function buildMaterialShortageExceptionActionButtons({
   onAction: ActionHandler;
   keyPrefix: string;
 }): React.ReactNode[] {
-  if (record.status !== 'pending') return [];
+  const status = String(record.status || '');
+  // pending：发起采购/替代/结案；processing（已点采购）：须仍可结案或取消，否则关不掉
+  if (status !== 'pending' && status !== 'processing') return [];
 
-  return [
-    <Button
-      key={`${keyPrefix}-purchase`}
-      {...rowActionKind('execute')}
-      {...rowActionLabelKeep()}
-      onClick={() => onAction('purchase')}
-    >
-      {t(`${P}.action.purchase`)}
-    </Button>,
-    <Button
-      key={`${keyPrefix}-substitute`}
-      {...rowActionKind('skip')}
-      {...rowActionLabelKeep()}
-      icon={<SwapOutlined />}
-      onClick={() => onAction('substitute')}
-    >
-      {t(`${P}.action.substitute`)}
-    </Button>,
+  const buttons: React.ReactNode[] = [];
+  if (status === 'pending') {
+    buttons.push(
+      <Button
+        key={`${keyPrefix}-purchase`}
+        {...rowActionKind('execute')}
+        {...rowActionLabelKeep()}
+        onClick={() => onAction('purchase')}
+      >
+        {t(`${P}.action.purchase`)}
+      </Button>,
+      <Button
+        key={`${keyPrefix}-substitute`}
+        {...rowActionKind('skip')}
+        {...rowActionLabelKeep()}
+        icon={<SwapOutlined />}
+        onClick={() => onAction('substitute')}
+      >
+        {t(`${P}.action.substitute`)}
+      </Button>,
+    );
+  }
+  buttons.push(
     <Button
       key={`${keyPrefix}-resolve`}
       {...rowActionKind('complete')}
@@ -71,7 +78,8 @@ export function buildMaterialShortageExceptionActionButtons({
     >
       {t('common.cancel')}
     </Button>,
-  ];
+  );
+  return buttons;
 }
 
 export function renderMaterialShortageExceptionActionGroup(props: {
@@ -94,33 +102,39 @@ export function buildDeliveryDelayExceptionActionButtons({
   onAction: ActionHandler;
   keyPrefix: string;
 }): React.ReactNode[] {
-  if (record.status !== 'pending') return [];
+  const status = String(record.status || '');
+  if (status !== 'pending' && status !== 'processing') return [];
 
-  return [
-    <Button
-      key={`${keyPrefix}-adjust`}
-      {...rowActionKind('update')}
-      {...rowActionLabelKeep()}
-      onClick={() => onAction('adjust_plan')}
-    >
-      {t(`${P}.action.adjustPlan`)}
-    </Button>,
-    <Button
-      key={`${keyPrefix}-resources`}
-      {...rowActionKind('assign')}
-      {...rowActionLabelKeep()}
-      onClick={() => onAction('increase_resources')}
-    >
-      {t(`${P}.action.increaseResources`)}
-    </Button>,
-    <Button
-      key={`${keyPrefix}-expedite`}
-      {...rowActionKind('execute')}
-      {...rowActionLabelKeep()}
-      onClick={() => onAction('expedite')}
-    >
-      {t(`${P}.action.expedite`)}
-    </Button>,
+  const buttons: React.ReactNode[] = [];
+  if (status === 'pending') {
+    buttons.push(
+      <Button
+        key={`${keyPrefix}-adjust`}
+        {...rowActionKind('update')}
+        {...rowActionLabelKeep()}
+        onClick={() => onAction('adjust_plan')}
+      >
+        {t(`${P}.action.adjustPlan`)}
+      </Button>,
+      <Button
+        key={`${keyPrefix}-resources`}
+        {...rowActionKind('assign')}
+        {...rowActionLabelKeep()}
+        onClick={() => onAction('increase_resources')}
+      >
+        {t(`${P}.action.increaseResources`)}
+      </Button>,
+      <Button
+        key={`${keyPrefix}-expedite`}
+        {...rowActionKind('execute')}
+        {...rowActionLabelKeep()}
+        onClick={() => onAction('expedite')}
+      >
+        {t(`${P}.action.expedite`)}
+      </Button>,
+    );
+  }
+  buttons.push(
     <Button
       key={`${keyPrefix}-resolve`}
       {...rowActionKind('complete')}
@@ -136,7 +150,8 @@ export function buildDeliveryDelayExceptionActionButtons({
     >
       {t('common.cancel')}
     </Button>,
-  ];
+  );
+  return buttons;
 }
 
 export function renderDeliveryDelayExceptionActionGroup(props: {
@@ -346,11 +361,13 @@ export function renderQualityExceptionActionGroup(props: {
 }
 
 export function hasMaterialShortageExceptionActions(record: MaterialShortageExceptionDetailRecord): boolean {
-  return record.status === 'pending';
+  const status = String(record.status || '');
+  return status === 'pending' || status === 'processing';
 }
 
 export function hasDeliveryDelayExceptionActions(record: DeliveryDelayExceptionDetailRecord): boolean {
-  return record.status === 'pending';
+  const status = String(record.status || '');
+  return status === 'pending' || status === 'processing';
 }
 
 export function hasQualityExceptionHandleActions(record: QualityExceptionDetailRecord): boolean {

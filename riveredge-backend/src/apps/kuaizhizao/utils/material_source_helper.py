@@ -1079,6 +1079,43 @@ def resolve_material_purchase_line_unit_price(
     return Decimal(0)
 
 
+async def resolve_material_purchase_line_unit_price_async(
+    *,
+    tenant_id: int,
+    material: Optional[Any] = None,
+    supplier_id: Optional[int] = None,
+    quantity: Optional[Any] = None,
+    as_of: Optional[Any] = None,
+    source_config: Optional[Dict[str, Any]] = None,
+) -> Decimal:
+    """采购行单价：有供应商时走 master_data 统一 resolver，否则回落物料默认价。"""
+    if material is not None and supplier_id is not None:
+        mid = getattr(material, "id", None)
+        if mid is not None:
+            from datetime import date
+
+            from apps.master_data.services.partner_material_price_resolver import (
+                PartnerMaterialPriceResolver,
+            )
+
+            qty = Decimal(str(quantity)) if quantity is not None else None
+            as_of_date = as_of if isinstance(as_of, date) else None
+            resolved = await PartnerMaterialPriceResolver.resolve(
+                tenant_id,
+                "purchase",
+                int(supplier_id),
+                int(mid),
+                quantity=qty,
+                as_of=as_of_date,
+            )
+            if resolved.found and resolved.unit_price > 0:
+                return resolved.unit_price
+    return resolve_material_purchase_line_unit_price(
+        material=material,
+        source_config=source_config,
+    )
+
+
 def build_material_source_config(material: Material) -> Dict[str, Any]:
     """
     从已加载 Material 构建来源配置（与 get_material_source_config 同口径）。

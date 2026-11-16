@@ -27,6 +27,10 @@ import type { LifecycleResult } from '../../../../../../components/uni-lifecycle
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../../components/document-tracking-panel';
 import { DetailDrawerSection, useDetailDrawerDescriptionItems, type TraceBriefDocument } from '../../../../../../components/layout-templates';
 import { MarkerTag } from '../../../../../../constants/statusBadges';
+import {
+  buildDocumentLineAttachmentsDrawerColumn,
+  DOCUMENT_LINE_ATTACHMENT_UPLOAD_CATEGORY,
+} from '../../../../components/documentLineAttachmentsColumns';
 import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
 import {
   buildDocumentMaterialLineExtensionColumns,
@@ -728,6 +732,10 @@ export const SalesOrderDetailLinesPane: React.FC = () => {
                 ellipsis: true,
               })),
               { title: t('common.remark'), dataIndex: 'notes', width: 120, ellipsis: true },
+              buildDocumentLineAttachmentsDrawerColumn(
+                t,
+                DOCUMENT_LINE_ATTACHMENT_UPLOAD_CATEGORY.salesOrder,
+              ),
             ]}
             dataSource={order.items}
             rowKey="id"

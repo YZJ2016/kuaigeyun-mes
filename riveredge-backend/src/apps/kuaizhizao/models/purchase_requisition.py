@@ -87,6 +87,7 @@ class PurchaseRequisitionItem(DocumentLinePartnerMaterialSnapshotMixin, BaseMode
     supplier_id = fields.IntField(null=True, description="供应商ID（用于合并转单分组）")
 
     notes = fields.TextField(null=True, description="备注")
+    attachments = fields.JSONField(null=True, description="行附件列表")
 
     class Meta:
         table = "apps_kuaizhizao_purchase_requisition_items"

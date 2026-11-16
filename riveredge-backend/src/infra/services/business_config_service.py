@@ -372,6 +372,7 @@ REGISTRY_PARAM_CONTROL_META: Dict[str, Dict[str, Any]] = {
     "parameters.finance.require_payment_application": {"type": "boolean"},
     "parameters.kuaiplm.lab_request_delegate_dept_uuids": {"type": "tags"},
     "parameters.kuaiplm.lab_request_test_dept_uuids": {"type": "tags"},
+    "parameters.supply_chain.partner_price_resolution_order": {"type": "string"},
 }
 
 
@@ -562,6 +563,7 @@ PARAMETER_KEYS = {
     "parameters.master_data.drawing_max_upload_size_mb",
     "parameters.kuaiplm.lab_request_delegate_dept_uuids",
     "parameters.kuaiplm.lab_request_test_dept_uuids",
+    "parameters.supply_chain.partner_price_resolution_order",
 }
 
 # 已实装并在后端有明确生效点的配置项（用于前端禁用"假开关"）
@@ -651,6 +653,7 @@ IMPLEMENTED_PARAMETER_KEYS = {
     "parameters.master_data.drawing_max_upload_size_mb",
     "parameters.kuaiplm.lab_request_delegate_dept_uuids",
     "parameters.kuaiplm.lab_request_test_dept_uuids",
+    "parameters.supply_chain.partner_price_resolution_order",
 }
 
 # 默认仓管/生产领料确认角色
@@ -962,6 +965,9 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
     },
     "master_data": {
         "drawing_max_upload_size_mb": 100,
+    },
+    "supply_chain": {
+        "partner_price_resolution_order": ["recent", "book_standard", "book_tier"],
     },
     "kuaiplm": {
         "lab_request_delegate_dept_uuids": [],

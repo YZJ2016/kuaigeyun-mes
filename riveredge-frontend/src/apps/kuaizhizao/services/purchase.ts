@@ -596,6 +596,26 @@ export async function listPurchaseOrderReceiptNoticePullLines(params: {
   });
 }
 
+export type PurchaseOrderSalesOrderPullCandidate = {
+  id: number;
+  order_code: string;
+  customer_name?: string | null;
+  order_date?: string | null;
+  total_quantity?: number;
+};
+
+export async function listPurchaseOrderSalesOrderPullOrders(params: {
+  skip?: number;
+  limit?: number;
+  keyword?: string;
+  pullable_only?: boolean;
+}): Promise<{ data: PurchaseOrderSalesOrderPullCandidate[]; total: number; success?: boolean }> {
+  return apiRequest('/apps/kuaizhizao/purchase-orders/sales-order-pull-orders', {
+    method: 'GET',
+    params,
+  });
+}
+
 export async function pullReceiptNoticesFromPurchaseOrderItems(
   selectedItemIds: number[],
 ): Promise<{

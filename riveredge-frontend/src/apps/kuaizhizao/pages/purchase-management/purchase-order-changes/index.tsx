@@ -9,6 +9,7 @@ import { useSearchParams } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Alert, Button, Descriptions, Form, Space, Typography } from 'antd';
 import { DeleteOutlined, EditOutlined, PlusOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { ActionConfirmPopconfirm } from '../../../../../components/action-confirm';
 import { LinkedDocumentCode } from '../../../../../components/linked-document-code';
@@ -56,7 +57,7 @@ import {
   withdrawPurchaseOrderChange,
   type PurchaseOrderChange,
 } from '../../../services/purchase-order-change';
-import { listPurchaseOrders, type PurchaseOrder } from '../../../services/purchase';
+import { getPurchaseOrder, listPurchaseOrders, type PurchaseOrder } from '../../../services/purchase';
 import {
   buildOrderChangeLifecycleValueEnum,
   getOrderChangeLifecycle,
@@ -70,7 +71,10 @@ import {
   KUAIZHIZAO_DOC_HOST,
   loadSupplierFormReferenceList,
 } from '../../../../../utils/documentFormReferenceLoad';
-import { OrderChangeItemsTable } from '../../../components/order-change/OrderChangeItemsTable';
+import {
+  OrderChangeItemsTable,
+  type OrderChangeItemsTablePricing,
+} from '../../../components/order-change/OrderChangeItemsTable';
 import { OrderChangeImpactModal } from '../../../components/order-change/OrderChangeImpactModal';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import {
@@ -137,6 +141,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
   const [pendingEditFormValues, setPendingEditFormValues] = useState<Record<string, any> | null>(null);
   const [editItems, setEditItems] = useState<PurchaseOrderChange['items']>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [changePricing, setChangePricing] = useState<OrderChangeItemsTablePricing | undefined>();
   const [impactOpen, setImpactOpen] = useState(false);
   const [impactLoading, setImpactLoading] = useState(false);
   const [impactData, setImpactData] = useState<Awaited<ReturnType<typeof previewPurchaseOrderChangeImpact>> | null>(null);
@@ -179,6 +184,25 @@ const PurchaseOrderChangesPage: React.FC = () => {
   const openEdit = async (record: PurchaseOrderChange) => {
     const full = await getPurchaseOrderChange(record.id!);
     setEditingId(full.id!);
+    let pricingAsOf = full.created_at ? dayjs(full.created_at) : dayjs();
+    if (full.source_order_id != null && Number(full.source_order_id) > 0) {
+      try {
+        const sourceOrder = await getPurchaseOrder(full.source_order_id);
+        if (sourceOrder.order_date) {
+          pricingAsOf = dayjs(sourceOrder.order_date);
+        }
+      } catch {
+        /* 保留变更单创建时间 */
+      }
+    }
+    setChangePricing({
+      side: 'purchase',
+      partnerId:
+        full.supplier_id != null && Number.isFinite(Number(full.supplier_id))
+          ? Number(full.supplier_id)
+          : undefined,
+      asOf: pricingAsOf,
+    });
     setEditItems(full.items ?? []);
     setPendingEditFormValues({
       change_reason: full.change_reason,
@@ -906,7 +930,12 @@ const PurchaseOrderChangesPage: React.FC = () => {
             />
           </FormModalGridBlock>
         ) : null}
-        <OrderChangeItemsTable items={editItems ?? []} editable onChange={setEditItems} />
+        <OrderChangeItemsTable
+          items={editItems ?? []}
+          editable
+          onChange={setEditItems}
+          pricing={changePricing}
+        />
         <ProFormTextArea name="change_reason" label={t('app.kuaizhizao.purchaseOrderChange.colChangeReason')} rules={[{ required: true }]} />
         <ProFormTextArea name="notes" label={t('common.remark')} />
         <DocumentAttachmentsField category="purchase_order_change_attachments" />

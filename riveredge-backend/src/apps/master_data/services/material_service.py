@@ -1371,15 +1371,21 @@ class MaterialService:
         
         # 处理默认值
         if data.defaults:
-            material_data["defaults"] = data.defaults
+            from apps.master_data.services.material_defaults_pricing import (
+                normalize_and_validate_material_defaults,
+            )
+
+            material_data["defaults"] = normalize_and_validate_material_defaults(data.defaults)
 
         # 自制件：默认工艺路线可能仅写在 defaults（前端未带 process_route_id），创建时同步 FK
         if (
             not material_data.get("process_route_id")
             and material_data.get("source_type") == "Make"
-            and _material_defaults_as_dict(data.defaults)
+            and _material_defaults_as_dict(material_data.get("defaults"))
         ):
-            resolved_pr_id = await _resolve_process_route_id_from_defaults_dict(tenant_id, data.defaults)
+            resolved_pr_id = await _resolve_process_route_id_from_defaults_dict(
+                tenant_id, material_data.get("defaults")
+            )
             if resolved_pr_id:
                 material_data["process_route_id"] = resolved_pr_id
 
@@ -2936,7 +2942,11 @@ class MaterialService:
         
         # 处理默认值
         if data.defaults is not None:
-            material.defaults = data.defaults
+            from apps.master_data.services.material_defaults_pricing import (
+                normalize_and_validate_material_defaults,
+            )
+
+            material.defaults = normalize_and_validate_material_defaults(data.defaults)
 
         # 自制件：未显式传 process_route_id 时，从 defaults 中的默认工艺路线同步 FK（修复列表/SOP 只认 process_route_id）
         if (
