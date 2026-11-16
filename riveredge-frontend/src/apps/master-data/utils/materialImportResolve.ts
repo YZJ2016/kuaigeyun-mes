@@ -33,7 +33,7 @@ export function normalizeImportMaterialCode(raw: unknown): string {
     .trim();
 }
 
-function attachImportAlias(material: Material, alias: string): Material {
+function attachImportAlias(material: Material, alias: string): MaterialWithImportAliases {
   const key = normalizeImportMaterialCode(alias).toUpperCase();
   if (!key) return material;
   const prev = material as MaterialWithImportAliases;

@@ -218,6 +218,7 @@ import {
 } from '../../sales-management/shared/DocumentPushProgressBar';
 import { collectPurchaseOrderPushDocuments } from '../../sales-management/shared/pushProgress';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
+import { resolveSupplierDefaultTaxRatePercent } from '../shared/purchasePriceType';
 import type { SubStage } from '../../../../../components/uni-lifecycle/types';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { useDeferAfterPaint } from '../../../../../hooks/useDeferAfterPaint';

@@ -2902,14 +2902,6 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
       'pages.dashboard.updateLog.entries.purchase-receipt-red-voucher-location-r01.description',
   },
   {
-    id: 'mobile-purchase-requisition-submit-review-r01',
-    date: '2026-11-10',
-    type: 'fix',
-    titleKey: 'pages.dashboard.updateLog.entries.mobile-purchase-requisition-submit-review-r01.title',
-    descriptionKey:
-      'pages.dashboard.updateLog.entries.mobile-purchase-requisition-submit-review-r01.description',
-  },
-  {
     id: 'inventory-duplicate-default-batch-r01',
     date: '2026-11-10',
     type: 'fix',

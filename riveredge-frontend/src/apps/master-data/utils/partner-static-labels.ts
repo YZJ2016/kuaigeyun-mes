@@ -45,6 +45,51 @@ const SETTLEMENT_KEYS: Record<string, string> = {
   other: 'field.partner.settlementMethod.other',
 };
 
+const PAYMENT_METHOD_KEYS: Record<string, string> = {
+  cash: 'field.partner.settlementMethod.cash',
+  bank_transfer: 'field.partner.settlementMethod.bankTransfer',
+  bank_acceptance: 'field.partner.settlementMethod.bankAcceptance',
+  commercial_acceptance: 'field.partner.settlementMethod.commercialAcceptance',
+  other: 'field.partner.settlementMethod.other',
+};
+
+const SETTLEMENT_TERMS_KEYS: Record<string, string> = {
+  prepaid: 'field.partner.settlementMethod.prepaid',
+  pay_before_ship: 'field.partner.settlementMethod.payBeforeShip',
+  spot: 'field.partner.settlementMethod.spot',
+  cod: 'field.partner.settlementMethod.cod',
+  net_terms: 'field.partner.settlementMethod.netTerms',
+  /** @deprecated 库内历史值，展示仍可读 */
+  monthly: 'field.partner.settlementMethod.monthly',
+  bimonthly: 'field.partner.settlementMethod.bimonthly',
+  quarterly: 'field.partner.settlementMethod.quarterly',
+  installment: 'field.partner.settlementMethod.installment',
+  progress: 'field.partner.settlementMethod.progress',
+  pay_on_invoice: 'field.partner.settlementMethod.payOnInvoice',
+};
+
+const SETTLEMENT_TERMS_CN_ALIASES: Record<string, string> = {
+  月结: 'net_terms',
+  双月结: 'net_terms',
+  季结: 'net_terms',
+  季度结: 'net_terms',
+  预付款: 'prepaid',
+  预付: 'prepaid',
+  款到发货: 'pay_before_ship',
+  先款后货: 'pay_before_ship',
+  现款现货: 'spot',
+  货到付款: 'cod',
+  账期结算: 'net_terms',
+  账期: 'net_terms',
+  分期付款: 'installment',
+  分期: 'installment',
+  进度款: 'progress',
+  按进度: 'progress',
+  票到付款: 'pay_on_invoice',
+  见票付款: 'pay_on_invoice',
+  票到付: 'pay_on_invoice',
+};
+
 function mapLabel(t: TFunction, map: Record<string, string>, code?: string | null): string {
   if (code == null || code === '') return '—';
   const key = map[code];
@@ -101,6 +146,14 @@ export function buildPartnerSettlementMethodImportOptions(t: TFunction): string[
   return buildImportOptions(t, SETTLEMENT_KEYS);
 }
 
+export function buildPartnerDefaultPaymentMethodImportOptions(t: TFunction): string[] {
+  return buildImportOptions(t, PAYMENT_METHOD_KEYS);
+}
+
+export function buildPartnerSettlementTermsImportOptions(t: TFunction): string[] {
+  return buildImportOptions(t, SETTLEMENT_TERMS_KEYS);
+}
+
 export function parsePartnerInvoiceTypeImport(raw?: string | null, t?: TFunction): string | undefined {
   if (!t) {
     const v = String(raw ?? '').trim();
@@ -131,6 +184,25 @@ export function parsePartnerSettlementMethodImport(raw?: string | null, t?: TFun
     return v || undefined;
   }
   return parseStaticImport(raw, t, SETTLEMENT_KEYS);
+}
+
+export function parsePartnerDefaultPaymentMethodImport(raw?: string | null, t?: TFunction): string | undefined {
+  if (!t) {
+    const v = String(raw ?? '').trim();
+    return v && v in PAYMENT_METHOD_KEYS ? v : undefined;
+  }
+  return parseStaticImport(raw, t, PAYMENT_METHOD_KEYS);
+}
+
+export function parsePartnerSettlementTermsImport(raw?: string | null, t?: TFunction): string | undefined {
+  const trimmed = String(raw ?? '').trim();
+  if (!trimmed) return undefined;
+  const fromCn = SETTLEMENT_TERMS_CN_ALIASES[trimmed];
+  if (fromCn) return fromCn;
+  const lowered = trimmed.toLowerCase();
+  if (lowered in SETTLEMENT_TERMS_KEYS) return lowered;
+  if (!t) return undefined;
+  return parseStaticImport(raw, t, SETTLEMENT_TERMS_KEYS);
 }
 
 export function partnerInvoiceTypeLabel(t: TFunction, code?: string | null): string {

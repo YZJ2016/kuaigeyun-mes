@@ -1,5 +1,4 @@
 export default {
-  "components.uniTable.helpHint": "本页帮助内容尚未编写，请联系管理员补充。",
   "help.applicationCenter.advanced.alert": "重置数据为高危操作，执行前务必确认或联系技术支持。",
   "help.applicationCenter.advanced.label": "3.5 高级配置",
   "help.applicationCenter.advanced.p1": "查看：打开应用详情抽屉，查看版本与描述等信息。",

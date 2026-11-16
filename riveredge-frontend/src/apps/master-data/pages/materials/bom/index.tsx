@@ -3753,9 +3753,7 @@ const BOMPage: React.FC = () => {
                 <SyncPushHubButton
                   syncEnabled={toolbarSyncPush.syncEnabled}
                   pushEnabled={toolbarSyncPush.pushEnabled}
-                  historySourceType="engineering_bom"
-                  historyTargetProfiles={['kingdee_eng_bom']}
-                  size="middle"
+                  size="medium"
                   wrapButton={(hubButton) => (
                     <SyncFreshnessBadge
                       getBinding={loadBomSyncBinding}
@@ -4283,13 +4281,11 @@ const BOMPage: React.FC = () => {
           formItemProps={{ className: 'bom-main-material-field' }}
           label={t('app.master-data.bom.mainMaterialLabel')}
           rules={[{ required: true, message: t('app.master-data.bom.mainMaterialRequired') }]}
-          renderFormItem={(_, { onChange: notifyProForm }) => (
+          renderFormItem={() => (
             <div className="bom-main-material-control">
               <div className="bom-main-material-select">
                 <UniMaterialSelect
                   key={`bom-main-material-${mainMaterialScope}`}
-                  embedInProFormField
-                  proFormFieldOnChange={notifyProForm as (value: number | number[] | undefined) => void}
                   name="materialId"
                   placeholder={t('app.master-data.bom.mainMaterialPlaceholder')}
                   disabled={isEdit}

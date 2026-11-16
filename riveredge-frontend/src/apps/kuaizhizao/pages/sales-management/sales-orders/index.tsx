@@ -302,6 +302,7 @@ import {
   searchReferenceDisplay,
 } from '../../../../../utils/referenceDisplay';
 import {
+  KUAIZHIZAO_DOC_HOST,
   loadBankAccountFormOptions,
   loadMaterialFormReferenceList,
   resolveMaterialFormReference,
