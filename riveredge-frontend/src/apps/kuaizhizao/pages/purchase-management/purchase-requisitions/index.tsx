@@ -1224,6 +1224,18 @@ const PurchaseRequisitionsPage: React.FC = () => {
     }
   }, [messageApi, t]);
 
+  const handlePurchaseRequisitionSaveDraft = useCallback(async () => {
+    try {
+      await createFormRef.current?.validateFields();
+      submitAfterSaveRef.current = false;
+      createFormRef.current?.submit?.();
+    } catch (err: any) {
+      if (err?.errorFields?.length) {
+        messageApi.warning(t('components.layoutTemplates.formModal.checkFormHint'));
+      }
+    }
+  }, [messageApi, t]);
+
   const handleDetail = async (record: PurchaseRequisition) => {
     try {
       void ensureSupplierList();
@@ -2429,9 +2441,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
     </>
   );
 
-  const triggerPurchaseRequisitionFormSubmit = () => void triggerPurchaseRequisitionPrimarySubmit();
-
-  useSubmitShortcut(() => triggerPurchaseRequisitionFormSubmit(), isFormPage);
+  useSubmitShortcut(() => void triggerPurchaseRequisitionPrimarySubmit(), isFormPage);
 
   if (isFormPage) {
     return (
@@ -2454,10 +2464,11 @@ const PurchaseRequisitionsPage: React.FC = () => {
             </Space>
             <DocumentFormPageHeaderActions
               onCancel={leavePurchaseRequisitionFormPage}
-              onSaveDraft={triggerPurchaseRequisitionFormSubmit}
+              onSaveDraft={() => void handlePurchaseRequisitionSaveDraft()}
               onPrimarySubmit={() => void triggerPurchaseRequisitionPrimarySubmit()}
               isCreatePage={isCreatePage}
-              showSaveDraft={false}
+              showSaveDraft
+              primaryCreateLabel={t('components.layoutTemplates.documentFormPage.saveAndSubmit')}
               primaryLoading={formSubmitting}
             />
             </>

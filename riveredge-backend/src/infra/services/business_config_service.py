@@ -979,6 +979,8 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
         "payable_recognition": "on_receipt",
         "auto_generate_receivable_from_sales_invoice": False,
         "auto_generate_payable_from_purchase_invoice": False,
+        "auto_apply_supplier_prepayment_to_payable": False,
+        "auto_apply_customer_prepayment_to_receivable": True,
         "credit_limit_enabled": False,
         "require_payment_application": False,
         "gl_period_close_enabled": False,
@@ -1390,6 +1392,22 @@ class BusinessConfigService:
     async def get_finance_require_payment_application(self, tenant_id: int) -> bool:
         config = await self.get_business_config(tenant_id)
         return bool(config["parameters"].get("finance", {}).get("require_payment_application", False))
+
+    async def get_finance_auto_apply_supplier_prepayment_to_payable(self, tenant_id: int) -> bool:
+        config = await self.get_business_config(tenant_id)
+        return bool(
+            config["parameters"]
+            .get("finance", {})
+            .get("auto_apply_supplier_prepayment_to_payable", False)
+        )
+
+    async def get_finance_auto_apply_customer_prepayment_to_receivable(self, tenant_id: int) -> bool:
+        config = await self.get_business_config(tenant_id)
+        return bool(
+            config["parameters"]
+            .get("finance", {})
+            .get("auto_apply_customer_prepayment_to_receivable", True)
+        )
 
     async def resolve_revenue_recognition(self, tenant_id: int, customer_id: Optional[int]) -> str:
         """有效应收确认策略：客户覆盖非空则用覆盖，否则用组织 finance.revenue_recognition（已 coerce）。"""

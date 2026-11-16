@@ -114,6 +114,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                 requisition_code=data.requisition_code,
                 requisition_name=custom_name or _default_requisition_name(data.requisition_code),
                 status="草稿",
+                review_status=ReviewStatus.DRAFT.value,
                 requisition_date=req_date,
                 applicant_id=applicant_id,
                 applicant_name=applicant_name,
