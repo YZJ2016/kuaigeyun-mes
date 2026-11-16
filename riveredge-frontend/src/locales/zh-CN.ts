@@ -36843,6 +36843,14 @@ export default {
     '出入库未选库位不再硬拦',
   'pages.dashboard.updateLog.entries.warehouse-location-optional-default-r01.description':
     '不合格品自动入库及其他出入库写路径：未选手选库位时默认仓库首个可用库位，仓下无库位则自动整仓；不再因「须选择库位」阻断与金蝶一致的非必填库位流转。手选库位仍校验归属。',
+  'pages.dashboard.updateLog.entries.document-line-tax-single-logic-r01.title':
+    '采购、销售、报价、发票价税共用一套计算',
+  'pages.dashboard.updateLog.entries.document-line-tax-single-logic-r01.description':
+    '销售订单保存、报价行金额、发票税额改为与采购订单相同的行价税拆分，不再单独把单价先收成两位再乘数量。',
+  'pages.dashboard.updateLog.entries.purchase-order-display-unit-price-r01.title':
+    '采购订单含税单价按录入值保存并回填',
+  'pages.dashboard.updateLog.entries.purchase-order-display-unit-price-r01.description':
+    '含税单价另存录入价，编辑、详情和下推入库直接读取，不再由未税单价乘税率。保存后的 600 再打开仍是 600。尚未保存过录入价的旧单，编辑时含税单价为空，重录一次后固定。',
   'pages.dashboard.updateLog.entries.purchase-order-line-tax-rate-r01.title':
     '采购订单支持行级税率',
   'pages.dashboard.updateLog.entries.purchase-order-line-tax-rate-r01.description':

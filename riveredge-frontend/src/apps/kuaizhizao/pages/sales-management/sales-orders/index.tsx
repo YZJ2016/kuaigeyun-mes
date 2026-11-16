@@ -184,6 +184,8 @@ import {
 import { DocumentAmountSummary } from '../../../components/document-amount-summary/DocumentAmountSummary';
 import {
   applyDocumentLineInclAmountEdit,
+  calcDocumentLineAmounts,
+  documentLineInclMatchesDerived,
   applyDocumentLineTaxRateChange,
   computeSalesDocumentTotals,
   EXCLUSIVE_UNIT_ANCHOR_KEY,
@@ -484,32 +486,6 @@ const resolveSaleUnitConversionFactor = (material: Material | undefined, materia
     return 1;
   }
   return numerator / denominator;
-};
-
-const calcSalesLineAmounts = (qtyInput: unknown, priceInput: unknown, taxRateInput: unknown, priceTypeInput?: string) => {
-  const qty = toSafeNumber(qtyInput);
-  const unitPriceCents = toCents(priceInput);
-  const taxRate = toSafeNumber(taxRateInput);
-  const priceType = salesFormPriceType(priceTypeInput);
-
-  if (priceType === 'tax_inclusive') {
-    const inclCents = Math.round(qty * unitPriceCents);
-    const exclCents = Math.round(inclCents / (1 + taxRate / 100));
-    const taxCents = inclCents - exclCents;
-    return {
-      excl: fromCents(exclCents),
-      tax: fromCents(taxCents),
-      incl: fromCents(inclCents),
-    };
-  }
-
-  const exclCents = Math.round(qty * unitPriceCents);
-  const taxCents = Math.round((exclCents * taxRate) / 100);
-  return {
-    excl: fromCents(exclCents),
-    tax: fromCents(taxCents),
-    incl: fromCents(exclCents + taxCents),
-  };
 };
 
 const convertUnitPriceByPriceType = (
@@ -1772,7 +1748,12 @@ const SalesOrdersPage: React.FC = () => {
       values.items = validItems.map((it: SalesOrderItem) => {
         const isGift = Boolean((it as any).is_gift);
         const unitPrice = isGift ? 0 : p(it);
-        const line = calcSalesLineAmounts(q(it), unitPrice, taxR(it), values.price_type);
+        const line = calcDocumentLineAmounts(
+          q(it),
+          unitPrice,
+          taxR(it),
+          salesFormPriceType(values.price_type),
+        );
         const material = materialsRef.current.find((m) => m.id === Number((it as any).material_id));
         const conversionFactor = resolveSaleUnitConversionFactor(material, (it as any).material_unit);
         const deliveryDateStr = toApiDateString((it as any).delivery_date) ?? mainDeliveryStr;

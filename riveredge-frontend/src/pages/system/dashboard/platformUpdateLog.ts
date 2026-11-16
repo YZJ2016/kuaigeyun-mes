@@ -44,6 +44,22 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'document-line-tax-single-logic-r01',
+    date: '2026-11-10',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.document-line-tax-single-logic-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.document-line-tax-single-logic-r01.description',
+  },
+  {
+    id: 'purchase-order-display-unit-price-r01',
+    date: '2026-11-10',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-order-display-unit-price-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-order-display-unit-price-r01.description',
+  },
+  {
     id: 'purchase-order-line-tax-rate-r01',
     date: '2026-11-07',
     type: 'fix',

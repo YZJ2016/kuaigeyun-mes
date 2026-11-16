@@ -74,29 +74,20 @@ def compute_tax_from_excluding(
     amount_excl: Decimal,
     tax_rate_percent: Decimal,
 ) -> tuple[Decimal, Decimal, Decimal]:
-    """
-    按未税金额与税率（百分比 0–100）计算税额与价税合计。
+    """按未税金额与税率（百分比）正算税额与价税合计。实现在 document_line_amounts。"""
+    from apps.kuaizhizao.utils.document_line_amounts import calc_document_amounts_from_excl_total
 
-    销项发票 API 入参 tax_rate 为百分比；进项发票 PurchaseInvoice.tax_rate 同为百分比。
-    销项落库 Invoice.tax_rate 为小数（API 层除以 100），本函数仅处理百分比口径。
-    """
-    excl = quantize_money(amount_excl)
-    rate = Decimal(tax_rate_percent) / Decimal("100")
-    tax = (excl * rate).quantize(_MONEY_SCALE)
-    total = (excl + tax).quantize(_MONEY_SCALE)
-    return excl, tax, total
+    return calc_document_amounts_from_excl_total(amount_excl, tax_rate_percent, 2)
 
 
 def compute_tax_from_including(
     amount_incl: Decimal,
     tax_rate_percent: Decimal,
 ) -> tuple[Decimal, Decimal, Decimal]:
-    """按价税合计与税率（百分比 0–100）反算未税金额与税额。"""
-    total = quantize_money(amount_incl)
-    factor = Decimal("1") + Decimal(tax_rate_percent) / Decimal("100")
-    excl = (total / factor).quantize(_MONEY_SCALE)
-    tax = (total - excl).quantize(_MONEY_SCALE)
-    return excl, tax, total
+    """按价税合计与税率（百分比）拆未税与税额。实现在 document_line_amounts。"""
+    from apps.kuaizhizao.utils.document_line_amounts import calc_document_amounts_from_incl_total
+
+    return calc_document_amounts_from_incl_total(amount_incl, tax_rate_percent, 2)
 
 
 def resolve_invoice_amounts_for_create(

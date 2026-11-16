@@ -21,6 +21,12 @@ const toAmountUnits = (value: unknown, scale = getAmountScale()): number =>
 
 const fromAmountUnits = (units: number, scale = getAmountScale()): number => units / scale;
 
+/** 金额按站点小数位对齐后是否相同（禁止裸 === 浮点） */
+export function documentLineAmountsEqual(a: unknown, b: unknown): boolean {
+  const scale = getAmountScale();
+  return toAmountUnits(a, scale) === toAmountUnits(b, scale);
+}
+
 /**
  * 单据明细行价税拆分（销售/报价/合同/采购共用）。
  * 先 qty×单价再按金额小数位舍入；禁止先把单价压成 2 位（否则 0.195×1 会变成 0.20）。
@@ -122,6 +128,48 @@ export function resolveDocumentLineDisplayAmounts(
     return calcDocumentLineAmountsFromExclTotal(row.item_amount, row.tax_rate);
   }
   return calcDocumentLineAmounts(row.qty, row.unit_price, row.tax_rate, pt);
+}
+
+export type DocumentLineAmountDeriveRow = {
+  qty?: unknown;
+  unit_price?: unknown;
+  tax_rate?: unknown;
+  item_amount?: unknown;
+  is_gift?: unknown;
+};
+
+/** 未税/价税合计是否与当前行推导一致（未改值却 blur 时不反写单价） */
+export function documentLineAmountMatchesDerived(
+  field: 'excl' | 'incl',
+  amount: unknown,
+  row: DocumentLineAmountDeriveRow,
+  priceType: string | undefined,
+): boolean {
+  const line = resolveDocumentLineDisplayAmounts(row, priceType);
+  return documentLineAmountsEqual(amount, field === 'excl' ? line.excl : line.incl);
+}
+
+export function documentLineExclMatchesDerived(
+  exclAmount: unknown,
+  qty: unknown,
+  unitPrice: unknown,
+  taxRate: unknown,
+  priceType: string | undefined,
+): boolean {
+  return documentLineAmountMatchesDerived(
+    'excl',
+    exclAmount,
+    { qty, unit_price: unitPrice, tax_rate: taxRate },
+    priceType,
+  );
+}
+
+export function documentLineInclMatchesDerived(
+  inclAmount: unknown,
+  row: DocumentLineAmountDeriveRow,
+  priceType: string | undefined,
+): boolean {
+  return documentLineAmountMatchesDerived('incl', inclAmount, row, priceType);
 }
 
 /**
@@ -355,6 +403,37 @@ export interface DocumentGoodsTotals {
   goodsExcl: number;
   taxAmount: number;
   goodsIncl: number;
+}
+
+/**
+ * 全站单据金额唯一路径（新建 / 编辑 / 保存 / 汇总区 / 列表与详情展示）：
+ * - 行：resolveDocumentLineDisplayAmounts（与明细表、DocumentAmountSummary 同源）
+ * - 头表货值：computeDocumentGoodsTotals（禁止保存时再对已存未税合计二次拆税）
+ * - 销售头表落库：resolveSalesDocumentStoredTotalAmount(computeSalesDocumentTotals(...))
+ * - 采购头表落库：mapDocumentGoodsTotalsToPurchaseHeader(computeDocumentGoodsTotals(...))
+ * - 列表/详情价税展示（采购）：resolveDocumentStoredNetGrossAmount（读 net_amount）
+ * - 列表/详情（销售）：resolveSalesOrderDisplayTotalAmount
+ */
+
+/** 采购订单头表落库字段（与表单汇总区 goods 同源） */
+export function mapDocumentGoodsTotalsToPurchaseHeader(goods: DocumentGoodsTotals): {
+  total_amount: number;
+  tax_amount: number;
+  net_amount: number;
+} {
+  return {
+    total_amount: goods.goodsExcl,
+    tax_amount: goods.taxAmount,
+    net_amount: goods.goodsIncl,
+  };
+}
+
+/** 采购类单据列表/详情「订单金额」：只读保存时写入的 net_amount（价税合计），禁止读侧换算法重算 */
+export function resolveDocumentStoredNetGrossAmount(header: {
+  net_amount?: number | null;
+}): number {
+  const net = Number(header.net_amount);
+  return Number.isFinite(net) && net > 0 ? net : 0;
 }
 
 export interface DocumentTotalsWithDiscount extends DocumentGoodsTotals {

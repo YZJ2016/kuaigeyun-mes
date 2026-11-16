@@ -36,7 +36,31 @@ class PurchaseReceiptItem(DocumentLinePartnerMaterialSnapshotMixin, BaseModel):
     # 入库数量和价格
     receipt_quantity = fields.DecimalField(max_digits=12, decimal_places=4, description="入库数量")
     unit_price = fields.DecimalField(max_digits=12, decimal_places=4, description="单价")
+    display_unit_price = fields.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        null=True,
+        description="录入单价（表单口径，含税录入时存用户输入值，只读展示不反算）",
+    )
     total_amount = fields.DecimalField(max_digits=14, decimal_places=4, description="金额")
+    tax_amount = fields.DecimalField(
+        max_digits=14,
+        decimal_places=4,
+        null=True,
+        description="行税额（财务 rollup 写回，只读展示禁止前端重算）",
+    )
+    net_amount = fields.DecimalField(
+        max_digits=14,
+        decimal_places=4,
+        null=True,
+        description="行价税合计（财务 rollup 写回）",
+    )
+    tax_rate = fields.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        description="行税率（百分比，与采购订单明细一致）",
+    )
 
     # 质量信息
     qualified_quantity = fields.DecimalField(max_digits=12, decimal_places=4, description="合格数量")
