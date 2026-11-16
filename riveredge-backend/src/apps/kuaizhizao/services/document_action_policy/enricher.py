@@ -958,10 +958,12 @@ def enrich_purchase_requisition_capabilities_on_response(
     response: T,
     *,
     has_linked_purchase_order: bool = False,
+    review_submitted: Optional[bool] = None,
 ) -> T:
     caps = derive_purchase_requisition_capabilities(
         req,
         has_linked_purchase_order=has_linked_purchase_order,
+        review_submitted=review_submitted,
     )
     if hasattr(response, "model_copy"):
         return _attach_capabilities_to_response(response, caps)
@@ -976,10 +978,14 @@ async def enrich_purchase_requisition_detail_capabilities(
     has_linked = await purchase_requisition_has_linked_purchase_order(
         tenant_id, int(req.id)
     )
+    review_submitted = await resolve_review_submitted_for_document(
+        tenant_id, "purchase_request", req
+    )
     return enrich_purchase_requisition_capabilities_on_response(
         req,
         response,
         has_linked_purchase_order=has_linked,
+        review_submitted=review_submitted,
     )
 
 
@@ -990,12 +996,16 @@ async def enrich_purchase_requisition_list_capabilities(
 ) -> List[T]:
     req_ids = [int(getattr(r, "id", 0) or 0) for r in reqs]
     linked_map = await purchase_requisition_linked_po_by_ids(tenant_id, req_ids)
+    review_submitted_map = await batch_review_submitted_for_documents(
+        tenant_id, "purchase_request", reqs
+    )
     out: List[T] = []
     for req_model, resp in zip(reqs, responses):
         rid = int(getattr(req_model, "id", 0) or 0)
         caps = derive_purchase_requisition_capabilities(
             req_model,
             has_linked_purchase_order=linked_map.get(rid, False),
+            review_submitted=review_submitted_map.get(rid),
         )
         if hasattr(resp, "model_copy"):
             out.append(_attach_capabilities_to_response(resp, caps))
