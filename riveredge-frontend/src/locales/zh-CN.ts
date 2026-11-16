@@ -27440,7 +27440,6 @@ export default {
   'pages.system.configCenter.param.supply_chain_partner_price_resolution_order': '客商取价顺序',
   'pages.system.configCenter.param.supply_chain_partner_price_resolution_order_desc':
     '未锁定来源的单据行取价时，依次尝试最近成交价与价本；价本有订购数量时优先命中阶梯价，未命中再用标准价（同本标准/阶梯不互相短路）',
-    '未锁定来源的单据行取价时，依次尝试最近成交价、价本标准价、价本阶梯价',
   'pages.system.configCenter.param.supply_chain_partner_price_resolution_order_opt_rsb': '最近价 然后 标准价 然后 阶梯价',
   'pages.system.configCenter.param.supply_chain_partner_price_resolution_order_opt_rbs': '最近价 然后 阶梯价 然后 标准价',
   'pages.system.configCenter.param.supply_chain_partner_price_resolution_order_opt_sbr': '标准价 然后 阶梯价 然后 最近价',
@@ -53453,7 +53452,6 @@ export default {
   'pages.system.applications.resetStart': '启动物理重置（且自动备份）',
   'pages.system.applications.resetSuccessFallback': '重置成功并已自动备份',
   'pages.system.applications.resetTokenFailed': '获取二次确认令牌失败，请重试',
-    '重置将按所选模块物理删除「快制造」应用数据，此操作不可撤销。请先按业务/基础分组勾选模块。',
   'components.uniTable.exportList': '导出列表',
   'components.uniTable.exportDetail': '导出明细',
   'app.kuaioa.livingAdvance.status.confirmed': '已确认',
@@ -53463,7 +53461,6 @@ export default {
   'app.kuaioa.payroll.settlementMonth': '结算月份',
   'app.kuaioa.payroll.help': '帮助',
   'app.kuaioa.payroll.helpNoIssue': '当前无额外提示，可按上方说明操作。',
-    '基本工资=结算月落在执行期间内的最低工资；计时=已提交考勤工时×档案小时单价（加班×本单加班倍率）；计件=已确认绩效汇总（档案须关联用户）；生活费扣除=档案生活费+当月已确认预支；奖励进补助奖励；岗位补贴按项目写入夜班/高温/岗位津贴。个税、打卡金额等须手改或导入。改配置或产线总产量/总工资后请点「按考勤重建」。确认后锁定。',
   'app.kuaioa.payroll.noMinimumWageTip':
     '结算月 {{yearMonth}} 未命中最低工资执行期间，基本工资为 0。请在最低工资配置中调整执行开始/结束时间覆盖该月并勾选当前执行，再点「按考勤重建」。',
   'app.kuaioa.minimumWage.endDate': '执行结束时间',
