@@ -161,11 +161,18 @@ export const paymentService = {
       method: 'GET',
     }),
 
+  previewPullFromPayables: async (payableIds: number[]) =>
+    apiRequest<PaymentPullPreview>(`${PAYMENT_API}/from-payables/pull-preview`, {
+      method: 'GET',
+      params: { payable_ids: payableIds.join(',') },
+    }),
+
   listPaymentApplicationPullCandidates: async (params?: {
     skip?: number;
     limit?: number;
     keyword?: string;
     supplier_id?: number;
+    application_kind?: 'prepayment' | 'goods';
   }) =>
     apiRequest<{ data: PaymentPullCandidate[]; total: number; success: boolean }>(
       `${PAYMENT_API}/pull-candidates/payment-applications`,
@@ -175,6 +182,12 @@ export const paymentService = {
   previewPullFromPaymentApplication: async (applicationId: number) =>
     apiRequest<PaymentPullPreview>(
       `${PAYMENT_API}/from-payment-application/${applicationId}/pull-preview`,
+      { method: 'GET' },
+    ),
+
+  previewPullFromPurchaseOrder: async (purchaseOrderId: number) =>
+    apiRequest<PaymentPullPreview>(
+      `${PAYMENT_API}/from-purchase-order/${purchaseOrderId}/pull-preview`,
       { method: 'GET' },
     ),
 };

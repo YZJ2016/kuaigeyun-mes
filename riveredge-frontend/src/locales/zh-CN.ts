@@ -15573,7 +15573,7 @@ export default {
   'app.kuaizhizao.purchaseOrder.saveSubmitPending': '采购订单已保存并提交审核',
   'app.kuaizhizao.purchaseOrder.createSubmitAutoApproved': '采购订单已创建并提交，已自动审核通过',
   'app.kuaizhizao.purchaseOrder.createSubmitPending': '采购订单已创建并提交审核',
-  'app.kuaizhizao.purchaseOrder.saveSubmitFailed': '保存成功，但提交失败：{{message}}。您可在列表中点击「提交」重试。',
+  'app.kuaizhizao.purchaseOrder.saveSubmitFailed': '保存成功，但提交失败：{{message}}。您可在列表中点击「提交审核」重试。',
   'app.kuaizhizao.purchaseOrder.submitNotDraft': '只能提交草稿状态的订单',
   'app.kuaizhizao.purchaseOrder.saveDraft': '保存为草稿',
   'app.kuaizhizao.purchaseOrder.createAndSubmit': '创建并提交',
@@ -21006,6 +21006,74 @@ export default {
     '采购订单下推预付付款单对齐付款单表单',
   'pages.dashboard.updateLog.entries.purchase-order-prepayment-payment-form-r01.description':
     '从采购订单创建预付付款单的预览改为与付款单取单一致的字段布局，可填写付款日期、方式、付款账户与备注，并带出订单预付款账户。',
+  'pages.dashboard.updateLog.entries.payment-application-pull-multi-supplier-r01.title':
+    '付款申请取单支持同供应商多选',
+  'pages.dashboard.updateLog.entries.payment-application-pull-multi-supplier-r01.description':
+    '从采购订单或采购入库创建付款申请时，可多选同一供应商多张来源单，合并生成一张付款申请；不同供应商混选会提示须同一供应商。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-confirm-skip-iqc-r01.title':
+    '采购入库无需检验时不再弹来料检验确认',
+  'pages.dashboard.updateLog.entries.purchase-receipt-confirm-skip-iqc-r01.description':
+    '确认入库时若明细物料均不需要来料检验，直接进入确认流程，不再弹出「来料检验确认」窗口；仅存在需检验物料时才展示该窗口。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-po-pull-compose-r01.title':
+    '采购订单取单开入库单先编辑后创建',
+  'pages.dashboard.updateLog.entries.purchase-receipt-po-pull-compose-r01.description':
+    '从采购订单加载入库明细时不再在取单表选择仓库，也不再先下推草稿再弹窗；确认后进入编辑窗口，保存时再创建入库单。',
+  'pages.dashboard.updateLog.entries.purchase-invoice-pull-create-nested-tx-r01.title':
+    '从入库创建采购发票不再请求超时',
+  'pages.dashboard.updateLog.entries.purchase-invoice-pull-create-nested-tx-r01.description':
+    '修复从采购入库加载创建采购发票时外层事务与创建逻辑二次开启事务导致的死锁，网关 25 秒超时或「服务器暂时不可用」。',
+  'pages.dashboard.updateLog.entries.po-receipt-compose-payable-r01.title':
+    '采购订单取单开入库单继承立账策略',
+  'pages.dashboard.updateLog.entries.po-receipt-compose-payable-r01.description':
+    '从采购订单取单生成采购入库草稿时，表单会回填订单上的立账策略与付款方式，保存时不再用组织默认覆盖后端已继承的值。',
+  'pages.dashboard.updateLog.entries.payment-form-pull-line-labels-r01.title':
+    '付款单弹窗内取单按钮文案修正',
+  'pages.dashboard.updateLog.entries.payment-form-pull-line-labels-r01.description':
+    '新建编辑付款单时，付款明细区改为「加载明细/选择待抵扣应付」等表述，不再误用「从应付单创建付款单」类列表下推文案。',
+  'pages.dashboard.updateLog.entries.payment-prepayment-offset-contract-r01.title':
+    '付款单预付抵扣与普通付款取单对齐',
+  'pages.dashboard.updateLog.entries.payment-prepayment-offset-contract-r01.description':
+    '选用预付抵扣时固定普通付款，仅可从应付或货款申请取明细；确认后按采购订单预付余额冲应付且不记银行出账，预付款结算不可选预付抵扣。',
+  'pages.dashboard.updateLog.entries.payment-prepayment-po-pull-lines-r01.title':
+    '预付款付款单可从采购订单取明细',
+  'pages.dashboard.updateLog.entries.payment-prepayment-po-pull-lines-r01.description':
+    '新建付款单且结算类型为预付款时，付款明细支持从采购订单按行加载预付款（与付款申请取单一致），预付类付款申请列表与货款分开筛选。',
+  'pages.dashboard.updateLog.entries.purchase-order-save-submit-race-r01.title':
+    '采购订单保存并提交防重复与状态复核',
+  'pages.dashboard.updateLog.entries.purchase-order-save-submit-race-r01.description':
+    '保存并提交时加互锁，提交前拉取最新状态；若订单已被提交或重复点击导致二次提交，不再误报「只能提交草稿」。',
+  'pages.dashboard.updateLog.entries.uni-input-number-relaxed-precision-r01.title':
+    '数字输入聚焦时不强制小数位',
+  'pages.dashboard.updateLog.entries.uni-input-number-relaxed-precision-r01.description':
+    '全站 InputNumber 在输入过程中不再即时格式化为固定小数位，避免闪动与误读；失焦后仍按字段 precision 量化。',
+  'pages.dashboard.updateLog.entries.purchase-invoice-pull-receipt-line-gross-r01.title':
+    '从采购入库开票行可开金额与价税合计一致',
+  'pages.dashboard.updateLog.entries.purchase-invoice-pull-receipt-line-gross-r01.description':
+    '取单预览中入库明细的「可开票」「本次开票」改为价税合计，与表头单据金额及提交校验一致；明细列仍展示未税金额与税额。',
+  'pages.dashboard.updateLog.entries.sales-invoice-wording-unify-r01.title':
+    '销售发票文案统一为「销售发票」',
+  'pages.dashboard.updateLog.entries.sales-invoice-wording-unify-r01.description':
+    '财务管理中登记、取单、下推、审核与全链路单据类型展示不再混用「销项发票」，与菜单「销售发票」一致；销项金额、销项税额与红字销项等税务用语不变。',
+  'pages.dashboard.updateLog.entries.purchase-invoice-wording-unify-r01.title':
+    '采购发票文案统一为「采购发票」',
+  'pages.dashboard.updateLog.entries.purchase-invoice-wording-unify-r01.description':
+    '财务管理中登记、取单、下推、审核与全链路单据类型展示不再混用「进项发票」，与菜单「采购发票」一致；进项认证、进项税额等税务用语不变。',
+  'pages.dashboard.updateLog.entries.purchase-invoice-pull-receipt-gross-amount-r01.title':
+    '从采购入库创建采购发票列表金额为价税合计',
+  'pages.dashboard.updateLog.entries.purchase-invoice-pull-receipt-gross-amount-r01.description':
+    '取单弹窗中采购入库行的金额改为与预览、开票上限一致的价税合计，不再展示未税金额。',
+  'pages.dashboard.updateLog.entries.purchase-receipt-po-compose-before-post-r01.title':
+    '采购订单下推入库先编辑再保存',
+  'pages.dashboard.updateLog.entries.purchase-receipt-po-compose-before-post-r01.description':
+    '从采购订单创建采购入库时，取单页不再先下推或过账；确认数量与仓库后打开编辑弹窗，点击保存才生成草稿入库单，确认入库仍在列表执行。',
+  'pages.dashboard.updateLog.entries.sales-outbound-edit-deliverer-revert-r01.title':
+    '编辑销售出库时可正常改选出库人',
+  'pages.dashboard.updateLog.entries.sales-outbound-edit-deliverer-revert-r01.description':
+    '修复编辑弹窗里改选出库人后会被自动改回原值的问题；领料人/借用人等同字段一并稳定。',
+  'pages.dashboard.updateLog.entries.init-steps-skip-menu-sync-when-done-r01.title':
+    '登录后不再因初始化检查全量同步菜单而提示服务器不可用',
+  'pages.dashboard.updateLog.entries.init-steps-skip-menu-sync-when-done-r01.description':
+    '组织已完成初始化时，登录后的初始化步骤检查不再全量同步全部应用菜单；此前在定制应用等大菜单租户上易超过请求时限并弹出「服务器暂时不可用」。后台检查失败也不再误弹该窗；短时内多个 502/504 只提示一次。',
   'pages.dashboard.updateLog.entries.purchase-requisition-save-draft-button-r01.title':
     '采购申请新建页可保存为草稿',
   'pages.dashboard.updateLog.entries.purchase-requisition-save-draft-button-r01.description':
@@ -25010,6 +25078,7 @@ export default {
   'app.kuaicaiwu.payable.detailNotFound': '未找到应付单',
   'app.kuaicaiwu.payable.offsetBannerTitle': '采购退货冲减台账',
   'app.kuaicaiwu.payable.offsetBannerDesc':
+    '本单由采购退货自动生成，用于客商往来借方冲减，不是向供应商付款的正向应付。请勿登记付款或从此单开蓝字采购发票；退款请走付款退款。',
   'app.kuaicaiwu.payable.offsetMarker': '红字应付',
   'app.kuaicaiwu.payable.col.offsetAmount': '冲减金额',
   'app.kuaicaiwu.payable.col.redPayableAmount': '红字应付金额',
@@ -25309,8 +25378,8 @@ export default {
   'app.kuaicaiwu.payment.pullLines.modalSelectApplication': '选择付款申请',
   'app.kuaicaiwu.payment.col.prepaymentOffsetTotal': '本次抵扣金额',
   'app.kuaicaiwu.payment.pullLines.prepaymentOffsetHint':
-    '表头「本次抵扣金额」与预付款明细抵扣合计一致，可手工修改表头并分摊至预付款行；保存前须与待抵扣应付明细合计一致。确认后从预付款单余额冲减应付，不产生银行出账。',
-  'app.kuaicaiwu.payment.pullLines.requiredForPrepaymentOffset': '预付抵扣须先加载待抵扣应付明细',
+    '明细行表示本次要冲减的应付；系统确认后按应付关联采购订单，自动扣减已确认预付付款单的可用余额，不产生银行出账。',
+  'app.kuaicaiwu.payment.pullLines.requiredForPrepaymentOffset': '预付抵扣须先加载应付或货款类付款申请明细',
   'app.kuaicaiwu.payment.pullLines.requiredOffsetPrepayment': '预付抵扣须选择预付款明细',
   'app.kuaicaiwu.payment.pullLines.offsetAmountRequired': '请填写本次抵扣金额',
   'app.kuaicaiwu.payment.pullLines.offsetSumMustMatchTotal': '预付款抵扣合计须与付款总额一致',
@@ -25605,8 +25674,8 @@ export default {
   'app.kuaicaiwu.salesInvoice.form.amountModeIncl': '含税金额',
   'app.kuaicaiwu.salesInvoice.form.amountHintExcl': '折合不含税 ¥{{amount}}',
   'app.kuaicaiwu.salesInvoice.form.amountHintIncl': '折合含税 ¥{{amount}}',
+  'app.kuaicaiwu.salesInvoice.pullPreviewIncomplete': '预览数据未就绪，请关闭弹窗后重试',
   'app.kuaicaiwu.salesInvoice.pullPreviewLoading': '正在加载发票信息…',
-  'app.kuaicaiwu.salesInvoice.pullPreviewIncomplete': '发票数据未就绪，请关闭弹窗后重试',
   'app.kuaicaiwu.salesInvoice.pullPreviewBlocked': '当前源单不可创建销售发票',
   'app.kuaicaiwu.salesInvoice.pullNoInvoiceableAmount': '源单无可开票金额',
   'app.kuaicaiwu.salesInvoice.pullCreateSuccess': '已创建{{target}}',

@@ -22,14 +22,11 @@ import { warehouseApi as masterWarehouseApi } from '../../../../master-data/serv
 import { materialSerialApi, MATERIAL_SERIAL_GENERATE_MAX_COUNT } from '../../../../master-data/services/material';
 import {
   getPurchaseOrder,
-  pushPurchaseOrderToReceipt,
   pushPurchaseOrderToReceiptPreview,
   type PurchaseOrder,
   type PurchaseOrderItem,
 } from '../../../services/purchase';
-import { warehouseApi } from '../../../services/warehouse-execution';
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
-import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
 import {formatDateBySiteSetting, formatQuantity} from '../../../../../utils/format';
 import { reportDocumentStatusText } from '../../../utils/reportPresentation';
@@ -46,7 +43,13 @@ import {
   getPoItemReceivableMax,
   normalizePurchaseOrderDetail,
 } from './inboundPoReceiptEntryUtils';
-import type { PurchaseReceiptEntryHandoff } from './inboundPullEntryTypes';
+import { lineLocationSelectionRequired } from '../../../../../components/uni-wh-dropdown';
+import { loadPullWarehouseReferenceOptions } from '../../../../../components/uni-pull-query';
+import {
+  PURCHASE_INBOUND_WH_HOST,
+  PurchaseInboundLineLocationCell,
+  PurchaseInboundLineWarehouseCell,
+} from './PurchaseInboundLineWhCells';
 import {
   InboundEntryAttachmentsSection,
   InboundEntryReceiverField,
@@ -58,7 +61,12 @@ import {
 import { inboundReceiptTypeLabel } from './inboundHubTypes';
 import { INBOUND_LIST_PATH, inboundPoEntryPath } from './inboundPaths';
 import {
-  draftDayjs,
+  INBOUND_LIST_PATH,
+  PURCHASE_INBOUND_LIST_PATH,
+  inboundPoEntryPath,
+} from './inboundPaths';
+import type { PurchaseReceiptPoComposePayload } from './inboundPullEntryTypes';
+import {
   draftOptionalNumber,
   mergeRecordMaps,
   usePullEntryFormDraft,
@@ -77,7 +85,6 @@ const InboundPoPullEntryPage: React.FC = () => {
   const trackingFlags = useWarehouseTrackingFlags();
   const pullFromPurchaseOrderAction = resolveKuaizhizaoDocumentAction(t, 'purchase_receipt.pull_from_purchase_order');
   const receiverHook = useInboundReceiverSelect();
-  const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const initRef = useRef(false);
 
   const [loading, setLoading] = useState(true);
@@ -389,52 +396,33 @@ const InboundPoPullEntryPage: React.FC = () => {
     }
   };
 
-  const buildHandoff = (): PurchaseReceiptEntryHandoff => {
-    const handoff: PurchaseReceiptEntryHandoff = {
-      lineWhByPoItemId: {},
-      lineLocByPoItemId: {},
-      lineLocCodeByPoItemId: {},
-      lineBatchByPoItemId: {},
-      lineSerialByPoItemId: {},
-    };
+  const buildPoComposePayload = (): PurchaseReceiptPoComposePayload => {
+    const lineSerials: Record<number, string[]> = {};
     outstandingItems.forEach((it) => {
       if (it.id == null || (quantities[it.id] ?? 0) <= 0) return;
-      const id = it.id;
-      if (lineWh[id] != null) handoff.lineWhByPoItemId[id] = lineWh[id];
-      if (lineLoc[id] != null) handoff.lineLocByPoItemId[id] = lineLoc[id];
-      if (lineLocCode[id]) handoff.lineLocCodeByPoItemId[id] = lineLocCode[id];
-      const batchStr = (batchNumbers[id] ?? '').trim();
-      if (batchStr) handoff.lineBatchByPoItemId[id] = batchStr;
-      const sn = serials[id];
-      if (sn?.length) handoff.lineSerialByPoItemId[id] = sn;
+      const sn = serials[it.id];
+      if (sn?.length) lineSerials[it.id] = sn;
     });
-    return handoff;
-  };
-
-  const saveReceiptHeader = async (receiptId: number) => {
-    if (!order?.id) return;
-    const whIds = [...new Set(Object.values(lineWh).filter((id) => id > 0))];
-    const headerWhId = defaultWarehouseId ?? whIds[0];
-    const whOpt = warehouseOptions.find((o) => o.value === headerWhId);
-    if (!headerWhId || !whOpt) return;
-    await warehouseApi.purchaseReceipt.update(String(receiptId), {
-      purchase_order_id: Number(order.id),
-      purchase_order_code: order.order_code || '',
-      supplier_id: Number(order.supplier_id || 0),
-      supplier_name: order.supplier_name || '',
-      warehouse_id: headerWhId,
-      warehouse_name: whOpt.name,
-      receipt_time: receiptTime?.isValid() ? toApiBusinessDocumentDateTime(receiptTime) : undefined,
-      receiver_id: receiverHook.receiverId,
-      receiver_name: receiverHook.receiverName.trim() || undefined,
-      delivery_note: deliveryNote.trim() || undefined,
+    return {
+      purchaseOrderId: Number(order!.id),
+      quantities: { ...quantities },
+      batchNumbers: { ...batchNumbers },
+      lineWh: { ...lineWh },
+      lineLoc: { ...lineLoc },
+      lineLocCode: { ...lineLocCode },
+      lineSerials,
+      defaultWarehouseId: defaultWarehouseId ?? undefined,
+      receiptTimeIso:
+        receiptTime?.isValid() ? toApiBusinessDocumentDateTime(receiptTime) : undefined,
+      receiverId: receiverHook.receiverId ?? undefined,
+      receiverName: receiverHook.receiverName.trim() || undefined,
+      deliveryNote: deliveryNote.trim() || undefined,
       notes: receiptNotes.trim() || undefined,
       attachments: normalizeDocumentAttachments(receiptAttachments),
-      status: '草稿',
-    });
+    };
   };
 
-  const submit = async (mode: 'draft' | 'confirm') => {
+  const submitToEditModal = async () => {
     if (!order?.id) return;
     let hasPositiveQty = false;
     for (const it of outstandingItems) {
@@ -444,87 +432,76 @@ const InboundPoPullEntryPage: React.FC = () => {
       if (qty <= 0) continue;
       hasPositiveQty = true;
       if (qty > max) {
-        messageApi.error(t('app.kuaizhizao.warehouseInbound.entry.purchase.qtyExceedsOutstanding', { material: it.material_code || it.material_name, max }));
+        messageApi.error(
+          t('app.kuaizhizao.warehouseInbound.entry.purchase.qtyExceedsOutstanding', {
+            material: it.material_code || it.material_name,
+            max,
+          }),
+        );
         return;
+      }
+      const wh = lineWh[it.id];
+      if (wh == null || !(wh > 0)) {
+        messageApi.error(
+          t('app.kuaizhizao.warehouseInbound.msg.selectWarehouseForMaterial', {
+            material: it.material_code || it.material_name || '-',
+          }),
+        );
+        return;
+      }
+      const locId = lineLoc[it.id];
+      const locCode = lineLocCode[it.id];
+      const needLoc = await lineLocationSelectionRequired(wh, locId, locCode);
+      if (needLoc) {
+        messageApi.error(
+          t('app.kuaizhizao.warehouseInbound.msg.selectLocationForMaterial', {
+            material: it.material_code || it.material_name || '-',
+          }),
+        );
+        return;
+      }
+      const rid = it.id;
+      const materialLabel = it.material_code || it.material_name || '-';
+      const meta = materialMeta[rid];
+      if (isMaterialBatchEntryEnabled(trackingFlags, meta?.batchManaged)) {
+        if (!String(batchNumbers[rid] ?? '').trim()) {
+          messageApi.error(
+            t('app.kuaizhizao.warehouseOutbound.confirm.batchRequired', {
+              material: materialLabel,
+              batches: '—',
+            }),
+          );
+          return;
+        }
+      }
+      if (isMaterialSerialEntryEnabled(trackingFlags, meta?.serialManaged)) {
+        const serialList = (serials[rid] ?? []).map((s) => String(s).trim()).filter(Boolean);
+        const expected = Math.floor(qty);
+        if (serialList.length !== expected) {
+          messageApi.error(
+            t('app.kuaizhizao.warehouseOutbound.entry.serialCountMismatch', {
+              material: materialLabel,
+              required: expected,
+              actual: serialList.length,
+            }),
+          );
+          return;
+        }
       }
     }
     if (!hasPositiveQty) {
       messageApi.warning(t('app.kuaizhizao.warehouseInbound.entry.purchase.fillReceiptQty'));
       return;
     }
-    if (mode === 'confirm') {
-      for (const it of outstandingItems) {
-        if (it.id == null) continue;
-        if ((quantities[it.id] ?? 0) <= 0) continue;
-        const wh = lineWh[it.id];
-        if (wh == null || !(wh > 0)) {
-          messageApi.error(t('app.kuaizhizao.warehouseInbound.msg.selectWarehouseForMaterial', { material: it.material_code || it.material_name || '-' }));
-          return;
-        }
-      }
-    }
-    const batchPayload: Record<number, string> = {};
-    const lineWhPayload: Record<number, number> = {};
-    const lineLocIdPayload: Record<number, number> = {};
-    const lineLocCodePayload: Record<number, string> = {};
-    let headerWhId: number | undefined;
-    outstandingItems.forEach((it) => {
-      if (it.id == null || (quantities[it.id] ?? 0) <= 0) return;
-      const id = it.id;
-      if (lineWh[id] != null && lineWh[id] > 0) {
-        lineWhPayload[id] = lineWh[id];
-        if (headerWhId == null) headerWhId = lineWh[id];
-      }
-      if (lineLoc[id] != null && lineLoc[id] > 0) lineLocIdPayload[id] = lineLoc[id];
-      if (lineLocCode[id]) lineLocCodePayload[id] = lineLocCode[id];
-      if (batchNumbers[id]) batchPayload[id] = batchNumbers[id];
-    });
     setSubmitting(true);
     try {
-      const created = (await pushPurchaseOrderToReceipt(
-        order.id,
-        quantities,
-        Object.keys(batchPayload).length > 0 ? batchPayload : undefined,
-        {
-          warehouseId: headerWhId ?? defaultWarehouseId,
-          lineWarehouses: lineWhPayload,
-          lineLocationIds: lineLocIdPayload,
-          lineLocationCodes: lineLocCodePayload,
-        },
-      )) as { id?: number; receipt_code?: string };
-      if (created?.id == null) {
-        messageApi.error(t('app.kuaizhizao.warehouseInbound.entry.purchase.noReceiptId'));
-        return;
-      }
-      await saveReceiptHeader(Number(created.id));
-      invalidateMenuBadgeCounts();
       clearDraft();
-      if (mode === 'confirm') {
-        navigateLeavingPullEntry(
-          navigate,
-          INBOUND_LIST_PATH,
-          pullEntryTabKey(location.pathname, location.search),
-          {
-            inboundDirectConfirm: {
-              id: Number(created.id),
-              receipt_type: 'purchase',
-              purchaseReceiptHandoff: buildHandoff(),
-            },
-          },
-        );
-      } else {
-        messageApi.success(
-          t('app.kuaizhizao.warehouseInbound.entry.purchase.draftCreated', {
-            code: created.receipt_code
-              ? t('app.kuaizhizao.warehouseInbound.entry.purchase.draftCreatedSuffix', { code: created.receipt_code })
-              : '',
-          }),
-        );
-        leavePage();
-      }
-    } catch (e: unknown) {
-      const err = e as { message?: string; response?: { data?: { detail?: string } } };
-      messageApi.error(err?.message || err?.response?.data?.detail || t('common.saveFailed'));
+      navigateLeavingPullEntry(
+        navigate,
+        PURCHASE_INBOUND_LIST_PATH,
+        pullEntryTabKey(location.pathname, location.search),
+        { purchaseReceiptPoCompose: buildPoComposePayload() },
+      );
     } finally {
       setSubmitting(false);
     }
@@ -729,11 +706,8 @@ const InboundPoPullEntryPage: React.FC = () => {
             <Button disabled={submitting || loading} onClick={leavePage}>
               {t('common.cancel')}
             </Button>
-            <Button loading={submitting} disabled={loading} onClick={() => void submit('draft')}>
-              {t('app.kuaizhizao.warehouseInbound.action.generateDraft')}
-            </Button>
-            <Button type="primary" loading={submitting} disabled={loading} onClick={() => void submit('confirm')}>
-              {t('app.kuaizhizao.warehouseInbound.action.confirmInbound')}
+            <Button type="primary" loading={submitting} disabled={loading} onClick={() => void submitToEditModal()}>
+              {t('app.kuaizhizao.warehouseInbound.action.continueToEditPurchaseReceipt')}
             </Button>
           </Space>
         </>

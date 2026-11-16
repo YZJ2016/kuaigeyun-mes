@@ -22,7 +22,9 @@ from apps.kuaizhizao.schemas.payment_application import (
     ApprovePaymentApplicationRequest,
     PushPaymentApplicationToPaymentRequest,
     PullPaymentApplicationFromPurchaseOrderRequest,
+    PullPaymentApplicationFromPurchaseOrdersRequest,
     PullPaymentApplicationFromPurchaseReceiptRequest,
+    PullPaymentApplicationFromPurchaseReceiptsRequest,
     PullPaymentApplicationFromReconciliationRequest,
 )
 from apps.kuaizhizao.services.payment_application_service import PaymentApplicationService
@@ -123,6 +125,26 @@ async def pull_from_purchase_order(
         raise _http(400, str(e), "/payment-applications/pull-from-purchase-order", tenant_id) from e
 
 
+@router.post(
+    "/payment-applications/pull-from-purchase-orders",
+    response_model=PaymentApplicationResponse,
+)
+async def pull_from_purchase_orders(
+    data: PullPaymentApplicationFromPurchaseOrdersRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_permission_codes("kuaizhizao:payment-application:create")),
+):
+    try:
+        return await _pull.create_from_purchase_orders(
+            tenant_id, data.purchase_order_ids, current_user.id
+        )
+    except (NotFoundError, ValidationError, BusinessLogicError) as e:
+        raise _http(
+            400, str(e), "/payment-applications/pull-from-purchase-orders", tenant_id
+        ) from e
+
+
 @router.post("/payment-applications/pull-from-purchase-receipt", response_model=PaymentApplicationResponse)
 async def pull_from_purchase_receipt(
     data: PullPaymentApplicationFromPurchaseReceiptRequest,
@@ -136,6 +158,26 @@ async def pull_from_purchase_receipt(
         )
     except (NotFoundError, ValidationError, BusinessLogicError) as e:
         raise _http(400, str(e), "/payment-applications/pull-from-purchase-receipt", tenant_id) from e
+
+
+@router.post(
+    "/payment-applications/pull-from-purchase-receipts",
+    response_model=PaymentApplicationResponse,
+)
+async def pull_from_purchase_receipts(
+    data: PullPaymentApplicationFromPurchaseReceiptsRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_permission_codes("kuaizhizao:payment-application:create")),
+):
+    try:
+        return await _pull.create_from_purchase_receipts(
+            tenant_id, data.purchase_receipt_ids, current_user.id
+        )
+    except (NotFoundError, ValidationError, BusinessLogicError) as e:
+        raise _http(
+            400, str(e), "/payment-applications/pull-from-purchase-receipts", tenant_id
+        ) from e
 
 
 @router.post("/payment-applications/pull-from-reconciliation", response_model=PaymentApplicationResponse)

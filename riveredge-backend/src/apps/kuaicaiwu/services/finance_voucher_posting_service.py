@@ -190,13 +190,27 @@ class FinanceVoucherPostingService:
             payment_method=payment.payment_method,
             bank_account_id=payment.bank_account_id,
         )
+        if bool(getattr(payment, "require_payment_voucher", False)):
+            attachments = getattr(payment, "attachments", None)
+            if not isinstance(attachments, list) or len(attachments) == 0:
+                raise ValidationError("该付款单要求上传付款凭证，请先上传后再确认")
+        from apps.kuaicaiwu.constants.payment_method import (
+            is_prepayment_offset_payment_method,
+        )
+
+        is_prepay_offset = is_prepayment_offset_payment_method(payment.payment_method)
+        if not is_prepay_offset:
+            await self._assert_bank_funds_for_voucher(
+                bank_svc, tenant_id, voucher_type="payment", row=payment
+            )
+
         await self._assert_bank_funds_for_voucher(
             bank_svc, tenant_id, voucher_type="payment", row=payment
         )
 
         was_draft = payment.status == "Draft"
         try:
-            if payment.bank_account_id:
+            if payment.bank_account_id and not is_prepay_offset:
                 await bank_svc.sync_from_confirmed_voucher(
                     tenant_id,
                     voucher_type="payment",

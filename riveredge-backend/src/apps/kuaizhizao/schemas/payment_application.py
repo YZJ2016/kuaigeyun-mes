@@ -165,9 +165,25 @@ class PullPaymentApplicationFromPurchaseOrderRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
+class PullPaymentApplicationFromPurchaseOrdersRequest(BaseModel):
+    purchase_order_ids: List[int] = Field(
+        ..., alias="purchaseOrderIds", min_length=1, description="同供应商可多选"
+    )
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
 class PullPaymentApplicationFromPurchaseReceiptRequest(BaseModel):
     purchase_receipt_id: int = Field(..., alias="purchaseReceiptId")
     amount: Optional[Decimal] = Field(None, gt=0)
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class PullPaymentApplicationFromPurchaseReceiptsRequest(BaseModel):
+    purchase_receipt_ids: List[int] = Field(
+        ..., alias="purchaseReceiptIds", min_length=1, description="同供应商可多选"
+    )
 
     model_config = ConfigDict(populate_by_name=True)
 

@@ -4,10 +4,13 @@
  */
 import type { TFunction } from 'i18next';
 
+/** 按采购付款常用程度排序（银行转账默认；「其他」垫底） */
 const PAYMENT_METHOD_I18N: Record<string, string> = {
   银行转账: 'app.kuaicaiwu.financeUi.paymentMethod.bankTransfer',
-  现金: 'app.kuaicaiwu.financeUi.paymentMethod.cash',
+  预付抵扣: 'app.kuaicaiwu.financeUi.paymentMethod.prepaymentOffset',
   票据: 'app.kuaicaiwu.financeUi.paymentMethod.note',
+  现金: 'app.kuaicaiwu.financeUi.paymentMethod.cash',
+  员工垫付: 'app.kuaicaiwu.financeUi.paymentMethod.employeeAdvance',
   在线支付: 'app.kuaicaiwu.financeUi.paymentMethod.online',
   其他: 'app.kuaicaiwu.financeUi.paymentMethod.other',
 };
@@ -30,6 +33,22 @@ export const BANK_TRANSFER_PAYMENT_METHOD = '银行转账';
 export const CASH_PAYMENT_METHOD = '现金';
 /** 收/付款方式「票据」：关联应收/应付票据台账（票种在台账内区分） */
 export const NOTE_PAYMENT_METHOD = '票据';
+/** 用供应商预付余额抵扣应付，无实际出账 */
+export const PREPAYMENT_OFFSET_PAYMENT_METHOD = '预付抵扣';
+export const EMPLOYEE_ADVANCE_PAYMENT_METHOD = '员工垫付';
+
+export function isEmployeeAdvancePaymentMethod(method: string | null | undefined): boolean {
+  return String(method || '').trim() === EMPLOYEE_ADVANCE_PAYMENT_METHOD;
+}
+
+export function isPrepaymentOffsetPaymentMethod(method: string | null | undefined): boolean {
+  return String(method || '').trim() === PREPAYMENT_OFFSET_PAYMENT_METHOD;
+}
+
+/** 无供应商收款账户信息（预付抵扣/员工垫付） */
+export function hidesSupplierPayeeAccount(method: string | null | undefined): boolean {
+  return isEmployeeAdvancePaymentMethod(method) || isPrepaymentOffsetPaymentMethod(method);
+}
 
 export function isNotePaymentMethod(method: string | null | undefined): boolean {
   return String(method || '').trim() === NOTE_PAYMENT_METHOD;
@@ -45,7 +64,11 @@ export function isCashPaymentMethod(method: string | null | undefined): boolean 
 
 /** 银行转账或现金收付款时，入账账户必选 */
 export function requiresLedgerAccount(method: string | null | undefined): boolean {
-  return isBankTransferPaymentMethod(method) || isCashPaymentMethod(method);
+  return (
+    isBankTransferPaymentMethod(method)
+    || isCashPaymentMethod(method)
+    || isEmployeeAdvancePaymentMethod(method)
+  );
 }
 
 export function assertBankAccountForTransfer(
@@ -67,6 +90,9 @@ export function assertBankAccountForPaymentMethod(
   }
   if (isCashPaymentMethod(paymentMethod) && missing) {
     throw new Error(t('app.kuaicaiwu.common.bankAccountRequiredForCash'));
+  }
+  if (isEmployeeAdvancePaymentMethod(paymentMethod) && missing) {
+    throw new Error(t('app.kuaicaiwu.payment.advancePayeeAccountRequired'));
   }
 }
 
@@ -91,6 +117,9 @@ export function filterBankAccountsForPaymentMethod<T extends { account_type?: st
   }
   if (isCashPaymentMethod(paymentMethod)) {
     return accounts.filter((a) => String(a.account_type || '').toLowerCase() === 'cash');
+  }
+  if (isEmployeeAdvancePaymentMethod(paymentMethod)) {
+    return accounts.filter((a) => String(a.account_type || '').toLowerCase() !== 'cash');
   }
   return accounts;
 }
@@ -223,6 +252,7 @@ export function buildPartnerStatementStatusEnum(t: TFunction) {
     Confirmed: { text: t('app.kuaicaiwu.partnerStatement.status.confirmed') },
     Sent: { text: t('app.kuaicaiwu.partnerStatement.status.sent') },
     Disputed: { text: t('app.kuaicaiwu.partnerStatement.status.disputed') },
+    LedgerPosted: { text: t('app.kuaicaiwu.partnerStatement.status.ledgerPosted') },
   };
 }
 

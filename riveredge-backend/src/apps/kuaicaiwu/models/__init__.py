@@ -13,6 +13,8 @@ from .settlement import SettlementRecord
 from .partner_statement import PartnerStatement
 from .receipt import Receipt
 from .payment import Payment
+from .payment_pull_line import PaymentPullLine
+from .purchase_receipt_line_finance_occupancy import PurchaseReceiptLineFinanceOccupancy
 from .accounting_event import AccountingEvent
 from .bank_account import BankAccount
 from .bank_transaction import BankTransaction

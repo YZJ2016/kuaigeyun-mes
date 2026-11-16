@@ -157,7 +157,7 @@ DOCUMENT_TYPE_LABEL_ZH: Dict[str, str] = {
     "sales_return": "销售退货单",
     "receivable": "应收单",
     "payable": "应付单",
-    "sales_invoice": "销项发票",
+    "sales_invoice": "销售发票",
     "receipt": "收款单",
     "payment": "付款单",
     "purchase_invoice": "采购发票",

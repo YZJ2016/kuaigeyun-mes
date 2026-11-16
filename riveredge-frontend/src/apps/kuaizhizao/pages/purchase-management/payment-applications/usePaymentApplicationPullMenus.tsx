@@ -7,9 +7,12 @@ import type { ColumnsType } from 'antd/es/table';
 import { useTranslation } from 'react-i18next';
 import {
   UniPullQueryModal,
+  composePullRowDisabled,
   filterByPullScope,
+  isPullRowBlockedByPartnerLock,
   paginatePullRows,
   renderPullQueryDocStatus,
+  resolvePullQueryAnchorPartnerKey,
   UNI_PULL_QUERY_MAX_FETCH_LIMIT,
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
@@ -27,10 +30,9 @@ import { otherExpenseService, type OtherExpenseVoucher } from '../../../../kuaic
 import {
   createPaymentApplication,
   listPayablesForPaymentApplication,
-  pullPaymentApplicationFromPurchaseOrder,
-  pullPaymentApplicationFromPurchaseReceipt,
+  pullPaymentApplicationFromPurchaseOrders,
+  pullPaymentApplicationFromPurchaseReceipts,
   pullPaymentApplicationFromReconciliation,
-  previewPullPaymentApplicationFromPurchaseOrder,
 } from '../../../services/payment-application';
 
 type PullRow = {
@@ -38,12 +40,29 @@ type PullRow = {
   code: string;
   /** 来源单据日期 YYYY-MM-DD */
   documentDate?: string | null;
+  supplierId?: number;
   partnerName?: string;
   amount?: number;
   status?: string;
   pullable?: boolean;
   disableReason?: string;
 };
+
+function selectedPullRows(keys: React.Key[], rows: PullRow[]): PullRow[] {
+  return rows.filter((row) => keys.some((k) => String(k) === String(row.id)));
+}
+
+function assertSameSupplierSelected(rows: PullRow[]): boolean {
+  const supplierIds = new Set(
+    rows.map((r) => Number(r.supplierId ?? 0)).filter((id) => id > 0),
+  );
+  if (supplierIds.size > 1) return false;
+  if (supplierIds.size === 1) return true;
+  const names = new Set(
+    rows.map((r) => String(r.partnerName ?? '').trim()).filter((n) => n.length > 0),
+  );
+  return names.size <= 1;
+}
 
 type ExpenseWithFinance = OtherExpenseVoucher & {
   payable_id?: number;
@@ -129,7 +148,14 @@ export function usePaymentApplicationPullMenus({ onCreated, onOpenPayablePull }:
 
   const isPullable = useCallback((row: PullRow) => row.pullable === true, []);
 
-  const warnDisabledRow = useCallback(
+  const makeSameSupplierPullDisabledHandler = useCallback(
+    (selectedRows: PullRow[], baseDisabled: (row: PullRow) => boolean) =>
+      (row: PullRow) =>
+        composePullRowDisabled(row, { baseDisabled, selectedRows }),
+    [],
+  );
+
+  const warnPullSourceNotSelectable = useCallback(
     (row: PullRow) => {
       const reason = String(row.disableReason || '').trim();
       if (reason) {
@@ -141,12 +167,32 @@ export function usePaymentApplicationPullMenus({ onCreated, onOpenPayablePull }:
     [messageApi, t],
   );
 
+  const makeWarnDisabledRow = useCallback(
+    (selectedRows: PullRow[], baseDisabled: (row: PullRow) => boolean) =>
+      (row: PullRow) => {
+        const anchor = resolvePullQueryAnchorPartnerKey(selectedRows);
+        if (
+          !baseDisabled(row)
+          && anchor
+          && isPullRowBlockedByPartnerLock(row, anchor)
+        ) {
+          messageApi.warning(t('app.kuaicaiwu.payment.sameSupplierRequired'));
+          return;
+        }
+        warnPullSourceNotSelectable(row);
+      },
+    [messageApi, t, warnPullSourceNotSelectable],
+  );
+
+  const basePoRowDisabled = useCallback((row: PullRow) => !isPullable(row), [isPullable]);
+  const baseReceiptRowDisabled = useCallback((row: PullRow) => !isPullable(row), [isPullable]);
+
   const pullFromPoQuery = useUniPullQuery<PullRow>({
     rowKey: 'id',
-    selectionType: 'radio',
+    selectionType: 'checkbox',
     scopeOptions,
     defaultScope: 'pullable',
-    isRowDisabled: (row) => !isPullable(row),
+    isRowDisabled: basePoRowDisabled,
     loadData: async ({ keyword, page, pageSize, scope }) => {
       try {
         const res = await listPurchaseOrders({
@@ -164,6 +210,7 @@ export function usePaymentApplicationPullMenus({ onCreated, onOpenPayablePull }:
             id: Number(o.id),
             code: String(o.order_code ?? o.id),
             documentDate: orderDate,
+            supplierId: Number(o.supplier_id ?? 0) || undefined,
             partnerName: String(o.supplier_name ?? ''),
             // 仅展示预付额度，禁止用订单总额冒充可请款（否则「全部单据」上看似有金额却选不了）
             amount: prepay > 0 ? prepay : undefined,
@@ -181,31 +228,18 @@ export function usePaymentApplicationPullMenus({ onCreated, onOpenPayablePull }:
       }
     },
     onConfirm: async (keys, rows) => {
-      const selected = rows.find((r) => String(r.id) === String(keys[0]));
-      if (!selected?.id) {
+      const selectedRows = selectedPullRows(keys, rows);
+      if (!selectedRows.length) {
         messageApi.warning(t('common.required'));
         return;
       }
+      if (!assertSameSupplierSelected(selectedRows)) {
+        messageApi.warning(t('app.kuaicaiwu.payment.sameSupplierRequired'));
+        return;
+      }
+      const orderIds = selectedRows.map((r) => Number(r.id)).filter((id) => id > 0);
       try {
-        const preview = await previewPullPaymentApplicationFromPurchaseOrder(selected.id);
-        if (preview.has_blocking_issues) {
-          const code = String(preview.blocking_reason || '').trim();
-          const fromCap = code ? purchaseOrderCapabilityReasonMessage(code, t) : '';
-          messageApi.warning(
-            (fromCap && fromCap !== code ? fromCap : '')
-              || String(preview.summary || t('common.operationFailed')),
-          );
-          return;
-        }
-        const amount = Number(preview.max_push_quantity ?? 0);
-        if (!(amount > 0)) {
-          messageApi.warning(t('app.kuaizhizao.paymentApplication.noPrepayAmount'));
-          return;
-        }
-        const app = await pullPaymentApplicationFromPurchaseOrder({
-          purchaseOrderId: selected.id,
-          amount,
-        });
+        const app = await pullPaymentApplicationFromPurchaseOrders(orderIds);
         messageApi.success(
           t('app.kuaizhizao.paymentApplication.createFromSourceSuccess', {
             code: app.applicationCode,
@@ -223,10 +257,10 @@ export function usePaymentApplicationPullMenus({ onCreated, onOpenPayablePull }:
 
   const pullFromReceiptQuery = useUniPullQuery<PullRow>({
     rowKey: 'id',
-    selectionType: 'radio',
+    selectionType: 'checkbox',
     scopeOptions,
     defaultScope: 'pullable',
-    isRowDisabled: (row) => !isPullable(row),
+    isRowDisabled: baseReceiptRowDisabled,
     loadData: async ({ keyword, page, pageSize, scope }) => {
       try {
         const res = await warehouseApi.purchaseReceipt.list({
@@ -257,10 +291,12 @@ export function usePaymentApplicationPullMenus({ onCreated, onOpenPayablePull }:
           }
           const receiptTime = o.receipt_time ?? o.receiptTime;
           const documentDate = receiptTime ? String(receiptTime).slice(0, 10) : null;
+          const supplierIdRaw = o.supplier_id ?? o.supplierId;
           return {
             id: Number(o.id),
             code: String(o.receipt_code ?? o.receiptCode ?? o.id),
             documentDate,
+            supplierId: Number(supplierIdRaw ?? 0) || undefined,
             partnerName: String(o.supplier_name ?? o.supplierName ?? ''),
             amount: Number(o.total_amount ?? o.totalAmount ?? 0) || undefined,
             status,
@@ -275,15 +311,18 @@ export function usePaymentApplicationPullMenus({ onCreated, onOpenPayablePull }:
       }
     },
     onConfirm: async (keys, rows) => {
-      const selected = rows.find((r) => String(r.id) === String(keys[0]));
-      if (!selected?.id) {
+      const selectedRows = selectedPullRows(keys, rows);
+      if (!selectedRows.length) {
         messageApi.warning(t('common.required'));
         return;
       }
+      if (!assertSameSupplierSelected(selectedRows)) {
+        messageApi.warning(t('app.kuaicaiwu.payment.sameSupplierRequired'));
+        return;
+      }
+      const receiptIds = selectedRows.map((r) => Number(r.id)).filter((id) => id > 0);
       try {
-        const app = await pullPaymentApplicationFromPurchaseReceipt({
-          purchaseReceiptId: selected.id,
-        });
+        const app = await pullPaymentApplicationFromPurchaseReceipts(receiptIds);
         messageApi.success(
           t('app.kuaizhizao.paymentApplication.createFromReceiptSuccess', {
             code: app.applicationCode,
@@ -523,8 +562,14 @@ export function usePaymentApplicationPullMenus({ onCreated, onOpenPayablePull }:
         selectedRowKeys={pullFromPoQuery.selectedRowKeys}
         selectedRows={pullFromPoQuery.selectedRows}
         onSelectedRowKeysChange={pullFromPoQuery.handleSelectedRowKeysChange}
-        isRowDisabled={pullFromPoQuery.isRowDisabled}
-        onDisabledRowClick={warnDisabledRow}
+        isRowDisabled={makeSameSupplierPullDisabledHandler(
+          pullFromPoQuery.selectedRows,
+          basePoRowDisabled,
+        )}
+        onDisabledRowClick={makeWarnDisabledRow(
+          pullFromPoQuery.selectedRows,
+          basePoRowDisabled,
+        )}
         searchDraft={pullFromPoQuery.searchDraft}
         onSearchDraftChange={pullFromPoQuery.setSearchDraft}
         onSearchApply={pullFromPoQuery.handleSearchApply}
@@ -553,8 +598,14 @@ export function usePaymentApplicationPullMenus({ onCreated, onOpenPayablePull }:
         selectedRowKeys={pullFromReceiptQuery.selectedRowKeys}
         selectedRows={pullFromReceiptQuery.selectedRows}
         onSelectedRowKeysChange={pullFromReceiptQuery.handleSelectedRowKeysChange}
-        isRowDisabled={pullFromReceiptQuery.isRowDisabled}
-        onDisabledRowClick={warnDisabledRow}
+        isRowDisabled={makeSameSupplierPullDisabledHandler(
+          pullFromReceiptQuery.selectedRows,
+          baseReceiptRowDisabled,
+        )}
+        onDisabledRowClick={makeWarnDisabledRow(
+          pullFromReceiptQuery.selectedRows,
+          baseReceiptRowDisabled,
+        )}
         searchDraft={pullFromReceiptQuery.searchDraft}
         onSearchDraftChange={pullFromReceiptQuery.setSearchDraft}
         onSearchApply={pullFromReceiptQuery.handleSearchApply}
@@ -583,7 +634,7 @@ export function usePaymentApplicationPullMenus({ onCreated, onOpenPayablePull }:
         selectedRows={pullFromStatementQuery.selectedRows}
         onSelectedRowKeysChange={pullFromStatementQuery.handleSelectedRowKeysChange}
         isRowDisabled={pullFromStatementQuery.isRowDisabled}
-        onDisabledRowClick={warnDisabledRow}
+        onDisabledRowClick={warnPullSourceNotSelectable}
         searchDraft={pullFromStatementQuery.searchDraft}
         onSearchDraftChange={pullFromStatementQuery.setSearchDraft}
         onSearchApply={pullFromStatementQuery.handleSearchApply}
@@ -612,7 +663,7 @@ export function usePaymentApplicationPullMenus({ onCreated, onOpenPayablePull }:
         selectedRows={pullFromExpenseQuery.selectedRows}
         onSelectedRowKeysChange={pullFromExpenseQuery.handleSelectedRowKeysChange}
         isRowDisabled={pullFromExpenseQuery.isRowDisabled}
-        onDisabledRowClick={warnDisabledRow}
+        onDisabledRowClick={warnPullSourceNotSelectable}
         searchDraft={pullFromExpenseQuery.searchDraft}
         onSearchDraftChange={pullFromExpenseQuery.setSearchDraft}
         onSearchApply={pullFromExpenseQuery.handleSearchApply}

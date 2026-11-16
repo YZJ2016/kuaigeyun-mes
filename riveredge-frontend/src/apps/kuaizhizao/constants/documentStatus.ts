@@ -131,6 +131,12 @@ export function isPendingReviewStatus(status: string | undefined): boolean {
   return normalizeStatus(String(status).trim()) === DocumentStatus.PENDING_REVIEW;
 }
 
+/** 判断是否为驳回状态（可再次提交） */
+export function isRejectedStatus(status: string | undefined): boolean {
+  if (!status) return false;
+  return normalizeStatus(String(status).trim()) === DocumentStatus.REJECTED;
+}
+
 /** 判断是否为已审核/已确认状态 */
 export function isAuditedStatus(status: string | undefined): boolean {
   if (!status) return false;

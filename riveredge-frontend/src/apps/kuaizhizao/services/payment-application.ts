@@ -148,7 +148,24 @@ export async function pullPaymentApplicationFromPurchaseOrder(payload: {
   });
 }
 
-export async function previewPullPaymentApplicationFromPurchaseOrder(purchaseOrderId: number) {
+export async function pullPaymentApplicationFromPurchaseOrders(purchaseOrderIds: number[]) {
+  return apiRequest<PaymentApplication>(`${BASE}/pull-from-purchase-orders`, {
+    method: 'POST',
+    data: { purchase_order_ids: purchaseOrderIds },
+  });
+}
+
+export async function pullPaymentApplicationFromPurchaseReceipts(purchaseReceiptIds: number[]) {
+  return apiRequest<PaymentApplication>(`${BASE}/pull-from-purchase-receipts`, {
+    method: 'POST',
+    data: { purchase_receipt_ids: purchaseReceiptIds },
+  });
+}
+
+export async function previewPullPaymentApplicationFromPurchaseOrder(
+  purchaseOrderId: number,
+  amount?: number,
+) {
   return apiRequest<Record<string, unknown>>(`${BASE}/pull-from-purchase-order/preview`, {
     method: 'GET',
     params: { purchase_order_id: purchaseOrderId },

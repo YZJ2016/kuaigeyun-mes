@@ -34,7 +34,7 @@ class DocumentReconciliationService:
         ("sales_order", "销售订单"),
         ("sales_delivery", "销售出库"),
         ("receivable", "应收单"),
-        ("sales_invoice", "销项发票"),
+        ("sales_invoice", "销售发票"),
         ("receipt", "收款单"),
     ]
 
@@ -42,7 +42,7 @@ class DocumentReconciliationService:
         ("purchase_order", "采购订单"),
         ("purchase_receipt", "采购入库"),
         ("payable", "应付单"),
-        ("purchase_invoice", "进项发票"),
+        ("purchase_invoice", "采购发票"),
         ("payment", "付款单"),
     ]
 

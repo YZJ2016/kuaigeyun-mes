@@ -107,6 +107,7 @@ import InboundQuickPullModals, {
 import type {
   InboundPullEntryNavigationState,
   PurchaseReceiptEntryHandoff,
+  PurchaseReceiptPoComposePayload,
 } from './inboundPullEntryTypes';
 import { fetchInboundHubList } from './inboundListAggregate';
 import { fetchInboundHubDetail } from './inboundHubDetail';
@@ -120,7 +121,6 @@ import {
 import { fetchPurchaseReceiptIqcEnsure } from './inboundPurchaseIqcGate';
 import { pullPaymentApplicationFromPurchaseReceipt } from '../../../services/payment-application';
 import { PurchaseReceiptIqcReviewModal } from './PurchaseReceiptIqcReviewModal';
-import PurchaseReceiptEditModal from './PurchaseReceiptEditModal';
 import OtherInboundEditModal from './OtherInboundEditModal';
 import { fetchCustomerMaterialIqcEnsure } from './inboundCustomerMaterialIqcGate';
 import { CustomerMaterialIqcReviewModal } from './CustomerMaterialIqcReviewModal';
@@ -640,6 +640,78 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
     [t],
   );
   const inboundPerms = useResourcePermissions(permissionResource);
+  const [purchaseReceiptCreateOpen, setPurchaseReceiptCreateOpen] = useState(false);
+  const [purchaseReceiptPoCompose, setPurchaseReceiptPoCompose] =
+    useState<PurchaseReceiptPoComposePayload | null>(null);
+  const handledPoComposeKeyRef = useRef<string | null>(null);
+  const [finishedGoodsReceiptCreateOpen, setFinishedGoodsReceiptCreateOpen] = useState(false);
+  const [productionBlankReceiptKind, setProductionBlankReceiptKind] = useState<
+    'finished_goods' | 'semi_finished_goods'
+  >('finished_goods');
+  const enablePurchaseBlankCreate = fixedReceiptType === 'purchase' && inboundPerms.canCreate;
+  const enableFinishedGoodsBlankCreate =
+    inboundPerms.canCreate &&
+    (fixedReceiptType === 'finished_goods' ||
+      fixedReceiptType === 'semi_finished_goods' ||
+      isProductionInboundHubScope(hubScopedReceiptTypes));
+
+  useEffect(() => {
+    if (fixedReceiptType === 'semi_finished_goods') {
+      setProductionBlankReceiptKind('semi_finished_goods');
+    } else if (fixedReceiptType === 'finished_goods') {
+      setProductionBlankReceiptKind('finished_goods');
+    }
+  }, [fixedReceiptType]);
+
+  const productionInboundDualBlankCreate = useMemo(
+    () =>
+      enableFinishedGoodsBlankCreate &&
+      isProductionInboundHubScope(hubScopedReceiptTypes) &&
+      !fixedReceiptType,
+    [enableFinishedGoodsBlankCreate, hubScopedReceiptTypes, fixedReceiptType],
+  );
+
+  const openProductionBlankCreate = useCallback(
+    (kind: 'finished_goods' | 'semi_finished_goods') => {
+      setProductionBlankReceiptKind(kind);
+      setFinishedGoodsReceiptCreateOpen(true);
+    },
+    [],
+  );
+
+  const handleCreate = useCallback(() => {
+    if (enablePurchaseBlankCreate) {
+      setPurchaseReceiptCreateOpen(true);
+      return;
+    }
+    if (enableFinishedGoodsBlankCreate) {
+      openProductionBlankCreate(
+        fixedReceiptType === 'semi_finished_goods' ? 'semi_finished_goods' : 'finished_goods',
+      );
+      return;
+    }
+    quickPullRef.current?.open(defaultInboundQuickPullKey);
+  }, [
+    enableFinishedGoodsBlankCreate,
+    enablePurchaseBlankCreate,
+    fixedReceiptType,
+    openProductionBlankCreate,
+    defaultInboundQuickPullKey,
+  ]);
+  useNewShortcut(handleCreate);
+
+  const purchaseCreateButtonLabel = useMemo(
+    () => withSingleNewShortcutHint(t('app.kuaizhizao.warehouseInbound.createPurchaseReceipt')),
+    [t],
+  );
+  const finishedGoodsCreateButtonLabel = useMemo(() => {
+    const key =
+      fixedReceiptType === 'semi_finished_goods'
+        ? 'app.kuaizhizao.warehouseInbound.createSemiFinishedGoodsReceipt'
+        : 'app.kuaizhizao.warehouseInbound.createFinishedGoodsReceipt';
+    return withSingleNewShortcutHint(t(key));
+  }, [fixedReceiptType, t]);
+
   const paymentApplicationPerms = useResourcePermissions('kuaizhizao:payment-application');
   const currentUser = useCurrentUser();
   const packingBindingPerms = useResourcePermissions('kuaizhizao:production-execution-packing-binding');
@@ -848,6 +920,8 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
 
   const handleEditModalClose = useCallback(() => {
     setEditModalRecord(null);
+    setPurchaseReceiptPoCompose(null);
+    setPurchaseReceiptCreateOpen(false);
   }, []);
 
   const handleEditModalSuccess = useCallback(() => {
@@ -1061,15 +1135,19 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
     if (record.receipt_type === 'purchase') {
       pendingConfirmRecordRef.current = record;
       pendingConfirmHandoffRef.current = purchaseReceiptHandoff;
-      setIqcReviewPurchaseReceiptId(record.id);
-      setIqcReviewEnsure(null);
-      setIqcReviewOpen(true);
       setIqcReviewLoading(true);
       try {
         const ensure = await fetchPurchaseReceiptIqcEnsure(record.id);
+        if (!ensure.requires_iqc) {
+          pendingConfirmRecordRef.current = null;
+          pendingConfirmHandoffRef.current = undefined;
+          await executeStoredInboundConfirm(record);
+          return;
+        }
+        setIqcReviewPurchaseReceiptId(record.id);
         setIqcReviewEnsure(ensure);
+        setIqcReviewOpen(true);
       } catch (e: any) {
-        setIqcReviewOpen(false);
         pendingConfirmRecordRef.current = null;
         pendingConfirmHandoffRef.current = undefined;
         messageApi.error(
@@ -1224,6 +1302,19 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
     pendingConfirmRecordRef.current = null;
     pendingConfirmHandoffRef.current = undefined;
   };
+
+  useEffect(() => {
+    const compose = (location.state as InboundPullEntryNavigationState | null)
+      ?.purchaseReceiptPoCompose;
+    if (compose?.purchaseOrderId) {
+      const key = `po:${compose.purchaseOrderId}:${JSON.stringify(compose.quantities)}`;
+      if (handledPoComposeKeyRef.current !== key) {
+        handledPoComposeKeyRef.current = key;
+        navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
+        setPurchaseReceiptPoCompose(compose);
+      }
+    }
+  }, [location.pathname, location.search, location.state, navigate]);
 
   useEffect(() => {
     const dc = (location.state as InboundPullEntryNavigationState | null)?.inboundDirectConfirm;
@@ -2559,7 +2650,11 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
 
       <InboundQuickPullModals
         ref={quickPullRef}
-        onSuccess={() => {
+        onSuccess={(result) => {
+          if (result?.purchaseReceiptPoCompose?.purchaseOrderId) {
+            setPurchaseReceiptPoCompose(result.purchaseReceiptPoCompose);
+            return;
+          }
           invalidateMenuBadgeCounts();
     actionRef.current?.reload();
         }}
@@ -3092,11 +3187,86 @@ const InboundPage: React.FC<InboundHubPageProps> = ({
         onCancel={handleFqcReviewCancel}
         onContinue={() => void handleFqcReviewContinue()}
       />
-      <PurchaseReceiptEditModal
-        open={editModalRecord?.receipt_type === 'purchase'}
-        record={editModalRecord?.receipt_type === 'purchase' ? editModalRecord : null}
-        onClose={handleEditModalClose}
-        onSuccess={handleEditModalSuccess}
+      <FinishedGoodsReceiptCreateModal
+        open={
+          finishedGoodsReceiptCreateOpen ||
+          editModalRecord?.receipt_type === 'finished_goods' ||
+          editModalRecord?.receipt_type === 'semi_finished_goods'
+        }
+        receiptKind={
+          editModalRecord?.receipt_type === 'semi_finished_goods' ||
+          (!editModalRecord && productionBlankReceiptKind === 'semi_finished_goods')
+            ? 'semi_finished_goods'
+            : editModalRecord?.receipt_type === 'finished_goods'
+              ? 'finished_goods'
+              : productionBlankReceiptKind
+        }
+        receiptId={
+          finishedGoodsReceiptCreateOpen
+            ? null
+            : editModalRecord?.receipt_type === 'finished_goods' ||
+                editModalRecord?.receipt_type === 'semi_finished_goods'
+              ? editModalRecord.id ?? null
+              : null
+        }
+        onClose={() => {
+          setFinishedGoodsReceiptCreateOpen(false);
+          if (
+            editModalRecord?.receipt_type === 'finished_goods' ||
+            editModalRecord?.receipt_type === 'semi_finished_goods'
+          ) {
+            handleEditModalClose();
+          }
+        }}
+        onSuccess={() => {
+          if (
+            !finishedGoodsReceiptCreateOpen &&
+            (editModalRecord?.receipt_type === 'finished_goods' ||
+              editModalRecord?.receipt_type === 'semi_finished_goods')
+          ) {
+            handleEditModalSuccess();
+            return;
+          }
+          invalidateMenuBadgeCounts();
+          actionRef.current?.reload();
+        }}
+      />
+      <PurchaseReceiptCreateModal
+        open={
+          purchaseReceiptCreateOpen ||
+          purchaseReceiptPoCompose != null ||
+          editModalRecord?.receipt_type === 'purchase'
+        }
+        receiptId={
+          purchaseReceiptCreateOpen || purchaseReceiptPoCompose != null
+            ? null
+            : editModalRecord?.receipt_type === 'purchase'
+              ? editModalRecord.id ?? null
+              : null
+        }
+        poCompose={purchaseReceiptPoCompose}
+        onClose={() => {
+          if (editModalRecord?.receipt_type === 'purchase') {
+            handleEditModalClose();
+            return;
+          }
+          setPurchaseReceiptCreateOpen(false);
+          setPurchaseReceiptPoCompose(null);
+        }}
+        onSuccess={() => {
+          if (purchaseReceiptPoCompose != null) {
+            setPurchaseReceiptPoCompose(null);
+            invalidateMenuBadgeCounts();
+            actionRef.current?.reload();
+            return;
+          }
+          if (!purchaseReceiptCreateOpen && editModalRecord?.receipt_type === 'purchase') {
+            handleEditModalSuccess();
+            return;
+          }
+          invalidateMenuBadgeCounts();
+          actionRef.current?.reload();
+        }}
       />
       <OtherInboundEditModal
         open={editModalRecord?.receipt_type === 'other_inbound'}

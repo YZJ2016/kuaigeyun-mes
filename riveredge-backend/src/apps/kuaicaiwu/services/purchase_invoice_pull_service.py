@@ -489,14 +489,14 @@ class PurchaseInvoicePullService(AppBaseService[PurchaseInvoice]):
             "source_id": order_id,
             "source_code": code,
             "summary": (
-                f"将从采购订单 {code} 创建进项发票（可开票 ¥{pushable:,.2f}）"
+                f"将从采购订单 {code} 创建采购发票（可开票 ¥{pushable:,.2f}）"
                 if preview_items and allowed
-                else f"采购订单 {code} 当前不可加载进项发票"
+                else f"采购订单 {code} 当前不可加载采购发票"
             ),
             "items": preview_items,
             "has_blocking_issues": not allowed,
             "blocking_reason": reason,
-            "tip": "价税合计不可超过可开票金额；删除未审核进项发票后，可开票金额自动回退。",
+            "tip": "价税合计不可超过可开票金额；删除未审核采购发票后，可开票金额自动回退。",
             "supplier_id": order.supplier_id,
             "supplier_name": order.supplier_name,
             "purchase_order_id": order.id,
@@ -536,9 +536,9 @@ class PurchaseInvoicePullService(AppBaseService[PurchaseInvoice]):
             "source_id": receipt_id,
             "source_code": code,
             "summary": (
-                f"将从采购入库单 {code} 创建进项发票（可开票 ¥{pushable:,.2f}）"
+                f"将从采购入库单 {code} 创建采购发票（可开票 ¥{pushable:,.2f}）"
                 if preview_items and allowed
-                else f"采购入库单 {code} 当前不可加载进项发票"
+                else f"采购入库单 {code} 当前不可加载采购发票"
             ),
             "items": preview_items,
             "has_blocking_issues": not allowed,
@@ -548,6 +548,83 @@ class PurchaseInvoicePullService(AppBaseService[PurchaseInvoice]):
             "supplier_name": receipt.supplier_name,
             "purchase_order_id": receipt.purchase_order_id,
             "purchase_order_code": receipt.purchase_order_code,
+        }
+
+    @staticmethod
+    def _normalize_source_ids(source_ids: Sequence[int]) -> List[int]:
+        ordered: List[int] = []
+        seen: set[int] = set()
+        for raw in source_ids:
+            sid = int(raw)
+            if sid <= 0 or sid in seen:
+                continue
+            seen.add(sid)
+            ordered.append(sid)
+        if not ordered:
+            raise BusinessLogicError("请至少选择一张源单")
+        return ordered
+
+    async def preview_pull_from_payables(
+        self,
+        tenant_id: int,
+        payable_ids: Sequence[int],
+    ) -> Dict[str, Any]:
+        ids = self._normalize_source_ids(payable_ids)
+        if len(ids) == 1:
+            return await self.preview_pull_from_payable(tenant_id, ids[0])
+
+        merged_items: List[Dict[str, Any]] = []
+        merged_detail_lines: List[Dict[str, Any]] = []
+        blocking_reasons: List[str] = []
+        supplier_id: Optional[int] = None
+        supplier_name: Optional[str] = None
+        codes: List[str] = []
+
+        for pid in ids:
+            fragment = await self.preview_pull_from_payable(tenant_id, pid)
+            if supplier_id is None:
+                supplier_id = int(fragment.get("supplier_id") or 0)
+                supplier_name = str(fragment.get("supplier_name") or "")
+            elif int(fragment.get("supplier_id") or 0) != int(supplier_id or 0):
+                raise BusinessLogicError("多笔一起加载须为同一供应商")
+
+            codes.append(str(fragment.get("source_code") or pid))
+            if fragment.get("has_blocking_issues"):
+                reason = str(fragment.get("blocking_reason") or "")
+                if reason:
+                    blocking_reasons.append(reason)
+            merged_items.extend(fragment.get("items") or [])
+            for row in fragment.get("detail_lines") or []:
+                line = dict(row)
+                line["payable_id"] = pid
+                merged_detail_lines.append(line)
+
+        max_push_total = sum(
+            Decimal(str(item.get("max_push_quantity") or 0)) for item in merged_items
+        )
+        allowed = not blocking_reasons and max_push_total > 0
+        joined_codes = "、".join(codes)
+        return {
+            "target_type": "purchase_invoice",
+            "source_type": "payable",
+            "source_id": ids[0],
+            "source_ids": ids,
+            "source_code": joined_codes,
+            "summary": (
+                f"将从 {len(ids)} 张应付单创建采购发票（可开票合计 ¥{float(max_push_total):,.2f}）"
+                if allowed
+                else "所选应付单当前不可一起加载采购发票"
+            ),
+            "items": merged_items,
+            "detail_lines": merged_detail_lines,
+            "has_blocking_issues": not allowed,
+            "blocking_reason": blocking_reasons[0] if blocking_reasons else None,
+            "tip": "价税合计不可超过可开票合计；有入库行占用时须与所选行金额一致。",
+            "supplier_id": supplier_id,
+            "supplier_name": supplier_name,
+            "max_push_total": float(max_push_total),
+            "payable_id": ids[0],
+            "payable_code": codes[0] if codes else None,
         }
 
     async def preview_pull_from_payable(
@@ -581,18 +658,22 @@ class PurchaseInvoicePullService(AppBaseService[PurchaseInvoice]):
             "source_id": payable_id,
             "source_code": code,
             "summary": (
-                f"将从应付单 {code} 创建进项发票（可开票 ¥{pushable:,.2f}）"
+                f"将从应付单 {code} 创建采购发票（可开票 ¥{pushable:,.2f}）"
                 if preview_items and allowed
-                else f"应付单 {code} 当前不可加载进项发票"
+                else f"应付单 {code} 当前不可加载采购发票"
             ),
             "items": preview_items,
             "has_blocking_issues": not allowed,
             "blocking_reason": reason,
             "tip": (
-                "采购退货冲减应付不可从应付开进项发票；请对原蓝字业务收票或申请红字发票。"
+                "采购退货冲减应付不可从应付开采购发票；请对原蓝字业务收票或申请红字发票。"
                 if reason == "purchase_invoice.pull_from_payable.purchase_return_offset"
                 else (
-                    "价税合计不可超过可开票金额；删除未审核进项发票后，可开票金额自动回退。"
+                    (
+                        "价税合计须与所选入库行合计一致；未勾选行时按应付行占用比例分摊。"
+                        if purchase_receipt_id
+                        else "价税合计不可超过可开票金额；删除未审核采购发票后，可开票金额自动回退。"
+                    )
                     + ("有关联采购订单时将一并挂接。" if po_id else "无采购订单时仅关联应付单。")
                 )
             ),
@@ -703,6 +784,10 @@ class PurchaseInvoicePullService(AppBaseService[PurchaseInvoice]):
             tenant_id, "purchase_receipt", receipt_ids, code_by_id
         )
 
+        from apps.kuaicaiwu.services.purchase_settlement import (
+            purchase_receipt_settlement_gross_async,
+        )
+
         rows: List[Dict[str, Any]] = []
         for receipt in receipts:
             rid = int(receipt.id)
@@ -711,8 +796,9 @@ class PurchaseInvoicePullService(AppBaseService[PurchaseInvoice]):
                 receipt,
                 pushed=pushed_map.get(rid, Decimal("0")),
             )
+            receipt_gross = await purchase_receipt_settlement_gross_async(tenant_id, receipt)
             allowed, reason = self._derive_pull_capability(
-                source_allowed=Decimal(str(receipt.total_amount or 0)) > 0,
+                source_allowed=receipt_gross > 0,
                 preview_items=preview_items,
                 not_allowed_reason="purchase_invoice.pull_from_purchase_receipt.not_allowed",
                 no_lines_reason="purchase_invoice.pull_from_purchase_receipt.no_lines",
@@ -731,7 +817,7 @@ class PurchaseInvoicePullService(AppBaseService[PurchaseInvoice]):
                     "source_date": str(
                         getattr(receipt, "receipt_time", "") or getattr(receipt, "created_at", "") or ""
                     ),
-                    "amount": float(receipt.total_amount or 0),
+                    "amount": float(receipt_gross),
                     "capabilities": {
                         "pull_purchase_invoice": {
                             "allowed": allowed,
@@ -827,7 +913,7 @@ class PurchaseInvoicePullService(AppBaseService[PurchaseInvoice]):
         else:
             raise BusinessLogicError(f"不支持的加载源单类型: {source_type}")
         if preview.get("has_blocking_issues"):
-            reason = preview.get("blocking_reason") or "当前不可加载进项发票"
+            reason = preview.get("blocking_reason") or "当前不可加载采购发票"
             raise BusinessLogicError(reason)
         items = preview.get("items") or []
         if not items:
@@ -872,7 +958,7 @@ class PurchaseInvoicePullService(AppBaseService[PurchaseInvoice]):
                 target_name=None,
                 relation_type="source",
                 relation_mode="pull",
-                relation_desc="加载创建进项发票",
+                relation_desc="加载创建采购发票",
                 notes=notes,
             ),
             created_by=created_by,

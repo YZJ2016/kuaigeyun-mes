@@ -173,6 +173,37 @@ class PaymentApplicationPushService:
             "settlement_type": settlement_type,
         }
 
+    @staticmethod
+    def _allocate_payment_amount_to_lines(
+        lines: List[PaymentApplicationLine],
+        pay_total: Decimal,
+        *,
+        settlement_type: str,
+    ) -> List[tuple[int, Decimal]]:
+        """按付款金额 FIFO 分摊到申请行。"""
+        remaining = Decimal(str(pay_total or 0))
+        if remaining <= 0:
+            return []
+        is_prepay = str(settlement_type or "") == "prepayment"
+        line_payments: List[tuple[int, Decimal]] = []
+        for line in lines:
+            if remaining <= 0:
+                break
+            if is_prepay:
+                if str(line.line_kind) != "prepayment":
+                    continue
+            elif not line.payable_id:
+                continue
+            available = Decimal(str(line.request_amount or 0)) - Decimal(
+                str(line.paid_amount or 0)
+            )
+            if available <= 0:
+                continue
+            take = min(available, remaining)
+            line_payments.append((int(line.id), take))
+            remaining -= take
+        return line_payments
+
     async def apply_payment_confirmed(
         self,
         tenant_id: int,
