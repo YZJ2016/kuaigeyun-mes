@@ -271,8 +271,6 @@ import {
 } from '../../sales-management/shared/DocumentPushProgressBar';
 import { collectPurchaseOrderPushDocuments } from '../../sales-management/shared/pushProgress';
 import { buildDocumentAuditColumns } from '../../shared/documentAuditColumns';
-import { resolveSupplierDefaultTaxRatePercent } from '../shared/purchasePriceType';
-import { resolveOrgPayableDefaultFromBusinessConfig } from '../shared/applySupplierFormFields';
 import type { SubStage } from '../../../../../components/uni-lifecycle/types';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { useDeferAfterPaint } from '../../../../../hooks/useDeferAfterPaint';
@@ -4067,7 +4065,8 @@ const PurchaseOrdersPage: React.FC = () => {
                     }
                   }}
                 />
-              </Col>
+              </ProForm.Item>
+            </Col>
               <Col span={6}>
                 <ProForm.Item
                   name="supplier_id"
@@ -4141,6 +4140,8 @@ const PurchaseOrdersPage: React.FC = () => {
                 />
               </Col>
             </Row>
+        </Col>
+      </Row>
           </div>
           <div className="document-form-untitled-group">
             <Row gutter={16}>

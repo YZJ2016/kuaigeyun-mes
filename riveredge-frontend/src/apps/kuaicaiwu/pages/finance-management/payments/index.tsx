@@ -601,7 +601,6 @@ const PaymentsPage: React.FC = () => {
     if (pullLineError) {
       messageApi.warning(pullLineError);
       return false;
-      }
     }
     try {
       await paymentService.updatePayment(editingRecord.id, {
