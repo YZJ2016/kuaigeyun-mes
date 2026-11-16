@@ -2265,71 +2265,24 @@ class QuotationService:
             "blocking_reason": (
                 caps.convert_to_order.reason if not push_allowed else None
             ),
-            "tip": "确认后将按全部报价明细创建销售订单；整单转换后报价单状态变为「已转订单」。",
+            "tip": "确认后将打开新建销售订单，保存后报价单状态变为「已转订单」。",
         }
 
-    async def preview_push_quotation_to_sales_contract(
+    async def build_sales_order_create_from_quotation(
         self,
         tenant_id: int,
         quotation_id: int,
-    ) -> Dict[str, Any]:
-        """下推销售合同预览：返回明细数量、已下推、可下推。"""
-        quotation, items, _conv_missing, contract_missing, _review_missing, caps = (
-            await self._load_quotation_push_context(tenant_id, quotation_id)
-        )
-        if not items:
-            raise BusinessLogicError("报价单无明细，无法下推销售合同")
-
-        push_allowed = caps.convert_to_contract.allowed
-        already_pushed = bool(quotation.contract_id) and not contract_missing
-        preview_items = self._build_quotation_push_preview_items(
-            items,
-            push_allowed=push_allowed,
-            already_pushed=already_pushed,
-        )
-        if not preview_items:
-            raise BusinessLogicError("报价单无有效明细数量，无法下推销售合同")
-
-        pushable_count = sum(
-            1 for row in preview_items if float(row.get("max_push_quantity") or 0) > 0
-        )
-        return {
-            "target_type": "sales_contract",
-            "summary": (
-                f"请确认将下推的报价明细（{pushable_count}/{len(preview_items)} 行可下推）"
-                if push_allowed
-                else "当前报价单不可下推销售合同"
-            ),
-            "items": preview_items,
-            "has_blocking_issues": not push_allowed,
-            "blocking_reason": (
-                caps.convert_to_contract.reason if not push_allowed else None
-            ),
-            "tip": "确认后将按报价明细创建销售合同；转换后报价单状态变为「已转订单」。",
-        }
-
-    async def convert_to_sales_order(
-        self,
-        tenant_id: int,
-        quotation_id: int,
-        created_by: int,
         selected_item_ids: Optional[List[int]] = None,
     ):
         """
-        将报价单转为销售订单
-
-        创建销售订单及明细，更新报价单状态为「已转订单」，建立关联。
-        返回 (sales_order_response, quotation_response)
+        从报价单构建 SalesOrderCreate（不写库）。
+        返回 (quotation, 使用的明细行, SalesOrderCreate)。
         """
         await self._detach_quotation_if_downstream_sales_order_deleted(
-            tenant_id, quotation_id, created_by, log_transition=False
+            tenant_id, quotation_id, 0, log_transition=False
         )
-        await self._detach_quotation_if_contract_deleted(
-            tenant_id, quotation_id, created_by
-        )
-        await self._detach_quotation_if_sales_review_deleted(
-            tenant_id, quotation_id, created_by
-        )
+        await self._detach_quotation_if_contract_deleted(tenant_id, quotation_id, 0)
+        await self._detach_quotation_if_sales_review_deleted(tenant_id, quotation_id, 0)
         quotation = await Quotation.get_or_none(
             tenant_id=tenant_id, id=quotation_id, deleted_at__isnull=True
         )
@@ -2352,7 +2305,11 @@ class QuotationService:
             contract_downstream_missing=contract_missing,
             sales_review_downstream_missing=review_missing,
         )
-        if quotation.sales_order_id:
+        from apps.kuaizhizao.services.document_action_policy.quotation import (
+            _has_live_sales_order_link,
+        )
+
+        if _has_live_sales_order_link(quotation, conv_missing):
             raise BusinessLogicError("该报价单已关联销售订单，无法重复转换")
         items = await QuotationItem.filter(
             tenant_id=tenant_id, quotation_id=quotation_id
@@ -2373,13 +2330,17 @@ class QuotationService:
             items = [it for it in items if int(it.id) in selected_ids]
             if not items:
                 raise BusinessLogicError("所选报价明细为空，无法转为销售订单")
-            all_item_ids = {int(it.id) for it in await QuotationItem.filter(
-                tenant_id=tenant_id, quotation_id=quotation_id
-            )}
+            all_item_ids = {
+                int(it.id)
+                for it in await QuotationItem.filter(
+                    tenant_id=tenant_id, quotation_id=quotation_id
+                )
+            }
             if selected_ids != all_item_ids:
-                raise BusinessLogicError("报价单须整单下推销售订单，请在下推预览中确认全部可下推明细")
+                raise BusinessLogicError(
+                    "报价单须整单下推销售订单，请在下推预览中确认全部可下推明细"
+                )
 
-        # 构建 SalesOrderCreate
         order_date = quotation.quotation_date
         valid_dates = [it.delivery_date for it in items if it.delivery_date]
         delivery_date = quotation.delivery_date or (
@@ -2443,19 +2404,42 @@ class QuotationService:
             notes=quotation.notes or f"由报价单 {quotation.quotation_code} 转入",
             items=so_items,
         )
+        return quotation, items, so_create
 
-        from apps.kuaizhizao.services.sales_order_service import SalesOrderService
-        sales_order_service = SalesOrderService()
-        sales_order = await sales_order_service.create_sales_order(
-            tenant_id=tenant_id,
-            sales_order_data=so_create,
-            created_by=created_by,
+    async def finalize_quotation_after_sales_order_created(
+        self,
+        tenant_id: int,
+        quotation_id: int,
+        sales_order_id: int,
+        created_by: int,
+        selected_item_ids: Optional[List[int]] = None,
+    ) -> None:
+        """用户保存销售订单后回写报价单状态与关联。"""
+        from apps.kuaizhizao.models.sales_order import SalesOrder
+
+        sales_order = await SalesOrder.get_or_none(
+            tenant_id=tenant_id, id=sales_order_id, deleted_at__isnull=True
         )
-        sales_order = await sales_order_service.apply_push_default_mode_after_create(
-            tenant_id=tenant_id,
-            sales_order_id=int(sales_order.id),
-            created_by=created_by,
+        if not sales_order:
+            raise NotFoundError(f"销售订单不存在: {sales_order_id}")
+        quotation = await Quotation.get_or_none(
+            tenant_id=tenant_id, id=quotation_id, deleted_at__isnull=True
         )
+        if not quotation:
+            raise NotFoundError(f"报价单不存在: {quotation_id}")
+        conv_missing = await self._quotation_conversion_downstream_missing(
+            tenant_id, quotation
+        )
+        from apps.kuaizhizao.services.document_action_policy.quotation import (
+            _has_live_sales_order_link,
+        )
+
+        if _has_live_sales_order_link(quotation, conv_missing):
+            raise BusinessLogicError("该报价单已关联销售订单，无法重复转换")
+        if selected_item_ids is not None:
+            await self.build_sales_order_create_from_quotation(
+                tenant_id, quotation_id, selected_item_ids
+            )
 
         from apps.common.base_service import AppBaseService
 
@@ -2478,10 +2462,12 @@ class QuotationService:
                 "转销售订单",
             )
 
-        # 建立单据关联（quotation -> sales_order）
         try:
-            from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+            from apps.kuaizhizao.services.document_relation_new_service import (
+                DocumentRelationNewService,
+            )
             from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+
             rel_svc = DocumentRelationNewService()
             await rel_svc.create_relation(
                 tenant_id=tenant_id,
@@ -2501,10 +2487,110 @@ class QuotationService:
                 created_by=created_by,
             )
         except BusinessLogicError:
-            pass  # 关联已存在，忽略
+            pass
         except Exception as e:
             logger.warning("建立报价单-销售订单关联失败: %s", e)
 
+    async def draft_sales_order_create_from_quotation(
+        self,
+        tenant_id: int,
+        quotation_id: int,
+        selected_item_ids: Optional[List[int]] = None,
+    ) -> Dict[str, Any]:
+        """供前端打开销售订单新建页：返回 create 载荷与 document_flow 元数据。"""
+        quotation, items, so_create = await self.build_sales_order_create_from_quotation(
+            tenant_id, quotation_id, selected_item_ids
+        )
+        item_ids = [int(it.id) for it in items]
+        payload = so_create.model_dump(by_alias=True, mode="json")
+        return {
+            "target_type": "sales_order",
+            "source_type": "quotation",
+            "source_id": quotation_id,
+            "source_code": quotation.quotation_code,
+            "document_flow": {
+                "documentFlowSourceType": "quotation",
+                "documentFlowSourceId": quotation_id,
+                "documentFlowSourceItemIds": item_ids,
+            },
+            "create_payload": payload,
+        }
+
+    async def preview_push_quotation_to_sales_contract(
+        self,
+        tenant_id: int,
+        quotation_id: int,
+    ) -> Dict[str, Any]:
+        """下推销售合同预览：返回明细数量、已下推、可下推。"""
+        quotation, items, _conv_missing, contract_missing, _review_missing, caps = (
+            await self._load_quotation_push_context(tenant_id, quotation_id)
+        )
+        if not items:
+            raise BusinessLogicError("报价单无明细，无法下推销售合同")
+
+        push_allowed = caps.convert_to_contract.allowed
+        already_pushed = bool(quotation.contract_id) and not contract_missing
+        preview_items = self._build_quotation_push_preview_items(
+            items,
+            push_allowed=push_allowed,
+            already_pushed=already_pushed,
+        )
+        if not preview_items:
+            raise BusinessLogicError("报价单无有效明细数量，无法下推销售合同")
+
+        pushable_count = sum(
+            1 for row in preview_items if float(row.get("max_push_quantity") or 0) > 0
+        )
+        return {
+            "target_type": "sales_contract",
+            "summary": (
+                f"请确认将下推的报价明细（{pushable_count}/{len(preview_items)} 行可下推）"
+                if push_allowed
+                else "当前报价单不可下推销售合同"
+            ),
+            "items": preview_items,
+            "has_blocking_issues": not push_allowed,
+            "blocking_reason": (
+                caps.convert_to_contract.reason if not push_allowed else None
+            ),
+            "tip": "确认后将按报价明细创建销售合同；转换后报价单状态变为「已转订单」。",
+        }
+
+    async def convert_to_sales_order(
+        self,
+        tenant_id: int,
+        quotation_id: int,
+        created_by: int,
+        selected_item_ids: Optional[List[int]] = None,
+    ):
+        """
+        将报价单转为销售订单（兼容自动化/旧 API：直接落库）。
+
+        手工 UI 应走 draft + 销售订单新建页保存（document_flow 回写）。
+        """
+        quotation, _items, so_create = await self.build_sales_order_create_from_quotation(
+            tenant_id, quotation_id, selected_item_ids
+        )
+        from apps.kuaizhizao.services.sales_order_service import SalesOrderService
+
+        sales_order_service = SalesOrderService()
+        sales_order = await sales_order_service.create_sales_order(
+            tenant_id=tenant_id,
+            sales_order_data=so_create,
+            created_by=created_by,
+        )
+        await self.finalize_quotation_after_sales_order_created(
+            tenant_id=tenant_id,
+            quotation_id=quotation_id,
+            sales_order_id=int(sales_order.id),
+            created_by=created_by,
+            selected_item_ids=selected_item_ids,
+        )
+        sales_order = await sales_order_service.apply_push_default_mode_after_create(
+            tenant_id=tenant_id,
+            sales_order_id=int(sales_order.id),
+            created_by=created_by,
+        )
         quotation_updated = await self.get_quotation_by_id(
             tenant_id, quotation_id, include_items=True
         )
@@ -2550,28 +2636,21 @@ class QuotationService:
             "tip": "确认后将按报价明细创建订单评审草稿；报价单状态不变，后续由订单评审下推销售订单。",
         }
 
-    async def convert_to_sales_review(
+    async def build_sales_review_create_from_quotation(
         self,
         tenant_id: int,
         quotation_id: int,
-        created_by: int,
         selected_item_ids: Optional[List[int]] = None,
     ):
         """
-        将报价单转为订单评审。
-
-        创建订单评审及明细，回写报价单 sales_review_id，建立关联；不改变报价单业务状态。
-        返回 (sales_review_response, quotation_response)
+        从报价单构建 SalesReviewCreate（不写库）。
+        返回 (quotation, 使用的明细行, SalesReviewCreate)。
         """
         await self._detach_quotation_if_downstream_sales_order_deleted(
-            tenant_id, quotation_id, created_by, log_transition=False
+            tenant_id, quotation_id, 0, log_transition=False
         )
-        await self._detach_quotation_if_contract_deleted(
-            tenant_id, quotation_id, created_by
-        )
-        await self._detach_quotation_if_sales_review_deleted(
-            tenant_id, quotation_id, created_by
-        )
+        await self._detach_quotation_if_contract_deleted(tenant_id, quotation_id, 0)
+        await self._detach_quotation_if_sales_review_deleted(tenant_id, quotation_id, 0)
         quotation = await Quotation.get_or_none(
             tenant_id=tenant_id, id=quotation_id, deleted_at__isnull=True
         )
@@ -2629,7 +2708,6 @@ class QuotationService:
             SalesReviewCreate,
             SalesReviewItemCreate,
         )
-        from apps.kuaizhizao.services.sales_review_service import SalesReviewService
 
         review_items = [
             SalesReviewItemCreate(
@@ -2668,17 +2746,28 @@ class QuotationService:
             salesman_name=quotation.salesman_name,
             items=review_items,
         )
-        user = await User.get_or_none(id=created_by)
-        if not user:
-            raise NotFoundError(f"用户不存在: {created_by}")
-        review = await SalesReviewService().create(tenant_id, create_data, user)
+        return quotation, items, create_data
 
+    async def finalize_quotation_after_sales_review_created(
+        self,
+        tenant_id: int,
+        quotation_id: int,
+        sales_review_id: int,
+        sales_review_code: str,
+        project_name: Optional[str],
+        created_by: int,
+    ) -> None:
+        """用户保存订单评审后回写报价单关联（不改变报价单业务状态）。"""
+        quotation = await Quotation.get_or_none(
+            tenant_id=tenant_id, id=quotation_id, deleted_at__isnull=True
+        )
+        if not quotation:
+            raise NotFoundError(f"报价单不存在: {quotation_id}")
         await Quotation.filter(id=quotation_id).update(
-            sales_review_id=review.id,
-            sales_review_code=review.review_code,
+            sales_review_id=sales_review_id,
+            sales_review_code=sales_review_code,
             updated_by=created_by,
         )
-
         try:
             from apps.kuaizhizao.services.document_relation_new_service import (
                 DocumentRelationNewService,
@@ -2693,9 +2782,9 @@ class QuotationService:
                     source_code=quotation.quotation_code,
                     source_name=quotation.quotation_code,
                     target_type="sales_review",
-                    target_id=review.id,
-                    target_code=review.review_code,
-                    target_name=review.project_name or review.review_code,
+                    target_id=sales_review_id,
+                    target_code=sales_review_code,
+                    target_name=project_name or sales_review_code,
                     relation_type="source",
                     relation_mode="push",
                     relation_desc="报价单下推订单评审",
@@ -2707,6 +2796,60 @@ class QuotationService:
         except Exception as e:
             logger.warning("建立报价单-订单评审关联失败: %s", e)
 
+    async def draft_sales_review_create_from_quotation(
+        self,
+        tenant_id: int,
+        quotation_id: int,
+        selected_item_ids: Optional[List[int]] = None,
+    ) -> Dict[str, Any]:
+        """供前端打开订单评审新建弹窗：返回 create 载荷与 document_flow 元数据。"""
+        quotation, items, review_create = await self.build_sales_review_create_from_quotation(
+            tenant_id, quotation_id, selected_item_ids
+        )
+        item_ids = [int(it.id) for it in items]
+        payload = review_create.model_dump(by_alias=True, mode="json")
+        return {
+            "target_type": "sales_review",
+            "source_type": "quotation",
+            "source_id": quotation_id,
+            "source_code": quotation.quotation_code,
+            "document_flow": {
+                "documentFlowSourceType": "quotation",
+                "documentFlowSourceId": quotation_id,
+                "documentFlowSourceItemIds": item_ids,
+            },
+            "create_payload": payload,
+        }
+
+    async def convert_to_sales_review(
+        self,
+        tenant_id: int,
+        quotation_id: int,
+        created_by: int,
+        selected_item_ids: Optional[List[int]] = None,
+    ):
+        """
+        将报价单转为订单评审（兼容自动化/旧 API：直接落库）。
+
+        手工 UI 应走 draft + 订单评审新建弹窗保存（document_flow 回写）。
+        """
+        _quotation, _items, create_data = await self.build_sales_review_create_from_quotation(
+            tenant_id, quotation_id, selected_item_ids
+        )
+        from apps.kuaizhizao.services.sales_review_service import SalesReviewService
+
+        user = await User.get_or_none(id=created_by)
+        if not user:
+            raise NotFoundError(f"用户不存在: {created_by}")
+        review = await SalesReviewService().create(tenant_id, create_data, user)
+        await self.finalize_quotation_after_sales_review_created(
+            tenant_id=tenant_id,
+            quotation_id=quotation_id,
+            sales_review_id=int(review.id),
+            sales_review_code=review.review_code,
+            project_name=review.project_name,
+            created_by=created_by,
+        )
         quotation_updated = await self.get_quotation_by_id(
             tenant_id, quotation_id, include_items=True
         )

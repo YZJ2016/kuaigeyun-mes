@@ -326,6 +326,19 @@ export interface ConvertToOrderPayload {
 
 }
 
+export interface SalesContractToSalesOrderDraftResponse {
+  target_type: 'sales_order';
+  source_type: 'sales_contract';
+  source_id: number;
+  source_code?: string;
+  document_flow: {
+    documentFlowSourceType: 'sales_contract';
+    documentFlowSourceId: number;
+    documentFlowReleaseLines?: { item_id: number; release_quantity: number }[];
+  };
+  create_payload: Record<string, unknown>;
+}
+
 export interface PushToWorkOrderFromContractPayload {
   selected_item_ids?: number[];
   release_lines?: { item_id: number; release_quantity: number }[];
@@ -488,6 +501,12 @@ export const salesContractApi = {
       { method: 'POST', data: payload ?? {} },
 
     ),
+
+  draftSalesOrderFromSalesContract: (id: number, payload?: ConvertToOrderPayload | null) =>
+    apiRequest<SalesContractToSalesOrderDraftResponse>(`${BASE}/${id}/push-to-sales-order/draft`, {
+      method: 'POST',
+      data: payload ?? {},
+    }),
 
   previewPushToSalesOrder: (id: number) =>
     apiRequest<SalesContractPushPreviewResponse>(`${BASE}/${id}/push-to-sales-order/preview`, {

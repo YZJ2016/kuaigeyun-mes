@@ -209,12 +209,60 @@ export async function listPurchaseInquiryPurchaseOrderPullLines(params: {
   });
 }
 
+export type RequisitionToPurchaseInquiryDraftResponse = {
+  target_type: 'purchase_inquiry';
+  source_type: 'purchase_requisition';
+  create_payload: Record<string, unknown>;
+  document_flow: Record<string, unknown>;
+};
+
+export type RequisitionToPurchaseInquiryDraftPayload =
+  | { selected_item_ids: number[] }
+  | {
+      item_ids: number[];
+      supplier_ids?: number[];
+      inquiry_name?: string;
+      quote_deadline?: string;
+      notes?: string;
+    };
+
+export async function draftPurchaseInquiryFromRequisitionItems(
+  data: RequisitionToPurchaseInquiryDraftPayload,
+): Promise<RequisitionToPurchaseInquiryDraftResponse> {
+  return apiRequest('/apps/kuaizhizao/purchase-inquiries/draft-from-requisition-items', {
+    method: 'POST',
+    data,
+  });
+}
+
 export async function pullPurchaseInquiryFromRequisitionItems(
   selectedItemIds: number[],
 ): Promise<PurchaseInquiry> {
   return apiRequest('/apps/kuaizhizao/purchase-inquiries/pull-from-requisition-items', {
     method: 'POST',
     data: { selected_item_ids: selectedItemIds },
+  });
+}
+
+export type InquiryToPurchaseOrderDraftEntry = {
+  create_payload: Record<string, unknown>;
+  document_flow: Record<string, unknown>;
+  supplier_id?: number;
+  inquiry_ids?: number[];
+};
+
+export type InquiryToPurchaseOrderDraftResponse = {
+  target_type: 'purchase_order';
+  source_type: 'purchase_inquiry';
+  drafts: InquiryToPurchaseOrderDraftEntry[];
+};
+
+export async function draftPurchaseOrdersFromInquiryItems(
+  data: { selected_item_ids: number[] } | { item_ids: number[] },
+): Promise<InquiryToPurchaseOrderDraftResponse> {
+  return apiRequest('/apps/kuaizhizao/purchase-orders/draft-from-inquiry-items', {
+    method: 'POST',
+    data,
   });
 }
 

@@ -656,6 +656,31 @@ class ConvertToOrderResponse(QuotationResponse):
 
 
 @router.get(
+    "/{quotation_id}/push-to-sales-order/draft",
+    summary="Draft sales order create payload from quotation",
+)
+async def draft_sales_order_from_quotation(
+    quotation_id: int = Path(..., description="报价单ID"),
+    selected_item_ids: Optional[List[int]] = Query(
+        None,
+        description="须整单下推时传全部可推明细 ID",
+    ),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await quotation_service.draft_sales_order_create_from_quotation(
+            tenant_id=tenant_id,
+            quotation_id=quotation_id,
+            selected_item_ids=selected_item_ids,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get(
     "/{quotation_id}/push-to-sales-order/preview",
     summary="Preview push quotation to sales order",
 )
@@ -732,6 +757,31 @@ async def convert_to_sales_order(
             status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"报价单转销售订单失败: {e}",
         )
+
+
+@router.get(
+    "/{quotation_id}/push-to-sales-review/draft",
+    summary="Draft sales review create payload from quotation",
+)
+async def draft_sales_review_from_quotation(
+    quotation_id: int = Path(..., description="报价单ID"),
+    selected_item_ids: Optional[List[int]] = Query(
+        None,
+        description="须整单下推时传全部可推明细 ID",
+    ),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await quotation_service.draft_sales_review_create_from_quotation(
+            tenant_id=tenant_id,
+            quotation_id=quotation_id,
+            selected_item_ids=selected_item_ids,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.get(

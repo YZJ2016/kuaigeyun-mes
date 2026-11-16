@@ -7,9 +7,9 @@ Date: 2026-05-28
 
 import uuid
 from datetime import date
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, Query, Path, HTTPException as FastAPIHTTPException, status
+from fastapi import APIRouter, Body, Depends, Query, Path, HTTPException as FastAPIHTTPException, status
 from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
@@ -134,6 +134,42 @@ async def list_purchase_order_pull_lines(
     except Exception:
         logger.exception("列出采购订单开口询价行失败")
         raise _http_exception(500, "列出采购订单开口询价行失败")
+
+
+@router.post(
+    "/purchase-inquiries/draft-from-requisition-items",
+    summary="Draft purchase inquiry create payload from requisition lines",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:purchase-inquiry:create"))],
+)
+async def draft_inquiry_from_requisition_items(
+    request: Dict[str, Any] = Body(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    from apps.kuaizhizao.schemas.purchase_inquiry import CreateFromRequisitionRequest
+
+    if "selected_item_ids" in request and "item_ids" not in request:
+        item_ids = PullFromRequisitionItemsRequest(**request).selected_item_ids
+        extra = CreateFromRequisitionRequest(item_ids=item_ids)
+    else:
+        extra = CreateFromRequisitionRequest(**request)
+        item_ids = extra.item_ids
+    try:
+        return await PurchaseInquiryService().draft_inquiry_from_requisition_items(
+            tenant_id=tenant_id,
+            item_ids=item_ids,
+            inquiry_name=extra.inquiry_name,
+            quote_deadline=extra.quote_deadline,
+            notes=extra.notes,
+            supplier_ids=extra.supplier_ids,
+        )
+    except NotFoundError as e:
+        raise _http_exception(404, str(e))
+    except BusinessLogicError as e:
+        raise _http_exception(400, str(e))
+    except Exception:
+        logger.exception("从采购申请行生成询价草稿失败")
+        raise _http_exception(500, "从采购申请行生成询价草稿失败")
 
 
 @router.post(

@@ -11,6 +11,7 @@ Date: 2025-01-14
 
 import asyncio
 import random
+from dataclasses import dataclass
 from typing import List, Optional, Dict, Any, Tuple, Set
 from datetime import datetime, timedelta, date, timezone, time
 from decimal import Decimal, ROUND_CEILING
@@ -7169,6 +7170,274 @@ class DemandComputationService(AppBaseService):
         except Exception as e:
             logger.error(f"创建采购单失败: {e}")
             raise BusinessLogicError(f"创建采购单失败: {str(e)}")
+
+    @dataclass
+    class _ComputationPoPlan:
+        po_create: Any
+        supplier_id: int
+        demand_computation_item_ids: List[int]
+        computation_ids: List[int]
+
+    async def plan_purchase_orders_from_computation_item_ids(
+        self,
+        tenant_id: int,
+        selected_item_ids: List[int],
+        created_by: int,
+        include_sales_order_attachments: bool = False,
+    ) -> List["_ComputationPoPlan"]:
+        """按供应商规划采购订单 create 载荷（不写库，供 handoff）。"""
+        from apps.kuaizhizao.schemas.purchase import PurchaseOrderCreate, PurchaseOrderItemCreate
+        from apps.master_data.models.supplier import Supplier
+        from apps.kuaizhizao.utils.sales_order_attachment_carry import (
+            resolve_carried_sales_order_attachments,
+        )
+
+        selected_set = {int(v) for v in selected_item_ids if v is not None}
+        if not selected_set:
+            raise BusinessLogicError("请至少选择一条可下推采购明细")
+
+        seed_items = await DemandComputationItem.filter(
+            tenant_id=tenant_id,
+            id__in=list(selected_set),
+        ).all()
+        if not seed_items:
+            raise NotFoundError("需求计算明细不存在")
+
+        computation_ids = sorted({int(i.computation_id) for i in seed_items})
+        computations = await DemandComputation.filter(
+            tenant_id=tenant_id,
+            id__in=computation_ids,
+        ).all()
+        computation_by_id = {int(c.id): c for c in computations}
+        if len(computation_by_id) != len(computation_ids):
+            raise NotFoundError("需求计算不存在")
+        for computation in computations:
+            if computation.computation_status != "完成":
+                raise BusinessLogicError("只能下推已完成的需求计算")
+
+        plans: List[DemandComputationService._ComputationPoPlan] = []
+        site_today = to_site_date(resolve_business_datetime())
+        user = await User.get_or_none(id=created_by)
+
+        for computation_id in computation_ids:
+            computation = computation_by_id[computation_id]
+            items = await DemandComputationItem.filter(
+                tenant_id=tenant_id,
+                computation_id=computation_id,
+            ).all()
+            comp_selected_ids = [
+                int(i.id) for i in seed_items if int(i.computation_id) == computation_id
+            ]
+            selected_material_ids = self._resolve_buy_selected_material_ids(
+                items, comp_selected_ids
+            )
+
+            exclusions = await self._get_already_pushed_exclusions(tenant_id, computation_id)
+            purchase_remaining_by_material = self._get_purchase_remaining_qty_by_material(
+                items, exclusions
+            )
+
+            buy_material_ids = sorted(
+                {
+                    int(i.material_id or 0)
+                    for i in items
+                    if getattr(i, "material_source_type", None) == SOURCE_TYPE_BUY
+                    and int(i.material_id or 0) > 0
+                }
+            )
+            live_supplier_by_material: Dict[int, int] = {}
+            if buy_material_ids:
+                from apps.master_data.models.material import Material
+
+                mats = await Material.filter(
+                    tenant_id=tenant_id,
+                    id__in=buy_material_ids,
+                    deleted_at__isnull=True,
+                ).all()
+                for m in mats:
+                    live_sid = resolve_default_supplier_id_from_source_config(
+                        build_material_source_config(m)
+                    )
+                    if live_sid:
+                        live_supplier_by_material[int(m.id)] = live_sid
+
+            def _item_default_supplier_id(item: Any) -> Optional[int]:
+                sid = resolve_default_supplier_id_from_source_config(
+                    getattr(item, "material_source_config", None)
+                )
+                if sid:
+                    return sid
+                mid = int(getattr(item, "material_id", 0) or 0)
+                return live_supplier_by_material.get(mid)
+
+            purchase_items_by_supplier: Dict[int, List[Any]] = {}
+            created_po_material_ids: set = set()
+
+            for item in items:
+                if item.material_source_type != SOURCE_TYPE_BUY:
+                    continue
+                if (
+                    selected_material_ids is not None
+                    and int(item.material_id or 0) not in selected_material_ids
+                ):
+                    continue
+                if item.material_id in created_po_material_ids:
+                    continue
+                remaining_qty = purchase_remaining_by_material.get(
+                    int(item.material_id or 0), 0.0
+                )
+                if remaining_qty <= 0:
+                    continue
+                if not (
+                    item.suggested_purchase_order_quantity
+                    and item.suggested_purchase_order_quantity > 0
+                ):
+                    continue
+                supplier_id = _item_default_supplier_id(item)
+                group_key = (
+                    int(supplier_id) if supplier_id else PURCHASE_ORDER_NO_SUPPLIER_GROUP
+                )
+                push_lines = self._resolve_purchase_push_lines(item, remaining_qty)
+                purchase_items_by_supplier.setdefault(group_key, [])
+                for line in push_lines:
+                    purchase_items_by_supplier[group_key].append(
+                        self._build_purchase_push_item(item, line)
+                    )
+                created_po_material_ids.add(item.material_id)
+
+            attachments = await resolve_carried_sales_order_attachments(
+                tenant_id=tenant_id,
+                computation_id=computation_id,
+                computation_ids=None,
+                include=include_sales_order_attachments,
+            )
+
+            for supplier_id, push_items in purchase_items_by_supplier.items():
+                if not push_items:
+                    continue
+                po_plan = await self._build_computation_po_create_plan(
+                    tenant_id=tenant_id,
+                    computation=computation,
+                    supplier_id=int(supplier_id or 0),
+                    push_items=push_items,
+                    attachments=attachments,
+                    site_today=site_today,
+                    user=user,
+                    created_by=created_by,
+                )
+                if po_plan:
+                    plans.append(po_plan)
+
+        if not plans:
+            raise BusinessLogicError("所选明细均不可下推，请重新选择")
+        return plans
+
+    async def _build_computation_po_create_plan(
+        self,
+        tenant_id: int,
+        computation: DemandComputation,
+        supplier_id: int,
+        push_items: List[Any],
+        attachments: Optional[List[Dict[str, Any]]],
+        site_today: date,
+        user: Optional[User],
+        created_by: int,
+    ) -> Optional["_ComputationPoPlan"]:
+        from apps.kuaizhizao.schemas.purchase import PurchaseOrderCreate, PurchaseOrderItemCreate
+        from apps.master_data.models.supplier import Supplier
+
+        supplier_name = "待定供应商"
+        supplier = None
+        if int(supplier_id or 0) > 0:
+            supplier = await Supplier.get_or_none(tenant_id=tenant_id, id=supplier_id)
+            if supplier:
+                supplier_name = supplier.name
+            elif push_items and push_items[0].material_source_config:
+                source_config = resolve_computation_item_source_config(
+                    push_items[0].material_source_config
+                )
+                supplier_name = source_config.get("default_supplier_name", "待定供应商")
+
+        delivery_date = None
+        for item in push_items:
+            item_delivery_date = item.procurement_completion_date or item.delivery_date
+            if item_delivery_date:
+                if not delivery_date or item_delivery_date < delivery_date:
+                    delivery_date = item_delivery_date
+        if not delivery_date:
+            lead_time_days = 7
+            if push_items and push_items[0].material_source_config:
+                source_config = resolve_computation_item_source_config(
+                    push_items[0].material_source_config
+                )
+                lead_time_days = source_config.get("purchase_lead_time", 7)
+            delivery_date = site_today + timedelta(days=lead_time_days)
+
+        po_items: List[PurchaseOrderItemCreate] = []
+        dc_item_ids: List[int] = []
+        for item in push_items:
+            unit_price = Decimal(0)
+            if item.material_source_type == SOURCE_TYPE_BUY and item.material_source_config:
+                source_config = resolve_computation_item_source_config(item.material_source_config)
+                unit_price = Decimal(str(source_config.get("purchase_price", 0)))
+            quantity = Decimal(str(item.suggested_purchase_order_quantity or 0))
+            if quantity <= 0:
+                continue
+            total_price = unit_price * quantity
+            line_required_date = (
+                item.procurement_completion_date or item.delivery_date or delivery_date
+            )
+            dc_item_id = getattr(item, "id", None)
+            po_items.append(
+                PurchaseOrderItemCreate(
+                    material_id=item.material_id,
+                    material_code=item.material_code,
+                    material_name=item.material_name,
+                    material_spec=item.material_spec,
+                    ordered_quantity=quantity,
+                    unit=item.material_unit or "件",
+                    unit_price=unit_price,
+                    total_price=total_price,
+                    received_quantity=Decimal(0),
+                    outstanding_quantity=quantity,
+                    required_date=line_required_date,
+                    inspection_required=True,
+                    source_type="demand_computation",
+                    source_id=computation.id,
+                    demand_computation_item_id=int(dc_item_id) if dc_item_id else None,
+                )
+            )
+            if dc_item_id is not None:
+                dc_item_ids.append(int(dc_item_id))
+
+        if not po_items:
+            return None
+
+        po_create = PurchaseOrderCreate(
+            supplier_id=int(supplier_id or 0),
+            supplier_name=supplier_name,
+            order_date=site_today,
+            delivery_date=delivery_date,
+            order_type="标准采购",
+            status=DocumentStatus.DRAFT.value,
+            source_type="demand_computation",
+            source_id=int(computation.id),
+            items=po_items,
+            attachments=attachments or None,
+        )
+        if supplier and getattr(supplier, "buyer_id", None):
+            po_create.buyer_id = int(supplier.buyer_id)
+            po_create.buyer_name = (getattr(supplier, "buyer_name", None) or "").strip() or None
+        elif created_by:
+            po_create.buyer_id = int(created_by)
+            po_create.buyer_name = operator_name_from_user(user) or None
+
+        return DemandComputationService._ComputationPoPlan(
+            po_create=po_create,
+            supplier_id=int(supplier_id or 0),
+            demand_computation_item_ids=sorted(set(dc_item_ids)),
+            computation_ids=[int(computation.id)],
+        )
     
     async def _create_purchase_order_from_items(
         self,

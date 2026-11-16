@@ -1309,6 +1309,49 @@ async def preview_push_sales_order_to_purchase_requisition(
 
 
 @router.post(
+    "/{sales_order_id}/push-to-purchase-requisition/draft",
+    response_model=Dict[str, Any],
+    summary="Draft purchase requisition create payload from sales order",
+)
+async def draft_push_sales_order_to_purchase_requisition(
+    sales_order_id: int = Path(..., description="销售订单ID"),
+    payload: Optional[Dict[str, Any]] = Body(None),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    selected_item_ids = None
+    selected_quantities = None
+    if isinstance(payload, dict):
+        raw_ids = payload.get("selected_item_ids")
+        if isinstance(raw_ids, list):
+            selected_item_ids = raw_ids
+        raw_qty = payload.get("selected_quantities")
+        if isinstance(raw_qty, dict):
+            selected_quantities = raw_qty
+    try:
+        return await sales_order_service.draft_push_sales_order_to_purchase_requisition(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id,
+            selected_item_ids=selected_item_ids,
+            selected_quantities=selected_quantities,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(
+            http_status.HTTP_404_NOT_FOUND,
+            str(e),
+            "/sales-orders/{sales_order_id}/push-to-purchase-requisition/draft",
+            tenant_id,
+        )
+    except (BusinessLogicError, ValidationError) as e:
+        raise _http_exception_with_trace(
+            http_status.HTTP_400_BAD_REQUEST,
+            str(e),
+            "/sales-orders/{sales_order_id}/push-to-purchase-requisition/draft",
+            tenant_id,
+        )
+
+
+@router.post(
     "/{sales_order_id}/push-to-purchase-requisition",
     response_model=Dict[str, Any],
     summary="Push sales order to purchase requisition",
@@ -1387,6 +1430,49 @@ async def preview_push_sales_order_to_purchase_order(
             http_status.HTTP_400_BAD_REQUEST,
             str(e),
             "/sales-orders/{sales_order_id}/push-to-purchase-order/preview",
+            tenant_id,
+        )
+
+
+@router.post(
+    "/{sales_order_id}/push-to-purchase-order/draft",
+    response_model=Dict[str, Any],
+    summary="Draft purchase order create payloads from sales order",
+)
+async def draft_push_sales_order_to_purchase_order(
+    sales_order_id: int = Path(..., description="销售订单ID"),
+    payload: Optional[Dict[str, Any]] = Body(None),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    selected_item_ids = None
+    selected_quantities = None
+    if isinstance(payload, dict):
+        raw_ids = payload.get("selected_item_ids")
+        if isinstance(raw_ids, list):
+            selected_item_ids = raw_ids
+        raw_qty = payload.get("selected_quantities")
+        if isinstance(raw_qty, dict):
+            selected_quantities = raw_qty
+    try:
+        return await sales_order_service.draft_push_sales_order_to_purchase_order(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id,
+            selected_item_ids=selected_item_ids,
+            selected_quantities=selected_quantities,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(
+            http_status.HTTP_404_NOT_FOUND,
+            str(e),
+            "/sales-orders/{sales_order_id}/push-to-purchase-order/draft",
+            tenant_id,
+        )
+    except (BusinessLogicError, ValidationError) as e:
+        raise _http_exception_with_trace(
+            http_status.HTTP_400_BAD_REQUEST,
+            str(e),
+            "/sales-orders/{sales_order_id}/push-to-purchase-order/draft",
             tenant_id,
         )
 

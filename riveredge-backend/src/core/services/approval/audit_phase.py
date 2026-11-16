@@ -109,6 +109,7 @@ def derive_audit_phase(
     review_status: Any = None,
     *,
     enabled: bool,
+    review_submitted: Optional[bool] = None,
 ) -> Dict[str, Any]:
     """由单据状态确定性派生审核相位与允许动作。
 
@@ -124,9 +125,11 @@ def derive_audit_phase(
     if s in _REJECTED_STATUS or r in _REVIEW_REJECTED:
         phase = "rejected"
     elif entity_type in _RETURN_REVIEW_ENTITY_TYPES | _FINANCE_REVIEW_ENTITY_TYPES:
-        if r in _REVIEW_PENDING:
-            phase = "pending"
-        elif r in _REVIEW_APPROVED:
+        raw_review = str(review_status or "").strip()
+        pending_review = r in _REVIEW_PENDING or raw_review in _REVIEW_PENDING
+        if pending_review:
+            phase = "draft" if review_submitted is False else "pending"
+        elif r in _REVIEW_APPROVED or raw_review in _REVIEW_APPROVED:
             phase = "approved"
         elif r in _REVIEW_DRAFT or s in _DRAFT:
             phase = "draft"
@@ -150,11 +153,11 @@ def derive_audit_phase(
             entity_type in _DRAFT_REVIEW_PENDING_ENTITY_TYPES
             and r in _DRAFT_ENTITY_SUBMITTED_REVIEW
         ):
-            phase = "pending"
+            phase = "draft" if review_submitted is False else "pending"
         else:
             phase = "draft"
     elif (s in _PENDING or s in _SENT_AWAITING_REVIEW) and r not in _REVIEW_APPROVED:
-        phase = "pending"
+        phase = "draft" if review_submitted is False else "pending"
     elif s in _AUDITED_STRICT or s in _APPROVED_ONGOING or r in _REVIEW_APPROVED:
         phase = "approved"
     elif entity_type in _ENTITY_APPROVED_BUSINESS_STATUSES and s in _ENTITY_APPROVED_BUSINESS_STATUSES[entity_type]:

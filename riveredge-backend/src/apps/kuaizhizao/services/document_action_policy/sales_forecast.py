@@ -78,9 +78,16 @@ def derive_sales_forecast_capabilities(
     pushed_to_computation: bool = False,
     has_downstream: bool = False,
     has_items: bool = True,
+    review_submitted: Optional[bool] = None,
 ) -> SalesForecastCapabilities:
     status = getattr(forecast, "status", None)
     review_status = getattr(forecast, "review_status", None)
+
+    from apps.kuaizhizao.services.document_action_policy.review_submission_gate import (
+        allows_delete_unsubmitted,
+        allows_submit_unsubmitted,
+        allows_approve_submitted_pending,
+    )
 
     update_allowed = (
         is_draft_status(status or "")
@@ -92,25 +99,33 @@ def derive_sales_forecast_capabilities(
         "sales_forecast.update.not_allowed" if not update_allowed else None,
     )
 
-    delete_allowed = is_draft_status(status or "") or is_pending_review_status(status or "")
+    delete_allowed = allows_delete_unsubmitted(
+        status, review_status, review_submitted=review_submitted
+    )
     delete_cap = _cap(
         delete_allowed,
         "sales_forecast.delete.not_allowed" if not delete_allowed else None,
     )
 
-    submit_allowed = is_draft_status(status or "") or _is_rejected_status(status)
+    submit_allowed = allows_submit_unsubmitted(
+        status, review_status, review_submitted=review_submitted
+    )
     submit_cap = _cap(
         submit_allowed,
         "sales_forecast.submit.not_draft" if not submit_allowed else None,
     )
 
-    withdraw_allowed = is_pending_review_status(status or "") and _is_review_pending(review_status)
+    withdraw_allowed = allows_approve_submitted_pending(
+        status, review_status, review_submitted=review_submitted
+    )
     withdraw_cap = _cap(
         withdraw_allowed,
         "sales_forecast.withdraw_submit.not_pending" if not withdraw_allowed else None,
     )
 
-    approve_allowed = is_pending_review_status(status or "")
+    approve_allowed = allows_approve_submitted_pending(
+        status, review_status, review_submitted=review_submitted
+    )
     approve_cap = _cap(
         approve_allowed,
         "sales_forecast.approve.not_pending" if not approve_allowed else None,

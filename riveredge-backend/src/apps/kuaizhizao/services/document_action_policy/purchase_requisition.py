@@ -70,8 +70,16 @@ def derive_purchase_requisition_capabilities(
     req: Any,
     *,
     has_linked_purchase_order: bool = False,
+    review_submitted: Optional[bool] = None,
 ) -> PurchaseRequisitionCapabilities:
     status = getattr(req, "status", None)
+    review_status = getattr(req, "review_status", None)
+
+    from apps.kuaizhizao.services.document_action_policy.review_submission_gate import (
+        allows_delete_unsubmitted,
+        allows_submit_unsubmitted,
+        allows_approve_submitted_pending,
+    )
 
     update_allowed = (
         is_draft_status(status or "")
@@ -84,7 +92,9 @@ def derive_purchase_requisition_capabilities(
     )
 
     linked_po = bool(has_linked_purchase_order) or _status_implies_linked_purchase_order(status)
-    delete_status_ok = is_draft_status(status or "") or is_pending_review_status(status or "")
+    delete_status_ok = allows_delete_unsubmitted(
+        status, review_status, review_submitted=review_submitted
+    )
     delete_allowed = delete_status_ok and not linked_po
     delete_reason = None
     if linked_po:
@@ -93,17 +103,20 @@ def derive_purchase_requisition_capabilities(
         delete_reason = "purchase_requisition.delete.not_allowed"
     delete_cap = _cap(delete_allowed, delete_reason)
 
-    submit_allowed = is_draft_status(status or "") or is_rejected_status(status or "")
+    submit_allowed = allows_submit_unsubmitted(
+        status, review_status, review_submitted=review_submitted
+    )
     submit_cap = _cap(
         submit_allowed,
         "purchase_requisition.submit.not_draft" if not submit_allowed else None,
     )
 
+    approve_ok = allows_approve_submitted_pending(
+        status, review_status, review_submitted=review_submitted
+    )
     approve_cap = _cap(
-        is_pending_review_status(status or ""),
-        "purchase_requisition.approve.not_pending"
-        if not is_pending_review_status(status or "")
-        else None,
+        approve_ok,
+        "purchase_requisition.approve.not_pending" if not approve_ok else None,
     )
 
     revoke_allowed = _is_revoke_approval_allowed(status) and not linked_po
@@ -147,10 +160,12 @@ def assert_purchase_requisition_capability(
     action: str,
     *,
     has_linked_purchase_order: bool = False,
+    review_submitted: Optional[bool] = None,
 ) -> None:
     caps = derive_purchase_requisition_capabilities(
         req,
         has_linked_purchase_order=has_linked_purchase_order,
+        review_submitted=review_submitted,
     )
     cap_map = {
         "update": caps.update,

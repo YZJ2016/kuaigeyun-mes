@@ -331,6 +331,60 @@ export async function previewPushQuotationToSalesOrder(
   );
 }
 
+export interface QuotationToSalesOrderDraftResponse {
+  target_type: 'sales_order';
+  source_type: 'quotation';
+  source_id: number;
+  source_code?: string;
+  document_flow: {
+    documentFlowSourceType: 'quotation';
+    documentFlowSourceId: number;
+    documentFlowSourceItemIds: number[];
+  };
+  create_payload: Record<string, unknown>;
+}
+
+export interface QuotationToSalesReviewDraftResponse {
+  target_type: 'sales_review';
+  source_type: 'quotation';
+  source_id: number;
+  source_code?: string;
+  document_flow: {
+    documentFlowSourceType: 'quotation';
+    documentFlowSourceId: number;
+    documentFlowSourceItemIds: number[];
+  };
+  create_payload: Record<string, unknown>;
+}
+
+export async function draftSalesReviewFromQuotation(
+  quotationId: number,
+  selectedItemIds?: number[],
+): Promise<QuotationToSalesReviewDraftResponse> {
+  const qs =
+    selectedItemIds?.length ?
+      `?${selectedItemIds.map((id) => `selected_item_ids=${id}`).join('&')}`
+    : '';
+  return apiRequest<QuotationToSalesReviewDraftResponse>(
+    `/apps/kuaizhizao/quotations/${quotationId}/push-to-sales-review/draft${qs}`,
+    { method: 'GET' },
+  );
+}
+
+export async function draftSalesOrderFromQuotation(
+  quotationId: number,
+  selectedItemIds?: number[],
+): Promise<QuotationToSalesOrderDraftResponse> {
+  const qs =
+    selectedItemIds?.length ?
+      `?${selectedItemIds.map((id) => `selected_item_ids=${id}`).join('&')}`
+    : '';
+  return apiRequest<QuotationToSalesOrderDraftResponse>(
+    `/apps/kuaizhizao/quotations/${quotationId}/push-to-sales-order/draft${qs}`,
+    { method: 'GET' },
+  );
+}
+
 export async function previewPushQuotationToSalesContract(
   quotationId: number,
 ): Promise<QuotationPushPreviewResponse> {

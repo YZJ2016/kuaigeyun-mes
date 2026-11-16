@@ -11,6 +11,10 @@ from apps.kuaizhizao.services.document_action_policy.types import (
     CAPABILITY_REASON_MESSAGES,
     PurchaseReturnCapabilities,
 )
+from core.services.approval.review_submission_state import (
+    is_effective_review_draft,
+    is_effective_review_pending,
+)
 
 _PENDING_STATUSES = frozenset({"待退货", "pending"})
 _DRAFT_STATUSES = frozenset({"草稿", "DRAFT", "draft"})
@@ -82,12 +86,14 @@ def derive_purchase_return_capabilities(
     *,
     has_items: bool = True,
     audit_required: bool = False,
+    review_submitted: Optional[bool] = None,
 ) -> PurchaseReturnCapabilities:
     status = getattr(return_doc, "status", None)
     review_status = getattr(return_doc, "review_status", None)
 
     review_blocks_edit = audit_required and (
-        _is_review_pending(review_status) or _is_review_approved(review_status)
+        is_effective_review_pending(review_status, review_submitted=review_submitted)
+        or _is_review_approved(review_status)
     )
     update_allowed = _is_editable_business_status(status) and not review_blocks_edit
     if _is_review_rejected(review_status):
@@ -98,7 +104,9 @@ def derive_purchase_return_capabilities(
     )
 
     delete_allowed = _is_pending(status) and (
-        not audit_required or _is_review_draft(review_status) or _is_review_rejected(review_status)
+        not audit_required
+        or is_effective_review_draft(review_status, review_submitted=review_submitted)
+        or _is_review_rejected(review_status)
     )
     delete_cap = _cap(
         delete_allowed,
@@ -134,9 +142,13 @@ def derive_purchase_return_capabilities(
         submit_reason = "purchase_return.submit.not_draft"
     elif not has_items:
         submit_reason = "purchase_return.submit.no_items"
-    elif _is_review_pending(review_status) or _is_review_approved(review_status):
+    elif is_effective_review_pending(review_status, review_submitted=review_submitted) or _is_review_approved(
+        review_status
+    ):
         submit_reason = "purchase_return.submit.not_draft"
-    elif _is_review_draft(review_status) or _is_review_rejected(review_status):
+    elif is_effective_review_draft(review_status, review_submitted=review_submitted) or _is_review_rejected(
+        review_status
+    ):
         # 待退货可提审；已退货仍草稿（自动审确认未盖章的历史单）允许补提交以解锁审核态
         if _is_editable_business_status(status) or _is_returned(status):
             submit_allowed = True
@@ -146,15 +158,21 @@ def derive_purchase_return_capabilities(
     submit_cap = _cap(submit_allowed, submit_reason)
 
     withdraw_submit_cap = _cap(
-        _is_editable_business_status(status) and _is_review_pending(review_status),
+        _is_editable_business_status(status)
+        and is_effective_review_pending(review_status, review_submitted=review_submitted),
         "purchase_return.withdraw_submit.not_pending"
-        if not (_is_editable_business_status(status) and _is_review_pending(review_status))
+        if not (
+            _is_editable_business_status(status)
+            and is_effective_review_pending(review_status, review_submitted=review_submitted)
+        )
         else None,
     )
 
     approve_cap = _cap(
-        _is_review_pending(review_status),
-        "purchase_return.approve.not_pending" if not _is_review_pending(review_status) else None,
+        is_effective_review_pending(review_status, review_submitted=review_submitted),
+        "purchase_return.approve.not_pending"
+        if not is_effective_review_pending(review_status, review_submitted=review_submitted)
+        else None,
     )
 
     revoke_allowed = (
@@ -186,11 +204,13 @@ def assert_purchase_return_capability(
     *,
     has_items: bool = True,
     audit_required: bool = False,
+    review_submitted: Optional[bool] = None,
 ) -> None:
     caps = derive_purchase_return_capabilities(
         return_doc,
         has_items=has_items,
         audit_required=audit_required,
+        review_submitted=review_submitted,
     )
     cap_map = {
         "update": caps.update,

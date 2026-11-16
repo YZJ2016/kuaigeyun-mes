@@ -2,7 +2,7 @@
  * UniTabs 表单标签（/new、/create、/:id/edit）的 keep-alive 由 TabRouteCache 负责。
  * 本模块为仓库 pull-entry 等非 `/new` 路由提供进程内表单快照（与 useRecordFormDraft 配合）。
  */
-import dayjs from 'dayjs';
+import dayjs from '../config/dayjs';
 import { coerceFormDate } from './formDate';
 import { normalizeFormListItems } from './formListItems';
 
@@ -23,11 +23,20 @@ function looksLikeDateString(value: unknown): value is string {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value);
 }
 
+function draftDateMarker(value: unknown): { [typeof DRAFT_DAYJS]: string } | null {
+  if (value == null || value === '') return null;
+  const coerced = coerceFormDate(value);
+  if (coerced) return { [DRAFT_DAYJS]: coerced.toISOString() };
+  return null;
+}
+
 function serializeDraftValue(value: unknown): unknown {
   if (dayjs.isDayjs(value)) {
     const iso = value.toISOString();
     return { [DRAFT_DAYJS]: iso };
   }
+  const dateMarker = draftDateMarker(value);
+  if (dateMarker) return dateMarker;
   if (isBrokenDayjsLike(value)) {
     const healed = coerceFormDate((value as Record<string, unknown>).$d);
     if (healed) return { [DRAFT_DAYJS]: healed.toISOString() };
@@ -76,7 +85,8 @@ export function buildDocumentCreateDraftKey(
 ): string {
   const params = new URLSearchParams(search || '');
   params.delete('_refresh');
-  const cleanSearch = params.toString();
+  const sorted = [...params.entries()].sort(([a], [b]) => a.localeCompare(b));
+  const cleanSearch = new URLSearchParams(sorted).toString();
   const routeKey = cleanSearch ? `${pathname}?${cleanSearch}` : pathname;
   return `doc-create-draft:${resourceKey}:${routeKey}`;
 }

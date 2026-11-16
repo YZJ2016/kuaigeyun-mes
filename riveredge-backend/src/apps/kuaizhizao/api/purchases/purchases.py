@@ -473,6 +473,39 @@ async def list_purchase_receipt_pull_candidates(
 
 
 @router.post(
+    "/purchase-orders/draft-from-requisition-items",
+    summary="Draft purchase order create payloads from requisition lines",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:purchase-order:create"))],
+)
+async def draft_purchase_orders_from_requisition_items(
+    request: Dict[str, Any] = Body(...),
+    current_user: CurrentUser = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    from apps.kuaizhizao.schemas.purchase_requisition import (
+        ConvertToPurchaseOrderRequest,
+        PullFromRequisitionItemsRequest,
+    )
+    from apps.kuaizhizao.services.purchase_requisition_service import PurchaseRequisitionService
+
+    if "selected_item_ids" in request and "item_ids" not in request:
+        data = ConvertToPurchaseOrderRequest(
+            item_ids=PullFromRequisitionItemsRequest(**request).selected_item_ids
+        )
+    else:
+        data = ConvertToPurchaseOrderRequest(**request)
+    try:
+        return await PurchaseRequisitionService().draft_purchase_orders_from_requisition_convert(
+            tenant_id=tenant_id,
+            data=data,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
     "/purchase-orders/pull-from-requisition-items",
     summary="Create purchase orders from requisition lines",
     dependencies=[Depends(require_permission_codes("kuaizhizao:purchase-order:create"))],
@@ -503,6 +536,65 @@ async def pull_purchase_orders_from_requisition_items(
             status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="从采购申请开口行创建采购订单失败",
         )
+
+
+@router.post(
+    "/purchase-orders/draft-from-demand-computation-items",
+    summary="Draft purchase order create payloads from demand computation lines",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:purchase-order:create"))],
+)
+async def draft_purchase_orders_from_demand_computation_items(
+    request: Dict[str, Any] = Body(...),
+    current_user: CurrentUser = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    from apps.kuaizhizao.schemas.purchase_requisition import PullFromDemandComputationItemsRequest
+    from apps.kuaizhizao.services.document_push_pull_service import DocumentPushPullService
+
+    data = PullFromDemandComputationItemsRequest(**request)
+    try:
+        return await DocumentPushPullService().draft_purchase_orders_from_demand_computation_items(
+            tenant_id=tenant_id,
+            selected_item_ids=data.selected_item_ids,
+            created_by=current_user.id,
+            include_sales_order_attachments=bool(data.include_sales_order_attachments),
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/purchase-orders/draft-from-inquiry-items",
+    summary="Draft purchase order create payloads from inquiry lines",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:purchase-order:create"))],
+)
+async def draft_purchase_orders_from_inquiry_items(
+    request: Dict[str, Any] = Body(...),
+    current_user: CurrentUser = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    from apps.kuaizhizao.schemas.purchase_inquiry import PullFromInquiryItemsRequest
+
+    if "selected_item_ids" in request and "item_ids" not in request:
+        item_ids = PullFromInquiryItemsRequest(**request).selected_item_ids
+    elif isinstance(request.get("item_ids"), list):
+        item_ids = request["item_ids"]
+    else:
+        raise HTTPException(
+            status_code=http_status.HTTP_400_BAD_REQUEST,
+            detail="请提供 selected_item_ids 或 item_ids",
+        )
+    try:
+        return await PurchaseInquiryService().draft_purchase_orders_from_inquiry_convert(
+            tenant_id=tenant_id,
+            item_ids=item_ids,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post(

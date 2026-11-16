@@ -181,6 +181,9 @@ async def batch_document_item_material_previews(
     """
     批量拉取列表明细物料名预览（仅 material_name，供前端「明细」列 MarkerTag）。
     按 parent_id、id 升序；前端只展示前 2 条 + 等 N 项。
+
+    快照 material_name 为空时：先走 `_hydrate_item_material_snapshot` 写回主数据编码/名称，
+    再组装预览（与详情 hydrate 同一写路径，非读侧猜值）。
     """
     if not parent_ids:
         return {}
@@ -191,11 +194,41 @@ async def batch_document_item_material_previews(
     # 软删明细不参与列表预览（有 deleted_at 字段的单据行表）
     if hasattr(item_model, "deleted_at"):
         filter_kwargs["deleted_at__isnull"] = True
+
+    value_fields = [parent_field, material_name_field, "id"]
+    if hasattr(item_model, "material_id"):
+        value_fields.append("material_id")
+
     rows = await (
         item_model.filter(**filter_kwargs)
         .order_by(parent_field, "id")
-        .values(parent_field, material_name_field)
+        .values(*value_fields)
     )
+
+    blank_ids = [
+        int(row["id"])
+        for row in rows
+        if not str(row.get(material_name_field) or "").strip()
+        and int(row.get("material_id") or 0) > 0
+    ]
+    if blank_ids:
+        from apps.kuaizhizao.services.warehouse_service import (
+            _hydrate_item_material_snapshot,
+        )
+
+        blank_items = await item_model.filter(
+            tenant_id=tenant_id, id__in=blank_ids
+        ).all()
+        await _hydrate_item_material_snapshot(tenant_id, blank_items)
+        name_by_id = {
+            int(it.id): str(getattr(it, material_name_field, "") or "").strip()
+            for it in blank_items
+        }
+        for row in rows:
+            rid = int(row["id"])
+            if rid in name_by_id and name_by_id[rid]:
+                row[material_name_field] = name_by_id[rid]
+
     out: Dict[int, List[Dict[str, Any]]] = {}
     for row in rows:
         pid = int(row[parent_field])
@@ -385,6 +418,7 @@ def enrich_sales_order_capabilities_on_response(
     order_model: Any,
     response: T,
     *,
+    review_submitted: Optional[bool] = None,
     pushed_to_computation: bool = False,
     has_items: bool = True,
     has_line_work_orders: bool = False,
@@ -403,6 +437,7 @@ def enrich_sales_order_capabilities_on_response(
 ) -> T:
     caps = derive_sales_order_capabilities(
         order_model,
+        review_submitted=review_submitted,
         pushed_to_computation=pushed_to_computation,
         has_items=has_items,
         has_line_work_orders=has_line_work_orders,
@@ -440,8 +475,10 @@ def enrich_sales_order_list_capabilities(
     has_remaining_invoice_amount_by_id: Optional[dict[int, bool]] = None,
     has_prepayment_receipt_by_id: Optional[dict[int, bool]] = None,
     require_audit_before_print: bool = False,
+    review_submitted_by_id: Optional[dict[int, bool]] = None,
 ) -> List[T]:
     pushed_map = pushed_to_computation_by_id or {}
+    submitted_map = review_submitted_by_id or {}
     items_map = has_items_by_id or {}
     wo_map = has_line_work_orders_by_id or {}
     blocks_map = computation_blocks_withdraw_by_id or {}
@@ -457,6 +494,7 @@ def enrich_sales_order_list_capabilities(
         oid = int(getattr(order_model, "id", 0) or 0)
         caps = derive_sales_order_capabilities(
             order_model,
+            review_submitted=submitted_map.get(oid),
             pushed_to_computation=pushed_map.get(oid, False),
             has_items=items_map.get(oid, True),
             has_line_work_orders=wo_map.get(oid, False),
@@ -685,17 +723,99 @@ def get_shipment_notice_capabilities_from_record(
     )
 
 
+async def resolve_review_submitted_for_entity(
+    tenant_id: int,
+    entity_type: str,
+    entity_id: int,
+    review_status: Any,
+) -> Optional[bool]:
+    from core.services.approval.approval_instance_service import ApprovalInstanceService
+    from core.services.approval.review_submission_state import is_review_label_pending
+
+    if not is_review_label_pending(review_status):
+        return None
+    flow = await ApprovalInstanceService.batch_entity_has_approval_flow(
+        tenant_id,
+        entity_type,
+        [int(entity_id)],
+    )
+    return bool(flow.get(int(entity_id), False))
+
+
+async def resolve_review_submitted_for_document(
+    tenant_id: int,
+    entity_type: str,
+    doc: Any,
+    *,
+    status_attr: str = "status",
+    review_status_attr: str = "review_status",
+) -> Optional[bool]:
+    from apps.kuaizhizao.services.document_action_policy.review_submission_gate import (
+        looks_pending_submission,
+    )
+
+    status = getattr(doc, status_attr, None)
+    review_status = getattr(doc, review_status_attr, None)
+    if not looks_pending_submission(status, review_status):
+        return None
+    doc_id = int(getattr(doc, "id", 0) or 0)
+    if not doc_id:
+        return None
+    from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+    flow = await ApprovalInstanceService.batch_entity_has_approval_flow(
+        tenant_id,
+        entity_type,
+        [doc_id],
+    )
+    return bool(flow.get(doc_id, False))
+
+
+async def batch_review_submitted_for_documents(
+    tenant_id: int,
+    entity_type: str,
+    docs: List[Any],
+    *,
+    status_attr: str = "status",
+    review_status_attr: str = "review_status",
+) -> dict[int, bool]:
+    from apps.kuaizhizao.services.document_action_policy.review_submission_gate import (
+        looks_pending_submission,
+    )
+    from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+    pending_ids: list[int] = []
+    for doc in docs:
+        if not looks_pending_submission(
+            getattr(doc, status_attr, None),
+            getattr(doc, review_status_attr, None),
+        ):
+            continue
+        doc_id = int(getattr(doc, "id", 0) or 0)
+        if doc_id:
+            pending_ids.append(doc_id)
+    if not pending_ids:
+        return {}
+    return await ApprovalInstanceService.batch_entity_has_approval_flow(
+        tenant_id,
+        entity_type,
+        pending_ids,
+    )
+
+
 def enrich_sales_return_capabilities_on_response(
     return_doc: Any,
     response: T,
     *,
     has_items: bool = True,
     audit_required: bool = False,
+    review_submitted: Optional[bool] = None,
 ) -> T:
     caps = derive_sales_return_capabilities(
         return_doc,
         has_items=has_items,
         audit_required=audit_required,
+        review_submitted=review_submitted,
     )
     if hasattr(response, "model_copy"):
         return _attach_capabilities_to_response(response, caps)
@@ -709,8 +829,10 @@ def enrich_sales_return_list_capabilities(
     has_items_by_id: Optional[dict[int, bool]] = None,
     item_counts_by_id: Optional[dict[int, int]] = None,
     audit_required: bool = False,
+    review_submitted_by_id: Optional[dict[int, bool]] = None,
 ) -> List[T]:
     items_map = has_items_by_id or {}
+    submitted_map = review_submitted_by_id or {}
     out: List[T] = []
     for doc, resp in zip(return_docs, responses):
         rid = int(getattr(doc, "id", 0) or 0)
@@ -718,6 +840,7 @@ def enrich_sales_return_list_capabilities(
             doc,
             has_items=items_map.get(rid, True),
             audit_required=audit_required,
+            review_submitted=submitted_map.get(rid),
         )
         update: Dict[str, Any] = {"capabilities": caps}
         if item_counts_by_id is not None:
@@ -1167,6 +1290,7 @@ def enrich_purchase_order_capabilities_on_response(
     order: Any,
     response: T,
     *,
+    review_submitted: Optional[bool] = None,
     has_items: bool = True,
     has_outstanding: bool = False,
     has_pushable_receipt_outstanding: bool = False,
@@ -1183,6 +1307,7 @@ def enrich_purchase_order_capabilities_on_response(
 ) -> T:
     caps = derive_purchase_order_capabilities(
         order,
+        review_submitted=review_submitted,
         has_items=has_items,
         has_outstanding=has_outstanding,
         has_pushable_receipt_outstanding=has_pushable_receipt_outstanding,
@@ -1235,11 +1360,16 @@ async def enrich_purchase_order_detail_capabilities(
     reserved_map = await PaymentApplicationPullService().prepayment_reserved_by_order_ids(
         tenant_id, [order_id]
     )
-    prepay_amount = Decimal(str(getattr(order, "prepayment_amount", 0) or 0))
-    prepay_remaining = max(Decimal("0"), prepay_amount - reserved_map.get(order_id, Decimal("0")))
+    prepay_remaining = compute_prepayment_application_remaining(
+        order, reserved_map.get(order_id, Decimal("0"))
+    )
+    review_submitted = await resolve_review_submitted_for_document(
+        tenant_id, "purchase_order", order
+    )
     return enrich_purchase_order_capabilities_on_response(
         order,
         response,
+        review_submitted=review_submitted,
         has_items=has_items,
         has_outstanding=has_outstanding,
         has_pushable_receipt_outstanding=pushable_receipt_map.get(order_id, False),
@@ -1379,11 +1509,13 @@ def enrich_purchase_return_capabilities_on_response(
     *,
     has_items: bool = True,
     audit_required: bool = False,
+    review_submitted: Optional[bool] = None,
 ) -> T:
     caps = derive_purchase_return_capabilities(
         return_doc,
         has_items=has_items,
         audit_required=audit_required,
+        review_submitted=review_submitted,
     )
     if hasattr(response, "model_copy"):
         return _attach_capabilities_to_response(response, caps)
@@ -1396,8 +1528,10 @@ def enrich_purchase_return_list_capabilities(
     *,
     has_items_by_id: Optional[dict[int, bool]] = None,
     audit_required: bool = False,
+    review_submitted_by_id: Optional[dict[int, bool]] = None,
 ) -> List[T]:
     items_map = has_items_by_id or {}
+    submitted_map = review_submitted_by_id or {}
     out: List[T] = []
     for doc, resp in zip(return_docs, responses):
         rid = int(getattr(doc, "id", 0) or 0)
@@ -1405,6 +1539,7 @@ def enrich_purchase_return_list_capabilities(
             doc,
             has_items=items_map.get(rid, True),
             audit_required=audit_required,
+            review_submitted=submitted_map.get(rid),
         )
         if hasattr(resp, "model_copy"):
             out.append(_attach_capabilities_to_response(resp, caps))

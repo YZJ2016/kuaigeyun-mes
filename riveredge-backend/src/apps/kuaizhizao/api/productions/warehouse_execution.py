@@ -3769,6 +3769,15 @@ async def pull_sales_deliveries_from_sales_order_items(
                 delivery_quantities[int(k)] = qty
         if not delivery_quantities:
             delivery_quantities = None
+    raw_wh = request.get("line_warehouses")
+    line_warehouses: Optional[Dict[int, int]] = None
+    if isinstance(raw_wh, dict) and raw_wh:
+        line_warehouses = {}
+        for k, v in raw_wh.items():
+            try:
+                line_warehouses[int(k)] = int(v)
+            except (TypeError, ValueError):
+                continue
     from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
 
     source_items = await SalesOrderItem.filter(tenant_id=tenant_id, id__in=selected_ids).only("sales_order_id")
@@ -3784,6 +3793,7 @@ async def pull_sales_deliveries_from_sales_order_items(
             item_ids=selected_ids,
             created_by=current_user.id,
             delivery_quantities=delivery_quantities,
+            line_warehouses=line_warehouses,
         )
     except NotFoundError as e:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
@@ -3835,11 +3845,21 @@ async def pull_sales_deliveries_from_shipment_notice_items(
         selected_ids = [int(v) for v in raw_ids]
     except (TypeError, ValueError):
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail="明细ID格式无效")
+    raw_wh = request.get("line_warehouses")
+    line_warehouses: Optional[Dict[int, int]] = None
+    if isinstance(raw_wh, dict) and raw_wh:
+        line_warehouses = {}
+        for k, v in raw_wh.items():
+            try:
+                line_warehouses[int(k)] = int(v)
+            except (TypeError, ValueError):
+                continue
     try:
         return await SalesDeliveryService().create_sales_deliveries_from_notice_items(
             tenant_id=tenant_id,
             item_ids=selected_ids,
             created_by=current_user.id,
+            line_warehouses=line_warehouses,
         )
     except NotFoundError as e:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
@@ -5720,6 +5740,54 @@ async def generate_replenishment_suggestions_from_demand_computation(
         tenant_id=tenant_id,
         demand_computation_id=int(demand_computation_id),
         created_by=current_user.id,
+    )
+
+
+@router.post(
+    "/replenishment-suggestions/draft-purchase-requisition",
+    summary="Draft purchase requisition create payload from replenishment suggestions",
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaizhizao:warehouse-management-replenishment-suggestions:update",
+                "kuaizhizao:purchase-requisition:create",
+                require_all=True,
+            )
+        )
+    ],
+)
+async def draft_replenishment_to_purchase_requisition(
+    body: ReplenishmentSuggestionPushRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    return await ReplenishmentSuggestionService().draft_purchase_requisition_from_replenishment_suggestions(
+        tenant_id=tenant_id,
+        suggestion_ids=body.suggestion_ids,
+    )
+
+
+@router.post(
+    "/replenishment-suggestions/draft-purchase-orders",
+    summary="Draft purchase order create payloads from replenishment suggestions",
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaizhizao:warehouse-management-replenishment-suggestions:update",
+                "kuaizhizao:purchase-order:create",
+                require_all=True,
+            )
+        )
+    ],
+)
+async def draft_replenishment_to_purchase_orders(
+    body: ReplenishmentSuggestionPushRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    return await ReplenishmentSuggestionService().draft_purchase_orders_from_replenishment_suggestions(
+        tenant_id=tenant_id,
+        suggestion_ids=body.suggestion_ids,
     )
 
 

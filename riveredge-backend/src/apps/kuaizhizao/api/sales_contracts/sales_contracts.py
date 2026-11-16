@@ -381,6 +381,30 @@ async def convert_to_order(
         raise HTTPException(status_code=409, detail=str(e))
 
 
+@router.post(
+    "/{contract_id}/push-to-sales-order/draft",
+    summary="Draft sales order create payload from sales contract",
+)
+async def draft_sales_order_from_sales_contract(
+    contract_id: int = Path(..., description="销售合同 ID"),
+    body: SalesContractConvertToOrderRequest = Body(default_factory=SalesContractConvertToOrderRequest),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        return await service.draft_sales_order_create_from_sales_contract(
+            tenant_id=tenant_id,
+            contract_id=contract_id,
+            selected_item_ids=body.selected_item_ids,
+            release_lines=body.release_lines,
+            current_user=current_user,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
 @router.get(
     "/{contract_id}/push-to-sales-order/preview",
     summary="Push sales contract to sales order preview",

@@ -132,6 +132,7 @@ def _can_withdraw_submitted(order: Any) -> bool:
 def derive_sales_order_capabilities(
     order: Any,
     *,
+    review_submitted: Optional[bool] = None,
     pushed_to_computation: bool = False,
     has_items: bool = True,
     has_line_work_orders: bool = False,
@@ -160,11 +161,21 @@ def derive_sales_order_capabilities(
         update_allowed = True
     update_cap = _cap(update_allowed, update_reason if not update_allowed else None)
 
-    # delete — 草稿、待审核或已提交，且尚无下游单据
-    delete_status_ok = (
-        _is_draft(status)
-        or _is_pending_review_status(status)
-        or _norm_status(status) == "已提交"
+    # update_attachments — 与整单 update 解耦；已审核后仍可在附件中心补充（已取消除外）
+    if _is_cancelled_status(status):
+        update_attachments_cap = _cap(False, "sales_order.update_attachments.cancelled")
+    else:
+        update_attachments_cap = _cap(True)
+
+    from apps.kuaizhizao.services.document_action_policy.review_submission_gate import (
+        allows_delete_unsubmitted,
+        allows_submit_unsubmitted,
+        allows_approve_submitted_pending,
+    )
+
+    # delete — 未提交（草稿/误标待审）可删；已提交待审须先撤回
+    delete_status_ok = allows_delete_unsubmitted(
+        status, review_status, review_submitted=review_submitted
     )
     delete_allowed = delete_status_ok and not has_downstream_documents
     delete_reason = None
@@ -174,16 +185,20 @@ def derive_sales_order_capabilities(
         delete_reason = "sales_order.delete.not_allowed"
     delete_cap = _cap(delete_allowed, delete_reason)
 
-    # submit — 草稿（已审核时 submit 接口直接返回，不报错）
-    submit_allowed = _is_draft(status) or _is_rejected_status(status)
+    submit_allowed = allows_submit_unsubmitted(
+        status, review_status, review_submitted=review_submitted
+    )
     submit_cap = _cap(
         submit_allowed,
         "sales_order.submit.not_draft" if not submit_allowed else None,
     )
 
+    approve_ok = allows_approve_submitted_pending(
+        status, review_status, review_submitted=review_submitted
+    )
     approve_cap = _cap(
-        _is_pending_review_status(status),
-        "sales_order.approve.not_pending" if not _is_pending_review_status(status) else None,
+        approve_ok,
+        "sales_order.approve.not_pending" if not approve_ok else None,
     )
 
     # close — 与 _validate_can_close_sales_order 一致
@@ -490,9 +505,11 @@ def assert_sales_order_capability(
     require_shipment_notice_before_delivery: bool = False,
     require_audit_before_print: bool = False,
     has_prepayment_receipt: bool = False,
+    review_submitted: Optional[bool] = None,
 ) -> None:
     caps = derive_sales_order_capabilities(
         order,
+        review_submitted=review_submitted,
         pushed_to_computation=pushed_to_computation,
         has_items=has_items,
         has_line_work_orders=has_line_work_orders,

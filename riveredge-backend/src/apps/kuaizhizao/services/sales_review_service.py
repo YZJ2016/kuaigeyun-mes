@@ -496,7 +496,40 @@ class SalesReviewService(AppBaseService):
             row.total_quantity = total_qty
             row.total_amount = total_amt
 
+        await self._finalize_document_flow_after_create(
+            tenant_id=tenant_id,
+            review_data=data,
+            sales_review_id=int(row.id),
+            sales_review_code=code,
+            project_name=data.project_name,
+            created_by=current_user.id,
+        )
+
         return await self.get(tenant_id, row.id)
+
+    async def _finalize_document_flow_after_create(
+        self,
+        tenant_id: int,
+        review_data: SalesReviewCreate,
+        sales_review_id: int,
+        sales_review_code: str,
+        project_name: str,
+        created_by: int,
+    ) -> None:
+        source_type = (getattr(review_data, "document_flow_source_type", None) or "").strip()
+        source_id = getattr(review_data, "document_flow_source_id", None)
+        if source_type != "quotation" or not source_id:
+            return
+        from apps.kuaizhizao.services.quotation_service import QuotationService
+
+        await QuotationService().finalize_quotation_after_sales_review_created(
+            tenant_id=tenant_id,
+            quotation_id=int(source_id),
+            sales_review_id=sales_review_id,
+            sales_review_code=sales_review_code,
+            project_name=project_name,
+            created_by=created_by,
+        )
 
     async def update(
         self, tenant_id: int, review_id: int, data: SalesReviewUpdate, current_user: User
@@ -877,15 +910,16 @@ class SalesReviewService(AppBaseService):
             items=[it.model_dump() for it in items],
         )
 
-    async def push_to_sales_order(
-        self, tenant_id: int, review_id: int, current_user: User
-    ) -> SalesReviewPushResult:
+    async def build_sales_order_create_from_sales_review(
+        self, tenant_id: int, review_id: int
+    ):
+        """
+        从订单评审构建 SalesOrderCreate（不写库）。
+        返回 (review_row, 明细行, SalesOrderCreate)。
+        """
         from apps.kuaizhizao.constants import DemandStatus, ReviewStatus
         from apps.kuaizhizao.constants.price_type import DEFAULT_SALES_PRICE_TYPE
-        from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
         from apps.kuaizhizao.schemas.sales_order import SalesOrderCreate, SalesOrderItemCreate
-        from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
-        from apps.kuaizhizao.services.sales_order_service import SalesOrderService
 
         preview = await self.preview_push_to_sales_order(tenant_id, review_id)
         if not preview.can_push:
@@ -935,22 +969,33 @@ class SalesReviewService(AppBaseService):
             notes=row.remarks or f"由订单评审 {row.review_code} 下推",
             items=so_items,
         )
+        return row, items, so_create
+
+    async def finalize_sales_review_after_sales_order_created(
+        self,
+        tenant_id: int,
+        review_id: int,
+        sales_order_id: int,
+        sales_order_code: str,
+        actor: User,
+    ) -> None:
+        """用户保存销售订单后回写订单评审、关联报价与单据关联。"""
+        from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+        from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+        from apps.kuaizhizao.services.sales_order_service import SalesOrderService
+
+        row = await SalesReview.get(id=review_id)
         so_svc = SalesOrderService()
-        sales_order = await so_svc.create_sales_order(
+        await so_svc.apply_push_default_mode_after_create(
             tenant_id=tenant_id,
-            sales_order_data=so_create,
-            created_by=current_user.id,
-        )
-        sales_order = await so_svc.apply_push_default_mode_after_create(
-            tenant_id=tenant_id,
-            sales_order_id=int(sales_order.id),
-            created_by=current_user.id,
+            sales_order_id=int(sales_order_id),
+            created_by=actor.id,
         )
         await SalesReview.filter(id=review_id).update(
             status="converted",
-            sales_order_id=sales_order.id,
-            sales_order_code=sales_order.order_code,
-            **_audit_update_kwargs(current_user),
+            sales_order_id=sales_order_id,
+            sales_order_code=sales_order_code,
+            **_audit_update_kwargs(actor),
         )
         if row.quotation_id:
             from apps.kuaizhizao.models.quotation import Quotation
@@ -961,12 +1006,12 @@ class SalesReviewService(AppBaseService):
             )
             if quotation and not quotation.sales_order_id:
                 prev_status = (quotation.status or "").strip() or "已发送"
-                op_name = await AppBaseService().get_user_name(current_user.id)
+                op_name = await AppBaseService().get_user_name(actor.id)
                 await Quotation.filter(id=row.quotation_id).update(
                     status="已转订单",
-                    sales_order_id=sales_order.id,
-                    sales_order_code=sales_order.order_code,
-                    updated_by=current_user.id,
+                    sales_order_id=sales_order_id,
+                    sales_order_code=sales_order_code,
+                    updated_by=actor.id,
                 )
                 try:
                     from apps.kuaizhizao.services.quotation_service import QuotationService
@@ -976,7 +1021,7 @@ class SalesReviewService(AppBaseService):
                         row.quotation_id,
                         prev_status,
                         "已转订单",
-                        current_user.id,
+                        actor.id,
                         op_name,
                         "订单评审下推销售订单",
                     )
@@ -995,17 +1040,59 @@ class SalesReviewService(AppBaseService):
                     source_code=row.review_code,
                     source_name=row.project_name or row.review_code,
                     target_type="sales_order",
-                    target_id=sales_order.id,
-                    target_code=sales_order.order_code,
-                    target_name=sales_order.order_code,
+                    target_id=sales_order_id,
+                    target_code=sales_order_code,
+                    target_name=sales_order_code,
                     relation_type="source",
                     relation_mode="push",
                     relation_desc="订单评审下推销售订单",
                 ),
-                created_by=current_user.id,
+                created_by=actor.id,
             )
         except Exception as exc:
             logger.warning("订单评审下推关联写入失败 review_id={}: {}", review_id, exc)
+
+    async def draft_sales_order_create_from_sales_review(
+        self, tenant_id: int, review_id: int
+    ) -> Dict[str, Any]:
+        """供前端打开销售订单新建页：返回 create 载荷与 document_flow 元数据。"""
+        row, _items, so_create = await self.build_sales_order_create_from_sales_review(
+            tenant_id, review_id
+        )
+        payload = so_create.model_dump(by_alias=True, mode="json")
+        return {
+            "target_type": "sales_order",
+            "source_type": "sales_review",
+            "source_id": review_id,
+            "source_code": row.review_code,
+            "document_flow": {
+                "documentFlowSourceType": "sales_review",
+                "documentFlowSourceId": review_id,
+            },
+            "create_payload": payload,
+        }
+
+    async def push_to_sales_order(
+        self, tenant_id: int, review_id: int, current_user: User
+    ) -> SalesReviewPushResult:
+        from apps.kuaizhizao.services.sales_order_service import SalesOrderService
+
+        _row, _items, so_create = await self.build_sales_order_create_from_sales_review(
+            tenant_id, review_id
+        )
+        so_svc = SalesOrderService()
+        sales_order = await so_svc.create_sales_order(
+            tenant_id=tenant_id,
+            sales_order_data=so_create,
+            created_by=current_user.id,
+        )
+        await self.finalize_sales_review_after_sales_order_created(
+            tenant_id=tenant_id,
+            review_id=review_id,
+            sales_order_id=int(sales_order.id),
+            sales_order_code=sales_order.order_code,
+            actor=current_user,
+        )
 
         return SalesReviewPushResult(
             success=True,

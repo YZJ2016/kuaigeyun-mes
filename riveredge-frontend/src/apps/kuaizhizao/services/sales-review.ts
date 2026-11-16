@@ -188,6 +188,9 @@ export interface SalesReviewCreatePayload {
   salesman_name?: string | null;
   items: SalesReviewItemInput[];
   review_dept_plan?: SalesReviewDeptPlanItem[];
+  documentFlowSourceType?: 'quotation' | string;
+  documentFlowSourceId?: number;
+  documentFlowSourceItemIds?: number[];
 }
 
 export type SalesReviewUpdatePayload = Partial<Omit<SalesReviewCreatePayload, 'items'>> & {
@@ -259,6 +262,18 @@ export const salesReviewApi = {
 
   previewPushToSalesOrder: async (id: number): Promise<SalesReviewPushPreview> =>
     apiRequest(`${BASE}/${id}/push-to-sales-order/preview`, { method: 'GET' }),
+
+  draftSalesOrderFromSalesReview: async (reviewId: number): Promise<{
+    target_type: 'sales_order';
+    source_type: 'sales_review';
+    source_id: number;
+    source_code?: string;
+    document_flow: {
+      documentFlowSourceType: 'sales_review';
+      documentFlowSourceId: number;
+    };
+    create_payload: Record<string, unknown>;
+  }> => apiRequest(`${BASE}/${reviewId}/push-to-sales-order/draft`, { method: 'GET' }),
 
   pushToSalesOrder: async (id: number): Promise<SalesReviewPushResult> =>
     apiRequest(`${BASE}/${id}/push-to-sales-order`, { method: 'POST' }),
