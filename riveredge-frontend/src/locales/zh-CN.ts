@@ -12203,6 +12203,8 @@ export default {
   'app.kuaizhizao.menu.purchase-management.purchase-order-changes': '采购变更单',
   'app.kuaizhizao.menu.purchase-management.arrival-warnings': '到货预警',
   'app.kuaizhizao.menu.purchase-management.purchase-requisitions': '采购申请',
+  'app.kuaizhizao.documentFlow.openedDownstreamCreate': '已打开{{target}}新建页，请确认后保存',
+  'app.kuaizhizao.documentFlow.draftMissing': '下游新建草稿不存在，请从源单据重新下推',
   'app.kuaizhizao.menu.purchase-management.purchase-requisitions.new': '新建采购申请',
   'app.kuaizhizao.menu.purchase-management.purchase-requisitions.edit': '编辑采购申请',
   'app.kuaizhizao.menu.purchase-management.purchase-inquiries': '采购询价',

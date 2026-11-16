@@ -175,6 +175,7 @@ import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts'
 import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry'
+import { handoffDemandComputationToWorkOrderPull } from '../../../utils/documentFlowHandoff'
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions'
 import { SupplierSelectDropdown } from '../../../../master-data/components/SupplierSelectDropdown'
 import {
@@ -2174,6 +2175,34 @@ const DemandComputationPage: React.FC = () => {
             }
             productionItemIds = selected
           }
+        }
+        // 仅采购申请 / 仅采购订单：与「工单+采购」一致，确认后直接建单，不跳转新建页 handoff
+        if (
+          hasProduction &&
+          !hasPurchase &&
+          pushConfig.production === 'work_order'
+        ) {
+          handoffDemandComputationToWorkOrderPull(navigate, record.id!, {
+            selectedItemIds: productionItemIds,
+            pushMode,
+            workOrderGranularity,
+          })
+          messageApi.success(
+            t('app.kuaizhizao.documentFlow.openedDownstreamCreate', {
+              target: pushToWorkOrderAction.targetLabel,
+            }),
+          )
+          setPushPanelRecord(null)
+          setIncludeSalesOrderAttachments(false)
+          invalidateStatistics()
+          actionRef.current?.reload()
+          if (drawerVisible && currentComputation?.id === record.id) {
+            void getDemandComputation(record.id!, true)
+              .then(setCurrentComputation)
+              .catch(() => {})
+            setComputationTrackingRefreshKey((k) => k + 1)
+          }
+          return
         }
         await pushAll(record.id!, {
           production: pushConfig.production,
