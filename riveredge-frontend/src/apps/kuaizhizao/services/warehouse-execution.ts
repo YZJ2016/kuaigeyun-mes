@@ -130,6 +130,8 @@ export type SalesDeliveryOrderPullLine = {
   material_name?: string;
   material_spec?: string | null;
   unit?: string;
+  warehouse_id?: number | null;
+  warehouse_name?: string | null;
   suggested_quantity?: number;
   pushed_quantity?: number;
   remaining_quantity?: number;
@@ -149,6 +151,8 @@ export type SalesDeliveryNoticePullLine = {
   material_name?: string;
   material_spec?: string | null;
   unit?: string;
+  warehouse_id?: number | null;
+  warehouse_name?: string | null;
   suggested_quantity?: number;
   pushed_quantity?: number;
   remaining_quantity?: number;
@@ -608,6 +612,7 @@ export const warehouseApi = {
     pullFromSalesOrderItems: async (
       selectedItemIds: number[],
       deliveryQuantities?: Record<number, number>,
+      options?: { lineWarehouses?: Record<number, number> },
     ): Promise<{
       success: boolean;
       message: string;
@@ -620,6 +625,9 @@ export const warehouseApi = {
         data: {
           selected_item_ids: selectedItemIds,
           ...(deliveryQuantities ? { delivery_quantities: deliveryQuantities } : {}),
+          ...(options?.lineWarehouses && Object.keys(options.lineWarehouses).length > 0
+            ? { line_warehouses: options.lineWarehouses }
+            : {}),
         },
       }),
     listShipmentNoticePullLines: async (params: {
@@ -635,6 +643,7 @@ export const warehouseApi = {
       }),
     pullFromShipmentNoticeItems: async (
       selectedItemIds: number[],
+      options?: { lineWarehouses?: Record<number, number> },
     ): Promise<{
       success: boolean;
       message: string;
@@ -644,7 +653,12 @@ export const warehouseApi = {
     }> =>
       apiRequest('/apps/kuaizhizao/sales-deliveries/pull-from-shipment-notice-items', {
         method: 'POST',
-        data: { selected_item_ids: selectedItemIds },
+        data: {
+          selected_item_ids: selectedItemIds,
+          ...(options?.lineWarehouses && Object.keys(options.lineWarehouses).length > 0
+            ? { line_warehouses: options.lineWarehouses }
+            : {}),
+        },
       }),
   },
   wavePicking: {
@@ -825,6 +839,29 @@ export const warehouseApi = {
       }>('/apps/kuaizhizao/replenishment-suggestions/generate-from-demand-computation', {
         method: 'POST',
         data,
+      }),
+    draftPurchaseRequisition: async (suggestion_ids: number[]) =>
+      apiRequest<{
+        target_type: 'purchase_requisition';
+        source_type: 'replenishment_suggestion';
+        create_payload: Record<string, unknown>;
+        document_flow: Record<string, unknown>;
+      }>('/apps/kuaizhizao/replenishment-suggestions/draft-purchase-requisition', {
+        method: 'POST',
+        data: { suggestion_ids },
+      }),
+    draftPurchaseOrders: async (suggestion_ids: number[]) =>
+      apiRequest<{
+        target_type: 'purchase_order';
+        source_type: 'replenishment_suggestion';
+        drafts: Array<{
+          create_payload: Record<string, unknown>;
+          document_flow: Record<string, unknown>;
+          supplier_id?: number;
+        }>;
+      }>('/apps/kuaizhizao/replenishment-suggestions/draft-purchase-orders', {
+        method: 'POST',
+        data: { suggestion_ids },
       }),
     previewPushToPurchaseRequisition: async (suggestion_ids: number[]) =>
       apiRequest('/apps/kuaizhizao/replenishment-suggestions/push-to-purchase-requisition/preview', {

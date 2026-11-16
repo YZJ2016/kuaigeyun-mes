@@ -94,12 +94,14 @@ import {
   convertToPurchaseOrder,
   previewPushToPurchaseOrder,
   previewPushToInquiry,
-  pullPurchaseRequisitionFromDemandComputationItems,
   PurchaseRequisition,
   PurchaseRequisitionItem,
   type DocumentPushPreview,
 } from '../../../services/purchase-requisition';
-import { createInquiryFromRequisition } from '../../../services/purchase-inquiry';
+import {
+  handoffDemandComputationToPurchaseRequisitionCreate,
+  handoffRequisitionToPurchaseInquiryCreate,
+} from '../../../utils/documentFlowHandoff';
 import {
   listDemandComputationPurchasePullLines,
   listDemandComputations,
@@ -150,7 +152,6 @@ import {
 } from '../../../../master-data/utils/materialImportResolve';
 import { SupplierSelectDropdown } from '../../../../master-data/components/SupplierSelectDropdown';
 import type { Supplier } from '../../../../master-data/types/supply-chain';
-import { ROUTES } from '../../../constants/routes';
 import { useTranslation } from 'react-i18next';
 import { useGlobalStore, useUserPreferenceStore } from '../../../../../stores';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
@@ -951,29 +952,26 @@ const PurchaseRequisitionsPage: React.FC = () => {
     }
     setPullDateConfirming(true);
     try {
-      const res = await pullPurchaseRequisitionFromDemandComputationItems(
+      await handoffDemandComputationToPurchaseRequisitionCreate(
+        navigate,
         selectedIds,
         pullDateConfirmRows.map((row) => ({
           item_id: Number(row.id),
           required_date: String(row.required_date),
         })),
       );
-      messageApi.success(res?.message || t('app.kuaizhizao.purchaseRequisition.pull.success'));
+      messageApi.success(
+        t('app.kuaizhizao.documentFlow.openedDownstreamCreate', {
+          target: t('app.kuaizhizao.menu.purchase-management.purchase-requisitions'),
+        }),
+      );
       resetPullDateConfirmModal();
-      actionRef.current?.reload();
-      invalidateMenuBadgeCounts();
     } catch (error: unknown) {
       messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.purchaseRequisition.pull.failed')));
     } finally {
       setPullDateConfirming(false);
     }
-  }, [
-    invalidateMenuBadgeCounts,
-    messageApi,
-    pullDateConfirmRows,
-    resetPullDateConfirmModal,
-    t,
-  ]);
+  }, [messageApi, navigate, pullDateConfirmRows, resetPullDateConfirmModal, t]);
 
   const mapItemsForApi = (
     validItems: Array<{
@@ -1460,12 +1458,13 @@ const PurchaseRequisitionsPage: React.FC = () => {
     }
     setPushInquiryPreviewConfirming(true);
     try {
-      const doc = await createInquiryFromRequisition(pushInquiryTarget.id, { item_ids: selectedIds });
-      messageApi.success(t('app.kuaizhizao.purchaseRequisition.inquiryCreated', { code: doc.inquiry_code }));
-      navigate(`${ROUTES.PURCHASE_INQUIRIES}?inquiryId=${doc.id}`);
-      actionRef.current?.reload();
+      await handoffRequisitionToPurchaseInquiryCreate(navigate, { item_ids: selectedIds });
+      messageApi.success(
+        t('app.kuaizhizao.documentFlow.openedDownstreamCreate', {
+          target: t('app.kuaizhizao.menu.purchase-management.purchase-inquiries'),
+        }),
+      );
       resetPushInquiryPreviewModal();
-      setSelectedRowKeys([]);
     } catch (error: any) {
       messageApi.error(getApiErrorMessage(error, t('app.kuaizhizao.purchaseRequisition.inquiryCreateFailed')));
     } finally {

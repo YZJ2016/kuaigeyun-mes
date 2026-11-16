@@ -235,7 +235,7 @@ import {
   resolveMaterialsByCodesForImport,
 } from '../../../../master-data/utils/materialImportResolve'
 import { OperationPickPanel } from '../../../../master-data/components/OperationSequenceEditor'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import {
   completeDeliveryNodeDocumentLinkIfPending,
   isDeliveryCreateQuery,
@@ -249,6 +249,10 @@ import { buildDocumentCreateDraftKey, setDocumentFormDraft } from '../../../../.
 import { qualityApi } from '../../../services/production'
 import type { PushPreviewResponse } from '../../../services/sales-order'
 import { mapOutsourceOptionsToPullPreview } from '../../../utils/outsourceOrderPullPreview'
+import {
+  consumeDemandComputationToWorkOrderHandoff,
+  type DemandComputationToWorkOrderHandoffPayload,
+} from '../../../utils/documentFlowHandoff'
 import { renderDemandBusinessModeMarkerTag } from '../../../utils/businessMode'
 import dayjs from 'dayjs'
 import CodeField from '../../../../../components/code-field'
@@ -1615,6 +1619,9 @@ const WorkOrdersPage: React.FC = () => {
   )
   const pullFromDemandComputationAction = resolveKuaizhizaoDocumentAction(t, 'work_order.pull_from_demand_computation')
   const pullFromSalesOrderAction = resolveKuaizhizaoDocumentAction(t, 'work_order.pull_from_sales_order')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const soPullFromSalesOrderDeepLinkRef = useRef<string | null>(null)
+  const dcPullFromComputationDeepLinkRef = useRef<string | null>(null)
   const pushToOutboundAction = resolveKuaizhizaoDocumentAction(t, 'outbound.pull_from_work_order')
   const pushToInboundAction = resolveKuaizhizaoDocumentAction(t, 'inbound.pull_from_work_order')
   const pushToFinishedGoodsInspectionAction = resolveKuaizhizaoDocumentAction(
@@ -2976,31 +2983,43 @@ const WorkOrdersPage: React.FC = () => {
   }, [])
 
   const openComputationPullPreview = useCallback(
-    async (computationId: number) => {
+    async (
+      computationId: number,
+      handoff?: Omit<DemandComputationToWorkOrderHandoffPayload, 'computationId'>,
+    ) => {
       setComputationPullPreviewOpen(true)
       setComputationPullPreviewLoading(true)
       setComputationPullPreviewConfirming(false)
       setComputationPullSourceId(computationId)
       setComputationPullPreviewData(null)
       setComputationPullPreviewError(null)
-      setComputationPullMode('draft')
+      setComputationPullMode(handoff?.pushMode === 'confirm' ? 'confirm' : 'draft')
       setComputationPullSelectedItemIds([])
       try {
         const data = await getPushPreview(computationId, {
           production: 'work_order',
           generate_mode: 'work_order_only',
+          ...(handoff?.workOrderGranularity
+            ? { work_order_granularity: handoff.workOrderGranularity }
+            : {}),
+          ...(handoff?.pushMode ? { push_mode: handoff.pushMode } : {}),
         })
         setComputationPullPreviewData(data)
-        setComputationPullSelectedItemIds(
-          (data.items || [])
-            .filter(
-              (row) =>
-                (row.target_document === 'work_order' ||
-                  row.target_document === 'outsource_work_order') &&
-                Number(row.max_push_quantity ?? 0) > 0,
-            )
-            .map((row) => Number(row.item_id)),
+        const prodRows = (data.items || []).filter(
+          (row) =>
+            (row.target_document === 'work_order' ||
+              row.target_document === 'outsource_work_order') &&
+            Number(row.max_push_quantity ?? 0) > 0,
         )
+        const defaultIds = prodRows.map((row) => Number(row.item_id))
+        if (handoff?.selectedItemIds?.length) {
+          const allowed = new Set(defaultIds)
+          setComputationPullSelectedItemIds(
+            handoff.selectedItemIds.filter((id) => allowed.has(id)),
+          )
+        } else {
+          setComputationPullSelectedItemIds(defaultIds)
+        }
       } catch (e: any) {
         setComputationPullPreviewError(
           e?.response?.data?.detail || e?.message || t('app.kuaizhizao.workOrder.computationPullPreviewFailed'),
@@ -3162,6 +3181,33 @@ const WorkOrdersPage: React.FC = () => {
     },
     [ensureSoPullWorkCenters, messageApi, resetSoPullPreview, t],
   )
+
+  useEffect(() => {
+    const raw = searchParams.get('pullFromSalesOrderId')
+    const id = raw ? Number(raw) : NaN
+    if (!Number.isFinite(id) || id <= 0) return
+    const sig = String(id)
+    if (soPullFromSalesOrderDeepLinkRef.current === sig) return
+    soPullFromSalesOrderDeepLinkRef.current = sig
+    void openSoPullPreview(id)
+    const next = new URLSearchParams(searchParams)
+    next.delete('pullFromSalesOrderId')
+    setSearchParams(next, { replace: true })
+  }, [searchParams, setSearchParams, openSoPullPreview])
+
+  useEffect(() => {
+    const raw = searchParams.get('pullFromDemandComputationId')
+    const id = raw ? Number(raw) : NaN
+    if (!Number.isFinite(id) || id <= 0) return
+    const sig = String(id)
+    if (dcPullFromComputationDeepLinkRef.current === sig) return
+    dcPullFromComputationDeepLinkRef.current = sig
+    const handoff = consumeDemandComputationToWorkOrderHandoff(id)
+    void openComputationPullPreview(id, handoff ?? undefined)
+    const next = new URLSearchParams(searchParams)
+    next.delete('pullFromDemandComputationId')
+    setSearchParams(next, { replace: true })
+  }, [searchParams, setSearchParams, openComputationPullPreview])
 
   const handleSoPullConfirm = useCallback(async () => {
     if (!soPullSourceId || !soPullPreviewData) return
