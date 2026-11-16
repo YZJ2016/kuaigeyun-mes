@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-10-07T06:04:21Z",
-  "updated_at": "2026-10-22T12:52:02Z",
+  "updated_at": "2026-11-16T03:52:09Z",
   "files": {
     ".agents/skills/banner-design/SKILL.md": {
       "role": "index",
@@ -725,9 +725,9 @@
     },
     ".gitignore": {
       "role": "index",
-      "sha256": "4a0a6a4d65c475a2060736ef4d05c5bfa2d78314f1ae091574680c837ab9e602",
-      "size": 6203,
-      "normalized_sha256": "4a0a6a4d65c475a2060736ef4d05c5bfa2d78314f1ae091574680c837ab9e602"
+      "sha256": "e9c8ee2bf5e6181eb1ccd2b34004dcf6180edf103f7f6db112e0eb2287f76427",
+      "size": 6510,
+      "normalized_sha256": "e9c8ee2bf5e6181eb1ccd2b34004dcf6180edf103f7f6db112e0eb2287f76427"
     },
     ".windsurf/skills/banner-design/SKILL.md": {
       "role": "index",
@@ -1271,9 +1271,9 @@
     },
     "aoci.code.txt": {
       "role": "index",
-      "sha256": "09576dec3f3d6c0b2ce217bc3c3607d6def75a8a1af66285156cf9388b628fed",
-      "size": 1670565,
-      "normalized_sha256": "09576dec3f3d6c0b2ce217bc3c3607d6def75a8a1af66285156cf9388b628fed"
+      "sha256": "098aeccc522525f0041ad3b75b96f24f1f0c7dc0e4d931c6bd4a23c6815dc238",
+      "size": 1673109,
+      "normalized_sha256": "098aeccc522525f0041ad3b75b96f24f1f0c7dc0e4d931c6bd4a23c6815dc238"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -1443,11 +1443,17 @@
       "size": 1867,
       "normalized_sha256": "45d1c4223b3fc00af925f649417be7845a407b901b41db6fd3fb93b681d1433c"
     },
+    "docs/core/金蝶强一致实施-SOP.md": {
+      "role": "index",
+      "sha256": "69a47c32aaf619b75cbc27008bc9fb5a5764a604d32784a71676e265d3ce34d3",
+      "size": 1923,
+      "normalized_sha256": "69a47c32aaf619b75cbc27008bc9fb5a5764a604d32784a71676e265d3ce34d3"
+    },
     "docs/上游同步台账.md": {
       "role": "index",
-      "sha256": "ad40105637695d7978b24f6ac877af75a8e9f4179a3da7029db04bfd86df4469",
-      "size": 67358,
-      "normalized_sha256": "ad40105637695d7978b24f6ac877af75a8e9f4179a3da7029db04bfd86df4469"
+      "sha256": "678d0a258b4431e9f4ac9345b8f9b4a457bcdf376788eb2a7567cc1a7e302d3b",
+      "size": 84707,
+      "normalized_sha256": "678d0a258b4431e9f4ac9345b8f9b4a457bcdf376788eb2a7567cc1a7e302d3b"
     },
     "docs/功能清单.md": {
       "role": "index",
@@ -1565,9 +1571,9 @@
     },
     "fast-deploy/lib/blue_green.sh": {
       "role": "index",
-      "sha256": "a48c60e7d9a155fc19878bc41ac22905b7edf833139a63404660254ec986a65f",
-      "size": 19680,
-      "normalized_sha256": "a48c60e7d9a155fc19878bc41ac22905b7edf833139a63404660254ec986a65f"
+      "sha256": "0dc421e717804b092dd44d234b26fb09a628778c8f2d64f8b6c031b6996a2061",
+      "size": 19877,
+      "normalized_sha256": "0dc421e717804b092dd44d234b26fb09a628778c8f2d64f8b6c031b6996a2061"
     },
     "fast-deploy/lib/build_web_git.sh": {
       "role": "index",
@@ -1583,9 +1589,9 @@
     },
     "fast-deploy/lib/common.sh": {
       "role": "index",
-      "sha256": "dd880e31e98d4859833a7dfe953081758230a43c46690f44c91c3fd241bc7b1f",
-      "size": 313880,
-      "normalized_sha256": "dd880e31e98d4859833a7dfe953081758230a43c46690f44c91c3fd241bc7b1f"
+      "sha256": "a21ff4b34615765bdcfa869e3f8da8f521b86f00a7ec95c4a8a9eb0b9fa50db0",
+      "size": 314049,
+      "normalized_sha256": "a21ff4b34615765bdcfa869e3f8da8f521b86f00a7ec95c4a8a9eb0b9fa50db0"
     },
     "fast-deploy/lib/low_spec_mode.sh": {
       "role": "index",
@@ -1625,9 +1631,9 @@
     },
     "fast-deploy/linux/systemd-exec-backend.sh": {
       "role": "index",
-      "sha256": "444038d0ef78d4cca1b8e4d258f25be8b2c1521e44e44a3cfa66388f7987f41a",
-      "size": 832,
-      "normalized_sha256": "444038d0ef78d4cca1b8e4d258f25be8b2c1521e44e44a3cfa66388f7987f41a"
+      "sha256": "e6add385d893dfbe923f3846bed30e87bb9b5bf56a25e3e551f99454bfe2bd06",
+      "size": 1001,
+      "normalized_sha256": "e6add385d893dfbe923f3846bed30e87bb9b5bf56a25e3e551f99454bfe2bd06"
     },
     "fast-deploy/linux/systemd-exec-caddy.sh": {
       "role": "index",
@@ -4903,6 +4909,24 @@
       "sha256": "5d3b7e9e9c7a549a1d7bc1335e617a792908fcaade7b63d79f39784958a258a8",
       "size": 791,
       "normalized_sha256": "5d3b7e9e9c7a549a1d7bc1335e617a792908fcaade7b63d79f39784958a258a8"
+    },
+    "riveredge-backend/migrations/models/20261023150000_kuaiai_tool_catalog_rename.py": {
+      "role": "index",
+      "sha256": "ce4e67c40dd543ce7e60a73f6f353e7a266dcd4fcce0c0280a1ba7c7bd39981a",
+      "size": 3341,
+      "normalized_sha256": "ce4e67c40dd543ce7e60a73f6f353e7a266dcd4fcce0c0280a1ba7c7bd39981a"
+    },
+    "riveredge-backend/migrations/models/20261023160000_kuaiai_agent_checkpointer.py": {
+      "role": "index",
+      "sha256": "411d65ac92c8c56423bfddbe070b46f0d7d1dfbfcad1595abd2bed8e34da168d",
+      "size": 3794,
+      "normalized_sha256": "411d65ac92c8c56423bfddbe070b46f0d7d1dfbfcad1595abd2bed8e34da168d"
+    },
+    "riveredge-backend/migrations/models/20261024120000_kuaiai_knowledge_document_source_ref.py": {
+      "role": "index",
+      "sha256": "bcc03f5f548dbe896ddaf3b228c80cb92855fe2d09962d21a39e28a2291361c3",
+      "size": 1419,
+      "normalized_sha256": "bcc03f5f548dbe896ddaf3b228c80cb92855fe2d09962d21a39e28a2291361c3"
     },
     "riveredge-backend/migrations/models/202_20260504180000_partner_invoice_extended_fields.py": {
       "role": "index",
@@ -9992,6 +10016,12 @@
       "size": 19117,
       "normalized_sha256": "dc873c6c3dba054f8ead45275e5d023da4c9ae7653065b39d090f57cf01d7f5b"
     },
+    "riveredge-backend/scripts/scan_host_finance_path_leaks.py": {
+      "role": "index",
+      "sha256": "e160570056c2be1b601572e3a507dd8f8c085788f5116e114ba6e0e6e225ffd6",
+      "size": 2021,
+      "normalized_sha256": "5c5e5291e24ac7e90ce73d37117972e9daa541069f65c5fe1d820ac689fb3824"
+    },
     "riveredge-backend/scripts/scan_manifest_permissions.py": {
       "role": "index",
       "sha256": "22c1f5d83dc103b83de6168c64bbad80e04a65b0894ccb074f99f37143115d33",
@@ -10010,6 +10040,12 @@
       "size": 9467,
       "normalized_sha256": "02cf7e4a50c7de237d6d09fc73e1a2a8e3ee32584f09d9b17f89e815d6a9eb26"
     },
+    "riveredge-backend/scripts/tenant_kingdee_strong_consistency.py": {
+      "role": "index",
+      "sha256": "6a6cb06b86358614008d615d8a996ca5cc9aec5505d4ec3319de71583269cab5",
+      "size": 9370,
+      "normalized_sha256": "6a6cb06b86358614008d615d8a996ca5cc9aec5505d4ec3319de71583269cab5"
+    },
     "riveredge-backend/src/__init__.py": {
       "role": "index",
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -10025,6 +10061,12 @@
       "sha256": "ee60c3ccda911b2387a721857e976822f34f4c50a95a99431c1ecdf509cf58b3",
       "size": 127,
       "normalized_sha256": "499fae3e0f9e5f0fbad974e6ca839f88ba123d6bf69126f3cf8c4769479bdca9"
+    },
+    "riveredge-backend/src/apps/common/app_orm.py": {
+      "role": "index",
+      "sha256": "450ffa73c6109ad4cc231f2d9f5ed48e81f8d2778298db285674195c5ded4b5c",
+      "size": 3276,
+      "normalized_sha256": "efe934a05231a215aa270ea58dbf17064c51523acc7d9f94f59e4cfb62e4d960"
     },
     "riveredge-backend/src/apps/common/audit_actor.py": {
       "role": "index",
@@ -10357,21 +10399,21 @@
     },
     "riveredge-backend/src/apps/kuaiai/api/operations.py": {
       "role": "index",
-      "sha256": "d291978f7655bbceffdb6ac07edabb9c67011b78dcdb4164384aeb64e69466b2",
-      "size": 15370,
-      "normalized_sha256": "d291978f7655bbceffdb6ac07edabb9c67011b78dcdb4164384aeb64e69466b2"
+      "sha256": "15749828d7b4b7a07ca816948eb4be2014dc478e8e8fe27fd1524b10165440cf",
+      "size": 15441,
+      "normalized_sha256": "15749828d7b4b7a07ca816948eb4be2014dc478e8e8fe27fd1524b10165440cf"
     },
     "riveredge-backend/src/apps/kuaiai/api/router.py": {
       "role": "index",
-      "sha256": "5f5e85863788105bce09c54927895b72cf7a3e04fbf37a9170c4ace085c8ea76",
-      "size": 17991,
-      "normalized_sha256": "5f5e85863788105bce09c54927895b72cf7a3e04fbf37a9170c4ace085c8ea76"
+      "sha256": "8398c9f5348902c8bac010bb8f987a5ef86782e2c44a3e9ba1dd959b062a1af2",
+      "size": 18660,
+      "normalized_sha256": "8398c9f5348902c8bac010bb8f987a5ef86782e2c44a3e9ba1dd959b062a1af2"
     },
     "riveredge-backend/src/apps/kuaiai/constants.py": {
       "role": "index",
-      "sha256": "b62f0a8b634e28e18b61b2c73eeb5026ca7986614359508286592fad3c1f88f1",
-      "size": 2559,
-      "normalized_sha256": "b62f0a8b634e28e18b61b2c73eeb5026ca7986614359508286592fad3c1f88f1"
+      "sha256": "9262025af3f9edc2bbd40f64f64891a05d71cb46869a1fab7ba7877a889034e9",
+      "size": 5657,
+      "normalized_sha256": "9262025af3f9edc2bbd40f64f64891a05d71cb46869a1fab7ba7877a889034e9"
     },
     "riveredge-backend/src/apps/kuaiai/manifest.json": {
       "role": "index",

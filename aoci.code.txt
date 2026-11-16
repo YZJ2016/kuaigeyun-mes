@@ -2,7 +2,7 @@
 
 ===D:/kuaigeyun-pro/kuaigeyun/===
 .gitattributes[XV1T]: F:git LF lock | R:- | A:eol=lf | S:no autocrlf; bytes-stable; 5L
-.gitignore[XV3S]: F:repo ignore与Cursor/AOCI正式资产白名单 | R:- | A:py+node+env+build | S:.cursor放行memory/**与rules/**;勿整夹忽略.aoci/
+.gitignore[XV3S]: F:repo ignore与Cursor/AOCI正式资产白名单 | R:- | A:py+node+env+build+本地.tmp草稿+scripts/*忽略 | S:memory/rules白名单;.aoci不整夹忽略;scripts/*忽略,跟踪需-f
 AGENTS.md[SV2S]: F:agent+AOCI contract | R:- | A:aoci managed block | S:cognition loop rules; 103L
 LICENSE[SV1S]: F:Apache 2.0 | R:- | A:Apache-2.0 | S:211L
 README.md[SG6M]: F:星技谷制造MES产品总览：能力、插件、终端矩阵与部署接入入口 | R:code:fast-deploy/deploy.sh | A:15秒了解,立即体验与接入,核心能力,插件应用,终端形态,快速开始 | S:演示仅供预览勿生产;无需Redis;TV看板不在本仓;Python锁3.11
@@ -43,6 +43,7 @@ permission-contract.md[SS5M]: F:RBAC permission contract | R:- | A:require_* hel
 permission-responsibility.md[SS4M]: F:permission duty split | R:- | A:manifest→route→UI | S:composite page material pilot; 64L
 realtime-im.md[SM3T]: F:realtime IM transport | R:- | A:3 backends | S:socketio default; centrifugo separate; 56L
 aoci-cursor-setup.md[SU3T]: F:说明Cursor三仓AOCI接入、选仓与本机检查流程 | R:- | A:- | S:单个MCP进程只能绑定一个仓库；文中进度和路径须现场核对
+金蝶强一致实施-SOP.md[SW4T]: F:单租户金蝶强一致实施SOP:审计清红灯→基础资料→库存→金额→复核执行序 | R:code:riveredge-backend/scripts/tenant_kingdee_strong_consistency.py | A:一致口径五条,执行顺序,连枝横专项治理 | S:基础资料禁手工改编码不同步;撤回须金蝶成功再本地;空仓位归无货架再全量入站
 
 ===D:/kuaigeyun-pro/kuaigeyun/docs/===
 功能清单.md[SG3S]: F:星技谷制造全功能地图：主数据到AI十一模块组加多端与分期实施建议 | R:code:riveredge-backend/src/apps | A:主数据,星制造核心MES,星研发PLM,轻财务,行业扩展,平台与系统能力 | S:渐进上线按插件装配;行业包按需选装勿首期摊大
@@ -53,7 +54,7 @@ aoci-cursor-setup.md[SU3T]: F:说明Cursor三仓AOCI接入、选仓与本机检�
 报工思路.md[DU3T]: F:Implements 报工思路.md | R:- | A:- | S:59L
 报工新思路.md[DU3S]: F:Implements 报工新思路.md | R:- | A:- | S:143L
 文件路径.md[DU3T]: F:Implements 文件路径.md | R:- | A:- | S:33L
-上游同步台账.md[SW3M]: F:私有fork上游同步台账：gitee主源与水位29b785f655、cherry/range-diff逐批摘取映射、本地领先修复与跳过清单 | R:code:AGENTS.md | A:远端与水位,已同步映射,本地领先上游的修复,明确跳过剔除,维护约定 | S:勿用upstream镜像;fetch仅--filter=blob:none;新批次置顶
+上游同步台账.md[SW3M]: F:私有fork上游同步台账:gitee主源水位、分簇批次A-G摘取映射、跳过清单与逐批复核 | R:code:AGENTS.md | A:远端与水位,已同步映射,批A批B段,维护约定 | S:勿用upstream镜像;fetch半克隆;新批次置顶;财务=kuaicaiwu权威
 成熟度与技术再评估.md[SG4M]: F:MES/MOM全领域成熟度再评估,含领域评分,链路核查与Q01-Q20问题清单 | R:code:riveredge-backend/src/apps/kuaicaiwu/services/posting_service.py | A:总评,各领域成熟度盘点,业务主链路评估,技术评估,Q01-Q20具体问题,优先补齐方向 | S:评分非上线验收;spec标记≠运行证据;历史测试不作本轮验证
 
 ===D:/kuaigeyun-pro/kuaigeyun/fast-deploy/===
@@ -71,10 +72,10 @@ workbuddy-mcp.env.example[CC3T]: F:WorkBuddy MCP Sidecar密钥env模板，复制
 
 ===D:/kuaigeyun-pro/kuaigeyun/fast-deploy/lib/===
 blue_green.ps1[OV4M]: F:PS blue-green deploy | R:- | A:BG state+swap | S:low-spec disables BG; 437L
-blue_green.sh[OV5L]: F:蓝绿双槽位后端与前端dist-live切换,update尽量不停机可回滚 | R:code:fast-deploy/lib/common.sh | A:bg_enabled,bg_run_update_prod,bg_run_update_dev,bg_start_backend_slot,bg_flip_frontend_to_slot,bg_rollback_update | S:低配强制单槽清state;非交互默认传统;槽位8201/8202;worker先drain
+blue_green.sh[OV5L]: F:蓝绿双槽位后端与前端dist-live切换,update尽量不停机可回滚 | R:code:fast-deploy/lib/common.sh | A:bg_enabled,bg_run_update_prod,bg_run_update_dev,bg_start_backend_slot,bg_flip_frontend_to_slot,bg_rollback_update | S:低配强制单槽清state;非交互默认传统;槽位8201/8202;worker先drain;uvicorn workers可配对齐DB/请求超时
 build_web_git.sh[OV5M]: F:build.web.sh专用:剥离Git历史dist提交仅tip保留 | R:code:fast-deploy/build.web.sh | A:assert_source_tree_committed,drop_pure_dist_commits,strip_dist_from_history,restore_remotes,push_with_lease | S:未commit拒跑;遇merge转filter-repo;重写后恢复remote
 common.ps1[OV9L]: F:Windows 侧部署共享库：依赖检测安装、env 读写、Caddy 生成、服务启停、迁移与开机任务 | R:code:fast-deploy/lib/common.sh | A:Load-DeployEnv,Get-EnhancedPath,Invoke-Configure,Invoke-Migrate,New-Caddyfile,Install-RiverEdgeBootTask | S:PS 侧不复制 H5 产物；须 PYTHONUTF8=1 防 GBK 读 pyproject 失败
-common.sh[OV9L]: F:全平台部署共享库：依赖检测安装、deploy.env 管理、Caddy/systemd、迁移、选装依赖与私仓组装 | R:code:fast-deploy/deploy.sh | A:load_deploy_env,sync_git_from_origin,cmd_migrate,gen_caddyfile,cmd_install_service,sync_sibling_git_repo | S:systemd 包装脚本缺 +x/CRLF 即 203/EXEC；deploy.env 须归服务用户
+common.sh[OV9L]: F:全平台部署共享库:依赖检测安装、deploy.env管理、Caddy/systemd、迁移、选装依赖、私仓组装与后端workers/超时env | R:code:fast-deploy/deploy.sh | A:load_deploy_env,sync_git_from_origin,cmd_migrate,gen_caddyfile,cmd_install_service,sync_sibling_git_repo | S:systemd包装脚本缺+x/CRLF即203/EXEC;deploy.env须归服务用户;UVICORN_WORKERS/超时env透传后端exec
 low_spec_mode.sh[OV4M]: F:低配模式内存调优与快照恢复 | R:code:fast-deploy/lib/common.sh | A:low_spec_apply_profile,low_spec_apply_normal_profile | S:开启低配写PLAYWRIGHT_POSTINSTALL_ENABLE=1不关闭Chromium补装; 恢复一般模式不改该开关; 缩池关蓝绿
 wizard.sh[OV8L]: F:对话式部署向导：面板 UI、意图分发、依赖安装计划、扩展/选装菜单与 8 阶段安装流程 | R:code:fast-deploy/lib/common.sh | A:cmd_wizard,wizard_show_home_panel,cmd_wizard_fresh,wizard_install_deps,wizard_ask_optional_deps_choice,wizard_update_app | S:面板宽取 /dev/tty 防 tee 误判；git reset 后须重 source common.sh
 
@@ -82,7 +83,7 @@ wizard.sh[OV8L]: F:对话式部署向导：面板 UI、意图分发、依赖安�
 dev.sh[OV1T]: F:dev mode entry | R:- | A:DEPLOY_MODE=dev | S:fd_dispatch; 11L
 prod.sh[OV1T]: F:prod mode entry | R:- | A:DEPLOY_MODE=prod | S:fd_dispatch; 12L
 riveredge-service.sh[OV2T]: F:systemd entry script | R:- | A:prod orchestration | S:3 retries; swap+PG wait; 36L
-systemd-exec-backend.sh[OV1T]: F:systemd uvicorn exec | R:- | A:backend+PG env | S:malloc tuning; playwright; 25L
+systemd-exec-backend.sh[OV1T]: F:systemd uvicorn exec(可配workers/超时env) | R:- | A:backend+PG env | S:malloc tuning;playwright;入库强制LF+可执行
 systemd-exec-caddy.sh[OV1T]: F:systemd Caddy exec | R:- | A:Caddyfile gen+run | S:bind caps; validate; 22L
 systemd-exec-taskiq-scheduler.sh[OV1T]: F:taskiq scheduler exec | R:- | A:scheduler taskiq | S:uv run taskiq scheduler; 20L
 systemd-exec-taskiq-worker.sh[OV1T]: F:taskiq worker exec | R:- | A:worker tasks | S:TASKIQ_WORKERS; 4 taskiq mods; 21L
@@ -1132,6 +1133,9 @@ config-center-ops.md[SO2T]: F:config center ops | R:- | A:3 control points | S:c
 893_20261016140000_kuaivision_p2_edge.py[SM4T]: F:三表加9列:agents(run_mode/agent_version/last_error等5列),recipes(3列),settings(offline_timeout_seconds) | R:- | A:upgrade,downgrade,apps_kuaivision_agents,apps_kuaivision_recipes,apps_kuaivision_settings | S:边缘心跳/方案触发/离线超时字段,全幂等ADD COLUMN
 894_20261016140100_user_password_lifecycle.py[SM4T]: F:core_users加password_changed_at与must_change_password两列支撑密码生命周期 | R:- | A:upgrade,downgrade,core_users,password_changed_at,must_change_password | S:两列带中文COMMENT,downgrade逆向DROP
 895_20261016150000_kuaivision_p3_governance.py[SM4S]: F:新建model_artifacts/sample_sets/sample_items三表;recipe_versions加model_artifact_id/require_model;settings加保留告警列 | R:- | A:upgrade,downgrade,apps_kuaivision_model_artifacts,apps_kuaivision_sample_sets,apps_kuaivision_sample_items | S:另agents.last_ops_alert_at;样本item关联source_event_id
+20261023150000_kuaiai_tool_catalog_rename.py[PD5T]: F:KU-AI spec190工具目录合并改名纯数据迁移:enabled_tools旧名→新名 | R:code:riveredge-backend/src/apps/kuaiai/constants.py | A:upgrade,downgrade | S:11旧名并改9新名;JSONB逐行改写去重保序;无旧名行不写
+20261023160000_kuaiai_agent_checkpointer.py[PD5T]: F:KU-AI spec192 HITL LangGraph checkpoint双表:checkpoints+checkpoint_writes | R:- | A:upgrade,downgrade | S:checkpoint/metadata(type,bytes)落bytea;uuid6 id字典序即时间序;只存执行现场非审计真源
+20261024120000_kuaiai_knowledge_document_source_ref.py[PD5T]: F:KU-AI spec200知识文档外部来源列source_ref_type/source_ref_id | R:- | A:upgrade,downgrade | S:SOP同步写(sop,id)一对一可追溯;(tenant_id,type,id)未删部分唯一索引;双NULL不占唯一键
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/scripts/===
 pack_sensitive_words.py[XC3T]: F:敏感词打包脚本 | R:code:riveredge-backend/pyproject.toml | A:lexicon pack | S:gh mirror fallback; 90L
@@ -1140,12 +1144,15 @@ scan_document_action_bypass.py[XQ4L]: F:单据动作旁路扫描脚本 | R:code:
 scan_manifest_permissions.py[XC3L]: F:manifest权限规范扫描脚本 | R:code:riveredge-backend/scripts/scan_document_action_bypass.py | A:manifest permissions | S:action enum check; 292L
 scan_permission_bypass.py[XQ4L]: F:权限旁路/action混用静态扫描器：后端apps+前端+移动端正则规则，含manifest引用完整性与两项委托扫描 | R:code:riveredge-backend/scripts/scan_manifest_permissions.py | A:scan_backend_apps,scan_frontend,scan_mobile,run_scan,Finding,main | S:约20条规则分级high/medium/info;委托模块缺失会ImportError
 scan_timezone_contract.py[XO3L]: F:时区契约违规扫描脚本 | R:code:riveredge-backend/scripts/scan_permission_bypass.py | A:be+fe datetime | S:12 rules utcnow ban; 218L
+scan_host_finance_path_leaks.py[XQ4T]: F:上游同步回归扫描:禁apps.kuaizhizao.finance/optional_pro/import_pro_*/pro_orm_ready回流 | R:code:riveredge-backend/src/apps/common/app_orm.py | A:main,PATTERN,--fail-on | S:本仓财务=apps.kuaicaiwu权威;命中import语句即fail;--fail-on仅high
+tenant_kingdee_strong_consistency.py[XB4M]: F:租户级金蝶强一致审计:仓储红灯/仓库重名分叉/空仓位批次;--apply修空仓位落账 | R:code:docs/core/金蝶强一致实施-SOP.md | A:audit_warehouse_blockers,audit_duplicate_warehouse_names,audit_empty_location_batches,repair_empty_location_batches | S:TENANT_ID+PYTHONPATH=src直跑;默认dry-run;按SOP先审计后修复
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/common/===
 __init__.py[CC2T]: F:公共模块导出 | R:code:riveredge-backend/scripts/scan_timezone_contract.py | A:AppBaseService | S:5L; init export
 audit_actor.py[CC3T]: F:审计操作人统一写入 | R:code:riveredge-backend/src/apps/common/__init__.py | A:4 audit fields | S:no list enrich; 116L
 base_service.py[CB4M]: F:应用级服务基类AppBaseService[T]：统一编码生成、用户信息获取与租户隔离CRUD（含软删除） | R:code:riveredge-backend/src/apps/common/audit_actor.py | A:AppBaseService,generate_code,generate_code_batch,get_user_info,create_with_user,update_with_user | S:create同步写updated_*与audit_actor一致;软删除用resolve_business_datetime
 bulk_import.py[CC2T]: F:批量导入公共Schema | R:code:riveredge-backend/src/apps/common/base_service.py | A:BulkCreateResponse | S:per-item fail collect; 64L
+app_orm.py[CG5T]: F:应用/财务ORM就绪判定:未绑default_connection时读路径跳过写路径报错 | R:code:riveredge-backend/src/apps/kuaizhizao/services, code:riveredge-backend/src/core/services | A:app_orm_ready,require_app_orm,finance_orm_ready,require_finance_orm | S:对应上游optional_pro就绪分支;判Tortoise._meta.default_connection;无模型服务型应用已init即就绪;财务markers七核心模型
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/ind_electronics/===
 extension_hooks.py[DE3T]: F:行业包扩展钩子 | R:code:riveredge-backend/src/apps/ind_electronics/api/router.py | A:esd apply/revert | S:deepcopy seed; 34L
@@ -9230,14 +9237,14 @@ setup.js[CC4T]: F:配置页提交逻辑，调saveServerOrigin并显示状态 | R
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaiai/===
 __init__.py[SB1T]: F:kuaiai应用包初始化,仅含docstring声明KU-AI LangChain骨架(S1:会话/消息/纯对话委托) | R:- | A:- | S:无导出语句仅包标记
-constants.py[SB4T]: F:KR钉死常量:状态/模型类型/Tool闭集/授权模式 | R:- | A:ENABLED_TOOL_NAMES,SCENE_READONLY_TOOL_NAMES,MODEL_TYPES,GRANT_MODES,DEFAULT_AGENT_PROFILE_NAME | S:下游统一引用,勿再写字面值
+constants.py[SB4T]: F:KR钉死常量:状态/模型类型/Tool闭集(spec189-222全量)/授权模式 | R:- | A:ENABLED_TOOL_NAMES,SCENE_READONLY_TOOL_NAMES,MODEL_TYPES,GRANT_MODES,DEFAULT_AGENT_PROFILE_NAME | S:下游统一引用,勿再写字面值
 manifest.json[FG2M]: F:星AI应用清单:菜单/40权限码/11个ai_tools | R:- | A:menu_config,permissions,ai_tools,dependencies | S:is_pro;tool handler指向chat_tools/scene_tools
 orm_models.py[SB4T]: F:kuaiai ORM模块注册清单 | R:- | A:ORM_MODEL_MODULES | S:6个模型模块路径供Tortoise注册
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaiai/api/===
 __init__.py[SB1T]: F:kuaiai/api子包初始化,仅含docstring“KU-AI API 包” | R:- | A:- | S:无导出语句仅包标记
-operations.py[SB4L]: F:运营层只编排路由:hub/智能体库/pulse/设置/trust/语料 | R:- | A:router,api_get_hub,api_get_pulse,api_clone_agent_library_instance,api_export_corpus_jsonl | S:全端点require_all权限码;业务逻辑全在服务层
-router.py[SB4L]: F:KU-AI产品路由:会话/Agent档案授权/知识库文档/MCP | R:- | A:router,api_put_agent_grants,api_parse_document,McpService,KnowledgeService | S:include operations;权限码kuaiai:域:动词
+operations.py[SB4L]: F:运营层只编排路由:hub/智能体库/pulse/设置/trust/语料+spec189-204场景工具与HITL | R:- | A:router,api_get_hub,api_get_pulse,api_clone_agent_library_instance,api_export_corpus_jsonl | S:全端点require_all权限码;业务逻辑全在服务层
+router.py[SB4L]: F:KU-AI产品路由:会话/Agent档案授权/知识库文档/MCP+spec189-204场景工具HITL | R:- | A:router,api_put_agent_grants,api_parse_document,McpService,KnowledgeService | S:include operations;权限码kuaiai:域:动词
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaiai/models/===
 __init__.py[SB1T]: F:模型包导出会话两模型 | R:- | A:KuaiaiChatMessage,KuaiaiChatSession | S:仅re-export无逻辑
