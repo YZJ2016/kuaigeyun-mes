@@ -386,27 +386,16 @@ class QuotationService:
         tax_rate: Decimal,
         price_type: str,
     ) -> Decimal:
-        """
-        价税合计（行金额），与前端销售/报价明细 calcSalesLineAmounts.incl 的分币舍入一致。
-        """
-        q = qty or Decimal("0")
-        up = unit_price or Decimal("0")
-        tr = tax_rate if tax_rate is not None else Decimal("0")
-        pt = normalize_price_type(price_type)
-        unit_cents = int((up * Decimal("100")).to_integral_value(rounding=ROUND_HALF_UP))
-        if pt == "tax_inclusive":
-            incl_cents = int((q * Decimal(unit_cents)).to_integral_value(rounding=ROUND_HALF_UP))
-        else:
-            excl_cents = int((q * Decimal(unit_cents)).to_integral_value(rounding=ROUND_HALF_UP))
-            tax_cents = int(
-                (Decimal(excl_cents) * tr / Decimal("100")).to_integral_value(
-                    rounding=ROUND_HALF_UP
-                )
-            )
-            incl_cents = excl_cents + tax_cents
-        return (Decimal(incl_cents) / Decimal("100")).quantize(
-            Decimal("0.01"), rounding=ROUND_HALF_UP
+        """价税合计。与销售订单、采购订单共用 document_line_amounts。"""
+        from apps.kuaizhizao.utils.sales_price_amount import calc_sales_line_amounts
+
+        _, _, incl = calc_sales_line_amounts(
+            qty or Decimal("0"),
+            unit_price or Decimal("0"),
+            tax_rate if tax_rate is not None else Decimal("0"),
+            price_type,
         )
+        return incl
 
     @staticmethod
     def _validate_quotation_non_negative(

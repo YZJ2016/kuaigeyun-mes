@@ -193,6 +193,8 @@ export interface PurchaseOrderItem {
   ordered_quantity?: number;
   unit?: string;
   unit_price?: number;
+  /** 表单录入单价。含税时与 unit_price（未税）分开保存 */
+  display_unit_price?: number | null;
   total_price?: number;
   /** 行税率（百分比，与销售订单行一致） */
   tax_rate?: number;

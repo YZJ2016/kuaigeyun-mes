@@ -86,8 +86,9 @@ import {
   resolveSupplierDefaultTaxRatePercent,
 } from '../shared/purchasePriceType';
 import {
-  purchaseOrderStoredUnitPriceToForm,
+  purchaseOrderFormLineToStored,
   purchaseOrderTaxRateToDecimal,
+  readPurchaseOrderEnteredUnitPrice,
   purchaseOrderTaxRateToPercent,
   resolvePurchaseOrderDisplayAmount,
 } from '../shared/purchaseOrderAmounts';
@@ -2565,9 +2566,24 @@ const PurchaseOrdersPage: React.FC = () => {
         material_spec: it.material_spec || '',
         unit: it.unit || '件',
         ordered_quantity: Number(it.ordered_quantity ?? it.orderedQuantity) || 0,
-        unit_price: purchaseOrderStoredUnitPriceToForm(
-          Number(it.unit_price ?? it.unitPrice) || 0,
-          lineTaxPercent,
+        aux_quantity:
+          it.aux_quantity != null
+            ? Number(it.aux_quantity)
+            : it.auxQuantity != null
+              ? Number(it.auxQuantity)
+              : undefined,
+        aux_unit: it.aux_unit ?? it.auxUnit ?? undefined,
+        unit_conversion_rate:
+          it.unit_conversion_rate != null
+            ? Number(it.unit_conversion_rate)
+            : it.unitConversionRate != null
+              ? Number(it.unitConversionRate)
+              : undefined,
+        unit_price: readPurchaseOrderEnteredUnitPrice(
+          {
+            display_unit_price: it.display_unit_price ?? it.displayUnitPrice,
+            unit_price: it.unit_price ?? it.unitPrice,
+          },
           priceType,
         ),
         tax_rate: lineTaxPercent,
@@ -3256,6 +3272,145 @@ const PurchaseOrdersPage: React.FC = () => {
     },
   });
 
+  const handleCopySelectedPurchaseOrder = useCallback(async () => {
+    if (requirePurchaseRequisition) {
+      messageApi.warning('当前组织要求先采购申请后下单，请从采购申请加载');
+      pullFromRequisitionQuery.openModal();
+      return;
+    }
+    const orderId = selectedOrderForToolbar?.id;
+    if (orderId == null) return;
+    try {
+      const detail = await getPurchaseOrder(Number(orderId));
+      const customValues = await loadPurchaseOrderFormFieldValues(Number(orderId));
+      const headerTaxRatePercent = purchaseOrderTaxRateToPercent(detail.tax_rate);
+      const storedPriceType = String(
+        (detail as { price_type?: string; priceType?: string }).price_type ??
+          (detail as { priceType?: string }).priceType ??
+          '',
+      ).trim();
+      const priceType: PriceTypeValue =
+        storedPriceType === 'tax_inclusive' || storedPriceType === 'tax_exclusive'
+          ? storedPriceType
+          : headerTaxRatePercent > 0
+            ? 'tax_inclusive'
+            : 'tax_exclusive';
+      const plainValue = (value: unknown): unknown => {
+        if (dayjs.isDayjs(value)) return value.format('YYYY-MM-DD HH:mm:ss');
+        if (Array.isArray(value)) return value.map(plainValue);
+        if (value && typeof value === 'object') {
+          const out: Record<string, unknown> = {};
+          for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+            out[key] = plainValue(nested);
+          }
+          return out;
+        }
+        return value;
+      };
+      const items = (detail.items || []).map((raw) => {
+        const it = raw as PurchaseOrderItem & {
+          partner_material_code?: string | null;
+          partner_material_name?: string | null;
+          attachments?: Parameters<typeof mapAttachmentsToUploadList>[0];
+        };
+        const qty = Number(it.ordered_quantity) || 0;
+        const dual = it as PurchaseOrderItem & {
+          aux_quantity?: number | null;
+          aux_unit?: string | null;
+          unit_conversion_rate?: number | null;
+        };
+        return {
+          material_id: it.material_id,
+          material_code: it.material_code || '',
+          material_name: it.material_name || '',
+          material_spec: it.material_spec || '',
+          partner_material_code: it.partner_material_code ?? '',
+          partner_material_name: it.partner_material_name ?? '',
+          unit: it.unit || '件',
+          ordered_quantity: qty,
+          aux_quantity: dual.aux_quantity != null ? Number(dual.aux_quantity) : undefined,
+          aux_unit: dual.aux_unit ?? undefined,
+          unit_conversion_rate:
+            dual.unit_conversion_rate != null ? Number(dual.unit_conversion_rate) : undefined,
+          unit_price: readPurchaseOrderEnteredUnitPrice(
+            {
+              display_unit_price: (it as { display_unit_price?: unknown; displayUnitPrice?: unknown }).display_unit_price
+                ?? (it as { displayUnitPrice?: unknown }).displayUnitPrice,
+              unit_price: it.unit_price,
+            },
+            priceType,
+          ),
+          tax_rate: headerTaxRatePercent,
+          required_date: it.required_date || undefined,
+          notes: it.notes ?? '',
+          attachments: mapAttachmentsToUploadList(it.attachments),
+        };
+      });
+      const milestones = (detail.payment_milestones ?? []).map((ms) => ({
+        milestone_name: ms.milestone_name,
+        planned_date: ms.planned_date,
+        planned_amount: ms.planned_amount,
+        planned_ratio: ms.planned_ratio,
+        billing_trigger: ms.billing_trigger || 'milestone',
+        is_prepayment: Boolean(ms.is_prepayment),
+        auto_generate_payable: ms.is_prepayment ? false : Boolean(ms.auto_generate_payable),
+        bank_account_id: ms.is_prepayment ? ms.bank_account_id ?? undefined : undefined,
+        notes: ms.notes,
+      }));
+      const feeDetails = (detail.fee_details ?? []).map((fee: Record<string, unknown>) => ({
+        type: fee.type,
+        amount: fee.amount,
+        bearer: fee.bearer,
+        notes: fee.notes,
+      }));
+      navigate(PURCHASE_ORDER_CREATE_PATH, {
+        state: {
+          documentFlowCreate: {
+            ...(plainValue(customValues) as Record<string, unknown>),
+            supplier_id: detail.supplier_id,
+            supplier_name: detail.supplier_name,
+            supplier_contact: detail.supplier_contact,
+            supplier_phone: detail.supplier_phone,
+            order_date: todaySiteDateString(),
+            delivery_date: detail.delivery_date,
+            order_type: detail.order_type || '标准采购',
+            payable_recognition:
+              detail.payable_recognition ?? orgPayableRecognitionDefault,
+            payment_method_code: detail.payment_method_code ?? undefined,
+            settlement_terms_code: detail.settlement_terms_code ?? undefined,
+            payment_terms_days: detail.payment_terms_days ?? undefined,
+            currency: detail.currency || 'CNY',
+            exchange_rate: detail.exchange_rate ?? 1,
+            price_type: priceType,
+            buyer_id: detail.buyer_id,
+            buyer_name: detail.buyer_name,
+            department_id:
+              (detail as { department_id?: number | null }).department_id ?? undefined,
+            department_name:
+              (detail as { department_name?: string | null }).department_name ?? undefined,
+            notes: detail.notes,
+            attachments: mapAttachmentsToUploadList(detail.attachments),
+            fee_details: feeDetails,
+            payment_milestones: milestones,
+            items,
+          },
+        },
+      });
+    } catch {
+      messageApi.error(t('app.kuaizhizao.purchaseOrder.detailFailed'));
+    }
+  }, [
+    loadPurchaseOrderFormFieldValues,
+    messageApi,
+    navigate,
+    orgPayableRecognitionDefault,
+    pullFromRequisitionQuery,
+    requirePurchaseRequisition,
+    selectedOrderForToolbar,
+    t,
+  ]);
+
+
   // 处理表单提交（创建/更新）
   const purchaseOrderStatusAlreadySubmitted = (status: string | undefined) =>
     isPendingReviewStatus(status) || isAuditedStatus(status) || isConfirmedStatus(status);
@@ -3445,6 +3600,7 @@ const PurchaseOrdersPage: React.FC = () => {
           ordered_quantity: qty,
           unit: it.unit || '件',
           unit_price: price,
+          display_unit_price: storedLine.display_unit_price,
           total_price: totalPrice,
           tax_rate: taxRate,
           received_quantity: receivedQty,
@@ -4715,34 +4871,45 @@ const PurchaseOrdersPage: React.FC = () => {
                   : t('app.kuaizhizao.menu.purchase-management.purchase-orders.new')
               }
               onCreate={handleCreate}
-              menuItems={buildKuaizhizaoPullCreateMenuItems(
-                t,
-                requirePurchaseRequisition
-                  ? [
-                      {
-                        key: 'pull-from-requisition',
-                        actionKey: 'purchase_order.pull_from_requisition',
-                        onClick: pullFromRequisitionQuery.openModal,
-                      },
-                    ]
-                  : [
-                      {
-                        key: 'pull-from-requisition',
-                        actionKey: 'purchase_order.pull_from_requisition',
-                        onClick: pullFromRequisitionQuery.openModal,
-                      },
-                      {
-                        key: 'pull-from-inquiry',
-                        actionKey: 'purchase_order.pull_from_inquiry',
-                        onClick: pullFromInquiryQuery.openModal,
-                      },
-                      {
-                        key: 'pull-from-sales-order',
-                        actionKey: 'purchase_order.pull_from_sales_order',
-                        onClick: pullFromSalesOrderQuery.openModal,
-                      },
-                    ],
-              )}
+              menuItems={[
+                ...buildKuaizhizaoPullCreateMenuItems(
+                  t,
+                  requirePurchaseRequisition
+                    ? [
+                        {
+                          key: 'pull-from-requisition',
+                          actionKey: 'purchase_order.pull_from_requisition',
+                          onClick: pullFromRequisitionQuery.openModal,
+                        },
+                      ]
+                    : [
+                        {
+                          key: 'pull-from-requisition',
+                          actionKey: 'purchase_order.pull_from_requisition',
+                          onClick: pullFromRequisitionQuery.openModal,
+                        },
+                        {
+                          key: 'pull-from-inquiry',
+                          actionKey: 'purchase_order.pull_from_inquiry',
+                          onClick: pullFromInquiryQuery.openModal,
+                        },
+                        {
+                          key: 'pull-from-sales-order',
+                          actionKey: 'purchase_order.pull_from_sales_order',
+                          onClick: pullFromSalesOrderQuery.openModal,
+                        },
+                      ],
+                ),
+                { key: 'copy-selected-divider', type: 'divider' },
+                {
+                  key: 'copy-selected-create',
+                  label: t('app.kuaizhizao.purchaseOrder.copySelectedCreate'),
+                  disabled: !selectedOrderForToolbar,
+                  onClick: () => {
+                    void handleCopySelectedPurchaseOrder();
+                  },
+                },
+              ]}
             />,
             <UniPushToolbarButton
               key={`purchase-order-push-${selectedOrderForToolbar?.id ?? 'none'}`}

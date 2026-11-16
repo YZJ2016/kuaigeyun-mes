@@ -908,7 +908,15 @@ class PurchaseReceiptItemBase(BaseSchema):
     material_unit: str = Field(..., max_length=20, description="物料单位")
     receipt_quantity: float = Field(..., gt=0, description="入库数量")
     unit_price: float = Field(..., ge=0, description="单价")
+    display_unit_price: Optional[float] = Field(
+        None,
+        ge=0,
+        description="录入单价（表单展示口径，保存时写入；详情只读直接展示）",
+    )
     total_amount: float = Field(..., ge=0, description="金额")
+    tax_amount: Optional[float] = Field(None, ge=0, description="行税额（rollup 写回）")
+    net_amount: Optional[float] = Field(None, ge=0, description="行价税合计（rollup 写回）")
+    tax_rate: Optional[float] = Field(None, ge=0, description="行税率（百分比）")
     qualified_quantity: float = Field(..., ge=0, description="合格数量")
     unqualified_quantity: float = Field(..., ge=0, description="不合格数量")
     quality_status: str = Field("合格", max_length=20, description="质量状态")
@@ -949,6 +957,11 @@ class PurchaseReceiptItemResponse(PurchaseReceiptItemBase):
     created_by_name: Optional[str] = Field(None, description="创建人姓名")
     updated_by: Optional[int] = Field(None, description="更新人ID")
     updated_by_name: Optional[str] = Field(None, description="更新人姓名")
+    settlement_excl: Optional[float] = Field(
+        None, description="行未税（与财务 rollup / PO 比例分摊同源，详情展示真源）"
+    )
+    settlement_tax: Optional[float] = Field(None, description="行税额（rollup 同源）")
+    settlement_gross: Optional[float] = Field(None, description="行价税合计（rollup 同源）")
 
     class Config:
         from_attributes = True

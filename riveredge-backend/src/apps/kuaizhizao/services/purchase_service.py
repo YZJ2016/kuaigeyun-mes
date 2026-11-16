@@ -273,6 +273,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             biz_config = await config_service.get_business_config(tenant_id)
             purchase_price_fluctuation_limit = await config_service.get_purchase_price_fluctuation_limit_percent(tenant_id)
             quantity_decimal_places = await config_service.get_quantity_decimal_places(tenant_id)
+            price_decimal_places = await config_service.get_price_decimal_places(tenant_id)
             require_purchase_requisition = (
                 biz_config.get("parameters", {})
                 .get("procurement", {})
@@ -389,6 +390,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 quantize_money,
             )
             from apps.kuaicaiwu.services.purchase_settlement import (
+                coerce_purchase_order_display_unit_price,
                 normalize_po_tax_rate_to_percent,
             )
 
@@ -420,6 +422,10 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 item_dict["ordered_quantity"] = ordered_qty
                 item_dict["outstanding_quantity"] = outstanding_quantity
                 item_dict["tax_rate"] = line_tax_pct
+                item_dict["display_unit_price"] = coerce_purchase_order_display_unit_price(
+                    getattr(item_data, "display_unit_price", None),
+                    price_decimal_places,
+                )
                 if not str(item_dict.get("material_name") or "").strip():
                     item_dict["material_name"] = str(material.name or "")[:200]
                 if not str(item_dict.get("material_code") or "").strip():
@@ -1380,6 +1386,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                     tenant_id
                 )
                 quantity_decimal_places = await BusinessConfigService().get_quantity_decimal_places(tenant_id)
+                price_decimal_places = await BusinessConfigService().get_price_decimal_places(tenant_id)
                 partner_settlement_method = None
                 supplier_id_for_items = int(update_dict.get("supplier_id", order.supplier_id) or 0)
                 if supplier_id_for_items > 0:
@@ -1402,6 +1409,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                     quantize_money,
                 )
                 from apps.kuaicaiwu.services.purchase_settlement import (
+                    coerce_purchase_order_display_unit_price,
                     normalize_po_tax_rate_to_percent,
                 )
 
@@ -1441,6 +1449,10 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                     item_dict["ordered_quantity"] = ordered_qty
                     item_dict["outstanding_quantity"] = outstanding_quantity
                     item_dict["tax_rate"] = line_tax_pct
+                    item_dict["display_unit_price"] = coerce_purchase_order_display_unit_price(
+                        getattr(item_data, "display_unit_price", None),
+                        price_decimal_places,
+                    )
                     if not str(item_dict.get("material_name") or "").strip():
                         item_dict["material_name"] = str(material.name or "")[:200]
                     if not str(item_dict.get("material_code") or "").strip():

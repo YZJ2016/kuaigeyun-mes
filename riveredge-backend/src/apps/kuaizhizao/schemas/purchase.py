@@ -287,6 +287,11 @@ class PurchaseOrderItemBase(BaseSchema):
     ordered_quantity: Decimal = Field(..., gt=0, description="采购数量")
     unit: str = Field(..., max_length=20, description="单位")
     unit_price: Decimal = Field(..., ge=0, description="单价")
+    display_unit_price: Optional[Decimal] = Field(
+        None,
+        ge=0,
+        description="录入单价（表单展示口径，含税时保存用户输入；详情只读直接展示）",
+    )
     total_price: Decimal = Field(..., ge=0, description="总价")
     tax_rate: Decimal = Field(
         default=Decimal(0),

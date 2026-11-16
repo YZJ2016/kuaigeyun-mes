@@ -48,7 +48,12 @@ import {
 } from '../../sales-management/shared/materialLineFormDetail';
 import { resolveMaterialScenarioUnit } from '../../../../../utils/materialScenarioUnit';
 import { calcDocumentLineAmounts } from '../../../utils/documentLineAmounts';
-import { purchaseOrderTaxRateToPercent } from '../../purchase-management/shared/purchaseOrderAmounts';
+import {
+  purchaseOrderFormLineToStored,
+  purchaseOrderTaxRateToPercent,
+  readPurchaseOrderEnteredUnitPrice,
+} from '../../purchase-management/shared/purchaseOrderAmounts';
+import { readPurchaseReceiptFormUnitPrice } from '../shared/purchaseReceiptWarehouseAmounts';
 import { getPurchaseOrder } from '../../../services/purchase';
 import {
   enrichPurchaseOrderItemsMaterial,
@@ -58,7 +63,10 @@ import {
 import type { PurchaseReceiptPoComposePayload } from './inboundPullEntryTypes';
 import { DocumentLineUnitSelect } from '../../../../../components/quantity-with-unit';
 import { DocumentLineDualQuantityFormCell } from '../../../../../components/quantity-with-unit/documentLineDualQuantityColumn';
-import { validateDualQuantityBeforeSave } from '../../../../../utils/materialDualQuantity';
+import {
+  documentLineDualQuantityForPush,
+  validateDualQuantityBeforeSave,
+} from '../../../../../utils/materialDualQuantity';
 import {
   fetchMaterialForUnitSelectCache,
   prefetchMaterialsForUnitSelect,
@@ -263,6 +271,44 @@ export type PurchaseReceiptCreateModalProps = {
   /** 采购订单取单后尚未下推：打开新建弹窗预填，保存时才建单 */
   poCompose?: PurchaseReceiptPoComposePayload | null;
 };
+function positiveId(value: unknown): number | null {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function purchaseReceiptFormPriceType(taxRatePercent: number): 'tax_inclusive' | 'tax_exclusive' {
+  return taxRatePercent > 0 ? 'tax_inclusive' : 'tax_exclusive';
+}
+
+function resolveReceiptLineTaxPercent(
+  lineTax: unknown,
+  headerTax: unknown,
+  fallback = 13,
+): number {
+  const fromLine = purchaseOrderTaxRateToPercent(lineTax);
+  if (fromLine > 0) return fromLine;
+  const fromHeader = purchaseOrderTaxRateToPercent(headerTax);
+  return fromHeader > 0 ? fromHeader : fallback;
+}
+
+function parseSerialNumbers(raw: unknown): string[] | undefined {
+  if (Array.isArray(raw)) {
+    const list = raw.map((item) => String(item).trim()).filter(Boolean);
+    return list.length ? list : undefined;
+  }
+  const text = String(raw ?? '').trim();
+  if (!text) return undefined;
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    if (Array.isArray(parsed)) {
+      const list = parsed.map((item) => String(item).trim()).filter(Boolean);
+      return list.length ? list : undefined;
+    }
+  } catch {
+    return [text];
+  }
+  return undefined;
+}
 
 function UserPickField({
   name,
@@ -352,6 +398,7 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
     resolveName: resolveDepartmentName,
   } = usePurchaseDepartmentOptions();
   const quantityDecimals = useNumericPrecisionPlaces('quantity');
+  const priceDecimals = useNumericPrecisionPlaces('price');
   const trackingFlags = useWarehouseTrackingFlags();
   const [generatingBatchIdx, setGeneratingBatchIdx] = useState<number | null>(null);
   const [users, setUsers] = useState<User[]>([]);
@@ -517,11 +564,33 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
             purchase_order_code: poCode,
           };
           setLinkedPoId(poCompose.purchaseOrderId);
+          const headerTaxPct = purchaseOrderTaxRateToPercent(orderWithMaterials.tax_rate ?? 13);
           const formItems = outstanding
             .filter((it) => it.id != null && (poCompose.quantities[it.id] ?? 0) > 0)
             .map((it) => {
               const lineId = it.id!;
               const serialList = poCompose.lineSerials[lineId] ?? [];
+              const lineTaxPct = (() => {
+                const fromLine = purchaseOrderTaxRateToPercent(
+                  (it as { tax_rate?: number }).tax_rate,
+                );
+                return fromLine > 0 ? fromLine : headerTaxPct;
+              })();
+              const pushQty = Number(poCompose.quantities[lineId]) || 0;
+              const poPriceType = (() => {
+                const raw = String(
+                  (orderWithMaterials as { price_type?: string; priceType?: string }).price_type ??
+                    (orderWithMaterials as { priceType?: string }).priceType ??
+                    '',
+                ).trim();
+                return raw === 'tax_inclusive' || raw === 'tax_exclusive'
+                  ? raw
+                  : purchaseReceiptFormPriceType(headerTaxPct);
+              })();
+              const dual = documentLineDualQuantityForPush(it as unknown as Record<string, unknown>, {
+                sourcePrimaryQty: Number(it.ordered_quantity) || 0,
+                pushPrimaryQty: pushQty,
+              });
               return {
                 purchase_order_item_id: lineId,
                 material_id: it.material_id,
@@ -529,8 +598,12 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
                 material_name: String(it.material_name ?? ''),
                 material_spec: it.material_spec != null ? String(it.material_spec) : undefined,
                 material_unit: String(it.material_unit ?? ''),
-                receipt_quantity: Number(poCompose.quantities[lineId]) || 0,
-                unit_price: Number(it.unit_price) || 0,
+                receipt_quantity: pushQty,
+                tax_rate: lineTaxPct,
+                unit_price: readPurchaseOrderEnteredUnitPrice(it, poPriceType) ?? undefined,
+                aux_quantity: dual.aux_quantity,
+                aux_unit: dual.aux_unit,
+                unit_conversion_rate: dual.unit_conversion_rate,
                 warehouse_id: poCompose.lineWh[lineId],
                 warehouse_name: String(it.warehouse_name ?? ''),
                 location_id: poCompose.lineLoc[lineId],
@@ -635,7 +708,7 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
                 material_model: line.material_model != null ? String(line.material_model) : undefined,
                 material_unit: String(line.material_unit ?? line.unit ?? ''),
                 receipt_quantity: Number(line.receipt_quantity) || 0,
-                unit_price: Number(line.unit_price) || 0,
+                unit_price: readPurchaseReceiptFormUnitPrice(line),
                 warehouse_id: positiveId(line.warehouse_id) ?? undefined,
                 warehouse_name: String(line.warehouse_name ?? ''),
                 location_id: positiveId(line.location_id) ?? undefined,
@@ -1009,9 +1082,20 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
         items: validItems.map((it) => {
           const qty = Number(it.receipt_quantity) || 0;
           const price = Number(it.unit_price) || 0;
+          const taxPct = purchaseOrderTaxRateToPercent(it.tax_rate ?? 13);
+          const storedLine = purchaseOrderFormLineToStored(
+            price,
+            qty,
+            taxPct,
+            purchaseReceiptFormPriceType(taxPct),
+            priceDecimals,
+          );
           const lineWhId = Number(it.warehouse_id) || 0;
+          const unqualified = Number(it.unqualified_quantity) || 0;
+          const serials = parseSerialNumbers(it.serial_numbers_json);
           return {
-            purchase_order_item_id: null,
+            purchase_order_item_id: positiveId(it.purchase_order_item_id),
+            receipt_notice_item_id: positiveId(it.receipt_notice_item_id),
             material_id: Number(it.material_id),
             material_code: String(it.material_code ?? ''),
             material_name: String(it.material_name ?? ''),
@@ -1022,11 +1106,15 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
             unit_conversion_rate:
               it.unit_conversion_rate != null ? Number(it.unit_conversion_rate) : undefined,
             receipt_quantity: qty,
-            unit_price: price,
-            total_amount: Number((qty * price).toFixed(2)),
-            qualified_quantity: qty,
-            unqualified_quantity: 0,
-            quality_status: '合格',
+            unit_price: storedLine.unit_price,
+            display_unit_price: storedLine.display_unit_price,
+            total_amount: storedLine.excl,
+            tax_rate: taxPct,
+            qualified_quantity: Math.max(qty - unqualified, 0),
+            unqualified_quantity: unqualified,
+            quality_status: String(it.quality_status || '合格'),
+            status: String(it.line_status || '待入库'),
+            serial_numbers: serials,
             warehouse_id: lineWhId,
             warehouse_name: String(it.warehouse_name ?? '').trim() || undefined,
             location_id:

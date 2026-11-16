@@ -164,6 +164,12 @@ class PurchaseOrderItem(DocumentLinePartnerMaterialSnapshotMixin, BaseModel):
     ordered_quantity = fields.DecimalField(max_digits=12, decimal_places=4, description="采购数量")
     unit = fields.CharField(max_length=20, description="单位")
     unit_price = fields.DecimalField(max_digits=10, decimal_places=4, description="单价")
+    display_unit_price = fields.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        null=True,
+        description="录入单价（表单口径，含税录入时存用户输入值，只读展示不反算）",
+    )
     total_price = fields.DecimalField(max_digits=14, decimal_places=4, description="总价")
     tax_rate = fields.DecimalField(
         max_digits=6,

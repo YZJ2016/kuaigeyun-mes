@@ -1,11 +1,26 @@
-"""采购入库价税汇总：未税行合计 → 头 tax_amount / net_amount（财务结算含税真源）。"""
+"""采购价税汇总：订单/入库明细 → 头未税、税额、价税（财务结算唯一真源）。"""
 
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import Any, Dict, Mapping, Optional, Sequence
+from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
 
 from apps.kuaicaiwu.services.finance_tax import compute_tax_from_excluding, quantize_money
+
+# 头表金额只能由明细 rollup 写入，禁止接受前端/外推 payload
+PURCHASE_RECEIPT_COMPUTED_HEADER_FIELDS = frozenset(
+    {"total_amount", "tax_amount", "net_amount", "total_quantity"}
+)
+
+PURCHASE_ORDER_COMPUTED_HEADER_FIELDS = frozenset(
+    {"total_amount", "tax_amount", "net_amount", "total_quantity"}
+)
+
+_QTY_SCALE = Decimal("0.0001")
+
+
+def quantize_receipt_quantity(value: Decimal | str | int | float) -> Decimal:
+    return Decimal(str(value)).quantize(_QTY_SCALE)
 
 
 def normalize_po_tax_rate_to_percent(tax_rate: Any) -> Decimal:
@@ -45,17 +60,177 @@ def rollup_purchase_receipt_header_tax(
     return excl, tax, gross
 
 
+def coerce_purchase_order_display_unit_price(raw: Any, price_places: int) -> Decimal | None:
+    """表单录入单价原样量化。未传则 None，禁止由未税单价推导。"""
+    if raw is None or raw == "":
+        return None
+    from core.utils.price_precision import quantize_business_price
+
+    return quantize_business_price(Decimal(str(raw)), price_places)
+
+
+def compute_purchase_order_header_rollup(
+    order: Any,
+    items: Sequence[Any],
+    *,
+    amount_places: int = 2,
+) -> Tuple[Decimal, Decimal, Decimal, Decimal, Decimal] | None:
+    """按录入单价与价类正向拆分汇总。含税且缺 display_unit_price 时返回 None，禁止从未税单价回推。"""
+    from apps.kuaizhizao.utils.document_line_amounts import calc_document_line_amounts
+    from core.utils.amount_precision import quantize_business_amount
+
+    total_qty = Decimal("0")
+    header_fallback = getattr(order, "tax_rate", None)
+    total_excl = Decimal("0")
+    total_tax = Decimal("0")
+    total_incl = Decimal("0")
+    first_pct = Decimal("0")
+    header_price_type = str(getattr(order, "price_type", None) or "tax_exclusive")
+    for it in items:
+        qty = Decimal(str(getattr(it, "ordered_quantity", 0) or 0))
+        total_qty += qty
+        stored_unit = Decimal(str(getattr(it, "unit_price", 0) or 0))
+        display_raw = getattr(it, "display_unit_price", None)
+        pct = resolve_purchase_line_tax_rate_percent(
+            line_tax_rate=getattr(it, "tax_rate", None),
+            header_tax_rate=header_fallback,
+        )
+        if header_price_type == "tax_inclusive":
+            if display_raw is None:
+                if qty > 0 and stored_unit > 0:
+                    return None
+                excl = tax = incl = Decimal("0")
+            else:
+                excl, tax, incl = calc_document_line_amounts(
+                    qty, Decimal(str(display_raw)), pct, "tax_inclusive", amount_places
+                )
+        elif qty > 0 and stored_unit > 0:
+            excl, tax, incl = calc_document_line_amounts(
+                qty, stored_unit, pct, "tax_exclusive", amount_places
+            )
+        else:
+            excl = tax = incl = Decimal("0")
+        total_excl += excl
+        total_tax += tax
+        total_incl += incl
+        if first_pct <= 0 and pct > 0:
+            first_pct = pct
+    total_qty = quantize_receipt_quantity(total_qty)
+
+    if total_qty > 0 or total_incl > 0:
+        excl = quantize_business_amount(total_excl, amount_places)
+        tax = quantize_business_amount(total_tax, amount_places)
+        net = quantize_business_amount(total_incl, amount_places)
+        header_rate = (
+            (first_pct / Decimal("100")).quantize(Decimal("0.01"))
+            if first_pct > 0
+            else Decimal("0")
+        )
+    else:
+        excl = tax = net = Decimal("0")
+        header_rate = Decimal("0")
+    return total_qty, excl, tax, net, header_rate
+
+
+def purchase_order_header_out_of_sync(
+    order: Any,
+    *,
+    total_qty: Decimal,
+    excl: Decimal,
+    tax_amt: Decimal,
+    net_amt: Decimal,
+    header_tax_rate: Decimal,
+) -> bool:
+    stored_rate = Decimal(str(getattr(order, "tax_rate", 0) or 0))
+    rate_mismatch = stored_rate.quantize(Decimal("0.01")) != header_tax_rate.quantize(
+        Decimal("0.01")
+    )
+    return (
+        quantize_money(getattr(order, "total_amount", 0)) != quantize_money(excl)
+        or quantize_money(getattr(order, "tax_amount", 0)) != quantize_money(tax_amt)
+        or quantize_money(getattr(order, "net_amount", 0)) != quantize_money(net_amt)
+        or quantize_receipt_quantity(getattr(order, "total_quantity", 0))
+        != quantize_receipt_quantity(total_qty)
+        or (header_tax_rate > 0 and rate_mismatch)
+    )
+
+
+async def sync_purchase_order_header_amounts(
+    tenant_id: int,
+    order_id: int,
+    *,
+    order: Any | None = None,
+    items: Sequence[Any] | None = None,
+    persist: bool = True,
+) -> Tuple[Decimal, Decimal, Decimal, bool]:
+    """以采购订单明细为唯一真源写回头表价税与合计数量。"""
+    from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem
+
+    if order is None:
+        order = await PurchaseOrder.get_or_none(
+            tenant_id=tenant_id, id=order_id, deleted_at__isnull=True
+        )
+        if order is None:
+            return Decimal("0.00"), Decimal("0.00"), Decimal("0.00"), False
+
+    if items is None:
+        items = await PurchaseOrderItem.filter(
+            tenant_id=tenant_id, order_id=order_id, deleted_at__isnull=True
+        ).all()
+
+    from infra.services.business_config_service import BusinessConfigService
+
+    amount_places = await BusinessConfigService().get_amount_decimal_places(tenant_id)
+    rolled = compute_purchase_order_header_rollup(
+        order, items, amount_places=amount_places
+    )
+    if rolled is None:
+        return (
+            quantize_money(getattr(order, "total_amount", 0)),
+            quantize_money(getattr(order, "tax_amount", 0)),
+            quantize_money(getattr(order, "net_amount", 0)),
+            False,
+        )
+    total_qty, excl, tax_amt, net_amt, header_rate = rolled
+    changed = purchase_order_header_out_of_sync(
+        order,
+        total_qty=total_qty,
+        excl=excl,
+        tax_amt=tax_amt,
+        net_amt=net_amt,
+        header_tax_rate=header_rate,
+    )
+    if persist and changed:
+        upd: Dict[str, Any] = {
+            "total_quantity": total_qty,
+            "total_amount": excl,
+            "tax_amount": tax_amt,
+            "net_amount": net_amt,
+        }
+        if header_rate > 0:
+            upd["tax_rate"] = header_rate
+        await PurchaseOrder.filter(tenant_id=tenant_id, id=order_id).update(**upd)
+        order.total_quantity = total_qty
+        order.total_amount = excl
+        order.tax_amount = tax_amt
+        order.net_amount = net_amt
+        if header_rate > 0:
+            order.tax_rate = header_rate
+
+    return excl, tax_amt, net_amt, changed
+
+
 def purchase_order_settlement_gross(order: Any) -> Decimal:
-    """采购订单财务上限（预付/应付/开票）：价税合计；与前端 resolvePurchaseOrderDisplayAmount 同源。"""
+    """采购订单财务上限（预付/应付/开票）：价税合计；与前端 resolveDocumentStoredNetGrossAmount 同源。"""
+    stored_net = Decimal(str(getattr(order, "net_amount", 0) or 0))
+    if stored_net > 0:
+        return quantize_money(stored_net)
     excl = quantize_money(Decimal(str(getattr(order, "total_amount", 0) or 0)))
     tax_amt_raw = getattr(order, "tax_amount", None)
     if tax_amt_raw is not None:
         tax_amt = Decimal(str(tax_amt_raw or 0))
         if excl > 0 or tax_amt > 0:
             return quantize_money(excl + tax_amt)
-    stored_net = Decimal(str(getattr(order, "net_amount", 0) or 0))
-    if stored_net > 0:
-        return quantize_money(stored_net)
     if excl <= 0:
         return Decimal("0.00")
     _, _, gross = rollup_purchase_receipt_header_tax(
@@ -95,8 +270,13 @@ def resolve_receipt_line_tax_rate_percent(
     receipt: Any,
     purchase_order_item_id: Optional[int],
     poi_by_id: Mapping[int, Any],
+    receipt_line: Any = None,
 ) -> Decimal:
-    """入库行税率：优先关联采购订单行，否则入库单头。"""
+    """入库行税率：本行 → 关联采购订单行 → 入库单头。"""
+    if receipt_line is not None:
+        own_pct = normalize_po_tax_rate_to_percent(getattr(receipt_line, "tax_rate", None))
+        if own_pct > 0:
+            return own_pct
     header_pct = normalize_po_tax_rate_to_percent(getattr(receipt, "tax_rate", None))
     poi_id = int(purchase_order_item_id or 0)
     if poi_id > 0 and poi_id in poi_by_id:
@@ -105,6 +285,201 @@ def resolve_receipt_line_tax_rate_percent(
             header_tax_rate=getattr(receipt, "tax_rate", None),
         )
     return header_pct
+
+
+def _first_positive_line_tax_percent(lines: Sequence[Any]) -> Optional[Decimal]:
+    for it in lines:
+        pct = normalize_po_tax_rate_to_percent(getattr(it, "tax_rate", None))
+        if pct > 0:
+            return pct
+    return None
+
+
+def compute_purchase_receipt_header_rollup(
+    receipt: Any,
+    lines: Sequence[Any],
+    poi_by_id: Mapping[int, Any],
+) -> Tuple[Decimal, Decimal, Decimal, Decimal]:
+    """
+    按明细汇总头表：入库数量合计、未税、税额、价税合计。
+    无明细时价税均为 0（税率仅保留在头表 tax_rate）。
+    """
+    total_qty = Decimal("0")
+    for line in lines:
+        total_qty += Decimal(str(getattr(line, "receipt_quantity", 0) or 0))
+    total_qty = quantize_receipt_quantity(total_qty)
+
+    if lines:
+        excl, tax_amt, net_amt = rollup_purchase_receipt_amounts_from_lines(
+            receipt, lines, poi_by_id
+        )
+    else:
+        excl, tax_amt, net_amt = (
+            Decimal("0.00"),
+            Decimal("0.00"),
+            Decimal("0.00"),
+        )
+    return total_qty, excl, tax_amt, net_amt
+
+
+def purchase_receipt_header_out_of_sync(
+    receipt: Any,
+    *,
+    total_qty: Decimal,
+    excl: Decimal,
+    tax_amt: Decimal,
+    net_amt: Decimal,
+) -> bool:
+    """头表金额/数量与 rollup 是否不一致（分位比较）。"""
+    return (
+        quantize_money(getattr(receipt, "total_amount", 0)) != quantize_money(excl)
+        or quantize_money(getattr(receipt, "tax_amount", 0)) != quantize_money(tax_amt)
+        or quantize_money(getattr(receipt, "net_amount", 0)) != quantize_money(net_amt)
+        or quantize_receipt_quantity(getattr(receipt, "total_quantity", 0))
+        != quantize_receipt_quantity(total_qty)
+    )
+
+
+def compute_purchase_receipt_line_settlement_amounts(
+    receipt: Any,
+    line: Any,
+    poi_by_id: Mapping[int, Any],
+) -> Tuple[Decimal, Decimal, Decimal]:
+    """单行未税/税额/价税（与 rollup、列表 settlement 同源）。"""
+    qty = Decimal(str(getattr(line, "receipt_quantity", 0) or 0))
+    unit_price = Decimal(str(getattr(line, "unit_price", 0) or 0))
+    poi_id = int(getattr(line, "purchase_order_item_id", 0) or 0) or None
+    line_total_raw = getattr(line, "total_amount", None)
+    line_total = (
+        Decimal(str(line_total_raw)) if line_total_raw is not None else None
+    )
+    line_excl = resolve_purchase_receipt_line_excl_amount(
+        receipt_quantity=qty,
+        unit_price=unit_price,
+        purchase_order_item_id=poi_id,
+        line_total_amount=line_total,
+        poi_by_id=poi_by_id,
+    )
+    tax_pct = resolve_receipt_line_tax_rate_percent(
+        receipt=receipt,
+        purchase_order_item_id=poi_id,
+        poi_by_id=poi_by_id,
+        receipt_line=line,
+    )
+    _, tax, gross = compute_tax_from_excluding(line_excl, tax_pct)
+    return line_excl, quantize_money(tax), gross
+
+
+async def sync_purchase_receipt_line_settlement_amounts(
+    tenant_id: int,
+    receipt: Any,
+    lines: Sequence[Any],
+    poi_by_id: Mapping[int, Any],
+    *,
+    persist: bool = True,
+) -> bool:
+    """将行未税/税额/价税写回与 PO 比例分摊/财务 rollup 一致的值（详情只读真源）。"""
+    from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
+
+    any_changed = False
+    for line in lines:
+        line_excl, line_tax, line_gross = compute_purchase_receipt_line_settlement_amounts(
+            receipt, line, poi_by_id
+        )
+        stored_excl = quantize_money(getattr(line, "total_amount", 0) or 0)
+        stored_tax = quantize_money(getattr(line, "tax_amount", 0) or 0)
+        stored_net = quantize_money(getattr(line, "net_amount", 0) or 0)
+        if stored_excl == line_excl and stored_tax == line_tax and stored_net == line_gross:
+            continue
+        any_changed = True
+        if persist:
+            line_id = int(getattr(line, "id"))
+            await PurchaseReceiptItem.filter(tenant_id=tenant_id, id=line_id).update(
+                total_amount=line_excl,
+                tax_amount=line_tax,
+                net_amount=line_gross,
+            )
+            line.total_amount = line_excl
+            line.tax_amount = line_tax
+            line.net_amount = line_gross
+    return any_changed
+
+
+async def sync_purchase_receipt_header_amounts(
+    tenant_id: int,
+    receipt_id: int,
+    *,
+    receipt: Any | None = None,
+    lines: Sequence[Any] | None = None,
+    poi_by_id: Mapping[int, Any] | None = None,
+    persist: bool = True,
+) -> Tuple[Decimal, Decimal, Decimal, bool]:
+    """
+    以明细为唯一真源写回头表未税/税额/价税/合计数量。
+    返回 (未税, 税额, 价税合计, 是否发生过持久化修正)。
+    """
+    from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
+    from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
+
+    if receipt is None:
+        receipt = await PurchaseReceipt.get_or_none(
+            tenant_id=tenant_id, id=receipt_id, deleted_at__isnull=True
+        )
+        if receipt is None:
+            return Decimal("0.00"), Decimal("0.00"), Decimal("0.00"), False
+
+    if lines is None:
+        lines = await PurchaseReceiptItem.filter(
+            tenant_id=tenant_id,
+            receipt_id=receipt_id,
+            deleted_at__isnull=True,
+        ).all()
+
+    if poi_by_id is None:
+        poi_ids = {
+            int(getattr(i, "purchase_order_item_id", 0) or 0)
+            for i in lines
+            if int(getattr(i, "purchase_order_item_id", 0) or 0) > 0
+        }
+        poi_by_id = {}
+        if poi_ids:
+            from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
+
+            for poi in await PurchaseOrderItem.filter(
+                tenant_id=tenant_id, id__in=list(poi_ids)
+            ):
+                poi_by_id[int(poi.id)] = poi
+
+    line_excl_changed = await sync_purchase_receipt_line_settlement_amounts(
+        tenant_id, receipt, lines, poi_by_id, persist=persist
+    )
+
+    total_qty, excl, tax_amt, net_amt = compute_purchase_receipt_header_rollup(
+        receipt, lines, poi_by_id
+    )
+    changed = line_excl_changed or purchase_receipt_header_out_of_sync(
+        receipt, total_qty=total_qty, excl=excl, tax_amt=tax_amt, net_amt=net_amt
+    )
+    line_tax_pct = _first_positive_line_tax_percent(lines)
+
+    if persist and changed:
+        upd: Dict[str, Any] = {
+            "total_quantity": total_qty,
+            "total_amount": excl,
+            "tax_amount": tax_amt,
+            "net_amount": net_amt,
+        }
+        if line_tax_pct is not None:
+            upd["tax_rate"] = float(line_tax_pct)
+        await PurchaseReceipt.filter(tenant_id=tenant_id, id=receipt_id).update(**upd)
+        receipt.total_quantity = total_qty
+        receipt.total_amount = excl
+        receipt.tax_amount = tax_amt
+        receipt.net_amount = net_amt
+        if line_tax_pct is not None:
+            receipt.tax_rate = line_tax_pct
+
+    return excl, tax_amt, net_amt, changed
 
 
 def rollup_purchase_receipt_amounts_from_lines(
@@ -116,26 +491,9 @@ def rollup_purchase_receipt_amounts_from_lines(
     excl_sum = Decimal("0")
     tax_sum = Decimal("0")
     for line in lines:
-        qty = Decimal(str(getattr(line, "receipt_quantity", 0) or 0))
-        unit_price = Decimal(str(getattr(line, "unit_price", 0) or 0))
-        poi_id = int(getattr(line, "purchase_order_item_id", 0) or 0) or None
-        line_total_raw = getattr(line, "total_amount", None)
-        line_total = (
-            Decimal(str(line_total_raw)) if line_total_raw is not None else None
+        line_excl, tax, _ = compute_purchase_receipt_line_settlement_amounts(
+            receipt, line, poi_by_id
         )
-        line_excl = resolve_purchase_receipt_line_excl_amount(
-            receipt_quantity=qty,
-            unit_price=unit_price,
-            purchase_order_item_id=poi_id,
-            line_total_amount=line_total,
-            poi_by_id=poi_by_id,
-        )
-        tax_pct = resolve_receipt_line_tax_rate_percent(
-            receipt=receipt,
-            purchase_order_item_id=poi_id,
-            poi_by_id=poi_by_id,
-        )
-        _, tax, _ = compute_tax_from_excluding(line_excl, tax_pct)
         excl_sum += line_excl
         tax_sum += tax
     excl_sum = quantize_money(excl_sum)
@@ -309,6 +667,9 @@ async def align_payables_from_purchase_receipt_settlement(
         if canonical is None:
             continue
         canonical = quantize_money(canonical)
+        await sync_purchase_receipt_header_amounts(
+            tenant_id, rid, receipt=receipt, persist=True
+        )
         for payable in payables_by_receipt.get(rid, []):
             current = quantize_money(Decimal(str(getattr(payable, "total_amount", 0) or 0)))
             if current == canonical:

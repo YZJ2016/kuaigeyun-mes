@@ -32,6 +32,11 @@ import {
 import { CustomFieldsDetailSection, hasCustomFieldsDetailContent } from '../../../../../../components/custom-fields';
 import { WarehouseTraceBriefPrimaryActions } from '../../../warehouse-management/WarehouseTraceBriefFooter';
 import { getPurchaseOrderLifecycle } from '../../../../utils/purchaseOrderLifecycle';
+import { payableLedgerRecognitionLabel } from '../../../../../../utils/documentLedgerRecognition';
+import {
+  partnerDefaultPaymentMethodLabel,
+  partnerSettlementTermsLabel,
+} from '../../../../../master-data/utils/partner-static-labels';
 import { formatOrderChangeStatusLabel } from '../../../../utils/orderChangeLifecycle';
 import { type PurchaseOrder, type PurchaseOrderItem } from '../../../../services/purchase';
 import { listPurchaseOrderChangesByOrder, type PurchaseOrderChange } from '../../../../services/purchase-order-change';
@@ -49,43 +54,17 @@ import { useKuaizhizaoPrintModal } from '../../../../hooks/useKuaizhizaoPrintMod
 import { DocumentStatus, ReviewStatusEnum } from '../../../../constants/documentStatus';
 import type { CustomField } from '../../../../../../services/customField';
 import type { AuditPhaseRecord } from '../../../../../../components/uni-audit/AuditPhaseBadge';
-import { calcDocumentLineAmounts } from '../../../../utils/documentLineAmounts';
 import {
-  purchaseOrderTaxRateToPercent,
+  calcPurchaseOrderDetailLineAmounts,
+  purchaseOrderDetailUnitPriceIncl,
   resolvePurchaseOrderDisplayAmount,
+  resolvePurchaseOrderLineTaxPercent,
 } from '../../shared/purchaseOrderAmounts';
+import { normalizePurchasePriceType } from '../../shared/purchasePriceType';
 
 const PURCHASE_ORDER_RESOURCE = 'kuaizhizao:purchase-order';
 const PLACEHOLDER: PurchaseOrder = { id: 0 };
 const DETAIL_ITEMS_MIN_WIDTH = 1200;
-
-function resolvePurchaseOrderLineTaxPercent(
-  item: Pick<PurchaseOrderItem, 'tax_rate'>,
-  headerTaxRate: unknown,
-): number {
-  const lineRaw = Number(item.tax_rate);
-  if (Number.isFinite(lineRaw) && lineRaw > 0) {
-    return purchaseOrderTaxRateToPercent(lineRaw);
-  }
-  return purchaseOrderTaxRateToPercent(headerTaxRate);
-}
-
-function resolvePurchaseOrderLineInclAmounts(
-  item: Pick<PurchaseOrderItem, 'ordered_quantity' | 'unit_price' | 'total_price' | 'tax_rate'>,
-  headerTaxRate: unknown,
-): { unitIncl: number; totalIncl: number } {
-  const taxRatePercent = resolvePurchaseOrderLineTaxPercent(item, headerTaxRate);
-  const qty = Number(item.ordered_quantity) || 0;
-  const unitExcl = Number(item.unit_price) || 0;
-  const line = calcDocumentLineAmounts(qty, unitExcl, taxRatePercent, 'tax_exclusive');
-  const storedTotal = Number(item.total_price);
-  const totalIncl =
-    Number.isFinite(storedTotal) && (taxRatePercent > 0 || storedTotal > 0)
-      ? calcDocumentLineAmounts(1, storedTotal, taxRatePercent, 'tax_exclusive').incl
-      : line.incl;
-  const unitIncl = qty > 0 ? totalIncl / qty : calcDocumentLineAmounts(1, unitExcl, taxRatePercent, 'tax_exclusive').incl;
-  return { unitIncl, totalIncl };
-}
 
 export const PURCHASE_ORDER_WORKFLOW_PROPS = {
   entityType: 'purchase_order' as const,
@@ -285,7 +264,55 @@ export const PurchaseOrderDetailDrawer: React.FC<PurchaseOrderDetailDrawerProps>
                 t,
               ) || '—',
           },
+          {
+            title: t('app.kuaizhizao.purchaseOrder.paymentMethod'),
+            dataIndex: 'payment_method_code',
+            render: (_, entity) =>
+              partnerDefaultPaymentMethodLabel(
+                t,
+                (entity as { payment_method_code?: string }).payment_method_code,
+              ),
+          },
+          {
+            title: t('app.kuaizhizao.purchaseOrder.settlementTerms'),
+            dataIndex: 'settlement_terms_code',
+            render: (_, entity) =>
+              partnerSettlementTermsLabel(
+                t,
+                (entity as { settlement_terms_code?: string }).settlement_terms_code,
+              ),
+          },
+          {
+            title: t('app.kuaizhizao.purchaseOrder.paymentCycle'),
+            dataIndex: 'payment_terms_days',
+            render: (_, entity) => {
+              const days = (entity as { payment_terms_days?: number | null }).payment_terms_days;
+              if (days != null && Number.isFinite(Number(days))) {
+                return t('app.kuaizhizao.purchaseOrder.paymentCycleDaysValue', { days: Number(days) });
+              }
+              return '-';
+            },
+          },
+          {
+            title: t('field.document.ledgerRecognition'),
+            dataIndex: 'payable_recognition',
+            key: 'payable_recognition',
+            render: (_, entity) =>
+              payableLedgerRecognitionLabel(
+                t,
+                (entity as { payable_recognition?: string; payableRecognition?: string }).payable_recognition ??
+                  (entity as { payableRecognition?: string }).payableRecognition,
+              ),
+          },
           { title: t('app.kuaizhizao.purchaseOrder.form.currency'), dataIndex: 'currency', key: 'currency_code' },
+          {
+            title: t('app.kuaizhizao.purchaseOrder.form.exchangeRate'),
+            dataIndex: 'exchange_rate',
+            render: (_, entity) => {
+              const rate = (entity as { exchange_rate?: number | null }).exchange_rate;
+              return rate != null && Number.isFinite(Number(rate)) ? Number(rate) : '-';
+            },
+          },
           {
             title: t('app.kuaizhizao.purchaseOrder.col.orderAmount'),
             dataIndex: 'net_amount',
@@ -539,12 +566,16 @@ export const PurchaseOrderDetailDrawer: React.FC<PurchaseOrderDetailDrawerProps>
                   ),
                 },
                 {
-                  title: t('app.kuaizhizao.purchaseOrder.col.unitPrice'),
+                  title: t('app.kuaizhizao.purchaseOrder.col.taxUnitPrice'),
                   dataIndex: 'unit_price',
                   width: 100,
                   align: 'right',
                   render: (_text: number, row: PurchaseOrderItem) => {
-                    const { unitIncl } = resolvePurchaseOrderLineInclAmounts(row, effective.tax_rate);
+                    const unitIncl = purchaseOrderDetailUnitPriceIncl(
+                      row,
+                      effective.tax_rate,
+                      normalizePurchasePriceType(effective.price_type),
+                    );
                     return (
                       <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
                         {formatCurrencyPrice(unitIncl)}
@@ -557,13 +588,46 @@ export const PurchaseOrderDetailDrawer: React.FC<PurchaseOrderDetailDrawerProps>
                   },
                 },
                 {
-                  title: t('app.kuaizhizao.purchaseOrder.col.totalPrice'),
+                  title: t('app.kuaizhizao.purchaseOrder.col.taxRate'),
+                  key: 'line_tax_rate',
+                  width: 88,
+                  align: 'right',
+                  render: (_: unknown, row: PurchaseOrderItem) => {
+                    const pct = resolvePurchaseOrderLineTaxPercent(row, effective.tax_rate);
+                    return pct > 0 ? pct : '—';
+                  },
+                },
+                {
+                  title: t('app.kuaizhizao.purchaseOrder.col.exclAmount'),
+                  key: 'line_excl',
+                  width: 120,
+                  align: 'right',
+                  render: (_: unknown, row: PurchaseOrderItem) => {
+                    const priceType = normalizePurchasePriceType(effective.price_type);
+                    const amounts = calcPurchaseOrderDetailLineAmounts(row, effective.tax_rate, priceType);
+                    return amounts ? formatCurrencyAmount(amounts.excl) : '—';
+                  },
+                },
+                {
+                  title: t('app.kuaizhizao.purchaseOrder.col.taxAmount'),
+                  key: 'line_tax',
+                  width: 112,
+                  align: 'right',
+                  render: (_: unknown, row: PurchaseOrderItem) => {
+                    const priceType = normalizePurchasePriceType(effective.price_type);
+                    const amounts = calcPurchaseOrderDetailLineAmounts(row, effective.tax_rate, priceType);
+                    return amounts ? formatCurrencyAmount(amounts.tax) : '—';
+                  },
+                },
+                {
+                  title: t('app.kuaizhizao.purchaseOrder.col.inclTotal'),
                   dataIndex: 'total_price',
                   width: 120,
                   align: 'right',
                   render: (_text: number, row: PurchaseOrderItem) => {
-                    const { totalIncl } = resolvePurchaseOrderLineInclAmounts(row, effective.tax_rate);
-                    return formatCurrencyAmount(totalIncl);
+                    const priceType = normalizePurchasePriceType(effective.price_type);
+                    const amounts = calcPurchaseOrderDetailLineAmounts(row, effective.tax_rate, priceType);
+                    return amounts ? formatCurrencyAmount(amounts.incl) : '—';
                   },
                 },
                 {

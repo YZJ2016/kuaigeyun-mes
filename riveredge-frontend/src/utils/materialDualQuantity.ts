@@ -144,12 +144,69 @@ export function syncDualQuantitiesFloating(params: {
   return value;
 }
 
+/** 从 Form.List 行解析业务数量（主单位）；兼容未注册 Form.Item 时的 quantity 键与副×行率。 */
+export function resolveDocumentLineQuantityField(
+  row: Record<string, unknown>,
+  quantityField: string,
+): number {
+  const direct = Number(row[quantityField]);
+  if (Number.isFinite(direct) && direct > 0) return direct;
+  const legacy = Number(row.quantity);
+  if (Number.isFinite(legacy) && legacy > 0) return legacy;
+  const aux = Number(row.aux_quantity);
+  const rate = Number(row.unit_conversion_rate);
+  if (Number.isFinite(aux) && aux > 0 && Number.isFinite(rate) && rate > 0) {
+    return aux * rate;
+  }
+  return 0;
+}
+
 /** 提交单据行时附带主/副数量与行换算率。 */
 export function pickDocumentLineDualQuantityFields(row: Record<string, unknown>) {
   return {
     aux_quantity: row.aux_quantity,
     aux_unit: row.aux_unit,
     unit_conversion_rate: row.unit_conversion_rate,
+  };
+}
+
+/**
+ * 上游单据行 → 下游表单/创建载荷的副数量三字段。
+ * 部分下推时按主数量比例缩放副数量；行换算率原样带出。
+ */
+export function documentLineDualQuantityForPush(
+  source: Record<string, unknown> | null | undefined,
+  params: { sourcePrimaryQty: number; pushPrimaryQty: number },
+): {
+  aux_quantity: number | undefined;
+  aux_unit: string | undefined;
+  unit_conversion_rate: number | undefined;
+} {
+  const auxUnitRaw = source?.aux_unit ?? source?.auxUnit;
+  const auxUnit =
+    auxUnitRaw != null && String(auxUnitRaw).trim() ? String(auxUnitRaw).trim() : undefined;
+  const rateRaw = source?.unit_conversion_rate ?? source?.unitConversionRate;
+  const rateNum = rateRaw != null ? Number(rateRaw) : NaN;
+  const rate = Number.isFinite(rateNum) && rateNum > 0 ? rateNum : undefined;
+  const auxRaw = source?.aux_quantity ?? source?.auxQuantity;
+  if (auxRaw == null || auxRaw === '') {
+    return { aux_quantity: undefined, aux_unit: auxUnit, unit_conversion_rate: rate };
+  }
+  const full = Number(params.sourcePrimaryQty);
+  const push = Number(params.pushPrimaryQty);
+  let aux = Number(auxRaw);
+  if (!Number.isFinite(aux)) {
+    return { aux_quantity: undefined, aux_unit: auxUnit, unit_conversion_rate: rate };
+  }
+  if (!(push > 0)) {
+    aux = 0;
+  } else if (Number.isFinite(full) && full > 0 && push < full && aux > 0) {
+    aux = (aux * push) / full;
+  }
+  return {
+    aux_quantity: aux,
+    aux_unit: auxUnit,
+    unit_conversion_rate: rate,
   };
 }
 
