@@ -340,6 +340,13 @@ export const PurchaseRequisitionDetailDrawer: React.FC<PurchaseRequisitionDetail
                       <Tag>{t('common.no')}</Tag>
                     ),
                 },
+                {
+                  title: t('app.kuaizhizao.purchaseRequisition.form.lineNotes'),
+                  dataIndex: 'notes',
+                  width: 140,
+                  ellipsis: true,
+                  render: (v: string | undefined) => (v?.trim() ? v.trim() : '-'),
+                },
                 buildDocumentLineAttachmentsDrawerColumn(
                   t,
                   DOCUMENT_LINE_ATTACHMENT_UPLOAD_CATEGORY.purchaseRequisition,

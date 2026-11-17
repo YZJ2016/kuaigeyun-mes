@@ -28,6 +28,32 @@ class PaymentApplicationLineCreate(PaymentApplicationLineBase):
     pass
 
 
+class PaymentApplicationPurchaseOrderItemSnapshot(BaseModel):
+    id: int
+    material_code: str = Field(..., alias="materialCode")
+    material_name: str = Field(..., alias="materialName")
+    material_spec: Optional[str] = Field(None, alias="materialSpec")
+    quantity: str
+    unit: str
+    unit_price: str = Field(..., alias="unitPrice")
+    total_price: str = Field(..., alias="totalPrice")
+    notes: Optional[str] = None
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class PaymentApplicationPurchaseOrderSource(BaseModel):
+    id: int
+    order_code: str = Field(..., alias="orderCode")
+    order_date: Optional[str] = Field(None, alias="orderDate")
+    order_type: Optional[str] = Field(None, alias="orderType")
+    buyer_name: Optional[str] = Field(None, alias="buyerName")
+    total_amount: str = Field(..., alias="totalAmount")
+    items: List[PaymentApplicationPurchaseOrderItemSnapshot] = Field(default_factory=list)
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
 class PaymentApplicationLineResponse(PaymentApplicationLineBase):
     id: int
     line_no: int
@@ -127,6 +153,11 @@ class PaymentApplicationResponse(UuidStrCoerceMixin, BaseSchema):
     attachments: Optional[List[dict]] = None
     items: List[PaymentApplicationLineResponse] = []
     linked_payments: Optional[List[Dict[str, Any]]] = Field(None, alias="linkedPayments")
+    purchase_order_sources: Optional[List[PaymentApplicationPurchaseOrderSource]] = Field(
+        None,
+        alias="purchaseOrderSources",
+        description="申请行涉及的来源采购订单（只读聚合）",
+    )
     capabilities: Optional[Dict[str, Any]] = None
     created_at: datetime = Field(..., alias="createdAt")
     updated_at: datetime = Field(..., alias="updatedAt")

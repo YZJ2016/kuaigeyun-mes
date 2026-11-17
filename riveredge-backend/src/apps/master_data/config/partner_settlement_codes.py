@@ -139,3 +139,27 @@ def partner_settlement_terms_for_pricing(partner: object) -> Optional[str]:
     """月结暂估价等：只读结算方式，不再读付款方式。"""
     raw = getattr(partner, "settlement_terms_code", None)
     return coerce_partner_settlement_terms_code(raw)
+
+
+_SETTLEMENT_TERMS_LABELS_ZH: dict[str, str] = {
+    "prepaid": "预付款",
+    "pay_before_ship": "款到发货",
+    "spot": "现款现货",
+    "cod": "货到付款",
+    "net_terms": "账期结算",
+    "monthly": "账期结算",
+    "bimonthly": "账期结算",
+    "quarterly": "账期结算",
+    "installment": "分期付款",
+    "progress": "进度款",
+    "pay_on_invoice": "票到付款",
+}
+
+
+def settlement_terms_label_zh(value: Optional[str]) -> str:
+    """结算方式码 → 中文标签（打印/回显）；无法识别时原样返回。"""
+    code = coerce_partner_settlement_terms_code(value)
+    if code:
+        return _SETTLEMENT_TERMS_LABELS_ZH.get(code, code)
+    raw = str(value or "").strip()
+    return raw
