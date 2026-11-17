@@ -5,8 +5,9 @@ from apps.kuaizhizao.services.purchase_service import PurchaseService
 
 def test_apply_purchase_item_price_settlement_overwrites_null_status():
     item_dict = {"price_settlement_status": None, "provisional_unit_price": None}
+    svc = object.__new__(PurchaseService)
 
-    PurchaseService._apply_purchase_item_price_settlement(
+    svc._apply_purchase_item_price_settlement(
         item_dict,
         unit_price=Decimal("0.2655"),
         partner_settlement_method=None,
@@ -20,8 +21,9 @@ def test_apply_purchase_item_price_settlement_overwrites_null_status():
 
 def test_apply_purchase_item_price_settlement_monthly_zero_price():
     item_dict = {"price_settlement_status": None}
+    svc = object.__new__(PurchaseService)
 
-    PurchaseService._apply_purchase_item_price_settlement(
+    svc._apply_purchase_item_price_settlement(
         item_dict,
         unit_price=Decimal("0"),
         partner_settlement_method="monthly",
