@@ -14,6 +14,7 @@ from tortoise.expressions import Q
 from decimal import Decimal
 from tortoise.functions import Count
 
+from tortoise.exceptions import IntegrityError
 from tortoise.transactions import in_transaction
 from apps.kuaizhizao.constants import (
     DocumentStatus, ReviewStatus, normalize_status, 
@@ -35,6 +36,7 @@ from apps.kuaizhizao.schemas.purchase_requisition import (
 )
 from apps.kuaizhizao.schemas.purchase import PurchaseOrderCreate, PurchaseOrderItemCreate
 from apps.kuaizhizao.services.purchase_service import PurchaseService
+from apps.kuaizhizao.utils.document_source_types import is_purchase_requisition_source_type
 from apps.kuaizhizao.utils.material_source_helper import (
     SOURCE_TYPE_BUY,
     resolve_material_purchase_line_unit_price,
@@ -82,23 +84,146 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         """生成采购申请编码"""
         return await self.generate_code(tenant_id, "PURCHASE_REQUISITION_CODE", prefix="CGSQ")
 
-    async def create_requisition(
+    async def _po_items_by_requisition_item_ids(
+        self, tenant_id: int, req_item_ids: List[int]
+    ) -> Dict[int, PurchaseOrderItem]:
+        """按申请行 id 反查采购订单明细（认 purchase_requisition / PurchaseRequisition）。"""
+        if not req_item_ids:
+            return {}
+        po_items = await PurchaseOrderItem.filter(
+            tenant_id=tenant_id,
+            source_id__in=req_item_ids,
+        ).all()
+        po_item_by_source: Dict[int, PurchaseOrderItem] = {}
+        for pi in po_items:
+            if not is_purchase_requisition_source_type(getattr(pi, "source_type", None)):
+                continue
+            sid = int(pi.source_id or 0)
+            if sid <= 0:
+                continue
+            existing = po_item_by_source.get(sid)
+            if existing is None or pi.id > existing.id:
+                po_item_by_source[sid] = pi
+        return po_item_by_source
+
+    async def _heal_requisition_links_from_downstream(
+        self,
+        tenant_id: int,
+        requisition_id: int,
+        all_items: List[PurchaseRequisitionItem],
+    ) -> Dict[int, PurchaseOrderItem]:
+        """
+        自愈申请行 ↔ 采购订单行：
+        1) POI.source_id = 申请行 id
+        2) 头 source / 仍缺链时，按同单物料对齐未挂链行（修复编辑 PO 丢 source 的历史数据）
+        """
+        req_item_ids = [int(i.id) for i in all_items]
+        po_item_by_source = await self._po_items_by_requisition_item_ids(
+            tenant_id, req_item_ids
+        )
+
+        for it in all_items:
+            target = po_item_by_source.get(int(it.id))
+            if target and (
+                not it.purchase_order_id
+                or int(it.purchase_order_item_id or 0) != int(target.id)
+            ):
+                await it.update_from_dict({
+                    "purchase_order_id": target.order_id,
+                    "purchase_order_item_id": target.id,
+                }).save()
+                it.purchase_order_id = target.order_id
+                it.purchase_order_item_id = target.id
+
+        # 未挂链，或头链仍在但 purchase_order_item_id 已随 PO 删建失效
+        needs_material_heal: List[PurchaseRequisitionItem] = []
+        for it in all_items:
+            if not it.purchase_order_id:
+                needs_material_heal.append(it)
+                continue
+            poi_id = int(it.purchase_order_item_id or 0)
+            if poi_id <= 0:
+                needs_material_heal.append(it)
+                continue
+            if not await PurchaseOrderItem.exists(tenant_id=tenant_id, id=poi_id):
+                needs_material_heal.append(it)
+
+        if not needs_material_heal:
+            return po_item_by_source
+
+        pos = await PurchaseOrder.filter(
+            tenant_id=tenant_id,
+            source_id=requisition_id,
+            deleted_at__isnull=True,
+        ).all()
+        linked_pos = [
+            po for po in pos
+            if is_purchase_requisition_source_type(getattr(po, "source_type", None))
+        ]
+        if not linked_pos:
+            return po_item_by_source
+
+        from collections import defaultdict
+
+        used_poi_ids = {int(pi.id) for pi in po_item_by_source.values()}
+        poi_pool: Dict[int, List[PurchaseOrderItem]] = defaultdict(list)
+        for po in linked_pos:
+            for poi in await PurchaseOrderItem.filter(
+                tenant_id=tenant_id, order_id=po.id
+            ).all():
+                if int(poi.id) in used_poi_ids:
+                    continue
+                # 已挂其它申请行来源的明细不可被物料对齐抢走
+                if is_purchase_requisition_source_type(
+                    getattr(poi, "source_type", None)
+                ) and int(poi.source_id or 0) > 0:
+                    continue
+                poi_pool[int(poi.material_id or 0)].append(poi)
+
+        for it in needs_material_heal:
+            bucket = poi_pool.get(int(it.material_id or 0)) or []
+            # 优先在已挂的采购单上找同行物料
+            if it.purchase_order_id:
+                preferred = [
+                    p for p in bucket if int(p.order_id) == int(it.purchase_order_id)
+                ]
+                if preferred:
+                    target = preferred[0]
+                    bucket.remove(target)
+                elif bucket:
+                    target = bucket.pop(0)
+                else:
+                    continue
+            else:
+                if not bucket:
+                    continue
+                target = bucket.pop(0)
+            await it.update_from_dict({
+                "purchase_order_id": target.order_id,
+                "purchase_order_item_id": target.id,
+            }).save()
+            it.purchase_order_id = target.order_id
+            it.purchase_order_item_id = target.id
+            # 回写行源，避免下次编辑/自愈再丢
+            if not target.source_id or not is_purchase_requisition_source_type(
+                getattr(target, "source_type", None)
+            ):
+                await target.update_from_dict({
+                    "source_type": "purchase_requisition",
+                    "source_id": int(it.id),
+                }).save()
+            po_item_by_source[int(it.id)] = target
+
+        return po_item_by_source
+
+    async def _create_requisition_in_tx(
         self,
         tenant_id: int,
         data: PurchaseRequisitionCreate,
         created_by: int,
-    ) -> PurchaseRequisitionResponse:
-        """创建采购申请"""
-        # 0. 检查模块是否启用
-        is_enabled = await self.business_config_service.check_node_enabled(tenant_id, "purchase_request")
-        if not is_enabled:
-            raise BusinessLogicError("采购申请模块未启用，无法创建")
-
-        # 写事务内只做插入；读回详情（含 enrich）放在提交后，避免嵌套事务/连接池等待
+    ) -> int:
+        """写事务内只做插入（发号在事务外，避免 generate_code 嵌套挂起）。"""
         async with in_transaction():
-            if not data.requisition_code:
-                data.requisition_code = await self._generate_requisition_code(tenant_id)
-
             req_date = data.requisition_date or date.today()
             user_info = await self.get_user_info(created_by)
             applicant_id = int(data.applicant_id) if data.applicant_id else created_by
@@ -149,7 +274,56 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                     notes=item_data.notes,
                     attachments=item_data.attachments,
                 )
-            req_id = req.id
+            return int(req.id)
+
+    @staticmethod
+    def _is_requisition_code_integrity_conflict(exc: IntegrityError) -> bool:
+        msg = str(exc).lower()
+        return (
+            "requisition_code" in msg
+            or "uidx_purchase_requisitions_tenant_req_code_active" in msg
+        )
+
+    async def create_requisition(
+        self,
+        tenant_id: int,
+        data: PurchaseRequisitionCreate,
+        created_by: int,
+    ) -> PurchaseRequisitionResponse:
+        """创建采购申请"""
+        # 0. 检查模块是否启用
+        is_enabled = await self.business_config_service.check_node_enabled(tenant_id, "purchase_request")
+        if not is_enabled:
+            raise BusinessLogicError("采购申请模块未启用，无法创建")
+        if not data.items:
+            raise BusinessLogicError("采购申请须包含至少一条明细")
+
+        last_error: Exception | None = None
+        req_id: int | None = None
+        for attempt in range(5):
+            code = str(data.requisition_code or "").strip()
+            if not code or attempt > 0:
+                data.requisition_code = await self._generate_requisition_code(tenant_id)
+            try:
+                req_id = await self._create_requisition_in_tx(
+                    tenant_id, data, created_by
+                )
+                break
+            except IntegrityError as exc:
+                if not self._is_requisition_code_integrity_conflict(exc):
+                    raise
+                last_error = exc
+                logger.warning(
+                    "采购申请编号冲突，重试占号 attempt={} code={} err={}",
+                    attempt + 1,
+                    data.requisition_code,
+                    exc,
+                )
+                data.requisition_code = ""
+        if req_id is None:
+            raise ValidationError(
+                "采购申请编号已存在，请关闭弹窗后重新新建"
+            ) from last_error
 
         response = await self.get_requisition_by_id(tenant_id, req_id)
         await self._finalize_document_flow_after_create(
@@ -324,37 +498,16 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         all_items = await PurchaseRequisitionItem.filter(
             tenant_id=tenant_id, requisition_id=requisition_id
         ).all()
-        req_item_ids = [i.id for i in all_items]
-
-        # 自愈链接：以 PurchaseOrderItem.source_type/source_id 作为权威来源反查
-        # 避免历史数据/异常路径导致 requisition_item.purchase_order_id 被清空但下游 PO 仍存在
-        po_items_back = (
-            await PurchaseOrderItem.filter(
-                tenant_id=tenant_id,
-                source_type="PurchaseRequisition",
-                source_id__in=req_item_ids,
-            ).all()
-            if req_item_ids
-            else []
+        before_links = {
+            int(it.id): (it.purchase_order_id, it.purchase_order_item_id) for it in all_items
+        }
+        po_item_by_source = await self._heal_requisition_links_from_downstream(
+            tenant_id, requisition_id, all_items
         )
-        po_item_by_source: Dict[int, PurchaseOrderItem] = {}
-        for pi in po_items_back:
-            existing = po_item_by_source.get(pi.source_id)
-            # 多次转单时取最新一条（id 最大）
-            if existing is None or pi.id > existing.id:
-                po_item_by_source[pi.source_id] = pi
-
-        healed = False
-        for it in all_items:
-            target = po_item_by_source.get(it.id)
-            if target and not it.purchase_order_id:
-                await it.update_from_dict({
-                    "purchase_order_id": target.order_id,
-                    "purchase_order_item_id": target.id,
-                }).save()
-                it.purchase_order_id = target.order_id
-                it.purchase_order_item_id = target.id
-                healed = True
+        healed = any(
+            before_links.get(int(it.id)) != (it.purchase_order_id, it.purchase_order_item_id)
+            for it in all_items
+        )
 
         # 若有自愈，重建明细响应
         if healed:
@@ -679,31 +832,9 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         all_items = await PurchaseRequisitionItem.filter(
             tenant_id=tenant_id, requisition_id=req.id
         ).all()
-        req_item_ids = [i.id for i in all_items]
-        po_items_back = (
-            await PurchaseOrderItem.filter(
-                tenant_id=tenant_id,
-                source_type="PurchaseRequisition",
-                source_id__in=req_item_ids,
-            ).all()
-            if req_item_ids
-            else []
+        po_item_by_source = await self._heal_requisition_links_from_downstream(
+            tenant_id, int(req.id), all_items
         )
-        po_item_by_source: Dict[int, PurchaseOrderItem] = {}
-        for pi in po_items_back:
-            existing = po_item_by_source.get(pi.source_id)
-            if existing is None or pi.id > existing.id:
-                po_item_by_source[pi.source_id] = pi
-
-        for it in all_items:
-            target = po_item_by_source.get(it.id)
-            if target and not it.purchase_order_id:
-                await it.update_from_dict({
-                    "purchase_order_id": target.order_id,
-                    "purchase_order_item_id": target.id,
-                }).save()
-                it.purchase_order_id = target.order_id
-                it.purchase_order_item_id = target.id
 
         converted_ids = {it.id for it in all_items if it.purchase_order_id} | set(po_item_by_source.keys())
         has_any = len(converted_ids) > 0

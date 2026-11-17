@@ -31,12 +31,12 @@ export function readPurchaseReceiptDetailLineAmounts(
   headerTaxRate?: number | null,
 ): { excl: number; tax: number; incl: number; taxPct: number } | null {
   const excl = pickLineNumber(
-    row.total_amount,
     row.settlement_excl,
     row.settlementExcl,
+    row.total_amount,
   );
-  const tax = pickLineNumber(row.tax_amount, row.settlement_tax, row.settlementTax);
-  const incl = pickLineNumber(row.net_amount, row.settlement_gross, row.settlementGross);
+  const tax = pickLineNumber(row.settlement_tax, row.settlementTax, row.tax_amount);
+  const incl = pickLineNumber(row.settlement_gross, row.settlementGross, row.net_amount);
   if (excl == null || tax == null || incl == null) return null;
   const taxPct = resolvePurchaseReceiptLineTaxPercent(row.tax_rate, headerTaxRate);
   return { excl, tax, incl, taxPct };

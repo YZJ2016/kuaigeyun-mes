@@ -10,8 +10,8 @@
  * |------|-------|------|
  * | draft | RE_STATUS_BADGE_DRAFT | 草稿 / 计划中 / 初始 |
  * | pending | warning | 待审核 / 已提交 / 待决（等人） |
- * | active | processing | 进行中 / 执行中 / 评审中 / 已生效（业务进行中） |
- * | success | success | 通过 / 已完成 / 终态结案 |
+ * | active | processing | 进行中 / 执行中 / 评审中 / 已生效 / **转单结案**（与审核「已通过」区分） |
+ * | success | success | 审核通过 / 已完成 / 业务终态结案（非转单语义） |
  * | danger | error | 驳回 / 取消 / 失败 / 不合格 |
  * | muted | default | 关闭 / 无 / 停用 |
  */
@@ -182,13 +182,13 @@ const STATUS_SEMANTIC_ALIASES: Record<string, DocumentStatusSemantic> = {
   READY_TO_SHIP: 'success',
   已执行: 'success',
   EXECUTED: 'success',
-  全部转单: 'success',
-  FULL_CONVERTED: 'success',
-  full_converted: 'success',
-  已转单: 'success',
-  已转订单: 'success',
-  CONVERTED: 'success',
-  converted: 'success',
+  全部转单: 'active',
+  FULL_CONVERTED: 'active',
+  full_converted: 'active',
+  已转单: 'active',
+  已转订单: 'active',
+  CONVERTED: 'active',
+  converted: 'active',
   合格: 'success',
   完工: 'success',
   在用: 'success',

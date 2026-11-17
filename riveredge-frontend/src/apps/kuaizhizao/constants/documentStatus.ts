@@ -89,7 +89,7 @@ const FALLBACK_STATUS_DISPLAY: Record<string, { text: string; color: string }> =
   [DocumentStatus.IN_PROGRESS]: { text: '执行中', color: 'processing' },
   [DocumentStatus.COMPLETED]: { text: '已完成', color: 'success' },
   [DocumentStatus.PARTIAL_CONVERTED]: { text: '部分转单', color: 'warning' },
-  [DocumentStatus.FULL_CONVERTED]: { text: '全部转单', color: 'success' },
+  [DocumentStatus.FULL_CONVERTED]: { text: '全部转单', color: 'processing' },
 };
 
 const FALLBACK_REVIEW_DISPLAY: Record<string, { text: string; color: string }> = {

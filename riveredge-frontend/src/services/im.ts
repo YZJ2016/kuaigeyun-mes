@@ -47,7 +47,11 @@ export async function listImConversations(params?: {
   page?: number;
   page_size?: number;
 }): Promise<{ items: ImConversation[]; total: number }> {
-  return apiRequest('/personal/im/conversations', { method: 'GET', params });
+  return apiRequest('/personal/im/conversations', {
+    method: 'GET',
+    params,
+    background: true,
+  });
 }
 
 export async function createDirectImConversation(peerUserId: number): Promise<ImConversation> {
