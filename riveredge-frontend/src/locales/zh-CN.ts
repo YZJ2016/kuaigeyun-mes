@@ -21263,6 +21263,18 @@ export default {
     '采购订单预付改为人为下推出单',
   'pages.dashboard.updateLog.entries.purchase-order-prepayment-manual-only-r01.description':
     '付款计划中的预付金额仅作计划与取数；审核确认采购订单不再自动生成预付款单，须从订单下推预付或经付款申请再下推付款。',
+  'pages.dashboard.updateLog.entries.purchase-order-header-rollup-backend-r01.title':
+    '采购订单保存后头表价税与明细一致',
+  'pages.dashboard.updateLog.entries.purchase-order-header-rollup-backend-r01.description':
+    '后端 sync 汇总改为数量×未税单价行价税累加，不再对行未税合计二次拆税，避免保存后 net_amount 从 800 被写回 799.99。',
+  'pages.dashboard.updateLog.entries.purchase-order-amount-unified-r01.title':
+    '单据金额统一走 documentLineAmounts 契约',
+  'pages.dashboard.updateLog.entries.purchase-order-amount-unified-r01.description':
+    '全站行价税、头表汇总、采购保存与列表详情展示对齐 documentLineAmounts（与 DocumentAmountSummary 同源）；采购禁止保存后再对已存未税二次拆税，列表读 net_amount。',
+  'pages.dashboard.updateLog.entries.purchase-order-tax-incl-unit-600-r01.title':
+    '单据明细金额失焦反算单价全站修复',
+  'pages.dashboard.updateLog.entries.purchase-order-tax-incl-unit-600-r01.description':
+    '采购/销售订单、报价、销售合同明细：金额列失焦仅在实际改值时反算单价；采购含税回填与价税整数录入不再漂成 600.0001 类尾差。',
   'pages.dashboard.updateLog.entries.purchase-order-tax-inclusive-unit-roundtrip-r01.title':
     '采购订单含税单价编辑后价差修复',
   'pages.dashboard.updateLog.entries.purchase-order-tax-inclusive-unit-roundtrip-r01.description':

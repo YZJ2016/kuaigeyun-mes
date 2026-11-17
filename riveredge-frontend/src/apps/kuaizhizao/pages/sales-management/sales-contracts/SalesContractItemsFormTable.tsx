@@ -48,7 +48,10 @@ import { repriceUnlockedSalesDocumentLineIfNeeded } from '../../../../master-dat
 import { normalizeFormListItems } from '../../../../../utils/formListItems';
 import { buildFutureDateShortcutFieldProps, FutureDatePicker } from '../../../../../utils/futureDatePickerShortcuts';
 import {
+  applyDocumentLineInclAmountEdit,
   applyDocumentLineTaxRateChange,
+  documentLineInclMatchesDerived,
+  stripExclusiveUnitAnchor,
 } from '../../../utils/documentLineAmounts';
 
 export type ContractItemsFormTableProps = {
@@ -347,14 +350,35 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                                   }}
                                   onBlur={() => {
                                     const incl = editingInclValueRef.current;
-                                    if (editingIncl?.index === index && incl != null && qty > 0) {
-                                      const factor = 1 + taxRate / 100;
-                                      const newPrice =
-                                        priceType === 'tax_inclusive'
-                                          ? incl / qty
-                                          : (factor > 0 ? incl / factor : incl) / qty;
+                                    if (
+                                      editingIncl?.index === index &&
+                                      incl != null &&
+                                      qty > 0 &&
+                                      !documentLineInclMatchesDerived(
+                                        incl,
+                                        {
+                                          qty: row?.contract_quantity,
+                                          unit_price: row?.unit_price,
+                                          tax_rate: row?.tax_rate,
+                                          item_amount: row?.item_amount,
+                                          is_gift: row?.is_gift,
+                                        },
+                                        priceType,
+                                      )
+                                    ) {
+                                      const applied = applyDocumentLineInclAmountEdit({
+                                        qty,
+                                        taxRate: row?.tax_rate,
+                                        priceType,
+                                        inclAmount: incl,
+                                        priceDecimals,
+                                      });
                                       const next = [...itemsVal];
-                                      next[index] = { ...row, unit_price: newPrice };
+                                      next[index] = stripExclusiveUnitAnchor({
+                                        ...row,
+                                        unit_price: applied.unit_price,
+                                        item_amount: applied.item_amount,
+                                      });
                                       formRef.current?.setFieldsValue({ items: next });
                                     }
                                     setEditingIncl(null);

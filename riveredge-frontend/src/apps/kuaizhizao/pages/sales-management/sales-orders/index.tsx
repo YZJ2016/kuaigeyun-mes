@@ -5415,7 +5415,22 @@ const SalesOrdersPage: React.FC = () => {
                                 }}
                                 onBlur={() => {
                                   const incl = editingInclValueRef.current;
-                                  if (editingIncl?.index === index && incl != null && qty > 0) {
+                                  if (
+                                    editingIncl?.index === index &&
+                                    incl != null &&
+                                    qty > 0 &&
+                                    !documentLineInclMatchesDerived(
+                                      incl,
+                                      {
+                                        qty: row?.required_quantity,
+                                        unit_price: row?.unit_price,
+                                        tax_rate: row?.tax_rate,
+                                        item_amount: row?.item_amount,
+                                        is_gift: row?.is_gift,
+                                      },
+                                      priceType,
+                                    )
+                                  ) {
                                     const applied = applyDocumentLineInclAmountEdit({
                                       qty,
                                       taxRate: row?.tax_rate,

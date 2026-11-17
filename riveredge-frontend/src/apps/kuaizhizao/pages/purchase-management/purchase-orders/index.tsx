@@ -90,7 +90,9 @@ import {
   purchaseOrderTaxRateToDecimal,
   readPurchaseOrderEnteredUnitPrice,
   purchaseOrderTaxRateToPercent,
+  computePurchaseOrderHeaderAmountsForSave,
   resolvePurchaseOrderDisplayAmount,
+  resolvePurchaseOrderLineAmounts,
 } from '../shared/purchaseOrderAmounts';
 import {
   partnerPaymentMethodSelectOptions,
@@ -235,7 +237,7 @@ import { getSessionCurrentUser } from '../../../../../utils/sessionCurrentUser';
 import { displayItemsToUsers, normalizeUserDisplayName } from '../../../../../utils/userDisplay';
 import {
   applyDocumentLineExclAmountEdit,
-  calcDocumentLineAmounts,
+  documentLineExclMatchesDerived,
 } from '../../../utils/documentLineAmounts';
 import {
   DocumentStatus,
@@ -3610,24 +3612,13 @@ const PurchaseOrdersPage: React.FC = () => {
         };
       });
 
-      const totalAmount = itemsPayload.reduce((s: number, it: any) => s + Number(it.total_price), 0);
-      let taxAmount = 0;
-      let netAmount = 0;
-      itemsPayload.forEach((it: any, idx: number) => {
-        const lineTax = Number(validItems[idx]?.tax_rate) || 0;
-        const lineAmounts = calcDocumentLineAmountsFromExclTotal(
-          Number(it.total_price) || 0,
-          lineTax,
-        );
-        taxAmount += lineAmounts.tax;
-        netAmount += lineAmounts.incl;
-      });
+      const headerAmounts = computePurchaseOrderHeaderAmountsForSave(validItems, priceType);
       const firstLineTaxPercent = validItems[0] ? Number(validItems[0].tax_rate) || 0 : 0;
       data.tax_rate = purchaseOrderTaxRateToDecimal(firstLineTaxPercent);
       data.price_type = priceType;
-      data.total_amount = totalAmount;
-      data.tax_amount = taxAmount;
-      data.net_amount = netAmount;
+      data.total_amount = headerAmounts.total_amount;
+      data.tax_amount = headerAmounts.tax_amount;
+      data.net_amount = headerAmounts.net_amount;
 
       // 计算费用总额
       const feeDetails = normalizeFormListItems<any>(values.fee_details);
@@ -4455,12 +4446,7 @@ const PurchaseOrdersPage: React.FC = () => {
                                 const items = normalizeFormListItems<any>(getFieldValue('items'));
                                 const row = items[index];
                                 const qty = Number(row?.ordered_quantity) || 0;
-                                const line = calcDocumentLineAmounts(
-                                  row?.ordered_quantity,
-                                  row?.unit_price,
-                                  row?.tax_rate,
-                                  priceType,
-                                );
+                                const line = resolvePurchaseOrderLineAmounts(row, priceType);
                                 const isEditing = editingExcl?.index === index;
                                 const displayValue = isEditing ? editingExcl.value : line.excl;
                                 return (
@@ -4488,7 +4474,18 @@ const PurchaseOrdersPage: React.FC = () => {
                                     }}
                                     onBlur={() => {
                                       const excl = editingExclValueRef.current;
-                                      if (editingExclIndexRef.current === index && excl != null && qty > 0) {
+                                      if (
+                                        editingExclIndexRef.current === index &&
+                                        excl != null &&
+                                        qty > 0 &&
+                                        !documentLineExclMatchesDerived(
+                                          excl,
+                                          row?.ordered_quantity,
+                                          row?.unit_price,
+                                          row?.tax_rate,
+                                          priceType,
+                                        )
+                                      ) {
                                         const applied = applyDocumentLineExclAmountEdit({
                                           qty,
                                           taxRate: row?.tax_rate,
@@ -4540,12 +4537,7 @@ const PurchaseOrdersPage: React.FC = () => {
                             <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
                               {({ getFieldValue }: any) => {
                                 const row = normalizeFormListItems<any>(getFieldValue('items'))[index];
-                                const line = calcDocumentLineAmounts(
-                                  row?.ordered_quantity,
-                                  row?.unit_price,
-                                  row?.tax_rate,
-                                  priceType,
-                                );
+                                const line = resolvePurchaseOrderLineAmounts(row, priceType);
                                 return <span>¥{line.tax.toFixed(amountDecimals)}</span>;
                               }}
                             </AntForm.Item>
@@ -4563,12 +4555,7 @@ const PurchaseOrdersPage: React.FC = () => {
                           const items = normalizeFormListItems<any>(getFieldValue('items'));
                           const row = items[index];
                           const qty = Number(row?.ordered_quantity) || 0;
-                          const line = calcDocumentLineAmounts(
-                            row?.ordered_quantity,
-                            row?.unit_price,
-                            row?.tax_rate,
-                            priceType,
-                          );
+                          const line = resolvePurchaseOrderLineAmounts(row, priceType);
                           if (showTaxColumns) {
                             return <span>¥{line.incl.toFixed(amountDecimals)}</span>;
                           }
@@ -4600,7 +4587,18 @@ const PurchaseOrdersPage: React.FC = () => {
                               }}
                               onBlur={() => {
                                 const excl = editingExclValueRef.current;
-                                if (editingExclIndexRef.current === index && excl != null && qty > 0) {
+                                if (
+                                  editingExclIndexRef.current === index &&
+                                  excl != null &&
+                                  qty > 0 &&
+                                  !documentLineExclMatchesDerived(
+                                    excl,
+                                    row?.ordered_quantity,
+                                    row?.unit_price,
+                                    row?.tax_rate,
+                                    'tax_exclusive',
+                                  )
+                                ) {
                                   const applied = applyDocumentLineExclAmountEdit({
                                     qty,
                                     taxRate: row?.tax_rate,
