@@ -20,6 +20,7 @@ from apps.kuaizhizao.schemas.payment_application import (
     PaymentApplicationUpdate,
     PaymentApplicationResponse,
     PaymentApplicationLineResponse,
+    PaymentApplicationPurchaseOrderSource,
 )
 from apps.kuaizhizao.services.document_action_policy.payment_application import (
     assert_payment_application_capability,
@@ -31,6 +32,8 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError, Business
 from infra.services.business_config_service import BusinessConfigService
 from loguru import logger
 
+
+PAYMENT_APPLICATION_INVOICE_STATUSES = frozenset({"有发票", "无发票", "发票后补"})
 
 PAYMENT_APPLICATION_SORTABLE = frozenset({
     "application_code",
@@ -48,6 +51,21 @@ class PaymentApplicationService(AppBaseService[PaymentApplication]):
         super().__init__(PaymentApplication)
         self._open_amount = PayableOpenAmountService()
         self.business_config_service = BusinessConfigService()
+
+    @staticmethod
+    def _coerce_invoice_status(raw: Any, *, allow_default: bool) -> str:
+        text = str(raw or "").strip()
+        if not text:
+            if allow_default:
+                return "无发票"
+            raise ValidationError("请选择发票情况")
+        if text not in PAYMENT_APPLICATION_INVOICE_STATUSES:
+            raise ValidationError("发票情况无效")
+        return text
+
+    @classmethod
+    def _assert_application_invoice_status(cls, app: PaymentApplication) -> None:
+        cls._coerce_invoice_status(app.invoice_status, allow_default=False)
 
     async def _generate_code(self, tenant_id: int) -> str:
         return await self.generate_code(tenant_id, "PAYMENT_APPLICATION_CODE", prefix="FKSQ")
@@ -116,12 +134,25 @@ class PaymentApplicationService(AppBaseService[PaymentApplication]):
             for r in payment_rels
             if r.target_id
         ]
+        from apps.kuaizhizao.services.payment_application_purchase_order_sources import (
+            load_payment_application_purchase_order_sources,
+        )
+
+        po_sources_raw = await load_payment_application_purchase_order_sources(
+            app.tenant_id, lines
+        )
+        po_sources = (
+            [PaymentApplicationPurchaseOrderSource.model_validate(row) for row in po_sources_raw]
+            if po_sources_raw
+            else None
+        )
         resp = PaymentApplicationResponse.model_validate(app, from_attributes=True)
         resp = resp.model_copy(
             update={
                 "items": [PaymentApplicationLineResponse.model_validate(row) for row in lines],
                 "capabilities": {k: v.model_dump() for k, v in caps.items()},
                 "linked_payments": linked_payments,
+                "purchase_order_sources": po_sources,
             }
         )
         from core.services.approval.audit_record_enricher import enrich_record
@@ -162,7 +193,9 @@ class PaymentApplicationService(AppBaseService[PaymentApplication]):
                 supplier_bank_account=data.supplier_bank_account,
                 payment_reason=data.payment_reason,
                 payment_method=data.payment_method,
-                invoice_status=data.invoice_status,
+                invoice_status=self._coerce_invoice_status(
+                    data.invoice_status, allow_default=True
+                ),
                 payment_terms=data.payment_terms,
                 notes=data.notes,
                 require_payment_voucher=bool(data.require_payment_voucher),
@@ -319,6 +352,10 @@ class PaymentApplicationService(AppBaseService[PaymentApplication]):
                     )
                 dump["total_request_amount"] = total
                 dump["remaining_amount"] = total - Decimal(str(app.paid_amount or 0))
+        if "invoice_status" in dump:
+            dump["invoice_status"] = self._coerce_invoice_status(
+                dump["invoice_status"], allow_default=False
+            )
         user = await self.get_user_info(updated_by)
         dump["updated_by"] = updated_by
         dump["updated_by_name"] = user["name"]
@@ -350,6 +387,7 @@ class PaymentApplicationService(AppBaseService[PaymentApplication]):
         if not app:
             raise NotFoundError(f"付款申请单不存在: {application_id}")
         assert_payment_application_capability(app, "submit")
+        self._assert_application_invoice_status(app)
 
         audit_required = await self.business_config_service.check_audit_required(
             tenant_id, "payment_application"

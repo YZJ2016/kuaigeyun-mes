@@ -1869,15 +1869,16 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                     'updated_by': approved_by
                 }
             else:
+                # 中间节点通过：不写 reviewer_*（审核人真源=终审最后通过人）
                 update_dict = {
-                    'reviewer_id': approved_by,
-                    'reviewer_name': approver_name,
-                    'review_time': resolve_business_datetime(),
                     'review_status': "审核中" if approve_data.approved else ReviewStatus.REJECTED.value,
                     'review_remarks': approve_data.review_remarks,
-                    'updated_by': approved_by
+                    'updated_by': approved_by,
                 }
                 if not approve_data.approved:
+                    update_dict['reviewer_id'] = approved_by
+                    update_dict['reviewer_name'] = approver_name
+                    update_dict['review_time'] = resolve_business_datetime()
                     update_dict['status'] = DocumentStatus.REJECTED.value
         else:
             # 没有启动审批流程，使用原有逻辑
