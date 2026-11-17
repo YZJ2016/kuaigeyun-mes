@@ -23,6 +23,7 @@ class PurchaseRequisition(BaseModel):
     """
     tenant_id = fields.IntField(description="租户ID")
     requisition_code = fields.CharField(max_length=50, db_index=True, description="申请编码")  # 租户内未删除唯一，见迁移 462
+    order_type = fields.CharField(max_length=20, default="标准采购", description="采购类型")
 
     # 基本信息
     requisition_name = fields.CharField(max_length=200, null=True, description="申请名称")

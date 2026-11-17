@@ -31,6 +31,8 @@ function draftDateMarker(value: unknown): { [typeof DRAFT_DAYJS]: string } | nul
 }
 
 function serializeDraftValue(value: unknown): unknown {
+  // 数量、单价、人员 id 都是数字。dayjs(0)/dayjs(1) 是合法时刻，不能把数字送进日期转换。
+  if (typeof value === 'number' || typeof value === 'boolean') return value;
   if (dayjs.isDayjs(value)) {
     const iso = value.toISOString();
     return { [DRAFT_DAYJS]: iso };
@@ -55,6 +57,7 @@ function serializeDraftValue(value: unknown): unknown {
 }
 
 function deserializeDraftValue(value: unknown): unknown {
+  if (dayjs.isDayjs(value)) return value;
   if (looksLikeDateString(value)) {
     return coerceFormDate(value);
   }

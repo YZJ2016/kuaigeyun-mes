@@ -751,6 +751,55 @@ async def _resolve_purchase_receipt_line_warehouse_id_for_stock(
     return None
 
 
+def _purchase_receipt_warehouse_id_or_none(raw: Any) -> Optional[int]:
+    """空、0 视为未填仓库。服务采购允许未填，禁止用 0 占位。"""
+    if raw is None or str(raw).strip() == "":
+        return None
+    try:
+        wid = int(raw)
+    except (TypeError, ValueError):
+        raise ValidationError(f"仓库ID无效: {raw}")
+    if wid <= 0:
+        return None
+    return wid
+
+
+def apply_purchase_receipt_header_warehouse(
+    receipt_dict: dict,
+    *,
+    service: bool,
+    required: bool,
+) -> None:
+    """服务采购表头仓库可空。标准采购、资产采购创建时必须指定仓库。"""
+    present = "warehouse_id" in receipt_dict
+    if not present:
+        if required and not service:
+            raise ValidationError("请选择入库仓库")
+        if required and service:
+            receipt_dict["warehouse_id"] = None
+            receipt_dict["warehouse_name"] = None
+        return
+    wid = _purchase_receipt_warehouse_id_or_none(receipt_dict.get("warehouse_id"))
+    if wid is None:
+        if not service:
+            raise ValidationError("请选择入库仓库")
+        receipt_dict["warehouse_id"] = None
+        receipt_dict["warehouse_name"] = None
+        return
+    receipt_dict["warehouse_id"] = wid
+    receipt_dict["warehouse_name"] = str(receipt_dict.get("warehouse_name") or "").strip()
+
+
+def clear_blank_purchase_receipt_line_warehouse(item_dict: dict) -> None:
+    """行仓库空或 0 落成 NULL，避免服务采购写入不存在的仓库。"""
+    wid = _purchase_receipt_warehouse_id_or_none(item_dict.get("warehouse_id"))
+    if wid is None:
+        item_dict["warehouse_id"] = None
+        item_dict["warehouse_name"] = None
+        return
+    item_dict["warehouse_id"] = wid
+
+
 _SALES_OUTBOUND_CLOSED_STATUSES = frozenset(
     {"已出库", "已完成", "completed", "COMPLETED", "done", "DONE"}
 )
@@ -10012,7 +10061,47 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 'updated_by': created_by,
                 'updated_by_name': user_info.get("name", ""),
             })
-            
+
+            from apps.kuaizhizao.models.purchase_order import PurchaseOrder
+            po_id = getattr(receipt_data, "purchase_order_id", None) or receipt_dict.get("purchase_order_id")
+            po_upstream = None
+            if po_id and int(po_id) > 0:
+                po_upstream = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=po_id)
+
+            from apps.kuaizhizao.constants.purchase_order_type import (
+                is_service_purchase_order_type,
+                load_and_assert_purchase_order_type_materials,
+                normalize_purchase_order_type,
+            )
+
+            pay_fields_set = getattr(receipt_data, "model_fields_set", set()) or set()
+            requested_order_type = normalize_purchase_order_type(
+                receipt_dict.get("order_type")
+                if "order_type" in pay_fields_set
+                else getattr(receipt_data, "order_type", None)
+            )
+            if po_upstream is not None:
+                po_order_type = normalize_purchase_order_type(getattr(po_upstream, "order_type", None))
+                if "order_type" in pay_fields_set and requested_order_type != po_order_type:
+                    raise ValidationError("采购入库类型须与来源采购订单一致")
+                receipt_dict["order_type"] = po_order_type
+            else:
+                receipt_dict["order_type"] = requested_order_type
+
+            service_purchase_create = is_service_purchase_order_type(receipt_dict.get("order_type"))
+            apply_purchase_receipt_header_warehouse(
+                receipt_dict,
+                service=service_purchase_create,
+                required=True,
+            )
+            await load_and_assert_purchase_order_type_materials(
+                tenant_id,
+                receipt_dict["order_type"],
+                [int(getattr(it, "material_id", 0) or 0) for it in (receipt_data.items or [])],
+                document_label="采购入库单",
+            )
+            receipt_dict["review_status"] = str(receipt_dict.get("review_status") or "草稿")
+
             receipt = await PurchaseReceipt.create(**receipt_dict)
             
             # 创建入库单明细
@@ -10050,6 +10139,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
             )
             for item_data in receipt_data.items or []:
                 item_dict = item_data.model_dump(exclude_unset=True)
+                clear_blank_purchase_receipt_line_warehouse(item_dict)
                 # 确保数量字段是Decimal类型
                 receipt_quantity = Decimal(str(item_data.receipt_quantity))
                 unit_price = Decimal(str(item_data.unit_price))
@@ -10088,20 +10178,21 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 if batch_no is not None:
                     item_dict["batch_number"] = batch_no
                 material_label = item_dict.get("material_name") or item_dict.get("material_code") or "未知物料"
-                _validate_location_if_required(
-                    location_required=location_required,
-                    location_id=getattr(item_data, 'location_id', None),
-                    location_code=getattr(item_data, 'location_code', None),
-                    scene="采购入库",
-                    material_label=material_label,
-                )
-                await _validate_purchase_line_warehouse_location_match(
-                    tenant_id,
-                    warehouse_id=getattr(item_data, "warehouse_id", None),
-                    location_id=getattr(item_data, "location_id", None),
-                    material_label=material_label,
-                )
-                
+                if not service_purchase_create:
+                    _validate_location_if_required(
+                        location_required=location_required,
+                        location_id=getattr(item_data, 'location_id', None),
+                        location_code=getattr(item_data, 'location_code', None),
+                        scene="采购入库",
+                        material_label=material_label,
+                    )
+                    await _validate_purchase_line_warehouse_location_match(
+                        tenant_id,
+                        warehouse_id=getattr(item_data, "warehouse_id", None),
+                        location_id=getattr(item_data, "location_id", None),
+                        material_label=material_label,
+                    )
+
                 item_dict.update({
                     'tenant_id': tenant_id,
                     'receipt_id': receipt.id,
@@ -10386,13 +10477,20 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 has_pushable_receipt_outstanding=has_pushable,
             )
 
-        groups: Dict[int, List[PurchaseOrderItem]] = {}
+        from apps.kuaizhizao.constants.purchase_order_type import normalize_purchase_order_type
+
+        groups: Dict[tuple[int, str], List[PurchaseOrderItem]] = {}
         for item in items:
-            groups.setdefault(int(order_by_id[int(item.order_id)].supplier_id or 0), []).append(item)
+            po_row = order_by_id[int(item.order_id)]
+            group_key = (
+                int(po_row.supplier_id or 0),
+                normalize_purchase_order_type(getattr(po_row, "order_type", None)),
+            )
+            groups.setdefault(group_key, []).append(item)
 
         purchase_service = PurchaseService()
         receipts_out: List[Dict[str, Any]] = []
-        for _sid, group_items in groups.items():
+        for (_sid, _order_type), group_items in groups.items():
             source_order_ids = sorted({int(i.order_id) for i in group_items})
             primary = order_by_id[source_order_ids[0]]
             source_codes = " ".join(order_by_id[oid].order_code for oid in source_order_ids)
@@ -10468,13 +10566,23 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 )
             if not receipt_items or header_wh_id is None:
                 continue
+            po_tax_pct = float(normalize_po_tax_rate_to_percent(getattr(primary, "tax_rate", None)))
             created = await self.create_purchase_receipt(
                 tenant_id=tenant_id,
                 receipt_data=PurchaseReceiptCreate(
                     purchase_order_id=primary.id,
                     purchase_order_code=primary.order_code,
+                    order_type=normalize_purchase_order_type(getattr(primary, "order_type", None)),
                     supplier_id=primary.supplier_id,
                     supplier_name=primary.supplier_name,
+                    buyer_id=getattr(primary, "buyer_id", None),
+                    buyer_name=getattr(primary, "buyer_name", None),
+                    department_id=getattr(primary, "department_id", None),
+                    department_name=getattr(primary, "department_name", None),
+                    tax_rate=po_tax_pct if po_tax_pct > 0 else None,
+                    currency=str(getattr(primary, "currency", None) or "CNY").strip() or "CNY",
+                    pay_mode=getattr(primary, "payment_method_code", None),
+                    payable_recognition=getattr(primary, "payable_recognition", None),
                     warehouse_id=header_wh_id,
                     warehouse_name=header_wh_name or await _resolve_warehouse_name_by_id(
                         tenant_id, header_wh_id
@@ -10948,6 +11056,46 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 receipt_dict.pop("purchase_order_id", None)
             if not str(receipt_dict.get("purchase_order_code") or "").strip():
                 receipt_dict.pop("purchase_order_code", None)
+
+            from apps.kuaizhizao.constants.purchase_order_type import (
+                is_service_purchase_order_type,
+                load_and_assert_purchase_order_type_materials,
+                normalize_purchase_order_type,
+            )
+
+            update_fields_set = getattr(receipt_data, "model_fields_set", set()) or set()
+            effective_order_type = normalize_purchase_order_type(
+                receipt_dict.get("order_type")
+                if "order_type" in update_fields_set
+                else getattr(receipt, "order_type", None)
+            )
+            po_upstream = None
+            if receipt.purchase_order_id:
+                from apps.kuaizhizao.models.purchase_order import PurchaseOrder
+
+                po_upstream = await PurchaseOrder.get_or_none(
+                    tenant_id=tenant_id, id=int(receipt.purchase_order_id)
+                )
+            if po_upstream is not None:
+                po_order_type = normalize_purchase_order_type(getattr(po_upstream, "order_type", None))
+                if "order_type" in update_fields_set and effective_order_type != po_order_type:
+                    raise ValidationError("采购入库类型须与来源采购订单一致")
+                effective_order_type = po_order_type
+            receipt_dict["order_type"] = effective_order_type
+            service_purchase_update = is_service_purchase_order_type(effective_order_type)
+            apply_purchase_receipt_header_warehouse(
+                receipt_dict,
+                service=service_purchase_update,
+                required=False,
+            )
+            if receipt_data.items is not None:
+                await load_and_assert_purchase_order_type_materials(
+                    tenant_id,
+                    effective_order_type,
+                    [int(getattr(it, "material_id", 0) or 0) for it in receipt_data.items],
+                    document_label="采购入库单",
+                )
+
             receipt_dict["updated_by"] = updated_by
             receipt_dict["updated_by_name"] = user_info.get("name", "")
             await PurchaseReceipt.filter(tenant_id=tenant_id, id=receipt_id).update(**receipt_dict)
@@ -11013,19 +11161,20 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                             pending_po_received.get(purchase_order_item_id, Decimal("0")) + qty
                         )
 
-                    _validate_location_if_required(
-                        location_required=location_required,
-                        location_id=getattr(item_data, "location_id", None),
-                        location_code=getattr(item_data, "location_code", None),
-                        scene="采购入库",
-                        material_label=getattr(item_data, "material_name", None) or getattr(item_data, "material_code", "未知物料"),
-                    )
-                    await _validate_purchase_line_warehouse_location_match(
-                        tenant_id,
-                        warehouse_id=getattr(item_data, "warehouse_id", None),
-                        location_id=getattr(item_data, "location_id", None),
-                        material_label=getattr(item_data, "material_name", None) or getattr(item_data, "material_code", "未知物料"),
-                    )
+                    if not service_purchase_update:
+                        _validate_location_if_required(
+                            location_required=location_required,
+                            location_id=getattr(item_data, "location_id", None),
+                            location_code=getattr(item_data, "location_code", None),
+                            scene="采购入库",
+                            material_label=getattr(item_data, "material_name", None) or getattr(item_data, "material_code", "未知物料"),
+                        )
+                        await _validate_purchase_line_warehouse_location_match(
+                            tenant_id,
+                            warehouse_id=getattr(item_data, "warehouse_id", None),
+                            location_id=getattr(item_data, "location_id", None),
+                            material_label=getattr(item_data, "material_name", None) or getattr(item_data, "material_code", "未知物料"),
+                        )
 
                     from apps.master_data.models.material import Material
                     from apps.kuaizhizao.services.batch_serial_helper import ensure_batch_no_for_item
@@ -11045,6 +11194,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                         )
 
                     item_dict = item_data.model_dump(exclude_unset=True)
+                    clear_blank_purchase_receipt_line_warehouse(item_dict)
                     item_dict.update({
                         "tenant_id": tenant_id,
                         "receipt_id": receipt_id,
@@ -11592,80 +11742,84 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 existing_time=getattr(receipt, "receipt_time", None),
             )
             ledger_production_date = to_site_date(receipt_time) if receipt_time else None
-            try:
-                from apps.kuaizhizao.services.inventory_service import InventoryService
+            from apps.kuaizhizao.constants.purchase_order_type import is_service_purchase_order_type
 
-                # 重新加载明细以获取最新的批号
-                items = await PurchaseReceiptItem.filter(
-                    tenant_id=tenant_id, receipt_id=receipt_id
-                ).all()
-                material_ids = list({int(it.material_id) for it in items if getattr(it, "material_id", None)})
-                material_by_id = await _load_materials_by_ids(tenant_id, material_ids)
-                _stock_snap = []
-                for item in items:
-                    qty = item.receipt_quantity or Decimal(0)
-                    if qty <= 0:
-                        continue
-                    base_qty = _convert_line_quantity_to_base(
-                        quantity=qty,
-                        material_unit=getattr(item, "material_unit", None),
-                        material=material_by_id.get(item.material_id),
-                    )
-                    line_wh = await _resolve_purchase_receipt_line_warehouse_id_for_stock(
-                        tenant_id, item, receipt
-                    )
-                    _stock_snap.append(
-                        {
-                            "item_id": int(item.id),
-                            "material_id": int(item.material_id),
-                            "qty": str(qty),
-                            "resolved_wh": line_wh,
-                            "item_wh": getattr(item, "warehouse_id", None),
-                            "header_wh": getattr(receipt, "warehouse_id", None),
-                        }
-                    )
-                    if line_wh is None:
-                        # #region agent log
-                        _agent_debug_ndjson(
-                            "warehouse_service.confirm_receipt:stock",
-                            "warehouse_unresolved",
-                            {"snap": _stock_snap[-3:]},
-                            "H4",
+            service_purchase = is_service_purchase_order_type(getattr(receipt, "order_type", None))
+            try:
+                if not service_purchase:
+                    from apps.kuaizhizao.services.inventory_service import InventoryService
+
+                    # 重新加载明细以获取最新的批号
+                    items = await PurchaseReceiptItem.filter(
+                        tenant_id=tenant_id, receipt_id=receipt_id
+                    ).all()
+                    material_ids = list({int(it.material_id) for it in items if getattr(it, "material_id", None)})
+                    material_by_id = await _load_materials_by_ids(tenant_id, material_ids)
+                    _stock_snap = []
+                    for item in items:
+                        qty = item.receipt_quantity or Decimal(0)
+                        if qty <= 0:
+                            continue
+                        base_qty = _convert_line_quantity_to_base(
+                            quantity=qty,
+                            material_unit=getattr(item, "material_unit", None),
+                            material=material_by_id.get(item.material_id),
                         )
-                        # #endregion
-                        raise BusinessLogicError(
-                            f"无法确定入库仓库：物料 {getattr(item, 'material_name', '') or getattr(item, 'material_code', '')} "
-                            "请为明细指定行仓库或库位，或为入库单指定表头仓库"
+                        line_wh = await _resolve_purchase_receipt_line_warehouse_id_for_stock(
+                            tenant_id, item, receipt
                         )
-                    await InventoryService._increase_stock_no_atomic(
-                        tenant_id=tenant_id,
-                        material_id=item.material_id,
-                        quantity=base_qty,
-                        warehouse_id=line_wh,
-                        batch_no=item.batch_number or None,
-                        **InventoryService.location_kwargs_from_line_item(item),
-                        serial_nos=_parse_serial_numbers(getattr(item, "serial_numbers", None)) or None,
-                        source_type="purchase_receipt",
-                        source_doc_id=receipt_id,
-                        source_doc_code=receipt.receipt_code,
-                        ledger_production_date=ledger_production_date,
-                        ledger_expiry_date=getattr(item, "expiry_date", None),
-                        movement_type="purchase_receipt",
-                        to_warehouse_id=line_wh,
-                        idempotency_key=f"purchase_receipt:{receipt_id}:inc:{item.id}",
-                    operator_id=receiver_id,
-                    operator_name=receiver_name,
-                )
-                from apps.kuaicaiwu.services.inventory_cost_service import InventoryCostService
-                await InventoryCostService().on_purchase_receipt_confirmed(tenant_id, receipt_id)
-                # #region agent log
-                _agent_debug_ndjson(
-                    "warehouse_service.confirm_receipt:stock",
-                    "stock_loop_ok",
-                    {"lines": _stock_snap[:20], "n_lines": len(_stock_snap)},
-                    "H5",
-                )
-                # #endregion
+                        _stock_snap.append(
+                            {
+                                "item_id": int(item.id),
+                                "material_id": int(item.material_id),
+                                "qty": str(qty),
+                                "resolved_wh": line_wh,
+                                "item_wh": getattr(item, "warehouse_id", None),
+                                "header_wh": getattr(receipt, "warehouse_id", None),
+                            }
+                        )
+                        if line_wh is None:
+                            # #region agent log
+                            _agent_debug_ndjson(
+                                "warehouse_service.confirm_receipt:stock",
+                                "warehouse_unresolved",
+                                {"snap": _stock_snap[-3:]},
+                                "H4",
+                            )
+                            # #endregion
+                            raise BusinessLogicError(
+                                f"无法确定入库仓库：物料 {getattr(item, 'material_name', '') or getattr(item, 'material_code', '')} "
+                                "请为明细指定行仓库或库位，或为入库单指定表头仓库"
+                            )
+                        await InventoryService._increase_stock_no_atomic(
+                            tenant_id=tenant_id,
+                            material_id=item.material_id,
+                            quantity=base_qty,
+                            warehouse_id=line_wh,
+                            batch_no=item.batch_number or None,
+                            **InventoryService.location_kwargs_from_line_item(item),
+                            serial_nos=_parse_serial_numbers(getattr(item, "serial_numbers", None)) or None,
+                            source_type="purchase_receipt",
+                            source_doc_id=receipt_id,
+                            source_doc_code=receipt.receipt_code,
+                            ledger_production_date=ledger_production_date,
+                            ledger_expiry_date=getattr(item, "expiry_date", None),
+                            movement_type="purchase_receipt",
+                            to_warehouse_id=line_wh,
+                            idempotency_key=f"purchase_receipt:{receipt_id}:inc:{item.id}",
+                        operator_id=receiver_id,
+                        operator_name=receiver_name,
+                    )
+                    from apps.kuaicaiwu.services.inventory_cost_service import InventoryCostService
+                    await InventoryCostService().on_purchase_receipt_confirmed(tenant_id, receipt_id)
+                    # #region agent log
+                    _agent_debug_ndjson(
+                        "warehouse_service.confirm_receipt:stock",
+                        "stock_loop_ok",
+                        {"lines": _stock_snap[:20], "n_lines": len(_stock_snap)},
+                        "H5",
+                    )
+                    # #endregion
             except Exception as inv_e:
                 # #region agent log
                 _agent_debug_ndjson(
@@ -11741,48 +11895,52 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 acting_user_id=updated_by,
             )
 
-            try:
-                from apps.kuaizhizao.services.inventory_service import InventoryService
+            from apps.kuaizhizao.constants.purchase_order_type import is_service_purchase_order_type
 
+            try:
                 receipt_obj = await PurchaseReceipt.get(tenant_id=tenant_id, id=receipt_id)
-                items = await PurchaseReceiptItem.filter(
-                    tenant_id=tenant_id, receipt_id=receipt_id
-                ).all()
-                material_ids = list({int(it.material_id) for it in items if getattr(it, "material_id", None)})
-                material_by_id = await _load_materials_by_ids(tenant_id, material_ids)
-                for item in items:
-                    qty = item.receipt_quantity or Decimal(0)
-                    if qty <= 0:
-                        continue
-                    base_qty = _convert_line_quantity_to_base(
-                        quantity=qty,
-                        material_unit=getattr(item, "material_unit", None),
-                        material=material_by_id.get(item.material_id),
-                    )
-                    line_wh = await _resolve_purchase_receipt_line_warehouse_id_for_stock(
-                        tenant_id, item, receipt_obj
-                    )
-                    if line_wh is None:
-                        raise BusinessLogicError(
-                            "撤回失败：无法解析明细行仓库，请检查原入库单仓库/库位配置"
+                if not is_service_purchase_order_type(getattr(receipt_obj, "order_type", None)):
+                    from apps.kuaizhizao.services.inventory_service import InventoryService
+
+
+                    items = await PurchaseReceiptItem.filter(
+                        tenant_id=tenant_id, receipt_id=receipt_id
+                    ).all()
+                    material_ids = list({int(it.material_id) for it in items if getattr(it, "material_id", None)})
+                    material_by_id = await _load_materials_by_ids(tenant_id, material_ids)
+                    for item in items:
+                        qty = item.receipt_quantity or Decimal(0)
+                        if qty <= 0:
+                            continue
+                        base_qty = _convert_line_quantity_to_base(
+                            quantity=qty,
+                            material_unit=getattr(item, "material_unit", None),
+                            material=material_by_id.get(item.material_id),
                         )
-                    serial_nos = _parse_serial_numbers(getattr(item, "serial_numbers", None))
-                    await InventoryService._decrease_stock_no_atomic(
-                        tenant_id=tenant_id,
-                        material_id=item.material_id,
-                        quantity=base_qty,
-                        warehouse_id=line_wh,
-                        batch_no=item.batch_number or None,
-                        serial_nos=serial_nos or None,
-                        source_type="purchase_receipt_revoke",
-                        source_doc_id=receipt_id,
-                        source_doc_code=receipt_obj.receipt_code,
-                        movement_type="purchase_receipt_withdraw",
-                        from_warehouse_id=line_wh,
-                        operator_id=updated_by,
-                        operator_name=None,
-                        idempotency_key=f"purchase_receipt:{receipt_id}:revoke:{item.id}",
-                    )
+                        line_wh = await _resolve_purchase_receipt_line_warehouse_id_for_stock(
+                            tenant_id, item, receipt_obj
+                        )
+                        if line_wh is None:
+                            raise BusinessLogicError(
+                                "撤回失败：无法解析明细行仓库，请检查原入库单仓库/库位配置"
+                            )
+                        serial_nos = _parse_serial_numbers(getattr(item, "serial_numbers", None))
+                        await InventoryService._decrease_stock_no_atomic(
+                            tenant_id=tenant_id,
+                            material_id=item.material_id,
+                            quantity=base_qty,
+                            warehouse_id=line_wh,
+                            batch_no=item.batch_number or None,
+                            serial_nos=serial_nos or None,
+                            source_type="purchase_receipt_revoke",
+                            source_doc_id=receipt_id,
+                            source_doc_code=receipt_obj.receipt_code,
+                            movement_type="purchase_receipt_withdraw",
+                            from_warehouse_id=line_wh,
+                            operator_id=updated_by,
+                            operator_name=None,
+                            idempotency_key=f"purchase_receipt:{receipt_id}:revoke:{item.id}",
+                        )
 
                 user_info = await self.get_user_info(updated_by)
                 await PurchaseReceipt.filter(tenant_id=tenant_id, id=receipt_id).update(

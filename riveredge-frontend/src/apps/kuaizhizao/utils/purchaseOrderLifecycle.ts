@@ -185,12 +185,19 @@ export const PURCHASE_ORDER_EXCEPTION_LIFECYCLE_STAGES = ['已驳回', '已取�
 
 export function getPurchaseOrderLifecycleStageLabels(auditRequired = true): string[] {
   void auditRequired;
-  return [...MAIN_STAGE_KEYS.map((k) => MAIN_STAGE_LABELS[k]), ...PURCHASE_ORDER_EXCEPTION_LIFECYCLE_STAGES];
+  return [
+    '草稿',
+    '待审核',
+    '待我审核',
+    ...MAIN_STAGE_KEYS.map((k) => MAIN_STAGE_LABELS[k]).filter((label) => label !== '草稿'),
+    ...PURCHASE_ORDER_EXCEPTION_LIFECYCLE_STAGES,
+  ];
 }
 
 const PURCHASE_ORDER_LIFECYCLE_STAGE_I18N: Record<string, string> = {
   草稿: 'app.kuaizhizao.purchaseOrder.lifecycleDraft',
   待审核: 'app.kuaizhizao.purchaseOrder.lifecyclePendingReview',
+  待我审核: 'app.kuaizhizao.purchaseOrder.lifecyclePendingMine',
   已审核: 'app.kuaizhizao.purchaseOrder.lifecycleAudited',
   已确认: 'app.kuaizhizao.purchaseOrder.lifecycleConfirmed',
   执行中: 'app.kuaizhizao.purchaseOrder.lifecycleExecuting',
@@ -216,7 +223,7 @@ export function buildPurchaseOrderLifecycleValueEnum(
 export function resolvePurchaseOrderListLifecycleParams(
   searchFormValues?: Record<string, unknown> | null,
   params?: Record<string, unknown> | null,
-): { status?: string; review_status?: string } {
+): { status?: string; review_status?: string; pending_my_review?: boolean } {
   const stage = resolveListLifecycleStageFromSearch(searchFormValues, params);
   if (!stage) {
     return {};
@@ -226,11 +233,13 @@ export function resolvePurchaseOrderListLifecycleParams(
 
 export function mapPurchaseOrderLifecycleStageToApiParams(
   stage: string,
-): { status?: string; review_status?: string } {
+): { status?: string; review_status?: string; pending_my_review?: boolean } {
   const normalized = normalizeStageName(stage);
   switch (normalized) {
     case '草稿':
       return { status: 'DRAFT' };
+    case '待我审核':
+      return { pending_my_review: true };
     case '待审核':
       return { status: 'PENDING_REVIEW' };
     case '已审核':
@@ -526,6 +535,7 @@ export function resolvePurchaseOrderListApiParams(
   const lifecycleMapped = resolvePurchaseOrderListLifecycleParams(searchFormValues, params);
   if (lifecycleMapped.status) apiParams.status = lifecycleMapped.status;
   if (lifecycleMapped.review_status) apiParams.review_status = lifecycleMapped.review_status;
+  if (lifecycleMapped.pending_my_review) apiParams.pending_my_review = true;
 
   if (fuzzyKeyword) {
     apiParams.keyword = fuzzyKeyword;

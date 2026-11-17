@@ -892,23 +892,54 @@ class SalesDeliveryConfirmRequest(BaseSchema):
 class PurchaseReceiptBase(BaseSchema):
     """采购入库单基础schema"""
     receipt_code: Optional[str] = Field(None, max_length=50, description="入库单编码（可选，不提供则自动生成）")
-    purchase_order_id: int = Field(0, description="采购订单ID（手动创建时为0）")
+    purchase_order_id: Optional[int] = Field(None, description="采购订单ID（空白建单可空；勿传0）")
     purchase_order_code: str = Field("", max_length=50, description="采购订单编码（手动创建时为空）")
-    supplier_id: int = Field(..., description="供应商ID")
-    supplier_name: str = Field(..., max_length=200, description="供应商名称")
-    warehouse_id: int = Field(..., description="入库仓库ID")
-    warehouse_name: str = Field(..., max_length=100, description="入库仓库名称")
+    order_type: str = Field("标准采购", max_length=20, description="采购类型（标准采购/资产采购/服务采购）")
+    supplier_id: int = Field(0, description="供应商ID（无供应商时为0）")
+    supplier_name: str = Field("", max_length=200, description="供应商名称（无供应商时为空）")
+    payable_recognition: Optional[str] = Field(
+        None,
+        max_length=32,
+        description="立账策略（应付确认时点）",
+    )
+    buyer_id: Optional[int] = Field(None, description="采购员用户ID")
+    buyer_name: Optional[str] = Field(None, max_length=100, description="采购员姓名")
+    buyer_operator_number: Optional[str] = Field(
+        None,
+        max_length=64,
+        description="金蝶供应链业务员工号",
+    )
+    department_id: Optional[int] = Field(None, description="部门ID")
+    department_name: Optional[str] = Field(None, max_length=100, description="部门名称")
+    pay_mode: Optional[str] = Field(
+        None,
+        max_length=32,
+        description="付款方式（客商码 cash/bank_transfer/…；外推映射金蝶 CREDIT/CASH）",
+    )
+    org_number: Optional[str] = Field(None, max_length=64, description="库存组织编码")
+    bizorg_number: Optional[str] = Field(None, max_length=64, description="采购组织编码")
+    billtype_number: Optional[str] = Field(None, max_length=64, description="单据类型编码")
+    biztype_number: Optional[str] = Field("110", max_length=64, description="业务类型编码（默认 110）")
+    invscheme_number: Optional[str] = Field(
+        "110", max_length=64, description="库存事务编码（默认 110）"
+    )
+    tax_rate: Optional[float] = Field(None, ge=0, description="税率（百分比）")
+    currency: Optional[str] = Field("CNY", max_length=10, description="币别")
+    warehouse_id: Optional[int] = Field(None, description="入库仓库ID（服务采购可空）")
+    warehouse_name: Optional[str] = Field(None, max_length=100, description="入库仓库名称（服务采购可空）")
     receipt_time: Optional[datetime] = Field(None, description="实际入库时间")
-    receiver_id: Optional[int] = Field(None, description="入库人ID")
-    receiver_name: Optional[str] = Field(None, max_length=100, description="入库人姓名")
+    receiver_id: Optional[int] = Field(None, description="入库人/验收人ID")
+    receiver_name: Optional[str] = Field(None, max_length=100, description="入库人/验收人姓名")
     reviewer_id: Optional[int] = Field(None, description="审核人ID")
     reviewer_name: Optional[str] = Field(None, max_length=100, description="审核人姓名")
     review_time: Optional[datetime] = Field(None, description="审核时间")
-    review_status: str = Field("待审核", max_length=20, description="审核状态")
+    review_status: str = Field("草稿", max_length=20, description="审核状态")
     review_remarks: Optional[str] = Field(None, description="审核备注")
     status: str = Field("待入库", max_length=20, description="入库状态")
     total_quantity: float = Field(0, ge=0, description="总入库数量")
-    total_amount: float = Field(0, ge=0, description="总金额")
+    total_amount: float = Field(0, ge=0, description="未税合计")
+    tax_amount: float = Field(0, ge=0, description="税额")
+    net_amount: float = Field(0, ge=0, description="价税合计")
     delivery_note: Optional[str] = Field(None, max_length=100, description="送货单号")
     invoice_number: Optional[str] = Field(None, max_length=100, description="发票号")
     notes: Optional[str] = Field(None, description="备注")
@@ -919,7 +950,7 @@ class PurchaseReceiptBase(BaseSchema):
 
 class PurchaseReceiptItemBase(BaseSchema):
     """采购入库单明细基础schema"""
-    purchase_order_item_id: int = Field(0, description="采购订单明细ID（手动创建时为0）")
+    purchase_order_item_id: Optional[int] = Field(None, description="采购订单明细ID（空白建单可空；勿传0）")
     receipt_notice_item_id: Optional[int] = Field(None, description="收货通知明细ID")
     material_id: int = Field(..., description="物料ID")
     material_code: str = Field(..., max_length=50, description="物料编码")

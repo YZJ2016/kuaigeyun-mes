@@ -71,6 +71,7 @@ class PurchaseRequisitionBase(BaseSchema):
     """采购申请头基础"""
 
     requisition_code: str = Field(..., max_length=50, description="申请编码")
+    order_type: str = Field("标准采购", max_length=20, description="采购类型")
     requisition_name: Optional[str] = Field(None, max_length=200, description="申请名称")
     status: str = Field("草稿", max_length=20, description="状态")
     applicant_id: Optional[int] = None
@@ -113,6 +114,7 @@ class PurchaseRequisitionCreate(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     requisition_code: Optional[str] = None
+    order_type: Optional[str] = Field(None, max_length=20, description="采购类型，默认标准采购")
     requisition_name: Optional[str] = None
     requisition_date: Optional[date] = Field(None, description="申请日期，未传则默认当天")
     required_date: Optional[date] = None
@@ -149,6 +151,7 @@ class PurchaseRequisitionCreate(BaseModel):
 
 class PurchaseRequisitionUpdate(BaseModel):
     """采购申请更新"""
+    order_type: Optional[str] = Field(None, max_length=20, description="采购类型")
     requisition_name: Optional[str] = None
     requisition_date: Optional[date] = None
     required_date: Optional[date] = None

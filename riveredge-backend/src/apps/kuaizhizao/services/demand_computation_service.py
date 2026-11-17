@@ -6664,15 +6664,12 @@ class DemandComputationService(AppBaseService):
         if purchase == "requisition":
             from apps.kuaizhizao.services.document_push_pull_service import DocumentPushPullService
 
-            push_params: Optional[Dict[str, Any]] = None
+            push_params: Dict[str, Any] = {"push_mode": resolved_push_mode}
             if purchase_requisition_item_ids is not None:
-                push_params = {
-                    "selected_item_ids": [
-                        int(i) for i in purchase_requisition_item_ids if i is not None
-                    ],
-                }
+                push_params["selected_item_ids"] = [
+                    int(i) for i in purchase_requisition_item_ids if i is not None
+                ]
             if include_sales_order_attachments:
-                push_params = push_params or {}
                 push_params["include_sales_order_attachments"] = True
 
             push_service = DocumentPushPullService()

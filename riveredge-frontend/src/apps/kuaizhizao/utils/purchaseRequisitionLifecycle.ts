@@ -41,7 +41,7 @@ export interface PurchaseRequisitionLike {
 /** 列表筛选 / 钉住 Tab：与生命周期主轴一致 */
 export function getPurchaseRequisitionLifecycleStageLabels(auditRequired = true): string[] {
   void auditRequired;
-  return ['草稿', '已驳回', '已通过', '部分转单', '全部转单'];
+  return ['草稿', '待审核', '待我审核', '已驳回', '已通过', '部分转单', '全部转单'];
 }
 
 import {
@@ -61,6 +61,8 @@ export const PURCHASE_REQUISITION_LIST_LIFECYCLE_FIELD = LIST_LIFECYCLE_STAGE_FI
 
 const PURCHASE_REQUISITION_STAGE_LABELS = [
   '草稿',
+  '待审核',
+  '待我审核',
   '已驳回',
   '已通过',
   '部分转单',

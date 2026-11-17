@@ -145,7 +145,10 @@ def test_push_all_passes_selected_purchase_requisition_item_ids(monkeypatch):
 
     result = asyncio.run(_run())
     assert result["success"] is True
-    assert captured["push_params"] == {"selected_item_ids": [11, 12]}
+    assert captured["push_params"] == {
+        "push_mode": "draft",
+        "selected_item_ids": [11, 12],
+    }
 
 
 def test_push_all_passes_production_item_ids(monkeypatch):

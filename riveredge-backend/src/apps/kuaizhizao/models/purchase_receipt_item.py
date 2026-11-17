@@ -24,7 +24,7 @@ class PurchaseReceiptItem(DocumentLinePartnerMaterialSnapshotMixin, BaseModel):
     receipt_id = fields.IntField(description="入库单ID")
 
     # 采购订单明细关联
-    purchase_order_item_id = fields.IntField(description="采购订单明细ID")
+    purchase_order_item_id = fields.IntField(null=True, description="采购订单明细ID（空白建单可空）")
     receipt_notice_item_id = fields.IntField(null=True, description="收货通知明细ID")
 
     material_id = fields.IntField(description="物料ID")

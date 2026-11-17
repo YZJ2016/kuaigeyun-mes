@@ -103,6 +103,8 @@ import {
   buildPayableLedgerRecognitionOptions,
 } from '../../../../../utils/documentLedgerRecognition';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
+import { getDataDictionaryByCode, getDictionaryItemList, type DictionaryItem } from '../../../../../services/dataDictionary';
+import { mapSystemDictionaryItemOptions } from '../../../../../utils/systemDictionaryI18n';
 import { useCurrentUser } from '../../../../../hooks/useCurrentUser';
 import type { User } from '../../../../../services/user';
 import { searchUserDisplay } from '../../../../../services/user';
@@ -125,6 +127,12 @@ import {
 } from '../../purchase-management/shared/purchasePriceType';
 
 const INBOUND_HOST_RESOURCE = 'kuaizhizao:inbound';
+
+const PURCHASE_RECEIPT_ORDER_TYPE_FALLBACK: Pick<DictionaryItem, 'value' | 'label' | 'is_system_managed' | 'sort_order'>[] = [
+  { value: '标准采购', label: '标准采购', is_system_managed: true, sort_order: 0 },
+  { value: '资产采购', label: '资产采购', is_system_managed: true, sort_order: 1 },
+  { value: '服务采购', label: '服务采购', is_system_managed: true, sort_order: 2 },
+];
 
 const defaultLineItem = {
   receipt_quantity: 1,
@@ -235,6 +243,7 @@ function PurchaseReceiptCreateWarehouseCell({
   t: (key: string, opts?: Record<string, unknown>) => string;
 }) {
   const materialId = Number(AntForm.useWatch(['items', index, 'material_id']) || 0);
+  const servicePurchase = String(AntForm.useWatch('order_type') ?? '').trim() === '服务采购';
   return (
     <div>
       <AntForm.Item name={[index, 'warehouse_name']} hidden>
@@ -245,12 +254,16 @@ function PurchaseReceiptCreateWarehouseCell({
       </AntForm.Item>
       <AntForm.Item
         name={[index, 'warehouse_id']}
-        rules={[
-          {
-            required: true,
-            message: t('app.kuaizhizao.warehouseInbound.selectWarehouse'),
-          },
-        ]}
+        rules={
+          servicePurchase
+            ? []
+            : [
+                {
+                  required: true,
+                  message: t('app.kuaizhizao.warehouseInbound.selectWarehouse'),
+                },
+              ]
+        }
         noStyle
       >
         <UniWhDropdown
@@ -259,6 +272,7 @@ function PurchaseReceiptCreateWarehouseCell({
           materialId={materialId > 0 ? materialId : undefined}
           showStock={materialId > 0}
           sortByStock={materialId > 0}
+          allowClear={servicePurchase}
           placeholder={t('app.kuaizhizao.warehouseInbound.selectWarehouse')}
           getPopupContainer={getPopupContainerInModal}
           onChange={(_value, wh) => {
@@ -468,6 +482,29 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
   const [generatingBatchIdx, setGeneratingBatchIdx] = useState<number | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
+  const [orderTypeOptions, setOrderTypeOptions] = useState<Array<{ label: string; value: string }>>(() =>
+    mapSystemDictionaryItemOptions('ORDER_TYPE', PURCHASE_RECEIPT_ORDER_TYPE_FALLBACK as DictionaryItem[], t),
+  );
+  const [orderTypeLoading, setOrderTypeLoading] = useState(false);
+  useEffect(() => {
+    const loadOrderType = async () => {
+      setOrderTypeLoading(true);
+      try {
+        const dict = await getDataDictionaryByCode('ORDER_TYPE');
+        const items = await getDictionaryItemList(dict.uuid, true);
+        const sorted = [...items].sort((a, b) => a.sort_order - b.sort_order);
+        setOrderTypeOptions(mapSystemDictionaryItemOptions('ORDER_TYPE', sorted, t));
+      } catch {
+        setOrderTypeOptions(
+          mapSystemDictionaryItemOptions('ORDER_TYPE', PURCHASE_RECEIPT_ORDER_TYPE_FALLBACK as DictionaryItem[], t),
+        );
+        messageApi.info(t('app.kuaizhizao.purchaseOrder.orderTypeFallback'));
+      } finally {
+        setOrderTypeLoading(false);
+      }
+    };
+    void loadOrderType();
+  }, [messageApi, t]);
   const [linkedPoId, setLinkedPoId] = useState<number | null>(null);
   const [poSettlementCtx, setPoSettlementCtx] = useState<PurchaseReceiptPoSettlementCtx | null>(
     null,
@@ -922,6 +959,11 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
             <AntForm.Item name={[index, 'material_name']} hidden>
               <Input />
             </AntForm.Item>
+            <AntForm.Item
+              noStyle
+              shouldUpdate={(prev, curr) => prev?.order_type !== curr?.order_type}
+            >
+              {({ getFieldValue }) => (
             <UniMaterialSelect
               name={[index, 'material_id']}
               label=""
@@ -933,6 +975,9 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
               fillMapping={withMaterialLineFillMapping({ material_unit: 'baseUnit' })}
               showAdvancedSearch
               skipFuzzyPinyinClientFilter
+              sourceType={
+                String(getFieldValue('order_type') ?? '').trim() === '服务采购' ? 'Service' : undefined
+              }
               onChange={(_v, material) => {
                 clearLineWarehouseDependents(index);
                 if (!material) {
@@ -960,6 +1005,8 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
                 });
               }}
             />
+              )}
+            </AntForm.Item>
           </div>
         ),
       },
@@ -1267,28 +1314,32 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
       throw new Error(msg);
     }
 
+    const servicePurchase = String(values.order_type ?? '').trim() === '服务采购';
+
     for (const it of validItems) {
       const materialLabel =
         String(it.material_name || it.material_code || it.material_id || '').trim() || '-';
       const lineWhId = Number(it.warehouse_id) || 0;
-      if (!(lineWhId > 0)) {
+      if (!servicePurchase && !(lineWhId > 0)) {
         const msg = t('app.kuaizhizao.warehouseInbound.msg.selectWarehouseForMaterial', {
           material: materialLabel,
         });
         messageApi.error(msg);
         throw new Error(msg);
       }
-      const needLoc = await lineLocationSelectionRequired(
-        lineWhId,
-        it.location_id,
-        it.location_code,
-      );
-      if (needLoc) {
-        const msg = t('app.kuaizhizao.warehouseInbound.msg.selectLocationForMaterial', {
-          material: materialLabel,
-        });
-        messageApi.error(msg);
-        throw new Error(msg);
+      if (!servicePurchase) {
+        const needLoc = await lineLocationSelectionRequired(
+          lineWhId,
+          it.location_id,
+          it.location_code,
+        );
+        if (needLoc) {
+          const msg = t('app.kuaizhizao.warehouseInbound.msg.selectLocationForMaterial', {
+            material: materialLabel,
+          });
+          messageApi.error(msg);
+          throw new Error(msg);
+        }
       }
       const material = await fetchMaterialForUnitSelectCache(Number(it.material_id));
       const dualErr = validateDualQuantityBeforeSave({
@@ -1342,8 +1393,8 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
         currency: String(values.currency ?? 'CNY').trim() || 'CNY',
         receiver_id: values.receiver_id != null ? Number(values.receiver_id) : undefined,
         receiver_name: String(values.receiver_name ?? '').trim() || undefined,
-        warehouse_id: headerWhId,
-        warehouse_name: headerWhName,
+        warehouse_id: headerWhId > 0 ? headerWhId : null,
+        warehouse_name: headerWhId > 0 ? headerWhName || null : null,
         receipt_time:
           values.receipt_time && typeof (values.receipt_time as { format?: unknown }).format === 'function'
             ? toApiBusinessDocumentDateTime(values.receipt_time as dayjs.Dayjs)
@@ -1402,8 +1453,8 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
             quality_status: String(it.quality_status || '合格'),
             status: String(it.line_status || '待入库'),
             serial_numbers: serials,
-            warehouse_id: lineWhId,
-            warehouse_name: String(it.warehouse_name ?? '').trim() || undefined,
+            warehouse_id: lineWhId > 0 ? lineWhId : null,
+            warehouse_name: lineWhId > 0 ? String(it.warehouse_name ?? '').trim() || undefined : null,
             location_id:
               it.location_id != null && Number(it.location_id) > 0
                 ? Number(it.location_id)
@@ -1464,6 +1515,27 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
     >
       <ProFormText name="price_type" hidden />
       <Row gutter={16}>
+        <Col span={6}>
+          <ProFormItem
+            name="order_type"
+            label={t('app.kuaizhizao.purchaseReceipt.field.orderType')}
+            initialValue="标准采购"
+            rules={[
+              {
+                required: true,
+                message: t('app.kuaizhizao.purchaseReceipt.orderTypeRequired'),
+              },
+            ]}
+          >
+            <UniDropdown
+              options={orderTypeOptions}
+              loading={orderTypeLoading}
+              disabled={linkedPoId != null && linkedPoId > 0}
+              placeholder={t('app.kuaizhizao.purchaseOrder.form.orderTypePlaceholder')}
+              getPopupContainer={getPopupContainerInModal}
+            />
+          </ProFormItem>
+        </Col>
         <Col span={6}>
           <ProFormItem
             name="supplier_id"
