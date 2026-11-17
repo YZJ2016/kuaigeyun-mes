@@ -612,12 +612,14 @@ def enrich_sales_forecast_capabilities_on_response(
     pushed_to_computation: bool = False,
     has_downstream: bool = False,
     has_items: bool = True,
+    review_submitted: Optional[bool] = None,
 ) -> T:
     caps = derive_sales_forecast_capabilities(
         forecast,
         pushed_to_computation=pushed_to_computation,
         has_downstream=has_downstream,
         has_items=has_items,
+        review_submitted=review_submitted,
     )
     if hasattr(response, "model_copy"):
         return _attach_capabilities_to_response(response, caps)
@@ -631,10 +633,12 @@ def enrich_sales_forecast_list_capabilities(
     pushed_by_id: Optional[dict[int, bool]] = None,
     downstream_by_id: Optional[dict[int, bool]] = None,
     has_items_by_id: Optional[dict[int, bool]] = None,
+    review_submitted_by_id: Optional[dict[int, bool]] = None,
 ) -> List[T]:
     pushed_map = pushed_by_id or {}
     downstream_map = downstream_by_id or {}
     items_map = has_items_by_id or {}
+    submitted_map = review_submitted_by_id or {}
     out: List[T] = []
     for forecast_model, resp in zip(forecasts, responses):
         fid = int(getattr(forecast_model, "id", 0) or 0)
@@ -643,6 +647,7 @@ def enrich_sales_forecast_list_capabilities(
             pushed_to_computation=pushed_map.get(fid, False),
             has_downstream=downstream_map.get(fid, False),
             has_items=items_map.get(fid, True),
+            review_submitted=submitted_map.get(fid),
         )
         if hasattr(resp, "model_copy"):
             out.append(_attach_capabilities_to_response(resp, caps))
@@ -657,12 +662,14 @@ def get_sales_forecast_capabilities_from_record(
     pushed_to_computation: bool = False,
     has_downstream: bool = False,
     has_items: bool = True,
+    review_submitted: Optional[bool] = None,
 ) -> SalesForecastCapabilities:
     return derive_sales_forecast_capabilities(
         forecast,
         pushed_to_computation=pushed_to_computation,
         has_downstream=has_downstream,
         has_items=has_items,
+        review_submitted=review_submitted,
     )
 
 

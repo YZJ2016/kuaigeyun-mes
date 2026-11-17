@@ -999,11 +999,24 @@ async def batch_delete_sales_forecasts(
     
     注意：只能删除草稿状态的销售预测
     """
+    from apps.kuaizhizao.services.document_action_policy.enricher import (
+        batch_review_submitted_for_documents,
+    )
+
+    gate_rows = await SalesForecast.filter(tenant_id=tenant_id, id__in=request.ids).all()
+    submitted_map = await batch_review_submitted_for_documents(
+        tenant_id, "sales_forecast", gate_rows
+    )
+
     def validate_sales_forecast(forecast):
         """验证销售预测是否可以删除"""
         from apps.kuaizhizao.services.document_action_policy.sales_forecast import assert_sales_forecast_capability
 
-        assert_sales_forecast_capability(forecast, "delete")
+        assert_sales_forecast_capability(
+            forecast,
+            "delete",
+            review_submitted=submitted_map.get(int(forecast.id)),
+        )
     
     result = await BatchOperationService().batch_delete(
         tenant_id=tenant_id,

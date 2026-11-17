@@ -44,6 +44,27 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'sales-order-action-crash-fix-r01',
+    date: '2026-11-17',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-order-action-crash-fix-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.sales-order-action-crash-fix-r01.description',
+  },
+  {
+    id: 'sales-forecast-review-gate-fix-r01',
+    date: '2026-11-17',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.sales-forecast-review-gate-fix-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.sales-forecast-review-gate-fix-r01.description',
+  },
+  {
+    id: 'share-expiry-parse-fix-r01',
+    date: '2026-11-17',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.share-expiry-parse-fix-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.share-expiry-parse-fix-r01.description',
+  },
+  {
     id: 'antd6-api-compat-fix-r01',
     date: '2026-11-17',
     type: 'fix',

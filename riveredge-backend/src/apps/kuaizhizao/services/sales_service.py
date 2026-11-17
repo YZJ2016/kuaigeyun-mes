@@ -259,7 +259,16 @@ class SalesForecastService(AppBaseService[SalesForecast]):
         )
         if not forecast:
             raise NotFoundError(f"销售预测不存在: {forecast_id}")
-        assert_sales_forecast_capability(forecast, "delete")
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            resolve_review_submitted_for_document,
+        )
+
+        review_submitted = await resolve_review_submitted_for_document(
+            tenant_id, "sales_forecast", forecast
+        )
+        assert_sales_forecast_capability(
+            forecast, "delete", review_submitted=review_submitted
+        )
         deleted = await SalesForecast.filter(tenant_id=tenant_id, id=forecast_id).delete()
         if not deleted:
             raise BusinessLogicError("销售预测删除失败")
@@ -322,12 +331,20 @@ class SalesForecastService(AppBaseService[SalesForecast]):
 
             demand = await self._get_linked_demand_for_forecast(tenant_id, forecast.id)
             resp = SalesForecastResponse.model_validate(forecast)
+            from apps.kuaizhizao.services.document_action_policy.enricher import (
+                resolve_review_submitted_for_document,
+            )
+
+            review_submitted = await resolve_review_submitted_for_document(
+                tenant_id, "sales_forecast", forecast
+            )
             resp = enrich_sales_forecast_capabilities_on_response(
                 forecast,
                 resp,
                 pushed_to_computation=self._is_forecast_pushed_to_computation(forecast, demand),
                 has_downstream=await self._forecast_has_downstream(tenant_id, forecast.id),
                 has_items=bool(items_data),
+                review_submitted=review_submitted,
             )
             return resp
 
@@ -365,12 +382,20 @@ class SalesForecastService(AppBaseService[SalesForecast]):
         pushed = self._is_forecast_pushed_to_computation(forecast, demand)
         has_downstream = await self._forecast_has_downstream(tenant_id, forecast_id)
         has_items = bool(item_rows)
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            resolve_review_submitted_for_document,
+        )
+
+        review_submitted = await resolve_review_submitted_for_document(
+            tenant_id, "sales_forecast", forecast
+        )
         resp = enrich_sales_forecast_capabilities_on_response(
             forecast,
             resp,
             pushed_to_computation=pushed,
             has_downstream=has_downstream,
             has_items=has_items,
+            review_submitted=review_submitted,
         )
         return await enrich_record(tenant_id, "sales_forecast", resp)
 
@@ -483,12 +508,20 @@ class SalesForecastService(AppBaseService[SalesForecast]):
                 resp.items = [self._forecast_item_to_response(it) for it in f_items]
             list_responses.append(resp)
 
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            batch_review_submitted_for_documents,
+        )
+
+        submitted_map = await batch_review_submitted_for_documents(
+            tenant_id, "sales_forecast", forecasts
+        )
         enriched = enrich_sales_forecast_list_capabilities(
             forecasts,
             list_responses,
             pushed_by_id=pushed_by_id,
             downstream_by_id={fid: fid in downstream_ids for fid in forecast_ids},
             has_items_by_id=has_items_by_id,
+            review_submitted_by_id=submitted_map,
         )
         result = [r.model_dump() for r in enriched]
         from core.services.approval.audit_record_enricher import enrich_data_payload
@@ -826,10 +859,21 @@ class SalesForecastService(AppBaseService[SalesForecast]):
         )
         if not forecast_row:
             raise NotFoundError(f"销售预测不存在: {forecast_id}")
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            resolve_review_submitted_for_document,
+        )
+
+        review_submitted = await resolve_review_submitted_for_document(
+            tenant_id, "sales_forecast", forecast_row
+        )
         if rejection_reason:
-            assert_sales_forecast_capability(forecast_row, "reject")
+            assert_sales_forecast_capability(
+                forecast_row, "reject", review_submitted=review_submitted
+            )
         else:
-            assert_sales_forecast_capability(forecast_row, "approve")
+            assert_sales_forecast_capability(
+                forecast_row, "approve", review_submitted=review_submitted
+            )
 
         from infra.services.business_config_service import BusinessConfigService
         from core.services.approval.audit_flow_guard import assert_pending_approval_instance
@@ -989,7 +1033,16 @@ class SalesForecastService(AppBaseService[SalesForecast]):
         )
         if not forecast_row:
             raise NotFoundError(f"销售预测不存在: {forecast_id}")
-        assert_sales_forecast_capability(forecast_row, "submit")
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            resolve_review_submitted_for_document,
+        )
+
+        review_submitted = await resolve_review_submitted_for_document(
+            tenant_id, "sales_forecast", forecast_row
+        )
+        assert_sales_forecast_capability(
+            forecast_row, "submit", review_submitted=review_submitted
+        )
 
         approval_instance = None
         async with in_transaction():
@@ -1056,7 +1109,16 @@ class SalesForecastService(AppBaseService[SalesForecast]):
         )
         if not forecast_row:
             raise NotFoundError(f"销售预测不存在: {forecast_id}")
-        assert_sales_forecast_capability(forecast_row, "withdraw_submit")
+        from apps.kuaizhizao.services.document_action_policy.enricher import (
+            resolve_review_submitted_for_document,
+        )
+
+        review_submitted = await resolve_review_submitted_for_document(
+            tenant_id, "sales_forecast", forecast_row
+        )
+        assert_sales_forecast_capability(
+            forecast_row, "withdraw_submit", review_submitted=review_submitted
+        )
 
         try:
             from core.services.approval.approval_instance_service import ApprovalInstanceService

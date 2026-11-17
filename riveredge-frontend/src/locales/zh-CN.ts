@@ -4556,6 +4556,18 @@ export default {
     '修复销售订单列表加载失败',
   'pages.dashboard.updateLog.entries.sales-order-list-item-scope-r01.description':
     '列表接口因 keyword 分支内局部 import 遮蔽 SalesOrderItem，无搜索词时明细加载闭包报 free variable；改为使用模块级模型，并按 sales_order_id 反查明细物料关键字。',
+  'pages.dashboard.updateLog.entries.sales-order-action-crash-fix-r01.title':
+    '销售订单操作报错修复',
+  'pages.dashboard.updateLog.entries.sales-order-action-crash-fix-r01.description':
+    '修复销售订单提交、审核、删除、下推等操作因内部变量引用顺序错误而全部报错的问题，相关动作恢复正常。',
+  'pages.dashboard.updateLog.entries.sales-forecast-review-gate-fix-r01.title':
+    '销售预测审批门禁修复',
+  'pages.dashboard.updateLog.entries.sales-forecast-review-gate-fix-r01.description':
+    '销售预测的删除、提交、审核、驳回、撤回等动作现在正确识别单据送审状态，已送审单据不再被误删，待审单据可正常审核。',
+  'pages.dashboard.updateLog.entries.share-expiry-parse-fix-r01.title':
+    '报表分享有效期解析修复',
+  'pages.dashboard.updateLog.entries.share-expiry-parse-fix-r01.description':
+    '修复报表分享链接有效期按站点时区解析的问题，设置的到期时刻与实际生效时刻保持一致。',
   'pages.dashboard.updateLog.entries.antd6-api-compat-fix-r01.title':
     '界面组件兼容性修复',
   'pages.dashboard.updateLog.entries.antd6-api-compat-fix-r01.description':

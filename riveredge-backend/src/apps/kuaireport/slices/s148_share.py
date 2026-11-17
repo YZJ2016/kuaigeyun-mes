@@ -22,6 +22,7 @@ from jose import JWTError, jwt
 from tortoise.exceptions import IntegrityError
 
 from core.api.deps.access import require_permission_codes
+from core.utils.timezone_utils import coerce_business_datetime_to_utc
 from infra.api.deps.deps import get_current_user
 from infra.exceptions.exceptions import AuthorizationError
 from infra.domain.security.security import hash_password, verify_password
@@ -1685,11 +1686,17 @@ class ShareService:
 
 def _parse_expires(value: Any) -> datetime:
     if isinstance(value, datetime):
-        return as_utc(value)
-    if not isinstance(value, str) or not value.strip():
+        dt = value
+    elif isinstance(value, str) and value.strip():
+        dt = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    else:
         raise ValueError("expires_at required")
-    text = value.strip().replace("Z", "+00:00")
-    return as_utc(datetime.fromisoformat(text))
+    if dt.tzinfo is None:
+        parsed = coerce_business_datetime_to_utc(dt)
+        if parsed is None:
+            raise ValueError("expires_at required")
+        return parsed
+    return dt.astimezone(timezone.utc)
 
 
 def _normalize_cidrs(allow: Any) -> Optional[list[str]]:

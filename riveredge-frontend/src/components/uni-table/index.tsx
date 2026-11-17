@@ -3529,7 +3529,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const showAltViewBorderedShell = !embedded && !isMobile && !isTableLikeView
 
   const effectiveToolbarButtonSize =
-    toolBarButtonSize ?? (searchPlacement === 'toolbarLeft' ? 'small' : 'middle')
+    toolBarButtonSize ?? (searchPlacement === 'toolbarLeft' ? 'small' : 'medium')
 
   const memoizedUniSearch = React.useMemo(
     () => (

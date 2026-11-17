@@ -188,12 +188,14 @@ def assert_sales_forecast_capability(
     pushed_to_computation: bool = False,
     has_downstream: bool = False,
     has_items: bool = True,
+    review_submitted: Optional[bool] = None,
 ) -> None:
     caps = derive_sales_forecast_capabilities(
         forecast,
         pushed_to_computation=pushed_to_computation,
         has_downstream=has_downstream,
         has_items=has_items,
+        review_submitted=review_submitted,
     )
     cap_map = {
         "update": caps.update,

@@ -1333,7 +1333,6 @@ class SalesOrderService:
         has_existing_delivery_project = await self._order_has_delivery_project(
             tenant_id, order.id
         )
-        remaining_wo = production_fulfillable_map.get(int(order.id), False)
         invoice_remainder = Decimal("0")
         if finance_orm_ready():
             from apps.kuaicaiwu.services.sales_invoice_service import SalesInvoiceService

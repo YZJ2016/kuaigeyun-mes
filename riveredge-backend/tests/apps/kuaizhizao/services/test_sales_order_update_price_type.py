@@ -67,3 +67,34 @@ async def test_item_update_resolves_price_type_and_persists(monkeypatch, submitt
     created_items = bulk_create.call_args.args[0]
     assert created_items[0].order_quantity == Decimal(2)
     assert created_items[0].total_amount == Decimal(20)
+
+
+@pytest.mark.asyncio
+async def test_assert_capability_non_update_action_resolves_context(monkeypatch):
+    """回归：非 update 动作不得在 asyncio.gather 之前读 production_fulfillable_map。"""
+    import apps.kuaizhizao.services.document_action_policy.enricher as enricher_mod
+    import apps.kuaizhizao.utils.sales_order_push_qty as push_qty_mod
+    import apps.kuaizhizao.services.sales_order_purchase_push as purchase_push_mod
+    import apps.kuaizhizao.services.sales_order_code_sync as code_sync_mod
+
+    monkeypatch.setattr(enricher_mod, "resolve_review_submitted_for_document", AsyncMock(return_value=False))
+    monkeypatch.setattr(enricher_mod, "_order_prepayment_linked_by_ids", AsyncMock(return_value={}))
+    monkeypatch.setattr(push_qty_mod, "get_pushable_qty_for_order_items", AsyncMock(return_value={}))
+    monkeypatch.setattr(purchase_push_mod, "batch_has_purchasable_remaining", AsyncMock(return_value={}))
+    monkeypatch.setattr(purchase_push_mod, "batch_has_production_fulfillable_remaining", AsyncMock(return_value={}))
+    monkeypatch.setattr(purchase_push_mod, "require_purchase_requisition_for_tenant", AsyncMock(return_value=False))
+    monkeypatch.setattr(code_sync_mod, "list_sales_order_active_downstream_documents", AsyncMock(return_value=[]))
+    monkeypatch.setattr(module, "finance_orm_ready", lambda: False)
+    monkeypatch.setattr(module.BusinessConfigService, "require_shipment_notice_before_delivery", AsyncMock(return_value=False))
+
+    obj = module.SalesOrderService()
+    monkeypatch.setattr(obj, "_get_linked_demand", AsyncMock(return_value=None))
+    monkeypatch.setattr(obj, "_order_has_delivery_project", AsyncMock(return_value=False))
+    monkeypatch.setattr(
+        obj,
+        "business_config_service",
+        SimpleNamespace(get_sales_require_audit_before_print=AsyncMock(return_value=False)),
+    )
+
+    order = SimpleNamespace(id=1, status="草稿", review_status=None, planning_pushed_to_computation=False)
+    await obj._assert_sales_order_capability_for_order(1, order, "delete", items=[])
