@@ -350,6 +350,20 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             requisition_name=response.requisition_name,
             created_by=created_by,
         )
+        source_type = (getattr(data, "document_flow_source_type", None) or "").strip()
+        if not source_type:
+            from apps.kuaizhizao.services.manual_create_auto_lifecycle import (
+                apply_manual_create_auto_submit,
+            )
+
+            applied = await apply_manual_create_auto_submit(
+                tenant_id=tenant_id,
+                node_key="purchase_request",
+                entity_id=int(response.id),
+                operator_id=created_by,
+            )
+            if applied:
+                return await self.get_requisition_by_id(tenant_id, int(response.id))
         return response
 
     async def _finalize_document_flow_after_create(
