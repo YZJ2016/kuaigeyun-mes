@@ -174,6 +174,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             raise ValidationError("非赠品明细须填写大于0的采购单价")
 
     def _apply_purchase_item_price_settlement(
+        self,
         item_dict: Dict[str, Any],
         *,
         unit_price: Decimal,
