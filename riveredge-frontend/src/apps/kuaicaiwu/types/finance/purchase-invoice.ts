@@ -71,6 +71,8 @@ export interface PurchaseInvoiceCreateData {
     attachments?: unknown;
     source_type?: 'purchase_order' | 'purchase_receipt' | 'payable';
     source_id?: number;
+    source_ids?: number[];
+    pull_receipt_lines?: { purchase_receipt_item_id: number; amount: number }[];
     concurrent_settlement?: {
         enabled: boolean;
         total_amount: number;

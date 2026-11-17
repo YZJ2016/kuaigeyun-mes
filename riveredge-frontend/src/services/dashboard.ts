@@ -134,7 +134,9 @@ export type MenuBadgeCounts = Record<string, MenuBadgeEntry>;
 
 export async function getMenuBadgeCounts(): Promise<MenuBadgeCounts> {
   try {
-    return await apiRequest<MenuBadgeCounts>('/apps/kuaizhizao/dashboard/menu-badge-counts');
+    return await apiRequest<MenuBadgeCounts>('/apps/kuaizhizao/dashboard/menu-badge-counts', {
+      background: true,
+    });
   } catch {
     return {};
   }

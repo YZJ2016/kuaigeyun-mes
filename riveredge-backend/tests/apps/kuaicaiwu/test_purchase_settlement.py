@@ -211,6 +211,94 @@ def test_proportional_line_gross():
     assert line == Decimal("452.00")
 
 
+def test_receipt_settlement_gross_aligns_with_purchase_order_rollup():
+    """多行入库价税合计应与采购订单头 net_amount（按行 qty×单价 rollup）一致，避免 456.00 vs 455.99。"""
+    from types import SimpleNamespace
+
+    from apps.kuaicaiwu.services.purchase_settlement import (
+        compute_purchase_order_header_rollup,
+        compute_purchase_receipt_settlement_gross_from_lines,
+        purchase_order_item_settlement_gross,
+        purchase_order_settlement_gross,
+    )
+
+    order = SimpleNamespace(tax_rate=Decimal("0.13"), price_type="tax_exclusive")
+    lines_po = [
+        SimpleNamespace(
+            ordered_quantity=Decimal("8"),
+            unit_price=Decimal("22.5660"),
+            tax_rate=Decimal("13"),
+            display_unit_price=None,
+            total_price=Decimal("180.5280"),
+            order_id=1,
+            id=101,
+        ),
+        SimpleNamespace(
+            ordered_quantity=Decimal("12"),
+            unit_price=Decimal("22.8940"),
+            tax_rate=Decimal("13"),
+            display_unit_price=None,
+            total_price=Decimal("274.7280"),
+            order_id=1,
+            id=102,
+        ),
+    ]
+    _, _, _, po_net, _ = compute_purchase_order_header_rollup(order, lines_po)
+    assert purchase_order_settlement_gross(
+        SimpleNamespace(
+            total_amount=Decimal("455.2560"),
+            tax_amount=Decimal("59.18"),
+            tax_rate=Decimal("0.13"),
+            net_amount=po_net,
+        )
+    ) == po_net
+
+    receipt = SimpleNamespace(tax_rate=Decimal("13"))
+    receipt_lines = [
+        SimpleNamespace(
+            receipt_quantity=Decimal("8"),
+            unit_price=Decimal("22.5660"),
+            purchase_order_item_id=101,
+            total_amount=Decimal("180.5280"),
+        ),
+        SimpleNamespace(
+            receipt_quantity=Decimal("12"),
+            unit_price=Decimal("22.8940"),
+            purchase_order_item_id=102,
+            total_amount=Decimal("274.7280"),
+        ),
+    ]
+    poi_by_id = {101: lines_po[0], 102: lines_po[1]}
+    order_by_id = {1: order}
+    gross_legacy = Decimal("0")
+    for poi in lines_po:
+        share_excl = Decimal(str(poi.total_price))
+        poi_gross = purchase_order_item_settlement_gross(order, poi)
+        from apps.kuaicaiwu.services.purchase_settlement import (
+            compute_tax_from_excluding,
+            resolve_purchase_receipt_line_excl_amount,
+        )
+
+        excl = resolve_purchase_receipt_line_excl_amount(
+            receipt_quantity=Decimal(str(poi.ordered_quantity)),
+            unit_price=Decimal(str(poi.unit_price)),
+            purchase_order_item_id=int(poi.id),
+            line_total_amount=share_excl,
+            poi_by_id=poi_by_id,
+        )
+        _, tax, _ = compute_tax_from_excluding(excl, Decimal("13"))
+        gross_legacy += excl + tax
+
+    gross_new = compute_purchase_receipt_settlement_gross_from_lines(
+        receipt, receipt_lines, poi_by_id, purchase_order_by_id=order_by_id
+    )
+    from apps.kuaicaiwu.services.finance_tax import quantize_money
+
+    gross_legacy = quantize_money(gross_legacy)
+    assert gross_new == po_net
+    assert gross_legacy <= po_net
+
+
 def test_on_purchase_invoice_skips_receipt_payable():
     assert should_auto_payable_on_purchase_receipt("on_purchase_invoice") is False
     assert should_auto_payable_on_purchase_receipt("on_receipt") is True

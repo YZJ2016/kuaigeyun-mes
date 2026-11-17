@@ -216,7 +216,54 @@ def _normalize_optional_datetime(value: Any) -> Optional[datetime]:
     return None
 
 
-def _build_purchase_receipt_item_response(item: Any) -> PurchaseReceiptItemResponse:
+def _document_line_dual_quantity_payload(item: Any) -> Dict[str, Any]:
+    """单据行副数量/副单位/行换算率；手工拼 payload 时勿漏（否则编辑回显为空）。"""
+    aux_q = getattr(item, "aux_quantity", None)
+    aux_u = getattr(item, "aux_unit", None)
+    rate = getattr(item, "unit_conversion_rate", None)
+    return {
+        "aux_quantity": float(aux_q) if aux_q is not None else None,
+        "aux_unit": (str(aux_u).strip() or None) if aux_u is not None else None,
+        "unit_conversion_rate": float(rate) if rate is not None else None,
+    }
+
+
+def _purchase_receipt_display_unit_price_from_item(item_data: Any) -> Decimal | None:
+    """表单录入单价（展示真源）；未传则 null。"""
+    raw = getattr(item_data, "display_unit_price", None)
+    if raw is None:
+        return None
+    val = Decimal(str(raw))
+    return val if val > 0 else None
+
+
+def _document_line_dual_quantity_write_kwargs(item_data: Any) -> Dict[str, Any]:
+    """创建/克隆明细时写入副数量三字段（显式 kwargs 路径，非 model_dump）。"""
+    return {
+        "aux_quantity": getattr(item_data, "aux_quantity", None),
+        "aux_unit": getattr(item_data, "aux_unit", None),
+        "unit_conversion_rate": getattr(item_data, "unit_conversion_rate", None),
+    }
+
+
+def _document_line_dual_quantity_update_fields(line: Any) -> Dict[str, Any]:
+    """编辑明细：仅当请求体显式带了副数量字段时写入（尊重 exclude_unset）。"""
+    fields_set = getattr(line, "model_fields_set", set()) or set()
+    out: Dict[str, Any] = {}
+    for key in ("aux_quantity", "aux_unit", "unit_conversion_rate"):
+        if key in fields_set:
+            out[key] = getattr(line, key, None)
+    return out
+
+
+def _build_purchase_receipt_item_response(
+    item: Any,
+    *,
+    receipt: Any | None = None,
+    poi_by_id: Any | None = None,
+    purchase_order_by_id: Any | None = None,
+    amount_places: int = 2,
+) -> PurchaseReceiptItemResponse:
     """统一采购入库明细响应，兼容历史 serial_numbers/date 存储格式。"""
     payload = {
         "id": int(getattr(item, "id")),
@@ -253,6 +300,26 @@ def _build_purchase_receipt_item_response(item: Any) -> PurchaseReceiptItemRespo
         "updated_at": getattr(item, "updated_at"),
         **audit_response_fields(item),
     }
+    from apps.kuaicaiwu.services.finance_tax import money_to_json_float
+
+    if receipt is not None and poi_by_id is not None:
+        from apps.kuaicaiwu.services.purchase_settlement import (
+            compute_purchase_receipt_line_settlement_amounts,
+        )
+
+        line_excl, line_tax, line_gross = compute_purchase_receipt_line_settlement_amounts(
+            receipt,
+            item,
+            poi_by_id,
+            purchase_order_by_id=purchase_order_by_id,
+            amount_places=amount_places,
+        )
+        payload["total_amount"] = float(line_excl)
+        payload["tax_amount"] = float(line_tax)
+        payload["net_amount"] = float(line_gross)
+        payload["settlement_excl"] = money_to_json_float(line_excl)
+        payload["settlement_tax"] = money_to_json_float(line_tax)
+        payload["settlement_gross"] = money_to_json_float(line_gross)
     return PurchaseReceiptItemResponse.model_validate(payload)
 
 
@@ -10778,12 +10845,72 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
         if _st_rows and _st_rows[0].get("status") is not None:
             receipt.status = _st_rows[0]["status"]
         items = await PurchaseReceiptItem.filter(tenant_id=tenant_id, receipt_id=receipt_id).all()
+        from apps.kuaicaiwu.services.purchase_settlement import (
+            sync_purchase_receipt_header_amounts,
+        )
+
+        await sync_purchase_receipt_header_amounts(
+            tenant_id,
+            receipt_id,
+            receipt=receipt,
+            lines=items,
+        )
+        await receipt.refresh_from_db()
+        items = await PurchaseReceiptItem.filter(
+            tenant_id=tenant_id, receipt_id=receipt_id, deleted_at__isnull=True
+        ).all()
+        from apps.kuaicaiwu.services.finance_tax import money_to_json_float
+        from apps.kuaicaiwu.services.purchase_settlement import (
+            compute_purchase_receipt_settlement_gross_from_lines,
+        )
+        from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
+
+        poi_ids = {
+            int(i.purchase_order_item_id or 0)
+            for i in items
+            if int(i.purchase_order_item_id or 0) > 0
+        }
+        poi_by_id: Dict[int, PurchaseOrderItem] = {}
+        if poi_ids:
+            for poi in await PurchaseOrderItem.filter(tenant_id=tenant_id, id__in=list(poi_ids)):
+                poi_by_id[int(poi.id)] = poi
+
+        from apps.kuaicaiwu.services.purchase_settlement import (
+            load_purchase_order_by_id_for_poi_by_id,
+        )
+        from infra.services.business_config_service import BusinessConfigService
+
+        purchase_order_by_id = await load_purchase_order_by_id_for_poi_by_id(
+            tenant_id, poi_by_id
+        )
+        amount_places = await BusinessConfigService().get_amount_decimal_places(tenant_id)
+
         resp = PurchaseReceiptWithItemsResponse.model_validate(receipt)
         milestones = await get_document_milestones(receipt.tenant_id, "purchase_receipt", receipt.id)
         resp.lifecycle = get_purchase_receipt_lifecycle(receipt, milestones=milestones)
-        resp.items = [_build_purchase_receipt_item_response(i) for i in items]
+        resp.items = [
+            _build_purchase_receipt_item_response(
+                i,
+                receipt=receipt,
+                poi_by_id=poi_by_id,
+                purchase_order_by_id=purchase_order_by_id,
+                amount_places=amount_places,
+            )
+            for i in items
+        ]
         if _st_rows and _st_rows[0].get("status") is not None:
             resp = resp.model_copy(update={"status": _st_rows[0]["status"]})
+        if items:
+            settlement = compute_purchase_receipt_settlement_gross_from_lines(
+                receipt,
+                items,
+                poi_by_id,
+                purchase_order_by_id=purchase_order_by_id,
+                amount_places=amount_places,
+            )
+            resp = resp.model_copy(
+                update={"settlement_gross": money_to_json_float(settlement)}
+            )
         # #region agent log
         _agent_debug_ndjson(
             "get_purchase_receipt_by_id:status_sync",
@@ -11014,10 +11141,18 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
         if filters.get("scoped_purchase_order_ids") is not None:
             query = query.filter(purchase_order_id__in=filters["scoped_purchase_order_ids"])
 
+        from apps.kuaizhizao.services.equipment_list_core import pick_search_keyword
+        from apps.kuaizhizao.utils.list_item_material_keyword import (
+            header_ids_matching_item_material,
+        )
+        from apps.kuaizhizao.models.purchase_receipt_item import PurchaseReceiptItem
+        from tortoise.expressions import Q
+
+        kw = pick_search_keyword(filters.get("keyword"), filters.get("search"))
         query, order_clause = apply_warehouse_doc_list_filters(
             query,
-            keyword=filters.get("keyword"),
-            search=filters.get("search"),
+            keyword=None,
+            search=None,
             order_by=filters.get("order_by"),
             allowed_fields=PURCHASE_RECEIPT_SORTABLE_FIELDS,
             default_order="-created_at",
@@ -11030,6 +11165,17 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
             updated_start_date=filters.get("updated_start_date"),
             updated_end_date=filters.get("updated_end_date"),
         )
+        if kw:
+            material_receipt_ids = await header_ids_matching_item_material(
+                tenant_id,
+                PurchaseReceiptItem,
+                "receipt_id",
+                kw,
+            )
+            header_cond = Q()
+            for field in PURCHASE_RECEIPT_KEYWORD_FIELDS:
+                header_cond |= Q(**{f"{field}__icontains": kw})
+            query = query.filter(header_cond | Q(id__in=material_receipt_ids))
         total = await query.count()
         receipts = await query.offset(skip).limit(limit).order_by(order_clause)
         out: List[PurchaseReceiptResponse] = []

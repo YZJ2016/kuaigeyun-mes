@@ -49,7 +49,6 @@ import {
   withMaterialLineFillMapping,
 } from '../../sales-management/shared/materialLineFormDetail';
 import { resolveMaterialScenarioUnit } from '../../../../../utils/materialScenarioUnit';
-import { calcDocumentLineAmounts } from '../../../utils/documentLineAmounts';
 import { DocumentAmountSummary } from '../../../components/document-amount-summary/DocumentAmountSummary';
 import {
   computePurchaseReceiptFormGoodsTotals,
@@ -473,6 +472,52 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
   const [poSettlementCtx, setPoSettlementCtx] = useState<PurchaseReceiptPoSettlementCtx | null>(
     null,
   );
+
+  useEffect(() => {
+    if (linkedPoId == null || linkedPoId <= 0) {
+      setPoSettlementCtx(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const raw = await getPurchaseOrder(String(linkedPoId));
+        const order = normalizePurchaseOrderDetail(
+          await enrichPurchaseOrderItemsMaterial(raw as Parameters<typeof enrichPurchaseOrderItemsMaterial>[0]),
+        );
+        if (cancelled) return;
+        const headerTaxPct = purchaseOrderTaxRateToPercent(order.tax_rate ?? 13);
+        const rawPriceType = String(
+          (order as { price_type?: string; priceType?: string }).price_type ??
+            (order as { priceType?: string }).priceType ??
+            '',
+        ).trim();
+        const priceType =
+          rawPriceType === 'tax_inclusive' || rawPriceType === 'tax_exclusive'
+            ? rawPriceType
+            : purchaseReceiptFormPriceType(headerTaxPct);
+        const items = Array.isArray(order.items) ? order.items : [];
+        const poiById: PurchaseReceiptPoSettlementCtx['poiById'] = {};
+        for (const it of items) {
+          const id = Number((it as { id?: number }).id);
+          if (id > 0) {
+            poiById[id] = it as PurchaseReceiptPoSettlementCtx['poiById'][number];
+          }
+        }
+        setPoSettlementCtx({
+          priceType,
+          headerTaxRate: order.tax_rate,
+          poiById,
+        });
+      } catch {
+        if (!cancelled) setPoSettlementCtx(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [linkedPoId]);
+
   const { data: businessConfig } = useQuery({
     queryKey: ['businessConfigFinanceRecognition'],
     queryFn: getBusinessConfig,
@@ -1183,6 +1228,7 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
       generatingBatchIdx,
       handleGenerateBatch,
       poSettlementCtx,
+      priceDecimals,
       quantityDecimals,
       syncLineMaterialTracking,
       t,
@@ -1349,7 +1395,7 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
             receipt_quantity: qty,
             unit_price: storedLine.unit_price,
             display_unit_price: storedLine.display_unit_price,
-            total_amount: storedLine.excl,
+            total_amount: poiId ? receiptAmounts.excl : storedLine.excl,
             tax_rate: taxPct,
             qualified_quantity: Math.max(qty - unqualified, 0),
             unqualified_quantity: unqualified,
@@ -1647,8 +1693,7 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
           />
         </Col>
       </Row>
-    </FormModalTemplate>
-  );
+    </FormModalTemplate>  );
 };
 
 export default PurchaseReceiptCreateModal;

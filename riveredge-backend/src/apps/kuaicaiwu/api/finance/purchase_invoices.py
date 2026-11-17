@@ -89,12 +89,25 @@ async def create_purchase_invoice(
                 raise BusinessLogicError("同时付款金额须大于 0")
 
         pull_preview: Optional[Dict[str, Any]] = None
-        if data.source_type and data.source_id:
+        pull_source_ids: list[int] = []
+        if data.source_ids:
+            pull_source_ids = [int(x) for x in data.source_ids if x]
+        elif data.source_id:
+            pull_source_ids = [int(data.source_id)]
+        if data.source_type and pull_source_ids:
+            if (
+                want_payment
+                and str(data.source_type or "").strip() == "payable"
+                and len(pull_source_ids) > 1
+            ):
+                raise BusinessLogicError("多应付合并开票不支持同时付款，请先开票再付款")
             pull_preview = await purchase_invoice_pull_service.assert_pull_create_allowed(
                 tenant_id=tenant_id,
                 source_type=str(data.source_type).strip(),
-                source_id=int(data.source_id),
+                source_id=int(pull_source_ids[0]),
                 total_amount=total_for_gate,
+                pull_receipt_lines=data.pull_receipt_lines,
+                source_ids=pull_source_ids,
             )
             if pull_preview:
                 po_id = pull_preview.get("purchase_order_id")
@@ -151,24 +164,68 @@ async def create_purchase_invoice(
             invoice_id = int(invoice.id)
             if invoice.payable_id and not input_payable_id:
                 auto_payable_id = int(invoice.payable_id)
-            if pull_preview and data.source_type and data.source_id:
-                await purchase_invoice_pull_service.create_pull_relation(
-                    tenant_id=tenant_id,
-                    source_type=str(data.source_type).strip(),
-                    source_id=int(data.source_id),
-                    source_code=str(pull_preview.get("source_code") or ""),
-                    invoice_id=invoice_id,
-                    invoice_code=str(invoice.invoice_code),
+            if pull_preview and data.source_type and pull_source_ids:
+                code_by_source: dict[int, str] = {}
+                for item in pull_preview.get("items") or []:
+                    iid = int(item.get("item_id") or 0)
+                    if iid > 0:
+                        code_by_source[iid] = str(item.get("source_code") or iid)
+                allocated_by_source: dict[int, Decimal] = {}
+                if len(pull_source_ids) > 1:
+                    allocated_by_source = (
+                        purchase_invoice_pull_service._fifo_allocate_amount_by_preview_items(
+                            pull_source_ids,
+                            pull_preview.get("items") or [],
+                            Decimal(str(invoice.total_amount or 0)),
+                        )
+                    )
+                for sid in pull_source_ids:
+                    await purchase_invoice_pull_service.create_pull_relation(
+                        tenant_id=tenant_id,
+                        source_type=str(data.source_type).strip(),
+                        source_id=int(sid),
+                        source_code=code_by_source.get(int(sid), str(pull_preview.get("source_code") or "")),
+                        invoice_id=invoice_id,
+                        invoice_code=str(invoice.invoice_code),
+                        created_by=current_user.id,
+                        allocated_amount=(
+                            allocated_by_source.get(int(sid))
+                            if allocated_by_source
+                            else None
+                        ),
+                    )
+                if str(data.source_type).strip() == "purchase_order":
+                    from apps.kuaicaiwu.services.purchase_order_finance_lifecycle import (
+                        link_purchase_invoice_to_order_receipt_payables,
+                    )
+
+                    for sid in pull_source_ids:
+                        await link_purchase_invoice_to_order_receipt_payables(
+                            tenant_id,
+                            purchase_order_id=int(sid),
+                            invoice_id=invoice_id,
+                            invoice_code=str(invoice.invoice_code),
+                            created_by=current_user.id,
+                        )
+                if str(data.source_type).strip() == "purchase_receipt":
+                    await purchase_invoice_pull_service.record_multi_receipt_invoice_occupancy(
+                        tenant_id,
+                        pull_source_ids,
+                        int(invoice_id),
+                        Decimal(str(invoice.total_amount or 0)),
+                        pull_receipt_lines=data.pull_receipt_lines,
+                        created_by=current_user.id,
+                    )
+            if pull_preview and str(data.source_type or "").strip() == "payable" and pull_source_ids:
+                await purchase_invoice_pull_service.record_multi_payable_invoice_side_effects(
+                    tenant_id,
+                    pull_source_ids,
+                    int(invoice_id),
+                    Decimal(str(invoice.total_amount or 0)),
+                    pull_receipt_lines=data.pull_receipt_lines,
+                    invoice_number=data.invoice_number,
                     created_by=current_user.id,
                 )
-            if pull_preview and str(data.source_type or "").strip() == "payable" and data.payable_id:
-                payable_update: dict = {
-                    "invoice_received": True,
-                    "updated_by": current_user.id,
-                }
-                if data.invoice_number:
-                    payable_update["invoice_number"] = data.invoice_number
-                await Payable.filter(tenant_id=tenant_id, id=int(data.payable_id)).update(**payable_update)
                 if want_payment and concurrent:
                     await create_concurrent_payment_for_payable(
                         tenant_id=tenant_id,
@@ -319,6 +376,42 @@ async def preview_pull_purchase_invoice_from_purchase_order(
 
 
 @router.get(
+    "/from-purchase-orders/pull-preview",
+    summary="Preview merge pull purchase invoice from purchase orders",
+)
+async def preview_pull_purchase_invoice_from_purchase_orders(
+    order_ids: str = Query(..., description="采购订单ID，逗号分隔"),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:purchase-invoice:read")),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
+
+    parsed: list[int] = []
+    for part in str(order_ids or "").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            parsed.append(int(part))
+        except ValueError as exc:
+            raise _http_exception_with_trace(
+                422,
+                f"无效的采购订单ID: {part}",
+                "/purchase-invoices/from-purchase-orders/pull-preview",
+                tenant_id,
+            ) from exc
+    try:
+        return await purchase_invoice_pull_service.preview_pull_from_purchase_orders(
+            tenant_id=tenant_id,
+            order_ids=parsed,
+        )
+    except (NotFoundError, BusinessLogicError) as exc:
+        raise _http_exception_with_trace(
+            422, str(exc), "/purchase-invoices/from-purchase-orders/pull-preview", tenant_id
+        ) from exc
+
+
+@router.get(
     "/from-purchase-receipt/{receipt_id}/pull-preview",
     summary="Preview pull purchase invoice from purchase receipt",
 )
@@ -331,6 +424,42 @@ async def preview_pull_purchase_invoice_from_purchase_receipt(
         tenant_id=tenant_id,
         receipt_id=receipt_id,
     )
+
+
+@router.get(
+    "/from-purchase-receipts/pull-preview",
+    summary="Preview merge pull purchase invoice from purchase receipts",
+)
+async def preview_pull_purchase_invoice_from_purchase_receipts(
+    receipt_ids: str = Query(..., description="采购入库单ID，逗号分隔"),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:purchase-invoice:read")),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
+
+    parsed: list[int] = []
+    for part in str(receipt_ids or "").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            parsed.append(int(part))
+        except ValueError as exc:
+            raise _http_exception_with_trace(
+                422,
+                f"无效的入库单ID: {part}",
+                "/purchase-invoices/from-purchase-receipts/pull-preview",
+                tenant_id,
+            ) from exc
+    try:
+        return await purchase_invoice_pull_service.preview_pull_from_purchase_receipts(
+            tenant_id=tenant_id,
+            receipt_ids=parsed,
+        )
+    except (NotFoundError, BusinessLogicError) as exc:
+        raise _http_exception_with_trace(
+            422, str(exc), "/purchase-invoices/from-purchase-receipts/pull-preview", tenant_id
+        ) from exc
 
 
 @router.get(
@@ -365,6 +494,42 @@ async def preview_pull_purchase_invoice_from_payable(
         tenant_id=tenant_id,
         payable_id=payable_id,
     )
+
+
+@router.get(
+    "/from-payables/pull-preview",
+    summary="Preview merge pull purchase invoice from payables",
+)
+async def preview_pull_purchase_invoice_from_payables(
+    payable_ids: str = Query(..., description="应付单ID，逗号分隔"),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:purchase-invoice:read")),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
+
+    parsed: list[int] = []
+    for part in str(payable_ids or "").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            parsed.append(int(part))
+        except ValueError as exc:
+            raise _http_exception_with_trace(
+                422,
+                f"无效的应付单ID: {part}",
+                "/purchase-invoices/from-payables/pull-preview",
+                tenant_id,
+            ) from exc
+    try:
+        return await purchase_invoice_pull_service.preview_pull_from_payables(
+            tenant_id=tenant_id,
+            payable_ids=parsed,
+        )
+    except (NotFoundError, BusinessLogicError) as exc:
+        raise _http_exception_with_trace(
+            422, str(exc), "/purchase-invoices/from-payables/pull-preview", tenant_id
+        ) from exc
 
 
 @router.get("/{id}", response_model=PurchaseInvoiceResponse)

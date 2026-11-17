@@ -56,6 +56,13 @@ class PayableBase(BaseSchema):
         return self
 
 
+class PurchaseReceiptLinePullSelection(BaseSchema):
+    """从采购入库行加载应付/进项时的行级金额选择"""
+
+    purchase_receipt_item_id: int = Field(..., description="采购入库明细ID")
+    amount: Decimal = Field(..., gt=0, description="本单占用金额")
+
+
 class PayableCreate(PayableBase):
     """应付单创建schema"""
     payable_code: Optional[str] = Field(None, max_length=50, description="应付单编码（可选，如果不提供则自动生成）")
@@ -161,6 +168,12 @@ class PurchaseInvoiceCreate(PurchaseInvoiceBase):
     )
     source_type: Optional[str] = Field(None, description="加载源单类型 purchase_order|purchase_receipt|payable")
     source_id: Optional[int] = Field(None, description="加载源单ID")
+    source_ids: Optional[List[int]] = Field(
+        None, description="加载源单ID列表（同供应商多单合并开票）"
+    )
+    pull_receipt_lines: Optional[List[PurchaseReceiptLinePullSelection]] = Field(
+        None, description="入库行级占用金额（source=purchase_receipt 时可选；未传则按 FIFO）"
+    )
     concurrent_settlement: Optional[ConcurrentSettlementCreate] = Field(
         None, description="从应付开票时可选：同时生成付款单"
     )

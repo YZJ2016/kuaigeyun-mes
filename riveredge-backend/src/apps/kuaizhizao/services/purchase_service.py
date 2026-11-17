@@ -22,6 +22,7 @@ from infra.models.user import User as CurrentUser
 from loguru import logger
 
 from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem, PurchaseOrderChange, effective_po_item_outstanding
+from apps.kuaizhizao.utils.document_source_types import is_purchase_requisition_source_type as _is_purchase_requisition_source_type
 from apps.kuaizhizao.utils.document_line_material_snapshot import (
     apply_snapshot_to_line_dict,
     resolve_line_material_snapshots,
@@ -37,12 +38,6 @@ from apps.kuaizhizao.schemas.purchase import (
     PriceComparisonResponse, MaterialPriceComparison, PriceComparisonItem,
     PurchaseReceiptPullCandidate,
 )
-
-
-def _is_purchase_requisition_source_type(source_type: Optional[str]) -> bool:
-    """兼容 PurchaseRequisition / purchase_requisition 等写法。"""
-    key = (source_type or "").strip().lower().replace("_", "")
-    return key in {"purchaserequest", "purchaserequisition"}
 from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus, LEGACY_AUDITED_VALUES, is_draft_status, is_pending_review_status
 from infra.services.business_config_service import BusinessConfigService
 from apps.kuaizhizao.services.document_action_policy.enricher import (

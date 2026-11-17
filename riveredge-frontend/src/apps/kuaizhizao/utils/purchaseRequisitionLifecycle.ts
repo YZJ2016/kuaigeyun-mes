@@ -94,7 +94,7 @@ export function buildPurchaseRequisitionLifecycleValueEnum(
     已驳回: 'Error',
     已通过: 'Success',
     部分转单: 'Warning',
-    全部转单: 'Success',
+    全部转单: 'Processing',
   };
   return Object.fromEntries(
     getPurchaseRequisitionLifecycleStageLabels(auditRequired).map((stage) => [

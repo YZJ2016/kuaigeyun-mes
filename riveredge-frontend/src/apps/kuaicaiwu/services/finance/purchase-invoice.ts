@@ -5,6 +5,7 @@ import {
   PurchaseInvoiceListParams,
   PurchaseInvoiceCreateData,
 } from '../../types/finance/purchase-invoice';
+import type { FinancePullCandidateListParams } from './financePullListParams';
 
 const PURCHASE_INVOICE_API = '/apps/kuaicaiwu/purchase-invoices';
 
@@ -31,6 +32,9 @@ export type PurchaseInvoicePullPreview = DocumentPushPreview & {
   payable_code?: string;
   /** 同时付款上限（应付剩余可付） */
   remaining_settle_amount?: number;
+  /** 多源合并加载时的源单ID列表与可开票合计 */
+  source_ids?: number[];
+  max_push_total?: number;
   /** 源单物料明细，便于确认本次开票对应内容 */
   detail_lines?: PurchaseInvoicePullDetailLine[];
 };
@@ -106,16 +110,28 @@ export const purchaseInvoiceService = {
   previewPullFromPurchaseOrder: async (orderId: number) =>
     apiRequest<PurchaseInvoicePullPreview>(
       `${PURCHASE_INVOICE_API}/from-purchase-order/${orderId}/pull-preview`,
-      { method: 'GET' },
+      { method: 'GET', notifyOnGatewayError: true },
+    ),
+
+  previewPullFromPurchaseOrders: async (orderIds: number[]) =>
+    apiRequest<PurchaseInvoicePullPreview>(
+      `${PURCHASE_INVOICE_API}/from-purchase-orders/pull-preview?order_ids=${orderIds.join(',')}`,
+      { method: 'GET', notifyOnGatewayError: true },
     ),
 
   previewPullFromPurchaseReceipt: async (receiptId: number) =>
     apiRequest<PurchaseInvoicePullPreview>(
       `${PURCHASE_INVOICE_API}/from-purchase-receipt/${receiptId}/pull-preview`,
-      { method: 'GET' },
+      { method: 'GET', notifyOnGatewayError: true },
     ),
 
-  listPayablePullCandidates: async (params?: { skip?: number; limit?: number; keyword?: string }) =>
+  previewPullFromPurchaseReceipts: async (receiptIds: number[]) =>
+    apiRequest<PurchaseInvoicePullPreview>(
+      `${PURCHASE_INVOICE_API}/from-purchase-receipts/pull-preview?receipt_ids=${receiptIds.join(',')}`,
+      { method: 'GET', notifyOnGatewayError: true },
+    ),
+
+  listPayablePullCandidates: async (params?: FinancePullCandidateListParams) =>
     apiRequest<{ data: PurchaseInvoicePullCandidate[]; total: number; success: boolean }>(
       `${PURCHASE_INVOICE_API}/pull-candidates/payables`,
       { method: 'GET', params },
@@ -124,6 +140,12 @@ export const purchaseInvoiceService = {
   previewPullFromPayable: async (payableId: number) =>
     apiRequest<PurchaseInvoicePullPreview>(
       `${PURCHASE_INVOICE_API}/from-payable/${payableId}/pull-preview`,
-      { method: 'GET' },
+      { method: 'GET', notifyOnGatewayError: true },
+    ),
+
+  previewPullFromPayables: async (payableIds: number[]) =>
+    apiRequest<PurchaseInvoicePullPreview>(
+      `${PURCHASE_INVOICE_API}/from-payables/pull-preview?payable_ids=${payableIds.join(',')}`,
+      { method: 'GET', notifyOnGatewayError: true },
     ),
 };

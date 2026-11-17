@@ -76,7 +76,7 @@ export async function getUserMessage(messageUuid: string): Promise<UserMessage> 
  * 获取当前用户消息统计
  */
 export async function getUserMessageStats(): Promise<UserMessageStats> {
-  return apiRequest<UserMessageStats>('/personal/user-messages/stats');
+  return apiRequest<UserMessageStats>('/personal/user-messages/stats', { background: true });
 }
 
 /**

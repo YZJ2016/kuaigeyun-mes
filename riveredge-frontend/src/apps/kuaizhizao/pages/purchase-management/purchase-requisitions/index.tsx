@@ -1167,8 +1167,12 @@ const PurchaseRequisitionsPage: React.FC = () => {
           try {
             const res = await generateCode({ rule_code: ruleCode });
             requisitionCode = res.code;
-          } catch (e) {
-            console.warn('采购申请编号正式生成失败，使用当前值:', e);
+          } catch (e: unknown) {
+            const err = e as { message?: string };
+            messageApi.error(
+              err?.message || t('app.kuaizhizao.purchaseRequisition.generateCodeFailed'),
+            );
+            return;
           }
         }
         const created = await createPurchaseRequisition({

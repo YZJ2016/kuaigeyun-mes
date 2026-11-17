@@ -190,6 +190,14 @@ export async function apiRequest<T = any>(
     /** 覆盖默认网络重试次数（默认 2）；启动壳层建议 1 */
     maxRetries?: number;
     signal?: AbortSignal;
+    /** 为 true 时不弹出全局 5xx 网关弹窗（调用方自行处理；用于并行预取、轮询等） */
+    suppressErrorToast?: boolean;
+    /** 与 suppressErrorToast 同义：后台/轮询请求，网关 5xx 不打扰用户 */
+    background?: boolean;
+    /**
+     * 仅 GET：为 true 时仍弹出 502/503/504 全局弹窗（默认 GET 不弹，避免空闲轮询误报「操作超时」）
+     */
+    notifyOnGatewayError?: boolean;
     [key: string]: any;
   }
 ): Promise<T> {
@@ -466,8 +474,13 @@ export async function apiRequest<T = any>(
         throw error;
       }
       
-      // 处理服务器错误
-      if (response.status >= 500 && response.status < 600) {
+      // 网关 5xx：写请求或显式要求时弹窗；只读 GET 默认不弹（顶栏 IM/菜单徽章等轮询）
+      const httpMethod = String(options?.method || 'GET').toUpperCase();
+      const shouldNotifyGatewayError =
+        !options?.suppressErrorToast &&
+        options?.background !== true &&
+        (httpMethod !== 'GET' || options?.notifyOnGatewayError === true);
+      if (response.status >= 500 && response.status < 600 && shouldNotifyGatewayError) {
         handleServerError({ response: { status: response.status, data } });
       }
       

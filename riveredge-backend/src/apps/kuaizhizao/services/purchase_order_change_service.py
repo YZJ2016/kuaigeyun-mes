@@ -767,11 +767,22 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
             qs = qs.filter(created_at__lte=datetime.combine(end_date, datetime.max.time()))
         if keyword and str(keyword).strip():
             kw = str(keyword).strip()
+            from apps.kuaizhizao.utils.list_item_material_keyword import (
+                header_ids_matching_item_material,
+            )
+
+            material_change_ids = await header_ids_matching_item_material(
+                tenant_id,
+                PurchaseOrderChangeItem,
+                "change_order_id",
+                kw,
+            )
             qs = qs.filter(
                 Q(change_code__icontains=kw)
                 | Q(supplier_name__icontains=kw)
                 | Q(source_order_code__icontains=kw)
                 | Q(change_reason__icontains=kw)
+                | Q(id__in=material_change_ids)
             )
         if change_code and str(change_code).strip():
             qs = qs.filter(change_code__icontains=change_code.strip())

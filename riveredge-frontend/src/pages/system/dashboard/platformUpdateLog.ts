@@ -44,6 +44,61 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'purchase-receipt-settlement-unified-r01',
+    date: '2026-11-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-receipt-settlement-unified-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-receipt-settlement-unified-r01.description',
+  },
+  {
+    id: 'document-status-converted-badge-color-r01',
+    date: '2026-11-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.document-status-converted-badge-color-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.document-status-converted-badge-color-r01.description',
+  },
+  {
+    id: 'purchase-list-material-keyword-r01',
+    date: '2026-11-13',
+    type: 'improvement',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-list-material-keyword-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-list-material-keyword-r01.description',
+  },
+  {
+    id: 'purchase-requisition-code-conflict-retry-r01',
+    date: '2026-11-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-requisition-code-conflict-retry-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-requisition-code-conflict-retry-r01.description',
+  },
+  {
+    id: 'purchase-receipt-pull-amount-po-rollup-r01',
+    date: '2026-11-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-receipt-pull-amount-po-rollup-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-receipt-pull-amount-po-rollup-r01.description',
+  },
+  {
+    id: 'purchase-invoice-pull-preview-defer-close-r01',
+    date: '2026-11-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-invoice-pull-preview-defer-close-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-invoice-pull-preview-defer-close-r01.description',
+  },
+  {
+    id: 'idle-gateway-poll-modal-r01',
+    date: '2026-11-13',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.idle-gateway-poll-modal-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.idle-gateway-poll-modal-r01.description',
+  },
+  {
     id: 'purchase-order-header-rollup-backend-r01',
     date: '2026-11-10',
     type: 'fix',
@@ -438,61 +493,6 @@ export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
     titleKey: 'pages.dashboard.updateLog.entries.drawing-upload-default-200mb-r01.title',
     descriptionKey:
       'pages.dashboard.updateLog.entries.drawing-upload-default-200mb-r01.description',
-  },
-  {
-    id: 'purchase-receipt-settlement-unified-r01',
-    date: '2026-11-13',
-    type: 'fix',
-    titleKey: 'pages.dashboard.updateLog.entries.purchase-receipt-settlement-unified-r01.title',
-    descriptionKey:
-      'pages.dashboard.updateLog.entries.purchase-receipt-settlement-unified-r01.description',
-  },
-  {
-    id: 'document-status-converted-badge-color-r01',
-    date: '2026-11-13',
-    type: 'improvement',
-    titleKey: 'pages.dashboard.updateLog.entries.document-status-converted-badge-color-r01.title',
-    descriptionKey:
-      'pages.dashboard.updateLog.entries.document-status-converted-badge-color-r01.description',
-  },
-  {
-    id: 'purchase-list-material-keyword-r01',
-    date: '2026-11-13',
-    type: 'improvement',
-    titleKey: 'pages.dashboard.updateLog.entries.purchase-list-material-keyword-r01.title',
-    descriptionKey:
-      'pages.dashboard.updateLog.entries.purchase-list-material-keyword-r01.description',
-  },
-  {
-    id: 'purchase-requisition-code-conflict-retry-r01',
-    date: '2026-11-13',
-    type: 'fix',
-    titleKey: 'pages.dashboard.updateLog.entries.purchase-requisition-code-conflict-retry-r01.title',
-    descriptionKey:
-      'pages.dashboard.updateLog.entries.purchase-requisition-code-conflict-retry-r01.description',
-  },
-  {
-    id: 'purchase-receipt-pull-amount-po-rollup-r01',
-    date: '2026-11-13',
-    type: 'fix',
-    titleKey: 'pages.dashboard.updateLog.entries.purchase-receipt-pull-amount-po-rollup-r01.title',
-    descriptionKey:
-      'pages.dashboard.updateLog.entries.purchase-receipt-pull-amount-po-rollup-r01.description',
-  },
-  {
-    id: 'purchase-invoice-pull-preview-defer-close-r01',
-    date: '2026-11-13',
-    type: 'fix',
-    titleKey: 'pages.dashboard.updateLog.entries.purchase-invoice-pull-preview-defer-close-r01.title',
-    descriptionKey:
-      'pages.dashboard.updateLog.entries.purchase-invoice-pull-preview-defer-close-r01.description',
-  },
-  {
-    id: 'idle-gateway-poll-modal-r01',
-    date: '2026-11-13',
-    type: 'fix',
-    titleKey: 'pages.dashboard.updateLog.entries.idle-gateway-poll-modal-r01.title',
-    descriptionKey: 'pages.dashboard.updateLog.entries.idle-gateway-poll-modal-r01.description',
   },
   {
     id: 'material-inspection-stages-save-r01',

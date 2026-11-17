@@ -4,7 +4,7 @@
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { rowActionKind, rowActionFillInvoiceNumber } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Modal, Typography, Alert, Spin, Table, Empty, Form } from 'antd';
+import { App, Button, Modal, Typography, Alert, Spin, Table, Empty, Form, InputNumber } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { apiRequest, formatApiErrorDetail } from '../../../../../services/api';
@@ -30,6 +30,8 @@ import {
   filterByPullScope,
   paginatePullRows,
   UNI_PULL_QUERY_MAX_FETCH_LIMIT,
+  resolvePullConfirmNumericIds,
+  resolvePullQueryPartnerKey,
   useUniPullQuery,
 } from '../../../../../components/uni-pull-query';
 import { getChineseInvoiceLifecycle } from '../../../utils/financeLifecycle';
@@ -73,6 +75,12 @@ import {
 } from '../../../components/LedgerAccountFormFields';
 import { bankAccountService, type BankAccount } from '../../../services/finance/bank-account';
 import { purchaseInvoiceCapabilityReasonMessage } from '../../../utils/purchaseInvoiceCapabilityMessages';
+import {
+  initPullReceiptLineSelection,
+  reconcilePullReceiptLinesForHeaderAmount,
+  sumPullReceiptLineAmounts,
+  type PullReceiptFinanceDetailLine,
+} from '../../../kuaizhizao/utils/pullReceiptFinanceLines';
 import { formatDateTime, formatCurrencyAmount, formatAmount } from '../../../../../utils/format';
 import {
   FINANCE_INVOICE_PINNED_REVIEW_FIELD,
@@ -124,6 +132,9 @@ const PurchaseInvoiceList: React.FC = () => {
   const [pullPreviewLoading, setPullPreviewLoading] = useState(false);
   const [pullPreviewData, setPullPreviewData] = useState<PurchaseInvoicePullPreview | null>(null);
   const [pullPreviewSourceId, setPullPreviewSourceId] = useState<number | null>(null);
+  const [pullPreviewSourceIds, setPullPreviewSourceIds] = useState<number[]>([]);
+  const [pullReceiptSelectedIds, setPullReceiptSelectedIds] = useState<number[]>([]);
+  const [pullReceiptLineAmounts, setPullReceiptLineAmounts] = useState<Record<number, number>>({});
   const [pullPreviewKind, setPullPreviewKind] = useState<PullPreviewKind | null>(null);
   const [pullForm] = Form.useForm();
   const pullAmountModeRef = useRef<InvoiceAmountInputMode>('tax_exclusive');
@@ -152,11 +163,18 @@ const PurchaseInvoiceList: React.FC = () => {
   const concurrentPaymentEnabled = Form.useWatch('concurrent_payment_enabled', pullForm);
   const canConcurrentPayment =
     pullPreviewKind === 'payable'
+    && pullPreviewSourceIds.length === 1
     && paymentPerms.canCreate
     && Number(pullPreviewData?.remaining_settle_amount ?? 0) > 0;
   const purchaseInvoiceAuditBatchHandlers = useMemo(
     () => createUniAuditBatchHandlers('purchase_invoice'),
     [],
+  );
+  const pullReceiptLineSelectEnabled = useMemo(
+    () =>
+      (pullPreviewKind === 'purchase_receipt' || pullPreviewKind === 'payable')
+      && (pullPreviewData?.detail_lines?.length ?? 0) > 0,
+    [pullPreviewKind, pullPreviewData],
   );
   const selectedRecordsForBatch = useMemo(
     () => tableRows.filter((row) => row.id != null && selectedRowKeys.includes(row.id)),
@@ -278,13 +296,42 @@ const PurchaseInvoiceList: React.FC = () => {
   const resetPullPreview = () => {
     setPullPreviewOpen(false);
     setPullPreviewSourceId(null);
+    setPullPreviewSourceIds([]);
     setPullPreviewData(null);
     setPullPreviewKind(null);
+    setPullReceiptSelectedIds([]);
+    setPullReceiptLineAmounts({});
     pullForm.resetFields();
   };
 
-  const openPullPreview = async (kind: PullPreviewKind, sourceId: number) => {
+  const syncPullReceiptSumToInvoiceForm = useCallback(
+    (sumIncl: number) => {
+      if (sumIncl <= 0) return;
+      const taxRate = Number(pullForm.getFieldValue('tax_rate') ?? pullTaxRateRef.current ?? 13);
+      const mode = (pullForm.getFieldValue('amount_input_mode') || pullAmountModeRef.current) as InvoiceAmountInputMode;
+      if (mode === 'tax_inclusive') {
+        pullForm.setFieldsValue({ invoice_amount: sumIncl });
+      } else {
+        pullForm.setFieldsValue({ invoice_amount: invoiceExclFromIncl(sumIncl, taxRate) });
+      }
+    },
+    [pullForm],
+  );
+
+  const openPullPreview = async (
+    kind: PullPreviewKind,
+    sourceIdsInput: number | number[],
+    options?: { closeSourceModal?: () => void },
+  ) => {
+    const sourceIds = (Array.isArray(sourceIdsInput) ? sourceIdsInput : [sourceIdsInput])
+      .map((id) => Number(id))
+      .filter((id) => Number.isFinite(id) && id > 0);
+    if (!sourceIds.length) return;
     setPullPreviewKind(kind);
+    setPullPreviewSourceIds(sourceIds);
+    setPullPreviewSourceId(sourceIds[0]);
+    setPullReceiptSelectedIds([]);
+    setPullReceiptLineAmounts({});
     setPullPreviewOpen(false);
     setPullPreviewLoading(true);
     setPullPreviewData(null);
@@ -292,10 +339,17 @@ const PurchaseInvoiceList: React.FC = () => {
     try {
       const data =
         kind === 'purchase_order'
-          ? await purchaseInvoiceService.previewPullFromPurchaseOrder(sourceId)
+          ? sourceIds.length === 1
+            ? await purchaseInvoiceService.previewPullFromPurchaseOrder(sourceIds[0])
+            : await purchaseInvoiceService.previewPullFromPurchaseOrders(sourceIds)
           : kind === 'purchase_receipt'
-            ? await purchaseInvoiceService.previewPullFromPurchaseReceipt(sourceId)
-            : await purchaseInvoiceService.previewPullFromPayable(sourceId);
+            ? sourceIds.length === 1
+              ? await purchaseInvoiceService.previewPullFromPurchaseReceipt(sourceIds[0])
+              : await purchaseInvoiceService.previewPullFromPurchaseReceipts(sourceIds)
+            : sourceIds.length === 1
+              ? await purchaseInvoiceService.previewPullFromPayable(sourceIds[0])
+              : await purchaseInvoiceService.previewPullFromPayables(sourceIds);
+      options?.closeSourceModal?.();
       setPullPreviewData(data);
     } catch (e: any) {
       messageApi.error(
@@ -344,13 +398,25 @@ const PurchaseInvoiceList: React.FC = () => {
       }
     },
     onConfirm: async (keys, rows) => {
-      const selected = rows.find((x) => String(x.id) === String(keys[0]));
-      if (!selected?.id) {
+      const selectedIds = resolvePullConfirmNumericIds(keys, rows, 'id');
+      if (!selectedIds.length) {
         messageApi.warning(t(`${P}.selectSource`, { label: pullFromPurchaseOrderAction.sourceLabel }));
         return;
       }
-      pullFromPurchaseOrderCloseRef.current?.();
-      await openPullPreview('purchase_order', selected.id);
+      const selectedIdSet = new Set(selectedIds);
+      const partnerKeys = new Set(
+        rows
+          .filter((x) => selectedIdSet.has(Number(x.id)))
+          .map((x) => resolvePullQueryPartnerKey(x))
+          .filter(Boolean),
+      );
+      if (partnerKeys.size > 1) {
+        messageApi.warning(t(`${P}.pull.sameSupplierRequired`));
+        return;
+      }
+      await openPullPreview('purchase_order', selectedIds, {
+        closeSourceModal: () => pullFromPurchaseOrderCloseRef.current?.(),
+      });
     },
   });
   pullFromPurchaseOrderCloseRef.current = pullFromPurchaseOrderQuery.closeModal;
@@ -379,13 +445,25 @@ const PurchaseInvoiceList: React.FC = () => {
       }
     },
     onConfirm: async (keys, rows) => {
-      const selected = rows.find((x) => String(x.id) === String(keys[0]));
-      if (!selected?.id) {
+      const selectedIds = resolvePullConfirmNumericIds(keys, rows, 'id');
+      if (!selectedIds.length) {
         messageApi.warning(t(`${P}.selectSource`, { label: pullFromPurchaseReceiptAction.sourceLabel }));
         return;
       }
-      pullFromPurchaseReceiptCloseRef.current?.();
-      await openPullPreview('purchase_receipt', selected.id);
+      const selectedIdSet = new Set(selectedIds);
+      const partnerKeys = new Set(
+        rows
+          .filter((x) => selectedIdSet.has(Number(x.id)))
+          .map((x) => resolvePullQueryPartnerKey(x))
+          .filter(Boolean),
+      );
+      if (partnerKeys.size > 1) {
+        messageApi.warning(t(`${P}.pull.sameSupplierRequired`));
+        return;
+      }
+      await openPullPreview('purchase_receipt', selectedIds, {
+        closeSourceModal: () => pullFromPurchaseReceiptCloseRef.current?.(),
+      });
     },
   });
   pullFromPurchaseReceiptCloseRef.current = pullFromPurchaseReceiptQuery.closeModal;
@@ -414,19 +492,31 @@ const PurchaseInvoiceList: React.FC = () => {
       }
     },
     onConfirm: async (keys, rows) => {
-      const selected = rows.find((x) => String(x.id) === String(keys[0]));
-      if (!selected?.id) {
+      const selectedIds = resolvePullConfirmNumericIds(keys, rows, 'id');
+      if (!selectedIds.length) {
         messageApi.warning(t(`${P}.selectSource`, { label: pullFromPayableAction.sourceLabel }));
         return;
       }
-      pullFromPayableCloseRef.current?.();
-      await openPullPreview('payable', selected.id);
+      const selectedIdSet = new Set(selectedIds);
+      const partnerKeys = new Set(
+        rows
+          .filter((x) => selectedIdSet.has(Number(x.id)))
+          .map((x) => resolvePullQueryPartnerKey(x))
+          .filter(Boolean),
+      );
+      if (partnerKeys.size > 1) {
+        messageApi.warning(t('app.kuaicaiwu.mergeFinance.sameSupplierRequired'));
+        return;
+      }
+      await openPullPreview('payable', selectedIds, {
+        closeSourceModal: () => pullFromPayableCloseRef.current?.(),
+      });
     },
   });
   pullFromPayableCloseRef.current = pullFromPayableQuery.closeModal;
 
   const handlePullCreateSubmit = async (values: any) => {
-    if (!pullPreviewData || !pullPreviewSourceId || !pullPreviewKind) {
+    if (!pullPreviewData || !pullPreviewSourceIds.length || !pullPreviewKind) {
       messageApi.warning(t(`${P}.pullPreviewIncomplete`));
       return false;
     }
@@ -437,7 +527,13 @@ const PurchaseInvoiceList: React.FC = () => {
       );
       return false;
     }
-    const maxPush = Number(pullPreviewData.items?.[0]?.max_push_quantity ?? 0);
+    const maxPush = Number(
+      pullPreviewData.max_push_total ??
+        (pullPreviewData.items || []).reduce(
+          (sum, row) => sum + Number(row.max_push_quantity ?? 0),
+          0,
+        ),
+    );
     const enteredAmount = Number(values.invoice_amount) || 0;
     if (enteredAmount <= 0) {
       messageApi.warning(t(`${P}.amountRequired`));
@@ -454,6 +550,38 @@ const PurchaseInvoiceList: React.FC = () => {
     if (moneyExceedsMax(estimatedTotal, maxPush)) {
       messageApi.warning(t(`${P}.pullExceedMax`, { max: formatCurrencyAmount(maxPush) }));
       return false;
+    }
+    let pullReceiptLines: PurchaseInvoiceCreateData['pull_receipt_lines'];
+    if (pullReceiptLineSelectEnabled) {
+      if (pullReceiptSelectedIds.length === 0) {
+        messageApi.warning(t(`${P}.pull.selectAtLeastOneLine`));
+        return false;
+      }
+      const detailLines = (pullPreviewData.detail_lines ?? []) as PullReceiptFinanceDetailLine[];
+      const reconciled = reconcilePullReceiptLinesForHeaderAmount(
+        pullReceiptSelectedIds,
+        detailLines,
+        estimatedTotal,
+        pullReceiptLineAmounts,
+      );
+      if (reconciled.selectedItemIds.length === 0) {
+        messageApi.warning(t(`${P}.pull.selectAtLeastOneLine`));
+        return false;
+      }
+      if (Math.abs(reconciled.lineSum - estimatedTotal) > 0.009) {
+        messageApi.warning(t(`${P}.pull.lineAmountMismatch`));
+        return false;
+      }
+      const detailById = new Map(detailLines.map((row) => [row.purchase_receipt_item_id, row]));
+      for (const id of reconciled.selectedItemIds) {
+        const cap = Number(detailById.get(id)?.max_push_amount ?? 0);
+        const amt = Number(reconciled.amounts[id] ?? 0);
+        if (amt <= 0 || amt > cap + 0.009) {
+          messageApi.warning(t(`${P}.pull.lineExceedMax`));
+          return false;
+        }
+      }
+      pullReceiptLines = reconciled.payload;
     }
     const sourceLabel =
       pullPreviewKind === 'purchase_order'
@@ -495,12 +623,15 @@ const PurchaseInvoiceList: React.FC = () => {
       await purchaseInvoiceService.create({
         purchase_order_id: pullPreviewData.purchase_order_id ?? undefined,
         purchase_order_code: pullPreviewData.purchase_order_code ?? undefined,
-        payable_id: pullPreviewKind === 'payable' ? pullPreviewSourceId : pullPreviewData.payable_id,
+        payable_id:
+          pullPreviewKind === 'payable' ? pullPreviewSourceIds[0] : pullPreviewData.payable_id,
         payable_code: pullPreviewKind === 'payable' ? pullPreviewData.source_code : pullPreviewData.payable_code,
         supplier_id: Number(pullPreviewData.supplier_id || 0),
         supplier_name: pullPreviewData.supplier_name || '',
         source_type: pullPreviewKind,
-        source_id: pullPreviewSourceId,
+        source_id: pullPreviewSourceIds[0],
+        source_ids:
+          pullPreviewSourceIds.length > 1 ? pullPreviewSourceIds : undefined,
         invoice_number: String(values.invoice_number ?? '').trim(),
         invoice_date: formatDateTime(values.invoice_date || dayjs(), 'YYYY-MM-DD'),
         invoice_type: values.invoice_type || '增值税专用发票',
@@ -517,6 +648,7 @@ const PurchaseInvoiceList: React.FC = () => {
         status: '未审核',
         review_status: '草稿',
         attachments: normalizeDocumentAttachments(values.attachments),
+        pull_receipt_lines: pullReceiptLines,
         ...(wantPayment
           ? {
               concurrent_settlement: {
@@ -783,7 +915,14 @@ const PurchaseInvoiceList: React.FC = () => {
     [t],
   );
 
-  const pullPreviewMaxPush = Number(pullPreviewData?.items?.[0]?.max_push_quantity ?? 0);
+  const pullPreviewMaxPush =
+    Number(
+      pullPreviewData?.max_push_total ??
+        (pullPreviewData?.items || []).reduce(
+          (sum, row) => sum + Number(row.max_push_quantity ?? 0),
+          0,
+        ),
+    ) || 0;
   const formatPullMoney = (v: number) =>
     formatCurrencyAmount(v || 0);
   const pullPreviewTargetLabel =
@@ -849,9 +988,60 @@ const PurchaseInvoiceList: React.FC = () => {
     pullForm.setFieldsValue(pullFormInitialValues);
   }, [pullPreviewOpen, pullPreviewLoading, pullFormInitialValues, pullForm]);
 
+  useEffect(() => {
+    if (!pullPreviewOpen || !pullPreviewData) return;
+    if (pullPreviewKind !== 'purchase_receipt' && pullPreviewKind !== 'payable') return;
+    const lines = (pullPreviewData.detail_lines ?? []) as PullReceiptFinanceDetailLine[];
+    if (!lines.length) {
+      setPullReceiptSelectedIds([]);
+      setPullReceiptLineAmounts({});
+      return;
+    }
+    const { selectedItemIds, amounts } = initPullReceiptLineSelection(lines);
+    setPullReceiptSelectedIds(selectedItemIds);
+    setPullReceiptLineAmounts(amounts);
+    const sum = sumPullReceiptLineAmounts(selectedItemIds, amounts);
+    syncPullReceiptSumToInvoiceForm(sum);
+  }, [pullPreviewOpen, pullPreviewKind, pullPreviewData, syncPullReceiptSumToInvoiceForm]);
+
   const pullAmountInputMode = Form.useWatch('amount_input_mode', pullForm) as InvoiceAmountInputMode | undefined;
   const pullTaxRateWatch = Form.useWatch('tax_rate', pullForm);
   const pullInvoiceAmountWatch = Form.useWatch('invoice_amount', pullForm);
+  useEffect(() => {
+    if (!pullPreviewOpen || !pullReceiptLineSelectEnabled || !pullPreviewData) return;
+    if (pullReceiptSelectedIds.length === 0) return;
+    const entered = Number(pullInvoiceAmountWatch || 0);
+    if (!(entered > 0)) return;
+    const taxRate = Number(pullTaxRateWatch) || 13;
+    const mode = (pullAmountInputMode || 'tax_exclusive') as InvoiceAmountInputMode;
+    const { totalIncl } = resolveInvoiceAmountsForSubmit(entered, taxRate, mode, {
+      maxTotalIncl: pullPreviewMaxPush,
+    });
+    const detailLines = (pullPreviewData.detail_lines ?? []) as PullReceiptFinanceDetailLine[];
+    const currentSum = sumPullReceiptLineAmounts(pullReceiptSelectedIds, pullReceiptLineAmounts);
+    if (Math.abs(currentSum - totalIncl) <= 0.009) return;
+    const reconciled = reconcilePullReceiptLinesForHeaderAmount(
+      pullReceiptSelectedIds,
+      detailLines,
+      totalIncl,
+    );
+    setPullReceiptLineAmounts(reconciled.amounts);
+    if (reconciled.selectedItemIds.join(',') !== pullReceiptSelectedIds.join(',')) {
+      setPullReceiptSelectedIds(reconciled.selectedItemIds);
+    }
+  }, [
+    pullPreviewOpen,
+    pullReceiptLineSelectEnabled,
+    pullPreviewData,
+    pullReceiptSelectedIds,
+    pullReceiptLineAmounts,
+    pullInvoiceAmountWatch,
+    pullAmountInputMode,
+    pullTaxRateWatch,
+    pullPreviewMaxPush,
+    syncPullReceiptSumToInvoiceForm,
+  ]);
+
   const pullAmountCounterpartHint = useMemo(() => {
     const entered = Number(pullInvoiceAmountWatch || 0);
     const taxRate = Number(pullTaxRateWatch) || 13;
@@ -1153,12 +1343,28 @@ const PurchaseInvoiceList: React.FC = () => {
               {t(`${P}.pull.detailTitle`)}
             </Typography.Paragraph>
             {(pullPreviewData.detail_lines?.length ?? 0) > 0 ? (
-              <Table
+              <Table<PullReceiptFinanceDetailLine>
                 size="small"
-                dataSource={pullPreviewData.detail_lines}
-                rowKey={(row) => String(row.line_no)}
+                dataSource={pullPreviewData.detail_lines as PullReceiptFinanceDetailLine[]}
+                rowKey={(row) => String(row.purchase_receipt_item_id ?? row.line_no)}
                 pagination={false}
-                scroll={{ x: 880, y: 240 }}
+                scroll={{ x: pullReceiptLineSelectEnabled ? 980 : 880, y: 240 }}
+                rowSelection={
+                  pullReceiptLineSelectEnabled
+                    ? {
+                        selectedRowKeys: pullReceiptSelectedIds,
+                        onChange: (keys) => {
+                          const ids = keys.map((k) => Number(k)).filter((id) => id > 0);
+                          setPullReceiptSelectedIds(ids);
+                          const sum = sumPullReceiptLineAmounts(ids, pullReceiptLineAmounts);
+                          syncPullReceiptSumToInvoiceForm(sum);
+                        },
+                        getCheckboxProps: (row) => ({
+                          disabled: Number(row.max_push_amount ?? 0) <= 0,
+                        }),
+                      }
+                    : undefined
+                }
                 columns={[
                   {
                     title: t(`${P}.pull.col.lineNo`),
@@ -1212,6 +1418,54 @@ const PurchaseInvoiceList: React.FC = () => {
                     align: 'right',
                     render: (v: number) => formatPullMoney(v),
                   },
+                  ...(pullReceiptLineSelectEnabled
+                    ? [
+                        {
+                          title: t(`${P}.pull.col.occupiedAmount`),
+                          dataIndex: 'occupied_amount',
+                          width: 100,
+                          align: 'right' as const,
+                          render: (v: number) => formatPullMoney(v),
+                        },
+                        {
+                          title: t(`${P}.pull.col.invoiceableAmount`),
+                          dataIndex: 'max_push_amount',
+                          width: 100,
+                          align: 'right' as const,
+                          render: (v: number) => formatPullMoney(v),
+                        },
+                        {
+                          title: t(`${P}.pull.col.thisInvoiceAmount`),
+                          width: 130,
+                          align: 'right' as const,
+                          render: (_: unknown, row: PullReceiptFinanceDetailLine) => {
+                            const id = row.purchase_receipt_item_id;
+                            const selected = pullReceiptSelectedIds.includes(id);
+                            const cap = Number(row.max_push_amount ?? 0);
+                            return (
+                              <InputNumber
+                                size="small"
+                                min={0}
+                                max={cap}
+                                precision={2}
+                                disabled={!selected || cap <= 0}
+                                value={pullReceiptLineAmounts[id]}
+                                onChange={(val) => {
+                                  const next = Number(val ?? 0);
+                                  setPullReceiptLineAmounts((prev) => {
+                                    const merged = { ...prev, [id]: next };
+                                    const sum = sumPullReceiptLineAmounts(pullReceiptSelectedIds, merged);
+                                    syncPullReceiptSumToInvoiceForm(sum);
+                                    return merged;
+                                  });
+                                }}
+                                style={{ width: '100%' }}
+                              />
+                            );
+                          },
+                        },
+                      ]
+                    : []),
                 ]}
               />
             ) : (

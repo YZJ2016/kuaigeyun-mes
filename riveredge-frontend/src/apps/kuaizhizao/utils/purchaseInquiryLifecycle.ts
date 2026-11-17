@@ -69,7 +69,7 @@ export function buildPurchaseInquiryLifecycleValueEnum(
   STAGE_LABELS.forEach((label) => {
     map[label] = {
       text: t && STAGE_I18N[label] ? t(STAGE_I18N[label]) : label,
-      status: label === '已转单' ? 'Success' : 'Default',
+      status: label === '已转单' ? 'Processing' : 'Default',
     };
   });
   return map;
