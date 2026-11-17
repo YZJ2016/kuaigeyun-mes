@@ -25,6 +25,11 @@ from apps.kuaizhizao.services.document_recognition import (
 def test_normalize_po_tax_rate_decimal_to_percent():
     assert normalize_po_tax_rate_to_percent(Decimal("0.13")) == Decimal("13.00")
     assert normalize_po_tax_rate_to_percent(13) == Decimal("13.00")
+    # 百分数 1% 不得被当成小数 1.0 抬成 100%
+    assert normalize_po_tax_rate_to_percent(Decimal("1")) == Decimal("1.00")
+    assert normalize_po_tax_rate_to_percent(1) == Decimal("1.00")
+    # 头表小数 1%（0.01）仍换算为 1
+    assert normalize_po_tax_rate_to_percent(Decimal("0.01")) == Decimal("1.00")
 
 
 def test_compute_purchase_order_header_rollup_from_lines():

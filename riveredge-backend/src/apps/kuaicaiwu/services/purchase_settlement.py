@@ -25,13 +25,16 @@ def quantize_receipt_quantity(value: Decimal | str | int | float) -> Decimal:
 
 def normalize_po_tax_rate_to_percent(tax_rate: Any) -> Decimal:
     """
-    采购订单头 tax_rate 为小数（0.13）；订单行 / 入库单 tax_rate 存百分比（13）。
-    已大于 1 的视为已是百分比。
+    采购订单头 tax_rate 为小数（0.13）；订单行 / 入库单 / 价本 tax_rate 存百分比（13）。
+
+    约定（禁止把百分数 1 当成小数 1.0）：
+    - (0, 1) → 小数比率，×100 得百分比（0.13→13，0.01→1）
+    - >= 1 → 已是百分比（1→1%，13→13%）；不可再用 <=1 把 1% 抬成 100%
     """
     rate = Decimal(str(tax_rate or 0))
     if rate <= 0:
         return Decimal("0")
-    if rate <= 1:
+    if rate < 1:
         return (rate * Decimal("100")).quantize(Decimal("0.01"))
     return rate.quantize(Decimal("0.01"))
 

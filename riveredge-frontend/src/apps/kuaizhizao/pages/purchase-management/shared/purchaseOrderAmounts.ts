@@ -19,11 +19,14 @@ const roundMoney = (value: number): number => {
   return Math.round(value * factor) / factor;
 };
 
-/** 头表 tax_rate 存小数（0.13），表单与详情展示用百分比 */
+/**
+ * 头表 tax_rate 存小数（0.13）；行 / 入库 / 价本存百分比（13）。
+ * (0,1)→小数×100；(>=1)→已是百分比。禁止 `<=1` 把百分数 1（1%）抬成 100%。
+ */
 export function purchaseOrderTaxRateToPercent(raw: unknown): number {
   const n = Number(raw);
   if (!Number.isFinite(n) || n <= 0) return 0;
-  return n <= 1 ? n * 100 : n;
+  return n < 1 ? n * 100 : n;
 }
 
 export function purchaseOrderTaxRateToDecimal(percent: unknown): number {
