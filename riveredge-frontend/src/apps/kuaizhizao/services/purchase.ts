@@ -243,6 +243,8 @@ export interface PurchaseOrderListParams {
   include_items?: boolean;
   /** 高级搜索 / 列筛选 JSON */
   column_filters?: string;
+  /** 仅当前登录人待审批 */
+  pending_my_review?: boolean;
 }
 
 export interface PurchaseOrderListResponse {

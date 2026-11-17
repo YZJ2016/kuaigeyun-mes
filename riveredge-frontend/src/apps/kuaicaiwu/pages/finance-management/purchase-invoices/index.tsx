@@ -80,7 +80,7 @@ import {
   reconcilePullReceiptLinesForHeaderAmount,
   sumPullReceiptLineAmounts,
   type PullReceiptFinanceDetailLine,
-} from '../../../kuaizhizao/utils/pullReceiptFinanceLines';
+} from '../../../../kuaizhizao/utils/pullReceiptFinanceLines';
 import { formatDateTime, formatCurrencyAmount, formatAmount } from '../../../../../utils/format';
 import {
   FINANCE_INVOICE_PINNED_REVIEW_FIELD,

@@ -1151,6 +1151,8 @@ def match_purchase_requisition_lifecycle_filter(
 
     if target == "草稿":
         return _is_draft(status_raw) and not _is_rejected(review_status)
+    if target == "待审核":
+        return status_norm == DocumentStatus.PENDING_REVIEW.value
     if target == "已驳回":
         return status_norm in (
             DocumentStatus.REJECTED.value,

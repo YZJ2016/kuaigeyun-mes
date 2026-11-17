@@ -330,6 +330,7 @@ class DocumentPushPullService:
             selected_ids = [
                 int(v) for v in (push_params.get("selected_item_ids") or []) if v is not None
             ]
+        push_mode = (push_params or {}).get("push_mode")
         return await self.create_purchase_requisition_from_computation_items(
             tenant_id=tenant_id,
             selected_item_ids=selected_ids,
@@ -338,6 +339,7 @@ class DocumentPushPullService:
             include_sales_order_attachments=bool(
                 push_params and push_params.get("include_sales_order_attachments")
             ),
+            push_mode=str(push_mode).strip().lower() if push_mode is not None else None,
         )
 
     async def build_purchase_requisition_create_from_computation_items(
@@ -707,8 +709,18 @@ class DocumentPushPullService:
         computation_id: Optional[int] = None,
         item_required_dates: Optional[Dict[int, Any]] = None,
         include_sales_order_attachments: bool = False,
+        push_mode: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """按计算明细 id 建一张采购申请，可跨多张已完成需求计算。"""
+        """按计算明细 id 建一张采购申请，可跨多张已完成需求计算。
+
+        push_mode:
+        - draft: 仅落草稿，不自动提交/审核
+        - confirm: 正式下推；未开审核则直接已通过，已开审核则进入提交审核
+        """
+        resolved_push_mode = str(push_mode or "").strip().lower()
+        if resolved_push_mode not in ("draft", "confirm"):
+            resolved_push_mode = await BusinessConfigService().get_push_default_mode(tenant_id)
+
         req_data, used_computation_ids, _selected_for_flow = (
             await self.build_purchase_requisition_create_from_computation_items(
                 tenant_id=tenant_id,
@@ -737,20 +749,26 @@ class DocumentPushPullService:
             created_by=created_by,
         )
 
-        # 未开审核门禁：下推生成后自动提交确认（与采购订单 try_auto_approve 无审分支一致）
-        audit_required = await pr_service.business_config_service.check_audit_required(
-            tenant_id, "purchase_request"
-        )
-        if not audit_required:
-            req = await pr_service.submit_requisition(
-                tenant_id=tenant_id,
-                requisition_id=int(req.id),
-                submitted_by=created_by,
+        # 正式下推才自动提交；草稿下推保持「草稿」，便于补供应商/改明细后再提交
+        if resolved_push_mode == "confirm":
+            audit_required = await pr_service.business_config_service.check_audit_required(
+                tenant_id, "purchase_request"
             )
+            if not audit_required:
+                req = await pr_service.submit_requisition(
+                    tenant_id=tenant_id,
+                    requisition_id=int(req.id),
+                    submitted_by=created_by,
+                )
 
         return {
             "success": True,
-            "message": "下推成功，已生成采购申请",
+            "message": (
+                "下推成功，已生成采购申请草稿"
+                if resolved_push_mode == "draft"
+                else "下推成功，已生成采购申请"
+            ),
+            "push_mode": resolved_push_mode,
             "target_document": {"type": "purchase_requisition", "id": req.id, "code": req.requisition_code},
         }
 

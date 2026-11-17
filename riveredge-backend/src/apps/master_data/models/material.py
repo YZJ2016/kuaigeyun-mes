@@ -233,6 +233,11 @@ class Material(BaseModel):
     brand = fields.CharField(max_length=100, null=True, description="品牌")
     model = fields.CharField(max_length=100, null=True, description="型号")
     texture = fields.CharField(max_length=100, null=True, description="材质（如：钢、塑料、铝合金等）")
+    inventory_category = fields.CharField(
+        max_length=32,
+        null=True,
+        description="存货类别（系统预置编码，如 CHLB01_SYS 原材料）",
+    )
     images = fields.JSONField(null=True, description="产品图片列表")
     weight = fields.DecimalField(max_digits=12, decimal_places=4, default=0, description="重量 (kg)")
     volume = fields.DecimalField(max_digits=12, decimal_places=4, default=0, description="体积 (m³)")

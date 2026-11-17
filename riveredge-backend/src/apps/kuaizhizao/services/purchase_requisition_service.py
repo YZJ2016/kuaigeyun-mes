@@ -237,6 +237,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             req = await PurchaseRequisition.create(
                 tenant_id=tenant_id,
                 requisition_code=data.requisition_code,
+                order_type=getattr(data, "order_type", None) or "标准采购",
                 requisition_name=custom_name or _default_requisition_name(data.requisition_code),
                 status="草稿",
                 review_status=ReviewStatus.DRAFT.value,
@@ -297,6 +298,20 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             raise BusinessLogicError("采购申请模块未启用，无法创建")
         if not data.items:
             raise BusinessLogicError("采购申请须包含至少一条明细")
+
+        from apps.kuaizhizao.constants.purchase_order_type import (
+            load_and_assert_purchase_order_type_materials,
+            normalize_purchase_order_type,
+        )
+
+        order_type = normalize_purchase_order_type(getattr(data, "order_type", None))
+        await load_and_assert_purchase_order_type_materials(
+            tenant_id,
+            order_type,
+            [int(it.material_id) for it in data.items],
+            document_label="采购申请",
+        )
+        data.order_type = order_type
 
         last_error: Exception | None = None
         req_id: int | None = None
@@ -688,7 +703,25 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             tenant_id=tenant_id, deleted_at__isnull=True
         )
         lifecycle_filter = (lifecycle_stage or "").strip()
-        if status and not lifecycle_filter:
+        if lifecycle_filter == "待我审核":
+            from core.services.approval.pending_my_approval import (
+                entity_ids_pending_my_approval,
+            )
+
+            mine_ids = await entity_ids_pending_my_approval(
+                tenant_id, "purchase_request", viewer_id
+            )
+            if not mine_ids:
+                return {"data": [], "total": 0, "success": True}
+            query = query.filter(id__in=mine_ids)
+            lifecycle_filter = ""
+        elif lifecycle_filter == "待审核":
+            query = query.filter(status=DocumentStatus.PENDING_REVIEW.value)
+            lifecycle_filter = ""
+        if status and not lifecycle_filter and (lifecycle_stage or "").strip() not in (
+            "待审核",
+            "待我审核",
+        ):
             query = query.filter(status=status)
         if source_type:
             query = query.filter(source_type=source_type)
@@ -1008,6 +1041,31 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                 raise ValidationError("字段「申请明细」不允许在审核中修改")
 
         update_data = data.model_dump(exclude_unset=True, exclude={"items"})
+        from apps.kuaizhizao.constants.purchase_order_type import (
+            load_and_assert_purchase_order_type_materials,
+            normalize_purchase_order_type,
+        )
+
+        effective_order_type = normalize_purchase_order_type(
+            update_data.get("order_type")
+            if "order_type" in update_data
+            else getattr(req, "order_type", None)
+        )
+        if "order_type" in update_data:
+            update_data["order_type"] = effective_order_type
+        line_material_ids = (
+            [int(it.material_id) for it in data.items]
+            if data.items is not None
+            else await PurchaseRequisitionItem.filter(
+                tenant_id=tenant_id, requisition_id=requisition_id
+            ).values_list("material_id", flat=True)
+        )
+        await load_and_assert_purchase_order_type_materials(
+            tenant_id,
+            effective_order_type,
+            line_material_ids,
+            document_label="采购申请",
+        )
         if update_data:
             from core.services.document_code_service import pop_and_apply_code_change_from_update_dict
 
@@ -1581,6 +1639,8 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         created_by: int,
     ) -> Dict[str, Any]:
         """将采购申请行转为采购订单；按供应商自动拆成多张采购单，可选回写物料默认供应商"""
+        from apps.kuaizhizao.constants.purchase_order_type import normalize_purchase_order_type
+
         req = await PurchaseRequisition.get_or_none(
             tenant_id=tenant_id, id=requisition_id, deleted_at__isnull=True
         )
@@ -1711,6 +1771,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                         ordered_quantity=qty,
                         unit=item.unit or "件",
                         unit_price=unit_price,
+                        display_unit_price=unit_price,
                         total_price=total_price,
                         received_quantity=Decimal(0),
                         outstanding_quantity=qty,
@@ -1734,7 +1795,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                 supplier_name=supplier_name,
                 order_date=today,
                 delivery_date=delivery_date,
-                order_type="标准采购",
+                order_type=normalize_purchase_order_type(getattr(req, "order_type", None)),
                 status=DocumentStatus.DRAFT.value,
                 source_type="purchase_requisition",
                 source_id=requisition_id,
@@ -2021,6 +2082,8 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         assert_push_capability: bool = True,
     ) -> List["_RequisitionPoPlan"]:
         """按转单请求规划采购订单 create 载荷（不写库、不拆申请行）。"""
+        from apps.kuaizhizao.constants.purchase_order_type import normalize_purchase_order_type
+
         selected_ids = [int(v) for v in data.item_ids if v is not None]
         if not selected_ids:
             raise BusinessLogicError("请至少选择一条可下推采购申请明细")
@@ -2126,6 +2189,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                         ordered_quantity=qty,
                         unit=item.unit or "件",
                         unit_price=unit_price,
+                        display_unit_price=unit_price,
                         total_price=total_price,
                         received_quantity=Decimal(0),
                         outstanding_quantity=qty,
@@ -2147,7 +2211,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                 supplier_name=supplier_name,
                 order_date=today,
                 delivery_date=delivery_date,
-                order_type="标准采购",
+                order_type=normalize_purchase_order_type(getattr(primary, "order_type", None)),
                 status=DocumentStatus.DRAFT.value,
                 source_type="purchase_requisition",
                 source_id=primary.id,
@@ -2279,19 +2343,47 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             for pi in po_items
             if pi.source_id is not None and is_purchase_requisition_source_type(pi.source_type)
         }
+        # 前端若未注册 source_id，落库行可能没有来源。按 handoff 申请行与同物料未挂链 PO 行补齐。
+        linked_poi_ids = {int(pi.id) for pi in po_item_by_source.values() if pi.id is not None}
+        unlinked_by_material: Dict[int, List[PurchaseOrderItem]] = {}
+        for pi in po_items:
+            if pi.id is None or int(pi.id) in linked_poi_ids:
+                continue
+            if pi.source_id is not None and is_purchase_requisition_source_type(pi.source_type):
+                continue
+            mid = int(pi.material_id or 0)
+            if mid <= 0:
+                continue
+            unlinked_by_material.setdefault(mid, []).append(pi)
 
         requisition_ids: set[int] = set()
+        # 只回写「本单实际落库的 PO 行」对应的申请行：数量以 PO 行为真源；
+        # 表单删行/改量后不得按 handoff 全量 item_ids 误占未转出的申请行。
         for rid in requisition_item_ids:
             raw = item_by_id.get(int(rid))
             if not raw:
                 continue
-            qty = self._resolve_convert_quantity(raw, convert_data)
+            po_item = po_item_by_source.get(int(rid))
+            if not po_item or not po_item.id:
+                bucket = unlinked_by_material.get(int(raw.material_id or 0)) or []
+                if not bucket:
+                    continue
+                po_item = bucket.pop(0)
+                await po_item.update_from_dict(
+                    {
+                        "source_type": "purchase_requisition",
+                        "source_id": int(rid),
+                    }
+                ).save()
+                po_item_by_source[int(rid)] = po_item
+            qty = Decimal(str(po_item.ordered_quantity or 0))
+            if qty <= 0:
+                qty = self._resolve_convert_quantity(raw, convert_data)
             if qty <= 0:
                 continue
             item = await self._maybe_split_requisition_item_for_qty(
                 tenant_id, raw, qty, int(raw.requisition_id)
             )
-            po_item = po_item_by_source.get(int(rid))
             po_item_id = int(po_item.id) if po_item and po_item.id else None
             await item.update_from_dict(
                 {
@@ -2349,6 +2441,21 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                 else DocumentStatus.PARTIAL_CONVERTED.value
             )
             await req.save()
+
+        # 头表来源：取单创建时若前端未带回 source，按本批申请回写，便于后续自愈
+        if requisition_ids:
+            primary_req_id = next(iter(sorted(requisition_ids)))
+            po_header = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=purchase_order_id)
+            if po_header and (
+                not po_header.source_id
+                or not is_purchase_requisition_source_type(getattr(po_header, "source_type", None))
+            ):
+                await po_header.update_from_dict(
+                    {
+                        "source_type": "purchase_requisition",
+                        "source_id": primary_req_id,
+                    }
+                ).save()
 
         push_mode = await BusinessConfigService().get_push_default_mode(tenant_id)
         if push_mode == "confirm":

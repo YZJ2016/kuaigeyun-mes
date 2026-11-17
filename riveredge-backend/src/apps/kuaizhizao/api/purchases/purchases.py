@@ -190,6 +190,9 @@ async def list_purchase_orders(
     ),
     include_items: bool = Query(False, description="是否附带订单明细（明细表格视图）"),
     column_filters: Optional[str] = Query(None, description="列筛选 JSON（高级搜索）"),
+    pending_my_review: Optional[bool] = Query(
+        None, description="仅当前用户待审批的采购订单"
+    ),
     current_user: CurrentUser = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant)
 ):
@@ -226,6 +229,7 @@ async def list_purchase_orders(
         pull_target=pull_target,
         include_items=include_items,
         column_filters=column_filters,
+        pending_my_review=pending_my_review,
     )
 
     return await PurchaseService().list_purchase_orders(tenant_id, params, current_user=current_user)

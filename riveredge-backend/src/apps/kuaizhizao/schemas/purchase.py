@@ -463,6 +463,7 @@ class PurchaseOrderListParams(BaseModel):
     pull_target: Optional[str] = None
     include_items: bool = False
     column_filters: Optional[str] = None
+    pending_my_review: Optional[bool] = None
     skip: int = 0
     limit: int = 20
 

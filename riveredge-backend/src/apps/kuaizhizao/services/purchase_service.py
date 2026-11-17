@@ -790,6 +790,18 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             query = query.filter(status=params.status)
         if params.review_status:
             query = query.filter(review_status=params.review_status)
+        if params.pending_my_review:
+            from core.services.approval.pending_my_approval import (
+                entity_ids_pending_my_approval,
+            )
+
+            viewer_id = getattr(current_user, "id", None) if current_user else None
+            mine_ids = await entity_ids_pending_my_approval(
+                tenant_id, "purchase_order", viewer_id
+            )
+            if not mine_ids:
+                return {"data": [], "total": 0, "success": True}
+            query = query.filter(id__in=mine_ids)
         if params.order_date_from:
             query = query.filter(order_date__gte=params.order_date_from)
         if params.order_date_to:

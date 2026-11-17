@@ -62,6 +62,7 @@ import {
 import { MaterialUnitSelect, prefetchMaterialsForUnitSelect } from '../../../../../components/material-unit-select';
 import {
   DocumentLineDualQuantityFormCell, DocumentLineUnitSelect } from '../../../../../components/quantity-with-unit';
+import { coerceDocumentLineQuantity } from '../../../../../utils/materialDualQuantity';
 import { resolveMaterialScenarioUnit } from '../../../../../utils/materialScenarioUnit';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import {
@@ -127,6 +128,9 @@ import { renderDemandBusinessModeMarkerTag } from '../../../utils/businessMode';
 import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
 import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
 import { createListAuditPhaseColumn } from '../../sales-management/shared/listAuditPhaseColumn';
+import { getDataDictionaryByCode, getDictionaryItemList, type DictionaryItem } from '../../../../../services/dataDictionary';
+import { mapSystemDictionaryItemOptions } from '../../../../../utils/systemDictionaryI18n';
+import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { alignProColumns, GLOBAL_DOC_DETAIL_TABLE_FIELD_RANK, SALES_DOC_LIST_FIELD_RANK } from '../../sales-management/shared/documentFieldAlignment';
 import { DocumentPushProgressBar, DOCUMENT_PROGRESS_COLUMN_DEFAULTS, DETAIL_TABLE_PROGRESS_COLUMN_DEFAULTS, ratioToPushProgressPercent } from '../../sales-management/shared/DocumentPushProgressBar';
 import { flattenDocumentDetailRows, resolveDetailTableViewMode } from '../../shared/detailTableFlatRows';
@@ -205,6 +209,63 @@ const INITIAL_PR_FORM_ITEM_ROW = {
 
 const INITIAL_CREATE_ITEMS = [{ ...INITIAL_PR_FORM_ITEM_ROW }];
 
+const PR_DRAFT_HEADER_NUMBER_FIELDS = ['applicant_id', 'department_id'] as const;
+const PR_DRAFT_LINE_NUMBER_FIELDS = [
+  'quantity',
+  'aux_quantity',
+  'unit_conversion_rate',
+  'suggested_unit_price',
+  'material_id',
+  'supplier_id',
+  'demand_computation_item_id',
+] as const;
+
+function healDraftNumber(value: unknown): unknown {
+  if (typeof value === 'number' || value == null || value === '') return value;
+  const recovered = coerceDocumentLineQuantity(value);
+  return recovered == null ? value : recovered;
+}
+
+/** 草稿曾把 0、1 存成日期对象。恢复时这些字段必须仍是数字。 */
+function healPurchaseRequisitionDraft(values: Record<string, unknown>): Record<string, unknown> {
+  const next: Record<string, unknown> = { ...values };
+  for (const key of PR_DRAFT_HEADER_NUMBER_FIELDS) {
+    if (key in next) next[key] = healDraftNumber(next[key]);
+  }
+  const items = normalizeFormListItems<Record<string, unknown>>(next.items);
+  if (items.length > 0) {
+    next.items = items.map((row) => {
+      const healed: Record<string, unknown> = { ...row };
+      for (const key of PR_DRAFT_LINE_NUMBER_FIELDS) {
+        if (key in healed) healed[key] = healDraftNumber(healed[key]);
+      }
+      return healed;
+    });
+  }
+  return next;
+}
+
+const SuggestedPriceStoreRepair: React.FC<{
+  form: {
+    getFieldValue?: (name: any) => any;
+    setFieldValue?: (name: any, value: any) => void;
+  } | null | undefined;
+  rowIndex: number;
+  raw: unknown;
+}> = ({ form, rowIndex, raw }) => {
+  const repairKey = typeof raw === 'number' || raw == null || raw === '' ? '' : 'bad';
+  useEffect(() => {
+    if (!repairKey || !form?.getFieldValue || !form.setFieldValue) return;
+    const current = form.getFieldValue(['items', rowIndex, 'suggested_unit_price']);
+    if (typeof current === 'number' && Number.isFinite(current)) return;
+    if (current == null || current === '') return;
+    const recovered = coerceDocumentLineQuantity(current);
+    if (recovered == null) return;
+    form.setFieldValue(['items', rowIndex, 'suggested_unit_price'], recovered);
+  }, [form, repairKey, rowIndex]);
+  return null;
+};
+
 type PurchaseRequisitionItemRow = PurchaseRequisitionItem & {
   _rowKey: string;
   _headerId?: number | string;
@@ -230,7 +291,13 @@ type PurchaseRequisitionItemRow = PurchaseRequisitionItem & {
 };
 
 const PURCHASE_REQUISITION_LIST_PERSISTENCE_ID =
-  'apps.kuaizhizao.pages.purchase-management.purchase-requisitions-width-v1';
+  'apps.kuaizhizao.pages.purchase-management.purchase-requisitions-width-v2';
+
+const PURCHASE_REQUISITION_ORDER_TYPE_FALLBACK: Pick<DictionaryItem, 'value' | 'label' | 'is_system_managed' | 'sort_order'>[] = [
+  { value: '标准采购', label: '标准采购', is_system_managed: true, sort_order: 0 },
+  { value: '资产采购', label: '资产采购', is_system_managed: true, sort_order: 1 },
+  { value: '服务采购', label: '服务采购', is_system_managed: true, sort_order: 2 },
+];
 
 type PullDemandComputationCandidate = DemandComputationPurchasePullLine;
 
@@ -283,6 +350,29 @@ const PurchaseRequisitionsPage: React.FC = () => {
   const { token } = theme.useToken();
   const prqDetailDrawerZIndex = token.zIndexPopupBase;
   const { message: messageApi, modal: modalApi } = App.useApp();
+  const [orderTypeOptions, setOrderTypeOptions] = useState<Array<{ label: string; value: string }>>(() =>
+    mapSystemDictionaryItemOptions('ORDER_TYPE', PURCHASE_REQUISITION_ORDER_TYPE_FALLBACK as DictionaryItem[], t),
+  );
+  const [orderTypeLoading, setOrderTypeLoading] = useState(false);
+  useEffect(() => {
+    const loadOrderType = async () => {
+      setOrderTypeLoading(true);
+      try {
+        const dict = await getDataDictionaryByCode('ORDER_TYPE');
+        const items = await getDictionaryItemList(dict.uuid, true);
+        const sorted = [...items].sort((a, b) => a.sort_order - b.sort_order);
+        setOrderTypeOptions(mapSystemDictionaryItemOptions('ORDER_TYPE', sorted, t));
+      } catch {
+        setOrderTypeOptions(
+          mapSystemDictionaryItemOptions('ORDER_TYPE', PURCHASE_REQUISITION_ORDER_TYPE_FALLBACK as DictionaryItem[], t),
+        );
+        messageApi.info(t('app.kuaizhizao.purchaseOrder.orderTypeFallback'));
+      } finally {
+        setOrderTypeLoading(false);
+      }
+    };
+    void loadOrderType();
+  }, [messageApi, t]);
   const actionRef = useRef<ActionType>(null);
   const tableRowsRef = useRef<PurchaseRequisition[]>([]);
   const [viewTypeState, setViewTypeState] = useState<'table' | 'detailTable' | 'help'>(() =>
@@ -378,6 +468,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
   const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null);
   const [effectiveAutoGen, setEffectiveAutoGen] = useState<boolean | null>(null);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
+  const [materialPickSourceType, setMaterialPickSourceType] = useState<string | undefined>();
   const [importModalVisible, setImportModalVisible] = useState(false);
   const materialUnitImport = useImportMaterialUnitOptions();
   const requisitionLineUnitOptions = materialUnitImport.options;
@@ -553,6 +644,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
         const applicantUuid = await resolveUserUuidById(detail.applicant_id);
         const baseValues = {
           requisition_code: detail.requisition_code ?? '',
+          order_type: detail.order_type || '标准采购',
           requisition_name: detail.requisition_name ?? '',
           requisition_date: detail.requisition_date ? dayjs(detail.requisition_date) : dayjs(),
           applicant_uuid: applicantUuid,
@@ -654,13 +746,43 @@ const PurchaseRequisitionsPage: React.FC = () => {
     [defaultApplicantFields],
   );
 
+  const fillBlankPurchaseRequisitionCode = useCallback(async () => {
+    const existing = String(createFormRef.current?.getFieldValue?.('requisition_code') ?? '').trim();
+    if (existing) return;
+    try {
+      const config = await getCodeRulePageConfig('kuaizhizao-purchase-requisition');
+      const autoGen = config?.autoGenerate ?? isAutoGenerateEnabled('kuaizhizao-purchase-requisition');
+      const ruleCode = config?.ruleCode ?? getPageRuleCode('kuaizhizao-purchase-requisition');
+      setEffectiveRuleCode(ruleCode ?? null);
+      setEffectiveAutoGen(autoGen);
+      if (!autoGen || !ruleCode) return;
+      const again = String(createFormRef.current?.getFieldValue?.('requisition_code') ?? '').trim();
+      if (again) return;
+      const res = await testGenerateCode({ rule_code: ruleCode });
+      if (!res.code) return;
+      const still = String(createFormRef.current?.getFieldValue?.('requisition_code') ?? '').trim();
+      if (still) return;
+      setPreviewCode(res.code);
+      createFormRef.current?.setFieldValue('requisition_code', res.code);
+    } catch (error: unknown) {
+      console.warn('采购申请编号预生成失败:', error);
+    }
+  }, []);
+
   const initPurchaseRequisitionCreateForm = useCallback(async () => {
     void ensureSupplierList();
     const draft = prFormDraftKey ? getDocumentFormDraft(prFormDraftKey) : null;
     if (draft && Object.keys(draft).length > 0) {
-      applyCreateFormDefaults(draft);
+      const healed = healPurchaseRequisitionDraft(draft as Record<string, unknown>);
+      if (healed.requisition_date == null || healed.requisition_date === '') {
+        healed.requisition_date = dayjs();
+      }
+      applyCreateFormDefaults(healed);
       lastHeaderDeliveryRef.current = null;
-      applyHeaderDeliveryToItemLines((draft as Record<string, unknown>).required_date);
+      applyHeaderDeliveryToItemLines(healed.required_date);
+      if (!String(healed.requisition_code ?? '').trim()) {
+        await fillBlankPurchaseRequisitionCode();
+      }
       return;
     }
     lastHeaderDeliveryRef.current = null;
@@ -734,7 +856,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
         });
       }
     }
-  }, [ensureSupplierList, prFormDraftKey, applyCreateFormDefaults, initialCreateItems, applyHeaderDeliveryToItemLines]);
+  }, [ensureSupplierList, prFormDraftKey, applyCreateFormDefaults, initialCreateItems, applyHeaderDeliveryToItemLines, fillBlankPurchaseRequisitionCode]);
 
   const handleCreate = () => {
     navigate(PURCHASE_REQUISITION_CREATE_PATH);
@@ -768,14 +890,36 @@ const PurchaseRequisitionsPage: React.FC = () => {
   useEffect(() => {
     if (!isFormPage) return;
     const initKey = isCreatePage ? 'create' : `edit-${editRouteId}`;
-    if (formPageInitKeyRef.current === initKey) return;
+    if (formPageInitKeyRef.current === initKey) {
+      if (isCreatePage) {
+        const form = createFormRef.current;
+        const values = form?.getFieldsValue?.(true) as Record<string, unknown> | undefined;
+        if (form && values) {
+          const healed = healPurchaseRequisitionDraft(values);
+          const headerDirty = PR_DRAFT_HEADER_NUMBER_FIELDS.some(
+            (key) => healed[key] !== values[key],
+          );
+          const itemsDirty = JSON.stringify(healed.items ?? null) !== JSON.stringify(values.items ?? null);
+          if (headerDirty || itemsDirty) {
+            form.setFieldsValue?.({
+              applicant_id: healed.applicant_id,
+              department_id: healed.department_id,
+              items: healed.items ?? values.items,
+            });
+          }
+        }
+        const existing = String(form?.getFieldValue?.('requisition_code') ?? '').trim();
+        if (!existing) void fillBlankPurchaseRequisitionCode();
+      }
+      return;
+    }
     formPageInitKeyRef.current = initKey;
     if (isCreatePage) {
       void initPurchaseRequisitionCreateForm();
     } else if (editRouteId != null) {
       void loadPurchaseRequisitionEditForm(editRouteId);
     }
-  }, [isFormPage, isCreatePage, editRouteId, initPurchaseRequisitionCreateForm, loadPurchaseRequisitionEditForm]);
+  }, [isFormPage, isCreatePage, editRouteId, initPurchaseRequisitionCreateForm, loadPurchaseRequisitionEditForm, fillBlankPurchaseRequisitionCode]);
 
   useEffect(() => {
     if (!isFormPage || !prFormDraftKey) return;
@@ -1144,6 +1288,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
         await updatePurchaseRequisition(editingId, {
           // 是否允许改号由后端 document_code 门禁判定，勿因前端 editable 竞态静默丢掉
           ...(editedCode ? { requisition_code: editedCode } : {}),
+          order_type: String(values.order_type ?? '标准采购').trim() || '标准采购',
           ...(showRequisitionNameField
             ? { requisition_name: String(values.requisition_name ?? '').trim() }
             : {}),
@@ -1177,6 +1322,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
         }
         const created = await createPurchaseRequisition({
           requisition_code: requisitionCode || undefined,
+          order_type: String(values.order_type ?? '标准采购').trim() || '标准采购',
           ...(showRequisitionNameField
             ? { requisition_name: String(values.requisition_name ?? '').trim() || undefined }
             : {}),
@@ -1695,6 +1841,15 @@ const PurchaseRequisitionsPage: React.FC = () => {
       },
     },
     {
+      title: t('app.kuaizhizao.purchaseRequisition.form.orderType'),
+      dataIndex: 'order_type',
+      width: 96,
+      minWidth: 96,
+      uniTableKeepWidth: true,
+      hideInSearch: true,
+      ellipsis: true,
+    },
+    {
       title: t('app.kuaizhizao.purchaseRequisition.col.nameAndCode'),
       key: 'requisition_code',
       dataIndex: 'requisition_code',
@@ -2160,6 +2315,19 @@ const PurchaseRequisitionsPage: React.FC = () => {
                   rules={[{ required: true, message: t('app.kuaizhizao.purchaseRequisition.form.codeManual') }]}
                 />
               </Col>
+              <Col span={12}>
+                <ProForm.Item
+                  name="order_type"
+                  label={t('app.kuaizhizao.purchaseRequisition.form.orderType')}
+                  initialValue="标准采购"
+                >
+                  <UniDropdown
+                    options={orderTypeOptions}
+                    loading={orderTypeLoading}
+                    placeholder={t('app.kuaizhizao.purchaseOrder.form.orderTypePlaceholder')}
+                  />
+                </ProForm.Item>
+              </Col>
               {showRequisitionNameField ? (
                 <Col span={12}>
                   <ProFormText
@@ -2311,7 +2479,11 @@ const PurchaseRequisitionsPage: React.FC = () => {
               <Button
                 type="default"
                 icon={<AppstoreAddOutlined />}
-                onClick={() => setMaterialPickerOpen(true)}
+                onClick={() => {
+                  const orderType = String(createFormRef.current?.getFieldValue('order_type') ?? '').trim();
+                  setMaterialPickSourceType(orderType === '服务采购' ? 'Service' : undefined);
+                  setMaterialPickerOpen(true);
+                }}
               >
                 {t('app.kuaizhizao.common.materialBatchSelect')}
               </Button>
@@ -2325,10 +2497,16 @@ const PurchaseRequisitionsPage: React.FC = () => {
                     render: (_: any, __: any, index: number) => (
                       <AntForm.Item
                         noStyle
-                        shouldUpdate={(prev: any, curr: any) => prev?.items?.[index] !== curr?.items?.[index]}
+                        shouldUpdate={(prev: any, curr: any) =>
+                          prev?.order_type !== curr?.order_type || prev?.items?.[index] !== curr?.items?.[index]
+                        }
                       >
                         {({ getFieldValue }: any) => {
                           const row = getFieldValue('items')?.[index];
+                          const materialSourceType =
+                            String(getFieldValue('order_type') ?? '').trim() === '服务采购'
+                              ? 'Service'
+                              : undefined;
                           const mid = row?.material_id ? Number(row.material_id) : null;
                           const fallback =
                             mid && (row?.material_code || row?.material_name)
@@ -2375,6 +2553,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
                                     formItemProps={{ style: { margin: 0 } }}
                                     showQuickCreate
                                     showAdvancedSearch
+                                    sourceType={materialSourceType}
                                   skipFuzzyPinyinClientFilter
                                   />
                                 </div>
@@ -2469,10 +2648,18 @@ const PurchaseRequisitionsPage: React.FC = () => {
                         }
                       >
                         {({ getFieldValue }: any) => {
+                          const price = getFieldValue(['items', index, 'suggested_unit_price']);
                           return (
-                            <AntForm.Item name={[index, 'suggested_unit_price']} style={{ margin: 0 }}>
-                              <InputNumber placeholder="0" min={0} precision={priceDecimals} style={{ width: 80 }} size="small" />
-                            </AntForm.Item>
+                            <>
+                              <SuggestedPriceStoreRepair
+                                form={createFormRef.current}
+                                rowIndex={index}
+                                raw={price}
+                              />
+                              <AntForm.Item name={[index, 'suggested_unit_price']} style={{ margin: 0 }}>
+                                <InputNumber placeholder="0" min={0} precision={priceDecimals} style={{ width: 80 }} size="small" />
+                              </AntForm.Item>
+                            </>
                           );
                         }}
                       </AntForm.Item>
@@ -2630,6 +2817,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
         </DocumentFormPageLayout>
         <UniMaterialBatchPicker
           open={materialPickerOpen}
+          sourceType={materialPickSourceType}
           onCancel={() => setMaterialPickerOpen(false)}
           onConfirm={appendRequisitionItemsFromMaterials}
         />
@@ -3277,6 +3465,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
       />
       <UniMaterialBatchPicker
         open={materialPickerOpen}
+        sourceType={materialPickSourceType}
         onCancel={() => setMaterialPickerOpen(false)}
         onConfirm={appendRequisitionItemsFromMaterials}
       />
