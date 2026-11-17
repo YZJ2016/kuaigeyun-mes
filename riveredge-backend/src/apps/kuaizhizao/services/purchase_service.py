@@ -546,11 +546,28 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             )
             created_order_id = int(order.id)
 
-        await self.try_auto_approve_purchase_order(
-            tenant_id=tenant_id,
-            order_id=created_order_id,
-            operator_id=created_by,
+        source_type = (getattr(order_data, "document_flow_source_type", None) or "").strip()
+        from apps.kuaizhizao.services.manual_create_auto_lifecycle import (
+            apply_manual_create_auto_submit,
+            is_manual_create_auto_submit_enabled,
         )
+
+        # 手动建单自动提交优先于「创建后自动审核」；有审批流时只提交不过审
+        if not source_type and await is_manual_create_auto_submit_enabled(
+            tenant_id, "purchase_order"
+        ):
+            await apply_manual_create_auto_submit(
+                tenant_id=tenant_id,
+                node_key="purchase_order",
+                entity_id=created_order_id,
+                operator_id=created_by,
+            )
+        else:
+            await self.try_auto_approve_purchase_order(
+                tenant_id=tenant_id,
+                order_id=created_order_id,
+                operator_id=created_by,
+            )
         created = await self.get_purchase_order_by_id(tenant_id, created_order_id)
         await self._finalize_document_flow_after_create(
             tenant_id=tenant_id,

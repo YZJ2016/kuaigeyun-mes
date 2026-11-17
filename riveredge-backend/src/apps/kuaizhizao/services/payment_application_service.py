@@ -226,6 +226,16 @@ class PaymentApplicationService(AppBaseService[PaymentApplication]):
                     notes=item.notes,
                 )
             app_id = app.id
+        from apps.kuaizhizao.services.manual_create_auto_lifecycle import (
+            apply_manual_create_auto_submit,
+        )
+
+        await apply_manual_create_auto_submit(
+            tenant_id=tenant_id,
+            node_key="payment_application",
+            entity_id=app_id,
+            operator_id=created_by,
+        )
         return await self.get_by_id(tenant_id, app_id)
 
     async def get_by_id(

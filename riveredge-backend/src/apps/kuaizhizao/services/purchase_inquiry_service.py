@@ -548,6 +548,20 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
             inquiry=response,
             created_by=created_by,
         )
+        source_type = (getattr(data, "document_flow_source_type", None) or "").strip()
+        if not source_type:
+            from apps.kuaizhizao.services.manual_create_auto_lifecycle import (
+                apply_manual_create_auto_submit,
+            )
+
+            applied = await apply_manual_create_auto_submit(
+                tenant_id=tenant_id,
+                node_key="purchase_inquiry",
+                entity_id=created_inquiry_id,
+                operator_id=created_by,
+            )
+            if applied:
+                return await self.get_inquiry_by_id(tenant_id, created_inquiry_id)
         return response
 
     async def update_inquiry(

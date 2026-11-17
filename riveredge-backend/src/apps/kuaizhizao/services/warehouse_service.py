@@ -10040,7 +10040,14 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
         self.business_config_service = BusinessConfigService()
 
     @serialize_stock_create("purchase_receipt")
-    async def create_purchase_receipt(self, tenant_id: int, receipt_data: PurchaseReceiptCreate, created_by: int) -> PurchaseReceiptResponse:
+    async def create_purchase_receipt(
+        self,
+        tenant_id: int,
+        receipt_data: PurchaseReceiptCreate,
+        created_by: int,
+        *,
+        skip_manual_create_auto_submit: bool = False,
+    ) -> PurchaseReceiptResponse:
         """创建采购入库单"""
         created_receipt_id: Optional[int] = None
         response: Optional[PurchaseReceiptResponse] = None
@@ -10288,6 +10295,20 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 logger.warning("建立采购订单→采购入库 单据关联失败: %s", e)
 
         if created_receipt_id is not None:
+            if not skip_manual_create_auto_submit:
+                from apps.kuaizhizao.services.manual_create_auto_lifecycle import (
+                    apply_manual_create_auto_submit,
+                )
+
+                await apply_manual_create_auto_submit(
+                    tenant_id=tenant_id,
+                    node_key="purchase_receipt",
+                    entity_id=int(created_receipt_id),
+                    operator_id=created_by,
+                )
+                response = await self.get_purchase_receipt_by_id(
+                    tenant_id, int(created_receipt_id)
+                )
             from apps.kuaizhizao.services.quality_automation_service import QualityAutomationService
 
             await QualityAutomationService().maybe_auto_create_iqc_from_purchase_receipt(
@@ -10593,6 +10614,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                     items=receipt_items,
                 ),
                 created_by=created_by,
+                skip_manual_create_auto_submit=True,
             )
             for oid in source_order_ids[1:]:
                 source = order_by_id[oid]
@@ -10868,6 +10890,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                     items=receipt_items,
                 ),
                 created_by=created_by,
+                skip_manual_create_auto_submit=True,
             )
             for nid in source_notice_ids:
                 created_by_notice[nid] = created
@@ -12239,7 +12262,8 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 await self.create_purchase_receipt(
                     tenant_id=tenant_id,
                     receipt_data=receipt_create_data,
-                    created_by=created_by
+                    created_by=created_by,
+                    skip_manual_create_auto_submit=True,
                 )
                 
                 success_count += 1

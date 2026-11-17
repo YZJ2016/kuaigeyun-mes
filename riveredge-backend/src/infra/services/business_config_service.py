@@ -77,7 +77,7 @@ def coerce_finance_parameter_dict(finance: Dict[str, Any]) -> Dict[str, Any]:
     return fin
 
 from infra.models.tenant import Tenant
-from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.exceptions.exceptions import NotFoundError, ValidationError, tenant_not_found
 from core.models.approval_process import ApprovalProcess
 from core.config.audit_registry import audit_node_keys
 
@@ -346,6 +346,8 @@ REGISTRY_PARAM_CONTROL_META: Dict[str, Dict[str, Any]] = {
             },
         ],
     },
+    "parameters.automation.manual_create_auto_submit": {"type": "boolean"},
+
     "parameters.master_data.drawing_max_upload_size_mb": {"type": "number", "min": 1, "max": 100},
     "parameters.warehouse.fifo_mode": {
         "type": "select",
@@ -560,6 +562,7 @@ PARAMETER_KEYS = {
     "parameters.procurement.auto_push_receipt_notice_on_approve",
     "parameters.procurement.arrival_imminent_days",
     "parameters.automation.push_default_mode",
+    "parameters.automation.manual_create_auto_submit",
     "parameters.master_data.drawing_max_upload_size_mb",
     "parameters.kuaiplm.lab_request_delegate_dept_uuids",
     "parameters.kuaiplm.lab_request_test_dept_uuids",
@@ -650,11 +653,27 @@ IMPLEMENTED_PARAMETER_KEYS = {
     "parameters.procurement.auto_approve_purchase_order_on_create",
     "parameters.procurement.auto_push_receipt_notice_on_approve",
     "parameters.automation.push_default_mode",
+    "parameters.automation.manual_create_auto_submit",
     "parameters.master_data.drawing_max_upload_size_mb",
     "parameters.kuaiplm.lab_request_delegate_dept_uuids",
     "parameters.kuaiplm.lab_request_test_dept_uuids",
     "parameters.supply_chain.partner_price_resolution_order",
 }
+
+
+def _register_manual_create_auto_submit_param_keys() -> None:
+    """注册手动建单自动提交：全局 + 各单据扁平布尔键。"""
+    from apps.kuaizhizao.services.manual_create_auto_lifecycle import (
+        parameter_keys_for_manual_create_lifecycle,
+    )
+
+    for full_key in parameter_keys_for_manual_create_lifecycle():
+        REGISTRY_PARAM_CONTROL_META.setdefault(full_key, {"type": "boolean"})
+        PARAMETER_KEYS.add(full_key)
+        IMPLEMENTED_PARAMETER_KEYS.add(full_key)
+
+
+_register_manual_create_auto_submit_param_keys()
 
 # 默认仓管/生产领料确认角色
 DEFAULT_WAREHOUSE_ROLE_CODES = {
@@ -959,6 +978,8 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
     },
     "automation": {
         "push_default_mode": "confirm",
+        # 手动建单后自动提交（有审批流则待审、不过审）；单证见 manual_create_doc_*
+        "manual_create_auto_submit": False,
     },
     "bom": {
         "bom_multi_version_allowed": True,
@@ -987,6 +1008,17 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
         "gl_closed_periods": [],
     },
 }
+
+# 补齐手动建单单证默认 False（在 DEFAULT_PARAMETERS 定稿后合并）
+try:
+    from apps.kuaizhizao.services.manual_create_auto_lifecycle import (
+        default_manual_create_doc_params,
+    )
+
+    DEFAULT_PARAMETERS.setdefault("automation", {}).update(default_manual_create_doc_params())
+except Exception:
+    # 启动早期循环导入时跳过；首次 get_business_config 仍会 deep-merge 缺省
+    pass
 
 
 # ============================================================
@@ -1198,7 +1230,7 @@ class BusinessConfigService:
         """
         tenant = await Tenant.get_or_none(id=tenant_id)
         if not tenant:
-            raise NotFoundError(f"组织不存在: {tenant_id}")
+            raise tenant_not_found(tenant_id)
 
         stored = (tenant.settings or {}).get("business_config", {}) or {}
         stored_params = stored.get("parameters", {}) or {}
@@ -1591,6 +1623,26 @@ class BusinessConfigService:
         mode = str(raw or "confirm").strip().lower()
         return mode if mode in ("draft", "confirm") else "confirm"
 
+    async def manual_create_auto_submit_global(self, tenant_id: int) -> bool:
+        """手动建单后是否全局自动提交（有审批流则待审、不过审）。"""
+        config = await self.get_business_config(tenant_id)
+        return bool(
+            config.get("parameters", {})
+            .get("automation", {})
+            .get("manual_create_auto_submit", False)
+        )
+
+    async def manual_create_auto_submit_for_doc(self, tenant_id: int, node_key: str) -> bool:
+        """单证手动建单自动提交开关（全局关闭时仍可单项开启）。"""
+        from apps.kuaizhizao.services.manual_create_auto_lifecycle import flat_param_key_for_doc
+
+        nk = str(node_key or "").strip()
+        if not nk:
+            return False
+        key = flat_param_key_for_doc(nk)
+        config = await self.get_business_config(tenant_id)
+        return bool(config.get("parameters", {}).get("automation", {}).get(key, False))
+
     async def get_work_order_picking_policy(self, tenant_id: int) -> Dict[str, Any]:
         config = await self.get_business_config(tenant_id)
         wo_params = config["parameters"].get("work_order", {})
@@ -1699,7 +1751,7 @@ class BusinessConfigService:
     ) -> Dict[str, Any]:
         tenant = await Tenant.get_or_none(id=tenant_id)
         if not tenant:
-            raise NotFoundError(f"组织不存在: {tenant_id}")
+            raise tenant_not_found(tenant_id)
 
         settings = tenant.settings or {}
         business_config = settings.get("business_config", {})
@@ -1749,7 +1801,7 @@ class BusinessConfigService:
     ) -> Dict[str, Any]:
         tenant = await Tenant.get_or_none(id=tenant_id)
         if not tenant:
-            raise NotFoundError(f"组织不存在: {tenant_id}")
+            raise tenant_not_found(tenant_id)
 
         settings = tenant.settings or {}
         business_config = settings.get("business_config", {})
@@ -1807,7 +1859,7 @@ class BusinessConfigService:
     ) -> Dict[str, Any]:
         tenant = await Tenant.get_or_none(id=tenant_id)
         if not tenant:
-            raise NotFoundError(f"组织不存在: {tenant_id}")
+            raise tenant_not_found(tenant_id)
 
         is_pro_feature = False
         if feature_type == "modules":
@@ -1836,7 +1888,7 @@ class BusinessConfigService:
     async def get_pro_features_list(self, tenant_id: int) -> Dict[str, Any]:
         tenant = await Tenant.get_or_none(id=tenant_id)
         if not tenant:
-            raise NotFoundError(f"组织不存在: {tenant_id}")
+            raise tenant_not_found(tenant_id)
 
         has_pro_access = tenant.plan.value in self.PRO_PLANS
         return {
