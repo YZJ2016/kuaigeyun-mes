@@ -4,9 +4,31 @@ import {
   computePurchaseOrderHeaderAmountsForSave,
   computePurchaseReceiptFormLineAmounts,
   purchaseOrderFormLineToStored,
+  purchaseOrderTaxRateToPercent,
   readPurchaseOrderEnteredUnitPrice,
   resolvePurchaseOrderDisplayAmount,
+  resolvePurchaseOrderLineAmounts,
 } from './purchaseOrderAmounts';
+
+describe('purchaseOrderTaxRateToPercent', () => {
+  it('keeps percent 1 as 1% and converts header decimal 0.01 to 1', () => {
+    expect(purchaseOrderTaxRateToPercent(1)).toBe(1);
+    expect(purchaseOrderTaxRateToPercent(0.01)).toBe(1);
+    expect(purchaseOrderTaxRateToPercent(0.13)).toBe(13);
+    expect(purchaseOrderTaxRateToPercent(13)).toBe(13);
+  });
+
+  it('1% exclusive line tax is 1% of excl not 100%', () => {
+    const line = resolvePurchaseOrderLineAmounts(
+      { ordered_quantity: 1, unit_price: 100, tax_rate: 1 },
+      'tax_exclusive',
+    );
+    expect(line.taxPct).toBe(1);
+    expect(line.excl).toBe(100);
+    expect(line.tax).toBe(1);
+    expect(line.incl).toBe(101);
+  });
+});
 
 describe('purchaseOrderAmounts unified with documentLineAmounts', () => {
   it('tax_inclusive unit 800 qty 1: header net equals form goodsIncl', () => {

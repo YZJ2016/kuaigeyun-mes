@@ -316,7 +316,11 @@ const SalesInvoiceDetailPage: React.FC = () => {
         dataIndex: 'tax_rate',
         width: 72,
         align: 'right',
-        render: (_, r) => `${(Number(r.tax_rate) <= 1 ? Number(r.tax_rate) * 100 : Number(r.tax_rate)).toFixed(2)}%`,
+        render: (_, r) => {
+          const n = Number(r.tax_rate);
+          const pct = !Number.isFinite(n) || n <= 0 ? 0 : n < 1 ? n * 100 : n;
+          return `${pct.toFixed(2)}%`;
+        },
       },
       {
         title: t('app.kuaicaiwu.invoice.line.taxAmount'),
