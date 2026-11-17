@@ -2,7 +2,7 @@
 
 ===D:/kuaigeyun-pro/kuaigeyun/===
 .gitattributes[XV1T]: F:git LF lock | R:- | A:eol=lf | S:no autocrlf; bytes-stable; 5L
-.gitignore[XV3S]: F:repo ignore与Cursor/AOCI正式资产白名单 | R:- | A:py+node+env+build+本地.tmp草稿+scripts/*忽略 | S:memory/rules白名单;.aoci不整夹忽略;scripts/*忽略,跟踪需-f
+.gitignore[XV3M]: F:仓库根忽略规则:py/node/构建产物/密钥/本地运行时+AOCI/Cursor正式资产白名单 | R:- | A:py+node+env+build+scripts/*+.aoci+.cursor忽略与放行 | S:.aoci/.cursor白名单放行;scripts按件白名单;dist入库,.gz/.br忽略
 AGENTS.md[SV2S]: F:agent+AOCI contract | R:- | A:aoci managed block | S:cognition loop rules; 103L
 LICENSE[SV1S]: F:Apache 2.0 | R:- | A:Apache-2.0 | S:211L
 README.md[SG6M]: F:星技谷制造MES产品总览：能力、插件、终端矩阵与部署接入入口 | R:code:fast-deploy/deploy.sh | A:15秒了解,立即体验与接入,核心能力,插件应用,终端形态,快速开始 | S:演示仅供预览勿生产;无需Redis;TV看板不在本仓;Python锁3.11
@@ -54,7 +54,7 @@ aoci-cursor-setup.md[SU3T]: F:说明Cursor三仓AOCI接入、选仓与本机检�
 报工思路.md[DU3T]: F:Implements 报工思路.md | R:- | A:- | S:59L
 报工新思路.md[DU3S]: F:Implements 报工新思路.md | R:- | A:- | S:143L
 文件路径.md[DU3T]: F:Implements 文件路径.md | R:- | A:- | S:33L
-上游同步台账.md[SW3M]: F:私有fork上游同步台账:gitee主源水位、分簇批次A-G摘取映射、跳过清单与逐批复核 | R:code:AGENTS.md | A:远端与水位,已同步映射,批A批B段,维护约定 | S:勿用upstream镜像;fetch半克隆;新批次置顶;财务=kuaicaiwu权威
+上游同步台账.md[SW3L]: F:私有fork上游同步台账:gitee水位、批A-G摘取映射、跳过清单与逐批复核手法 | R:code:AGENTS.md | A:远端与水位,已同步映射,批C价税采购段,基线清理记录 | S:勿用upstream;fetch半克隆;新批次置顶;财务=kuaicaiwu权威
 成熟度与技术再评估.md[SG4M]: F:MES/MOM全领域成熟度再评估,含领域评分,链路核查与Q01-Q20问题清单 | R:code:riveredge-backend/src/apps/kuaicaiwu/services/posting_service.py | A:总评,各领域成熟度盘点,业务主链路评估,技术评估,Q01-Q20具体问题,优先补齐方向 | S:评分非上线验收;spec标记≠运行证据;历史测试不作本轮验证
 
 ===D:/kuaigeyun-pro/kuaigeyun/fast-deploy/===
@@ -1136,6 +1136,25 @@ config-center-ops.md[SO2T]: F:config center ops | R:- | A:3 control points | S:c
 20261023150000_kuaiai_tool_catalog_rename.py[PD5T]: F:KU-AI spec190工具目录合并改名纯数据迁移:enabled_tools旧名→新名 | R:code:riveredge-backend/src/apps/kuaiai/constants.py | A:upgrade,downgrade | S:11旧名并改9新名;JSONB逐行改写去重保序;无旧名行不写
 20261023160000_kuaiai_agent_checkpointer.py[PD5T]: F:KU-AI spec192 HITL LangGraph checkpoint双表:checkpoints+checkpoint_writes | R:- | A:upgrade,downgrade | S:checkpoint/metadata(type,bytes)落bytea;uuid6 id字典序即时间序;只存执行现场非审计真源
 20261024120000_kuaiai_knowledge_document_source_ref.py[PD5T]: F:KU-AI spec200知识文档外部来源列source_ref_type/source_ref_id | R:- | A:upgrade,downgrade | S:SOP同步写(sop,id)一对一可追溯;(tenant_id,type,id)未删部分唯一索引;双NULL不占唯一键
+20261110163000_purchase_order_item_display_unit_price.py[PD3T]: F:迁移:purchase_order_items加display_unit_price录入单价列 | R:- | A:采购订单行价税 | S:展示禁由未税价反算含税;23L
+20261110170000_purchase_receipt_item_amount_fields.py[PD3T]: F:迁移:purchase_receipt_items加display_unit_price/tax_amount/net_amount/tax_rate | R:- | A:入库行价税rollup | S:税额与价税合计服务端rollup写回;44L
+20261117120000_storage_location_warehouse_direct.py[PD3T]: F:迁移:storage_locations库区可空+warehouse直挂+金蝶source_location_code | R:- | A:整仓库位/苍穹仓位回写 | S:downgrade先删空storage_area行再恢复NOT NULL;35L
+899_20261019160000_purchase_inquiry_demand_party_commercial.py[PD3T]: F:迁移:建purchase_demand_parties需方表+询价头商务字段+受邀供应商联系方式 | R:- | A:demand_parties+inquiries+inquiry_vendors | S:78L
+900_20261019163000_purchase_demand_party_uuid.py[PD3T]: F:迁移:demand_parties补uuid列回填并加唯一索引 | R:code:riveredge-backend/migrations/models/899_20261019160000_purchase_inquiry_demand_party_commercial.py | A:修补899遗漏BaseModel.uuid | S:27L
+913_20261022140000_document_line_dual_quantity.py[PD3T]: F:迁移:出入库/收发货/订单6张行表加aux_quantity/aux_unit/unit_conversion_rate | R:- | A:双单位基建首批6表 | S:42L
+914_20261022150000_document_line_dual_quantity_extend.py[PD3T]: F:迁移:报价/通知/合同/退换货/请购等16张行表加双单位三列 | R:code:riveredge-backend/migrations/models/913_20261022140000_document_line_dual_quantity.py | A:双单位第二批16表 | S:52L
+915_20261022153000_document_line_dual_quantity_more.py[PD3T]: F:迁移:询价/调拨/评审/售后等5张行表加双单位三列 | R:code:riveredge-backend/migrations/models/914_20261022150000_document_line_dual_quantity_extend.py | A:双单位第三批5表 | S:41L
+927_20261025130000_document_relation_target_id_bigint.py[PD2T]: F:迁移:document_relations.target_id INT→BIGINT | R:- | A:外部系统单据关联 | S:金蝶雪花ID>int32不改溢出;25L
+928_20261025190000_purchase_return_payable_negative_amount.py[PD3T]: F:迁移:采购退货应付total_amount回填为负 | R:- | A:红字应付口径 | S:downgrade反向取绝对值;23L
+951_20261028120000_backfill_unsubmitted_review_draft.py[PD3T]: F:迁移:采购/销售退货误标待审核且无审核人时刻→草稿 | R:- | A:review_status回填2表 | S:downgrade SELECT 1不可逆;39L
+952_20261028130000_backfill_draft_review_sales_purchase_docs.py[PD3T]: F:迁移:销售订单/采购订单/请购/预测主态草稿但review误PENDING→DRAFT | R:- | A:review_status回填4表 | S:downgrade SELECT 1不可逆;49L
+955_20261028190000_kuaioa_minimum_wage_end_current.py[PD3T]: F:迁移:最低工资配置加end_date/is_current+租户当前索引+最新条标当前 | R:- | A:kuaioa_min_wage_configs | S:每租户仅最新一条is_current;36L
+971_20261101030000_inventory_transfer_item_serial_numbers.py[PD3T]: F:迁移:inventory_transfer_items加serial_numbers JSONB | R:- | A:调拨行序列号 | S:22L
+972_20261101040000_partner_price_book_tier_prices.py[PD3T]: F:迁移:partner_price_books加tier_prices阶梯价JSONB | R:- | A:客商价格本阶梯价 | S:22L
+973_20261101050000_document_line_item_attachments.py[PD3T]: F:迁移:请购/订单/入库/报价/销单/发货6行表加attachments JSONB | R:- | A:单据行附件 | S:52L
+974_20261105140000_create_payment_pull_lines_and_receipt_occupancy.py[PD3T]: F:迁移:建kuaicaiwu付款pull明细+入库行财务占用两表 | R:- | A:payment_pull_lines+receipt_line_occupancies | S:72L
+975_20261107003000_purchase_order_line_tax_price_type.py[PD3T]: F:迁移:orders加price_type+行tax_rate并从头税率回填 | R:- | A:采购行税率/价税类型 | S:头税率<=1按小数×100回填;38L
+976_20261107140000_purchase_order_payment_recognition_columns.py[PD3T]: F:迁移:orders加付款方式/结算/账期天数/立账策略 | R:- | A:采购付款与立账列 | S:payable_recognition默认on_receipt;36L
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/scripts/===
 pack_sensitive_words.py[XC3T]: F:敏感词打包脚本 | R:code:riveredge-backend/pyproject.toml | A:lexicon pack | S:gh mirror fallback; 90L
@@ -1146,6 +1165,8 @@ scan_permission_bypass.py[XQ4L]: F:权限旁路/action混用静态扫描器：�
 scan_timezone_contract.py[XO3L]: F:时区契约违规扫描脚本 | R:code:riveredge-backend/scripts/scan_permission_bypass.py | A:be+fe datetime | S:12 rules utcnow ban; 218L
 scan_host_finance_path_leaks.py[XQ4T]: F:上游同步回归扫描:禁apps.kuaizhizao.finance/optional_pro/import_pro_*/pro_orm_ready回流 | R:code:riveredge-backend/src/apps/common/app_orm.py | A:main,PATTERN,--fail-on | S:本仓财务=apps.kuaicaiwu权威;命中import语句即fail;--fail-on仅high
 tenant_kingdee_strong_consistency.py[XB4M]: F:租户级金蝶强一致审计:仓储红灯/仓库重名分叉/空仓位批次;--apply修空仓位落账 | R:code:docs/core/金蝶强一致实施-SOP.md | A:audit_warehouse_blockers,audit_duplicate_warehouse_names,audit_empty_location_batches,repair_empty_location_batches | S:TENANT_ID+PYTHONPATH=src直跑;默认dry-run;按SOP先审计后修复
+backfill_inclusive_tax_misentry.py[OR4L]: F:历史含税误存修正:PO/入库行错账指纹匹配→重算录入价+settlement/头表rollup | R:code:riveredge-backend/src/apps/kuaicaiwu/services/purchase_settlement.py, code:riveredge-backend/src/apps/kuaizhizao/utils/document_line_amounts.py | A:run | S:默认仅空PO行;frozen跳过;--dry-run先快照
+scan_route_manifest_alignment.py[XQ5M]: F:契约扫描:路由require_permission_codes↔manifest/基线/display声明对齐 | R:- | A:run_scan,filter_findings | S:未声明码恒403;--fail-on high
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/common/===
 __init__.py[CC2T]: F:公共模块导出 | R:code:riveredge-backend/scripts/scan_timezone_contract.py | A:AppBaseService | S:5L; init export
@@ -1268,7 +1289,7 @@ __init__.py[AA2T]: F:财务API包 | R:code:riveredge-backend/src/apps/kuaicaiwu/
 partner_statements.py[AE7M]: F:往来对账单API | R:code:riveredge-backend/src/apps/kuaicaiwu/api/finance/__init__.py | A:11 endpoints | S:xlsx/pdf export;line-detail钻取; 307L
 payables.py[AE8L]: F:应付管理API | R:code:riveredge-backend/src/apps/kuaicaiwu/api/finance/partner_statements.py | A:8 endpoints | S:pull from PO/PR; 399L
 payment_refunds.py[AE8L]: F:付款退款API | R:code:riveredge-backend/src/apps/kuaicaiwu/api/finance/payables.py | A:10 endpoints | S:field mask; 417L
-payments.py[AE8L]: F:付款单管理API | R:code:riveredge-backend/src/apps/kuaicaiwu/api/finance/payment_refunds.py | A:13 endpoints | S:pull payable/付款申请;print;unpost on delete; 507L
+payments.py[AE8L]: F:付款单管理API:CRUD+print+pull_lines多源拉取+pull-preview | R:code:riveredge-backend/src/apps/kuaicaiwu/api/finance/payment_refunds.py | A:15 endpoints | S:pull_lines与legacy source二选一互斥;删除反过账
 price_settlement.py[AE5M]: F:月结定价API | R:code:riveredge-backend/src/apps/kuaicaiwu/api/finance/payments.py | A:5 endpoints | S:batch apply; 175L
 purchase_invoices.py[AE8L]: F:采购发票API | R:code:riveredge-backend/src/apps/kuaicaiwu/api/finance/price_settlement.py | A:12 endpoints | S:concurrent pay; 500L
 receipt_refunds.py[AE8L]: F:收款退款API | R:code:riveredge-backend/src/apps/kuaicaiwu/api/finance/purchase_invoices.py | A:10 endpoints | S:field mask; 417L
@@ -6029,7 +6050,6 @@ InboundQuickPullModals.tsx[EU5L]: F:入库快捷拉式建单组：ref.open(key)�
 InboundReceiptNoticePullEntryPage.tsx[EU5M]: F:Implements InboundReceiptNoticePullEntryPage.tsx | R:- | A:- | S:277L
 InboundSalesReturnPullEntryPage.tsx[EU5L]: F:Implements InboundSalesReturnPullEntryPage.tsx | R:- | A:- | S:506L
 InboundWorkOrderPullEntryPage.tsx[EU5L]: F:Implements InboundWorkOrderPullEntryPage.tsx | R:- | A:- | S:563L
-PurchaseReceiptEditModal.tsx[EU5M]: F:Implements PurchaseReceiptEditModal.tsx | R:- | A:- | S:290L
 PurchaseReceiptIqcReviewModal.tsx[EU5S]: F:Implements PurchaseReceiptIqcReviewModal.tsx | R:- | A:- | S:181L
 inboundCreateConfig.ts[EU5T]: F:Implements inboundCreateConfig.ts | R:- | A:- | S:6L
 inboundCustomerMaterialIqcGate.ts[EU5T]: F:Implements inboundCustomerMaterialIqcGate.ts | R:- | A:- | S:27L
@@ -9238,8 +9258,8 @@ setup.js[CC4T]: F:配置页提交逻辑，调saveServerOrigin并显示状态 | R
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaiai/===
 __init__.py[SB1T]: F:kuaiai应用包初始化,仅含docstring声明KU-AI LangChain骨架(S1:会话/消息/纯对话委托) | R:- | A:- | S:无导出语句仅包标记
 constants.py[SB4T]: F:KR钉死常量:状态/模型类型/Tool闭集(spec189-222全量)/授权模式 | R:- | A:ENABLED_TOOL_NAMES,SCENE_READONLY_TOOL_NAMES,MODEL_TYPES,GRANT_MODES,DEFAULT_AGENT_PROFILE_NAME | S:下游统一引用,勿再写字面值
-manifest.json[FG2M]: F:星AI应用清单:菜单/40权限码/11个ai_tools | R:- | A:menu_config,permissions,ai_tools,dependencies | S:is_pro;tool handler指向chat_tools/scene_tools
-orm_models.py[SB4T]: F:kuaiai ORM模块注册清单 | R:- | A:ORM_MODEL_MODULES | S:6个模型模块路径供Tortoise注册
+manifest.json[FG2L]: F:星AI应用清单:菜单/40权限码/57个ai_tools | R:- | A:menu_config,permissions,ai_tools,dependencies | S:is_pro;tool handler指向chat_tools/scene_tools
+orm_models.py[SB4T]: F:kuaiai ORM模块注册清单 | R:- | A:ORM_MODEL_MODULES | S:7个模型模块路径供Tortoise注册
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaiai/api/===
 __init__.py[SB1T]: F:kuaiai/api子包初始化,仅含docstring“KU-AI API 包” | R:- | A:- | S:无导出语句仅包标记
@@ -9247,13 +9267,14 @@ operations.py[SB4L]: F:运营层只编排路由:hub/智能体库/pulse/设置/tr
 router.py[SB4L]: F:KU-AI产品路由:会话/Agent档案授权/知识库文档/MCP+spec189-204场景工具HITL | R:- | A:router,api_put_agent_grants,api_parse_document,McpService,KnowledgeService | S:include operations;权限码kuaiai:域:动词
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaiai/models/===
-__init__.py[SB1T]: F:模型包导出会话两模型 | R:- | A:KuaiaiChatMessage,KuaiaiChatSession | S:仅re-export无逻辑
+__init__.py[SB1T]: F:模型包导出会话与checkpoint四模型 | R:- | A:ChatMessage,ChatSession,AgentCheckpoint,CheckpointWrite | S:仅re-export无逻辑
 agent.py[SB4T]: F:Agent档案+使用授权名单模型 | R:- | A:KuaiaiAgentProfile,KuaiaiAgentGrant | S:grant_mode ROLE|USER互斥;启用档案名单非空
 agent_scene.py[SB4T]: F:租户场景实例模型:模板→实例/档案绑定 | R:- | A:KuaiaiAgentScene,SCENE_ORIGINS | S:instance_key软删部分唯一;overrides白名单
 catalog.py[SB4T]: F:LLM厂商+模型目录模型(KR-D5) | R:- | A:KuaiaiLlmProvider,KuaiaiLlmModel,decrypt_api_key | S:api_key只写打码;model_type闭集四值
 chat.py[SB4T]: F:KU-AI会话/消息ORM模型 | R:- | A:KuaiaiChatSession,KuaiaiChatMessage | S:含工具轨迹列；消息表为回放唯一历史
-knowledge.py[SB4S]: F:KU-AI知识库/文档/切块ORM | R:- | A:KuaiaiKnowledgeBase,KuaiaiKnowledgeDocument,KuaiaiKnowledgeChunk | S:向量列占位仅走原始SQL；无DB级FK
+knowledge.py[SB4S]: F:KU-AI知识库/文档/切块ORM:faq语料+外部来源定位 | R:- | A:KnowledgeBase,KnowledgeDocument,KnowledgeChunk | S:向量列占位仅走原始SQL;无DB级FK
 mcp.py[SB4T]: F:KU-AI MCP白名单ORM | R:- | A:KuaiaiMcpServer,decrypt_token | S:仅http传输；token打码出参/decrypt为cipher seam
+checkpoint.py[SB4T]: F:LangGraph执行现场checkpoint+pending writes模型 | R:- | A:KuaiaiAgentCheckpoint,KuaiaiAgentCheckpointWrite | S:非审计真源;日志禁出值;硬删
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaiai/schemas/===
 __init__.py[SB1T]: F:再导出chat会话schemas | R:- | A:__all__ | S:仅导出4个Chat相关schema符号
@@ -9263,17 +9284,18 @@ chat.py[SP2T]: F:KU-AI 会话/消息 Pydantic schemas：会话创建/更新/输�
 corpus.py[SP3T]: F:KU-AI 语料运营视图 schemas（spec 183/§11.4）：跨库语料列表项、FAQ 创建、种子 FAQ、批量索引/删除；列表不回 raw_content/tenant_id/file_uuid | R:code:riveredge-backend/src/apps/kuaiai/models/knowledge.py | A:CorpusItemOut,CorpusListOut,CorpusKnowledgeOption,CorpusFaqCreate,CorpusSeedFaqsIn,CorpusBatchIn | S:type由服务层推导;error脱敏;批量ids 1..100
 knowledge.py[SP3S]: F:KU-AI 知识库 schemas（KR-D12，S3）：库 CRUD/下拉项、文档上传（file_uuid|raw_content 二选一）、列表/详情、切块只读；闭集与归属校验留服务层抛400 | R:code:riveredge-backend/src/apps/kuaiai/models/knowledge.py | A:KnowledgeBaseCreate,KnowledgeBaseUpdate,KnowledgeBaseOut,KnowledgeBaseOption,DocumentCreate,DocumentOut | S:extra=forbid;不回tenant_id/向量;raw_content仅详情回
 mcp.py[SP2T]: F:KU-AI MCP 白名单 schemas（KR-D11，S4）：服务器 CRUD + 档案勾选下拉项；token 只写不回明文（打码占位+token_configured），endpoint/tools 守卫在服务层 | R:code:riveredge-backend/src/apps/kuaiai/models/mcp.py | A:McpServerCreate,McpServerUpdate,McpServerOut,McpServerOption | S:token只写打码;transport仅http;守卫在服务层抛400
-operations.py[SP3M]: F:KU-AI 运营层 schemas（spec181/184/185）：hub 能力矩阵、智能体库、信任中心、场景实例定制/克隆写请求、设置读写；状态闭集 ready|partial|not_ready | R:code:riveredge-backend/src/apps/kuaiai/models/agent_scene.py | A:HubOut,LibraryOut,TrustOut,SettingsOut,SceneInstanceUpdate,SettingsUpdateIn | S:回参脱敏无密钥;capabilities七字段整体替换;version不透明
-pulse.py[SP2T]: F:KU-AI 异常感知 Pulse schemas（spec 182/§6.2）：统一异常项 + 汇总 + 领域分组 + 脱敏 errors + complete 标记；不回堆栈/SQL/敏感明细 | R:- | A:PulseItemOut,PulseSummaryOut,PulseGroupOut,PulseErrorOut,PulseOut | S:errors仅code/message脱敏;summary只计成功detector
+operations.py[SP3M]: F:KU-AI运营层schemas:hub能力矩阵(场景绑定/业务分类)/智能体库/信任中心/场景实例写/设置读写 | R:code:riveredge-backend/src/apps/kuaiai/models/agent_scene.py | A:HubOut,LibraryOut,TrustOut,SettingsOut,SceneInstanceUpdate | S:回参脱敏无密钥;状态闭集ready|partial|not_ready
+pulse.py[SP2T]: F:KU-AI异常感知Pulse schemas:统一异常项+汇总+领域分组+脱敏errors+complete标记 | R:- | A:PulseItemOut,PulseSummaryOut,PulseGroupOut,PulseErrorOut,PulseOut | S:errors仅code/message脱敏;summary只计成功detector
+tool_catalog.py[SP3T]: F:KU-AI Tool目录schemas:manifest ai_tools下发项name/label/kind/permission(s) | R:- | A:ToolCatalogItem | S:kind为能力绑定依赖;permission与permissions_any互斥
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaiai/services/===
 __init__.py[SB1T]: F:KU-AI 服务包标记，仅 docstring；刻意不 eager import 以便 chat_handler 经 importlib.find_spec 探测无副作用 | R:- | A:- | S:空包标记无导出
-agent_assembler.py[SB4S]: F:KU-AI Agent 档案装配（KR-D8/D9，§7 发送时装配）：查档案(跨租户404/停用403)→check_use_grant→build_chat_model+注册表/MCP tools+MCP感知tool guard→build_agent | R:code:riveredge-backend/src/apps/kuaiai/models/agent.py | A:AssembledAgent,_resolve_default_profile,assemble | S:每请求装配;授权先于装配;MCP失败降级;默认档案按固定名解析
-agent_scene_service.py[SB4L]: F:KU-AI 租户场景实例服务：六个出厂场景模板与路由/插画/能力标签/覆盖字段白名单、生命周期幂等预置（同事务回滚）、智能体库聚合视图（就绪态/停用原因/档案 ID 脱敏）、实例定制改绑与按需克隆、chat agent_key 场景守卫 | R:code:riveredge-backend/src/apps/kuaiai/models/agent.py,code:riveredge-backend/src/apps/kuaiai/models/agent_scene.py | A:SCENE_TEMPLATES,seed_kuaiai_agent_scenes_on_lifecycle,list_agent_library,update_instance,clone_instance,guard_scene_agent_key | S:场景模板定义、幂等预置、聚合视图、实例定制克隆与 chat 场景守卫的一体化服务。
-agent_service.py[SB4M]: F:KU-AI Agent 档案服务：profiles CRUD 与 options，grant_mode ROLE|USER 互斥（切换同事务清对侧名单），启用档案授权名单非空校验，enabled_tools 五值闭集与 JSONB id 列表归一，default_model_id 本租户 chat 启用行复核 | R:code:riveredge-backend/src/apps/kuaiai/models/agent.py,code:riveredge-backend/src/apps/kuaiai/models/catalog.py | A:get_profile,list_profiles,profile_options,create_profile,update_profile,delete_profile | S:Agent 档案的创建/更新/软删与授权模式切换校验服务。
+agent_assembler.py[SB4S]: F:KU-AI Agent档案装配:查档案(跨租户404/停用403)→check_use_grant→build_chat_model+注册表/MCP tools+MCP感知guard+checkpointer→build_agent | R:code:riveredge-backend/src/apps/kuaiai/models/agent.py | A:AssembledAgent,_resolve_default_profile,assemble | S:每请求装配;授权先于装配;MCP失败降级
+agent_scene_service.py[SB4L]: F:KU-AI租户场景实例服务:出厂模板(业务分类/只读Tool)+生命周期幂等预置+智能体库聚合视图+实例定制改绑克隆+chat agent_key场景守卫 | R:code:riveredge-backend/src/apps/kuaiai/models/agent.py,code:riveredge-backend/src/apps/kuaiai/models/agent_scene.py | A:SCENE_TEMPLATES,seed_kuaiai_agent_scenes_on_lifecycle,list_agent_library,update_instance,clone_instance,guard_scene_agent_key | S:模板key/插画/路由/覆盖字段全闭集白名单;种子不冒名用户
+agent_service.py[SB4M]: F:KU-AI Agent档案服务:profiles CRUD+options;grant_mode ROLE|USER互斥切换清对侧;启用名单非空;enabled_tools闭集;default_model_id本租户chat启用复核 | R:code:riveredge-backend/src/apps/kuaiai/models/agent.py,code:riveredge-backend/src/apps/kuaiai/models/catalog.py | A:get_profile,list_profiles,profile_options,create_profile,update_profile,delete_profile | S:配置权≠使用权;陈旧JSONB id静默过滤
 catalog_service.py[SB4M]: F:KU-AI 模型目录服务：llm_providers/llm_models CRUD 与启用模型下拉项，api_key 复用 IntegrationConfig 打码回显（打码占位/空串保留原值），写路径统一 evict 模型缓存，归属校验跨租户/软删一律 404 | R:code:riveredge-backend/src/apps/kuaiai/models/catalog.py,code:riveredge-backend/src/apps/kuaiai/models/agent.py | A:masked_api_key_fields,provider_out,list_providers,update_provider,list_models,model_options | S:LLM 厂商与模型目录的 CRUD、密钥打码与缓存失效编排服务。
-chat_service.py[SB4L]: F:KU-AI 对话编排服务：模块级 create_chat_completion 委托入口；路径 A 纯对话（目录行优先模型解析、页/知识摘要注入），路径 B 档案装配（授权 403、astream_events 流式、tool/assistant 行落库），OpenAI SSE 线格式与 token 回填 | R:code:riveredge-backend/src/apps/kuaiai/models/chat.py,code:riveredge-backend/src/apps/kuaiai/models/knowledge.py | A:create_chat_completion | S:对话请求双路径编排、消息持久化与流式响应服务。
-chat_tools.py[SB4L]: F:KU-AI 五值受控 Tool handler 集（知识检索/工单查询/任务列表/报工提交/状态迁移）；工单操作调 kuaizhizao 既有 service 带行级数据范围复核，失败回错误文案；读 manifest ai_tools 自注册 | R:code:riveredge-backend/src/apps/kuaiai/models/agent.py | A:search_knowledge,query_workorder,list_workorder_tasks,submit_production_feedback,update_workorder_status,CHAT_TOOL_DEFINITIONS | S:五个 AI 受控读写工具 handler 与 manifest 自注册。
+chat_service.py[SB4L]: F:KU-AI对话编排:路径A纯对话/路径B档案装配(astream_events流式+tool/assistant行落库+token回填)+HITL resume续跑 | R:code:riveredge-backend/src/apps/kuaiai/models/chat.py,code:riveredge-backend/src/apps/kuaiai/models/knowledge.py | A:create_chat_completion,resume_chat_completion | S:消息表唯一真源;失败不回滚user行;SSE不落密钥
+chat_tools.py[SB4L]: F:KU-AI受控Tool handler集:search_knowledge/query_work_orders/submit_production_feedback/update_workorder_status;读manifest ai_tools自注册 | R:code:riveredge-backend/src/apps/kuaiai/models/agent.py | A:search_knowledge,query_work_orders,submit_production_feedback,update_workorder_status,CHAT_TOOL_DEFINITIONS | S:handler经既有service带行级范围;manifest读取失败不注册
 corpus_service.py[SB4M]: F:KU-AI 知识语料运营视图服务：跨库扁平分页列表（类型推导+白名单序列化）、FAQ 创建与出厂 FAQ 幂等种子（select_for_update 串行）、批量索引/删除逐项隔离、JSONL 流式导出（分批+两万行硬上限） | R:code:riveredge-backend/src/apps/kuaiai/models/knowledge.py | A:list_corpus,create_faq,seed_faqs,batch_index,batch_delete,iter_export_jsonl | S:语料跨库列表、FAQ 种子、批量操作与 JSONL 导出的运营服务。
 document_parsers.py[SB3S]: F:KU-AI 文档解析路由：extract_text 按扩展名分发 pdf/docx/pptx/xlsx(xls)/md/txt 的内存 bytes 解析，魔数签名校验，doc/ppt 旧二进制明确拒绝，失败一律 ValidationError 不落半截文本 | R:- | A:extract_text | S:按扩展名路由的内存文档文本抽取入口。
 grant_service.py[SB4S]: F:KU-AI Agent 档案使用授权（KR-D9）：check_use_grant 单档案判定（USER 比 id/ROLE 比角色集），usable_profile_ids 供 agents/options 过滤，list/replace_grants 同事务软删旧行整体替换名单（启用档案非空） | R:code:riveredge-backend/src/apps/kuaiai/models/agent.py | A:check_use_grant,usable_profile_ids,list_grants,replace_grants | S:未知模式失败关闭;启用档案名单非空
@@ -9282,19 +9304,26 @@ knowledge_service.py[SB4L]: F:KU-AI 知识文档/切块/解析（KR-D12）：文
 mcp_client_service.py[SB4M]: F:KU-AI MCP 运行面（KR-D11）：档案 mcp_server_ids→本租户启用行逐行建 MultiServerMCPClient，单 server 失败跳过；allowed_tools 过滤+撞名丢弃；interceptor 复核白名单/超时+审计，错误回 isError | R:code:riveredge-backend/src/apps/kuaiai/models/mcp.py | A:load_agent_mcp_tools,build_mcp_aware_tool_guard | S:server失败跳过;isError不抛穿;调用期复核URL
 mcp_guard.py[SC3S]: F:KU-AI MCP 白名单守卫（KR-D11）：transport 仅 http；require_safe_http_url 出站 SSRF 校验（禁 userinfo/localhost/回环/链路本地/云元数据）；SQL 工具名 NFKC 黑名单+allowed_tools 校验，空名单失败关闭 | R:- | A:require_http_transport,require_safe_http_url,is_forbidden_sql_tool,is_tool_allowed,require_allowed_tools,parse_allowed_tools | S:http传输+SSRF出站校验+SQL工具名黑名单,失败关闭
 mcp_service.py[SB4M]: F:KU-AI MCP 白名单管理（KR-D11/S4）：mcp_servers CRUD+下拉项；code 本租户重名400；保存与建连同口径守卫（transport/endpoint/allowed_tools 闭集）；token 打码回显，占位/空白保留原值、null 清空；软删不级联 | R:code:riveredge-backend/src/apps/kuaiai/models/mcp.py,code:riveredge-backend/src/apps/kuaiai/services/catalog_service.py | A:McpService,masked_token_fields | S:token打码回显;守卫口径同建连;软删不级联
-operations_service.py[SB4M]: F:KU-AI 运营层聚合（spec181/184）：get_hub 能力矩阵（模型状态+AiStats+pulse 计数+8 能力项就绪）；get_trust 信任中心三卡+当前用户权限码闭集；数据源失败局部降级 null/not_ready 不伪造 | R:code:riveredge-backend/src/apps/kuaiai/models/knowledge.py,code:riveredge-backend/src/apps/kuaiai/services/agent_scene_service.py | A:get_hub,get_trust,TRUST_PERMISSION_CODES | S:局部降级null/not_ready;HITL按真实装配判定
-page_context.py[SB4S]: F:KU-AI 抽屉页上下文摘要（KR-F4/F6）：screen 白名单映射页名、resource_key 白名单 reader 按 record_id 经既有 service 拼单据短句；客户端 label 永不进返回值；未知 screen/resource、无读权限、查询异常一律返回 None 省略摘要 | R:- | A:build_page_context_summary | S:客户端label不入参;未知/无权限返回None
+operations_service.py[SB4M]: F:KU-AI运营层聚合:get_hub能力矩阵(模型状态+AiStats+pulse计数+场景卡绑定/分类就绪);get_trust信任中心三卡+权限码闭集 | R:code:riveredge-backend/src/apps/kuaiai/models/knowledge.py,code:riveredge-backend/src/apps/kuaiai/services/agent_scene_service.py | A:get_hub,get_trust,TRUST_PERMISSION_CODES | S:局部降级null/not_ready不伪造;HITL按真实装配判定
+page_context.py[SB4M]: F:KU-AI抽屉页上下文摘要:screen/resource_key白名单经既有service拼短句,reader先行级数据范围复核 | R:- | A:build_page_context_summary | S:客户端label不入参;无权限/范围外返回None省略摘要
 retrieval.py[SB4M]: F:KU-AI RAG 检索唯一 facade：retrieve 流水线含启用库复核、chat 压缩、有限展开、pgvector 分库检索、RRF(k=60) 融合、打分重排、±1 扩窗；rag_enabled 开关，失败关闭返回 [] | R:code:riveredge-backend/src/apps/kuaiai/models/catalog.py,code:riveredge-backend/src/apps/kuaiai/models/knowledge.py | A:retrieve,resolve_embed_model_id | S:知识库向量检索/RAG/RRF/重排
-scene_tools.py[SB4L]: F:KU-AI 场景只读 Tool handler 六值闭集（库存余额/交期风险/采购跟单/已发布排程/质量异常/供应商订单）：仅调 kuaizhizao 读 service，无 current_user 的补 DataScope 行级范围，limit≤20，回有界脱敏摘要，异常失败关闭 | R:- | A:query_inventory_balance,query_delivery_risk,query_purchase_followup,query_published_schedule,query_quality_anomalies,query_supplier_orders | S:AI 只读场景查询/数据范围/摘要
+scene_tools.py[SB4L]: F:KU-AI场景只读Tool五值:query_inventory/analyze_delivery_risk/query_purchase_orders/query_schedule/analyze_quality | R:- | A:query_inventory,analyze_delivery_risk,query_purchase_orders,query_schedule,analyze_quality | S:仅调既有service+无current_user补行级范围;limit≤20
 session_service.py[SB4S]: F:KU-AI 会话/消息服务：get_owned_session 统一归属校验（int id/uuid 归一，跨租户404、同租户跨用户403），会话分页/创建/更新/软删与按 seq 排序消息列表，删除同事务级联软删会话消息 | R:code:riveredge-backend/src/apps/kuaiai/models/chat.py | A:get_owned_session,list_sessions,create_session,update_session,delete_session,list_messages | S:跨租户404跨用户403;软删级联消息;挂接档案复核归属
-settings_service.py[SB4M]: F:KU-AI 模型与能力设置聚合服务（spec185）：GET 聚合 chat/vision 角色候选连接+OCR 脱敏视图+六模板开关+能力项+乐观版本；PUT 事务内锁候选连接与站点行、锁内重算版本不一致409、白名单深合并单次 save、提交后 evict 模型缓存；回参不含密钥 | R:code:riveredge-backend/src/apps/kuaiai/services/agent_scene_service.py | A:get_settings,update_settings | S:锁内版本比对409;深合并单次save;无密钥回参
+settings_service.py[SB4L]: F:KU-AI模型与能力设置聚合:GET候选连接+OCR脱敏+模板开关+能力项+乐观版本;PUT锁内版本比对409+白名单深合并单写 | R:code:riveredge-backend/src/apps/kuaiai/services/agent_scene_service.py | A:get_settings,update_settings | S:无密钥回参;审计不记prompt全文
+checkpoint_saver.py[SB4M]: F:Tortoise版LangGraph BaseCheckpointSaver:checkpoint/pending writes两表读写,with_tenant租户隔离 | R:code:riveredge-backend/src/apps/kuaiai/models/checkpoint.py | A:TortoiseCheckpointSaver | S:仅异步接口;跨租户操作unscoped+审计;非审计真源
+hitl_service.py[SB4L]: F:KU-AI人工确认闸:write工具识别+thread_id/token生成+TTL+挂起元数据+CAS认领+确认审计+过期清理 | R:code:riveredge-backend/src/apps/kuaiai/services/checkpoint_saver.py | A:HITL_META_*,resume认领,审计 | S:token HMAC校验失败一律404;TTL读取异常失败关闭
+sop_sync_service.py[SB4L]: F:SOP→知识库同步:publish/obsolete投递+按当前态幂等建删文档+附件文本并入+同步索引 | R:- | A:enqueue_sop_sync,sync_sop_document | S:下架软删chunks;审计写系统身份;日志不记正文
+tool_catalog_service.py[SB4S]: F:KU-AI Tool目录服务:manifest ai_tools唯一真源→已注册∩ENABLED_TOOL_NAMES下发 | R:- | A:manifest_tool_meta,manifest_write_tool_names | S:manifest非法/缺kind失败关闭不降级
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaiai/services/pulse/===
 __init__.py[SC1T]: F:Pulse detector 框架包标记（spec 182）：base 承载上下文/权限基座，registry 聚合编排 | R:- | A:- | S:pulse 异常检测框架包标记
-base.py[SC3S]: F:Pulse detector 基座：共享 PulseContext（now/today 业务时刻）与 PulseDetector 只读协议；PulsePermissionDenied 判权失败关闭；business_date 站点业务日历、ensure_permission、apply_scope 数据范围助手 | R:- | A:PulseContext,PulseDetector,PulsePermissionDenied,ensure_permission,apply_scope,business_date | S:detector 上下文/权限/时区/数据范围基座
+base.py[SC3S]: F:Pulse detector基座:共享PulseContext(同一业务时刻)+只读协议+权限失败关闭+来源级detect_sources | R:- | A:PulseContext,PulseDetector,PulsePermissionDenied,ensure_permission,apply_scope,business_date | S:无权来源signals必为空;today=站点业务日历日
 production.py[SC3S]: F:生产延期 detector：扫 planned_end_date 早于站点墙钟且非排除态闭集的工单，按逾期天数×工单优先级定 severity/priority，分批 200 产出 PulseItemOut，锚定 work-order:read 权限与数据范围 | R:- | A:ProductionDelayDetector,DOMAIN,RULE_CODE,REQUIRED_PERMISSION,SCOPE_RESOURCE,SCAN_BATCH_SIZE | S:工单生产延期检测 severity 矩阵
-registry.py[SC3M]: F:Pulse 五领域注册表与聚合入口：per-detector wait_for 超时+gather 隔离失败，未接入领域回 not_connected，errors[] 脱敏，domain+rule_code+resource_id 去重，严重度/优先级/detected_at 排序，分页分组与 summary | R:- | A:run_pulse,pulse_total_count,parse_domains,DETECTORS,PULSE_DOMAINS,DOMAIN_LABELS | S:pulse 多领域聚合编排/超时隔离/分页汇总
+registry.py[SC3M]: F:Pulse五领域注册表聚合:per-detector超时+gather隔离+来源级sources+脱敏errors+去重排序分页summary | R:- | A:run_pulse,pulse_total_count,parse_domains,DETECTORS,PULSE_DOMAINS,DOMAIN_LABELS | S:未接入领域not_connected;summary只计成功detector
 sales.py[SC3S]: F:销售订单交期风险 detector：租户配置 warning_days（缺失/非法回落 3），扫 delivery_date≤today+N 且非履约终态订单，按距交期天数定 severity/priority，分批产出 PulseItemOut，锚定 sales-order:read 权限与数据范围 | R:- | A:SalesDeliveryRiskDetector,DOMAIN,RULE_CODE,REQUIRED_PERMISSION,SALES_TERMINAL_STATUSES,DEFAULT_WARNING_DAYS | S:销售订单交期风险检测 租户阈值
+equipment.py[SC4L]: F:Pulse设备detector:MES故障单未闭环+kuaiiot未处理告警按设备聚合两来源 | R:code:riveredge-backend/src/apps/kuaiai/services/pulse/base.py | A:EquipmentFaultDetector | S:两源独立判权;无权来源signals恒空
+inventory.py[SC3S]: F:Pulse库存预警detector:未处理InventoryAlert→统一异常项 | R:code:riveredge-backend/src/apps/kuaiai/services/pulse/base.py | A:InventoryAlertDetector | S:闭集对齐handleable;alert_level定严重度
+quality.py[SC3S]: F:Pulse质量异常detector:未闭环QualityException→统一异常项 | R:code:riveredge-backend/src/apps/kuaiai/services/pulse/base.py | A:QualityExceptionDetector | S:severity枚举定级;未知值兜底warning/medium
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaiiot/===
 __init__.py[AA2T]: F:快数采IoT应用包 | R:- | A:- | S:仅docstring;工业物联网设备数采与集成平台;5L
@@ -9873,3 +9902,26 @@ index.tsx[EU5T]: F:纯工位账号访问守卫：纯工位账号限留工位入�
 
 ===D:/kuaigeyun-pro/kuaigeyun/riveredge-frontend/src/patches/===
 isolatedRcDialog.tsx[EU5T]: F:rc-dialog隔离补丁的废弃占位文件：曾用vite alias替换@rc-component/dialog做全局Portal点击隔离，与antd预构建图交织拖慢首屏模块图致看门狗误报白屏，已退役仅export{}；标准做法指向utils/modalEventIsolation.ts | R:code:riveredge-frontend/src/utils/modalEventIsolation.ts | A:- | S:11行;纯@deprecated注释块+export{}占位，指引MODAL_ISOLATE_POINTER_PROPS与global.less遮罩pointer-events
+
+===D:/kuaigeyun-pro/kuaigeyun/riveredge-backend/src/apps/kuaiai/services/tools/===
+__init__.py[SB1T]: F:KU-AI场景Tool适配层包(spec195-218按领域分文件) | R:- | A:- | S:handler约定同scene_tools失败关闭
+complaint_8d.py[SB4L]: F:场景只读Tool:query_complaints/query_8d_reports客诉与8D报告查询 | R:code:riveredge-backend/src/apps/kuaiai/services/scene_tools.py | A:query_complaints,query_8d_reports | S:客诉先行级范围复核;参数闭集limit≤20
+document_chain.py[SB4L]: F:场景只读Tool:trace_document_chain+销/采/需求变更影响分析;链上节点按类型读权限过滤 | R:code:riveredge-backend/src/apps/kuaiai/services/scene_tools.py | A:trace_document_chain,analyze_sales_order_change_impact,analyze_purchase_order_change_impact,analyze_demand_change_impact | S:无权节点只计数;映射缺项按无权
+ecn_impact.py[SB4L]: F:场景只读Tool:query_ecn/analyze_ecn_impact;kuaiplm未启用回固定文案 | R:code:riveredge-backend/src/apps/kuaiai/services/scene_tools.py | A:query_ecn,analyze_ecn_impact | S:影响面分区按读权限门控;不输出变更全文/金额
+engineering_bom.py[SB4L]: F:场景只读Tool:query_material_where_used/query_drawing_where_used/query_engineering_bom | R:code:riveredge-backend/src/apps/kuaiai/services/scene_tools.py | A:query_material_where_used,query_drawing_where_used,query_engineering_bom | S:一Tool一权限码;不输出进价/图纸正文
+equipment_maintenance.py[SB4L]: F:场景只读Tool:设备台账/故障维修/保养计划/提醒/校准五查询 | R:code:riveredge-backend/src/apps/kuaiai/services/scene_tools.py | A:query_equipment,query_equipment_faults,query_maintenance_plans,query_maintenance_reminders,query_calibration_alerts | S:逐行套scoped范围;不输出金额
+equipment_performance.py[SB4L]: F:场景只读Tool:query_equipment_oee/analyze_equipment_losses设备OEE与损失分解 | R:code:riveredge-backend/src/apps/kuaiai/services/scene_tools.py | A:query_equipment_oee,analyze_equipment_losses | S:OEE按设备台账权限码收紧;无行级范围不补
+exception_report.py[SB4M]: F:场景写Tool:缺料/延期/质量异常上报经HITL确认闸执行 | R:code:riveredge-backend/src/apps/kuaiai/services/scene_tools.py | A:create_material_shortage_exception,create_delivery_delay_exception,create_quality_exception | S:装配期挂起确认后执行;关联单先行级复核
+inspection_supplier.py[SB4L]: F:场景只读Tool:来料/过程/成品/OQC检验单+供应商绩效查询 | R:code:riveredge-backend/src/apps/kuaiai/services/scene_tools.py | A:query_incoming_inspections,query_process_inspections,query_finished_inspections,query_oqc_inspections,query_supplier_evaluations | S:过滤键同service闭集;行级scoped收敛
+inventory_alerts.py[SB4L]: F:场景只读Tool:库存预警/补货建议/呆滞料查询 | R:code:riveredge-backend/src/apps/kuaiai/services/scene_tools.py | A:query_inventory_alerts,query_replenishment_suggestions,query_slow_moving_inventory | S:行id套inventory资源求交;过采样后收敛
+kitting_exceptions.py[SB4L]: F:场景只读Tool:齐套分析+缺料/延期/质量异常查询;异常资源∩工单可见集双层收敛 | R:code:riveredge-backend/src/apps/kuaiai/services/scene_tools.py | A:analyze_kitting,query_material_shortages,query_delivery_delays,query_quality_exceptions | S:无工单行只过自身范围;必填缺失剔除
+management_brief.py[SB4L]: F:场景只读Tool:get_management_brief管理层日/周简报多域聚合 | R:code:riveredge-backend/src/apps/kuaiai/services/scene_tools.py | A:get_management_brief | S:域级独立判权+超时降级;只聚合确定性指标
+mold_tooling.py[SB4M]: F:场景只读Tool:query_molds/query_tooling模具寿命与工装状态 | R:code:riveredge-backend/src/apps/kuaiai/services/scene_tools.py | A:query_molds,query_tooling | S:剩余寿命<20%入预警;行级套资源键
+mrp_exceptions.py[SB3S]: F:场景只读Tool:query_mrp_exceptions MRP例外收件箱解读 | R:code:riveredge-backend/src/apps/kuaiai/services/scene_tools.py | A:query_mrp_exceptions | S:与路由同口径不加范围;不重排
+process_routes.py[SB4M]: F:场景只读Tool:query_process_routes工艺路线(物料反查+view=parameters) | R:code:riveredge-backend/src/apps/kuaiai/services/scene_tools.py | A:query_process_routes | S:逐行套route资源;total不回显
+quality_analytics.py[SB4M]: F:场景只读Tool:analyze_first_pass_yield/analyze_defect_pareto质量分析 | R:code:riveredge-backend/src/apps/kuaiai/services/scene_tools.py | A:analyze_first_pass_yield,analyze_defect_pareto | S:帕累托按defect_type聚合;不输出员工排名
+sales_purchase.py[SB4M]: F:场景只读Tool:query_sales_orders/query_purchase_arrival_warnings | R:code:riveredge-backend/src/apps/kuaiai/services/scene_tools.py | A:query_sales_orders,query_purchase_arrival_warnings | S:只读走options不写库;不落商务敏感字段
+scheduling_board.py[SB4M]: F:场景只读Tool:query_scheduling_board排产看板纯事实 | R:code:riveredge-backend/src/apps/kuaiai/services/scene_tools.py | A:query_scheduling_board | S:仅取确定性事实不调模型;候选套scheduling资源
+shift_brief.py[SB4M]: F:场景只读Tool:query_production_daily/query_pulse_signals日报与异常信号 | R:code:riveredge-backend/src/apps/kuaiai/services/scene_tools.py | A:query_production_daily,query_pulse_signals | S:errors/complete透传;不调list_templates
+stocktaking.py[SB4L]: F:场景只读Tool:query_stocktakings/analyze_stocktaking_variance盘点差异解读 | R:code:riveredge-backend/src/apps/kuaiai/services/scene_tools.py | A:query_stocktakings,analyze_stocktaking_variance | S:双视图按读权限分判;过采样后收敛
+traceability.py[SB4M]: F:场景只读Tool:trace_lineage批号/序列号/工单正反追溯BFS分层 | R:code:riveredge-backend/src/apps/kuaiai/services/scene_tools.py | A:trace_lineage | S:与路由同口径无行级;不落通讯信息
