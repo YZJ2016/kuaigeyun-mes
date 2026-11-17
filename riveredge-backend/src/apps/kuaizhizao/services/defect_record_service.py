@@ -1192,6 +1192,7 @@ class DefectRecordService(AppBaseService[DefectRecord]):
                 ],
             ),
             created_by=updated_by,
+            skip_manual_create_auto_submit=True,
         )
 
         defect_record.accept_purchase_receipt_id = receipt.id

@@ -167,7 +167,9 @@ class PaymentApplicationPullService:
                 )
             ],
         )
-        return await self._apps.create_application(tenant_id, create, created_by)
+        return await self._apps.create_application(
+            tenant_id, create, created_by, skip_manual_create_auto_submit=True
+        )
 
     async def create_from_purchase_orders(
         self,
@@ -232,7 +234,9 @@ class PaymentApplicationPullService:
             application_kind="prepayment",
             items=merged_items,
         )
-        return await self._apps.create_application(tenant_id, create, created_by)
+        return await self._apps.create_application(
+            tenant_id, create, created_by, skip_manual_create_auto_submit=True
+        )
 
     async def push_payment_application_open_by_receipt_ids(
         self, tenant_id: int, receipt_ids: List[int]
@@ -397,7 +401,9 @@ class PaymentApplicationPullService:
                 )
             ],
         )
-        return await self._apps.create_application(tenant_id, create, created_by)
+        return await self._apps.create_application(
+            tenant_id, create, created_by, skip_manual_create_auto_submit=True
+        )
 
     async def create_from_purchase_receipts(
         self,
@@ -442,7 +448,9 @@ class PaymentApplicationPullService:
             application_kind="goods",
             items=merged_items,
         )
-        return await self._apps.create_application(tenant_id, create, created_by)
+        return await self._apps.create_application(
+            tenant_id, create, created_by, skip_manual_create_auto_submit=True
+        )
 
     async def create_from_reconciliation(
         self,
@@ -490,7 +498,9 @@ class PaymentApplicationPullService:
             application_kind="mixed" if len(lines) > 1 else "goods",
             items=lines,
         )
-        return await self._apps.create_application(tenant_id, create, created_by)
+        return await self._apps.create_application(
+            tenant_id, create, created_by, skip_manual_create_auto_submit=True
+        )
 
     async def list_payable_pull_lines(
         self,
