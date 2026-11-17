@@ -904,7 +904,7 @@ export default function App() {
   );
 
   // 触屏工位模式用 middle；普通 PC 亦 middle（小屏已交 H5，不再用 small 平板档）
-  const componentSize = 'middle' as const;
+  const componentSize = 'medium' as const;
 
   return (
     <ConfigProvider 

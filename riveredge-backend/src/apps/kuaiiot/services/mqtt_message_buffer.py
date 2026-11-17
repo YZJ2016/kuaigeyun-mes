@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections import deque
-from datetime import datetime, timezone
 from threading import Lock
 from typing import Any, Deque, Optional
 from uuid import uuid4
@@ -11,6 +10,7 @@ from uuid import uuid4
 from loguru import logger
 
 from apps.kuaiiot.services.mqtt_device_discovery import compact_payload_for_store
+from core.utils.timezone_utils import now_utc
 
 # 每个连接保留条数；单条 payload 预览最大字符
 MAX_MESSAGES_PER_CONNECTION = 50
@@ -43,7 +43,7 @@ class MqttMessageBuffer:
             "topic": topic,
             "qos": qos,
             "retained": retained,
-            "received_at": datetime.now(timezone.utc).isoformat(),
+            "received_at": now_utc().isoformat(),
             "payload": cls._truncate_payload(payload),
             "payload_format": payload_format,
             "ingest_summary": ingest_summary or {},

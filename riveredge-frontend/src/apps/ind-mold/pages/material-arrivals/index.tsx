@@ -102,7 +102,7 @@ export default function MoldMaterialArrivalsPage() {
           <Form.Item name="weight" label={t('app.ind-mold.materialArrival.weight')}>
             <InputNumber style={{ width: '100%' }} min={0} />
           </Form.Item>
-          <Form.Item name="remarks" label={t('common.remarks')}>
+          <Form.Item name="remarks" label={t('common.remark')}>
             <Input.TextArea rows={3} />
           </Form.Item>
         </Form>

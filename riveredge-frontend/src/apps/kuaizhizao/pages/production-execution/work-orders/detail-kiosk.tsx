@@ -152,7 +152,7 @@ const WorkOrderDetailKioskPage: React.FC = () => {
                 }]}
             >
                 <Card loading={loading}>
-                    {!loading && <Alert type="error" showIcon message={t('app.kuaizhizao.workOrder.kioskDetailLoadFailed')} />}
+                    {!loading && <Alert type="error" showIcon title={t('app.kuaizhizao.workOrder.kioskDetailLoadFailed')} />}
                 </Card>
             </TouchScreenTemplate>
         );
@@ -188,7 +188,7 @@ const WorkOrderDetailKioskPage: React.FC = () => {
                     <Alert
                         type="info"
                         showIcon
-                        message="未确认操作员：可查看工单与状态，开工与完工报工不可用"
+                        title="未确认操作员：可查看工单与状态，开工与完工报工不可用"
                     />
                 ) : null}
                 {/* 顶部信息栏 */}

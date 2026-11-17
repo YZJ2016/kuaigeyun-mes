@@ -32,7 +32,7 @@ export default function GroupsPage() {
   };
 
   return (
-    <Space direction="vertical" size={16} style={{ width: '100%', padding: 16 }}>
+    <Space orientation="vertical" size={16} style={{ width: '100%', padding: 16 }}>
       <Space>
         <Title level={4} style={{ margin: 0 }}>
           设备分组

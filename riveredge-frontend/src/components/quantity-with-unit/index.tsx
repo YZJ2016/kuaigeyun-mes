@@ -29,7 +29,7 @@ export interface QuantityWithUnitProps {
   value?: QuantityWithUnitValue;
   onChange?: (next: QuantityWithUnitValue) => void;
   disabled?: boolean;
-  size?: 'large' | 'middle' | 'small';
+  size?: 'large' | 'medium' | 'small';
   quantityMin?: number;
   quantityPrecision?: number;
   quantityPlaceholder?: string;
@@ -71,7 +71,7 @@ export const QuantityWithUnit: React.FC<QuantityWithUnitProps> = ({
   value,
   onChange,
   disabled = false,
-  size='middle',
+  size='medium',
   quantityMin = 0,
   quantityPrecision = 2,
   quantityPlaceholder,

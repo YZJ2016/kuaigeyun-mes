@@ -1008,7 +1008,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
             permGates={purchaseOrderChangePerms}
             handlers={purchaseOrderChangeAuditBatchHandlers}
             onSuccess={handlePurchaseOrderChangeAuditBatchSuccess}
-            toolBarButtonSize="middle"
+            toolBarButtonSize="medium"
           />,
         ]}
       />

@@ -30,7 +30,7 @@ from core.services.integration.kingdee_galaxy_api_presets import (
     SAL_SALE_ORDER_DEFAULT_BILL_TYPE,
     SAL_SALE_ORDER_FORM_ID,
 )
-from core.utils.timezone_utils import to_api_isoformat
+from core.utils.timezone_utils import now_utc, resolve_business_datetime, to_api_isoformat
 from infra.exceptions.exceptions import BusinessLogicError
 from infra.services.business_config_service import BusinessConfigService
 
@@ -74,7 +74,7 @@ def _relation_is_stale_pushing(rel: DocumentRelation) -> bool:
         started = datetime.fromisoformat(notes.replace("Z", "+00:00"))
         if started.tzinfo is not None:
             started = started.replace(tzinfo=None)
-        age = (datetime.utcnow() - started).total_seconds()
+        age = (now_utc().replace(tzinfo=None) - started).total_seconds()
         return age >= PUSHING_STALE_SECONDS
     except Exception:
         return True
@@ -129,7 +129,7 @@ async def _claim_sales_order_push_slot(
                 relation_type="source",
                 relation_mode="push",
                 relation_desc="销售订单推送金蝶销售订单（进行中）",
-                notes=to_api_isoformat(datetime.utcnow()),
+                notes=to_api_isoformat(resolve_business_datetime()),
                 created_by=acting_user_id,
             )
         except IntegrityError:
@@ -165,7 +165,7 @@ async def _finalize_sales_order_push_relation(
         "relation_type": "source",
         "relation_mode": "push",
         "relation_desc": str(result.get("relation_desc") or "销售订单推送金蝶销售订单"),
-        "notes": to_api_isoformat(datetime.utcnow()),
+        "notes": to_api_isoformat(resolve_business_datetime()),
         "created_by": acting_user_id,
     }
     if pending:

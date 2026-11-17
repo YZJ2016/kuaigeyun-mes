@@ -264,7 +264,7 @@ export function AgentGrantsModal({ open, agent, onClose }: AgentGrantsModalProps
                 type="warning"
                 showIcon
                 style={{ marginBottom: 8 }}
-                message={t('app.kuaiai.agents.rolesDenied', {
+                title={t('app.kuaiai.agents.rolesDenied', {
                   defaultValue:
                     '无角色读取权限（system:role:read），无法加载角色候选列表；已授权角色仍会显示并可保存调整',
                 })}

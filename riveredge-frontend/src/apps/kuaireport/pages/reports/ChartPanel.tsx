@@ -229,7 +229,7 @@ export function DrillDrawer({
     }),
   );
   return (
-    <Drawer title={title || '明细下钻'} open={open} width={720} onClose={onClose}>
+    <Drawer title={title || '明细下钻'} open={open} size={720} onClose={onClose}>
       <Table size="small" rowKey={(_, index) => String(index)} columns={columns} dataSource={rows} pagination={{ pageSize: 10 }} />
     </Drawer>
   );

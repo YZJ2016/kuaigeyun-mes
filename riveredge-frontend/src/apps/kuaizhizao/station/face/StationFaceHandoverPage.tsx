@@ -445,7 +445,7 @@ export const StationFaceHandoverPage: React.FC<StationFaceHandoverPageProps> = (
                 }
               />
             ) : (
-              <Space direction="vertical" style={{ width: '100%' }}>
+              <Space orientation="vertical" style={{ width: '100%' }}>
                 {templates.map((row) => (
                   <Space key={row.id} style={{ width: '100%', justifyContent: 'space-between' }}>
                     <Text>
@@ -476,7 +476,7 @@ export const StationFaceHandoverPage: React.FC<StationFaceHandoverPageProps> = (
 
           <div className="hmi-station-pane">
             <Card title="交接班">
-          <Space direction="vertical" size={12} style={{ width: '100%' }}>
+          <Space orientation="vertical" size={12} style={{ width: '100%' }}>
             <Text>
               工位：{workstationId == null ? '未传入' : workstationId}
               {workstationName ? ` ${workstationName}` : ''}
@@ -520,7 +520,7 @@ export const StationFaceHandoverPage: React.FC<StationFaceHandoverPageProps> = (
               </Button>
             </Space>
             {summary ? (
-              <Space direction="vertical" size={4}>
+              <Space orientation="vertical" size={4}>
                 <Text>计划数量 {qtyText(summary.planned_qty)}</Text>
                 <Text>完成数量 {qtyText(summary.completed_qty)}</Text>
                 <Text>不合格数量 {qtyText(summary.unqualified_qty)}</Text>
@@ -557,7 +557,7 @@ export const StationFaceHandoverPage: React.FC<StationFaceHandoverPageProps> = (
             <Empty description={`工单 ${workOrderId} 已查角标。未传入当前工序，不查询工序文档。`} />
           ) : (
             <Spin spinning={documentsLoading}>
-              <Space direction="vertical" size={12} style={{ width: '100%' }}>
+              <Space orientation="vertical" size={12} style={{ width: '100%' }}>
                 <Text>
                   工单 {workOrderId} · 工序 {operationId}
                 </Text>
@@ -578,7 +578,7 @@ export const StationFaceHandoverPage: React.FC<StationFaceHandoverPageProps> = (
                   <Text type="secondary">该工序没有 SOP</Text>
                 )}
                 {documents?.sop?.steps?.length ? (
-                  <Space direction="vertical" size={2}>
+                  <Space orientation="vertical" size={2}>
                     {documents.sop.steps.map((step) => (
                       <Text key={step.id}>
                         {step.title}

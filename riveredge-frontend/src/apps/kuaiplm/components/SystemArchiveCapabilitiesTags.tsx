@@ -43,7 +43,7 @@ export const SystemArchiveCapabilitiesTags: React.FC<Props> = ({
   }
   if (compact) {
     return (
-      <Space size={4} wrap direction="vertical" style={{ lineHeight: 1.3 }}>
+      <Space size={4} wrap orientation="vertical" style={{ lineHeight: 1.3 }}>
         <span>
           {t('app.kuaiplm.rdProjects.systemArchive.listCell', {
             filled: filled ?? 0,

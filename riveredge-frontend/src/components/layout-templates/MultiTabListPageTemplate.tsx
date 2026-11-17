@@ -123,7 +123,7 @@ export const MultiTabListPageTemplate: React.FC<MultiTabListPageTemplateProps> =
                     activeTabKey={activeTabKey}
                     onTabChange={onTabChange}
                     tabBarExtraContent={tabBarExtraContent}
-                    tabProps={{ size: 'middle' }}
+                    tabProps={{ size: 'medium' }}
                     classNames={{ body: 'scrollbar-like-modal multi-tab-list-page-card-body' }}
                     styles={{ body: preserveMounted ? { padding: 0 } : { padding } }}
                 >

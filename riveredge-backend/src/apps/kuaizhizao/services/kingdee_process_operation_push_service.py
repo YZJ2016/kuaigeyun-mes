@@ -16,7 +16,7 @@ from core.services.integration.document_push_pipeline import (
     DocumentPushPrepared,
     DocumentPushRequest,
 )
-from core.utils.timezone_utils import to_api_isoformat
+from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
 from infra.exceptions.exceptions import BusinessLogicError
 from infra.services.business_config_service import BusinessConfigService
 
@@ -200,7 +200,7 @@ class KingdeeProcessOperationPushService:
                 relation_type="source",
                 relation_mode="push",
                 relation_desc=str(result.get("relation_desc") or "工序推送金蝶ENG_Process"),
-                notes=to_api_isoformat(datetime.utcnow()),
+                notes=to_api_isoformat(resolve_business_datetime()),
                 created_by=acting_user_id,
             )
 

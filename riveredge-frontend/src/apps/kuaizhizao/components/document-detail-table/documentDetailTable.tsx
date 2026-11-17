@@ -46,12 +46,12 @@ export const DOCUMENT_DETAIL_DATE_PICKER_STYLE: React.CSSProperties = {
 
 export const DOCUMENT_DETAIL_TABLE_PROPS = {
   className: DOCUMENT_DETAIL_TABLE_CLASS,
-  size: 'middle' as const,
+  size: 'medium' as const,
   style: { width: '100%', margin: 0 },
 };
 
-/** 明细表行内 Input / Select / DatePicker 等与 Table middle 对齐 */
-export const DOCUMENT_DETAIL_CONTROL_SIZE = 'middle' as const;
+/** 明细表行内 Input / Select / DatePicker 等与 Table medium 对齐 */
+export const DOCUMENT_DETAIL_CONTROL_SIZE = 'medium' as const;
 
 /** 明细表行内文本框空值占位（规格/型号/伙伴料号等统一，禁止混用列标题文案） */
 export const DOCUMENT_DETAIL_LINE_EMPTY_PLACEHOLDER = '—';

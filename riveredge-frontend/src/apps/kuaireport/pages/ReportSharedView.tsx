@@ -87,7 +87,7 @@ export default function ReportSharedView() {
     if (token) void openReport(undefined, DEFAULT_PAGE_SIZE, 0);
   }, [token, openReport]);
 
-  if (!token) return <Alert type="error" message="缺少分享参数" />;
+  if (!token) return <Alert type="error" title="缺少分享参数" />;
 
   if (!report) {
     if (needsPassword) {
@@ -103,7 +103,7 @@ export default function ReportSharedView() {
           <Form.Item name="password" label="访问口令" rules={[{ required: true }]}>
             <Input.Password />
           </Form.Item>
-          {error ? <Alert type="error" message={error} style={{ marginBottom: 12 }} /> : null}
+          {error ? <Alert type="error" title={error} style={{ marginBottom: 12 }} /> : null}
           <Button type="primary" htmlType="submit" loading={loading} block>
             打开账表
           </Button>
@@ -113,7 +113,7 @@ export default function ReportSharedView() {
     return loading ? (
       <Spin style={{ display: 'block', margin: '20vh auto' }} />
     ) : (
-      <Alert type="error" message={error || '分享打不开'} />
+      <Alert type="error" title={error || '分享打不开'} />
     );
   }
 

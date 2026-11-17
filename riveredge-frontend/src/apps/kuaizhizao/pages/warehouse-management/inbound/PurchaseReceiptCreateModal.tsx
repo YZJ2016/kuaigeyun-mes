@@ -273,6 +273,41 @@ function PurchaseReceiptCreateWarehouseCell({
 }
 
 /** 历史金蝶 CREDIT/CASH → 表单码；客商码原样 */
+const TAX_RATE_PERCENT_ADDON_STYLE: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  padding: '0 8px',
+  color: 'var(--ant-color-text-secondary)',
+  background: 'var(--ant-color-fill-alter)',
+  border: '1px solid var(--ant-color-border)',
+  borderLeft: 0,
+  borderRadius: '0 var(--ant-border-radius) var(--ant-border-radius) 0',
+  fontSize: 'inherit',
+};
+
+/** Form.Item 子组件须接收 value/onChange；不可直接用 Space.Compact 包裹 InputNumber */
+function TaxRatePercentInput({
+  value,
+  onChange,
+}: {
+  value?: number | null;
+  onChange?: (value: number | null) => void;
+}) {
+  return (
+    <Space.Compact style={{ width: '100%' }}>
+      <InputNumber
+        value={value}
+        onChange={onChange}
+        min={0}
+        max={100}
+        precision={2}
+        style={{ width: '100%' }}
+      />
+      <span style={TAX_RATE_PERCENT_ADDON_STYLE}>%</span>
+    </Space.Compact>
+  );
+}
+
 function normalizeReceiptPayModeForForm(raw: unknown): string | undefined {
   const s = String(raw ?? '').trim();
   if (!s) return undefined;
@@ -1511,7 +1546,7 @@ export const PurchaseReceiptCreateModal: React.FC<PurchaseReceiptCreateModalProp
             label={t('app.kuaizhizao.warehouseInbound.field.taxRate')}
             rules={[{ required: true, message: t('app.kuaizhizao.warehouseInbound.field.taxRateRequired') }]}
           >
-            <InputNumber min={0} max={100} precision={2} addonAfter="%" style={{ width: '100%' }} />
+            <TaxRatePercentInput />
           </ProFormItem>
         </Col>
         <Col span={6}>

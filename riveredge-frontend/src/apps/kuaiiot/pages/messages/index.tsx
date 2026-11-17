@@ -17,7 +17,7 @@ export default function MessagesPage({ title = '消息追踪' }: { title?: strin
   const refresh = () => form.submit();
 
   return (
-    <Space direction="vertical" size={16} style={{ width: '100%', padding: 16 }}>
+    <Space orientation="vertical" size={16} style={{ width: '100%', padding: 16 }}>
       <Space>
         <Title level={4} style={{ margin: 0 }}>
           {title}

@@ -30,7 +30,7 @@ Tool 名：``trace_document_chain`` / ``analyze_sales_order_change_impact`` /
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 from loguru import logger
@@ -66,6 +66,7 @@ _TRACE_DOCUMENT_TYPES = frozenset(
         "delivery_notice",
         "purchase_order",
         "purchase_requisition",
+        "purchase_inquiry",
         "purchase_receipt",
         "purchase_return",
         "payable",
@@ -137,6 +138,7 @@ _DOC_TYPE_READ_PERMISSION: Dict[str, str] = {
     "delivery_notice": "kuaizhizao:delivery-notice:read",
     "purchase_order": "kuaizhizao:purchase-order:read",
     "purchase_requisition": "kuaizhizao:purchase-requisition:read",
+    "purchase_inquiry": "kuaizhizao:purchase-inquiry:read",
     "purchase_receipt": "kuaizhizao:inbound:read",
     "purchase_return": "kuaizhizao:purchase-return:read",
     # 财务单据归属 kuaicaiwu 应用 manifest
@@ -515,16 +517,10 @@ def _fmt_dt(value: Any) -> str:
     ``changed_at`` 已是 ``to_api_isoformat`` 串时原样透传（缺省 ''）。"""
     if value is None:
         return ""
-    try:
-        from core.utils.timezone_utils import to_api_isoformat
+    from core.utils.timezone_utils import to_api_isoformat
 
-        out = to_api_isoformat(value)
-        if out:
-            return out
-    except Exception:
-        pass
-    if isinstance(value, datetime):
-        return value.strftime("%Y-%m-%d %H:%M:%S")
+    if isinstance(value, (datetime, date)):
+        return to_api_isoformat(value) or ""
     s = str(value).strip()
     return s if s else ""
 

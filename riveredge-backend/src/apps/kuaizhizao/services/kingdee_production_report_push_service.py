@@ -524,7 +524,7 @@ class KingdeeProductionReportPushService:
                         relation_desc=str(
                             result.get("relation_desc") or "报工审核通过推送金蝶生产汇报单"
                         ),
-                        notes=to_api_isoformat(datetime.utcnow()),
+                        notes=to_api_isoformat(resolve_business_datetime()),
                     ),
                     created_by=acting_user_id,
                 )

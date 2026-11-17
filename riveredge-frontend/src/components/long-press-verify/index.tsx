@@ -20,7 +20,7 @@ export interface LongPressVerifyProps {
   /** 按钮文本，默认 "长按验证" */
   text?: string;
   /** 按钮大小 */
-  size?: 'small' | 'middle' | 'large';
+  size?: 'small' | 'medium' | 'large';
   /** 是否禁用 */
   disabled?: boolean;
   /** 自定义样式类名 */
@@ -37,7 +37,7 @@ export default function LongPressVerify({
   duration = 2000,
   onVerify,
   text = '长按验证',
-  size='middle',
+  size='medium',
   disabled = false,
   className = '',
 }: LongPressVerifyProps) {

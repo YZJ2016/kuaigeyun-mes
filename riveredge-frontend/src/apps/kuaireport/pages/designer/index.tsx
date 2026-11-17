@@ -204,7 +204,7 @@ export default function ReportDesignerPage() {
       <Typography.Title level={4}>账表设计器</Typography.Title>
       {readOnly ? <Typography.Paragraph>系统报表只可查看。</Typography.Paragraph> : null}
       <Form form={form} layout="vertical" disabled={readOnly} onFinish={onSave}>
-        <Space size="middle" align="start" wrap>
+        <Space size="medium" align="start" wrap>
           <Form.Item name="code" label="编码" rules={[{ required: true, message: '请填写编码' }]}>
             <Input maxLength={50} disabled={readOnly || saved?.category === 'custom'} />
           </Form.Item>

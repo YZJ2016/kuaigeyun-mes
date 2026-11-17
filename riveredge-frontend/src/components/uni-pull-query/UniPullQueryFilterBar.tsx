@@ -77,7 +77,7 @@ export const UniPullQueryFilterBar: React.FC<UniPullQueryFilterBarProps> = ({
       {enableDateFilter && onDateDraftChange && onDateApply ? (
         <RangePicker
           allowClear
-          size="middle"
+          size="medium"
           format="YYYY-MM-DD"
           placeholder={[
             t('components.uniPullQuery.dateFromPlaceholder'),

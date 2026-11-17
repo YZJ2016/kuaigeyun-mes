@@ -116,7 +116,7 @@ const OutboundOutsourcePullEntryPage: React.FC = () => {
   useEffect(() => {
     bindSnapshot(() => ({
       notes,
-      issueTime: issueTime?.isValid() ? issueTime.toISOString() : undefined,
+      issueTime: toApiBusinessDocumentDateTime(issueTime),
       receiverUuid: operatorHook.receiverUuid,
       receiverName: operatorHook.receiverName,
       issueQuantities: Object.fromEntries(issueLines.map((line) => [line.materialId, line.issueQuantity])),

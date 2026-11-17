@@ -456,7 +456,7 @@ const SettingsPage: React.FC = () => {
             style={{ marginBottom: 12 }}
             type="info"
             showIcon
-            message={t('app.kuaiai.settings.serverChanged', {
+            title={t('app.kuaiai.settings.serverChanged', {
               defaultValue: '服务端配置已更新',
             })}
             action={

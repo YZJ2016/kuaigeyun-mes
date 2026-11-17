@@ -149,7 +149,7 @@ export default function DistributionPage() {
   };
 
   return (
-    <Space direction="vertical" size={16} style={{ width: '100%' }}>
+    <Space orientation="vertical" size={16} style={{ width: '100%' }}>
       <Card title="按角色授权">
         <Form form={grantForm} layout="inline" onFinish={onGrant}>
           <Form.Item

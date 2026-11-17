@@ -715,7 +715,7 @@ function StationHome() {
           }}
         >
           <Space size={32} wrap>
-            <Space direction="vertical" size={8}>
+            <Space orientation="vertical" size={8}>
               <Typography.Text type="secondary">生产执行</Typography.Text>
               <Space wrap>
                 {EXECUTION_LINKS.map((item, index) => (
@@ -729,7 +729,7 @@ function StationHome() {
                 ))}
               </Space>
             </Space>
-            <Space direction="vertical" size={8}>
+            <Space orientation="vertical" size={8}>
               <Typography.Text type="secondary">作业资料</Typography.Text>
               <Space wrap>
                 {RESOURCE_LINKS.map((item) => (
@@ -743,7 +743,7 @@ function StationHome() {
                 ))}
               </Space>
             </Space>
-            <Space direction="vertical" size={8}>
+            <Space orientation="vertical" size={8}>
               <Typography.Text type="secondary">现场处理</Typography.Text>
               <Space wrap>
                 {STATION_LINKS.map((item) => (
@@ -758,7 +758,7 @@ function StationHome() {
               </Space>
             </Space>
           </Space>
-          <Space direction="vertical" size={8} style={{ alignItems: 'flex-end' }}>
+          <Space orientation="vertical" size={8} style={{ alignItems: 'flex-end' }}>
             <Typography.Text type="secondary">终端管理</Typography.Text>
             <Button {...touchButtonProps({ size: 'action' })} onClick={() => setBinding(true)}>
               {workstation ? '切换工位' : '绑定工位'}

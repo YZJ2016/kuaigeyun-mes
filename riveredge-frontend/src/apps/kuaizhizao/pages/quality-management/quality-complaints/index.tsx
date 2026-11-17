@@ -700,7 +700,7 @@ const QualityComplaintsPage: React.FC = () => {
       <DetailDrawerTemplate
         title={detail?.code || t('app.kuaizhizao.qualityComplaint.title')}
         open={detailOpen}
-        width={DRAWER_CONFIG.HALF_WIDTH}
+        size={DRAWER_CONFIG.HALF_WIDTH}
         loading={detailLoading}
         onClose={() => setDetailOpen(false)}
         basic={

@@ -717,7 +717,7 @@ const OQCInspectionPage: React.FC = () => {
                 setSelectedRowKeys([]);
     actionRef.current?.reload();
               }}
-              toolBarButtonSize="middle"
+              toolBarButtonSize="medium"
             />,
           ]}
           onTableDataChange={(rows) => {

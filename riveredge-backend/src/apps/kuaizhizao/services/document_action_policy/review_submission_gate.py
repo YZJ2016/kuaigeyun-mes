@@ -34,14 +34,18 @@ def allows_delete_unsubmitted(
     *,
     review_submitted: Optional[bool] = None,
 ) -> bool:
-    """未提交可删：草稿、驳回，或待审但无审批实例（误标）。"""
+    """未提交可删：草稿、驳回，或待审但无审批实例（误标）。
+
+    review_submitted=None 表示无审批实例证据（生产端按审批实例解析后恒为 bool，
+    未解析的 None 视为「未提交」），与单测桩语义一致。
+    """
     st = _norm_status(status)
     if is_rejected_status(st):
         return True
     if is_draft_status(st):
         return True
     if is_pending_review_status(st) or st == "已提交":
-        return review_submitted is False
+        return review_submitted is not True
     if is_effective_review_draft(review_status, review_submitted=review_submitted):
         return True
     return False

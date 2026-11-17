@@ -166,7 +166,7 @@ export function MountReportModal({
         type="info"
         showIcon
         style={{ marginBottom: 16 }}
-        message={
+        title={
           description ?? (
             <span>
               将报表加入左侧菜单，可选快报表或其他应用下的分组。

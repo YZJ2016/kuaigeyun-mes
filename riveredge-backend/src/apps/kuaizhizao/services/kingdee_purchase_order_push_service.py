@@ -27,7 +27,7 @@ from core.services.integration.kingdee_galaxy_api_presets import (
     PUR_PURCHASE_ORDER_DEFAULT_BILL_TYPE,
     PUR_PURCHASE_ORDER_FORM_ID,
 )
-from core.utils.timezone_utils import to_api_isoformat
+from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
 from infra.exceptions.exceptions import BusinessLogicError
 from infra.services.business_config_service import BusinessConfigService
 
@@ -334,7 +334,7 @@ class KingdeePurchaseOrderPushService:
                 relation_type="source",
                 relation_mode="push",
                 relation_desc=str(result.get("relation_desc") or "采购订单推送金蝶采购订单"),
-                notes=to_api_isoformat(datetime.utcnow()),
+                notes=to_api_isoformat(resolve_business_datetime()),
                 created_by=acting_user_id,
             )
 

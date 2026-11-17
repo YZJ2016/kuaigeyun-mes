@@ -179,7 +179,7 @@ class TestMappingCompleteness:
         codes = set()
         for app in ("kuaizhizao", "kuaicaiwu"):
             manifest = json.loads(
-                (src / "apps" / app / "manifest.json").read_text()
+                (src / "apps" / app / "manifest.json").read_text(encoding="utf-8")
             )
             for p in manifest.get("permissions") or []:
                 codes.add(p if isinstance(p, str) else p.get("code"))

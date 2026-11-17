@@ -8,6 +8,8 @@ import React, { useEffect, useState } from 'react';
 import { Alert, App, DatePicker, Form, Input, Modal, Typography } from 'antd';
 import type { Dayjs } from 'dayjs';
 import type { ShareResult } from '../reports/api';
+import { toApiDateTimeString } from '../../../../utils/formDate';
+import { formatDateTimeBySiteSetting } from '../../../../utils/format';
 
 export interface ShareBody {
   password: string;
@@ -61,7 +63,7 @@ export function ShareModal({
     try {
       const body: ShareBody = {
         password: values.password,
-        expires_at: values.expires_at.toISOString(),
+        expires_at: toApiDateTimeString(values.expires_at) ?? '',
       };
       if (cidrs.length) body.allow_ip_cidrs = cidrs;
       const saved = await onSubmit(body);
@@ -92,7 +94,7 @@ export function ShareModal({
           <Alert
             type="success"
             showIcon
-            message="分享链接已签发"
+            title="分享链接已签发"
             description="口令不会出现在链接与日志中，请把口令单独告知访问方。"
             style={{ marginBottom: 12 }}
           />
@@ -101,7 +103,7 @@ export function ShareModal({
           </Typography.Paragraph>
           {result.expires_at ? (
             <Typography.Text type="secondary">
-              有效期至 {new Date(result.expires_at).toLocaleString()}
+              有效期至 {formatDateTimeBySiteSetting(result.expires_at)}
             </Typography.Text>
           ) : null}
         </>

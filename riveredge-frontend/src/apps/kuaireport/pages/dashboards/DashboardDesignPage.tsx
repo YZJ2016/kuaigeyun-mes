@@ -1647,7 +1647,10 @@ function NumberField({
 function ColorField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
   return (
     <Field label={label}>
-      <Input value={value} onChange={(event) => onChange(event.target.value)} addonAfter={<ColorPicker value={value} onChange={(_, hex) => onChange(hex)} />} />
+      <Space.Compact style={{ width: '100%' }}>
+        <Input value={value} onChange={(event) => onChange(event.target.value)} />
+        <ColorPicker value={value} onChange={(_, hex) => onChange(hex)} />
+      </Space.Compact>
     </Field>
   );
 }

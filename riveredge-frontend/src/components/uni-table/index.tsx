@@ -1115,7 +1115,7 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    * 工具栏按钮尺寸（新建、删除、导入、导出、同步等）
    * middle 为 Ant Design 默认尺寸
    */
-  toolBarButtonSize?: 'large' | 'middle' | 'small'
+  toolBarButtonSize?: 'large' | 'medium' | 'small'
   /**
    * 用 TanStack Query 管理列表请求：相同分页+筛选在并发去重；默认实时拉数（staleTime=0）。
    * 不改变 ProTable 外观，仅替换底层请求去重（与 patch 后 debounceTime=0 配合）。

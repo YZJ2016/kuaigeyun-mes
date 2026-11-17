@@ -7,6 +7,8 @@ from datetime import datetime, timedelta, timezone
 
 from tortoise.transactions import in_transaction
 
+from core.utils.timezone_utils import now_utc, resolve_business_datetime
+
 from core.models.mobile_submission import MobileSubmissionEffect
 from infra.domain.tenant_context import with_tenant
 
@@ -23,7 +25,7 @@ async def run_effect(tenant_id: int, effect_id: int) -> str:
     async with with_tenant(tenant_id, reason="mobile submission effect execution"):
         async with in_transaction():
             row = await MobileSubmissionEffect.filter(id=effect_id).select_for_update().first()
-            now = datetime.now(timezone.utc)
+            now = now_utc()
             if row is None or row.status != "pending":
                 return "skipped"
             if row.next_attempt_at is not None and row.next_attempt_at > now:
@@ -45,7 +47,7 @@ async def run_effect(tenant_id: int, effect_id: int) -> str:
                 )
                 return "needs_reconcile"
             await MobileSubmissionEffect.filter(id=effect_id, status="processing").update(
-                status="completed", completed_at=datetime.now(timezone.utc), last_error_code=None,
+                status="completed", completed_at=resolve_business_datetime(), last_error_code=None,
             )
             return "completed"
         try:
@@ -53,12 +55,12 @@ async def run_effect(tenant_id: int, effect_id: int) -> str:
                 row = await MobileSubmissionEffect.filter(id=effect_id).select_for_update().first()
                 if row is None or row.status != "pending":
                     return "skipped"
-                if row.next_attempt_at is not None and row.next_attempt_at > datetime.now(timezone.utc):
+                if row.next_attempt_at is not None and row.next_attempt_at > now_utc():
                     return "skipped"
                 await _execute_effect(row)
                 row.status = "completed"
                 row.attempts += 1
-                row.completed_at = datetime.now(timezone.utc)
+                row.completed_at = resolve_business_datetime()
                 row.last_error_code = None
                 await row.save()
             return "completed"
@@ -71,7 +73,7 @@ async def run_effect(tenant_id: int, effect_id: int) -> str:
                     return "skipped"
                 row.attempts += 1
                 row.last_error_code = type(exc).__name__[:64]
-                row.next_attempt_at = datetime.now(timezone.utc) + timedelta(minutes=min(60, 2 ** min(row.attempts, 6)))
+                row.next_attempt_at = now_utc() + timedelta(minutes=min(60, 2 ** min(row.attempts, 6)))
                 if isinstance(exc, NotImplementedError) or row.attempts >= 8:
                     row.status = "blocked"
                 await row.save()

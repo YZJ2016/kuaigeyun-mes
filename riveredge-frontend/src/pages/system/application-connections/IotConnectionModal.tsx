@@ -41,7 +41,7 @@ export function IotConnectionModal({ open, type, onOpenChange, onCreated }: {
       }
     }}
   >
-    <FormModalGridBlock><Alert type="info" showIcon message="每条连接独立保存于系统配置的应用连接器中。保存后仍需提交数采接入配置。" style={{ marginBottom: 16 }} /></FormModalGridBlock>
+    <FormModalGridBlock><Alert type="info" showIcon title="每条连接独立保存于系统配置的应用连接器中。保存后仍需提交数采接入配置。" style={{ marginBottom: 16 }} /></FormModalGridBlock>
     <ProFormText name="code" label="连接编码" rules={[{ required: true, whitespace: true }]} fieldProps={{ maxLength: 50 }} colProps={{ span: 12 }} />
     <ProFormText name="name" label="连接名称" rules={[{ required: true, whitespace: true }]} fieldProps={{ maxLength: 100 }} colProps={{ span: 12 }} />
     <IotConnectionFields type={type} />

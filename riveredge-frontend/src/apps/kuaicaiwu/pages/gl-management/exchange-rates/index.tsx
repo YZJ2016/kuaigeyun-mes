@@ -7,7 +7,7 @@ import { useResourcePermissions } from '../../../../../hooks/useResourcePermissi
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { ProFormDatePicker, ProFormDigit, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Dropdown, Popconfirm, Row, Col } from 'antd';
+import { App, Button, Dropdown, Popconfirm, Row, Col, Space } from 'antd';
 import type { MenuProps } from 'antd';
 import { DownOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
@@ -367,15 +367,14 @@ const GlExchangeRatesPage: React.FC = () => {
           >
             <Button loading={presetLoading}>{t(`${NS}.presetCommon`)}</Button>
           </Popconfirm>,
-          <Dropdown.Button
-            key="fetch-reference"
-            menu={fetchMenu}
-            loading={fetchLoading}
-            icon={<DownOutlined />}
-            onClick={() => confirmFetchWithSource(defaultSource)}
-          >
-            {t(`${NS}.fetchReference`)}
-          </Dropdown.Button>,
+          <Space.Compact key="fetch-reference">
+            <Button loading={fetchLoading} onClick={() => confirmFetchWithSource(defaultSource)}>
+              {t(`${NS}.fetchReference`)}
+            </Button>
+            <Dropdown menu={fetchMenu}>
+              <Button icon={<DownOutlined />} />
+            </Dropdown>
+          </Space.Compact>,
         ]}
         request={async (params, sort, _filter, searchFormValues) => {
           const sortField = sort && Object.keys(sort)[0];

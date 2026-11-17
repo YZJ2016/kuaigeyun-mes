@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import { Space } from 'antd';
 import { UniInputNumber } from '../uni-input-number/UniInputNumber';
 import type { Material } from '../../apps/master-data/types/material';
 import { isFloatingMaterialUnit } from '../../apps/master-data/utils/materialConversionType';
@@ -14,6 +15,21 @@ import {
 import { resolveMaterialScenarioUnit, type MaterialScenario } from '../../utils/materialScenarioUnit';
 import { EMPTY_VALUE_PLACEHOLDER } from '../../utils/format';
 import { QuantityWithUnit } from './index';
+
+const UNIT_ADDON_STYLE: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  padding: '0 8px',
+  color: 'var(--ant-color-text-secondary)',
+  background: 'var(--ant-color-fill-alter)',
+  border: '1px solid var(--ant-color-border)',
+  borderLeft: 0,
+  borderRadius: '0 var(--ant-border-radius) var(--ant-border-radius) 0',
+  fontSize: 'inherit',
+};
+
+const UnitAddon: React.FC<{ label?: string }> = ({ label }) =>
+  label ? <span style={UNIT_ADDON_STYLE}>{label}</span> : null;
 
 export type DocumentLineDualQuantityProps = {
   material?: Material | null;
@@ -206,20 +222,22 @@ export const DocumentLineDualQuantity: React.FC<DocumentLineDualQuantityProps> =
 
   const primaryControl = !auxEnabled ? (
     inlineUnitWithQuantity ? (
-      <UniInputNumber
-        value={lineQty as number | null | undefined}
-        onChange={(qty) =>
-          handlePrimaryLineChange({
-            quantity: qty,
-            unit: primaryUnitLabel || undefined,
-          })
-        }
-        min={0}
-        precision={quantityPrecision}
-        disabled={disabled}
-        addonAfter={primaryUnitLabel || undefined}
-        style={{ width: '100%' }}
-      />
+      <Space.Compact style={{ width: '100%' }}>
+        <UniInputNumber
+          value={lineQty as number | null | undefined}
+          onChange={(qty) =>
+            handlePrimaryLineChange({
+              quantity: qty,
+              unit: primaryUnitLabel || undefined,
+            })
+          }
+          min={0}
+          precision={quantityPrecision}
+          disabled={disabled}
+          style={{ width: '100%' }}
+        />
+        <UnitAddon label={primaryUnitLabel || undefined} />
+      </Space.Compact>
     ) : (
       <QuantityWithUnit
         material={material ?? undefined}
@@ -235,28 +253,32 @@ export const DocumentLineDualQuantity: React.FC<DocumentLineDualQuantityProps> =
       />
     )
   ) : (
-    <UniInputNumber
-      value={primaryBaseQty != null && Number.isFinite(primaryBaseQty) ? primaryBaseQty : undefined}
-      onChange={handleBaseQtyChange}
-      min={0}
-      precision={quantityPrecision}
-      disabled={disabled}
-      addonAfter={baseUnit}
-      style={{ width: '100%' }}
-    />
+    <Space.Compact style={{ width: '100%' }}>
+      <UniInputNumber
+        value={primaryBaseQty != null && Number.isFinite(primaryBaseQty) ? primaryBaseQty : undefined}
+        onChange={handleBaseQtyChange}
+        min={0}
+        precision={quantityPrecision}
+        disabled={disabled}
+        style={{ width: '100%' }}
+      />
+      <UnitAddon label={baseUnit} />
+    </Space.Compact>
   );
 
   const auxControl = (
-    <UniInputNumber
-      value={auxEnabled ? (value?.aux_quantity ?? undefined) : undefined}
-      onChange={auxEnabled ? handleAuxQtyChange : undefined}
-      min={0}
-      precision={quantityPrecision}
-      disabled={disabled || !auxEnabled}
-      placeholder={auxEnabled ? undefined : EMPTY_VALUE_PLACEHOLDER}
-      addonAfter={auxEnabled ? auxUnit : undefined}
-      style={{ width: '100%' }}
-    />
+    <Space.Compact style={{ width: '100%' }}>
+      <UniInputNumber
+        value={auxEnabled ? (value?.aux_quantity ?? undefined) : undefined}
+        onChange={auxEnabled ? handleAuxQtyChange : undefined}
+        min={0}
+        precision={quantityPrecision}
+        disabled={disabled || !auxEnabled}
+        placeholder={auxEnabled ? undefined : EMPTY_VALUE_PLACEHOLDER}
+        style={{ width: '100%' }}
+      />
+      <UnitAddon label={auxEnabled ? auxUnit : undefined} />
+    </Space.Compact>
   );
 
   if (part === 'aux') return auxControl;

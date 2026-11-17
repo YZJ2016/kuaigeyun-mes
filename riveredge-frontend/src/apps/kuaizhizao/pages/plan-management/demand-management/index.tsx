@@ -1092,7 +1092,7 @@ const DemandManagementPage: React.FC = () => {
               permGates={demandPerms}
               handlers={demandAuditBatchHandlers}
               onSuccess={handleDemandAuditBatchSuccess}
-              toolBarButtonSize="middle"
+              toolBarButtonSize="medium"
             />,
           ]}
           showImportButton={false}

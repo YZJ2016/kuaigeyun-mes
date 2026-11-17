@@ -1462,8 +1462,8 @@ const ApplicationConnectionsListPage: React.FC = () => {
               })}
               placeholder="kuaigeyun.com"
               fieldProps={{
-                addonBefore: 'https://',
-                addonAfter: WORKBUDDY_MCP_PUBLIC_PATH,
+                prefix: 'https://',
+                suffix: WORKBUDDY_MCP_PUBLIC_PATH,
               }}
               formItemProps={{
                 style: { marginTop: 8 },

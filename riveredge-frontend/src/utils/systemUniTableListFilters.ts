@@ -1,5 +1,5 @@
-import dayjs from 'dayjs';
 import type { ApprovalInstanceListParams } from '../services/approvalInstance';
+import { toApiDateTimeString } from './formDate';
 import type { ApprovalProcessListParams } from '../services/approvalProcess';
 import type { PrintDeviceListParams } from '../services/printDevice';
 import type { PrintTemplateListParams } from '../services/printTemplate';
@@ -27,8 +27,8 @@ function pickIsoTimeRangeFromCreatedAtColumn(
 ): { start_time?: string; end_time?: string } {
   const { from, to } = pickSearchDateTimeRange(searchFormValues, 'start_time', 'end_time', 'created_at');
   return {
-    start_time: from ? dayjs(from).toISOString() : undefined,
-    end_time: to ? dayjs(to).toISOString() : undefined,
+    start_time: toApiDateTimeString(from),
+    end_time: toApiDateTimeString(to),
   };
 }
 

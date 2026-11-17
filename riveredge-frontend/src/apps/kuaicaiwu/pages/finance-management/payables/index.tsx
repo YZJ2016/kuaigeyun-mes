@@ -1097,7 +1097,7 @@ const PayableList: React.FC = () => {
                         permGates={payablePerms}
                         handlers={payableAuditBatchHandlers}
                         onSuccess={handlePayableAuditBatchSuccess}
-                        toolBarButtonSize="middle"
+                        toolBarButtonSize="medium"
                     />,
                     <Button
                         key="merge-payment"

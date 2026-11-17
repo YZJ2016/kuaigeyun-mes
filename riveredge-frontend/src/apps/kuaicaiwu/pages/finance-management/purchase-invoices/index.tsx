@@ -947,7 +947,7 @@ const PurchaseInvoiceList: React.FC = () => {
             permGates={purchaseInvoicePerms}
             handlers={purchaseInvoiceAuditBatchHandlers}
             onSuccess={handlePurchaseInvoiceAuditBatchSuccess}
-            toolBarButtonSize="middle"
+            toolBarButtonSize="medium"
           />,
         ]}
         toolBarRender={() => [

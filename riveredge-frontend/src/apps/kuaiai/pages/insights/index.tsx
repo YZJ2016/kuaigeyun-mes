@@ -380,7 +380,7 @@ const InsightsPage: React.FC = () => {
   ) : (
     <Table<AiAuditLogItemOut>
       rowKey="uuid"
-      size="middle"
+      size="medium"
       loading={activityQuery.isPending || activityQuery.isFetching}
       columns={activityColumns}
       dataSource={activityQuery.data?.items ?? []}

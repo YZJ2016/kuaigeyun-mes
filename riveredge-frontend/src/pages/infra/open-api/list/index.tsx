@@ -190,7 +190,7 @@ const PermissionCodesPicker: React.FC<{
             setCodes([...kept, ...(vals as string[])]);
           }}
         >
-          <Space direction="vertical" size={4} style={{ width: '100%' }}>
+          <Space orientation="vertical" size={4} style={{ width: '100%' }}>
             {actions.map((a) => (
               <Checkbox key={a.code} value={a.code}>
                 <Space size={6} wrap>
@@ -650,7 +650,7 @@ const OpenApiPage: React.FC = () => {
                   key: 'curl',
                   label: 'curl',
                   children: (
-                    <Space direction="vertical" style={{ width: '100%' }}>
+                    <Space orientation="vertical" style={{ width: '100%' }}>
                       <Button type="link" size="small" icon={<CopyOutlined />} onClick={() => copyText(ep.curl)}>
                         复制
                       </Button>
@@ -676,7 +676,7 @@ const OpenApiPage: React.FC = () => {
                   key: 'python',
                   label: 'Python',
                   children: (
-                    <Space direction="vertical" style={{ width: '100%' }}>
+                    <Space orientation="vertical" style={{ width: '100%' }}>
                       <Button type="link" size="small" icon={<CopyOutlined />} onClick={() => copyText(ep.python)}>
                         复制
                       </Button>
@@ -690,7 +690,7 @@ const OpenApiPage: React.FC = () => {
                         key: 'body',
                         label: '请求体示例',
                         children: (
-                          <Space direction="vertical" style={{ width: '100%' }}>
+                          <Space orientation="vertical" style={{ width: '100%' }}>
                             <Button
                               type="link"
                               size="small"
@@ -711,7 +711,7 @@ const OpenApiPage: React.FC = () => {
                         key: 'fields',
                         label: `请求字段（${ep.request_fields.field_count}）`,
                         children: (
-                          <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                          <Space orientation="vertical" size={12} style={{ width: '100%' }}>
                             <Typography.Text type="secondary">
                               Schema：{ep.request_fields.schema}
                               {ep.request_fields.schema_module
@@ -780,7 +780,7 @@ const OpenApiPage: React.FC = () => {
                         key: 'query',
                         label: `查询参数（${ep.read_fields.query.field_count}）`,
                         children: (
-                          <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                          <Space orientation="vertical" size={12} style={{ width: '100%' }}>
                             {ep.read_fields.note ? (
                               <Typography.Text type="secondary">{ep.read_fields.note}</Typography.Text>
                             ) : null}
@@ -862,7 +862,7 @@ const OpenApiPage: React.FC = () => {
                             0)
                         }）`,
                         children: (
-                          <Space direction="vertical" size={16} style={{ width: '100%' }}>
+                          <Space orientation="vertical" size={16} style={{ width: '100%' }}>
                             {ep.read_fields?.detail_response?.groups?.length ? (
                               <div>
                                 <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
@@ -995,7 +995,7 @@ const OpenApiPage: React.FC = () => {
           key: 'auth',
           label: '换取 Token',
           children: (
-            <Space direction="vertical" size={12} style={{ width: '100%' }}>
+            <Space orientation="vertical" size={12} style={{ width: '100%' }}>
               <Typography.Text>
                 POST{' '}
                 <Typography.Text code>{guide.token_url_absolute || guide.token_url}</Typography.Text>
@@ -1070,7 +1070,7 @@ const OpenApiPage: React.FC = () => {
           </Typography.Paragraph>
         }
       >
-        <Button size="middle" icon={<InfoCircleOutlined />}>
+        <Button size="medium" icon={<InfoCircleOutlined />}>
           {t('pages.infra.openApi.pageHintButton')}
         </Button>
       </Popover>,
@@ -1114,7 +1114,7 @@ const OpenApiPage: React.FC = () => {
             showCreateButton={canManage}
             createButtonText={t('pages.infra.openApi.createApp')}
             onCreate={() => setCreateOpen(true)}
-            toolBarButtonSize="middle"
+            toolBarButtonSize="medium"
             toolBarActionsEnd={authHintToolbar}
             showImportButton={false}
             showExportButton={false}
@@ -1128,7 +1128,7 @@ const OpenApiPage: React.FC = () => {
             toolBarActionsAfterDelete={[
               <Button
                 key="open-api-refresh"
-                size="middle"
+                size="medium"
                 icon={<ReloadOutlined />}
                 loading={loading}
                 onClick={() => void loadAll()}
@@ -1142,7 +1142,7 @@ const OpenApiPage: React.FC = () => {
                       title={t('pages.infra.openApi.rotateAcctConfirmTitle')}
                       onConfirm={handleRotateAcct}
                     >
-                      <Button key="open-api-rotate-acct-btn" size="middle">
+                      <Button key="open-api-rotate-acct-btn" size="medium">
                         {t('pages.infra.openApi.rotateAcctId')}
                       </Button>
                     </ActionConfirmPopconfirm>,
@@ -1154,7 +1154,7 @@ const OpenApiPage: React.FC = () => {
                     >
                       <Button
                         key="open-api-preset-workbuddy-btn"
-                        size="middle"
+                        size="medium"
                         icon={<ApiOutlined />}
                         loading={presetLoading}
                       >
@@ -1165,7 +1165,7 @@ const OpenApiPage: React.FC = () => {
                       ? [
                           <Button
                             key="open-api-batch-enable"
-                            size="middle"
+                            size="medium"
                             {...rowActionKind('update')}
                             onClick={() => void handleBatchStatus(true)}
                           >
@@ -1173,7 +1173,7 @@ const OpenApiPage: React.FC = () => {
                           </Button>,
                           <Button
                             key="open-api-batch-disable"
-                            size="middle"
+                            size="medium"
                             {...rowActionKind('update')}
                             onClick={() => void handleBatchStatus(false)}
                           >
@@ -1202,7 +1202,7 @@ const OpenApiPage: React.FC = () => {
         key: 'docs',
         label: t('pages.infra.openApi.tabDocs'),
         children: guide ? (
-          <Space direction="vertical" size={16} style={{ width: '100%' }}>
+          <Space orientation="vertical" size={16} style={{ width: '100%' }}>
             <Alert
               type="info"
               showIcon

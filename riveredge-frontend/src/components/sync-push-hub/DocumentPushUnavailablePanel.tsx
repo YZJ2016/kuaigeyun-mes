@@ -23,7 +23,7 @@ export const DocumentPushUnavailablePanel: React.FC<DocumentPushUnavailablePanel
       type="warning"
       showIcon
       style={style}
-      message={message ?? t('components.syncPushHub.pushNotReady')}
+      title={message ?? t('components.syncPushHub.pushNotReady')}
       action={
         <Link to="/system/application-connections">
           <Button size="small" type="link">

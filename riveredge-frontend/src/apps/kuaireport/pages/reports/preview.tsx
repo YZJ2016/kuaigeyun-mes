@@ -51,7 +51,7 @@ export default function ReportPreviewPage() {
       <div style={{ padding: 16 }}>
         <Alert
           type="error"
-          message={loadError}
+          title={loadError}
           action={
             <Button size="small" onClick={() => navigate('/apps/kuaireport/reports')}>
               返回报表中心

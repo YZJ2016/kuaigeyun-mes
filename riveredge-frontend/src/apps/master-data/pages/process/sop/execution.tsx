@@ -251,7 +251,7 @@ const SOPExecutionPage: React.FC = () => {
         type="info"
         showIcon
         style={{ marginBottom: 16 }}
-        message={t('app.master-data.sop.executionNotShopfloor', {
+        title={t('app.master-data.sop.executionNotShopfloor', {
           defaultValue: '本页是设计演练，不绑定工单。现场以工位确认与报工采集为准。',
         })}
       />

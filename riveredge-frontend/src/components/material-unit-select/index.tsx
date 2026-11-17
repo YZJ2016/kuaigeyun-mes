@@ -11,7 +11,7 @@ export interface MaterialUnitSelectProps {
   /** 变更回调 */
   onChange?: (value: string) => void;
   /** 尺寸 */
-  size?: 'large' | 'middle' | 'small';
+  size?: 'large' | 'medium' | 'small';
   /** 是否禁用 */
   disabled?: boolean;
   /** 占位符 */
@@ -114,7 +114,7 @@ export const MaterialUnitSelect: React.FC<MaterialUnitSelectProps> = ({
   materialId,
   value,
   onChange,
-  size='middle',
+  size='medium',
   disabled = false,
   placeholder = '单位',
   noStyle = false,

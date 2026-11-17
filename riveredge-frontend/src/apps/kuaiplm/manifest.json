@@ -277,6 +277,7 @@
     "kuaiplm:gate-template:update",
     "kuaiplm:gate-template:delete",
     "kuaiplm:change:read",
+    "kuaiplm:change:create",
     "kuaiplm:change:update",
     "kuaiplm:change:submit",
     "kuaiplm:change:approve",

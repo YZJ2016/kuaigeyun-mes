@@ -175,9 +175,9 @@ export const ReportingSyncHistoryModal: React.FC<ReportingSyncHistoryModalProps>
       onCancel={onClose}
       footer={null}
       width={1100}
-      destroyOnClose={false}
+      destroyOnHidden={false}
     >
-      <Space direction="vertical" size={12} style={{ width: '100%' }}>
+      <Space orientation="vertical" size={12} style={{ width: '100%' }}>
         {loadError ? (
           <Typography.Text type="danger">{loadError}</Typography.Text>
         ) : null}

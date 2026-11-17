@@ -4693,7 +4693,7 @@ const MaterialsManagementPage: React.FC = () => {
                         <SyncPushHubButton
                           syncEnabled={toolbarSyncPush.syncEnabled}
                           pushEnabled={toolbarSyncPush.pushEnabled}
-                          size="middle"
+                          size="medium"
                           wrapButton={(hubButton) => (
                             <SyncFreshnessBadge
                               getBinding={loadMaterialSyncBinding}

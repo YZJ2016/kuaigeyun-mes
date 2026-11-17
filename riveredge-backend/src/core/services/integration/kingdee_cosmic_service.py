@@ -73,9 +73,9 @@ def _build_nonce() -> str:
 
 def _build_timestamp() -> str:
     """与官方示例一致：站点墙钟 YYYY-MM-DD HH:MM:SS（5 分钟内有效）。"""
-    from core.utils.timezone_utils import resolve_business_datetime, to_site_timezone
+    from core.utils.timezone_utils import resolve_business_datetime, to_api_isoformat
 
-    return to_site_timezone(resolve_business_datetime()).strftime("%Y-%m-%d %H:%M:%S")
+    return to_api_isoformat(resolve_business_datetime()) or ""
 
 
 def build_kingdee_cosmic_get_token_payload(config: Dict[str, Any]) -> Dict[str, Any]:

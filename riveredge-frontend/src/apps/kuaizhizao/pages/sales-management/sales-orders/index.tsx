@@ -5769,7 +5769,7 @@ const SalesOrdersPage: React.FC = () => {
           detailTableColumns={detailColumns}
           helpViewConfig={buildDocumentListHelpViewConfig(DOCUMENT_LIST_HELP_KEYS.salesOrder)}
           actionRef={actionRef}
-          toolBarButtonSize="middle"
+          toolBarButtonSize="medium"
           beforeSearchButtons={
             <Space size={8} wrap>
               <ThemedSegmented
@@ -5955,7 +5955,7 @@ const SalesOrdersPage: React.FC = () => {
               resolveIdFromKey={resolveSalesOrderBatchId}
               extraMenuItems={salesOrderBatchExtraMenuItems}
               onSuccess={handleBulkCapabilityBatchSuccess}
-              toolBarButtonSize="middle"
+              toolBarButtonSize="medium"
             />,
           ]}
           toolBarActionsAfterBatch={[
@@ -6095,7 +6095,7 @@ const SalesOrdersPage: React.FC = () => {
                   <SyncPushHubButton
                     syncEnabled={toolbarSyncPush.syncEnabled}
                     pushEnabled={toolbarSyncPush.pushEnabled}
-                    size="middle"
+                    size="medium"
                     wrapButton={(hubButton) => (
                       <SyncFreshnessBadge
                         getBinding={loadSalesOrderSyncBinding}

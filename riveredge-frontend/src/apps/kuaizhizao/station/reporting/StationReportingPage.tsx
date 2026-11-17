@@ -324,19 +324,19 @@ export const StationReportingPage: React.FC<StationReportingPageProps> = ({
           }}
         >
           <div className="hmi-station-pane" style={{ flex: 1 }}>
-            {workstationId == null ? <Alert type="warning" showIcon message="未绑定工位" /> : null}
+            {workstationId == null ? <Alert type="warning" showIcon title="未绑定工位" /> : null}
             {mode === 'self' && !operator ? (
-              <Alert type="warning" showIcon message="当前操作员未传入，本人报工不会提交" />
+              <Alert type="warning" showIcon title="当前操作员未传入，本人报工不会提交" />
             ) : null}
             {operator && mode === 'self' ? (
-              <Alert type="info" showIcon message={`当前操作员：${operator.name}`} />
+              <Alert type="info" showIcon title={`当前操作员：${operator.name}`} />
             ) : null}
-            {sourceLabel ? <Alert type="success" showIcon message={`报工来源：${sourceLabel}`} /> : null}
+            {sourceLabel ? <Alert type="success" showIcon title={`报工来源：${sourceLabel}`} /> : null}
             {!writeEnabled ? (
               <Alert
                 type="info"
                 showIcon
-                message="未确认操作员：可查看页面，报工、上下料与报废提交不可用"
+                title="未确认操作员：可查看页面，报工、上下料与报废提交不可用"
               />
             ) : null}
 

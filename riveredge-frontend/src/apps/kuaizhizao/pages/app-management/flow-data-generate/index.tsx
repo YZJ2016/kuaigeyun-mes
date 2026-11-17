@@ -100,6 +100,49 @@ const OPERATOR_MODE_VALUES: StepOperatorMode[] = [
 const DEFAULT_REPORTING_BATCHES_MIN = 2;
 const DEFAULT_REPORTING_BATCHES_MAX = 5;
 
+const FIELD_ADDON_STYLE: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  padding: '0 8px',
+  color: 'var(--ant-color-text-secondary)',
+  background: 'var(--ant-color-fill-alter)',
+  border: '1px solid var(--ant-color-border)',
+  fontSize: 'inherit',
+};
+
+/** Form.Item 子组件须接收 value/onChange；不可直接用 Space.Compact 包裹 InputNumber */
+function AddonInputNumber({
+  addonBeforeText,
+  addonAfterText,
+  value,
+  onChange,
+  ...rest
+}: {
+  addonBeforeText?: string;
+  addonAfterText?: string;
+  value?: number | null;
+  onChange?: (value: number | null) => void;
+  min?: number;
+  max?: number;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <Space.Compact style={{ width: '100%' }}>
+      {addonBeforeText ? (
+        <span style={{ ...FIELD_ADDON_STYLE, borderRight: 0, borderRadius: 'var(--ant-border-radius) 0 0 var(--ant-border-radius)' }}>
+          {addonBeforeText}
+        </span>
+      ) : null}
+      <InputNumber value={value} onChange={onChange} {...rest} style={{ width: '100%' }} />
+      {addonAfterText ? (
+        <span style={{ ...FIELD_ADDON_STYLE, borderLeft: 0, borderRadius: '0 var(--ant-border-radius) var(--ant-border-radius) 0' }}>
+          {addonAfterText}
+        </span>
+      ) : null}
+    </Space.Compact>
+  );
+}
+
 function flattenDepartmentOptions(
   nodes: DepartmentTreeItem[],
   depth = 0,
@@ -1189,7 +1232,7 @@ export default function FlowDataGeneratePage() {
                     label={t('app.kuaizhizao.flowDataGenerate.defaultMinMinutes')}
                     rules={[{ required: true }]}
                   >
-                    <InputNumber min={1} style={{ width: '100%' }} addonAfter={t('app.kuaizhizao.flowDataGenerate.minuteUnit')} />
+                    <AddonInputNumber min={1} addonAfterText={t('app.kuaizhizao.flowDataGenerate.minuteUnit')} />
                   </Form.Item>
                 </Col>
                 <Col xs={24} md={6}>
@@ -1198,7 +1241,7 @@ export default function FlowDataGeneratePage() {
                     label={t('app.kuaizhizao.flowDataGenerate.defaultMaxMinutes')}
                     rules={[{ required: true }]}
                   >
-                    <InputNumber min={1} style={{ width: '100%' }} addonAfter={t('app.kuaizhizao.flowDataGenerate.minuteUnit')} />
+                    <AddonInputNumber min={1} addonAfterText={t('app.kuaizhizao.flowDataGenerate.minuteUnit')} />
                   </Form.Item>
                 </Col>
               </Row>
@@ -1248,21 +1291,19 @@ export default function FlowDataGeneratePage() {
                   </Col>
                   <Col span={8}>
                     <Form.Item name={`interval_min_${s.key}`} noStyle>
-                      <InputNumber
+                      <AddonInputNumber
                         min={1}
-                        addonBefore={t('app.kuaizhizao.flowDataGenerate.min')}
-                        addonAfter={t('app.kuaizhizao.flowDataGenerate.minuteUnit')}
-                        style={{ width: '100%' }}
+                        addonBeforeText={t('app.kuaizhizao.flowDataGenerate.min')}
+                        addonAfterText={t('app.kuaizhizao.flowDataGenerate.minuteUnit')}
                       />
                     </Form.Item>
                   </Col>
                   <Col span={8}>
                     <Form.Item name={`interval_max_${s.key}`} noStyle>
-                      <InputNumber
+                      <AddonInputNumber
                         min={1}
-                        addonBefore={t('app.kuaizhizao.flowDataGenerate.max')}
-                        addonAfter={t('app.kuaizhizao.flowDataGenerate.minuteUnit')}
-                        style={{ width: '100%' }}
+                        addonBeforeText={t('app.kuaizhizao.flowDataGenerate.max')}
+                        addonAfterText={t('app.kuaizhizao.flowDataGenerate.minuteUnit')}
                       />
                     </Form.Item>
                   </Col>

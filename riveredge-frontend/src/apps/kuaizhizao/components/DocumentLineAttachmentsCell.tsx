@@ -60,7 +60,7 @@ export const DocumentLineAttachmentsCell: React.FC<DocumentLineAttachmentsCellPr
   }
 
   return (
-    <Space direction="vertical" size={4} style={{ width: '100%' }}>
+    <Space orientation="vertical" size={4} style={{ width: '100%' }}>
       <LineAttachmentsUpload
         value={value}
         onChange={onChange}

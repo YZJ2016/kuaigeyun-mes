@@ -44,6 +44,41 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'antd6-api-compat-fix-r01',
+    date: '2026-11-17',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.antd6-api-compat-fix-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.antd6-api-compat-fix-r01.description',
+  },
+  {
+    id: 'timezone-contract-fix-r01',
+    date: '2026-11-17',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.timezone-contract-fix-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.timezone-contract-fix-r01.description',
+  },
+  {
+    id: 'permission-manifest-align-r01',
+    date: '2026-11-17',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.permission-manifest-align-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.permission-manifest-align-r01.description',
+  },
+  {
+    id: 'kingdee-org-payload-fix-r01',
+    date: '2026-11-17',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.kingdee-org-payload-fix-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.kingdee-org-payload-fix-r01.description',
+  },
+  {
+    id: 'document-delete-policy-fix-r01',
+    date: '2026-11-17',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.document-delete-policy-fix-r01.title',
+    descriptionKey: 'pages.dashboard.updateLog.entries.document-delete-policy-fix-r01.description',
+  },
+  {
     id: 'purchase-receipt-push-return-r01',
     date: '2026-11-17',
     type: 'feature',

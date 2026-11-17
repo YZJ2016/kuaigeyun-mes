@@ -4556,6 +4556,26 @@ export default {
     '修复销售订单列表加载失败',
   'pages.dashboard.updateLog.entries.sales-order-list-item-scope-r01.description':
     '列表接口因 keyword 分支内局部 import 遮蔽 SalesOrderItem，无搜索词时明细加载闭包报 free variable；改为使用模块级模型，并按 sales_order_id 反查明细物料关键字。',
+  'pages.dashboard.updateLog.entries.antd6-api-compat-fix-r01.title':
+    '界面组件兼容性修复',
+  'pages.dashboard.updateLog.entries.antd6-api-compat-fix-r01.description':
+    '修复抽屉宽度、组件尺寸枚举、提示标题、复合输入控件等多处界面组件写法失效问题，恢复相应页面正常展示与交互。',
+  'pages.dashboard.updateLog.entries.timezone-contract-fix-r01.title':
+    '业务时间统一按站点时区处理',
+  'pages.dashboard.updateLog.entries.timezone-contract-fix-r01.description':
+    '分享链接有效期展示、出库发料与拣货时间提交、登录日志时间范围筛选、金蝶推送备注、移动端提交回执等业务时刻统一走站点时区，避免偏移 8 小时。',
+  'pages.dashboard.updateLog.entries.permission-manifest-align-r01.title':
+    '权限清单补齐与对齐',
+  'pages.dashboard.updateLog.entries.permission-manifest-align-r01.description':
+    '补齐 PLM 变更创建、物料生命周期追溯读取与打印等权限码声明，修正工程图纸读取权限码，使应用中心可正常分配相关权限。',
+  'pages.dashboard.updateLog.entries.kingdee-org-payload-fix-r01.title':
+    '金蝶云星空连接器组织过滤修复',
+  'pages.dashboard.updateLog.entries.kingdee-org-payload-fix-r01.description':
+    '修复金蝶云星空集成在同步请求载荷中缺失组织字段回填的问题，恢复按创建组织过滤同步数据。',
+  'pages.dashboard.updateLog.entries.document-delete-policy-fix-r01.title':
+    '单据删除策略修正',
+  'pages.dashboard.updateLog.entries.document-delete-policy-fix-r01.description':
+    '已提交审核的销售订单禁止删除，待撤回状态的销售预测允许删除，删除动作与单据审批状态保持一致。',
   'pages.dashboard.updateLog.entries.purchase-receipt-push-return-r01.title':
     '采购入库单支持下推采购退货',
   'pages.dashboard.updateLog.entries.purchase-receipt-push-return-r01.description':

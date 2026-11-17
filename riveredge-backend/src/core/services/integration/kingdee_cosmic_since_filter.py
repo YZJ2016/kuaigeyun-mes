@@ -7,7 +7,7 @@ import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Sequence
 
-from core.utils.timezone_utils import to_site_timezone
+from core.utils.timezone_utils import to_api_isoformat, to_site_timezone
 
 # 源行上常见的修改时间字段（苍穹 / 星空混用）
 ROW_MODIFY_TIME_KEYS: tuple[str, ...] = (
@@ -31,7 +31,7 @@ _DATA_START_MODIFY_KEYS: tuple[str, ...] = (
 
 
 def _site_since_text(since: datetime) -> str:
-    return to_site_timezone(since).strftime("%Y-%m-%d %H:%M:%S")
+    return to_api_isoformat(since) or ""
 
 
 def _cosmic_ge_clause(date_field: str, since: datetime) -> str:

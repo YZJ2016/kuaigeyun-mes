@@ -444,7 +444,7 @@ const HubPage: React.FC = () => {
             style={{ marginTop: 12 }}
             type="warning"
             showIcon
-            message={t('app.kuaiai.ops.partialFailed', {
+            title={t('app.kuaiai.ops.partialFailed', {
               defaultValue: '部分数据刷新失败，已保留上次结果',
             })}
             action={

@@ -2826,7 +2826,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
               permGates={purchaseRequisitionPerms}
               handlers={purchaseRequisitionAuditBatchHandlers}
               onSuccess={handlePurchaseRequisitionAuditBatchSuccess}
-              toolBarButtonSize="middle"
+              toolBarButtonSize="medium"
             />,
           ]}
           rightToolBarActionsBeforeExport={[

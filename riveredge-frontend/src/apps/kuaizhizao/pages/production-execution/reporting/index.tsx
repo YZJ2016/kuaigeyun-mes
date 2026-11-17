@@ -1915,7 +1915,7 @@ const ReportingPage: React.FC = () => {
                   <SyncPushHubButton
                     syncEnabled={toolbarSyncPush.syncEnabled}
                     pushEnabled={toolbarSyncPush.pushEnabled}
-                    size="middle"
+                    size="medium"
                     wrapButton={(hubButton) => (
                       <SyncFreshnessBadge
                         getBinding={loadReportingSyncBinding}
@@ -1949,7 +1949,7 @@ const ReportingPage: React.FC = () => {
                     )}
                   />
                   <Button
-                    size="middle"
+                    size="medium"
                     icon={<HistoryOutlined />}
                     onClick={() => setSyncHistoryVisible(true)}
                   >
@@ -1993,7 +1993,7 @@ const ReportingPage: React.FC = () => {
             handlers={reportingAuditBatchHandlers}
             bulkHandlers={reportingAuditBatchBulkHandlers}
             onSuccess={handleReportingBatchSuccess}
-            toolBarButtonSize="middle"
+            toolBarButtonSize="medium"
           />,
         ]}
       />

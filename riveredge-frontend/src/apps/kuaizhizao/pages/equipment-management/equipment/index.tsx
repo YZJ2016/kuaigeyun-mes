@@ -1546,7 +1546,7 @@ const EquipmentPage: React.FC = () => {
                       placeholder={t('app.kuaizhizao.equipment.phQrBindCode')}
                       extra={t('app.kuaizhizao.equipment.fieldQrBindCodeHint')}
                       fieldProps={{
-                        addonAfter: (
+                        suffix: (
                           <Button
                             type="link"
                             size="small"

@@ -4196,7 +4196,7 @@ const QuotationsPage: React.FC = () => {
               />
             </Space>
           }
-          toolBarButtonSize="middle"
+          toolBarButtonSize="medium"
           showCreateButton
           createButtonText={t('app.kuaizhizao.quotation.createButton')}
           onCreate={handleCreate}
@@ -4238,7 +4238,7 @@ const QuotationsPage: React.FC = () => {
                     permGates={quotationPerms}
                     handlers={quotationAuditBatchHandlers}
                     onSuccess={handleQuotationAuditBatchSuccess}
-                    toolBarButtonSize="middle"
+                    toolBarButtonSize="medium"
                   />,
                 ]
               : []

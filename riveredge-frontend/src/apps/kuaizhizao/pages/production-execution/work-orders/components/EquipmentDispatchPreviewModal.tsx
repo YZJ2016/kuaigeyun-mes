@@ -227,7 +227,7 @@ const EquipmentDispatchPreviewModal: React.FC<EquipmentDispatchPreviewModalProps
         key: 'overview',
         label: t('app.kuaizhizao.workOrder.equipmentDispatchPreview.tabOverview'),
         children: (
-          <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+          <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
             {summaryAlerts.map((text) => (
               <Alert key={text} type="warning" title={text} showIcon />
             ))}
@@ -260,7 +260,7 @@ const EquipmentDispatchPreviewModal: React.FC<EquipmentDispatchPreviewModalProps
         key: 'maintenance',
         label: t('app.kuaizhizao.workOrder.equipmentDispatchPreview.tabMaintenance'),
         children: (
-          <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+          <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
             <Typography.Text strong>{t('app.kuaizhizao.workOrder.equipmentDispatchPreview.sectionMaintenancePlans')}</Typography.Text>
             <Table
               dataSource={trace.maintenance_plans ?? []}
@@ -332,7 +332,7 @@ const EquipmentDispatchPreviewModal: React.FC<EquipmentDispatchPreviewModalProps
       destroyOnHidden
       mask={{ closable: true }}
     >
-      <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+      <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
         <Space wrap style={{ width: '100%', justifyContent: 'space-between' }}>
           <DatePicker.RangePicker
             value={dateRange}

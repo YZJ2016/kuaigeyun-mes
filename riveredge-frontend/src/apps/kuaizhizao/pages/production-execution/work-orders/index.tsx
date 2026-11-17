@@ -6853,7 +6853,7 @@ const WorkOrdersPage: React.FC = () => {
       <UniBatchMenuButton
         key="work-order-batch-more-actions"
         selectedRowKeys={selectedRowKeys}
-        toolBarButtonSize="middle"
+        toolBarButtonSize="medium"
         menuItems={[
           {
             key: 'batch-release',
@@ -8437,7 +8437,7 @@ const WorkOrdersPage: React.FC = () => {
           showCreateButton={false}
           createButtonText={t('app.kuaizhizao.workOrder.actionCreateWorkOrder')}
           onCreate={handleCreate}
-          toolBarButtonSize="middle"
+          toolBarButtonSize="medium"
           selectedRowKeys={selectedRowKeys}
           enableRowSelection
           rowSelectionGetCheckboxProps={(record) => ({

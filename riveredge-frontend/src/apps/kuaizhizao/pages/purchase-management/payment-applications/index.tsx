@@ -1930,7 +1930,7 @@ const PaymentApplicationsPage: React.FC = () => {
                 reviewStatusField="reviewStatus"
                 {...paymentApplicationWorkflowStatuses}
                 theme="default"
-                size="middle"
+                size="medium"
                 onSuccess={() => {
                   void getPaymentApplication(detail.id).then(setDetail);
                   actionRef.current?.reload();

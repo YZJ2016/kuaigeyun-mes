@@ -74,9 +74,9 @@ export default function DashboardPreviewPage() {
     return () => window.clearInterval(timer);
   }, [loadPreview, refreshSeconds]);
 
-  if (!dashboardId) return <Alert type="info" message="缺少大屏 id" />;
+  if (!dashboardId) return <Alert type="info" title="缺少大屏 id" />;
   if (loading) return <Spin />;
-  if (error) return <Alert type="error" message={error} />;
+  if (error) return <Alert type="error" title={error} />;
   if (canvasTheme) return <DashboardCanvasFrame theme={canvasTheme} widgets={widgets} flow={flowCanvas} />;
   return (
     <div style={{ padding: 16 }}>

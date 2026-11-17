@@ -985,7 +985,7 @@ export function qualityInspectionUniAuditProps(opts: {
   entityName: string;
   onSuccess: () => void;
   theme?: 'default' | 'link';
-  size?: 'small' | 'middle' | 'large';
+  size?: 'small' | 'medium' | 'large';
 }) {
   return {
     entityType: opts.entityType,

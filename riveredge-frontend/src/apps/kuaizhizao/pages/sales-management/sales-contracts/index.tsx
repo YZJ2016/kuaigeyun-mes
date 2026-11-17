@@ -2696,7 +2696,7 @@ const SalesContractsPage: React.FC = () => {
             permGates={contractPerms}
             handlers={contractAuditBatchHandlers}
             onSuccess={handleContractAuditBatchSuccess}
-            toolBarButtonSize="middle"
+            toolBarButtonSize="medium"
           />,
         ]}
         rightToolBarActionsBeforeExport={

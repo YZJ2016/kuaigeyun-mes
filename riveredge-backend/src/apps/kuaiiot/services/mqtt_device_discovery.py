@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Optional
 
 from loguru import logger
@@ -16,6 +16,7 @@ from apps.kuaiiot.models.iot import (
     IotDiscoveredMqttDevice,
 )
 from apps.kuaiiot.services.sanyi_line_adapter import device_external_id
+from core.utils.timezone_utils import now_utc
 
 _DEVICE_PAIR_RE = re.compile(
     r'"device_id"\s*:\s*"([^"]+)"\s*,\s*"device_name"\s*:\s*"([^"]+)"'
@@ -226,7 +227,7 @@ class MqttDeviceDiscoveryService:
         items = extract_devices_from_payload(payload)
         if not items:
             return 0
-        now = seen_at or datetime.now(timezone.utc)
+        now = seen_at or now_utc()
         written = 0
         for item in items:
             external_id = item["external_device_id"]

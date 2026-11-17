@@ -357,13 +357,13 @@ export function StationExecutionPage({
         </div>
 
         {notice ? (
-          <Alert type={notice.type} message={notice.text} showIcon />
+          <Alert type={notice.type} title={notice.text} showIcon />
         ) : null}
         {!writeEnabled ? (
           <Alert
             type="info"
             showIcon
-            message="未确认操作员：可查看工单与状态，开工、暂停、恢复、结束、上下机与 SOP 确认不可用"
+            title="未确认操作员：可查看工单与状态，开工、暂停、恢复、结束、上下机与 SOP 确认不可用"
           />
         ) : null}
 

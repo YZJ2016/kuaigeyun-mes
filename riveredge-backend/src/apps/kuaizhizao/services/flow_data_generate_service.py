@@ -349,8 +349,8 @@ class _FlowJobRecord:
     message: str = ""
     result: Optional[dict[str, Any]] = None
     error: Optional[str] = None
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=resolve_business_datetime)
+    updated_at: datetime = field(default_factory=resolve_business_datetime)
 
 
 class FlowGenerateJobService:
@@ -401,7 +401,7 @@ class FlowGenerateJobService:
             rec.result = result
         if error is not None:
             rec.error = error
-        rec.updated_at = datetime.now(timezone.utc)
+        rec.updated_at = resolve_business_datetime()
 
     @classmethod
     def to_dict(cls, rec: _FlowJobRecord) -> dict[str, Any]:

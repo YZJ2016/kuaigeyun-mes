@@ -453,7 +453,7 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
             doc.updated_by = updated_by
             doc.updated_by_name = user_info["name"]
             await doc.save()
-        if normalize_status(doc.status) == DocumentStatus.PENDING_REVIEW.value:
+        if is_pending:
             audit_required = await self.business_config_service.check_audit_required(
                 tenant_id, "sales_order_change"
             )

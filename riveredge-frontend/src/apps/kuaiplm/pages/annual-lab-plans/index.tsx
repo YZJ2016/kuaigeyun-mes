@@ -433,7 +433,7 @@ const AnnualLabPlansPage: React.FC = () => {
               `${record.completed_months || 0}/${record.total_months || 12}`,
           },
           {
-            title: t('common.remarks'),
+            title: t('common.remark'),
             dataIndex: 'remarks',
             key: 'remarks',
             span: 2,
@@ -687,7 +687,7 @@ const AnnualLabPlansPage: React.FC = () => {
             />
           </Col>
           <Col span={24}>
-            <ProFormTextArea name="remarks" label={t('common.remarks')} />
+            <ProFormTextArea name="remarks" label={t('common.remark')} />
           </Col>
         </Row>
       </FormModalTemplate>

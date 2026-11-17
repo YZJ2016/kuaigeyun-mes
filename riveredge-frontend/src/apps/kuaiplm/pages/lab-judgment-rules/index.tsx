@@ -319,7 +319,7 @@ const LabJudgmentRulesPage: React.FC = () => {
         render: (_, record) => renderIsActiveTag(t, record.is_active),
       },
       {
-        title: t('common.remarks'),
+        title: t('common.remark'),
         dataIndex: 'remarks',
         key: 'remarks',
         span: 2,
@@ -488,7 +488,7 @@ const LabJudgmentRulesPage: React.FC = () => {
             />
           </Col>
           <Col span={24}>
-            <ProFormTextArea name="remarks" label={t('common.remarks')} />
+            <ProFormTextArea name="remarks" label={t('common.remark')} />
           </Col>
           <Col span={12}>
             <ProFormSwitch

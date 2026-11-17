@@ -7,7 +7,7 @@ import json
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-from core.utils.timezone_utils import to_site_timezone
+from core.utils.timezone_utils import to_api_isoformat
 
 
 def _parse_query_from_body(request_body: Dict[str, Any]) -> tuple[Any, Optional[dict]]:
@@ -48,7 +48,7 @@ def apply_kingdee_since_filter(
     if not isinstance(query, dict):
         return body
 
-    site_since = to_site_timezone(since).strftime("%Y-%m-%d %H:%M:%S")
+    site_since = to_api_isoformat(since) or ""
     clause = f"{date_field}>='{site_since}'"
     existing = str(query.get("FilterString") or query.get("filterString") or "").strip()
     if clause in existing:

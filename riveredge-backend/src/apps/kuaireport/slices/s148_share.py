@@ -64,7 +64,7 @@ SYSTEM_REPORT_CODES = frozenset(
 PASSWORD_HEADER = "X-Share-Password"
 UNLOCK_COOKIE = "kuaireport_share_unlock"
 UNLOCK_PURPOSE = "kuaireport_share_unlock"
-UNLOCK_TTL = timedelta(hours=8)
+UNLOCK_TTL = timedelta(minutes=8 * 60)
 
 PERM_SHARE_MANAGE = "kuaireport:share:manage"
 PERM_DASHBOARD_DESIGN = "kuaireport:dashboard:design"

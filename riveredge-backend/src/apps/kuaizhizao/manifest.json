@@ -1790,14 +1790,14 @@
       "kuaicaiwu:bank-account",
       "master-data:supply-chain:customer",
       "master-data:supply-chain:supplier",
-      "master-data:department:read",
+      "system:department",
       "system:user"
     ],
     "other-expense": [
       "kuaicaiwu:bank-account",
       "master-data:supply-chain:customer",
       "master-data:supply-chain:supplier",
-      "master-data:department:read",
+      "system:department",
       "system:user"
     ],
     "work-order": [
@@ -2385,6 +2385,8 @@
     "kuaizhizao:material-borrow:reject",
     "kuaizhizao:material-borrow:print",
     "kuaizhizao:material-borrow:execute",
+    "kuaizhizao:material-lifecycle-trace:read",
+    "kuaizhizao:material-lifecycle-trace:print",
     "kuaizhizao:material-return:read",
     "kuaizhizao:material-return:create",
     "kuaizhizao:material-return:delete",

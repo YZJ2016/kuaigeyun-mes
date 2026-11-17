@@ -36,6 +36,40 @@ import {
 
 const LOG_PAGE_SIZE_OPTIONS = ['10', '20', '50', '100'];
 
+const UNIT_ADDON_STYLE: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  padding: '0 8px',
+  color: 'var(--ant-color-text-secondary)',
+  background: 'var(--ant-color-fill-alter)',
+  border: '1px solid var(--ant-color-border)',
+  borderLeft: 0,
+  borderRadius: '0 var(--ant-border-radius) var(--ant-border-radius) 0',
+  fontSize: 'inherit',
+};
+
+/** Form.Item 子组件须接收 value/onChange；不可直接用 Space.Compact 包裹 InputNumber */
+function UnitInputNumber({
+  addonText,
+  value,
+  onChange,
+  ...rest
+}: {
+  addonText?: string;
+  value?: number | null;
+  onChange?: (value: number | null) => void;
+  min?: number;
+  max?: number;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <Space.Compact style={{ width: '100%' }}>
+      <InputNumber value={value} onChange={onChange} {...rest} style={{ width: '100%' }} />
+      {addonText ? <span style={UNIT_ADDON_STYLE}>{addonText}</span> : null}
+    </Space.Compact>
+  );
+}
+
 const EVENT_TAG_COLOR: Record<string, string> = {
   skip: 'default',
   BIND: 'blue',
@@ -400,7 +434,7 @@ export default function RelayAutoReportPage() {
         <Alert
           type="info"
           showIcon
-          message={
+          title={
             <span>
               {t('app.ind-relay.autoReport.hint')}{' '}
               <Link to="/apps/kuaiiot/devices">{t('app.ind-relay.autoReport.openDevices')}</Link>
@@ -448,7 +482,7 @@ export default function RelayAutoReportPage() {
                   label={t('app.ind-relay.autoReport.interval')}
                   rules={[{ required: true }]}
                 >
-                  <InputNumber min={1} max={1440} style={{ width: '100%' }} addonAfter={t('app.ind-relay.autoReport.unitMinutes')} />
+                  <UnitInputNumber min={1} max={1440} addonText={t('app.ind-relay.autoReport.unitMinutes')} />
                 </Form.Item>
               </Col>
               {reportMode === 'PLAN_REACHED_OR_OFFLINE' ? (
@@ -458,7 +492,7 @@ export default function RelayAutoReportPage() {
                     label={t('app.ind-relay.autoReport.offlineThreshold')}
                     rules={[{ required: true }]}
                   >
-                    <InputNumber min={30} max={86400} style={{ width: '100%' }} addonAfter={t('app.ind-relay.autoReport.unitSeconds')} />
+                    <UnitInputNumber min={30} max={86400} addonText={t('app.ind-relay.autoReport.unitSeconds')} />
                   </Form.Item>
                 </Col>
               ) : null}
@@ -487,7 +521,7 @@ export default function RelayAutoReportPage() {
               type="warning"
               showIcon
               style={{ marginTop: 12 }}
-              message={t('app.ind-relay.autoReport.reporterRequired')}
+              title={t('app.ind-relay.autoReport.reporterRequired')}
             />
           ) : null}
         </Card>
@@ -521,7 +555,7 @@ export default function RelayAutoReportPage() {
         >
           <Table
             rowKey="id"
-            size="middle"
+            size="medium"
             pagination={false}
             dataSource={bindings}
             columns={bindingColumns}
@@ -539,7 +573,7 @@ export default function RelayAutoReportPage() {
         >
           <Table
             rowKey="id"
-            size="middle"
+            size="medium"
             loading={logsLoading}
             dataSource={logs}
             columns={logColumns}
@@ -550,7 +584,7 @@ export default function RelayAutoReportPage() {
       </Space>
       <Drawer
         title={t('app.ind-relay.autoReport.processOpDetailTitle')}
-        width={640}
+        size={640}
         open={opDrawerOpen}
         onClose={() => {
           setOpDrawerOpen(false);
@@ -571,11 +605,11 @@ export default function RelayAutoReportPage() {
           type="info"
           showIcon
           style={{ marginBottom: 12 }}
-          message={t('app.ind-relay.autoReport.processOpHint')}
+          title={t('app.ind-relay.autoReport.processOpHint')}
         />
         <Table
           rowKey="id"
-          size="middle"
+          size="medium"
           loading={opDrawerLoading}
           pagination={false}
           dataSource={opDetail?.items || []}

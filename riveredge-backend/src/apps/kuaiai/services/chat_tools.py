@@ -32,6 +32,7 @@ from loguru import logger
 from tortoise.transactions import in_transaction
 
 from apps.kuaiai.constants import KNOWLEDGE_RESULT_MAX_CHARS, STATUS_ENABLED
+from core.utils.timezone_utils import resolve_business_datetime
 from core.ai.runtime.context import AiRuntimeContext, get_ai_context
 from core.ai.tool_registry import ToolRegistry
 from infra.exceptions.exceptions import (
@@ -429,7 +430,7 @@ async def submit_production_feedback(
             qualified_quantity=qual,
             unqualified_quantity=unq,
             work_hours=hours,
-            reported_at=datetime.now(),
+            reported_at=resolve_business_datetime(),
             remarks=remarks,
         )
         record = await ReportingService().create_reporting_record(

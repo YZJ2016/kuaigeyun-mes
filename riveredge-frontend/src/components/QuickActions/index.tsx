@@ -62,7 +62,7 @@ interface QuickActionsProps {
   /** 更多操作菜单项 */
   moreActions?: MenuProps['items'];
   /** 按钮大小 */
-  size?: 'small' | 'middle' | 'large';
+  size?: 'small' | 'medium' | 'large';
   /** 按钮类型 */
   type?: 'default' | 'primary' | 'dashed' | 'link' | 'text';
 }
@@ -89,7 +89,7 @@ const QuickActions: React.FC<QuickActionsProps> = ({
   onImport,
   onCopy,
   moreActions = [],
-  size='middle',
+  size='medium',
   type = 'default',
 }) => {
   const { token } = theme.useToken();

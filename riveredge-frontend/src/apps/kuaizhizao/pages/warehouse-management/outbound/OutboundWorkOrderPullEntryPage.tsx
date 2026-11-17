@@ -725,7 +725,7 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
       batchAllocations,
       serials,
       notes,
-      pickingTime: pickingTime?.isValid() ? pickingTime.toISOString() : undefined,
+      pickingTime: toApiBusinessDocumentDateTime(pickingTime),
       receiverUuid: operatorHook.receiverUuid,
       receiverName: operatorHook.receiverName,
       issueQuantities: Object.fromEntries(pickLines.map((line) => [line.materialId, line.issueQuantity])),

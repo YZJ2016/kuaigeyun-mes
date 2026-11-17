@@ -397,6 +397,18 @@
       ],
       "data_scope_key": null,
       "sensitive": false
+    },
+    "payable": {
+      "permission_prefix": "kuaicaiwu:payable",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "kuaicaiwu:payable",
+      "sensitive": false
     }
   },
   "module_references": {

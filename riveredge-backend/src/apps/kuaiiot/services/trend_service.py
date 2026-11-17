@@ -11,6 +11,7 @@ from apps.kuaiiot.constants import TSDB_INTEGRATION_CODE, TSDB_INTEGRATION_TYPE
 from apps.kuaiiot.models.device import KuaiiotDevice
 from apps.kuaiiot.models.tag import KuaiiotTagDefinition
 from apps.kuaiiot.services.tag_template_service import _require_tenant
+from core.utils.timezone_utils import now_utc
 from core.models.integration_config import IntegrationConfig
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
@@ -114,7 +115,7 @@ async def write_trend(
         if not math.isfinite(number):
             raise ValidationError("趋势值必须是有限数值")
     definition = await _numeric_tag(tid, device_id, tag_key)
-    when = sampled_at or datetime.now(timezone.utc)
+    when = sampled_at or now_utc()
     # naive 时间戳统一按 UTC 解释，与 _flux_time 口径一致
     if when.tzinfo is None:
         when = when.replace(tzinfo=timezone.utc)

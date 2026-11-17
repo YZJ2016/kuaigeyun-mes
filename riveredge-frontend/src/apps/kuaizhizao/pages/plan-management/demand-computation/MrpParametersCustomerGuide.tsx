@@ -21,7 +21,7 @@ const PARAM_ROW_KEYS = [
   { paramKey: 'mrpParamScheduleBuffer', problemKey: 'mrpParamScheduleBufferProblem' },
 ] as const
 
-export const MrpParametersCustomerGuideTrigger: React.FC<{ size?: 'small' | 'middle' }> = ({ size = 'small' }) => {
+export const MrpParametersCustomerGuideTrigger: React.FC<{ size?: 'small' | 'medium' }> = ({ size = 'small' }) => {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
 

@@ -4950,7 +4950,7 @@ const PurchaseOrdersPage: React.FC = () => {
               handlers={purchaseOrderAuditBatchHandlers}
               extraMenuItems={purchaseOrderBatchExtraMenuItems}
               onSuccess={handlePurchaseOrderAuditBatchSuccess}
-              toolBarButtonSize="middle"
+              toolBarButtonSize="medium"
             />,
           ]}
           rightToolBarActionsBeforeExport={[
@@ -5068,7 +5068,7 @@ const PurchaseOrdersPage: React.FC = () => {
                   <SyncPushHubButton
                     syncEnabled={toolbarSyncPush.syncEnabled}
                     pushEnabled={toolbarSyncPush.pushEnabled}
-                    size="middle"
+                    size="medium"
                     wrapButton={(hubButton) => (
                       <SyncFreshnessBadge
                         getBinding={loadPurchaseOrderSyncBinding}

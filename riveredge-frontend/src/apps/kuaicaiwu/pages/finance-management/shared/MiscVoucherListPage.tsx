@@ -813,7 +813,7 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
               permGates={perms}
               handlers={auditBatchHandlers}
               onSuccess={handleAuditBatchSuccess}
-              toolBarButtonSize="middle"
+              toolBarButtonSize="medium"
             />,
           ]}
           onTableDataChange={(rows) => {
@@ -1050,7 +1050,7 @@ export const MiscVoucherListPage: React.FC<MiscVoucherListPageProps> = ({
               statusField="status"
               {...miscWorkflowStatuses}
               theme="default"
-              size="middle"
+              size="medium"
               onSuccess={() => reloadAfterWorkflow(detailRow.id)}
             />
           ) : null

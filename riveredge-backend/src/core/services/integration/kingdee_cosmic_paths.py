@@ -320,6 +320,86 @@ def _strip_createorg_from_group_master_query_payload(
     return params_out, body_out
 
 
+_ORG_FIELD_KEYS = frozenset(
+    {
+        "org",
+        "createorg_number",
+        "createorgnumber",
+        "create_org_number",
+        "org_number",
+        "orgnumber",
+        "bizorg_number",
+        "bizorgnumber",
+        "entrysettleorg_number",
+        "entrysettleorgnumber",
+    }
+)
+
+
+def _is_org_field_key(key: Any) -> bool:
+    text = str(key or "").strip().lower().replace("-", "_")
+    if text in _ORG_FIELD_KEYS:
+        return True
+    return text.endswith("org_number") or text.endswith("orgnumber")
+
+
+def _is_createorg_filter_key(key: Any) -> bool:
+    """batchQuery data 内「创建组织」筛选项（与 org/管理组织 不同）。"""
+    text = str(key or "").strip().lower().replace("-", "_")
+    if text in {"createorg_number", "createorgnumber", "create_org_number", "createorg"}:
+        return True
+    return text.startswith("createorg_")
+
+
+def _is_org_placeholder(value: Any) -> bool:
+    """空值、尖括号占位、历史示例 BU-00000、出站 REPLACE_ORG 均视为待连接器填充。"""
+    if value is None:
+        return True
+    text = str(value).strip()
+    if not text:
+        return True
+    if text.startswith("<") and text.endswith(">"):
+        return True
+    upper = text.upper()
+    if upper in {"BU-00000", "REPLACE_ORG"}:
+        return True
+    if upper.startswith("REPLACE_"):
+        return True
+    return False
+
+
+def apply_connector_org_to_payload(payload: Any, org: str) -> Any:
+    """把连接器组织写入请求体/参数中所有组织字段；无连接器组织则原样返回。"""
+    org_text = str(org or "").strip()
+    if not org_text:
+        return payload
+
+    def _walk(node: Any, *, parent_is_org_field: bool = False) -> Any:
+        if isinstance(node, dict):
+            out: Dict[str, Any] = {}
+            for key, value in node.items():
+                is_org = _is_org_field_key(key)
+                if is_org:
+                    if isinstance(value, list):
+                        out[key] = [org_text]
+                    else:
+                        out[key] = org_text
+                else:
+                    out[key] = _walk(value, parent_is_org_field=False)
+            return out
+        if isinstance(node, list):
+            if parent_is_org_field:
+                return [org_text]
+            return [_walk(item, parent_is_org_field=False) for item in node]
+        if parent_is_org_field or _is_org_placeholder(node):
+            # 仅在组织字段路径上替换占位；普通字符串里的 BU-00000 不当组织
+            if parent_is_org_field:
+                return org_text
+        return node
+
+    return _walk(payload, parent_is_org_field=False)
+
+
 def _rewrite_warehouse_list_url(url: str) -> str:
     """仓库列表统一走 sbd/bd_warehouse/getList。basedata 路径网关 2530。"""
     raw = _path_without_query(url)

@@ -88,7 +88,7 @@ export const customerFormSchemaBasicTail: FieldConfig[] = [
       { labelKey: 'field.customer.visibilityPrivate', value: false },
       { labelKey: 'field.customer.visibilityPublic', value: true },
     ],
-    fieldProps: { className: 'form-field-segmented', size: 'middle' },
+    fieldProps: { className: 'form-field-segmented', size: 'medium' },
     rules: [{ required: true, messageKey: 'field.customer.visibilityRequired' }],
   },
   {

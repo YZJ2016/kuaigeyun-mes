@@ -1857,7 +1857,7 @@ const OtherOutboundPage: React.FC = () => {
                     pushEnabled={toolbarSyncPush.pushEnabled}
                     historySourceType="other_outbound"
                     historyTargetProfiles={['kingdee_im_otheroutbill']}
-                    size="middle"
+                    size="medium"
                     renderPushPanel={({ active, close }) => (
                       <OtherOutboundDocumentPushPanel
                         embedded

@@ -237,7 +237,7 @@ const TrustPage: React.FC = () => {
   ) : (
     <Table<AiAuditLogItemOut>
       rowKey="uuid"
-      size="middle"
+      size="medium"
       loading={auditQuery.isPending || auditQuery.isFetching}
       columns={auditColumns}
       dataSource={auditQuery.data?.items ?? []}

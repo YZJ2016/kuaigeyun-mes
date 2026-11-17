@@ -189,7 +189,7 @@ export function AgentEditModal({ open, agent, onCancel, onSaved }: AgentEditModa
             <Alert
               type="error"
               showIcon
-              message={t('app.kuaiai.agents.toolsLoadFailed', {
+              title={t('app.kuaiai.agents.toolsLoadFailed', {
                 defaultValue: '工具目录加载失败，重试成功前不可保存',
               })}
               action={

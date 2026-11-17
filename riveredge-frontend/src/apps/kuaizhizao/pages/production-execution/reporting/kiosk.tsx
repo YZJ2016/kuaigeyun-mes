@@ -523,7 +523,7 @@ const ReportingKioskPage: React.FC = () => {
             type="info"
             showIcon
             style={{ marginBottom: 24 }}
-            message="未确认操作员：可查看页面，提交报工与缺陷登记不可用"
+            title="未确认操作员：可查看页面，提交报工与缺陷登记不可用"
           />
         ) : null}
         <Form

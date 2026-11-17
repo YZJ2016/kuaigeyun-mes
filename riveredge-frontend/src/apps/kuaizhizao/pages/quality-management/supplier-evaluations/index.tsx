@@ -3507,7 +3507,7 @@ const SupplierEvaluationsPage: React.FC = () => {
 
         open={detailOpen}
 
-        width={DRAWER_CONFIG.HALF_WIDTH}
+        size={DRAWER_CONFIG.HALF_WIDTH}
 
         loading={detailLoading}
 

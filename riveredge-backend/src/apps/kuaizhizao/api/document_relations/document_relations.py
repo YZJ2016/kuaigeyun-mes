@@ -39,7 +39,7 @@ _DOCUMENT_LINE_MATERIAL_ATTACHMENT_READ = require_permission_codes(
     "kuaizhizao:outbound:read",
     "master-data:material:read",
     "master-data:material:display",
-    "master-data:process:engineering-drawing:read",
+    "master-data:process:drawing:read",
     require_all=False,
 )
 

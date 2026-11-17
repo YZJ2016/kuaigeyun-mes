@@ -479,7 +479,7 @@ const OutsourceInspectionPage: React.FC = () => {
               setSelectedRowKeys([]);
               reload();
             }}
-            toolBarButtonSize="middle"
+            toolBarButtonSize="medium"
           />,
         ]}
         request={async (params, sort) => {

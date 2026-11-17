@@ -1114,7 +1114,7 @@ const ProcessInspectionPage: React.FC = () => {
               invalidateStats();
     actionRef.current?.reload();
             }}
-            toolBarButtonSize="middle"
+            toolBarButtonSize="medium"
           />,
         ]}
         deleteConfirmTitle={(count) => t('app.kuaizhizao.quality.process.messages.deleteConfirm', { count })}

@@ -1079,7 +1079,7 @@ const ReceivableList: React.FC = () => {
                         permGates={receivablePerms}
                         handlers={receivableAuditBatchHandlers}
                         onSuccess={handleReceivableAuditBatchSuccess}
-                        toolBarButtonSize="middle"
+                        toolBarButtonSize="medium"
                     />,
                     <Button
                         key="merge-receipt"

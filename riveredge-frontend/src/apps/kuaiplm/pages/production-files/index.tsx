@@ -704,7 +704,7 @@ const ProductionFilesPage: React.FC = () => {
       },
       {
         key: 'remarks',
-        title: t('common.remarks'),
+        title: t('common.remark'),
         dataIndex: 'remarks',
       },
     ];

@@ -40,7 +40,7 @@ export default function TrendPage() {
   }, [range.start, range.stop]);
 
   return (
-    <Space direction="vertical" size={16} style={{ width: '100%', padding: 16 }}>
+    <Space orientation="vertical" size={16} style={{ width: '100%', padding: 16 }}>
       <Space>
         <Title level={4} style={{ margin: 0 }}>
           点位趋势
@@ -48,7 +48,7 @@ export default function TrendPage() {
         <Link to="/apps/kuaiiot/products">产品</Link>
       </Space>
       {unavailable ? (
-        <Alert type="warning" showIcon message="趋势不可用" description="当前租户没有启用的 kuaiiot_tsdb 集成。" />
+        <Alert type="warning" showIcon title="趋势不可用" description="当前租户没有启用的 kuaiiot_tsdb 集成。" />
       ) : (
         <Card title="查询">
           <Form

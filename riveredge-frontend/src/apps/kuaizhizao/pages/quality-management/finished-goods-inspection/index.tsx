@@ -1355,7 +1355,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
               invalidateStats();
     actionRef.current?.reload();
             }}
-            toolBarButtonSize="middle"
+            toolBarButtonSize="medium"
           />,
         ]}
         deleteConfirmTitle={(count) => t('app.kuaizhizao.quality.finished.messages.deleteConfirm', { count })}

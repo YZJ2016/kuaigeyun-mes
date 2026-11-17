@@ -531,7 +531,7 @@ const AgentLibraryPage: React.FC = () => {
             style={{ marginTop: 12 }}
             type="warning"
             showIcon
-            message={t('app.kuaiai.ops.partialFailed', {
+            title={t('app.kuaiai.ops.partialFailed', {
               defaultValue: '部分数据刷新失败，已保留上次结果',
             })}
             action={
@@ -547,7 +547,7 @@ const AgentLibraryPage: React.FC = () => {
             style={{ marginTop: 12 }}
             type="warning"
             showIcon
-            message={t('app.kuaiai.library.provisioningIncomplete', {
+            title={t('app.kuaiai.library.provisioningIncomplete', {
               defaultValue: '场景预置未完成，部分智能体暂不可用',
             })}
             description={
@@ -722,7 +722,7 @@ const AgentLibraryPage: React.FC = () => {
             style={{ marginBottom: 12 }}
             type="info"
             showIcon
-            message={t('app.kuaiai.library.cloneHint', {
+            title={t('app.kuaiai.library.cloneHint', {
               defaultValue:
                 '将从所选本租户 Agent 档案克隆出停用副本档案，并创建一个新的场景实例',
             })}

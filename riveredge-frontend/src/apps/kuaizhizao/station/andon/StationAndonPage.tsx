@@ -391,7 +391,7 @@ export function StationAndonPage({
   if (stationId == null) {
     return (
       <TouchScreenTemplate title="安灯">
-        <Alert type="info" showIcon message="等待工位入口传入当前工位" />
+        <Alert type="info" showIcon title="等待工位入口传入当前工位" />
         <div style={{ marginTop: 16 }}>
           <Button
             size="large"
@@ -431,12 +431,12 @@ export function StationAndonPage({
           </Button>
         </div>
 
-        {notice ? <Alert type={notice.type} message={notice.text} showIcon /> : null}
+        {notice ? <Alert type={notice.type} title={notice.text} showIcon /> : null}
         {!writeEnabled ? (
           <Alert
             type="info"
             showIcon
-            message="未确认操作员：可查看安灯，发起、响应、关闭与撤销不可用"
+            title="未确认操作员：可查看安灯，发起、响应、关闭与撤销不可用"
           />
         ) : null}
 

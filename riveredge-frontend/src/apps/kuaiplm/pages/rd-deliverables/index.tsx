@@ -647,7 +647,7 @@ const RdDeliverablesPage: React.FC = () => {
         title={detailRow?.name || t('app.kuaiplm.menu.rd-deliverables')}
       >
         {detailRow ? (
-          <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+          <Space orientation="vertical" size="medium" style={{ width: '100%' }}>
             <div>
               <Typography.Text type="secondary">{t('app.kuaiplm.common.columns.type')}</Typography.Text>
               <div>{typeLabel(detailRow.deliverable_type)}</div>

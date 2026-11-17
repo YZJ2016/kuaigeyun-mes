@@ -2123,7 +2123,7 @@ export default function SalesForecastsPage() {
           showAdvancedSearch={true}
           skipFuzzyPinyinClientFilter
           enableRowSelection={viewTypeState !== 'detailTable'}
-          toolBarButtonSize="middle"
+          toolBarButtonSize="medium"
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={(keys) => setSelectedRowKeys(keys)}
           showCreateButton={salesNodesEnabled.sales_forecast}
@@ -2178,7 +2178,7 @@ export default function SalesForecastsPage() {
                 setSelectedRowKeys([]);
     actionRef.current?.reload();
               }}
-              toolBarButtonSize="middle"
+              toolBarButtonSize="medium"
             />,
           ]}
           rightToolBarActionsBeforeExport={[
