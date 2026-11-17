@@ -44,6 +44,30 @@ export const PLATFORM_UPDATE_TYPE_ORDER: PlatformUpdateType[] = [
  */
 export const PLATFORM_UPDATE_LOG_GENERAL: PlatformUpdateLogEntry[] = [
   {
+    id: 'purchase-order-header-rollup-backend-r01',
+    date: '2026-11-10',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-order-header-rollup-backend-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-order-header-rollup-backend-r01.description',
+  },
+  {
+    id: 'purchase-order-amount-unified-r01',
+    date: '2026-11-10',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-order-amount-unified-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-order-amount-unified-r01.description',
+  },
+  {
+    id: 'purchase-order-tax-incl-unit-600-r01',
+    date: '2026-11-10',
+    type: 'fix',
+    titleKey: 'pages.dashboard.updateLog.entries.purchase-order-tax-incl-unit-600-r01.title',
+    descriptionKey:
+      'pages.dashboard.updateLog.entries.purchase-order-tax-incl-unit-600-r01.description',
+  },
+  {
     id: 'sales-order-action-crash-fix-r01',
     date: '2026-11-17',
     type: 'fix',
