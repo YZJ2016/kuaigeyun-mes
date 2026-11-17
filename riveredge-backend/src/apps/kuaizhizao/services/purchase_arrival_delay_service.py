@@ -320,3 +320,14 @@ class PurchaseArrivalDelayService(AppBaseService[PurchaseArrivalDelayReport]):
         if doc:
             doc.status = OrderChangeApplyStatus.APPLIED.value
             await doc.save()
+
+    async def clear_applied_for_change(self, tenant_id: int, change_id: int) -> None:
+        """变更单撤销生效后，延期填报回到 change_generated。"""
+        doc = await PurchaseArrivalDelayReport.get_or_none(
+            tenant_id=tenant_id,
+            purchase_order_change_id=change_id,
+            deleted_at__isnull=True,
+        )
+        if doc and doc.status == OrderChangeApplyStatus.APPLIED.value:
+            doc.status = "change_generated"
+            await doc.save()

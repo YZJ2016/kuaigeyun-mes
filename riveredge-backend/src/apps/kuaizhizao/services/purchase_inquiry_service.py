@@ -54,6 +54,7 @@ from apps.kuaizhizao.schemas.purchase_inquiry import (
     UpsertSupplierQuoteRequest,
 )
 from apps.kuaizhizao.services.purchase_service import PurchaseService
+from apps.kuaizhizao.utils.document_source_types import is_purchase_inquiry_source_type
 from apps.kuaizhizao.utils.material_source_helper import get_material_source_config
 from apps.master_data.models import Supplier
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
@@ -1414,6 +1415,45 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
             "tip": "系统将按定标供应商与报价数量自动生成采购订单，并按供应商拆单。",
         }
 
+    async def _occupied_purchase_order_qty_by_inquiry_item_ids(
+        self,
+        tenant_id: int,
+        item_ids: List[int],
+    ) -> Dict[int, Decimal]:
+        """按询价行汇总下游采购订单占用（含草稿；删除的 PO 不计）。"""
+        if not item_ids:
+            return {}
+        from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem
+
+        pois = await PurchaseOrderItem.filter(
+            tenant_id=tenant_id,
+            source_id__in=item_ids,
+            deleted_at__isnull=True,
+        ).all()
+        if not pois:
+            return {}
+        order_ids = {int(pi.order_id) for pi in pois if pi.order_id}
+        live_order_ids = set(
+            await PurchaseOrder.filter(
+                tenant_id=tenant_id,
+                id__in=list(order_ids),
+                deleted_at__isnull=True,
+            ).values_list("id", flat=True)
+        )
+        occupied: Dict[int, Decimal] = {}
+        for pi in pois:
+            if int(pi.order_id or 0) not in live_order_ids:
+                continue
+            if not is_purchase_inquiry_source_type(getattr(pi, "source_type", None)):
+                continue
+            sid = int(pi.source_id or 0)
+            if sid <= 0:
+                continue
+            occupied[sid] = occupied.get(sid, Decimal("0")) + Decimal(
+                str(pi.ordered_quantity or 0)
+            )
+        return occupied
+
     async def list_purchase_order_pull_lines(
         self,
         tenant_id: int,
@@ -1437,6 +1477,10 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
             tenant_id=tenant_id,
             inquiry_id__in=list(inq_by_id.keys()),
         ).all()
+        item_ids = [int(i.id) for i in items if i.id is not None]
+        occupied_po = await self._occupied_purchase_order_qty_by_inquiry_item_ids(
+            tenant_id, item_ids
+        )
 
         kw = (keyword or "").strip().lower()
         lines: List[Dict[str, Any]] = []
@@ -1449,12 +1493,13 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
             if qty <= 0:
                 continue
             awarded = bool(item.awarded_supplier_id)
+            item_id = int(item.id) if item.id is not None else 0
             if item.purchase_order_id or not awarded:
                 remaining = 0.0
                 pushed = qty
             else:
-                remaining = qty
-                pushed = 0.0
+                pushed = min(qty, float(occupied_po.get(item_id, Decimal("0"))))
+                remaining = max(0.0, qty - pushed)
             selectable = can_push and remaining > 0
             if pullable_only and not selectable:
                 continue
@@ -1515,6 +1560,10 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
         if not items:
             raise BusinessLogicError("没有可转单的已定标询价行")
 
+        occupied_po = await self._occupied_purchase_order_qty_by_inquiry_item_ids(
+            tenant_id, [int(i.id) for i in items if i.id is not None]
+        )
+
         inquiry_ids = sorted({int(i.inquiry_id) for i in items})
         inquiries = await PurchaseInquiry.filter(
             tenant_id=tenant_id,
@@ -1550,15 +1599,23 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
             line_inquiry_item_ids: List[int] = []
 
             for item in group_items:
+                line_qty = Decimal(str(item.quantity or 0))
+                occupied = occupied_po.get(int(item.id or 0), Decimal("0"))
+                remaining = line_qty - occupied
+                if remaining <= 0:
+                    continue
                 quote_item = await PurchaseSupplierQuoteItem.get_or_none(
                     tenant_id=tenant_id, id=item.awarded_quote_item_id
                 )
                 unit_price = quote_item.unit_price if quote_item else Decimal(0)
-                qty = (
-                    quote_item.quoted_quantity
+                quoted = (
+                    Decimal(str(quote_item.quoted_quantity))
                     if quote_item and quote_item.quoted_quantity
-                    else item.quantity
+                    else line_qty
                 )
+                qty = min(remaining, quoted) if quoted > 0 else remaining
+                if qty <= 0:
+                    continue
                 delivery = quote_item.delivery_date if quote_item else item.required_date
                 total_price = qty * unit_price
                 po_items.append(
@@ -1607,7 +1664,7 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
             )
 
         if not plans:
-            raise BusinessLogicError("所选明细无法生成采购订单")
+            raise BusinessLogicError("所选明细的剩余可转数量均为 0，无法生成采购订单")
         return plans
 
     async def draft_purchase_orders_from_inquiry_convert(
@@ -1682,9 +1739,11 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
 
         po_by_inquiry_item_id: Dict[int, Any] = {}
         for po_item in po_items:
-            src_type = getattr(po_item, "source_type", None) or ""
             src_id = getattr(po_item, "source_id", None)
-            if src_type == "PurchaseInquiry" and src_id is not None:
+            if (
+                src_id is not None
+                and is_purchase_inquiry_source_type(getattr(po_item, "source_type", None))
+            ):
                 po_by_inquiry_item_id[int(src_id)] = po_item
 
         inquiry_ids = sorted({int(i.inquiry_id) for i in inquiry_items})

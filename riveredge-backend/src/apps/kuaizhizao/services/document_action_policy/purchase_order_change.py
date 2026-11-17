@@ -80,13 +80,19 @@ def derive_purchase_order_change_capabilities(
 
     is_audited = normalize_status(_norm_status(status)) == DocumentStatus.AUDITED.value
     is_rejected = normalize_status(_norm_status(status)) == DocumentStatus.REJECTED.value
-    revoke_allowed = (is_audited or is_rejected) and not _is_applied(doc)
+    applied = _is_applied(doc)
+    revoke_allowed = (is_audited or is_rejected) and not applied
     revoke_reason = None
-    if _is_applied(doc):
+    if applied:
         revoke_reason = "purchase_order_change.revoke_approval.applied"
     elif not (is_audited or is_rejected):
         revoke_reason = "purchase_order_change.revoke_approval.not_allowed"
     revoke_cap = _cap(revoke_allowed, revoke_reason)
+
+    withdraw_apply_cap = _cap(
+        applied,
+        None if applied else "purchase_order_change.withdraw_apply.not_applied",
+    )
 
     return PurchaseOrderChangeCapabilities(
         update=update_cap,
@@ -96,6 +102,7 @@ def derive_purchase_order_change_capabilities(
         approve=approve_cap,
         revoke_approval=revoke_cap,
         apply=apply_cap,
+        withdraw_apply=withdraw_apply_cap,
         preview_impact=_cap(is_draft or is_pending or apply_allowed),
         print=_cap(True),
         reopen=_cap(False, "purchase_order_change.reopen.not_supported"),
@@ -117,6 +124,7 @@ def assert_purchase_order_change_capability(
         "approve": caps.approve,
         "revoke_approval": caps.revoke_approval,
         "apply": caps.apply,
+        "withdraw_apply": caps.withdraw_apply,
     }
     cap = cap_map.get(action)
     if cap is None:

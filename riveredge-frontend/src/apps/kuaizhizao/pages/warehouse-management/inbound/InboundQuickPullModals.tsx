@@ -5,6 +5,7 @@ import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import {
   UniPullQueryModal,
   PULL_SOURCE_REFERENCE,
+  isPullOpenLineSelectable,
   isPullableScope,
   loadPullSourceReferenceOptions,
   renderPullCapabilityTag,
@@ -157,12 +158,6 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
       [t],
     );
 
-    const isPullLineSelectable = useCallback(
-      (record: { remaining_quantity?: number }) => Number(record.remaining_quantity ?? 0) > 0,
-      [],
-    );
-
-
     const pullFromPurchaseOrderQuery = useUniPullQuery<PullPurchaseOrderCandidate>({
       rowKey: 'id',
       selectionType: 'checkbox',
@@ -196,9 +191,9 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
           return { data: [], total: 0 };
         }
       },
-      isRowDisabled: (record) => !isPullLineSelectable(record),
+      isRowDisabled: (record) => !isPullOpenLineSelectable(record),
       onConfirm: async (_keys, rows) => {
-        const selectedRows = rows.filter((row) => isPullLineSelectable(row));
+        const selectedRows = rows.filter((row) => isPullOpenLineSelectable(row));
         if (!selectedRows.length) {
           messageApi.warning(t('app.kuaizhizao.warehouseInbound.pull.po.selectLinesFirst'));
           return;
@@ -270,10 +265,10 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
           return { data: [], total: 0 };
         }
       },
-      isRowDisabled: (record) => !isPullLineSelectable(record),
+      isRowDisabled: (record) => !isPullOpenLineSelectable(record),
       onConfirm: async (_keys, rows) => {
         const selectedIds = rows
-          .filter((row) => isPullLineSelectable(row))
+          .filter((row) => isPullOpenLineSelectable(row))
           .map((row) => Number(row.id))
           .filter((id) => id > 0);
         if (!selectedIds.length) {
@@ -338,10 +333,10 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
           return { data: [], total: 0 };
         }
       },
-      isRowDisabled: (record) => !isPullLineSelectable(record),
+      isRowDisabled: (record) => !isPullOpenLineSelectable(record),
       onConfirm: async (_keys, rows) => {
         const selectedIds = rows
-          .filter((row) => isPullLineSelectable(row))
+          .filter((row) => isPullOpenLineSelectable(row))
           .map((row) => Number(row.id))
           .filter((id) => id > 0);
         if (!selectedIds.length) {
@@ -406,10 +401,10 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
           return { data: [], total: 0 };
         }
       },
-      isRowDisabled: (record) => !isPullLineSelectable(record),
+      isRowDisabled: (record) => !isPullOpenLineSelectable(record),
       onConfirm: async (_keys, rows) => {
         const selectedIds = rows
-          .filter((row) => isPullLineSelectable(row))
+          .filter((row) => isPullOpenLineSelectable(row))
           .map((row) => Number(row.id))
           .filter((id) => id > 0);
         if (!selectedIds.length) {
@@ -474,10 +469,10 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
           return { data: [], total: 0 };
         }
       },
-      isRowDisabled: (record) => !isPullLineSelectable(record),
+      isRowDisabled: (record) => !isPullOpenLineSelectable(record),
       onConfirm: async (_keys, rows) => {
         const selectedIds = rows
-          .filter((row) => isPullLineSelectable(row))
+          .filter((row) => isPullOpenLineSelectable(row))
           .map((row) => Number(row.id))
           .filter((id) => id > 0);
         if (!selectedIds.length) {
@@ -546,10 +541,10 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
           return { data: [], total: 0 };
         }
       },
-      isRowDisabled: (record) => !isPullLineSelectable(record),
+      isRowDisabled: (record) => !isPullOpenLineSelectable(record),
       onConfirm: async (_keys, rows) => {
         const selectedIds = rows
-          .filter((row) => isPullLineSelectable(row))
+          .filter((row) => isPullOpenLineSelectable(row))
           .map((row) => Number(row.id))
           .filter((id) => id > 0);
         if (!selectedIds.length) {

@@ -64,6 +64,7 @@ import {
   listPurchaseOrderChanges,
   previewPurchaseOrderChangeImpact,
   submitPurchaseOrderChange,
+  unapplyPurchaseOrderChange,
   updatePurchaseOrderChange,
   withdrawPurchaseOrderChange,
   type PurchaseOrderChange,
@@ -745,6 +746,9 @@ const PurchaseOrderChangesPage: React.FC = () => {
           const canApply =
             record.capabilities?.apply?.allowed === true &&
             (purchaseOrderChangePerms.canAction?.('execute') ?? false);
+          const canWithdrawApply =
+            record.capabilities?.withdraw_apply?.allowed === true &&
+            (purchaseOrderChangePerms.canAction?.('execute') ?? false);
           const canRevoke =
             record.capabilities?.withdraw_submit?.allowed === true &&
             (purchaseOrderChangePerms.canAction?.('revoke') ?? false);
@@ -779,6 +783,25 @@ const PurchaseOrderChangesPage: React.FC = () => {
                 }}
               >
                 {t('app.kuaizhizao.purchaseOrderChange.applyConfirm')}
+              </Button>
+            ) : null,
+            canWithdrawApply ? (
+              <Button
+                {...rowActionKind('revoke')}
+                key="withdraw-apply"
+                type="link"
+                size="small"
+                onClick={async () => {
+                  try {
+                    await unapplyPurchaseOrderChange(record.id!);
+                    message.success(t('app.kuaizhizao.purchaseOrderChange.unapplySuccess'));
+                    reloadTable();
+                  } catch (e: unknown) {
+                    message.error(getApiErrorMessage(e) || t('common.operationFailed'));
+                  }
+                }}
+              >
+                {t('app.kuaizhizao.purchaseOrderChange.toolbar.withdrawApply')}
               </Button>
             ) : null,
             canRevoke ? (
@@ -1096,6 +1119,24 @@ const PurchaseOrderChangesPage: React.FC = () => {
                   }}
                 >
                   {t('app.kuaizhizao.purchaseOrderChange.applyConfirm')}
+                </Button>
+              ) : null}
+              {detail.capabilities?.withdraw_apply?.allowed &&
+              purchaseOrderChangePerms.canAction?.('execute') ? (
+                <Button
+                  onClick={async () => {
+                    try {
+                      await unapplyPurchaseOrderChange(detail.id!);
+                      message.success(t('app.kuaizhizao.purchaseOrderChange.unapplySuccess'));
+                      reloadTable();
+                      setChangeTrackingRefreshKey((k) => k + 1);
+                      setDetail(await getPurchaseOrderChange(detail.id!));
+                    } catch (e: any) {
+                      message.error(e?.message || t('common.operationFailed'));
+                    }
+                  }}
+                >
+                  {t('app.kuaizhizao.purchaseOrderChange.toolbar.withdrawApply')}
                 </Button>
               ) : null}
               <UniWorkflowActions {...rowActionKind('skip')}

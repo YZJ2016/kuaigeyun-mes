@@ -15,6 +15,7 @@ export interface PurchaseOrderChangeCapabilities {
   approve?: ActionCapability;
   revoke_approval?: ActionCapability;
   apply?: ActionCapability;
+  withdraw_apply?: ActionCapability;
   preview_impact?: ActionCapability;
   print?: ActionCapability;
   reopen?: ActionCapability;
@@ -128,6 +129,10 @@ export async function previewPurchaseOrderChangeImpact(id: number): Promise<Chan
 
 export async function applyPurchaseOrderChange(id: number): Promise<PurchaseOrderChange> {
   return apiRequest(`/apps/kuaizhizao/purchase-order-change-orders/${id}/apply`, { method: 'POST' });
+}
+
+export async function unapplyPurchaseOrderChange(id: number): Promise<PurchaseOrderChange> {
+  return apiRequest(`/apps/kuaizhizao/purchase-order-change-orders/${id}/unapply`, { method: 'POST' });
 }
 
 export type { ChangeImpactPreview, OrderChangeItem };
