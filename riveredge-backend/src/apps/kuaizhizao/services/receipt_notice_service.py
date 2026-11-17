@@ -336,28 +336,7 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
                 total_amount=total_amount
             )
             notice = await ReceiptNotice.get(tenant_id=tenant_id, id=notice.id)
-            notice_id = int(notice.id)
-
-        # 事务提交后再走自动化，避免嵌套写单被回滚
-        source_type = (getattr(notice_data, "document_flow_source_type", None) or "").strip()
-        if not source_type:
-            from apps.kuaizhizao.services.manual_create_auto_lifecycle import (
-                apply_manual_create_auto_submit,
-            )
-
-            applied = await apply_manual_create_auto_submit(
-                tenant_id=tenant_id,
-                node_key="receipt_notice",
-                entity_id=notice_id,
-                operator_id=created_by,
-            )
-            if applied:
-                refreshed = await ReceiptNotice.get_or_none(
-                    tenant_id=tenant_id, id=notice_id, deleted_at__isnull=True
-                )
-                if refreshed:
-                    return ReceiptNoticeResponse.model_validate(refreshed)
-        return ReceiptNoticeResponse.model_validate(notice)
+            return ReceiptNoticeResponse.model_validate(notice)
 
     async def get_receipt_notice_by_id(
         self,
@@ -831,6 +810,7 @@ class ReceiptNoticeService(AppBaseService[ReceiptNotice]):
             tenant_id=tenant_id,
             receipt_data=receipt_data,
             created_by=notified_by,
+            skip_manual_create_auto_submit=True,
         )
 
         await ReceiptNotice.filter(tenant_id=tenant_id, id=notice_id).update(

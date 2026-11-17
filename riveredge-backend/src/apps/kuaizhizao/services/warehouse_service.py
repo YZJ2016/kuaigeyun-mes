@@ -10295,20 +10295,6 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 logger.warning("建立采购订单→采购入库 单据关联失败: %s", e)
 
         if created_receipt_id is not None:
-            if not skip_manual_create_auto_submit:
-                from apps.kuaizhizao.services.manual_create_auto_lifecycle import (
-                    apply_manual_create_auto_submit,
-                )
-
-                await apply_manual_create_auto_submit(
-                    tenant_id=tenant_id,
-                    node_key="purchase_receipt",
-                    entity_id=int(created_receipt_id),
-                    operator_id=created_by,
-                )
-                response = await self.get_purchase_receipt_by_id(
-                    tenant_id, int(created_receipt_id)
-                )
             from apps.kuaizhizao.services.quality_automation_service import QualityAutomationService
 
             await QualityAutomationService().maybe_auto_create_iqc_from_purchase_receipt(

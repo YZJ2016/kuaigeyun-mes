@@ -165,7 +165,12 @@ class PaymentApplicationService(AppBaseService[PaymentApplication]):
         )
 
     async def create_application(
-        self, tenant_id: int, data: PaymentApplicationCreate, created_by: int
+        self,
+        tenant_id: int,
+        data: PaymentApplicationCreate,
+        created_by: int,
+        *,
+        skip_manual_create_auto_submit: bool = False,
     ) -> PaymentApplicationResponse:
         if not data.items:
             raise ValidationError("至少一行申请明细")
@@ -235,6 +240,7 @@ class PaymentApplicationService(AppBaseService[PaymentApplication]):
             node_key="payment_application",
             entity_id=app_id,
             operator_id=created_by,
+            skip=skip_manual_create_auto_submit,
         )
         return await self.get_by_id(tenant_id, app_id)
 

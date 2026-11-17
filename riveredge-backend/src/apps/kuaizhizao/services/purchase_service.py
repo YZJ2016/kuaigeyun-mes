@@ -3418,6 +3418,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             tenant_id=tenant_id,
             receipt_data=receipt_data,
             created_by=created_by,
+            skip_manual_create_auto_submit=True,
         )
         return {"id": created.id, "receipt_code": created.receipt_code}
 

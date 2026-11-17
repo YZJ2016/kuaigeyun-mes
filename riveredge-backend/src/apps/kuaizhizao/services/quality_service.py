@@ -2116,6 +2116,7 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
                 items=receipt_items,
             ),
             created_by=created_by,
+            skip_manual_create_auto_submit=True,
         )
 
         try:
