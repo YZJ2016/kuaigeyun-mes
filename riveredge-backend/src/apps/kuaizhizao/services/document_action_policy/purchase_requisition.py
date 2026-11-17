@@ -66,6 +66,27 @@ def _can_push_downstream(status: Any) -> bool:
     )
 
 
+# 与 _can_push_downstream 一致，供列表 SQL 预筛（含存量中文 status）
+REQUISITION_DOWNSTREAM_PUSH_STATUS_VALUES = (
+    DocumentStatus.AUDITED.value,
+    DocumentStatus.CONFIRMED.value,
+    DocumentStatus.PARTIAL_CONVERTED.value,
+    "已通过",
+    "已审核",
+    "已确认",
+    "部分转单",
+)
+
+
+def requisition_open_line_can_push(req: Any, *, target: str) -> bool:
+    caps = derive_purchase_requisition_capabilities(req)
+    if target == "purchase_order":
+        return caps.push_purchase_order.allowed
+    if target == "inquiry":
+        return caps.push_inquiry.allowed
+    raise ValueError(f"Unknown requisition open line target: {target}")
+
+
 def derive_purchase_requisition_capabilities(
     req: Any,
     *,

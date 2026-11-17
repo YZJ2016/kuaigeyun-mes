@@ -48,8 +48,9 @@ from apps.kuaizhizao.services.document_action_policy.enricher import (
 )
 from core.utils.timezone_utils import resolve_business_datetime, today_site_str, to_site_date
 from apps.kuaizhizao.services.document_action_policy.purchase_requisition import (
+    REQUISITION_DOWNSTREAM_PUSH_STATUS_VALUES,
     assert_purchase_requisition_capability,
-    _can_push_downstream,
+    requisition_open_line_can_push,
 )
 
 def _default_requisition_name(requisition_code: str) -> str:
@@ -2023,8 +2024,15 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         req_query = PurchaseRequisition.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if requisition_id is not None:
             req_query = req_query.filter(id=int(requisition_id))
+        if pullable_only:
+            req_query = req_query.filter(status__in=REQUISITION_DOWNSTREAM_PUSH_STATUS_VALUES)
         requisitions = await req_query.only(
-            "id", "requisition_code", "status"
+            "id",
+            "requisition_code",
+            "status",
+            "review_status",
+            "requisition_date",
+            "applicant_name",
         )
         req_by_id = {int(r.id): r for r in requisitions}
         if not req_by_id:
@@ -2053,7 +2061,7 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             req = req_by_id.get(int(item.requisition_id))
             if not req:
                 continue
-            can_push = _can_push_downstream(req.status)
+            can_push = requisition_open_line_can_push(req, target=target)
             qty = float(item.quantity or 0)
             if qty <= 0:
                 continue
@@ -2083,6 +2091,8 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                     "id": int(item.id),
                     "requisition_id": int(item.requisition_id),
                     "requisition_code": req.requisition_code,
+                    "requisition_status": req.status,
+                    "can_push": can_push,
                     "document_date": requisition_date,
                     "requisition_date": requisition_date,
                     "applicant_name": (str(req.applicant_name or "").strip() or None),

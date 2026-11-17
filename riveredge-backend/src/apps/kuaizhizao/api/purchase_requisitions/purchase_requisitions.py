@@ -173,7 +173,10 @@ async def list_purchase_order_pull_lines(
     limit: int = Query(20, ge=1, le=100),
     keyword: Optional[str] = Query(None, description="物料编码/名称/规格"),
     requisition_id: Optional[int] = Query(None, description="来源采购申请"),
-    pullable_only: bool = Query(True, description="仅剩余可转量大于 0"),
+    pullable_only: bool = Query(
+        True,
+        description="仅可下推且剩余可转量大于 0（未审核/草稿不返回）",
+    ),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -207,7 +210,10 @@ async def list_purchase_inquiry_pull_lines(
     limit: int = Query(20, ge=1, le=100),
     keyword: Optional[str] = Query(None, description="物料编码/名称/规格"),
     requisition_id: Optional[int] = Query(None, description="来源采购申请"),
-    pullable_only: bool = Query(True, description="仅剩余可转量大于 0"),
+    pullable_only: bool = Query(
+        True,
+        description="仅可下推且剩余可转量大于 0（未审核/草稿不返回）",
+    ),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):

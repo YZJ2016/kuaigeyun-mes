@@ -38567,6 +38567,18 @@ export default {
     '从采购申请创建采购订单取单展示优化',
   'pages.dashboard.updateLog.entries.purchase-order-pull-requisition-date-applicant-r01.description':
     '取单列表增加申请日期、申请人列，并按申请日期倒序（最新在前），便于优先处理新申请。重启后端后生效。',
+  'pages.dashboard.updateLog.entries.partner-settlement-pay-on-invoice-r01.title':
+    '客商档案结算方式增加票到付款',
+  'pages.dashboard.updateLog.entries.partner-settlement-pay-on-invoice-r01.description':
+    '供应商与客户资料的「结算方式」下拉与导入别名新增「票到付款」（编码 pay_on_invoice）；采购订单等引用同一码表。更新 Web 端后可见。',
+  'pages.dashboard.updateLog.entries.purchase-order-pull-requisition-approved-only-r01.title':
+    '修复从采购申请取单可勾选未审核与草稿',
+  'pages.dashboard.updateLog.entries.purchase-order-pull-requisition-approved-only-r01.description':
+    '采购订单与询价从采购申请取单时，默认与「全部」分段均按申请审核通过且剩余可转量门禁；来源申请下拉不再出现草稿、待审核单。需重启后端并更新 Web 端后生效。',
+  'pages.dashboard.updateLog.entries.mobile-purchase-requisition-submit-review-r01.title':
+    '手机采购申请分拆提交与提交审核',
+  'pages.dashboard.updateLog.entries.mobile-purchase-requisition-submit-review-r01.description':
+    '企微新建页增加「提交」「提交审核」，与 PC 单据流一致；已提交单在详情可继续点提交审核进入待审核，无需回电脑端操作。',
   'pages.dashboard.updateLog.entries.equipment-status-monitor-ledger-align-r01.title':
     '修复设备状态监控与台账状态不一致',
   'pages.dashboard.updateLog.entries.equipment-status-monitor-ledger-align-r01.description':
