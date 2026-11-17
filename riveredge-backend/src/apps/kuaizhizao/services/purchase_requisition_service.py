@@ -1492,16 +1492,18 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         assert_purchase_requisition_capability(req, "push_purchase_order")
 
         detail = await self.get_requisition_by_id(tenant_id, requisition_id)
+        open_items = [
+            item
+            for item in (detail.items or [])
+            if item.id is not None and not item.purchase_order_id and float(item.quantity or 0) > 0
+        ]
+        occupied_po = await self._occupied_purchase_order_qty_by_requisition_item_ids(
+            tenant_id, [int(item.id) for item in open_items]
+        )
         preview_items: List[Dict[str, Any]] = []
-        for item in detail.items or []:
-            if item.purchase_order_id:
-                continue
+        for item in open_items:
             qty = float(item.quantity or 0)
-            if qty <= 0:
-                continue
-            pushed = float(item.converted_quantity_draft or 0) + float(
-                item.converted_quantity_confirmed or 0
-            )
+            pushed = min(qty, float(occupied_po.get(int(item.id), Decimal("0"))))
             max_push = max(0.0, qty - pushed)
             if max_push <= 0:
                 continue
@@ -1892,6 +1894,79 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             "persisted_material_ids": persisted_material_ids if data.persist_default_supplier_to_material else [],
         }
 
+    async def _occupied_purchase_order_qty_by_requisition_item_ids(
+        self,
+        tenant_id: int,
+        item_ids: List[int],
+    ) -> Dict[int, Decimal]:
+        """按申请行汇总下游采购订单占用数量（含草稿；删除的 PO 不计）。"""
+        if not item_ids:
+            return {}
+        from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem
+
+        pois = await PurchaseOrderItem.filter(
+            tenant_id=tenant_id,
+            source_id__in=item_ids,
+            deleted_at__isnull=True,
+        ).all()
+        if not pois:
+            return {}
+        order_ids = {int(pi.order_id) for pi in pois if pi.order_id}
+        live_order_ids = set(
+            await PurchaseOrder.filter(
+                tenant_id=tenant_id,
+                id__in=list(order_ids),
+                deleted_at__isnull=True,
+            ).values_list("id", flat=True)
+        )
+        occupied: Dict[int, Decimal] = {}
+        for pi in pois:
+            if int(pi.order_id or 0) not in live_order_ids:
+                continue
+            if not is_purchase_requisition_source_type(getattr(pi, "source_type", None)):
+                continue
+            sid = int(pi.source_id or 0)
+            if sid <= 0:
+                continue
+            occupied[sid] = occupied.get(sid, Decimal("0")) + Decimal(
+                str(pi.ordered_quantity or 0)
+            )
+        return occupied
+
+    async def _occupied_inquiry_qty_by_requisition_item_ids(
+        self,
+        tenant_id: int,
+        item_ids: List[int],
+    ) -> Dict[int, Decimal]:
+        """按申请行汇总下游询价占用数量（含草稿；删除的询价不计）。"""
+        if not item_ids:
+            return {}
+        from apps.kuaizhizao.models.purchase_inquiry import PurchaseInquiry, PurchaseInquiryItem
+
+        rows = await PurchaseInquiryItem.filter(
+            tenant_id=tenant_id,
+            source_requisition_item_id__in=item_ids,
+        ).all()
+        if not rows:
+            return {}
+        inquiry_ids = {int(r.inquiry_id) for r in rows if r.inquiry_id}
+        live_inquiry_ids = set(
+            await PurchaseInquiry.filter(
+                tenant_id=tenant_id,
+                id__in=list(inquiry_ids),
+                deleted_at__isnull=True,
+            ).values_list("id", flat=True)
+        )
+        occupied: Dict[int, Decimal] = {}
+        for row in rows:
+            if int(row.inquiry_id or 0) not in live_inquiry_ids:
+                continue
+            sid = int(row.source_requisition_item_id or 0)
+            if sid <= 0:
+                continue
+            occupied[sid] = occupied.get(sid, Decimal("0")) + Decimal(str(row.quantity or 0))
+        return occupied
+
     async def list_purchase_order_pull_lines(
         self,
         tenant_id: int,
@@ -1960,35 +2035,17 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             requisition_id__in=list(req_by_id.keys()),
         ).all()
 
-        blocked_ids: set = set()
-        if target == "inquiry":
-            from apps.kuaizhizao.models.purchase_inquiry import PurchaseInquiry, PurchaseInquiryItem
-            from apps.kuaizhizao.constants.purchase_inquiry import INQUIRY_ACTIVE_STATUSES
-
-            candidate_ids = [int(i.id) for i in items if i.id is not None and not i.purchase_order_id]
-            if candidate_ids:
-                active_items = await PurchaseInquiryItem.filter(
-                    tenant_id=tenant_id,
-                    source_requisition_item_id__in=candidate_ids,
-                    purchase_order_id__isnull=True,
-                ).all()
-                inquiry_ids = {a.inquiry_id for a in active_items}
-                active_inquiries = (
-                    await PurchaseInquiry.filter(
-                        tenant_id=tenant_id,
-                        id__in=list(inquiry_ids),
-                        deleted_at__isnull=True,
-                        status__in=list(INQUIRY_ACTIVE_STATUSES),
-                    ).all()
-                    if inquiry_ids
-                    else []
-                )
-                active_inquiry_ids = {a.id for a in active_inquiries}
-                blocked_ids = {
-                    int(a.source_requisition_item_id)
-                    for a in active_items
-                    if a.inquiry_id in active_inquiry_ids and a.source_requisition_item_id
-                }
+        item_ids = [int(i.id) for i in items if i.id is not None]
+        occupied_po = (
+            await self._occupied_purchase_order_qty_by_requisition_item_ids(tenant_id, item_ids)
+            if target == "purchase_order"
+            else {}
+        )
+        occupied_inquiry = (
+            await self._occupied_inquiry_qty_by_requisition_item_ids(tenant_id, item_ids)
+            if target == "inquiry"
+            else {}
+        )
 
         kw = (keyword or "").strip().lower()
         lines: List[Dict[str, Any]] = []
@@ -2000,22 +2057,17 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             qty = float(item.quantity or 0)
             if qty <= 0:
                 continue
-            if target == "purchase_order":
-                # 转单占用仅以 purchase_order_id 为准；converted_quantity_* 是详情 Schema 派生字段，非 ORM 列
-                if item.purchase_order_id:
-                    remaining = 0.0
-                    pushed = qty
-                else:
-                    pushed = 0.0
-                    remaining = qty
+            item_id = int(item.id) if item.id is not None else 0
+            # 挂链行视为本行数量已取完；未挂链则按下游占用数量（含草稿）算剩余
+            if item.purchase_order_id:
+                remaining = 0.0
+                pushed = qty
+            elif target == "purchase_order":
+                pushed = min(qty, float(occupied_po.get(item_id, Decimal("0"))))
+                remaining = max(0.0, qty - pushed)
             else:
-                in_active = int(item.id) in blocked_ids if item.id is not None else False
-                if item.purchase_order_id or in_active:
-                    remaining = 0.0
-                    pushed = qty
-                else:
-                    remaining = qty
-                    pushed = 0.0
+                pushed = min(qty, float(occupied_inquiry.get(item_id, Decimal("0"))))
+                remaining = max(0.0, qty - pushed)
             selectable = can_push and remaining > 0
             if pullable_only and not selectable:
                 continue

@@ -154,9 +154,21 @@ def snapshot_sales_item(source_item: Any) -> Tuple[str, Dict[str, Any]]:
     }
 
 
-def snapshot_purchase_item(source_item: Any) -> Tuple[str, Dict[str, Any]]:
+def read_purchase_line_entered_unit_price(source_item: Any, price_type: str) -> Decimal:
+    """采购变更单价口径与订单表单一致：录入单价；含税禁止从未税回推。"""
+    display = getattr(source_item, "display_unit_price", None)
+    if display is not None and str(display).strip() != "":
+        return Decimal(str(display))
+    if str(price_type or "tax_exclusive") == "tax_inclusive":
+        return Decimal("0")
+    return Decimal(str(getattr(source_item, "unit_price", 0) or 0))
+
+
+def snapshot_purchase_item(
+    source_item: Any, *, price_type: str = "tax_exclusive"
+) -> Tuple[str, Dict[str, Any]]:
     before_qty = Decimal(str(getattr(source_item, "ordered_quantity", 0) or 0))
-    before_price = Decimal(str(getattr(source_item, "unit_price", 0) or 0))
+    before_price = read_purchase_line_entered_unit_price(source_item, price_type)
     before_date = getattr(source_item, "required_date", None)
     return OrderChangeLineType.QUANTITY.value, {
         "before_quantity": before_qty,
@@ -217,6 +229,8 @@ def resolve_sales_line_change(
 def resolve_purchase_line_change(
     source_item: Any,
     payload: Any,
+    *,
+    price_type: str = "tax_exclusive",
 ) -> Tuple[str, Dict[str, Any]]:
     if getattr(payload, "change_type", None) == OrderChangeLineType.LINE_ADD.value:
         return OrderChangeLineType.LINE_ADD.value, build_line_add_diff(
@@ -232,11 +246,12 @@ def resolve_purchase_line_change(
             payload.after_unit_price,
             payload.after_delivery_date,
             line_cancel=cancel,
+            price_type=price_type,
         )
     except BusinessLogicError as exc:
         if cancel or "无有效变更" not in str(exc):
             raise
-        return snapshot_purchase_item(source_item)
+        return snapshot_purchase_item(source_item, price_type=price_type)
 
 
 def diff_purchase_item(
@@ -245,9 +260,11 @@ def diff_purchase_item(
     after_unit_price: Optional[Decimal],
     after_delivery_date: Optional[Any],
     line_cancel: bool = False,
+    *,
+    price_type: str = "tax_exclusive",
 ) -> Tuple[str, Dict[str, Any]]:
     before_qty = Decimal(str(getattr(source_item, "ordered_quantity", 0) or 0))
-    before_price = Decimal(str(getattr(source_item, "unit_price", 0) or 0))
+    before_price = read_purchase_line_entered_unit_price(source_item, price_type)
     before_date = getattr(source_item, "required_date", None)
     received = Decimal(str(getattr(source_item, "received_quantity", 0) or 0))
 

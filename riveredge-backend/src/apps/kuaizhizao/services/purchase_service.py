@@ -165,6 +165,14 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             )
 
     @staticmethod
+    def _assert_non_gift_purchase_unit_price(item_data: Any) -> None:
+        """非赠品明细采购单价须大于 0（与报价单口径一致；采购行暂无 is_gift 时一律按非赠品）。"""
+        if bool(getattr(item_data, "is_gift", False)):
+            return
+        price = Decimal(str(getattr(item_data, "unit_price", 0) or 0))
+        if price <= 0:
+            raise ValidationError("非赠品明细须填写大于0的采购单价")
+
     def _apply_purchase_item_price_settlement(
         item_dict: Dict[str, Any],
         *,
@@ -439,6 +447,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 material = await Material.get_or_none(tenant_id=tenant_id, id=item_data.material_id)
                 if not material:
                     raise NotFoundError(f"物料不存在: {item_data.material_id}")
+                self._assert_non_gift_purchase_unit_price(item_data)
                 self._validate_purchase_price_fluctuation_for_material(
                     material=material,
                     unit_price=item_data.unit_price,
@@ -1490,6 +1499,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                     material = await Material.get_or_none(tenant_id=tenant_id, id=item_data.material_id)
                     if not material:
                         raise NotFoundError(f"物料不存在: {item_data.material_id}")
+                    self._assert_non_gift_purchase_unit_price(item_data)
                     self._validate_purchase_price_fluctuation_for_material(
                         material=material,
                         unit_price=item_data.unit_price,

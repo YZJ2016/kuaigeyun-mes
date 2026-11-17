@@ -180,6 +180,16 @@ async def apply_change_order(
     return await service.apply(tenant_id, change_id, current_user.id)
 
 
+@router.post("/{change_id}/unapply", response_model=PurchaseOrderChangeWithItemsResponse)
+async def unapply_change_order(
+    change_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _: None = Depends(require_kuaizhizao_module_access("purchase-order-change")),
+):
+    return await service.unapply(tenant_id, change_id, current_user.id)
+
+
 @router.post("/{change_id}/preview-impact", response_model=ChangeImpactPreviewResponse)
 async def preview_impact(
     change_id: int,

@@ -42,6 +42,7 @@ from apps.kuaizhizao.services.order_change.helpers import (
     infer_change_category,
     is_source_order_locked_for_direct_edit,
     line_amount,
+    read_purchase_line_entered_unit_price,
     resolve_purchase_line_change,
 )
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
@@ -84,6 +85,59 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
         if dates:
             order.delivery_date = max(dates)
         await order.save()
+
+    async def _write_po_line_pricing_from_entered(
+        self,
+        *,
+        tenant_id: int,
+        order: PurchaseOrder,
+        po_item: PurchaseOrderItem,
+        qty: Decimal,
+        entered_unit_price: Decimal,
+    ) -> None:
+        """变更生效/撤销：按采购订单表单口径写录入单价与未税单价，再算行未税金额。"""
+        from apps.kuaizhizao.finance.services.finance_tax import quantize_money
+        from apps.kuaizhizao.finance.services.purchase_settlement import (
+            coerce_purchase_order_display_unit_price,
+            resolve_purchase_line_tax_rate_percent,
+        )
+        from apps.kuaizhizao.utils.document_line_amounts import calc_document_line_amounts
+        from core.utils.price_precision import quantize_business_price
+
+        price_places = await self.business_config_service.get_price_decimal_places(tenant_id)
+        amount_places = await self.business_config_service.get_amount_decimal_places(tenant_id)
+        price_type = str(getattr(order, "price_type", None) or "tax_exclusive")
+        tax_pct = resolve_purchase_line_tax_rate_percent(
+            line_tax_rate=getattr(po_item, "tax_rate", None),
+            header_tax_rate=getattr(order, "tax_rate", None),
+        )
+        display = coerce_purchase_order_display_unit_price(entered_unit_price, price_places)
+        if display is None:
+            display = Decimal("0")
+        excl, _tax, _incl = calc_document_line_amounts(
+            qty, display, tax_pct, price_type, amount_places
+        )
+        if qty > 0:
+            stored_unit = quantize_business_price(excl / qty, price_places)
+        elif price_type == "tax_inclusive" and display > 0:
+            divisor = Decimal("1") + (tax_pct / Decimal("100"))
+            stored_unit = quantize_business_price(display / divisor, price_places)
+        else:
+            stored_unit = display
+        po_item.display_unit_price = display
+        po_item.unit_price = stored_unit
+        po_item.total_price = quantize_money(excl)
+
+    async def _sync_po_header_amounts_after_change(
+        self, tenant_id: int, order: PurchaseOrder
+    ) -> None:
+        from apps.kuaizhizao.finance.services.purchase_settlement import (
+            sync_purchase_order_header_amounts,
+        )
+
+        await sync_purchase_order_header_amounts(
+            tenant_id, int(order.id), order=order, persist=True
+        )
 
     async def _sync_open_receipt_notice_dates(
         self, tenant_id: int, order_id: int, delivery_date: date
@@ -344,11 +398,14 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
         line_types: list[str] = []
         rows: list[dict] = []
 
+        price_type = str(getattr(order, "price_type", None) or "tax_exclusive")
         for idx, payload in enumerate(items, start=1):
             if payload.change_type == OrderChangeLineType.LINE_ADD.value:
                 if not payload.material_id:
                     raise BusinessLogicError("新增行必须选择物料")
-                change_type, diff = resolve_purchase_line_change(None, payload)
+                change_type, diff = resolve_purchase_line_change(
+                    None, payload, price_type=price_type
+                )
                 b_amt = Decimal("0")
                 a_amt = line_amount(diff["after_quantity"], diff["after_unit_price"])
                 after_qty += diff["after_quantity"]
@@ -380,7 +437,9 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
             if not src:
                 raise BusinessLogicError(f"变更行缺少有效原订单行: {payload.source_item_id}")
 
-            change_type, diff = resolve_purchase_line_change(src, payload)
+            change_type, diff = resolve_purchase_line_change(
+                src, payload, price_type=price_type
+            )
             line_types.append(change_type)
             b_amt = line_amount(diff["before_quantity"], diff["before_unit_price"])
             a_amt = line_amount(diff["after_quantity"], diff["after_unit_price"])
@@ -426,11 +485,13 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
         )
         version = await self._next_version(tenant_id, order_id)
         code = await self._generate_code(tenant_id)
+        price_type = str(getattr(order, "price_type", None) or "tax_exclusive")
         before_qty = Decimal("0")
         before_amt = Decimal("0")
         rows: list[dict] = []
         for idx, src in enumerate(source_items, start=1):
-            b_amt = line_amount(src.ordered_quantity, src.unit_price)
+            entered = read_purchase_line_entered_unit_price(src, price_type)
+            b_amt = line_amount(src.ordered_quantity, entered)
             before_qty += Decimal(str(src.ordered_quantity or 0))
             before_amt += b_amt
             rows.append({
@@ -444,8 +505,8 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
                 "material_unit": src.unit,
                 "before_quantity": src.ordered_quantity,
                 "after_quantity": src.ordered_quantity,
-                "before_unit_price": src.unit_price,
-                "after_unit_price": src.unit_price,
+                "before_unit_price": entered,
+                "after_unit_price": entered,
                 "before_delivery_date": src.required_date,
                 "after_delivery_date": src.required_date,
                 "before_amount": b_amt,
@@ -509,7 +570,9 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
             has_pending_change=has_pending_change,
         )
 
-        b_amt = line_amount(src.ordered_quantity, src.unit_price)
+        price_type = str(getattr(order, "price_type", None) or "tax_exclusive")
+        entered = read_purchase_line_entered_unit_price(src, price_type)
+        b_amt = line_amount(src.ordered_quantity, entered)
         before_qty = Decimal(str(src.ordered_quantity or 0))
         row = {
             "line_no": 1,
@@ -522,8 +585,8 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
             "material_unit": src.unit,
             "before_quantity": src.ordered_quantity,
             "after_quantity": src.ordered_quantity,
-            "before_unit_price": src.unit_price,
-            "after_unit_price": src.unit_price,
+            "before_unit_price": entered,
+            "after_unit_price": entered,
             "before_delivery_date": src.required_date,
             "after_delivery_date": after_delivery_date,
             "before_amount": b_amt,
@@ -1169,7 +1232,6 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
                         raise BusinessLogicError("新增行缺少物料")
                     if qty <= 0:
                         raise BusinessLogicError("新增行采购数量必须大于 0")
-                    total_price = line_amount(qty, price)
                     await PurchaseOrderChange.create(
                         tenant_id=tenant_id,
                         order_id=order.id,
@@ -1181,7 +1243,11 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
                         operator_id=operator_id,
                         operator_name=operator_name,
                     )
-                    await PurchaseOrderItem.create(
+                    from apps.kuaizhizao.finance.services.purchase_settlement import (
+                        normalize_po_tax_rate_to_percent,
+                    )
+
+                    created_item = await PurchaseOrderItem.create(
                         tenant_id=tenant_id,
                         order_id=order.id,
                         material_id=ch.material_id,
@@ -1192,10 +1258,24 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
                         ordered_quantity=qty,
                         received_quantity=Decimal("0"),
                         outstanding_quantity=qty,
-                        unit_price=price,
-                        total_price=total_price,
+                        unit_price=Decimal("0"),
+                        total_price=Decimal("0"),
+                        tax_rate=normalize_po_tax_rate_to_percent(
+                            getattr(order, "tax_rate", None)
+                        ),
                         required_date=required_date,
                     )
+                    await self._write_po_line_pricing_from_entered(
+                        tenant_id=tenant_id,
+                        order=order,
+                        po_item=created_item,
+                        qty=qty,
+                        entered_unit_price=price,
+                    )
+                    await created_item.save()
+                    # 回写 source_item_id，便于撤销生效精确定位新增行
+                    ch.source_item_id = int(created_item.id)
+                    await ch.save(update_fields=["source_item_id", "updated_at"])
                     continue
 
                 if not ch.source_item_id:
@@ -1262,19 +1342,28 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
                         operator_name=operator_name,
                     )
                 po_item.ordered_quantity = after_qty
-                if ch.after_unit_price is not None:
-                    po_item.unit_price = Decimal(str(ch.after_unit_price))
+                entered_after = (
+                    Decimal(str(ch.after_unit_price))
+                    if ch.after_unit_price is not None
+                    else read_purchase_line_entered_unit_price(
+                        po_item, str(getattr(order, "price_type", None) or "tax_exclusive")
+                    )
+                )
+                await self._write_po_line_pricing_from_entered(
+                    tenant_id=tenant_id,
+                    order=order,
+                    po_item=po_item,
+                    qty=after_qty,
+                    entered_unit_price=entered_after,
+                )
                 po_item.required_date = ch.after_delivery_date or po_item.required_date
                 received = Decimal(str(po_item.received_quantity or 0))
                 po_item.outstanding_quantity = max(Decimal("0"), po_item.ordered_quantity - received)
-                po_item.total_price = line_amount(po_item.ordered_quantity, po_item.unit_price)
                 await po_item.save()
 
-            remaining = await PurchaseOrderItem.filter(tenant_id=tenant_id, order_id=order.id).all()
-            order.total_quantity = sum((Decimal(str(i.ordered_quantity or 0)) for i in remaining), Decimal("0"))
-            order.total_amount = sum((Decimal(str(i.total_price or 0)) for i in remaining), Decimal("0"))
             order.updated_by = operator_id
             order.updated_by_name = operator_name
+            await self._sync_po_header_amounts_after_change(tenant_id, order)
             await self._rollup_po_delivery_date(order)
             await self._sync_open_receipt_notice_dates(tenant_id, order.id, order.delivery_date)
 
@@ -1311,4 +1400,266 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
         from apps.kuaizhizao.services.purchase_arrival_delay_service import PurchaseArrivalDelayService
         await PurchaseArrivalDelayService().mark_applied_for_change(tenant_id, change_id)
 
+        return await self._to_detail(doc)
+
+    async def _resolve_po_item_for_unapply(
+        self,
+        *,
+        tenant_id: int,
+        order_id: int,
+        ch: PurchaseOrderChangeItem,
+        include_deleted: bool = False,
+    ) -> Optional[PurchaseOrderItem]:
+        q = PurchaseOrderItem.filter(tenant_id=tenant_id, order_id=order_id)
+        if not include_deleted:
+            q = q.filter(deleted_at__isnull=True)
+        if ch.source_item_id:
+            hit = await q.filter(id=int(ch.source_item_id)).first()
+            if hit:
+                return hit
+        if ch.change_type != OrderChangeLineType.LINE_ADD.value or not ch.material_id:
+            return None
+        after_qty = Decimal(str(ch.after_quantity or 0))
+        after_price = Decimal(str(ch.after_unit_price or 0))
+        candidates = await q.filter(material_id=int(ch.material_id)).all()
+        for row in candidates:
+            if Decimal(str(row.ordered_quantity or 0)) != after_qty:
+                continue
+            display = getattr(row, "display_unit_price", None)
+            row_entered = (
+                Decimal(str(display))
+                if display is not None and str(display).strip() != ""
+                else Decimal(str(row.unit_price or 0))
+            )
+            if row_entered != after_price:
+                continue
+            return row
+        return None
+
+    async def unapply(
+        self, tenant_id: int, change_id: int, operator_id: int
+    ) -> PurchaseOrderChangeWithItemsResponse:
+        """撤销生效：按变更快照回滚原采购订单，单据回到已审核待生效，可再反审核。"""
+        doc = await PurchaseOrderChangeOrder.get_or_none(
+            tenant_id=tenant_id, id=change_id, deleted_at__isnull=True
+        )
+        if not doc:
+            raise NotFoundError(f"采购变更单不存在: {change_id}")
+        assert_purchase_order_change_capability(doc, "withdraw_apply")
+
+        order = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=doc.source_order_id)
+        if not order:
+            raise NotFoundError("原采购订单不存在")
+        items = await PurchaseOrderChangeItem.filter(
+            tenant_id=tenant_id, change_order_id=doc.id
+        ).all()
+        user_info = await self.get_user_info(operator_id)
+        operator_name = user_info["name"]
+
+        async with in_transaction():
+            if doc.header_changes and isinstance(doc.header_changes, dict):
+                for field, after_val in doc.header_changes.items():
+                    log = (
+                        await PurchaseOrderChange.filter(
+                            tenant_id=tenant_id,
+                            order_id=order.id,
+                            field_name=str(field),
+                            new_value=str(after_val),
+                            reason=doc.change_reason,
+                        )
+                        .order_by("-id")
+                        .first()
+                    )
+                    if log is None:
+                        # apply 时字段未实际改动，无需回滚
+                        continue
+                    if log.old_value is None:
+                        raise BusinessLogicError(
+                            f"无法撤销表头字段「{field}」：缺少变更前快照，请新建反向变更单"
+                        )
+                    setattr(order, field, log.old_value)
+                    await PurchaseOrderChange.create(
+                        tenant_id=tenant_id,
+                        order_id=order.id,
+                        change_type="Modify",
+                        field_name=str(field),
+                        old_value=str(after_val),
+                        new_value=str(log.old_value),
+                        reason=f"撤销生效：{doc.change_code}",
+                        operator_id=operator_id,
+                        operator_name=operator_name,
+                    )
+
+            for ch in items:
+                if not self._item_has_change_content(ch):
+                    continue
+
+                if ch.change_type == OrderChangeLineType.LINE_ADD.value:
+                    po_item = await self._resolve_po_item_for_unapply(
+                        tenant_id=tenant_id, order_id=order.id, ch=ch
+                    )
+                    if not po_item:
+                        raise BusinessLogicError(
+                            f"撤销生效失败：找不到新增行物料 {ch.material_code or ch.material_id}"
+                        )
+                    received = Decimal(str(po_item.received_quantity or 0))
+                    if received > 0:
+                        raise BusinessLogicError(
+                            f"撤销生效失败：新增行 {po_item.material_code} 已有到货，请先处理入库"
+                        )
+                    await PurchaseOrderChange.create(
+                        tenant_id=tenant_id,
+                        order_id=order.id,
+                        change_type="Cancel",
+                        field_name=f"line_add_unapply_{po_item.id}",
+                        old_value=str(po_item.ordered_quantity),
+                        new_value="0",
+                        reason=f"撤销生效：{doc.change_code}",
+                        operator_id=operator_id,
+                        operator_name=operator_name,
+                    )
+                    await po_item.delete()
+                    continue
+
+                was_cancel = ch.change_type == OrderChangeLineType.LINE_CANCEL.value or (
+                    ch.after_quantity is not None and Decimal(str(ch.after_quantity)) <= 0
+                )
+                if was_cancel:
+                    # apply 对取消行硬删；撤销生效按变更快照重建
+                    before_qty = Decimal(str(ch.before_quantity or 0))
+                    before_price = Decimal(str(ch.before_unit_price or 0))
+                    required_date = ch.before_delivery_date or order.order_date
+                    if not ch.material_id:
+                        raise BusinessLogicError("撤销生效失败：取消行缺少物料快照，无法恢复")
+                    from apps.kuaizhizao.finance.services.purchase_settlement import (
+                        normalize_po_tax_rate_to_percent,
+                    )
+
+                    restored = await PurchaseOrderItem.create(
+                        tenant_id=tenant_id,
+                        order_id=order.id,
+                        material_id=ch.material_id,
+                        material_code=ch.material_code or "",
+                        material_name=ch.material_name or "",
+                        material_spec=ch.material_spec,
+                        unit=ch.material_unit or "",
+                        ordered_quantity=before_qty,
+                        received_quantity=Decimal("0"),
+                        outstanding_quantity=before_qty,
+                        unit_price=Decimal("0"),
+                        total_price=Decimal("0"),
+                        tax_rate=normalize_po_tax_rate_to_percent(
+                            getattr(order, "tax_rate", None)
+                        ),
+                        required_date=required_date,
+                    )
+                    await self._write_po_line_pricing_from_entered(
+                        tenant_id=tenant_id,
+                        order=order,
+                        po_item=restored,
+                        qty=before_qty,
+                        entered_unit_price=before_price,
+                    )
+                    await restored.save()
+                    ch.source_item_id = int(restored.id)
+                    await ch.save(update_fields=["source_item_id", "updated_at"])
+                    await PurchaseOrderChange.create(
+                        tenant_id=tenant_id,
+                        order_id=order.id,
+                        change_type="Add",
+                        field_name=f"line_cancel_unapply_{restored.id}",
+                        old_value="0",
+                        new_value=str(before_qty),
+                        reason=f"撤销生效：{doc.change_code}",
+                        operator_id=operator_id,
+                        operator_name=operator_name,
+                    )
+                    continue
+
+                po_item = await self._resolve_po_item_for_unapply(
+                    tenant_id=tenant_id, order_id=order.id, ch=ch
+                )
+                if not po_item:
+                    raise BusinessLogicError(
+                        f"撤销生效失败：找不到原明细行 {ch.material_code or ch.source_item_id}"
+                    )
+                before_qty = (
+                    Decimal(str(ch.before_quantity))
+                    if ch.before_quantity is not None
+                    else Decimal(str(po_item.ordered_quantity or 0))
+                )
+                received = Decimal(str(po_item.received_quantity or 0))
+                if received > before_qty:
+                    raise BusinessLogicError(
+                        f"撤销生效失败：物料 {po_item.material_code} 已到货 {received}，"
+                        f"超过变更前数量 {before_qty}"
+                    )
+                if ch.before_quantity is not None and ch.after_quantity != ch.before_quantity:
+                    await PurchaseOrderChange.create(
+                        tenant_id=tenant_id,
+                        order_id=order.id,
+                        change_type="Quantity",
+                        field_name=f"line_{po_item.id}_quantity",
+                        old_value=str(po_item.ordered_quantity),
+                        new_value=str(before_qty),
+                        reason=f"撤销生效：{doc.change_code}",
+                        operator_id=operator_id,
+                        operator_name=operator_name,
+                    )
+                if ch.before_unit_price is not None and ch.after_unit_price != ch.before_unit_price:
+                    await PurchaseOrderChange.create(
+                        tenant_id=tenant_id,
+                        order_id=order.id,
+                        change_type="Price",
+                        field_name=f"line_{po_item.id}_price",
+                        old_value=str(
+                            read_purchase_line_entered_unit_price(
+                                po_item,
+                                str(getattr(order, "price_type", None) or "tax_exclusive"),
+                            )
+                        ),
+                        new_value=str(ch.before_unit_price),
+                        reason=f"撤销生效：{doc.change_code}",
+                        operator_id=operator_id,
+                        operator_name=operator_name,
+                    )
+                po_item.ordered_quantity = before_qty
+                entered_before = (
+                    Decimal(str(ch.before_unit_price))
+                    if ch.before_unit_price is not None
+                    else read_purchase_line_entered_unit_price(
+                        po_item, str(getattr(order, "price_type", None) or "tax_exclusive")
+                    )
+                )
+                await self._write_po_line_pricing_from_entered(
+                    tenant_id=tenant_id,
+                    order=order,
+                    po_item=po_item,
+                    qty=before_qty,
+                    entered_unit_price=entered_before,
+                )
+                if ch.before_delivery_date is not None:
+                    po_item.required_date = ch.before_delivery_date
+                po_item.outstanding_quantity = max(Decimal("0"), before_qty - received)
+                await po_item.save()
+
+            order.updated_by = operator_id
+            order.updated_by_name = operator_name
+            await self._sync_po_header_amounts_after_change(tenant_id, order)
+            await self._rollup_po_delivery_date(order)
+            await self._sync_open_receipt_notice_dates(tenant_id, order.id, order.delivery_date)
+
+            doc.status = DocumentStatus.AUDITED.value
+            doc.review_status = ReviewStatus.APPROVED.value
+            doc.applied_at = None
+            doc.applied_by = None
+            doc.updated_by = operator_id
+            doc.updated_by_name = operator_name
+            await doc.save()
+
+        from apps.kuaizhizao.services.purchase_arrival_delay_service import (
+            PurchaseArrivalDelayService,
+        )
+
+        await PurchaseArrivalDelayService().clear_applied_for_change(tenant_id, change_id)
         return await self._to_detail(doc)

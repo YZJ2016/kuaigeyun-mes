@@ -125,6 +125,7 @@ import {
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import {
   UniPullQueryModal,
+  isPullOpenLineSelectable,
   isPullableScope,
   renderPullCapabilityTag,
   useUniPullQuery,
@@ -2941,7 +2942,7 @@ const PurchaseOrdersPage: React.FC = () => {
         align: 'center' as const,
         render: (_: unknown, record: PullPurchaseRequisitionCandidate) =>
           renderPullCapabilityTag(
-            Number(record.remaining_quantity ?? 0) > 0,
+            isPullOpenLineSelectable(record),
             t('app.kuaizhizao.purchaseRequisition.pull.canCreate'),
             t('app.kuaizhizao.purchaseRequisition.pull.cannotCreate'),
           ),
@@ -3018,7 +3019,7 @@ const PurchaseOrdersPage: React.FC = () => {
         align: 'center' as const,
         render: (_: unknown, record: PullPurchaseInquiryCandidate) =>
           renderPullCapabilityTag(
-            Number(record.remaining_quantity ?? 0) > 0,
+            isPullOpenLineSelectable(record),
             t('app.kuaizhizao.purchaseRequisition.pull.canCreate'),
             t('app.kuaizhizao.purchaseRequisition.pull.cannotCreate'),
           ),
@@ -3056,11 +3057,6 @@ const PurchaseOrdersPage: React.FC = () => {
       },
     ],
     [t],
-  );
-
-  const isPullLineSelectable = useCallback(
-    (record: { remaining_quantity?: number }) => Number(record.remaining_quantity ?? 0) > 0,
-    [],
   );
 
   const pullDocumentScopeOptions = useMemo(
@@ -3107,10 +3103,10 @@ const PurchaseOrdersPage: React.FC = () => {
         return { data: [], total: 0 };
       }
     },
-    isRowDisabled: (record) => !isPullLineSelectable(record),
+    isRowDisabled: (record) => !isPullOpenLineSelectable(record),
     onConfirm: async (_keys, rows) => {
       const selectedIds = rows
-        .filter((row) => isPullLineSelectable(row))
+        .filter((row) => isPullOpenLineSelectable(row))
         .map((row) => Number(row.id))
         .filter((id) => id > 0);
       if (!selectedIds.length) {
@@ -3184,10 +3180,10 @@ const PurchaseOrdersPage: React.FC = () => {
         return { data: [], total: 0 };
       }
     },
-    isRowDisabled: (record) => !isPullLineSelectable(record),
+    isRowDisabled: (record) => !isPullOpenLineSelectable(record),
     onConfirm: async (_keys, rows) => {
       const selectedIds = rows
-        .filter((row) => isPullLineSelectable(row))
+        .filter((row) => isPullOpenLineSelectable(row))
         .map((row) => Number(row.id))
         .filter((id) => id > 0);
       if (!selectedIds.length) {
@@ -3518,6 +3514,17 @@ const PurchaseOrdersPage: React.FC = () => {
       if (!validItems.length) {
         messageApi.error(t('app.kuaizhizao.purchaseOrder.atLeastOneItem'));
         throw new Error(t('app.kuaizhizao.purchaseOrder.atLeastOneItem'));
+      }
+      for (let i = 0; i < validItems.length; i += 1) {
+        const it = validItems[i];
+        if (Boolean(it?.is_gift)) continue;
+        if (!(Number(it?.unit_price) > 0)) {
+          const msg = t('app.kuaizhizao.purchaseOrder.lineNonGiftUnitPriceRequired', {
+            row: i + 1,
+          });
+          messageApi.error(msg);
+          throw new Error(msg);
+        }
       }
 
       const data = { ...values };
@@ -4400,18 +4407,45 @@ const PurchaseOrdersPage: React.FC = () => {
                         shouldUpdate={(prev: any, curr: any) =>
                           prev?.items?.[index]?.material_id !== curr?.items?.[index]?.material_id ||
                           prev?.items?.[index]?.unit_price !== curr?.items?.[index]?.unit_price ||
+                          prev?.items?.[index]?.is_gift !== curr?.items?.[index]?.is_gift ||
                           prev?.supplier_id !== curr?.supplier_id
                         }
                       >
                         {({ getFieldValue }) => {
                           const row = normalizeFormListItems<any>(getFieldValue('items'))[index] ?? {};
+                          const isGift = Boolean(row.is_gift);
                           return (
                             <AntForm.Item
                               name={[index, 'unit_price']}
-                              rules={[
-                                { required: true, message: t('common.required') },
-                                { type: 'number', min: 0, message: t('app.kuaizhizao.purchaseOrder.form.gteZero') },
-                              ]}
+                              rules={
+                                isGift
+                                  ? [
+                                      {
+                                        type: 'number',
+                                        min: 0,
+                                        message: t('app.kuaizhizao.purchaseOrder.form.gteZero'),
+                                      },
+                                    ]
+                                  : [
+                                      {
+                                        required: true,
+                                        message: t(
+                                          'app.kuaizhizao.purchaseOrder.form.nonGiftUnitPriceRequired',
+                                        ),
+                                      },
+                                      {
+                                        validator: async (_, value) => {
+                                          if (!(Number(value) > 0)) {
+                                            throw new Error(
+                                              t(
+                                                'app.kuaizhizao.purchaseOrder.form.nonGiftUnitPriceRequired',
+                                              ),
+                                            );
+                                          }
+                                        },
+                                      },
+                                    ]
+                              }
                               style={{ margin: 0 }}
                             >
                               <LineUnitPriceWithTrendTrigger
@@ -4427,6 +4461,7 @@ const PurchaseOrdersPage: React.FC = () => {
                                 precision={priceDecimals}
                                 prefix="¥"
                                 size={DOCUMENT_DETAIL_CONTROL_SIZE}
+                                disabled={isGift}
                               />
                             </AntForm.Item>
                           );
