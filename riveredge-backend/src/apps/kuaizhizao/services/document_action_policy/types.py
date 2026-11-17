@@ -66,7 +66,6 @@ class SalesOrderChangeCapabilities(BaseModel):
     approve: ActionCapability
     revoke_approval: ActionCapability
     apply: ActionCapability
-    withdraw_apply: ActionCapability
     preview_impact: ActionCapability
     print: ActionCapability
     reopen: ActionCapability
