@@ -96,8 +96,8 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
         entered_unit_price: Decimal,
     ) -> None:
         """变更生效/撤销：按采购订单表单口径写录入单价与未税单价，再算行未税金额。"""
-        from apps.kuaizhizao.finance.services.finance_tax import quantize_money
-        from apps.kuaizhizao.finance.services.purchase_settlement import (
+        from apps.kuaicaiwu.services.finance_tax import quantize_money
+        from apps.kuaicaiwu.services.purchase_settlement import (
             coerce_purchase_order_display_unit_price,
             resolve_purchase_line_tax_rate_percent,
         )
@@ -131,7 +131,7 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
     async def _sync_po_header_amounts_after_change(
         self, tenant_id: int, order: PurchaseOrder
     ) -> None:
-        from apps.kuaizhizao.finance.services.purchase_settlement import (
+        from apps.kuaicaiwu.services.purchase_settlement import (
             sync_purchase_order_header_amounts,
         )
 
@@ -1243,7 +1243,7 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
                         operator_id=operator_id,
                         operator_name=operator_name,
                     )
-                    from apps.kuaizhizao.finance.services.purchase_settlement import (
+                    from apps.kuaicaiwu.services.purchase_settlement import (
                         normalize_po_tax_rate_to_percent,
                     )
 
@@ -1531,7 +1531,7 @@ class PurchaseOrderChangeService(AppBaseService[PurchaseOrderChangeOrder]):
                     required_date = ch.before_delivery_date or order.order_date
                     if not ch.material_id:
                         raise BusinessLogicError("撤销生效失败：取消行缺少物料快照，无法恢复")
-                    from apps.kuaizhizao.finance.services.purchase_settlement import (
+                    from apps.kuaicaiwu.services.purchase_settlement import (
                         normalize_po_tax_rate_to_percent,
                     )
 
